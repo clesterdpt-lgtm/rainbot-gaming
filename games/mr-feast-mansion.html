@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mr. Feast: Last To Leave the Mansion — Escape the Strait</title>
+  <meta name="description" content="You and 9 other contestants are locked in a mansion. Last one to leave wins $1,000,000. Just don't take the pizza." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23f7d716'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='60' fill='%230a0a14' text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🍔 Mr. Feast: Last To Leave the Mansion</h1>
+        <div class="game-page__sub">Survive 24 hours in the mansion · Don't take the pizza · Win $1,000,000</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">HOUR</span><span class="hud__value" id="hud-hour">0</span></div>
+          <div class="hud__item"><span class="hud__label">PRIZE</span><span class="hud__value" id="hud-money">$0</span></div>
+          <div class="hud__item"><span class="hud__label">CONTESTANTS</span><span class="hud__value" id="hud-count">10</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">$0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-700-480">
+          <canvas id="gameCanvas" width="700" height="480" tabindex="0"></canvas>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🍔 MR. FEAST</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              You and 9 other contestants are locked in a mansion. Last one to leave wins $1,000,000.
+              The longer you stay, the more temptation comes at you. Pizza. Money. Drama. Smells.
+              <br><br>
+              <strong>Survive 24 hours. Win the cash.</strong>
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Enter the mansion</button>
+          </div>
+        </div>
+
+        <div class="powerups" id="powerups"></div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
+            Click the temptation cards:<br>
+            <strong>RESIST</strong> · power through<br>
+            <strong>TAKE</strong> · instant reward (spike)
+          </p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Stay seated.</strong> Each hour = ~$40,000 banked.</li>
+            <li><strong style="color:var(--ink);">Resist temptation events.</strong> Pizza, money, drama, smells — Mr. Feast will throw everything at you.</li>
+            <li><strong style="color:var(--ink);">Watch the temptation meter.</strong> If it maxes out, you cave and leave. Game over.</li>
+            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Willpower Boost (reset) · Bathroom Break (freeze 30s).</li>
+            <li><strong style="color:var(--ink);">Other contestants</strong> may leave first. They also might fall asleep and forfeit.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Not affiliated with any real brand, person, or game show. The mansion does not exist.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Escape the Strait. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/mr-feast.js"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

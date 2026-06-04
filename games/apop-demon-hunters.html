@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A-Pop Demon Hunters — Escape the Strait</title>
+  <meta name="description" content="Pop stars vs. demon elites. A beat-based action RPG parody. Sync attacks to the beat. Defeat Lavish Larry." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🎤 A-Pop Demon Hunters</h1>
+        <div class="game-page__sub">Pop stars vs. demon elites · Sync attacks to the beat · Defeat Lavish Larry</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">STAGE</span><span class="hud__value" id="hud-stage">1/3</span></div>
+          <div class="hud__item"><span class="hud__label">HP</span><span class="hud__value" id="hud-hp">100</span></div>
+          <div class="hud__item"><span class="hud__label">COMBO</span><span class="hud__value" id="hud-combo">0x</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-750-500">
+          <canvas id="gameCanvas" width="750" height="500" tabindex="0"></canvas>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🎤 A-POP DEMON HUNTERS</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              America fought back. The demon elite didn't see it coming.
+              <br><br>
+              You play as <strong>The Diva</strong>. Sync your mic swings to the beat.
+              Slay your way up Madison Ave, into a hedge-fund penthouse, through a private-equity nightmare dimension.
+              <br><br>
+              <strong>Final boss: Lavish Larry, Demon of Endless Foreclosure.</strong>
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Take the stage</button>
+          </div>
+        </div>
+
+        <div class="powerups" id="powerups"></div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
+            <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>W</kbd>/<kbd>S</kbd> · lanes<br>
+            <kbd>Z</kbd> · swing mic (on beat = 2×)<br>
+            <kbd>X</kbd> · surprise album drop (5 combo)
+          </p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Move</strong> between 4 lanes with ↑/↓ or W/S.</li>
+            <li><strong style="color:var(--ink);">Press Z</strong> to swing your mic. When the beat circle pulses green, hit Z for <strong style="color:var(--accent-3);">2× damage</strong>.</li>
+            <li><strong style="color:var(--ink);">Build a combo</strong> by chaining hits. X drops a nuke (5 combo, damages all elites).</li>
+            <li><strong style="color:var(--ink);">Survive 3 stages.</strong> Stage 3 is boss vs Lavish Larry (3 phases).</li>
+            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Crowd Surf (5s inv), Power Note (2× dmg 8s), Smash Hit (30 dmg all).</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> A-Pop Demon Hunters is fictional. All characters are parodies of internet culture and pop-star tropes. Not based on any real person or organization.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Escape the Strait. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/apop-demon-hunters.js"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

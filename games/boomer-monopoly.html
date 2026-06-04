@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boomer Monopoly — Escape the Strait</title>
+  <meta name="description" content="Boomer Monopoly — Monopoly, but the rules were written by a 1971 homeowner." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css" />
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🏘 Boomer Monopoly</h1>
+        <div class="game-page__sub">A satirical board game. Coming soon.</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div id="ad-leaderboard" style="margin-bottom: 20px;"></div>
+
+    <div class="game-stage">
+      <div class="soon">
+        <div class="soon__emoji">🏘</div>
+        <h2 class="soon__title">Coming soon</h2>
+        <p class="soon__body">
+          You're a 1971 homeowner. Property values only go up.
+          The kids will figure it out eventually. They always do.
+          <br><br>
+          <strong>Early access for Pro members.</strong> Drop your email to get notified.
+        </p>
+        <form class="soon__notify" id="notify-form">
+          <input type="email" placeholder="you@somewhere.com" required />
+          <button type="submit" class="btn btn--primary" style="font-size:14px;padding:12px 16px;">Notify me</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="ad-rectangle" style="margin: 30px auto; display:flex; justify-content:center;"></div>
+
+    <section style="padding: 30px 16px 0; max-width: 720px;">
+      <h3 class="section__title" style="font-size: 24px; text-align: left;">Pitch</h3>
+      <p style="color: var(--ink-dim); line-height: 1.7;">
+        Classic Monopoly, but the rules are slightly bent:
+        property values only go up, the income tax is a flat-fee mortgage deduction,
+        and the "Free Parking" square has unclaimed stimulus money. Buy the whole
+        board. Rent out the duplex. Tell the kids to stop eating avocado toast.
+      </p>
+      <p style="color: var(--ink-dim); line-height: 1.7;">
+        Single-player vs. AI boomers. 2-4 player online. Local pass-and-play.
+        Card-driven chaos. Watch an ad to get an extra "Zoning Variance" power-up
+        that lets you build a 5th house when the rules say you can't.
+      </p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+    </div>
+    <div>© 2026 Escape the Strait. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+    document.getElementById("notify-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = e.target.querySelector("input").value;
+      if (RB.addNotify(email)) {
+        RB.toast("You're on the list! 🎉", "good");
+        e.target.reset();
+      } else {
+        RB.toast("That email is already on the list", "bad");
+      }
+    });
+  </script>
+</body>
+</html>

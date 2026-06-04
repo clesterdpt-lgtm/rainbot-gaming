@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Look at the Gym Girl — Rainbot</title>
+  <meta name="description" content="Top-down stealth parody. Get to the locker room without getting publicly shamed. Parody." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-family='Arial Black' font-size='52' fill='%230a0a14' text-anchor='middle'%3E%F0%9F%91%80%3C/text%3E%3C/svg%3E" />
+  <style>
+    /* ===== Game-specific styles ===== */
+    .shame-meter, .heart-meter {
+      display: inline-flex; gap: 3px; align-items: center;
+    }
+    .shame-pip, .heart-pip {
+      width: 12px; height: 12px; border-radius: 3px;
+      background: #2a2a3a;
+      border: 1px solid rgba(255,255,255,0.15);
+      transition: background 0.2s, transform 0.2s;
+    }
+    .shame-pip[data-state="low"]    { background: var(--accent-3); }
+    .shame-pip[data-state="med"]    { background: var(--accent); animation: pipPulse 0.5s infinite; }
+    .shame-pip[data-state="crit"]   { background: var(--bad); animation: pipPulse 0.3s infinite; transform: scale(1.15); }
+    .heart-pip[data-state="on"]     { background: var(--accent); }
+    .heart-pip[data-state="panic"]  { background: var(--bad); animation: pipPulse 0.25s infinite; }
+    @keyframes pipPulse { 50% { transform: scale(1.18); } }
+
+    .gym-hud {
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+      justify-content: center;
+      padding: 10px 12px;
+      background: rgba(10,10,20,0.85);
+      border: 1px solid var(--panel-2);
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      margin-bottom: 10px;
+    }
+    .gym-hud__item { display: flex; align-items: center; gap: 6px; }
+    .gym-hud__label { color: var(--ink-dim); letter-spacing: 1.5px; }
+    .gym-hud__value { color: var(--ink); font-weight: 700; }
+    .gym-hud__value--bad { color: var(--accent); }
+
+    .panic-banner {
+      position: absolute; top: 70px; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-display);
+      font-size: 22px; color: var(--bad);
+      text-shadow: 2px 2px 0 #000;
+      z-index: 5; pointer-events: none;
+      animation: panicFlash 0.5s steps(2) infinite;
+    }
+    @keyframes panicFlash { 50% { opacity: 0.4; } }
+
+    .shame-card {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10,10,20,0.97);
+      border: 3px solid var(--accent);
+      border-radius: var(--r);
+      padding: 26px;
+      max-width: 520px; width: 92%;
+      box-shadow: 0 0 60px rgba(255,46,136,0.5);
+      z-index: 10;
+      text-align: center;
+    }
+    .shame-card__title {
+      font-family: var(--font-display);
+      font-size: 26px; color: var(--accent);
+      margin: 0 0 8px;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .shame-card__sub {
+      font-size: 14px; color: var(--ink-dim); margin: 0 0 12px;
+    }
+    .shame-card__stats {
+      font-family: var(--font-mono);
+      font-size: 13px; color: var(--ink-dim);
+      margin: 0 0 16px;
+    }
+    .shame-card__stats strong { color: var(--accent-3); font-size: 18px; }
+    .shame-card__caption {
+      font-family: var(--font-display);
+      font-size: 14px; color: var(--ink);
+      background: var(--panel);
+      padding: 10px 14px; border-radius: 6px;
+      margin: 0 0 18px;
+      border-left: 4px solid var(--accent-2);
+    }
+    .shame-card__actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    .win-card {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10,10,20,0.97);
+      border: 3px solid var(--accent-2);
+      border-radius: var(--r);
+      padding: 26px;
+      max-width: 520px; width: 92%;
+      box-shadow: 0 0 60px rgba(46,224,255,0.4);
+      z-index: 10;
+      text-align: center;
+    }
+    .win-card__title {
+      font-family: var(--font-display);
+      font-size: 24px; color: var(--accent-2);
+      margin: 0 0 6px;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .win-card__caption {
+      font-size: 14px; color: var(--ink);
+      background: var(--panel);
+      padding: 10px 14px; border-radius: 6px;
+      margin: 0 0 18px;
+      border-left: 4px solid var(--accent-2);
+    }
+
+    .gym-powers {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .gym-power {
+      background: var(--panel);
+      border: 2px solid var(--panel-2);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink);
+      display: flex; align-items: center; gap: 6px;
+      transition: all 0.15s;
+    }
+    .gym-power:hover:not([data-empty="true"]) {
+      border-color: var(--accent-2);
+      transform: translateY(-2px);
+    }
+    .gym-power[data-empty="true"] { opacity: 0.4; cursor: not-allowed; }
+    .gym-power__count {
+      background: var(--accent); color: var(--bg);
+      padding: 1px 6px; border-radius: 8px;
+      font-size: 10px; font-weight: 800;
+    }
+    .gym-power[data-empty="true"] .gym-power__count { background: #444; color: #888; }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">👀 Don't Look at the Gym Girl</h1>
+        <div class="game-page__sub">WASD/arrows to move · mouse to look · get to the locker room without looking at her</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="gym-hud">
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">SHAME</span>
+            <span class="shame-meter" id="hud-shame"></span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">HEART</span>
+            <span class="heart-meter" id="hud-heart"></span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">DIST</span>
+            <span class="gym-hud__value" id="hud-dist">0%</span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">PHASE</span>
+            <span class="gym-hud__value" id="hud-phase">1</span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">HIGH</span>
+            <span class="gym-hud__value" id="hud-high">0%</span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">SHAME TOTAL</span>
+            <span class="gym-hud__value" id="hud-shametotal">0</span>
+          </div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-640-640">
+          <canvas id="gameCanvas" width="640" height="640" tabindex="0"></canvas>
+
+          <div class="panic-banner" id="panic-banner" style="display:none;">⚠ PANIC — HEART RATE SPIKE</div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">👀 READY?</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              You're at the <strong style="color:var(--accent-3)">front door</strong>. She's at the
+              <strong style="color:var(--accent)">squat rack</strong>. You need to get to the
+              <strong style="color:var(--accent-2)">locker room</strong>.
+              <br><br>
+              <strong style="color:var(--accent)">Don't. Look. At. Her.</strong>
+              <br>
+              <em style="color:var(--ink-dim);font-size:13px;">
+                WASD/arrows to move · mouse to look · click to start
+              </em>
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Enter the gym</button>
+          </div>
+
+          <div id="shame-mount"></div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row" style="margin-bottom: 8px;">
+            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <div class="gym-powers" id="gym-powers" style="margin-top: 8px;"></div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Move</strong> with WASD or arrow keys.</li>
+            <li><strong style="color:var(--ink);">Look</strong> with the mouse. Your head turn is what counts.</li>
+            <li><strong style="color:var(--ink);">Hide</strong> behind racks, benches, lockers, the fountain.</li>
+            <li><strong style="color:var(--ink);">8 phases, escalating roster:</strong>
+              <ol style="padding-left: 18px; margin-top: 4px;">
+                <li>1 girl → 2 → 3 (mirror selfies) → 4 (group class)</li>
+                <li>5 + filmer → 5 speed → 5 + trainer → 5 + filmer + trainer</li>
+              </ol>
+            </li>
+            <li><strong style="color:var(--ink);">Filmer</strong> (P5+): 2× shame.</li>
+            <li><strong style="color:var(--ink);">Trainer</strong> (P7+): aggressive cone.</li>
+            <li><strong style="color:var(--ink);">Shame</strong> fills per girl in cone. <strong>5 pips = PUBLIC SHAME.</strong></li>
+            <li><strong style="color:var(--ink);">Heart</strong> spikes → <strong>PANIC</strong> at 3 pips.</li>
+            <li><strong style="color:var(--ink);">Power-ups</strong>: 🎧 AirPods (8s), 👔 Boyfriend (5s), 🎭 Decoy (2.5s).</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 12px; margin-top: 10px; font-style: italic;">
+            ⚠️ Parody. No real gym girls were algorithmically trained for this.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot. Parody. The squat rack is not real.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/dont-look-gym-girl.js"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+  </script>
+</body>
+</html>

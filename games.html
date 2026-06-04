@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Games — Escape the Strait</title>
+  <meta name="description" content="All Escape the Strait games. Free, browser-based, meme-worthy." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <header class="hero" style="padding: 70px 24px 40px;">
+    <span class="hero__pill">🎮 All games</span>
+    <h1 class="hero__title" style="font-size: clamp(40px, 7vw, 80px);">
+      <span class="word w1">Pick</span>
+      <span class="word w2">Your</span>
+      <span class="word w3">Fight.</span>
+    </h1>
+    <p class="hero__sub">Each game runs in your browser. No logins. No "please verify you're human."</p>
+  </header>
+
+  <section style="padding-top: 30px;">
+    <div class="game-grid">
+      <a href="games/strait-of-hormuz.html" class="game-card">
+        <div class="game-card__art game-card__art--hormuz">
+          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
+          <div class="game-card__art-text">⛴ ESCAPE THE<br/>STRAIT OF HORMUZ</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">Escape the Strait of Hormuz</h3>
+          <p class="game-card__desc">Frogger-style. You're a VLCC oil tanker. Mines, drones, fast boats. Get to open water or spill everything.</p>
+          <span class="game-card__cta">Play now →</span>
+        </div>
+      </a>
+
+      <a href="games/mr-feast-mansion.html" class="game-card">
+        <div class="game-card__art game-card__art--apop">
+          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
+          <div class="game-card__art-text">🍔 MR. FEAST:<br/>LAST TO LEAVE</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">Mr. Feast: Last To Leave the Mansion</h3>
+          <p class="game-card__desc">Survive 24 hours in a mansion. Last to leave wins $1M. (Parody. Mr. Feast is fictional.)</p>
+          <span class="game-card__cta">Play now →</span>
+        </div>
+      </a>
+
+      <a href="games/looksmaxxing-grindset.html" class="game-card">
+        <div class="game-card__art game-card__art--monopoly">
+          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
+          <div class="game-card__art-text">💪 LOOKSMAXXING<br/>GRINDSET</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">Looksmaxxing Grindset</h3>
+          <p class="game-card__desc">Click to grind. Wake up sadge, become gigachad. (Parody. Mewing doesn't actually work.)</p>
+          <span class="game-card__cta">Play now →</span>
+        </div>
+      </a>
+
+      <a href="games/boomer-monopoly.html" class="game-card">
+        <div class="game-card__art game-card__art--monopoly">
+          <span class="game-card__tag game-card__tag--soon">SOON</span>
+          <div class="game-card__art-text">🏘 BOOMER<br/>MONOPOLY</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">Boomer Monopoly</h3>
+          <p class="game-card__desc">Monopoly, but the rules are written by a 1971 homeowner. Coming soon — get notified when it drops.</p>
+          <span class="game-card__cta">Notify me →</span>
+        </div>
+      </a>
+
+      <a href="games/apop-demon-hunters.html" class="game-card">
+        <div class="game-card__art game-card__art--apop">
+          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
+          <div class="game-card__art-text">🎤 A-POP<br/>DEMON HUNTERS</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">A-Pop Demon Hunters</h3>
+          <p class="game-card__desc">Beat-based action. Pop stars vs. demon elites. Sync attacks to the beat. (Parody. Not affiliated.)</p>
+          <span class="game-card__cta">Play now →</span>
+        </div>
+      </a>
+
+      <a href="games/dont-look-gym-girl.html" class="game-card">
+        <div class="game-card__art game-card__art--gym">
+          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
+          <div class="game-card__art-text">👀 DON'T LOOK<br/>AT THE GYM GIRL</div>
+        </div>
+        <div class="game-card__body">
+          <h3 class="game-card__title">Don't Look at the Gym Girl</h3>
+          <p class="game-card__desc">Stealth-awkward. She's doing squats in skanky leggings. One glance and she shames you to death. Get to the door. Eyes forward. (Parody.)</p>
+          <span class="game-card__cta">Play now →</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <div id="ad-leaderboard" style="margin: 40px auto;"></div>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="./">Home</a>
+      <a href="legal/privacy.html">Privacy</a>
+      <a href="legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Escape the Strait.</div>
+  </footer>
+
+  <script src="assets/js/ads.js"></script>
+  <script src="assets/js/main.js"></script>
+  <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
+</body>
+</html>

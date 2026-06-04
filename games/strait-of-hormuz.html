@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escape the Strait of Hormuz — Escape the Strait</title>
+  <meta name="description" content="You're a 2-million-barrel VLCC duct-taped to the moon. Iran has mines. The US has rockets. Just get to open water." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231e3a5f'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='50' fill='%23fff' text-anchor='middle'%3E%E2%9B%B4%3C/text%3E%3C/svg%3E" />
+  <style>
+    /* ===== New game-specific styles for the continuous-dodger ===== */
+    .hull-pips { display:inline-flex; gap:4px; }
+    .hull-pip {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--good); box-shadow: 0 0 6px rgba(107,255,125,0.6);
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+    .hull-pip[data-state="damaged"] { background: var(--accent-3); box-shadow: 0 0 4px rgba(247,215,22,0.4); }
+    .hull-pip[data-state="critical"] { background: var(--bad); box-shadow: 0 0 6px rgba(255,92,92,0.7); animation: pipPulse 0.6s infinite; }
+    .hull-pip[data-state="lost"]   { background: #333; box-shadow: none; transform: scale(0.7); }
+    @keyframes pipPulse { 50% { transform: scale(1.2); } }
+
+    .wipeout-card {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--bg-soft);
+      border: 3px solid var(--accent);
+      border-radius: var(--r);
+      padding: 28px;
+      max-width: 520px; width: 92%;
+      box-shadow: 0 0 60px rgba(255,46,136,0.5);
+      z-index: 10;
+      text-align: center;
+    }
+    .wipeout-card__death {
+      font-family: var(--font-display);
+      font-size: 22px; line-height: 1.2;
+      color: var(--accent); margin: 0 0 12px;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .wipeout-card__stats {
+      font-family: var(--font-mono);
+      font-size: 13px; color: var(--ink-dim);
+      margin: 0 0 18px;
+    }
+    .wipeout-card__stats strong { color: var(--accent-3); font-size: 18px; }
+    .wipeout-card__caption {
+      font-family: var(--font-display);
+      font-size: 16px; color: var(--ink);
+      background: var(--panel);
+      padding: 10px 14px; border-radius: 6px;
+      margin: 0 0 18px;
+      border-left: 4px solid var(--accent-2);
+    }
+    .wipeout-card__actions {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    }
+
+    .gate-card {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10,10,20,0.95);
+      border: 3px solid var(--accent-3);
+      border-radius: var(--r);
+      padding: 26px;
+      max-width: 620px; width: 95%;
+      box-shadow: 0 0 50px rgba(247,215,22,0.4);
+      z-index: 9;
+      text-align: center;
+    }
+    .gate-card__title {
+      font-family: var(--font-display);
+      font-size: 22px; color: var(--accent-3);
+      margin: 0 0 6px; letter-spacing: 1px;
+    }
+    .gate-card__sub {
+      font-size: 14px; color: var(--ink-dim);
+      margin: 0 0 18px;
+    }
+    .gate-card__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 16px 0 20px;
+    }
+    .gate-card__option {
+      background: var(--panel);
+      border: 2px solid var(--panel-2);
+      border-radius: 8px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+    .gate-card__option:hover {
+      border-color: var(--accent-2);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(46,224,255,0.3);
+    }
+    .gate-card__option-icon { font-size: 32px; display: block; margin-bottom: 6px; }
+    .gate-card__option-name {
+      font-family: var(--font-display);
+      font-size: 14px; color: var(--accent-3);
+      margin: 0 0 4px; letter-spacing: 0.5px;
+    }
+    .gate-card__option-desc {
+      font-size: 12px; color: var(--ink-dim);
+      line-height: 1.4; margin: 0;
+    }
+    .gate-card__ad-hint {
+      font-size: 12px; color: var(--ink-dim); margin-bottom: 12px;
+    }
+    .gate-card__skip {
+      font-size: 12px; color: var(--ink-dim);
+      background: none; border: none;
+      cursor: pointer; text-decoration: underline;
+      font-family: var(--font-body);
+    }
+    .gate-card__skip:hover { color: var(--accent); }
+
+    .boss-honkhud {
+      position: absolute; top: 12px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      border: 2px solid var(--accent-2);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--accent-2);
+      z-index: 5;
+    }
+
+    .phase-banner {
+      position: absolute; top: 60px; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-display);
+      font-size: 28px; letter-spacing: 2px;
+      color: var(--accent); text-shadow: 3px 3px 0 #000;
+      z-index: 4; pointer-events: none;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    .phase-banner--show { opacity: 1; animation: bannerPulse 2s ease-out; }
+    @keyframes bannerPulse {
+      0% { opacity: 0; transform: translateX(-50%) scale(0.7); }
+      20% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translateX(-50%) scale(1); }
+    }
+
+    .dpad--continuous {
+      display: grid;
+      grid-template-columns: 60px 60px 60px;
+      grid-template-rows: 60px 60px;
+      gap: 4px;
+      justify-content: center;
+    }
+    .dpad--continuous button {
+      background: var(--panel); color: var(--ink);
+      border: 2px solid var(--panel-2);
+      border-radius: 8px;
+      font-size: 22px; cursor: pointer;
+      touch-action: none;
+    }
+    .dpad--continuous button:active { background: var(--accent-2); color: var(--bg); }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">⛴ Escape the Strait of Hormuz</h1>
+        <div class="game-page__sub">Arrow keys / WASD · Hold to steer · Space = horn · Get to open water</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">DIST</span><span class="hud__value" id="hud-dist">0%</span></div>
+          <div class="hud__item"><span class="hud__label">HULL</span><span class="hud__value hull-pips" id="hud-hull"></span></div>
+          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">1</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-585-720">
+          <canvas id="gameCanvas" width="585" height="720" tabindex="0"></canvas>
+
+          <div class="phase-banner" id="phase-banner">PHASE 1 · OPEN WATER</div>
+          <div class="boss-honkhud" id="boss-honkhud" style="display:none;">HONK! <span id="honk-count">0/5</span></div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">⛴ READY?</h2>
+            <p class="overlay__sub" id="overlay-sub">You're the <strong style="color:var(--accent-3)">SST Patience</strong> — a 2-million-barrel VLCC held together by gaffer tape and prayers. Iran has mines. The US has questions. Just get to open water.</p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start voyage</button>
+          </div>
+
+          <div id="wipeout-mount"></div>
+          <div id="gate-mount"></div>
+        </div>
+
+        <div class="powerups" id="powerups"></div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row" style="margin-bottom: 8px;">
+            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <!-- Continuous d-pad (mobile) — left side steer, right side throttle/horn -->
+          <div class="dpad dpad--continuous" id="dpad" aria-label="Controls" style="margin: 0 auto;">
+            <div></div>
+            <button data-ctrl="thrust" aria-label="Throttle">▲</button>
+            <div></div>
+            <button data-ctrl="left" aria-label="Left">◀</button>
+            <button data-ctrl="horn" aria-label="Horn" style="background:var(--accent);color:var(--bg);">HORN</button>
+            <button data-ctrl="right" aria-label="Right">▶</button>
+            <div></div>
+            <button data-ctrl="brake" aria-label="Brake">▼</button>
+            <div></div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Steer</strong> with A/D or ←/→ — hold for continuous turning.</li>
+            <li><strong style="color:var(--ink);">Throttle</strong> with W/↑, brake with S/↓.</li>
+            <li><strong style="color:var(--ink);">Horn</strong> (Space) clears nearby mines and the boss.</li>
+            <li><strong style="color:var(--ink);">Take 3 hits</strong> and you explode. Share the wipeout card.</li>
+            <li><strong style="color:var(--ink);">Ad walls</strong> at 25%, 60%, 90% offer temporary upgrades.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Escape the Strait. Parody. No real tankers were harmed.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script src="../assets/js/strait-of-hormuz.js"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+  </script>
+</body>
+</html>

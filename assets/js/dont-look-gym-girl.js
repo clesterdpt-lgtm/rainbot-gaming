@@ -1,35 +1,38 @@
 /* ============================================
-   DON'T LOOK AT THE GYM GIRL — v2
+   DON'T LOOK AT THE GYM GIRL — v3 (THE REMAKE)
    --------------------------------------------
-   v2: 8 phases, escalating roster.
-   - Phase 1: 1 girl (tutorial)
-   - Phase 2: 2 girls
-   - Phase 3: 3 girls + mirror selfie
-   - Phase 4: 4 girls
-   - Phase 5: 5 girls + filmer NPC
-   - Phase 6: 5 girls, faster
-   - Phase 7: 5 girls + trainer NPC
-   - Phase 8: 5 girls + filmer + trainer
+   Premise: get from the FRONT DOOR (left) to the
+   LOCKER ROOM (right) without getting accused of
+   being a pervert.
 
-   Each girl:
-   - Has a patrol path (3-4 waypoints)
-   - Walks between waypoints, head turns to face velocity
-   - Pauses 2-4s at a waypoint, does her exercise (facing the rack/mirror/door)
-   - Randomly checks her phone for 2s every 6-10s
+   What's new in v3:
+   - 8 hand-built LEVELS. Each level adds more
+     equipment (real obstacles: they block movement
+     AND line of sight) and more girls.
+   - THE NECK™: your gaze is magnetically pulled
+     toward the nearest girl. The pull gets stronger
+     every level. Fight it with the mouse.
+   - CAUGHT IN 4K: sus only builds while YOU look.
+     If she's looking back at you while you look,
+     her notice meter ("?" → "!") fills — hold the
+     mutual stare too long and she accuses you on
+     the spot.
+   - EYES CLOSED (hold SPACE): zero sus, but the
+     screen goes dark, you walk slower, and bumping
+     into a girl blind is an instant bust.
 
-   Filmer NPC (Phase 5+):
-   - Guy with phone, panning left-right slowly
-   - 2× shame gain (being filmed is worse than being seen)
-   - Wider cone
+   Girl types:
+   - lifter:     stationary, periodically turns
+                 around to scan behind her
+   - walker:     patrols waypoints
+   - stepper:    stair-stepper at the wall, faces
+                 away, HUGE gaze pull, quick
+                 over-shoulder checks
+   - scanner:    stationary, cone rotates 360°
+   - influencer: ring light, very wide cone,
+                 2× sus, periodically flips 180°
 
-   Trainer NPC (Phase 7+):
-   - Aggressive, walks around, big cone, panics the player
-
-   Shame formula:
-   - 0.22/sec per girl in your gaze cone
-   - 0.44/sec per filmer in cone
-   - 0.32/sec per trainer in cone
-   - Per-girl penalty so the full roster is hard but not instant-kill
+   Debug hook: window.__GYM
    ============================================ */
 
 (() => {
@@ -41,76 +44,232 @@
   // =========================================================================
   // 1. TUNING
   // =========================================================================
-  const PLAYER_SPEED      = 130;
-  const PLAYER_RADIUS     = 11;
-  const GAZE_RANGE        = 220;
-  const GAZE_HALF_ANGLE   = 0.55;
-  const SHAME_MAX         = 5;
-  const HEART_MAX         = 3;
-  const SHAME_GAIN_GIRL   = 0.22;   // per girl, per sec
-  const SHAME_GAIN_FILMER = 0.44;   // 2x: being filmed is worse
-  const SHAME_GAIN_TRAINER= 0.32;
-  const SHAME_DECAY       = 0.5;
-  const HEART_GAIN        = 0.55;
-  const HEART_DECAY       = 0.4;
-  const PANIC_DURATION    = 2.0;
-  const PANIC_SPEED_MULT  = 1.55;
+  const PLAYER_SPEED       = 138;
+  const PLAYER_SPEED_BLIND = 80;     // eyes closed
+  const PLAYER_RADIUS      = 11;
+  const GIRL_RADIUS        = 12;
+
+  const GAZE_RANGE      = 230;
+  const GAZE_HALF_ANGLE = 0.5;
+
+  const SUS_MAX        = 100;
+  const SUS_DECAY      = 13;     // %/sec when not looking
+  const SUS_DECAY_SHUT = 17;     // %/sec eyes closed
+  const SUS_GAIN_BASE  = 19;     // %/sec, one girl, point blank
+  const SUS_MUTUAL_MULT = 2.4;   // she sees you seeing her
+  const SUS_BUMP       = 14;     // walked into a girl (eyes open)
+
+  const NOTICE_TIME   = 1.15;    // sustained mutual stare → accused
+  const NOTICE_DECAY  = 0.8;     // /sec when stare breaks
+
+  const PULL_RANGE   = 280;      // the neck activates inside this radius
+  const DRIFT_BASE   = 4.2;      // rad/s at point blank × level pull
+  const ASSIST_RATE  = 2.3;      // rad/s, gaze eases back to mouse
+  const SNAP_RATE    = 9.0;      // rad/s, when no girl in pull range
+
+  const DOOR_Y0 = 250, DOOR_Y1 = 390;   // door bands on both walls
 
   // =========================================================================
-  // 2. PHASES (escalating roster)
+  // 2. GIRL ARCHETYPES
   // =========================================================================
-  const PHASES = [
-    { id: 1, name: "BICEP CURLS",      numGirls: 1, girlSpeed: 0,    stayMin: 99, stayMax: 99, phoneChance: 0.0, coneWidth: 0.55, description: "She's doing bicep curls. Easy. Eyes down. Just walk past." },
-    { id: 2, name: "ROMANIAN DEADLIFTS", numGirls: 2, girlSpeed: 30,  stayMin: 2.5, stayMax: 4.0, phoneChance: 0.4, coneWidth: 0.6, description: "Two of them now. One checks her phone." },
-    { id: 3, name: "MIRROR SELFIES",   numGirls: 3, girlSpeed: 38,  stayMin: 2.0, stayMax: 3.5, phoneChance: 0.6, coneWidth: 0.6, description: "Three girls. One is taking mirror selfies. The reflection counts." },
-    { id: 4, name: "GROUP CLASS",      numGirls: 4, girlSpeed: 42,  stayMin: 1.5, stayMax: 3.0, phoneChance: 0.7, coneWidth: 0.65, description: "Four girls. They're synchronized. Eyes down the whole time." },
-    { id: 5, name: "PAPARAZZI HOUR",   numGirls: 5, girlSpeed: 45,  stayMin: 1.5, stayMax: 2.8, phoneChance: 0.8, coneWidth: 0.65, hasFilmer: true, description: "Five girls. Plus a guy with a phone. He's filming." },
-    { id: 6, name: "SPEED ROUND",      numGirls: 5, girlSpeed: 60,  stayMin: 1.2, stayMax: 2.2, phoneChance: 0.85, coneWidth: 0.7, hasFilmer: true, description: "Same five. They walk faster. They look around more." },
-    { id: 7, name: "PERSONAL TRAINER", numGirls: 5, girlSpeed: 55,  stayMin: 1.2, stayMax: 2.2, phoneChance: 0.85, coneWidth: 0.7, hasFilmer: true, hasTrainer: true, description: "Five girls. Filmer. Plus a trainer correcting form." },
-    { id: 8, name: "PEAK HOURS",       numGirls: 5, girlSpeed: 70,  stayMin: 0.8, stayMax: 1.6, phoneChance: 0.95, coneWidth: 0.75, hasFilmer: true, hasTrainer: true, description: "Peak hours. Everyone is moving. Everyone is looking. Don't look up." }
+  const TYPES = {
+    lifter:     { coneW: 0.55, range: 190, susMult: 1.0, pullW: 1.0, checkEvery: [4.5, 7.0], checkDur: 1.2 },
+    walker:     { coneW: 0.60, range: 200, susMult: 1.0, pullW: 1.0 },
+    stepper:    { coneW: 0.50, range: 200, susMult: 1.0, pullW: 1.7, checkEvery: [3.5, 6.0], checkDur: 0.8 },
+    scanner:    { coneW: 0.60, range: 210, susMult: 1.0, pullW: 1.0, rotate: 0.65 },
+    influencer: { coneW: 0.95, range: 240, susMult: 2.0, pullW: 1.35, flipEvery: [4.0, 6.5], flipDur: 2.0 }
+  };
+
+  // =========================================================================
+  // 3. LEVELS — more obstacles, more girls, stronger neck every level
+  //    Obstacles block movement AND line of sight (both ways — use as cover).
+  //    kinds: rack, bench, tread, plant, fountain, cable, desk, ring
+  // =========================================================================
+  const LEVELS = [
+    {
+      name: "6 AM. DEAD.", sub: "One girl. She's at the rack, facing the mirror. She checks behind her sometimes.",
+      pull: 0.22, girlSpeed: 0, phoneChance: 0.3,
+      obstacles: [
+        { x: 200, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 310, y: 430, w: 70, h: 40, kind: "bench" },
+        { x: 520, y: 110, w: 38, h: 38, kind: "plant" },
+        { x: 500, y: 540, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "lifter", x: 320, y: 160, facing: -Math.PI / 2 }
+      ]
+    },
+    {
+      name: "MORNING REGULARS", sub: "Two now. One of them walks laps.",
+      pull: 0.30, girlSpeed: 36, phoneChance: 0.4,
+      obstacles: [
+        { x: 140, y: 140, w: 56, h: 72, kind: "rack" },
+        { x: 490, y: 140, w: 56, h: 72, kind: "rack" },
+        { x: 330, y: 250, w: 70, h: 40, kind: "bench" },
+        { x: 220, y: 470, w: 70, h: 40, kind: "bench" },
+        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
+        { x: 340, y: 565, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "lifter", x: 490, y: 190, facing: Math.PI },
+        { type: "walker", path: [[150, 350], [330, 350], [330, 520], [150, 520]] }
+      ]
+    },
+    {
+      name: "LEG DAY", sub: "Stair-steppers at the back wall. They face away. Your neck knows.",
+      pull: 0.38, girlSpeed: 40, phoneChance: 0.5,
+      obstacles: [
+        { x: 450, y: 112, w: 44, h: 80, kind: "tread" },
+        { x: 520, y: 112, w: 44, h: 80, kind: "tread" },
+        { x: 150, y: 140, w: 56, h: 72, kind: "rack" },
+        { x: 290, y: 300, w: 70, h: 40, kind: "bench" },
+        { x: 160, y: 480, w: 70, h: 40, kind: "bench" },
+        { x: 400, y: 520, w: 38, h: 38, kind: "plant" },
+        { x: 80, y: 565, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "stepper", x: 450, y: 118, facing: -Math.PI / 2 },
+        { type: "stepper", x: 520, y: 118, facing: -Math.PI / 2 },
+        { type: "walker", path: [[210, 220], [380, 220], [380, 430], [210, 430]] }
+      ]
+    },
+    {
+      name: "INFLUENCER HOURS", sub: "She set up a ring light in the middle of the floor. Wide lens. Do not enter the frame.",
+      pull: 0.45, girlSpeed: 44, phoneChance: 0.5,
+      obstacles: [
+        { x: 140, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 140, y: 520, w: 56, h: 72, kind: "rack" },
+        { x: 270, y: 210, w: 70, h: 40, kind: "bench" },
+        { x: 270, y: 470, w: 70, h: 40, kind: "bench" },
+        { x: 520, y: 116, w: 44, h: 80, kind: "tread" },
+        { x: 560, y: 545, w: 38, h: 38, kind: "plant" },
+        { x: 430, y: 570, w: 66, h: 36, kind: "fountain" },
+        { x: 380, y: 320, w: 16, h: 16, kind: "ring" }
+      ],
+      girls: [
+        { type: "influencer", x: 336, y: 320, facing: 0 },
+        { type: "lifter", x: 140, y: 172, facing: Math.PI / 2 },
+        { type: "stepper", x: 520, y: 122, facing: -Math.PI / 2 },
+        { type: "walker", path: [[200, 580], [560, 580], [560, 460], [200, 460]] }
+      ]
+    },
+    {
+      name: "LUNCH RUSH", sub: "Five girls. One of them just… slowly scans the whole room. Forever.",
+      pull: 0.52, girlSpeed: 48, phoneChance: 0.6,
+      obstacles: [
+        { x: 120, y: 130, w: 56, h: 72, kind: "rack" },
+        { x: 520, y: 130, w: 56, h: 72, kind: "rack" },
+        { x: 230, y: 260, w: 70, h: 40, kind: "bench" },
+        { x: 420, y: 260, w: 70, h: 40, kind: "bench" },
+        { x: 230, y: 440, w: 70, h: 40, kind: "bench" },
+        { x: 420, y: 440, w: 70, h: 40, kind: "bench" },
+        { x: 320, y: 120, w: 84, h: 44, kind: "cable" },
+        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
+        { x: 580, y: 560, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 580, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "scanner", x: 320, y: 350, facing: 0 },
+        { type: "lifter", x: 120, y: 182, facing: 0 },
+        { type: "lifter", x: 520, y: 182, facing: Math.PI },
+        { type: "walker", path: [[140, 540], [500, 540], [500, 500], [140, 500]] },
+        { type: "walker", path: [[160, 200], [480, 200], [480, 330], [160, 330]] }
+      ]
+    },
+    {
+      name: "THE SQUAD ARRIVES", sub: "Six of them came together. They cross the floor in pairs. The neck pull is getting serious.",
+      pull: 0.60, girlSpeed: 52, phoneChance: 0.65,
+      obstacles: [
+        { x: 130, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 510, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 320, y: 200, w: 70, h: 40, kind: "bench" },
+        { x: 180, y: 320, w: 70, h: 40, kind: "bench" },
+        { x: 460, y: 320, w: 70, h: 40, kind: "bench" },
+        { x: 320, y: 460, w: 70, h: 40, kind: "bench" },
+        { x: 250, y: 112, w: 44, h: 80, kind: "tread" },
+        { x: 390, y: 112, w: 44, h: 80, kind: "tread" },
+        { x: 64, y: 560, w: 38, h: 38, kind: "plant" },
+        { x: 576, y: 560, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 580, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "influencer", x: 320, y: 560, facing: -Math.PI / 2 },
+        { type: "scanner", x: 320, y: 330, facing: 0 },
+        { type: "stepper", x: 250, y: 118, facing: -Math.PI / 2 },
+        { type: "lifter", x: 510, y: 172, facing: Math.PI / 2 },
+        { type: "walker", path: [[120, 240], [120, 540], [240, 540], [240, 240]] },
+        { type: "walker", path: [[540, 240], [540, 540], [410, 540], [410, 240]] }
+      ]
+    },
+    {
+      name: "FULL FLOOR", sub: "Seven girls. Two scanners. You are one head-turn from the group chat.",
+      pull: 0.68, girlSpeed: 56, phoneChance: 0.7,
+      obstacles: [
+        { x: 120, y: 130, w: 56, h: 72, kind: "rack" },
+        { x: 520, y: 130, w: 56, h: 72, kind: "rack" },
+        { x: 320, y: 110, w: 84, h: 44, kind: "cable" },
+        { x: 210, y: 240, w: 70, h: 40, kind: "bench" },
+        { x: 430, y: 240, w: 70, h: 40, kind: "bench" },
+        { x: 320, y: 350, w: 70, h: 40, kind: "bench" },
+        { x: 210, y: 460, w: 70, h: 40, kind: "bench" },
+        { x: 430, y: 460, w: 70, h: 40, kind: "bench" },
+        { x: 150, y: 575, w: 44, h: 60, kind: "tread" },
+        { x: 490, y: 575, w: 44, h: 60, kind: "tread" },
+        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
+        { x: 580, y: 110, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 590, w: 66, h: 36, kind: "fountain" }
+      ],
+      girls: [
+        { type: "scanner", x: 230, y: 330, facing: 0 },
+        { type: "scanner", x: 410, y: 330, facing: Math.PI },
+        { type: "influencer", x: 320, y: 180, facing: Math.PI / 2 },
+        { type: "stepper", x: 150, y: 560, facing: Math.PI / 2 },
+        { type: "stepper", x: 490, y: 560, facing: Math.PI / 2 },
+        { type: "walker", path: [[110, 220], [110, 520], [550, 520], [550, 220]] },
+        { type: "walker", path: [[270, 540], [370, 540], [370, 410], [270, 410]] }
+      ]
+    },
+    {
+      name: "PEAK HOURS. 6 PM.", sub: "Eight girls. Bench maze. Max neck. Godspeed, soldier.",
+      pull: 0.78, girlSpeed: 62, phoneChance: 0.8,
+      obstacles: [
+        { x: 110, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 530, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 320, y: 100, w: 84, h: 44, kind: "cable" },
+        { x: 160, y: 250, w: 70, h: 40, kind: "bench" },
+        { x: 320, y: 220, w: 70, h: 40, kind: "bench" },
+        { x: 480, y: 250, w: 70, h: 40, kind: "bench" },
+        { x: 240, y: 350, w: 70, h: 40, kind: "bench" },
+        { x: 400, y: 350, w: 70, h: 40, kind: "bench" },
+        { x: 160, y: 450, w: 70, h: 40, kind: "bench" },
+        { x: 480, y: 450, w: 70, h: 40, kind: "bench" },
+        { x: 250, y: 575, w: 44, h: 60, kind: "tread" },
+        { x: 390, y: 575, w: 44, h: 60, kind: "tread" },
+        { x: 64, y: 580, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 480, w: 16, h: 16, kind: "ring" }
+      ],
+      girls: [
+        { type: "influencer", x: 320, y: 524, facing: -Math.PI / 2 },
+        { type: "scanner", x: 320, y: 300, facing: 0 },
+        { type: "scanner", x: 130, y: 350, facing: 0 },
+        { type: "stepper", x: 250, y: 560, facing: Math.PI / 2 },
+        { type: "stepper", x: 390, y: 560, facing: Math.PI / 2 },
+        { type: "walker", path: [[100, 200], [560, 200], [560, 160], [100, 160]] },
+        { type: "walker", path: [[120, 520], [120, 280], [220, 280], [220, 520]] },
+        { type: "walker", path: [[540, 520], [540, 280], [440, 280], [440, 520]] }
+      ]
+    }
   ];
 
-  // =========================================================================
-  // 3. WAYPOINTS — shared across girls, sampled per girl so they don't overlap
-  // =========================================================================
-  // 8 waypoints around the periphery + a few mid-floor nodes + the center
-  const WAYPOINTS = [
-    { x: 320, y: 320 }, // CENTER (used for phase 1 tutorial spawn)
-    { x: 110, y: 110 }, // top-left rack
-    { x: 320, y:  90 }, // top center (mirror wall)
-    { x: 530, y: 110 }, // top-right rack
-    { x: 110, y: 320 }, // left mid
-    { x: 320, y: 540 }, // bottom center (water fountain)
-    { x: 530, y: 320 }, // right mid (lockers)
-    { x: 110, y: 530 }, // bottom-left
-    { x: 530, y: 530 }, // bottom-right
-    { x: 220, y: 220 }, // mid upper-left
-    { x: 420, y: 220 }, // mid upper-right
-    { x: 220, y: 420 }, // mid lower-left
-    { x: 420, y: 420 }, // mid lower-right
-  ];
-
-  // =========================================================================
-  // 4. COVERS (more, smaller, scattered)
-  // =========================================================================
-  const COVERS = [
-    { x:  90, y: 110, w: 50, h: 70, kind: "rack",   label: "RACK" },
-    { x: 530, y: 110, w: 50, h: 70, kind: "rack",   label: "RACK" },
-    { x: 290, y: 200, w: 60, h: 40, kind: "bench",  label: "BENCH" },
-    { x: 110, y: 320, w: 40, h: 60, kind: "locker", label: "LOCKER" },
-    { x: 320, y: 540, w: 70, h: 40, kind: "rack",   label: "FOUNTAIN" },
-    { x: 530, y: 320, w: 40, h: 60, kind: "locker", label: "LOCKER" },
-    { x: 220, y: 420, w: 50, h: 40, kind: "bench",  label: "BENCH" },
-    { x: 420, y: 420, w: 50, h: 40, kind: "rack",   label: "RACK" },
-  ];
-
-  // Decoy positions
-  const DECOY_TARGETS = [
-    { x: 320, y: 100 },
-    { x: 100, y: 320 },
-    { x: 540, y: 540 },
-    { x: 100, y: 100 },
-    { x: 540, y: 100 }
+  const LEVEL_TOASTS = [
+    "👀 Level 1 · 6 AM. One girl. Tutorial neck.",
+    "💪 Level 2 · Two girls. One walks laps.",
+    "🦵 Level 3 · Stair-steppers. Your neck has opinions.",
+    "💡 Level 4 · Ring light deployed. 2× sus in her frame.",
+    "🥗 Level 5 · Lunch rush. One girl scans the room forever.",
+    "👯 Level 6 · The squad. They patrol in pairs.",
+    "🔥 Level 7 · Full floor. Two scanners. Stay behind iron.",
+    "💀 Level 8 · Peak hours. Max neck. See you on the other side."
   ];
 
   const SHAME_CAPTIONS = [
@@ -123,182 +282,191 @@
     "Job interview next week is gonna be a vibe.",
     "Your Hinge matches just got pruned.",
     "She tagged the gym. The gym tagged you back.",
-    "The duck radar couldn't have predicted this. (It did.)",
     "Insurance claim filed. Cause of loss: one (1) head turn.",
-    "The IOC sends their regards.",
-    "Five girls. Five phones. You didn't stand a chance.",
-    "The filmer got the angle. The trainer got the quote. The leggings got the rest.",
-    "Group chat notification: 'is this him???' x 47"
+    "Group chat notification: 'is this him???' × 47",
+    "Front desk just voided your membership. And your dignity.",
+    "The ring light caught everything. In 4K. At 60fps.",
+    "Your neck wrote a check your reputation couldn't cash."
   ];
 
-  const PHASE_INTROS = [
-    "👀 Phase 1 · 1 girl. Tutorial. You got this.",
-    "💪 Phase 2 · 2 girls. One of them is on her phone.",
-    "📸 Phase 3 · 3 girls. Mirror selfies. The reflection counts.",
-    "🔥 Phase 4 · 4 girls. Group class. Synchronized.",
-    "📱 Phase 5 · 5 girls + filmer. He's walking the perimeter.",
-    "⚡ Phase 6 · Speed round. They move faster.",
-    "🏋️ Phase 7 · + Trainer. He's correcting form aggressively.",
-    "💀 Phase 8 · Peak hours. Five girls. Filmer. Trainer. Don't look up."
+  const BUMP_LINES = [
+    "💢 You literally walked into her.",
+    "💢 'Watch it, creep.'",
+    "💢 Body check. Not the good kind.",
+    "💢 She dropped her shaker bottle. Everyone heard it."
   ];
 
   // =========================================================================
-  // 5. STATE
+  // 4. STATE
   // =========================================================================
-
   const state = {
     running: false,
     paused: false,
     gameOver: false,
     won: false,
     started: false,
-    phase: 1,
+
+    level: 1,
+    levelT: 0,
+    levelPeakSus: 0,
+    score: 0,
 
     player: {
-      x: 40, y: 320,
-      vx: 0, vy: 0,
-      facing: 0,
+      x: 36, y: 320,
+      facing: 0,        // actual gaze (after neck pull)
+      desired: 0,       // where the mouse points
+      dirX: 0, dirY: 0,
       moving: false,
-      dirX: 0, dirY: 0
+      eyesClosed: false
     },
 
-    gaze: { active: true, range: GAZE_RANGE, halfAngle: GAZE_HALF_ANGLE },
+    sus: 0,
+    fighting: false,    // neck pull currently strong
+    pullTarget: null,   // girl the neck wants
 
-    shame: 0,
-    heart: 0,
-    shameTotal: 0,
-    shameHits: 0,
+    girls: [],
+    obstacles: [],
 
-    panic: 0,
     airpodT: 0,
     boyfriendT: 0,
     decoy: null,
 
-    inCover: false,
-
-    // Girls (array of NPC states)
-    girls: [],
-    // Special NPCs
-    filmer: null,
-    trainer: null,
-
-    mouseX: 0,
-    mouseY: 0,
+    bustReason: null,   // "sus" | "caught" | "blindbump"
 
     cam: { shake: 0, flash: 0 },
-
     t: 0,
     lastTime: 0
   };
 
   // =========================================================================
-  // 6. UTILITIES
+  // 5. UTILITIES
   // =========================================================================
-  const rand   = (a, b) => a + Math.random() * (b - a);
-  const randi  = (a, b) => Math.floor(rand(a, b));
-  const choice = (arr)  => arr[Math.floor(Math.random() * arr.length)];
-  const clamp  = (v, a, b) => Math.max(a, Math.min(b, v));
-  const TAU    = Math.PI * 2;
-  const dist   = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
-  function lerp(a, b, t) { return a + (b - a) * t; }
+  const TAU = Math.PI * 2;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const choice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
+  const lerp = (a, b, t) => a + (b - a) * t;
+
   function normalizeAngle(a) {
     while (a > Math.PI) a -= TAU;
     while (a < -Math.PI) a += TAU;
     return a;
   }
 
-  function pointInCover(x, y) {
-    for (const c of COVERS) {
-      if (x >= c.x - c.w/2 && x <= c.x + c.w/2 &&
-          y >= c.y - c.h/2 && y <= c.y + c.h/2) {
-        return c;
-      }
-    }
-    return null;
+  function pointInRect(x, y, r) {
+    return x >= r.x - r.w / 2 && x <= r.x + r.w / 2 &&
+           y >= r.y - r.h / 2 && y <= r.y + r.h / 2;
   }
 
-  function gazeBlocked(x, y, facing) {
-    const steps = 10;
-    const dx = Math.cos(facing);
-    const dy = Math.sin(facing);
-    for (let i = 1; i <= steps; i++) {
-      const px = x + dx * (i / steps) * state.gaze.range;
-      const py = y + dy * (i / steps) * state.gaze.range;
-      if (pointInCover(px, py)) return true;
+  // Line of sight between two points — blocked by any obstacle
+  function losBlocked(ax, ay, bx, by) {
+    const steps = 14;
+    for (let i = 1; i < steps; i++) {
+      const px = lerp(ax, bx, i / steps);
+      const py = lerp(ay, by, i / steps);
+      for (const o of state.obstacles) {
+        if (pointInRect(px, py, o)) return true;
+      }
+    }
+    return false;
+  }
+
+  // Circle-vs-rect collision for player movement (axis-separated)
+  function collidesCircleRect(cx, cy, cr, r) {
+    const nx = clamp(cx, r.x - r.w / 2, r.x + r.w / 2);
+    const ny = clamp(cy, r.y - r.h / 2, r.y + r.h / 2);
+    return dist(cx, cy, nx, ny) < cr;
+  }
+
+  function collidesAny(cx, cy, cr) {
+    for (const o of state.obstacles) {
+      if (collidesCircleRect(cx, cy, cr, o)) return true;
     }
     return false;
   }
 
   // =========================================================================
-  // 7. NPC FACTORY — make a girl with a patrol path
+  // 6. AUDIO — tiny synthesized blips, no files
   // =========================================================================
-
-  function makeGirl(index) {
-    // Pick a starting waypoint that's not already occupied
-    // Phase 1 always spawns the first girl at canvas center for tutorial visibility.
-    // Other girls (and later phases) get a random starting waypoint.
-    const waypoints = [];
-    let startX, startY;
-    if (index === 0 && state.phase === 1) {
-      startX = 320; startY = 320;
-    } else {
-      const startWP = choice(WAYPOINTS);
-      startX = startWP.x; startY = startWP.y;
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
     }
-    // Always include the starting position in the waypoint list
-    const startObj = { x: startX, y: startY };
-    waypoints.push(startObj);
-    while (waypoints.length < 4) {
-      const wp = choice(WAYPOINTS);
-      // Make sure we don't add a duplicate of the start
-      if (!waypoints.some(w => w.x === wp.x && w.y === wp.y)) waypoints.push(wp);
-    }
-    return makeGirlFromWaypoints(index, waypoints);
   }
+  function beep(freq, dur, type, gain, when) {
+    if (!audioCtx) return;
+    try {
+      const t0 = audioCtx.currentTime + (when || 0);
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      osc.type = type || "square";
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(gain || 0.06, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur);
+    } catch (e) {}
+  }
+  const sfx = {
+    notice: () => beep(880, 0.09, "square", 0.05),
+    alert:  () => { beep(660, 0.1, "square", 0.06); beep(990, 0.1, "square", 0.06, 0.1); },
+    bust:   () => { beep(220, 0.3, "sawtooth", 0.08); beep(140, 0.45, "sawtooth", 0.08, 0.12); },
+    level:  () => { beep(523, 0.1, "square", 0.05); beep(784, 0.14, "square", 0.05, 0.1); },
+    win:    () => { [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.16, "square", 0.05, i * 0.11)); },
+    bump:   () => beep(180, 0.12, "sawtooth", 0.07)
+  };
 
-  function makeGirlFromWaypoints(index, waypoints) {
-    return {
-      index,
-      x: waypoints[0].x,
-      y: waypoints[0].y,
-      waypoints,
-      targetIdx: 1,
-      mode: "exercising",
-      modeT: 0,
-      stayDuration: 2.5,
-      facing: 0,
-      speed: 0,
-      phoneT: 0,
+  // =========================================================================
+  // 7. GIRL FACTORY
+  // =========================================================================
+  function makeGirl(def, lv) {
+    const t = TYPES[def.type];
+    const g = {
+      type: def.type,
+      x: def.x !== undefined ? def.x : def.path[0][0],
+      y: def.y !== undefined ? def.y : def.path[0][1],
+      facing: def.facing !== undefined ? def.facing : 0,
+      baseFacing: def.facing !== undefined ? def.facing : 0,
+      coneW: t.coneW,
+      range: t.range,
+      susMult: t.susMult,
+      pullW: t.pullW,
+      notice: 0,            // 0..NOTICE_TIME — mutual stare meter
+      bumpCooldown: 0,
+
+      // phone
       phoneActive: false,
-      phoneCycle: rand(6, 10),
+      phoneT: 0,
+      phoneCycle: rand(6, 11),
+
+      // lifter / stepper checks
+      checkT: def.type === "lifter" || def.type === "stepper" ? rand(t.checkEvery[0], t.checkEvery[1]) : 0,
+      checking: false,
+      checkDur: t.checkDur || 0,
+
+      // scanner
+      rotate: t.rotate || 0,
+
+      // influencer
+      flipT: def.type === "influencer" ? rand(t.flipEvery[0], t.flipEvery[1]) : 0,
+      flipping: 0,          // remaining flip time
+      flipped: false,
+
+      // walker
+      path: def.path || null,
+      pathIdx: 1,
+      speed: lv.girlSpeed,
+
       leggings: choice(["#ff2e88", "#e91e63", "#ff4081", "#d81b60", "#c2185b"]),
-      label: choice(["YOGA PANTS", "LULLEMON", "LIFTO", "GAINS", "FLEX", "CUT", "BOOTY", "DEADLIFT"])
+      label: choice(["YOGA PANTS", "LULLEMON", "LIFTO", "GAINS", "FLEX", "CUT", "BOOTY", "PR QUEEN"])
     };
-  }
-
-  function makeFilmer() {
-    return {
-      x: 60, y: 320,
-      // Walks along the perimeter (top, right, bottom, left)
-      perimeterT: 0,             // 0..4 — 4 sides
-      speed: 25,                 // slower than girls
-      facing: 0,
-      panT: 0,
-      panTarget: 0,
-      // Panning — slowly rotates cone
-      panSpeed: 0.6
-    };
-  }
-
-  function makeTrainer() {
-    return {
-      x: 320, y: 320,
-      target: choice(WAYPOINTS),
-      speed: 40,
-      facing: 0,
-      whistleT: 0,
-      whistleActive: false
-    };
+    if (g.type === "influencer") g.label = "RING LIGHT";
+    if (g.type === "scanner") g.label = "THE WATCHER";
+    if (g.type === "stepper") g.label = "STAIRMASTER";
+    return g;
   }
 
   // =========================================================================
@@ -309,505 +477,343 @@
   let mouseCanvasY = H / 2;
 
   window.addEventListener("keydown", (e) => {
-    keys[e.key.toLowerCase()] = true;
-    if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key.toLowerCase())) e.preventDefault();
+    const k = e.key.toLowerCase();
+    keys[k] = true;
+    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
-  function getMousePos(e) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left) * (canvas.width / rect.width),
-      y: (e.clientY - rect.top) * (canvas.height / rect.height)
-    };
-  }
   canvas.addEventListener("mousemove", (e) => {
-    const m = getMousePos(e);
-    mouseCanvasX = m.x;
-    mouseCanvasY = m.y;
+    const rect = canvas.getBoundingClientRect();
+    mouseCanvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
+    mouseCanvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
   });
   canvas.addEventListener("mousedown", () => {
     canvas.focus();
+    ensureAudio();
     if (!state.running && !state.gameOver && !state.won) startGame();
   });
 
-  function readInput(dt) {
+  function readInput() {
+    const p = state.player;
     let dx = 0, dy = 0;
-    if (keys["w"] || keys["arrowup"])    dy -= 1;
-    if (keys["s"] || keys["arrowdown"])  dy += 1;
-    if (keys["a"] || keys["arrowleft"])  dx -= 1;
+    if (keys["w"] || keys["arrowup"]) dy -= 1;
+    if (keys["s"] || keys["arrowdown"]) dy += 1;
+    if (keys["a"] || keys["arrowleft"]) dx -= 1;
     if (keys["d"] || keys["arrowright"]) dx += 1;
     if (dx !== 0 || dy !== 0) {
-      const len = Math.sqrt(dx*dx + dy*dy);
+      const len = Math.hypot(dx, dy);
       dx /= len; dy /= len;
-      state.player.moving = true;
+      p.moving = true;
     } else {
-      state.player.moving = false;
+      p.moving = false;
     }
-    state.player.dirX = dx;
-    state.player.dirY = dy;
+    p.dirX = dx;
+    p.dirY = dy;
+    p.eyesClosed = !!keys[" "];
 
-    const mdx = mouseCanvasX - state.player.x;
-    const mdy = mouseCanvasY - state.player.y;
-    if (mdx !== 0 || mdy !== 0) {
-      state.player.facing = Math.atan2(mdy, mdx);
-    }
+    const mdx = mouseCanvasX - p.x;
+    const mdy = mouseCanvasY - p.y;
+    if (mdx !== 0 || mdy !== 0) p.desired = Math.atan2(mdy, mdx);
   }
 
   // =========================================================================
-  // 9. NPC UPDATE
+  // 9. THE NECK™ — gaze drift toward the nearest girl
   // =========================================================================
+  function updateGaze(dt) {
+    const p = state.player;
+    const lv = LEVELS[state.level - 1];
 
-  function updateGirl(g, ph, dt) {
-    if (state.airpodT > 0) {
-      // AirPods → all girls look at phone (facing up)
-      g.facing = -Math.PI / 2;
+    // Find the strongest temptation in pull range
+    let best = null, bestWeight = 0;
+    for (const g of state.girls) {
+      const d = dist(p.x, p.y, g.x, g.y);
+      if (d > PULL_RANGE) continue;
+      const w = (1 - d / PULL_RANGE) * g.pullW;
+      if (w > bestWeight) { bestWeight = w; best = g; }
+    }
+    state.pullTarget = best;
+
+    if (p.eyesClosed || state.airpodT > 0) {
+      // Eyes shut or AirPods in: the neck loses. Gaze snaps to the mouse.
+      p.facing += normalizeAngle(p.desired - p.facing) * Math.min(1, SNAP_RATE * dt);
+      state.fighting = false;
       return;
     }
 
+    if (!best) {
+      // Nobody around — gaze follows the mouse snappily
+      p.facing += normalizeAngle(p.desired - p.facing) * Math.min(1, SNAP_RATE * dt);
+      state.fighting = false;
+      return;
+    }
+
+    // 1) Willpower: ease toward the mouse
+    const toDesired = normalizeAngle(p.desired - p.facing);
+    p.facing += Math.sign(toDesired) * Math.min(Math.abs(toDesired), ASSIST_RATE * dt);
+
+    // 2) The neck: drift toward her
+    const girlAngle = Math.atan2(best.y - p.y, best.x - p.x);
+    const toGirl = normalizeAngle(girlAngle - p.facing);
+    const driftRate = bestWeight * lv.pull * DRIFT_BASE;
+    p.facing += Math.sign(toGirl) * Math.min(Math.abs(toGirl), driftRate * dt);
+
+    p.facing = normalizeAngle(p.facing);
+    state.fighting = driftRate > ASSIST_RATE * 0.8;
+  }
+
+  // =========================================================================
+  // 10. GIRL UPDATE
+  // =========================================================================
+  function updateGirl(g, lv, dt) {
+    g.bumpCooldown = Math.max(0, g.bumpCooldown - dt);
+
+    // Decoy overrides everything: all eyes on the dropped deadlift
     if (state.decoy) {
-      // Decoy → girl is glued to it
-      const dx = state.decoy.x - g.x;
-      const dy = state.decoy.y - g.y;
-      const targetFacing = Math.atan2(dy, dx);
+      const targetFacing = Math.atan2(state.decoy.y - g.y, state.decoy.x - g.x);
       const diff = normalizeAngle(targetFacing - g.facing);
-      const turnRate = 3.5 * dt;
-      if (Math.abs(diff) < turnRate) g.facing = targetFacing;
-      else g.facing += Math.sign(diff) * turnRate;
+      g.facing += Math.sign(diff) * Math.min(Math.abs(diff), 4.0 * dt);
+      g.notice = Math.max(0, g.notice - NOTICE_DECAY * dt);
       return;
     }
 
-    g.modeT += dt;
-
-    // Phone check (every phoneCycle seconds, for 2s)
-    if (!g.phoneActive) {
-      g.phoneT += dt;
-      if (g.phoneT > g.phoneCycle && Math.random() < ph.phoneChance) {
-        g.phoneActive = true;
-        g.phoneT = 0;
+    // Phone check (not influencers — they ARE the phone)
+    if (g.type !== "influencer" && g.type !== "scanner") {
+      if (!g.phoneActive) {
+        g.phoneT += dt;
+        if (g.phoneT > g.phoneCycle && Math.random() < lv.phoneChance) {
+          g.phoneActive = true;
+          g.phoneT = 0;
+        }
+      } else {
+        g.phoneT += dt;
+        if (g.phoneT > 2.0) {
+          g.phoneActive = false;
+          g.phoneT = 0;
+          g.phoneCycle = rand(5, 10);
+        }
       }
     }
-    if (g.phoneActive) {
-      g.facing = -Math.PI / 2;  // look at phone (up)
-      if (g.phoneT > 2.0) {
-        g.phoneActive = false;
-        g.phoneT = 0;
-        g.phoneCycle = rand(5, 10);
-      }
-      return;
-    }
 
-    if (g.mode === "exercising") {
-      // At a waypoint, facing the rack/mirror/etc.
-      // Pick a facing based on which waypoint we're at
-      const wp = g.waypoints[0];
-      // For the starting waypoint, face right (mirror wall).
-      // For other waypoints, face toward the center of the gym.
-      const wpX = g.waypoints.find(w => w.x === g.x && w.y === g.y);
-      if (wpX) {
-        if (wpX.x < 200) g.facing = 0;        // facing right (mirror)
-        else if (wpX.x > 440) g.facing = Math.PI; // facing left
-        else if (wpX.y < 200) g.facing = Math.PI / 2; // facing down
-        else if (wpX.y > 440) g.facing = -Math.PI / 2; // facing up
-        else g.facing = 0;
-      } else {
-        // We just arrived — pick a sensible facing
-        g.facing = 0;
+    switch (g.type) {
+      case "lifter":
+      case "stepper": {
+        // Periodic over-the-shoulder check: facing flips 180°
+        g.checkT -= dt;
+        if (g.checkT <= 0) {
+          if (!g.checking) {
+            g.checking = true;
+            g.checkT = g.checkDur;
+            g.facing = normalizeAngle(g.baseFacing + Math.PI);
+          } else {
+            g.checking = false;
+            const t = TYPES[g.type];
+            g.checkT = rand(t.checkEvery[0], t.checkEvery[1]);
+            g.facing = g.baseFacing;
+          }
+        }
+        break;
       }
-      if (g.modeT > g.stayDuration) {
-        g.mode = "walking";
-        g.modeT = 0;
-        // Pick a new target waypoint (not the current one)
-        const others = g.waypoints.filter((_, i) => i !== 0);
-        const newTarget = choice(others);
-        g.targetX = newTarget.x;
-        g.targetY = newTarget.y;
+      case "scanner": {
+        g.facing = normalizeAngle(g.facing + g.rotate * dt);
+        break;
       }
-    } else {
-      // Walking
-      const dx = g.targetX - g.x;
-      const dy = g.targetY - g.y;
-      const d = Math.hypot(dx, dy);
-      if (d < 4) {
-        // Arrived — snap to waypoint, start exercising
-        g.x = g.targetX;
-        g.y = g.targetY;
-        // Set the "current waypoint" to this one for facing logic
-        g.waypoints = [g.waypoints.find(w => w.x === g.targetX && w.y === g.targetY), ...g.waypoints.filter(w => !(w.x === g.targetX && w.y === g.targetY))];
-        g.mode = "exercising";
-        g.modeT = 0;
-        g.stayDuration = rand(ph.stayMin, ph.stayMax);
-      } else {
-        const vx = (dx / d) * g.speed;
-        const vy = (dy / d) * g.speed;
-        g.x += vx * dt;
-        g.y += vy * dt;
-        // Head turn follows velocity
-        const targetFacing = Math.atan2(vy, vx);
-        const diff = normalizeAngle(targetFacing - g.facing);
-        const turnRate = 2.5 * dt;
-        if (Math.abs(diff) < turnRate) g.facing = targetFacing;
-        else g.facing += Math.sign(diff) * turnRate;
+      case "influencer": {
+        if (g.flipping > 0) {
+          g.flipping -= dt;
+          if (g.flipping <= 0) {
+            g.flipped = !g.flipped;
+            g.facing = normalizeAngle(g.baseFacing + (g.flipped ? Math.PI : 0));
+            const t = TYPES.influencer;
+            g.flipT = rand(t.flipEvery[0], t.flipEvery[1]);
+          }
+        } else {
+          g.flipT -= dt;
+          if (g.flipT <= 0) g.flipping = 0.45;  // brief wind-up, then flip
+        }
+        break;
+      }
+      case "walker": {
+        const target = g.path[g.pathIdx];
+        const dx = target[0] - g.x;
+        const dy = target[1] - g.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 5) {
+          g.pathIdx = (g.pathIdx + 1) % g.path.length;
+        } else if (!g.phoneActive) {
+          g.x += (dx / d) * g.speed * dt;
+          g.y += (dy / d) * g.speed * dt;
+          const targetFacing = Math.atan2(dy, dx);
+          const diff = normalizeAngle(targetFacing - g.facing);
+          g.facing += Math.sign(diff) * Math.min(Math.abs(diff), 3.0 * dt);
+        }
+        break;
       }
     }
   }
 
-  function updateFilmer(f, dt) {
-    if (state.airpodT > 0) { f.facing = -Math.PI / 2; return; }
-    if (state.decoy) {
-      const dx = state.decoy.x - f.x;
-      const dy = state.decoy.y - f.y;
-      const targetFacing = Math.atan2(dy, dx);
-      const diff = normalizeAngle(targetFacing - f.facing);
-      f.facing += Math.sign(diff) * Math.min(Math.abs(diff), 3.0 * dt);
-      return;
-    }
-    // Walk the perimeter
-    f.perimeterT += dt;
-    // 4 sides, each takes 6 seconds at speed 25 (perimeter ~600u)
-    const side = Math.floor(f.perimeterT / 6) % 4;
-    const sideT = (f.perimeterT / 6) % 1;
-    const P_TOP = { from: {x: 60, y: 60}, to: {x: 580, y: 60} };
-    const P_RIGHT = { from: {x: 580, y: 60}, to: {x: 580, y: 580} };
-    const P_BOTTOM = { from: {x: 580, y: 580}, to: {x: 60, y: 580} };
-    const P_LEFT = { from: {x: 60, y: 580}, to: {x: 60, y: 60} };
-    const sides = [P_TOP, P_RIGHT, P_BOTTOM, P_LEFT];
-    const seg = sides[side];
-    f.x = lerp(seg.from.x, seg.to.x, sideT);
-    f.y = lerp(seg.from.y, seg.to.y, sideT);
-    // Facing: inward + pan
-    f.panT += dt;
-    // Pan left-right
-    f.facing = (side === 0 ? Math.PI/2 : side === 1 ? Math.PI : side === 2 ? -Math.PI/2 : 0) + Math.sin(f.panT * 0.6) * 0.7;
+  // Is the player inside this girl's vision cone (and she can actually see)?
+  function girlSeesPlayer(g) {
+    if (g.phoneActive || state.decoy) return false;
+    const p = state.player;
+    const d = dist(p.x, p.y, g.x, g.y);
+    if (d > g.range) return false;
+    const angle = Math.atan2(p.y - g.y, p.x - g.x);
+    if (Math.abs(normalizeAngle(angle - g.facing)) > g.coneW) return false;
+    return !losBlocked(g.x, g.y, p.x, p.y);
   }
 
-  function updateTrainer(t, dt) {
-    if (state.airpodT > 0) { t.facing = -Math.PI / 2; return; }
-    if (state.decoy) {
-      const dx = state.decoy.x - t.x;
-      const dy = state.decoy.y - t.y;
-      const targetFacing = Math.atan2(dy, dx);
-      const diff = normalizeAngle(targetFacing - t.facing);
-      t.facing += Math.sign(diff) * Math.min(Math.abs(diff), 4.0 * dt);
-      return;
+  // Is this girl inside the player's gaze cone (and visible)?
+  function playerSeesGirl(g) {
+    const p = state.player;
+    if (p.eyesClosed) return false;
+    const d = dist(p.x, p.y, g.x, g.y);
+    if (d > GAZE_RANGE) return false;
+    const angle = Math.atan2(g.y - p.y, g.x - p.x);
+    if (Math.abs(normalizeAngle(angle - p.facing)) > GAZE_HALF_ANGLE) return false;
+    return !losBlocked(p.x, p.y, g.x, g.y);
+  }
+
+  // =========================================================================
+  // 11. SUS / NOTICE / BUST
+  // =========================================================================
+  function updateSus(dt) {
+    const p = state.player;
+    let gain = 0;
+    let anyMutual = false;
+
+    for (const g of state.girls) {
+      const looking = playerSeesGirl(g);
+      const seen = girlSeesPlayer(g);
+      const mutual = looking && seen;
+
+      if (looking) {
+        const d = dist(p.x, p.y, g.x, g.y);
+        const proximity = 0.35 + 0.65 * (1 - d / GAZE_RANGE);
+        let mult = g.susMult * (g.phoneActive ? 0.5 : 1);
+        if (mutual) mult *= SUS_MUTUAL_MULT;
+        gain += SUS_GAIN_BASE * proximity * mult;
+      }
+
+      // Notice: she watches you watching her
+      if (mutual && state.boyfriendT <= 0) {
+        anyMutual = true;
+        const before = g.notice;
+        g.notice += dt;
+        if (before < 0.15 && g.notice >= 0.15) sfx.notice();
+        if (before < 0.65 && g.notice >= 0.65) { sfx.alert(); state.cam.shake = Math.max(state.cam.shake, 0.25); }
+        if (g.notice >= NOTICE_TIME) {
+          bust("caught");
+          return;
+        }
+      } else {
+        g.notice = Math.max(0, g.notice - NOTICE_DECAY * dt);
+      }
     }
-    const dx = t.target.x - t.x;
-    const dy = t.target.y - t.y;
-    const d = Math.hypot(dx, dy);
-    if (d < 8) {
-      t.target = choice(WAYPOINTS);
+
+    if (state.boyfriendT > 0) {
+      // Shield: sus frozen, slowly drains
+      state.sus = Math.max(0, state.sus - SUS_DECAY * dt);
+    } else if (gain > 0) {
+      state.sus = Math.min(SUS_MAX, state.sus + gain * dt);
     } else {
-      t.x += (dx / d) * t.speed * dt;
-      t.y += (dy / d) * t.speed * dt;
-      const targetFacing = Math.atan2(dy, dx);
-      const diff = normalizeAngle(targetFacing - t.facing);
-      const turnRate = 3.0 * dt;
-      if (Math.abs(diff) < turnRate) t.facing = targetFacing;
-      else t.facing += Math.sign(diff) * turnRate;
+      state.sus = Math.max(0, state.sus - (p.eyesClosed ? SUS_DECAY_SHUT : SUS_DECAY) * dt);
+    }
+
+    state.levelPeakSus = Math.max(state.levelPeakSus, state.sus);
+
+    if (state.sus >= SUS_MAX && state.boyfriendT <= 0) {
+      bust("sus");
+    }
+  }
+
+  function updateBumps(dt) {
+    const p = state.player;
+    for (const g of state.girls) {
+      const d = dist(p.x, p.y, g.x, g.y);
+      const minD = PLAYER_RADIUS + GIRL_RADIUS;
+      if (d < minD) {
+        // Push the player out
+        const ang = Math.atan2(p.y - g.y, p.x - g.x);
+        p.x = g.x + Math.cos(ang) * minD;
+        p.y = g.y + Math.sin(ang) * minD;
+
+        if (g.bumpCooldown <= 0) {
+          g.bumpCooldown = 1.2;
+          if (p.eyesClosed) {
+            bust("blindbump");
+            return;
+          }
+          if (state.boyfriendT <= 0) {
+            state.sus = Math.min(SUS_MAX, state.sus + SUS_BUMP);
+            state.cam.shake = Math.max(state.cam.shake, 0.35);
+            sfx.bump();
+            RB.toast(choice(BUMP_LINES), "bad");
+            if (state.sus >= SUS_MAX) { bust("sus"); return; }
+          }
+        }
+      }
     }
   }
 
   // =========================================================================
-  // 10. PLAYER UPDATE
+  // 12. PLAYER MOVEMENT (real collision now)
   // =========================================================================
-
   function updatePlayer(dt) {
     const p = state.player;
-    let speed = PLAYER_SPEED;
-    if (state.panic > 0) {
-      speed *= PANIC_SPEED_MULT;
-      state.panic -= dt;
-    }
-    if (state.boyfriendT > 0) {
-      state.boyfriendT -= dt;
-      state.boyfriendFlash = 0.5 + 0.5 * Math.sin(state.t * 14);
-    }
-    const cover = pointInCover(p.x, p.y);
-    state.inCover = !!cover;
-    if (cover) speed *= 1.3;
+    const speed = p.eyesClosed ? PLAYER_SPEED_BLIND : PLAYER_SPEED;
 
-    p.x += p.dirX * speed * dt;
-    p.y += p.dirY * speed * dt;
+    // Axis-separated so you slide along equipment
+    const nx = p.x + p.dirX * speed * dt;
+    if (!collidesAny(nx, p.y, PLAYER_RADIUS)) p.x = nx;
+    const ny = p.y + p.dirY * speed * dt;
+    if (!collidesAny(p.x, ny, PLAYER_RADIUS)) p.y = ny;
+
     p.x = clamp(p.x, PLAYER_RADIUS, W - PLAYER_RADIUS);
     p.y = clamp(p.y, PLAYER_RADIUS, H - PLAYER_RADIUS);
   }
 
-  // =========================================================================
-  // 11. GAZE / SHAME UPDATE (multi-NPC)
-  // =========================================================================
+  function checkLevelProgress() {
+    const p = state.player;
+    // The locker room door: right wall, center band only
+    if (p.x >= W - 22 && p.y >= DOOR_Y0 && p.y <= DOOR_Y1) {
+      // Level score: speed + clean eyes
+      const timeBonus = Math.max(0, Math.round(500 - state.levelT * 22));
+      const cleanBonus = state.levelPeakSus < 30 ? 250 : state.levelPeakSus < 60 ? 100 : 0;
+      const levelScore = 500 + timeBonus + cleanBonus;
+      state.score += levelScore;
 
-  function isInPlayerGaze(targetX, targetY, halfAngle) {
-    if (!state.gaze.active) return false;
-    const dx = targetX - state.player.x;
-    const dy = targetY - state.player.y;
-    if (Math.hypot(dx, dy) > state.gaze.range) return false;
-    const angle = Math.atan2(dy, dx);
-    return Math.abs(normalizeAngle(angle - state.player.facing)) <= (halfAngle || state.gaze.halfAngle);
-  }
-
-  function isInNpcCone(npcX, npcY, npcFacing, range, halfAngle) {
-    const dx = state.player.x - npcX;
-    const dy = state.player.y - npcY;
-    if (Math.hypot(dx, dy) > range) return false;
-    const angle = Math.atan2(dy, dx);
-    return Math.abs(normalizeAngle(angle - npcFacing)) <= halfAngle;
-  }
-
-  function updateGauges(dt) {
-    if (state.airpodT > 0) state.gaze.active = false;
-    else state.gaze.active = true;
-
-    const ph = PHASES[state.phase - 1];
-    const covered = state.gaze.active ? gazeBlocked(state.player.x, state.player.y, state.player.facing) : false;
-
-    // Count how many girls are in player's gaze (contributes to shame)
-    let girlsInGaze = 0;
-    if (state.gaze.active && !covered) {
-      for (const g of state.girls) {
-        if (isInPlayerGaze(g.x, g.y, ph.coneWidth)) girlsInGaze++;
-      }
-    }
-
-    // Count filmers and trainers in player's gaze
-    let filmerInGaze = 0;
-    if (state.gaze.active && !covered && state.filmer) {
-      if (isInPlayerGaze(state.filmer.x, state.filmer.y, 0.85)) filmerInGaze++;
-    }
-    let trainerInGaze = 0;
-    if (state.gaze.active && !covered && state.trainer) {
-      if (isInPlayerGaze(state.trainer.x, state.trainer.y, 0.95)) trainerInGaze++;
-    }
-
-    const totalShameGain = girlsInGaze * SHAME_GAIN_GIRL +
-                           filmerInGaze * SHAME_GAIN_FILMER +
-                           trainerInGaze * SHAME_GAIN_TRAINER;
-
-    if (state.boyfriendT > 0) {
-      // Boyfriend shield: shame does not accumulate
-      state.shame = Math.max(0, state.shame - SHAME_DECAY * 2 * dt);
-    } else if (totalShameGain > 0) {
-      state.shame = Math.min(SHAME_MAX, state.shame + totalShameGain * dt);
-      state.heart = Math.min(HEART_MAX, state.heart + HEART_GAIN * dt);
-    } else {
-      state.shame = Math.max(0, state.shame - SHAME_DECAY * dt);
-      state.heart = Math.max(0, state.heart - HEART_DECAY * dt);
-    }
-
-    // Track shame total
-    state.shameTotal += state.shame * dt * 4;
-    state.shameTotal = Math.floor(state.shameTotal);
-
-    // Heart full → panic
-    if (state.heart >= HEART_MAX && state.panic <= 0) {
-      state.panic = PANIC_DURATION;
-      state.shame = Math.max(0, state.shame - 1.0);
-      state.heart = 0;
-      state.cam.shake = Math.max(state.cam.shake, 0.4);
-      showBanner("⚠ PANIC — HEART RATE SPIKE", 1.2);
-    }
-
-    // Shame at max → game over (unless Boyfriend active)
-    if (state.shame >= SHAME_MAX) {
-      state.shame = SHAME_MAX;
-      if (!state.gameOver && state.boyfriendT <= 0) {
-        triggerShame();
-      }
-    }
-  }
-
-  function checkPhaseProgress() {
-    if (state.player.x >= W - 24) {
-      if (state.phase < PHASES.length) {
-        state.phase++;
-        state.player.x = 40;
-        state.player.y = 320;
-        spawnPhase(state.phase);
-        showBanner("PHASE " + state.phase + " · " + PHASES[state.phase - 1].name, 2.0);
-        RB.toast(PHASE_INTROS[state.phase - 1] || "Next phase", "");
-        state.cam.shake = 0.2;
+      if (state.level < LEVELS.length) {
+        state.level++;
+        loadLevel(state.level);
+        sfx.level();
+        showBanner("LEVEL " + state.level + " · " + LEVELS[state.level - 1].name, 2.0);
+        RB.toast(LEVEL_TOASTS[state.level - 1] + "  (+" + levelScore + ")", "good");
+        state.cam.flash = 0.25;
       } else {
         triggerWin();
       }
     }
   }
 
-  function updateCam(dt) {
-    state.cam.shake = Math.max(0, state.cam.shake - dt * 2);
-    state.cam.flash = Math.max(0, state.cam.flash - dt * 3);
-  }
-
   // =========================================================================
-  // 12. PHASE SPAWN
+  // 13. POWER-UPS (rewarded-ad economy, shared RB store)
   // =========================================================================
-
-  function spawnPhase(phaseNum) {
-    const ph = PHASES[phaseNum - 1];
-    // Spawn girls
-    state.girls = [];
-    for (let i = 0; i < ph.numGirls; i++) {
-      const g = makeGirl(i);
-      g.speed = ph.girlSpeed;
-      // Phase 1: stay still (tutorial). Others: stay between stayMin and stayMax.
-      if (phaseNum === 1) {
-        g.stayDuration = 9999;
-      } else {
-        g.stayDuration = rand(ph.stayMin, ph.stayMax);
-      }
-      state.girls.push(g);
+  function updatePowerTimers(dt) {
+    if (state.airpodT > 0) state.airpodT -= dt;
+    if (state.boyfriendT > 0) state.boyfriendT -= dt;
+    if (state.decoy) {
+      state.decoy.life -= dt;
+      if (state.decoy.life <= 0) state.decoy = null;
     }
-    // Filmer
-    state.filmer = ph.hasFilmer ? makeFilmer() : null;
-    // Trainer
-    state.trainer = ph.hasTrainer ? makeTrainer() : null;
   }
 
-  // =========================================================================
-  // 13. GAME FLOW
-  // =========================================================================
+  const DECOY_TARGETS = [
+    { x: 320, y: 90 }, { x: 90, y: 320 }, { x: 550, y: 550 },
+    { x: 90, y: 90 }, { x: 550, y: 90 }, { x: 320, y: 560 }
+  ];
 
-  function startGame() {
-    if (state.started) return;
-    state.started = true;
-    state.running = true;
-    state.gameOver = false;
-    state.won = false;
-    state.phase = 1;
-    state.shame = 0;
-    state.heart = 0;
-    state.shameTotal = 0;
-    state.shameHits = 0;
-    state.panic = 0;
-    state.airpodT = 0;
-    state.boyfriendT = 0;
-    state.decoy = null;
-    state.player.x = 40;
-    state.player.y = 320;
-    spawnPhase(1);
-    state.t = 0;
-    document.getElementById("overlay").classList.remove("overlay--show");
-    showBanner("PHASE 1 · " + PHASES[0].name, 2.0);
-    requestAnimationFrame(loop);
-  }
-
-  function triggerShame() {
-    state.gameOver = true;
-    state.running = false;
-    state.shameHits++;
-    state.cam.shake = 0.8;
-    state.cam.flash = 1.0;
-    showShameCard();
-  }
-
-  function triggerWin() {
-    state.won = true;
-    state.running = false;
-    state.cam.flash = 0.6;
-    const distScore = 100;
-    const shameBonus = Math.max(0, 8000 - state.shameTotal);
-    const finalScore = distScore + shameBonus;
-    RB.recordScore("dont-look-gym-girl", finalScore);
-    showWinCard(finalScore);
-  }
-
-  function restart() {
-    document.getElementById("shame-mount").innerHTML = "";
-    document.getElementById("panic-banner").style.display = "none";
-    document.getElementById("overlay").classList.add("overlay--show");
-    document.getElementById("overlay-title").innerHTML = "👀 READY?";
-    document.getElementById("overlay-sub").innerHTML = `
-      You're at the <strong style="color:var(--accent-3)">front door</strong>. The gym is full of women in skanky leggings.
-      You need to get to the <strong style="color:var(--accent-2)">locker room</strong>.
-      <br><br>
-      <strong style="color:var(--accent)">Don't. Look. At. Any. Of. Them.</strong>
-      <br>
-      <em style="color:var(--ink-dim);font-size:13px;">
-        WASD/arrows to move · mouse to look · click to start
-      </em>
-    `;
-    state.started = false;
-    state.gameOver = false;
-    state.won = false;
-    state.running = false;
-    state.phase = 1;
-    state.shame = 0;
-    state.heart = 0;
-    state.shameTotal = 0;
-    state.shameHits = 0;
-    state.panic = 0;
-    state.airpodT = 0;
-    state.boyfriendT = 0;
-    state.decoy = null;
-    state.player.x = 40;
-    state.player.y = 320;
-    state.girls = [];
-    state.filmer = null;
-    state.trainer = null;
-    state.t = 0;
-  }
-
-  // =========================================================================
-  // 14. UI: cards, banner, power buttons
-  // =========================================================================
-
-  function showBanner(text, duration) {
-    const b = document.getElementById("panic-banner");
-    b.textContent = text;
-    b.style.display = "block";
-    b.style.animation = "none";
-    void b.offsetWidth;
-    b.style.animation = "panicFlash 0.5s steps(2) " + (duration || 1.2) + " forwards";
-    setTimeout(() => { b.style.display = "none"; }, (duration || 1.2) * 1000);
-  }
-
-  function showShameCard() {
-    const high = RB.getHighScore("dont-look-gym-girl") || 0;
-    const score = Math.max(0, 8000 - state.shameTotal);
-    const cap = choice(SHAME_CAPTIONS);
-
-    document.getElementById("shame-mount").innerHTML = `
-      <div class="shame-card">
-        <h3 class="shame-card__title">📢 PUBLICLY SHAMED</h3>
-        <p class="shame-card__sub">They filmed you. The video is up. ${state.shameHits} shame ${state.shameHits === 1 ? "event" : "events"} this run.</p>
-        <div class="shame-card__stats">
-          Phase reached: <strong>${state.phase}</strong>/${PHASES.length} · Shame total: <strong>${state.shameTotal}</strong><br>
-          High score: <strong>${Math.max(score, high)}</strong>
-        </div>
-        <div class="shame-card__caption">"${cap}"</div>
-        <div class="shame-card__actions">
-          <button class="btn btn--primary" id="shame-retry">Try again</button>
-          <a class="btn btn--ghost" href="../games.html">All games</a>
-        </div>
-      </div>
-    `;
-    document.getElementById("shame-retry").addEventListener("click", restart);
-  }
-
-  function showWinCard(score) {
-    const high = RB.getHighScore("dont-look-gym-girl") || 0;
-    const isNewHigh = score > high;
-    if (isNewHigh) RB.recordScore("dont-look-gym-girl", score);
-
-    document.getElementById("shame-mount").innerHTML = `
-      <div class="win-card">
-        <h3 class="win-card__title">🚪 YOU MADE IT</h3>
-        <p class="shame-card__sub">You crossed the gym floor past every single one of them. Your mom didn't see anything. Your boss didn't see anything. You can go back next week. Maybe.</p>
-        <div class="shame-card__stats">
-          Phases cleared: <strong>${PHASES.length}</strong>/${PHASES.length}<br>
-          Shame total: <strong>${state.shameTotal}</strong><br>
-          Final score: <strong>${score}</strong> ${isNewHigh ? "🆕 NEW HIGH" : ""}
-        </div>
-        <div class="win-card__caption">"I was just here for the leg press. I didn't even see them."</div>
-        <div class="shame-card__actions">
-          <button class="btn btn--primary" id="win-again">Run it back</button>
-          <a class="btn btn--ghost" href="../games.html">All games</a>
-        </div>
-      </div>
-    `;
-    document.getElementById("win-again").addEventListener("click", restart);
-  }
-
-  // ---- Power-up buttons ----
-  let _rbPowerCache = { shield: 0, boost: 0, nuke: 0, airpods: 0, boyfriend: 0, decoy: 0 };
+  let _rbPowerCache = { airpods: 0, boyfriend: 0, decoy: 0 };
   if (typeof RB !== "undefined" && RB.subscribe) {
     RB.subscribe((s) => { _rbPowerCache = s.powerups || _rbPowerCache; });
   }
@@ -842,23 +848,23 @@
     if (!RB.consumePowerup(key)) { RB.toast("Couldn't use that. Try again.", "bad"); return; }
     if (key === "airpods") {
       state.airpodT = 8.0;
-      RB.toast("🎧 Cone vanished for 8s. Walk.", "good");
+      RB.toast("🎧 Noise cancelling ON. The neck is silent for 8s.", "good");
     } else if (key === "boyfriend") {
       state.boyfriendT = 5.0;
-      RB.toast("👔 'I'm her boyfriend.' They didn't even look.", "good");
+      RB.toast("👔 'I'm her boyfriend.' Untouchable for 5s.", "good");
     } else if (key === "decoy") {
       const target = choice(DECOY_TARGETS);
       state.decoy = { x: target.x, y: target.y, life: 2.5, maxLife: 2.5 };
-      RB.toast("🎭 Decoy deployed. Everyone turns.", "good");
+      RB.toast("🎭 Someone dropped a 405 deadlift. Everyone turns.", "good");
     }
     updatePowerButtons();
   }
 
   function renderPowerButtons() {
     const defs = [
-      { key: "airpods",   icon: "🎧", label: "AirPods Max 2.0",   desc: "Cone vanishes · 8s" },
-      { key: "boyfriend", icon: "👔", label: "I'm Her Boyfriend", desc: "Walk through their line · 5s" },
-      { key: "decoy",     icon: "🎭", label: "Decoy Drop",        desc: "Everyone turns · 2.5s" }
+      { key: "airpods",   icon: "🎧", label: "AirPods Max 2.0",   desc: "Neck disabled · 8s" },
+      { key: "boyfriend", icon: "👔", label: "I'm Her Boyfriend", desc: "Sus frozen, can't get caught · 5s" },
+      { key: "decoy",     icon: "🎭", label: "Dropped Deadlift",  desc: "Everyone turns · 2.5s" }
     ];
     document.getElementById("gym-powers").innerHTML = defs.map(d => `
       <button class="gym-power" data-power="${d.key}" data-empty="true" title="${d.desc} — watch a rewarded ad to earn one">
@@ -886,9 +892,150 @@
   }
 
   // =========================================================================
-  // 15. RENDER
+  // 14. GAME FLOW
   // =========================================================================
+  function loadLevel(n) {
+    const lv = LEVELS[n - 1];
+    state.obstacles = lv.obstacles;
+    state.girls = lv.girls.map(def => makeGirl(def, lv));
+    state.player.x = 36;
+    state.player.y = 320;
+    state.levelT = 0;
+    state.levelPeakSus = 0;
+    state.sus = Math.max(0, state.sus - 40);  // partial mercy between levels
+    state.decoy = null;
+  }
 
+  function startGame() {
+    if (state.started) return;
+    state.started = true;
+    state.running = true;
+    state.gameOver = false;
+    state.won = false;
+    state.level = 1;
+    state.score = 0;
+    state.sus = 0;
+    state.airpodT = 0;
+    state.boyfriendT = 0;
+    state.bustReason = null;
+    loadLevel(1);
+    state.t = 0;
+    document.getElementById("overlay").classList.remove("overlay--show");
+    showBanner("LEVEL 1 · " + LEVELS[0].name, 2.0);
+    RB.toast(LEVEL_TOASTS[0], "");
+  }
+
+  function bust(reason) {
+    if (state.gameOver) return;
+    state.gameOver = true;
+    state.running = false;
+    state.bustReason = reason;
+    state.cam.shake = 0.8;
+    state.cam.flash = 1.0;
+    sfx.bust();
+    showShameCard(reason);
+  }
+
+  function triggerWin() {
+    state.won = true;
+    state.running = false;
+    state.cam.flash = 0.6;
+    sfx.win();
+    RB.recordScore("dont-look-gym-girl", state.score);
+    showWinCard(state.score);
+  }
+
+  function restart() {
+    document.getElementById("shame-mount").innerHTML = "";
+    document.getElementById("gym-banner").style.display = "none";
+    document.getElementById("overlay").classList.add("overlay--show");
+    state.started = false;
+    state.gameOver = false;
+    state.won = false;
+    state.running = false;
+    state.level = 1;
+    state.score = 0;
+    state.sus = 0;
+    state.airpodT = 0;
+    state.boyfriendT = 0;
+    state.decoy = null;
+    state.girls = [];
+    state.obstacles = LEVELS[0].obstacles;
+    state.player.x = 36;
+    state.player.y = 320;
+    state.t = 0;
+  }
+
+  // =========================================================================
+  // 15. UI CARDS / BANNER
+  // =========================================================================
+  function showBanner(text, duration) {
+    const b = document.getElementById("gym-banner");
+    b.textContent = text;
+    b.style.display = "block";
+    b.style.animation = "none";
+    void b.offsetWidth;
+    b.style.animation = "gymBannerFlash 0.5s steps(2) " + (duration || 1.2) + " forwards";
+    setTimeout(() => { b.style.display = "none"; }, (duration || 1.2) * 1000);
+  }
+
+  const BUST_TITLES = {
+    sus:       "📢 PUBLICLY SHAMED",
+    caught:    "📸 CAUGHT IN 4K",
+    blindbump: "💥 YOU WALKED INTO HER"
+  };
+  const BUST_SUBS = {
+    sus:       "The vibes curdled. Security was called. There's a flyer with your face on it now.",
+    caught:    "She watched you watch her. She narrated it to her phone. It's already posted.",
+    blindbump: "You closed your eyes and walked directly into her. Incredible. Unprecedented."
+  };
+
+  function showShameCard(reason) {
+    const high = RB.getHighScore("dont-look-gym-girl") || 0;
+    const cap = choice(SHAME_CAPTIONS);
+    document.getElementById("shame-mount").innerHTML = `
+      <div class="shame-card">
+        <h3 class="shame-card__title">${BUST_TITLES[reason] || BUST_TITLES.sus}</h3>
+        <p class="shame-card__sub">${BUST_SUBS[reason] || BUST_SUBS.sus}</p>
+        <div class="shame-card__stats">
+          Level reached: <strong>${state.level}</strong>/${LEVELS.length} ·
+          Run score: <strong>${state.score}</strong><br>
+          High score: <strong>${Math.max(state.score, high)}</strong>
+        </div>
+        <div class="shame-card__caption">"${cap}"</div>
+        <div class="shame-card__actions">
+          <button class="btn btn--primary" id="shame-retry">Try again</button>
+          <a class="btn btn--ghost" href="../games.html">All games</a>
+        </div>
+      </div>
+    `;
+    document.getElementById("shame-retry").addEventListener("click", restart);
+  }
+
+  function showWinCard(score) {
+    const high = RB.getHighScore("dont-look-gym-girl") || 0;
+    const isNewHigh = score >= high;
+    document.getElementById("shame-mount").innerHTML = `
+      <div class="win-card">
+        <h3 class="win-card__title">🚪 LOCKER ROOM. SANCTUARY.</h3>
+        <p class="shame-card__sub">Eight levels. Peak hours. Ring lights, scanners, the stairmaster section — and not one accusation. Your neck fought. You won.</p>
+        <div class="shame-card__stats">
+          Levels cleared: <strong>${LEVELS.length}</strong>/${LEVELS.length}<br>
+          Final score: <strong>${score}</strong> ${isNewHigh ? "🆕 NEW HIGH" : ""}
+        </div>
+        <div class="win-card__caption">"I was just here for the leg press. I saw nothing. I am nothing."</div>
+        <div class="shame-card__actions">
+          <button class="btn btn--primary" id="win-again">Run it back</button>
+          <a class="btn btn--ghost" href="../games.html">All games</a>
+        </div>
+      </div>
+    `;
+    document.getElementById("win-again").addEventListener("click", restart);
+  }
+
+  // =========================================================================
+  // 16. RENDER
+  // =========================================================================
   function drawGymFloor() {
     ctx.fillStyle = "#1a1a24";
     ctx.fillRect(0, 0, W, H);
@@ -897,86 +1044,143 @@
     const tile = 40;
     for (let x = 0; x <= W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
     for (let y = 0; y <= H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-    // Door
+
+    // Front door (left, center band)
     ctx.fillStyle = "#2a3a2a";
-    ctx.fillRect(8, 240, 14, 160);
+    ctx.fillRect(0, DOOR_Y0, 16, DOOR_Y1 - DOOR_Y0);
     ctx.fillStyle = "#4dff7d";
     ctx.font = "11px JetBrains Mono, monospace";
     ctx.textAlign = "left";
-    ctx.fillText("FRONT", 4, 232);
-    ctx.fillText("DOOR", 4, 412);
-    // Locker room
+    ctx.fillText("FRONT", 4, DOOR_Y0 - 8);
+    ctx.fillText("DOOR", 4, DOOR_Y1 + 16);
+
+    // Locker room (right, center band) — pulsing arrow
     ctx.fillStyle = "#3a2a3a";
-    ctx.fillRect(W - 22, 240, 14, 160);
+    ctx.fillRect(W - 16, DOOR_Y0, 16, DOOR_Y1 - DOOR_Y0);
     ctx.fillStyle = "#ff7ddf";
     ctx.textAlign = "right";
-    ctx.fillText("LOCKER", W - 4, 232);
-    ctx.fillText("ROOM", W - 4, 412);
+    ctx.fillText("LOCKER", W - 4, DOOR_Y0 - 8);
+    ctx.fillText("ROOM", W - 4, DOOR_Y1 + 16);
+    const pulse = 0.5 + 0.5 * Math.sin(state.t * 4);
+    ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+    ctx.font = "18px Arial";
+    ctx.fillText("→", W - 22, 326);
   }
 
-  function drawCovers() {
-    for (const c of COVERS) {
+  function drawObstacles() {
+    for (const o of state.obstacles) {
+      const x0 = o.x - o.w / 2, y0 = o.y - o.h / 2;
       ctx.save();
-      if (c.kind === "rack") {
-        ctx.fillStyle = "#3a2a3a";
-        ctx.fillRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.strokeStyle = "#ff2e88";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.fillStyle = "#888";
-        for (let i = 0; i < 3; i++) {
-          const yy = c.y - c.h/2 + 12 + i * 14;
-          ctx.fillRect(c.x - c.w/2 + 4, yy, c.w - 8, 3);
+      switch (o.kind) {
+        case "rack":
+          ctx.fillStyle = "#3a2a3a";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#ff2e88";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          ctx.fillStyle = "#888";
+          for (let i = 0; i < 3; i++) ctx.fillRect(x0 + 4, y0 + 12 + i * 16, o.w - 8, 3);
+          break;
+        case "bench":
+          ctx.fillStyle = "#2a3a4a";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#2ee0ff";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          ctx.fillStyle = "#445";
+          ctx.fillRect(x0 + 6, o.y - 4, o.w - 12, 8);
+          break;
+        case "tread": {
+          ctx.fillStyle = "#22222e";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#888";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          // animated belt stripes
+          ctx.fillStyle = "rgba(255,255,255,0.15)";
+          const off = (state.t * 40) % 14;
+          for (let yy = y0 + 6 - off; yy < y0 + o.h - 4; yy += 14) {
+            if (yy > y0 + 4) ctx.fillRect(x0 + 6, yy, o.w - 12, 3);
+          }
+          break;
         }
-      } else if (c.kind === "bench") {
-        ctx.fillStyle = "#2a3a4a";
-        ctx.fillRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.strokeStyle = "#2ee0ff";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-      } else if (c.kind === "locker") {
-        ctx.fillStyle = "#3a3a4a";
-        ctx.fillRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.strokeStyle = "#f7d716";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(c.x - c.w/2, c.y - c.h/2, c.w, c.h);
-        ctx.fillStyle = "#f7d716";
-        ctx.beginPath();
-        ctx.arc(c.x - c.w/4, c.y, 2, 0, TAU);
-        ctx.fill();
+        case "plant":
+          ctx.fillStyle = "#2a2418";
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.w / 2, 0, TAU);
+          ctx.fill();
+          ctx.fillStyle = "#2e7d32";
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * TAU + state.t * 0.2;
+            ctx.beginPath();
+            ctx.ellipse(o.x + Math.cos(a) * 7, o.y + Math.sin(a) * 7, 9, 4, a, 0, TAU);
+            ctx.fill();
+          }
+          break;
+        case "fountain":
+          ctx.fillStyle = "#1a2a3a";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#4d9fff";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          ctx.fillStyle = "#4d9fff";
+          ctx.font = "12px Arial";
+          ctx.textAlign = "center";
+          ctx.fillText("💧", o.x, o.y + 4);
+          break;
+        case "cable":
+          ctx.fillStyle = "#2a2a3a";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#f7d716";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#666";
+          ctx.beginPath();
+          ctx.moveTo(x0 + 8, y0 + 6); ctx.lineTo(x0 + 8, y0 + o.h - 6);
+          ctx.moveTo(x0 + o.w - 8, y0 + 6); ctx.lineTo(x0 + o.w - 8, y0 + o.h - 6);
+          ctx.stroke();
+          break;
+        case "ring":
+          // ring light — glowy
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, 9, 0, TAU);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,200,0.25)";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, 12, 0, TAU);
+          ctx.stroke();
+          break;
       }
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.font = "9px JetBrains Mono, monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(c.label, c.x, c.y + c.h/2 + 12);
       ctx.restore();
     }
   }
 
-  function drawNpcCone(x, y, facing, range, halfAngle, color) {
+  function drawGirlCone(g) {
+    if (g.phoneActive || state.decoy) return;
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(facing);
-    const grad = ctx.createLinearGradient(0, 0, range, 0);
-    grad.addColorStop(0, color.replace("ALPHA", "0.35"));
-    grad.addColorStop(1, color.replace("ALPHA", "0.0"));
+    ctx.translate(g.x, g.y);
+    ctx.rotate(g.facing);
+    const alarmed = g.notice > 0.15;
+    const base = alarmed ? "255,60,60" : "255,46,136";
+    const grad = ctx.createLinearGradient(0, 0, g.range, 0);
+    grad.addColorStop(0, "rgba(" + base + ",0.30)");
+    grad.addColorStop(1, "rgba(" + base + ",0)");
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.arc(0, 0, range, -halfAngle, halfAngle);
+    ctx.arc(0, 0, g.range, -g.coneW, g.coneW);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = color.replace("ALPHA", "0.4");
-    ctx.beginPath();
-    ctx.arc(0, 0, range, -halfAngle, halfAngle);
-    ctx.stroke();
     ctx.restore();
   }
 
   function drawGirl(g) {
     ctx.save();
     ctx.translate(g.x, g.y);
-    const legPulse = 1 + 0.08 * Math.sin(state.t * 3.2 + g.index);
+    const legPulse = 1 + 0.08 * Math.sin(state.t * 3.2 + g.x);
     ctx.fillStyle = g.leggings;
     ctx.beginPath();
     ctx.ellipse(-6, 10 * legPulse, 5, 12 * legPulse, 0, 0, TAU);
@@ -984,7 +1188,6 @@
     ctx.beginPath();
     ctx.ellipse(6, 10 * legPulse, 5, 12 * legPulse, 0, 0, TAU);
     ctx.fill();
-    ctx.fillStyle = g.leggings;
     ctx.beginPath();
     ctx.arc(0, -3, 10, 0, TAU);
     ctx.fill();
@@ -996,114 +1199,34 @@
     ctx.beginPath();
     ctx.arc(0, -17, 6, Math.PI, 0);
     ctx.fill();
+
     if (g.phoneActive) {
       ctx.fillStyle = "#fff";
       ctx.fillRect(-5, -18, 10, 7);
       ctx.fillStyle = "#000";
       ctx.fillRect(-4, -17, 8, 5);
     }
+    if (g.type === "influencer") {
+      // phone on a stick, always
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(10, -20, 7, 12);
+      ctx.fillStyle = "#000";
+      ctx.fillRect(11, -19, 5, 10);
+    }
+
+    // Notice indicator: "?" building, "!" about to accuse
+    if (g.notice > 0.15) {
+      const crit = g.notice > 0.65;
+      ctx.fillStyle = crit ? "#ff3c3c" : "#f7d716";
+      ctx.font = "bold " + (crit ? 20 : 15) + "px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(crit ? "!" : "?", 0, -28);
+    }
+
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.font = "8px JetBrains Mono, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(g.label, 0, 28);
-    ctx.restore();
-  }
-
-  function drawFilmer(f) {
-    ctx.save();
-    ctx.translate(f.x, f.y);
-    // Guy with phone
-    ctx.fillStyle = "#5a3a2a";
-    ctx.beginPath();
-    ctx.arc(0, 0, 9, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#f1c27d";
-    ctx.beginPath();
-    ctx.arc(0, -8, 6, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#1a0a0a";
-    ctx.beginPath();
-    ctx.arc(0, -10, 5, Math.PI, 0);
-    ctx.fill();
-    // Phone in front of face
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(-5, -7, 10, 8);
-    ctx.fillStyle = "#000";
-    ctx.fillRect(-4, -6, 8, 6);
-    ctx.fillStyle = "rgba(255,46,136,0.7)";
-    ctx.font = "8px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("📹 FILMER", 0, 22);
-    ctx.restore();
-  }
-
-  function drawTrainer(t) {
-    ctx.save();
-    ctx.translate(t.x, t.y);
-    // Big guy
-    ctx.fillStyle = "#2a4a2a";
-    ctx.beginPath();
-    ctx.arc(0, 0, 12, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#f1c27d";
-    ctx.beginPath();
-    ctx.arc(0, -10, 7, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#0a0a0a";
-    ctx.beginPath();
-    ctx.arc(0, -12, 6, Math.PI, 0);
-    ctx.fill();
-    // Whistle
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(0, -4, 2, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "rgba(46,224,255,0.8)";
-    ctx.font = "8px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("🏋️ TRAINER", 0, 26);
-    ctx.restore();
-  }
-
-  function drawGazeCone() {
-    const p = state.player;
-    if (!state.gaze.active) {
-      ctx.save();
-      ctx.globalAlpha = 0.3;
-      ctx.translate(p.x, p.y);
-      ctx.fillStyle = "#2ee0ff";
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 18, p.facing - 0.3, p.facing + 0.3);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      return;
-    }
-    const covered = gazeBlocked(p.x, p.y, p.facing);
-    const blockedRange = covered ? 30 : state.gaze.range;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.facing);
-    const grad = ctx.createLinearGradient(0, 0, blockedRange, 0);
-    grad.addColorStop(0, "rgba(247,215,22,0.30)");
-    grad.addColorStop(1, "rgba(247,215,22,0.0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, blockedRange, -state.gaze.halfAngle, state.gaze.halfAngle);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(247,215,22,0.7)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(blockedRange, 0);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(247,215,22,0.4)";
-    ctx.beginPath();
-    ctx.arc(0, 0, blockedRange, -state.gaze.halfAngle, state.gaze.halfAngle);
-    ctx.stroke();
+    ctx.fillText(g.label, 0, 30);
     ctx.restore();
   }
 
@@ -1118,27 +1241,59 @@
     ctx.arc(0, 0, 14, 0, TAU);
     ctx.fill();
     ctx.fillStyle = "#0a0a14";
-    ctx.font = "16px Arial";
+    ctx.font = "15px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("🚪", 0, 5);
+    ctx.fillText("🏋️", 0, 5);
     ctx.restore();
+  }
+
+  function drawGazeCone() {
+    const p = state.player;
+    if (p.eyesClosed) return;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.facing);
+    // Cone goes pink when the neck is winning
+    const col = state.fighting ? "255,46,136" : "247,215,22";
+    const grad = ctx.createLinearGradient(0, 0, GAZE_RANGE, 0);
+    grad.addColorStop(0, "rgba(" + col + ",0.28)");
+    grad.addColorStop(1, "rgba(" + col + ",0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, GAZE_RANGE, -GAZE_HALF_ANGLE, GAZE_HALF_ANGLE);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(" + col + ",0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(GAZE_RANGE, 0);
+    ctx.stroke();
+    ctx.restore();
+
+    // Temptation tether: wobbly line from eyes to the girl the neck wants
+    if (state.fighting && state.pullTarget && state.airpodT <= 0) {
+      const g = state.pullTarget;
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,46,136,0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 5]);
+      ctx.lineDashOffset = -state.t * 30;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      const mx = (p.x + g.x) / 2 + Math.sin(state.t * 8) * 8;
+      const my = (p.y + g.y) / 2 + Math.cos(state.t * 7) * 8;
+      ctx.quadraticCurveTo(mx, my, g.x, g.y);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function drawPlayer() {
     const p = state.player;
     ctx.save();
     ctx.translate(p.x, p.y);
-    if (state.panic > 0) {
-      ctx.fillStyle = "rgba(255,46,136,0.3)";
-      ctx.beginPath();
-      ctx.arc(0, 0, PLAYER_RADIUS + 8, 0, TAU);
-      ctx.fill();
-    }
-    const bodyColor = state.boyfriendT > 0 ? "#2ee0ff" : "#f1c27d";
-    ctx.fillStyle = bodyColor;
-    ctx.beginPath();
-    ctx.arc(0, 0, PLAYER_RADIUS, 0, TAU);
-    ctx.fill();
     ctx.fillStyle = "#f1c27d";
     ctx.beginPath();
     ctx.arc(0, 0, PLAYER_RADIUS, 0, TAU);
@@ -1147,63 +1302,82 @@
     ctx.beginPath();
     ctx.arc(0, -3, PLAYER_RADIUS * 0.7, Math.PI, 0);
     ctx.fill();
-    ctx.fillStyle = "#000";
-    const ex = Math.cos(p.facing) * 4;
-    const ey = Math.sin(p.facing) * 4;
-    ctx.beginPath();
-    ctx.arc(ex, ey, 1.5, 0, TAU);
-    ctx.fill();
+    if (p.eyesClosed) {
+      // closed eyes: little dashes
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 1.5;
+      const ex = Math.cos(p.facing) * 4, ey = Math.sin(p.facing) * 4;
+      ctx.beginPath();
+      ctx.moveTo(ex - 3, ey); ctx.lineTo(ex + 3, ey);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#000";
+      const ex = Math.cos(p.facing) * 4, ey = Math.sin(p.facing) * 4;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 1.5, 0, TAU);
+      ctx.fill();
+    }
     if (state.boyfriendT > 0) {
-      ctx.strokeStyle = "rgba(46,224,255," + state.boyfriendFlash + ")";
+      ctx.strokeStyle = "rgba(46,224,255," + (0.5 + 0.5 * Math.sin(state.t * 10)) + ")";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, PLAYER_RADIUS + 4 + Math.sin(state.t * 10) * 2, 0, TAU);
+      ctx.arc(0, 0, PLAYER_RADIUS + 5 + Math.sin(state.t * 10) * 2, 0, TAU);
       ctx.stroke();
+    }
+    if (state.airpodT > 0) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(-PLAYER_RADIUS - 2, -4, 3, 7);
+      ctx.fillRect(PLAYER_RADIUS - 1, -4, 3, 7);
     }
     ctx.restore();
   }
 
+  function drawDarkness() {
+    if (!state.player.eyesClosed) return;
+    const p = state.player;
+    ctx.save();
+    const grad = ctx.createRadialGradient(p.x, p.y, 30, p.x, p.y, 110);
+    grad.addColorStop(0, "rgba(0,0,0,0.55)");
+    grad.addColorStop(1, "rgba(0,0,0,0.96)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.font = "13px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("eyes closed. walking on vibes.", W / 2, 40);
+    ctx.restore();
+  }
+
   function drawHud() {
-    const shameEl = document.getElementById("hud-shame");
-    if (shameEl && shameEl.childElementCount !== SHAME_MAX) {
-      shameEl.innerHTML = "";
-      for (let i = 0; i < SHAME_MAX; i++) {
-        const p = document.createElement("span");
-        p.className = "shame-pip";
-        shameEl.appendChild(p);
-      }
+    // SUS bar
+    const fill = document.getElementById("hud-sus-fill");
+    const pct = document.getElementById("hud-sus-pct");
+    if (fill) {
+      fill.style.width = state.sus + "%";
+      fill.dataset.zone = state.sus < 35 ? "ok" : state.sus < 70 ? "warn" : "crit";
     }
-    if (shameEl) {
-      const pips = shameEl.querySelectorAll(".shame-pip");
-      const s = state.shame;
-      pips.forEach((pip, i) => {
-        if (i < Math.floor(s)) pip.dataset.state = "crit";
-        else if (i < s) pip.dataset.state = "med";
-        else if (s === 0) pip.dataset.state = "";
-        else pip.dataset.state = "low";
-      });
+    if (pct) pct.textContent = Math.round(state.sus) + "%";
+
+    // EYES state chip
+    const eyes = document.getElementById("hud-eyes");
+    if (eyes) {
+      let label, zone;
+      if (state.player.eyesClosed)      { label = "CLOSED";    zone = "shut"; }
+      else if (state.airpodT > 0)       { label = "LOCKED 🎧"; zone = "ok"; }
+      else if (state.fighting)          { label = "FIGHTING";  zone = "crit"; }
+      else                              { label = "OPEN";      zone = "ok"; }
+      eyes.textContent = label;
+      eyes.dataset.zone = zone;
     }
-    const heartEl = document.getElementById("hud-heart");
-    if (heartEl && heartEl.childElementCount !== HEART_MAX) {
-      heartEl.innerHTML = "";
-      for (let i = 0; i < HEART_MAX; i++) {
-        const p = document.createElement("span");
-        p.className = "heart-pip";
-        heartEl.appendChild(p);
-      }
-    }
-    if (heartEl) {
-      const pips = heartEl.querySelectorAll(".heart-pip");
-      pips.forEach((pip, i) => {
-        pip.dataset.state = i < state.heart ? (state.panic > 0 ? "panic" : "on") : "";
-      });
-    }
-    const distPct = Math.floor((state.player.x / W) * 100);
-    document.getElementById("hud-dist").textContent = distPct + "%";
-    document.getElementById("hud-phase").textContent = state.phase + "/" + PHASES.length;
-    document.getElementById("hud-shametotal").textContent = state.shameTotal;
-    const high = RB.getHighScore("dont-look-gym-girl") || 0;
-    document.getElementById("hud-high").textContent = high;
+
+    const lvEl = document.getElementById("hud-level");
+    if (lvEl) lvEl.textContent = state.level + "/" + LEVELS.length;
+    const distEl = document.getElementById("hud-dist");
+    if (distEl) distEl.textContent = Math.floor((state.player.x / W) * 100) + "%";
+    const scoreEl = document.getElementById("hud-score");
+    if (scoreEl) scoreEl.textContent = state.score;
+    const highEl = document.getElementById("hud-high");
+    if (highEl) highEl.textContent = RB.getHighScore("dont-look-gym-girl") || 0;
   }
 
   function render() {
@@ -1214,41 +1388,27 @@
     }
     ctx.save();
     ctx.translate(sx, sy);
+
+    drawGymFloor();
+    drawObstacles();
+    for (const g of state.girls) drawGirlCone(g);
+    drawDecoy();
+    for (const g of state.girls) drawGirl(g);
+    drawGazeCone();
+    drawPlayer();
+    drawDarkness();
+
     if (state.cam.flash > 0) {
       ctx.fillStyle = "rgba(255,46,136," + (state.cam.flash * 0.6) + ")";
       ctx.fillRect(-20, -20, W + 40, H + 40);
     }
-    drawGymFloor();
-    drawCovers();
-
-    // NPC gaze cones (rendered behind the NPCs)
-    const ph = PHASES[state.phase - 1];
-    if (state.boyfriendT <= 0 && !state.decoy) {
-      for (const g of state.girls) {
-        if (g.phoneActive) continue;
-        drawNpcCone(g.x, g.y, g.facing, state.gaze.range * 0.9, ph.coneWidth, "rgba(255,46,136,ALPHA)");
-      }
-      if (state.filmer) drawNpcCone(state.filmer.x, state.filmer.y, state.filmer.facing, state.gaze.range * 1.1, 0.85, "rgba(255,46,136,ALPHA)");
-      if (state.trainer) drawNpcCone(state.trainer.x, state.trainer.y, state.trainer.facing, state.gaze.range, 0.95, "rgba(255,46,136,ALPHA)");
-    }
-
-    drawDecoy();
-
-    // NPCs
-    for (const g of state.girls) drawGirl(g);
-    if (state.filmer) drawFilmer(state.filmer);
-    if (state.trainer) drawTrainer(state.trainer);
-
-    drawGazeCone();
-    drawPlayer();
     ctx.restore();
     drawHud();
   }
 
   // =========================================================================
-  // 16. MAIN LOOP
+  // 17. MAIN LOOP
   // =========================================================================
-
   function loop(now) {
     if (!state.lastTime) state.lastTime = now;
     const dt = Math.min(0.05, (now - state.lastTime) / 1000);
@@ -1256,34 +1416,31 @@
     state.t += dt;
 
     if (state.running && !state.paused) {
-      readInput(dt);
+      state.levelT += dt;
+      readInput();
       updatePlayer(dt);
-      const ph = PHASES[state.phase - 1];
-      for (const g of state.girls) updateGirl(g, ph, dt);
-      if (state.filmer) updateFilmer(state.filmer, dt);
-      if (state.trainer) updateTrainer(state.trainer, dt);
-      // Decoy lifetime
-      if (state.decoy) {
-        state.decoy.life -= dt;
-        if (state.decoy.life <= 0) state.decoy = null;
-      }
-      updateGauges(dt);
-      updateCam(dt);
-      checkPhaseProgress();
-    } else if (!state.running && !state.gameOver && !state.won) {
-      render();
+      updateGaze(dt);
+      const lv = LEVELS[state.level - 1];
+      for (const g of state.girls) updateGirl(g, lv, dt);
+      updatePowerTimers(dt);
+      if (!state.gameOver) updateSus(dt);
+      if (!state.gameOver) updateBumps(dt);
+      state.cam.shake = Math.max(0, state.cam.shake - dt * 2);
+      state.cam.flash = Math.max(0, state.cam.flash - dt * 3);
+      if (!state.gameOver && !state.won) checkLevelProgress();
     }
-    if (state.started) render();
+
+    render();
     requestAnimationFrame(loop);
   }
 
   // =========================================================================
-  // 17. BOOT
+  // 18. BOOT
   // =========================================================================
-
   function init() {
+    state.obstacles = LEVELS[0].obstacles;
     requestAnimationFrame(loop);
-    document.getElementById("btn-primary").addEventListener("click", startGame);
+    document.getElementById("btn-primary").addEventListener("click", () => { ensureAudio(); startGame(); });
     document.getElementById("btn-pause").addEventListener("click", () => {
       state.paused = !state.paused;
       document.getElementById("btn-pause").textContent = state.paused ? "Resume" : "Pause";
@@ -1297,4 +1454,7 @@
   } else {
     init();
   }
+
+  // Debug hook (same convention as window.__AGAIN)
+  window.__GYM = { state, LEVELS, startGame, restart, bust, loadLevel };
 })();

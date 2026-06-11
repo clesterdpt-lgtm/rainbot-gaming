@@ -12,9 +12,10 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | ✅ Live | **Mr. Feast: Last To Leave the Mansion** | Survival parody. Survive 24 hours, win $1M. `/games/mr-feast-mansion.html` |
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
 | ✅ Live | **A-Pop Demon Hunters** | Beat-based action. Pop stars vs. demon elites. Final boss: Lavish Larry. `/games/apop-demon-hunters.html` |
+| ✅ Live | **AGAIN.** | 🕯 *Rainbot After Dark No. 001* — first-person loop-horror in the spirit of P.T. Three.js hallway, 100% synthesized positional audio (no sound files). Headphones required. **Not a parody.** `/games/again.html` |
 | 🚧 Coming | **Boomer Monopoly** | Satirical board game. Real estate, avocado toast. `/games/boomer-monopoly.html` |
 
-> ⚠️ **All games are parody / satire.** Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. A-Pop Demon Hunters is a fictional beat-action game; all "demon elite" characters are parody stereotypes and have no relation to any real person, organization, or community. Not affiliated with any real brand, person, or community.
+> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. A-Pop Demon Hunters is a fictional beat-action game; all "demon elite" characters are parody stereotypes and have no relation to any real person, organization, or community. Not affiliated with any real brand, person, or community.
 
 ## 🚀 Run it locally
 

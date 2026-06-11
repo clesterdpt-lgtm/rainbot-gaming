@@ -5,123 +5,142 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Games — Rainbot Gaming</title>
   <meta name="description" content="All Rainbot Gaming browser games. Free, instant-play, meme-worthy." />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260611-2" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260611-7" />
 </head>
-<body>
+<body class="games-index arcade-home">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
-  <header class="hero" style="padding: 70px 24px 40px;">
-    <span class="hero__pill">🎮 All games</span>
-    <h1 class="hero__title">
-      <span class="word w1">Pick</span>
-      <span class="word w2">Your</span>
-      <span class="word w3">Fight.</span>
-    </h1>
-    <p class="hero__sub">Each game runs in your browser. No logins. No "please verify you're human."</p>
-  </header>
+  <main class="arcade-shell games-directory">
+    <header class="games-hero arcade-panel">
+      <div class="games-hero__copy">
+        <span class="games-hero__eyebrow">All Games</span>
+        <h1>Pick Your Glitch.</h1>
+        <p>Free browser chaos for people whose attention span has already rage-quit.</p>
+      </div>
+      <div class="games-hero__stats" aria-label="Arcade directory stats">
+        <span><b>7</b> games online</span>
+        <span><b>0</b> downloads</span>
+        <span><b>100%</b> browser</span>
+      </div>
+    </header>
 
-  <section style="padding-top: 30px;">
-    <div class="game-grid">
-      <a href="games/again.html" class="game-card game-card--horror">
-        <div class="game-card__art game-card__art--hallway">
-          <span class="game-card__tag game-card__tag--horror">NEW · HORROR</span>
-          <div class="game-card__art-text game-card__art-text--serif">AGAIN.</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">AGAIN.</h3>
-          <p class="game-card__desc">Our first horror — and it's not a parody. One hallway. It repeats. Something in it remembers you. Headphones. Lights off. Alone.</p>
-          <span class="game-card__cta">Enter →</span>
-        </div>
-      </a>
+    <section class="arcade-panel games-catalog" data-search-scope>
+      <div class="arcade-panel__header">
+        <h2><span class="panel-glyph">+</span>Full Game Vault</h2>
+        <span class="games-catalog__count">New weirdness weekly</span>
+      </div>
 
-      <a href="games/strait-of-hormuz.html" class="game-card">
-        <div class="game-card__art game-card__art--hormuz">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">⛴ ESCAPE THE<br/>STRAIT OF HORMUZ</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Escape the Strait of Hormuz</h3>
-          <p class="game-card__desc">Frogger-style. You're a VLCC oil tanker. Mines, drones, fast boats. Get to open water or spill everything.</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
+      <div class="directory-grid">
+        <a href="games/again.html" class="directory-card directory-card--feature" data-title="Again horror hallway after dark">
+          <div class="directory-card__poster directory-card__poster--again">
+            <img src="assets/img/mockup/after-dark-again.png?v=20260611-7" alt="AGAIN horror hallway poster art" />
+          </div>
+        </a>
 
-      <a href="games/mr-feast-mansion.html" class="game-card">
-        <div class="game-card__art game-card__art--apop">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">🍔 MR. FEAST:<br/>LAST TO LEAVE</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Mr. Feast: Last To Leave the Mansion</h3>
-          <p class="game-card__desc">Survive 24 hours in a mansion. Last to leave wins $1M. (Parody. Mr. Feast is fictional.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
+        <a href="games/strait-of-hormuz.html" class="directory-card" data-title="Escape the Straight action tanker mines drones">
+          <div class="directory-card__poster directory-card__poster--escape">
+            <img src="assets/img/mockup/card-escape-straight-wide.png?v=20260611-7" alt="Escape the Straight tanker poster art" />
+            <span class="directory-card__status">Playable</span>
+            <span class="directory-card__poster-title">Escape the<br />Straight</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>Escape the Straight</h3>
+            <p>Frogger-style tanker panic. Mines, drones, fast boats, and a route planner with no chill.</p>
+          </div>
+          <span class="directory-card__meta"><b>Action</b><em>12.4K playing</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
 
-      <a href="games/looksmaxxing-grindset.html" class="game-card">
-        <div class="game-card__art game-card__art--monopoly">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">💪 LOOKSMAXXING<br/>GRINDSET</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Looksmaxxing Grindset</h3>
-          <p class="game-card__desc">Click to grind. Wake up sadge, become gigachad. (Parody. Mewing doesn't actually work.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
+        <a href="games/mr-feast-mansion.html" class="directory-card" data-title="Mr Feast Last to Leave the Mansion horror challenge">
+          <div class="directory-card__poster">
+            <img src="assets/img/mockup/card-mr-feast.png?v=20260611-7" alt="Mr. Feast: Last To Leave the Mansion poster art" />
+            <span class="directory-card__status">Playable</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>Mr. Feast: Last To Leave</h3>
+            <p>Survive 24 hours in a mansion where the prize money is loud and the vibes are legally haunted.</p>
+          </div>
+          <span class="directory-card__meta"><b>Horror</b><em>8.7K playing</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
 
-      <a href="games/boomer-monopoly.html" class="game-card">
-        <div class="game-card__art game-card__art--monopoly">
-          <span class="game-card__tag game-card__tag--soon">SOON</span>
-          <div class="game-card__art-text">🏘 BOOMER<br/>MONOPOLY</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Boomer Monopoly</h3>
-          <p class="game-card__desc">Monopoly, but the rules are written by a 1971 homeowner. Coming soon — get notified when it drops.</p>
-          <span class="game-card__cta">Notify me →</span>
-        </div>
-      </a>
+        <a href="games/looksmaxxing-grindset.html" class="directory-card" data-title="Looksmaxxing Grindset idle sim gym mewing water">
+          <div class="directory-card__poster">
+            <img src="assets/img/mockup/card-looksmaxxing.png?v=20260611-7" alt="Looksmaxxing Grindset poster art" />
+            <span class="directory-card__status">Playable</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>Looksmaxxing Grindset</h3>
+            <p>Click to grind. Wake up sadge, become allegedly optimized. The advice is fake. The water is real.</p>
+          </div>
+          <span class="directory-card__meta"><b>Sim / Idle</b><em>25.1K playing</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
 
-      <a href="games/apop-demon-hunters.html" class="game-card">
-        <div class="game-card__art game-card__art--apop">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">🎤 A-POP<br/>DEMON HUNTERS</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">A-Pop Demon Hunters</h3>
-          <p class="game-card__desc">Beat-based action. Pop stars vs. demon elites. Sync attacks to the beat. (Parody. Not affiliated.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
+        <a href="games/boomer-monopoly.html" class="directory-card" data-title="Boomer Monopoly housing board game parody">
+          <div class="directory-card__poster">
+            <img src="assets/img/mockup/card-boomer-monopoly.png?v=20260611-7" alt="Boomer Monopoly poster art" />
+            <span class="directory-card__status directory-card__status--soon">Soon</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>Boomer Monopoly</h3>
+            <p>A housing board game where every rule was written by someone who bought a house with pocket change.</p>
+          </div>
+          <span class="directory-card__meta"><b>Board</b><em>Coming soon</em></span>
+          <span class="directory-card__play" aria-hidden="true">Notify</span>
+        </a>
 
-      <a href="games/dont-look-gym-girl.html" class="game-card">
-        <div class="game-card__art game-card__art--gym">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">👀 DON'T LOOK<br/>AT THE GYM GIRL</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Don't Look at the Gym Girl</h3>
-          <p class="game-card__desc">Stealth-awkward, remade. Front door to locker room, 8 levels, more girls and more equipment every floor — and your own neck is the boss fight. (Parody.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-    </div>
-  </section>
+        <a href="games/apop-demon-hunters.html" class="directory-card" data-title="A-Pop Demon Hunters rhythm pop action">
+          <div class="directory-card__poster">
+            <img src="assets/img/mockup/card-apop.png?v=20260611-7" alt="A-Pop Demon Hunters poster art" />
+            <span class="directory-card__status">Playable</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>A-Pop Demon Hunters</h3>
+            <p>Beat-based action where pop stars send demon elites back to the subscription tier they crawled out of.</p>
+          </div>
+          <span class="directory-card__meta"><b>Rhythm</b><em>15.6K playing</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
 
-  <div id="ad-leaderboard" style="margin: 40px auto;"></div>
+        <a href="games/dont-look-gym-girl.html" class="directory-card" data-title="Don't Look at the Gym Girl stealth awkward parody">
+          <div class="directory-card__poster">
+            <img src="assets/img/mockup/card-gym-girl.png?v=20260611-7" alt="Don't Look at the Gym Girl poster art" />
+            <span class="directory-card__status">Playable</span>
+          </div>
+          <div class="directory-card__body">
+            <h3>Don't Look at the Gym Girl</h3>
+            <p>Stealth-awkward gym survival. The equipment is everywhere, and your own neck is the boss fight.</p>
+          </div>
+          <span class="directory-card__meta"><b>Stealth</b><em>9.8K playing</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
+      </div>
+    </section>
 
-  <footer class="footer">
-    <div class="footer__links">
+    <div id="ad-leaderboard" class="games-ad-slot"></div>
+  </main>
+
+  <footer class="site-footer">
+    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-logo.png?v=20260611-7" alt="Rainbot Gaming" /></a>
+    <div class="site-footer__links">
       <a href="./">Home</a>
       <a href="legal/privacy.html">Privacy</a>
       <a href="legal/terms.html">Terms</a>
+      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
     </div>
-    <div>© 2026 Rainbot Gaming.</div>
+    <div class="site-footer__social" aria-label="Social links">
+      <a href="#" aria-label="Discord">DI</a>
+      <a href="#" aria-label="X">X</a>
+      <a href="#" aria-label="YouTube">YT</a>
+      <a href="#" aria-label="TikTok">TT</a>
+      <a href="#" aria-label="Instagram">IG</a>
+    </div>
   </footer>
 
-  <script src="assets/js/ads.js?v=20260611-2"></script>
-  <script src="assets/js/main.js?v=20260611-2"></script>
+  <script src="assets/js/ads.js?v=20260611-7"></script>
+  <script src="assets/js/main.js?v=20260611-7"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

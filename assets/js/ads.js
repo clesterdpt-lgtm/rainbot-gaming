@@ -128,8 +128,8 @@ const RB = (() => {
     return new Promise((resolve) => {
       const ok = confirm(
         plan === "yearly"
-          ? "Subscribe to Rainbot Pro (yearly) for $29.99? (Mock — wire Stripe in ads.js)"
-          : "Subscribe to Rainbot Pro (monthly) for $3.99? (Mock — wire Stripe in ads.js)"
+          ? "Subscribe to Rainbot Pro (yearly) for $49.99? (Mock - wire Stripe in ads.js)"
+          : "Subscribe to Rainbot Pro (monthly) for $4.99? (Mock - wire Stripe in ads.js)"
       );
       if (ok) {
         state.isPro = true;

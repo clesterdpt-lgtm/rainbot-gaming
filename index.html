@@ -3,247 +3,181 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rainbot Gaming — Free Browser Games</title>
-  <meta name="description" content="Rainbot Gaming is a free browser arcade of AI-generated, human-curated parody and horror games. Play instantly or go Pro to skip ads." />
+  <title>Rainbot Gaming - Free Browser Games</title>
+  <meta name="description" content="Rainbot Gaming is a free browser arcade of AI-generated parody, horror, and algorithmic bad decisions. Play instantly or go Pro to skip ads." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260611-2" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260611-7" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
-<body class="home-page">
+<body class="home-page arcade-home">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
-  <!-- HERO -->
-  <header class="hero hero--home">
-    <div class="hero__inner">
-      <div class="hero__copy">
-        <h1 class="hero__title">
-          <span class="word w1">Rainbot</span>
-          <span class="word w2">Gaming</span>
+  <main class="arcade-shell">
+    <header class="portal-hero" id="home">
+      <div class="portal-hero__scan" aria-hidden="true"></div>
+      <div class="portal-hero__copy">
+        <h1 class="portal-hero__title">
+          AI feeds on the internet.<br />
+          <span>Rainbot</span> makes games.
         </h1>
-        <p class="hero__sub">
-          Free browser games from a bot that learned too much from the internet.
-          Parody arcade chaos, one horror hallway, no installs, no account wall.
-        </p>
-        <div class="hero__ctas">
-          <a href="games.html" class="btn btn--primary">Play the arcade</a>
-          <a href="#pricing" class="btn btn--ghost">Skip the ads</a>
+        <p class="portal-hero__sub">Free browser arcade of AI-generated parody, horror, and algorithmic bad decisions.</p>
+        <div class="portal-hero__actions">
+          <a class="arcade-btn arcade-btn--primary" href="games.html">
+            <span class="arcade-btn__mark">PLAY</span>
+            Games
+          </a>
+          <a class="arcade-btn arcade-btn--outline" href="#pricing">
+            <span class="arcade-btn__bolt">AD</span>
+            Go Ad-Free (Pro)
+          </a>
+        </div>
+        <div class="portal-hero__status" aria-label="Arcade status">
+          <span><i></i>387 bots online</span>
+          <span>New games drop weekly</span>
+          <span>100% free to play</span>
         </div>
       </div>
-      <div class="hero__media" aria-label="Rainbot Gaming neon arcade artwork">
-        <img src="assets/img/rainbot-arcade-hero.png?v=20260611-2" alt="Neon arcade cabinets with a smiling Rainbot robot cabinet at the center" />
-        <div class="hero__media-strip">
-          <span>5 playable games</span>
-          <span>After Dark open</span>
-          <span>Pro removes ads</span>
+      <div class="portal-hero__media" aria-label="Rainbot robot mascot and arcade stickers">
+        <img src="assets/img/mockup/hero-bot-stickers.png?v=20260611-7" alt="" />
+      </div>
+    </header>
+
+    <section class="arcade-panel featured-panel" id="games">
+      <div class="arcade-panel__header">
+        <h2><span class="panel-glyph">+</span>Featured Live Games</h2>
+        <a href="games.html">View all games</a>
+      </div>
+      <div class="poster-grid" data-search-scope>
+        <a class="poster-card poster-card--escape" href="games/strait-of-hormuz.html" data-title="Escape the Straight action tanker mines drones">
+          <img src="assets/img/mockup/card-escape-straight-wide.png?v=20260611-7" alt="Escape the Straight tanker poster art" />
+          <span class="poster-card__label">Escape the<br />Straight</span>
+          <span class="poster-card__meta"><b>Action</b><em>12.4K playing</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Leave the Mansion horror challenge">
+          <img src="assets/img/mockup/card-mr-feast.png?v=20260611-7" alt="Mr. Feast: Last To Leave the Mansion poster art" />
+          <span class="poster-card__meta"><b>Horror</b><em>8.7K playing</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card" href="games/looksmaxxing-grindset.html" data-title="Looksmaxxing Grindset idle sim gym mewing water">
+          <img src="assets/img/mockup/card-looksmaxxing.png?v=20260611-7" alt="Looksmaxxing Grindset poster art" />
+          <span class="poster-card__meta"><b>Sim / Idle</b><em>25.1K playing</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+
+        <a class="poster-card" href="games/apop-demon-hunters.html" data-title="A-Pop Demon Hunters rhythm pop action">
+          <img src="assets/img/mockup/card-apop.png?v=20260611-7" alt="A-Pop Demon Hunters poster art" />
+          <span class="poster-card__meta"><b>Rhythm</b><em>15.6K playing</em></span>
+          <span class="poster-card__play" aria-hidden="true">Play</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="arcade-row" aria-label="After Dark and coming soon">
+      <div class="arcade-panel after-panel" id="after-dark">
+        <div class="arcade-panel__header arcade-panel__header--pink">
+          <h2>Rainbot After Dark</h2>
+          <a href="games/again.html">Enter if you dare</a>
+        </div>
+        <a class="after-card" href="games/again.html" data-title="Again horror hallway after dark">
+          <img src="assets/img/mockup/after-dark-again.png?v=20260611-7" alt="AGAIN horror hallway poster art" />
+        </a>
+      </div>
+
+      <div class="arcade-panel soon-panel" id="coming-soon">
+        <div class="arcade-panel__header">
+          <h2>Coming Soon</h2>
+          <a href="games.html">See all</a>
+        </div>
+        <div class="soon-list">
+          <div class="soon-item" data-title="Goatse Simulator 2 legend returns">
+            <img src="assets/img/mockup/soon-goat.png?v=20260611-7" alt="" />
+            <div>
+              <strong>Goatse Simulator 2</strong>
+              <span>The legend returns</span>
+            </div>
+            <em>Soon</em>
+          </div>
+          <div class="soon-item" data-title="Skibidi Tower Defense toilets towers chaos">
+            <img src="assets/img/mockup/soon-toilet.png?v=20260611-7" alt="" />
+            <div>
+              <strong>Skibidi Tower Defense</strong>
+              <span>Toilets. Towers. Chaos.</span>
+            </div>
+            <em>Soon</em>
+          </div>
+          <div class="soon-item" data-title="NFT Tycoon jpeg hell">
+            <img src="assets/img/mockup/soon-nft.png?v=20260611-7" alt="" />
+            <div>
+              <strong>NFT Tycoon</strong>
+              <span>Welcome to JPEG hell</span>
+            </div>
+            <em>Soon</em>
+          </div>
         </div>
       </div>
-    </div>
-  </header>
+    </section>
 
-  <!-- AD SLOT -->
-  <div id="ad-leaderboard"></div>
-
-  <!-- FEATURED GAMES -->
-  <section class="section--live">
-    <div class="section__header">
-      <h2 class="section__title">Live games</h2>
-      <p class="section__sub">Click in. The first round takes 60 seconds. You will absolutely get mad.</p>
-    </div>
-    <div class="game-grid">
-      <a href="games/strait-of-hormuz.html" class="game-card">
-        <div class="game-card__art game-card__art--hormuz">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">⛴ ESCAPE THE<br/>STRAIT OF HORMUZ</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Escape the Strait of Hormuz</h3>
-          <p class="game-card__desc">You're a 2-million-barrel oil tanker. Iran has speedboats. The US Navy has questions. Just get to open water.</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-
-      <a href="games/mr-feast-mansion.html" class="game-card">
-        <div class="game-card__art game-card__art--apop">
-          <span class="game-card__tag game-card__tag--new">NEW · PLAYABLE</span>
-          <div class="game-card__art-text">🍔 MR. FEAST:<br/>LAST TO LEAVE</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Mr. Feast: Last To Leave the Mansion</h3>
-          <p class="game-card__desc">Survive 24 hours in a mansion with 9 other contestants. Last to leave wins $1,000,000. Just don't take the pizza.</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-
-      <a href="games/looksmaxxing-grindset.html" class="game-card">
-        <div class="game-card__art game-card__art--monopoly">
-          <span class="game-card__tag game-card__tag--new">NEW · PLAYABLE</span>
-          <div class="game-card__art-text">💪 LOOKSMAXXING<br/>GRINDSET</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Looksmaxxing Grindset</h3>
-          <p class="game-card__desc">Gym. Mewing. Jawline. Skincare. Sleep. NoFap. Wake up at 1% looksmax. Become gigachad. (Parody, obviously.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-
-      <a href="games/apop-demon-hunters.html" class="game-card">
-        <div class="game-card__art game-card__art--apop">
-          <span class="game-card__tag game-card__tag--new">NEW · PLAYABLE</span>
-          <div class="game-card__art-text">🎤 A-POP<br/>DEMON HUNTERS</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">A-Pop Demon Hunters</h3>
-          <p class="game-card__desc">Pop star vs. demon elites. Sync mic swings to the beat. Final boss: Lavish Larry. (Parody. Not affiliated.)</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-    </div>
-  </section>
-
-  <!-- AFTER DARK -->
-  <section class="section--after-dark">
-    <div class="section__header">
-      <h2 class="section__title">Rainbot After Dark</h2>
-      <p class="section__sub">The brainrot stops here. Our first horror game: no memes, no parody, no mercy. Headphones on. Lights off.</p>
-    </div>
-    <div class="game-grid game-grid--single">
-      <a href="games/again.html" class="game-card game-card--horror">
-        <div class="game-card__art game-card__art--hallway">
-          <span class="game-card__tag game-card__tag--horror">NEW · HORROR</span>
-          <div class="game-card__art-text game-card__art-text--serif">AGAIN.</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">AGAIN.</h3>
-          <p class="game-card__desc">A first-person hallway that loops. Every pass, something is different. Something is closer. Inspired by the dread of P.T. — built for your browser.</p>
-          <span class="game-card__cta">Enter the hallway →</span>
-        </div>
-      </a>
-    </div>
-  </section>
-
-  <!-- COMING SOON -->
-  <section class="section--soon">
-    <div class="section__header">
-      <h2 class="section__title section__title--small">Coming soon</h2>
-      <p class="section__sub">More parodies in the oven. Get notified when they drop.</p>
-    </div>
-    <div class="game-grid game-grid--compact">
-      <div class="game-card game-card--dimmed">
-        <div class="game-card__art game-card__art--monopoly">
-          <span class="game-card__tag game-card__tag--soon">SOON</span>
-          <div class="game-card__art-text">🏘 BOOMER<br/>MONOPOLY</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Boomer Monopoly</h3>
-          <p class="game-card__desc">Buy the neighborhood. Rent out the duplex. Tell the kids to stop eating avocado toast. Capitalism: the board game.</p>
-          <span class="game-card__cta">Notify me →</span>
+    <section class="pro-strip arcade-panel" id="pricing">
+      <div class="pro-strip__intro">
+        <img src="assets/img/mockup/pro-badge.png?v=20260611-7" alt="" />
+        <div>
+          <h2>Go ad-free.<br /><span>Support the bot.</span></h2>
+          <p>Unlock an ad-free arcade, exclusive perks, and help Rainbot build weirder games.</p>
         </div>
       </div>
 
-      <a href="games/dont-look-gym-girl.html" class="game-card game-card--dimmed">
-        <div class="game-card__art game-card__art--gym">
-          <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
-          <div class="game-card__art-text">👀 DON'T LOOK<br/>AT THE GYM GIRL</div>
-        </div>
-        <div class="game-card__body">
-          <h3 class="game-card__title">Don't Look at the Gym Girl</h3>
-          <p class="game-card__desc">Stealth-awkward, remade. Front door to locker room, 8 levels, and your own neck is the boss fight. Get caught looking once and the group chat knows.</p>
-          <span class="game-card__cta">Play now →</span>
-        </div>
-      </a>
-    </div>
-  </section>
+      <ul class="pro-strip__perks">
+        <li>Ad-free gaming experience</li>
+        <li>Exclusive Pro-only games</li>
+        <li>Early access to new drops</li>
+        <li>Support the Rainbot crew</li>
+      </ul>
 
-  <!-- HOW IT WORKS -->
-  <section>
-    <div class="section__header">
-      <h2 class="section__title">Arcade loop</h2>
-      <p class="section__sub">No accounts. No installs. No email. Promise.</p>
-    </div>
-    <div class="features">
-      <div class="feature">
-        <div class="feature__icon">🎮</div>
-        <h3 class="feature__title">Click & play</h3>
-        <p class="feature__body">Browser-only. Works on your phone during the meeting. Sorry HR.</p>
+      <div class="pro-plan pro-plan--monthly">
+        <small>Monthly</small>
+        <strong>$4.99 <span>/ mo</span></strong>
+        <button class="arcade-btn arcade-btn--cyan" type="button" data-pro-plan="monthly">Go Pro</button>
       </div>
-      <div class="feature">
-        <div class="feature__icon">📺</div>
-        <h3 class="feature__title">Watch ad, get buff</h3>
-        <p class="feature__body">Stuck? Watch a 5-second ad, claim a shield, nuke, or speed boost. Then absolutely demolish that level.</p>
-      </div>
-      <div class="feature">
-        <div class="feature__icon">🚫</div>
-        <h3 class="feature__title">Or skip the ads</h3>
-        <p class="feature__body">Pro is $3.99/mo or $29.99/yr. No ads anywhere, exclusive skins, early access to new games.</p>
-      </div>
-      <div class="feature">
-        <div class="feature__icon">🏆</div>
-        <h3 class="feature__title">Bragging rights</h3>
-        <p class="feature__body">Local high scores for now. Global leaderboards coming once we have enough tankers to fill a queue.</p>
-      </div>
-    </div>
-  </section>
 
-  <!-- AD SLOT -->
-  <div id="ad-rectangle" style="display:flex;justify-content:center;"></div>
-
-  <!-- PRICING -->
-  <section id="pricing" class="section--pricing">
-    <div class="section__header">
-      <h2 class="section__title">Ad-free pass</h2>
-      <p class="section__sub">Free works forever. Pro is for people who hate waiting on ads.</p>
-    </div>
-    <div class="pricing">
-      <div class="plan">
-        <h3 class="plan__name">FREE</h3>
-        <div class="plan__price">$0<small>/forever</small></div>
-        <ul class="plan__list">
-          <li>All current games</li>
-          <li>Ads between rounds</li>
-          <li>Watch ads to earn power-ups</li>
-          <li>Local high scores</li>
-          <li>Three lives per run</li>
-        </ul>
-        <a href="games.html" class="btn btn--ghost">Start playing</a>
+      <div class="pro-plan pro-plan--yearly">
+        <em>2 months free</em>
+        <small>Yearly</small>
+        <strong>$49.99 <span>/ yr</span></strong>
+        <button class="arcade-btn arcade-btn--yellow" type="button" data-pro-plan="yearly">Go Pro</button>
       </div>
-      <div class="plan plan--pro">
-        <h3 class="plan__name">PRO</h3>
-        <div class="plan__price">$3.99<small>/mo</small></div>
-        <ul class="plan__list">
-          <li>Zero ads, anywhere</li>
-          <li>Exclusive tanker skins</li>
-          <li>Early access to new games</li>
-          <li>Cloud-synced high scores</li>
-          <li>Cancel anytime</li>
-        </ul>
-        <a href="#" id="go-pro-btn" class="btn btn--primary">Go Pro</a>
-      </div>
-    </div>
-  </section>
 
-  <footer class="footer">
-    <div class="footer__links">
-      <a href="games.html">Games</a>
-      <a href="legal/privacy.html">Privacy</a>
-      <a href="legal/terms.html">Terms</a>
+      <img class="pro-strip__bot" src="assets/img/mockup/pro-bot.png?v=20260611-7" alt="" />
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-logo.png?v=20260611-7" alt="Rainbot Gaming" /></a>
+    <div class="site-footer__links">
+      <a href="#after-dark">About</a>
       <a href="mailto:hello@rainbotgaming.com">Contact</a>
+      <a href="legal/terms.html">Terms</a>
+      <a href="legal/privacy.html">Privacy</a>
+      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
     </div>
-    <div>© 2026 Rainbot Gaming. Made with too much coffee.</div>
-    <div class="footer__small">Parody games. Not affiliated with any real tanker, boomer, or pop star.</div>
+    <div class="site-footer__social" aria-label="Social links">
+      <a href="#" aria-label="Discord">DI</a>
+      <a href="#" aria-label="X">X</a>
+      <a href="#" aria-label="YouTube">YT</a>
+      <a href="#" aria-label="TikTok">TT</a>
+      <a href="#" aria-label="Instagram">IG</a>
+    </div>
   </footer>
 
-  <script src="assets/js/ads.js?v=20260611-2"></script>
-  <script src="assets/js/main.js?v=20260611-2"></script>
+  <script src="assets/js/ads.js?v=20260611-7"></script>
+  <script src="assets/js/main.js?v=20260611-7"></script>
   <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
-
-    const goPro = document.getElementById("go-pro-btn");
-    if (goPro) goPro.addEventListener("click", (e) => {
-      e.preventDefault();
-      openProModal();
+    document.querySelectorAll("[data-pro-plan]").forEach((button) => {
+      button.addEventListener("click", () => openProModal(button.dataset.proPlan));
     });
   </script>
 </body>

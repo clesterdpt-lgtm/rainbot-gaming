@@ -796,13 +796,13 @@
   function shareWipeout() {
     // Use the most recent frame in the ring buffer if we have one
     const recent = state.ringBuffer[state.ringBuffer.length - 1];
-    const caption = `I just died in Escape the Strait 🚢💥 Score: ${state.score.toLocaleString()} #EscapeTheStrait`;
+    const caption = `I just died in Escape the Straight 🚢💥 Score: ${state.score.toLocaleString()} #EscapeTheStraight`;
     if (recent && navigator.canShare && navigator.share) {
       recent.canvas.toBlob((blob) => {
         if (!blob) return fallbackCopy(caption);
         const file = new File([blob], "wipeout.png", { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: "Escape the Strait", text: caption })
+          navigator.share({ files: [file], title: "Escape the Straight", text: caption })
             .then(() => RB.toast("📤 Shared!", "good"))
             .catch(() => fallbackCopy(caption));
         } else {

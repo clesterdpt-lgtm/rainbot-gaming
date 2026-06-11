@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AGAIN. — a Rainbot horror</title>
+  <meta name="description" content="A first-person loop-horror experience. One hallway. It repeats. It remembers. Headphones required. Not a parody." />
+  <meta name="theme-color" content="#000000" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23050505'/%3E%3Ccircle cx='50' cy='54' r='7' fill='%237a1f1f'/%3E%3Crect x='46' y='20' width='8' height='24' rx='4' fill='%23403a32'/%3E%3C/svg%3E" />
+  <style>
+    /* ============ AGAIN. — deliberately not the Rainbot neon ============ */
+    :root {
+      --bone: #d8d2c6;
+      --bone-dim: #8a857c;
+      --blood: #7a1f1f;
+      --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: #000;
+      color: var(--bone);
+      font-family: var(--serif);
+      overflow: hidden;
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body.playing { cursor: none; }
+
+    #app, #app canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+    #app canvas { display: block; touch-action: none; }
+
+    /* ---------- fx layers ---------- */
+    .fx { position: fixed; inset: 0; pointer-events: none; }
+    #fx-vignette {
+      background: radial-gradient(ellipse 75% 65% at 50% 48%, transparent 38%, rgba(0,0,0,0.55) 78%, rgba(0,0,0,0.95) 100%);
+      opacity: 0.5; z-index: 4;
+    }
+    #fx-grain {
+      width: 100%; height: 100%;
+      object-fit: cover; image-rendering: pixelated;
+      mix-blend-mode: overlay; opacity: 0.06; z-index: 5;
+    }
+    #fx-flash { background: #fff; opacity: 0; transition: opacity 140ms ease-out; z-index: 6; }
+    #fx-fade { background: #000; opacity: 1; transition: opacity 400ms linear; z-index: 7; }
+    #fx-sub {
+      position: fixed; left: 50%; bottom: 9vh; transform: translateX(-50%);
+      max-width: 80vw; text-align: center;
+      font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em;
+      color: rgba(216,210,198,0.82); text-shadow: 0 1px 3px #000, 0 0 18px rgba(0,0,0,0.9);
+      opacity: 0; transition: opacity 600ms; z-index: 8; pointer-events: none;
+      font-style: italic;
+    }
+    #fx-title {
+      position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      font-family: var(--serif); font-size: clamp(38px, 7vw, 84px);
+      letter-spacing: 0.42em; text-indent: 0.42em; color: rgba(216,210,198,0.85);
+      text-shadow: 0 0 30px rgba(0,0,0,0.8);
+      opacity: 0; transition: opacity 1400ms ease; z-index: 8; pointer-events: none;
+    }
+    #fx-hint {
+      position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%);
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+      color: rgba(138,133,124,0.7);
+      opacity: 0; transition: opacity 1200ms; z-index: 8; pointer-events: none;
+      text-transform: uppercase;
+    }
+    #btn-touch-pause {
+      position: fixed; top: 14px; right: 14px; z-index: 9;
+      display: none;
+      background: rgba(0,0,0,0.4); color: rgba(216,210,198,0.6);
+      border: 1px solid rgba(216,210,198,0.25); border-radius: 4px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em;
+      padding: 8px 12px;
+    }
+
+    /* ---------- screens ---------- */
+    .scr {
+      position: fixed; inset: 0; z-index: 20;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; background: #000; padding: 24px;
+    }
+    .scr--show { display: flex; }
+    .scr--dim { background: rgba(0,0,0,0.88); }
+    .scr__kicker {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.34em;
+      color: var(--blood); text-transform: uppercase; margin-bottom: 26px;
+    }
+    .scr__title {
+      font-family: var(--serif); font-weight: 400;
+      font-size: clamp(44px, 9vw, 96px);
+      letter-spacing: 0.4em; text-indent: 0.4em;
+      color: var(--bone);
+      animation: breathe 6s ease-in-out infinite;
+      margin-bottom: 22px;
+    }
+    @keyframes breathe { 50% { opacity: 0.55; } }
+    .scr__sub {
+      font-family: var(--serif); font-style: italic; font-size: 16px;
+      color: var(--bone-dim); line-height: 1.8; max-width: 440px; margin-bottom: 34px;
+    }
+    .scr__warn {
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+      color: #5d5950; text-transform: uppercase; margin-top: 34px; line-height: 2;
+    }
+    .scr__stats {
+      font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.1em;
+      color: var(--bone-dim); margin-bottom: 38px;
+    }
+    .scr__row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+    .ebtn {
+      display: inline-block; background: none; cursor: pointer;
+      font-family: var(--serif); font-size: 17px; letter-spacing: 0.22em; text-indent: 0.22em;
+      color: var(--bone); border: 1px solid #494439; border-radius: 2px;
+      padding: 14px 38px; text-decoration: none;
+      transition: background 240ms, color 240ms, border-color 240ms;
+    }
+    .ebtn:hover { background: var(--bone); color: #000; border-color: var(--bone); }
+    .ebtn--dim { font-size: 13px; padding: 10px 22px; color: var(--bone-dim); border-color: #2e2b26; }
+    .ebtn--dim:hover { background: none; color: var(--bone); border-color: var(--bone-dim); }
+    .scr__corner {
+      position: absolute; top: 18px; left: 20px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+      color: #4c483f; text-decoration: none;
+    }
+    .scr__corner:hover { color: var(--bone-dim); }
+    .vol-row {
+      display: flex; align-items: center; gap: 12px; margin: 26px 0 6px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; color: var(--bone-dim);
+    }
+    input[type="range"] { accent-color: #6e6657; width: 170px; }
+    #err-msg { font-family: var(--mono); font-size: 13px; color: var(--bone-dim); max-width: 420px; line-height: 1.9; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- fx layers -->
+  <div class="fx" id="fx-vignette"></div>
+  <canvas class="fx" id="fx-grain"></canvas>
+  <div class="fx" id="fx-flash"></div>
+  <div class="fx" id="fx-fade"></div>
+  <div id="fx-sub"></div>
+  <div id="fx-title"></div>
+  <div id="fx-hint">w a s d — walk&nbsp;&nbsp;·&nbsp;&nbsp;mouse — look&nbsp;&nbsp;·&nbsp;&nbsp;esc — pause</div>
+  <button id="btn-touch-pause" aria-label="Pause">&#10073;&#10073;</button>
+
+  <!-- title -->
+  <div class="scr scr--show" id="scr-boot">
+    <a class="scr__corner" href="../games.html">&larr; rainbot</a>
+    <div class="scr__kicker">rainbot after dark &middot; no. 001</div>
+    <h1 class="scr__title">AGAIN.</h1>
+    <p class="scr__sub">
+      There is a hallway in this house.<br />
+      You have walked it before.<br />
+      You will walk it again.
+    </p>
+    <div class="scr__row">
+      <button class="ebtn" id="btn-enter">enter</button>
+    </div>
+    <div class="scr__warn">
+      headphones &middot; lights off &middot; alone<br />
+      contains sudden loud sounds &amp; brief flashing imagery
+    </div>
+  </div>
+
+  <!-- pause -->
+  <div class="scr scr--dim" id="scr-pause">
+    <a class="scr__corner" href="../games.html">&larr; leave the house</a>
+    <div class="scr__kicker">it waits</div>
+    <h2 class="scr__title" style="font-size:clamp(26px,5vw,44px);">paused</h2>
+    <div class="scr__row">
+      <button class="ebtn" id="btn-resume">go back in</button>
+      <button class="ebtn ebtn--dim" id="btn-restart">start over</button>
+    </div>
+    <div class="vol-row">
+      <span>volume</span>
+      <input type="range" id="vol-slider" min="0" max="1" step="0.01" />
+      <span id="vol-readout">90%</span>
+    </div>
+    <div class="scr__warn">m — mute &middot; esc — pause</div>
+  </div>
+
+  <!-- end -->
+  <div class="scr" id="scr-end">
+    <div class="scr__kicker">rainbot after dark &middot; no. 001</div>
+    <h2 class="scr__title" style="font-size:clamp(30px,6vw,64px);" id="end-line">IT LET YOU LEAVE.</h2>
+    <p class="scr__sub" style="margin-bottom:18px;">she is still in there. walking.</p>
+    <div class="scr__stats" id="end-stats"></div>
+    <div class="scr__row">
+      <button class="ebtn" id="btn-again">again.</button>
+      <a class="ebtn ebtn--dim" href="../games.html">leave &rarr;</a>
+    </div>
+    <div class="scr__warn">tell a friend. don&rsquo;t let them play alone.</div>
+  </div>
+
+  <!-- error -->
+  <div class="scr" id="scr-error">
+    <div class="scr__kicker">rainbot after dark</div>
+    <h2 class="scr__title" style="font-size:clamp(24px,4vw,36px);letter-spacing:0.2em;">the door won&rsquo;t open</h2>
+    <p id="err-msg"></p>
+    <div class="scr__row" style="margin-top:30px;">
+      <a class="ebtn ebtn--dim" href="../games.html">&larr; back to rainbot</a>
+    </div>
+  </div>
+
+  <script src="../assets/js/again.js"></script>
+</body>
+</html>

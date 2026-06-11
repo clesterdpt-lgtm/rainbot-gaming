@@ -913,3 +913,45 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   .powerup { min-width: 100px; padding: 8px 10px; font-size: 11px; }
   .powerup__icon { font-size: 16px; }
 }
+
+/* ===== AFTER DARK — the horror shelf ===== */
+.game-card--horror { border-color: #15100e; background: #0c0908; }
+.game-card--horror:hover {
+  border-color: #7a1f1f;
+  box-shadow: 0 16px 48px rgba(122, 31, 31, 0.35);
+}
+.game-card__art--hallway {
+  background: radial-gradient(130% 100% at 50% 115%, #2b1812 0%, #150d0e 45%, #060507 100%);
+}
+.game-card__art--hallway::before {
+  content: "";
+  position: absolute; left: 50%; top: 16%;
+  transform: translateX(-50%);
+  width: 30px; height: 66%;
+  background: linear-gradient(180deg, rgba(255,212,164,0.30), rgba(255,212,164,0.04));
+  box-shadow: 0 0 34px 8px rgba(255,190,130,0.16);
+  animation: doorglow 5s ease-in-out infinite;
+}
+@keyframes doorglow { 50% { opacity: 0.55; } }
+.game-card__art--hallway::after {
+  content: "";
+  position: absolute; left: 50%; bottom: 17%;
+  transform: translateX(-50%);
+  width: 12px; height: 34px;
+  background: #050505;
+  border-radius: 5px 5px 0 0;
+  opacity: 0;
+  animation: herblink 7s steps(1) infinite;
+}
+@keyframes herblink { 0%, 87% { opacity: 0; } 88%, 93% { opacity: 0.9; } 94%, 100% { opacity: 0; } }
+.game-card__art-text--serif {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: #d8d2c6;
+  text-shadow: 0 2px 22px rgba(0,0,0,0.9);
+}
+.game-card--horror .game-card__title { color: #d8d2c6; }
+.game-card--horror .game-card__cta { color: #b85c5c; }
+.game-card__tag--horror { background: #7a1f1f; color: #f3e4e4; }

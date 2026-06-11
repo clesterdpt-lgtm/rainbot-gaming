@@ -1,5 +1,5 @@
 /* ============================================
-   ESCAPE THE STRAIT — ad & subscription system
+   RAINBOT GAMING — ad & subscription system
    --------------------------------------------
    - AdMob / AdSense / Adsterra are all pluggable
    - For local dev we use a mock that simulates a 5s rewarded ad
@@ -85,7 +85,7 @@ const RB = (() => {
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-ad-title">
           <div class="modal__title" id="rb-ad-title">📺 Watch a quick ad</div>
           <div class="modal__body">
-            Thanks for keeping Escape the Strait free. Watch the full ad to claim your power-up.
+            Thanks for keeping Rainbot Gaming free. Watch the full ad to claim your power-up.
           </div>
           <div class="modal__countdown" id="rb-ad-count">5</div>
           <div class="modal__body" style="font-size:12px;opacity:0.6;">
@@ -128,8 +128,8 @@ const RB = (() => {
     return new Promise((resolve) => {
       const ok = confirm(
         plan === "yearly"
-          ? "Subscribe to Escape the Strait Pro (yearly) for $29.99? (Mock — wire Stripe in ads.js)"
-          : "Subscribe to Escape the Strait Pro (monthly) for $3.99? (Mock — wire Stripe in ads.js)"
+          ? "Subscribe to Rainbot Pro (yearly) for $29.99? (Mock — wire Stripe in ads.js)"
+          : "Subscribe to Rainbot Pro (monthly) for $3.99? (Mock — wire Stripe in ads.js)"
       );
       if (ok) {
         state.isPro = true;

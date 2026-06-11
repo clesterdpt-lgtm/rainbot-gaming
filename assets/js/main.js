@@ -1,5 +1,5 @@
 /* ============================================
-   ESCAPE THE STRAIT — site-wide JS
+   RAINBOT GAMING — site-wide JS
    - nav rendering
    - Pro badge
    - subscribe modal
@@ -24,7 +24,7 @@ function renderNav() {
       : "";
 
     slot.innerHTML = `
-      <a href="${RB_BASE}" class="nav__brand" title="Rainbot — AI-generated brainrot games">
+      <a href="${RB_BASE}" class="nav__brand" title="Rainbot Gaming — free browser arcade">
         <span class="nav__brand-mark">
           <span class="nav__brand-mark__face">
             <span class="nav__brand-mark__eye"></span>
@@ -75,7 +75,7 @@ function openProModal() {
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal__title">⚡ Go Ad-Free</div>
       <div class="modal__body">
-        Skip every ad. Unlock the rainbow tanker skin. Support indie silliness.
+        Skip every ad. Unlock bonus skins. Support indie silliness.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;">
         <button class="btn btn--primary" data-plan="monthly">Monthly · $3.99</button>

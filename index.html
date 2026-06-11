@@ -3,34 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Escape the Strait — Free Browser Games</title>
-  <meta name="description" content="Free browser games. Cross the straits, dodge the dangers. Watch ads for power-ups, or go Pro for no ads." />
+  <title>Rainbot Gaming — Free Browser Games</title>
+  <meta name="description" content="Rainbot Gaming is a free browser arcade of AI-generated, human-curated parody and horror games. Play instantly or go Pro to skip ads." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" />
   <link rel="stylesheet" href="assets/css/styles.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
-<body>
+<body class="home-page">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <!-- HERO -->
-  <header class="hero">
-    <span class="hero__pill">🧠 AI-generated · Human-curated · Internet-rotted</span>
-    <h1 class="hero__title">
-      <span class="word w1">We fed an AI</span>
-      <span class="word w2">the internet.</span>
-      <span class="word w3">It made these.</span>
-    </h1>
-    <p class="hero__sub">
-      Parody games built by a bot that learned too much from Reddit, TikTok, and 4chan.
-      Oil tankers. Boomers. Pop stars. Squat racks. We just shipped them.
-      <br>
-      <span class="hero__sub-cta">Sorry.</span>
-    </p>
-    <div class="hero__ctas">
-      <a href="games.html" class="btn btn--primary">Play the brainrot →</a>
-      <a href="#pricing" class="btn btn--ghost">Skip the ads</a>
+  <header class="hero hero--home">
+    <div class="hero__inner">
+      <div class="hero__copy">
+        <h1 class="hero__title">
+          <span class="word w1">Rainbot</span>
+          <span class="word w2">Gaming</span>
+        </h1>
+        <p class="hero__sub">
+          Free browser games from a bot that learned too much from the internet.
+          Parody arcade chaos, one horror hallway, no installs, no account wall.
+        </p>
+        <div class="hero__ctas">
+          <a href="games.html" class="btn btn--primary">Play the arcade</a>
+          <a href="#pricing" class="btn btn--ghost">Skip the ads</a>
+        </div>
+      </div>
+      <div class="hero__media" aria-label="Rainbot Gaming neon arcade artwork">
+        <img src="assets/img/rainbot-arcade-hero.png" alt="Neon arcade cabinets with a smiling Rainbot robot cabinet at the center" />
+        <div class="hero__media-strip">
+          <span>5 playable games</span>
+          <span>After Dark open</span>
+          <span>Pro removes ads</span>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -38,9 +46,11 @@
   <div id="ad-leaderboard"></div>
 
   <!-- FEATURED GAMES -->
-  <section>
-    <h2 class="section__title">🔥 Live games</h2>
-    <p class="section__sub">Click in. The first round takes 60 seconds. You will absolutely get mad.</p>
+  <section class="section--live">
+    <div class="section__header">
+      <h2 class="section__title">Live games</h2>
+      <p class="section__sub">Click in. The first round takes 60 seconds. You will absolutely get mad.</p>
+    </div>
     <div class="game-grid">
       <a href="games/strait-of-hormuz.html" class="game-card">
         <div class="game-card__art game-card__art--hormuz">
@@ -93,10 +103,12 @@
   </section>
 
   <!-- AFTER DARK -->
-  <section style="padding-top: 0;">
-    <h2 class="section__title" style="color:#d8d2c6;">🕯 Rainbot After Dark</h2>
-    <p class="section__sub">The brainrot stops here. Our first horror game — no memes, no parody, no mercy. Headphones on. Lights off.</p>
-    <div class="game-grid" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); max-width: 460px;">
+  <section class="section--after-dark">
+    <div class="section__header">
+      <h2 class="section__title">Rainbot After Dark</h2>
+      <p class="section__sub">The brainrot stops here. Our first horror game: no memes, no parody, no mercy. Headphones on. Lights off.</p>
+    </div>
+    <div class="game-grid game-grid--single">
       <a href="games/again.html" class="game-card game-card--horror">
         <div class="game-card__art game-card__art--hallway">
           <span class="game-card__tag game-card__tag--horror">NEW · HORROR</span>
@@ -112,11 +124,13 @@
   </section>
 
   <!-- COMING SOON -->
-  <section style="padding-top: 0;">
-    <h2 class="section__title" style="font-size: 28px; color: var(--ink-dim);">🚧 Coming soon</h2>
-    <p class="section__sub">More parodies in the oven. Get notified when they drop.</p>
-    <div class="game-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
-      <div class="game-card" style="opacity:0.7;">
+  <section class="section--soon">
+    <div class="section__header">
+      <h2 class="section__title section__title--small">Coming soon</h2>
+      <p class="section__sub">More parodies in the oven. Get notified when they drop.</p>
+    </div>
+    <div class="game-grid game-grid--compact">
+      <div class="game-card game-card--dimmed">
         <div class="game-card__art game-card__art--monopoly">
           <span class="game-card__tag game-card__tag--soon">SOON</span>
           <div class="game-card__art-text">🏘 BOOMER<br/>MONOPOLY</div>
@@ -128,7 +142,7 @@
         </div>
       </div>
 
-      <a href="games/dont-look-gym-girl.html" class="game-card" style="opacity:0.7;">
+      <a href="games/dont-look-gym-girl.html" class="game-card game-card--dimmed">
         <div class="game-card__art game-card__art--gym">
           <span class="game-card__tag game-card__tag--new">PLAYABLE</span>
           <div class="game-card__art-text">👀 DON'T LOOK<br/>AT THE GYM GIRL</div>
@@ -144,8 +158,10 @@
 
   <!-- HOW IT WORKS -->
   <section>
-    <h2 class="section__title">How it works</h2>
-    <p class="section__sub">No accounts. No installs. No email. Promise.</p>
+    <div class="section__header">
+      <h2 class="section__title">Arcade loop</h2>
+      <p class="section__sub">No accounts. No installs. No email. Promise.</p>
+    </div>
     <div class="features">
       <div class="feature">
         <div class="feature__icon">🎮</div>
@@ -174,9 +190,11 @@
   <div id="ad-rectangle" style="display:flex;justify-content:center;"></div>
 
   <!-- PRICING -->
-  <section id="pricing">
-    <h2 class="section__title">Pay what you want</h2>
-    <p class="section__sub">Free works forever. Pro is for people who hate waiting on ads.</p>
+  <section id="pricing" class="section--pricing">
+    <div class="section__header">
+      <h2 class="section__title">Ad-free pass</h2>
+      <p class="section__sub">Free works forever. Pro is for people who hate waiting on ads.</p>
+    </div>
     <div class="pricing">
       <div class="plan">
         <h3 class="plan__name">FREE</h3>
@@ -210,9 +228,9 @@
       <a href="games.html">Games</a>
       <a href="legal/privacy.html">Privacy</a>
       <a href="legal/terms.html">Terms</a>
-      <a href="mailto:hello@escapethestrait.com">Contact</a>
+      <a href="mailto:hello@rainbotgaming.com">Contact</a>
     </div>
-    <div>© 2026 Escape the Strait. Made with too much coffee.</div>
+    <div>© 2026 Rainbot Gaming. Made with too much coffee.</div>
     <div class="footer__small">Parody games. Not affiliated with any real tanker, boomer, or pop star.</div>
   </footer>
 

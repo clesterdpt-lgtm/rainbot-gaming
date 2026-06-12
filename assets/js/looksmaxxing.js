@@ -14,6 +14,9 @@
   const WIN_LOOKSMAX = 100;
   const DAY_LENGTH = 10;
   const TOTAL_DAYS = 30;
+  const IDLE_DRAIN_DELAY = 2.2;
+  const IDLE_STAT_DRAIN = 1.05;
+  const IDLE_SCORE_DRAIN = 42;
 
   // ----- Game state -----
   const state = {
@@ -46,6 +49,12 @@
     recentRoutine: null,
     grindPulse: 0,
     comboPulse: 0,
+    idleDrain: 0,
+    idleWarning: 0,
+    flashColor: "#ffffff",
+    lastScoreDelta: 0,
+    scoreDeltaTimer: 0,
+    ending: false,
   };
 
   // ----- Stat metadata -----
@@ -104,31 +113,54 @@
 
   // ----- Event templates -----
   const EVENTS = [
-    { icon: "😊", text: "She said you have a nice smile", effect: () => bumpAll(2) },
-    { icon: "😴", text: "Your mom said you look tired", effect: () => bumpAll(-2) },
-    { icon: "💊", text: "You discovered creatine", effect: () => { state.stats.gym = clampStat(state.stats.gym + 8); } },
-    { icon: "🤡", text: "You forgot your supplements", effect: () => bumpAll(-3) },
-    { icon: "💪", text: "Someone called you gigachad", effect: () => bumpAll(3) },
-    { icon: "📱", text: "You stayed up late on TikTok", effect: () => { state.stats.sleep = Math.max(0, state.stats.sleep - 8); } },
-    { icon: "🍕", text: "You ate a whole pizza", effect: () => bumpAll(-3) },
-    { icon: "💕", text: "You went on a date", effect: () => bumpAll(2) },
-    { icon: "📸", text: "Your ex posted a thirst trap", effect: () => { state.stats.jawline = Math.max(0, state.stats.jawline - 4); } },
-    { icon: "🎥", text: "You saw a video of a man yelling", effect: () => { state.stats.mewing = clampStat(state.stats.mewing + 8); state.stats.jawline = clampStat(state.stats.jawline + 5); } },
-    { icon: "💇", text: "You tried a new haircut", effect: () => { state.stats.jawline = clampStat(state.stats.jawline + 5); state.stats.skincare = clampStat(state.stats.skincare + 5); } },
-    { icon: "😂", text: "She laughed at your joke", effect: () => bumpAll(1) },
-    { icon: "📷", text: "Your friend took a better photo", effect: () => bumpAll(-2) },
-    { icon: "🥶", text: "You took a cold shower", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 6); state.stats.gym = clampStat(state.stats.gym + 4); } },
-    { icon: "🧘", text: "You tried meditating", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 7); state.stats.mewing = clampStat(state.stats.mewing + 3); } },
-    { icon: "👑", text: "You walked into a room and people noticed", effect: () => bumpAll(4) },
-    { icon: "🪞", text: "The mirror finally respected you", effect: () => bumpAll(5) },
-    { icon: "🧃", text: "You drank exactly enough water", effect: () => { state.stats.skincare = clampStat(state.stats.skincare + 8); state.stats.sleep = clampStat(state.stats.sleep + 3); } },
-    { icon: "🧢", text: "Hat phase delayed the glow-up", effect: () => { state.stats.jawline = Math.max(0, state.stats.jawline - 7); } },
+    { tone: "good", icon: "😊", text: "She said you have a nice smile", impact: "+stats", effect: () => { bumpAll(2); addScore(80); } },
+    { tone: "bad", icon: "😴", text: "Your mom said you look tired", impact: "-stats -score", effect: () => { bumpAll(-3); damageScore(130); } },
+    { tone: "good", icon: "💊", text: "You discovered creatine", impact: "+gym", effect: () => { state.stats.gym = clampStat(state.stats.gym + 8); addScore(60); } },
+    { tone: "bad", icon: "🤡", text: "You forgot your supplements", impact: "-stats -score", effect: () => { bumpAll(-4); damageScore(180); } },
+    { tone: "good", icon: "💪", text: "Someone called you gigachad", impact: "+stats", effect: () => { bumpAll(3); addScore(90); } },
+    { tone: "bad", icon: "📱", text: "You stayed up late on TikTok", impact: "-sleep -score", effect: () => { hitStats(["sleep", "nofap"], 12); damageScore(220); } },
+    { tone: "bad", icon: "🍕", text: "You ate a whole pizza standing up", impact: "-stats -score", effect: () => { bumpAll(-5); damageScore(190); } },
+    { tone: "good", icon: "💕", text: "You went on a date", impact: "+stats", effect: () => { bumpAll(2); addScore(70); } },
+    { tone: "bad", icon: "📸", text: "Bad lighting front camera incident", impact: "-jaw -skin -score", effect: () => { hitStats(["jawline", "skincare"], 14); damageScore(260); } },
+    { tone: "good", icon: "🎥", text: "You saw a video of a man yelling", impact: "+mewing +jaw", effect: () => { state.stats.mewing = clampStat(state.stats.mewing + 8); state.stats.jawline = clampStat(state.stats.jawline + 5); addScore(60); } },
+    { tone: "good", icon: "💇", text: "You tried a new haircut", impact: "+jaw +skin", effect: () => { state.stats.jawline = clampStat(state.stats.jawline + 5); state.stats.skincare = clampStat(state.stats.skincare + 5); addScore(70); } },
+    { tone: "good", icon: "😂", text: "She laughed at your joke", impact: "+stats", effect: () => { bumpAll(1); addScore(45); } },
+    { tone: "bad", icon: "📷", text: "Your friend took a better photo", impact: "-stats -score", effect: () => { bumpAll(-3); damageScore(160); } },
+    { tone: "good", icon: "🥶", text: "You took a cold shower", impact: "+sleep +gym", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 6); state.stats.gym = clampStat(state.stats.gym + 4); addScore(55); } },
+    { tone: "good", icon: "🧘", text: "You tried meditating", impact: "+sleep +mewing", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 7); state.stats.mewing = clampStat(state.stats.mewing + 3); addScore(65); } },
+    { tone: "good", icon: "👑", text: "You walked into a room and people noticed", impact: "+stats", effect: () => { bumpAll(4); addScore(120); } },
+    { tone: "good", icon: "🪞", text: "The mirror finally respected you", impact: "+stats", effect: () => { bumpAll(5); addScore(150); } },
+    { tone: "good", icon: "🧃", text: "You drank exactly enough water", impact: "+skin +sleep", effect: () => { state.stats.skincare = clampStat(state.stats.skincare + 8); state.stats.sleep = clampStat(state.stats.sleep + 3); addScore(55); } },
+    { tone: "bad", icon: "🧢", text: "Hat phase delayed the glow-up", impact: "-jaw -score", effect: () => { hitStats(["jawline"], 12); damageScore(150); } },
+    { tone: "bad", icon: "🧂", text: "Salt bloat jumpscare", impact: "-skin -jaw -score", effect: () => { hitStats(["skincare", "jawline"], 11); damageScore(210); } },
+    { tone: "bad", icon: "💤", text: "Three-hour nap became nine hours", impact: "-gym -score", effect: () => { hitStats(["gym", "nofap"], 13); damageScore(170); } },
+    { tone: "bad", icon: "🧻", text: "Group chat found your yearbook photo", impact: "-all -score", effect: () => { bumpAll(-6); damageScore(300); } },
+    { tone: "bad", icon: "🥤", text: "Gas station pastry bulk arc", impact: "-all -score", effect: () => { bumpAll(-5); damageScore(230); } },
+    { tone: "bad", icon: "📉", text: "Algorithm served doomscroll spiral", impact: "-sleep -score", effect: () => { hitStats(["sleep", "nofap", "skincare"], 13); damageScore(280); } },
   ];
 
   function bumpAll(delta) {
     for (const k of Object.keys(state.stats)) {
       state.stats[k] = clampStat(state.stats[k] + delta);
     }
+  }
+
+  function hitStats(keys, amount) {
+    keys.forEach((key) => {
+      state.stats[key] = clampStat(state.stats[key] - amount);
+    });
+  }
+
+  function addScore(amount) {
+    state.score += amount;
+    state.lastScoreDelta = amount;
+    state.scoreDeltaTimer = 1.1;
+  }
+
+  function damageScore(amount) {
+    state.score = Math.max(0, state.score - amount);
+    state.lastScoreDelta = -amount;
+    state.scoreDeltaTimer = 1.25;
   }
 
   // ----- Game loop -----
@@ -151,10 +183,13 @@
       // Decay
       if (state.decayImmune > 0) {
         state.decayImmune = Math.max(0, state.decayImmune - dt);
+        state.idleDrain = 0;
+        state.idleWarning = Math.max(0, state.idleWarning - dt * 2.5);
       } else {
         for (const k of Object.keys(state.stats)) {
           state.stats[k] = Math.max(0, state.stats[k] - state.baseDecay * dt);
         }
+        applyIdleDrain(now, dt);
       }
 
       // Event cooldown
@@ -168,6 +203,7 @@
       if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 4);
       if (state.grindPulse > 0) state.grindPulse = Math.max(0, state.grindPulse - dt * 5);
       if (state.comboPulse > 0) state.comboPulse = Math.max(0, state.comboPulse - dt * 4);
+      if (state.scoreDeltaTimer > 0) state.scoreDeltaTimer = Math.max(0, state.scoreDeltaTimer - dt * 1.8);
 
       // Aura size smoothing
       const targetAura = getLooksmax() / 100;
@@ -184,14 +220,37 @@
       }
 
       // Check win
-      if (getLooksmax() >= WIN_LOOKSMAX) {
-        endGame(true);
+      if (getLooksmax() >= WIN_LOOKSMAX && !state.ending) {
+        beginWinReveal();
       }
     }
 
     draw();
     updateHUD();
     rafId = requestAnimationFrame(loop);
+  }
+
+  function applyIdleDrain(now, dt) {
+    const idleSeconds = Math.max(0, (now - state.lastClickTime) / 1000 - IDLE_DRAIN_DELAY);
+    if (idleSeconds <= 0) {
+      state.idleDrain = Math.max(0, state.idleDrain - dt * 3);
+      state.idleWarning = Math.max(0, state.idleWarning - dt * 3);
+      return;
+    }
+
+    const pressure = Math.min(1, idleSeconds / 5);
+    state.idleDrain = pressure;
+    state.idleWarning = Math.min(1, state.idleWarning + dt * 2.2);
+    const statLoss = IDLE_STAT_DRAIN * (0.6 + pressure * 1.8) * dt;
+    for (const k of Object.keys(state.stats)) {
+      state.stats[k] = Math.max(0, state.stats[k] - statLoss);
+    }
+    const scoreLoss = IDLE_SCORE_DRAIN * (0.35 + pressure * 1.5) * dt;
+    if (scoreLoss > 0) {
+      state.score = Math.max(0, state.score - scoreLoss);
+      state.lastScoreDelta = -scoreLoss;
+      state.scoreDeltaTimer = Math.max(state.scoreDeltaTimer, 0.35);
+    }
   }
 
   function triggerRandomEvent() {
@@ -204,15 +263,20 @@
   function dismissEvent() {
     if (!state.currentEvent) return;
     const ev = state.currentEvent;
+    const bad = ev.tone === "bad";
     ev.effect();
-    state.flash = 0.5;
-    spawnParticles(W / 2, 200, "#f7d716", 14, 200);
+    state.flash = bad ? 0.75 : 0.5;
+    state.flashColor = bad ? "#ff3b54" : "#ffffff";
+    if (bad) {
+      state.shake = Math.max(state.shake, 0.55);
+    }
+    spawnParticles(W / 2, 200, bad ? "#ff3b54" : "#f7d716", bad ? 22 : 14, bad ? 250 : 200);
     state.currentEvent = null;
     state.eventCooldown = 9 + Math.random() * 6;
   }
 
   function grind() {
-    if (!state.running || state.paused || state.gameOver) return;
+    if (!state.running || state.paused || state.gameOver || state.ending) return;
     const now = performance.now();
     if (now - state.lastClickTime < state.comboWindow * 1000) {
       state.combo = Math.min(99, state.combo + 1);
@@ -222,6 +286,8 @@
     state.lastClickTime = now;
     state.clicks += 1;
     state.grindPulse = 1;
+    state.idleDrain = 0;
+    state.idleWarning = 0;
     state.comboPulse = Math.min(1, state.combo / 28);
 
     const routine = ROUTINES[state.routineIndex % ROUTINES.length];
@@ -238,14 +304,15 @@
     }
 
     // Combo score
-    state.score += state.combo + Math.round(getLooksmax() * 0.3);
+    addScore(state.combo + Math.round(getLooksmax() * 0.3));
 
     // Tier up bonus
     const tier = getTier(getLooksmax());
     if (tier.num > state.maxTier) {
       state.maxTier = tier.num;
-      state.score += tier.num * 100;
+      addScore(tier.num * 100);
       state.flash = 0.7;
+      state.flashColor = "#ffffff";
       state.shake = 0.3;
       state.comboPulse = 1;
       spawnParticles(W / 2, 200, tier.color, 30, 280);
@@ -275,7 +342,7 @@
     state.gameOver = true;
     state.running = false;
     state.won = won;
-    const finalScore = state.score + getLooksmax() * 10;
+    const finalScore = Math.round(state.score + getLooksmax() * 10);
     RB.recordScore("looksmax", finalScore);
     const high = RB.getHighScore("looksmax");
     const tier = getTier(getLooksmax());
@@ -286,6 +353,22 @@
       ? `You did it. 10/10. The mirror blinked first. Final day: ${state.day}/${TOTAL_DAYS}.`
       : `Click RESTART to grind again.`;
     showOverlay(title, sub, "Grind again", `Final tier: <strong style="color:${tier.color}">${tier.title} ${tier.num}/10</strong> · Score: <strong style="color:var(--accent-3)">${finalScore.toLocaleString()}</strong> · High: <strong>${high.toLocaleString()}</strong>`);
+  }
+
+  function beginWinReveal() {
+    state.ending = true;
+    state.won = true;
+    state.currentEvent = null;
+    state.decayImmune = Math.max(state.decayImmune, 3);
+    state.comboPulse = 1;
+    state.flash = 1;
+    state.flashColor = "#ffd700";
+    state.shake = 0.85;
+    spawnParticles(W / 2, 210, "#ffd700", 70, 380);
+    RB.toast("🗿 FINAL FORM UNLOCKED", "good");
+    setTimeout(() => {
+      if (state.ending && state.running) endGame(true);
+    }, 1800);
   }
 
   // ----- Drawing -----
@@ -300,6 +383,7 @@
     const tier = getTier(getLooksmax());
     drawMirrorRoom(tier, time);
     drawTopHud(tier);
+    drawIdleWarning();
 
     // Avatar
     const ax = W / 2;
@@ -330,7 +414,7 @@
 
     // Flash
     if (state.flash > 0) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${state.flash * 0.3})`;
+      ctx.fillStyle = hexToRgba(state.flashColor, state.flash * 0.3);
       ctx.fillRect(0, 0, W, H);
     }
 
@@ -482,7 +566,7 @@
     ctx.font = "bold 11px JetBrains Mono, monospace";
     ctx.textAlign = "right";
     ctx.fillText(`DAY ${state.day}/${TOTAL_DAYS}`, W - 16, 20);
-    ctx.fillText(`🔥 ${state.combo}x  ·  👆 ${state.clicks}`, W - 16, 38);
+    ctx.fillText(`SCORE ${Math.floor(state.score).toLocaleString()}`, W - 16, 38);
 
     ctx.fillStyle = "rgba(255,255,255,0.12)";
     roundRect(ctx, W - 116, 44, 100, 5, 3);
@@ -490,6 +574,36 @@
     ctx.fillStyle = hexToRgba(tier.color, 0.9);
     roundRect(ctx, W - 116, 44, 100 * getDayProgress(), 5, 3);
     ctx.fill();
+
+    if (state.scoreDeltaTimer > 0 && Math.abs(state.lastScoreDelta) > 0.1) {
+      const good = state.lastScoreDelta > 0;
+      ctx.fillStyle = good ? "#6bff7d" : "#ff5c5c";
+      ctx.globalAlpha = 0.65 + state.scoreDeltaTimer * 0.2;
+      ctx.font = "bold 10px JetBrains Mono, monospace";
+      ctx.fillText(`${good ? "+" : "-"}${Math.ceil(Math.abs(state.lastScoreDelta))}`, W - 16, 54);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawIdleWarning() {
+    if (state.idleWarning <= 0) return;
+    const a = state.idleWarning;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "rgba(255, 30, 72, 0.14)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    roundRect(ctx, 56, 64, W - 112, 30, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#ff5c5c";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#ff5c5c";
+    ctx.font = "bold 12px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("IDLE DRAIN - SCORE FALLING", W / 2, 79);
+    ctx.restore();
   }
 
   function drawAvatar(cx, cy, tier, time = performance.now() / 1000) {
@@ -558,7 +672,9 @@
     ctx.fill();
 
     // Head circle
-    const skinColor = t < 0.3
+    const skinColor = t > 0.9
+      ? `rgb(196, 230, 226)`
+      : t < 0.3
       ? `rgb(${180 + t * 100}, ${120 + t * 100}, ${100 + t * 100})`
       : t < 0.6
       ? `rgb(220, 180, 150)`
@@ -685,6 +801,10 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
+    if (t > 0.78) {
+      drawSculptedJaw(cx, cy, t, skinColor, tier);
+    }
+
     // Beard (only at high tier)
     if (t > 0.5) {
       const beardDensity = (t - 0.5) * 2; // 0..1
@@ -701,7 +821,19 @@
     }
 
     // Mouth
-    if (t < 0.3) {
+    if (t > 0.84) {
+      const sculpt = Math.min(1, (t - 0.84) / 0.16);
+      ctx.fillStyle = "#f08ca8";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 36 + sculpt * 4, 11 + sculpt * 5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#0a0a14";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 12 - sculpt * 4, cy + 36 + sculpt * 4);
+      ctx.quadraticCurveTo(cx, cy + 40 + sculpt * 6, cx + 12 + sculpt * 4, cy + 36 + sculpt * 4);
+      ctx.stroke();
+    } else if (t < 0.3) {
       // Frown
       ctx.strokeStyle = "#0a0a14";
       ctx.lineWidth = 2;
@@ -751,6 +883,70 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${tier.num}/10`, 0, -2);
+    ctx.restore();
+  }
+
+  function drawSculptedJaw(cx, cy, t, skinColor, tier) {
+    const sculpt = Math.min(1, (t - 0.78) / 0.22);
+    const cheek = 46 + sculpt * 20;
+    const jaw = 34 + sculpt * 32;
+    const chinDrop = 20 + sculpt * 32;
+    const jawY = cy + 32;
+    const chinY = cy + 70 + chinDrop;
+
+    ctx.save();
+    ctx.fillStyle = skinColor;
+    ctx.beginPath();
+    ctx.moveTo(cx - 44, cy + 18);
+    ctx.lineTo(cx - cheek, jawY + 18);
+    ctx.lineTo(cx - jaw, chinY - 14);
+    ctx.quadraticCurveTo(cx, chinY + 8, cx + jaw, chinY - 14);
+    ctx.lineTo(cx + cheek, jawY + 18);
+    ctx.lineTo(cx + 44, cy + 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#05070d";
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Faceted cheek and jaw planes for the sculpted statue gag.
+    ctx.strokeStyle = hexToRgba("#ffffff", 0.22 + sculpt * 0.2);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 42, cy + 24);
+    ctx.lineTo(cx - cheek + 7, jawY + 14);
+    ctx.lineTo(cx - jaw + 8, chinY - 16);
+    ctx.moveTo(cx + 42, cy + 24);
+    ctx.lineTo(cx + cheek - 7, jawY + 14);
+    ctx.lineTo(cx + jaw - 8, chinY - 16);
+    ctx.moveTo(cx - 26, chinY - 4);
+    ctx.quadraticCurveTo(cx, chinY + 6, cx + 26, chinY - 4);
+    ctx.stroke();
+
+    ctx.strokeStyle = hexToRgba(tier.color, 0.42 + sculpt * 0.28);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - cheek + 4, jawY + 19);
+    ctx.lineTo(cx - jaw + 4, chinY - 12);
+    ctx.moveTo(cx + cheek - 4, jawY + 19);
+    ctx.lineTo(cx + jaw - 4, chinY - 12);
+    ctx.stroke();
+
+    if (sculpt > 0.72) {
+      ctx.fillStyle = hexToRgba("#ffffff", 0.14);
+      ctx.beginPath();
+      ctx.moveTo(cx - 18, cy + 8);
+      ctx.lineTo(cx - 68, jawY + 14);
+      ctx.lineTo(cx - 32, jawY + 25);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + 18, cy + 8);
+      ctx.lineTo(cx + 68, jawY + 14);
+      ctx.lineTo(cx + 32, jawY + 25);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -809,6 +1005,9 @@
       ctx.fillStyle = "#fff";
       ctx.font = "bold 10px JetBrains Mono, monospace";
       ctx.textAlign = "right";
+      ctx.strokeStyle = "rgba(0,0,0,0.85)";
+      ctx.lineWidth = 3;
+      ctx.strokeText(Math.floor(v), W - 16, y + barH / 2);
       ctx.fillText(Math.floor(v), W - 16, y + barH / 2);
     }
   }
@@ -859,15 +1058,16 @@
 
   function drawEventPopup() {
     const ev = state.currentEvent;
+    const bad = ev.tone === "bad";
     const px = 20;
     const py = 560;
     const pw = W - 40;
     const ph = 64;
 
-    ctx.fillStyle = "rgba(20, 20, 30, 0.96)";
+    ctx.fillStyle = bad ? "rgba(34, 8, 18, 0.97)" : "rgba(20, 20, 30, 0.96)";
     roundRect(ctx, px, py, pw, ph, 8);
     ctx.fill();
-    ctx.strokeStyle = "#f7d716";
+    ctx.strokeStyle = bad ? "#ff5c5c" : "#f7d716";
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -876,14 +1076,14 @@
     ctx.textBaseline = "middle";
     ctx.fillText(ev.icon, px + 14, py + ph / 2);
 
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = bad ? "#ffe4e8" : "#fff";
     ctx.font = "bold 12px Inter, sans-serif";
     ctx.textAlign = "left";
     ctx.fillText(ev.text, px + 60, py + ph / 2 - 6);
 
-    ctx.fillStyle = "#a8a8b8";
+    ctx.fillStyle = bad ? "#ff9cab" : "#a8a8b8";
     ctx.font = "10px JetBrains Mono, monospace";
-    ctx.fillText("[CLICK or SPACE] continue", px + 60, py + ph / 2 + 12);
+    ctx.fillText(`${ev.impact || ""}  [CLICK or SPACE] continue`, px + 60, py + ph / 2 + 12);
   }
 
   function roundRect(ctx, x, y, w, h, r) {
@@ -915,6 +1115,8 @@
     document.getElementById("hud-tier").style.color = tier.color;
     const dayEl = document.getElementById("hud-day");
     if (dayEl) dayEl.textContent = state.day + "/" + TOTAL_DAYS;
+    const scoreEl = document.getElementById("hud-score");
+    if (scoreEl) scoreEl.textContent = Math.floor(state.score).toLocaleString();
     document.getElementById("hud-combo").textContent = state.combo + "x";
     document.getElementById("hud-clicks").textContent = state.clicks;
     document.getElementById("hud-high").textContent = RB.getHighScore("looksmax").toLocaleString();
@@ -1031,11 +1233,12 @@
     state.running = true;
     state.paused = false;
     state.gameOver = false;
+    state.ending = false;
     state.started = true;
     state.won = false;
     state.clicks = 0;
     state.combo = 0;
-    state.lastClickTime = 0;
+    state.lastClickTime = performance.now();
     state.score = 0;
     state.maxTier = 0;
     state.stats = { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0 };
@@ -1051,6 +1254,11 @@
     state.recentRoutine = ROUTINES[0];
     state.grindPulse = 0;
     state.comboPulse = 0;
+    state.idleDrain = 0;
+    state.idleWarning = 0;
+    state.flashColor = "#ffffff";
+    state.lastScoreDelta = 0;
+    state.scoreDeltaTimer = 0;
     state.lastTime = 0;
     hideOverlay();
     updateHUD();
@@ -1071,6 +1279,7 @@
     state.running = false;
     state.paused = false;
     state.gameOver = true;
+    state.ending = false;
     if (rafId) cancelAnimationFrame(rafId);
     document.getElementById("btn-pause").textContent = "Pause";
     showOverlay("💪 LOOKSMAXXING GRINDSET", "Restart the 30-day mirror arc?", "Start the grind");

@@ -144,6 +144,70 @@ function openProModal(defaultPlan = "monthly") {
   backdrop.querySelector("#rb-close-pro").addEventListener("click", () => backdrop.remove());
 }
 
+let gameCanvasFitFrame = 0;
+
+function scheduleGameCanvasFit() {
+  if (gameCanvasFitFrame) cancelAnimationFrame(gameCanvasFitFrame);
+  gameCanvasFitFrame = requestAnimationFrame(() => {
+    gameCanvasFitFrame = 0;
+    fitGameCanvases();
+  });
+}
+
+function fitGameCanvases() {
+  const wraps = Array.from(document.querySelectorAll(".canvas-wrap"));
+  if (!wraps.length) return;
+
+  const isCompact = window.matchMedia("(max-width: 900px)").matches;
+
+  wraps.forEach((wrap) => {
+    const canvas = wrap.querySelector("canvas");
+    const stage = wrap.closest(".game-stage");
+    if (!canvas || !stage) return;
+
+    const naturalWidth = Number(canvas.getAttribute("width")) || canvas.width || wrap.clientWidth;
+    const naturalHeight = Number(canvas.getAttribute("height")) || canvas.height || wrap.clientHeight;
+    const aspect = naturalWidth / Math.max(1, naturalHeight);
+    const stageStyle = window.getComputedStyle(stage);
+    const stagePaddingX =
+      (parseFloat(stageStyle.paddingLeft) || 0) +
+      (parseFloat(stageStyle.paddingRight) || 0);
+    const availableWidth = Math.max(0, stage.clientWidth - stagePaddingX);
+    let fitWidth = availableWidth;
+
+    if (!isCompact) {
+      const wrapRect = wrap.getBoundingClientRect();
+      const visibleChildren = Array.from(stage.children).filter((child) => {
+        const style = window.getComputedStyle(child);
+        const rect = child.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden" && rect.width >= 0;
+      });
+      const wrapIndex = visibleChildren.indexOf(wrap);
+      const belowChildren = wrapIndex >= 0 ? visibleChildren.slice(wrapIndex + 1) : [];
+      const belowHeight = belowChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
+      const gap = parseFloat(stageStyle.rowGap || stageStyle.gap) || 0;
+      const gapsBelow = Math.max(0, belowChildren.length) * gap;
+      const bottomPadding = parseFloat(stageStyle.paddingBottom) || 0;
+      const availableHeight = window.innerHeight - wrapRect.top - belowHeight - gapsBelow - bottomPadding - 20;
+      const heightBoundWidth = availableHeight > 0 ? availableHeight * aspect : availableWidth;
+      const maxWidth = parseFloat(window.getComputedStyle(wrap).getPropertyValue("--game-max-width"));
+
+      fitWidth = Math.min(availableWidth, heightBoundWidth);
+      if (Number.isFinite(maxWidth) && maxWidth > 0) {
+        fitWidth = Math.min(fitWidth, maxWidth);
+      }
+    }
+
+    if (Number.isFinite(fitWidth) && fitWidth > 0) {
+      wrap.style.setProperty("--game-fit-width", `${Math.floor(fitWidth)}px`);
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderNav();
+  scheduleGameCanvasFit();
 });
+
+window.addEventListener("load", scheduleGameCanvasFit);
+window.addEventListener("resize", scheduleGameCanvasFit);

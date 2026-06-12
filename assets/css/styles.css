@@ -571,16 +571,13 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 /* ===== Game page ===== */
 .game-page {
   padding: 10px 16px 14px;
-  max-width: 1400px;
+  width: min(100%, 1600px);
+  max-width: 1600px;
   margin: 0 auto;
-  /* Hard-cap the page to fit the available viewport (after nav + footer).
-     overflow:hidden + min-height:0 prevent content from forcing the page taller. */
-  height: calc(100vh - 200px);
-  min-height: 0;
-  max-height: calc(100vh - 200px);
+  min-height: calc(100dvh - 170px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
 }
 .game-page__header {
@@ -601,7 +598,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
    The game-layout flex-grows to fill the remaining viewport. */
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   gap: 16px;
   align-items: start;
   flex: 1;
@@ -665,11 +662,8 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   padding: 12px;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   box-shadow: var(--shadow-soft);
-  /* Cap to available viewport space. The page itself is height: calc(100vh - 60px),
-     so this just ensures the game-stage doesn't overflow its parent. */
-  max-height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .hud {
   display: flex; gap: 12px; flex-wrap: wrap;
@@ -692,25 +686,23 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  /* Don't grow the wrapper. The canvas inside has explicit max sizing
-     so it shrinks to fit available space while keeping its aspect ratio. */
   flex: 0 1 auto;
   min-height: 0;
   max-width: 100%;
-  max-height: 100%;
   align-self: center;
   /* Default to square canvas; specific games override with .canvas-wrap--ar-* */
-  width: min(100%, calc(100vh - 340px));
+  --game-max-width: 820px;
+  width: min(100%, var(--game-fit-width, var(--game-max-width)));
   aspect-ratio: 1 / 1;
   background: #001a33;
 }
 /* Per-game aspect ratios (canvas natural size) */
-.canvas-wrap--ar-585-720  { aspect-ratio: 585 / 720; }   /* strait-of-hormuz */
-.canvas-wrap--ar-700-480  { aspect-ratio: 700 / 480; }   /* mr-feast */
-.canvas-wrap--ar-750-500  { aspect-ratio: 750 / 500; }   /* a-pop */
-.canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; }   /* looksmaxxing */
-.canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; }       /* gym girl (default) */
-.canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; }   /* skibidi toilet tower defense */
+.canvas-wrap--ar-585-720  { aspect-ratio: 585 / 720; --game-max-width: 680px; }   /* strait-of-hormuz */
+.canvas-wrap--ar-700-480  { aspect-ratio: 700 / 480; --game-max-width: 1120px; }  /* mr-feast */
+.canvas-wrap--ar-750-500  { aspect-ratio: 750 / 500; --game-max-width: 1160px; }  /* a-pop */
+.canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; --game-max-width: 650px; }   /* looksmaxxing */
+.canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
+.canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -909,17 +901,21 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   .hud__value { font-size: 16px; }
 }
 @media (max-width: 900px) {
+  .game-page,
   .tower-defense-page .game-page {
     height: auto;
+    min-height: 0;
     max-height: none;
     overflow: visible;
   }
 
+  .game-stage,
   .tower-defense-page .game-stage {
     max-height: none;
     overflow: visible;
   }
 
+  .canvas-wrap,
   .tower-defense-page .canvas-wrap--ar-800-520 {
     width: 100%;
     max-height: none;

@@ -2138,12 +2138,30 @@ body.arcade-home::before {
   image-rendering: pixelated;
 }
 
+.poster-card--doorcrash img,
+.directory-card__poster--doorcrash img {
+  object-fit: cover;
+  filter: saturate(1.12) contrast(1.05);
+}
+
 .poster-card--escape::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;
   z-index: 1;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.22) 62%, transparent);
+  pointer-events: none;
+}
+
+.poster-card--doorcrash::before,
+.directory-card__poster--doorcrash::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 34px;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0.28) 52%, transparent),
+    linear-gradient(180deg, transparent 48%, rgba(0, 0, 0, 0.42));
   pointer-events: none;
 }
 

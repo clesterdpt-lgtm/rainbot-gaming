@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DoorCrash: No Tip Nitro — Rainbot Gaming</title>
+  <meta name="description" content="A 3D food-delivery lane runner. Dodge traffic, keep the fries warm, and survive the no-tip economy." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-5" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 59h8l7-15h31l8 15h7v15H20z' fill='%232ee0ff'/%3E%3Ccircle cx='35' cy='76' r='8' fill='%23ffd43b'/%3E%3Ccircle cx='66' cy='76' r='8' fill='%23ffd43b'/%3E%3Cpath d='M40 29h20l5 14H35z' fill='%23ff2e88'/%3E%3C/svg%3E" />
+  <style>
+    .doorcrash-page {
+      max-width: 1680px;
+    }
+
+    .doorcrash-stage {
+      background:
+        radial-gradient(circle at 52% 12%, rgba(255, 212, 59, 0.16), transparent 26%),
+        linear-gradient(180deg, rgba(7, 11, 24, 0.96), rgba(2, 5, 10, 0.98));
+      border-color: rgba(46, 224, 255, 0.38);
+      position: relative;
+    }
+
+    .doorcrash-stage .hud {
+      background: rgba(3, 6, 11, 0.84);
+      border-color: rgba(46, 224, 255, 0.32);
+      box-shadow: 0 0 24px rgba(46, 224, 255, 0.1);
+    }
+
+    .canvas-wrap--doorcrash {
+      aspect-ratio: 920 / 600;
+      --game-max-width: 1240px;
+      background: #05070d;
+      border: 1px solid rgba(46, 224, 255, 0.32);
+    }
+
+    .canvas-wrap--doorcrash #gameCanvas {
+      background: #05070d;
+      border-color: rgba(255, 46, 136, 0.48);
+    }
+
+    .doorcrash-status {
+      position: absolute;
+      left: 16px;
+      top: 70px;
+      z-index: 4;
+      display: grid;
+      gap: 8px;
+      pointer-events: none;
+      width: min(270px, calc(100% - 32px));
+    }
+
+    .doorcrash-chip {
+      background: rgba(3, 6, 11, 0.72);
+      border: 1px solid rgba(46, 224, 255, 0.28);
+      color: #eaf7ff;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.3;
+      padding: 8px 10px;
+      text-transform: uppercase;
+      box-shadow: 0 0 18px rgba(46, 224, 255, 0.1);
+    }
+
+    .doorcrash-chip strong {
+      color: var(--accent-3);
+      display: block;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 2px;
+    }
+
+    .doorcrash-event {
+      opacity: 0;
+      transform: translateY(-5px);
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    .doorcrash-event--show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .doorcrash-meter {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .doorcrash-meter__row {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr) 44px;
+      gap: 8px;
+      align-items: center;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .doorcrash-meter__track {
+      height: 9px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+    }
+
+    .doorcrash-meter__fill {
+      display: block;
+      height: 100%;
+      width: 50%;
+      background: var(--accent-2);
+      border-radius: inherit;
+      box-shadow: 0 0 12px currentColor;
+      transition: width 100ms linear, background-color 100ms linear;
+    }
+
+    .doorcrash-side-note {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 10px 0 0;
+    }
+
+    .doorcrash-side-note kbd {
+      color: var(--ink);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    .doorcrash-page .controls-row .btn {
+      flex: 0 0 auto;
+      min-height: 42px;
+    }
+
+    .doorcrash-mobile-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .doorcrash-mobile-grid .btn {
+      min-height: 48px;
+    }
+
+    @media (max-width: 900px) {
+      .canvas-wrap--doorcrash {
+        aspect-ratio: 4 / 3;
+      }
+
+      .doorcrash-status {
+        top: 60px;
+        left: 10px;
+        width: calc(100% - 20px);
+      }
+
+      .doorcrash-chip {
+        font-size: 10px;
+        padding: 6px 8px;
+      }
+
+      .doorcrash-chip strong {
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .doorcrash-page .hud__item {
+        flex-basis: 108px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page doorcrash-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🚗 DoorCrash: No Tip Nitro</h1>
+        <div class="game-page__sub">3D delivery runner · dodge traffic · keep the fries hot · don't get tip-baited</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage doorcrash-stage">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">DELIVERY</span><span class="hud__value" id="hud-delivery">1/3</span></div>
+          <div class="hud__item"><span class="hud__label">HEAT</span><span class="hud__value" id="hud-heat">100%</span></div>
+          <div class="hud__item"><span class="hud__label">BAG</span><span class="hud__value" id="hud-bag">100%</span></div>
+          <div class="hud__item"><span class="hud__label">TIP</span><span class="hud__value" id="hud-tip">$6.00</span></div>
+          <div class="hud__item"><span class="hud__label">STREAK</span><span class="hud__value" id="hud-streak">0x</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--doorcrash">
+          <canvas id="gameCanvas" width="920" height="600" tabindex="0"></canvas>
+          <div class="doorcrash-status" aria-live="polite">
+            <div class="doorcrash-chip" id="route-chip">
+              <strong>Apartment 9B</strong>
+              Customer says “leave at door” but is already outside.
+            </div>
+            <div class="doorcrash-chip doorcrash-event" id="event-chip">
+              <strong>Soup order detected</strong>
+              The cupholder is praying.
+            </div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">DOORCRASH: NO TIP NITRO</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Blast through three cursed deliveries. Swipe lanes, jump potholes, boost past scooter traffic,
+              and keep the food warm while the customer updates the instructions every seven seconds.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start delivery</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+
+          <p class="doorcrash-side-note">
+            <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> · lanes<br>
+            <kbd>↑</kbd>/<kbd>W</kbd>/<kbd>Space</kbd> · jump potholes<br>
+            <kbd>Shift</kbd> · hold nitro
+          </p>
+
+          <div class="mobile-controls" aria-label="Mobile controls">
+            <div class="mobile-controls__grid doorcrash-mobile-grid">
+              <button class="btn btn--secondary" id="btn-left" type="button">Left</button>
+              <button class="btn btn--secondary" id="btn-right" type="button">Right</button>
+              <button class="btn btn--yellow" id="btn-jump" type="button">Jump</button>
+              <button class="btn btn--primary" id="btn-boost" type="button">Nitro</button>
+            </div>
+          </div>
+
+          <div class="doorcrash-meter" aria-label="Delivery status meters">
+            <div class="doorcrash-meter__row">
+              <span>Route</span>
+              <span class="doorcrash-meter__track"><span class="doorcrash-meter__fill" id="meter-route"></span></span>
+              <b id="meter-route-text">0%</b>
+            </div>
+            <div class="doorcrash-meter__row">
+              <span>Nitro</span>
+              <span class="doorcrash-meter__track"><span class="doorcrash-meter__fill" id="meter-nitro"></span></span>
+              <b id="meter-nitro-text">100%</b>
+            </div>
+            <div class="doorcrash-meter__row">
+              <span>Patience</span>
+              <span class="doorcrash-meter__track"><span class="doorcrash-meter__fill" id="meter-patience"></span></span>
+              <b id="meter-patience-text">100%</b>
+            </div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto" open>
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Change lanes</strong> to dodge cones, parked cars, scooters, and suspicious puddles.</li>
+            <li><strong style="color:var(--ink);">Jump</strong> potholes. Hitting them nukes bag integrity and tip confidence.</li>
+            <li><strong style="color:var(--ink);">Hold nitro</strong> to beat the clock, but heat drops faster and steering gets twitchy.</li>
+            <li><strong style="color:var(--ink);">Finish 3 deliveries</strong> before the food gets cold or the customer patience meter rage-quits.</li>
+            <li><strong style="color:var(--ink);">Pick up glowing cash</strong> for tip recovery and combo streaks.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> DoorCrash is a fictional delivery chaos game. Not affiliated with any real delivery brand or app.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260612-5"></script>
+  <script src="../assets/js/doorcrash-no-tip-nitro.js?v=20260612-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

@@ -13,6 +13,29 @@
       background: #102018;
     }
 
+    .boomer-page .game-page {
+      max-width: 1800px;
+      width: min(100%, 1800px);
+    }
+
+    .boomer-page .game-layout {
+      gap: 12px;
+      grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
+    }
+
+    .boomer-page .game-stage {
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .boomer-page .hud {
+      padding: 6px 10px;
+    }
+
+    .boomer-page .canvas-wrap--boomer {
+      --game-max-width: 1040px;
+    }
+
     .boomer-decision {
       width: 100%;
       background: var(--bg);
@@ -169,7 +192,7 @@
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">$0</span></div>
         </div>
 
-        <div class="canvas-wrap canvas-wrap--ar-640-640">
+        <div class="canvas-wrap canvas-wrap--ar-640-640 canvas-wrap--boomer">
           <canvas id="gameCanvas" width="720" height="720" tabindex="0"></canvas>
 
           <div class="overlay overlay--show" id="overlay">
@@ -184,13 +207,6 @@
           </div>
         </div>
 
-        <div class="boomer-decision" id="decision-card" aria-live="polite">
-          <div class="boomer-decision__kicker" id="decision-kicker">Ready</div>
-          <div class="boomer-decision__text" id="decision-text">Start the game, then roll on your turn.</div>
-          <div class="boomer-decision__meta" id="decision-meta">Win by having the highest net worth after 16 rounds.</div>
-        </div>
-
-        <div class="powerups" id="powerups"></div>
       </div>
 
       <aside class="game-side">
@@ -208,6 +224,17 @@
           <p class="boomer-hotkeys">
             <kbd>Space</kbd> or <kbd>R</kbd> roll · <kbd>B</kbd> buy/renovate · <kbd>P</kbd> pass
           </p>
+        </div>
+
+        <div class="boomer-decision" id="decision-card" aria-live="polite">
+          <div class="boomer-decision__kicker" id="decision-kicker">Ready</div>
+          <div class="boomer-decision__text" id="decision-text">Start the game, then roll on your turn.</div>
+          <div class="boomer-decision__meta" id="decision-meta">Win by having the highest net worth after 16 rounds.</div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">POWER-UPS</h3>
+          <div class="powerups" id="powerups"></div>
         </div>
 
         <div class="game-side__panel">
@@ -251,7 +278,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260611-9"></script>
-  <script src="../assets/js/boomer-monopoly.js?v=20260612-1"></script>
+  <script src="../assets/js/boomer-monopoly.js?v=20260612-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -697,7 +697,7 @@
   }
 
   function buildBoardRects() {
-    const margin = 40;
+    const margin = 24;
     const cells = 8;
     const cell = (W - margin * 2) / cells;
     const rects = [];
@@ -797,10 +797,10 @@
 
     if (space.type === "property") {
       ctx.fillStyle = space.group;
-      ctx.fillRect(rect.x + 3, rect.y + 3, rect.w - 6, 10);
+      ctx.fillRect(rect.x + 3, rect.y + 3, rect.w - 6, 13);
       if (owner) {
         ctx.fillStyle = owner.color;
-        ctx.fillRect(rect.x + 3, rect.y + rect.h - 12, rect.w - 6, 9);
+        ctx.fillRect(rect.x + 3, rect.y + rect.h - 14, rect.w - 6, 11);
       }
     }
 
@@ -813,21 +813,21 @@
     ctx.fillStyle = space.type === "property" ? "#111827" : "#fbfaf4";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "800 9px JetBrains Mono, monospace";
+    ctx.font = "900 14px JetBrains Mono, monospace";
     const lines = space.label || [space.name];
     lines.slice(0, 2).forEach((line, i) => {
-      ctx.fillText(line, rect.x + rect.w / 2, rect.y + 27 + i * 11);
+      ctx.fillText(line, rect.x + rect.w / 2, rect.y + 32 + i * 17, rect.w - 10);
     });
 
-    ctx.font = "800 10px JetBrains Mono, monospace";
+    ctx.font = "900 12px JetBrains Mono, monospace";
     if (space.type === "property") {
-      ctx.fillText(money(space.cost), rect.x + rect.w / 2, rect.y + rect.h - 23);
+      ctx.fillText(money(space.cost), rect.x + rect.w / 2, rect.y + rect.h - 24, rect.w - 10);
       if (space.level > 0) {
         ctx.fillStyle = COLORS.bg;
-        ctx.fillText(`LV ${space.level}`, rect.x + rect.w / 2, rect.y + rect.h - 7);
+        ctx.fillText(`LV ${space.level}`, rect.x + rect.w / 2, rect.y + rect.h - 8, rect.w - 10);
       }
     } else {
-      ctx.fillText(spaceIcon(space), rect.x + rect.w / 2, rect.y + rect.h - 22);
+      ctx.fillText(spaceIcon(space), rect.x + rect.w / 2, rect.y + rect.h - 24, rect.w - 10);
     }
 
     ctx.restore();
@@ -854,10 +854,10 @@
   }
 
   function drawCenter(now) {
-    const x = 132;
-    const y = 132;
-    const w = 456;
-    const h = 456;
+    const x = 120;
+    const y = 120;
+    const w = 480;
+    const h = 480;
     const human = humanPlayer();
     const heatPercent = Math.round(state.marketHeat * 100);
 

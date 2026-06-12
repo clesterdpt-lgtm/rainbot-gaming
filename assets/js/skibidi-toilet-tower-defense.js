@@ -1214,6 +1214,11 @@
     });
 
     canvas.addEventListener("click", handleCanvasClick);
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse") return;
+      event.preventDefault();
+      handleCanvasClick(event);
+    });
     canvas.addEventListener("mousemove", (event) => {
       const p = canvasPoint(event);
       const pad = getPadAt(p.x, p.y);

@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260611-9" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-4" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-family='Arial Black' font-size='52' fill='%230a0a14' text-anchor='middle'%3E%F0%9F%91%80%3C/text%3E%3C/svg%3E" />
   <style>
     /* ===== Game-specific styles ===== */
@@ -166,7 +166,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">👀 Don't Look at the Gym Girl</h1>
-        <div class="game-page__sub">WASD to move · mouse to look · hold SPACE to close your eyes · 8 levels, door to locker room</div>
+        <div class="game-page__sub">WASD/touch to move · mouse/drag to look · hold SPACE/EYES to close your eyes · 8 levels</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -237,6 +237,15 @@
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
+          <div class="mobile-controls" aria-label="Mobile movement controls">
+            <div class="mobile-controls__dpad">
+              <button class="btn btn--secondary" data-gym-dir="up" type="button">▲</button>
+              <button class="btn btn--secondary" data-gym-dir="left" type="button">◀</button>
+              <button class="btn btn--primary" data-gym-hold="eyes" type="button">EYES</button>
+              <button class="btn btn--secondary" data-gym-dir="right" type="button">▶</button>
+              <button class="btn btn--secondary" data-gym-dir="down" type="button">▼</button>
+            </div>
+          </div>
           <div class="gym-powers" id="gym-powers" style="margin-top: 8px;"></div>
         </div>
 
@@ -272,8 +281,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
-  <script src="../assets/js/main.js?v=20260611-9"></script>
-  <script src="../assets/js/dont-look-gym-girl.js"></script>
+  <script src="../assets/js/main.js?v=20260612-4"></script>
+  <script src="../assets/js/dont-look-gym-girl.js?v=20260612-4"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

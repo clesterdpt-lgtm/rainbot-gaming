@@ -722,7 +722,7 @@
     }
   });
 
-  canvas.addEventListener("click", (e) => {
+  function handleCanvasAction(e) {
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -736,6 +736,13 @@
     if (state.currentEvent) {
       dismissEvent();
     }
+  }
+
+  canvas.addEventListener("click", handleCanvasAction);
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    e.preventDefault();
+    handleCanvasAction(e);
   });
 
   // ----- Overlay -----
@@ -787,6 +794,14 @@
   document.getElementById("btn-restart").addEventListener("click", () => {
     showOverlay("💪 LOOKSMAXXING GRINDSET", "Restart the grind?", "Start the grind");
   });
+  const grindButton = document.getElementById("btn-grind-action");
+  if (grindButton) {
+    grindButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (state.currentEvent) dismissEvent();
+      else grind();
+    });
+  }
 
   RB.subscribe(renderPowerups);
   updateHUD();

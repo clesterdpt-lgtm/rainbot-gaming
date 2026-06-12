@@ -476,6 +476,12 @@
   let mouseCanvasX = W / 2;
   let mouseCanvasY = H / 2;
 
+  function setLookTarget(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    mouseCanvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    mouseCanvasY = (clientY - rect.top) * (canvas.height / rect.height);
+  }
+
   window.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase();
     keys[k] = true;
@@ -483,16 +489,64 @@
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
-  canvas.addEventListener("mousemove", (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseCanvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    mouseCanvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
-  });
+  canvas.addEventListener("mousemove", (e) => setLookTarget(e.clientX, e.clientY));
   canvas.addEventListener("mousedown", () => {
     canvas.focus();
     ensureAudio();
     if (!state.running && !state.gameOver && !state.won) startGame();
   });
+  canvas.addEventListener("touchstart", (e) => {
+    if (!e.touches.length) return;
+    e.preventDefault();
+    const touch = e.touches[e.touches.length - 1];
+    setLookTarget(touch.clientX, touch.clientY);
+    canvas.focus();
+    ensureAudio();
+    if (!state.running && !state.gameOver && !state.won) startGame();
+  }, { passive: false });
+  canvas.addEventListener("touchmove", (e) => {
+    if (!e.touches.length) return;
+    e.preventDefault();
+    const touch = e.touches[e.touches.length - 1];
+    setLookTarget(touch.clientX, touch.clientY);
+  }, { passive: false });
+
+  function bindTouchControls() {
+    const dirMap = {
+      up: "arrowup",
+      down: "arrowdown",
+      left: "arrowleft",
+      right: "arrowright",
+    };
+    const setKey = (key, down) => {
+      keys[key] = down;
+      if (down) {
+        canvas.focus();
+        ensureAudio();
+        if (!state.running && !state.gameOver && !state.won) startGame();
+      }
+    };
+
+    document.querySelectorAll("[data-gym-dir]").forEach((button) => {
+      const key = dirMap[button.dataset.gymDir];
+      if (!key) return;
+      const press = (event) => { event.preventDefault(); setKey(key, true); };
+      const release = (event) => { event.preventDefault(); setKey(key, false); };
+      button.addEventListener("pointerdown", press);
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("pointerleave", release);
+    });
+
+    document.querySelectorAll("[data-gym-hold=\"eyes\"]").forEach((button) => {
+      const press = (event) => { event.preventDefault(); setKey(" ", true); };
+      const release = (event) => { event.preventDefault(); setKey(" ", false); };
+      button.addEventListener("pointerdown", press);
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("pointerleave", release);
+    });
+  }
 
   function readInput() {
     const p = state.player;
@@ -1446,6 +1500,7 @@
       document.getElementById("btn-pause").textContent = state.paused ? "Resume" : "Pause";
     });
     document.getElementById("btn-restart").addEventListener("click", restart);
+    bindTouchControls();
     renderPowerButtons();
   }
 

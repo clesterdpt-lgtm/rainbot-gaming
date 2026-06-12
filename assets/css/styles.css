@@ -710,6 +710,10 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   background: #001a33;
   border: 3px solid var(--panel-2);
   border-radius: 10px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .controls-row {
@@ -900,6 +904,40 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   .hud { font-size: 12px; padding: 8px 12px; }
   .hud__value { font-size: 16px; }
 }
+
+.mobile-controls {
+  display: none;
+}
+
+.mobile-controls__grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mobile-controls__dpad {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+  justify-content: center;
+}
+
+.mobile-controls button {
+  min-height: 48px;
+  touch-action: none;
+}
+
+.mobile-controls__dpad button[data-mobile-dir="up"],
+.mobile-controls__dpad button[data-gym-dir="up"] { grid-column: 2; grid-row: 1; }
+.mobile-controls__dpad button[data-mobile-dir="left"],
+.mobile-controls__dpad button[data-gym-dir="left"] { grid-column: 1; grid-row: 2; }
+.mobile-controls__dpad button[data-mobile-dir="right"],
+.mobile-controls__dpad button[data-gym-dir="right"] { grid-column: 3; grid-row: 2; }
+.mobile-controls__dpad button[data-mobile-dir="down"],
+.mobile-controls__dpad button[data-gym-dir="down"] { grid-column: 2; grid-row: 3; }
+.mobile-controls__dpad button[data-gym-hold="eyes"] { grid-column: 2; grid-row: 2; }
+
 @media (max-width: 900px) {
   .game-page,
   .tower-defense-page .game-page {
@@ -920,12 +958,101 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
     width: 100%;
     max-height: none;
   }
+
+  .game-page {
+    padding: 8px 8px 12px;
+  }
+
+  .game-page__header {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .game-page__header .btn {
+    padding: 7px 10px !important;
+  }
+
+  .game-layout {
+    gap: 10px;
+  }
+
+  .game-stage {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .hud {
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .hud__item {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    flex: 1 1 92px;
+    justify-content: center;
+    min-width: 0;
+    padding: 3px 6px;
+  }
+
+  .game-side {
+    gap: 8px;
+  }
+
+  .game-side__panel {
+    padding: 10px;
+  }
+
+  .controls-row .btn {
+    flex: 1 1 120px;
+    min-height: 44px;
+  }
+
+  .mobile-controls {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .powerups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    width: 100%;
+  }
+
+  .powerup {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .game-side #ad-rectangle,
+  .game-side .ad-slot--rectangle {
+    display: none !important;
+  }
+
+  .game-side .ad-slot--leaderboard {
+    min-height: 72px;
+  }
 }
 @media (max-width: 480px) {
   .hero { padding: 40px 14px 30px; }
   .hero__pill { font-size: 10px; padding: 5px 10px; }
   .powerup { min-width: 100px; padding: 8px 10px; font-size: 11px; }
   .powerup__icon { font-size: 16px; }
+  .overlay {
+    padding: 14px;
+  }
+  .overlay__title {
+    font-size: 24px;
+  }
+  .overlay__sub {
+    font-size: 13px;
+    max-width: 92%;
+  }
+  .mobile-controls__dpad {
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(3, 48px);
+  }
 }
 
 /* ===== AFTER DARK — the horror shelf ===== */

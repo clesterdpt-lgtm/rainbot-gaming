@@ -1010,6 +1010,20 @@
     }
   });
 
+  function bindMobileButton(id, action) {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      action();
+    });
+  }
+
+  bindMobileButton("btn-lane-up", () => moveLane(-1));
+  bindMobileButton("btn-lane-down", () => moveLane(1));
+  bindMobileButton("btn-attack", attack);
+  bindMobileButton("btn-special", special);
+
   // ----- Wire up buttons -----
   document.getElementById("btn-primary").addEventListener("click", () => {
     if (state.gameOver) {

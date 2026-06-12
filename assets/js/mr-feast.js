@@ -767,7 +767,7 @@
   });
 
   // Click on event buttons
-  canvas.addEventListener("click", (e) => {
+  function handleCanvasAction(e) {
     if (!state.currentEvent) return;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -790,6 +790,13 @@
         dismissEvent("take");
       }
     }
+  }
+
+  canvas.addEventListener("click", handleCanvasAction);
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse") return;
+    e.preventDefault();
+    handleCanvasAction(e);
   });
 
   // ----- Overlay -----
@@ -848,6 +855,20 @@
   document.getElementById("btn-restart").addEventListener("click", () => {
     showOverlay("🍔 MR. FEAST", "Restart the mansion challenge?", "Enter the mansion");
   });
+  const resistButton = document.getElementById("btn-resist");
+  const takeButton = document.getElementById("btn-take");
+  if (resistButton) {
+    resistButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (state.currentEvent) dismissEvent("resist");
+    });
+  }
+  if (takeButton) {
+    takeButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (state.currentEvent && !state.currentEvent.oneSided) dismissEvent("take");
+    });
+  }
 
   RB.subscribe(renderPowerups);
   updateHUD();

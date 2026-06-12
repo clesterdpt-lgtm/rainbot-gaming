@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skibidi Toilet Tower Defense — Rainbot Gaming</title>
+  <meta name="description" content="Build camera turrets, speaker stacks, and plunger traps to stop the singing toilet rush. A Rainbot parody tower defense game." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260611-8" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2323dff2'/%3E%3Cpath d='M28 45h44v22c0 12-10 20-22 20s-22-8-22-20z' fill='%23fff' stroke='%2305070d' stroke-width='6'/%3E%3Crect x='34' y='16' width='32' height='31' rx='7' fill='%23fff' stroke='%2305070d' stroke-width='6'/%3E%3Ccircle cx='42' cy='31' r='4' fill='%2305070d'/%3E%3Ccircle cx='58' cy='31' r='4' fill='%2305070d'/%3E%3C/svg%3E" />
+  <style>
+    .tower-shop {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tower-shop__button {
+      align-items: center;
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+      grid-template-columns: 42px minmax(0, 1fr) auto;
+      min-height: 58px;
+      padding: 8px;
+      text-align: left;
+      transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+      width: 100%;
+    }
+    .tower-shop__button:hover,
+    .tower-shop__button.is-selected {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 20px rgba(46, 224, 255, 0.16);
+      transform: translateY(-1px);
+    }
+    .tower-shop__icon {
+      align-items: center;
+      background: var(--panel);
+      border-radius: 8px;
+      display: inline-flex;
+      font-size: 24px;
+      height: 40px;
+      justify-content: center;
+      width: 40px;
+    }
+    .tower-shop__name,
+    .tower-shop__cost {
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+    .tower-shop__desc {
+      color: var(--ink-dim);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.25;
+      margin-top: 3px;
+    }
+    .tower-shop__cost {
+      color: var(--accent-3);
+      white-space: nowrap;
+    }
+    .tower-shop__button[disabled] {
+      cursor: not-allowed;
+      opacity: 0.48;
+      transform: none;
+    }
+    .tower-inspector {
+      border-top: 1px dashed var(--panel-2);
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 12px;
+      padding-top: 12px;
+    }
+    .tower-inspector strong {
+      color: var(--ink);
+      display: block;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 5px;
+    }
+    .tower-inspector__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tower-defense-actions {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .tower-defense-actions .btn {
+      font-size: 12px;
+      padding: 9px 10px;
+      width: 100%;
+    }
+    .wave-tip {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.45;
+      margin: 10px 0 0;
+    }
+  </style>
+</head>
+<body class="tower-defense-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🚽 Skibidi Toilet Tower Defense</h1>
+        <div class="game-page__sub">Build towers · Stop the toilet rush · Survive 10 waves</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">CASH</span><span class="hud__value" id="hud-cash">$260</span></div>
+          <div class="hud__item"><span class="hud__label">LIVES</span><span class="hud__value" id="hud-lives">20</span></div>
+          <div class="hud__item"><span class="hud__label">WAVE</span><span class="hud__value" id="hud-wave">1/10</span></div>
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-800-520">
+          <canvas id="gameCanvas" width="800" height="520" tabindex="0" aria-label="Skibidi Toilet Tower Defense playfield"></canvas>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🚽 SKIBIDI TOILET TOWER DEFENSE</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              The bathroom portal is leaking singing toilets. Build camera turrets, speaker stacks, and plunger traps on the glowing pads.
+              <br><br>
+              <strong>Hold the line for 10 waves.</strong>
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start defense</button>
+          </div>
+        </div>
+
+        <div class="powerups" id="powerups"></div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">BUILD MENU</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-start-wave" style="font-size:13px;padding:8px 12px;">Start wave</button>
+            <button class="btn btn--ghost" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+
+          <div class="tower-shop" id="tower-shop" aria-label="Tower shop">
+            <button class="tower-shop__button is-selected" type="button" data-tower="camera">
+              <span class="tower-shop__icon">📷</span>
+              <span><span class="tower-shop__name">Camera Turret</span><span class="tower-shop__desc">Fast single-target laser</span></span>
+              <span class="tower-shop__cost">$90</span>
+            </button>
+            <button class="tower-shop__button" type="button" data-tower="speaker">
+              <span class="tower-shop__icon">🔊</span>
+              <span><span class="tower-shop__name">Speaker Stack</span><span class="tower-shop__desc">Splash damage and slow</span></span>
+              <span class="tower-shop__cost">$130</span>
+            </button>
+            <button class="tower-shop__button" type="button" data-tower="plunger">
+              <span class="tower-shop__icon">🪠</span>
+              <span><span class="tower-shop__name">Plunger Trap</span><span class="tower-shop__desc">Cheap rapid stuns</span></span>
+              <span class="tower-shop__cost">$70</span>
+            </button>
+          </div>
+
+          <div class="tower-inspector" id="tower-inspector">
+            <strong>No tower selected</strong>
+            Pick a tower type, then click an empty glowing pad on the map.
+          </div>
+
+          <p class="wave-tip">Keys: <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> select towers · <kbd>Space</kbd> starts wave · <kbd>P</kbd> pauses</p>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">AD BOOSTS</h3>
+          <div class="tower-defense-actions">
+            <button class="btn btn--yellow" id="btn-flush">Watch ad: emergency flush</button>
+            <button class="btn btn--secondary" id="btn-repair">Watch ad: repair base</button>
+          </div>
+          <p class="wave-tip">Pro players get these instantly. Everyone else gets the mock rewarded ad.</p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto" open>
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Click a tower</strong>, then click a glowing pad to build.</li>
+            <li><strong style="color:var(--ink);">Start waves</strong> when your defense is ready. Enemies follow the neon pipe path.</li>
+            <li><strong style="color:var(--ink);">Click built towers</strong> to upgrade or sell them.</li>
+            <li><strong style="color:var(--ink);">Camera</strong> is reliable damage, <strong style="color:var(--ink);">Speaker</strong> splashes and slows, <strong style="color:var(--ink);">Plunger</strong> is cheap crowd control.</li>
+            <li><strong style="color:var(--ink);">Emergency flush</strong> damages and slows every enemy on screen.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody fan game.</strong> Original Rainbot artwork and code. Not affiliated with Skibidi Toilet, DaFuq!?Boom!, or any official tower-defense game.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-8"></script>
+  <script src="../assets/js/main.js?v=20260611-8"></script>
+  <script src="../assets/js/skibidi-toilet-tower-defense.js?v=20260611-8"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

@@ -710,6 +710,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-750-500  { aspect-ratio: 750 / 500; }   /* a-pop */
 .canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; }   /* looksmaxxing */
 .canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; }       /* gym girl (default) */
+.canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; }   /* skibidi toilet tower defense */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -906,6 +907,23 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   .game-stage { padding: 14px; }
   .hud { font-size: 12px; padding: 8px 12px; }
   .hud__value { font-size: 16px; }
+}
+@media (max-width: 900px) {
+  .tower-defense-page .game-page {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tower-defense-page .game-stage {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tower-defense-page .canvas-wrap--ar-800-520 {
+    width: 100%;
+    max-height: none;
+  }
 }
 @media (max-width: 480px) {
   .hero { padding: 40px 14px 30px; }

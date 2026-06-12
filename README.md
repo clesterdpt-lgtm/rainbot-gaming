@@ -13,7 +13,7 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
 | ✅ Live | **A-Pop Demon Hunters** | Beat-based action. Pop stars vs. demon elites. Final boss: Lavish Larry. `/games/apop-demon-hunters.html` |
 | ✅ Live | **AGAIN.** | 🕯 *Rainbot After Dark No. 001* — first-person loop-horror in the spirit of P.T. Three.js hallway, 100% synthesized positional audio (no sound files). Headphones required. **Not a parody.** `/games/again.html` |
-| 🚧 Coming | **Boomer Monopoly** | Satirical board game. Real estate, avocado toast. `/games/boomer-monopoly.html` |
+| ✅ Live | **Boomer Monopoly** | Satirical housing board game. Roll, buy, renovate, and collect rent. `/games/boomer-monopoly.html` |
 
 > ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. A-Pop Demon Hunters is a fictional beat-action game; all "demon elite" characters are parody stereotypes and have no relation to any real person, organization, or community. Not affiliated with any real brand, person, or community.
 
@@ -41,13 +41,14 @@ Then open <http://localhost:8000>.
 ├── games.html                    # Game selector
 ├── games/
 │   ├── strait-of-hormuz.html     # Playable Frogger
-│   ├── boomer-monopoly.html      # Coming-soon
-│   └── apop-demon-hunters.html   # Coming-soon
+│   ├── boomer-monopoly.html      # Playable board-game parody
+│   └── apop-demon-hunters.html   # Playable beat-action
 ├── assets/
 │   ├── css/styles.css            # All styles
 │   └── js/
 │       ├── ads.js                # Ad + subscription + power-up state machine
 │       ├── main.js               # Nav, Pro modal, site-wide UI
+│       ├── boomer-monopoly.js    # Board-game parody engine
 │       └── strait-of-hormuz.js   # Game engine
 ├── legal/
 │   ├── privacy.html

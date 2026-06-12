@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Looksmaxxing Grindset — Rainbot Gaming</title>
-  <meta name="description" content="Daily looksmax routine simulator. Gym, mewing, jawline, skincare, sleep. Become 10/10 chad." />
+  <meta name="description" content="Daily looksmax routine simulator. Rotate routines, survive random events, and grind through a longer neon mirror arc." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-4" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-5" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ff2e88'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='60' fill='%230a0a14' text-anchor='middle'%3E10%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -16,7 +16,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">💪 Looksmaxxing Grindset</h1>
-        <div class="game-page__sub">Click GRIND to do the routine · Reach 10/10 · Become gigachad</div>
+        <div class="game-page__sub">Tap GRIND through the 30-day mirror arc · rotate routines · reach 10/10</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -25,6 +25,7 @@
       <div class="game-stage" style="position:relative;">
         <div class="hud">
           <div class="hud__item"><span class="hud__label">TIER</span><span class="hud__value" id="hud-tier">1/10</span></div>
+          <div class="hud__item"><span class="hud__label">DAY</span><span class="hud__value" id="hud-day">1/30</span></div>
           <div class="hud__item"><span class="hud__label">COMBO</span><span class="hud__value" id="hud-combo">0x</span></div>
           <div class="hud__item"><span class="hud__label">CLICKS</span><span class="hud__value" id="hud-clicks">0</span></div>
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
@@ -38,9 +39,11 @@
             <p class="overlay__sub" id="overlay-sub">
               You woke up at 1% looksmax. Time to grind.
               <br><br>
-              Hit <strong>GRIND</strong> to do the routine: gym, mewing, jawline, skincare, sleep. Each stat decays, so keep clicking.
+              Hit <strong>GRIND</strong> to rotate through push day, mirror reps, serum stack, sleepmaxx, hydration arc, and silent walk.
               <br><br>
-              <strong>Reach 10/10 to become gigachad.</strong>
+              Stats now have a bigger runway, decay over time, and random events keep interrupting the glow-up.
+              <br><br>
+              <strong>Reach 10/10 and defeat the mirror final boss.</strong>
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Start the grind</button>
@@ -57,7 +60,7 @@
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
-            Click <strong>GRIND</strong> or press <kbd>Space</kbd>
+            Tap/click <strong>GRIND</strong> or press <kbd>Space</kbd>
           </p>
           <div class="mobile-controls" aria-label="Mobile controls">
             <button class="btn btn--primary" id="btn-grind-action" type="button">GRIND</button>
@@ -75,11 +78,11 @@
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Click GRIND</strong> (or press <kbd>Space</kbd>) for +1 to all six stats. Build combos for bonus.</li>
-            <li><strong style="color:var(--ink);">Stats decay</strong> over time. The grind never stops.</li>
+            <li><strong style="color:var(--ink);">Tap GRIND</strong> (or press <kbd>Space</kbd>) to run the current routine. Focused stats get the biggest bump.</li>
+            <li><strong style="color:var(--ink);">Stats decay</strong> over time and now climb to a higher cap, so the glow-up lasts longer.</li>
             <li><strong style="color:var(--ink);">Random events</strong> pop up with choices. They can help or hurt your stats.</li>
-            <li><strong style="color:var(--ink);">Tier up</strong> at avg thresholds: 2, 4, 6, 8, 10 (gigachad).</li>
-            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Mewing Masterclass (2× 30s), Looksmaxx Guru (+10 all), Cope Harder (30s decay immunity).</li>
+            <li><strong style="color:var(--ink);">Tier up</strong> through 10 mirror stages. Combos add momentum.</li>
+            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Mewing Masterclass (2× 45s), Looksmaxx Guru (+18 all), Cope Harder (45s decay immunity).</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             <strong>Parody.</strong> Satirical sendup of "looksmaxxing" / gym-bro internet culture. Not affiliated with any real program. The advice is fake. Mewing does not work.
@@ -100,7 +103,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/looksmaxxing.js?v=20260612-4"></script>
+  <script src="../assets/js/looksmaxxing.js?v=20260612-5"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

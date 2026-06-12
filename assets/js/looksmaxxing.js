@@ -1,8 +1,8 @@
 /* ============================================
-   ESCAPE THE STRAIT — Looksmaxxing Grindset
+   LOOKSMAXXING GRINDSET
    --------------------------------------------
-   Parody clicker. Click GRIND. Build stats.
-   Evolve from 1/10 sadge to 10/10 gigachad.
+   Parody clicker. Click GRIND. Build routines.
+   Evolve from basement arc to mirror final boss.
    ============================================ */
 
 (() => {
@@ -10,6 +10,10 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
+  const STAT_CAP = 240;
+  const WIN_LOOKSMAX = 100;
+  const DAY_LENGTH = 10;
+  const TOTAL_DAYS = 30;
 
   // ----- Game state -----
   const state = {
@@ -24,7 +28,7 @@
     comboWindow: 1.5,
     score: 0,                  // total tier-up score
     stats: { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0 },
-    baseDecay: 0.6,            // stat points lost per second
+    baseDecay: 0.42,           // stat points lost per second
     lastTime: 0,
     clickPower: 1,
     decayImmune: 0,           // seconds of immunity
@@ -36,30 +40,45 @@
     particles: [],
     auraSize: 0,
     maxTier: 0,
+    playTime: 0,
+    day: 1,
+    routineIndex: 0,
+    recentRoutine: null,
+    grindPulse: 0,
+    comboPulse: 0,
   };
 
   // ----- Stat metadata -----
   const STAT_META = [
     { key: "gym",      label: "GYM",      icon: "🏋️", color: "#ff5c5c", y: 0 },
     { key: "mewing",   label: "MEWING",   icon: "👅", color: "#ff2e88", y: 1 },
-    { key: "jawline",  label: "JAWLINE",  icon: "🦷", color: "#a855f7", y: 2 },
+    { key: "jawline",  label: "JAWLINE",  icon: "🦷", color: "#b36bff", y: 2 },
     { key: "skincare", label: "SKINCARE", icon: "🧴", color: "#2ee0ff", y: 3 },
     { key: "sleep",    label: "SLEEP",    icon: "😴", color: "#f7d716", y: 4 },
     { key: "nofap",    label: "NOFAP",    icon: "🚫", color: "#6bff7d", y: 5 },
   ];
 
+  const ROUTINES = [
+    { label: "Push day", stats: ["gym", "jawline"], color: "#ff5c5c" },
+    { label: "Mirror reps", stats: ["mewing", "jawline"], color: "#ff2e88" },
+    { label: "Serum stack", stats: ["skincare", "sleep"], color: "#2ee0ff" },
+    { label: "Sleepmaxx", stats: ["sleep", "nofap"], color: "#f7d716" },
+    { label: "Hydration arc", stats: ["skincare", "gym"], color: "#6bff7d" },
+    { label: "Silent walk", stats: ["nofap", "mewing"], color: "#b36bff" },
+  ];
+
   // ----- Tier definitions -----
   const TIERS = [
-    { min: 0,  num: 1,  title: "SADGE",         color: "#666" },
-    { min: 10, num: 2,  title: "SUBHUMAN",      color: "#888" },
-    { min: 20, num: 3,  title: "BELOW AVERAGE", color: "#a8a8b8" },
-    { min: 30, num: 4,  title: "NORMIE",        color: "#cdcdcd" },
-    { min: 40, num: 5,  title: "ABOVE AVERAGE", color: "#6bff7d" },
-    { min: 50, num: 6,  title: "CUTE",          color: "#2ee0ff" },
-    { min: 60, num: 7,  title: "CHAD LITE",     color: "#f7d716" },
-    { min: 70, num: 8,  title: "CHAD",          color: "#ff8c1a" },
-    { min: 80, num: 9,  title: "GIGACHAD",      color: "#ff2e88" },
-    { min: 90, num: 10, title: "ULTRA GIGACHAD", color: "#ffd700" },
+    { min: 0,  num: 1,  title: "BASEMENT ARC",      color: "#777788" },
+    { min: 10, num: 2,  title: "BEDHEAD",           color: "#8f94aa" },
+    { min: 20, num: 3,  title: "PUMP PENDING",      color: "#a8a8d4" },
+    { min: 30, num: 4,  title: "NORMIE CUT",        color: "#cdcdcd" },
+    { min: 40, num: 5,  title: "SKIN GLOW",         color: "#6bff7d" },
+    { min: 50, num: 6,  title: "JAWLINE LOADING",   color: "#2ee0ff" },
+    { min: 60, num: 7,  title: "CHAD LITE",         color: "#f7d716" },
+    { min: 70, num: 8,  title: "CHAD",              color: "#ff8c1a" },
+    { min: 82, num: 9,  title: "GIGACHAD",          color: "#ff2e88" },
+    { min: 94, num: 10, title: "MIRROR FINAL BOSS", color: "#ffd700" },
   ];
 
   function getTier(score) {
@@ -72,32 +91,43 @@
 
   function getLooksmax() {
     const sum = Object.values(state.stats).reduce((a, b) => a + b, 0);
-    return Math.round((sum / 600) * 100); // 0..100
+    return Math.min(100, Math.round((sum / (STAT_CAP * STAT_META.length)) * 100));
+  }
+
+  function clampStat(value) {
+    return Math.max(0, Math.min(STAT_CAP, value));
+  }
+
+  function getDayProgress() {
+    return Math.min(1, (state.day - 1) / (TOTAL_DAYS - 1));
   }
 
   // ----- Event templates -----
   const EVENTS = [
     { icon: "😊", text: "She said you have a nice smile", effect: () => bumpAll(2) },
     { icon: "😴", text: "Your mom said you look tired", effect: () => bumpAll(-2) },
-    { icon: "💊", text: "You discovered creatine", effect: () => { state.stats.gym = Math.min(100, state.stats.gym + 5); } },
+    { icon: "💊", text: "You discovered creatine", effect: () => { state.stats.gym = clampStat(state.stats.gym + 8); } },
     { icon: "🤡", text: "You forgot your supplements", effect: () => bumpAll(-3) },
     { icon: "💪", text: "Someone called you gigachad", effect: () => bumpAll(3) },
     { icon: "📱", text: "You stayed up late on TikTok", effect: () => { state.stats.sleep = Math.max(0, state.stats.sleep - 8); } },
     { icon: "🍕", text: "You ate a whole pizza", effect: () => bumpAll(-3) },
     { icon: "💕", text: "You went on a date", effect: () => bumpAll(2) },
     { icon: "📸", text: "Your ex posted a thirst trap", effect: () => { state.stats.jawline = Math.max(0, state.stats.jawline - 4); } },
-    { icon: "🎥", text: "You saw a video of a man yelling", effect: () => { state.stats.mewing = Math.min(100, state.stats.mewing + 6); state.stats.jawline = Math.min(100, state.stats.jawline + 3); } },
-    { icon: "💇", text: "You tried a new haircut", effect: () => { state.stats.jawline = Math.min(100, state.stats.jawline + 3); state.stats.skincare = Math.min(100, state.stats.skincare + 3); } },
+    { icon: "🎥", text: "You saw a video of a man yelling", effect: () => { state.stats.mewing = clampStat(state.stats.mewing + 8); state.stats.jawline = clampStat(state.stats.jawline + 5); } },
+    { icon: "💇", text: "You tried a new haircut", effect: () => { state.stats.jawline = clampStat(state.stats.jawline + 5); state.stats.skincare = clampStat(state.stats.skincare + 5); } },
     { icon: "😂", text: "She laughed at your joke", effect: () => bumpAll(1) },
     { icon: "📷", text: "Your friend took a better photo", effect: () => bumpAll(-2) },
-    { icon: "🥶", text: "You took a cold shower", effect: () => { state.stats.sleep = Math.min(100, state.stats.sleep + 4); state.stats.gym = Math.min(100, state.stats.gym + 2); } },
-    { icon: "🧘", text: "You tried meditating", effect: () => { state.stats.sleep = Math.min(100, state.stats.sleep + 5); state.stats.mewing = Math.min(100, state.stats.mewing + 2); } },
+    { icon: "🥶", text: "You took a cold shower", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 6); state.stats.gym = clampStat(state.stats.gym + 4); } },
+    { icon: "🧘", text: "You tried meditating", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 7); state.stats.mewing = clampStat(state.stats.mewing + 3); } },
     { icon: "👑", text: "You walked into a room and people noticed", effect: () => bumpAll(4) },
+    { icon: "🪞", text: "The mirror finally respected you", effect: () => bumpAll(5) },
+    { icon: "🧃", text: "You drank exactly enough water", effect: () => { state.stats.skincare = clampStat(state.stats.skincare + 8); state.stats.sleep = clampStat(state.stats.sleep + 3); } },
+    { icon: "🧢", text: "Hat phase delayed the glow-up", effect: () => { state.stats.jawline = Math.max(0, state.stats.jawline - 7); } },
   ];
 
   function bumpAll(delta) {
     for (const k of Object.keys(state.stats)) {
-      state.stats[k] = Math.max(0, Math.min(100, state.stats[k] + delta));
+      state.stats[k] = clampStat(state.stats[k] + delta);
     }
   }
 
@@ -110,6 +140,9 @@
     state.lastTime = now;
 
     if (!state.paused && !state.gameOver) {
+      state.playTime += dt;
+      state.day = Math.min(TOTAL_DAYS, 1 + Math.floor(state.playTime / DAY_LENGTH));
+
       // Combo decay
       if (now - state.lastClickTime > state.comboWindow * 1000) {
         state.combo = 0;
@@ -133,6 +166,8 @@
       // Effect decay
       if (state.flash > 0) state.flash = Math.max(0, state.flash - dt * 3);
       if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 4);
+      if (state.grindPulse > 0) state.grindPulse = Math.max(0, state.grindPulse - dt * 5);
+      if (state.comboPulse > 0) state.comboPulse = Math.max(0, state.comboPulse - dt * 4);
 
       // Aura size smoothing
       const targetAura = getLooksmax() / 100;
@@ -149,7 +184,7 @@
       }
 
       // Check win
-      if (getLooksmax() >= 100) {
+      if (getLooksmax() >= WIN_LOOKSMAX) {
         endGame(true);
       }
     }
@@ -173,11 +208,11 @@
     state.flash = 0.5;
     spawnParticles(W / 2, 200, "#f7d716", 14, 200);
     state.currentEvent = null;
-    state.eventCooldown = 8 + Math.random() * 4;
+    state.eventCooldown = 9 + Math.random() * 6;
   }
 
   function grind() {
-    if (state.paused || state.gameOver) return;
+    if (!state.running || state.paused || state.gameOver) return;
     const now = performance.now();
     if (now - state.lastClickTime < state.comboWindow * 1000) {
       state.combo = Math.min(99, state.combo + 1);
@@ -186,16 +221,24 @@
     }
     state.lastClickTime = now;
     state.clicks += 1;
+    state.grindPulse = 1;
+    state.comboPulse = Math.min(1, state.combo / 28);
+
+    const routine = ROUTINES[state.routineIndex % ROUTINES.length];
+    state.routineIndex += 1;
+    state.recentRoutine = routine;
 
     // Combo bonus
-    const bonus = state.combo > 10 ? 1 : 0;
+    const bonus = state.combo >= 80 ? 2 : state.combo >= 35 ? 1 : 0;
     const power = state.clickPower + bonus;
     for (const k of Object.keys(state.stats)) {
-      state.stats[k] = Math.min(100, state.stats[k] + power);
+      const focused = routine.stats.includes(k);
+      const delta = focused ? power + 1 : Math.max(0.32, power * 0.42);
+      state.stats[k] = clampStat(state.stats[k] + delta);
     }
 
     // Combo score
-    state.score += state.combo;
+    state.score += state.combo + Math.round(getLooksmax() * 0.3);
 
     // Tier up bonus
     const tier = getTier(getLooksmax());
@@ -204,10 +247,11 @@
       state.score += tier.num * 100;
       state.flash = 0.7;
       state.shake = 0.3;
+      state.comboPulse = 1;
       spawnParticles(W / 2, 200, tier.color, 30, 280);
       RB.toast(`⬆ TIER UP · ${tier.title} (${tier.num}/10)`, "good");
     } else {
-      spawnParticles(W / 2, 220, "#f7d716", 4, 80);
+      spawnParticles(W / 2, 238, routine.color, 5 + Math.min(12, Math.floor(state.combo / 8)), 90);
     }
   }
 
@@ -236,10 +280,10 @@
     const high = RB.getHighScore("looksmax");
     const tier = getTier(getLooksmax());
     const title = won
-      ? "👑 ULTRA GIGACHAD"
+      ? "👑 MIRROR FINAL BOSS"
       : `💪 ${tier.title.toUpperCase()}`;
     const sub = won
-      ? `You did it. 10/10. The grindset is complete. You may now rest. (Actually no, you can't. There's no end.)`
+      ? `You did it. 10/10. The mirror blinked first. Final day: ${state.day}/${TOTAL_DAYS}.`
       : `Click RESTART to grind again.`;
     showOverlay(title, sub, "Grind again", `Final tier: <strong style="color:${tier.color}">${tier.title} ${tier.num}/10</strong> · Score: <strong style="color:var(--accent-3)">${finalScore.toLocaleString()}</strong> · High: <strong>${high.toLocaleString()}</strong>`);
   }
@@ -249,42 +293,18 @@
     const sh = state.shake;
     const sx = (Math.random() - 0.5) * 6 * sh;
     const sy = (Math.random() - 0.5) * 6 * sh;
+    const time = performance.now() / 1000;
     ctx.save();
     ctx.translate(sx, sy);
 
-    // Background gradient (gets more colorful with higher tier)
     const tier = getTier(getLooksmax());
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#0a0a14");
-    g.addColorStop(0.5, "#1a1a2e");
-    g.addColorStop(1, "#0a0a14");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    // Decorative top bar
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, W, 36);
-
-    // Tier display
-    ctx.fillStyle = tier.color;
-    ctx.font = "bold 18px Bungee, Impact, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`${tier.num}/10`, 16, 18);
-    ctx.font = "bold 12px Bungee, Impact, sans-serif";
-    ctx.fillText(tier.title, 60, 18);
-
-    // Score / combo / clicks
-    ctx.fillStyle = "#fff";
-    ctx.font = "bold 11px JetBrains Mono, monospace";
-    ctx.textAlign = "right";
-    ctx.fillText("🔥 " + state.combo + "x", W - 16, 14);
-    ctx.fillText("👆 " + state.clicks, W - 16, 28);
+    drawMirrorRoom(tier, time);
+    drawTopHud(tier);
 
     // Avatar
     const ax = W / 2;
-    const ay = 170;
-    drawAvatar(ax, ay, tier);
+    const ay = 188;
+    drawAvatar(ax, ay, tier, time);
 
     // Stat bars
     drawStats();
@@ -328,10 +348,154 @@
     ctx.restore();
   }
 
-  function drawAvatar(cx, cy, tier) {
+  function drawMirrorRoom(tier, time) {
+    const looksmax = getLooksmax();
+    const mood = looksmax / 100;
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#090916");
+    bg.addColorStop(0.45, mood > 0.55 ? "#1b1832" : "#131326");
+    bg.addColorStop(1, "#05050c");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Neon wall wash
+    const glow = ctx.createRadialGradient(W / 2, 180, 40, W / 2, 180, 320);
+    glow.addColorStop(0, hexToRgba(tier.color, 0.34 + mood * 0.16));
+    glow.addColorStop(0.55, "rgba(255,46,136,0.10)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Floor grid
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    ctx.strokeStyle = mood > 0.55 ? "#2ee0ff" : "#5f4aa0";
+    ctx.lineWidth = 1;
+    for (let y = 392; y < H; y += 26) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y + (y - 392) * 0.18);
+      ctx.stroke();
+    }
+    for (let x = -120; x <= W + 120; x += 38) {
+      ctx.beginPath();
+      ctx.moveTo(W / 2, 388);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Mirror frame
+    const mx = 66;
+    const my = 50;
+    const mw = W - 132;
+    const mh = 268;
+    const mirror = ctx.createLinearGradient(0, my, 0, my + mh);
+    mirror.addColorStop(0, "rgba(255,255,255,0.08)");
+    mirror.addColorStop(0.45, "rgba(46,224,255,0.08)");
+    mirror.addColorStop(1, "rgba(255,46,136,0.08)");
+    ctx.fillStyle = "rgba(5,5,12,0.78)";
+    roundRect(ctx, mx - 16, my - 16, mw + 32, mh + 32, 24);
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(tier.color, 0.8);
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = mirror;
+    roundRect(ctx, mx, my, mw, mh, 18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Vanity bulbs
+    for (let i = 0; i < 7; i++) {
+      const bx = mx - 20;
+      const by = my + 18 + i * 36;
+      drawBulb(bx, by, tier.color, time + i * 0.3);
+      drawBulb(mx + mw + 20, by, tier.color, time + i * 0.3);
+    }
+    for (let i = 0; i < 5; i++) {
+      drawBulb(mx + 38 + i * 58, my - 20, tier.color, time + i * 0.2);
+    }
+
+    // Locker shelf silhouettes
+    ctx.fillStyle = "rgba(0,0,0,0.34)";
+    roundRect(ctx, 24, 330, 452, 50, 10);
+    ctx.fill();
+    ctx.fillStyle = "rgba(46,224,255,0.18)";
+    roundRect(ctx, 42, 342, 82, 18, 5);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,46,136,0.22)";
+    roundRect(ctx, 342, 339, 34, 25, 7);
+    ctx.fill();
+    ctx.fillStyle = "rgba(247,215,22,0.18)";
+    roundRect(ctx, 386, 344, 70, 15, 5);
+    ctx.fill();
+  }
+
+  function drawBulb(x, y, color, time) {
+    const pulse = 0.7 + Math.sin(time * 2.4) * 0.2 + state.comboPulse * 0.3;
+    ctx.fillStyle = hexToRgba(color, 0.18 * pulse);
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = hexToRgba(color, 0.78);
+    ctx.beginPath();
+    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawTopHud(tier) {
+    const looksmax = getLooksmax();
+    ctx.fillStyle = "rgba(0,0,0,0.62)";
+    roundRect(ctx, 10, 10, W - 20, 46, 10);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = tier.color;
+    ctx.font = "bold 17px Bungee, Impact, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${tier.num}/10`, 20, 25);
+    ctx.font = "bold 10px JetBrains Mono, monospace";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(tier.title, 76, 25);
+
+    const barX = 20;
+    const barY = 40;
+    const barW = 220;
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    roundRect(ctx, barX, barY, barW, 7, 4);
+    ctx.fill();
+    const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    grad.addColorStop(0, "#ff2e88");
+    grad.addColorStop(0.55, "#2ee0ff");
+    grad.addColorStop(1, "#f7d716");
+    ctx.fillStyle = grad;
+    roundRect(ctx, barX, barY, barW * (looksmax / 100), 7, 4);
+    ctx.fill();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 11px JetBrains Mono, monospace";
+    ctx.textAlign = "right";
+    ctx.fillText(`DAY ${state.day}/${TOTAL_DAYS}`, W - 16, 20);
+    ctx.fillText(`🔥 ${state.combo}x  ·  👆 ${state.clicks}`, W - 16, 38);
+
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    roundRect(ctx, W - 116, 44, 100, 5, 3);
+    ctx.fill();
+    ctx.fillStyle = hexToRgba(tier.color, 0.9);
+    roundRect(ctx, W - 116, 44, 100 * getDayProgress(), 5, 3);
+    ctx.fill();
+  }
+
+  function drawAvatar(cx, cy, tier, time = performance.now() / 1000) {
     const looksmax = getLooksmax();
     const t = looksmax / 100; // 0..1
-    const tnow = performance.now() / 1000;
+    const tnow = time;
 
     // Aura (size scales with tier)
     if (t > 0.3) {
@@ -358,6 +522,41 @@
       ctx.restore();
     }
 
+    // Torso and shoulders
+    const bodyY = cy + 70;
+    const shoulderW = 128 + t * 32;
+    const shoulderH = 40 + t * 10;
+    const torso = ctx.createLinearGradient(0, bodyY, 0, bodyY + 90);
+    torso.addColorStop(0, t > 0.55 ? "#3b214f" : "#272741");
+    torso.addColorStop(1, t > 0.55 ? "#090912" : "#101020");
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath();
+    ctx.ellipse(cx, bodyY + 20, shoulderW * 0.62, shoulderH * 0.75, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = torso;
+    ctx.beginPath();
+    ctx.moveTo(cx - shoulderW / 2, bodyY + 24);
+    ctx.quadraticCurveTo(cx - 58, bodyY - 4, cx - 30, bodyY - 8);
+    ctx.lineTo(cx + 30, bodyY - 8);
+    ctx.quadraticCurveTo(cx + 58, bodyY - 4, cx + shoulderW / 2, bodyY + 24);
+    ctx.lineTo(cx + 44, bodyY + 86);
+    ctx.lineTo(cx - 44, bodyY + 86);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(tier.color, 0.55);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Tank top stripe / chain
+    ctx.strokeStyle = t > 0.65 ? "#f7d716" : "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, bodyY + 4, 28 + t * 5, 0.18 * Math.PI, 0.82 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = hexToRgba(tier.color, 0.28 + t * 0.22);
+    roundRect(ctx, cx - 42, bodyY + 34, 84, 10, 5);
+    ctx.fill();
+
     // Head circle
     const skinColor = t < 0.3
       ? `rgb(${180 + t * 100}, ${120 + t * 100}, ${100 + t * 100})`
@@ -371,6 +570,18 @@
     ctx.strokeStyle = "#0a0a14";
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Cheekbone glow
+    if (t > 0.35) {
+      ctx.strokeStyle = hexToRgba("#ffffff", 0.12 + t * 0.14);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 37, cy + 13);
+      ctx.quadraticCurveTo(cx - 22, cy + 18, cx - 10, cy + 14);
+      ctx.moveTo(cx + 37, cy + 13);
+      ctx.quadraticCurveTo(cx + 22, cy + 18, cx + 10, cy + 14);
+      ctx.stroke();
+    }
 
     // Hair (fullness based on tier)
     const hairColor = t > 0.5 ? "#3a1a0a" : t > 0.2 ? "#1a1a1a" : "#0a0a0a";
@@ -451,6 +662,14 @@
     }
     ctx.lineCap = "butt";
 
+    // Nose
+    ctx.strokeStyle = "rgba(10,10,20,0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + 2, cy - 2);
+    ctx.quadraticCurveTo(cx + 8, cy + 10, cx + 1, cy + 15);
+    ctx.stroke();
+
     // Jawline (sharper at higher tier)
     const jawW = 50 - t * 18;
     const jawY = cy + 30;
@@ -517,25 +736,49 @@
       ctx.lineTo(cx + eyeSpacing - eyeSize - 4, eyeY);
       ctx.stroke();
     }
+
+    // Floating rating badge
+    ctx.save();
+    ctx.translate(cx + 78, cy - 42);
+    ctx.rotate(Math.sin(tnow * 1.8) * 0.04);
+    ctx.fillStyle = "rgba(0,0,0,0.58)";
+    roundRect(ctx, -40, -18, 80, 36, 10);
+    ctx.fill();
+    ctx.strokeStyle = tier.color;
+    ctx.stroke();
+    ctx.fillStyle = tier.color;
+    ctx.font = "bold 16px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${tier.num}/10`, 0, -2);
+    ctx.restore();
   }
 
   function drawStats() {
-    const startY = 290;
-    const rowH = 26;
-    const labelW = 100;
-    const barX = 110;
-    const barW = W - 110 - 50;
-    const barH = 14;
+    const startY = 322;
+    const rowH = 23;
+    const barX = 132;
+    const barW = W - 154;
+    const barH = 13;
+    const focusedStats = state.recentRoutine ? state.recentRoutine.stats : [];
+
+    ctx.fillStyle = "rgba(0,0,0,0.38)";
+    roundRect(ctx, 16, startY - 12, W - 32, rowH * STAT_META.length + 18, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
     for (let i = 0; i < STAT_META.length; i++) {
       const meta = STAT_META[i];
       const y = startY + i * rowH;
       const v = state.stats[meta.key];
-      const ratio = v / 100;
+      const ratio = v / STAT_CAP;
+      const focused = focusedStats.includes(meta.key);
 
       // Label
-      ctx.fillStyle = "#a8a8b8";
-      ctx.font = "bold 11px JetBrains Mono, monospace";
+      ctx.fillStyle = focused ? "#ffffff" : "#a8a8b8";
+      ctx.font = "bold 10.5px JetBrains Mono, monospace";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(meta.icon + " " + meta.label, 16, y + barH / 2);
@@ -547,14 +790,24 @@
 
       // Bar fill
       if (ratio > 0) {
-        ctx.fillStyle = meta.color;
+        const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+        grad.addColorStop(0, meta.color);
+        grad.addColorStop(1, focused ? "#ffffff" : hexToRgba(meta.color, 0.62));
+        ctx.fillStyle = grad;
         roundRect(ctx, barX, y, barW * ratio, barH, 4);
         ctx.fill();
       }
 
+      if (focused && state.grindPulse > 0) {
+        ctx.strokeStyle = hexToRgba(meta.color, 0.22 + state.grindPulse * 0.42);
+        ctx.lineWidth = 2;
+        roundRect(ctx, barX - 3, y - 3, barW + 6, barH + 6, 6);
+        ctx.stroke();
+      }
+
       // Value
       ctx.fillStyle = "#fff";
-      ctx.font = "bold 11px JetBrains Mono, monospace";
+      ctx.font = "bold 10px JetBrains Mono, monospace";
       ctx.textAlign = "right";
       ctx.fillText(Math.floor(v), W - 16, y + barH / 2);
     }
@@ -562,35 +815,38 @@
 
   function drawGrindButton() {
     const bx = 30;
-    const by = 460;
+    const by = 488;
     const bw = W - 60;
-    const bh = 90;
+    const bh = 78;
+    const pulse = state.grindPulse;
+    const routine = state.recentRoutine || ROUTINES[0];
 
     // Glow
-    ctx.fillStyle = "rgba(255, 46, 136, 0.2)";
-    roundRect(ctx, bx - 4, by - 4, bw + 8, bh + 8, 12);
+    ctx.fillStyle = hexToRgba(routine.color, 0.18 + pulse * 0.22);
+    roundRect(ctx, bx - 6 - pulse * 2, by - 6 - pulse * 2, bw + 12 + pulse * 4, bh + 12 + pulse * 4, 14);
     ctx.fill();
 
     // Button
     const grad = ctx.createLinearGradient(0, by, 0, by + bh);
-    grad.addColorStop(0, "#ff2e88");
-    grad.addColorStop(1, "#cc1f6a");
+    grad.addColorStop(0, routine.color);
+    grad.addColorStop(0.58, "#ff2e88");
+    grad.addColorStop(1, "#32112a");
     ctx.fillStyle = grad;
     roundRect(ctx, bx, by, bw, bh, 10);
     ctx.fill();
-    ctx.strokeStyle = "#0a0a14";
+    ctx.strokeStyle = pulse > 0 ? "#ffffff" : "#0a0a14";
     ctx.lineWidth = 3;
     ctx.stroke();
 
     // Text
     ctx.fillStyle = "#fff";
-    ctx.font = "bold 32px Bungee, Impact, sans-serif";
+    ctx.font = "bold 30px Bungee, Impact, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("💪 GRIND", W / 2, by + bh / 2 - 8);
-    ctx.font = "11px JetBrains Mono, monospace";
+    ctx.fillText("💪 GRIND", W / 2, by + 30);
+    ctx.font = "bold 10px JetBrains Mono, monospace";
     ctx.fillStyle = "rgba(255,255,255,0.7)";
-    ctx.fillText("SPACE / CLICK · +1 ALL STATS", W / 2, by + bh / 2 + 16);
+    ctx.fillText(`${routine.label.toUpperCase()} · SPACE / TAP`, W / 2, by + 54);
 
     // Combo indicator
     if (state.combo > 2) {
@@ -640,12 +896,25 @@
     ctx.closePath();
   }
 
+  function hexToRgba(hex, alpha) {
+    const value = hex.replace("#", "");
+    const bigint = parseInt(value.length === 3
+      ? value.split("").map((c) => c + c).join("")
+      : value, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   // ----- HUD -----
   function updateHUD() {
     const looksmax = getLooksmax();
     const tier = getTier(looksmax);
     document.getElementById("hud-tier").textContent = tier.num + "/10";
     document.getElementById("hud-tier").style.color = tier.color;
+    const dayEl = document.getElementById("hud-day");
+    if (dayEl) dayEl.textContent = state.day + "/" + TOTAL_DAYS;
     document.getElementById("hud-combo").textContent = state.combo + "x";
     document.getElementById("hud-clicks").textContent = state.clicks;
     document.getElementById("hud-high").textContent = RB.getHighScore("looksmax").toLocaleString();
@@ -656,9 +925,9 @@
     const slot = document.getElementById("powerups");
     const s = RB.state;
     const items = [
-      { key: "shield", icon: "📚", label: "Mewing Masterclass", desc: "2x click power for 30s" },
-      { key: "boost",  icon: "🧠", label: "Looksmaxx Guru",     desc: "+10 to all stats" },
-      { key: "nuke",   icon: "🛡", label: "Cope Harder",         desc: "30s immunity to decay" },
+      { key: "shield", icon: "📚", label: "Mewing Masterclass", desc: "2x click power for 45s" },
+      { key: "boost",  icon: "🧠", label: "Looksmaxx Guru",     desc: "+18 to all stats" },
+      { key: "nuke",   icon: "🛡", label: "Cope Harder",         desc: "45s immunity to decay" },
     ];
     slot.innerHTML = items.map((it) => {
       const count = s.powerups[it.key] || 0;
@@ -693,18 +962,18 @@
     if (!RB.consumePowerup(key)) return;
     if (key === "shield") {
       state.clickPower = 2;
-      RB.toast("📚 Mewing Masterclass active — 2x click power for 30s", "good");
-      setTimeout(() => { state.clickPower = 1; }, 30000);
+      RB.toast("📚 Mewing Masterclass active — 2x click power for 45s", "good");
+      setTimeout(() => { state.clickPower = 1; }, 45000);
     } else if (key === "boost") {
-      bumpAll(10);
+      bumpAll(18);
       state.flash = 0.5;
       state.shake = 0.4;
       spawnParticles(W / 2, 200, "#f7d716", 40, 320);
-      RB.toast("🧠 Looksmaxx Guru: +10 to ALL stats", "good");
+      RB.toast("🧠 Looksmaxx Guru: +18 to ALL stats", "good");
     } else if (key === "nuke") {
-      state.decayImmune = 30;
+      state.decayImmune = 45;
       spawnParticles(W / 2, H / 2, "#2ee0ff", 30, 280);
-      RB.toast("🛡 Cope activated — stats frozen for 30s", "good");
+      RB.toast("🛡 Cope activated — stats frozen for 45s", "good");
     }
   }
 
@@ -727,14 +996,14 @@
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
-    // GRIND button
-    if (x >= 30 && x <= W - 30 && y >= 460 && y <= 550) {
-      grind();
-      return;
-    }
     // Event popup
     if (state.currentEvent) {
       dismissEvent();
+      return;
+    }
+    // GRIND button
+    if (x >= 30 && x <= W - 30 && y >= 488 && y <= 566) {
+      grind();
     }
   }
 
@@ -766,6 +1035,7 @@
     state.won = false;
     state.clicks = 0;
     state.combo = 0;
+    state.lastClickTime = 0;
     state.score = 0;
     state.maxTier = 0;
     state.stats = { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0 };
@@ -775,6 +1045,12 @@
     state.eventCooldown = 5;
     state.auraSize = 0;
     state.particles = [];
+    state.playTime = 0;
+    state.day = 1;
+    state.routineIndex = 0;
+    state.recentRoutine = ROUTINES[0];
+    state.grindPulse = 0;
+    state.comboPulse = 0;
     state.lastTime = 0;
     hideOverlay();
     updateHUD();
@@ -792,7 +1068,12 @@
   document.getElementById("btn-primary").addEventListener("click", startGame);
   document.getElementById("btn-pause").addEventListener("click", pauseGame);
   document.getElementById("btn-restart").addEventListener("click", () => {
-    showOverlay("💪 LOOKSMAXXING GRINDSET", "Restart the grind?", "Start the grind");
+    state.running = false;
+    state.paused = false;
+    state.gameOver = true;
+    if (rafId) cancelAnimationFrame(rafId);
+    document.getElementById("btn-pause").textContent = "Pause";
+    showOverlay("💪 LOOKSMAXXING GRINDSET", "Restart the 30-day mirror arc?", "Start the grind");
   });
   const grindButton = document.getElementById("btn-grind-action");
   if (grindButton) {

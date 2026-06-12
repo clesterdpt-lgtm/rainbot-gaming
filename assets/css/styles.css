@@ -2889,7 +2889,7 @@ body.arcade-home::before {
   display: none !important;
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1340px) {
   #nav-slot {
     grid-template-columns: 250px minmax(360px, 1fr) auto;
   }

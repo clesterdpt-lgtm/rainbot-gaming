@@ -69,6 +69,7 @@
     right: $("btn-right"),
     jump: $("btn-jump"),
     boost: $("btn-boost"),
+    routeTitle: $("route-title"),
     delivery: $("hud-delivery"),
     heat: $("hud-heat"),
     bag: $("hud-bag"),
@@ -83,6 +84,7 @@
     meterNitroText: $("meter-nitro-text"),
     meterPatience: $("meter-patience"),
     meterPatienceText: $("meter-patience-text"),
+    eventLog: $("event-log"),
   };
 
   const api = window.RB || {
@@ -879,9 +881,10 @@
   }
 
   function showEvent(title, text, tone = "") {
-    el.eventChip.innerHTML = `<strong>${title}</strong>${text}`;
+    el.eventChip.innerHTML = `<strong>${title}</strong><span>${shortCue(text)}</span>`;
     el.eventChip.classList.add("doorcrash-event--show");
     el.eventChip.style.borderColor = tone === "good" ? "rgba(107, 255, 125, 0.42)" : "rgba(255, 46, 136, 0.5)";
+    if (el.eventLog) el.eventLog.textContent = `${title}: ${text}`;
     state.eventMessageTimer = 2.7;
   }
 
@@ -954,7 +957,17 @@
 
   function updateRouteChip() {
     const route = currentRoute();
-    el.routeChip.innerHTML = `<strong>${route.title}</strong>${route.text}`;
+    if (el.routeTitle) el.routeTitle.textContent = route.title;
+    if (el.routeChip) el.routeChip.textContent = route.text;
+  }
+
+  function shortCue(text) {
+    if (text.includes("nitro")) return "Nitro";
+    if (text.includes("Tip") || text.includes("tip")) return "Tip";
+    if (text.includes("Bag") || text.includes("bag")) return "Bag";
+    if (text.includes("Customer") || text.includes("customer")) return "Patience";
+    if (text.includes("Next")) return "Next drop";
+    return "Watch it";
   }
 
   function updateHUD() {

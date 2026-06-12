@@ -41,34 +41,53 @@
 
     .doorcrash-status {
       position: absolute;
-      left: 16px;
-      top: 70px;
+      left: 50%;
+      top: 12px;
+      transform: translateX(-50%);
       z-index: 4;
       display: grid;
-      gap: 8px;
       pointer-events: none;
-      width: min(270px, calc(100% - 32px));
+      width: min(260px, calc(100% - 28px));
     }
 
-    .doorcrash-chip {
-      background: rgba(3, 6, 11, 0.72);
-      border: 1px solid rgba(46, 224, 255, 0.28);
+    .doorcrash-toast {
+      background: rgba(3, 6, 11, 0.54);
+      border: 1px solid rgba(46, 224, 255, 0.34);
+      border-radius: 999px;
       color: #eaf7ff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
       font-family: var(--font-mono);
-      font-size: 11px;
-      line-height: 1.3;
-      padding: 8px 10px;
+      font-size: 10px;
+      line-height: 1;
+      min-height: 28px;
+      padding: 6px 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       text-transform: uppercase;
-      box-shadow: 0 0 18px rgba(46, 224, 255, 0.1);
+      white-space: nowrap;
+      box-shadow: 0 0 18px rgba(46, 224, 255, 0.12);
     }
 
-    .doorcrash-chip strong {
+    .doorcrash-toast strong {
       color: var(--accent-3);
-      display: block;
       font-family: var(--font-display);
-      font-size: 13px;
-      line-height: 1.2;
-      margin-bottom: 2px;
+      font-size: 10px;
+      line-height: 1;
+      max-width: 156px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .doorcrash-toast span {
+      color: rgba(234, 247, 255, 0.78);
+      max-width: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .doorcrash-event {
@@ -80,6 +99,44 @@
     .doorcrash-event--show {
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .doorcrash-route-card {
+      background: rgba(3, 6, 11, 0.48);
+      border: 1px solid rgba(46, 224, 255, 0.2);
+      border-radius: 8px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 10px;
+      padding: 10px;
+      text-transform: uppercase;
+    }
+
+    .doorcrash-route-card__label {
+      color: var(--accent-2);
+      display: block;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1.3px;
+      margin-bottom: 4px;
+    }
+
+    .doorcrash-route-card strong {
+      color: var(--accent-3);
+      display: block;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.25;
+      margin-bottom: 4px;
+    }
+
+    .doorcrash-route-card em {
+      color: var(--ink);
+      display: block;
+      font-style: normal;
+      margin-top: 8px;
     }
 
     .doorcrash-meter {
@@ -152,18 +209,27 @@
       }
 
       .doorcrash-status {
-        top: 60px;
-        left: 10px;
-        width: calc(100% - 20px);
+        top: 8px;
+        width: min(230px, calc(100% - 18px));
       }
 
-      .doorcrash-chip {
-        font-size: 10px;
-        padding: 6px 8px;
+      .doorcrash-toast {
+        font-size: 9px;
+        min-height: 24px;
+        padding: 5px 8px;
       }
 
-      .doorcrash-chip strong {
-        font-size: 12px;
+      .doorcrash-toast strong {
+        font-size: 9px;
+        max-width: 138px;
+      }
+
+      .doorcrash-toast span {
+        max-width: 58px;
+      }
+
+      .doorcrash-route-card {
+        display: none;
       }
     }
 
@@ -200,13 +266,8 @@
         <div class="canvas-wrap canvas-wrap--doorcrash">
           <canvas id="gameCanvas" width="920" height="600" tabindex="0"></canvas>
           <div class="doorcrash-status" aria-live="polite">
-            <div class="doorcrash-chip" id="route-chip">
-              <strong>Apartment 9B</strong>
-              Customer says “leave at door” but is already outside.
-            </div>
-            <div class="doorcrash-chip doorcrash-event" id="event-chip">
-              <strong>Soup order detected</strong>
-              The cupholder is praying.
+            <div class="doorcrash-toast doorcrash-event" id="event-chip">
+              <strong>Soup order</strong><span>Watch it</span>
             </div>
           </div>
 
@@ -235,6 +296,13 @@
             <kbd>↑</kbd>/<kbd>W</kbd>/<kbd>Space</kbd> · jump potholes<br>
             <kbd>Shift</kbd> · hold nitro
           </p>
+
+          <div class="doorcrash-route-card" aria-live="polite">
+            <span class="doorcrash-route-card__label">Current drop</span>
+            <strong id="route-title">Apartment 9B</strong>
+            <span id="route-chip">Customer says “leave at door” but is already outside.</span>
+            <em id="event-log">No incidents yet. Suspicious.</em>
+          </div>
 
           <div class="mobile-controls" aria-label="Mobile controls">
             <div class="mobile-controls__grid doorcrash-mobile-grid">
@@ -296,7 +364,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-5"></script>
-  <script src="../assets/js/doorcrash-no-tip-nitro.js?v=20260612-1"></script>
+  <script src="../assets/js/doorcrash-no-tip-nitro.js?v=20260612-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

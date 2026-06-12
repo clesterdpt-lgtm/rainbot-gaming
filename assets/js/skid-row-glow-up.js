@@ -124,6 +124,7 @@
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (a, b, t) => a + (b - a) * t;
+  const postButtonRect = () => ({ x: W - 216, y: H - 76, w: 168, h: 52 });
   const moneyLikes = (value) => {
     if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
     if (value >= 1000) return (value / 1000).toFixed(1).replace(".0", "") + "K";
@@ -442,8 +443,9 @@
     ctx.save();
     ctx.translate(sx, sy);
     drawBackdrop(time);
+    drawReelFrame(time);
+    drawCharacter(360, 452, time);
     drawSocialPanel(time);
-    drawCharacter(W / 2 - 66, 380, time);
     drawLowerBar(time);
     drawParticles();
     drawFlash();
@@ -455,12 +457,12 @@
     const backdrop = getLookLabel("backdrop");
     const bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, backdrop === "neon mural" ? "#1b1037" : "#0b1328");
-    bg.addColorStop(0.48, "#130d24");
+    bg.addColorStop(0.58, "#130d24");
     bg.addColorStop(1, "#05070d");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
 
-    const glow = ctx.createRadialGradient(W / 2 - 80, 190, 30, W / 2 - 80, 190, 390);
+    const glow = ctx.createRadialGradient(358, 190, 30, 358, 190, 460);
     glow.addColorStop(0, `rgba(255, 46, 136, ${0.22 + state.pulse * 0.18})`);
     glow.addColorStop(0.5, "rgba(46, 224, 255, 0.08)");
     glow.addColorStop(1, "rgba(0,0,0,0)");
@@ -471,15 +473,15 @@
     ctx.globalAlpha = 0.34;
     ctx.strokeStyle = "#2ee0ff";
     ctx.lineWidth = 1;
-    for (let y = 438; y < H; y += 32) {
+    for (let y = 382; y < H; y += 28) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(W, y + (y - 438) * 0.12);
+      ctx.lineTo(W, y + (y - 382) * 0.08);
       ctx.stroke();
     }
-    for (let x = -160; x < W + 180; x += 44) {
+    for (let x = -180; x < W + 180; x += 48) {
       ctx.beginPath();
-      ctx.moveTo(W / 2 - 74, 418);
+      ctx.moveTo(364, 370);
       ctx.lineTo(x, H);
       ctx.stroke();
     }
@@ -490,7 +492,7 @@
 
     if (backdrop === "thrift backdrop" || backdrop === "neon mural") {
       ctx.fillStyle = backdrop === "neon mural" ? "rgba(255,46,136,0.26)" : "rgba(255,212,59,0.18)";
-      roundRect(54, 82, 272, 250, 18);
+      roundRect(190, 70, 350, 270, 18);
       ctx.fill();
       ctx.strokeStyle = backdrop === "neon mural" ? "#ff2e88" : "#ffd43b";
       ctx.lineWidth = 3;
@@ -498,43 +500,43 @@
       ctx.font = "bold 22px Bungee, Impact, sans-serif";
       ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
-      ctx.fillText(backdrop === "neon mural" ? "GLOW" : "THRIFT", 190, 148);
+      ctx.fillText(backdrop === "neon mural" ? "GLOW" : "THRIFT", 365, 136);
       ctx.font = "bold 11px JetBrains Mono, monospace";
-      ctx.fillText("COUTURE POP-UP", 190, 171);
+      ctx.fillText("COUTURE POP-UP", 365, 159);
     }
   }
 
   function drawCityShapes(time) {
     const colors = ["rgba(46,224,255,0.16)", "rgba(255,46,136,0.16)", "rgba(255,212,59,0.12)"];
-    for (let i = 0; i < 12; i++) {
-      const x = -40 + i * 62;
-      const h = 96 + (i % 4) * 24;
+    for (let i = 0; i < 17; i++) {
+      const x = -50 + i * 62;
+      const h = 88 + (i % 4) * 22;
       ctx.fillStyle = "rgba(0,0,0,0.28)";
-      roundRect(x, 250 - h * 0.38, 42, h, 4);
+      roundRect(x, 222 - h * 0.38, 42, h, 4);
       ctx.fill();
       ctx.fillStyle = colors[i % colors.length];
       for (let r = 0; r < 5; r++) {
-        ctx.fillRect(x + 8, 230 - h * 0.25 + r * 17, 24, 3);
+        ctx.fillRect(x + 8, 202 - h * 0.25 + r * 17, 24, 3);
       }
     }
 
     ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.moveTo(0, 424);
-    ctx.lineTo(W, 424);
+    ctx.moveTo(0, 374);
+    ctx.lineTo(W, 374);
     ctx.stroke();
 
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     for (let i = 0; i < 20; i++) {
-      ctx.fillRect((i * 74 + time * 12) % (W + 80) - 40, 60 + (i % 6) * 36, 38, 2);
+      ctx.fillRect((i * 74 + time * 12) % (W + 80) - 40, 48 + (i % 6) * 31, 38, 2);
     }
   }
 
   function drawStudioGear(time) {
     const activeRing = getLookLabel("backdrop") === "ring light" || state.reelTimer > 0;
     ctx.save();
-    ctx.translate(86, 265);
+    ctx.translate(128, 266);
     ctx.strokeStyle = activeRing ? "#ffd43b" : "rgba(255,255,255,0.48)";
     ctx.lineWidth = 8;
     ctx.beginPath();
@@ -553,53 +555,117 @@
     ctx.restore();
 
     ctx.fillStyle = "rgba(0,0,0,0.55)";
-    roundRect(452, 296, 54, 34, 8);
+    roundRect(548, 272, 64, 38, 8);
     ctx.fill();
     ctx.strokeStyle = "#2ee0ff";
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.fillStyle = "#2ee0ff";
-    ctx.fillRect(463, 307, 31, 4);
+    ctx.fillRect(560, 284, 38, 4);
+  }
+
+  function drawReelFrame(time) {
+    const x = 214;
+    const y = 54;
+    const w = 350;
+    const h = 438;
+    ctx.save();
+    ctx.fillStyle = "rgba(2,4,12,0.28)";
+    roundRect(x, y, w, h, 28);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255,212,59,${0.32 + state.reelTimer * 0.22})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    roundRect(x + 18, y + 16, w - 36, 34, 14);
+    ctx.fill();
+    ctx.fillStyle = state.reelTimer > 0 ? "#ff5c5c" : "#6bff7d";
+    ctx.beginPath();
+    ctx.arc(x + 36, y + 33, 6 + Math.sin(time * 8) * (state.reelTimer > 0 ? 1.5 : 0), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px Bungee, Impact, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(state.reelTimer > 0 ? "REC · REEL POSTING" : "CONSENT CAMERA", x + 52, y + 37);
+
+    ctx.fillStyle = "rgba(46,224,255,0.13)";
+    roundRect(x + 24, y + h - 78, w - 48, 44, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(46,224,255,0.36)";
+    ctx.stroke();
+    ctx.fillStyle = "#2ee0ff";
+    ctx.font = "bold 9px JetBrains Mono, monospace";
+    ctx.fillText("SUBJECT APPROVED · RESOURCES LINKED", x + 42, y + h - 52);
+    ctx.fillStyle = "rgba(234,247,255,0.72)";
+    ctx.font = "9px JetBrains Mono, monospace";
+    ctx.fillText(`POST ${state.posts}/${POSTS_TO_END} · HYPE ${Math.round(state.hype)}`, x + 42, y + h - 36);
+    ctx.restore();
   }
 
   function drawSocialPanel(time) {
-    const x = 428;
-    const y = 74;
-    const w = 176;
-    const h = 252;
-    ctx.fillStyle = "rgba(3,5,12,0.78)";
+    const x = 642;
+    const y = 54;
+    const w = 220;
+    const h = 422;
+    ctx.fillStyle = "rgba(3,5,12,0.82)";
     roundRect(x, y, w, h, 16);
     ctx.fill();
     ctx.strokeStyle = "rgba(46,224,255,0.36)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
+    ctx.fillStyle = "rgba(255,46,136,0.12)";
+    roundRect(x + 10, y + 10, w - 20, 72, 12);
+    ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.font = "bold 13px Bungee, Impact, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("LIVE FEED", x + 14, y + 26);
+    ctx.fillText("LIVE FEED", x + 18, y + 31);
     ctx.fillStyle = "#ff2e88";
-    ctx.font = "bold 20px Bungee, Impact, sans-serif";
-    ctx.fillText(moneyLikes(state.likes), x + 14, y + 58);
+    ctx.font = "bold 28px Bungee, Impact, sans-serif";
+    ctx.fillText(moneyLikes(state.likes), x + 18, y + 65);
     ctx.fillStyle = "rgba(234,247,255,0.64)";
     ctx.font = "10px JetBrains Mono, monospace";
-    ctx.fillText("LIKES", x + 14, y + 74);
+    ctx.fillText("LIKES · COMMENTS WATCHING", x + 20, y + 80);
 
-    const styleY = y + 102;
-    drawMiniBar(x + 14, styleY, 148, "STYLE", state.style, "#ffd43b");
-    drawMiniBar(x + 14, styleY + 38, 148, "RESPECT", state.respect, state.respect < 34 ? "#ff5c5c" : "#6bff7d");
-    drawMiniBar(x + 14, styleY + 76, 148, "HYPE", state.hype, "#2ee0ff");
+    const styleY = y + 112;
+    drawMiniBar(x + 18, styleY, w - 36, "STYLE", state.style, "#ffd43b");
+    drawMiniBar(x + 18, styleY + 40, w - 36, "RESPECT", state.respect, state.respect < 34 ? "#ff5c5c" : "#6bff7d");
+    drawMiniBar(x + 18, styleY + 80, w - 36, "HYPE", state.hype, "#2ee0ff");
+
+    const checklistY = y + 232;
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    roundRect(x + 14, checklistY, w - 28, 58, 10);
+    ctx.fill();
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "bold 9px Bungee, Impact, sans-serif";
+    ctx.fillText("SHOOT ETHICS", x + 24, checklistY + 20);
+    ctx.fillStyle = state.respect > 45 ? "#6bff7d" : "#ff5c5c";
+    ctx.font = "9px JetBrains Mono, monospace";
+    ctx.fillText(state.respect > 45 ? "✓ consent visible" : "! repair respect", x + 24, checklistY + 38);
+    ctx.fillStyle = state.posts < POSTS_TO_END ? "#2ee0ff" : "#ffd43b";
+    ctx.fillText(`✓ resources caption ${state.posts}/${POSTS_TO_END}`, x + 118, checklistY + 38);
 
     const [author, text] = state.lastComment;
     ctx.fillStyle = "rgba(255,255,255,0.08)";
-    roundRect(x + 12, y + 204, w - 24, 38, 8);
+    roundRect(x + 14, y + 314, w - 28, 82, 10);
     ctx.fill();
     ctx.fillStyle = "#ffd43b";
     ctx.font = "bold 8.5px Bungee, Impact, sans-serif";
-    ctx.fillText(author.toUpperCase().slice(0, 18), x + 20, y + 220);
+    ctx.fillText(author.toUpperCase().slice(0, 20), x + 26, y + 334);
     ctx.fillStyle = "rgba(255,255,255,0.78)";
     ctx.font = "9px JetBrains Mono, monospace";
-    wrapText(text, x + 20, y + 234, w - 40, 11, 2);
+    wrapText(text, x + 26, y + 350, w - 52, 12, 3);
+
+    ctx.fillStyle = `rgba(255,212,59,${0.16 + state.pulse * 0.1})`;
+    ctx.beginPath();
+    ctx.arc(x + w - 28, y + 32, 14 + Math.sin(time * 3) * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#05070d";
+    ctx.font = "bold 12px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("RB", x + w - 28, y + 37);
 
     for (const f of state.floats) {
       const a = 1 - f.age / f.life;
@@ -1027,8 +1093,9 @@
   }
 
   function drawLowerBar(time) {
+    const button = postButtonRect();
     ctx.fillStyle = "rgba(0,0,0,0.68)";
-    roundRect(24, 602, W - 48, 84, 16);
+    roundRect(28, H - 94, W - 56, 76, 16);
     ctx.fill();
     ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.lineWidth = 2;
@@ -1037,27 +1104,41 @@
     ctx.fillStyle = "#ffd43b";
     ctx.font = "bold 14px Bungee, Impact, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("CURRENT LOOK", 42, 628);
-    ctx.fillStyle = "rgba(234,247,255,0.72)";
-    ctx.font = "10px JetBrains Mono, monospace";
+    ctx.fillText("CURRENT LOOK", 48, H - 62);
+
     const labels = [
-      `Hair: ${getLookLabel("hair")}`,
-      `Makeup: ${getLookLabel("makeup")}`,
-      `Fit: ${getLookLabel("outfit")}`,
-      `Extra: ${getLookLabel("accessory")}`,
+      ["HAIR", getLookLabel("hair"), "#2ee0ff"],
+      ["MAKEUP", getLookLabel("makeup"), "#ff2e88"],
+      ["FIT", getLookLabel("outfit"), "#ffd43b"],
+      ["EXTRA", getLookLabel("accessory"), "#6bff7d"],
     ];
-    labels.forEach((label, i) => ctx.fillText(label.toUpperCase(), 42 + (i % 2) * 266, 650 + Math.floor(i / 2) * 18));
+    labels.forEach(([key, value, color], i) => {
+      const x = 198 + i * 112;
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      roundRect(x, H - 76, 98, 42, 9);
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.58;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = color;
+      ctx.font = "bold 8px JetBrains Mono, monospace";
+      ctx.fillText(key, x + 9, H - 60);
+      ctx.fillStyle = "rgba(234,247,255,0.82)";
+      ctx.font = "bold 8.5px JetBrains Mono, monospace";
+      ctx.fillText(value.toUpperCase().slice(0, 12), x + 9, H - 44);
+    });
 
     const postPulse = 0.65 + Math.sin(time * 5) * 0.12 + state.pulse * 0.22;
     ctx.fillStyle = `rgba(46,224,255,${postPulse})`;
-    roundRect(448, 614, 150, 54, 12);
+    roundRect(button.x, button.y, button.w, button.h, 12);
     ctx.fill();
     ctx.strokeStyle = "#fff";
     ctx.stroke();
     ctx.fillStyle = "#05070d";
     ctx.font = "bold 15px Bungee, Impact, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("POST REEL", 523, 642);
+    ctx.fillText("POST REEL", button.x + button.w / 2, button.y + 32);
   }
 
   function drawParticles() {
@@ -1199,7 +1280,8 @@
       const rect = canvas.getBoundingClientRect();
       const x = (event.clientX - rect.left) * (W / rect.width);
       const y = (event.clientY - rect.top) * (H / rect.height);
-      if (x >= 448 && x <= 598 && y >= 614 && y <= 668) postReel();
+      const button = postButtonRect();
+      if (x >= button.x && x <= button.x + button.w && y >= button.y && y <= button.y + button.h) postReel();
       else if (!state.running) startGame();
     });
 

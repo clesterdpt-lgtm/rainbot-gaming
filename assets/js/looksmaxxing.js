@@ -17,6 +17,7 @@
   const IDLE_DRAIN_DELAY = 2.2;
   const IDLE_STAT_DRAIN = 1.05;
   const IDLE_SCORE_DRAIN = 42;
+  const CHARACTER_STAGE_BASE = "../assets/img/looksmaxxing/character-stages";
 
   // ----- Game state -----
   const state = {
@@ -75,6 +76,16 @@
     { label: "Hydration arc", stats: ["skincare", "gym"], color: "#6bff7d" },
     { label: "Silent walk", stats: ["nofap", "mewing"], color: "#b36bff" },
   ];
+
+  const characterStageImages = Array.from({ length: 10 }, (_, i) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.onload = () => {
+      if (!state.running) draw();
+    };
+    img.src = `${CHARACTER_STAGE_BASE}/looksmax-stage-${String(i + 1).padStart(2, "0")}.png`;
+    return img;
+  });
 
   // ----- Tier definitions -----
   const TIERS = [
@@ -388,7 +399,7 @@
     // Avatar
     const ax = W / 2;
     const ay = 188;
-    drawAvatar(ax, ay, tier, time);
+    drawGeneratedCharacter(ax, ay, tier, time);
 
     // Stat bars
     drawStats();
@@ -603,6 +614,79 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("IDLE DRAIN - SCORE FALLING", W / 2, 79);
+    ctx.restore();
+  }
+
+  function drawGeneratedCharacter(cx, cy, tier, time) {
+    const looksmax = getLooksmax();
+    const t = looksmax / 100;
+    const stageIndex = Math.max(0, Math.min(characterStageImages.length - 1, tier.num - 1));
+    const img = characterStageImages[stageIndex];
+
+    // Keep the generated portrait embedded in the same mirror treatment.
+    if (t > 0.24) {
+      const auraR = 84 + state.auraSize * 76;
+      const grad = ctx.createRadialGradient(cx, cy + 6, 28, cx, cy + 6, auraR);
+      grad.addColorStop(0, hexToRgba(tier.color, 0.24 + state.auraSize * 0.28));
+      grad.addColorStop(0.58, hexToRgba("#ff2e88", 0.12));
+      grad.addColorStop(1, "rgba(255, 215, 0, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy + 6, auraR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (t > 0.62) {
+      ctx.save();
+      ctx.translate(cx, cy + 22);
+      ctx.rotate(time * 0.22);
+      for (let i = 0; i < 12; i++) {
+        ctx.rotate(Math.PI / 6);
+        ctx.fillStyle = hexToRgba(tier.color, 0.11 + state.comboPulse * 0.12);
+        ctx.fillRect(84, -1.5, 36 + t * 26, 3);
+      }
+      ctx.restore();
+    }
+
+    if (img.complete && img.naturalWidth > 0) {
+      const pulse = 1 + state.grindPulse * 0.018 + (tier.num === 10 ? Math.sin(time * 3) * 0.008 : 0);
+      const drawSize = (264 + Math.min(24, tier.num * 2.4)) * pulse;
+      const dx = cx - drawSize / 2;
+      const dy = 56 - Math.min(10, tier.num * 0.8);
+      ctx.save();
+      ctx.shadowColor = hexToRgba(tier.color, 0.32 + state.comboPulse * 0.28);
+      ctx.shadowBlur = 22 + state.comboPulse * 18;
+      ctx.drawImage(img, dx, dy, drawSize, drawSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = "rgba(0,0,0,0.46)";
+      roundRect(ctx, cx - 86, cy - 86, 172, 196, 18);
+      ctx.fill();
+      ctx.strokeStyle = tier.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 12px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("LOADING FORM", cx, cy + 8);
+    }
+
+    // Floating rating badge.
+    ctx.save();
+    ctx.translate(cx + 91, cy - 42);
+    ctx.rotate(Math.sin(time * 1.8) * 0.04);
+    ctx.fillStyle = "rgba(0,0,0,0.66)";
+    roundRect(ctx, -42, -19, 84, 38, 10);
+    ctx.fill();
+    ctx.strokeStyle = tier.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = tier.color;
+    ctx.font = "bold 16px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`${tier.num}/10`, 0, -1);
     ctx.restore();
   }
 

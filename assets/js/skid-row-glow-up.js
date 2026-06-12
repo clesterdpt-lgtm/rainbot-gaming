@@ -456,8 +456,8 @@
   function drawBackdrop(time) {
     const backdrop = getLookLabel("backdrop");
     const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, backdrop === "neon mural" ? "#1b1037" : "#0b1328");
-    bg.addColorStop(0.58, "#130d24");
+    bg.addColorStop(0, backdrop === "neon mural" ? "#1b1037" : "#10151e");
+    bg.addColorStop(0.45, "#1a1420");
     bg.addColorStop(1, "#05070d");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
@@ -469,25 +469,7 @@
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.save();
-    ctx.globalAlpha = 0.34;
-    ctx.strokeStyle = "#2ee0ff";
-    ctx.lineWidth = 1;
-    for (let y = 382; y < H; y += 28) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y + (y - 382) * 0.08);
-      ctx.stroke();
-    }
-    for (let x = -180; x < W + 180; x += 48) {
-      ctx.beginPath();
-      ctx.moveTo(364, 370);
-      ctx.lineTo(x, H);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    drawCityShapes(time);
+    drawSkidRowStreet(time);
     drawStudioGear(time);
 
     if (backdrop === "thrift backdrop" || backdrop === "neon mural") {
@@ -506,31 +488,230 @@
     }
   }
 
-  function drawCityShapes(time) {
-    const colors = ["rgba(46,224,255,0.16)", "rgba(255,46,136,0.16)", "rgba(255,212,59,0.12)"];
-    for (let i = 0; i < 17; i++) {
-      const x = -50 + i * 62;
-      const h = 88 + (i % 4) * 22;
-      ctx.fillStyle = "rgba(0,0,0,0.28)";
-      roundRect(x, 222 - h * 0.38, 42, h, 4);
+  function drawSkidRowStreet(time) {
+    drawStorefronts(time);
+    drawStreetProps(time);
+    drawStreetFloor(time);
+    drawUtilityLines(time);
+  }
+
+  function drawStorefronts(time) {
+    const facades = [
+      { x: -36, w: 132, h: 188, color: "#191b24", sign: "6TH ST", accent: "#ffd43b" },
+      { x: 96, w: 124, h: 210, color: "#141a23", sign: "MISSION", accent: "#2ee0ff" },
+      { x: 220, w: 160, h: 198, color: "#1c1724", sign: "ROW MARKET", accent: "#ff2e88" },
+      { x: 380, w: 116, h: 214, color: "#171a22", sign: "HOTEL", accent: "#ffd43b" },
+      { x: 496, w: 150, h: 190, color: "#171522", sign: "DONUTS", accent: "#2ee0ff" },
+      { x: 646, w: 150, h: 205, color: "#151922", sign: "WAREHOUSE", accent: "#ff2e88" },
+      { x: 796, w: 128, h: 184, color: "#1a1720", sign: "CROCKER", accent: "#ffd43b" },
+    ];
+
+    facades.forEach((shop, i) => {
+      const top = 104 + (i % 2) * 10;
+      ctx.fillStyle = shop.color;
+      roundRect(shop.x, top, shop.w, shop.h, 3);
       ctx.fill();
-      ctx.fillStyle = colors[i % colors.length];
-      for (let r = 0; r < 5; r++) {
-        ctx.fillRect(x + 8, 202 - h * 0.25 + r * 17, 24, 3);
+
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      for (let y = top + 12; y < top + shop.h - 16; y += 22) {
+        ctx.fillRect(shop.x + 8, y, shop.w - 16, 2);
       }
+
+      ctx.fillStyle = "rgba(0,0,0,0.56)";
+      roundRect(shop.x + 8, top + 38, shop.w - 16, shop.h - 60, 4);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.10)";
+      ctx.lineWidth = 1;
+      for (let y = top + 50; y < top + shop.h - 30; y += 13) {
+        ctx.beginPath();
+        ctx.moveTo(shop.x + 12, y);
+        ctx.lineTo(shop.x + shop.w - 12, y);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "rgba(0,0,0,0.66)";
+      roundRect(shop.x + 8, top + 8, shop.w - 16, 26, 5);
+      ctx.fill();
+      ctx.strokeStyle = shop.accent;
+      ctx.globalAlpha = 0.58 + Math.sin(time * 1.5 + i) * 0.08;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = shop.accent;
+      ctx.font = "bold 10px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(shop.sign, shop.x + shop.w / 2, top + 26);
+    });
+
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    for (let i = 0; i < 14; i++) {
+      ctx.fillRect((i * 82 + time * 8) % (W + 80) - 40, 52 + (i % 5) * 28, 42, 2);
     }
+  }
+
+  function drawStreetProps(time) {
+    drawTarps();
+    drawBoxesAndCones(time);
+
+    ctx.fillStyle = "rgba(0,0,0,0.58)";
+    roundRect(22, 282, 104, 38, 7);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,212,59,0.38)";
+    ctx.stroke();
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "bold 9px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("SAN JULIAN", 74, 305);
+
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    roundRect(760, 258, 94, 42, 7);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(46,224,255,0.34)";
+    ctx.stroke();
+    ctx.fillStyle = "#2ee0ff";
+    ctx.fillText("LOS ANGELES", 807, 282);
+  }
+
+  function drawTarps() {
+    const tarps = [
+      { x: 28, y: 324, w: 128, h: 58, color: "#173b4a", line: "#2ee0ff" },
+      { x: 738, y: 318, w: 136, h: 62, color: "#4c2940", line: "#ff2e88" },
+      { x: 566, y: 306, w: 86, h: 44, color: "#4b3b15", line: "#ffd43b" },
+    ];
+    tarps.forEach((tarp) => {
+      const grad = ctx.createLinearGradient(tarp.x, tarp.y, tarp.x, tarp.y + tarp.h);
+      grad.addColorStop(0, lighten(tarp.color, 12));
+      grad.addColorStop(1, darken(tarp.color, 14));
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(tarp.x, tarp.y + tarp.h);
+      ctx.lineTo(tarp.x + tarp.w * 0.22, tarp.y + 8);
+      ctx.lineTo(tarp.x + tarp.w * 0.82, tarp.y + 4);
+      ctx.lineTo(tarp.x + tarp.w, tarp.y + tarp.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = tarp.line;
+      ctx.globalAlpha = 0.42;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(tarp.x + i * (tarp.w / 4), tarp.y + 14);
+        ctx.lineTo(tarp.x + i * (tarp.w / 4) + 8, tarp.y + tarp.h - 8);
+        ctx.stroke();
+      }
+    });
+  }
+
+  function drawBoxesAndCones(time) {
+    const boxes = [
+      [148, 354, 42, 34], [186, 366, 34, 22], [700, 350, 44, 32], [652, 366, 34, 24],
+    ];
+    boxes.forEach(([x, y, w, h], i) => {
+      ctx.fillStyle = i % 2 ? "#8b5a32" : "#6f4529";
+      roundRect(x, y, w, h, 4);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.34)";
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,212,59,0.16)";
+      ctx.beginPath();
+      ctx.moveTo(x + 6, y + 10);
+      ctx.lineTo(x + w - 8, y + 7);
+      ctx.stroke();
+    });
+
+    [232, 678, 824].forEach((x, i) => {
+      const y = 358 + (i % 2) * 8;
+      ctx.fillStyle = "#ff7a1a";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 13, y + 42);
+      ctx.lineTo(x + 13, y + 42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.62)";
+      ctx.fillRect(x - 8, y + 17, 16, 5);
+    });
+
+    ctx.strokeStyle = `rgba(255,255,255,${0.10 + Math.sin(time * 2) * 0.03})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(70, 332);
+    ctx.lineTo(144, 380);
+    ctx.moveTo(800, 328);
+    ctx.lineTo(728, 378);
+    ctx.stroke();
+  }
+
+  function drawStreetFloor(time) {
+    const street = ctx.createLinearGradient(0, 350, 0, H);
+    street.addColorStop(0, "#22232b");
+    street.addColorStop(0.55, "#12141c");
+    street.addColorStop(1, "#070911");
+    ctx.fillStyle = street;
+    ctx.fillRect(0, 350, W, H - 350);
 
     ctx.strokeStyle = "rgba(255,255,255,0.12)";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(0, 374);
     ctx.lineTo(W, 374);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    for (let i = 0; i < 20; i++) {
-      ctx.fillRect((i * 74 + time * 12) % (W + 80) - 40, 48 + (i % 6) * 31, 38, 2);
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = "#2ee0ff";
+    ctx.lineWidth = 1;
+    for (let y = 390; y < H; y += 30) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y + (y - 390) * 0.08);
+      ctx.stroke();
     }
+    for (let x = -180; x < W + 180; x += 52) {
+      ctx.beginPath();
+      ctx.moveTo(364, 370);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = "rgba(255,212,59,0.18)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 12; i++) {
+      const y = 414 + i * 18;
+      ctx.beginPath();
+      ctx.moveTo(34 + i * 7, y);
+      ctx.quadraticCurveTo(70 + i * 3, y + 5, 118 + i * 6, y + 1);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.09)";
+    for (let i = 0; i < 20; i++) {
+      ctx.fillRect((i * 79 + time * 10) % (W + 80) - 40, 410 + (i % 6) * 24, 34, 2);
+    }
+  }
+
+  function drawUtilityLines(time) {
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 96);
+    ctx.quadraticCurveTo(260, 132 + Math.sin(time) * 2, 520, 102);
+    ctx.quadraticCurveTo(680, 84, W, 118);
+    ctx.moveTo(0, 132);
+    ctx.quadraticCurveTo(284, 158, 548, 126);
+    ctx.quadraticCurveTo(704, 110, W, 146);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(0,0,0,0.44)";
+    ctx.fillRect(126, 80, 8, 278);
+    ctx.fillRect(736, 72, 8, 286);
+    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fillRect(120, 122, 20, 5);
+    ctx.fillRect(730, 118, 20, 5);
   }
 
   function drawStudioGear(time) {
@@ -704,12 +885,38 @@
     };
     const bob = Math.sin(time * 2.1) * 2 + state.pulse * -5;
 
+    drawCharacterAura(cx, footY - 166, time);
     drawCharacterShadow(cx, footY);
     drawBody(cx, footY + bob, skin, look);
     drawHead(cx, footY - 214 + bob, skin, look, gender, time);
     drawHair(cx, footY - 244 + bob, look.hair, gender);
     drawAccessories(cx, footY - 214 + bob, look, time);
     drawNameBadge(cx, footY - 354 + bob);
+  }
+
+  function drawCharacterAura(cx, cy, time) {
+    const radius = 120 + state.style * 0.7 + state.pulse * 18;
+    const grad = ctx.createRadialGradient(cx, cy, 22, cx, cy, radius);
+    grad.addColorStop(0, `rgba(255,212,59,${0.08 + state.pulse * 0.05})`);
+    grad.addColorStop(0.42, `rgba(255,46,136,${0.07 + state.style / 1600})`);
+    grad.addColorStop(1, "rgba(46,224,255,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (state.style > 62) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(time * 0.18);
+      ctx.globalAlpha = 0.12 + state.pulse * 0.08;
+      ctx.fillStyle = "#ffd43b";
+      for (let i = 0; i < 10; i++) {
+        ctx.rotate(Math.PI / 5);
+        ctx.fillRect(88, -1, 38, 2);
+      }
+      ctx.restore();
+    }
   }
 
   function drawCharacterShadow(cx, y) {
@@ -732,8 +939,8 @@
       "star jacket": ["#ffd43b", "#5f3900"],
     }[outfit] || ["#2ee0ff", "#0b5e70"];
 
-    ctx.fillStyle = "rgba(0,0,0,0.34)";
-    roundRect(cx - 104, footY - 178, 208, 176, 42);
+    ctx.fillStyle = "rgba(0,0,0,0.38)";
+    roundRect(cx - 112, footY - 184, 224, 186, 46);
     ctx.fill();
 
     const neck = ctx.createLinearGradient(0, footY - 190, 0, footY - 128);
@@ -742,6 +949,23 @@
     ctx.fillStyle = neck;
     roundRect(cx - 32, footY - 198, 64, 74, 24);
     ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const hood = ctx.createLinearGradient(0, footY - 186, 0, footY - 110);
+    hood.addColorStop(0, lighten(palette[0], 8));
+    hood.addColorStop(1, darken(palette[1], 4));
+    ctx.fillStyle = hood;
+    ctx.beginPath();
+    ctx.ellipse(cx, footY - 140, 86, 56, 0, Math.PI, 0);
+    ctx.lineTo(cx + 72, footY - 114);
+    ctx.quadraticCurveTo(cx, footY - 86, cx - 72, footY - 114);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     const torso = ctx.createLinearGradient(0, footY - 178, 0, footY);
     torso.addColorStop(0, palette[0]);
@@ -759,6 +983,19 @@
     ctx.strokeStyle = "rgba(255,255,255,0.16)";
     ctx.lineWidth = 3;
     ctx.stroke();
+
+    const centerGlow = ctx.createLinearGradient(cx - 70, 0, cx + 70, 0);
+    centerGlow.addColorStop(0, "rgba(255,255,255,0)");
+    centerGlow.addColorStop(0.5, "rgba(255,255,255,0.13)");
+    centerGlow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = centerGlow;
+    ctx.beginPath();
+    ctx.moveTo(cx - 42, footY - 156);
+    ctx.quadraticCurveTo(cx, footY - 108, cx + 42, footY - 156);
+    ctx.lineTo(cx + 54, footY - 12);
+    ctx.lineTo(cx - 54, footY - 12);
+    ctx.closePath();
+    ctx.fill();
 
     ctx.save();
     ctx.globalAlpha = 0.2;
@@ -779,6 +1016,20 @@
     ctx.quadraticCurveTo(cx, footY - 104, cx + 32, footY - 154);
     ctx.stroke();
 
+    ctx.strokeStyle = outfit === "worn hoodie" ? "rgba(234,247,255,0.36)" : "rgba(255,212,59,0.7)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 12, footY - 143);
+    ctx.quadraticCurveTo(cx - 15, footY - 112, cx - 8, footY - 82);
+    ctx.moveTo(cx + 12, footY - 143);
+    ctx.quadraticCurveTo(cx + 15, footY - 112, cx + 8, footY - 82);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    roundRect(cx - 50, footY - 58, 100, 34, 13);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.stroke();
+
     if (outfit === "thrift blazer" || outfit === "velvet jacket" || outfit === "star jacket") {
       ctx.fillStyle = "rgba(255,255,255,0.12)";
       ctx.beginPath();
@@ -793,6 +1044,20 @@
       ctx.lineTo(cx + 48, footY - 42);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,212,59,0.46)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 66, footY - 144);
+      ctx.lineTo(cx - 13, footY - 59);
+      ctx.moveTo(cx + 66, footY - 144);
+      ctx.lineTo(cx + 13, footY - 59);
+      ctx.stroke();
+      ctx.fillStyle = "#ffd43b";
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(cx + 20, footY - 100 + i * 23, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       if (outfit === "star jacket") {
         ctx.fillStyle = "rgba(255,255,255,0.58)";
@@ -802,17 +1067,25 @@
       }
     }
 
-    ctx.fillStyle = skin;
+    const arm = ctx.createLinearGradient(0, footY - 114, 0, footY - 36);
+    arm.addColorStop(0, lighten(skin, 10));
+    arm.addColorStop(1, darken(skin, 12));
+    ctx.fillStyle = arm;
     ctx.beginPath();
     ctx.ellipse(cx - 102, footY - 72, 18, 34, -0.35, 0, Math.PI * 2);
     ctx.ellipse(cx + 102, footY - 72, 18, 34, 0.35, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
   }
 
   function drawHead(cx, cy, skin, look, gender, time) {
     const glam = state.style / 100;
     const faceW = gender === "female" ? 59 : 64;
     const faceH = gender === "female" ? 72 : 76;
+    const jawW = gender === "female" ? 41 : 46;
+    const chinY = cy + 62;
     const face = ctx.createRadialGradient(cx - 20, cy - 28, 8, cx, cy, 94);
     face.addColorStop(0, lighten(skin, 24));
     face.addColorStop(0.55, skin);
@@ -825,6 +1098,21 @@
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
+    const jaw = ctx.createLinearGradient(0, cy + 18, 0, chinY + 10);
+    jaw.addColorStop(0, skin);
+    jaw.addColorStop(1, darken(skin, 16));
+    ctx.fillStyle = jaw;
+    ctx.beginPath();
+    ctx.moveTo(cx - faceW + 8, cy + 18);
+    ctx.lineTo(cx - jawW, cy + 48);
+    ctx.quadraticCurveTo(cx, chinY + 12, cx + jawW, cy + 48);
+    ctx.lineTo(cx + faceW - 8, cy + 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.42)";
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
     ctx.fillStyle = skin;
     ctx.beginPath();
     ctx.ellipse(cx - faceW + 2, cy + 4, 11, 18, -0.2, 0, Math.PI * 2);
@@ -834,23 +1122,47 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.fillStyle = `rgba(255,255,255,${0.10 + glam * 0.08})`;
     ctx.beginPath();
-    ctx.ellipse(cx - 24, cy + 8, 16, 7, -0.15, 0, Math.PI * 2);
-    ctx.ellipse(cx + 24, cy + 8, 16, 7, 0.15, 0, Math.PI * 2);
+    ctx.ellipse(cx - 29, cy + 9, 18, 8, -0.18, 0, Math.PI * 2);
+    ctx.ellipse(cx + 29, cy + 9, 18, 8, 0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 21, cy + 37, 14, 5, -0.1, 0, Math.PI * 2);
+    ctx.ellipse(cx + 21, cy + 37, 14, 5, 0.1, 0, Math.PI * 2);
     ctx.fill();
 
     const eyeColor = glam > 0.7 ? "#2ee0ff" : "#111827";
+    ctx.fillStyle = "rgba(0,0,0,0.26)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 23, cy - 6, 16, 10, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 23, cy - 6, 16, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.ellipse(cx - 22, cy - 8, 11, 7, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + 22, cy - 8, 11, 7, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - 22, cy - 8, 11, 7, -0.04, 0, Math.PI * 2);
+    ctx.ellipse(cx + 22, cy - 8, 11, 7, 0.04, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = eyeColor;
     ctx.beginPath();
     ctx.arc(cx - 22, cy - 8, 4, 0, Math.PI * 2);
     ctx.arc(cx + 22, cy - 8, 4, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.beginPath();
+    ctx.arc(cx - 23.5, cy - 10, 1.5, 0, Math.PI * 2);
+    ctx.arc(cx + 20.5, cy - 10, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.42)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 34, cy - 12);
+    ctx.quadraticCurveTo(cx - 22, cy - 17, cx - 10, cy - 11);
+    ctx.moveTo(cx + 34, cy - 12);
+    ctx.quadraticCurveTo(cx + 22, cy - 17, cx + 10, cy - 11);
+    ctx.stroke();
 
     ctx.strokeStyle = "#26120c";
     ctx.lineWidth = look.hair === "beanie" ? 2 : 3.5;
@@ -893,18 +1205,31 @@
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx + 3, cy - 1);
-    ctx.quadraticCurveTo(cx + 9, cy + 15, cx, cy + 22);
+    ctx.quadraticCurveTo(cx + 10, cy + 13, cx + 1, cy + 23);
     ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 5, cy + 11, 4, 15, -0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 9, cy + 24, 3, 2, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + 8, cy + 24, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.fillStyle = look.makeup === "full glam" || look.makeup === "glow balm" ? "#db5c75" : "#7e332d";
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 40, 17 + glam * 3, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 39, 17 + glam * 3, 5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,0.56)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(cx, cy + 32, 18, 0.18 * Math.PI, 0.82 * Math.PI);
+    ctx.arc(cx, cy + 31, 18, 0.18 * Math.PI, 0.82 * Math.PI);
     ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 5, cy + 37, 6, 1.4, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     if (glam > 0.55) {
       ctx.strokeStyle = `rgba(255,212,59,${(glam - 0.45) * 0.5})`;
@@ -938,13 +1263,26 @@
 
   function drawHair(cx, cy, hair, gender) {
     if (hair === "beanie") {
-      ctx.fillStyle = "#3b2a4f";
+      const cap = ctx.createLinearGradient(0, cy - 22, 0, cy + 28);
+      cap.addColorStop(0, "#4e3a65");
+      cap.addColorStop(1, "#241a34");
+      ctx.fillStyle = cap;
       ctx.beginPath();
       ctx.ellipse(cx, cy + 7, 68, 34, 0, Math.PI, 0);
       ctx.fill();
       ctx.fillStyle = "#ff2e88";
       roundRect(cx - 56, cy + 5, 112, 18, 9);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 52 + i * 15, cy - 6);
+        ctx.quadraticCurveTo(cx - 48 + i * 13, cy + 5, cx - 46 + i * 14, cy + 20);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(255,212,59,0.26)";
+      ctx.fillRect(cx - 40, cy + 10, 80, 3);
       return;
     }
 
@@ -963,6 +1301,11 @@
         ctx.lineTo(cx - 42 + i * 22, cy + 10);
         ctx.stroke();
       }
+      ctx.strokeStyle = "rgba(46,224,255,0.22)";
+      ctx.beginPath();
+      ctx.moveTo(cx - 44, cy + 8);
+      ctx.quadraticCurveTo(cx, cy + 19, cx + 44, cy + 8);
+      ctx.stroke();
     } else if (hair === "textured curls" || hair === "box braids") {
       for (let i = 0; i < 15; i++) {
         const a = Math.PI + (i / 14) * Math.PI;
@@ -971,6 +1314,11 @@
         ctx.beginPath();
         ctx.arc(x, y, hair === "box braids" ? 8 : 12, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.12)";
+        ctx.beginPath();
+        ctx.arc(x - 3, y - 4, hair === "box braids" ? 2 : 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = hair === "box braids" ? "#21100a" : "#2a130b";
       }
       if (hair === "box braids") {
         for (let i = 0; i < 9; i++) {
@@ -981,6 +1329,12 @@
           ctx.moveTo(x, cy + 18);
           ctx.quadraticCurveTo(x - 4, cy + 64, x + 2, cy + 102);
           ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,255,0.10)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(x - 2, cy + 24);
+          ctx.quadraticCurveTo(x - 7, cy + 62, x - 1, cy + 96);
+          ctx.stroke();
         }
       }
     } else if (hair === "high pony") {
@@ -990,6 +1344,12 @@
       ctx.beginPath();
       ctx.ellipse(cx + 48, cy + 8, 24, 58, -0.35, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 40, cy - 12);
+      ctx.quadraticCurveTo(cx + 68, cy + 26, cx + 54, cy + 62);
+      ctx.stroke();
     } else if (hair === "soft bob") {
       ctx.beginPath();
       ctx.ellipse(cx, cy + 42, 74, 84, 0, Math.PI, 0);
@@ -998,12 +1358,26 @@
       ctx.beginPath();
       ctx.ellipse(cx, cy + 52, 48, 60, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx - 44 + i * 22, cy - 4);
+        ctx.quadraticCurveTo(cx - 54 + i * 22, cy + 38, cx - 42 + i * 19, cy + 80);
+        ctx.stroke();
+      }
     } else {
       ctx.beginPath();
       ctx.ellipse(cx, cy + 2, 70, 30, -0.1, Math.PI, 0);
       ctx.fill();
       ctx.fillStyle = "rgba(255,255,255,0.24)";
       ctx.fillRect(cx - 6, cy - 16, 38, 5);
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 4, cy - 14);
+      ctx.quadraticCurveTo(cx + 30, cy - 4, cx + 48, cy + 16);
+      ctx.stroke();
     }
 
     if (gender === "female" && hair !== "soft bob" && hair !== "high pony" && hair !== "box braids") {

@@ -13,6 +13,7 @@
   const POSTS_TO_END = 6;
   const STYLE_WIN = 88;
   const RESPECT_MIN = 24;
+  const ASSET_VERSION = "20260612-4";
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -44,16 +45,24 @@
     getHighScore: () => 0,
   };
 
+  const assetPaths = {
+    background: `../assets/img/skid-row-glow-up/street-background.png?v=${ASSET_VERSION}`,
+    blackMale: `../assets/img/skid-row-glow-up/black-man.png?v=${ASSET_VERSION}`,
+    whiteWoman: `../assets/img/skid-row-glow-up/white-woman.png?v=${ASSET_VERSION}`,
+  };
+
+  const art = {};
+
   const options = {
     male: {
-      names: ["Marcus", "Dre", "Leo", "Terry"],
+      names: ["Marcus", "Dre", "Leon", "Terry"],
       hair: ["beanie", "clean fade", "textured curls", "silver sweep"],
       makeup: ["none", "camera concealer", "neon liner", "glow balm"],
       outfit: ["worn hoodie", "fresh hoodie", "thrift blazer", "velvet jacket"],
     },
     female: {
-      names: ["Nina", "Jules", "Rae", "Maya"],
-      hair: ["beanie", "soft bob", "box braids", "high pony"],
+      names: ["Marlene", "Diane", "Rita", "Linda"],
+      hair: ["beanie", "messy bob", "silver shag", "high pony"],
       makeup: ["none", "camera concealer", "neon liner", "full glam"],
       outfit: ["worn hoodie", "fresh hoodie", "thrift blazer", "star jacket"],
     },
@@ -130,6 +139,20 @@
     if (value >= 1000) return (value / 1000).toFixed(1).replace(".0", "") + "K";
     return Math.round(value).toString();
   };
+  const imageReady = (img) => img && img.complete && img.naturalWidth > 0;
+
+  function loadArt() {
+    Object.entries(assetPaths).forEach(([key, src]) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => draw();
+      img.onerror = () => {
+        // The canvas has vector fallbacks, so a missed image should not stop play.
+      };
+      img.src = src;
+      art[key] = img;
+    });
+  }
 
   function reset(preserveGender = true) {
     const gender = preserveGender ? state.gender : "male";
@@ -444,7 +467,7 @@
     ctx.translate(sx, sy);
     drawBackdrop(time);
     drawReelFrame(time);
-    drawCharacter(360, 452, time);
+    drawCharacter(360, 506, time);
     drawSocialPanel(time);
     drawLowerBar(time);
     drawParticles();
@@ -455,22 +478,27 @@
 
   function drawBackdrop(time) {
     const backdrop = getLookLabel("backdrop");
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, backdrop === "neon mural" ? "#1b1037" : "#10151e");
-    bg.addColorStop(0.45, "#1a1420");
-    bg.addColorStop(1, "#05070d");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
+    if (imageReady(art.background)) {
+      drawCoverImage(art.background, 0, 0, W, H);
+      drawBackgroundGrade(backdrop, time);
+    } else {
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, backdrop === "neon mural" ? "#1b1037" : "#10151e");
+      bg.addColorStop(0.45, "#1a1420");
+      bg.addColorStop(1, "#05070d");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
 
-    const glow = ctx.createRadialGradient(358, 190, 30, 358, 190, 460);
-    glow.addColorStop(0, `rgba(255, 46, 136, ${0.22 + state.pulse * 0.18})`);
-    glow.addColorStop(0.5, "rgba(46, 224, 255, 0.08)");
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, W, H);
+      const glow = ctx.createRadialGradient(358, 190, 30, 358, 190, 460);
+      glow.addColorStop(0, `rgba(255, 46, 136, ${0.22 + state.pulse * 0.18})`);
+      glow.addColorStop(0.5, "rgba(46, 224, 255, 0.08)");
+      glow.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
 
-    drawSkidRowStreet(time);
-    drawStudioGear(time);
+      drawSkidRowStreet(time);
+      drawStudioGear(time);
+    }
 
     if (backdrop === "thrift backdrop" || backdrop === "neon mural") {
       ctx.fillStyle = backdrop === "neon mural" ? "rgba(255,46,136,0.26)" : "rgba(255,212,59,0.18)";
@@ -486,6 +514,48 @@
       ctx.font = "bold 11px JetBrains Mono, monospace";
       ctx.fillText("COUTURE POP-UP", 365, 159);
     }
+  }
+
+  function drawCoverImage(img, x, y, w, h) {
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (img.naturalWidth - sw) / 2;
+    const sy = (img.naturalHeight - sh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+  }
+
+  function drawBackgroundGrade(backdrop, time) {
+    const tint = {
+      "sidewalk set": "rgba(4,7,14,0.12)",
+      "ring light": "rgba(255,212,59,0.08)",
+      "thrift backdrop": "rgba(46,224,255,0.08)",
+      "neon mural": "rgba(255,46,136,0.12)",
+    }[backdrop] || "rgba(4,7,14,0.12)";
+
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, W, H);
+
+    const centerGlow = ctx.createRadialGradient(356, 230, 35, 356, 230, 360);
+    centerGlow.addColorStop(0, `rgba(255,255,255,${0.08 + state.pulse * 0.08})`);
+    centerGlow.addColorStop(0.36, `rgba(255,46,136,${0.10 + state.style / 1400})`);
+    centerGlow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = centerGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    const vignette = ctx.createRadialGradient(W / 2, H / 2, 160, W / 2, H / 2, 620);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(0.68, "rgba(0,0,0,0.16)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.58)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = `rgba(255,255,255,${0.08 + Math.sin(time * 2) * 0.02})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 374);
+    ctx.lineTo(W, 374);
+    ctx.stroke();
   }
 
   function drawSkidRowStreet(time) {
@@ -884,6 +954,12 @@
       accessory: getLookLabel("accessory"),
     };
     const bob = Math.sin(time * 2.1) * 2 + state.pulse * -5;
+    const sprite = gender === "female" ? art.whiteWoman : art.blackMale;
+
+    if (imageReady(sprite)) {
+      drawGeneratedCharacter(sprite, cx, footY + bob, look, time);
+      return;
+    }
 
     drawCharacterAura(cx, footY - 166, time);
     drawCharacterShadow(cx, footY);
@@ -892,6 +968,84 @@
     drawHair(cx, footY - 244 + bob, look.hair, gender);
     drawAccessories(cx, footY - 214 + bob, look, time);
     drawNameBadge(cx, footY - 354 + bob);
+  }
+
+  function drawGeneratedCharacter(sprite, cx, footY, look, time) {
+    const drawW = state.gender === "female" ? 292 : 286;
+    const drawH = drawW * (sprite.naturalHeight / sprite.naturalWidth);
+    const x = cx - drawW / 2;
+    const y = footY - drawH;
+
+    drawCharacterAura(cx, footY - drawH * 0.56, time);
+    drawCharacterShadow(cx, footY + 2);
+
+    ctx.save();
+    ctx.shadowColor = state.reelTimer > 0 ? "rgba(255,212,59,0.58)" : "rgba(46,224,255,0.34)";
+    ctx.shadowBlur = 14 + state.pulse * 16;
+    ctx.drawImage(sprite, x, y, drawW, drawH);
+    ctx.restore();
+
+    drawGeneratedStyleOverlays(cx, footY, drawH, look, time);
+    drawNameBadge(cx, footY - 376);
+  }
+
+  function drawGeneratedStyleOverlays(cx, footY, drawH, look, time) {
+    const faceY = footY - drawH * 0.72;
+    const chestY = footY - drawH * 0.42;
+    const outfitColor = {
+      "worn hoodie": "rgba(234,247,255,0.22)",
+      "fresh hoodie": "#2ee0ff",
+      "thrift blazer": "#7a4df0",
+      "velvet jacket": "#ff2e88",
+      "star jacket": "#ffd43b",
+    }[look.outfit] || "#2ee0ff";
+
+    ctx.save();
+    ctx.globalAlpha = look.outfit === "worn hoodie" ? 0.22 : 0.45;
+    ctx.strokeStyle = outfitColor;
+    ctx.lineWidth = 8;
+    ctx.setLineDash([14, 10]);
+    roundRect(cx - 126, chestY - 56, 252, 166, 34);
+    ctx.stroke();
+    ctx.restore();
+
+    if (look.makeup !== "none") {
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = look.makeup === "neon liner" ? "#2ee0ff" : "#ff2e88";
+      ctx.lineWidth = look.makeup === "full glam" ? 5 : 3;
+      ctx.beginPath();
+      ctx.moveTo(cx - 44, faceY - 7);
+      ctx.quadraticCurveTo(cx - 22, faceY - 20, cx - 3, faceY - 7);
+      ctx.moveTo(cx + 44, faceY - 7);
+      ctx.quadraticCurveTo(cx + 22, faceY - 20, cx + 3, faceY - 7);
+      ctx.stroke();
+      ctx.fillStyle = look.makeup === "full glam" || look.makeup === "glow balm" ? "rgba(255,46,136,0.34)" : "rgba(255,255,255,0.16)";
+      ctx.beginPath();
+      ctx.ellipse(cx - 46, faceY + 28, 17, 8, -0.25, 0, Math.PI * 2);
+      ctx.ellipse(cx + 46, faceY + 28, 17, 8, 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (look.hair !== "beanie") {
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.strokeStyle = look.hair === "silver shag" ? "#e5eef6" : "#ffd43b";
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      for (let i = 0; i < 8; i++) {
+        const side = i % 2 ? 1 : -1;
+        const offset = 16 + i * 5;
+        ctx.beginPath();
+        ctx.moveTo(cx + side * offset, faceY - 72 + i * 3);
+        ctx.quadraticCurveTo(cx + side * (70 + i * 4), faceY - 24 + i * 3, cx + side * (52 + i * 5), faceY + 55 + i * 3);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    drawAccessories(cx, faceY, look, time);
   }
 
   function drawCharacterAura(cx, cy, time) {
@@ -1676,6 +1830,7 @@
   }
 
   function init() {
+    loadArt();
     renderActions();
     bind();
     reset(false);

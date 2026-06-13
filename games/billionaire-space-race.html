@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Billionaire Space Race — Rainbot Gaming</title>
+  <meta name="description" content="Light the investor money on fire, dodge lawsuit drones and audit satellites, and set your ego-rocket down gently on an ever-tinier, ever-movinger platform. A parody lunar-lander." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260613-6" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305060f'/%3E%3Ctext x='50' y='72' font-size='58' text-anchor='middle'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E" />
+  <style>
+    /* ===== Billionaire Space Race — game-specific UI ===== */
+    .bsr-card {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 12, 26, 0.97);
+      border: 3px solid var(--accent);
+      border-radius: var(--r);
+      padding: 26px;
+      max-width: 540px; width: 92%;
+      box-shadow: 0 0 60px rgba(255, 46, 136, 0.45);
+      z-index: 10; text-align: center;
+    }
+    .bsr-card--win { border-color: var(--good); box-shadow: 0 0 60px rgba(107, 255, 125, 0.4); }
+    .bsr-card__title {
+      font-family: var(--font-display);
+      font-size: 19px; line-height: 1.2;
+      color: var(--accent); margin: 0 0 12px;
+      text-shadow: 2px 2px 0 #000; letter-spacing: 0.5px;
+    }
+    .bsr-card__msg {
+      font-family: var(--font-display);
+      font-size: 15px; color: var(--ink);
+      background: var(--panel);
+      padding: 12px 14px; border-radius: 6px;
+      margin: 0 0 16px; line-height: 1.35;
+      border-left: 4px solid var(--accent-2);
+    }
+    .bsr-card__stats {
+      font-family: var(--font-mono);
+      font-size: 13px; color: var(--ink-dim);
+      margin: 0 0 18px; line-height: 1.6;
+    }
+    .bsr-card__stats strong { color: var(--accent-3); }
+    .bsr-card__actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    .bsr-gate__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px; margin: 16px 0 16px;
+    }
+    .bsr-gate__opt {
+      background: var(--panel);
+      border: 2px solid var(--panel-2);
+      border-radius: 8px; padding: 14px;
+      cursor: pointer; transition: all 0.15s ease;
+      text-align: left; display: flex; flex-direction: column; gap: 4px;
+      font-family: var(--font-body); color: var(--ink);
+    }
+    .bsr-gate__opt:hover {
+      border-color: var(--accent-2);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(46, 224, 255, 0.3);
+    }
+    .bsr-gate__icon { font-size: 30px; }
+    .bsr-gate__name { font-family: var(--font-display); font-size: 13px; color: var(--accent-3); letter-spacing: 0.3px; }
+    .bsr-gate__desc { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+    .bsr-gate__skip {
+      font-size: 12px; color: var(--ink-dim);
+      background: none; border: none; cursor: pointer;
+      text-decoration: underline; font-family: var(--font-body);
+    }
+    .bsr-gate__skip:hover { color: var(--accent); }
+
+    .level-banner {
+      position: absolute; top: 58px; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-display);
+      font-size: 26px; letter-spacing: 1.5px;
+      color: var(--accent-3); text-shadow: 3px 3px 0 #000;
+      text-align: center; z-index: 4; pointer-events: none;
+      opacity: 0; transition: opacity 0.4s;
+    }
+    .level-banner span { display: block; font-size: 12px; color: var(--ink-dim); letter-spacing: 1px; margin-top: 6px; text-shadow: none; }
+    .level-banner--show { opacity: 1; animation: bsrBanner 2.2s ease-out; }
+    @keyframes bsrBanner {
+      0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+      18% { opacity: 1; transform: translateX(-50%) scale(1.06); }
+      80% { opacity: 1; }
+      100% { opacity: 0; transform: translateX(-50%) scale(1); }
+    }
+
+    .dpad--lander {
+      display: grid;
+      grid-template-columns: 64px 64px 64px;
+      gap: 6px; justify-content: center;
+    }
+    .dpad--lander button {
+      background: var(--panel); color: var(--ink);
+      border: 2px solid var(--panel-2);
+      border-radius: 10px; height: 64px;
+      font-size: 22px; cursor: pointer; touch-action: none;
+    }
+    .dpad--lander button[data-ctrl="thrust"] { background: var(--accent); color: var(--bg); font-size: 16px; }
+    .dpad--lander button:active { background: var(--accent-2); color: var(--bg); }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🚀 Billionaire Space Race</h1>
+        <div class="game-page__sub">← / → rotate · ↑ / Space / W thrust · Land GENTLY &amp; upright on the green pad</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">LEVEL</span><span class="hud__value" id="hud-level">1</span></div>
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">FUEL</span><span class="hud__value" id="hud-fuel">100%</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-760-620">
+          <canvas id="gameCanvas" width="760" height="620" tabindex="0"></canvas>
+
+          <div class="level-banner" id="level-banner"></div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title">🚀 BILLIONAIRE SPACE RACE</h2>
+            <p class="overlay__sub">
+              You are <strong style="color:var(--accent-3)" id="intro-tycoon">a tech tycoon with too much rocket.</strong>
+              Burn the investor money, climb past lawsuit drones and audit satellites, then set down <em>gently</em> and <em>upright</em> on the platform — which keeps shrinking and, eventually, moving. It's a metaphor. Also it's a rocket.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Light the money on fire</button>
+          </div>
+
+          <div id="card-mount"></div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row" style="margin-bottom: 10px;">
+            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <div class="dpad dpad--lander" id="dpad" aria-label="Controls" style="margin: 0 auto;">
+            <button data-ctrl="left" aria-label="Rotate left">↺</button>
+            <button data-ctrl="thrust" aria-label="Thrust">THRUST</button>
+            <button data-ctrl="right" aria-label="Rotate right">↻</button>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+
+        <details class="game-side__howto" open>
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Rotate</strong> with ← / → (or A / D). The rocket keeps spinning — tap, don't hold.</li>
+            <li><strong style="color:var(--ink);">Thrust</strong> with ↑ / Space / W. Thrust pushes wherever the nose points.</li>
+            <li><strong style="color:var(--ink);">Land</strong> on the green pad: slow descent (<em>vy</em>), slow drift (<em>vx</em>), and nearly <em>level</em>. The gauges go green when you're safe.</li>
+            <li><strong style="color:var(--ink);">Fuel</strong> is investor money. Run out mid-air and gravity collects.</li>
+            <li><strong style="color:var(--ink);">Each level</strong> the pad shrinks, then moves, and the airspace fills with hazards. Clear it to earn an ad-powered upgrade.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody. All billionaires, rockets, and crashes are fictional and affectionately satirical.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260612-4"></script>
+  <script src="../assets/js/billionaire-space-race.js?v=20260613-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+  </script>
+</body>
+</html>

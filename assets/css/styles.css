@@ -624,6 +624,14 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   border-radius: 8px;
   padding: 12px 14px;
 }
+.game-side__poster {
+  aspect-ratio: 1200 / 827;
+  border: 2px solid var(--panel-2);
+  border-radius: 8px;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
 .game-side__title {
   font-family: var(--font-display);
   font-size: 14px; letter-spacing: 1px;

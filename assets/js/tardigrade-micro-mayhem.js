@@ -87,6 +87,15 @@
     { id: "waterbearling", type: "waterbearling", centerX: 40, centerZ: -58, radiusX: 17, radiusZ: 12, speed: 0.3, hover: 1.1, phase: 3.0 },
     { id: "spore-ray", type: "sporeRay", centerX: 0, centerZ: 50, radiusX: 38, radiusZ: 16, speed: 0.16, hover: 8.2, phase: 5.2 },
   ];
+  const STARTER_PROPS = [
+    ["algae", { x: -2.4, z: 4.4 }],
+    ["algae", { x: 1.8, z: 3.1 }],
+    ["algae", { x: -4.9, z: 1.0 }],
+    ["bacteria", { x: -7.4, z: -4.8 }],
+    ["droplet", { x: 6.8, z: -7.2 }],
+    ["pollen", { x: -10.8, z: -11.6 }],
+    ["pollen", { x: -37.5, z: -31.8 }],
+  ];
   const SCRIPT_URL = document.currentScript
     ? document.currentScript.src
     : new URL("../assets/js/tardigrade-micro-mayhem.js", window.location.href).href;
@@ -110,14 +119,16 @@
       text: "Scuttle into two green algae chunks. They heal hydration and teach movement.",
       target: GOAL_TARGETS.algae,
       progress: () => state.snacks,
-      hint: "Move the mouse to aim the camera. WASD moves forward, left, right, and back.",
+      hint: "Follow the yellow target tag. Move with WASD, aim with the mouse, and munch two glowing algae.",
+      mobileHint: "Left stick moves. Drag the dish to look. Follow the target tag and munch two glowing algae.",
     },
     {
       title: "Bash bacteria",
       text: "Use Shift to bonk the spiky orange bacteria in the dash lane.",
       target: GOAL_TARGETS.bacteria,
       progress: () => state.bacteriaBashed,
-      hint: "Face the spiky orange bacteria and tap Shift for a hydro bonk.",
+      hint: "Face the target bacteria, build a little speed, then tap Shift for a hydro bonk.",
+      mobileHint: "Aim at the target bacteria, scuttle forward, then tap Bonk.",
     },
     {
       title: "Move water",
@@ -125,6 +136,7 @@
       target: GOAL_TARGETS.water,
       progress: () => state.waterMoved,
       hint: "Droplets are heavy. Hit one with a run-up or a dash to push it.",
+      mobileHint: "Push the blue droplet with the stick. Bonk gives it extra shove.",
     },
     {
       title: "Feed the ring",
@@ -132,6 +144,7 @@
       target: GOAL_TARGETS.ring,
       progress: () => state.ringFed,
       hint: "Follow the beacon to the ring, then bully a gold chunk into the glow.",
+      mobileHint: "Follow the target tag. Push the gold pollen into the glowing ring.",
     },
     {
       title: "Become the incident",
@@ -223,6 +236,9 @@
     radarToy: $("radar-toy"),
     radarLandmark: $("radar-landmark"),
     radarDistance: $("radar-distance"),
+    targetMarker: $("micro-target-marker"),
+    targetMarkerTitle: $("target-marker-title"),
+    targetMarkerDistance: $("target-marker-distance"),
     missionAlgae: $("mission-algae"),
     missionBacteria: $("mission-bacteria"),
     missionWater: $("mission-water"),
@@ -537,6 +553,9 @@
       tardigradeBelly: mat(0xe6c89d, { roughness: 0.68 }),
       tardigradePlate: mat(0xd9b983, { roughness: 0.58, emissive: 0x261704, emissiveIntensity: 0.08 }),
       tardigradeStripe: mat(0x8c603e, { roughness: 0.74, emissive: 0x140905, emissiveIntensity: 0.04 }),
+      tardigradeMuzzle: mat(0xe8c592, { roughness: 0.66, emissive: 0x261704, emissiveIntensity: 0.05 }),
+      oralRing: mat(0xb98658, { roughness: 0.72, emissive: 0x241004, emissiveIntensity: 0.08 }),
+      mouthDark: mat(0x432312, { roughness: 0.68, emissive: 0x150704, emissiveIntensity: 0.08 }),
       claw: mat(0xf7fbff, { roughness: 0.52 }),
       eye: mat(0x05070d, { roughness: 0.4 }),
       eyeGlint: mat(0xf8fbff, { roughness: 0.25, emissive: 0x90eaff, emissiveIntensity: 0.45 }),
@@ -1754,34 +1773,50 @@
       }
     });
 
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.88, 7), world.materials.tardigradePlate);
-    snout.position.set(0, 1.18, -3.02);
-    snout.rotation.x = -Math.PI / 2;
-    snout.castShadow = true;
-    group.add(snout);
+    const headMask = new THREE.Mesh(new THREE.SphereGeometry(0.72, 9, 6), world.materials.tardigradeMuzzle);
+    headMask.position.set(0, 1.2, -3.0);
+    headMask.scale.set(0.95, 0.76, 0.52);
+    headMask.castShadow = true;
+    group.add(headMask);
 
-    const mouth = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.36, 5), world.materials.claw);
-    mouth.position.set(0, 1.06, -3.42);
-    mouth.rotation.x = -Math.PI / 2;
-    group.add(mouth);
+    const oralTube = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.24, 0.22, 8), world.materials.oralRing);
+    oralTube.position.set(0, 1.16, -3.47);
+    oralTube.rotation.x = Math.PI / 2;
+    oralTube.castShadow = true;
+    group.add(oralTube);
 
-    const cheekGeometry = new THREE.IcosahedronGeometry(0.16, 0);
-    [-0.42, 0.42].forEach((x) => {
-      const cheek = new THREE.Mesh(cheekGeometry, world.materials.tardigradeBelly);
-      cheek.position.set(x, 1.28, -2.86);
-      cheek.scale.set(0.8, 0.7, 0.55);
-      group.add(cheek);
+    const oralRim = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 5, 12), world.materials.tardigradePlate);
+    oralRim.position.set(0, 1.16, -3.59);
+    oralRim.scale.set(0.95, 0.78, 1);
+    group.add(oralRim);
+
+    const oralOpening = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.026, 8), world.materials.mouthDark);
+    oralOpening.position.set(0, 1.16, -3.62);
+    oralOpening.rotation.x = Math.PI / 2;
+    group.add(oralOpening);
+
+    [-0.16, 0.16].forEach((x) => {
+      const stylet = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.26, 5), world.materials.claw);
+      stylet.position.set(x, 1.15, -3.69);
+      stylet.rotation.x = Math.PI / 2;
+      stylet.rotation.z = x < 0 ? -0.12 : 0.12;
+      group.add(stylet);
     });
 
-    const eyeGeometry = new THREE.IcosahedronGeometry(0.18, 0);
-    [-0.36, 0.36].forEach((x) => {
-      const eye = new THREE.Mesh(eyeGeometry, world.materials.eye);
-      eye.position.set(x, 1.62, -2.7);
-      eye.scale.set(0.9, 1.08, 0.75);
+    [-0.42, 0.42].forEach((x) => {
+      const eyePad = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 0), world.materials.tardigradePlate);
+      eyePad.position.set(x, 1.56, -3.0);
+      eyePad.scale.set(1.0, 0.88, 0.38);
+      eyePad.castShadow = true;
+      group.add(eyePad);
+
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 9, 7), world.materials.eye);
+      eye.position.set(x, 1.58, -3.17);
+      eye.scale.set(0.86, 1.02, 0.52);
       group.add(eye);
 
-      const glint = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 0), world.materials.eyeGlint);
-      glint.position.set(x - 0.045 * Math.sign(x || 1), 1.67, -2.84);
+      const glint = new THREE.Mesh(new THREE.IcosahedronGeometry(0.052, 0), world.materials.eyeGlint);
+      glint.position.set(x - 0.055 * Math.sign(x), 1.66, -3.3);
       group.add(glint);
     });
 
@@ -2033,17 +2068,7 @@
   function populateProps() {
     clearProps();
     clearEffects();
-    [
-      { x: -2.1, z: 5.2 },
-      { x: 2.2, z: 5.0 },
-      { x: 0.5, z: 2.2 },
-      { x: -5.8, z: 0.6 },
-      { x: 5.4, z: -0.8 },
-    ].forEach((point) => addProp("algae", point));
-    addProp("bacteria", { x: 0.05, z: 5.25 });
-    addProp("droplet", { x: 4.2, z: 1.4 });
-    addProp("pollen", { x: -8.5, z: -10.5 });
-    addProp("pollen", { x: -37.5, z: -31.8 });
+    STARTER_PROPS.forEach(([type, point]) => addProp(type, point));
 
     addZoneProps("forest", [
       ["algae", 14],
@@ -2916,7 +2941,7 @@
 
       data.baseY = data.baseHeight + terrainOffsetAt(prop.position.x, prop.position.z);
       prop.position.y = data.baseY + Math.sin(state.clock * 2.3 + i) * (data.type === "algae" ? 0.16 : 0.05);
-      prop.scale.setScalar(isCurrentTargetProp(prop) ? 1 + Math.sin(state.clock * 8) * 0.08 : 1);
+      prop.scale.setScalar(isCurrentTargetProp(prop) ? 1.1 + Math.sin(state.clock * 8) * 0.12 : 1);
       prop.rotation.x += data.spin.x * dt + data.velocity.z * dt * 0.18;
       prop.rotation.y += data.spin.y * dt;
       prop.rotation.z += data.spin.z * dt - data.velocity.x * dt * 0.18;
@@ -3189,6 +3214,7 @@
     if (data.type === "bacteria") state.bacteriaBashed += 1;
     addChaos(score, message);
     showCallout(title, `+${score.toLocaleString()} ${message.toLowerCase()}${comboTag(comboInfo)}`);
+    spawnRewardBurst(prop.position, rewardMaterialForType(data.type), smashy ? 9 : 5, smashy ? 1.18 : 0.82);
     playTone(smashy ? "break" : "bonk", smashy ? 1.45 : 1);
 
     if (data.destructible && smashy) {
@@ -3214,6 +3240,8 @@
     addChaos(score, "Nutrient ring fed");
     showPrompt("Ring fed. Keep bullying the pollen.");
     showCallout("FED!", `+${score.toLocaleString()} nutrient ring fed${comboTag(comboInfo)}`);
+    spawnRewardBurst(prop.position, world.materials.ring, 12, 1.15);
+    spawnRewardBurst({ x: RING_TARGET.x, y: groundYAt(RING_TARGET.x, RING_TARGET.z) + 0.7, z: RING_TARGET.z }, world.materials.ringCore, 8, 0.9);
     playTone("level", 0.8);
     removeProp(prop, index);
     return true;
@@ -3233,8 +3261,10 @@
     const comboInfo = extendCombo("algae", 1, 3.7);
     const score = scoreWithCombo(160);
     addChaos(score, "Algae snack");
-    showPrompt("Algae absorbed. Hydration restored.");
+    const remaining = Math.max(0, GOAL_TARGETS.algae - state.snacks);
+    showPrompt(state.goalIndex === 0 && remaining > 0 ? `${remaining} algae snack left. Follow the next yellow target.` : "Algae absorbed. Hydration restored.");
     showCallout("MUNCH!", `+${score.toLocaleString()} algae delicious${comboTag(comboInfo)}`);
+    spawnRewardBurst(prop.position, world.materials.algae, 10, 0.88);
     playTone("munch", 1.1);
     removeProp(prop, index);
     addProp("algae", randomPoint(WORLD_RADIUS - 5));
@@ -3292,6 +3322,42 @@
       shard.userData.spin = new THREE.Vector3(rand(-5, 5), rand(-7, 7), rand(-5, 5));
       world.scene.add(shard);
       world.effects.push(shard);
+    }
+  }
+
+  function rewardMaterialForType(type) {
+    return {
+      algae: world.materials.algae,
+      bacteria: world.materials.bacteria,
+      droplet: world.materials.droplet,
+      pollen: world.materials.pollen,
+      capsule: world.materials.capsuleBlue,
+      enzyme: world.materials.enzyme,
+      platelet: world.materials.platelet,
+      spore: world.materials.spore,
+      crystal: world.materials.crystal,
+      bubble: world.materials.bubble,
+      cell: world.materials.cell,
+    }[type] || world.materials.shard;
+  }
+
+  function spawnRewardBurst(position, material, count, power = 1) {
+    const THREE = window.THREE;
+    if (!position || !material) return;
+    for (let i = 0; i < count; i++) {
+      const mote = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.08, 0.24), 0), material);
+      mote.position.set(
+        position.x + rand(-0.4, 0.4),
+        (position.y || 0.8) + rand(0.18, 0.84),
+        position.z + rand(-0.4, 0.4)
+      );
+      mote.rotation.set(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI));
+      mote.userData.life = rand(0.42, 0.82);
+      mote.userData.maxLife = mote.userData.life;
+      mote.userData.velocity = new THREE.Vector3(rand(-3.2, 3.2) * power, rand(2.8, 6.4) * power, rand(-3.2, 3.2) * power);
+      mote.userData.spin = new THREE.Vector3(rand(-7, 7), rand(-8, 8), rand(-7, 7));
+      world.scene.add(mote);
+      world.effects.push(mote);
     }
   }
 
@@ -3390,7 +3456,7 @@
       updateGoalText();
       showCallout("GOAL CLEAR!", completed.title);
       announceGoal("Next specimen task:");
-      api.toast("Goal complete", "good");
+      if (!isTouchLayout()) api.toast("Goal complete", "good");
     }
   }
 
@@ -3411,8 +3477,21 @@
 
   function announceGoal(prefix = "") {
     const goal = GOALS[state.goalIndex] || GOALS[GOALS.length - 1];
-    const message = prefix ? `${prefix} ${goal.hint}` : goal.hint;
+    const hint = getGoalHint(goal);
+    const message = prefix ? `${prefix} ${hint}` : hint;
     showPrompt(message);
+  }
+
+  function getGoalHint(goal) {
+    if (!goal) return "";
+    return isTouchLayout() && goal.mobileHint ? goal.mobileHint : goal.hint;
+  }
+
+  function isTouchLayout() {
+    return !!(window.matchMedia && (
+      window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
+      window.matchMedia("(max-width: 900px)").matches
+    ));
   }
 
   function updateGoalText() {
@@ -3529,6 +3608,7 @@
       world.ring.scale.setScalar(1 + Math.sin(state.clock * 3) * 0.025);
     }
     updateGuideBeacon(dt);
+    updateTargetMarker();
     updateAtmosphere(dt);
     if (world.boundary) world.boundary.rotation.z += dt * 0.035;
     world.renderer.render(world.scene, world.camera);
@@ -3554,6 +3634,52 @@
     if (world.guide.userData.pointer) {
       world.guide.userData.pointer.position.y = 2.1 + Math.sin(state.clock * 5.2) * 0.22;
     }
+  }
+
+  function updateTargetMarker() {
+    if (!el.targetMarker || !world.camera || !state.running || state.paused || state.gameOver) {
+      hideTargetMarker();
+      return;
+    }
+
+    const target = getGuideTarget();
+    if (!target) {
+      hideTargetMarker();
+      return;
+    }
+
+    const THREE = window.THREE;
+    const markerPoint = new THREE.Vector3(target.x, (target.y || 0) + 3.0, target.z);
+    markerPoint.project(world.camera);
+    const canvasRect = canvas.getBoundingClientRect();
+    const parentRect = canvas.parentElement.getBoundingClientRect();
+    const projectedX = (markerPoint.x * 0.5 + 0.5) * canvasRect.width + (canvasRect.left - parentRect.left);
+    const projectedY = (-markerPoint.y * 0.5 + 0.5) * canvasRect.height + (canvasRect.top - parentRect.top);
+    const marginX = isTouchLayout() ? 58 : 70;
+    const marginTop = isTouchLayout() ? 84 : 74;
+    const marginBottom = isTouchLayout() ? 178 : 92;
+    const x = clamp(projectedX, marginX, parentRect.width - marginX);
+    const y = clamp(projectedY, marginTop, parentRect.height - marginBottom);
+    const distance = Math.hypot(target.x - state.player.x, target.z - state.player.z);
+
+    el.targetMarker.style.left = `${x.toFixed(1)}px`;
+    el.targetMarker.style.top = `${y.toFixed(1)}px`;
+    if (el.targetMarkerTitle) el.targetMarkerTitle.textContent = targetMarkerTitle();
+    if (el.targetMarkerDistance) el.targetMarkerDistance.textContent = `${Math.max(1, Math.round(distance))} um`;
+    el.targetMarker.classList.add("is-visible");
+  }
+
+  function hideTargetMarker() {
+    if (el.targetMarker) el.targetMarker.classList.remove("is-visible");
+  }
+
+  function targetMarkerTitle() {
+    if (state.goalIndex === 0) return "Eat algae";
+    if (state.goalIndex === 1) return "Bonk bacteria";
+    if (state.goalIndex === 2) return "Push water";
+    if (state.goalIndex === 3) return "Feed ring";
+    if (state.goalIndex === 4) return "Make chaos";
+    return "Stay hydrated";
   }
 
   function getGuideTarget() {

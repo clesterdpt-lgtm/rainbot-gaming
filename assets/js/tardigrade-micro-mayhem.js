@@ -7,7 +7,7 @@
   "use strict";
 
   const GAME_ID = "tardigrade-micro-mayhem";
-  const WORLD_RADIUS = 78;
+  const WORLD_RADIUS = 108;
   const PLAYER_RADIUS = 1.55;
   const GRAVITY = 22;
   const GROUND_Y = 0.42;
@@ -28,55 +28,64 @@
     {
       id: "forest",
       name: "Algae Forest",
-      x: -42,
-      z: 28,
-      radius: 20,
+      x: -62,
+      z: 45,
+      radius: 25,
       color: 0x6bff7d,
       material: "zoneForest",
     },
     {
       id: "flats",
       name: "Droplet Flats",
-      x: 38,
-      z: 22,
-      radius: 19,
+      x: 62,
+      z: 38,
+      radius: 24,
       color: 0x37b8ff,
       material: "zoneFlats",
     },
     {
       id: "reef",
       name: "Bacteria Reef",
-      x: 30,
-      z: -46,
-      radius: 20,
+      x: 57,
+      z: -64,
+      radius: 24,
       color: 0xff9d2e,
       material: "zoneReef",
     },
     {
       id: "ridge",
       name: "Spore Ridge",
-      x: -36,
-      z: -42,
-      radius: 17,
+      x: -58,
+      z: -62,
+      radius: 23,
       color: 0xa5ff4f,
       material: "zoneRidge",
     },
   ];
   const HIDDEN_LANDMARKS = [
-    { id: "algae-crown", name: "Algae Crown", zone: "forest", x: -56, z: 41, radius: 5.8, color: 0x6bff7d },
-    { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: 55, z: 30, radius: 6.2, color: 0x37b8ff },
-    { id: "orange-spire", name: "Orange Spire", zone: "reef", x: 44, z: -56, radius: 6.0, color: 0xff9d2e },
-    { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: -48, z: -53, radius: 5.8, color: 0xa5ff4f },
+    { id: "algae-crown", name: "Algae Crown", zone: "forest", x: -80, z: 59, radius: 7.0, color: 0x6bff7d },
+    { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: 78, z: 48, radius: 7.2, color: 0x37b8ff },
+    { id: "orange-spire", name: "Orange Spire", zone: "reef", x: 70, z: -74, radius: 7.0, color: 0xff9d2e },
+    { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: -76, z: -76, radius: 7.0, color: 0xa5ff4f },
   ];
   const TRAVERSAL_TOYS = [
     { id: "starter-ramp", type: "ramp", name: "Cellulose Ramp", x: -10, z: 23, yaw: -0.54, radius: 5.6, boost: 17, lift: 6.8 },
-    { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: -39, z: 18, yaw: -0.9, radius: 6.4, boost: 19, lift: 7.8 },
-    { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: 29, z: 15, yaw: 0.2, radius: 5.2, boost: 6.5, lift: 15.6 },
-    { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: -29, z: -30, yaw: -0.38, radius: 5.0, boost: 7.5, lift: 16.8 },
-    { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: 48, z: -37, yaw: 0.6, radius: 5.7, boost: 9.5, lift: 18.2 },
-    { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: -52, z: 10, yaw: -0.35, radius: 5.3, boost: 8.5, lift: 16.5 },
-    { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: -37, z: -43, yaw: -0.2, radius: 7.4, boost: 8.8, lift: 3.8 },
-    { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: 24, z: -52, yaw: 0.55, radius: 7.0, boost: 7.8, lift: 3.4 },
+    { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: -54, z: 28, yaw: -0.9, radius: 6.8, boost: 22, lift: 9.8 },
+    { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: 38, z: 20, yaw: 0.2, radius: 5.7, boost: 7.2, lift: 18.6 },
+    { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: -42, z: -42, yaw: -0.38, radius: 5.7, boost: 8.6, lift: 19.8 },
+    { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: 63, z: -50, yaw: 0.6, radius: 6.2, boost: 10.5, lift: 22.4 },
+    { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: -71, z: 20, yaw: -0.35, radius: 5.9, boost: 9.2, lift: 19.5 },
+    { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: -58, z: -62, yaw: -0.2, radius: 8.4, boost: 10.2, lift: 5.0 },
+    { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: 45, z: -71, yaw: 0.55, radius: 8.0, boost: 9.4, lift: 4.6 },
+    { id: "crown-pad", type: "jumpPad", name: "Crown Popper", x: 2, z: -70, yaw: 0.05, radius: 6.0, boost: 9.2, lift: 23.0 },
+  ];
+  const CREATURE_ROUTES = [
+    { id: "rotifer-forest", type: "rotifer", centerX: -58, centerZ: 34, radiusX: 22, radiusZ: 12, speed: 0.26, hover: 2.1, phase: 0.1 },
+    { id: "rotifer-flats", type: "rotifer", centerX: 58, centerZ: 34, radiusX: 20, radiusZ: 11, speed: 0.22, hover: 2.4, phase: 2.4 },
+    { id: "ciliate-canal", type: "ciliate", centerX: 6, centerZ: -15, radiusX: 42, radiusZ: 20, speed: 0.18, hover: 4.4, phase: 1.1 },
+    { id: "ciliate-ridge", type: "ciliate", centerX: -51, centerZ: -59, radiusX: 18, radiusZ: 10, speed: 0.25, hover: 3.2, phase: 4.1 },
+    { id: "waterbearling", type: "waterbearling", centerX: 40, centerZ: -58, radiusX: 17, radiusZ: 12, speed: 0.3, hover: 1.1, phase: 3.0 },
+    { id: "spore-ray", type: "sporeRay", centerX: 0, centerZ: 50, radiusX: 38, radiusZ: 16, speed: 0.16, hover: 8.2, phase: 5.2 },
   ];
   const SCRIPT_URL = document.currentScript
     ? document.currentScript.src
@@ -311,6 +320,7 @@
     legs: [],
     feelers: [],
     props: [],
+    creatures: [],
     drift: [],
     effects: [],
     atmosphere: [],
@@ -362,20 +372,23 @@
 
   function terrainOffsetAt(x, z) {
     const distance = Math.hypot(x, z);
-    const edgeFade = clamp((WORLD_RADIUS - 4 - distance) / 18, 0, 1);
+    const edgeFade = clamp((WORLD_RADIUS - 5 - distance) / 24, 0, 1);
     const rolling =
-      Math.sin(x * 0.082) * 0.42 +
-      Math.cos(z * 0.067) * 0.36 +
-      Math.sin((x + z) * 0.045) * 0.48 +
-      Math.cos((x - z) * 0.034) * 0.28;
+      Math.sin(x * 0.058) * 0.54 +
+      Math.cos(z * 0.052) * 0.46 +
+      Math.sin((x + z) * 0.031) * 0.58 +
+      Math.cos((x - z) * 0.026) * 0.36;
     const features =
-      terrainBump(x, z, -44, 30, 27, 1.55) +
-      terrainBump(x, z, 37, -43, 25, 1.45) +
-      terrainBump(x, z, -35, -42, 20, 1.65) +
-      terrainBump(x, z, 18, 24, 22, 0.95) -
-      terrainBump(x, z, 4, 6, 28, 0.32) -
-      terrainBump(x, z, 48, 28, 17, 0.58);
-    return clamp((rolling * 0.8 + features) * edgeFade, -0.65, 2.45);
+      terrainBump(x, z, -64, 47, 36, 3.95) +
+      terrainBump(x, z, 64, 38, 34, 3.25) +
+      terrainBump(x, z, 58, -64, 35, 4.25) +
+      terrainBump(x, z, -58, -62, 32, 4.85) +
+      terrainBump(x, z, 2, -72, 24, 3.65) +
+      terrainBump(x, z, -6, 46, 30, 1.65) -
+      terrainBump(x, z, 3, 4, 28, 0.42) -
+      terrainBump(x, z, 18, -18, 44, 0.78) -
+      terrainBump(x, z, 31, 56, 22, 0.64);
+    return clamp((rolling * 0.72 + features) * edgeFade, -1.15, 6.2);
   }
 
   function groundYAt(x, z) {
@@ -436,8 +449,8 @@
     world.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     world.scene = new THREE.Scene();
-    world.scene.fog = new THREE.FogExp2(0x078ec8, 0.0044);
-    world.camera = new THREE.PerspectiveCamera(64, 960 / 620, 0.1, 300);
+    world.scene.fog = new THREE.FogExp2(0x078ec8, 0.00315);
+    world.camera = new THREE.PerspectiveCamera(64, 960 / 620, 0.1, 430);
 
     buildMaterials();
     applyAssetTextures();
@@ -517,8 +530,11 @@
       tardigradeA: mat(0xcaa36f, { roughness: 0.64 }),
       tardigradeB: mat(0xa8784d, { roughness: 0.7 }),
       tardigradeBelly: mat(0xe6c89d, { roughness: 0.68 }),
+      tardigradePlate: mat(0xd9b983, { roughness: 0.58, emissive: 0x261704, emissiveIntensity: 0.08 }),
+      tardigradeStripe: mat(0x8c603e, { roughness: 0.74, emissive: 0x140905, emissiveIntensity: 0.04 }),
       claw: mat(0xf7fbff, { roughness: 0.52 }),
       eye: mat(0x05070d, { roughness: 0.4 }),
+      eyeGlint: mat(0xf8fbff, { roughness: 0.25, emissive: 0x90eaff, emissiveIntensity: 0.45 }),
       algae: mat(0x5bd924, { emissive: 0x123e08, emissiveIntensity: 0.38 }),
       pollen: mat(0xffd43b, { emissive: 0x4e3700, emissiveIntensity: 0.58 }),
       cell: mat(0xff5c9f, { emissive: 0x56152f, emissiveIntensity: 0.45 }),
@@ -549,6 +565,10 @@
       backdropBlue: mat(0x1779b9, { roughness: 0.86, metalness: 0.01, emissive: 0x06395a, emissiveIntensity: 0.18 }),
       backdropGreen: mat(0x4da52c, { roughness: 0.88, metalness: 0.01, emissive: 0x143807, emissiveIntensity: 0.14 }),
       backdropPurple: mat(0x8d78d9, { roughness: 0.84, metalness: 0.02, emissive: 0x26184f, emissiveIntensity: 0.18 }),
+      creatureA: mat(0xffd19a, { roughness: 0.6, emissive: 0x4d2408, emissiveIntensity: 0.16 }),
+      creatureB: mat(0x53ead1, { roughness: 0.5, emissive: 0x0b4d45, emissiveIntensity: 0.36 }),
+      creatureC: mat(0xd883ff, { roughness: 0.55, emissive: 0x411260, emissiveIntensity: 0.32 }),
+      creatureFin: mat(0xf8fbff, { roughness: 0.36, transparent: true, opacity: 0.66, depthWrite: false }),
     };
   }
 
@@ -606,7 +626,7 @@
   function buildPhysicsBoundary() {
     if (!world.physics.ready || world.physics.boundaryBodies.length) return;
     const RAPIER = world.physics.RAPIER;
-    const bodyCount = 64;
+    const bodyCount = 88;
     const radius = WORLD_RADIUS - 0.25;
     const tangentHalf = (Math.PI * radius * 2) / bodyCount / 2;
     for (let i = 0; i < bodyCount; i++) {
@@ -688,10 +708,10 @@
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
     key.shadow.camera.far = 180;
-    key.shadow.camera.left = -92;
-    key.shadow.camera.right = 92;
-    key.shadow.camera.top = 92;
-    key.shadow.camera.bottom = -92;
+    key.shadow.camera.left = -132;
+    key.shadow.camera.right = 132;
+    key.shadow.camera.top = 132;
+    key.shadow.camera.bottom = -132;
     scene.add(key);
 
     const rim = new THREE.PointLight(0xff8cd8, 1.05, 82);
@@ -712,6 +732,7 @@
     buildSandboxZones();
     buildTraversalToys();
     buildHiddenLandmarks();
+    buildRoamingCreatures();
     world.ring = makeNutrientRing();
     scene.add(world.ring);
     world.tardigrade = makeTardigrade();
@@ -787,23 +808,27 @@
     world.petri = waterBase;
 
     makeRollingTerrain();
-    makeTerrainIsland(-51, 35, 12.8, 1.8, 0.68, world.materials.grassLight);
-    makeTerrainIsland(47, -46, 14.5, 1.55, 0.72, world.materials.dish);
-    makeTerrainIsland(-42, -44, 10.6, 1.7, 0.78, world.materials.grassLight);
-    makeTerrainIsland(32, 32, 11.8, 1.35, 0.7, world.materials.dish);
-    makeTerrainIsland(1, -58, 9.4, 1.2, 0.66, world.materials.dish);
+    makeTerrainIsland(-68, 52, 16.8, 2.5, 0.68, world.materials.grassLight);
+    makeTerrainIsland(66, -68, 17.5, 2.2, 0.72, world.materials.dish);
+    makeTerrainIsland(-62, -66, 14.6, 2.65, 0.78, world.materials.grassLight);
+    makeTerrainIsland(66, 42, 15.8, 1.95, 0.7, world.materials.dish);
+    makeTerrainIsland(2, -76, 14.4, 1.9, 0.66, world.materials.dish);
+    makeVerticalMesa(-92, 10, 13, 11.5, 0.58, world.materials.backdropPurple);
+    makeVerticalMesa(92, -14, 15, 13.2, 0.64, world.materials.backdropBlue);
+    makeVerticalMesa(-12, 88, 18, 12.6, 0.52, world.materials.backdropGreen);
 
     [
-      [-14, 19, 6.8, 0.42, 0.15],
-      [19, 17, 6.2, 0.5, -0.55],
-      [-18, -6, 5.6, 0.38, 0.8],
-      [35, -18, 7.4, 0.5, 0.4],
-      [-49, 8, 6.2, 0.52, -0.2],
-      [5, -34, 6.8, 0.46, 0.7],
-      [56, 30, 8.6, 0.42, 0.1],
-      [-57, -31, 7.8, 0.48, -0.35],
-      [3, 44, 8.2, 0.5, 0.55],
-      [48, -55, 5.8, 0.44, -0.85],
+      [-18, 22, 7.6, 0.42, 0.15],
+      [25, 18, 7.2, 0.5, -0.55],
+      [-22, -8, 6.2, 0.38, 0.8],
+      [43, -20, 8.4, 0.5, 0.4],
+      [-62, 11, 7.2, 0.52, -0.2],
+      [6, -43, 8.4, 0.46, 0.7],
+      [74, 42, 10.6, 0.42, 0.1],
+      [-78, -43, 9.2, 0.48, -0.35],
+      [4, 60, 10.2, 0.5, 0.55],
+      [66, -72, 7.4, 0.44, -0.85],
+      [-12, -76, 9.8, 0.4, 0.2],
     ].forEach(([x, z, radius, scaleZ, rotation]) => makeWaterPatch(x, z, radius, scaleZ, rotation));
 
     const boundary = new THREE.Mesh(
@@ -827,8 +852,8 @@
 
   function makeRollingTerrain() {
     const THREE = window.THREE;
-    const rings = 30;
-    const segments = 112;
+    const rings = 42;
+    const segments = 144;
     const positions = [];
     const colors = [];
     const indices = [];
@@ -910,6 +935,47 @@
     return group;
   }
 
+  function makeVerticalMesa(x, z, radius, height, scaleZ, topMaterial) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const sides = Math.max(10, Math.round(radius * 0.8));
+    const cliff = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.72, radius, height, sides),
+      world.materials.cliff
+    );
+    cliff.position.y = height / 2;
+    cliff.receiveShadow = true;
+    group.add(cliff);
+
+    const cap = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius * 0.98, radius * 0.86, 0.32, sides),
+      topMaterial
+    );
+    cap.position.y = height + 0.16;
+    cap.receiveShadow = true;
+    group.add(cap);
+
+    for (let i = 0; i < 9; i++) {
+      const angle = (i / 9) * Math.PI * 2 + rand(-0.18, 0.18);
+      const distance = rand(radius * 0.28, radius * 0.76);
+      const spireHeight = rand(2.6, 6.8);
+      const spire = new THREE.Mesh(
+        new THREE.ConeGeometry(rand(0.28, 0.62), spireHeight, 5),
+        pick([world.materials.coralGreen, world.materials.coralTeal, world.materials.coralPink, world.materials.spore])
+      );
+      spire.position.set(Math.cos(angle) * distance, height + 0.42 + spireHeight / 2, Math.sin(angle) * distance * scaleZ);
+      spire.rotation.x = rand(-0.14, 0.14);
+      spire.rotation.z = rand(-0.14, 0.14);
+      group.add(spire);
+    }
+
+    group.position.set(x, terrainOffsetAt(x, z) - 0.15, z);
+    group.scale.z = scaleZ;
+    group.rotation.y = rand(-0.16, 0.16);
+    world.scene.add(group);
+    return group;
+  }
+
   function makeWaterPatch(x, z, radius, scaleZ, rotation) {
     const THREE = window.THREE;
     const patch = new THREE.Mesh(
@@ -925,52 +991,56 @@
 
   function buildScenicDepth() {
     const shelves = [
-      [-60, -63, 11.5, 2.2, 0.64, world.materials.backdropGreen],
-      [-20, -70, 14.2, 2.7, 0.52, world.materials.dish],
-      [20, -69, 13.4, 2.4, 0.58, world.materials.grassLight],
-      [61, -53, 11.2, 2.0, 0.7, world.materials.backdropGreen],
-      [-70, -18, 8.6, 1.7, 0.66, world.materials.backdropPurple],
-      [69, 12, 8.8, 1.9, 0.72, world.materials.backdropBlue],
+      [-86, -78, 17.5, 4.8, 0.64, world.materials.backdropGreen],
+      [-34, -92, 20.2, 5.4, 0.52, world.materials.dish],
+      [25, -94, 18.4, 4.8, 0.58, world.materials.grassLight],
+      [86, -70, 16.2, 4.4, 0.7, world.materials.backdropGreen],
+      [-94, -26, 13.6, 4.1, 0.66, world.materials.backdropPurple],
+      [94, 18, 14.8, 4.5, 0.72, world.materials.backdropBlue],
+      [-74, 84, 17.2, 4.6, 0.58, world.materials.backdropGreen],
+      [75, 76, 18.6, 5.0, 0.62, world.materials.backdropBlue],
     ];
     shelves.forEach(([x, z, radius, height, scaleZ, material]) => {
       makeBackdropShelf(x, z, radius, height, scaleZ, material);
     });
 
     [
-      [-66, 44, 9.4, 0.92, world.materials.coralPink],
-      [-72, 5, 8.8, 0.72, world.materials.coralPurple],
-      [-57, -62, 10.8, 0.78, world.materials.coralTeal],
-      [-33, -68, 12.4, 0.84, world.materials.coralGreen],
-      [5, -72, 11.2, 0.78, world.materials.coralOrange],
-      [36, -66, 9.8, 0.72, world.materials.coralPink],
-      [66, -40, 10.4, 0.76, world.materials.coralYellow],
-      [70, 29, 8.6, 0.68, world.materials.coralTeal],
+      [-88, 58, 18.4, 1.04, world.materials.coralPink],
+      [-94, 7, 16.8, 0.82, world.materials.coralPurple],
+      [-78, -86, 20.8, 0.92, world.materials.coralTeal],
+      [-45, -91, 22.4, 1.0, world.materials.coralGreen],
+      [3, -98, 19.6, 0.92, world.materials.coralOrange],
+      [48, -89, 18.8, 0.86, world.materials.coralPink],
+      [90, -52, 21.4, 0.92, world.materials.coralYellow],
+      [96, 39, 17.6, 0.82, world.materials.coralTeal],
+      [-8, 92, 20.2, 0.9, world.materials.coralGreen],
     ].forEach(([x, z, height, radius, material]) => makeTallCoralPillar(x, z, height, radius, material));
 
     [
-      [-55, -49, 5.8, 18, [world.materials.coralTeal, world.materials.coralPink, world.materials.coralGreen]],
-      [-12, -62, 7.4, 22, [world.materials.coralYellow, world.materials.coralGreen, world.materials.algae]],
-      [32, -58, 6.8, 20, [world.materials.coralOrange, world.materials.coralPink, world.materials.bacteria]],
-      [59, 28, 5.6, 18, [world.materials.coralPurple, world.materials.coralTeal, world.materials.crystal]],
+      [-78, -73, 8.6, 16, [world.materials.coralTeal, world.materials.coralPink, world.materials.coralGreen]],
+      [-16, -88, 9.4, 18, [world.materials.coralYellow, world.materials.coralGreen, world.materials.algae]],
+      [55, -82, 8.8, 16, [world.materials.coralOrange, world.materials.coralPink, world.materials.bacteria]],
+      [82, 43, 7.6, 15, [world.materials.coralPurple, world.materials.coralTeal, world.materials.crystal]],
+      [-82, 62, 8.0, 14, [world.materials.coralGreen, world.materials.algae, world.materials.spore]],
     ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
 
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 18; i++) {
       const pos = randomPoint(WORLD_RADIUS - 8);
       makeCausticGlint(pos.x, pos.z, rand(1.0, 3.1), rand(0, Math.PI));
     }
 
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < 26; i++) {
       const pos = randomPoint(WORLD_RADIUS - 4);
-      makeSuspendedDroplet(pos.x, pos.z, rand(0.55, 1.45), rand(6.5, 24));
+      makeSuspendedDroplet(pos.x, pos.z, rand(0.55, 1.65), rand(7.5, 32));
     }
 
     [
-      [-48, -42, 5.2, 32, -0.25],
-      [-22, -52, 4.4, 36, 0.12],
-      [7, -48, 5.6, 38, -0.05],
-      [34, -39, 4.8, 34, 0.25],
-      [57, -18, 4.2, 30, -0.2],
-      [-58, 16, 3.8, 26, 0.3],
+      [-70, -60, 6.4, 44, -0.25],
+      [-28, -70, 5.2, 48, 0.12],
+      [10, -68, 6.8, 52, -0.05],
+      [52, -55, 5.8, 46, 0.25],
+      [74, -24, 4.8, 42, -0.2],
+      [-78, 23, 4.5, 40, 0.3],
     ].forEach(([x, z, width, height, yaw]) => makeLightShaft(x, z, width, height, yaw));
   }
 
@@ -1111,28 +1181,28 @@
   function buildEnvironment() {
     const THREE = window.THREE;
     const tubeClusters = [
-      [-13, 13, 5.2, 18, [world.materials.fiberA, world.materials.coralGreen, world.materials.coralPink]],
-      [14, 13, 5.4, 18, [world.materials.fiberA, world.materials.coralPink, world.materials.coralPurple]],
-      [-45, 27, 9.8, 32, [world.materials.fiberA, world.materials.coralGreen, world.materials.algae]],
-      [-57, 10, 8.8, 24, [world.materials.coralPink, world.materials.coralPurple]],
-      [37, 22, 9.6, 30, [world.materials.fiberA, world.materials.algae, world.materials.coralGreen]],
-      [52, -18, 9.0, 26, [world.materials.coralPink, world.materials.bacteria]],
-      [31, -46, 10.4, 32, [world.materials.coralPink, world.materials.bacteria, world.materials.coralPurple]],
-      [-36, -42, 9.0, 28, [world.materials.coralPurple, world.materials.spore, world.materials.capsulePink]],
-      [-18, -56, 7.6, 20, [world.materials.fiberA, world.materials.algae]],
-      [8, 48, 8.4, 22, [world.materials.coralGreen, world.materials.flowerPetal]],
-      [61, 35, 7.2, 18, [world.materials.fiberA, world.materials.coralPink]],
-      [-61, -31, 7.4, 18, [world.materials.coralPurple, world.materials.spore]],
+      [-18, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralGreen, world.materials.coralPink]],
+      [20, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralPink, world.materials.coralPurple]],
+      [-64, 45, 11.8, 14, [world.materials.fiberA, world.materials.coralGreen, world.materials.algae]],
+      [-76, 19, 9.8, 10, [world.materials.coralPink, world.materials.coralPurple]],
+      [63, 38, 11.6, 14, [world.materials.fiberA, world.materials.algae, world.materials.coralGreen]],
+      [72, -27, 10.0, 11, [world.materials.coralPink, world.materials.bacteria]],
+      [58, -64, 12.4, 15, [world.materials.coralPink, world.materials.bacteria, world.materials.coralPurple]],
+      [-58, -62, 11.2, 13, [world.materials.coralPurple, world.materials.spore, world.materials.capsulePink]],
+      [-22, -78, 8.6, 9, [world.materials.fiberA, world.materials.algae]],
+      [8, 66, 9.4, 16, [world.materials.coralGreen, world.materials.flowerPetal]],
+      [83, 54, 8.2, 14, [world.materials.fiberA, world.materials.coralPink]],
+      [-83, -46, 8.4, 14, [world.materials.coralPurple, world.materials.spore]],
     ];
     tubeClusters.forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
 
-    for (let i = 0; i < 130; i++) {
+    for (let i = 0; i < 78; i++) {
       const bubble = new THREE.Mesh(
         new THREE.SphereGeometry(rand(0.12, 0.62), 9, 7),
         world.materials.bubble
       );
       const pos = randomPoint(WORLD_RADIUS - 4);
-      bubble.position.set(pos.x, rand(3.0, 19.5), pos.z);
+      bubble.position.set(pos.x, rand(3.4, 28), pos.z);
       bubble.userData.baseY = bubble.position.y;
       bubble.userData.speed = rand(0.35, 1.15);
       bubble.userData.phase = rand(0, Math.PI * 2);
@@ -1140,13 +1210,13 @@
       world.drift.push(bubble);
     }
 
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 42; i++) {
       const cell = new THREE.Mesh(
         new THREE.IcosahedronGeometry(rand(0.2, 0.58), 0),
         pick([world.materials.cell, world.materials.algae, world.materials.crystal, world.materials.spore])
       );
       const pos = randomPoint(WORLD_RADIUS - 5);
-      cell.position.set(pos.x, rand(2.2, 13.5), pos.z);
+      cell.position.set(pos.x, rand(2.6, 18.5), pos.z);
       cell.userData.baseY = cell.position.y;
       cell.userData.speed = rand(0.55, 1.55);
       cell.userData.phase = rand(0, Math.PI * 2);
@@ -1154,17 +1224,17 @@
       world.drift.push(cell);
     }
 
-    for (let i = 0; i < 78; i++) {
+    for (let i = 0; i < 44; i++) {
       const pos = randomPoint(WORLD_RADIUS - 5);
       makePebblePatch(pos.x, pos.z, rand(0.55, 1.4));
     }
 
-    for (let i = 0; i < 62; i++) {
+    for (let i = 0; i < 34; i++) {
       const pos = randomPoint(WORLD_RADIUS - 6);
       makeMicroFlower(pos.x, pos.z, rand(0.55, 1.1));
     }
 
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 26; i++) {
       const cilia = new THREE.Group();
       const pos = randomPoint(WORLD_RADIUS - 7);
       const height = rand(2.6, 5.2);
@@ -1192,7 +1262,7 @@
     for (let i = 0; i < count; i++) {
       const angle = rand(0, Math.PI * 2);
       const distance = Math.sqrt(Math.random()) * radius;
-      const height = rand(2.0, 7.4) * (i % 5 === 0 ? 1.25 : 1);
+      const height = rand(2.6, 8.4) * (i % 5 === 0 ? 1.26 : 1);
       const tube = new THREE.Mesh(
         new THREE.CylinderGeometry(rand(0.16, 0.36), rand(0.22, 0.48), height, 6),
         pick(materials)
@@ -1484,9 +1554,9 @@
       group.add(rim);
 
       if (zone.id === "forest") {
-        for (let i = 0; i < 34; i++) {
+        for (let i = 0; i < 15; i++) {
           const blade = new THREE.Mesh(
-            new THREE.ConeGeometry(rand(0.18, 0.5), rand(2.0, 5.8), 5),
+            new THREE.ConeGeometry(rand(0.2, 0.52), rand(2.8, 7.4), 5),
             i % 5 === 0 ? world.materials.coralGreen : i % 3 ? world.materials.algae : world.materials.fiberA
           );
           const pos = randomPointNear(zone, zone.radius * 0.82);
@@ -1498,7 +1568,7 @@
           group.add(blade);
         }
       } else if (zone.id === "flats") {
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 12; i++) {
           const puddle = new THREE.Mesh(
             new THREE.CylinderGeometry(rand(1.2, 2.4), rand(1.1, 2.2), 0.035, 14),
             i % 3 === 0 ? world.materials.water : world.materials.droplet
@@ -1511,9 +1581,9 @@
           group.add(puddle);
         }
       } else if (zone.id === "ridge") {
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 13; i++) {
           const spire = new THREE.Group();
-          const height = rand(1.0, 3.8);
+          const height = rand(2.4, 7.2);
           const core = new THREE.Mesh(
             new THREE.ConeGeometry(rand(0.26, 0.64), height, 5),
             i % 2 ? world.materials.spore : world.materials.coralPurple
@@ -1531,7 +1601,7 @@
           group.add(spire);
         }
       } else {
-        for (let i = 0; i < 22; i++) {
+        for (let i = 0; i < 16; i++) {
           const coral = new THREE.Group();
           const core = new THREE.Mesh(
             new THREE.DodecahedronGeometry(rand(0.38, 0.82), 0),
@@ -1642,15 +1712,16 @@
     world.feelers = [];
 
     const segmentPositions = [
-      [0, 1.26, -1.95, 1.24, 0.9, 0.95, world.materials.tardigradeBelly],
-      [0, 1.16, -0.95, 1.52, 1.03, 1.1, world.materials.tardigradeA],
-      [0, 1.12, 0.05, 1.62, 1.05, 1.16, world.materials.tardigradeA],
-      [0, 1.14, 1.05, 1.5, 1.0, 1.08, world.materials.tardigradeB],
-      [0, 1.18, 1.92, 1.16, 0.86, 0.88, world.materials.tardigradeB],
+      [0, 1.28, -2.32, 1.12, 0.88, 0.86, world.materials.tardigradeBelly],
+      [0, 1.2, -1.34, 1.45, 1.03, 1.04, world.materials.tardigradeA],
+      [0, 1.16, -0.34, 1.66, 1.12, 1.14, world.materials.tardigradeA],
+      [0, 1.14, 0.72, 1.68, 1.1, 1.16, world.materials.tardigradeA],
+      [0, 1.18, 1.72, 1.46, 1.0, 1.02, world.materials.tardigradeB],
+      [0, 1.22, 2.48, 1.02, 0.78, 0.78, world.materials.tardigradeB],
     ];
 
     segmentPositions.forEach(([x, y, z, sx, sy, sz, material], index) => {
-      const segment = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), material);
+      const segment = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), material);
       segment.scale.set(sx, sy, sz);
       segment.position.set(x, y, z);
       segment.castShadow = true;
@@ -1659,44 +1730,93 @@
       segment.userData.phase = index * 0.65;
       group.add(segment);
       world.bodySegments.push(segment);
+
+      if (index > 0) {
+        const band = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.045, 5, 18), world.materials.tardigradeStripe);
+        band.position.set(x, y + 0.02, z - 0.42);
+        band.scale.set(sx * 0.92, sy * 0.72, 1);
+        band.castShadow = true;
+        group.add(band);
+      }
+
+      if (index > 0 && index < segmentPositions.length - 1) {
+        const plate = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32 + index * 0.015, 0), world.materials.tardigradePlate);
+        plate.position.set(0, y + sy * 0.78, z - 0.08);
+        plate.scale.set(1.35, 0.34, 0.86);
+        plate.rotation.y = index * 0.28;
+        plate.castShadow = true;
+        group.add(plate);
+      }
     });
 
-    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.46, 1.0, 6), world.materials.claw);
-    snout.position.set(0, 1.18, -2.78);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.88, 7), world.materials.tardigradePlate);
+    snout.position.set(0, 1.18, -3.02);
     snout.rotation.x = -Math.PI / 2;
     snout.castShadow = true;
     group.add(snout);
 
-    const eyeGeometry = new THREE.IcosahedronGeometry(0.11, 0);
+    const mouth = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.36, 5), world.materials.claw);
+    mouth.position.set(0, 1.06, -3.42);
+    mouth.rotation.x = -Math.PI / 2;
+    group.add(mouth);
+
+    const cheekGeometry = new THREE.IcosahedronGeometry(0.16, 0);
+    [-0.42, 0.42].forEach((x) => {
+      const cheek = new THREE.Mesh(cheekGeometry, world.materials.tardigradeBelly);
+      cheek.position.set(x, 1.28, -2.86);
+      cheek.scale.set(0.8, 0.7, 0.55);
+      group.add(cheek);
+    });
+
+    const eyeGeometry = new THREE.IcosahedronGeometry(0.18, 0);
     [-0.36, 0.36].forEach((x) => {
       const eye = new THREE.Mesh(eyeGeometry, world.materials.eye);
-      eye.position.set(x, 1.58, -2.42);
+      eye.position.set(x, 1.62, -2.7);
+      eye.scale.set(0.9, 1.08, 0.75);
       group.add(eye);
+
+      const glint = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 0), world.materials.eyeGlint);
+      glint.position.set(x - 0.045 * Math.sign(x || 1), 1.67, -2.84);
+      group.add(glint);
     });
 
     const legPairs = [
-      [-1.16, -1.26],
-      [-1.34, -0.32],
-      [-1.26, 0.68],
-      [-1.02, 1.55],
-      [1.16, -1.26],
-      [1.34, -0.32],
-      [1.26, 0.68],
-      [1.02, 1.55],
+      [-1.1, -1.55],
+      [-1.34, -0.58],
+      [-1.32, 0.54],
+      [-1.02, 1.58],
+      [1.1, -1.55],
+      [1.34, -0.58],
+      [1.32, 0.54],
+      [1.02, 1.58],
     ];
     legPairs.forEach(([x, z], index) => {
       const leg = new THREE.Group();
-      const upper = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.9, 5), world.materials.tardigradeB);
-      upper.position.set(x, 0.75, z);
+      const upper = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.92, 5), world.materials.tardigradeB);
+      upper.position.set(x, 0.77, z);
       upper.rotation.z = x < 0 ? -0.52 : 0.52;
       upper.castShadow = true;
       leg.add(upper);
 
-      const foot = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.42, 5), world.materials.claw);
-      foot.position.set(x * 1.12, 0.22, z + (index % 2 ? 0.14 : -0.08));
-      foot.rotation.x = Math.PI;
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 7, 5), world.materials.tardigradeBelly);
+      foot.position.set(x * 1.12, 0.28, z + (index % 2 ? 0.14 : -0.08));
+      foot.scale.set(1.1, 0.58, 0.72);
       foot.castShadow = true;
       leg.add(foot);
+
+      [-0.16, 0.16].forEach((offset) => {
+        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.26, 5), world.materials.claw);
+        claw.position.set(x * 1.18, 0.18, z + offset);
+        claw.rotation.x = Math.PI;
+        claw.rotation.z = x < 0 ? -0.28 : 0.28;
+        leg.add(claw);
+      });
+
+      const toe = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.34, 5), world.materials.claw);
+      toe.position.set(x * 1.18, 0.22, z + (index % 2 ? 0.3 : -0.24));
+      foot.rotation.x = Math.PI;
+      toe.rotation.x = Math.PI;
+      leg.add(toe);
 
       leg.userData.side = x < 0 ? -1 : 1;
       leg.userData.baseZ = z;
@@ -1706,19 +1826,176 @@
     });
 
     [-0.42, 0.42].forEach((x) => {
-      const feeler = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.92, 5), world.materials.fiberA);
-      feeler.position.set(x, 1.78, -2.72);
+      const feeler = new THREE.Mesh(new THREE.ConeGeometry(0.052, 1.06, 5), world.materials.fiberA);
+      feeler.position.set(x, 1.82, -2.88);
       feeler.rotation.x = -0.9;
       feeler.rotation.z = x * 0.45;
       group.add(feeler);
       world.feelers.push(feeler);
     });
 
+    const tailNub = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.48, 6), world.materials.tardigradeStripe);
+    tailNub.position.set(0, 1.16, 3.06);
+    tailNub.rotation.x = Math.PI / 2;
+    group.add(tailNub);
+
     group.traverse((child) => {
       if (child.isMesh) child.castShadow = false;
     });
-    group.scale.setScalar(1.08);
+    group.scale.setScalar(1.14);
     return group;
+  }
+
+  function buildRoamingCreatures() {
+    world.creatures = CREATURE_ROUTES.map((route) => {
+      const creature = makeRoamingCreature(route);
+      creature.userData.angle = route.phase || 0;
+      creature.userData.baseScale = creatureBaseScale(route.type);
+      creature.userData.bonkCooldown = 0;
+      const start = creatureRoutePosition(creature.userData, 0);
+      creature.position.set(start.x, start.y, start.z);
+      creature.userData.prevX = start.x;
+      creature.userData.prevZ = start.z;
+      world.scene.add(creature);
+      return creature;
+    });
+  }
+
+  function makeRoamingCreature(route) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.userData = { ...route };
+
+    if (route.type === "rotifer") {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), world.materials.creatureA);
+      body.scale.set(1.05, 0.58, 1.9);
+      body.castShadow = true;
+      group.add(body);
+
+      const crown = new THREE.Group();
+      for (let i = 0; i < 9; i++) {
+        const angle = (i / 9) * Math.PI * 2;
+        const cilium = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.72, 5), world.materials.creatureFin);
+        cilium.position.set(Math.cos(angle) * 0.48, 0.08 + Math.sin(angle) * 0.12, -1.64 + Math.sin(angle) * 0.2);
+        cilium.rotation.x = -0.8 + Math.sin(angle) * 0.22;
+        cilium.rotation.z = Math.cos(angle) * 0.55;
+        crown.add(cilium);
+      }
+      crown.userData.kind = "crown";
+      group.add(crown);
+
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.2, 5), world.materials.creatureB);
+      tail.position.z = 1.8;
+      tail.rotation.x = Math.PI / 2;
+      tail.userData.kind = "tail";
+      group.add(tail);
+    } else if (route.type === "waterbearling") {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), world.materials.tardigradeBelly);
+      body.scale.set(0.78, 0.58, 1.06);
+      group.add(body);
+      for (let i = 0; i < 4; i++) {
+        const z = -0.58 + i * 0.38;
+        [-0.58, 0.58].forEach((x) => {
+          const leg = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.42, 5), world.materials.claw);
+          leg.position.set(x, -0.36, z);
+          leg.rotation.z = x < 0 ? -0.7 : 0.7;
+          group.add(leg);
+        });
+      }
+      const eye = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 0), world.materials.eye);
+      eye.position.set(0.34, 0.28, -0.88);
+      group.add(eye);
+    } else if (route.type === "sporeRay") {
+      const body = new THREE.Mesh(new THREE.TetrahedronGeometry(1.12, 0), world.materials.creatureC);
+      body.scale.set(1.35, 0.32, 1.1);
+      body.rotation.y = Math.PI / 4;
+      group.add(body);
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.58, 1.8, 5), world.materials.creatureFin);
+      fin.position.z = 0.92;
+      fin.rotation.x = Math.PI / 2;
+      fin.userData.kind = "fin";
+      group.add(fin);
+    } else {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 7), world.materials.creatureB);
+      body.scale.set(0.72, 0.46, 2.05);
+      group.add(body);
+      const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.035, 5, 16), world.materials.creatureC);
+      stripe.position.z = -0.45;
+      stripe.scale.y = 0.58;
+      group.add(stripe);
+      for (let i = 0; i < 8; i++) {
+        const fin = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.56, 5), world.materials.creatureFin);
+        const side = i % 2 ? 1 : -1;
+        fin.position.set(side * 0.58, 0.02, -0.9 + i * 0.26);
+        fin.rotation.z = side * 0.95;
+        fin.userData.kind = "fin";
+        group.add(fin);
+      }
+    }
+
+    group.scale.setScalar(creatureBaseScale(route.type));
+    return group;
+  }
+
+  function creatureBaseScale(type) {
+    if (type === "sporeRay") return 2.0;
+    if (type === "rotifer") return 1.65;
+    if (type === "ciliate") return 1.5;
+    if (type === "waterbearling") return 1.35;
+    return 1.25;
+  }
+
+  function creatureRoutePosition(data, clockOffset) {
+    const angle = data.angle + clockOffset;
+    const wobble = Math.sin(angle * 1.7 + data.phase) * 2.6;
+    const x = data.centerX + Math.cos(angle) * data.radiusX + Math.sin(angle * 0.5 + 1.3) * wobble;
+    const z = data.centerZ + Math.sin(angle * 0.92) * data.radiusZ + Math.cos(angle * 0.62) * wobble;
+    return {
+      x,
+      z,
+      y: groundYAt(x, z) + data.hover + Math.sin(state.clock * 1.8 + data.phase) * 0.38,
+    };
+  }
+
+  function updateCreatures(dt, active) {
+    const THREE = window.THREE;
+    const player = state.player;
+    world.creatures.forEach((creature, index) => {
+      const data = creature.userData;
+      data.angle += dt * data.speed * (active ? 1 : 0.58);
+      data.bonkCooldown = Math.max(0, data.bonkCooldown - dt);
+      const next = creatureRoutePosition(data, index * 0.21);
+      const dx = next.x - (data.prevX ?? creature.position.x);
+      const dz = next.z - (data.prevZ ?? creature.position.z);
+      creature.position.set(next.x, next.y, next.z);
+      if (Math.hypot(dx, dz) > 0.001) {
+        creature.rotation.y = Math.atan2(-dx, -dz);
+      }
+      creature.rotation.x = Math.sin(state.clock * 1.4 + data.phase) * 0.05;
+      creature.rotation.z = Math.cos(state.clock * 1.7 + data.phase) * 0.08;
+      creature.children.forEach((child, childIndex) => {
+        if (child.userData.kind === "crown") child.rotation.z += dt * 4.2;
+        if (child.userData.kind === "fin") child.rotation.y = Math.sin(state.clock * 6 + childIndex) * 0.26;
+        if (child.userData.kind === "tail") child.rotation.z = Math.sin(state.clock * 5 + data.phase) * 0.32;
+      });
+      data.prevX = next.x;
+      data.prevZ = next.z;
+      const baseScale = data.baseScale || creatureBaseScale(data.type);
+      creature.scale.lerp(new THREE.Vector3(baseScale, baseScale, baseScale), Math.min(1, dt * 4));
+
+      if (!active || data.bonkCooldown > 0) return;
+      const distance = Math.hypot(creature.position.x - player.x, creature.position.z - player.z);
+      const playerSpeed = Math.hypot(player.vx, player.vz);
+      if (distance < 3.2 && playerSpeed > 8) {
+        data.bonkCooldown = 2.5;
+        creature.scale.setScalar(baseScale * 1.22);
+        const comboInfo = extendCombo("creature", 1, 3.2);
+        const score = scoreWithCombo(210);
+        addChaos(score, "Roaming microbe startled");
+        showCallout("SQUIRM!", `+${score.toLocaleString()} roaming microbe startled${comboTag(comboInfo)}`);
+        playTone("bonk", 0.9);
+      }
+    });
   }
 
   function zoneById(id) {
@@ -1764,37 +2041,37 @@
     addProp("pollen", { x: -37.5, z: -31.8 });
 
     addZoneProps("forest", [
-      ["algae", 18],
-      ["spore", 7],
-      ["cell", 8],
+      ["algae", 14],
+      ["spore", 5],
+      ["cell", 5],
       ["bacteria", 2],
     ]);
     addZoneProps("flats", [
-      ["droplet", 7],
-      ["bubble", 10],
-      ["platelet", 8],
-      ["capsule", 4],
+      ["droplet", 6],
+      ["bubble", 7],
+      ["platelet", 5],
+      ["capsule", 3],
     ]);
     addZoneProps("reef", [
-      ["bacteria", 10],
-      ["enzyme", 6],
-      ["crystal", 6],
-      ["capsule", 5],
+      ["bacteria", 8],
+      ["enzyme", 4],
+      ["crystal", 4],
+      ["capsule", 3],
     ]);
     addZoneProps("ridge", [
-      ["spore", 9],
-      ["crystal", 8],
-      ["enzyme", 4],
+      ["spore", 7],
+      ["crystal", 5],
+      ["enzyme", 3],
       ["pollen", 4],
     ]);
 
     for (let i = 0; i < 5; i++) addProp("pollen", randomPointNear(zoneById("reef"), 13));
-    for (let i = 0; i < 24; i++) addProp("algae", randomPoint(WORLD_RADIUS - 6));
-    for (let i = 0; i < 20; i++) addProp(i < 9 ? "pollen" : "cell", randomPoint(WORLD_RADIUS - 7));
-    for (let i = 0; i < 12; i++) addProp("bubble", randomPoint(WORLD_RADIUS - 7));
-    for (let i = 0; i < 10; i++) addProp("crystal", randomPoint(WORLD_RADIUS - 8));
-    for (let i = 0; i < 10; i++) addProp("capsule", randomPoint(WORLD_RADIUS - 7));
-    for (let i = 0; i < 6; i++) addProp("droplet", randomPoint(WORLD_RADIUS - 8));
+    for (let i = 0; i < 16; i++) addProp("algae", randomPoint(WORLD_RADIUS - 8));
+    for (let i = 0; i < 13; i++) addProp(i < 6 ? "pollen" : "cell", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < 8; i++) addProp("bubble", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < 7; i++) addProp("crystal", randomPoint(WORLD_RADIUS - 10));
+    for (let i = 0; i < 7; i++) addProp("capsule", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < 4; i++) addProp("droplet", randomPoint(WORLD_RADIUS - 10));
   }
 
   function addProp(type, point) {
@@ -2411,6 +2688,7 @@
     updateInputMovement(dt);
     updateTraversalToys(dt, true);
     updateHiddenLandmarks(dt, true);
+    updateCreatures(dt, true);
     updateProps(dt);
     updateZoneAwareness(dt);
     updateGoals();
@@ -2444,6 +2722,7 @@
     updatePlayerTransform(dt);
     updateTraversalToys(dt, false);
     updateHiddenLandmarks(dt, false);
+    updateCreatures(dt, false);
     updateDrift(dt);
     updateEffects(dt);
     updateCallout(dt);
@@ -3364,7 +3643,7 @@
     const localX = dx * rightX + dz * rightZ;
     const localY = dx * forwardX + dz * forwardZ;
     const radarRadius = 52;
-    const visibleWorldRadius = 58;
+    const visibleWorldRadius = WORLD_RADIUS * 0.7;
     const rawX = localX * (radarRadius / visibleWorldRadius);
     const rawY = -localY * (radarRadius / visibleWorldRadius);
     const distance = Math.hypot(rawX, rawY);

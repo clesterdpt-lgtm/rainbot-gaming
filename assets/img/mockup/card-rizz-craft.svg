@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" role="img" aria-labelledby="title desc">
+  <title id="title">Rizz-Craft poster art</title>
+  <desc id="desc">Blocky Minecraft-style parody landscape with grass and stone layers, glowing ores, and a Skibidi Toilet mob at night.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1030"/>
+      <stop offset="0.55" stop-color="#1b2b66"/>
+      <stop offset="1" stop-color="#3a6db0"/>
+    </linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fe05f"/>
+      <stop offset="1" stop-color="#4fb547"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fdfbe7"/>
+      <stop offset="1" stop-color="#d3d8c4"/>
+    </radialGradient>
+    <pattern id="dirt" width="30" height="30" patternUnits="userSpaceOnUse">
+      <rect width="30" height="30" fill="#8a623c"/>
+      <rect x="4" y="6" width="6" height="6" fill="#6e4d2e"/>
+      <rect x="18" y="16" width="6" height="6" fill="#6e4d2e"/>
+      <rect x="10" y="22" width="5" height="5" fill="#9a724a"/>
+    </pattern>
+    <pattern id="stone" width="30" height="30" patternUnits="userSpaceOnUse">
+      <rect width="30" height="30" fill="#83838f"/>
+      <rect x="3" y="4" width="7" height="7" fill="#6d6d7d"/>
+      <rect x="19" y="14" width="6" height="6" fill="#6d6d7d"/>
+      <rect x="11" y="21" width="6" height="6" fill="#9a9aa6"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- sky -->
+  <rect width="900" height="620" fill="url(#sky)"/>
+  <!-- stars -->
+  <g fill="#ffffff" opacity="0.85">
+    <rect x="70" y="60" width="4" height="4"/><rect x="160" y="110" width="3" height="3"/>
+    <rect x="250" y="50" width="4" height="4"/><rect x="360" y="130" width="3" height="3"/>
+    <rect x="520" y="70" width="3" height="3"/><rect x="610" y="120" width="4" height="4"/>
+    <rect x="700" y="60" width="3" height="3"/><rect x="820" y="100" width="4" height="4"/>
+    <rect x="120" y="170" width="3" height="3"/><rect x="470" y="40" width="3" height="3"/>
+  </g>
+  <!-- pixel moon -->
+  <g>
+    <rect x="690" y="70" width="96" height="96" rx="10" fill="url(#moon)"/>
+    <rect x="710" y="95" width="16" height="16" fill="#c4cab2"/>
+    <rect x="748" y="118" width="20" height="20" fill="#c4cab2"/>
+    <rect x="724" y="132" width="12" height="12" fill="#c4cab2"/>
+  </g>
+
+  <!-- blocky background hills -->
+  <g fill="#16331f">
+    <rect x="0" y="300" width="120" height="320"/>
+    <rect x="120" y="270" width="120" height="350"/>
+    <rect x="240" y="320" width="120" height="300"/>
+  </g>
+
+  <!-- terrain cross-section -->
+  <!-- grass top layer -->
+  <rect x="0" y="360" width="900" height="40" fill="url(#grass)"/>
+  <rect x="0" y="392" width="900" height="8" fill="#3f9a3a"/>
+  <!-- dirt -->
+  <rect x="0" y="400" width="900" height="90" fill="url(#dirt)"/>
+  <!-- stone -->
+  <rect x="0" y="490" width="900" height="130" fill="url(#stone)"/>
+
+  <!-- ores embedded in stone -->
+  <!-- coal -->
+  <g>
+    <rect x="120" y="520" width="40" height="40" fill="#6d6d7d"/>
+    <rect x="128" y="528" width="10" height="10" fill="#23232b"/>
+    <rect x="144" y="540" width="9" height="9" fill="#23232b"/>
+  </g>
+  <!-- rizz (gold) -->
+  <g filter="url(#glow)">
+    <rect x="360" y="556" width="40" height="40" fill="#6d6d7d"/>
+    <rect x="368" y="564" width="11" height="11" fill="#ffcf3a"/>
+    <rect x="384" y="578" width="9" height="9" fill="#ffcf3a"/>
+  </g>
+  <!-- sigma (diamond) -->
+  <g filter="url(#glow)">
+    <rect x="660" y="528" width="44" height="44" fill="#6d6d7d"/>
+    <rect x="670" y="538" width="12" height="12" fill="#46e8ff"/>
+    <rect x="686" y="552" width="10" height="10" fill="#46e8ff"/>
+  </g>
+
+  <!-- a Skibidi Log tree -->
+  <g>
+    <rect x="120" y="270" width="34" height="92" fill="#7a5230"/>
+    <rect x="129" y="270" width="6" height="92" fill="#4f3620"/>
+    <g fill="#3fae46">
+      <rect x="84" y="222" width="108" height="40"/>
+      <rect x="100" y="194" width="76" height="34"/>
+    </g>
+    <rect x="112" y="232" width="14" height="14" fill="#58c95f"/>
+    <rect x="150" y="208" width="14" height="14" fill="#58c95f"/>
+  </g>
+
+  <!-- Skibidi Toilet mob on the grass -->
+  <g>
+    <!-- bowl -->
+    <rect x="470" y="300" width="120" height="64" rx="14" fill="#eef2f6"/>
+    <!-- lid -->
+    <rect x="462" y="262" width="136" height="48" rx="14" fill="#cfd6dd"/>
+    <!-- eyes -->
+    <rect x="498" y="316" width="16" height="22" fill="#05070d"/>
+    <rect x="548" y="316" width="16" height="22" fill="#05070d"/>
+    <!-- mouth -->
+    <rect x="500" y="348" width="60" height="9" fill="#b5202f"/>
+  </g>
+
+  <!-- pickaxe planted in the grass (right) -->
+  <g transform="rotate(18 770 330)">
+    <rect x="760" y="300" width="14" height="120" fill="#7a5230"/>
+    <path d="M716 296 q54 -30 108 0 q-54 -16 -108 0 z" fill="#46e8ff"/>
+    <rect x="744" y="290" width="56" height="14" rx="4" fill="#9aa3ad"/>
+  </g>
+
+  <!-- floating torches for vibe -->
+  <g filter="url(#glow)">
+    <rect x="300" y="318" width="10" height="34" fill="#7a5230"/>
+    <circle cx="305" cy="312" r="12" fill="#ff8a1e"/>
+    <circle cx="305" cy="309" r="6" fill="#ffd43b"/>
+  </g>
+</svg>

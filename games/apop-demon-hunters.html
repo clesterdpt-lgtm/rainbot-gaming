@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>A-Pop Demon Hunters — Rainbot Gaming</title>
-  <meta name="description" content="Pop stars vs. demon elites. A beat-based action RPG parody. Sync attacks to the beat. Defeat Lavish Larry." />
+  <title>Apop Demon Moggers — Rainbot Gaming</title>
+  <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A 2D side-scroller parody — run, jump, and blast a demon boy band back to the group chat. Disband Boyz II Hell." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-4" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260613-6" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -15,8 +15,8 @@
   <main class="game-page">
     <div class="game-page__header">
       <div>
-        <h1 class="game-page__title">🎤 A-Pop Demon Hunters</h1>
-        <div class="game-page__sub">Pop stars vs. demon elites · Sync attacks to the beat · Defeat Lavish Larry</div>
+        <h1 class="game-page__title">🎤 Apop Demon Moggers</h1>
+        <div class="game-page__sub">Run-and-gun pop parody · Mog demons off the charts · Disband Boyz II Hell</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -34,15 +34,29 @@
         <div class="canvas-wrap canvas-wrap--ar-750-500">
           <canvas id="gameCanvas" width="750" height="500" tabindex="0"></canvas>
 
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="touch-pad" aria-label="Touch controls">
+            <!-- Left thumb: invisible joystick — push to run, up to aim up, down to crouch -->
+            <div class="touch-pad__side touch-pad__side--move">
+              <div class="joystick" id="joystick" role="button" aria-label="Move, aim up, crouch"></div>
+            </div>
+            <!-- Right thumb: jump + attacks -->
+            <div class="touch-pad__side touch-pad__side--right">
+              <button class="touch-btn touch-btn--aura" id="btn-special" type="button" aria-label="Mog Aura">💅</button>
+              <button class="touch-btn touch-btn--jump" id="btn-jump" type="button" aria-label="Jump">↑</button>
+              <button class="touch-btn touch-btn--beam" id="btn-mog" type="button" aria-label="Mog Beam">BEAM</button>
+            </div>
+          </div>
+
           <div class="overlay overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">🎤 A-POP DEMON HUNTERS</h2>
+            <h2 class="overlay__title" id="overlay-title">🎤 APOP DEMON MOGGERS</h2>
             <p class="overlay__sub" id="overlay-sub">
-              America fought back. The demon elite didn't see it coming.
+              K-pop had demon <em>hunters</em>. America has demon <strong>MOGGERS</strong>.
               <br><br>
-              You play as <strong>The Diva</strong>. Sync your mic swings to the beat.
-              Slay your way up Madison Ave, into a hedge-fund penthouse, through a private-equity nightmare dimension.
-              <br><br>
-              <strong>Final boss: Lavish Larry, Demon of Endless Foreclosure.</strong>
+              Play <strong>Moggadonna</strong>'s frontwoman: run, jump, and blast a demon boy band
+              off the charts — then disband <strong>Boyz II Hell</strong> and out-mog
+              <strong>Lucifer Lipsync</strong>.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Take the stage</button>
@@ -53,24 +67,24 @@
 
       <aside class="game-side">
         <div class="game-side__panel">
+          <img class="game-side__poster game-side__poster--wide" src="../assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5" alt="Apop Demon Moggers updated cartoon poster art" />
+        </div>
+
+        <div class="game-side__panel">
           <h3 class="game-side__title">CONTROLS</h3>
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
-            <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>W</kbd>/<kbd>S</kbd> · lanes<br>
-            <kbd>Z</kbd> · swing mic (on beat = 2×)<br>
-            <kbd>X</kbd> · surprise album drop (5 combo)
+            <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> · run<br>
+            <kbd>↑</kbd>/<kbd>W</kbd> · aim up · <kbd>↓</kbd>/<kbd>S</kbd> · crouch<br>
+            <kbd>Space</kbd> · jump (tap again = double jump)<br>
+            <kbd>Z</kbd>/<kbd>J</kbd> · Mog Beam (on beat = bonus)<br>
+            <kbd>X</kbd>/<kbd>K</kbd> · Mog Aura (when meter is full)<br>
+            <kbd>⛶</kbd> top-right · max screen<br>
+            <span style="opacity:0.8;">Touch: left stick runs / aims up / crouches · jump &amp; blast on the right</span>
           </p>
-          <div class="mobile-controls" aria-label="Mobile controls">
-            <div class="mobile-controls__grid">
-              <button class="btn btn--secondary" id="btn-lane-up" type="button">Lane Up</button>
-              <button class="btn btn--secondary" id="btn-lane-down" type="button">Lane Down</button>
-              <button class="btn btn--primary" id="btn-attack" type="button">Swing</button>
-              <button class="btn btn--yellow" id="btn-special" type="button">Album Drop</button>
-            </div>
-          </div>
         </div>
 
         <div class="game-side__panel">
@@ -84,14 +98,15 @@
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Move</strong> between 4 lanes with ↑/↓ or W/S.</li>
-            <li><strong style="color:var(--ink);">Press Z</strong> to swing your mic. When the beat circle pulses green, hit Z for <strong style="color:var(--accent-3);">2× damage</strong>.</li>
-            <li><strong style="color:var(--ink);">Build a combo</strong> by chaining hits. X drops a nuke (5 combo, damages all elites).</li>
-            <li><strong style="color:var(--ink);">Survive 3 stages.</strong> Stage 3 is boss vs Lavish Larry (3 phases).</li>
-            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Crowd Surf (5s inv), Power Note (2× dmg 8s), Smash Hit (30 dmg all).</li>
+            <li><strong style="color:var(--ink);">Run</strong> with ←/→ (or A/D). <strong style="color:var(--ink);">Jump</strong> with Space — tap again mid-air for a double jump.</li>
+            <li><strong style="color:var(--ink);">Aim up</strong> with ↑/W to blast flying demons; <strong style="color:var(--ink);">crouch</strong> with ↓/S to duck under projectiles. On touch, the left stick does all four.</li>
+            <li><strong style="color:var(--ink);">Press Z/J</strong> to fire your Mog Beam. Fire when the beat dot flashes <strong style="color:var(--accent-3);">green</strong> for bonus damage.</li>
+            <li><strong style="color:var(--ink);">Mog demons</strong> to build your MOG meter. When it's full, press X/K for a screen-clearing <strong style="color:var(--accent);">Mog Aura</strong>.</li>
+            <li><strong style="color:var(--ink);">Reach the EXIT flag</strong> to clear stages 1–2. Stage 3 is the boss: Lucifer Lipsync (3 phases).</li>
+            <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Crowd Surf (6s invincible), Power Note (2× damage 8s), Encore Blast (wipe demons on screen).</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
-            <strong>Parody.</strong> A-Pop Demon Hunters is fictional. All characters are parodies of internet culture and pop-star tropes. Not based on any real person or organization.
+            <strong>Parody.</strong> Apop Demon Moggers is fictional satire of American pop culture and internet "mogging" slang. The demon "boy band" and every character are invented parodies — not based on any real person, group, or organization.
           </p>
         </details>
       </aside>
@@ -110,7 +125,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/apop-demon-hunters.js?v=20260612-4"></script>
+  <script src="../assets/js/apop-demon-hunters.js?v=20260613-6"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

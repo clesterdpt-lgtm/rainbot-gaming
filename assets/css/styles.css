@@ -624,6 +624,17 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   border-radius: 8px;
   padding: 12px 14px;
 }
+.game-side__poster {
+  aspect-ratio: 1200 / 827;
+  border: 2px solid var(--panel-2);
+  border-radius: 8px;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+.game-side__poster--wide {
+  aspect-ratio: 1116 / 488;
+}
 .game-side__title {
   font-family: var(--font-display);
   font-size: 14px; letter-spacing: 1px;
@@ -703,6 +714,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; --game-max-width: 650px; }   /* looksmaxxing */
 .canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
 .canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
+.canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -937,6 +949,150 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .mobile-controls__dpad button[data-mobile-dir="down"],
 .mobile-controls__dpad button[data-gym-dir="down"] { grid-column: 2; grid-row: 3; }
 .mobile-controls__dpad button[data-gym-hold="eyes"] { grid-column: 2; grid-row: 2; }
+
+/* ===== On-screen touch pad (canvas overlay) ===== */
+.touch-pad {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: none;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 6px 10px 10px;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.touch-pad__side {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.48);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 0.08s, transform 0.08s;
+}
+
+.touch-btn:active {
+  filter: brightness(1.5);
+  transform: scale(0.93);
+}
+
+.touch-btn--jump {
+  background: rgba(46, 224, 255, 0.35);
+  border-color: rgba(46, 224, 255, 0.65);
+}
+
+.touch-btn--beam {
+  background: rgba(236, 26, 94, 0.5);
+  border-color: rgba(236, 26, 94, 0.85);
+  width: 64px;
+  height: 64px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.touch-btn--aura {
+  background: rgba(247, 215, 22, 0.4);
+  border-color: rgba(247, 215, 22, 0.75);
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 22px;
+}
+
+/* Invisible joystick — left thumb: push to run, up to aim up, down to crouch */
+.touch-pad__side--move {
+  gap: 0;
+  align-items: flex-end;
+}
+.joystick {
+  width: 150px;
+  height: 160px;
+  max-height: 60vh;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Max-screen (fullscreen) toggle */
+.fs-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s, transform 0.08s;
+}
+.fs-btn:hover { background: rgba(0, 0, 0, 0.72); }
+.fs-btn:active { transform: scale(0.92); }
+
+/* Maximized canvas (pseudo-fullscreen; pairs with native Fullscreen API when available) */
+.canvas-wrap.is-maxed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #05010a;
+  z-index: 9999;
+}
+.canvas-wrap.is-maxed #gameCanvas {
+  width: min(100vw, 150vh);
+  height: auto;
+  max-height: 100vh;
+  aspect-ratio: 750 / 500;
+  border: none;
+  border-radius: 0;
+}
+.canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
+.canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }
+.canvas-wrap.is-maxed .touch-btn--beam { width: 88px; height: 88px; }
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-pad {
+    display: flex;
+  }
+}
 
 @media (max-width: 900px) {
   .game-page,
@@ -2139,7 +2295,11 @@ body.arcade-home::before {
 }
 
 .poster-card--doorcrash img,
-.directory-card__poster--doorcrash img {
+.directory-card__poster--doorcrash img,
+.poster-card--tardigrade img,
+.directory-card__poster--tardigrade img,
+.poster-card--apop img,
+.directory-card__poster--apop img {
   object-fit: cover;
   filter: saturate(1.12) contrast(1.05);
 }
@@ -2154,7 +2314,11 @@ body.arcade-home::before {
 }
 
 .poster-card--doorcrash::before,
-.directory-card__poster--doorcrash::before {
+.directory-card__poster--doorcrash::before,
+.poster-card--tardigrade::before,
+.directory-card__poster--tardigrade::before,
+.poster-card--apop::before,
+.directory-card__poster--apop::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;

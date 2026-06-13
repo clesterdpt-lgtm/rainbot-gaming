@@ -23,15 +23,17 @@
   // =========================================================================
   // 1. TUNING
   // =========================================================================
-  const GRAVITY        = 0.085;   // downward accel (px/frame²) at level 1
-  const THRUST         = 0.22;    // accel along the nose while burning
-  const ROT_SPEED      = 0.052;   // radians/frame while rotating
-  const ROT_DAMP       = 0.86;    // angular drag when not steering
-  const SAFE_VY        = 2.6;     // max vertical speed for a clean touchdown
-  const SAFE_VX        = 1.9;     // max sideways speed for a clean touchdown
-  const SAFE_ANGLE     = 0.30;    // max tilt (radians ~17°) for a clean touchdown
-  const FUEL_BURN      = 0.6;     // fuel units per frame of thrust
-  const BASE_FUEL      = 210;     // starting fuel (level 1)
+  const GRAVITY        = 0.072;   // downward accel (px/frame²) at level 1
+  const THRUST         = 0.15;    // accel along the nose while burning
+  const ROT_SPEED      = 0.030;   // radians/frame while rotating
+  const ROT_DAMP       = 0.78;    // angular drag when not steering (lower = settles faster)
+  const MAX_VX         = 4.2;     // sideways speed cap — keeps drift controllable
+  const MAX_VY         = 7.5;     // vertical speed cap (both directions)
+  const SAFE_VY        = 2.8;     // max vertical speed for a clean touchdown
+  const SAFE_VX        = 2.1;     // max sideways speed for a clean touchdown
+  const SAFE_ANGLE     = 0.32;    // max tilt (radians ~18°) for a clean touchdown
+  const FUEL_BURN      = 0.45;    // fuel units per frame of thrust
+  const BASE_FUEL      = 230;     // starting fuel (level 1)
   const ROCKET_W       = 18;
   const ROCKET_H       = 40;
 
@@ -300,6 +302,10 @@
 
     // Gravity (suppressed while resting on the launch pad)
     if (!r.onPad) r.vy += g;
+
+    // Speed caps keep the rocket controllable instead of zippy
+    r.vx = clamp(r.vx, -MAX_VX, MAX_VX);
+    r.vy = clamp(r.vy, -MAX_VY, MAX_VY);
 
     r.x += r.vx;
     r.y += r.vy;

@@ -2148,7 +2148,9 @@ body.arcade-home::before {
 }
 
 .poster-card--doorcrash img,
-.directory-card__poster--doorcrash img {
+.directory-card__poster--doorcrash img,
+.poster-card--tardigrade img,
+.directory-card__poster--tardigrade img {
   object-fit: cover;
   filter: saturate(1.12) contrast(1.05);
 }
@@ -2163,7 +2165,9 @@ body.arcade-home::before {
 }
 
 .poster-card--doorcrash::before,
-.directory-card__poster--doorcrash::before {
+.directory-card__poster--doorcrash::before,
+.poster-card--tardigrade::before,
+.directory-card__poster--tardigrade::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;

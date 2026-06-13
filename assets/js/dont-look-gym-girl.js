@@ -69,6 +69,13 @@
 
   const DOOR_Y0 = 250, DOOR_Y1 = 390;   // door bands on both walls
 
+  const WORLD_SCALE_X = 2.0;
+  const WORLD_SCALE_Y = 2.0;
+  const WORLD_W = W * WORLD_SCALE_X; // 1280
+  const WORLD_H = H * WORLD_SCALE_Y; // 1280
+  const WORLD_DOOR_Y0 = DOOR_Y0 * WORLD_SCALE_Y; // 500
+  const WORLD_DOOR_Y1 = DOOR_Y1 * WORLD_SCALE_Y; // 780
+
   // =========================================================================
   // 2. GIRL ARCHETYPES
   // =========================================================================
@@ -340,7 +347,7 @@
 
     bustReason: null,   // "sus" | "caught" | "blindbump"
 
-    cam: { shake: 0, flash: 0 },
+    cam: { x: 0, y: 0, shake: 0, flash: 0 },
     t: 0,
     lastTime: 0
   };
@@ -708,8 +715,8 @@
     p.dirY = dy;
     p.eyesClosed = !!keys[" "] || !!state.touchEyesClosed;
 
-    const mdx = mouseCanvasX - p.x;
-    const mdy = mouseCanvasY - p.y;
+    const mdx = (mouseCanvasX + state.cam.x) - p.x;
+    const mdy = (mouseCanvasY + state.cam.y) - p.y;
     if (mdx !== 0 || mdy !== 0) p.desired = Math.atan2(mdy, mdx);
   }
 
@@ -965,14 +972,14 @@
     const ny = p.y + p.dirY * speed * dt;
     if (!collidesAny(p.x, ny, PLAYER_RADIUS)) p.y = ny;
 
-    p.x = clamp(p.x, PLAYER_RADIUS, W - PLAYER_RADIUS);
-    p.y = clamp(p.y, PLAYER_RADIUS, H - PLAYER_RADIUS);
+    p.x = clamp(p.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
+    p.y = clamp(p.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
   }
 
   function checkLevelProgress() {
     const p = state.player;
     // The locker room door: right wall, center band only
-    if (p.x >= W - 22 && p.y >= DOOR_Y0 && p.y <= DOOR_Y1) {
+    if (p.x >= WORLD_W - 22 && p.y >= WORLD_DOOR_Y0 && p.y <= WORLD_DOOR_Y1) {
       // Level score: speed + clean eyes
       const timeBonus = Math.max(0, Math.round(500 - state.levelT * 22));
       const cleanBonus = state.levelPeakSus < 30 ? 250 : state.levelPeakSus < 60 ? 100 : 0;
@@ -1050,7 +1057,7 @@
       RB.toast("👔 'I'm her boyfriend.' Untouchable for 5s.", "good");
     } else if (key === "decoy") {
       const target = choice(DECOY_TARGETS);
-      state.decoy = { x: target.x, y: target.y, life: 2.5, maxLife: 2.5 };
+      state.decoy = { x: target.x * WORLD_SCALE_X, y: target.y * WORLD_SCALE_Y, life: 2.5, maxLife: 2.5 };
       RB.toast("🎭 Someone dropped a 405 deadlift. Everyone turns.", "good");
     }
     updatePowerButtons();
@@ -1092,14 +1099,37 @@
   // =========================================================================
   function loadLevel(n) {
     const lv = LEVELS[n - 1];
-    state.obstacles = lv.obstacles;
-    state.girls = lv.girls.map(def => makeGirl(def, lv));
+    
+    // Scale obstacles dynamically
+    state.obstacles = lv.obstacles.map(o => ({
+      x: o.x * WORLD_SCALE_X,
+      y: o.y * WORLD_SCALE_Y,
+      w: o.w * 1.5,
+      h: o.h * 1.5,
+      kind: o.kind
+    }));
+    
+    // Scale girls dynamically
+    state.girls = lv.girls.map(def => {
+      const scaledDef = { ...def };
+      if (def.x !== undefined) scaledDef.x = def.x * WORLD_SCALE_X;
+      if (def.y !== undefined) scaledDef.y = def.y * WORLD_SCALE_Y;
+      if (def.path) {
+        scaledDef.path = def.path.map(pt => [pt[0] * WORLD_SCALE_X, pt[1] * WORLD_SCALE_Y]);
+      }
+      return makeGirl(scaledDef, lv);
+    });
+
     state.player.x = 36;
-    state.player.y = 320;
+    state.player.y = 320 * WORLD_SCALE_Y;
     state.levelT = 0;
     state.levelPeakSus = 0;
     state.sus = Math.max(0, state.sus - 40);  // partial mercy between levels
     state.decoy = null;
+
+    // Reset camera position
+    state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
+    state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
   }
 
   function startGame() {
@@ -1156,9 +1186,17 @@
     state.boyfriendT = 0;
     state.decoy = null;
     state.girls = [];
-    state.obstacles = LEVELS[0].obstacles;
+    state.obstacles = LEVELS[0].obstacles.map(o => ({
+      x: o.x * WORLD_SCALE_X,
+      y: o.y * WORLD_SCALE_Y,
+      w: o.w * 1.5,
+      h: o.h * 1.5,
+      kind: o.kind
+    }));
     state.player.x = 36;
-    state.player.y = 320;
+    state.player.y = 320 * WORLD_SCALE_Y;
+    state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
+    state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
     state.t = 0;
   }
 
@@ -1234,33 +1272,33 @@
   // =========================================================================
   function drawGymFloor() {
     ctx.fillStyle = "#1a1a24";
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
     ctx.strokeStyle = "rgba(255,255,255,0.04)";
     ctx.lineWidth = 1;
     const tile = 40;
-    for (let x = 0; x <= W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y <= H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    for (let x = 0; x <= WORLD_W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke(); }
+    for (let y = 0; y <= WORLD_H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke(); }
 
     // Front door (left, center band)
     ctx.fillStyle = "#2a3a2a";
-    ctx.fillRect(0, DOOR_Y0, 16, DOOR_Y1 - DOOR_Y0);
+    ctx.fillRect(0, WORLD_DOOR_Y0, 16, WORLD_DOOR_Y1 - WORLD_DOOR_Y0);
     ctx.fillStyle = "#4dff7d";
     ctx.font = "11px JetBrains Mono, monospace";
     ctx.textAlign = "left";
-    ctx.fillText("FRONT", 4, DOOR_Y0 - 8);
-    ctx.fillText("DOOR", 4, DOOR_Y1 + 16);
+    ctx.fillText("FRONT", 4, WORLD_DOOR_Y0 - 8);
+    ctx.fillText("DOOR", 4, WORLD_DOOR_Y1 + 16);
 
     // Locker room (right, center band) — pulsing arrow
     ctx.fillStyle = "#3a2a3a";
-    ctx.fillRect(W - 16, DOOR_Y0, 16, DOOR_Y1 - DOOR_Y0);
+    ctx.fillRect(WORLD_W - 16, WORLD_DOOR_Y0, 16, WORLD_DOOR_Y1 - WORLD_DOOR_Y0);
     ctx.fillStyle = "#ff7ddf";
     ctx.textAlign = "right";
-    ctx.fillText("LOCKER", W - 4, DOOR_Y0 - 8);
-    ctx.fillText("ROOM", W - 4, DOOR_Y1 + 16);
+    ctx.fillText("LOCKER", WORLD_W - 4, WORLD_DOOR_Y0 - 8);
+    ctx.fillText("ROOM", WORLD_W - 4, WORLD_DOOR_Y1 + 16);
     const pulse = 0.5 + 0.5 * Math.sin(state.t * 4);
     ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
     ctx.font = "18px Arial";
-    ctx.fillText("→", W - 22, 326);
+    ctx.fillText("→", WORLD_W - 22, (WORLD_DOOR_Y0 + WORLD_DOOR_Y1) / 2 + 6);
   }
 
   function drawObstacles() {
@@ -1532,7 +1570,9 @@
     if (!state.player.eyesClosed) return;
     const p = state.player;
     ctx.save();
-    const grad = ctx.createRadialGradient(p.x, p.y, 30, p.x, p.y, 110);
+    const sx = p.x - state.cam.x;
+    const sy = p.y - state.cam.y;
+    const grad = ctx.createRadialGradient(sx, sy, 30, sx, sy, 110);
     grad.addColorStop(0, "rgba(0,0,0,0.55)");
     grad.addColorStop(1, "rgba(0,0,0,0.96)");
     ctx.fillStyle = grad;
@@ -1569,7 +1609,7 @@
     const lvEl = document.getElementById("hud-level");
     if (lvEl) lvEl.textContent = state.level + "/" + LEVELS.length;
     const distEl = document.getElementById("hud-dist");
-    if (distEl) distEl.textContent = Math.floor((state.player.x / W) * 100) + "%";
+    if (distEl) distEl.textContent = Math.floor((state.player.x / WORLD_W) * 100) + "%";
     const scoreEl = document.getElementById("hud-score");
     if (scoreEl) scoreEl.textContent = state.score;
     const highEl = document.getElementById("hud-high");
@@ -1585,6 +1625,8 @@
     ctx.save();
     ctx.translate(sx, sy);
 
+    ctx.save();
+    ctx.translate(-state.cam.x, -state.cam.y);
     drawGymFloor();
     drawObstacles();
     for (const g of state.girls) drawGirlCone(g);
@@ -1592,6 +1634,8 @@
     for (const g of state.girls) drawGirl(g);
     drawGazeCone();
     drawPlayer();
+    ctx.restore();
+
     drawDarkness();
 
     if (state.cam.flash > 0) {
@@ -1615,6 +1659,8 @@
       state.levelT += dt;
       readInput();
       updatePlayer(dt);
+      state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
+      state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
       updateGaze(dt);
       const lv = LEVELS[state.level - 1];
       for (const g of state.girls) updateGirl(g, lv, dt);
@@ -1671,7 +1717,13 @@
   // 18. BOOT
   // =========================================================================
   function init() {
-    state.obstacles = LEVELS[0].obstacles;
+    state.obstacles = LEVELS[0].obstacles.map(o => ({
+      x: o.x * WORLD_SCALE_X,
+      y: o.y * WORLD_SCALE_Y,
+      w: o.w * 1.5,
+      h: o.h * 1.5,
+      kind: o.kind
+    }));
     requestAnimationFrame(loop);
     document.getElementById("btn-primary").addEventListener("click", () => { ensureAudio(); startGame(); });
     document.getElementById("btn-pause").addEventListener("click", () => {

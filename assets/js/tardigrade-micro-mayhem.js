@@ -182,6 +182,65 @@
     { id: "zones", title: "Tour Zones", target: SANDBOX_ZONES.length, progress: () => state.zonesVisited.size },
   ];
 
+  const STORE_STORAGE_KEY = `${GAME_ID}:micro-store-v1`;
+  const STARTER_STORE_GEL = 900;
+  const STORE_ITEMS = [
+    { id: "skin-classic", name: "Classic Squish", slot: "skin", cost: 0, icon: "CL", ownedDefault: true, description: "Original tan water-bear softness." },
+    { id: "skin-mint", name: "Mint Moss Suit", slot: "skin", cost: 450, icon: "MT", description: "Fresh chlorophyll drip for algae royalty." },
+    { id: "skin-bubblegum", name: "Bubblegum Blush", slot: "skin", cost: 650, icon: "PK", description: "Pink, shiny, and completely unscientific." },
+    { id: "skin-starry", name: "Deep Dish Starcoat", slot: "skin", cost: 850, icon: "ST", description: "Midnight purple with suspicious sparkle energy." },
+    { id: "hat-party", name: "Party Cone", slot: "head", cost: 250, icon: "PH", description: "For formal lab accidents." },
+    { id: "hat-crown", name: "Tiny Crown", slot: "head", cost: 900, icon: "CR", description: "Announces microscopic authority." },
+    { id: "face-goggles", name: "Lab Goggles", slot: "face", cost: 550, icon: "GG", description: "Safety first. Chaos immediately after." },
+    { id: "back-flag", name: "Snack Flag", slot: "back", cost: 400, icon: "FL", description: "A flag for claiming moist territory." },
+    { id: "back-pizza", name: "Pizza Saddle", slot: "back", cost: 700, icon: "PZ", description: "Extra cheese, extra life choices." },
+    { id: "back-rocket", name: "Bottle Rockets", slot: "back", cost: 1100, icon: "RK", description: "Not propulsion. Definitely vibes." },
+    { id: "trail-confetti", name: "Confetti Trail", slot: "trail", cost: 600, icon: "CF", description: "Leaves little celebration bits while you scuttle." },
+  ];
+  const STORE_ITEM_BY_ID = new Map(STORE_ITEMS.map((item) => [item.id, item]));
+  const STORE_SKINS = {
+    "skin-classic": ["tardigradeBelly", "tardigradeA", "tardigradeA", "tardigradeA", "tardigradeB", "tardigradeB"],
+    "skin-mint": ["storeMintLight", "storeMint", "storeMint", "storeMint", "storeMoss", "storeMoss"],
+    "skin-bubblegum": ["storePinkLight", "storePink", "storePink", "storePink", "storeBerry", "storeBerry"],
+    "skin-starry": ["storeStarLight", "storeStar", "storeStar", "storeStar", "storeNight", "storeNight"],
+  };
+
+  function defaultStoreState() {
+    return {
+      coins: STARTER_STORE_GEL,
+      owned: new Set(STORE_ITEMS.filter((item) => item.ownedDefault).map((item) => item.id)),
+      equipped: { skin: "skin-classic", head: "", face: "", back: "", trail: "" },
+      open: false,
+      wasPaused: false,
+      trailTimer: 0,
+    };
+  }
+
+  function loadStoreState() {
+    const defaults = defaultStoreState();
+    try {
+      const raw = window.localStorage && window.localStorage.getItem(STORE_STORAGE_KEY);
+      if (!raw) return defaults;
+      const saved = JSON.parse(raw);
+      const owned = new Set(Array.isArray(saved.owned) ? saved.owned.filter((id) => STORE_ITEM_BY_ID.has(id)) : []);
+      STORE_ITEMS.forEach((item) => {
+        if (item.ownedDefault) owned.add(item.id);
+      });
+      const equipped = { ...defaults.equipped, ...(saved.equipped || {}) };
+      Object.keys(equipped).forEach((slot) => {
+        if (equipped[slot] && !owned.has(equipped[slot])) equipped[slot] = slot === "skin" ? "skin-classic" : "";
+      });
+      return {
+        ...defaults,
+        coins: Number.isFinite(saved.coins) ? Math.max(0, Math.floor(saved.coins)) : defaults.coins,
+        owned,
+        equipped,
+      };
+    } catch (error) {
+      return defaults;
+    }
+  }
+
   const $ = (id) => document.getElementById(id);
   const canvas = $("gameCanvas");
   const el = {
@@ -192,6 +251,12 @@
     primary: $("btn-primary"),
     pause: $("btn-pause"),
     restart: $("btn-restart"),
+    store: $("btn-store"),
+    storeModal: $("micro-store"),
+    storeItems: $("store-items"),
+    storeWallet: $("store-wallet"),
+    storeWalletChip: $("store-wallet-chip"),
+    storeClose: $("btn-store-close"),
     forward: $("btn-forward"),
     back: $("btn-back"),
     left: $("btn-left"),
@@ -309,6 +374,7 @@
     desiccationActive: false,
     curlHeld: false,
     reducedMotion: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    store: loadStoreState(),
     player: {
       x: 0,
       y: GROUND_Y,
@@ -357,6 +423,7 @@
     traversalToys: [],
     landmarks: [],
     plateauObstacles: [],
+    cosmeticRoot: null,
     ring: null,
     ringCore: null,
     guide: null,
@@ -567,6 +634,7 @@
     resetGame(false);
     resize();
     updateHUD();
+    syncStoreUi();
 
     world.resizeObserver = new ResizeObserver(resize);
     world.resizeObserver.observe(canvas.parentElement || canvas);
@@ -645,6 +713,22 @@
       claw: mat(0xf7fbff, { roughness: 0.52 }),
       eye: mat(0x05070d, { roughness: 0.4 }),
       eyeGlint: mat(0xf8fbff, { roughness: 0.25, emissive: 0x90eaff, emissiveIntensity: 0.45 }),
+      storeMintLight: mat(0xd5ffd0, { roughness: 0.64, emissive: 0x153b0a, emissiveIntensity: 0.12 }),
+      storeMint: mat(0x7be85d, { roughness: 0.62, emissive: 0x16450b, emissiveIntensity: 0.16 }),
+      storeMoss: mat(0x3f9f42, { roughness: 0.72, emissive: 0x0c2f08, emissiveIntensity: 0.14 }),
+      storePinkLight: mat(0xffd2e7, { roughness: 0.6, emissive: 0x4f1430, emissiveIntensity: 0.12 }),
+      storePink: mat(0xff7abf, { roughness: 0.62, emissive: 0x5b163b, emissiveIntensity: 0.18 }),
+      storeBerry: mat(0xc84c9f, { roughness: 0.68, emissive: 0x3b0d2d, emissiveIntensity: 0.2 }),
+      storeStarLight: mat(0x9edcff, { roughness: 0.54, emissive: 0x0f4865, emissiveIntensity: 0.24 }),
+      storeStar: mat(0x635bff, { roughness: 0.58, emissive: 0x15106a, emissiveIntensity: 0.32 }),
+      storeNight: mat(0x231b64, { roughness: 0.66, emissive: 0x09062c, emissiveIntensity: 0.36 }),
+      storeGold: mat(0xffd43b, { roughness: 0.42, metalness: 0.12, emissive: 0x6b4d00, emissiveIntensity: 0.55 }),
+      storeRed: mat(0xff5a57, { roughness: 0.58, emissive: 0x5f120f, emissiveIntensity: 0.3 }),
+      storeHotPink: mat(0xff3aa7, { roughness: 0.56, emissive: 0x5a0f3d, emissiveIntensity: 0.34 }),
+      storeRocket: mat(0x5f6d7e, { roughness: 0.48, metalness: 0.18, emissive: 0x0d1520, emissiveIntensity: 0.18 }),
+      storeFlag: mat(0x37c8ff, { roughness: 0.54, emissive: 0x0b5d8f, emissiveIntensity: 0.42 }),
+      storePizza: mat(0xffc95c, { roughness: 0.74, emissive: 0x6b3900, emissiveIntensity: 0.22 }),
+      storeTrail: mat(0xf8fbff, { roughness: 0.4, emissive: 0xff5c9f, emissiveIntensity: 0.7 }),
       algae: mat(0x5bd924, { emissive: 0x123e08, emissiveIntensity: 0.38 }),
       pollen: mat(0xffd43b, { emissive: 0x4e3700, emissiveIntensity: 0.58 }),
       cell: mat(0xff5c9f, { emissive: 0x56152f, emissiveIntensity: 0.45 }),
@@ -1972,10 +2056,16 @@
     tailNub.rotation.x = Math.PI / 2;
     group.add(tailNub);
 
+    const cosmeticRoot = new THREE.Group();
+    cosmeticRoot.userData.kind = "cosmetics";
+    group.add(cosmeticRoot);
+    world.cosmeticRoot = cosmeticRoot;
+
     group.traverse((child) => {
       if (child.isMesh) child.castShadow = false;
     });
     group.scale.setScalar(1.14);
+    applyStoreCosmetics();
     return group;
   }
 
@@ -2366,9 +2456,257 @@
     });
   }
 
+  function saveStoreState() {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(STORE_STORAGE_KEY, JSON.stringify({
+        coins: state.store.coins,
+        owned: [...state.store.owned],
+        equipped: state.store.equipped,
+      }));
+    } catch (error) {}
+  }
+
+  function addStoreCoins(amount, announce = false) {
+    const gain = Math.max(0, Math.floor(amount));
+    if (!gain) return;
+    state.store.coins += gain;
+    saveStoreState();
+    syncStoreUi();
+    if (announce) showPrompt(`+${gain.toLocaleString()} GEL added to the micro wallet.`);
+  }
+
+  function syncStoreUi() {
+    if (el.storeWallet) el.storeWallet.textContent = `${state.store.coins.toLocaleString()} GEL`;
+    if (el.storeWalletChip) el.storeWalletChip.textContent = state.store.coins.toLocaleString();
+    if (state.store.open) renderStore();
+  }
+
+  function renderStore() {
+    if (!el.storeItems) return;
+    if (el.storeWallet) el.storeWallet.textContent = `${state.store.coins.toLocaleString()} GEL`;
+    if (el.storeWalletChip) el.storeWalletChip.textContent = state.store.coins.toLocaleString();
+    el.storeItems.innerHTML = STORE_ITEMS.map((item) => {
+      const owned = state.store.owned.has(item.id);
+      const equipped = state.store.equipped[item.slot] === item.id;
+      const affordable = state.store.coins >= item.cost;
+      const action = owned ? "equip" : "buy";
+      const disabled = owned ? false : !affordable;
+      const buttonLabel = owned
+        ? (equipped ? (item.slot === "skin" ? "Equipped" : "Unequip") : "Equip")
+        : `Buy ${item.cost.toLocaleString()}`;
+      return `
+        <article class="micro-store-card${equipped ? " is-equipped" : ""}">
+          <i class="micro-store-card__icon" aria-hidden="true">${item.icon}</i>
+          <span class="micro-store-card__copy">
+            <b>${item.name}</b>
+            <span>${item.description}</span>
+            <em>${owned ? (equipped ? "Equipped" : "Owned") : item.cost.toLocaleString() + " GEL"}</em>
+          </span>
+          <button class="btn ${owned ? "btn--secondary" : "btn--yellow"}" type="button" data-store-action="${action}" data-store-id="${item.id}"${disabled || (owned && equipped && item.slot === "skin") ? " disabled" : ""}>${buttonLabel}</button>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function openStore() {
+    if (!el.storeModal) return;
+    state.store.wasPaused = !!state.paused;
+    state.store.open = true;
+    if (document.pointerLockElement === canvas && document.exitPointerLock) document.exitPointerLock();
+    if (state.running && !state.gameOver) state.paused = true;
+    el.storeModal.classList.add("is-open");
+    el.storeModal.setAttribute("aria-hidden", "false");
+    document.body.classList.add("micro-store-open");
+    renderStore();
+    syncPlayMode();
+    resetVirtualControls();
+    if (el.storeClose) el.storeClose.focus({ preventScroll: true });
+  }
+
+  function closeStore() {
+    if (!state.store.open) return;
+    state.store.open = false;
+    if (el.storeModal) {
+      el.storeModal.classList.remove("is-open");
+      el.storeModal.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("micro-store-open");
+    if (state.running && !state.gameOver && !state.store.wasPaused) {
+      state.paused = false;
+      state.lastTime = performance.now();
+      anchorGameViewport();
+      canvas.focus();
+    }
+    syncPlayMode();
+  }
+
+  function handleStoreAction(event) {
+    const target = event.target && event.target.closest ? event.target : event.target && event.target.parentElement;
+    const button = target && target.closest("[data-store-action]");
+    if (!button) return;
+    const item = STORE_ITEM_BY_ID.get(button.dataset.storeId);
+    if (!item) return;
+    if (button.dataset.storeAction === "buy") buyStoreItem(item);
+    else equipStoreItem(item);
+  }
+
+  function buyStoreItem(item) {
+    if (state.store.owned.has(item.id)) {
+      equipStoreItem(item);
+      return;
+    }
+    if (state.store.coins < item.cost) {
+      const missing = item.cost - state.store.coins;
+      showPrompt(`${missing.toLocaleString()} more GEL needed for ${item.name}.`);
+      playTone("bonk", 0.75);
+      renderStore();
+      return;
+    }
+    state.store.coins -= item.cost;
+    state.store.owned.add(item.id);
+    equipStoreItem(item, false);
+    showCallout("PURCHASED!", `${item.name} equipped`);
+    playTone("level", 1.1);
+  }
+
+  function equipStoreItem(item, alreadySaved = true) {
+    if (!state.store.owned.has(item.id)) return;
+    const current = state.store.equipped[item.slot];
+    if (current === item.id && item.slot !== "skin") {
+      state.store.equipped[item.slot] = "";
+      showPrompt(`${item.name} removed.`);
+    } else {
+      state.store.equipped[item.slot] = item.id;
+      showPrompt(`${item.name} equipped.`);
+    }
+    if (item.slot === "skin" && !state.store.equipped.skin) state.store.equipped.skin = "skin-classic";
+    saveStoreState();
+    syncStoreUi();
+    applyStoreCosmetics();
+    if (alreadySaved) playTone("level", 0.82);
+  }
+
+  function applyStoreCosmetics() {
+    applyStoreSkin();
+    rebuildStoreAttachments();
+    syncStoreUi();
+  }
+
+  function applyStoreSkin() {
+    const skinId = state.store.equipped.skin || "skin-classic";
+    const palette = STORE_SKINS[skinId] || STORE_SKINS["skin-classic"];
+    world.bodySegments.forEach((segment, index) => {
+      const materialName = palette[index] || palette[palette.length - 1];
+      segment.material = world.materials[materialName] || segment.material;
+    });
+    world.legs.forEach((leg) => {
+      leg.children.forEach((child, index) => {
+        if (!child.isMesh) return;
+        if (index === 0) child.material = world.materials[palette[4]] || child.material;
+        if (index === 1) child.material = world.materials[palette[0]] || child.material;
+      });
+    });
+  }
+
+  function rebuildStoreAttachments() {
+    if (!world.cosmeticRoot) return;
+    while (world.cosmeticRoot.children.length) {
+      const child = world.cosmeticRoot.children[0];
+      world.cosmeticRoot.remove(child);
+      disposeObject(child);
+    }
+    ["head", "face", "back"].forEach((slot) => {
+      const item = STORE_ITEM_BY_ID.get(state.store.equipped[slot]);
+      if (!item) return;
+      const attachment = makeStoreAttachment(item.id);
+      if (!attachment) return;
+      attachment.userData.slot = slot;
+      world.cosmeticRoot.add(attachment);
+    });
+  }
+
+  function makeStoreAttachment(id) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    if (id === "hat-party") {
+      const hat = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.92, 5), world.materials.storeHotPink);
+      hat.position.set(0, 2.18, -2.92);
+      hat.rotation.z = -0.12;
+      const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 0), world.materials.storeGold);
+      puff.position.set(0.04, 2.68, -2.96);
+      group.add(hat, puff);
+    } else if (id === "hat-crown") {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.045, 5, 18), world.materials.storeGold);
+      band.position.set(0, 2.12, -2.93);
+      band.scale.y = 0.52;
+      for (let i = 0; i < 5; i++) {
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.38, 5), world.materials.storeGold);
+        const angle = (i / 5) * Math.PI * 2;
+        spike.position.set(Math.cos(angle) * 0.29, 2.24, -2.93 + Math.sin(angle) * 0.17);
+        group.add(spike);
+      }
+      group.add(band);
+    } else if (id === "face-goggles") {
+      [-0.42, 0.42].forEach((x) => {
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.035, 5, 16), world.materials.storeRocket);
+        rim.position.set(x, 1.58, -3.34);
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.02, 10), world.materials.creatureGlass || world.materials.bubble);
+        lens.position.set(x, 1.58, -3.35);
+        lens.rotation.x = Math.PI / 2;
+        group.add(rim, lens);
+      });
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.04, 0.05), world.materials.storeRocket);
+      bridge.position.set(0, 1.58, -3.34);
+      group.add(bridge);
+    } else if (id === "back-flag") {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.1, 6), world.materials.claw);
+      pole.position.set(0.48, 2.0, -0.1);
+      pole.rotation.z = -0.22;
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.36, 0.05), world.materials.storeFlag);
+      flag.position.set(0.76, 2.3, -0.14);
+      group.add(pole, flag);
+    } else if (id === "back-pizza") {
+      const slice = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.14, 3), world.materials.storePizza);
+      slice.position.set(0, 2.08, 0.35);
+      slice.rotation.set(Math.PI / 2, 0.58, 0);
+      const pepperoniA = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.025, 8), world.materials.storeRed);
+      const pepperoniB = pepperoniA.clone();
+      pepperoniA.position.set(-0.16, 2.17, 0.24);
+      pepperoniB.position.set(0.18, 2.16, 0.44);
+      pepperoniA.rotation.x = Math.PI / 2;
+      pepperoniB.rotation.x = Math.PI / 2;
+      group.add(slice, pepperoniA, pepperoniB);
+    } else if (id === "back-rocket") {
+      [-0.34, 0.34].forEach((x) => {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.74, 8), world.materials.storeRocket);
+        body.position.set(x, 1.88, 1.12);
+        body.rotation.x = Math.PI / 2;
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.28, 8), world.materials.storeRed);
+        cap.position.set(x, 1.88, 0.69);
+        cap.rotation.x = -Math.PI / 2;
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.42, 7), world.materials.storeGold);
+        flame.position.set(x, 1.88, 1.58);
+        flame.rotation.x = Math.PI / 2;
+        flame.userData.kind = "rocketFlame";
+        group.add(body, cap, flame);
+      });
+    }
+    group.traverse((child) => {
+      if (child.isMesh) child.castShadow = false;
+    });
+    return group;
+  }
+
   function bindInputs() {
     window.addEventListener("keydown", (event) => {
       const key = event.key;
+      if (state.store.open && (key === "Escape" || key === "Esc")) {
+        closeStore();
+        event.preventDefault();
+        return;
+      }
+      if (state.store.open) return;
       if (key === "ArrowUp" || key === "w" || key === "W") {
         state.input.forward = 1;
         event.preventDefault();
@@ -2484,6 +2822,14 @@
     el.pause.addEventListener("click", togglePause);
     el.restart.addEventListener("click", startGame);
     if (el.sound) el.sound.addEventListener("click", toggleSound);
+    if (el.store) el.store.addEventListener("click", openStore);
+    if (el.storeClose) el.storeClose.addEventListener("click", closeStore);
+    if (el.storeItems) el.storeItems.addEventListener("click", handleStoreAction);
+    if (el.storeModal) {
+      el.storeModal.addEventListener("pointerdown", (event) => {
+        if (event.target === el.storeModal) closeStore();
+      });
+    }
 
     bindHold(el.forward, () => { state.input.virtualForward = 1; }, () => { if (state.input.virtualForward > 0) state.input.virtualForward = 0; });
     bindHold(el.back, () => { state.input.virtualForward = -1; }, () => { if (state.input.virtualForward < 0) state.input.virtualForward = 0; });
@@ -2835,6 +3181,7 @@
       landmark.userData.found = false;
       landmark.scale.setScalar(1);
     });
+    state.store.trailTimer = 0;
     populateProps();
     updatePlayerTransform(0);
     updateGoalText();
@@ -3375,6 +3722,7 @@
     state.scoreDelta += rounded;
     state.scoreDeltaTimer = 1.15;
     addXp(Math.max(12, Math.round(rounded * 0.42)));
+    addStoreCoins(Math.max(1, Math.round(rounded * 0.1)));
     if (message) el.labLog.textContent = `Lab log: ${message}. Chaos +${rounded}.`;
   }
 
@@ -3659,6 +4007,29 @@
       feeler.rotation.z = (index ? 0.22 : -0.22) + Math.sin(state.clock * 4 + index) * 0.16;
     });
 
+    updateStoreCosmeticMotion(dt, speed);
+  }
+
+  function updateStoreCosmeticMotion(dt, speed) {
+    if (world.cosmeticRoot) {
+      world.cosmeticRoot.children.forEach((attachment, index) => {
+        attachment.rotation.z = Math.sin(state.clock * 2.4 + index) * 0.035;
+        attachment.children.forEach((child) => {
+          if (child.userData.kind === "rocketFlame") {
+            const pulse = 0.82 + Math.sin(state.clock * 15) * 0.18 + Math.min(0.35, speed * 0.018);
+            child.scale.setScalar(pulse);
+          }
+        });
+      });
+    }
+    if (state.store.equipped.trail !== "trail-confetti" || !state.running || state.paused || state.gameOver || speed < 1.4) return;
+    state.store.trailTimer = Math.max(0, state.store.trailTimer - dt);
+    if (state.store.trailTimer > 0) return;
+    state.store.trailTimer = state.reducedMotion ? 0.34 : 0.16;
+    const p = state.player;
+    const backX = p.x + Math.sin(p.yaw) * 1.7;
+    const backZ = p.z + Math.cos(p.yaw) * 1.7;
+    spawnRewardBurst({ x: backX, y: p.y + 1.05, z: backZ }, world.materials.storeTrail, state.reducedMotion ? 1 : 2, 0.34);
   }
 
   function updateDrift(dt) {
@@ -3866,6 +4237,7 @@
     if (el.arcadeLevel) el.arcadeLevel.textContent = state.level.toLocaleString();
     if (el.arcadeXp) el.arcadeXp.style.width = percent((state.xp / xpTarget()) * 100);
     if (el.arcadeXpText) el.arcadeXpText.textContent = `${Math.floor(state.xp).toLocaleString()} / ${xpTarget().toLocaleString()}`;
+    syncStoreUi();
     updateMissionHUD();
     updatePhysicsStatus();
 

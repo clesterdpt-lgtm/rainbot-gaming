@@ -63,6 +63,7 @@
 
     .micro-chip,
     .micro-status-strip,
+    .micro-wallet-chip,
     .micro-arcade-hud,
     .micro-callout,
     .micro-prompt {
@@ -129,6 +130,210 @@
     .micro-status-strip b {
       color: #6bff7d;
       margin-left: 5px;
+    }
+
+    .micro-wallet-chip {
+      right: 12px;
+      top: 122px;
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border: 1px solid rgba(255, 212, 59, 0.34);
+      border-radius: 999px;
+      background: rgba(3, 9, 13, 0.62);
+      color: #f7fbff;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 6px 10px;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.62);
+      z-index: 5;
+    }
+
+    .micro-wallet-chip b {
+      color: #ffd43b;
+      font: inherit;
+    }
+
+    .micro-store {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 30%, rgba(83, 234, 209, 0.16), rgba(2, 7, 13, 0.82) 62%);
+      padding: clamp(12px, 3vw, 28px);
+      pointer-events: auto;
+      z-index: 140;
+    }
+
+    .micro-store.is-open {
+      display: flex;
+    }
+
+    .micro-store__panel {
+      width: min(780px, 100%);
+      max-height: min(84dvh, 640px);
+      overflow: auto;
+      border: 1px solid rgba(83, 234, 209, 0.32);
+      border-radius: 8px;
+      background: rgba(3, 9, 13, 0.9);
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58), inset 0 0 34px rgba(83, 234, 209, 0.08);
+      padding: clamp(14px, 2.4vw, 22px);
+    }
+
+    .micro-store__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .micro-store__title {
+      display: grid;
+      gap: 5px;
+    }
+
+    .micro-store__title b {
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: clamp(20px, 3vw, 30px);
+      line-height: 0.95;
+      text-shadow: 0 3px 0 rgba(0, 0, 0, 0.72);
+      text-transform: uppercase;
+    }
+
+    .micro-store__title span,
+    .micro-store-card span {
+      color: rgba(234, 247, 255, 0.72);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .micro-store__wallet {
+      display: inline-grid;
+      justify-items: end;
+      gap: 4px;
+      flex: 0 0 auto;
+      color: rgba(247, 251, 255, 0.7);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    .micro-store__wallet strong {
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: 22px;
+      line-height: 1;
+      text-shadow: 0 2px 0 #05070d;
+    }
+
+    .micro-store__grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .micro-store-card {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 102px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 18% 20%, rgba(255, 212, 59, 0.16), transparent 38%),
+        rgba(255, 255, 255, 0.055);
+      padding: 10px;
+    }
+
+    .micro-store-card.is-equipped {
+      border-color: rgba(107, 255, 125, 0.48);
+      box-shadow: inset 0 0 0 1px rgba(107, 255, 125, 0.18), 0 0 24px rgba(107, 255, 125, 0.1);
+    }
+
+    .micro-store-card__icon {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(3, 9, 13, 0.5);
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: 18px;
+      line-height: 1;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.64);
+    }
+
+    .micro-store-card__copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .micro-store-card b {
+      color: #f7fbff;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+
+    .micro-store-card em {
+      color: #ffd43b;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .micro-store-card .btn {
+      min-width: 82px;
+      min-height: 36px;
+      padding: 7px 9px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .micro-store-card .btn:disabled {
+      cursor: default;
+      filter: grayscale(0.7);
+      opacity: 0.52;
+      transform: none;
+    }
+
+    .micro-store__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .micro-store__foot span {
+      color: rgba(234, 247, 255, 0.62);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    body.micro-store-open .micro-radar,
+    body.micro-store-open .micro-play-meters,
+    body.micro-store-open .micro-chip,
+    body.micro-store-open .micro-status-strip,
+    body.micro-store-open .micro-wallet-chip,
+    body.micro-store-open .micro-touch-controls {
+      opacity: 0.22;
     }
 
     .micro-play-meters {
@@ -1024,6 +1229,11 @@
       right: 30px;
     }
 
+    body.micro-play-active .micro-wallet-chip {
+      top: 186px;
+      right: 30px;
+    }
+
     body.micro-play-active .micro-chip {
       left: 26px;
       bottom: 26px;
@@ -1086,6 +1296,14 @@
         padding: 4px 7px;
       }
 
+      .micro-wallet-chip {
+        top: 96px;
+        right: 8px;
+        min-height: 26px;
+        font-size: 9px;
+        padding: 5px 8px;
+      }
+
       .micro-arcade-hud {
         inset: 10px;
       }
@@ -1139,6 +1357,19 @@
 
       body.micro-play-active .micro-touch-controls {
         display: flex;
+      }
+
+      .micro-store__grid {
+        grid-template-columns: 1fr;
+      }
+
+      .micro-store-card {
+        grid-template-columns: 40px minmax(0, 1fr);
+      }
+
+      .micro-store-card .btn {
+        grid-column: 1 / -1;
+        width: 100%;
       }
     }
 
@@ -1330,11 +1561,35 @@
         display: none;
       }
 
+      body.micro-play-active .micro-wallet-chip {
+        display: none;
+      }
+
       body.micro-play-active .controls-row .btn {
         flex: 0 0 auto;
         min-height: 30px;
         font-size: 11px !important;
         padding: 6px 8px !important;
+      }
+
+      .micro-store {
+        position: fixed;
+        padding: 8px;
+      }
+
+      .micro-store__panel {
+        max-height: calc(100dvh - 16px);
+        padding: 12px;
+      }
+
+      .micro-store__head,
+      .micro-store__foot {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .micro-store__wallet {
+        justify-items: start;
       }
 
       body.micro-play-active .micro-arcade-hud {
@@ -1491,6 +1746,7 @@
             <span>Ring <b id="status-ring">0/3</b></span>
             <span>Zone <b id="status-zone">Open Dish</b></span>
           </div>
+          <div class="micro-wallet-chip" aria-live="polite">GEL <b id="store-wallet-chip">900</b></div>
           <div class="micro-play-meters" aria-label="Run meters">
             <span><b>Hydrate</b><i><em id="play-meter-hydrate"></em></i><strong id="play-meter-hydrate-text">100%</strong></span>
             <span><b>Dash</b><i><em id="play-meter-dash"></em></i><strong id="play-meter-dash-text">100%</strong></span>
@@ -1524,6 +1780,26 @@
             </div>
           </div>
 
+          <div class="micro-store" id="micro-store" aria-hidden="true">
+            <div class="micro-store__panel" role="dialog" aria-modal="true" aria-labelledby="micro-store-title">
+              <div class="micro-store__head">
+                <div class="micro-store__title">
+                  <b id="micro-store-title">Micro Store</b>
+                  <span>Silly specimen cosmetics bought with chaos-earned GEL.</span>
+                </div>
+                <div class="micro-store__wallet">
+                  <span>Wallet</span>
+                  <strong id="store-wallet">900 GEL</strong>
+                </div>
+              </div>
+              <div class="micro-store__grid" id="store-items" aria-live="polite"></div>
+              <div class="micro-store__foot">
+                <span>Purchases save in this browser. Cosmetics are wonderfully useless.</span>
+                <button class="btn btn--secondary" id="btn-store-close" type="button">Close store</button>
+              </div>
+            </div>
+          </div>
+
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">TARDIGRADE: MICRO MAYHEM</h2>
             <p class="overlay__sub" id="overlay-sub">
@@ -1541,6 +1817,7 @@
           <h3 class="game-side__title">SPECIMEN CONTROL</h3>
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--yellow" id="btn-store" type="button" style="font-size:13px;padding:8px 12px;">Store</button>
             <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
             <button class="btn btn--ghost" id="btn-sound" type="button" style="font-size:13px;padding:8px 12px;">Sound On</button>
           </div>
@@ -1613,7 +1890,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-5"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-33"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-35"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

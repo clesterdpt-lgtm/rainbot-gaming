@@ -6,7 +6,7 @@
   <title>Apop Demon Moggers — Rainbot Gaming</title>
   <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A 2D side-scroller parody — run, jump, and blast a demon boy band back to the group chat. Disband Boyz II Hell." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-4" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260613-3" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -33,6 +33,18 @@
 
         <div class="canvas-wrap canvas-wrap--ar-750-500">
           <canvas id="gameCanvas" width="750" height="500" tabindex="0"></canvas>
+
+          <div class="touch-pad" aria-label="Mobile controls">
+            <div class="touch-pad__side touch-pad__side--left">
+              <button class="touch-btn" id="btn-left" type="button" aria-label="Move left">◄</button>
+              <button class="touch-btn touch-btn--jump" id="btn-jump" type="button" aria-label="Jump">↑</button>
+              <button class="touch-btn" id="btn-right" type="button" aria-label="Move right">►</button>
+            </div>
+            <div class="touch-pad__side touch-pad__side--right">
+              <button class="touch-btn touch-btn--aura" id="btn-special" type="button" aria-label="Mog Aura">💅</button>
+              <button class="touch-btn touch-btn--beam" id="btn-mog" type="button" aria-label="Mog Beam">BEAM</button>
+            </div>
+          </div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">🎤 APOP DEMON MOGGERS</h2>
@@ -63,15 +75,6 @@
             <kbd>Z</kbd>/<kbd>J</kbd> · Mog Beam (on beat = bonus)<br>
             <kbd>X</kbd>/<kbd>K</kbd> · Mog Aura (when meter is full)
           </p>
-          <div class="mobile-controls" aria-label="Mobile controls">
-            <div class="mobile-controls__grid">
-              <button class="btn btn--secondary" id="btn-left" type="button">◄ Run</button>
-              <button class="btn btn--secondary" id="btn-right" type="button">Run ►</button>
-              <button class="btn btn--secondary" id="btn-jump" type="button">Jump</button>
-              <button class="btn btn--primary" id="btn-mog" type="button">Mog Beam</button>
-              <button class="btn btn--yellow" id="btn-special" type="button" style="grid-column:1 / -1;">💅 Mog Aura</button>
-            </div>
-          </div>
         </div>
 
         <div class="game-side__panel">

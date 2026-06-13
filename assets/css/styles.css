@@ -947,6 +947,83 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .mobile-controls__dpad button[data-gym-dir="down"] { grid-column: 2; grid-row: 3; }
 .mobile-controls__dpad button[data-gym-hold="eyes"] { grid-column: 2; grid-row: 2; }
 
+/* ===== On-screen touch pad (canvas overlay) ===== */
+.touch-pad {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: none;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 6px 10px 10px;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.touch-pad__side {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.48);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 20px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: filter 0.08s, transform 0.08s;
+}
+
+.touch-btn:active {
+  filter: brightness(1.5);
+  transform: scale(0.93);
+}
+
+.touch-btn--jump {
+  background: rgba(46, 224, 255, 0.35);
+  border-color: rgba(46, 224, 255, 0.65);
+}
+
+.touch-btn--beam {
+  background: rgba(236, 26, 94, 0.5);
+  border-color: rgba(236, 26, 94, 0.85);
+  width: 64px;
+  height: 64px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.touch-btn--aura {
+  background: rgba(247, 215, 22, 0.4);
+  border-color: rgba(247, 215, 22, 0.75);
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 22px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-pad {
+    display: flex;
+  }
+}
+
 @media (max-width: 900px) {
   .game-page,
   .tower-defense-page .game-page {

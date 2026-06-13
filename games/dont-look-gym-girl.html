@@ -159,6 +159,9 @@
     .gym-power[data-empty="true"] .gym-power__count { background: #444; color: #888; }
 
     /* ===== Mobile Virtual Joystick & EYES Button Styling ===== */
+    .canvas-wrap, #gameCanvas {
+      touch-action: none;
+    }
     .game-touch-overlay {
       display: none;
       position: absolute;
@@ -170,6 +173,7 @@
       z-index: 4;
       padding: 0 24px;
       box-sizing: border-box;
+      touch-action: none;
     }
     @media (max-width: 900px), (pointer: coarse) {
       .game-touch-overlay {
@@ -190,6 +194,7 @@
       pointer-events: auto;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: none;
     }
     .joystick-base {
       width: 80px;
@@ -247,6 +252,7 @@
       outline: none;
       transition: transform 0.1s, background-color 0.1s, box-shadow 0.1s, border-color 0.1s;
       -webkit-tap-highlight-color: transparent;
+      touch-action: none;
     }
     .eyes-btn:active, .eyes-btn.active {
       background: var(--accent);

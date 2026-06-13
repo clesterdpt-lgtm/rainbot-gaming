@@ -507,6 +507,7 @@
     }
     // Touch starts a drag/look interaction
     if (e.pointerType === "touch") {
+      e.preventDefault();
       activeTouchLookId = e.pointerId;
       setLookTarget(e.clientX, e.clientY);
     }
@@ -516,6 +517,7 @@
     if (e.pointerType === "mouse") {
       setLookTarget(e.clientX, e.clientY);
     } else if (e.pointerType === "touch" && e.pointerId === activeTouchLookId) {
+      e.preventDefault();
       setLookTarget(e.clientX, e.clientY);
     }
   });
@@ -604,6 +606,7 @@
 
     function handleJoystickMove(e) {
       if (!state.touchJoystick.active || e.pointerId !== joystickPointerId) return;
+      e.preventDefault();
 
       const diffX = e.clientX - centerX;
       const diffY = e.clientY - centerY;

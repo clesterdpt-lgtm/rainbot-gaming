@@ -340,6 +340,65 @@
       transform: translateX(-50%) translateY(0);
     }
 
+    .micro-target-marker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: grid;
+      justify-items: center;
+      min-width: 116px;
+      max-width: 176px;
+      border: 1px solid rgba(255, 212, 59, 0.58);
+      border-radius: 8px;
+      background: rgba(3, 9, 13, 0.62);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34), 0 0 22px rgba(255, 212, 59, 0.22);
+      color: #ffffff;
+      font-family: var(--font-mono);
+      opacity: 0;
+      padding: 7px 10px 8px;
+      pointer-events: none;
+      text-align: center;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.72);
+      text-transform: uppercase;
+      transform: translate(-50%, -118%) scale(0.92);
+      transition: opacity 100ms ease, transform 100ms ease;
+      z-index: 12;
+    }
+
+    .micro-target-marker::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -10px;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 10px solid rgba(255, 212, 59, 0.9);
+      filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.42));
+      transform: translateX(-50%);
+    }
+
+    .micro-target-marker.is-visible {
+      opacity: 1;
+      transform: translate(-50%, -118%) scale(1);
+    }
+
+    .micro-target-marker b {
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .micro-target-marker span {
+      color: rgba(247, 251, 255, 0.86);
+      font-size: 9px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-top: 3px;
+    }
+
     .micro-arcade-hud {
       inset: 14px;
       color: #f9fbff;
@@ -972,7 +1031,7 @@
     }
 
     body.micro-play-active .micro-prompt {
-      bottom: 24px;
+      bottom: 106px;
     }
 
     body.micro-play-active .micro-play-meters {
@@ -1057,18 +1116,24 @@
       }
 
       body.micro-play-active .micro-chip {
-        width: min(300px, calc(100% - 180px));
+        bottom: 168px;
+        width: min(300px, calc(100% - 320px));
+      }
+
+      body.micro-play-active .micro-prompt {
+        bottom: 166px;
+        max-width: calc(100% - 320px);
       }
 
       body.micro-play-active .micro-radar {
         right: 12px;
-        bottom: 86px;
+        bottom: 168px;
         width: 116px;
         height: 116px;
       }
 
       body.micro-play-active .micro-play-meters {
-        bottom: 16px;
+        bottom: 158px;
         width: min(330px, calc(100% - 160px));
       }
 
@@ -1187,6 +1252,20 @@
 
       .micro-prompt {
         display: none;
+      }
+
+      .micro-target-marker {
+        min-width: 98px;
+        max-width: 136px;
+        padding: 6px 8px 7px;
+      }
+
+      .micro-target-marker b {
+        font-size: 10px;
+      }
+
+      .micro-target-marker span {
+        font-size: 8px;
       }
 
       .micro-physics-pill {
@@ -1428,6 +1507,10 @@
             <em id="radar-distance">0 um</em>
           </div>
           <div class="micro-prompt micro-prompt--show" id="micro-prompt">Move mouse to look. WASD moves. Shift bonks.</div>
+          <div class="micro-target-marker" id="micro-target-marker" aria-live="polite">
+            <b id="target-marker-title">Target</b>
+            <span id="target-marker-distance">0 um</span>
+          </div>
           <div class="micro-touch-controls" aria-label="Touch controls">
             <div class="micro-touch-stick" id="touch-stick" role="group" aria-label="Move">
               <span class="micro-touch-stick__side micro-touch-stick__side--left">A</span>
@@ -1530,7 +1613,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-5"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-28"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-32"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

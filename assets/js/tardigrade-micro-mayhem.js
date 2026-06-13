@@ -7,14 +7,22 @@
   "use strict";
 
   const GAME_ID = "tardigrade-micro-mayhem";
-  const WORLD_RADIUS = 108;
+  const MAP_AREA_SCALE = 5;
+  const MAP_LINEAR_SCALE = Math.sqrt(MAP_AREA_SCALE);
+  const SCENIC_RADIUS_SCALE = 1.45;
+  const MAP_POPULATION_SCALE = 1.7;
+  const mapCoord = (value) => value * MAP_LINEAR_SCALE;
+  const mapRadius = (value) => value * MAP_LINEAR_SCALE;
+  const scenicRadius = (value) => value * SCENIC_RADIUS_SCALE;
+  const populationCount = (value) => Math.max(1, Math.round(value * MAP_POPULATION_SCALE));
+  const WORLD_RADIUS = mapRadius(108);
   const PLAYER_RADIUS = 1.55;
   const GRAVITY = 22;
   const GROUND_Y = 0.42;
   const TERRAIN_VISUAL_OFFSET = 0.24;
   const CAMERA_YAW_SENSITIVITY = 0.0048;
   const CAMERA_PITCH_SENSITIVITY = 0.0032;
-  const RING_TARGET = { x: -42, z: -34, radius: 5.8 };
+  const RING_TARGET = { x: mapCoord(-42), z: mapCoord(-34), radius: scenicRadius(5.8) };
   const SANDBOX_SECONDS = 300;
   const GOAL_TARGETS = {
     algae: 2,
@@ -28,64 +36,64 @@
     {
       id: "forest",
       name: "Algae Forest",
-      x: -62,
-      z: 45,
-      radius: 25,
+      x: mapCoord(-62),
+      z: mapCoord(45),
+      radius: mapRadius(25),
       color: 0x6bff7d,
       material: "zoneForest",
     },
     {
       id: "flats",
       name: "Droplet Flats",
-      x: 62,
-      z: 38,
-      radius: 24,
+      x: mapCoord(62),
+      z: mapCoord(38),
+      radius: mapRadius(24),
       color: 0x37b8ff,
       material: "zoneFlats",
     },
     {
       id: "reef",
       name: "Bacteria Reef",
-      x: 57,
-      z: -64,
-      radius: 24,
+      x: mapCoord(57),
+      z: mapCoord(-64),
+      radius: mapRadius(24),
       color: 0xff9d2e,
       material: "zoneReef",
     },
     {
       id: "ridge",
       name: "Spore Ridge",
-      x: -58,
-      z: -62,
-      radius: 23,
+      x: mapCoord(-58),
+      z: mapCoord(-62),
+      radius: mapRadius(23),
       color: 0xa5ff4f,
       material: "zoneRidge",
     },
   ];
   const HIDDEN_LANDMARKS = [
-    { id: "algae-crown", name: "Algae Crown", zone: "forest", x: -80, z: 59, radius: 7.0, color: 0x6bff7d },
-    { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: 78, z: 48, radius: 7.2, color: 0x37b8ff },
-    { id: "orange-spire", name: "Orange Spire", zone: "reef", x: 70, z: -74, radius: 7.0, color: 0xff9d2e },
-    { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: -76, z: -76, radius: 7.0, color: 0xa5ff4f },
+    { id: "algae-crown", name: "Algae Crown", zone: "forest", x: mapCoord(-80), z: mapCoord(59), radius: scenicRadius(7.0), color: 0x6bff7d },
+    { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: mapCoord(78), z: mapCoord(48), radius: scenicRadius(7.2), color: 0x37b8ff },
+    { id: "orange-spire", name: "Orange Spire", zone: "reef", x: mapCoord(70), z: mapCoord(-74), radius: scenicRadius(7.0), color: 0xff9d2e },
+    { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: mapCoord(-76), z: mapCoord(-76), radius: scenicRadius(7.0), color: 0xa5ff4f },
   ];
   const TRAVERSAL_TOYS = [
     { id: "starter-ramp", type: "ramp", name: "Cellulose Ramp", x: -10, z: 23, yaw: -0.54, radius: 5.6, boost: 17, lift: 6.8 },
-    { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: -54, z: 28, yaw: -0.9, radius: 6.8, boost: 22, lift: 9.8 },
-    { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: 38, z: 20, yaw: 0.2, radius: 5.7, boost: 7.2, lift: 18.6 },
-    { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: -42, z: -42, yaw: -0.38, radius: 5.7, boost: 8.6, lift: 19.8 },
-    { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: 63, z: -50, yaw: 0.6, radius: 6.2, boost: 10.5, lift: 22.4 },
-    { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: -71, z: 20, yaw: -0.35, radius: 5.9, boost: 9.2, lift: 19.5 },
-    { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: -58, z: -62, yaw: -0.2, radius: 8.4, boost: 10.2, lift: 5.0 },
-    { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: 45, z: -71, yaw: 0.55, radius: 8.0, boost: 9.4, lift: 4.6 },
-    { id: "crown-pad", type: "jumpPad", name: "Crown Popper", x: 2, z: -70, yaw: 0.05, radius: 6.0, boost: 9.2, lift: 23.0 },
+    { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: mapCoord(-54), z: mapCoord(28), yaw: -0.9, radius: scenicRadius(6.8), boost: 22, lift: 9.8 },
+    { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: mapCoord(38), z: mapCoord(20), yaw: 0.2, radius: scenicRadius(5.7), boost: 7.2, lift: 18.6 },
+    { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: mapCoord(-42), z: mapCoord(-42), yaw: -0.38, radius: scenicRadius(5.7), boost: 8.6, lift: 19.8 },
+    { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: mapCoord(63), z: mapCoord(-50), yaw: 0.6, radius: scenicRadius(6.2), boost: 10.5, lift: 22.4 },
+    { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: mapCoord(-71), z: mapCoord(20), yaw: -0.35, radius: scenicRadius(5.9), boost: 9.2, lift: 19.5 },
+    { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: mapCoord(-58), z: mapCoord(-62), yaw: -0.2, radius: scenicRadius(8.4), boost: 10.2, lift: 5.0 },
+    { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: mapCoord(45), z: mapCoord(-71), yaw: 0.55, radius: scenicRadius(8.0), boost: 9.4, lift: 4.6 },
+    { id: "crown-pad", type: "jumpPad", name: "Crown Popper", x: mapCoord(2), z: mapCoord(-70), yaw: 0.05, radius: scenicRadius(6.0), boost: 9.2, lift: 23.0 },
   ];
   const CREATURE_ROUTES = [
-    { id: "rotifer-forest", type: "rotifer", centerX: -58, centerZ: 34, radiusX: 22, radiusZ: 12, speed: 0.26, hover: 2.1, phase: 0.1 },
-    { id: "rotifer-flats", type: "rotifer", centerX: 58, centerZ: 34, radiusX: 20, radiusZ: 11, speed: 0.22, hover: 2.4, phase: 2.4 },
-    { id: "ciliate-canal", type: "ciliate", centerX: 6, centerZ: -15, radiusX: 42, radiusZ: 20, speed: 0.18, hover: 4.4, phase: 1.1 },
-    { id: "ciliate-ridge", type: "ciliate", centerX: -51, centerZ: -59, radiusX: 18, radiusZ: 10, speed: 0.25, hover: 3.2, phase: 4.1 },
-    { id: "waterbearling", type: "waterbearling", centerX: 40, centerZ: -58, radiusX: 17, radiusZ: 12, speed: 0.3, hover: 1.1, phase: 3.0 },
-    { id: "spore-ray", type: "sporeRay", centerX: 0, centerZ: 50, radiusX: 38, radiusZ: 16, speed: 0.16, hover: 8.2, phase: 5.2 },
+    { id: "rotifer-forest", type: "rotifer", centerX: mapCoord(-58), centerZ: mapCoord(34), radiusX: mapRadius(22), radiusZ: mapRadius(12), speed: 0.26, hover: 2.1, phase: 0.1 },
+    { id: "rotifer-flats", type: "rotifer", centerX: mapCoord(58), centerZ: mapCoord(34), radiusX: mapRadius(20), radiusZ: mapRadius(11), speed: 0.22, hover: 2.4, phase: 2.4 },
+    { id: "ciliate-canal", type: "ciliate", centerX: mapCoord(6), centerZ: mapCoord(-15), radiusX: mapRadius(42), radiusZ: mapRadius(20), speed: 0.18, hover: 4.4, phase: 1.1 },
+    { id: "ciliate-ridge", type: "ciliate", centerX: mapCoord(-51), centerZ: mapCoord(-59), radiusX: mapRadius(18), radiusZ: mapRadius(10), speed: 0.25, hover: 3.2, phase: 4.1 },
+    { id: "waterbearling", type: "waterbearling", centerX: mapCoord(40), centerZ: mapCoord(-58), radiusX: mapRadius(17), radiusZ: mapRadius(12), speed: 0.3, hover: 1.1, phase: 3.0 },
+    { id: "spore-ray", type: "sporeRay", centerX: mapCoord(0), centerZ: mapCoord(50), radiusX: mapRadius(38), radiusZ: mapRadius(16), speed: 0.16, hover: 8.2, phase: 5.2 },
   ];
   const STARTER_PROPS = [
     ["algae", { x: -2.4, z: 4.4 }],
@@ -348,6 +356,7 @@
     zones: [],
     traversalToys: [],
     landmarks: [],
+    plateauObstacles: [],
     ring: null,
     ringCore: null,
     guide: null,
@@ -393,22 +402,22 @@
 
   function terrainOffsetAt(x, z) {
     const distance = Math.hypot(x, z);
-    const edgeFade = clamp((WORLD_RADIUS - 5 - distance) / 24, 0, 1);
+    const edgeFade = clamp((WORLD_RADIUS - 5 - distance) / mapRadius(24), 0, 1);
     const rolling =
       Math.sin(x * 0.058) * 0.54 +
       Math.cos(z * 0.052) * 0.46 +
       Math.sin((x + z) * 0.031) * 0.58 +
       Math.cos((x - z) * 0.026) * 0.36;
     const features =
-      terrainBump(x, z, -64, 47, 36, 3.95) +
-      terrainBump(x, z, 64, 38, 34, 3.25) +
-      terrainBump(x, z, 58, -64, 35, 4.25) +
-      terrainBump(x, z, -58, -62, 32, 4.85) +
-      terrainBump(x, z, 2, -72, 24, 3.65) +
-      terrainBump(x, z, -6, 46, 30, 1.65) -
+      terrainBump(x, z, mapCoord(-64), mapCoord(47), mapRadius(36), 3.95) +
+      terrainBump(x, z, mapCoord(64), mapCoord(38), mapRadius(34), 3.25) +
+      terrainBump(x, z, mapCoord(58), mapCoord(-64), mapRadius(35), 4.25) +
+      terrainBump(x, z, mapCoord(-58), mapCoord(-62), mapRadius(32), 4.85) +
+      terrainBump(x, z, mapCoord(2), mapCoord(-72), mapRadius(24), 3.65) +
+      terrainBump(x, z, mapCoord(-6), mapCoord(46), mapRadius(30), 1.65) -
       terrainBump(x, z, 3, 4, 28, 0.42) -
-      terrainBump(x, z, 18, -18, 44, 0.78) -
-      terrainBump(x, z, 31, 56, 22, 0.64);
+      terrainBump(x, z, mapCoord(18), mapCoord(-18), mapRadius(44), 0.78) -
+      terrainBump(x, z, mapCoord(31), mapCoord(56), mapRadius(22), 0.64);
     return clamp((rolling * 0.72 + features) * edgeFade, -1.15, 6.2);
   }
 
@@ -418,6 +427,83 @@
 
   function terrainVisualYAt(x, z) {
     return groundYAt(x, z) - TERRAIN_VISUAL_OFFSET;
+  }
+
+  function toPlateauLocal(obstacle, x, z) {
+    const dx = x - obstacle.x;
+    const dz = z - obstacle.z;
+    const cos = Math.cos(obstacle.rotation);
+    const sin = Math.sin(obstacle.rotation);
+    return {
+      x: dx * cos + dz * sin,
+      z: -dx * sin + dz * cos,
+    };
+  }
+
+  function fromPlateauLocal(localX, localZ, obstacle) {
+    const cos = Math.cos(obstacle.rotation);
+    const sin = Math.sin(obstacle.rotation);
+    return {
+      x: obstacle.x + localX * cos - localZ * sin,
+      z: obstacle.z + localX * sin + localZ * cos,
+    };
+  }
+
+  function registerPlateauObstacle(x, z, radius, scaleZ, rotation, kind) {
+    world.plateauObstacles.push({
+      x,
+      z,
+      radiusX: radius * 0.94,
+      radiusZ: radius * scaleZ * 0.94,
+      rotation,
+      kind,
+    });
+  }
+
+  function pointOverlapsPlateau(x, z, margin = 0) {
+    return world.plateauObstacles.some((obstacle) => {
+      const local = toPlateauLocal(obstacle, x, z);
+      const radiusX = obstacle.radiusX + margin;
+      const radiusZ = obstacle.radiusZ + margin;
+      return (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ) < 1;
+    });
+  }
+
+  function resolvePlateauCollisions(previousX, previousZ) {
+    const player = state.player;
+    world.plateauObstacles.forEach((obstacle) => {
+      let local = toPlateauLocal(obstacle, player.x, player.z);
+      const radiusX = obstacle.radiusX + PLAYER_RADIUS * 0.9;
+      const radiusZ = obstacle.radiusZ + PLAYER_RADIUS * 0.9;
+      let amount = (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ);
+      if (amount >= 1) return;
+
+      if (amount < 0.0001) {
+        const previousLocal = toPlateauLocal(obstacle, previousX, previousZ);
+        local = Math.abs(previousLocal.x) + Math.abs(previousLocal.z) > 0.001
+          ? previousLocal
+          : { x: 1, z: 0 };
+        amount = (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ);
+      }
+
+      const scale = 1 / Math.sqrt(Math.max(0.0001, amount));
+      const targetWorld = fromPlateauLocal(local.x * scale, local.z * scale, obstacle);
+      const pushX = targetWorld.x - player.x;
+      const pushZ = targetWorld.z - player.z;
+      const pushLength = Math.hypot(pushX, pushZ);
+      if (pushLength <= 0.0001) return;
+
+      const normalX = pushX / pushLength;
+      const normalZ = pushZ / pushLength;
+      player.x = targetWorld.x + normalX * 0.045;
+      player.z = targetWorld.z + normalZ * 0.045;
+      const incoming = player.vx * normalX + player.vz * normalZ;
+      if (incoming < 0) {
+        player.vx -= incoming * normalX * 1.08;
+        player.vz -= incoming * normalZ * 1.08;
+      }
+      player.wobble = Math.max(player.wobble, 0.24);
+    });
   }
 
   function bootThree() {
@@ -470,8 +556,8 @@
     world.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     world.scene = new THREE.Scene();
-    world.scene.fog = new THREE.FogExp2(0x078ec8, 0.00315);
-    world.camera = new THREE.PerspectiveCamera(64, 960 / 620, 0.1, 430);
+    world.scene.fog = new THREE.FogExp2(0x078ec8, 0.00155);
+    world.camera = new THREE.PerspectiveCamera(64, 960 / 620, 0.1, Math.max(430, WORLD_RADIUS * 2.35));
 
     buildMaterials();
     applyAssetTextures();
@@ -617,7 +703,7 @@
       );
     };
 
-    applyTexture("dish", TEXTURE_ASSETS.floor, 8, 8);
+    applyTexture("dish", TEXTURE_ASSETS.floor, 8 * MAP_LINEAR_SCALE, 8 * MAP_LINEAR_SCALE);
     applyTexture("algae", TEXTURE_ASSETS.algae, 1.8, 1.8);
     applyTexture("fiberA", TEXTURE_ASSETS.membrane, 2, 6);
   }
@@ -650,7 +736,7 @@
   function buildPhysicsBoundary() {
     if (!world.physics.ready || world.physics.boundaryBodies.length) return;
     const RAPIER = world.physics.RAPIER;
-    const bodyCount = 88;
+    const bodyCount = Math.ceil(88 * MAP_LINEAR_SCALE);
     const radius = WORLD_RADIUS - 0.25;
     const tangentHalf = (Math.PI * radius * 2) / bodyCount / 2;
     for (let i = 0; i < bodyCount; i++) {
@@ -731,11 +817,11 @@
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 1;
-    key.shadow.camera.far = 180;
-    key.shadow.camera.left = -132;
-    key.shadow.camera.right = 132;
-    key.shadow.camera.top = 132;
-    key.shadow.camera.bottom = -132;
+    key.shadow.camera.far = Math.max(180, WORLD_RADIUS * 1.4);
+    key.shadow.camera.left = -WORLD_RADIUS * 0.62;
+    key.shadow.camera.right = WORLD_RADIUS * 0.62;
+    key.shadow.camera.top = WORLD_RADIUS * 0.62;
+    key.shadow.camera.bottom = -WORLD_RADIUS * 0.62;
     scene.add(key);
 
     const rim = new THREE.PointLight(0xff8cd8, 1.05, 82);
@@ -831,28 +917,29 @@
     world.scene.add(waterBase);
     world.petri = waterBase;
 
+    world.plateauObstacles = [];
     makeRollingTerrain();
-    makeTerrainIsland(-68, 52, 16.8, 2.5, 0.68, world.materials.grassLight);
-    makeTerrainIsland(66, -68, 17.5, 2.2, 0.72, world.materials.dish);
-    makeTerrainIsland(-62, -66, 14.6, 2.65, 0.78, world.materials.grassLight);
-    makeTerrainIsland(66, 42, 15.8, 1.95, 0.7, world.materials.dish);
-    makeTerrainIsland(2, -76, 14.4, 1.9, 0.66, world.materials.dish);
-    makeVerticalMesa(-92, 10, 13, 11.5, 0.58, world.materials.backdropPurple);
-    makeVerticalMesa(92, -14, 15, 13.2, 0.64, world.materials.backdropBlue);
-    makeVerticalMesa(-12, 88, 18, 12.6, 0.52, world.materials.backdropGreen);
+    makeTerrainIsland(mapCoord(-68), mapCoord(52), scenicRadius(16.8), 2.5, 0.68, world.materials.grassLight);
+    makeTerrainIsland(mapCoord(66), mapCoord(-68), scenicRadius(17.5), 2.2, 0.72, world.materials.dish);
+    makeTerrainIsland(mapCoord(-62), mapCoord(-66), scenicRadius(14.6), 2.65, 0.78, world.materials.grassLight);
+    makeTerrainIsland(mapCoord(66), mapCoord(42), scenicRadius(15.8), 1.95, 0.7, world.materials.dish);
+    makeTerrainIsland(mapCoord(2), mapCoord(-76), scenicRadius(14.4), 1.9, 0.66, world.materials.dish);
+    makeVerticalMesa(mapCoord(-92), mapCoord(10), scenicRadius(13), 11.5, 0.58, world.materials.backdropPurple);
+    makeVerticalMesa(mapCoord(92), mapCoord(-14), scenicRadius(15), 13.2, 0.64, world.materials.backdropBlue);
+    makeVerticalMesa(mapCoord(-12), mapCoord(88), scenicRadius(18), 12.6, 0.52, world.materials.backdropGreen);
 
     [
-      [-18, 22, 7.6, 0.42, 0.15],
-      [25, 18, 7.2, 0.5, -0.55],
-      [-22, -8, 6.2, 0.38, 0.8],
-      [43, -20, 8.4, 0.5, 0.4],
-      [-62, 11, 7.2, 0.52, -0.2],
-      [6, -43, 8.4, 0.46, 0.7],
-      [74, 42, 10.6, 0.42, 0.1],
-      [-78, -43, 9.2, 0.48, -0.35],
-      [4, 60, 10.2, 0.5, 0.55],
-      [66, -72, 7.4, 0.44, -0.85],
-      [-12, -76, 9.8, 0.4, 0.2],
+      [mapCoord(-18), mapCoord(22), scenicRadius(7.6), 0.42, 0.15],
+      [mapCoord(25), mapCoord(18), scenicRadius(7.2), 0.5, -0.55],
+      [mapCoord(-22), mapCoord(-8), scenicRadius(6.2), 0.38, 0.8],
+      [mapCoord(43), mapCoord(-20), scenicRadius(8.4), 0.5, 0.4],
+      [mapCoord(-62), mapCoord(11), scenicRadius(7.2), 0.52, -0.2],
+      [mapCoord(6), mapCoord(-43), scenicRadius(8.4), 0.46, 0.7],
+      [mapCoord(74), mapCoord(42), scenicRadius(10.6), 0.42, 0.1],
+      [mapCoord(-78), mapCoord(-43), scenicRadius(9.2), 0.48, -0.35],
+      [mapCoord(4), mapCoord(60), scenicRadius(10.2), 0.5, 0.55],
+      [mapCoord(66), mapCoord(-72), scenicRadius(7.4), 0.44, -0.85],
+      [mapCoord(-12), mapCoord(-76), scenicRadius(9.8), 0.4, 0.2],
     ].forEach(([x, z, radius, scaleZ, rotation]) => makeWaterPatch(x, z, radius, scaleZ, rotation));
 
     const boundary = new THREE.Mesh(
@@ -876,8 +963,8 @@
 
   function makeRollingTerrain() {
     const THREE = window.THREE;
-    const rings = 42;
-    const segments = 144;
+    const rings = Math.round(42 * MAP_LINEAR_SCALE);
+    const segments = Math.round(144 * MAP_LINEAR_SCALE);
     const positions = [];
     const colors = [];
     const indices = [];
@@ -952,9 +1039,11 @@
     cap.receiveShadow = true;
     group.add(cap);
 
+    const rotation = rand(-0.18, 0.18);
     group.position.set(x, terrainOffsetAt(x, z), z);
     group.scale.z = scaleZ;
-    group.rotation.y = rand(-0.18, 0.18);
+    group.rotation.y = rotation;
+    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "island");
     world.scene.add(group);
     return group;
   }
@@ -993,9 +1082,11 @@
       group.add(spire);
     }
 
+    const rotation = rand(-0.16, 0.16);
     group.position.set(x, terrainOffsetAt(x, z) - 0.15, z);
     group.scale.z = scaleZ;
-    group.rotation.y = rand(-0.16, 0.16);
+    group.rotation.y = rotation;
+    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "mesa");
     world.scene.add(group);
     return group;
   }
@@ -1015,56 +1106,56 @@
 
   function buildScenicDepth() {
     const shelves = [
-      [-86, -78, 17.5, 4.8, 0.64, world.materials.backdropGreen],
-      [-34, -92, 20.2, 5.4, 0.52, world.materials.dish],
-      [25, -94, 18.4, 4.8, 0.58, world.materials.grassLight],
-      [86, -70, 16.2, 4.4, 0.7, world.materials.backdropGreen],
-      [-94, -26, 13.6, 4.1, 0.66, world.materials.backdropPurple],
-      [94, 18, 14.8, 4.5, 0.72, world.materials.backdropBlue],
-      [-74, 84, 17.2, 4.6, 0.58, world.materials.backdropGreen],
-      [75, 76, 18.6, 5.0, 0.62, world.materials.backdropBlue],
+      [mapCoord(-86), mapCoord(-78), scenicRadius(17.5), 4.8, 0.64, world.materials.backdropGreen],
+      [mapCoord(-34), mapCoord(-92), scenicRadius(20.2), 5.4, 0.52, world.materials.dish],
+      [mapCoord(25), mapCoord(-94), scenicRadius(18.4), 4.8, 0.58, world.materials.grassLight],
+      [mapCoord(86), mapCoord(-70), scenicRadius(16.2), 4.4, 0.7, world.materials.backdropGreen],
+      [mapCoord(-94), mapCoord(-26), scenicRadius(13.6), 4.1, 0.66, world.materials.backdropPurple],
+      [mapCoord(94), mapCoord(18), scenicRadius(14.8), 4.5, 0.72, world.materials.backdropBlue],
+      [mapCoord(-74), mapCoord(84), scenicRadius(17.2), 4.6, 0.58, world.materials.backdropGreen],
+      [mapCoord(75), mapCoord(76), scenicRadius(18.6), 5.0, 0.62, world.materials.backdropBlue],
     ];
     shelves.forEach(([x, z, radius, height, scaleZ, material]) => {
       makeBackdropShelf(x, z, radius, height, scaleZ, material);
     });
 
     [
-      [-88, 58, 18.4, 1.04, world.materials.coralPink],
-      [-94, 7, 16.8, 0.82, world.materials.coralPurple],
-      [-78, -86, 20.8, 0.92, world.materials.coralTeal],
-      [-45, -91, 22.4, 1.0, world.materials.coralGreen],
-      [3, -98, 19.6, 0.92, world.materials.coralOrange],
-      [48, -89, 18.8, 0.86, world.materials.coralPink],
-      [90, -52, 21.4, 0.92, world.materials.coralYellow],
-      [96, 39, 17.6, 0.82, world.materials.coralTeal],
-      [-8, 92, 20.2, 0.9, world.materials.coralGreen],
+      [mapCoord(-88), mapCoord(58), 18.4, 1.04, world.materials.coralPink],
+      [mapCoord(-94), mapCoord(7), 16.8, 0.82, world.materials.coralPurple],
+      [mapCoord(-78), mapCoord(-86), 20.8, 0.92, world.materials.coralTeal],
+      [mapCoord(-45), mapCoord(-91), 22.4, 1.0, world.materials.coralGreen],
+      [mapCoord(3), mapCoord(-98), 19.6, 0.92, world.materials.coralOrange],
+      [mapCoord(48), mapCoord(-89), 18.8, 0.86, world.materials.coralPink],
+      [mapCoord(90), mapCoord(-52), 21.4, 0.92, world.materials.coralYellow],
+      [mapCoord(96), mapCoord(39), 17.6, 0.82, world.materials.coralTeal],
+      [mapCoord(-8), mapCoord(92), 20.2, 0.9, world.materials.coralGreen],
     ].forEach(([x, z, height, radius, material]) => makeTallCoralPillar(x, z, height, radius, material));
 
     [
-      [-78, -73, 8.6, 16, [world.materials.coralTeal, world.materials.coralPink, world.materials.coralGreen]],
-      [-16, -88, 9.4, 18, [world.materials.coralYellow, world.materials.coralGreen, world.materials.algae]],
-      [55, -82, 8.8, 16, [world.materials.coralOrange, world.materials.coralPink, world.materials.bacteria]],
-      [82, 43, 7.6, 15, [world.materials.coralPurple, world.materials.coralTeal, world.materials.crystal]],
-      [-82, 62, 8.0, 14, [world.materials.coralGreen, world.materials.algae, world.materials.spore]],
+      [mapCoord(-78), mapCoord(-73), scenicRadius(8.6), 16, [world.materials.coralTeal, world.materials.coralPink, world.materials.coralGreen]],
+      [mapCoord(-16), mapCoord(-88), scenicRadius(9.4), 18, [world.materials.coralYellow, world.materials.coralGreen, world.materials.algae]],
+      [mapCoord(55), mapCoord(-82), scenicRadius(8.8), 16, [world.materials.coralOrange, world.materials.coralPink, world.materials.bacteria]],
+      [mapCoord(82), mapCoord(43), scenicRadius(7.6), 15, [world.materials.coralPurple, world.materials.coralTeal, world.materials.crystal]],
+      [mapCoord(-82), mapCoord(62), scenicRadius(8.0), 14, [world.materials.coralGreen, world.materials.algae, world.materials.spore]],
     ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
 
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < populationCount(18); i++) {
       const pos = randomPoint(WORLD_RADIUS - 8);
       makeCausticGlint(pos.x, pos.z, rand(1.0, 3.1), rand(0, Math.PI));
     }
 
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < populationCount(26); i++) {
       const pos = randomPoint(WORLD_RADIUS - 4);
       makeSuspendedDroplet(pos.x, pos.z, rand(0.55, 1.65), rand(7.5, 32));
     }
 
     [
-      [-70, -60, 6.4, 44, -0.25],
-      [-28, -70, 5.2, 48, 0.12],
-      [10, -68, 6.8, 52, -0.05],
-      [52, -55, 5.8, 46, 0.25],
-      [74, -24, 4.8, 42, -0.2],
-      [-78, 23, 4.5, 40, 0.3],
+      [mapCoord(-70), mapCoord(-60), 6.4, 44, -0.25],
+      [mapCoord(-28), mapCoord(-70), 5.2, 48, 0.12],
+      [mapCoord(10), mapCoord(-68), 6.8, 52, -0.05],
+      [mapCoord(52), mapCoord(-55), 5.8, 46, 0.25],
+      [mapCoord(74), mapCoord(-24), 4.8, 42, -0.2],
+      [mapCoord(-78), mapCoord(23), 4.5, 40, 0.3],
     ].forEach(([x, z, width, height, yaw]) => makeLightShaft(x, z, width, height, yaw));
   }
 
@@ -1102,9 +1193,11 @@
       group.add(frond);
     }
 
+    const rotation = rand(-0.18, 0.18);
     group.position.set(x, terrainOffsetAt(x, z) + 0.05, z);
     group.scale.z = scaleZ;
-    group.rotation.y = rand(-0.18, 0.18);
+    group.rotation.y = rotation;
+    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "shelf");
     world.scene.add(group);
     return group;
   }
@@ -1207,20 +1300,20 @@
     const tubeClusters = [
       [-18, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralGreen, world.materials.coralPink]],
       [20, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralPink, world.materials.coralPurple]],
-      [-64, 45, 11.8, 14, [world.materials.fiberA, world.materials.coralGreen, world.materials.algae]],
-      [-76, 19, 9.8, 10, [world.materials.coralPink, world.materials.coralPurple]],
-      [63, 38, 11.6, 14, [world.materials.fiberA, world.materials.algae, world.materials.coralGreen]],
-      [72, -27, 10.0, 11, [world.materials.coralPink, world.materials.bacteria]],
-      [58, -64, 12.4, 15, [world.materials.coralPink, world.materials.bacteria, world.materials.coralPurple]],
-      [-58, -62, 11.2, 13, [world.materials.coralPurple, world.materials.spore, world.materials.capsulePink]],
-      [-22, -78, 8.6, 9, [world.materials.fiberA, world.materials.algae]],
-      [8, 66, 9.4, 16, [world.materials.coralGreen, world.materials.flowerPetal]],
-      [83, 54, 8.2, 14, [world.materials.fiberA, world.materials.coralPink]],
-      [-83, -46, 8.4, 14, [world.materials.coralPurple, world.materials.spore]],
+      [mapCoord(-64), mapCoord(45), scenicRadius(11.8), 14, [world.materials.fiberA, world.materials.coralGreen, world.materials.algae]],
+      [mapCoord(-76), mapCoord(19), scenicRadius(9.8), 10, [world.materials.coralPink, world.materials.coralPurple]],
+      [mapCoord(63), mapCoord(38), scenicRadius(11.6), 14, [world.materials.fiberA, world.materials.algae, world.materials.coralGreen]],
+      [mapCoord(72), mapCoord(-27), scenicRadius(10.0), 11, [world.materials.coralPink, world.materials.bacteria]],
+      [mapCoord(58), mapCoord(-64), scenicRadius(12.4), 15, [world.materials.coralPink, world.materials.bacteria, world.materials.coralPurple]],
+      [mapCoord(-58), mapCoord(-62), scenicRadius(11.2), 13, [world.materials.coralPurple, world.materials.spore, world.materials.capsulePink]],
+      [mapCoord(-22), mapCoord(-78), scenicRadius(8.6), 9, [world.materials.fiberA, world.materials.algae]],
+      [mapCoord(8), mapCoord(66), scenicRadius(9.4), 16, [world.materials.coralGreen, world.materials.flowerPetal]],
+      [mapCoord(83), mapCoord(54), scenicRadius(8.2), 14, [world.materials.fiberA, world.materials.coralPink]],
+      [mapCoord(-83), mapCoord(-46), scenicRadius(8.4), 14, [world.materials.coralPurple, world.materials.spore]],
     ];
     tubeClusters.forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
 
-    for (let i = 0; i < 78; i++) {
+    for (let i = 0; i < populationCount(78); i++) {
       const bubble = new THREE.Mesh(
         new THREE.SphereGeometry(rand(0.12, 0.62), 9, 7),
         world.materials.bubble
@@ -1234,7 +1327,7 @@
       world.drift.push(bubble);
     }
 
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < populationCount(42); i++) {
       const cell = new THREE.Mesh(
         new THREE.IcosahedronGeometry(rand(0.2, 0.58), 0),
         pick([world.materials.cell, world.materials.algae, world.materials.crystal, world.materials.spore])
@@ -1248,17 +1341,17 @@
       world.drift.push(cell);
     }
 
-    for (let i = 0; i < 44; i++) {
+    for (let i = 0; i < populationCount(44); i++) {
       const pos = randomPoint(WORLD_RADIUS - 5);
       makePebblePatch(pos.x, pos.z, rand(0.55, 1.4));
     }
 
-    for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < populationCount(34); i++) {
       const pos = randomPoint(WORLD_RADIUS - 6);
       makeMicroFlower(pos.x, pos.z, rand(0.55, 1.1));
     }
 
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < populationCount(26); i++) {
       const cilia = new THREE.Group();
       const pos = randomPoint(WORLD_RADIUS - 7);
       const height = rand(2.6, 5.2);
@@ -1361,12 +1454,12 @@
       slat.castShadow = true;
       log.add(slat);
     }
-    log.position.set(2, terrainOffsetAt(2, 23) + 5.3, 23);
+    log.position.set(mapCoord(2), terrainOffsetAt(mapCoord(2), mapCoord(23)) + 5.3, mapCoord(23));
     log.rotation.set(-0.6, -0.72, 0.18);
     world.scene.add(log);
 
     const crater = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), world.materials.pollen);
-    crater.position.set(58, terrainOffsetAt(58, -10) + 2.6, -10);
+    crater.position.set(mapCoord(58), terrainOffsetAt(mapCoord(58), mapCoord(-10)) + 2.6, mapCoord(-10));
     crater.scale.set(1.1, 0.82, 0.95);
     crater.rotation.set(0.4, -0.2, 0.12);
     crater.castShadow = true;
@@ -1374,8 +1467,8 @@
     for (let i = 0; i < 16; i++) {
       const pit = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.18, 0.42), 0), world.materials.cliff);
       const angle = rand(0, Math.PI * 2);
-      const px = 58 + Math.cos(angle) * rand(0.8, 2.8);
-      const pz = -10 + Math.sin(angle) * rand(0.8, 2.3);
+      const px = mapCoord(58) + Math.cos(angle) * rand(0.8, 2.8);
+      const pz = mapCoord(-10) + Math.sin(angle) * rand(0.8, 2.3);
       pit.position.set(px, terrainOffsetAt(px, pz) + 3.05, pz);
       pit.scale.y = 0.2;
       world.scene.add(pit);
@@ -1578,7 +1671,7 @@
       group.add(rim);
 
       if (zone.id === "forest") {
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < populationCount(15); i++) {
           const blade = new THREE.Mesh(
             new THREE.ConeGeometry(rand(0.2, 0.52), rand(2.8, 7.4), 5),
             i % 5 === 0 ? world.materials.coralGreen : i % 3 ? world.materials.algae : world.materials.fiberA
@@ -1592,7 +1685,7 @@
           group.add(blade);
         }
       } else if (zone.id === "flats") {
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < populationCount(12); i++) {
           const puddle = new THREE.Mesh(
             new THREE.CylinderGeometry(rand(1.2, 2.4), rand(1.1, 2.2), 0.035, 14),
             i % 3 === 0 ? world.materials.water : world.materials.droplet
@@ -1605,7 +1698,7 @@
           group.add(puddle);
         }
       } else if (zone.id === "ridge") {
-        for (let i = 0; i < 13; i++) {
+        for (let i = 0; i < populationCount(13); i++) {
           const spire = new THREE.Group();
           const height = rand(2.4, 7.2);
           const core = new THREE.Mesh(
@@ -1625,7 +1718,7 @@
           group.add(spire);
         }
       } else {
-        for (let i = 0; i < 16; i++) {
+        for (let i = 0; i < populationCount(16); i++) {
           const coral = new THREE.Group();
           const core = new THREE.Mesh(
             new THREE.DodecahedronGeometry(rand(0.38, 0.82), 0),
@@ -2049,7 +2142,7 @@
       const distance = Math.sqrt(Math.random()) * spread;
       const x = zone.x + Math.cos(angle) * distance;
       const z = zone.z + Math.sin(angle) * distance;
-      if (Math.hypot(x, z) < WORLD_RADIUS - 5) {
+      if (Math.hypot(x, z) < WORLD_RADIUS - 5 && !pointOverlapsPlateau(x, z, PLAYER_RADIUS + 1.2)) {
         point = { x, z };
         break;
       }
@@ -2061,7 +2154,7 @@
     const zone = zoneById(zoneId);
     if (!zone) return;
     entries.forEach(([type, count, spread]) => {
-      for (let i = 0; i < count; i++) addProp(type, randomPointNear(zone, spread || zone.radius * 0.82));
+      for (let i = 0; i < populationCount(count); i++) addProp(type, randomPointNear(zone, spread || zone.radius * 0.82));
     });
   }
 
@@ -2095,13 +2188,13 @@
       ["pollen", 4],
     ]);
 
-    for (let i = 0; i < 5; i++) addProp("pollen", randomPointNear(zoneById("reef"), 13));
-    for (let i = 0; i < 16; i++) addProp("algae", randomPoint(WORLD_RADIUS - 8));
-    for (let i = 0; i < 13; i++) addProp(i < 6 ? "pollen" : "cell", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < 8; i++) addProp("bubble", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < 7; i++) addProp("crystal", randomPoint(WORLD_RADIUS - 10));
-    for (let i = 0; i < 7; i++) addProp("capsule", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < 4; i++) addProp("droplet", randomPoint(WORLD_RADIUS - 10));
+    for (let i = 0; i < populationCount(5); i++) addProp("pollen", randomPointNear(zoneById("reef"), scenicRadius(13)));
+    for (let i = 0; i < populationCount(16); i++) addProp("algae", randomPoint(WORLD_RADIUS - 8));
+    for (let i = 0; i < populationCount(13); i++) addProp(i < populationCount(6) ? "pollen" : "cell", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < populationCount(8); i++) addProp("bubble", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < populationCount(7); i++) addProp("crystal", randomPoint(WORLD_RADIUS - 10));
+    for (let i = 0; i < populationCount(7); i++) addProp("capsule", randomPoint(WORLD_RADIUS - 9));
+    for (let i = 0; i < populationCount(4); i++) addProp("droplet", randomPoint(WORLD_RADIUS - 10));
   }
 
   function addProp(type, point) {
@@ -2243,7 +2336,10 @@
       x = Math.cos(angle) * distance;
       z = Math.sin(angle) * distance;
       tries += 1;
-    } while (tries < 12 && Math.hypot(x - state.player.x, z - state.player.z) < 7);
+    } while (
+      tries < 18 &&
+      (Math.hypot(x - state.player.x, z - state.player.z) < 7 || pointOverlapsPlateau(x, z, PLAYER_RADIUS + 1.2))
+    );
     return { x, z };
   }
 
@@ -2884,10 +2980,13 @@
       player.vz += Math.cos(state.clock * 10) * dt * 2;
     }
 
+    const previousX = player.x;
+    const previousZ = player.z;
     player.vy -= GRAVITY * dt;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
     player.z += player.vz * dt;
+    resolvePlateauCollisions(previousX, previousZ);
     const groundY = groundYAt(player.x, player.z);
     if (player.y <= groundY) {
       player.y = groundY;

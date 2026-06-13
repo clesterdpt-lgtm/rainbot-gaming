@@ -632,6 +632,9 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   object-fit: cover;
   width: 100%;
 }
+.game-side__poster--wide {
+  aspect-ratio: 1116 / 487;
+}
 .game-side__title {
   font-family: var(--font-display);
   font-size: 14px; letter-spacing: 1px;
@@ -2227,7 +2230,9 @@ body.arcade-home::before {
 .poster-card--doorcrash img,
 .directory-card__poster--doorcrash img,
 .poster-card--tardigrade img,
-.directory-card__poster--tardigrade img {
+.directory-card__poster--tardigrade img,
+.poster-card--apop img,
+.directory-card__poster--apop img {
   object-fit: cover;
   filter: saturate(1.12) contrast(1.05);
 }
@@ -2244,7 +2249,9 @@ body.arcade-home::before {
 .poster-card--doorcrash::before,
 .directory-card__poster--doorcrash::before,
 .poster-card--tardigrade::before,
-.directory-card__poster--tardigrade::before {
+.directory-card__poster--tardigrade::before,
+.poster-card--apop::before,
+.directory-card__poster--apop::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;

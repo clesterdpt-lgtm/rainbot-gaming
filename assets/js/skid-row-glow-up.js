@@ -13,7 +13,7 @@
   const POSTS_TO_END = 6;
   const STYLE_WIN = 88;
   const RESPECT_MIN = 24;
-  const ASSET_VERSION = "20260612-4";
+  const ASSET_VERSION = "20260612-5";
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -49,9 +49,21 @@
     background: `../assets/img/skid-row-glow-up/street-background.png?v=${ASSET_VERSION}`,
     blackMale: `../assets/img/skid-row-glow-up/black-man.png?v=${ASSET_VERSION}`,
     whiteWoman: `../assets/img/skid-row-glow-up/white-woman.png?v=${ASSET_VERSION}`,
+    blackOverlays: `../assets/img/skid-row-glow-up/black-upgrade-atlas.png?v=${ASSET_VERSION}`,
+    whiteOverlays: `../assets/img/skid-row-glow-up/white-upgrade-atlas.png?v=${ASSET_VERSION}`,
   };
 
   const art = {};
+  const overlayCells = {
+    hair: 0,
+    makeup: 1,
+    hoodie: 2,
+    jacket: 3,
+    shades: 4,
+    chain: 5,
+    scarf: 6,
+    vape: 7,
+  };
 
   const options = {
     male: {
@@ -986,12 +998,19 @@
     ctx.restore();
 
     drawGeneratedStyleOverlays(cx, footY, drawH, look, time);
-    drawNameBadge(cx, footY - 376);
+    drawNameBadge(cx, Math.max(58, y - 8));
   }
 
   function drawGeneratedStyleOverlays(cx, footY, drawH, look, time) {
     const faceY = footY - drawH * 0.72;
     const chestY = footY - drawH * 0.42;
+    const atlas = state.gender === "female" ? art.whiteOverlays : art.blackOverlays;
+
+    if (imageReady(atlas)) {
+      drawAtlasStyleOverlays(atlas, cx, footY, drawH, look, time);
+      return;
+    }
+
     const outfitColor = {
       "worn hoodie": "rgba(234,247,255,0.22)",
       "fresh hoodie": "#2ee0ff",
@@ -1046,6 +1065,67 @@
     }
 
     drawAccessories(cx, faceY, look, time);
+  }
+
+  function drawAtlasStyleOverlays(atlas, cx, footY, drawH, look, time) {
+    const faceY = footY - drawH * 0.72;
+    const chestY = footY - drawH * 0.42;
+    const isFemale = state.gender === "female";
+    const pulseAlpha = 1 + state.pulse * 0.08;
+
+    if (look.outfit === "fresh hoodie") {
+      drawAtlasCell(atlas, overlayCells.hoodie, cx - 122, chestY - 88, 244, 202, { alpha: 0.94 });
+    } else if (look.outfit !== "worn hoodie") {
+      drawAtlasCell(atlas, overlayCells.jacket, cx - 136, chestY - 92, 272, 212, { alpha: 0.96 });
+    }
+
+    if (look.hair !== "beanie") {
+      const hairScale = look.hair === "clean fade" ? 0.76 : look.hair === "high pony" ? 1.04 : 0.94;
+      const hairW = (isFemale ? 184 : 164) * hairScale;
+      const hairH = (isFemale ? 158 : 106) * hairScale;
+      const hairY = isFemale ? faceY - 124 : faceY - 114;
+      const filter = look.hair === "silver sweep" || look.hair === "silver shag"
+        ? "saturate(0.7) brightness(1.18)"
+        : look.hair === "high pony"
+          ? "saturate(1.25) brightness(1.05)"
+          : "none";
+      drawAtlasCell(atlas, overlayCells.hair, cx - hairW / 2, hairY, hairW, hairH, { alpha: 0.96, filter });
+    }
+
+    if (look.makeup !== "none") {
+      const makeupAlpha = look.makeup === "camera concealer" ? 0.5 : look.makeup === "neon liner" ? 0.82 : 0.95;
+      drawAtlasCell(atlas, overlayCells.makeup, cx - 62, faceY - 39, 124, 82, {
+        alpha: makeupAlpha * pulseAlpha,
+        composite: "screen",
+      });
+    }
+
+    if (look.accessory === "shades") {
+      drawAtlasCell(atlas, overlayCells.shades, cx - 65, faceY - 38, 130, 64, { alpha: 0.98 });
+    } else if (look.accessory === "silver chain") {
+      drawAtlasCell(atlas, overlayCells.chain, cx - 78, faceY + 74, 156, 118, { alpha: 0.98 });
+    } else if (look.accessory === "silk scarf") {
+      drawAtlasCell(atlas, overlayCells.scarf, cx - 98, faceY + 64, 196, 136, { alpha: 0.98 });
+    } else if (look.accessory === "vape") {
+      const drift = Math.sin(time * 2.4) * 3;
+      drawAtlasCell(atlas, overlayCells.vape, cx + 80 + drift, faceY + 64, 108, 138, { alpha: 0.98 });
+    }
+  }
+
+  function drawAtlasCell(atlas, index, x, y, w, h, options = {}) {
+    const cols = 4;
+    const rows = 2;
+    const cellW = atlas.naturalWidth / cols;
+    const cellH = atlas.naturalHeight / rows;
+    const sx = (index % cols) * cellW;
+    const sy = Math.floor(index / cols) * cellH;
+
+    ctx.save();
+    ctx.globalAlpha = options.alpha ?? 1;
+    if (options.composite) ctx.globalCompositeOperation = options.composite;
+    if (options.filter && options.filter !== "none") ctx.filter = options.filter;
+    ctx.drawImage(atlas, sx, sy, cellW, cellH, x, y, w, h);
+    ctx.restore();
   }
 
   function drawCharacterAura(cx, cy, time) {

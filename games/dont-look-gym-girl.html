@@ -237,9 +237,9 @@
       width: 72px;
       height: 72px;
       border-radius: 50%;
-      background: rgba(10, 10, 20, 0.85);
-      border: 3px solid var(--accent);
-      color: var(--accent);
+      background: rgba(10, 10, 20, 0.35);
+      border: 2px solid rgba(255, 46, 136, 0.4);
+      color: rgba(255, 46, 136, 0.6);
       font-family: var(--font-display);
       font-size: 15px;
       font-weight: 900;
@@ -247,7 +247,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 15px rgba(255, 46, 136, 0.3);
+      box-shadow: 0 0 10px rgba(255, 46, 136, 0.15);
       cursor: pointer;
       outline: none;
       transition: transform 0.1s, background-color 0.1s, box-shadow 0.1s, border-color 0.1s;
@@ -260,6 +260,82 @@
       border-color: #ff5e9f;
       box-shadow: 0 0 25px rgba(255, 46, 136, 0.8);
       transform: scale(0.92);
+    }
+    .fullscreen-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 5;
+      background: rgba(10, 10, 20, 0.55);
+      border: 1px solid rgba(46, 224, 255, 0.4);
+      color: var(--accent-2);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fullscreen-btn:hover {
+      border-color: var(--accent-2);
+      background: rgba(46, 224, 255, 0.15);
+      transform: scale(1.05);
+    }
+    .fullscreen-btn:active {
+      transform: scale(0.95);
+    }
+    
+    /* Fullscreen layout overrides */
+    .game-stage:fullscreen {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: #0a0a14 !important;
+      padding: 16px !important;
+      box-sizing: border-box !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    .game-stage:-webkit-full-screen {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: #0a0a14 !important;
+      padding: 16px !important;
+      box-sizing: border-box !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    .game-stage:fullscreen .gym-hud,
+    .game-stage:-webkit-full-screen .gym-hud {
+      width: 100% !important;
+      max-width: 640px !important;
+      margin-bottom: 12px !important;
+      background: rgba(10, 10, 20, 0.95) !important;
+    }
+    .game-stage:fullscreen .canvas-wrap,
+    .game-stage:-webkit-full-screen .canvas-wrap {
+      flex: 1 !important;
+      width: 100% !important;
+      max-width: 640px !important;
+      max-height: calc(100vh - 80px) !important;
+      aspect-ratio: 1/1 !important;
+      position: relative !important;
+    }
+    .game-stage:fullscreen canvas,
+    .game-stage:-webkit-full-screen canvas {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
     }
   </style>
 </head>
@@ -307,6 +383,7 @@
 
         <div class="canvas-wrap canvas-wrap--ar-640-640">
           <canvas id="gameCanvas" width="640" height="640" tabindex="0"></canvas>
+          <button class="fullscreen-btn" id="btn-fullscreen" type="button">⛶ Maximize</button>
 
           <div class="panic-banner" id="gym-banner" style="display:none;"></div>
 

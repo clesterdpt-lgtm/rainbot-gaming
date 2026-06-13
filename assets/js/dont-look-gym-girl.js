@@ -1630,6 +1630,43 @@
     requestAnimationFrame(loop);
   }
 
+  function initFullscreenControls() {
+    const fullscreenBtn = document.getElementById("btn-fullscreen");
+    if (!fullscreenBtn) return;
+
+    function toggleFullscreen() {
+      const stage = document.querySelector(".game-stage");
+      if (!stage) return;
+      const requestMethod = stage.requestFullscreen || 
+                            stage.webkitRequestFullscreen || 
+                            stage.msRequestFullscreen;
+      if (requestMethod) {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          requestMethod.call(stage).catch((err) => {
+            console.error(`Error attempting to enable fullscreen: ${err.message}`);
+          });
+        } else {
+          const exitMethod = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exitMethod) exitMethod.call(document);
+        }
+      }
+    }
+
+    fullscreenBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFullscreen();
+    });
+
+    const onFullscreenChange = () => {
+      const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      fullscreenBtn.innerHTML = isFullscreen ? "⛶ Minimize" : "⛶ Maximize";
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+  }
+
   // =========================================================================
   // 18. BOOT
   // =========================================================================
@@ -1643,6 +1680,7 @@
     });
     document.getElementById("btn-restart").addEventListener("click", restart);
     bindTouchControls();
+    initFullscreenControls();
     renderPowerButtons();
   }
 

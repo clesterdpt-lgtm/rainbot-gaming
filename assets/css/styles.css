@@ -715,6 +715,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
 .canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
 .canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
+.canvas-wrap--ar-760-620  { aspect-ratio: 760 / 620; --game-max-width: 900px; }   /* billionaire space race */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -2326,6 +2327,35 @@ body.arcade-home::before {
   background:
     linear-gradient(90deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0.28) 52%, transparent),
     linear-gradient(180deg, transparent 48%, rgba(0, 0, 0, 0.42));
+  pointer-events: none;
+}
+
+/* Billionaire Space Race — image-free CSS poster */
+.poster-card--bsr,
+.directory-card__poster--bsr {
+  background:
+    radial-gradient(120% 90% at 78% 18%, rgba(255, 212, 59, 0.18), transparent 42%),
+    radial-gradient(90% 80% at 20% 12%, rgba(46, 224, 255, 0.16), transparent 48%),
+    linear-gradient(165deg, #120a2e 0%, #07060f 70%);
+}
+.poster-card--bsr::after,
+.directory-card__poster--bsr::after {
+  content: "🚀";
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  font-size: 54px;
+  filter: drop-shadow(0 0 10px rgba(255, 46, 136, 0.5));
+  transform: rotate(-18deg);
+  z-index: 1;
+  pointer-events: none;
+}
+.poster-card--bsr::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 34px;
+  z-index: 1;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.7), transparent 55%);
   pointer-events: none;
 }
 

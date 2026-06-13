@@ -200,28 +200,27 @@
       width: 80px;
       height: 80px;
       border-radius: 50%;
-      background: rgba(10, 10, 20, 0.6);
-      border: 2px solid rgba(46, 224, 255, 0.4);
-      box-shadow: 0 0 15px rgba(46, 224, 255, 0.2);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: border-color 0.2s, box-shadow 0.2s;
       opacity: 0;
     }
     .joystick-base.active {
-      border-color: var(--accent-2);
-      box-shadow: 0 0 25px rgba(46, 224, 255, 0.6);
+      border: none;
+      box-shadow: none;
     }
     .joystick-handle {
       width: 36px;
       height: 36px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent-2), #11788f);
-      box-shadow: 0 0 10px var(--accent-2);
+      background: transparent;
+      box-shadow: none;
       position: absolute;
       top: 50%;
       left: 50%;

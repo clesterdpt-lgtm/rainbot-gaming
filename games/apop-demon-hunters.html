@@ -6,7 +6,7 @@
   <title>Apop Demon Moggers — Rainbot Gaming</title>
   <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A 2D side-scroller parody — run, jump, and blast a demon boy band back to the group chat. Disband Boyz II Hell." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260613-5" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260613-6" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -37,10 +37,9 @@
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
 
           <div class="touch-pad" aria-label="Touch controls">
-            <!-- Left thumb: invisible run zones (tap/hold the left of the screen) -->
+            <!-- Left thumb: invisible joystick — push to run, up to aim up, down to crouch -->
             <div class="touch-pad__side touch-pad__side--move">
-              <button class="touch-zone touch-zone--left" id="btn-left" type="button" aria-label="Move left"><span>◄</span></button>
-              <button class="touch-zone touch-zone--right" id="btn-right" type="button" aria-label="Move right"><span>►</span></button>
+              <div class="joystick" id="joystick" role="button" aria-label="Move, aim up, crouch"></div>
             </div>
             <!-- Right thumb: jump + attacks -->
             <div class="touch-pad__side touch-pad__side--right">
@@ -79,11 +78,12 @@
           </div>
           <p style="font-family: var(--font-mono); font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; line-height: 1.5;">
             <kbd>←</kbd>/<kbd>→</kbd> or <kbd>A</kbd>/<kbd>D</kbd> · run<br>
-            <kbd>↑</kbd>/<kbd>W</kbd>/<kbd>Space</kbd> · jump (tap again = double jump)<br>
+            <kbd>↑</kbd>/<kbd>W</kbd> · aim up · <kbd>↓</kbd>/<kbd>S</kbd> · crouch<br>
+            <kbd>Space</kbd> · jump (tap again = double jump)<br>
             <kbd>Z</kbd>/<kbd>J</kbd> · Mog Beam (on beat = bonus)<br>
             <kbd>X</kbd>/<kbd>K</kbd> · Mog Aura (when meter is full)<br>
             <kbd>⛶</kbd> top-right · max screen<br>
-            <span style="opacity:0.8;">Touch: hold left side to run · jump &amp; blast on the right</span>
+            <span style="opacity:0.8;">Touch: left stick runs / aims up / crouches · jump &amp; blast on the right</span>
           </p>
         </div>
 
@@ -98,7 +98,8 @@
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Run</strong> with ←/→ (or A/D). <strong style="color:var(--ink);">Jump</strong> with ↑/W/Space — tap again mid-air for a double jump.</li>
+            <li><strong style="color:var(--ink);">Run</strong> with ←/→ (or A/D). <strong style="color:var(--ink);">Jump</strong> with Space — tap again mid-air for a double jump.</li>
+            <li><strong style="color:var(--ink);">Aim up</strong> with ↑/W to blast flying demons; <strong style="color:var(--ink);">crouch</strong> with ↓/S to duck under projectiles. On touch, the left stick does all four.</li>
             <li><strong style="color:var(--ink);">Press Z/J</strong> to fire your Mog Beam. Fire when the beat dot flashes <strong style="color:var(--accent-3);">green</strong> for bonus damage.</li>
             <li><strong style="color:var(--ink);">Mog demons</strong> to build your MOG meter. When it's full, press X/K for a screen-clearing <strong style="color:var(--accent);">Mog Aura</strong>.</li>
             <li><strong style="color:var(--ink);">Reach the EXIT flag</strong> to clear stages 1–2. Stage 3 is the boss: Lucifer Lipsync (3 phases).</li>
@@ -124,7 +125,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/apop-demon-hunters.js?v=20260613-5"></script>
+  <script src="../assets/js/apop-demon-hunters.js?v=20260613-6"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

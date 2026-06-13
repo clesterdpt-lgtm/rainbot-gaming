@@ -1021,21 +1021,16 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   font-size: 22px;
 }
 
-/* Invisible run zones — hold the left of the screen to move; no visible buttons */
+/* Invisible joystick — left thumb: push to run, up to aim up, down to crouch */
 .touch-pad__side--move {
   gap: 0;
   align-items: flex-end;
 }
-.touch-zone {
-  width: 88px;
-  height: 150px;
-  max-height: 56vh;
-  padding: 0;
+.joystick {
+  width: 150px;
+  height: 160px;
+  max-height: 60vh;
   background: transparent;
-  border: none;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1043,14 +1038,6 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
-.touch-zone > span {            /* arrows kept for a11y but invisible at rest */
-  opacity: 0;
-  color: #fff;
-  font-size: 18px;
-  padding-bottom: 10px;
-  transition: opacity 0.1s;
-}
-.touch-zone:active > span { opacity: 0.22; }   /* faint flash only while pressed */
 
 /* Max-screen (fullscreen) toggle */
 .fs-btn {
@@ -1097,7 +1084,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   border: none;
   border-radius: 0;
 }
-.canvas-wrap.is-maxed .touch-zone { width: 130px; height: 42vh; }
+.canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
 .canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }
 .canvas-wrap.is-maxed .touch-btn--beam { width: 88px; height: 88px; }
 

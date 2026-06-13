@@ -91,7 +91,7 @@
   };
 
   // ----- Held-key input -----
-  const input = { left: false, right: false };
+  const input = { left: false, right: false, up: false, down: false };
 
   // ----- Funny on-mog text -----
   const MOG_WORDS = ["MOGGED", "RATIO'D", "L + RATIO", "REJECTED", "CRINGE",
@@ -317,6 +317,23 @@
   }
 
   // ----- Combat: player shoots Mog Beam -----
+  // Beam aim direction: up on the stick aims upward (straight up, or diagonal
+  // if a run direction is also held). Otherwise fire forward (facing).
+  function aimVec() {
+    if (input.up && !player.crouching) {
+      if (input.left && !input.right) return { x: -0.6, y: -0.8 };
+      if (input.right && !input.left) return { x: 0.6, y: -0.8 };
+      return { x: 0, y: -1 };
+    }
+    return { x: player.facing, y: 0 };
+  }
+
+  // Collision box — shrinks low when crouching so projectiles fly overhead.
+  function pbox() {
+    const ch = player.crouching ? 18 : player.h;
+    return { x: player.x, y: (player.y + player.h) - ch, w: player.w, h: ch };
+  }
+
   function shoot() {
     if (!state.running || state.paused || state.gameOver) return;
     if (player.shootCd > 0) return;
@@ -324,11 +341,13 @@
     player.shootT = 1;
     const onBeat = inBeatWindow();
     const dmg = 11 * state.dmgMult * (onBeat ? 1.7 : 1);
-    const muzzleX = player.x + player.w / 2 + player.facing * 22;
-    const muzzleY = player.y + 14;
+    const aim = aimVec();
+    const baseMuzzleY = player.y + (player.crouching ? 30 : 14);
+    const muzzleX = player.x + player.w / 2 + aim.x * 22;
+    const muzzleY = baseMuzzleY + aim.y * 12;
     state.beams.push({
       x: muzzleX - 6, y: muzzleY - 6, w: 18, h: 12,
-      vx: player.facing * BEAM_SPEED, vy: 0,
+      vx: aim.x * BEAM_SPEED, vy: aim.y * BEAM_SPEED,
       life: 1.1, dmg, onBeat, hue: onBeat ? GREEN : HOT,
     });
     if (onBeat) {
@@ -473,6 +492,10 @@
   }
 
   function updatePlayer(dt) {
+    // Crouch: hold down on the ground (down has priority over aim-up)
+    player.crouching = input.down && player.onGround && !input.up;
+    const maxRun = player.crouching ? 95 : MAX_RUN;   // crouch-walk is slower
+
     // Horizontal accel/friction
     if (input.left && !input.right) {
       player.vx -= RUN_ACCEL * dt; player.facing = -1;
@@ -483,7 +506,7 @@
       if (player.vx > 0) player.vx = Math.max(0, player.vx - f);
       else if (player.vx < 0) player.vx = Math.min(0, player.vx + f);
     }
-    player.vx = clamp(player.vx, -MAX_RUN, MAX_RUN);
+    player.vx = clamp(player.vx, -maxRun, maxRun);
 
     // Gravity
     player.vy += GRAVITY * dt;
@@ -559,7 +582,7 @@
       }
 
       // Contact damage
-      if (e.contactCd <= 0 && aabb(player, e)) {
+      if (e.contactCd <= 0 && aabb(pbox(), e)) {
         e.contactCd = 0.8;
         hurtPlayer(e.dmg, dir * -140);
       }
@@ -666,7 +689,7 @@
     }
 
     // Contact damage
-    if (b.contactCd <= 0 && aabb(player, b)) {
+    if (b.contactCd <= 0 && aabb(pbox(), b)) {
       b.contactCd = 0.9;
       hurtPlayer(14, (player.x < b.x ? -1 : 1) * 200);
     }
@@ -714,7 +737,8 @@
       }
     }
     state.beams = state.beams.filter(m => m.life > 0 &&
-      m.x > state.camX - 80 && m.x < state.camX + W + 80);
+      m.x > state.camX - 80 && m.x < state.camX + W + 80 &&
+      m.y > -60 && m.y < H + 60);
     cullEnemies();
     updateHUD();
   }
@@ -722,7 +746,7 @@
   function updateHostiles(dt) {
     for (const h of state.hostiles) {
       h.x += h.vx * dt; h.y += h.vy * dt; h.life -= dt; h.spin += dt * 12;
-      if (aabb(h, player)) { h.life = 0; hurtPlayer(h.dmg, h.vx > 0 ? 120 : -120); }
+      if (aabb(h, pbox())) { h.life = 0; hurtPlayer(h.dmg, h.vx > 0 ? 120 : -120); }
     }
     state.hostiles = state.hostiles.filter(h => h.life > 0 &&
       h.x > state.camX - 120 && h.x < state.camX + W + 120 && h.y < H + 40);
@@ -919,7 +943,7 @@
     const baseY = player.y + player.h;     // feet
     ctx.save();
     ctx.translate(px, baseY);
-    ctx.scale(player.facing, 1);
+    ctx.scale(player.facing, player.crouching ? 0.6 : 1);   // compress vertically when crouching
 
     const run = player.runPhase;
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
@@ -989,7 +1013,9 @@
     // Mic arm + mic (front hand)
     ctx.save();
     ctx.translate(12, topY + 14);
-    if (player.shootT > 0) ctx.rotate(-0.5 + player.shootT * 0.3);
+    let micRot = (input.up && !player.crouching) ? -1.05 : 0;   // raise mic when aiming up
+    if (player.shootT > 0) micRot += -0.5 + player.shootT * 0.3;
+    ctx.rotate(micRot);
     ctx.strokeStyle = "#fde2c5";
     ctx.lineWidth = 5;
     ctx.beginPath();
@@ -1522,7 +1548,9 @@
     const k = e.key.toLowerCase();
     if (k === "arrowleft" || k === "a") { input.left = true; e.preventDefault(); }
     else if (k === "arrowright" || k === "d") { input.right = true; e.preventDefault(); }
-    else if (k === "arrowup" || k === "w" || k === " ") { if (!e.repeat) jump(); e.preventDefault(); }
+    else if (k === "arrowup" || k === "w") { input.up = true; e.preventDefault(); }      // aim up
+    else if (k === "arrowdown" || k === "s") { input.down = true; e.preventDefault(); }   // crouch
+    else if (k === " ") { if (!e.repeat) jump(); e.preventDefault(); }                    // jump
     else if (k === "z" || k === "j") { e.preventDefault(); shoot(); }
     else if (k === "x" || k === "k") { e.preventDefault(); special(); }
     else if (k === "p") { pauseGame(); }
@@ -1531,6 +1559,8 @@
     const k = e.key.toLowerCase();
     if (k === "arrowleft" || k === "a") input.left = false;
     else if (k === "arrowright" || k === "d") input.right = false;
+    else if (k === "arrowup" || k === "w") input.up = false;
+    else if (k === "arrowdown" || k === "s") input.down = false;
   });
 
   canvas.addEventListener("click", () => { if (state.gameOver) startGame(); });
@@ -1546,8 +1576,27 @@
     b.addEventListener("pointerleave", end);
     b.addEventListener("pointercancel", end);
   }
-  bindHold("btn-left", () => { input.left = true; }, () => { input.left = false; });
-  bindHold("btn-right", () => { input.right = true; }, () => { input.right = false; });
+  // Invisible floating joystick (left thumb): run (L/R), aim up, crouch (down)
+  const stick = document.getElementById("joystick");
+  if (stick) {
+    let stickId = null, sx0 = 0, sy0 = 0;
+    const DEAD = 16;
+    const clearStick = () => { input.left = input.right = input.up = input.down = false; };
+    stick.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      stickId = e.pointerId; sx0 = e.clientX; sy0 = e.clientY;
+      if (stick.setPointerCapture) { try { stick.setPointerCapture(e.pointerId); } catch (_) {} }
+    });
+    stick.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== stickId) return;
+      const dx = e.clientX - sx0, dy = e.clientY - sy0;
+      input.left = dx < -DEAD; input.right = dx > DEAD;
+      input.up = dy < -DEAD; input.down = dy > DEAD;
+    });
+    const stickEnd = (e) => { if (e.pointerId !== stickId) return; stickId = null; clearStick(); };
+    stick.addEventListener("pointerup", stickEnd);
+    stick.addEventListener("pointercancel", stickEnd);
+  }
   function bindTap(id, fn) {
     const b = document.getElementById(id);
     if (!b) return;
@@ -1649,7 +1698,8 @@
 
   // ----- Debug hook (preview-driven testing) -----
   window.__APOP = {
-    state, player,
+    state, player, input,
+    aimVec,
     get enemies() { return state.enemies; },
     get boss() { return state.boss; },
     start: startGame,

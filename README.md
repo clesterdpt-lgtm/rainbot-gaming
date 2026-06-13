@@ -13,11 +13,11 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
 | ✅ Live | **DoorCrash: No Tip Nitro** | 3D food-delivery lane runner. Keep the fries hot, dodge city chaos, and survive the no-tip economy. `/games/doorcrash-no-tip-nitro.html` |
 | ✅ Live | **Skid Row Glow-Up: Clout Couture** | Makeover influencer sim. Build style, chase likes, and keep Respect out of cancellation range. `/games/skid-row-glow-up.html` |
-| ✅ Live | **A-Pop Demon Hunters** | Beat-based action. Pop stars vs. demon elites. Final boss: Lavish Larry. `/games/apop-demon-hunters.html` |
+| ✅ Live | **Apop Demon Moggers** | 2D side-scroller. America's pop divas run-and-gun a demon boy band off the charts. Final boss: Lucifer Lipsync of Boyz II Hell. `/games/apop-demon-hunters.html` |
 | ✅ Live | **AGAIN.** | 🕯 *Rainbot After Dark No. 001* — first-person loop-horror in the spirit of P.T. Three.js hallway, 100% synthesized positional audio (no sound files). Headphones required. **Not a parody.** `/games/again.html` |
 | ✅ Live | **Boomer Monopoly** | Satirical housing board game. Roll, buy, renovate, and collect rent. `/games/boomer-monopoly.html` |
 
-> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. A-Pop Demon Hunters is a fictional beat-action game; all "demon elite" characters are parody stereotypes and have no relation to any real person, organization, or community. Not affiliated with any real brand, person, or community.
+> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. Apop Demon Moggers is a fictional side-scroller satirizing American pop culture and internet "mogging" slang; the demon "boy band" and all characters are invented parodies with no relation to any real person, group, organization, or community. Not affiliated with any real brand, person, or community.
 
 ## 🚀 Run it locally
 
@@ -44,7 +44,7 @@ Then open <http://localhost:8000>.
 ├── games/
 │   ├── strait-of-hormuz.html     # Playable Frogger
 │   ├── boomer-monopoly.html      # Playable board-game parody
-│   └── apop-demon-hunters.html   # Playable beat-action
+│   └── apop-demon-hunters.html   # Playable side-scroller (Apop Demon Moggers)
 ├── assets/
 │   ├── css/styles.css            # All styles
 │   └── js/

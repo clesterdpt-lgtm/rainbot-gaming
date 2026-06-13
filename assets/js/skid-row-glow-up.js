@@ -13,7 +13,7 @@
   const POSTS_TO_END = 6;
   const STYLE_WIN = 88;
   const RESPECT_MIN = 24;
-  const ASSET_VERSION = "20260612-5";
+  const ASSET_VERSION = "20260613-2";
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -54,6 +54,33 @@
   };
 
   const art = {};
+  const spriteMaskCanvas = document.createElement("canvas");
+  spriteMaskCanvas.width = 1024;
+  spriteMaskCanvas.height = 1536;
+  const spriteMaskCtx = spriteMaskCanvas.getContext("2d");
+  const characterLayerPaths = {
+    male: {
+      hair: `../assets/img/skid-row-glow-up/layers/black-hair.png?v=${ASSET_VERSION}`,
+      makeup: `../assets/img/skid-row-glow-up/layers/black-makeup.png?v=${ASSET_VERSION}`,
+      freshHoodie: `../assets/img/skid-row-glow-up/layers/black-fresh-hoodie.png?v=${ASSET_VERSION}`,
+      jacket: `../assets/img/skid-row-glow-up/layers/black-jacket.png?v=${ASSET_VERSION}`,
+      shades: `../assets/img/skid-row-glow-up/layers/black-shades.png?v=${ASSET_VERSION}`,
+      chain: `../assets/img/skid-row-glow-up/layers/black-chain.png?v=${ASSET_VERSION}`,
+      scarf: `../assets/img/skid-row-glow-up/layers/black-scarf.png?v=${ASSET_VERSION}`,
+      vape: `../assets/img/skid-row-glow-up/layers/black-vape.png?v=${ASSET_VERSION}`,
+    },
+    female: {
+      hair: `../assets/img/skid-row-glow-up/layers/white-hair.png?v=${ASSET_VERSION}`,
+      makeup: `../assets/img/skid-row-glow-up/layers/white-makeup.png?v=${ASSET_VERSION}`,
+      freshHoodie: `../assets/img/skid-row-glow-up/layers/white-fresh-hoodie.png?v=${ASSET_VERSION}`,
+      jacket: `../assets/img/skid-row-glow-up/layers/white-jacket.png?v=${ASSET_VERSION}`,
+      shades: `../assets/img/skid-row-glow-up/layers/white-shades.png?v=${ASSET_VERSION}`,
+      chain: `../assets/img/skid-row-glow-up/layers/white-chain.png?v=${ASSET_VERSION}`,
+      scarf: `../assets/img/skid-row-glow-up/layers/white-scarf.png?v=${ASSET_VERSION}`,
+      vape: `../assets/img/skid-row-glow-up/layers/white-vape.png?v=${ASSET_VERSION}`,
+    },
+  };
+  const characterLayers = { male: {}, female: {} };
   const overlayCells = {
     hair: 0,
     makeup: 1,
@@ -163,6 +190,15 @@
       };
       img.src = src;
       art[key] = img;
+    });
+    Object.entries(characterLayerPaths).forEach(([gender, layers]) => {
+      Object.entries(layers).forEach(([key, src]) => {
+        const img = new Image();
+        img.decoding = "async";
+        img.onload = () => draw();
+        img.src = src;
+        characterLayers[gender][key] = img;
+      });
     });
   }
 
@@ -991,14 +1027,115 @@
     drawCharacterAura(cx, footY - drawH * 0.56, time);
     drawCharacterShadow(cx, footY + 2);
 
+    drawMaskedGeneratedBase(sprite, x, y, drawW, drawH, look);
+    if (!drawFullFrameStyleLayers(x, y, drawW, drawH, look, time)) {
+      drawGeneratedStyleOverlays(cx, footY, drawH, look, time);
+    }
+    drawNameBadge(cx, Math.max(58, y - 8));
+  }
+
+  function drawMaskedGeneratedBase(sprite, x, y, drawW, drawH, look) {
+    spriteMaskCtx.clearRect(0, 0, spriteMaskCanvas.width, spriteMaskCanvas.height);
+    spriteMaskCtx.drawImage(sprite, 0, 0, spriteMaskCanvas.width, spriteMaskCanvas.height);
+
+    spriteMaskCtx.save();
+    spriteMaskCtx.globalCompositeOperation = "destination-out";
+    spriteMaskCtx.fillStyle = "#000";
+    if (look.hair !== "beanie" && imageReady(characterLayers[state.gender].hair)) eraseBaseHair(spriteMaskCtx, state.gender);
+    if (look.outfit !== "worn hoodie" && imageReady(getOutfitLayer(look.outfit))) eraseBaseOutfit(spriteMaskCtx, state.gender);
+    spriteMaskCtx.restore();
+
     ctx.save();
     ctx.shadowColor = state.reelTimer > 0 ? "rgba(255,212,59,0.58)" : "rgba(46,224,255,0.34)";
     ctx.shadowBlur = 14 + state.pulse * 16;
-    ctx.drawImage(sprite, x, y, drawW, drawH);
+    ctx.drawImage(spriteMaskCanvas, x, y, drawW, drawH);
     ctx.restore();
+  }
 
-    drawGeneratedStyleOverlays(cx, footY, drawH, look, time);
-    drawNameBadge(cx, Math.max(58, y - 8));
+  function eraseBaseHair(target, gender) {
+    target.beginPath();
+    if (gender === "female") {
+      target.ellipse(512, 210, 300, 188, 0, 0, Math.PI * 2);
+      target.ellipse(352, 236, 170, 136, -0.24, 0, Math.PI * 2);
+      target.ellipse(672, 236, 170, 136, 0.24, 0, Math.PI * 2);
+    } else {
+      target.ellipse(512, 182, 314, 164, 0, 0, Math.PI * 2);
+      target.ellipse(308, 220, 174, 130, -0.38, 0, Math.PI * 2);
+      target.ellipse(712, 210, 122, 118, 0.2, 0, Math.PI * 2);
+    }
+    target.fill();
+  }
+
+  function eraseBaseOutfit(target, gender) {
+    const points = gender === "female"
+      ? [[88, 620], [936, 620], [892, 1200], [708, 1320], [316, 1320], [132, 1200]]
+      : [[96, 610], [928, 610], [878, 1180], [700, 1292], [326, 1292], [146, 1180]];
+    target.beginPath();
+    target.moveTo(points[0][0], points[0][1]);
+    for (let i = 1; i < points.length; i++) target.lineTo(points[i][0], points[i][1]);
+    target.closePath();
+    target.fill();
+  }
+
+  function getOutfitLayer(outfit) {
+    const layers = characterLayers[state.gender];
+    if (outfit === "fresh hoodie") return layers.freshHoodie;
+    if (outfit !== "worn hoodie") return layers.jacket;
+    return null;
+  }
+
+  function drawFullFrameStyleLayers(x, y, drawW, drawH, look, time) {
+    const layers = characterLayers[state.gender];
+    let attempted = false;
+    let drew = false;
+
+    const drawLayer = (img, options = {}) => {
+      if (!imageReady(img)) return false;
+      ctx.save();
+      ctx.globalAlpha = options.alpha ?? 1;
+      if (options.composite) ctx.globalCompositeOperation = options.composite;
+      if (options.filter) ctx.filter = options.filter;
+      ctx.drawImage(img, x, y, drawW, drawH);
+      ctx.restore();
+      return true;
+    };
+
+    const outfitLayer = getOutfitLayer(look.outfit);
+    if (outfitLayer) {
+      attempted = true;
+      const filter = look.outfit === "thrift blazer" ? "hue-rotate(18deg) saturate(0.9)" : look.outfit === "velvet jacket" ? "hue-rotate(62deg) saturate(1.18)" : "";
+      drew = drawLayer(outfitLayer, { alpha: 0.98, filter }) || drew;
+    }
+
+    if (look.hair !== "beanie") {
+      attempted = true;
+      const filter = look.hair === "silver sweep" || look.hair === "silver shag"
+        ? "saturate(0.72) brightness(1.12)"
+        : look.hair === "high pony"
+          ? "saturate(1.18) brightness(1.03)"
+          : "";
+      drew = drawLayer(layers.hair, { alpha: 0.98, filter }) || drew;
+    }
+
+    if (look.makeup !== "none") {
+      attempted = true;
+      const alpha = look.makeup === "camera concealer" ? 0.58 : look.makeup === "neon liner" ? 0.78 : 0.92;
+      drew = drawLayer(layers.makeup, { alpha }) || drew;
+    }
+
+    const accessoryLayer = {
+      shades: layers.shades,
+      "silver chain": layers.chain,
+      "silk scarf": layers.scarf,
+      vape: layers.vape,
+    }[look.accessory];
+    if (accessoryLayer) {
+      attempted = true;
+      const drift = look.accessory === "vape" ? Math.sin(time * 2.4) * 0.005 : 0;
+      drew = drawLayer(accessoryLayer, { alpha: 0.98 + drift }) || drew;
+    }
+
+    return attempted && drew;
   }
 
   function drawGeneratedStyleOverlays(cx, footY, drawH, look, time) {

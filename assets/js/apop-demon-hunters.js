@@ -1285,6 +1285,16 @@
     ctx.font = "bold 9px JetBrains Mono, monospace";
     ctx.fillText(state.mog >= 1 ? "💅 MOG AURA READY (K / X)" : "MOG " + Math.floor(state.mog * 100) + "%", mX + 6, mY + 5);
 
+    // Score + stage (top center) — keeps the count visible in max-screen mode
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.font = "bold 16px Bungee, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(state.score.toLocaleString(), W / 2, 12);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.font = "bold 9px JetBrains Mono, monospace";
+    ctx.fillText("STAGE " + state.stage + "/3", W / 2, 32);
+
     // Combo (right)
     if (state.combo > 1) {
       ctx.fillStyle = GOLD;
@@ -1546,6 +1556,62 @@
   bindTap("btn-jump", jump);
   bindTap("btn-mog", shoot);
   bindTap("btn-special", special);
+
+  // ----- Max screen (fullscreen) -----
+  const fsBtn = document.getElementById("btn-fullscreen");
+  const fsTarget = canvas.closest(".canvas-wrap") || canvas.parentElement;
+
+  function isMaxed() { return fsTarget.classList.contains("is-maxed"); }
+  function nativeFsEl() { return document.fullscreenElement || document.webkitFullscreenElement; }
+
+  function updateFsBtn() {
+    if (!fsBtn) return;
+    const on = isMaxed();
+    fsBtn.textContent = on ? "✕" : "⛶";
+    fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+    fsBtn.setAttribute("title", on ? "Exit" : "Max screen");
+  }
+
+  function setMaxed(on) {
+    fsTarget.classList.toggle("is-maxed", on);
+    updateFsBtn();
+    // let main.js re-fit any non-maximized canvases
+    window.dispatchEvent(new Event("resize"));
+    if (on) canvas.focus();
+  }
+
+  function toggleFullscreen() {
+    const on = !isMaxed();
+    setMaxed(on);
+    // Pair with the native Fullscreen API where supported (hides browser chrome).
+    // The .is-maxed class is what actually drives layout, so this is best-effort.
+    if (on) {
+      const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+      if (req) {
+        try {
+          const ret = req.call(fsTarget);
+          if (ret && ret.catch) ret.catch(() => {}); // ignore rejection; pseudo-fullscreen still applies
+        } catch (e) { /* pseudo-fullscreen still applies */ }
+      }
+    } else if (nativeFsEl()) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) { try { exit.call(document); } catch (e) {} }
+    }
+  }
+
+  if (fsBtn) fsBtn.addEventListener("click", toggleFullscreen);
+
+  // If the user leaves native fullscreen (e.g. Esc / system gesture), drop pseudo too.
+  function onNativeFsChange() {
+    if (!nativeFsEl() && isMaxed()) { setMaxed(false); }
+  }
+  document.addEventListener("fullscreenchange", onNativeFsChange);
+  document.addEventListener("webkitfullscreenchange", onNativeFsChange);
+  // Esc exits pseudo-fullscreen when the native API isn't engaged.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+  });
+  updateFsBtn();
 
   // Buttons
   document.getElementById("btn-primary").addEventListener("click", startGame);

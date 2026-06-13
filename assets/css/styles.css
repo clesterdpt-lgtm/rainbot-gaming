@@ -1021,6 +1021,86 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   font-size: 22px;
 }
 
+/* Invisible run zones — hold the left of the screen to move; no visible buttons */
+.touch-pad__side--move {
+  gap: 0;
+  align-items: flex-end;
+}
+.touch-zone {
+  width: 88px;
+  height: 150px;
+  max-height: 56vh;
+  padding: 0;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.touch-zone > span {            /* arrows kept for a11y but invisible at rest */
+  opacity: 0;
+  color: #fff;
+  font-size: 18px;
+  padding-bottom: 10px;
+  transition: opacity 0.1s;
+}
+.touch-zone:active > span { opacity: 0.22; }   /* faint flash only while pressed */
+
+/* Max-screen (fullscreen) toggle */
+.fs-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 11;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s, transform 0.08s;
+}
+.fs-btn:hover { background: rgba(0, 0, 0, 0.72); }
+.fs-btn:active { transform: scale(0.92); }
+
+/* Maximized canvas (pseudo-fullscreen; pairs with native Fullscreen API when available) */
+.canvas-wrap.is-maxed {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #05010a;
+  z-index: 9999;
+}
+.canvas-wrap.is-maxed #gameCanvas {
+  width: min(100vw, 150vh);
+  height: auto;
+  max-height: 100vh;
+  aspect-ratio: 750 / 500;
+  border: none;
+  border-radius: 0;
+}
+.canvas-wrap.is-maxed .touch-zone { width: 130px; height: 42vh; }
+.canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }
+.canvas-wrap.is-maxed .touch-btn--beam { width: 88px; height: 88px; }
+
 @media (hover: none) and (pointer: coarse) {
   .touch-pad {
     display: flex;

@@ -698,12 +698,134 @@
       min-height: 42px;
     }
 
-    .micro-mobile-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+    .micro-touch-controls {
+      position: absolute;
+      inset: auto 0 0;
+      display: none;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 max(16px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      pointer-events: none;
+      z-index: 18;
     }
 
-    .micro-mobile-grid .btn {
-      min-height: 46px;
+    .micro-touch-stick {
+      position: relative;
+      width: clamp(112px, 28vw, 150px);
+      height: clamp(112px, 28vw, 150px);
+      border: 2px solid rgba(255, 255, 255, 0.24);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, rgba(255, 255, 255, 0.2) 0 3px, transparent 4px),
+        linear-gradient(90deg, transparent 48%, rgba(255, 255, 255, 0.16) 49% 51%, transparent 52%),
+        linear-gradient(0deg, transparent 48%, rgba(255, 255, 255, 0.16) 49% 51%, transparent 52%),
+        radial-gradient(circle at 34% 24%, rgba(107, 255, 125, 0.22), transparent 36%),
+        rgba(3, 9, 13, 0.58);
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.36), inset 0 0 24px rgba(83, 234, 209, 0.16);
+      pointer-events: auto;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .micro-touch-stick::before,
+    .micro-touch-stick::after {
+      position: absolute;
+      color: rgba(247, 251, 255, 0.78);
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.56);
+    }
+
+    .micro-touch-stick::before {
+      content: "W";
+      top: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .micro-touch-stick::after {
+      content: "S";
+      bottom: 11px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .micro-touch-stick__side {
+      position: absolute;
+      top: 50%;
+      color: rgba(247, 251, 255, 0.78);
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1;
+      text-shadow: 0 2px 0 rgba(0, 0, 0, 0.56);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .micro-touch-stick__side--left {
+      left: 12px;
+    }
+
+    .micro-touch-stick__side--right {
+      right: 12px;
+    }
+
+    .micro-touch-stick__knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 46%;
+      height: 46%;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.34), transparent 34%),
+        linear-gradient(135deg, rgba(83, 234, 209, 0.92), rgba(107, 255, 125, 0.72));
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34), inset 0 -10px 18px rgba(0, 67, 54, 0.22);
+      transform: translate(-50%, -50%);
+      transition: transform 90ms ease, box-shadow 90ms ease;
+      pointer-events: none;
+    }
+
+    .micro-touch-stick.is-active .micro-touch-stick__knob {
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.42), 0 0 20px rgba(107, 255, 125, 0.28);
+      transition: none;
+    }
+
+    .micro-touch-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(58px, 1fr));
+      gap: 10px;
+      width: clamp(126px, 34vw, 166px);
+      pointer-events: auto;
+    }
+
+    .micro-touch-actions .btn {
+      min-width: 0;
+      min-height: 54px;
+      padding: 8px 9px;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .micro-touch-actions .btn:nth-child(3) {
+      grid-column: 1 / -1;
+      min-height: 44px;
+      font-size: 11px;
+    }
+
+    .micro-touch-actions .btn.is-held,
+    .micro-touch-actions .btn:active {
+      transform: translateY(1px) scale(0.98);
+      filter: brightness(1.15);
     }
 
     .micro-page .game-side__howto {
@@ -868,7 +990,8 @@
     body.micro-play-paused .micro-radar,
     body.micro-play-paused .micro-play-meters,
     body.micro-play-paused .micro-chip,
-    body.micro-play-paused .micro-status-strip {
+    body.micro-play-paused .micro-status-strip,
+    body.micro-play-paused .micro-touch-controls {
       opacity: 0.32;
     }
 
@@ -947,6 +1070,72 @@
       body.micro-play-active .micro-play-meters {
         bottom: 16px;
         width: min(330px, calc(100% - 160px));
+      }
+
+      body.micro-play-active .micro-touch-controls {
+        display: flex;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      body.micro-play-active .micro-touch-controls {
+        display: flex;
+      }
+    }
+
+    @media (max-height: 480px) and (orientation: landscape) {
+      body.micro-play-active .micro-chip,
+      body.micro-play-active .micro-prompt,
+      body.micro-play-active .micro-status-strip {
+        display: none;
+      }
+
+      body.micro-play-active .micro-touch-controls {
+        display: flex;
+        padding: 0 max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      }
+
+      .micro-touch-stick {
+        width: 112px;
+        height: 112px;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .micro-touch-actions {
+        width: 146px;
+        gap: 8px;
+      }
+
+      .micro-touch-actions .btn {
+        min-height: 46px;
+        font-size: 10px;
+        padding: 7px 8px;
+      }
+
+      .micro-touch-actions .btn:nth-child(3) {
+        min-height: 36px;
+      }
+
+      body.micro-play-active .micro-radar {
+        right: 16px;
+        bottom: calc(126px + env(safe-area-inset-bottom));
+        width: 82px;
+        height: 82px;
+      }
+
+      body.micro-play-active .micro-play-meters {
+        left: 176px;
+        right: 176px;
+        bottom: calc(12px + env(safe-area-inset-bottom));
+        width: auto;
+        transform: none;
+      }
+
+      body.micro-play-active .micro-play-meters span {
+        grid-template-columns: 52px minmax(0, 1fr) 36px;
+        gap: 6px;
+        font-size: 8px;
       }
     }
 
@@ -1027,47 +1216,46 @@
       }
 
       body.micro-play-active .game-side {
-        top: auto;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        max-width: none;
-        padding: 8px;
+        top: calc(8px + env(safe-area-inset-top));
+        right: max(8px, env(safe-area-inset-right));
+        bottom: auto;
+        left: auto;
+        width: auto;
+        max-width: min(124px, calc(100vw - 16px));
+        padding: 0;
       }
 
       body.micro-play-active .game-side__panel {
-        display: grid;
-        gap: 7px;
+        display: block;
         border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 8px;
-        background: rgba(3, 9, 13, 0.68);
-        padding: 8px;
+        background: rgba(3, 9, 13, 0.5);
+        padding: 6px;
         backdrop-filter: blur(10px);
       }
 
       body.micro-play-active .mobile-controls {
-        display: block !important;
+        display: none !important;
       }
 
       body.micro-play-active .controls-row {
-        justify-content: stretch;
+        justify-content: flex-end;
         padding: 0;
         border: 0;
         background: transparent;
         box-shadow: none;
       }
 
+      body.micro-play-active #btn-restart,
+      body.micro-play-active #btn-sound {
+        display: none;
+      }
+
       body.micro-play-active .controls-row .btn {
-        flex: 1 1 0;
+        flex: 0 0 auto;
         min-height: 30px;
         font-size: 11px !important;
         padding: 6px 8px !important;
-      }
-
-      body.micro-play-active .micro-mobile-grid .btn {
-        min-height: 34px;
-        padding: 7px 8px;
       }
 
       body.micro-play-active .micro-arcade-hud {
@@ -1103,8 +1291,8 @@
 
       body.micro-play-active .micro-play-meters {
         left: 10px;
-        right: 224px;
-        bottom: 286px;
+        right: 144px;
+        bottom: calc(168px + env(safe-area-inset-bottom));
         width: auto;
         transform: none;
       }
@@ -1117,9 +1305,38 @@
 
       body.micro-play-active .micro-radar {
         right: 10px;
-        bottom: 284px;
+        bottom: calc(190px + env(safe-area-inset-bottom));
         width: 88px;
         height: 88px;
+      }
+
+      body.micro-play-active .micro-touch-controls {
+        display: flex;
+        gap: 10px;
+        padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      }
+
+      .micro-touch-stick {
+        width: min(34vw, 126px);
+        height: min(34vw, 126px);
+        min-width: 108px;
+        min-height: 108px;
+      }
+
+      .micro-touch-actions {
+        width: min(34vw, 136px);
+        min-width: 118px;
+        gap: 8px;
+      }
+
+      .micro-touch-actions .btn {
+        min-height: 48px;
+        font-size: 11px;
+        padding: 7px 8px;
+      }
+
+      .micro-touch-actions .btn:nth-child(3) {
+        min-height: 40px;
       }
 
       body.micro-play-active .micro-radar em {
@@ -1211,6 +1428,18 @@
             <em id="radar-distance">0 um</em>
           </div>
           <div class="micro-prompt micro-prompt--show" id="micro-prompt">Move mouse to look. WASD moves. Shift bonks.</div>
+          <div class="micro-touch-controls" aria-label="Touch controls">
+            <div class="micro-touch-stick" id="touch-stick" role="group" aria-label="Move">
+              <span class="micro-touch-stick__side micro-touch-stick__side--left">A</span>
+              <span class="micro-touch-stick__side micro-touch-stick__side--right">D</span>
+              <i class="micro-touch-stick__knob" id="touch-stick-knob"></i>
+            </div>
+            <div class="micro-touch-actions">
+              <button class="btn btn--yellow" id="btn-jump" type="button" aria-label="Jump">Jump</button>
+              <button class="btn btn--primary" id="btn-dash" type="button" aria-label="Bonk">Bonk</button>
+              <button class="btn btn--secondary" id="btn-curl" type="button" aria-label="Curl">Curl</button>
+            </div>
+          </div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">TARDIGRADE: MICRO MAYHEM</h2>
@@ -1251,17 +1480,6 @@
               <li><span>Find landmarks</span><em data-mission="landmarks">0/4</em></li>
               <li><span>Tour zones</span><em data-mission="zones">0/4</em></li>
             </ul>
-          </div>
-
-          <div class="mobile-controls" aria-label="Mobile controls">
-            <div class="mobile-controls__grid micro-mobile-grid">
-              <button class="btn btn--secondary" id="btn-forward" type="button">Forward</button>
-              <button class="btn btn--secondary" id="btn-back" type="button">Back</button>
-              <button class="btn btn--secondary" id="btn-left" type="button">Left</button>
-              <button class="btn btn--secondary" id="btn-right" type="button">Right</button>
-              <button class="btn btn--yellow" id="btn-jump" type="button">Jump</button>
-              <button class="btn btn--primary" id="btn-dash" type="button">Bonk</button>
-            </div>
           </div>
 
           <div class="micro-meter" aria-label="Specimen meters">
@@ -1312,7 +1530,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-5"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-27"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-28"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

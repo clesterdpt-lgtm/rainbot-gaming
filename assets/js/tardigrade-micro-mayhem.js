@@ -177,6 +177,9 @@
     right: $("btn-right"),
     jump: $("btn-jump"),
     dash: $("btn-dash"),
+    curl: $("btn-curl"),
+    touchStick: $("touch-stick"),
+    touchStickKnob: $("touch-stick-knob"),
     sound: $("btn-sound"),
     chaos: $("hud-chaos"),
     snacks: $("hud-snacks"),
@@ -306,6 +309,8 @@
       right: 0,
       virtualForward: 0,
       virtualRight: 0,
+      keyboardCurl: false,
+      virtualCurl: false,
     },
   };
 
@@ -2262,7 +2267,7 @@
         dash();
         event.preventDefault();
       } else if (key === "e" || key === "E") {
-        state.curlHeld = true;
+        setCurlSource("keyboard", true);
         event.preventDefault();
       } else if (key === "q" || key === "Q") {
         state.camera.targetYaw -= 0.22;
@@ -2293,7 +2298,7 @@
       if ((key === "ArrowDown" || key === "s" || key === "S") && state.input.forward < 0) state.input.forward = 0;
       if ((key === "ArrowLeft" || key === "a" || key === "A") && state.input.right < 0) state.input.right = 0;
       if ((key === "ArrowRight" || key === "d" || key === "D") && state.input.right > 0) state.input.right = 0;
-      if (key === "e" || key === "E") state.curlHeld = false;
+      if (key === "e" || key === "E") setCurlSource("keyboard", false);
     });
 
     let pointer = null;
@@ -2363,8 +2368,10 @@
     bindHold(el.back, () => { state.input.virtualForward = -1; }, () => { if (state.input.virtualForward < 0) state.input.virtualForward = 0; });
     bindHold(el.left, () => { state.input.virtualRight = -1; }, () => { if (state.input.virtualRight < 0) state.input.virtualRight = 0; });
     bindHold(el.right, () => { state.input.virtualRight = 1; }, () => { if (state.input.virtualRight > 0) state.input.virtualRight = 0; });
+    bindTouchStick(el.touchStick, el.touchStickKnob);
     bindTap(el.jump, jump);
     bindTap(el.dash, dash);
+    bindHold(el.curl, () => setCurlSource("touch", true), () => setCurlSource("touch", false));
   }
 
   function requestMouseLook() {
@@ -2380,11 +2387,97 @@
     state.camera.targetPitch = clamp(state.camera.targetPitch + dy * CAMERA_PITCH_SENSITIVITY, 0.24, 0.82);
   }
 
+  function setCurlSource(source, held) {
+    if (source === "keyboard") state.input.keyboardCurl = held;
+    else state.input.virtualCurl = held;
+    state.curlHeld = !!(state.input.keyboardCurl || state.input.virtualCurl);
+  }
+
+  function resetVirtualControls() {
+    state.input.virtualForward = 0;
+    state.input.virtualRight = 0;
+    state.input.virtualCurl = false;
+    state.curlHeld = !!state.input.keyboardCurl;
+    if (el.touchStick) el.touchStick.classList.remove("is-active");
+    if (el.touchStickKnob) el.touchStickKnob.style.transform = "";
+    [el.jump, el.dash, el.curl, el.forward, el.back, el.left, el.right].forEach((button) => {
+      if (button) button.classList.remove("is-held");
+    });
+  }
+
+  function bindTouchStick(stick, knob) {
+    if (!stick || !knob) return;
+    let pointerId = null;
+    const deadZone = 0.13;
+    const update = (event) => {
+      const rect = stick.getBoundingClientRect();
+      const max = Math.max(32, Math.min(rect.width, rect.height) * 0.34);
+      let dx = event.clientX - (rect.left + rect.width / 2);
+      let dy = event.clientY - (rect.top + rect.height / 2);
+      const distance = Math.hypot(dx, dy);
+      if (distance > max) {
+        const scale = max / distance;
+        dx *= scale;
+        dy *= scale;
+      }
+      const inputX = Math.abs(dx / max) < deadZone ? 0 : dx / max;
+      const inputY = Math.abs(dy / max) < deadZone ? 0 : dy / max;
+      state.input.virtualRight = clamp(inputX, -1, 1);
+      state.input.virtualForward = clamp(-inputY, -1, 1);
+      knob.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px), calc(-50% + ${dy.toFixed(1)}px))`;
+    };
+    const release = () => {
+      pointerId = null;
+      state.input.virtualForward = 0;
+      state.input.virtualRight = 0;
+      stick.classList.remove("is-active");
+      knob.style.transform = "";
+    };
+    stick.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      if (!state.running) startGame();
+      pointerId = event.pointerId;
+      stick.classList.add("is-active");
+      try {
+        stick.setPointerCapture(event.pointerId);
+      } catch (_) {}
+      update(event);
+    });
+    stick.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== pointerId) return;
+      event.preventDefault();
+      update(event);
+    });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((eventName) => {
+      stick.addEventListener(eventName, (event) => {
+        if (event.pointerId !== pointerId && eventName !== "lostpointercapture") return;
+        event.preventDefault();
+        release();
+      });
+    });
+    window.addEventListener("pointerup", (event) => {
+      if (event.pointerId === pointerId) release();
+    });
+    window.addEventListener("pointercancel", (event) => {
+      if (event.pointerId === pointerId) release();
+    });
+    window.addEventListener("mouseup", release);
+    window.addEventListener("touchend", release, { passive: true });
+    window.addEventListener("touchcancel", release, { passive: true });
+    window.addEventListener("blur", release);
+  }
+
   function bindTap(button, action) {
     if (!button) return;
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      button.classList.add("is-held");
       action();
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
+      button.addEventListener(eventName, () => {
+        button.classList.remove("is-held");
+      });
     });
   }
 
@@ -2392,11 +2485,13 @@
     if (!button) return;
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      button.classList.add("is-held");
       down();
     });
     ["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
       button.addEventListener(eventName, (event) => {
         event.preventDefault();
+        button.classList.remove("is-held");
         up();
       });
     });
@@ -2469,6 +2564,7 @@
     const active = state.running && !state.gameOver;
     document.body.classList.toggle("micro-play-active", active);
     document.body.classList.toggle("micro-play-paused", active && state.paused);
+    if (!active || state.paused) resetVirtualControls();
     requestAnimationFrame(resize);
   }
 
@@ -2607,6 +2703,8 @@
       right: 0,
       virtualForward: 0,
       virtualRight: 0,
+      keyboardCurl: false,
+      virtualCurl: false,
     });
     world.traversalToys.forEach((toy) => {
       toy.userData.cooldown = 0;

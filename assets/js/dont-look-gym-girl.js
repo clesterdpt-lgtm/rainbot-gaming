@@ -320,6 +320,13 @@
       eyesClosed: false
     },
 
+    touchJoystick: {
+      active: false,
+      dirX: 0,
+      dirY: 0
+    },
+    touchEyesClosed: false,
+
     sus: 0,
     fighting: false,    // neck pull currently strong
     pullTarget: null,   // girl the neck wants
@@ -489,29 +496,39 @@
   });
   window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 
-  canvas.addEventListener("mousemove", (e) => setLookTarget(e.clientX, e.clientY));
-  canvas.addEventListener("mousedown", () => {
+  let activeTouchLookId = null;
+
+  canvas.addEventListener("pointerdown", (e) => {
     canvas.focus();
     ensureAudio();
-    if (!state.running && !state.gameOver && !state.won) startGame();
+    if (!state.running && !state.gameOver && !state.won) {
+      startGame();
+      return;
+    }
+    // Touch starts a drag/look interaction
+    if (e.pointerType === "touch") {
+      activeTouchLookId = e.pointerId;
+      setLookTarget(e.clientX, e.clientY);
+    }
   });
-  canvas.addEventListener("touchstart", (e) => {
-    if (!e.touches.length) return;
-    e.preventDefault();
-    const touch = e.touches[e.touches.length - 1];
-    setLookTarget(touch.clientX, touch.clientY);
-    canvas.focus();
-    ensureAudio();
-    if (!state.running && !state.gameOver && !state.won) startGame();
-  }, { passive: false });
-  canvas.addEventListener("touchmove", (e) => {
-    if (!e.touches.length) return;
-    e.preventDefault();
-    const touch = e.touches[e.touches.length - 1];
-    setLookTarget(touch.clientX, touch.clientY);
-  }, { passive: false });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse") {
+      setLookTarget(e.clientX, e.clientY);
+    } else if (e.pointerType === "touch" && e.pointerId === activeTouchLookId) {
+      setLookTarget(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener("pointerup", (e) => {
+    if (e.pointerId === activeTouchLookId) activeTouchLookId = null;
+  });
+  window.addEventListener("pointercancel", (e) => {
+    if (e.pointerId === activeTouchLookId) activeTouchLookId = null;
+  });
 
   function bindTouchControls() {
+    // 1. Static buttons fallback (remains unchanged)
     const dirMap = {
       up: "arrowup",
       down: "arrowdown",
@@ -546,25 +563,147 @@
       button.addEventListener("pointercancel", release);
       button.addEventListener("pointerleave", release);
     });
+
+    // 2. Premium On-screen Joystick and EYES action button
+    const joystickZone = document.getElementById("joystick-zone");
+    const joystickBase = document.getElementById("joystick-base");
+    const joystickHandle = document.getElementById("joystick-handle");
+    const eyesBtn = document.getElementById("eyes-btn");
+
+    if (!joystickZone || !joystickBase || !joystickHandle || !eyesBtn) return;
+
+    let joystickPointerId = null;
+    let baseRect = null;
+    let centerX = 0;
+    let centerY = 0;
+    let maxRadius = 40;
+
+    joystickZone.addEventListener("pointerdown", (e) => {
+      if (joystickPointerId !== null) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      canvas.focus();
+      ensureAudio();
+      if (!state.running && !state.gameOver && !state.won) {
+        startGame();
+        return;
+      }
+
+      joystickPointerId = e.pointerId;
+      state.touchJoystick.active = true;
+      joystickBase.classList.add("active");
+
+      baseRect = joystickBase.getBoundingClientRect();
+      centerX = baseRect.left + baseRect.width / 2;
+      centerY = baseRect.top + baseRect.height / 2;
+      maxRadius = baseRect.width / 2;
+
+      handleJoystickMove(e);
+    });
+
+    function handleJoystickMove(e) {
+      if (!state.touchJoystick.active || e.pointerId !== joystickPointerId) return;
+
+      const diffX = e.clientX - centerX;
+      const diffY = e.clientY - centerY;
+      const d = Math.hypot(diffX, diffY);
+
+      if (d === 0) {
+        state.touchJoystick.dirX = 0;
+        state.touchJoystick.dirY = 0;
+        joystickHandle.style.transform = "translate(-50%, -50%)";
+        return;
+      }
+
+      const clampedD = Math.min(maxRadius, d);
+      const angle = Math.atan2(diffY, diffX);
+
+      const handleX = Math.cos(angle) * clampedD;
+      const handleY = Math.sin(angle) * clampedD;
+
+      joystickHandle.style.transform = `translate(calc(-50% + ${handleX}px), calc(-50% + ${handleY}px))`;
+
+      state.touchJoystick.dirX = Math.cos(angle) * (clampedD / maxRadius);
+      state.touchJoystick.dirY = Math.sin(angle) * (clampedD / maxRadius);
+    }
+
+    window.addEventListener("pointermove", (e) => {
+      if (state.touchJoystick.active && e.pointerId === joystickPointerId) {
+        handleJoystickMove(e);
+      }
+    });
+
+    function handleJoystickUp(e) {
+      if (e.pointerId === joystickPointerId) {
+        state.touchJoystick.active = false;
+        state.touchJoystick.dirX = 0;
+        state.touchJoystick.dirY = 0;
+        joystickPointerId = null;
+        joystickBase.classList.remove("active");
+        joystickHandle.style.transform = "translate(-50%, -50%)";
+      }
+    }
+
+    window.addEventListener("pointerup", handleJoystickUp);
+    window.addEventListener("pointercancel", handleJoystickUp);
+
+    // EYES button
+    let eyesPointerId = null;
+    eyesBtn.addEventListener("pointerdown", (e) => {
+      if (eyesPointerId !== null) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      canvas.focus();
+      ensureAudio();
+      if (!state.running && !state.gameOver && !state.won) {
+        startGame();
+        return;
+      }
+
+      eyesPointerId = e.pointerId;
+      state.touchEyesClosed = true;
+      eyesBtn.classList.add("active");
+    });
+
+    function handleEyesUp(e) {
+      if (e.pointerId === eyesPointerId) {
+        state.touchEyesClosed = false;
+        eyesPointerId = null;
+        eyesBtn.classList.remove("active");
+      }
+    }
+
+    window.addEventListener("pointerup", handleEyesUp);
+    window.addEventListener("pointercancel", handleEyesUp);
   }
 
   function readInput() {
     const p = state.player;
     let dx = 0, dy = 0;
-    if (keys["w"] || keys["arrowup"]) dy -= 1;
-    if (keys["s"] || keys["arrowdown"]) dy += 1;
-    if (keys["a"] || keys["arrowleft"]) dx -= 1;
-    if (keys["d"] || keys["arrowright"]) dx += 1;
-    if (dx !== 0 || dy !== 0) {
-      const len = Math.hypot(dx, dy);
-      dx /= len; dy /= len;
-      p.moving = true;
+
+    if (state.touchJoystick && state.touchJoystick.active) {
+      dx = state.touchJoystick.dirX;
+      dy = state.touchJoystick.dirY;
+      p.moving = (dx !== 0 || dy !== 0);
     } else {
-      p.moving = false;
+      if (keys["w"] || keys["arrowup"]) dy -= 1;
+      if (keys["s"] || keys["arrowdown"]) dy += 1;
+      if (keys["a"] || keys["arrowleft"]) dx -= 1;
+      if (keys["d"] || keys["arrowright"]) dx += 1;
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        dx /= len; dy /= len;
+        p.moving = true;
+      } else {
+        p.moving = false;
+      }
     }
+
     p.dirX = dx;
     p.dirY = dy;
-    p.eyesClosed = !!keys[" "];
+    p.eyesClosed = !!keys[" "] || !!state.touchEyesClosed;
 
     const mdx = mouseCanvasX - p.x;
     const mdy = mouseCanvasY - p.y;

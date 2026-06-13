@@ -157,6 +157,104 @@
       font-size: 10px; font-weight: 800;
     }
     .gym-power[data-empty="true"] .gym-power__count { background: #444; color: #888; }
+
+    /* ===== Mobile Virtual Joystick & EYES Button Styling ===== */
+    .game-touch-overlay {
+      display: none;
+      position: absolute;
+      bottom: 24px;
+      left: 0;
+      width: 100%;
+      height: 120px;
+      pointer-events: none;
+      z-index: 4;
+      padding: 0 24px;
+      box-sizing: border-box;
+    }
+    @media (max-width: 900px), (pointer: coarse) {
+      .game-touch-overlay {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+      }
+      .mobile-controls {
+        display: none !important;
+      }
+    }
+    .joystick-zone {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .joystick-base {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(10, 10, 20, 0.6);
+      border: 2px solid rgba(46, 224, 255, 0.4);
+      box-shadow: 0 0 15px rgba(46, 224, 255, 0.2);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .joystick-base.active {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 25px rgba(46, 224, 255, 0.6);
+    }
+    .joystick-handle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-2), #11788f);
+      box-shadow: 0 0 10px var(--accent-2);
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform 0.05s ease-out;
+      pointer-events: none;
+    }
+    .action-zone {
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .eyes-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(10, 10, 20, 0.85);
+      border: 3px solid var(--accent);
+      color: var(--accent);
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 15px rgba(255, 46, 136, 0.3);
+      cursor: pointer;
+      outline: none;
+      transition: transform 0.1s, background-color 0.1s, box-shadow 0.1s, border-color 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .eyes-btn:active, .eyes-btn.active {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: #ff5e9f;
+      box-shadow: 0 0 25px rgba(255, 46, 136, 0.8);
+      transform: scale(0.92);
+    }
   </style>
 </head>
 <body>
@@ -227,6 +325,18 @@
           </div>
 
           <div id="shame-mount"></div>
+
+          <!-- Mobile Joystick and Action Button Overlays -->
+          <div class="game-touch-overlay" id="game-touch-overlay">
+            <div class="joystick-zone" id="joystick-zone">
+              <div class="joystick-base" id="joystick-base">
+                <div class="joystick-handle" id="joystick-handle"></div>
+              </div>
+            </div>
+            <div class="action-zone" id="action-zone">
+              <button class="eyes-btn" id="eyes-btn" type="button">EYES</button>
+            </div>
+          </div>
         </div>
       </div>
 

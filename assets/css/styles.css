@@ -703,6 +703,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; --game-max-width: 650px; }   /* looksmaxxing */
 .canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
 .canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
+.canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
 #gameCanvas {
   display: block;
   width: 100%;

@@ -6,7 +6,7 @@
   <title>Unhoused and Unhinged — Rainbot Gaming</title>
   <meta name="description" content="A low-poly 3D street-survival sandbox prototype. Earn cash with slapstick antics by day, dodge overzealous cops, and survive Tweeker Zombies at night." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-unhoused-1" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-mobile-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M14 70h72v12H14z' fill='%23ffd43b'/%3E%3Cpath d='M26 64c2-24 46-24 48 0' fill='%23ff2e88'/%3E%3Ccircle cx='38' cy='40' r='8' fill='%232ee0ff'/%3E%3Ccircle cx='62' cy='40' r='8' fill='%232ee0ff'/%3E%3C/svg%3E" />
   <style>
     .unhinged-page {
@@ -38,6 +38,25 @@
       --game-max-width: 1536px;
       background: #05070d;
       border: 1px solid rgba(255, 46, 136, 0.36);
+      /* The in-canvas HUD scales against the play area (not the viewport),
+         so it never overlaps regardless of layout, window, or max screen. */
+      container-type: size;
+      container-name: ustage;
+    }
+
+    /* Max screen: fill the wrap (orthographic camera adapts to any aspect). */
+    .canvas-wrap--unhinged.is-maxed {
+      border: 0;
+    }
+
+    .canvas-wrap--unhinged.is-maxed #gameCanvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 0;
     }
 
     .canvas-wrap--unhinged::after {
@@ -83,17 +102,17 @@
 
     .unhinged-hud-left {
       display: grid;
-      gap: 9px;
+      gap: clamp(5px, 1cqw, 9px);
       left: 12px;
       position: absolute;
       top: 14px;
-      width: min(282px, 31vw);
+      width: clamp(116px, 22cqw, 282px);
     }
 
     .unhinged-logo-mark {
       color: #fff;
       font-family: "Bungee", var(--font-display);
-      font-size: clamp(18px, 2.2vw, 36px);
+      font-size: clamp(14px, 2.4cqw, 34px);
       font-weight: 900;
       letter-spacing: 0;
       line-height: 0.9;
@@ -113,9 +132,9 @@
       color: #fff;
       display: block;
       font-family: var(--font-display);
-      font-size: 14px;
+      font-size: clamp(8px, 1cqw, 14px);
       line-height: 1;
-      margin-left: 88px;
+      margin-left: clamp(44px, 6.4cqw, 88px);
       margin-top: -1px;
     }
 
@@ -130,15 +149,15 @@
 
     .unhinged-task-card {
       display: grid;
-      gap: 8px;
-      padding: 10px 12px;
+      gap: clamp(4px, 0.9cqw, 8px);
+      padding: clamp(6px, 1.1cqw, 10px) clamp(7px, 1.3cqw, 12px);
     }
 
     .unhinged-task-card strong {
       color: #ffd43b;
       display: block;
       font-family: var(--font-display);
-      font-size: 13px;
+      font-size: clamp(9px, 1.35cqw, 13px);
       line-height: 1.05;
       text-transform: uppercase;
     }
@@ -162,7 +181,7 @@
     .unhinged-task-row span {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 11px;
+      font-size: clamp(8px, 1.1cqw, 11px);
       line-height: 1.12;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -177,23 +196,23 @@
     .unhinged-task-row b {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 11px;
+      font-size: clamp(8px, 1.1cqw, 11px);
       line-height: 1;
     }
 
     .unhinged-notoriety {
       left: 50%;
-      min-width: 270px;
+      min-width: 0;
       position: absolute;
       top: 18px;
       transform: translateX(-50%);
-      width: 31%;
+      width: clamp(120px, 22cqw, 270px);
     }
 
     .unhinged-notoriety__label {
       color: #ff736d;
       font-family: var(--font-display);
-      font-size: 17px;
+      font-size: clamp(10px, 1.6cqw, 17px);
       line-height: 1;
       text-align: center;
       text-transform: uppercase;
@@ -203,7 +222,8 @@
       background: rgba(8, 18, 30, 0.82);
       border: 1px solid rgba(5, 8, 14, 0.78);
       border-radius: 4px;
-      height: 16px;
+      display: block;
+      height: clamp(9px, 1.5cqw, 16px);
       margin-top: 7px;
       overflow: hidden;
     }
@@ -217,14 +237,14 @@
 
     .unhinged-stars {
       display: flex;
-      gap: 9px;
+      gap: clamp(3px, 0.8cqw, 9px);
       justify-content: center;
-      margin-top: 8px;
+      margin-top: clamp(4px, 0.9cqw, 8px);
     }
 
     .unhinged-stars span {
       color: rgba(20, 48, 74, 0.86);
-      font-size: 34px;
+      font-size: clamp(15px, 3cqw, 34px);
       line-height: 1;
       -webkit-text-stroke: 2px rgba(5, 7, 13, 0.82);
     }
@@ -237,8 +257,9 @@
     .unhinged-hud-map {
       position: absolute;
       right: 14px;
-      top: 12px;
-      width: 186px;
+      /* clear the fixed 38px max-screen button in the top-right corner */
+      top: 52px;
+      width: clamp(94px, 15cqw, 186px);
     }
 
     .unhinged-hud-clock {
@@ -252,7 +273,7 @@
     .unhinged-hud-clock b {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 20px;
+      font-size: clamp(11px, 1.8cqw, 20px);
       line-height: 1;
     }
 
@@ -264,11 +285,11 @@
       color: #fff;
       display: inline-flex;
       font-family: var(--font-display);
-      font-size: 22px;
-      height: 42px;
+      font-size: clamp(13px, 2cqw, 22px);
+      height: clamp(24px, 3.4cqw, 42px);
       justify-content: center;
       line-height: 1;
-      width: 42px;
+      width: clamp(24px, 3.4cqw, 42px);
     }
 
     .unhinged-minimap {
@@ -371,16 +392,16 @@
       display: grid;
       gap: 7px;
       left: 12px;
-      padding: 10px;
+      padding: clamp(7px, 1.1cqw, 10px);
       position: absolute;
-      width: min(286px, 31vw);
+      width: clamp(150px, 23cqw, 286px);
     }
 
     .unhinged-stat-row {
       align-items: center;
       display: grid;
-      gap: 8px;
-      grid-template-columns: 32px minmax(0, 1fr) 60px;
+      gap: clamp(5px, 0.9cqw, 8px);
+      grid-template-columns: clamp(20px, 3cqw, 32px) minmax(0, 1fr) clamp(40px, 5.4cqw, 60px);
     }
 
     .unhinged-stat-icon {
@@ -390,11 +411,11 @@
       color: #fff;
       display: flex;
       font-family: var(--font-display);
-      font-size: 16px;
-      height: 30px;
+      font-size: clamp(10px, 1.6cqw, 16px);
+      height: clamp(19px, 3cqw, 30px);
       justify-content: center;
       line-height: 1;
-      width: 30px;
+      width: clamp(19px, 3cqw, 30px);
     }
 
     .unhinged-stat-icon--health {
@@ -421,16 +442,17 @@
       color: #fff;
       display: block;
       font-family: var(--font-display);
-      font-size: 11px;
+      font-size: clamp(8px, 1.1cqw, 11px);
       line-height: 1;
-      margin-bottom: 3px;
+      margin-bottom: clamp(2px, 0.5cqw, 3px);
       text-transform: uppercase;
     }
 
     .unhinged-stat-track {
       background: rgba(255, 255, 255, 0.11);
       border: 1px solid rgba(0, 0, 0, 0.36);
-      height: 14px;
+      display: block;
+      height: clamp(9px, 1.5cqw, 14px);
       overflow: hidden;
     }
 
@@ -459,7 +481,7 @@
     .unhinged-stat-value {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 11px;
+      font-size: clamp(8px, 1.1cqw, 11px);
       line-height: 1;
       text-align: right;
     }
@@ -469,8 +491,8 @@
       color: #75ff92;
       display: flex;
       font-family: var(--font-display);
-      font-size: 24px;
-      gap: 10px;
+      font-size: clamp(15px, 2.4cqw, 24px);
+      gap: clamp(6px, 1.1cqw, 10px);
       line-height: 1;
       margin-top: 3px;
     }
@@ -482,17 +504,17 @@
       border-radius: 6px;
       color: #175323;
       display: inline-flex;
-      font-size: 18px;
-      height: 28px;
+      font-size: clamp(12px, 1.8cqw, 18px);
+      height: clamp(19px, 2.9cqw, 28px);
       justify-content: center;
       transform: rotate(-10deg);
-      width: 44px;
+      width: clamp(30px, 4.6cqw, 44px);
     }
 
     .unhinged-hotbar {
-      bottom: 20px;
+      bottom: clamp(10px, 1.8cqw, 20px);
       display: flex;
-      gap: 6px;
+      gap: clamp(3px, 0.6cqw, 6px);
       left: 50%;
       pointer-events: auto;
       position: absolute;
@@ -504,10 +526,10 @@
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 8px;
       box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
-      height: 78px;
+      height: clamp(42px, 5.6cqw, 78px);
       position: relative;
       touch-action: manipulation;
-      width: 78px;
+      width: clamp(42px, 5.6cqw, 78px);
     }
 
     #hud-slot-action,
@@ -528,10 +550,10 @@
     .unhinged-slot__key {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 12px;
-      left: 7px;
+      font-size: clamp(8px, 1cqw, 12px);
+      left: clamp(4px, 0.7cqw, 7px);
       position: absolute;
-      top: 6px;
+      top: clamp(3px, 0.7cqw, 6px);
     }
 
     .unhinged-slot__icon {
@@ -539,22 +561,22 @@
       color: #f8f1dc;
       display: flex;
       font-family: var(--font-display);
-      font-size: 12px;
+      font-size: clamp(8px, 1cqw, 12px);
       height: 100%;
       justify-content: center;
       line-height: 1.05;
-      padding: 18px 8px 8px;
+      padding: clamp(13px, 2cqw, 18px) clamp(4px, 0.9cqw, 8px) clamp(4px, 0.9cqw, 8px);
       text-align: center;
       text-transform: uppercase;
     }
 
     .unhinged-slot__count {
-      bottom: 6px;
+      bottom: clamp(3px, 0.7cqw, 6px);
       color: #fff;
       font-family: var(--font-display);
-      font-size: 12px;
+      font-size: clamp(8px, 1cqw, 12px);
       position: absolute;
-      right: 8px;
+      right: clamp(5px, 0.9cqw, 8px);
     }
 
     .unhinged-prompts {
@@ -563,16 +585,16 @@
       gap: 8px;
       position: absolute;
       right: 14px;
-      width: min(210px, 22vw);
+      width: clamp(132px, 16cqw, 210px);
     }
 
     .unhinged-prompt {
       align-items: center;
       display: grid;
-      gap: 10px;
-      grid-template-columns: 42px minmax(0, 1fr);
-      min-height: 48px;
-      padding: 6px 10px;
+      gap: clamp(5px, 1cqw, 10px);
+      grid-template-columns: clamp(30px, 4.6cqw, 42px) minmax(0, 1fr);
+      min-height: clamp(28px, 5cqw, 48px);
+      padding: clamp(4px, 0.7cqw, 6px) clamp(6px, 1.2cqw, 10px);
     }
 
     .unhinged-prompt kbd {
@@ -583,8 +605,8 @@
       color: #fff;
       display: flex;
       font-family: var(--font-display);
-      font-size: 15px;
-      height: 34px;
+      font-size: clamp(9px, 1.4cqw, 15px);
+      height: clamp(22px, 3.4cqw, 34px);
       justify-content: center;
       line-height: 1;
     }
@@ -592,7 +614,7 @@
     .unhinged-prompt span {
       color: #fff;
       font-family: var(--font-display);
-      font-size: 12px;
+      font-size: clamp(8px, 1.1cqw, 12px);
       line-height: 1.05;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -996,6 +1018,7 @@
       font-weight: 800;
     }
 
+    /* Page layout only — the in-canvas HUD scales itself via container units. */
     @media (max-width: 900px) {
       .unhinged-page .game-layout {
         grid-template-columns: minmax(0, 1fr);
@@ -1013,188 +1036,6 @@
 
       .canvas-wrap--unhinged {
         aspect-ratio: 4 / 3;
-      }
-
-      .unhinged-hud-left {
-        left: 9px;
-        top: 9px;
-        width: 178px;
-      }
-
-      .unhinged-logo-mark {
-        font-size: 17px;
-      }
-
-      .unhinged-logo-mark small {
-        font-size: 9px;
-        margin-left: 48px;
-      }
-
-      .unhinged-version,
-      .unhinged-task-card--heat {
-        display: none;
-      }
-
-      .unhinged-task-card {
-        gap: 5px;
-        padding: 7px 8px;
-      }
-
-      .unhinged-task-card strong,
-      .unhinged-task-row span,
-      .unhinged-task-row b {
-        font-size: 9px;
-      }
-
-      .unhinged-notoriety {
-        min-width: 150px;
-        top: 8px;
-        width: 31%;
-      }
-
-      .unhinged-notoriety__label {
-        font-size: 11px;
-      }
-
-      .unhinged-notoriety__track {
-        height: 10px;
-        margin-top: 5px;
-      }
-
-      .unhinged-stars {
-        gap: 4px;
-        margin-top: 5px;
-      }
-
-      .unhinged-stars span {
-        font-size: 20px;
-        -webkit-text-stroke-width: 1px;
-      }
-
-      .unhinged-hud-map {
-        right: 8px;
-        top: 8px;
-        width: 112px;
-      }
-
-      .unhinged-hud-clock b {
-        font-size: 13px;
-      }
-
-      .unhinged-gear-dot {
-        font-size: 14px;
-        height: 28px;
-        width: 28px;
-      }
-
-      .unhinged-survival-panel {
-        bottom: 8px;
-        gap: 4px;
-        left: 8px;
-        padding: 7px;
-        width: 205px;
-      }
-
-      .unhinged-stat-row {
-        gap: 5px;
-        grid-template-columns: 22px minmax(0, 1fr) 45px;
-      }
-
-      .unhinged-stat-icon {
-        font-size: 11px;
-        height: 21px;
-        width: 21px;
-      }
-
-      .unhinged-stat-label,
-      .unhinged-stat-value {
-        font-size: 8px;
-      }
-
-      .unhinged-stat-track {
-        height: 9px;
-      }
-
-      .unhinged-cashline {
-        font-size: 16px;
-      }
-
-      .unhinged-cash-bill {
-        font-size: 12px;
-        height: 20px;
-        width: 32px;
-      }
-
-      .unhinged-hotbar {
-        bottom: 8px;
-        gap: 3px;
-      }
-
-      .unhinged-slot {
-        border-radius: 5px;
-        height: 50px;
-        width: 50px;
-      }
-
-      .unhinged-slot__key,
-      .unhinged-slot__count {
-        font-size: 8px;
-      }
-
-      .unhinged-slot__icon {
-        font-size: 8px;
-        padding: 14px 4px 5px;
-      }
-
-      .unhinged-prompts {
-        bottom: 64px;
-        display: grid;
-        gap: 5px;
-        right: 8px;
-        width: 138px;
-      }
-
-      .unhinged-prompt {
-        gap: 6px;
-        grid-template-columns: 30px minmax(0, 1fr);
-        min-height: 34px;
-        padding: 4px 7px;
-      }
-
-      .unhinged-prompt kbd {
-        font-size: 9px;
-        height: 24px;
-      }
-
-      .unhinged-prompt span {
-        font-size: 8px;
-      }
-
-      .unhinged-status {
-        left: 10px;
-        bottom: 104px;
-        width: min(320px, calc(100% - 20px));
-      }
-
-      .unhinged-chip {
-        font-size: 9px;
-        min-height: 28px;
-        padding: 6px 9px;
-      }
-
-      .unhinged-page .hud__item {
-        flex-basis: 104px;
-        gap: 4px;
-        padding-inline: 4px;
-      }
-
-      .unhinged-page .hud__label {
-        font-size: 9px;
-        letter-spacing: 0.8px;
-      }
-
-      .unhinged-page .hud__value {
-        font-size: 14px;
       }
 
       .unhinged-page .overlay {
@@ -1220,10 +1061,80 @@
       }
     }
 
-    @media (max-width: 620px) {
-      .unhinged-prompts {
+    /* Declutter the HUD when the *play area* gets narrow (any device/layout). */
+    @container ustage (max-width: 680px) {
+      .unhinged-prompts,
+      .unhinged-task-card--heat,
+      .unhinged-version {
         display: none;
       }
+    }
+
+    /* Too narrow for a bottom-left panel and a centered hotbar side by side. */
+    @container ustage (max-width: 520px) {
+      .unhinged-hotbar {
+        display: none;
+      }
+    }
+
+    @container ustage (max-width: 460px) {
+      .unhinged-task-card,
+      .unhinged-logo-mark,
+      .unhinged-version {
+        display: none;
+      }
+    }
+
+    /* Touch devices: button-driven controls, decluttered HUD, no overlap. */
+    @media (hover: none) and (pointer: coarse) {
+      .unhinged-task-card,
+      .unhinged-version,
+      .unhinged-prompts,
+      .unhinged-hotbar,
+      .unhinged-map-district {
+        display: none;
+      }
+
+      /* Invisible floating thumb-stick on the left; survival sits beneath it. */
+      .rb-touch-layer--unhinged .rb-touch-zone {
+        width: min(48%, 240px);
+        height: min(54%, 240px);
+        background: transparent;
+        border-color: transparent;
+      }
+
+      .rb-touch-layer--unhinged .rb-touch-zone::after {
+        opacity: 0.5;
+      }
+    }
+
+    /* Don't show on-canvas touch buttons to mouse users (narrow window / max screen). */
+    @media (hover: hover) and (pointer: fine) {
+      .rb-touch-layer--unhinged {
+        display: none;
+      }
+
+      .canvas-wrap--unhinged.is-maxed .rb-touch-layer {
+        display: none;
+      }
+    }
+
+    /* On-canvas touch action buttons (bottom-right cluster). */
+    .rb-touch-layer--unhinged .rb-touch-cluster--actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn {
+      font-size: 12px;
+      height: 52px;
+      min-width: 66px;
+      opacity: 0.96;
+    }
+
+    .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn--primary {
+      font-size: 13px;
     }
 
     body.unhinged-visual-target {
@@ -1509,6 +1420,7 @@
 
         <div class="canvas-wrap canvas-wrap--unhinged">
           <canvas id="gameCanvas" width="960" height="600" tabindex="0"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
 
           <div class="unhinged-game-hud" aria-hidden="true">
             <div class="unhinged-hud-left">
@@ -1610,28 +1522,28 @@
                 <span class="unhinged-slot__icon">Cache</span>
                 <span class="unhinged-slot__count" id="hud-slot-scrap-count">0</span>
               </div>
-              <div class="unhinged-slot">
-                <span class="unhinged-slot__key">K</span>
+              <div class="unhinged-slot" id="hud-slot-cone">
+                <span class="unhinged-slot__key">RMB</span>
                 <span class="unhinged-slot__icon">Cone</span>
                 <span class="unhinged-slot__count" id="hud-slot-cone-count">4</span>
               </div>
-              <div class="unhinged-slot">
-                <span class="unhinged-slot__key">L</span>
+              <div class="unhinged-slot" id="hud-slot-peel">
+                <span class="unhinged-slot__key">C</span>
                 <span class="unhinged-slot__icon">Peel</span>
                 <span class="unhinged-slot__count" id="hud-slot-peel-count">2</span>
               </div>
               <div class="unhinged-slot is-active" id="hud-slot-tool">
-                <span class="unhinged-slot__key">J</span>
+                <span class="unhinged-slot__key">LMB</span>
                 <span class="unhinged-slot__icon" id="hud-slot-tool-label">Plunger</span>
-                <span class="unhinged-slot__count">Tool</span>
+                <span class="unhinged-slot__count">Bonk</span>
               </div>
             </div>
 
             <div class="unhinged-prompts">
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>LMB</kbd><span id="hud-prompt-j">Bonk</span></div>
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>RMB</kbd><span id="hud-prompt-l">Throw</span></div>
               <div class="unhinged-hud-panel unhinged-prompt"><kbd>E</kbd><span id="hud-prompt-e">Interact</span></div>
               <div class="unhinged-hud-panel unhinged-prompt"><kbd>Space</kbd><span id="hud-prompt-space">Stunt</span></div>
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>J</kbd><span id="hud-prompt-j">Bonk</span></div>
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>L</kbd><span id="hud-prompt-l">Peel</span></div>
             </div>
           </div>
 
@@ -1645,8 +1557,14 @@
             </div>
           </div>
 
-          <div class="rb-touch-layer rb-touch-layer--unhinged" aria-label="Touch movement controls">
+          <div class="rb-touch-layer rb-touch-layer--unhinged" aria-label="Touch controls">
             <div class="rb-touch-zone" id="unhinged-touch-stick" aria-label="Move"></div>
+            <div class="rb-touch-cluster rb-touch-cluster--right rb-touch-cluster--actions">
+              <button class="rb-touch-btn rb-touch-btn--accent" id="touch-act" type="button" aria-label="Interact">Act</button>
+              <button class="rb-touch-btn rb-touch-btn--yellow" id="touch-throw" type="button" aria-label="Throw cone">Throw</button>
+              <button class="rb-touch-btn" id="touch-stunt" type="button" aria-label="Stunt">Stunt</button>
+              <button class="rb-touch-btn rb-touch-btn--primary" id="touch-bonk" type="button" aria-label="Bonk">Bonk</button>
+            </div>
           </div>
 
           <div class="overlay overlay--show" id="overlay">
@@ -1669,10 +1587,11 @@
             <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p class="unhinged-note">
-            <kbd>WASD</kbd> or arrows move · <kbd>Shift</kbd> sprint<br />
-            <kbd>E</kbd> interact/busk · <kbd>Space</kbd> stunt<br />
-            <kbd>J</kbd> plunger · <kbd>K</kbd> throw cone · <kbd>L</kbd> drop peel<br />
-            <kbd>1</kbd>-<kbd>4</kbd> swap daytime antics · <kbd>Esc</kbd> pause
+            <kbd>Mouse</kbd> aim · <kbd>L-click</kbd> bonk · <kbd>R-click</kbd> throw cone<br />
+            <kbd>WASD</kbd> / arrows move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> stunt<br />
+            <kbd>E</kbd> interact / busk · <kbd>C</kbd> drop peel<br />
+            <kbd>F</kbd> bonk &amp; <kbd>Q</kbd> throw (keyboard) · <kbd>1</kbd>–<kbd>4</kbd> antics · <kbd>Esc</kbd> pause<br />
+            <kbd>⛶</kbd> button (top-right of the screen) maximizes the game
           </p>
 
           <div class="unhinged-district" aria-live="polite">
@@ -1879,7 +1798,7 @@
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260614-mobile-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260614-detail-3"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260614-controls-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

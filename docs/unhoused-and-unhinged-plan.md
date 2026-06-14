@@ -88,7 +88,8 @@ Current implementation status:
 - The older third-person runtime remains at `assets/js/unhoused-and-unhinged.js` as a legacy prototype, but the page no longer loads it.
 - A real rendered gameplay card exists at `assets/img/mockup/card-unhoused-and-unhinged.png`.
 - Implemented in the fresh top-down baseline: compact board-style city grid, readable districts, orthographic follow camera, top-down WASD/arrows movement, daytime antics, cash/heat/energy/health/needs HUD, pickups for food/water/cash/scrap, district prompts, camp recovery, pawn supply buys, moving cars, civilians, cops with chase/arrest pressure, night Tweeker Zombie waves, plunger melee, cone throws, banana-peel traps, stunt burst, objective arrow, minimap player marker, score/high score, pause/restart, mobile movement buttons, and `?debug=1` fast timer mode.
-- Still rough: AI balance, building variety, better pedestrian reactions, richer sound/feedback, more interesting cop escape routes, stronger night enemy variety, clearer mobile controls, and deeper long-run progression.
+- Controls + presentation pass (2026-06-14): mouse aim with left/right-click combat, left-hand keyboard cluster (F/Q/C, legacy J/K/L kept), a max-screen button, on-canvas touch action buttons, and a container-query HUD that scales to the play area without overlap at any size.
+- Still rough: AI balance, building variety, better pedestrian reactions, richer sound/feedback, more interesting cop escape routes, stronger night enemy variety, and deeper long-run progression.
 
 ## Systems
 
@@ -141,24 +142,25 @@ Later physics phase:
 
 ### Input
 
-Keyboard first:
+Mouse + keyboard (current scheme, reworked 2026-06-14):
 
+- Mouse: move to aim (the player faces the cursor via a ground-plane raycast; no mouse-look). Left-click bonks, right-click throws a cone — both toward the cursor.
 - `WASD` or arrows: move in screen/world top-down directions.
-- Mouse: click the canvas to focus/start, no mouse-look.
 - `Shift`: sprint.
-- `E`: interact/perform.
+- `E`: interact/perform/pick up.
 - `Space`: dodge/stunt.
-- `J`: attack.
-- `K`: throw.
-- `L`: drop peel.
-- `1-4`: pick action/weapon.
-- `P` or `Escape`: pause.
+- `F` (or legacy `J`): attack/bonk.
+- `Q` (or legacy `K`): throw cone.
+- `C` (or legacy `L`): drop peel.
+- `1-4`: pick daytime antic.
+- `P` or `Escape`: pause (`Escape` exits max screen first when maximized).
+- `⛶` button (top-right of the stage): max screen — pseudo-fullscreen paired with the native Fullscreen API; the canvas fills the viewport and the orthographic camera adapts to any aspect.
 
-Mobile later:
+Mobile / touch (current):
 
-- Virtual joystick.
-- Two action buttons.
-- Compact HUD only.
+- Invisible left-half floating joystick for movement.
+- On-canvas action buttons (Bonk / Throw / Stunt / Act) bottom-right.
+- Decluttered HUD: tasks, prompts, and the hotbar hide; survival, heat, and minimap stay. The whole in-canvas HUD scales against the play area via CSS container queries, so it never overlaps at any size (sidebar layout, narrow window, max screen, or phone).
 
 ## Content Plan
 

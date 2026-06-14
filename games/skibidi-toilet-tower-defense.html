@@ -14,6 +14,55 @@
       gap: 8px;
       margin-top: 10px;
     }
+    .level-select {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    .level-card {
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      min-height: 58px;
+      padding: 9px 10px;
+      text-align: left;
+      transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+      width: 100%;
+    }
+    .level-card:hover,
+    .level-card.is-selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 20px rgba(255, 46, 136, 0.16);
+      transform: translateY(-1px);
+    }
+    .level-card__name,
+    .level-card__tag {
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+    .level-card__desc {
+      color: var(--ink-dim);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.25;
+      margin-top: 3px;
+    }
+    .level-card__tag {
+      color: var(--accent-2);
+      white-space: nowrap;
+    }
+    .level-card[disabled] {
+      cursor: not-allowed;
+      opacity: 0.5;
+      transform: none;
+    }
     .tower-shop__button {
       align-items: center;
       background: #070a12;
@@ -109,6 +158,35 @@
       line-height: 1.45;
       margin: 10px 0 0;
     }
+    @media (max-width: 480px) {
+      .tower-defense-page .overlay {
+        gap: 6px;
+        padding: 10px;
+      }
+      .tower-defense-page .overlay__title {
+        font-size: 18px;
+        line-height: 1.05;
+        margin-bottom: 0;
+      }
+      .tower-defense-page .overlay__sub {
+        font-size: 11px;
+        line-height: 1.28;
+        margin-bottom: 6px;
+        max-width: 96%;
+      }
+      .tower-defense-page .overlay__sub br {
+        display: none;
+      }
+      .tower-defense-page .overlay__sub strong {
+        display: block;
+        margin-top: 5px;
+      }
+      .tower-defense-page .overlay .btn {
+        font-size: 12px;
+        min-height: 34px;
+        padding: 7px 12px;
+      }
+    }
   </style>
 </head>
 <body class="tower-defense-page">
@@ -118,7 +196,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">🚽 Skibidi Toilet Tower Defense</h1>
-        <div class="game-page__sub">Build towers · Stop the toilet rush · Survive 10 waves</div>
+        <div class="game-page__sub">Choose a map · Build towers · Stop the toilet rush</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -126,9 +204,10 @@
     <div class="game-layout">
       <div class="game-stage" style="position:relative;">
         <div class="hud">
-          <div class="hud__item"><span class="hud__label">CASH</span><span class="hud__value" id="hud-cash">$260</span></div>
-          <div class="hud__item"><span class="hud__label">LIVES</span><span class="hud__value" id="hud-lives">20</span></div>
+          <div class="hud__item"><span class="hud__label">CASH</span><span class="hud__value" id="hud-cash">$245</span></div>
+          <div class="hud__item"><span class="hud__label">LIVES</span><span class="hud__value" id="hud-lives">18</span></div>
           <div class="hud__item"><span class="hud__label">WAVE</span><span class="hud__value" id="hud-wave">1/10</span></div>
+          <div class="hud__item"><span class="hud__label">MAP</span><span class="hud__value" id="hud-map">Breach</span></div>
           <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
         </div>
@@ -153,6 +232,29 @@
       <aside class="game-side">
         <div class="game-side__panel">
           <h3 class="game-side__title">BUILD MENU</h3>
+          <div class="level-select" id="level-select" aria-label="Defense map selector">
+            <button class="level-card is-selected" type="button" data-level="bathroom">
+              <span>
+                <span class="level-card__name">Bathroom Breach</span>
+                <span class="level-card__desc">Classic elbows with generous build pads.</span>
+              </span>
+              <span class="level-card__tag">10W</span>
+            </button>
+            <button class="level-card" type="button" data-level="sewer">
+              <span>
+                <span class="level-card__name">Subway Sewers</span>
+                <span class="level-card__desc">Long snake route with faster mid-wave rushes.</span>
+              </span>
+              <span class="level-card__tag">11W</span>
+            </button>
+            <button class="level-card" type="button" data-level="rooftop">
+              <span>
+                <span class="level-card__name">Rooftop Relay</span>
+                <span class="level-card__desc">Tight corners, crossfire lanes, tougher bosses.</span>
+              </span>
+              <span class="level-card__tag">12W</span>
+            </button>
+          </div>
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-start-wave" style="font-size:13px;padding:8px 12px;">Start wave</button>
             <button class="btn btn--ghost" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
@@ -201,6 +303,7 @@
           <summary>How to play</summary>
           <ul>
             <li><strong style="color:var(--ink);">Click a tower</strong>, then click a glowing pad to build.</li>
+            <li><strong style="color:var(--ink);">Pick a map</strong> before the first wave. Each map changes the path, pads, and enemy pressure.</li>
             <li><strong style="color:var(--ink);">Start waves</strong> when your defense is ready. Enemies follow the neon pipe path.</li>
             <li><strong style="color:var(--ink);">Click built towers</strong> to upgrade or sell them.</li>
             <li><strong style="color:var(--ink);">Camera</strong> is reliable damage, <strong style="color:var(--ink);">Speaker</strong> splashes and slows, <strong style="color:var(--ink);">Plunger</strong> is cheap crowd control.</li>
@@ -225,8 +328,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
-  <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/skibidi-toilet-tower-defense.js?v=20260612-4"></script>
+  <script src="../assets/js/main.js?v=20260614-max-1"></script>
+  <script src="../assets/js/skibidi-toilet-tower-defense.js?v=20260614-enemies-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -2,7 +2,7 @@
    SKIBIDI TOILET TOWER DEFENSE
    --------------------------------------------
    Static canvas tower defense for Rainbot Gaming.
-   Build towers on fixed pads, hold 10 waves, and
+   Build towers on fixed pads, hold each map, and
    use the existing RB rewarded-ad hooks for boosts.
    ============================================ */
 
@@ -14,7 +14,6 @@
   const W = canvas.width;
   const H = canvas.height;
   const GAME_ID = "skibidi_toilet_tower_defense";
-  const MAX_WAVES = 10;
 
   const api = window.RB || {
     showRewarded: () => Promise.resolve(true),
@@ -28,6 +27,7 @@
     cash: document.getElementById("hud-cash"),
     lives: document.getElementById("hud-lives"),
     wave: document.getElementById("hud-wave"),
+    map: document.getElementById("hud-map"),
     score: document.getElementById("hud-score"),
     high: document.getElementById("hud-high"),
     overlay: document.getElementById("overlay"),
@@ -40,6 +40,7 @@
     restart: document.getElementById("btn-restart"),
     flush: document.getElementById("btn-flush"),
     repair: document.getElementById("btn-repair"),
+    levelSelect: document.getElementById("level-select"),
     shop: document.getElementById("tower-shop"),
     inspector: document.getElementById("tower-inspector"),
   };
@@ -56,28 +57,175 @@
     muted: "#9eb6cb",
   };
 
-  const path = [
-    { x: -44, y: 96 },
-    { x: 148, y: 96 },
-    { x: 148, y: 244 },
-    { x: 386, y: 244 },
-    { x: 386, y: 390 },
-    { x: 668, y: 390 },
-    { x: 668, y: 162 },
-    { x: 848, y: 162 },
-  ];
-
-  const pads = [
-    { id: 1, x: 86, y: 180 },
-    { id: 2, x: 224, y: 82 },
-    { id: 3, x: 248, y: 178 },
-    { id: 4, x: 278, y: 326 },
-    { id: 5, x: 480, y: 178 },
-    { id: 6, x: 506, y: 306 },
-    { id: 7, x: 580, y: 454 },
-    { id: 8, x: 742, y: 284 },
-    { id: 9, x: 606, y: 82 },
-    { id: 10, x: 740, y: 96 },
+  const LEVELS = [
+    {
+      id: "bathroom",
+      name: "Bathroom Breach",
+      hudName: "Breach",
+      difficulty: "Normal",
+      banner: "BATHROOM BREACH",
+      intro: "Build camera turrets, speaker stacks, and plunger traps around the bathroom portal.",
+      startCash: 245,
+      lives: 18,
+      waves: 10,
+      enemyCountScale: 1.05,
+      hpGrowth: 0.2,
+      speedGrowth: 0.04,
+      maxSpeedBonus: 0.62,
+      rewardScale: 1,
+      spawnGapScale: 0.94,
+      bossWaves: [5, 10],
+      pathWidth: 66,
+      palette: {
+        top: "#05070d",
+        mid: "#0d1726",
+        bottom: "#031420",
+        path: "#2c3147",
+        pathTrim: "#23dff2",
+        grid: "rgba(113,132,156,0.16)",
+        wash: "rgba(255,20,144,0.05)",
+        pad: "#23dff2",
+        prop: "rgba(35,223,242,0.18)",
+        accent: "#ff1490",
+        exit: "#48f35a",
+      },
+      path: [
+        { x: -44, y: 96 },
+        { x: 148, y: 96 },
+        { x: 148, y: 244 },
+        { x: 386, y: 244 },
+        { x: 386, y: 390 },
+        { x: 668, y: 390 },
+        { x: 668, y: 162 },
+        { x: 848, y: 162 },
+      ],
+      pads: [
+        { id: 1, x: 64, y: 180 },
+        { id: 2, x: 224, y: 82 },
+        { id: 3, x: 248, y: 160 },
+        { id: 4, x: 278, y: 326 },
+        { id: 5, x: 455, y: 196 },
+        { id: 6, x: 506, y: 306 },
+        { id: 7, x: 580, y: 474 },
+        { id: 8, x: 742, y: 284 },
+        { id: 9, x: 617, y: 96 },
+        { id: 10, x: 740, y: 78 },
+      ],
+    },
+    {
+      id: "sewer",
+      name: "Subway Sewers",
+      hudName: "Sewers",
+      difficulty: "Hard",
+      banner: "SUBWAY SEWER SURGE",
+      intro: "A longer service-tunnel route sends quicker rushes through wide speaker lanes.",
+      startCash: 285,
+      lives: 20,
+      waves: 11,
+      enemyCountScale: 1.16,
+      hpGrowth: 0.22,
+      speedGrowth: 0.047,
+      maxSpeedBonus: 0.74,
+      rewardScale: 1.08,
+      spawnGapScale: 0.82,
+      bossWaves: [6, 11],
+      pathWidth: 64,
+      palette: {
+        top: "#03110e",
+        mid: "#071c1c",
+        bottom: "#06101b",
+        path: "#233d3e",
+        pathTrim: "#6bff7d",
+        grid: "rgba(107,255,125,0.10)",
+        wash: "rgba(107,255,125,0.06)",
+        pad: "#6bff7d",
+        prop: "rgba(255,212,59,0.18)",
+        accent: "#23dff2",
+        exit: "#ffd43b",
+      },
+      path: [
+        { x: -44, y: 410 },
+        { x: 122, y: 410 },
+        { x: 122, y: 126 },
+        { x: 306, y: 126 },
+        { x: 306, y: 318 },
+        { x: 506, y: 318 },
+        { x: 506, y: 84 },
+        { x: 690, y: 84 },
+        { x: 690, y: 430 },
+        { x: 848, y: 430 },
+      ],
+      pads: [
+        { id: 1, x: 42, y: 330 },
+        { id: 2, x: 194, y: 236 },
+        { id: 3, x: 210, y: 42 },
+        { id: 4, x: 380, y: 208 },
+        { id: 5, x: 214, y: 390 },
+        { id: 6, x: 430, y: 402 },
+        { id: 7, x: 590, y: 236 },
+        { id: 8, x: 604, y: 166 },
+        { id: 9, x: 766, y: 196 },
+        { id: 10, x: 610, y: 456 },
+        { id: 11, x: 766, y: 346 },
+      ],
+    },
+    {
+      id: "rooftop",
+      name: "Rooftop Relay",
+      hudName: "Relay",
+      difficulty: "Expert",
+      banner: "ROOFTOP RELAY",
+      intro: "Tight skyline corners reward crossfire, but late bosses hit harder.",
+      startCash: 315,
+      lives: 22,
+      waves: 12,
+      enemyCountScale: 1.22,
+      hpGrowth: 0.24,
+      speedGrowth: 0.046,
+      maxSpeedBonus: 0.78,
+      rewardScale: 1.14,
+      spawnGapScale: 0.78,
+      bossWaves: [6, 10, 12],
+      pathWidth: 62,
+      palette: {
+        top: "#071024",
+        mid: "#121a33",
+        bottom: "#070a12",
+        path: "#342c50",
+        pathTrim: "#ff1490",
+        grid: "rgba(255,255,255,0.10)",
+        wash: "rgba(46,224,255,0.06)",
+        pad: "#ff1490",
+        prop: "rgba(46,224,255,0.18)",
+        accent: "#ffd43b",
+        exit: "#23dff2",
+      },
+      path: [
+        { x: -44, y: 260 },
+        { x: 116, y: 260 },
+        { x: 116, y: 104 },
+        { x: 332, y: 104 },
+        { x: 332, y: 422 },
+        { x: 538, y: 422 },
+        { x: 538, y: 226 },
+        { x: 704, y: 226 },
+        { x: 704, y: 88 },
+        { x: 848, y: 88 },
+      ],
+      pads: [
+        { id: 1, x: 40, y: 170 },
+        { id: 2, x: 194, y: 34 },
+        { id: 3, x: 236, y: 176 },
+        { id: 4, x: 254, y: 330 },
+        { id: 5, x: 414, y: 276 },
+        { id: 6, x: 610, y: 466 },
+        { id: 7, x: 612, y: 350 },
+        { id: 8, x: 622, y: 142 },
+        { id: 9, x: 766, y: 270 },
+        { id: 10, x: 622, y: 52 },
+        { id: 11, x: 670, y: 302 },
+      ],
+    },
   ];
 
   const TOWERS = {
@@ -125,6 +273,17 @@
       size: 17,
       color: "#dff6ff",
     },
+    jet: {
+      name: "Jet Toilet",
+      hp: 44,
+      speed: 92,
+      reward: 10,
+      score: 75,
+      drain: 1,
+      size: 16,
+      color: "#a8f7ff",
+      slowResist: 0.24,
+    },
     singer: {
       name: "Singing Bowl",
       hp: 78,
@@ -135,6 +294,20 @@
       size: 21,
       color: "#f9fbff",
     },
+    cluster: {
+      name: "Clog Cluster",
+      hp: 112,
+      speed: 39,
+      reward: 18,
+      score: 140,
+      drain: 2,
+      size: 24,
+      color: "#c8ffe8",
+      splitInto: [
+        { type: "runner", hpScale: 0.72, rewardScale: 0.45, scoreScale: 0.45 },
+        { type: "runner", hpScale: 0.72, rewardScale: 0.45, scoreScale: 0.45 },
+      ],
+    },
     chrome: {
       name: "Chrome Clogger",
       hp: 126,
@@ -144,6 +317,33 @@
       drain: 2,
       size: 24,
       color: "#b9d5e4",
+      armor: 0.12,
+      stunResist: 0.18,
+    },
+    shield: {
+      name: "Shield Bowl",
+      hp: 168,
+      speed: 31,
+      reward: 28,
+      score: 215,
+      drain: 2,
+      size: 26,
+      color: "#d7e8ff",
+      armor: 0.28,
+      slowResist: 0.18,
+      stunResist: 0.42,
+    },
+    leaker: {
+      name: "Leaky Royal",
+      hp: 118,
+      speed: 37,
+      reward: 24,
+      score: 185,
+      drain: 2,
+      size: 23,
+      color: "#baffd4",
+      regen: 5.5,
+      slowResist: 0.12,
     },
     boss: {
       name: "G-Man Flush",
@@ -154,26 +354,42 @@
       drain: 5,
       size: 34,
       color: "#f7d924",
+      armor: 0.16,
+      regen: 3,
+      slowResist: 0.42,
+      stunResist: 0.68,
     },
   };
 
-  const segments = [];
+  let activeLevel = LEVELS[0];
+  let path = activeLevel.path;
+  let pads = activeLevel.pads;
+  let segments = [];
   let pathLength = 0;
-  for (let i = 0; i < path.length - 1; i++) {
-    const a = path[i];
-    const b = path[i + 1];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    segments.push({ a, b, len, start: pathLength });
-    pathLength += len;
+
+  function rebuildPathMetrics() {
+    path = activeLevel.path;
+    pads = activeLevel.pads;
+    segments = [];
+    pathLength = 0;
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i];
+      const b = path[i + 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      segments.push({ a, b, len, start: pathLength });
+      pathLength += len;
+    }
   }
+
+  rebuildPathMetrics();
 
   const state = {
     running: false,
     paused: false,
     gameOver: false,
     won: false,
-    cash: 260,
-    lives: 20,
+    cash: activeLevel.startCash,
+    lives: activeLevel.lives,
     wave: 1,
     score: 0,
     selectedType: "camera",
@@ -188,6 +404,7 @@
     queue: [],
     spawnTimer: 0,
     lastTime: 0,
+    time: 0,
     nextId: 1,
     screenShake: 0,
     flash: 0,
@@ -207,6 +424,69 @@
 
   function format(n) {
     return Math.floor(n).toLocaleString();
+  }
+
+  function maxWaves() {
+    return activeLevel.waves;
+  }
+
+  function scoreKey() {
+    return `${GAME_ID}_${activeLevel.id}`;
+  }
+
+  function canSwitchLevel() {
+    return !state.running || state.gameOver || (!state.waveActive && !state.towers.length && state.wave === 1 && state.score === 0);
+  }
+
+  function resetPreviewState() {
+    state.running = false;
+    state.paused = false;
+    state.gameOver = false;
+    state.won = false;
+    state.cash = activeLevel.startCash;
+    state.lives = activeLevel.lives;
+    state.wave = 1;
+    state.score = 0;
+    state.selectedTowerId = null;
+    state.hoverPadId = null;
+    state.towers = [];
+    state.enemies = [];
+    state.projectiles = [];
+    state.particles = [];
+    state.floats = [];
+    state.waveActive = false;
+    state.queue = [];
+    state.spawnTimer = 0;
+    state.lastTime = 0;
+    state.time = 0;
+    state.screenShake = 0;
+    state.flash = 0;
+  }
+
+  function showLevelIntro() {
+    showOverlay(
+      "🚽 SKIBIDI TOILET TOWER DEFENSE",
+      `${activeLevel.intro}<br><br><strong>Hold ${activeLevel.name} for ${activeLevel.waves} waves.</strong>`,
+      `Start ${activeLevel.hudName}`,
+    );
+  }
+
+  function selectLevel(id) {
+    const next = LEVELS.find((level) => level.id === id);
+    if (!next || next.id === activeLevel.id) return;
+    if (!canSwitchLevel()) {
+      api.toast("Restart before switching maps", "bad");
+      return;
+    }
+    activeLevel = next;
+    rebuildPathMetrics();
+    resetPreviewState();
+    showLevelIntro();
+    updateHUD();
+    updateLevelSelect();
+    updateShop();
+    updateInspector();
+    draw();
   }
 
   function pointAt(distance) {
@@ -230,8 +510,8 @@
     state.paused = false;
     state.gameOver = false;
     state.won = false;
-    state.cash = 260;
-    state.lives = 20;
+    state.cash = activeLevel.startCash;
+    state.lives = activeLevel.lives;
     state.wave = 1;
     state.score = 0;
     state.selectedType = "camera";
@@ -246,6 +526,7 @@
     state.queue = [];
     state.spawnTimer = 0;
     state.lastTime = 0;
+    state.time = 0;
     state.nextId = 1;
     state.screenShake = 0;
     state.flash = 0;
@@ -270,21 +551,30 @@
 
   function makeWave(wave) {
     const queue = [];
-    const runnerCount = 7 + wave * 2;
-    const singerCount = Math.max(0, wave - 1);
-    const chromeCount = Math.max(0, Math.floor((wave - 3) * 0.75));
+    const pressure = activeLevel.enemyCountScale;
+    const runnerCount = Math.round((6 + wave * 1.5) * pressure);
+    const jetCount = Math.round(Math.max(0, wave - 1) * 0.55 * pressure);
+    const singerCount = Math.round(Math.max(0, wave - 2) * 0.62 * pressure);
+    const clusterCount = Math.round(Math.max(0, wave - 4) * 0.35 * pressure);
+    const chromeCount = Math.round(Math.max(0, Math.floor((wave - 3) * 0.62)) * pressure);
+    const shieldCount = Math.round(Math.max(0, wave - 5) * 0.3 * pressure);
+    const leakerCount = Math.round(Math.max(0, wave - 6) * 0.25 * pressure);
 
     for (let i = 0; i < runnerCount; i++) queue.push({ type: "runner", gap: 0.55 });
+    for (let i = 0; i < jetCount; i++) queue.push({ type: "jet", gap: 0.44 });
     for (let i = 0; i < singerCount; i++) queue.push({ type: "singer", gap: 0.78 });
+    for (let i = 0; i < clusterCount; i++) queue.push({ type: "cluster", gap: 0.92 });
     for (let i = 0; i < chromeCount; i++) queue.push({ type: "chrome", gap: 1.05 });
-    if (wave === 5 || wave === 10) queue.push({ type: "boss", gap: 1.25 });
+    for (let i = 0; i < shieldCount; i++) queue.push({ type: "shield", gap: 1.15 });
+    for (let i = 0; i < leakerCount; i++) queue.push({ type: "leaker", gap: 0.96 });
+    if (activeLevel.bossWaves.includes(wave) || wave === activeLevel.waves) queue.push({ type: "boss", gap: 1.25 });
 
     const lead = queue.splice(0, Math.min(4, queue.length));
     for (let i = queue.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [queue[i], queue[j]] = [queue[j], queue[i]];
     }
-    return lead.concat(queue);
+    return lead.concat(queue).map((entry) => ({ ...entry, gap: entry.gap * activeLevel.spawnGapScale }));
   }
 
   function startWave() {
@@ -300,26 +590,33 @@
     updateInspector();
   }
 
-  function spawnEnemy(kind) {
+  function spawnEnemy(kind, options = {}) {
     const def = ENEMIES[kind];
-    const scale = 1 + (state.wave - 1) * 0.18;
-    const speedScale = 1 + Math.min(0.55, (state.wave - 1) * 0.035);
+    const scale = 1 + (state.wave - 1) * activeLevel.hpGrowth;
+    const speedScale = 1 + Math.min(activeLevel.maxSpeedBonus, (state.wave - 1) * activeLevel.speedGrowth);
+    const distance = Math.max(0, options.distance || 0);
+    const p = pointAt(distance);
     const enemy = {
       id: state.nextId++,
       kind,
       name: def.name,
-      distance: 0,
-      x: path[0].x,
-      y: path[0].y,
-      angle: 0,
-      hp: Math.round(def.hp * scale),
-      maxHp: Math.round(def.hp * scale),
+      distance,
+      x: p.x,
+      y: p.y,
+      angle: p.angle,
+      hp: Math.round(def.hp * scale * (options.hpScale || 1)),
+      maxHp: Math.round(def.hp * scale * (options.hpScale || 1)),
       speed: def.speed * speedScale,
-      reward: Math.round(def.reward * (1 + state.wave * 0.04)),
-      score: Math.round(def.score * (1 + state.wave * 0.08)),
+      reward: Math.max(1, Math.round(def.reward * activeLevel.rewardScale * (1 + state.wave * 0.04) * (options.rewardScale || 1))),
+      score: Math.max(1, Math.round(def.score * (1 + state.wave * 0.08) * (options.scoreScale || 1))),
       drain: def.drain,
       size: def.size,
       color: def.color,
+      armor: def.armor || 0,
+      regen: def.regen || 0,
+      slowResist: def.slowResist || 0,
+      stunResist: def.stunResist || 0,
+      splitInto: def.splitInto || null,
       slowTime: 0,
       slowMult: 1,
       stunTime: 0,
@@ -466,8 +763,7 @@
         const d = Math.hypot(enemy.x - target.x, enemy.y - target.y);
         if (d <= stats.splash) {
           damageEnemy(enemy, stats.damage, tower);
-          enemy.slowTime = Math.max(enemy.slowTime, 1.7);
-          enemy.slowMult = Math.min(enemy.slowMult, 0.52);
+          applySlow(enemy, 1.7, 0.52);
         }
       }
       burst(target.x, target.y, def.color, 8, 80);
@@ -488,9 +784,27 @@
     });
   }
 
+  function applySlow(enemy, duration, mult) {
+    const resist = clamp(enemy.slowResist || 0, 0, 0.9);
+    const effectiveDuration = duration * (1 - resist);
+    const effectiveMult = 1 - (1 - mult) * (1 - resist);
+    if (effectiveDuration <= 0.05) return;
+    enemy.slowTime = Math.max(enemy.slowTime, effectiveDuration);
+    enemy.slowMult = Math.min(enemy.slowMult, effectiveMult);
+  }
+
+  function applyStun(enemy, duration) {
+    const resist = clamp(enemy.stunResist || 0, 0, 0.92);
+    const effectiveDuration = duration * (1 - resist);
+    if (effectiveDuration <= 0.05) return;
+    enemy.stunTime = Math.max(enemy.stunTime, effectiveDuration);
+  }
+
   function damageEnemy(enemy, amount, tower) {
     if (!enemy.alive) return;
-    enemy.hp -= amount;
+    const armor = clamp(enemy.armor || 0, 0, 0.75);
+    const dealt = Math.max(1, Math.round(amount * (1 - armor)));
+    enemy.hp -= dealt;
     enemy.hitFlash = 0.18;
     if (enemy.hp <= 0) {
       enemy.alive = false;
@@ -499,7 +813,21 @@
       state.score += enemy.score;
       burst(enemy.x, enemy.y, enemy.color, enemy.kind === "boss" ? 46 : 16, enemy.kind === "boss" ? 260 : 120);
       addFloat(enemy.x, enemy.y - enemy.size - 10, `+$${enemy.reward}`, COLORS.green, 0.8);
+      spawnSplitEnemies(enemy);
     }
+  }
+
+  function spawnSplitEnemies(enemy) {
+    if (!enemy.splitInto || enemy.distance >= pathLength - 42) return;
+    enemy.splitInto.forEach((child, index) => {
+      spawnEnemy(child.type, {
+        distance: Math.max(0, enemy.distance - 18 + index * 20),
+        hpScale: child.hpScale || 1,
+        rewardScale: child.rewardScale || 0.5,
+        scoreScale: child.scoreScale || 0.5,
+      });
+    });
+    addFloat(enemy.x, enemy.y - enemy.size - 28, "SPLIT!", COLORS.pink, 0.7);
   }
 
   function burst(x, y, color, count = 10, speed = 120) {
@@ -528,12 +856,12 @@
     state.gameOver = true;
     state.won = won;
     state.waveActive = false;
-    const high = api.recordScore(GAME_ID, state.score);
+    const high = api.recordScore(scoreKey(), state.score);
     updateHUD();
     if (won) {
       showOverlay(
         "🚽 DEFENSE COMPLETE",
-        "The toilet rush has been flushed back into the algorithm. The camera towers are exhausted. The plungers are heroes.",
+        `${activeLevel.name} is clear. The toilet rush has been flushed back into the algorithm, and the plungers are heroes.`,
         "Play again",
         `<strong>${format(state.score)}</strong> points${high ? " · new high score" : ""}`,
       );
@@ -554,7 +882,7 @@
     const bonus = 55 + state.wave * 12 + Math.max(0, state.lives - 10) * 2;
     state.cash += bonus;
     addFloat(W / 2, 62, `WAVE CLEAR +$${bonus}`, COLORS.green, 1.3, 0);
-    if (state.wave >= MAX_WAVES) {
+    if (state.wave >= maxWaves()) {
       endGame(true);
       return;
     }
@@ -580,6 +908,8 @@
   }
 
   function update(dt) {
+    state.time += dt;
+
     if (state.waveActive) {
       state.spawnTimer -= dt;
       while (state.spawnTimer <= 0 && state.queue.length) {
@@ -606,6 +936,9 @@
       if (!enemy.alive) continue;
       enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
       enemy.wobble += dt * 5;
+      if (enemy.regen > 0 && enemy.hitFlash <= 0 && enemy.hp < enemy.maxHp) {
+        enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.regen * dt);
+      }
       if (enemy.stunTime > 0) {
         enemy.stunTime = Math.max(0, enemy.stunTime - dt);
       } else {
@@ -655,7 +988,7 @@
       const d = Math.hypot(dx, dy);
       if (d < Math.max(12, target.size * 0.7)) {
         damageEnemy(target, p.damage, state.towers.find((tower) => tower.id === p.fromTowerId));
-        if (p.stun && target.alive) target.stunTime = Math.max(target.stunTime, p.stun);
+        if (p.stun && target.alive) applyStun(target, p.stun);
         burst(target.x, target.y, p.color, 6, 90);
         state.projectiles.splice(i, 1);
         continue;
@@ -695,13 +1028,25 @@
   function updateHUD() {
     el.cash.textContent = `$${format(state.cash)}`;
     el.lives.textContent = String(state.lives);
-    el.wave.textContent = `${state.wave}/${MAX_WAVES}`;
+    el.wave.textContent = `${state.wave}/${maxWaves()}`;
+    el.map.textContent = activeLevel.hudName;
     el.score.textContent = format(state.score);
-    el.high.textContent = format(api.getHighScore(GAME_ID));
+    el.high.textContent = format(api.getHighScore(scoreKey()));
     el.startWave.disabled = state.paused || state.waveActive || state.gameOver;
     el.startWave.textContent = state.waveActive ? "Wave running" : `Start wave ${state.wave}`;
     el.pause.textContent = state.paused ? "Resume" : "Pause";
     updateShop();
+    updateLevelSelect();
+  }
+
+  function updateLevelSelect() {
+    if (!el.levelSelect) return;
+    const locked = !canSwitchLevel();
+    el.levelSelect.querySelectorAll("[data-level]").forEach((button) => {
+      const level = LEVELS.find((candidate) => candidate.id === button.dataset.level);
+      button.classList.toggle("is-selected", level && level.id === activeLevel.id);
+      button.disabled = locked && (!level || level.id !== activeLevel.id);
+    });
   }
 
   function updateShop() {
@@ -767,14 +1112,17 @@
   }
 
   function drawBackground() {
+    const palette = activeLevel.palette;
     const g = ctx.createLinearGradient(0, 0, W, H);
-    g.addColorStop(0, "#05070d");
-    g.addColorStop(0.55, "#0d1726");
-    g.addColorStop(1, "#031420");
+    g.addColorStop(0, palette.top);
+    g.addColorStop(0.55, palette.mid);
+    g.addColorStop(1, palette.bottom);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.strokeStyle = "rgba(113,132,156,0.16)";
+    drawLevelTexture();
+
+    ctx.strokeStyle = palette.grid;
     ctx.lineWidth = 1;
     for (let x = 0; x <= W; x += 40) {
       ctx.beginPath();
@@ -789,30 +1137,187 @@
       ctx.stroke();
     }
 
-    ctx.fillStyle = "rgba(255,20,144,0.05)";
+    ctx.fillStyle = palette.wash;
     ctx.fillRect(0, 0, W, 38);
     ctx.fillStyle = COLORS.muted;
     ctx.font = "700 11px JetBrains Mono, monospace";
-    ctx.fillText("RAINBOT DEFENSE GRID · BATHROOM BREACH", 18, 24);
+    ctx.fillText(`RAINBOT DEFENSE GRID · ${activeLevel.banner}`, 18, 24);
+
+    drawMapBadge();
+  }
+
+  function drawLevelTexture() {
+    if (activeLevel.id === "bathroom") drawBathroomTexture();
+    if (activeLevel.id === "sewer") drawSewerTexture();
+    if (activeLevel.id === "rooftop") drawRooftopTexture();
+  }
+
+  function drawBathroomTexture() {
+    ctx.save();
+    ctx.strokeStyle = "rgba(249,251,255,0.08)";
+    ctx.lineWidth = 2;
+    for (let x = 20; x < W; x += 80) {
+      ctx.beginPath();
+      ctx.moveTo(x, 44);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = 70; y < H; y += 80) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(46,224,255,0.20)";
+    ctx.lineWidth = 3;
+    for (const drain of [{ x: 52, y: 462 }, { x: 724, y: 42 }, { x: 732, y: 470 }]) {
+      ctx.beginPath();
+      ctx.arc(drain.x, drain.y, 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(drain.x, drain.y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(249,251,255,0.08)";
+    roundedRect(516, 48, 104, 32, 6);
+    ctx.fill();
+    roundedRect(34, 312, 92, 28, 6);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSewerTexture() {
+    ctx.save();
+    ctx.strokeStyle = "rgba(107,255,125,0.14)";
+    ctx.lineWidth = 18;
+    for (const pipe of [{ y: 54, r: 25 }, { y: 484, r: 32 }]) {
+      ctx.beginPath();
+      ctx.moveTo(0, pipe.y);
+      ctx.quadraticCurveTo(210, pipe.y + pipe.r, 420, pipe.y);
+      ctx.quadraticCurveTo(610, pipe.y - pipe.r, W, pipe.y + 6);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255,212,59,0.22)";
+    for (let x = 18; x < W; x += 42) {
+      ctx.beginPath();
+      ctx.moveTo(x, 488);
+      ctx.lineTo(x + 18, 508);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(107,255,125,0.13)";
+    for (const bubble of [{ x: 56, y: 116, r: 6 }, { x: 732, y: 262, r: 5 }, { x: 414, y: 464, r: 7 }, { x: 560, y: 142, r: 4 }]) {
+      ctx.beginPath();
+      ctx.arc(bubble.x, bubble.y + Math.sin(state.time * 2 + bubble.x) * 3, bubble.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawRooftopTexture() {
+    ctx.save();
+    ctx.fillStyle = "rgba(5,7,13,0.42)";
+    for (const building of [
+      { x: 0, y: 402, w: 84, h: 118 },
+      { x: 92, y: 430, w: 78, h: 90 },
+      { x: 178, y: 386, w: 118, h: 134 },
+      { x: 606, y: 382, w: 76, h: 138 },
+      { x: 690, y: 416, w: 110, h: 104 },
+    ]) {
+      ctx.fillRect(building.x, building.y, building.w, building.h);
+      ctx.fillStyle = "rgba(46,224,255,0.12)";
+      for (let x = building.x + 10; x < building.x + building.w - 8; x += 22) {
+        for (let y = building.y + 12; y < H - 10; y += 24) ctx.fillRect(x, y, 7, 10);
+      }
+      ctx.fillStyle = "rgba(5,7,13,0.42)";
+    }
+    ctx.strokeStyle = "rgba(255,20,144,0.34)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(654, 138);
+    ctx.lineTo(654, 54);
+    ctx.moveTo(654, 70);
+    ctx.lineTo(614, 104);
+    ctx.moveTo(654, 70);
+    ctx.lineTo(694, 104);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,212,59,0.28)";
+    ctx.lineWidth = 1;
+    for (const star of [{ x: 56, y: 70 }, { x: 188, y: 42 }, { x: 450, y: 68 }, { x: 746, y: 42 }]) {
+      ctx.beginPath();
+      ctx.moveTo(star.x - 5, star.y);
+      ctx.lineTo(star.x + 5, star.y);
+      ctx.moveTo(star.x, star.y - 5);
+      ctx.lineTo(star.x, star.y + 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawMapBadge() {
+    ctx.save();
+    ctx.textAlign = "right";
+    ctx.font = "800 10px JetBrains Mono, monospace";
+    ctx.fillStyle = "rgba(5,7,13,0.68)";
+    roundedRect(W - 178, 10, 158, 24, 6);
+    ctx.fill();
+    ctx.strokeStyle = activeLevel.palette.pathTrim;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = activeLevel.palette.pathTrim;
+    ctx.fillText(`${activeLevel.name.toUpperCase()} · ${activeLevel.difficulty.toUpperCase()}`, W - 28, 26);
+    ctx.restore();
   }
 
   function drawPath() {
+    const palette = activeLevel.palette;
+    const width = activeLevel.pathWidth;
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.lineWidth = 86;
+    ctx.lineWidth = width + 22;
     ctx.strokeStyle = "#02050a";
     strokePath();
-    ctx.lineWidth = 66;
-    ctx.strokeStyle = COLORS.path;
+    ctx.lineWidth = width;
+    ctx.strokeStyle = palette.path;
+    strokePath();
+    ctx.lineWidth = width + 8;
+    ctx.strokeStyle = "rgba(249,251,255,0.08)";
     strokePath();
     ctx.lineWidth = 6;
-    ctx.strokeStyle = "rgba(35,223,242,0.72)";
+    ctx.strokeStyle = palette.pathTrim;
     ctx.setLineDash([24, 22]);
+    ctx.lineDashOffset = -state.time * 58;
     strokePath();
     ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
 
-    drawPortal(path[0].x + 36, path[0].y, "IN");
-    drawPortal(W - 34, 162, "EXIT");
+    drawPathArrows();
+
+    const entrance = pointAt(40);
+    const exit = pointAt(Math.max(0, pathLength - 40));
+    drawPortal(entrance.x, entrance.y, "IN", palette.accent);
+    drawPortal(exit.x, exit.y, "EXIT", palette.exit);
+  }
+
+  function drawPathArrows() {
+    ctx.save();
+    ctx.fillStyle = activeLevel.palette.pathTrim;
+    ctx.globalAlpha = 0.72;
+    for (let d = 130 + (state.time * 40) % 160; d < pathLength - 90; d += 160) {
+      const p = pointAt(d);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.beginPath();
+      ctx.moveTo(16, 0);
+      ctx.lineTo(-10, -10);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(-10, 10);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   function strokePath() {
@@ -822,11 +1327,11 @@
     ctx.stroke();
   }
 
-  function drawPortal(x, y, label) {
+  function drawPortal(x, y, label, color) {
     ctx.save();
     ctx.translate(x, y);
     ctx.fillStyle = label === "IN" ? "rgba(255,20,144,0.24)" : "rgba(72,243,90,0.20)";
-    ctx.strokeStyle = label === "IN" ? COLORS.pink : COLORS.green;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(0, 0, 34, 0, Math.PI * 2);
@@ -845,14 +1350,17 @@
       const hovering = state.hoverPadId === pad.id;
       ctx.save();
       ctx.translate(pad.x, pad.y);
-      ctx.fillStyle = tower ? "rgba(5,7,13,0.78)" : "rgba(35,223,242,0.09)";
-      ctx.strokeStyle = hovering && !tower ? COLORS.yellow : tower ? "rgba(249,251,255,0.26)" : "rgba(35,223,242,0.62)";
+      ctx.shadowBlur = tower ? 0 : hovering ? 18 : 9;
+      ctx.shadowColor = activeLevel.palette.pad;
+      ctx.fillStyle = tower ? "rgba(5,7,13,0.78)" : "rgba(5,7,13,0.50)";
+      ctx.strokeStyle = hovering && !tower ? COLORS.yellow : tower ? "rgba(249,251,255,0.32)" : activeLevel.palette.pad;
       ctx.lineWidth = hovering ? 4 : 2;
       roundedRect(-26, -26, 52, 52, 9);
       ctx.fill();
       ctx.stroke();
       if (!tower) {
-        ctx.strokeStyle = "rgba(255,20,144,0.42)";
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = activeLevel.palette.accent;
         ctx.beginPath();
         ctx.moveTo(-11, 0);
         ctx.lineTo(11, 0);
@@ -860,6 +1368,7 @@
         ctx.lineTo(0, 11);
         ctx.stroke();
       }
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
   }
@@ -882,11 +1391,28 @@
         ctx.stroke();
         ctx.restore();
       }
+      drawTowerBase(tower, def);
       if (tower.kind === "camera") drawCameraTower(tower, def);
       if (tower.kind === "speaker") drawSpeakerTower(tower, def);
       if (tower.kind === "plunger") drawPlungerTower(tower, def);
       drawLevelPips(tower.x, tower.y + 33, tower.level, def.color);
     }
+  }
+
+  function drawTowerBase(tower, def) {
+    ctx.save();
+    ctx.translate(tower.x, tower.y);
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    ctx.beginPath();
+    ctx.ellipse(0, 24, 30, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = def.color;
+    ctx.globalAlpha = 0.56;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 28 + Math.sin(state.time * 4 + tower.id) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawCameraTower(tower, def) {
@@ -986,6 +1512,11 @@
     const scale = enemy.size / 22;
     ctx.scale(scale, scale);
 
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(0, 35, 24, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     if (enemy.slowTime > 0) {
       ctx.strokeStyle = "rgba(35,223,242,0.6)";
       ctx.lineWidth = 4;
@@ -994,11 +1525,45 @@
       ctx.stroke();
     }
 
+    if (enemy.kind === "shield") {
+      ctx.strokeStyle = "rgba(247,217,36,0.72)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 2, 35, -0.35, Math.PI * 1.35);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(35,223,242,0.46)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 2, 41, 0.2, Math.PI * 1.1);
+      ctx.stroke();
+    }
+
+    if (enemy.kind === "jet") {
+      const flicker = Math.sin(enemy.wobble * 4) * 4;
+      ctx.fillStyle = "rgba(35,223,242,0.78)";
+      ctx.beginPath();
+      ctx.moveTo(-18, 28);
+      ctx.lineTo(-8, 28);
+      ctx.lineTo(-14, 48 + flicker);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,20,144,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(8, 28);
+      ctx.lineTo(18, 28);
+      ctx.lineTo(13, 44 - flicker);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     ctx.fillStyle = enemy.hitFlash > 0 ? COLORS.red : enemy.color;
     ctx.strokeStyle = "#05070d";
     ctx.lineWidth = 4;
+    ctx.shadowBlur = enemy.kind === "boss" ? 18 : 8;
+    ctx.shadowColor = enemy.kind === "boss" ? COLORS.yellow : "rgba(35,223,242,0.45)";
     roundedRect(-24, 0, 48, 33, 11);
     ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.stroke();
 
     ctx.fillStyle = "#f9fbff";
@@ -1012,6 +1577,31 @@
     ctx.fill();
     ctx.stroke();
 
+    if (enemy.kind === "chrome" || enemy.kind === "shield" || enemy.kind === "boss") {
+      ctx.strokeStyle = "rgba(35,223,242,0.55)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-17, 9);
+      ctx.lineTo(18, 5);
+      ctx.moveTo(-15, 20);
+      ctx.lineTo(16, 17);
+      ctx.stroke();
+    }
+
+    if (enemy.kind === "cluster") {
+      ctx.fillStyle = "#05070d";
+      ctx.beginPath();
+      ctx.arc(-14, 9, 4, 0, Math.PI * 2);
+      ctx.arc(14, 9, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = COLORS.green;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(-15, 9, 9, 0, Math.PI * 2);
+      ctx.arc(15, 9, 9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     ctx.fillStyle = "#05070d";
     ctx.beginPath();
     ctx.arc(-7, -16, 3.4, 0, Math.PI * 2);
@@ -1022,6 +1612,31 @@
     ctx.beginPath();
     ctx.arc(1, -5, enemy.kind === "runner" ? 5 : 8, 0.15, Math.PI - 0.15);
     ctx.stroke();
+
+    if (enemy.kind === "leaker") {
+      ctx.strokeStyle = COLORS.green;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, -24);
+      ctx.lineTo(0, -12);
+      ctx.moveTo(-6, -18);
+      ctx.lineTo(6, -18);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(72,243,90,0.5)";
+      ctx.beginPath();
+      ctx.arc(18, 20 + Math.sin(enemy.wobble * 2), 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (enemy.kind === "singer") {
+      ctx.strokeStyle = COLORS.pink;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(18, -24);
+      ctx.lineTo(18, -40);
+      ctx.quadraticCurveTo(28, -42, 29, -34);
+      ctx.stroke();
+    }
 
     if (enemy.kind === "boss") {
       ctx.strokeStyle = COLORS.yellow;
@@ -1039,7 +1654,7 @@
   }
 
   function drawHealth(enemy) {
-    const w = enemy.kind === "boss" ? 60 : 40;
+    const w = enemy.kind === "boss" ? 64 : enemy.kind === "shield" ? 48 : 40;
     const pct = clamp(enemy.hp / enemy.maxHp, 0, 1);
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     roundedRect(enemy.x - w / 2, enemy.y - enemy.size - 31, w, 7, 3);
@@ -1173,8 +1788,7 @@
     if (!ok) return;
     if (kind === "flush") {
       for (const enemy of state.enemies) {
-        enemy.slowTime = Math.max(enemy.slowTime, 2.8);
-        enemy.slowMult = Math.min(enemy.slowMult, 0.38);
+        applySlow(enemy, 2.8, 0.38);
         damageEnemy(enemy, 36 + state.wave * 5, null);
       }
       state.cash += 80;
@@ -1212,6 +1826,12 @@
         updateInspector();
       });
     });
+
+    if (el.levelSelect) {
+      el.levelSelect.querySelectorAll("[data-level]").forEach((button) => {
+        button.addEventListener("click", () => selectLevel(button.dataset.level));
+      });
+    }
 
     canvas.addEventListener("click", handleCanvasClick);
     canvas.addEventListener("pointerdown", (event) => {
@@ -1257,5 +1877,6 @@
   bindEvents();
   updateHUD();
   updateInspector();
+  showLevelIntro();
   draw();
 })();

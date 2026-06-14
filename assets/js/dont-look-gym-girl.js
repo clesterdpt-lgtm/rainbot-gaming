@@ -44,27 +44,28 @@
   // =========================================================================
   // 1. TUNING
   // =========================================================================
-  const PLAYER_SPEED       = 138;
-  const PLAYER_SPEED_BLIND = 80;     // eyes closed
+  const PLAYER_SPEED       = 134;
+  const PLAYER_SPEED_BLIND = 66;     // eyes closed
   const PLAYER_RADIUS      = 11;
   const GIRL_RADIUS        = 12;
 
-  const GAZE_RANGE      = 230;
-  const GAZE_HALF_ANGLE = 0.5;
+  const GAZE_RANGE      = 252;
+  const GAZE_HALF_ANGLE = 0.52;
 
   const SUS_MAX        = 100;
-  const SUS_DECAY      = 13;     // %/sec when not looking
-  const SUS_DECAY_SHUT = 17;     // %/sec eyes closed
-  const SUS_GAIN_BASE  = 19;     // %/sec, one girl, point blank
+  const SUS_DECAY      = 9.5;    // %/sec when not looking
+  const SUS_DECAY_SHUT = 12.5;   // %/sec eyes closed
+  const SUS_GAIN_BASE  = 23;     // %/sec, one girl, point blank
   const SUS_MUTUAL_MULT = 2.4;   // she sees you seeing her
   const SUS_BUMP       = 14;     // walked into a girl (eyes open)
+  const MOVER_BUMP_SUS = 11;     // clanked into moving equipment
 
-  const NOTICE_TIME   = 1.15;    // sustained mutual stare → accused
-  const NOTICE_DECAY  = 0.8;     // /sec when stare breaks
+  const NOTICE_TIME   = 0.98;    // sustained mutual stare → accused
+  const NOTICE_DECAY  = 0.62;    // /sec when stare breaks
 
-  const PULL_RANGE   = 280;      // the neck activates inside this radius
-  const DRIFT_BASE   = 4.2;      // rad/s at point blank × level pull
-  const ASSIST_RATE  = 2.3;      // rad/s, gaze eases back to mouse
+  const PULL_RANGE   = 318;      // the neck activates inside this radius
+  const DRIFT_BASE   = 5.15;     // rad/s at point blank × level pull
+  const ASSIST_RATE  = 2.05;     // rad/s, gaze eases back to mouse
   const SNAP_RATE    = 9.0;      // rad/s, when no girl in pull range
 
   const DOOR_Y0 = 250, DOOR_Y1 = 390;   // door bands on both walls
@@ -75,6 +76,7 @@
   const WORLD_H = H * WORLD_SCALE_Y; // 1280
   const WORLD_DOOR_Y0 = DOOR_Y0 * WORLD_SCALE_Y; // 500
   const WORLD_DOOR_Y1 = DOOR_Y1 * WORLD_SCALE_Y; // 780
+  const GYM_HEAT_LABELS = ["WARMUP", "ACTIVE", "BUSY", "PACKED", "PEAK"];
 
   // =========================================================================
   // 2. GIRL ARCHETYPES
@@ -328,14 +330,55 @@
   ];
 
   const LEVEL_TOASTS = [
-    "👀 Level 1 · 6 AM. Standard square gym. Exit on the right.",
-    "📐 Level 2 · L-shape layout. Exit door is at the top.",
-    "🧱 Level 3 · T-shape layout. Watch out for steppers. Exit at the bottom.",
-    "⚡ Level 4 · S-shaped tri-corridor. Exit is bottom-left.",
-    "🔄 Level 5 · Loop-back layout. Walk right, wrap around, exit on left.",
-    "⭕ Level 6 · Large central block. Top-left blocked. Exit at top.",
-    "🚪 Level 7 · Quadrant rooms. Navigate door gaps. Exit bottom-right.",
-    "💀 Level 8 · Cross corridors with massive corner blocks. Exit at top."
+    "👀 Level 1 · 6 AM. Standard square gym. Moving plate cart is live.",
+    "📐 Level 2 · L-shape layout. Sliding mirror blocks the safest line.",
+    "🧱 Level 3 · T-shape layout. Watch steppers and scrubber traffic.",
+    "⚡ Level 4 · S-shaped tri-corridor. Moving screens change the cover.",
+    "🔄 Level 5 · Loop-back layout. Plate carts sweep the spiral.",
+    "⭕ Level 6 · Influencer ring. Mirror gates split the top route.",
+    "🚪 Level 7 · Quadrant rooms. Door gaps open and close with traffic.",
+    "💀 Level 8 · Peak hours. Chokepoints, scanners, and moving equipment."
+  ];
+
+  const MOVING_LAYOUTS = [
+    [
+      { kind: "cart", label: "PLATE CART", x: 250, y: 468, w: 78, h: 28, speed: 36, pause: 0.45, path: [[250, 468], [530, 468]] }
+    ],
+    [
+      { kind: "mirror", label: "MIRROR", x: 290, y: 270, w: 26, h: 118, speed: 42, pause: 0.35, path: [[290, 210], [290, 510]] },
+      { kind: "cart", label: "PLATES", x: 118, y: 392, w: 72, h: 28, speed: 40, pause: 0.4, path: [[118, 392], [408, 392]] }
+    ],
+    [
+      { kind: "cleaner", label: "SCRUB", x: 330, y: 218, w: 44, h: 44, speed: 48, pause: 0.25, path: [[330, 218], [330, 486]] },
+      { kind: "cleaner", label: "SCRUB", x: 402, y: 486, w: 44, h: 44, speed: 48, pause: 0.25, path: [[402, 486], [402, 218]] }
+    ],
+    [
+      { kind: "mirror", label: "SCREEN", x: 182, y: 320, w: 132, h: 24, speed: 50, pause: 0.2, path: [[110, 320], [320, 320]] },
+      { kind: "cart", label: "CART", x: 520, y: 532, w: 78, h: 28, speed: 58, pause: 0.25, path: [[520, 532], [250, 532]] },
+      { kind: "cleaner", label: "SCRUB", x: 610, y: 150, w: 42, h: 42, speed: 34, pause: 0.15, path: [[610, 150], [610, 370]] }
+    ],
+    [
+      { kind: "cart", label: "PLATE CART", x: 170, y: 354, w: 86, h: 30, speed: 62, pause: 0.18, path: [[170, 354], [548, 354]] },
+      { kind: "mirror", label: "MIRROR", x: 520, y: 124, w: 128, h: 24, speed: 48, pause: 0.3, path: [[520, 124], [190, 124]] },
+      { kind: "cart", label: "CART", x: 505, y: 584, w: 76, h: 28, speed: 56, pause: 0.25, path: [[505, 584], [128, 584]] }
+    ],
+    [
+      { kind: "mirror", label: "MIRROR", x: 320, y: 116, w: 118, h: 24, speed: 55, pause: 0.2, path: [[170, 116], [470, 116]] },
+      { kind: "mirror", label: "SCREEN", x: 320, y: 482, w: 118, h: 24, speed: 55, pause: 0.2, path: [[470, 482], [170, 482]] },
+      { kind: "cleaner", label: "SCRUB", x: 72, y: 402, w: 44, h: 44, speed: 48, pause: 0.2, path: [[72, 402], [276, 402], [276, 548], [72, 548]] }
+    ],
+    [
+      { kind: "mirror", label: "DOOR", x: 320, y: 258, w: 24, h: 110, speed: 46, pause: 0.18, path: [[320, 258], [320, 382]] },
+      { kind: "mirror", label: "DOOR", x: 320, y: 382, w: 24, h: 110, speed: 46, pause: 0.18, path: [[320, 382], [320, 258]] },
+      { kind: "cart", label: "CART", x: 478, y: 330, w: 84, h: 30, speed: 60, pause: 0.2, path: [[478, 330], [148, 330]] },
+      { kind: "cleaner", label: "SCRUB", x: 555, y: 560, w: 46, h: 46, speed: 54, pause: 0.15, path: [[555, 560], [385, 560], [385, 430], [555, 430]] }
+    ],
+    [
+      { kind: "cart", label: "PLATES", x: 320, y: 260, w: 92, h: 30, speed: 72, pause: 0.1, path: [[320, 190], [320, 455]] },
+      { kind: "cart", label: "CART", x: 210, y: 320, w: 88, h: 30, speed: 70, pause: 0.1, path: [[210, 320], [430, 320]] },
+      { kind: "mirror", label: "MIRROR", x: 320, y: 392, w: 126, h: 24, speed: 58, pause: 0.12, path: [[180, 392], [460, 392]] },
+      { kind: "cleaner", label: "SCRUB", x: 520, y: 320, w: 46, h: 46, speed: 62, pause: 0.08, path: [[520, 320], [120, 320], [120, 390], [520, 390]] }
+    ]
   ];
 
   const SHAME_CAPTIONS = [
@@ -399,8 +442,10 @@
 
     girls: [],
     obstacles: [],
+    movers: [],
     decor: [],
     exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
+    levelStartDist: WORLD_W,
 
 
     airpodT: 0,
@@ -435,13 +480,37 @@
            y >= r.y - r.h / 2 && y <= r.y + r.h / 2;
   }
 
+  function blockerRects() {
+    return state.obstacles.concat(state.movers);
+  }
+
+  function getLevelPressure() {
+    return 1 + (state.level - 1) * 0.075;
+  }
+
+  function getLevelDecayScale() {
+    return clamp(1 - (state.level - 1) * 0.045, 0.64, 1);
+  }
+
+  function getHeatLabel() {
+    const idx = clamp(Math.floor((state.level - 1) / 2), 0, GYM_HEAT_LABELS.length - 1);
+    return GYM_HEAT_LABELS[idx];
+  }
+
+  function exitDistanceFrom(x, y) {
+    const ex = state.exit;
+    const closestX = clamp(x, ex.x - ex.w / 2, ex.x + ex.w / 2);
+    const closestY = clamp(y, ex.y - ex.h / 2, ex.y + ex.h / 2);
+    return dist(x, y, closestX, closestY);
+  }
+
   // Line of sight between two points — blocked by any obstacle
   function losBlocked(ax, ay, bx, by) {
     const steps = 14;
     for (let i = 1; i < steps; i++) {
       const px = lerp(ax, bx, i / steps);
       const py = lerp(ay, by, i / steps);
-      for (const o of state.obstacles) {
+      for (const o of blockerRects()) {
         if (pointInRect(px, py, o)) return true;
       }
     }
@@ -456,7 +525,7 @@
   }
 
   function collidesAny(cx, cy, cr) {
-    for (const o of state.obstacles) {
+    for (const o of blockerRects()) {
       if (collidesCircleRect(cx, cy, cr, o)) return true;
     }
     return false;
@@ -820,7 +889,7 @@
     // 2) The neck: drift toward her
     const girlAngle = Math.atan2(best.y - p.y, best.x - p.x);
     const toGirl = normalizeAngle(girlAngle - p.facing);
-    const driftRate = bestWeight * lv.pull * DRIFT_BASE;
+    const driftRate = bestWeight * (lv.pull + (state.level - 1) * 0.018) * DRIFT_BASE;
     p.facing += Math.sign(toGirl) * Math.min(Math.abs(toGirl), driftRate * dt);
 
     p.facing = normalizeAngle(p.facing);
@@ -917,6 +986,66 @@
     }
   }
 
+  function updateMovers(dt) {
+    for (const m of state.movers) {
+      m.bumpCooldown = Math.max(0, m.bumpCooldown - dt);
+      if (!m.path || m.path.length < 2) continue;
+      if (m.pauseT > 0) {
+        m.pauseT -= dt;
+        continue;
+      }
+
+      const target = m.path[m.pathIdx];
+      const dx = target[0] - m.x;
+      const dy = target[1] - m.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 2) {
+        m.x = target[0];
+        m.y = target[1];
+        m.pathIdx = (m.pathIdx + 1) % m.path.length;
+        m.pauseT = m.pause || 0;
+      } else {
+        const step = Math.min(d, m.speed * dt);
+        const ox = m.x;
+        const oy = m.y;
+        m.x += (dx / d) * step;
+        m.y += (dy / d) * step;
+        m.dir = Math.atan2(m.y - oy, m.x - ox);
+      }
+    }
+  }
+
+  function updateMoverBumps() {
+    const p = state.player;
+    for (const m of state.movers) {
+      if (!collidesCircleRect(p.x, p.y, PLAYER_RADIUS + 1, m)) continue;
+
+      const dx = p.x - m.x;
+      const dy = p.y - m.y;
+      const px = (m.w / 2 + PLAYER_RADIUS + 2) - Math.abs(dx);
+      const py = (m.h / 2 + PLAYER_RADIUS + 2) - Math.abs(dy);
+      if (px < py) {
+        p.x += (dx >= 0 ? 1 : -1) * Math.max(1, px);
+      } else {
+        p.y += (dy >= 0 ? 1 : -1) * Math.max(1, py);
+      }
+      p.x = clamp(p.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
+      p.y = clamp(p.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
+
+      if (m.bumpCooldown <= 0 && state.boyfriendT <= 0) {
+        m.bumpCooldown = 0.9;
+        state.sus = Math.min(SUS_MAX, state.sus + MOVER_BUMP_SUS * getLevelPressure());
+        state.cam.shake = Math.max(state.cam.shake, 0.22);
+        sfx.bump();
+        RB.toast("🔩 Equipment clank. Everyone glanced over.", "bad");
+        if (state.sus >= SUS_MAX) {
+          bust("sus");
+          return;
+        }
+      }
+    }
+  }
+
   // Is the player inside this girl's vision cone (and she can actually see)?
   function girlSeesPlayer(g) {
     if (g.phoneActive || state.decoy) return false;
@@ -944,6 +1073,7 @@
   // =========================================================================
   function updateSus(dt) {
     const p = state.player;
+    const pressure = getLevelPressure();
     let gain = 0;
     let anyMutual = false;
 
@@ -957,14 +1087,14 @@
         const proximity = 0.35 + 0.65 * (1 - d / GAZE_RANGE);
         let mult = g.susMult * (g.phoneActive ? 0.5 : 1);
         if (mutual) mult *= SUS_MUTUAL_MULT;
-        gain += SUS_GAIN_BASE * proximity * mult;
+        gain += SUS_GAIN_BASE * pressure * proximity * mult;
       }
 
       // Notice: she watches you watching her
       if (mutual && state.boyfriendT <= 0) {
         anyMutual = true;
         const before = g.notice;
-        g.notice += dt;
+        g.notice += dt * pressure;
         if (before < 0.15 && g.notice >= 0.15) sfx.notice();
         if (before < 0.65 && g.notice >= 0.65) { sfx.alert(); state.cam.shake = Math.max(state.cam.shake, 0.25); }
         if (g.notice >= NOTICE_TIME) {
@@ -978,11 +1108,12 @@
 
     if (state.boyfriendT > 0) {
       // Shield: sus frozen, slowly drains
-      state.sus = Math.max(0, state.sus - SUS_DECAY * dt);
+      state.sus = Math.max(0, state.sus - SUS_DECAY * getLevelDecayScale() * dt);
     } else if (gain > 0) {
       state.sus = Math.min(SUS_MAX, state.sus + gain * dt);
     } else {
-      state.sus = Math.max(0, state.sus - (p.eyesClosed ? SUS_DECAY_SHUT : SUS_DECAY) * dt);
+      const decay = (p.eyesClosed ? SUS_DECAY_SHUT : SUS_DECAY) * getLevelDecayScale();
+      state.sus = Math.max(0, state.sus - decay * dt);
     }
 
     state.levelPeakSus = Math.max(state.levelPeakSus, state.sus);
@@ -1166,16 +1297,36 @@
     const lv = LEVELS[n - 1];
     
     // Scale obstacles dynamically
-    state.obstacles = lv.obstacles.map(o => {
+    const scaleObstacle = (o, moving) => {
       const isWall = o.kind === "wall";
-      const scaleW = isWall ? WORLD_SCALE_X : 1.5;
-      const scaleH = isWall ? WORLD_SCALE_Y : 1.5;
+      const scaleW = isWall ? WORLD_SCALE_X : (moving ? 1.62 : 1.5);
+      const scaleH = isWall ? WORLD_SCALE_Y : (moving ? 1.62 : 1.5);
       return {
         x: o.x * WORLD_SCALE_X,
         y: o.y * WORLD_SCALE_Y,
         w: o.w * scaleW,
         h: o.h * scaleH,
         kind: o.kind
+      };
+    };
+
+    state.obstacles = lv.obstacles.map(o => scaleObstacle(o, false));
+    state.movers = (MOVING_LAYOUTS[n - 1] || []).map((m, i) => {
+      const scaled = scaleObstacle(m, true);
+      const path = (m.path || [[m.x, m.y]]).map(pt => [pt[0] * WORLD_SCALE_X, pt[1] * WORLD_SCALE_Y]);
+      return {
+        ...scaled,
+        x: path[0][0],
+        y: path[0][1],
+        label: m.label || m.kind.toUpperCase(),
+        path,
+        pathIdx: path.length > 1 ? 1 : 0,
+        speed: (m.speed || 42) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+        pause: m.pause || 0,
+        pauseT: (m.pause || 0) * (i % 2),
+        dir: 0,
+        seed: i * 17.23 + n * 3.7,
+        bumpCooldown: 0
       };
     });
     
@@ -1222,6 +1373,7 @@
 
     state.player.x = 36;
     state.player.y = 320 * WORLD_SCALE_Y;
+    state.levelStartDist = Math.max(1, exitDistanceFrom(state.player.x, state.player.y));
     state.levelT = 0;
     state.levelPeakSus = 0;
     state.sus = Math.max(0, state.sus - 40);  // partial mercy between levels
@@ -1432,6 +1584,47 @@
     ctx.restore();
   }
 
+  function drawAmbientTraffic() {
+    const count = Math.min(11, 3 + state.level);
+    ctx.save();
+    for (let i = 0; i < count; i++) {
+      const lane = i % 4;
+      const travel = ((state.t * (0.025 + i * 0.002) + i * 0.17) % 1);
+      const x =
+        lane === 0 ? 80 + travel * (WORLD_W - 160) :
+        lane === 1 ? WORLD_W - 110 - travel * (WORLD_W - 220) :
+        lane === 2 ? 52 + Math.sin(state.t * 0.45 + i) * 18 :
+        WORLD_W - 52 + Math.cos(state.t * 0.4 + i) * 18;
+      const y =
+        lane === 0 ? 72 + Math.sin(state.t * 0.9 + i) * 22 :
+        lane === 1 ? WORLD_H - 74 + Math.cos(state.t * 0.8 + i) * 20 :
+        120 + travel * (WORLD_H - 240);
+
+      ctx.globalAlpha = 0.08 + state.level * 0.006;
+      ctx.fillStyle = i % 2 ? "#2ee0ff" : "#ff2e88";
+      ctx.beginPath();
+      ctx.ellipse(x, y, 8, 13, Math.sin(state.t + i) * 0.4, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.beginPath();
+      ctx.ellipse(x + 2, y + 11, 10, 3, 0, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawExitHalo() {
+    const ex = state.exit;
+    ctx.save();
+    const pulse = 0.55 + 0.45 * Math.sin(state.t * 4);
+    const grad = ctx.createRadialGradient(ex.x, ex.y, 12, ex.x, ex.y, 170);
+    grad.addColorStop(0, "rgba(255,125,223," + (0.18 + pulse * 0.14) + ")");
+    grad.addColorStop(1, "rgba(255,125,223,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(ex.x - 180, ex.y - 180, 360, 360);
+    ctx.restore();
+  }
+
   function drawWallSign(o) {
     if (o.w >= 140 && o.h >= 60) {
       ctx.save();
@@ -1529,27 +1722,54 @@
   }
 
   function drawGymFloor() {
-    ctx.fillStyle = "#12121c"; // slightly darker theme base
+    const heat = Math.min(1, (state.level - 1) / (LEVELS.length - 1));
+    const baseGrad = ctx.createLinearGradient(0, 0, WORLD_W, WORLD_H);
+    baseGrad.addColorStop(0, "#0d1018");
+    baseGrad.addColorStop(0.48, heat > 0.55 ? "#15101b" : "#111522");
+    baseGrad.addColorStop(1, heat > 0.4 ? "#1a1117" : "#10111c");
+    ctx.fillStyle = baseGrad;
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+
+    ctx.fillStyle = "rgba(255,255,255,0.018)";
+    for (let y = 0; y < WORLD_H; y += 160) {
+      ctx.fillRect(0, y + ((state.level * 23) % 80), WORLD_W, 2);
+    }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.035)";
     ctx.lineWidth = 1;
     const tile = 40;
     for (let x = 0; x <= WORLD_W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke(); }
     for (let y = 0; y <= WORLD_H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke(); }
+
+    ctx.strokeStyle = "rgba(77,255,201,0.035)";
+    for (let x = -WORLD_H; x < WORLD_W; x += 140) {
+      ctx.beginPath();
+      ctx.moveTo(x, WORLD_H);
+      ctx.lineTo(x + WORLD_H, 0);
+      ctx.stroke();
+    }
 
     // Turf lane
     drawTurfLane();
 
     // Center logo
     drawGymLogo();
+    drawAmbientTraffic();
+    drawExitHalo();
 
     // Ambient spotlighting: soft circular glow tracking the player
     const p = state.player;
     ctx.save();
     const spotlight = ctx.createRadialGradient(p.x, p.y, 40, p.x, p.y, 340);
-    spotlight.addColorStop(0, "rgba(46, 224, 255, 0.08)");
+    spotlight.addColorStop(0, "rgba(46, 224, 255, 0.10)");
     spotlight.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = spotlight;
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+    const heatGlow = ctx.createRadialGradient(WORLD_W / 2, WORLD_H / 2, 180, WORLD_W / 2, WORLD_H / 2, WORLD_W * 0.7);
+    heatGlow.addColorStop(0, "rgba(255,46,136," + (0.02 + heat * 0.035) + ")");
+    heatGlow.addColorStop(1, "rgba(255,46,136,0)");
+    ctx.fillStyle = heatGlow;
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
 
     // Soft vignette around the borders of the world
@@ -1857,6 +2077,101 @@
       }
       ctx.restore();
     }
+  }
+
+  function drawMover(m) {
+    const x0 = m.x - m.w / 2;
+    const y0 = m.y - m.h / 2;
+    const shimmer = 0.5 + 0.5 * Math.sin(state.t * 4 + m.seed);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(m.x + 3, m.y + m.h * 0.26, m.w * 0.48, Math.max(5, m.h * 0.16), 0, 0, TAU);
+    ctx.fill();
+
+    if (m.path && m.path.length > 1) {
+      ctx.strokeStyle = "rgba(255,255,255,0.09)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 7]);
+      ctx.beginPath();
+      ctx.moveTo(m.path[0][0], m.path[0][1]);
+      for (let i = 1; i < m.path.length; i++) ctx.lineTo(m.path[i][0], m.path[i][1]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    if (m.kind === "mirror") {
+      const grad = ctx.createLinearGradient(x0, y0, x0 + m.w, y0 + m.h);
+      grad.addColorStop(0, "rgba(77,255,201,0.22)");
+      grad.addColorStop(0.45, "rgba(220,255,255,0.88)");
+      grad.addColorStop(0.55, "rgba(46,224,255,0.30)");
+      grad.addColorStop(1, "rgba(255,46,136,0.18)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x0, y0, m.w, m.h);
+      ctx.strokeStyle = "rgba(46,224,255,0.85)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0, y0, m.w, m.h);
+      ctx.strokeStyle = "rgba(255,255,255," + (0.16 + shimmer * 0.18) + ")";
+      ctx.lineWidth = 1;
+      for (let i = -1; i < 4; i++) {
+        const px = x0 + i * 34 + (state.t * 32 + m.seed) % 34;
+        ctx.beginPath();
+        ctx.moveTo(px, y0 + 4);
+        ctx.lineTo(px + 34, y0 + m.h - 4);
+        ctx.stroke();
+      }
+    } else if (m.kind === "cleaner") {
+      ctx.fillStyle = "#141721";
+      ctx.fillRect(x0, y0, m.w, m.h);
+      ctx.strokeStyle = "rgba(77,255,201,0.8)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0, y0, m.w, m.h);
+      ctx.fillStyle = "rgba(46,224,255,0.22)";
+      ctx.fillRect(x0 + 5, y0 + 5, m.w - 10, m.h - 10);
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 2; i++) {
+        const cx = m.x + (i ? 10 : -10);
+        const cy = m.y + 8;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, state.t * 8, state.t * 8 + Math.PI * 1.3);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(255,46,136," + (0.4 + shimmer * 0.35) + ")";
+      ctx.beginPath();
+      ctx.arc(m.x, y0 + 8, 3.5, 0, TAU);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "#171820";
+      ctx.fillRect(x0, y0, m.w, m.h);
+      ctx.strokeStyle = "rgba(247,215,22,0.65)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0, y0, m.w, m.h);
+      ctx.fillStyle = "#2a2a35";
+      ctx.fillRect(x0 + 6, y0 + 5, m.w - 12, m.h - 10);
+      ctx.strokeStyle = "rgba(0,0,0,0.45)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const px = x0 + 14 + i * ((m.w - 28) / 3);
+        ctx.beginPath();
+        ctx.arc(px, m.y, Math.min(9, m.h * 0.28), 0, TAU);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(247,215,22," + (0.25 + shimmer * 0.35) + ")";
+      ctx.fillRect(x0 + 6, y0 + 3, m.w - 12, 3);
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.58)";
+    ctx.font = "bold 7px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(m.label, m.x, m.y + 3);
+
+    ctx.restore();
+  }
+
+  function drawMovers() {
+    for (const m of state.movers) drawMover(m);
   }
 
   function drawGirlCone(g) {
@@ -2184,11 +2499,12 @@
     const sx = p.x - state.cam.x;
     const sy = p.y - state.cam.y;
     const pulse = 1 + 0.1 * Math.sin(state.t * 4);
-    const innerRadius = 30 * pulse;
-    const outerRadius = 110 * pulse;
+    const levelShrink = 1 - Math.min(0.34, (state.level - 1) * 0.045);
+    const innerRadius = 28 * pulse * levelShrink;
+    const outerRadius = 92 * pulse * levelShrink;
     const grad = ctx.createRadialGradient(sx, sy, innerRadius, sx, sy, outerRadius);
-    grad.addColorStop(0, "rgba(0,0,0,0.5)");
-    grad.addColorStop(1, "rgba(0,0,0,0.97)");
+    grad.addColorStop(0, "rgba(0,0,0,0.58)");
+    grad.addColorStop(1, "rgba(0,0,0,0.985)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = "rgba(255,255,255,0.45)";
@@ -2222,8 +2538,14 @@
 
     const lvEl = document.getElementById("hud-level");
     if (lvEl) lvEl.textContent = state.level + "/" + LEVELS.length;
+    const heatEl = document.getElementById("hud-heat");
+    if (heatEl) heatEl.textContent = getHeatLabel();
     const distEl = document.getElementById("hud-dist");
-    if (distEl) distEl.textContent = Math.floor((state.player.x / WORLD_W) * 100) + "%";
+    if (distEl) {
+      const remaining = exitDistanceFrom(state.player.x, state.player.y);
+      const progress = clamp(1 - remaining / state.levelStartDist, 0, 1);
+      distEl.textContent = Math.floor(progress * 100) + "%";
+    }
     const scoreEl = document.getElementById("hud-score");
     if (scoreEl) scoreEl.textContent = state.score;
     const highEl = document.getElementById("hud-high");
@@ -2252,6 +2574,7 @@
     }
 
     drawObstacles();
+    drawMovers();
 
     // Draw glowing neon signs on top of walls
     for (const o of state.obstacles) {
@@ -2287,6 +2610,7 @@
     if (state.running && !state.paused) {
       state.levelT += dt;
       readInput();
+      updateMovers(dt);
       updatePlayer(dt);
       state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
       state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
@@ -2296,6 +2620,7 @@
       updatePowerTimers(dt);
       if (!state.gameOver) updateSus(dt);
       if (!state.gameOver) updateBumps(dt);
+      if (!state.gameOver) updateMoverBumps();
       state.cam.shake = Math.max(0, state.cam.shake - dt * 2);
       state.cam.flash = Math.max(0, state.cam.flash - dt * 3);
       if (!state.gameOver && !state.won) checkLevelProgress();

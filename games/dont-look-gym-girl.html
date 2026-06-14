@@ -12,17 +12,33 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ctext x='50' y='68' font-family='Arial Black' font-size='52' fill='%230a0a14' text-anchor='middle'%3E%F0%9F%91%80%3C/text%3E%3C/svg%3E" />
   <style>
     /* ===== Game-specific styles ===== */
+    .gym-page .canvas-wrap--ar-640-640 {
+      background:
+        radial-gradient(circle at 50% 45%, rgba(46,224,255,0.12), transparent 45%),
+        linear-gradient(135deg, rgba(255,46,136,0.12), rgba(77,255,201,0.08));
+      border: 1px solid rgba(46,224,255,0.35);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 22px 70px rgba(0,0,0,0.55),
+        0 0 46px rgba(255,46,136,0.14);
+    }
+    .gym-page #gameCanvas {
+      background: #0d1018;
+    }
     .gym-hud {
       display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
       justify-content: center;
       padding: 10px 12px;
-      background: rgba(10,10,20,0.85);
-      border: 1px solid var(--panel-2);
+      background:
+        linear-gradient(135deg, rgba(10,10,20,0.92), rgba(20,18,34,0.86)),
+        radial-gradient(circle at 10% 20%, rgba(46,224,255,0.14), transparent 42%);
+      border: 1px solid rgba(46,224,255,0.26);
       border-radius: 8px;
       font-family: var(--font-mono);
       font-size: 12px;
       color: var(--ink-dim);
       margin-bottom: 10px;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06);
     }
     .gym-hud__item { display: flex; align-items: center; gap: 6px; }
     .gym-hud__label { color: var(--ink-dim); letter-spacing: 1.5px; }
@@ -337,16 +353,31 @@
       height: 100% !important;
       object-fit: contain !important;
     }
+    @media (max-width: 560px) {
+      .gym-page .controls-row {
+        align-items: center;
+        flex-direction: row;
+      }
+      .gym-page .controls-row .btn {
+        flex: 1 1 0;
+        min-height: 40px;
+        width: auto;
+      }
+      .gym-page .gym-power {
+        justify-content: space-between;
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
   <nav class="nav"><div id="nav-slot"></div></nav>
 
-  <main class="game-page">
+  <main class="game-page gym-page">
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">👀 Don't Look at the Gym Girl</h1>
-        <div class="game-page__sub">WASD/touch to move · mouse/drag to look · hold SPACE/EYES to close your eyes · 8 levels</div>
+        <div class="game-page__sub">WASD/touch to move · mouse/drag to look · moving gym floor · hold SPACE/EYES to close your eyes</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -366,6 +397,10 @@
           <div class="gym-hud__item">
             <span class="gym-hud__label">LEVEL</span>
             <span class="gym-hud__value" id="hud-level">1/8</span>
+          </div>
+          <div class="gym-hud__item">
+            <span class="gym-hud__label">HEAT</span>
+            <span class="gym-hud__value" id="hud-heat">WARMUP</span>
           </div>
           <div class="gym-hud__item">
             <span class="gym-hud__label">DIST</span>
@@ -392,7 +427,7 @@
             <p class="overlay__sub" id="overlay-sub">
               <strong style="color:var(--accent-3)">Front door</strong> →
               <strong style="color:var(--accent-2)">locker room</strong>. Eight levels.
-              Every level: more equipment, more girls, and your
+              Every level: more equipment, moving cover, tighter routes, and your
               <strong style="color:var(--accent)">neck pulls harder</strong>.
               <br><br>
               Looking builds <strong style="color:var(--accent)">SUS</strong>.
@@ -447,7 +482,7 @@
         <details class="game-side__howto">
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Move</strong> with WASD/arrows. Equipment blocks you now — and blocks their view. Use it.</li>
+            <li><strong style="color:var(--ink);">Move</strong> with WASD/arrows. Equipment, sliding mirrors, carts, and scrubbers block you — and block their view. Time your cover.</li>
             <li><strong style="color:var(--ink);">THE NECK™:</strong> your gaze drifts toward the nearest girl. Drag the mouse away to fight it. It gets stronger every level.</li>
             <li><strong style="color:var(--ink);">SUS</strong> builds while a girl is in your gaze cone. Full bar = publicly shamed.</li>
             <li><strong style="color:var(--ink);">Caught in 4K:</strong> if she's looking at you <em>while</em> you look at her, a "?" appears. Hold the stare and it becomes "!" — instant accusation.</li>
@@ -474,8 +509,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
-  <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/dont-look-gym-girl.js?v=20260612-4"></script>
+  <script src="../assets/js/main.js?v=20260614-max-1"></script>
+  <script src="../assets/js/dont-look-gym-girl.js?v=20260614-dynamic-gym-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

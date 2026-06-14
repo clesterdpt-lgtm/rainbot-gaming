@@ -321,20 +321,46 @@
   window.addEventListener("keyup", (e) => { keys[e.code] = false; });
 
   function wireDpad() {
-    const dpad = document.getElementById("dpad");
-    if (!dpad) return;
-    dpad.querySelectorAll("button[data-ctrl]").forEach((btn) => {
+    document.querySelectorAll("button[data-ctrl]").forEach((btn) => {
       const code = btn.dataset.ctrl;
-      const press = (ev) => { ev.preventDefault(); keys[code] = true; };
-      const release = (ev) => { if (ev) ev.preventDefault?.(); keys[code] = false; };
-      btn.addEventListener("touchstart", press, { passive: false });
-      btn.addEventListener("touchend", release);
-      btn.addEventListener("touchcancel", release);
-      btn.addEventListener("mousedown", press);
-      btn.addEventListener("mouseup", release);
-      btn.addEventListener("mouseleave", release);
+      const press = (ev) => {
+        ev.preventDefault();
+        if (ev.pointerId != null && btn.setPointerCapture) {
+          try { btn.setPointerCapture(ev.pointerId); } catch (_) {}
+        }
+        keys[code] = true;
+        btn.setAttribute("aria-pressed", "true");
+        canvas.focus?.({ preventScroll: true });
+      };
+      const release = (ev) => {
+        if (ev) ev.preventDefault?.();
+        keys[code] = false;
+        btn.removeAttribute("aria-pressed");
+      };
+      btn.addEventListener("pointerdown", press);
+      btn.addEventListener("pointerup", release);
+      btn.addEventListener("pointercancel", release);
+      btn.addEventListener("lostpointercapture", release);
+      btn.addEventListener("pointerleave", (ev) => {
+        if (ev.pointerType === "mouse") release(ev);
+      });
+      btn.addEventListener("contextmenu", (ev) => ev.preventDefault());
     });
   }
+
+  function releaseTouchControls() {
+    keys.left = false;
+    keys.right = false;
+    keys.thrust = false;
+    document.querySelectorAll("button[data-ctrl][aria-pressed='true']").forEach((btn) => {
+      btn.removeAttribute("aria-pressed");
+    });
+  }
+
+  window.addEventListener("blur", releaseTouchControls);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) releaseTouchControls();
+  });
 
   function thrustHeld() { return keys.Space || keys.ArrowUp || keys.KeyW || keys.thrust; }
   function leftHeld()   { return keys.ArrowLeft || keys.KeyA || keys.left; }

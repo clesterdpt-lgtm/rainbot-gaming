@@ -17,8 +17,9 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | ✅ Live | **AGAIN.** | 🕯 *Rainbot After Dark No. 001* — first-person loop-horror in the spirit of P.T. Three.js hallway, 100% synthesized positional audio (no sound files). Headphones required. **Not a parody.** `/games/again.html` |
 | ✅ Live | **Boomer Monopoly** | Satirical housing board game. Roll, buy, renovate, and collect rent. `/games/boomer-monopoly.html` |
 | ✅ Live | **Billionaire Space Race** | Lunar-lander parody. Burn the investor money, dodge lawsuit drones and audit satellites, and set your ego-rocket down gently on an ever-tinier, ever-moving platform. `/games/billionaire-space-race.html` |
+| 🧪 Prototype | **Unhoused and Unhinged** | Low-poly 3D street-survival sandbox. Perform slapstick antics by day, manage heat, and survive Tweeker Zombies with improvised comedy weapons at night. `/games/unhoused-and-unhinged.html` |
 
-> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. Apop Demon Moggers is a fictional side-scroller satirizing American pop culture and internet "mogging" slang; the demon "boy band" and all characters are invented parodies with no relation to any real person, group, organization, or community. Billionaire Space Race satirizes the private-spaceflight ambitions of fictional tech billionaires; all tycoons, companies, and rockets are invented parodies with no relation to any real person or company. Not affiliated with any real brand, person, or community.
+> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. Apop Demon Moggers is a fictional side-scroller satirizing American pop culture and internet "mogging" slang; the demon "boy band" and all characters are invented parodies with no relation to any real person, group, organization, or community. Billionaire Space Race satirizes the private-spaceflight ambitions of fictional tech billionaires; all tycoons, companies, and rockets are invented parodies with no relation to any real person or company. Unhoused and Unhinged satirizes absurd city systems, clout culture, and cartoon survival-game logic; it should not frame real homelessness or addiction as the punchline. Not affiliated with any real brand, person, or community.
 
 ## 🚀 Run it locally
 
@@ -45,14 +46,16 @@ Then open <http://localhost:8000>.
 ├── games/
 │   ├── strait-of-hormuz.html     # Playable Frogger
 │   ├── boomer-monopoly.html      # Playable board-game parody
-│   └── apop-demon-hunters.html   # Playable side-scroller (Apop Demon Moggers)
+│   ├── apop-demon-hunters.html   # Playable side-scroller (Apop Demon Moggers)
+│   └── unhoused-and-unhinged.html # Low-poly 3D sandbox prototype
 ├── assets/
 │   ├── css/styles.css            # All styles
 │   └── js/
 │       ├── ads.js                # Ad + subscription + power-up state machine
 │       ├── main.js               # Nav, Pro modal, site-wide UI
 │       ├── boomer-monopoly.js    # Board-game parody engine
-│       └── strait-of-hormuz.js   # Game engine
+│       ├── strait-of-hormuz.js   # Game engine
+│       └── unhoused-and-unhinged-topdown.js # Top-down sandbox prototype engine
 ├── legal/
 │   ├── privacy.html
 │   └── terms.html

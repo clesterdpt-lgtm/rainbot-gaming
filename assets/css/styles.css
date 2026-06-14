@@ -1070,25 +1070,221 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap.is-maxed {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100dvw !important;
+  height: 100dvh !important;
   max-width: none;
   aspect-ratio: auto;
   border-radius: 0;
   background: #05010a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 9999;
 }
+
+body.rb-game-maxed {
+  overflow: hidden;
+}
+
 .canvas-wrap.is-maxed #gameCanvas {
-  width: min(100vw, 150vh);
-  height: auto;
-  max-height: 100vh;
-  aspect-ratio: 750 / 500;
+  width: min(100dvw, calc(100dvh * var(--game-aspect, 1.5)));
+  height: min(100dvh, calc(100dvw / var(--game-aspect, 1.5)));
+  max-width: 100dvw;
+  max-height: 100dvh;
+  aspect-ratio: var(--game-aspect-ratio, 16 / 9);
   border: none;
   border-radius: 0;
 }
 .canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
 .canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }
 .canvas-wrap.is-maxed .touch-btn--beam { width: 88px; height: 88px; }
+
+.rb-touch-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.canvas-wrap.is-maxed .rb-touch-layer {
+  display: block;
+}
+
+.rb-touch-cluster {
+  position: absolute;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.rb-touch-cluster--left {
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
+}
+
+.rb-touch-cluster--right {
+  bottom: max(10px, env(safe-area-inset-bottom));
+  right: max(10px, env(safe-area-inset-right));
+}
+
+.rb-touch-cluster--stack {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
+.rb-touch-btn {
+  align-items: center;
+  background: rgba(5, 7, 15, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-display);
+  font-size: 13px;
+  height: 54px;
+  justify-content: center;
+  letter-spacing: 0;
+  min-width: 54px;
+  padding: 0 13px;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+}
+
+.rb-touch-btn--wide {
+  min-width: 78px;
+}
+
+.rb-touch-btn--accent {
+  background: rgba(46, 224, 255, 0.30);
+  border-color: rgba(46, 224, 255, 0.52);
+}
+
+.rb-touch-btn--primary {
+  background: rgba(255, 46, 136, 0.34);
+  border-color: rgba(255, 46, 136, 0.58);
+}
+
+.rb-touch-btn--yellow {
+  background: rgba(255, 212, 59, 0.32);
+  border-color: rgba(255, 212, 59, 0.58);
+  color: rgba(8, 8, 16, 0.86);
+}
+
+.rb-touch-btn:active,
+.rb-touch-btn.is-held,
+.rb-touch-btn.is-active {
+  filter: brightness(1.28);
+  transform: scale(0.94);
+}
+
+.rb-touch-zone {
+  position: absolute;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  left: max(8px, env(safe-area-inset-left));
+  width: min(42%, 170px);
+  height: min(42%, 170px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+  background: rgba(46, 224, 255, 0.045);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.rb-touch-zone::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  transform: translate(-50%, -50%);
+}
+
+.rb-touch-zone.is-held {
+  background: rgba(46, 224, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.rb-touch-dpad {
+  position: absolute;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: max(10px, env(safe-area-inset-left));
+  display: grid;
+  grid-template-columns: repeat(3, 50px);
+  grid-template-rows: repeat(3, 50px);
+  gap: 5px;
+  pointer-events: auto;
+}
+
+.rb-touch-dpad .rb-touch-btn {
+  height: 50px;
+  min-width: 50px;
+  padding: 0;
+}
+
+.rb-touch-dpad [data-ctrl="thrust"] { grid-column: 2; grid-row: 1; }
+.rb-touch-dpad [data-ctrl="left"] { grid-column: 1; grid-row: 2; }
+.rb-touch-dpad [data-ctrl="horn"] { grid-column: 2; grid-row: 2; font-size: 10px; }
+.rb-touch-dpad [data-ctrl="right"] { grid-column: 3; grid-row: 2; }
+.rb-touch-dpad [data-ctrl="brake"] { grid-column: 2; grid-row: 3; }
+
+.rb-touch-layer--unhinged .rb-touch-zone {
+  width: 96px;
+  height: 96px;
+}
+
+.rb-touch-layer--unhinged .rb-touch-cluster--right {
+  flex-direction: row;
+}
+
+.rb-touch-layer--unhinged .rb-touch-btn {
+  font-size: 11px;
+  height: 44px;
+  min-width: 58px;
+  opacity: 0.82;
+  padding: 0 9px;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .rb-touch-layer {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .rb-touch-layer {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .rb-touch-btn {
+    height: 48px;
+    min-width: 48px;
+    padding: 0 11px;
+  }
+
+  .rb-touch-btn--wide {
+    min-width: 70px;
+  }
+
+  .rb-touch-dpad {
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+  }
+
+  .rb-touch-dpad .rb-touch-btn {
+    height: 46px;
+    min-width: 46px;
+  }
+}
 
 @media (hover: none) and (pointer: coarse) {
   .touch-pad {
@@ -2300,6 +2496,8 @@ body.arcade-home::before {
 .directory-card__poster--doorcrash img,
 .poster-card--tardigrade img,
 .directory-card__poster--tardigrade img,
+.poster-card--unhinged img,
+.directory-card__poster--unhinged img,
 .poster-card--apop img,
 .directory-card__poster--apop img,
 .poster-card--bsr img,
@@ -2321,6 +2519,8 @@ body.arcade-home::before {
 .directory-card__poster--doorcrash::before,
 .poster-card--tardigrade::before,
 .directory-card__poster--tardigrade::before,
+.poster-card--unhinged::before,
+.directory-card__poster--unhinged::before,
 .poster-card--apop::before,
 .directory-card__poster--apop::before,
 .poster-card--bsr::before,
@@ -2342,6 +2542,14 @@ body.arcade-home::before {
     radial-gradient(120% 90% at 78% 18%, rgba(255, 212, 59, 0.18), transparent 42%),
     radial-gradient(90% 80% at 20% 12%, rgba(46, 224, 255, 0.16), transparent 48%),
     linear-gradient(165deg, #120a2e 0%, #07060f 70%);
+}
+
+.poster-card--unhinged,
+.directory-card__poster--unhinged {
+  background:
+    radial-gradient(110% 80% at 78% 16%, rgba(103, 255, 98, 0.18), transparent 44%),
+    radial-gradient(90% 75% at 20% 20%, rgba(255, 46, 136, 0.18), transparent 50%),
+    linear-gradient(165deg, #17102b 0%, #05070d 76%);
 }
 
 .poster-card__label {

@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unhoused and Unhinged — Rainbot Gaming</title>
+  <meta name="description" content="A low-poly 3D street-survival sandbox prototype. Earn cash with slapstick antics by day, dodge overzealous cops, and survive Tweeker Zombies at night." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-unhoused-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M14 70h72v12H14z' fill='%23ffd43b'/%3E%3Cpath d='M26 64c2-24 46-24 48 0' fill='%23ff2e88'/%3E%3Ccircle cx='38' cy='40' r='8' fill='%232ee0ff'/%3E%3Ccircle cx='62' cy='40' r='8' fill='%232ee0ff'/%3E%3C/svg%3E" />
+  <style>
+    .unhinged-page {
+      max-width: 1760px;
+    }
+
+    .unhinged-page .game-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 330px);
+    }
+
+    .unhinged-stage {
+      position: relative;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(255, 212, 59, 0.16), transparent 26%),
+        radial-gradient(circle at 82% 8%, rgba(46, 224, 255, 0.14), transparent 28%),
+        linear-gradient(180deg, rgba(8, 12, 24, 0.98), rgba(3, 5, 12, 0.99));
+      border-color: rgba(255, 212, 59, 0.34);
+    }
+
+    .unhinged-stage .hud {
+      background: rgba(3, 6, 12, 0.86);
+      border-color: rgba(46, 224, 255, 0.28);
+      box-shadow: 0 0 28px rgba(46, 224, 255, 0.1);
+      display: none;
+    }
+
+    .canvas-wrap--unhinged {
+      aspect-ratio: 16 / 9;
+      --game-max-width: 1536px;
+      background: #05070d;
+      border: 1px solid rgba(255, 46, 136, 0.36);
+    }
+
+    .canvas-wrap--unhinged::after {
+      background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.34), transparent 22%, transparent 76%, rgba(0, 0, 0, 0.18)),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent 24%, transparent 70%, rgba(0, 0, 0, 0.18)),
+        radial-gradient(circle at 48% 46%, transparent 42%, rgba(0, 0, 0, 0.26) 100%);
+      content: "";
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      z-index: 5;
+    }
+
+    .canvas-wrap--unhinged #gameCanvas {
+      background: #05070d;
+      border-color: rgba(46, 224, 255, 0.42);
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .canvas-wrap--unhinged #gameCanvas.is-mouselook {
+      cursor: grabbing;
+    }
+
+    .unhinged-game-hud {
+      color: #f7fbff;
+      font-family: var(--font-mono);
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.82);
+      z-index: 6;
+    }
+
+    .unhinged-hud-panel {
+      background: linear-gradient(180deg, rgba(7, 9, 13, 0.68), rgba(7, 9, 13, 0.44));
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.32), 0 12px 32px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(2px);
+    }
+
+    .unhinged-hud-left {
+      display: grid;
+      gap: 9px;
+      left: 12px;
+      position: absolute;
+      top: 14px;
+      width: min(282px, 31vw);
+    }
+
+    .unhinged-logo-mark {
+      color: #fff;
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(18px, 2.2vw, 36px);
+      font-weight: 900;
+      letter-spacing: 0;
+      line-height: 0.9;
+      text-transform: uppercase;
+    }
+
+    .unhinged-logo-mark span {
+      display: block;
+      filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, 0.74));
+    }
+
+    .unhinged-logo-mark span:last-child {
+      color: #e96cff;
+    }
+
+    .unhinged-logo-mark small {
+      color: #fff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: 14px;
+      line-height: 1;
+      margin-left: 88px;
+      margin-top: -1px;
+    }
+
+    .unhinged-version {
+      color: rgba(255, 255, 255, 0.86);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 900;
+      padding-left: 26px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-task-card {
+      display: grid;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+
+    .unhinged-task-card strong {
+      color: #ffd43b;
+      display: block;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    .unhinged-task-card--bucks strong {
+      color: #75ff92;
+    }
+
+    .unhinged-task-card--heat strong {
+      color: #ff6c6c;
+    }
+
+    .unhinged-task-row {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      min-height: 18px;
+    }
+
+    .unhinged-task-row span {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1.12;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .unhinged-task-row span::before {
+      content: "- ";
+      font-family: var(--font-mono);
+    }
+
+    .unhinged-task-row b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .unhinged-notoriety {
+      left: 50%;
+      min-width: 270px;
+      position: absolute;
+      top: 18px;
+      transform: translateX(-50%);
+      width: 31%;
+    }
+
+    .unhinged-notoriety__label {
+      color: #ff736d;
+      font-family: var(--font-display);
+      font-size: 17px;
+      line-height: 1;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .unhinged-notoriety__track {
+      background: rgba(8, 18, 30, 0.82);
+      border: 1px solid rgba(5, 8, 14, 0.78);
+      border-radius: 4px;
+      height: 16px;
+      margin-top: 7px;
+      overflow: hidden;
+    }
+
+    .unhinged-notoriety__fill {
+      background: linear-gradient(90deg, #df2f32, #ff8a3a);
+      display: block;
+      height: 100%;
+      width: 0%;
+    }
+
+    .unhinged-stars {
+      display: flex;
+      gap: 9px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .unhinged-stars span {
+      color: rgba(20, 48, 74, 0.86);
+      font-size: 34px;
+      line-height: 1;
+      -webkit-text-stroke: 2px rgba(5, 7, 13, 0.82);
+    }
+
+    .unhinged-stars span.is-lit {
+      color: #ffd43b;
+      filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7));
+    }
+
+    .unhinged-hud-map {
+      position: absolute;
+      right: 14px;
+      top: 12px;
+      width: 186px;
+    }
+
+    .unhinged-hud-clock {
+      align-items: center;
+      display: flex;
+      gap: 9px;
+      justify-content: flex-end;
+      margin-bottom: 6px;
+    }
+
+    .unhinged-hud-clock b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .unhinged-gear-dot {
+      align-items: center;
+      background: rgba(5, 7, 13, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 50%;
+      color: #fff;
+      display: inline-flex;
+      font-family: var(--font-display);
+      font-size: 22px;
+      height: 42px;
+      justify-content: center;
+      line-height: 1;
+      width: 42px;
+    }
+
+    .unhinged-minimap {
+      aspect-ratio: 1;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 46%),
+        repeating-linear-gradient(34deg, transparent 0 16px, rgba(255, 255, 255, 0.16) 16px 21px),
+        repeating-linear-gradient(121deg, rgba(26, 31, 36, 0.92) 0 18px, rgba(78, 84, 88, 0.9) 18px 24px);
+      border: 5px solid rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 28px rgba(0, 0, 0, 0.62);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .unhinged-minimap::before {
+      color: rgba(255, 255, 255, 0.74);
+      content: "N";
+      font-family: var(--font-display);
+      font-size: 12px;
+      left: 50%;
+      position: absolute;
+      top: 6px;
+      transform: translateX(-50%);
+    }
+
+    .unhinged-mini-dot {
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.62), 0 0 8px currentColor;
+      height: 10px;
+      position: absolute;
+      width: 10px;
+    }
+
+    .unhinged-mini-dot--player {
+      background: #2ee0ff;
+      clip-path: polygon(50% 0, 100% 100%, 50% 75%, 0 100%);
+      height: 18px;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px;
+    }
+
+    .unhinged-mini-dot--cash {
+      background: #75ff92;
+      left: 68%;
+      top: 70%;
+    }
+
+    .unhinged-mini-dot--heat {
+      background: #ff4b6d;
+      left: 34%;
+      top: 33%;
+    }
+
+    .unhinged-mini-dot--job {
+      background: #ffd43b;
+      left: 58%;
+      top: 42%;
+    }
+
+    .unhinged-map-district {
+      background: rgba(5, 7, 13, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      margin-top: 7px;
+      padding: 6px 7px;
+      text-align: center;
+    }
+
+    .unhinged-map-district strong,
+    .unhinged-map-district span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .unhinged-map-district strong {
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    .unhinged-map-district span {
+      color: rgba(255, 255, 255, 0.78);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-survival-panel {
+      bottom: 12px;
+      display: grid;
+      gap: 7px;
+      left: 12px;
+      padding: 10px;
+      position: absolute;
+      width: min(286px, 31vw);
+    }
+
+    .unhinged-stat-row {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 32px minmax(0, 1fr) 60px;
+    }
+
+    .unhinged-stat-icon {
+      align-items: center;
+      border-radius: 50%;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18), 0 2px 0 rgba(0, 0, 0, 0.5);
+      color: #fff;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: 16px;
+      height: 30px;
+      justify-content: center;
+      line-height: 1;
+      width: 30px;
+    }
+
+    .unhinged-stat-icon--health {
+      background: #f34c4c;
+    }
+
+    .unhinged-stat-icon--thirst {
+      background: #2eabff;
+    }
+
+    .unhinged-stat-icon--hunger {
+      background: #ffb632;
+    }
+
+    .unhinged-stat-icon--morale {
+      background: #78df48;
+    }
+
+    .unhinged-stat-bar {
+      min-width: 0;
+    }
+
+    .unhinged-stat-label {
+      color: #fff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-stat-track {
+      background: rgba(255, 255, 255, 0.11);
+      border: 1px solid rgba(0, 0, 0, 0.36);
+      height: 14px;
+      overflow: hidden;
+    }
+
+    .unhinged-stat-fill {
+      display: block;
+      height: 100%;
+      width: 50%;
+    }
+
+    .unhinged-stat-fill--health {
+      background: #cc332f;
+    }
+
+    .unhinged-stat-fill--thirst {
+      background: #2188c9;
+    }
+
+    .unhinged-stat-fill--hunger {
+      background: #b98d23;
+    }
+
+    .unhinged-stat-fill--morale {
+      background: #75bf3e;
+    }
+
+    .unhinged-stat-value {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1;
+      text-align: right;
+    }
+
+    .unhinged-cashline {
+      align-items: center;
+      color: #75ff92;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: 24px;
+      gap: 10px;
+      line-height: 1;
+      margin-top: 3px;
+    }
+
+    .unhinged-cash-bill {
+      align-items: center;
+      background: #75ff92;
+      border: 2px solid rgba(0, 0, 0, 0.38);
+      border-radius: 6px;
+      color: #175323;
+      display: inline-flex;
+      font-size: 18px;
+      height: 28px;
+      justify-content: center;
+      transform: rotate(-10deg);
+      width: 44px;
+    }
+
+    .unhinged-hotbar {
+      bottom: 20px;
+      display: flex;
+      gap: 6px;
+      left: 50%;
+      pointer-events: auto;
+      position: absolute;
+      transform: translateX(-50%);
+    }
+
+    .unhinged-slot {
+      background: rgba(8, 11, 16, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+      height: 78px;
+      position: relative;
+      touch-action: manipulation;
+      width: 78px;
+    }
+
+    #hud-slot-action,
+    #hud-slot-tool {
+      cursor: pointer;
+    }
+
+    #hud-slot-action:active,
+    #hud-slot-tool:active {
+      transform: translateY(2px);
+    }
+
+    .unhinged-slot.is-active {
+      border-color: rgba(255, 212, 59, 0.82);
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.24), inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+    }
+
+    .unhinged-slot__key {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 12px;
+      left: 7px;
+      position: absolute;
+      top: 6px;
+    }
+
+    .unhinged-slot__icon {
+      align-items: center;
+      color: #f8f1dc;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: 12px;
+      height: 100%;
+      justify-content: center;
+      line-height: 1.05;
+      padding: 18px 8px 8px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .unhinged-slot__count {
+      bottom: 6px;
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 12px;
+      position: absolute;
+      right: 8px;
+    }
+
+    .unhinged-prompts {
+      bottom: 16px;
+      display: grid;
+      gap: 8px;
+      position: absolute;
+      right: 14px;
+      width: min(210px, 22vw);
+    }
+
+    .unhinged-prompt {
+      align-items: center;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 42px minmax(0, 1fr);
+      min-height: 48px;
+      padding: 6px 10px;
+    }
+
+    .unhinged-prompt kbd {
+      align-items: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 4px;
+      color: #fff;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: 15px;
+      height: 34px;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .unhinged-prompt span {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.05;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .unhinged-status {
+      position: absolute;
+      left: 16px;
+      bottom: 126px;
+      z-index: 4;
+      display: none;
+      gap: 7px;
+      pointer-events: none;
+      width: min(360px, calc(100% - 32px));
+    }
+
+    .unhinged-chip {
+      align-items: center;
+      background: rgba(3, 6, 12, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      color: var(--ink);
+      display: inline-flex;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      gap: 8px;
+      justify-content: flex-start;
+      line-height: 1.2;
+      min-height: 32px;
+      overflow: hidden;
+      padding: 7px 11px;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .unhinged-chip strong {
+      color: var(--accent-3);
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .unhinged-chip[hidden] {
+      display: none;
+    }
+
+    .unhinged-chip--perk {
+      border-color: rgba(117, 255, 146, 0.4);
+      box-shadow: inset 0 0 0 1px rgba(117, 255, 146, 0.12);
+    }
+
+    .unhinged-chip--perk strong {
+      color: #75ff92;
+    }
+
+    .unhinged-chip--boss {
+      border-color: rgba(255, 75, 109, 0.58);
+      box-shadow: inset 0 0 0 1px rgba(255, 75, 109, 0.16);
+    }
+
+    .unhinged-chip--boss strong {
+      color: #ff4b6d;
+    }
+
+    .unhinged-compass {
+      align-items: center;
+      background: rgba(3, 6, 12, 0.72);
+      border: 1px solid rgba(46, 224, 255, 0.26);
+      border-radius: 999px;
+      color: var(--ink);
+      display: inline-flex;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      gap: 8px;
+      min-height: 32px;
+      padding: 6px 10px;
+      text-transform: uppercase;
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .unhinged-compass__arrow {
+      align-items: center;
+      background: rgba(255, 212, 59, 0.16);
+      border: 1px solid rgba(255, 212, 59, 0.42);
+      border-radius: 999px;
+      color: var(--accent-3);
+      display: inline-flex;
+      flex: 0 0 24px;
+      font-size: 15px;
+      height: 24px;
+      justify-content: center;
+      line-height: 1;
+      transition: transform 120ms linear;
+      width: 24px;
+    }
+
+    .unhinged-compass span:last-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .unhinged-meter {
+      display: grid;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .unhinged-meter__row {
+      align-items: center;
+      color: var(--ink-dim);
+      display: grid;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      gap: 8px;
+      grid-template-columns: 70px minmax(0, 1fr) 44px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-meter__track {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      height: 9px;
+      overflow: hidden;
+    }
+
+    .unhinged-meter__fill {
+      background: var(--accent-2);
+      border-radius: inherit;
+      display: block;
+      height: 100%;
+      transition: width 100ms linear, background-color 100ms linear;
+      width: 50%;
+    }
+
+    .unhinged-gig {
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      gap: 9px;
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+
+    .unhinged-gig strong {
+      color: var(--accent-3);
+      display: block;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .unhinged-gig span,
+    .unhinged-gig small {
+      color: rgba(234, 247, 255, 0.68);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .unhinged-gig small {
+      color: var(--accent-2);
+      font-weight: 800;
+    }
+
+    .unhinged-actions {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .unhinged-action {
+      min-height: 50px;
+      padding: 9px 10px;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .unhinged-action span {
+      color: rgba(234, 247, 255, 0.68);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.2;
+      margin-top: 3px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-action.is-active {
+      outline: 2px solid var(--accent-3);
+      outline-offset: 2px;
+    }
+
+    .unhinged-shop {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .unhinged-shop-btn {
+      min-height: 58px;
+      padding: 9px 10px;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .unhinged-shop-btn strong,
+    .unhinged-action strong {
+      display: block;
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1.05;
+    }
+
+    .unhinged-shop-btn span {
+      color: rgba(234, 247, 255, 0.66);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.2;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-shop-btn small {
+      color: var(--accent-3);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      margin-top: 5px;
+    }
+
+    .unhinged-shop-btn.is-owned {
+      border-color: rgba(117, 255, 146, 0.64);
+      box-shadow: inset 0 0 0 1px rgba(117, 255, 146, 0.24);
+    }
+
+    .unhinged-shop-btn.is-equipped {
+      outline: 2px solid var(--accent-3);
+      outline-offset: 2px;
+    }
+
+    .unhinged-shop-btn:disabled {
+      cursor: not-allowed;
+      filter: grayscale(0.45);
+      opacity: 0.58;
+    }
+
+    .unhinged-gear-summary {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 10px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-district {
+      background: rgba(5, 7, 13, 0.58);
+      border: 1px solid rgba(46, 224, 255, 0.16);
+      border-radius: 8px;
+      display: grid;
+      gap: 4px;
+      margin-top: 10px;
+      padding: 9px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-district strong {
+      color: var(--accent-3);
+      font-family: var(--font-display);
+      font-size: 11px;
+      line-height: 1.1;
+    }
+
+    .unhinged-district span,
+    .unhinged-district small {
+      color: rgba(234, 247, 255, 0.68);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.35;
+    }
+
+    .unhinged-district small {
+      color: var(--accent-2);
+      font-weight: 800;
+    }
+
+    .unhinged-note {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 10px 0 0;
+    }
+
+    .unhinged-note kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 4px;
+      color: var(--ink);
+      padding: 1px 5px;
+    }
+
+    .unhinged-log {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .unhinged-log__item {
+      background: rgba(5, 7, 13, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.35;
+      padding: 8px;
+    }
+
+    .unhinged-log__item strong {
+      color: var(--accent-3);
+      display: block;
+      font-family: var(--font-display);
+      font-size: 10px;
+      line-height: 1.2;
+      margin-bottom: 3px;
+    }
+
+    .unhinged-page .overlay {
+      overflow-y: auto;
+    }
+
+    .unhinged-page .overlay__sub {
+      max-width: 520px;
+    }
+
+    .unhinged-page .overlay__choices {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 0 auto 18px;
+      max-width: min(760px, 100%);
+      width: 100%;
+    }
+
+    .unhinged-page .overlay__choices[hidden] {
+      display: none;
+    }
+
+    .unhinged-dawn-choice {
+      align-content: start;
+      background: rgba(5, 7, 13, 0.86);
+      border: 1px solid rgba(46, 224, 255, 0.26);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 7px;
+      min-height: 142px;
+      padding: 12px;
+      text-align: left;
+      transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+    }
+
+    .unhinged-dawn-choice:hover,
+    .unhinged-dawn-choice:focus-visible {
+      border-color: var(--accent-3);
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.24);
+      transform: translateY(-1px);
+    }
+
+    .unhinged-dawn-choice strong {
+      color: var(--accent-3);
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.08;
+    }
+
+    .unhinged-dawn-choice span,
+    .unhinged-dawn-choice small {
+      color: rgba(234, 247, 255, 0.72);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .unhinged-dawn-choice small {
+      color: var(--accent-2);
+      font-weight: 800;
+    }
+
+    @media (max-width: 900px) {
+      .unhinged-page .game-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .unhinged-page .controls-row {
+        flex-direction: row;
+      }
+
+      .unhinged-page .controls-row .btn {
+        flex: 1 1 0;
+        min-height: 42px;
+        width: auto;
+      }
+
+      .canvas-wrap--unhinged {
+        aspect-ratio: 4 / 3;
+      }
+
+      .unhinged-hud-left {
+        left: 9px;
+        top: 9px;
+        width: 178px;
+      }
+
+      .unhinged-logo-mark {
+        font-size: 17px;
+      }
+
+      .unhinged-logo-mark small {
+        font-size: 9px;
+        margin-left: 48px;
+      }
+
+      .unhinged-version,
+      .unhinged-task-card--heat {
+        display: none;
+      }
+
+      .unhinged-task-card {
+        gap: 5px;
+        padding: 7px 8px;
+      }
+
+      .unhinged-task-card strong,
+      .unhinged-task-row span,
+      .unhinged-task-row b {
+        font-size: 9px;
+      }
+
+      .unhinged-notoriety {
+        min-width: 150px;
+        top: 8px;
+        width: 31%;
+      }
+
+      .unhinged-notoriety__label {
+        font-size: 11px;
+      }
+
+      .unhinged-notoriety__track {
+        height: 10px;
+        margin-top: 5px;
+      }
+
+      .unhinged-stars {
+        gap: 4px;
+        margin-top: 5px;
+      }
+
+      .unhinged-stars span {
+        font-size: 20px;
+        -webkit-text-stroke-width: 1px;
+      }
+
+      .unhinged-hud-map {
+        right: 8px;
+        top: 8px;
+        width: 112px;
+      }
+
+      .unhinged-hud-clock b {
+        font-size: 13px;
+      }
+
+      .unhinged-gear-dot {
+        font-size: 14px;
+        height: 28px;
+        width: 28px;
+      }
+
+      .unhinged-survival-panel {
+        bottom: 8px;
+        gap: 4px;
+        left: 8px;
+        padding: 7px;
+        width: 205px;
+      }
+
+      .unhinged-stat-row {
+        gap: 5px;
+        grid-template-columns: 22px minmax(0, 1fr) 45px;
+      }
+
+      .unhinged-stat-icon {
+        font-size: 11px;
+        height: 21px;
+        width: 21px;
+      }
+
+      .unhinged-stat-label,
+      .unhinged-stat-value {
+        font-size: 8px;
+      }
+
+      .unhinged-stat-track {
+        height: 9px;
+      }
+
+      .unhinged-cashline {
+        font-size: 16px;
+      }
+
+      .unhinged-cash-bill {
+        font-size: 12px;
+        height: 20px;
+        width: 32px;
+      }
+
+      .unhinged-hotbar {
+        bottom: 8px;
+        gap: 3px;
+      }
+
+      .unhinged-slot {
+        border-radius: 5px;
+        height: 50px;
+        width: 50px;
+      }
+
+      .unhinged-slot__key,
+      .unhinged-slot__count {
+        font-size: 8px;
+      }
+
+      .unhinged-slot__icon {
+        font-size: 8px;
+        padding: 14px 4px 5px;
+      }
+
+      .unhinged-prompts {
+        bottom: 64px;
+        display: grid;
+        gap: 5px;
+        right: 8px;
+        width: 138px;
+      }
+
+      .unhinged-prompt {
+        gap: 6px;
+        grid-template-columns: 30px minmax(0, 1fr);
+        min-height: 34px;
+        padding: 4px 7px;
+      }
+
+      .unhinged-prompt kbd {
+        font-size: 9px;
+        height: 24px;
+      }
+
+      .unhinged-prompt span {
+        font-size: 8px;
+      }
+
+      .unhinged-status {
+        left: 10px;
+        bottom: 104px;
+        width: min(320px, calc(100% - 20px));
+      }
+
+      .unhinged-chip {
+        font-size: 9px;
+        min-height: 28px;
+        padding: 6px 9px;
+      }
+
+      .unhinged-page .hud__item {
+        flex-basis: 104px;
+        gap: 4px;
+        padding-inline: 4px;
+      }
+
+      .unhinged-page .hud__label {
+        font-size: 9px;
+        letter-spacing: 0.8px;
+      }
+
+      .unhinged-page .hud__value {
+        font-size: 14px;
+      }
+
+      .unhinged-page .overlay {
+        justify-content: flex-start;
+        padding: 18px;
+      }
+
+      .unhinged-page .overlay--choice {
+        border: 1px solid rgba(255, 46, 136, 0.48);
+        border-radius: 10px;
+        inset: 78px 8px 8px;
+        max-height: calc(100vh - 16px);
+        position: fixed;
+        z-index: 40;
+      }
+
+      .unhinged-page .overlay__choices {
+        grid-template-columns: 1fr;
+      }
+
+      .unhinged-dawn-choice {
+        min-height: 0;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .unhinged-prompts {
+        display: none;
+      }
+    }
+
+    body.unhinged-visual-target {
+      background: #05070d;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body.unhinged-visual-target .nav,
+    body.unhinged-visual-target .game-page__header,
+    body.unhinged-visual-target .game-side,
+    body.unhinged-visual-target .footer {
+      display: none;
+    }
+
+    body.unhinged-visual-target .unhinged-page {
+      margin: 0;
+      max-width: none;
+      padding: 0;
+    }
+
+    body.unhinged-visual-target .unhinged-page .game-layout {
+      display: block;
+    }
+
+    body.unhinged-visual-target .unhinged-stage {
+      background: #05070d;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    body.unhinged-visual-target .canvas-wrap--unhinged {
+      --game-max-width: none;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 0;
+      height: 100vh;
+      max-width: none;
+      width: 100vw;
+    }
+
+    body.unhinged-visual-target .canvas-wrap--unhinged #gameCanvas {
+      border: 0;
+      border-radius: 0;
+      height: 100%;
+      width: 100%;
+    }
+
+    body.unhinged-visual-target .canvas-wrap--unhinged::after {
+      background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.28), transparent 18%, transparent 80%, rgba(0, 0, 0, 0.2)),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.18), transparent 24%, transparent 74%, rgba(0, 0, 0, 0.18));
+    }
+
+    body.unhinged-visual-target .unhinged-hud-left {
+      gap: 0;
+      left: 16px;
+      top: 16px;
+      width: min(214px, 22vw);
+    }
+
+    body.unhinged-visual-target .unhinged-logo-mark {
+      font-size: clamp(18px, 1.7vw, 28px);
+    }
+
+    body.unhinged-visual-target .unhinged-logo-mark small {
+      font-size: 10px;
+      margin-left: 54px;
+    }
+
+    body.unhinged-visual-target .unhinged-version,
+    body.unhinged-visual-target .unhinged-task-card,
+    body.unhinged-visual-target .unhinged-survival-panel {
+      display: none;
+    }
+
+    body.unhinged-visual-target .unhinged-status {
+      bottom: auto;
+      left: 16px;
+      max-width: min(260px, 24vw);
+      top: 104px;
+    }
+
+    body.unhinged-visual-target .unhinged-chip {
+      border-radius: 4px;
+      gap: 6px;
+      min-height: 34px;
+      padding: 7px 10px;
+    }
+
+    body.unhinged-visual-target .unhinged-chip strong,
+    body.unhinged-visual-target .unhinged-chip span {
+      font-size: 10px;
+    }
+
+    body.unhinged-visual-target .unhinged-compass {
+      display: none;
+    }
+
+    body.unhinged-visual-target .unhinged-notoriety {
+      min-width: 208px;
+      top: 16px;
+      width: 23%;
+    }
+
+    body.unhinged-visual-target .unhinged-notoriety__label {
+      font-size: 13px;
+    }
+
+    body.unhinged-visual-target .unhinged-notoriety__track {
+      height: 10px;
+      margin-top: 5px;
+    }
+
+    body.unhinged-visual-target .unhinged-stars {
+      gap: 5px;
+      margin-top: 4px;
+    }
+
+    body.unhinged-visual-target .unhinged-stars span {
+      font-size: 20px;
+      -webkit-text-stroke-width: 1px;
+    }
+
+    body.unhinged-visual-target .unhinged-hud-map {
+      right: 16px;
+      top: 14px;
+      width: 132px;
+    }
+
+    body.unhinged-visual-target .unhinged-hud-clock {
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    body.unhinged-visual-target .unhinged-hud-clock b {
+      font-size: 15px;
+    }
+
+    body.unhinged-visual-target .unhinged-gear-dot {
+      font-size: 17px;
+      height: 30px;
+      width: 30px;
+    }
+
+    body.unhinged-visual-target .unhinged-minimap {
+      border-width: 4px;
+    }
+
+    body.unhinged-visual-target .unhinged-mini-dot {
+      height: 8px;
+      width: 8px;
+    }
+
+    body.unhinged-visual-target .unhinged-mini-dot--player {
+      height: 14px;
+      width: 12px;
+    }
+
+    body.unhinged-visual-target .unhinged-map-district {
+      margin-top: 5px;
+      padding: 5px 6px;
+    }
+
+    body.unhinged-visual-target .unhinged-map-district strong {
+      font-size: 9px;
+    }
+
+    body.unhinged-visual-target .unhinged-map-district span {
+      font-size: 8px;
+    }
+
+    body.unhinged-visual-target .unhinged-stat-row {
+      gap: 9px;
+      grid-template-columns: 34px minmax(0, 1fr) 66px;
+    }
+
+    body.unhinged-visual-target .unhinged-stat-icon {
+      font-size: 17px;
+      height: 32px;
+      width: 32px;
+    }
+
+    body.unhinged-visual-target .unhinged-stat-label {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    body.unhinged-visual-target .unhinged-stat-track {
+      background: rgba(5, 7, 11, 0.62);
+      border-color: rgba(255, 255, 255, 0.13);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.34), 0 2px 0 rgba(0, 0, 0, 0.26);
+      height: 18px;
+    }
+
+    body.unhinged-visual-target .unhinged-stat-fill {
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.18), inset 0 2px 0 rgba(255, 255, 255, 0.22);
+    }
+
+    body.unhinged-visual-target .unhinged-stat-value {
+      font-size: 12px;
+    }
+
+    body.unhinged-visual-target .unhinged-hotbar {
+      bottom: 14px;
+      gap: 5px;
+    }
+
+    body.unhinged-visual-target .unhinged-slot {
+      border-radius: 6px;
+      height: 56px;
+      width: 60px;
+    }
+
+    body.unhinged-visual-target .unhinged-slot__key,
+    body.unhinged-visual-target .unhinged-slot__count {
+      font-size: 9px;
+    }
+
+    body.unhinged-visual-target .unhinged-slot__icon {
+      font-size: 9px;
+      padding: 14px 6px 6px;
+    }
+
+    body.unhinged-visual-target .unhinged-prompts {
+      bottom: 14px;
+      display: flex;
+      gap: 6px;
+      right: 16px;
+      width: auto;
+    }
+
+    body.unhinged-visual-target .unhinged-prompt {
+      gap: 6px;
+      grid-template-columns: 26px minmax(0, auto);
+      min-height: 34px;
+      padding: 4px 8px;
+    }
+
+    body.unhinged-visual-target .unhinged-prompt kbd {
+      font-size: 10px;
+      height: 24px;
+    }
+
+    body.unhinged-visual-target .unhinged-prompt span {
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("visual") === "target" || params.has("cinematic")) {
+        document.body.classList.add("unhinged-visual-target");
+      }
+    })();
+  </script>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page unhinged-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Unhoused and Unhinged</h1>
+        <div class="game-page__sub">Top-down low-poly sandbox prototype · street antics by day · Tweeker Zombie survival by night</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage unhinged-stage">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">Day</span></div>
+          <div class="hud__item"><span class="hud__label">CASH</span><span class="hud__value" id="hud-cash">$0</span></div>
+          <div class="hud__item"><span class="hud__label">HEAT</span><span class="hud__value" id="hud-heat">0%</span></div>
+          <div class="hud__item"><span class="hud__label">ENERGY</span><span class="hud__value" id="hud-energy">100%</span></div>
+          <div class="hud__item"><span class="hud__label">HEALTH</span><span class="hud__value" id="hud-health">100%</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--unhinged">
+          <canvas id="gameCanvas" width="960" height="600" tabindex="0"></canvas>
+
+          <div class="unhinged-game-hud" aria-hidden="true">
+            <div class="unhinged-hud-left">
+              <div>
+                <div class="unhinged-logo-mark">
+                  <span>Unhoused</span>
+                  <small>&amp;</small>
+                  <span>Unhinged</span>
+                </div>
+                <div class="unhinged-version">v0.2.0 Top-Down Beta</div>
+              </div>
+
+              <div class="unhinged-hud-panel unhinged-task-card">
+                <strong>Daily Struggles</strong>
+                <div class="unhinged-task-row"><span>Find something to eat</span><b id="hud-task-food">0/1</b></div>
+                <div class="unhinged-task-row"><span>Find clean water</span><b id="hud-task-water">0/1</b></div>
+              </div>
+
+              <div class="unhinged-hud-panel unhinged-task-card unhinged-task-card--bucks">
+                <strong>Make Some Bucks</strong>
+                <div class="unhinged-task-row"><span id="hud-task-busk-label">Busk for cash in the park</span><b id="hud-task-busk">0/1</b></div>
+              </div>
+
+              <div class="unhinged-hud-panel unhinged-task-card unhinged-task-card--heat">
+                <strong>Avoid The Heat</strong>
+                <div class="unhinged-task-row"><span id="hud-task-heat-label">Lose the cops</span><b id="hud-task-heat">0/1</b></div>
+              </div>
+            </div>
+
+            <div class="unhinged-notoriety">
+              <div class="unhinged-notoriety__label">Notoriety</div>
+              <div class="unhinged-notoriety__track"><span class="unhinged-notoriety__fill" id="hud-notoriety-fill"></span></div>
+              <div class="unhinged-stars" id="hud-notoriety-stars">
+                <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+              </div>
+            </div>
+
+            <div class="unhinged-hud-map">
+              <div class="unhinged-hud-clock">
+                <b id="hud-clock">8:00 AM</b>
+                <span class="unhinged-gear-dot">*</span>
+              </div>
+              <div class="unhinged-minimap">
+                <span class="unhinged-mini-dot unhinged-mini-dot--player" id="hud-mini-player"></span>
+                <span class="unhinged-mini-dot unhinged-mini-dot--cash"></span>
+                <span class="unhinged-mini-dot unhinged-mini-dot--heat"></span>
+                <span class="unhinged-mini-dot unhinged-mini-dot--job"></span>
+              </div>
+              <div class="unhinged-map-district" aria-live="polite">
+                <strong id="hud-map-district-name">Open Block</strong>
+                <span id="hud-map-district-trait">balanced risk</span>
+              </div>
+            </div>
+
+            <div class="unhinged-hud-panel unhinged-survival-panel">
+              <div class="unhinged-stat-row">
+                <span class="unhinged-stat-icon unhinged-stat-icon--health">H</span>
+                <span class="unhinged-stat-bar">
+                  <span class="unhinged-stat-label">Health</span>
+                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--health" id="hud-survival-health"></span></span>
+                </span>
+                <b class="unhinged-stat-value" id="hud-survival-health-text">100/100</b>
+              </div>
+              <div class="unhinged-stat-row">
+                <span class="unhinged-stat-icon unhinged-stat-icon--thirst">T</span>
+                <span class="unhinged-stat-bar">
+                  <span class="unhinged-stat-label">Thirst</span>
+                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--thirst" id="hud-survival-thirst"></span></span>
+                </span>
+                <b class="unhinged-stat-value" id="hud-survival-thirst-text">100/100</b>
+              </div>
+              <div class="unhinged-stat-row">
+                <span class="unhinged-stat-icon unhinged-stat-icon--hunger">F</span>
+                <span class="unhinged-stat-bar">
+                  <span class="unhinged-stat-label">Hunger</span>
+                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--hunger" id="hud-survival-hunger"></span></span>
+                </span>
+                <b class="unhinged-stat-value" id="hud-survival-hunger-text">55/100</b>
+              </div>
+              <div class="unhinged-stat-row">
+                <span class="unhinged-stat-icon unhinged-stat-icon--morale">M</span>
+                <span class="unhinged-stat-bar">
+                  <span class="unhinged-stat-label">Morale</span>
+                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--morale" id="hud-survival-morale"></span></span>
+                </span>
+                <b class="unhinged-stat-value" id="hud-survival-morale-text">50/100</b>
+              </div>
+              <div class="unhinged-cashline"><span class="unhinged-cash-bill">$</span><b id="hud-cash-large">$0</b></div>
+            </div>
+
+            <div class="unhinged-hotbar">
+              <div class="unhinged-slot is-active" id="hud-slot-action">
+                <span class="unhinged-slot__key">1</span>
+                <span class="unhinged-slot__icon" id="hud-slot-action-label">Dance</span>
+                <span class="unhinged-slot__count">Act</span>
+              </div>
+              <div class="unhinged-slot">
+                <span class="unhinged-slot__key">E</span>
+                <span class="unhinged-slot__icon">Cache</span>
+                <span class="unhinged-slot__count" id="hud-slot-scrap-count">0</span>
+              </div>
+              <div class="unhinged-slot">
+                <span class="unhinged-slot__key">K</span>
+                <span class="unhinged-slot__icon">Cone</span>
+                <span class="unhinged-slot__count" id="hud-slot-cone-count">4</span>
+              </div>
+              <div class="unhinged-slot">
+                <span class="unhinged-slot__key">L</span>
+                <span class="unhinged-slot__icon">Peel</span>
+                <span class="unhinged-slot__count" id="hud-slot-peel-count">2</span>
+              </div>
+              <div class="unhinged-slot is-active" id="hud-slot-tool">
+                <span class="unhinged-slot__key">J</span>
+                <span class="unhinged-slot__icon" id="hud-slot-tool-label">Plunger</span>
+                <span class="unhinged-slot__count">Tool</span>
+              </div>
+            </div>
+
+            <div class="unhinged-prompts">
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>E</kbd><span id="hud-prompt-e">Interact</span></div>
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>Space</kbd><span id="hud-prompt-space">Stunt</span></div>
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>J</kbd><span id="hud-prompt-j">Bonk</span></div>
+              <div class="unhinged-hud-panel unhinged-prompt"><kbd>L</kbd><span id="hud-prompt-l">Peel</span></div>
+            </div>
+          </div>
+
+          <div class="unhinged-status" aria-live="polite">
+            <div class="unhinged-chip" id="status-chip"><strong>Goal</strong><span>Earn cash before nightfall</span></div>
+            <div class="unhinged-chip unhinged-chip--perk" id="dawn-perk-chip" hidden><strong>Perk</strong><span id="dawn-perk-text">No route</span></div>
+            <div class="unhinged-chip unhinged-chip--boss" id="haze-boss-chip" hidden><strong>Boss</strong><span id="haze-boss-text">Tweeker Brute</span></div>
+            <div class="unhinged-compass" id="objective-chip">
+              <span class="unhinged-compass__arrow" id="objective-arrow">▲</span>
+              <span id="objective-text">Find the first job</span>
+            </div>
+          </div>
+
+          <div class="rb-touch-layer rb-touch-layer--unhinged" aria-label="Touch movement controls">
+            <div class="rb-touch-zone" id="unhinged-touch-stick" aria-label="Move"></div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">UNHOUSED AND UNHINGED</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Prototype block: build cash by day, survive escalating Tweeker Zombie nights, and make it through three cartoon city cycles.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <div class="overlay__choices" id="dawn-choice-grid" hidden></div>
+            <button class="btn btn--primary" id="btn-primary">Start prototype</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
+          </div>
+          <p class="unhinged-note">
+            <kbd>WASD</kbd> or arrows move · <kbd>Shift</kbd> sprint<br />
+            <kbd>E</kbd> interact/busk · <kbd>Space</kbd> stunt<br />
+            <kbd>J</kbd> plunger · <kbd>K</kbd> throw cone · <kbd>L</kbd> drop peel<br />
+            <kbd>1</kbd>-<kbd>4</kbd> swap daytime antics · <kbd>Esc</kbd> pause
+          </p>
+
+          <div class="unhinged-district" aria-live="polite">
+            <strong id="district-name">Open Block</strong>
+            <span id="district-trait">balanced risk</span>
+            <small id="director-readout">Block Mood · pressure 0%</small>
+          </div>
+
+          <div class="unhinged-meter" aria-label="Run meters">
+            <div class="unhinged-meter__row">
+              <span>Time</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-time"></span></span>
+              <b id="meter-time-text">0%</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Arrest</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-arrest"></span></span>
+              <b id="meter-arrest-text">0%</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Wave</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-wave"></span></span>
+              <b id="meter-wave-text">0</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Hype</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-hype"></span></span>
+              <b id="meter-hype-text">0%</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Tumble</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-tumble"></span></span>
+              <b id="meter-tumble-text">ready</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Peels</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-peel"></span></span>
+              <b id="meter-peel-text">2/4</b>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">DAY ANTICS</h3>
+          <div class="unhinged-actions" id="action-grid">
+            <button class="btn btn--secondary unhinged-action is-active" type="button" data-action="dance">1 Dance<span>tips + small heat</span></button>
+            <button class="btn btn--secondary unhinged-action" type="button" data-action="sign">2 Sign Bit<span>steady cash</span></button>
+            <button class="btn btn--secondary unhinged-action" type="button" data-action="drums">3 Trash Drums<span>crowd pull</span></button>
+            <button class="btn btn--secondary unhinged-action" type="button" data-action="stunt">4 Pratfall<span>risky burst</span></button>
+          </div>
+          <div class="mobile-controls" aria-label="Mobile controls">
+            <div class="mobile-controls__grid">
+              <button class="btn btn--secondary" id="btn-up" type="button">Up</button>
+              <button class="btn btn--secondary" id="btn-left" type="button">Left</button>
+              <button class="btn btn--secondary" id="btn-right" type="button">Right</button>
+              <button class="btn btn--secondary" id="btn-down" type="button">Down</button>
+              <button class="btn btn--primary" id="btn-act" type="button">Act</button>
+              <button class="btn btn--yellow" id="btn-attack" type="button">Bonk</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel" hidden>
+          <h3 class="game-side__title">STREET GIG</h3>
+          <div class="unhinged-gig" aria-live="polite">
+            <strong id="gig-title">Warm Up the Block</strong>
+            <span id="gig-desc">Build hype with daytime chaos before nightfall.</span>
+            <div class="unhinged-meter__row">
+              <span>Gig</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="gig-progress"></span></span>
+              <b id="gig-progress-text">0/14</b>
+            </div>
+            <small id="gig-reward">Reward: $14 + hype</small>
+          </div>
+        </div>
+
+        <div class="game-side__panel" hidden>
+          <h3 class="game-side__title">BLOCK FAVOR</h3>
+          <div class="unhinged-gig" aria-live="polite">
+            <strong id="favor-title">Open Block Route</strong>
+            <span id="favor-desc">Help the current district for a local payout.</span>
+            <div class="unhinged-meter__row">
+              <span>Favor</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="favor-progress"></span></span>
+              <b id="favor-progress-text">0/3</b>
+            </div>
+            <small id="favor-reward">Reward: $15 + hype</small>
+          </div>
+        </div>
+
+        <div class="game-side__panel" hidden>
+          <h3 class="game-side__title">ODD JOBS</h3>
+          <div class="unhinged-gig" aria-live="polite">
+            <strong id="job-title">Phone Relay</strong>
+            <span id="job-desc">Pick up the ringing phone, then drop it at the return marker.</span>
+            <div class="unhinged-meter__row">
+              <span>Scrap</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-scrap"></span></span>
+              <b id="meter-scrap-text">0</b>
+            </div>
+            <div class="unhinged-meter__row">
+              <span>Job</span>
+              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="job-progress"></span></span>
+              <b id="job-progress-text">0/2</b>
+            </div>
+            <small id="job-reward">Carry item · Reward: $18 + scrap</small>
+          </div>
+        </div>
+
+        <div class="game-side__panel" hidden>
+          <h3 class="game-side__title">CAMP UPGRADES</h3>
+          <div class="unhinged-shop" id="camp-upgrade-grid">
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="tarpRoof">
+              <strong>Tarp Roof</strong>
+              <span>recovery + max health</span>
+              <small>3 scrap</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="lanternRig">
+              <strong>Lantern Rig</strong>
+              <span>softer Tweeker Zombie nights</span>
+              <small>4 scrap</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="peelBucket">
+              <strong>Peel Bucket</strong>
+              <span>more slapstick traps</span>
+              <small>4 scrap</small>
+            </button>
+          </div>
+          <div class="unhinged-gear-summary" id="camp-summary">Spend scrap at camp for run-long shelter perks.</div>
+        </div>
+
+        <div class="game-side__panel" hidden>
+          <h3 class="game-side__title">GEAR & HELP</h3>
+          <div class="unhinged-shop" id="upgrade-grid">
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="plungerTape">
+              <strong>Plunger Tape</strong>
+              <span>wider bonks</span>
+              <small>$30</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="conePouch">
+              <strong>Cone Pouch</strong>
+              <span>carry 8 cones</span>
+              <small>$24</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="cartPadding">
+              <strong>Cart Padding</strong>
+              <span>+25 max health</span>
+              <small>$36</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="mopSpear">
+              <strong>Mop Spear</strong>
+              <span>long stun poke</span>
+              <small>$34</small>
+            </button>
+            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="rubberChicken">
+              <strong>Rubber Chicken</strong>
+              <span>confuse squeak</span>
+              <small>$28</small>
+            </button>
+            <button class="btn btn--yellow unhinged-shop-btn" type="button" data-upgrade="mealTicket">
+              <strong>Meal Ticket</strong>
+              <span>heal + energy</span>
+              <small>$12</small>
+            </button>
+          </div>
+          <div class="unhinged-gear-summary" id="gear-summary">No upgrades yet.</div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CITY LOG</h3>
+          <div class="unhinged-log" id="city-log"></div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto" open>
+          <summary>Prototype notes</summary>
+          <ul>
+            <li>Move through a compact top-down city board with roads, districts, pickups, cars, cops, and night enemies.</li>
+            <li>Earn cash with daytime antics, scavenge food and water, and manage heat before nightfall.</li>
+            <li>High heat starts a chase. Use distance, camp recovery, and banana peels to cool it down.</li>
+            <li>At night, Tweeker Zombies spawn from alleys. Use the plunger, cones, peels, and stunts to clear the wave.</li>
+            <li>The current goal arrow points to food, water, busking, safety, supplies, or the nearest night threat.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            Satire prototype. The target is absurd systems and slapstick city chaos, not real unhoused people or addiction.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260614-mobile-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260614-detail-3"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

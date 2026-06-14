@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smooth Brain Snacker — Rainbot Gaming</title>
+  <meta name="description" content="A snake parody. You're a brain worm: eat smart, responsible ideas and poop them out the other end as pure brainrot. The longer your trail of terrible takes, the harder it is not to eat your own." />
+  <meta property="og:title" content="Smooth Brain Snacker — Rainbot Gaming" />
+  <meta property="og:description" content="Eat smart ideas, leave pure brainrot behind, and do not crash into your own terrible takes." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-4" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23080810'/%3E%3Crect x='20' y='44' width='20' height='20' rx='6' fill='%232ee0ff'/%3E%3Crect x='40' y='44' width='20' height='20' rx='6' fill='%23b06cff'/%3E%3Crect x='60' y='44' width='22' height='22' rx='7' fill='%23ff2e88'/%3E%3Ccircle cx='67' cy='52' r='3' fill='%23fff'/%3E%3Ccircle cx='77' cy='52' r='3' fill='%23fff'/%3E%3C/svg%3E" />
+  <style>
+    /* ON THE MENU panel — the current smart idea */
+    .snack-menu {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      min-height: 58px;
+    }
+    .snack-menu__emoji { font-size: 30px; line-height: 1; }
+    .snack-menu__text {
+      font-family: var(--font-display);
+      font-size: 14px;
+      line-height: 1.15;
+      color: var(--ink);
+    }
+    /* BRAIN OUTPUT feed — the terrible ideas you produced */
+    .snack-feed {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .snack-feed li {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      background: #070a12;
+      border-left: 3px solid var(--panel-2);
+      border-radius: 0 6px 6px 0;
+      padding: 6px 10px;
+    }
+    .snack-feed li::before { content: "💩 "; }
+    .snack-feed__fresh {
+      color: var(--ink) !important;
+      border-left-color: var(--accent) !important;
+    }
+    .snack-feed__empty {
+      color: var(--ink-dim);
+      font-style: italic;
+      border-left-color: transparent !important;
+      background: transparent !important;
+    }
+    .snack-feed__empty::before { content: "" !important; }
+  </style>
+</head>
+<body class="snack-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🧠 Smooth Brain Snacker</h1>
+        <div class="game-page__sub">Eat smart ideas · Poop pure brainrot · Don't eat your own takes</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">BRAINROT</span><span class="hud__value" id="hud-len">4</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-700-700">
+          <canvas id="gameCanvas" width="700" height="700" tabindex="0" aria-label="Smooth Brain Snacker playfield"></canvas>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🧠 SMOOTH BRAIN SNACKER</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              You're a brain worm. Slither around and gobble up <strong>smart, responsible ideas</strong> —
+              then watch them come out the other end as glorious <strong>brainrot</strong>.
+              Every idea you digest makes your trail of terrible takes longer.
+              <br><br>
+              <strong>Don't hit the walls. Don't eat your own brainrot.</strong>
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start snacking</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          Steer with <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> / <kbd>WASD</kbd>, swipe, or the arrows in the panel. <kbd>P</kbd> pauses.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" alt="Smooth Brain Snacker brain-worm snake parody cover art" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-new" style="font-size:13px;padding:8px 12px;">New game</button>
+            <button class="btn btn--ghost" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+          </div>
+          <div class="mobile-controls" aria-label="Direction controls">
+            <div class="mobile-controls__dpad">
+              <button class="btn btn--ghost" data-mobile-dir="up" aria-label="Turn up">↑</button>
+              <button class="btn btn--ghost" data-mobile-dir="left" aria-label="Turn left">←</button>
+              <button class="btn btn--ghost" data-mobile-dir="right" aria-label="Turn right">→</button>
+              <button class="btn btn--ghost" data-mobile-dir="down" aria-label="Turn down">↓</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">ON THE MENU</h3>
+          <div class="snack-menu" id="menu-idea"></div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">BRAIN OUTPUT</h3>
+          <ul class="snack-feed" id="feed"></ul>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Eat the glowing idea.</strong> Its name flashes overhead when it appears. Digest it for points, grow a segment, and drop the brainrot it became as a 💩 behind you.</li>
+            <li><strong style="color:var(--ink);">Grab the 🧠 Big Brain idea</strong> when it pulses in. Big bonus points, but it ghosts away if you dawdle.</li>
+            <li><strong style="color:var(--ink);">Mind your tail.</strong> The longer your brainrot trail, the easier it is to crash into your own bad takes.</li>
+            <li><strong style="color:var(--ink);">Walls are fatal.</strong> No wrap-around — that's the edge of your attention span.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> A satirical sendup of "brainrot" internet culture. Slither-and-grow gameplay inspired by the classic Snake. Not affiliated with anyone. Go touch grass afterward.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-8"></script>
+  <script src="../assets/js/main.js?v=20260612-4"></script>
+  <script src="../assets/js/smooth-brain-snacker.js?v=20260614-3"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

@@ -716,6 +716,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
 .canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
 .canvas-wrap--ar-760-620  { aspect-ratio: 760 / 620; --game-max-width: 900px; }   /* billionaire space race */
+.canvas-wrap--ar-700-700  { aspect-ratio: 1 / 1; --game-max-width: 760px; }       /* smooth brain snacker */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -3516,4 +3517,145 @@ body.arcade-home::before {
   .soon-item em {
     grid-column: 2;
   }
+}
+
+/* ===== Brainrot 2048 (slide-to-merge) ===== */
+.merge-board {
+  position: relative;
+  width: min(100%, 62vh, 540px);
+  aspect-ratio: 1 / 1;
+  background: #100f1f;
+  border: 2px solid var(--panel-2);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  align-self: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.merge-field {
+  position: absolute;
+  inset: 3.4%;
+  container-type: size;
+}
+.merge-cells {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 2%;
+}
+.merge-cell {
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.merge-tiles {
+  position: absolute;
+  inset: 0;
+}
+.merge-tile {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 23.5%;
+  height: 23.5%;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.02;
+  padding: 4px;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  word-break: break-word;
+  overflow: hidden;
+  font-size: 16px;
+  font-size: clamp(10px, 3.7cqw, 22px);
+  transform: translate(calc(var(--c, 0) * 108.5106%), calc(var(--r, 0) * 108.5106%));
+  transition: transform 0.12s ease-in-out;
+  will-change: transform;
+}
+.merge-tile__n {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  opacity: 0.45;
+}
+.merge-tile--pop {
+  animation: mergePop 0.2s ease;
+}
+.merge-tile--new {
+  animation: mergeNew 0.14s ease;
+}
+.merge-tile--boss {
+  box-shadow: 0 0 0 2px #2ee0ff, 0 0 16px rgba(255, 46, 136, 0.75);
+  animation: mergeBoss 1.3s ease-in-out infinite;
+}
+@keyframes mergePop {
+  0%   { transform: translate(calc(var(--c,0) * 108.5106%), calc(var(--r,0) * 108.5106%)) scale(1); }
+  55%  { transform: translate(calc(var(--c,0) * 108.5106%), calc(var(--r,0) * 108.5106%)) scale(1.16); }
+  100% { transform: translate(calc(var(--c,0) * 108.5106%), calc(var(--r,0) * 108.5106%)) scale(1); }
+}
+@keyframes mergeNew {
+  0%   { opacity: 0; transform: translate(calc(var(--c,0) * 108.5106%), calc(var(--r,0) * 108.5106%)) scale(0.3); }
+  100% { opacity: 1; transform: translate(calc(var(--c,0) * 108.5106%), calc(var(--r,0) * 108.5106%)) scale(1); }
+}
+@keyframes mergeBoss {
+  0%, 100% { box-shadow: 0 0 0 2px #2ee0ff, 0 0 14px rgba(255, 46, 136, 0.7); }
+  50%      { box-shadow: 0 0 0 2px #ffd43b, 0 0 26px rgba(46, 224, 255, 0.9); }
+}
+.merge-hint {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-dim);
+  text-align: center;
+  margin: 0;
+}
+.merge-hint kbd {
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  color: var(--ink);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin: 0 1px;
+  font-size: 11px;
+}
+.merge-ladder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.merge-ladder li {
+  font-family: var(--font-display);
+  font-size: 10px;
+  line-height: 1;
+  padding: 5px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Brainrot 2048 card poster fills both card layouts.
+   object-position keeps the title framed when the 16:9 directory card crops top/bottom. */
+.poster-card--merge img,
+.directory-card__poster--merge img {
+  object-fit: cover;
+  object-position: center top;
+}
+
+.poster-card--snake img,
+.directory-card__poster--snake img {
+  object-fit: cover;
+  object-position: center;
 }

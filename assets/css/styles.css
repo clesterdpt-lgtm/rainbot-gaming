@@ -3437,8 +3437,10 @@ body.arcade-home::before {
   letter-spacing: 0.3px;
 }
 
-/* Brainrot 2048 card poster fills both card layouts */
+/* Brainrot 2048 card poster fills both card layouts.
+   object-position keeps the title framed when the 16:9 directory card crops top/bottom. */
 .poster-card--merge img,
 .directory-card__poster--merge img {
   object-fit: cover;
+  object-position: center top;
 }

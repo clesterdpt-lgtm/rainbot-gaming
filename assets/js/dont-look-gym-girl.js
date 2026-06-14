@@ -1294,13 +1294,30 @@
   // 16. RENDER
   // =========================================================================
   function drawGymFloor() {
-    ctx.fillStyle = "#1a1a24";
+    ctx.fillStyle = "#12121c"; // slightly darker theme base
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    ctx.strokeStyle = "rgba(255,255,255,0.03)";
     ctx.lineWidth = 1;
     const tile = 40;
     for (let x = 0; x <= WORLD_W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke(); }
     for (let y = 0; y <= WORLD_H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke(); }
+
+    // Ambient spotlighting: soft circular glow tracking the player
+    const p = state.player;
+    ctx.save();
+    const spotlight = ctx.createRadialGradient(p.x, p.y, 40, p.x, p.y, 340);
+    spotlight.addColorStop(0, "rgba(46, 224, 255, 0.08)");
+    spotlight.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = spotlight;
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+    // Soft vignette around the borders of the world
+    const worldVignette = ctx.createRadialGradient(WORLD_W / 2, WORLD_H / 2, WORLD_W / 3, WORLD_W / 2, WORLD_H / 2, WORLD_W * 0.75);
+    worldVignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+    worldVignette.addColorStop(1, "rgba(4, 4, 8, 0.9)");
+    ctx.fillStyle = worldVignette;
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    ctx.restore();
 
     // Front door (left, center band)
     ctx.fillStyle = "#2a3a2a";
@@ -1363,103 +1380,238 @@
       ctx.save();
       switch (o.kind) {
         case "rack":
-          ctx.fillStyle = "#3a2a3a";
+          // Steel base rack
+          ctx.fillStyle = "#22222a";
           ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#ff2e88";
+          ctx.strokeStyle = "#444454";
           ctx.lineWidth = 2;
           ctx.strokeRect(x0, y0, o.w, o.h);
-          ctx.fillStyle = "#888";
-          for (let i = 0; i < 3; i++) ctx.fillRect(x0 + 4, y0 + 12 + i * 16, o.w - 8, 3);
+          
+          // Red neon frame accents
+          ctx.strokeStyle = "rgba(255, 46, 136, 0.65)";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(x0 + 3, y0 + 3, o.w - 6, o.h - 6);
+
+          // Steel pegs and weight plates stacked
+          ctx.fillStyle = "#111116";
+          ctx.strokeStyle = "#888899";
+          ctx.lineWidth = 1;
+          const plateRadiusY = Math.min(8, o.h / 6);
+          const plateRadiusX = Math.min(14, o.w / 4);
+          // Left weights
+          ctx.beginPath();
+          ctx.ellipse(x0 + plateRadiusX, y0 + o.h * 0.25, plateRadiusX, plateRadiusY, 0, 0, TAU);
+          ctx.fill(); ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(x0 + plateRadiusX - 3, y0 + o.h * 0.75, plateRadiusX, plateRadiusY, 0, 0, TAU);
+          ctx.fill(); ctx.stroke();
+          // Right weights
+          ctx.beginPath();
+          ctx.ellipse(x0 + o.w - plateRadiusX, y0 + o.h * 0.25, plateRadiusX, plateRadiusY, 0, 0, TAU);
+          ctx.fill(); ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(x0 + o.w - plateRadiusX + 3, y0 + o.h * 0.75, plateRadiusX, plateRadiusY, 0, 0, TAU);
+          ctx.fill(); ctx.stroke();
           break;
+
         case "bench":
-          ctx.fillStyle = "#2a3a4a";
+          // Metal frame base
+          ctx.fillStyle = "#1b1b24";
           ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#2ee0ff";
+          ctx.strokeStyle = "#3f3f4e";
           ctx.lineWidth = 2;
           ctx.strokeRect(x0, y0, o.w, o.h);
-          ctx.fillStyle = "#445";
-          ctx.fillRect(x0 + 6, o.y - 4, o.w - 12, 8);
+
+          // Leather cushion pad in center
+          ctx.fillStyle = "#2a2a3a";
+          ctx.fillRect(x0 + 4, y0 + 4, o.w - 8, o.h - 8);
+          // Cushion seams
+          ctx.strokeStyle = "#4dffc9"; // glowing stitching
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x0 + 4, y0 + 4, o.w - 8, o.h - 8);
+          // Highlight shine line
+          ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+          ctx.fillRect(x0 + 4, y0 + 4, o.w - 8, (o.h - 8) / 2);
           break;
+
         case "tread": {
-          ctx.fillStyle = "#22222e";
+          // Frame
+          ctx.fillStyle = "#161622";
           ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#888";
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#5f5f7a";
+          ctx.lineWidth = 2.5;
           ctx.strokeRect(x0, y0, o.w, o.h);
-          // animated belt stripes
-          ctx.fillStyle = "rgba(255,255,255,0.15)";
-          const off = (state.t * 40) % 14;
-          for (let yy = y0 + 6 - off; yy < y0 + o.h - 4; yy += 14) {
-            if (yy > y0 + 4) ctx.fillRect(x0 + 6, yy, o.w - 12, 3);
+
+          // Running belt
+          ctx.fillStyle = "#0d0d12";
+          ctx.fillRect(x0 + 6, y0 + 10, o.w - 12, o.h - 14);
+
+          // Animated belt stripes
+          ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+          const off = (state.t * 30) % 16;
+          for (let yy = y0 + 12 - off; yy < y0 + o.h - 8; yy += 16) {
+            if (yy > y0 + 10) ctx.fillRect(x0 + 8, yy, o.w - 16, 2);
           }
+
+          // Digital console at the top
+          ctx.fillStyle = "#222230";
+          ctx.fillRect(x0 + 2, y0 + 2, o.w - 4, 8);
+          ctx.fillStyle = "#00e5ff"; // neon cyan stats screen
+          ctx.fillRect(x0 + 8, y0 + 4, o.w - 16, 4);
           break;
         }
+
         case "plant":
-          ctx.fillStyle = "#2a2418";
+          // Ceramic pot shadow and base
+          ctx.fillStyle = "rgba(0,0,0,0.2)";
           ctx.beginPath();
-          ctx.arc(o.x, o.y, o.w / 2, 0, TAU);
+          ctx.arc(o.x + 2, o.y + 2, o.w / 2, 0, TAU);
           ctx.fill();
-          ctx.fillStyle = "#2e7d32";
-          for (let i = 0; i < 5; i++) {
-            const a = (i / 5) * TAU + state.t * 0.2;
+
+          ctx.fillStyle = "#f5f5f5"; // white ceramic pot
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.w / 2.3, 0, TAU);
+          ctx.fill();
+          ctx.strokeStyle = "#d7ccc8";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Multi-tone leaves
+          const leafColors = ["#1b5e20", "#2e7d32", "#388e3c", "#4caf50"];
+          for (let i = 0; i < 7; i++) {
+            const angle = (i / 7) * TAU + state.t * 0.15;
+            const length = o.w / 2 + 2;
+            const width = o.w / 5;
+            ctx.fillStyle = leafColors[i % leafColors.length];
             ctx.beginPath();
-            ctx.ellipse(o.x + Math.cos(a) * 7, o.y + Math.sin(a) * 7, 9, 4, a, 0, TAU);
+            ctx.ellipse(
+              o.x + Math.cos(angle) * 6,
+              o.y + Math.sin(angle) * 6,
+              length,
+              width,
+              angle,
+              0,
+              TAU
+            );
+            ctx.fill();
+            // Leaf center vein line
+            ctx.strokeStyle = "rgba(255,255,255,0.15)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(o.x, o.y);
+            ctx.lineTo(o.x + Math.cos(angle) * length, o.y + Math.sin(angle) * length);
+            ctx.stroke();
+          }
+          break;
+
+        case "fountain":
+          // Metallic basin
+          ctx.fillStyle = "#2c3e50";
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "#7f8c8d";
+          ctx.lineWidth = 2.5;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+
+          // Water basin pool
+          ctx.fillStyle = "#1e3c72";
+          ctx.fillRect(x0 + 4, y0 + 4, o.w - 8, o.h - 8);
+
+          // Animated water spray
+          ctx.fillStyle = "rgba(100, 220, 255, 0.75)";
+          const sprayCount = 4;
+          for (let i = 0; i < sprayCount; i++) {
+            const sprayT = (state.t * 2.5 + i / sprayCount) % 1.0;
+            const sprayX = o.x + Math.sin(state.t * 5 + i) * 3;
+            const sprayY = o.y - 10 * sprayT * (1 - sprayT);
+            ctx.beginPath();
+            ctx.arc(sprayX, sprayY, 1.5, 0, TAU);
             ctx.fill();
           }
           break;
-        case "fountain":
-          ctx.fillStyle = "#1a2a3a";
-          ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#4d9fff";
-          ctx.lineWidth = 2;
-          ctx.strokeRect(x0, y0, o.w, o.h);
-          ctx.fillStyle = "#4d9fff";
-          ctx.font = "12px Arial";
-          ctx.textAlign = "center";
-          ctx.fillText("💧", o.x, o.y + 4);
-          break;
+
         case "cable":
-          ctx.fillStyle = "#2a2a3a";
+          // Frame base
+          ctx.fillStyle = "#1c1c24";
           ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#f7d716";
+          ctx.strokeStyle = "#4dffc9";
           ctx.lineWidth = 2;
           ctx.strokeRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "#666";
-          ctx.beginPath();
-          ctx.moveTo(x0 + 8, y0 + 6); ctx.lineTo(x0 + 8, y0 + o.h - 6);
-          ctx.moveTo(x0 + o.w - 8, y0 + 6); ctx.lineTo(x0 + o.w - 8, y0 + o.h - 6);
-          ctx.stroke();
-          break;
-        case "ring":
-          // ring light — glowy
-          ctx.strokeStyle = "rgba(255,255,255,0.9)";
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(o.x, o.y, 9, 0, TAU);
-          ctx.stroke();
-          ctx.strokeStyle = "rgba(255,255,200,0.25)";
-          ctx.lineWidth = 8;
-          ctx.beginPath();
-          ctx.arc(o.x, o.y, 12, 0, TAU);
-          ctx.stroke();
-          break;
-        case "wall":
-          ctx.fillStyle = "#0d0d17"; // dark purple-black
-          ctx.fillRect(x0, y0, o.w, o.h);
-          ctx.strokeStyle = "rgba(46, 224, 255, 0.35)"; // cyan wall borders
-          ctx.lineWidth = 3;
-          ctx.strokeRect(x0, y0, o.w, o.h);
-          ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
-          ctx.fillRect(x0 + 3, y0 + 3, o.w - 6, o.h - 6);
-          // Diagonal hashes for structural grid look
-          ctx.strokeStyle = "rgba(46, 224, 255, 0.08)";
-          ctx.lineWidth = 1.5;
-          for (let offset = 0; offset < o.w + o.h; offset += 30) {
+
+          // Left weight stack
+          ctx.fillStyle = "#2c2c35";
+          ctx.fillRect(x0 + 4, y0 + 6, 10, o.h - 12);
+          // Right weight stack
+          ctx.fillRect(x0 + o.w - 14, y0 + 6, 10, o.h - 12);
+          
+          // Horizontal weight stack divider lines
+          ctx.strokeStyle = "#111116";
+          ctx.lineWidth = 1;
+          for (let yy = y0 + 10; yy < y0 + o.h - 10; yy += 6) {
             ctx.beginPath();
-            ctx.moveTo(x0 + Math.max(0, offset - o.h), y0 + Math.min(o.h, offset));
-            ctx.lineTo(x0 + Math.min(o.w, offset), y0 + Math.max(0, offset - o.w));
+            ctx.moveTo(x0 + 4, yy); ctx.lineTo(x0 + 14, yy);
+            ctx.moveTo(x0 + o.w - 14, yy); ctx.lineTo(x0 + o.w - 4, yy);
             ctx.stroke();
           }
+
+          // Cable wires linking left and right
+          ctx.strokeStyle = "#7f8c8d";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(x0 + 9, o.y);
+          ctx.bezierCurveTo(x0 + 20, o.y - 10, x0 + o.w - 20, o.y - 10, x0 + o.w - 9, o.y);
+          ctx.stroke();
+          break;
+
+        case "ring":
+          // Tripod stand
+          ctx.strokeStyle = "#33333f";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(o.x, o.y); ctx.lineTo(o.x - 8, o.y + 16);
+          ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + 8, o.y + 16);
+          ctx.moveTo(o.x, o.y); ctx.lineTo(o.x, o.y + 12);
+          ctx.stroke();
+
+          // Ring light circle outer glow
+          ctx.save();
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = "rgba(255, 255, 220, 0.9)";
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, 8, 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+
+          // Innermost camera phone details
+          ctx.fillStyle = "#111";
+          ctx.fillRect(o.x - 2, o.y - 3, 4, 6);
+          break;
+
+        case "wall":
+          // Dark metallic panel fill
+          ctx.fillStyle = "#0c0c14";
+          ctx.fillRect(x0, y0, o.w, o.h);
+
+          // Pulsing cyan neon trim
+          const wallPulse = 0.75 + 0.25 * Math.sin(state.t * 3);
+          ctx.strokeStyle = "rgba(46, 224, 255, " + (0.35 * wallPulse) + ")";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+
+          // Inner panel bevel border
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.03)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x0 + 4, y0 + 4, o.w - 8, o.h - 8);
+
+          // Rivets / corner dots
+          ctx.fillStyle = "rgba(46, 224, 255, 0.25)";
+          ctx.beginPath();
+          ctx.arc(x0 + 8, y0 + 8, 2, 0, TAU);
+          ctx.arc(x0 + o.w - 8, y0 + 8, 2, 0, TAU);
+          ctx.arc(x0 + 8, y0 + o.h - 8, 2, 0, TAU);
+          ctx.arc(x0 + o.w - 8, y0 + o.h - 8, 2, 0, TAU);
+          ctx.fill();
           break;
       }
       ctx.restore();
@@ -1488,53 +1640,133 @@
   function drawGirl(g) {
     ctx.save();
     ctx.translate(g.x, g.y);
-    const legPulse = 1 + 0.08 * Math.sin(state.t * 3.2 + g.x);
-    ctx.fillStyle = g.leggings;
+
+    // 1. Drop shadow
+    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
     ctx.beginPath();
-    ctx.ellipse(-6, 10 * legPulse, 5, 12 * legPulse, 0, 0, TAU);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(6, 10 * legPulse, 5, 12 * legPulse, 0, 0, TAU);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(0, -3, 10, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#f1c27d";
-    ctx.beginPath();
-    ctx.arc(0, -14, 7, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = "#3a1a0a";
-    ctx.beginPath();
-    ctx.arc(0, -17, 6, Math.PI, 0);
+    ctx.ellipse(0, 16, 11, 4, 0, 0, TAU);
     ctx.fill();
 
+    // 2. Compute workout animations
+    let squatY = 0;
+    let leftLegOffset = 0;
+    let rightLegOffset = 0;
+    let bodyBobY = 0;
+    let ponytailSwayX = 0;
+
+    if (g.type === "lifter") {
+      // Periodic squatting: squats down, holds, stands up
+      const squatCycle = (state.t * 2) % (Math.PI * 2);
+      squatY = Math.max(0, Math.sin(squatCycle) * 6);
+      bodyBobY = squatY * 0.7;
+    } else if (g.type === "walker") {
+      // Walking leg swing and hair sway
+      const cycle = state.t * 8;
+      leftLegOffset = Math.sin(cycle) * 6;
+      rightLegOffset = -Math.sin(cycle) * 6;
+      bodyBobY = Math.abs(Math.sin(cycle)) * 2;
+      ponytailSwayX = Math.cos(cycle) * 3;
+    } else if (g.type === "stepper") {
+      // Stepping rapid vertical leg movement and bobbing
+      const cycle = state.t * 14;
+      leftLegOffset = Math.sin(cycle) * 4;
+      rightLegOffset = -Math.sin(cycle) * 4;
+      bodyBobY = Math.abs(Math.sin(cycle)) * 1.5;
+      ponytailSwayX = Math.cos(cycle) * 1.5;
+    }
+
+    // Facing direction rotation for upper body
+    ctx.save();
+    ctx.rotate(g.facing);
+
+    // 3. Shoes (feet)
+    ctx.fillStyle = "#ffffff"; // white athletic shoes
+    // Left shoe
+    ctx.beginPath();
+    ctx.ellipse(-6, 18 + leftLegOffset - squatY * 0.2, 4, 2, 0, 0, TAU);
+    ctx.fill();
+    // Right shoe
+    ctx.beginPath();
+    ctx.ellipse(6, 18 + rightLegOffset - squatY * 0.2, 4, 2, 0, 0, TAU);
+    ctx.fill();
+
+    // 4. Leggings (legs)
+    ctx.fillStyle = g.leggings;
+    // Left leg
+    ctx.beginPath();
+    ctx.ellipse(-6, 10 + leftLegOffset / 2 - squatY * 0.4, 4, 8, 0, 0, TAU);
+    ctx.fill();
+    // Right leg
+    ctx.beginPath();
+    ctx.ellipse(6, 10 + rightLegOffset / 2 - squatY * 0.4, 4, 8, 0, 0, TAU);
+    ctx.fill();
+
+    // 5. Torso (Body)
+    // Hips/Butt
+    ctx.beginPath();
+    ctx.ellipse(0, 1 - bodyBobY, 9, 6, 0, 0, TAU);
+    ctx.fill();
+
+    // Waist / Skin
+    ctx.fillStyle = "#f1c27d"; // skin tone
+    ctx.fillRect(-6, -8 - bodyBobY, 12, 8);
+
+    // Sports Crop Top
+    ctx.fillStyle = g.leggings; // matching outfit
+    ctx.fillRect(-7, -8 - bodyBobY, 14, 5);
+
+    // 6. Shoulders / Chest
+    ctx.beginPath();
+    ctx.ellipse(0, -8 - bodyBobY, 8.5, 4.5, 0, 0, TAU);
+    ctx.fill();
+
+    // 7. Head
+    ctx.fillStyle = "#f1c27d";
+    ctx.beginPath();
+    ctx.arc(0, -18 - bodyBobY, 6.5, 0, TAU);
+    ctx.fill();
+
+    // 8. Hair & Workout Ponytail
+    ctx.fillStyle = "#3a1a0a"; // brown hair
+    // Main hair cap
+    ctx.beginPath();
+    ctx.arc(0, -20 - bodyBobY, 6, Math.PI, 0);
+    ctx.fill();
+    // Ponytail bun or sway ponytail
+    ctx.beginPath();
+    ctx.ellipse(ponytailSwayX, -23 - bodyBobY, 3.5, 5, ponytailSwayX * 0.1, 0, TAU);
+    ctx.fill();
+
+    // Phone drawing
     if (g.phoneActive) {
       ctx.fillStyle = "#fff";
-      ctx.fillRect(-5, -18, 10, 7);
-      ctx.fillStyle = "#000";
-      ctx.fillRect(-4, -17, 8, 5);
+      ctx.fillRect(-3, -22 - bodyBobY, 6, 4);
+      ctx.fillStyle = "#00e5ff"; // glowing screen
+      ctx.fillRect(-2, -21 - bodyBobY, 4, 2);
     }
     if (g.type === "influencer") {
       // phone on a stick, always
       ctx.fillStyle = "#fff";
-      ctx.fillRect(10, -20, 7, 12);
+      ctx.fillRect(8, -24 - bodyBobY, 5, 8);
       ctx.fillStyle = "#000";
-      ctx.fillRect(11, -19, 5, 10);
+      ctx.fillRect(9, -23 - bodyBobY, 3, 6);
     }
+    ctx.restore(); // end facing rotation
 
-    // Notice indicator: "?" building, "!" about to accuse
+    // Notice indicator: "?" building, "!" about to accuse (stays billboarded to screen space)
     if (g.notice > 0.15) {
       const crit = g.notice > 0.65;
       ctx.fillStyle = crit ? "#ff3c3c" : "#f7d716";
       ctx.font = "bold " + (crit ? 20 : 15) + "px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(crit ? "!" : "?", 0, -28);
+      ctx.fillText(crit ? "!" : "?", 0, -32 - bodyBobY);
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    // Label
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
     ctx.font = "8px JetBrains Mono, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(g.label, 0, 30);
+    ctx.fillText(g.label, 0, 32);
     ctx.restore();
   }
 
@@ -1602,40 +1834,104 @@
     const p = state.player;
     ctx.save();
     ctx.translate(p.x, p.y);
+
+    // 1. Drop shadow
+    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
+    ctx.beginPath();
+    ctx.ellipse(0, PLAYER_RADIUS + 4, 11, 4, 0, 0, TAU);
+    ctx.fill();
+
+    // 2. Walking Bob
+    const bobY = p.moving ? 1.5 * Math.sin(state.t * 12) : 0;
+
+    // 3. Torso (Gym Tank Top)
+    ctx.fillStyle = "#f1c27d"; // skin tone neck
+    ctx.fillRect(-3, 0 + bobY, 6, 6);
+    
+    ctx.fillStyle = "#2c3e50"; // dark blue tank top
+    ctx.beginPath();
+    ctx.ellipse(0, 7 + bobY, 10, 5, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#16a085"; // tank top strap accents
+    ctx.fillRect(-8, 3 + bobY, 3, 4);
+    ctx.fillRect(5, 3 + bobY, 3, 4);
+
+    // 4. Head
     ctx.fillStyle = "#f1c27d";
     ctx.beginPath();
-    ctx.arc(0, 0, PLAYER_RADIUS, 0, TAU);
+    ctx.arc(0, -3 + bobY, PLAYER_RADIUS * 0.85, 0, TAU);
     ctx.fill();
-    ctx.fillStyle = "#2a1a0a";
+
+    // 5. Hair and Sweatband
+    ctx.fillStyle = "#2a1a0a"; // brown hair
     ctx.beginPath();
-    ctx.arc(0, -3, PLAYER_RADIUS * 0.7, Math.PI, 0);
+    ctx.arc(0, -6 + bobY, PLAYER_RADIUS * 0.7, Math.PI, 0);
     ctx.fill();
+
+    // Glowing Neon Sweatband
+    ctx.strokeStyle = "#ff2e88";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-7, -6 + bobY);
+    ctx.lineTo(7, -6 + bobY);
+    ctx.stroke();
+
+    // 6. Eyes (Look Direction)
+    ctx.save();
+    ctx.rotate(p.facing);
     if (p.eyesClosed) {
       // closed eyes: little dashes
-      ctx.strokeStyle = "#000";
+      ctx.strokeStyle = "#111";
       ctx.lineWidth = 1.5;
-      const ex = Math.cos(p.facing) * 4, ey = Math.sin(p.facing) * 4;
       ctx.beginPath();
-      ctx.moveTo(ex - 3, ey); ctx.lineTo(ex + 3, ey);
+      ctx.moveTo(1, -2); ctx.lineTo(6, -2);
+      ctx.moveTo(1, 2); ctx.lineTo(6, 2);
       ctx.stroke();
     } else {
-      ctx.fillStyle = "#000";
-      const ex = Math.cos(p.facing) * 4, ey = Math.sin(p.facing) * 4;
+      // open eyes
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.arc(ex, ey, 1.5, 0, TAU);
+      ctx.arc(4, -2, 2, 0, TAU);
+      ctx.arc(4, 2, 2, 0, TAU);
+      ctx.fill();
+
+      // Pupils looking alert
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(5, -2, 1, 0, TAU);
+      ctx.arc(5, 2, 1, 0, TAU);
       ctx.fill();
     }
+    ctx.restore();
+
+    // 7. Sweat Droplets when SUS is high (>50)
+    if (state.sus > 50) {
+      ctx.fillStyle = "#2ee0ff";
+      const dropletCount = Math.floor((state.sus - 50) / 10) + 1;
+      for (let i = 0; i < dropletCount; i++) {
+        const seedAngle = (i / dropletCount) * TAU + state.t * 3;
+        const progress = ((state.t * 2.5 + i * 0.4) % 1);
+        const dist = 11 + 9 * progress;
+        const dropX = Math.cos(seedAngle) * dist;
+        const dropY = Math.sin(seedAngle) * dist - 3 + bobY;
+        ctx.beginPath();
+        ctx.arc(dropX, dropY, 1.2 * (1 - progress), 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // 8. Power-up Overlays
     if (state.boyfriendT > 0) {
       ctx.strokeStyle = "rgba(46,224,255," + (0.5 + 0.5 * Math.sin(state.t * 10)) + ")";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, PLAYER_RADIUS + 5 + Math.sin(state.t * 10) * 2, 0, TAU);
+      ctx.arc(0, 0, PLAYER_RADIUS + 7 + Math.sin(state.t * 10) * 2, 0, TAU);
       ctx.stroke();
     }
     if (state.airpodT > 0) {
       ctx.fillStyle = "#fff";
-      ctx.fillRect(-PLAYER_RADIUS - 2, -4, 3, 7);
-      ctx.fillRect(PLAYER_RADIUS - 1, -4, 3, 7);
+      ctx.fillRect(-PLAYER_RADIUS - 1, -6 + bobY, 2.5, 6);
+      ctx.fillRect(PLAYER_RADIUS - 1, -6 + bobY, 2.5, 6);
     }
     ctx.restore();
   }
@@ -1646,13 +1942,16 @@
     ctx.save();
     const sx = p.x - state.cam.x;
     const sy = p.y - state.cam.y;
-    const grad = ctx.createRadialGradient(sx, sy, 30, sx, sy, 110);
-    grad.addColorStop(0, "rgba(0,0,0,0.55)");
-    grad.addColorStop(1, "rgba(0,0,0,0.96)");
+    const pulse = 1 + 0.1 * Math.sin(state.t * 4);
+    const innerRadius = 30 * pulse;
+    const outerRadius = 110 * pulse;
+    const grad = ctx.createRadialGradient(sx, sy, innerRadius, sx, sy, outerRadius);
+    grad.addColorStop(0, "rgba(0,0,0,0.5)");
+    grad.addColorStop(1, "rgba(0,0,0,0.97)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.font = "13px JetBrains Mono, monospace";
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "bold 13px JetBrains Mono, monospace";
     ctx.textAlign = "center";
     ctx.fillText("eyes closed. walking on vibes.", W / 2, 40);
     ctx.restore();

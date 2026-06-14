@@ -62,31 +62,56 @@
   ];
 
   // Themed destinations — the mission progresses outward through the solar system.
-  // grav is a multiplier on GRAVITY (exaggerated for playability, it's a parody).
+  // grav is a multiplier on GRAVITY; move is the base pad drift speed (0 = stationary).
   const THEMES = {
-    earth:   { id: "earth",   name: "EARTH",            pad: "PAD 39-EGO",              grav: 1.0,
-               sky: ["#0a1430", "#274684"], ground: "#23311a", surf: "#3a5a2c", water: false,
-               blurb: "investors are watching" },
-    ocean:   { id: "ocean",   name: "PACIFIC DRONESHIP", pad: "OF COURSE I STILL TIP U", grav: 1.0,
-               sky: ["#0a1830", "#1d4a72"], ground: "#0a2438", surf: "#1f6f9a", water: true,
-               blurb: "land on the barge, not the sea" },
-    station: { id: "station", name: "ORBITAL STATION",  pad: "DOCK 7-EGO",              grav: 0.5,
-               sky: ["#02030a", "#0a0a1f"], ground: "#161628", surf: "#3a3a64", water: false, space: true,
-               blurb: "low-g, no atmosphere to save you" },
-    moon:    { id: "moon",    name: "THE MOON",          pad: "TRANQUILITY-ISH",         grav: 0.35,
-               sky: ["#01010a", "#05050f"], ground: "#34343c", surf: "#74747e", water: false, space: true,
-               blurb: "one small step, one giant liability" },
-    mars:    { id: "mars",    name: "MARS",              pad: "OLYMPUS PAD",             grav: 0.6,
-               sky: ["#160806", "#43180e"], ground: "#5a2417", surf: "#9a4326", water: false,
-               blurb: "the planet of billionaire cope" },
+    earth:    { id: "earth",    name: "EARTH",            pad: "PAD 39-EGO",              grav: 1.0,  move: 0,
+                sky: ["#0a1430", "#274684"], ground: "#23311a", surf: "#3a5a2c", water: false,
+                blurb: "investors are watching" },
+    ocean:    { id: "ocean",    name: "PACIFIC DRONESHIP", pad: "OF COURSE I STILL TIP U", grav: 1.0, move: 0.8,
+                sky: ["#0a1830", "#1d4a72"], ground: "#0a2438", surf: "#1f6f9a", water: true,
+                blurb: "land on the barge, not the sea" },
+    station:  { id: "station",  name: "ORBITAL STATION",  pad: "DOCK 7-EGO",              grav: 0.5,  move: 0.7,
+                sky: ["#02030a", "#0a0a1f"], ground: "#161628", surf: "#3a3a64", water: false, space: true,
+                blurb: "low-g, no atmosphere to save you" },
+    moon:     { id: "moon",     name: "THE MOON",          pad: "TRANQUILITY-ISH",         grav: 0.35, move: 0,
+                sky: ["#01010a", "#05050f"], ground: "#34343c", surf: "#74747e", water: false, space: true,
+                blurb: "one small step, one giant liability" },
+    mars:     { id: "mars",     name: "MARS",              pad: "OLYMPUS PAD",             grav: 0.6,  move: 0.7,
+                sky: ["#160806", "#43180e"], ground: "#5a2417", surf: "#9a4326", water: false,
+                blurb: "the planet of billionaire cope" },
+    asteroid: { id: "asteroid", name: "ASTEROID BELT",     pad: "MINING CLAIM 0x9F",       grav: 0.18, move: 1.0,
+                sky: ["#04050d", "#0d0d18"], ground: "#2e2a26", surf: "#564a3e", water: false, space: true,
+                blurb: "stake a claim, dodge the rubble" },
+    venus:    { id: "venus",    name: "VENUS",             pad: "HOTHOUSE PAD",            grav: 1.25, move: 0,
+                sky: ["#3a1e06", "#b07a1e"], ground: "#6e4a16", surf: "#caa23a", water: false,
+                blurb: "runaway greenhouse, runaway ego" },
+    titan:    { id: "titan",    name: "TITAN",             pad: "METHANE MARINA",          grav: 0.4,  move: 0.8,
+                sky: ["#1a1206", "#6a4a1a"], ground: "#2a2410", surf: "#b48a2e", water: true,
+                blurb: "the dock floats; the methane does not forgive" },
+    europa:   { id: "europa",   name: "EUROPA",            pad: "ICE SHELF 7",             grav: 0.3,  move: 0.9,
+                sky: ["#06101a", "#16344e"], ground: "#8fa9bd", surf: "#dbeeff", water: false, space: true,
+                blurb: "cracked ice over a hidden ocean" },
+    sun:      { id: "sun",      name: "THE SUN (DON'T)",   pad: "SOLAR SHADE",             grav: 0.9,  move: 1.2,
+                sky: ["#2a0a00", "#b03000"], ground: "#7a1a00", surf: "#ff7a00", water: false,
+                blurb: "you cannot land on the sun. do it anyway." },
   };
 
+  // Two levels per world, then the Sun escalates forever.
+  const THEME_SEQUENCE = [
+    THEMES.earth,    THEMES.earth,
+    THEMES.ocean,    THEMES.ocean,
+    THEMES.station,  THEMES.station,
+    THEMES.moon,     THEMES.moon,
+    THEMES.mars,     THEMES.mars,
+    THEMES.asteroid, THEMES.asteroid,
+    THEMES.venus,    THEMES.venus,
+    THEMES.titan,    THEMES.titan,
+    THEMES.europa,   THEMES.europa,
+    THEMES.sun,
+  ];
+
   function themeForLevel(level) {
-    if (level <= 2) return THEMES.earth;
-    if (level <= 4) return THEMES.ocean;
-    if (level <= 6) return THEMES.station;
-    if (level <= 8) return THEMES.moon;
-    return THEMES.mars;
+    return THEME_SEQUENCE[Math.min(level - 1, THEME_SEQUENCE.length - 1)];
   }
 
   const OBSTACLE_TYPES = [
@@ -195,13 +220,9 @@
     state.launchPad = launchPad;
 
     // Landing pad: also at GROUND level, off to the right — shrinks and (per theme) moves.
-    const padW = Math.max(52, 140 - level * 9);
-    let moveSpeed = 0;
-    if (theme.id === "ocean")        moveSpeed = 0.9 + (level - 3) * 0.35;
-    else if (theme.id === "station") moveSpeed = 0.7 + (level - 5) * 0.30;
-    else if (theme.id === "mars")    moveSpeed = 0.7 + Math.max(0, level - 9) * 0.30;
-    moveSpeed = Math.max(0, moveSpeed);
-    const moveRange = moveSpeed > 0 ? Math.min(80 + level * 12, W * 0.28) : 0;
+    const padW = Math.max(46, 138 - level * 6);
+    const moveSpeed = theme.move ? theme.move + level * 0.03 : 0;
+    const moveRange = moveSpeed > 0 ? Math.min(70 + level * 10, W * 0.28) : 0;
     const baseX = clamp(W * 0.66, launchPad.x + padW / 2 + 80 + moveRange, W - padW / 2 - moveRange - 16);
     const phase = Math.random() * Math.PI * 2;
     const landPad = {

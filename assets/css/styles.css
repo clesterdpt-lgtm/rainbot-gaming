@@ -2300,7 +2300,9 @@ body.arcade-home::before {
 .poster-card--tardigrade img,
 .directory-card__poster--tardigrade img,
 .poster-card--apop img,
-.directory-card__poster--apop img {
+.directory-card__poster--apop img,
+.poster-card--bsr img,
+.directory-card__poster--bsr img {
   object-fit: cover;
   filter: saturate(1.12) contrast(1.05);
 }
@@ -2319,7 +2321,9 @@ body.arcade-home::before {
 .poster-card--tardigrade::before,
 .directory-card__poster--tardigrade::before,
 .poster-card--apop::before,
-.directory-card__poster--apop::before {
+.directory-card__poster--apop::before,
+.poster-card--bsr::before,
+.directory-card__poster--bsr::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;
@@ -2330,33 +2334,13 @@ body.arcade-home::before {
   pointer-events: none;
 }
 
-/* Billionaire Space Race — image-free CSS poster */
+/* Billionaire Space Race — generated image poster fallback */
 .poster-card--bsr,
 .directory-card__poster--bsr {
   background:
     radial-gradient(120% 90% at 78% 18%, rgba(255, 212, 59, 0.18), transparent 42%),
     radial-gradient(90% 80% at 20% 12%, rgba(46, 224, 255, 0.16), transparent 48%),
     linear-gradient(165deg, #120a2e 0%, #07060f 70%);
-}
-.poster-card--bsr::after,
-.directory-card__poster--bsr::after {
-  content: "🚀";
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  font-size: 54px;
-  filter: drop-shadow(0 0 10px rgba(255, 46, 136, 0.5));
-  transform: rotate(-18deg);
-  z-index: 1;
-  pointer-events: none;
-}
-.poster-card--bsr::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 34px;
-  z-index: 1;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.7), transparent 55%);
-  pointer-events: none;
 }
 
 .poster-card__label {

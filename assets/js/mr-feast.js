@@ -32,8 +32,8 @@
   const TASK_DEFS = [
     {
       id: "lobby",
-      title: "Cut the lobby camera",
-      room: "Lobby",
+      title: "Disable the foyer camera",
+      room: "Foyer",
       x: -2.4,
       z: 22.5,
       seconds: 2.1,
@@ -43,8 +43,8 @@
     },
     {
       id: "pizza",
-      title: "Incinerate the pizza altar",
-      room: "Pizza Gallery",
+      title: "Kill the kitchen oven feed",
+      room: "Kitchen",
       x: -25.8,
       z: 17.4,
       seconds: 2.7,
@@ -54,8 +54,8 @@
     },
     {
       id: "cash",
-      title: "Jam the cash cannon",
-      room: "Cash Maze",
+      title: "Jam the dining room prize drop",
+      room: "Dining Room",
       x: 25.3,
       z: 15.2,
       seconds: 2.5,
@@ -65,8 +65,8 @@
     },
     {
       id: "breaker",
-      title: "Trip the vanity breaker",
-      room: "Sleep Cubicles",
+      title: "Trip the bedroom vanity breaker",
+      room: "Main Bedroom",
       x: -25.8,
       z: -15.5,
       seconds: 3.0,
@@ -76,8 +76,8 @@
     },
     {
       id: "sponsor",
-      title: "Mute the sponsor siren",
-      room: "Sponsor Atrium",
+      title: "Mute the utility room sponsor siren",
+      room: "Utility Hall",
       x: 0.2,
       z: -7.8,
       seconds: 2.8,
@@ -87,8 +87,8 @@
     },
     {
       id: "contract",
-      title: "Shred the bonus contract",
-      room: "Confessional Studio",
+      title: "Shred the office bonus contract",
+      room: "Home Office",
       x: 25.5,
       z: -17.4,
       seconds: 3.2,
@@ -315,6 +315,9 @@
       lastY: 0,
       hoverX: null,
       hoverY: null,
+      locked: false,
+      softLocked: false,
+      lastUnlockedAt: 0,
     },
     tasks: [],
     hazards: [],
@@ -459,6 +462,24 @@
       wall: new THREE.MeshStandardMaterial({ color: 0x2b2118, roughness: 0.9 }),
       wallDark: new THREE.MeshStandardMaterial({ color: 0x120d0b, roughness: 0.94 }),
       trim: new THREE.MeshStandardMaterial({ color: 0x6b4a23, roughness: 0.72, metalness: 0.1 }),
+      wood: new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.64, metalness: 0.04 }),
+      darkWood: new THREE.MeshStandardMaterial({ color: 0x2a160d, roughness: 0.76, metalness: 0.03 }),
+      leather: new THREE.MeshStandardMaterial({ color: 0x23110d, roughness: 0.58, metalness: 0.02 }),
+      fabric: new THREE.MeshStandardMaterial({ color: 0x28384d, roughness: 0.92 }),
+      fabricWarm: new THREE.MeshStandardMaterial({ color: 0x6a4f36, roughness: 0.9 }),
+      hardwood: new THREE.MeshStandardMaterial({ color: 0x5a341d, roughness: 0.68, metalness: 0.03 }),
+      tile: new THREE.MeshStandardMaterial({ color: 0x7f7566, roughness: 0.76, metalness: 0.02 }),
+      porcelain: new THREE.MeshStandardMaterial({ color: 0xf3efe3, roughness: 0.38, metalness: 0.02 }),
+      appliance: new THREE.MeshStandardMaterial({ color: 0xc6c1b2, roughness: 0.36, metalness: 0.36 }),
+      skin: new THREE.MeshStandardMaterial({ color: 0xd7b89b, roughness: 0.62 }),
+      sickSkin: new THREE.MeshStandardMaterial({ color: 0xc9b7a7, emissive: 0x180606, roughness: 0.72 }),
+      suit: new THREE.MeshStandardMaterial({ color: 0x161719, roughness: 0.68, metalness: 0.04 }),
+      shirt: new THREE.MeshStandardMaterial({ color: 0xe7dfce, roughness: 0.58 }),
+      hair: new THREE.MeshStandardMaterial({ color: 0x17100c, roughness: 0.86 }),
+      tooth: new THREE.MeshStandardMaterial({ color: 0xfff1cf, roughness: 0.38 }),
+      bruise: new THREE.MeshStandardMaterial({ color: 0x3a2027, roughness: 0.88 }),
+      nail: new THREE.MeshStandardMaterial({ color: 0x080505, roughness: 0.42 }),
+      paper: new THREE.MeshStandardMaterial({ color: 0xf6efd8, roughness: 0.72 }),
       black: new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.82 }),
       yellow: new THREE.MeshStandardMaterial({ color: 0xf0c336, emissive: 0x221600, roughness: 0.48, metalness: 0.08 }),
       red: new THREE.MeshStandardMaterial({ color: 0x8b1818, emissive: 0x220202, roughness: 0.58, metalness: 0.08 }),
@@ -478,6 +499,18 @@
     world.materials.corridor.needsUpdate = true;
     world.materials.wall.map = makePatternTexture("wall");
     world.materials.wall.needsUpdate = true;
+    world.materials.hardwood.map = makePatternTexture("hardwood");
+    world.materials.hardwood.needsUpdate = true;
+    world.materials.tile.map = makePatternTexture("tile");
+    world.materials.tile.needsUpdate = true;
+    world.materials.carpet.map = makePatternTexture("carpet");
+    world.materials.carpet.needsUpdate = true;
+    world.materials.fabricWarm.map = makePatternTexture("fabric");
+    world.materials.fabricWarm.needsUpdate = true;
+    world.materials.suit.map = makePatternTexture("suit");
+    world.materials.suit.needsUpdate = true;
+    world.materials.sickSkin.map = makePatternTexture("skin");
+    world.materials.sickSkin.needsUpdate = true;
   }
 
   function makePatternTexture(kind) {
@@ -512,6 +545,80 @@
       ctx.strokeStyle = "rgba(240,195,54,0.18)";
       ctx.lineWidth = 6;
       ctx.strokeRect(18, 18, 220, 220);
+    } else if (kind === "hardwood") {
+      ctx.fillStyle = "#4a2817";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 256; y += 32) {
+        ctx.fillStyle = y % 64 ? "#5d351f" : "#3f2315";
+        ctx.fillRect(0, y, 256, 30);
+        ctx.strokeStyle = "rgba(18,9,5,0.55)";
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(256, y);
+        ctx.stroke();
+        for (let x = (y % 64 ? 38 : 0); x < 256; x += 86) {
+          ctx.strokeStyle = "rgba(18,9,5,0.45)";
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, y + 30);
+          ctx.stroke();
+        }
+      }
+      ctx.fillStyle = "rgba(124,78,42,0.28)";
+      for (let i = 0; i < 11; i++) ctx.fillRect((i * 47) % 256, 12 + ((i * 31) % 220), 28, 3);
+    } else if (kind === "tile") {
+      ctx.fillStyle = "#70685c";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 256; y += 42) {
+        for (let x = 0; x < 256; x += 42) {
+          ctx.fillStyle = (x / 42 + y / 42) % 2 ? "#7e7466" : "#665f55";
+          ctx.fillRect(x + 2, y + 2, 38, 38);
+        }
+      }
+      ctx.strokeStyle = "rgba(22,18,14,0.58)";
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 256; i += 42) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 256);
+        ctx.moveTo(0, i);
+        ctx.lineTo(256, i);
+        ctx.stroke();
+      }
+    } else if (kind === "carpet" || kind === "fabric") {
+      ctx.fillStyle = kind === "fabric" ? "#6a4f36" : "#5c1410";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 180; i++) {
+        ctx.fillStyle = i % 3 ? "rgba(255,230,190,0.08)" : "rgba(0,0,0,0.1)";
+        ctx.fillRect((i * 37) % 256, (i * 53) % 256, 2 + (i % 4), 1);
+      }
+    } else if (kind === "suit") {
+      ctx.fillStyle = "#151619";
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.strokeStyle = "rgba(210,210,190,0.08)";
+      ctx.lineWidth = 2;
+      for (let x = 18; x < 256; x += 28) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 256);
+        ctx.stroke();
+      }
+      ctx.fillStyle = "rgba(0,0,0,0.24)";
+      for (let y = 0; y < 256; y += 22) ctx.fillRect(0, y, 256, 2);
+    } else if (kind === "skin") {
+      ctx.fillStyle = "#c9b7a7";
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 160; i++) {
+        ctx.fillStyle = i % 4 ? "rgba(76,30,32,0.09)" : "rgba(250,230,208,0.08)";
+        ctx.fillRect((i * 61) % 256, (i * 29) % 256, 2 + (i % 5), 1 + (i % 3));
+      }
+      ctx.strokeStyle = "rgba(54,22,28,0.12)";
+      for (let y = 24; y < 256; y += 48) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(70, y + 14, 160, y - 18, 256, y + 8);
+        ctx.stroke();
+      }
     } else {
       ctx.fillStyle = "#2b2118";
       ctx.fillRect(0, 0, 256, 256);
@@ -530,7 +637,8 @@
     const texture = new THREE.CanvasTexture(cnv);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(kind === "wall" ? 2 : 7, kind === "wall" ? 2 : 7);
+    const repeat = kind === "wall" ? 2 : kind === "carpet" || kind === "fabric" ? 4 : 7;
+    texture.repeat.set(repeat, repeat);
     texture.encoding = THREE.sRGBEncoding;
     texture.anisotropy = world.renderer ? Math.min(8, world.renderer.capabilities.getMaxAnisotropy()) : 4;
     return texture;
@@ -551,12 +659,13 @@
 
     addFloor(0, -3, 74, 80, world.materials.floor);
     addFloor(0, -4, 5.4, 68, world.materials.corridor, 0.035);
-    addFloor(0, 23, 12, 22, world.materials.carpet, 0.05);
-    addFloor(-23, 17, 27, 22, world.materials.carpet, 0.045);
-    addFloor(23, 14, 27, 24, world.materials.carpet, 0.045);
-    addFloor(-23, -16, 27, 24, world.materials.carpet, 0.045);
-    addFloor(23, -17, 27, 24, world.materials.carpet, 0.045);
-    addFloor(0, -6, 17, 16, world.materials.carpet, 0.045);
+    addFloor(0, 23, 12, 22, world.materials.hardwood, 0.05);
+    addFloor(-23, 17, 27, 22, world.materials.tile, 0.045);
+    addFloor(23, 14, 27, 24, world.materials.hardwood, 0.045);
+    addFloor(-23, -16, 27, 24, world.materials.fabric, 0.045);
+    addFloor(23, -17, 27, 24, world.materials.hardwood, 0.045);
+    addFloor(0, -6, 17, 16, world.materials.tile, 0.045);
+    addCeiling(0, -3, 74, 80);
 
     buildWalls();
     buildSetDressing();
@@ -603,38 +712,42 @@
   }
 
   function buildSetDressing() {
-    addRoomLight(0, 24, 0xf0c336, 2.5, 24);
-    addRoomLight(-24, 18, 0xff5f3d, 2.4, 19);
-    addRoomLight(24, 15, 0x6bff7d, 2.2, 19);
-    addRoomLight(-24, -16, 0x789cff, 1.8, 18);
-    addRoomLight(24, -17, 0xff3d5a, 2.0, 18);
-    addRoomLight(0, -7, 0xf0c336, 1.6, 17);
+    addRoomLight(0, 24, 0xffdf9a, 1.8, 21);
+    addRoomLight(-24, 18, 0xffc78a, 1.9, 18);
+    addRoomLight(24, 15, 0xd8ffc0, 1.55, 18);
+    addRoomLight(-24, -16, 0xb5cfff, 1.35, 17);
+    addRoomLight(24, -17, 0xffd7c5, 1.45, 17);
+    addRoomLight(0, -7, 0xffdf9a, 1.25, 14);
 
-    addSign("LIVE UNTIL IT HURTS", 0, 1.9, 35.26, 0, 5.4, 1.25, "#070505", "#f0c336");
-    addSign("OPTIONAL EXIT", 0, 2.1, -41.22, Math.PI, 4.6, 1.1, "#130707", "#ffdddd");
-    addSign("PIZZA ROOM", -36.25, 1.8, 24, Math.PI / 2, 3.4, 0.95, "#170807", "#ffd9a0");
-    addSign("CASH MAZE", 36.25, 1.8, 22, -Math.PI / 2, 3.4, 0.95, "#06120b", "#b8ffc0");
-    addSign("CONFESSIONAL", 36.25, 1.8, -10, -Math.PI / 2, 3.8, 0.95, "#16080d", "#ffd9e4");
-    addSign("NO SLEEPING ON CAMERA", -36.25, 1.8, -10, Math.PI / 2, 4.8, 0.95, "#07101b", "#d8ebff");
+    addSign("DEADLINE HOUSE", 0, 1.9, 35.26, 0, 5.4, 1.25, "#070505", "#f0c336");
+    addSign("BACK DOOR", 0, 2.1, -41.22, Math.PI, 4.6, 1.1, "#130707", "#ffdddd");
 
-    addTable(0, 24);
-    addTable(-24, 18);
-    addTable(24, 15);
-    addSponsorStacks();
-    addPrizePile(22, 9, 6);
-    addPrizePile(28, 22, 4);
-    addPrizePile(-30, 22, 3);
+    addDoorFrame(-7.02, 18.3, Math.PI / 2, 6.4);
+    addDoorFrame(7.02, 16.3, -Math.PI / 2, 6.2);
+    addDoorFrame(-7.02, -14.6, Math.PI / 2, 8.2);
+    addDoorFrame(7.02, -15.5, -Math.PI / 2, 8.2);
+    addDoorFrame(0, 5.7, 0, 4.8);
+    addDoorFrame(0, -23.2, Math.PI, 4.8);
 
-    for (let i = 0; i < 8; i++) {
-      addTripod(-4 + i * 1.1, 32.8, Math.PI + (i - 3.5) * 0.05);
-    }
-    for (let i = 0; i < 6; i++) {
-      addDiningChair(-28 + i * 2.2, 11.5, 0.2);
-      addDiningChair(18 + i * 2.2, 7.5, -0.2);
-    }
-    for (let i = 0; i < 7; i++) {
-      addCubicleBed(-31 + i * 3.2, -25, i % 2 ? 0.02 : -0.04);
-    }
+    addWindow(-36.28, 22, Math.PI / 2, 3.4, 1.25);
+    addWindow(-36.28, 12.5, Math.PI / 2, 3.0, 1.15);
+    addWindow(36.28, 20.5, -Math.PI / 2, 3.4, 1.25);
+    addWindow(36.28, 7.8, -Math.PI / 2, 2.7, 1.1);
+    addWindow(-36.28, -12, Math.PI / 2, 3.0, 1.15);
+    addWindow(-36.28, -23.5, Math.PI / 2, 2.6, 1.0);
+    addWindow(36.28, -11.8, -Math.PI / 2, 3.0, 1.15);
+    addWindow(36.28, -23.2, -Math.PI / 2, 2.6, 1.0);
+
+    addInteriorArchitecture();
+    addFoyerLivingRoom();
+    addKitchenRoom();
+    addDiningRoom();
+    addBedroomRoom();
+    addBathroomNook();
+    addUtilityRoom();
+    addHomeOffice();
+    addProductionContamination();
+    addNormalHouseClutter();
   }
 
   function buildTasks() {
@@ -717,51 +830,169 @@
     const THREE = window.THREE;
     const host = new THREE.Group();
 
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.92, 2.25, 20), world.materials.red);
-    body.position.y = 1.3;
-    body.castShadow = true;
-    host.add(body);
+    const pelvis = addBox(host, 0.92, 0.42, 0.5, world.materials.suit, 0, 0.92, 0);
+    pelvis.castShadow = true;
 
-    const torsoStripe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.7, 0.08), world.materials.yellow);
-    torsoStripe.position.set(0, 1.45, -0.7);
-    host.add(torsoStripe);
+    [-0.28, 0.28].forEach((x) => {
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.95, 12), world.materials.suit);
+      thigh.position.set(x, 0.55, 0);
+      thigh.castShadow = true;
+      host.add(thigh);
+      const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.82, 12), world.materials.suit);
+      shin.position.set(x, 0.12, -0.03);
+      shin.castShadow = true;
+      host.add(shin);
+      addBox(host, 0.42, 0.14, 0.78, world.materials.black, x, 0.08, -0.2);
+    });
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.74, 32, 22), world.materials.yellow);
-    head.position.y = 2.78;
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.68, 1.55, 18), world.materials.suit);
+    torso.position.y = 1.62;
+    torso.scale.z = 0.72;
+    torso.castShadow = true;
+    host.add(torso);
+
+    addBox(host, 0.34, 1.16, 0.075, world.materials.shirt, 0, 1.7, -0.47, false);
+    addBox(host, 0.13, 0.9, 0.08, world.materials.red, 0, 1.58, -0.53, false);
+    addBox(host, 1.28, 0.16, 0.34, world.materials.suit, 0, 2.36, -0.03);
+
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.36, 16), world.materials.sickSkin);
+    neck.position.y = 2.44;
+    neck.castShadow = true;
+    host.add(neck);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.58, 34, 24), world.materials.sickSkin);
+    head.position.y = 2.92;
+    head.scale.set(0.82, 1.14, 0.76);
     head.castShadow = true;
     host.add(head);
 
-    const eyeGeo = new THREE.BoxGeometry(0.22, 0.08, 0.04);
-    const leftEye = new THREE.Mesh(eyeGeo, world.materials.black);
-    leftEye.position.set(-0.24, 2.88, -0.66);
-    host.add(leftEye);
-    const rightEye = leftEye.clone();
-    rightEye.position.x = 0.24;
-    host.add(rightEye);
+    const jaw = addBox(host, 0.48, 0.2, 0.22, world.materials.sickSkin, 0, 2.48, -0.34);
+    jaw.scale.x = 0.82;
+    [-0.5, 0.5].forEach((x) => {
+      const ear = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), world.materials.sickSkin);
+      ear.position.set(x, 2.94, -0.04);
+      ear.scale.set(0.46, 1.0, 0.3);
+      ear.castShadow = true;
+      host.add(ear);
+      const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), world.materials.bruise);
+      innerEar.position.set(x * 1.01, 2.93, -0.055);
+      innerEar.scale.set(0.3, 0.85, 0.24);
+      host.add(innerEar);
+    });
 
-    const smile = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.035, 8, 24, Math.PI), world.materials.black);
-    smile.position.set(0, 2.57, -0.68);
-    smile.rotation.z = Math.PI;
-    host.add(smile);
+    const scalp = new THREE.Mesh(new THREE.SphereGeometry(0.59, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.53), world.materials.hair);
+    scalp.position.set(0, 3.13, -0.02);
+    scalp.scale.set(0.83, 0.5, 0.76);
+    scalp.castShadow = true;
+    host.add(scalp);
 
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.035, 10, 48), world.materials.yellow);
-    ring.position.set(0, 3.05, 0);
-    ring.rotation.x = Math.PI / 2;
-    host.add(ring);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.32, 8), world.materials.skin);
+    nose.position.set(0, 2.93, -0.48);
+    nose.rotation.x = Math.PI / 2;
+    nose.castShadow = true;
+    host.add(nose);
 
-    const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 12), world.materials.chrome);
-    mic.position.set(0.72, 1.85, -0.4);
-    mic.rotation.z = -0.55;
+    [-0.22, 0.22].forEach((x) => {
+      const socket = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 10), world.materials.bruise);
+      socket.position.set(x, 3.035, -0.51);
+      socket.scale.set(1.45, 0.9, 0.25);
+      host.add(socket);
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 10), world.materials.white);
+      eye.position.set(x, 3.04, -0.49);
+      eye.scale.set(1.15, 0.7, 0.34);
+      host.add(eye);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), world.materials.black);
+      pupil.position.set(x, 3.035, -0.57);
+      pupil.scale.set(1.0, 0.85, 0.35);
+      host.add(pupil);
+      const brow = addBox(host, 0.27, 0.045, 0.045, world.materials.hair, x, 3.17, -0.55, false);
+      brow.rotation.z = x < 0 ? -0.22 : 0.22;
+    });
+    for (let i = 0; i < 3; i++) {
+      const wrinkle = addBox(host, 0.36 - i * 0.05, 0.024, 0.026, world.materials.bruise, 0, 3.23 - i * 0.065, -0.53, false);
+      wrinkle.rotation.z = (i - 1) * 0.08;
+    }
+
+    const mouth = addBox(host, 0.48, 0.12, 0.06, world.materials.black, 0, 2.68, -0.53, false);
+    mouth.rotation.x = -0.05;
+    for (let i = 0; i < 6; i++) {
+      addBox(host, 0.052, 0.12, 0.04, world.materials.tooth, -0.2 + i * 0.08, 2.74, -0.575, false);
+    }
+    addBox(host, 0.6, 0.035, 0.035, world.materials.black, 0, 2.55, -0.54, false);
+    [-0.36, 0.36].forEach((x) => {
+      const crease = addBox(host, 0.24, 0.035, 0.035, world.materials.black, x, 2.66, -0.54, false);
+      crease.rotation.z = x < 0 ? -0.85 : 0.85;
+      const cheek = addBox(host, 0.24, 0.032, 0.028, world.materials.bruise, x * 0.82, 2.79, -0.55, false);
+      cheek.rotation.z = x < 0 ? 0.42 : -0.42;
+    });
+    [-0.16, 0.16].forEach((x) => {
+      const lapel = addBox(host, 0.16, 0.98, 0.055, world.materials.black, x, 1.72, -0.54, false);
+      lapel.rotation.z = x < 0 ? -0.22 : 0.22;
+    });
+    for (let i = 0; i < 4; i++) addBox(host, 0.055, 0.055, 0.035, world.materials.chrome, 0, 1.22 + i * 0.22, -0.58, false);
+
+    [-0.78, 0.78].forEach((x) => {
+      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.82, 12), world.materials.suit);
+      upper.position.set(x, 1.86, -0.04);
+      upper.rotation.z = x < 0 ? 0.5 : -0.5;
+      upper.castShadow = true;
+      host.add(upper);
+      const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.11, 0.72, 12), world.materials.sickSkin);
+      forearm.position.set(x * 1.03, 1.25, -0.26);
+      forearm.rotation.z = x < 0 ? -0.18 : 0.18;
+      forearm.rotation.x = 0.35;
+      forearm.castShadow = true;
+      host.add(forearm);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 10), world.materials.sickSkin);
+      hand.position.set(x * 1.12, 0.9, -0.36);
+      hand.scale.set(0.92, 0.72, 1.2);
+      hand.castShadow = true;
+      host.add(hand);
+      for (let i = 0; i < 4; i++) {
+        const finger = addBox(host, 0.036, 0.23, 0.052, world.materials.sickSkin, x * 1.12 + (i - 1.5) * 0.038, 0.72, -0.48 - i * 0.008, false);
+        finger.rotation.x = 0.36;
+        finger.rotation.z = x < 0 ? -0.05 : 0.05;
+        addBox(host, 0.04, 0.026, 0.038, world.materials.nail, x * 1.12 + (i - 1.5) * 0.038, 0.6, -0.56 - i * 0.008, false);
+      }
+      addBox(host, 0.22, 0.09, 0.14, world.materials.shirt, x * 0.92, 1.02, -0.32, false);
+    });
+
+    const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.9, 12), world.materials.chrome);
+    mic.position.set(0.84, 1.18, -0.48);
+    mic.rotation.z = -0.35;
+    mic.rotation.x = 0.18;
     host.add(mic);
+    const micHead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), world.materials.black);
+    micHead.position.set(0.92, 1.55, -0.62);
+    host.add(micHead);
 
-    world.hostLight = new THREE.PointLight(0xf0c336, 1.8, 11);
-    world.hostLight.position.set(0, 3.1, -0.2);
+    const cameraRig = new THREE.Group();
+    addBox(cameraRig, 0.44, 0.26, 0.28, world.materials.black, 0, 0, 0);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.105, 0.12, 14), world.materials.glass);
+    lens.position.set(0, 0, -0.2);
+    lens.rotation.x = Math.PI / 2;
+    cameraRig.add(lens);
+    cameraRig.position.set(-0.56, 2.32, -0.42);
+    cameraRig.rotation.y = -0.15;
+    host.add(cameraRig);
+
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.86, 0.026, 10, 48), world.materials.red);
+    halo.position.set(0, 3.02, 0.08);
+    halo.rotation.x = Math.PI / 2;
+    host.add(halo);
+    host.userData.head = head;
+    host.userData.cameraRig = cameraRig;
+    host.userData.halo = halo;
+
+    world.hostLight = new THREE.PointLight(0xf0c336, 1.5, 10);
+    world.hostLight.position.set(0, 3.15, -0.15);
     host.add(world.hostLight);
     world.hostFaceLight = new THREE.PointLight(0xff3333, 0, 8);
-    world.hostFaceLight.position.set(0, 2.85, -0.75);
+    world.hostFaceLight.position.set(0, 2.92, -0.72);
     host.add(world.hostFaceLight);
 
     host.position.set(state.host.x, 0, state.host.z);
+    host.scale.setScalar(1.05);
     world.hostGroup = host;
     world.scene.add(host);
   }
@@ -855,6 +1086,15 @@
     return mesh;
   }
 
+  function addCeiling(x, z, w, d) {
+    const THREE = window.THREE;
+    const ceiling = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), world.materials.wallDark);
+    ceiling.position.set(x, 4.08, z);
+    ceiling.receiveShadow = true;
+    world.scene.add(ceiling);
+    return ceiling;
+  }
+
   function addWall(x, z, w, d, h, material = world.materials.wall, options = {}) {
     const THREE = window.THREE;
     const group = new THREE.Group();
@@ -902,6 +1142,229 @@
     return light;
   }
 
+  function addBox(parent, w, h, d, material, x = 0, y = h / 2, z = 0, castShadow = true) {
+    const THREE = window.THREE;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = castShadow;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+
+  function addRug(x, z, w, d, material = world.materials.carpet, yaw = 0) {
+    const THREE = window.THREE;
+    const rug = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, d), material);
+    rug.position.set(x, 0.055, z);
+    rug.rotation.y = yaw;
+    rug.receiveShadow = true;
+    world.scene.add(rug);
+    return rug;
+  }
+
+  function addDoorFrame(x, z, yaw, width) {
+    const THREE = window.THREE;
+    const frame = new THREE.Group();
+    addBox(frame, 0.18, 3.25, 0.2, world.materials.darkWood, -width / 2, 1.62, 0);
+    addBox(frame, 0.18, 3.25, 0.2, world.materials.darkWood, width / 2, 1.62, 0);
+    addBox(frame, width + 0.36, 0.2, 0.22, world.materials.darkWood, 0, 3.18, 0);
+    addBox(frame, width + 0.58, 0.08, 0.18, world.materials.trim, 0, 0.24, -0.02);
+    frame.position.set(x, 0, z);
+    frame.rotation.y = yaw;
+    world.scene.add(frame);
+    return frame;
+  }
+
+  function addWindow(x, z, yaw, w, h) {
+    const THREE = window.THREE;
+    const windowGroup = new THREE.Group();
+    const pane = addBox(windowGroup, w, h, 0.05, world.materials.glass, 0, 2.08, 0, false);
+    pane.material = world.materials.glass;
+    addBox(windowGroup, w + 0.22, 0.14, 0.12, world.materials.trim, 0, 2.08 + h / 2 + 0.1, 0.02);
+    addBox(windowGroup, w + 0.22, 0.14, 0.12, world.materials.trim, 0, 2.08 - h / 2 - 0.1, 0.02);
+    addBox(windowGroup, 0.14, h + 0.28, 0.12, world.materials.trim, -w / 2 - 0.1, 2.08, 0.02);
+    addBox(windowGroup, 0.14, h + 0.28, 0.12, world.materials.trim, w / 2 + 0.1, 2.08, 0.02);
+    addBox(windowGroup, 0.1, h + 0.55, 0.08, world.materials.fabricWarm, -w / 2 - 0.35, 2.02, -0.04, false);
+    addBox(windowGroup, 0.1, h + 0.55, 0.08, world.materials.fabricWarm, w / 2 + 0.35, 2.02, -0.04, false);
+    windowGroup.position.set(x, 0, z);
+    windowGroup.rotation.y = yaw;
+    world.scene.add(windowGroup);
+    return windowGroup;
+  }
+
+  function addInteriorArchitecture() {
+    addWallPanel(-20.8, 7.05, 0, 12.0, 3.2);
+    addWallPanel(-13.2, 11.2, Math.PI / 2, 5.2, 3.2);
+    addWallPanel(-13.2, 23.0, Math.PI / 2, 7.2, 3.2);
+    addWallPanel(-30.8, 8.8, Math.PI / 2, 4.8, 3.0);
+    addWallPanel(20.6, 5.9, 0, 11.2, 3.2);
+    addWallPanel(13.2, 21.4, Math.PI / 2, 6.4, 3.2);
+    addWallPanel(-18.9, -7.4, Math.PI / 2, 5.3, 2.65, world.materials.wall);
+    addWallPanel(-18.8, -21.1, Math.PI / 2, 5.0, 3.1);
+    addWallPanel(18.8, -7.2, 0, 9.6, 3.1);
+    addWallPanel(13.1, -19.8, Math.PI / 2, 6.2, 3.1);
+
+    addDoorSlab(-7.24, 18.3, Math.PI / 2, -0.72);
+    addDoorSlab(7.24, 16.3, -Math.PI / 2, 0.68);
+    addDoorSlab(-7.24, -14.6, Math.PI / 2, 0.62);
+    addDoorSlab(7.24, -15.5, -Math.PI / 2, -0.64);
+    addDoorSlab(-19.0, -5.2, 0, 0.7, 0.82);
+    addDoorSlab(13.1, -16.7, Math.PI / 2, 0.72, 0.9);
+
+    addWallSconce(-6.88, 21.8, Math.PI / 2);
+    addWallSconce(6.88, 20.5, -Math.PI / 2);
+    addWallSconce(-18.85, -10.2, Math.PI / 2);
+    addWallSconce(18.85, -10.4, -Math.PI / 2);
+  }
+
+  function addWallPanel(x, z, yaw, length, h = 3.25, material = world.materials.wallDark) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, length, h, 0.34, material, 0, h / 2, 0);
+    addBox(group, length + 0.12, 0.09, 0.42, world.materials.trim, 0, 0.16, 0);
+    addBox(group, length + 0.06, 0.07, 0.38, world.materials.trim, 0, h - 0.18, 0);
+    for (let i = -1; i <= 1; i++) {
+      addBox(group, 0.08, h - 0.55, 0.38, world.materials.trim, (length / 3) * i, h / 2, 0.01, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    return group;
+  }
+
+  function addDoorSlab(x, z, yaw, openAngle = 0.65, width = 1.05) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, width, 2.45, 0.1, world.materials.darkWood, width / 2, 1.25, 0);
+    addBox(group, width * 0.72, 0.04, 0.055, world.materials.trim, width / 2, 1.92, -0.07, false);
+    addBox(group, width * 0.72, 0.04, 0.055, world.materials.trim, width / 2, 0.74, -0.07, false);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), world.materials.chrome);
+    knob.position.set(width * 0.82, 1.24, -0.11);
+    group.add(knob);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw + openAngle;
+    world.scene.add(group);
+    return group;
+  }
+
+  function addWallSconce(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.18, 0.46, 0.08, world.materials.chrome, 0, 1.82, 0);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.24, 0.32, 12), world.materials.paper);
+    shade.position.set(0, 2.06, -0.08);
+    shade.rotation.x = Math.PI / 2;
+    group.add(shade);
+    const light = new THREE.PointLight(0xffd89a, 0.34, 4.2);
+    light.position.set(0, 2.0, -0.26);
+    group.add(light);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addFoyerLivingRoom() {
+    addRug(0, 25.2, 6.8, 7.6, world.materials.carpet);
+    addSofa(3.7, 25.8, -Math.PI / 2, world.materials.leather);
+    addCoffeeTable(0.6, 25.3, 0);
+    addMediaConsole(-4.8, 25.1, Math.PI / 2);
+    addFireplace(-5.85, 30.3, Math.PI / 2);
+    addStaircase(5.1, 30.2, Math.PI);
+    addFloorLamp(4.7, 21.2);
+    addHousePlant(-4.7, 28.8);
+    addPictureCluster(-6.35, 24.1, Math.PI / 2, ["before", "after", "waiver"]);
+    addPictureCluster(6.35, 23.0, -Math.PI / 2, ["winner", "winner", "missing"]);
+    addCoatRack(5.7, 20.1);
+    addShoePile(-2.6, 19.6);
+    addTripod(-3.8, 31.9, Math.PI + 0.12);
+    addTripod(3.8, 31.9, Math.PI - 0.12);
+  }
+
+  function addKitchenRoom() {
+    addRug(-24.2, 18.2, 7.0, 5.4, world.materials.fabricWarm);
+    addKitchenCounter(-34.2, 18.2, 1.2, 16.8);
+    addKitchenCounter(-24.2, 27.1, 15.2, 1.15);
+    addKitchenIsland(-20.8, 18.0);
+    addUpperCabinetRun(-34.9, 18.2, Math.PI / 2, 13.6);
+    addUpperCabinetRun(-24.2, 27.75, 0, 12.4);
+    addRangeHood(-34.7, 15.0, Math.PI / 2);
+    addBreakfastNook(-15.2, 11.8);
+    addRollingCart(-15.5, 23.4);
+    addKitchenForegroundDetails(-16.7, 18.2);
+    addKitchenClutter(-20.8, 18.0);
+    addDishRack(-28.4, 26.7);
+    addPendantLight(-20.8, 18.0);
+    addAppliance(-34.1, 10.2, 1.35, 2.2, "fridge");
+    addAppliance(-34.1, 15.0, 1.25, 1.4, "oven");
+    addAppliance(-27.2, 27.0, 2.2, 1.1, "sink");
+    addHousePlant(-12.2, 25.5);
+    addPictureCluster(-23.8, 6.1, 0, ["family", "sponsor", "teeth"]);
+  }
+
+  function addDiningRoom() {
+    addRug(24.0, 15.2, 10.8, 8.2, world.materials.green);
+    addDiningSet(24.0, 15.2);
+    addTableSettings(24.0, 15.2);
+    addSideboard(32.0, 22.5, -Math.PI / 2);
+    addChinaCabinet(33.2, 7.8, -Math.PI / 2);
+    addPrizePile(28.2, 21.0, 3);
+    addFloorLamp(13.0, 7.0);
+  }
+
+  function addBedroomRoom() {
+    addRug(-25.6, -16.8, 9.8, 8.8, world.materials.fabric);
+    addRealBed(-31.0, -18.0, Math.PI / 2, world.materials.fabric);
+    addNightstand(-31.0, -13.4);
+    addNightstand(-31.0, -22.6);
+    addDresser(-13.0, -23.8, 0);
+    addVanity(-25.8, -12.4, Math.PI);
+    addWardrobe(-34.0, -8.0, Math.PI / 2);
+    addFloorLamp(-13.0, -7.0);
+    addLaundryBasket(-15.2, -10.4);
+    addClothingPile(-22.0, -22.6);
+    addPictureCluster(-36.2, -16.2, Math.PI / 2, ["smile", "sleep", "rules"]);
+  }
+
+  function addBathroomNook() {
+    addRug(-15.7, -7.2, 3.4, 3.0, world.materials.tile);
+    addTub(-13.7, -8.2, 0);
+    addToilet(-17.2, -8.1, Math.PI / 2);
+    addSink(-16.5, -5.2, Math.PI);
+    addTowelRack(-13.4, -5.4, Math.PI);
+    addBox(world.scene, 0.52, 1.9, 5.2, world.materials.wallDark, -19.0, 0.95, -7.4);
+  }
+
+  function addUtilityRoom() {
+    addRug(0.0, -7.5, 6.2, 6.6, world.materials.floor);
+    addWasherPair(-4.6, -8.8, 0);
+    addStorageShelves(4.6, -8.7, Math.PI);
+    addStorageShelves(5.4, -2.2, -Math.PI / 2);
+    addLaundryBasket(-2.0, -2.2);
+    addSponsorStacks();
+  }
+
+  function addHomeOffice() {
+    addRug(24.2, -17.6, 9.4, 8.0, world.materials.fabricWarm);
+    addOfficeDesk(25.0, -17.2, Math.PI);
+    addOfficeChair(25.0, -19.0, 0);
+    addBookshelf(34.0, -14.0, -Math.PI / 2);
+    addBookshelf(34.0, -22.0, -Math.PI / 2);
+    addArmchair(14.0, -10.2, -0.7);
+    addSideboard(14.0, -25.0, 0);
+    addPaperMess(26.0, -16.4, 9, 2.8, 1.6);
+    addCableSnake(23.9, -18.8);
+    addPictureCluster(36.2, -17.6, -Math.PI / 2, ["contract", "contract", "contract"]);
+  }
+
+  function addProductionContamination() {
+    addTripod(-3.8, 32.8, Math.PI + 0.1);
+    addTripod(3.8, 32.8, Math.PI - 0.1);
+    addTripod(-10.4, 20.8, -Math.PI / 2);
+    addTripod(10.4, 17.8, Math.PI / 2);
+    addPrizePile(21.2, 8.2, 3);
+    addPrizePile(-29.6, 23.0, 2);
+  }
+
   function addTable(x, z) {
     const THREE = window.THREE;
     const group = new THREE.Group();
@@ -920,6 +1383,673 @@
     world.scene.add(group);
     addPropCollision(x, z, 3.2, 3.2, false);
     return group;
+  }
+
+  function addSofa(x, z, yaw, material = world.materials.leather) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 3.2, 0.46, 1.05, material, 0, 0.48, 0);
+    addBox(group, 3.35, 1.1, 0.28, material, 0, 1.0, 0.5);
+    addBox(group, 0.26, 0.82, 1.12, material, -1.78, 0.82, 0);
+    addBox(group, 0.26, 0.82, 1.12, material, 1.78, 0.82, 0);
+    for (let i = 0; i < 3; i++) {
+      addBox(group, 0.9, 0.1, 0.82, world.materials.fabricWarm, -0.95 + i * 0.95, 0.75, -0.12, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.8, 1.7, false);
+    return group;
+  }
+
+  function addCoffeeTable(x, z, yaw = 0) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.3, 0.14, 1.08, world.materials.wood, 0, 0.55, 0);
+    addBox(group, 0.14, 0.48, 0.14, world.materials.darkWood, -0.9, 0.28, -0.38);
+    addBox(group, 0.14, 0.48, 0.14, world.materials.darkWood, 0.9, 0.28, -0.38);
+    addBox(group, 0.14, 0.48, 0.14, world.materials.darkWood, -0.9, 0.28, 0.38);
+    addBox(group, 0.14, 0.48, 0.14, world.materials.darkWood, 0.9, 0.28, 0.38);
+    addBox(group, 0.64, 0.04, 0.42, world.materials.paper, 0.35, 0.65, -0.1, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.6, 1.4, false);
+    return group;
+  }
+
+  function addMediaConsole(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.7, 0.58, 0.56, world.materials.darkWood, 0, 0.38, 0);
+    addBox(group, 2.35, 1.25, 0.08, world.materials.black, 0, 1.45, -0.34);
+    addBox(group, 2.1, 0.96, 0.04, world.materials.glass, 0, 1.45, -0.39, false);
+    addBox(group, 0.7, 0.08, 0.06, world.materials.red, 0, 1.45, -0.43, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.0, 1.0, false);
+  }
+
+  function addFireplace(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.2, 1.35, 0.38, world.materials.darkWood, 0, 0.68, 0);
+    addBox(group, 1.35, 0.72, 0.08, world.materials.black, 0, 0.56, -0.23, false);
+    for (let i = 0; i < 3; i++) {
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12 + i * 0.02, 0.55, 5), i % 2 ? world.materials.yellow : world.materials.red);
+      flame.position.set(-0.26 + i * 0.26, 0.68, -0.31);
+      flame.rotation.y = i * 0.7;
+      group.add(flame);
+    }
+    const light = new THREE.PointLight(0xff5f3d, 0.9, 6);
+    light.position.set(0, 0.86, -0.42);
+    group.add(light);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.6, 0.8, false);
+  }
+
+  function addStaircase(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      addBox(group, 2.3, 0.18, 0.72, world.materials.wood, 0, 0.09 + i * 0.18, -i * 0.42);
+    }
+    addBox(group, 0.08, 1.6, 3.2, world.materials.trim, -1.22, 0.9, -1.25);
+    addBox(group, 0.08, 1.6, 3.2, world.materials.trim, 1.22, 0.9, -1.25);
+    addBox(group, 2.7, 0.12, 0.16, world.materials.trim, 0, 1.72, -2.55);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z - 1.25, 2.9, 3.2, false);
+  }
+
+  function addKitchenClutter(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.38, 0.34, 0.38, world.materials.appliance, -1.22, 1.18, -0.2, false);
+    addBox(group, 0.8, 0.06, 0.42, world.materials.paper, 0.25, 1.2, 0.28, false);
+    addBox(group, 0.28, 0.18, 0.18, world.materials.red, 0.92, 1.25, -0.26, false);
+    addBox(group, 0.28, 0.18, 0.18, world.materials.green, 1.22, 1.25, -0.12, false);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 0.18, 18), world.materials.porcelain);
+    bowl.position.set(-0.38, 1.18, -0.16);
+    group.add(bowl);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addNormalHouseClutter() {
+    addPaperMess(-0.4, 24.0, 5, 1.8, 1.1);
+    addPaperMess(-32.0, 12.0, 4, 1.5, 1.0);
+    addPaperMess(30.8, -19.0, 5, 1.7, 1.2);
+    addWallClock(0, 35.1, 0);
+    addWallClock(-36.2, 16.2, Math.PI / 2);
+    addWasteBin(-31.6, 8.4);
+    addWasteBin(31.6, -8.8);
+  }
+
+  function addCoatRack(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.9, 10), world.materials.darkWood);
+    pole.position.y = 1.0;
+    group.add(pole);
+    addBox(group, 0.78, 0.08, 0.78, world.materials.darkWood, 0, 0.06, 0);
+    for (let i = 0; i < 4; i++) {
+      const hook = addBox(group, 0.46, 0.055, 0.055, world.materials.chrome, 0, 1.86, 0, false);
+      hook.rotation.y = i * Math.PI / 2;
+      addBox(group, 0.32, 0.7, 0.08, i % 2 ? world.materials.fabric : world.materials.fabricWarm, Math.sin(i) * 0.22, 1.34, Math.cos(i) * 0.22, false);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 0.95, 0.95, false);
+  }
+
+  function addShoePile(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+      const shoe = addBox(group, 0.42, 0.12, 0.22, i % 2 ? world.materials.leather : world.materials.black, -0.45 + (i % 3) * 0.42, 0.08, -0.2 + Math.floor(i / 3) * 0.32, false);
+      shoe.rotation.y = -0.5 + i * 0.28;
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addUpperCabinetRun(x, z, yaw, length) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, length, 0.72, 0.42, world.materials.darkWood, 0, 2.18, 0);
+    const doorCount = Math.max(2, Math.floor(length / 1.35));
+    for (let i = 0; i <= doorCount; i++) {
+      const offset = -length / 2 + (length / doorCount) * i;
+      addBox(group, 0.035, 0.64, 0.055, world.materials.trim, offset, 2.18, -0.24, false);
+    }
+    for (let i = 0; i < doorCount; i++) {
+      const offset = -length / 2 + (length / doorCount) * (i + 0.5);
+      addBox(group, 0.08, 0.04, 0.06, world.materials.chrome, offset, 2.05, -0.27, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addRangeHood(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.25, 0.18, 0.62, world.materials.appliance, 0, 2.06, 0);
+    addBox(group, 0.58, 0.65, 0.42, world.materials.appliance, 0, 2.42, 0.02);
+    addBox(group, 0.86, 0.06, 0.05, world.materials.black, 0, 1.93, -0.35, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addBreakfastNook(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.55, 0.14, 1.05, world.materials.wood, 0, 0.74, 0);
+    addBox(group, 0.14, 0.68, 0.14, world.materials.darkWood, -0.58, 0.36, -0.36);
+    addBox(group, 0.14, 0.68, 0.14, world.materials.darkWood, 0.58, 0.36, -0.36);
+    addBox(group, 0.14, 0.68, 0.14, world.materials.darkWood, -0.58, 0.36, 0.36);
+    addBox(group, 0.14, 0.68, 0.14, world.materials.darkWood, 0.58, 0.36, 0.36);
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 18), world.materials.porcelain);
+    plate.position.set(-0.28, 0.84, 0.08);
+    group.add(plate);
+    addBox(group, 0.38, 0.16, 0.24, world.materials.paper, 0.34, 0.88, -0.18, false);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addDiningChair(x - 1.05, z, Math.PI / 2);
+    addDiningChair(x + 1.05, z, -Math.PI / 2);
+    addPropCollision(x, z, 1.9, 1.35, false);
+  }
+
+  function addRollingCart(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.25, 0.1, 0.7, world.materials.chrome, 0, 0.5, 0);
+    addBox(group, 1.25, 0.1, 0.7, world.materials.chrome, 0, 1.02, 0);
+    for (let i = 0; i < 4; i++) {
+      addBox(group, 0.06, 1.0, 0.06, world.materials.chrome, -0.52 + (i % 2) * 1.04, 0.55, -0.27 + Math.floor(i / 2) * 0.54);
+    }
+    addBox(group, 0.42, 0.28, 0.32, world.materials.red, -0.32, 1.21, 0.08, false);
+    addBox(group, 0.36, 0.24, 0.3, world.materials.green, 0.24, 1.19, -0.12, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = -0.18;
+    world.scene.add(group);
+    addPropCollision(x, z, 1.55, 1.0, false);
+  }
+
+  function addKitchenForegroundDetails(x, z) {
+    addRug(x, z, 3.6, 4.2, world.materials.fabricWarm, 0);
+    addPaperMess(x - 0.55, z + 0.25, 4, 1.0, 0.7);
+    addBox(world.scene, 0.52, 0.24, 0.34, world.materials.paper, x + 0.72, 0.16, z - 0.72, false);
+    addBox(world.scene, 0.36, 0.2, 0.28, world.materials.green, x + 0.36, 0.14, z - 0.42, false);
+    addBox(world.scene, 0.34, 0.18, 0.26, world.materials.red, x + 1.0, 0.13, z - 0.18, false);
+    addBox(world.scene, 0.76, 0.08, 0.18, world.materials.darkWood, x - 1.2, 0.08, z + 1.15, false);
+  }
+
+  function addDishRack(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.92, 0.06, 0.42, world.materials.chrome, 0, 1.12, 0, false);
+    for (let i = 0; i < 5; i++) {
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.025, 18), world.materials.porcelain);
+      plate.position.set(-0.34 + i * 0.17, 1.22, 0);
+      plate.rotation.x = Math.PI / 2;
+      group.add(plate);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addTableSettings(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const spots = [
+      [-1.7, -0.72], [-0.55, -0.72], [0.55, -0.72], [1.7, -0.72],
+      [-1.7, 0.72], [-0.55, 0.72], [0.55, 0.72], [1.7, 0.72],
+    ];
+    spots.forEach(([px, pz], index) => {
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.03, 20), world.materials.porcelain);
+      plate.position.set(px, 0.95, pz);
+      group.add(plate);
+      addBox(group, 0.04, 0.025, 0.36, index % 2 ? world.materials.chrome : world.materials.black, px + 0.34, 0.98, pz, false);
+    });
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addLaundryBasket(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.62, 16), world.materials.paper);
+    basket.position.y = 0.32;
+    basket.castShadow = true;
+    group.add(basket);
+    for (let i = 0; i < 4; i++) {
+      addBox(group, 0.32, 0.12, 0.26, i % 2 ? world.materials.fabric : world.materials.fabricWarm, -0.2 + (i % 2) * 0.4, 0.7 + i * 0.035, -0.1 + Math.floor(i / 2) * 0.24, false);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 0.9, 0.9, false);
+  }
+
+  function addClothingPile(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const cloth = addBox(group, 0.52, 0.08, 0.36, i % 3 ? world.materials.fabricWarm : world.materials.fabric, Math.sin(i * 1.2) * 0.55, 0.06 + i * 0.018, Math.cos(i * 0.9) * 0.42, false);
+      cloth.rotation.y = i * 0.62;
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addTowelRack(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.05, 0.06, 0.08, world.materials.chrome, 0, 1.62, 0, false);
+    addBox(group, 0.82, 0.72, 0.05, world.materials.fabricWarm, 0, 1.22, -0.04, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addPaperMess(x, z, count, spreadX, spreadZ) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    for (let i = 0; i < count; i++) {
+      const paper = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.024, 0.3), world.materials.paper);
+      paper.position.set(Math.sin(i * 1.91) * spreadX * 0.5, 0.035 + i * 0.004, Math.cos(i * 1.37) * spreadZ * 0.5);
+      paper.rotation.y = i * 0.73;
+      group.add(paper);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addCableSnake(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    for (let i = 0; i < 6; i++) {
+      const segment = addBox(group, 0.42, 0.035, 0.055, world.materials.black, -0.92 + i * 0.34, 0.045, Math.sin(i) * 0.16, false);
+      segment.rotation.y = Math.sin(i * 1.2) * 0.7;
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addWallClock(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.055, 28), world.materials.paper);
+    face.rotation.x = Math.PI / 2;
+    face.position.y = 2.35;
+    group.add(face);
+    addBox(group, 0.035, 0.28, 0.035, world.materials.black, 0, 2.37, -0.04, false);
+    addBox(group, 0.2, 0.03, 0.035, world.materials.black, 0.08, 2.37, -0.045, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addWasteBin(x, z) {
+    const THREE = window.THREE;
+    const bin = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.28, 0.58, 14), world.materials.black);
+    bin.position.set(x, 0.3, z);
+    bin.castShadow = true;
+    world.scene.add(bin);
+    addPropCollision(x, z, 0.72, 0.72, false);
+  }
+
+  function addPendantLight(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8), world.materials.black);
+    cable.position.y = 3.4;
+    group.add(cable);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 0.34, 18), world.materials.black);
+    shade.position.y = 2.78;
+    group.add(shade);
+    const bulb = new THREE.PointLight(0xffdf9a, 0.48, 5);
+    bulb.position.y = 2.62;
+    group.add(bulb);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addFloorLamp(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.42, 0.08, 0.42, world.materials.chrome, 0, 0.04, 0);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.75, 10), world.materials.chrome);
+    pole.position.y = 0.9;
+    pole.castShadow = true;
+    group.add(pole);
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.56, 0.5, 18), world.materials.paper);
+    shade.position.y = 1.92;
+    shade.castShadow = true;
+    group.add(shade);
+    const light = new THREE.PointLight(0xffd89a, 0.58, 6);
+    light.position.y = 1.9;
+    group.add(light);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addHousePlant(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.42, 0.48, 14), world.materials.wallDark);
+    pot.position.y = 0.24;
+    pot.castShadow = true;
+    group.add(pot);
+    for (let i = 0; i < 7; i++) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.82, 5), world.materials.green);
+      leaf.position.set(Math.sin(i) * 0.18, 0.86, Math.cos(i * 1.7) * 0.18);
+      leaf.rotation.set(0.55 + i * 0.04, i * 0.9, -0.3 + i * 0.1);
+      group.add(leaf);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+  }
+
+  function addPictureCluster(x, z, yaw, labels) {
+    labels.forEach((label, index) => {
+      const y = 1.55 + (index % 2) * 0.72;
+      const offset = (index - 1) * 0.92;
+      const sign = makeTextSign(label.toUpperCase(), 0.82, 0.42, "#22170f", index === 2 ? "#ffb9b9" : "#e5d3b4");
+      sign.position.set(x, y, z + offset);
+      sign.rotation.y = yaw;
+      world.scene.add(sign);
+    });
+  }
+
+  function addKitchenCounter(x, z, w, d) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, w, 0.9, d, world.materials.darkWood, 0, 0.45, 0);
+    addBox(group, w + 0.08, 0.12, d + 0.08, world.materials.tile, 0, 0.98, 0);
+    addBox(group, Math.max(0.25, w - 0.18), 0.08, Math.max(0.25, d - 0.18), world.materials.black, 0, 1.08, 0, false);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, w + 0.25, d + 0.25, false);
+    return group;
+  }
+
+  function addKitchenIsland(x, z) {
+    const island = addKitchenCounter(x, z, 4.6, 1.65);
+    addBox(island, 0.52, 0.06, 0.42, world.materials.paper, 0.6, 1.18, -0.28, false);
+    for (let i = 0; i < 3; i++) addDiningChair(x - 1.4 + i * 1.4, z - 1.35, Math.PI);
+  }
+
+  function addAppliance(x, z, w, d, kind) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const h = kind === "fridge" ? 2.35 : kind === "oven" ? 1.1 : 0.82;
+    addBox(group, w, h, d, world.materials.appliance, 0, h / 2, 0);
+    if (kind === "fridge") {
+      addBox(group, w * 0.78, 0.06, 0.05, world.materials.chrome, 0, 1.22, -d / 2 - 0.03, false);
+      addBox(group, 0.06, 1.55, 0.06, world.materials.chrome, w / 2 - 0.18, 1.25, -d / 2 - 0.05, false);
+    } else if (kind === "oven") {
+      addBox(group, w * 0.72, 0.52, 0.06, world.materials.glass, 0, 0.62, -d / 2 - 0.04, false);
+      addBox(group, w * 0.86, 0.08, 0.08, world.materials.black, 0, 1.16, -d / 2 - 0.04, false);
+    } else {
+      const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 0.16, 18), world.materials.chrome);
+      basin.position.set(0, 0.92, 0);
+      basin.scale.x = 1.45;
+      group.add(basin);
+      const faucet = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.025, 8, 18, Math.PI), world.materials.chrome);
+      faucet.position.set(0.22, 1.12, -0.15);
+      faucet.rotation.y = Math.PI / 2;
+      group.add(faucet);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, w + 0.25, d + 0.25, false);
+  }
+
+  function addDiningSet(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 4.9, 0.18, 2.15, world.materials.wood, 0, 0.82, 0);
+    addBox(group, 0.18, 0.78, 0.18, world.materials.darkWood, -2.0, 0.4, -0.78);
+    addBox(group, 0.18, 0.78, 0.18, world.materials.darkWood, 2.0, 0.4, -0.78);
+    addBox(group, 0.18, 0.78, 0.18, world.materials.darkWood, -2.0, 0.4, 0.78);
+    addBox(group, 0.18, 0.78, 0.18, world.materials.darkWood, 2.0, 0.4, 0.78);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 5.4, 2.7, false);
+    [-2, -0.7, 0.7, 2].forEach((offset) => {
+      addDiningChair(x + offset, z - 1.75, 0);
+      addDiningChair(x + offset, z + 1.75, Math.PI);
+    });
+  }
+
+  function addSideboard(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 3.1, 0.86, 0.72, world.materials.darkWood, 0, 0.43, 0);
+    addBox(group, 2.7, 0.08, 0.12, world.materials.chrome, 0, 0.86, -0.43, false);
+    addBox(group, 0.42, 0.52, 0.36, world.materials.glass, -0.85, 1.16, 0, false);
+    addBox(group, 0.42, 0.52, 0.36, world.materials.glass, 0.85, 1.16, 0, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.4, 1.1, false);
+  }
+
+  function addChinaCabinet(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.1, 2.35, 0.58, world.materials.darkWood, 0, 1.18, 0);
+    addBox(group, 1.72, 1.65, 0.06, world.materials.glass, 0, 1.42, -0.34, false);
+    for (let i = 0; i < 4; i++) addBox(group, 1.76, 0.06, 0.44, world.materials.wood, 0, 0.55 + i * 0.42, -0.04, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.4, 0.95, false);
+  }
+
+  function addRealBed(x, z, yaw, blanketMaterial = world.materials.fabric) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.45, 0.36, 4.1, world.materials.darkWood, 0, 0.35, 0);
+    addBox(group, 2.28, 0.22, 3.6, blanketMaterial, 0, 0.69, 0.24);
+    addBox(group, 2.62, 1.4, 0.22, world.materials.darkWood, 0, 1.02, 1.96);
+    addBox(group, 0.86, 0.2, 0.72, world.materials.white, -0.55, 0.92, 1.16, false);
+    addBox(group, 0.86, 0.2, 0.72, world.materials.white, 0.55, 0.92, 1.16, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.0, 4.6, false);
+  }
+
+  function addNightstand(x, z) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.82, 0.62, 0.72, world.materials.darkWood, 0, 0.31, 0);
+    addBox(group, 0.26, 0.34, 0.26, world.materials.paper, 0, 0.86, 0, false);
+    const light = new THREE.PointLight(0xffd89a, 0.4, 4);
+    light.position.set(0, 1.05, 0);
+    group.add(light);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 1.0, 0.9, false);
+  }
+
+  function addDresser(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 3.2, 0.92, 0.74, world.materials.darkWood, 0, 0.46, 0);
+    for (let i = 0; i < 6; i++) {
+      addBox(group, 0.92, 0.06, 0.05, world.materials.chrome, -0.95 + (i % 3) * 0.95, 0.35 + Math.floor(i / 3) * 0.32, -0.42, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.5, 1.1, false);
+  }
+
+  function addVanity(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.45, 0.78, 0.72, world.materials.wood, 0, 0.39, 0);
+    addBox(group, 1.24, 1.08, 0.08, world.materials.glass, 0, 1.42, -0.42, false);
+    for (let i = 0; i < 5; i++) {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffefb7 }));
+      bulb.position.set(-0.62 + i * 0.31, 1.94, -0.49);
+      group.add(bulb);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.7, 1.0, false);
+  }
+
+  function addWardrobe(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.25, 2.5, 0.86, world.materials.darkWood, 0, 1.25, 0);
+    addBox(group, 0.06, 2.25, 0.08, world.materials.trim, 0, 1.25, -0.48, false);
+    addBox(group, 0.08, 0.32, 0.08, world.materials.chrome, -0.18, 1.27, -0.55, false);
+    addBox(group, 0.08, 0.32, 0.08, world.materials.chrome, 0.18, 1.27, -0.55, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.5, 1.2, false);
+  }
+
+  function addTub(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.2, 0.6, 0.92, world.materials.porcelain, 0, 0.38, 0);
+    addBox(group, 1.72, 0.2, 0.58, world.materials.tile, 0, 0.7, 0, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.4, 1.2, false);
+  }
+
+  function addToilet(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.42, 0.42, 18), world.materials.porcelain);
+    bowl.position.y = 0.36;
+    group.add(bowl);
+    addBox(group, 0.72, 0.62, 0.22, world.materials.porcelain, 0, 0.78, 0.42);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 0.95, 1.0, false);
+  }
+
+  function addSink(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.0, 0.72, 0.62, world.materials.wood, 0, 0.36, 0);
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.28, 0.16, 18), world.materials.porcelain);
+    basin.position.y = 0.82;
+    basin.scale.x = 1.3;
+    group.add(basin);
+    addBox(group, 0.86, 0.82, 0.05, world.materials.glass, 0, 1.45, -0.35, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 1.25, 0.9, false);
+  }
+
+  function addWasherPair(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    [-0.62, 0.62].forEach((offset) => {
+      addBox(group, 1.05, 1.15, 0.95, world.materials.appliance, offset, 0.58, 0);
+      const door = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.055, 24), world.materials.glass);
+      door.position.set(offset, 0.58, -0.51);
+      door.rotation.x = Math.PI / 2;
+      group.add(door);
+    });
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.6, 1.25, false);
+  }
+
+  function addStorageShelves(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.8, 0.1, 0.62, world.materials.darkWood, 0, 0.65, 0);
+    addBox(group, 2.8, 0.1, 0.62, world.materials.darkWood, 0, 1.35, 0);
+    addBox(group, 2.8, 0.1, 0.62, world.materials.darkWood, 0, 2.05, 0);
+    for (let i = 0; i < 7; i++) {
+      addBox(group, 0.42, 0.34, 0.38, i % 2 ? world.materials.red : world.materials.paper, -1.05 + (i % 4) * 0.7, 0.92 + Math.floor(i / 4) * 0.72, -0.02, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.1, 0.9, false);
+  }
+
+  function addOfficeDesk(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 3.3, 0.16, 1.45, world.materials.wood, 0, 0.82, 0);
+    addBox(group, 0.26, 0.82, 0.26, world.materials.darkWood, -1.35, 0.42, -0.5);
+    addBox(group, 0.26, 0.82, 0.26, world.materials.darkWood, 1.35, 0.42, -0.5);
+    addBox(group, 0.26, 0.82, 0.26, world.materials.darkWood, -1.35, 0.42, 0.5);
+    addBox(group, 0.26, 0.82, 0.26, world.materials.darkWood, 1.35, 0.42, 0.5);
+    addBox(group, 1.2, 0.72, 0.08, world.materials.black, 0.35, 1.28, -0.52);
+    addBox(group, 0.9, 0.04, 0.62, world.materials.paper, -0.75, 0.94, 0.16, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.7, 1.8, false);
+  }
+
+  function addOfficeChair(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 0.82, 0.22, 0.82, world.materials.leather, 0, 0.62, 0);
+    addBox(group, 0.82, 1.0, 0.18, world.materials.leather, 0, 1.12, 0.38);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.52, 10), world.materials.chrome);
+    stem.position.y = 0.31;
+    group.add(stem);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 1.0, 1.0, false);
+  }
+
+  function addBookshelf(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 2.1, 2.45, 0.52, world.materials.darkWood, 0, 1.22, 0);
+    for (let shelf = 0; shelf < 4; shelf++) {
+      addBox(group, 1.82, 0.08, 0.44, world.materials.wood, 0, 0.55 + shelf * 0.48, -0.02, false);
+      for (let i = 0; i < 5; i++) {
+        addBox(group, 0.16, 0.34 + (i % 2) * 0.12, 0.2, i % 3 ? world.materials.red : world.materials.green, -0.72 + i * 0.34, 0.76 + shelf * 0.48, -0.22, false);
+      }
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.4, 0.85, false);
+  }
+
+  function addArmchair(x, z, yaw) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    addBox(group, 1.1, 0.42, 1.0, world.materials.fabricWarm, 0, 0.48, 0);
+    addBox(group, 1.22, 1.0, 0.2, world.materials.fabricWarm, 0, 0.98, 0.48);
+    addBox(group, 0.2, 0.7, 1.0, world.materials.fabricWarm, -0.66, 0.74, 0);
+    addBox(group, 0.2, 0.7, 1.0, world.materials.fabricWarm, 0.66, 0.74, 0);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 1.55, 1.35, false);
   }
 
   function addDiningChair(x, z, yaw) {
@@ -1245,8 +2375,25 @@
       KeyR: "turnRight",
     };
 
+    document.addEventListener("pointerlockchange", syncPointerLock);
+    document.addEventListener("pointerlockerror", () => {
+      if (state.running && !state.paused && !state.gameOver) {
+        activateSoftMouseLock();
+      } else {
+        state.mouseLook.locked = false;
+        updateMouseLookClass();
+      }
+    });
+
     window.addEventListener("keydown", (event) => {
       if (event.code === "Escape" && state.running && !state.gameOver) {
+        const justUnlocked = performance.now() - state.mouseLook.lastUnlockedAt < 350;
+        if (isMouseCaptured() || justUnlocked) {
+          if (document.pointerLockElement === canvas) document.exitPointerLock();
+          releaseSoftMouseLock();
+          event.preventDefault();
+          return;
+        }
         setPaused(!state.paused);
         return;
       }
@@ -1267,42 +2414,31 @@
       if (!state.running || state.paused || state.gameOver) return;
       canvas.focus({ preventScroll: true });
       if (event.pointerType === "mouse") {
-        state.mouseLook.dragging = true;
-        state.mouseLook.pointerId = event.pointerId;
-        state.mouseLook.lastX = event.clientX;
-        state.mouseLook.lastY = event.clientY;
-        try {
-          canvas.setPointerCapture(event.pointerId);
-        } catch (error) {}
+        requestMouseLock();
+        event.preventDefault();
+        return;
       }
-      if (canvas.requestPointerLock && event.pointerType === "mouse") {
-        try {
-          const lockRequest = canvas.requestPointerLock();
-          if (lockRequest && typeof lockRequest.catch === "function") lockRequest.catch(() => {});
-        } catch (error) {}
-      }
+
+      state.mouseLook.dragging = true;
+      state.mouseLook.pointerId = event.pointerId;
+      state.mouseLook.lastX = event.clientX;
+      state.mouseLook.lastY = event.clientY;
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch (error) {}
     });
 
-    canvas.addEventListener("mousemove", (event) => {
+    canvas.addEventListener("click", (event) => {
       if (!state.running || state.paused || state.gameOver) return;
-      if (document.pointerLockElement === canvas) return;
-      const fallbackDx = state.mouseLook.hoverX === null ? 0 : event.clientX - state.mouseLook.hoverX;
-      const fallbackDy = state.mouseLook.hoverY === null ? 0 : event.clientY - state.mouseLook.hoverY;
-      const dx = event.movementX || fallbackDx;
-      const dy = event.movementY || fallbackDy;
-      state.mouseLook.hoverX = event.clientX;
-      state.mouseLook.hoverY = event.clientY;
-      applyMouseLook(dx, dy);
-    });
-
-    canvas.addEventListener("mouseleave", () => {
-      state.mouseLook.hoverX = null;
-      state.mouseLook.hoverY = null;
+      if (event.button && event.button !== 0) return;
+      canvas.focus({ preventScroll: true });
+      requestMouseLock();
+      event.preventDefault();
     });
 
     window.addEventListener("mousemove", (event) => {
       if (!state.running || state.paused || state.gameOver) return;
-      if (document.pointerLockElement === canvas) {
+      if (document.pointerLockElement === canvas || state.mouseLook.softLocked) {
         applyMouseLook(event.movementX, event.movementY);
       }
     });
@@ -1408,6 +2544,68 @@
     state.mouseLook.hoverY = null;
   }
 
+  function isMouseCaptured() {
+    return document.pointerLockElement === canvas || state.mouseLook.locked || state.mouseLook.softLocked;
+  }
+
+  function activateSoftMouseLock() {
+    state.mouseLook.softLocked = true;
+    state.mouseLook.locked = true;
+    state.mouseLook.dragging = false;
+    state.mouseLook.pointerId = null;
+    updateMouseLookClass();
+    showAlert("Mouse capture active. Press Escape to release.", "");
+  }
+
+  function requestMouseLock() {
+    if (document.pointerLockElement === canvas || state.mouseLook.softLocked) return;
+    if (!canvas.requestPointerLock) {
+      activateSoftMouseLock();
+      return;
+    }
+    try {
+      const lockRequest = canvas.requestPointerLock();
+      if (lockRequest && typeof lockRequest.catch === "function") {
+        lockRequest.catch(activateSoftMouseLock);
+      }
+    } catch (error) {
+      activateSoftMouseLock();
+    }
+  }
+
+  function releaseSoftMouseLock() {
+    if (!state.mouseLook.softLocked) return;
+    state.mouseLook.softLocked = false;
+    state.mouseLook.locked = document.pointerLockElement === canvas;
+    state.mouseLook.lastUnlockedAt = performance.now();
+    updateMouseLookClass();
+    if (state.running && !state.paused && !state.gameOver) showAlert("Mouse released.", "");
+  }
+
+  function syncPointerLock() {
+    const locked = document.pointerLockElement === canvas;
+    if (state.mouseLook.locked === locked) return;
+    state.mouseLook.locked = locked;
+    state.mouseLook.softLocked = false;
+    state.mouseLook.dragging = false;
+    state.mouseLook.pointerId = null;
+    state.mouseLook.hoverX = null;
+    state.mouseLook.hoverY = null;
+    updateMouseLookClass();
+    if (locked) {
+      showAlert("Mouse locked. Press Escape to release.", "");
+    } else {
+      state.mouseLook.lastUnlockedAt = performance.now();
+      if (state.running && !state.paused && !state.gameOver) showAlert("Mouse released.", "");
+    }
+  }
+
+  function updateMouseLookClass() {
+    const captured = isMouseCaptured();
+    canvas.classList.toggle("mouse-look-locked", captured);
+    document.documentElement.classList.toggle("mrfeast-mouse-look-locked", captured);
+  }
+
   function installLocalDirector() {
     const host = window.location.hostname;
     const isLocal = host === "127.0.0.1" || host === "localhost" || host === "::1";
@@ -1430,6 +2628,30 @@
         state.player.z = -13.5;
         state.player.yaw = Math.PI;
         triggerSponsorBreach();
+      } else if (name === "host") {
+        state.player.x = 0;
+        state.player.z = 2.65;
+        state.player.yaw = Math.PI;
+        state.player.pitch = -0.1;
+        state.host.x = 0;
+        state.host.z = 6.85;
+        state.host.yaw = 0;
+        state.host.mode = "search";
+        state.host.stunTimer = 999;
+        state.safeTimer = Math.max(state.safeTimer, 999);
+        showAlert("Local check: host model inspection.", "");
+      } else if (name === "house") {
+        state.player.x = -13.6;
+        state.player.z = 18.3;
+        state.player.yaw = -Math.PI / 2;
+        state.player.pitch = -0.05;
+        state.host.x = 28;
+        state.host.z = -23;
+        state.host.yaw = Math.PI * 0.2;
+        state.host.mode = "stunned";
+        state.host.stunTimer = 999;
+        state.safeTimer = Math.max(state.safeTimer, 999);
+        showAlert("Local check: furnished house layout.", "");
       } else if (name === "final" || name === "final30" || name === "final15") {
         setDirectorTaskProgress(TASK_TOTAL);
         state.detourActive = false;
@@ -1584,6 +2806,9 @@
     Object.keys(state.input).forEach((key) => { state.input[key] = false; });
     state.mouseLook.dragging = false;
     state.mouseLook.pointerId = null;
+    state.mouseLook.locked = document.pointerLockElement === canvas;
+    state.mouseLook.softLocked = false;
+    updateMouseLookClass();
 
     world.taskGroups.forEach((group, id) => {
       const task = state.tasks.find((item) => item.id === id);
@@ -1630,6 +2855,7 @@
     if (state.paused) {
       showAlert("Paused. The mansion waits politely, which is worse.", "");
       if (document.pointerLockElement === canvas) document.exitPointerLock();
+      releaseSoftMouseLock();
     } else {
       showAlert("Rolling again.", "");
     }
@@ -2302,6 +3528,12 @@
       world.hostGroup.position.set(state.host.x, 0, state.host.z);
       world.hostGroup.rotation.y = state.host.yaw;
       world.hostGroup.position.y = Math.sin(t * (state.host.mode === "chase" ? 7 : 2.4)) * 0.045;
+      if (world.hostGroup.userData.head) world.hostGroup.userData.head.rotation.z = Math.sin(t * 2.2) * 0.045 + danger * 0.08;
+      if (world.hostGroup.userData.cameraRig) world.hostGroup.userData.cameraRig.rotation.y = -0.15 + Math.sin(t * 6) * 0.04;
+      if (world.hostGroup.userData.halo) {
+        world.hostGroup.userData.halo.rotation.z += state.host.mode === "chase" ? 0.045 : 0.012;
+        world.hostGroup.userData.halo.scale.setScalar(1 + danger * 0.16 + Math.sin(t * 9) * 0.025);
+      }
       if (world.hostLight) world.hostLight.intensity = state.host.mode === "chase" ? 3.5 + Math.sin(t * 16) * 0.5 : 1.7;
       if (world.hostFaceLight) world.hostFaceLight.intensity = state.host.mode === "chase" ? 2.5 + danger * 2.5 : 0.3;
     }
@@ -2667,6 +3899,7 @@
     state.running = false;
     state.won = true;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
+    releaseSoftMouseLock();
     const finalScore = Math.round(state.viewers + state.nerve * 80 + state.contestants * 250 + state.tasksDone * 1000);
     state.viewers = finalScore;
     const high = api.recordScore(GAME_ID, finalScore);
@@ -2685,6 +3918,7 @@
     state.gameOver = true;
     state.running = false;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
+    releaseSoftMouseLock();
     const finalScore = Math.round(state.viewers + state.tasksDone * 700 + state.nerve * 25);
     state.viewers = finalScore;
     const high = api.recordScore(GAME_ID, finalScore);

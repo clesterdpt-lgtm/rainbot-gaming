@@ -40,6 +40,15 @@
       border-color: rgba(139, 24, 24, 0.72);
     }
 
+    .canvas-wrap--mrfeast-3d #gameCanvas.mouse-look-locked {
+      cursor: none;
+    }
+
+    .mrfeast-mouse-look-locked,
+    .mrfeast-mouse-look-locked * {
+      cursor: none !important;
+    }
+
     .feast-objective {
       position: absolute;
       top: 12px;
@@ -553,8 +562,8 @@
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p class="feast-side-note">
-            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · move mouse over game to look<br>
-            <kbd>Shift</kbd> sprint · hold <kbd>F</kbd> near sabotage points
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click game to lock mouse<br>
+            <kbd>Esc</kbd> release mouse · <kbd>Shift</kbd> sprint · hold <kbd>F</kbd>
           </p>
           <div class="feast-settings" aria-label="Look settings">
             <label class="feast-setting" for="look-sensitivity">
@@ -622,7 +631,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260613-2"></script>
-  <script src="../assets/js/mr-feast.js?v=20260613-8"></script>
+  <script src="../assets/js/mr-feast.js?v=20260614-5"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

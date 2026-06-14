@@ -25,7 +25,7 @@
   // =========================================================================
   const GRAVITY        = 0.055;   // downward accel (px/frame²) at level 1 — gentle
   const THRUST         = 0.125;   // accel along the nose while burning
-  const ROT_SPEED      = 0.023;   // radians/frame while rotating
+  const ROT_SPEED      = 0.017;   // radians/frame while rotating
   const ROT_DAMP       = 0.74;    // angular drag when not steering (lower = settles faster)
   const MAX_VX         = 3.0;     // sideways speed cap — keeps drift controllable
   const MAX_VY         = 5.5;     // vertical speed cap (both directions)
@@ -977,14 +977,15 @@
           ${isHigh ? '<br><span style="color:var(--accent-3)">🏆 New personal record!</span>' : ""}
         </p>
         <div class="bsr-card__actions">
-          <button class="btn btn--primary" id="bsr-retry">Relaunch (try again)</button>
-          <button class="btn btn--secondary" id="bsr-switch">Switch founder</button>
+          <button class="btn btn--primary" id="bsr-retry">Retry Level ${state.level}</button>
+          <button class="btn btn--secondary" id="bsr-switch">Restart from Level 1</button>
           <button class="btn btn--secondary" id="bsr-share">Share the wreckage</button>
           <button class="btn btn--ghost" id="bsr-home">All games</button>
         </div>
       </div>`;
-    document.getElementById("bsr-retry").addEventListener("click", () => { mount.innerHTML = ""; state.level = 1; state.score = 0; startLevel(); });
-    document.getElementById("bsr-switch").addEventListener("click", returnToSelect);
+    // Retry keeps your progress — same level, same accumulated score.
+    document.getElementById("bsr-retry").addEventListener("click", () => { mount.innerHTML = ""; startLevel(); });
+    document.getElementById("bsr-switch").addEventListener("click", () => { mount.innerHTML = ""; state.level = 1; state.score = 0; startLevel(); });
     document.getElementById("bsr-home").addEventListener("click", () => { window.location.href = "../games.html"; });
     document.getElementById("bsr-share").addEventListener("click", () => shareCard(msg));
   }

@@ -69,6 +69,8 @@
   const WATER_BOTTLE_TRIP_SUS = 7;
   const PATRON_RADIUS = 13;
   const PATRON_BUMP_SUS = 3;
+  const STAIR_RADIUS = 26;
+  const STAIR_COOLDOWN = 0.8;
 
   const NOTICE_TIME   = 0.98;    // sustained mutual stare → accused
   const NOTICE_DECAY  = 0.62;    // /sec when stare breaks
@@ -106,11 +108,13 @@
   // =========================================================================
   const LEVELS = [
     {
-      name: "6 AM. DEAD.", sub: "One girl at the rack. Standard square gym. Exit: Right wall.",
+      name: "6 AM. DEAD.", sub: "One girl at the rack. Equipment breaks the straight lane. Exit: Right wall.",
       pull: 0.22, girlSpeed: 0, phoneChance: 0.3,
       exit: { side: "right", x: 640, y: 320 },
       obstacles: [
         { x: 200, y: 120, w: 56, h: 72, kind: "rack" },
+        { x: 110, y: 250, w: 38, h: 38, kind: "plant" },
+        { x: 410, y: 318, w: 84, h: 44, kind: "cable" },
         { x: 310, y: 430, w: 70, h: 40, kind: "bench" },
         { x: 520, y: 110, w: 38, h: 38, kind: "plant" },
         { x: 500, y: 540, w: 66, h: 36, kind: "fountain" }
@@ -126,12 +130,13 @@
       ]
     },
     {
-      name: "THE CORNER LANE", sub: "Top-right corner blocked. Gym is now L-shaped. Exit: Top wall.",
+      name: "THE CORNER LANE", sub: "Top-right corner blocked. Cover pockets force an L-shaped route. Exit: Top wall.",
       pull: 0.30, girlSpeed: 36, phoneChance: 0.4,
       exit: { side: "top", x: 160, y: 0 },
       obstacles: [
         { x: 480, y: 160, w: 320, h: 320, kind: "wall" },
         { x: 150, y: 150, w: 56, h: 72, kind: "rack" },
+        { x: 90, y: 360, w: 40, h: 120, kind: "wall" },
         { x: 200, y: 460, w: 70, h: 40, kind: "bench" },
         { x: 400, y: 560, w: 38, h: 38, kind: "plant" },
         { x: 340, y: 400, w: 66, h: 36, kind: "fountain" }
@@ -149,7 +154,7 @@
       ]
     },
     {
-      name: "THE STEPPER WING", sub: "Bottom corners blocked. Gym is T-shaped. Exit: Bottom wall.",
+      name: "THE STEPPER WING", sub: "Bottom corners blocked. The center aisle pinches before the locker door.",
       pull: 0.38, girlSpeed: 40, phoneChance: 0.5,
       exit: { side: "bottom", x: 320, y: 640 },
       obstacles: [
@@ -157,6 +162,7 @@
         { x: 520, y: 520, w: 240, h: 240, kind: "wall" },
         { x: 450, y: 112, w: 44, h: 80, kind: "tread" },
         { x: 520, y: 112, w: 44, h: 80, kind: "tread" },
+        { x: 320, y: 185, w: 34, h: 110, kind: "wall" },
         { x: 150, y: 140, w: 56, h: 72, kind: "rack" },
         { x: 290, y: 300, w: 70, h: 40, kind: "bench" },
         { x: 400, y: 300, w: 38, h: 38, kind: "plant" },
@@ -176,12 +182,13 @@
       ]
     },
     {
-      name: "THE TRI-CORRIDOR", sub: "Horizontal walls divide the floor. S-shaped layout. Exit: Bottom wall.",
+      name: "THE TRI-CORRIDOR", sub: "Horizontal walls divide the floor into an S-route. Exit: Bottom wall.",
       pull: 0.45, girlSpeed: 44, phoneChance: 0.5,
       exit: { side: "bottom", x: 100, y: 640 },
       obstacles: [
         { x: 360, y: 210, w: 560, h: 30, kind: "wall" },
         { x: 280, y: 430, w: 560, h: 30, kind: "wall" },
+        { x: 610, y: 332, w: 38, h: 150, kind: "wall" },
         { x: 500, y: 100, w: 56, h: 72, kind: "rack" },
         { x: 300, y: 320, w: 70, h: 40, kind: "bench" },
         { x: 150, y: 530, w: 70, h: 40, kind: "bench" },
@@ -204,13 +211,14 @@
       ]
     },
     {
-      name: "LOOP-BACK SPIRAL", sub: "Long horizontal center wall. Walk right, loop back left. Exit: Left wall.",
+      name: "LOOP-BACK SPIRAL", sub: "No same-wall shortcut. Loop through the upper lane to the northeast locker.",
       pull: 0.52, girlSpeed: 48, phoneChance: 0.6,
-      exit: { side: "left", x: 0, y: 520 },
+      exit: { side: "right", x: 640, y: 120 },
       obstacles: [
         { x: 360, y: 320, w: 480, h: 40, kind: "wall" },
         { x: 320, y: 80, w: 400, h: 40, kind: "wall" },
         { x: 320, y: 560, w: 400, h: 40, kind: "wall" },
+        { x: 72, y: 430, w: 34, h: 210, kind: "wall" },
         { x: 120, y: 180, w: 56, h: 72, kind: "rack" },
         { x: 520, y: 180, w: 56, h: 72, kind: "rack" },
         { x: 230, y: 440, w: 70, h: 40, kind: "bench" },
@@ -235,9 +243,13 @@
       ]
     },
     {
-      name: "INFLUENCER RING", sub: "Large central block. Direct top-left path is blocked. Exit: Top wall.",
+      name: "INFLUENCER RING", sub: "Central block plus stairs. Take 2F stairs to reach the locker balcony.",
       pull: 0.60, girlSpeed: 52, phoneChance: 0.65,
-      exit: { side: "top", x: 320, y: 0 },
+      exit: { side: "top", x: 560, y: 0 }, startFloor: "1F", exitFloor: "2F",
+      stairs: [
+        { x: 86, y: 548, toX: 560, toY: 118, floor: "1F", toFloor: "2F", label: "UP" },
+        { x: 560, y: 118, toX: 86, toY: 548, floor: "2F", toFloor: "1F", label: "DOWN" }
+      ],
       obstacles: [
         { x: 320, y: 320, w: 240, h: 240, kind: "wall" },
         { x: 120, y: 160, w: 40, h: 160, kind: "wall" },
@@ -267,9 +279,13 @@
       ]
     },
     {
-      name: "JUICE BAR ROOMS", sub: "Four rooms separated by walls. Navigate through door gaps. Exit: Bottom wall.",
+      name: "JUICE BAR ROOMS", sub: "Four rooms, door gaps, and a rear stairwell to the 2F locker hall.",
       pull: 0.68, girlSpeed: 56, phoneChance: 0.7,
-      exit: { side: "bottom", x: 520, y: 640 },
+      exit: { side: "bottom", x: 520, y: 640 }, startFloor: "1F", exitFloor: "2F",
+      stairs: [
+        { x: 104, y: 104, toX: 540, toY: 560, floor: "1F", toFloor: "2F", label: "UP" },
+        { x: 540, y: 560, toX: 104, toY: 104, floor: "2F", toFloor: "1F", label: "DOWN" }
+      ],
       obstacles: [
         { x: 320, y: 120, w: 30, h: 240, kind: "wall" },
         { x: 320, y: 520, w: 30, h: 240, kind: "wall" },
@@ -303,9 +319,13 @@
       ]
     },
     {
-      name: "PEAK HOURS. 6 PM.", sub: "Four massive corner blocks. Chokepoint cross-corridors. Exit: Top wall.",
+      name: "PEAK HOURS. 6 PM.", sub: "Two-floor peak-hour cross. Survive the stairs before the final locker door.",
       pull: 0.78, girlSpeed: 62, phoneChance: 0.8,
-      exit: { side: "top", x: 320, y: 0 },
+      exit: { side: "top", x: 320, y: 0 }, startFloor: "1F", exitFloor: "2F",
+      stairs: [
+        { x: 250, y: 320, toX: 350, toY: 90, floor: "1F", toFloor: "2F", label: "UP" },
+        { x: 350, y: 90, toX: 250, toY: 320, floor: "2F", toFloor: "1F", label: "DOWN" }
+      ],
       obstacles: [
         { x: 130, y: 130, w: 260, h: 260, kind: "wall" },
         { x: 510, y: 130, w: 260, h: 260, kind: "wall" },
@@ -340,14 +360,14 @@
   ];
 
   const LEVEL_TOASTS = [
-    "👀 Level 1 · 6 AM. One territorial spotter patrols the floor.",
-    "📐 Level 2 · L-shape layout. Big dudes guard the clean angles.",
-    "🧱 Level 3 · T-shape layout. Watch steppers and bro patrols.",
-    "⚡ Level 4 · S-shaped tri-corridor. Cross the lanes between smacks.",
-    "🔄 Level 5 · Loop-back layout. Buff dudes sweep the spiral.",
-    "⭕ Level 6 · Influencer ring. Bouncers guard the top route.",
-    "🚪 Level 7 · Quadrant rooms. Door gaps are patrolled.",
-    "💀 Level 8 · Peak hours. Chokepoints, scanners, and gym bros."
+    "👀 Level 1 · 6 AM. Equipment now breaks the straight shot.",
+    "📐 Level 2 · L-shape layout. Cover pockets tighten the lane.",
+    "🧱 Level 3 · T-wing pinch. Watch the center aisle.",
+    "⚡ Level 4 · S-shaped tri-corridor. Right-side gap is tighter.",
+    "🔄 Level 5 · Loop-back layout. Locker moved off the entrance wall.",
+    "⭕ Level 6 · Influencer ring. Take stairs to the 2F locker balcony.",
+    "🚪 Level 7 · Quadrant rooms. Rear stairs unlock the locker hall.",
+    "💀 Level 8 · Peak hours. Final locker room is upstairs."
   ];
 
   const BRUISER_LAYOUTS = [
@@ -569,9 +589,14 @@
     bruisers: [],
     bottles: [],
     patrons: [],
+    stairs: [],
     decor: [],
     exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
+    floor: "1F",
+    exitFloor: null,
     levelStartDist: WORLD_W,
+    exitHintT: 0,
+    stairCooldown: 0,
 
 
     airpodT: 0,
@@ -634,6 +659,23 @@
     return dist(x, y, closestX, closestY);
   }
 
+  function nearestActiveStairDistanceFrom(x, y) {
+    let best = Infinity;
+    for (const stair of state.stairs) {
+      if (stair.floor && stair.floor !== state.floor) continue;
+      best = Math.min(best, dist(x, y, stair.x, stair.y));
+    }
+    return best;
+  }
+
+  function objectiveDistanceFrom(x, y) {
+    if (state.exitFloor && state.floor !== state.exitFloor) {
+      const stairD = nearestActiveStairDistanceFrom(x, y);
+      if (Number.isFinite(stairD)) return stairD;
+    }
+    return exitDistanceFrom(x, y);
+  }
+
   // Line of sight between two points — blocked by any obstacle
   function losBlocked(ax, ay, bx, by) {
     const steps = 14;
@@ -671,6 +713,9 @@
     }
     for (const b of state.bruisers) {
       if (dist(x, y, b.x, b.y) < 96) return true;
+    }
+    for (const stair of state.stairs) {
+      if (dist(x, y, stair.x, stair.y) < 78) return true;
     }
     for (const b of placed) {
       if (dist(x, y, b.x, b.y) < 72) return true;
@@ -1372,6 +1417,32 @@
     }
   }
 
+  function updateStairs(dt) {
+    if (state.stairCooldown > 0) {
+      state.stairCooldown = Math.max(0, state.stairCooldown - dt);
+      return;
+    }
+
+    const p = state.player;
+    for (const stair of state.stairs) {
+      if (stair.floor && stair.floor !== state.floor) continue;
+      if (dist(p.x, p.y, stair.x, stair.y) > STAIR_RADIUS) continue;
+
+      p.x = stair.toX;
+      p.y = stair.toY;
+      state.floor = stair.toFloor || state.floor;
+      state.stairCooldown = STAIR_COOLDOWN;
+      state.knockX = 0;
+      state.knockY = 0;
+      state.cam.flash = Math.max(state.cam.flash, 0.22);
+      state.cam.shake = Math.max(state.cam.shake, 0.2);
+      sfx.level();
+      showBanner((state.floor === "2F" ? "2F LOCKER ACCESS" : "1F GYM FLOOR"), 1.1);
+      RB.toast("Stairs to " + state.floor + ".", "good");
+      return;
+    }
+  }
+
   // Is the player inside this girl's vision cone (and she can actually see)?
   function girlSeesPlayer(g) {
     if (g.phoneActive || state.decoy) return false;
@@ -1512,6 +1583,16 @@
     const closestY = clamp(p.y, ex.y - ex.h / 2, ex.y + ex.h / 2);
     const distance = dist(p.x, p.y, closestX, closestY);
     if (distance < PLAYER_RADIUS) {
+      if (state.exitFloor && state.floor !== state.exitFloor) {
+        if (state.exitHintT <= 0) {
+          state.exitHintT = 1.8;
+          state.cam.shake = Math.max(state.cam.shake, 0.16);
+          RB.toast("Locker room is upstairs. Find the stairs.", "bad");
+          showBanner("LOCKER ROOM IS ON " + state.exitFloor, 1.2);
+        }
+        return;
+      }
+
       // Level score: speed + clean eyes
       const timeBonus = Math.max(0, Math.round(500 - state.levelT * 22));
       const cleanBonus = state.levelPeakSus < 30 ? 250 : state.levelPeakSus < 60 ? 100 : 0;
@@ -1539,6 +1620,7 @@
     if (state.boyfriendT > 0) state.boyfriendT -= dt;
     if (state.stunT > 0) state.stunT -= dt;
     if (state.tripT > 0) state.tripT -= dt;
+    if (state.exitHintT > 0) state.exitHintT -= dt;
     if (state.decoy) {
       state.decoy.life -= dt;
       if (state.decoy.life <= 0) state.decoy = null;
@@ -1710,6 +1792,17 @@
         side: "right"
       };
     }
+    state.floor = lv.startFloor || "1F";
+    state.exitFloor = lv.exitFloor || null;
+    state.stairs = (lv.stairs || []).map(stair => ({
+      x: stair.x * WORLD_SCALE_X,
+      y: stair.y * WORLD_SCALE_Y,
+      toX: stair.toX * WORLD_SCALE_X,
+      toY: stair.toY * WORLD_SCALE_Y,
+      floor: stair.floor || null,
+      toFloor: stair.toFloor || null,
+      label: stair.label || "STAIRS"
+    }));
 
     // Scale and load decor dynamically
     state.decor = (lv.decor || []).map(d => {
@@ -1723,13 +1816,15 @@
     state.player.x = 36;
     state.player.y = 320 * WORLD_SCALE_Y;
     state.bottles = spawnWaterBottles(n);
-    state.levelStartDist = Math.max(1, exitDistanceFrom(state.player.x, state.player.y));
+    state.levelStartDist = Math.max(1, objectiveDistanceFrom(state.player.x, state.player.y));
     state.levelT = 0;
     state.levelPeakSus = 0;
     state.sus = Math.max(0, state.sus - 40);  // partial mercy between levels
     state.decoy = null;
     state.stunT = 0;
     state.tripT = 0;
+    state.exitHintT = 0;
+    state.stairCooldown = 0;
     state.knockX = 0;
     state.knockY = 0;
 
@@ -1971,9 +2066,11 @@
     const ex = state.exit;
     ctx.save();
     const pulse = 0.55 + 0.45 * Math.sin(state.t * 4);
+    const locked = state.exitFloor && state.floor !== state.exitFloor;
+    const color = locked ? "247,215,22" : "255,125,223";
     const grad = ctx.createRadialGradient(ex.x, ex.y, 12, ex.x, ex.y, 170);
-    grad.addColorStop(0, "rgba(255,125,223," + (0.18 + pulse * 0.14) + ")");
-    grad.addColorStop(1, "rgba(255,125,223,0)");
+    grad.addColorStop(0, "rgba(" + color + "," + (locked ? 0.08 + pulse * 0.08 : 0.18 + pulse * 0.14) + ")");
+    grad.addColorStop(1, "rgba(" + color + ",0)");
     ctx.fillStyle = grad;
     ctx.fillRect(ex.x - 180, ex.y - 180, 360, 360);
     ctx.restore();
@@ -2125,6 +2222,49 @@
     }
   }
 
+  function drawStairs() {
+    for (const stair of state.stairs) {
+      if (stair.floor && stair.floor !== state.floor) continue;
+
+      ctx.save();
+      ctx.translate(stair.x, stair.y);
+      const pulse = 0.55 + 0.45 * Math.sin(state.t * 5);
+
+      ctx.fillStyle = "rgba(247,215,22,0.12)";
+      ctx.beginPath();
+      ctx.arc(0, 0, STAIR_RADIUS + pulse * 5, 0, TAU);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(10, 12, 18, 0.92)";
+      ctx.strokeStyle = "rgba(247,215,22,0.9)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(-28, -22, 56, 44);
+      ctx.strokeRect(-28, -22, 56, 44);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.64)";
+      ctx.lineWidth = 2;
+      for (let y = -14; y <= 14; y += 7) {
+        ctx.beginPath();
+        ctx.moveTo(-20, y);
+        ctx.lineTo(20, y);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = "rgba(46,224,255,0.75)";
+      ctx.beginPath();
+      ctx.moveTo(-18, 16);
+      ctx.lineTo(18, -16);
+      ctx.stroke();
+
+      ctx.fillStyle = "#f7d716";
+      ctx.font = "bold 8px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("STAIRS " + stair.label, 0, 35);
+      ctx.fillStyle = "rgba(255,255,255,0.58)";
+      ctx.fillText(state.floor + " -> " + (stair.toFloor || state.floor), 0, 47);
+      ctx.restore();
+    }
+  }
+
   function drawGymFloor() {
     const heat = Math.min(1, (state.level - 1) / (LEVELS.length - 1));
     const baseGrad = ctx.createLinearGradient(0, 0, WORLD_W, WORLD_H);
@@ -2197,43 +2337,49 @@
     const ex = state.exit;
     const rx = ex.x - ex.w / 2;
     const ry = ex.y - ex.h / 2;
-    ctx.fillStyle = "#3a2a3a";
+    const exitLocked = state.exitFloor && state.floor !== state.exitFloor;
+    ctx.fillStyle = exitLocked ? "#2e2a18" : "#3a2a3a";
     ctx.fillRect(rx, ry, ex.w, ex.h);
+    ctx.strokeStyle = exitLocked ? "rgba(247,215,22,0.75)" : "rgba(255,125,223,0.48)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rx, ry, ex.w, ex.h);
 
     const pulse = 0.5 + 0.5 * Math.sin(state.t * 4);
+    const exitColor = exitLocked ? "#f7d716" : "#ff7ddf";
+    const exitText = exitLocked ? state.exitFloor + " LOCKER" : "LOCKER ROOM";
 
     if (ex.side === "right") {
-      ctx.fillStyle = "#ff7ddf";
+      ctx.fillStyle = exitColor;
       ctx.textAlign = "right";
       ctx.font = "11px JetBrains Mono, monospace";
-      ctx.fillText("LOCKER", WORLD_W - 4, ry - 8);
-      ctx.fillText("ROOM", WORLD_W - 4, ry + ex.h + 16);
-      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.fillText(exitLocked ? state.exitFloor : "LOCKER", WORLD_W - 4, ry - 8);
+      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", WORLD_W - 4, ry + ex.h + 16);
+      ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("→", WORLD_W - 22, ex.y + 6);
     } else if (ex.side === "left") {
-      ctx.fillStyle = "#ff7ddf";
+      ctx.fillStyle = exitColor;
       ctx.textAlign = "left";
       ctx.font = "11px JetBrains Mono, monospace";
-      ctx.fillText("LOCKER", 4, ry - 8);
-      ctx.fillText("ROOM", 4, ry + ex.h + 16);
-      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.fillText(exitLocked ? state.exitFloor : "LOCKER", 4, ry - 8);
+      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", 4, ry + ex.h + 16);
+      ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("←", 22, ex.y + 6);
     } else if (ex.side === "top") {
-      ctx.fillStyle = "#ff7ddf";
+      ctx.fillStyle = exitColor;
       ctx.textAlign = "center";
       ctx.font = "11px JetBrains Mono, monospace";
-      ctx.fillText("LOCKER ROOM", ex.x, 24 + ex.h);
-      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.fillText(exitText, ex.x, 24 + ex.h);
+      ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("↑", ex.x, 22);
     } else if (ex.side === "bottom") {
-      ctx.fillStyle = "#ff7ddf";
+      ctx.fillStyle = exitColor;
       ctx.textAlign = "center";
       ctx.font = "11px JetBrains Mono, monospace";
-      ctx.fillText("LOCKER ROOM", ex.x, ry - 12);
-      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.fillText(exitText, ex.x, ry - 12);
+      ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("↓", ex.x, WORLD_H - 22);
     }
@@ -3076,10 +3222,10 @@
     const lvEl = document.getElementById("hud-level");
     if (lvEl) lvEl.textContent = state.level + "/" + LEVELS.length;
     const heatEl = document.getElementById("hud-heat");
-    if (heatEl) heatEl.textContent = getHeatLabel();
+    if (heatEl) heatEl.textContent = getHeatLabel() + (state.exitFloor ? " " + state.floor : "");
     const distEl = document.getElementById("hud-dist");
     if (distEl) {
-      const remaining = exitDistanceFrom(state.player.x, state.player.y);
+      const remaining = objectiveDistanceFrom(state.player.x, state.player.y);
       const progress = clamp(1 - remaining / state.levelStartDist, 0, 1);
       distEl.textContent = Math.floor(progress * 100) + "%";
     }
@@ -3105,6 +3251,7 @@
     // Draw non-colliding background decorations
     drawDecorations();
     drawWaterBottles();
+    drawStairs();
 
     // Draw wood lifting platforms under racks
     for (const o of state.obstacles) {
@@ -3152,6 +3299,7 @@
       updateBruisers(dt);
       updatePatrons(dt);
       updatePlayer(dt);
+      updateStairs(dt);
       state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
       state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
       updateGaze(dt);

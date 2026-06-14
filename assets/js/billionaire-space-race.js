@@ -23,17 +23,17 @@
   // =========================================================================
   // 1. TUNING
   // =========================================================================
-  const GRAVITY        = 0.072;   // downward accel (px/frame²) at level 1
-  const THRUST         = 0.15;    // accel along the nose while burning
-  const ROT_SPEED      = 0.030;   // radians/frame while rotating
-  const ROT_DAMP       = 0.78;    // angular drag when not steering (lower = settles faster)
-  const MAX_VX         = 4.2;     // sideways speed cap — keeps drift controllable
-  const MAX_VY         = 7.5;     // vertical speed cap (both directions)
-  const SAFE_VY        = 2.8;     // max vertical speed for a clean touchdown
-  const SAFE_VX        = 2.1;     // max sideways speed for a clean touchdown
-  const SAFE_ANGLE     = 0.32;    // max tilt (radians ~18°) for a clean touchdown
-  const FUEL_BURN      = 0.45;    // fuel units per frame of thrust
-  const BASE_FUEL      = 230;     // starting fuel (level 1)
+  const GRAVITY        = 0.055;   // downward accel (px/frame²) at level 1 — gentle
+  const THRUST         = 0.125;   // accel along the nose while burning
+  const ROT_SPEED      = 0.023;   // radians/frame while rotating
+  const ROT_DAMP       = 0.74;    // angular drag when not steering (lower = settles faster)
+  const MAX_VX         = 3.0;     // sideways speed cap — keeps drift controllable
+  const MAX_VY         = 5.5;     // vertical speed cap (both directions)
+  const SAFE_VY        = 3.6;     // max vertical speed for a clean touchdown
+  const SAFE_VX        = 2.8;     // max sideways speed for a clean touchdown
+  const SAFE_ANGLE     = 0.40;    // max tilt (radians ~23°) for a clean touchdown
+  const FUEL_BURN      = 0.4;     // fuel units per frame of thrust
+  const BASE_FUEL      = 260;     // starting fuel (level 1)
   const ROCKET_W       = 18;
   const ROCKET_H       = 40;
 
@@ -295,7 +295,7 @@
     if (!state.running || state.paused || state.crashed || state.landed) return;
     const r = state.rocket;
     const slow = state.slowmo ? 0.7 : 1;
-    const g = GRAVITY * (1 + (state.level - 1) * 0.04) * slow;
+    const g = GRAVITY * (1 + (state.level - 1) * 0.03) * slow;
 
     // Steering
     if (leftHeld())  r.angVel -= ROT_SPEED * slow;

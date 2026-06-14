@@ -453,6 +453,13 @@
 
   const keys = Object.create(null);
   const mobileMove = { x: 0, z: 0 };
+  // Mouse aim: when the cursor is over the canvas, the player faces it and
+  // bonks/throws fire toward it. Falls back to movement facing on touch/keyboard.
+  const aim = { x: 0, z: -1, active: false };
+  const aimRaycaster = new THREE.Raycaster();
+  const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const aimNdc = new THREE.Vector2();
+  const aimHit = new THREE.Vector3();
   const clock = new THREE.Clock();
   let cameraTarget = new THREE.Vector3(0, 0, 0);
   let labelCounter = 0;
@@ -1668,7 +1675,7 @@
     ui.setText(els.overlayTitle, "UNHOUSED AND UNHINGED");
     ui.setText(
       els.overlaySub,
-      "Fresh top-down sandbox: earn cash by day, dodge overreactions, then survive Tweeker Zombie night with improvised slapstick tools."
+      "Earn cash by day, dodge overreactions, then survive Tweeker Zombie night. Move with WASD, aim with the mouse, left-click to bonk and right-click to throw."
     );
     ui.setText(els.overlayScore, "");
     setAction("dance");
@@ -2056,6 +2063,26 @@
     return zombie;
   }
 
+  // Convert a screen-space pointer position into a world-space aim direction
+  // from the player, by raycasting onto the ground plane.
+  function aimFromPointer(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    aimNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    aimNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    aimRaycaster.setFromCamera(aimNdc, camera);
+    if (aimRaycaster.ray.intersectPlane(aimPlane, aimHit)) {
+      const dx = aimHit.x - player.x;
+      const dz = aimHit.z - player.z;
+      const mag = Math.hypot(dx, dz);
+      if (mag > 0.0001) {
+        aim.x = dx / mag;
+        aim.z = dz / mag;
+        aim.active = true;
+      }
+    }
+  }
+
   function updatePlayer(dt) {
     let ix = 0;
     let iz = 0;
@@ -2067,18 +2094,28 @@
     iz += mobileMove.z;
 
     const mag = len2(ix, iz);
-    if (mag > 0.01) {
+    const moving = mag > 0.01;
+    if (moving) {
       ix /= mag;
       iz /= mag;
-      player.facing.x = ix;
-      player.facing.z = iz;
       const sprinting = (keys.shift || keys.shiftleft || keys.shiftright) && state.energy > 4;
       const speed = sprinting ? player.speed * 1.42 : player.speed;
       moveCircle(player, ix * speed * dt, iz * speed * dt);
       state.energy = clamp(state.energy - (sprinting ? 12 : 3.5) * dt, 0, 100);
-      player.mesh.rotation.y = Math.atan2(ix, iz);
     } else {
       state.energy = clamp(state.energy + 8.5 * dt, 0, 100);
+    }
+
+    // Face the cursor when aiming with a mouse; otherwise face movement.
+    if (aim.active) {
+      player.facing.x = aim.x;
+      player.facing.z = aim.z;
+    } else if (moving) {
+      player.facing.x = ix;
+      player.facing.z = iz;
+    }
+    if (player.mesh) {
+      player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
     }
 
     if (state.phase === "day") {
@@ -2828,7 +2865,7 @@
     ui.setText(els.promptE, state.nearestPrompt);
     ui.setText(els.promptSpace, state.cooldowns.stunt > 0 ? "Recover" : "Stunt");
     ui.setText(els.promptJ, state.cooldowns.attack > 0 ? "Ready" : "Bonk");
-    ui.setText(els.promptL, state.inventory.peel > 0 ? "Peel" : "No peel");
+    ui.setText(els.promptL, state.inventory.cone > 0 ? "Throw" : "No cones");
 
     if (els.statusChip) {
       ui.setHtml(
@@ -2921,6 +2958,10 @@
       event.preventDefault();
     }
     if (key === "escape") {
+      const wrap = canvas.closest(".canvas-wrap");
+      if (wrap && wrap.classList.contains("is-maxed")) {
+        return; // let the max-screen handler exit; don't also pause
+      }
       setPaused(!state.paused);
       return;
     }
@@ -2929,9 +2970,9 @@
     }
     if (key === "e") interact();
     if (key === " ") stunt();
-    if (key === "j") attack();
-    if (key === "k") throwCone();
-    if (key === "l") dropPeel();
+    if (key === "j" || key === "f") attack();
+    if (key === "k" || key === "q") throwCone();
+    if (key === "l" || key === "c") dropPeel();
     if (key === "1") setAction("dance");
     if (key === "2") setAction("sign");
     if (key === "3") setAction("drums");
@@ -2970,7 +3011,88 @@
     document.getElementById("btn-attack")?.addEventListener("click", attack);
     bindHotbarTouch("hud-slot-action", interact);
     bindHotbarTouch("hud-slot-tool", attack);
+    bindHotbarTouch("hud-slot-cone", throwCone);
+    bindHotbarTouch("hud-slot-peel", dropPeel);
+    bindActionTouch("touch-bonk", attack);
+    bindActionTouch("touch-throw", throwCone);
+    bindActionTouch("touch-stunt", stunt);
+    bindActionTouch("touch-act", interact);
     bindTouchStick();
+    bindFullscreen();
+  }
+
+  // On-canvas touch action buttons (shown on touch devices and in max screen).
+  function bindActionTouch(id, action) {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      button.classList.add("is-held");
+      if (!state.running && !state.ended) {
+        startGame();
+        return;
+      }
+      action();
+      canvas.focus({ preventScroll: true });
+    });
+    const clear = () => button.classList.remove("is-held");
+    button.addEventListener("pointerup", clear);
+    button.addEventListener("pointercancel", clear);
+    button.addEventListener("pointerleave", clear);
+  }
+
+  function bindFullscreen() {
+    const fsBtn = document.getElementById("btn-fullscreen");
+    const fsTarget = canvas.closest(".canvas-wrap") || canvas.parentElement;
+    if (!fsTarget) return;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const updateBtn = () => {
+      if (!fsBtn) return;
+      const on = isMaxed();
+      fsBtn.textContent = on ? "✕" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateBtn();
+      // Let the renderer re-fit to the new wrap size.
+      window.dispatchEvent(new Event("resize"));
+      resize();
+      if (on) canvas.focus({ preventScroll: true });
+    };
+    const toggle = () => {
+      const on = !isMaxed();
+      setMaxed(on);
+      // Pair with the native Fullscreen API where supported (hides browser
+      // chrome). The .is-maxed class drives layout, so this is best-effort.
+      if (on) {
+        const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+        if (req) {
+          try {
+            const ret = req.call(fsTarget);
+            if (ret && ret.catch) ret.catch(() => {});
+          } catch (_) {}
+        }
+      } else if (nativeFsEl()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) {
+          try { exit.call(document); } catch (_) {}
+        }
+      }
+    };
+    if (fsBtn) fsBtn.addEventListener("click", toggle);
+    const onNativeFsChange = () => {
+      if (!nativeFsEl() && isMaxed()) setMaxed(false);
+    };
+    document.addEventListener("fullscreenchange", onNativeFsChange);
+    document.addEventListener("webkitfullscreenchange", onNativeFsChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+    });
+    updateBtn();
   }
 
   function bindMobileButton(id, x, z) {
@@ -3146,6 +3268,34 @@
         startGame();
       }
     });
+
+    // Mouse aim + click combat (no mouse-look required): the player faces the
+    // cursor, left-click bonks, right-click throws a cone toward it.
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "mouse") {
+        aimFromPointer(event.clientX, event.clientY);
+      }
+    });
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "mouse") return;
+      canvas.focus({ preventScroll: true });
+      if (!state.running && !state.ended) {
+        startGame();
+        return;
+      }
+      aimFromPointer(event.clientX, event.clientY);
+      if (event.button === 0) {
+        attack();
+      } else if (event.button === 2) {
+        event.preventDefault();
+        throwCone();
+      }
+    });
+    canvas.addEventListener("pointerleave", (event) => {
+      if (event.pointerType === "mouse") aim.active = false;
+    });
+    canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
     loop();
   }
 

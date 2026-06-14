@@ -20,6 +20,8 @@
    - EYES CLOSED (hold SPACE): zero sus, but the
      screen goes dark, you walk slower, and bumping
      into a girl blind is an instant bust.
+   - FLOOR HAZARDS: loose water bottles trip you,
+     stun you briefly, and slide you into bad lanes.
 
    Girl types:
    - lifter:     stationary, periodically turns
@@ -58,7 +60,11 @@
   const SUS_GAIN_BASE  = 23;     // %/sec, one girl, point blank
   const SUS_MUTUAL_MULT = 2.4;   // she sees you seeing her
   const SUS_BUMP       = 14;     // walked into a girl (eyes open)
-  const MOVER_BUMP_SUS = 11;     // clanked into moving equipment
+  const BRUISER_SMACK_SUS = 10;  // got loud near a territorial gym bro
+  const BRUISER_RADIUS = 22;
+  const WATER_BOTTLE_RADIUS = 9;
+  const WATER_BOTTLE_TRIGGER = 18;
+  const WATER_BOTTLE_TRIP_SUS = 7;
 
   const NOTICE_TIME   = 0.98;    // sustained mutual stare → accused
   const NOTICE_DECAY  = 0.62;    // /sec when stare breaks
@@ -330,54 +336,54 @@
   ];
 
   const LEVEL_TOASTS = [
-    "👀 Level 1 · 6 AM. Standard square gym. Moving plate cart is live.",
-    "📐 Level 2 · L-shape layout. Sliding mirror blocks the safest line.",
-    "🧱 Level 3 · T-shape layout. Watch steppers and scrubber traffic.",
-    "⚡ Level 4 · S-shaped tri-corridor. Moving screens change the cover.",
-    "🔄 Level 5 · Loop-back layout. Plate carts sweep the spiral.",
-    "⭕ Level 6 · Influencer ring. Mirror gates split the top route.",
-    "🚪 Level 7 · Quadrant rooms. Door gaps open and close with traffic.",
-    "💀 Level 8 · Peak hours. Chokepoints, scanners, and moving equipment."
+    "👀 Level 1 · 6 AM. One territorial spotter patrols the floor.",
+    "📐 Level 2 · L-shape layout. Big dudes guard the clean angles.",
+    "🧱 Level 3 · T-shape layout. Watch steppers and bro patrols.",
+    "⚡ Level 4 · S-shaped tri-corridor. Cross the lanes between smacks.",
+    "🔄 Level 5 · Loop-back layout. Buff dudes sweep the spiral.",
+    "⭕ Level 6 · Influencer ring. Bouncers guard the top route.",
+    "🚪 Level 7 · Quadrant rooms. Door gaps are patrolled.",
+    "💀 Level 8 · Peak hours. Chokepoints, scanners, and gym bros."
   ];
 
-  const MOVING_LAYOUTS = [
+  const BRUISER_LAYOUTS = [
     [
-      { kind: "cart", label: "PLATE CART", x: 250, y: 468, w: 78, h: 28, speed: 36, pause: 0.45, path: [[250, 468], [530, 468]] }
+      { label: "SPOTTER", x: 250, y: 468, speed: 34, aggro: 78, hit: 34, stun: 0.75, cooldown: 1.2, path: [[250, 468], [530, 468]] }
     ],
     [
-      { kind: "mirror", label: "MIRROR", x: 290, y: 270, w: 26, h: 118, speed: 42, pause: 0.35, path: [[290, 210], [290, 510]] },
-      { kind: "cart", label: "PLATES", x: 118, y: 392, w: 72, h: 28, speed: 40, pause: 0.4, path: [[118, 392], [408, 392]] }
+      { label: "CURL KING", x: 290, y: 270, speed: 40, aggro: 86, hit: 36, stun: 0.85, cooldown: 1.15, path: [[290, 210], [290, 510]] },
+      { label: "TRAP DAD", x: 118, y: 392, speed: 37, aggro: 80, hit: 34, stun: 0.8, cooldown: 1.25, path: [[118, 392], [408, 392]] }
     ],
     [
-      { kind: "cleaner", label: "SCRUB", x: 330, y: 218, w: 44, h: 44, speed: 48, pause: 0.25, path: [[330, 218], [330, 486]] },
-      { kind: "cleaner", label: "SCRUB", x: 402, y: 486, w: 44, h: 44, speed: 48, pause: 0.25, path: [[402, 486], [402, 218]] }
+      { label: "LEG DAY", x: 330, y: 218, speed: 45, aggro: 90, hit: 36, stun: 0.95, cooldown: 1.1, path: [[330, 218], [330, 486]] },
+      { label: "BULK MODE", x: 402, y: 486, speed: 45, aggro: 90, hit: 36, stun: 0.95, cooldown: 1.1, path: [[402, 486], [402, 218]] }
     ],
     [
-      { kind: "mirror", label: "SCREEN", x: 182, y: 320, w: 132, h: 24, speed: 50, pause: 0.2, path: [[110, 320], [320, 320]] },
-      { kind: "cart", label: "CART", x: 520, y: 532, w: 78, h: 28, speed: 58, pause: 0.25, path: [[520, 532], [250, 532]] },
-      { kind: "cleaner", label: "SCRUB", x: 610, y: 150, w: 42, h: 42, speed: 34, pause: 0.15, path: [[610, 150], [610, 370]] }
+      { label: "NO REPS", x: 182, y: 320, speed: 48, aggro: 92, hit: 37, stun: 1.0, cooldown: 1.05, path: [[110, 320], [320, 320]] },
+      { label: "MEAT WALL", x: 520, y: 532, speed: 54, aggro: 94, hit: 38, stun: 1.05, cooldown: 1.05, path: [[520, 532], [250, 532]] },
+      { label: "PREWORKOUT", x: 610, y: 150, speed: 34, aggro: 82, hit: 35, stun: 0.9, cooldown: 1.1, path: [[610, 150], [610, 370]] }
     ],
     [
-      { kind: "cart", label: "PLATE CART", x: 170, y: 354, w: 86, h: 30, speed: 62, pause: 0.18, path: [[170, 354], [548, 354]] },
-      { kind: "mirror", label: "MIRROR", x: 520, y: 124, w: 128, h: 24, speed: 48, pause: 0.3, path: [[520, 124], [190, 124]] },
-      { kind: "cart", label: "CART", x: 505, y: 584, w: 76, h: 28, speed: 56, pause: 0.25, path: [[505, 584], [128, 584]] }
+      { label: "BARBELL BOB", x: 170, y: 354, speed: 58, aggro: 96, hit: 38, stun: 1.05, cooldown: 1.0, path: [[170, 354], [548, 354]] },
+      { label: "WHEY LORD", x: 520, y: 124, speed: 44, aggro: 88, hit: 36, stun: 0.95, cooldown: 1.05, path: [[520, 124], [190, 124]] },
+      { label: "PR POLICE", x: 505, y: 584, speed: 52, aggro: 92, hit: 37, stun: 1.0, cooldown: 1.05, path: [[505, 584], [128, 584]] }
     ],
     [
-      { kind: "mirror", label: "MIRROR", x: 320, y: 116, w: 118, h: 24, speed: 55, pause: 0.2, path: [[170, 116], [470, 116]] },
-      { kind: "mirror", label: "SCREEN", x: 320, y: 482, w: 118, h: 24, speed: 55, pause: 0.2, path: [[470, 482], [170, 482]] },
-      { kind: "cleaner", label: "SCRUB", x: 72, y: 402, w: 44, h: 44, speed: 48, pause: 0.2, path: [[72, 402], [276, 402], [276, 548], [72, 548]] }
+      { label: "TOP SET", x: 320, y: 116, speed: 52, aggro: 100, hit: 39, stun: 1.1, cooldown: 0.95, path: [[170, 116], [470, 116]] },
+      { label: "BULK SECURITY", x: 320, y: 482, speed: 52, aggro: 100, hit: 39, stun: 1.1, cooldown: 0.95, path: [[470, 482], [170, 482]] },
+      { label: "CUTTING", x: 72, y: 402, speed: 47, aggro: 92, hit: 37, stun: 1.0, cooldown: 1.0, path: [[72, 402], [276, 402], [276, 548], [72, 548]] }
     ],
     [
-      { kind: "mirror", label: "DOOR", x: 320, y: 258, w: 24, h: 110, speed: 46, pause: 0.18, path: [[320, 258], [320, 382]] },
-      { kind: "mirror", label: "DOOR", x: 320, y: 382, w: 24, h: 110, speed: 46, pause: 0.18, path: [[320, 382], [320, 258]] },
-      { kind: "cart", label: "CART", x: 478, y: 330, w: 84, h: 30, speed: 60, pause: 0.2, path: [[478, 330], [148, 330]] },
-      { kind: "cleaner", label: "SCRUB", x: 555, y: 560, w: 46, h: 46, speed: 54, pause: 0.15, path: [[555, 560], [385, 560], [385, 430], [555, 430]] }
+      { label: "BENCH LORD", x: 320, y: 258, speed: 44, aggro: 98, hit: 38, stun: 1.1, cooldown: 0.95, path: [[320, 258], [320, 382]] },
+      { label: "SQUAT DAD", x: 320, y: 382, speed: 44, aggro: 98, hit: 38, stun: 1.1, cooldown: 0.95, path: [[320, 382], [320, 258]] },
+      { label: "LAT SPREAD", x: 478, y: 330, speed: 56, aggro: 104, hit: 40, stun: 1.15, cooldown: 0.92, path: [[478, 330], [148, 330]] },
+      { label: "BICEPS", x: 555, y: 560, speed: 50, aggro: 98, hit: 38, stun: 1.05, cooldown: 0.95, path: [[555, 560], [385, 560], [385, 430], [555, 430]] }
     ],
     [
-      { kind: "cart", label: "PLATES", x: 320, y: 260, w: 92, h: 30, speed: 72, pause: 0.1, path: [[320, 190], [320, 455]] },
-      { kind: "cart", label: "CART", x: 210, y: 320, w: 88, h: 30, speed: 70, pause: 0.1, path: [[210, 320], [430, 320]] },
-      { kind: "mirror", label: "MIRROR", x: 320, y: 392, w: 126, h: 24, speed: 58, pause: 0.12, path: [[180, 392], [460, 392]] },
-      { kind: "cleaner", label: "SCRUB", x: 520, y: 320, w: 46, h: 46, speed: 62, pause: 0.08, path: [[520, 320], [120, 320], [120, 390], [520, 390]] }
+      { label: "FINAL BOSS", x: 320, y: 260, speed: 66, aggro: 112, hit: 42, stun: 1.25, cooldown: 0.85, path: [[320, 190], [320, 455]] },
+      { label: "PROTEIN", x: 210, y: 320, speed: 64, aggro: 108, hit: 41, stun: 1.18, cooldown: 0.88, path: [[210, 320], [430, 320]] },
+      { label: "TANK TOP", x: 320, y: 392, speed: 56, aggro: 104, hit: 40, stun: 1.12, cooldown: 0.9, path: [[180, 392], [460, 392]] },
+      { label: "PEAK BULK", x: 520, y: 320, speed: 58, aggro: 108, hit: 41, stun: 1.18, cooldown: 0.88, path: [[520, 320], [120, 320], [120, 390], [520, 390]] }
     ]
   ];
 
@@ -442,7 +448,8 @@
 
     girls: [],
     obstacles: [],
-    movers: [],
+    bruisers: [],
+    bottles: [],
     decor: [],
     exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
     levelStartDist: WORLD_W,
@@ -451,6 +458,10 @@
     airpodT: 0,
     boyfriendT: 0,
     decoy: null,
+    stunT: 0,
+    tripT: 0,
+    knockX: 0,
+    knockY: 0,
 
     bustReason: null,   // "sus" | "caught" | "blindbump"
 
@@ -481,7 +492,7 @@
   }
 
   function blockerRects() {
-    return state.obstacles.concat(state.movers);
+    return state.obstacles;
   }
 
   function getLevelPressure() {
@@ -529,6 +540,47 @@
       if (collidesCircleRect(cx, cy, cr, o)) return true;
     }
     return false;
+  }
+
+  function bottlePlacementBlocked(x, y, placed) {
+    if (collidesAny(x, y, WATER_BOTTLE_RADIUS + 14)) return true;
+    if (exitDistanceFrom(x, y) < 105) return true;
+    if (dist(x, y, state.player.x, state.player.y) < 155) return true;
+
+    for (const g of state.girls) {
+      if (dist(x, y, g.x, g.y) < 76) return true;
+    }
+    for (const b of state.bruisers) {
+      if (dist(x, y, b.x, b.y) < 96) return true;
+    }
+    for (const b of placed) {
+      if (dist(x, y, b.x, b.y) < 72) return true;
+    }
+    return false;
+  }
+
+  function spawnWaterBottles(levelNum) {
+    const target = clamp(3 + levelNum, 4, 10);
+    const bottles = [];
+    const margin = 62;
+    const attempts = target * 90;
+
+    for (let i = 0; i < attempts && bottles.length < target; i++) {
+      const x = rand(margin, WORLD_W - margin);
+      const y = rand(margin, WORLD_H - margin);
+      if (bottlePlacementBlocked(x, y, bottles)) continue;
+
+      bottles.push({
+        x,
+        y,
+        active: true,
+        hitT: 0,
+        spin: rand(-Math.PI, Math.PI),
+        seed: rand(0, 1000)
+      });
+    }
+
+    return bottles;
   }
 
   // =========================================================================
@@ -845,6 +897,11 @@
     p.dirX = dx;
     p.dirY = dy;
     p.eyesClosed = !!keys[" "] || !!state.touchEyesClosed;
+    if (state.stunT > 0) {
+      p.dirX = 0;
+      p.dirY = 0;
+      p.moving = false;
+    }
 
     const mdx = (mouseCanvasX + state.cam.x) - p.x;
     const mdy = (mouseCanvasY + state.cam.y) - p.y;
@@ -986,62 +1043,108 @@
     }
   }
 
-  function updateMovers(dt) {
-    for (const m of state.movers) {
-      m.bumpCooldown = Math.max(0, m.bumpCooldown - dt);
-      if (!m.path || m.path.length < 2) continue;
-      if (m.pauseT > 0) {
-        m.pauseT -= dt;
-        continue;
+  function updateBruisers(dt) {
+    const p = state.player;
+    for (const b of state.bruisers) {
+      b.attackCooldown = Math.max(0, b.attackCooldown - dt);
+      b.swingT = Math.max(0, b.swingT - dt);
+      b.warningT = Math.max(0, b.warningT - dt);
+
+      const toPlayerX = p.x - b.x;
+      const toPlayerY = p.y - b.y;
+      const playerD = Math.hypot(toPlayerX, toPlayerY);
+      const chasing = playerD < b.aggro && b.attackCooldown <= 0 && state.boyfriendT <= 0;
+
+      let target = null;
+      let speed = b.speed;
+      if (chasing && playerD > 1) {
+        target = [p.x, p.y];
+        speed *= 1.35;
+        b.warningT = 0.2;
+      } else if (b.path && b.path.length > 1) {
+        target = b.path[b.pathIdx];
       }
 
-      const target = m.path[m.pathIdx];
-      const dx = target[0] - m.x;
-      const dy = target[1] - m.y;
+      if (!target) continue;
+
+      const dx = target[0] - b.x;
+      const dy = target[1] - b.y;
       const d = Math.hypot(dx, dy);
-      if (d < 2) {
-        m.x = target[0];
-        m.y = target[1];
-        m.pathIdx = (m.pathIdx + 1) % m.path.length;
-        m.pauseT = m.pause || 0;
-      } else {
-        const step = Math.min(d, m.speed * dt);
-        const ox = m.x;
-        const oy = m.y;
-        m.x += (dx / d) * step;
-        m.y += (dy / d) * step;
-        m.dir = Math.atan2(m.y - oy, m.x - ox);
+      if (d < 3 && !chasing) {
+        b.x = target[0];
+        b.y = target[1];
+        b.pathIdx = (b.pathIdx + 1) % b.path.length;
+      } else if (d > 1) {
+        const step = Math.min(d, speed * dt);
+        b.x += (dx / d) * step;
+        b.y += (dy / d) * step;
+        b.facing = Math.atan2(dy, dx);
       }
     }
   }
 
-  function updateMoverBumps() {
+  function updateBruiserThreats() {
     const p = state.player;
-    for (const m of state.movers) {
-      if (!collidesCircleRect(p.x, p.y, PLAYER_RADIUS + 1, m)) continue;
+    for (const b of state.bruisers) {
+      const dx = p.x - b.x;
+      const dy = p.y - b.y;
+      const d = Math.hypot(dx, dy);
+      const minD = BRUISER_RADIUS + PLAYER_RADIUS;
 
-      const dx = p.x - m.x;
-      const dy = p.y - m.y;
-      const px = (m.w / 2 + PLAYER_RADIUS + 2) - Math.abs(dx);
-      const py = (m.h / 2 + PLAYER_RADIUS + 2) - Math.abs(dy);
-      if (px < py) {
-        p.x += (dx >= 0 ? 1 : -1) * Math.max(1, px);
-      } else {
-        p.y += (dy >= 0 ? 1 : -1) * Math.max(1, py);
+      if (d > 0 && d < minD) {
+        p.x = b.x + (dx / d) * minD;
+        p.y = b.y + (dy / d) * minD;
+        p.x = clamp(p.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
+        p.y = clamp(p.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
       }
-      p.x = clamp(p.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
-      p.y = clamp(p.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
 
-      if (m.bumpCooldown <= 0 && state.boyfriendT <= 0) {
-        m.bumpCooldown = 0.9;
-        state.sus = Math.min(SUS_MAX, state.sus + MOVER_BUMP_SUS * getLevelPressure());
-        state.cam.shake = Math.max(state.cam.shake, 0.22);
-        sfx.bump();
-        RB.toast("🔩 Equipment clank. Everyone glanced over.", "bad");
-        if (state.sus >= SUS_MAX) {
-          bust("sus");
-          return;
-        }
+      if (d > b.hit || b.attackCooldown > 0 || state.boyfriendT > 0) continue;
+
+      const ang = d > 0 ? Math.atan2(dy, dx) : rand(-Math.PI, Math.PI);
+      b.attackCooldown = b.cooldown;
+      b.swingT = 0.28;
+      b.facing = ang;
+
+      state.stunT = Math.max(state.stunT, b.stun);
+      state.knockX += Math.cos(ang) * 310;
+      state.knockY += Math.sin(ang) * 310;
+      state.sus = Math.min(SUS_MAX, state.sus + BRUISER_SMACK_SUS * getLevelPressure());
+      state.cam.shake = Math.max(state.cam.shake, 0.48);
+      sfx.bump();
+      RB.toast("💪 " + b.label + " checked your shoulder. Stunned.", "bad");
+      if (state.sus >= SUS_MAX) {
+        bust("sus");
+        return;
+      }
+    }
+  }
+
+  function updateWaterBottles(dt) {
+    const p = state.player;
+
+    for (const bottle of state.bottles) {
+      if (bottle.hitT > 0) bottle.hitT = Math.max(0, bottle.hitT - dt);
+      if (!bottle.active) continue;
+
+      const d = dist(p.x, p.y, bottle.x, bottle.y);
+      if (d > WATER_BOTTLE_TRIGGER) continue;
+
+      const ang = d > 0 ? Math.atan2(p.y - bottle.y, p.x - bottle.x) : rand(-Math.PI, Math.PI);
+      bottle.active = false;
+      bottle.hitT = 0.8;
+
+      state.tripT = Math.max(state.tripT, 0.75);
+      state.stunT = Math.max(state.stunT, 0.7);
+      state.knockX += Math.cos(ang) * 230 + rand(-32, 32);
+      state.knockY += Math.sin(ang) * 230 + rand(-32, 32);
+      state.sus = Math.min(SUS_MAX, state.sus + WATER_BOTTLE_TRIP_SUS * getLevelPressure());
+      state.cam.shake = Math.max(state.cam.shake, 0.4);
+      sfx.bump();
+      RB.toast("💧 Loose bottle. You slipped.", "bad");
+
+      if (state.sus >= SUS_MAX) {
+        bust("sus");
+        return;
       }
     }
   }
@@ -1157,13 +1260,23 @@
   // =========================================================================
   function updatePlayer(dt) {
     const p = state.player;
-    const speed = p.eyesClosed ? PLAYER_SPEED_BLIND : PLAYER_SPEED;
+    const speed = state.stunT > 0 ? 0 : (p.eyesClosed ? PLAYER_SPEED_BLIND : PLAYER_SPEED);
 
     // Axis-separated so you slide along equipment
     const nx = p.x + p.dirX * speed * dt;
     if (!collidesAny(nx, p.y, PLAYER_RADIUS)) p.x = nx;
     const ny = p.y + p.dirY * speed * dt;
     if (!collidesAny(p.x, ny, PLAYER_RADIUS)) p.y = ny;
+
+    if (Math.abs(state.knockX) > 1 || Math.abs(state.knockY) > 1) {
+      const kx = p.x + state.knockX * dt;
+      if (!collidesAny(kx, p.y, PLAYER_RADIUS)) p.x = kx;
+      const ky = p.y + state.knockY * dt;
+      if (!collidesAny(p.x, ky, PLAYER_RADIUS)) p.y = ky;
+      const damp = Math.min(1, dt * 7.5);
+      state.knockX = lerp(state.knockX, 0, damp);
+      state.knockY = lerp(state.knockY, 0, damp);
+    }
 
     p.x = clamp(p.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
     p.y = clamp(p.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
@@ -1201,6 +1314,8 @@
   function updatePowerTimers(dt) {
     if (state.airpodT > 0) state.airpodT -= dt;
     if (state.boyfriendT > 0) state.boyfriendT -= dt;
+    if (state.stunT > 0) state.stunT -= dt;
+    if (state.tripT > 0) state.tripT -= dt;
     if (state.decoy) {
       state.decoy.life -= dt;
       if (state.decoy.life <= 0) state.decoy = null;
@@ -1297,10 +1412,10 @@
     const lv = LEVELS[n - 1];
     
     // Scale obstacles dynamically
-    const scaleObstacle = (o, moving) => {
+    const scaleObstacle = (o) => {
       const isWall = o.kind === "wall";
-      const scaleW = isWall ? WORLD_SCALE_X : (moving ? 1.62 : 1.5);
-      const scaleH = isWall ? WORLD_SCALE_Y : (moving ? 1.62 : 1.5);
+      const scaleW = isWall ? WORLD_SCALE_X : 1.5;
+      const scaleH = isWall ? WORLD_SCALE_Y : 1.5;
       return {
         x: o.x * WORLD_SCALE_X,
         y: o.y * WORLD_SCALE_Y,
@@ -1310,23 +1425,30 @@
       };
     };
 
-    state.obstacles = lv.obstacles.map(o => scaleObstacle(o, false));
-    state.movers = (MOVING_LAYOUTS[n - 1] || []).map((m, i) => {
-      const scaled = scaleObstacle(m, true);
-      const path = (m.path || [[m.x, m.y]]).map(pt => [pt[0] * WORLD_SCALE_X, pt[1] * WORLD_SCALE_Y]);
+    state.obstacles = lv.obstacles.map(o => scaleObstacle(o));
+    state.bruisers = (BRUISER_LAYOUTS[n - 1] || []).map((b, i) => {
+      const path = (b.path || [[b.x, b.y]]).map(pt => [pt[0] * WORLD_SCALE_X, pt[1] * WORLD_SCALE_Y]);
       return {
-        ...scaled,
         x: path[0][0],
         y: path[0][1],
-        label: m.label || m.kind.toUpperCase(),
+        spawnX: path[0][0],
+        spawnY: path[0][1],
+        label: b.label || "BRO",
         path,
         pathIdx: path.length > 1 ? 1 : 0,
-        speed: (m.speed || 42) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
-        pause: m.pause || 0,
-        pauseT: (m.pause || 0) * (i % 2),
-        dir: 0,
+        speed: (b.speed || 42) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+        aggro: (b.aggro || 86) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+        hit: (b.hit || 36) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+        stun: b.stun || 0.9,
+        cooldown: b.cooldown || 1.1,
+        attackCooldown: 0,
+        swingT: 0,
+        warningT: 0,
+        facing: 0,
         seed: i * 17.23 + n * 3.7,
-        bumpCooldown: 0
+        shorts: choice(["#2ee0ff", "#4dffc9", "#f7d716", "#ff7ddf", "#7c5cff"]),
+        tank: choice(["#111827", "#242132", "#1d2630", "#2b1f28"]),
+        skin: choice(["#f1c27d", "#d89b63", "#b8734c", "#8d5524"])
       };
     });
     
@@ -1373,11 +1495,16 @@
 
     state.player.x = 36;
     state.player.y = 320 * WORLD_SCALE_Y;
+    state.bottles = spawnWaterBottles(n);
     state.levelStartDist = Math.max(1, exitDistanceFrom(state.player.x, state.player.y));
     state.levelT = 0;
     state.levelPeakSus = 0;
     state.sus = Math.max(0, state.sus - 40);  // partial mercy between levels
     state.decoy = null;
+    state.stunT = 0;
+    state.tripT = 0;
+    state.knockX = 0;
+    state.knockY = 0;
 
     // Reset camera position
     state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
@@ -1717,6 +1844,56 @@
           break;
         }
       }
+      ctx.restore();
+    }
+  }
+
+  function drawWaterBottles() {
+    for (const bottle of state.bottles) {
+      ctx.save();
+      ctx.translate(bottle.x, bottle.y);
+
+      const splash = bottle.hitT > 0 ? bottle.hitT : 0;
+      ctx.fillStyle = bottle.active ? "rgba(46,224,255,0.13)" : "rgba(46,224,255,0.2)";
+      ctx.beginPath();
+      ctx.ellipse(1, 7, bottle.active ? 12 : 18 + splash * 8, bottle.active ? 4 : 6 + splash * 4, 0, 0, TAU);
+      ctx.fill();
+
+      if (!bottle.active) {
+        ctx.rotate(bottle.spin + 0.35);
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = "#79eaff";
+        ctx.fillRect(-5, -4, 10, 8);
+        ctx.fillStyle = "#f7d716";
+        ctx.fillRect(5, -5, 4, 4);
+        ctx.restore();
+        continue;
+      }
+
+      const glow = 0.6 + 0.4 * Math.sin(state.t * 4.2 + bottle.seed);
+      ctx.rotate(bottle.spin + Math.sin(state.t * 2.6 + bottle.seed) * 0.06);
+      ctx.shadowColor = "rgba(46,224,255,0.6)";
+      ctx.shadowBlur = 8 + glow * 5;
+
+      ctx.fillStyle = "rgba(79,226,255,0.72)";
+      ctx.fillRect(-5, -13, 10, 25);
+      ctx.strokeStyle = "rgba(221,252,255,0.85)";
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(-5, -13, 10, 25);
+
+      ctx.fillStyle = "rgba(255,255,255,0.32)";
+      ctx.fillRect(-2, -10, 2, 18);
+      ctx.fillStyle = "#f7d716";
+      ctx.fillRect(-6, -17, 12, 5);
+      ctx.fillRect(-3, -20, 6, 3);
+
+      ctx.strokeStyle = "rgba(12,25,38,0.55)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-4, 1);
+      ctx.lineTo(4, -2);
+      ctx.stroke();
+
       ctx.restore();
     }
   }
@@ -2079,99 +2256,135 @@
     }
   }
 
-  function drawMover(m) {
-    const x0 = m.x - m.w / 2;
-    const y0 = m.y - m.h / 2;
-    const shimmer = 0.5 + 0.5 * Math.sin(state.t * 4 + m.seed);
+  function drawBruiser(b) {
+    const playerD = dist(state.player.x, state.player.y, b.x, b.y);
+    const alert = playerD < b.aggro;
+    const swing = b.swingT > 0 ? Math.sin((b.swingT / 0.28) * Math.PI) : 0;
 
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.28)";
-    ctx.beginPath();
-    ctx.ellipse(m.x + 3, m.y + m.h * 0.26, m.w * 0.48, Math.max(5, m.h * 0.16), 0, 0, TAU);
-    ctx.fill();
-
-    if (m.path && m.path.length > 1) {
-      ctx.strokeStyle = "rgba(255,255,255,0.09)";
+    if (b.path && b.path.length > 1) {
+      ctx.strokeStyle = "rgba(247,215,22,0.08)";
       ctx.lineWidth = 1;
-      ctx.setLineDash([5, 7]);
+      ctx.setLineDash([5, 9]);
       ctx.beginPath();
-      ctx.moveTo(m.path[0][0], m.path[0][1]);
-      for (let i = 1; i < m.path.length; i++) ctx.lineTo(m.path[i][0], m.path[i][1]);
+      ctx.moveTo(b.path[0][0], b.path[0][1]);
+      for (let i = 1; i < b.path.length; i++) ctx.lineTo(b.path[i][0], b.path[i][1]);
       ctx.stroke();
       ctx.setLineDash([]);
     }
 
-    if (m.kind === "mirror") {
-      const grad = ctx.createLinearGradient(x0, y0, x0 + m.w, y0 + m.h);
-      grad.addColorStop(0, "rgba(77,255,201,0.22)");
-      grad.addColorStop(0.45, "rgba(220,255,255,0.88)");
-      grad.addColorStop(0.55, "rgba(46,224,255,0.30)");
-      grad.addColorStop(1, "rgba(255,46,136,0.18)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(x0, y0, m.w, m.h);
-      ctx.strokeStyle = "rgba(46,224,255,0.85)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x0, y0, m.w, m.h);
-      ctx.strokeStyle = "rgba(255,255,255," + (0.16 + shimmer * 0.18) + ")";
-      ctx.lineWidth = 1;
-      for (let i = -1; i < 4; i++) {
-        const px = x0 + i * 34 + (state.t * 32 + m.seed) % 34;
-        ctx.beginPath();
-        ctx.moveTo(px, y0 + 4);
-        ctx.lineTo(px + 34, y0 + m.h - 4);
-        ctx.stroke();
-      }
-    } else if (m.kind === "cleaner") {
-      ctx.fillStyle = "#141721";
-      ctx.fillRect(x0, y0, m.w, m.h);
-      ctx.strokeStyle = "rgba(77,255,201,0.8)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x0, y0, m.w, m.h);
-      ctx.fillStyle = "rgba(46,224,255,0.22)";
-      ctx.fillRect(x0 + 5, y0 + 5, m.w - 10, m.h - 10);
-      ctx.strokeStyle = "rgba(255,255,255,0.18)";
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 2; i++) {
-        const cx = m.x + (i ? 10 : -10);
-        const cy = m.y + 8;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 6, state.t * 8, state.t * 8 + Math.PI * 1.3);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "rgba(255,46,136," + (0.4 + shimmer * 0.35) + ")";
+    if (alert || b.swingT > 0) {
+      ctx.strokeStyle = b.swingT > 0 ? "rgba(255,60,60,0.75)" : "rgba(247,215,22,0.32)";
+      ctx.lineWidth = b.swingT > 0 ? 4 : 2;
       ctx.beginPath();
-      ctx.arc(m.x, y0 + 8, 3.5, 0, TAU);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = "#171820";
-      ctx.fillRect(x0, y0, m.w, m.h);
-      ctx.strokeStyle = "rgba(247,215,22,0.65)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x0, y0, m.w, m.h);
-      ctx.fillStyle = "#2a2a35";
-      ctx.fillRect(x0 + 6, y0 + 5, m.w - 12, m.h - 10);
-      ctx.strokeStyle = "rgba(0,0,0,0.45)";
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 4; i++) {
-        const px = x0 + 14 + i * ((m.w - 28) / 3);
-        ctx.beginPath();
-        ctx.arc(px, m.y, Math.min(9, m.h * 0.28), 0, TAU);
-        ctx.stroke();
-      }
-      ctx.fillStyle = "rgba(247,215,22," + (0.25 + shimmer * 0.35) + ")";
-      ctx.fillRect(x0 + 6, y0 + 3, m.w - 12, 3);
+      ctx.arc(b.x, b.y, b.hit + Math.sin(state.t * 10 + b.seed) * 2, 0, TAU);
+      ctx.stroke();
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.58)";
-    ctx.font = "bold 7px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(m.label, m.x, m.y + 3);
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath();
+    ctx.ellipse(b.x + 3, b.y + 22, 26, 8, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
 
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.facing);
+
+    const bob = Math.sin(state.t * 7 + b.seed) * 1.5;
+    const flex = 1 + (alert ? 0.08 : 0) + swing * 0.08;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Legs and shoes
+    ctx.strokeStyle = b.skin;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(-8, 12 + bob);
+    ctx.lineTo(-12, 28 + bob);
+    ctx.moveTo(8, 12 + bob);
+    ctx.lineTo(12, 28 + bob);
+    ctx.stroke();
+    ctx.fillStyle = "#f5f7fb";
+    ctx.beginPath();
+    ctx.ellipse(-14, 30 + bob, 8, 3, 0, 0, TAU);
+    ctx.ellipse(14, 30 + bob, 8, 3, 0, 0, TAU);
+    ctx.fill();
+
+    // Shorts and torso
+    ctx.fillStyle = b.shorts;
+    ctx.fillRect(-18, 6 + bob, 36, 17);
+    ctx.fillStyle = b.tank;
+    ctx.beginPath();
+    ctx.ellipse(0, -6 + bob, 22 * flex, 20, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "rgba(77,255,201,0.75)";
+    ctx.fillRect(-5, -16 + bob, 10, 4);
+
+    // Arms
+    ctx.strokeStyle = b.skin;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(-18, -9 + bob);
+    ctx.lineTo(-31, 5 + bob);
+    ctx.moveTo(18, -9 + bob);
+    ctx.lineTo(33 + swing * 16, 2 - swing * 7 + bob);
+    ctx.stroke();
+
+    // Gloves/hands
+    ctx.fillStyle = "#111116";
+    ctx.beginPath();
+    ctx.arc(-33, 6 + bob, 7, 0, TAU);
+    ctx.arc(35 + swing * 16, 2 - swing * 7 + bob, 7, 0, TAU);
+    ctx.fill();
+
+    // Neck and head
+    ctx.fillStyle = b.skin;
+    ctx.fillRect(-5, -25 + bob, 10, 10);
+    ctx.beginPath();
+    ctx.arc(0, -32 + bob, 11, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#1b120c";
+    ctx.beginPath();
+    ctx.arc(0, -37 + bob, 11, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = "#ff2e88";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-8, -33 + bob);
+    ctx.lineTo(8, -33 + bob);
+    ctx.stroke();
+
+    // Direction eyes
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(7, -34 + bob, 2.2, 0, TAU);
+    ctx.arc(7, -29 + bob, 2.2, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(8, -34 + bob, 1, 0, TAU);
+    ctx.arc(8, -29 + bob, 1, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = alert ? "rgba(247,215,22,0.9)" : "rgba(255,255,255,0.48)";
+    ctx.font = "bold 8px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(b.label, b.x, b.y + 45);
+    if (b.swingT > 0) {
+      ctx.fillStyle = "#ff3c3c";
+      ctx.font = "bold 13px JetBrains Mono, monospace";
+      ctx.fillText("SMACK", b.x, b.y - 48);
+    }
     ctx.restore();
   }
 
-  function drawMovers() {
-    for (const m of state.movers) drawMover(m);
+  function drawBruisers() {
+    for (const b of state.bruisers) drawBruiser(b);
   }
 
   function drawGirlCone(g) {
@@ -2460,6 +2673,22 @@
     }
     ctx.restore();
 
+    if (state.stunT > 0) {
+      ctx.strokeStyle = "rgba(247,215,22,0.9)";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = state.t * 8 + i * (TAU / 3);
+        const x = Math.cos(a) * 13;
+        const y = -21 + Math.sin(a) * 4 + bobY;
+        ctx.moveTo(x - 3, y);
+        ctx.lineTo(x + 3, y);
+        ctx.moveTo(x, y - 3);
+        ctx.lineTo(x, y + 3);
+      }
+      ctx.stroke();
+    }
+
     // 7. Sweat Droplets when SUS is high (>50)
     if (state.sus > 50) {
       ctx.fillStyle = "#2ee0ff";
@@ -2528,7 +2757,9 @@
     const eyes = document.getElementById("hud-eyes");
     if (eyes) {
       let label, zone;
-      if (state.player.eyesClosed)      { label = "CLOSED";    zone = "shut"; }
+      if (state.tripT > 0)              { label = "TRIPPED";   zone = "crit"; }
+      else if (state.stunT > 0)         { label = "STUNNED";   zone = "crit"; }
+      else if (state.player.eyesClosed) { label = "CLOSED";    zone = "shut"; }
       else if (state.airpodT > 0)       { label = "LOCKED 🎧"; zone = "ok"; }
       else if (state.fighting)          { label = "FIGHTING";  zone = "crit"; }
       else                              { label = "OPEN";      zone = "ok"; }
@@ -2567,6 +2798,7 @@
     
     // Draw non-colliding background decorations
     drawDecorations();
+    drawWaterBottles();
 
     // Draw wood lifting platforms under racks
     for (const o of state.obstacles) {
@@ -2574,7 +2806,7 @@
     }
 
     drawObstacles();
-    drawMovers();
+    drawBruisers();
 
     // Draw glowing neon signs on top of walls
     for (const o of state.obstacles) {
@@ -2610,7 +2842,7 @@
     if (state.running && !state.paused) {
       state.levelT += dt;
       readInput();
-      updateMovers(dt);
+      updateBruisers(dt);
       updatePlayer(dt);
       state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
       state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
@@ -2620,7 +2852,8 @@
       updatePowerTimers(dt);
       if (!state.gameOver) updateSus(dt);
       if (!state.gameOver) updateBumps(dt);
-      if (!state.gameOver) updateMoverBumps();
+      if (!state.gameOver) updateWaterBottles(dt);
+      if (!state.gameOver) updateBruiserThreats();
       state.cam.shake = Math.max(0, state.cam.shake - dt * 2);
       state.cam.flash = Math.max(0, state.cam.flash - dt * 3);
       if (!state.gameOver && !state.won) checkLevelProgress();

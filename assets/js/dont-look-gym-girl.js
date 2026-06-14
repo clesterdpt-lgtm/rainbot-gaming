@@ -103,6 +103,12 @@
         { x: 520, y: 110, w: 38, h: 38, kind: "plant" },
         { x: 500, y: 540, w: 66, h: 36, kind: "fountain" }
       ],
+      decor: [
+        { x: 260, y: 360, kind: "mat" },
+        { x: 120, y: 440, kind: "dumbbells" },
+        { x: 380, y: 150, kind: "towel" },
+        { x: 420, y: 520, kind: "shaker" }
+      ],
       girls: [
         { type: "lifter", x: 320, y: 160, facing: -Math.PI / 2 }
       ]
@@ -117,6 +123,13 @@
         { x: 200, y: 460, w: 70, h: 40, kind: "bench" },
         { x: 400, y: 560, w: 38, h: 38, kind: "plant" },
         { x: 340, y: 400, w: 66, h: 36, kind: "fountain" }
+      ],
+      decor: [
+        { x: 80, y: 120, kind: "towel" },
+        { x: 250, y: 350, kind: "mat" },
+        { x: 300, y: 520, kind: "dumbbells" },
+        { x: 280, y: 440, kind: "kettlebell" },
+        { x: 180, y: 560, kind: "shaker" }
       ],
       girls: [
         { type: "lifter", x: 150, y: 200, facing: Math.PI },
@@ -137,6 +150,13 @@
         { x: 400, y: 300, w: 38, h: 38, kind: "plant" },
         { x: 320, y: 450, w: 66, h: 36, kind: "fountain" }
       ],
+      decor: [
+        { x: 200, y: 200, kind: "mat" },
+        { x: 280, y: 180, kind: "mat" },
+        { x: 360, y: 240, kind: "dumbbells" },
+        { x: 320, y: 380, kind: "towel" },
+        { x: 450, y: 300, kind: "shaker" }
+      ],
       girls: [
         { type: "stepper", x: 450, y: 118, facing: -Math.PI / 2 },
         { type: "stepper", x: 520, y: 118, facing: -Math.PI / 2 },
@@ -156,6 +176,13 @@
         { x: 450, y: 530, w: 38, h: 38, kind: "plant" },
         { x: 600, y: 100, w: 44, h: 80, kind: "tread" },
         { x: 380, y: 320, w: 16, h: 16, kind: "ring" }
+      ],
+      decor: [
+        { x: 200, y: 120, kind: "mat" },
+        { x: 460, y: 310, kind: "kettlebell" },
+        { x: 180, y: 340, kind: "towel" },
+        { x: 520, y: 530, kind: "dumbbells" },
+        { x: 250, y: 540, kind: "shaker" }
       ],
       girls: [
         { type: "influencer", x: 336, y: 320, facing: 0 },
@@ -178,6 +205,14 @@
         { x: 420, y: 440, w: 70, h: 40, kind: "bench" },
         { x: 580, y: 460, w: 38, h: 38, kind: "plant" },
         { x: 320, y: 460, w: 66, h: 36, kind: "fountain" }
+      ],
+      decor: [
+        { x: 250, y: 140, kind: "dumbbells" },
+        { x: 340, y: 150, kind: "mat" },
+        { x: 460, y: 150, kind: "mat" },
+        { x: 240, y: 460, kind: "towel" },
+        { x: 360, y: 480, kind: "kettlebell" },
+        { x: 150, y: 510, kind: "shaker" }
       ],
       girls: [
         { type: "scanner", x: 320, y: 200, facing: 0 },
@@ -202,6 +237,13 @@
         { x: 64, y: 560, w: 38, h: 38, kind: "plant" },
         { x: 576, y: 560, w: 38, h: 38, kind: "plant" },
         { x: 320, y: 560, w: 16, h: 16, kind: "ring" }
+      ],
+      decor: [
+        { x: 80, y: 240, kind: "mat" },
+        { x: 460, y: 180, kind: "towel" },
+        { x: 540, y: 440, kind: "dumbbells" },
+        { x: 160, y: 500, kind: "kettlebell" },
+        { x: 260, y: 520, kind: "shaker" }
       ],
       girls: [
         { type: "influencer", x: 320, y: 520, facing: -Math.PI / 2 },
@@ -231,6 +273,13 @@
         { x: 490, y: 575, w: 44, h: 60, kind: "tread" },
         { x: 580, y: 110, w: 38, h: 38, kind: "plant" }
       ],
+      decor: [
+        { x: 160, y: 220, kind: "mat" },
+        { x: 480, y: 220, kind: "mat" },
+        { x: 180, y: 250, kind: "shaker" },
+        { x: 250, y: 500, kind: "dumbbells" },
+        { x: 430, y: 520, kind: "towel" }
+      ],
       girls: [
         { type: "scanner", x: 230, y: 260, facing: 0 },
         { type: "scanner", x: 410, y: 260, facing: Math.PI },
@@ -256,6 +305,14 @@
         { x: 160, y: 320, w: 40, h: 70, kind: "bench" },
         { x: 480, y: 320, w: 40, h: 70, kind: "bench" },
         { x: 320, y: 480, w: 16, h: 16, kind: "ring" }
+      ],
+      decor: [
+        { x: 320, y: 260, kind: "mat" },
+        { x: 320, y: 380, kind: "mat" },
+        { x: 280, y: 340, kind: "towel" },
+        { x: 360, y: 340, kind: "shaker" },
+        { x: 180, y: 350, kind: "dumbbells" },
+        { x: 460, y: 350, kind: "kettlebell" }
       ],
       girls: [
         { type: "influencer", x: 320, y: 524, facing: -Math.PI / 2 },
@@ -342,6 +399,7 @@
 
     girls: [],
     obstacles: [],
+    decor: [],
     exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
 
 
@@ -1153,6 +1211,15 @@
       };
     }
 
+    // Scale and load decor dynamically
+    state.decor = (lv.decor || []).map(d => {
+      return {
+        x: d.x * WORLD_SCALE_X,
+        y: d.y * WORLD_SCALE_Y,
+        kind: d.kind
+      };
+    });
+
     state.player.x = 36;
     state.player.y = 320 * WORLD_SCALE_Y;
     state.levelT = 0;
@@ -1293,6 +1360,174 @@
   // =========================================================================
   // 16. RENDER
   // =========================================================================
+  function drawGymLogo() {
+    ctx.save();
+    ctx.translate(WORLD_W / 2, WORLD_H / 2);
+    // Outer dashed ring
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.08)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 12]);
+    ctx.beginPath();
+    ctx.arc(0, 0, 95, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(WORLD_W / 2, WORLD_H / 2);
+    // Inner text and barbell silhouette
+    ctx.fillStyle = "rgba(255, 46, 136, 0.07)";
+    ctx.font = "bold 15px 'Press Start 2P', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("RAINBOT", 0, -22);
+    ctx.fillText("GYM", 0, 32);
+
+    // Barbell silhouette
+    ctx.fillStyle = "rgba(46, 224, 255, 0.06)";
+    ctx.fillRect(-60, -3, 120, 6); // bar
+    ctx.fillRect(-65, -12, 10, 24); // inner plates
+    ctx.fillRect(-76, -16, 8, 32);  // outer plates
+    ctx.fillRect(55, -12, 10, 24);
+    ctx.fillRect(68, -16, 8, 32);
+    ctx.restore();
+  }
+
+  function drawTurfLane() {
+    ctx.save();
+    // Green turf area (draw on the left corridor side, but not blocking start zone)
+    ctx.fillStyle = "rgba(46, 204, 113, 0.035)"; // translucent green
+    ctx.fillRect(100, 0, 110, WORLD_H);
+    // White line borders
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(100, 0); ctx.lineTo(100, WORLD_H);
+    ctx.moveTo(210, 0); ctx.lineTo(210, WORLD_H);
+    ctx.stroke();
+
+    // Turf hashmarks and numbers
+    ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+    ctx.font = "bold 12px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    for (let y = 100; y < WORLD_H; y += 200) {
+      ctx.fillRect(100, y, 110, 2);
+      ctx.fillText(Math.floor(y / 10) + "m", 155, y - 6);
+    }
+    ctx.restore();
+  }
+
+  function drawLiftingPlatform(x, y, w, h) {
+    ctx.save();
+    // Dark brown wood backing
+    ctx.fillStyle = "#2c1f13";
+    ctx.fillRect(x - w/2 - 10, y - h/2 - 6, w + 20, h + 12);
+    // Light brown wood slats
+    ctx.fillStyle = "#3e2723";
+    for (let xx = x - w/2 - 6; xx < x + w/2 + 6; xx += 14) {
+      ctx.fillRect(xx, y - h/2 - 4, 10, h + 8);
+    }
+    // Metal protective steel border
+    ctx.strokeStyle = "#4e342e";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - w/2 - 10, y - h/2 - 6, w + 20, h + 12);
+    ctx.restore();
+  }
+
+  function drawWallSign(o) {
+    if (o.w >= 140 && o.h >= 60) {
+      ctx.save();
+      // Glowing backing
+      ctx.fillStyle = "rgba(255, 46, 136, 0.08)";
+      ctx.fillRect(o.x - o.w/2 + 10, o.y - 12, o.w - 20, 24);
+      ctx.strokeStyle = "rgba(255, 46, 136, 0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(o.x - o.w/2 + 10, o.y - 12, o.w - 20, 24);
+
+      ctx.fillStyle = "#ff2e88";
+      ctx.font = "bold 8px 'Press Start 2P', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("FLEX ZONE", o.x, o.y + 3);
+      ctx.restore();
+    }
+  }
+
+  function drawDecorations() {
+    for (const d of state.decor) {
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      switch (d.kind) {
+        case "mat": {
+          // Rolled out yoga mat
+          ctx.fillStyle = "#ff2e88"; // neon pink
+          ctx.strokeStyle = "#ff85c0";
+          ctx.lineWidth = 1;
+          ctx.fillRect(-15, -28, 30, 56);
+          ctx.strokeRect(-15, -28, 30, 56);
+          // mat ribs
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+          for (let y = -22; y <= 22; y += 6) {
+            ctx.beginPath();
+            ctx.moveTo(-12, y); ctx.lineTo(12, y);
+            ctx.stroke();
+          }
+          break;
+        }
+        case "dumbbells": {
+          // Steel handles and plates lying on floor
+          ctx.fillStyle = "#2c2c35";
+          ctx.strokeStyle = "#7f8c8d";
+          ctx.lineWidth = 1;
+          // Dumbbell 1
+          ctx.fillRect(-12, -2, 10, 4); // handle
+          ctx.beginPath(); ctx.arc(-13, 0, 3, 0, TAU); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.arc(-6, 0, 3, 0, TAU); ctx.fill(); ctx.stroke();
+          // Dumbbell 2
+          ctx.fillRect(2, -2, 10, 4);
+          ctx.beginPath(); ctx.arc(1, 0, 3, 0, TAU); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.arc(8, 0, 3, 0, TAU); ctx.fill(); ctx.stroke();
+          break;
+        }
+        case "kettlebell": {
+          // Kettlebell body & handle
+          ctx.fillStyle = "#1e272c";
+          ctx.beginPath();
+          ctx.arc(0, 4, 6, 0, TAU);
+          ctx.fill();
+          // Handle
+          ctx.strokeStyle = "#1e272c";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(0, -1, 4.5, Math.PI, 0);
+          ctx.stroke();
+          break;
+        }
+        case "towel": {
+          // Folded white gym towel
+          ctx.fillStyle = "#fbfbfb";
+          ctx.fillRect(-10, -6, 20, 12);
+          ctx.strokeStyle = "#e2e2e2";
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-10, -6, 20, 12);
+          // Fold crease lines
+          ctx.strokeStyle = "rgba(0,0,0,0.08)";
+          ctx.beginPath();
+          ctx.moveTo(-10, 0); ctx.lineTo(10, 0);
+          ctx.stroke();
+          break;
+        }
+        case "shaker": {
+          // shaker cup with a cap
+          ctx.fillStyle = "rgba(46, 224, 255, 0.7)"; // translucent cyan
+          ctx.fillRect(-4, -5, 8, 12);
+          ctx.fillStyle = "#ff2e88"; // neon pink lid
+          ctx.fillRect(-5, -8, 10, 3);
+          ctx.fillRect(-2, -10, 4, 2); // cap loop
+          break;
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   function drawGymFloor() {
     ctx.fillStyle = "#12121c"; // slightly darker theme base
     ctx.fillRect(0, 0, WORLD_W, WORLD_H);
@@ -1301,6 +1536,12 @@
     const tile = 40;
     for (let x = 0; x <= WORLD_W; x += tile) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, WORLD_H); ctx.stroke(); }
     for (let y = 0; y <= WORLD_H; y += tile) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(WORLD_W, y); ctx.stroke(); }
+
+    // Turf lane
+    drawTurfLane();
+
+    // Center logo
+    drawGymLogo();
 
     // Ambient spotlighting: soft circular glow tracking the player
     const p = state.player;
@@ -2001,7 +2242,22 @@
     ctx.save();
     ctx.translate(-state.cam.x, -state.cam.y);
     drawGymFloor();
+    
+    // Draw non-colliding background decorations
+    drawDecorations();
+
+    // Draw wood lifting platforms under racks
+    for (const o of state.obstacles) {
+      if (o.kind === "rack") drawLiftingPlatform(o.x, o.y, o.w, o.h);
+    }
+
     drawObstacles();
+
+    // Draw glowing neon signs on top of walls
+    for (const o of state.obstacles) {
+      if (o.kind === "wall") drawWallSign(o);
+    }
+
     for (const g of state.girls) drawGirlCone(g);
     drawDecoy();
     for (const g of state.girls) drawGirl(g);

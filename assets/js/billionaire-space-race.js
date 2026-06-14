@@ -61,33 +61,15 @@
     },
   ];
 
-  // Themed destinations — the mission progresses outward through the solar system.
-  // grav is a multiplier on GRAVITY (exaggerated for playability, it's a parody).
-  const THEMES = {
-    earth:   { id: "earth",   name: "EARTH",            pad: "PAD 39-EGO",              grav: 1.0,
-               sky: ["#0a1430", "#274684"], ground: "#23311a", surf: "#3a5a2c", water: false,
-               blurb: "investors are watching" },
-    ocean:   { id: "ocean",   name: "PACIFIC DRONESHIP", pad: "OF COURSE I STILL TIP U", grav: 1.0,
-               sky: ["#0a1830", "#1d4a72"], ground: "#0a2438", surf: "#1f6f9a", water: true,
-               blurb: "land on the barge, not the sea" },
-    station: { id: "station", name: "ORBITAL STATION",  pad: "DOCK 7-EGO",              grav: 0.5,
-               sky: ["#02030a", "#0a0a1f"], ground: "#161628", surf: "#3a3a64", water: false, space: true,
-               blurb: "low-g, no atmosphere to save you" },
-    moon:    { id: "moon",    name: "THE MOON",          pad: "TRANQUILITY-ISH",         grav: 0.35,
-               sky: ["#01010a", "#05050f"], ground: "#34343c", surf: "#74747e", water: false, space: true,
-               blurb: "one small step, one giant liability" },
-    mars:    { id: "mars",    name: "MARS",              pad: "OLYMPUS PAD",             grav: 0.6,
-               sky: ["#160806", "#43180e"], ground: "#5a2417", surf: "#9a4326", water: false,
-               blurb: "the planet of billionaire cope" },
-  };
-
-  function themeForLevel(level) {
-    if (level <= 2) return THEMES.earth;
-    if (level <= 4) return THEMES.ocean;
-    if (level <= 6) return THEMES.station;
-    if (level <= 8) return THEMES.moon;
-    return THEMES.mars;
-  }
+  const LEVEL_TAGLINES = [
+    "PAD 39-EGO · investors are watching",
+    "TIGHTER MARGINS · the pad shrank, like your morals",
+    "MOVING PLATFORM · it pays union wages now, so it left",
+    "DRONE TRAFFIC · the lawsuits achieved orbit",
+    "TAX SEASON · audit satellites have lock",
+    "HARD MODE · the board wants 'synergy'",
+    "MAXIMUM HUBRIS · land it or trend for the wrong reasons",
+  ];
 
   const OBSTACLE_TYPES = [
     { id: "lawsuit",  label: "⚖️", name: "Lawsuit Drone" },
@@ -152,11 +134,6 @@
     worldH: 1800,
     cameraY: 0,
 
-    theme: THEMES.earth,
-    surfaceY: 980,
-    apogeeY: 80,
-    reachedApogee: false,
-
     rocket: null,
     launchPad: null,
     landPad: null,
@@ -176,44 +153,36 @@
   // 4. LEVEL BUILDER — difficulty scales with level
   // =========================================================================
   function buildLevel(level) {
-    const theme = themeForLevel(level);
-    state.theme = theme;
+    const worldH = 1250 + Math.min(level, 8) * 200;
+    state.worldH = worldH;
     state.crashed = false;
     state.landed = false;
-    state.reachedApogee = false;
 
-    // Vertical mission corridor: surface at the bottom, "space" (apogee) at the top.
-    // You must climb past the apogee line, THEN descend and land on the ground pad.
-    const surfaceY = 980;
-    const apogeeY = 80;
-    state.surfaceY = surfaceY;
-    state.apogeeY = apogeeY;
-    state.worldH = surfaceY + 120;
-
-    // Launch pad: on the surface, left side.
-    const launchPad = { x: Math.round(W * 0.24), w: 116, y: surfaceY };
+    // Launch pad: bottom-center
+    const launchPad = {
+      x: W / 2,
+      w: 150,
+      y: worldH - 60,
+    };
     state.launchPad = launchPad;
 
-    // Landing pad: also at GROUND level, off to the right — shrinks and (per theme) moves.
-    const padW = Math.max(52, 140 - level * 9);
-    let moveSpeed = 0;
-    if (theme.id === "ocean")        moveSpeed = 0.9 + (level - 3) * 0.35;
-    else if (theme.id === "station") moveSpeed = 0.7 + (level - 5) * 0.30;
-    else if (theme.id === "mars")    moveSpeed = 0.7 + Math.max(0, level - 9) * 0.30;
-    moveSpeed = Math.max(0, moveSpeed);
-    const moveRange = moveSpeed > 0 ? Math.min(80 + level * 12, W * 0.28) : 0;
-    const baseX = clamp(W * 0.66, launchPad.x + padW / 2 + 80 + moveRange, W - padW / 2 - moveRange - 16);
-    const phase = Math.random() * Math.PI * 2;
+    // Landing platform: high up. Shrinks and starts moving as levels climb.
+    const padW = Math.max(54, 150 - level * 12);
+    const moveSpeed = level >= 3 ? Math.min(0.4 + (level - 3) * 0.35, 2.6) : 0;
+    const moveRange = moveSpeed > 0 ? Math.min(90 + level * 22, W / 2 - padW) : 0;
     const landPad = {
-      baseX,
-      x: baseX + Math.sin(phase) * moveRange,  // start where it actually rests (no first-frame pop)
+      baseX: W / 2 + (Math.random() - 0.5) * (W * 0.4),
+      x: W / 2,
       w: padW,
-      y: surfaceY,
+      y: 210 + Math.random() * 70,
       moveSpeed,
       moveRange,
-      phase,
-      bob: theme.water ? 3 : 0,   // visual barge bob amplitude
+      phase: Math.random() * Math.PI * 2,
+      // vertical bob on the meanest levels
+      bob: level >= 6 ? 0.6 : 0,
     };
+    landPad.baseX = Math.max(padW / 2 + moveRange + 16, Math.min(W - padW / 2 - moveRange - 16, landPad.baseX));
+    landPad.x = landPad.baseX;
     state.landPad = landPad;
 
     // Apply one-shot upgrades earned at the last gate
@@ -248,11 +217,11 @@
     state.pendingUpgrades.slowmo = false;
     state.pendingUpgrades.autostab = false;
 
-    // Obstacle field in the vertical corridor between apogee (top) and surface (bottom)
+    // Obstacle field between the pads
     state.obstacles = [];
-    const count = level === 1 ? 0 : Math.min(1 + level, 11);
-    const top = apogeeY + 130;
-    const bottom = surfaceY - 150;
+    const count = level === 1 ? 0 : Math.min(2 + level, 11);
+    const top = landPad.y + 120;
+    const bottom = launchPad.y - 180;
     for (let i = 0; i < count; i++) {
       const t = OBSTACLE_TYPES[(Math.random() * OBSTACLE_TYPES.length) | 0];
       const r = 16 + Math.random() * 12;
@@ -274,7 +243,7 @@
       for (let i = 0; i < 140; i++) {
         state.stars.push({
           x: Math.random() * W,
-          y: Math.random() * state.worldH,
+          y: Math.random() * worldH,
           z: 0.3 + Math.random() * 0.7,
           r: Math.random() * 1.6 + 0.4,
         });
@@ -283,8 +252,8 @@
     state.particles = [];
     state.bestAltitude = 0;
 
-    // Camera starts looking at the launch pad
-    state.cameraY = clamp(state.rocket.y - H * 0.5, 0, state.worldH - H);
+    // Camera starts at the launch pad
+    state.cameraY = clamp(state.rocket.y - H * 0.6, 0, worldH - H);
   }
 
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -300,20 +269,46 @@
   window.addEventListener("keyup", (e) => { keys[e.code] = false; });
 
   function wireDpad() {
-    const dpad = document.getElementById("dpad");
-    if (!dpad) return;
-    dpad.querySelectorAll("button[data-ctrl]").forEach((btn) => {
+    document.querySelectorAll("button[data-ctrl]").forEach((btn) => {
       const code = btn.dataset.ctrl;
-      const press = (ev) => { ev.preventDefault(); keys[code] = true; };
-      const release = (ev) => { if (ev) ev.preventDefault?.(); keys[code] = false; };
-      btn.addEventListener("touchstart", press, { passive: false });
-      btn.addEventListener("touchend", release);
-      btn.addEventListener("touchcancel", release);
-      btn.addEventListener("mousedown", press);
-      btn.addEventListener("mouseup", release);
-      btn.addEventListener("mouseleave", release);
+      const press = (ev) => {
+        ev.preventDefault();
+        if (ev.pointerId != null && btn.setPointerCapture) {
+          try { btn.setPointerCapture(ev.pointerId); } catch (_) {}
+        }
+        keys[code] = true;
+        btn.setAttribute("aria-pressed", "true");
+        canvas.focus?.({ preventScroll: true });
+      };
+      const release = (ev) => {
+        if (ev) ev.preventDefault?.();
+        keys[code] = false;
+        btn.removeAttribute("aria-pressed");
+      };
+      btn.addEventListener("pointerdown", press);
+      btn.addEventListener("pointerup", release);
+      btn.addEventListener("pointercancel", release);
+      btn.addEventListener("lostpointercapture", release);
+      btn.addEventListener("pointerleave", (ev) => {
+        if (ev.pointerType === "mouse") release(ev);
+      });
+      btn.addEventListener("contextmenu", (ev) => ev.preventDefault());
     });
   }
+
+  function releaseTouchControls() {
+    keys.left = false;
+    keys.right = false;
+    keys.thrust = false;
+    document.querySelectorAll("button[data-ctrl][aria-pressed='true']").forEach((btn) => {
+      btn.removeAttribute("aria-pressed");
+    });
+  }
+
+  window.addEventListener("blur", releaseTouchControls);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) releaseTouchControls();
+  });
 
   function thrustHeld() { return keys.Space || keys.ArrowUp || keys.KeyW || keys.thrust; }
   function leftHeld()   { return keys.ArrowLeft || keys.KeyA || keys.left; }
@@ -326,7 +321,7 @@
     if (!state.running || state.paused || state.crashed || state.landed) return;
     const r = state.rocket;
     const slow = state.slowmo ? 0.7 : 1;
-    const g = GRAVITY * state.theme.grav * (1 + (state.level - 1) * 0.02) * slow;
+    const g = GRAVITY * (1 + (state.level - 1) * 0.03) * slow;
 
     // Steering
     if (leftHeld())  r.angVel -= ROT_SPEED * slow;
@@ -366,28 +361,24 @@
     if (r.x < half) { r.x = half; r.vx = Math.abs(r.vx) * 0.4; }
     if (r.x > W - half) { r.x = W - half; r.vx = -Math.abs(r.vx) * 0.4; }
 
-    // Soft ceiling above the apogee line — keeps you on-screen.
-    const ceilY = state.apogeeY - 44;
+    // Soft ceiling — the "Kármán line of your stock price." Keeps you on-screen.
+    const ceilY = 50;
     if (r.y < ceilY) { r.y = ceilY; if (r.vy < 0) r.vy *= -0.3; }
 
-    // Reaching the apogee line "arms" the landing — you've officially been to space.
-    if (!state.reachedApogee && (r.y - ROCKET_H / 2) <= state.apogeeY) {
-      state.reachedApogee = true;
-      RB.toast("🚀 Apogee reached! Now bring it down on the pad.", "good");
-    }
-
     // Track best altitude for scoring
-    const alt = state.surfaceY - r.y;
+    const alt = state.worldH - r.y;
     if (alt > state.bestAltitude) state.bestAltitude = alt;
 
-    // Move the landing pad (per-theme: barge / station drift)
+    // Fell off the bottom of the world
+    if (r.y > state.worldH + 80) return doCrash("You fell back to Earth. Tragically, on-brand.");
+
+    // Move the landing platform
     const lp = state.landPad;
     if (lp.moveSpeed > 0) {
-      lp.phase += lp.moveSpeed * 0.016 * slow;
+      lp.phase += lp.moveSpeed * 0.018 * slow;
       lp.x = lp.baseX + Math.sin(lp.phase) * lp.moveRange;
-    } else {
-      lp.phase += 0.03; // keep phase advancing for barge-bob visuals
     }
+    if (lp.bob) lp.y += Math.sin(lp.phase * 1.7) * lp.bob;
 
     // Move obstacles
     for (const o of state.obstacles) {
@@ -406,8 +397,8 @@
       }
     }
 
-    // Surface / landing collision
-    checkSurface();
+    // Landing / platform collision
+    checkLanding();
 
     // Particles
     updateParticles();
@@ -417,32 +408,24 @@
     state.cameraY += (targetCam - state.cameraY) * 0.12;
   }
 
-  function checkSurface() {
+  function checkLanding() {
     const r = state.rocket;
-    if (r.onPad) return;                 // still resting on the launch pad pre-liftoff
-    if (r.vy < 0) return;                // moving up (e.g. just lifted off) — not a touchdown
-    const feetY = r.y + ROCKET_H / 2;
-    if (feetY < state.surfaceY) return;  // still airborne
-
     const lp = state.landPad;
-    const onPadX = r.x > lp.x - lp.w / 2 && r.x < lp.x + lp.w / 2;
+    const feetY = r.y + ROCKET_H / 2;
+    const x0 = lp.x - lp.w / 2;
+    const x1 = lp.x + lp.w / 2;
+    const padTop = lp.y;
 
-    if (state.reachedApogee && onPadX) {
+    // Only consider a touch when descending onto the deck within its x-span
+    if (r.vy >= 0 && feetY >= padTop && feetY <= padTop + 26 && r.x > x0 && r.x < x1) {
       const upright = Math.abs(normAngle(r.angle)) <= SAFE_ANGLE;
       const gentle = Math.abs(r.vy) <= SAFE_VY && Math.abs(r.vx) <= SAFE_VX;
-      if (upright && gentle) return doLand();
+      if (upright && gentle) {
+        return doLand();
+      }
       if (!upright) return doCrash(choice(TILT_CRASH));
       return doCrash(choice(HARD_LANDING));
     }
-
-    // Hit the surface somewhere it shouldn't
-    if (!state.reachedApogee) {
-      return doCrash("You set down without ever reaching space. The mission needs the 'space' part.");
-    }
-    if (state.theme.water) {
-      return doCrash("Splashdown! Missed the droneship and fed the fish. 🌊");
-    }
-    return doCrash("Augered into the surface right next to the pad. So close, so expensive.");
   }
 
   function normAngle(a) {
@@ -526,8 +509,6 @@
     state.running = false;
     r.vx = 0; r.vy = 0; r.onPad = true;
     r.x = clamp(r.x, lp.x - lp.w / 2 + 6, lp.x + lp.w / 2 - 6);
-    r.y = state.surfaceY - ROCKET_H / 2;
-    r.angle = 0;
 
     // Scoring
     const fuelBonus = Math.round(r.fuel * 3);
@@ -552,11 +533,11 @@
   // =========================================================================
   function render() {
     const cam = state.cameraY;
-    const theme = state.theme;
-    // Sky gradient — theme-coloured, darker (space) up top
+    // Sky gradient — fades to space as you climb
+    const climb = clamp(1 - cam / Math.max(1, state.worldH - H), 0, 1);
     const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, theme.sky[0]);
-    grad.addColorStop(1, theme.sky[1]);
+    grad.addColorStop(0, "#05060f");
+    grad.addColorStop(1, lerpColor("#0b1030", "#1a1140", climb));
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
@@ -570,131 +551,79 @@
       return;
     }
 
-    // Stars (denser/brighter in space themes)
-    const starA = theme.space ? 0.9 : 0.6;
+    // Stars
     for (const s of state.stars) {
       const sy = s.y - cam * s.z;
       if (sy < -2 || sy > H + 2) continue;
-      ctx.globalAlpha = (0.4 + s.z * 0.5) * starA;
+      ctx.globalAlpha = 0.5 + s.z * 0.5;
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(s.x, sy, s.r, s.r);
     }
     ctx.globalAlpha = 1;
 
-    drawApogeeLine(cam);
-    drawSurface(cam);      // ground/water + launch pad + landing pad
-    for (const o of state.obstacles) drawObstacle(o, cam);
-    drawParticles(cam);
-    if (!state.crashed) drawRocket(cam);
-    drawGuides(cam);
-    drawAltimeter();
-  }
-
-  function drawApogeeLine(cam) {
-    const y = state.apogeeY - cam;
-    if (y < -20 || y > H + 20) return;
-    const armed = state.reachedApogee;
-    ctx.save();
-    ctx.setLineDash([10, 8]);
-    ctx.strokeStyle = armed ? "rgba(107,255,125,0.5)" : "rgba(255,212,59,0.7)";
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = armed ? "#6bff7d" : "#ffd43b";
-    ctx.font = "11px 'JetBrains Mono', monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(armed ? "✓ SPACE REACHED — NOW LAND BELOW" : "▲ APOGEE — REACH SPACE FIRST", W / 2, y - 8);
-    ctx.restore();
-  }
-
-  function drawSurface(cam) {
-    const theme = state.theme;
-    const sy = state.surfaceY - cam;
-
-    // ground / sea body
-    ctx.fillStyle = theme.ground;
-    ctx.fillRect(0, sy, W, state.worldH);
-    // surface line
-    if (theme.water) {
-      ctx.fillStyle = theme.surf;
-      ctx.fillRect(0, sy - 2, W, 8);
-      // wave glints
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      const t = Date.now() / 600;
-      for (let x = 0; x < W; x += 38) {
-        const wy = sy + 2 + Math.sin(t + x * 0.05) * 2;
-        ctx.fillRect(x + (Math.sin(t * 1.3 + x) * 6), wy, 14, 2);
-      }
-    } else {
-      ctx.fillStyle = theme.surf;
-      ctx.fillRect(0, sy, W, 5);
-      // a few surface bumps / craters for texture
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      for (let x = 18; x < W; x += 90) {
-        const r = 6 + (x % 5);
-        ctx.beginPath(); ctx.ellipse(x + (state.level * 7 % 30), sy + 9, r, 3, 0, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-
+    // Launch pad (ground)
     drawLaunchPad(cam);
+    // Landing platform
     drawLandPad(cam);
+    // Obstacles
+    for (const o of state.obstacles) drawObstacle(o, cam);
+    // Particles (flames behind, debris over)
+    drawParticles(cam);
+    // Rocket
+    if (!state.crashed) drawRocket(cam);
+
+    // HUD overlays drawn on the canvas: velocity gauge + guide
+    drawGuides(cam);
+
+    // Edge fade hint of distance to pad
+    drawAltimeter();
   }
 
   function drawLaunchPad(cam) {
     const lp = state.launchPad;
     const y = lp.y - cam;
-    ctx.fillStyle = "#2a2a32";
-    ctx.fillRect(lp.x - lp.w / 2, y - 6, lp.w, 14);
+    // ground slab
+    ctx.fillStyle = "#241a14";
+    ctx.fillRect(0, y + 8, W, state.worldH);
+    ctx.fillStyle = "#3a2a1e";
+    ctx.fillRect(lp.x - lp.w / 2, y, lp.w, 18);
     ctx.fillStyle = "#f7d924";
-    for (let i = 0; i < lp.w; i += 22) {
-      ctx.fillRect(lp.x - lp.w / 2 + i + 4, y - 2, 11, 4);
+    for (let i = 0; i < lp.w; i += 24) {
+      ctx.fillRect(lp.x - lp.w / 2 + i + 4, y + 5, 12, 4);
     }
-    ctx.fillStyle = "#8e8ca2";
-    ctx.font = "10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = "#b6b3c9";
+    ctx.font = "11px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
-    ctx.fillText("LAUNCH", lp.x, y + 22);
+    ctx.fillText("PAD 39-EGO", lp.x, y + 36);
   }
 
   function drawLandPad(cam) {
     const lp = state.landPad;
-    const theme = state.theme;
-    const bob = theme.water ? Math.sin(lp.phase * 1.6) * lp.bob : 0;
-    const y = lp.y - cam + bob;
+    const y = lp.y - cam;
     const x0 = lp.x - lp.w / 2;
-    const armed = state.reachedApogee;
-
-    // barge hull / platform base
-    if (theme.water) {
-      ctx.fillStyle = "#20242e";
-      ctx.fillRect(x0 - 6, y, lp.w + 12, 16);
-      ctx.fillStyle = "#3a3f4c";
-      ctx.fillRect(x0 - 6, y, lp.w + 12, 4);
-    } else {
-      // support legs/pillar down to the surface
-      ctx.fillStyle = "#1c1c26";
-      ctx.fillRect(lp.x - 5, y, 10, (state.surfaceY - cam) - y + 4);
-    }
-
-    // deck
-    ctx.fillStyle = "#15151f";
-    ctx.fillRect(x0, y - 8, lp.w, 10);
-    // the big "land here" X / strip
-    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 250);
-    ctx.strokeStyle = armed ? `rgba(107,255,125,${0.55 + pulse * 0.45})` : "rgba(255,212,59,0.7)";
+    // legs
+    ctx.strokeStyle = "#5a5870";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(x0 + 6, y - 6); ctx.lineTo(x0 + lp.w - 6, y - 1);
-    ctx.moveTo(x0 + lp.w - 6, y - 6); ctx.lineTo(x0 + 6, y - 1);
+    ctx.moveTo(x0 + 6, y + 6); ctx.lineTo(x0 - 4, y + 34);
+    ctx.moveTo(lp.x + lp.w / 2 - 6, y + 6); ctx.lineTo(lp.x + lp.w / 2 + 4, y + 34);
     ctx.stroke();
+    // deck
+    ctx.fillStyle = "#15151f";
+    ctx.fillRect(x0, y, lp.w, 12);
+    // pulsing landing strip
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 250);
+    ctx.fillStyle = `rgba(107,255,125,${0.5 + pulse * 0.5})`;
+    ctx.fillRect(x0 + 4, y - 3, lp.w - 8, 4);
     // beacons
-    ctx.fillStyle = armed ? (pulse > 0.5 ? "#6bff7d" : "#1a3a1e") : "#ffd43b";
-    ctx.beginPath(); ctx.arc(x0 + 5, y - 12, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(x0 + lp.w - 5, y - 12, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = pulse > 0.5 ? "#6bff7d" : "#1a3a1e";
+    ctx.beginPath(); ctx.arc(x0 + 6, y - 6, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(lp.x + lp.w / 2 - 6, y - 6, 3, 0, Math.PI * 2); ctx.fill();
     // label
-    ctx.fillStyle = armed ? "#6bff7d" : "#ffd43b";
+    ctx.fillStyle = "#6bff7d";
     ctx.font = "10px 'JetBrains Mono', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(theme.pad, lp.x, y - 18);
+    ctx.fillText("LAND HERE ↓", lp.x, y - 12);
   }
 
   function drawObstacle(o, cam) {
@@ -865,22 +794,19 @@
   }
 
   function drawAltimeter() {
-    // right-edge bar: apogee at the top, surface/pad at the bottom, rocket in between
+    // right-edge bar showing rocket between launch (bottom) and pad (top)
+    const lp = state.landPad;
     const r = state.rocket;
     if (!r) return;
     const x = W - 14;
     const top = 16, bot = H - 16;
-    const span = Math.max(1, state.surfaceY - state.apogeeY);
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(x, top, 4, bot - top);
-    // apogee marker (top)
-    ctx.fillStyle = state.reachedApogee ? "#6bff7d" : "#ffd43b";
-    ctx.fillRect(x - 3, top - 1, 10, 3);
-    // surface/pad marker (bottom)
-    ctx.fillStyle = "#9a98aa";
-    ctx.fillRect(x - 3, bot - 2, 10, 3);
-    // rocket
-    const rkT = clamp((r.y - state.apogeeY) / span, 0, 1);
+    // pad marker
+    const padT = clamp((lp.y) / state.worldH, 0, 1);
+    const rkT = clamp((r.y) / state.worldH, 0, 1);
+    ctx.fillStyle = "#6bff7d";
+    ctx.fillRect(x - 3, top + padT * (bot - top) - 1, 10, 3);
     ctx.fillStyle = state.tycoon.color;
     ctx.beginPath();
     ctx.arc(x + 2, top + rkT * (bot - top), 4, 0, Math.PI * 2);
@@ -1046,9 +972,10 @@
 
     const banner = document.getElementById("level-banner");
     if (banner) {
-      banner.innerHTML = `LEVEL ${state.level} · ${state.theme.name}<br><span>${state.theme.pad} · ${state.theme.blurb}</span>`;
+      const idx = Math.min(state.level - 1, LEVEL_TAGLINES.length - 1);
+      banner.innerHTML = `LEVEL ${state.level}<br><span>${LEVEL_TAGLINES[idx]}</span>`;
       banner.classList.add("level-banner--show");
-      setTimeout(() => banner.classList.remove("level-banner--show"), 2400);
+      setTimeout(() => banner.classList.remove("level-banner--show"), 2200);
     }
     hideOverlay();
     syncHud();

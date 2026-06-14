@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Billionaire Space Race — Rainbot Gaming</title>
   <meta name="description" content="Light the investor money on fire, dodge lawsuit drones and audit satellites, and set your ego-rocket down gently on an ever-tinier, ever-movinger platform. A parody lunar-lander." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
@@ -145,16 +145,356 @@
     }
     .dpad--lander button[data-ctrl="thrust"] { background: var(--accent); color: var(--bg); font-size: 16px; }
     .dpad--lander button:active { background: var(--accent-2); color: var(--bg); }
+
+    .bsr-touch-controls {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 8;
+      display: none;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      pointer-events: none;
+    }
+    .bsr-touch-controls__cluster {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+    .bsr-touch-btn {
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.32);
+      background: rgba(8, 8, 16, 0.72);
+      color: var(--ink);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-body);
+      font-size: 24px;
+      font-weight: 900;
+      line-height: 1;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.08s, filter 0.08s, background 0.08s;
+    }
+    .bsr-touch-btn--thrust {
+      width: 78px;
+      height: 78px;
+      border-color: rgba(255, 46, 136, 0.88);
+      background: rgba(255, 46, 136, 0.72);
+      color: #080810;
+      font-family: var(--font-display);
+      font-size: 11px;
+      letter-spacing: 0;
+      text-shadow: none;
+    }
+    .bsr-touch-btn:active,
+    .bsr-touch-btn[aria-pressed="true"] {
+      filter: brightness(1.25);
+      transform: scale(0.94);
+      background: rgba(46, 224, 255, 0.72);
+      color: #080810;
+    }
+
+    @media (hover: none) and (pointer: coarse), (max-width: 780px), (max-width: 900px) and (max-height: 560px) and (orientation: landscape) {
+      .bsr-page .bsr-touch-controls { display: flex; }
+    }
+
+    @media (max-width: 900px) {
+      .bsr-page .game-page {
+        padding-left: max(8px, env(safe-area-inset-left));
+        padding-right: max(8px, env(safe-area-inset-right));
+      }
+      .bsr-page .game-page__header {
+        align-items: flex-start;
+      }
+      .bsr-page .game-page__title {
+        font-size: clamp(19px, 6vw, 24px);
+        letter-spacing: 0;
+      }
+      .bsr-page .game-page__sub {
+        max-width: 72ch;
+        font-size: 10px;
+        line-height: 1.35;
+      }
+      .bsr-page .game-stage {
+        padding: 8px;
+      }
+      .bsr-page .hud {
+        padding: 7px;
+      }
+      .bsr-page .hud__label {
+        font-size: 9px;
+        letter-spacing: 1px;
+      }
+      .bsr-page .hud__value {
+        font-size: 14px;
+      }
+      .bsr-page .game-side .dpad--lander {
+        display: none;
+      }
+      .bsr-page .game-side__poster {
+        max-height: 180px;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .bsr-page .overlay {
+        justify-content: flex-start;
+        gap: 8px;
+        padding: 12px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+      .bsr-page .overlay__title {
+        font-size: clamp(18px, 6vw, 23px);
+        margin-bottom: 2px;
+        letter-spacing: 0;
+      }
+      .bsr-page .overlay__sub {
+        max-width: 100%;
+        margin-bottom: 8px;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .bsr-page .bsr-select {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        gap: 7px;
+        margin: 0 0 8px;
+      }
+      .bsr-page .bsr-founder {
+        flex-direction: row;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 9px;
+        border-radius: 8px;
+        text-align: left;
+      }
+      .bsr-page .bsr-founder__rocket {
+        font-size: 24px;
+      }
+      .bsr-page .bsr-founder__name {
+        font-size: 12px;
+      }
+      .bsr-page .bsr-founder__co {
+        font-size: 9px;
+      }
+      .bsr-page .bsr-founder__blurb {
+        display: none;
+      }
+      .bsr-page #btn-primary {
+        min-height: 42px;
+        padding: 9px 12px;
+        font-size: 12px;
+      }
+      .bsr-page .level-banner {
+        top: 38px;
+        width: 90%;
+        font-size: 18px;
+        line-height: 1.1;
+      }
+      .bsr-page .level-banner span {
+        font-size: 9px;
+        line-height: 1.35;
+      }
+      .bsr-page .bsr-card {
+        width: calc(100% - 18px);
+        max-height: calc(100% - 18px);
+        overflow-y: auto;
+        padding: 14px;
+      }
+      .bsr-page .bsr-card__title {
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+      .bsr-page .bsr-card__msg {
+        padding: 9px 10px;
+        font-size: 12px;
+      }
+      .bsr-page .bsr-card__stats {
+        font-size: 11px;
+      }
+      .bsr-page .bsr-card__actions .btn {
+        flex: 1 1 100%;
+        min-height: 40px;
+        padding: 9px 10px;
+        font-size: 12px;
+      }
+      .bsr-page .bsr-gate__grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .bsr-page .bsr-gate__opt {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 8px;
+        padding: 9px 10px;
+      }
+      .bsr-page .bsr-gate__icon {
+        grid-row: 1 / span 2;
+        font-size: 23px;
+      }
+      .bsr-page .bsr-gate__name {
+        font-size: 11px;
+      }
+      .bsr-page .bsr-gate__desc {
+        font-size: 10px;
+        line-height: 1.25;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .bsr-page .game-page__header .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .bsr-page .hud__item {
+        flex-basis: calc(50% - 6px);
+      }
+      .bsr-touch-controls {
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+      }
+      .bsr-touch-btn {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        font-size: 22px;
+      }
+      .bsr-touch-btn--thrust {
+        width: 70px;
+        height: 70px;
+        font-size: 10px;
+      }
+      .bsr-page .overlay {
+        padding: 10px;
+      }
+      .bsr-page .overlay__title {
+        font-size: 18px;
+        line-height: 1.15;
+      }
+      .bsr-page .overlay__sub {
+        display: none;
+      }
+      .bsr-page .bsr-select {
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+      .bsr-page .bsr-founder {
+        flex-wrap: nowrap;
+        min-height: 40px;
+        padding: 7px 8px;
+      }
+      .bsr-page .bsr-founder__co {
+        display: none;
+      }
+      .bsr-page #btn-primary {
+        min-height: 40px;
+        width: 100%;
+      }
+    }
+
+    @media (max-height: 560px) and (orientation: landscape) {
+      .bsr-page .nav {
+        min-height: 56px;
+        padding: 0 10px;
+      }
+      .bsr-page .nav__brand {
+        height: 56px;
+      }
+      .bsr-page .nav__brand img {
+        width: 168px;
+      }
+      .bsr-page .nav__actions {
+        gap: 8px;
+      }
+      .bsr-page .nav__cta {
+        min-width: 78px;
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+      .bsr-page .game-page {
+        padding-top: 6px;
+      }
+      .bsr-page .game-page__header {
+        margin-bottom: 6px;
+      }
+      .bsr-page .game-page__title {
+        font-size: 18px;
+      }
+      .bsr-page .game-page__sub,
+      .bsr-page .game-side__poster,
+      .bsr-page .game-side__howto,
+      .bsr-page #ad-leaderboard {
+        display: none;
+      }
+      .bsr-page .canvas-wrap--ar-760-620 {
+        width: min(100%, calc((100dvh - 166px) * 760 / 620));
+      }
+      .bsr-page .overlay__sub {
+        display: none;
+      }
+      .bsr-page .overlay {
+        justify-content: flex-start;
+        gap: 6px;
+        padding: 8px;
+        overflow-y: auto;
+      }
+      .bsr-page .overlay__title {
+        font-size: 16px;
+        line-height: 1.1;
+        margin-bottom: 0;
+      }
+      .bsr-page .bsr-select {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        max-width: 100%;
+        margin: 0 0 6px;
+      }
+      .bsr-page .bsr-founder {
+        flex-direction: column;
+        min-height: 62px;
+        gap: 3px;
+        padding: 7px 5px;
+        text-align: center;
+      }
+      .bsr-page .bsr-founder__rocket {
+        font-size: 20px;
+      }
+      .bsr-page .bsr-founder__name {
+        font-size: 9px;
+      }
+      .bsr-page .bsr-founder__co {
+        display: none;
+      }
+      .bsr-page .bsr-founder__blurb {
+        display: none;
+      }
+      .bsr-page #btn-primary {
+        min-height: 34px;
+        padding: 7px 10px;
+        font-size: 10px;
+      }
+    }
   </style>
 </head>
-<body>
+<body class="bsr-page">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">🚀 Billionaire Space Race</h1>
-        <div class="game-page__sub">← / → rotate · ↑ / Space / W thrust · Fly up past the APOGEE line, then land GENTLY on the ground pad</div>
+        <div class="game-page__sub">← / → rotate · ↑ / Space / W thrust · Land GENTLY &amp; upright on the green pad</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -173,10 +513,18 @@
 
           <div class="level-banner" id="level-banner"></div>
 
+          <div class="bsr-touch-controls" id="bsr-touch-controls" aria-label="Touch flight controls">
+            <div class="bsr-touch-controls__cluster">
+              <button class="bsr-touch-btn" type="button" data-ctrl="left" aria-label="Rotate left">↺</button>
+              <button class="bsr-touch-btn" type="button" data-ctrl="right" aria-label="Rotate right">↻</button>
+            </div>
+            <button class="bsr-touch-btn bsr-touch-btn--thrust" type="button" data-ctrl="thrust" aria-label="Thrust">THRUST</button>
+          </div>
+
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title">🚀 BILLIONAIRE SPACE RACE</h2>
             <p class="overlay__sub overlay__sub--wide">
-              Pick your founder. Launch <em>up</em> past the apogee line — you have to actually reach space — then turn around, descend, and set down <em>gently</em> and <em>upright</em> on the ground pad. Progress from Earth to ocean droneships, a space station, the Moon, and Mars. The pad keeps shrinking and moving. It's a metaphor. Also it's a rocket.
+              Pick your founder. Burn the investor money, climb past lawsuit drones and audit satellites, then set down <em>gently</em> and <em>upright</em> on the platform — which keeps shrinking and, eventually, moving. It's a metaphor. Also it's a rocket.
             </p>
             <div class="bsr-select" id="tycoon-select"></div>
             <div class="overlay__score" id="overlay-score"></div>
@@ -199,9 +547,9 @@
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <div class="dpad dpad--lander" id="dpad" aria-label="Controls" style="margin: 0 auto;">
-            <button data-ctrl="left" aria-label="Rotate left">↺</button>
-            <button data-ctrl="thrust" aria-label="Thrust">THRUST</button>
-            <button data-ctrl="right" aria-label="Rotate right">↻</button>
+            <button type="button" data-ctrl="left" aria-label="Rotate left">↺</button>
+            <button type="button" data-ctrl="thrust" aria-label="Thrust">THRUST</button>
+            <button type="button" data-ctrl="right" aria-label="Rotate right">↻</button>
           </div>
         </div>
 
@@ -210,11 +558,11 @@
         <details class="game-side__howto" open>
           <summary>How to play</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Reach space first.</strong> Climb up past the dashed <em>APOGEE</em> line — the pad's beacons turn green once you've made it.</li>
-            <li><strong style="color:var(--ink);">Then come back down</strong> and land on the ground pad: slow descent (<em>vy</em>), slow drift (<em>vx</em>), and nearly <em>level</em>. The gauges go green when you're safe.</li>
-            <li><strong style="color:var(--ink);">Rotate</strong> with ← / → (or A / D) — tap, don't hold. <strong style="color:var(--ink);">Thrust</strong> with ↑ / Space / W, which pushes wherever the nose points.</li>
+            <li><strong style="color:var(--ink);">Rotate</strong> with ← / → (or A / D). The rocket keeps spinning — tap, don't hold.</li>
+            <li><strong style="color:var(--ink);">Thrust</strong> with ↑ / Space / W. Thrust pushes wherever the nose points.</li>
+            <li><strong style="color:var(--ink);">Land</strong> on the green pad: slow descent (<em>vy</em>), slow drift (<em>vx</em>), and nearly <em>level</em>. The gauges go green when you're safe.</li>
             <li><strong style="color:var(--ink);">Fuel</strong> is investor money. Run out mid-air and gravity collects.</li>
-            <li><strong style="color:var(--ink);">Travel the system:</strong> Earth → ocean droneship → space station → the Moon → Mars. The pad shrinks and moves, gravity changes, and the air fills with hazards.</li>
+            <li><strong style="color:var(--ink);">Each level</strong> the pad shrinks, then moves, and the airspace fills with hazards. Clear it to earn an ad-powered upgrade.</li>
           </ul>
         </details>
       </aside>

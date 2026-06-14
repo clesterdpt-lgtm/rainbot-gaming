@@ -1,0 +1,101 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic: Unhoused
+              - generic: "&"
+              - generic: Unhinged
+            - generic: v0.2.0 Top-Down Beta
+          - generic:
+            - strong: Daily Struggles
+            - generic:
+              - generic: "- Find something to eat"
+              - generic: 0/1
+            - generic:
+              - generic: "- Find clean water"
+              - generic: 0/1
+          - generic:
+            - strong: Make Some Bucks
+            - generic:
+              - generic: "- Earn $20 in the block"
+              - generic: 0/1
+          - generic:
+            - strong: Avoid The Heat
+            - generic:
+              - generic: "- Keep heat low"
+              - generic: 1/1
+        - generic:
+          - generic: Notoriety
+          - generic:
+            - generic: ★
+            - generic: ★
+            - generic: ★
+            - generic: ★
+            - generic: ★
+        - generic:
+          - generic:
+            - generic: 8:08 AM
+            - generic: "*"
+          - generic: "N"
+        - generic:
+          - generic:
+            - generic: H
+            - generic:
+              - generic: Health
+            - generic: 100/100
+          - generic:
+            - generic: T
+            - generic:
+              - generic: Thirst
+            - generic: 56/100
+          - generic:
+            - generic: F
+            - generic:
+              - generic: Hunger
+            - generic: 61/100
+          - generic:
+            - generic: M
+            - generic:
+              - generic: Morale
+            - generic: 46/100
+          - generic:
+            - generic: $
+            - generic: $7.25
+        - generic:
+          - generic:
+            - generic: "1"
+            - generic: Dance
+            - generic: Act
+          - generic:
+            - generic: E
+            - generic: Cache
+            - generic: "0"
+          - generic:
+            - generic: K
+            - generic: Cone
+            - generic: "5"
+          - generic:
+            - generic: L
+            - generic: Peel
+            - generic: "2"
+          - generic:
+            - generic: J
+            - generic: Plunger
+            - generic: Tool
+        - generic:
+          - generic:
+            - generic: E
+            - generic: Interact
+          - generic:
+            - generic: Space
+            - generic: Stunt
+          - generic:
+            - generic: J
+            - generic: Bonk
+          - generic:
+            - generic: L
+            - generic: Peel
+    - text: ▸

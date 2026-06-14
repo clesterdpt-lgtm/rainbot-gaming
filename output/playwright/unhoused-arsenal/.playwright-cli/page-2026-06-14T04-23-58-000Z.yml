@@ -1,0 +1,221 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "Rainbot Gaming" [ref=e4] [cursor=pointer]:
+        - /url: ../
+        - img "Rainbot Gaming" [ref=e5]
+      - generic [ref=e6]:
+        - link "Home" [ref=e7] [cursor=pointer]:
+          - /url: ../
+        - link "Games" [ref=e8] [cursor=pointer]:
+          - /url: ../games.html
+        - link "After Dark" [ref=e9] [cursor=pointer]:
+          - /url: ../#after-dark
+        - link "Coming Soon" [ref=e10] [cursor=pointer]:
+          - /url: ../#coming-soon
+        - link "About" [ref=e11] [cursor=pointer]:
+          - /url: ../#after-dark
+        - link "Merch" [ref=e12] [cursor=pointer]:
+          - /url: ../#pricing
+      - generic [ref=e13]:
+        - link "Pro" [ref=e14] [cursor=pointer]:
+          - /url: "#"
+        - link "Login" [ref=e15] [cursor=pointer]:
+          - /url: "#"
+  - main [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - heading "Unhoused and Unhinged" [level=1] [ref=e19]
+        - generic [ref=e20]: Low-poly 3D sandbox prototype · street antics by day · Haze Zombie survival by night
+      - link "All games" [ref=e21] [cursor=pointer]:
+        - /url: ../games.html
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: PHASE
+            - generic [ref=e27]: Day
+          - generic [ref=e28]:
+            - generic [ref=e29]: CASH
+            - generic [ref=e30]: $0
+          - generic [ref=e31]:
+            - generic [ref=e32]: HEAT
+            - generic [ref=e33]: 0%
+          - generic [ref=e34]:
+            - generic [ref=e35]: ENERGY
+            - generic [ref=e36]: 100%
+          - generic [ref=e37]:
+            - generic [ref=e38]: HEALTH
+            - generic [ref=e39]: 100/100
+          - generic [ref=e40]:
+            - generic [ref=e41]: HIGH
+            - generic [ref=e42]: "0"
+        - generic [ref=e43]:
+          - generic:
+            - generic:
+              - strong: Physics
+              - generic: Stunt props armed
+            - generic:
+              - generic: ▲
+              - generic: Find the first job
+          - generic [ref=e45]:
+            - heading "UNHOUSED AND UNHINGED" [level=2] [ref=e46]
+            - paragraph [ref=e47]: "Prototype block: perform for tips, dodge overzealous heat, and survive the Haze Zombie wave."
+            - button "Start prototype" [ref=e48] [cursor=pointer]
+      - complementary [ref=e49]:
+        - generic [ref=e50]:
+          - heading "CONTROLS" [level=3] [ref=e51]
+          - generic [ref=e52]:
+            - button "Pause" [ref=e53] [cursor=pointer]
+            - button "Restart" [ref=e54] [cursor=pointer]
+          - paragraph [ref=e55]:
+            - text: WASD move · Shift sprint
+            - text: E perform/interact · Space stunt
+            - text: J active tool · K throw cone
+            - text: 567 swap tools
+          - generic [ref=e56]:
+            - strong [ref=e57]: Busking Strip
+            - generic [ref=e58]: tips + hype, nosy crowd
+            - generic [ref=e59]: Block Mood · pressure 0%
+          - generic "Run meters" [ref=e60]:
+            - generic [ref=e61]:
+              - generic [ref=e62]: Time
+              - generic [ref=e65]: 0%
+            - generic [ref=e66]:
+              - generic [ref=e67]: Arrest
+              - generic [ref=e70]: 0%
+            - generic [ref=e71]:
+              - generic [ref=e72]: Wave
+              - generic [ref=e75]: 4 cones
+            - generic [ref=e76]:
+              - generic [ref=e77]: Hype
+              - generic [ref=e80]: 0%
+            - generic [ref=e81]:
+              - generic [ref=e82]: Tumble
+              - generic [ref=e85]: ready
+        - generic [ref=e86]:
+          - heading "DAY ANTICS" [level=3] [ref=e87]
+          - generic [ref=e88]:
+            - button "1 Dance tips + small heat" [ref=e89] [cursor=pointer]:
+              - text: 1 Dance
+              - generic [ref=e90]: tips + small heat
+            - button "2 Sign Bit steady cash" [ref=e91] [cursor=pointer]:
+              - text: 2 Sign Bit
+              - generic [ref=e92]: steady cash
+            - button "3 Trash Drums crowd pull" [ref=e93] [cursor=pointer]:
+              - text: 3 Trash Drums
+              - generic [ref=e94]: crowd pull
+            - button "4 Pratfall risky burst" [ref=e95] [cursor=pointer]:
+              - text: 4 Pratfall
+              - generic [ref=e96]: risky burst
+        - generic [ref=e97]:
+          - heading "STREET GIG" [level=3] [ref=e98]
+          - generic [ref=e99]:
+            - strong [ref=e100]: Warm Up the Block
+            - generic [ref=e101]: Build 14 hype from any daytime antics or prop chaos.
+            - generic [ref=e102]:
+              - generic [ref=e103]: Gig
+              - generic [ref=e106]: 0/14
+            - generic [ref=e107]: "Reward: $14 + 6 hype"
+        - generic [ref=e108]:
+          - heading "BLOCK FAVOR" [level=3] [ref=e109]
+          - generic [ref=e110]:
+            - strong [ref=e111]: Pass the Hat
+            - generic [ref=e112]: Earn 16 hype from antics on the Busking Strip.
+            - generic [ref=e113]:
+              - generic [ref=e114]: Favor
+              - generic [ref=e117]: 0/16
+            - generic [ref=e118]: "Reward: $16 + 5 hype · heat +2"
+        - generic [ref=e119]:
+          - heading "ODD JOBS" [level=3] [ref=e120]
+          - generic [ref=e121]:
+            - strong [ref=e122]: Phone Relay
+            - generic [ref=e123]: Pick up the ringing phone, then drop it at the camp return marker.
+            - generic [ref=e124]:
+              - generic [ref=e125]: Scrap
+              - generic [ref=e128]: "0"
+            - generic [ref=e129]:
+              - generic [ref=e130]: Job
+              - generic [ref=e133]: 0/2
+            - generic [ref=e134]: "Carry item · Reward: $18 + 1 scrap"
+        - generic [ref=e135]:
+          - heading "GEAR & HELP" [level=3] [ref=e136]
+          - generic [ref=e137]:
+            - button "Plunger Tape wider bonks $30" [disabled] [ref=e138]:
+              - strong [ref=e139]: Plunger Tape
+              - generic [ref=e140]: wider bonks
+              - generic [ref=e141]: $30
+            - button "Cone Pouch carry 8 cones $24" [disabled] [ref=e142]:
+              - strong [ref=e143]: Cone Pouch
+              - generic [ref=e144]: carry 8 cones
+              - generic [ref=e145]: $24
+            - button "Cart Padding +25 max health $36" [disabled] [ref=e146]:
+              - strong [ref=e147]: Cart Padding
+              - generic [ref=e148]: +25 max health
+              - generic [ref=e149]: $36
+            - button "Mop Spear long stun poke $34" [disabled] [ref=e150]:
+              - strong [ref=e151]: Mop Spear
+              - generic [ref=e152]: long stun poke
+              - generic [ref=e153]: $34
+            - button "Rubber Chicken confuse squeak $28" [disabled] [ref=e154]:
+              - strong [ref=e155]: Rubber Chicken
+              - generic [ref=e156]: confuse squeak
+              - generic [ref=e157]: $28
+            - button "Meal Ticket heal + energy $12" [disabled] [ref=e158]:
+              - strong [ref=e159]: Meal Ticket
+              - generic [ref=e160]: heal + energy
+              - generic [ref=e161]: $12
+          - generic [ref=e162]: "Tool: Plunger · No upgrades yet."
+        - generic [ref=e163]:
+          - heading "CITY LOG" [level=3] [ref=e164]
+          - generic [ref=e165]:
+            - generic [ref=e166]:
+              - strong [ref=e167]: Physics
+              - text: Stunt props are live. Kick boxes, barrels, and cans for extra chaos.
+            - generic [ref=e168]:
+              - strong [ref=e169]: Producer
+              - text: Earn cash by day. Survive the Haze at night.
+            - generic [ref=e170]:
+              - strong [ref=e171]: Outreach
+              - text: Keep your energy up and the heat manageable.
+            - generic [ref=e172]:
+              - strong [ref=e173]: Pawn Kiosk
+              - text: Plunger is free. Cones are everywhere.
+        - generic [ref=e175]:
+          - generic [ref=e176]: 📢 AD SLOT — LEADERBOARD
+          - generic [ref=e177]:
+            - text: Replace with your network tag in
+            - code [ref=e178]: renderAdSlot()
+        - generic [ref=e180]:
+          - generic [ref=e181]: 📢 AD SLOT — RECTANGLE
+          - generic [ref=e182]:
+            - text: Replace with your network tag in
+            - code [ref=e183]: renderAdSlot()
+        - group [ref=e184]:
+          - generic "▸ Prototype notes" [ref=e185] [cursor=pointer]
+          - list [ref=e186]:
+            - listitem [ref=e187]: Earn enough cash before night while managing heat and energy.
+            - listitem [ref=e188]: Districts change tips, scrap, heat, chase speed, and night pressure.
+            - listitem [ref=e189]: Block Favors add district-specific errands with local payouts.
+            - listitem [ref=e190]: Amp Rescue adds a heavy carried prop route with a performance finale.
+            - listitem [ref=e191]: The chaos director throws crowd, scrap, security, quiet, and haze beats into the run.
+            - listitem [ref=e192]: Street Gigs reward chained antics, prop launches, and clean getaways.
+            - listitem [ref=e193]: The compass points to the current pickup, dropoff, cache, camp, or kiosk target.
+            - listitem [ref=e194]: Press E near glowing caches, pickups, camp, or the pawn kiosk for scavenging and odd jobs.
+            - listitem [ref=e195]: High heat starts a chase. Keep distance until the meter cools.
+            - listitem [ref=e196]: Space starts a short tumble chain; prop hits extend the combo.
+            - listitem [ref=e197]: Buy Mop Spear or Rubber Chicken to change the active J attack.
+            - listitem [ref=e198]: At night, Haze Zombies spawn from alleys. Use tools, cones, and prop chaos.
+            - listitem [ref=e199]: Survive until morning to bank your score.
+          - paragraph [ref=e200]: Satire prototype. The target is absurd systems and slapstick city chaos, not real unhoused people or addiction.
+  - contentinfo [ref=e201]:
+    - generic [ref=e202]:
+      - link "Home" [ref=e203] [cursor=pointer]:
+        - /url: ../
+      - link "All games" [ref=e204] [cursor=pointer]:
+        - /url: ../games.html
+      - link "Privacy" [ref=e205] [cursor=pointer]:
+        - /url: ../legal/privacy.html
+      - link "Terms" [ref=e206] [cursor=pointer]:
+        - /url: ../legal/terms.html
+    - generic [ref=e207]: © 2026 Rainbot Gaming. Parody.

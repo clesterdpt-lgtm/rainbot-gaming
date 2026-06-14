@@ -1,0 +1,108 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "Rainbot Gaming" [ref=e4] [cursor=pointer]:
+        - /url: ../
+        - img "Rainbot Gaming" [ref=e5]
+      - generic [ref=e6]:
+        - link "Home" [ref=e7] [cursor=pointer]:
+          - /url: ../
+        - link "Games" [ref=e8] [cursor=pointer]:
+          - /url: ../games.html
+        - link "After Dark" [ref=e9] [cursor=pointer]:
+          - /url: ../#after-dark
+        - link "Coming Soon" [ref=e10] [cursor=pointer]:
+          - /url: ../#coming-soon
+        - link "About" [ref=e11] [cursor=pointer]:
+          - /url: ../#after-dark
+        - link "Merch" [ref=e12] [cursor=pointer]:
+          - /url: ../#pricing
+      - generic [ref=e13]:
+        - link "Pro" [ref=e14] [cursor=pointer]:
+          - /url: "#"
+        - link "Login" [ref=e15] [cursor=pointer]:
+          - /url: "#"
+  - main [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - heading "👀 Don't Look at the Gym Girl" [level=1] [ref=e19]
+        - generic [ref=e20]: WASD/touch to move · mouse/drag to look · avoid gym bros · hold SPACE/EYES to close your eyes
+      - link "← All games" [ref=e21] [cursor=pointer]:
+        - /url: ../games.html
+    - generic [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: SUS
+            - generic [ref=e28]: 0%
+          - generic [ref=e29]:
+            - generic [ref=e30]: EYES
+            - generic [ref=e31]: OPEN
+          - generic [ref=e32]:
+            - generic [ref=e33]: LEVEL
+            - generic [ref=e34]: 1/8
+          - generic [ref=e35]:
+            - generic [ref=e36]: HEAT
+            - generic [ref=e37]: WARMUP
+          - generic [ref=e38]:
+            - generic [ref=e39]: DIST
+            - generic [ref=e40]: 0%
+          - generic [ref=e41]:
+            - generic [ref=e42]: SCORE
+            - generic [ref=e43]: "0"
+          - generic [ref=e44]:
+            - generic [ref=e45]: HIGH
+            - generic [ref=e46]: "0"
+        - generic [ref=e47]:
+          - button "⛶ Maximize" [ref=e49] [cursor=pointer]
+          - generic [ref=e50]:
+            - heading "👀 READY?" [level=2] [ref=e51]
+            - paragraph [ref=e52]:
+              - strong [ref=e53]: Front door
+              - text: →
+              - strong [ref=e54]: locker room
+              - text: ". Eight levels. Every level: more equipment, big dudes, tighter routes, and your"
+              - strong [ref=e55]: neck pulls harder
+              - text: .
+              - text: Looking builds
+              - strong [ref=e56]: SUS
+              - text: . If she sees you looking —
+              - strong [ref=e57]: "\"?\" turns into \"!\""
+              - text: — and you're done.
+              - emphasis [ref=e58]: WASD/arrows to move · mouse to fight your own eyes · hold SPACE to shut them · click to start
+            - button "Enter the gym" [ref=e59] [cursor=pointer]
+      - complementary [ref=e60]:
+        - generic [ref=e61]:
+          - heading "CONTROLS" [level=3] [ref=e62]
+          - generic [ref=e63]:
+            - button "Pause" [ref=e64] [cursor=pointer]
+            - button "Restart" [ref=e65] [cursor=pointer]
+          - generic [ref=e66]:
+            - button "🎧 AirPods Max 2.0 +AD" [ref=e67]:
+              - generic [ref=e68]: 🎧
+              - generic [ref=e69]: AirPods Max 2.0
+              - generic [ref=e70]: +AD
+            - button "👔 I'm Her Boyfriend +AD" [ref=e71]:
+              - generic [ref=e72]: 👔
+              - generic [ref=e73]: I'm Her Boyfriend
+              - generic [ref=e74]: +AD
+            - button "🎭 Dropped Deadlift +AD" [ref=e75]:
+              - generic [ref=e76]: 🎭
+              - generic [ref=e77]: Dropped Deadlift
+              - generic [ref=e78]: +AD
+        - generic [ref=e80]:
+          - generic [ref=e81]: 📢 AD SLOT — LEADERBOARD
+          - generic [ref=e82]:
+            - text: Replace with your network tag in
+            - code [ref=e83]: renderAdSlot()
+        - group [ref=e84]:
+          - generic "▸ How to play" [ref=e85] [cursor=pointer]
+  - contentinfo [ref=e86]:
+    - generic [ref=e87]:
+      - link "Home" [ref=e88] [cursor=pointer]:
+        - /url: ../
+      - link "All games" [ref=e89] [cursor=pointer]:
+        - /url: ../games.html
+      - link "Privacy" [ref=e90] [cursor=pointer]:
+        - /url: ../legal/privacy.html
+    - generic [ref=e91]: © 2026 Rainbot Gaming. Parody. The squat rack is not real.

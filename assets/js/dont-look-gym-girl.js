@@ -22,6 +22,8 @@
      into a girl blind is an instant bust.
    - FLOOR HAZARDS: loose water bottles trip you,
      stun you briefly, and slide you into bad lanes.
+   - PEAK HOURS CROWD: extra gym girls plus regular
+     people moving through lanes and crowding routes.
 
    Girl types:
    - lifter:     stationary, periodically turns
@@ -65,6 +67,8 @@
   const WATER_BOTTLE_RADIUS = 9;
   const WATER_BOTTLE_TRIGGER = 18;
   const WATER_BOTTLE_TRIP_SUS = 7;
+  const PATRON_RADIUS = 13;
+  const PATRON_BUMP_SUS = 3;
 
   const NOTICE_TIME   = 0.98;    // sustained mutual stare → accused
   const NOTICE_DECAY  = 0.62;    // /sec when stare breaks
@@ -387,6 +391,120 @@
     ]
   ];
 
+  const EXTRA_GIRLS = [
+    [
+      { type: "walker", path: [[420, 260], [540, 260], [540, 380], [420, 380]] }
+    ],
+    [
+      { type: "scanner", x: 90, y: 500, facing: 0 },
+      { type: "lifter", x: 300, y: 150, facing: Math.PI / 2 }
+    ],
+    [
+      { type: "lifter", x: 210, y: 120, facing: 0 },
+      { type: "walker", path: [[150, 250], [245, 250], [245, 380], [150, 380]] }
+    ],
+    [
+      { type: "scanner", x: 530, y: 320, facing: Math.PI },
+      { type: "walker", path: [[470, 80], [580, 80], [580, 170], [470, 170]] }
+    ],
+    [
+      { type: "influencer", x: 585, y: 355, facing: Math.PI },
+      { type: "walker", path: [[90, 120], [220, 120], [220, 260], [90, 260]] }
+    ],
+    [
+      { type: "scanner", x: 80, y: 420, facing: 0 },
+      { type: "lifter", x: 555, y: 170, facing: Math.PI }
+    ],
+    [
+      { type: "influencer", x: 520, y: 190, facing: Math.PI },
+      { type: "lifter", x: 560, y: 250, facing: Math.PI }
+    ],
+    [
+      { type: "influencer", x: 320, y: 180, facing: Math.PI / 2 },
+      { type: "scanner", x: 520, y: 320, facing: Math.PI }
+    ]
+  ];
+
+  const PATRON_LAYOUTS = [
+    [
+      { role: "CARDIO", path: [[90, 250], [180, 250], [180, 390], [90, 390]], speed: 24 },
+      { role: "WALK-IN", path: [[560, 170], [560, 470]], speed: 22 },
+      { role: "REST", x: 245, y: 520 },
+      { role: "STAFF", path: [[360, 560], [500, 560], [500, 440], [360, 440]], speed: 20 }
+    ],
+    [
+      { role: "CHECK-IN", path: [[70, 110], [70, 520]], speed: 26 },
+      { role: "CARDIO", path: [[120, 560], [420, 560]], speed: 24 },
+      { role: "REST", path: [[120, 360], [300, 360]], speed: 18 },
+      { role: "STAFF", x: 260, y: 500 },
+      { role: "LIFT", x: 430, y: 430 }
+    ],
+    [
+      { role: "WALK-IN", path: [[80, 210], [210, 210]], speed: 24 },
+      { role: "CARDIO", path: [[430, 210], [560, 210]], speed: 24 },
+      { role: "STAFF", path: [[320, 90], [320, 370]], speed: 26 },
+      { role: "REST", path: [[250, 350], [390, 350]], speed: 20 },
+      { role: "LIFT", x: 120, y: 300 },
+      { role: "LIFT", x: 520, y: 300 }
+    ],
+    [
+      { role: "CARDIO", path: [[80, 100], [450, 100]], speed: 28 },
+      { role: "WALK-IN", path: [[90, 320], [270, 320]], speed: 26 },
+      { role: "LIFT", path: [[470, 520], [600, 520]], speed: 22 },
+      { role: "STAFF", path: [[60, 260], [60, 380]], speed: 22 },
+      { role: "REST", x: 520, y: 300 },
+      { role: "REST", x: 150, y: 540 },
+      { role: "CARDIO", x: 575, y: 155 }
+    ],
+    [
+      { role: "WALK-IN", path: [[80, 130], [80, 520]], speed: 27 },
+      { role: "CARDIO", path: [[160, 140], [490, 140]], speed: 26 },
+      { role: "STAFF", path: [[520, 260], [590, 260], [590, 480], [520, 480]], speed: 24 },
+      { role: "REST", path: [[150, 500], [260, 500]], speed: 18 },
+      { role: "LIFT", path: [[380, 500], [520, 500]], speed: 20 },
+      { role: "WALK-IN", path: [[570, 130], [570, 290]], speed: 22 },
+      { role: "REST", x: 70, y: 350 },
+      { role: "CARDIO", x: 300, y: 380 }
+    ],
+    [
+      { role: "CARDIO", path: [[180, 90], [520, 90]], speed: 28 },
+      { role: "WALK-IN", path: [[80, 360], [80, 560]], speed: 25 },
+      { role: "STAFF", path: [[520, 180], [560, 540]], speed: 25 },
+      { role: "REST", path: [[190, 540], [450, 540]], speed: 20 },
+      { role: "LIFT", path: [[160, 360], [160, 520]], speed: 20 },
+      { role: "WALK-IN", x: 475, y: 125 },
+      { role: "REST", x: 535, y: 455 },
+      { role: "CARDIO", x: 70, y: 500 },
+      { role: "STAFF", x: 310, y: 90 }
+    ],
+    [
+      { role: "WALK-IN", path: [[90, 90], [240, 90]], speed: 26 },
+      { role: "CARDIO", path: [[400, 90], [570, 90]], speed: 26 },
+      { role: "STAFF", path: [[90, 250], [260, 250]], speed: 22 },
+      { role: "REST", path: [[380, 250], [560, 250]], speed: 20 },
+      { role: "LIFT", path: [[90, 430], [260, 430]], speed: 20 },
+      { role: "WALK-IN", path: [[380, 430], [560, 430]], speed: 24 },
+      { role: "REST", x: 150, y: 570 },
+      { role: "CARDIO", x: 490, y: 575 },
+      { role: "STAFF", x: 320, y: 300 },
+      { role: "LIFT", x: 320, y: 365 }
+    ],
+    [
+      { role: "WALK-IN", path: [[280, 90], [360, 90]], speed: 28 },
+      { role: "CARDIO", path: [[280, 190], [360, 190]], speed: 26 },
+      { role: "STAFF", path: [[90, 320], [250, 320]], speed: 25 },
+      { role: "REST", path: [[390, 320], [550, 320]], speed: 25 },
+      { role: "LIFT", path: [[280, 450], [360, 450]], speed: 22 },
+      { role: "WALK-IN", path: [[320, 510], [320, 570]], speed: 24 },
+      { role: "CARDIO", x: 320, y: 250 },
+      { role: "REST", x: 320, y: 390 },
+      { role: "STAFF", x: 250, y: 320 },
+      { role: "LIFT", x: 390, y: 320 },
+      { role: "WALK-IN", x: 320, y: 120 },
+      { role: "REST", x: 320, y: 520 }
+    ]
+  ];
+
   const SHAME_CAPTIONS = [
     "POV: the whole gym saw that.",
     "You're trending #3 in your local gym's group chat.",
@@ -450,6 +568,7 @@
     obstacles: [],
     bruisers: [],
     bottles: [],
+    patrons: [],
     decor: [],
     exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
     levelStartDist: WORLD_W,
@@ -664,6 +783,34 @@
     if (g.type === "scanner") g.label = "THE WATCHER";
     if (g.type === "stepper") g.label = "STAIRMASTER";
     return g;
+  }
+
+  function makePatron(def, levelNum, idx) {
+    const rawPath = def.path || [[def.x, def.y]];
+    const path = rawPath.map(pt => [pt[0] * WORLD_SCALE_X, pt[1] * WORLD_SCALE_Y]);
+    const palette = [
+      ["#2ee0ff", "#171923"],
+      ["#4dffc9", "#22212b"],
+      ["#f7d716", "#2b2630"],
+      ["#ff7ddf", "#202633"],
+      ["#c7d2fe", "#1f2937"]
+    ];
+    const colors = palette[(idx + levelNum) % palette.length];
+
+    return {
+      x: path[0][0],
+      y: path[0][1],
+      path,
+      pathIdx: path.length > 1 ? 1 : 0,
+      speed: (def.speed || 22) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+      facing: def.facing || 0,
+      role: def.role || "GYM",
+      bumpCooldown: 0,
+      seed: levelNum * 13.11 + idx * 5.37,
+      shirt: def.shirt || colors[0],
+      pants: def.pants || colors[1],
+      skin: def.skin || choice(["#f1c27d", "#d89b63", "#b8734c", "#8d5524"])
+    };
   }
 
   // =========================================================================
@@ -1039,6 +1186,82 @@
           g.facing += Math.sign(diff) * Math.min(Math.abs(diff), 3.0 * dt);
         }
         break;
+      }
+    }
+  }
+
+  function updatePatrons(dt) {
+    for (const patron of state.patrons) {
+      patron.bumpCooldown = Math.max(0, patron.bumpCooldown - dt);
+      if (!patron.path || patron.path.length < 2) continue;
+
+      const target = patron.path[patron.pathIdx];
+      const dx = target[0] - patron.x;
+      const dy = target[1] - patron.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 4) {
+        patron.x = target[0];
+        patron.y = target[1];
+        patron.pathIdx = (patron.pathIdx + 1) % patron.path.length;
+        continue;
+      }
+
+      const step = Math.min(d, patron.speed * dt);
+      const vx = (dx / d) * step;
+      const vy = (dy / d) * step;
+      patron.facing = Math.atan2(dy, dx);
+
+      const nx = patron.x + vx;
+      if (!collidesAny(nx, patron.y, PATRON_RADIUS)) {
+        patron.x = nx;
+      } else {
+        patron.pathIdx = (patron.pathIdx + 1) % patron.path.length;
+      }
+
+      const ny = patron.y + vy;
+      if (!collidesAny(patron.x, ny, PATRON_RADIUS)) {
+        patron.y = ny;
+      } else {
+        patron.pathIdx = (patron.pathIdx + 1) % patron.path.length;
+      }
+
+      patron.x = clamp(patron.x, PATRON_RADIUS, WORLD_W - PATRON_RADIUS);
+      patron.y = clamp(patron.y, PATRON_RADIUS, WORLD_H - PATRON_RADIUS);
+    }
+  }
+
+  function updatePatronBumps() {
+    const player = state.player;
+
+    for (const patron of state.patrons) {
+      const dx = player.x - patron.x;
+      const dy = player.y - patron.y;
+      const d = Math.hypot(dx, dy);
+      const minD = PLAYER_RADIUS + PATRON_RADIUS;
+      if (d >= minD) continue;
+
+      const ang = d > 0 ? Math.atan2(dy, dx) : rand(-Math.PI, Math.PI);
+      const px = patron.x + Math.cos(ang) * minD;
+      const py = patron.y + Math.sin(ang) * minD;
+      if (!collidesAny(px, player.y, PLAYER_RADIUS)) player.x = px;
+      if (!collidesAny(player.x, py, PLAYER_RADIUS)) player.y = py;
+      player.x = clamp(player.x, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
+      player.y = clamp(player.y, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
+
+      if (patron.bumpCooldown > 0) continue;
+      patron.bumpCooldown = 1.35;
+      state.knockX += Math.cos(ang) * 58;
+      state.knockY += Math.sin(ang) * 58;
+      state.cam.shake = Math.max(state.cam.shake, 0.18);
+      sfx.bump();
+
+      if (state.boyfriendT <= 0) {
+        state.sus = Math.min(SUS_MAX, state.sus + PATRON_BUMP_SUS * getLevelPressure());
+        RB.toast("Crowded lane. Keep moving.", "bad");
+        if (state.sus >= SUS_MAX) {
+          bust("sus");
+          return;
+        }
       }
     }
   }
@@ -1453,7 +1676,8 @@
     });
     
     // Scale girls dynamically
-    state.girls = lv.girls.map(def => {
+    const girlDefs = lv.girls.concat(EXTRA_GIRLS[n - 1] || []);
+    state.girls = girlDefs.map(def => {
       const scaledDef = { ...def };
       if (def.x !== undefined) scaledDef.x = def.x * WORLD_SCALE_X;
       if (def.y !== undefined) scaledDef.y = def.y * WORLD_SCALE_Y;
@@ -1462,6 +1686,9 @@
       }
       return makeGirl(scaledDef, lv);
     });
+    state.patrons = (PATRON_LAYOUTS[n - 1] || [])
+      .map((def, i) => makePatron(def, n, i))
+      .filter(p => !collidesAny(p.x, p.y, PATRON_RADIUS));
 
     // Scale exit door coordinates dynamically
     if (lv.exit) {
@@ -2256,6 +2483,85 @@
     }
   }
 
+  function drawPatron(patron) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.beginPath();
+    ctx.ellipse(patron.x + 2, patron.y + 16, 14, 5, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(patron.x, patron.y);
+    ctx.rotate(patron.facing);
+
+    const bob = Math.sin(state.t * 5 + patron.seed) * 1.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.strokeStyle = patron.pants;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-4, 8 + bob);
+    ctx.lineTo(-7, 20 + bob);
+    ctx.moveTo(4, 8 + bob);
+    ctx.lineTo(7, 20 + bob);
+    ctx.stroke();
+
+    ctx.fillStyle = "#f5f7fb";
+    ctx.beginPath();
+    ctx.ellipse(-8, 21 + bob, 5, 2, 0, 0, TAU);
+    ctx.ellipse(8, 21 + bob, 5, 2, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = patron.shirt;
+    ctx.beginPath();
+    ctx.ellipse(0, -2 + bob, 11, 13, 0, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = patron.skin;
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(-8, -3 + bob);
+    ctx.lineTo(-14, 7 + bob);
+    ctx.moveTo(8, -3 + bob);
+    ctx.lineTo(14, 7 + bob);
+    ctx.stroke();
+
+    ctx.fillStyle = patron.skin;
+    ctx.fillRect(-3, -18 + bob, 6, 6);
+    ctx.beginPath();
+    ctx.arc(0, -23 + bob, 7.5, 0, TAU);
+    ctx.fill();
+
+    ctx.fillStyle = "#22170f";
+    ctx.beginPath();
+    ctx.arc(0, -27 + bob, 7.5, Math.PI, 0);
+    ctx.fill();
+
+    if (patron.role === "STAFF" || patron.role === "WALK-IN") {
+      ctx.fillStyle = "rgba(255,255,255,0.8)";
+      ctx.fillRect(12, 3 + bob, 4, 6);
+      ctx.strokeStyle = "rgba(46,224,255,0.8)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(12, 3 + bob, 4, 6);
+    }
+
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.44;
+    ctx.fillStyle = "#d8e6ef";
+    ctx.font = "bold 7px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(patron.role, patron.x, patron.y + 34);
+    ctx.restore();
+  }
+
+  function drawPatrons() {
+    for (const patron of state.patrons) drawPatron(patron);
+  }
+
   function drawBruiser(b) {
     const playerD = dist(state.player.x, state.player.y, b.x, b.y);
     const alert = playerD < b.aggro;
@@ -2806,6 +3112,7 @@
     }
 
     drawObstacles();
+    drawPatrons();
     drawBruisers();
 
     // Draw glowing neon signs on top of walls
@@ -2843,6 +3150,7 @@
       state.levelT += dt;
       readInput();
       updateBruisers(dt);
+      updatePatrons(dt);
       updatePlayer(dt);
       state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
       state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
@@ -2852,6 +3160,7 @@
       updatePowerTimers(dt);
       if (!state.gameOver) updateSus(dt);
       if (!state.gameOver) updateBumps(dt);
+      if (!state.gameOver) updatePatronBumps();
       if (!state.gameOver) updateWaterBottles(dt);
       if (!state.gameOver) updateBruiserThreats();
       state.cam.shake = Math.max(0, state.cam.shake - dt * 2);

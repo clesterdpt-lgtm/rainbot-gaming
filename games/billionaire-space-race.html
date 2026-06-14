@@ -90,6 +90,48 @@
       100% { opacity: 0; transform: translateX(-50%) scale(1); }
     }
 
+    /* ===== Founder select ===== */
+    .overlay__sub--wide { max-width: 560px; }
+    .bsr-select {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(140px, 1fr));
+      gap: 12px;
+      width: 100%;
+      max-width: 600px;
+      margin: 4px 0 18px;
+    }
+    .bsr-founder {
+      background: var(--panel);
+      border: 2px solid var(--panel-2);
+      border-radius: 10px;
+      padding: 14px 12px;
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      text-align: center; color: var(--ink);
+      font-family: var(--font-body);
+    }
+    .bsr-founder:hover { transform: translateY(-2px); border-color: var(--accent-2); }
+    .bsr-founder.is-selected {
+      border-color: var(--accent-3);
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.3), 0 8px 22px rgba(255, 212, 59, 0.18);
+      background: #211f38;
+    }
+    .bsr-founder__rocket {
+      font-size: 38px; line-height: 1;
+      filter: drop-shadow(0 0 8px var(--rk, var(--accent-2)));
+    }
+    .bsr-founder__name { font-family: var(--font-display); font-size: 14px; color: var(--accent-3); letter-spacing: 0.3px; }
+    .bsr-founder__co { font-family: var(--font-mono); font-size: 10px; color: var(--accent-2); }
+    .bsr-founder__blurb { font-size: 11px; color: var(--ink-dim); line-height: 1.35; }
+
+    @media (max-width: 560px) {
+      .bsr-select { grid-template-columns: 1fr; max-width: 320px; }
+      .bsr-founder { flex-direction: row; text-align: left; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .bsr-founder__rocket { font-size: 30px; }
+      .bsr-founder__blurb { flex-basis: 100%; }
+    }
+
     .dpad--lander {
       display: grid;
       grid-template-columns: 64px 64px 64px;
@@ -133,12 +175,12 @@
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title">🚀 BILLIONAIRE SPACE RACE</h2>
-            <p class="overlay__sub">
-              You are <strong style="color:var(--accent-3)" id="intro-tycoon">a tech tycoon with too much rocket.</strong>
-              Burn the investor money, climb past lawsuit drones and audit satellites, then set down <em>gently</em> and <em>upright</em> on the platform — which keeps shrinking and, eventually, moving. It's a metaphor. Also it's a rocket.
+            <p class="overlay__sub overlay__sub--wide">
+              Pick your founder. Burn the investor money, climb past lawsuit drones and audit satellites, then set down <em>gently</em> and <em>upright</em> on the platform — which keeps shrinking and, eventually, moving. It's a metaphor. Also it's a rocket.
             </p>
+            <div class="bsr-select" id="tycoon-select"></div>
             <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Light the money on fire</button>
+            <button class="btn btn--primary" id="btn-primary">Light the money on fire 🚀</button>
           </div>
 
           <div id="card-mount"></div>
@@ -186,7 +228,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/billionaire-space-race.js?v=20260613-2"></script>
+  <script src="../assets/js/billionaire-space-race.js?v=20260614-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

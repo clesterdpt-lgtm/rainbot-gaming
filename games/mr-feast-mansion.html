@@ -293,6 +293,52 @@
       transition: opacity 80ms linear;
     }
 
+    .feast-touch-move {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      z-index: 6;
+      display: none;
+      width: 46%;
+      height: 66%;
+      touch-action: none;
+      pointer-events: none;
+    }
+
+    .feast-touch-actions {
+      position: absolute;
+      right: max(10px, env(safe-area-inset-right));
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 7;
+      display: none;
+      grid-template-columns: repeat(3, auto);
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .feast-touch-actions .btn {
+      background: rgba(5, 5, 6, 0.34);
+      border-color: rgba(240, 195, 54, 0.18);
+      border-radius: 999px;
+      box-shadow: 0 0 16px rgba(0, 0, 0, 0.24);
+      color: rgba(255, 246, 208, 0.74);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      min-height: 38px;
+      min-width: 48px;
+      padding: 8px 10px;
+      pointer-events: auto;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+      touch-action: none;
+    }
+
+    .feast-touch-actions .btn:active,
+    .feast-touch-actions .btn.is-held {
+      background: rgba(240, 195, 54, 0.28);
+      border-color: rgba(240, 195, 54, 0.45);
+      color: #fff6d0;
+    }
+
     .feast-side-note,
     .feast-log,
     .feast-objectives {
@@ -484,6 +530,44 @@
         min-height: 27px;
         padding: 6px 9px;
       }
+
+      .feast-touch-move,
+      .feast-touch-actions {
+        display: grid;
+      }
+
+      .feast-touch-move {
+        pointer-events: auto;
+      }
+
+      .mrfeast-page .game-side .mobile-controls {
+        display: none;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .feast-touch-actions {
+        gap: 6px;
+        right: max(8px, env(safe-area-inset-right));
+        bottom: max(8px, env(safe-area-inset-bottom));
+      }
+
+      .feast-touch-actions .btn {
+        font-size: 9px;
+        min-height: 34px;
+        min-width: 42px;
+        padding: 7px 8px;
+      }
+
+      .feast-route,
+      .feast-danger {
+        bottom: 50px;
+      }
+
+      .feast-alert,
+      .feast-prompt {
+        bottom: 86px;
+      }
     }
   </style>
 </head>
@@ -540,6 +624,12 @@
           <div class="feast-prompt" id="feast-prompt"><div class="feast-prompt__inner" id="feast-prompt-text">Hold E</div></div>
           <div class="feast-vignette" id="feast-vignette"></div>
           <div class="feast-jumpscare" id="feast-jumpscare"></div>
+          <div class="feast-touch-move" id="touch-move-zone" aria-hidden="true"></div>
+          <div class="feast-touch-actions" aria-label="Mobile actions">
+            <button class="btn" data-hold-action="sprint" type="button">Run</button>
+            <button class="btn" data-hold-action="interact" type="button">Use</button>
+            <button class="btn" id="btn-recenter-touch" type="button">Aim</button>
+          </div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">MR. FEAST</h2>
@@ -631,7 +721,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260613-2"></script>
-  <script src="../assets/js/mr-feast.js?v=20260614-5"></script>
+  <script src="../assets/js/mr-feast.js?v=20260614-9"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

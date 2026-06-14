@@ -205,6 +205,8 @@
     pause: $("btn-pause"),
     restart: $("btn-restart"),
     recenter: $("btn-recenter"),
+    recenterTouch: $("btn-recenter-touch"),
+    touchMoveZone: $("touch-move-zone"),
     hudTasks: $("hud-tasks"),
     hudViewers: $("hud-viewers"),
     hudNerve: $("hud-nerve"),
@@ -318,6 +320,15 @@
       locked: false,
       softLocked: false,
       lastUnlockedAt: 0,
+      suppressClickUntil: 0,
+    },
+    touchMove: {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      forward: 0,
+      strafe: 0,
     },
     tasks: [],
     hazards: [],
@@ -2419,6 +2430,7 @@
         return;
       }
 
+      state.mouseLook.suppressClickUntil = performance.now() + 650;
       state.mouseLook.dragging = true;
       state.mouseLook.pointerId = event.pointerId;
       state.mouseLook.lastX = event.clientX;
@@ -2431,6 +2443,10 @@
     canvas.addEventListener("click", (event) => {
       if (!state.running || state.paused || state.gameOver) return;
       if (event.button && event.button !== 0) return;
+      if (performance.now() < state.mouseLook.suppressClickUntil) {
+        event.preventDefault();
+        return;
+      }
       canvas.focus({ preventScroll: true });
       requestMouseLock();
       event.preventDefault();
@@ -2463,6 +2479,7 @@
       const action = button.dataset.holdAction;
       const set = (value) => {
         state.input[action] = value;
+        button.classList.toggle("is-held", value);
         canvas.focus({ preventScroll: true });
       };
       button.addEventListener("pointerdown", (event) => {
@@ -2477,12 +2494,30 @@
       button.addEventListener("pointercancel", () => set(false));
     });
 
-    if (el.recenter) {
-      el.recenter.addEventListener("click", () => {
+    const recenterView = () => {
+      state.player.yaw = 0;
+      state.player.pitch = 0;
+      canvas.focus({ preventScroll: true });
+    };
+    [el.recenter, el.recenterTouch].forEach((button) => {
+      if (!button) return;
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        recenterView();
+      });
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
         state.player.yaw = 0;
+        state.player.pitch = 0;
+        button.classList.add("is-held");
         canvas.focus({ preventScroll: true });
       });
-    }
+      button.addEventListener("pointerup", () => button.classList.remove("is-held"));
+      button.addEventListener("pointerleave", () => button.classList.remove("is-held"));
+      button.addEventListener("pointercancel", () => button.classList.remove("is-held"));
+    });
+
+    bindTouchMoveZone();
 
     bindLookSettings();
 
@@ -2542,6 +2577,66 @@
     state.mouseLook.pointerId = null;
     state.mouseLook.hoverX = null;
     state.mouseLook.hoverY = null;
+  }
+
+  function bindTouchMoveZone() {
+    if (!el.touchMoveZone) return;
+
+    const update = (event) => {
+      const dx = event.clientX - state.touchMove.startX;
+      const dy = event.clientY - state.touchMove.startY;
+      const rawStrafe = clamp(dx / 58, -1, 1);
+      const rawForward = clamp(-dy / 58, -1, 1);
+      const amount = Math.hypot(rawStrafe, rawForward);
+      if (amount < 0.16) {
+        state.touchMove.forward = 0;
+        state.touchMove.strafe = 0;
+        return;
+      }
+      const scale = Math.min(1, amount);
+      state.touchMove.forward = (rawForward / amount) * scale;
+      state.touchMove.strafe = (rawStrafe / amount) * scale;
+    };
+
+    el.touchMoveZone.addEventListener("pointerdown", (event) => {
+      if (!state.running || state.paused || state.gameOver) return;
+      state.touchMove.active = true;
+      state.touchMove.pointerId = event.pointerId;
+      state.touchMove.startX = event.clientX;
+      state.touchMove.startY = event.clientY;
+      state.touchMove.forward = 0;
+      state.touchMove.strafe = 0;
+      canvas.focus({ preventScroll: true });
+      try {
+        el.touchMoveZone.setPointerCapture(event.pointerId);
+      } catch (error) {}
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    el.touchMoveZone.addEventListener("pointermove", (event) => {
+      if (!state.touchMove.active || state.touchMove.pointerId !== event.pointerId) return;
+      update(event);
+      event.preventDefault();
+      event.stopPropagation();
+    });
+
+    const stop = (event) => {
+      if (event && state.touchMove.pointerId !== null && state.touchMove.pointerId !== event.pointerId) return;
+      resetTouchMove();
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    el.touchMoveZone.addEventListener("pointerup", stop);
+    el.touchMoveZone.addEventListener("pointercancel", stop);
+    el.touchMoveZone.addEventListener("lostpointercapture", resetTouchMove);
+  }
+
+  function resetTouchMove() {
+    state.touchMove.active = false;
+    state.touchMove.pointerId = null;
+    state.touchMove.forward = 0;
+    state.touchMove.strafe = 0;
   }
 
   function isMouseCaptured() {
@@ -2690,6 +2785,11 @@
           finalUnlocked: state.finalUnlocked,
           finalEscapeTimer: Number(state.finalEscapeTimer.toFixed(2)),
           hostMode: state.host.mode,
+          playerX: Number(state.player.x.toFixed(2)),
+          playerZ: Number(state.player.z.toFixed(2)),
+          playerYaw: Number(state.player.yaw.toFixed(3)),
+          touchForward: Number(state.touchMove.forward.toFixed(2)),
+          touchStrafe: Number(state.touchMove.strafe.toFixed(2)),
           nerve: Number(state.nerve.toFixed(1)),
           signal: Number(state.signal.toFixed(1)),
         };
@@ -2808,6 +2908,7 @@
     state.mouseLook.pointerId = null;
     state.mouseLook.locked = document.pointerLockElement === canvas;
     state.mouseLook.softLocked = false;
+    resetTouchMove();
     updateMouseLookClass();
 
     world.taskGroups.forEach((group, id) => {
@@ -2856,6 +2957,7 @@
       showAlert("Paused. The mansion waits politely, which is worse.", "");
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       releaseSoftMouseLock();
+      resetTouchMove();
     } else {
       showAlert("Rolling again.", "");
     }
@@ -2899,8 +3001,10 @@
     if (state.input.turnLeft) state.player.yaw += turnSpeed * dt;
     if (state.input.turnRight) state.player.yaw -= turnSpeed * dt;
 
-    const forward = (state.input.forward ? 1 : 0) - (state.input.back ? 1 : 0);
-    const strafe = (state.input.right ? 1 : 0) - (state.input.left ? 1 : 0);
+    const keyForward = (state.input.forward ? 1 : 0) - (state.input.back ? 1 : 0);
+    const keyStrafe = (state.input.right ? 1 : 0) - (state.input.left ? 1 : 0);
+    const forward = clamp(keyForward + state.touchMove.forward, -1, 1);
+    const strafe = clamp(keyStrafe + state.touchMove.strafe, -1, 1);
     const moving = Math.abs(forward) + Math.abs(strafe) > 0;
     state.player.moving = moving;
 
@@ -3640,6 +3744,9 @@
   }
 
   function updateHUD() {
+    canvas.dataset.playerX = state.player.x.toFixed(2);
+    canvas.dataset.playerZ = state.player.z.toFixed(2);
+    canvas.dataset.playerYaw = state.player.yaw.toFixed(3);
     if (el.hudTasks) el.hudTasks.textContent = `${state.tasksDone}/${TASK_TOTAL}`;
     if (el.hudViewers) el.hudViewers.textContent = formatScore(state.viewers);
     if (el.hudNerve) el.hudNerve.textContent = percent(state.nerve);

@@ -1,5 +1,5 @@
 /* ============================================
-   BRAINROT 2048 — sliding-tile merge game
+   BRAINROT 2048 - sliding-tile merge game
    - DOM-based 4x4 board with CSS slide/merge animation
    - Tier ladder: NPC -> Skibidi -> ... -> Galaxy Brain
    - Debug hook: window.__MERGE
@@ -9,23 +9,25 @@
 
   const GAME_ID = "brainrot2048";
   const SIZE = 4;
-  const ANIM = 120; // ms — must match the CSS transform transition on .merge-tile
+  const ANIM = 120; // ms - must match the CSS transform transition on .merge-tile
+  const scriptUrl = document.currentScript ? document.currentScript.src : location.href;
+  const tileImageBase = new URL("../img/brainrot-2048/", scriptUrl).href;
 
-  // Tier ladder. Index 1..MAX. Each tier: display name + tile colours.
-  // Colours are the single source of truth (tiles + the side-panel ladder read this).
+  // Tier ladder. Index 1..MAX. Each tier: display name, tile colours, generated image.
+  // Colours remain a fallback while image files are loading.
   const TIERS = [
     null,
-    { name: "NPC",          bg: "#26243f", fg: "#9b98b5" },
-    { name: "Skibidi",      bg: "#243a5e", fg: "#8fc7ff" },
-    { name: "Rizz",         bg: "#194e5c", fg: "#5fe3ff" },
-    { name: "Gyatt",        bg: "#155e44", fg: "#67ffb0" },
-    { name: "Sigma",        bg: "#4f5016", fg: "#ffe85e" },
-    { name: "Mogger",       bg: "#5e3a12", fg: "#ffba5e" },
-    { name: "Aura",         bg: "#5a1f48", fg: "#ff93d1" },
-    { name: "Gigachad",     bg: "#ff2e88", fg: "#1a0a12" },
-    { name: "Fanum Tax",    bg: "#2ee0ff", fg: "#04222b" },
-    { name: "Ohio",         bg: "#ffd43b", fg: "#2a1d00" },
-    { name: "Galaxy Brain", bg: "#ff2e88", fg: "#ffffff" },
+    { name: "NPC",          bg: "#26243f", fg: "#ffffff", image: "tile-npc.png" },
+    { name: "Skibidi",      bg: "#243a5e", fg: "#ffffff", image: "tile-skibidi.png" },
+    { name: "Rizz",         bg: "#194e5c", fg: "#ffffff", image: "tile-rizz.png" },
+    { name: "Gyatt",        bg: "#155e44", fg: "#ffffff", image: "tile-gyatt.png" },
+    { name: "Sigma",        bg: "#4f5016", fg: "#ffffff", image: "tile-sigma.png" },
+    { name: "Mogger",       bg: "#5e3a12", fg: "#ffffff", image: "tile-mogger.png" },
+    { name: "Aura",         bg: "#5a1f48", fg: "#ffffff", image: "tile-aura.png" },
+    { name: "Gigachad",     bg: "#ff2e88", fg: "#ffffff", image: "tile-gigachad.png" },
+    { name: "Fanum Tax",    bg: "#2ee0ff", fg: "#ffffff", image: "tile-fanum-tax.png" },
+    { name: "Ohio",         bg: "#ffd43b", fg: "#ffffff", image: "tile-ohio.png" },
+    { name: "Galaxy Brain", bg: "#ff2e88", fg: "#ffffff", image: "tile-galaxy-brain.png" },
   ];
   const MAX = TIERS.length - 1;
 
@@ -34,7 +36,6 @@
       ? RB
       : { recordScore: () => false, getHighScore: () => 0, toast: () => {} };
 
-  // ---------- DOM ----------
   const boardEl = document.getElementById("board");
   const cellsEl = document.getElementById("cells");
   const tilesEl = document.getElementById("tiles");
@@ -49,9 +50,8 @@
   const topEl = document.getElementById("hud-top");
   const ladderEl = document.getElementById("ladder");
 
-  // ---------- State ----------
-  let grid; // SIZE x SIZE of tile|null
-  let tiles; // flat list of live tile objects { id, val, r, c, el, mergedInto }
+  let grid;
+  let tiles;
   let score = 0;
   let topTier = 1;
   let uid = 0;
@@ -60,13 +60,16 @@
   let won = false;
   let bestAtStart = 0;
 
-  // ---------- Build static scaffolding ----------
+  function tileImageUrl(tier) {
+    return tileImageBase + tier.image;
+  }
+
   function makeCells() {
     cellsEl.innerHTML = "";
     for (let i = 0; i < SIZE * SIZE; i++) {
-      const c = document.createElement("div");
-      c.className = "merge-cell";
-      cellsEl.appendChild(c);
+      const cell = document.createElement("div");
+      cell.className = "merge-cell";
+      cellsEl.appendChild(cell);
     }
   }
 
@@ -74,28 +77,32 @@
     if (!ladderEl) return;
     ladderEl.innerHTML = "";
     for (let v = 1; v <= MAX; v++) {
+      const tier = TIERS[v];
       const li = document.createElement("li");
-      li.textContent = TIERS[v].name;
-      li.style.background = TIERS[v].bg;
-      li.style.color = TIERS[v].fg;
+      li.style.background = tier.bg;
+      li.style.color = tier.fg;
+      li.innerHTML =
+        '<img src="' + tileImageUrl(tier) + '" alt="" loading="lazy" />' +
+        '<span>' + tier.name + "</span>";
       ladderEl.appendChild(li);
     }
   }
 
-  // ---------- Tile helpers ----------
   function placeTile(tile) {
     tile.el.style.setProperty("--c", tile.c);
     tile.el.style.setProperty("--r", tile.r);
   }
 
   function styleTile(tile) {
-    const t = TIERS[tile.val];
-    tile.el.style.background = t.bg;
-    tile.el.style.color = t.fg;
+    const tier = TIERS[tile.val];
+    tile.el.style.background = tier.bg;
+    tile.el.style.color = tier.fg;
+    tile.el.style.setProperty("--tile-image", 'url("' + tileImageUrl(tier) + '")');
     tile.el.classList.toggle("merge-tile--boss", tile.val === MAX);
     tile.el.innerHTML =
+      '<span class="merge-tile__art" aria-hidden="true"></span>' +
       '<span class="merge-tile__n">' + tile.val + "</span>" +
-      '<span class="merge-tile__name">' + t.name + "</span>";
+      '<span class="merge-tile__name">' + tier.name + "</span>";
   }
 
   function flash(el, cls, ms) {
@@ -132,7 +139,6 @@
     return tile;
   }
 
-  // ---------- Movement ----------
   const VEC = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
 
   function traversal(dir) {
@@ -153,20 +159,29 @@
     if (!running || animating || !VEC[dir]) return false;
     const [dr, dc] = VEC[dir];
     let moved = false;
-    const merges = []; // { survivor, eaten }
+    const merges = [];
 
-    for (const t of tiles) t.mergedInto = false;
+    for (const tile of tiles) tile.mergedInto = false;
 
     for (const [r, c] of traversal(dir)) {
       const tile = grid[r][c];
       if (!tile) continue;
-      let nr = r, nc = c;
+      let nr = r;
+      let nc = c;
       while (true) {
-        const tr = nr + dr, tc = nc + dc;
+        const tr = nr + dr;
+        const tc = nc + dc;
         if (tr < 0 || tr >= SIZE || tc < 0 || tc >= SIZE) break;
         const occ = grid[tr][tc];
-        if (!occ) { nr = tr; nc = tc; continue; }
-        if (occ.val === tile.val && occ.val < MAX && !occ.mergedInto) { nr = tr; nc = tc; }
+        if (!occ) {
+          nr = tr;
+          nc = tc;
+          continue;
+        }
+        if (occ.val === tile.val && occ.val < MAX && !occ.mergedInto) {
+          nr = tr;
+          nc = tc;
+        }
         break;
       }
       if (nr === r && nc === c) continue;
@@ -174,8 +189,9 @@
       moved = true;
       const dest = grid[nr][nc];
       grid[r][c] = null;
-      tile.r = nr; tile.c = nc;
-      placeTile(tile); // CSS transition slides it
+      tile.r = nr;
+      tile.c = nc;
+      placeTile(tile);
       if (dest) {
         dest.mergedInto = true;
         merges.push({ survivor: dest, eaten: tile });
@@ -225,11 +241,10 @@
     return true;
   }
 
-  // ---------- HUD + overlays ----------
   function updateHud() {
     if (scoreEl) scoreEl.textContent = score.toLocaleString();
     if (bestEl) bestEl.textContent = api.getHighScore(GAME_ID).toLocaleString();
-    if (topEl) topEl.textContent = TIERS[topTier] ? TIERS[topTier].name : "—";
+    if (topEl) topEl.textContent = TIERS[topTier] ? TIERS[topTier].name : "-";
   }
 
   function showOverlay(title, sub, btnLabel, scoreHtml, onClick) {
@@ -249,33 +264,31 @@
     running = false;
     const best = api.getHighScore(GAME_ID);
     if (score > 0 && score >= best && score > bestAtStart) {
-      setTimeout(() => api.toast("🏆 New high score!", "good"), 300);
+      setTimeout(() => api.toast("New high score!", "good"), 300);
     }
     showOverlay(
       "Brain Full.",
-      "No moves left — the grid is wall-to-wall NPCs and nothing else will merge.",
+      "No moves left - the grid is wall-to-wall NPCs and nothing else will merge.",
       "Run it back",
       "Score: <strong>" + score.toLocaleString() +
-        "</strong> · Best tier: <strong>" + TIERS[topTier].name +
-        "</strong> · High: <strong>" + best.toLocaleString() + "</strong>",
+        "</strong> / Best tier: <strong>" + TIERS[topTier].name +
+        "</strong> / High: <strong>" + best.toLocaleString() + "</strong>",
       newGame
     );
   }
 
   function showWin() {
-    // Reaching the top doesn't end the run — let them keep stacking for score.
     const best = api.getHighScore(GAME_ID);
     showOverlay(
-      "🧠 GALAXY BRAIN",
-      "You merged all the way to the top of the brainrot food chain. Genuinely sigma behaviour. Keep going for a higher score, or reset.",
+      "GALAXY BRAIN",
+      "You merged all the way to the top of the brainrot food chain. Keep going for a higher score, or reset.",
       "Keep merging",
       "Score: <strong>" + score.toLocaleString() +
-        "</strong> · High: <strong>" + best.toLocaleString() + "</strong>",
+        "</strong> / High: <strong>" + best.toLocaleString() + "</strong>",
       hideOverlay
     );
   }
 
-  // ---------- Lifecycle ----------
   function newGame() {
     tilesEl.innerHTML = "";
     grid = [];
@@ -294,7 +307,6 @@
     updateHud();
   }
 
-  // ---------- Input ----------
   const KEYS = {
     ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
     w: "up", s: "down", a: "left", d: "right",
@@ -310,40 +322,40 @@
     move(dir);
   });
 
-  // On-screen d-pad (mobile) reuses the site's [data-mobile-dir] grid placement.
   document.querySelectorAll("[data-mobile-dir]").forEach((btn) => {
     btn.addEventListener("click", () => move(btn.getAttribute("data-mobile-dir")));
   });
 
   if (btnNew) btnNew.addEventListener("click", newGame);
 
-  // Swipe.
-  let sx = 0, sy = 0, swiping = false;
+  let sx = 0;
+  let sy = 0;
+  let swiping = false;
   boardEl.addEventListener("touchstart", (e) => {
     const t = e.touches[0];
-    sx = t.clientX; sy = t.clientY; swiping = true;
+    sx = t.clientX;
+    sy = t.clientY;
+    swiping = true;
   }, { passive: true });
   boardEl.addEventListener("touchend", (e) => {
     if (!swiping) return;
     swiping = false;
     const t = e.changedTouches[0];
-    const dx = t.clientX - sx, dy = t.clientY - sy;
+    const dx = t.clientX - sx;
+    const dy = t.clientY - sy;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
     if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
     else move(dy > 0 ? "down" : "up");
   }, { passive: true });
 
-  // ---------- Init ----------
   makeCells();
   makeLadder();
   grid = [];
   for (let r = 0; r < SIZE; r++) grid.push(new Array(SIZE).fill(null));
   tiles = [];
   updateHud();
-  // Start overlay is shown in markup; wire its button.
   btnPrimary.onclick = newGame;
 
-  // ---------- Debug hook ----------
   function setCell(r, c, val) {
     if (!grid[r][c] && !val) return;
     if (grid[r][c]) {
@@ -377,7 +389,7 @@
     spawn: spawnTile,
     set: setCell,
     clear: clearBoard,
-    vals: () => grid.map((row) => row.map((t) => (t ? t.val : 0))),
+    vals: () => grid.map((row) => row.map((tile) => (tile ? tile.val : 0))),
     get score() { return score; },
     get topTier() { return topTier; },
     get animating() { return animating; },

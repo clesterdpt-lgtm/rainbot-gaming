@@ -41,11 +41,24 @@
   // 2. FLAVOR — the parody lives here
   // =========================================================================
   const TYCOONS = [
-    { name: "Elon Tusk",        co: "ThiccX",        rocket: "Starshippost",  color: "#2ee0ff" },
-    { name: "Jeff Bozo",        co: "Blue Horizon",  rocket: "New Shepherd-Loaf", color: "#7da7ff" },
-    { name: "Richard Bananason",co: "Virgin Voyage", rocket: "VSS Unity-ish", color: "#ff5c5c" },
-    { name: "Mark Zuckerbot",   co: "Meta-stasis",   rocket: "The Pivot",     color: "#6bff7d" },
-    { name: "Larry Pagebreak",  co: "Alphabae",      rocket: "Don't Be Evil-2", color: "#ffd43b" },
+    {
+      id: "musk", name: "Elon Tusk", co: "ThiccX",
+      rocket: "Starshippost 9000", color: "#2ee0ff", shape: "starship", perk: "thrust",
+      tagline: "Posts through the launch.",
+      blurb: "Overengineered, runs on hype. +12% thrust — but it might explode on a livestream.",
+    },
+    {
+      id: "bezos", name: "Jeff Bezotz", co: "Amazoom",
+      rocket: "Blue Girth", color: "#7da7ff", shape: "capsule", perk: "pad",
+      tagline: "Shaped like that on purpose.",
+      blurb: "Prime-certified precision. The landing pad arrives +28px wider, every level. Same-day.",
+    },
+    {
+      id: "zuck", name: "Zark Muckerberg", co: "Meta-stasis",
+      rocket: "The Pivot v8", color: "#6bff7d", shape: "cube", perk: "autostab",
+      tagline: "Legally a human pilot.",
+      blurb: "The algorithm fixes your posture. Auto-stabilizers always on — the rocket self-levels.",
+    },
   ];
 
   const LEVEL_TAGLINES = [
@@ -116,7 +129,7 @@
     landed: false,
     level: 1,
     score: 0,
-    tycoon: choice(TYCOONS),
+    tycoon: TYCOONS[0],
 
     worldH: 1800,
     cameraY: 0,
@@ -178,6 +191,12 @@
     landPad.w += state.pendingUpgrades.padBonus;
     state.slowmo = state.pendingUpgrades.slowmo;
     state.autostab = state.pendingUpgrades.autostab;
+
+    // Founder perks — each billionaire flies differently
+    const perk = state.tycoon && state.tycoon.perk;
+    if (perk === "pad") landPad.w += 28;            // Bezotz: Prime-precision wider pad
+    if (perk === "autostab") state.autostab = true; // Muckerberg: the algorithm self-levels
+    state.thrustMul = perk === "thrust" ? 1.12 : 1; // Tusk: +12% thrust
 
     // Rocket sits on the launch pad
     state.rocket = {
@@ -292,8 +311,9 @@
     if (thrustHeld() && r.fuel > 0) {
       r.thrusting = true;
       r.fuel = Math.max(0, r.fuel - FUEL_BURN);
-      const ax = Math.sin(r.angle) * THRUST * slow;
-      const ay = -Math.cos(r.angle) * THRUST * slow;
+      const tmul = state.thrustMul || 1;
+      const ax = Math.sin(r.angle) * THRUST * tmul * slow;
+      const ay = -Math.cos(r.angle) * THRUST * tmul * slow;
       r.vx += ax;
       r.vy += ay;
       r.onPad = false;
@@ -618,40 +638,11 @@
       ctx.fill();
     }
 
-    // body
-    ctx.fillStyle = "#e8e6f0";
-    ctx.beginPath();
-    ctx.moveTo(0, -ROCKET_H / 2);                     // nose
-    ctx.lineTo(ROCKET_W / 2, -ROCKET_H / 2 + 16);
-    ctx.lineTo(ROCKET_W / 2, ROCKET_H / 2 - 8);
-    ctx.lineTo(-ROCKET_W / 2, ROCKET_H / 2 - 8);
-    ctx.lineTo(-ROCKET_W / 2, -ROCKET_H / 2 + 16);
-    ctx.closePath();
-    ctx.fill();
-
-    // tycoon-colored nose + window
-    ctx.fillStyle = state.tycoon.color;
-    ctx.beginPath();
-    ctx.moveTo(0, -ROCKET_H / 2);
-    ctx.lineTo(ROCKET_W / 2, -ROCKET_H / 2 + 16);
-    ctx.lineTo(-ROCKET_W / 2, -ROCKET_H / 2 + 16);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#0b1030";
-    ctx.beginPath(); ctx.arc(0, -2, 4, 0, Math.PI * 2); ctx.fill();
-
-    // fins
-    ctx.fillStyle = "#ff2e88";
-    ctx.beginPath();
-    ctx.moveTo(-ROCKET_W / 2, ROCKET_H / 2 - 14);
-    ctx.lineTo(-ROCKET_W / 2 - 8, ROCKET_H / 2 - 2);
-    ctx.lineTo(-ROCKET_W / 2, ROCKET_H / 2 - 4);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(ROCKET_W / 2, ROCKET_H / 2 - 14);
-    ctx.lineTo(ROCKET_W / 2 + 8, ROCKET_H / 2 - 2);
-    ctx.lineTo(ROCKET_W / 2, ROCKET_H / 2 - 4);
-    ctx.fill();
+    // body — shape depends on which founder you picked
+    const shape = state.tycoon.shape;
+    if (shape === "capsule") drawBodyCapsule();
+    else if (shape === "cube") drawBodyCube();
+    else drawBodyStarship();
 
     // landing legs
     ctx.strokeStyle = "#9a98aa";
@@ -662,6 +653,82 @@
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  // ----- Founder-specific rocket bodies (drawn in rocket-local space) -----
+  const HW = ROCKET_W / 2, HH = ROCKET_H / 2;
+
+  function drawBodyStarship() {
+    // Tusk: pointy stainless Starship parody
+    ctx.fillStyle = "#e8e6f0";
+    ctx.beginPath();
+    ctx.moveTo(0, -HH);
+    ctx.lineTo(HW, -HH + 16);
+    ctx.lineTo(HW, HH - 8);
+    ctx.lineTo(-HW, HH - 8);
+    ctx.lineTo(-HW, -HH + 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = state.tycoon.color;
+    ctx.beginPath();
+    ctx.moveTo(0, -HH); ctx.lineTo(HW, -HH + 16); ctx.lineTo(-HW, -HH + 16);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#0b1030";
+    ctx.beginPath(); ctx.arc(0, -2, 4, 0, Math.PI * 2); ctx.fill();
+    // pink fins
+    ctx.fillStyle = "#ff2e88";
+    ctx.beginPath();
+    ctx.moveTo(-HW, HH - 14); ctx.lineTo(-HW - 8, HH - 2); ctx.lineTo(-HW, HH - 4); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(HW, HH - 14); ctx.lineTo(HW + 8, HH - 2); ctx.lineTo(HW, HH - 4); ctx.fill();
+  }
+
+  function drawBodyCapsule() {
+    // Bezotz: the, ahem, famously-shaped rounded capsule
+    const cw = HW + 2;
+    ctx.fillStyle = "#eceaf2";
+    ctx.beginPath();
+    ctx.moveTo(-cw, HH - 6);
+    ctx.lineTo(-cw, -HH + cw);
+    ctx.arc(0, -HH + cw, cw, Math.PI, 0);   // rounded dome nose
+    ctx.lineTo(cw, HH - 6);
+    ctx.closePath();
+    ctx.fill();
+    // colored dome cap
+    ctx.fillStyle = state.tycoon.color;
+    ctx.beginPath();
+    ctx.arc(0, -HH + cw, cw, Math.PI, 0);
+    ctx.lineTo(cw, -HH + cw + 4); ctx.lineTo(-cw, -HH + cw + 4);
+    ctx.closePath(); ctx.fill();
+    // window
+    ctx.fillStyle = "#0b1030";
+    ctx.beginPath(); ctx.arc(0, -2, 4, 0, Math.PI * 2); ctx.fill();
+    // little fins
+    ctx.fillStyle = "#7da7ff";
+    ctx.beginPath();
+    ctx.moveTo(-cw, HH - 12); ctx.lineTo(-cw - 7, HH - 2); ctx.lineTo(-cw, HH - 4); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cw, HH - 12); ctx.lineTo(cw + 7, HH - 2); ctx.lineTo(cw, HH - 4); ctx.fill();
+  }
+
+  function drawBodyCube() {
+    // Muckerberg: blocky "metaverse" rocket with a VR-visor band + antenna
+    ctx.fillStyle = "#d9d7e6";
+    ctx.fillRect(-HW, -HH + 6, ROCKET_W, ROCKET_H - 12);
+    // antenna
+    ctx.strokeStyle = "#9a98aa"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -HH + 6); ctx.lineTo(0, -HH - 4); ctx.stroke();
+    ctx.fillStyle = "#ff2e88";
+    ctx.beginPath(); ctx.arc(0, -HH - 5, 2.5, 0, Math.PI * 2); ctx.fill();
+    // VR-visor band in founder color
+    ctx.fillStyle = state.tycoon.color;
+    ctx.fillRect(-HW, -HH + 11, ROCKET_W, 9);
+    ctx.fillStyle = "#0b1030";
+    ctx.fillRect(-HW + 3, -HH + 13, ROCKET_W - 6, 4);
+    // blocky fins
+    ctx.fillStyle = "#6bff7d";
+    ctx.fillRect(-HW - 6, HH - 12, 6, 8);
+    ctx.fillRect(HW, HH - 12, 6, 8);
   }
 
   function drawParticles(cam) {
@@ -764,11 +831,13 @@
         </p>
         <div class="bsr-card__actions">
           <button class="btn btn--primary" id="bsr-retry">Relaunch (try again)</button>
+          <button class="btn btn--secondary" id="bsr-switch">Switch founder</button>
           <button class="btn btn--secondary" id="bsr-share">Share the wreckage</button>
           <button class="btn btn--ghost" id="bsr-home">All games</button>
         </div>
       </div>`;
     document.getElementById("bsr-retry").addEventListener("click", () => { mount.innerHTML = ""; state.level = 1; state.score = 0; startLevel(); });
+    document.getElementById("bsr-switch").addEventListener("click", returnToSelect);
     document.getElementById("bsr-home").addEventListener("click", () => { window.location.href = "../games.html"; });
     document.getElementById("bsr-share").addEventListener("click", () => shareCard(msg));
   }
@@ -911,10 +980,45 @@
     state.score = 0;
     state.shield = false;
     state.pendingUpgrades = { fuelBonus: 0, padBonus: 0, slowmo: false, autostab: false };
-    state.tycoon = choice(TYCOONS);
     document.getElementById("card-mount").innerHTML = "";
-    // refresh the intro flavor with the rolled tycoon
+    // state.tycoon was chosen on the founder-select screen
     startLevel();
+  }
+
+  // Return to the founder-select screen (overlay)
+  function returnToSelect() {
+    state.started = false;
+    state.running = false;
+    state.crashed = false;
+    state.landed = false;
+    document.getElementById("card-mount").innerHTML = "";
+    renderTycoonSelect();
+    showOverlay();
+  }
+
+  // Build the 3-founder picker into the intro overlay
+  function renderTycoonSelect() {
+    const wrap = document.getElementById("tycoon-select");
+    if (!wrap) return;
+    wrap.innerHTML = TYCOONS.map((t, i) => `
+      <button class="bsr-founder${state.tycoon.id === t.id ? " is-selected" : ""}" data-id="${t.id}">
+        <span class="bsr-founder__rocket" style="--rk:${t.color}">${rocketGlyph(t.shape)}</span>
+        <span class="bsr-founder__name">${t.name}</span>
+        <span class="bsr-founder__co">${t.co} · "${t.rocket}"</span>
+        <span class="bsr-founder__blurb">${t.blurb}</span>
+      </button>`).join("");
+    wrap.querySelectorAll(".bsr-founder").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.tycoon = TYCOONS.find((t) => t.id === btn.dataset.id) || TYCOONS[0];
+        wrap.querySelectorAll(".bsr-founder").forEach((b) => b.classList.toggle("is-selected", b === btn));
+      });
+    });
+  }
+
+  function rocketGlyph(shape) {
+    if (shape === "capsule") return "🛸";
+    if (shape === "cube") return "🤖";
+    return "🚀";
   }
 
   // =========================================================================
@@ -932,21 +1036,11 @@
   // =========================================================================
   function boot() {
     wireDpad();
-    // intro overlay copy uses a rolled tycoon
-    const introName = document.getElementById("intro-tycoon");
-    if (introName) {
-      introName.textContent = `${state.tycoon.name} of ${state.tycoon.co}, piloting the "${state.tycoon.rocket}."`;
-    }
-    document.getElementById("btn-primary").addEventListener("click", () => {
-      const introName2 = document.getElementById("intro-tycoon");
-      startGame();
-      if (introName2) introName2.textContent = `${state.tycoon.name} of ${state.tycoon.co}, piloting the "${state.tycoon.rocket}."`;
-    });
+    renderTycoonSelect();
+    document.getElementById("btn-primary").addEventListener("click", startGame);
     document.getElementById("btn-pause").addEventListener("click", pauseGame);
-    document.getElementById("btn-restart").addEventListener("click", () => {
-      document.getElementById("card-mount").innerHTML = "";
-      startGame();
-    });
+    // Side "Restart" returns to founder select so you can re-pick
+    document.getElementById("btn-restart").addEventListener("click", returnToSelect);
     syncHud();
     loop();
   }

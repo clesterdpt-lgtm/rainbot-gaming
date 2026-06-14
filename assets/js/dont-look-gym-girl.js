@@ -94,8 +94,9 @@
   // =========================================================================
   const LEVELS = [
     {
-      name: "6 AM. DEAD.", sub: "One girl. She's at the rack, facing the mirror. She checks behind her sometimes.",
+      name: "6 AM. DEAD.", sub: "One girl at the rack. Standard square gym. Exit: Right wall.",
       pull: 0.22, girlSpeed: 0, phoneChance: 0.3,
+      exit: { side: "right", x: 640, y: 320 },
       obstacles: [
         { x: 200, y: 120, w: 56, h: 72, kind: "rack" },
         { x: 310, y: 430, w: 70, h: 40, kind: "bench" },
@@ -107,176 +108,177 @@
       ]
     },
     {
-      name: "MORNING REGULARS", sub: "Two now. One of them walks laps.",
+      name: "THE CORNER LANE", sub: "Top-right corner blocked. Gym is now L-shaped. Exit: Top wall.",
       pull: 0.30, girlSpeed: 36, phoneChance: 0.4,
+      exit: { side: "top", x: 160, y: 0 },
       obstacles: [
-        { x: 140, y: 140, w: 56, h: 72, kind: "rack" },
-        { x: 490, y: 140, w: 56, h: 72, kind: "rack" },
-        { x: 330, y: 250, w: 70, h: 40, kind: "bench" },
-        { x: 220, y: 470, w: 70, h: 40, kind: "bench" },
-        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
-        { x: 340, y: 565, w: 66, h: 36, kind: "fountain" }
+        { x: 480, y: 160, w: 320, h: 320, kind: "wall" },
+        { x: 150, y: 150, w: 56, h: 72, kind: "rack" },
+        { x: 200, y: 460, w: 70, h: 40, kind: "bench" },
+        { x: 400, y: 560, w: 38, h: 38, kind: "plant" },
+        { x: 340, y: 400, w: 66, h: 36, kind: "fountain" }
       ],
       girls: [
-        { type: "lifter", x: 490, y: 190, facing: Math.PI },
-        { type: "walker", path: [[150, 350], [330, 350], [330, 520], [150, 520]] }
+        { type: "lifter", x: 150, y: 200, facing: Math.PI },
+        { type: "walker", path: [[80, 220], [240, 220], [240, 480], [80, 480]] }
       ]
     },
     {
-      name: "LEG DAY", sub: "Stair-steppers at the back wall. They face away. Your neck knows.",
+      name: "THE STEPPER WING", sub: "Bottom corners blocked. Gym is T-shaped. Exit: Bottom wall.",
       pull: 0.38, girlSpeed: 40, phoneChance: 0.5,
+      exit: { side: "bottom", x: 320, y: 640 },
       obstacles: [
+        { x: 120, y: 520, w: 240, h: 240, kind: "wall" },
+        { x: 520, y: 520, w: 240, h: 240, kind: "wall" },
         { x: 450, y: 112, w: 44, h: 80, kind: "tread" },
         { x: 520, y: 112, w: 44, h: 80, kind: "tread" },
         { x: 150, y: 140, w: 56, h: 72, kind: "rack" },
         { x: 290, y: 300, w: 70, h: 40, kind: "bench" },
-        { x: 160, y: 480, w: 70, h: 40, kind: "bench" },
-        { x: 400, y: 520, w: 38, h: 38, kind: "plant" },
-        { x: 80, y: 565, w: 66, h: 36, kind: "fountain" }
+        { x: 400, y: 300, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 450, w: 66, h: 36, kind: "fountain" }
       ],
       girls: [
         { type: "stepper", x: 450, y: 118, facing: -Math.PI / 2 },
         { type: "stepper", x: 520, y: 118, facing: -Math.PI / 2 },
-        { type: "walker", path: [[210, 220], [380, 220], [380, 430], [210, 430]] }
+        { type: "walker", path: [[280, 220], [360, 220], [360, 380], [280, 380]] }
       ]
     },
     {
-      name: "INFLUENCER HOURS", sub: "She set up a ring light in the middle of the floor. Wide lens. Do not enter the frame.",
+      name: "THE TRI-CORRIDOR", sub: "Horizontal walls divide the floor. S-shaped layout. Exit: Bottom wall.",
       pull: 0.45, girlSpeed: 44, phoneChance: 0.5,
+      exit: { side: "bottom", x: 100, y: 640 },
       obstacles: [
-        { x: 140, y: 120, w: 56, h: 72, kind: "rack" },
-        { x: 140, y: 520, w: 56, h: 72, kind: "rack" },
-        { x: 270, y: 210, w: 70, h: 40, kind: "bench" },
-        { x: 270, y: 470, w: 70, h: 40, kind: "bench" },
-        { x: 520, y: 116, w: 44, h: 80, kind: "tread" },
-        { x: 560, y: 545, w: 38, h: 38, kind: "plant" },
-        { x: 430, y: 570, w: 66, h: 36, kind: "fountain" },
+        { x: 360, y: 210, w: 560, h: 30, kind: "wall" },
+        { x: 280, y: 430, w: 560, h: 30, kind: "wall" },
+        { x: 500, y: 100, w: 56, h: 72, kind: "rack" },
+        { x: 300, y: 320, w: 70, h: 40, kind: "bench" },
+        { x: 150, y: 530, w: 70, h: 40, kind: "bench" },
+        { x: 450, y: 530, w: 38, h: 38, kind: "plant" },
+        { x: 600, y: 100, w: 44, h: 80, kind: "tread" },
         { x: 380, y: 320, w: 16, h: 16, kind: "ring" }
       ],
       girls: [
         { type: "influencer", x: 336, y: 320, facing: 0 },
-        { type: "lifter", x: 140, y: 172, facing: Math.PI / 2 },
-        { type: "stepper", x: 520, y: 122, facing: -Math.PI / 2 },
-        { type: "walker", path: [[200, 580], [560, 580], [560, 460], [200, 460]] }
+        { type: "lifter", x: 500, y: 150, facing: Math.PI / 2 },
+        { type: "stepper", x: 600, y: 106, facing: -Math.PI / 2 },
+        { type: "walker", path: [[120, 530], [380, 530], [380, 590], [120, 590]] }
       ]
     },
     {
-      name: "LUNCH RUSH", sub: "Five girls. One of them just… slowly scans the whole room. Forever.",
+      name: "LOOP-BACK SPIRAL", sub: "Long horizontal center wall. Walk right, loop back left. Exit: Left wall.",
       pull: 0.52, girlSpeed: 48, phoneChance: 0.6,
+      exit: { side: "left", x: 0, y: 520 },
       obstacles: [
-        { x: 120, y: 130, w: 56, h: 72, kind: "rack" },
-        { x: 520, y: 130, w: 56, h: 72, kind: "rack" },
-        { x: 230, y: 260, w: 70, h: 40, kind: "bench" },
-        { x: 420, y: 260, w: 70, h: 40, kind: "bench" },
+        { x: 360, y: 320, w: 480, h: 40, kind: "wall" },
+        { x: 320, y: 80, w: 400, h: 40, kind: "wall" },
+        { x: 320, y: 560, w: 400, h: 40, kind: "wall" },
+        { x: 120, y: 180, w: 56, h: 72, kind: "rack" },
+        { x: 520, y: 180, w: 56, h: 72, kind: "rack" },
         { x: 230, y: 440, w: 70, h: 40, kind: "bench" },
         { x: 420, y: 440, w: 70, h: 40, kind: "bench" },
-        { x: 320, y: 120, w: 84, h: 44, kind: "cable" },
-        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
-        { x: 580, y: 560, w: 38, h: 38, kind: "plant" },
-        { x: 320, y: 580, w: 66, h: 36, kind: "fountain" }
+        { x: 580, y: 460, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 460, w: 66, h: 36, kind: "fountain" }
       ],
       girls: [
-        { type: "scanner", x: 320, y: 350, facing: 0 },
-        { type: "lifter", x: 120, y: 182, facing: 0 },
-        { type: "lifter", x: 520, y: 182, facing: Math.PI },
-        { type: "walker", path: [[140, 540], [500, 540], [500, 500], [140, 500]] },
-        { type: "walker", path: [[160, 200], [480, 200], [480, 330], [160, 330]] }
+        { type: "scanner", x: 320, y: 200, facing: 0 },
+        { type: "lifter", x: 120, y: 220, facing: 0 },
+        { type: "lifter", x: 520, y: 220, facing: Math.PI },
+        { type: "stepper", x: 440, y: 530, facing: Math.PI / 2 },
+        { type: "walker", path: [[140, 480], [500, 480], [500, 520], [140, 520]] }
       ]
     },
     {
-      name: "THE SQUAD ARRIVES", sub: "Six of them came together. They cross the floor in pairs. The neck pull is getting serious.",
+      name: "INFLUENCER RING", sub: "Large central block. Direct top-left path is blocked. Exit: Top wall.",
       pull: 0.60, girlSpeed: 52, phoneChance: 0.65,
+      exit: { side: "top", x: 320, y: 0 },
       obstacles: [
-        { x: 130, y: 120, w: 56, h: 72, kind: "rack" },
-        { x: 510, y: 120, w: 56, h: 72, kind: "rack" },
-        { x: 320, y: 200, w: 70, h: 40, kind: "bench" },
-        { x: 180, y: 320, w: 70, h: 40, kind: "bench" },
-        { x: 460, y: 320, w: 70, h: 40, kind: "bench" },
-        { x: 320, y: 460, w: 70, h: 40, kind: "bench" },
+        { x: 320, y: 320, w: 240, h: 240, kind: "wall" },
+        { x: 120, y: 160, w: 40, h: 160, kind: "wall" },
+        { x: 320, y: 180, w: 70, h: 40, kind: "bench" },
+        { x: 120, y: 360, w: 40, h: 70, kind: "bench" },
+        { x: 490, y: 320, w: 40, h: 70, kind: "bench" },
         { x: 250, y: 112, w: 44, h: 80, kind: "tread" },
         { x: 390, y: 112, w: 44, h: 80, kind: "tread" },
         { x: 64, y: 560, w: 38, h: 38, kind: "plant" },
         { x: 576, y: 560, w: 38, h: 38, kind: "plant" },
-        { x: 320, y: 580, w: 66, h: 36, kind: "fountain" }
+        { x: 320, y: 560, w: 16, h: 16, kind: "ring" }
       ],
       girls: [
-        { type: "influencer", x: 320, y: 560, facing: -Math.PI / 2 },
-        { type: "scanner", x: 320, y: 330, facing: 0 },
+        { type: "influencer", x: 320, y: 520, facing: -Math.PI / 2 },
+        { type: "scanner", x: 480, y: 420, facing: 0 },
         { type: "stepper", x: 250, y: 118, facing: -Math.PI / 2 },
-        { type: "lifter", x: 510, y: 172, facing: Math.PI / 2 },
-        { type: "walker", path: [[120, 240], [120, 540], [240, 540], [240, 240]] },
-        { type: "walker", path: [[540, 240], [540, 540], [410, 540], [410, 240]] }
+        { type: "lifter", x: 390, y: 160, facing: Math.PI / 2 },
+        { type: "walker", path: [[120, 460], [120, 540], [240, 540], [240, 460]] },
+        { type: "walker", path: [[540, 240], [540, 540], [460, 540], [460, 240]] }
       ]
     },
     {
-      name: "FULL FLOOR", sub: "Seven girls. Two scanners. You are one head-turn from the group chat.",
+      name: "JUICE BAR ROOMS", sub: "Four rooms separated by walls. Navigate through door gaps. Exit: Bottom wall.",
       pull: 0.68, girlSpeed: 56, phoneChance: 0.7,
+      exit: { side: "bottom", x: 520, y: 640 },
       obstacles: [
+        { x: 320, y: 120, w: 30, h: 240, kind: "wall" },
+        { x: 320, y: 520, w: 30, h: 240, kind: "wall" },
+        { x: 200, y: 320, w: 240, h: 30, kind: "wall" },
+        { x: 480, y: 320, w: 240, h: 30, kind: "wall" },
         { x: 120, y: 130, w: 56, h: 72, kind: "rack" },
         { x: 520, y: 130, w: 56, h: 72, kind: "rack" },
-        { x: 320, y: 110, w: 84, h: 44, kind: "cable" },
         { x: 210, y: 240, w: 70, h: 40, kind: "bench" },
         { x: 430, y: 240, w: 70, h: 40, kind: "bench" },
-        { x: 320, y: 350, w: 70, h: 40, kind: "bench" },
         { x: 210, y: 460, w: 70, h: 40, kind: "bench" },
         { x: 430, y: 460, w: 70, h: 40, kind: "bench" },
         { x: 150, y: 575, w: 44, h: 60, kind: "tread" },
         { x: 490, y: 575, w: 44, h: 60, kind: "tread" },
-        { x: 64, y: 110, w: 38, h: 38, kind: "plant" },
-        { x: 580, y: 110, w: 38, h: 38, kind: "plant" },
-        { x: 320, y: 590, w: 66, h: 36, kind: "fountain" }
+        { x: 580, y: 110, w: 38, h: 38, kind: "plant" }
       ],
       girls: [
-        { type: "scanner", x: 230, y: 330, facing: 0 },
-        { type: "scanner", x: 410, y: 330, facing: Math.PI },
-        { type: "influencer", x: 320, y: 180, facing: Math.PI / 2 },
+        { type: "scanner", x: 230, y: 260, facing: 0 },
+        { type: "scanner", x: 410, y: 260, facing: Math.PI },
+        { type: "influencer", x: 180, y: 180, facing: Math.PI / 2 },
         { type: "stepper", x: 150, y: 560, facing: Math.PI / 2 },
         { type: "stepper", x: 490, y: 560, facing: Math.PI / 2 },
-        { type: "walker", path: [[110, 220], [110, 520], [550, 520], [550, 220]] },
-        { type: "walker", path: [[270, 540], [370, 540], [370, 410], [270, 410]] }
+        { type: "walker", path: [[110, 480], [110, 580], [260, 580], [260, 480]] },
+        { type: "walker", path: [[370, 540], [550, 540], [550, 410], [370, 410]] }
       ]
     },
     {
-      name: "PEAK HOURS. 6 PM.", sub: "Eight girls. Bench maze. Max neck. Godspeed, soldier.",
+      name: "PEAK HOURS. 6 PM.", sub: "Four massive corner blocks. Chokepoint cross-corridors. Exit: Top wall.",
       pull: 0.78, girlSpeed: 62, phoneChance: 0.8,
+      exit: { side: "top", x: 320, y: 0 },
       obstacles: [
-        { x: 110, y: 120, w: 56, h: 72, kind: "rack" },
-        { x: 530, y: 120, w: 56, h: 72, kind: "rack" },
-        { x: 320, y: 100, w: 84, h: 44, kind: "cable" },
-        { x: 160, y: 250, w: 70, h: 40, kind: "bench" },
+        { x: 130, y: 130, w: 260, h: 260, kind: "wall" },
+        { x: 510, y: 130, w: 260, h: 260, kind: "wall" },
+        { x: 130, y: 510, w: 260, h: 260, kind: "wall" },
+        { x: 510, y: 510, w: 260, h: 260, kind: "wall" },
+        { x: 320, y: 320, w: 84, h: 44, kind: "cable" },
         { x: 320, y: 220, w: 70, h: 40, kind: "bench" },
-        { x: 480, y: 250, w: 70, h: 40, kind: "bench" },
-        { x: 240, y: 350, w: 70, h: 40, kind: "bench" },
-        { x: 400, y: 350, w: 70, h: 40, kind: "bench" },
-        { x: 160, y: 450, w: 70, h: 40, kind: "bench" },
-        { x: 480, y: 450, w: 70, h: 40, kind: "bench" },
-        { x: 250, y: 575, w: 44, h: 60, kind: "tread" },
-        { x: 390, y: 575, w: 44, h: 60, kind: "tread" },
-        { x: 64, y: 580, w: 38, h: 38, kind: "plant" },
+        { x: 320, y: 420, w: 70, h: 40, kind: "bench" },
+        { x: 160, y: 320, w: 40, h: 70, kind: "bench" },
+        { x: 480, y: 320, w: 40, h: 70, kind: "bench" },
         { x: 320, y: 480, w: 16, h: 16, kind: "ring" }
       ],
       girls: [
         { type: "influencer", x: 320, y: 524, facing: -Math.PI / 2 },
         { type: "scanner", x: 320, y: 300, facing: 0 },
-        { type: "scanner", x: 130, y: 350, facing: 0 },
-        { type: "stepper", x: 250, y: 560, facing: Math.PI / 2 },
-        { type: "stepper", x: 390, y: 560, facing: Math.PI / 2 },
-        { type: "walker", path: [[100, 200], [560, 200], [560, 160], [100, 160]] },
-        { type: "walker", path: [[120, 520], [120, 280], [220, 280], [220, 520]] },
-        { type: "walker", path: [[540, 520], [540, 280], [440, 280], [440, 520]] }
+        { type: "scanner", x: 130, y: 320, facing: 0 },
+        { type: "stepper", x: 320, y: 100, facing: Math.PI / 2 },
+        { type: "stepper", x: 320, y: 560, facing: -Math.PI / 2 },
+        { type: "walker", path: [[270, 320], [370, 320], [370, 380], [270, 380]] },
+        { type: "walker", path: [[120, 320], [240, 320], [240, 360], [120, 360]] },
+        { type: "walker", path: [[400, 320], [520, 320], [520, 360], [400, 360]] }
       ]
     }
   ];
 
   const LEVEL_TOASTS = [
-    "👀 Level 1 · 6 AM. One girl. Tutorial neck.",
-    "💪 Level 2 · Two girls. One walks laps.",
-    "🦵 Level 3 · Stair-steppers. Your neck has opinions.",
-    "💡 Level 4 · Ring light deployed. 2× sus in her frame.",
-    "🥗 Level 5 · Lunch rush. One girl scans the room forever.",
-    "👯 Level 6 · The squad. They patrol in pairs.",
-    "🔥 Level 7 · Full floor. Two scanners. Stay behind iron.",
-    "💀 Level 8 · Peak hours. Max neck. See you on the other side."
+    "👀 Level 1 · 6 AM. Standard square gym. Exit on the right.",
+    "📐 Level 2 · L-shape layout. Exit door is at the top.",
+    "🧱 Level 3 · T-shape layout. Watch out for steppers. Exit at the bottom.",
+    "⚡ Level 4 · S-shaped tri-corridor. Exit is bottom-left.",
+    "🔄 Level 5 · Loop-back layout. Walk right, wrap around, exit on left.",
+    "⭕ Level 6 · Large central block. Top-left blocked. Exit at top.",
+    "🚪 Level 7 · Quadrant rooms. Navigate door gaps. Exit bottom-right.",
+    "💀 Level 8 · Cross corridors with massive corner blocks. Exit at top."
   ];
 
   const SHAME_CAPTIONS = [
@@ -340,6 +342,8 @@
 
     girls: [],
     obstacles: [],
+    exit: { x: 1280, y: 640, w: 32, h: 280, side: "right" },
+
 
     airpodT: 0,
     boyfriendT: 0,
@@ -978,8 +982,11 @@
 
   function checkLevelProgress() {
     const p = state.player;
-    // The locker room door: right wall, center band only
-    if (p.x >= WORLD_W - 22 && p.y >= WORLD_DOOR_Y0 && p.y <= WORLD_DOOR_Y1) {
+    const ex = state.exit;
+    const closestX = clamp(p.x, ex.x - ex.w / 2, ex.x + ex.w / 2);
+    const closestY = clamp(p.y, ex.y - ex.h / 2, ex.y + ex.h / 2);
+    const distance = dist(p.x, p.y, closestX, closestY);
+    if (distance < PLAYER_RADIUS) {
       // Level score: speed + clean eyes
       const timeBonus = Math.max(0, Math.round(500 - state.levelT * 22));
       const cleanBonus = state.levelPeakSus < 30 ? 250 : state.levelPeakSus < 60 ? 100 : 0;
@@ -1101,13 +1108,18 @@
     const lv = LEVELS[n - 1];
     
     // Scale obstacles dynamically
-    state.obstacles = lv.obstacles.map(o => ({
-      x: o.x * WORLD_SCALE_X,
-      y: o.y * WORLD_SCALE_Y,
-      w: o.w * 1.5,
-      h: o.h * 1.5,
-      kind: o.kind
-    }));
+    state.obstacles = lv.obstacles.map(o => {
+      const isWall = o.kind === "wall";
+      const scaleW = isWall ? WORLD_SCALE_X : 1.5;
+      const scaleH = isWall ? WORLD_SCALE_Y : 1.5;
+      return {
+        x: o.x * WORLD_SCALE_X,
+        y: o.y * WORLD_SCALE_Y,
+        w: o.w * scaleW,
+        h: o.h * scaleH,
+        kind: o.kind
+      };
+    });
     
     // Scale girls dynamically
     state.girls = lv.girls.map(def => {
@@ -1119,6 +1131,27 @@
       }
       return makeGirl(scaledDef, lv);
     });
+
+    // Scale exit door coordinates dynamically
+    if (lv.exit) {
+      const isVert = (lv.exit.side === "top" || lv.exit.side === "bottom");
+      state.exit = {
+        x: lv.exit.x * WORLD_SCALE_X,
+        y: lv.exit.y * WORLD_SCALE_Y,
+        w: isVert ? 140 * WORLD_SCALE_X : 16 * WORLD_SCALE_X,
+        h: isVert ? 16 * WORLD_SCALE_Y : 140 * WORLD_SCALE_Y,
+        side: lv.exit.side
+      };
+    } else {
+      // Default to right wall centered
+      state.exit = {
+        x: WORLD_W,
+        y: WORLD_H / 2,
+        w: 16 * WORLD_SCALE_X,
+        h: 140 * WORLD_SCALE_Y,
+        side: "right"
+      };
+    }
 
     state.player.x = 36;
     state.player.y = 320 * WORLD_SCALE_Y;
@@ -1186,17 +1219,7 @@
     state.boyfriendT = 0;
     state.decoy = null;
     state.girls = [];
-    state.obstacles = LEVELS[0].obstacles.map(o => ({
-      x: o.x * WORLD_SCALE_X,
-      y: o.y * WORLD_SCALE_Y,
-      w: o.w * 1.5,
-      h: o.h * 1.5,
-      kind: o.kind
-    }));
-    state.player.x = 36;
-    state.player.y = 320 * WORLD_SCALE_Y;
-    state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
-    state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
+    loadLevel(1);
     state.t = 0;
   }
 
@@ -1288,17 +1311,50 @@
     ctx.fillText("FRONT", 4, WORLD_DOOR_Y0 - 8);
     ctx.fillText("DOOR", 4, WORLD_DOOR_Y1 + 16);
 
-    // Locker room (right, center band) — pulsing arrow
+    // Dynamic Locker room exit door
+    const ex = state.exit;
+    const rx = ex.x - ex.w / 2;
+    const ry = ex.y - ex.h / 2;
     ctx.fillStyle = "#3a2a3a";
-    ctx.fillRect(WORLD_W - 16, WORLD_DOOR_Y0, 16, WORLD_DOOR_Y1 - WORLD_DOOR_Y0);
-    ctx.fillStyle = "#ff7ddf";
-    ctx.textAlign = "right";
-    ctx.fillText("LOCKER", WORLD_W - 4, WORLD_DOOR_Y0 - 8);
-    ctx.fillText("ROOM", WORLD_W - 4, WORLD_DOOR_Y1 + 16);
+    ctx.fillRect(rx, ry, ex.w, ex.h);
+
     const pulse = 0.5 + 0.5 * Math.sin(state.t * 4);
-    ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
-    ctx.font = "18px Arial";
-    ctx.fillText("→", WORLD_W - 22, (WORLD_DOOR_Y0 + WORLD_DOOR_Y1) / 2 + 6);
+
+    if (ex.side === "right") {
+      ctx.fillStyle = "#ff7ddf";
+      ctx.textAlign = "right";
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillText("LOCKER", WORLD_W - 4, ry - 8);
+      ctx.fillText("ROOM", WORLD_W - 4, ry + ex.h + 16);
+      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.font = "18px Arial";
+      ctx.fillText("→", WORLD_W - 22, ex.y + 6);
+    } else if (ex.side === "left") {
+      ctx.fillStyle = "#ff7ddf";
+      ctx.textAlign = "left";
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillText("LOCKER", 4, ry - 8);
+      ctx.fillText("ROOM", 4, ry + ex.h + 16);
+      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.font = "18px Arial";
+      ctx.fillText("←", 22, ex.y + 6);
+    } else if (ex.side === "top") {
+      ctx.fillStyle = "#ff7ddf";
+      ctx.textAlign = "center";
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillText("LOCKER ROOM", ex.x, 24 + ex.h);
+      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.font = "18px Arial";
+      ctx.fillText("↑", ex.x, 22);
+    } else if (ex.side === "bottom") {
+      ctx.fillStyle = "#ff7ddf";
+      ctx.textAlign = "center";
+      ctx.font = "11px JetBrains Mono, monospace";
+      ctx.fillText("LOCKER ROOM", ex.x, ry - 12);
+      ctx.fillStyle = "rgba(255,125,223," + (0.3 + 0.4 * pulse) + ")";
+      ctx.font = "18px Arial";
+      ctx.fillText("↓", ex.x, WORLD_H - 22);
+    }
   }
 
   function drawObstacles() {
@@ -1386,6 +1442,24 @@
           ctx.beginPath();
           ctx.arc(o.x, o.y, 12, 0, TAU);
           ctx.stroke();
+          break;
+        case "wall":
+          ctx.fillStyle = "#0d0d17"; // dark purple-black
+          ctx.fillRect(x0, y0, o.w, o.h);
+          ctx.strokeStyle = "rgba(46, 224, 255, 0.35)"; // cyan wall borders
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x0, y0, o.w, o.h);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.02)";
+          ctx.fillRect(x0 + 3, y0 + 3, o.w - 6, o.h - 6);
+          // Diagonal hashes for structural grid look
+          ctx.strokeStyle = "rgba(46, 224, 255, 0.08)";
+          ctx.lineWidth = 1.5;
+          for (let offset = 0; offset < o.w + o.h; offset += 30) {
+            ctx.beginPath();
+            ctx.moveTo(x0 + Math.max(0, offset - o.h), y0 + Math.min(o.h, offset));
+            ctx.lineTo(x0 + Math.min(o.w, offset), y0 + Math.max(0, offset - o.w));
+            ctx.stroke();
+          }
           break;
       }
       ctx.restore();
@@ -1717,13 +1791,7 @@
   // 18. BOOT
   // =========================================================================
   function init() {
-    state.obstacles = LEVELS[0].obstacles.map(o => ({
-      x: o.x * WORLD_SCALE_X,
-      y: o.y * WORLD_SCALE_Y,
-      w: o.w * 1.5,
-      h: o.h * 1.5,
-      kind: o.kind
-    }));
+    loadLevel(1);
     requestAnimationFrame(loop);
     document.getElementById("btn-primary").addEventListener("click", () => { ensureAudio(); startGame(); });
     document.getElementById("btn-pause").addEventListener("click", () => {

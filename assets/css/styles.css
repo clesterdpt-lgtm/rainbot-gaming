@@ -716,6 +716,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
 .canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
 .canvas-wrap--ar-760-620  { aspect-ratio: 760 / 620; --game-max-width: 900px; }   /* billionaire space race */
+.canvas-wrap--ar-700-700  { aspect-ratio: 1 / 1; --game-max-width: 760px; }       /* smooth brain snacker */
 #gameCanvas {
   display: block;
   width: 100%;
@@ -3443,4 +3444,10 @@ body.arcade-home::before {
 .directory-card__poster--merge img {
   object-fit: cover;
   object-position: center top;
+}
+
+.poster-card--snake img,
+.directory-card__poster--snake img {
+  object-fit: cover;
+  object-position: center;
 }

@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" role="img" aria-label="Brainrot 2048 merge puzzle poster art">
+  <defs>
+    <radialGradient id="glowPink" cx="22%" cy="20%" r="60%">
+      <stop offset="0" stop-color="#ff2e88" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#ff2e88" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowCyan" cx="82%" cy="86%" r="62%">
+      <stop offset="0" stop-color="#2ee0ff" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#2ee0ff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <style>
+      .t { font-family: "Arial Black", Impact, sans-serif; font-weight: 900; }
+      .m { font-family: "Courier New", monospace; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="800" fill="#080810"/>
+  <rect width="1200" height="800" fill="url(#glowPink)"/>
+  <rect width="1200" height="800" fill="url(#glowCyan)"/>
+
+  <g stroke="#ffffff" stroke-opacity="0.05">
+    <line x1="0" y1="200" x2="1200" y2="200"/>
+    <line x1="0" y1="400" x2="1200" y2="400"/>
+    <line x1="0" y1="600" x2="1200" y2="600"/>
+    <line x1="300" y1="0" x2="300" y2="800"/>
+    <line x1="600" y1="0" x2="600" y2="800"/>
+    <line x1="900" y1="0" x2="900" y2="800"/>
+  </g>
+
+  <!-- Title with pink/cyan offset shadow -->
+  <g class="t" text-anchor="middle">
+    <text x="606" y="212" font-size="116" fill="#ff2e88" fill-opacity="0.85">BRAINROT</text>
+    <text x="594" y="212" font-size="116" fill="#2ee0ff" fill-opacity="0.7">BRAINROT</text>
+    <text x="600" y="208" font-size="116" fill="#fbfaf4">BRAINROT</text>
+    <text x="600" y="320" font-size="150" fill="#ffd43b">2048</text>
+  </g>
+
+  <!-- Merge tile cluster -->
+  <g class="t" text-anchor="middle">
+    <!-- NPC -->
+    <g transform="translate(372,430)">
+      <rect width="200" height="200" rx="20" fill="#26243f"/>
+      <text x="100" y="118" font-size="40" fill="#9b98b5">NPC</text>
+    </g>
+    <!-- SIGMA -->
+    <g transform="translate(628,430)">
+      <rect width="200" height="200" rx="20" fill="#4f5016"/>
+      <text x="100" y="118" font-size="38" fill="#ffe85e">SIGMA</text>
+    </g>
+  </g>
+
+  <!-- Big arrow merge -->
+  <g text-anchor="middle">
+    <circle cx="600" cy="530" r="40" fill="#2ee0ff" filter="url(#soft)" opacity="0.55"/>
+    <text x="600" y="552" class="t" font-size="64" fill="#080810">+</text>
+  </g>
+
+  <!-- GALAXY BRAIN winner tile -->
+  <g transform="translate(760,430)" class="t" text-anchor="middle">
+    <rect width="200" height="200" rx="20" fill="#ff2e88" stroke="#2ee0ff" stroke-width="5"/>
+    <text x="100" y="92" font-size="33" fill="#ffffff">GALAXY</text>
+    <text x="100" y="132" font-size="33" fill="#ffffff">BRAIN</text>
+  </g>
+
+  <text x="600" y="712" class="m" text-anchor="middle" font-size="30" fill="#b6b3c9" letter-spacing="2">MERGE THE MEME TIERS</text>
+</svg>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brainrot 2048 — Rainbot Gaming</title>
+  <meta name="description" content="Slide-to-merge brainrot puzzle. Fuse matching meme tiles — NPC, Skibidi, Rizz, Sigma — and climb the ladder all the way to Galaxy Brain before the grid fills up." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23080810'/%3E%3Crect x='12' y='12' width='34' height='34' rx='7' fill='%232ee0ff'/%3E%3Crect x='54' y='12' width='34' height='34' rx='7' fill='%23ffd43b'/%3E%3Crect x='12' y='54' width='34' height='34' rx='7' fill='%2326243f'/%3E%3Crect x='54' y='54' width='34' height='34' rx='7' fill='%23ff2e88'/%3E%3C/svg%3E" />
+</head>
+<body class="merge-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🧠 Brainrot 2048</h1>
+        <div class="game-page__sub">Swipe to merge the brainrot · NPC → Skibidi → Rizz → … → Galaxy Brain</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">TOP TIER</span><span class="hud__value" id="hud-top">NPC</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="merge-board" id="board" tabindex="0" aria-label="Brainrot 2048 board">
+          <div class="merge-field">
+            <div class="merge-cells" id="cells"></div>
+            <div class="merge-tiles" id="tiles"></div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🧠 BRAINROT 2048</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Slide the grid to smash matching memes together. Two <strong>NPC</strong>s fuse into a
+              <strong>Skibidi</strong>, two Skibidis into <strong>Rizz</strong>… climb all the way to
+              <strong>Galaxy Brain</strong> before the board clogs up.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start merging</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          Swipe, press <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> / <kbd>WASD</kbd>, or use the arrows in the panel.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-new" style="font-size:13px;padding:8px 12px;">New game</button>
+          </div>
+          <div class="mobile-controls" aria-label="Direction controls">
+            <div class="mobile-controls__dpad">
+              <button class="btn btn--ghost" data-mobile-dir="up" aria-label="Slide up">↑</button>
+              <button class="btn btn--ghost" data-mobile-dir="left" aria-label="Slide left">←</button>
+              <button class="btn btn--ghost" data-mobile-dir="right" aria-label="Slide right">→</button>
+              <button class="btn btn--ghost" data-mobile-dir="down" aria-label="Slide down">↓</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">TIER LADDER</h3>
+          <ul class="merge-ladder" id="ladder"></ul>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Slide</strong> every tile one direction (swipe, arrow keys, or WASD).</li>
+            <li><strong style="color:var(--ink);">Matching tiles merge</strong> into the next tier up. A new NPC pops in after each move.</li>
+            <li><strong style="color:var(--ink);">Keep space free.</strong> When the grid is full and nothing can merge, your brain is full — game over.</li>
+            <li><strong style="color:var(--ink);">Goal:</strong> reach <strong style="color:var(--ink);">Galaxy Brain</strong>, the top of the food chain.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> A satirical sendup of internet "brainrot" slang. Slide-and-merge gameplay inspired by the classic 2048. Not affiliated with anyone. Go touch grass afterward.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260612-4"></script>
+  <script src="../assets/js/brainrot-2048.js?v=20260614-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

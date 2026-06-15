@@ -16,6 +16,11 @@
     lookSensitivity: 1,
     invertY: false,
   };
+  const EYE_HEIGHT = 1.65;
+  const UPPER_FLOOR_Y = 4.18;
+  const STAIR_TRAVEL_SECONDS = 1.05;
+  const STAIR_BOTTOM = { x: 4.8, z: 31.55, level: 0, yaw: 0.04 };
+  const STAIR_TOP = { x: 8.2, z: 24.4, level: 1, yaw: 0.02 };
   const DETOUR_PANEL = {
     x: 0,
     z: 0.8,
@@ -261,7 +266,10 @@
     alertTimer: 0,
     jumpscareTimer: 0,
     interactionProgress: 0,
+    stairProgress: 0,
     activeTask: null,
+    stairPromptActive: false,
+    stairDirection: null,
     detourActive: false,
     detourComplete: false,
     detourPromptActive: false,
@@ -277,7 +285,8 @@
     player: {
       x: 0,
       z: 29,
-      y: 1.65,
+      y: EYE_HEIGHT,
+      level: 0,
       yaw: 0,
       pitch: 0,
       bob: 0,
@@ -379,6 +388,7 @@
   const randomChoice = (items) => items[Math.floor(Math.random() * items.length)];
   const formatScore = (value) => Math.max(0, Math.round(value)).toLocaleString();
   const percent = (value) => Math.round(clamp(value, 0, 100)) + "%";
+  const floorYForLevel = (level) => (level === 1 ? UPPER_FLOOR_Y : 0);
 
   function loadLookSettings() {
     try {
@@ -738,6 +748,7 @@
     addFloor(-10.0, 22.0, 5.2, 28, world.materials.hardwood, 4.22);
     addFloor(10.0, 21.0, 5.2, 30, world.materials.hardwood, 4.22);
     addFloor(0, 31.2, 14.5, 4.4, world.materials.hardwood, 4.22);
+    addFloor(6.8, 24.4, 4.8, 5.8, world.materials.hardwood, 4.22);
     addFloor(0, -24.6, 14.5, 4.2, world.materials.hardwood, 4.22);
 
     addUpperWall(-37, -3, 1.0, 78, 2.6);
@@ -750,7 +761,8 @@
     addUpperWall(13.0, -18.0, 0.7, 24, 2.35, world.materials.wallDark);
 
     addUpperRailLine(-5.9, 18.0, 34, Math.PI / 2);
-    addUpperRailLine(5.9, 18.0, 34, Math.PI / 2);
+    addUpperRailLine(5.9, 8.6, 15.2, Math.PI / 2);
+    addUpperRailLine(5.9, 32.1, 6.3, Math.PI / 2);
     addUpperRailLine(0, 31.0, 10.7, 0);
     addUpperRailLine(0, -24.4, 10.7, 0);
 
@@ -767,6 +779,7 @@
     addUpperWindow(36.45, 12.0, -Math.PI / 2, 2.8, 1.0);
     addUpperWindow(-36.45, -14.0, Math.PI / 2, 2.8, 1.0);
     addUpperWindow(36.45, -15.8, -Math.PI / 2, 2.8, 1.0);
+    addUpperFloorDressing();
 
     const upperGlow = new window.THREE.PointLight(0xffd89a, 0.85, 24);
     upperGlow.position.set(0, 5.7, 27);
@@ -870,10 +883,10 @@
   function buildContestants() {
     const spots = [
       [-5.0, 30.4, 2.35],
-      [-5.1, 27.8, 2.0],
-      [-5.0, 25.2, 1.65],
-      [5.0, 30.2, -2.35],
-      [5.1, 27.4, -1.95],
+      [-5.2, 27.6, 2.0],
+      [-4.8, 24.6, 1.65],
+      [3.8, 22.5, -2.2],
+      [5.2, 20.4, -1.95],
       [-28.8, -20.5, 1.9],
       [-25.5, -20.8, 1.9],
       [20.8, -23.2, -2.2],
@@ -1005,9 +1018,9 @@
     };
 
     [-1, 1].forEach((side) => {
-      const shoulder = new THREE.Vector3(side * 0.66, 2.22, -0.03);
-      const elbow = new THREE.Vector3(side * 0.94, 1.55, -0.16);
-      const wrist = new THREE.Vector3(side * 0.82, 1.04, -0.42);
+      const shoulder = new THREE.Vector3(side * 0.62, 2.22, -0.08);
+      const elbow = new THREE.Vector3(side * 0.74, 1.58, -0.18);
+      const wrist = new THREE.Vector3(side * 0.7, 1.03, -0.4);
       addHostLimb(shoulder, elbow, 0.14, 0.12, world.materials.suit);
       addHostLimb(elbow, wrist, 0.105, 0.085, world.materials.sickSkin);
 
@@ -1016,6 +1029,12 @@
       shoulderPad.scale.set(1.2, 0.72, 0.82);
       shoulderPad.castShadow = true;
       host.add(shoulderPad);
+
+      const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), world.materials.suit);
+      elbowJoint.position.copy(elbow);
+      elbowJoint.scale.set(0.9, 0.72, 0.82);
+      elbowJoint.castShadow = true;
+      host.add(elbowJoint);
 
       const cuff = addBox(host, 0.22, 0.1, 0.16, world.materials.shirt, wrist.x * 0.98, wrist.y + 0.05, wrist.z + 0.04, false);
       cuff.rotation.z = side * -0.18;
@@ -1195,19 +1214,25 @@
     group.position.set(x, 0, z);
     world.scene.add(group);
 
+    const collider = addCollisionRect(x, z, w, d, true, options.label || "wall", options.level || 0);
+    group.userData.collider = collider;
+    if (options.dynamic) group.userData.dynamic = true;
+    return group;
+  }
+
+  function addCollisionRect(x, z, w, d, blocksSight, label = "wall", level = 0) {
     const collider = {
       x1: x - w / 2,
       x2: x + w / 2,
       z1: z - d / 2,
       z2: z + d / 2,
       active: true,
-      blocksSight: true,
-      label: options.label || "wall",
+      blocksSight: Boolean(blocksSight),
+      label,
+      level,
     };
     world.collisions.push(collider);
-    group.userData.collider = collider;
-    if (options.dynamic) group.userData.dynamic = true;
-    return group;
+    return collider;
   }
 
   function addRoomLight(x, z, color, intensity, range) {
@@ -1332,6 +1357,7 @@
     addBox(group, w + 0.06, 0.08, d + 0.06, world.materials.trim, 0, 4.18 + h - 0.22, 0, false);
     group.position.set(x, 0, z);
     world.scene.add(group);
+    addCollisionRect(x, z, w, d, true, "upper wall", 1);
     return group;
   }
 
@@ -1378,6 +1404,130 @@
     world.scene.add(group);
   }
 
+  function addUpperFloorDressing() {
+    addUpperRug(-22, 24.0, 8.4, 5.2, world.materials.fabricWarm);
+    addUpperDesk(-22.6, 27.6, Math.PI, "EDIT BAY");
+    addUpperShelf(-31.6, 23.0, Math.PI / 2);
+    addUpperRug(-22, 13.4, 8.2, 5.0, world.materials.green);
+    addUpperPrizeTable(-22.2, 14.6);
+    addUpperBench(-14.8, 12.0, Math.PI / 2);
+
+    addUpperRug(22, 25.4, 8.5, 5.4, world.materials.fabric);
+    addUpperDesk(22.4, 27.5, Math.PI, "STREAM");
+    addUpperShelf(32.0, 23.8, -Math.PI / 2);
+    addUpperRug(22, 12.4, 8.4, 5.4, world.materials.fabricWarm);
+    addUpperBed(27.8, 12.6, -Math.PI / 2);
+    addUpperBench(16.0, 11.8, -Math.PI / 2);
+
+    addUpperRug(-22, -14.2, 8.4, 5.6, world.materials.fabric);
+    addUpperBed(-30.0, -14.2, Math.PI / 2);
+    addUpperShelf(-15.0, -18.8, 0);
+    addUpperRug(22, -15.4, 8.4, 5.6, world.materials.corridor);
+    addUpperControlBank(23.0, -15.2);
+    addUpperShelf(32.0, -20.0, -Math.PI / 2);
+
+    addUpperBench(0, 31.1, 0);
+    addUpperBench(0, -24.2, Math.PI);
+    addUpperSign("STAIRS", STAIR_TOP.x, UPPER_FLOOR_Y + 1.75, STAIR_TOP.z - 0.9, Math.PI, 1.6, 0.44);
+  }
+
+  function addUpperRug(x, z, w, d, material) {
+    const THREE = window.THREE;
+    const rug = new THREE.Mesh(new THREE.BoxGeometry(w, 0.055, d), material);
+    rug.position.set(x, UPPER_FLOOR_Y + 0.055, z);
+    rug.receiveShadow = true;
+    world.scene.add(rug);
+  }
+
+  function addUpperBench(x, z, yaw) {
+    const group = new window.THREE.Group();
+    addBox(group, 2.4, 0.24, 0.82, world.materials.darkWood, 0, UPPER_FLOOR_Y + 0.48, 0);
+    addBox(group, 2.55, 0.85, 0.18, world.materials.fabricWarm, 0, UPPER_FLOOR_Y + 0.9, 0.38);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.8, 1.1, false, 1);
+  }
+
+  function addUpperDesk(x, z, yaw, label) {
+    const group = new window.THREE.Group();
+    addBox(group, 3.0, 0.18, 1.25, world.materials.wood, 0, UPPER_FLOOR_Y + 0.78, 0);
+    addBox(group, 0.22, 0.78, 0.22, world.materials.darkWood, -1.18, UPPER_FLOOR_Y + 0.38, -0.42);
+    addBox(group, 0.22, 0.78, 0.22, world.materials.darkWood, 1.18, UPPER_FLOOR_Y + 0.38, -0.42);
+    addBox(group, 1.15, 0.68, 0.08, world.materials.black, 0.28, UPPER_FLOOR_Y + 1.2, -0.48);
+    addBox(group, 0.82, 0.04, 0.5, world.materials.paper, -0.72, UPPER_FLOOR_Y + 0.91, 0.1, false);
+    const sign = makeTextSign(label, 1.25, 0.34, "#050505", "#f0c336");
+    sign.position.set(0, UPPER_FLOOR_Y + 1.7, -0.62);
+    group.add(sign);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 3.35, 1.6, false, 1);
+  }
+
+  function addUpperShelf(x, z, yaw) {
+    const group = new window.THREE.Group();
+    addBox(group, 2.2, 2.1, 0.52, world.materials.darkWood, 0, UPPER_FLOOR_Y + 1.05, 0);
+    for (let shelf = 0; shelf < 3; shelf++) {
+      addBox(group, 1.9, 0.07, 0.42, world.materials.wood, 0, UPPER_FLOOR_Y + 0.48 + shelf * 0.5, -0.02, false);
+      for (let i = 0; i < 4; i++) {
+        addBox(group, 0.18, 0.3 + (i % 2) * 0.12, 0.18, i % 2 ? world.materials.red : world.materials.green, -0.66 + i * 0.42, UPPER_FLOOR_Y + 0.7 + shelf * 0.5, -0.22, false);
+      }
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.5, 0.9, false, 1);
+  }
+
+  function addUpperPrizeTable(x, z) {
+    const group = new window.THREE.Group();
+    addBox(group, 3.1, 0.16, 1.3, world.materials.wood, 0, UPPER_FLOOR_Y + 0.78, 0);
+    addBox(group, 0.18, 0.76, 0.18, world.materials.darkWood, -1.2, UPPER_FLOOR_Y + 0.38, -0.45);
+    addBox(group, 0.18, 0.76, 0.18, world.materials.darkWood, 1.2, UPPER_FLOOR_Y + 0.38, -0.45);
+    addBox(group, 0.18, 0.76, 0.18, world.materials.darkWood, -1.2, UPPER_FLOOR_Y + 0.38, 0.45);
+    addBox(group, 0.18, 0.76, 0.18, world.materials.darkWood, 1.2, UPPER_FLOOR_Y + 0.38, 0.45);
+    for (let i = 0; i < 5; i++) {
+      addBox(group, 0.54, 0.22, 0.34, i % 2 ? world.materials.green : world.materials.yellow, -1.0 + i * 0.5, UPPER_FLOOR_Y + 1.0 + (i % 2) * 0.13, -0.08 + (i % 3) * 0.16, false);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 3.45, 1.65, false, 1);
+  }
+
+  function addUpperBed(x, z, yaw) {
+    const group = new window.THREE.Group();
+    addBox(group, 2.2, 0.32, 3.4, world.materials.darkWood, 0, UPPER_FLOOR_Y + 0.34, 0);
+    addBox(group, 2.05, 0.22, 2.9, world.materials.fabricWarm, 0, UPPER_FLOOR_Y + 0.64, 0.2);
+    addBox(group, 2.3, 1.05, 0.2, world.materials.darkWood, 0, UPPER_FLOOR_Y + 0.95, 1.52);
+    addBox(group, 0.8, 0.18, 0.62, world.materials.white, -0.5, UPPER_FLOOR_Y + 0.87, 0.95, false);
+    addBox(group, 0.8, 0.18, 0.62, world.materials.white, 0.5, UPPER_FLOOR_Y + 0.87, 0.95, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    addPropCollision(x, z, 2.6, 3.8, false, 1);
+  }
+
+  function addUpperControlBank(x, z) {
+    const group = new window.THREE.Group();
+    addBox(group, 4.2, 0.9, 1.1, world.materials.black, 0, UPPER_FLOOR_Y + 0.45, 0);
+    for (let i = 0; i < 5; i++) {
+      addBox(group, 0.42, 0.08, 0.42, i % 2 ? world.materials.cyan : world.materials.red, -1.6 + i * 0.8, UPPER_FLOOR_Y + 0.96, -0.18, false);
+      addBox(group, 0.34, 0.04, 0.12, world.materials.yellow, -1.6 + i * 0.8, UPPER_FLOOR_Y + 1.05, 0.26, false);
+    }
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    addPropCollision(x, z, 4.55, 1.45, false, 1);
+  }
+
+  function addUpperSign(text, x, y, z, yaw, w, h) {
+    const sign = makeTextSign(text, w, h, "#050505", "#f0c336");
+    sign.position.set(x, y, z);
+    sign.rotation.y = yaw;
+    world.scene.add(sign);
+    return sign;
+  }
+
   function addWallSconce(x, z, yaw) {
     const THREE = window.THREE;
     const group = new THREE.Group();
@@ -1400,7 +1550,7 @@
     addCoffeeTable(0.6, 25.3, 0);
     addMediaConsole(-4.8, 25.1, Math.PI / 2);
     addFireplace(-5.85, 30.3, Math.PI / 2);
-    addStaircase(5.1, 30.2, Math.PI);
+    addStaircase(5.1, 30.2, 0);
     addFloorLamp(4.7, 21.2);
     addHousePlant(-4.7, 28.8);
     addPictureCluster(-6.35, 24.1, Math.PI / 2, ["before", "after", "waiver"]);
@@ -1460,9 +1610,9 @@
     addRug(-15.7, -7.2, 3.4, 3.0, world.materials.tile);
     addTub(-13.7, -8.2, 0);
     addToilet(-17.2, -8.1, Math.PI / 2);
-    addSink(-16.5, -5.2, Math.PI);
+    addSink(-18.0, -5.4, Math.PI / 2);
     addTowelRack(-13.4, -5.4, Math.PI);
-    addBox(world.scene, 0.52, 1.9, 5.2, world.materials.wallDark, -19.0, 0.95, -7.4);
+    addWall(-19.0, -7.4, 0.52, 5.2, 3.2, world.materials.wallDark);
   }
 
   function addUtilityRoom() {
@@ -1585,21 +1735,25 @@
   function addStaircase(x, z, yaw) {
     const THREE = window.THREE;
     const group = new THREE.Group();
-    for (let i = 0; i < 15; i++) {
-      addBox(group, 2.65, 0.18, 0.54, world.materials.wood, 0, 0.09 + i * 0.18, -i * 0.34);
+    for (let i = 0; i < 22; i++) {
+      addBox(group, 2.65, 0.18, 0.46, world.materials.wood, 0, 0.09 + i * 0.19, -i * 0.29);
     }
-    addBox(group, 3.1, 0.18, 1.25, world.materials.hardwood, 0, 2.85, -5.35);
-    addBox(group, 0.1, 2.35, 5.7, world.materials.trim, -1.44, 1.65, -2.7);
-    addBox(group, 0.1, 2.35, 5.7, world.materials.trim, 1.44, 1.65, -2.7);
-    addBox(group, 3.2, 0.12, 0.16, world.materials.trim, 0, 3.05, -5.95);
+    addBox(group, 3.15, 0.18, 1.25, world.materials.hardwood, 0, UPPER_FLOOR_Y - 0.08, -6.45);
+    addBox(group, 0.1, 3.8, 6.8, world.materials.trim, -1.44, 2.1, -3.2);
+    addBox(group, 0.1, 3.8, 6.8, world.materials.trim, 1.44, 2.1, -3.2);
+    addBox(group, 3.2, 0.12, 0.16, world.materials.trim, 0, UPPER_FLOOR_Y + 0.14, -6.95);
     addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, -1.44, 1.52, 0.2);
     addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, 1.44, 1.52, 0.2);
-    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, -1.44, 3.0, -5.8);
-    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, 1.44, 3.0, -5.8);
+    addBox(group, 0.16, 4.1, 0.16, world.materials.darkWood, -1.44, UPPER_FLOOR_Y - 0.1, -6.75);
+    addBox(group, 0.16, 4.1, 0.16, world.materials.darkWood, 1.44, UPPER_FLOOR_Y - 0.1, -6.75);
+    const stairSign = makeTextSign("UPSTAIRS", 1.7, 0.42, "#050505", "#f0c336");
+    stairSign.position.set(0, 1.8, 0.64);
+    stairSign.rotation.y = Math.PI;
+    group.add(stairSign);
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x - Math.sin(yaw) * 2.7, z - Math.cos(yaw) * 2.7, 3.2, 6.1, false);
+    addPropCollision(x - Math.sin(yaw) * 3.2, z - Math.cos(yaw) * 3.2, 3.3, 7.2, false);
   }
 
   function addKitchenClutter(x, z) {
@@ -2480,16 +2634,8 @@
     return group;
   }
 
-  function addPropCollision(x, z, w, d, blocksSight) {
-    world.collisions.push({
-      x1: x - w / 2,
-      x2: x + w / 2,
-      z1: z - d / 2,
-      z2: z + d / 2,
-      active: true,
-      blocksSight: Boolean(blocksSight),
-      label: "prop",
-    });
+  function addPropCollision(x, z, w, d, blocksSight, level = 0) {
+    addCollisionRect(x, z, w, d, blocksSight, "prop", level);
   }
 
   function bindInputs() {
@@ -2831,9 +2977,48 @@
     const isLocal = host === "127.0.0.1" || host === "localhost" || host === "::1";
     if (!isLocal) return;
 
+    const inspectionViews = {
+      foyer: { x: 0, z: 30.4, yaw: 0, pitch: 0.12, level: 0, label: "foyer and upper gallery" },
+      kitchen: { x: -15.0, z: 18.6, yaw: -Math.PI / 2, pitch: -0.05, level: 0, label: "kitchen" },
+      dining: { x: 16.6, z: 15.7, yaw: Math.PI / 2, pitch: -0.04, level: 0, label: "dining room prop placement" },
+      bedroom: { x: -16.0, z: -16.2, yaw: -Math.PI / 2, pitch: -0.05, level: 0, label: "main bedroom" },
+      bathroom: { x: -17.8, z: -7.0, yaw: Math.PI / 2, pitch: -0.03, level: 0, label: "bathroom nook" },
+      utility: { x: 0.6, z: -3.2, yaw: Math.PI, pitch: -0.05, level: 0, label: "utility hall" },
+      office: { x: 16.6, z: -17.2, yaw: Math.PI / 2, pitch: -0.05, level: 0, label: "home office" },
+      stairs: { x: STAIR_BOTTOM.x - 0.85, z: STAIR_BOTTOM.z - 0.1, yaw: STAIR_BOTTOM.yaw, pitch: -0.02, level: 0, label: "working staircase" },
+      upstairs: { x: STAIR_TOP.x, z: STAIR_TOP.z, yaw: STAIR_TOP.yaw, pitch: -0.04, level: 1, label: "second floor landing" },
+      upstairsEast: { x: 14.2, z: 23.4, yaw: Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs east rooms" },
+      upstairsWest: { x: -14.2, z: 18.8, yaw: -Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs west rooms" },
+    };
+
+    const applyInspectionView = (view) => {
+      state.player.x = view.x;
+      state.player.z = view.z;
+      state.player.level = view.level || 0;
+      state.player.y = floorYForLevel(state.player.level) + EYE_HEIGHT;
+      state.player.yaw = view.yaw || 0;
+      state.player.pitch = view.pitch || 0;
+      state.player.bob = 0;
+      state.host.x = 28;
+      state.host.z = -23;
+      state.host.yaw = Math.PI * 0.2;
+      state.host.mode = "stunned";
+      state.host.stunTimer = 999;
+      state.safeTimer = Math.max(state.safeTimer, 999);
+      showAlert(`Local check: ${view.label}.`, "");
+    };
+
     const runPhase = (name) => {
       startDirectorRun();
-      if (name === "detour") {
+      if (inspectionViews[name]) {
+        applyInspectionView(inspectionViews[name]);
+      } else if (name === "stairsUp") {
+        applyInspectionView({ ...inspectionViews.stairs, x: STAIR_BOTTOM.x, z: STAIR_BOTTOM.z, yaw: STAIR_BOTTOM.yaw, label: "stair transfer up" });
+        transferStairs("up");
+      } else if (name === "stairsDown") {
+        applyInspectionView({ ...inspectionViews.upstairs, x: STAIR_TOP.x, z: STAIR_TOP.z, yaw: STAIR_TOP.yaw, label: "stair transfer down" });
+        transferStairs("down");
+      } else if (name === "detour") {
         setDirectorTaskProgress(2);
         state.detourComplete = false;
         state.player.x = 2.4;
@@ -2934,6 +3119,8 @@
           hostMode: state.host.mode,
           playerX: Number(state.player.x.toFixed(2)),
           playerZ: Number(state.player.z.toFixed(2)),
+          playerY: Number(state.player.y.toFixed(2)),
+          playerLevel: state.player.level,
           playerYaw: Number(state.player.yaw.toFixed(3)),
           touchForward: Number(state.touchMove.forward.toFixed(2)),
           touchStrafe: Number(state.touchMove.strafe.toFixed(2)),
@@ -3021,7 +3208,10 @@
     state.alertTimer = 0;
     state.jumpscareTimer = 0;
     state.interactionProgress = 0;
+    state.stairProgress = 0;
     state.activeTask = null;
+    state.stairPromptActive = false;
+    state.stairDirection = null;
     state.detourActive = false;
     state.detourComplete = false;
     state.detourPromptActive = false;
@@ -3034,6 +3224,8 @@
     state.logs = [];
     state.player.x = 0;
     state.player.z = 29;
+    state.player.level = 0;
+    state.player.y = EYE_HEIGHT;
     state.player.yaw = 0;
     state.player.pitch = 0;
     state.player.bob = 0;
@@ -3134,6 +3326,7 @@
     updateStoryTimers(dt);
 
     updatePlayer(dt);
+    updateStairTravel(dt);
     updateTasks(dt);
     updateHazards(dt);
     updateHost(dt);
@@ -3186,6 +3379,21 @@
   }
 
   function updateTasks(dt) {
+    if (state.stairPromptActive) {
+      state.activeTask = null;
+      state.interactionProgress = 0;
+      updatePrompt();
+      return;
+    }
+
+    if (state.player.level !== 0) {
+      state.activeTask = null;
+      state.finalPromptActive = false;
+      state.interactionProgress = 0;
+      updatePrompt();
+      return;
+    }
+
     if (updateDetour(dt)) {
       updatePrompt();
       return;
@@ -3224,6 +3432,42 @@
     }
 
     updatePrompt();
+  }
+
+  function updateStairTravel(dt) {
+    const endpoint = state.player.level === 0 ? STAIR_BOTTOM : STAIR_TOP;
+    const d = distance(state.player.x, state.player.z, endpoint.x, endpoint.z);
+    state.stairPromptActive = d < 2.65;
+    state.stairDirection = state.stairPromptActive ? (state.player.level === 0 ? "up" : "down") : null;
+
+    if (!state.stairPromptActive) {
+      state.stairProgress = 0;
+      return;
+    }
+
+    if (state.input.interact) {
+      state.stairProgress += dt;
+      if (state.stairProgress >= STAIR_TRAVEL_SECONDS) {
+        transferStairs(state.stairDirection);
+      }
+    } else {
+      state.stairProgress = Math.max(0, state.stairProgress - dt * 2.4);
+    }
+  }
+
+  function transferStairs(direction) {
+    const destination = direction === "up" ? STAIR_TOP : STAIR_BOTTOM;
+    state.player.level = destination.level;
+    state.player.x = destination.x;
+    state.player.z = destination.z;
+    state.player.y = floorYForLevel(destination.level) + EYE_HEIGHT;
+    state.player.yaw = destination.yaw;
+    state.player.pitch = direction === "up" ? -0.04 : 0.02;
+    state.player.bob = 0;
+    state.stairProgress = 0;
+    state.stairDirection = destination.level === 0 ? "up" : "down";
+    state.safeTimer = Math.max(state.safeTimer, 1.2);
+    showAlert(destination.level === 1 ? "Second floor reached. The balcony has cameras too." : "Back downstairs. The mansion resumes judging.", "");
   }
 
   function updateStoryTimers(dt) {
@@ -3437,7 +3681,7 @@
       const dz = state.player.z - hazard.z;
       const d = Math.hypot(dx, dz);
       const a = wrapAngle(angleTo(hazard.x, hazard.z, state.player.x, state.player.z) - hazard.yaw);
-      const visible = state.graceTimer <= 0 && d < hazard.range && Math.abs(a) < hazard.fov && !isLineBlocked(hazard.x, hazard.z, state.player.x, state.player.z);
+      const visible = state.player.level === 0 && state.graceTimer <= 0 && d < hazard.range && Math.abs(a) < hazard.fov && !isLineBlocked(hazard.x, hazard.z, state.player.x, state.player.z, 0);
       hazard.spotted = visible;
       if (visible) {
         anySpot = true;
@@ -3531,9 +3775,9 @@
     }
 
     const catchRadius = host.mode === "chase" ? 0.92 : 0.68;
-    if (dPlayer < catchRadius && state.safeTimer <= 0) {
+    if (state.player.level === 0 && dPlayer < catchRadius && state.safeTimer <= 0) {
       endGame("YOU BECAME BONUS CONTENT", "Mr. Feast caught you before the final segment ended. The comments are calling it immersive.");
-    } else if (dPlayer < 1.18 && state.safeTimer > 0) {
+    } else if (state.player.level === 0 && dPlayer < 1.18 && state.safeTimer > 0) {
       host.stunTimer = 3.2;
       state.viewers += 650;
       showAlert("Insurance clause triggered. The host had to smile through it.", "good");
@@ -3543,7 +3787,7 @@
   function chooseHostTarget() {
     const host = state.host;
     if (host.mode === "chase") {
-      if (!isLineBlocked(host.x, host.z, state.player.x, state.player.z)) return { x: state.player.x, z: state.player.z };
+      if (state.player.level === 0 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0)) return { x: state.player.x, z: state.player.z };
       return nearestNavPointTo(state.player.x, state.player.z);
     }
     if (host.mode === "search") return { x: host.lastKnownX, z: host.lastKnownZ };
@@ -3553,6 +3797,7 @@
   function canHostSeePlayer(dPlayer) {
     const host = state.host;
     const tuning = hostTuning();
+    if (state.player.level !== 0) return false;
     if (state.graceTimer > 0) return dPlayer < 2.6 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z);
     if (dPlayer > (host.mode === "chase" ? tuning.chaseVision : tuning.patrolVision)) return false;
     if (isLineBlocked(host.x, host.z, state.player.x, state.player.z)) return false;
@@ -3646,7 +3891,7 @@
 
   function updatePressure(dt) {
     const dHost = distance(state.player.x, state.player.z, state.host.x, state.host.z);
-    const threat = clamp(1 - (dHost - 1.4) / 10, 0, 1);
+    const threat = state.player.level === 0 ? clamp(1 - (dHost - 1.4) / 10, 0, 1) : 0;
     const chaseDrain = state.host.mode === "chase" ? 9.5 : state.host.mode === "search" ? 4.4 : 1.6;
     const signalDrain = state.signal > 65 ? 1.8 : 0;
     const safeScale = state.safeTimer > 0 ? 0.18 : state.graceTimer > 0 ? 0.2 : 1;
@@ -3660,10 +3905,11 @@
   }
 
   function moveEntity(entity, dx, dz, radius) {
+    const level = entity.level || 0;
     const tryMove = (axis) => {
       const nx = axis === "x" ? entity.x + dx : entity.x;
       const nz = axis === "z" ? entity.z + dz : entity.z;
-      if (!collides(nx, nz, radius)) {
+      if (!collides(nx, nz, radius, level)) {
         entity.x = nx;
         entity.z = nz;
       }
@@ -3672,18 +3918,25 @@
     tryMove("z");
   }
 
-  function collides(x, z, radius) {
+  function collides(x, z, radius, level = 0) {
     return world.collisions.some((rect) => {
       if (rect.active === false) return false;
+      if (!colliderMatchesLevel(rect, level)) return false;
       return x + radius > rect.x1 && x - radius < rect.x2 && z + radius > rect.z1 && z - radius < rect.z2;
     });
   }
 
-  function isLineBlocked(ax, az, bx, bz) {
+  function isLineBlocked(ax, az, bx, bz, level = 0) {
     return world.collisions.some((rect) => {
       if (rect.active === false || !rect.blocksSight) return false;
+      if (!colliderMatchesLevel(rect, level)) return false;
       return segmentIntersectsRect(ax, az, bx, bz, rect, 0.08);
     });
+  }
+
+  function colliderMatchesLevel(rect, level) {
+    if (Array.isArray(rect.level)) return rect.level.includes(level);
+    return (rect.level || 0) === level;
   }
 
   function segmentIntersectsRect(x1, z1, x2, z2, rect, pad) {
@@ -3727,7 +3980,7 @@
     const THREE = window.THREE;
     const player = state.player;
     const shake = state.jumpscareTimer > 0 && !state.reducedMotion ? state.jumpscareTimer : 0;
-    const danger = clamp(1 - distance(player.x, player.z, state.host.x, state.host.z) / 14, 0, 1);
+    const danger = player.level === 0 ? clamp(1 - distance(player.x, player.z, state.host.x, state.host.z) / 14, 0, 1) : 0;
     const bob = state.player.moving && !state.reducedMotion ? Math.sin(state.player.bob) * 0.045 : 0;
     const shakeX = shake ? Math.sin(world.clock * 58) * shake * 0.16 : 0;
     const shakeY = shake ? Math.cos(world.clock * 49) * shake * 0.1 : 0;
@@ -3860,7 +4113,7 @@
     world.guideBeacon.visible = state.running && !state.gameOver && Boolean(target);
     if (!target) return;
 
-    world.guideBeacon.position.set(target.x, 0.12 + Math.sin(t * 3.2) * 0.08, target.z);
+    world.guideBeacon.position.set(target.x, floorYForLevel(target.level || 0) + 0.12 + Math.sin(t * 3.2) * 0.08, target.z);
     world.guideBeacon.rotation.y = t * 1.6;
     const urgent = target.final || state.host.mode === "chase";
     if (world.guideBeaconLight) {
@@ -3882,6 +4135,10 @@
       text = state.input.interact
         ? `${state.activeTask.title} ${clamp(pct, 0, 100)}%`
         : `Hold F: ${state.activeTask.title}`;
+    } else if (state.stairPromptActive) {
+      const pct = Math.round((state.stairProgress / STAIR_TRAVEL_SECONDS) * 100);
+      const label = state.stairDirection === "up" ? "go upstairs" : "go downstairs";
+      text = state.input.interact ? `Taking stairs ${clamp(pct, 0, 100)}%` : `Hold F: ${label}`;
     } else if (state.finalPromptActive) {
       const pct = Math.round((state.interactionProgress / 2.2) * 100);
       text = state.input.interact ? `Opening exit ${clamp(pct, 0, 100)}%` : "Hold F: leave the mansion";
@@ -3893,6 +4150,7 @@
   function updateHUD() {
     canvas.dataset.playerX = state.player.x.toFixed(2);
     canvas.dataset.playerZ = state.player.z.toFixed(2);
+    canvas.dataset.playerLevel = String(state.player.level || 0);
     canvas.dataset.playerYaw = state.player.yaw.toFixed(3);
     if (el.hudTasks) el.hudTasks.textContent = `${state.tasksDone}/${TASK_TOTAL}`;
     if (el.hudViewers) el.hudViewers.textContent = formatScore(state.viewers);
@@ -3911,6 +4169,8 @@
         el.objective.textContent = "Lockdown: override the release panel";
       } else if (state.finalUnlocked) {
         el.objective.textContent = `Exit through the south gate · ${Math.ceil(state.finalEscapeTimer)}s`;
+      } else if (state.player.level === 1) {
+        el.objective.textContent = "Second floor: inspect the balcony or return downstairs";
       } else {
         const remaining = state.tasks.filter((task) => !task.done);
         const nearest = nearestTask();
@@ -3956,6 +4216,9 @@
     if (state.finalUnlocked) {
       label = `Final ${Math.ceil(state.finalEscapeTimer)}s`;
       kind = "final";
+    } else if (state.player.level === 1) {
+      label = "Second floor";
+      kind = "search";
     } else if (state.detourActive && !state.detourComplete) {
       label = "Lockdown";
       kind = "search";
@@ -3991,12 +4254,15 @@
   }
 
   function currentRouteTarget() {
-    if (state.detourActive && !state.detourComplete) {
-      return { x: DETOUR_PANEL.x, z: DETOUR_PANEL.z, label: DETOUR_PANEL.label, final: false, detour: true };
+    if (state.player.level === 1) {
+      return { x: STAIR_TOP.x, z: STAIR_TOP.z, label: "Stairs down", final: false, level: 1 };
     }
-    if (state.finalUnlocked) return { x: 0, z: -38.1, label: "Exit", final: true };
+    if (state.detourActive && !state.detourComplete) {
+      return { x: DETOUR_PANEL.x, z: DETOUR_PANEL.z, label: DETOUR_PANEL.label, final: false, detour: true, level: 0 };
+    }
+    if (state.finalUnlocked) return { x: 0, z: -38.1, label: "Exit", final: true, level: 0 };
     const task = nearestTask();
-    return task ? { x: task.x, z: task.z, label: task.room, final: false } : null;
+    return task ? { x: task.x, z: task.z, label: task.room, final: false, level: 0 } : null;
   }
 
   function renderObjectiveList() {

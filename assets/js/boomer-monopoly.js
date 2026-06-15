@@ -122,13 +122,13 @@
 
   const PROPERTY_STAMPS = [
     "NO LOWBALLS",
-    "CASH ONLY",
+    "CASH",
     "AS-IS",
-    "GOOD BONES",
-    "OPEN HOUSE",
-    "NEAR A COSTCO",
-    "HOA APPROVED",
-    "EQUITY DRIP",
+    "BONES",
+    "OPEN",
+    "COSTCO",
+    "HOA",
+    "EQUITY",
   ];
 
   const HEADLINES = [
@@ -170,6 +170,8 @@
     lastTime: 0,
     boardRects: [],
   };
+
+  const CENTER_PANEL = { x: 120, y: 120, w: 480, h: 480 };
 
   const money = (amount) => {
     const sign = amount < 0 ? "-" : "";
@@ -770,15 +772,40 @@
   }
 
   function spawnCallout(x, y, text, color) {
+    const pos = safeCalloutAnchor(x, y, text);
     state.callouts.push({
-      x,
-      y,
+      x: pos.x,
+      y: pos.y,
       text,
       color,
       age: 0,
-      life: 1.05,
-      vy: -34,
+      life: 0.82,
+      vy: -24,
     });
+  }
+
+  function safeCalloutAnchor(x, y, text) {
+    const width = calloutWidth(text);
+    const edgePad = 34;
+    const half = width / 2;
+    const panelPad = 22;
+    let nextX = Math.max(edgePad + half, Math.min(W - edgePad - half, x));
+    let nextY = Math.max(edgePad + 20, Math.min(H - edgePad, y));
+    const crossesPanelX = nextX + half > CENTER_PANEL.x + panelPad && nextX - half < CENTER_PANEL.x + CENTER_PANEL.w - panelPad;
+    const crossesPanelY = nextY > CENTER_PANEL.y + 44 && nextY < CENTER_PANEL.y + CENTER_PANEL.h - 28;
+
+    if (crossesPanelX && crossesPanelY) {
+      nextY = y < H / 2 ? CENTER_PANEL.y - 24 : CENTER_PANEL.y + CENTER_PANEL.h + 28;
+    }
+
+    return {
+      x: Math.max(edgePad + half, Math.min(W - edgePad - half, nextX)),
+      y: Math.max(edgePad + 20, Math.min(H - edgePad, nextY)),
+    };
+  }
+
+  function calloutWidth(text) {
+    return Math.min(190, Math.max(72, text.length * 7.2));
   }
 
   function buildBoardRects() {
@@ -834,11 +861,11 @@
     }
 
     drawGrid();
+    drawParticles();
+    drawCallouts();
     drawBoard(now);
     drawCenter(now);
     drawTokens(now);
-    drawParticles();
-    drawCallouts();
     ctx.restore();
 
     if (state.paused && !state.gameOver) {
@@ -942,15 +969,15 @@
     for (const c of state.callouts) {
       const alpha = 1 - c.age / c.life;
       ctx.save();
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = alpha * 0.72;
       ctx.translate(c.x, c.y);
-      ctx.fillStyle = "rgba(6, 8, 18, 0.82)";
+      ctx.fillStyle = "rgba(6, 8, 18, 0.62)";
       ctx.strokeStyle = c.color;
-      ctx.lineWidth = 2;
-      const width = Math.min(220, Math.max(82, c.text.length * 8.4));
-      roundRect(-width / 2, -18, width, 30, 8, true, true);
+      ctx.lineWidth = 1.5;
+      const width = calloutWidth(c.text);
+      roundRect(-width / 2, -16, width, 26, 8, true, true);
       ctx.fillStyle = c.color;
-      ctx.font = "900 12px Bungee, Impact, sans-serif";
+      ctx.font = "900 10px Bungee, Impact, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(c.text, 0, -2, width - 12);
@@ -1051,8 +1078,9 @@
       if (space.level > 0) {
         drawLevelHomes(rect.x + rect.w / 2, rect.y + rect.h - 9, space.level, space.group);
       } else {
-        ctx.fillStyle = "rgba(17,24,39,0.52)";
-        ctx.fillText(PROPERTY_STAMPS[space.index % PROPERTY_STAMPS.length], rect.x + rect.w / 2, rect.y + rect.h - 10, rect.w - 12);
+        ctx.fillStyle = "rgba(17,24,39,0.5)";
+        ctx.font = "900 8px JetBrains Mono, monospace";
+        ctx.fillText(shortStamp(space.index), rect.x + rect.w / 2, rect.y + rect.h - 9, rect.w - 18);
       }
     } else {
       ctx.font = "900 16px Inter, sans-serif";
@@ -1099,6 +1127,10 @@
     if (space.type === "skip") return "SKIP";
     if (space.type === "market") return `${space.amount > 0 ? "+" : ""}${Math.round(space.amount * 100)}%`;
     return "";
+  }
+
+  function shortStamp(index) {
+    return PROPERTY_STAMPS[index % PROPERTY_STAMPS.length];
   }
 
   function drawCenter(now) {
@@ -1243,29 +1275,44 @@
       const rect = state.boardRects[spaceIndex];
       if (!rect) continue;
       players.forEach((player, i) => {
-        const angle = (i / Math.max(1, players.length)) * Math.PI * 2;
-        const radius = players.length > 1 ? 13 : 0;
-        const cx = rect.x + rect.w / 2 + Math.cos(angle) * radius;
-        const cy = rect.y + rect.h / 2 + Math.sin(angle) * radius + Math.sin(now / 180 + i) * 1.5;
+        const pos = tokenPosition(rect, i, players.length, now);
+        const cx = pos.x;
+        const cy = pos.y;
+        const size = players.length > 2 ? 7.5 : 8.5;
         ctx.save();
         ctx.shadowColor = player.color;
-        ctx.shadowBlur = player.isHuman ? 16 : 9;
+        ctx.shadowBlur = player.isHuman ? 12 : 7;
         ctx.fillStyle = player.color;
         ctx.strokeStyle = "#05070d";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
-        ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+        ctx.arc(cx, cy, size, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.fillStyle = COLORS.bg;
-        ctx.font = "900 11px Inter, sans-serif";
+        ctx.font = "900 8px Inter, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(player.name[0].toUpperCase(), cx, cy + 0.5);
         ctx.restore();
       });
     }
+  }
+
+  function tokenPosition(rect, index, total, now) {
+    const chip = total > 2 ? 7.5 : 8.5;
+    const spacing = total > 2 ? 13 : 15;
+    const visible = Math.min(total, 4);
+    const rowIndex = index % visible;
+    const totalWidth = (visible - 1) * spacing;
+    const baseX = rect.x + rect.w - chip - 7 - totalWidth + rowIndex * spacing;
+    const baseY = rect.y + 16 + Math.sin(now / 220 + index) * 0.8;
+
+    return {
+      x: Math.max(rect.x + chip + 6, Math.min(rect.x + rect.w - chip - 6, baseX)),
+      y: Math.max(rect.y + chip + 4, Math.min(rect.y + 24, baseY)),
+    };
   }
 
   function drawParticles() {

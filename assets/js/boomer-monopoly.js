@@ -110,14 +110,14 @@
     { title: "Yard Sign Fever", text: "Each rival pays you $35 for unsolicited advice.", collectFromAll: 35 },
   ];
 
-  const TYPE_ICONS = {
-    start: "🏡",
-    property: "🏘",
-    card: "📬",
-    tax: "🧾",
-    bonus: "🛒",
-    skip: "⚖",
-    market: "📈",
+  const TYPE_BADGES = {
+    start: "$",
+    property: "H",
+    card: "?",
+    tax: "!",
+    bonus: "+",
+    skip: "Z",
+    market: "%",
   };
 
   const PROPERTY_STAMPS = [
@@ -1083,12 +1083,29 @@
         ctx.fillText(shortStamp(space.index), rect.x + rect.w / 2, rect.y + rect.h - 9, rect.w - 18);
       }
     } else {
-      ctx.font = "900 16px Inter, sans-serif";
-      ctx.fillText(TYPE_ICONS[space.type] || "•", rect.x + rect.w / 2, rect.y + rect.h - 29, rect.w - 10);
+      drawTypeBadge(rect, space.type);
       ctx.font = "900 10px JetBrains Mono, monospace";
-      ctx.fillText(spaceIcon(space), rect.x + rect.w / 2, rect.y + rect.h - 11, rect.w - 10);
+      ctx.textAlign = "right";
+      ctx.fillText(spaceIcon(space), rect.x + rect.w - 8, rect.y + rect.h - 11, rect.w - 34);
     }
 
+    ctx.restore();
+  }
+
+  function drawTypeBadge(rect, type) {
+    const badge = TYPE_BADGES[type] || "•";
+    const bx = rect.x + 8;
+    const by = rect.y + rect.h - 24;
+    ctx.save();
+    ctx.fillStyle = "rgba(251, 250, 244, 0.15)";
+    ctx.strokeStyle = "rgba(251, 250, 244, 0.22)";
+    ctx.lineWidth = 1;
+    roundRect(bx, by, 19, 16, 5, true, true);
+    ctx.fillStyle = COLORS.cream;
+    ctx.font = "900 10px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(badge, bx + 9.5, by + 8.5, 15);
     ctx.restore();
   }
 

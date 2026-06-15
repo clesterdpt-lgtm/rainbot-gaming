@@ -53,6 +53,10 @@
     inner: "#17251c",
     ink: "#fbfaf4",
     muted: "#aab6c9",
+    cream: "#fff2c2",
+    navy: "#07111f",
+    brown: "#5a331b",
+    lawn: "#57d163",
     pink: "#ff2e88",
     cyan: "#2ee0ff",
     yellow: "#ffd43b",
@@ -106,6 +110,44 @@
     { title: "Yard Sign Fever", text: "Each rival pays you $35 for unsolicited advice.", collectFromAll: 35 },
   ];
 
+  const TYPE_ICONS = {
+    start: "🏡",
+    property: "🏘",
+    card: "📬",
+    tax: "🧾",
+    bonus: "🛒",
+    skip: "⚖",
+    market: "📈",
+  };
+
+  const PROPERTY_STAMPS = [
+    "NO LOWBALLS",
+    "CASH ONLY",
+    "AS-IS",
+    "GOOD BONES",
+    "OPEN HOUSE",
+    "NEAR A COSTCO",
+    "HOA APPROVED",
+    "EQUITY DRIP",
+  ];
+
+  const HEADLINES = [
+    "Local duplex described as 'starter home' at $780k.",
+    "HOA bans clouds for lowering curb appeal.",
+    "Gary says rates were 18% once, refuses all context.",
+    "Neighborhood app reports suspicious teenager using sidewalk.",
+    "Open house snacks downgraded to one warm grape.",
+    "Barb calls every renovation 'a little facelift'.",
+  ];
+
+  const CASH_BITS = {
+    buy: ["Deed folder thickens", "Another lawn joins the empire", "Escrow machine hums"],
+    upgrade: ["Rent has entered its villain era", "Granite countertops deployed", "The garage became a studio"],
+    rent: ["Rent extracted", "Mailbox money acquired", "Passive income noises"],
+    bad: ["Wallet took structural damage", "Budget spreadsheet caught fire", "Liquidity left the chat"],
+    good: ["Cash drawer did a cartwheel", "Coupon energy restored", "Found money in a windbreaker"],
+  };
+
   const state = {
     board: [],
     players: [],
@@ -121,6 +163,10 @@
     busy: false,
     log: [],
     particles: [],
+    callouts: [],
+    headline: HEADLINES[0],
+    shake: 0,
+    actionPulse: 0,
     lastTime: 0,
     boardRects: [],
   };
@@ -129,6 +175,26 @@
     const sign = amount < 0 ? "-" : "";
     return `${sign}$${Math.abs(Math.round(amount)).toLocaleString()}`;
   };
+
+  const choice = (items) => items[Math.floor(Math.random() * items.length)];
+
+  function randomHeadline() {
+    return choice(HEADLINES);
+  }
+
+  function spaceCenter(index) {
+    const rect = state.boardRects[index];
+    if (!rect) return { x: W / 2, y: H / 2 };
+    return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+  }
+
+  function addImpact(spaceIndex, text, color, intensity = 1) {
+    const pos = typeof spaceIndex === "number" ? spaceCenter(spaceIndex) : { x: W / 2, y: H / 2 };
+    spawnParticles(pos.x, pos.y, color, 18 + Math.round(intensity * 8));
+    spawnCallout(pos.x, pos.y - 18, text, color);
+    state.shake = Math.max(state.shake, 0.18 * intensity);
+    state.actionPulse = Math.max(state.actionPulse, 0.8);
+  }
 
   function cloneBoard() {
     return SPACE_TEMPLATES.map((space, index) => ({
@@ -163,6 +229,10 @@
     state.busy = false;
     state.log = [];
     state.particles = [];
+    state.callouts = [];
+    state.headline = randomHeadline();
+    state.shake = 0;
+    state.actionPulse = 0;
     hideOverlay();
     log("You enter the market with $1,500 and unreasonable confidence.");
     beginTurn();
@@ -199,6 +269,7 @@
   function log(message) {
     state.log.unshift(message);
     state.log = state.log.slice(0, 8);
+    if (Math.random() < 0.42) state.headline = randomHeadline();
   }
 
   function beginTurn() {
@@ -386,12 +457,12 @@
     if (player.rentShield > 0) {
       player.rentShield -= 1;
       log(`${player.name}'s Rent Shield blocked ${money(rent)} at ${space.name}.`);
-      spawnParticles(360, 360, COLORS.cyan, 18);
+      addImpact(space.index, "RENT BLOCKED", COLORS.cyan, 0.8);
     } else {
       player.cash -= rent;
       owner.cash += rent;
       log(`${player.name} paid ${owner.name} ${money(rent)} rent for ${space.name}.`);
-      spawnParticles(360, 360, owner.color, 14);
+      addImpact(space.index, choice(CASH_BITS.rent), owner.color, 1);
     }
 
     afterResolved(player);
@@ -408,14 +479,14 @@
     space.owner = player.id;
     space.level = 0;
     log(`${player.name} bought ${space.name} for ${money(space.cost)}.`);
-    spawnParticles(360, 360, player.color, 18);
+    addImpact(space.index, choice(CASH_BITS.buy), player.color, 1.1);
   }
 
   function upgradeProperty(player, space) {
     player.cash -= space.upgrade;
     space.level = Math.min(3, space.level + 1);
     log(`${player.name} renovated ${space.name} to level ${space.level}.`);
-    spawnParticles(360, 360, space.group, 18);
+    addImpact(space.index, choice(CASH_BITS.upgrade), space.group, 1.1);
   }
 
   function acceptDecision() {
@@ -447,7 +518,7 @@
   function changeCash(player, amount, message) {
     player.cash += amount;
     log(message);
-    spawnParticles(360, 360, amount >= 0 ? COLORS.green : COLORS.red, 12);
+    addImpact(player.pos, amount >= 0 ? choice(CASH_BITS.good) : choice(CASH_BITS.bad), amount >= 0 ? COLORS.green : COLORS.red, 0.85);
   }
 
   function drawCard(player) {
@@ -487,7 +558,7 @@
     }
 
     log(`${card.title}: ${card.text} (${detail})`);
-    spawnParticles(360, 360, COLORS.purple, 18);
+    addImpact(player.pos, card.title.toUpperCase(), COLORS.purple, 1);
   }
 
   function adjustMarket(delta) {
@@ -692,8 +763,22 @@
         age: 0,
         life: 0.45 + Math.random() * 0.5,
         size: 2 + Math.random() * 4,
+        spin: Math.random() * Math.PI,
+        shape: Math.random() < 0.28 ? "cash" : Math.random() < 0.58 ? "rect" : "dot",
       });
     }
+  }
+
+  function spawnCallout(x, y, text, color) {
+    state.callouts.push({
+      x,
+      y,
+      text,
+      color,
+      age: 0,
+      life: 1.05,
+      vy: -34,
+    });
   }
 
   function buildBoardRects() {
@@ -719,6 +804,9 @@
   }
 
   function updateParticles(dt) {
+    state.shake = Math.max(0, state.shake - dt * 1.4);
+    state.actionPulse = Math.max(0, state.actionPulse - dt * 2.2);
+
     for (let i = state.particles.length - 1; i >= 0; i -= 1) {
       const p = state.particles[i];
       p.age += dt;
@@ -727,23 +815,31 @@
       p.vy += 80 * dt;
       if (p.age >= p.life) state.particles.splice(i, 1);
     }
+
+    for (let i = state.callouts.length - 1; i >= 0; i -= 1) {
+      const c = state.callouts[i];
+      c.age += dt;
+      c.y += c.vy * dt;
+      if (c.age >= c.life) state.callouts.splice(i, 1);
+    }
   }
 
   function draw(now) {
     ctx.clearRect(0, 0, W, H);
+    drawBackground(now);
 
-    const bg = ctx.createLinearGradient(0, 0, W, H);
-    bg.addColorStop(0, "#07130f");
-    bg.addColorStop(0.52, "#17251c");
-    bg.addColorStop(1, "#05070d");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    if (state.shake > 0) {
+      ctx.translate((Math.random() - 0.5) * state.shake * 12, (Math.random() - 0.5) * state.shake * 12);
+    }
 
     drawGrid();
     drawBoard(now);
     drawCenter(now);
     drawTokens(now);
     drawParticles();
+    drawCallouts();
+    ctx.restore();
 
     if (state.paused && !state.gameOver) {
       ctx.fillStyle = "rgba(0,0,0,0.68)";
@@ -756,18 +852,124 @@
     }
   }
 
+  function drawBackground(now) {
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#06111f");
+    bg.addColorStop(0.4, "#12261b");
+    bg.addColorStop(0.72, "#2a1a0d");
+    bg.addColorStop(1, "#070812");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const t = now / 1000;
+    ctx.save();
+    ctx.translate(W / 2, H / 2);
+    for (let i = 0; i < 32; i += 1) {
+      ctx.rotate((Math.PI * 2) / 32);
+      ctx.fillStyle = i % 2 === 0 ? "rgba(255, 212, 59, 0.055)" : "rgba(46, 224, 255, 0.035)";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(520 + Math.sin(t + i) * 18, -12);
+      ctx.lineTo(520 + Math.sin(t + i) * 18, 12);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+
+    drawNeighborhood(now);
+    drawMoneyRain(now);
+
+    const vignette = ctx.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, 520);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.46)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawNeighborhood(now) {
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    for (let i = 0; i < 12; i += 1) {
+      const x = 22 + i * 62 + Math.sin(now / 900 + i) * 4;
+      const y = 80 + ((i * 37) % 120);
+      drawTinyHouse(x, y, i % 3 === 0 ? COLORS.pink : i % 3 === 1 ? COLORS.cyan : COLORS.yellow, 0.72);
+      drawTinyHouse(W - x - 40, H - y - 40, i % 2 === 0 ? COLORS.green : COLORS.orange, 0.62);
+    }
+    ctx.restore();
+  }
+
+  function drawMoneyRain(now) {
+    ctx.save();
+    ctx.font = "900 18px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i < 18; i += 1) {
+      const x = (i * 91 + (now / 36)) % (W + 80) - 40;
+      const y = (i * 53 + (now / 24)) % (H + 80) - 40;
+      ctx.globalAlpha = 0.14 + (i % 4) * 0.025;
+      ctx.fillStyle = i % 2 === 0 ? COLORS.yellow : COLORS.green;
+      ctx.fillText(i % 3 === 0 ? "$" : "¢", x, y);
+    }
+    ctx.restore();
+  }
+
+  function drawTinyHouse(x, y, color, scale = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(22, 37, 30, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLORS.cream;
+    roundRect(4, 17, 36, 24, 5, true, false);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 20);
+    ctx.lineTo(22, 3);
+    ctx.lineTo(44, 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = COLORS.navy;
+    ctx.fillRect(18, 27, 8, 14);
+    ctx.fillStyle = "rgba(46,224,255,0.7)";
+    ctx.fillRect(8, 24, 7, 7);
+    ctx.fillRect(30, 24, 7, 7);
+    ctx.restore();
+  }
+
+  function drawCallouts() {
+    for (const c of state.callouts) {
+      const alpha = 1 - c.age / c.life;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(c.x, c.y);
+      ctx.fillStyle = "rgba(6, 8, 18, 0.82)";
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2;
+      const width = Math.min(220, Math.max(82, c.text.length * 8.4));
+      roundRect(-width / 2, -18, width, 30, 8, true, true);
+      ctx.fillStyle = c.color;
+      ctx.font = "900 12px Bungee, Impact, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(c.text, 0, -2, width - 12);
+      ctx.restore();
+    }
+  }
+
   function drawGrid() {
     ctx.save();
-    ctx.globalAlpha = 0.12;
-    ctx.strokeStyle = COLORS.cyan;
+    ctx.globalAlpha = 0.16;
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.52)";
     ctx.lineWidth = 1;
-    for (let x = 0; x <= W; x += 24) {
+    for (let x = 0; x <= W; x += 36) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, H);
       ctx.stroke();
     }
-    for (let y = 0; y <= H; y += 24) {
+    for (let y = 0; y <= H; y += 36) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(W, y);
@@ -787,50 +989,96 @@
   function drawSpace(space, rect, now) {
     const active = state.selectedSpace === space.index;
     const owner = state.players.find((player) => player.id === space.owner);
+    const pad = 3;
+    const x = rect.x + pad;
+    const y = rect.y + pad;
+    const w = rect.w - pad * 2;
+    const h = rect.h - pad * 2;
 
     ctx.save();
-    ctx.fillStyle = space.type === "property" ? "#f8f4de" : specialColor(space.type);
-    ctx.strokeStyle = active ? COLORS.yellow : "#07110d";
+    if (active) {
+      ctx.shadowColor = COLORS.yellow;
+      ctx.shadowBlur = 18 + Math.sin(now / 110) * 6;
+    }
+
+    const tileGrad = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+    if (space.type === "property") {
+      tileGrad.addColorStop(0, "#fff9de");
+      tileGrad.addColorStop(0.64, "#f6e7b6");
+      tileGrad.addColorStop(1, "#dac58d");
+    } else {
+      tileGrad.addColorStop(0, specialColor(space.type));
+      tileGrad.addColorStop(1, "#080b14");
+    }
+
+    ctx.fillStyle = tileGrad;
+    ctx.strokeStyle = active ? COLORS.yellow : "rgba(5,7,13,0.88)";
     ctx.lineWidth = active ? 4 : 2;
-    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    roundRect(x, y, w, h, 8, true, true);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(255,255,255,0.13)";
+    ctx.fillRect(x + 5, y + 5, w - 10, 2);
 
     if (space.type === "property") {
       ctx.fillStyle = space.group;
-      ctx.fillRect(rect.x + 3, rect.y + 3, rect.w - 6, 13);
+      roundRect(x + 5, y + 5, w - 10, 15, 5, true, false);
       if (owner) {
         ctx.fillStyle = owner.color;
-        ctx.fillRect(rect.x + 3, rect.y + rect.h - 14, rect.w - 6, 11);
+        roundRect(x + 7, y + h - 17, w - 14, 12, 5, true, false);
       }
     }
 
     if (active) {
       ctx.strokeStyle = `rgba(255, 212, 59, ${0.45 + Math.sin(now / 120) * 0.18})`;
       ctx.lineWidth = 7;
-      ctx.strokeRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8);
+      roundRect(x + 5, y + 5, w - 10, h - 10, 9, false, true);
     }
 
     ctx.fillStyle = space.type === "property" ? "#111827" : "#fbfaf4";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "900 14px JetBrains Mono, monospace";
+    ctx.font = "900 13px JetBrains Mono, monospace";
     const lines = space.label || [space.name];
     lines.slice(0, 2).forEach((line, i) => {
-      ctx.fillText(line, rect.x + rect.w / 2, rect.y + 32 + i * 17, rect.w - 10);
+      ctx.fillText(line, rect.x + rect.w / 2, rect.y + 31 + i * 16, rect.w - 12);
     });
 
-    ctx.font = "900 12px JetBrains Mono, monospace";
+    ctx.font = "900 11px JetBrains Mono, monospace";
     if (space.type === "property") {
-      ctx.fillText(money(space.cost), rect.x + rect.w / 2, rect.y + rect.h - 24, rect.w - 10);
+      ctx.fillStyle = "#17251c";
+      ctx.fillText(money(space.cost), rect.x + rect.w / 2, rect.y + rect.h - 27, rect.w - 10);
       if (space.level > 0) {
-        ctx.fillStyle = COLORS.bg;
-        ctx.fillText(`LV ${space.level}`, rect.x + rect.w / 2, rect.y + rect.h - 8, rect.w - 10);
+        drawLevelHomes(rect.x + rect.w / 2, rect.y + rect.h - 9, space.level, space.group);
+      } else {
+        ctx.fillStyle = "rgba(17,24,39,0.52)";
+        ctx.fillText(PROPERTY_STAMPS[space.index % PROPERTY_STAMPS.length], rect.x + rect.w / 2, rect.y + rect.h - 10, rect.w - 12);
       }
     } else {
-      ctx.fillText(spaceIcon(space), rect.x + rect.w / 2, rect.y + rect.h - 24, rect.w - 10);
+      ctx.font = "900 16px Inter, sans-serif";
+      ctx.fillText(TYPE_ICONS[space.type] || "•", rect.x + rect.w / 2, rect.y + rect.h - 29, rect.w - 10);
+      ctx.font = "900 10px JetBrains Mono, monospace";
+      ctx.fillText(spaceIcon(space), rect.x + rect.w / 2, rect.y + rect.h - 11, rect.w - 10);
     }
 
     ctx.restore();
+  }
+
+  function drawLevelHomes(cx, y, level, color) {
+    const total = level;
+    const startX = cx - (total - 1) * 8;
+    for (let i = 0; i < total; i += 1) {
+      const x = startX + i * 16;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y - 2);
+      ctx.lineTo(x, y - 9);
+      ctx.lineTo(x + 6, y - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = COLORS.bg;
+      ctx.fillRect(x - 5, y - 2, 10, 7);
+    }
   }
 
   function specialColor(type) {
@@ -860,61 +1108,84 @@
     const h = 480;
     const human = humanPlayer();
     const heatPercent = Math.round(state.marketHeat * 100);
+    const currentSpace = state.board[human.pos] || state.board[0];
+    const pulse = state.actionPulse;
 
     ctx.save();
-    ctx.fillStyle = "rgba(6, 17, 13, 0.94)";
-    ctx.strokeStyle = "#2a4738";
-    ctx.lineWidth = 3;
+    ctx.shadowColor = state.marketHeat >= 0.2 ? COLORS.pink : COLORS.cyan;
+    ctx.shadowBlur = 20 + pulse * 18;
+    const centerGrad = ctx.createLinearGradient(x, y, x + w, y + h);
+    centerGrad.addColorStop(0, "rgba(10, 18, 28, 0.96)");
+    centerGrad.addColorStop(0.48, "rgba(22, 37, 28, 0.97)");
+    centerGrad.addColorStop(1, "rgba(44, 24, 10, 0.96)");
+    ctx.fillStyle = centerGrad;
+    ctx.strokeStyle = state.marketHeat >= 0 ? COLORS.yellow : COLORS.cyan;
+    ctx.lineWidth = 4;
     roundRect(x, y, w, h, 16, true, true);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "rgba(255, 212, 59, 0.08)";
+    ctx.fillRect(x + 18, y + 18, w - 36, 3);
 
     ctx.fillStyle = COLORS.yellow;
-    ctx.font = "bold 35px Bungee, Impact, sans-serif";
+    ctx.shadowColor = "rgba(255, 212, 59, 0.45)";
+    ctx.shadowBlur = 12;
+    ctx.font = "bold 38px Bungee, Impact, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
     ctx.fillText("BOOMER", x + w / 2, y + 34);
     ctx.fillStyle = COLORS.cyan;
     ctx.fillText("MONOPOLY", x + w / 2, y + 74);
+    ctx.shadowBlur = 0;
 
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "700 13px JetBrains Mono, monospace";
-    ctx.fillText("Buy low, rent forever.", x + w / 2, y + 124);
+    ctx.fillStyle = COLORS.cream;
+    ctx.font = "900 12px JetBrains Mono, monospace";
+    ctx.fillText("BUY LOW · RENT FOREVER · EXPLAIN 1983", x + w / 2, y + 125);
 
-    drawDice(x + w / 2 - 62, y + 164, state.dice[0]);
-    drawDice(x + w / 2 + 10, y + 164, state.dice[1]);
+    ctx.fillStyle = "rgba(255, 46, 136, 0.16)";
+    roundRect(x + 62, y + 146, w - 124, 28, 8, true, false);
+    ctx.fillStyle = COLORS.pink;
+    ctx.font = "900 11px JetBrains Mono, monospace";
+    ctx.fillText(`NEWS: ${state.headline}`, x + w / 2, y + 160, w - 146);
 
-    ctx.fillStyle = "#0b1510";
-    ctx.strokeStyle = "#314638";
-    roundRect(x + 44, y + 258, w - 88, 76, 10, true, true);
+    drawDice(x + w / 2 - 68, y + 194, state.dice[0]);
+    drawDice(x + w / 2 + 16, y + 194, state.dice[1]);
+
+    ctx.fillStyle = "rgba(7, 17, 31, 0.86)";
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.34)";
+    roundRect(x + 44, y + 278, w - 88, 90, 12, true, true);
     ctx.fillStyle = COLORS.ink;
-    ctx.font = "800 15px JetBrains Mono, monospace";
+    ctx.font = "900 15px JetBrains Mono, monospace";
     ctx.textAlign = "left";
-    ctx.fillText(`Net worth: ${money(netWorth(human))}`, x + 62, y + 281);
+    ctx.fillText(`Net worth: ${money(netWorth(human))}`, x + 62, y + 303);
     ctx.fillStyle = COLORS.muted;
     ctx.font = "700 12px JetBrains Mono, monospace";
-    ctx.fillText(`Deeds: ${ownedSpaces(human).length}   Shield: ${human.rentShield}`, x + 62, y + 307);
+    ctx.fillText(`Deeds: ${ownedSpaces(human).length}   Shield: ${human.rentShield}`, x + 62, y + 329);
+    ctx.fillStyle = COLORS.yellow;
+    ctx.fillText(`Current tile: ${currentSpace.name}`, x + 62, y + 351, w - 124);
 
     ctx.fillStyle = COLORS.muted;
-    ctx.fillText(`Market heat ${heatPercent > 0 ? "+" : ""}${heatPercent}%`, x + 62, y + 368);
+    ctx.fillText(`Market heat ${heatPercent > 0 ? "+" : ""}${heatPercent}%`, x + 62, y + 400);
     ctx.fillStyle = "#08100c";
-    ctx.fillRect(x + 62, y + 382, w - 124, 13);
+    roundRect(x + 62, y + 414, w - 124, 16, 8, true, false);
     ctx.fillStyle = state.marketHeat >= 0 ? COLORS.green : COLORS.red;
     const marker = ((state.marketHeat + 0.15) / 0.5) * (w - 124);
-    ctx.fillRect(x + 62, y + 382, Math.max(0, marker), 13);
-    ctx.strokeStyle = "#314638";
-    ctx.strokeRect(x + 62, y + 382, w - 124, 13);
+    roundRect(x + 62, y + 414, Math.max(8, marker), 16, 8, true, false);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    roundRect(x + 62, y + 414, w - 124, 16, 8, false, true);
 
     ctx.fillStyle = COLORS.muted;
     ctx.font = "700 11px JetBrains Mono, monospace";
     ctx.textAlign = "center";
     const active = activePlayer();
     const action = state.gameOver ? "Game over" : state.paused ? "Paused" : `${active.name}'s turn`;
-    ctx.fillText(`${action} · Round ${Math.min(state.round, MAX_ROUNDS)}/${MAX_ROUNDS}`, x + w / 2, y + 420);
+    ctx.fillText(`${action} · Round ${Math.min(state.round, MAX_ROUNDS)}/${MAX_ROUNDS}`, x + w / 2, y + 452);
 
     if (state.phase === "await_roll") {
       ctx.globalAlpha = 0.8 + Math.sin(now / 180) * 0.18;
       ctx.fillStyle = COLORS.yellow;
-      ctx.font = "bold 15px Bungee, Impact, sans-serif";
-      ctx.fillText("ROLL", x + w / 2, y + 218);
+      ctx.font = "bold 17px Bungee, Impact, sans-serif";
+      ctx.fillText("ROLL FOR EQUITY", x + w / 2, y + 254);
       ctx.globalAlpha = 1;
     }
 
@@ -923,10 +1194,18 @@
 
   function drawDice(x, y, value) {
     ctx.save();
-    ctx.fillStyle = "#f7f0d8";
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 4;
+    const grad = ctx.createLinearGradient(x, y, x + 52, y + 52);
+    grad.addColorStop(0, "#fff7d6");
+    grad.addColorStop(1, "#ffd43b");
+    ctx.fillStyle = grad;
     ctx.strokeStyle = "#05070d";
     ctx.lineWidth = 4;
     roundRect(x, y, 52, 52, 10, true, true);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
     ctx.fillStyle = COLORS.bg;
     const dots = diceDots(value);
     for (const dot of dots) {
@@ -969,6 +1248,8 @@
         const cx = rect.x + rect.w / 2 + Math.cos(angle) * radius;
         const cy = rect.y + rect.h / 2 + Math.sin(angle) * radius + Math.sin(now / 180 + i) * 1.5;
         ctx.save();
+        ctx.shadowColor = player.color;
+        ctx.shadowBlur = player.isHuman ? 16 : 9;
         ctx.fillStyle = player.color;
         ctx.strokeStyle = "#05070d";
         ctx.lineWidth = 3;
@@ -976,6 +1257,7 @@
         ctx.arc(cx, cy, 13, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        ctx.shadowBlur = 0;
         ctx.fillStyle = COLORS.bg;
         ctx.font = "900 11px Inter, sans-serif";
         ctx.textAlign = "center";
@@ -992,9 +1274,20 @@
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.spin + p.age * 8);
+      if (p.shape === "cash") {
+        ctx.font = "900 13px JetBrains Mono, monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("$", 0, 0);
+      } else if (p.shape === "rect") {
+        ctx.fillRect(-p.size, -p.size * 0.65, p.size * 2.2, p.size * 1.3);
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
   }
@@ -1059,4 +1352,14 @@
   bindEvents();
   updateUI();
   requestAnimationFrame(loop);
+
+  window.__BOOMER = {
+    state,
+    reset: resetGame,
+    roll: rollForActive,
+    buy: acceptDecision,
+    pass: declineDecision,
+    human: humanPlayer,
+    active: activePlayer,
+  };
 })();

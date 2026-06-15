@@ -4,13 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Boomer Monopoly - Rainbot Gaming</title>
-  <meta name="description" content="Boomer Monopoly - a satirical housing board game where rent always goes up." />
+  <meta name="description" content="Boomer Monopoly - a loud satirical housing board game where equity glows, rent spikes, and every cul-de-sac is a personality test." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260612-4" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23f7d716'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='56' fill='%230a0a14' text-anchor='middle'%3E%24%3C/text%3E%3C/svg%3E" />
   <style>
+    .boomer-page {
+      background:
+        radial-gradient(circle at 14% 10%, rgba(255, 212, 59, 0.16), transparent 28%),
+        radial-gradient(circle at 84% 18%, rgba(46, 224, 255, 0.13), transparent 26%),
+        linear-gradient(135deg, #070812 0%, #101a18 48%, #22130b 100%);
+    }
+
     .boomer-page .canvas-wrap {
-      background: #102018;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 212, 59, 0.2), transparent 35%),
+        linear-gradient(145deg, #102018, #07100d 58%, #1e1208);
+      border-color: rgba(255, 212, 59, 0.52);
+      box-shadow:
+        0 0 0 1px rgba(46, 224, 255, 0.18),
+        0 18px 45px rgba(0, 0, 0, 0.42),
+        0 0 42px rgba(255, 46, 136, 0.13);
     }
 
     .boomer-page .game-page {
@@ -26,10 +40,19 @@
     .boomer-page .game-stage {
       gap: 8px;
       padding: 8px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+        rgba(8, 10, 20, 0.88);
     }
 
     .boomer-page .hud {
-      padding: 6px 10px;
+      border-color: rgba(255, 212, 59, 0.26);
+      padding: 7px 10px;
+    }
+
+    .boomer-page .hud__value {
+      color: #ffd43b;
+      text-shadow: 0 0 14px rgba(255, 212, 59, 0.25);
     }
 
     .boomer-page .canvas-wrap--boomer {
@@ -44,8 +67,10 @@
 
     .boomer-decision {
       width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--panel-2);
+      background:
+        linear-gradient(135deg, rgba(255, 212, 59, 0.08), transparent 40%),
+        rgba(8, 8, 16, 0.92);
+      border: 1px solid rgba(255, 212, 59, 0.24);
       border-radius: 8px;
       color: var(--ink-dim);
       display: grid;
@@ -54,7 +79,7 @@
     }
 
     .boomer-decision__kicker {
-      color: var(--accent-3);
+      color: #2ee0ff;
       font-family: var(--font-mono);
       font-size: 11px;
       font-weight: 800;
@@ -86,8 +111,10 @@
 
     .boomer-player {
       align-items: center;
-      background: var(--bg);
-      border: 1px solid var(--panel-2);
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+        rgba(7, 10, 20, 0.9);
+      border: 1px solid rgba(255,255,255,0.11);
       border-radius: 8px;
       display: grid;
       gap: 8px;
@@ -119,8 +146,10 @@
     }
 
     .boomer-player.is-active {
-      border-color: var(--accent-3);
-      box-shadow: 0 0 0 1px rgba(247, 215, 22, 0.18);
+      border-color: #ffd43b;
+      box-shadow:
+        0 0 0 1px rgba(247, 215, 22, 0.18),
+        0 0 24px rgba(247, 215, 22, 0.12);
     }
 
     .boomer-log {
@@ -132,7 +161,9 @@
     }
 
     .boomer-log li {
-      background: rgba(8, 8, 16, 0.74);
+      background:
+        linear-gradient(90deg, rgba(46, 224, 255, 0.07), transparent 38%),
+        rgba(8, 8, 16, 0.78);
       border-left: 3px solid var(--panel-2);
       border-radius: 4px;
       color: var(--ink-dim);
@@ -142,7 +173,7 @@
     }
 
     .boomer-log li:first-child {
-      border-left-color: var(--accent-2);
+      border-left-color: #ff2e88;
       color: var(--ink);
     }
 
@@ -184,7 +215,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">🏘 Boomer Monopoly</h1>
-        <div class="game-page__sub">Roll dice · buy cul-de-sacs · charge rent · survive 16 rounds</div>
+        <div class="game-page__sub">Roll dice · hoard cul-de-sacs · weaponize curb appeal · survive 16 rounds</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -206,7 +237,8 @@
             <p class="overlay__sub" id="overlay-sub">
               Buy the neighborhood before anyone younger than you can qualify for a mortgage.
               <br><br>
-              Roll, buy, collect rent, and reach generational wealth before the board gets tired of you.
+              Roll through the equity casino, collect absurd rent, and turn every starter home
+              into a cautionary listing.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Start buying</button>
@@ -235,7 +267,7 @@
         <div class="boomer-decision" id="decision-card" aria-live="polite">
           <div class="boomer-decision__kicker" id="decision-kicker">Ready</div>
           <div class="boomer-decision__text" id="decision-text">Start the game, then roll on your turn.</div>
-          <div class="boomer-decision__meta" id="decision-meta">Win by having the highest net worth after 16 rounds.</div>
+          <div class="boomer-decision__meta" id="decision-meta">Win by having the highest net worth after 16 rounds. Try not to become a spreadsheet warning.</div>
         </div>
 
         <div class="game-side__panel">
@@ -261,7 +293,7 @@
           <ul>
             <li><strong style="color:var(--ink);">Roll on your turn.</strong> Buy unowned property, pay rent to rivals, and collect $200 when you pass Start.</li>
             <li><strong style="color:var(--ink);">Renovate owned property.</strong> Landing on your own deed lets you raise its rent up to level 3.</li>
-            <li><strong style="color:var(--ink);">Watch market heat.</strong> Hot markets raise rent and net worth, but special cards can cool things off.</li>
+            <li><strong style="color:var(--ink);">Watch market heat.</strong> Hot markets raise rent and net worth, but special cards can cool the room fast.</li>
             <li><strong style="color:var(--ink);">Win after 16 rounds</strong> by having the highest net worth. Going negative bankrupts you.</li>
             <li><strong style="color:var(--ink);">Power-ups (ad):</strong> HELOC Cash, Zoning Variance, and Rent Shield.</li>
           </ul>
@@ -284,7 +316,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-4"></script>
-  <script src="../assets/js/boomer-monopoly.js?v=20260612-4"></script>
+  <script src="../assets/js/boomer-monopoly.js?v=20260615-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

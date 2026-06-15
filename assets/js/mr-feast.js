@@ -56,8 +56,8 @@
       id: "cash",
       title: "Jam the dining room prize drop",
       room: "Dining Room",
-      x: 25.3,
-      z: 15.2,
+      x: 31.4,
+      z: 19.0,
       seconds: 2.5,
       score: 1450,
       type: "cash",
@@ -89,8 +89,8 @@
       id: "contract",
       title: "Shred the office bonus contract",
       room: "Home Office",
-      x: 25.5,
-      z: -17.4,
+      x: 30.8,
+      z: -14.0,
       seconds: 3.2,
       score: 1900,
       type: "contract",
@@ -669,16 +669,17 @@
     scene.add(moon);
 
     addFloor(0, -3, 74, 80, world.materials.floor);
-    addFloor(0, -4, 5.4, 68, world.materials.corridor, 0.035);
-    addFloor(0, 23, 12, 22, world.materials.hardwood, 0.05);
-    addFloor(-23, 17, 27, 22, world.materials.tile, 0.045);
-    addFloor(23, 14, 27, 24, world.materials.hardwood, 0.045);
-    addFloor(-23, -16, 27, 24, world.materials.fabric, 0.045);
-    addFloor(23, -17, 27, 24, world.materials.hardwood, 0.045);
-    addFloor(0, -6, 17, 16, world.materials.tile, 0.045);
-    addCeiling(0, -3, 74, 80);
+    addFloor(0, -3, 10.8, 76, world.materials.corridor, 0.035);
+    addFloor(0, 26, 11.2, 18, world.materials.hardwood, 0.05);
+    addFloor(-22, 18, 29, 24, world.materials.tile, 0.045);
+    addFloor(22, 16, 29, 24, world.materials.hardwood, 0.045);
+    addFloor(-22, -17, 29, 25, world.materials.fabric, 0.045);
+    addFloor(22, -18, 29, 26, world.materials.hardwood, 0.045);
+    addFloor(0, -7.4, 10.2, 9.4, world.materials.tile, 0.045);
+    addFloor(0, -29.5, 10.4, 22, world.materials.corridor, 0.04);
 
     buildWalls();
+    buildSecondStoryShell();
     buildSetDressing();
     buildTasks();
     buildGuideBeacon();
@@ -699,27 +700,77 @@
     addWall(-37, -3, 1.4, 78, 4.1);
     addWall(37, -3, 1.4, 78, 4.1);
 
-    addWall(-7, 29, 1.1, 14, 3.8);
-    addWall(-7, 10.5, 1.1, 9, 3.8);
-    addWall(-7, -4.8, 1.1, 9.4, 3.8);
-    addWall(-7, -31, 1.1, 22, 3.8);
+    addWall(-7, 31.2, 1.1, 9.6, 3.8);
+    addWall(-7, 23.2, 1.1, 3.0, 3.8);
+    addWall(-7, 8.8, 1.1, 10.5, 3.8);
+    addWall(-7, -2.9, 1.1, 4.0, 3.8);
+    addWall(-7, -8.9, 1.1, 4.0, 3.8);
+    addWall(-7, -31.4, 1.1, 21.2, 3.8);
 
-    addWall(7, 29, 1.1, 14, 3.8);
-    addWall(7, 10.2, 1.1, 9.4, 3.8);
-    addWall(7, -4.8, 1.1, 9.4, 3.8);
-    addWall(7, -31, 1.1, 22, 3.8);
+    addWall(7, 30.6, 1.1, 10.8, 3.8);
+    addWall(7, 22.2, 1.1, 4.0, 3.8);
+    addWall(7, 8.0, 1.1, 8.8, 3.8);
+    addWall(7, -2.8, 1.1, 4.2, 3.8);
+    addWall(7, -8.8, 1.1, 4.0, 3.8);
+    addWall(7, -31.2, 1.1, 21.6, 3.8);
 
-    addWall(-22, 4.5, 29, 1.1, 3.7);
-    addWall(22, 0.5, 29, 1.1, 3.7);
-    addWall(-5.2, 6.2, 3.2, 1.1, 3.4);
-    addWall(5.2, 6.2, 3.2, 1.1, 3.4);
-    addWall(-5.2, -23.8, 3.2, 1.1, 3.4);
-    addWall(5.2, -23.8, 3.2, 1.1, 3.4);
+    addWall(-22, 5.4, 29, 1.1, 3.7);
+    addWall(22, 3.4, 29, 1.1, 3.7);
+    addWall(-22, -5.5, 29, 1.1, 3.7);
+    addWall(22, -5.8, 29, 1.1, 3.7);
 
-    addWall(-31.2, 17, 1.0, 12, 3.2, world.materials.wallDark);
-    addWall(31.2, 14, 1.0, 12, 3.2, world.materials.wallDark);
-    addWall(-31.2, -16, 1.0, 12, 3.2, world.materials.wallDark);
-    addWall(31.2, -17, 1.0, 12, 3.2, world.materials.wallDark);
+    addWall(-5.4, 5.4, 3.2, 1.1, 3.4);
+    addWall(5.4, 5.4, 3.2, 1.1, 3.4);
+    addWall(-5.4, -23.2, 3.2, 1.1, 3.4);
+    addWall(5.4, -23.2, 3.2, 1.1, 3.4);
+
+    addWall(-31.4, 17.8, 1.0, 13.0, 3.2, world.materials.wallDark);
+    addWall(31.4, 16.0, 1.0, 13.0, 3.2, world.materials.wallDark);
+    addWall(-31.4, -17.0, 1.0, 13.5, 3.2, world.materials.wallDark);
+    addWall(31.4, -18.0, 1.0, 13.5, 3.2, world.materials.wallDark);
+  }
+
+  function buildSecondStoryShell() {
+    addFloor(-22, 18, 29, 24, world.materials.hardwood, 4.16);
+    addFloor(22, 16, 29, 24, world.materials.hardwood, 4.16);
+    addFloor(-22, -17, 29, 25, world.materials.hardwood, 4.16);
+    addFloor(22, -18, 29, 26, world.materials.hardwood, 4.16);
+    addFloor(-10.0, 22.0, 5.2, 28, world.materials.hardwood, 4.22);
+    addFloor(10.0, 21.0, 5.2, 30, world.materials.hardwood, 4.22);
+    addFloor(0, 31.2, 14.5, 4.4, world.materials.hardwood, 4.22);
+    addFloor(0, -24.6, 14.5, 4.2, world.materials.hardwood, 4.22);
+
+    addUpperWall(-37, -3, 1.0, 78, 2.6);
+    addUpperWall(37, -3, 1.0, 78, 2.6);
+    addUpperWall(0, 36, 74, 1.0, 2.6);
+    addUpperWall(0, -42, 74, 1.0, 2.6);
+    addUpperWall(-13.0, 22.0, 0.7, 28, 2.35, world.materials.wallDark);
+    addUpperWall(13.0, 21.0, 0.7, 30, 2.35, world.materials.wallDark);
+    addUpperWall(-13.0, -17.0, 0.7, 24, 2.35, world.materials.wallDark);
+    addUpperWall(13.0, -18.0, 0.7, 24, 2.35, world.materials.wallDark);
+
+    addUpperRailLine(-5.9, 18.0, 34, Math.PI / 2);
+    addUpperRailLine(5.9, 18.0, 34, Math.PI / 2);
+    addUpperRailLine(0, 31.0, 10.7, 0);
+    addUpperRailLine(0, -24.4, 10.7, 0);
+
+    addUpperDoorVisual(-13.35, 28.0, Math.PI / 2, "EDIT BAY");
+    addUpperDoorVisual(-13.35, 15.8, Math.PI / 2, "PRIZE ROOM");
+    addUpperDoorVisual(13.35, 26.6, -Math.PI / 2, "STREAM SUITE");
+    addUpperDoorVisual(13.35, 12.4, -Math.PI / 2, "GUEST ROOM");
+    addUpperDoorVisual(-13.35, -13.8, Math.PI / 2, "BUNK ROOM");
+    addUpperDoorVisual(13.35, -14.6, -Math.PI / 2, "CONTROL");
+
+    addUpperWindow(-36.45, 25.4, Math.PI / 2, 3.1, 1.05);
+    addUpperWindow(-36.45, 14.0, Math.PI / 2, 2.8, 1.0);
+    addUpperWindow(36.45, 24.4, -Math.PI / 2, 3.1, 1.05);
+    addUpperWindow(36.45, 12.0, -Math.PI / 2, 2.8, 1.0);
+    addUpperWindow(-36.45, -14.0, Math.PI / 2, 2.8, 1.0);
+    addUpperWindow(36.45, -15.8, -Math.PI / 2, 2.8, 1.0);
+
+    const upperGlow = new window.THREE.PointLight(0xffd89a, 0.85, 24);
+    upperGlow.position.set(0, 5.7, 27);
+    world.scene.add(upperGlow);
   }
 
   function buildSetDressing() {
@@ -733,12 +784,12 @@
     addSign("DEADLINE HOUSE", 0, 1.9, 35.26, 0, 5.4, 1.25, "#070505", "#f0c336");
     addSign("BACK DOOR", 0, 2.1, -41.22, Math.PI, 4.6, 1.1, "#130707", "#ffdddd");
 
-    addDoorFrame(-7.02, 18.3, Math.PI / 2, 6.4);
-    addDoorFrame(7.02, 16.3, -Math.PI / 2, 6.2);
-    addDoorFrame(-7.02, -14.6, Math.PI / 2, 8.2);
-    addDoorFrame(7.02, -15.5, -Math.PI / 2, 8.2);
-    addDoorFrame(0, 5.7, 0, 4.8);
-    addDoorFrame(0, -23.2, Math.PI, 4.8);
+    addDoorFrame(-7.02, 18.3, Math.PI / 2, 5.7);
+    addDoorFrame(7.02, 16.3, -Math.PI / 2, 5.7);
+    addDoorFrame(-7.02, -15.6, Math.PI / 2, 6.2);
+    addDoorFrame(7.02, -15.5, -Math.PI / 2, 6.2);
+    addDoorFrame(0, 5.4, 0, 6.2);
+    addDoorFrame(0, -23.2, Math.PI, 6.2);
 
     addWindow(-36.28, 22, Math.PI / 2, 3.4, 1.25);
     addWindow(-36.28, 12.5, Math.PI / 2, 3.0, 1.15);
@@ -818,11 +869,11 @@
 
   function buildContestants() {
     const spots = [
-      [-4.8, 29.2, 2.7],
-      [-2.8, 29.5, 3.0],
-      [-0.8, 29.6, 3.1],
-      [1.2, 29.6, -3.05],
-      [3.2, 29.4, -2.85],
+      [-5.0, 30.4, 2.35],
+      [-5.1, 27.8, 2.0],
+      [-5.0, 25.2, 1.65],
+      [5.0, 30.2, -2.35],
+      [5.1, 27.4, -1.95],
       [-28.8, -20.5, 1.9],
       [-25.5, -20.8, 1.9],
       [20.8, -23.2, -2.2],
@@ -942,30 +993,48 @@
     });
     for (let i = 0; i < 4; i++) addBox(host, 0.055, 0.055, 0.035, world.materials.chrome, 0, 1.22 + i * 0.22, -0.58, false);
 
-    [-0.78, 0.78].forEach((x) => {
-      const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.82, 12), world.materials.suit);
-      upper.position.set(x, 1.86, -0.04);
-      upper.rotation.z = x < 0 ? 0.5 : -0.5;
-      upper.castShadow = true;
-      host.add(upper);
-      const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.11, 0.72, 12), world.materials.sickSkin);
-      forearm.position.set(x * 1.03, 1.25, -0.26);
-      forearm.rotation.z = x < 0 ? -0.18 : 0.18;
-      forearm.rotation.x = 0.35;
-      forearm.castShadow = true;
-      host.add(forearm);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 10), world.materials.sickSkin);
-      hand.position.set(x * 1.12, 0.9, -0.36);
-      hand.scale.set(0.92, 0.72, 1.2);
+    const addHostLimb = (start, end, radiusTop, radiusBottom, material) => {
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const limb = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 14), material);
+      limb.position.copy(start).add(end).multiplyScalar(0.5);
+      limb.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+      limb.castShadow = true;
+      host.add(limb);
+      return limb;
+    };
+
+    [-1, 1].forEach((side) => {
+      const shoulder = new THREE.Vector3(side * 0.66, 2.22, -0.03);
+      const elbow = new THREE.Vector3(side * 0.94, 1.55, -0.16);
+      const wrist = new THREE.Vector3(side * 0.82, 1.04, -0.42);
+      addHostLimb(shoulder, elbow, 0.14, 0.12, world.materials.suit);
+      addHostLimb(elbow, wrist, 0.105, 0.085, world.materials.sickSkin);
+
+      const shoulderPad = new THREE.Mesh(new THREE.SphereGeometry(0.19, 14, 10), world.materials.suit);
+      shoulderPad.position.copy(shoulder);
+      shoulderPad.scale.set(1.2, 0.72, 0.82);
+      shoulderPad.castShadow = true;
+      host.add(shoulderPad);
+
+      const cuff = addBox(host, 0.22, 0.1, 0.16, world.materials.shirt, wrist.x * 0.98, wrist.y + 0.05, wrist.z + 0.04, false);
+      cuff.rotation.z = side * -0.18;
+      cuff.rotation.x = 0.28;
+
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 10), world.materials.sickSkin);
+      hand.position.set(wrist.x + side * 0.02, wrist.y - 0.12, wrist.z - 0.05);
+      hand.scale.set(0.88, 0.74, 1.15);
+      hand.rotation.z = side * -0.12;
       hand.castShadow = true;
       host.add(hand);
+
       for (let i = 0; i < 4; i++) {
-        const finger = addBox(host, 0.036, 0.23, 0.052, world.materials.sickSkin, x * 1.12 + (i - 1.5) * 0.038, 0.72, -0.48 - i * 0.008, false);
-        finger.rotation.x = 0.36;
-        finger.rotation.z = x < 0 ? -0.05 : 0.05;
-        addBox(host, 0.04, 0.026, 0.038, world.materials.nail, x * 1.12 + (i - 1.5) * 0.038, 0.6, -0.56 - i * 0.008, false);
+        const fingerX = hand.position.x + side * (i - 1.5) * 0.038;
+        const finger = addBox(host, 0.036, 0.23, 0.052, world.materials.sickSkin, fingerX, hand.position.y - 0.18, hand.position.z - 0.11 - i * 0.008, false);
+        finger.rotation.x = 0.34;
+        finger.rotation.z = side * 0.04;
+        addBox(host, 0.04, 0.026, 0.038, world.materials.nail, fingerX, hand.position.y - 0.31, hand.position.z - 0.2 - i * 0.008, false);
       }
-      addBox(host, 0.22, 0.09, 0.14, world.materials.shirt, x * 0.92, 1.02, -0.32, false);
     });
 
     const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.9, 12), world.materials.chrome);
@@ -1204,23 +1273,21 @@
   }
 
   function addInteriorArchitecture() {
-    addWallPanel(-20.8, 7.05, 0, 12.0, 3.2);
-    addWallPanel(-13.2, 11.2, Math.PI / 2, 5.2, 3.2);
-    addWallPanel(-13.2, 23.0, Math.PI / 2, 7.2, 3.2);
-    addWallPanel(-30.8, 8.8, Math.PI / 2, 4.8, 3.0);
-    addWallPanel(20.6, 5.9, 0, 11.2, 3.2);
-    addWallPanel(13.2, 21.4, Math.PI / 2, 6.4, 3.2);
-    addWallPanel(-18.9, -7.4, Math.PI / 2, 5.3, 2.65, world.materials.wall);
-    addWallPanel(-18.8, -21.1, Math.PI / 2, 5.0, 3.1);
-    addWallPanel(18.8, -7.2, 0, 9.6, 3.1);
-    addWallPanel(13.1, -19.8, Math.PI / 2, 6.2, 3.1);
+    addWallPanel(-21.8, 4.85, 0, 24.8, 3.05, world.materials.wall);
+    addWallPanel(21.8, 2.85, 0, 24.8, 3.05, world.materials.wall);
+    addWallPanel(-21.8, -5.95, 0, 24.8, 3.05, world.materials.wall);
+    addWallPanel(21.8, -6.25, 0, 24.8, 3.05, world.materials.wall);
+    addWallPanel(-35.9, 18.0, Math.PI / 2, 22.0, 3.05, world.materials.wallDark);
+    addWallPanel(35.9, 16.0, -Math.PI / 2, 22.0, 3.05, world.materials.wallDark);
+    addWallPanel(-35.9, -17.0, Math.PI / 2, 25.0, 3.05, world.materials.wallDark);
+    addWallPanel(35.9, -18.0, -Math.PI / 2, 25.0, 3.05, world.materials.wallDark);
+    addWallPanel(-18.8, -7.6, Math.PI / 2, 5.0, 2.8, world.materials.wall);
 
-    addDoorSlab(-7.24, 18.3, Math.PI / 2, -0.72);
-    addDoorSlab(7.24, 16.3, -Math.PI / 2, 0.68);
-    addDoorSlab(-7.24, -14.6, Math.PI / 2, 0.62);
-    addDoorSlab(7.24, -15.5, -Math.PI / 2, -0.64);
-    addDoorSlab(-19.0, -5.2, 0, 0.7, 0.82);
-    addDoorSlab(13.1, -16.7, Math.PI / 2, 0.72, 0.9);
+    addDoorSlab(-7.24, 18.3, Math.PI / 2, -0.64, 0.95);
+    addDoorSlab(7.24, 16.3, -Math.PI / 2, 0.64, 0.95);
+    addDoorSlab(-7.24, -15.6, Math.PI / 2, 0.58, 0.98);
+    addDoorSlab(7.24, -15.5, -Math.PI / 2, -0.58, 0.98);
+    addDoorSlab(-18.85, -5.25, 0, 0.58, 0.82);
 
     addWallSconce(-6.88, 21.8, Math.PI / 2);
     addWallSconce(6.88, 20.5, -Math.PI / 2);
@@ -1256,6 +1323,59 @@
     group.rotation.y = yaw + openAngle;
     world.scene.add(group);
     return group;
+  }
+
+  function addUpperWall(x, z, w, d, h, material = world.materials.wall) {
+    const group = new window.THREE.Group();
+    addBox(group, w, h, d, material, 0, 4.18 + h / 2, 0);
+    addBox(group, w + 0.06, 0.08, d + 0.06, world.materials.trim, 0, 4.36, 0, false);
+    addBox(group, w + 0.06, 0.08, d + 0.06, world.materials.trim, 0, 4.18 + h - 0.22, 0, false);
+    group.position.set(x, 0, z);
+    world.scene.add(group);
+    return group;
+  }
+
+  function addUpperRailLine(x, z, length, yaw) {
+    const group = new window.THREE.Group();
+    addBox(group, length, 0.1, 0.09, world.materials.trim, 0, 4.88, 0, false);
+    addBox(group, length, 0.08, 0.08, world.materials.darkWood, 0, 4.55, 0, false);
+    const posts = Math.max(3, Math.ceil(length / 2.5));
+    for (let i = 0; i <= posts; i++) {
+      const offset = -length / 2 + (length / posts) * i;
+      addBox(group, 0.1, 0.8, 0.1, world.materials.trim, offset, 4.48, 0, false);
+    }
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+    return group;
+  }
+
+  function addUpperDoorVisual(x, z, yaw, label) {
+    const group = new window.THREE.Group();
+    addBox(group, 0.95, 1.95, 0.1, world.materials.darkWood, 0, 5.16, 0, false);
+    addBox(group, 0.72, 0.08, 0.055, world.materials.trim, 0, 5.66, -0.07, false);
+    addBox(group, 0.72, 0.08, 0.055, world.materials.trim, 0, 4.82, -0.07, false);
+    const knob = new window.THREE.Mesh(new window.THREE.SphereGeometry(0.055, 10, 8), world.materials.chrome);
+    knob.position.set(0.31, 5.1, -0.12);
+    group.add(knob);
+    const sign = makeTextSign(label, 1.25, 0.34, "#120d0b", "#f0c336");
+    sign.position.set(0, 6.32, -0.08);
+    group.add(sign);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
+  }
+
+  function addUpperWindow(x, z, yaw, w, h) {
+    const group = new window.THREE.Group();
+    addBox(group, w, h, 0.05, world.materials.glass, 0, 5.58, 0, false);
+    addBox(group, w + 0.2, 0.12, 0.1, world.materials.trim, 0, 5.58 + h / 2 + 0.08, 0.02, false);
+    addBox(group, w + 0.2, 0.12, 0.1, world.materials.trim, 0, 5.58 - h / 2 - 0.08, 0.02, false);
+    addBox(group, 0.12, h + 0.24, 0.1, world.materials.trim, -w / 2 - 0.08, 5.58, 0.02, false);
+    addBox(group, 0.12, h + 0.24, 0.1, world.materials.trim, w / 2 + 0.08, 5.58, 0.02, false);
+    group.position.set(x, 0, z);
+    group.rotation.y = yaw;
+    world.scene.add(group);
   }
 
   function addWallSconce(x, z, yaw) {
@@ -1465,16 +1585,21 @@
   function addStaircase(x, z, yaw) {
     const THREE = window.THREE;
     const group = new THREE.Group();
-    for (let i = 0; i < 7; i++) {
-      addBox(group, 2.3, 0.18, 0.72, world.materials.wood, 0, 0.09 + i * 0.18, -i * 0.42);
+    for (let i = 0; i < 15; i++) {
+      addBox(group, 2.65, 0.18, 0.54, world.materials.wood, 0, 0.09 + i * 0.18, -i * 0.34);
     }
-    addBox(group, 0.08, 1.6, 3.2, world.materials.trim, -1.22, 0.9, -1.25);
-    addBox(group, 0.08, 1.6, 3.2, world.materials.trim, 1.22, 0.9, -1.25);
-    addBox(group, 2.7, 0.12, 0.16, world.materials.trim, 0, 1.72, -2.55);
+    addBox(group, 3.1, 0.18, 1.25, world.materials.hardwood, 0, 2.85, -5.35);
+    addBox(group, 0.1, 2.35, 5.7, world.materials.trim, -1.44, 1.65, -2.7);
+    addBox(group, 0.1, 2.35, 5.7, world.materials.trim, 1.44, 1.65, -2.7);
+    addBox(group, 3.2, 0.12, 0.16, world.materials.trim, 0, 3.05, -5.95);
+    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, -1.44, 1.52, 0.2);
+    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, 1.44, 1.52, 0.2);
+    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, -1.44, 3.0, -5.8);
+    addBox(group, 0.16, 3.0, 0.16, world.materials.darkWood, 1.44, 3.0, -5.8);
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z - 1.25, 2.9, 3.2, false);
+    addPropCollision(x - Math.sin(yaw) * 2.7, z - Math.cos(yaw) * 2.7, 3.2, 6.1, false);
   }
 
   function addKitchenClutter(x, z) {
@@ -2130,9 +2255,9 @@
 
   function addSponsorStacks() {
     const signs = [
-      ["FEAST WATER", -4.5, -8.8],
-      ["SLEEP COINS", 4.5, -9.2],
-      ["LEGAL SNACKS", 0, -1.8],
+      ["FEAST WATER", -4.6, -9.3],
+      ["SLEEP COINS", 4.6, -9.4],
+      ["LEGAL SNACKS", -4.6, -3.5],
     ];
     signs.forEach(([text, x, z], index) => {
       const group = new window.THREE.Group();
@@ -2747,6 +2872,28 @@
         state.host.stunTimer = 999;
         state.safeTimer = Math.max(state.safeTimer, 999);
         showAlert("Local check: furnished house layout.", "");
+      } else if (name === "foyer") {
+        state.player.x = 0;
+        state.player.z = 30.4;
+        state.player.yaw = 0;
+        state.player.pitch = 0.12;
+        state.host.x = 28;
+        state.host.z = -23;
+        state.host.mode = "stunned";
+        state.host.stunTimer = 999;
+        state.safeTimer = Math.max(state.safeTimer, 999);
+        showAlert("Local check: foyer and upper gallery.", "");
+      } else if (name === "dining") {
+        state.player.x = 16.6;
+        state.player.z = 15.7;
+        state.player.yaw = Math.PI / 2;
+        state.player.pitch = -0.04;
+        state.host.x = -28;
+        state.host.z = -23;
+        state.host.mode = "stunned";
+        state.host.stunTimer = 999;
+        state.safeTimer = Math.max(state.safeTimer, 999);
+        showAlert("Local check: dining room prop placement.", "");
       } else if (name === "final" || name === "final30" || name === "final15") {
         setDirectorTaskProgress(TASK_TOTAL);
         state.detourActive = false;

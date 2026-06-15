@@ -24,7 +24,7 @@ function renderNav() {
       : "";
     const path = location.pathname;
     const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-    const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth");
+    const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
     const isGames = !isAgentGames && (path.endsWith("/games.html") || path.includes("/games/"));
 
     slot.innerHTML = `

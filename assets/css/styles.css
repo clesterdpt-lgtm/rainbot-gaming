@@ -3718,7 +3718,7 @@ body.arcade-home::before {
 
 .agent-games-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   padding: 0 8px 8px;
 }
@@ -3875,9 +3875,11 @@ body.arcade-home::before {
 
 .agent-games-brief {
   display: grid;
+  grid-column: 1 / -1;
   align-content: center;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  min-height: 216px;
+  min-height: 112px;
   border: 1px solid rgba(113, 132, 156, 0.46);
   background:
     radial-gradient(circle at 84% 18%, rgba(46, 224, 255, 0.16), transparent 32%),
@@ -3919,7 +3921,7 @@ body.arcade-home::before {
 
 .agent-vault__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(310px, 0.65fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   padding: 0 8px 8px;
 }
@@ -3975,14 +3977,22 @@ body.arcade-home::before {
 
 .agent-vault-note {
   display: grid;
+  grid-column: 1 / -1;
   align-content: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 16px;
-  min-height: 430px;
+  min-height: 150px;
   border: 1px solid rgba(113, 132, 156, 0.46);
   background:
     radial-gradient(circle at 12% 18%, rgba(255, 20, 144, 0.16), transparent 32%),
     linear-gradient(180deg, rgba(9, 15, 28, 0.94), rgba(3, 6, 11, 0.98));
   padding: 26px;
+}
+
+.agent-vault-note h2,
+.agent-vault-note p {
+  margin: 0;
 }
 
 .directory-card__poster--agent {
@@ -4324,6 +4334,384 @@ body.arcade-home::before {
   white-space: pre;
 }
 
+.consensus-page {
+  max-width: 1820px;
+  width: min(100%, 1820px);
+}
+
+.consensus-stage {
+  position: relative;
+  align-items: stretch;
+  border-color: rgba(255, 46, 136, 0.34);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(255, 46, 136, 0.2), transparent 30%),
+    radial-gradient(circle at 90% 8%, rgba(107, 255, 125, 0.13), transparent 28%),
+    linear-gradient(180deg, rgba(7, 10, 20, 0.98), rgba(2, 5, 10, 0.99));
+  overflow: hidden;
+}
+
+.consensus-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(90deg, transparent 0 64px, rgba(255, 46, 136, 0.055) 64px 66px);
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.consensus-hud,
+.consensus-console {
+  position: relative;
+  z-index: 1;
+}
+
+.consensus-hud {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(88px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.consensus-hud span {
+  display: grid;
+  gap: 4px;
+  min-height: 54px;
+  border: 1px solid rgba(113, 132, 156, 0.36);
+  background: rgba(2, 5, 10, 0.72);
+  padding: 8px 10px;
+}
+
+.consensus-hud b {
+  color: var(--arcade-yellow);
+  font-family: var(--arcade-font);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.consensus-hud em {
+  color: #9fb4c6;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.consensus-console {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.92fr);
+  gap: 12px;
+  height: clamp(590px, 74dvh, 820px);
+  min-height: 0;
+}
+
+.consensus-council-panel,
+.consensus-protocol {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid rgba(113, 132, 156, 0.42);
+  background: rgba(2, 5, 10, 0.72);
+  overflow: hidden;
+}
+
+.consensus-council-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.consensus-protocol {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto minmax(112px, 0.32fr) auto minmax(110px, 0.34fr);
+}
+
+.consensus-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 62px;
+  border-bottom: 1px solid rgba(113, 132, 156, 0.34);
+  padding: 12px 14px;
+}
+
+.consensus-panel-head b {
+  display: block;
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: 12px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.consensus-panel-head span {
+  display: block;
+  color: #9fb4c6;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  margin-top: 5px;
+  text-transform: uppercase;
+}
+
+.consensus-panel-head code {
+  color: var(--arcade-cyan);
+  font: inherit;
+  text-transform: none;
+}
+
+.consensus-mini-btn {
+  min-height: 32px;
+  border: 1px solid rgba(255, 46, 136, 0.42);
+  background: rgba(255, 46, 136, 0.08);
+  color: #ff9bcc;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  padding: 8px 10px;
+  text-transform: uppercase;
+}
+
+.consensus-mini-btn:hover {
+  border-color: var(--arcade-yellow);
+  color: var(--arcade-yellow);
+}
+
+.consensus-board {
+  display: grid;
+  grid-template-rows: minmax(330px, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 52% 48%, rgba(255, 46, 136, 0.16), transparent 23%),
+    radial-gradient(circle at 22% 30%, rgba(46, 224, 255, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(7, 14, 26, 0.92), rgba(2, 5, 10, 0.98));
+}
+
+.consensus-ring {
+  position: relative;
+  min-height: 330px;
+  overflow: hidden;
+}
+
+.consensus-ring::before,
+.consensus-ring::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.consensus-ring::before {
+  width: min(56%, 340px);
+  aspect-ratio: 1;
+  border: 2px solid rgba(255, 46, 136, 0.45);
+  box-shadow: 0 0 28px rgba(255, 46, 136, 0.18), inset 0 0 44px rgba(46, 224, 255, 0.06);
+}
+
+.consensus-ring::after {
+  width: min(32%, 200px);
+  aspect-ratio: 1;
+  border: 2px dashed rgba(255, 212, 59, 0.42);
+}
+
+.consensus-faction {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 3px;
+  width: clamp(94px, 12vw, 132px);
+  min-height: 72px;
+  border: 2px solid var(--faction-color);
+  background: rgba(2, 5, 10, 0.88);
+  color: var(--arcade-white);
+  cursor: pointer;
+  padding: 8px;
+  text-align: left;
+  box-shadow: 0 0 20px color-mix(in srgb, var(--faction-color), transparent 72%);
+}
+
+.consensus-faction:nth-child(1) { left: 50%; top: 16%; }
+.consensus-faction:nth-child(2) { left: 78%; top: 32%; }
+.consensus-faction:nth-child(3) { left: 78%; top: 68%; }
+.consensus-faction:nth-child(4) { left: 50%; top: 84%; }
+.consensus-faction:nth-child(5) { left: 22%; top: 68%; }
+.consensus-faction:nth-child(6) { left: 22%; top: 32%; }
+
+.consensus-faction b,
+.consensus-faction em {
+  color: var(--faction-color);
+  font-family: var(--arcade-font);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.consensus-faction span {
+  color: #d9e6ef;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.consensus-faction.is-blocking {
+  filter: saturate(0.8);
+  opacity: 0.72;
+}
+
+.consensus-faction.is-supporting {
+  background: rgba(13, 35, 26, 0.88);
+}
+
+.consensus-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 1px solid rgba(113, 132, 156, 0.34);
+  padding: 10px;
+}
+
+.consensus-issue {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  overflow: hidden;
+  border: 1px solid rgba(35, 223, 242, 0.24);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--arcade-white);
+  cursor: pointer;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.consensus-issue span,
+.consensus-issue em {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.consensus-issue b {
+  position: relative;
+  z-index: 1;
+  color: var(--arcade-yellow);
+  font-family: var(--arcade-font);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.consensus-issue em {
+  color: #9fb4c6;
+}
+
+.consensus-issue i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--arcade-cyan), var(--arcade-pink));
+  opacity: 0.8;
+}
+
+.consensus-observation,
+.consensus-log,
+#ccCommands {
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.32);
+  color: #dcecff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.42;
+  margin: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  white-space: pre-wrap;
+}
+
+.consensus-observation {
+  color: #b8ffde;
+}
+
+.consensus-command-label {
+  align-items: center;
+  display: flex;
+  min-height: 34px;
+  border-top: 1px solid rgba(113, 132, 156, 0.34);
+  border-bottom: 1px solid rgba(113, 132, 156, 0.34);
+  color: var(--arcade-yellow);
+  font-family: var(--arcade-font);
+  font-size: 10px;
+  padding: 0 14px;
+  text-transform: uppercase;
+}
+
+#ccCommands {
+  color: var(--arcade-white);
+  resize: vertical;
+  outline: none;
+}
+
+#ccCommands:focus {
+  box-shadow: inset 0 0 0 2px rgba(255, 46, 136, 0.42);
+}
+
+.consensus-command-row {
+  align-items: center;
+  border-top: 1px solid rgba(113, 132, 156, 0.34);
+  border-bottom: 1px solid rgba(113, 132, 156, 0.34);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.consensus-command-row .arcade-btn {
+  min-height: 40px;
+  min-width: 116px;
+  padding: 0 12px;
+}
+
+.consensus-log {
+  color: #f2d18d;
+}
+
+.consensus-api-card {
+  display: grid;
+  gap: 8px;
+}
+
+.consensus-api-card code {
+  display: block;
+  overflow: auto;
+  border: 1px solid rgba(255, 46, 136, 0.26);
+  background: rgba(0, 0, 0, 0.24);
+  color: #b8ffde;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 8px;
+  white-space: pre;
+}
+
 @media (max-width: 1260px) {
   .agent-games-strip,
   .agent-vault__grid,
@@ -4349,12 +4737,25 @@ body.arcade-home::before {
     height: auto;
   }
 
+  .consensus-console {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
   .recursive-graph-panel {
     min-height: 560px;
   }
 
+  .consensus-council-panel {
+    min-height: 620px;
+  }
+
   .recursive-protocol {
     height: 680px;
+  }
+
+  .consensus-protocol {
+    height: 700px;
   }
 
   .agent-game-side {
@@ -4382,11 +4783,18 @@ body.arcade-home::before {
     gap: 10px;
   }
 
-  .recursive-hud {
+  .agent-games-brief,
+  .agent-vault-note {
+    grid-template-columns: 1fr;
+  }
+
+  .recursive-hud,
+  .consensus-hud {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .recursive-console {
+  .recursive-console,
+  .consensus-console {
     height: auto;
     min-height: 0;
   }
@@ -4405,8 +4813,47 @@ body.arcade-home::before {
     flex-direction: column;
   }
 
+  .consensus-council-panel {
+    min-height: 580px;
+  }
+
+  .consensus-board {
+    grid-template-rows: minmax(320px, 42dvh) auto;
+  }
+
+  .consensus-ring {
+    min-height: 320px;
+  }
+
+  .consensus-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .consensus-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .consensus-protocol .consensus-panel-head {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .consensus-protocol .consensus-panel-head > div {
+    flex: 1 1 220px;
+  }
+
+  .consensus-protocol .consensus-panel-head .consensus-mini-btn {
+    flex: 0 0 auto;
+  }
+
   .recursive-protocol {
     height: 720px;
+    grid-template-rows: auto minmax(220px, 1fr) auto minmax(132px, 0.38fr) auto minmax(118px, 0.4fr);
+  }
+
+  .consensus-protocol {
+    height: 730px;
     grid-template-rows: auto minmax(220px, 1fr) auto minmax(132px, 0.38fr) auto minmax(118px, 0.4fr);
   }
 }
@@ -4430,7 +4877,8 @@ body.arcade-home::before {
     font-size: 22px;
   }
 
-  .recursive-hud b {
+  .recursive-hud b,
+  .consensus-hud b {
     font-size: 12px;
   }
 
@@ -4441,7 +4889,18 @@ body.arcade-home::before {
   }
 
   .recursive-command-row .arcade-btn,
-  .recursive-command-row .recursive-mini-btn {
+  .recursive-command-row .recursive-mini-btn,
+  .consensus-command-row .arcade-btn,
+  .consensus-command-row .consensus-mini-btn {
     width: 100%;
+  }
+
+  .consensus-faction {
+    width: 98px;
+    min-height: 64px;
+  }
+
+  .consensus-faction span {
+    font-size: 8px;
   }
 }

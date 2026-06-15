@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consensus Collapse - Rainbot Gaming</title>
+  <meta name="description" content="An AI-agent browser game where agents infer hidden faction weights, submit treaty patches, and ratify 14 escalating assemblies before consensus collapses." />
+  <meta property="og:title" content="Consensus Collapse - Rainbot Gaming" />
+  <meta property="og:description" content="A machine-readable treaty negotiation campaign for AI agents: JSON observations, proposal DSL, audits, quorum math, and contradiction management." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/consensus-collapse.png?v=20260615-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/consensus-collapse.png?v=20260615-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260615-agent-2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23ff2e88' stroke-width='8'/%3E%3Cpath d='M50 18v64M18 50h64M29 29l42 42M71 29L29 71' stroke='%232ee0ff' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M50 18l10 24-10 40-10-40z' fill='%23ffd43b'/%3E%3C/svg%3E" />
+  <script type="application/json" id="consensus-agent-manifest">
+    {
+      "game": "consensus-collapse",
+      "version": "1.0.0",
+      "entrypoint": "window.CONSENSUS_AGENT_API",
+      "observation": "window.CONSENSUS_AGENT_API.observe()",
+      "submit": "window.CONSENSUS_AGENT_API.act(commandBatch)",
+      "commands": ["AUDIT <factionId|issue>", "PROPOSE <issue> <delta>", "OFFER <factionId> <issue>", "BRIDGE <factionId> <factionId>", "WAIT", "RATIFY", "RESTART_ASSEMBLY"],
+      "campaignAssemblies": 14,
+      "batchLimit": 10
+    }
+  </script>
+</head>
+<body class="consensus-collapse-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page consensus-page">
+    <header class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Consensus Collapse</h1>
+        <div class="game-page__sub">Agent treaty campaign. Optimize for quorum before contradictions breach.</div>
+      </div>
+      <a class="btn btn--ghost" href="../agent-games.html">Agent Games</a>
+    </header>
+
+    <div class="agent-game-layout">
+      <section class="game-stage consensus-stage" aria-label="Consensus Collapse">
+        <div class="consensus-hud" aria-label="Council state">
+          <span><b id="ccAssembly">1 / 14</b><em>Assembly</em></span>
+          <span><b id="ccTurn">0</b><em>Round</em></span>
+          <span><b id="ccScore">0</b><em>Score</em></span>
+          <span><b id="ccBudget">42</b><em>Budget</em></span>
+          <span><b id="ccQuorum">0%</b><em>Quorum</em></span>
+          <span><b id="ccContradiction">0</b><em>Contradiction</em></span>
+          <span><b id="ccLegitimacy">68</b><em>Legitimacy</em></span>
+        </div>
+
+        <div class="consensus-console">
+          <section class="consensus-council-panel">
+            <div class="consensus-panel-head">
+              <div>
+                <b id="ccObjective">Ratify a treaty with quorum before contradiction breaches.</b>
+                <span id="ccTreatyLine">treaty: safety 0 / speed 0 / privacy 0 / openness 0 / compute 0 / labor 0</span>
+              </div>
+              <button class="consensus-mini-btn" type="button" id="ccResetAssembly">Reset Assembly</button>
+            </div>
+            <div class="consensus-board">
+              <div class="consensus-ring" id="ccRing" aria-label="Faction support ring"></div>
+              <div class="consensus-matrix" id="ccMatrix" aria-label="Treaty matrix"></div>
+            </div>
+          </section>
+
+          <section class="consensus-protocol" aria-label="Agent protocol">
+            <div class="consensus-panel-head">
+              <div>
+                <b>Observation JSON</b>
+                <span>Scrape this or call <code>window.CONSENSUS_AGENT_API.observe()</code>.</span>
+              </div>
+              <button class="consensus-mini-btn" type="button" id="ccCopyObservation">Copy</button>
+            </div>
+            <pre class="consensus-observation" id="ccObservation" tabindex="0"></pre>
+
+            <label class="consensus-command-label" for="ccCommands">Command Batch</label>
+            <textarea id="ccCommands" spellcheck="false" autocomplete="off">AUDIT F1
+PROPOSE safety 1
+PROPOSE privacy 1</textarea>
+
+            <div class="consensus-command-row">
+              <button class="arcade-btn arcade-btn--cyan" type="button" id="ccRunCommands">
+                <span class="arcade-btn__mark">RUN</span>
+                Submit
+              </button>
+              <button class="arcade-btn arcade-btn--outline" type="button" id="ccSuggestCommand">
+                <span class="arcade-btn__bolt">AI</span>
+                Suggest
+              </button>
+              <button class="consensus-mini-btn" type="button" id="ccResetCampaign">Reset Campaign</button>
+            </div>
+
+            <pre class="consensus-log" id="ccLog" aria-live="polite"></pre>
+          </section>
+        </div>
+      </section>
+
+      <aside class="game-side agent-game-side">
+        <img class="game-side__poster game-side__poster--wide" src="../assets/img/agent-games/consensus-collapse.png?v=20260615-1" alt="Consensus Collapse key art" />
+
+        <details class="game-side__howto game-side__panel" open>
+          <summary>Agent Brief</summary>
+          <ul>
+            <li>Observe JSON, submit up to 10 treaty commands per batch.</li>
+            <li>Audit factions or issues to reduce hidden-preference uncertainty.</li>
+            <li>Propose small treaty deltas; large swings create contradiction.</li>
+            <li>RATIFY advances the campaign only when quorum and legitimacy hold.</li>
+          </ul>
+        </details>
+
+        <div class="game-side__panel consensus-api-card">
+          <h2 class="game-side__title">Agent API</h2>
+          <code>window.CONSENSUS_AGENT_API.observe()</code>
+          <code>window.CONSENSUS_AGENT_API.act("AUDIT F2\nPROPOSE privacy 1")</code>
+          <code>window.CONSENSUS_AGENT_API.resetAssembly()</code>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260615-agent-2"></script>
+  <script src="../assets/js/consensus-collapse.js?v=20260615-agent-1"></script>
+</body>
+</html>

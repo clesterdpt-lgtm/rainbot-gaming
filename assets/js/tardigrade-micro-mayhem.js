@@ -999,130 +999,291 @@
     return index >= 0 ? index + 1 : goals.length;
   }
 
-  function terrainBump(x, z, cx, cz, radius, height) {
-    const distance = Math.hypot(x - cx, z - cz);
-    if (distance >= radius) return 0;
-    const t = 1 - distance / radius;
-    return height * t * t * (3 - 2 * t);
-  }
-
   function smoothstep(edge0, edge1, value) {
     const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
   }
 
+  // ===========================================================================
+  // PROCEDURAL TERRAIN (Perlin noise)
+  // ===========================================================================
+  // Each level's ground is ONE continuous, highly subdivided mesh. We push its
+  // vertices up and down to sculpt hills, valleys, plateaus and cliffs. The height
+  // at any world point (x, z) is decided here using layered Perlin noise, so the
+  // landscape looks natural and is repeatable (same seed -> same world) instead of
+  // being faked with separate rocks or blocks placed on a flat plane.
+
+  // Build a seeded 2D Perlin-noise function. Returns noise(x, z) in roughly [-1, 1].
+  function makePerlinNoise(seed) {
+    // The permutation table is the heart of Perlin noise: the values 0..255 in a
+    // shuffled order. We shuffle deterministically from `seed` so every level gets
+    // its own repeatable terrain.
+    const perm = new Uint8Array(512);
+    const table = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) table[i] = i;
+    let s = (seed >>> 0) || 1;
+    const random = () => {
+      // mulberry32 - a tiny, fast, seeded pseudo-random generator.
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      const tmp = table[i];
+      table[i] = table[j];
+      table[j] = tmp;
+    }
+    for (let i = 0; i < 512; i++) perm[i] = table[i & 255];
+
+    // Smootherstep easing (Perlin's improved curve) for soft, kink-free blending.
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    // Turn a hashed grid corner into one of 8 gradient directions, dotted with the
+    // offset to that corner. This is what makes the noise smooth and wavy.
+    const grad = (hash, x, z) => {
+      switch (hash & 7) {
+        case 0: return x + z;
+        case 1: return x - z;
+        case 2: return -x + z;
+        case 3: return -x - z;
+        case 4: return x;
+        case 5: return -x;
+        case 6: return z;
+        default: return -z;
+      }
+    };
+
+    return function noise2D(x, z) {
+      // Which grid cell are we in, and where inside that cell (0..1)?
+      const xi = Math.floor(x) & 255;
+      const zi = Math.floor(z) & 255;
+      const xf = x - Math.floor(x);
+      const zf = z - Math.floor(z);
+      const u = fade(xf);
+      const v = fade(zf);
+      // Hash the four corners of the cell, then blend their gradients smoothly.
+      const aa = perm[perm[xi] + zi];
+      const ba = perm[perm[xi + 1] + zi];
+      const ab = perm[perm[xi] + zi + 1];
+      const bb = perm[perm[xi + 1] + zi + 1];
+      const x1 = lerp(grad(aa, xf, zf), grad(ba, xf - 1, zf), u);
+      const x2 = lerp(grad(ab, xf, zf - 1), grad(bb, xf - 1, zf - 1), u);
+      return lerp(x1, x2, v);
+    };
+  }
+
+  // Cache one noise field per seed so we don't rebuild the table on every lookup.
+  const noiseFields = new Map();
+  function noiseField(seed) {
+    let field = noiseFields.get(seed);
+    if (!field) {
+      field = makePerlinNoise(seed);
+      noiseFields.set(seed, field);
+    }
+    return field;
+  }
+
+  // Fractal Brownian motion: add several octaves of noise, each one at a higher
+  // frequency but lower amplitude. This is what turns smooth blobs into believable
+  // rolling hills with finer detail layered on top.
+  function fbm(field, x, z, octaves, lacunarity, gain) {
+    let amplitude = 1;
+    let frequency = 1;
+    let sum = 0;
+    let norm = 0;
+    for (let o = 0; o < octaves; o++) {
+      sum += amplitude * field(x * frequency, z * frequency);
+      norm += amplitude;
+      amplitude *= gain;
+      frequency *= lacunarity;
+    }
+    // Perlin output clusters near zero, so we scale the averaged result to better
+    // fill [-1, 1]. Without this, hills and (especially) the cliff mask come out far
+    // gentler than the amplitudes suggest, leaving the terrain too flat.
+    return norm > 0 ? (sum / norm) * 1.8 : 0;
+  }
+
+  // Ridged noise: fold the noise at zero so its crests become sharp ridge lines.
+  // Perfect for the rocky spines and jagged mountain edges in the gut/lava worlds.
+  function ridgedNoise(field, x, z, octaves) {
+    let amplitude = 0.5;
+    let frequency = 1;
+    let sum = 0;
+    let norm = 0;
+    for (let o = 0; o < octaves; o++) {
+      const peak = 1 - Math.abs(field(x * frequency, z * frequency));
+      sum += amplitude * peak * peak;
+      norm += amplitude;
+      amplitude *= 0.5;
+      frequency *= 2;
+    }
+    return norm > 0 ? sum / norm : 0; // ~0..1, near 1 along the ridge crests
+  }
+
+  // Terracing snaps a smooth height into flat steps joined by short, steep risers.
+  // Flat treads + steep faces are what read as plateaus, mesas and cliff drop-offs.
+  function terrace(value, steps, riser) {
+    const scaled = value * steps;
+    const step = Math.floor(scaled);
+    const frac = scaled - step;
+    // Stay flat across most of the step, then climb fast over the last `riser` slice.
+    const climb = smoothstep(1 - riser, 1, frac);
+    return (step + climb) / steps;
+  }
+
+  // Flatten terrain toward the spawn point so the player never starts buried in a
+  // hillside; full detail fades back in beyond `calmRadius`.
+  function spawnCalm(distance, calmRadius) {
+    return lerp(0.34, 1, smoothstep(calmRadius * 0.4, calmRadius, distance));
+  }
+
+  // Per-level terrain shaping + colour palette. One spot to dial in each world's
+  // character: how tall the hills are, where the cliffs cut in, and the valley ->
+  // peak colour ramp that makes elevation easy to read.
+  const TERRAIN_PARAMS = {
+    petri: {
+      seed: 1207,
+      hillFreq: 0.016, octaves: 4, lacunarity: 2, gain: 0.5, hillAmp: 3.6,
+      cliffFreq: 0.012, cliffSteps: 4, cliffRiser: 0.14, cliffAmp: 3.4,
+      maskFreq: 0.01, cliffMaskStart: 0.48,
+      rim: 1.8, calmRadius: 30, min: -4.5, max: 8.5,
+      slopeColor: 0x9a7942, slopeRef: 0.34,
+    },
+    aquarium: {
+      seed: 2207,
+      hillFreq: 0.009, octaves: 5, lacunarity: 2, gain: 0.5, hillAmp: 5.6,
+      cliffFreq: 0.0072, cliffSteps: 4, cliffRiser: 0.13, cliffAmp: 5.8,
+      maskFreq: 0.006, cliffMaskStart: 0.46,
+      channel: -2.6, rim: 5.4, calmRadius: 48, min: -4.8, max: 14.5,
+      slopeColor: 0x214f33, slopeRef: 0.46,
+    },
+    stomach: {
+      seed: 3307,
+      hillFreq: 0.011, octaves: 4, lacunarity: 2, gain: 0.5, hillAmp: 4.0,
+      ridgeFreq: 0.02, ridgeAmp: 2.8,
+      cliffFreq: 0.009, cliffSteps: 3, cliffRiser: 0.13, cliffAmp: 5.2,
+      maskFreq: 0.007, cliffMaskStart: 0.44,
+      channel: -2.8, rim: 4.4, calmRadius: 50, min: -4.5, max: 12.5,
+      slopeColor: 0x320f2c, slopeRef: 0.44,
+    },
+    lava: {
+      seed: 4407,
+      hillFreq: 0.0105, octaves: 4, lacunarity: 2, gain: 0.5, hillAmp: 4.8,
+      ridgeFreq: 0.018, ridgeAmp: 3.6,
+      cliffFreq: 0.0085, cliffSteps: 4, cliffRiser: 0.14, cliffAmp: 6.8,
+      maskFreq: 0.006, cliffMaskStart: 0.46,
+      channel: -3.4, rim: 5.2, calmRadius: 48, min: -5.2, max: 15.5,
+      slopeColor: 0x140f10, slopeRef: 0.52,
+    },
+    station: {
+      seed: 5507,
+      hillFreq: 0.012, octaves: 3, lacunarity: 2, gain: 0.5, hillAmp: 2.5,
+      cliffFreq: 0.009, cliffSteps: 5, cliffRiser: 0.1, cliffAmp: 5.2,
+      maskFreq: 0.0075, cliffMaskStart: 0.44,
+      channel: -1.5, rim: 2.3, calmRadius: 44, min: -3.2, max: 9.5,
+      slopeColor: 0x2a323c, slopeRef: 0.46,
+    },
+  };
+
+  // Combine smooth hills + optional sharp ridges + terraced cliffs into one height.
+  function noiseTerrain(x, z, p) {
+    const hillField = noiseField(p.seed);
+    const roughField = noiseField(p.seed + 137);
+
+    // (1) Smooth rolling hills from layered Perlin noise.
+    let height = fbm(hillField, x * p.hillFreq, z * p.hillFreq, p.octaves, p.lacunarity, p.gain) * p.hillAmp;
+
+    // (2) Optional sharp ridges that read as mountain spines.
+    if (p.ridgeAmp) {
+      height += (ridgedNoise(roughField, x * p.ridgeFreq, z * p.ridgeFreq, 3) - 0.4) * p.ridgeAmp;
+    }
+
+    // (3) Steep cliffs & flat-topped plateaus. We terrace a noise field, then only
+    //     reveal it where a slow, separate mask is high - so mesas and drop-offs
+    //     punch through some regions while the rest stays gentle rolling hills.
+    if (p.cliffAmp) {
+      const raw = (fbm(roughField, x * p.cliffFreq, z * p.cliffFreq, 3, 2, 0.5) + 1) * 0.5;
+      const stepped = terrace(raw, p.cliffSteps, p.cliffRiser);
+      const maskRaw = (fbm(hillField, x * p.maskFreq + 19.7, z * p.maskFreq - 4.3, 2, 2, 0.5) + 1) * 0.5;
+      const mask = smoothstep(p.cliffMaskStart, p.cliffMaskStart + 0.22, maskRaw);
+      height += (stepped - 0.5) * 2 * p.cliffAmp * mask;
+    }
+
+    return height;
+  }
+
   function petriTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const p = TERRAIN_PARAMS.petri;
     const normalized = distance / LEVEL_ONE_RADIUS;
-    const agarRoll =
-      Math.sin(x * 0.072) * 0.12 +
-      Math.cos(z * 0.066) * 0.1 +
-      Math.sin((x + z) * 0.043) * 0.08;
-    const gentleFeatures =
-      terrainBump(x, z, -31, 24, 26, 0.34) +
-      terrainBump(x, z, 32, -23, 24, 0.28) +
-      terrainBump(x, z, -42, -31, 22, 0.24) -
-      terrainBump(x, z, 5, 6, 34, 0.22) -
-      terrainBump(x, z, 45, 32, 18, 0.18);
-    const meniscusRise = smoothstep(0.76, 0.98, normalized) * 0.82;
-    const edgeSoftening = 1 - smoothstep(0.94, 1.08, normalized) * 0.3;
-    return clamp((agarRoll + gentleFeatures) * edgeSoftening + meniscusRise, -0.42, 1.18);
+    // Noise-sculpted hills + cliffs, flattened toward the central spawn clearing.
+    const land = noiseTerrain(x, z, p) * spawnCalm(distance, p.calmRadius);
+    // The agar meniscus: the ground curls up into a soft wall around the rim.
+    const rim = smoothstep(0.72, 1.0, normalized) * p.rim;
+    // Ease off just past the playable edge so the rim never clips hard.
+    const edgeSoftening = 1 - smoothstep(0.99, 1.12, normalized) * 0.4;
+    return clamp(land * edgeSoftening + rim, p.min, p.max);
   }
 
   function aquariumTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const p = TERRAIN_PARAMS.aquarium;
     const tankHalf = LEVEL_CONFIGS[2].halfSize;
     const squareDistance = Math.max(Math.abs(x), Math.abs(z));
-    const edgeFade = clamp((tankHalf - 5 - squareDistance) / mapRadius(24), 0, 1);
-    const rolling =
-      Math.sin(x * 0.058) * 0.54 +
-      Math.cos(z * 0.052) * 0.46 +
-      Math.sin((x + z) * 0.031) * 0.58 +
-      Math.cos((x - z) * 0.026) * 0.36;
-    const features =
-      terrainBump(x, z, mapCoord(-64), mapCoord(47), mapRadius(36), 3.95) +
-      terrainBump(x, z, mapCoord(64), mapCoord(38), mapRadius(34), 3.25) +
-      terrainBump(x, z, mapCoord(58), mapCoord(-64), mapRadius(35), 4.25) +
-      terrainBump(x, z, mapCoord(-58), mapCoord(-62), mapRadius(32), 4.85) +
-      terrainBump(x, z, mapCoord(2), mapCoord(-72), mapRadius(24), 3.65) +
-      terrainBump(x, z, mapCoord(-6), mapCoord(46), mapRadius(30), 1.65) -
-      terrainBump(x, z, mapCoord(-8), mapCoord(8), mapRadius(34), 1.05) -
-      terrainBump(x, z, 3, 4, 28, 0.42) -
-      terrainBump(x, z, mapCoord(18), mapCoord(-18), mapRadius(44), 0.78) -
-      terrainBump(x, z, mapCoord(31), mapCoord(56), mapRadius(22), 0.64) -
-      terrainBump(x, z, mapCoord(-84), mapCoord(8), mapRadius(25), 0.82) -
-      terrainBump(x, z, mapCoord(78), mapCoord(-18), mapRadius(30), 1.2);
+    const edgeFade = clamp((tankHalf - 6 - squareDistance) / mapRadius(26), 0, 1);
+    const land = noiseTerrain(x, z, p) * spawnCalm(distance, p.calmRadius);
+    // A sandy channel carved roughly north-to-south across the tank floor.
     const channel =
-      Math.exp(-Math.pow((x - mapCoord(2)) / mapRadius(20), 2)) *
-      Math.exp(-Math.pow((z + mapCoord(6)) / mapRadius(72), 2)) *
-      -1.15;
-    const gravelShelf =
-      smoothstep(tankHalf * 0.62, tankHalf * 0.96, squareDistance) *
-      (0.48 + Math.sin(Math.atan2(z, x) * 8) * 0.22);
-    return clamp((rolling * 0.72 + features + channel + gravelShelf) * edgeFade, -1.95, 7.2);
+      Math.exp(-Math.pow((x - mapCoord(2)) / mapRadius(22), 2)) *
+      Math.exp(-Math.pow((z + mapCoord(6)) / mapRadius(82), 2)) *
+      p.channel;
+    // Gravel banks heap up against the glass walls to enclose the playfield.
+    const shelf = smoothstep(tankHalf * 0.6, tankHalf * 0.96, squareDistance) * p.rim;
+    return clamp((land + channel) * edgeFade + shelf, p.min, p.max);
   }
 
   function stomachTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const p = TERRAIN_PARAMS.stomach;
     const radius = LEVEL_CONFIGS[3].radius;
     const normalized = distance / radius;
-    const foldWave =
-      Math.sin(x * 0.046) * 0.86 +
-      Math.cos(z * 0.052) * 0.68 +
-      Math.sin((x - z) * 0.031) * 0.54;
-    const rugae =
-      terrainBump(x, z, mapCoord(-48), mapCoord(34), mapRadius(28), 3.6) +
-      terrainBump(x, z, mapCoord(43), mapCoord(42), mapRadius(30), 2.8) +
-      terrainBump(x, z, mapCoord(-54), mapCoord(-52), mapRadius(27), 3.1) +
-      terrainBump(x, z, mapCoord(51), mapCoord(-47), mapRadius(31), 2.2) -
-      terrainBump(x, z, mapCoord(4), mapCoord(2), mapRadius(40), 1.6) -
-      terrainBump(x, z, mapCoord(20), mapCoord(-16), mapRadius(25), 1.2);
-    const peristalsisChannel =
-      Math.exp(-Math.pow((x - mapCoord(8)) / mapRadius(18), 2)) *
-      Math.exp(-Math.pow(z / mapRadius(78), 2)) *
-      -1.28;
-    const wallRise = smoothstep(0.74, 0.99, normalized) * 1.65;
-    return clamp(foldWave * 0.76 + rugae + peristalsisChannel + wallRise, -2.4, 6.7);
+    const land = noiseTerrain(x, z, p) * spawnCalm(distance, p.calmRadius);
+    // A deep peristalsis trough snakes through the stomach floor.
+    const channel =
+      Math.exp(-Math.pow((x - mapCoord(8)) / mapRadius(20), 2)) *
+      Math.exp(-Math.pow(z / mapRadius(82), 2)) *
+      p.channel;
+    // The stomach wall rears up steeply at the rim.
+    const wall = smoothstep(0.7, 0.99, normalized) * p.rim;
+    return clamp(land + channel + wall, p.min, p.max);
   }
 
   function lavaTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const p = TERRAIN_PARAMS.lava;
     const radius = LEVEL_CONFIGS[4].radius;
     const normalized = distance / radius;
-    const fractured =
-      Math.sin(x * 0.061) * 0.72 +
-      Math.cos(z * 0.055) * 0.66 +
-      Math.sin((x + z) * 0.042) * 0.5;
-    const shelves =
-      terrainBump(x, z, mapCoord(-52), mapCoord(38), mapRadius(30), 4.2) +
-      terrainBump(x, z, mapCoord(52), mapCoord(-54), mapRadius(28), 4.8) +
-      terrainBump(x, z, mapCoord(-45), mapCoord(-52), mapRadius(25), 2.9) -
-      terrainBump(x, z, mapCoord(38), mapCoord(22), mapRadius(35), 2.25) -
-      terrainBump(x, z, mapCoord(4), mapCoord(-6), mapRadius(38), 1.35);
-    const lavaRiver =
-      Math.exp(-Math.pow((x - mapCoord(28)) / mapRadius(18), 2)) *
-      Math.exp(-Math.pow((z - mapCoord(5)) / mapRadius(76), 2)) *
-      -1.7;
-    const rim = smoothstep(0.78, 0.99, normalized) * 2.1;
-    return clamp(fractured * 0.84 + shelves + lavaRiver + rim, -2.7, 7.6);
+    const land = noiseTerrain(x, z, p) * spawnCalm(distance, p.calmRadius);
+    // A glowing lava canyon cuts a deep channel through the rock.
+    const river =
+      Math.exp(-Math.pow((x - mapCoord(28)) / mapRadius(20), 2)) *
+      Math.exp(-Math.pow((z - mapCoord(5)) / mapRadius(80), 2)) *
+      p.channel;
+    const rim = smoothstep(0.74, 0.99, normalized) * p.rim;
+    return clamp(land + river + rim, p.min, p.max);
   }
 
   function stationTerrainOffsetAt(x, z) {
+    const p = TERRAIN_PARAMS.station;
     const half = LEVEL_CONFIGS[5].halfSize;
+    const distance = Math.hypot(x, z);
     const squareDistance = Math.max(Math.abs(x), Math.abs(z));
-    const edgeFade = clamp((half - 4 - squareDistance) / mapRadius(18), 0, 1);
-    const panelRipple =
-      Math.sin(x * 0.075) * 0.18 +
-      Math.cos(z * 0.08) * 0.16 +
-      Math.sin((x - z) * 0.041) * 0.14;
-    const raisedModules =
-      terrainBump(x, z, mapCoord(-50), mapCoord(43), mapRadius(26), 1.2) +
-      terrainBump(x, z, mapCoord(46), mapCoord(40), mapRadius(27), 1.5) +
-      terrainBump(x, z, mapCoord(-48), mapCoord(-46), mapRadius(25), 1.0) +
-      terrainBump(x, z, mapCoord(50), mapCoord(-48), mapRadius(26), 1.35) -
-      terrainBump(x, z, mapCoord(4), mapCoord(0), mapRadius(36), 0.78);
-    const magRailGroove =
-      Math.exp(-Math.pow(z / mapRadius(18), 2)) *
-      Math.exp(-Math.pow(x / mapRadius(92), 2)) *
-      -0.52;
-    const rim = smoothstep(half * 0.78, half * 0.97, squareDistance) * 0.5;
-    return clamp((panelRipple + raisedModules + magRailGroove + rim) * edgeFade, -1.0, 3.1);
+    const edgeFade = clamp((half - 5 - squareDistance) / mapRadius(20), 0, 1);
+    const land = noiseTerrain(x, z, p) * spawnCalm(distance, p.calmRadius);
+    // A recessed mag-rail groove runs down the station's central axis.
+    const groove =
+      Math.exp(-Math.pow(z / mapRadius(20), 2)) *
+      Math.exp(-Math.pow(x / mapRadius(96), 2)) *
+      p.channel;
+    const rim = smoothstep(half * 0.78, half * 0.97, squareDistance) * p.rim;
+    return clamp((land + groove) * edgeFade + rim, p.min, p.max);
   }
 
   function terrainOffsetAt(x, z) {
@@ -2394,9 +2555,11 @@
     const THREE = window.THREE;
     if (levelConfig().shape === "square") return makeSquareTerrain();
 
+    // A dense radial grid of vertices. More rings/segments means cliffs and ridges
+    // render crisply instead of melting into smooth ramps.
     const radiusLimit = playableRadius();
-    const rings = Math.max(36, Math.round(42 * radiusLimit / LEVEL_ONE_RADIUS));
-    const segments = Math.max(96, Math.round(144 * radiusLimit / LEVEL_ONE_RADIUS));
+    const rings = Math.max(44, Math.round(50 * radiusLimit / LEVEL_ONE_RADIUS));
+    const segments = Math.max(132, Math.round(160 * radiusLimit / LEVEL_ONE_RADIUS));
     const positions = [];
     const colors = [];
     const indices = [];
@@ -2406,9 +2569,11 @@
         const angle = (segment / segments) * Math.PI * 2;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
-        const y = terrainVisualYAt(x, z);
+        // Sample the procedural height once, then displace this vertex vertically.
+        const elevation = terrainOffsetAt(x, z);
+        const y = GROUND_Y + elevation - TERRAIN_VISUAL_OFFSET;
         positions.push(x, y, z);
-        const color = terrainColorAt(x, z);
+        const color = terrainColorAt(x, z, elevation);
         colors.push(color.r, color.g, color.b);
       }
     }
@@ -2437,9 +2602,10 @@
 
   function makeSquareTerrain() {
     const THREE = window.THREE;
+    // A dense square grid of vertices, displaced vertically by the noise height.
     const half = playableHalfSize();
     const inset = 4.8;
-    const divisions = Math.max(72, Math.round(72 * half / LEVEL_ONE_RADIUS));
+    const divisions = Math.max(84, Math.round(86 * half / LEVEL_ONE_RADIUS));
     const positions = [];
     const colors = [];
     const indices = [];
@@ -2447,9 +2613,11 @@
       const z = lerp(-half + inset, half - inset, row / divisions);
       for (let column = 0; column <= divisions; column++) {
         const x = lerp(-half + inset, half - inset, column / divisions);
-        const y = terrainVisualYAt(x, z);
+        // Sample the procedural height once, then displace this vertex vertically.
+        const elevation = terrainOffsetAt(x, z);
+        const y = GROUND_Y + elevation - TERRAIN_VISUAL_OFFSET;
         positions.push(x, y, z);
-        const color = terrainColorAt(x, z);
+        const color = terrainColorAt(x, z, elevation);
         colors.push(color.r, color.g, color.b);
       }
     }
@@ -2476,70 +2644,73 @@
     return terrain;
   }
 
-  function terrainColorAt(x, z) {
+  // Choose a vertex colour for the ground. Each level keeps its own palette (tuned
+  // to that world's lighting), picking the colour by elevation so high ground reads
+  // differently from low ground. We then darken steep faces so cliffs and drop-offs
+  // pop. `elevation` can be passed in to reuse the height the mesh already computed.
+  function terrainColorAt(x, z, elevation = terrainOffsetAt(x, z)) {
     const THREE = window.THREE;
-    const distance = Math.hypot(x, z);
-    const elevation = terrainOffsetAt(x, z);
     const config = levelConfig();
+    const p = TERRAIN_PARAMS[config.id] || TERRAIN_PARAMS.aquarium;
+    const distance = Math.hypot(x, z);
+    let color;
+
     if (config.id === "petri") {
-      const color = new THREE.Color(elevation > 0.65 ? 0xf9de9b : 0xecc77b);
-      if (elevation < -0.12) color.lerp(new THREE.Color(0xdcae6d), 0.42);
+      color = new THREE.Color(elevation > 1.4 ? 0xf9de9b : 0xecc77b);
+      if (elevation < -0.5) color.lerp(new THREE.Color(0xdcae6d), 0.5);
       LEVEL_CONFIGS[1].zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.08), 0, 1);
-        if (influence <= 0) return;
-        color.lerp(new THREE.Color(zone.color), influence * 0.18);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.18);
       });
-      const petriEdge = smoothstep(LEVEL_ONE_RADIUS * 0.76, LEVEL_ONE_RADIUS, distance);
-      color.lerp(new THREE.Color(0xffefbd), petriEdge * 0.28);
-      return color;
-    }
-
-    if (config.id === "stomach") {
-      const color = new THREE.Color(elevation > 1.8 ? 0xb34a75 : 0x7e274b);
-      if (elevation < -0.65) color.set(0x4e1b43);
+      color.lerp(new THREE.Color(0xffefbd), smoothstep(LEVEL_ONE_RADIUS * 0.78, LEVEL_ONE_RADIUS, distance) * 0.28);
+    } else if (config.id === "stomach") {
+      color = new THREE.Color(elevation > 3.2 ? 0xb34a75 : 0x7e274b);
+      if (elevation < -1.4) color.set(0x4e1b43);
       config.zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
-        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.28);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.26);
       });
       color.lerp(new THREE.Color(0xffb34d), smoothstep(config.radius * 0.72, config.radius, distance) * 0.18);
-      return color;
-    }
-
-    if (config.id === "lava") {
-      const color = new THREE.Color(elevation > 2.2 ? 0x5c5662 : 0x2d2630);
-      if (elevation < -0.9) color.set(0xb32719);
+    } else if (config.id === "lava") {
+      // Typical ground is dark cooled rock; the deepest channels glow with magma.
+      color = new THREE.Color(elevation > 3.6 ? 0x5c5662 : 0x2d2630);
+      if (elevation < -1.6) color.set(0xb32719);
       config.zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.04), 0, 1);
-        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.3);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.24);
       });
-      color.lerp(new THREE.Color(0xff5a2f), Math.max(0, -elevation) * 0.12);
-      return color;
-    }
-
-    if (config.id === "station") {
-      const color = new THREE.Color(elevation > 0.8 ? 0xaeb8c6 : 0x657080);
-      if (elevation < -0.35) color.set(0x44505f);
+      color.lerp(new THREE.Color(0xff5a2f), clamp(-elevation, 0, 3) * 0.1);
+    } else if (config.id === "station") {
+      color = new THREE.Color(elevation > 2.0 ? 0xaeb8c6 : 0x657080);
+      if (elevation < -0.8) color.set(0x44505f);
       config.zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
         if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.2);
       });
       const seam = (Math.abs(Math.sin(x * 0.19)) < 0.035 || Math.abs(Math.sin(z * 0.19)) < 0.035) ? 0.12 : 0;
-      color.lerp(new THREE.Color(0xf8fbff), seam);
-      return color;
+      if (seam) color.lerp(new THREE.Color(0xf8fbff), seam);
+    } else {
+      // Aquarium / default: sunlit weedy gravel, lighter on the high mounds.
+      color = new THREE.Color(elevation > 3.0 ? 0x82d22a : 0x55b61f);
+      if (elevation < -0.6) color.set(0x31a65a);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.22);
+      });
+      const edge = config.shape === "square"
+        ? Math.max(Math.abs(x), Math.abs(z)) / playableHalfSize()
+        : distance / WORLD_RADIUS;
+      if (edge > 0.82) color.lerp(new THREE.Color(0x257f31), (edge - 0.82) / 0.18 * 0.6);
     }
 
-    const color = new THREE.Color(elevation > 1.2 ? 0x82d22a : 0x55b61f);
-    if (elevation < -0.18) color.set(0x31a65a);
-    config.zones.forEach((zone) => {
-      const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
-      if (influence <= 0) return;
-      const zoneColor = new THREE.Color(zone.color);
-      color.lerp(zoneColor, influence * 0.24);
-    });
-    const edge = levelConfig().shape === "square"
-      ? Math.max(Math.abs(x), Math.abs(z)) / playableHalfSize()
-      : distance / WORLD_RADIUS;
-    if (edge > 0.82) color.lerp(new THREE.Color(0x257f31), (edge - 0.82) / 0.18);
+    // Slope shading (every level): sample neighbouring heights to gauge steepness,
+    // then darken steep faces so cliffs, ridges and drop-offs read clearly.
+    const e = 1.8;
+    const dx = terrainOffsetAt(x + e, z) - terrainOffsetAt(x - e, z);
+    const dz = terrainOffsetAt(x, z + e) - terrainOffsetAt(x, z - e);
+    const slope = clamp(Math.hypot(dx, dz) / (2 * e) / p.slopeRef, 0, 1);
+    color.lerp(new THREE.Color(p.slopeColor), slope * 0.42);
+
     return color;
   }
 

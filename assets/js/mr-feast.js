@@ -9,7 +9,7 @@
   const GAME_ID = "mrfeast3d";
   const TASK_TOTAL = 6;
   const PLAYER_RADIUS = 0.62;
-  const HOST_RADIUS = 0.86;
+  const HOST_RADIUS = 0.66;
   const FINAL_ESCAPE_SECONDS = 62;
   const LOOK_SETTINGS_KEY = "mrfeast-look-settings";
   const DEFAULT_LOOK_SETTINGS = {
@@ -28,7 +28,7 @@
   const HIDE_SPOTS = [
     { id: "foyer-sofa", label: "sofa shadow", x: 3.1, z: 25.0, yaw: -Math.PI / 2, level: 0 },
     { id: "breakfast-nook", label: "breakfast nook", x: -15.4, z: 11.9, yaw: Math.PI, level: 0 },
-    { id: "bed", label: "bed frame", x: -30.2, z: -18.0, yaw: Math.PI / 2, level: 0 },
+    { id: "bed", label: "bed frame", x: -28.8, z: -18.0, yaw: Math.PI / 2, level: 0 },
     { id: "wardrobe", label: "wardrobe gap", x: -33.6, z: -8.2, yaw: Math.PI / 2, level: 0 },
     { id: "utility-shelves", label: "utility shelves", x: 4.7, z: -8.6, yaw: Math.PI, level: 0 },
     { id: "office-desk", label: "office desk", x: 24.8, z: -18.8, yaw: Math.PI, level: 0 },
@@ -732,15 +732,15 @@
     addWall(-37, -3, 1.4, 78, 4.1);
     addWall(37, -3, 1.4, 78, 4.1);
 
-    addWall(-7, 31.2, 1.1, 9.6, 3.8);
-    addWall(-7, 23.2, 1.1, 3.0, 3.8);
+    addWall(-7, 31.45, 1.1, 9.1, 3.8);
+    addWall(-7, 23.0, 1.1, 2.8, 3.8);
     addWall(-7, 8.8, 1.1, 10.5, 3.8);
     addWall(-7, -2.9, 1.1, 4.0, 3.8);
     addWall(-7, -8.9, 1.1, 4.0, 3.8);
     addWall(-7, -31.4, 1.1, 21.2, 3.8);
 
-    addWall(7, 30.6, 1.1, 10.8, 3.8);
-    addWall(7, 22.2, 1.1, 4.0, 3.8);
+    addWall(7, 31.25, 1.1, 9.5, 3.8);
+    addWall(7, 21.95, 1.1, 3.1, 3.8);
     addWall(7, 8.0, 1.1, 8.8, 3.8);
     addWall(7, -2.8, 1.1, 4.2, 3.8);
     addWall(7, -8.8, 1.1, 4.0, 3.8);
@@ -823,6 +823,8 @@
     addDoorFrame(7.02, 16.3, -Math.PI / 2, 5.7);
     addDoorFrame(-7.02, -15.6, Math.PI / 2, 6.2);
     addDoorFrame(7.02, -15.5, -Math.PI / 2, 6.2);
+    addDoorFrame(-7.02, 25.65, Math.PI / 2, 2.5);
+    addDoorFrame(7.02, 24.85, -Math.PI / 2, 2.65);
     addDoorFrame(0, 5.4, 0, 6.2);
     addDoorFrame(0, -23.2, Math.PI, 6.2);
 
@@ -1640,7 +1642,7 @@
     addRug(24.0, 15.2, 10.8, 8.2, world.materials.green);
     addDiningSet(24.0, 15.2);
     addTableSettings(24.0, 15.2);
-    addSideboard(32.0, 22.5, -Math.PI / 2);
+    addSideboard(29.2, 22.2, -Math.PI / 2);
     addChinaCabinet(33.2, 7.8, -Math.PI / 2);
     addPrizePile(28.2, 21.0, 3);
     addFloorLamp(13.0, 7.0);
@@ -1648,9 +1650,9 @@
 
   function addBedroomRoom() {
     addRug(-25.6, -16.8, 9.8, 8.8, world.materials.fabric);
-    addRealBed(-31.0, -18.0, Math.PI / 2, world.materials.fabric);
-    addNightstand(-31.0, -13.4);
-    addNightstand(-31.0, -22.6);
+    addRealBed(-28.8, -18.0, Math.PI / 2, world.materials.fabric);
+    addNightstand(-28.8, -13.4);
+    addNightstand(-28.8, -22.6);
     addDresser(-13.0, -23.8, 0);
     addVanity(-25.8, -12.4, Math.PI);
     addWardrobe(-34.0, -8.0, Math.PI / 2);

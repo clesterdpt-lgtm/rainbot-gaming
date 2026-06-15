@@ -24,7 +24,8 @@ function renderNav() {
       : "";
     const path = location.pathname;
     const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-    const isGames = path.endsWith("/games.html") || path.includes("/games/");
+    const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth");
+    const isGames = !isAgentGames && (path.endsWith("/games.html") || path.includes("/games/"));
 
     slot.innerHTML = `
       <a href="${RB_BASE}" class="nav__brand" title="Rainbot Gaming — free browser arcade">
@@ -33,6 +34,7 @@ function renderNav() {
       <div class="nav__links">
         <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
         <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
+        <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
         <a href="${RB_BASE}#after-dark">After Dark</a>
         <a href="${RB_BASE}#coming-soon">Coming Soon</a>
         <a href="${RB_BASE}#after-dark">About</a>

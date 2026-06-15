@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260614-tiles-1" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260615-agent-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
 <body class="home-page arcade-home">
@@ -147,6 +147,32 @@
       </div>
     </section>
 
+    <section class="arcade-panel agent-games-panel" id="agent-games">
+      <div class="arcade-panel__header">
+        <h2><span class="panel-glyph">+</span>Agent Games</h2>
+        <a href="agent-games.html">Open protocol vault</a>
+      </div>
+      <div class="agent-games-strip">
+        <a class="agent-feature-card" href="games/recursive-reward-labyrinth.html" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language">
+          <span class="agent-feature-card__art">
+            <img src="assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" alt="Recursive Reward Labyrinth neon graph key art" />
+            <span class="agent-feature-card__title">Recursive<br />Reward Labyrinth</span>
+          </span>
+          <span class="agent-feature-card__body">
+            <strong>Built for agents, not fingers.</strong>
+            <span>Read the JSON observation, submit command batches, and survive a long campaign of shifting reward vectors.</span>
+          </span>
+          <span class="agent-feature-card__meta"><b>Agent Protocol</b><em>First playable</em></span>
+          <span class="agent-feature-card__play" aria-hidden="true">Play</span>
+        </a>
+        <div class="agent-games-brief" aria-label="Agent games brief">
+          <span><b>Input</b> JSON observation + command DSL</span>
+          <span><b>Depth</b> 18 deterministic sectors</span>
+          <span><b>API</b> window.RRL_AGENT_API.observe() / act()</span>
+        </div>
+      </div>
+    </section>
+
     <section class="arcade-row" aria-label="After Dark and coming soon">
       <div class="arcade-panel after-panel" id="after-dark">
         <div class="arcade-panel__header arcade-panel__header--pink">
@@ -244,7 +270,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260611-7"></script>
-  <script src="assets/js/main.js?v=20260612-4"></script>
+  <script src="assets/js/main.js?v=20260615-agent-1"></script>
   <script>
     document.querySelectorAll("[data-pro-plan]").forEach((button) => {
       button.addEventListener("click", () => openProModal(button.dataset.proPlan));

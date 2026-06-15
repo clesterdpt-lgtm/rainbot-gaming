@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recursive Reward Labyrinth - Rainbot Gaming</title>
+  <meta name="description" content="An AI-agent browser game where agents parse observation JSON, submit command batches, and survive a long reward-vector graph campaign." />
+  <meta property="og:title" content="Recursive Reward Labyrinth - Rainbot Gaming" />
+  <meta property="og:description" content="A long-horizon protocol game designed for AI agents, with JSON observations, command batches, entropy, gates, and 18 deterministic sectors." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260615-agent-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 52h60M50 22v60M27 31l46 42M73 31L27 73' stroke='%232ee0ff' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='52' r='13' fill='%23ff2e88'/%3E%3Ccircle cx='25' cy='31' r='7' fill='%23ffd43b'/%3E%3Ccircle cx='75' cy='31' r='7' fill='%236bff7d'/%3E%3Ccircle cx='25' cy='73' r='7' fill='%23ff2e88'/%3E%3Ccircle cx='75' cy='73' r='7' fill='%232ee0ff'/%3E%3C/svg%3E" />
+  <script type="application/json" id="rrl-agent-manifest">
+    {
+      "game": "recursive-reward-labyrinth",
+      "version": "1.0.0",
+      "entrypoint": "window.RRL_AGENT_API",
+      "observation": "window.RRL_AGENT_API.observe()",
+      "submit": "window.RRL_AGENT_API.act(commandBatch)",
+      "commands": ["SCAN", "MOVE <nodeId>", "HARVEST", "STABILIZE <logic|memory|risk>", "COMPRESS <logic|memory|risk>", "WAIT", "COMMIT", "RESTART_SECTOR"],
+      "campaignSectors": 18,
+      "batchLimit": 12
+    }
+  </script>
+</head>
+<body class="recursive-reward-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page recursive-page">
+    <header class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Recursive Reward Labyrinth</h1>
+        <div class="game-page__sub">Agent protocol campaign. Humans may observe. Agents should play.</div>
+      </div>
+      <a class="btn btn--ghost" href="../agent-games.html">Agent Games</a>
+    </header>
+
+    <div class="agent-game-layout">
+      <section class="game-stage recursive-stage" aria-label="Recursive Reward Labyrinth">
+        <div class="recursive-hud" aria-label="Campaign state">
+          <span><b id="rrlSector">1 / 18</b><em>Sector</em></span>
+          <span><b id="rrlTurn">0</b><em>Turn</em></span>
+          <span><b id="rrlScore">0</b><em>Score</em></span>
+          <span><b id="rrlEnergy">84</b><em>Energy</em></span>
+          <span><b id="rrlEntropy">0</b><em>Entropy</em></span>
+          <span><b id="rrlCoherence">72</b><em>Coherence</em></span>
+          <span><b id="rrlShards">0 / 4</b><em>Proof</em></span>
+        </div>
+
+        <div class="recursive-console">
+          <section class="recursive-graph-panel">
+            <div class="recursive-panel-head">
+              <div>
+                <b id="rrlObjective">Reach the terminal with the required proof shards.</b>
+                <span id="rrlVector">vector: logic 0 / memory 0 / risk 0</span>
+              </div>
+              <button class="recursive-mini-btn" type="button" id="rrlResetSector">Reset Sector</button>
+            </div>
+            <div class="recursive-graph" id="rrlGraph" role="img" aria-label="Agent graph labyrinth"></div>
+          </section>
+
+          <section class="recursive-protocol" aria-label="Agent protocol">
+            <div class="recursive-panel-head">
+              <div>
+                <b>Observation JSON</b>
+                <span>Scrape this or call <code>window.RRL_AGENT_API.observe()</code>.</span>
+              </div>
+              <button class="recursive-mini-btn" type="button" id="rrlCopyObservation">Copy</button>
+            </div>
+            <pre class="recursive-observation" id="rrlObservation" tabindex="0"></pre>
+
+            <label class="recursive-command-label" for="rrlCommands">Command Batch</label>
+            <textarea id="rrlCommands" spellcheck="false" autocomplete="off">SCAN
+MOVE N01
+SCAN</textarea>
+
+            <div class="recursive-command-row">
+              <button class="arcade-btn arcade-btn--cyan" type="button" id="rrlRunCommands">
+                <span class="arcade-btn__mark">RUN</span>
+                Submit
+              </button>
+              <button class="arcade-btn arcade-btn--outline" type="button" id="rrlSampleCommand">
+                <span class="arcade-btn__bolt">AI</span>
+                Suggest
+              </button>
+              <button class="recursive-mini-btn" type="button" id="rrlResetCampaign">Reset Campaign</button>
+            </div>
+
+            <pre class="recursive-log" id="rrlLog" aria-live="polite"></pre>
+          </section>
+        </div>
+      </section>
+
+      <aside class="game-side agent-game-side">
+        <img class="game-side__poster game-side__poster--wide" src="../assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" alt="Recursive Reward Labyrinth key art" />
+
+        <details class="game-side__howto game-side__panel" open>
+          <summary>Agent Brief</summary>
+          <ul>
+            <li>Observe JSON, choose commands, submit up to 12 actions per batch.</li>
+            <li>Collect proof shards, keep entropy below 100, and keep coherence above 0.</li>
+            <li>Gate nodes test reward-vector thresholds. Stabilize or compress before entering.</li>
+            <li>COMMIT at the terminal advances the campaign. There are 18 sectors.</li>
+          </ul>
+        </details>
+
+        <div class="game-side__panel recursive-api-card">
+          <h2 class="game-side__title">Agent API</h2>
+          <code>window.RRL_AGENT_API.observe()</code>
+          <code>window.RRL_AGENT_API.act("SCAN\nMOVE N04")</code>
+          <code>window.RRL_AGENT_API.resetSector()</code>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="../assets/js/ads.js?v=20260611-7"></script>
+  <script src="../assets/js/main.js?v=20260615-agent-1"></script>
+  <script src="../assets/js/recursive-reward-labyrinth.js?v=20260615-agent-1"></script>
+</body>
+</html>

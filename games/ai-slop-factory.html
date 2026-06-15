@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Slop Factory - Rainbot Gaming</title>
+  <meta name="description" content="A frantic browser arcade game where cursed AI content rides conveyor belts and you sort it into Boost, Demonetize, Fact Check, Delete, or Milk for Engagement before the feed overloads." />
+  <meta property="og:title" content="AI Slop Factory - Rainbot Gaming" />
+  <meta property="og:description" content="Sort cursed AI content before the feed overloads. Fast, stupid, and legally nervous." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260614-tiles-2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M16 28h68v12H16zM16 50h68v12H16zM16 72h68v12H16z' fill='%232ee0ff'/%3E%3Crect x='28' y='18' width='34' height='26' rx='6' fill='%23ff2e88'/%3E%3Crect x='50' y='44' width='34' height='26' rx='6' fill='%23ffd43b'/%3E%3Crect x='24' y='64' width='34' height='26' rx='6' fill='%236bff7d'/%3E%3C/svg%3E" />
+  <style>
+    .slop-page {
+      max-width: 1720px;
+    }
+
+    .slop-stage {
+      position: relative;
+      border-color: rgba(46, 224, 255, 0.36);
+      background:
+        radial-gradient(circle at 18% 6%, rgba(255, 46, 136, 0.22), transparent 28%),
+        radial-gradient(circle at 86% 14%, rgba(46, 224, 255, 0.18), transparent 26%),
+        linear-gradient(180deg, rgba(12, 14, 30, 0.98), rgba(4, 6, 14, 0.98));
+    }
+
+    .slop-stage .hud {
+      background: rgba(3, 6, 11, 0.86);
+      border-color: rgba(46, 224, 255, 0.26);
+      box-shadow: 0 0 22px rgba(46, 224, 255, 0.08);
+    }
+
+    .slop-overload {
+      display: grid;
+      grid-template-columns: 74px minmax(100px, 1fr) 44px;
+      gap: 8px;
+      align-items: center;
+      flex: 1 1 220px;
+      min-width: 190px;
+    }
+
+    .slop-overload__track {
+      height: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .slop-overload__fill {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #6bff7d, #ffd43b 58%, #ff4f68);
+      box-shadow: 0 0 14px rgba(255, 46, 136, 0.36);
+      transition: width 120ms linear;
+    }
+
+    .slop-machine {
+      position: relative;
+      width: 100%;
+      min-height: min(72dvh, 690px);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(194px, 230px);
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid rgba(113, 132, 156, 0.42);
+      border-radius: 8px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(255, 46, 136, 0.09), transparent 28%),
+        radial-gradient(circle at 84% 70%, rgba(255, 212, 59, 0.12), transparent 26%),
+        #05070d;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+      isolation: isolate;
+    }
+
+    .slop-machine::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 5px),
+        repeating-linear-gradient(90deg, transparent 0 54px, rgba(46, 224, 255, 0.07) 54px 56px);
+      opacity: 0.42;
+    }
+
+    .slop-feed,
+    .slop-bins,
+    .slop-card-layer,
+    .slop-event-stack,
+    .slop-overlay {
+      position: relative;
+      z-index: 1;
+    }
+
+    .slop-feed {
+      min-height: 520px;
+      border: 2px solid rgba(46, 224, 255, 0.22);
+      border-radius: 8px;
+      overflow: visible;
+      background:
+        radial-gradient(circle at 12% 22%, rgba(46, 224, 255, 0.12), transparent 22%),
+        linear-gradient(180deg, rgba(8, 13, 27, 0.96), rgba(3, 6, 11, 0.96));
+    }
+
+    .slop-feed::after {
+      content: "FEED OVERLOAD";
+      position: absolute;
+      right: 14px;
+      top: 12px;
+      color: rgba(255, 79, 104, 0.84);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.4px;
+    }
+
+    .slop-intake {
+      position: absolute;
+      left: 14px;
+      top: 12px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 6px 9px;
+      border: 1px solid rgba(255, 46, 136, 0.36);
+      background: rgba(0, 0, 0, 0.36);
+      color: var(--accent-2);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.3px;
+    }
+
+    .slop-intake i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      animation: slopPulse 0.72s ease-in-out infinite;
+    }
+
+    .slop-lanes {
+      position: absolute;
+      inset: 58px 18px 22px;
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .slop-lane {
+      position: relative;
+      min-height: 96px;
+      border: 1px solid rgba(113, 132, 156, 0.28);
+      border-radius: 8px;
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 18px, transparent 18px 34px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015));
+      background-size: 34px 100%, 100% 100%;
+      box-shadow: inset 0 -12px 0 rgba(0, 0, 0, 0.18);
+    }
+
+    .slop-lane::before {
+      content: "";
+      position: absolute;
+      inset: 50% 12px auto;
+      height: 3px;
+      background: repeating-linear-gradient(90deg, rgba(46, 224, 255, 0.62) 0 28px, transparent 28px 42px);
+      transform: translateY(-50%);
+      opacity: 0.6;
+      animation: slopBelt 0.55s linear infinite;
+    }
+
+    .slop-lane::after {
+      content: attr(data-lane);
+      position: absolute;
+      left: 10px;
+      bottom: 8px;
+      color: rgba(251, 250, 244, 0.38);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .slop-card-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .slop-machine.is-dragging-card .slop-card-layer {
+      z-index: 12;
+    }
+
+    .slop-card {
+      position: absolute;
+      width: clamp(176px, 19vw, 238px);
+      min-height: 108px;
+      padding: 10px 11px 9px;
+      border: 2px solid rgba(251, 250, 244, 0.82);
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, rgba(251, 250, 244, 0.98), rgba(223, 232, 242, 0.98));
+      color: #08101c;
+      box-shadow: 0 8px 0 rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.05);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: auto;
+      will-change: transform;
+    }
+
+    .slop-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 7px;
+      border-radius: 6px 6px 0 0;
+      background: var(--card-accent, var(--accent));
+    }
+
+    .slop-card--boost { --card-accent: #64ff87; }
+    .slop-card--demonetize { --card-accent: #ffd43b; }
+    .slop-card--fact { --card-accent: #2ee0ff; }
+    .slop-card--delete { --card-accent: #ff4f68; }
+    .slop-card--milk { --card-accent: #b06cff; }
+
+    .slop-card.is-held,
+    .slop-card.is-selected {
+      z-index: 9;
+      border-color: var(--card-accent, var(--accent));
+      box-shadow: 0 10px 0 rgba(0, 0, 0, 0.5), 0 0 28px color-mix(in srgb, var(--card-accent, #ff2e88), transparent 25%);
+      cursor: grabbing;
+    }
+
+    .slop-card.is-selected {
+      animation: slopSelected 0.7s ease-in-out infinite;
+    }
+
+    .slop-card.is-correct {
+      animation: slopApprove 180ms ease-out forwards;
+    }
+
+    .slop-card.is-wrong {
+      animation: slopReject 220ms ease-out forwards;
+    }
+
+    .slop-card__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 2px;
+      color: #5b6178;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .slop-card__kind {
+      color: #05070d;
+    }
+
+    .slop-card__risk {
+      color: #8b3446;
+    }
+
+    .slop-card h3 {
+      margin: 8px 0 5px;
+      color: #05070d;
+      font-family: var(--font-display);
+      font-size: clamp(13px, 1.45vw, 17px);
+      line-height: 1.04;
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+    .slop-card p {
+      margin: 0;
+      color: #495166;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.24;
+    }
+
+    .slop-card__source {
+      display: block;
+      margin-top: 8px;
+      color: #7b8398;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .slop-bins {
+      display: grid;
+      grid-template-rows: repeat(5, minmax(72px, 1fr));
+      gap: 8px;
+      min-height: 0;
+      z-index: 8;
+    }
+
+    .slop-bin {
+      position: relative;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+      min-height: 72px;
+      padding: 9px 10px;
+      border: 2px solid var(--bin-color);
+      border-radius: 8px;
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--bin-color), transparent 76%), rgba(0, 0, 0, 0.42)),
+        #070a12;
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.48);
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+      touch-action: manipulation;
+      transition: transform 90ms ease, filter 90ms ease, box-shadow 90ms ease;
+    }
+
+    .slop-bin:hover,
+    .slop-bin.is-target,
+    .slop-bin.is-hot {
+      filter: brightness(1.18);
+      transform: translateY(-2px);
+      box-shadow: 0 7px 0 rgba(0, 0, 0, 0.48), 0 0 20px color-mix(in srgb, var(--bin-color), transparent 48%);
+    }
+
+    .slop-bin:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.48);
+    }
+
+    .slop-bin__code {
+      color: var(--bin-color);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .slop-bin__label {
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: clamp(13px, 1.2vw, 17px);
+      line-height: 1.02;
+      text-transform: uppercase;
+    }
+
+    .slop-bin__hint {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .slop-event-stack {
+      position: absolute;
+      left: 50%;
+      top: 18px;
+      z-index: 12;
+      display: grid;
+      gap: 8px;
+      width: min(420px, calc(100% - 30px));
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .slop-event {
+      justify-self: center;
+      max-width: 100%;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: rgba(3, 6, 11, 0.9);
+      color: var(--ink);
+      box-shadow: 0 0 26px rgba(255, 46, 136, 0.22);
+      text-align: center;
+      animation: slopEventIn 1.75s ease forwards;
+    }
+
+    .slop-event strong {
+      display: block;
+      color: var(--accent-3);
+      font-family: var(--font-display);
+      font-size: 17px;
+      line-height: 1.08;
+      text-transform: uppercase;
+    }
+
+    .slop-event span {
+      display: block;
+      margin-top: 4px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .slop-float {
+      position: absolute;
+      z-index: 11;
+      color: var(--float-color, var(--accent-3));
+      font-family: var(--font-display);
+      font-size: 18px;
+      text-shadow: 2px 2px 0 #000;
+      pointer-events: none;
+      animation: slopFloat 760ms ease-out forwards;
+    }
+
+    .slop-overlay {
+      position: absolute;
+      inset: 12px;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      border: 1px solid rgba(46, 224, 255, 0.24);
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(255, 46, 136, 0.22), transparent 34%),
+        radial-gradient(circle at 82% 18%, rgba(46, 224, 255, 0.18), transparent 30%),
+        rgba(3, 6, 11, 0.94);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      text-align: center;
+    }
+
+    .slop-overlay.is-visible {
+      display: flex;
+    }
+
+    .slop-title-card {
+      width: min(620px, 100%);
+    }
+
+    .slop-title-card__eyebrow {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 5px 9px;
+      border: 1px solid rgba(255, 212, 59, 0.32);
+      color: var(--accent-3);
+      background: rgba(0, 0, 0, 0.28);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+    }
+
+    .slop-title-card h2 {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: clamp(34px, 6vw, 68px);
+      line-height: 0.94;
+      text-transform: uppercase;
+      text-shadow: 4px 0 0 rgba(255, 46, 136, 0.38), -3px 0 0 rgba(46, 224, 255, 0.28), 0 5px 0 #000;
+    }
+
+    .slop-title-card p {
+      max-width: 540px;
+      margin: 14px auto 18px;
+      color: #dce6f0;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .slop-title-card__stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0 0 20px;
+    }
+
+    .slop-title-card__stats span {
+      min-height: 48px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(113, 132, 156, 0.34);
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .slop-title-card__stats b {
+      display: block;
+      color: var(--accent-3);
+      font-family: var(--font-display);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .slop-policy {
+      list-style: none;
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+    }
+
+    .slop-policy li {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .slop-policy i {
+      width: 14px;
+      height: 14px;
+      margin-top: 1px;
+      border-radius: 4px;
+      background: var(--policy-color);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--policy-color), transparent 35%);
+    }
+
+    .slop-policy strong {
+      color: var(--ink);
+      font-family: var(--font-display);
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .slop-log {
+      min-height: 112px;
+      display: grid;
+      align-content: start;
+      gap: 6px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .slop-log div {
+      border-left: 3px solid var(--accent-2);
+      padding: 5px 0 5px 8px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .slop-log div:first-child {
+      color: var(--ink);
+      border-left-color: var(--accent-3);
+    }
+
+    .slop-side-note {
+      margin: 8px 0 0;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .slop-machine.is-shaking {
+      animation: slopShake 210ms linear infinite;
+    }
+
+    .slop-machine.is-meltdown .slop-feed {
+      filter: hue-rotate(28deg) saturate(1.35);
+      box-shadow: inset 0 0 32px rgba(255, 46, 136, 0.28);
+    }
+
+    .slop-machine.is-label-blind .slop-bin__label,
+    .slop-machine.is-label-blind .slop-bin__hint {
+      color: transparent;
+      text-shadow: 0 0 9px rgba(251, 250, 244, 0.72);
+    }
+
+    .slop-machine.is-label-blind .slop-bin__code {
+      color: var(--ink);
+    }
+
+    .slop-machine.is-label-blind .slop-bin__code::after {
+      content: " / ???";
+      color: var(--bin-color);
+    }
+
+    @keyframes slopBelt {
+      from { background-position: 0 0; }
+      to { background-position: 42px 0; }
+    }
+
+    @keyframes slopPulse {
+      0%, 100% { opacity: 0.45; transform: scale(0.84); }
+      50% { opacity: 1; transform: scale(1.18); }
+    }
+
+    @keyframes slopSelected {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.14); }
+    }
+
+    @keyframes slopApprove {
+      to { opacity: 0; transform: translate3d(var(--sort-x, 0), var(--sort-y, 0), 0) scale(0.72) rotate(8deg); }
+    }
+
+    @keyframes slopReject {
+      0% { filter: saturate(1); }
+      45% { filter: saturate(1.8) hue-rotate(-18deg); }
+      100% { opacity: 0; transform: translate3d(var(--sort-x, 0), var(--sort-y, 0), 0) scale(0.72) rotate(-10deg); }
+    }
+
+    @keyframes slopEventIn {
+      0% { opacity: 0; transform: translateY(-12px) scale(0.96); }
+      15%, 78% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-10px) scale(0.98); }
+    }
+
+    @keyframes slopFloat {
+      from { opacity: 0; transform: translateY(8px) scale(0.92); }
+      18% { opacity: 1; }
+      to { opacity: 0; transform: translateY(-42px) scale(1.06); }
+    }
+
+    @keyframes slopShake {
+      0%, 100% { transform: translate(0, 0); }
+      25% { transform: translate(-4px, 2px); }
+      50% { transform: translate(3px, -3px); }
+      75% { transform: translate(2px, 3px); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slop-lane::before,
+      .slop-intake i,
+      .slop-card.is-selected,
+      .slop-machine.is-shaking {
+        animation: none !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .slop-page .game-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .slop-machine {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: auto;
+        padding: 8px;
+      }
+
+      .slop-feed {
+        min-height: min(58dvh, 480px);
+      }
+
+      .slop-bins {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: none;
+      }
+
+      .slop-bin {
+        min-height: 62px;
+        padding: 8px;
+      }
+
+      .slop-bin:last-child {
+        grid-column: 1 / -1;
+      }
+
+      .slop-card {
+        width: min(68vw, 216px);
+        min-height: 100px;
+      }
+
+      .slop-title-card__stats {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .slop-stage .hud__item {
+        flex-basis: 104px;
+      }
+
+      .slop-overload {
+        grid-template-columns: 66px minmax(80px, 1fr) 38px;
+        flex-basis: 100%;
+      }
+
+      .slop-lanes {
+        inset: 48px 10px 14px;
+        gap: 10px;
+      }
+
+      .slop-lane {
+        min-height: 84px;
+      }
+
+      .slop-card h3 {
+        font-size: 13px;
+      }
+
+      .slop-card p,
+      .slop-card__source {
+        font-size: 9px;
+      }
+
+      .slop-bin__label {
+        font-size: 12px;
+      }
+
+      .slop-title-card p {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page slop-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">AI Slop Factory</h1>
+        <div class="game-page__sub">Content moderation conveyor panic - sort cursed internet sludge before the feed overloads</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">&larr; All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage slop-stage">
+        <div class="hud" aria-label="AI Slop Factory status">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="slop-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">TIME</span><span class="hud__value" id="slop-time">75</span></div>
+          <div class="hud__item"><span class="hud__label">COMBO</span><span class="hud__value" id="slop-combo">0x</span></div>
+          <div class="hud__item"><span class="hud__label">MULTI</span><span class="hud__value" id="slop-multi">1.0x</span></div>
+          <div class="hud__item"><span class="hud__label">MISSES</span><span class="hud__value" id="slop-mistakes">0</span></div>
+          <div class="slop-overload">
+            <span class="hud__label">OVERLOAD</span>
+            <span class="slop-overload__track"><span class="slop-overload__fill" id="slop-overload-fill"></span></span>
+            <span class="hud__value" id="slop-overload">0%</span>
+          </div>
+        </div>
+
+        <div class="slop-machine" id="slop-machine">
+          <div class="slop-feed" id="slop-feed" aria-label="AI content conveyor belts">
+            <div class="slop-intake"><i aria-hidden="true"></i><span>Incoming slop</span></div>
+            <div class="slop-lanes" id="slop-lanes">
+              <div class="slop-lane" data-lane="Lane A"></div>
+              <div class="slop-lane" data-lane="Lane B"></div>
+              <div class="slop-lane" data-lane="Lane C"></div>
+            </div>
+          </div>
+
+          <div class="slop-bins" id="slop-bins" aria-label="Sorting bins">
+            <button class="slop-bin" type="button" data-bin="boost" style="--bin-color:#64ff87">
+              <span class="slop-bin__code">01</span>
+              <span class="slop-bin__label">Boost</span>
+              <span class="slop-bin__hint">Harmless, useful, weirdly wholesome</span>
+            </button>
+            <button class="slop-bin" type="button" data-bin="demonetize" style="--bin-color:#ffd43b">
+              <span class="slop-bin__code">02</span>
+              <span class="slop-bin__label">Demonetize</span>
+              <span class="slop-bin__hint">Brand risk, fake sponsor stink</span>
+            </button>
+            <button class="slop-bin" type="button" data-bin="fact" style="--bin-color:#2ee0ff">
+              <span class="slop-bin__code">03</span>
+              <span class="slop-bin__label">Fact Check</span>
+              <span class="slop-bin__hint">Big claim, tiny evidence</span>
+            </button>
+            <button class="slop-bin" type="button" data-bin="delete" style="--bin-color:#ff4f68">
+              <span class="slop-bin__code">04</span>
+              <span class="slop-bin__label">Delete</span>
+              <span class="slop-bin__hint">Scam, bot flood, theft, malware</span>
+            </button>
+            <button class="slop-bin" type="button" data-bin="milk" style="--bin-color:#b06cff">
+              <span class="slop-bin__code">05</span>
+              <span class="slop-bin__label">Milk for Engagement</span>
+              <span class="slop-bin__hint">Drama, ragebait, comment fuel</span>
+            </button>
+          </div>
+
+          <div class="slop-card-layer" id="slop-card-layer" aria-live="polite"></div>
+          <div class="slop-event-stack" id="slop-event-stack" aria-live="polite"></div>
+
+          <div class="slop-overlay is-visible" id="slop-overlay">
+            <div class="slop-title-card">
+              <span class="slop-title-card__eyebrow" id="slop-overlay-eyebrow">Moderation Shift 404</span>
+              <h2 id="slop-overlay-title">AI Slop Factory</h2>
+              <p id="slop-overlay-copy">The algorithm is hungry, the policy doc is on fire, and cursed content is already on the belts.</p>
+              <div class="slop-title-card__stats" id="slop-overlay-stats">
+                <span><b>75s</b> Arcade Shift</span>
+                <span><b>5</b> Bad Decisions</span>
+                <span><b>0</b> HR Oversight</span>
+              </div>
+              <div class="overlay__score" id="slop-overlay-score"></div>
+              <button class="btn btn--primary" type="button" id="slop-primary">Clock in</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" alt="AI Slop Factory poster art" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">FACTORY POLICY</h3>
+          <ul class="slop-policy">
+            <li style="--policy-color:#64ff87"><i aria-hidden="true"></i><span><strong>Boost</strong> actually helpful or harmless weirdness.</span></li>
+            <li style="--policy-color:#ffd43b"><i aria-hidden="true"></i><span><strong>Demonetize</strong> sponsor rot and unsafe ad bait.</span></li>
+            <li style="--policy-color:#2ee0ff"><i aria-hidden="true"></i><span><strong>Fact Check</strong> medical, political, or panic claims.</span></li>
+            <li style="--policy-color:#ff4f68"><i aria-hidden="true"></i><span><strong>Delete</strong> scams, theft, bots, doxx-ish nonsense.</span></li>
+            <li style="--policy-color:#b06cff"><i aria-hidden="true"></i><span><strong>Milk</strong> drama, ragebait, and attention traps.</span></li>
+          </ul>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">SHIFT CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" type="button" id="slop-new" style="font-size:13px;padding:8px 12px;">New shift</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">INCIDENT FEED</h3>
+          <div class="slop-log" id="slop-log">
+            <div>Awaiting first bad call.</div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>Parody notice</summary>
+          <p>AI Slop Factory is a satire of platform incentives, content moderation dashboards, and the internet's ability to turn any crisis into a thumbnail. It is not affiliated with any real platform, sponsor, or moderation vendor.</p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-8"></script>
+  <script src="../assets/js/main.js?v=20260612-4"></script>
+  <script src="../assets/js/ai-slop-factory.js?v=20260614-2"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

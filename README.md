@@ -8,6 +8,7 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 
 | Status | Game | Notes |
 | --- | --- | --- |
+| ✅ Live | **AI Slop Factory** | Conveyor-belt content moderation panic. Sort cursed AI thumbnails, bot floods, scams, misinformation, and ragebait before the feed overloads. `/games/ai-slop-factory.html` |
 | ✅ Live | **Escape the Strait of Hormuz** | Frogger-style. You're a VLCC oil tanker. `/games/strait-of-hormuz.html` |
 | ✅ Live | **Mr. Feast: Last To Leave the Mansion** | Survival parody. Survive 24 hours, win $1M. `/games/mr-feast-mansion.html` |
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
@@ -19,7 +20,7 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | ✅ Live | **Billionaire Space Race** | Lunar-lander parody. Burn the investor money, dodge lawsuit drones and audit satellites, and set your ego-rocket down gently on an ever-tinier, ever-moving platform. `/games/billionaire-space-race.html` |
 | 🧪 Prototype | **Unhoused and Unhinged** | Low-poly 3D street-survival sandbox. Perform slapstick antics by day, manage heat, and survive Tweeker Zombies with improvised comedy weapons at night. `/games/unhoused-and-unhinged.html` |
 
-> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. Apop Demon Moggers is a fictional side-scroller satirizing American pop culture and internet "mogging" slang; the demon "boy band" and all characters are invented parodies with no relation to any real person, group, organization, or community. Billionaire Space Race satirizes the private-spaceflight ambitions of fictional tech billionaires; all tycoons, companies, and rockets are invented parodies with no relation to any real person or company. Unhoused and Unhinged satirizes absurd city systems, clout culture, and cartoon survival-game logic; it should not frame real homelessness or addiction as the punchline. Not affiliated with any real brand, person, or community.
+> ⚠️ **All games are parody / satire** — except the *After Dark* line, which is original horror fiction. AI Slop Factory satirizes platform incentives, content moderation dashboards, AI slop, and engagement farming; it is not affiliated with any real platform, sponsor, or moderation vendor. Mr. Feast is a fictional character parodying a well-known YouTube challenge format. Looksmaxxing Grindset is a satirical sendup of "looksmaxxing" / "gym-bro" internet culture. DoorCrash is a fictional delivery-app chaos parody and is not affiliated with any real delivery brand. Skid Row Glow-Up targets exploitative influencer content, not unhoused people or real Skid Row residents. Apop Demon Moggers is a fictional side-scroller satirizing American pop culture and internet "mogging" slang; the demon "boy band" and all characters are invented parodies with no relation to any real person, group, organization, or community. Billionaire Space Race satirizes the private-spaceflight ambitions of fictional tech billionaires; all tycoons, companies, and rockets are invented parodies with no relation to any real person or company. Unhoused and Unhinged satirizes absurd city systems, clout culture, and cartoon survival-game logic; it should not frame real homelessness or addiction as the punchline. Not affiliated with any real brand, person, or community.
 
 ## 🚀 Run it locally
 
@@ -44,6 +45,7 @@ Then open <http://localhost:8000>.
 ├── index.html                    # Landing page
 ├── games.html                    # Game selector
 ├── games/
+│   ├── ai-slop-factory.html      # Playable content-moderation arcade parody
 │   ├── strait-of-hormuz.html     # Playable Frogger
 │   ├── boomer-monopoly.html      # Playable board-game parody
 │   ├── apop-demon-hunters.html   # Playable side-scroller (Apop Demon Moggers)

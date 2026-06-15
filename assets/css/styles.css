@@ -2492,6 +2492,13 @@ body.arcade-home::before {
   image-rendering: pixelated;
 }
 
+.poster-card--slop img,
+.directory-card__poster--slop img {
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(1.08) contrast(1.05);
+}
+
 .directory-card__poster--again img,
 .poster-card--doorcrash img,
 .directory-card__poster--doorcrash img,
@@ -2513,6 +2520,18 @@ body.arcade-home::before {
   inset: 0 0 34px;
   z-index: 1;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.22) 62%, transparent);
+  pointer-events: none;
+}
+
+.poster-card--slop::before,
+.directory-card__poster--slop::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 34px;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.22) 54%, transparent),
+    linear-gradient(180deg, transparent 42%, rgba(0, 0, 0, 0.48));
   pointer-events: none;
 }
 

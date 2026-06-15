@@ -64,6 +64,8 @@
   const SUS_BUMP       = 14;     // walked into a girl (eyes open)
   const BRUISER_SMACK_SUS = 10;  // got loud near a territorial gym bro
   const BRUISER_RADIUS = 22;
+  const BRUISER_AGGRO_SCALE = 0.72;
+  const BRUISER_CHASE_MULT = 1.12;
   const WATER_BOTTLE_RADIUS = 9;
   const WATER_BOTTLE_TRIGGER = 18;
   const WATER_BOTTLE_TRIP_SUS = 7;
@@ -1327,7 +1329,7 @@
       let speed = b.speed;
       if (chasing && playerD > 1) {
         target = [p.x, p.y];
-        speed *= 1.35;
+        speed *= BRUISER_CHASE_MULT;
         b.warningT = 0.2;
       } else if (b.path && b.path.length > 1) {
         target = b.path[b.pathIdx];
@@ -1742,7 +1744,7 @@
         path,
         pathIdx: path.length > 1 ? 1 : 0,
         speed: (b.speed || 42) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
-        aggro: (b.aggro || 86) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
+        aggro: (b.aggro || 86) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2) * BRUISER_AGGRO_SCALE,
         hit: (b.hit || 36) * ((WORLD_SCALE_X + WORLD_SCALE_Y) / 2),
         stun: b.stun || 0.9,
         cooldown: b.cooldown || 1.1,

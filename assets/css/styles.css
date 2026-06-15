@@ -2889,15 +2889,6 @@ body.arcade-home::before {
   padding: 16px 16px 14px;
 }
 
-.directory-card__body h3 {
-  color: var(--arcade-white);
-  font-family: var(--arcade-font);
-  font-size: clamp(17px, 1.8vw, 21px);
-  line-height: 1.2;
-  margin: 0 0 9px;
-  text-transform: uppercase;
-}
-
 .directory-card__body p {
   color: #bfccd9;
   font-size: 13px;

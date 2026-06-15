@@ -21,6 +21,18 @@
   const STAIR_TRAVEL_SECONDS = 1.05;
   const STAIR_BOTTOM = { x: 4.8, z: 31.55, level: 0, yaw: 0.04 };
   const STAIR_TOP = { x: 8.2, z: 24.4, level: 1, yaw: 0.02 };
+  const HIDE_HOLD_SECONDS = 0.72;
+  const LEAVE_HIDE_SECONDS = 0.42;
+  const HIDE_SPOT_RADIUS = 2.25;
+  const HIDDEN_EYE_HEIGHT = 1.08;
+  const HIDE_SPOTS = [
+    { id: "foyer-sofa", label: "sofa shadow", x: 3.1, z: 25.0, yaw: -Math.PI / 2, level: 0 },
+    { id: "breakfast-nook", label: "breakfast nook", x: -15.4, z: 11.9, yaw: Math.PI, level: 0 },
+    { id: "bed", label: "bed frame", x: -30.2, z: -18.0, yaw: Math.PI / 2, level: 0 },
+    { id: "wardrobe", label: "wardrobe gap", x: -33.6, z: -8.2, yaw: Math.PI / 2, level: 0 },
+    { id: "utility-shelves", label: "utility shelves", x: 4.7, z: -8.6, yaw: Math.PI, level: 0 },
+    { id: "office-desk", label: "office desk", x: 24.8, z: -18.8, yaw: Math.PI, level: 0 },
+  ];
   const DETOUR_PANEL = {
     x: 0,
     z: 0.8,
@@ -234,6 +246,7 @@
     routeArrow: $("route-arrow"),
     routeText: $("route-text"),
     danger: $("feast-danger"),
+    stealth: $("feast-stealth"),
     log: $("event-log"),
     objectiveList: $("objective-list"),
     powerups: $("powerups"),
@@ -267,6 +280,11 @@
     jumpscareTimer: 0,
     interactionProgress: 0,
     stairProgress: 0,
+    hideProgress: 0,
+    hidden: false,
+    hidePromptActive: false,
+    activeHideSpot: null,
+    hideCooldown: 0,
     activeTask: null,
     stairPromptActive: false,
     stairDirection: null,
@@ -307,6 +325,7 @@
       lastKnownX: 0,
       lastKnownZ: 29,
       justSawPlayer: false,
+      heardTimer: 0,
       stuckTimer: 0,
     },
     input: {
@@ -367,6 +386,8 @@
     sponsorGhostLight: null,
     guideBeacon: null,
     guideBeaconLight: null,
+    hideSpots: [],
+    hideGroups: [],
     hostGroup: null,
     hostLight: null,
     hostFaceLight: null,
@@ -691,6 +712,7 @@
     buildWalls();
     buildSecondStoryShell();
     buildSetDressing();
+    buildHidingSpots();
     buildTasks();
     buildGuideBeacon();
     buildHazards();
@@ -898,6 +920,38 @@
       group.rotation.y = spot[2];
       world.scene.add(group);
       world.contestantGroups.push(group);
+    });
+  }
+
+  function buildHidingSpots() {
+    const THREE = window.THREE;
+    world.hideSpots = HIDE_SPOTS.map((def) => {
+      const group = new THREE.Group();
+      const shadowMat = world.materials.black.clone();
+      shadowMat.transparent = true;
+      shadowMat.opacity = 0.38;
+      shadowMat.depthWrite = false;
+
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.2, 0.035, 28), shadowMat);
+      pad.position.y = 0.07;
+      pad.scale.z = 0.68;
+      group.add(pad);
+
+      const edgeMat = world.materials.yellow.clone();
+      edgeMat.transparent = true;
+      edgeMat.opacity = 0;
+      const edge = new THREE.Mesh(new THREE.TorusGeometry(1.18, 0.025, 8, 40), edgeMat);
+      edge.rotation.x = Math.PI / 2;
+      edge.position.y = 0.12;
+      group.add(edge);
+
+      group.position.set(def.x, floorYForLevel(def.level || 0), def.z);
+      group.rotation.y = def.yaw || 0;
+      group.userData.edge = edge;
+      group.visible = false;
+      world.scene.add(group);
+      world.hideGroups.push(group);
+      return { ...def, radius: def.radius || HIDE_SPOT_RADIUS, group };
     });
   }
 
@@ -2989,6 +3043,7 @@
       upstairs: { x: STAIR_TOP.x, z: STAIR_TOP.z, yaw: STAIR_TOP.yaw, pitch: -0.04, level: 1, label: "second floor landing" },
       upstairsEast: { x: 14.2, z: 23.4, yaw: Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs east rooms" },
       upstairsWest: { x: -14.2, z: 18.8, yaw: -Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs west rooms" },
+      hidePrompt: { x: 3.0, z: 24.1, yaw: -Math.PI / 2, pitch: -0.06, level: 0, label: "hide prompt" },
     };
 
     const applyInspectionView = (view) => {
@@ -3018,6 +3073,43 @@
       } else if (name === "stairsDown") {
         applyInspectionView({ ...inspectionViews.upstairs, x: STAIR_TOP.x, z: STAIR_TOP.z, yaw: STAIR_TOP.yaw, label: "stair transfer down" });
         transferStairs("down");
+      } else if (name === "hidden") {
+        applyInspectionView({ ...inspectionViews.hidePrompt, label: "hidden state" });
+        enterHiding(world.hideSpots.find((spot) => spot.id === "foyer-sofa") || world.hideSpots[0]);
+        state.host.x = 6.4;
+        state.host.z = 20.8;
+        state.host.yaw = -0.35;
+        state.host.mode = "search";
+        state.host.stunTimer = 0;
+        state.host.alertTimer = 4.8;
+        state.host.lastKnownX = 3.0;
+        state.host.lastKnownZ = 24.1;
+      } else if (name === "stealthChase") {
+        applyInspectionView({ x: 0.6, z: 19.2, yaw: Math.PI, pitch: -0.05, level: 0, label: "stealth chase" });
+        state.safeTimer = 0;
+        state.host.x = 0.8;
+        state.host.z = 13.2;
+        state.host.yaw = Math.PI;
+        state.host.mode = "chase";
+        state.host.stunTimer = 0;
+        state.host.lostTimer = 0;
+        state.host.alertTimer = 6.5;
+        state.host.lastKnownX = state.player.x;
+        state.host.lastKnownZ = state.player.z;
+        showAlert("Local check: stealth chase.", "bad");
+      } else if (name === "stealthLost") {
+        applyInspectionView({ x: -16.0, z: 12.0, yaw: -Math.PI / 2, pitch: -0.05, level: 0, label: "line of sight break" });
+        state.safeTimer = 0;
+        state.host.x = 0.0;
+        state.host.z = 0.0;
+        state.host.yaw = -Math.PI / 2;
+        state.host.mode = "chase";
+        state.host.stunTimer = 0;
+        state.host.lostTimer = hostTuning().lostSeconds + 0.25;
+        state.host.alertTimer = 6.5;
+        state.host.lastKnownX = state.player.x;
+        state.host.lastKnownZ = state.player.z;
+        showAlert("Local check: line of sight broken.", "");
       } else if (name === "detour") {
         setDirectorTaskProgress(2);
         state.detourComplete = false;
@@ -3122,6 +3214,9 @@
           playerY: Number(state.player.y.toFixed(2)),
           playerLevel: state.player.level,
           playerYaw: Number(state.player.yaw.toFixed(3)),
+          hidden: state.hidden,
+          hidePromptActive: state.hidePromptActive,
+          activeHideSpot: state.activeHideSpot ? state.activeHideSpot.id : null,
           touchForward: Number(state.touchMove.forward.toFixed(2)),
           touchStrafe: Number(state.touchMove.strafe.toFixed(2)),
           nerve: Number(state.nerve.toFixed(1)),
@@ -3209,6 +3304,11 @@
     state.jumpscareTimer = 0;
     state.interactionProgress = 0;
     state.stairProgress = 0;
+    state.hideProgress = 0;
+    state.hidden = false;
+    state.hidePromptActive = false;
+    state.activeHideSpot = null;
+    state.hideCooldown = 0;
     state.activeTask = null;
     state.stairPromptActive = false;
     state.stairDirection = null;
@@ -3240,6 +3340,7 @@
     state.host.lastKnownX = 0;
     state.host.lastKnownZ = 29;
     state.host.justSawPlayer = false;
+    state.host.heardTimer = 0;
     state.host.stuckTimer = 0;
     state.tasks = TASK_DEFS.map((def) => ({ ...def, done: false }));
     Object.keys(state.input).forEach((key) => { state.input[key] = false; });
@@ -3297,8 +3398,10 @@
       if (document.pointerLockElement === canvas) document.exitPointerLock();
       releaseSoftMouseLock();
       resetTouchMove();
+      duckAudio(true);
     } else {
       showAlert("Rolling again.", "");
+      duckAudio(false);
     }
   }
 
@@ -3323,15 +3426,19 @@
     if (state.safeTimer > 0) state.safeTimer = Math.max(0, state.safeTimer - dt);
     if (state.boostTimer > 0) state.boostTimer = Math.max(0, state.boostTimer - dt);
     if (state.cameraJamTimer > 0) state.cameraJamTimer = Math.max(0, state.cameraJamTimer - dt);
+    if (state.hideCooldown > 0) state.hideCooldown = Math.max(0, state.hideCooldown - dt);
+    if (state.host.heardTimer > 0) state.host.heardTimer = Math.max(0, state.host.heardTimer - dt);
     updateStoryTimers(dt);
 
     updatePlayer(dt);
+    updateHiding(dt);
     updateStairTravel(dt);
     updateTasks(dt);
     updateHazards(dt);
     updateHost(dt);
     updateContestants(dt);
     updatePressure(dt);
+    updateAudio(dt);
     updateFinalEscape(dt);
     updateHUD();
   }
@@ -3340,6 +3447,16 @@
     const turnSpeed = state.input.sprint ? 1.5 : 1.85;
     if (state.input.turnLeft) state.player.yaw += turnSpeed * dt;
     if (state.input.turnRight) state.player.yaw -= turnSpeed * dt;
+
+    if (state.hidden) {
+      state.player.moving = false;
+      state.player.sprinting = false;
+      state.player.y = floorYForLevel(state.player.level) + HIDDEN_EYE_HEIGHT;
+      state.player.bob = lerp(state.player.bob, 0, Math.min(1, dt * 5));
+      state.stamina = clamp(state.stamina + dt * 16, 0, 100);
+      state.signal = clamp(state.signal - dt * 12, 0, 100);
+      return;
+    }
 
     const keyForward = (state.input.forward ? 1 : 0) - (state.input.back ? 1 : 0);
     const keyStrafe = (state.input.right ? 1 : 0) - (state.input.left ? 1 : 0);
@@ -3378,7 +3495,105 @@
     state.player.z = clamp(state.player.z, -40.5, 34.5);
   }
 
+  function updateHiding(dt) {
+    const spot = state.hidden ? state.activeHideSpot : nearestHideSpot();
+    state.activeHideSpot = spot || (state.hidden ? state.activeHideSpot : null);
+    state.hidePromptActive = Boolean(spot) || state.hidden;
+    updateHideSpotVisuals(spot);
+
+    if (!state.hidePromptActive || state.hideCooldown > 0) {
+      state.hideProgress = 0;
+      return;
+    }
+
+    if (!state.input.interact) {
+      state.hideProgress = Math.max(0, state.hideProgress - dt * 2.8);
+      return;
+    }
+
+    const seconds = state.hidden ? LEAVE_HIDE_SECONDS : HIDE_HOLD_SECONDS;
+    state.hideProgress += dt;
+    if (state.hideProgress < seconds) return;
+
+    if (state.hidden) {
+      exitHiding(false);
+    } else if (spot) {
+      enterHiding(spot);
+    }
+  }
+
+  function nearestHideSpot() {
+    let best = null;
+    let bestD = Infinity;
+    world.hideSpots.forEach((spot) => {
+      if ((spot.level || 0) !== (state.player.level || 0)) return;
+      const d = distance(state.player.x, state.player.z, spot.x, spot.z);
+      if (d < spot.radius && d < bestD) {
+        best = spot;
+        bestD = d;
+      }
+    });
+    return best;
+  }
+
+  function enterHiding(spot) {
+    state.hidden = true;
+    state.activeHideSpot = spot;
+    state.hideProgress = 0;
+    state.hideCooldown = 0.45;
+    state.player.x = spot.x;
+    state.player.z = spot.z;
+    state.player.y = floorYForLevel(spot.level || 0) + HIDDEN_EYE_HEIGHT;
+    state.player.level = spot.level || 0;
+    state.player.yaw = spot.yaw || state.player.yaw;
+    state.player.pitch = -0.08;
+    state.player.moving = false;
+    state.player.sprinting = false;
+    state.signal = clamp(state.signal - 18, 0, 100);
+    if (state.host.mode === "chase") state.host.lostTimer = Math.max(state.host.lostTimer, hostTuning().lostSeconds * 0.45);
+    showAlert("Hidden. Stay still until he loses the shot.", "good");
+    playStinger("hide");
+  }
+
+  function exitHiding(forced) {
+    const spot = state.activeHideSpot;
+    state.hidden = false;
+    state.hideProgress = 0;
+    state.hideCooldown = forced ? 0.9 : 0.55;
+    state.player.y = floorYForLevel(state.player.level || 0) + EYE_HEIGHT;
+    state.player.pitch = Math.min(state.player.pitch, 0.05);
+    if (spot) {
+      state.player.x = spot.x + Math.sin(spot.yaw || 0) * 0.9;
+      state.player.z = spot.z - Math.cos(spot.yaw || 0) * 0.9;
+    }
+    showAlert(forced ? "He checked the hiding spot." : "Back in the open.", forced ? "bad" : "");
+    playStinger(forced ? "seen" : "unhide");
+  }
+
+  function updateHideSpotVisuals(activeSpot) {
+    world.hideSpots.forEach((spot) => {
+      if (!spot.group) return;
+      const sameLevel = (spot.level || 0) === (state.player.level || 0);
+      const active = spot === activeSpot || spot === state.activeHideSpot;
+      const nearby = active || (sameLevel && distance(state.player.x, state.player.z, spot.x, spot.z) < spot.radius + 1.2);
+      spot.group.visible = sameLevel && nearby && !state.gameOver;
+      const edge = spot.group.userData.edge;
+      if (edge && edge.material) {
+        edge.material.opacity = state.hidden && spot === state.activeHideSpot ? 0.55 : active ? 0.34 : 0.08;
+      }
+      spot.group.scale.setScalar(active ? 1.08 + Math.sin(world.clock * 5) * 0.03 : 1);
+    });
+  }
+
   function updateTasks(dt) {
+    if (state.hidden || state.hidePromptActive) {
+      state.activeTask = null;
+      state.finalPromptActive = false;
+      state.interactionProgress = 0;
+      updatePrompt();
+      return;
+    }
+
     if (state.stairPromptActive) {
       state.activeTask = null;
       state.interactionProgress = 0;
@@ -3435,6 +3650,12 @@
   }
 
   function updateStairTravel(dt) {
+    if (state.hidden) {
+      state.stairPromptActive = false;
+      state.stairProgress = 0;
+      state.stairDirection = null;
+      return;
+    }
     const endpoint = state.player.level === 0 ? STAIR_BOTTOM : STAIR_TOP;
     const d = distance(state.player.x, state.player.z, endpoint.x, endpoint.z);
     state.stairPromptActive = d < 2.65;
@@ -3681,7 +3902,7 @@
       const dz = state.player.z - hazard.z;
       const d = Math.hypot(dx, dz);
       const a = wrapAngle(angleTo(hazard.x, hazard.z, state.player.x, state.player.z) - hazard.yaw);
-      const visible = state.player.level === 0 && state.graceTimer <= 0 && d < hazard.range && Math.abs(a) < hazard.fov && !isLineBlocked(hazard.x, hazard.z, state.player.x, state.player.z, 0);
+      const visible = !state.hidden && state.player.level === 0 && state.graceTimer <= 0 && d < hazard.range && Math.abs(a) < hazard.fov && !isLineBlocked(hazard.x, hazard.z, state.player.x, state.player.z, 0);
       hazard.spotted = visible;
       if (visible) {
         anySpot = true;
@@ -3713,6 +3934,7 @@
     }
 
     const hostSees = canHostSeePlayer(dPlayer);
+    const hostHears = !hostSees && canHostHearPlayer(dPlayer);
     if (hostSees) {
       host.mode = "chase";
       host.alertTimer = Math.max(host.alertTimer, 6.5);
@@ -3725,18 +3947,26 @@
         playStinger("seen");
       }
       host.justSawPlayer = true;
+    } else if (hostHears) {
+      if (host.mode !== "chase") host.mode = "search";
+      host.alertTimer = Math.max(host.alertTimer, 4.8);
+      host.lastKnownX = state.player.x;
+      host.lastKnownZ = state.player.z;
+      host.lostTimer = Math.max(0, host.lostTimer - dt * 0.65);
+      if (host.heardTimer <= 0) {
+        host.heardTimer = 3.5;
+        showAlert("He heard movement.", "");
+        playStinger("heard");
+      }
+      host.justSawPlayer = false;
     } else {
       host.justSawPlayer = false;
       if (host.mode === "chase") {
         host.lostTimer += dt;
-        if (host.lostTimer > hostTuning().lostSeconds) {
-          if (state.finalUnlocked) {
-            host.lostTimer = 0;
-            host.lastKnownX = state.player.x;
-            host.lastKnownZ = state.player.z;
-          } else {
-            host.mode = "search";
-          }
+        const lostSeconds = state.hidden ? Math.min(1.65, hostTuning().lostSeconds) : hostTuning().lostSeconds;
+        if (host.lostTimer > lostSeconds) {
+          host.mode = "search";
+          host.alertTimer = Math.max(host.alertTimer, state.finalUnlocked ? 5.5 : 3.2);
         }
       }
       if (host.mode === "search") {
@@ -3775,9 +4005,15 @@
     }
 
     const catchRadius = host.mode === "chase" ? 0.92 : 0.68;
-    if (state.player.level === 0 && dPlayer < catchRadius && state.safeTimer <= 0) {
+    if (state.hidden && dPlayer < 0.8 && state.safeTimer <= 0 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0)) {
+      exitHiding(true);
+      host.mode = "chase";
+      host.alertTimer = Math.max(host.alertTimer, 5.5);
+      host.lastKnownX = state.player.x;
+      host.lastKnownZ = state.player.z;
+    } else if (!state.hidden && state.player.level === 0 && dPlayer < catchRadius && state.safeTimer <= 0) {
       endGame("YOU BECAME BONUS CONTENT", "Mr. Feast caught you before the final segment ended. The comments are calling it immersive.");
-    } else if (state.player.level === 0 && dPlayer < 1.18 && state.safeTimer > 0) {
+    } else if (!state.hidden && state.player.level === 0 && dPlayer < 1.18 && state.safeTimer > 0) {
       host.stunTimer = 3.2;
       state.viewers += 650;
       showAlert("Insurance clause triggered. The host had to smile through it.", "good");
@@ -3787,8 +4023,8 @@
   function chooseHostTarget() {
     const host = state.host;
     if (host.mode === "chase") {
-      if (state.player.level === 0 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0)) return { x: state.player.x, z: state.player.z };
-      return nearestNavPointTo(state.player.x, state.player.z);
+      if (!state.hidden && state.player.level === 0 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0)) return { x: state.player.x, z: state.player.z };
+      return { x: host.lastKnownX, z: host.lastKnownZ };
     }
     if (host.mode === "search") return { x: host.lastKnownX, z: host.lastKnownZ };
     return HOST_PATROL[host.patrolIndex] || HOST_PATROL[0];
@@ -3798,13 +4034,26 @@
     const host = state.host;
     const tuning = hostTuning();
     if (state.player.level !== 0) return false;
-    if (state.graceTimer > 0) return dPlayer < 2.6 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z);
-    if (dPlayer > (host.mode === "chase" ? tuning.chaseVision : tuning.patrolVision)) return false;
-    if (isLineBlocked(host.x, host.z, state.player.x, state.player.z)) return false;
+    if (state.hidden) return host.mode !== "patrol" && dPlayer < tuning.hideCheck && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0);
+    if (state.graceTimer > 0) return dPlayer < 2.6 && !isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0);
+    const vision = (host.mode === "chase" ? tuning.chaseVision : tuning.patrolVision) * (state.player.sprinting ? 1.12 : state.player.moving ? 1 : 0.82);
+    if (dPlayer > vision) return false;
+    if (isLineBlocked(host.x, host.z, state.player.x, state.player.z, 0)) return false;
     const toward = angleTo(host.x, host.z, state.player.x, state.player.z);
-    const fov = host.mode === "patrol" ? tuning.patrolFov : tuning.alertFov;
+    const fov = (host.mode === "patrol" ? tuning.patrolFov : tuning.alertFov) + (state.player.sprinting ? 0.08 : 0);
     if (Math.abs(wrapAngle(toward - host.yaw)) < fov) return true;
-    return dPlayer < tuning.sprintHear && state.player.sprinting;
+    return false;
+  }
+
+  function canHostHearPlayer(dPlayer) {
+    if (state.hidden || state.player.level !== 0 || state.safeTimer > 0) return false;
+    const tuning = hostTuning();
+    let radius = 0;
+    if (state.player.sprinting) radius = tuning.sprintHear;
+    else if (state.player.moving) radius = tuning.walkHear;
+    if (state.activeTask || state.detourPromptActive || state.finalPromptActive) radius = Math.max(radius, tuning.workHear);
+    if (state.signal > 72) radius = Math.max(radius, tuning.signalHear);
+    return radius > 0 && dPlayer < radius;
   }
 
   function hostTuning() {
@@ -3818,6 +4067,10 @@
         patrolFov: 0.68,
         alertFov: 0.98,
         sprintHear: 3.8,
+        walkHear: 1.45,
+        workHear: 3.2,
+        signalHear: 4.1,
+        hideCheck: 1.12,
         lostSeconds: 4.1,
       };
     }
@@ -3832,6 +4085,10 @@
         patrolFov: 0.62,
         alertFov: 0.9,
         sprintHear: 3.1,
+        walkHear: 1.25,
+        workHear: 2.85,
+        signalHear: 3.7,
+        hideCheck: 1.02,
         lostSeconds: 3.5,
       };
     }
@@ -3846,6 +4103,10 @@
         patrolFov: 0.58,
         alertFov: 0.84,
         sprintHear: 2.8,
+        walkHear: 1.05,
+        workHear: 2.55,
+        signalHear: 3.3,
+        hideCheck: 0.95,
         lostSeconds: 3.2,
       };
     }
@@ -3859,6 +4120,10 @@
       patrolFov: 0.43,
       alertFov: 0.62,
       sprintHear: 1.9,
+      walkHear: 0.8,
+      workHear: 2.1,
+      signalHear: 2.7,
+      hideCheck: 0.85,
       lostSeconds: 2.3,
     };
   }
@@ -3891,7 +4156,9 @@
 
   function updatePressure(dt) {
     const dHost = distance(state.player.x, state.player.z, state.host.x, state.host.z);
-    const threat = state.player.level === 0 ? clamp(1 - (dHost - 1.4) / 10, 0, 1) : 0;
+    const visibleThreat = state.player.level === 0 && !state.hidden ? clamp(1 - (dHost - 1.4) / 10, 0, 1) : 0;
+    const hiddenThreat = state.hidden ? clamp(1 - (dHost - 0.8) / 5, 0, 0.35) : 0;
+    const threat = Math.max(visibleThreat, hiddenThreat);
     const chaseDrain = state.host.mode === "chase" ? 9.5 : state.host.mode === "search" ? 4.4 : 1.6;
     const signalDrain = state.signal > 65 ? 1.8 : 0;
     const safeScale = state.safeTimer > 0 ? 0.18 : state.graceTimer > 0 ? 0.2 : 1;
@@ -3980,7 +4247,7 @@
     const THREE = window.THREE;
     const player = state.player;
     const shake = state.jumpscareTimer > 0 && !state.reducedMotion ? state.jumpscareTimer : 0;
-    const danger = player.level === 0 ? clamp(1 - distance(player.x, player.z, state.host.x, state.host.z) / 14, 0, 1) : 0;
+    const danger = player.level === 0 && !state.hidden ? clamp(1 - distance(player.x, player.z, state.host.x, state.host.z) / 14, 0, 1) : state.hidden ? 0.18 : 0;
     const bob = state.player.moving && !state.reducedMotion ? Math.sin(state.player.bob) * 0.045 : 0;
     const shakeX = shake ? Math.sin(world.clock * 58) * shake * 0.16 : 0;
     const shakeY = shake ? Math.cos(world.clock * 49) * shake * 0.1 : 0;
@@ -3993,7 +4260,7 @@
     const lookY = headY + Math.sin(player.pitch) * lookDistance;
     const lookZ = player.z - Math.cos(player.yaw) * horizontalLook;
     world.camera.lookAt(lookX, lookY, lookZ);
-    world.camera.fov = lerp(world.camera.fov, state.player.sprinting ? 73 : 68, Math.min(1, dt * 5));
+    world.camera.fov = lerp(world.camera.fov, state.hidden ? 62 : state.player.sprinting ? 73 : 68, Math.min(1, dt * 5));
     world.camera.updateProjectionMatrix();
 
     updateSceneAnimation(danger);
@@ -4125,7 +4392,15 @@
   function updatePrompt() {
     if (!el.prompt || !el.promptText) return;
     let text = "";
-    if (state.detourPromptActive) {
+    if (state.hidden) {
+      const pct = Math.round((state.hideProgress / LEAVE_HIDE_SECONDS) * 100);
+      text = state.input.interact ? `Leaving cover ${clamp(pct, 0, 100)}%` : "Hold F: leave hiding spot";
+    } else if (state.hidePromptActive && state.activeHideSpot) {
+      const pct = Math.round((state.hideProgress / HIDE_HOLD_SECONDS) * 100);
+      text = state.input.interact
+        ? `Hiding ${clamp(pct, 0, 100)}%`
+        : `Hold F: hide in ${state.activeHideSpot.label}`;
+    } else if (state.detourPromptActive) {
       const pct = Math.round((state.interactionProgress / DETOUR_PANEL.seconds) * 100);
       text = state.input.interact
         ? `Overriding lockdown ${clamp(pct, 0, 100)}%`
@@ -4144,7 +4419,9 @@
       text = state.input.interact ? `Opening exit ${clamp(pct, 0, 100)}%` : "Hold F: leave the mansion";
     }
     el.promptText.textContent = text;
-    el.prompt.classList.toggle("feast-prompt--show", Boolean(text));
+    const hasPrompt = Boolean(text);
+    el.prompt.classList.toggle("feast-prompt--show", hasPrompt);
+    if (canvas.parentElement) canvas.parentElement.classList.toggle("feast-has-prompt", hasPrompt);
   }
 
   function updateHUD() {
@@ -4152,6 +4429,8 @@
     canvas.dataset.playerZ = state.player.z.toFixed(2);
     canvas.dataset.playerLevel = String(state.player.level || 0);
     canvas.dataset.playerYaw = state.player.yaw.toFixed(3);
+    canvas.dataset.hidden = state.hidden ? "1" : "0";
+    canvas.dataset.hostMode = state.host.mode;
     if (el.hudTasks) el.hudTasks.textContent = `${state.tasksDone}/${TASK_TOTAL}`;
     if (el.hudViewers) el.hudViewers.textContent = formatScore(state.viewers);
     if (el.hudNerve) el.hudNerve.textContent = percent(state.nerve);
@@ -4163,6 +4442,7 @@
     setMeter(el.meterSignal, el.meterSignalText, state.signal, state.signal < 65 ? "#5fc8d6" : "#ff4d4d");
     updateRouteGuide();
     updateDangerHud();
+    updateStealthHud();
 
     if (el.objective) {
       if (state.detourActive && !state.detourComplete) {
@@ -4216,6 +4496,9 @@
     if (state.finalUnlocked) {
       label = `Final ${Math.ceil(state.finalEscapeTimer)}s`;
       kind = "final";
+    } else if (state.hidden) {
+      label = dHost < 3 ? "Hold still" : "Hidden";
+      kind = "hidden";
     } else if (state.player.level === 1) {
       label = "Second floor";
       kind = "search";
@@ -4237,6 +4520,34 @@
     }
     el.danger.textContent = label;
     el.danger.className = "feast-danger" + (kind ? ` feast-danger--${kind}` : "");
+  }
+
+  function updateStealthHud() {
+    if (!el.stealth) return;
+    const dHost = distance(state.player.x, state.player.z, state.host.x, state.host.z);
+    let label = "Visible";
+    let kind = "";
+    if (state.player.level === 1) {
+      label = "Upstairs";
+      kind = "hidden";
+    } else if (state.hidden) {
+      label = dHost < 3 ? "Hidden: close" : "Hidden";
+      kind = "hidden";
+    } else if (state.host.mode === "chase") {
+      label = "Spotted";
+      kind = "spotted";
+    } else if (state.host.mode === "search") {
+      label = "Search";
+      kind = "search";
+    } else if (state.signal > 65) {
+      label = "Exposed";
+      kind = "search";
+    } else if (state.player.sprinting) {
+      label = "Noisy";
+      kind = "search";
+    }
+    el.stealth.textContent = label;
+    el.stealth.className = "feast-stealth" + (kind ? ` feast-stealth--${kind}` : "");
   }
 
   function nearestTask() {
@@ -4343,6 +4654,31 @@
       humGain.connect(master);
       hum.start();
 
+      const low = ctx.createOscillator();
+      low.type = "sine";
+      low.frequency.value = 28;
+      const lowGain = ctx.createGain();
+      lowGain.gain.value = 0.06;
+      low.connect(lowGain);
+      lowGain.connect(master);
+      low.start();
+
+      const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.32;
+      const noise = ctx.createBufferSource();
+      noise.buffer = noiseBuffer;
+      noise.loop = true;
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = "lowpass";
+      noiseFilter.frequency.value = 380;
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.value = 0.012;
+      noise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(master);
+      noise.start();
+
       const tremolo = ctx.createOscillator();
       tremolo.type = "sine";
       tremolo.frequency.value = 0.8;
@@ -4352,10 +4688,92 @@
       tremoloGain.connect(humGain.gain);
       tremolo.start();
 
-      world.audio = { ctx, master };
+      world.audio = {
+        ctx,
+        master,
+        humGain,
+        lowGain,
+        noiseGain,
+        heartbeatTimer: 0,
+        footstepTimer: 0,
+      };
     } catch (error) {
       world.audio = null;
     }
+  }
+
+  function updateAudio(dt) {
+    if (!world.audio || state.reducedMotion) return;
+    const audio = world.audio;
+    const { ctx, master, humGain, lowGain, noiseGain } = audio;
+    if (ctx.state === "suspended" && state.running && !state.paused) {
+      ctx.resume().catch(() => {});
+    }
+
+    const dHost = state.player.level === 0 ? distance(state.player.x, state.player.z, state.host.x, state.host.z) : 24;
+    const proximity = clamp(1 - (dHost - 2) / 12, 0, 1);
+    const chase = state.host.mode === "chase" ? 1 : 0;
+    const search = state.host.mode === "search" ? 1 : 0;
+    const hidden = state.hidden ? 1 : 0;
+    const now = ctx.currentTime;
+    master.gain.setTargetAtTime(state.paused || state.gameOver ? 0.006 : 0.024 + chase * 0.025 + proximity * 0.014, now, 0.08);
+    humGain.gain.setTargetAtTime(0.09 + proximity * 0.13 + chase * 0.16 - hidden * 0.035, now, 0.12);
+    lowGain.gain.setTargetAtTime(0.045 + chase * 0.12 + hidden * 0.025, now, 0.14);
+    noiseGain.gain.setTargetAtTime(0.008 + search * 0.018 + chase * 0.026 + hidden * 0.012, now, 0.16);
+
+    audio.heartbeatTimer -= dt;
+    const heartbeatInterval = chase ? 0.38 : lerp(1.1, 0.54, Math.max(proximity, hidden * 0.42));
+    if (audio.heartbeatTimer <= 0) {
+      audio.heartbeatTimer = heartbeatInterval;
+      playHeartbeat(chase ? 1 : Math.max(proximity, hidden * 0.55));
+    }
+
+    audio.footstepTimer -= dt;
+    if (state.player.moving && !state.hidden && audio.footstepTimer <= 0) {
+      audio.footstepTimer = state.player.sprinting ? 0.24 : 0.42;
+      playFootstep(state.player.sprinting ? 0.08 : 0.035);
+    }
+  }
+
+  function duckAudio(quiet) {
+    if (!world.audio || state.reducedMotion) return;
+    const { ctx, master } = world.audio;
+    master.gain.setTargetAtTime(quiet ? 0.005 : 0.025, ctx.currentTime, 0.08);
+  }
+
+  function playHeartbeat(intensity) {
+    if (!world.audio || state.reducedMotion) return;
+    const { ctx, master } = world.audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(56, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.12);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.035 + intensity * 0.08, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+
+  function playFootstep(amount) {
+    if (!world.audio || state.reducedMotion) return;
+    const { ctx, master } = world.audio;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(74 + Math.random() * 34, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(amount, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(now);
+    osc.stop(now + 0.1);
   }
 
   function playStinger(kind) {
@@ -4363,19 +4781,34 @@
     const { ctx, master } = world.audio;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = kind === "task" ? "triangle" : "square";
+    osc.type = kind === "task" || kind === "hide" || kind === "unhide" ? "triangle" : "square";
     const now = ctx.currentTime;
-    const start = kind === "task" ? 220 : kind === "seen" ? 95 : 70;
-    const end = kind === "task" ? 440 : 38;
+    const start = kind === "task" ? 220 : kind === "seen" ? 95 : kind === "heard" ? 130 : kind === "hide" ? 180 : kind === "unhide" ? 120 : 70;
+    const end = kind === "task" ? 440 : kind === "hide" ? 82 : kind === "unhide" ? 220 : 38;
     osc.frequency.setValueAtTime(start, now);
-    osc.frequency.exponentialRampToValueAtTime(end, now + 0.22);
+    osc.frequency.exponentialRampToValueAtTime(end, now + (kind === "hide" ? 0.42 : 0.22));
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(kind === "task" ? 0.08 : 0.12, now + 0.018);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    gain.gain.exponentialRampToValueAtTime(kind === "task" ? 0.08 : kind === "hide" ? 0.06 : 0.12, now + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + (kind === "hide" ? 0.48 : 0.3));
     osc.connect(gain);
     gain.connect(master);
     osc.start(now);
-    osc.stop(now + 0.32);
+    osc.stop(now + (kind === "hide" ? 0.5 : 0.32));
+
+    if (kind === "seen" || kind === "bad") {
+      const scrape = ctx.createOscillator();
+      const scrapeGain = ctx.createGain();
+      scrape.type = "sawtooth";
+      scrape.frequency.setValueAtTime(310, now + 0.025);
+      scrape.frequency.exponentialRampToValueAtTime(54, now + 0.36);
+      scrapeGain.gain.setValueAtTime(0.0001, now + 0.025);
+      scrapeGain.gain.exponentialRampToValueAtTime(0.055, now + 0.05);
+      scrapeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      scrape.connect(scrapeGain);
+      scrapeGain.connect(master);
+      scrape.start(now + 0.025);
+      scrape.stop(now + 0.44);
+    }
   }
 
   function renderPowerups(rbState) {
@@ -4424,6 +4857,7 @@
     state.viewers = finalScore;
     const high = api.recordScore(GAME_ID, finalScore);
     playStinger("task");
+    duckAudio(true);
     updateHUD();
     showOverlay(
       high ? "NEW FINAL CUT RECORD" : "YOU ESCAPED DEADLINE MANSION",
@@ -4444,6 +4878,7 @@
     const high = api.recordScore(GAME_ID, finalScore);
     triggerJumpscare(0.9);
     playStinger("bad");
+    duckAudio(true);
     updateHUD();
     showOverlay(
       title,

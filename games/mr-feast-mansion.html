@@ -201,12 +201,57 @@
       color: #f0c336;
     }
 
+    .feast-danger--hidden {
+      border-color: rgba(107, 255, 125, 0.52);
+      color: #d8ffe0;
+      box-shadow: 0 0 18px rgba(107, 255, 125, 0.12);
+    }
+
     .feast-danger--chase,
     .feast-danger--final,
     .feast-danger--camera {
       border-color: rgba(255, 77, 77, 0.68);
       color: #ffd9d9;
       box-shadow: 0 0 18px rgba(255, 77, 77, 0.14);
+    }
+
+    .feast-stealth {
+      position: absolute;
+      top: 90px;
+      left: 12px;
+      z-index: 5;
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      background: rgba(6, 5, 4, 0.68);
+      color: rgba(255, 255, 255, 0.74);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      padding: 6px 10px;
+      pointer-events: none;
+      text-transform: uppercase;
+    }
+
+    .feast-stealth--hidden {
+      border-color: rgba(107, 255, 125, 0.52);
+      color: #d8ffe0;
+      box-shadow: 0 0 18px rgba(107, 255, 125, 0.12);
+    }
+
+    .feast-stealth--search {
+      border-color: rgba(240, 195, 54, 0.52);
+      color: #f0c336;
+    }
+
+    .feast-stealth--spotted {
+      border-color: rgba(255, 77, 77, 0.72);
+      color: #ffd9d9;
+      box-shadow: 0 0 18px rgba(255, 77, 77, 0.16);
     }
 
     .feast-prompt,
@@ -495,9 +540,17 @@
         font-size: 10px;
       }
 
+      .feast-stealth {
+        top: 72px;
+        left: 8px;
+        min-height: 27px;
+        padding: 5px 8px;
+        font-size: 9px;
+      }
+
       .feast-alert {
-        top: auto;
-        bottom: 8px;
+        top: 92px;
+        bottom: auto;
       }
 
       .feast-route {
@@ -564,9 +617,25 @@
         bottom: 50px;
       }
 
-      .feast-alert,
       .feast-prompt {
         bottom: 86px;
+      }
+
+      .feast-alert {
+        top: 62px;
+        right: 8px;
+        left: auto;
+        width: min(270px, calc(100% - 104px));
+        transform: none;
+        text-align: right;
+      }
+
+      .feast-alert--show {
+        transform: none;
+      }
+
+      .canvas-wrap.feast-has-prompt .feast-alert {
+        opacity: 0;
       }
     }
   </style>
@@ -620,6 +689,7 @@
             <span class="feast-route__text" id="route-text">Next target</span>
           </div>
           <div class="feast-danger" id="feast-danger" aria-hidden="true">Signal quiet</div>
+          <div class="feast-stealth" id="feast-stealth" aria-hidden="true">Visible</div>
           <div class="feast-alert" id="feast-alert"><div class="feast-alert__inner" id="feast-alert-text">LIVE FEED INTERRUPTED</div></div>
           <div class="feast-prompt" id="feast-prompt"><div class="feast-prompt__inner" id="feast-prompt-text">Hold E</div></div>
           <div class="feast-vignette" id="feast-vignette"></div>
@@ -636,7 +706,7 @@
             <p class="overlay__sub" id="overlay-sub">
               Ten contestants entered the Deadline Mansion. The contracts are missing pages, the cameras keep smiling, and the host has started calling the exits "optional."
               <br><br>
-              Sabotage six show systems, keep your nerve, and leave before the final segment goes live.
+              Sabotage six show systems, hide when Mr. Feast is searching, and break line of sight if he starts chasing.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Enter the mansion</button>
@@ -653,7 +723,7 @@
           </div>
           <p class="feast-side-note">
             <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click game to lock mouse<br>
-            <kbd>Esc</kbd> release mouse · <kbd>Shift</kbd> sprint · hold <kbd>F</kbd>
+            <kbd>Esc</kbd> release mouse · <kbd>Shift</kbd> sprint · hold <kbd>F</kbd> use/hide
           </p>
           <div class="feast-settings" aria-label="Look settings">
             <label class="feast-setting" for="look-sensitivity">
@@ -721,7 +791,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260613-2"></script>
-  <script src="../assets/js/mr-feast.js?v=20260615-2"></script>
+  <script src="../assets/js/mr-feast.js?v=20260615-3"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

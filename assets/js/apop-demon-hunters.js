@@ -4,7 +4,7 @@
    2D side-scrolling platformer-shooter parody.
    K-pop had demon HUNTERS. America has demon MOGGERS.
    Run, jump, and blast demons back to the group chat
-   with your Mog Beam. Survive 3 stages, then disband
+   with your Mog Beam. Survive 5 stages, then disband
    the demon boy band "Boyz II Hell" and their frontman
    Lucifer Lipsync. Stay on beat for bonus damage.
 
@@ -27,6 +27,7 @@
   const JUMP_V = 760;             // initial jump velocity
   const BEAM_SPEED = 640;
   const MAX_JUMPS = 2;
+  const HAZARD_IFRAME = 0.75;
 
   // ----- Brand palette -----
   const PINK = "#ec1a5e";
@@ -53,6 +54,7 @@
     beams: [],          // player projectiles
     hostiles: [],       // enemy/boss projectiles
     particles: [],
+    ambientTimer: 0,
     boss: null,
     bossIntro: 0,       // boss entrance timer
     camX: 0,
@@ -100,11 +102,14 @@
 
   // ----- Enemy archetypes (American-pop demon parody) -----
   const ENEMY_TYPES = {
-    imp:    { name: "Auto-Tune Imp",     hp: 18, dmg: 8,  speed: 95,  color: "#a855f7", icon: "🎤", w: 28, h: 40, behavior: "walk",  score: 100 },
-    lackey: { name: "Lip-Sync Lackey",   hp: 14, dmg: 7,  speed: 165, color: "#fb923c", icon: "👄", w: 26, h: 38, behavior: "walk",  score: 120 },
-    plant:  { name: "Industry Plant",    hp: 26, dmg: 10, speed: 0,   color: "#22c55e", icon: "🪴", w: 32, h: 44, behavior: "shoot", score: 160 },
-    pig:    { name: "Pay-Pig Gremlin",   hp: 46, dmg: 12, speed: 70,  color: "#f472b6", icon: "🐷", w: 38, h: 46, behavior: "walk",  score: 200 },
-    bat:    { name: "Stan-Account Bat",  hp: 16, dmg: 8,  speed: 130, color: "#2ee0ff", icon: "📱", w: 30, h: 26, behavior: "fly",   score: 150 },
+    imp:     { name: "Auto-Tune Imp",       hp: 18, dmg: 8,  speed: 95,  color: "#a855f7", icon: "🎤", w: 28, h: 40, behavior: "walk",       score: 100 },
+    lackey:  { name: "Lip-Sync Lackey",     hp: 14, dmg: 7,  speed: 165, color: "#fb923c", icon: "👄", w: 26, h: 38, behavior: "walk",       score: 120 },
+    plant:   { name: "Industry Plant",      hp: 26, dmg: 10, speed: 0,   color: "#22c55e", icon: "🪴", w: 32, h: 44, behavior: "shoot",      score: 160 },
+    pig:     { name: "Pay-Pig Demon",       hp: 46, dmg: 12, speed: 70,  color: "#f472b6", icon: "💸", w: 38, h: 46, behavior: "walk",       score: 200 },
+    bat:     { name: "Stan-Account Bat",    hp: 16, dmg: 8,  speed: 130, color: "#2ee0ff", icon: "📱", w: 30, h: 26, behavior: "fly",        score: 150 },
+    dancer:  { name: "Backup Dancer Demon", hp: 28, dmg: 11, speed: 190, color: "#facc15", icon: "🕺", w: 30, h: 42, behavior: "hopper",     score: 190 },
+    bouncer: { name: "VIP Bouncer Demon",   hp: 42, dmg: 14, speed: 105, color: "#ef4444", icon: "🛑", w: 42, h: 52, behavior: "dash",       score: 250 },
+    drone:   { name: "Paparazzi Drone",     hp: 22, dmg: 9,  speed: 115, color: "#38bdf8", icon: "📸", w: 34, h: 28, behavior: "hoverShoot", score: 210 },
   };
 
   // ----- Boss: Lucifer Lipsync, frontman of "Boyz II Hell" -----
@@ -118,13 +123,14 @@
   ];
 
   // ----- Stage definitions -----
-  // Each: name, sub, worldWidth, palette, platforms[], spawns[{x, type}], boss flag.
+  // Each: name, sub, worldWidth, palette, platforms[], hazards[], spawns[{x, type}], boss flag.
   function buildStages() {
     return [
       {
         name: "THE MALL FOOD COURT",
         sub: "A demon flash mob broke out by the Cinnabon.",
-        worldWidth: 3200,
+        scene: "mall",
+        worldWidth: 3300,
         sky: ["#1a0a2e", "#2a0a3e"],
         accent: PINK,
         platforms: [
@@ -134,18 +140,25 @@
           { x: 1900, y: GROUND_Y - 175, w: 130, h: 16 },
           { x: 2350, y: GROUND_Y - 120, w: 160, h: 16 },
         ],
+        hazards: [
+          { type: "speaker", x: 1180, range: 145, period: 2.8, phase: 0.3, dmg: 8 },
+          { type: "laser", x: 1740, y: GROUND_Y - 168, w: 12, h: 168, period: 2.6, duty: 0.46, phase: 0.1, dmg: 9 },
+          { type: "speaker", x: 2760, range: 170, period: 2.4, phase: 1.2, dmg: 9 },
+        ],
         spawns: [
           { x: 620, type: "imp" }, { x: 760, type: "imp" },
           { x: 1050, type: "lackey" }, { x: 1300, type: "plant" },
           { x: 1600, type: "imp" }, { x: 1640, type: "lackey" },
           { x: 1980, type: "bat" }, { x: 2200, type: "pig" },
           { x: 2500, type: "imp" }, { x: 2560, type: "lackey" }, { x: 2620, type: "imp" },
+          { x: 2920, type: "dancer" },
         ],
       },
       {
         name: "THE AWARDS-SHOW RED CARPET",
         sub: "They rigged the fan vote. Take it back.",
-        worldWidth: 3600,
+        scene: "redcarpet",
+        worldWidth: 3800,
         sky: ["#0a1430", "#241038"],
         accent: CYAN,
         platforms: [
@@ -157,24 +170,104 @@
           { x: 2300, y: GROUND_Y - 190, w: 130, h: 16 },
           { x: 2750, y: GROUND_Y - 130, w: 160, h: 16 },
         ],
+        hazards: [
+          { type: "spotlight", x: 620, range: 380, y: 68, w: 76, h: GROUND_Y - 68, period: 3.0, duty: 0.58, phase: 0.2, dmg: 8 },
+          { type: "laser", x: 1710, y: GROUND_Y - 210, w: 14, h: 210, period: 2.2, duty: 0.42, phase: 0.8, dmg: 10 },
+          { type: "speaker", x: 3180, range: 190, period: 2.2, phase: 0.7, dmg: 10 },
+        ],
         spawns: [
           { x: 560, type: "lackey" }, { x: 700, type: "plant" },
           { x: 980, type: "bat" }, { x: 1020, type: "bat" },
           { x: 1250, type: "pig" }, { x: 1450, type: "imp" }, { x: 1500, type: "lackey" },
           { x: 1800, type: "plant" }, { x: 1950, type: "bat" },
           { x: 2150, type: "pig" }, { x: 2380, type: "lackey" }, { x: 2440, type: "imp" },
-          { x: 2700, type: "bat" }, { x: 2900, type: "pig" }, { x: 2960, type: "imp" }, { x: 3020, type: "lackey" },
+          { x: 2700, type: "drone" }, { x: 2900, type: "pig" }, { x: 2960, type: "imp" }, { x: 3020, type: "lackey" },
+          { x: 3300, type: "bouncer" },
         ],
       },
       {
-        name: "BOYZ II HELL — THE REUNION TOUR",
+        name: "THE STREAMING FARM BASEMENT",
+        sub: "Fake fans, real projectiles.",
+        scene: "basement",
+        worldWidth: 4050,
+        sky: ["#041f1d", "#181032"],
+        accent: GREEN,
+        platforms: [
+          { x: 420, y: GROUND_Y - 115, w: 130, h: 16 },
+          { x: 760, y: GROUND_Y - 180, w: 160, h: 16 },
+          { x: 1160, y: GROUND_Y - 120, w: 150, h: 16 },
+          { x: 1480, y: GROUND_Y - 215, w: 130, h: 16 },
+          { x: 1960, y: GROUND_Y - 150, w: 170, h: 16 },
+          { x: 2380, y: GROUND_Y - 210, w: 145, h: 16 },
+          { x: 2860, y: GROUND_Y - 132, w: 155, h: 16 },
+          { x: 3320, y: GROUND_Y - 190, w: 150, h: 16 },
+        ],
+        hazards: [
+          { type: "laser", x: 980, y: GROUND_Y - 160, w: 12, h: 160, period: 2.1, duty: 0.38, phase: 0.2, dmg: 11 },
+          { type: "laser", x: 1660, y: GROUND_Y - 230, w: 14, h: 230, period: 2.7, duty: 0.48, phase: 1.0, dmg: 12 },
+          { type: "speaker", x: 2240, range: 175, period: 2.0, phase: 0.6, dmg: 10 },
+          { type: "spotlight", x: 3060, range: 460, y: 58, w: 84, h: GROUND_Y - 58, period: 2.6, duty: 0.5, phase: 1.4, dmg: 9 },
+        ],
+        spawns: [
+          { x: 520, type: "dancer" }, { x: 710, type: "drone" },
+          { x: 1030, type: "plant" }, { x: 1240, type: "lackey" }, { x: 1320, type: "imp" },
+          { x: 1620, type: "bouncer" }, { x: 1870, type: "bat" }, { x: 2040, type: "plant" },
+          { x: 2350, type: "dancer" }, { x: 2520, type: "drone" },
+          { x: 2860, type: "pig" }, { x: 3030, type: "lackey" }, { x: 3090, type: "imp" },
+          { x: 3420, type: "bouncer" }, { x: 3540, type: "drone" },
+        ],
+      },
+      {
+        name: "INFLUENCER ROOFTOP AFTERPARTY",
+        sub: "Dodge lasers, drones, and bad contracts.",
+        scene: "rooftop",
+        worldWidth: 4350,
+        sky: ["#06111f", "#2d0636"],
+        accent: HOT,
+        platforms: [
+          { x: 500, y: GROUND_Y - 150, w: 140, h: 16 },
+          { x: 820, y: GROUND_Y - 220, w: 125, h: 16 },
+          { x: 1190, y: GROUND_Y - 155, w: 170, h: 16 },
+          { x: 1620, y: GROUND_Y - 210, w: 130, h: 16 },
+          { x: 2070, y: GROUND_Y - 132, w: 170, h: 16 },
+          { x: 2490, y: GROUND_Y - 220, w: 130, h: 16 },
+          { x: 2920, y: GROUND_Y - 150, w: 165, h: 16 },
+          { x: 3380, y: GROUND_Y - 210, w: 135, h: 16 },
+          { x: 3740, y: GROUND_Y - 145, w: 150, h: 16 },
+        ],
+        hazards: [
+          { type: "spotlight", x: 760, range: 520, y: 50, w: 92, h: GROUND_Y - 50, period: 2.35, duty: 0.54, phase: 0.1, dmg: 11 },
+          { type: "laser", x: 1460, y: GROUND_Y - 240, w: 16, h: 240, period: 1.9, duty: 0.4, phase: 0.4, dmg: 13 },
+          { type: "speaker", x: 2260, range: 210, period: 1.9, phase: 0.8, dmg: 12 },
+          { type: "laser", x: 3180, y: GROUND_Y - 190, w: 16, h: 190, period: 1.75, duty: 0.36, phase: 1.3, dmg: 13 },
+          { type: "speaker", x: 3840, range: 230, period: 1.75, phase: 0.2, dmg: 12 },
+        ],
+        spawns: [
+          { x: 600, type: "drone" }, { x: 760, type: "dancer" },
+          { x: 1060, type: "bouncer" }, { x: 1260, type: "plant" }, { x: 1360, type: "bat" },
+          { x: 1710, type: "pig" }, { x: 1900, type: "drone" }, { x: 2060, type: "dancer" },
+          { x: 2360, type: "bouncer" }, { x: 2570, type: "plant" },
+          { x: 2880, type: "drone" }, { x: 3060, type: "lackey" }, { x: 3120, type: "imp" },
+          { x: 3400, type: "bouncer" }, { x: 3580, type: "dancer" },
+          { x: 3860, type: "pig" }, { x: 3980, type: "drone" },
+        ],
+      },
+      {
+        name: "BOYZ II HELL — FINAL LIVESTREAM",
         sub: "Final boss: Lucifer Lipsync.",
-        worldWidth: 1500,            // small arena, then boss
+        scene: "finale",
+        worldWidth: 1900,            // compact arena, then boss
         sky: ["#2a0608", "#120216"],
         accent: GOLD,
         platforms: [
           { x: 250, y: GROUND_Y - 150, w: 150, h: 16 },
-          { x: 1050, y: GROUND_Y - 150, w: 150, h: 16 },
+          { x: 740, y: GROUND_Y - 210, w: 160, h: 16 },
+          { x: 1280, y: GROUND_Y - 150, w: 150, h: 16 },
+        ],
+        hazards: [
+          { type: "spotlight", x: 360, range: 1080, y: 42, w: 92, h: GROUND_Y - 42, period: 2.2, duty: 0.5, phase: 0.5, dmg: 12 },
+          { type: "speaker", x: 930, range: 250, period: 1.8, phase: 0.9, dmg: 12 },
+          { type: "laser", x: 1510, y: GROUND_Y - 210, w: 16, h: 210, period: 1.7, duty: 0.35, phase: 0.1, dmg: 14 },
         ],
         spawns: [],
         boss: true,
@@ -183,6 +276,7 @@
   }
 
   let STAGES = buildStages();
+  function stageCount() { return STAGES.length; }
 
   // ----- Helpers -----
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -193,6 +287,7 @@
   function aabb(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
+  function isAirEnemyType(behavior) { return behavior === "fly" || behavior === "hoverShoot"; }
 
   // ----- Beat (light pop-rhythm bonus) -----
   const BEAT_MS = () => 60000 / state.bpm;
@@ -230,6 +325,70 @@
     });
   }
 
+  function spawnAmbientFx(dt) {
+    if (!state.stageDef) return;
+    state.ambientTimer -= dt;
+    if (state.ambientTimer > 0) return;
+    state.ambientTimer = rand(0.035, 0.085);
+    const cols = [state.stageDef.accent, PINK, CYAN, GOLD, GREEN, HOT];
+    state.particles.push({
+      x: state.camX + rand(-20, W + 40),
+      y: rand(28, GROUND_Y - 28),
+      vx: rand(-38, 18),
+      vy: rand(-18, 26),
+      life: rand(0.45, 1.0),
+      maxLife: 1.0,
+      color: choose(cols),
+      size: rand(1.5, 4.5),
+      grav: false,
+    });
+  }
+
+  // ----- Stage hazards -----
+  function hazardClock(h) {
+    const period = h.period || 2.4;
+    return ((state.lastTime / 1000 + (h.phase || 0)) % period) / period;
+  }
+
+  function hazardActive(h) {
+    const duty = h.duty == null ? (h.type === "speaker" ? 0.24 : 0.5) : h.duty;
+    return hazardClock(h) < duty;
+  }
+
+  function spotlightX(h) {
+    const sway = Math.sin(state.lastTime / 650 + (h.phase || 0) * 6.28);
+    return h.x + sway * ((h.range || 360) / 2);
+  }
+
+  function hazardHitbox(h) {
+    if (h.type === "laser") return { x: h.x, y: h.y, w: h.w, h: h.h };
+    if (h.type === "speaker") {
+      const r = h.range || 160;
+      return { x: h.x - r, y: GROUND_Y - 34, w: r * 2, h: 48 };
+    }
+    if (h.type === "spotlight") {
+      const w = h.w || 82;
+      return { x: spotlightX(h) - w / 2, y: h.y || 50, w, h: h.h || GROUND_Y - (h.y || 50) };
+    }
+    return null;
+  }
+
+  function updateHazards(dt) {
+    const hazards = state.stageDef && state.stageDef.hazards ? state.stageDef.hazards : [];
+    const box = pbox();
+    for (const h of hazards) {
+      h._hitCd = Math.max(0, (h._hitCd || 0) - dt);
+      if (!hazardActive(h) || h._hitCd > 0) continue;
+      const hb = hazardHitbox(h);
+      if (!hb || !aabb(box, hb)) continue;
+      h._hitCd = HAZARD_IFRAME;
+      const push = h.type === "speaker"
+        ? (player.x + player.w / 2 < h.x ? -180 : 180)
+        : (player.x + player.w / 2 < hb.x + hb.w / 2 ? -120 : 120);
+      hurtPlayer(h.dmg || 10, push);
+    }
+  }
+
   // ----- Spawning enemies (lazy, as camera reveals them) -----
   function spawnEnemy(type, x) {
     const t = ENEMY_TYPES[type];
@@ -238,7 +397,7 @@
       type,
       name: t.name, icon: t.icon, color: t.color, behavior: t.behavior,
       w: t.w, h: t.h,
-      x, y: t.behavior === "fly" ? GROUND_Y - 170 : GROUND_Y - t.h,
+      x, y: isAirEnemyType(t.behavior) ? GROUND_Y - 170 : GROUND_Y - t.h,
       vx: 0, vy: 0,
       hp: Math.round(t.hp * scale), maxHp: Math.round(t.hp * scale),
       dmg: Math.round(t.dmg * (1 + (state.stage - 1) * 0.15)),
@@ -246,6 +405,8 @@
       score: t.score,
       hitFlash: 0, contactCd: 0, shootCd: rand(0.6, 1.6), wobble: rand(0, 6.28),
       bob: rand(0, 6.28),
+      dashCd: rand(0.7, 1.5), dashT: 0, dashDir: 0,
+      hopCd: rand(0.3, 1.2),
     };
     state.enemies.push(e);
   }
@@ -267,7 +428,7 @@
       title: "Frontman of Boyz II Hell",
       x: state.stageDef.worldWidth - 150, y: GROUND_Y - 120,
       w: 90, h: 120,
-      hp: 520, maxHp: 520,
+      hp: 680, maxHp: 680,
       phase: 0,
       vx: 0, vy: 0,
       onGround: true, jumps: 0,
@@ -308,7 +469,7 @@
     player.vx = 0; player.vy = 0;
     player.onGround = true; player.jumps = 0;
     for (const s of state.stageDef.spawns) s._done = false;
-    showBanner("STAGE " + n + " / 3", state.stageDef.name);
+    showBanner("STAGE " + n + " / " + stageCount(), state.stageDef.name);
     if (state.stageDef.boss) {
       // brief arena, then boss appears
       spawnBoss();
@@ -480,12 +641,14 @@
     }
     if (state.transition > 0) state.transition = Math.max(0, state.transition - dt * 1.4);
 
+    spawnAmbientFx(dt);
     updatePlayer(dt);
     activateSpawns();
     updateEnemies(dt);
     updateBoss(dt);
     updateBeams(dt);
     updateHostiles(dt);
+    updateHazards(dt);
     updateParticles(dt);
     updateCamera();
     checkStageClear();
@@ -566,11 +729,57 @@
         e.x += dir * e.speed * dt;
         e.y += e.vy * dt;
         if (e.y + e.h >= GROUND_Y) { e.y = GROUND_Y - e.h; e.vy = 0; }
+      } else if (e.behavior === "hopper") {
+        e.vy += GRAVITY * dt;
+        e.hopCd -= dt;
+        if (e.y + e.h >= GROUND_Y) {
+          e.y = GROUND_Y - e.h;
+          e.vy = 0;
+          if (e.hopCd <= 0) {
+            e.hopCd = rand(0.8, 1.45);
+            e.vy = -rand(520, 660);
+            e.vx = dir * rand(e.speed * 0.75, e.speed * 1.15);
+            spawnBurst(e.x + e.w / 2, GROUND_Y, e.color, 5, 110);
+          } else {
+            e.vx = lerp(e.vx, dir * e.speed * 0.35, 0.05);
+          }
+        }
+        e.x += e.vx * dt;
+        e.y += e.vy * dt;
+      } else if (e.behavior === "dash") {
+        e.vy += GRAVITY * dt;
+        e.dashCd -= dt;
+        if (e.dashT > 0) {
+          e.dashT -= dt;
+          e.x += e.dashDir * 430 * dt;
+        } else if (e.dashCd <= 0 && Math.abs(pcx - (e.x + e.w / 2)) < 420) {
+          e.dashCd = rand(1.3, 2.1);
+          e.dashT = 0.38;
+          e.dashDir = dir;
+          spawnText(e.x + e.w / 2, e.y - 16, "CHARGE", "#ef4444", 12);
+        } else {
+          e.x += dir * e.speed * 0.55 * dt;
+        }
+        e.y += e.vy * dt;
+        if (e.y + e.h >= GROUND_Y) { e.y = GROUND_Y - e.h; e.vy = 0; }
       } else if (e.behavior === "fly") {
         e.bob += dt * 3;
         const targetY = player.y - 30 + Math.sin(e.bob) * 30;
         e.y = lerp(e.y, clamp(targetY, 40, GROUND_Y - e.h), 0.04);
         e.x += dir * e.speed * dt;
+      } else if (e.behavior === "hoverShoot") {
+        e.bob += dt * 3.6;
+        const targetY = clamp(player.y - 70 + Math.sin(e.bob) * 48, 48, GROUND_Y - e.h - 20);
+        e.y = lerp(e.y, targetY, 0.045);
+        const dist = pcx - (e.x + e.w / 2);
+        const ideal = 250;
+        if (Math.abs(dist) > ideal) e.x += Math.sign(dist) * e.speed * dt;
+        else e.x -= Math.sign(dist || 1) * e.speed * 0.35 * dt;
+        e.shootCd -= dt;
+        if (e.shootCd <= 0 && Math.abs(dist) < 560) {
+          e.shootCd = rand(1.1, 1.8);
+          fireHostile(e.x + e.w / 2, e.y + e.h / 2, "camera");
+        }
       } else if (e.behavior === "shoot") {
         // stationary; fire toward player if on screen
         const onScreen = e.x > state.camX - 40 && e.x < state.camX + W + 40;
@@ -580,6 +789,7 @@
           fireHostile(e.x + e.w / 2, e.y + 8, "seed");
         }
       }
+      e.x = clamp(e.x, 0, state.stageDef.worldWidth - e.w);
 
       // Contact damage
       if (e.contactCd <= 0 && aabb(pbox(), e)) {
@@ -595,11 +805,11 @@
     const pcy = player.y + player.h / 2;
     const dx = pcx - x, dy = pcy - y;
     const d = Math.hypot(dx, dy) || 1;
-    const spd = kind === "disc" ? 360 : 300;
+    const spd = kind === "disc" ? 360 : kind === "camera" ? 430 : 300;
     state.hostiles.push({
       x: x - 8, y: y - 8, w: 16, h: 16,
       vx: dx / d * spd, vy: dy / d * spd,
-      life: 3, dmg: kind === "disc" ? 12 : 10, kind, spin: 0,
+      life: 3, dmg: kind === "disc" ? 12 : kind === "camera" ? 11 : 10, kind, spin: 0,
     });
   }
 
@@ -681,8 +891,8 @@
     } else if (b.action === "summon") {
       b.actionT -= dt;
       if (b.actionT <= 0) {
-        spawnEnemy("bat", b.x - 30);
-        spawnEnemy(b.phase >= 2 ? "pig" : "lackey", b.x + 30);
+        spawnEnemy(b.phase >= 1 ? "drone" : "bat", b.x - 30);
+        spawnEnemy(b.phase >= 2 ? "bouncer" : "dancer", b.x + 30);
         bossSay("BACKUP DANCERS!", 1.4);
         endBossAction(1.6);
       }
@@ -804,6 +1014,7 @@
     ctx.translate(-cam, 0);
 
     drawPlatforms(def);
+    drawHazards(def);
     // entities
     for (const e of state.enemies) drawEnemy(e);
     if (state.boss && !state.boss.defeated) drawBoss(state.boss);
@@ -858,6 +1069,8 @@
       ctx.fill();
     }
 
+    drawSceneBackdrops(def, t);
+
     // far skyline (parallax 0.3)
     const off1 = (state.bgScroll * 0.3) % 160;
     ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -880,6 +1093,91 @@
         }
       }
     }
+
+    drawNeonGrid(def, t);
+  }
+
+  function drawSceneBackdrops(def, t) {
+    const accent = def.accent || HOT;
+    const par = (state.bgScroll * 0.18) % 360;
+
+    // huge LED halo
+    ctx.save();
+    ctx.translate(W * 0.5 - par * 0.12, GROUND_Y - 180);
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = 0.16 + Math.sin(t * 1.4) * 0.04;
+    ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.arc(0, 0, 110 + Math.sin(t * 2) * 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.24;
+    ctx.beginPath(); ctx.arc(0, 0, 145, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    // stage-specific signs and props
+    const signY = GROUND_Y - 260;
+    const signX = ((170 - par) % 520 + 520) % 520 - 150;
+    const label = {
+      mall: "FOOD COURT LIVE",
+      redcarpet: "VOTE RIGGED",
+      basement: "STREAM FARM",
+      rooftop: "AFTERPARTY",
+      finale: "BOYZ II HELL"
+    }[def.scene] || "APOP LIVE";
+    ctx.save();
+    ctx.translate(signX, signY);
+    ctx.fillStyle = "rgba(3,7,18,0.7)";
+    roundRectXY(0, 0, 210, 58, 12); ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px Bungee, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 105, 30);
+    ctx.restore();
+
+    // reactive equalizer skyline behind the playfield
+    for (let i = 0; i < 24; i++) {
+      const x = i * 38 - (state.bgScroll * 0.08) % 38;
+      const h = 36 + Math.abs(Math.sin(t * 2.2 + i * 0.7)) * 90;
+      ctx.fillStyle = i % 3 === 0 ? "rgba(236,26,94,0.16)" : i % 3 === 1 ? "rgba(46,224,255,0.14)" : "rgba(247,215,22,0.13)";
+      ctx.fillRect(x, GROUND_Y - h - 8, 18, h);
+    }
+
+    if (def.scene === "rooftop" || def.scene === "finale") {
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      for (let i = 0; i < 18; i++) {
+        const x = (i * 90 - (state.bgScroll * 0.42) % 90);
+        const y = 70 + ((i * 47) % 90);
+        ctx.beginPath();
+        ctx.arc(x, y, 1.2 + Math.sin(t * 3 + i) * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawNeonGrid(def, t) {
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = def.accent || HOT;
+    ctx.lineWidth = 1;
+    const horizon = GROUND_Y - 12;
+    for (let i = 0; i < 10; i++) {
+      const y = horizon + i * i * 2.4;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    for (let i = -7; i <= 7; i++) {
+      const x = W / 2 + i * 70 + Math.sin(t + i) * 5;
+      ctx.beginPath();
+      ctx.moveTo(W / 2, horizon);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawPlatforms(def) {
@@ -914,6 +1212,76 @@
       ctx.fillRect(p.x, p.y, p.w, 3);
       ctx.fillStyle = "rgba(0,0,0,0.4)";
       ctx.fillRect(p.x, p.y + p.h, p.w, 5);
+    }
+  }
+
+  function drawHazards(def) {
+    const hazards = def.hazards || [];
+    for (const h of hazards) {
+      const active = hazardActive(h);
+      const hb = hazardHitbox(h);
+      if (!hb) continue;
+      if (h.type === "laser") {
+        ctx.save();
+        ctx.globalAlpha = active ? 1 : 0.32;
+        ctx.shadowColor = active ? HOT : def.accent;
+        ctx.shadowBlur = active ? 18 : 5;
+        ctx.fillStyle = active ? "rgba(255,46,136,0.78)" : "rgba(255,255,255,0.16)";
+        roundRectXY(hb.x, hb.y, hb.w, hb.h, 6); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = active ? "#fff" : "rgba(255,255,255,0.35)";
+        ctx.fillRect(hb.x + hb.w / 2 - 1, hb.y, 2, hb.h);
+        ctx.fillStyle = "rgba(10,10,20,0.86)";
+        roundRectXY(hb.x - 9, hb.y - 16, hb.w + 18, 16, 5); ctx.fill();
+        ctx.fillStyle = active ? GOLD : "rgba(255,255,255,0.45)";
+        ctx.font = "bold 8px JetBrains Mono, monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("LASER", hb.x + hb.w / 2, hb.y - 8);
+        ctx.restore();
+      } else if (h.type === "speaker") {
+        const pulse = hazardClock(h) / Math.max(0.01, h.duty || 0.24);
+        ctx.save();
+        ctx.fillStyle = "#0a0a14";
+        roundRectXY(h.x - 28, GROUND_Y - 50, 56, 50, 10); ctx.fill();
+        ctx.strokeStyle = active ? GOLD : "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(h.x, GROUND_Y - 30, 13, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(h.x, GROUND_Y - 14, 9, 0, Math.PI * 2); ctx.stroke();
+        if (active) {
+          ctx.globalAlpha = 0.55;
+          ctx.strokeStyle = HOT;
+          ctx.lineWidth = 4;
+          for (let i = 0; i < 3; i++) {
+            const r = (h.range || 160) * clamp(pulse + i * 0.22, 0, 1);
+            ctx.beginPath();
+            ctx.ellipse(h.x, GROUND_Y - 12, r, 26 + i * 9, 0, Math.PI, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      } else if (h.type === "spotlight") {
+        ctx.save();
+        const cx = hb.x + hb.w / 2;
+        ctx.globalAlpha = active ? 0.28 : 0.1;
+        const cone = ctx.createLinearGradient(cx, hb.y, cx, GROUND_Y);
+        cone.addColorStop(0, "rgba(255,255,255,0.34)");
+        cone.addColorStop(1, active ? "rgba(247,215,22,0.22)" : "rgba(255,255,255,0.05)");
+        ctx.fillStyle = cone;
+        ctx.beginPath();
+        ctx.moveTo(cx - 18, hb.y);
+        ctx.lineTo(cx + 18, hb.y);
+        ctx.lineTo(cx + hb.w / 2, GROUND_Y);
+        ctx.lineTo(cx - hb.w / 2, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = active ? 0.9 : 0.35;
+        ctx.fillStyle = active ? "rgba(247,215,22,0.28)" : "rgba(255,255,255,0.10)";
+        ctx.beginPath();
+        ctx.ellipse(cx, GROUND_Y - 5, hb.w * 0.55, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
   }
 
@@ -1061,7 +1429,7 @@
 
     // body
     ctx.fillStyle = e.hitFlash > 0 ? "#fff" : e.color;
-    if (e.behavior === "fly") {
+    if (isAirEnemyType(e.behavior)) {
       // little floating phone-bat
       ctx.beginPath();
       ctx.ellipse(cx, e.y + e.h / 2 + wob, e.w / 2, e.h / 2, 0, 0, Math.PI * 2);
@@ -1094,7 +1462,7 @@
     }
 
     // sunglasses + smirk
-    const eyY = (e.behavior === "fly" ? e.y + 8 : e.y + 16) + wob;
+    const eyY = (isAirEnemyType(e.behavior) ? e.y + 8 : e.y + 16) + wob;
     ctx.fillStyle = "#0a0a14";
     ctx.fillRect(cx - 12, eyY, 9, 5);
     ctx.fillRect(cx + 3, eyY, 9, 5);
@@ -1259,6 +1627,21 @@
       ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = GOLD;
       ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+    } else if (h.kind === "camera") {
+      // paparazzi flash bolt
+      ctx.fillStyle = "#e0f2fe";
+      ctx.beginPath();
+      ctx.moveTo(-2, -11);
+      ctx.lineTo(9, -1);
+      ctx.lineTo(2, 1);
+      ctx.lineTo(6, 11);
+      ctx.lineTo(-9, -1);
+      ctx.lineTo(-2, -2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = CYAN;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     } else {
       // industry-plant seed pod
       ctx.fillStyle = GREEN;
@@ -1319,7 +1702,7 @@
     ctx.fillText(state.score.toLocaleString(), W / 2, 12);
     ctx.fillStyle = "rgba(255,255,255,0.5)";
     ctx.font = "bold 9px JetBrains Mono, monospace";
-    ctx.fillText("STAGE " + state.stage + "/3", W / 2, 32);
+    ctx.fillText("STAGE " + state.stage + "/" + stageCount(), W / 2, 32);
 
     // Combo (right)
     if (state.combo > 1) {
@@ -1414,7 +1797,7 @@
   // ----- HUD -----
   function updateHUD() {
     document.getElementById("hud-score").textContent = state.score.toLocaleString();
-    document.getElementById("hud-stage").textContent = state.stage + "/3";
+    document.getElementById("hud-stage").textContent = state.stage + "/" + stageCount();
     document.getElementById("hud-hp").textContent = Math.max(0, Math.round(state.hp));
     document.getElementById("hud-combo").textContent = state.combo + "x";
     document.getElementById("hud-high").textContent = RB.getHighScore("apop").toLocaleString();
@@ -1516,6 +1899,7 @@
     state.hp = 100;
     state.maxHp = 100;
     state.particles = [];
+    state.ambientTimer = 0;
     state.beams = [];
     state.hostiles = [];
     state.shaking = 0;
@@ -1702,7 +2086,10 @@
     aimVec,
     get enemies() { return state.enemies; },
     get boss() { return state.boss; },
+    get stageCount() { return stageCount(); },
+    get stageNames() { return STAGES.map(s => s.name); },
     start: startGame,
+    loadStage,
     pause: pauseGame,
     god(on = true) { state.invulnTime = on ? 1e9 : 0; },
     fillMog() { state.mog = 1; },
@@ -1710,7 +2097,7 @@
     skipToBoss() {
       startGame();
       state.score = 1000;
-      loadStage(3);
+      loadStage(stageCount());
     },
     killStage() { for (const e of state.enemies) e.hp = 0; cullEnemies(); },
     damageBoss(n = 100) { if (state.boss) { state.boss.hp -= n; checkBossDeath(); } },

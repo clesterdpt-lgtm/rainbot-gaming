@@ -15,95 +15,333 @@
   const mapRadius = (value) => value * MAP_LINEAR_SCALE;
   const scenicRadius = (value) => value * SCENIC_RADIUS_SCALE;
   const populationCount = (value) => Math.max(1, Math.round(value * MAP_POPULATION_SCALE));
-  const WORLD_RADIUS = mapRadius(108);
+  const levelPopulationCount = (value) => {
+    const scale = levelConfig().populationScale ?? (levelConfig().id === "aquarium" ? MAP_POPULATION_SCALE : 0.75);
+    return Math.max(1, Math.round(value * scale));
+  };
+  const LEVEL_ONE_RADIUS = 108;
+  const LEVEL_TWO_HALF_SIZE = Math.sqrt(MAP_AREA_SCALE * Math.PI * LEVEL_ONE_RADIUS * LEVEL_ONE_RADIUS) / 2;
+  const LEVEL_THREE_RADIUS = mapRadius(88);
+  const LEVEL_FOUR_RADIUS = mapRadius(84);
+  const LEVEL_FIVE_HALF_SIZE = mapRadius(78);
+  const WORLD_RADIUS = Math.max(
+    LEVEL_TWO_HALF_SIZE * Math.SQRT2,
+    LEVEL_THREE_RADIUS,
+    LEVEL_FOUR_RADIUS,
+    LEVEL_FIVE_HALF_SIZE * Math.SQRT2
+  );
+  const FINAL_STAGE = 5;
   const PLAYER_RADIUS = 1.55;
   const GRAVITY = 22;
   const GROUND_Y = 0.42;
   const TERRAIN_VISUAL_OFFSET = 0.24;
   const CAMERA_YAW_SENSITIVITY = 0.0048;
   const CAMERA_PITCH_SENSITIVITY = 0.0032;
-  const RING_TARGET = { x: mapCoord(-42), z: mapCoord(-34), radius: scenicRadius(5.8) };
+  const LEVEL_ONE_GOAL_COUNT = 6;
+  const LEVEL_CONFIGS = {
+    1: {
+      id: "petri",
+      name: "Petri Dish",
+      shortName: "Petri",
+      shape: "circle",
+      radius: LEVEL_ONE_RADIUS,
+      requiredGoals: LEVEL_ONE_GOAL_COUNT,
+      populationScale: 0.82,
+      advanceTitle: "SCIENTIST INTEREST DETECTED",
+      advanceText: "The scientists think you are worth studying more, which is either an honor or a paperwork error.",
+      advanceButton: "Accept paperwork error",
+      arrivalTitle: "LEVEL 1!",
+      arrivalSubtitle: "Petri dish loaded",
+      ring: { x: -42, z: -34, radius: 5.8 },
+      zones: [
+        { id: "agar", name: "Agar Center", x: 0, z: 0, radius: 24, color: 0xf4d58c, material: "zoneAgar" },
+        { id: "algae-smear", name: "Algae Smear", x: -30, z: 24, radius: 20, color: 0x87d84a, material: "zonePetriAlgae" },
+        { id: "droplet-lane", name: "Droplet Lane", x: 30, z: -22, radius: 19, color: 0x65d5ff, material: "zonePetriWater" },
+        { id: "bacteria-track", name: "Bacteria Track", x: -34, z: -25, radius: 18, color: 0xff9d45, material: "zonePetriBacteria" },
+      ],
+      landmarks: [
+        { id: "agar-dimple", name: "Agar Dimple", zone: "agar", x: 18, z: 18, radius: 5.8, color: 0xf4d58c },
+        { id: "glass-lip", name: "Glass Lip", zone: "droplet-lane", x: 58, z: -8, radius: 6.4, color: 0x9de8ff },
+        { id: "micro-colony", name: "Micro Colony", zone: "algae-smear", x: -46, z: 32, radius: 6.2, color: 0x6bff7d },
+        { id: "nutrient-scratch", name: "Nutrient Scratch", zone: "bacteria-track", x: -55, z: -38, radius: 6.0, color: 0xffd43b },
+      ],
+      toys: [
+        { id: "starter-ramp", type: "ramp", name: "Agar Ramp", x: -10, z: 23, yaw: -0.54, radius: 5.6, boost: 17, lift: 6.8 },
+        { id: "meniscus-pad", type: "jumpPad", name: "Meniscus Popper", x: 34, z: 9, yaw: 0.2, radius: 5.2, boost: 5.8, lift: 13.2 },
+      ],
+      creatures: [
+        { id: "rotifer-smear", type: "rotifer", centerX: -24, centerZ: 18, radiusX: 18, radiusZ: 9, speed: 0.24, hover: 1.9, phase: 0.1 },
+        { id: "ciliate-loop", type: "ciliate", centerX: 24, centerZ: -5, radiusX: 28, radiusZ: 13, speed: 0.2, hover: 3.2, phase: 1.4 },
+        { id: "waterbearling-petri", type: "waterbearling", centerX: -34, centerZ: -22, radiusX: 12, radiusZ: 8, speed: 0.28, hover: 1.0, phase: 3.0 },
+      ],
+      starterProps: [
+        ["algae", { x: -2.4, z: 4.4 }],
+        ["algae", { x: 1.8, z: 3.1 }],
+        ["algae", { x: -4.9, z: 1.0 }],
+        ["bacteria", { x: -7.4, z: -4.8 }],
+        ["droplet", { x: 6.8, z: -7.2 }],
+        ["pollen", { x: -10.8, z: -11.6 }],
+        ["pollen", { x: -37.5, z: -31.8 }],
+      ],
+    },
+    2: {
+      id: "aquarium",
+      name: "Aquarium",
+      shortName: "Aquarium",
+      shape: "square",
+      halfSize: LEVEL_TWO_HALF_SIZE,
+      radius: WORLD_RADIUS,
+      requiredGoals: 3,
+      populationScale: MAP_POPULATION_SCALE,
+      advanceTitle: "RESEARCH ESCALATED",
+      advanceText: "The aquarium report says you are thriving, so the scientists made the normal decision to involve a rat.",
+      advanceButton: "Enter questionable rat study",
+      arrivalTitle: "LEVEL 2!",
+      arrivalSubtitle: "Aquarium loaded",
+      ring: { x: mapCoord(-42), z: mapCoord(-34), radius: scenicRadius(5.8) },
+      zones: [
+        {
+          id: "forest",
+          name: "Algae Forest",
+          x: mapCoord(-62),
+          z: mapCoord(45),
+          radius: mapRadius(25),
+          color: 0x6bff7d,
+          material: "zoneForest",
+        },
+        {
+          id: "flats",
+          name: "Droplet Flats",
+          x: mapCoord(62),
+          z: mapCoord(38),
+          radius: mapRadius(24),
+          color: 0x37b8ff,
+          material: "zoneFlats",
+        },
+        {
+          id: "reef",
+          name: "Bacteria Reef",
+          x: mapCoord(57),
+          z: mapCoord(-64),
+          radius: mapRadius(24),
+          color: 0xff9d2e,
+          material: "zoneReef",
+        },
+        {
+          id: "ridge",
+          name: "Spore Ridge",
+          x: mapCoord(-58),
+          z: mapCoord(-62),
+          radius: mapRadius(23),
+          color: 0xa5ff4f,
+          material: "zoneRidge",
+        },
+      ],
+      landmarks: [
+        { id: "algae-crown", name: "Algae Crown", zone: "forest", x: mapCoord(-80), z: mapCoord(59), radius: scenicRadius(7.0), color: 0x6bff7d },
+        { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: mapCoord(78), z: mapCoord(48), radius: scenicRadius(7.2), color: 0x37b8ff },
+        { id: "orange-spire", name: "Orange Spire", zone: "reef", x: mapCoord(70), z: mapCoord(-74), radius: scenicRadius(7.0), color: 0xff9d2e },
+        { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: mapCoord(-76), z: mapCoord(-76), radius: scenicRadius(7.0), color: 0xa5ff4f },
+      ],
+      toys: [
+        { id: "starter-ramp", type: "ramp", name: "Cellulose Ramp", x: -10, z: 23, yaw: -0.54, radius: 5.6, boost: 17, lift: 6.8 },
+        { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: mapCoord(-54), z: mapCoord(28), yaw: -0.9, radius: scenicRadius(6.8), boost: 22, lift: 9.8 },
+        { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: mapCoord(38), z: mapCoord(20), yaw: 0.2, radius: scenicRadius(5.7), boost: 7.2, lift: 18.6 },
+        { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: mapCoord(-42), z: mapCoord(-42), yaw: -0.38, radius: scenicRadius(5.7), boost: 8.6, lift: 19.8 },
+        { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: mapCoord(63), z: mapCoord(-50), yaw: 0.6, radius: scenicRadius(6.2), boost: 10.5, lift: 22.4 },
+        { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: mapCoord(-71), z: mapCoord(20), yaw: -0.35, radius: scenicRadius(5.9), boost: 9.2, lift: 19.5 },
+        { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: mapCoord(-58), z: mapCoord(-62), yaw: -0.2, radius: scenicRadius(8.4), boost: 10.2, lift: 5.0 },
+        { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: mapCoord(45), z: mapCoord(-71), yaw: 0.55, radius: scenicRadius(8.0), boost: 9.4, lift: 4.6 },
+        { id: "crown-pad", type: "jumpPad", name: "Crown Popper", x: mapCoord(2), z: mapCoord(-70), yaw: 0.05, radius: scenicRadius(6.0), boost: 9.2, lift: 23.0 },
+      ],
+      creatures: [
+        { id: "rotifer-forest", type: "rotifer", centerX: mapCoord(-58), centerZ: mapCoord(34), radiusX: mapRadius(22), radiusZ: mapRadius(12), speed: 0.26, hover: 2.1, phase: 0.1 },
+        { id: "rotifer-flats", type: "rotifer", centerX: mapCoord(58), centerZ: mapCoord(34), radiusX: mapRadius(20), radiusZ: mapRadius(11), speed: 0.22, hover: 2.4, phase: 2.4 },
+        { id: "ciliate-canal", type: "ciliate", centerX: mapCoord(6), centerZ: mapCoord(-15), radiusX: mapRadius(42), radiusZ: mapRadius(20), speed: 0.18, hover: 4.4, phase: 1.1 },
+        { id: "ciliate-ridge", type: "ciliate", centerX: mapCoord(-51), centerZ: mapCoord(-59), radiusX: mapRadius(18), radiusZ: mapRadius(10), speed: 0.25, hover: 3.2, phase: 4.1 },
+        { id: "waterbearling", type: "waterbearling", centerX: mapCoord(40), centerZ: mapCoord(-58), radiusX: mapRadius(17), radiusZ: mapRadius(12), speed: 0.3, hover: 1.1, phase: 3.0 },
+        { id: "spore-ray", type: "sporeRay", centerX: mapCoord(0), centerZ: mapCoord(50), radiusX: mapRadius(38), radiusZ: mapRadius(16), speed: 0.16, hover: 8.2, phase: 5.2 },
+        { id: "nano-shoal-west", type: "sporeRay", centerX: mapCoord(-72), centerZ: mapCoord(-8), radiusX: mapRadius(18), radiusZ: mapRadius(36), speed: 0.21, hover: 7.6, phase: 2.1 },
+        { id: "ciliate-filter", type: "ciliate", centerX: mapCoord(76), centerZ: mapCoord(-22), radiusX: mapRadius(12), radiusZ: mapRadius(34), speed: 0.28, hover: 5.4, phase: 0.8 },
+      ],
+      starterProps: [
+        ["algae", { x: -2.4, z: 4.4 }],
+        ["algae", { x: 1.8, z: 3.1 }],
+        ["algae", { x: -4.9, z: 1.0 }],
+        ["bacteria", { x: -7.4, z: -4.8 }],
+        ["droplet", { x: 6.8, z: -7.2 }],
+        ["pollen", { x: -10.8, z: -11.6 }],
+        ["pollen", { x: -37.5, z: -31.8 }],
+      ],
+    },
+    3: {
+      id: "stomach",
+      name: "Rat Stomach",
+      shortName: "Stomach",
+      shape: "circle",
+      radius: LEVEL_THREE_RADIUS,
+      requiredGoals: 4,
+      populationScale: 1.35,
+      advanceTitle: "DIGESTION STUDY COMPLETE",
+      advanceText: "The rat coughed politely, the scientists wrote 'probably fine,' and a lava sample somehow became the next logical step.",
+      advanceButton: "Descend to lava lab",
+      arrivalTitle: "LEVEL 3!",
+      arrivalSubtitle: "Rat stomach research mission",
+      ring: { x: mapCoord(-34), z: mapCoord(26), radius: scenicRadius(6.2) },
+      zones: [
+        { id: "cardia-cove", name: "Cardia Cove", x: mapCoord(-48), z: mapCoord(34), radius: mapRadius(23), color: 0xff7aa8, material: "zoneStomachPink" },
+        { id: "mucus-rapids", name: "Mucus Rapids", x: mapCoord(43), z: mapCoord(42), radius: mapRadius(24), color: 0xffb34d, material: "zoneStomachGold" },
+        { id: "food-raft", name: "Food Raft", x: mapCoord(51), z: mapCoord(-47), radius: mapRadius(23), color: 0xd883ff, material: "zoneStomachPurple" },
+        { id: "enzyme-sump", name: "Enzyme Sump", x: mapCoord(-54), z: mapCoord(-52), radius: mapRadius(24), color: 0x53ead1, material: "zoneStomachMint" },
+      ],
+      landmarks: [
+        { id: "cracker-island", name: "Cracker Island", zone: "food-raft", x: mapCoord(66), z: mapCoord(-38), radius: scenicRadius(7.0), color: 0xffd43b },
+        { id: "bubble-burper", name: "Bubble Burper", zone: "mucus-rapids", x: mapCoord(28), z: mapCoord(62), radius: scenicRadius(7.0), color: 0x53ead1 },
+        { id: "folded-rugae", name: "Folded Rugae", zone: "cardia-cove", x: mapCoord(-68), z: mapCoord(41), radius: scenicRadius(7.2), color: 0xff7aa8 },
+        { id: "enzyme-oracle", name: "Enzyme Oracle", zone: "enzyme-sump", x: mapCoord(-61), z: mapCoord(-68), radius: scenicRadius(7.0), color: 0xd883ff },
+      ],
+      toys: [
+        { id: "peristalsis-ramp", type: "ramp", name: "Peristalsis Ramp", x: mapCoord(-18), z: mapCoord(28), yaw: -0.45, radius: scenicRadius(6.5), boost: 21, lift: 10.4 },
+        { id: "mucus-geyser", type: "geyser", name: "Mucus Geyser", x: mapCoord(38), z: mapCoord(18), yaw: 0.3, radius: scenicRadius(6.3), boost: 9.5, lift: 21 },
+        { id: "rugae-stair", type: "ridge", name: "Rugae Stair", x: mapCoord(-47), z: mapCoord(-36), yaw: 0.18, radius: scenicRadius(8.4), boost: 9.4, lift: 4.8 },
+        { id: "burp-pad", type: "jumpPad", name: "Burp Pad", x: mapCoord(5), z: mapCoord(-57), yaw: -0.2, radius: scenicRadius(5.9), boost: 7.8, lift: 20.5 },
+      ],
+      creatures: [
+        { id: "gut-ciliate", type: "gutWorm", centerX: mapCoord(-46), centerZ: mapCoord(30), radiusX: mapRadius(20), radiusZ: mapRadius(11), speed: 0.24, hover: 3.6, phase: 0.2 },
+        { id: "enzyme-eel", type: "gutWorm", centerX: mapCoord(36), centerZ: mapCoord(-30), radiusX: mapRadius(34), radiusZ: mapRadius(16), speed: 0.18, hover: 5.8, phase: 1.7 },
+        { id: "crumb-rotifer", type: "rotifer", centerX: mapCoord(49), centerZ: mapCoord(-52), radiusX: mapRadius(15), radiusZ: mapRadius(11), speed: 0.26, hover: 2.5, phase: 3.1 },
+        { id: "junior-waterbear-gut", type: "waterbearling", centerX: mapCoord(-44), centerZ: mapCoord(-54), radiusX: mapRadius(14), radiusZ: mapRadius(10), speed: 0.29, hover: 1.2, phase: 5.0 },
+      ],
+      starterProps: [
+        ["foodbit", { x: -3.5, z: 5.5 }],
+        ["foodbit", { x: 4.2, z: 3.5 }],
+        ["digestiveBubble", { x: -8.8, z: -5.4 }],
+        ["enzyme", { x: 8.0, z: -8.6 }],
+        ["droplet", { x: -13.5, z: 8.4 }],
+        ["pollen", { x: -34, z: 25 }],
+      ],
+    },
+    4: {
+      id: "lava",
+      name: "Lava Cavern",
+      shortName: "Lava",
+      shape: "circle",
+      radius: LEVEL_FOUR_RADIUS,
+      requiredGoals: 4,
+      populationScale: 1.18,
+      advanceTitle: "GEOTHERMAL NOTES FILED",
+      advanceText: "You survived lava, which means the scientists upgraded your file from 'mysterious damp bean' to 'space-program damp bean.'",
+      advanceButton: "Board the space station",
+      arrivalTitle: "LEVEL 4!",
+      arrivalSubtitle: "Underground lava level",
+      ring: { x: mapCoord(39), z: mapCoord(-32), radius: scenicRadius(6.0) },
+      zones: [
+        { id: "basalt-shelf", name: "Basalt Shelf", x: mapCoord(-52), z: mapCoord(38), radius: mapRadius(23), color: 0x6f7488, material: "zoneLavaBasalt" },
+        { id: "ember-river", name: "Ember River", x: mapCoord(48), z: mapCoord(32), radius: mapRadius(24), color: 0xff5a2f, material: "zoneLavaRiver" },
+        { id: "steam-fissure", name: "Steam Fissure", x: mapCoord(-45), z: mapCoord(-52), radius: mapRadius(22), color: 0xffd43b, material: "zoneLavaSteam" },
+        { id: "crystal-caldera", name: "Crystal Caldera", x: mapCoord(52), z: mapCoord(-54), radius: mapRadius(24), color: 0xd883ff, material: "zoneLavaCrystal" },
+      ],
+      landmarks: [
+        { id: "obsidian-tooth", name: "Obsidian Tooth", zone: "basalt-shelf", x: mapCoord(-68), z: mapCoord(50), radius: scenicRadius(7.0), color: 0xf8fbff },
+        { id: "magma-heart", name: "Magma Heart", zone: "ember-river", x: mapCoord(60), z: mapCoord(23), radius: scenicRadius(7.2), color: 0xff5a2f },
+        { id: "steam-kazoo", name: "Steam Kazoo", zone: "steam-fissure", x: mapCoord(-55), z: mapCoord(-65), radius: scenicRadius(7.0), color: 0xb9f4ff },
+        { id: "violet-geode", name: "Violet Geode", zone: "crystal-caldera", x: mapCoord(68), z: mapCoord(-66), radius: scenicRadius(7.0), color: 0xd883ff },
+      ],
+      toys: [
+        { id: "basalt-ramp", type: "ramp", name: "Basalt Ramp", x: mapCoord(-30), z: mapCoord(21), yaw: -0.58, radius: scenicRadius(6.4), boost: 23, lift: 11 },
+        { id: "heat-vent", type: "geyser", name: "Heat Vent", x: mapCoord(42), z: mapCoord(0), yaw: 0.52, radius: scenicRadius(6.5), boost: 11.2, lift: 24 },
+        { id: "ash-pad", type: "jumpPad", name: "Ash Popper", x: mapCoord(-7), z: mapCoord(-60), yaw: 0.1, radius: scenicRadius(5.9), boost: 8.7, lift: 22.5 },
+        { id: "caldera-ridge", type: "ridge", name: "Caldera Scramble", x: mapCoord(43), z: mapCoord(-53), yaw: -0.42, radius: scenicRadius(8.0), boost: 10.5, lift: 5.4 },
+      ],
+      creatures: [
+        { id: "ember-ray", type: "emberSkimmer", centerX: mapCoord(38), centerZ: mapCoord(22), radiusX: mapRadius(24), radiusZ: mapRadius(14), speed: 0.21, hover: 8.4, phase: 0.6 },
+        { id: "ash-ciliate", type: "ciliate", centerX: mapCoord(-30), centerZ: mapCoord(-45), radiusX: mapRadius(26), radiusZ: mapRadius(12), speed: 0.25, hover: 4.8, phase: 2.2 },
+        { id: "basalt-rotifer", type: "rotifer", centerX: mapCoord(-54), centerZ: mapCoord(34), radiusX: mapRadius(18), radiusZ: mapRadius(11), speed: 0.23, hover: 2.6, phase: 3.4 },
+      ],
+      starterProps: [
+        ["ashCrystal", { x: -4, z: 6 }],
+        ["magmaBubble", { x: 7, z: -7 }],
+        ["magmaBubble", { x: -10, z: -6 }],
+        ["crystal", { x: 12, z: 7 }],
+        ["pollen", { x: mapCoord(39), z: mapCoord(-28) }],
+      ],
+    },
+    5: {
+      id: "station",
+      name: "Space Station",
+      shortName: "Station",
+      shape: "square",
+      halfSize: LEVEL_FIVE_HALF_SIZE,
+      radius: LEVEL_FIVE_HALF_SIZE * Math.SQRT2,
+      requiredGoals: 3,
+      populationScale: 1.08,
+      arrivalTitle: "LEVEL 5!",
+      arrivalSubtitle: "Space station research mission",
+      ring: { x: mapCoord(-22), z: mapCoord(38), radius: scenicRadius(5.8) },
+      zones: [
+        { id: "airlock-grid", name: "Airlock Grid", x: mapCoord(-50), z: mapCoord(43), radius: mapRadius(21), color: 0x53ead1, material: "zoneStationCyan" },
+        { id: "lab-bench", name: "Orbital Lab Bench", x: mapCoord(46), z: mapCoord(40), radius: mapRadius(22), color: 0xf8fbff, material: "zoneStationWhite" },
+        { id: "vent-maze", name: "Vent Maze", x: mapCoord(-48), z: mapCoord(-46), radius: mapRadius(22), color: 0xffd43b, material: "zoneStationGold" },
+        { id: "window-array", name: "Observation Window", x: mapCoord(50), z: mapCoord(-48), radius: mapRadius(22), color: 0x8c6bff, material: "zoneStationViolet" },
+      ],
+      landmarks: [
+        { id: "camera-dock", name: "Camera Dock", zone: "airlock-grid", x: mapCoord(-62), z: mapCoord(56), radius: scenicRadius(7.0), color: 0x53ead1 },
+        { id: "sample-vault", name: "Sample Vault", zone: "lab-bench", x: mapCoord(62), z: mapCoord(50), radius: scenicRadius(7.0), color: 0xf8fbff },
+        { id: "fan-shrine", name: "Fan Shrine", zone: "vent-maze", x: mapCoord(-64), z: mapCoord(-58), radius: scenicRadius(7.0), color: 0xffd43b },
+        { id: "earth-peek", name: "Earth Peek", zone: "window-array", x: mapCoord(62), z: mapCoord(-62), radius: scenicRadius(7.0), color: 0x8c6bff },
+      ],
+      toys: [
+        { id: "mag-rail", type: "ridge", name: "Mag Rail", x: mapCoord(-24), z: mapCoord(8), yaw: 0.1, radius: scenicRadius(9.0), boost: 12.5, lift: 6.3 },
+        { id: "zero-g-pad", type: "jumpPad", name: "Zero-G Pad", x: mapCoord(31), z: mapCoord(9), yaw: -0.2, radius: scenicRadius(6.4), boost: 10.8, lift: 28 },
+        { id: "air-vent", type: "geyser", name: "Air Vent", x: mapCoord(-38), z: mapCoord(-26), yaw: 0.3, radius: scenicRadius(6.2), boost: 13, lift: 24 },
+        { id: "sample-ramp", type: "ramp", name: "Sample Ramp", x: mapCoord(42), z: mapCoord(-34), yaw: -0.7, radius: scenicRadius(6.3), boost: 23, lift: 12 },
+      ],
+      creatures: [
+        { id: "cleanroom-drone", type: "labDrone", centerX: mapCoord(0), centerZ: mapCoord(45), radiusX: mapRadius(42), radiusZ: mapRadius(13), speed: 0.18, hover: 11.2, phase: 1.0 },
+        { id: "lab-ciliate", type: "ciliate", centerX: mapCoord(-52), centerZ: mapCoord(-36), radiusX: mapRadius(19), radiusZ: mapRadius(12), speed: 0.28, hover: 5.8, phase: 2.8 },
+        { id: "orbital-waterbearling", type: "waterbearling", centerX: mapCoord(42), centerZ: mapCoord(-44), radiusX: mapRadius(16), radiusZ: mapRadius(11), speed: 0.3, hover: 1.4, phase: 4.6 },
+      ],
+      starterProps: [
+        ["dataChip", { x: -5, z: 5 }],
+        ["dataChip", { x: 6, z: -5 }],
+        ["toolpod", { x: -11, z: -7 }],
+        ["crystal", { x: 12, z: 8 }],
+        ["pollen", { x: mapCoord(-22), z: mapCoord(36) }],
+      ],
+    },
+  };
+  const RING_TARGET = { ...LEVEL_CONFIGS[1].ring };
   const SANDBOX_SECONDS = 300;
   const GOAL_TARGETS = {
     algae: 2,
     bacteria: 1,
     water: 1,
     ring: 1,
-    chaos: 5200,
+    petriZones: 3,
+    petriLandmarks: 2,
+    chaos: 4200,
+    tankZones: 4,
+    tankLandmarks: 4,
+    tankChaos: 3600,
+    gutZones: 4,
+    gutBubbles: 4,
+    gutToys: 3,
+    gutLandmarks: 3,
+    lavaZones: 4,
+    lavaHazards: 4,
+    lavaToys: 3,
+    lavaChaos: 3800,
+    stationZones: 4,
+    stationScans: 4,
+    stationToys: 3,
+    stationChaos: 4500,
     time: SANDBOX_SECONDS,
   };
-  const SANDBOX_ZONES = [
-    {
-      id: "forest",
-      name: "Algae Forest",
-      x: mapCoord(-62),
-      z: mapCoord(45),
-      radius: mapRadius(25),
-      color: 0x6bff7d,
-      material: "zoneForest",
-    },
-    {
-      id: "flats",
-      name: "Droplet Flats",
-      x: mapCoord(62),
-      z: mapCoord(38),
-      radius: mapRadius(24),
-      color: 0x37b8ff,
-      material: "zoneFlats",
-    },
-    {
-      id: "reef",
-      name: "Bacteria Reef",
-      x: mapCoord(57),
-      z: mapCoord(-64),
-      radius: mapRadius(24),
-      color: 0xff9d2e,
-      material: "zoneReef",
-    },
-    {
-      id: "ridge",
-      name: "Spore Ridge",
-      x: mapCoord(-58),
-      z: mapCoord(-62),
-      radius: mapRadius(23),
-      color: 0xa5ff4f,
-      material: "zoneRidge",
-    },
-  ];
-  const HIDDEN_LANDMARKS = [
-    { id: "algae-crown", name: "Algae Crown", zone: "forest", x: mapCoord(-80), z: mapCoord(59), radius: scenicRadius(7.0), color: 0x6bff7d },
-    { id: "glass-moonpool", name: "Glass Moonpool", zone: "flats", x: mapCoord(78), z: mapCoord(48), radius: scenicRadius(7.2), color: 0x37b8ff },
-    { id: "orange-spire", name: "Orange Spire", zone: "reef", x: mapCoord(70), z: mapCoord(-74), radius: scenicRadius(7.0), color: 0xff9d2e },
-    { id: "spore-crown", name: "Spore Crown", zone: "ridge", x: mapCoord(-76), z: mapCoord(-76), radius: scenicRadius(7.0), color: 0xa5ff4f },
-  ];
-  const TRAVERSAL_TOYS = [
-    { id: "starter-ramp", type: "ramp", name: "Cellulose Ramp", x: -10, z: 23, yaw: -0.54, radius: 5.6, boost: 17, lift: 6.8 },
-    { id: "forest-ramp", type: "ramp", name: "Algae Launch Ramp", x: mapCoord(-54), z: mapCoord(28), yaw: -0.9, radius: scenicRadius(6.8), boost: 22, lift: 9.8 },
-    { id: "flats-pad", type: "jumpPad", name: "Droplet Spring", x: mapCoord(38), z: mapCoord(20), yaw: 0.2, radius: scenicRadius(5.7), boost: 7.2, lift: 18.6 },
-    { id: "ridge-pad", type: "jumpPad", name: "Spore Popper", x: mapCoord(-42), z: mapCoord(-42), yaw: -0.38, radius: scenicRadius(5.7), boost: 8.6, lift: 19.8 },
-    { id: "reef-geyser", type: "geyser", name: "Hydro Geyser", x: mapCoord(63), z: mapCoord(-50), yaw: 0.6, radius: scenicRadius(6.2), boost: 10.5, lift: 22.4 },
-    { id: "forest-geyser", type: "geyser", name: "Bubble Vent", x: mapCoord(-71), z: mapCoord(20), yaw: -0.35, radius: scenicRadius(5.9), boost: 9.2, lift: 19.5 },
-    { id: "spore-ridge", type: "ridge", name: "Spore Stair", x: mapCoord(-58), z: mapCoord(-62), yaw: -0.2, radius: scenicRadius(8.4), boost: 10.2, lift: 5.0 },
-    { id: "reef-ridge", type: "ridge", name: "Reef Scramble", x: mapCoord(45), z: mapCoord(-71), yaw: 0.55, radius: scenicRadius(8.0), boost: 9.4, lift: 4.6 },
-    { id: "crown-pad", type: "jumpPad", name: "Crown Popper", x: mapCoord(2), z: mapCoord(-70), yaw: 0.05, radius: scenicRadius(6.0), boost: 9.2, lift: 23.0 },
-  ];
-  const CREATURE_ROUTES = [
-    { id: "rotifer-forest", type: "rotifer", centerX: mapCoord(-58), centerZ: mapCoord(34), radiusX: mapRadius(22), radiusZ: mapRadius(12), speed: 0.26, hover: 2.1, phase: 0.1 },
-    { id: "rotifer-flats", type: "rotifer", centerX: mapCoord(58), centerZ: mapCoord(34), radiusX: mapRadius(20), radiusZ: mapRadius(11), speed: 0.22, hover: 2.4, phase: 2.4 },
-    { id: "ciliate-canal", type: "ciliate", centerX: mapCoord(6), centerZ: mapCoord(-15), radiusX: mapRadius(42), radiusZ: mapRadius(20), speed: 0.18, hover: 4.4, phase: 1.1 },
-    { id: "ciliate-ridge", type: "ciliate", centerX: mapCoord(-51), centerZ: mapCoord(-59), radiusX: mapRadius(18), radiusZ: mapRadius(10), speed: 0.25, hover: 3.2, phase: 4.1 },
-    { id: "waterbearling", type: "waterbearling", centerX: mapCoord(40), centerZ: mapCoord(-58), radiusX: mapRadius(17), radiusZ: mapRadius(12), speed: 0.3, hover: 1.1, phase: 3.0 },
-    { id: "spore-ray", type: "sporeRay", centerX: mapCoord(0), centerZ: mapCoord(50), radiusX: mapRadius(38), radiusZ: mapRadius(16), speed: 0.16, hover: 8.2, phase: 5.2 },
-  ];
-  const STARTER_PROPS = [
-    ["algae", { x: -2.4, z: 4.4 }],
-    ["algae", { x: 1.8, z: 3.1 }],
-    ["algae", { x: -4.9, z: 1.0 }],
-    ["bacteria", { x: -7.4, z: -4.8 }],
-    ["droplet", { x: 6.8, z: -7.2 }],
-    ["pollen", { x: -10.8, z: -11.6 }],
-    ["pollen", { x: -37.5, z: -31.8 }],
-  ];
+  const SANDBOX_ZONES = cloneLevelEntries(LEVEL_CONFIGS[1].zones);
+  const HIDDEN_LANDMARKS = cloneLevelEntries(LEVEL_CONFIGS[1].landmarks);
+  const TRAVERSAL_TOYS = cloneLevelEntries(LEVEL_CONFIGS[1].toys);
+  const CREATURE_ROUTES = cloneLevelEntries(LEVEL_CONFIGS[1].creatures);
+  const STARTER_PROPS = cloneStarterProps(LEVEL_CONFIGS[1].starterProps);
   const SCRIPT_URL = document.currentScript
     ? document.currentScript.src
     : new URL("../assets/js/tardigrade-micro-mayhem.js", window.location.href).href;
@@ -123,6 +361,8 @@
 
   const GOALS = [
     {
+      id: "algae",
+      stage: 1,
       title: "Eat some algae",
       text: "Scuttle into two green algae chunks. They heal hydration and teach movement.",
       target: GOAL_TARGETS.algae,
@@ -131,6 +371,8 @@
       mobileHint: "Left stick moves. Drag the dish to look. Follow the target tag and munch two glowing algae.",
     },
     {
+      id: "bacteria",
+      stage: 1,
       title: "Bash bacteria",
       text: "Use Shift to bonk the spiky orange bacteria in the dash lane.",
       target: GOAL_TARGETS.bacteria,
@@ -139,6 +381,8 @@
       mobileHint: "Aim at the target bacteria, scuttle forward, then tap Bonk.",
     },
     {
+      id: "water",
+      stage: 1,
       title: "Move water",
       text: "Shove one blue droplet far enough for the lab to notice.",
       target: GOAL_TARGETS.water,
@@ -147,6 +391,8 @@
       mobileHint: "Push the blue droplet with the stick. Bonk gives it extra shove.",
     },
     {
+      id: "ring",
+      stage: 1,
       title: "Feed the ring",
       text: "Push one golden pollen chunk into the glowing nutrient ring.",
       target: GOAL_TARGETS.ring,
@@ -155,19 +401,173 @@
       mobileHint: "Follow the target tag. Push the gold pollen into the glowing ring.",
     },
     {
-      title: "Become the incident",
-      text: "Build enough chaos to earn a questionable microscope report.",
-      target: GOAL_TARGETS.chaos,
-      progress: () => Math.floor(state.chaos),
-      hint: "Freestyle mayhem. Mix bonks, snacks, ring feeds, and zone visits to grow the combo.",
+      id: "zones",
+      stage: 1,
+      title: "Map the dish",
+      text: "Visit three petri dish regions so the lab can pretend this is a controlled study.",
+      target: GOAL_TARGETS.petriZones,
+      progress: () => state.zonesVisited.size,
+      hint: "Use the radar to scuttle through three named dish regions before the paperwork notices.",
+      mobileHint: "Use the stick and radar to visit three named dish regions.",
     },
     {
-      title: "Rule the dish",
-      text: "Keep the sandbox alive for five minutes of microscopic trouble.",
-      target: GOAL_TARGETS.time,
-      progress: () => Math.floor(state.sessionTime),
-      hint: "Five-minute sandbox run. Chase mini-missions, hold combos, and stay hydrated.",
-      kind: "time",
+      id: "landmarks",
+      stage: 1,
+      title: "Find odd evidence",
+      text: "Discover two tiny dish landmarks. The scientists will call them data because it sounds expensive.",
+      target: GOAL_TARGETS.petriLandmarks,
+      progress: () => state.landmarksFound.size,
+      hint: "Chase the landmark blips near the dish edge and agar patches.",
+      mobileHint: "Follow the landmark blips and find two glowing dish clues.",
+    },
+    {
+      id: "zones",
+      stage: 2,
+      title: "Tour the aquarium",
+      text: "Visit four aquarium regions so the radar can map the larger tank.",
+      target: GOAL_TARGETS.tankZones,
+      progress: () => state.zonesVisited.size,
+      hint: "Use the radar and landmarks to tour the larger aquarium zones.",
+      mobileHint: "Use the stick and radar to tour the larger aquarium zones.",
+    },
+    {
+      id: "landmarks",
+      stage: 2,
+      title: "Find tank landmarks",
+      text: "Discover four bright aquarium landmarks across the larger floor.",
+      target: GOAL_TARGETS.tankLandmarks,
+      progress: () => state.landmarksFound.size,
+      hint: "Chase the landmark blip between plants, bubble vents, ridges, and reef clusters.",
+      mobileHint: "Chase the landmark blip between plants, bubble vents, ridges, and reef clusters.",
+    },
+    {
+      id: "chaos",
+      stage: 2,
+      title: "Become the aquarium incident",
+      text: "Build enough chaos to earn a questionable tank report.",
+      target: GOAL_TARGETS.tankChaos,
+      progress: () => Math.floor(state.stageChaos),
+      hint: "Freestyle mayhem across the aquarium. Mix bonks, snacks, ring feeds, toys, and zone visits.",
+    },
+    {
+      id: "zones",
+      stage: 3,
+      title: "Tour the stomach biome",
+      text: "Map four harmlessly weird stomach regions after the rat study gets very committed.",
+      target: GOAL_TARGETS.gutZones,
+      progress: () => state.zonesVisited.size,
+      hint: "Follow the radar through rugae folds, mucus rapids, food rafts, and enzyme sump.",
+      mobileHint: "Use the radar to tour the stomach regions.",
+    },
+    {
+      id: "hazards",
+      stage: 3,
+      title: "Pop digestive bubbles",
+      text: "Bonk four digestive bubbles. They are rude, harmless, and mostly burp-based.",
+      target: GOAL_TARGETS.gutBubbles,
+      progress: () => state.stageHazards,
+      hint: "Aim for glossy digestive bubbles and dash into them for research-grade burps.",
+      mobileHint: "Bonk the glossy digestive bubbles.",
+      propTypes: ["digestiveBubble"],
+    },
+    {
+      id: "toys",
+      stage: 3,
+      title: "Ride stomach currents",
+      text: "Use three peristalsis toys so the scientists can write 'movement observed' and go to lunch.",
+      target: GOAL_TARGETS.gutToys,
+      progress: () => state.toysUsed.size,
+      hint: "Try the peristalsis ramp, burp pad, mucus geyser, and rugae stair.",
+      mobileHint: "Use three stomach launch toys.",
+    },
+    {
+      id: "landmarks",
+      stage: 3,
+      title: "Find gut landmarks",
+      text: "Find three glowing stomach landmarks before anyone asks why this was funded.",
+      target: GOAL_TARGETS.gutLandmarks,
+      progress: () => state.landmarksFound.size,
+      hint: "Chase landmark blips between food bits, bubbles, and folded rugae.",
+      mobileHint: "Find three gut landmarks.",
+    },
+    {
+      id: "zones",
+      stage: 4,
+      title: "Survey the lava cavern",
+      text: "Tour four volcanic regions without becoming a toasted crumb with legs.",
+      target: GOAL_TARGETS.lavaZones,
+      progress: () => state.zonesVisited.size,
+      hint: "Use the radar to cross basalt shelves, ember rivers, steam fissures, and crystal caldera.",
+      mobileHint: "Tour the four lava regions.",
+    },
+    {
+      id: "hazards",
+      stage: 4,
+      title: "Burst magma bubbles",
+      text: "Bonk four magma bubbles. The lab calls it thermal resilience; you call it hot dodgeball.",
+      target: GOAL_TARGETS.lavaHazards,
+      progress: () => state.stageHazards,
+      hint: "Dash into magma bubbles and use vents to stay moving.",
+      mobileHint: "Bonk four magma bubbles.",
+      propTypes: ["magmaBubble"],
+    },
+    {
+      id: "toys",
+      stage: 4,
+      title: "Ride heat vents",
+      text: "Use three lava traversal toys to prove physics still works when everything is glowing.",
+      target: GOAL_TARGETS.lavaToys,
+      progress: () => state.toysUsed.size,
+      hint: "Try the heat vent, ash popper, basalt ramp, and caldera scramble.",
+      mobileHint: "Use three lava launch toys.",
+    },
+    {
+      id: "chaos",
+      stage: 4,
+      title: "File a geothermal incident",
+      text: "Build enough cavern chaos for a report that smells faintly like burned toast.",
+      target: GOAL_TARGETS.lavaChaos,
+      progress: () => Math.floor(state.stageChaos),
+      hint: "Mix magma bubble bonks, heat vents, crystals, and zone visits.",
+    },
+    {
+      id: "zones",
+      stage: 5,
+      title: "Tour the space station",
+      text: "Visit four orbital research zones while wearing a camera smaller than the grant budget.",
+      target: GOAL_TARGETS.stationZones,
+      progress: () => state.zonesVisited.size,
+      hint: "Use the radar to map the airlock grid, lab bench, vent maze, and observation window.",
+      mobileHint: "Tour the four station zones.",
+    },
+    {
+      id: "scans",
+      stage: 5,
+      title: "Transmit research scans",
+      text: "Use the tiny camera to scan four station landmarks for extremely serious science.",
+      target: GOAL_TARGETS.stationScans,
+      progress: () => state.stageResearchScans,
+      hint: "Find station landmarks. The attached camera scans each one automatically.",
+      mobileHint: "Find four station scan landmarks.",
+    },
+    {
+      id: "toys",
+      stage: 5,
+      title: "Test zero-g gadgets",
+      text: "Use three station traversal gadgets. The results are peer-reviewed by a blinking light.",
+      target: GOAL_TARGETS.stationToys,
+      progress: () => state.toysUsed.size,
+      hint: "Ride the mag rail, air vent, zero-g pad, and sample ramp.",
+      mobileHint: "Use three station gadgets.",
+    },
+    {
+      id: "chaos",
+      stage: 5,
+      title: "Become space-grade data",
+      text: "Build enough station chaos to finish the research mission and mildly concern orbit control.",
+      target: GOAL_TARGETS.stationChaos,
+      progress: () => Math.floor(state.stageChaos),
+      hint: "Scan, bonk, bounce, and shove data pods until the final report gives up.",
     },
   ];
 
@@ -178,8 +578,8 @@
     { id: "ring", title: "Feed Ring", target: 3, progress: () => state.ringFed },
     { id: "combo", title: "Chain 8x Combo", target: 8, progress: () => state.maxCombo },
     { id: "toys", title: "Use Traversal Toys", target: 5, progress: () => state.toysUsed.size },
-    { id: "landmarks", title: "Find Landmarks", target: HIDDEN_LANDMARKS.length, progress: () => state.landmarksFound.size },
-    { id: "zones", title: "Tour Zones", target: SANDBOX_ZONES.length, progress: () => state.zonesVisited.size },
+    { id: "landmarks", title: "Find Landmarks", target: () => HIDDEN_LANDMARKS.length, progress: () => state.landmarksFound.size },
+    { id: "zones", title: "Tour Zones", target: () => SANDBOX_ZONES.length, progress: () => state.zonesVisited.size },
   ];
 
   const STORE_STORAGE_KEY = `${GAME_ID}:micro-store-v1`;
@@ -280,6 +680,7 @@
     dashStatus: $("status-dash"),
     ringStatus: $("status-ring"),
     zoneStatus: $("status-zone"),
+    levelStatus: $("status-level"),
     goalCardTitle: $("goal-card-title"),
     goalCardText: $("goal-card-text"),
     goalCardProgress: $("goal-card-progress"),
@@ -312,6 +713,7 @@
     targetMarker: $("micro-target-marker"),
     targetMarkerTitle: $("target-marker-title"),
     targetMarkerDistance: $("target-marker-distance"),
+    advance: $("btn-advance-stage"),
     missionAlgae: $("mission-algae"),
     missionBacteria: $("mission-bacteria"),
     missionWater: $("mission-water"),
@@ -355,6 +757,7 @@
     calloutTimer: 0,
     tipTimer: 0,
     hydrate: 100,
+    stage: 1,
     level: 1,
     xp: 0,
     goalIndex: 0,
@@ -363,8 +766,16 @@
     dashPulse: 0,
     maxCombo: 0,
     goalsCleared: 0,
+    stageChaos: 0,
+    stageBonks: 0,
+    stageHazards: 0,
+    stageCollects: 0,
+    stageResearchScans: 0,
+    stageAdvanceAvailable: false,
+    pendingStage: 0,
+    researchCameraUnlocked: false,
     zoneId: "",
-    zoneName: "Open Dish",
+    zoneName: "Petri Dish",
     zonesVisited: new Set(),
     miniComplete: new Set(),
     toysUsed: new Set(),
@@ -422,14 +833,15 @@
     zones: [],
     traversalToys: [],
     landmarks: [],
-    plateauObstacles: [],
     cosmeticRoot: null,
+    stageRoot: null,
     ring: null,
     ringCore: null,
     guide: null,
     boundary: null,
     petri: null,
     terrain: null,
+    researchCamera: null,
     physics: {
       RAPIER: null,
       world: null,
@@ -460,6 +872,133 @@
     return `${minutes}:${String(remainder).padStart(2, "0")}`;
   };
 
+  function cloneLevelEntries(entries) {
+    return entries.map((entry) => ({ ...entry }));
+  }
+
+  function cloneStarterProps(entries) {
+    return entries.map(([type, point]) => [type, { ...point }]);
+  }
+
+  function levelConfig(stage = state.stage || 1) {
+    return LEVEL_CONFIGS[stage] || LEVEL_CONFIGS[1];
+  }
+
+  function playableRadius(stage = state.stage || 1) {
+    return levelConfig(stage).radius;
+  }
+
+  function playableHalfSize(stage = state.stage || 1) {
+    const config = levelConfig(stage);
+    return config.halfSize || config.radius;
+  }
+
+  function playableArea(stage = state.stage || 1) {
+    const config = levelConfig(stage);
+    if (config.shape === "square") return Math.pow(playableHalfSize(stage) * 2, 2);
+    return Math.PI * config.radius * config.radius;
+  }
+
+  function levelAreaRatio(stage = 2) {
+    return playableArea(stage) / playableArea(1);
+  }
+
+  function pointInsidePlayable(x, z, margin = 0) {
+    if (levelConfig().shape === "square") {
+      const limit = playableHalfSize() - margin;
+      return Math.abs(x) <= limit && Math.abs(z) <= limit;
+    }
+    return Math.hypot(x, z) <= playableRadius() - margin;
+  }
+
+  function constrainPointToPlayable(x, z, margin = 0) {
+    if (levelConfig().shape === "square") {
+      const limit = playableHalfSize() - margin;
+      const clampedX = clamp(x, -limit, limit);
+      const clampedZ = clamp(z, -limit, limit);
+      if (clampedX === x && clampedZ === z) {
+        return { x, z, nx: 0, nz: 0, clamped: false };
+      }
+      let nx = x < -limit ? -1 : x > limit ? 1 : 0;
+      let nz = z < -limit ? -1 : z > limit ? 1 : 0;
+      const normalLength = Math.hypot(nx, nz) || 1;
+      nx /= normalLength;
+      nz /= normalLength;
+      return { x: clampedX, z: clampedZ, nx, nz, clamped: true };
+    }
+
+    const limit = playableRadius() - margin;
+    const distance = Math.hypot(x, z);
+    if (distance <= limit) return { x, z, nx: 0, nz: 0, clamped: false };
+    const nx = distance > 0.001 ? x / distance : 1;
+    const nz = distance > 0.001 ? z / distance : 0;
+    return { x: nx * limit, z: nz * limit, nx, nz, clamped: true };
+  }
+
+  function resetArray(target, entries) {
+    target.splice(0, target.length, ...cloneLevelEntries(entries));
+  }
+
+  function applyLevelConfig(stage) {
+    const config = levelConfig(stage);
+    Object.assign(RING_TARGET, config.ring);
+    resetArray(SANDBOX_ZONES, config.zones);
+    resetArray(HIDDEN_LANDMARKS, config.landmarks);
+    resetArray(TRAVERSAL_TOYS, config.toys);
+    resetArray(CREATURE_ROUTES, config.creatures);
+    STARTER_PROPS.splice(0, STARTER_PROPS.length, ...cloneStarterProps(config.starterProps));
+  }
+
+  function targetValue(item) {
+    if (!item) return 0;
+    return typeof item.target === "function" ? item.target() : item.target;
+  }
+
+  function currentStageGoals() {
+    return GOALS.filter((goal) => goal.stage === state.stage);
+  }
+
+  function nextStageNumber(stage = state.stage) {
+    for (let next = stage + 1; next <= FINAL_STAGE; next += 1) {
+      if (LEVEL_CONFIGS[next]) return next;
+    }
+    return 0;
+  }
+
+  function requiredStageGoalCount(stage = state.stage) {
+    return levelConfig(stage).requiredGoals || GOALS.filter((goal) => goal.stage === stage).length;
+  }
+
+  function firstGoalIndexForStage(stage) {
+    return GOALS.findIndex((goal) => goal.stage === stage);
+  }
+
+  function stageAdvanceGoal() {
+    const config = levelConfig();
+    return {
+      id: "advance",
+      stage: state.stage,
+      title: config.advanceTitle || "Research path unlocked",
+      text: config.advanceText || "The next research environment is ready when you are.",
+      target: 1,
+      progress: () => 1,
+      hint: `${config.advanceText || "The next research environment is ready."} Press the continue research button when ready.`,
+      mobileHint: `${config.advanceText || "The next research environment is ready."} Tap continue research when ready.`,
+    };
+  }
+
+  function activeGoal() {
+    return state.stageAdvanceAvailable ? stageAdvanceGoal() : (GOALS[state.goalIndex] || GOALS[GOALS.length - 1]);
+  }
+
+  function currentStageGoalOrdinal() {
+    if (state.stageAdvanceAvailable) return currentStageGoals().length;
+    const goals = currentStageGoals();
+    const current = GOALS[state.goalIndex];
+    const index = goals.findIndex((goal) => goal === current);
+    return index >= 0 ? index + 1 : goals.length;
+  }
+
   function terrainBump(x, z, cx, cz, radius, height) {
     const distance = Math.hypot(x - cx, z - cz);
     if (distance >= radius) return 0;
@@ -467,9 +1006,32 @@
     return height * t * t * (3 - 2 * t);
   }
 
-  function terrainOffsetAt(x, z) {
-    const distance = Math.hypot(x, z);
-    const edgeFade = clamp((WORLD_RADIUS - 5 - distance) / mapRadius(24), 0, 1);
+  function smoothstep(edge0, edge1, value) {
+    const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  function petriTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const normalized = distance / LEVEL_ONE_RADIUS;
+    const agarRoll =
+      Math.sin(x * 0.072) * 0.12 +
+      Math.cos(z * 0.066) * 0.1 +
+      Math.sin((x + z) * 0.043) * 0.08;
+    const gentleFeatures =
+      terrainBump(x, z, -31, 24, 26, 0.34) +
+      terrainBump(x, z, 32, -23, 24, 0.28) +
+      terrainBump(x, z, -42, -31, 22, 0.24) -
+      terrainBump(x, z, 5, 6, 34, 0.22) -
+      terrainBump(x, z, 45, 32, 18, 0.18);
+    const meniscusRise = smoothstep(0.76, 0.98, normalized) * 0.82;
+    const edgeSoftening = 1 - smoothstep(0.94, 1.08, normalized) * 0.3;
+    return clamp((agarRoll + gentleFeatures) * edgeSoftening + meniscusRise, -0.42, 1.18);
+  }
+
+  function aquariumTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const tankHalf = LEVEL_CONFIGS[2].halfSize;
+    const squareDistance = Math.max(Math.abs(x), Math.abs(z));
+    const edgeFade = clamp((tankHalf - 5 - squareDistance) / mapRadius(24), 0, 1);
     const rolling =
       Math.sin(x * 0.058) * 0.54 +
       Math.cos(z * 0.052) * 0.46 +
@@ -482,10 +1044,99 @@
       terrainBump(x, z, mapCoord(-58), mapCoord(-62), mapRadius(32), 4.85) +
       terrainBump(x, z, mapCoord(2), mapCoord(-72), mapRadius(24), 3.65) +
       terrainBump(x, z, mapCoord(-6), mapCoord(46), mapRadius(30), 1.65) -
+      terrainBump(x, z, mapCoord(-8), mapCoord(8), mapRadius(34), 1.05) -
       terrainBump(x, z, 3, 4, 28, 0.42) -
       terrainBump(x, z, mapCoord(18), mapCoord(-18), mapRadius(44), 0.78) -
-      terrainBump(x, z, mapCoord(31), mapCoord(56), mapRadius(22), 0.64);
-    return clamp((rolling * 0.72 + features) * edgeFade, -1.15, 6.2);
+      terrainBump(x, z, mapCoord(31), mapCoord(56), mapRadius(22), 0.64) -
+      terrainBump(x, z, mapCoord(-84), mapCoord(8), mapRadius(25), 0.82) -
+      terrainBump(x, z, mapCoord(78), mapCoord(-18), mapRadius(30), 1.2);
+    const channel =
+      Math.exp(-Math.pow((x - mapCoord(2)) / mapRadius(20), 2)) *
+      Math.exp(-Math.pow((z + mapCoord(6)) / mapRadius(72), 2)) *
+      -1.15;
+    const gravelShelf =
+      smoothstep(tankHalf * 0.62, tankHalf * 0.96, squareDistance) *
+      (0.48 + Math.sin(Math.atan2(z, x) * 8) * 0.22);
+    return clamp((rolling * 0.72 + features + channel + gravelShelf) * edgeFade, -1.95, 7.2);
+  }
+
+  function stomachTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const radius = LEVEL_CONFIGS[3].radius;
+    const normalized = distance / radius;
+    const foldWave =
+      Math.sin(x * 0.046) * 0.86 +
+      Math.cos(z * 0.052) * 0.68 +
+      Math.sin((x - z) * 0.031) * 0.54;
+    const rugae =
+      terrainBump(x, z, mapCoord(-48), mapCoord(34), mapRadius(28), 3.6) +
+      terrainBump(x, z, mapCoord(43), mapCoord(42), mapRadius(30), 2.8) +
+      terrainBump(x, z, mapCoord(-54), mapCoord(-52), mapRadius(27), 3.1) +
+      terrainBump(x, z, mapCoord(51), mapCoord(-47), mapRadius(31), 2.2) -
+      terrainBump(x, z, mapCoord(4), mapCoord(2), mapRadius(40), 1.6) -
+      terrainBump(x, z, mapCoord(20), mapCoord(-16), mapRadius(25), 1.2);
+    const peristalsisChannel =
+      Math.exp(-Math.pow((x - mapCoord(8)) / mapRadius(18), 2)) *
+      Math.exp(-Math.pow(z / mapRadius(78), 2)) *
+      -1.28;
+    const wallRise = smoothstep(0.74, 0.99, normalized) * 1.65;
+    return clamp(foldWave * 0.76 + rugae + peristalsisChannel + wallRise, -2.4, 6.7);
+  }
+
+  function lavaTerrainOffsetAt(x, z, distance = Math.hypot(x, z)) {
+    const radius = LEVEL_CONFIGS[4].radius;
+    const normalized = distance / radius;
+    const fractured =
+      Math.sin(x * 0.061) * 0.72 +
+      Math.cos(z * 0.055) * 0.66 +
+      Math.sin((x + z) * 0.042) * 0.5;
+    const shelves =
+      terrainBump(x, z, mapCoord(-52), mapCoord(38), mapRadius(30), 4.2) +
+      terrainBump(x, z, mapCoord(52), mapCoord(-54), mapRadius(28), 4.8) +
+      terrainBump(x, z, mapCoord(-45), mapCoord(-52), mapRadius(25), 2.9) -
+      terrainBump(x, z, mapCoord(38), mapCoord(22), mapRadius(35), 2.25) -
+      terrainBump(x, z, mapCoord(4), mapCoord(-6), mapRadius(38), 1.35);
+    const lavaRiver =
+      Math.exp(-Math.pow((x - mapCoord(28)) / mapRadius(18), 2)) *
+      Math.exp(-Math.pow((z - mapCoord(5)) / mapRadius(76), 2)) *
+      -1.7;
+    const rim = smoothstep(0.78, 0.99, normalized) * 2.1;
+    return clamp(fractured * 0.84 + shelves + lavaRiver + rim, -2.7, 7.6);
+  }
+
+  function stationTerrainOffsetAt(x, z) {
+    const half = LEVEL_CONFIGS[5].halfSize;
+    const squareDistance = Math.max(Math.abs(x), Math.abs(z));
+    const edgeFade = clamp((half - 4 - squareDistance) / mapRadius(18), 0, 1);
+    const panelRipple =
+      Math.sin(x * 0.075) * 0.18 +
+      Math.cos(z * 0.08) * 0.16 +
+      Math.sin((x - z) * 0.041) * 0.14;
+    const raisedModules =
+      terrainBump(x, z, mapCoord(-50), mapCoord(43), mapRadius(26), 1.2) +
+      terrainBump(x, z, mapCoord(46), mapCoord(40), mapRadius(27), 1.5) +
+      terrainBump(x, z, mapCoord(-48), mapCoord(-46), mapRadius(25), 1.0) +
+      terrainBump(x, z, mapCoord(50), mapCoord(-48), mapRadius(26), 1.35) -
+      terrainBump(x, z, mapCoord(4), mapCoord(0), mapRadius(36), 0.78);
+    const magRailGroove =
+      Math.exp(-Math.pow(z / mapRadius(18), 2)) *
+      Math.exp(-Math.pow(x / mapRadius(92), 2)) *
+      -0.52;
+    const rim = smoothstep(half * 0.78, half * 0.97, squareDistance) * 0.5;
+    return clamp((panelRipple + raisedModules + magRailGroove + rim) * edgeFade, -1.0, 3.1);
+  }
+
+  function terrainOffsetAt(x, z) {
+    const distance = Math.hypot(x, z);
+    const id = levelConfig().id;
+    if (id === "petri") return petriTerrainOffsetAt(x, z, distance);
+    if (id === "aquarium") return aquariumTerrainOffsetAt(x, z, distance);
+    if (id === "stomach") return stomachTerrainOffsetAt(x, z, distance);
+    if (id === "lava") return lavaTerrainOffsetAt(x, z, distance);
+    if (id === "station") return stationTerrainOffsetAt(x, z);
+    const petri = petriTerrainOffsetAt(x, z, distance);
+    const aquarium = aquariumTerrainOffsetAt(x, z, distance);
+    const blend = smoothstep(LEVEL_ONE_RADIUS - 8, LEVEL_ONE_RADIUS + 20, distance);
+    return lerp(petri, aquarium, blend);
   }
 
   function groundYAt(x, z) {
@@ -494,83 +1145,6 @@
 
   function terrainVisualYAt(x, z) {
     return groundYAt(x, z) - TERRAIN_VISUAL_OFFSET;
-  }
-
-  function toPlateauLocal(obstacle, x, z) {
-    const dx = x - obstacle.x;
-    const dz = z - obstacle.z;
-    const cos = Math.cos(obstacle.rotation);
-    const sin = Math.sin(obstacle.rotation);
-    return {
-      x: dx * cos + dz * sin,
-      z: -dx * sin + dz * cos,
-    };
-  }
-
-  function fromPlateauLocal(localX, localZ, obstacle) {
-    const cos = Math.cos(obstacle.rotation);
-    const sin = Math.sin(obstacle.rotation);
-    return {
-      x: obstacle.x + localX * cos - localZ * sin,
-      z: obstacle.z + localX * sin + localZ * cos,
-    };
-  }
-
-  function registerPlateauObstacle(x, z, radius, scaleZ, rotation, kind) {
-    world.plateauObstacles.push({
-      x,
-      z,
-      radiusX: radius * 0.94,
-      radiusZ: radius * scaleZ * 0.94,
-      rotation,
-      kind,
-    });
-  }
-
-  function pointOverlapsPlateau(x, z, margin = 0) {
-    return world.plateauObstacles.some((obstacle) => {
-      const local = toPlateauLocal(obstacle, x, z);
-      const radiusX = obstacle.radiusX + margin;
-      const radiusZ = obstacle.radiusZ + margin;
-      return (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ) < 1;
-    });
-  }
-
-  function resolvePlateauCollisions(previousX, previousZ) {
-    const player = state.player;
-    world.plateauObstacles.forEach((obstacle) => {
-      let local = toPlateauLocal(obstacle, player.x, player.z);
-      const radiusX = obstacle.radiusX + PLAYER_RADIUS * 0.9;
-      const radiusZ = obstacle.radiusZ + PLAYER_RADIUS * 0.9;
-      let amount = (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ);
-      if (amount >= 1) return;
-
-      if (amount < 0.0001) {
-        const previousLocal = toPlateauLocal(obstacle, previousX, previousZ);
-        local = Math.abs(previousLocal.x) + Math.abs(previousLocal.z) > 0.001
-          ? previousLocal
-          : { x: 1, z: 0 };
-        amount = (local.x * local.x) / (radiusX * radiusX) + (local.z * local.z) / (radiusZ * radiusZ);
-      }
-
-      const scale = 1 / Math.sqrt(Math.max(0.0001, amount));
-      const targetWorld = fromPlateauLocal(local.x * scale, local.z * scale, obstacle);
-      const pushX = targetWorld.x - player.x;
-      const pushZ = targetWorld.z - player.z;
-      const pushLength = Math.hypot(pushX, pushZ);
-      if (pushLength <= 0.0001) return;
-
-      const normalX = pushX / pushLength;
-      const normalZ = pushZ / pushLength;
-      player.x = targetWorld.x + normalX * 0.045;
-      player.z = targetWorld.z + normalZ * 0.045;
-      const incoming = player.vx * normalX + player.vz * normalZ;
-      if (incoming < 0) {
-        player.vx -= incoming * normalX * 1.08;
-        player.vz -= incoming * normalZ * 1.08;
-      }
-      player.wobble = Math.max(player.wobble, 0.24);
-    });
   }
 
   function bootThree() {
@@ -672,15 +1246,19 @@
     world.materials = {
       dish: mat(0x63bf1f, { roughness: 0.9, metalness: 0.01, emissive: 0x092402, emissiveIntensity: 0.05 }),
       dishDark: mat(0x046f9d, { roughness: 0.74, metalness: 0.02, emissive: 0x011e31, emissiveIntensity: 0.14 }),
+      agarBase: mat(0xf0cf87, { roughness: 0.94, metalness: 0.01, emissive: 0x2e2007, emissiveIntensity: 0.09 }),
+      agarEdge: mat(0xffe3a7, { roughness: 0.76, metalness: 0.02, emissive: 0x3b2808, emissiveIntensity: 0.12, transparent: true, opacity: 0.7 }),
+      glass: mat(0xc8f8ff, { roughness: 0.16, metalness: 0.02, emissive: 0x0c6a8d, emissiveIntensity: 0.22, transparent: true, opacity: 0.28, depthWrite: false }),
+      gravel: mat(0xc9a77a, { roughness: 0.96, metalness: 0.02, emissive: 0x1f1204, emissiveIntensity: 0.05 }),
       cliff: mat(0x65553e, { roughness: 0.94, metalness: 0.02, emissive: 0x0e0903, emissiveIntensity: 0.03 }),
       grassLight: mat(0x8ed927, { roughness: 0.86, metalness: 0.01, emissive: 0x123b00, emissiveIntensity: 0.08 }),
       terrain: new THREE.MeshStandardMaterial({
-        color: 0x5fbd1f,
+        color: 0xffffff,
         vertexColors: true,
         roughness: 0.9,
         metalness: 0.01,
-        emissive: 0x041301,
-        emissiveIntensity: 0.04,
+        emissive: 0x000000,
+        emissiveIntensity: 0.02,
         fog: true,
         side: THREE.DoubleSide,
         flatShading: true,
@@ -702,6 +1280,22 @@
       zoneFlats: mat(0x36c8f4, { emissive: 0x0a668d, emissiveIntensity: 0.38, transparent: true, opacity: 0.52 }),
       zoneReef: mat(0xffa83d, { emissive: 0x803005, emissiveIntensity: 0.36, transparent: true, opacity: 0.54 }),
       zoneRidge: mat(0xb9e34a, { emissive: 0x425608, emissiveIntensity: 0.32, transparent: true, opacity: 0.52 }),
+      zoneAgar: mat(0xf4d58c, { emissive: 0x4a3107, emissiveIntensity: 0.28, transparent: true, opacity: 0.5 }),
+      zonePetriAlgae: mat(0x87d84a, { emissive: 0x1e5a0c, emissiveIntensity: 0.3, transparent: true, opacity: 0.52 }),
+      zonePetriWater: mat(0x65d5ff, { emissive: 0x0b668f, emissiveIntensity: 0.34, transparent: true, opacity: 0.48 }),
+      zonePetriBacteria: mat(0xff9d45, { emissive: 0x713006, emissiveIntensity: 0.32, transparent: true, opacity: 0.5 }),
+      zoneStomachPink: mat(0xff7aa8, { emissive: 0x61102e, emissiveIntensity: 0.34, transparent: true, opacity: 0.5 }),
+      zoneStomachGold: mat(0xffb34d, { emissive: 0x6b3000, emissiveIntensity: 0.38, transparent: true, opacity: 0.5 }),
+      zoneStomachPurple: mat(0xd883ff, { emissive: 0x4a166a, emissiveIntensity: 0.34, transparent: true, opacity: 0.48 }),
+      zoneStomachMint: mat(0x53ead1, { emissive: 0x0b4d45, emissiveIntensity: 0.34, transparent: true, opacity: 0.48 }),
+      zoneLavaBasalt: mat(0x6f7488, { emissive: 0x11131b, emissiveIntensity: 0.22, transparent: true, opacity: 0.5 }),
+      zoneLavaRiver: mat(0xff5a2f, { emissive: 0x9a1600, emissiveIntensity: 0.72, transparent: true, opacity: 0.52 }),
+      zoneLavaSteam: mat(0xffd43b, { emissive: 0x6b4d00, emissiveIntensity: 0.5, transparent: true, opacity: 0.48 }),
+      zoneLavaCrystal: mat(0xd883ff, { emissive: 0x4d1978, emissiveIntensity: 0.44, transparent: true, opacity: 0.5 }),
+      zoneStationCyan: mat(0x53ead1, { emissive: 0x0d5a50, emissiveIntensity: 0.42, transparent: true, opacity: 0.42 }),
+      zoneStationWhite: mat(0xf8fbff, { emissive: 0x526578, emissiveIntensity: 0.24, transparent: true, opacity: 0.38 }),
+      zoneStationGold: mat(0xffd43b, { emissive: 0x6b4d00, emissiveIntensity: 0.4, transparent: true, opacity: 0.44 }),
+      zoneStationViolet: mat(0x8c6bff, { emissive: 0x281568, emissiveIntensity: 0.44, transparent: true, opacity: 0.42 }),
       tardigradeA: mat(0xcaa36f, { roughness: 0.64 }),
       tardigradeB: mat(0xa8784d, { roughness: 0.7 }),
       tardigradeBelly: mat(0xe6c89d, { roughness: 0.68 }),
@@ -742,6 +1336,12 @@
       enzyme: mat(0xd883ff, { emissive: 0x4d1978, emissiveIntensity: 0.64 }),
       platelet: mat(0xff6b5a, { emissive: 0x4f150f, emissiveIntensity: 0.42 }),
       spore: mat(0xa5ff4f, { emissive: 0x285609, emissiveIntensity: 0.58 }),
+      foodbit: mat(0xffc66d, { roughness: 0.82, emissive: 0x5f2d00, emissiveIntensity: 0.3 }),
+      digestiveBubble: mat(0xb2ff5f, { emissive: 0x2e7000, emissiveIntensity: 0.7, transparent: true, opacity: 0.66, depthWrite: false }),
+      magmaBubble: mat(0xff4a21, { roughness: 0.45, emissive: 0xff2400, emissiveIntensity: 1.08 }),
+      ashCrystal: mat(0xb7a6ff, { roughness: 0.5, emissive: 0x3d1f8c, emissiveIntensity: 0.55 }),
+      dataChip: mat(0x5ff8ff, { roughness: 0.42, metalness: 0.18, emissive: 0x0a6370, emissiveIntensity: 0.62 }),
+      toolpod: mat(0xd9e4f2, { roughness: 0.46, metalness: 0.14, emissive: 0x283747, emissiveIntensity: 0.24 }),
       shard: mat(0xf8fbff, { emissive: 0x6a4a10, emissiveIntensity: 0.32 }),
       fiberA: mat(0x2f9710, { emissive: 0x0b2d03, emissiveIntensity: 0.24 }),
       fiberB: mat(0xf136a8, { emissive: 0x4c0d31, emissiveIntensity: 0.25 }),
@@ -756,6 +1356,15 @@
       white: mat(0xf7fbff, { roughness: 0.5 }),
       caustic: basic(0xf1ffb7, { opacity: 0.12, fog: false }),
       mist: basic(0xbdf4ff, { opacity: 0.12, fog: false }),
+      labWall: mat(0xe8eef2, { roughness: 0.92, metalness: 0.01, emissive: 0x35434c, emissiveIntensity: 0.05 }),
+      labCounter: mat(0xc7dde4, { roughness: 0.88, metalness: 0.03, emissive: 0x20373d, emissiveIntensity: 0.08 }),
+      labMetal: mat(0x8d9aa5, { roughness: 0.5, metalness: 0.22, emissive: 0x101820, emissiveIntensity: 0.08 }),
+      labGlass: mat(0xbfefff, { roughness: 0.16, metalness: 0.02, emissive: 0x2b6f89, emissiveIntensity: 0.18, transparent: true, opacity: 0.38, depthWrite: false }),
+      roomWall: mat(0xd7b88f, { roughness: 0.92, metalness: 0.01, emissive: 0x2d190a, emissiveIntensity: 0.08 }),
+      roomFloor: mat(0x8f5d34, { roughness: 0.86, metalness: 0.02, emissive: 0x1f0d04, emissiveIntensity: 0.08 }),
+      couch: mat(0x426f98, { roughness: 0.82, metalness: 0.01, emissive: 0x071f33, emissiveIntensity: 0.1 }),
+      furnitureWood: mat(0x6f3f22, { roughness: 0.8, metalness: 0.02, emissive: 0x1a0902, emissiveIntensity: 0.08 }),
+      lampShade: mat(0xffe0a0, { roughness: 0.72, metalness: 0.01, emissive: 0x6c450d, emissiveIntensity: 0.38 }),
       backdropBlue: mat(0x1779b9, { roughness: 0.86, metalness: 0.01, emissive: 0x06395a, emissiveIntensity: 0.18 }),
       backdropGreen: mat(0x4da52c, { roughness: 0.88, metalness: 0.01, emissive: 0x143807, emissiveIntensity: 0.14 }),
       backdropPurple: mat(0x8d78d9, { roughness: 0.84, metalness: 0.02, emissive: 0x26184f, emissiveIntensity: 0.18 }),
@@ -763,6 +1372,8 @@
       creatureB: mat(0x53ead1, { roughness: 0.5, emissive: 0x0b4d45, emissiveIntensity: 0.36 }),
       creatureC: mat(0xd883ff, { roughness: 0.55, emissive: 0x411260, emissiveIntensity: 0.32 }),
       creatureFin: mat(0xf8fbff, { roughness: 0.36, transparent: true, opacity: 0.66, depthWrite: false }),
+      cameraBody: mat(0x1d2533, { roughness: 0.45, metalness: 0.18, emissive: 0x0a1018, emissiveIntensity: 0.18 }),
+      cameraLens: mat(0x53ead1, { roughness: 0.22, metalness: 0.08, emissive: 0x0a5d55, emissiveIntensity: 0.85 }),
     };
   }
 
@@ -788,6 +1399,7 @@
     };
 
     applyTexture("dish", TEXTURE_ASSETS.floor, 8 * MAP_LINEAR_SCALE, 8 * MAP_LINEAR_SCALE);
+    applyTexture("agarBase", TEXTURE_ASSETS.floor, 5, 5);
     applyTexture("algae", TEXTURE_ASSETS.algae, 1.8, 1.8);
     applyTexture("fiberA", TEXTURE_ASSETS.membrane, 2, 6);
   }
@@ -817,11 +1429,38 @@
     el.arcadePhysics.textContent = world.physics.ready ? "Rapier physics" : "Fallback physics";
   }
 
+  function clearPhysicsBoundary() {
+    if (!world.physics.ready || !world.physics.world) return;
+    world.physics.boundaryBodies.forEach((body) => {
+      if (body) world.physics.world.removeRigidBody(body);
+    });
+    world.physics.boundaryBodies.length = 0;
+  }
+
   function buildPhysicsBoundary() {
     if (!world.physics.ready || world.physics.boundaryBodies.length) return;
     const RAPIER = world.physics.RAPIER;
-    const bodyCount = Math.ceil(88 * MAP_LINEAR_SCALE);
-    const radius = WORLD_RADIUS - 0.25;
+    if (levelConfig().shape === "square") {
+      const half = playableHalfSize() - 0.25;
+      [
+        { x: 0, z: -half, hx: half, hz: 0.52 },
+        { x: 0, z: half, hx: half, hz: 0.52 },
+        { x: -half, z: 0, hx: 0.52, hz: half },
+        { x: half, z: 0, hx: 0.52, hz: half },
+      ].forEach((wall) => {
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(wall.x, 0, wall.z);
+        const body = world.physics.world.createRigidBody(bodyDesc);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(wall.hx, 1.2, wall.hz)
+          .setRestitution(0.86)
+          .setFriction(0.52);
+        world.physics.world.createCollider(colliderDesc, body);
+        world.physics.boundaryBodies.push(body);
+      });
+      return;
+    }
+
+    const radius = playableRadius() - 0.25;
+    const bodyCount = Math.max(48, Math.ceil(88 * radius / LEVEL_ONE_RADIUS));
     const tangentHalf = (Math.PI * radius * 2) / bodyCount / 2;
     for (let i = 0; i < bodyCount; i++) {
       const angle = (i / bodyCount) * Math.PI * 2;
@@ -838,6 +1477,11 @@
       world.physics.world.createCollider(colliderDesc, body);
       world.physics.boundaryBodies.push(body);
     }
+  }
+
+  function rebuildPhysicsBoundary() {
+    clearPhysicsBoundary();
+    buildPhysicsBoundary();
   }
 
   function attachPhysicsBody(prop, config) {
@@ -921,18 +1565,143 @@
     scene.add(gardenFill);
 
     buildDish();
-    buildScenicDepth();
-    buildEnvironment();
+    world.tardigrade = makeTardigrade();
+    scene.add(world.tardigrade);
+    world.guide = makeGuideBeacon();
+    scene.add(world.guide);
+  }
+
+  function removeSceneObjects(items) {
+    items.forEach((item) => {
+      if (!item) return;
+      world.scene.remove(item);
+      disposeObject(item);
+    });
+    items.length = 0;
+  }
+
+  function addStageScenery(object, bucket = "") {
+    if (!object) return object;
+    (world.stageRoot || world.scene).add(object);
+    if (bucket === "drift") world.drift.push(object);
+    if (bucket === "atmosphere") world.atmosphere.push(object);
+    return object;
+  }
+
+  function clearStageScenery() {
+    if (world.stageRoot) {
+      world.scene.remove(world.stageRoot);
+      disposeObject(world.stageRoot);
+      world.stageRoot = null;
+    }
+    world.terrain = null;
+    world.boundary = null;
+    world.drift.length = 0;
+    world.atmosphere.length = 0;
+  }
+
+  function rebuildStageScenery() {
+    const THREE = window.THREE;
+    clearStageScenery();
+    applyStageAtmosphere();
+    world.stageRoot = new THREE.Group();
+    world.stageRoot.userData.kind = `${levelConfig().id}-stage-scenery`;
+    world.scene.add(world.stageRoot);
+    makeRollingTerrain();
+    makePlayableBoundary();
+
+    if (levelConfig().id === "petri") {
+      makeLabBackdrop();
+      makePetriDishDetails();
+      makePetriWaterPatches();
+    } else if (levelConfig().id === "aquarium") {
+      makeLivingRoomBackdrop();
+      makeAquariumBoundaryDetails();
+      makeAquariumFloorAccents();
+      makeAquariumWaterPatches();
+      buildScenicDepth();
+      buildEnvironment();
+    } else if (levelConfig().id === "stomach") {
+      makeStomachBackdrop();
+      makeStomachDetails();
+      buildEnvironment();
+    } else if (levelConfig().id === "lava") {
+      makeLavaBackdrop();
+      makeLavaDetails();
+      buildEnvironment();
+    } else if (levelConfig().id === "station") {
+      makeStationBackdrop();
+      makeStationDetails();
+      buildEnvironment();
+    }
+  }
+
+  function applyStageAtmosphere() {
+    const THREE = window.THREE;
+    const id = levelConfig().id;
+    updateWorldBaseForStage(id);
+    if (id === "petri") {
+      world.renderer.setClearColor(0xeaf7ff, 1);
+      world.scene.fog = new THREE.FogExp2(0xeaf7ff, 0.0009);
+      world.scene.background = makePetriSkyTexture();
+      return;
+    }
+    if (id === "stomach") {
+      world.renderer.setClearColor(0x3a0d2a, 1);
+      world.scene.fog = new THREE.FogExp2(0x5a1b36, 0.0011);
+      world.scene.background = makeStomachSkyTexture();
+      return;
+    }
+    if (id === "lava") {
+      world.renderer.setClearColor(0x170b10, 1);
+      world.scene.fog = new THREE.FogExp2(0x3a1a18, 0.00092);
+      world.scene.background = makeLavaSkyTexture();
+      return;
+    }
+    if (id === "station") {
+      world.renderer.setClearColor(0x050914, 1);
+      world.scene.fog = new THREE.FogExp2(0x091427, 0.00058);
+      world.scene.background = makeStationSkyTexture();
+      return;
+    }
+    world.renderer.setClearColor(0xd7b88f, 1);
+    world.scene.fog = new THREE.FogExp2(0x9bd7df, 0.00072);
+    world.scene.background = makeLivingRoomSkyTexture();
+  }
+
+  function updateWorldBaseForStage(id) {
+    if (!world.petri) return;
+    const baseMaterials = {
+      petri: world.materials.labCounter,
+      aquarium: world.materials.dishDark,
+      stomach: world.materials.zoneStomachPurple,
+      lava: world.materials.cliff,
+      station: world.materials.cameraBody,
+    };
+    world.petri.material = baseMaterials[id] || world.materials.dishDark;
+  }
+
+  function clearInteractiveLevel() {
+    removeSceneObjects(world.zones);
+    removeSceneObjects(world.traversalToys);
+    removeSceneObjects(world.landmarks);
+    removeSceneObjects(world.creatures);
+    if (world.ring) {
+      world.scene.remove(world.ring);
+      disposeObject(world.ring);
+      world.ring = null;
+      world.ringCore = null;
+    }
+  }
+
+  function rebuildInteractiveLevel() {
+    clearInteractiveLevel();
     buildSandboxZones();
     buildTraversalToys();
     buildHiddenLandmarks();
     buildRoamingCreatures();
     world.ring = makeNutrientRing();
-    scene.add(world.ring);
-    world.tardigrade = makeTardigrade();
-    scene.add(world.tardigrade);
-    world.guide = makeGuideBeacon();
-    scene.add(world.guide);
+    world.scene.add(world.ring);
   }
 
   function makeSkyTexture() {
@@ -990,6 +1759,179 @@
     return texture;
   }
 
+  function makePetriSkyTexture() {
+    const THREE = window.THREE;
+    const sky = document.createElement("canvas");
+    sky.width = 96;
+    sky.height = 256;
+    const ctx = sky.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
+    gradient.addColorStop(0, "#f8fbff");
+    gradient.addColorStop(0.42, "#e6f4ff");
+    gradient.addColorStop(1, "#d4edf6");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, sky.width, sky.height);
+    for (let i = 0; i < 5; i++) {
+      const x = 6 + i * 21;
+      const beam = ctx.createLinearGradient(x, 0, x + 12, sky.height);
+      beam.addColorStop(0, "rgba(255,255,255,0.58)");
+      beam.addColorStop(0.5, "rgba(210,236,255,0.18)");
+      beam.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + 10, 0);
+      ctx.lineTo(x + 2, sky.height);
+      ctx.lineTo(x - 16, sky.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(126,160,178,0.08)";
+    ctx.lineWidth = 1;
+    for (let y = 22; y < sky.height; y += 34) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(sky.width, y + Math.sin(y) * 2);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 64; i++) {
+      const size = Math.random() * 1.6 + 0.25;
+      ctx.fillStyle = i % 6 === 0 ? "rgba(255,255,255,0.62)" : "rgba(142,170,180,0.22)";
+      ctx.beginPath();
+      ctx.arc(Math.random() * sky.width, Math.random() * sky.height * 0.74, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const texture = new THREE.CanvasTexture(sky);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeLivingRoomSkyTexture() {
+    const THREE = window.THREE;
+    const sky = document.createElement("canvas");
+    sky.width = 128;
+    sky.height = 256;
+    const ctx = sky.getContext("2d");
+    const wall = ctx.createLinearGradient(0, 0, 0, sky.height);
+    wall.addColorStop(0, "#d9c39f");
+    wall.addColorStop(0.52, "#c9a77b");
+    wall.addColorStop(0.53, "#8a5a33");
+    wall.addColorStop(1, "#6f4527");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, sky.width, sky.height);
+
+    ctx.fillStyle = "rgba(255,245,220,0.12)";
+    for (let y = 24; y < sky.height * 0.5; y += 34) {
+      ctx.fillRect(0, y, sky.width, 2);
+    }
+    ctx.fillStyle = "rgba(88,55,30,0.38)";
+    ctx.fillRect(0, Math.floor(sky.height * 0.52), sky.width, 5);
+
+    const texture = new THREE.CanvasTexture(sky);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeStomachSkyTexture() {
+    const THREE = window.THREE;
+    const sky = document.createElement("canvas");
+    sky.width = 128;
+    sky.height = 256;
+    const ctx = sky.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
+    gradient.addColorStop(0, "#5a1837");
+    gradient.addColorStop(0.48, "#8b2e54");
+    gradient.addColorStop(1, "#3d1030");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, sky.width, sky.height);
+    for (let y = 18; y < sky.height; y += 24) {
+      ctx.strokeStyle = "rgba(255,171,118,0.18)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let x = 0; x <= sky.width; x += 8) {
+        const waveY = y + Math.sin(x * 0.22 + y * 0.11) * 4;
+        if (x === 0) ctx.moveTo(x, waveY);
+        else ctx.lineTo(x, waveY);
+      }
+      ctx.stroke();
+    }
+    for (let i = 0; i < 80; i++) {
+      ctx.fillStyle = i % 4 ? "rgba(255,179,77,0.2)" : "rgba(178,255,95,0.28)";
+      ctx.beginPath();
+      ctx.arc(Math.random() * sky.width, Math.random() * sky.height, Math.random() * 1.8 + 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const texture = new THREE.CanvasTexture(sky);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeLavaSkyTexture() {
+    const THREE = window.THREE;
+    const sky = document.createElement("canvas");
+    sky.width = 128;
+    sky.height = 256;
+    const ctx = sky.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
+    gradient.addColorStop(0, "#120810");
+    gradient.addColorStop(0.45, "#2a1620");
+    gradient.addColorStop(1, "#5c160f");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, sky.width, sky.height);
+    for (let i = 0; i < 9; i++) {
+      const x = 6 + i * 15;
+      const glow = ctx.createLinearGradient(x, sky.height, x + 12, 0);
+      glow.addColorStop(0, "rgba(255,74,33,0.48)");
+      glow.addColorStop(0.5, "rgba(255,212,59,0.16)");
+      glow.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.moveTo(x, sky.height);
+      ctx.lineTo(x + 18, sky.height);
+      ctx.lineTo(x + 9, 0);
+      ctx.lineTo(x - 8, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    for (let i = 0; i < 120; i++) {
+      ctx.fillStyle = i % 5 ? "rgba(255,179,77,0.26)" : "rgba(248,251,255,0.22)";
+      ctx.fillRect(Math.random() * sky.width, Math.random() * sky.height, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
+    }
+    const texture = new THREE.CanvasTexture(sky);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeStationSkyTexture() {
+    const THREE = window.THREE;
+    const sky = document.createElement("canvas");
+    sky.width = 128;
+    sky.height = 256;
+    const ctx = sky.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
+    gradient.addColorStop(0, "#060914");
+    gradient.addColorStop(0.54, "#111c31");
+    gradient.addColorStop(1, "#283747");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, sky.width, sky.height);
+    for (let i = 0; i < 120; i++) {
+      const alpha = Math.random() * 0.5 + 0.24;
+      ctx.fillStyle = `rgba(248,251,255,${alpha})`;
+      ctx.fillRect(Math.random() * sky.width, Math.random() * sky.height * 0.62, 1, 1);
+    }
+    ctx.fillStyle = "rgba(83,234,209,0.16)";
+    for (let y = 142; y < sky.height; y += 24) {
+      ctx.fillRect(0, y, sky.width, 2);
+    }
+    ctx.fillStyle = "rgba(248,251,255,0.32)";
+    ctx.beginPath();
+    ctx.arc(92, 58, 13, 0, Math.PI * 2);
+    ctx.fill();
+    const texture = new THREE.CanvasTexture(sky);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function buildDish() {
     const THREE = window.THREE;
     const waterBase = new THREE.Mesh(
@@ -1001,17 +1943,402 @@
     world.scene.add(waterBase);
     world.petri = waterBase;
 
-    world.plateauObstacles = [];
-    makeRollingTerrain();
-    makeTerrainIsland(mapCoord(-68), mapCoord(52), scenicRadius(16.8), 2.5, 0.68, world.materials.grassLight);
-    makeTerrainIsland(mapCoord(66), mapCoord(-68), scenicRadius(17.5), 2.2, 0.72, world.materials.dish);
-    makeTerrainIsland(mapCoord(-62), mapCoord(-66), scenicRadius(14.6), 2.65, 0.78, world.materials.grassLight);
-    makeTerrainIsland(mapCoord(66), mapCoord(42), scenicRadius(15.8), 1.95, 0.7, world.materials.dish);
-    makeTerrainIsland(mapCoord(2), mapCoord(-76), scenicRadius(14.4), 1.9, 0.66, world.materials.dish);
-    makeVerticalMesa(mapCoord(-92), mapCoord(10), scenicRadius(13), 11.5, 0.58, world.materials.backdropPurple);
-    makeVerticalMesa(mapCoord(92), mapCoord(-14), scenicRadius(15), 13.2, 0.64, world.materials.backdropBlue);
-    makeVerticalMesa(mapCoord(-12), mapCoord(88), scenicRadius(18), 12.6, 0.52, world.materials.backdropGreen);
+  }
 
+  function makeBackdropBox(x, y, z, width, height, depth, material, rotationY = 0) {
+    const THREE = window.THREE;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = rotationY;
+    mesh.receiveShadow = true;
+    addStageScenery(mesh);
+    return mesh;
+  }
+
+  function makeBackdropCylinder(x, y, z, radiusTop, radiusBottom, height, material, segments = 16) {
+    const THREE = window.THREE;
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments), material);
+    mesh.position.set(x, y, z);
+    mesh.receiveShadow = true;
+    addStageScenery(mesh);
+    return mesh;
+  }
+
+  function makeLabBackdrop() {
+    const THREE = window.THREE;
+    makeBackdropBox(0, -1.55, 0, WORLD_RADIUS * 2.45, 0.5, WORLD_RADIUS * 2.45, world.materials.labCounter);
+    makeBackdropBox(0, 70, -270, 560, 140, 5, world.materials.labWall);
+    makeBackdropBox(0, 8, -268, 560, 4, 8, world.materials.labMetal);
+    makeBackdropBox(-190, 44, -250, 70, 72, 6, world.materials.labMetal);
+    makeBackdropBox(-190, 26, -222, 38, 12, 58, world.materials.labMetal, -0.22);
+    const scopeArm = makeBackdropCylinder(-155, 70, -230, 7.5, 7.5, 74, world.materials.labMetal, 18);
+    scopeArm.rotation.z = Math.PI / 2.9;
+    scopeArm.rotation.y = -0.22;
+    const scopeLens = makeBackdropCylinder(-118, 55, -208, 15, 18, 24, world.materials.labGlass, 20);
+    scopeLens.rotation.x = Math.PI / 2;
+    scopeLens.rotation.z = -0.24;
+
+    makeBackdropBox(122, 15, -246, 84, 9, 34, world.materials.labMetal);
+    [-18, 0, 18].forEach((offset, index) => {
+      const tube = makeBackdropCylinder(104 + offset, 43, -248, 7, 8, 54 + index * 7, world.materials.labGlass, 18);
+      tube.scale.x = 0.68;
+      const liquid = makeBackdropCylinder(104 + offset, 23, -248, 6.2, 7, 16 + index * 4, index === 1 ? world.materials.droplet : world.materials.cell, 18);
+      liquid.scale.x = 0.64;
+    });
+
+    const flask = makeBackdropCylinder(214, 25, -234, 20, 35, 40, world.materials.labGlass, 24);
+    flask.scale.z = 0.72;
+    const flaskNeck = makeBackdropCylinder(214, 57, -234, 8, 8, 36, world.materials.labGlass, 18);
+    flaskNeck.scale.z = 0.7;
+    const flaskLiquid = makeBackdropCylinder(214, 13, -234, 18, 31, 16, world.materials.zonePetriWater, 24);
+    flaskLiquid.scale.z = 0.68;
+
+    for (let i = 0; i < 7; i++) {
+      const x = -240 + i * 78;
+      makeBackdropBox(x, 124, -266, 26, 7, 4, world.materials.white);
+    }
+  }
+
+  function makeLivingRoomBackdrop() {
+    const half = playableHalfSize();
+    makeBackdropBox(0, -1.7, 0, half * 3.6, 0.52, half * 3.6, world.materials.roomFloor);
+    makeBackdropBox(0, 104, -half - 96, half * 2.9, 208, 7, world.materials.roomWall);
+    makeBackdropBox(-half - 96, 104, 0, 7, 208, half * 2.9, world.materials.roomWall);
+
+    makeBackdropBox(-132, 58, -half - 68, 196, 72, 42, world.materials.couch);
+    makeBackdropBox(-205, 93, -half - 82, 54, 70, 30, world.materials.couch);
+    makeBackdropBox(-62, 93, -half - 82, 54, 70, 30, world.materials.couch);
+    makeBackdropBox(-132, 25, -half - 42, 184, 28, 58, world.materials.couch);
+    makeBackdropBox(-154, 70, -half - 37, 34, 24, 10, world.materials.lampShade);
+    makeBackdropBox(-101, 73, -half - 37, 36, 28, 10, world.materials.coralPink);
+
+    const lampX = half + 86;
+    makeBackdropBox(lampX, 58, -half - 60, 24, 112, 24, world.materials.furnitureWood);
+    const shade = makeBackdropCylinder(lampX, 132, -half - 60, 36, 54, 46, world.materials.lampShade, 24);
+    shade.scale.z = 0.72;
+    makeBackdropBox(lampX, 158, -half - 60, 88, 8, 88, world.materials.lampShade);
+
+    makeBackdropBox(42, 18, half + 146, 128, 18, 58, world.materials.furnitureWood, 0.15);
+    const shelfX = -half - 86;
+    makeBackdropBox(shelfX, 64, 86, 40, 110, 86, world.materials.furnitureWood);
+    [26, 52, 78, 104].forEach((y, index) => {
+      makeBackdropBox(shelfX, y, 86, 42, 4, 88, index % 2 ? world.materials.roomWall : world.materials.labMetal);
+    });
+  }
+
+  function makeStomachBackdrop() {
+    const radius = playableRadius();
+    makeBackdropBox(0, -1.85, 0, radius * 2.55, 0.6, radius * 2.55, world.materials.zoneStomachPink);
+    makeBackdropBox(0, 82, -radius - 82, radius * 2.3, 164, 8, world.materials.zoneStomachPink);
+    makeBackdropBox(-radius - 82, 82, 0, 8, 164, radius * 2.3, world.materials.zoneStomachPurple);
+    makeBackdropBox(radius + 82, 82, 0, 8, 164, radius * 2.3, world.materials.zoneStomachGold);
+    for (let i = 0; i < 9; i++) {
+      const x = -radius * 0.92 + i * (radius * 0.23);
+      const fold = makeBackdropCylinder(x, 58 + (i % 3) * 8, -radius - 70, 6, 11, 118, i % 2 ? world.materials.zoneStomachGold : world.materials.zoneStomachPink, 10);
+      fold.rotation.z = 0.18 + Math.sin(i) * 0.12;
+    }
+  }
+
+  function makeLavaBackdrop() {
+    const radius = playableRadius();
+    makeBackdropBox(0, -2.0, 0, radius * 2.62, 0.6, radius * 2.62, world.materials.zoneLavaBasalt);
+    makeBackdropBox(0, 92, -radius - 88, radius * 2.4, 184, 10, world.materials.cliff);
+    makeBackdropBox(-radius - 90, 84, 0, 10, 168, radius * 2.4, world.materials.cliff);
+    makeBackdropBox(radius + 90, 84, 0, 10, 168, radius * 2.4, world.materials.cliff);
+    for (let i = 0; i < 10; i++) {
+      const x = -radius * 0.9 + i * radius * 0.2;
+      const spire = makeBackdropCylinder(x, 42 + (i % 4) * 12, -radius - 72, 9, 17, 82 + (i % 3) * 18, i % 2 ? world.materials.zoneLavaCrystal : world.materials.zoneLavaBasalt, 6);
+      spire.rotation.z = Math.sin(i * 1.7) * 0.16;
+    }
+  }
+
+  function makeStationBackdrop() {
+    const half = playableHalfSize();
+    makeBackdropBox(0, -1.9, 0, half * 3.2, 0.55, half * 3.2, world.materials.zoneStationWhite);
+    makeBackdropBox(0, 98, -half - 86, half * 2.75, 196, 8, world.materials.cameraBody);
+    makeBackdropBox(-half - 88, 98, 0, 8, 196, half * 2.75, world.materials.cameraBody);
+    makeBackdropBox(half + 88, 98, 0, 8, 196, half * 2.75, world.materials.cameraBody);
+    for (let i = 0; i < 5; i++) {
+      const x = -half * 0.68 + i * half * 0.34;
+      makeBackdropBox(x, 94, -half - 80, 44, 32, 5, world.materials.labGlass);
+      makeBackdropBox(x, 94, -half - 76, 50, 4, 6, world.materials.labMetal);
+      makeBackdropBox(x, 76, -half - 76, 50, 4, 6, world.materials.labMetal);
+    }
+    makeBackdropBox(-half - 70, 34, 76, 72, 26, 92, world.materials.labMetal, 0.12);
+    makeBackdropBox(half + 70, 42, -68, 82, 34, 74, world.materials.toolpod, -0.18);
+  }
+
+  function makeStomachDetails() {
+    const mats = [world.materials.zoneStomachPink, world.materials.zoneStomachGold, world.materials.foodbit, world.materials.digestiveBubble];
+    [
+      [mapCoord(-44), mapCoord(31), scenicRadius(9.2), 16, mats],
+      [mapCoord(40), mapCoord(42), scenicRadius(8.4), 15, [world.materials.digestiveBubble, world.materials.zoneStomachMint, world.materials.foodbit]],
+      [mapCoord(48), mapCoord(-48), scenicRadius(10.4), 17, [world.materials.foodbit, world.materials.pollen, world.materials.zoneStomachGold]],
+      [mapCoord(-54), mapCoord(-52), scenicRadius(9.4), 16, [world.materials.enzyme, world.materials.zoneStomachPurple, world.materials.digestiveBubble]],
+    ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
+    [
+      [mapCoord(4), mapCoord(12), scenicRadius(14), 0.32, 0.2, world.materials.zoneStomachGold],
+      [mapCoord(-24), mapCoord(-30), scenicRadius(12), 0.42, -0.35, world.materials.zoneStomachPink],
+      [mapCoord(46), mapCoord(-8), scenicRadius(11), 0.36, 0.65, world.materials.zoneStomachMint],
+    ].forEach(([x, z, radius, scaleZ, rotation, material]) => makeMaterialPatch(x, z, radius, scaleZ, rotation, material));
+    for (let i = 0; i < 46; i++) {
+      const pos = randomPlayablePoint(8);
+      makeSuspendedDroplet(pos.x, pos.z, rand(0.45, 1.2), rand(3.8, 24));
+    }
+    makeBubbleColumn(mapCoord(34), mapCoord(46), 23, 20);
+    makeBubbleColumn(mapCoord(-50), mapCoord(-46), 20, 18);
+    makeCurrentRibbon(mapCoord(5), mapCoord(8), 60, 10, 0.15);
+    makeCurrentRibbon(mapCoord(-28), mapCoord(38), 52, 8, -0.45);
+  }
+
+  function makeLavaDetails() {
+    [
+      [mapCoord(32), mapCoord(26), scenicRadius(15), 0.26, 0.2, world.materials.zoneLavaRiver],
+      [mapCoord(6), mapCoord(-12), scenicRadius(18), 0.2, -0.38, world.materials.magmaBubble],
+      [mapCoord(-42), mapCoord(-50), scenicRadius(10), 0.36, 0.68, world.materials.zoneLavaSteam],
+    ].forEach(([x, z, radius, scaleZ, rotation, material]) => makeMaterialPatch(x, z, radius, scaleZ, rotation, material));
+    [
+      [mapCoord(-56), mapCoord(40), scenicRadius(9.6), 13, [world.materials.cliff, world.materials.zoneLavaBasalt, world.materials.ashCrystal]],
+      [mapCoord(54), mapCoord(-54), scenicRadius(10.6), 16, [world.materials.ashCrystal, world.materials.crystal, world.materials.zoneLavaCrystal]],
+      [mapCoord(50), mapCoord(28), scenicRadius(8.8), 12, [world.materials.magmaBubble, world.materials.coralOrange, world.materials.zoneLavaRiver]],
+    ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
+    for (let i = 0; i < 40; i++) {
+      const pos = randomPlayablePoint(8);
+      const ember = new window.THREE.Mesh(new window.THREE.TetrahedronGeometry(rand(0.1, 0.32), 0), pick([world.materials.magmaBubble, world.materials.zoneLavaSteam, world.materials.ashCrystal]));
+      ember.position.set(pos.x, rand(3.5, 30), pos.z);
+      ember.userData.baseY = ember.position.y;
+      ember.userData.speed = rand(0.45, 1.4);
+      ember.userData.phase = rand(0, Math.PI * 2);
+      addStageScenery(ember, "drift");
+    }
+    makeBubbleColumn(mapCoord(42), mapCoord(0), 26, 18, world.materials.magmaBubble);
+    makeBubbleColumn(mapCoord(-44), mapCoord(-52), 22, 16, world.materials.zoneLavaSteam);
+    makeCurrentRibbon(mapCoord(20), mapCoord(14), 72, 12, 0.35, world.materials.zoneLavaRiver, 0.18);
+  }
+
+  function makeStationDetails() {
+    [
+      [mapCoord(-50), mapCoord(43), scenicRadius(8.8), 12, [world.materials.dataChip, world.materials.labMetal, world.materials.zoneStationCyan]],
+      [mapCoord(46), mapCoord(40), scenicRadius(9.2), 13, [world.materials.toolpod, world.materials.white, world.materials.labGlass]],
+      [mapCoord(-48), mapCoord(-46), scenicRadius(8.6), 12, [world.materials.zoneStationGold, world.materials.labMetal, world.materials.cameraLens]],
+      [mapCoord(50), mapCoord(-48), scenicRadius(8.8), 14, [world.materials.zoneStationViolet, world.materials.crystal, world.materials.dataChip]],
+    ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
+    for (let i = 0; i < 18; i++) {
+      const pos = randomPlayablePoint(10);
+      const panel = new window.THREE.Mesh(new window.THREE.BoxGeometry(rand(2.2, 5.8), 0.12, rand(1.2, 3.8)), pick([world.materials.labMetal, world.materials.dataChip, world.materials.toolpod]));
+      panel.position.set(pos.x, terrainVisualYAt(pos.x, pos.z) + 0.16, pos.z);
+      panel.rotation.y = rand(0, Math.PI);
+      panel.receiveShadow = true;
+      addStageScenery(panel);
+    }
+    for (let i = 0; i < 54; i++) {
+      const pos = randomPlayablePoint(5);
+      const dust = new window.THREE.Mesh(new window.THREE.IcosahedronGeometry(rand(0.06, 0.22), 0), pick([world.materials.cameraLens, world.materials.white, world.materials.dataChip]));
+      dust.position.set(pos.x, rand(4, 34), pos.z);
+      dust.userData.baseY = dust.position.y;
+      dust.userData.speed = rand(0.2, 0.72);
+      dust.userData.phase = rand(0, Math.PI * 2);
+      addStageScenery(dust, "drift");
+    }
+    makeCurrentRibbon(mapCoord(-28), mapCoord(-28), 42, 8, -0.2);
+    makeCurrentRibbon(mapCoord(36), mapCoord(8), 54, 7, 0.44);
+  }
+
+  function makePlayableBoundary() {
+    const THREE = window.THREE;
+    if (levelConfig().shape === "square") {
+      makeSquareAquariumBoundary();
+      return;
+    }
+
+    const radius = playableRadius();
+    const boundaryMaterial = levelConfig().id === "petri"
+      ? world.materials.agarEdge
+      : levelConfig().id === "stomach"
+        ? world.materials.zoneStomachPink
+        : levelConfig().id === "lava"
+          ? world.materials.zoneLavaRiver
+          : world.materials.water;
+    const boundary = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, levelConfig().id === "petri" ? 0.42 : 0.34, 10, 112),
+      boundaryMaterial
+    );
+    boundary.rotation.x = Math.PI / 2;
+    boundary.position.y = 0.08;
+    boundary.receiveShadow = true;
+    addStageScenery(boundary);
+    world.boundary = boundary;
+
+    const inner = new THREE.Mesh(
+      new THREE.TorusGeometry(radius - 5.2, 0.035, 6, 112),
+      levelConfig().id === "lava" ? world.materials.magmaBubble : world.materials.ring
+    );
+    inner.rotation.x = Math.PI / 2;
+    inner.position.y = 0.05;
+    addStageScenery(inner);
+  }
+
+  function makeSquareAquariumBoundary() {
+    const half = playableHalfSize();
+    const isStation = levelConfig().id === "station";
+    const wallHeight = isStation ? 24 : 38;
+    const wallY = wallHeight / 2 - 0.5;
+    const sideLength = half * 2 + 5.6;
+    const glass = isStation ? world.materials.labGlass : world.materials.glass;
+    const water = isStation ? world.materials.labMetal : world.materials.water;
+
+    const group = new window.THREE.Group();
+    group.userData.kind = `${levelConfig().id}-square-boundary`;
+    [
+      { x: 0, z: -half - 1.4, w: sideLength, h: wallHeight, d: 1.8 },
+      { x: 0, z: half + 1.4, w: sideLength, h: wallHeight, d: 1.8 },
+      { x: -half - 1.4, z: 0, w: 1.8, h: wallHeight, d: sideLength },
+      { x: half + 1.4, z: 0, w: 1.8, h: wallHeight, d: sideLength },
+    ].forEach((wall) => {
+      const mesh = new window.THREE.Mesh(new window.THREE.BoxGeometry(wall.w, wall.h, wall.d), glass);
+      mesh.position.set(wall.x, wallY, wall.z);
+      mesh.renderOrder = 1;
+      group.add(mesh);
+    });
+
+    [
+      { x: 0, z: -half - 1.8, w: sideLength, d: 2.3 },
+      { x: 0, z: half + 1.8, w: sideLength, d: 2.3 },
+      { x: -half - 1.8, z: 0, w: 2.3, d: sideLength },
+      { x: half + 1.8, z: 0, w: 2.3, d: sideLength },
+    ].forEach((rim) => {
+      const top = new window.THREE.Mesh(new window.THREE.BoxGeometry(rim.w, 1.25, rim.d), glass);
+      top.position.set(rim.x, wallHeight + 1.2, rim.z);
+      group.add(top);
+      const floorEdge = new window.THREE.Mesh(new window.THREE.BoxGeometry(rim.w, 0.22, rim.d), water);
+      floorEdge.position.set(rim.x, 0.12, rim.z);
+      group.add(floorEdge);
+    });
+
+    addStageScenery(group);
+    world.boundary = group;
+  }
+
+  function makePetriDishDetails() {
+    const THREE = window.THREE;
+    const agarGlow = new THREE.Mesh(
+      new THREE.CylinderGeometry(LEVEL_ONE_RADIUS - 4, LEVEL_ONE_RADIUS - 6, 0.18, 96),
+      world.materials.agarBase
+    );
+    agarGlow.position.y = -0.76;
+    agarGlow.receiveShadow = true;
+    addStageScenery(agarGlow);
+
+    const wall = new THREE.Mesh(
+      new THREE.CylinderGeometry(LEVEL_ONE_RADIUS + 1.2, LEVEL_ONE_RADIUS + 1.2, 2.35, 128, 1, true),
+      world.materials.glass
+    );
+    wall.position.y = 0.88;
+    wall.renderOrder = 2;
+    addStageScenery(wall);
+
+    const lip = new THREE.Mesh(
+      new THREE.TorusGeometry(LEVEL_ONE_RADIUS + 1.2, 0.72, 10, 128),
+      world.materials.glass
+    );
+    lip.rotation.x = Math.PI / 2;
+    lip.position.y = 1.92;
+    lip.renderOrder = 3;
+    addStageScenery(lip);
+
+    const agarMeniscus = new THREE.Mesh(
+      new THREE.TorusGeometry(LEVEL_ONE_RADIUS - 6.4, 0.11, 6, 128),
+      world.materials.agarEdge
+    );
+    agarMeniscus.rotation.x = Math.PI / 2;
+    agarMeniscus.position.y = 0.72;
+    addStageScenery(agarMeniscus);
+
+    for (let i = 0; i < 48; i++) {
+      const angle = rand(0, Math.PI * 2);
+      const distance = Math.sqrt(Math.random()) * (LEVEL_ONE_RADIUS - 12);
+      const x = Math.cos(angle) * distance;
+      const z = Math.sin(angle) * distance;
+      const speck = new THREE.Mesh(
+        new THREE.CylinderGeometry(rand(0.12, 0.44), rand(0.1, 0.38), 0.025, 7),
+        pick([world.materials.gravel, world.materials.pollen, world.materials.algae, world.materials.cell])
+      );
+      speck.position.set(x, terrainVisualYAt(x, z) + 0.11, z);
+      speck.scale.z = rand(0.45, 1.2);
+      speck.rotation.set(rand(-0.05, 0.05), rand(0, Math.PI), rand(-0.05, 0.05));
+      speck.receiveShadow = true;
+      addStageScenery(speck);
+    }
+
+    [
+      [-64, 18, 8.2, -0.3],
+      [42, 39, 6.8, 0.46],
+      [58, -42, 7.4, -0.15],
+      [-28, -58, 5.8, 0.7],
+    ].forEach(([x, z, radius, rotation]) => makeLabReflection(x, z, radius, rotation));
+  }
+
+  function makeLabReflection(x, z, radius, rotation) {
+    const THREE = window.THREE;
+    const glint = new THREE.Mesh(
+      new THREE.TorusGeometry(radius, 0.035, 4, 32),
+      world.materials.caustic.clone()
+    );
+    glint.position.set(x, terrainVisualYAt(x, z) + 0.12, z);
+    glint.rotation.x = Math.PI / 2;
+    glint.rotation.z = rotation;
+    glint.scale.z = 0.32;
+    glint.userData.phase = rand(0, Math.PI * 2);
+    glint.userData.baseOpacity = rand(0.05, 0.12);
+    glint.userData.baseScale = glint.scale.clone();
+    addStageScenery(glint, "atmosphere");
+  }
+
+  function makeAquariumBoundaryDetails() {
+    const THREE = window.THREE;
+    const half = playableHalfSize();
+    const airStone = new THREE.Mesh(
+      new THREE.BoxGeometry(11.5, 1.2, 4.2),
+      world.materials.gravel
+    );
+    airStone.position.set(half - 30, terrainVisualYAt(half - 30, -54) + 0.72, -54);
+    airStone.rotation.y = -0.4;
+    airStone.receiveShadow = true;
+    addStageScenery(airStone);
+
+    makeBubbleColumn(half - 30, -54, 26, 22);
+    makeBubbleColumn(-half + 42, mapCoord(53), 18, 16);
+    makeBubbleColumn(mapCoord(12), -half + 32, 22, 18);
+    makeCurrentRibbon(mapCoord(-20), mapCoord(66), 46, 8, -0.4);
+    makeCurrentRibbon(mapCoord(68), mapCoord(-44), 52, 7, 0.5);
+  }
+
+  function makeAquariumFloorAccents() {
+    [
+      [mapCoord(-74), mapCoord(48), 9.4, 18, [world.materials.fiberA, world.materials.algae, world.materials.coralGreen]],
+      [mapCoord(68), mapCoord(36), 8.4, 15, [world.materials.coralTeal, world.materials.droplet, world.materials.algae]],
+      [mapCoord(58), mapCoord(-66), 10.4, 17, [world.materials.coralPink, world.materials.bacteria, world.materials.coralPurple]],
+      [mapCoord(-58), mapCoord(-64), 9.6, 16, [world.materials.spore, world.materials.coralPurple, world.materials.crystal]],
+      [mapCoord(6), mapCoord(-78), 7.4, 13, [world.materials.coralYellow, world.materials.coralTeal, world.materials.spore]],
+    ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
+
+    for (let i = 0; i < 28; i++) {
+      const pos = randomPlayablePoint(12);
+      makePebblePatch(pos.x, pos.z, rand(0.8, 1.8));
+    }
+  }
+
+  function makePetriWaterPatches() {
+    [
+      [-42, 34, 13.5, 0.34, 0.15],
+      [34, -26, 11.0, 0.42, -0.52],
+      [6, 52, 8.4, 0.36, 0.48],
+      [-58, -38, 9.2, 0.32, -0.22],
+      [54, 12, 7.4, 0.4, 0.72],
+    ].forEach(([x, z, radius, scaleZ, rotation]) => makeWaterPatch(x, z, radius, scaleZ, rotation));
+  }
+
+  function makeAquariumWaterPatches() {
     [
       [mapCoord(-18), mapCoord(22), scenicRadius(7.6), 0.42, 0.15],
       [mapCoord(25), mapCoord(18), scenicRadius(7.2), 0.5, -0.55],
@@ -1025,35 +2352,56 @@
       [mapCoord(66), mapCoord(-72), scenicRadius(7.4), 0.44, -0.85],
       [mapCoord(-12), mapCoord(-76), scenicRadius(9.8), 0.4, 0.2],
     ].forEach(([x, z, radius, scaleZ, rotation]) => makeWaterPatch(x, z, radius, scaleZ, rotation));
+  }
 
-    const boundary = new THREE.Mesh(
-      new THREE.TorusGeometry(WORLD_RADIUS, 0.34, 10, 96),
-      world.materials.water
-    );
-    boundary.rotation.x = Math.PI / 2;
-    boundary.position.y = 0.08;
-    boundary.receiveShadow = true;
-    world.scene.add(boundary);
-    world.boundary = boundary;
+  function makeBubbleColumn(x, z, height, count, material = world.materials.bubble) {
+    const THREE = window.THREE;
+    for (let i = 0; i < count; i++) {
+      const bubble = new THREE.Mesh(
+        new THREE.SphereGeometry(rand(0.16, 0.68), 8, 6),
+        material
+      );
+      bubble.position.set(x + rand(-2.1, 2.1), rand(2, height), z + rand(-2.1, 2.1));
+      bubble.userData.baseY = bubble.position.y;
+      bubble.userData.speed = rand(0.7, 1.7);
+      bubble.userData.phase = rand(0, Math.PI * 2);
+      addStageScenery(bubble, "drift");
+    }
+  }
 
-    const inner = new THREE.Mesh(
-      new THREE.TorusGeometry(WORLD_RADIUS - 5.2, 0.035, 6, 96),
-      world.materials.ring
+  function makeCurrentRibbon(x, z, width, height, yaw, material = world.materials.mist, baseOpacity = 0.085) {
+    const THREE = window.THREE;
+    const ribbonMaterial = material.clone();
+    if ("opacity" in ribbonMaterial) {
+      ribbonMaterial.transparent = true;
+      ribbonMaterial.opacity = baseOpacity;
+      ribbonMaterial.depthWrite = false;
+    }
+    const ribbon = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, height),
+      ribbonMaterial
     );
-    inner.rotation.x = Math.PI / 2;
-    inner.position.y = 0.05;
-    world.scene.add(inner);
+    ribbon.position.set(x, terrainVisualYAt(x, z) + height * 0.35, z);
+    ribbon.rotation.y = yaw;
+    ribbon.rotation.z = rand(-0.08, 0.08);
+    ribbon.userData.phase = rand(0, Math.PI * 2);
+    ribbon.userData.baseOpacity = baseOpacity;
+    ribbon.userData.baseScale = ribbon.scale.clone();
+    addStageScenery(ribbon, "atmosphere");
   }
 
   function makeRollingTerrain() {
     const THREE = window.THREE;
-    const rings = Math.round(42 * MAP_LINEAR_SCALE);
-    const segments = Math.round(144 * MAP_LINEAR_SCALE);
+    if (levelConfig().shape === "square") return makeSquareTerrain();
+
+    const radiusLimit = playableRadius();
+    const rings = Math.max(36, Math.round(42 * radiusLimit / LEVEL_ONE_RADIUS));
+    const segments = Math.max(96, Math.round(144 * radiusLimit / LEVEL_ONE_RADIUS));
     const positions = [];
     const colors = [];
     const indices = [];
     for (let ring = 0; ring <= rings; ring++) {
-      const radius = (ring / rings) * (WORLD_RADIUS - 4.8);
+      const radius = (ring / rings) * (radiusLimit - 4.8);
       for (let segment = 0; segment <= segments; segment++) {
         const angle = (segment / segments) * Math.PI * 2;
         const x = Math.cos(angle) * radius;
@@ -1082,127 +2430,137 @@
 
     const terrain = new THREE.Mesh(geometry, world.materials.terrain);
     terrain.receiveShadow = true;
-    world.scene.add(terrain);
+    addStageScenery(terrain);
+    world.terrain = terrain;
+    return terrain;
+  }
+
+  function makeSquareTerrain() {
+    const THREE = window.THREE;
+    const half = playableHalfSize();
+    const inset = 4.8;
+    const divisions = Math.max(72, Math.round(72 * half / LEVEL_ONE_RADIUS));
+    const positions = [];
+    const colors = [];
+    const indices = [];
+    for (let row = 0; row <= divisions; row++) {
+      const z = lerp(-half + inset, half - inset, row / divisions);
+      for (let column = 0; column <= divisions; column++) {
+        const x = lerp(-half + inset, half - inset, column / divisions);
+        const y = terrainVisualYAt(x, z);
+        positions.push(x, y, z);
+        const color = terrainColorAt(x, z);
+        colors.push(color.r, color.g, color.b);
+      }
+    }
+    for (let row = 0; row < divisions; row++) {
+      for (let column = 0; column < divisions; column++) {
+        const a = row * (divisions + 1) + column;
+        const b = a + 1;
+        const c = (row + 1) * (divisions + 1) + column;
+        const d = c + 1;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    const terrain = new THREE.Mesh(geometry, world.materials.terrain);
+    terrain.receiveShadow = true;
+    addStageScenery(terrain);
     world.terrain = terrain;
     return terrain;
   }
 
   function terrainColorAt(x, z) {
     const THREE = window.THREE;
+    const distance = Math.hypot(x, z);
     const elevation = terrainOffsetAt(x, z);
+    const config = levelConfig();
+    if (config.id === "petri") {
+      const color = new THREE.Color(elevation > 0.65 ? 0xf9de9b : 0xecc77b);
+      if (elevation < -0.12) color.lerp(new THREE.Color(0xdcae6d), 0.42);
+      LEVEL_CONFIGS[1].zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.08), 0, 1);
+        if (influence <= 0) return;
+        color.lerp(new THREE.Color(zone.color), influence * 0.18);
+      });
+      const petriEdge = smoothstep(LEVEL_ONE_RADIUS * 0.76, LEVEL_ONE_RADIUS, distance);
+      color.lerp(new THREE.Color(0xffefbd), petriEdge * 0.28);
+      return color;
+    }
+
+    if (config.id === "stomach") {
+      const color = new THREE.Color(elevation > 1.8 ? 0xb34a75 : 0x7e274b);
+      if (elevation < -0.65) color.set(0x4e1b43);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.28);
+      });
+      color.lerp(new THREE.Color(0xffb34d), smoothstep(config.radius * 0.72, config.radius, distance) * 0.18);
+      return color;
+    }
+
+    if (config.id === "lava") {
+      const color = new THREE.Color(elevation > 2.2 ? 0x5c5662 : 0x2d2630);
+      if (elevation < -0.9) color.set(0xb32719);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.04), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.3);
+      });
+      color.lerp(new THREE.Color(0xff5a2f), Math.max(0, -elevation) * 0.12);
+      return color;
+    }
+
+    if (config.id === "station") {
+      const color = new THREE.Color(elevation > 0.8 ? 0xaeb8c6 : 0x657080);
+      if (elevation < -0.35) color.set(0x44505f);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.2);
+      });
+      const seam = (Math.abs(Math.sin(x * 0.19)) < 0.035 || Math.abs(Math.sin(z * 0.19)) < 0.035) ? 0.12 : 0;
+      color.lerp(new THREE.Color(0xf8fbff), seam);
+      return color;
+    }
+
     const color = new THREE.Color(elevation > 1.2 ? 0x82d22a : 0x55b61f);
     if (elevation < -0.18) color.set(0x31a65a);
-    SANDBOX_ZONES.forEach((zone) => {
+    config.zones.forEach((zone) => {
       const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
       if (influence <= 0) return;
       const zoneColor = new THREE.Color(zone.color);
       color.lerp(zoneColor, influence * 0.24);
     });
-    const edge = Math.hypot(x, z) / WORLD_RADIUS;
+    const edge = levelConfig().shape === "square"
+      ? Math.max(Math.abs(x), Math.abs(z)) / playableHalfSize()
+      : distance / WORLD_RADIUS;
     if (edge > 0.82) color.lerp(new THREE.Color(0x257f31), (edge - 0.82) / 0.18);
     return color;
   }
 
-  function makeTerrainIsland(x, z, radius, height, scaleZ, topMaterial) {
-    const THREE = window.THREE;
-    const group = new THREE.Group();
-    const sides = Math.max(10, Math.round(radius * 0.9));
-    const cliff = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.98, radius * 0.82, height, sides),
-      world.materials.cliff
-    );
-    cliff.position.y = 0.08 - height / 2;
-    cliff.receiveShadow = true;
-    group.add(cliff);
-
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius * 0.94, 0.16, sides),
-      topMaterial
-    );
-    cap.position.y = 0.12;
-    cap.receiveShadow = true;
-    group.add(cap);
-
-    const rotation = rand(-0.18, 0.18);
-    group.position.set(x, terrainOffsetAt(x, z), z);
-    group.scale.z = scaleZ;
-    group.rotation.y = rotation;
-    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "island");
-    world.scene.add(group);
-    return group;
-  }
-
-  function makeVerticalMesa(x, z, radius, height, scaleZ, topMaterial) {
-    const THREE = window.THREE;
-    const group = new THREE.Group();
-    const sides = Math.max(10, Math.round(radius * 0.8));
-    const cliff = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.72, radius, height, sides),
-      world.materials.cliff
-    );
-    cliff.position.y = height / 2;
-    cliff.receiveShadow = true;
-    group.add(cliff);
-
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.98, radius * 0.86, 0.32, sides),
-      topMaterial
-    );
-    cap.position.y = height + 0.16;
-    cap.receiveShadow = true;
-    group.add(cap);
-
-    for (let i = 0; i < 9; i++) {
-      const angle = (i / 9) * Math.PI * 2 + rand(-0.18, 0.18);
-      const distance = rand(radius * 0.28, radius * 0.76);
-      const spireHeight = rand(2.6, 6.8);
-      const spire = new THREE.Mesh(
-        new THREE.ConeGeometry(rand(0.28, 0.62), spireHeight, 5),
-        pick([world.materials.coralGreen, world.materials.coralTeal, world.materials.coralPink, world.materials.spore])
-      );
-      spire.position.set(Math.cos(angle) * distance, height + 0.42 + spireHeight / 2, Math.sin(angle) * distance * scaleZ);
-      spire.rotation.x = rand(-0.14, 0.14);
-      spire.rotation.z = rand(-0.14, 0.14);
-      group.add(spire);
-    }
-
-    const rotation = rand(-0.16, 0.16);
-    group.position.set(x, terrainOffsetAt(x, z) - 0.15, z);
-    group.scale.z = scaleZ;
-    group.rotation.y = rotation;
-    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "mesa");
-    world.scene.add(group);
-    return group;
-  }
-
   function makeWaterPatch(x, z, radius, scaleZ, rotation) {
+    return makeMaterialPatch(x, z, radius, scaleZ, rotation, world.materials.water);
+  }
+
+  function makeMaterialPatch(x, z, radius, scaleZ, rotation, material) {
     const THREE = window.THREE;
     const patch = new THREE.Mesh(
       new THREE.CylinderGeometry(radius, radius * 0.94, 0.035, 18),
-      world.materials.water
+      material || world.materials.water
     );
     patch.position.set(x, terrainVisualYAt(x, z) + 0.08, z);
     patch.scale.z = scaleZ;
     patch.rotation.y = rotation;
-    world.scene.add(patch);
+    addStageScenery(patch);
     return patch;
   }
 
   function buildScenicDepth() {
-    const shelves = [
-      [mapCoord(-86), mapCoord(-78), scenicRadius(17.5), 4.8, 0.64, world.materials.backdropGreen],
-      [mapCoord(-34), mapCoord(-92), scenicRadius(20.2), 5.4, 0.52, world.materials.dish],
-      [mapCoord(25), mapCoord(-94), scenicRadius(18.4), 4.8, 0.58, world.materials.grassLight],
-      [mapCoord(86), mapCoord(-70), scenicRadius(16.2), 4.4, 0.7, world.materials.backdropGreen],
-      [mapCoord(-94), mapCoord(-26), scenicRadius(13.6), 4.1, 0.66, world.materials.backdropPurple],
-      [mapCoord(94), mapCoord(18), scenicRadius(14.8), 4.5, 0.72, world.materials.backdropBlue],
-      [mapCoord(-74), mapCoord(84), scenicRadius(17.2), 4.6, 0.58, world.materials.backdropGreen],
-      [mapCoord(75), mapCoord(76), scenicRadius(18.6), 5.0, 0.62, world.materials.backdropBlue],
-    ];
-    shelves.forEach(([x, z, radius, height, scaleZ, material]) => {
-      makeBackdropShelf(x, z, radius, height, scaleZ, material);
-    });
-
     [
       [mapCoord(-88), mapCoord(58), 18.4, 1.04, world.materials.coralPink],
       [mapCoord(-94), mapCoord(7), 16.8, 0.82, world.materials.coralPurple],
@@ -1224,12 +2582,12 @@
     ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
 
     for (let i = 0; i < populationCount(18); i++) {
-      const pos = randomPoint(WORLD_RADIUS - 8);
+      const pos = randomPlayablePoint(8);
       makeCausticGlint(pos.x, pos.z, rand(1.0, 3.1), rand(0, Math.PI));
     }
 
     for (let i = 0; i < populationCount(26); i++) {
-      const pos = randomPoint(WORLD_RADIUS - 4);
+      const pos = randomPlayablePoint(4);
       makeSuspendedDroplet(pos.x, pos.z, rand(0.55, 1.65), rand(7.5, 32));
     }
 
@@ -1241,49 +2599,6 @@
       [mapCoord(74), mapCoord(-24), 4.8, 42, -0.2],
       [mapCoord(-78), mapCoord(23), 4.5, 40, 0.3],
     ].forEach(([x, z, width, height, yaw]) => makeLightShaft(x, z, width, height, yaw));
-  }
-
-  function makeBackdropShelf(x, z, radius, height, scaleZ, topMaterial) {
-    const THREE = window.THREE;
-    const group = new THREE.Group();
-    const sides = Math.max(8, Math.round(radius * 0.7));
-    const cliff = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.92, radius * 0.68, height, sides),
-      world.materials.backdropBlue
-    );
-    cliff.position.y = -height / 2;
-    cliff.receiveShadow = true;
-    group.add(cliff);
-
-    const cap = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius * 0.88, 0.18, sides),
-      topMaterial
-    );
-    cap.position.y = 0.08;
-    cap.receiveShadow = true;
-    group.add(cap);
-
-    for (let i = 0; i < 10; i++) {
-      const angle = rand(0, Math.PI * 2);
-      const distance = Math.sqrt(Math.random()) * radius * 0.78;
-      const heightScale = rand(1.1, 2.8);
-      const frond = new THREE.Mesh(
-        new THREE.ConeGeometry(rand(0.12, 0.32), heightScale, 5),
-        pick([world.materials.coralGreen, world.materials.coralPink, world.materials.coralTeal, world.materials.spore])
-      );
-      frond.position.set(Math.cos(angle) * distance, 0.2 + heightScale / 2, Math.sin(angle) * distance * scaleZ);
-      frond.rotation.x = rand(-0.18, 0.18);
-      frond.rotation.z = rand(-0.18, 0.18);
-      group.add(frond);
-    }
-
-    const rotation = rand(-0.18, 0.18);
-    group.position.set(x, terrainOffsetAt(x, z) + 0.05, z);
-    group.scale.z = scaleZ;
-    group.rotation.y = rotation;
-    registerPlateauObstacle(x, z, radius, scaleZ, rotation, "shelf");
-    world.scene.add(group);
-    return group;
   }
 
   function makeTallCoralPillar(x, z, height, radius, material) {
@@ -1318,8 +2633,7 @@
 
     group.position.set(x, terrainOffsetAt(x, z) + 0.14, z);
     group.userData.phase = rand(0, Math.PI * 2);
-    world.scene.add(group);
-    world.drift.push(group);
+    addStageScenery(group, "drift");
     return group;
   }
 
@@ -1337,8 +2651,7 @@
     ring.userData.phase = rand(0, Math.PI * 2);
     ring.userData.baseOpacity = rand(0.045, 0.11);
     ring.userData.baseScale = ring.scale.clone();
-    world.scene.add(ring);
-    world.atmosphere.push(ring);
+    addStageScenery(ring, "atmosphere");
     return ring;
   }
 
@@ -1360,8 +2673,7 @@
     group.userData.baseY = y;
     group.userData.speed = rand(0.25, 0.8);
     group.userData.phase = rand(0, Math.PI * 2);
-    world.scene.add(group);
-    world.drift.push(group);
+    addStageScenery(group, "drift");
     return group;
   }
 
@@ -1374,13 +2686,66 @@
     shaft.userData.phase = rand(0, Math.PI * 2);
     shaft.userData.baseOpacity = rand(0.045, 0.12);
     shaft.userData.baseScale = shaft.scale.clone();
-    world.scene.add(shaft);
-    world.atmosphere.push(shaft);
+    addStageScenery(shaft, "atmosphere");
     return shaft;
+  }
+
+  function buildStomachEnvironment() {
+    for (let i = 0; i < populationCount(30); i++) {
+      const pos = randomPlayablePoint(7);
+      makePebblePatch(pos.x, pos.z, rand(0.65, 1.25));
+    }
+    for (let i = 0; i < populationCount(24); i++) {
+      const pos = randomPlayablePoint(8);
+      makeMicroFlower(pos.x, pos.z, rand(0.55, 1.0));
+    }
+    for (let i = 0; i < populationCount(28); i++) {
+      const pos = randomPlayablePoint(7);
+      const morsel = new window.THREE.Mesh(new window.THREE.DodecahedronGeometry(rand(0.2, 0.58), 0), pick([world.materials.foodbit, world.materials.pollen, world.materials.digestiveBubble]));
+      morsel.position.set(pos.x, rand(2.4, 18), pos.z);
+      morsel.userData.baseY = morsel.position.y;
+      morsel.userData.speed = rand(0.4, 1.1);
+      morsel.userData.phase = rand(0, Math.PI * 2);
+      addStageScenery(morsel, "drift");
+    }
+  }
+
+  function buildLavaEnvironment() {
+    for (let i = 0; i < populationCount(34); i++) {
+      const pos = randomPlayablePoint(8);
+      makePebblePatch(pos.x, pos.z, rand(0.75, 1.55));
+    }
+    [
+      [mapCoord(-64), mapCoord(48), scenicRadius(8.0), 13, [world.materials.cliff, world.materials.ashCrystal, world.materials.zoneLavaBasalt]],
+      [mapCoord(62), mapCoord(-60), scenicRadius(10.0), 17, [world.materials.ashCrystal, world.materials.crystal, world.materials.zoneLavaCrystal]],
+      [mapCoord(55), mapCoord(26), scenicRadius(7.8), 12, [world.materials.magmaBubble, world.materials.zoneLavaRiver, world.materials.coralOrange]],
+    ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
+  }
+
+  function buildStationEnvironment() {
+    for (let i = 0; i < populationCount(20); i++) {
+      const pos = randomPlayablePoint(10);
+      const mast = new window.THREE.Group();
+      const height = rand(2.2, 6.2);
+      const post = new window.THREE.Mesh(new window.THREE.CylinderGeometry(0.08, 0.12, height, 6), world.materials.labMetal);
+      post.position.y = height / 2;
+      mast.add(post);
+      const node = new window.THREE.Mesh(new window.THREE.BoxGeometry(0.8, 0.24, 0.8), pick([world.materials.dataChip, world.materials.cameraLens, world.materials.toolpod]));
+      node.position.y = height + 0.18;
+      mast.add(node);
+      mast.position.set(pos.x, terrainOffsetAt(pos.x, pos.z) + 0.12, pos.z);
+      mast.rotation.y = rand(0, Math.PI);
+      addStageScenery(mast);
+    }
   }
 
   function buildEnvironment() {
     const THREE = window.THREE;
+    const id = levelConfig().id;
+    if (id === "stomach") return buildStomachEnvironment();
+    if (id === "lava") return buildLavaEnvironment();
+    if (id === "station") return buildStationEnvironment();
+
     const tubeClusters = [
       [-18, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralGreen, world.materials.coralPink]],
       [20, 18, 4.2, 8, [world.materials.fiberA, world.materials.coralPink, world.materials.coralPurple]],
@@ -1402,13 +2767,12 @@
         new THREE.SphereGeometry(rand(0.12, 0.62), 9, 7),
         world.materials.bubble
       );
-      const pos = randomPoint(WORLD_RADIUS - 4);
+      const pos = randomPlayablePoint(4);
       bubble.position.set(pos.x, rand(3.4, 28), pos.z);
       bubble.userData.baseY = bubble.position.y;
       bubble.userData.speed = rand(0.35, 1.15);
       bubble.userData.phase = rand(0, Math.PI * 2);
-      world.scene.add(bubble);
-      world.drift.push(bubble);
+      addStageScenery(bubble, "drift");
     }
 
     for (let i = 0; i < populationCount(42); i++) {
@@ -1416,28 +2780,27 @@
         new THREE.IcosahedronGeometry(rand(0.2, 0.58), 0),
         pick([world.materials.cell, world.materials.algae, world.materials.crystal, world.materials.spore])
       );
-      const pos = randomPoint(WORLD_RADIUS - 5);
+      const pos = randomPlayablePoint(5);
       cell.position.set(pos.x, rand(2.6, 18.5), pos.z);
       cell.userData.baseY = cell.position.y;
       cell.userData.speed = rand(0.55, 1.55);
       cell.userData.phase = rand(0, Math.PI * 2);
-      world.scene.add(cell);
-      world.drift.push(cell);
+      addStageScenery(cell, "drift");
     }
 
     for (let i = 0; i < populationCount(44); i++) {
-      const pos = randomPoint(WORLD_RADIUS - 5);
+      const pos = randomPlayablePoint(5);
       makePebblePatch(pos.x, pos.z, rand(0.55, 1.4));
     }
 
     for (let i = 0; i < populationCount(34); i++) {
-      const pos = randomPoint(WORLD_RADIUS - 6);
+      const pos = randomPlayablePoint(6);
       makeMicroFlower(pos.x, pos.z, rand(0.55, 1.1));
     }
 
     for (let i = 0; i < populationCount(26); i++) {
       const cilia = new THREE.Group();
-      const pos = randomPoint(WORLD_RADIUS - 7);
+      const pos = randomPlayablePoint(7);
       const height = rand(2.6, 5.2);
       const stem = new THREE.Mesh(
         new THREE.ConeGeometry(rand(0.18, 0.34), height, 5),
@@ -1450,8 +2813,7 @@
       cilia.add(stem);
       cilia.position.set(pos.x, terrainOffsetAt(pos.x, pos.z) + 0.12, pos.z);
       cilia.userData.phase = rand(0, Math.PI * 2);
-      world.scene.add(cilia);
-      world.drift.push(cilia);
+      addStageScenery(cilia, "drift");
     }
 
     makeMicroDebris();
@@ -1483,7 +2845,7 @@
     }
     group.position.set(x, terrainOffsetAt(x, z), z);
     group.userData.phase = rand(0, Math.PI * 2);
-    world.scene.add(group);
+    addStageScenery(group);
     return group;
   }
 
@@ -1504,7 +2866,7 @@
       group.add(pebble);
     }
     group.position.set(x, terrainOffsetAt(x, z) + 0.12, z);
-    world.scene.add(group);
+    addStageScenery(group);
   }
 
   function makeMicroFlower(x, z, scale) {
@@ -1525,29 +2887,34 @@
     group.add(core);
     group.position.set(x, terrainOffsetAt(x, z) + 0.14, z);
     group.rotation.y = rand(0, Math.PI * 2);
-    world.scene.add(group);
+    addStageScenery(group);
   }
 
   function makeMicroDebris() {
     const THREE = window.THREE;
-    const log = new THREE.Group();
-    for (let i = 0; i < 5; i++) {
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.34, 7.2), world.materials.cliff);
-      slat.position.x = (i - 2) * 0.52;
-      slat.rotation.z = rand(-0.03, 0.03);
-      slat.castShadow = true;
-      log.add(slat);
+    const leafLitter = new THREE.Group();
+    const leafMats = [world.materials.algae, world.materials.coralTeal, world.materials.fiberA, world.materials.coralGreen];
+    for (let i = 0; i < 7; i++) {
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(rand(0.34, 0.56), 10, 6), pick(leafMats));
+      leaf.scale.set(rand(0.8, 1.25), rand(0.1, 0.16), rand(3.2, 5.1));
+      leaf.position.set((i - 3) * rand(0.42, 0.76), rand(0.18, 0.44), rand(-0.7, 0.7));
+      leaf.rotation.set(rand(-0.18, 0.18), rand(-0.95, 0.95), rand(-0.16, 0.16));
+      leaf.castShadow = i % 3 === 0;
+      leaf.receiveShadow = true;
+      leafLitter.add(leaf);
     }
-    log.position.set(mapCoord(2), terrainOffsetAt(mapCoord(2), mapCoord(23)) + 5.3, mapCoord(23));
-    log.rotation.set(-0.6, -0.72, 0.18);
-    world.scene.add(log);
+    const leafX = mapCoord(2);
+    const leafZ = mapCoord(23);
+    leafLitter.position.set(leafX, terrainOffsetAt(leafX, leafZ) + 0.42, leafZ);
+    leafLitter.rotation.set(0.02, -0.72, 0.04);
+    addStageScenery(leafLitter);
 
     const crater = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), world.materials.pollen);
     crater.position.set(mapCoord(58), terrainOffsetAt(mapCoord(58), mapCoord(-10)) + 2.6, mapCoord(-10));
     crater.scale.set(1.1, 0.82, 0.95);
     crater.rotation.set(0.4, -0.2, 0.12);
     crater.castShadow = true;
-    world.scene.add(crater);
+    addStageScenery(crater);
     for (let i = 0; i < 16; i++) {
       const pit = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.18, 0.42), 0), world.materials.cliff);
       const angle = rand(0, Math.PI * 2);
@@ -1555,7 +2922,7 @@
       const pz = mapCoord(-10) + Math.sin(angle) * rand(0.8, 2.3);
       pit.position.set(px, terrainOffsetAt(px, pz) + 3.05, pz);
       pit.scale.y = 0.2;
-      world.scene.add(pit);
+      addStageScenery(pit);
     }
   }
 
@@ -1754,6 +3121,7 @@
       rim.position.y = 0.12;
       group.add(rim);
 
+      const levelId = levelConfig().id;
       if (zone.id === "forest") {
         for (let i = 0; i < populationCount(15); i++) {
           const blade = new THREE.Mesh(
@@ -1800,6 +3168,67 @@
           spire.position.set(pos.x - zone.x, localY + 0.1, pos.z - zone.z);
           spire.rotation.z = rand(-0.16, 0.16);
           group.add(spire);
+        }
+      } else if (levelId === "stomach") {
+        for (let i = 0; i < populationCount(14); i++) {
+          const fold = new THREE.Group();
+          const height = rand(2.0, 6.6);
+          const core = new THREE.Mesh(
+            new THREE.CylinderGeometry(rand(0.22, 0.42), rand(0.36, 0.74), height, 6),
+            pick([world.materials.zoneStomachPink, world.materials.zoneStomachGold, world.materials.digestiveBubble, world.materials.foodbit])
+          );
+          core.position.y = height / 2;
+          core.scale.z = rand(0.45, 0.82);
+          fold.add(core);
+          const cap = new THREE.Mesh(new THREE.SphereGeometry(rand(0.18, 0.38), 8, 6), pick([world.materials.digestiveBubble, world.materials.zoneStomachMint]));
+          cap.position.y = height + 0.2;
+          fold.add(cap);
+          const pos = randomPointNear(zone, zone.radius * 0.8);
+          const localY = terrainOffsetAt(pos.x, pos.z) - zoneOffset;
+          fold.position.set(pos.x - zone.x, localY + 0.1, pos.z - zone.z);
+          fold.rotation.z = rand(-0.22, 0.22);
+          group.add(fold);
+        }
+      } else if (levelId === "lava") {
+        for (let i = 0; i < populationCount(15); i++) {
+          const vent = new THREE.Group();
+          const height = rand(1.6, 6.2);
+          const core = new THREE.Mesh(
+            new THREE.ConeGeometry(rand(0.34, 0.86), height, 6),
+            pick([world.materials.cliff, world.materials.ashCrystal, world.materials.zoneLavaBasalt, world.materials.zoneLavaCrystal])
+          );
+          core.position.y = height / 2;
+          core.castShadow = true;
+          vent.add(core);
+          if (i % 3 === 0) {
+            const glow = new THREE.Mesh(new THREE.SphereGeometry(rand(0.25, 0.56), 8, 6), world.materials.magmaBubble);
+            glow.position.y = height + 0.22;
+            vent.add(glow);
+          }
+          const pos = randomPointNear(zone, zone.radius * 0.78);
+          const localY = terrainOffsetAt(pos.x, pos.z) - zoneOffset;
+          vent.position.set(pos.x - zone.x, localY + 0.12, pos.z - zone.z);
+          vent.rotation.z = rand(-0.15, 0.15);
+          group.add(vent);
+        }
+      } else if (levelId === "station") {
+        for (let i = 0; i < populationCount(13); i++) {
+          const module = new THREE.Group();
+          const panel = new THREE.Mesh(
+            new THREE.BoxGeometry(rand(1.8, 4.6), rand(0.26, 0.52), rand(1.2, 3.4)),
+            pick([world.materials.labMetal, world.materials.toolpod, world.materials.dataChip, world.materials.cameraBody])
+          );
+          panel.position.y = 0.3;
+          panel.castShadow = i % 2 === 0;
+          module.add(panel);
+          const light = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 1.2), pick([world.materials.cameraLens, world.materials.zoneStationGold]));
+          light.position.y = 0.62;
+          module.add(light);
+          const pos = randomPointNear(zone, zone.radius * 0.76);
+          const localY = terrainOffsetAt(pos.x, pos.z) - zoneOffset;
+          module.position.set(pos.x - zone.x, localY + 0.16, pos.z - zone.z);
+          module.rotation.y = rand(0, Math.PI);
+          group.add(module);
         }
       } else {
         for (let i = 0; i < populationCount(16); i++) {
@@ -2061,12 +3490,46 @@
     group.add(cosmeticRoot);
     world.cosmeticRoot = cosmeticRoot;
 
+    const researchCamera = makeResearchCameraAttachment();
+    researchCamera.visible = false;
+    group.add(researchCamera);
+    world.researchCamera = researchCamera;
+
     group.traverse((child) => {
       if (child.isMesh) child.castShadow = false;
     });
     group.scale.setScalar(1.14);
     applyStoreCosmetics();
     return group;
+  }
+
+  function makeResearchCameraAttachment() {
+    const THREE = window.THREE;
+    const mount = new THREE.Group();
+    mount.userData.kind = "research-camera";
+    mount.position.set(0.42, 2.36, 0.92);
+    mount.rotation.set(-0.12, -0.08, -0.18);
+
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.035, 5, 18), world.materials.cameraBody);
+    strap.position.set(-0.08, -0.08, 0);
+    strap.rotation.x = Math.PI / 2;
+    strap.scale.set(1.22, 0.72, 1);
+    mount.add(strap);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 0.5), world.materials.cameraBody);
+    body.castShadow = false;
+    mount.add(body);
+
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.18, 12), world.materials.cameraLens);
+    lens.position.z = -0.34;
+    lens.rotation.x = Math.PI / 2;
+    mount.add(lens);
+
+    const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), world.materials.cameraLens);
+    light.position.set(0.22, 0.12, -0.28);
+    mount.add(light);
+    mount.userData.light = light;
+    return mount;
   }
 
   function buildRoamingCreatures() {
@@ -2089,7 +3552,52 @@
     const group = new THREE.Group();
     group.userData = { ...route };
 
-    if (route.type === "rotifer") {
+    if (route.type === "gutWorm") {
+      for (let i = 0; i < 5; i++) {
+        const segment = new THREE.Mesh(new THREE.SphereGeometry(0.58 - i * 0.035, 9, 7), pick([world.materials.foodbit, world.materials.zoneStomachPink, world.materials.digestiveBubble]));
+        segment.position.z = -1.2 + i * 0.58;
+        segment.scale.set(0.86, 0.62, 1.05);
+        segment.userData.kind = "gutSegment";
+        segment.userData.phase = i * 0.7;
+        group.add(segment);
+      }
+      const whisker = new THREE.Mesh(new THREE.ConeGeometry(0.07, 1.1, 5), world.materials.zoneStomachMint);
+      whisker.position.set(0, 0.08, -1.72);
+      whisker.rotation.x = -Math.PI / 2;
+      whisker.userData.kind = "tail";
+      group.add(whisker);
+    } else if (route.type === "emberSkimmer") {
+      const body = new THREE.Mesh(new THREE.TetrahedronGeometry(1.05, 0), world.materials.magmaBubble);
+      body.scale.set(1.3, 0.42, 1.1);
+      body.rotation.y = Math.PI / 4;
+      group.add(body);
+      [-1, 1].forEach((side) => {
+        const wing = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.6, 5), world.materials.zoneLavaSteam);
+        wing.position.set(side * 0.76, 0.02, 0.16);
+        wing.rotation.z = side * 1.1;
+        wing.userData.kind = "fin";
+        group.add(wing);
+      });
+      const spark = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), world.materials.zoneLavaSteam);
+      spark.position.z = -0.9;
+      spark.userData.kind = "rotor";
+      group.add(spark);
+    } else if (route.type === "labDrone") {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.56, 1.05), world.materials.cameraBody);
+      body.castShadow = true;
+      group.add(body);
+      const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.18, 12), world.materials.cameraLens);
+      lens.position.z = -0.62;
+      lens.rotation.x = Math.PI / 2;
+      group.add(lens);
+      [-0.82, 0.82].forEach((x) => {
+        const rotor = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.035, 5, 16), world.materials.labGlass);
+        rotor.position.set(x, 0.08, 0);
+        rotor.rotation.x = Math.PI / 2;
+        rotor.userData.kind = "rotor";
+        group.add(rotor);
+      });
+    } else if (route.type === "rotifer") {
       const body = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), world.materials.creatureA);
       body.scale.set(1.05, 0.58, 1.9);
       body.castShadow = true;
@@ -2161,6 +3669,9 @@
   }
 
   function creatureBaseScale(type) {
+    if (type === "labDrone") return 1.55;
+    if (type === "emberSkimmer") return 1.7;
+    if (type === "gutWorm") return 1.55;
     if (type === "sporeRay") return 2.0;
     if (type === "rotifer") return 1.65;
     if (type === "ciliate") return 1.5;
@@ -2200,6 +3711,8 @@
         if (child.userData.kind === "crown") child.rotation.z += dt * 4.2;
         if (child.userData.kind === "fin") child.rotation.y = Math.sin(state.clock * 6 + childIndex) * 0.26;
         if (child.userData.kind === "tail") child.rotation.z = Math.sin(state.clock * 5 + data.phase) * 0.32;
+        if (child.userData.kind === "rotor") child.rotation.z += dt * 8.5;
+        if (child.userData.kind === "gutSegment") child.position.x = Math.sin(state.clock * 3.5 + child.userData.phase) * 0.12;
       });
       data.prevX = next.x;
       data.prevZ = next.z;
@@ -2232,7 +3745,7 @@
       const distance = Math.sqrt(Math.random()) * spread;
       const x = zone.x + Math.cos(angle) * distance;
       const z = zone.z + Math.sin(angle) * distance;
-      if (Math.hypot(x, z) < WORLD_RADIUS - 5 && !pointOverlapsPlateau(x, z, PLAYER_RADIUS + 1.2)) {
+      if (pointInsidePlayable(x, z, 5)) {
         point = { x, z };
         break;
       }
@@ -2244,8 +3757,12 @@
     const zone = zoneById(zoneId);
     if (!zone) return;
     entries.forEach(([type, count, spread]) => {
-      for (let i = 0; i < populationCount(count); i++) addProp(type, randomPointNear(zone, spread || zone.radius * 0.82));
+      for (let i = 0; i < levelPopulationCount(count); i++) addProp(type, randomPointNear(zone, spread || zone.radius * 0.82));
     });
+  }
+
+  function firstAvailableZone(ids) {
+    return ids.map(zoneById).find(Boolean) || SANDBOX_ZONES[0];
   }
 
   function populateProps() {
@@ -2253,38 +3770,132 @@
     clearEffects();
     STARTER_PROPS.forEach(([type, point]) => addProp(type, point));
 
-    addZoneProps("forest", [
-      ["algae", 14],
-      ["spore", 5],
-      ["cell", 5],
-      ["bacteria", 2],
-    ]);
-    addZoneProps("flats", [
-      ["droplet", 6],
-      ["bubble", 7],
-      ["platelet", 5],
-      ["capsule", 3],
-    ]);
-    addZoneProps("reef", [
-      ["bacteria", 8],
-      ["enzyme", 4],
-      ["crystal", 4],
-      ["capsule", 3],
-    ]);
-    addZoneProps("ridge", [
-      ["spore", 7],
-      ["crystal", 5],
-      ["enzyme", 3],
-      ["pollen", 4],
-    ]);
+    if (levelConfig().id === "petri") {
+      addZoneProps("agar", [
+        ["algae", 4],
+        ["cell", 3],
+        ["pollen", 2],
+      ]);
+      addZoneProps("algae-smear", [
+        ["algae", 7],
+        ["spore", 2],
+        ["cell", 2],
+      ]);
+      addZoneProps("droplet-lane", [
+        ["droplet", 3],
+        ["bubble", 4],
+        ["platelet", 2],
+      ]);
+      addZoneProps("bacteria-track", [
+        ["bacteria", 4],
+        ["enzyme", 2],
+        ["capsule", 2],
+      ]);
+    } else if (levelConfig().id === "aquarium") {
+      addZoneProps("forest", [
+        ["algae", 14],
+        ["spore", 5],
+        ["cell", 5],
+        ["bacteria", 2],
+      ]);
+      addZoneProps("flats", [
+        ["droplet", 6],
+        ["bubble", 7],
+        ["platelet", 5],
+        ["capsule", 3],
+      ]);
+      addZoneProps("reef", [
+        ["bacteria", 8],
+        ["enzyme", 4],
+        ["crystal", 4],
+        ["capsule", 3],
+      ]);
+      addZoneProps("ridge", [
+        ["spore", 7],
+        ["crystal", 5],
+        ["enzyme", 3],
+        ["pollen", 4],
+      ]);
+    } else if (levelConfig().id === "stomach") {
+      addZoneProps("cardia-cove", [
+        ["foodbit", 8],
+        ["digestiveBubble", 4],
+        ["cell", 3],
+      ]);
+      addZoneProps("mucus-rapids", [
+        ["digestiveBubble", 8],
+        ["droplet", 4],
+        ["enzyme", 4],
+      ]);
+      addZoneProps("food-raft", [
+        ["foodbit", 12],
+        ["pollen", 4],
+        ["capsule", 3],
+      ]);
+      addZoneProps("enzyme-sump", [
+        ["enzyme", 6],
+        ["digestiveBubble", 5],
+        ["spore", 3],
+      ]);
+    } else if (levelConfig().id === "lava") {
+      addZoneProps("basalt-shelf", [
+        ["ashCrystal", 7],
+        ["crystal", 4],
+        ["spore", 2],
+      ]);
+      addZoneProps("ember-river", [
+        ["magmaBubble", 9],
+        ["ashCrystal", 3],
+        ["crystal", 3],
+      ]);
+      addZoneProps("steam-fissure", [
+        ["magmaBubble", 5],
+        ["ashCrystal", 5],
+        ["crystal", 4],
+      ]);
+      addZoneProps("crystal-caldera", [
+        ["ashCrystal", 8],
+        ["crystal", 6],
+        ["pollen", 3],
+      ]);
+    } else if (levelConfig().id === "station") {
+      addZoneProps("airlock-grid", [
+        ["dataChip", 7],
+        ["toolpod", 4],
+        ["crystal", 3],
+      ]);
+      addZoneProps("lab-bench", [
+        ["dataChip", 8],
+        ["toolpod", 5],
+        ["capsule", 3],
+      ]);
+      addZoneProps("vent-maze", [
+        ["dataChip", 6],
+        ["toolpod", 6],
+        ["dataChip", 3],
+      ]);
+      addZoneProps("window-array", [
+        ["dataChip", 6],
+        ["crystal", 5],
+        ["toolpod", 3],
+      ]);
+    }
 
-    for (let i = 0; i < populationCount(5); i++) addProp("pollen", randomPointNear(zoneById("reef"), scenicRadius(13)));
-    for (let i = 0; i < populationCount(16); i++) addProp("algae", randomPoint(WORLD_RADIUS - 8));
-    for (let i = 0; i < populationCount(13); i++) addProp(i < populationCount(6) ? "pollen" : "cell", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < populationCount(8); i++) addProp("bubble", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < populationCount(7); i++) addProp("crystal", randomPoint(WORLD_RADIUS - 10));
-    for (let i = 0; i < populationCount(7); i++) addProp("capsule", randomPoint(WORLD_RADIUS - 9));
-    for (let i = 0; i < populationCount(4); i++) addProp("droplet", randomPoint(WORLD_RADIUS - 10));
+    const id = levelConfig().id;
+    const clusterZone = firstAvailableZone(["reef", "bacteria-track", "algae-smear", "agar"]);
+    if ((id === "petri" || id === "aquarium") && clusterZone) {
+      for (let i = 0; i < levelPopulationCount(5); i++) addProp("pollen", randomPointNear(clusterZone, scenicRadius(13)));
+    }
+    const fillers = {
+      petri: [["algae", 16, 8], ["pollen", 6, 9], ["cell", 7, 9], ["bubble", 8, 9], ["crystal", 7, 10], ["capsule", 7, 9], ["droplet", 4, 10]],
+      aquarium: [["algae", 16, 8], ["pollen", 6, 9], ["cell", 7, 9], ["bubble", 8, 9], ["crystal", 7, 10], ["capsule", 7, 9], ["droplet", 4, 10]],
+      stomach: [["foodbit", 12, 8], ["digestiveBubble", 7, 9], ["enzyme", 6, 9], ["pollen", 5, 10], ["cell", 5, 9], ["droplet", 3, 10]],
+      lava: [["ashCrystal", 10, 9], ["magmaBubble", 7, 10], ["crystal", 8, 10], ["pollen", 5, 11], ["cell", 4, 10]],
+      station: [["dataChip", 10, 8], ["toolpod", 8, 9], ["crystal", 7, 10], ["capsule", 5, 9], ["pollen", 3, 10]],
+    }[id] || [];
+    fillers.forEach(([type, count, margin]) => {
+      for (let i = 0; i < levelPopulationCount(count); i++) addProp(type, randomPlayablePoint(margin));
+    });
   }
 
   function addProp(type, point) {
@@ -2302,6 +3913,12 @@
       enzyme: { radius: 1.1, y: 1.06, score: 310, mass: 1.35, material: world.materials.enzyme, health: 2, restitution: 0.72 },
       platelet: { radius: 1.28, y: 0.72, score: 170, mass: 1.25, material: world.materials.platelet, collider: "cuboid", restitution: 0.78, friction: 0.42 },
       spore: { radius: 0.92, y: 0.82, score: 145, mass: 0.55, material: world.materials.spore, restitution: 0.96, friction: 0.22 },
+      foodbit: { radius: 1.05, y: 0.88, score: 190, collect: true, mass: 0.28, material: world.materials.foodbit, damping: 3.8 },
+      digestiveBubble: { radius: 1.28, y: 1.18, score: 330, mass: 0.72, material: world.materials.digestiveBubble, health: 1, hazard: true, restitution: 0.95, friction: 0.18 },
+      magmaBubble: { radius: 1.24, y: 1.12, score: 380, mass: 0.88, material: world.materials.magmaBubble, health: 1, hazard: true, restitution: 0.82, friction: 0.28 },
+      ashCrystal: { radius: 1.08, y: 1.02, score: 220, mass: 1.65, material: world.materials.ashCrystal, restitution: 0.5 },
+      dataChip: { radius: 0.98, y: 0.82, score: 260, collect: true, mass: 0.2, material: world.materials.dataChip, damping: 4.1 },
+      toolpod: { radius: 1.26, y: 1.04, score: 240, mass: 1.4, material: world.materials.toolpod, collider: "cuboid", restitution: 0.68, friction: 0.5 },
     }[type];
 
     let mesh;
@@ -2382,6 +3999,38 @@
         nub.position.set(Math.cos(angle) * 0.78, 0.12 + (i % 2) * 0.35, Math.sin(angle) * 0.78);
         group.add(nub);
       }
+    } else if (type === "foodbit") {
+      mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(config.radius, 0), config.material);
+      mesh.scale.set(1.2, 0.62, 0.92);
+      const crumb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 0), world.materials.pollen);
+      crumb.position.set(0.38, 0.46, -0.22);
+      group.add(crumb);
+    } else if (type === "digestiveBubble") {
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(config.radius, 12, 8), config.material);
+      mesh.scale.set(1.0, 0.82, 1.08);
+      const shine = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), world.materials.white);
+      shine.position.set(-0.36, 0.48, -0.52);
+      group.add(shine);
+    } else if (type === "magmaBubble") {
+      mesh = new THREE.Mesh(new THREE.SphereGeometry(config.radius, 10, 7), config.material);
+      mesh.scale.set(1.08, 0.76, 0.96);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.84, 6), world.materials.zoneLavaSteam);
+      cap.position.set(0.12, 0.92, 0);
+      group.add(cap);
+    } else if (type === "ashCrystal") {
+      mesh = new THREE.Mesh(new THREE.OctahedronGeometry(config.radius, 0), config.material);
+      mesh.scale.set(0.84, 1.28, 0.92);
+    } else if (type === "dataChip") {
+      mesh = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.26, 1.05), config.material);
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.05, 0.16), world.materials.cameraLens);
+      stripe.position.y = 0.16;
+      group.add(stripe);
+    } else if (type === "toolpod") {
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.48, 2.1, 8), config.material);
+      mesh.rotation.z = Math.PI / 2;
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), world.materials.labMetal);
+      tip.position.x = 1.05;
+      group.add(tip);
     } else {
       mesh = new THREE.Mesh(new THREE.OctahedronGeometry(config.radius, 0), config.material);
       mesh.scale.y = 1.35;
@@ -2406,7 +4055,8 @@
       moved: false,
       spawnX: point.x,
       spawnZ: point.z,
-      destructible: type === "bacteria" || type === "capsule" || type === "enzyme",
+      destructible: type === "bacteria" || type === "capsule" || type === "enzyme" || !!config.hazard,
+      hazard: !!config.hazard,
       health: config.health || (type === "capsule" ? 1 : 0),
       baseHeight: config.y,
       baseY,
@@ -2428,9 +4078,28 @@
       tries += 1;
     } while (
       tries < 18 &&
-      (Math.hypot(x - state.player.x, z - state.player.z) < 7 || pointOverlapsPlateau(x, z, PLAYER_RADIUS + 1.2))
+      Math.hypot(x - state.player.x, z - state.player.z) < 7
     );
     return { x, z };
+  }
+
+  function randomPlayablePoint(margin = 0) {
+    if (levelConfig().shape === "square") {
+      const limit = playableHalfSize() - margin;
+      let x = 0;
+      let z = 0;
+      let tries = 0;
+      do {
+        x = rand(-limit, limit);
+        z = rand(-limit, limit);
+        tries += 1;
+      } while (
+        tries < 18 &&
+        Math.hypot(x - state.player.x, z - state.player.z) < 7
+      );
+      return { x, z };
+    }
+    return randomPoint(playableRadius() - margin);
   }
 
   function clearProps() {
@@ -2707,7 +4376,10 @@
         return;
       }
       if (state.store.open) return;
-      if (key === "ArrowUp" || key === "w" || key === "W") {
+      if ((key === "Enter" || key === "Return") && state.stageAdvanceAvailable) {
+        acceptStageAdvance();
+        event.preventDefault();
+      } else if (key === "ArrowUp" || key === "w" || key === "W") {
         state.input.forward = 1;
         event.preventDefault();
       } else if (key === "ArrowDown" || key === "s" || key === "S") {
@@ -2736,6 +4408,12 @@
         togglePause();
       } else if (isLocalQA() && key === "F9") {
         forceIncidentReport();
+        event.preventDefault();
+      } else if (isLocalQA() && key === "F10") {
+        forceCurrentStageCompletion();
+        event.preventDefault();
+      } else if (isLocalQA() && key === "F5") {
+        acceptStageAdvance();
         event.preventDefault();
       } else if (isLocalQA() && key === "F8") {
         forceFailureReport();
@@ -2823,6 +4501,7 @@
     el.restart.addEventListener("click", startGame);
     if (el.sound) el.sound.addEventListener("click", toggleSound);
     if (el.store) el.store.addEventListener("click", openStore);
+    if (el.advance) el.advance.addEventListener("click", acceptStageAdvance);
     if (el.storeClose) el.storeClose.addEventListener("click", closeStore);
     if (el.storeItems) el.storeItems.addEventListener("click", handleStoreAction);
     if (el.storeModal) {
@@ -3047,8 +4726,8 @@
     state.snacks = Math.max(state.snacks, GOAL_TARGETS.algae);
     state.bacteriaBashed = Math.max(state.bacteriaBashed, GOAL_TARGETS.bacteria);
     state.waterMoved = Math.max(state.waterMoved, GOAL_TARGETS.water);
-    state.ringFed = Math.max(state.ringFed, missionById("ring").target);
-    state.maxCombo = Math.max(state.maxCombo, missionById("combo").target);
+    state.ringFed = Math.max(state.ringFed, targetValue(missionById("ring")));
+    state.maxCombo = Math.max(state.maxCombo, targetValue(missionById("combo")));
     state.toysUsed = new Set(TRAVERSAL_TOYS.map((toy) => toy.id));
     state.landmarksFound = new Set(HIDDEN_LANDMARKS.map((landmark) => landmark.id));
     state.propsBroken = Math.max(state.propsBroken, 5);
@@ -3060,6 +4739,40 @@
     state.chaos = Math.max(state.chaos, GOAL_TARGETS.chaos);
     updateHUD();
     winGame();
+  }
+
+  function forceCurrentStageCompletion() {
+    if (!state.ready) return;
+    if (!state.running) startGame();
+    state.running = true;
+    state.paused = false;
+    state.gameOver = false;
+    currentStageGoals().forEach((goal) => {
+      const target = targetValue(goal);
+      if (goal.id === "algae") state.snacks = Math.max(state.snacks, target);
+      if (goal.id === "bacteria") state.bacteriaBashed = Math.max(state.bacteriaBashed, target);
+      if (goal.id === "water") state.waterMoved = Math.max(state.waterMoved, target);
+      if (goal.id === "ring") state.ringFed = Math.max(state.ringFed, target);
+      if (goal.id === "zones") state.zonesVisited = new Set(SANDBOX_ZONES.slice(0, target).map((zone) => zone.id));
+      if (goal.id === "landmarks") {
+        state.landmarksFound = new Set(HIDDEN_LANDMARKS.slice(0, target).map((landmark) => landmark.id));
+        world.landmarks.forEach((landmark) => {
+          if (state.landmarksFound.has(landmark.userData.id)) landmark.userData.found = true;
+        });
+      }
+      if (goal.id === "hazards") state.stageHazards = Math.max(state.stageHazards, target);
+      if (goal.id === "toys") state.toysUsed = new Set(TRAVERSAL_TOYS.slice(0, target).map((toy) => toy.id));
+      if (goal.id === "scans") state.stageResearchScans = Math.max(state.stageResearchScans, target);
+      if (goal.id === "chaos") state.stageChaos = Math.max(state.stageChaos, target);
+    });
+    while (!state.stageAdvanceAvailable && !state.gameOver && GOALS[state.goalIndex] && GOALS[state.goalIndex].stage === state.stage) {
+      updateGoals();
+    }
+    updateHUD();
+  }
+
+  function forceLevelOneCompletion() {
+    forceCurrentStageCompletion();
   }
 
   function forceFailureReport() {
@@ -3106,6 +4819,11 @@
   }
 
   function resetGame(run) {
+    const needsLevelReset = state.stage !== 1 || !world.ring;
+    state.stage = 1;
+    applyLevelConfig(1);
+    if (needsLevelReset && world.scene) rebuildInteractiveLevel();
+
     Object.assign(state, {
       running: run,
       paused: false,
@@ -3128,6 +4846,7 @@
       calloutTimer: 0,
       tipTimer: run ? 8 : 0,
       hydrate: 100,
+      stage: 1,
       level: 1,
       xp: 0,
       goalIndex: 0,
@@ -3136,8 +4855,16 @@
       dashPulse: 0,
       maxCombo: 0,
       goalsCleared: 0,
+      stageChaos: 0,
+      stageBonks: 0,
+      stageHazards: 0,
+      stageCollects: 0,
+      stageResearchScans: 0,
+      stageAdvanceAvailable: false,
+      pendingStage: 0,
+      researchCameraUnlocked: false,
       zoneId: "",
-      zoneName: "Open Dish",
+      zoneName: "Petri Dish",
       zonesVisited: new Set(),
       miniComplete: new Set(),
       toysUsed: new Set(),
@@ -3173,6 +4900,10 @@
       keyboardCurl: false,
       virtualCurl: false,
     });
+    applyLevelConfig(1);
+    rebuildPhysicsBoundary();
+    rebuildStageScenery();
+    rebuildInteractiveLevel();
     world.traversalToys.forEach((toy) => {
       toy.userData.cooldown = 0;
       toy.userData.justTriggered = 0;
@@ -3188,6 +4919,76 @@
     updateHUD();
     syncPlayMode();
     if (el.pause) el.pause.textContent = "Pause";
+  }
+
+  function transitionToStage(stageNumber) {
+    if (state.stage === stageNumber || !LEVEL_CONFIGS[stageNumber]) return;
+    state.stage = stageNumber;
+    applyLevelConfig(stageNumber);
+    clearProps();
+    clearEffects();
+    rebuildPhysicsBoundary();
+    rebuildStageScenery();
+    rebuildInteractiveLevel();
+    populateProps();
+
+    const stageConfig = levelConfig(stageNumber);
+    const entry = stageConfig.entry || {
+      x: 0,
+      z: stageConfig.shape === "square" ? Math.min(LEVEL_ONE_RADIUS + 18, playableHalfSize(stageNumber) - 28) : Math.min(stageConfig.radius * 0.28, 44),
+    };
+    Object.assign(state.player, {
+      x: entry.x,
+      y: groundYAt(entry.x, entry.z) + 0.12,
+      z: entry.z,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      yaw: 0,
+      targetYaw: 0,
+      grounded: true,
+      wobble: 0.3,
+    });
+    Object.assign(state.camera, {
+      yaw: 0.32,
+      pitch: stageNumber === 2 || stageNumber === 5 ? 0.5 : 0.44,
+      targetYaw: 0.32,
+      targetPitch: stageNumber === 2 || stageNumber === 5 ? 0.5 : 0.44,
+    });
+    if (world.camera && world.camera.userData) world.camera.userData.ready = false;
+
+    state.goalIndex = firstGoalIndexForStage(stageNumber);
+    state.zoneId = "";
+    state.zoneName = levelConfig(stageNumber).name;
+    state.zonesVisited = new Set();
+    state.miniComplete = new Set();
+    state.toysUsed = new Set();
+    state.landmarksFound = new Set();
+    state.stageChaos = 0;
+    state.stageBonks = 0;
+    state.stageHazards = 0;
+    state.stageCollects = 0;
+    state.stageResearchScans = 0;
+    state.stageAdvanceAvailable = false;
+    state.pendingStage = 0;
+    state.researchCameraUnlocked = state.researchCameraUnlocked || stageNumber >= 3;
+    state.qaToyIndex = 0;
+    state.qaLandmarkIndex = 0;
+    state.desiccationActive = false;
+    state.hydrate = Math.max(82, state.hydrate);
+    state.dashCooldown = 0;
+    state.dashPulse = 0;
+    state.promptTimer = 4.2;
+
+    updatePlayerTransform(0);
+    updateGoalText();
+    updateHUD();
+    syncPlayMode();
+    syncAdvancePrompt();
+    showCallout(stageConfig.arrivalTitle || `LEVEL ${stageNumber}!`, stageConfig.arrivalSubtitle || `${stageConfig.name} loaded`);
+    const scaleText = stageNumber === 2 ? ` Playable area is ${levelAreaRatio(2).toFixed(1)}x the petri dish.` : "";
+    showPrompt(`${stageConfig.name} loaded.${scaleText} New research objectives online.`);
+    playTone("level", 1.45);
   }
 
   function togglePause() {
@@ -3262,7 +5063,8 @@
     updateDirector(dt);
     updatePrompt(dt);
     updateCallout(dt);
-    const drain = (state.curlHeld ? 0.36 : 0.2) + state.goalIndex * 0.028 + (state.desiccationActive ? 0.34 : 0);
+    const stageDrain = levelConfig().id === "lava" ? 0.16 : levelConfig().id === "stomach" ? 0.06 : levelConfig().id === "station" ? -0.03 : 0;
+    const drain = Math.max(0.04, (state.curlHeld ? 0.36 : 0.2) + state.goalIndex * 0.028 + stageDrain + (state.desiccationActive ? 0.34 : 0));
     state.hydrate = clamp(state.hydrate - dt * drain, 0, 100);
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer <= 0) {
@@ -3314,8 +5116,9 @@
 
     const curl = state.curlHeld ? 0.76 : 1;
     const dashBoost = state.dashPulse > 0 ? 1.45 : 1;
-    const maxSpeed = (state.player.grounded ? 12.4 : 8.6) * curl * dashBoost;
-    const accel = state.player.grounded ? 34 : 14;
+    const stationFloat = levelConfig().id === "station" ? 0.82 : 1;
+    const maxSpeed = (state.player.grounded ? 12.4 : 8.6) * curl * dashBoost * (levelConfig().id === "stomach" ? 0.94 : 1);
+    const accel = (state.player.grounded ? 34 : 14) * (levelConfig().id === "station" ? 0.78 : 1);
     const targetVX = moveX * maxSpeed;
     const targetVZ = moveZ * maxSpeed;
     const control = Math.min(1, dt * accel);
@@ -3327,13 +5130,10 @@
       player.vz += Math.cos(state.clock * 10) * dt * 2;
     }
 
-    const previousX = player.x;
-    const previousZ = player.z;
-    player.vy -= GRAVITY * dt;
+    player.vy -= GRAVITY * stationFloat * dt;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
     player.z += player.vz * dt;
-    resolvePlateauCollisions(previousX, previousZ);
     const groundY = groundYAt(player.x, player.z);
     if (player.y <= groundY) {
       player.y = groundY;
@@ -3343,18 +5143,15 @@
       player.grounded = false;
     }
 
-    const dist = Math.hypot(player.x, player.z);
-    const limit = WORLD_RADIUS - PLAYER_RADIUS - 0.8;
-    if (dist > limit) {
-      const nx = player.x / dist;
-      const nz = player.z / dist;
-      player.x = nx * limit;
-      player.z = nz * limit;
-      const dot = player.vx * nx + player.vz * nz;
+    const constrained = constrainPointToPlayable(player.x, player.z, PLAYER_RADIUS + 0.8);
+    if (constrained.clamped) {
+      player.x = constrained.x;
+      player.z = constrained.z;
+      const dot = player.vx * constrained.nx + player.vz * constrained.nz;
       if (dot > 0) {
-        player.vx -= dot * nx * 1.55;
-        player.vz -= dot * nz * 1.55;
-        addChaos(18, "Petri wall rebound");
+        player.vx -= dot * constrained.nx * 1.55;
+        player.vz -= dot * constrained.nz * 1.55;
+        addChaos(18, levelConfig().shape === "square" ? "Aquarium glass rebound" : "Petri wall rebound");
       }
     }
 
@@ -3563,6 +5360,9 @@
       if (distance > data.radius) return;
       data.found = true;
       state.landmarksFound.add(data.id);
+      if (levelConfig().id === "station") {
+        state.stageResearchScans = Math.max(state.stageResearchScans, state.landmarksFound.size);
+      }
       landmark.scale.setScalar(1.18);
       const comboInfo = extendCombo("landmark", 2, 4.5);
       const score = scoreWithCombo(480);
@@ -3575,17 +5375,14 @@
 
   function clampPropToDish(prop) {
     const data = prop.userData;
-    const dist = Math.hypot(prop.position.x, prop.position.z);
-    const limit = WORLD_RADIUS - data.radius - 0.9;
-    if (dist <= limit) return;
-    const nx = prop.position.x / dist;
-    const nz = prop.position.z / dist;
-    prop.position.x = nx * limit;
-    prop.position.z = nz * limit;
-    const dot = data.velocity.x * nx + data.velocity.z * nz;
+    const constrained = constrainPointToPlayable(prop.position.x, prop.position.z, data.radius + 0.9);
+    if (!constrained.clamped) return;
+    prop.position.x = constrained.x;
+    prop.position.z = constrained.z;
+    const dot = data.velocity.x * constrained.nx + data.velocity.z * constrained.nz;
     if (dot > 0) {
-      data.velocity.x -= dot * nx * 1.65;
-      data.velocity.z -= dot * nz * 1.65;
+      data.velocity.x -= dot * constrained.nx * 1.65;
+      data.velocity.z -= dot * constrained.nz * 1.65;
     }
     if (world.physics.ready && data.body) {
       data.body.setTranslation({ x: prop.position.x, y: 0, z: prop.position.z }, true);
@@ -3632,6 +5429,11 @@
     if (data.hitCooldown > 0) return false;
     data.hitCooldown = 0.55;
     state.bonks += 1;
+    state.stageBonks += 1;
+    if (data.hazard && !data.hazardCleared) {
+      data.hazardCleared = true;
+      state.stageHazards += 1;
+    }
 
     const smashy = state.dashPulse > 0 || playerSpeed > 10.5;
     const comboInfo = extendCombo(data.type, data.type === "droplet" ? 2 : 1, smashy ? 3.9 : 3.25);
@@ -3643,6 +5445,12 @@
           ? "YEET!"
           : data.type === "enzyme"
             ? "ENZYME CRACK!"
+            : data.type === "digestiveBubble"
+              ? "BURP POP!"
+              : data.type === "magmaBubble"
+                ? "MAGMA POP!"
+                : data.type === "toolpod"
+                  ? "ORBIT BONK!"
           : "BONK!";
     const message = {
       bacteria: "Bacteria bashed",
@@ -3655,6 +5463,12 @@
       cell: "Cell bumped",
       bubble: "Bubble booped",
       crystal: "Crystal clattered",
+      foodbit: "Food bit bullied",
+      digestiveBubble: "Digestive bubble popped",
+      magmaBubble: "Magma bubble burst",
+      ashCrystal: "Ash crystal pinged",
+      dataChip: "Data chip bumped",
+      toolpod: "Tool pod bonked",
     }[data.type] || "Prop bonked";
     const score = scoreWithCombo(data.score + (smashy ? 90 : 0));
     if (data.type === "bacteria") state.bacteriaBashed += 1;
@@ -3667,7 +5481,7 @@
       data.health -= 1;
       if (data.health <= 0) {
         state.propsBroken += 1;
-        spawnShards(prop.position, data.type === "bacteria" ? world.materials.bacteria : data.type === "enzyme" ? world.materials.enzyme : world.materials.capsuleBlue, 7);
+        spawnShards(prop.position, rewardMaterialForType(data.type), 7);
         removeProp(prop, index);
         return true;
       }
@@ -3702,23 +5516,33 @@
   }
 
   function collectProp(prop, index) {
+    const type = prop.userData.type;
     state.snacks += 1;
-    state.hydrate = clamp(state.hydrate + 13, 0, 100);
-    const comboInfo = extendCombo("algae", 1, 3.7);
-    const score = scoreWithCombo(160);
-    addChaos(score, "Algae snack");
+    state.stageCollects += 1;
+    state.hydrate = clamp(state.hydrate + (type === "dataChip" ? 5 : 13), 0, 100);
+    const comboInfo = extendCombo(type, 1, 3.7);
+    const score = scoreWithCombo(type === "dataChip" ? 230 : type === "foodbit" ? 190 : 160);
+    const logMessage = type === "dataChip" ? "Research data captured" : type === "foodbit" ? "Food bit sampled" : "Algae snack";
+    addChaos(score, logMessage);
     const remaining = Math.max(0, GOAL_TARGETS.algae - state.snacks);
-    showPrompt(state.goalIndex === 0 && remaining > 0 ? `${remaining} algae snack left. Follow the next yellow target.` : "Algae absorbed. Hydration restored.");
-    showCallout("MUNCH!", `+${score.toLocaleString()} algae delicious${comboTag(comboInfo)}`);
-    spawnRewardBurst(prop.position, world.materials.algae, 10, 0.88);
+    const goal = activeGoal();
+    const snackText = type === "dataChip"
+      ? "Data chip scanned by the backpack camera."
+      : type === "foodbit"
+        ? "Food bit sampled. The rat review board is confused."
+        : "Algae absorbed. Hydration restored.";
+    showPrompt(goal && goal.id === "algae" && remaining > 0 ? `${remaining} algae snack left. Follow the next yellow target.` : snackText);
+    showCallout(type === "dataChip" ? "SCAN!" : type === "foodbit" ? "SNACK?" : "MUNCH!", `+${score.toLocaleString()} ${logMessage.toLowerCase()}${comboTag(comboInfo)}`);
+    spawnRewardBurst(prop.position, rewardMaterialForType(type), 10, 0.88);
     playTone("munch", 1.1);
     removeProp(prop, index);
-    addProp("algae", randomPoint(WORLD_RADIUS - 5));
+    addProp(type === "dataChip" ? "dataChip" : type === "foodbit" ? "foodbit" : "algae", randomPlayablePoint(5));
   }
 
   function addChaos(amount, message) {
     const rounded = Math.round(amount);
     state.chaos += amount;
+    state.stageChaos += amount;
     state.scoreDelta += rounded;
     state.scoreDeltaTimer = 1.15;
     addXp(Math.max(12, Math.round(rounded * 0.42)));
@@ -3785,6 +5609,12 @@
       crystal: world.materials.crystal,
       bubble: world.materials.bubble,
       cell: world.materials.cell,
+      foodbit: world.materials.foodbit,
+      digestiveBubble: world.materials.digestiveBubble,
+      magmaBubble: world.materials.magmaBubble,
+      ashCrystal: world.materials.ashCrystal,
+      dataChip: world.materials.dataChip,
+      toolpod: world.materials.toolpod,
     }[type] || world.materials.shard;
   }
 
@@ -3844,7 +5674,7 @@
   function updateZoneAwareness() {
     const zone = getCurrentZone();
     const nextId = zone ? zone.id : "";
-    const nextName = zone ? zone.name : "Open Dish";
+    const nextName = zone ? zone.name : levelConfig().name;
     if (state.zoneId === nextId) return;
 
     state.zoneId = nextId;
@@ -3863,10 +5693,26 @@
 
   function zoneHint(zoneId) {
     return {
+      agar: "learn the agar slopes and keep the dish readable.",
+      "algae-smear": "graze glowing algae through the soft agar smear.",
+      "droplet-lane": "use the shallow lane to push water cleanly.",
+      "bacteria-track": "line up the orange bacteria for a starter bonk.",
       forest: "chain algae snacks through the green thicket.",
       flats: "shove droplets and skid platelets across the blue flats.",
       reef: "dash into bacteria, enzymes, and capsules for big bonks.",
       ridge: "climb the spore ridge for crystals, spores, and pollen.",
+      "cardia-cove": "folds, crumbs, and one deeply overconfident digestive bubble.",
+      "mucus-rapids": "ride the current and pretend the texture is professional.",
+      "food-raft": "sample crumbs for science and definitely not lunch.",
+      "enzyme-sump": "bonk bubbles before the enzymes unionize.",
+      "basalt-shelf": "use the dark ridges for cleaner lava jumps.",
+      "ember-river": "magma bubbles count as hazards and terrible pool toys.",
+      "steam-fissure": "vents launch hard; try not to become steam trivia.",
+      "crystal-caldera": "smash, scan, and sparkle responsibly.",
+      "airlock-grid": "mag rails and camera scans start here.",
+      "lab-bench": "data chips, tool pods, and zero supervision.",
+      "vent-maze": "air vents make microgravity look suspiciously bouncy.",
+      "window-array": "scan the view and do not wave at Earth.",
     }[zoneId] || "free-roam the dish.";
   }
 
@@ -3874,7 +5720,7 @@
     if (!state.running || state.paused || state.gameOver) return;
     MINI_MISSIONS.forEach((mission) => {
       if (state.miniComplete.has(mission.id)) return;
-      if (mission.progress() < mission.target) return;
+      if (mission.progress() < targetValue(mission)) return;
       state.miniComplete.add(mission.id);
       const bonus = 420 + state.miniComplete.size * 90;
       addChaos(bonus, `${mission.title} mini-mission`);
@@ -3888,14 +5734,57 @@
     return state.miniComplete.size >= MINI_MISSIONS.length;
   }
 
+  function offerStageAdvance(nextStage) {
+    if (!nextStage || !LEVEL_CONFIGS[nextStage] || state.stageAdvanceAvailable) return;
+    const config = levelConfig();
+    state.stageAdvanceAvailable = true;
+    state.pendingStage = nextStage;
+    state.researchCameraUnlocked = true;
+    resetVirtualControls();
+    updateGoalText();
+    syncAdvancePrompt();
+    updateHUD();
+    showCallout("RESEARCH UNLOCKED!", LEVEL_CONFIGS[nextStage].name);
+    showPrompt(config.advanceText || "The next research environment is ready when you are.");
+    playTone("level", 1.25);
+  }
+
+  function acceptStageAdvance() {
+    if (!state.stageAdvanceAvailable || !state.pendingStage) return;
+    const target = state.pendingStage;
+    state.stageAdvanceAvailable = false;
+    state.pendingStage = 0;
+    syncAdvancePrompt();
+    transitionToStage(target);
+  }
+
+  function syncAdvancePrompt() {
+    if (!el.advance) return;
+    const visible = !!(state.running && !state.gameOver && state.stageAdvanceAvailable && state.pendingStage);
+    el.advance.classList.toggle("is-visible", visible);
+    el.advance.disabled = !visible;
+    if (visible) {
+      const next = LEVEL_CONFIGS[state.pendingStage];
+      el.advance.textContent = levelConfig().advanceButton || `Continue to ${next ? next.name : "next level"}`;
+    }
+  }
+
   function updateGoals() {
+    if (state.stageAdvanceAvailable) return;
     const goal = GOALS[state.goalIndex];
     if (!goal) return;
-    if (goal.progress() >= goal.target) {
+    if (goal.progress() >= targetValue(goal)) {
       const completed = goal;
+      const stageGoals = currentStageGoals();
+      const completedOrdinal = stageGoals.findIndex((stageGoal) => stageGoal === completed) + 1;
       state.goalIndex += 1;
       state.goalsCleared += 1;
       addChaos(250 + state.goalsCleared * 75, `${completed.title} complete`);
+      const nextStage = nextStageNumber(completed.stage);
+      if (completedOrdinal >= requiredStageGoalCount(completed.stage) && nextStage) {
+        offerStageAdvance(nextStage);
+        return;
+      }
       if (state.goalIndex >= GOALS.length) {
         winGame();
         return;
@@ -3923,7 +5812,7 @@
   }
 
   function announceGoal(prefix = "") {
-    const goal = GOALS[state.goalIndex] || GOALS[GOALS.length - 1];
+    const goal = activeGoal();
     const hint = getGoalHint(goal);
     const message = prefix ? `${prefix} ${hint}` : hint;
     showPrompt(message);
@@ -3942,7 +5831,7 @@
   }
 
   function updateGoalText() {
-    const goal = GOALS[state.goalIndex] || GOALS[GOALS.length - 1];
+    const goal = activeGoal();
     el.objectiveTitle.textContent = goal.title;
     el.objectiveText.textContent = goal.text;
     el.goalCardTitle.textContent = goal.title;
@@ -3950,8 +5839,9 @@
   }
 
   function formatGoalProgress(goal, value) {
-    if (goal && goal.kind === "time") return `${formatTime(value)} / ${formatTime(goal.target)}`;
-    return `${Math.floor(value).toLocaleString()} / ${goal.target.toLocaleString()}`;
+    const target = targetValue(goal);
+    if (goal && goal.kind === "time") return `${formatTime(value)} / ${formatTime(target)}`;
+    return `${Math.floor(value).toLocaleString()} / ${target.toLocaleString()}`;
   }
 
   function missionById(id) {
@@ -3962,9 +5852,10 @@
     el.missionElements.forEach((node) => {
       const mission = missionById(node.dataset.mission);
       if (!mission) return;
-      const progress = Math.min(mission.progress(), mission.target);
-      node.textContent = `${Math.floor(progress).toLocaleString()}/${mission.target.toLocaleString()}`;
-      node.classList.toggle("is-complete", progress >= mission.target);
+      const target = targetValue(mission);
+      const progress = Math.min(mission.progress(), target);
+      node.textContent = `${Math.floor(progress).toLocaleString()}/${target.toLocaleString()}`;
+      node.classList.toggle("is-complete", progress >= target);
     });
   }
 
@@ -4006,6 +5897,14 @@
     world.feelers.forEach((feeler, index) => {
       feeler.rotation.z = (index ? 0.22 : -0.22) + Math.sin(state.clock * 4 + index) * 0.16;
     });
+
+    if (world.researchCamera) {
+      world.researchCamera.visible = state.researchCameraUnlocked || state.stage >= 3;
+      world.researchCamera.rotation.z = -0.18 + Math.sin(state.clock * 3.2) * 0.035;
+      if (world.researchCamera.userData.light) {
+        world.researchCamera.userData.light.scale.setScalar(0.9 + Math.sin(state.clock * 6.8) * 0.16);
+      }
+    }
 
     updateStoreCosmeticMotion(dt, speed);
   }
@@ -4080,17 +5979,20 @@
     updateGuideBeacon(dt);
     updateTargetMarker();
     updateAtmosphere(dt);
-    if (world.boundary) world.boundary.rotation.z += dt * 0.035;
+    if (world.boundary && levelConfig().shape !== "square") world.boundary.rotation.z += dt * 0.035;
     world.renderer.render(world.scene, world.camera);
   }
 
   function isCurrentTargetProp(prop) {
     const type = prop && prop.userData && prop.userData.type;
-    if (state.goalIndex === 0) return type === "algae";
-    if (state.goalIndex === 1) return type === "bacteria";
-    if (state.goalIndex === 2) return type === "droplet";
-    if (state.goalIndex === 3) return type === "pollen";
-    return type === "bacteria" || type === "droplet" || type === "capsule" || type === "enzyme" || type === "platelet" || type === "spore";
+    const goal = activeGoal();
+    if (goal && goal.id === "algae") return type === "algae";
+    if (goal && goal.id === "bacteria") return type === "bacteria";
+    if (goal && goal.id === "water") return type === "droplet";
+    if (goal && goal.id === "ring") return type === "pollen";
+    if (goal && goal.id === "hazards") return goal.propTypes ? goal.propTypes.includes(type) : prop.userData.hazard;
+    if (goal && (goal.id === "zones" || goal.id === "landmarks")) return false;
+    return type === "bacteria" || type === "droplet" || type === "capsule" || type === "enzyme" || type === "platelet" || type === "spore" || type === "digestiveBubble" || type === "magmaBubble" || type === "dataChip" || type === "toolpod";
   }
 
   function updateGuideBeacon(dt) {
@@ -4144,33 +6046,123 @@
   }
 
   function targetMarkerTitle() {
-    if (state.goalIndex === 0) return "Eat algae";
-    if (state.goalIndex === 1) return "Bonk bacteria";
-    if (state.goalIndex === 2) return "Push water";
-    if (state.goalIndex === 3) return "Feed ring";
-    if (state.goalIndex === 4) return "Make chaos";
+    const goal = activeGoal();
+    if (goal && goal.id === "algae") return "Eat algae";
+    if (goal && goal.id === "bacteria") return "Bonk bacteria";
+    if (goal && goal.id === "water") return "Push water";
+    if (goal && goal.id === "ring") return "Feed ring";
+    if (goal && goal.id === "zones") return "Tour zone";
+    if (goal && goal.id === "landmarks") return "Find landmark";
+    if (goal && goal.id === "hazards") return levelConfig().id === "lava" ? "Pop magma" : "Pop bubbles";
+    if (goal && goal.id === "toys") return "Use gadget";
+    if (goal && goal.id === "scans") return "Scan target";
+    if (goal && goal.id === "advance") return "Continue";
+    if (goal && goal.id === "chaos") return "Make chaos";
     return "Stay hydrated";
   }
 
   function getGuideTarget() {
     if (!state.running) return null;
-    if (state.goalIndex === 3) {
+    const goal = activeGoal();
+    if (goal && goal.id === "ring") {
       const pollen = findProp("pollen", "ring");
       if (pollen) return { x: pollen.position.x, y: pollen.userData.baseY + 0.1, z: pollen.position.z };
       return { x: RING_TARGET.x, y: groundYAt(RING_TARGET.x, RING_TARGET.z) - 0.2, z: RING_TARGET.z };
     }
-    const type = state.goalIndex === 0
+    if (goal && goal.id === "zones") {
+      return nearestUnvisitedZone();
+    }
+    if (goal && goal.id === "landmarks") {
+      return nearestUnfoundLandmark();
+    }
+    if (goal && goal.id === "scans") {
+      return nearestUnfoundLandmark();
+    }
+    if (goal && goal.id === "toys") {
+      return nearestUnusedToy();
+    }
+    if (goal && goal.id === "hazards") {
+      return nearestHazardProp(goal.propTypes);
+    }
+    if (goal && goal.id === "advance") {
+      return { x: state.player.x, y: state.player.y + 0.2, z: state.player.z };
+    }
+    const type = goal && goal.id === "algae"
       ? "algae"
-      : state.goalIndex === 1
+      : goal && goal.id === "bacteria"
         ? "bacteria"
-        : state.goalIndex === 2
+        : goal && goal.id === "water"
           ? "droplet"
           : null;
     const prop = type
       ? findProp(type, "player")
-      : findProp("bacteria", "player") || findProp("droplet", "player") || findProp("capsule", "player") || findProp("enzyme", "player") || findProp("platelet", "player");
+      : findProp("bacteria", "player") || findProp("droplet", "player") || findProp("capsule", "player") || findProp("enzyme", "player") || findProp("platelet", "player") || findProp("digestiveBubble", "player") || findProp("magmaBubble", "player") || findProp("dataChip", "player");
     if (!prop) return state.goalIndex >= 3 ? { x: RING_TARGET.x, y: groundYAt(RING_TARGET.x, RING_TARGET.z) - 0.2, z: RING_TARGET.z } : null;
     return { x: prop.position.x, y: prop.userData.baseY + 0.1, z: prop.position.z };
+  }
+
+  function nearestUnvisitedZone() {
+    let best = null;
+    let bestDistance = Infinity;
+    SANDBOX_ZONES.forEach((zone) => {
+      if (state.zonesVisited.has(zone.id)) return;
+      const distance = Math.hypot(zone.x - state.player.x, zone.z - state.player.z);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x: zone.x, y: groundYAt(zone.x, zone.z) + 0.3, z: zone.z };
+      }
+    });
+    return best || { x: RING_TARGET.x, y: groundYAt(RING_TARGET.x, RING_TARGET.z) + 0.3, z: RING_TARGET.z };
+  }
+
+  function nearestUnfoundLandmark() {
+    let best = null;
+    let bestDistance = Infinity;
+    world.landmarks.forEach((landmark) => {
+      if (!landmark.userData || landmark.userData.found) return;
+      const distance = Math.hypot(landmark.position.x - state.player.x, landmark.position.z - state.player.z);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = {
+          x: landmark.position.x,
+          y: groundYAt(landmark.position.x, landmark.position.z) + 0.8,
+          z: landmark.position.z,
+        };
+      }
+    });
+    return best || nearestUnvisitedZone();
+  }
+
+  function nearestUnusedToy() {
+    let best = null;
+    let bestDistance = Infinity;
+    world.traversalToys.forEach((toy) => {
+      if (!toy.userData || state.toysUsed.has(toy.userData.id)) return;
+      const x = toy.userData.x ?? toy.position.x;
+      const z = toy.userData.z ?? toy.position.z;
+      const distance = Math.hypot(x - state.player.x, z - state.player.z);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x, y: groundYAt(x, z) + 0.4, z };
+      }
+    });
+    return best || nearestUnvisitedZone();
+  }
+
+  function nearestHazardProp(types = []) {
+    let best = null;
+    let bestDistance = Infinity;
+    world.props.forEach((prop) => {
+      if (!prop.visible || !prop.userData) return;
+      const matches = types.length ? types.includes(prop.userData.type) : prop.userData.hazard;
+      if (!matches || prop.userData.hazardCleared) return;
+      const distance = Math.hypot(prop.position.x - state.player.x, prop.position.z - state.player.z);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x: prop.position.x, y: prop.userData.baseY + 0.2, z: prop.position.z };
+      }
+    });
+    return best || nearestUnvisitedZone();
   }
 
   function findProp(type, mode) {
@@ -4214,9 +6206,10 @@
   }
 
   function updateHUD() {
-    const goal = GOALS[state.goalIndex] || GOALS[GOALS.length - 1];
-    const progress = clamp(goal.progress(), 0, goal.target);
-    const goalPercent = goal.target > 0 ? progress / goal.target : 1;
+    const goal = activeGoal();
+    const target = targetValue(goal);
+    const progress = clamp(goal.progress(), 0, target);
+    const goalPercent = target > 0 ? progress / target : 1;
     const dashPercent = state.dashCooldown <= 0 ? 100 : (1 - state.dashCooldown / 1.1) * 100;
 
     el.chaos.textContent = format(state.chaos);
@@ -4224,12 +6217,15 @@
     el.hydrate.textContent = percent(state.hydrate);
     el.combo.textContent = `${state.combo}x`;
     if (el.time) el.time.textContent = formatTime(SANDBOX_SECONDS - state.sessionTime);
-    el.goal.textContent = `${Math.min(state.goalIndex + 1, GOALS.length)}/${GOALS.length}`;
+    el.goal.textContent = `${currentStageGoalOrdinal()}/${currentStageGoals().length}`;
     el.high.textContent = api.getHighScore(GAME_ID).toLocaleString();
     el.goalCardProgress.textContent = formatGoalProgress(goal, progress);
     el.dashStatus.textContent = state.dashCooldown <= 0 ? "Ready" : `${Math.ceil(state.dashCooldown * 10) / 10}s`;
-    el.ringStatus.textContent = `${Math.min(state.ringFed, missionById("ring").target)}/${missionById("ring").target}`;
+    const ringMission = missionById("ring");
+    const ringTarget = targetValue(ringMission);
+    el.ringStatus.textContent = `${Math.min(state.ringFed, ringTarget)}/${ringTarget}`;
     if (el.zoneStatus) el.zoneStatus.textContent = state.zoneName;
+    if (el.levelStatus) el.levelStatus.textContent = levelConfig().name;
     if (el.arcadeScore) el.arcadeScore.textContent = format(state.chaos);
     if (el.arcadeDelta) {
       el.arcadeDelta.textContent = state.scoreDeltaTimer > 0 && state.scoreDelta > 0 ? `+${state.scoreDelta.toLocaleString()}` : "";
@@ -4252,6 +6248,7 @@
     el.meterGoalText.textContent = percent(goalPercent * 100);
     updatePlayMeters(dashPercent, goalPercent);
     updateRadar();
+    syncAdvancePrompt();
   }
 
   function updatePlayMeters(dashPercent, goalPercent) {
@@ -4338,7 +6335,7 @@
     const localX = dx * rightX + dz * rightZ;
     const localY = dx * forwardX + dz * forwardZ;
     const radarRadius = 52;
-    const visibleWorldRadius = WORLD_RADIUS * 0.7;
+    const visibleWorldRadius = (levelConfig().shape === "square" ? playableHalfSize() : playableRadius()) * 0.7;
     const rawX = localX * (radarRadius / visibleWorldRadius);
     const rawY = -localY * (radarRadius / visibleWorldRadius);
     const distance = Math.hypot(rawX, rawY);
@@ -4403,6 +6400,8 @@
       ["Zones visited", `${state.zonesVisited.size} / ${SANDBOX_ZONES.length}`],
       ["Traversal toys", `${state.toysUsed.size} / ${TRAVERSAL_TOYS.length}`],
       ["Landmarks found", `${state.landmarksFound.size} / ${HIDDEN_LANDMARKS.length}`],
+      ["Environment", levelConfig().name],
+      ["Area scale", `${levelAreaRatio(state.stage).toFixed(1)}x`],
       ["Algae eaten", state.snacks.toLocaleString()],
       ["Bacteria bashed", state.bacteriaBashed.toLocaleString()],
       ["Droplets moved", state.waterMoved.toLocaleString()],
@@ -4441,6 +6440,18 @@
     return a + delta * t;
   }
 
-  window.__MICRO_MAYHEM_DEBUG = { state, world };
+  window.__MICRO_MAYHEM_DEBUG = {
+    state,
+    world,
+    levelConfig,
+    playableRadius,
+    levelAreaRatio,
+    groundYAt,
+    terrainOffsetAt,
+    forceLevelOneCompletion,
+    forceCurrentStageCompletion,
+    acceptStageAdvance,
+    transitionToStage,
+  };
   loadThree();
 })();

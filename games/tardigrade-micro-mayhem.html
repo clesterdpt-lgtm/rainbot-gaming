@@ -34,6 +34,11 @@
       box-shadow: 0 22px 54px rgba(3, 68, 84, 0.28);
     }
 
+    .canvas-wrap--micro,
+    .canvas-wrap--micro * {
+      box-sizing: border-box;
+    }
+
     .canvas-wrap--micro #gameCanvas {
       background: #18b8ec;
       border-color: rgba(255, 255, 255, 0.34);
@@ -66,11 +71,20 @@
     .micro-wallet-chip,
     .micro-arcade-hud,
     .micro-callout,
-    .micro-prompt {
+    .micro-prompt,
+    .micro-advance {
       position: absolute;
-      pointer-events: none;
       font-family: var(--font-mono);
       text-transform: uppercase;
+    }
+
+    .micro-chip,
+    .micro-status-strip,
+    .micro-wallet-chip,
+    .micro-arcade-hud,
+    .micro-callout,
+    .micro-prompt {
+      pointer-events: none;
     }
 
     .micro-chip {
@@ -105,10 +119,12 @@
       right: 12px;
       top: 84px;
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       align-items: center;
       justify-content: flex-end;
-      max-width: min(360px, calc(100% - 24px));
+      max-width: min(520px, calc(100% - 24px));
+      row-gap: 6px;
       z-index: 4;
     }
 
@@ -123,7 +139,11 @@
       color: #e9fbff;
       font-size: 10px;
       font-weight: 800;
+      max-width: 170px;
+      min-width: 0;
+      overflow: hidden;
       padding: 5px 9px;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -535,13 +555,37 @@
       letter-spacing: 0.8px;
       opacity: 0;
       padding: 7px 12px;
+      text-align: center;
       transition: opacity 140ms ease, transform 140ms ease;
-      white-space: nowrap;
+      white-space: normal;
       z-index: 6;
     }
 
     .micro-prompt--show {
       opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .micro-advance {
+      left: 50%;
+      bottom: 54px;
+      display: none;
+      min-height: 38px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32), 0 0 18px rgba(107, 255, 125, 0.22);
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1;
+      padding: 10px 14px;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(8px);
+      z-index: 22;
+    }
+
+    .micro-advance.is-visible {
+      display: inline-flex;
       transform: translateX(-50%) translateY(0);
     }
 
@@ -1160,7 +1204,7 @@
       right: 16px;
       z-index: 90;
       width: auto;
-      max-width: min(360px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
     }
 
     body.micro-play-active .game-side__panel {
@@ -1184,6 +1228,7 @@
 
     body.micro-play-active .controls-row {
       display: flex;
+      flex-wrap: nowrap;
       gap: 8px;
       align-items: center;
       justify-content: flex-end;
@@ -1205,13 +1250,13 @@
     }
 
     body.micro-play-active .micro-arcade-title {
-      font-size: clamp(20px, 2.6vw, 34px);
-      max-width: 420px;
+      font-size: clamp(18px, 2.2vw, 30px);
+      max-width: min(380px, calc(50vw - 150px));
     }
 
+    body.micro-play-active .micro-arcade-title span,
     body.micro-play-active .micro-missions {
-      top: 82px;
-      width: 235px;
+      display: none;
     }
 
     body.micro-play-active .micro-scoreboard strong {
@@ -1219,18 +1264,25 @@
     }
 
     body.micro-play-active .micro-levelboard {
-      right: 8px;
-      top: 72px;
-      width: 232px;
+      left: 22px;
+      right: auto;
+      top: 112px;
+      width: 210px;
+      justify-items: start;
+    }
+
+    body.micro-play-active .micro-levelboard strong {
+      font-size: clamp(22px, 3vw, 34px);
     }
 
     body.micro-play-active .micro-status-strip {
-      top: 150px;
+      top: 126px;
       right: 30px;
+      max-width: min(440px, calc(100vw - 320px));
     }
 
     body.micro-play-active .micro-wallet-chip {
-      top: 186px;
+      top: 168px;
       right: 30px;
     }
 
@@ -1242,6 +1294,14 @@
 
     body.micro-play-active .micro-prompt {
       bottom: 106px;
+      max-width: min(620px, calc(100vw - 360px));
+    }
+
+    body.micro-play-active .micro-advance {
+      bottom: 62px;
+      max-width: min(320px, calc(100vw - 320px));
+      text-align: center;
+      white-space: normal;
     }
 
     body.micro-play-active .micro-play-meters {
@@ -1262,6 +1322,27 @@
     body.micro-play-paused .micro-status-strip,
     body.micro-play-paused .micro-touch-controls {
       opacity: 0.32;
+    }
+
+    @media (max-width: 1100px) {
+      body.micro-play-active #btn-sound {
+        display: none;
+      }
+
+      body.micro-play-active .micro-chip {
+        display: none;
+      }
+
+      body.micro-play-active .micro-play-meters {
+        left: 22px;
+        right: 180px;
+        width: auto;
+        transform: none;
+      }
+
+      body.micro-play-active .micro-prompt {
+        max-width: min(540px, calc(100vw - 240px));
+      }
     }
 
     @media (max-width: 900px) {
@@ -1338,9 +1419,49 @@
         width: min(300px, calc(100% - 320px));
       }
 
+      body.micro-play-active .game-side {
+        max-width: min(210px, calc(100vw - 24px));
+      }
+
+      body.micro-play-active #btn-restart,
+      body.micro-play-active #btn-sound {
+        display: none;
+      }
+
+      body.micro-play-active .controls-row {
+        gap: 6px;
+        padding: 6px;
+      }
+
+      body.micro-play-active .controls-row .btn {
+        min-height: 32px;
+        padding: 6px 9px !important;
+      }
+
+      body.micro-play-active .micro-levelboard {
+        left: 12px;
+        right: auto;
+        top: 72px;
+        width: 150px;
+        justify-items: start;
+      }
+
+      body.micro-play-active .micro-status-strip {
+        display: none;
+      }
+
+      body.micro-play-active .micro-wallet-chip {
+        top: 76px;
+        right: 12px;
+      }
+
       body.micro-play-active .micro-prompt {
         bottom: 166px;
         max-width: calc(100% - 320px);
+      }
+
+      body.micro-play-active .micro-advance {
+        bottom: 118px;
       }
 
       body.micro-play-active .micro-radar {
@@ -1351,8 +1472,11 @@
       }
 
       body.micro-play-active .micro-play-meters {
+        left: 18px;
+        right: 150px;
         bottom: 158px;
-        width: min(330px, calc(100% - 160px));
+        width: auto;
+        transform: none;
       }
 
       body.micro-play-active .micro-touch-controls {
@@ -1382,7 +1506,9 @@
     @media (max-height: 480px) and (orientation: landscape) {
       body.micro-play-active .micro-chip,
       body.micro-play-active .micro-prompt,
-      body.micro-play-active .micro-status-strip {
+      body.micro-play-active .micro-status-strip,
+      body.micro-play-active .micro-levelboard,
+      body.micro-play-active .micro-wallet-chip {
         display: none;
       }
 
@@ -1423,7 +1549,7 @@
       body.micro-play-active .micro-play-meters {
         left: 176px;
         right: 176px;
-        bottom: calc(12px + env(safe-area-inset-bottom));
+        bottom: calc(132px + env(safe-area-inset-bottom));
         width: auto;
         transform: none;
       }
@@ -1483,6 +1609,12 @@
 
       .micro-prompt {
         display: none;
+      }
+
+      .micro-advance {
+        bottom: 82px;
+        max-width: calc(100% - 20px);
+        white-space: normal;
       }
 
       .micro-target-marker {
@@ -1606,9 +1738,11 @@
       }
 
       body.micro-play-active .micro-levelboard {
-        top: 0;
-        right: 0;
+        left: 10px;
+        right: auto;
+        top: 116px;
         width: 128px;
+        justify-items: start;
       }
 
       body.micro-play-active .micro-levelboard span {
@@ -1742,9 +1876,10 @@
             <span id="objective-text">Scuttle into two green algae chunks. They heal hydration and teach movement.</span>
           </div>
           <div class="micro-status-strip" aria-label="Tardigrade status">
+            <span>Level <b id="status-level">Petri Dish</b></span>
             <span>Dash <b id="status-dash">Ready</b></span>
             <span>Ring <b id="status-ring">0/3</b></span>
-            <span>Zone <b id="status-zone">Open Dish</b></span>
+            <span>Zone <b id="status-zone">Petri Dish</b></span>
           </div>
           <div class="micro-wallet-chip" aria-live="polite">GEL <b id="store-wallet-chip">900</b></div>
           <div class="micro-play-meters" aria-label="Run meters">
@@ -1763,6 +1898,7 @@
             <em id="radar-distance">0 um</em>
           </div>
           <div class="micro-prompt micro-prompt--show" id="micro-prompt">Move mouse to look. WASD moves. Shift bonks.</div>
+          <button class="btn btn--yellow micro-advance" id="btn-advance-stage" type="button">Continue research</button>
           <div class="micro-target-marker" id="micro-target-marker" aria-live="polite">
             <b id="target-marker-title">Target</b>
             <span id="target-marker-distance">0 um</span>
@@ -1890,7 +2026,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260612-5"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260613-35"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260615-9"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

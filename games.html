@@ -6,7 +6,7 @@
   <title>Games — Rainbot Gaming</title>
   <meta name="description" content="All Rainbot Gaming browser games. Free, instant-play, meme-worthy." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260615-agent-2" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260616-filters-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="games-index arcade-home">
@@ -26,13 +26,37 @@
       </div>
     </header>
 
-    <section class="arcade-panel games-catalog" data-search-scope>
+    <section class="arcade-panel games-catalog" data-search-scope data-games-catalog>
       <div class="arcade-panel__header">
         <h2><span class="panel-glyph">+</span>Full Game Vault</h2>
-        <span class="games-catalog__count">New weirdness weekly</span>
+        <span class="games-catalog__count" data-games-count>New weirdness weekly</span>
       </div>
 
-      <div class="directory-grid">
+      <div class="games-filterbar" aria-label="Game filters">
+        <label class="games-filterbar__field" for="games-category-filter">
+          <span>Category</span>
+          <span class="games-filterbar__select">
+            <select id="games-category-filter" data-games-category>
+              <option value="all">All categories</option>
+            </select>
+          </span>
+        </label>
+        <label class="games-filterbar__field" for="games-sort">
+          <span>Sort</span>
+          <span class="games-filterbar__select">
+            <select id="games-sort" data-games-sort>
+              <option value="featured">Featured</option>
+              <option value="new">New first</option>
+              <option value="popular">Most played</option>
+              <option value="category">Category</option>
+              <option value="az">A-Z</option>
+            </select>
+          </span>
+        </label>
+        <button class="games-filterbar__reset" type="button" data-games-reset>Reset</button>
+      </div>
+
+      <div class="directory-grid" data-games-grid>
         <a href="games/consensus-collapse.html" class="directory-card directory-card--agent" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL">
           <div class="directory-card__poster directory-card__poster--agent">
             <img src="assets/img/agent-games/consensus-collapse.png?v=20260615-1" alt="Consensus Collapse fractured council key art" />
@@ -275,6 +299,7 @@
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
       </div>
+      <p class="games-catalog__empty" data-games-empty hidden>No games match those filters.</p>
     </section>
 
     <div id="ad-leaderboard" class="games-ad-slot"></div>
@@ -298,7 +323,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260611-7"></script>
-  <script src="assets/js/main.js?v=20260615-agent-1"></script>
+  <script src="assets/js/main.js?v=20260616-filters-1"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

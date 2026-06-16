@@ -85,8 +85,23 @@ function bindSearch(root) {
   if (!form || !input) return;
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
 
+  const syncGamesQueryUrl = (query) => {
+    if (!window.RBGamesCatalog || !history.replaceState) return;
+    const url = new URL(location.href);
+    if (query) {
+      url.searchParams.set("q", query);
+    } else {
+      url.searchParams.delete("q");
+    }
+    history.replaceState(null, "", url);
+  };
+
   const applySearch = () => {
     const query = input.value.trim().toLowerCase();
+    if (window.RBGamesCatalog) {
+      window.RBGamesCatalog.setSearch(query);
+      return;
+    }
     if (!searchable.length) return;
     searchable.forEach((item) => {
       const text = item.dataset.title.toLowerCase();
@@ -94,9 +109,21 @@ function bindSearch(root) {
     });
   };
 
+  if (window.RBGamesCatalog) {
+    const initialQuery = window.RBGamesCatalog.getSearch();
+    if (initialQuery) input.value = initialQuery;
+  }
+
   input.addEventListener("input", applySearch);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (window.RBGamesCatalog) {
+      applySearch();
+      syncGamesQueryUrl(input.value.trim());
+      const target = document.querySelector("[data-search-scope]");
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (searchable.length) {
       applySearch();
       const target = document.querySelector("[data-search-scope]");
@@ -106,6 +133,157 @@ function bindSearch(root) {
     const q = encodeURIComponent(input.value.trim());
     location.href = q ? `${RB_BASE}games.html?q=${q}` : `${RB_BASE}games.html`;
   });
+}
+
+function initGamesCatalog() {
+  const catalog = document.querySelector("[data-games-catalog]");
+  if (!catalog) return;
+
+  const grid = catalog.querySelector("[data-games-grid]");
+  const categorySelect = catalog.querySelector("[data-games-category]");
+  const sortSelect = catalog.querySelector("[data-games-sort]");
+  const resetButton = catalog.querySelector("[data-games-reset]");
+  const countEl = catalog.querySelector("[data-games-count]");
+  const emptyEl = catalog.querySelector("[data-games-empty]");
+  if (!grid || !categorySelect || !sortSelect) return;
+
+  const normalize = (value) => (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const categoryKey = (value) => normalize(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const parsePopularity = (value) => {
+    const match = normalize(value).match(/([\d.]+)\s*k\s+playing/);
+    return match ? Number(match[1]) * 1000 : 0;
+  };
+
+  const cards = Array.from(grid.querySelectorAll(".directory-card")).map((card, order) => {
+    const category = card.querySelector(".directory-card__meta b")?.textContent.trim() || "Other";
+    const detail = card.querySelector(".directory-card__meta em")?.textContent.trim() || "";
+    const status = card.querySelector(".directory-card__status")?.textContent.trim() || "";
+    const title = (
+      card.querySelector(".directory-card__poster-title")?.textContent ||
+      card.dataset.title ||
+      card.getAttribute("href") ||
+      ""
+    ).replace(/\s+/g, " ").trim();
+    const searchText = normalize([
+      card.dataset.title,
+      card.textContent,
+      category,
+      detail,
+      status,
+    ].join(" "));
+    const newRank = (() => {
+      const compactStatus = normalize(status);
+      const compactDetail = normalize(detail);
+      if (compactStatus === "new" || compactDetail.includes("fresh drop") || compactDetail.includes("new protocol")) return 4;
+      if (compactStatus === "agent") return 3;
+      if (compactStatus === "prototype" || compactDetail.includes("first playable")) return 2;
+      if (compactStatus === "playable") return 1;
+      return 0;
+    })();
+
+    return {
+      card,
+      order,
+      title: title || `Game ${order + 1}`,
+      category,
+      categoryKey: categoryKey(category),
+      detail,
+      popularity: parsePopularity(detail),
+      searchText,
+      newRank,
+    };
+  });
+  if (!cards.length) return;
+
+  const categoryLabels = new Map();
+  cards.forEach((item) => {
+    if (!categoryLabels.has(item.categoryKey)) categoryLabels.set(item.categoryKey, item.category);
+  });
+  Array.from(categoryLabels.entries())
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      categorySelect.append(option);
+    });
+
+  const state = {
+    category: "all",
+    sort: "featured",
+    search: normalize(new URLSearchParams(location.search).get("q") || ""),
+  };
+
+  const sortCards = () => {
+    const sorted = cards.slice().sort((a, b) => {
+      if (state.sort === "new") {
+        return (b.newRank - a.newRank) || (a.order - b.order);
+      }
+      if (state.sort === "popular") {
+        return (b.popularity - a.popularity) || (a.order - b.order);
+      }
+      if (state.sort === "category") {
+        return a.category.localeCompare(b.category) || a.title.localeCompare(b.title);
+      }
+      if (state.sort === "az") {
+        return a.title.localeCompare(b.title);
+      }
+      return a.order - b.order;
+    });
+
+    sorted.forEach((item) => grid.append(item.card));
+  };
+
+  const applyFilters = () => {
+    state.category = categorySelect.value;
+    state.sort = sortSelect.value;
+    sortCards();
+
+    let visible = 0;
+    cards.forEach((item) => {
+      const categoryMatch = state.category === "all" || item.categoryKey === state.category;
+      const searchMatch = !state.search || item.searchText.includes(state.search);
+      const show = categoryMatch && searchMatch;
+      item.card.toggleAttribute("hidden", !show);
+      if (show) visible += 1;
+    });
+
+    if (countEl) {
+      countEl.textContent = visible === cards.length
+        ? `${cards.length} games online`
+        : `${visible} of ${cards.length} games`;
+    }
+    if (emptyEl) emptyEl.hidden = visible !== 0;
+  };
+
+  window.RBGamesCatalog = {
+    getSearch() {
+      return state.search;
+    },
+    setSearch(query) {
+      state.search = normalize(query);
+      applyFilters();
+    },
+    reset() {
+      categorySelect.value = "all";
+      sortSelect.value = "featured";
+      state.search = "";
+      const navSearch = document.getElementById("rb-search");
+      if (navSearch) navSearch.value = "";
+      if (history.replaceState) {
+        const url = new URL(location.href);
+        url.searchParams.delete("q");
+        history.replaceState(null, "", url);
+      }
+      applyFilters();
+    },
+  };
+
+  categorySelect.addEventListener("change", applyFilters);
+  sortSelect.addEventListener("change", applyFilters);
+  if (resetButton) resetButton.addEventListener("click", () => window.RBGamesCatalog.reset());
+
+  applyFilters();
 }
 
 function openProModal(defaultPlan = "monthly") {
@@ -326,6 +504,7 @@ function fitGameCanvases() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  initGamesCatalog();
   renderNav();
   scheduleGameCanvasFit();
 });

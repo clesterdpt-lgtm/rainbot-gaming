@@ -2781,6 +2781,92 @@ body.arcade-home::before {
   font-weight: 800;
 }
 
+.games-filterbar {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 8px 14px;
+}
+
+.games-filterbar__field {
+  color: #9eb6cb;
+  display: grid;
+  flex: 1 1 190px;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.games-filterbar__select {
+  position: relative;
+}
+
+.games-filterbar__select::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--arcade-yellow);
+  pointer-events: none;
+  transform: translateY(-40%);
+}
+
+.games-filterbar select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(113, 132, 156, 0.68);
+  border-radius: 4px;
+  background: #05070d;
+  color: var(--arcade-white);
+  font: 800 11px var(--font-mono);
+  letter-spacing: 0;
+  padding: 0 38px 0 12px;
+  text-transform: uppercase;
+}
+
+.games-filterbar select:focus-visible,
+.games-filterbar__reset:focus-visible {
+  outline: 2px solid var(--arcade-cyan);
+  outline-offset: 2px;
+}
+
+.games-filterbar__reset {
+  min-height: 44px;
+  border: 1px solid rgba(255, 20, 144, 0.62);
+  border-radius: 4px;
+  background: rgba(255, 20, 144, 0.12);
+  color: var(--arcade-white);
+  cursor: pointer;
+  font: 800 10px var(--font-mono);
+  letter-spacing: 0;
+  padding: 0 16px;
+  text-transform: uppercase;
+}
+
+.games-filterbar__reset:hover {
+  border-color: var(--arcade-pink);
+  background: rgba(255, 20, 144, 0.2);
+}
+
+.games-catalog__empty {
+  margin: 0 8px 18px;
+  border: 1px dashed rgba(113, 132, 156, 0.72);
+  color: #bfccd9;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 18px;
+  text-align: center;
+}
+
 .directory-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3480,6 +3566,19 @@ body.arcade-home::before {
 
   .directory-grid {
     grid-template-columns: 1fr;
+  }
+
+  .games-filterbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .games-filterbar__field {
+    flex-basis: auto;
+  }
+
+  .games-filterbar__reset {
+    width: 100%;
   }
 
   .directory-card {

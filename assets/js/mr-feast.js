@@ -789,31 +789,46 @@
     addWall(31.4, -18.0, 1.0, 13.5, 3.2, world.materials.wallDark);
   }
 
+  // The upper floor used to be a sparse "donut" of slabs with no railing collision,
+  // so you walked out over the foyer on invisible floor. It is now a single SOLID
+  // floor (bounded by the outer + inner walls), with ONE railed opening over the
+  // foyer that the staircase rises through. OPENING = x[-6.5, 6.7], z[24, 35.5].
+  // You climb the stairs up through this opening and step off SOUTH (z < 24) onto
+  // the solid gallery floor.
   function buildSecondStoryShell() {
-    addFloor(-22, 18, 29, 24, world.materials.hardwood, 4.16);
-    addFloor(22, 16, 29, 24, world.materials.hardwood, 4.16);
-    addFloor(-22, -17, 29, 25, world.materials.hardwood, 4.16);
-    addFloor(22, -18, 29, 26, world.materials.hardwood, 4.16);
-    addFloor(-10.0, 22.0, 5.2, 28, world.materials.hardwood, 4.22);
-    addFloor(10.0, 21.0, 5.2, 30, world.materials.hardwood, 4.22);
-    addFloor(0, 31.2, 14.5, 4.4, world.materials.hardwood, 4.22);
-    addFloor(6.8, 24.4, 4.8, 5.8, world.materials.hardwood, 4.22);
-    addFloor(0, -24.6, 14.5, 4.2, world.materials.hardwood, 4.22);
+    const FY = UPPER_FLOOR_Y - 0.02; // floor-slab top sits just under the player's foot height
+    // Solid floor laid as three slabs that wrap the foyer/stairwell opening with no gaps.
+    addFloor(0, -8.5, 73, 65, world.materials.hardwood, FY); // everything south of the opening
+    addFloor(-21.5, 29.75, 30, 11.5, world.materials.hardwood, FY); // west of the opening
+    addFloor(21.6, 29.75, 29.8, 11.5, world.materials.hardwood, FY); // east of the opening
 
     addUpperWall(-37, -3, 1.0, 78, 2.6);
     addUpperWall(37, -3, 1.0, 78, 2.6);
     addUpperWall(0, 36, 74, 1.0, 2.6);
     addUpperWall(0, -42, 74, 1.0, 2.6);
-    addUpperWall(-13.0, 22.0, 0.7, 28, 2.35, world.materials.wallDark);
-    addUpperWall(13.0, 21.0, 0.7, 30, 2.35, world.materials.wallDark);
-    addUpperWall(-13.0, -17.0, 0.7, 24, 2.35, world.materials.wallDark);
-    addUpperWall(13.0, -18.0, 0.7, 24, 2.35, world.materials.wallDark);
 
-    addUpperRailLine(-5.9, 18.0, 34, Math.PI / 2);
-    addUpperRailLine(5.9, 8.6, 15.2, Math.PI / 2);
-    addUpperRailLine(5.9, 32.1, 6.3, Math.PI / 2);
-    addUpperRailLine(0, 31.0, 10.7, 0);
-    addUpperRailLine(0, -24.4, 10.7, 0);
+    // Inner room walls, now built in segments that leave real walk-through doorways
+    // aligned with the door visuals below (instead of one sealed slab with fake doors).
+    const W = world.materials.wallDark;
+    // West divider (x = -13): doors at z = 28 (Edit Bay), 15.8 (Prize Room), -13.8 (Bunk Room)
+    addUpperWall(-13.0, 11.55, 0.7, 7.1, 2.35, W);
+    addUpperWall(-13.0, 21.9, 0.7, 10.8, 2.35, W);
+    addUpperWall(-13.0, 32.35, 0.7, 7.3, 2.35, W);
+    addUpperWall(-13.0, -22.25, 0.7, 15.5, 2.35, W);
+    addUpperWall(-13.0, -9.05, 0.7, 8.1, 2.35, W);
+    // East divider (x = 13): doors at z = 26.6 (Stream Suite), 12.4 (Guest Room), -14.6 (Control)
+    addUpperWall(13.0, 8.85, 0.7, 5.7, 2.35, W);
+    addUpperWall(13.0, 19.5, 0.7, 12.8, 2.35, W);
+    addUpperWall(13.0, 31.65, 0.7, 8.7, 2.35, W);
+    addUpperWall(13.0, -22.65, 0.7, 14.7, 2.35, W);
+    addUpperWall(13.0, -9.95, 0.7, 7.9, 2.35, W);
+
+    // Railing around the foyer/stairwell opening — these colliders are the floor's true
+    // edge. The south edge stops west of the staircase; the stair's own side rails guard
+    // the gap where you step off, and the north side butts the perimeter wall.
+    addUpperEdgeRail(-6.5, 29.75, 11.5, Math.PI / 2); // west edge
+    addUpperEdgeRail(6.7, 29.75, 11.5, Math.PI / 2); // east edge
+    addUpperEdgeRail(-1.4, 24, 10.2, 0); // south edge (west of the stair exit)
 
     addUpperDoorVisual(-13.35, 28.0, Math.PI / 2, "EDIT BAY");
     addUpperDoorVisual(-13.35, 15.8, Math.PI / 2, "PRIZE ROOM");
@@ -830,9 +845,20 @@
     addUpperWindow(36.45, -15.8, -Math.PI / 2, 2.8, 1.0);
     addUpperFloorDressing();
 
-    const upperGlow = new window.THREE.PointLight(0xffd89a, 0.85, 24);
-    upperGlow.position.set(0, 5.7, 27);
+    // Brighter, more even upper lighting (it used to read as a dark, empty deck).
+    const upperGlow = new window.THREE.PointLight(0xffd89a, 1.05, 30);
+    upperGlow.position.set(0, 5.9, 24);
     world.scene.add(upperGlow);
+    [
+      [-22, 22, 0xffd9a8],
+      [22, 20, 0xd8ffe0],
+      [-22, -16, 0xb9d2ff],
+      [22, -17, 0xffd2c2],
+    ].forEach(([lx, lz, color]) => {
+      const lamp = new window.THREE.PointLight(color, 0.8, 22);
+      lamp.position.set(lx, 6.0, lz);
+      world.scene.add(lamp);
+    });
   }
 
   function buildSetDressing() {
@@ -1444,18 +1470,25 @@
     return group;
   }
 
-  function addUpperRailLine(x, z, length, yaw) {
+  // A balcony railing that ALSO collides on the upper floor, so the rail is a real
+  // edge you can't walk through. Use it along every open floor edge (the foyer light
+  // well) — that is what stops the player walking out over the void on invisible floor.
+  function addUpperEdgeRail(x, z, length, yaw) {
     const group = new window.THREE.Group();
-    addBox(group, length, 0.1, 0.09, world.materials.trim, 0, 4.88, 0, false);
+    addBox(group, length, 0.12, 0.1, world.materials.trim, 0, 4.9, 0, false);
     addBox(group, length, 0.08, 0.08, world.materials.darkWood, 0, 4.55, 0, false);
-    const posts = Math.max(3, Math.ceil(length / 2.5));
+    const posts = Math.max(3, Math.ceil(length / 2.2));
     for (let i = 0; i <= posts; i++) {
       const offset = -length / 2 + (length / posts) * i;
-      addBox(group, 0.1, 0.8, 0.1, world.materials.trim, offset, 4.48, 0, false);
+      addBox(group, 0.1, 0.86, 0.1, world.materials.trim, offset, 4.51, 0, false);
     }
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
+    // Collider footprint follows the rail's orientation (thin across, long along its run).
+    const cw = Math.abs(length * Math.cos(yaw)) + 0.3 * Math.abs(Math.sin(yaw));
+    const cd = Math.abs(length * Math.sin(yaw)) + 0.3 * Math.abs(Math.cos(yaw));
+    addCollisionRect(x, z, cw, cd, false, "rail", 1);
     return group;
   }
 
@@ -1509,7 +1542,7 @@
     addUpperControlBank(23.0, -15.2);
     addUpperShelf(32.0, -20.0, -Math.PI / 2);
 
-    addUpperBench(0, 31.1, 0);
+    addUpperBench(0, 22.2, Math.PI); // overlook bench on the solid edge of the foyer opening
     addUpperBench(0, -24.2, Math.PI);
     addUpperSign("STAIRS", STAIR_TOP.x, UPPER_FLOOR_Y + 1.75, STAIR_TOP.z - 0.9, Math.PI, 1.6, 0.44);
   }
@@ -1560,7 +1593,7 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z, 2.5, 0.9, false, 1);
+    addOrientedPropCollision(x, z, 2.5, 0.9, yaw, false, 1);
   }
 
   function addUpperPrizeTable(x, z) {
@@ -1588,7 +1621,7 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z, 2.6, 3.8, false, 1);
+    addOrientedPropCollision(x, z, 2.6, 3.8, yaw, false, 1);
   }
 
   function addUpperControlBank(x, z) {
@@ -1762,11 +1795,8 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    // Rotation-aware footprint: the sofa is 3.8 long × 1.7 deep, so a 90° turn must
-    // swap those for collision (the old axis-aligned rect sprawled under the stairs).
-    const cw = Math.abs(3.8 * Math.cos(yaw)) + Math.abs(1.7 * Math.sin(yaw));
-    const cd = Math.abs(3.8 * Math.sin(yaw)) + Math.abs(1.7 * Math.cos(yaw));
-    addPropCollision(x, z, cw, cd, false);
+    // Rotation-aware footprint (the old axis-aligned rect sprawled under the stairs).
+    addOrientedPropCollision(x, z, 3.8, 1.7, yaw);
     return group;
   }
 
@@ -2303,7 +2333,7 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z, 2.5, 1.2, false);
+    addOrientedPropCollision(x, z, 2.5, 1.2, yaw);
   }
 
   function addTub(x, z, yaw) {
@@ -2419,7 +2449,7 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z, 2.4, 0.85, false);
+    addOrientedPropCollision(x, z, 2.4, 0.85, yaw);
   }
 
   function addArmchair(x, z, yaw) {
@@ -2729,6 +2759,15 @@
 
   function addPropCollision(x, z, w, d, blocksSight, level = 0) {
     addCollisionRect(x, z, w, d, blocksSight, "prop", level);
+  }
+
+  // Collision for a rectangular prop that is rotated by `yaw`. The collider is an
+  // axis-aligned box sized to the rotated footprint, so a 90°-turned shelf/wardrobe/sofa
+  // no longer juts a phantom wall into the room (the old calls passed w,d unrotated).
+  function addOrientedPropCollision(x, z, w, d, yaw, blocksSight = false, level = 0) {
+    const cw = Math.abs(w * Math.cos(yaw)) + Math.abs(d * Math.sin(yaw));
+    const cd = Math.abs(w * Math.sin(yaw)) + Math.abs(d * Math.cos(yaw));
+    addCollisionRect(x, z, cw, cd, blocksSight, "prop", level);
   }
 
   function bindInputs() {

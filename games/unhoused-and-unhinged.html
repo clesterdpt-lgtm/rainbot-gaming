@@ -6,7 +6,7 @@
   <title>Unhoused and Unhinged — Rainbot Gaming</title>
   <meta name="description" content="A low-poly 3D street-survival sandbox prototype. Earn cash with slapstick antics by day, dodge overzealous cops, and survive Tweeker Zombies at night." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260616-save-1" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260616-unhinged-2" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M14 70h72v12H14z' fill='%23ffd43b'/%3E%3Cpath d='M26 64c2-24 46-24 48 0' fill='%23ff2e88'/%3E%3Ccircle cx='38' cy='40' r='8' fill='%232ee0ff'/%3E%3Ccircle cx='62' cy='40' r='8' fill='%232ee0ff'/%3E%3C/svg%3E" />
   <style>
     .unhinged-page {
@@ -1061,80 +1061,531 @@
       }
     }
 
-    /* Declutter the HUD when the *play area* gets narrow (any device/layout). */
-    @container ustage (max-width: 680px) {
-      .unhinged-prompts,
-      .unhinged-task-card--heat,
-      .unhinged-version {
-        display: none;
-      }
+    /* ===== Simplified HUD (uh-*) ============================================ */
+    /* Top-left: cash + health. */
+    .uh-topleft {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      display: grid;
+      gap: clamp(5px, 1cqw, 9px);
+      padding: clamp(7px, 1.2cqw, 11px) clamp(9px, 1.5cqw, 13px);
+      width: clamp(132px, 22cqw, 250px);
     }
 
-    /* Too narrow for a bottom-left panel and a centered hotbar side by side. */
-    @container ustage (max-width: 520px) {
-      .unhinged-hotbar {
-        display: none;
-      }
+    .uh-cash {
+      align-items: center;
+      color: #75ff92;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: clamp(16px, 2.6cqw, 26px);
+      gap: clamp(6px, 1.1cqw, 10px);
+      line-height: 1;
     }
 
-    @container ustage (max-width: 460px) {
-      .unhinged-task-card,
-      .unhinged-logo-mark,
-      .unhinged-version {
-        display: none;
-      }
+    .uh-cash__bill {
+      align-items: center;
+      background: #75ff92;
+      border: 2px solid rgba(0, 0, 0, 0.4);
+      border-radius: 5px;
+      color: #175323;
+      display: inline-flex;
+      font-size: clamp(11px, 1.6cqw, 16px);
+      height: clamp(18px, 2.6cqw, 26px);
+      justify-content: center;
+      transform: rotate(-10deg);
+      width: clamp(28px, 4cqw, 40px);
     }
 
-    /* Touch devices: button-driven controls, decluttered HUD, no overlap. */
+    .uh-health {
+      align-items: center;
+      display: grid;
+      gap: clamp(5px, 0.9cqw, 8px);
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .uh-health__label {
+      color: #ff8f8f;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.2cqw, 13px);
+    }
+
+    .uh-health__track {
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 4px;
+      display: block;
+      height: clamp(9px, 1.5cqw, 15px);
+      overflow: hidden;
+    }
+
+    .uh-health__fill {
+      background: linear-gradient(90deg, #cc332f, #ff6a4d);
+      display: block;
+      height: 100%;
+      width: 100%;
+      transition: width 120ms linear;
+    }
+
+    .uh-health b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.2cqw, 13px);
+    }
+
+    /* Top-center: wanted level. */
+    .uh-wanted {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: clamp(124px, 22cqw, 250px);
+      padding: clamp(5px, 0.9cqw, 9px) clamp(8px, 1.3cqw, 12px);
+      text-align: center;
+    }
+
+    .uh-wanted__label {
+      color: #ff8f6d;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.4cqw, 15px);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .uh-wanted__track {
+      background: rgba(8, 18, 30, 0.82);
+      border: 1px solid rgba(5, 8, 14, 0.78);
+      border-radius: 4px;
+      display: block;
+      height: clamp(6px, 1cqw, 10px);
+      margin: 5px 0;
+      overflow: hidden;
+    }
+
+    .uh-wanted__fill {
+      background: linear-gradient(90deg, #df2f32, #ff8a3a);
+      display: block;
+      height: 100%;
+      width: 0%;
+      transition: width 140ms linear;
+    }
+
+    .uh-stars {
+      display: flex;
+      gap: clamp(2px, 0.6cqw, 7px);
+      justify-content: center;
+    }
+
+    .uh-stars span {
+      color: rgba(20, 48, 74, 0.7);
+      font-size: clamp(13px, 2.4cqw, 26px);
+      line-height: 1;
+      -webkit-text-stroke: 2px rgba(5, 7, 13, 0.82);
+    }
+
+    .uh-stars span.is-lit {
+      color: #ffd43b;
+      filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.7));
+    }
+
+    .uh-chase {
+      color: #ff5d5d;
+      font-family: var(--font-display);
+      font-size: clamp(8px, 1.2cqw, 12px);
+      letter-spacing: 0.04em;
+      margin-top: 4px;
+      text-transform: uppercase;
+      animation: uh-blink 0.8s steps(2, start) infinite;
+    }
+
+    @keyframes uh-blink {
+      50% { opacity: 0.3; }
+    }
+
+    /* Top-right: clock + phase + minimap. */
+    .uh-topright {
+      position: absolute;
+      top: 52px;
+      right: 14px;
+      display: grid;
+      gap: 7px;
+      justify-items: end;
+      width: clamp(86px, 14cqw, 150px);
+    }
+
+    .uh-clock {
+      align-items: center;
+      display: flex;
+      gap: clamp(5px, 1cqw, 9px);
+      padding: clamp(4px, 0.8cqw, 7px) clamp(7px, 1.2cqw, 11px);
+    }
+
+    .uh-clock b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(11px, 1.7cqw, 19px);
+      line-height: 1;
+    }
+
+    .uh-phase-pill {
+      background: rgba(255, 212, 59, 0.16);
+      border: 1px solid rgba(255, 212, 59, 0.4);
+      border-radius: 999px;
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: clamp(8px, 1.1cqw, 12px);
+      padding: 2px 8px;
+      text-transform: uppercase;
+    }
+
+    .uh-minimap {
+      aspect-ratio: 1;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 46%),
+        repeating-linear-gradient(34deg, transparent 0 14px, rgba(255, 255, 255, 0.14) 14px 18px),
+        repeating-linear-gradient(121deg, rgba(26, 31, 36, 0.92) 0 16px, rgba(78, 84, 88, 0.9) 16px 22px);
+      border: 4px solid rgba(0, 0, 0, 0.7);
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 24px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      position: relative;
+      width: clamp(74px, 12cqw, 130px);
+    }
+
+    .uh-mini-dot {
+      background: #2ee0ff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 8px #2ee0ff;
+      clip-path: polygon(50% 0, 100% 100%, 50% 75%, 0 100%);
+      height: 16px;
+      left: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 14px;
+    }
+
+    /* Objective banner (bottom-center, above the hotbar). */
+    .uh-objective {
+      position: absolute;
+      bottom: clamp(74px, 13cqw, 116px);
+      left: 50%;
+      transform: translateX(-50%);
+      align-items: center;
+      display: flex;
+      gap: clamp(6px, 1cqw, 10px);
+      max-width: min(80%, 420px);
+      padding: clamp(5px, 0.9cqw, 9px) clamp(9px, 1.4cqw, 14px);
+    }
+
+    .uh-objective__arrow {
+      align-items: center;
+      background: rgba(255, 212, 59, 0.16);
+      border: 1px solid rgba(255, 212, 59, 0.42);
+      border-radius: 999px;
+      color: #ffd43b;
+      display: inline-flex;
+      flex: 0 0 auto;
+      font-size: clamp(12px, 1.8cqw, 17px);
+      height: clamp(22px, 3cqw, 28px);
+      justify-content: center;
+      line-height: 1;
+      transition: transform 120ms linear;
+      width: clamp(22px, 3cqw, 28px);
+    }
+
+    .uh-objective span:last-child {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.3cqw, 14px);
+      line-height: 1.1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Hotbar (slots 1-4). */
+    .uh-hotbar {
+      position: absolute;
+      bottom: clamp(10px, 1.8cqw, 20px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: clamp(4px, 0.7cqw, 7px);
+      pointer-events: auto;
+      z-index: 7;
+    }
+
+    .uh-slot {
+      background: rgba(8, 11, 16, 0.66);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 9px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+      color: #f8f1dc;
+      cursor: pointer;
+      height: clamp(46px, 6cqw, 76px);
+      padding: 0;
+      position: relative;
+      touch-action: manipulation;
+      width: clamp(46px, 6cqw, 76px);
+    }
+
+    .uh-slot:active {
+      transform: translateY(2px);
+    }
+
+    .uh-slot.is-active {
+      border-color: rgba(255, 212, 59, 0.85);
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.26), inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+    }
+
+    .uh-slot.is-empty {
+      opacity: 0.5;
+    }
+
+    .uh-slot__key {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(8px, 1cqw, 12px);
+      left: clamp(4px, 0.7cqw, 7px);
+      position: absolute;
+      top: clamp(3px, 0.6cqw, 6px);
+    }
+
+    .uh-slot__icon {
+      align-items: center;
+      display: flex;
+      font-family: var(--font-display);
+      font-size: clamp(8px, 1cqw, 12px);
+      height: 100%;
+      justify-content: center;
+      line-height: 1.05;
+      padding: clamp(12px, 1.8cqw, 18px) clamp(3px, 0.8cqw, 7px) clamp(4px, 0.8cqw, 7px);
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .uh-slot__count {
+      bottom: clamp(3px, 0.6cqw, 6px);
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: clamp(8px, 1cqw, 12px);
+      position: absolute;
+      right: clamp(5px, 0.8cqw, 8px);
+    }
+
+    /* Bag / loadout overlay. */
+    .uh-bag {
+      position: absolute;
+      inset: 0;
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(3, 6, 12, 0.78);
+      backdrop-filter: blur(3px);
+    }
+
+    .uh-bag[hidden] {
+      display: none;
+    }
+
+    .uh-bag__panel {
+      background: linear-gradient(180deg, rgba(10, 14, 22, 0.97), rgba(6, 8, 14, 0.97));
+      border: 1px solid rgba(46, 224, 255, 0.32);
+      border-radius: 12px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+      max-height: 100%;
+      max-width: 540px;
+      overflow-y: auto;
+      padding: clamp(12px, 2cqw, 18px);
+      width: 100%;
+    }
+
+    .uh-bag__head {
+      align-items: start;
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .uh-bag__head strong {
+      color: #ffd43b;
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(14px, 2cqw, 18px);
+      text-transform: uppercase;
+    }
+
+    .uh-bag__head span {
+      color: rgba(234, 247, 255, 0.7);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+
+    .uh-bag__head b {
+      color: #75ff92;
+    }
+
+    .uh-bag__grid {
+      display: grid;
+      gap: 9px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .uh-bag__item {
+      background: rgba(8, 11, 16, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      color: var(--ink);
+      cursor: pointer;
+      padding: 10px 11px;
+      text-align: left;
+    }
+
+    .uh-bag__item:hover {
+      border-color: rgba(46, 224, 255, 0.5);
+    }
+
+    .uh-bag__item.is-equipped {
+      border-color: rgba(117, 255, 146, 0.6);
+      box-shadow: inset 0 0 0 1px rgba(117, 255, 146, 0.22);
+    }
+
+    .uh-bag__item.is-active {
+      outline: 2px solid #ffd43b;
+      outline-offset: 2px;
+    }
+
+    .uh-bag__item strong {
+      color: #fff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: 13px;
+    }
+
+    .uh-bag__item span {
+      color: rgba(234, 247, 255, 0.66);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.3;
+      margin-top: 3px;
+    }
+
+    .uh-bag__item small {
+      color: #ffd43b;
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      margin-top: 5px;
+      text-transform: uppercase;
+    }
+
+    .unhinged-howto-list {
+      display: grid;
+      gap: 9px;
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+    }
+
+    .unhinged-howto-list li {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.45;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .unhinged-howto-list li::before {
+      color: var(--accent-3);
+      content: "▸";
+      left: 0;
+      position: absolute;
+    }
+
+    .unhinged-howto-list strong {
+      color: var(--accent-3);
+    }
+
+    /* Touch controls: hidden for desktop mouse, shown on touch OR narrow screens
+       (pointer:coarse alone mis-detects in some browsers and emulators). */
+    .rb-touch-layer--unhinged { display: none; }
+
     @media (hover: none) and (pointer: coarse) {
-      .unhinged-task-card,
-      .unhinged-version,
-      .unhinged-prompts,
-      .unhinged-hotbar,
-      .unhinged-map-district {
-        display: none;
-      }
-
-      /* Invisible floating thumb-stick on the left; survival sits beneath it. */
-      .rb-touch-layer--unhinged .rb-touch-zone {
-        width: min(48%, 240px);
-        height: min(54%, 240px);
-        background: transparent;
-        border-color: transparent;
-      }
-
-      .rb-touch-layer--unhinged .rb-touch-zone::after {
-        opacity: 0.5;
-      }
+      .rb-touch-layer--unhinged { display: block; }
     }
 
-    /* Don't show on-canvas touch buttons to mouse users (narrow window / max screen). */
-    @media (hover: hover) and (pointer: fine) {
-      .rb-touch-layer--unhinged {
-        display: none;
-      }
-
-      .canvas-wrap--unhinged.is-maxed .rb-touch-layer {
-        display: none;
-      }
+    @media (max-width: 820px) {
+      .rb-touch-layer--unhinged { display: block; }
     }
 
-    /* On-canvas touch action buttons (bottom-right cluster). */
+    /* Invisible floating thumb-stick on the left half. */
+    .rb-touch-layer--unhinged .rb-touch-zone {
+      width: min(50%, 260px);
+      height: min(62%, 300px);
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .rb-touch-layer--unhinged .rb-touch-zone::after {
+      opacity: 0.5;
+    }
+
+    /* On-canvas touch action buttons (bottom-right cluster: ACT / ATTACK / BAG). */
     .rb-touch-layer--unhinged .rb-touch-cluster--actions {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
 
     .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn {
-      font-size: 12px;
-      height: 52px;
-      min-width: 66px;
+      font-size: 13px;
+      height: 54px;
+      min-width: 94px;
       opacity: 0.96;
     }
 
-    .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn--primary {
-      font-size: 13px;
+    /* Reflow the HUD when the play area is narrow (phones / narrow windows).
+       Placed after the base rules so these compact overrides win on source order. */
+    @container ustage (max-width: 600px) {
+      .uh-minimap { display: none; }
+
+      /* Shrink the three top panels so they sit side by side without touching. */
+      .uh-topleft { width: clamp(88px, 27cqw, 132px); padding: 6px 8px; gap: 5px; }
+      .uh-cash { font-size: clamp(13px, 4.6cqw, 24px); }
+      .uh-wanted { width: clamp(84px, 26cqw, 124px); padding: 5px 6px; }
+      .uh-topright { width: auto; }
+      .uh-clock { padding: 4px 7px; gap: 5px; }
+      .uh-clock b { font-size: clamp(10px, 2.6cqw, 18px); }
+      .uh-phase-pill { font-size: 9px; padding: 1px 6px; }
+
+      /* Lift the objective well clear of the bottom controls. */
+      .uh-objective { bottom: clamp(122px, 34cqw, 160px); max-width: 76%; }
+
+      /* Hotbar pinned bottom-left so it can't reach the action buttons. */
+      .uh-hotbar { left: clamp(6px, 2cqw, 12px); transform: none; gap: 4px; }
+      .uh-slot { width: clamp(38px, 12cqw, 48px); height: clamp(38px, 12cqw, 48px); }
+
+      /* Action buttons: compact 2-column grid, clear of the top clock. */
+      .rb-touch-layer--unhinged .rb-touch-cluster--actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+      }
+      .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn {
+        height: 44px;
+        min-width: 58px;
+        font-size: 11px;
+        padding: 0 8px;
+      }
     }
 
     body.unhinged-visual-target {
@@ -1409,161 +1860,66 @@
 
     <div class="game-layout">
       <div class="game-stage unhinged-stage">
-        <div class="hud">
-          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">Day</span></div>
-          <div class="hud__item"><span class="hud__label">CASH</span><span class="hud__value" id="hud-cash">$0</span></div>
-          <div class="hud__item"><span class="hud__label">HEAT</span><span class="hud__value" id="hud-heat">0%</span></div>
-          <div class="hud__item"><span class="hud__label">ENERGY</span><span class="hud__value" id="hud-energy">100%</span></div>
-          <div class="hud__item"><span class="hud__label">HEALTH</span><span class="hud__value" id="hud-health">100%</span></div>
-          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
-        </div>
-
         <div class="canvas-wrap canvas-wrap--unhinged">
           <canvas id="gameCanvas" width="960" height="600" tabindex="0"></canvas>
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
 
           <div class="unhinged-game-hud" aria-hidden="true">
-            <div class="unhinged-hud-left">
-              <div>
-                <div class="unhinged-logo-mark">
-                  <span>Unhoused</span>
-                  <small>&amp;</small>
-                  <span>Unhinged</span>
+            <!-- Top-left: cash + health -->
+            <div class="uh-topleft unhinged-hud-panel">
+              <div class="uh-cash"><span class="uh-cash__bill">$</span><b id="hud-cash-large">$7.25</b></div>
+              <div class="uh-health">
+                <span class="uh-health__label">HP</span>
+                <span class="uh-health__track"><span class="uh-health__fill" id="hud-health-fill"></span></span>
+                <b id="hud-health-text">100</b>
+              </div>
+            </div>
+
+            <!-- Top-center: wanted stars (rises when you bonk people or over-act) -->
+            <div class="uh-wanted unhinged-hud-panel">
+              <div class="uh-wanted__label">Wanted</div>
+              <div class="uh-wanted__track"><span class="uh-wanted__fill" id="hud-wanted-fill"></span></div>
+              <div class="uh-stars" id="hud-stars"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div>
+              <div class="uh-chase" id="hud-chase" hidden>● POLICE CHASING</div>
+            </div>
+
+            <!-- Top-right: clock + phase + minimap dot -->
+            <div class="uh-topright">
+              <div class="uh-clock unhinged-hud-panel"><b id="hud-clock">8:00 AM</b><span class="uh-phase-pill" id="hud-phase-pill">Day 1</span></div>
+              <div class="uh-minimap"><span class="uh-mini-dot" id="hud-mini-player"></span></div>
+            </div>
+
+            <!-- Objective banner -->
+            <div class="uh-objective unhinged-hud-panel">
+              <span class="uh-objective__arrow" id="hud-objective-arrow">▲</span>
+              <span id="hud-objective-text">Earn $0/20 before dusk</span>
+            </div>
+
+            <!-- Bottom-center hotbar (slots 1-4, filled from JS) -->
+            <div class="uh-hotbar" id="hud-hotbar"></div>
+          </div>
+
+          <!-- Bag / loadout overlay -->
+          <div class="uh-bag" id="bag-overlay" hidden>
+            <div class="uh-bag__panel">
+              <div class="uh-bag__head">
+                <div>
+                  <strong>Your Bag</strong>
+                  <span>Pick a slot with <b>1-4</b>, then tap an item to equip it to slot <b id="bag-active-slot">1</b>.</span>
                 </div>
-                <div class="unhinged-version">v0.2.0 Top-Down Beta</div>
+                <button class="btn btn--ghost" id="bag-close" type="button">Close</button>
               </div>
-
-              <div class="unhinged-hud-panel unhinged-task-card">
-                <strong>Daily Struggles</strong>
-                <div class="unhinged-task-row"><span>Find something to eat</span><b id="hud-task-food">0/1</b></div>
-                <div class="unhinged-task-row"><span>Find clean water</span><b id="hud-task-water">0/1</b></div>
-              </div>
-
-              <div class="unhinged-hud-panel unhinged-task-card unhinged-task-card--bucks">
-                <strong>Make Some Bucks</strong>
-                <div class="unhinged-task-row"><span id="hud-task-busk-label">Busk for cash in the park</span><b id="hud-task-busk">0/1</b></div>
-              </div>
-
-              <div class="unhinged-hud-panel unhinged-task-card unhinged-task-card--heat">
-                <strong>Avoid The Heat</strong>
-                <div class="unhinged-task-row"><span id="hud-task-heat-label">Lose the cops</span><b id="hud-task-heat">0/1</b></div>
-              </div>
-            </div>
-
-            <div class="unhinged-notoriety">
-              <div class="unhinged-notoriety__label">Notoriety</div>
-              <div class="unhinged-notoriety__track"><span class="unhinged-notoriety__fill" id="hud-notoriety-fill"></span></div>
-              <div class="unhinged-stars" id="hud-notoriety-stars">
-                <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
-              </div>
-            </div>
-
-            <div class="unhinged-hud-map">
-              <div class="unhinged-hud-clock">
-                <b id="hud-clock">8:00 AM</b>
-                <span class="unhinged-gear-dot">*</span>
-              </div>
-              <div class="unhinged-minimap">
-                <span class="unhinged-mini-dot unhinged-mini-dot--player" id="hud-mini-player"></span>
-                <span class="unhinged-mini-dot unhinged-mini-dot--cash"></span>
-                <span class="unhinged-mini-dot unhinged-mini-dot--heat"></span>
-                <span class="unhinged-mini-dot unhinged-mini-dot--job"></span>
-              </div>
-              <div class="unhinged-map-district" aria-live="polite">
-                <strong id="hud-map-district-name">Open Block</strong>
-                <span id="hud-map-district-trait">balanced risk</span>
-              </div>
-            </div>
-
-            <div class="unhinged-hud-panel unhinged-survival-panel">
-              <div class="unhinged-stat-row">
-                <span class="unhinged-stat-icon unhinged-stat-icon--health">H</span>
-                <span class="unhinged-stat-bar">
-                  <span class="unhinged-stat-label">Health</span>
-                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--health" id="hud-survival-health"></span></span>
-                </span>
-                <b class="unhinged-stat-value" id="hud-survival-health-text">100/100</b>
-              </div>
-              <div class="unhinged-stat-row">
-                <span class="unhinged-stat-icon unhinged-stat-icon--thirst">T</span>
-                <span class="unhinged-stat-bar">
-                  <span class="unhinged-stat-label">Thirst</span>
-                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--thirst" id="hud-survival-thirst"></span></span>
-                </span>
-                <b class="unhinged-stat-value" id="hud-survival-thirst-text">100/100</b>
-              </div>
-              <div class="unhinged-stat-row">
-                <span class="unhinged-stat-icon unhinged-stat-icon--hunger">F</span>
-                <span class="unhinged-stat-bar">
-                  <span class="unhinged-stat-label">Hunger</span>
-                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--hunger" id="hud-survival-hunger"></span></span>
-                </span>
-                <b class="unhinged-stat-value" id="hud-survival-hunger-text">55/100</b>
-              </div>
-              <div class="unhinged-stat-row">
-                <span class="unhinged-stat-icon unhinged-stat-icon--morale">M</span>
-                <span class="unhinged-stat-bar">
-                  <span class="unhinged-stat-label">Morale</span>
-                  <span class="unhinged-stat-track"><span class="unhinged-stat-fill unhinged-stat-fill--morale" id="hud-survival-morale"></span></span>
-                </span>
-                <b class="unhinged-stat-value" id="hud-survival-morale-text">50/100</b>
-              </div>
-              <div class="unhinged-cashline"><span class="unhinged-cash-bill">$</span><b id="hud-cash-large">$0</b></div>
-            </div>
-
-            <div class="unhinged-hotbar">
-              <div class="unhinged-slot is-active" id="hud-slot-action">
-                <span class="unhinged-slot__key">1</span>
-                <span class="unhinged-slot__icon" id="hud-slot-action-label">Dance</span>
-                <span class="unhinged-slot__count">Act</span>
-              </div>
-              <div class="unhinged-slot">
-                <span class="unhinged-slot__key">E</span>
-                <span class="unhinged-slot__icon">Cache</span>
-                <span class="unhinged-slot__count" id="hud-slot-scrap-count">0</span>
-              </div>
-              <div class="unhinged-slot" id="hud-slot-cone">
-                <span class="unhinged-slot__key">RMB</span>
-                <span class="unhinged-slot__icon">Cone</span>
-                <span class="unhinged-slot__count" id="hud-slot-cone-count">4</span>
-              </div>
-              <div class="unhinged-slot" id="hud-slot-peel">
-                <span class="unhinged-slot__key">C</span>
-                <span class="unhinged-slot__icon">Peel</span>
-                <span class="unhinged-slot__count" id="hud-slot-peel-count">2</span>
-              </div>
-              <div class="unhinged-slot is-active" id="hud-slot-tool">
-                <span class="unhinged-slot__key">LMB</span>
-                <span class="unhinged-slot__icon" id="hud-slot-tool-label">Plunger</span>
-                <span class="unhinged-slot__count">Bonk</span>
-              </div>
-            </div>
-
-            <div class="unhinged-prompts">
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>LMB</kbd><span id="hud-prompt-j">Bonk</span></div>
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>RMB</kbd><span id="hud-prompt-l">Throw</span></div>
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>E</kbd><span id="hud-prompt-e">Interact</span></div>
-              <div class="unhinged-hud-panel unhinged-prompt"><kbd>Space</kbd><span id="hud-prompt-space">Stunt</span></div>
+              <div class="uh-bag__grid" id="bag-grid"></div>
             </div>
           </div>
 
-          <div class="unhinged-status" aria-live="polite">
-            <div class="unhinged-chip" id="status-chip"><strong>Goal</strong><span>Earn cash before nightfall</span></div>
-            <div class="unhinged-chip unhinged-chip--perk" id="dawn-perk-chip" hidden><strong>Perk</strong><span id="dawn-perk-text">No route</span></div>
-            <div class="unhinged-chip unhinged-chip--boss" id="haze-boss-chip" hidden><strong>Boss</strong><span id="haze-boss-text">Tweeker Brute</span></div>
-            <div class="unhinged-compass" id="objective-chip">
-              <span class="unhinged-compass__arrow" id="objective-arrow">▲</span>
-              <span id="objective-text">Find the first job</span>
-            </div>
-          </div>
-
+          <!-- Touch controls: left joystick + right action buttons (ACT / ATTACK / BAG) -->
           <div class="rb-touch-layer rb-touch-layer--unhinged" aria-label="Touch controls">
             <div class="rb-touch-zone" id="unhinged-touch-stick" aria-label="Move"></div>
             <div class="rb-touch-cluster rb-touch-cluster--right rb-touch-cluster--actions">
-              <button class="rb-touch-btn rb-touch-btn--accent" id="touch-act" type="button" aria-label="Interact">Act</button>
-              <button class="rb-touch-btn rb-touch-btn--yellow" id="touch-throw" type="button" aria-label="Throw cone">Throw</button>
-              <button class="rb-touch-btn" id="touch-stunt" type="button" aria-label="Stunt">Stunt</button>
-              <button class="rb-touch-btn rb-touch-btn--primary" id="touch-bonk" type="button" aria-label="Bonk">Bonk</button>
+              <button class="rb-touch-btn rb-touch-btn--accent" id="touch-act" type="button" aria-label="Act for money">ACT</button>
+              <button class="rb-touch-btn rb-touch-btn--primary" id="touch-attack" type="button" aria-label="Attack">ATTACK</button>
+              <button class="rb-touch-btn rb-touch-btn--yellow" id="touch-bag" type="button" aria-label="Open bag">BAG</button>
             </div>
           </div>
 
@@ -1587,177 +1943,25 @@
             <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
           </div>
           <p class="unhinged-note">
-            <kbd>Mouse</kbd> aim · <kbd>L-click</kbd> bonk · <kbd>R-click</kbd> throw cone<br />
-            <kbd>WASD</kbd> / arrows move · <kbd>Shift</kbd> sprint · <kbd>Space</kbd> stunt<br />
-            <kbd>E</kbd> interact / busk · <kbd>C</kbd> drop peel<br />
-            <kbd>F</kbd> bonk &amp; <kbd>Q</kbd> throw (keyboard) · <kbd>1</kbd>–<kbd>4</kbd> antics · <kbd>Esc</kbd> pause<br />
-            <kbd>⛶</kbd> button (top-right of the screen) maximizes the game
+            <kbd>WASD</kbd> / arrows move<br />
+            <kbd>E</kbd> or <kbd>Space</kbd> — <strong>ACT</strong> (earn money)<br />
+            <kbd>F</kbd> / <kbd>click</kbd> — <strong>ATTACK</strong> (auto-aims)<br />
+            <kbd>1</kbd>–<kbd>4</kbd> pick item · <kbd>B</kbd> open bag<br />
+            <kbd>Esc</kbd> pause · <kbd>⛶</kbd> (top-right) max screen
           </p>
-
-          <div class="unhinged-district" aria-live="polite">
-            <strong id="district-name">Open Block</strong>
-            <span id="district-trait">balanced risk</span>
-            <small id="director-readout">Block Mood · pressure 0%</small>
-          </div>
-
-          <div class="unhinged-meter" aria-label="Run meters">
-            <div class="unhinged-meter__row">
-              <span>Time</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-time"></span></span>
-              <b id="meter-time-text">0%</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Arrest</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-arrest"></span></span>
-              <b id="meter-arrest-text">0%</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Wave</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-wave"></span></span>
-              <b id="meter-wave-text">0</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Hype</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-hype"></span></span>
-              <b id="meter-hype-text">0%</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Tumble</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-tumble"></span></span>
-              <b id="meter-tumble-text">ready</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Peels</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-peel"></span></span>
-              <b id="meter-peel-text">2/4</b>
-            </div>
-          </div>
+          <p class="unhinged-note" style="margin-top:10px;">
+            On a phone: drag the <strong>left half</strong> to move, tap <strong>ACT / ATTACK / BAG</strong> on the right, and tap the <strong>1-4 slots</strong> to switch items.
+          </p>
         </div>
 
         <div class="game-side__panel">
-          <h3 class="game-side__title">DAY ANTICS</h3>
-          <div class="unhinged-actions" id="action-grid">
-            <button class="btn btn--secondary unhinged-action is-active" type="button" data-action="dance">1 Dance<span>tips + small heat</span></button>
-            <button class="btn btn--secondary unhinged-action" type="button" data-action="sign">2 Sign Bit<span>steady cash</span></button>
-            <button class="btn btn--secondary unhinged-action" type="button" data-action="drums">3 Trash Drums<span>crowd pull</span></button>
-            <button class="btn btn--secondary unhinged-action" type="button" data-action="stunt">4 Pratfall<span>risky burst</span></button>
-          </div>
-          <div class="mobile-controls" aria-label="Mobile controls">
-            <div class="mobile-controls__grid">
-              <button class="btn btn--secondary" id="btn-up" type="button">Up</button>
-              <button class="btn btn--secondary" id="btn-left" type="button">Left</button>
-              <button class="btn btn--secondary" id="btn-right" type="button">Right</button>
-              <button class="btn btn--secondary" id="btn-down" type="button">Down</button>
-              <button class="btn btn--primary" id="btn-act" type="button">Act</button>
-              <button class="btn btn--yellow" id="btn-attack" type="button">Bonk</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="game-side__panel" hidden>
-          <h3 class="game-side__title">STREET GIG</h3>
-          <div class="unhinged-gig" aria-live="polite">
-            <strong id="gig-title">Warm Up the Block</strong>
-            <span id="gig-desc">Build hype with daytime chaos before nightfall.</span>
-            <div class="unhinged-meter__row">
-              <span>Gig</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="gig-progress"></span></span>
-              <b id="gig-progress-text">0/14</b>
-            </div>
-            <small id="gig-reward">Reward: $14 + hype</small>
-          </div>
-        </div>
-
-        <div class="game-side__panel" hidden>
-          <h3 class="game-side__title">BLOCK FAVOR</h3>
-          <div class="unhinged-gig" aria-live="polite">
-            <strong id="favor-title">Open Block Route</strong>
-            <span id="favor-desc">Help the current district for a local payout.</span>
-            <div class="unhinged-meter__row">
-              <span>Favor</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="favor-progress"></span></span>
-              <b id="favor-progress-text">0/3</b>
-            </div>
-            <small id="favor-reward">Reward: $15 + hype</small>
-          </div>
-        </div>
-
-        <div class="game-side__panel" hidden>
-          <h3 class="game-side__title">ODD JOBS</h3>
-          <div class="unhinged-gig" aria-live="polite">
-            <strong id="job-title">Phone Relay</strong>
-            <span id="job-desc">Pick up the ringing phone, then drop it at the return marker.</span>
-            <div class="unhinged-meter__row">
-              <span>Scrap</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="meter-scrap"></span></span>
-              <b id="meter-scrap-text">0</b>
-            </div>
-            <div class="unhinged-meter__row">
-              <span>Job</span>
-              <span class="unhinged-meter__track"><span class="unhinged-meter__fill" id="job-progress"></span></span>
-              <b id="job-progress-text">0/2</b>
-            </div>
-            <small id="job-reward">Carry item · Reward: $18 + scrap</small>
-          </div>
-        </div>
-
-        <div class="game-side__panel" hidden>
-          <h3 class="game-side__title">CAMP UPGRADES</h3>
-          <div class="unhinged-shop" id="camp-upgrade-grid">
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="tarpRoof">
-              <strong>Tarp Roof</strong>
-              <span>recovery + max health</span>
-              <small>3 scrap</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="lanternRig">
-              <strong>Lantern Rig</strong>
-              <span>softer Tweeker Zombie nights</span>
-              <small>4 scrap</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-camp-upgrade="peelBucket">
-              <strong>Peel Bucket</strong>
-              <span>more slapstick traps</span>
-              <small>4 scrap</small>
-            </button>
-          </div>
-          <div class="unhinged-gear-summary" id="camp-summary">Spend scrap at camp for run-long shelter perks.</div>
-        </div>
-
-        <div class="game-side__panel" hidden>
-          <h3 class="game-side__title">GEAR & HELP</h3>
-          <div class="unhinged-shop" id="upgrade-grid">
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="plungerTape">
-              <strong>Plunger Tape</strong>
-              <span>wider bonks</span>
-              <small>$30</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="conePouch">
-              <strong>Cone Pouch</strong>
-              <span>carry 8 cones</span>
-              <small>$24</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="cartPadding">
-              <strong>Cart Padding</strong>
-              <span>+25 max health</span>
-              <small>$36</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="mopSpear">
-              <strong>Mop Spear</strong>
-              <span>long stun poke</span>
-              <small>$34</small>
-            </button>
-            <button class="btn btn--secondary unhinged-shop-btn" type="button" data-upgrade="rubberChicken">
-              <strong>Rubber Chicken</strong>
-              <span>confuse squeak</span>
-              <small>$28</small>
-            </button>
-            <button class="btn btn--yellow unhinged-shop-btn" type="button" data-upgrade="mealTicket">
-              <strong>Meal Ticket</strong>
-              <span>heal + energy</span>
-              <small>$12</small>
-            </button>
-          </div>
-          <div class="unhinged-gear-summary" id="gear-summary">No upgrades yet.</div>
+          <h3 class="game-side__title">HOW TO PLAY</h3>
+          <ul class="unhinged-howto-list">
+            <li><strong>Earn by day.</strong> Stand near people and tap <strong>ACT</strong> to perform for cash.</li>
+            <li><strong>Collect &amp; equip props.</strong> Grab cones, a boombox, a plunger and more, open the <strong>BAG</strong>, and slot them into 1-4. The equipped item changes what ACT and ATTACK do (a cone earns tips as a hat, or throws as a weapon).</li>
+            <li><strong>Mind your stars.</strong> Bonking regular folks or begging/acting nonstop raises your <strong>wanted level</strong>. Hit 2 stars and the cops chase — lie low or rest at camp to cool down.</li>
+            <li><strong>Survive the night.</strong> Tweeker Zombies swarm in. Tap <strong>ATTACK</strong> to clear the wave, then dawn resets the block. Last 3 nights to win.</li>
+          </ul>
         </div>
 
         <div class="game-side__panel">
@@ -1771,11 +1975,11 @@
         <details class="game-side__howto" open>
           <summary>Prototype notes</summary>
           <ul>
-            <li>Move through a compact top-down city board with roads, districts, pickups, cars, cops, and night enemies.</li>
-            <li>Earn cash with daytime antics, scavenge food and water, and manage heat before nightfall.</li>
-            <li>High heat starts a chase. Use distance, camp recovery, and banana peels to cool it down.</li>
-            <li>At night, Tweeker Zombies spawn from alleys. Use the plunger, cones, peels, and stunts to clear the wave.</li>
-            <li>The current goal arrow points to food, water, busking, safety, supplies, or the nearest night threat.</li>
+            <li>Move through a compact top-down city board with roads, pickups, cars, cops, and night enemies.</li>
+            <li>Two buttons: ACT earns money, ATTACK fights. Collected props in your bag flavor both.</li>
+            <li>Hitting bystanders or over-performing raises your wanted stars and brings the cops. Lie low or rest at camp to cool down.</li>
+            <li>At night, Tweeker Zombies spawn from alleys — clear the wave with whatever you've equipped.</li>
+            <li>The goal arrow points to the nearest pickup by day, or the nearest zombie at night.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             Satire prototype. The target is absurd systems and slapstick city chaos, not real unhoused people or addiction.
@@ -1798,7 +2002,7 @@
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260616-save-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260616-save-1"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260616-unhinged-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

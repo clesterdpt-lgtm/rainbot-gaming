@@ -40,68 +40,22 @@
     primary: document.getElementById("btn-primary"),
     pause: document.getElementById("btn-pause"),
     restart: document.getElementById("btn-restart"),
-    phase: document.getElementById("hud-phase"),
-    cash: document.getElementById("hud-cash"),
-    heat: document.getElementById("hud-heat"),
-    energy: document.getElementById("hud-energy"),
-    health: document.getElementById("hud-health"),
-    high: document.getElementById("hud-high"),
-    taskFood: document.getElementById("hud-task-food"),
-    taskWater: document.getElementById("hud-task-water"),
-    taskBuskLabel: document.getElementById("hud-task-busk-label"),
-    taskBusk: document.getElementById("hud-task-busk"),
-    taskHeatLabel: document.getElementById("hud-task-heat-label"),
-    taskHeat: document.getElementById("hud-task-heat"),
-    notorietyFill: document.getElementById("hud-notoriety-fill"),
-    notorietyStars: document.getElementById("hud-notoriety-stars"),
-    clock: document.getElementById("hud-clock"),
-    miniPlayer: document.getElementById("hud-mini-player"),
-    survivalHealth: document.getElementById("hud-survival-health"),
-    survivalHealthText: document.getElementById("hud-survival-health-text"),
-    survivalThirst: document.getElementById("hud-survival-thirst"),
-    survivalThirstText: document.getElementById("hud-survival-thirst-text"),
-    survivalHunger: document.getElementById("hud-survival-hunger"),
-    survivalHungerText: document.getElementById("hud-survival-hunger-text"),
-    survivalMorale: document.getElementById("hud-survival-morale"),
-    survivalMoraleText: document.getElementById("hud-survival-morale-text"),
+    healthFill: document.getElementById("hud-health-fill"),
+    healthText: document.getElementById("hud-health-text"),
     cashLarge: document.getElementById("hud-cash-large"),
-    slotAction: document.getElementById("hud-slot-action-label"),
-    slotScrap: document.getElementById("hud-slot-scrap-count"),
-    slotCone: document.getElementById("hud-slot-cone-count"),
-    slotPeel: document.getElementById("hud-slot-peel-count"),
-    slotTool: document.getElementById("hud-slot-tool-label"),
-    promptE: document.getElementById("hud-prompt-e"),
-    promptSpace: document.getElementById("hud-prompt-space"),
-    promptJ: document.getElementById("hud-prompt-j"),
-    promptL: document.getElementById("hud-prompt-l"),
-    statusChip: document.getElementById("status-chip"),
-    objectiveText: document.getElementById("objective-text"),
-    objectiveArrow: document.getElementById("objective-arrow"),
-    mapDistrictName: document.getElementById("hud-map-district-name"),
-    mapDistrictTrait: document.getElementById("hud-map-district-trait"),
-    districtName: document.getElementById("district-name"),
-    districtTrait: document.getElementById("district-trait"),
-    directorReadout: document.getElementById("director-readout"),
-    meterTime: document.getElementById("meter-time"),
-    meterTimeText: document.getElementById("meter-time-text"),
-    meterArrest: document.getElementById("meter-arrest"),
-    meterArrestText: document.getElementById("meter-arrest-text"),
-    meterWave: document.getElementById("meter-wave"),
-    meterWaveText: document.getElementById("meter-wave-text"),
-    meterHype: document.getElementById("meter-hype"),
-    meterHypeText: document.getElementById("meter-hype-text"),
-    meterTumble: document.getElementById("meter-tumble"),
-    meterTumbleText: document.getElementById("meter-tumble-text"),
-    meterPeel: document.getElementById("meter-peel"),
-    meterPeelText: document.getElementById("meter-peel-text"),
-    meterScrap: document.getElementById("meter-scrap"),
-    meterScrapText: document.getElementById("meter-scrap-text"),
-    gigTitle: document.getElementById("gig-title"),
-    gigDesc: document.getElementById("gig-desc"),
-    gigProgress: document.getElementById("gig-progress"),
-    gigProgressText: document.getElementById("gig-progress-text"),
-    gigReward: document.getElementById("gig-reward"),
-    actionGrid: document.getElementById("action-grid"),
+    stars: document.getElementById("hud-stars"),
+    wantedFill: document.getElementById("hud-wanted-fill"),
+    chase: document.getElementById("hud-chase"),
+    clock: document.getElementById("hud-clock"),
+    phasePill: document.getElementById("hud-phase-pill"),
+    objectiveText: document.getElementById("hud-objective-text"),
+    objectiveArrow: document.getElementById("hud-objective-arrow"),
+    miniPlayer: document.getElementById("hud-mini-player"),
+    hotbar: document.getElementById("hud-hotbar"),
+    hotbarSlots: null,
+    bagOverlay: document.getElementById("bag-overlay"),
+    bagGrid: document.getElementById("bag-grid"),
+    bagActiveSlot: document.getElementById("bag-active-slot"),
     cityLog: document.getElementById("city-log"),
   };
 
@@ -454,14 +408,53 @@
 
   const keys = Object.create(null);
   const mobileMove = { x: 0, z: 0 };
-  // Mouse aim: when the cursor is over the canvas, the player faces it and
-  // bonks/throws fire toward it. Falls back to movement facing on touch/keyboard.
-  const aim = { x: 0, z: -1, active: false };
-  const aimRaycaster = new THREE.Raycaster();
-  const aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const aimNdc = new THREE.Vector2();
-  const aimHit = new THREE.Vector3();
   const clock = new THREE.Clock();
+
+  // ----------------------------------------------------------------------------
+  // Items: collectible props that flavor the two action buttons. The hotbar's
+  // active item drives BOTH buttons — ACT (earn money) runs its `earn` behavior,
+  // ATTACK runs its `attack` behavior. A missing behavior falls back to the
+  // bare-hands default (`fists`). Consumables (cone, peel) track a count in
+  // state.inventory; everything else is owned once you pick it up.
+  // ----------------------------------------------------------------------------
+  const ITEMS = {
+    fists: {
+      id: "fists", name: "Street Moves", short: "Dance", starter: true,
+      earn: { cash: [1.4, 2.6], cool: 0.5, wanted: 1.2, label: "dance" },
+      attack: { kind: "melee", dmg: 1.2, range: 3.6, cool: 0.42, label: "slap" },
+    },
+    cone: {
+      id: "cone", name: "Traffic Cone", short: "Cone", count: "cone", cap: 9, start: 5, refill: 3, starter: true,
+      earn: { cash: [2.4, 4.0], cool: 0.6, wanted: 1.8, label: "cone hat" },
+      attack: { kind: "throw", dmg: 2, range: 27, cool: 0.6, label: "cone toss" },
+    },
+    plunger: {
+      id: "plunger", name: "Trusty Plunger", short: "Plunger", starter: true,
+      earn: { cash: [1.0, 1.8], cool: 0.55, wanted: 1.0, label: "plunger gag" },
+      attack: { kind: "melee", dmg: 2.4, range: 4.6, cool: 0.4, label: "plunger bonk" },
+    },
+    peel: {
+      id: "peel", name: "Banana Peels", short: "Peel", count: "peel", cap: 6, start: 2, refill: 2, starter: true,
+      earn: { cash: [1.6, 2.6], cool: 0.6, wanted: 1.4, label: "juggle" },
+      attack: { kind: "trap", cool: 0.45, label: "peel drop" },
+    },
+    boombox: {
+      id: "boombox", name: "Trash Boombox", short: "Boombox",
+      earn: { cash: [3.2, 5.2], cool: 0.72, wanted: 3.4, crowd: 2.0, label: "block party" },
+      attack: { kind: "melee", dmg: 1.0, range: 5.4, cool: 0.5, stun: 0.8, label: "bass blast" },
+    },
+    sign: {
+      id: "sign", name: "Cardboard Sign", short: "Sign",
+      earn: { cash: [1.8, 2.8], cool: 0.5, wanted: 0.7, label: "beg" },
+      attack: { kind: "melee", dmg: 0.9, range: 3.4, cool: 0.5, label: "sign smack" },
+    },
+    chicken: {
+      id: "chicken", name: "Rubber Chicken", short: "Chicken",
+      earn: { cash: [2.2, 3.8], cool: 0.6, wanted: 2.2, label: "comedy bit" },
+      attack: { kind: "melee", dmg: 1.0, range: 3.8, cool: 0.4, confuse: true, label: "squeak" },
+    },
+  };
+  const STARTER_HOTBAR = ["fists", "cone", "plunger", "peel"];
   let cameraTarget = new THREE.Vector3(0, 0, 0);
   let labelCounter = 0;
 
@@ -475,35 +468,28 @@
     dayLength: DEBUG ? 24 : 96,
     nightLength: DEBUG ? 26 : 74,
     cash: 7.25,
-    heat: 8,
-    energy: 100,
+    wanted: 8,
+    arrest: 0,
     health: 100,
     maxHealth: 100,
-    thirst: 56,
-    hunger: 61,
-    morale: 46,
-    hype: 0,
-    arrest: 0,
     score: 0,
     high: Number(localStorage.getItem(SAVE_KEY) || 0),
-    action: "dance",
+    bag: {},
+    hotbar: STARTER_HOTBAR.slice(),
+    activeSlot: 0,
+    actStreak: 0,
+    actStreakTime: 0,
+    bagOpen: false,
     inventory: {
-      scrap: 0,
       cone: 5,
       peel: 2,
     },
     tasks: {
-      ate: false,
-      drank: false,
       buskCash: 0,
-      escapedHeat: false,
     },
     cooldowns: {
-      interact: 0,
+      act: 0,
       attack: 0,
-      cone: 0,
-      peel: 0,
-      stunt: 0,
       hurt: 0,
       log: 0,
     },
@@ -511,7 +497,6 @@
     waveTarget: 8,
     waveKills: 0,
     objective: "Earn $20 before nightfall",
-    nearestPrompt: "Interact",
   };
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
   let saveMenu = null;
@@ -1442,21 +1427,45 @@
   function makePickup(type, x, z) {
     const group = new THREE.Group();
     group.position.set(x, 0, z);
-    let mesh;
-    if (type === "water") {
-      mesh = addCylinder(group, 0.45, 1.1, 0, 0, 0, materials.water, 12);
-    } else if (type === "food") {
-      mesh = makeMesh(new THREE.BoxGeometry(1.0, 0.35, 0.62), materials.food, 0, 0.42, 0, true, false);
-      group.add(mesh);
-    } else if (type === "cash") {
-      mesh = makeMesh(new THREE.BoxGeometry(1.0, 0.12, 0.55), materials.cash, 0, 0.28, 0, true, false);
-      group.add(mesh);
+    let ringColor = 0xffe07a;
+    if (type === "cash") {
+      group.add(makeMesh(new THREE.BoxGeometry(1.0, 0.12, 0.55), materials.cash, 0, 0.28, 0, true, false));
+      ringColor = 0x61e776;
+    } else if (type === "snack") {
+      group.add(makeMesh(new THREE.BoxGeometry(1.0, 0.35, 0.62), materials.food, 0, 0.42, 0, true, false));
+      ringColor = 0xffb34a;
+    } else if (type === "cone") {
+      addCone(group, 0.5, 1.0, 0, 0.04, 0, materials.cone, 10);
+      ringColor = 0xff7a3a;
+    } else if (type === "peel") {
+      const peel = makeMesh(new THREE.TorusGeometry(0.5, 0.13, 6, 12), materials.peel, 0, 0.16, 0, true, false);
+      peel.scale.z = 0.45;
+      group.add(peel);
+      ringColor = 0xf5d431;
+    } else if (type === "plunger") {
+      addCylinder(group, 0.12, 1.1, 0, 0.55, 0, materials.pole, 8);
+      group.add(makeMesh(new THREE.CylinderGeometry(0.34, 0.34, 0.4, 12), materials.plunger, 0, 0.2, 0, true, false));
+      ringColor = 0xc05555;
+    } else if (type === "boombox") {
+      group.add(makeMesh(new THREE.BoxGeometry(1.2, 0.7, 0.5), materials.black, 0, 0.4, 0, true, false));
+      group.add(makeMesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 12), materials.yellow, -0.3, 0.4, 0.27, true, false));
+      group.add(makeMesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 12), materials.yellow, 0.3, 0.4, 0.27, true, false));
+      ringColor = 0x49c9ff;
+    } else if (type === "sign") {
+      addCylinder(group, 0.08, 0.9, 0, 0.45, 0, materials.pole, 6);
+      group.add(makeMesh(new THREE.BoxGeometry(0.9, 0.6, 0.08), materials.cardboard, 0, 0.9, 0, true, false));
+      ringColor = 0xc79a5a;
+    } else if (type === "chicken") {
+      group.add(makeMesh(new THREE.SphereGeometry(0.34, 10, 8), materials.yellow, 0, 0.5, 0, true, false));
+      group.add(makeMesh(new THREE.BoxGeometry(0.16, 0.16, 0.4), materials.yellow, 0, 0.5, 0.32, true, false));
+      ringColor = 0xffd83a;
     } else {
-      mesh = addCylinder(group, 0.42, 0.45, 0, 0, 0, materials.scrap, 8);
+      addCylinder(group, 0.42, 0.45, 0, 0, 0, materials.scrap, 8);
+      ringColor = 0xd7dde2;
     }
     const ring = makeMesh(
       new THREE.RingGeometry(0.8, 1.05, 20),
-      new THREE.MeshBasicMaterial({ color: type === "water" ? 0x49c9ff : type === "food" ? 0xffb34a : type === "cash" ? 0x61e776 : 0xd7dde2, transparent: true, opacity: 0.65, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.65, side: THREE.DoubleSide }),
       0,
       0.06,
       0,
@@ -1648,40 +1657,33 @@
     state.cycle = 1;
     state.phaseTime = 0;
     state.cash = 7.25;
-    state.heat = 8;
-    state.energy = 100;
-    state.health = state.maxHealth;
-    state.thirst = 56;
-    state.hunger = 61;
-    state.morale = 46;
-    state.hype = 0;
+    state.wanted = 8;
     state.arrest = 0;
+    state.health = state.maxHealth;
     state.score = 0;
-    state.action = "dance";
-    state.inventory.scrap = 0;
-    state.inventory.cone = 5;
-    state.inventory.peel = 2;
-    state.tasks.ate = false;
-    state.tasks.drank = false;
+    state.actStreak = 0;
+    state.actStreakTime = 0;
+    state._god = false;
+    initBag();
     state.tasks.buskCash = 0;
-    state.tasks.escapedHeat = false;
     state.waveTarget = 8;
     state.waveKills = 0;
     state.objective = "Earn $20 before nightfall";
     Object.keys(state.cooldowns).forEach((key) => {
       state.cooldowns[key] = 0;
     });
+    toggleBag(false);
     if (els.overlay) {
       els.overlay.classList.toggle("overlay--show", !autoStart);
     }
-    ui.setText(els.primary, "Start top-down run");
+    ui.setText(els.primary, "Start run");
     ui.setText(els.overlayTitle, "UNHOUSED AND UNHINGED");
     ui.setText(
       els.overlaySub,
-      "Earn cash by day, dodge overreactions, then survive Tweeker Zombie night. Move with WASD, aim with the mouse, left-click to bonk and right-click to throw."
+      "Earn cash by day, keep your wanted stars down, then survive the Tweeker Zombie night. Move, tap ACT to earn, tap ATTACK to fight. Collect props and equip them to slots 1-4."
     );
     ui.setText(els.overlayScore, "");
-    setAction("dance");
+    refreshHotbar();
     logLine("New top-down block loaded.");
     updateHUD();
   }
@@ -1719,7 +1721,7 @@
     state.running = false;
     state.ended = true;
     if (saveSlot) saveSlot.clear();
-    state.score = Math.round(state.cash * 7 + state.hype * 2 + state.waveKills * 30 - state.heat);
+    state.score = Math.round(state.cash * 7 + state.waveKills * 30 + state.cycle * 20 - state.wanted * 0.5);
     state.high = Math.max(state.high, state.score);
     localStorage.setItem(SAVE_KEY, String(state.high));
     if (els.overlay) {
@@ -1731,20 +1733,78 @@
     ui.setText(els.primary, "Restart run");
   }
 
-  function setAction(action) {
-    state.action = action;
-    const labels = {
-      dance: "Dance",
-      sign: "Sign Bit",
-      drums: "Trash Drums",
-      stunt: "Pratfall",
-    };
-    ui.setText(els.slotAction, labels[action] || "Act");
-    if (els.actionGrid) {
-      els.actionGrid.querySelectorAll("[data-action]").forEach((button) => {
-        button.classList.toggle("is-active", button.dataset.action === action);
-      });
+  // ---- Items / bag / hotbar -------------------------------------------------
+  function initBag() {
+    state.bag = {};
+    STARTER_HOTBAR.forEach((id) => {
+      if (id) state.bag[id] = true;
+    });
+    state.hotbar = STARTER_HOTBAR.slice();
+    state.activeSlot = 0;
+    state.inventory.cone = ITEMS.cone.start;
+    state.inventory.peel = ITEMS.peel.start;
+  }
+
+  function activeItem() {
+    return ITEMS[state.hotbar[state.activeSlot]] || ITEMS.fists;
+  }
+
+  function ownsItem(id) {
+    return !!state.bag[id];
+  }
+
+  // Add an item to the bag. Consumables also gain `n` to their count. A brand
+  // new item auto-fills the first empty hotbar slot; otherwise it waits in the
+  // bag for the player to equip it. Returns true if it was new.
+  function addToBag(id, n = 1) {
+    const item = ITEMS[id];
+    if (!item) return false;
+    const isNew = !state.bag[id];
+    state.bag[id] = true;
+    if (item.count) {
+      state.inventory[item.count] = clamp((state.inventory[item.count] || 0) + n, 0, item.cap || 9);
     }
+    if (isNew) {
+      const empty = state.hotbar.findIndex((slot) => !slot);
+      if (empty !== -1) state.hotbar[empty] = id;
+    }
+    return isNew;
+  }
+
+  function selectSlot(index) {
+    if (index < 0 || index >= state.hotbar.length) return;
+    state.activeSlot = index;
+    refreshHotbar();
+    if (state.bagOpen) renderBag();
+  }
+
+  function equipToSlot(id, slot) {
+    if (!ITEMS[id] || !ownsItem(id)) return;
+    if (slot < 0 || slot >= state.hotbar.length) return;
+    // Avoid duplicates: if the item already sits in another slot, swap them.
+    const existing = state.hotbar.indexOf(id);
+    if (existing !== -1 && existing !== slot) state.hotbar[existing] = state.hotbar[slot];
+    state.hotbar[slot] = id;
+    state.activeSlot = slot;
+    refreshHotbar();
+  }
+
+  // ---- Wanted / police ------------------------------------------------------
+  function starLevel() {
+    return clamp(Math.ceil(state.wanted / 20), 0, 5);
+  }
+
+  function addWanted(amount) {
+    state.wanted = clamp(state.wanted + amount, 0, 100);
+  }
+
+  function copsChasing() {
+    return state.wanted >= 40 || state.arrest > 4;
+  }
+
+  function bumpActStreak() {
+    state.actStreak = Math.min(6, state.actStreak + 1);
+    state.actStreakTime = 2.4;
   }
 
   function logLine(text) {
@@ -1757,6 +1817,80 @@
     while (els.cityLog.children.length > 7) {
       els.cityLog.lastElementChild.remove();
     }
+  }
+
+  // ---- Hotbar + bag UI ------------------------------------------------------
+  function buildHotbar() {
+    const host = els.hotbar;
+    if (!host) return;
+    host.innerHTML = "";
+    els.hotbarSlots = state.hotbar.map((id, index) => {
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.className = "uh-slot";
+      slot.dataset.slot = String(index);
+      slot.innerHTML =
+        `<span class="uh-slot__key">${index + 1}</span>` +
+        `<span class="uh-slot__icon"></span>` +
+        `<span class="uh-slot__count"></span>`;
+      host.appendChild(slot);
+      return slot;
+    });
+    refreshHotbar();
+  }
+
+  function refreshHotbar() {
+    if (!els.hotbarSlots) return;
+    state.hotbar.forEach((id, index) => {
+      const slot = els.hotbarSlots[index];
+      if (!slot) return;
+      const item = ITEMS[id];
+      slot.classList.toggle("is-active", index === state.activeSlot);
+      slot.classList.toggle("is-empty", !item);
+      slot.querySelector(".uh-slot__icon").textContent = item ? item.short : "—";
+      const countEl = slot.querySelector(".uh-slot__count");
+      countEl.textContent = item && item.count ? String(state.inventory[item.count] || 0) : "";
+    });
+  }
+
+  function itemSummary(item) {
+    const parts = [];
+    if (item.earn) parts.push(`ACT: ${item.earn.label || "earn"}`);
+    if (item.attack) parts.push(`HIT: ${item.attack.label || item.attack.kind}`);
+    return parts.join(" · ");
+  }
+
+  function renderBag() {
+    const grid = els.bagGrid;
+    if (!grid) return;
+    grid.innerHTML = "";
+    Object.keys(ITEMS)
+      .filter((id) => state.bag[id])
+      .forEach((id) => {
+        const item = ITEMS[id];
+        const slot = state.hotbar.indexOf(id);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className =
+          "uh-bag__item" +
+          (slot === state.activeSlot ? " is-active" : "") +
+          (slot !== -1 ? " is-equipped" : "");
+        button.dataset.item = id;
+        const count = item.count ? ` ×${state.inventory[item.count] || 0}` : "";
+        const where = slot !== -1 ? `Slot ${slot + 1}` : "In bag";
+        button.innerHTML =
+          `<strong>${safeText(item.name)}</strong>` +
+          `<span>${safeText(itemSummary(item))}</span>` +
+          `<small>${where}${count}</small>`;
+        grid.appendChild(button);
+      });
+    ui.setText(els.bagActiveSlot, String(state.activeSlot + 1));
+  }
+
+  function toggleBag(open) {
+    state.bagOpen = open === undefined ? !state.bagOpen : open;
+    if (els.bagOverlay) els.bagOverlay.hidden = !state.bagOpen;
+    if (state.bagOpen) renderBag();
   }
 
   function isWalkable(x, z, radius) {
@@ -1958,15 +2092,15 @@
     updateProjectiles(dt);
     updatePeels(dt);
     updateZombies(dt);
-    updateNeeds(dt);
     updateFX(dt);
     updateCamera(dt);
     updateHUD();
 
+    if (state._god) state.health = state.maxHealth;
     if (state.health <= 0) {
-      endGame("WIPED OUT", "The block got too hot. Grab a meal ticket and try another run.");
+      endGame("WIPED OUT", "The block got too rough. Rest at camp and pick safer fights next run.");
     } else if (state.arrest >= 100) {
-      endGame("BUSTED", "The heat caught up. Use alleys, peels, and lower-risk antics next time.");
+      endGame("BUSTED", "The cops caught up. Keep your wanted stars down — don't bonk regular folks or beg nonstop.");
     }
   }
 
@@ -1990,8 +2124,8 @@
     state.waveKills = 0;
     state.waveTarget = 7 + state.cycle * 4;
     state.objective = "Survive the Tweeker Zombie wave";
-    state.heat = clamp(state.heat * 0.45, 12, 45);
-    state.morale = clamp(state.morale + 12, 0, 100);
+    state.wanted = clamp(state.wanted * 0.5, 8, 45);
+    state.arrest = 0;
     spawnNightWave();
     logLine("Tweeker Zombies rolling in. Bonk clean, keep moving.");
     addPulse(player.x, player.z, 0x6dff83, 8, 1.25);
@@ -2001,13 +2135,10 @@
     state.cycle += 1;
     state.phase = "day";
     state.phaseTime = 0;
-    state.objective = state.cycle >= 4 ? "Make it to the final payday" : "Earn cash before nightfall";
-    state.heat = clamp(state.heat * 0.45, 0, 55);
-    state.energy = clamp(state.energy + 45, 0, 100);
+    state.objective = state.cycle >= 4 ? "Make it to the final payday" : "Earn $20 before nightfall";
+    state.wanted = clamp(state.wanted * 0.4, 0, 45);
+    state.arrest = 0;
     state.health = clamp(state.health + 22, 1, state.maxHealth);
-    state.thirst = clamp(state.thirst + 10, 0, 100);
-    state.hunger = clamp(state.hunger + 10, 0, 100);
-    state.morale = clamp(state.morale + 16, 0, 100);
     zombies.splice(0).forEach((zombie) => actorGroup.remove(zombie.mesh));
     spawnDayPickups();
     logLine(`Dawn cycle ${state.cycle}. The block resets, mostly.`);
@@ -2017,7 +2148,8 @@
   }
 
   function spawnDayPickups() {
-    ["water", "food", "cash", "scrap", "cash", "food"].forEach((type) => {
+    const drops = ["cash", "snack", "cone", "peel", "cash", choose(["boombox", "sign", "chicken"])];
+    drops.forEach((type) => {
       const point = getOpenPoint(1.4, true);
       makePickup(type, point.x, point.z);
     });
@@ -2068,26 +2200,6 @@
     return zombie;
   }
 
-  // Convert a screen-space pointer position into a world-space aim direction
-  // from the player, by raycasting onto the ground plane.
-  function aimFromPointer(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    aimNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    aimNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    aimRaycaster.setFromCamera(aimNdc, camera);
-    if (aimRaycaster.ray.intersectPlane(aimPlane, aimHit)) {
-      const dx = aimHit.x - player.x;
-      const dz = aimHit.z - player.z;
-      const mag = Math.hypot(dx, dz);
-      if (mag > 0.0001) {
-        aim.x = dx / mag;
-        aim.z = dz / mag;
-        aim.active = true;
-      }
-    }
-  }
-
   function updatePlayer(dt) {
     let ix = 0;
     let iz = 0;
@@ -2103,19 +2215,7 @@
     if (moving) {
       ix /= mag;
       iz /= mag;
-      const sprinting = (keys.shift || keys.shiftleft || keys.shiftright) && state.energy > 4;
-      const speed = sprinting ? player.speed * 1.42 : player.speed;
-      moveCircle(player, ix * speed * dt, iz * speed * dt);
-      state.energy = clamp(state.energy - (sprinting ? 12 : 3.5) * dt, 0, 100);
-    } else {
-      state.energy = clamp(state.energy + 8.5 * dt, 0, 100);
-    }
-
-    // Face the cursor when aiming with a mouse; otherwise face movement.
-    if (aim.active) {
-      player.facing.x = aim.x;
-      player.facing.z = aim.z;
-    } else if (moving) {
+      moveCircle(player, ix * player.speed * dt, iz * player.speed * dt);
       player.facing.x = ix;
       player.facing.z = iz;
     }
@@ -2123,14 +2223,24 @@
       player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
     }
 
-    if (state.phase === "day") {
-      state.heat = clamp(state.heat - 1.2 * dt, 0, 100);
-    } else {
-      state.heat = clamp(state.heat - 0.45 * dt, 0, 100);
+    // "Acting too much" window: each ACT bumps the streak; it cools off here.
+    if (state.actStreakTime > 0) {
+      state.actStreakTime -= dt;
+      if (state.actStreakTime <= 0) state.actStreak = 0;
     }
 
-    const nearest = nearestInteractable();
-    state.nearestPrompt = nearest ? nearest.label : "Interact";
+    // Wanted stars cool down — faster when you lay low and faster still at camp.
+    const layingLow = state.cooldowns.act <= 0 && state.cooldowns.attack <= 0;
+    const atCamp = distSq(player, points.camp) < 200;
+    let cool = state.phase === "day" ? 1.4 : 0.6;
+    if (layingLow) cool += 0.9;
+    if (atCamp) cool += 3.4;
+    state.wanted = clamp(state.wanted - cool * dt, 0, 100);
+
+    // Camp is a passive safe zone: rest here to heal up between fights.
+    if (atCamp && state.health < state.maxHealth) {
+      state.health = clamp(state.health + 7 * dt, 0, state.maxHealth);
+    }
   }
 
   function updateCivilians(dt) {
@@ -2171,15 +2281,14 @@
       }
 
       const d = Math.sqrt(distSq(civilian, player));
-      if (d < 3.2 && state.phase === "day" && state.action === "drums" && civilian.tipped <= 0) {
+      if (d < 3.4 && state.phase === "day" && activeItem().id === "boombox" && civilian.tipped <= 0) {
         civilian.tipped = 5;
-        state.hype = clamp(state.hype + 1.5, 0, 100);
       }
     });
   }
 
   function updateCops(dt) {
-    const chase = state.heat >= 58 || state.arrest > 4;
+    const chase = copsChasing();
     cops.forEach((cop) => {
       cop.stun = Math.max(0, cop.stun - dt);
       cop.slip = Math.max(0, cop.slip - dt);
@@ -2194,7 +2303,7 @@
       if (chase) {
         tx = player.x;
         tz = player.z;
-        speed = cop.speed + state.heat * 0.025;
+        speed = cop.speed + state.wanted * 0.02;
       }
 
       let dx = tx - cop.x;
@@ -2209,13 +2318,10 @@
 
       const d = Math.sqrt(distSq(cop, player));
       if (chase && d < 2.2) {
-        state.arrest = clamp(state.arrest + 34 * dt, 0, 100);
-        state.energy = clamp(state.energy - 8 * dt, 0, 100);
+        state.arrest = clamp(state.arrest + 30 * dt, 0, 100);
+        state.health = clamp(state.health - 4 * dt, 0, state.maxHealth);
       } else if (state.arrest > 0 && d > 10) {
         state.arrest = clamp(state.arrest - 18 * dt, 0, 100);
-      }
-      if (state.arrest <= 1 && state.heat < 45) {
-        state.tasks.escapedHeat = true;
       }
     });
   }
@@ -2250,7 +2356,6 @@
         const dz = player.z - pos.z;
         car.hitCooldown = 1.5;
         state.health = clamp(state.health - (Math.abs(car.currentSpeed) > 2 ? 8 : 3), 0, state.maxHealth);
-        state.heat = clamp(state.heat + 5, 0, 100);
         moveCircle(player, Math.sign(dx || 1) * 2.5, Math.sign(dz || 1) * 2.5);
         addFloater(car.waitReason ? "move!" : "watch it!", player.x, player.z, "#ffd45c");
         addPulse(player.x, player.z, 0xffd45c, 3.5, 0.45);
@@ -2391,13 +2496,19 @@
       projectile.mesh.rotation.y += dt * 11;
       const hit = zombies.find((zombie) => distSq(projectile, zombie) < 3.4);
       const copHit = cops.find((cop) => distSq(projectile, cop) < 3.0);
+      const civHit = state.phase === "day" ? civilians.find((civ) => distSq(projectile, civ) < 3.0) : null;
       if (hit) {
-        damageZombie(hit, 2, projectile.vx * 0.12, projectile.vz * 0.12);
+        damageZombie(hit, projectile.dmg || 2, projectile.vx * 0.12, projectile.vz * 0.12);
         removeProjectile(i);
       } else if (copHit) {
         copHit.stun = 1.2;
-        state.heat = clamp(state.heat + 4, 0, 100);
+        addWanted(4);
         addFloater("cone check", copHit.x, copHit.z, "#9ed4ff");
+        removeProjectile(i);
+      } else if (civHit) {
+        civHit.panic = 2.2;
+        addWanted(12);
+        addFloater("hey! +wanted", civHit.x, civHit.z, "#ff7a6c");
         removeProjectile(i);
       } else if (projectile.life <= 0 || !isWalkable(projectile.x, projectile.z, 0.5)) {
         removeProjectile(i);
@@ -2425,7 +2536,7 @@
       cops.forEach((cop) => {
         if (cop.slip <= 0 && distSq(peel, cop) < 2.2) {
           cop.slip = 1.8;
-          state.heat = clamp(state.heat - 5, 0, 100);
+          addWanted(-5);
           addFloater("slip!", cop.x, cop.z, "#ffe56f");
         }
       });
@@ -2471,26 +2582,9 @@
       if (mag < 2.1 && zombie.attack <= 0) {
         zombie.attack = zombie.kind === "runner" ? 0.72 : 1.1;
         state.health = clamp(state.health - (zombie.kind === "runner" ? 6 : 9), 0, state.maxHealth);
-        state.morale = clamp(state.morale - 3, 0, 100);
         addPulse(player.x, player.z, 0x90ff76, 2.6, 0.4);
       }
     });
-  }
-
-  function updateNeeds(dt) {
-    const phaseMult = state.phase === "night" ? 1.45 : 1;
-    state.thirst = clamp(state.thirst - 0.85 * dt * phaseMult, 0, 100);
-    state.hunger = clamp(state.hunger - 0.62 * dt * phaseMult, 0, 100);
-    state.morale = clamp(state.morale - (state.heat > 60 ? 0.9 : 0.25) * dt, 0, 100);
-    if (state.thirst <= 0) {
-      state.health = clamp(state.health - 2.2 * dt, 0, state.maxHealth);
-    }
-    if (state.hunger <= 0) {
-      state.energy = clamp(state.energy - 5 * dt, 0, 100);
-    }
-    if (state.morale <= 0) {
-      state.heat = clamp(state.heat + 0.75 * dt, 0, 100);
-    }
   }
 
   function updateFX(dt) {
@@ -2534,205 +2628,138 @@
     }
     pickup.active = false;
     actorGroup.remove(pickup.mesh);
-    if (pickup.type === "water") {
-      state.thirst = clamp(state.thirst + 34, 0, 100);
-      state.tasks.drank = true;
-      addFloater("+water", pickup.x, pickup.z, "#7fd8ff");
-    } else if (pickup.type === "food") {
-      state.hunger = clamp(state.hunger + 31, 0, 100);
-      state.health = clamp(state.health + 5, 0, state.maxHealth);
-      state.tasks.ate = true;
-      addFloater("+snack", pickup.x, pickup.z, "#ffd080");
-    } else if (pickup.type === "cash") {
-      const gain = rand(1.2, 3.6);
+    if (pickup.type === "cash") {
+      const gain = rand(1.5, 4.2);
       state.cash += gain;
       state.tasks.buskCash += gain;
       addFloater(`+$${gain.toFixed(0)}`, pickup.x, pickup.z, "#79ff9a");
-    } else {
-      state.inventory.scrap += 1;
-      state.inventory.peel = clamp(state.inventory.peel + 1, 0, 5);
-      addFloater("+scrap", pickup.x, pickup.z, "#dde6ef");
+    } else if (pickup.type === "snack") {
+      state.health = clamp(state.health + 16, 0, state.maxHealth);
+      addFloater("+health", pickup.x, pickup.z, "#ffd080");
+    } else if (ITEMS[pickup.type]) {
+      const item = ITEMS[pickup.type];
+      const isNew = addToBag(pickup.type, item.refill || 1);
+      if (isNew) {
+        logLine(`Found ${item.name}! Open the Bag (B) to equip it to slots 1-4.`);
+        addFloater(`+${item.short}!`, pickup.x, pickup.z, "#ffe07a");
+      } else {
+        addFloater(`+${item.short}`, pickup.x, pickup.z, "#dde6ef");
+      }
+      refreshHotbar();
+      if (state.bagOpen) renderBag();
     }
     addPulse(pickup.x, pickup.z, 0xffffff, 2.5, 0.35);
   }
 
-  function nearestInteractable() {
+  // Nearest zombie/cop within range, for auto-aim (no mouse needed).
+  function nearestEnemy(maxDist) {
     let best = null;
-    pickups.forEach((pickup) => {
-      if (!pickup.active) return;
-      const d = distSq(pickup, player);
-      if (d < 12 && (!best || d < best.d)) {
-        best = { d, label: `Pick up ${pickup.type}`, type: "pickup", item: pickup };
-      }
-    });
-    const pointsList = [
-      { type: "busk", label: "Perform", x: points.busk.x, z: points.busk.z, range: 12 },
-      { type: "camp", label: "Rest at camp", x: points.camp.x, z: points.camp.z, range: 15 },
-      { type: "kiosk", label: "Buy supplies", x: points.kiosk.x, z: points.kiosk.z, range: 14 },
-      { type: "cache", label: "Scavenge cache", x: points.cache.x, z: points.cache.z, range: 13 },
-    ];
-    pointsList.forEach((point) => {
-      const d = distSq(point, player);
-      if (d < point.range && (!best || d < best.d)) {
-        best = { d, label: point.label, type: point.type, point };
-      }
-    });
-    return best;
+    const scan = (list) => {
+      list.forEach((thing) => {
+        const d = distSq(thing, player);
+        if (d <= maxDist * maxDist && (!best || d < best.d)) best = { thing, d };
+      });
+    };
+    scan(zombies);
+    scan(cops);
+    return best ? best.thing : null;
   }
 
-  function interact() {
-    if (!state.running || state.paused || state.cooldowns.interact > 0) {
-      return;
-    }
-    state.cooldowns.interact = 0.45;
-    const target = nearestInteractable();
-    if (!target) {
-      performForTips(false);
-      return;
-    }
-    if (target.type === "pickup") {
-      collectPickup(target.item);
-      return;
-    }
-    if (target.type === "busk") {
-      performForTips(true);
-      return;
-    }
-    if (target.type === "camp") {
-      const heal = state.inventory.scrap > 0 ? 18 : 9;
-      if (state.inventory.scrap > 0) {
-        state.inventory.scrap -= 1;
-      }
-      state.health = clamp(state.health + heal, 0, state.maxHealth);
-      state.energy = clamp(state.energy + 24, 0, 100);
-      state.heat = clamp(state.heat - 12, 0, 100);
-      state.morale = clamp(state.morale + 12, 0, 100);
-      addFloater("camp reset", points.camp.x, points.camp.z, "#baffc1");
-      logLine("Camp rest lowered heat and restored energy.");
-      return;
-    }
-    if (target.type === "kiosk") {
-      if (state.cash >= 10) {
-        state.cash -= 10;
-        state.inventory.cone = clamp(state.inventory.cone + 3, 0, 9);
-        state.inventory.peel = clamp(state.inventory.peel + 2, 0, 6);
-        state.hunger = clamp(state.hunger + 12, 0, 100);
-        addFloater("supplies", points.kiosk.x, points.kiosk.z, "#ffe083");
-        logLine("Pawn Alley sold cones, peels, and a questionable snack.");
-      } else {
-        addFloater("need $10", points.kiosk.x, points.kiosk.z, "#ff8c80");
-      }
-      return;
-    }
-    if (target.type === "cache") {
-      state.inventory.scrap += 1;
-      state.inventory.peel = clamp(state.inventory.peel + 1, 0, 6);
-      state.heat = clamp(state.heat + 3, 0, 100);
-      addFloater("+scrap cache", points.cache.x, points.cache.z, "#d7e5ff");
-    }
+  function faceTarget(target) {
+    if (!target) return;
+    const dx = target.x - player.x;
+    const dz = target.z - player.z;
+    const mag = len2(dx, dz) || 1;
+    player.facing.x = dx / mag;
+    player.facing.z = dz / mag;
+    if (player.mesh) player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
   }
 
-  function performForTips(isBuskZone) {
-    if (state.energy < 8) {
-      addFloater("too tired", player.x, player.z, "#ffb3a7");
+  // ACT button: earn money with the active item's bit. Earning near a crowd or
+  // the busk plaza pays more. Doing it over and over ("acting/begging too much")
+  // escalates your wanted stars.
+  function act() {
+    if (!state.running || state.paused || state.cooldowns.act > 0) {
       return;
     }
-    const nearCivs = civilians.filter((civilian) => distSq(civilian, player) < (isBuskZone ? 150 : 75));
-    const base = {
-      dance: { cash: 1.5, heat: 2.2, energy: 8, hype: 3 },
-      sign: { cash: 1.9, heat: 1.2, energy: 5, hype: 2 },
-      drums: { cash: 2.5, heat: 4.8, energy: 11, hype: 6 },
-      stunt: { cash: 3.2, heat: 7.5, energy: 14, hype: 8 },
-    }[state.action] || { cash: 1, heat: 2, energy: 6, hype: 2 };
-    const crowd = Math.max(1, nearCivs.length);
-    const districtTip = state.district.tip || 1;
-    const gain = (base.cash + crowd * 0.42 + rand(0, 1.2)) * districtTip * (isBuskZone ? 1.2 : 1);
-    const heatGain = base.heat * (state.district.heat || 1);
+    const earn = activeItem().earn || ITEMS.fists.earn;
+    state.cooldowns.act = earn.cool || 0.5;
+    const buskZone = distSq(player, points.busk) < 170;
+    const nearCivs = civilians.filter((civilian) => distSq(civilian, player) < (buskZone ? 150 : 80));
+    const crowd = Math.max(1, nearCivs.length) * (earn.crowd || 1);
+    const tip = state.district.tip || 1;
+    const [lo, hi] = earn.cash;
+    const gain = (rand(lo, hi) + crowd * 0.42) * tip * (buskZone ? 1.25 : 1);
     state.cash += gain;
     state.tasks.buskCash += gain;
-    state.heat = clamp(state.heat + heatGain, 0, 100);
-    state.energy = clamp(state.energy - base.energy, 0, 100);
-    state.hype = clamp(state.hype + base.hype + crowd * 0.5, 0, 100);
-    state.morale = clamp(state.morale + 2.5, 0, 100);
+    bumpActStreak();
+    addWanted((earn.wanted || 1) * (1 + (state.actStreak - 1) * 0.45));
     nearCivs.forEach((civilian) => {
       civilian.tipped = 4;
-      civilian.dir = Math.atan2(player.x - civilian.x, player.z - civilian.z) + Math.PI;
     });
-    addFloater(`+$${gain.toFixed(0)}`, player.x, player.z, "#73ff91");
-    addPulse(player.x, player.z, state.action === "stunt" ? 0xffbf47 : 0x74fff0, state.action === "drums" ? 6.5 : 4.5, 0.6);
-    if (state.action === "stunt") {
-      stunt(true);
-    }
+    addFloater(`+$${gain.toFixed(0)} ${earn.label || ""}`.trim(), player.x, player.z, "#73ff91");
+    addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 6.4 : 4.4, 0.55);
   }
 
+  // ATTACK button: dispatches on the active item's attack type. Hitting regular
+  // people spikes wanted hard — that's the "don't be too aggressive" rule.
   function attack() {
     if (!state.running || state.paused || state.cooldowns.attack > 0) {
       return;
     }
-    state.cooldowns.attack = 0.45;
-    const reach = 4.2;
+    const item = activeItem();
+    const a = item.attack || ITEMS.fists.attack;
+    if (a.kind === "throw") {
+      throwItem(item, a);
+    } else if (a.kind === "trap") {
+      dropTrap(item, a);
+    } else {
+      meleeAttack(item, a);
+    }
+  }
+
+  function meleeAttack(item, a) {
+    state.cooldowns.attack = a.cool || 0.45;
+    const reach = a.range || 3.8;
+    faceTarget(nearestEnemy(reach * 1.6));
     let hits = 0;
     zombies.slice().forEach((zombie) => {
       if (distSq(zombie, player) <= reach * reach) {
-        damageZombie(zombie, 1.5, zombie.x - player.x, zombie.z - player.z);
+        damageZombie(zombie, a.dmg || 1.2, zombie.x - player.x, zombie.z - player.z);
+        if (a.stun) zombie.stun = Math.max(zombie.stun, a.stun);
         hits += 1;
       }
     });
     cops.forEach((cop) => {
-      if (distSq(cop, player) <= 8.5) {
+      if (distSq(cop, player) <= (reach + 1.4) * (reach + 1.4)) {
         cop.stun = 0.55;
-        state.heat = clamp(state.heat + 2, 0, 100);
+        addWanted(2.5);
       }
     });
-    state.energy = clamp(state.energy - 3.5, 0, 100);
-    addPulse(player.x + player.facing.x * 1.8, player.z + player.facing.z * 1.8, 0xffffff, 3.2, 0.25);
-    addFloater(hits ? "plunger bonk" : "bonk air", player.x, player.z, hits ? "#f5ff9d" : "#d4d7dd");
-  }
-
-  function stunt(fromPerform = false) {
-    if (!state.running || state.paused || state.cooldowns.stunt > 0) {
-      return;
-    }
-    if (!fromPerform && state.energy < 10) {
-      addFloater("too tired", player.x, player.z, "#ffb3a7");
-      return;
-    }
-    state.cooldowns.stunt = 1.15;
-    if (!fromPerform) {
-      state.energy = clamp(state.energy - 12, 0, 100);
-      state.heat = clamp(state.heat + 5, 0, 100);
-      state.hype = clamp(state.hype + 8, 0, 100);
-      if (state.phase === "day") {
-        const gain = rand(2.5, 5.5) * (state.district.tip || 1);
-        state.cash += gain;
-        state.tasks.buskCash += gain;
-        addFloater(`stunt +$${gain.toFixed(0)}`, player.x, player.z, "#ffe36d");
-      }
-    }
-    zombies.slice().forEach((zombie) => {
-      if (distSq(zombie, player) < 34) {
-        zombie.stun = 0.7;
-        damageZombie(zombie, 1, zombie.x - player.x, zombie.z - player.z);
-      }
-    });
+    let hitCivilian = false;
     civilians.forEach((civilian) => {
-      if (distSq(civilian, player) < 30) {
-        civilian.panic = 1.5;
+      if (distSq(civilian, player) <= reach * reach) {
+        civilian.panic = a.confuse ? 2.8 : 1.9;
+        hitCivilian = true;
       }
     });
-    addPulse(player.x, player.z, 0xffc248, 5.5, 0.55);
+    if (hitCivilian) {
+      addWanted(16);
+      addFloater("assault! +wanted", player.x, player.z, "#ff7a6c");
+    } else {
+      addFloater(hits ? a.label || "bonk!" : "swing", player.x, player.z, hits ? "#f5ff9d" : "#d4d7dd");
+    }
+    addPulse(player.x + player.facing.x * 1.8, player.z + player.facing.z * 1.8, 0xffffff, 3.2, 0.25);
   }
 
-  function throwCone() {
-    if (!state.running || state.paused || state.cooldowns.cone > 0) {
+  function throwItem(item, a) {
+    if (item.count && (state.inventory[item.count] || 0) <= 0) {
+      addFloater(`no ${item.short.toLowerCase()}s`, player.x, player.z, "#ffb3a7");
       return;
     }
-    if (state.inventory.cone <= 0) {
-      addFloater("no cones", player.x, player.z, "#ffb3a7");
-      return;
-    }
-    state.inventory.cone -= 1;
-    state.cooldowns.cone = 0.65;
+    state.cooldowns.attack = a.cool || 0.6;
+    faceTarget(nearestEnemy(a.range || 27));
+    if (item.count) state.inventory[item.count] -= 1;
     const group = new THREE.Group();
     const cone = addCone(group, 0.52, 1.1, 0, 0, 0, materials.cone, 8);
     cone.rotation.x = Math.PI / 2;
@@ -2743,29 +2770,29 @@
       z: group.position.z,
       vx: player.facing.x * 27,
       vz: player.facing.z * 27,
-      life: 1.05,
+      life: 1.1,
+      dmg: a.dmg || 2,
       mesh: group,
     });
-    addFloater("cone toss", player.x, player.z, "#ffb878");
+    addFloater(a.label || "throw", player.x, player.z, "#ffb878");
+    refreshHotbar();
   }
 
-  function dropPeel() {
-    if (!state.running || state.paused || state.cooldowns.peel > 0) {
+  function dropTrap(item, a) {
+    if (item.count && (state.inventory[item.count] || 0) <= 0) {
+      addFloater(`no ${item.short.toLowerCase()}s`, player.x, player.z, "#ffb3a7");
       return;
     }
-    if (state.inventory.peel <= 0) {
-      addFloater("no peels", player.x, player.z, "#ffb3a7");
-      return;
-    }
-    state.inventory.peel -= 1;
-    state.cooldowns.peel = 0.45;
+    state.cooldowns.attack = a.cool || 0.45;
+    if (item.count) state.inventory[item.count] -= 1;
     const x = player.x - player.facing.x * 1.1;
     const z = player.z - player.facing.z * 1.1;
     const mesh = makeMesh(new THREE.TorusGeometry(0.55, 0.12, 6, 12), materials.peel, x, 0.12, z, true, false);
     mesh.scale.z = 0.45;
     actorGroup.add(mesh);
     peels.push({ x, z, life: 12, mesh });
-    addFloater("peel set", x, z, "#ffe96d");
+    addFloater(a.label || "trap set", x, z, "#ffe96d");
+    refreshHotbar();
   }
 
   function damageZombie(zombie, amount, kx = 0, kz = 0) {
@@ -2781,7 +2808,6 @@
       actorGroup.remove(zombie.mesh);
       state.waveKills += 1;
       state.cash += 0.75;
-      state.hype = clamp(state.hype + 2, 0, 100);
       addFloater("+tweeker clear", zombie.x, zombie.z, "#adff94");
       if (state.phase === "night" && state.waveKills >= state.waveTarget) {
         beginDay();
@@ -2802,10 +2828,10 @@
 
   function updateLighting() {
     const night = state.phase === "night" ? 1 : 0;
-    const heatTint = clamp(state.heat / 100, 0, 1);
+    const wantedTint = clamp(state.wanted / 100, 0, 1);
     sun.intensity = lerp(1.18, 0.42, night);
     ambient.intensity = lerp(0.62, 0.34, night);
-    nightLight.intensity = lerp(0, 1.7 + heatTint, night);
+    nightLight.intensity = lerp(0, 1.7 + wantedTint, night);
     renderer.setClearColor(new THREE.Color(lerp(0x6a, 0x18, night) / 255, lerp(0xb1, 0x24, night) / 255, lerp(0xd0, 0x2e, night) / 255), 1);
     scene.fog.color.setHex(night ? 0x1b2532 : 0x78abc1);
     scene.fog.near = night ? 45 : 145;
@@ -2814,106 +2840,51 @@
 
   function updateHUD() {
     updateLighting();
-    const phaseLabel = state.phase === "day" ? `Day ${state.cycle}` : `Night ${state.cycle}`;
-    ui.setText(els.phase, phaseLabel);
-    ui.setText(els.cash, `$${state.cash.toFixed(2)}`);
-    ui.setText(els.heat, `${Math.round(state.heat)}%`);
-    ui.setText(els.energy, `${Math.round(state.energy)}%`);
-    ui.setText(els.health, `${Math.round(state.health)}%`);
-    ui.setText(els.high, `${state.high}`);
+    ui.setWidth(els.healthFill, (state.health / state.maxHealth) * 100);
+    ui.setText(els.healthText, `${Math.round(state.health)}`);
     ui.setText(els.cashLarge, `$${state.cash.toFixed(2)}`);
 
-    ui.setWidth(els.survivalHealth, (state.health / state.maxHealth) * 100);
-    ui.setText(els.survivalHealthText, `${Math.round(state.health)}/${state.maxHealth}`);
-    ui.setWidth(els.survivalThirst, state.thirst);
-    ui.setText(els.survivalThirstText, `${Math.round(state.thirst)}/100`);
-    ui.setWidth(els.survivalHunger, state.hunger);
-    ui.setText(els.survivalHungerText, `${Math.round(state.hunger)}/100`);
-    ui.setWidth(els.survivalMorale, state.morale);
-    ui.setText(els.survivalMoraleText, `${Math.round(state.morale)}/100`);
-
-    ui.setText(els.taskFood, state.tasks.ate ? "1/1" : "0/1");
-    ui.setText(els.taskWater, state.tasks.drank ? "1/1" : "0/1");
-    ui.setText(els.taskBuskLabel, "Earn $20 in the block");
-    ui.setText(els.taskBusk, state.tasks.buskCash >= 20 ? "1/1" : "0/1");
-    ui.setText(els.taskHeatLabel, state.heat >= 58 ? "Lose the cops" : "Keep heat low");
-    ui.setText(els.taskHeat, state.tasks.escapedHeat || state.heat < 35 ? "1/1" : "0/1");
-
-    ui.setWidth(els.notorietyFill, state.heat);
-    if (els.notorietyStars) {
-      const stars = Math.ceil(state.heat / 20);
-      [...els.notorietyStars.children].forEach((star, index) => {
-        star.style.opacity = index < stars ? "1" : "0.35";
-        star.style.color = index < stars ? "#ffd052" : "rgba(180,210,238,0.65)";
+    // Wanted stars + fill.
+    const stars = starLevel();
+    if (els.stars) {
+      [...els.stars.children].forEach((star, index) => {
+        star.classList.toggle("is-lit", index < stars);
       });
     }
+    ui.setWidth(els.wantedFill, state.wanted);
+    if (els.chase) els.chase.hidden = !copsChasing();
 
-    const minutes = Math.floor((state.phaseTime / (state.phase === "day" ? state.dayLength : state.nightLength)) * 720);
+    // Clock + phase pill.
+    const phaseLimit = state.phase === "day" ? state.dayLength : state.nightLength;
+    const minutes = Math.floor((state.phaseTime / phaseLimit) * 720);
     const baseHour = state.phase === "day" ? 8 : 20;
     const hour24 = (baseHour + Math.floor(minutes / 60)) % 24;
     const minute = minutes % 60;
     const suffix = hour24 >= 12 ? "PM" : "AM";
     const hour12 = hour24 % 12 || 12;
     ui.setText(els.clock, `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`);
+    ui.setText(els.phasePill, `${state.phase === "day" ? "Day" : "Night"} ${state.cycle}`);
 
-    if (els.miniPlayer) {
-      const left = ((player.x + WORLD.width / 2) / WORLD.width) * 100;
-      const top = ((player.z + WORLD.height / 2) / WORLD.height) * 100;
-      els.miniPlayer.style.left = `${clamp(left, 3, 97)}%`;
-      els.miniPlayer.style.top = `${clamp(top, 3, 97)}%`;
-    }
-
-    ui.setText(els.slotScrap, `${state.inventory.scrap}`);
-    ui.setText(els.slotCone, `${state.inventory.cone}`);
-    ui.setText(els.slotPeel, `${state.inventory.peel}`);
-    ui.setText(els.slotTool, state.phase === "night" ? "Plunger" : "Plunger");
-    ui.setText(els.promptE, state.nearestPrompt);
-    ui.setText(els.promptSpace, state.cooldowns.stunt > 0 ? "Recover" : "Stunt");
-    ui.setText(els.promptJ, state.cooldowns.attack > 0 ? "Ready" : "Bonk");
-    ui.setText(els.promptL, state.inventory.cone > 0 ? "Throw" : "No cones");
-
-    if (els.statusChip) {
-      ui.setHtml(
-        els.statusChip,
-        `<strong>${state.phase === "day" ? "Goal" : "Night"}</strong><span>${safeText(state.objective)}</span>`
-      );
-    }
-    ui.setText(els.objectiveText, state.objective);
+    // Objective line with live progress.
+    const objective =
+      state.phase === "day"
+        ? `Earn $${Math.min(20, Math.floor(state.tasks.buskCash))}/20 before dusk`
+        : `Survive — ${Math.max(0, state.waveTarget - state.waveKills)} zombies left`;
+    ui.setText(els.objectiveText, objective);
     if (els.objectiveArrow) {
       const target = objectivePoint();
       const angle = Math.atan2(target.x - player.x, target.z - player.z);
       els.objectiveArrow.style.transform = `rotate(${angle}rad)`;
     }
 
-    ui.setText(els.districtName, state.district.name);
-    ui.setText(els.districtTrait, state.district.trait);
-    ui.setText(els.mapDistrictName, state.district.name);
-    ui.setText(els.mapDistrictTrait, state.district.trait);
-    ui.setText(els.directorReadout, `Block pressure ${Math.round((state.heat + state.hype) / 2)}%`);
-    const phaseLimit = state.phase === "day" ? state.dayLength : state.nightLength;
-    ui.setWidth(els.meterTime, (state.phaseTime / phaseLimit) * 100);
-    ui.setText(els.meterTimeText, `${Math.round((state.phaseTime / phaseLimit) * 100)}%`);
-    ui.setWidth(els.meterArrest, state.arrest);
-    ui.setText(els.meterArrestText, `${Math.round(state.arrest)}%`);
-    const wavePct = state.phase === "night" ? (state.waveKills / state.waveTarget) * 100 : 0;
-    ui.setWidth(els.meterWave, wavePct);
-    ui.setText(els.meterWaveText, state.phase === "night" ? `${state.waveKills}/${state.waveTarget}` : "day");
-    ui.setWidth(els.meterHype, state.hype);
-    ui.setText(els.meterHypeText, `${Math.round(state.hype)}%`);
-    ui.setWidth(els.meterTumble, state.cooldowns.stunt > 0 ? 30 : 100);
-    ui.setText(els.meterTumbleText, state.cooldowns.stunt > 0 ? "cooling" : "ready");
-    ui.setWidth(els.meterPeel, (state.inventory.peel / 6) * 100);
-    ui.setText(els.meterPeelText, `${state.inventory.peel}/6`);
-    ui.setWidth(els.meterScrap, clamp(state.inventory.scrap * 18, 0, 100));
-    ui.setText(els.meterScrapText, `${state.inventory.scrap}`);
-    ui.setText(els.gigTitle, state.phase === "day" ? "Top-Down Day Antics" : "Tweeker Night");
-    ui.setText(
-      els.gigDesc,
-      state.phase === "day" ? "Busk, scavenge, eat, drink, and keep heat manageable." : "Clear the wave with plunger, cones, and peels."
-    );
-    ui.setWidth(els.gigProgress, state.phase === "day" ? clamp((state.tasks.buskCash / 20) * 100, 0, 100) : wavePct);
-    ui.setText(els.gigProgressText, state.phase === "day" ? `$${state.tasks.buskCash.toFixed(0)}/20` : `${state.waveKills}/${state.waveTarget}`);
-    ui.setText(els.gigReward, state.phase === "day" ? "Reward: cash, hype, and supplies" : "Reward: dawn recovery");
+    if (els.miniPlayer) {
+      const left = ((player.x + WORLD.width / 2) / WORLD.width) * 100;
+      const top = ((player.z + WORLD.height / 2) / WORLD.height) * 100;
+      els.miniPlayer.style.left = `${clamp(left, 4, 96)}%`;
+      els.miniPlayer.style.top = `${clamp(top, 4, 96)}%`;
+    }
+
+    refreshHotbar();
   }
 
   function objectivePoint() {
@@ -2924,11 +2895,15 @@
       }, null);
       return nearest ? nearest.zombie : points.alley;
     }
-    if (!state.tasks.drank) return points.fountain;
-    if (!state.tasks.ate) return points.park;
-    if (state.tasks.buskCash < 20) return points.busk;
-    if (state.heat > 45) return points.camp;
-    return points.kiosk;
+    if (copsChasing()) return points.camp;
+    // Point at the nearest cash/item pickup, else the busk plaza.
+    let target = null;
+    pickups.forEach((pickup) => {
+      if (!pickup.active) return;
+      const d = distSq(pickup, player);
+      if (!target || d < target.d) target = { x: pickup.x, z: pickup.z, d };
+    });
+    return target || points.busk;
   }
 
   function resize() {
@@ -2962,26 +2937,31 @@
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
       event.preventDefault();
     }
+    if (key === "tab" || key === "b") {
+      event.preventDefault();
+    }
     if (key === "escape") {
       const wrap = canvas.closest(".canvas-wrap");
       if (wrap && wrap.classList.contains("is-maxed")) {
         return; // let the max-screen handler exit; don't also pause
       }
+      if (state.bagOpen) {
+        toggleBag(false);
+        return;
+      }
       setPaused(!state.paused);
       return;
     }
-    if (!state.running && key !== "tab") {
+    if (!state.running && key !== "tab" && key !== "b") {
       startGame();
     }
-    if (key === "e") interact();
-    if (key === " ") stunt();
-    if (key === "j" || key === "f") attack();
-    if (key === "k" || key === "q") throwCone();
-    if (key === "l" || key === "c") dropPeel();
-    if (key === "1") setAction("dance");
-    if (key === "2") setAction("sign");
-    if (key === "3") setAction("drums");
-    if (key === "4") setAction("stunt");
+    if (key === "e" || key === " ") act();
+    if (key === "f" || key === "j") attack();
+    if (key === "1") selectSlot(0);
+    if (key === "2") selectSlot(1);
+    if (key === "3") selectSlot(2);
+    if (key === "4") selectSlot(3);
+    if (key === "b" || key === "tab") toggleBag();
     if (key === "p") setPaused(!state.paused);
   }
 
@@ -3003,28 +2983,28 @@
       if (saveSlot) saveSlot.clear();
       resetGame(true);
     });
-    els.actionGrid?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-action]");
-      if (button) {
-        setAction(button.dataset.action);
+    // Hotbar slot selection (works for click and tap).
+    els.hotbar?.addEventListener("click", (event) => {
+      const slot = event.target.closest("[data-slot]");
+      if (slot) {
+        selectSlot(Number(slot.dataset.slot));
         canvas.focus({ preventScroll: true });
       }
     });
+    // Bag: tap an item to equip it into the active slot.
+    els.bagGrid?.addEventListener("click", (event) => {
+      const item = event.target.closest("[data-item]");
+      if (item) {
+        equipToSlot(item.dataset.item, state.activeSlot);
+        renderBag();
+      }
+    });
+    document.getElementById("bag-close")?.addEventListener("click", () => toggleBag(false));
+    document.getElementById("btn-bag")?.addEventListener("click", () => toggleBag());
 
-    bindMobileButton("btn-up", 0, -1);
-    bindMobileButton("btn-down", 0, 1);
-    bindMobileButton("btn-left", -1, 0);
-    bindMobileButton("btn-right", 1, 0);
-    document.getElementById("btn-act")?.addEventListener("click", interact);
-    document.getElementById("btn-attack")?.addEventListener("click", attack);
-    bindHotbarTouch("hud-slot-action", interact);
-    bindHotbarTouch("hud-slot-tool", attack);
-    bindHotbarTouch("hud-slot-cone", throwCone);
-    bindHotbarTouch("hud-slot-peel", dropPeel);
-    bindActionTouch("touch-bonk", attack);
-    bindActionTouch("touch-throw", throwCone);
-    bindActionTouch("touch-stunt", stunt);
-    bindActionTouch("touch-act", interact);
+    bindActionTouch("touch-act", act);
+    bindActionTouch("touch-attack", attack);
+    bindActionTouch("touch-bag", () => toggleBag());
     bindTouchStick();
     bindFullscreen();
     if (saveSlot) {
@@ -3049,19 +3029,14 @@
       cycle: state.cycle,
       phaseTime: state.phaseTime,
       cash: state.cash,
-      heat: state.heat,
-      energy: state.energy,
+      wanted: state.wanted,
       health: state.health,
-      thirst: state.thirst,
-      hunger: state.hunger,
-      morale: state.morale,
-      hype: state.hype,
-      arrest: state.arrest,
       score: state.score,
-      action: state.action,
+      bag: { ...state.bag },
+      hotbar: state.hotbar.slice(),
+      activeSlot: state.activeSlot,
       inventory: { ...state.inventory },
       tasks: { ...state.tasks },
-      cooldowns: { ...state.cooldowns },
       waveTarget: state.waveTarget,
       waveKills: state.waveKills,
       objective: state.objective,
@@ -3087,23 +3062,24 @@
       cycle: Math.max(1, Number(data.cycle) || 1),
       phaseTime: Math.max(0, Number(data.phaseTime) || 0),
       cash: Number(data.cash) || 0,
-      heat: clamp(Number(data.heat) || 0, 0, 100),
-      energy: clamp(Number(data.energy) || 100, 0, 100),
+      wanted: clamp(Number(data.wanted) || 0, 0, 100),
+      arrest: 0,
       health: clamp(Number(data.health) || state.maxHealth, 0, state.maxHealth),
-      thirst: clamp(Number(data.thirst) || 0, 0, 100),
-      hunger: clamp(Number(data.hunger) || 0, 0, 100),
-      morale: clamp(Number(data.morale) || 0, 0, 100),
-      hype: Math.max(0, Number(data.hype) || 0),
-      arrest: clamp(Number(data.arrest) || 0, 0, 100),
       score: Number(data.score) || 0,
-      action: data.action || "dance",
+      bag: data.bag && typeof data.bag === "object" ? { ...data.bag } : state.bag,
+      hotbar: Array.isArray(data.hotbar) ? data.hotbar.slice(0, 4) : state.hotbar,
+      activeSlot: clamp(Number(data.activeSlot) || 0, 0, 3),
       inventory: { ...state.inventory, ...(data.inventory || {}) },
       tasks: { ...state.tasks, ...(data.tasks || {}) },
-      cooldowns: { ...state.cooldowns, ...(data.cooldowns || {}) },
       waveTarget: Number(data.waveTarget) || 8,
       waveKills: Number(data.waveKills) || 0,
       objective: data.objective || "Earn $20 before nightfall",
     });
+    // Always own whatever sits on the hotbar (guards against corrupt saves).
+    state.hotbar.forEach((id) => {
+      if (id) state.bag[id] = true;
+    });
+    state.bag.fists = true;
     Object.assign(player, {
       x: Number(data.player && data.player.x) || points.start.x,
       z: Number(data.player && data.player.z) || points.start.z,
@@ -3114,7 +3090,7 @@
       player.facing.x = Number(data.player.facing.x) || 0;
       player.facing.z = Number(data.player.facing.z) || -1;
     }
-    setAction(state.action);
+    refreshHotbar();
     updateHUD();
     els.overlay?.classList.remove("overlay--show");
     canvas.focus({ preventScroll: true });
@@ -3195,34 +3171,6 @@
     updateBtn();
   }
 
-  function bindMobileButton(id, x, z) {
-    const button = document.getElementById(id);
-    if (!button) {
-      return;
-    }
-    const set = (on) => {
-      mobileMove.x = on ? x : 0;
-      mobileMove.z = on ? z : 0;
-      canvas.focus({ preventScroll: true });
-    };
-    button.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      set(true);
-    });
-    button.addEventListener("pointerup", () => set(false));
-    button.addEventListener("pointercancel", () => set(false));
-    button.addEventListener("pointerleave", () => set(false));
-  }
-
-  function bindHotbarTouch(id, action) {
-    const button = document.getElementById(id);
-    if (!button) return;
-    button.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      action();
-      canvas.focus({ preventScroll: true });
-    });
-  }
 
   function bindTouchStick() {
     const stick = document.getElementById("unhinged-touch-stick");
@@ -3340,14 +3288,52 @@
   }
 
   function installDebugHooks() {
-    if (!DEBUG) {
-      return;
+    const local = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+    if (DEBUG) {
+      window.__unhousedTrafficDebug = {
+        state,
+        snapshot: trafficDebugSnapshot,
+      };
+      writeTrafficDebugSnapshot();
     }
-    window.__unhousedTrafficDebug = {
-      state,
-      snapshot: trafficDebugSnapshot,
-    };
-    writeTrafficDebugSnapshot();
+    if (DEBUG || local) {
+      window.__UNHINGED = {
+        state,
+        player,
+        start: () => startGame(),
+        setCash: (n) => {
+          state.cash = Number(n) || 0;
+          updateHUD();
+        },
+        setStars: (n) => {
+          state.wanted = clamp((Number(n) || 0) * 20, 0, 100);
+          updateHUD();
+        },
+        giveItem: (id, n) => {
+          addToBag(id, n || (ITEMS[id] && ITEMS[id].refill) || 2);
+          refreshHotbar();
+          if (state.bagOpen) renderBag();
+        },
+        equip: (id, slot) => equipToSlot(id, slot == null ? state.activeSlot : slot),
+        skipToNight: () => {
+          if (state.phase === "day") {
+            state.phaseTime = 0;
+            beginNight();
+          }
+        },
+        skipToDay: () => {
+          if (state.phase === "night") {
+            state.phaseTime = 0;
+            beginDay();
+          }
+        },
+        god: (on) => {
+          state._god = on !== false;
+          state.health = state.maxHealth;
+        },
+        activeItem: () => activeItem().id,
+      };
+    }
   }
 
   function init() {
@@ -3359,23 +3345,13 @@
     updateHUD();
     render();
     bindButtons();
+    buildHotbar();
     window.addEventListener("resize", resize);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    canvas.addEventListener("click", () => {
-      canvas.focus({ preventScroll: true });
-      if (!state.running && !state.ended) {
-        startGame();
-      }
-    });
 
-    // Mouse aim + click combat (no mouse-look required): the player faces the
-    // cursor, left-click bonks, right-click throws a cone toward it.
-    canvas.addEventListener("pointermove", (event) => {
-      if (event.pointerType === "mouse") {
-        aimFromPointer(event.clientX, event.clientY);
-      }
-    });
+    // Mouse users get one-tap combat with auto-aim — left-click anywhere on the
+    // canvas attacks the nearest enemy. No cursor aiming required.
     canvas.addEventListener("pointerdown", (event) => {
       if (event.pointerType !== "mouse") return;
       canvas.focus({ preventScroll: true });
@@ -3383,16 +3359,7 @@
         startGame();
         return;
       }
-      aimFromPointer(event.clientX, event.clientY);
-      if (event.button === 0) {
-        attack();
-      } else if (event.button === 2) {
-        event.preventDefault();
-        throwCone();
-      }
-    });
-    canvas.addEventListener("pointerleave", (event) => {
-      if (event.pointerType === "mouse") aim.active = false;
+      if (event.button === 0) attack();
     });
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 

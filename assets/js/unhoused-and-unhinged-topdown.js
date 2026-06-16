@@ -409,10 +409,16 @@
   const keys = Object.create(null);
   const mobileMove = { x: 0, z: 0 };
   const clock = new THREE.Clock();
+  const AUDIENCE_RADIUS = 13.5;
+  const BUSK_AUDIENCE_RADIUS = 17;
+  const AGGRESSION_RADIUS = 11.5;
+  const WATCH_EMOJIS = ["👀", "😂", "👏", "💸", "🔥"];
+  const PANIC_EMOJIS = ["😱", "🏃", "🚨", "❗"];
+  const emojiTextureCache = Object.create(null);
 
   // ----------------------------------------------------------------------------
   // Items: collectible props that flavor the two action buttons. The hotbar's
-  // active item drives BOTH buttons — ACT (earn money) runs its `earn` behavior,
+  // active item drives BOTH buttons — ACT (perform for tips) runs its `earn` behavior,
   // ATTACK runs its `attack` behavior. A missing behavior falls back to the
   // bare-hands default (`fists`). Consumables (cone, peel) track a count in
   // state.inventory; everything else is owned once you pick it up.
@@ -445,7 +451,7 @@
     },
     sign: {
       id: "sign", name: "Cardboard Sign", short: "Sign",
-      earn: { cash: [1.8, 2.8], cool: 0.5, wanted: 0.7, label: "beg" },
+      earn: { cash: [1.8, 2.8], cool: 0.5, wanted: 0.7, label: "sign bit" },
       attack: { kind: "melee", dmg: 0.9, range: 3.4, cool: 0.5, label: "sign smack" },
     },
     chicken: {
@@ -497,6 +503,12 @@
     waveTarget: 8,
     waveKills: 0,
     objective: "Earn $20 before nightfall",
+    lastAudience: {
+      watching: 0,
+      panicked: 0,
+      cash: 0,
+      wanted: 0,
+    },
   };
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
   let saveMenu = null;
@@ -521,6 +533,7 @@
   const peels = [];
   const floaters = [];
   const pulses = [];
+  const actionFX = [];
 
   function makeMesh(geo, material, x = 0, y = 0, z = 0, cast = true, receive = true) {
     const mesh = new THREE.Mesh(geo, material);
@@ -698,6 +711,21 @@
     const fallback = getOpenPoint();
     const nearest = nearestSidewalk(fallback.x, fallback.z);
     return { ...fallback, strip: nearest.strip, segment: nearest.segment };
+  }
+
+  function randomSidewalkPointNear(anchor, spread = 14, radius = 0.85) {
+    for (let i = 0; i < 80; i += 1) {
+      const raw = {
+        x: anchor.x + rand(-spread, spread),
+        z: anchor.z + rand(-spread, spread),
+      };
+      const nearest = nearestSidewalk(raw.x, raw.z);
+      const point = sidewalkPoint(nearest.strip, nearest.segment, nearest.value);
+      if (isWalkable(point.x, point.z, radius)) {
+        return { ...point, strip: nearest.strip, segment: nearest.segment };
+      }
+    }
+    return randomSidewalkPoint(radius);
   }
 
   function assignCivilianTarget(civilian, forceCross = false) {
@@ -964,6 +992,73 @@
     floaters.push({ mesh: sprite, life: 1.1, maxLife: 1.1 });
   }
 
+  function makeEmojiTexture(emoji) {
+    const canvas2 = document.createElement("canvas");
+    canvas2.width = 160;
+    canvas2.height = 160;
+    const ctx = canvas2.getContext("2d");
+    ctx.clearRect(0, 0, canvas2.width, canvas2.height);
+    ctx.fillStyle = "rgba(22,24,28,0.76)";
+    ctx.beginPath();
+    ctx.arc(80, 80, 66, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.72)";
+    ctx.lineWidth = 7;
+    ctx.stroke();
+    ctx.font = "96px 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emoji, 80, 86);
+    const texture = new THREE.CanvasTexture(canvas2);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  function emojiTexture(emoji) {
+    if (!emojiTextureCache[emoji]) {
+      emojiTextureCache[emoji] = makeEmojiTexture(emoji);
+    }
+    return emojiTextureCache[emoji];
+  }
+
+  function setCivilianEmoji(civilian, emoji, life = 1.25) {
+    if (!civilian || !civilian.mesh) return;
+    if (!civilian.emojiSprite) {
+      civilian.emojiSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: emojiTexture(emoji),
+          transparent: true,
+          depthWrite: false,
+          opacity: 1,
+        })
+      );
+      civilian.emojiSprite.position.set(0, 3.35, 0);
+      civilian.emojiSprite.scale.set(2.4, 2.4, 1);
+      civilian.mesh.add(civilian.emojiSprite);
+    } else {
+      civilian.emojiSprite.material.map = emojiTexture(emoji);
+      civilian.emojiSprite.material.opacity = 1;
+      civilian.emojiSprite.material.needsUpdate = true;
+      civilian.emojiSprite.visible = true;
+    }
+    civilian.emojiLife = Math.max(civilian.emojiLife || 0, life);
+    civilian.emojiMaxLife = Math.max(civilian.emojiMaxLife || life, life);
+    civilian.emojiBob = civilian.emojiBob || rand(0, Math.PI * 2);
+  }
+
+  function tickCivilianEmoji(civilian, dt) {
+    if (!civilian.emojiSprite) return;
+    civilian.emojiLife = Math.max(0, (civilian.emojiLife || 0) - dt);
+    if (civilian.emojiLife <= 0) {
+      civilian.emojiSprite.visible = false;
+      return;
+    }
+    civilian.emojiSprite.visible = true;
+    civilian.emojiSprite.position.y = 3.35 + Math.sin(state.phaseTime * 7 + (civilian.emojiBob || 0)) * 0.12;
+    civilian.emojiSprite.material.opacity = clamp(civilian.emojiLife / Math.max(0.35, civilian.emojiMaxLife || 1), 0.34, 1);
+  }
+
   function addPulse(x, z, color, radius, life) {
     const mesh = makeMesh(
       new THREE.RingGeometry(radius * 0.45, radius, 28),
@@ -977,6 +1072,433 @@
     mesh.rotation.x = -Math.PI / 2;
     fxGroup.add(mesh);
     pulses.push({ mesh, life, maxLife: life });
+  }
+
+  function fxBasic(color, opacity = 0.86, side = THREE.DoubleSide) {
+    return new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      side,
+    });
+  }
+
+  function rememberFXOpacity(root) {
+    root.traverse((obj) => {
+      if (obj.material && typeof obj.material.opacity === "number") {
+        obj.userData.baseOpacity = obj.material.opacity;
+      }
+    });
+  }
+
+  function setFXOpacity(root, opacity) {
+    root.traverse((obj) => {
+      if (obj.material && typeof obj.material.opacity === "number") {
+        obj.material.opacity = clamp(opacity, 0, 1) * (obj.userData.baseOpacity || 1);
+      }
+    });
+  }
+
+  function addActionFX(group, life, onUpdate) {
+    rememberFXOpacity(group);
+    fxGroup.add(group);
+    actionFX.push({ mesh: group, life, maxLife: life, onUpdate });
+    return group;
+  }
+
+  function playerForwardPoint(distance = 0, side = 0) {
+    return {
+      x: player.x + player.facing.x * distance + player.facing.z * side,
+      z: player.z + player.facing.z * distance - player.facing.x * side,
+    };
+  }
+
+  function faceFXGroup(group) {
+    group.rotation.y = Math.atan2(player.facing.x, player.facing.z);
+  }
+
+  function makeGroundArc(inner, outer, start, length, color, opacity = 0.7) {
+    const mesh = makeMesh(
+      new THREE.RingGeometry(inner, outer, 36, 1, start, length),
+      fxBasic(color, opacity),
+      0,
+      0.12,
+      0,
+      false,
+      false
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
+  }
+
+  function makeTextSprite(text, color = "#ffffff", bg = "rgba(25,24,22,0.72)", scale = 3.4) {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: makeTextTexture(text, color, bg),
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.92,
+      })
+    );
+    sprite.scale.set(scale, scale * 0.25, 1);
+    return sprite;
+  }
+
+  function makeEmojiSprite(emoji, scale = 2.0) {
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: emojiTexture(emoji),
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.95,
+      })
+    );
+    sprite.scale.set(scale, scale, 1);
+    return sprite;
+  }
+
+  function makeCashBill(x, y, z, rotation = 0) {
+    const bill = makeMesh(new THREE.BoxGeometry(0.9, 0.04, 0.42), fxBasic(0x49c968, 0.9), x, y, z, false, false);
+    const stripe = makeMesh(new THREE.BoxGeometry(0.16, 0.05, 0.46), fxBasic(0xdfffe7, 0.85), 0, 0.02, 0, false, false);
+    bill.rotation.y = rotation;
+    bill.add(stripe);
+    return bill;
+  }
+
+  function makeTinyStar(color = 0xffe56f, scale = 1) {
+    const star = new THREE.Group();
+    const a = makeMesh(new THREE.BoxGeometry(0.12 * scale, 0.12 * scale, 1.0 * scale), fxBasic(color, 0.9), 0, 0, 0, false, false);
+    const b = makeMesh(new THREE.BoxGeometry(1.0 * scale, 0.12 * scale, 0.12 * scale), fxBasic(color, 0.9), 0, 0, 0, false, false);
+    const c = makeMesh(new THREE.BoxGeometry(0.12 * scale, 0.12 * scale, 0.8 * scale), fxBasic(color, 0.78), 0, 0, 0, false, false);
+    c.rotation.y = Math.PI / 4;
+    star.add(a, b, c);
+    return star;
+  }
+
+  function makePlungerProp(scale = 1) {
+    const prop = new THREE.Group();
+    addCylinder(prop, 0.08 * scale, 1.45 * scale, 0, 0, 0, fxBasic(0x6b422e, 0.92), 8);
+    const cup = makeMesh(new THREE.CylinderGeometry(0.34 * scale, 0.23 * scale, 0.32 * scale, 12), fxBasic(0x9b3434, 0.92), 0, 0.05 * scale, 0, false, false);
+    cup.rotation.x = Math.PI / 2;
+    prop.add(cup);
+    return prop;
+  }
+
+  function makeConePropFX(scale = 1) {
+    const prop = new THREE.Group();
+    addCone(prop, 0.42 * scale, 0.9 * scale, 0, 0, 0, fxBasic(0xff6d28, 0.92), 10);
+    const stripe = makeMesh(new THREE.BoxGeometry(0.72 * scale, 0.07 * scale, 0.14 * scale), fxBasic(0xf5efe3, 0.9), 0, 0.45 * scale, -0.02, false, false);
+    prop.add(stripe);
+    return prop;
+  }
+
+  function makePeelPropFX(scale = 1) {
+    const peel = makeMesh(new THREE.TorusGeometry(0.42 * scale, 0.11 * scale, 6, 12), fxBasic(0xf5d431, 0.92), 0, 0, 0, false, false);
+    peel.scale.z = 0.42;
+    return peel;
+  }
+
+  function makeChickenPropFX(scale = 1) {
+    const prop = new THREE.Group();
+    prop.add(makeMesh(new THREE.SphereGeometry(0.36 * scale, 10, 8), fxBasic(0xffdc4f, 0.94), 0, 0, 0, false, false));
+    prop.add(makeMesh(new THREE.BoxGeometry(0.18 * scale, 0.16 * scale, 0.5 * scale), fxBasic(0xffdc4f, 0.94), 0, 0, 0.4 * scale, false, false));
+    prop.add(makeMesh(new THREE.ConeGeometry(0.13 * scale, 0.28 * scale, 8), fxBasic(0xff7a35, 0.94), 0, 0, 0.73 * scale, false, false));
+    return prop;
+  }
+
+  function makeBoomboxPropFX(scale = 1) {
+    const box = new THREE.Group();
+    box.add(makeMesh(new THREE.BoxGeometry(1.45 * scale, 0.72 * scale, 0.52 * scale), fxBasic(0x161719, 0.9), 0, 0, 0, false, false));
+    [-0.38, 0.38].forEach((x) => {
+      const speaker = makeMesh(new THREE.CylinderGeometry(0.18 * scale, 0.18 * scale, 0.08 * scale, 16), fxBasic(0xf3c447, 0.92), x * scale, 0, -0.29 * scale, false, false);
+      speaker.rotation.x = Math.PI / 2;
+      box.add(speaker);
+    });
+    return box;
+  }
+
+  function makeSignPropFX(scale = 1) {
+    const sign = new THREE.Group();
+    addCylinder(sign, 0.055 * scale, 1.1 * scale, 0, 0, 0, fxBasic(0x6b422e, 0.9), 6);
+    sign.add(makeMesh(new THREE.BoxGeometry(1.35 * scale, 0.72 * scale, 0.09 * scale), fxBasic(0xbf8f54, 0.92), 0, 1.05 * scale, -0.02, false, false));
+    const label = makeTextSprite("TIPS", "#2b1d12", "rgba(245,224,160,0.92)", 1.4 * scale);
+    label.position.set(0, 1.06 * scale, -0.09 * scale);
+    sign.add(label);
+    return sign;
+  }
+
+  function spawnActFX(itemId, audienceCount = 0, missed = false) {
+    const group = new THREE.Group();
+    group.position.set(player.x, 0, player.z);
+    faceFXGroup(group);
+    const crowd = clamp(audienceCount || 0, 0, 10);
+    const intensity = missed ? 0.62 : 1 + crowd * 0.05;
+
+    if (itemId === "cone") {
+      const cone = makeConePropFX(1.05);
+      cone.position.set(0, 2.8, 0);
+      group.add(cone, makeGroundArc(1.1, 1.45, 0, Math.PI * 2, 0xff8b42, 0.45));
+      [-1, 1].forEach((side) => {
+        const sparkle = makeTinyStar(0xfff0a0, 0.7);
+        sparkle.position.set(side * 0.95, 1.8, -0.15);
+        group.add(sparkle);
+      });
+      addActionFX(group, 0.72, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z) + Math.sin(t * Math.PI * 2) * 0.22;
+        cone.position.y = 2.55 + Math.sin(t * Math.PI * 2) * 0.42;
+        cone.rotation.y = t * Math.PI * 4;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "plunger") {
+      const prop = makePlungerProp(1);
+      prop.position.set(0, 1.12, -0.95);
+      prop.rotation.x = Math.PI / 2;
+      group.add(prop);
+      for (let i = 0; i < 4; i += 1) {
+        const bubble = makeMesh(new THREE.SphereGeometry(0.16 + i * 0.03, 8, 6), fxBasic(0x9ed4ff, 0.75), -0.6 + i * 0.42, 1.55 + i * 0.12, -1.25 - i * 0.1, false, false);
+        group.add(bubble);
+      }
+      addActionFX(group, 0.66, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        faceFXGroup(mesh);
+        prop.position.z = -0.65 - Math.sin(t * Math.PI * 3) * 0.55;
+        prop.scale.setScalar(1 + Math.sin(t * Math.PI * 4) * 0.08);
+        setFXOpacity(mesh, 1 - t * 0.9);
+      });
+      return;
+    }
+
+    if (itemId === "peel") {
+      for (let i = 0; i < 3; i += 1) {
+        const peel = makePeelPropFX(0.75);
+        peel.position.set(Math.cos((i / 3) * Math.PI * 2) * 1.0, 2.2 + i * 0.18, Math.sin((i / 3) * Math.PI * 2) * 0.7);
+        group.add(peel);
+      }
+      group.add(makeGroundArc(0.8, 1.2, 0, Math.PI * 2, 0xf5d431, 0.42));
+      addActionFX(group, 0.75, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        faceFXGroup(mesh);
+        mesh.children.forEach((child, index) => {
+          child.rotation.y += 0.18 + index * 0.04;
+          child.position.y += Math.sin(t * Math.PI * 2 + index) * 0.015;
+        });
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "boombox") {
+      const box = makeBoomboxPropFX(1);
+      box.position.set(0, 0.92, -1.0);
+      group.add(box);
+      [1.1, 1.8, 2.5].forEach((radius, index) => {
+        group.add(makeGroundArc(radius, radius + 0.12, 0, Math.PI * 2, index % 2 ? 0x49c9ff : 0xffbf47, 0.52));
+      });
+      ["BEAT", "BASS", "$"].forEach((text, index) => {
+        const note = text === "$"
+          ? makeEmojiSprite("💸", 1.4)
+          : makeTextSprite(text, index === 1 ? "#49c9ff" : "#ffe07a", "rgba(0,0,0,0.45)", 2.2);
+        note.position.set(-1.1 + index * 1.1, 2.25 + index * 0.2, -1.35);
+        group.add(note);
+      });
+      addActionFX(group, 0.82, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        faceFXGroup(mesh);
+        box.scale.set(1 + Math.sin(t * Math.PI * 8) * 0.08, 1, 1 + Math.sin(t * Math.PI * 8) * 0.08);
+        mesh.children.forEach((child, index) => {
+          if (child.isSprite) child.position.y += 0.025 + index * 0.002;
+          if (child.geometry && child.geometry.type === "RingGeometry") child.scale.setScalar(1 + t * (1.4 + index * 0.08));
+        });
+        setFXOpacity(mesh, 1 - t * 0.92);
+      });
+      return;
+    }
+
+    if (itemId === "sign") {
+      const sign = makeSignPropFX(1);
+      sign.position.set(0, 0.4, -1.05);
+      group.add(sign);
+      [-0.9, 0, 0.9].forEach((x, index) => {
+        group.add(makeCashBill(x, 1.95 + index * 0.12, -1.55, index * 0.4));
+      });
+      addActionFX(group, 0.75, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        faceFXGroup(mesh);
+        sign.rotation.z = Math.sin(t * Math.PI * 4) * 0.22;
+        mesh.children.forEach((child, index) => {
+          if (index > 0) child.position.y += 0.025 + index * 0.004;
+        });
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "chicken") {
+      const chicken = makeChickenPropFX(1.2);
+      chicken.position.set(0, 1.55, -1.0);
+      group.add(chicken, makeTextSprite("SQUEAK", "#ffe07a", "rgba(82,38,12,0.72)", 3.2));
+      group.children[1].position.set(0, 2.8, -1.25);
+      for (let i = 0; i < 4; i += 1) {
+        const star = makeTinyStar(0xffe56f, 0.55);
+        star.position.set(Math.cos(i * Math.PI / 2) * 1.1, 1.85, -1 + Math.sin(i * Math.PI / 2) * 0.6);
+        group.add(star);
+      }
+      addActionFX(group, 0.72, (mesh, t) => {
+        mesh.position.set(player.x, 0, player.z);
+        faceFXGroup(mesh);
+        chicken.position.y = 1.3 + Math.abs(Math.sin(t * Math.PI * 3)) * 0.65;
+        chicken.rotation.z = Math.sin(t * Math.PI * 5) * 0.35;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    for (let i = 0; i < 5; i += 1) {
+      const foot = makeMesh(new THREE.BoxGeometry(0.42, 0.06, 0.78), fxBasic(i % 2 ? 0x74fff0 : 0xffbf47, missed ? 0.42 : 0.72), 0, 0.11, 0, false, false);
+      const angle = (i / 5) * Math.PI * 2;
+      foot.position.set(Math.cos(angle) * (1.0 + intensity * 0.2), 0.11, Math.sin(angle) * (0.72 + intensity * 0.12));
+      foot.rotation.y = angle;
+      group.add(foot);
+    }
+    group.add(makeGroundArc(1.0, 1.32, 0, Math.PI * 2, missed ? 0xdde6ef : 0x74fff0, missed ? 0.34 : 0.52));
+    addActionFX(group, missed ? 0.45 : 0.66, (mesh, t) => {
+      mesh.position.set(player.x, 0, player.z);
+      mesh.rotation.y += 0.12;
+      mesh.children.forEach((child, index) => {
+        child.scale.setScalar(1 + Math.sin(t * Math.PI * 2 + index) * 0.18);
+      });
+      setFXOpacity(mesh, 1 - t);
+    });
+  }
+
+  function spawnAttackFX(itemId, options = {}) {
+    const group = new THREE.Group();
+    const anchor = options.trapX == null ? playerForwardPoint((options.reach || 3.6) * 0.45) : { x: options.trapX, z: options.trapZ };
+    group.position.set(anchor.x, 0, anchor.z);
+    faceFXGroup(group);
+
+    if (itemId === "cone") {
+      const start = playerForwardPoint(1.2);
+      group.position.set(start.x, 0, start.z);
+      [-0.42, 0, 0.42].forEach((side, index) => {
+        const streak = makeMesh(new THREE.BoxGeometry(0.18, 0.08, 2.4 + index * 0.35), fxBasic(index === 1 ? 0xfff0a0 : 0xff8b42, 0.68), side, 0.42 + index * 0.06, -0.8 - index * 0.22, false, false);
+        group.add(streak);
+      });
+      group.add(makeGroundArc(0.6, 1.1, Math.PI * 0.08, Math.PI * 0.84, 0xff6d28, 0.5));
+      addActionFX(group, 0.42, (mesh, t) => {
+        faceFXGroup(mesh);
+        mesh.scale.setScalar(1 + t * 0.55);
+        mesh.position.x = playerForwardPoint(1.2 + t * 1.2).x;
+        mesh.position.z = playerForwardPoint(1.2 + t * 1.2).z;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "peel") {
+      const splat = makeGroundArc(0.45, 1.35, 0, Math.PI * 2, 0xf5d431, 0.62);
+      group.add(splat);
+      for (let i = 0; i < 5; i += 1) {
+        const peel = makePeelPropFX(0.45);
+        const angle = (i / 5) * Math.PI * 2;
+        peel.position.set(Math.cos(angle) * 0.8, 0.18, Math.sin(angle) * 0.8);
+        peel.rotation.y = angle;
+        group.add(peel);
+      }
+      addActionFX(group, 0.5, (mesh, t) => {
+        mesh.scale.setScalar(1 + t * 0.55);
+        mesh.rotation.y += 0.08;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "plunger") {
+      const prop = makePlungerProp(1.15);
+      prop.position.set(0, 1.0, -0.4);
+      prop.rotation.x = Math.PI / 2;
+      group.add(prop, makeGroundArc(0.7, 1.65, Math.PI * 0.12, Math.PI * 0.76, 0xff7a6c, 0.58));
+      addActionFX(group, 0.42, (mesh, t) => {
+        faceFXGroup(mesh);
+        const p = playerForwardPoint(1.2 + Math.sin(t * Math.PI) * 1.4);
+        mesh.position.set(p.x, 0, p.z);
+        prop.scale.z = 1 + Math.sin(t * Math.PI) * 0.35;
+        prop.rotation.z = Math.sin(t * Math.PI * 2) * 0.16;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "boombox") {
+      [1.1, 1.8, 2.5].forEach((radius, index) => {
+        const wave = makeGroundArc(radius, radius + 0.14, -Math.PI * 0.34, Math.PI * 0.68, index % 2 ? 0x49c9ff : 0xffbf47, 0.68);
+        wave.position.z = -0.4 - index * 0.55;
+        group.add(wave);
+      });
+      group.add(makeTextSprite("BASS BLAST", "#49c9ff", "rgba(0,0,0,0.62)", 4.4));
+      group.children[group.children.length - 1].position.set(0, 2.2, -1.6);
+      addActionFX(group, 0.58, (mesh, t) => {
+        faceFXGroup(mesh);
+        const p = playerForwardPoint(1.4);
+        mesh.position.set(p.x, 0, p.z);
+        mesh.scale.z = 1 + t * 0.55;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "sign") {
+      const sign = makeSignPropFX(0.9);
+      sign.position.set(0, 0.4, -0.55);
+      sign.rotation.z = -0.45;
+      group.add(sign, makeGroundArc(0.65, 1.75, -Math.PI * 0.5, Math.PI, 0xbf8f54, 0.6));
+      addActionFX(group, 0.44, (mesh, t) => {
+        faceFXGroup(mesh);
+        mesh.position.set(playerForwardPoint(1.3 + t * 1.5).x, 0, playerForwardPoint(1.3 + t * 1.5).z);
+        sign.rotation.z = -0.75 + t * 1.55;
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    if (itemId === "chicken") {
+      const chicken = makeChickenPropFX(1.0);
+      chicken.position.set(0, 1.35, -0.55);
+      group.add(chicken, makeTextSprite("BONK-SQUEAK", "#ffe07a", "rgba(82,38,12,0.72)", 4.3));
+      group.children[1].position.set(0, 2.5, -1.2);
+      for (let i = 0; i < 5; i += 1) {
+        const star = makeTinyStar(i % 2 ? 0xffe56f : 0xff7a6c, 0.7);
+        star.position.set(Math.cos(i * 1.25) * 1.1, 1.4, -0.6 + Math.sin(i * 1.25) * 0.75);
+        group.add(star);
+      }
+      addActionFX(group, 0.46, (mesh, t) => {
+        faceFXGroup(mesh);
+        mesh.position.set(playerForwardPoint(1.25 + t * 1.2).x, 0, playerForwardPoint(1.25 + t * 1.2).z);
+        chicken.rotation.z = Math.sin(t * Math.PI * 4) * 0.55;
+        chicken.scale.setScalar(1 + Math.sin(t * Math.PI) * 0.28);
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
+    [-0.34, 0.34].forEach((side, index) => {
+      const slash = makeMesh(new THREE.BoxGeometry(0.24, 0.1, 2.35), fxBasic(index ? 0xff7a6c : 0xf5ff9d, 0.75), side, 1.05 + index * 0.12, -0.8, false, false);
+      slash.rotation.y = side * 0.45;
+      group.add(slash);
+    });
+    group.add(makeGroundArc(0.65, 1.75, -Math.PI * 0.45, Math.PI * 0.9, 0xffffff, 0.58));
+    addActionFX(group, 0.4, (mesh, t) => {
+      faceFXGroup(mesh);
+      const p = playerForwardPoint(1 + t * 1.3);
+      mesh.position.set(p.x, 0, p.z);
+      mesh.scale.setScalar(1 + t * 0.28);
+      setFXOpacity(mesh, 1 - t);
+    });
   }
 
   function addWindowRows(x, z, w, d, cols, rows) {
@@ -1556,6 +2078,7 @@
     peels.length = 0;
     floaters.length = 0;
     pulses.length = 0;
+    actionFX.length = 0;
   }
 
   function spawnActors() {
@@ -1565,8 +2088,17 @@
     player.facing.z = -1;
     player.mesh = makeActor("player", player.x, player.z, { color: materials.player });
 
+    const audienceAnchors = [
+      points.busk,
+      { x: points.busk.x - 12, z: points.busk.z + 5 },
+      { x: points.busk.x + 13, z: points.busk.z - 7 },
+      points.park,
+      points.cache,
+    ];
     for (let i = 0; i < (VISUAL_TARGET ? 20 : 30); i += 1) {
-      const pos = randomSidewalkPoint(0.85);
+      const pos = i < 10
+        ? randomSidewalkPointNear(audienceAnchors[i % audienceAnchors.length], 12, 0.85)
+        : randomSidewalkPoint(0.85);
       const mesh = makeActor("civilian", pos.x, pos.z, {
         color: i % 3 === 0 ? materials.civilian2 : materials.civilian,
       });
@@ -1580,6 +2112,11 @@
         timer: rand(0.6, 2.4),
         tipped: 0,
         panic: 0,
+        watching: 0,
+        emojiSprite: null,
+        emojiLife: 0,
+        emojiMaxLife: 0,
+        emojiBob: rand(0, Math.PI * 2),
         sidewalk: pos.strip,
         sidewalkSegment: pos.segment,
         sidewalkTarget: pos.strip,
@@ -1613,12 +2150,12 @@
     [
       ["water", points.fountain.x, points.fountain.z],
       ["food", points.park.x + 9, points.park.z + 2],
-      ["cash", points.busk.x + 5, points.busk.z + 2],
+      ["boombox", points.busk.x + 5, points.busk.z + 2],
       ["scrap", points.cache.x, points.cache.z + 8],
       ["scrap", points.alley.x - 5, points.alley.z - 6],
       ["water", points.camp.x + 5, points.camp.z - 4],
       ["food", points.kiosk.x, points.kiosk.z - 12],
-      ["cash", -40, 73],
+      ["sign", -40, 73],
     ].forEach(([type, x, z]) => makePickup(type, x, z));
 
     let vehicleId = 0;
@@ -1664,6 +2201,7 @@
     state.actStreak = 0;
     state.actStreakTime = 0;
     state._god = false;
+    state.lastAudience = { watching: 0, panicked: 0, cash: 0, wanted: 0 };
     initBag();
     state.tasks.buskCash = 0;
     state.waveTarget = 8;
@@ -1680,7 +2218,7 @@
     ui.setText(els.overlayTitle, "UNHOUSED AND UNHINGED");
     ui.setText(
       els.overlaySub,
-      "Earn cash by day, keep your wanted stars down, then survive the Tweeker Zombie night. Move, tap ACT to earn, tap ATTACK to fight. Collect props and equip them to slots 1-4."
+      "Earn tips by doing funny bits near NPCs, keep your wanted stars down, then survive the Tweeker Zombie night. Move, tap ACT to perform, tap ATTACK to fight. Collect props and equip them to slots 1-4."
     );
     ui.setText(els.overlayScore, "");
     refreshHotbar();
@@ -1701,7 +2239,7 @@
       els.overlay.classList.remove("overlay--show");
     }
     canvas.focus({ preventScroll: true });
-    logLine("Run started. Make cash before the Tweeker Zombies roll in.");
+    logLine("Run started. Find an audience before the Tweeker Zombies roll in.");
   }
 
   function setPaused(nextPaused) {
@@ -1787,6 +2325,91 @@
     state.hotbar[slot] = id;
     state.activeSlot = slot;
     refreshHotbar();
+  }
+
+  // ---- Audience / wanted ----------------------------------------------------
+  function nearbyCivilians(radius, origin = player) {
+    const r2 = radius * radius;
+    return civilians
+      .filter((civilian) => distSq(civilian, origin) <= r2)
+      .sort((a, b) => distSq(a, origin) - distSq(b, origin));
+  }
+
+  function setActorPosition(actor, x, z) {
+    actor.x = x;
+    actor.z = z;
+    if (actor.mesh) {
+      actor.mesh.position.x = x;
+      actor.mesh.position.z = z;
+    }
+  }
+
+  function syncCivilianSidewalk(civilian) {
+    const nearest = nearestSidewalk(civilian.x, civilian.z);
+    civilian.sidewalk = nearest.strip;
+    civilian.sidewalkSegment = nearest.segment;
+    civilian.sidewalkTarget = nearest.strip;
+    civilian.sidewalkTargetSegment = nearest.segment;
+    civilian.target = sidewalkPoint(nearest.strip, nearest.segment, nearest.value);
+    civilian.crossing = false;
+    civilian.timer = rand(2.8, 6.4);
+  }
+
+  function placeCivilian(civilian, x, z) {
+    setActorPosition(civilian, x, z);
+    civilian.panic = 0;
+    civilian.watching = 0;
+    civilian.tipped = 0;
+    civilian.emojiLife = 0;
+    if (civilian.emojiSprite) civilian.emojiSprite.visible = false;
+    syncCivilianSidewalk(civilian);
+  }
+
+  function setCivilianWatching(civilian, emoji = choose(WATCH_EMOJIS), duration = 2.2) {
+    if (!civilian || civilian.panic > 0) return;
+    civilian.watching = Math.max(civilian.watching || 0, duration);
+    civilian.tipped = Math.max(civilian.tipped || 0, duration);
+    setCivilianEmoji(civilian, emoji, Math.min(1.7, duration));
+  }
+
+  function setCivilianPanic(civilian, duration = 2.4) {
+    if (!civilian) return;
+    civilian.panic = Math.max(civilian.panic || 0, duration);
+    civilian.watching = 0;
+    setCivilianEmoji(civilian, choose(PANIC_EMOJIS), Math.min(1.55, duration));
+  }
+
+  function emojiForAct(itemId) {
+    if (itemId === "boombox") return choose(["🎵", "🔥", "👏", "💸"]);
+    if (itemId === "chicken") return choose(["😂", "👏", "💸"]);
+    if (itemId === "cone") return choose(["🤔", "😂", "👀"]);
+    if (itemId === "peel") return choose(["👏", "😂", "👀"]);
+    if (itemId === "plunger") return choose(["😆", "👏", "👀"]);
+    if (itemId === "sign") return choose(["💬", "👀", "💸"]);
+    return choose(WATCH_EMOJIS);
+  }
+
+  function audienceForAct(earn, itemId) {
+    const buskZone = distSq(player, points.busk) < 170;
+    const radius = (buskZone ? BUSK_AUDIENCE_RADIUS : AUDIENCE_RADIUS) + (earn.crowd ? 2.8 : 0);
+    const audience = nearbyCivilians(radius).filter((civilian) => civilian.panic <= 0);
+    audience.forEach((civilian) => setCivilianWatching(civilian, emojiForAct(itemId), 2.4 + Math.min(1.2, (earn.crowd || 1) * 0.25)));
+    return { audience, buskZone };
+  }
+
+  function alertCivilianWitnesses(radius, baseWanted, origin = player, panicDuration = 2.5) {
+    const witnesses = nearbyCivilians(radius, origin);
+    witnesses.forEach((civilian) => setCivilianPanic(civilian, panicDuration + Math.min(1.1, witnesses.length * 0.08)));
+    if (!witnesses.length || baseWanted <= 0) {
+      state.lastAudience = { watching: 0, panicked: witnesses.length, cash: 0, wanted: 0 };
+      return { witnesses, wanted: 0 };
+    }
+    const crowdScale = 1 + Math.max(0, witnesses.length - 1) * 0.36;
+    const districtScale = state.district.heat || 1;
+    const wanted = baseWanted * crowdScale * districtScale;
+    addWanted(wanted);
+    state.lastAudience = { watching: 0, panicked: witnesses.length, cash: 0, wanted };
+    return { witnesses, wanted };
   }
 
   // ---- Wanted / police ------------------------------------------------------
@@ -2100,7 +2723,7 @@
     if (state.health <= 0) {
       endGame("WIPED OUT", "The block got too rough. Rest at camp and pick safer fights next run.");
     } else if (state.arrest >= 100) {
-      endGame("BUSTED", "The cops caught up. Keep your wanted stars down — don't bonk regular folks or beg nonstop.");
+      endGame("BUSTED", "The cops caught up. Keep your wanted stars down — don't bonk regular folks or perform nonstop.");
     }
   }
 
@@ -2148,7 +2771,7 @@
   }
 
   function spawnDayPickups() {
-    const drops = ["cash", "snack", "cone", "peel", "cash", choose(["boombox", "sign", "chicken"])];
+    const drops = ["snack", "cone", "peel", "scrap", choose(["boombox", "sign", "chicken"]), choose(["cone", "peel", "scrap", "snack"])];
     drops.forEach((type) => {
       const point = getOpenPoint(1.4, true);
       makePickup(type, point.x, point.z);
@@ -2247,6 +2870,7 @@
     civilians.forEach((civilian) => {
       civilian.tipped = Math.max(0, civilian.tipped - dt);
       civilian.panic = Math.max(0, civilian.panic - dt);
+      civilian.watching = Math.max(0, (civilian.watching || 0) - dt);
       civilian.timer -= dt;
 
       let speed = civilian.speed;
@@ -2259,6 +2883,14 @@
         dx /= mag;
         dz /= mag;
         speed *= 1.8;
+      } else if (civilian.watching > 0) {
+        dx = player.x - civilian.x;
+        dz = player.z - civilian.z;
+        const mag = len2(dx, dz) || 1;
+        dx /= mag;
+        dz /= mag;
+        speed = 0;
+        civilian.timer = Math.max(civilian.timer, 0.45);
       } else {
         const reached = !civilian.target || distSq(civilian, civilian.target) < 1.2;
         if (reached && civilian.sidewalkTarget) {
@@ -2275,15 +2907,19 @@
         dz /= mag;
         speed *= civilian.crossing ? 1.25 : 0.82;
       }
-      moveCircle(civilian, dx * speed * dt, dz * speed * dt);
+      if (speed > 0) {
+        moveCircle(civilian, dx * speed * dt, dz * speed * dt);
+      }
       if (Math.abs(dx) + Math.abs(dz) > 0.01) {
         civilian.mesh.rotation.y = Math.atan2(dx, dz);
       }
+      civilian.mesh.position.y = civilian.watching > 0 ? Math.sin(state.phaseTime * 10 + civilian.emojiBob) * 0.05 : 0;
 
       const d = Math.sqrt(distSq(civilian, player));
-      if (d < 3.4 && state.phase === "day" && activeItem().id === "boombox" && civilian.tipped <= 0) {
-        civilian.tipped = 5;
+      if (d < 4.5 && state.phase === "day" && activeItem().id === "boombox" && civilian.tipped <= 0) {
+        setCivilianWatching(civilian, choose(["🎵", "👀", "👏"]), 1.3);
       }
+      tickCivilianEmoji(civilian, dt);
     });
   }
 
@@ -2506,9 +3142,9 @@
         addFloater("cone check", copHit.x, copHit.z, "#9ed4ff");
         removeProjectile(i);
       } else if (civHit) {
-        civHit.panic = 2.2;
-        addWanted(12);
-        addFloater("hey! +wanted", civHit.x, civHit.z, "#ff7a6c");
+        setCivilianPanic(civHit, 3);
+        const witnessReaction = alertCivilianWitnesses(AGGRESSION_RADIUS, 9, civHit, 3);
+        addFloater(`panic x${Math.max(1, witnessReaction.witnesses.length)} +wanted`, civHit.x, civHit.z, "#ff7a6c");
         removeProjectile(i);
       } else if (projectile.life <= 0 || !isWalkable(projectile.x, projectile.z, 0.5)) {
         removeProjectile(i);
@@ -2610,6 +3246,20 @@
         pulses.splice(i, 1);
       }
     }
+    for (let i = actionFX.length - 1; i >= 0; i -= 1) {
+      const fx = actionFX[i];
+      fx.life -= dt;
+      const t = 1 - fx.life / fx.maxLife;
+      if (fx.onUpdate) {
+        fx.onUpdate(fx.mesh, clamp(t, 0, 1), dt, fx);
+      } else {
+        setFXOpacity(fx.mesh, 1 - t);
+      }
+      if (fx.life <= 0) {
+        fxGroup.remove(fx.mesh);
+        actionFX.splice(i, 1);
+      }
+    }
   }
 
   function animateIdle(dt) {
@@ -2629,10 +3279,7 @@
     pickup.active = false;
     actorGroup.remove(pickup.mesh);
     if (pickup.type === "cash") {
-      const gain = rand(1.5, 4.2);
-      state.cash += gain;
-      state.tasks.buskCash += gain;
-      addFloater(`+$${gain.toFixed(0)}`, pickup.x, pickup.z, "#79ff9a");
+      addFloater("tips need crowd", pickup.x, pickup.z, "#c7ffd5");
     } else if (pickup.type === "snack") {
       state.health = clamp(state.health + 16, 0, state.maxHealth);
       addFloater("+health", pickup.x, pickup.z, "#ffd080");
@@ -2675,34 +3322,47 @@
     if (player.mesh) player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
   }
 
-  // ACT button: earn money with the active item's bit. Earning near a crowd or
-  // the busk plaza pays more. Doing it over and over ("acting/begging too much")
-  // escalates your wanted stars.
+  // ACT button: earn tips with the active item's bit only when NPCs are close
+  // enough to watch. Bigger watching crowds pay better.
   function act() {
     if (!state.running || state.paused || state.cooldowns.act > 0) {
       return;
     }
-    const earn = activeItem().earn || ITEMS.fists.earn;
+    const item = activeItem();
+    const earn = item.earn || ITEMS.fists.earn;
     state.cooldowns.act = earn.cool || 0.5;
-    const buskZone = distSq(player, points.busk) < 170;
-    const nearCivs = civilians.filter((civilian) => distSq(civilian, player) < (buskZone ? 150 : 80));
-    const crowd = Math.max(1, nearCivs.length) * (earn.crowd || 1);
+    const { audience, buskZone } = audienceForAct(earn, item.id);
+    if (!audience.length) {
+      state.actStreak = 0;
+      state.actStreakTime = 0;
+      state.lastAudience = { watching: 0, panicked: 0, cash: 0, wanted: 0 };
+      spawnActFX(item.id, 0, true);
+      addFloater("need audience", player.x, player.z, "#dde6ef");
+      addPulse(player.x, player.z, 0xdde6ef, 2.8, 0.28);
+      return;
+    }
+    const crowd = Math.min(audience.length, 12);
     const tip = state.district.tip || 1;
     const [lo, hi] = earn.cash;
-    const gain = (rand(lo, hi) + crowd * 0.42) * tip * (buskZone ? 1.25 : 1);
+    const crowdFlavor = earn.crowd || 1;
+    const audienceScale = 1 + Math.max(0, crowd - 1) * 0.18 + Math.max(0, crowdFlavor - 1) * 0.2;
+    const gain = (rand(lo, hi) * audienceScale + crowd * 0.32 * crowdFlavor) * tip * (buskZone ? 1.25 : 1);
     state.cash += gain;
     state.tasks.buskCash += gain;
     bumpActStreak();
-    addWanted((earn.wanted || 1) * (1 + (state.actStreak - 1) * 0.45));
-    nearCivs.forEach((civilian) => {
-      civilian.tipped = 4;
-    });
-    addFloater(`+$${gain.toFixed(0)} ${earn.label || ""}`.trim(), player.x, player.z, "#73ff91");
-    addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 6.4 : 4.4, 0.55);
+    const wanted = (earn.wanted || 1) *
+      (1 + (state.actStreak - 1) * 0.32) *
+      (1 + Math.max(0, audience.length - 1) * 0.06) *
+      (state.district.heat || 1);
+    addWanted(wanted);
+    state.lastAudience = { watching: audience.length, panicked: 0, cash: gain, wanted };
+    spawnActFX(item.id, audience.length, false);
+    addFloater(`+$${gain.toFixed(0)} ${earn.label || ""} x${audience.length}`.trim(), player.x, player.z, "#73ff91");
+    addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 7.2 : 4.8 + crowd * 0.28, 0.55);
   }
 
-  // ATTACK button: dispatches on the active item's attack type. Hitting regular
-  // people spikes wanted hard — that's the "don't be too aggressive" rule.
+  // ATTACK button: dispatches on the active item's attack type. Aggression near
+  // regular people spikes wanted harder as more witnesses panic.
   function attack() {
     if (!state.running || state.paused || state.cooldowns.attack > 0) {
       return;
@@ -2739,13 +3399,21 @@
     let hitCivilian = false;
     civilians.forEach((civilian) => {
       if (distSq(civilian, player) <= reach * reach) {
-        civilian.panic = a.confuse ? 2.8 : 1.9;
+        setCivilianPanic(civilian, a.confuse ? 2.8 : 2.2);
         hitCivilian = true;
       }
     });
+    const witnessReaction = alertCivilianWitnesses(
+      hitCivilian ? reach + AGGRESSION_RADIUS : Math.max(AGGRESSION_RADIUS, reach + 4),
+      hitCivilian ? 10.5 : 4.4,
+      player,
+      hitCivilian ? 3.1 : 2.4
+    );
+    spawnAttackFX(item.id, { reach, hits, hitCivilian });
     if (hitCivilian) {
-      addWanted(16);
-      addFloater("assault! +wanted", player.x, player.z, "#ff7a6c");
+      addFloater(`panic x${Math.max(1, witnessReaction.witnesses.length)} +wanted`, player.x, player.z, "#ff7a6c");
+    } else if (witnessReaction.witnesses.length) {
+      addFloater(`witnesses x${witnessReaction.witnesses.length} +wanted`, player.x, player.z, "#ffb36f");
     } else {
       addFloater(hits ? a.label || "bonk!" : "swing", player.x, player.z, hits ? "#f5ff9d" : "#d4d7dd");
     }
@@ -2760,6 +3428,8 @@
     state.cooldowns.attack = a.cool || 0.6;
     faceTarget(nearestEnemy(a.range || 27));
     if (item.count) state.inventory[item.count] -= 1;
+    const witnessReaction = alertCivilianWitnesses(AGGRESSION_RADIUS + 2, 3.2, player, 2.3);
+    spawnAttackFX(item.id, { reach: a.range || 27 });
     const group = new THREE.Group();
     const cone = addCone(group, 0.52, 1.1, 0, 0, 0, materials.cone, 8);
     cone.rotation.x = Math.PI / 2;
@@ -2774,7 +3444,12 @@
       dmg: a.dmg || 2,
       mesh: group,
     });
-    addFloater(a.label || "throw", player.x, player.z, "#ffb878");
+    addFloater(
+      witnessReaction.witnesses.length ? `${a.label || "throw"} x${witnessReaction.witnesses.length}` : a.label || "throw",
+      player.x,
+      player.z,
+      witnessReaction.witnesses.length ? "#ffb36f" : "#ffb878"
+    );
     refreshHotbar();
   }
 
@@ -2785,13 +3460,20 @@
     }
     state.cooldowns.attack = a.cool || 0.45;
     if (item.count) state.inventory[item.count] -= 1;
+    const witnessReaction = alertCivilianWitnesses(AGGRESSION_RADIUS, 2.1, player, 2.1);
     const x = player.x - player.facing.x * 1.1;
     const z = player.z - player.facing.z * 1.1;
+    spawnAttackFX(item.id, { trapX: x, trapZ: z });
     const mesh = makeMesh(new THREE.TorusGeometry(0.55, 0.12, 6, 12), materials.peel, x, 0.12, z, true, false);
     mesh.scale.z = 0.45;
     actorGroup.add(mesh);
     peels.push({ x, z, life: 12, mesh });
-    addFloater(a.label || "trap set", x, z, "#ffe96d");
+    addFloater(
+      witnessReaction.witnesses.length ? `${a.label || "trap"} x${witnessReaction.witnesses.length}` : a.label || "trap set",
+      x,
+      z,
+      witnessReaction.witnesses.length ? "#ffcc73" : "#ffe96d"
+    );
     refreshHotbar();
   }
 
@@ -2807,7 +3489,6 @@
       }
       actorGroup.remove(zombie.mesh);
       state.waveKills += 1;
-      state.cash += 0.75;
       addFloater("+tweeker clear", zombie.x, zombie.z, "#adff94");
       if (state.phase === "night" && state.waveKills >= state.waveTarget) {
         beginDay();
@@ -2896,7 +3577,7 @@
       return nearest ? nearest.zombie : points.alley;
     }
     if (copsChasing()) return points.camp;
-    // Point at the nearest cash/item pickup, else the busk plaza.
+    // Point at the nearest prop pickup, else the busk plaza.
     let target = null;
     pickups.forEach((pickup) => {
       if (!pickup.active) return;
@@ -3274,6 +3955,8 @@
       longStops: vehicles.filter((vehicle) => vehicle.waitReason === "vehicle" && Math.abs(vehicle.speed) < 0.1 && vehicle.waitTime > 2.8).length,
       maxWait: vehicles.reduce((max, vehicle) => Math.max(max, vehicle.waitTime || 0), 0),
       pedestriansCrossing: civilians.filter((civilian) => civilian.crossing).length,
+      pedestriansWatching: civilians.filter((civilian) => civilian.watching > 0).length,
+      pedestriansPanicked: civilians.filter((civilian) => civilian.panic > 0).length,
       pedestriansOnRoad: civilians.filter((civilian) => pointNearRoad(civilian.x, civilian.z, -0.2)).length,
       waitCounts,
       vehicles: vehicles.map(({ footprint, ...vehicle }) => vehicle),
@@ -3297,10 +3980,71 @@
       writeTrafficDebugSnapshot();
     }
     if (DEBUG || local) {
+      const audienceSnapshot = () => ({
+        nearby: nearbyCivilians(AUDIENCE_RADIUS).length,
+        watching: civilians.filter((civilian) => civilian.watching > 0).length,
+        panicked: civilians.filter((civilian) => civilian.panic > 0).length,
+        cash: Number(state.cash.toFixed(2)),
+        wanted: Number(state.wanted.toFixed(2)),
+        lastAudience: { ...state.lastAudience },
+      });
       window.__UNHINGED = {
         state,
         player,
+        civilians,
         start: () => startGame(),
+        act: () => {
+          act();
+          updateHUD();
+          return audienceSnapshot();
+        },
+        attack: () => {
+          attack();
+          updateHUD();
+          return audienceSnapshot();
+        },
+        audience: audienceSnapshot,
+        fxCounts: () => ({
+          actionFX: actionFX.length,
+          pulses: pulses.length,
+          projectiles: projectiles.length,
+          peels: peels.length,
+        }),
+        placeAudience: (count = 6, radius = 7) => {
+          const total = clamp(Math.floor(Number(count) || 0), 0, civilians.length);
+          for (let i = 0; i < total; i += 1) {
+            const angle = (i / Math.max(1, total)) * Math.PI * 2;
+            const distance = Math.max(3.2, Number(radius) || 7) + (i % 3) * 0.45;
+            let point = {
+              x: player.x + Math.cos(angle) * distance,
+              z: player.z + Math.sin(angle) * distance,
+            };
+            if (!isWalkable(point.x, point.z, civilians[i].radius)) {
+              point = randomSidewalkPointNear(player, Math.max(7, distance + 2), civilians[i].radius);
+            }
+            placeCivilian(civilians[i], point.x, point.z);
+          }
+          return audienceSnapshot();
+        },
+        scatterAudience: (minDistance = 45) => {
+          const minD = Math.max(10, Number(minDistance) || 45);
+          civilians.forEach((civilian) => {
+            for (let i = 0; i < 80; i += 1) {
+              const point = randomSidewalkPoint(civilian.radius);
+              if (distSq(point, player) > minD * minD) {
+                placeCivilian(civilian, point.x, point.z);
+                return;
+              }
+            }
+          });
+          return audienceSnapshot();
+        },
+        setPlayer: (x, z) => {
+          setActorPosition(player, Number(x) || points.start.x, Number(z) || points.start.z);
+          updateCamera(1);
+          updateHUD();
+          return { x: player.x, z: player.z };
+        },
         setCash: (n) => {
           state.cash = Number(n) || 0;
           updateHUD();

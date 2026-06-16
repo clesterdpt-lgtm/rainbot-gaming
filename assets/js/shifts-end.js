@@ -383,28 +383,59 @@
   const vestStrip = box(0.52, 0.08, 0.32, COLORS.vestTrim);
   vestStrip.position.set(0, 0.85, 0);
   player.add(vestStrip);
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 12, 10),
-    new THREE.MeshStandardMaterial({ color: COLORS.skin, roughness: 0.7 })
+  // Robot Head (matching the Rainbot logo: dark navy box, cyan center eye, pink spokes)
+  const headGroup = new THREE.Group();
+  headGroup.position.set(0, 1.55, 0);
+
+  // Head base - dark navy box/screen (matching logo fill)
+  const headBase = box(0.44, 0.44, 0.35, 0x02050a, { metalness: 0.5, roughness: 0.3 });
+  headBase.castShadow = true;
+  headGroup.add(headBase);
+
+  // Cyan Eye Lens in the center of the face plate facing +z (matching logo circle)
+  const eye = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 0.04, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0x23dff2,
+      emissive: 0x23dff2,
+      emissiveIntensity: 1.5,
+      roughness: 0.1,
+    })
   );
-  head.position.y = 1.55;
-  head.castShadow = true;
-  player.add(head);
-  // Cap
+  eye.rotation.x = Math.PI / 2;
+  eye.position.set(0, 0, 0.18);
+  headGroup.add(eye);
+
+  // Pink Spokes (radiating from the center, matching the logo paths)
+  const angles = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI, (5 * Math.PI) / 4, (3 * Math.PI) / 2, (7 * Math.PI) / 4];
+  angles.forEach((angle) => {
+    const spoke = box(0.02, 0.15, 0.02, 0xff1490, {
+      emissive: 0xff1490,
+      emissiveIntensity: 0.6,
+    });
+    const radius = 0.14;
+    spoke.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0.178);
+    spoke.rotation.z = angle + Math.PI / 2;
+    headGroup.add(spoke);
+  });
+
+  // Trainee Cap on top of the robot head
   const cap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.19, 0.19, 0.12, 14),
+    new THREE.CylinderGeometry(0.2, 0.2, 0.08, 14),
     new THREE.MeshStandardMaterial({ color: 0x1a1814, roughness: 0.7 })
   );
-  cap.position.y = 1.7;
-  player.add(cap);
-  // Cap brim
+  cap.position.y = 0.26;
+  headGroup.add(cap);
+
   const brim = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.19, 0.19, 0.02, 14),
+    new THREE.CylinderGeometry(0.2, 0.2, 0.02, 14),
     new THREE.MeshStandardMaterial({ color: 0x1a1814, roughness: 0.7 })
   );
-  brim.position.set(0, 1.76, 0.04);
+  brim.position.set(0, 0.27, 0.06);
   brim.scale.set(1, 1, 1.4);
-  player.add(brim);
+  headGroup.add(brim);
+
+  player.add(headGroup);
   // Legs
   for (const dx of [-0.12, 0.12]) {
     const leg = box(0.18, 0.55, 0.2, 0x2a2820);

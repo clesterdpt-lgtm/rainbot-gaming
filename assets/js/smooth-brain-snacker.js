@@ -135,6 +135,8 @@
   let acc = 0; // step accumulator (ms)
   let lastT = 0;
   let rafId = 0;
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const stepMs = () =>
     Math.max(MIN_STEP, BASE_STEP - (snake.length - START_LEN) * STEP_RAMP);
@@ -531,6 +533,7 @@
       if (eaten % GOLD_EVERY === 0 && !gold) spawnGold();
       api.recordScore(GAME_ID, score);
       updateHud();
+      saveProgress();
     } else if (ateGold) {
       score += 75;
       const butt = snake[snake.length - 1];
@@ -541,11 +544,13 @@
       gold = null;
       api.recordScore(GAME_ID, score);
       updateHud();
+      saveProgress();
     }
   }
 
   function die(cause) {
     running = false;
+    if (saveSlot) saveSlot.clear();
     const lenReached = snake.length;
     // settle floats + final frame
     draw();
@@ -579,6 +584,7 @@
 
   // ---------- Lifecycle ----------
   function newGame() {
+    if (saveSlot) saveSlot.clear();
     snake = [];
     const sy = (ROWS / 2) | 0;
     const sx = 6;
@@ -603,6 +609,7 @@
     hideOverlay();
     acc = 0;
     lastT = performance.now();
+    saveProgress();
   }
 
   function togglePause() {
@@ -611,6 +618,7 @@
     setPauseLabel();
     if (!paused) lastT = performance.now();
     draw();
+    saveProgress();
   }
 
   function setPauseLabel() {
@@ -651,6 +659,57 @@
       if (food && food.labelTtl > 0) food.labelTtl -= dt;
     }
 
+    draw();
+  }
+
+  function snapshot() {
+    return {
+      snake: snake ? snake.map((cell) => ({ ...cell })) : [],
+      dir: dir ? { ...dir } : { x: 1, y: 0 },
+      inputQ: Array.isArray(inputQ) ? inputQ.map((next) => ({ ...next })) : [],
+      food: food ? { ...food, idea: food.idea } : null,
+      gold: gold ? { ...gold } : null,
+      eaten,
+      score,
+      floats: floats ? floats.map((item) => ({ ...item })) : [],
+      poops: poops ? poops.map((item) => ({ ...item })) : [],
+      feed: Array.isArray(feed) ? feed.slice() : [],
+      running,
+      paused,
+      started,
+      acc,
+    };
+  }
+
+  function saveProgress() {
+    if (!saveSlot || !started || !running) return;
+    saveSlot.save(snapshot());
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data || !Array.isArray(data.snake) || !data.snake.length) return;
+    snake = data.snake.map((cell) => ({ x: Number(cell.x) || 0, y: Number(cell.y) || 0 }));
+    dir = data.dir && Number.isFinite(data.dir.x) && Number.isFinite(data.dir.y) ? { x: data.dir.x, y: data.dir.y } : { x: 1, y: 0 };
+    inputQ = Array.isArray(data.inputQ) ? data.inputQ.map((next) => ({ x: Number(next.x) || 0, y: Number(next.y) || 0 })).slice(0, 2) : [];
+    food = data.food ? { ...data.food, idea: data.food.idea || SMART_IDEAS[0] } : null;
+    gold = data.gold ? { ...data.gold } : null;
+    eaten = Number(data.eaten) || 0;
+    score = Number(data.score) || 0;
+    floats = Array.isArray(data.floats) ? data.floats.map((item) => ({ ...item })) : [];
+    poops = Array.isArray(data.poops) ? data.poops.map((item) => ({ ...item })) : [];
+    feed = Array.isArray(data.feed) ? data.feed.slice(0, 6) : [];
+    running = true;
+    paused = Boolean(data.paused);
+    started = true;
+    acc = Number(data.acc) || 0;
+    bestAtStart = api.getHighScore(GAME_ID);
+    lastT = performance.now();
+    renderMenu();
+    renderFeed();
+    updateHud();
+    setPauseLabel();
+    hideOverlay();
     draw();
   }
 
@@ -737,6 +796,21 @@
   btnPrimary.onclick = newGame;
   lastT = performance.now();
   rafId = requestAnimationFrame(frame);
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: btnPrimary,
+      scoreEl: overlayScore,
+      continueLabel: "Continue",
+      newLabel: "New game",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Score <strong>${Number(data.score || 0).toLocaleString()}</strong> · Length <strong>${(data.snake || []).length || START_LEN}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => running && started);
+    saveMenu.refresh();
+  }
 
   // ---------- Debug hook ----------
   window.__SNACK = {
@@ -756,5 +830,7 @@
     get gold() { return gold; },
     get poops() { return poops.map((p) => ({ ...p })); },
     get feed() { return feed.slice(); },
+    save: saveProgress,
+    restore: () => restoreGame(saveSlot && saveSlot.read()),
   };
 })();

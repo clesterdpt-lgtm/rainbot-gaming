@@ -156,6 +156,8 @@
 
     lastTime: 0,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create("hormuz", { version: 1 });
+  let saveMenu = null;
 
   // =========================================================================
   // 3. UTILITIES
@@ -511,6 +513,7 @@
   function wipeout() {
     if (state.gameOver) return;
     state.gameOver = true;
+    if (saveSlot) saveSlot.clear();
     state._dethTime = performance.now();
     state.lastDeathScore = state.score;
     state.lastDeathDistance = Math.round((state.distance / STRAIT_LENGTH) * 100);
@@ -1480,6 +1483,7 @@
   // =========================================================================
 
   function startGame() {
+    if (saveSlot) saveSlot.clear();
     // Reset
     state.running = true;
     state.paused = false;
@@ -1522,6 +1526,74 @@
     updateHUD();
     canvas.focus();
     if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function snapshot() {
+    const now = performance.now();
+    const activeUpgrades = {};
+    Object.keys(state.activeUpgrades).forEach((key) => {
+      activeUpgrades[key] = Math.max(0, state.activeUpgrades[key] - now);
+    });
+    return {
+      score: state.score,
+      distance: state.distance,
+      phase: state.phase,
+      ship: { ...state.ship },
+      phaseGatesHit: Array.from(state.phaseGatesHit),
+      activeUpgrades,
+      bossActive: state.bossActive,
+      bossArmed: state.bossArmed,
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    const now = performance.now();
+    state.running = true;
+    state.paused = false;
+    state.gameOver = false;
+    state.started = true;
+    state.score = Number(data.score) || 0;
+    state.distance = clamp(Number(data.distance) || 0, 0, STRAIT_LENGTH - 1);
+    state.phase = Number(data.phase) || getPhaseProgress().phase;
+    state.ship = {
+      x: 0, y: state.distance, vx: 0, vy: 0,
+      heading: 0, angVel: 0,
+      hull: HULL_MAX, maxHull: HULL_MAX,
+      iframe: 0, hornCooldown: 0, flashing: 0,
+      shipScale: 1, turboMult: 1, plated: false,
+      ...(data.ship || {}),
+    };
+    state.obstacles = [];
+    state.pickups = [];
+    state.particles = [];
+    state.splashes = [];
+    state.boss = null;
+    state.bossActive = Boolean(data.bossActive);
+    state.bossArmed = Boolean(data.bossArmed);
+    state.phaseGatesHit = new Set(Array.isArray(data.phaseGatesHit) ? data.phaseGatesHit : []);
+    state.inGate = false;
+    state.activeUpgrades = {};
+    Object.entries(data.activeUpgrades || {}).forEach(([key, remaining]) => {
+      if (Number(remaining) > 0) state.activeUpgrades[key] = now + Number(remaining);
+    });
+    state.cam.shake = 0; state.cam.flash = 0;
+    state.ringBuffer = [];
+    state._spawnT = 0;
+    state._lastPhaseDrawn = 0;
+    state._dethTime = 0;
+    state.lastCauseOfDeath = "";
+    const mount = document.getElementById("wipeout-mount");
+    if (mount) mount.innerHTML = "";
+    const ghud = document.getElementById("boss-honkhud");
+    if (ghud) ghud.style.display = "none";
+    hideOverlay();
+    updateHUD();
+    canvas.focus();
+    if (rafId) cancelAnimationFrame(rafId);
+    state.lastTime = performance.now();
     rafId = requestAnimationFrame(loop);
   }
 
@@ -1585,7 +1657,22 @@
       "Restart the voyage? Your tanker can take it. (Probably.)",
       "Start voyage"
     );
+    if (saveMenu) saveMenu.refresh();
   });
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: document.getElementById("btn-primary"),
+      scoreEl: document.getElementById("overlay-score"),
+      continueLabel: "Continue voyage",
+      newLabel: "New voyage",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Distance <strong>${Math.round((Number(data.distance || 0) / STRAIT_LENGTH) * 100)}%</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+  }
 
   RB.subscribe(renderPowerups);
   setupTouch();

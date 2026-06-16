@@ -194,6 +194,8 @@
     shield: false,           // survive one crash
     bestAltitude: 0,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const keys = {};
 
@@ -985,7 +987,7 @@
       </div>`;
     // Retry keeps your progress — same level, same accumulated score.
     document.getElementById("bsr-retry").addEventListener("click", () => { mount.innerHTML = ""; startLevel(); });
-    document.getElementById("bsr-switch").addEventListener("click", () => { mount.innerHTML = ""; state.level = 1; state.score = 0; startLevel(); });
+    document.getElementById("bsr-switch").addEventListener("click", () => { if (saveSlot) saveSlot.clear(); mount.innerHTML = ""; state.level = 1; state.score = 0; startLevel(); });
     document.getElementById("bsr-home").addEventListener("click", () => { window.location.href = "../games.html"; });
     document.getElementById("bsr-share").addEventListener("click", () => shareCard(msg));
   }
@@ -1100,6 +1102,7 @@
     }
     hideOverlay();
     syncHud();
+    saveProgress();
   }
 
   function nextLevel() {
@@ -1123,12 +1126,46 @@
   }
 
   function startGame() {
+    if (saveSlot) saveSlot.clear();
     state.level = 1;
     state.score = 0;
     state.shield = false;
     state.pendingUpgrades = { fuelBonus: 0, padBonus: 0, slowmo: false, autostab: false };
     document.getElementById("card-mount").innerHTML = "";
     // state.tycoon was chosen on the founder-select screen
+    startLevel();
+  }
+
+  function snapshot() {
+    return {
+      level: state.level,
+      score: state.score,
+      tycoonId: state.tycoon && state.tycoon.id,
+      pendingUpgrades: { ...state.pendingUpgrades },
+      shield: state.shield,
+    };
+  }
+
+  function saveProgress() {
+    if (!saveSlot || !state.started) return;
+    saveSlot.save(snapshot());
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    const tycoon = TYCOONS.find((item) => item.id === data.tycoonId) || TYCOONS[0];
+    state.level = Math.max(1, Number(data.level) || 1);
+    state.score = Math.max(0, Number(data.score) || 0);
+    state.tycoon = tycoon;
+    state.pendingUpgrades = {
+      fuelBonus: Number(data.pendingUpgrades && data.pendingUpgrades.fuelBonus) || 0,
+      padBonus: Number(data.pendingUpgrades && data.pendingUpgrades.padBonus) || 0,
+      slowmo: Boolean(data.pendingUpgrades && data.pendingUpgrades.slowmo),
+      autostab: Boolean(data.pendingUpgrades && data.pendingUpgrades.autostab),
+    };
+    state.shield = Boolean(data.shield);
+    document.getElementById("card-mount").innerHTML = "";
     startLevel();
   }
 
@@ -1141,6 +1178,7 @@
     document.getElementById("card-mount").innerHTML = "";
     renderTycoonSelect();
     showOverlay();
+    if (saveMenu) saveMenu.refresh();
   }
 
   // Build the 3-founder picker into the intro overlay
@@ -1188,6 +1226,20 @@
     document.getElementById("btn-pause").addEventListener("click", pauseGame);
     // Side "Restart" returns to founder select so you can re-pick
     document.getElementById("btn-restart").addEventListener("click", returnToSelect);
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: document.getElementById("btn-primary"),
+        scoreEl: document.getElementById("overlay-score"),
+        continueLabel: "Continue launch",
+        newLabel: "New mission",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Level <strong>${Number(data.level || 1)}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.started && !state.paused);
+    }
     syncHud();
     loop();
   }

@@ -615,6 +615,8 @@
     t: 0,
     lastTime: 0
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create("dont-look-gym-girl", { version: 1 });
+  let saveMenu = null;
 
   // =========================================================================
   // 5. UTILITIES
@@ -1837,6 +1839,7 @@
 
   function startGame() {
     if (state.started) return;
+    if (saveSlot) saveSlot.clear();
     state.started = true;
     state.running = true;
     state.gameOver = false;
@@ -1858,6 +1861,7 @@
     if (state.gameOver) return;
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     state.bustReason = reason;
     state.cam.shake = 0.8;
     state.cam.flash = 1.0;
@@ -1868,6 +1872,7 @@
   function triggerWin() {
     state.won = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     state.cam.flash = 0.6;
     sfx.win();
     RB.recordScore("dont-look-gym-girl", state.score);
@@ -1875,6 +1880,7 @@
   }
 
   function restart() {
+    if (saveSlot) saveSlot.clear();
     document.getElementById("shame-mount").innerHTML = "";
     document.getElementById("gym-banner").style.display = "none";
     document.getElementById("overlay").classList.add("overlay--show");
@@ -3371,9 +3377,87 @@
       document.getElementById("btn-pause").textContent = state.paused ? "Resume" : "Pause";
     });
     document.getElementById("btn-restart").addEventListener("click", restart);
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: document.getElementById("btn-primary"),
+        scoreEl: document.getElementById("overlay-score"),
+        continueLabel: "Continue",
+        newLabel: "New run",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Level <strong>${Number(data.level || 1)}/${LEVELS.length}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver && !state.won);
+    }
     bindTouchControls();
     initFullscreenControls();
     renderPowerButtons();
+  }
+
+  function snapshot() {
+    return JSON.parse(JSON.stringify({
+      level: state.level,
+      levelT: state.levelT,
+      levelPeakSus: state.levelPeakSus,
+      score: state.score,
+      player: state.player,
+      sus: state.sus,
+      fighting: state.fighting,
+      pullTarget: state.pullTarget,
+      girls: state.girls,
+      obstacles: state.obstacles,
+      bruisers: state.bruisers,
+      bottles: state.bottles,
+      patrons: state.patrons,
+      stairs: state.stairs,
+      decor: state.decor,
+      exit: state.exit,
+      floor: state.floor,
+      exitFloor: state.exitFloor,
+      levelStartDist: state.levelStartDist,
+      exitHintT: state.exitHintT,
+      stairCooldown: state.stairCooldown,
+      airpodT: state.airpodT,
+      boyfriendT: state.boyfriendT,
+      decoy: state.decoy,
+      stunT: state.stunT,
+      tripT: state.tripT,
+      knockX: state.knockX,
+      knockY: state.knockY,
+      cam: state.cam,
+      t: state.t,
+    }));
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    Object.assign(state, {
+      ...state,
+      ...data,
+      player: { ...state.player, ...(data.player || {}) },
+      touchJoystick: { active: false, dirX: 0, dirY: 0 },
+      touchEyesClosed: false,
+      girls: Array.isArray(data.girls) ? data.girls : [],
+      obstacles: Array.isArray(data.obstacles) ? data.obstacles : [],
+      bruisers: Array.isArray(data.bruisers) ? data.bruisers : [],
+      bottles: Array.isArray(data.bottles) ? data.bottles : [],
+      patrons: Array.isArray(data.patrons) ? data.patrons : [],
+      stairs: Array.isArray(data.stairs) ? data.stairs : [],
+      decor: Array.isArray(data.decor) ? data.decor : [],
+      running: true,
+      paused: false,
+      gameOver: false,
+      won: false,
+      started: true,
+      lastTime: 0,
+    });
+    document.getElementById("shame-mount").innerHTML = "";
+    document.getElementById("overlay").classList.remove("overlay--show");
+    showBanner("LEVEL " + state.level + " · CONTINUED", 1.4);
+    updateHUD();
   }
 
   if (document.readyState === "loading") {

@@ -485,6 +485,8 @@
   let lastFrame = 0;
   let uid = 0;
   let drag = null;
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   function makeState() {
     return {
@@ -572,15 +574,19 @@
     overloadFillEl.style.width = pct + "%";
   }
 
-  function addLog(text) {
-    state.log.unshift(text);
-    state.log = state.log.slice(0, 5);
+  function renderLog() {
     logEl.innerHTML = "";
     state.log.forEach((entry) => {
       const row = document.createElement("div");
       row.textContent = entry;
       logEl.appendChild(row);
     });
+  }
+
+  function addLog(text) {
+    state.log.unshift(text);
+    state.log = state.log.slice(0, 5);
+    renderLog();
   }
 
   function showEvent(title, line) {
@@ -641,6 +647,10 @@
     return el;
   }
 
+  function templateIndex(template) {
+    return Math.max(0, SLOP.indexOf(template));
+  }
+
   function spawnCard(forcedTemplate) {
     if (state.mode !== "playing") return;
     const maxCards = window.innerWidth < 700 ? MAX_CARDS_MOBILE : MAX_CARDS_DESKTOP;
@@ -673,6 +683,30 @@
     card.y = laneY(lane, card.h);
     state.cards.push(card);
     positionCard(card);
+  }
+
+  function restoreCard(savedCard) {
+    const template = SLOP[Number(savedCard.templateIndex) || 0] || SLOP[0];
+    const card = {
+      id: Number(savedCard.id) || ++uid,
+      template,
+      lane: clamp(Number(savedCard.lane) || 0, 0, laneEls.length - 1),
+      x: Number(savedCard.x) || 0,
+      y: Number(savedCard.y) || laneY(0, 110),
+      w: Number(savedCard.w) || 220,
+      h: Number(savedCard.h) || 110,
+      tilt: Number(savedCard.tilt) || 0,
+      dragging: false,
+      removing: false,
+      el: null,
+    };
+    uid = Math.max(uid, card.id);
+    card.el = createCardElement(card);
+    layerEl.appendChild(card.el);
+    card.w = card.el.offsetWidth || card.w;
+    card.h = card.el.offsetHeight || card.h;
+    positionCard(card);
+    return card;
   }
 
   function spawnBotFlood(count) {
@@ -1015,6 +1049,7 @@
   }
 
   function startRound() {
+    if (saveSlot) saveSlot.clear();
     cancelAnimationFrame(rafId);
     clearCards();
     state = makeState();
@@ -1057,6 +1092,7 @@
   function endRound(reason) {
     if (state.mode !== "playing") return;
     state.mode = "over";
+    if (saveSlot) saveSlot.clear();
     cancelAnimationFrame(rafId);
     if (drag) cleanupDrag();
     deselectCard();
@@ -1109,6 +1145,66 @@
     primaryBtn.onclick = startRound;
     overlayEl.classList.add("is-visible");
     updateHud();
+    if (saveMenu) saveMenu.refresh();
+  }
+
+  function snapshot() {
+    return {
+      score: state.score,
+      combo: state.combo,
+      bestCombo: state.bestCombo,
+      mistakes: state.mistakes,
+      overload: state.overload,
+      timeLeft: state.timeLeft,
+      spawnIn: state.spawnIn,
+      nextLane: state.nextLane,
+      cards: state.cards
+        .filter((card) => !card.removing)
+        .map((card) => ({
+          id: card.id,
+          templateIndex: templateIndex(card.template),
+          lane: card.lane,
+          x: card.x,
+          y: card.y,
+          w: card.w,
+          h: card.h,
+          tilt: card.tilt,
+        })),
+      log: state.log.slice(0, 5),
+    };
+  }
+
+  function saveProgress() {
+    if (!saveSlot || state.mode !== "playing") return;
+    saveSlot.save(snapshot());
+  }
+
+  function restoreRound(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    cancelAnimationFrame(rafId);
+    clearCards();
+    state = makeState();
+    state.mode = "playing";
+    state.score = Number(data.score) || 0;
+    state.combo = Number(data.combo) || 0;
+    state.bestCombo = Number(data.bestCombo) || 0;
+    state.mistakes = Number(data.mistakes) || 0;
+    state.overload = clamp(Number(data.overload) || START_OVERLOAD, 0, 99);
+    state.timeLeft = clamp(Number(data.timeLeft) || ROUND_MS, 1000, ROUND_MS);
+    state.startedAt = performance.now() - (ROUND_MS - state.timeLeft);
+    state.spawnIn = Math.max(350, Number(data.spawnIn) || OPENING_SPAWN_DELAY);
+    state.nextLane = Number(data.nextLane) || 0;
+    state.log = Array.isArray(data.log) && data.log.length ? data.log.slice(0, 5) : ["Restored saved shift."];
+    renderLog();
+    state.cards = Array.isArray(data.cards) ? data.cards.map(restoreCard) : [];
+    overlayEl.classList.remove("is-visible");
+    machine.classList.remove("is-shaking", "is-label-blind", "is-meltdown");
+    clearShuffle();
+    updateHud();
+    frameMobileMachine();
+    lastFrame = performance.now();
+    rafId = requestAnimationFrame(loop);
   }
 
   binEls.forEach((bin) => {
@@ -1123,6 +1219,20 @@
   });
 
   newBtn.addEventListener("click", startRound);
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: primaryBtn,
+      scoreEl: overlayScore,
+      continueLabel: "Continue shift",
+      newLabel: "New shift",
+      onContinue: restoreRound,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Score <strong>${Math.round(Number(data.score || 0)).toLocaleString()}</strong> · ${Math.ceil(Number(data.timeLeft || 0) / 1000)}s left`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.mode === "playing");
+  }
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && overlayEl.classList.contains("is-visible")) {
@@ -1149,6 +1259,7 @@
         positionCard(card);
       }
     });
+    saveProgress();
   });
 
   window.__SLOP = {

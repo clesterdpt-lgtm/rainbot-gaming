@@ -33,6 +33,7 @@
   const CEIL_Y = 3.0;
 
   const TOTAL_LOOPS = 8;
+  const SAVE_KEY = "rainbot_game_save:again";
 
   /* ------------------------------------------------ dom */
   const $ = (id) => document.getElementById(id);
@@ -54,6 +55,24 @@
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
   const dist2d = (ax, az, bx, bz) => Math.hypot(ax - bx, az - bz);
+  function readSave() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+      return saved && saved.version === 1 ? saved : null;
+    } catch (error) {
+      return null;
+    }
+  }
+  function writeSave(data) {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({ version: 1, savedAt: Date.now(), data }));
+    } catch (error) {}
+  }
+  function clearSave() {
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch (error) {}
+  }
 
   /* ============================================================
      three.js loader — CDN with fallback, graceful failure
@@ -1169,6 +1188,13 @@
     const stats = { t0: 0, sightings: 0 };
     let state = "boot"; // boot | play | paused | end
     let shakeAmp = 0;
+    const continueBtn = document.createElement("button");
+    continueBtn.className = "ebtn";
+    continueBtn.id = "btn-continue";
+    continueBtn.type = "button";
+    continueBtn.textContent = "continue";
+    continueBtn.hidden = true;
+    el.enter.insertAdjacentElement("beforebegin", continueBtn);
 
     /* -------------------------------------------- fx helpers */
     function shake(a) { shakeAmp = Math.max(shakeAmp, a); }
@@ -1285,6 +1311,7 @@
 
     function endGame() {
       state = "end";
+      clearSave();
       document.exitPointerLock && document.exitPointerLock();
       const secs = ((performance.now() - stats.t0) / 1000) | 0;
       const mm = (secs / 60) | 0, ss = String(secs % 60).padStart(2, "0");
@@ -1633,6 +1660,7 @@
 
     /* -------------------------------------------- screens */
     function startGame() {
+      clearSave();
       if (!sfx.init()) { /* audio may be blocked; the dark still works */ }
       sfx.resume();
       sfx.radioStart(world.radioPos.x, world.radioPos.y, world.radioPos.z);
@@ -1652,6 +1680,55 @@
       }
     }
 
+    function saveProgress() {
+      if (state !== "play" && state !== "transition") return;
+      writeSave({
+        loop: D.loop,
+        player: {
+          x: player.x,
+          z: player.z,
+          yaw: player.yaw,
+          pitch: player.pitch,
+        },
+        sightings: stats.sightings,
+      });
+    }
+
+    function updateContinueButton() {
+      const saved = readSave();
+      continueBtn.hidden = !saved;
+      el.enter.textContent = saved ? "start over" : "enter";
+    }
+
+    function continueGame() {
+      const saved = readSave();
+      const data = saved && saved.data;
+      if (!data) {
+        updateContinueButton();
+        return;
+      }
+      if (!sfx.init()) { /* audio may be blocked; the dark still works */ }
+      sfx.resume();
+      sfx.radioStart(world.radioPos.x, world.radioPos.y, world.radioPos.z);
+      el.boot.classList.remove("scr--show");
+      document.body.classList.add("playing");
+      stats.t0 = performance.now();
+      stats.sightings = Number(data.sightings) || 0;
+      state = "play";
+      D.start(clamp(Number(data.loop) || 0, 0, TOTAL_LOOPS - 1));
+      if (data.player) {
+        player.x = clamp(Number(data.player.x) || START_POS.x, RECT_A.x0, RECT_B.x1);
+        player.z = clamp(Number(data.player.z) || START_POS.z, RECT_A.z0, RECT_A.z1);
+        player.yaw = Number(data.player.yaw) || 0;
+        player.pitch = clamp(Number(data.player.pitch) || 0, -1.45, 1.45);
+        player.vx = 0;
+        player.vz = 0;
+      }
+      FX.fade(false, 900);
+      requestLock();
+      if (isTouch) el.pauseBtn.style.display = "block";
+    }
+
     function openPause() {
       if (state !== "play") return;
       state = "paused";
@@ -1669,9 +1746,10 @@
     }
 
     el.enter.addEventListener("click", startGame);
+    continueBtn.addEventListener("click", continueGame);
     el.resume.addEventListener("click", closePause);
-    el.restart.addEventListener("click", () => location.reload());
-    el.again.addEventListener("click", () => location.reload());
+    el.restart.addEventListener("click", () => { clearSave(); location.reload(); });
+    el.again.addEventListener("click", () => { clearSave(); location.reload(); });
     el.pauseBtn.addEventListener("click", openPause);
     el.vol.value = String(sfx.volume);
     el.vol.addEventListener("input", () => {
@@ -1679,6 +1757,9 @@
       el.volPause.textContent = Math.round(sfx.volume * 100) + "%";
     });
     el.volPause.textContent = Math.round(sfx.volume * 100) + "%";
+    updateContinueButton();
+    setInterval(saveProgress, 2500);
+    window.addEventListener("beforeunload", saveProgress);
 
     document.addEventListener("visibilitychange", () => {
       Input.keys = {};

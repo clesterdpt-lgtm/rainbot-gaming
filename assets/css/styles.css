@@ -337,6 +337,12 @@ body::before {
   border: 2px solid var(--ink); box-shadow: none;
 }
 .btn--ghost:hover { background: var(--ink); color: var(--bg); }
+.rb-save-continue {
+  margin-bottom: 12px;
+}
+.rb-save-continue[hidden] {
+  display: none;
+}
 
 /* ===== Sections ===== */
 section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }

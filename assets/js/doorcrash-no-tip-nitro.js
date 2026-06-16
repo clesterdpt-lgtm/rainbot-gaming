@@ -130,6 +130,8 @@
     lastTime: 0,
     reducedMotion: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const world = {
     renderer: null,
@@ -751,6 +753,20 @@
       state.paused = false;
       startGame();
     });
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: el.primary,
+        scoreEl: el.overlayScore,
+        continueLabel: "Continue delivery",
+        newLabel: "New delivery",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Delivery <strong>${Number(data.delivery || 1)}/${DELIVERIES_TO_WIN}</strong> · Score <strong>${Math.round(Number(data.score || 0)).toLocaleString()}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.ready && state.running && !state.gameOver);
+    }
 
     bindTap(el.left, () => changeLane(-1));
     bindTap(el.right, () => changeLane(1));
@@ -782,6 +798,7 @@
 
   function startGame() {
     if (!state.ready) return;
+    if (saveSlot) saveSlot.clear();
     clearObstacles();
     Object.assign(state, {
       running: true,
@@ -807,6 +824,68 @@
       comboTimer: 0,
       spawnTimer: 0.65,
       eventTimer: 5.5,
+      eventMessageTimer: 0,
+      hitFlash: 0,
+      cameraShake: 0,
+      lastTime: performance.now(),
+    });
+    updateRouteChip();
+    hideOverlay();
+    updateHUD();
+    canvas.focus();
+  }
+
+  function snapshot() {
+    return {
+      delivery: state.delivery,
+      distance: state.distance,
+      score: state.score,
+      speed: state.speed,
+      targetLane: state.targetLane,
+      lane: state.lane,
+      carX: state.carX,
+      carY: state.carY,
+      carVY: state.carVY,
+      nitro: state.nitro,
+      heat: state.heat,
+      bag: state.bag,
+      patience: state.patience,
+      tip: state.tip,
+      streak: state.streak,
+      comboTimer: state.comboTimer,
+      spawnTimer: state.spawnTimer,
+      eventTimer: state.eventTimer,
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!state.ready || !data) return;
+    clearObstacles();
+    Object.assign(state, {
+      running: true,
+      paused: false,
+      gameOver: false,
+      delivery: clamp(Number(data.delivery) || 1, 1, DELIVERIES_TO_WIN),
+      distance: Math.max(0, Number(data.distance) || 0),
+      score: Number(data.score) || 0,
+      speed: Number(data.speed) || 26,
+      targetLane: clamp(Number(data.targetLane) || 1, 0, LANES.length - 1),
+      lane: clamp(Number(data.lane) || 1, 0, LANES.length - 1),
+      carX: Number(data.carX) || 0,
+      carY: Number(data.carY) || 0,
+      carVY: Number(data.carVY) || 0,
+      nitro: clamp(Number(data.nitro) || 100, 0, 100),
+      boostHeld: false,
+      boostActive: false,
+      heat: clamp(Number(data.heat) || 100, 0, 100),
+      bag: clamp(Number(data.bag) || 100, 0, 100),
+      patience: clamp(Number(data.patience) || 100, 0, 100),
+      tip: Math.max(0, Number(data.tip) || 6),
+      streak: Number(data.streak) || 0,
+      comboTimer: Number(data.comboTimer) || 0,
+      spawnTimer: Math.max(0.25, Number(data.spawnTimer) || 0.65),
+      eventTimer: Math.max(1, Number(data.eventTimer) || 5.5),
       eventMessageTimer: 0,
       hitFlash: 0,
       cameraShake: 0,
@@ -1122,6 +1201,7 @@
   function winGame() {
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     const finalScore = Math.round(state.score + state.heat * 13 + state.bag * 17 + state.tip * 155);
     state.score = finalScore;
     const high = api.recordScore(GAME_ID, finalScore);
@@ -1137,6 +1217,7 @@
   function endGame(title, sub) {
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     const finalScore = Math.round(state.score);
     const high = api.recordScore(GAME_ID, finalScore);
     updateHUD();

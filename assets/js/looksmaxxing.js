@@ -57,6 +57,8 @@
     scoreDeltaTimer: 0,
     ending: false,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create("looksmax", { version: 1 });
+  let saveMenu = null;
 
   // ----- Stat metadata -----
   const STAT_META = [
@@ -353,6 +355,7 @@
     state.gameOver = true;
     state.running = false;
     state.won = won;
+    if (saveSlot) saveSlot.clear();
     const finalScore = Math.round(state.score + getLooksmax() * 10);
     RB.recordScore("looksmax", finalScore);
     const high = RB.getHighScore("looksmax");
@@ -1314,6 +1317,7 @@
   function hideOverlay() { document.getElementById("overlay").classList.remove("overlay--show"); }
 
   function startGame() {
+    if (saveSlot) saveSlot.clear();
     state.running = true;
     state.paused = false;
     state.gameOver = false;
@@ -1360,6 +1364,7 @@
   document.getElementById("btn-primary").addEventListener("click", startGame);
   document.getElementById("btn-pause").addEventListener("click", pauseGame);
   document.getElementById("btn-restart").addEventListener("click", () => {
+    if (saveSlot) saveSlot.clear();
     state.running = false;
     state.paused = false;
     state.gameOver = true;
@@ -1367,6 +1372,7 @@
     if (rafId) cancelAnimationFrame(rafId);
     document.getElementById("btn-pause").textContent = "Pause";
     showOverlay("💪 LOOKSMAXXING GRINDSET", "Restart the 30-day mirror arc?", "Start the grind");
+    if (saveMenu) saveMenu.refresh();
   });
   const grindButton = document.getElementById("btn-grind-action");
   if (grindButton) {
@@ -1378,6 +1384,49 @@
   }
 
   RB.subscribe(renderPowerups);
+  function snapshot() {
+    const eventIndex = state.currentEvent ? EVENTS.indexOf(state.currentEvent) : -1;
+    return {
+      ...state,
+      currentEvent: eventIndex,
+      particles: state.particles.slice(0, 80),
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    const eventIndex = Number(data.currentEvent);
+    Object.assign(state, {
+      ...data,
+      stats: { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0, ...(data.stats || {}) },
+      particles: Array.isArray(data.particles) ? data.particles : [],
+      currentEvent: eventIndex >= 0 ? EVENTS[eventIndex] || null : null,
+      running: true,
+      paused: false,
+      gameOver: false,
+      lastTime: 0,
+    });
+    hideOverlay();
+    updateHUD();
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(loop);
+  }
+
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: document.getElementById("btn-primary"),
+      scoreEl: document.getElementById("overlay-score"),
+      continueLabel: "Continue grind",
+      newLabel: "New grind",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Day <strong>${Number(data.day || 1)}/${TOTAL_DAYS}</strong> · Score <strong>${Math.floor(Number(data.score || 0)).toLocaleString()}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+  }
   updateHUD();
   renderPowerups();
   draw();

@@ -814,6 +814,8 @@
       virtualCurl: false,
     },
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const world = {
     renderer: null,
@@ -4670,6 +4672,20 @@
     });
     el.pause.addEventListener("click", togglePause);
     el.restart.addEventListener("click", startGame);
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: el.primary,
+        scoreEl: el.overlayScore,
+        continueLabel: "Continue specimen",
+        newLabel: "New specimen",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Stage <strong>${Number(data.stage || 1)}</strong> · Chaos <strong>${format(Number(data.chaos || 0))}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.ready && state.running && !state.gameOver);
+    }
     if (el.sound) el.sound.addEventListener("click", toggleSound);
     if (el.store) el.store.addEventListener("click", openStore);
     if (el.advance) el.advance.addEventListener("click", acceptStageAdvance);
@@ -4868,6 +4884,7 @@
 
   function startGame() {
     if (!state.ready) return;
+    if (saveSlot) saveSlot.clear();
     ensureAudio();
     resetGame(true);
     hideOverlay();
@@ -4875,6 +4892,112 @@
     anchorGameViewport();
     canvas.focus();
     announceGoal();
+  }
+
+  function snapshot() {
+    return {
+      clock: state.clock,
+      sessionTime: state.sessionTime,
+      chaos: state.chaos,
+      snacks: state.snacks,
+      bonks: state.bonks,
+      ringFed: state.ringFed,
+      bacteriaBashed: state.bacteriaBashed,
+      waterMoved: state.waterMoved,
+      propsBroken: state.propsBroken,
+      combo: state.combo,
+      comboTimer: state.comboTimer,
+      lastComboAction: state.lastComboAction,
+      hydrate: state.hydrate,
+      stage: state.stage,
+      level: state.level,
+      xp: state.xp,
+      goalIndex: state.goalIndex,
+      promptTimer: state.promptTimer,
+      dashCooldown: state.dashCooldown,
+      maxCombo: state.maxCombo,
+      goalsCleared: state.goalsCleared,
+      stageChaos: state.stageChaos,
+      stageBonks: state.stageBonks,
+      stageHazards: state.stageHazards,
+      stageCollects: state.stageCollects,
+      stageResearchScans: state.stageResearchScans,
+      stageAdvanceAvailable: state.stageAdvanceAvailable,
+      pendingStage: state.pendingStage,
+      researchCameraUnlocked: state.researchCameraUnlocked,
+      zoneId: state.zoneId,
+      zoneName: state.zoneName,
+      zonesVisited: Array.from(state.zonesVisited),
+      miniComplete: Array.from(state.miniComplete),
+      toysUsed: Array.from(state.toysUsed),
+      landmarksFound: Array.from(state.landmarksFound),
+      desiccationActive: state.desiccationActive,
+      player: { ...state.player },
+      camera: { ...state.camera },
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!state.ready || !data) return;
+    resetGame(false);
+    const maxStage = Math.max(...Object.keys(LEVEL_CONFIGS).map((key) => Number(key) || 1));
+    const stage = Math.max(1, Math.min(maxStage, Number(data.stage) || 1));
+    if (stage !== state.stage) transitionToStage(stage);
+    Object.assign(state, {
+      running: true,
+      paused: false,
+      gameOver: false,
+      clock: Number(data.clock) || 0,
+      sessionTime: Math.max(0, Number(data.sessionTime) || 0),
+      chaos: Number(data.chaos) || 0,
+      snacks: Number(data.snacks) || 0,
+      bonks: Number(data.bonks) || 0,
+      ringFed: Number(data.ringFed) || 0,
+      bacteriaBashed: Number(data.bacteriaBashed) || 0,
+      waterMoved: Number(data.waterMoved) || 0,
+      propsBroken: Number(data.propsBroken) || 0,
+      combo: Number(data.combo) || 0,
+      comboTimer: Number(data.comboTimer) || 0,
+      lastComboAction: data.lastComboAction || "",
+      hydrate: clamp(Number(data.hydrate) || 100, 0, 100),
+      stage,
+      level: Math.max(1, Number(data.level) || 1),
+      xp: Math.max(0, Number(data.xp) || 0),
+      goalIndex: Math.max(0, Number(data.goalIndex) || firstGoalIndexForStage(stage)),
+      promptTimer: Number(data.promptTimer) || 2,
+      dashCooldown: Math.max(0, Number(data.dashCooldown) || 0),
+      maxCombo: Number(data.maxCombo) || 0,
+      goalsCleared: Number(data.goalsCleared) || 0,
+      stageChaos: Number(data.stageChaos) || 0,
+      stageBonks: Number(data.stageBonks) || 0,
+      stageHazards: Number(data.stageHazards) || 0,
+      stageCollects: Number(data.stageCollects) || 0,
+      stageResearchScans: Number(data.stageResearchScans) || 0,
+      stageAdvanceAvailable: Boolean(data.stageAdvanceAvailable),
+      pendingStage: Number(data.pendingStage) || 0,
+      researchCameraUnlocked: Boolean(data.researchCameraUnlocked),
+      zoneId: data.zoneId || "",
+      zoneName: data.zoneName || levelConfig(stage).name,
+      zonesVisited: new Set(Array.isArray(data.zonesVisited) ? data.zonesVisited : []),
+      miniComplete: new Set(Array.isArray(data.miniComplete) ? data.miniComplete : []),
+      toysUsed: new Set(Array.isArray(data.toysUsed) ? data.toysUsed : []),
+      landmarksFound: new Set(Array.isArray(data.landmarksFound) ? data.landmarksFound : []),
+      desiccationActive: Boolean(data.desiccationActive),
+      lastTime: performance.now(),
+    });
+    Object.assign(state.player, data.player || {});
+    Object.assign(state.camera, data.camera || {});
+    world.landmarks.forEach((landmark) => {
+      landmark.userData.found = state.landmarksFound.has(landmark.userData.id);
+      landmark.scale.setScalar(landmark.userData.found ? 0.72 : 1);
+    });
+    updatePlayerTransform(0);
+    updateGoalText();
+    updateHUD();
+    hideOverlay();
+    syncPlayMode();
+    canvas.focus();
   }
 
   function syncPlayMode() {
@@ -6536,6 +6659,7 @@
   function endGame(title, reason) {
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     syncPlayMode();
     const finalScore = Math.floor(state.chaos + state.snacks * 80 + state.ringFed * 500 + state.miniComplete.size * 300 + state.zonesVisited.size * 150 + state.toysUsed.size * 160 + state.landmarksFound.size * 420 + state.maxCombo * 35);
     const high = api.recordScore(GAME_ID, finalScore);
@@ -6550,6 +6674,7 @@
   function winGame() {
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     state.goalsCleared = Math.max(state.goalsCleared, GOALS.length);
     syncPlayMode();
     const finalScore = Math.floor(state.chaos + state.snacks * 120 + state.ringFed * 650 + state.hydrate * 8 + state.miniComplete.size * 420 + state.zonesVisited.size * 220 + state.toysUsed.size * 220 + state.landmarksFound.size * 520 + state.maxCombo * 45);

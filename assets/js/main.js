@@ -146,6 +146,125 @@ function openProModal(defaultPlan = "monthly") {
   backdrop.querySelector("#rb-close-pro").addEventListener("click", () => backdrop.remove());
 }
 
+const RBGameSaves = (() => {
+  const PREFIX = "rainbot_game_save:";
+
+  function storageKey(gameId) {
+    return PREFIX + gameId;
+  }
+
+  function readRaw(key) {
+    try {
+      return JSON.parse(localStorage.getItem(key));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeRaw(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function clearRaw(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {}
+  }
+
+  function formatSavedAt(value) {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return "Saved progress";
+    return "Saved " + date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function create(gameId, options = {}) {
+    const key = storageKey(gameId);
+    const version = options.version || 1;
+    let timer = 0;
+
+    const slot = {
+      key,
+      read() {
+        const saved = readRaw(key);
+        if (!saved || saved.version !== version || !saved.data) return null;
+        return saved;
+      },
+      has() {
+        return !!this.read();
+      },
+      save(data, meta = {}) {
+        if (!data || typeof data !== "object") return false;
+        return writeRaw(key, {
+          version,
+          savedAt: Date.now(),
+          meta,
+          data,
+        });
+      },
+      clear() {
+        clearRaw(key);
+      },
+      startAutosave(getData, shouldSave = () => true, intervalMs = 2500) {
+        const tick = () => {
+          if (shouldSave()) this.save(getData());
+        };
+        if (timer) clearInterval(timer);
+        timer = setInterval(tick, intervalMs);
+        window.addEventListener("beforeunload", tick);
+        return tick;
+      },
+      attachButtons(config) {
+        const primary = config.primary;
+        if (!primary) return null;
+        let continueButton = config.continueButton || document.getElementById(config.continueId || `${gameId}-continue-save`);
+        if (!continueButton) {
+          continueButton = document.createElement("button");
+          continueButton.type = "button";
+          continueButton.id = config.continueId || `${gameId}-continue-save`;
+          continueButton.className = config.continueClass || "btn btn--secondary rb-save-continue";
+          primary.insertAdjacentElement("beforebegin", continueButton);
+        }
+
+        const refresh = () => {
+          const saved = this.read();
+          continueButton.hidden = !saved;
+          if (saved) {
+            continueButton.textContent = config.continueLabel || "Continue";
+            if (config.newLabel) primary.textContent = config.newLabel;
+            if (config.scoreEl && config.summary) {
+              config.scoreEl.style.display = "block";
+              config.scoreEl.innerHTML = config.summary(saved) || formatSavedAt(saved.savedAt);
+            }
+          }
+        };
+
+        continueButton.addEventListener("click", () => {
+          const saved = this.read();
+          if (!saved) {
+            refresh();
+            return;
+          }
+          config.onContinue(saved);
+        });
+
+        refresh();
+        return { button: continueButton, refresh };
+      },
+    };
+
+    return slot;
+  }
+
+  return { create, formatSavedAt };
+})();
+
+window.RBGameSaves = RBGameSaves;
+
 let gameCanvasFitFrame = 0;
 
 function scheduleGameCanvasFit() {

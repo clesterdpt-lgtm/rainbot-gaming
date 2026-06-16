@@ -18,6 +18,7 @@
   const ROAD_HALF = ROAD_WIDTH / 2;
   const SIDEWALK_WIDTH = 2.25;
   const SIDEWALK_HALF = SIDEWALK_WIDTH / 2;
+  const GAME_ID = "unhoused-and-unhinged";
   const SAVE_KEY = "rainbot-unhoused-topdown-high";
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -512,6 +513,8 @@
     objective: "Earn $20 before nightfall",
     nearestPrompt: "Interact",
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const player = {
     x: points.start.x,
@@ -1684,6 +1687,7 @@
   }
 
   function startGame() {
+    if (saveSlot && !state.running) saveSlot.clear();
     if (state.ended) {
       resetGame(true);
       return;
@@ -1714,6 +1718,7 @@
   function endGame(title, sub) {
     state.running = false;
     state.ended = true;
+    if (saveSlot) saveSlot.clear();
     state.score = Math.round(state.cash * 7 + state.hype * 2 + state.waveKills * 30 - state.heat);
     state.high = Math.max(state.high, state.score);
     localStorage.setItem(SAVE_KEY, String(state.high));
@@ -2994,7 +2999,10 @@
       startGame();
     });
     els.pause?.addEventListener("click", () => setPaused(!state.paused));
-    els.restart?.addEventListener("click", () => resetGame(true));
+    els.restart?.addEventListener("click", () => {
+      if (saveSlot) saveSlot.clear();
+      resetGame(true);
+    });
     els.actionGrid?.addEventListener("click", (event) => {
       const button = event.target.closest("[data-action]");
       if (button) {
@@ -3019,6 +3027,98 @@
     bindActionTouch("touch-act", interact);
     bindTouchStick();
     bindFullscreen();
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: els.primary,
+        scoreEl: els.overlayScore,
+        continueLabel: "Continue run",
+        newLabel: "New run",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Cycle <strong>${Number(data.cycle || 1)}</strong> · Cash <strong>$${Number(data.cash || 0).toFixed(2)}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.running && !state.ended);
+    }
+  }
+
+  function snapshot() {
+    return {
+      phase: state.phase,
+      cycle: state.cycle,
+      phaseTime: state.phaseTime,
+      cash: state.cash,
+      heat: state.heat,
+      energy: state.energy,
+      health: state.health,
+      thirst: state.thirst,
+      hunger: state.hunger,
+      morale: state.morale,
+      hype: state.hype,
+      arrest: state.arrest,
+      score: state.score,
+      action: state.action,
+      inventory: { ...state.inventory },
+      tasks: { ...state.tasks },
+      cooldowns: { ...state.cooldowns },
+      waveTarget: state.waveTarget,
+      waveKills: state.waveKills,
+      objective: state.objective,
+      player: {
+        x: player.x,
+        z: player.z,
+        y: player.y,
+        facing: { ...player.facing },
+        stun: player.stun,
+      },
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    resetGame(false);
+    Object.assign(state, {
+      running: true,
+      paused: false,
+      ended: false,
+      phase: data.phase === "night" ? "night" : "day",
+      cycle: Math.max(1, Number(data.cycle) || 1),
+      phaseTime: Math.max(0, Number(data.phaseTime) || 0),
+      cash: Number(data.cash) || 0,
+      heat: clamp(Number(data.heat) || 0, 0, 100),
+      energy: clamp(Number(data.energy) || 100, 0, 100),
+      health: clamp(Number(data.health) || state.maxHealth, 0, state.maxHealth),
+      thirst: clamp(Number(data.thirst) || 0, 0, 100),
+      hunger: clamp(Number(data.hunger) || 0, 0, 100),
+      morale: clamp(Number(data.morale) || 0, 0, 100),
+      hype: Math.max(0, Number(data.hype) || 0),
+      arrest: clamp(Number(data.arrest) || 0, 0, 100),
+      score: Number(data.score) || 0,
+      action: data.action || "dance",
+      inventory: { ...state.inventory, ...(data.inventory || {}) },
+      tasks: { ...state.tasks, ...(data.tasks || {}) },
+      cooldowns: { ...state.cooldowns, ...(data.cooldowns || {}) },
+      waveTarget: Number(data.waveTarget) || 8,
+      waveKills: Number(data.waveKills) || 0,
+      objective: data.objective || "Earn $20 before nightfall",
+    });
+    Object.assign(player, {
+      x: Number(data.player && data.player.x) || points.start.x,
+      z: Number(data.player && data.player.z) || points.start.z,
+      y: Number(data.player && data.player.y) || 0,
+      stun: Number(data.player && data.player.stun) || 0,
+    });
+    if (data.player && data.player.facing) {
+      player.facing.x = Number(data.player.facing.x) || 0;
+      player.facing.z = Number(data.player.facing.z) || -1;
+    }
+    setAction(state.action);
+    updateHUD();
+    els.overlay?.classList.remove("overlay--show");
+    canvas.focus({ preventScroll: true });
+    logLine("Saved block restored.");
   }
 
   // On-canvas touch action buttons (shown on touch devices and in max screen).

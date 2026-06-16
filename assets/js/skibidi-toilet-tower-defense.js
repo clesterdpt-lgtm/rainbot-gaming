@@ -409,6 +409,8 @@
     screenShake: 0,
     flash: 0,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   function clamp(v, a, b) {
     return Math.max(a, Math.min(b, v));
@@ -469,6 +471,7 @@
       `${activeLevel.intro}<br><br><strong>Hold ${activeLevel.name} for ${activeLevel.waves} waves.</strong>`,
       `Start ${activeLevel.hudName}`,
     );
+    if (saveMenu) saveMenu.refresh();
   }
 
   function selectLevel(id) {
@@ -506,6 +509,7 @@
   }
 
   function resetGame() {
+    if (saveSlot) saveSlot.clear();
     state.running = true;
     state.paused = false;
     state.gameOver = false;
@@ -856,6 +860,7 @@
     state.gameOver = true;
     state.won = won;
     state.waveActive = false;
+    if (saveSlot) saveSlot.clear();
     const high = api.recordScore(scoreKey(), state.score);
     updateHUD();
     if (won) {
@@ -1867,6 +1872,46 @@
     });
   }
 
+  function snapshot() {
+    return JSON.parse(JSON.stringify({
+      activeLevelId: activeLevel.id,
+      state: {
+        ...state,
+        particles: state.particles.slice(0, 80),
+        floats: state.floats.slice(0, 80),
+      },
+    }));
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    const savedState = data && data.state;
+    if (!savedState) return;
+    const level = LEVELS.find((item) => item.id === data.activeLevelId) || LEVELS[0];
+    activeLevel = level;
+    rebuildPathMetrics();
+    Object.assign(state, {
+      ...savedState,
+      towers: Array.isArray(savedState.towers) ? savedState.towers : [],
+      enemies: Array.isArray(savedState.enemies) ? savedState.enemies : [],
+      projectiles: Array.isArray(savedState.projectiles) ? savedState.projectiles : [],
+      particles: Array.isArray(savedState.particles) ? savedState.particles : [],
+      floats: Array.isArray(savedState.floats) ? savedState.floats : [],
+      queue: Array.isArray(savedState.queue) ? savedState.queue : [],
+      running: true,
+      paused: false,
+      gameOver: false,
+      lastTime: 0,
+    });
+    hideOverlay();
+    updateHUD();
+    updateLevelSelect();
+    updateShop();
+    updateInspector();
+    if (!rafId) rafId = requestAnimationFrame(loop);
+    draw();
+  }
+
   function selectType(kind) {
     state.selectedType = kind;
     state.selectedTowerId = null;
@@ -1875,6 +1920,21 @@
   }
 
   bindEvents();
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: el.primary,
+      scoreEl: el.overlayScore,
+      continueLabel: "Continue defense",
+      newLabel: "New defense",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        const savedState = data.state || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Wave <strong>${Number(savedState.wave || 1)}</strong> · Score <strong>${format(Number(savedState.score || 0))}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+  }
   updateHUD();
   updateInspector();
   showLevelIntro();

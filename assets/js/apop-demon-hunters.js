@@ -77,6 +77,8 @@
     nextStage: 0,
     defeated: 0,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create("apop", { version: 1 });
+  let saveMenu = null;
 
   // ----- Player -----
   const player = {
@@ -1866,6 +1868,7 @@
     state.gameOver = true;
     state.won = won;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     RB.recordScore("apop", state.score);
     updateHUD();
     showOverlayEnd(won);
@@ -1887,6 +1890,7 @@
   function hideOverlay() { document.getElementById("overlay").classList.remove("overlay--show"); }
 
   function startGame() {
+    if (saveSlot) saveSlot.clear();
     STAGES = buildStages();
     state.running = true;
     state.paused = false;
@@ -2050,6 +2054,7 @@
   document.getElementById("btn-primary").addEventListener("click", startGame);
   document.getElementById("btn-pause").addEventListener("click", pauseGame);
   document.getElementById("btn-restart").addEventListener("click", () => {
+    if (saveSlot) saveSlot.clear();
     state.running = false;
     state.gameOver = false;
     const ov = document.getElementById("overlay");
@@ -2058,9 +2063,75 @@
     document.getElementById("overlay-score").style.display = "none";
     document.getElementById("btn-primary").textContent = "Take the stage";
     ov.classList.add("overlay--show");
+    if (saveMenu) saveMenu.refresh();
   });
 
   const OVERLAY_INTRO = document.getElementById("overlay-sub") ? document.getElementById("overlay-sub").innerHTML : "";
+
+  function snapshot() {
+    return {
+      stage: state.stage,
+      score: state.score,
+      combo: state.combo,
+      hp: state.hp,
+      maxHp: state.maxHp,
+      mog: state.mog,
+      defeated: state.defeated,
+      player: {
+        x: player.x,
+        y: player.y,
+        vx: player.vx,
+        vy: player.vy,
+        facing: player.facing,
+      },
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    STAGES = buildStages();
+    state.running = true;
+    state.paused = false;
+    state.gameOver = false;
+    state.won = false;
+    state.started = true;
+    state.score = Number(data.score) || 0;
+    state.combo = Number(data.combo) || 0;
+    state.hp = Math.max(1, Number(data.hp) || 100);
+    state.maxHp = Math.max(1, Number(data.maxHp) || 100);
+    state.mog = Math.max(0, Math.min(1, Number(data.mog) || 0));
+    state.defeated = Number(data.defeated) || 0;
+    state.lastTime = 0;
+    state.transitioning = false;
+    state.transition = 0;
+    loadStage(Math.max(1, Math.min(stageCount(), Number(data.stage) || 1)));
+    if (data.player) {
+      player.x = Number(data.player.x) || player.x;
+      player.y = Number(data.player.y) || player.y;
+      player.vx = Number(data.player.vx) || 0;
+      player.vy = Number(data.player.vy) || 0;
+      player.facing = Number(data.player.facing) || player.facing;
+    }
+    hideOverlay();
+    updateHUD();
+    canvas.focus();
+  }
+
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: document.getElementById("btn-primary"),
+      scoreEl: document.getElementById("overlay-score"),
+      continueLabel: "Continue stage",
+      newLabel: "New run",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Stage <strong>${Number(data.stage || 1)}/${stageCount()}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+  }
 
   // ----- Main loop -----
   function loop(time) {

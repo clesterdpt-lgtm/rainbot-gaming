@@ -137,6 +137,8 @@
     placedTable: false,
     sigmaForged: false,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   // input
   const keys = {};
@@ -1299,12 +1301,14 @@
 
   function startGame() {
     if (state.started) return;
+    if (saveSlot) saveSlot.clear();
     state.started = true; state.paused = false; state.over = false;
     if (overlay) overlay.classList.remove("overlay--show");
     canvas.focus();
   }
 
   function restart() {
+    if (saveSlot) saveSlot.clear();
     cancelAnimationFrame(raf); raf = 0; last = 0;
     initGame();
     state.started = true;
@@ -1331,6 +1335,64 @@
     rebuildLight();
     updateCamera();
     syncHud();
+  }
+
+  function snapshot() {
+    return {
+      started: state.started,
+      over: state.over,
+      paused: state.paused,
+      crafting: state.crafting,
+      world: Array.from(state.world),
+      torches: Array.from(state.torches),
+      player: state.player ? { ...state.player } : null,
+      mobs: state.mobs.map((mob) => ({ ...mob })),
+      floats: state.floats.slice(0, 50),
+      particles: state.particles.slice(0, 100),
+      hotbar: state.hotbar.map((item) => (item ? { ...item } : item)),
+      selected: state.selected,
+      time: state.time,
+      day: state.day,
+      nightsSurvived: state.nightsSurvived,
+      mined: state.mined,
+      score: state.score,
+      mode: state.mode,
+      placedTable: state.placedTable,
+      sigmaForged: state.sigmaForged,
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data || !Array.isArray(data.world) || data.world.length !== state.world.length) return;
+    state.world.set(data.world);
+    state.torches = new Set(Array.isArray(data.torches) ? data.torches : []);
+    state.player = data.player ? { ...data.player } : state.player;
+    state.mobs = Array.isArray(data.mobs) ? data.mobs.map((mob) => ({ ...mob })) : [];
+    state.floats = Array.isArray(data.floats) ? data.floats : [];
+    state.particles = Array.isArray(data.particles) ? data.particles : [];
+    state.hotbar = Array.isArray(data.hotbar) ? data.hotbar.map((item) => (item ? { ...item } : item)) : state.hotbar;
+    state.selected = Number(data.selected) || 0;
+    state.time = Number(data.time) || 0.18;
+    state.day = Number(data.day) || 1;
+    state.nightsSurvived = Number(data.nightsSurvived) || 0;
+    state.mined = Number(data.mined) || 0;
+    state.score = Number(data.score) || 0;
+    state.mode = data.mode === "place" ? "place" : "mine";
+    state.placedTable = Boolean(data.placedTable);
+    state.sigmaForged = Boolean(data.sigmaForged);
+    state.started = true;
+    state.over = false;
+    state.paused = false;
+    state.crafting = false;
+    rebuildSkyAll();
+    rebuildLight();
+    updateCamera();
+    updateModeButtons();
+    syncHud();
+    if (craftPanel) craftPanel.classList.remove("is-open");
+    if (overlay) overlay.classList.remove("overlay--show");
+    canvas.focus();
   }
 
   // ============================================================
@@ -1391,6 +1453,20 @@
   initGame();
   updateModeButtons();
   raf = requestAnimationFrame(frame);
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: btnPrimary,
+      scoreEl: document.getElementById("overlay-score"),
+      continueLabel: "Continue world",
+      newLabel: "New world",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Day <strong>${Number(data.day || 1)}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.started && !state.over);
+  }
 
   // Debug hook (convention: window.__RIZZ)
   window.__RIZZ = {

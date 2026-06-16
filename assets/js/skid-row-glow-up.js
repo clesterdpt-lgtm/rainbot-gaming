@@ -169,6 +169,8 @@
     messageTimer: 0,
     lastTime: 0,
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -259,6 +261,7 @@
 
   function startGame() {
     if (state.running && !state.gameOver) return;
+    if (saveSlot) saveSlot.clear();
     state.running = true;
     state.paused = false;
     state.gameOver = false;
@@ -402,6 +405,7 @@
   function endGame(title, sub, won = false) {
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     const finalScore = Math.round(state.likes + state.style * 420 + state.respect * 800 + state.posts * 1500);
     const isHigh = api.recordScore(GAME_ID, finalScore);
     const high = api.getHighScore(GAME_ID);
@@ -2016,8 +2020,10 @@
     [el.female, el.sideFemale].forEach((button) => button.addEventListener("click", () => chooseGender("female")));
     el.pause.addEventListener("click", togglePause);
     el.restart.addEventListener("click", () => {
+      if (saveSlot) saveSlot.clear();
       reset(true);
       showOverlay("SKID ROW GLOW-UP", "Pick a participant, build the look, and keep the comments from turning into a courtroom.", "Start shoot");
+      if (saveMenu) saveMenu.refresh();
     });
     el.postMobile.addEventListener("click", postReel);
 
@@ -2052,6 +2058,51 @@
     bind();
     reset(false);
     showOverlay("SKID ROW GLOW-UP", "Pick a consenting adult participant, build the look, and keep the comments from turning into a courtroom.", "Start shoot");
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: el.primary,
+        scoreEl: el.overlayScore,
+        continueLabel: "Continue shoot",
+        newLabel: "New shoot",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Posts <strong>${Number(data.posts || 0)}/${POSTS_TO_END}</strong> · Likes <strong>${moneyLikes(Number(data.likes || 0))}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+    }
+  }
+
+  function snapshot() {
+    return JSON.parse(JSON.stringify({
+      ...state,
+      particles: state.particles.slice(0, 80),
+      floats: state.floats.slice(0, 80),
+    }));
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data) return;
+    Object.assign(state, {
+      ...data,
+      look: { hair: 0, makeup: 0, outfit: 0, accessory: 0, backdrop: 0, ...(data.look || {}) },
+      feed: Array.isArray(data.feed) ? data.feed : [],
+      lastComment: Array.isArray(data.lastComment) ? data.lastComment : ["Producer", "Shoot restored."],
+      particles: Array.isArray(data.particles) ? data.particles : [],
+      floats: Array.isArray(data.floats) ? data.floats : [],
+      running: true,
+      paused: false,
+      gameOver: false,
+      lastTime: performance.now(),
+    });
+    updateGenderButtons();
+    updateHUD();
+    renderFeed();
+    hideOverlay();
+    requestAnimationFrame(loop);
+    canvas.focus();
   }
 
   init();

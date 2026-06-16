@@ -19,8 +19,19 @@
   const EYE_HEIGHT = 1.65;
   const UPPER_FLOOR_Y = 4.18;
   const STAIR_TRAVEL_SECONDS = 1.05;
-  const STAIR_BOTTOM = { x: 4.8, z: 31.55, level: 0, yaw: 0.04 };
+  const STAIR_BOTTOM = { x: 5.1, z: 31.4, level: 0, yaw: 0 };
   const STAIR_TOP = { x: 8.2, z: 24.4, level: 1, yaw: 0.02 };
+  // Walkable staircase footprint. The step mesh (see addStaircase) climbs in -Z
+  // from the foyer floor (z≈30.2, y=0) up to the upper landing (z≈24.1, y≈UPPER_FLOOR_Y)
+  // at x≈5.1. Inside this rect the player's Y is interpolated so you simply walk up/down.
+  const STAIR_RUN = {
+    xMin: 3.7,
+    xMax: 6.5,
+    zBottom: 30.35,
+    zTop: 23.95,
+    yBottom: 0,
+    yTop: UPPER_FLOOR_Y,
+  };
   const HIDE_HOLD_SECONDS = 0.72;
   const LEAVE_HIDE_SECONDS = 0.42;
   const HIDE_SPOT_RADIUS = 2.25;
@@ -361,6 +372,8 @@
     tasks: [],
     hazards: [],
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const world = {
     renderer: null,
@@ -410,6 +423,20 @@
   const formatScore = (value) => Math.max(0, Math.round(value)).toLocaleString();
   const percent = (value) => Math.round(clamp(value, 0, 100)) + "%";
   const floorYForLevel = (level) => (level === 1 ? UPPER_FLOOR_Y : 0);
+
+  // True if (x,z) sits on the walkable staircase footprint.
+  const onStairRun = (x, z) =>
+    x > STAIR_RUN.xMin && x < STAIR_RUN.xMax && z > STAIR_RUN.zTop && z < STAIR_RUN.zBottom;
+
+  // Floor height at a position. On the stairs it ramps continuously between floors;
+  // everywhere else it is flat at the current level's floor height.
+  const groundHeightAt = (x, z, level) => {
+    if (onStairRun(x, z)) {
+      const t = clamp((STAIR_RUN.zBottom - z) / (STAIR_RUN.zBottom - STAIR_RUN.zTop), 0, 1);
+      return lerp(STAIR_RUN.yBottom, STAIR_RUN.yTop, t);
+    }
+    return floorYForLevel(level);
+  };
 
   function loadLookSettings() {
     try {
@@ -1602,7 +1629,7 @@
 
   function addFoyerLivingRoom() {
     addRug(0, 25.2, 6.8, 7.6, world.materials.carpet);
-    addSofa(3.7, 25.8, -Math.PI / 2, world.materials.leather);
+    addSofa(3.2, 25.6, -Math.PI / 2, world.materials.leather);
     addCoffeeTable(0.6, 25.3, 0);
     addMediaConsole(-4.8, 25.1, Math.PI / 2);
     addFireplace(-5.85, 30.3, Math.PI / 2);
@@ -1735,7 +1762,11 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x, z, 3.8, 1.7, false);
+    // Rotation-aware footprint: the sofa is 3.8 long × 1.7 deep, so a 90° turn must
+    // swap those for collision (the old axis-aligned rect sprawled under the stairs).
+    const cw = Math.abs(3.8 * Math.cos(yaw)) + Math.abs(1.7 * Math.sin(yaw));
+    const cd = Math.abs(3.8 * Math.sin(yaw)) + Math.abs(1.7 * Math.cos(yaw));
+    addPropCollision(x, z, cw, cd, false);
     return group;
   }
 
@@ -1809,7 +1840,13 @@
     group.position.set(x, 0, z);
     group.rotation.y = yaw;
     world.scene.add(group);
-    addPropCollision(x - Math.sin(yaw) * 3.2, z - Math.cos(yaw) * 3.2, 3.3, 7.2, false);
+    // The step channel stays OPEN (no solid block) so the player can physically walk up;
+    // updatePlayer ramps their height across STAIR_RUN. Only the two side rails collide,
+    // and they exist on BOTH floors so you can't slip off the stairs sideways mid-climb.
+    // Authored for yaw === 0 (the staircase's only placement).
+    const railZ = z - 3.2;
+    addPropCollision(x - 1.44, railZ, 0.18, 6.9, false, [0, 1]);
+    addPropCollision(x + 1.44, railZ, 0.18, 6.9, false, [0, 1]);
   }
 
   function addKitchenClutter(x, z) {
@@ -2853,7 +2890,22 @@
     if (el.restart) {
       el.restart.addEventListener("click", () => {
         showOverlay("RESTART THE SEGMENT", "The crew will pretend this never happened. They are professionals.", "Restart");
+        if (saveMenu) saveMenu.refresh();
       });
+    }
+    if (saveSlot) {
+      saveMenu = saveSlot.attachButtons({
+        primary: el.primary,
+        scoreEl: el.overlayScore,
+        continueLabel: "Continue segment",
+        newLabel: "New segment",
+        onContinue: restoreGame,
+        summary: (saved) => {
+          const data = saved.data || {};
+          return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Systems <strong>${Number(data.tasksDone || 0)}/${TASK_TOTAL}</strong> · Nerve <strong>${percent(Number(data.nerve || 100))}</strong>`;
+        },
+      });
+      saveSlot.startAutosave(snapshot, () => state.ready && state.running && !state.gameOver);
     }
 
     api.subscribe(renderPowerups);
@@ -3041,7 +3093,7 @@
       bathroom: { x: -17.8, z: -7.0, yaw: Math.PI / 2, pitch: -0.03, level: 0, label: "bathroom nook" },
       utility: { x: 0.6, z: -3.2, yaw: Math.PI, pitch: -0.05, level: 0, label: "utility hall" },
       office: { x: 16.6, z: -17.2, yaw: Math.PI / 2, pitch: -0.05, level: 0, label: "home office" },
-      stairs: { x: STAIR_BOTTOM.x - 0.85, z: STAIR_BOTTOM.z - 0.1, yaw: STAIR_BOTTOM.yaw, pitch: -0.02, level: 0, label: "working staircase" },
+      stairs: { x: STAIR_BOTTOM.x, z: STAIR_BOTTOM.z, yaw: STAIR_BOTTOM.yaw, pitch: -0.02, level: 0, label: "working staircase" },
       upstairs: { x: STAIR_TOP.x, z: STAIR_TOP.z, yaw: STAIR_TOP.yaw, pitch: -0.04, level: 1, label: "second floor landing" },
       upstairsEast: { x: 14.2, z: 23.4, yaw: Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs east rooms" },
       upstairsWest: { x: -14.2, z: 18.8, yaw: -Math.PI / 2, pitch: -0.05, level: 1, label: "upstairs west rooms" },
@@ -3273,6 +3325,7 @@
 
   function startGame() {
     if (!state.ready) return;
+    if (saveSlot) saveSlot.clear();
     resetGame();
     startAudio();
     hideOverlay();
@@ -3280,6 +3333,89 @@
     const stage = document.querySelector(".mrfeast-stage");
     if (stage && stage.scrollIntoView) stage.scrollIntoView({ block: "start", behavior: "auto" });
     showAlert("Segment one: do not become bonus content.", "");
+  }
+
+  function snapshot() {
+    return {
+      time: state.time,
+      viewers: state.viewers,
+      tasksDone: state.tasksDone,
+      contestants: state.contestants,
+      nerve: state.nerve,
+      stamina: state.stamina,
+      signal: state.signal,
+      graceTimer: state.graceTimer,
+      safeTimer: state.safeTimer,
+      boostTimer: state.boostTimer,
+      cameraJamTimer: state.cameraJamTimer,
+      blackoutTimer: state.blackoutTimer,
+      sponsorScareTimer: state.sponsorScareTimer,
+      announcementTimer: state.announcementTimer,
+      hidden: state.hidden,
+      detourActive: state.detourActive,
+      detourComplete: state.detourComplete,
+      sponsorScareDone: state.sponsorScareDone,
+      finalUnlocked: state.finalUnlocked,
+      finalEscapeTimer: state.finalEscapeTimer,
+      finalWarning30: state.finalWarning30,
+      finalWarning15: state.finalWarning15,
+      logs: state.logs.slice(0, 8),
+      player: { ...state.player },
+      host: { ...state.host },
+      doneTaskIds: state.tasks.filter((task) => task.done).map((task) => task.id),
+    };
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!state.ready || !data) return;
+    resetGame();
+    Object.assign(state, {
+      running: true,
+      paused: false,
+      gameOver: false,
+      won: false,
+      time: Number(data.time) || 0,
+      viewers: Number(data.viewers) || 0,
+      contestants: Number(data.contestants) || 10,
+      nerve: clamp(Number(data.nerve) || 100, 0, 100),
+      stamina: clamp(Number(data.stamina) || 100, 0, 100),
+      signal: clamp(Number(data.signal) || 0, 0, 100),
+      graceTimer: Math.max(0, Number(data.graceTimer) || 0),
+      safeTimer: Math.max(0, Number(data.safeTimer) || 0),
+      boostTimer: Math.max(0, Number(data.boostTimer) || 0),
+      cameraJamTimer: Math.max(0, Number(data.cameraJamTimer) || 0),
+      blackoutTimer: Math.max(0, Number(data.blackoutTimer) || 0),
+      sponsorScareTimer: Math.max(0, Number(data.sponsorScareTimer) || 0),
+      announcementTimer: Math.max(6, Number(data.announcementTimer) || 34),
+      hidden: Boolean(data.hidden),
+      detourActive: Boolean(data.detourActive),
+      detourComplete: Boolean(data.detourComplete),
+      sponsorScareDone: Boolean(data.sponsorScareDone),
+      finalWarning30: Boolean(data.finalWarning30),
+      finalWarning15: Boolean(data.finalWarning15),
+      logs: Array.isArray(data.logs) ? data.logs : [],
+      lastTime: 0,
+    });
+    Object.assign(state.player, data.player || {});
+    Object.assign(state.host, data.host || {});
+    state.player.y = floorYForLevel(state.player.level || 0) + EYE_HEIGHT;
+    state.tasks.forEach((task) => {
+      task.done = Array.isArray(data.doneTaskIds) && data.doneTaskIds.includes(task.id);
+    });
+    state.tasksDone = clamp(Number(data.tasksDone) || state.tasks.filter((task) => task.done).length, 0, TASK_TOTAL);
+    setDirectorTaskProgress(state.tasksDone);
+    if (data.finalUnlocked) {
+      state.finalUnlocked = false;
+      unlockFinalExit();
+      state.finalEscapeTimer = Number(data.finalEscapeTimer) || FINAL_ESCAPE_SECONDS;
+    }
+    startAudio();
+    hideOverlay();
+    releaseSoftMouseLock();
+    renderObjectiveList();
+    updateHUD();
+    canvas.focus({ preventScroll: true });
   }
 
   function resetGame() {
@@ -3434,7 +3570,6 @@
 
     updatePlayer(dt);
     updateHiding(dt);
-    updateStairTravel(dt);
     updateTasks(dt);
     updateHazards(dt);
     updateHost(dt);
@@ -3495,6 +3630,15 @@
 
     state.player.x = clamp(state.player.x, -35.5, 35.5);
     state.player.z = clamp(state.player.z, -40.5, 34.5);
+
+    // Walk the stairs: while on the stair footprint the player's height ramps
+    // continuously and the floor "level" flips at the halfway point, so collision
+    // and floor rendering switch over without any key press or teleport.
+    const groundY = groundHeightAt(state.player.x, state.player.z, state.player.level);
+    if (onStairRun(state.player.x, state.player.z)) {
+      state.player.level = groundY > UPPER_FLOOR_Y * 0.5 ? 1 : 0;
+    }
+    state.player.y = groundY + EYE_HEIGHT;
   }
 
   function updateHiding(dt) {
@@ -3651,33 +3795,9 @@
     updatePrompt();
   }
 
-  function updateStairTravel(dt) {
-    if (state.hidden) {
-      state.stairPromptActive = false;
-      state.stairProgress = 0;
-      state.stairDirection = null;
-      return;
-    }
-    const endpoint = state.player.level === 0 ? STAIR_BOTTOM : STAIR_TOP;
-    const d = distance(state.player.x, state.player.z, endpoint.x, endpoint.z);
-    state.stairPromptActive = d < 2.65;
-    state.stairDirection = state.stairPromptActive ? (state.player.level === 0 ? "up" : "down") : null;
-
-    if (!state.stairPromptActive) {
-      state.stairProgress = 0;
-      return;
-    }
-
-    if (state.input.interact) {
-      state.stairProgress += dt;
-      if (state.stairProgress >= STAIR_TRAVEL_SECONDS) {
-        transferStairs(state.stairDirection);
-      }
-    } else {
-      state.stairProgress = Math.max(0, state.stairProgress - dt * 2.4);
-    }
-  }
-
+  // The stairs are now walkable (updatePlayer ramps the player's height across
+  // STAIR_RUN), so there is no hold-to-climb step. transferStairs is kept only as the
+  // debug director's instant teleport between floors.
   function transferStairs(direction) {
     const destination = direction === "up" ? STAIR_TOP : STAIR_BOTTOM;
     state.player.level = destination.level;
@@ -4412,10 +4532,6 @@
       text = state.input.interact
         ? `${state.activeTask.title} ${clamp(pct, 0, 100)}%`
         : `Hold F: ${state.activeTask.title}`;
-    } else if (state.stairPromptActive) {
-      const pct = Math.round((state.stairProgress / STAIR_TRAVEL_SECONDS) * 100);
-      const label = state.stairDirection === "up" ? "go upstairs" : "go downstairs";
-      text = state.input.interact ? `Taking stairs ${clamp(pct, 0, 100)}%` : `Hold F: ${label}`;
     } else if (state.finalPromptActive) {
       const pct = Math.round((state.interactionProgress / 2.2) * 100);
       text = state.input.interact ? `Opening exit ${clamp(pct, 0, 100)}%` : "Hold F: leave the mansion";
@@ -4853,6 +4969,7 @@
     state.gameOver = true;
     state.running = false;
     state.won = true;
+    if (saveSlot) saveSlot.clear();
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     releaseSoftMouseLock();
     const finalScore = Math.round(state.viewers + state.nerve * 80 + state.contestants * 250 + state.tasksDone * 1000);
@@ -4873,6 +4990,7 @@
     if (state.gameOver) return;
     state.gameOver = true;
     state.running = false;
+    if (saveSlot) saveSlot.clear();
     if (document.pointerLockElement === canvas) document.exitPointerLock();
     releaseSoftMouseLock();
     const finalScore = Math.round(state.viewers + state.tasksDone * 700 + state.nerve * 25);

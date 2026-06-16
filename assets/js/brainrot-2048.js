@@ -59,6 +59,8 @@
   let running = false;
   let won = false;
   let bestAtStart = 0;
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   function tileImageUrl(tier) {
     return tileImageBase + tier.image;
@@ -217,9 +219,11 @@
       spawnTile();
       api.recordScore(GAME_ID, score);
       updateHud();
+      saveProgress();
 
       if (!won && topTier >= MAX) {
         won = true;
+        saveProgress();
         showWin();
       } else if (isGameOver()) {
         showGameOver();
@@ -262,6 +266,7 @@
 
   function showGameOver() {
     running = false;
+    if (saveSlot) saveSlot.clear();
     const best = api.getHighScore(GAME_ID);
     if (score > 0 && score >= best && score > bestAtStart) {
       setTimeout(() => api.toast("New high score!", "good"), 300);
@@ -279,6 +284,7 @@
 
   function showWin() {
     const best = api.getHighScore(GAME_ID);
+    saveProgress();
     showOverlay(
       "GALAXY BRAIN",
       "You merged all the way to the top of the brainrot food chain. Keep going for a higher score, or reset.",
@@ -290,6 +296,7 @@
   }
 
   function newGame() {
+    if (saveSlot) saveSlot.clear();
     tilesEl.innerHTML = "";
     grid = [];
     for (let r = 0; r < SIZE; r++) grid.push(new Array(SIZE).fill(null));
@@ -303,6 +310,48 @@
     bestAtStart = api.getHighScore(GAME_ID);
     spawnTile(1);
     spawnTile(Math.random() < 0.5 ? 1 : 2);
+    hideOverlay();
+    updateHud();
+    saveProgress();
+  }
+
+  function snapshot() {
+    return {
+      grid: grid.map((row) => row.map((tile) => (tile ? tile.val : 0))),
+      score,
+      topTier,
+      uid,
+      won,
+      running: running && !animating,
+    };
+  }
+
+  function saveProgress() {
+    if (!saveSlot || !running) return;
+    saveSlot.save(snapshot());
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data || !Array.isArray(data.grid)) return;
+    tilesEl.innerHTML = "";
+    grid = [];
+    tiles = [];
+    uid = Number(data.uid) || 0;
+    score = Number(data.score) || 0;
+    topTier = Number(data.topTier) || 1;
+    won = Boolean(data.won);
+    animating = false;
+    running = data.running !== false;
+    for (let r = 0; r < SIZE; r++) {
+      grid.push(new Array(SIZE).fill(null));
+      const row = Array.isArray(data.grid[r]) ? data.grid[r] : [];
+      for (let c = 0; c < SIZE; c++) {
+        const val = Number(row[c]) || 0;
+        if (val > 0 && val <= MAX) addTile(r, c, val, false);
+      }
+    }
+    bestAtStart = api.getHighScore(GAME_ID);
     hideOverlay();
     updateHud();
   }
@@ -355,6 +404,22 @@
   tiles = [];
   updateHud();
   btnPrimary.onclick = newGame;
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: btnPrimary,
+      scoreEl: overlayScore,
+      continueLabel: "Continue",
+      newLabel: "New game",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        const tier = TIERS[data.topTier] ? TIERS[data.topTier].name : "NPC";
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Score <strong>${Number(data.score || 0).toLocaleString()}</strong> · ${tier}`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => running && !animating);
+    saveMenu.refresh();
+  }
 
   function setCell(r, c, val) {
     if (!grid[r][c] && !val) return;
@@ -394,5 +459,7 @@
     get topTier() { return topTier; },
     get animating() { return animating; },
     get running() { return running; },
+    save: saveProgress,
+    restore: () => restoreGame(saveSlot && saveSlot.read()),
   };
 })();

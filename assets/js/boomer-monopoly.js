@@ -170,6 +170,8 @@
     lastTime: 0,
     boardRects: [],
   };
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  let saveMenu = null;
 
   const CENTER_PANEL = { x: 120, y: 120, w: 480, h: 480 };
 
@@ -217,6 +219,7 @@
   }
 
   function resetGame() {
+    if (saveSlot) saveSlot.clear();
     state.board = cloneBoard();
     state.players = makePlayers();
     state.current = 0;
@@ -631,6 +634,7 @@
     state.gameOver = true;
     state.phase = "game_over";
     state.pendingDecision = null;
+    if (saveSlot) saveSlot.clear();
     const score = Math.max(0, netWorth(humanPlayer()) + ownedSpaces(humanPlayer()).length * 75 + (won ? 1000 : 0));
     api.recordScore(GAME_ID, score);
     const high = api.getHighScore(GAME_ID);
@@ -1384,6 +1388,63 @@
     resetGame();
   }
 
+  function snapshot() {
+    return JSON.parse(JSON.stringify({
+      board: state.board,
+      players: state.players,
+      current: state.current,
+      round: state.round,
+      dice: state.dice,
+      phase: state.phase,
+      pendingDecision: state.pendingDecision,
+      selectedSpace: state.selectedSpace,
+      marketHeat: state.marketHeat,
+      paused: state.paused,
+      gameOver: state.gameOver,
+      busy: state.busy,
+      log: state.log,
+      particles: state.particles,
+      callouts: state.callouts,
+      headline: state.headline,
+      shake: state.shake,
+      actionPulse: state.actionPulse,
+    }));
+  }
+
+  function restoreGame(saved) {
+    const data = saved && saved.data;
+    if (!data || !Array.isArray(data.board) || !Array.isArray(data.players)) return;
+    Object.assign(state, {
+      board: data.board,
+      players: data.players,
+      current: Number(data.current) || 0,
+      round: Number(data.round) || 1,
+      dice: Array.isArray(data.dice) ? data.dice : [1, 1],
+      phase: data.phase || "await_roll",
+      pendingDecision: data.pendingDecision || null,
+      selectedSpace: Number(data.selectedSpace) || 0,
+      marketHeat: Number(data.marketHeat) || 0.05,
+      paused: Boolean(data.paused),
+      gameOver: Boolean(data.gameOver),
+      busy: Boolean(data.busy),
+      log: Array.isArray(data.log) ? data.log : [],
+      particles: Array.isArray(data.particles) ? data.particles : [],
+      callouts: Array.isArray(data.callouts) ? data.callouts : [],
+      headline: data.headline || randomHeadline(),
+      shake: Number(data.shake) || 0,
+      actionPulse: Number(data.actionPulse) || 0,
+      lastTime: 0,
+    });
+    hideOverlay();
+    renderPowerups();
+    updateUI();
+    if (state.phase === "ai_thinking" && !activePlayer().isHuman) {
+      setTimeout(() => {
+        if (!state.paused && !state.gameOver && state.phase === "ai_thinking") rollForActive();
+      }, 450);
+    }
+  }
+
   function bindEvents() {
     el.primary.addEventListener("click", handlePrimary);
     el.roll.addEventListener("click", rollForActive);
@@ -1414,6 +1475,21 @@
   buildBoardRects();
   renderPowerups();
   bindEvents();
+  if (saveSlot) {
+    saveMenu = saveSlot.attachButtons({
+      primary: el.primary,
+      scoreEl: el.overlayScore,
+      continueLabel: "Continue",
+      newLabel: "New game",
+      onContinue: restoreGame,
+      summary: (saved) => {
+        const data = saved.data || {};
+        const player = Array.isArray(data.players) ? data.players[0] : null;
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Round <strong>${Number(data.round || 1)}/${MAX_ROUNDS}</strong> · Cash <strong>${money(player ? player.cash : 1500)}</strong>`;
+      },
+    });
+    saveSlot.startAutosave(snapshot, () => state.phase !== "intro" && !state.gameOver);
+  }
   updateUI();
   requestAnimationFrame(loop);
 

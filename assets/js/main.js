@@ -25,7 +25,8 @@ function renderNav() {
     const path = location.pathname;
     const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
     const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
-    const isGames = !isAgentGames && (path.endsWith("/games.html") || path.includes("/games/"));
+    const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
+    const isGames = !isAgentGames && !isAfterDark && (path.endsWith("/games.html") || path.includes("/games/"));
 
     slot.innerHTML = `
       <a href="${RB_BASE}" class="nav__brand" title="Rainbot Gaming — free browser arcade">
@@ -35,7 +36,7 @@ function renderNav() {
         <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
         <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
         <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
-        <a href="${RB_BASE}#after-dark">After Dark</a>
+        <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
         <a href="${RB_BASE}#coming-soon">Coming Soon</a>
         <a href="${RB_BASE}#after-dark">About</a>
         <a href="${RB_BASE}#pricing">Merch</a>

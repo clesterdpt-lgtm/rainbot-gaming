@@ -114,8 +114,9 @@
         <div class="game-side__panel">
           <h3 class="game-side__title">CONTROLS</h3>
           <div class="controls-row">
-            <button class="btn btn--secondary" id="btn-new" style="font-size:13px;padding:8px 12px;">New game</button>
-            <button class="btn btn--ghost" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--secondary" id="btn-new" type="button" style="font-size:13px;padding:8px 12px;">New game</button>
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
           </div>
           <div class="mobile-controls" aria-label="Direction controls">
             <div class="mobile-controls__dpad">
@@ -167,7 +168,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260616-save-1"></script>
-  <script src="../assets/js/smooth-brain-snacker.js?v=20260616-save-1"></script>
+  <script src="../assets/js/smooth-brain-snacker.js?v=20260616-sfx-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

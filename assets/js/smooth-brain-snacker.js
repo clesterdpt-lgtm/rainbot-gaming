@@ -36,6 +36,16 @@
     purple: "#b06cff",
   };
 
+  const BRAIN_BG_SRC = "../assets/img/smooth-brain-snacker/brain-material-bg-v2.png?v=20260616-2";
+  const brainBg = new Image();
+  let brainBgReady = false;
+  brainBg.decoding = "async";
+  brainBg.onload = () => {
+    brainBgReady = true;
+    if (snake) draw();
+  };
+  brainBg.src = BRAIN_BG_SRC;
+
   // Smart, responsible ideas — the food.
   const SMART_IDEAS = [
     { e: "📚", t: "Read a book" },
@@ -108,6 +118,7 @@
   const btnPrimary = document.getElementById("btn-primary");
   const btnNew = document.getElementById("btn-new");
   const btnPause = document.getElementById("btn-pause");
+  const btnSound = document.getElementById("btn-sound");
   const scoreEl = document.getElementById("hud-score");
   const lenEl = document.getElementById("hud-len");
   const bestEl = document.getElementById("hud-best");
@@ -140,6 +151,102 @@
 
   const stepMs = () =>
     Math.max(MIN_STEP, BASE_STEP - (snake.length - START_LEN) * STEP_RAMP);
+
+  // ---------- Sound ----------
+  const SOUND_PREF_KEY = "rainbot_smoothbrain_sound";
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+  let soundOn = readSoundPreference();
+
+  function readSoundPreference() {
+    try {
+      return localStorage.getItem(SOUND_PREF_KEY) !== "off";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function writeSoundPreference() {
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, soundOn ? "on" : "off");
+    } catch (_) {}
+  }
+
+  function ensureAudio() {
+    if (!soundOn || !AudioContextCtor) return null;
+    if (!audioCtx) audioCtx = new AudioContextCtor();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, options) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const opts = options || {};
+    const t0 = ac.currentTime + (opts.delay || 0);
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = opts.type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    if (opts.to) osc.frequency.exponentialRampToValueAtTime(Math.max(1, opts.to), t0 + duration);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(opts.gain || 0.03, t0 + (opts.attack || 0.012));
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.03);
+  }
+
+  function playSfx(name) {
+    if (!soundOn) return;
+    if (name === "turn") {
+      playTone(180, 0.035, { type: "square", gain: 0.012 });
+    } else if (name === "eat") {
+      playTone(260, 0.06, { type: "square", to: 390, gain: 0.035 });
+      playTone(520, 0.08, { type: "triangle", delay: 0.045, gain: 0.022 });
+    } else if (name === "big") {
+      [330, 495, 660].forEach((freq, i) =>
+        playTone(freq, 0.1, { type: "triangle", delay: i * 0.055, gain: 0.03 })
+      );
+    } else if (name === "die") {
+      playTone(160, 0.2, { type: "sawtooth", to: 55, gain: 0.042 });
+      playTone(70, 0.23, { type: "sine", delay: 0.06, gain: 0.03 });
+    } else if (name === "start") {
+      playTone(196, 0.08, { type: "triangle", gain: 0.028 });
+      playTone(392, 0.12, { type: "triangle", delay: 0.07, gain: 0.024 });
+    } else if (name === "pause") {
+      playTone(220, 0.08, { type: "sine", to: 150, gain: 0.022 });
+    } else if (name === "resume") {
+      playTone(260, 0.08, { type: "sine", to: 390, gain: 0.022 });
+    } else if (name === "toggle") {
+      playTone(440, 0.07, { type: "triangle", gain: 0.026 });
+      playTone(660, 0.08, { type: "triangle", delay: 0.055, gain: 0.022 });
+    }
+  }
+
+  function setSoundLabel() {
+    if (!btnSound) return;
+    if (!AudioContextCtor) {
+      btnSound.textContent = "Sound Off";
+      btnSound.setAttribute("aria-pressed", "false");
+      btnSound.disabled = true;
+      return;
+    }
+    btnSound.textContent = soundOn ? "Sound On" : "Sound Off";
+    btnSound.setAttribute("aria-pressed", String(soundOn));
+  }
+
+  function toggleSound() {
+    if (!AudioContextCtor) return;
+    soundOn = !soundOn;
+    writeSoundPreference();
+    setSoundLabel();
+    if (soundOn) {
+      ensureAudio();
+      playSfx("toggle");
+    }
+  }
 
   // ---------- Helpers ----------
   const sameCell = (a, b) => a.x === b.x && a.y === b.y;
@@ -269,6 +376,22 @@
     g.addColorStop(1, C.bg1);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    if (brainBgReady && brainBg.naturalWidth && brainBg.naturalHeight) {
+      const scale = Math.max(W / brainBg.naturalWidth, H / brainBg.naturalHeight);
+      const dw = brainBg.naturalWidth * scale;
+      const dh = brainBg.naturalHeight * scale;
+      ctx.drawImage(brainBg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+
+      ctx.fillStyle = "rgba(5,6,12,0.34)";
+      ctx.fillRect(0, 0, W, H);
+
+      const vignette = ctx.createRadialGradient(W / 2, H / 2, W * 0.15, W / 2, H / 2, W * 0.72);
+      vignette.addColorStop(0, "rgba(7,8,16,0)");
+      vignette.addColorStop(1, "rgba(7,8,16,0.42)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     ctx.strokeStyle = C.grid;
     ctx.lineWidth = 1;
@@ -522,6 +645,7 @@
     if (!ateFood && !ateGold) snake.pop(); // grow only when something was eaten
 
     if (ateFood) {
+      playSfx("eat");
       eaten++;
       score += 10;
       const phrase = randomRot();
@@ -535,6 +659,7 @@
       updateHud();
       saveProgress();
     } else if (ateGold) {
+      playSfx("big");
       score += 75;
       const butt = snake[snake.length - 1];
       dropPoop(butt.x, butt.y, gold.phrase + " ✨");
@@ -549,6 +674,7 @@
   }
 
   function die(cause) {
+    playSfx("die");
     running = false;
     if (saveSlot) saveSlot.clear();
     const lenReached = snake.length;
@@ -584,6 +710,8 @@
 
   // ---------- Lifecycle ----------
   function newGame() {
+    ensureAudio();
+    playSfx("start");
     if (saveSlot) saveSlot.clear();
     snake = [];
     const sy = (ROWS / 2) | 0;
@@ -615,6 +743,7 @@
   function togglePause() {
     if (!running) return;
     paused = !paused;
+    playSfx(paused ? "pause" : "resume");
     setPauseLabel();
     if (!paused) lastT = performance.now();
     draw();
@@ -726,7 +855,10 @@
     const last = inputQ.length ? inputQ[inputQ.length - 1] : dir;
     if (nd.x === -last.x && nd.y === -last.y) return; // can't reverse onto yourself
     if (nd.x === last.x && nd.y === last.y) return; // already going that way
-    if (inputQ.length < 2) inputQ.push(nd);
+    if (inputQ.length < 2) {
+      inputQ.push(nd);
+      playSfx("turn");
+    }
   }
 
   document.addEventListener("keydown", (e) => {
@@ -760,6 +892,7 @@
 
   if (btnNew) btnNew.addEventListener("click", newGame);
   if (btnPause) btnPause.addEventListener("click", togglePause);
+  if (btnSound) btnSound.addEventListener("click", toggleSound);
 
   // swipe on the canvas
   let sx0 = 0, sy0 = 0, swiping = false;
@@ -793,6 +926,7 @@
   renderMenu();
   renderFeed();
   updateHud();
+  setSoundLabel();
   btnPrimary.onclick = newGame;
   lastT = performance.now();
   rafId = requestAnimationFrame(frame);

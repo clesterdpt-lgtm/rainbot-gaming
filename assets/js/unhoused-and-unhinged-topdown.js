@@ -312,6 +312,21 @@
       stopDistance: 11.2,
       priority: 4,
     },
+    {
+      id: "police",
+      color: 0x161719, // Black body base
+      length: 4.7,
+      width: 2.25,
+      bodyHeight: 0.9,
+      cabinLength: 2.35,
+      cabinWidth: 1.55,
+      cabinHeight: 0.68,
+      speedScale: 1.25, // Police cars are faster
+      accel: 5.8,
+      brake: 14,
+      stopDistance: 8.2,
+      priority: 5, // High priority
+    },
   ];
   const sidewalkStrips = buildSidewalkStrips();
 
@@ -986,7 +1001,8 @@
         depthWrite: false,
       })
     );
-    sprite.position.set(x, 4.8, z);
+    // Offset by z - 1.6 to move the wide label north of the character's head on screen
+    sprite.position.set(x, 4.8, z - 1.6);
     sprite.scale.set(7, 1.75, 1);
     fxGroup.add(sprite);
     floaters.push({ mesh: sprite, life: 1.1, maxLife: 1.1 });
@@ -1920,11 +1936,180 @@
       group.add(pants, cap, bill, sign);
     }
 
+    if (kind === "civilian") {
+      // 1. Shirts / Body colors
+      const shirtColors = [
+        0xd1a856, // mustard (original civilian)
+        0x7a84bb, // gray-blue (original civilian2)
+        0xa93226, // brick red
+        0x1f618d, // dark blue
+        0x229954, // forest green
+        0xd68910, // dark orange
+        0x7d3c98, // purple
+        0x138d75, // teal
+        0xa04000, // brown
+        0x2c3e50, // charcoal
+        0xebf5fb, // off-white
+        0xf5b041, // light gold
+        0xec7063  // coral/salmon pink
+      ];
+      const shirtColor = shirtColors[Math.floor(Math.random() * shirtColors.length)];
+      const shirtMat = mat("civilian_shirt_" + shirtColor.toString(16), shirtColor);
+      body.material = shirtMat;
+
+      // 2. Skin tone
+      const skinColors = [
+        0xffdbac, // light peach
+        0xf1c27d, // warm sand
+        0xe0ac69, // tan
+        0xc68642, // medium brown
+        0x8d5524, // deep brown
+        0x5c3823  // dark espresso
+      ];
+      const skinColor = skinColors[Math.floor(Math.random() * skinColors.length)];
+      const skinMat = mat("civilian_skin_" + skinColor.toString(16), skinColor);
+      head.material = skinMat;
+
+      // 3. Pants style
+      const style = Math.floor(Math.random() * 4);
+      const pantsColors = [
+        0x1b2631, // dark navy
+        0x1f405b, // blue jeans
+        0x2c3e50, // charcoal slate
+        0x212f3d, // dark gray
+        0x8d6e63, // khaki/brown
+        0xe5e7e9, // light gray/white
+        0x707b7c  // medium gray
+      ];
+      const pantsColor = pantsColors[Math.floor(Math.random() * pantsColors.length)];
+      const pantsMat = mat("civilian_pants_" + pantsColor.toString(16), pantsColor);
+
+      if (style === 0) {
+        // Long Pants
+        const pants = makeMesh(new THREE.BoxGeometry(0.9, 0.7, 0.55), pantsMat, 0, 0.42, 0.04, true, false);
+        group.add(pants);
+      } else if (style === 1) {
+        // Shorts & Bare legs
+        const legL = addCylinder(group, 0.14, 0.4, -0.22, 0, 0.04, skinMat, 6);
+        const legR = addCylinder(group, 0.14, 0.4, 0.22, 0, 0.04, skinMat, 6);
+        const pants = makeMesh(new THREE.BoxGeometry(0.9, 0.4, 0.55), pantsMat, 0, 0.57, 0.04, true, false);
+        group.add(pants);
+      } else if (style === 2) {
+        // Skirt (cylinder flare)
+        const skirt = makeMesh(new THREE.CylinderGeometry(0.54, 0.62, 0.6, 10), pantsMat, 0, 0.3, 0.04, true, false);
+        skirt.scale.x = 0.85;
+        const legL = addCylinder(group, 0.14, 0.3, -0.2, 0, 0.04, skinMat, 6);
+        const legR = addCylinder(group, 0.14, 0.3, 0.2, 0, 0.04, skinMat, 6);
+        group.add(skirt);
+      } else if (style === 3) {
+        // Dress / Tunic with belt
+        const belt = makeMesh(new THREE.CylinderGeometry(0.52, 0.52, 0.08, 10), materials.black, 0, 0.75, 0, true, false);
+        belt.scale.x = 0.86;
+        group.add(belt);
+      }
+
+      // 4. Hair / Hats
+      const hairColors = [
+        0x1a1a1a, // black
+        0x3e2723, // dark brown
+        0x5c4033, // brown
+        0xd7ccc8, // gray/silver
+        0xe6c280, // blonde
+        0xb25e2e, // orange/red
+        0x8e44ad, // dyed purple
+        0x2e86c1  // dyed blue
+      ];
+      const hairColor = hairColors[Math.floor(Math.random() * hairColors.length)];
+      const hairMat = mat("civilian_hair_" + hairColor.toString(16), hairColor);
+
+      const headAccessory = Math.floor(Math.random() * 8); // 8 options: 0 (bald) to 7
+      if (headAccessory === 1) {
+        // Short hair
+        const hair = makeMesh(new THREE.BoxGeometry(0.74, 0.5, 0.65), hairMat, 0, 2.3, 0.08, true, false);
+        group.add(hair);
+      } else if (headAccessory === 2) {
+        // Long hair
+        const hairTop = makeMesh(new THREE.BoxGeometry(0.74, 0.45, 0.65), hairMat, 0, 2.32, 0.06, true, false);
+        const hairBack = makeMesh(new THREE.BoxGeometry(0.7, 0.8, 0.25), hairMat, 0, 1.85, 0.38, true, false);
+        group.add(hairTop, hairBack);
+      } else if (headAccessory === 3) {
+        // Afro
+        const afro = makeMesh(new THREE.SphereGeometry(0.56, 8, 8), hairMat, 0, 2.22, 0.02, true, false);
+        afro.scale.set(1.08, 1.05, 1.08);
+        group.add(afro);
+      } else if (headAccessory === 4) {
+        // Baseball cap
+        const capColors = [0xa93226, 0x1f618d, 0x229954, 0x2c3e50, 0xf5b041, 0x161719];
+        const capColor = capColors[Math.floor(Math.random() * capColors.length)];
+        const capMat = mat("civilian_cap_" + capColor.toString(16), capColor);
+        const cap = makeMesh(new THREE.CylinderGeometry(0.5, 0.5, 0.22, 8), capMat, 0, 2.55, -0.03, true, false);
+        const bill = makeMesh(new THREE.BoxGeometry(0.62, 0.08, 0.3), capMat, 0, 2.49, -0.48, true, false);
+        const peekHair = makeMesh(new THREE.BoxGeometry(0.68, 0.25, 0.25), hairMat, 0, 2.22, 0.25, true, false);
+        group.add(cap, bill, peekHair);
+      } else if (headAccessory === 5) {
+        // Beanie
+        const beanieColors = [0xc0392b, 0x2980b9, 0x27ae60, 0x8e44ad, 0xd35400, 0x7f8c8d];
+        const beanieColor = beanieColors[Math.floor(Math.random() * beanieColors.length)];
+        const beanieMat = mat("civilian_beanie_" + beanieColor.toString(16), beanieColor);
+        const beanie = makeMesh(new THREE.CylinderGeometry(0.44, 0.5, 0.38, 8), beanieMat, 0, 2.44, -0.02, true, false);
+        const pompom = makeMesh(new THREE.SphereGeometry(0.12, 6, 6), materials.white, 0, 2.66, -0.02, true, false);
+        group.add(beanie, pompom);
+      } else if (headAccessory === 6) {
+        // Fedora
+        const hatColors = [0x5d4037, 0x3e2723, 0x1a1a1a, 0xf5f5f5, 0xd7ccc8];
+        const hatColor = hatColors[Math.floor(Math.random() * hatColors.length)];
+        const hatMat = mat("civilian_hat_" + hatColor.toString(16), hatColor);
+        const brim = makeMesh(new THREE.CylinderGeometry(0.78, 0.78, 0.04, 10), hatMat, 0, 2.38, -0.02, true, false);
+        brim.scale.z = 0.88;
+        const crown = makeMesh(new THREE.CylinderGeometry(0.38, 0.44, 0.32, 10), hatMat, 0, 2.54, -0.02, true, false);
+        const band = makeMesh(new THREE.CylinderGeometry(0.42, 0.45, 0.08, 10), materials.black, 0, 2.42, -0.02, true, false);
+        group.add(brim, crown, band);
+      } else if (headAccessory === 7) {
+        // Spiky / messy hair
+        const hairBase = makeMesh(new THREE.BoxGeometry(0.74, 0.45, 0.65), hairMat, 0, 2.3, 0.06, true, false);
+        const spike1 = makeMesh(new THREE.BoxGeometry(0.15, 0.2, 0.15), hairMat, -0.2, 2.55, -0.1, true, false);
+        const spike2 = makeMesh(new THREE.BoxGeometry(0.15, 0.25, 0.15), hairMat, 0.1, 2.58, 0.05, true, false);
+        const spike3 = makeMesh(new THREE.BoxGeometry(0.15, 0.2, 0.15), hairMat, -0.05, 2.55, 0.2, true, false);
+        group.add(hairBase, spike1, spike2, spike3);
+      }
+
+      // 5. Glasses / Sunglasses
+      if (Math.random() < 0.38) {
+        const isSunglasses = Math.random() < 0.65;
+        const frameColors = isSunglasses ? [0x161719] : [0xc0392b, 0x1a1a1a, 0x2e86c1, 0x7f8c8d];
+        const frameColor = frameColors[Math.floor(Math.random() * frameColors.length)];
+        const frameMat = mat("glasses_frame_" + frameColor.toString(16), frameColor);
+        const lensMat = isSunglasses ? materials.black : materials.glass;
+
+        const lensL = makeMesh(new THREE.BoxGeometry(0.22, 0.16, 0.05), lensMat, -0.18, 2.18, -0.46, true, false);
+        const lensR = makeMesh(new THREE.BoxGeometry(0.22, 0.16, 0.05), lensMat, 0.18, 2.18, -0.46, true, false);
+        const bridge = makeMesh(new THREE.BoxGeometry(0.14, 0.06, 0.06), frameMat, 0, 2.2, -0.46, true, false);
+        const outerL = makeMesh(new THREE.BoxGeometry(0.26, 0.2, 0.04), frameMat, -0.18, 2.18, -0.47, true, false);
+        const outerR = makeMesh(new THREE.BoxGeometry(0.26, 0.2, 0.04), frameMat, 0.18, 2.18, -0.47, true, false);
+        group.add(lensL, lensR, bridge, outerL, outerR);
+      }
+
+      // 6. Backpack
+      if (Math.random() < 0.28) {
+        const packColors = [0xa93226, 0x1f618d, 0x229954, 0xd35400, 0x7d3c98, 0x7f8c8d];
+        const packColor = packColors[Math.floor(Math.random() * packColors.length)];
+        const packMat = mat("civilian_pack_" + packColor.toString(16), packColor);
+        const pack = makeMesh(new THREE.BoxGeometry(0.55, 0.8, 0.32), packMat, 0, 1.15, 0.76, true, false);
+        const pocket = makeMesh(new THREE.BoxGeometry(0.42, 0.42, 0.14), packMat, 0, 0.95, 0.93, true, false);
+        group.add(pack, pocket);
+      }
+    }
+
     if (kind === "cop") {
       const badge = makeMesh(new THREE.BoxGeometry(0.32, 0.08, 0.32), materials.yellow, 0.01, 1.55, -0.62, true, false);
       const lightA = makeMesh(new THREE.BoxGeometry(0.35, 0.18, 0.2), materials.copRed, -0.22, 2.62, 0, true, false);
       const lightB = makeMesh(new THREE.BoxGeometry(0.35, 0.18, 0.2), materials.copBlue, 0.22, 2.62, 0, true, false);
       group.add(badge, lightA, lightB);
+
+      // Add random skin tone to cop head
+      const skinColors = [0xffdbac, 0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3823];
+      const skinColor = skinColors[Math.floor(Math.random() * skinColors.length)];
+      head.material = mat("civilian_skin_" + skinColor.toString(16), skinColor);
     }
 
     if (kind === "zombie") {
@@ -1960,9 +2145,17 @@
       addCone(group, 0.5, 1.0, 0, 0.04, 0, materials.cone, 10);
       ringColor = 0xff7a3a;
     } else if (type === "peel") {
-      const peel = makeMesh(new THREE.TorusGeometry(0.5, 0.13, 6, 12), materials.peel, 0, 0.16, 0, true, false);
-      peel.scale.z = 0.45;
-      group.add(peel);
+      // 3D low-poly banana peel model
+      const stem = makeMesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), materials.peel, 0, 0.2, 0, true, false);
+      stem.rotation.z = 0.3;
+      group.add(stem);
+      for (let i = 0; i < 3; i++) {
+        const flap = makeMesh(new THREE.BoxGeometry(0.5, 0.08, 0.2), materials.peel, 0, 0.04, 0, true, false);
+        flap.rotation.y = (i * Math.PI * 2) / 3;
+        flap.position.set(Math.cos(flap.rotation.y) * 0.25, 0.04, Math.sin(flap.rotation.y) * 0.25);
+        flap.rotation.z = 0.2;
+        group.add(flap);
+      }
       ringColor = 0xf5d431;
     } else if (type === "plunger") {
       addCylinder(group, 0.12, 1.1, 0, 0.55, 0, materials.pole, 8);
@@ -1996,8 +2189,21 @@
     );
     ring.rotation.x = -Math.PI / 2;
     group.add(ring);
+
+    // Glowing floating indicator diamond
+    const indicator = makeMesh(
+      new THREE.OctahedronGeometry(0.18),
+      new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.85 }),
+      0,
+      1.7,
+      0,
+      false,
+      false
+    );
+    group.add(indicator);
+
     actorGroup.add(group);
-    const pickup = { type, x, z, mesh: group, active: true, spin: rand(0, Math.PI * 2) };
+    const pickup = { type, x, z, mesh: group, indicator, active: true, spin: rand(0, Math.PI * 2) };
     pickups.push(pickup);
     return pickup;
   }
@@ -2044,6 +2250,18 @@
       group.add(sign);
     }
 
+    let sirenL = null;
+    let sirenR = null;
+    if (type.id === "police") {
+      const doorL = makeMesh(new THREE.BoxGeometry(type.cabinLength, type.bodyHeight * 0.8, 0.04), materials.white, 0, type.bodyHeight / 2, type.width / 2 + 0.01, false, false);
+      const doorR = makeMesh(new THREE.BoxGeometry(type.cabinLength, type.bodyHeight * 0.8, 0.04), materials.white, 0, type.bodyHeight / 2, -type.width / 2 - 0.01, false, false);
+      const barY = type.bodyHeight + type.cabinHeight + 0.08;
+      const sirenBar = makeMesh(new THREE.BoxGeometry(0.35, 0.15, type.cabinWidth * 0.85), materials.black, 0, barY, 0, true, false);
+      sirenL = makeMesh(new THREE.BoxGeometry(0.32, 0.12, type.cabinWidth * 0.4), materials.copBlue, 0, barY + 0.04, type.cabinWidth * 0.2, true, false);
+      sirenR = makeMesh(new THREE.BoxGeometry(0.32, 0.12, type.cabinWidth * 0.4), materials.copRed, 0, barY + 0.04, -type.cabinWidth * 0.2, true, false);
+      group.add(doorL, doorR, sirenBar, sirenL, sirenR);
+    }
+
     actorGroup.add(group);
     const cruise = lane.speed * type.speedScale * (0.94 + (id % 3) * 0.04);
     const car = {
@@ -2060,6 +2278,8 @@
       waitReason: "",
       waitHard: false,
       waitTime: 0,
+      sirenL,
+      sirenR,
     };
     cars.push(car);
     updateCarPosition(car, 0);
@@ -2134,7 +2354,8 @@
       { x: -83, z: 64 },
     ].forEach((pos, index) => {
       const mesh = makeActor("cop", pos.x, pos.z, { color: materials.cop });
-      cops.push({
+      const nearest = nearestSidewalk(pos.x, pos.z);
+      const copObj = {
         x: pos.x,
         z: pos.z,
         homeX: pos.x,
@@ -2144,18 +2365,66 @@
         speed: 7.1 + index * 0.35,
         stun: 0,
         slip: 0,
-      });
+        timer: rand(4.0, 8.0),
+        sidewalk: nearest ? nearest.strip : null,
+        sidewalkSegment: nearest ? nearest.segment : null,
+        sidewalkTarget: nearest ? nearest.strip : null,
+        sidewalkTargetSegment: nearest ? nearest.segment : null,
+        target: null,
+        crossing: false,
+      };
+      assignCivilianTarget(copObj);
+      cops.push(copObj);
     });
 
     [
-      ["water", points.fountain.x, points.fountain.z],
-      ["food", points.park.x + 9, points.park.z + 2],
+      ["snack", points.fountain.x, points.fountain.z],
+      ["snack", points.park.x + 9, points.park.z + 2],
       ["boombox", points.busk.x + 5, points.busk.z + 2],
       ["scrap", points.cache.x, points.cache.z + 8],
       ["scrap", points.alley.x - 5, points.alley.z - 6],
-      ["water", points.camp.x + 5, points.camp.z - 4],
-      ["food", points.kiosk.x, points.kiosk.z - 12],
+      ["snack", points.camp.x + 5, points.camp.z - 4],
+      ["snack", points.kiosk.x, points.kiosk.z - 12],
       ["sign", -40, 73],
+      // Extra cones and peels near key locations
+      ["cone", points.camp.x + 8, points.camp.z - 3],
+      ["peel", points.camp.x - 4, points.camp.z + 5],
+      ["cone", points.park.x - 8, points.park.z + 8],
+      ["peel", points.park.x + 4, points.park.z - 6],
+      ["cone", points.busk.x - 6, points.busk.z - 5],
+      ["peel", points.busk.x + 6, points.busk.z - 4],
+      ["cone", points.alley.x - 12, points.alley.z + 2],
+      ["peel", points.alley.x - 8, points.alley.z - 3],
+      ["cone", points.fountain.x - 6, points.fountain.z + 12],
+      ["peel", points.fountain.x + 10, points.fountain.z - 6],
+      ["cone", points.kiosk.x - 10, points.kiosk.z + 6],
+      ["peel", points.kiosk.x + 8, points.kiosk.z - 8],
+      ["cone", points.cache.x + 12, points.cache.z - 4],
+      ["peel", points.cache.x - 10, points.cache.z + 8],
+      // One rubber chicken to scavenge in the park
+      ["chicken", points.park.x - 12, points.park.z - 2],
+      // Extra food/snacks scattered throughout the map
+      ["snack", points.camp.x - 8, points.camp.z - 6],
+      ["snack", points.park.x + 15, points.park.z - 8],
+      ["snack", points.busk.x + 12, points.busk.z - 12],
+      ["snack", points.alley.x + 8, points.alley.z - 8],
+      ["snack", points.fountain.x - 12, points.fountain.z - 8],
+      ["snack", points.kiosk.x - 12, points.kiosk.z + 8],
+      ["snack", points.cache.x - 6, points.cache.z - 12],
+      ["snack", 0, 0],
+      // Extra cones and peels scattered around
+      ["cone", -50, -20],
+      ["peel", -40, -10],
+      ["cone", 30, 20],
+      ["peel", 45, 10],
+      ["cone", -20, 60],
+      ["peel", -10, 50],
+      ["cone", 80, 50],
+      ["peel", 90, 45],
+      ["cone", -90, 10],
+      ["peel", -80, 20],
+      ["cone", 10, -70],
+      ["peel", 20, -60],
     ].forEach(([type, x, z]) => makePickup(type, x, z));
 
     let vehicleId = 0;
@@ -2418,6 +2687,17 @@
   }
 
   function addWanted(amount) {
+    if (amount > 0) {
+      const copNearby = cops.some((cop) => distSq(cop, player) < 22 * 22);
+      const policeCarNearby = cars.some(
+        (car) => car.type.id === "police" && distSq({ x: car.mesh.position.x, z: car.mesh.position.z }, player) < 25 * 25
+      );
+      if (copNearby || policeCarNearby) {
+        amount *= 2.0;
+        logLine("Cops witnessed your antics! Heat increase doubled.");
+        addFloater("HEAT x2 (COPS NEARBY)", player.x, player.z, "#ff4b4b");
+      }
+    }
     state.wanted = clamp(state.wanted + amount, 0, 100);
   }
 
@@ -2771,10 +3051,23 @@
   }
 
   function spawnDayPickups() {
-    const drops = ["snack", "cone", "peel", "scrap", choose(["boombox", "sign", "chicken"]), choose(["cone", "peel", "scrap", "snack"])];
+    // Random day drops focused heavily on depleted items, with double the food/snacks
+    const drops = [
+      "snack", "snack", "snack", "snack",
+      "cone", "cone", "cone", "cone",
+      "peel", "peel", "peel", "peel",
+      "scrap", "scrap",
+      choose(["cone", "peel", "scrap", "snack"]),
+      choose(["cone", "peel", "scrap", "snack"]),
+      choose(["cone", "peel", "scrap", "snack"]),
+      // Very small 25% chance of a tool drop, otherwise a consumable
+      Math.random() < 0.25 ? choose(["boombox", "sign", "chicken"]) : choose(["cone", "peel", "scrap", "snack"])
+    ];
     drops.forEach((type) => {
       const point = getOpenPoint(1.4, true);
-      makePickup(type, point.x, point.z);
+      if (point) {
+        makePickup(type, point.x, point.z);
+      }
     });
   }
 
@@ -2940,6 +3233,20 @@
         tx = player.x;
         tz = player.z;
         speed = cop.speed + state.wanted * 0.02;
+      } else {
+        cop.timer -= dt;
+        const reached = !cop.target || distSq(cop, cop.target) < 1.2;
+        if (reached && cop.sidewalkTarget) {
+          cop.sidewalk = cop.sidewalkTarget;
+          cop.sidewalkSegment = cop.sidewalkTargetSegment;
+        }
+        if (reached || cop.timer <= 0) {
+          assignCivilianTarget(cop);
+        }
+        if (cop.target) {
+          tx = cop.target.x;
+          tz = cop.target.z;
+        }
       }
 
       let dx = tx - cop.x;
@@ -2984,6 +3291,9 @@
       }
       car.braking = Boolean(car.waitReason) || Math.abs(car.currentSpeed) < Math.abs(car.targetSpeed) * 0.72;
       updateBrakeLights(car);
+      if (car.type.id === "police") {
+        updatePoliceSiren(car, dt);
+      }
       updateCarPosition(car, dt);
       const footprint = vehicleFootprintAt(car, car.offset, 0, 0.2);
       if (car.hitCooldown <= 0 && circleRectHit(player.x, player.z, player.radius, footprint)) {
@@ -3094,6 +3404,14 @@
     });
   }
 
+  function updatePoliceSiren(car, dt) {
+    if (!car.sirenL || !car.sirenR) return;
+    const flashSpeed = state.wanted > 0 ? 12 : 6;
+    const flash = Math.floor(state.phaseTime * flashSpeed) % 2 === 0;
+    car.sirenL.visible = flash;
+    car.sirenR.visible = !flash;
+  }
+
   function updateCarPosition(car, dt) {
     const lane = car.lane;
     car.offset = wrapLaneOffset(lane, car.offset + car.currentSpeed * dt);
@@ -3107,6 +3425,12 @@
     }
   }
 
+  function isPointOffScreen(x, z) {
+    const dx = x - player.x;
+    const dz = z - player.z;
+    return dx * dx + dz * dz > 46 * 46;
+  }
+
   function updatePickups(dt) {
     pickups.forEach((pickup) => {
       if (!pickup.active) {
@@ -3115,10 +3439,40 @@
       pickup.spin += dt * 2;
       pickup.mesh.rotation.y = pickup.spin;
       pickup.mesh.position.y = Math.sin(pickup.spin * 1.7) * 0.15;
+
+      // Animate the floating indicator
+      if (pickup.indicator) {
+        pickup.indicator.rotation.y = -pickup.spin * 1.5;
+        pickup.indicator.position.y = 1.7 + Math.sin(pickup.spin * 2.8) * 0.12;
+      }
+
       if (distSq(pickup, player) < 2.4) {
         collectPickup(pickup);
       }
     });
+
+    // Periodically spawn random new items slowly over time when off-screen during the day phase
+    if (state.phase === "day" && Math.random() < dt * 0.07) {
+      const activeCount = pickups.filter((p) => p.active).length;
+      if (activeCount < 28) {
+        // Bias choice heavily towards consumable items (especially snacks for healing) and make tools very rare
+        const type = Math.random() < 0.08
+          ? choose(["boombox", "sign", "chicken", "plunger"])
+          : choose(["cone", "peel", "cone", "peel", "snack", "snack", "scrap"]);
+        let spawnPoint = null;
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const point = getOpenPoint(1.4, true);
+          if (point && isPointOffScreen(point.x, point.z)) {
+            spawnPoint = point;
+            break;
+          }
+        }
+        if (spawnPoint) {
+          makePickup(type, spawnPoint.x, spawnPoint.z);
+          logLine(`A new ${type} has been spotted nearby.`);
+        }
+      }
+    }
   }
 
   function updateProjectiles(dt) {
@@ -3278,19 +3632,32 @@
     }
     pickup.active = false;
     actorGroup.remove(pickup.mesh);
+
     if (pickup.type === "cash") {
-      addFloater("tips need crowd", pickup.x, pickup.z, "#c7ffd5");
+      state.cash += 1.50;
+      addFloater("+$1.50 Cash", pickup.x, pickup.z, "#75ff92");
+      logLine("Picked up $1.50 cash.");
     } else if (pickup.type === "snack") {
       state.health = clamp(state.health + 16, 0, state.maxHealth);
-      addFloater("+health", pickup.x, pickup.z, "#ffd080");
+      addFloater("+16 HP (Snack)", pickup.x, pickup.z, "#ffd080");
+      logLine("Collected snack. Restored 16 HP.");
+    } else if (pickup.type === "scrap") {
+      state.cash += 2.50;
+      addFloater("+$2.50 Scrap", pickup.x, pickup.z, "#aab0b4");
+      logLine("Scrap collected. Sold automatically for $2.50.");
     } else if (ITEMS[pickup.type]) {
       const item = ITEMS[pickup.type];
-      const isNew = addToBag(pickup.type, item.refill || 1);
+      const qty = item.refill || 1;
+      const isNew = addToBag(pickup.type, qty);
+      
+      const qtyText = qty > 1 ? `+${qty} ` : "+";
+      const nameText = qty > 1 ? `${item.short}s` : item.short;
+      
       if (isNew) {
         logLine(`Found ${item.name}! Open the Bag (B) to equip it to slots 1-4.`);
-        addFloater(`+${item.short}!`, pickup.x, pickup.z, "#ffe07a");
+        addFloater(`${qtyText}${nameText}!`, pickup.x, pickup.z, "#ffe07a");
       } else {
-        addFloater(`+${item.short}`, pickup.x, pickup.z, "#dde6ef");
+        addFloater(`${qtyText}${nameText}`, pickup.x, pickup.z, "#dde6ef");
       }
       refreshHotbar();
       if (state.bagOpen) renderBag();

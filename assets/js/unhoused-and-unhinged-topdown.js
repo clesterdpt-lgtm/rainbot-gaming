@@ -419,6 +419,7 @@
     alley: { x: 112, z: 68 },
     fountain: { x: -84, z: -89 },
     cache: { x: 80, z: -8 },
+    policeStation: { x: -40, z: -6.5 },
   };
 
   const keys = Object.create(null);
@@ -1711,7 +1712,7 @@
       { w: 20, h: 6.5, d: 16, x: 112, z: -60, wall: materials.blueWall, roof: materials.roofCool, label: "COUPON CANYON", labelColor: "#d4f6ff" },
       { w: 15, h: 7.5, d: 20, x: -119, z: -18, wall: materials.purpleWall, roof: materials.roofWarm, label: "HOTEL NOPE", labelColor: "#ffd1ff" },
       { w: 22, h: 5.8, d: 18, x: -84, z: -18, wall: materials.tanWall, roof: materials.roofGold },
-      { w: 24, h: 7.2, d: 17, x: -40, z: -18, wall: materials.brick, roof: materials.roofWarm },
+      { w: 24, h: 7.2, d: 17, x: -40, z: -18, wall: materials.blueWall, roof: materials.roofCool, label: "POLICE DEPT", labelColor: "#8de9ff" },
       { w: 30, h: 7.2, d: 17, x: 64, z: -18, wall: materials.purpleWall, roof: materials.roofWarm, label: "PAWN & PLUNGERS", labelColor: "#ffd1ff" },
       { w: 20, h: 6.6, d: 18, x: 112, z: -18, wall: materials.tanWall, roof: materials.roofGold, label: "STAY WASHED", labelColor: "#8de9ff" },
       { w: 16, h: 6.1, d: 18, x: -119, z: 30, wall: materials.blueWall, roof: materials.roofCool, label: "SOUP WINDOW", labelColor: "#d4f6ff" },
@@ -2703,6 +2704,28 @@
     ui.setText(els.primary, "Restart run");
   }
 
+  function arrestPlayer() {
+    logLine("Arrested! The police confiscated all your cash.");
+    addFloater("BUSTED! -$ cash", player.x, player.z, "#ff1a1a");
+    
+    state.wanted = 0;
+    state.arrest = 0;
+    state.cash = 0;
+    state.health = state.maxHealth;
+    
+    if (state.drivingCar) {
+      exitVehicle();
+    }
+    
+    player.x = points.policeStation.x;
+    player.z = points.policeStation.z;
+    if (player.mesh) {
+      player.mesh.position.set(player.x, 0, player.z);
+    }
+    
+    addPulse(player.x, player.z, 0xff1a1a, 6.0, 0.6);
+  }
+
   // ---- Items / bag / hotbar -------------------------------------------------
   function initBag() {
     state.bag = {};
@@ -3509,7 +3532,7 @@
     if (state.health <= 0) {
       endGame("WIPED OUT", "The block got too rough. Rest at camp and pick safer fights next run.");
     } else if (state.arrest >= 100) {
-      endGame("BUSTED", "The cops caught up. Keep your wanted stars down — don't bonk regular folks or perform nonstop.");
+      arrestPlayer();
     }
   }
 

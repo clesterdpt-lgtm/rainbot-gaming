@@ -3531,8 +3531,6 @@
     if (state._god) state.health = state.maxHealth;
     if (state.health <= 0) {
       endGame("WIPED OUT", "The block got too rough. Rest at camp and pick safer fights next run.");
-    } else if (state.arrest >= 100) {
-      arrestPlayer();
     }
   }
 
@@ -3966,12 +3964,7 @@
       if (chase && (isTouchingPlayer || isTouchingCar)) {
         if (state.drivingCar) {
           if (Math.abs(state.drivingCar.speed) < 3.0) {
-            exitVehicle();
-            player.stun = 1.2;
-            state.arrest = 100;
-            addFloater("ARRESTED!", player.x, player.z, "#ff1a1a");
-            logLine("Busted! A cop pulled you out of your car!");
-            addPulse(player.x, player.z, 0xff1a1a, 4.0, 0.45);
+            arrestPlayer();
           } else {
             // Speeding: run over cop instead
             cop.stun = 2.0;
@@ -3986,10 +3979,7 @@
             }
           }
         } else {
-          state.arrest = 100;
-          addFloater("ARRESTED!", player.x, player.z, "#ff1a1a");
-          logLine("Busted! Caught by the police!");
-          addPulse(player.x, player.z, 0xff1a1a, 4.0, 0.45);
+          arrestPlayer();
         }
       } else if (state.arrest > 0 && d > 10) {
         state.arrest = clamp(state.arrest - 18 * dt, 0, 100);

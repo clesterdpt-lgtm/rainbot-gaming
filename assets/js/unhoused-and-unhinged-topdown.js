@@ -2930,19 +2930,6 @@
         }
       }
     });
-
-    cars.forEach((other) => {
-      if (other === car || other.userDriven) return;
-      const otherFootprint = vehicleFootprintAt(other, other.offset, 0, 0.1);
-      if (circleRectHit(car.x, car.z, car.type.width * 0.6, otherFootprint)) {
-        car.speed = -car.speed * 0.35;
-        other.currentSpeed = 0;
-        other.waitTime = 0.5;
-        addWanted(2.5);
-        addFloater("COLLISION +wanted", car.x, car.z, "#ff9933");
-        addPulse(car.x, car.z, 0xffcc33, 4.0, 0.3);
-      }
-    });
   }
 
   function bumpActStreak() {
@@ -3091,11 +3078,16 @@
   }
 
   function vehicleFootprintAt(car, offset = car.offset, extraFront = 0, pad = 0) {
-    const pos = car.userDriven ? { x: car.x, z: car.z } : vehiclePositionAt(car, offset);
+    const isChasingOrUser = car.userDriven || car.chasingPlayer;
+    const pos = car.userDriven
+      ? { x: car.x, z: car.z }
+      : (car.chasingPlayer
+         ? { x: car.mesh.position.x, z: car.mesh.position.z }
+         : vehiclePositionAt(car, offset));
     const halfLength = car.type.length / 2 + pad;
     const halfWidth = car.type.width / 2 + pad;
-    const isX = car.userDriven ? (Math.abs(Math.sin(car.angle)) > 0.707) : (car.lane.axis === "x");
-    const direction = car.userDriven ? 1 : laneDirection(car.lane);
+    const isX = isChasingOrUser ? (Math.abs(Math.sin(car.angle)) > 0.707) : (car.lane.axis === "x");
+    const direction = isChasingOrUser ? 1 : laneDirection(car.lane);
 
     if (isX) {
       const minX = pos.x - halfLength - (direction < 0 ? extraFront : 0);
@@ -3397,35 +3389,93 @@
       car.angle += steerInput * 2.2 * turnDir * turnPct * dt;
     }
 
+    function getCollidingVehicle(x, z, playerCar) {
+      const oldX = playerCar.x;
+      const oldZ = playerCar.z;
+      playerCar.x = x;
+      playerCar.z = z;
+      const myFootprint = vehicleFootprintAt(playerCar, playerCar.offset, 0, 0.1);
+      playerCar.x = oldX;
+      playerCar.z = oldZ;
+
+      for (let i = 0; i < cars.length; i++) {
+        const other = cars[i];
+        if (other === playerCar) continue;
+        const otherFootprint = vehicleFootprintAt(other, other.offset, 0, 0.1);
+        if (rectsOverlap(myFootprint, otherFootprint)) {
+          return other;
+        }
+      }
+      return null;
+    }
+
     const dx = Math.cos(car.angle) * car.speed * dt;
     const dz = -Math.sin(car.angle) * car.speed * dt;
 
     const nextX = car.x + dx;
     const nextZ = car.z + dz;
 
-    let hitWall = false;
+    let hitObstacle = false;
     let movedX = false;
     let movedZ = false;
+    let collidedCar = null;
 
-    if (isStaticWalkable(nextX, car.z, car.type.width * 0.42)) {
+    let isBlockedX = false;
+    if (!isStaticWalkable(nextX, car.z, car.type.width * 0.42)) {
+      isBlockedX = true;
+    } else {
+      const hit = getCollidingVehicle(nextX, car.z, car);
+      if (hit) {
+        isBlockedX = true;
+        collidedCar = hit;
+      }
+    }
+
+    if (!isBlockedX) {
       car.x = nextX;
       car.lastSafeX = nextX;
       movedX = true;
     } else {
       car.x = car.lastSafeX || car.x;
-      hitWall = true;
+      hitObstacle = true;
     }
 
-    if (isStaticWalkable(car.x, nextZ, car.type.width * 0.42)) {
+    let isBlockedZ = false;
+    if (!isStaticWalkable(car.x, nextZ, car.type.width * 0.42)) {
+      isBlockedZ = true;
+    } else {
+      const hit = getCollidingVehicle(car.x, nextZ, car);
+      if (hit) {
+        isBlockedZ = true;
+        collidedCar = hit;
+      }
+    }
+
+    if (!isBlockedZ) {
       car.z = nextZ;
       car.lastSafeZ = nextZ;
       movedZ = true;
     } else {
       car.z = car.lastSafeZ || car.z;
-      hitWall = true;
+      hitObstacle = true;
     }
 
-    if (hitWall && !movedX && !movedZ) {
+    if (collidedCar) {
+      car.speed = -car.speed * 0.35;
+      if (Math.abs(car.speed) < 0.8) car.speed = 0;
+      
+      if (collidedCar.type.id === "police" && state.wanted >= 20) {
+        collidedCar.speed = -collidedCar.speed * 0.5;
+        addFloater("RAMMED!", car.x, car.z, "#ff3333");
+      } else {
+        collidedCar.currentSpeed = 0;
+        collidedCar.waitTime = 0.5;
+        addFloater("COLLISION +wanted", car.x, car.z, "#ff9933");
+      }
+      
+      addWanted(2.5);
+      addPulse(car.x, car.z, 0xffcc33, 4.0, 0.3);
+    } else if (hitObstacle && !movedX && !movedZ) {
       car.speed = -car.speed * 0.28;
       if (Math.abs(car.speed) < 0.8) car.speed = 0;
       addPulse(car.x, car.z, 0xff5555, 3.2, 0.25);
@@ -3708,11 +3758,11 @@
       let fixed = false;
       for (let i = 0; i < cars.length; i += 1) {
         const car = cars[i];
-        if (car.userDriven) continue;
+        if (car.userDriven || car.chasingPlayer) continue;
         const footprint = vehicleFootprintAt(car, car.offset, 0, 0.12);
         for (let j = i + 1; j < cars.length; j += 1) {
           const other = cars[j];
-          if (other.userDriven) continue;
+          if (other.userDriven || other.chasingPlayer) continue;
           const otherFootprint = vehicleFootprintAt(other, other.offset, 0, 0.12);
           if (!rectsOverlap(footprint, otherFootprint)) {
             continue;
@@ -3829,29 +3879,54 @@
     const nextX = car.mesh.position.x + dxMove;
     const nextZ = car.mesh.position.z + dzMove;
     
-    if (isStaticWalkable(nextX, nextZ, car.type.width * 0.6)) {
+    function policeCarCollidesWithPlayer(policeCar, tx, tz) {
+      if (!state.drivingCar) return false;
+      const oldMeshX = policeCar.mesh.position.x;
+      const oldMeshZ = policeCar.mesh.position.z;
+      policeCar.mesh.position.x = tx;
+      policeCar.mesh.position.z = tz;
+      const copFootprint = vehicleFootprintAt(policeCar, policeCar.offset, 0, 0.1);
+      policeCar.mesh.position.x = oldMeshX;
+      policeCar.mesh.position.z = oldMeshZ;
+
+      const playerFootprint = vehicleFootprintAt(state.drivingCar, state.drivingCar.offset, 0, 0.1);
+      return rectsOverlap(copFootprint, playerFootprint);
+    }
+
+    let isBlocked = false;
+    if (!isStaticWalkable(nextX, nextZ, car.type.width * 0.6)) {
+      isBlocked = true;
+    }
+    
+    let hitPlayerCar = false;
+    if (state.drivingCar && policeCarCollidesWithPlayer(car, nextX, nextZ)) {
+      isBlocked = true;
+      hitPlayerCar = true;
+    }
+
+    if (!isBlocked) {
       car.mesh.position.set(nextX, 0, nextZ);
     } else {
-      car.angle += diff > 0 ? -Math.PI * 0.25 : Math.PI * 0.25;
-      car.speed = -car.speed * 0.35;
-      if (Math.abs(car.speed) < 0.8) car.speed = 0;
-    }
-    car.mesh.rotation.y = car.angle;
-    
-    const distSqPlayer = distSq(car.mesh.position, player);
-    if (distSqPlayer < 5.0) {
-      if (state.drivingCar) {
+      if (hitPlayerCar) {
         state.drivingCar.speed = -state.drivingCar.speed * 0.4;
         addPulse(player.x, player.z, 0xff5555, 4.0, 0.3);
         addFloater("RAMMED!", player.x, player.z, "#ff3333");
         car.speed = -car.speed * 0.5;
       } else {
-        state.health = clamp(state.health - 8.0 * dt, 0, state.maxHealth);
-        const knockX = Math.cos(car.angle) * 3;
-        const knockZ = -Math.sin(car.angle) * 3;
-        moveCircle(player, knockX, knockZ);
-        addFloater("WATCH OUT!", player.x, player.z, "#ff3333");
+        car.angle += diff > 0 ? -Math.PI * 0.25 : Math.PI * 0.25;
+        car.speed = -car.speed * 0.35;
+        if (Math.abs(car.speed) < 0.8) car.speed = 0;
       }
+    }
+    car.mesh.rotation.y = car.angle;
+    
+    const distSqPlayer = distSq(car.mesh.position, player);
+    if (!state.drivingCar && distSqPlayer < 5.0) {
+      state.health = clamp(state.health - 8.0 * dt, 0, state.maxHealth);
+      const knockX = Math.cos(car.angle) * 3;
+      const knockZ = -Math.sin(car.angle) * 3;
+      moveCircle(player, knockX, knockZ);
+      addFloater("WATCH OUT!", player.x, player.z, "#ff3333");
     }
   }
 

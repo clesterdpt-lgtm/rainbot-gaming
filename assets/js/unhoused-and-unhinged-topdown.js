@@ -531,6 +531,7 @@
       attack: 0,
       hurt: 0,
       log: 0,
+      copWitness: 0,
     },
     district: districts[4],
     waveTarget: 8,
@@ -3175,8 +3176,11 @@
       );
       if (copNearby || policeCarNearby) {
         amount *= 2.0;
-        logLine("Cops witnessed your antics! Heat increase doubled.");
-        addFloater("HEAT x2 (COPS NEARBY)", player.x, player.z, "#ff4b4b");
+        if (state.cooldowns.copWitness <= 0) {
+          logLine("Cops witnessed your antics! Heat increase doubled.");
+          addFloater("HEAT x2 (COPS NEARBY)", player.x, player.z, "#ff4b4b");
+          state.cooldowns.copWitness = 3.0; // 3-second spam protection cooldown
+        }
       }
     }
     state.wanted = clamp(state.wanted + amount, 0, 100);

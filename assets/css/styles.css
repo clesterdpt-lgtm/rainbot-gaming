@@ -2506,6 +2506,8 @@ body.arcade-home::before {
 }
 
 .directory-card__poster--again img,
+.poster-card--weight img,
+.directory-card__poster--weight img,
 .poster-card--doorcrash img,
 .directory-card__poster--doorcrash img,
 .poster-card--tardigrade img,
@@ -2542,6 +2544,8 @@ body.arcade-home::before {
 }
 
 .directory-card__poster--again::before,
+.poster-card--weight::before,
+.directory-card__poster--weight::before,
 .poster-card--doorcrash::before,
 .directory-card__poster--doorcrash::before,
 .poster-card--tardigrade::before,
@@ -4123,6 +4127,12 @@ body.arcade-home::before {
 
 .poster-card--snake img,
 .directory-card__poster--snake img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.poster-card--weight img,
+.directory-card__poster--weight img {
   object-fit: cover;
   object-position: center;
 }

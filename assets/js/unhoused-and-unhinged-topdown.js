@@ -2733,6 +2733,8 @@
     car.angle = car.mesh.rotation.y;
     car.x = car.mesh.position.x;
     car.z = car.mesh.position.z;
+    car.lastSafeX = car.x;
+    car.lastSafeZ = car.z;
 
     if (player.mesh) {
       player.mesh.visible = false;
@@ -3407,15 +3409,19 @@
 
     if (isStaticWalkable(nextX, car.z, car.type.width * 0.42)) {
       car.x = nextX;
+      car.lastSafeX = nextX;
       movedX = true;
     } else {
+      car.x = car.lastSafeX || car.x;
       hitWall = true;
     }
 
     if (isStaticWalkable(car.x, nextZ, car.type.width * 0.42)) {
       car.z = nextZ;
+      car.lastSafeZ = nextZ;
       movedZ = true;
     } else {
+      car.z = car.lastSafeZ || car.z;
       hitWall = true;
     }
 

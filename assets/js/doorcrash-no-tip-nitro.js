@@ -7,7 +7,7 @@
   "use strict";
 
   const GAME_ID = "doorcrash";
-  const DELIVERIES_TO_WIN = 3;
+  const DELIVERIES_TO_WIN = 5;
   const LANES = [-3.25, 0, 3.25];
   const PLAYER_Z = 0;
   const OBSTACLE_START_Z = -118;
@@ -28,6 +28,22 @@
       text: "The elevator is broken and the fries have entered their villain era.",
       length: 2320,
     },
+    {
+      title: "Campus Quad Detour",
+      text: "Scooters, delivery bots, and exactly one useful ramp stand between you and dorm justice.",
+      length: 2700,
+      airDrop: true,
+      airLane: 1,
+      airHeight: 2.35,
+    },
+    {
+      title: "Algorithmic Suburb Spiral",
+      text: "Every cul-de-sac looks identical and the app insists this is efficient.",
+      length: 3100,
+      airDrop: true,
+      airLane: 2,
+      airHeight: 2.75,
+    },
   ];
 
   const EVENTS = [
@@ -47,6 +63,9 @@
     scooter: { label: "Sidewalk scooter", bag: 10, heat: 2, tip: 0.65, score: 150 },
     sedan: { label: "Parked sedan", bag: 12, heat: 3, tip: 0.85, score: 180 },
     soda: { label: "Spilled soda", bag: 4, heat: 1, tip: 0.3, score: 60 },
+    bot: { label: "Delivery bot", bag: 8, heat: 1, tip: 0.55, score: 130, jump: true },
+    barricade: { label: "Road barricade", bag: 16, heat: 4, tip: 1.1, score: 230, jump: true, jumpHeight: 1.08 },
+    drone: { label: "Low-flying drone", bag: 13, heat: 2, tip: 0.9, score: 210, airborne: true, duckHeight: 0.52 },
   };
 
   const THREE_CDNS = [
@@ -71,6 +90,8 @@
     primary: $("btn-primary"),
     pause: $("btn-pause"),
     restart: $("btn-restart"),
+    sound: $("btn-sound"),
+    fullscreen: $("btn-fullscreen"),
     left: $("btn-left"),
     right: $("btn-right"),
     jump: $("btn-jump"),
@@ -125,13 +146,29 @@
     spawnTimer: 0,
     eventTimer: 0,
     eventMessageTimer: 0,
+    airRampSpawned: false,
+    airRampTimer: 0,
     hitFlash: 0,
     cameraShake: 0,
+    impactTimer: 0,
+    impactDuration: 0.5,
+    impactSide: 1,
     lastTime: 0,
     reducedMotion: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   };
-  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
+  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 3 });
   let saveMenu = null;
+
+  const audio = {
+    enabled: readSoundPreference(),
+    ctx: null,
+    master: null,
+    engine: null,
+    engineFilter: null,
+    engineGain: null,
+    noiseBuffer: null,
+    lastBoost: false,
+  };
 
   const world = {
     renderer: null,
@@ -141,9 +178,12 @@
     car: null,
     carWheels: [],
     roadLines: [],
+    roadDetails: [],
     buildings: [],
     neonRails: [],
+    streetProps: [],
     obstacles: [],
+    effects: [],
     destination: null,
     materials: {},
     textures: {},
@@ -158,6 +198,181 @@
   const pick = (items) => items[Math.floor(Math.random() * items.length)];
   const percent = (value) => Math.round(clamp(value, 0, 100)) + "%";
   const money = (value) => "$" + Math.max(0, value).toFixed(2);
+
+  function readSoundPreference() {
+    try {
+      return localStorage.getItem(`${GAME_ID}:sound`) !== "off";
+    } catch (error) {
+      return true;
+    }
+  }
+
+  function writeSoundPreference() {
+    try {
+      localStorage.setItem(`${GAME_ID}:sound`, audio.enabled ? "on" : "off");
+    } catch (error) {}
+  }
+
+  function updateSoundButton() {
+    if (!el.sound) return;
+    el.sound.textContent = audio.enabled ? "Sound on" : "Sound off";
+    el.sound.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
+  }
+
+  function ensureAudio() {
+    if (!audio.enabled) return false;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return false;
+
+    if (!audio.ctx) {
+      audio.ctx = new AudioContext();
+      audio.master = audio.ctx.createGain();
+      audio.master.gain.value = 0.32;
+      audio.master.connect(audio.ctx.destination);
+
+      audio.engine = audio.ctx.createOscillator();
+      audio.engine.type = "sawtooth";
+      audio.engine.frequency.value = 72;
+      audio.engineFilter = audio.ctx.createBiquadFilter();
+      audio.engineFilter.type = "lowpass";
+      audio.engineFilter.frequency.value = 180;
+      audio.engineGain = audio.ctx.createGain();
+      audio.engineGain.gain.value = 0;
+      audio.engine.connect(audio.engineFilter);
+      audio.engineFilter.connect(audio.engineGain);
+      audio.engineGain.connect(audio.master);
+      audio.engine.start();
+      audio.noiseBuffer = makeNoiseBuffer(audio.ctx);
+    }
+
+    if (audio.ctx.state === "suspended") {
+      audio.ctx.resume().catch(() => {});
+    }
+    return true;
+  }
+
+  function makeNoiseBuffer(ctx) {
+    const length = Math.floor(ctx.sampleRate * 0.45);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    }
+    return buffer;
+  }
+
+  function playTone(frequency, type, duration, gainValue, slideTo = frequency, delay = 0) {
+    if (!ensureAudio()) return;
+    const ctx = audio.ctx;
+    const now = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, now);
+    if (slideTo !== frequency) {
+      osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), now + duration);
+    }
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, gainValue), now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain);
+    gain.connect(audio.master);
+    osc.start(now);
+    osc.stop(now + duration + 0.04);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playNoiseBurst(duration, gainValue, filterFrequency, delay = 0) {
+    if (!ensureAudio() || !audio.noiseBuffer) return;
+    const ctx = audio.ctx;
+    const now = ctx.currentTime + delay;
+    const source = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    source.buffer = audio.noiseBuffer;
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(filterFrequency, now);
+    filter.Q.value = 1.2;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, gainValue), now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(audio.master);
+    source.start(now);
+    source.stop(now + duration + 0.05);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playStartSound() {
+    playTone(196, "triangle", 0.09, 0.045, 294);
+    playTone(392, "triangle", 0.12, 0.045, 523, 0.07);
+  }
+
+  function playJumpSound() {
+    playTone(340, "triangle", 0.16, 0.045, 620);
+  }
+
+  function playLaneSound() {
+    playTone(220, "sine", 0.055, 0.024, 260);
+  }
+
+  function playBoostSound() {
+    playNoiseBurst(0.24, 0.07, 1500);
+    playTone(170, "sawtooth", 0.2, 0.04, 260);
+  }
+
+  function playPickupSound() {
+    playTone(523, "triangle", 0.08, 0.05, 784);
+    playTone(1046, "sine", 0.11, 0.035, 1318, 0.055);
+  }
+
+  function playRampSound() {
+    playNoiseBurst(0.18, 0.06, 1850);
+    playTone(260, "triangle", 0.12, 0.045, 520);
+    playTone(680, "sine", 0.18, 0.035, 980, 0.08);
+  }
+
+  function playCrashSound(type) {
+    const heavy = type === "sedan";
+    playNoiseBurst(heavy ? 0.34 : 0.22, heavy ? 0.2 : 0.13, heavy ? 520 : 920);
+    playTone(heavy ? 118 : 150, "sawtooth", heavy ? 0.28 : 0.18, heavy ? 0.1 : 0.07, heavy ? 44 : 70);
+    if (heavy) {
+      playTone(360, "square", 0.13, 0.045, 160, 0.03);
+    }
+  }
+
+  function playDeliverySound() {
+    playTone(330, "triangle", 0.09, 0.044, 440);
+    playTone(494, "triangle", 0.11, 0.044, 660, 0.08);
+    playTone(740, "sine", 0.16, 0.036, 988, 0.16);
+  }
+
+  function playGameOverSound() {
+    playTone(196, "sawtooth", 0.18, 0.055, 128);
+    playTone(128, "sawtooth", 0.24, 0.045, 72, 0.12);
+  }
+
+  function updateAudio() {
+    if (!audio.ctx || !audio.engineGain) return;
+    const now = audio.ctx.currentTime;
+    const active = audio.enabled && state.running && !state.paused && !state.gameOver;
+    const engineGain = active ? (state.boostActive ? 0.068 : 0.034) : 0.0001;
+    const engineFrequency = clamp((state.boostActive ? 98 : 58) + state.speed * (state.boostActive ? 1.1 : 0.72), 42, 160);
+    audio.engine.frequency.setTargetAtTime(engineFrequency, now, 0.045);
+    audio.engineFilter.frequency.setTargetAtTime(state.boostActive ? 420 : 190, now, 0.08);
+    audio.engineGain.gain.setTargetAtTime(engineGain, now, 0.08);
+
+    if (active && state.boostActive && !audio.lastBoost) playBoostSound();
+    audio.lastBoost = active && state.boostActive;
+  }
 
   function loadThree(index = 0) {
     if (window.THREE) {
@@ -252,6 +467,21 @@
       cash: new THREE.MeshStandardMaterial({ color: 0x6bff7d, emissive: 0x156a22, roughness: 0.4, metalness: 0.16 }),
       buildingA: new THREE.MeshStandardMaterial({ color: 0x11192a, roughness: 0.72, metalness: 0.2 }),
       buildingB: new THREE.MeshStandardMaterial({ color: 0x1c1430, roughness: 0.72, metalness: 0.2 }),
+      storefront: new THREE.MeshStandardMaterial({ color: 0x123046, emissive: 0x071c2b, roughness: 0.3, metalness: 0.18 }),
+      awningCyan: new THREE.MeshStandardMaterial({ color: 0x2ee0ff, emissive: 0x0b5c76, roughness: 0.45, metalness: 0.1 }),
+      awningPink: new THREE.MeshStandardMaterial({ color: 0xff2e88, emissive: 0x5b1038, roughness: 0.45, metalness: 0.1 }),
+      curbPaint: new THREE.MeshBasicMaterial({ color: 0x2ee0ff, transparent: true, opacity: 0.7 }),
+      crosswalk: new THREE.MeshBasicMaterial({ color: 0xeaf7ff, transparent: true, opacity: 0.68 }),
+      lampPole: new THREE.MeshStandardMaterial({ color: 0x2a3342, roughness: 0.72, metalness: 0.38 }),
+      lampGlow: new THREE.MeshBasicMaterial({ color: 0xffe6a6 }),
+      lightPoolCyan: new THREE.MeshBasicMaterial({ color: 0x2ee0ff, transparent: true, opacity: 0.14, depthWrite: false }),
+      lightPoolWarm: new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: 0.16, depthWrite: false }),
+      roadPatch: new THREE.MeshStandardMaterial({ color: 0x0c1119, roughness: 0.98, metalness: 0.02 }),
+      trashGreen: new THREE.MeshStandardMaterial({ color: 0x284d3b, roughness: 0.74, metalness: 0.08 }),
+      spark: new THREE.MeshBasicMaterial({ color: 0xffd43b, transparent: true, opacity: 1 }),
+      smoke: new THREE.MeshBasicMaterial({ color: 0x9aa7ba, transparent: true, opacity: 0.22, depthWrite: false }),
+      impactRing: new THREE.MeshBasicMaterial({ color: 0xff2e88, transparent: true, opacity: 0.58, depthWrite: false }),
+      skid: new THREE.MeshBasicMaterial({ color: 0x0b0f16, transparent: true, opacity: 0.72, depthWrite: false }),
       windowCyan: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
       windowPink: new THREE.MeshBasicMaterial({ color: 0xff2e88 }),
       windowWarm: new THREE.MeshBasicMaterial({ color: 0xffd43b }),
@@ -335,6 +565,14 @@
     rightSidewalk.position.x = 10.4;
     scene.add(rightSidewalk);
 
+    const leftCurb = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 180), world.materials.curbPaint);
+    leftCurb.position.set(-6.36, 0.06, -58);
+    scene.add(leftCurb);
+
+    const rightCurb = leftCurb.clone();
+    rightCurb.position.x = 6.36;
+    scene.add(rightCurb);
+
     for (let i = 0; i < 34; i++) {
       const marker = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.035, 2.5), world.materials.lane);
       marker.position.set(-1.65, 0.035, -i * 5.8 + 8);
@@ -347,11 +585,25 @@
       world.roadLines.push(marker2);
     }
 
+    for (let i = 0; i < 7; i++) {
+      const detail = makeRoadDetail(i);
+      detail.position.z = -i * 30 + 6;
+      scene.add(detail);
+      world.roadDetails.push(detail);
+    }
+
     for (let i = 0; i < 18; i++) {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 7), i % 2 ? world.materials.pink : world.materials.cyan);
       rail.position.set(i % 2 ? -6.35 : 6.35, 0.18, -i * 9 + 9);
       scene.add(rail);
       world.neonRails.push(rail);
+    }
+
+    for (let i = 0; i < 16; i++) {
+      const side = i % 2 ? -1 : 1;
+      const prop = makeStreetProp(side, -i * 11 + rand(-2.5, 3.5), i);
+      scene.add(prop);
+      world.streetProps.push(prop);
     }
 
     for (let i = 0; i < 24; i++) {
@@ -367,6 +619,98 @@
     world.car = makePlayerCar();
     scene.add(world.car);
     loadModelAssets();
+  }
+
+  function makeRoadDetail(index) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.userData.kind = index % 3 === 1 ? "stop" : "crosswalk";
+
+    if (group.userData.kind === "crosswalk") {
+      for (let i = 0; i < 8; i++) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.035, 0.42), world.materials.crosswalk);
+        stripe.position.set(-4.8 + i * 1.37, 0.075, 0);
+        group.add(stripe);
+      }
+      const stopBar = new THREE.Mesh(new THREE.BoxGeometry(10.3, 0.032, 0.16), world.materials.crosswalk);
+      stopBar.position.set(0, 0.073, 1.05);
+      group.add(stopBar);
+    } else {
+      [-3.25, 0, 3.25].forEach((x) => {
+        const arrow = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.032, 0.18), world.materials.crosswalk);
+        arrow.position.set(x, 0.074, 0);
+        group.add(arrow);
+
+        const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.42, 3), world.materials.crosswalk);
+        arrowHead.position.set(x, 0.076, -0.42);
+        arrowHead.rotation.x = Math.PI / 2;
+        arrowHead.rotation.z = Math.PI / 2;
+        group.add(arrowHead);
+      });
+    }
+
+    if (index % 2 === 0) {
+      const patch = new THREE.Mesh(new THREE.BoxGeometry(rand(1.4, 2.4), 0.028, rand(1.5, 2.8)), world.materials.roadPatch);
+      patch.position.set(rand(-4.6, 4.6), 0.064, rand(-7.5, -4.2));
+      patch.rotation.y = rand(-0.08, 0.08);
+      group.add(patch);
+    }
+
+    return group;
+  }
+
+  function makeStreetProp(side, z, index) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.position.set(rand(-0.25, 0.25), 0, z);
+    group.userData.side = side;
+
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 3.2, 10), world.materials.lampPole);
+    pole.position.set(side * 7.05, 1.62, 0);
+    pole.castShadow = true;
+    group.add(pole);
+
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.07, 0.07), world.materials.lampPole);
+    arm.position.set(side * 6.56, 3.12, 0);
+    group.add(arm);
+
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 10), world.materials.lampGlow);
+    lamp.position.set(side * 6.05, 3.08, 0);
+    group.add(lamp);
+
+    const poolMaterial = index % 2 ? world.materials.lightPoolWarm : world.materials.lightPoolCyan;
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(1.75, 2.55, 0.018, 32), poolMaterial);
+    pool.position.set(side * 4.3, 0.068, 0);
+    pool.scale.z = 0.42;
+    group.add(pool);
+
+    if (index % 3 === 0) {
+      const glow = new THREE.PointLight(index % 2 ? 0xffd43b : 0x2ee0ff, 1.35, 14);
+      glow.position.set(side * 6.05, 2.9, 0);
+      group.add(glow);
+    }
+
+    if (index % 4 !== 1) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 0.08), world.materials.lampPole);
+      post.position.set(side * 7.48, 0.62, rand(-1.6, 1.6));
+      group.add(post);
+
+      const sign = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.42, 0.055), pick([world.materials.cyan, world.materials.pink, world.materials.yellow]));
+      sign.position.set(side * 7.48, 1.26, post.position.z);
+      sign.rotation.y = side > 0 ? -0.18 : 0.18;
+      group.add(sign);
+    } else {
+      const bin = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.72, 0.46), world.materials.trashGreen);
+      bin.position.set(side * 7.5, 0.38, rand(-1.2, 1.2));
+      bin.castShadow = true;
+      group.add(bin);
+
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.08, 0.52), world.materials.black);
+      lid.position.set(bin.position.x, 0.77, bin.position.z);
+      group.add(lid);
+    }
+
+    return group;
   }
 
   function makeBuilding(side, z) {
@@ -385,9 +729,23 @@
     const windowMaterial = pick([world.materials.windowCyan, world.materials.windowPink, world.materials.windowWarm]);
     const rows = Math.max(3, Math.floor(height / 1.3));
     const facadeZ = depth / 2 + 0.022;
+    const groundFloor = new THREE.Mesh(new THREE.BoxGeometry(width * 0.72, 0.82, 0.04), world.materials.storefront);
+    groundFloor.position.set(0, 0.55, facadeZ + 0.025);
+    group.add(groundFloor);
+
+    const door = new THREE.Mesh(new THREE.BoxGeometry(width * 0.18, 0.72, 0.05), world.materials.black);
+    door.position.set(width * 0.22, 0.45, facadeZ + 0.052);
+    group.add(door);
+
+    const awningMaterial = Math.random() > 0.5 ? world.materials.awningCyan : world.materials.awningPink;
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(width * 0.82, 0.16, 0.36), awningMaterial);
+    awning.position.set(0, 1.08, facadeZ + 0.16);
+    awning.castShadow = true;
+    group.add(awning);
+
     for (let r = 0; r < rows; r++) {
       if (Math.random() < 0.24) continue;
-      const win = new THREE.Mesh(new THREE.BoxGeometry(width * 0.56, 0.11, 0.035), windowMaterial);
+      const win = new THREE.Mesh(new THREE.BoxGeometry(width * rand(0.34, 0.58), 0.11, 0.035), windowMaterial);
       win.position.set(0, 0.8 + r * 1.05, facadeZ);
       group.add(win);
     }
@@ -401,6 +759,19 @@
       const signStripe = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.055, 0.065), world.materials.white);
       signStripe.position.set(0, sign.position.y, depth / 2 + 0.09);
       group.add(signStripe);
+    }
+
+    if (height > 8 && Math.random() > 0.42) {
+      const rooftop = new THREE.Mesh(new THREE.BoxGeometry(width * 0.38, rand(0.38, 0.74), depth * 0.42), material);
+      rooftop.position.set(rand(-width * 0.16, width * 0.16), height + rooftop.geometry.parameters.height / 2 - 0.05, rand(-depth * 0.08, depth * 0.08));
+      rooftop.castShadow = true;
+      group.add(rooftop);
+    }
+
+    if (Math.random() > 0.55) {
+      const vertical = new THREE.Mesh(new THREE.BoxGeometry(0.08, Math.min(height - 1.2, rand(3.2, 5.8)), 0.04), pick([world.materials.windowCyan, world.materials.windowPink, world.materials.windowWarm]));
+      vertical.position.set(-width * 0.48, vertical.geometry.parameters.height / 2 + 1.0, facadeZ + 0.045);
+      group.add(vertical);
     }
 
     group.position.set(side * rand(9.6, 15.5), 0, z);
@@ -618,6 +989,7 @@
     group.userData.type = type;
     group.userData.lane = lane;
     group.userData.hit = false;
+    group.userData.cleared = false;
     group.userData.passed = false;
     group.userData.spin = rand(-1, 1);
 
@@ -683,9 +1055,244 @@
       const glow = new THREE.PointLight(0x6bff7d, 2.6, 9);
       glow.position.set(0, 1.1, 0);
       group.add(glow);
+    } else if (type === "ramp") {
+      group.userData.spin = 0;
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.18, 2.75), world.materials.yellow);
+      deck.position.set(0, 0.38, 0);
+      deck.rotation.x = 0.34;
+      deck.castShadow = true;
+      deck.receiveShadow = true;
+      group.add(deck);
+
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(2.18, 0.14, 0.2), world.materials.cyan);
+      lip.position.set(0, 0.73, -1.12);
+      lip.castShadow = true;
+      group.add(lip);
+
+      [-0.78, 0.78].forEach((x) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 2.45), world.materials.pink);
+        rail.position.set(x, 0.54, 0);
+        rail.rotation.x = 0.34;
+        group.add(rail);
+      });
+
+      for (let i = 0; i < 3; i++) {
+        const chevron = new THREE.Mesh(new THREE.BoxGeometry(1.08 - i * 0.14, 0.055, 0.12), world.materials.black);
+        chevron.position.set(0, 0.57 + i * 0.08, 0.64 - i * 0.58);
+        chevron.rotation.x = 0.34;
+        group.add(chevron);
+      }
+
+      const glow = new THREE.PointLight(0xffd43b, 2.8, 10);
+      glow.position.set(0, 1.0, 0);
+      group.add(glow);
+    } else if (type === "bot") {
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.58, 1.35), world.materials.white);
+      shell.position.y = 0.52;
+      shell.castShadow = true;
+      group.add(shell);
+
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.26, 0.06), world.materials.cyan);
+      screen.position.set(0, 0.62, 0.71);
+      group.add(screen);
+
+      [-0.42, 0.42].forEach((x) => {
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.06, 8, 14), world.materials.black);
+        wheel.position.set(x, 0.22, 0.42);
+        wheel.rotation.y = Math.PI / 2;
+        group.add(wheel);
+      });
+    } else if (type === "barricade") {
+      [-0.82, 0.82].forEach((x) => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.04, 0.18), world.materials.orange);
+        post.position.set(x, 0.52, 0);
+        post.castShadow = true;
+        group.add(post);
+      });
+
+      const board = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.34, 0.16), world.materials.white);
+      board.position.set(0, 0.76, 0);
+      board.castShadow = true;
+      group.add(board);
+
+      [-0.52, 0.02, 0.56].forEach((x) => {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.38, 0.18), world.materials.pink);
+        stripe.position.set(x, 0.76, 0.02);
+        stripe.rotation.z = -0.45;
+        group.add(stripe);
+      });
+    } else if (type === "drone") {
+      group.userData.spin = 0;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.28, 0.72), world.materials.glass);
+      body.position.y = 1.82;
+      body.castShadow = true;
+      group.add(body);
+
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.12, 0.05), world.materials.pink);
+      eye.position.set(0, 1.82, 0.39);
+      group.add(eye);
+
+      [
+        [-0.68, 0.22],
+        [0.68, 0.22],
+        [-0.68, -0.22],
+        [0.68, -0.22],
+      ].forEach(([x, z]) => {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.05, 0.05), world.materials.black);
+        arm.position.set(x * 0.5, 1.84, z);
+        arm.rotation.y = x > 0 ? 0.25 : -0.25;
+        group.add(arm);
+
+        const rotor = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.025, 20), world.materials.cyan);
+        rotor.userData.rotor = true;
+        rotor.position.set(x, 1.9, z);
+        rotor.scale.z = 0.28;
+        group.add(rotor);
+      });
+
+      const glow = new THREE.PointLight(0xff2e88, 2.4, 9);
+      glow.position.set(0, 1.82, 0);
+      group.add(glow);
     }
 
     return group;
+  }
+
+  function makeImpactEffect(position, type, severity) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const heavy = type === "sedan";
+    group.position.set(position.x, 0.08, position.z + 0.25);
+    group.userData.age = 0;
+    group.userData.lifetime = heavy ? 0.9 : 0.64;
+
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.035, 8, 34), world.materials.impactRing.clone());
+    ring.userData.effectKind = "ring";
+    ring.userData.disposeMaterial = true;
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.08;
+    group.add(ring);
+
+    const skidCount = heavy ? 4 : 2;
+    for (let i = 0; i < skidCount; i++) {
+      const skid = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.025, rand(1.2, 2.5)), world.materials.skid.clone());
+      skid.userData.effectKind = "skid";
+      skid.userData.disposeMaterial = true;
+      skid.position.set(rand(-0.8, 0.8), 0.025, rand(-0.8, 0.9));
+      skid.rotation.y = rand(-0.28, 0.28);
+      group.add(skid);
+    }
+
+    const sparkCount = Math.round((heavy ? 20 : 12) * severity);
+    for (let i = 0; i < sparkCount; i++) {
+      const sparkMaterial = world.materials.spark.clone();
+      if (Math.random() > 0.64) sparkMaterial.color.setHex(0xfff4bf);
+      if (Math.random() > 0.82) sparkMaterial.color.setHex(0xff2e88);
+      const spark = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, rand(0.18, 0.34)), sparkMaterial);
+      spark.userData.effectKind = "spark";
+      spark.userData.disposeMaterial = true;
+      spark.userData.velocity = new THREE.Vector3(rand(-4.4, 4.4), rand(2.0, heavy ? 6.2 : 4.7), rand(-5.2, 2.6));
+      spark.userData.spin = new THREE.Vector3(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+      spark.position.set(rand(-0.36, 0.36), rand(0.35, 0.9), rand(-0.26, 0.32));
+      spark.castShadow = true;
+      group.add(spark);
+    }
+
+    const smokeCount = heavy ? 7 : 4;
+    for (let i = 0; i < smokeCount; i++) {
+      const smoke = new THREE.Mesh(new THREE.SphereGeometry(rand(0.12, 0.24), 10, 8), world.materials.smoke.clone());
+      smoke.userData.effectKind = "smoke";
+      smoke.userData.disposeMaterial = true;
+      smoke.userData.velocity = new THREE.Vector3(rand(-0.65, 0.65), rand(0.7, 1.55), rand(-1.4, 0.45));
+      smoke.position.set(rand(-0.46, 0.46), rand(0.28, 0.9), rand(-0.3, 0.38));
+      group.add(smoke);
+    }
+
+    const flash = new THREE.PointLight(heavy ? 0xffd43b : 0xff2e88, heavy ? 5.6 : 3.4, heavy ? 18 : 11);
+    flash.userData.effectKind = "flash";
+    flash.position.set(0, 1.05, 0);
+    group.add(flash);
+
+    world.scene.add(group);
+    world.effects.push(group);
+  }
+
+  function kickObstacle(obstacle, type, severity) {
+    const heavy = type === "sedan";
+    const side = Math.sign(obstacle.position.x - state.carX) || (Math.random() > 0.5 ? 1 : -1);
+    obstacle.userData.hitTimer = heavy ? 0.68 : 0.46;
+    obstacle.userData.hitDuration = obstacle.userData.hitTimer;
+    obstacle.userData.hitVX = side * rand(1.3, heavy ? 3.1 : 2.2) * severity;
+    obstacle.userData.hitVY = rand(1.6, heavy ? 3.2 : 2.5) * severity;
+    obstacle.userData.hitSpinX = rand(-2.6, 2.6) * severity;
+    obstacle.userData.hitSpinZ = -side * rand(2.0, heavy ? 4.8 : 3.2) * severity;
+  }
+
+  function makePickupEffect(position) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.position.set(position.x, 0.28, position.z);
+    group.userData.age = 0;
+    group.userData.lifetime = 0.52;
+
+    for (let i = 0; i < 10; i++) {
+      const material = world.materials.cash.clone();
+      material.transparent = true;
+      material.opacity = 0.9;
+      const coin = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 0.16), material);
+      coin.userData.effectKind = "spark";
+      coin.userData.disposeMaterial = true;
+      coin.userData.velocity = new THREE.Vector3(rand(-2.0, 2.0), rand(1.4, 3.8), rand(-2.0, 1.0));
+      coin.userData.spin = new THREE.Vector3(rand(-9, 9), rand(-9, 9), rand(-9, 9));
+      coin.position.set(rand(-0.25, 0.25), rand(0.28, 0.8), rand(-0.25, 0.25));
+      group.add(coin);
+    }
+
+    const flash = new THREE.PointLight(0x6bff7d, 3.6, 10);
+    flash.userData.effectKind = "flash";
+    flash.position.set(0, 1, 0);
+    group.add(flash);
+
+    world.scene.add(group);
+    world.effects.push(group);
+  }
+
+  function makeRampLaunchEffect(position) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    group.position.set(position.x, 0.2, position.z - 0.25);
+    group.userData.age = 0;
+    group.userData.lifetime = 0.72;
+
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.82, 0.035, 10, 36), world.materials.cyan.clone());
+    ring.material.transparent = true;
+    ring.material.opacity = 0.72;
+    ring.userData.effectKind = "ring";
+    ring.userData.disposeMaterial = true;
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.1;
+    group.add(ring);
+
+    for (let i = 0; i < 14; i++) {
+      const material = (i % 2 ? world.materials.yellow : world.materials.cyan).clone();
+      material.transparent = true;
+      material.opacity = 0.94;
+      const spark = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, rand(0.22, 0.42)), material);
+      spark.userData.effectKind = "spark";
+      spark.userData.disposeMaterial = true;
+      spark.userData.velocity = new THREE.Vector3(rand(-2.4, 2.4), rand(2.2, 5.2), rand(-3.7, -0.2));
+      spark.userData.spin = new THREE.Vector3(rand(-9, 9), rand(-9, 9), rand(-9, 9));
+      spark.position.set(rand(-0.45, 0.45), rand(0.32, 0.85), rand(-0.2, 0.36));
+      group.add(spark);
+    }
+
+    const flash = new THREE.PointLight(0x2ee0ff, 4.2, 14);
+    flash.userData.effectKind = "flash";
+    flash.position.set(0, 1.15, 0);
+    group.add(flash);
+
+    world.scene.add(group);
+    world.effects.push(group);
   }
 
   function resize() {
@@ -697,6 +1304,60 @@
     world.renderer.setSize(width, height, false);
     world.camera.aspect = width / height;
     world.camera.updateProjectionMatrix();
+  }
+
+  function bindFullscreen() {
+    const fsTarget = canvas.closest(".canvas-wrap") || canvas.parentElement;
+    if (!fsTarget) return;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const updateBtn = () => {
+      if (!el.fullscreen) return;
+      const on = isMaxed();
+      el.fullscreen.textContent = on ? "✕" : "⛶";
+      el.fullscreen.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      el.fullscreen.setAttribute("title", on ? "Exit" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateBtn();
+      window.dispatchEvent(new Event("resize"));
+      resize();
+      if (on) canvas.focus({ preventScroll: true });
+    };
+    const toggle = () => {
+      const on = !isMaxed();
+      setMaxed(on);
+      if (on) {
+        const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+        if (req) {
+          try {
+            const ret = req.call(fsTarget);
+            if (ret && ret.catch) ret.catch(() => {});
+          } catch (_) {}
+        }
+      } else if (nativeFsEl()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) {
+          try { exit.call(document); } catch (_) {}
+        }
+      }
+    };
+    if (el.fullscreen) el.fullscreen.addEventListener("click", toggle);
+    const onNativeFsChange = () => {
+      if (!nativeFsEl() && isMaxed()) setMaxed(false);
+    };
+    document.addEventListener("fullscreenchange", onNativeFsChange);
+    document.addEventListener("webkitfullscreenchange", onNativeFsChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) {
+        event.preventDefault();
+        event.stopPropagation();
+        setMaxed(false);
+      }
+    });
+    updateBtn();
   }
 
   function bindInputs() {
@@ -753,6 +1414,20 @@
       state.paused = false;
       startGame();
     });
+    if (el.sound) {
+      updateSoundButton();
+      el.sound.addEventListener("click", () => {
+        audio.enabled = !audio.enabled;
+        writeSoundPreference();
+        updateSoundButton();
+        if (audio.enabled) {
+          ensureAudio();
+          playTone(440, "triangle", 0.08, 0.04, 660);
+        } else if (audio.engineGain && audio.ctx) {
+          audio.engineGain.gain.setTargetAtTime(0.0001, audio.ctx.currentTime, 0.04);
+        }
+      });
+    }
     if (saveSlot) {
       saveMenu = saveSlot.attachButtons({
         primary: el.primary,
@@ -772,6 +1447,7 @@
     bindTap(el.right, () => changeLane(1));
     bindTap(el.jump, jump);
     bindHold(el.boost, () => { state.boostHeld = true; }, () => { state.boostHeld = false; });
+    bindFullscreen();
   }
 
   function bindTap(button, action) {
@@ -798,8 +1474,12 @@
 
   function startGame() {
     if (!state.ready) return;
+    ensureAudio();
+    playStartSound();
+    audio.lastBoost = false;
     if (saveSlot) saveSlot.clear();
     clearObstacles();
+    clearEffects();
     Object.assign(state, {
       running: true,
       paused: false,
@@ -825,8 +1505,13 @@
       spawnTimer: 0.65,
       eventTimer: 5.5,
       eventMessageTimer: 0,
+      airRampSpawned: false,
+      airRampTimer: 0,
       hitFlash: 0,
       cameraShake: 0,
+      impactTimer: 0,
+      impactDuration: 0.5,
+      impactSide: 1,
       lastTime: performance.now(),
     });
     updateRouteChip();
@@ -855,13 +1540,19 @@
       comboTimer: state.comboTimer,
       spawnTimer: state.spawnTimer,
       eventTimer: state.eventTimer,
+      airRampSpawned: state.airRampSpawned,
+      airRampTimer: state.airRampTimer,
     };
   }
 
   function restoreGame(saved) {
     const data = saved && saved.data;
     if (!state.ready || !data) return;
+    ensureAudio();
+    playStartSound();
+    audio.lastBoost = false;
     clearObstacles();
+    clearEffects();
     Object.assign(state, {
       running: true,
       paused: false,
@@ -887,8 +1578,13 @@
       spawnTimer: Math.max(0.25, Number(data.spawnTimer) || 0.65),
       eventTimer: Math.max(1, Number(data.eventTimer) || 5.5),
       eventMessageTimer: 0,
+      airRampSpawned: Boolean(data.airRampSpawned),
+      airRampTimer: Math.max(0, Number(data.airRampTimer) || 0),
       hitFlash: 0,
       cameraShake: 0,
+      impactTimer: 0,
+      impactDuration: 0.5,
+      impactSide: 1,
       lastTime: performance.now(),
     });
     updateRouteChip();
@@ -924,7 +1620,9 @@
 
   function changeLane(delta) {
     if (!state.running || state.paused || state.gameOver) return;
-    state.targetLane = clamp(state.targetLane + delta, 0, LANES.length - 1);
+    const nextLane = clamp(state.targetLane + delta, 0, LANES.length - 1);
+    if (nextLane !== state.targetLane) playLaneSound();
+    state.targetLane = nextLane;
   }
 
   function jump() {
@@ -932,6 +1630,7 @@
     if (state.carY <= 0.04) {
       state.carVY = 8.6;
       state.carY = 0.03;
+      playJumpSound();
     }
   }
 
@@ -946,6 +1645,7 @@
     } else {
       updateIdle(dt);
     }
+    updateAudio();
     renderWorld(dt);
   }
 
@@ -977,8 +1677,10 @@
 
     updateCar(dt);
     updateRoad(dt);
+    updateAirDropRamp(dt);
     updateSpawning(dt, difficulty);
     updateObstacles(dt);
+    updateEffects(dt);
     updateEvents(dt);
     updateDestination();
     updateHUD();
@@ -986,7 +1688,17 @@
     if (state.heat <= 0) endGame("COLD FRIES INCIDENT", "The order achieved room temperature and became evidence.");
     else if (state.bag <= 0) endGame("BAG INTEGRITY FAILURE", "The soup saw freedom and took it.");
     else if (state.patience <= 0) endGame("CUSTOMER RAGE-QUIT", "They texted “nvm” with courtroom energy.");
-    else if (state.distance >= route.length) finishDelivery();
+    else if (state.distance >= route.length) {
+      if (canFinishDelivery(route)) {
+        finishDelivery();
+      } else if (route.airDrop) {
+        state.distance = route.length * 0.985;
+        state.patience = clamp(state.patience - dt * 6.5, 0, 100);
+        if (state.eventMessageTimer <= 0.05) {
+          showEvent("Air drop missed", "Hit a ramp and fly through the marker.", "bad");
+        }
+      }
+    }
   }
 
   function updateCar(dt) {
@@ -1005,9 +1717,13 @@
     }
 
     const steer = clamp((state.carX - previousX) * 3.2, -0.55, 0.55);
-    world.car.position.set(state.carX, state.carY, PLAYER_Z);
-    world.car.rotation.z = lerp(world.car.rotation.z, -steer, Math.min(1, dt * 10));
-    world.car.rotation.x = lerp(world.car.rotation.x, state.carY > 0 ? -0.16 : 0, Math.min(1, dt * 8));
+    const impact = state.impactDuration ? clamp(state.impactTimer / state.impactDuration, 0, 1) : 0;
+    const impactMotion = state.reducedMotion ? 0 : impact;
+    const impactWobble = Math.sin(world.clock * 42) * impactMotion;
+    const impactHop = Math.max(0, Math.sin((1 - impact) * Math.PI * 2.2)) * impactMotion * 0.16;
+    world.car.position.set(state.carX, state.carY + impactHop, PLAYER_Z + impactMotion * 0.42);
+    world.car.rotation.z = lerp(world.car.rotation.z, -steer + state.impactSide * impactMotion * 0.28 + impactWobble * 0.07, Math.min(1, dt * 10));
+    world.car.rotation.x = lerp(world.car.rotation.x, (state.carY > 0 ? -0.16 : 0) - impactMotion * 0.22 + impactWobble * 0.035, Math.min(1, dt * 8));
     world.carWheels.forEach((wheel) => { wheel.rotation.x -= dt * state.speed * 1.8; });
   }
 
@@ -1023,6 +1739,17 @@
       rail.position.z += movement;
       if (rail.position.z > 18) rail.position.z -= 164;
     });
+    world.roadDetails.forEach((detail) => {
+      detail.position.z += movement;
+      if (detail.position.z > 18) detail.position.z -= 210;
+    });
+    world.streetProps.forEach((prop) => {
+      prop.position.z += movement * 0.94;
+      if (prop.position.z > 24) {
+        prop.position.z -= 188;
+        prop.position.x = rand(-0.25, 0.25);
+      }
+    });
     world.buildings.forEach((building) => {
       building.position.z += movement * 0.72;
       if (building.position.z > 24) {
@@ -1032,6 +1759,28 @@
     });
   }
 
+  function updateAirDropRamp(dt) {
+    const route = currentRoute();
+    if (!route.airDrop || !state.running || state.paused || state.gameOver) return;
+    const progress = clamp(state.distance / route.length, 0, 1);
+    state.airRampTimer = Math.max(0, state.airRampTimer - dt);
+
+    if (!state.airRampSpawned && progress > 0.74) {
+      spawnAirDropRamp(route, OBSTACLE_START_Z + 18);
+      state.airRampSpawned = true;
+      state.airRampTimer = 4.8;
+    } else if (progress > 0.94 && state.carY < route.airHeight * 0.45 && state.airRampTimer <= 0) {
+      spawnAirDropRamp(route, OBSTACLE_START_Z + 26);
+      state.airRampTimer = 4.8;
+    }
+  }
+
+  function spawnAirDropRamp(route, z) {
+    const lane = clamp(Number(route.airLane) || 1, 0, LANES.length - 1);
+    spawnObstacle("ramp", lane, z);
+    showEvent("Air drop ramp", "Line up and launch into the marker.", "good");
+  }
+
   function updateSpawning(dt, difficulty) {
     state.spawnTimer -= dt;
     if (state.spawnTimer > 0) return;
@@ -1039,15 +1788,31 @@
 
     const safeLane = Math.floor(rand(0, LANES.length));
     const lanes = [0, 1, 2].filter((lane) => lane !== safeLane);
-    const obstacleCount = Math.random() > 0.78 ? 2 : 1;
+    const obstacleCount = Math.random() > Math.max(0.48, 0.84 - state.delivery * 0.06) ? 2 : 1;
+    const obstaclePool = obstaclePoolForDelivery();
     lanes.sort(() => Math.random() - 0.5).slice(0, obstacleCount).forEach((lane, index) => {
-      const type = pick(["cone", "pothole", "scooter", "sedan", "soda"]);
+      const type = pick(obstaclePool);
       spawnObstacle(type, lane, OBSTACLE_START_Z - index * rand(8, 13));
     });
 
-    if (Math.random() > 0.48) {
+    const rampChance = state.delivery >= 2 ? 0.14 + state.delivery * 0.035 : 0.05;
+    if (Math.random() < rampChance) {
+      spawnObstacle("ramp", safeLane, OBSTACLE_START_Z + rand(8, 15));
+      if (state.delivery >= 3 && Math.random() > 0.28) {
+        spawnObstacle(pick(["pothole", "bot", "barricade"]), safeLane, OBSTACLE_START_Z - rand(4, 11));
+      }
+    } else if (Math.random() > 0.48) {
       spawnObstacle("cash", safeLane, OBSTACLE_START_Z - rand(5, 14));
     }
+  }
+
+  function obstaclePoolForDelivery() {
+    const pool = ["cone", "pothole", "scooter", "sedan", "soda"];
+    if (state.delivery >= 2) pool.push("bot", "bot", "barricade");
+    if (state.delivery >= 3) pool.push("drone", "barricade", "pothole");
+    if (state.delivery >= 4) pool.push("drone", "sedan", "bot", "barricade");
+    if (state.delivery >= 5) pool.push("drone", "drone", "barricade", "sedan");
+    return pool;
   }
 
   function spawnObstacle(type, lane, z) {
@@ -1065,15 +1830,34 @@
       if (obstacle.userData.type === "cash") {
         obstacle.position.y = 0.25 + Math.sin(world.clock * 5 + i) * 0.12;
         obstacle.rotation.y += dt * 2.8;
+      } else if (obstacle.userData.type === "drone") {
+        obstacle.position.y = Math.sin(world.clock * 4.4 + i) * 0.08;
+        obstacle.children.forEach((child) => {
+          if (child.userData && child.userData.rotor) child.rotation.y += dt * 18;
+        });
       }
 
-    if (!obstacle.userData.hit && Math.abs(obstacle.position.z - PLAYER_Z) < 1.2) {
+      if (obstacle.userData.hitTimer > 0) {
+        obstacle.userData.hitTimer = Math.max(0, obstacle.userData.hitTimer - dt);
+        obstacle.position.x += (obstacle.userData.hitVX || 0) * dt;
+        obstacle.position.y = Math.max(0, obstacle.position.y + (obstacle.userData.hitVY || 0) * dt);
+        obstacle.userData.hitVY = (obstacle.userData.hitVY || 0) - 9.5 * dt;
+        obstacle.rotation.x += (obstacle.userData.hitSpinX || 0) * dt;
+        obstacle.rotation.z += (obstacle.userData.hitSpinZ || 0) * dt;
+        const hitProgress = obstacle.userData.hitDuration ? obstacle.userData.hitTimer / obstacle.userData.hitDuration : 0;
+        const squash = 1 + Math.sin((1 - hitProgress) * Math.PI * 2) * 0.035;
+        obstacle.scale.setScalar(squash);
+      } else if (obstacle.userData.hit) {
+        obstacle.scale.setScalar(1);
+      }
+
+      if (!obstacle.userData.hit && !obstacle.userData.cleared && Math.abs(obstacle.position.z - PLAYER_Z) < 1.2) {
         checkCollision(obstacle);
       }
 
       if (!obstacle.userData.passed && obstacle.position.z > PLAYER_Z + 2.2) {
         obstacle.userData.passed = true;
-        if (!obstacle.userData.hit && obstacle.userData.type !== "cash") rewardNearMiss();
+        if (!obstacle.userData.hit && !obstacle.userData.cleared && obstacle.userData.type !== "cash" && obstacle.userData.type !== "ramp") rewardNearMiss();
       }
 
       if (obstacle.position.z > OBSTACLE_END_Z) {
@@ -1084,11 +1868,55 @@
     }
   }
 
+  function updateEffects(dt) {
+    const THREE = window.THREE;
+    const movement = state.speed * dt * 0.82;
+    for (let i = world.effects.length - 1; i >= 0; i--) {
+      const effect = world.effects[i];
+      effect.userData.age += dt;
+      effect.position.z += movement;
+      const progress = clamp(effect.userData.age / effect.userData.lifetime, 0, 1);
+
+      effect.children.forEach((child) => {
+        if (child.userData.effectKind === "spark") {
+          child.position.addScaledVector(child.userData.velocity, dt);
+          child.userData.velocity.y -= 7.6 * dt;
+          child.rotation.x += child.userData.spin.x * dt;
+          child.rotation.y += child.userData.spin.y * dt;
+          child.rotation.z += child.userData.spin.z * dt;
+          if (child.material) child.material.opacity = Math.max(0, 1 - progress);
+        } else if (child.userData.effectKind === "smoke") {
+          child.position.addScaledVector(child.userData.velocity, dt);
+          child.scale.setScalar(1 + progress * 1.7);
+          if (child.material) child.material.opacity = Math.max(0, 0.24 * (1 - progress));
+        } else if (child.userData.effectKind === "ring") {
+          child.scale.setScalar(1 + progress * 3.1);
+          if (child.material) child.material.opacity = Math.max(0, 0.58 * (1 - progress));
+        } else if (child.userData.effectKind === "skid") {
+          if (child.material) child.material.opacity = Math.max(0, 0.72 * (1 - progress * 1.2));
+        } else if (child.userData.effectKind === "flash" && child.isLight) {
+          child.intensity = THREE.MathUtils ? THREE.MathUtils.lerp(child.intensity, 0, progress) : child.intensity * (1 - progress);
+        }
+      });
+
+      if (effect.userData.age >= effect.userData.lifetime) {
+        world.scene.remove(effect);
+        disposeObject(effect);
+        world.effects.splice(i, 1);
+      }
+    }
+  }
+
   function checkCollision(obstacle) {
     const laneDistance = Math.abs(obstacle.position.x - state.carX);
     if (laneDistance > 1.05) return;
 
     const type = obstacle.userData.type;
+    if (type === "ramp") {
+      hitRamp(obstacle);
+      return;
+    }
+
     if (type === "cash") {
       obstacle.userData.hit = true;
       collectCash(obstacle);
@@ -1096,9 +1924,19 @@
     }
 
     const config = OBSTACLE_TYPES[type];
-    const jumped = config.jump && state.carY > 0.72;
+    const jumped = config.jump && state.carY > (config.jumpHeight || 0.72);
     if (jumped) {
+      obstacle.userData.cleared = true;
       rewardNearMiss(2);
+      showEvent("Clean air", `Cleared ${config.label.toLowerCase()}.`, "good");
+      return;
+    }
+
+    const ducked = config.airborne && state.carY < (config.duckHeight || 0.5);
+    if (ducked) {
+      obstacle.userData.cleared = true;
+      rewardNearMiss(2);
+      showEvent("Stayed low", "Drone missed the bag. Barely.", "good");
       return;
     }
 
@@ -1109,9 +1947,33 @@
     state.score = Math.max(0, state.score - config.score);
     state.streak = 0;
     state.comboTimer = 0;
-    state.hitFlash = 0.38;
-    state.cameraShake = 0.45;
+    const severity = type === "sedan" ? 1.35 : type === "pothole" ? 1.12 : 1;
+    state.hitFlash = 0.34 * severity;
+    state.cameraShake = 0.42 * severity;
+    state.impactTimer = type === "sedan" ? 0.68 : 0.48;
+    state.impactDuration = state.impactTimer;
+    state.impactSide = Math.sign(state.carX - obstacle.position.x) || (Math.random() > 0.5 ? 1 : -1);
+    kickObstacle(obstacle, type, severity);
+    makeImpactEffect(obstacle.position, type, severity);
+    playCrashSound(type);
     showEvent(config.label, "Bag damage. Tip confidence has left the chat.", "bad");
+  }
+
+  function hitRamp(obstacle) {
+    obstacle.userData.hit = true;
+    state.carVY = Math.max(state.carVY, 13.2);
+    state.carY = Math.max(state.carY, 0.08);
+    state.nitro = clamp(state.nitro + 10, 0, 100);
+    state.score += 220 + state.streak * 20;
+    state.streak += 1;
+    state.comboTimer = 3.4;
+    state.cameraShake = Math.max(state.cameraShake, 0.18);
+    state.impactTimer = Math.max(state.impactTimer, 0.22);
+    state.impactDuration = Math.max(state.impactDuration, 0.38);
+    state.impactSide = Math.random() > 0.5 ? 1 : -1;
+    makeRampLaunchEffect(obstacle.position);
+    playRampSound();
+    showEvent("Ramp launch", "Airborne shortcut. Watch for drones.", "good");
   }
 
   function collectCash(obstacle) {
@@ -1120,6 +1982,8 @@
     state.score += 280 + state.streak * 22;
     state.streak += 1;
     state.comboTimer = 3.5;
+    makePickupEffect(obstacle.position);
+    playPickupSound();
     showEvent("Mystery cash tip", "+nitro, +tip, +delusion.", "good");
     obstacle.visible = false;
   }
@@ -1140,6 +2004,7 @@
     state.eventMessageTimer = Math.max(0, state.eventMessageTimer - dt);
     state.hitFlash = Math.max(0, state.hitFlash - dt * 1.9);
     state.cameraShake = Math.max(0, state.cameraShake - dt * 2.2);
+    state.impactTimer = Math.max(0, state.impactTimer - dt);
 
     if (state.eventMessageTimer <= 0) {
       el.eventChip.classList.remove("doorcrash-event--show");
@@ -1167,13 +2032,22 @@
   function updateDestination() {
     const route = currentRoute();
     const progress = clamp(state.distance / route.length, 0, 1);
-    const visible = progress > 0.72;
+    const visible = progress > (route.airDrop ? 0.66 : 0.72);
     world.destination.visible = visible;
     if (!visible) return;
-    const t = (progress - 0.72) / 0.28;
-    world.destination.position.set(0, 0.05, lerp(-96, -18, t));
-    world.destination.rotation.y += 0.015 + (state.boostActive ? 0.02 : 0);
-    world.destination.scale.setScalar(1 + Math.sin(world.clock * 4) * 0.035);
+    const t = route.airDrop ? (progress - 0.66) / 0.34 : (progress - 0.72) / 0.28;
+    const laneX = route.airDrop ? LANES[clamp(Number(route.airLane) || 1, 0, LANES.length - 1)] : 0;
+    const targetY = route.airDrop ? route.airHeight : 0.05;
+    world.destination.position.set(laneX, targetY, lerp(-96, -18, clamp(t, 0, 1)));
+    world.destination.rotation.y += (route.airDrop ? 0.035 : 0.015) + (state.boostActive ? 0.02 : 0);
+    const pulse = 1 + Math.sin(world.clock * (route.airDrop ? 6 : 4)) * (route.airDrop ? 0.06 : 0.035);
+    world.destination.scale.setScalar((route.airDrop ? 1.12 : 1) * pulse);
+  }
+
+  function canFinishDelivery(route) {
+    if (!route.airDrop) return true;
+    const laneX = LANES[clamp(Number(route.airLane) || 1, 0, LANES.length - 1)];
+    return state.carY >= route.airHeight && Math.abs(state.carX - laneX) <= 1.45;
   }
 
   function finishDelivery() {
@@ -1193,8 +2067,12 @@
     state.tip += 1.35;
     state.spawnTimer = 1.2;
     state.eventTimer = 4.5;
+    state.airRampSpawned = false;
+    state.airRampTimer = 0;
     clearObstacles();
+    clearEffects();
     updateRouteChip();
+    playDeliverySound();
     showEvent("Delivery complete", `+$${(legBonus / 100).toFixed(2)} imaginary value. Next order loaded.`, "good");
   }
 
@@ -1205,10 +2083,11 @@
     const finalScore = Math.round(state.score + state.heat * 13 + state.bag * 17 + state.tip * 155);
     state.score = finalScore;
     const high = api.recordScore(GAME_ID, finalScore);
+    playDeliverySound();
     updateHUD();
     showOverlay(
       high ? "NO TIP NITRO LEGEND" : "DELIVERIES COMPLETE",
-      "Three deliveries survived. The fries are warm enough to testify.",
+      "Five deliveries survived. The fries are warm enough to testify.",
       "Run it back",
       `Score: <strong>${finalScore.toLocaleString()}</strong> · Tip: <strong>${money(state.tip)}</strong> · ${high ? "<strong>New high score</strong>" : "High: <strong>" + api.getHighScore(GAME_ID).toLocaleString() + "</strong>"}`
     );
@@ -1220,6 +2099,7 @@
     if (saveSlot) saveSlot.clear();
     const finalScore = Math.round(state.score);
     const high = api.recordScore(GAME_ID, finalScore);
+    playGameOverSound();
     updateHUD();
     showOverlay(
       title,
@@ -1236,7 +2116,9 @@
   function updateRouteChip() {
     const route = currentRoute();
     if (el.routeTitle) el.routeTitle.textContent = route.title;
-    if (el.routeChip) el.routeChip.textContent = route.text;
+    if (el.routeChip) {
+      el.routeChip.textContent = route.airDrop ? `${route.text} Ramp into the floating marker to finish.` : route.text;
+    }
   }
 
   function shortCue(text) {
@@ -1292,6 +2174,13 @@
       world.renderer.setClearColor(0x05070d, 1);
     }
 
+    const cyanPulse = state.reducedMotion ? 1 : 0.9 + Math.sin(world.clock * 2.4) * 0.1;
+    const pinkPulse = state.reducedMotion ? 0.86 : 0.86 + Math.sin(world.clock * 2.8 + 1.2) * 0.08;
+    const storefrontPulse = state.reducedMotion ? 0.72 : 0.72 + Math.sin(world.clock * 1.6) * 0.06;
+    world.materials.awningCyan.emissiveIntensity = cyanPulse;
+    world.materials.awningPink.emissiveIntensity = pinkPulse;
+    world.materials.storefront.emissiveIntensity = storefrontPulse;
+
     world.renderer.render(world.scene, world.camera);
   }
 
@@ -1303,9 +2192,21 @@
     world.obstacles = [];
   }
 
+  function clearEffects() {
+    world.effects.forEach((effect) => {
+      world.scene.remove(effect);
+      disposeObject(effect);
+    });
+    world.effects = [];
+  }
+
   function disposeObject(object) {
     object.traverse((child) => {
       if (child.geometry) child.geometry.dispose();
+      if (child.userData && child.userData.disposeMaterial && child.material) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((material) => material.dispose && material.dispose());
+      }
     });
   }
 

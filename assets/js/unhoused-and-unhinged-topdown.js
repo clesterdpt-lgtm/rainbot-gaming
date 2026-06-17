@@ -3773,9 +3773,9 @@
           if (Math.abs(state.drivingCar.speed) < 3.0) {
             exitVehicle();
             player.stun = 1.2;
-            state.arrest = clamp(state.arrest + 20, 0, 100);
-            addFloater("PULLED OUT!", player.x, player.z, "#ff1a1a");
-            logLine("A cop pulled you out of your car!");
+            state.arrest = 100;
+            addFloater("ARRESTED!", player.x, player.z, "#ff1a1a");
+            logLine("Busted! A cop pulled you out of your car!");
             addPulse(player.x, player.z, 0xff1a1a, 4.0, 0.45);
           } else {
             // Speeding: run over cop instead
@@ -3791,8 +3791,10 @@
             }
           }
         } else {
-          state.arrest = clamp(state.arrest + 30 * dt, 0, 100);
-          state.health = clamp(state.health - 4 * dt, 0, state.maxHealth);
+          state.arrest = 100;
+          addFloater("ARRESTED!", player.x, player.z, "#ff1a1a");
+          logLine("Busted! Caught by the police!");
+          addPulse(player.x, player.z, 0xff1a1a, 4.0, 0.45);
         }
       } else if (state.arrest > 0 && d > 10) {
         state.arrest = clamp(state.arrest - 18 * dt, 0, 100);

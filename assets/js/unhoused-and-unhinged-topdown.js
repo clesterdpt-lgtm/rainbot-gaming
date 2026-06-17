@@ -481,6 +481,7 @@
 
   const state = {
     running: false,
+    drivingCar: null,
     paused: false,
     ended: false,
     phase: "day",
@@ -549,6 +550,7 @@
   const floaters = [];
   const pulses = [];
   const actionFX = [];
+  let hijackPromptSprite = null;
 
   function makeMesh(geo, material, x = 0, y = 0, z = 0, cast = true, receive = true) {
     const mesh = new THREE.Mesh(geo, material);
@@ -2299,6 +2301,11 @@
     floaters.length = 0;
     pulses.length = 0;
     actionFX.length = 0;
+    state.drivingCar = null;
+    hijackPromptSprite = null;
+    if (player.mesh) {
+      player.mesh.visible = true;
+    }
   }
 
   function spawnActors() {
@@ -2705,6 +2712,237 @@
     return state.wanted >= 40 || state.arrest > 4;
   }
 
+  function findClosestCar(maxDist) {
+    let closest = null;
+    let closestDistSq = maxDist * maxDist;
+    cars.forEach((car) => {
+      const carPos = car.userDriven ? { x: car.x, z: car.z } : vehiclePositionAt(car, car.offset);
+      const dSq = distSq(carPos, player);
+      if (dSq < closestDistSq) {
+        closestDistSq = dSq;
+        closest = car;
+      }
+    });
+    return closest;
+  }
+
+  function enterVehicle(car) {
+    state.drivingCar = car;
+    car.userDriven = true;
+    car.speed = car.currentSpeed || 0;
+    car.angle = car.mesh.rotation.y;
+    car.x = car.mesh.position.x;
+    car.z = car.mesh.position.z;
+
+    if (player.mesh) {
+      player.mesh.visible = false;
+    }
+    
+    spawnSpookedDriverNPC(car.x, car.z);
+    
+    addFloater("HIJACKED!", car.x, car.z, "#ffbf00");
+    logLine("Vehicle hijacked! WASD/Arrows to drive, F to exit.");
+    addWanted(10);
+  }
+
+  function exitVehicle() {
+    const car = state.drivingCar;
+    if (!car) return;
+    
+    car.userDriven = false;
+    car.currentSpeed = 0;
+    
+    const sideAngle = car.angle + Math.PI / 2;
+    const exitX = car.x + Math.sin(sideAngle) * (car.type.width * 0.8 + 0.5);
+    const exitZ = car.z + Math.cos(sideAngle) * (car.type.width * 0.8 + 0.5);
+    
+    if (isWalkable(exitX, exitZ, player.radius)) {
+      player.x = exitX;
+      player.z = exitZ;
+    } else {
+      player.x = car.x;
+      player.z = car.z;
+    }
+    
+    if (player.mesh) {
+      player.mesh.position.set(player.x, 0, player.z);
+      player.mesh.visible = true;
+    }
+    
+    const nearest = nearestLaneForPosition(car.x, car.z);
+    if (nearest) {
+      car.lane = nearest.lane;
+      car.offset = nearest.offset;
+      updateCarPosition(car, 0);
+    }
+    
+    state.drivingCar = null;
+    logLine("Exited vehicle.");
+  }
+
+  function nearestLaneForPosition(x, z) {
+    let best = null;
+    let bestDistSq = Infinity;
+    lanes.forEach((lane) => {
+      const side = laneDirection(lane) * 1.8;
+      let lx, lz;
+      if (lane.axis === "x") {
+        lz = lane.z + side;
+        lx = clamp(x, lane.min, lane.max);
+      } else {
+        lx = lane.x + side;
+        lz = clamp(z, lane.min, lane.max);
+      }
+      
+      const dx = x - lx;
+      const dz = z - lz;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < bestDistSq) {
+        bestDistSq = dSq;
+        const offsetVal = (lane.axis === "x") ? (lx - lane.min) : (lz - lane.min);
+        best = { lane, offset: wrapLaneOffset(lane, offsetVal) };
+      }
+    });
+    return best;
+  }
+
+  function updateHijackPrompt() {
+    if (!state.running || state.paused || state.ended || state.drivingCar) {
+      if (hijackPromptSprite) {
+        hijackPromptSprite.visible = false;
+      }
+      return;
+    }
+    const closestCar = findClosestCar(3.8);
+    if (closestCar) {
+      if (!hijackPromptSprite) {
+        hijackPromptSprite = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: makeTextTexture("[F] Steal Car", "#ffdd33", "rgba(18,18,18,0.82)"),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        hijackPromptSprite.scale.set(6, 1.5, 1);
+        fxGroup.add(hijackPromptSprite);
+      }
+      const carPos = closestCar.userDriven ? { x: closestCar.x, z: closestCar.z } : vehiclePositionAt(closestCar, closestCar.offset);
+      hijackPromptSprite.position.set(carPos.x, 3.8, carPos.z - 1.2);
+      hijackPromptSprite.visible = true;
+    } else {
+      if (hijackPromptSprite) {
+        hijackPromptSprite.visible = false;
+      }
+    }
+  }
+
+  function spawnSpookedDriverNPC(x, z) {
+    const mesh = makeActor("civilian", x, z);
+    const pos = nearestSidewalk(x, z);
+    const civilian = {
+      x,
+      z,
+      radius: 0.85,
+      mesh,
+      dir: rand(0, Math.PI * 2),
+      speed: rand(2.8, 4.2),
+      timer: rand(3.0, 6.0),
+      tipped: 0,
+      panic: 6.0,
+      watching: 0,
+      emojiSprite: null,
+      emojiLife: 0,
+      emojiMaxLife: 0,
+      emojiBob: rand(0, Math.PI * 2),
+      sidewalk: pos ? pos.strip : null,
+      sidewalkSegment: pos ? pos.segment : null,
+      sidewalkTarget: pos ? pos.strip : null,
+      sidewalkTargetSegment: pos ? pos.segment : null,
+      target: null,
+      crossing: false,
+    };
+    assignCivilianTarget(civilian);
+    civilians.push(civilian);
+    
+    addFloater("AAAH!", x, z, "#ff4b4b");
+    setCivilianPanic(civilian, 6.0);
+  }
+
+  function playerCarHit(actor, car) {
+    const dx = actor.x - car.x;
+    const dz = actor.z - car.z;
+    const cos = Math.cos(-car.angle);
+    const sin = Math.sin(-car.angle);
+    const localX = dx * cos - dz * sin;
+    const localZ = dx * sin + dz * cos;
+    
+    const halfLen = car.type.length / 2;
+    const halfWidth = car.type.width / 2;
+    const closestX = clamp(localX, -halfLen, halfLen);
+    const closestZ = clamp(localZ, -halfWidth, halfWidth);
+    const dSq = (localX - closestX) * (localX - closestX) + (localZ - closestZ) * (localZ - closestZ);
+    return dSq < actor.radius * actor.radius;
+  }
+
+  function checkPlayerCarCollisions(car, dt) {
+    if (Math.abs(car.speed) < 1.0) return;
+    
+    zombies.slice().forEach((zombie) => {
+      if (playerCarHit(zombie, car)) {
+        const knockX = Math.cos(car.angle) * 4;
+        const knockZ = -Math.sin(car.angle) * 4;
+        const dmg = Math.abs(car.speed) * 1.5;
+        damageZombie(zombie, dmg, knockX, knockZ);
+        addFloater("crunch", zombie.x, zombie.z, "#a0ffa0");
+        addPulse(zombie.x, zombie.z, 0x8aff6a, 3.0, 0.3);
+      }
+    });
+
+    civilians.forEach((civilian) => {
+      if (civilian.panic <= 0 && playerCarHit(civilian, car)) {
+        setCivilianPanic(civilian, 4);
+        alertCivilianWitnesses(25, 12, civilian, 4);
+        addWanted(8.0);
+        addFloater("HIT & RUN +wanted", civilian.x, civilian.z, "#ff3333");
+        const knockX = Math.cos(car.angle) * 2;
+        const knockZ = -Math.sin(car.angle) * 2;
+        civilian.x += knockX;
+        civilian.z += knockZ;
+        if (civilian.mesh) {
+          civilian.mesh.position.set(civilian.x, 0, civilian.z);
+        }
+      }
+    });
+
+    cops.forEach((cop) => {
+      if (playerCarHit(cop, car)) {
+        cop.stun = 2.0;
+        addWanted(15);
+        addFloater("COP HIT! +wanted", cop.x, cop.z, "#ff1a1a");
+        const knockX = Math.cos(car.angle) * 2;
+        const knockZ = -Math.sin(car.angle) * 2;
+        cop.x += knockX;
+        cop.z += knockZ;
+        if (cop.mesh) {
+          cop.mesh.position.set(cop.x, 0, cop.z);
+        }
+      }
+    });
+
+    cars.forEach((other) => {
+      if (other === car || other.userDriven) return;
+      const otherFootprint = vehicleFootprintAt(other, other.offset, 0, 0.1);
+      if (circleRectHit(car.x, car.z, car.type.width * 0.6, otherFootprint)) {
+        car.speed = -car.speed * 0.35;
+        other.currentSpeed = 0;
+        other.waitTime = 0.5;
+        addWanted(2.5);
+        addFloater("COLLISION +wanted", car.x, car.z, "#ff9933");
+        addPulse(car.x, car.z, 0xffcc33, 4.0, 0.3);
+      }
+    });
+  }
+
   function bumpActStreak() {
     state.actStreak = Math.min(6, state.actStreak + 1);
     state.actStreakTime = 2.4;
@@ -2851,11 +3089,13 @@
   }
 
   function vehicleFootprintAt(car, offset = car.offset, extraFront = 0, pad = 0) {
-    const pos = vehiclePositionAt(car, offset);
-    const direction = laneDirection(car.lane);
+    const pos = car.userDriven ? { x: car.x, z: car.z } : vehiclePositionAt(car, offset);
     const halfLength = car.type.length / 2 + pad;
     const halfWidth = car.type.width / 2 + pad;
-    if (car.lane.axis === "x") {
+    const isX = car.userDriven ? (Math.abs(Math.sin(car.angle)) > 0.707) : (car.lane.axis === "x");
+    const direction = car.userDriven ? 1 : laneDirection(car.lane);
+
+    if (isX) {
       const minX = pos.x - halfLength - (direction < 0 ? extraFront : 0);
       const maxX = pos.x + halfLength + (direction > 0 ? extraFront : 0);
       return {
@@ -2998,6 +3238,7 @@
     updateFX(dt);
     updateCamera(dt);
     updateHUD();
+    updateHijackPrompt();
 
     if (state._god) state.health = state.maxHealth;
     if (state.health <= 0) {
@@ -3116,7 +3357,88 @@
     return zombie;
   }
 
+  function updatePlayerDriving(dt) {
+    const car = state.drivingCar;
+    if (!car) return;
+
+    let accelInput = 0;
+    if (keys.w || keys.arrowup) accelInput += 1;
+    if (keys.s || keys.arrowdown) accelInput -= 1;
+    if (Math.abs(mobileMove.z) > 0.05) {
+      accelInput -= mobileMove.z;
+    }
+
+    let steerInput = 0;
+    if (keys.a || keys.arrowleft) steerInput -= 1;
+    if (keys.d || keys.arrowright) steerInput += 1;
+    if (Math.abs(mobileMove.x) > 0.05) {
+      steerInput += mobileMove.x;
+    }
+
+    const maxSpeed = car.type.speedScale * 14.5;
+    const accelRate = car.type.accel * 1.8;
+    const brakeRate = car.type.brake * 1.8;
+    const drag = 1.6;
+
+    if (accelInput > 0) {
+      car.speed = Math.min(maxSpeed, car.speed + accelRate * dt);
+    } else if (accelInput < 0) {
+      car.speed = Math.max(-maxSpeed * 0.4, car.speed - brakeRate * dt);
+    } else {
+      if (car.speed > 0) car.speed = Math.max(0, car.speed - drag * dt);
+      else if (car.speed < 0) car.speed = Math.min(0, car.speed + drag * dt);
+    }
+
+    if (Math.abs(car.speed) > 0.5) {
+      const turnDir = car.speed > 0 ? 1 : -1;
+      const turnPct = Math.min(1.0, Math.abs(car.speed) / 5.0);
+      car.angle += steerInput * 2.2 * turnDir * turnPct * dt;
+    }
+
+    const dx = Math.cos(car.angle) * car.speed * dt;
+    const dz = -Math.sin(car.angle) * car.speed * dt;
+
+    const nextX = car.x + dx;
+    const nextZ = car.z + dz;
+
+    if (isStaticWalkable(nextX, nextZ, car.type.width * 0.55)) {
+      car.x = nextX;
+      car.z = nextZ;
+    } else {
+      car.speed = -car.speed * 0.28;
+      if (Math.abs(car.speed) < 0.8) car.speed = 0;
+      addPulse(car.x, car.z, 0xff5555, 3.2, 0.25);
+    }
+
+    car.mesh.position.set(car.x, 0, car.z);
+    car.mesh.rotation.y = car.angle;
+
+    player.x = car.x;
+    player.z = car.z;
+    if (player.mesh) {
+      player.mesh.position.set(player.x, 0, player.z);
+      player.mesh.rotation.y = car.angle;
+    }
+
+    checkPlayerCarCollisions(car, dt);
+
+    if (state.actStreakTime > 0) {
+      state.actStreakTime -= dt;
+      if (state.actStreakTime <= 0) state.actStreak = 0;
+    }
+    const layingLow = state.cooldowns.act <= 0 && state.cooldowns.attack <= 0;
+    const atCamp = distSq(player, points.camp) < 200;
+    let cool = state.phase === "day" ? 1.4 : 0.6;
+    if (layingLow) cool += 0.9;
+    if (atCamp) cool += 3.4;
+    state.wanted = clamp(state.wanted - cool * dt, 0, 100);
+  }
+
   function updatePlayer(dt) {
+    if (state.drivingCar) {
+      updatePlayerDriving(dt);
+      return;
+    }
     let ix = 0;
     let iz = 0;
     if (keys.w || keys.arrowup) iz -= 1;
@@ -3271,6 +3593,12 @@
 
   function updateCars(dt) {
     cars.forEach((car) => {
+      if (car.userDriven) {
+        if (car.type.id === "police") {
+          updatePoliceSiren(car, dt);
+        }
+        return;
+      }
       car.hitCooldown = Math.max(0, car.hitCooldown - dt);
       const hazard = vehicleTrafficHazard(car);
       if (hazard.reason && hazard.reason === car.waitReason) {
@@ -3317,9 +3645,11 @@
       let fixed = false;
       for (let i = 0; i < cars.length; i += 1) {
         const car = cars[i];
+        if (car.userDriven) continue;
         const footprint = vehicleFootprintAt(car, car.offset, 0, 0.12);
         for (let j = i + 1; j < cars.length; j += 1) {
           const other = cars[j];
+          if (other.userDriven) continue;
           const otherFootprint = vehicleFootprintAt(other, other.offset, 0, 0.12);
           if (!rectsOverlap(footprint, otherFootprint)) {
             continue;
@@ -3343,6 +3673,7 @@
 
   function resolveActorVehicleOverlaps() {
     trafficActors().forEach((actor) => {
+      if (state.drivingCar && actor === player) return;
       cars.forEach((car) => {
         const rect = vehicleFootprintAt(car, car.offset, 0, 0.08);
         if (!circleRectHit(actor.x, actor.z, actor.radius, rect)) {
@@ -3695,6 +4026,7 @@
     if (!state.running || state.paused || state.cooldowns.act > 0) {
       return;
     }
+    if (state.drivingCar) return;
     const item = activeItem();
     const earn = item.earn || ITEMS.fists.earn;
     state.cooldowns.act = earn.cool || 0.5;
@@ -3732,6 +4064,15 @@
   // regular people spikes wanted harder as more witnesses panic.
   function attack() {
     if (!state.running || state.paused || state.cooldowns.attack > 0) {
+      return;
+    }
+    if (state.drivingCar) {
+      exitVehicle();
+      return;
+    }
+    const closestCar = findClosestCar(3.8);
+    if (closestCar) {
+      enterVehicle(closestCar);
       return;
     }
     const item = activeItem();
@@ -3987,6 +4328,15 @@
     }
     if (key === "tab" || key === "b") {
       event.preventDefault();
+    }
+    if (state.drivingCar) {
+      if (key === "f" || key === "j") {
+        attack();
+      }
+      if (["1", "2", "3", "4", "e", " ", "b", "tab"].includes(key)) {
+        event.preventDefault();
+      }
+      return;
     }
     if (key === "escape") {
       const wrap = canvas.closest(".canvas-wrap");

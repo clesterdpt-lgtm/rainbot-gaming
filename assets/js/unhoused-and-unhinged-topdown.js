@@ -3051,6 +3051,119 @@
     return !(a.maxX <= b.minX || a.minX >= b.maxX || a.maxZ <= b.minZ || a.minZ >= b.maxZ);
   }
 
+  function getCarCollisionCircles(car) {
+    const isChasingOrUser = car.userDriven || car.chasingPlayer;
+    const x = car.userDriven ? car.x : car.mesh.position.x;
+    const z = car.userDriven ? car.z : car.mesh.position.z;
+    const angle = isChasingOrUser ? (car.angle || 0) : car.mesh.rotation.y;
+    
+    const offset = car.type.length * 0.22;
+    const radius = car.type.width * 0.5;
+    
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    
+    return [
+      { x: x + cos * offset, z: z - sin * offset, r: radius },
+      { x: x - cos * offset, z: z + sin * offset, r: radius }
+    ];
+  }
+
+  function checkCarOverlap(carA, carB) {
+    const circlesA = getCarCollisionCircles(carA);
+    const circlesB = getCarCollisionCircles(carB);
+    
+    for (let i = 0; i < circlesA.length; i++) {
+      const cA = circlesA[i];
+      for (let j = 0; j < circlesB.length; j++) {
+        const cB = circlesB[j];
+        const dx = cA.x - cB.x;
+        const dz = cA.z - cB.z;
+        const distSq = dx * dx + dz * dz;
+        const minDist = cA.r + cB.r;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq);
+          const overlap = minDist - dist;
+          return {
+            overlap,
+            nx: dist > 0.001 ? dx / dist : 1,
+            nz: dist > 0.001 ? dz / dist : 0
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function pushVehicleWalkable(car, px, pz) {
+    const radius = car.type.width * 0.42;
+    const isUser = car.userDriven;
+    const curX = isUser ? car.x : car.mesh.position.x;
+    const curZ = isUser ? car.z : car.mesh.position.z;
+    
+    let nextX = curX;
+    let nextZ = curZ;
+    
+    if (isStaticWalkable(curX + px, curZ, radius)) {
+      nextX = curX + px;
+    }
+    if (isStaticWalkable(curX, curZ + pz, radius)) {
+      nextZ = curZ + pz;
+    }
+    
+    if (isUser) {
+      car.x = nextX;
+      car.z = nextZ;
+      car.mesh.position.set(car.x, 0, car.z);
+    } else {
+      car.mesh.position.set(nextX, 0, nextZ);
+    }
+  }
+
+  function resolveDynamicVehicleCollisions() {
+    for (let pass = 0; pass < 4; pass++) {
+      let fixed = false;
+      for (let i = 0; i < cars.length; i++) {
+        const carA = cars[i];
+        const isDynamicA = carA.userDriven || carA.chasingPlayer;
+        if (!isDynamicA) continue;
+
+        for (let j = 0; j < cars.length; j++) {
+          if (i === j) continue;
+          const carB = cars[j];
+          
+          const hit = checkCarOverlap(carA, carB);
+          if (hit) {
+            const isDynamicB = carB.userDriven || carB.chasingPlayer;
+            if (isDynamicB) {
+              const px = hit.nx * hit.overlap * 0.5;
+              const pz = hit.nz * hit.overlap * 0.5;
+              
+              pushVehicleWalkable(carA, px, pz);
+              pushVehicleWalkable(carB, -px, -pz);
+            } else {
+              const px = hit.nx * hit.overlap;
+              const pz = hit.nz * hit.overlap;
+              
+              pushVehicleWalkable(carA, px, pz);
+            }
+            fixed = true;
+          }
+        }
+      }
+      if (!fixed) break;
+    }
+    
+    const playerCar = state.drivingCar;
+    if (playerCar) {
+      player.x = playerCar.x;
+      player.z = playerCar.z;
+      if (player.mesh) {
+        player.mesh.position.set(player.x, 0, player.z);
+      }
+    }
+  }
+
   function laneDirection(lane) {
     return lane.speed >= 0 ? 1 : -1;
   }
@@ -3750,6 +3863,7 @@
     });
     resolveVehicleOverlaps();
     resolveActorVehicleOverlaps();
+    resolveDynamicVehicleCollisions();
     writeTrafficDebugSnapshot();
   }
 

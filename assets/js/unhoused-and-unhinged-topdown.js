@@ -2709,7 +2709,7 @@
   }
 
   function copsChasing() {
-    return state.wanted >= 40 || state.arrest > 4;
+    return state.wanted >= 20 || state.arrest > 4;
   }
 
   function findClosestCar(maxDist) {
@@ -3401,10 +3401,25 @@
     const nextX = car.x + dx;
     const nextZ = car.z + dz;
 
-    if (isStaticWalkable(nextX, nextZ, car.type.width * 0.55)) {
+    let hitWall = false;
+    let movedX = false;
+    let movedZ = false;
+
+    if (isStaticWalkable(nextX, car.z, car.type.width * 0.42)) {
       car.x = nextX;
-      car.z = nextZ;
+      movedX = true;
     } else {
+      hitWall = true;
+    }
+
+    if (isStaticWalkable(car.x, nextZ, car.type.width * 0.42)) {
+      car.z = nextZ;
+      movedZ = true;
+    } else {
+      hitWall = true;
+    }
+
+    if (hitWall && !movedX && !movedZ) {
       car.speed = -car.speed * 0.28;
       if (Math.abs(car.speed) < 0.8) car.speed = 0;
       addPulse(car.x, car.z, 0xff5555, 3.2, 0.25);
@@ -3582,9 +3597,34 @@
       }
 
       const d = Math.sqrt(distSq(cop, player));
-      if (chase && d < 2.2) {
-        state.arrest = clamp(state.arrest + 30 * dt, 0, 100);
-        state.health = clamp(state.health - 4 * dt, 0, state.maxHealth);
+      const isTouchingCar = state.drivingCar && playerCarHit(cop, state.drivingCar);
+      const isTouchingPlayer = !state.drivingCar && d < 2.2;
+      if (chase && (isTouchingPlayer || isTouchingCar)) {
+        if (state.drivingCar) {
+          if (Math.abs(state.drivingCar.speed) < 3.0) {
+            exitVehicle();
+            player.stun = 1.2;
+            state.arrest = clamp(state.arrest + 20, 0, 100);
+            addFloater("PULLED OUT!", player.x, player.z, "#ff1a1a");
+            logLine("A cop pulled you out of your car!");
+            addPulse(player.x, player.z, 0xff1a1a, 4.0, 0.45);
+          } else {
+            // Speeding: run over cop instead
+            cop.stun = 2.0;
+            addWanted(15);
+            addFloater("COP HIT! +wanted", cop.x, cop.z, "#ff1a1a");
+            const knockX = Math.cos(state.drivingCar.angle) * 2;
+            const knockZ = -Math.sin(state.drivingCar.angle) * 2;
+            cop.x += knockX;
+            cop.z += knockZ;
+            if (cop.mesh) {
+              cop.mesh.position.set(cop.x, 0, cop.z);
+            }
+          }
+        } else {
+          state.arrest = clamp(state.arrest + 30 * dt, 0, 100);
+          state.health = clamp(state.health - 4 * dt, 0, state.maxHealth);
+        }
       } else if (state.arrest > 0 && d > 10) {
         state.arrest = clamp(state.arrest - 18 * dt, 0, 100);
       }
@@ -3599,6 +3639,23 @@
         }
         return;
       }
+
+      const shouldChase = car.type.id === "police" && state.wanted >= 20;
+      if (shouldChase) {
+        car.chasingPlayer = true;
+        updatePoliceSiren(car, dt);
+        updatePoliceCarChase(car, dt);
+        return;
+      } else if (car.chasingPlayer) {
+        car.chasingPlayer = false;
+        const nearest = nearestLaneForPosition(car.mesh.position.x, car.mesh.position.z);
+        if (nearest) {
+          car.lane = nearest.lane;
+          car.offset = nearest.offset;
+          updateCarPosition(car, 0);
+        }
+      }
+
       car.hitCooldown = Math.max(0, car.hitCooldown - dt);
       const hazard = vehicleTrafficHazard(car);
       if (hazard.reason && hazard.reason === car.waitReason) {
@@ -3741,6 +3798,55 @@
     const flash = Math.floor(state.phaseTime * flashSpeed) % 2 === 0;
     car.sirenL.visible = flash;
     car.sirenR.visible = !flash;
+  }
+
+  function updatePoliceCarChase(car, dt) {
+    const dx = player.x - car.mesh.position.x;
+    const dz = player.z - car.mesh.position.z;
+    const targetAngle = Math.atan2(dx, dz);
+    
+    let currentAngle = car.angle;
+    if (currentAngle === undefined) {
+      currentAngle = car.mesh.rotation.y;
+    }
+    
+    let diff = targetAngle - currentAngle;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    
+    car.angle = currentAngle + clamp(diff, -2.8 * dt, 2.8 * dt);
+    
+    car.speed = lerp(car.speed || 0, car.type.speedScale * 11.5, dt * 1.5);
+    const dxMove = Math.cos(car.angle) * car.speed * dt;
+    const dzMove = -Math.sin(car.angle) * car.speed * dt;
+    
+    const nextX = car.mesh.position.x + dxMove;
+    const nextZ = car.mesh.position.z + dzMove;
+    
+    if (isStaticWalkable(nextX, nextZ, car.type.width * 0.6)) {
+      car.mesh.position.set(nextX, 0, nextZ);
+    } else {
+      car.angle += diff > 0 ? -Math.PI * 0.25 : Math.PI * 0.25;
+      car.speed = -car.speed * 0.35;
+      if (Math.abs(car.speed) < 0.8) car.speed = 0;
+    }
+    car.mesh.rotation.y = car.angle;
+    
+    const distSqPlayer = distSq(car.mesh.position, player);
+    if (distSqPlayer < 5.0) {
+      if (state.drivingCar) {
+        state.drivingCar.speed = -state.drivingCar.speed * 0.4;
+        addPulse(player.x, player.z, 0xff5555, 4.0, 0.3);
+        addFloater("RAMMED!", player.x, player.z, "#ff3333");
+        car.speed = -car.speed * 0.5;
+      } else {
+        state.health = clamp(state.health - 8.0 * dt, 0, state.maxHealth);
+        const knockX = Math.cos(car.angle) * 3;
+        const knockZ = -Math.sin(car.angle) * 3;
+        moveCircle(player, knockX, knockZ);
+        addFloater("WATCH OUT!", player.x, player.z, "#ff3333");
+      }
+    }
   }
 
   function updateCarPosition(car, dt) {

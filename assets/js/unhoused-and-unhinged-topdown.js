@@ -1092,6 +1092,158 @@
     pulses.push({ mesh, life, maxLife: life });
   }
 
+  function spawnSmokeParticle(x, z) {
+    const size = rand(0.22, 0.44);
+    const geo = new THREE.BoxGeometry(size, size, size);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x484848,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x + rand(-0.25, 0.25), 0.7 + rand(0, 0.15), z + rand(-0.25, 0.25));
+    
+    addActionFX(mesh, rand(0.6, 0.95), (mesh, t, dt) => {
+      mesh.position.y += dt * 1.6;
+      mesh.position.x += rand(-0.15, 0.15) * dt;
+      mesh.position.z += rand(-0.15, 0.15) * dt;
+      mesh.scale.setScalar(1 - t);
+      mesh.material.opacity = 0.72 * (1 - t);
+    });
+  }
+
+  function spawnFireParticle(x, z) {
+    const size = rand(0.28, 0.52);
+    const geo = new THREE.BoxGeometry(size, size, size);
+    const colors = [0xff3a00, 0xff9a00, 0xffda00];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x + rand(-0.35, 0.35), 0.7 + rand(0, 0.2), z + rand(-0.35, 0.35));
+    
+    addActionFX(mesh, rand(0.45, 0.75), (mesh, t, dt) => {
+      mesh.position.y += dt * 2.0;
+      mesh.position.x += rand(-0.22, 0.22) * dt;
+      mesh.position.z += rand(-0.22, 0.22) * dt;
+      mesh.scale.setScalar(1 - t);
+      mesh.material.opacity = 0.9 * (1 - t);
+    });
+  }
+
+  function explodeVehicle(car) {
+    addPulse(car.x, car.z, 0xff4f00, 7.8, 0.62);
+    addPulse(car.x, car.z, 0xffcc00, 4.8, 0.48);
+    
+    for (let i = 0; i < 16; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = rand(4.5, 9.5);
+      const size = rand(0.45, 0.78);
+      const geo = new THREE.BoxGeometry(size, size, size);
+      const colors = [0xff2c00, 0xff8c00, 0xffcc00, 0x3c3c3c];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(car.x, 0.45, car.z);
+      
+      const vx = Math.cos(angle) * speed;
+      const vz = -Math.sin(angle) * speed;
+      
+      addActionFX(mesh, rand(0.65, 1.15), (mesh, t, dt) => {
+        mesh.position.x += vx * dt;
+        mesh.position.z += vz * dt;
+        mesh.position.y += (3.8 - t * 4.4) * dt;
+        mesh.scale.setScalar(1 - t);
+        mesh.material.opacity = 0.92 * (1 - t);
+      });
+    }
+
+    addFloater("BOOM!", car.x, car.z, "#ff1a1a");
+    
+    const radius = 6.4;
+    const radiusSq = radius * radius;
+    
+    if (state.drivingCar === car) {
+      exitVehicle();
+      state.health = Math.max(0, state.health - 65);
+      player.stun = 1.6;
+      const pushAngle = Math.random() * Math.PI * 2;
+      moveCircle(player, Math.cos(pushAngle) * 3, -Math.sin(pushAngle) * 3);
+    } else {
+      const dx = player.x - car.x;
+      const dz = player.z - car.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < radiusSq) {
+        const falloff = 1 - Math.sqrt(dSq) / radius;
+        state.health = Math.max(0, state.health - 45 * falloff);
+        player.stun = 1.0;
+        moveCircle(player, (dx / (Math.sqrt(dSq) || 1)) * 3 * falloff, (dz / (Math.sqrt(dSq) || 1)) * 3 * falloff);
+      }
+    }
+    
+    civilians.forEach((civ) => {
+      const dx = civ.x - car.x;
+      const dz = civ.z - car.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < radiusSq) {
+        const falloff = 1 - Math.sqrt(dSq) / radius;
+        setCivilianPanic(civ, 6.0);
+        civ.x += (dx / (Math.sqrt(dSq) || 1)) * 4 * falloff;
+        civ.z += (dz / (Math.sqrt(dSq) || 1)) * 4 * falloff;
+        if (civ.mesh) civ.mesh.position.set(civ.x, 0, civ.z);
+      }
+    });
+
+    cops.forEach((cop) => {
+      const dx = cop.x - car.x;
+      const dz = cop.z - car.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < radiusSq) {
+        const falloff = 1 - Math.sqrt(dSq) / radius;
+        cop.stun = 3.0;
+        cop.x += (dx / (Math.sqrt(dSq) || 1)) * 4 * falloff;
+        cop.z += (dz / (Math.sqrt(dSq) || 1)) * 4 * falloff;
+        if (cop.mesh) cop.mesh.position.set(cop.x, 0, cop.z);
+      }
+    });
+
+    zombies.slice().forEach((zombie) => {
+      const dx = zombie.x - car.x;
+      const dz = zombie.z - car.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < radiusSq) {
+        const falloff = 1 - Math.sqrt(dSq) / radius;
+        const dmg = 4 * falloff;
+        const knockX = (dx / (Math.sqrt(dSq) || 1)) * 5 * falloff;
+        const knockZ = (dz / (Math.sqrt(dSq) || 1)) * 5 * falloff;
+        damageZombie(zombie, dmg, knockX, knockZ);
+      }
+    });
+
+    car.mesh.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material = materials.black;
+      }
+    });
+    
+    car.exploded = true;
+    car.health = 0;
+    car.currentSpeed = 0;
+    car.targetSpeed = 0;
+    
+    addWanted(25);
+  }
+
   function fxBasic(color, opacity = 0.86, side = THREE.DoubleSide) {
     return new THREE.MeshBasicMaterial({
       color,
@@ -2282,6 +2434,10 @@
       waitTime: 0,
       sirenL,
       sirenR,
+      health: 100,
+      smokeTimer: 0,
+      fireTimer: 0,
+      exploded: false,
     };
     cars.push(car);
     updateCarPosition(car, 0);
@@ -2716,6 +2872,7 @@
     let closest = null;
     let closestDistSq = maxDist * maxDist;
     cars.forEach((car) => {
+      if (car.exploded) return;
       const carPos = car.userDriven ? { x: car.x, z: car.z } : vehiclePositionAt(car, car.offset);
       const dSq = distSq(carPos, player);
       if (dSq < closestDistSq) {
@@ -2727,6 +2884,7 @@
   }
 
   function enterVehicle(car) {
+    if (car.exploded) return;
     state.drivingCar = car;
     car.userDriven = true;
     car.speed = car.currentSpeed || 0;
@@ -3574,6 +3732,10 @@
     }
 
     if (collidedCar) {
+      const dmg = Math.min(45, Math.abs(car.speed) * 1.8);
+      car.health = Math.max(0, car.health - dmg);
+      collidedCar.health = Math.max(0, (collidedCar.health || 100) - dmg);
+      
       car.speed = -car.speed * 0.35;
       if (Math.abs(car.speed) < 0.8) car.speed = 0;
       
@@ -3586,11 +3748,21 @@
         addFloater("COLLISION +wanted", car.x, car.z, "#ff9933");
       }
       
+      if (dmg > 1) {
+        addFloater(`CAR HEALTH: ${Math.round(car.health)}%`, car.x, car.z, "#ff9999");
+      }
       addWanted(2.5);
       addPulse(car.x, car.z, 0xffcc33, 4.0, 0.3);
     } else if (hitObstacle && !movedX && !movedZ) {
+      const dmg = Math.min(35, Math.abs(car.speed) * 1.5);
+      car.health = Math.max(0, car.health - dmg);
+      
       car.speed = -car.speed * 0.28;
       if (Math.abs(car.speed) < 0.8) car.speed = 0;
+      
+      if (dmg > 1) {
+        addFloater(`CAR HEALTH: ${Math.round(car.health)}%`, car.x, car.z, "#ff9999");
+      }
       addPulse(car.x, car.z, 0xff5555, 3.2, 0.25);
     }
 
@@ -3804,6 +3976,45 @@
 
   function updateCars(dt) {
     cars.forEach((car) => {
+      if (car.exploded) {
+        car.currentSpeed = 0;
+        car.targetSpeed = 0;
+        return;
+      }
+
+      if (car.health <= 0) {
+        explodeVehicle(car);
+        return;
+      }
+
+      if (car.health < 50) {
+        car.smokeTimer -= dt;
+        if (car.smokeTimer <= 0) {
+          car.smokeTimer = rand(0.08, 0.16);
+          const isChasingOrUser = car.userDriven || car.chasingPlayer;
+          const x = car.userDriven ? car.x : car.mesh.position.x;
+          const z = car.userDriven ? car.z : car.mesh.position.z;
+          const angle = isChasingOrUser ? (car.angle || 0) : car.mesh.rotation.y;
+          const ex = x + Math.cos(angle) * car.type.length * 0.35;
+          const ez = z - Math.sin(angle) * car.type.length * 0.35;
+          spawnSmokeParticle(ex, ez);
+        }
+      }
+
+      if (car.health < 25) {
+        car.fireTimer -= dt;
+        if (car.fireTimer <= 0) {
+          car.fireTimer = rand(0.05, 0.12);
+          const isChasingOrUser = car.userDriven || car.chasingPlayer;
+          const x = car.userDriven ? car.x : car.mesh.position.x;
+          const z = car.userDriven ? car.z : car.mesh.position.z;
+          const angle = isChasingOrUser ? (car.angle || 0) : car.mesh.rotation.y;
+          const ex = x + Math.cos(angle) * car.type.length * 0.35;
+          const ez = z - Math.sin(angle) * car.type.length * 0.35;
+          spawnFireParticle(ex, ez);
+        }
+      }
+
       if (car.userDriven) {
         if (car.type.id === "police") {
           updatePoliceSiren(car, dt);
@@ -4024,11 +4235,21 @@
       car.mesh.position.set(nextX, 0, nextZ);
     } else {
       if (hitPlayerCar) {
+        const dmg = Math.min(45, Math.abs(car.speed) * 1.8);
+        state.drivingCar.health = Math.max(0, state.drivingCar.health - dmg);
+        car.health = Math.max(0, car.health - dmg);
+        
         state.drivingCar.speed = -state.drivingCar.speed * 0.4;
         addPulse(player.x, player.z, 0xff5555, 4.0, 0.3);
         addFloater("RAMMED!", player.x, player.z, "#ff3333");
+        if (dmg > 1) {
+          addFloater(`CAR HEALTH: ${Math.round(state.drivingCar.health)}%`, player.x, player.z, "#ff9999");
+        }
         car.speed = -car.speed * 0.5;
       } else {
+        const dmg = Math.min(35, Math.abs(car.speed) * 1.5);
+        car.health = Math.max(0, car.health - dmg);
+        
         car.angle += diff > 0 ? -Math.PI * 0.25 : Math.PI * 0.25;
         car.speed = -car.speed * 0.35;
         if (Math.abs(car.speed) < 0.8) car.speed = 0;
@@ -4203,10 +4424,24 @@
       moveCircle(zombie, (dx + dz * drift) * zombie.speed * dt, (dz - dx * drift) * zombie.speed * dt);
       zombie.mesh.rotation.y = Math.atan2(dx, dz);
 
-      if (mag < 2.1 && zombie.attack <= 0) {
+      let isTouchingPlayer = false;
+      if (state.drivingCar) {
+        isTouchingPlayer = playerCarHit(zombie, state.drivingCar);
+      } else {
+        isTouchingPlayer = (mag < 2.1);
+      }
+
+      if (isTouchingPlayer && zombie.attack <= 0) {
         zombie.attack = zombie.kind === "runner" ? 0.72 : 1.1;
-        state.health = clamp(state.health - (zombie.kind === "runner" ? 6 : 9), 0, state.maxHealth);
-        addPulse(player.x, player.z, 0x90ff76, 2.6, 0.4);
+        if (state.drivingCar) {
+          const dmg = zombie.kind === "runner" ? 10 : 15;
+          state.drivingCar.health = Math.max(0, state.drivingCar.health - dmg);
+          addFloater(`CAR HEALTH: ${Math.round(state.drivingCar.health)}%`, state.drivingCar.x, state.drivingCar.z, "#ff5555");
+          addPulse(state.drivingCar.x, state.drivingCar.z, 0xff5555, 3.0, 0.3);
+        } else {
+          state.health = clamp(state.health - (zombie.kind === "runner" ? 6 : 9), 0, state.maxHealth);
+          addPulse(player.x, player.z, 0x90ff76, 2.6, 0.4);
+        }
       }
     });
   }

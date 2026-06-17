@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>The Weight — Rainbot After Dark No. 002</title>
+  <meta name="description" content="You wake at 3:47 AM. You cannot move. Something is at the foot of the bed. A 3D sleep-paralysis horror experience. Headphones required." />
+  <meta name="theme-color" content="#000000" />
+  <meta property="og:title" content="The Weight — Rainbot After Dark No. 002" />
+  <meta property="og:description" content="You wake at 3:47 AM. You cannot move. Something is in the room." />
+  <meta name="twitter:card" content="summary" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23050505'/%3E%3Cellipse cx='50' cy='58' rx='24' ry='15' fill='%230a0810'/%3E%3Ccircle cx='42' cy='52' r='5' fill='%23380010'/%3E%3Ccircle cx='58' cy='52' r='5' fill='%23380010'/%3E%3C/svg%3E" />
+  <style>
+    /* === THE WEIGHT — Rainbot After Dark No. 002 === */
+    :root {
+      --bone:     #d8d2c6;
+      --bone-dim: #8a857c;
+      --blood:    #7a1f1f;
+      --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+      --mono:  "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: #000;
+      color: var(--bone);
+      font-family: var(--serif);
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+    }
+    body.playing { cursor: none; }
+
+    /* Three.js stage — hosts both Phase 1 (bedroom) and Phase 2 (astral) */
+    #stage { position: fixed; inset: 0; }
+    #stage canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    /* ---- FX layers ---- */
+    .fx { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+
+    #fx-vignette {
+      background: radial-gradient(ellipse 72% 62% at 50% 48%,
+        transparent 30%, rgba(0,0,0,0.55) 72%, rgba(0,0,0,0.97) 100%);
+    }
+    #fx-grain {
+      width: 100%; height: 100%; object-fit: cover;
+      image-rendering: pixelated;
+      mix-blend-mode: overlay; opacity: 0.06; z-index: 5;
+    }
+    #fx-blood {
+      background: radial-gradient(ellipse 72% 62% at 50% 48%,
+        transparent 28%, rgba(55,0,0,0.35) 74%, rgba(70,0,0,0.68) 100%);
+      opacity: 0; transition: opacity 3s ease; z-index: 5;
+    }
+    #fx-flash { background: #fff; opacity: 0; z-index: 6; transition: opacity 120ms ease-out; }
+    #fx-fade  { background: #000; opacity: 0; z-index: 7; transition: opacity 1200ms linear; }
+
+    /* Eyelids — driven by the blink mechanic */
+    #fx-lid-top, #fx-lid-bottom {
+      position: fixed; left: 0; right: 0; height: 53%;
+      background: #000; z-index: 9; pointer-events: none; will-change: transform;
+    }
+    #fx-lid-top    { top: 0;    transform: translateY(-100%); box-shadow: 0 7px 22px 6px #000; }
+    #fx-lid-bottom { bottom: 0; transform: translateY(100%);  box-shadow: 0 -7px 22px 6px #000; }
+
+    /* Subtitle / sub-text */
+    #fx-sub {
+      position: fixed; left: 50%; bottom: 9vh; transform: translateX(-50%);
+      max-width: 78vw; text-align: center;
+      font-family: var(--mono); font-size: 13px; letter-spacing: 0.09em;
+      color: rgba(216,210,198,0.78); text-shadow: 0 1px 4px #000;
+      opacity: 0; transition: opacity 700ms; z-index: 8; pointer-events: none;
+      font-style: italic;
+    }
+
+    /* Big center title (PULL transition text) */
+    #fx-title {
+      position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      font-family: var(--serif); font-size: 52px;
+      letter-spacing: 0.28em; text-indent: 0.28em;
+      color: rgba(216,210,198,0.82); text-shadow: 0 0 40px rgba(0,0,0,0.9);
+      opacity: 0; transition: opacity 1400ms ease; z-index: 8; pointer-events: none;
+      text-align: center;
+    }
+
+    /* Paralysis control hint */
+    #fx-hint-paralysis {
+      position: fixed; left: 50%; bottom: 4.5vh; transform: translateX(-50%);
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.22em;
+      color: rgba(130,122,112,0.48); text-transform: uppercase;
+      opacity: 0; transition: opacity 1000ms; z-index: 8; pointer-events: none;
+    }
+
+    /* Astral (phase 2) control hint + objective HUD */
+    #fx-hint-astral {
+      position: fixed; left: 50%; bottom: 4.5vh; transform: translateX(-50%);
+      font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.22em;
+      color: rgba(150,170,220,0.5); text-transform: uppercase;
+      opacity: 0; transition: opacity 900ms; z-index: 8; pointer-events: none;
+    }
+    #obe-hud {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 8;
+      padding: 18px; display: none; pointer-events: none;
+    }
+    #obe-objective {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.28em;
+      color: rgba(165,185,228,0.6); text-transform: uppercase; text-align: center;
+    }
+
+    /* ---- Screens ---- */
+    .scr {
+      position: fixed; inset: 0; z-index: 20;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; background: #000; padding: 24px;
+    }
+    .scr--show { display: flex; }
+    .scr--dim  { background: rgba(0,0,0,0.92); }
+
+    .scr__corner {
+      position: absolute; top: 18px; left: 20px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+      color: #4a463c; text-decoration: none;
+    }
+    .scr__corner:hover { color: var(--bone-dim); }
+
+    .scr__kicker {
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.34em;
+      color: var(--blood); text-transform: uppercase; margin-bottom: 26px;
+    }
+    .scr__title {
+      font-family: var(--serif); font-weight: 400;
+      font-size: 76px; letter-spacing: 0.38em; text-indent: 0.38em;
+      color: var(--bone);
+      animation: breathe 7s ease-in-out infinite;
+      margin-bottom: 20px;
+    }
+    @keyframes breathe { 50% { opacity: 0.48; } }
+
+    .scr__sub {
+      font-family: var(--serif); font-style: italic; font-size: 15px;
+      color: var(--bone-dim); line-height: 2; max-width: 400px;
+      margin-bottom: 32px; white-space: pre-line;
+    }
+    .scr__warn {
+      font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em;
+      color: #4a4540; text-transform: uppercase;
+      margin-top: 30px; line-height: 2.3;
+    }
+    .scr__stats {
+      font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em;
+      color: var(--bone-dim); margin-bottom: 34px;
+    }
+    .scr__icon { font-size: 38px; margin-bottom: 20px; opacity: 0.65; }
+
+    .scr__row { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+    .ebtn {
+      display: inline-block; background: none; cursor: pointer;
+      font-family: var(--serif); font-size: 16px;
+      letter-spacing: 0.22em; text-indent: 0.22em;
+      color: var(--bone); border: 1px solid #3e3830; border-radius: 2px;
+      padding: 13px 36px; text-decoration: none;
+      transition: background 230ms, color 230ms, border-color 230ms;
+    }
+    .ebtn:hover { background: var(--bone); color: #000; border-color: var(--bone); }
+    .ebtn--sm {
+      font-size: 13px; padding: 10px 20px;
+      color: var(--bone-dim); border-color: #2a2620;
+    }
+    .ebtn--sm:hover { background: none; color: var(--bone); border-color: var(--bone-dim); }
+
+    .vol-row {
+      display: flex; align-items: center; gap: 12px; margin: 22px 0 6px;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+      color: var(--bone-dim);
+    }
+    input[type="range"] { accent-color: #5a5248; width: 160px; }
+
+    .scr__title--end { font-size: 52px; }
+    .scr__title--err { font-size: 30px; letter-spacing: 0.18em; }
+
+    @media (max-width: 700px) {
+      .scr__title       { font-size: 46px; }
+      .scr__title--end  { font-size: 34px; }
+      #fx-title { font-size: 34px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Three.js stage (Phase 1 bedroom + Phase 2 astral share one renderer) -->
+  <div id="stage"></div>
+
+  <!-- FX overlays -->
+  <div    class="fx" id="fx-vignette"></div>
+  <canvas class="fx" id="fx-grain"></canvas>
+  <div    class="fx" id="fx-blood"></div>
+  <div    class="fx" id="fx-flash"></div>
+  <div    class="fx" id="fx-fade"></div>
+  <div id="fx-lid-top"></div>
+  <div id="fx-lid-bottom"></div>
+  <div id="fx-sub"></div>
+  <div id="fx-title"></div>
+  <div id="fx-hint-paralysis">you cannot move &nbsp;·&nbsp; mouse — look (barely)</div>
+  <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; get back to your body</div>
+  <div id="obe-hud"><div id="obe-objective"></div></div>
+
+  <!-- TITLE / CLICK-TO-BEGIN SCREEN -->
+  <div class="scr scr--show" id="scr-boot">
+    <a class="scr__corner" href="../after-dark.html">&larr; after dark</a>
+    <div class="scr__kicker">rainbot after dark &middot; no. 002</div>
+    <h1 class="scr__title">THE WEIGHT</h1>
+    <p class="scr__sub">You wake at 3:47 AM.
+You cannot move.
+Something is at the foot of the bed.</p>
+    <div class="scr__row">
+      <button class="ebtn" id="btn-enter">lie still</button>
+    </div>
+    <div class="scr__warn">
+      headphones required &middot; lights off &middot; alone<br />
+      positional audio &middot; slow-building dread &middot; sudden loud sounds<br />
+      photosensitivity warning: brief flashing imagery
+    </div>
+  </div>
+
+  <!-- PAUSE SCREEN -->
+  <div class="scr scr--dim" id="scr-pause">
+    <a class="scr__corner" href="../after-dark.html">&larr; leave</a>
+    <div class="scr__kicker">still in the room</div>
+    <h2 class="scr__title" style="font-size:36px;letter-spacing:0.2em;animation:none;">paused</h2>
+    <div class="scr__row" style="margin-bottom:0;">
+      <button class="ebtn" id="btn-resume">close your eyes again</button>
+      <button class="ebtn ebtn--sm" id="btn-restart">start over</button>
+    </div>
+    <div class="vol-row">
+      <span>volume</span>
+      <input type="range" id="vol-slider" min="0" max="1" step="0.01" value="0.9" />
+      <span id="vol-readout">90%</span>
+    </div>
+    <div class="scr__warn">esc — pause / resume</div>
+  </div>
+
+  <!-- END SCREEN -->
+  <div class="scr" id="scr-end">
+    <div class="scr__kicker">rainbot after dark &middot; no. 002</div>
+    <div class="scr__icon" id="end-icon"></div>
+    <h2 class="scr__title scr__title--end" id="end-title">YOU WAKE UP</h2>
+    <p class="scr__sub" id="end-sub"></p>
+    <div class="scr__stats" id="end-stats"></div>
+    <div class="scr__row">
+      <button class="ebtn" id="btn-again">again</button>
+      <a class="ebtn ebtn--sm" href="../after-dark.html">leave &rarr;</a>
+    </div>
+    <div class="scr__warn" id="end-warn"></div>
+  </div>
+
+  <!-- ERROR SCREEN -->
+  <div class="scr" id="scr-error">
+    <div class="scr__kicker">rainbot after dark</div>
+    <h2 class="scr__title scr__title--err">the door won&rsquo;t open</h2>
+    <p id="err-msg" style="font-family:var(--mono);font-size:13px;color:var(--bone-dim);max-width:420px;line-height:2;margin-top:20px;"></p>
+    <div class="scr__row" style="margin-top:28px;">
+      <a class="ebtn ebtn--sm" href="../after-dark.html">&larr; back</a>
+    </div>
+  </div>
+
+  <script src="../assets/vendor/three/three-r128.min.js"></script>
+  <script src="../assets/js/the-weight/config.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/audio.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/controls.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/bedroom.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/fx.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/post.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/astral.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/astral-controls.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/main.js?v=20260617m"></script>
+</body>
+</html>

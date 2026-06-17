@@ -1265,6 +1265,23 @@
       width: 14px;
     }
 
+    .uh-district {
+      box-sizing: border-box;
+      color: #ffd43b;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.2cqw, 13px);
+      font-weight: 700;
+      line-height: 1.1;
+      padding: clamp(4px, 0.8cqw, 6px) clamp(6px, 1cqw, 10px);
+      text-align: center;
+      text-transform: uppercase;
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.82);
+      width: clamp(86px, 14cqw, 150px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     /* Objective banner (bottom-center, above the hotbar). */
     .uh-objective {
       position: absolute;
@@ -1761,6 +1778,11 @@
       font-size: 8px;
     }
 
+    body.unhinged-visual-target .uh-district {
+      font-size: 9px;
+      width: 132px;
+    }
+
     body.unhinged-visual-target .unhinged-stat-row {
       gap: 9px;
       grid-template-columns: 34px minmax(0, 1fr) 66px;
@@ -1836,6 +1858,105 @@
     body.unhinged-visual-target .unhinged-prompt span {
       font-size: 10px;
     }
+
+    /* Busted Transition Screen Styles */
+    .busted-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(4, 4, 8, 0.94);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      z-index: 20;
+      opacity: 1;
+      transition: opacity 0.4s ease, display 0.4s ease;
+      transition-behavior: allow-discrete;
+    }
+    @starting-style {
+      .busted-overlay {
+        opacity: 0;
+      }
+    }
+    .busted-overlay[hidden] {
+      display: none;
+      opacity: 0;
+    }
+    .busted-content {
+      max-width: 480px;
+      width: 90%;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .busted-title {
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(32px, 8cqw, 52px);
+      font-weight: 900;
+      color: #ff1a3b;
+      text-shadow: 4px 4px 0 #000;
+      letter-spacing: 2px;
+      margin: 0 0 16px;
+      animation: busted-pulse 1.5s infinite alternate ease-in-out;
+    }
+    @keyframes busted-pulse {
+      from {
+        transform: scale(1);
+        text-shadow: 4px 4px 0 #000, 0 0 10px rgba(255, 26, 59, 0.4);
+      }
+      to {
+        transform: scale(1.05);
+        text-shadow: 4px 4px 0 #000, 0 0 24px rgba(255, 26, 59, 0.8);
+      }
+    }
+    .busted-frame {
+      width: min(100%, 360px);
+      border: 4px solid #ff1a3b;
+      box-shadow: 0 0 24px rgba(255, 26, 59, 0.5), inset 0 0 12px rgba(255, 26, 59, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      margin-bottom: 20px;
+      transform: rotate(-1.5deg);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .busted-frame:hover {
+      transform: rotate(0.5deg) scale(1.02);
+      box-shadow: 0 0 32px rgba(255, 26, 59, 0.7), inset 0 0 16px rgba(255, 26, 59, 0.4);
+    }
+    .busted-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      filter: contrast(1.15) brightness(0.95);
+    }
+    .busted-caption {
+      font-family: "JetBrains Mono", var(--font-mono);
+      font-size: clamp(12px, 1.8cqw, 15px);
+      color: #f0f4f8;
+      line-height: 1.5;
+      max-width: 420px;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+      border-top: 1px dashed rgba(255, 46, 136, 0.3);
+      padding-top: 16px;
+      margin: 0;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .busted-title {
+        animation: none;
+      }
+      .busted-frame {
+        transform: none;
+      }
+      .busted-frame:hover {
+        transform: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1887,6 +2008,7 @@
             <div class="uh-topright">
               <div class="uh-clock unhinged-hud-panel"><b id="hud-clock">8:00 AM</b><span class="uh-phase-pill" id="hud-phase-pill">Day 1</span></div>
               <div class="uh-minimap"><span class="uh-mini-dot" id="hud-mini-player"></span></div>
+              <div class="uh-district unhinged-hud-panel" id="hud-district-name">Open Block</div>
             </div>
 
             <!-- Objective banner -->
@@ -1931,6 +2053,17 @@
             <div class="overlay__score" id="overlay-score"></div>
             <div class="overlay__choices" id="dawn-choice-grid" hidden></div>
             <button class="btn btn--primary" id="btn-primary">Start prototype</button>
+          </div>
+
+          <!-- Busted Transition Overlay -->
+          <div class="busted-overlay" id="busted-overlay" hidden>
+            <div class="busted-content">
+              <h2 class="busted-title">BUSTED</h2>
+              <div class="busted-frame">
+                <img class="busted-img" id="busted-img" src="../assets/img/busted_jail.png" alt="Homeless character in jail cell" />
+              </div>
+              <p class="busted-caption" id="busted-caption">The judge didn't appreciate your cardboard acoustic performance.</p>
+            </div>
           </div>
         </div>
       </div>

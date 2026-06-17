@@ -20,6 +20,17 @@
   const SIDEWALK_HALF = SIDEWALK_WIDTH / 2;
   const GAME_ID = "unhoused-and-unhinged";
   const SAVE_KEY = "rainbot-unhoused-topdown-high";
+  const BUSTED_CAPTIONS = [
+    "The judge didn't appreciate your cardboard acoustic performance.",
+    "You tried to bribe the officer with a soggy banana peel. It didn't work.",
+    "Sentence: 30 days of community service cleaning up public parks. The irony.",
+    "Your bail has been set to 500 aluminum cans. Start scavenging.",
+    "The precinct cells are surprisingly warmer than the subway grate. Silver linings.",
+    "Charged with public disturbance, illegal busking, and excessive swagger.",
+    "Locked up for being unhoused and too unhinged.",
+    "You argued that public benches are a natural resource. The judge disagreed.",
+    "Charged with resisting arrest by cartwheels. That's a new record."
+  ];
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const lerp = (a, b, t) => a + (b - a) * t;
   const rand = (min, max) => min + Math.random() * (max - min);
@@ -37,6 +48,8 @@
     overlayTitle: document.getElementById("overlay-title"),
     overlaySub: document.getElementById("overlay-sub"),
     overlayScore: document.getElementById("overlay-score"),
+    bustedOverlay: document.getElementById("busted-overlay"),
+    bustedCaption: document.getElementById("busted-caption"),
     primary: document.getElementById("btn-primary"),
     pause: document.getElementById("btn-pause"),
     restart: document.getElementById("btn-restart"),
@@ -51,6 +64,7 @@
     objectiveText: document.getElementById("hud-objective-text"),
     objectiveArrow: document.getElementById("hud-objective-arrow"),
     miniPlayer: document.getElementById("hud-mini-player"),
+    districtName: document.getElementById("hud-district-name"),
     hotbar: document.getElementById("hud-hotbar"),
     hotbarSlots: null,
     bagOverlay: document.getElementById("bag-overlay"),
@@ -479,12 +493,14 @@
   const STARTER_HOTBAR = ["fists", "cone", "plunger", "peel"];
   let cameraTarget = new THREE.Vector3(0, 0, 0);
   let labelCounter = 0;
+  let arrestTimeout = null;
 
   const state = {
     running: false,
     drivingCar: null,
     paused: false,
     ended: false,
+    arrestTransition: false,
     phase: "day",
     cycle: 1,
     phaseTime: 0,
@@ -885,13 +901,197 @@
     if (rectOverlapsRoads(x, z, w, d, 0.35)) {
       return null;
     }
-    const building = addBox(staticGroup, w, h, d, x, 0, z, wall, true);
-    addBox(staticGroup, w + 0.65, 0.32, d + 0.65, x, h, z, roof, false);
-    addBox(staticGroup, Math.max(2, w * 0.3), 0.26, Math.max(1.6, d * 0.28), x - w * 0.18, h + 0.32, z - d * 0.12, materials.glass, false);
+    
+    // 1. Determine Building Style for visual variety
+    let style = "classic";
     if (label) {
-      addWindowRows(x, z, w, d, 4, 2);
+      if (label.includes("HOTEL") || label.includes("POLICE") || label.includes("SHELTER") || label.includes("DEPOT")) {
+        if (h > 7.0) {
+          style = "tiered";
+        } else if (label.includes("DEPOT")) {
+          style = "industrial";
+        }
+      } else if (label.includes("RECYCLE") || label.includes("DEPOT")) {
+        style = "industrial";
+      } else {
+        style = "storefront";
+      }
+    } else {
+      // Unlabeled buildings: alternate between classic and pyramid roof for variety
+      const seed = Math.floor(Math.abs(x + z));
+      style = (seed % 2 === 0) ? "pyramid" : "classic";
+    }
+
+    // Determine Corner Accent Pillars Material
+    let accentMat = materials.curb;
+    if (wall === materials.brick) {
+      accentMat = materials.concreteLight;
+    } else if (wall === materials.blueWall) {
+      accentMat = materials.sidewalkWarm;
+    } else if (wall === materials.purpleWall) {
+      accentMat = materials.sidewalkMint;
+    }
+
+    let building;
+
+    if (style === "tiered") {
+      // TIERED STYLE: Skyscraper/Office setback tower shape
+      const hBase = h * 0.55;
+      const hTower = h * 0.45;
+      const wSub = w * 0.76;
+      const dSub = d * 0.76;
+
+      // Base Section
+      building = addBox(staticGroup, w, hBase, d, x, 0, z, wall, true);
+      
+      // Base pillars
+      addBox(staticGroup, 0.45, hBase, 0.45, x - w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x + w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
+      
+      // Base roof trim
+      addBox(staticGroup, w + 0.4, 0.22, d + 0.4, x, hBase, z, roof, false);
+
+      // Tower Section
+      addBox(staticGroup, wSub, hTower, dSub, x, hBase, z, wall, false);
+      
+      // Tower pillars
+      addBox(staticGroup, 0.38, hTower, 0.38, x - wSub / 2, hBase, z - dSub / 2, accentMat, false);
+      addBox(staticGroup, 0.38, hTower, 0.38, x + wSub / 2, hBase, z - dSub / 2, accentMat, false);
+      addBox(staticGroup, 0.38, hTower, 0.38, x - wSub / 2, hBase, z + dSub / 2, accentMat, false);
+      addBox(staticGroup, 0.38, hTower, 0.38, x + wSub / 2, hBase, z + dSub / 2, accentMat, false);
+      
+      // Tower roof trim
+      addBox(staticGroup, wSub + 0.5, 0.26, dSub + 0.5, x, h, z, roof, false);
+      
+      // Tower skylight
+      addBox(staticGroup, Math.max(1.5, wSub * 0.3), 0.24, Math.max(1.2, dSub * 0.28), x - wSub * 0.18, h + 0.26, z - dSub * 0.12, materials.glass, false);
+
+      // Windows
+      addWindowRows(x, z, w, d, hBase, 0);
+      addWindowRows(x, z, wSub, dSub, hTower, hBase);
+
+    } else if (style === "pyramid") {
+      // PYRAMID STYLE: Residential houses with pitched gabled roofs
+      const hBase = h * 0.82;
+      building = addBox(staticGroup, w, hBase, d, x, 0, z, wall, true);
+      
+      // Pillars
+      addBox(staticGroup, 0.45, hBase, 0.45, x - w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x + w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, hBase, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
+
+      // Pitch Roof (Cone with 4 sides, scaled to fit building footprint)
+      const pyrH = Math.min(w, d) * 0.42;
+      const pyrGeom = new THREE.ConeGeometry(0.7071, pyrH, 4);
+      pyrGeom.rotateY(Math.PI / 4);
+      const pyr = makeMesh(pyrGeom, roof, x, hBase + pyrH / 2, z);
+      pyr.scale.set(w, 1, d);
+      staticGroup.add(pyr);
+
+      // Windows
+      addWindowRows(x, z, w, d, hBase, 0);
+
+    } else if (style === "industrial") {
+      // INDUSTRIAL STYLE: Warehouses with large garage shutter doors
+      building = addBox(staticGroup, w, h, d, x, 0, z, wall, true);
+
+      // Pillars
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
+
+      // Roof trim & skylight
+      addBox(staticGroup, w + 0.65, 0.32, d + 0.65, x, h, z, roof, false);
+      addBox(staticGroup, Math.max(2, w * 0.3), 0.26, Math.max(1.6, d * 0.28), x - w * 0.18, h + 0.32, z - d * 0.12, materials.glass, false);
+
+      // Large metal roller garage door (in +Z direction)
+      const doorW = w * 0.45;
+      const doorX = x + w * 0.12;
+      addBox(staticGroup, doorW, 3.0, 0.1, doorX, 0, z + d / 2 + 0.02, materials.asphaltDark, false);
+      // Garage door vertical tracks
+      addBox(staticGroup, 0.18, 3.0, 0.18, doorX - doorW / 2, 0, z + d / 2 + 0.03, materials.curb, false);
+      addBox(staticGroup, 0.18, 3.0, 0.18, doorX + doorW / 2, 0, z + d / 2 + 0.03, materials.curb, false);
+
+      // Smaller side pedestrian door
+      addBox(staticGroup, 1.2, 2.0, 0.1, x - w * 0.28, 0, z + d / 2 + 0.02, materials.black, false);
+
+      // Windows
+      addWindowRows(x, z, w, d, h, 0);
+
+    } else if (style === "storefront") {
+      // STOREFRONT STYLE: Retail storefronts with large glass display windows
+      building = addBox(staticGroup, w, h, d, x, 0, z, wall, true);
+
+      // Pillars
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
+
+      // Roof trim & skylight
+      addBox(staticGroup, w + 0.65, 0.32, d + 0.65, x, h, z, roof, false);
+      addBox(staticGroup, Math.max(2, w * 0.3), 0.26, Math.max(1.6, d * 0.28), x - w * 0.18, h + 0.32, z - d * 0.12, materials.glass, false);
+
+      // Center Door
+      addBox(staticGroup, 1.8, 2.2, 0.1, x, 0, z + d / 2 + 0.02, materials.black, false);
+      
+      // Large ground-floor glass show-windows
+      addBox(staticGroup, w * 0.26, 1.8, 0.12, x - w * 0.24, 0.2, z + d / 2 + 0.02, materials.glass, false);
+      addBox(staticGroup, w * 0.26, 1.8, 0.12, x + w * 0.24, 0.2, z + d / 2 + 0.02, materials.glass, false);
+
+      // Storefront Awning
+      let awningMat = materials.red;
+      if (label.includes("DONUT") || label.includes("RECYCLE") || label.includes("LAUNDRO")) {
+        awningMat = materials.orange;
+      } else if (label.includes("PAWN") || label.includes("ODD") || label.includes("MART")) {
+        awningMat = materials.yellow;
+      }
+      addBox(staticGroup, w * 0.88, 0.24, 1.0, x, 2.2, z + d / 2 + 0.45, awningMat, false);
+
+      // Windows
+      addWindowRows(x, z, w, d, h, 0);
+
+    } else {
+      // CLASSIC STYLE: Normal flat-roof trim building
+      building = addBox(staticGroup, w, h, d, x, 0, z, wall, true);
+
+      // Pillars
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z - d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
+      addBox(staticGroup, 0.45, h, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
+
+      // Roof trim & skylight
+      addBox(staticGroup, w + 0.65, 0.32, d + 0.65, x, h, z, roof, false);
+      addBox(staticGroup, Math.max(2, w * 0.3), 0.26, Math.max(1.6, d * 0.28), x - w * 0.18, h + 0.32, z - d * 0.12, materials.glass, false);
+
+      // Front doorway
+      addBox(staticGroup, 1.8, 2.2, 0.1, x, 0, z + d / 2 + 0.02, materials.black, false);
+
+      // Windows
+      addWindowRows(x, z, w, d, h, 0);
+    }
+
+    // Front Wall A/C units (all styles except tiered which is already detailed)
+    const seed = Math.sin(x) * Math.cos(z);
+    if (style !== "tiered") {
+      if (seed > 0.2) {
+        addBox(staticGroup, 0.9, 0.6, 0.75, x + w * 0.25, h * 0.65, z + d / 2 + 0.35, materials.curb, false);
+      }
+      if (seed < -0.3) {
+        addBox(staticGroup, 0.75, 0.6, 0.9, x + w / 2 + 0.35, h * 0.7, z - d * 0.15, materials.curb, false);
+      }
+    }
+
+    // Roof Billboard Sign (if Labeled)
+    if (label) {
       addBuildingRoofSign(label, x, z, w, d, h, labelColor);
     }
+
     return building;
   }
 
@@ -955,7 +1155,7 @@
     ctx.strokeRect(6, 6, canvas2.width - 12, canvas2.height - 12);
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(20, 20, canvas2.width - 40, canvas2.height - 40);
-    ctx.font = "800 48px Arial, sans-serif";
+    ctx.font = "800 96px Arial, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = color;
@@ -970,14 +1170,33 @@
 
   function addBuildingRoofSign(text, x, z, w, d, h, color = "#ffe07a") {
     const signW = clamp(w * 0.68, 7.2, Math.max(8, w - 2.4));
-    const signD = clamp(d * 0.26, 2.2, 3.6);
+    const signH = clamp(d * 0.26, 2.2, 3.6);
+
+    const postHeight = 1.35;
+    const postY = h + 0.32;
+    const signZ = z - d * 0.08;
+
+    // Draw left and right post
+    addBox(staticGroup, 0.22, postHeight, 0.22, x - signW * 0.3, postY, signZ, materials.curb, false);
+    addBox(staticGroup, 0.22, postHeight, 0.22, x + signW * 0.3, postY, signZ, materials.curb, false);
+
+    // Draw backing frame (tilted by -0.55 rad around X-axis to face camera)
+    const frameDepth = 0.3;
+    const centerY = postY + postHeight + signH / 2;
+    const backing = makeMesh(new THREE.BoxGeometry(signW + 0.3, signH + 0.3, frameDepth), materials.asphaltDark, x, centerY, signZ, false, false);
+    backing.rotation.x = -0.55;
+    staticGroup.add(backing);
+    staticMeshes.push(backing);
+
+    // Draw texture plane in front of the backing frame (tilted by -0.55 rad around X-axis)
     const material = new THREE.MeshBasicMaterial({
       map: makeRoofSignTexture(text, color),
       transparent: true,
-      depthWrite: false,
+      side: THREE.DoubleSide,
     });
-    const sign = makeMesh(new THREE.PlaneGeometry(signW, signD), material, x, h + 0.5, z - d * 0.08, false, false);
-    sign.rotation.x = -Math.PI / 2;
+    // Offset by +0.084 in Y, and +0.136 in Z to align perfectly in front of the tilted face
+    const sign = makeMesh(new THREE.PlaneGeometry(signW, signH), material, x, centerY + 0.084, signZ + 0.136, false, false);
+    sign.rotation.x = -0.55;
     staticGroup.add(sign);
     return sign;
   }
@@ -1672,14 +1891,60 @@
     });
   }
 
-  function addWindowRows(x, z, w, d, cols, rows) {
+  function addWindowRows(x, z, w, d, h, yOffset = 0) {
     const matGlass = materials.glass;
-    for (let i = 0; i < cols; i += 1) {
-      for (let j = 0; j < rows; j += 1) {
-        const px = x - w / 2 + 1.2 + i * ((w - 2.4) / Math.max(1, cols - 1));
-        const pz = z - d / 2 - 0.035;
-        const pane = makeMesh(new THREE.BoxGeometry(1.1, 0.7, 0.08), matGlass, px, 1.8 + j * 1.2, pz, false, false);
+    
+    // 1. South Wall (Front, facing camera/south)
+    const southCols = Math.max(2, Math.floor((w - 2.4) / 3.2));
+    const southRows = Math.max(1, Math.floor((h - 2.0) / 1.6));
+    for (let i = 0; i < southCols; i += 1) {
+      for (let j = 0; j < southRows; j += 1) {
+        const px = x - w / 2 + 1.2 + i * ((w - 2.4) / Math.max(1, southCols - 1));
+        const py = yOffset + 1.8 + j * 1.5;
+        const pz = z + d / 2 + 0.035;
+
+        // Skip windows on ground floor overlapping with doorway
+        if (py < 2.3 && Math.abs(px - x) < 1.4) {
+          continue;
+        }
+
+        const pane = makeMesh(new THREE.BoxGeometry(1.1, 0.7, 0.08), matGlass, px, py, pz, false, false);
         staticGroup.add(pane);
+      }
+    }
+
+    // 2. North Wall (Back, facing north)
+    const northCols = Math.max(2, Math.floor((w - 2.4) / 3.2));
+    const northRows = Math.max(1, Math.floor((h - 2.0) / 1.6));
+    for (let i = 0; i < northCols; i += 1) {
+      for (let j = 0; j < northRows; j += 1) {
+        const px = x - w / 2 + 1.2 + i * ((w - 2.4) / Math.max(1, northCols - 1));
+        const py = yOffset + 1.8 + j * 1.5;
+        const pz = z - d / 2 - 0.035;
+        const pane = makeMesh(new THREE.BoxGeometry(1.1, 0.7, 0.08), matGlass, px, py, pz, false, false);
+        staticGroup.add(pane);
+      }
+    }
+
+    // 3. Side Walls (East & West) - only if deep enough
+    if (d >= 10) {
+      const sideCols = Math.max(1, Math.floor((d - 2.4) / 3.2));
+      const sideRows = Math.max(1, Math.floor((h - 2.0) / 1.6));
+      for (let i = 0; i < sideCols; i += 1) {
+        for (let j = 0; j < sideRows; j += 1) {
+          const pz = z - d / 2 + 1.2 + i * ((d - 2.4) / Math.max(1, sideCols - 1));
+          const py = yOffset + 1.8 + j * 1.5;
+          
+          // East wall
+          const pxEast = x + w / 2 + 0.035;
+          const paneEast = makeMesh(new THREE.BoxGeometry(0.08, 0.7, 1.1), matGlass, pxEast, py, pz, false, false);
+          staticGroup.add(paneEast);
+
+          // West wall
+          const pxWest = x - w / 2 - 0.035;
+          const paneWest = makeMesh(new THREE.BoxGeometry(0.08, 0.7, 1.1), matGlass, pxWest, py, pz, false, false);
+          staticGroup.add(paneWest);
+        }
       }
     }
   }
@@ -1747,13 +2012,6 @@
       { w: 2.8, d: 24, x: -40, z: 68, rotation: -0.42 },
     ].forEach((lane) => addServiceLane(lane));
 
-    addLabel("BUSK PARK", points.park.x + 3.5, points.park.z - 6.8, "#f6ff90", "rgba(19,57,24,0.72)");
-    addLabel("CAMP ROW", points.camp.x + 3, points.camp.z - 6.3, "#ffe0a8", "rgba(75,45,26,0.72)");
-    addLabel("PAWN ALLEY", points.cache.x - 1, points.cache.z - 8.2, "#ffd1ff", "rgba(51,28,67,0.75)");
-    addLabel("CROSSWALK CIRCUS", points.busk.x, points.busk.z - 8.6, "#fff0a0", "rgba(96,62,17,0.76)", 8.8);
-    addLabel("HAZE MOUTH", points.alley.x - 1, points.alley.z + 7.3, "#aaffad", "rgba(19,53,27,0.75)");
-    addLabel("UNDERPASS LOOP", -40, 79, "#c6ffe9", "rgba(32,47,44,0.75)", 8.2);
-
     addCylinder(staticGroup, 2.4, 0.4, points.fountain.x, 0, points.fountain.z, materials.water, 20);
     addCylinder(staticGroup, 1.4, 0.6, points.fountain.x, 0.4, points.fountain.z, materials.concrete, 20);
     addCylinder(staticGroup, 1.2, 0.25, points.busk.x, 0, points.busk.z, materials.yellow, 16);
@@ -1763,7 +2021,7 @@
       [-123, 61], [-113, 76], [-38, 79], [-29, 65], [106, 63], [117, 73],
       [55, 23], [74, 39], [103, -73], [119, -53], [-119, -31], [-111, 36],
     ].forEach(([x, z]) => {
-      if (!pointNearRoad(x, z, 1.2)) addTree(x, z);
+      if (!pointNearRoad(x, z, 1.2) && canPlaceDetail(x, z, 2.0, 1.2)) addTree(x, z);
     });
 
     [
@@ -2618,6 +2876,15 @@
   }
 
   function resetGame(autoStart = false) {
+    if (arrestTimeout) {
+      clearTimeout(arrestTimeout);
+      arrestTimeout = null;
+    }
+    state.arrestTransition = false;
+    if (els.bustedOverlay) {
+      els.bustedOverlay.setAttribute("hidden", "");
+    }
+
     resetDynamic();
     spawnActors();
     state.running = autoStart;
@@ -2705,25 +2972,53 @@
   }
 
   function arrestPlayer() {
-    logLine("Arrested! The police confiscated all your cash.");
-    addFloater("BUSTED! -$ cash", player.x, player.z, "#ff1a1a");
-    
-    state.wanted = 0;
-    state.arrest = 0;
-    state.cash = 0;
-    state.health = state.maxHealth;
-    
+    if (state.arrestTransition) {
+      return;
+    }
+    state.arrestTransition = true;
+    logLine("BUSTED! The police are processing your arrest...");
+
     if (state.drivingCar) {
       exitVehicle();
     }
-    
-    player.x = points.policeStation.x;
-    player.z = points.policeStation.z;
-    if (player.mesh) {
-      player.mesh.position.set(player.x, 0, player.z);
+
+    const caption = choose(BUSTED_CAPTIONS);
+    ui.setText(els.bustedCaption, caption);
+    if (els.bustedOverlay) {
+      els.bustedOverlay.removeAttribute("hidden");
     }
-    
-    addPulse(player.x, player.z, 0xff1a1a, 6.0, 0.6);
+
+    if (arrestTimeout) {
+      clearTimeout(arrestTimeout);
+    }
+
+    arrestTimeout = setTimeout(() => {
+      state.wanted = 0;
+      state.arrest = 0;
+      state.cash = 0;
+      state.health = state.maxHealth;
+
+      player.x = points.policeStation.x;
+      player.z = points.policeStation.z;
+      if (player.mesh) {
+        player.mesh.position.set(player.x, 0, player.z);
+      }
+
+      // Snap camera target instantly to new position
+      cameraTarget.x = player.x;
+      cameraTarget.z = player.z;
+
+      if (els.bustedOverlay) {
+        els.bustedOverlay.setAttribute("hidden", "");
+      }
+
+      state.arrestTransition = false;
+      arrestTimeout = null;
+
+      logLine("Bailed out! The police confiscated all your cash.");
+      addPulse(player.x, player.z, 0xff1a1a, 6.0, 0.6);
+      addFloater("Bailed out! -$ cash", player.x, player.z, "#ff1a1a");
+    }, 5000);
   }
 
   // ---- Items / bag / hotbar -------------------------------------------------
@@ -3503,6 +3798,12 @@
   }
 
   function update(dt) {
+    if (state.arrestTransition) {
+      updateCamera(dt);
+      animateIdle(dt);
+      return;
+    }
+
     if (!state.running || state.paused || state.ended) {
       updateCamera(dt);
       animateIdle(dt);
@@ -4804,6 +5105,7 @@
     const hour12 = hour24 % 12 || 12;
     ui.setText(els.clock, `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`);
     ui.setText(els.phasePill, `${state.phase === "day" ? "Day" : "Night"} ${state.cycle}`);
+    ui.setText(els.districtName, state.district.name);
 
     // Objective line with live progress.
     const objective =
@@ -4872,6 +5174,10 @@
   }
 
   function onKeyDown(event) {
+    if (state.arrestTransition) {
+      event.preventDefault();
+      return;
+    }
     const key = event.key.toLowerCase();
     keys[key] = true;
     if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {

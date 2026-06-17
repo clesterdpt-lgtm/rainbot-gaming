@@ -11,7 +11,7 @@
 (function () {
 window.TW = window.TW || {};
 const THREE = window.THREE;
-const { CONFIG, AudioEngine, ClampedLook, BedroomScene, FX, AstralScene, AstralControls, Post } = TW;
+const { CONFIG, AudioEngine, ClampedLook, BedroomScene, FX, AstralScene, AstralControls, Post, Touch } = TW;
 
 class Game {
   constructor() {
@@ -43,6 +43,17 @@ class Game {
     this.controls.onLockChange = (locked) => this._onLockChange(locked);
     this.activeControls = this.controls;
     this._phase = 'paralysis';     // which world is being rendered
+
+    // touch / mobile input
+    this.touch = new Touch(
+      document.getElementById('touch-layer'),
+      document.getElementById('joy-base'),
+      document.getElementById('joy-thumb'),
+    );
+    this.touch.onLook = (dx, dy) => {
+      if (this.activeControls && this.activeControls.applyLookDelta) this.activeControls.applyLookDelta(dx, dy);
+    };
+    if (this.touch.enabled) document.body.classList.add('mobile');
 
     this._onResize();
     this._wireUI();
@@ -107,13 +118,33 @@ class Game {
         read.textContent = Math.round(vol.value * 100) + '%';
       });
     }
+
+    // on-screen buttons (mobile) — pointerdown for an instant, lag-free tap
+    const blinkBtn = document.getElementById('btn-blink');
+    if (blinkBtn) blinkBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (this.state === 'paralysis' && this._para && !this._para.lunged) this._doBlink(false);
+    });
+    const pauseBtn = document.getElementById('btn-pause');
+    if (pauseBtn) pauseBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (this.state === 'paralysis' || this.state === 'astral') this._pause();
+    });
+  }
+
+  _setTouchButtons(blink, pause) {
+    if (!this.touch || !this.touch.enabled) return;
+    const b = document.getElementById('btn-blink');
+    const p = document.getElementById('btn-pause');
+    if (b) b.classList.toggle('show', blink);
+    if (p) p.classList.toggle('show', pause);
   }
 
   _requestResume() {
     // Try to re-grab the lock; if it isn't available, resume anyway so the
     // pause menu can never trap the player.
     this.activeControls.requestLock();
-    if (this._fallback || !this.renderer.domElement.requestPointerLock) this._resume();
+    if (this._fallback || (this.touch && this.touch.enabled) || !this.renderer.domElement.requestPointerLock) this._resume();
   }
 
   // ---- phase 1: the paralysis -----------------------------------------
@@ -135,6 +166,11 @@ class Game {
     this.audio.unlock()
       .then(() => { this.audio.startDrone(41); this.audio.startBreathing(5.6); })
       .catch(() => {});
+
+    // mobile: whole screen is look, blink + pause buttons (no joystick yet)
+    this.touch.moveEnabled = false;
+    this.touch.reset();
+    this._setTouchButtons(true, true);
 
     fadeIn('fx-hint-paralysis', 900);
     setTimeout(() => fadeOut('fx-hint-paralysis'), 8500);
@@ -175,6 +211,8 @@ class Game {
     this.state = 'paused';
     this.activeControls.enabled = false;
     this.audio.suspend();
+    this._setTouchButtons(false, false);
+    if (this.touch) this.touch.reset();
     document.body.classList.remove('playing');
     show('scr-pause', true);
   }
@@ -185,6 +223,8 @@ class Game {
     this.activeControls.enabled = true;
     this.audio.resume();
     this.state = this._prePause || 'paralysis';
+    if (this.touch) this.touch.reset();
+    this._setTouchButtons(this.state === 'paralysis', true);
     this._last = performance.now();
   }
 
@@ -352,6 +392,12 @@ class Game {
     this.astralControls.setPosition(this.astral.playerStart);
     this.astralControls.enabled = true;
     this.activeControls = this.astralControls;
+
+    // mobile: enable the movement joystick; pause button only (no blink here)
+    this.touch.moveEnabled = true;
+    this.touch.reset();
+    this.astralControls.moveInput = this.touch.move;
+    this._setTouchButtons(false, true);
     this.post = new Post(this.renderer);
     this.post.setSize(window.innerWidth, window.innerHeight);
 
@@ -415,9 +461,11 @@ class Game {
     const a = this.astral, ep = a.entityPos, pp = this.astralControls.position;
     this._huntT += dt;
     const distP = Math.hypot(pp.x - ep.x, pp.z - ep.z);
+    // ease the hunt in over the first couple seconds so you can get your bearings
+    const grace = Math.min(this._huntT / 2.5, 1);
     // base + slow ramp + rubber-band: it surges when you pull away and eases
     // off up close, so a long chase stays on your heels without being unfair
-    const speed = 2.8 + Math.min(this._huntT * 0.018, 1.0) + Math.min(distP * 0.05, 1.9);
+    const speed = (2.8 + Math.min(this._huntT * 0.018, 1.0) + Math.min(distP * 0.05, 1.9)) * grace;
     // steer toward the next doorway on the route (open chase outdoors)
     const tgt = a.entityTarget(ep.x, ep.z, pp.x, pp.z);
     const dx = tgt.x - ep.x, dz = tgt.z - ep.z;
@@ -480,6 +528,8 @@ class Game {
 
   _showEnd(icon, title, sub, stats, warn) {
     if (document.exitPointerLock) document.exitPointerLock();  // free the cursor
+    this._setTouchButtons(false, false);
+    if (this.touch) this.touch.reset();
     this.audio.stopBreathing();
     this.audio.stopDrone(2);
     document.getElementById('end-icon').textContent = icon;

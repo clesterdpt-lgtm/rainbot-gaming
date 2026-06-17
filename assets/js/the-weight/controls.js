@@ -101,6 +101,19 @@ TW.ClampedLook = class ClampedLook {
     this.tPitch = clamp(pitch, -this.look.pitchDown, this.look.pitchUp);
   }
 
+  /** apply a relative look from a touch drag (px), same clamps as the mouse */
+  applyLookDelta(dx, dy) {
+    if (!this.enabled) return;
+    const s = 0.0052;   // per-pixel; a short drag covers the stiff-neck range
+    const yawNorm = Math.abs(this.tYaw) / this.look.yawClamp;
+    const yawResist = 1 - Math.pow(yawNorm, 3) * this.look.edgeResist;
+    const pl = dy > 0 ? this.look.pitchDown : this.look.pitchUp;
+    const pNorm = Math.abs(this.tPitch) / pl;
+    const pResist = 1 - Math.pow(pNorm, 3) * this.look.edgeResist;
+    this.tYaw = clamp(this.tYaw - dx * s * yawResist, -this.look.yawClamp, this.look.yawClamp);
+    this.tPitch = clamp(this.tPitch - dy * s * pResist, -this.look.pitchDown, this.look.pitchUp);
+  }
+
   update(dt) {
     this._clock += dt;
     this.apply(dt);

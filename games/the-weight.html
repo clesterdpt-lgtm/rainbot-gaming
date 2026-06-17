@@ -107,6 +107,27 @@
       color: rgba(165,185,228,0.6); text-transform: uppercase; text-align: center;
     }
 
+    /* ---- Touch / mobile controls (shown only on touch devices) ---- */
+    #touch-layer { position: fixed; inset: 0; z-index: 10; touch-action: none; pointer-events: none; }
+    body.mobile #touch-layer { pointer-events: auto; }
+    #joy-base, #joy-thumb {
+      position: fixed; z-index: 11; display: none; pointer-events: none;
+      border-radius: 50%; transform: translate(-50%, -50%);
+    }
+    #joy-base  { width: 116px; height: 116px; border: 1.5px solid rgba(216,210,198,0.26); background: rgba(18,20,26,0.22); }
+    #joy-thumb { width: 52px;  height: 52px;  border: 1.5px solid rgba(216,210,198,0.5);  background: rgba(216,210,198,0.12); }
+    .touch-btn {
+      position: fixed; z-index: 12; display: none;
+      align-items: center; justify-content: center; text-align: center;
+      font-family: var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--bone-dim); background: rgba(8,8,12,0.42);
+      border: 1px solid rgba(216,210,198,0.28); border-radius: 999px;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    body.mobile .touch-btn.show { display: flex; }
+    #btn-blink { right: 26px; bottom: 32px; width: 80px; height: 80px; font-size: 11px; }
+    #btn-pause { top: 16px; right: 16px; padding: 9px 15px; font-size: 9px; }
+
     /* ---- Screens ---- */
     .scr {
       position: fixed; inset: 0; z-index: 20;
@@ -206,6 +227,13 @@
   <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; get back to your body</div>
   <div id="obe-hud"><div id="obe-objective"></div></div>
 
+  <!-- Touch / mobile controls (inert on desktop) -->
+  <div id="touch-layer"></div>
+  <div id="joy-base"></div>
+  <div id="joy-thumb"></div>
+  <button id="btn-blink" class="touch-btn">blink</button>
+  <button id="btn-pause" class="touch-btn">pause</button>
+
   <!-- TITLE / CLICK-TO-BEGIN SCREEN -->
   <div class="scr scr--show" id="scr-boot">
     <a class="scr__corner" href="../after-dark.html">&larr; after dark</a>
@@ -266,14 +294,15 @@ Something is at the foot of the bed.</p>
   </div>
 
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/the-weight/config.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/audio.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/controls.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/bedroom.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/fx.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/post.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/astral.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/astral-controls.js?v=20260617m"></script>
-  <script src="../assets/js/the-weight/main.js?v=20260617m"></script>
+  <script src="../assets/js/the-weight/config.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/audio.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/controls.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/bedroom.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/fx.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/touch.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/post.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/astral.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/astral-controls.js?v=20260617n"></script>
+  <script src="../assets/js/the-weight/main.js?v=20260617n"></script>
 </body>
 </html>

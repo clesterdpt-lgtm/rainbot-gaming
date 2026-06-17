@@ -31,7 +31,7 @@ TW.AstralScene = class AstralScene {
 
     // the long way home: forest (far) → neighbourhood → yard → house → body
     this.playerStart = new THREE.Vector3(0, 1.62, 100);
-    this.entityStart = new THREE.Vector3(2, 0, 109);
+    this.entityStart = new THREE.Vector3(2, 0, 128);   // well back, behind the treeline
     this.bodyPosition = new THREE.Vector3(-3, 1.0, -14.5);
     this.entityPos = this.entityStart.clone();
 

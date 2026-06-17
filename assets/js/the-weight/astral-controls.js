@@ -34,6 +34,7 @@ TW.AstralControls = class AstralControls {
     this.locked = document.pointerLockElement === dom;
     this.shake = 0;
     this._keys = Object.create(null);
+    this.moveInput = null;       // {x,y} from a touch joystick (y<0 = forward)
     this._clock = 0;
     this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -96,18 +97,32 @@ TW.AstralControls = class AstralControls {
     this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch));
   }
 
+  /** relative look from a touch drag (px) */
+  applyLookDelta(dx, dy) {
+    if (!this.enabled) return;
+    const s = this.sensitivity * 1.7;
+    this.yaw -= dx * s;
+    this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch - dy * s));
+  }
+
   update(dt) {
     this._clock += dt;
 
-    // ---- desired move direction in world space (horizontal) ----
-    let ix = 0, iz = 0;
-    if (this._keys.f) iz -= 1;
-    if (this._keys.b) iz += 1;
-    if (this._keys.l) ix -= 1;
-    if (this._keys.r) ix += 1;
-    const len = Math.hypot(ix, iz);
+    // ---- desired move direction (touch joystick is analog; keys are unit) ----
+    let ix = 0, iz = 0, analog = false;
+    const mv = this.moveInput;
+    if (mv && (Math.abs(mv.x) > 0.12 || Math.abs(mv.y) > 0.12)) {
+      ix = mv.x; iz = mv.y; analog = true;
+    } else {
+      if (this._keys.f) iz -= 1;
+      if (this._keys.b) iz += 1;
+      if (this._keys.l) ix -= 1;
+      if (this._keys.r) ix += 1;
+    }
+    let len = Math.hypot(ix, iz);
     if (len > 0 && this.enabled) {
-      ix /= len; iz /= len;
+      if (!analog) { ix /= len; iz /= len; }            // keyboard = full tilt
+      else if (len > 1) { ix /= len; iz /= len; }        // clamp joystick to 1
       // camera forward = (-sin yaw, -cos yaw); right = (cos yaw, -sin yaw).
       // move = forward*(-iz) + right*ix  (W => iz=-1 => +forward)
       const cos = Math.cos(this.yaw), sin = Math.sin(this.yaw);

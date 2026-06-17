@@ -3369,10 +3369,10 @@
     }
 
     let steerInput = 0;
-    if (keys.a || keys.arrowleft) steerInput -= 1;
-    if (keys.d || keys.arrowright) steerInput += 1;
+    if (keys.a || keys.arrowleft) steerInput += 1;
+    if (keys.d || keys.arrowright) steerInput -= 1;
     if (Math.abs(mobileMove.x) > 0.05) {
-      steerInput += mobileMove.x;
+      steerInput -= mobileMove.x;
     }
 
     const maxSpeed = car.type.speedScale * 14.5;

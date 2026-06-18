@@ -128,7 +128,7 @@
   .gauge .cap { position:absolute; top:50%; left:50%; width:1.5cqh; height:1.5cqh; border-radius:50%;
     background:#3a3a40; transform:translate(-50%,-50%); box-shadow:inset 0 0 4px #000; }
 
-  .wheel { position:absolute; left:50%; bottom:-22cqh; transform:translateX(-50%);
+  .wheel { position:absolute; left:50%; bottom:-22cqh; transform:translateX(-50%); z-index:13;
     width:50cqh; height:50cqh; border-radius:50%; border:3.2cqh solid #1a1a1e;
     background:radial-gradient(circle, transparent 60%, rgba(0,0,0,.25) 72%);
     box-shadow:0 0 0 .5cqh #0a0a0c, inset 0 0 30px rgba(0,0,0,.6), 0 6px 30px rgba(0,0,0,.5); }
@@ -141,9 +141,9 @@
     border:1.5px solid #0a0a0c; box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 2px 8px rgba(0,0,0,.6);
     display:flex; align-items:center; justify-content:center; }
   .wheel .badge { font-size:2.2cqh; opacity:.85; }
-  .hand { position:absolute; top:34%; width:7cqh; height:5cqh; border-radius:42% 42% 36% 36%;
+  .hand { position:absolute; top:33%; width:8cqh; height:5.6cqh; border-radius:42% 42% 36% 36%;
     background:linear-gradient(180deg,#d9a878,#b9895e); box-shadow:0 4px 10px rgba(0,0,0,.45); }
-  .hand.l { left:1.5cqh; transform:rotate(20deg); } .hand.r { right:1.5cqh; transform:rotate(-20deg); }
+  .hand.wheel-hand { left:2cqh; top:3.2cqh; transform:rotate(26deg); z-index:2; }
 
   #freshener { position:absolute; top:4.4cqh; left:50%; z-index:12; pointer-events:none;
     transform-origin:top center; animation:swing 3.4s ease-in-out infinite; text-align:center; }
@@ -154,17 +154,39 @@
   /* =========================================================
      THE PHONE
   ========================================================= */
-  #phone { position:absolute; left:50%; bottom:4cqh; transform:translateX(-50%);
+  #phone { position:absolute; left:50%; bottom:4cqh; transform:translateX(-50%) rotateZ(-1.2deg) rotateX(2deg);
     width:var(--phone-w); height:var(--phone-h); z-index:20; background:#0b0b10;
     border-radius:clamp(14px, 7cqh, 28px); padding:clamp(4px, 2cqh, 8px);
-    border:2px solid #2a2a36; box-shadow:0 0 0 4px #161620,0 16px 44px rgba(0,0,0,.7),0 0 26px rgba(0,0,0,.5);
-    pointer-events:auto; container-type:size; container-name:phone; flex-shrink:0; aspect-ratio:248 / 390; }
+    border:2px solid #303244; box-shadow:inset -8px -12px 18px rgba(0,0,0,.5), inset 4px 4px 10px rgba(255,255,255,.05), 0 0 0 4px #161620, 0 18px 54px rgba(0,0,0,.74), 0 0 28px rgba(78,163,255,.18);
+    pointer-events:auto; container-type:size; container-name:phone; flex-shrink:0; aspect-ratio:248 / 390; perspective:540px; }
   #phone::after { content:""; position:absolute; bottom:calc(-1 * clamp(18px, 4.5cqh, 36px)); left:50%; transform:translateX(-50%);
     width:clamp(18px, 4.5cqh, 36px); height:clamp(22px, 5.5cqh, 44px); background:linear-gradient(180deg,#222226,#111114); border-radius:0 0 28% 28%; z-index:-1; }
+  .phone-side { position:absolute; top:12%; bottom:14%; width:clamp(5px,2cqh,10px); border-radius:999px; background:linear-gradient(180deg,#4c5064,#151822); box-shadow:inset 1px 0 2px rgba(255,255,255,.12); pointer-events:none; }
+  .phone-side--left { left:calc(-1 * clamp(3px,1.2cqh,6px)); }
+  .phone-side--right { right:calc(-1 * clamp(3px,1.2cqh,6px)); }
+  .phone-camera { position:absolute; top:clamp(9px,4cqh,17px); right:clamp(10px,4.4cqh,18px); z-index:5;
+    width:clamp(12px,5.5cqh,24px); height:clamp(12px,5.5cqh,24px); border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #9bd1ff 0 12%, #10131c 15% 52%, #3b4158 56% 100%);
+    box-shadow:0 0 0 3px rgba(255,255,255,.08), 0 5px 10px rgba(0,0,0,.45); pointer-events:none; }
+  .phone-hand { position:absolute; right:calc(-1 * clamp(22px,9.5cqh,46px)); top:43%; z-index:6; pointer-events:none;
+    width:clamp(34px,15cqh,64px); height:clamp(48px,20cqh,86px); border-radius:48% 34% 40% 46%;
+    background:linear-gradient(160deg,#e0ae7f,#b9855a 72%,#8d613f);
+    box-shadow:0 10px 20px rgba(0,0,0,.42), inset -5px -7px 12px rgba(92,50,24,.28);
+    transform:rotate(-11deg); }
+  .phone-hand::before { content:""; position:absolute; left:8%; top:8%; width:42%; height:82%; border-radius:999px;
+    background:linear-gradient(180deg,rgba(255,221,183,.68),rgba(174,114,72,.18)); opacity:.65; }
+  .phone-hand::after { content:""; position:absolute; left:2%; top:52%; width:54%; height:18%; border-radius:999px;
+    background:linear-gradient(180deg,#e7b78a,#b77f55); box-shadow:0 11px 0 -2px #af7850, 0 22px 0 -3px #a87049; }
+  .phone-thumb { position:absolute; left:calc(-1 * clamp(13px,5.5cqh,24px)); top:31%; width:clamp(22px,9.5cqh,42px); height:clamp(13px,5.8cqh,24px);
+    border-radius:999px 45% 45% 999px; background:linear-gradient(180deg,#e6b486,#b98259); transform:rotate(-16deg);
+    box-shadow:0 5px 12px rgba(0,0,0,.35); }
   #phone-screen { position:relative; width:100%; height:100%; border-radius:clamp(10px, 5.4cqh, 21px); overflow:hidden;
-    background:linear-gradient(180deg,#141420,#0a0a12); display:flex; flex-direction:column; }
+    background:radial-gradient(circle at 20% 0%, rgba(78,163,255,.24), transparent 34%), linear-gradient(180deg,#17192a,#090a12 74%);
+    display:flex; flex-direction:column; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), inset 0 14px 24px rgba(255,255,255,.04), inset 0 -20px 26px rgba(0,0,0,.48); z-index:4; }
   #phone-screen::before { content:""; position:absolute; top:clamp(3px, 1.5cqh, 6px); left:50%; transform:translateX(-50%);
     width:32%; height:clamp(8px, 3.8cqh, 15px); background:#0b0b10; border-radius:0 0 11px 11px; z-index:25; }
+  #phone-screen::after { content:""; position:absolute; inset:0; z-index:24; pointer-events:none;
+    background:linear-gradient(115deg,rgba(255,255,255,.18),transparent 18%,transparent 58%,rgba(255,255,255,.07) 59%,transparent 76%); mix-blend-mode:screen; opacity:.55; }
   .statusbar { display:flex; justify-content:space-between; align-items:center; padding:clamp(3px,1.3cqh,5px) clamp(7px,3.3cqh,13px) clamp(2px,.8cqh,3px); font-size:clamp(.48rem,4.2cqh,.62rem); font-weight:600; flex:0 0 auto; }
   .app-area { flex:1 1 auto; min-height:0; position:relative; overflow:hidden; }
   .app-view { position:absolute; inset:0; display:none; flex-direction:column; min-height:0; overflow:hidden; }
@@ -282,6 +304,82 @@
   .genz-touch-grid .btn { min-height:44px; font-size:13px; padding:8px 10px; }
   .genz-touch-grid .btn.is-held { border-color:var(--accent-3); box-shadow:0 0 16px rgba(255,212,59,.22); transform:translateY(1px); }
   .genz-side-note { color:var(--ink-dim); font-family:var(--font-mono); font-size:11px; line-height:1.55; margin:10px 0 0; }
+  .genz-thumb-options { display:flex; gap:8px; margin-top:8px; }
+  .genz-thumb-options .btn { flex:1 1 0; min-height:36px; padding:7px 8px; font-size:11px; }
+  .genz-thumb-options .btn.is-active { border-color:var(--accent-2); box-shadow:0 0 16px rgba(46,224,255,.18); color:var(--accent-2); }
+  .safety-disclaimer { max-width:min(34rem,82cqw); color:rgba(255,255,255,.7); font-size:.78rem; line-height:1.45; background:rgba(255,180,58,.1);
+    border:1px solid rgba(255,180,58,.28); border-radius:10px; padding:9px 12px; }
+  .genz-drive-touch-layer {
+    position:absolute;
+    inset:0;
+    z-index:36;
+    display:none;
+    pointer-events:none;
+  }
+  .genz-drive-joystick-zone {
+    position:absolute;
+    bottom:0;
+    width:clamp(72px, 20cqw, 78px);
+    height:min(62cqh, 300px);
+    pointer-events:auto;
+    touch-action:none;
+  }
+  .genz-drive-touch-layer[data-joystick-side="left"] .genz-drive-joystick-zone { left:max(6px, env(safe-area-inset-left)); }
+  .genz-drive-touch-layer[data-joystick-side="right"] .genz-drive-joystick-zone { right:max(6px, env(safe-area-inset-right)); }
+  .genz-drive-joystick {
+    position:absolute;
+    left:0;
+    top:0;
+    width:76px;
+    height:76px;
+    border-radius:50%;
+    pointer-events:none;
+    opacity:0;
+    transform:translate(-50%,-50%) scale(.92);
+    transition:opacity .12s ease, transform .12s ease;
+  }
+  .genz-drive-touch-layer.is-active .genz-drive-joystick {
+    opacity:.48;
+    transform:translate(-50%,-50%) scale(1);
+  }
+  .genz-drive-joystick::before {
+    content:"";
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(78,163,255,.08), rgba(78,163,255,.015) 58%, transparent 60%);
+    border:1px solid rgba(255,255,255,.26);
+    box-shadow:0 0 22px rgba(78,163,255,.2), inset 0 0 18px rgba(255,255,255,.08);
+  }
+  .genz-drive-joystick::after {
+    content:"";
+    position:absolute;
+    left:50%;
+    top:12%;
+    width:1px;
+    height:76%;
+    background:rgba(255,255,255,.2);
+    transform:translateX(-50%);
+  }
+  .genz-drive-joystick-knob {
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    background:rgba(255,255,255,.32);
+    border:1px solid rgba(255,255,255,.48);
+    box-shadow:0 6px 18px rgba(0,0,0,.28), 0 0 16px rgba(126,200,255,.22);
+    transform:translate(-50%,-50%);
+  }
+  .genz-drive-joystick-knob::after {
+    content:"";
+    position:absolute;
+    inset:9px;
+    border-radius:50%;
+    background:rgba(78,163,255,.48);
+  }
   .genz-driving-page .screen .text-6xl { font-size:clamp(2rem, 8cqh, 3.75rem); }
   .genz-driving-page .screen .text-4xl,
   .genz-driving-page .screen .sm\:text-6xl { font-size:clamp(1.8rem, 6cqh, 3.5rem); }
@@ -308,6 +406,7 @@
     .genz-driving-page .screen .mb-7 { margin-bottom:.75rem; }
     .genz-driving-page .screen .pill { padding:.2rem .55rem; }
     .genz-driving-page .btn-neon { font-size:.9rem; padding:10px 20px; }
+    .canvas-wrap--genz-driving .genz-drive-touch-layer { display:block; }
   }
 
   @media (max-width: 560px) {
@@ -320,6 +419,10 @@
       min-height:44px;
       width:auto;
     }
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    .canvas-wrap--genz-driving .genz-drive-touch-layer { display:block; }
   }
 </style>
 </head>
@@ -353,7 +456,7 @@
     <div class="dash-strip"></div><div class="vent l"></div><div class="vent r"></div>
     <div class="gauge speedo"><div class="needle" id="speed-needle"></div><div class="cap"></div><div class="num" id="speed-num">0</div><div class="lbl">MPH</div></div>
     <div class="gauge rpm"><div class="needle" id="rpm-needle"></div><div class="cap"></div><div class="num" id="rpm-num">0</div><div class="lbl">x1000</div></div>
-    <div class="wheel" id="steering-wheel"><div class="spoke-d"></div><div class="hand l"></div><div class="hand r"></div><div class="hub"><span class="badge">🌈</span></div></div>
+    <div class="wheel" id="steering-wheel"><div class="spoke-d"></div><div class="hand wheel-hand"></div><div class="hub"><span class="badge">🌈</span></div></div>
   </div>
   <div id="freshener"><div class="string"></div><div class="tree">🌲</div></div>
 
@@ -379,10 +482,14 @@
     </div>
   </div>
 
-  <div id="warning">⚠️ EYES ON THE ROAD ⚠️</div>
+  <div id="warning" aria-live="polite"></div>
   <div id="objective-toast" aria-live="polite"></div>
 
   <div id="phone">
+    <div class="phone-hand" aria-hidden="true"><span class="phone-thumb"></span></div>
+    <div class="phone-side phone-side--left" aria-hidden="true"></div>
+    <div class="phone-side phone-side--right" aria-hidden="true"></div>
+    <div class="phone-camera" aria-hidden="true"></div>
     <div id="phone-screen">
       <div class="statusbar"><span id="clock">9:41</span>
         <span class="font-arcade accent text-[.62rem]">RAINBOT OS</span>
@@ -414,6 +521,12 @@
     </div>
   </div>
 </div>
+<div id="mobile-drive-controls" class="genz-drive-touch-layer" data-joystick-side="left" aria-label="Mobile joystick driving controls">
+  <div id="drive-joystick-zone" class="genz-drive-joystick-zone" aria-label="Drag joystick to steer, gas, or brake"></div>
+  <div id="drive-joystick" class="genz-drive-joystick" aria-hidden="true">
+    <span id="drive-joystick-knob" class="genz-drive-joystick-knob"></span>
+  </div>
+</div>
 <div id="flash"></div>
 
 <div id="screen-start" class="screen">
@@ -422,18 +535,20 @@
   <h2 class="font-arcade text-lg sm:text-2xl mb-5 text-white/80">Gen Z Driving Simulator</h2>
   <p class="max-w-md text-white/80 mb-5 leading-relaxed">
     You <b>cannot stop scrolling.</b> Rack up clout on your phone 📱 while you actually <b>drive</b> the
-    back roads — gas, brake, and steer through the bends. Hold left or right to rotate the wheel through full turns.
-    Glance past the phone for real traffic: cars ahead pull away while oncoming cars rush toward you.
-    Steer into the curves, dodge other cars (collisions tank your vibe check), and tap the phone for bigger points the farther you get.
+    back roads as they mutate into city blocks. Traffic starts chill, then gets absolutely social once your score climbs.
+    Steer into the curves, dodge cars, trees, and buildings, and tap the phone for bigger points the farther you get.
     Hit each destination for bonus score — then keep driving as the next objective loads automatically.</p>
   <div class="flex flex-wrap gap-2 justify-center mb-7 text-sm">
     <span class="pill rounded-lg px-3 py-1"><kbd>W</kbd> gas</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>S</kbd> brake</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>A</kbd><kbd>D</kbd> full wheel</span>
+    <span class="pill rounded-lg px-3 py-1">Mobile invisible joystick</span>
     <span class="pill rounded-lg px-3 py-1">👆 phone = bigger points farther in</span>
   </div>
   <button class="btn-neon" onclick="Game.start()">START DRIVING ▶</button>
-  <p class="text-white/30 text-xs mt-6">A very responsible driving simulator™</p>
+  <p class="safety-disclaimer mt-5">
+    Rainbot does not endorse humans texting and driving. This is pixel clownery only; in real cars, park the phone before the phone parks you.
+  </p>
 </div>
 
 <div id="screen-level" class="screen hidden">
@@ -487,6 +602,13 @@
             <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> rotate the wheel.
             Hold left/right to wind the wheel through multiple turns.
           </p>
+          <div class="genz-thumb-options" aria-label="Mobile joystick thumb side">
+            <button class="btn btn--ghost" id="btn-joystick-left" type="button">Left thumb</button>
+            <button class="btn btn--ghost" id="btn-joystick-right" type="button">Right thumb</button>
+          </div>
+          <p class="genz-side-note">
+            Mobile: drag on your chosen screen edge. Up is gas, down is brake, sideways steers.
+          </p>
         </div>
 
         <div id="ad-leaderboard"></div>
@@ -497,13 +619,14 @@
           <ul>
             <li><strong style="color:var(--ink);">Drive the bends</strong> while the phone keeps trying to steal your attention.</li>
             <li><strong style="color:var(--ink);">Steering is wheel-based:</strong> tap for small corrections, hold to keep winding toward full lock.</li>
+            <li><strong style="color:var(--ink);">Score makes traffic denser</strong> and the countryside slowly turns into city streets.</li>
             <li><strong style="color:var(--ink);">Stay centered on pavement</strong> to slowly rebuild vibe (caps around 76% unless you earn more).</li>
             <li><strong style="color:var(--ink);">Phone taps always raise vibe</strong> — bigger bump when you're centered and traffic is clear.</li>
-            <li><strong style="color:var(--ink);">Collisions and off-road</strong> hit hard — staying maxed takes real multitasking discipline.</li>
+            <li><strong style="color:var(--ink);">Trees and buildings hit hard</strong> — leaving the road can crater the vibe meter fast.</li>
             <li><strong style="color:var(--ink);">Chain all three destinations</strong> — finishing one rolls you straight into the next with bonus points.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
-            Parody driving game. Eyes on the actual road in actual life.
+            Rainbot does not endorse humans texting and driving. Fake taps here, parked phones out there.
           </p>
         </details>
       </aside>
@@ -536,8 +659,18 @@ const CONFIG = {
   frontWheelMaxDeg: 34, wheelbase: 2.8, yawRateScale: 0.38, maxYawRate: 1.15,
   maxHeadingDeg: 30, highSpeedSteerDamp: 0.42,
   sideGrip: 7.2, maxLateralSpeed: 22, headingCameraLook: 38, cameraRollMax: 0.09, cameraSmoothing: 7,
-  laneLimit: 9.4, carLimit: 24, roadHalfWidth: 12, safeRoadHalfWidth: 10.7,
-  offRoadDrain: 0.45, offRoadDrainScale: 0.22, collisionVibeDamage: 18,
+  laneLimit: 9.4, carLimit: 42, roadHalfWidth: 12, safeRoadHalfWidth: 10.7,
+  offRoadDrain: 0.45, offRoadDrainScale: 0.22,
+  collisionVibeDamage: 18,
+  treeCollisionVibeDamage: 32,
+  buildingCollisionVibeDamage: 42,
+  treeCollisionRoadClearance: 10.5,
+  buildingCollisionRoadClearance: 12.5,
+  sceneryCollisionNearAhead: 16,
+  sceneryCollisionFarAhead: 5.5,
+  sceneryVisibilityLead: 78,
+  sceneryCollisionSeenTime: 0.7,
+  scenerySeenLateralPad: 8,
 
   // vibe meter — gains from driving well / phone / objectives; soft cap keeps 100% earned
   vibePassiveDrain: 0.2,
@@ -570,9 +703,17 @@ const CONFIG = {
 
   // traffic
   spawnZ: -165, despawnZ: 24, hitInvuln: 1.0,
+  trafficStartCount: 2,
+  trafficMaxCount: 17,
+  trafficScoreFull: 12500,
+  trafficSpawnTimeMax: 4.8,
+  trafficSpawnTimeMin: 1.15,
+  trafficSpawnDistanceMinScale: 0.42,
 
   // scenery (country / small town)
-  houseCount: 16, treeCount: 30, hillCount: 7, worldLength: 300,
+  houseCount: 16, treeCount: 30, hillCount: 7, cityBuildingCount: 24, streetLightCount: 18, worldLength: 300,
+  cityScoreStart: 900,
+  cityScoreFull: 9500,
 
   // scoring
   comboWindow: 2.2, comboMax: 9, basePoints: 30, scrollPoints: 7,
@@ -588,7 +729,7 @@ const CONFIG = {
 
   songs: [
     {t:"Rubber Duck Anthem", a:"DJ Quack"}, {t:"Highway to Wi-Fi", a:"The Buffering"},
-    {t:"Crashout (sped up)", a:"lil cone"}, {t:"Eyes On The Road?", a:"Nah Records"},
+    {t:"Crashout (sped up)", a:"lil cone"}, {t:"Parked Phone Anthem", a:"Nah Records"},
     {t:"420m to Taco Bell", a:"GPS feat. Karen"}, {t:"Brake? I Hardly…", a:"The Tailgaters"},
   ],
   feedPosts: [
@@ -624,8 +765,8 @@ const SFX = (() => {
 ================================================================= */
 const Scene3D = (() => {
   let renderer, scene, camera, roadTex, grassTex, road, roadX0, roadDepth, canvas, viewportEl, resizeObserver;
-  const traffic=[], houses=[], trees=[], hills=[];
-  let player={x:0}, D=0, cMul=1;
+  const traffic=[], houses=[], trees=[], hills=[], cityBuildings=[], streetLights=[], sidewalks=[];
+  let player={x:0}, D=0, cMul=1, cityProgress=0;
   const CAM_Z=10, CAM_Y=5.0, f=CONFIG.curveK ? CONFIG.curveFreq : 0.013;
 
   /* lateral offset of the road centre at depth `d` ahead — the double integral of a
@@ -659,6 +800,13 @@ const Scene3D = (() => {
     const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
     x.fillStyle='#5c8a40'; x.fillRect(0,0,128,128);
     for(let i=0;i<3200;i++){ const g=Math.random()*46-23; x.fillStyle=`rgba(${92+g|0},${138+g|0},${64+g|0},.6)`; x.fillRect(Math.random()*128,Math.random()*128,2,2); }
+    for(let i=0;i<180;i++){
+      const g=Math.random()*38-18;
+      x.strokeStyle=`rgba(${102+g|0},${152+g|0},${72+g|0},.42)`;
+      x.lineWidth=1+Math.random()*1.7;
+      const px=Math.random()*128, py=Math.random()*128;
+      x.beginPath(); x.moveTo(px,py); x.lineTo(px+(Math.random()-.5)*4,py+6+Math.random()*14); x.stroke();
+    }
     const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(70,70); return t;
   }
   function makeMemeTexture(emoji,bg){ const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
@@ -670,8 +818,8 @@ const Scene3D = (() => {
   function trafficLanes(){
     const inner=CONFIG.roadHalfWidth*0.25, outer=CONFIG.roadHalfWidth*0.62;
     return [
-      {x:-outer,oncoming:false}, {x:-inner,oncoming:false},
-      {x: inner,oncoming:true},  {x: outer,oncoming:true},
+      {x:-outer,oncoming:true},  {x:-inner,oncoming:true},
+      {x: inner,oncoming:false}, {x: outer,oncoming:false},
     ];
   }
   function createTrafficVehicle(oncoming=false){
@@ -714,6 +862,12 @@ const Scene3D = (() => {
   function overlapsZRange(zMin,zMax,range){
     return zMax>=range.near && zMin<=range.far;
   }
+  function sceneryCollisionZRange(){
+    return {
+      near:CAM_Z-CONFIG.sceneryCollisionNearAhead,
+      far:CAM_Z-CONFIG.sceneryCollisionFarAhead,
+    };
+  }
   function trafficCollides(playerX,o){
     if(o.userData.hit) return false;
     const range=collisionZRange();
@@ -721,6 +875,32 @@ const Scene3D = (() => {
     const zPrev=o.userData.prevZ ?? z;
     if(!overlapsZRange(Math.min(z,zPrev),Math.max(z,zPrev),range)) return false;
     return Math.abs(o.userData.lane-playerX)<trafficHitRadius();
+  }
+  function sceneryCollides(playerX,o){
+    if(!o.userData.solid) return false;
+    if(o.userData.hit) return false;
+    if((o.userData.seenTimer||0)<CONFIG.sceneryCollisionSeenTime) return false;
+    const range=sceneryCollisionZRange();
+    const z=o.position.z;
+    const zPrev=o.userData.prevZ ?? z;
+    if(!overlapsZRange(Math.min(z,zPrev),Math.max(z,zPrev),range)) return false;
+    if(Math.sign(playerX||o.userData.lane)!==Math.sign(o.userData.lane)) return false;
+    const roadClearance=o.userData.kind==='tree' ? CONFIG.treeCollisionRoadClearance : CONFIG.buildingCollisionRoadClearance;
+    if(Math.abs(playerX)<CONFIG.roadHalfWidth+roadClearance) return false;
+    const radius=o.userData.hitRadius ?? (CONFIG.playerCarWidth*0.5+1.2);
+    return Math.abs(o.userData.lane-playerX)<radius;
+  }
+  function registerSceneryHit(events,o,kind){
+    o.userData.hit=true;
+    events[kind]=(events[kind]||0)+1;
+  }
+  function markScenerySeen(o,dt,playerX){
+    const sameSide=Math.sign(playerX||o.userData.lane)===Math.sign(o.userData.lane);
+    const forward=o.position.z<CAM_Z-CONFIG.sceneryCollisionFarAhead && o.position.z>CAM_Z-CONFIG.sceneryVisibilityLead;
+    const radius=o.userData.hitRadius ?? (CONFIG.playerCarWidth*0.5+1.2);
+    const inForwardPath=Math.abs(o.userData.lane-playerX)<radius+CONFIG.scenerySeenLateralPad;
+    if(sameSide&&forward&&inForwardPath) o.userData.seenTimer=Math.min(2,(o.userData.seenTimer||0)+dt);
+    else o.userData.seenTimer=0;
   }
 
   /* ---------- country scenery ---------- */
@@ -731,7 +911,9 @@ const Scene3D = (() => {
     const g=new THREE.Group(); const w=3+Math.random()*2.4, h=2.2+Math.random()*1.4, d=3+Math.random()*2.4;
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:pick(WALLS),roughness:.92})); body.position.y=h/2;
     const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.8, h*0.85, 4),new THREE.MeshStandardMaterial({color:pick(ROOFS),roughness:.9}));
-    roof.position.y=h+h*0.42; roof.rotation.y=Math.PI/4; g.add(body,roof); return g;
+    roof.position.y=h+h*0.42; roof.rotation.y=Math.PI/4; g.add(body,roof);
+    g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.55;
+    return g;
   }
   function createBarn(){
     const g=new THREE.Group(); const w=5+Math.random()*2, h=3.4+Math.random()*1.2, d=7+Math.random()*2;
@@ -742,10 +924,13 @@ const Scene3D = (() => {
       const silo=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,h+2,12),new THREE.MeshStandardMaterial({color:0xb9bdc2,roughness:.6})); silo.position.set(w/2+1.4,(h+2)/2,0);
       const dome=new THREE.Mesh(new THREE.SphereGeometry(1.1,12,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:.6})); dome.position.set(w/2+1.4,h+2,0);
       g.add(silo,dome); }
+    g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.58;
     return g;
   }
   function placeStructure(b){ const side=Math.random()<.5?-1:1;
-    b.userData.lane=side*(CONFIG.roadHalfWidth+6+Math.random()*22); b.position.z=-Math.random()*CONFIG.worldLength; b.rotation.y=(Math.random()-.5)*0.7; }
+    b.userData.solid=Math.random()<0.12;
+    b.userData.lane=side*(CONFIG.roadHalfWidth+(b.userData.solid?34:24)+Math.random()*(b.userData.solid?28:34));
+    b.position.z=-Math.random()*CONFIG.worldLength; b.rotation.y=(Math.random()-.5)*0.7; b.userData.hit=false; b.userData.seenTimer=0; b.userData.prevZ=b.position.z; }
   function createStructures(){ for(let i=0;i<CONFIG.houseCount;i++){ const s=Math.random()<0.32?createBarn():createHouse(); placeStructure(s); scene.add(s); houses.push(s); } }
 
   function createTree(){ const g=new THREE.Group();
@@ -759,13 +944,70 @@ const Scene3D = (() => {
       const b2=new THREE.Mesh(new THREE.SphereGeometry(1.2,10,9),fol); b2.position.set(.9,2.9,.4);
       const c2=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,9),fol); c2.position.set(-.8,3,-.3); g.add(a,b2,c2); }
     return g; }
-  function placeTree(p){ const side=Math.random()<.5?-1:1; p.userData.lane=side*(CONFIG.roadHalfWidth+1.5+Math.random()*9); p.position.z=-Math.random()*CONFIG.worldLength; p.scale.setScalar(.8+Math.random()*.6); }
+  function placeTree(p){ const side=Math.random()<.5?-1:1; p.userData.solid=Math.random()<0.18; p.userData.lane=side*(CONFIG.roadHalfWidth+(p.userData.solid?27:15)+Math.random()*(p.userData.solid?24:28)); p.position.z=-Math.random()*CONFIG.worldLength; p.scale.setScalar(.8+Math.random()*.6); p.userData.kind='tree'; p.userData.hit=false; p.userData.seenTimer=0; p.userData.prevZ=p.position.z; p.userData.hitRadius=CONFIG.playerCarWidth*0.5+Math.max(.38,.45*p.scale.x); }
   function createTrees(){ for(let i=0;i<CONFIG.treeCount;i++){ const t=createTree(); placeTree(t); scene.add(t); trees.push(t); } }
 
   function createHill(){ const m=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshStandardMaterial({color:pick([0x4f7a3a,0x5c8a40,0x456e34]),roughness:1})); return m; }
   function placeHill(h){ const side=Math.random()<.5?-1:1; const r=22+Math.random()*34;
     h.scale.set(r,r*0.42,r); h.userData.lane=side*(40+Math.random()*70); h.position.y=-r*0.55; h.position.z=-Math.random()*CONFIG.worldLength; }
   function createHills(){ for(let i=0;i<CONFIG.hillCount;i++){ const h=createHill(); placeHill(h); scene.add(h); hills.push(h); } }
+
+  /* ---------- city scenery ---------- */
+  const CITY_WALLS=[0x3c465a,0x51505b,0x786a5f,0x40505c,0x5d5366];
+  const NEON=[0x4ea3ff,0xff4d9d,0xffd43b,0x70ffb8];
+  function createCityBuilding(){
+    const g=new THREE.Group();
+    const w=4+Math.random()*4.5, h=7+Math.random()*18, d=4+Math.random()*5;
+    const bodyMat=new THREE.MeshStandardMaterial({color:pick(CITY_WALLS),roughness:.72,metalness:.05});
+    const glassMat=new THREE.MeshStandardMaterial({color:0x9fd5ff,emissive:pick(NEON),emissiveIntensity:.18,roughness:.28});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),bodyMat); body.position.y=h/2; g.add(body);
+    for(let y=1.4;y<h-1;y+=1.9){
+      const front=new THREE.Mesh(new THREE.BoxGeometry(w*.68,.18,.08),glassMat); front.position.set(0,y,d/2+.05); g.add(front);
+      const back=new THREE.Mesh(new THREE.BoxGeometry(w*.68,.18,.08),glassMat); back.position.set(0,y,-d/2-.05); g.add(back);
+    }
+    if(Math.random()<0.72){
+      const signMat=new THREE.MeshStandardMaterial({color:pick(NEON),emissive:pick(NEON),emissiveIntensity:.65,roughness:.4});
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(w*.72,.45,.12),signMat); sign.position.set(0,Math.min(h*.55,5.5),d/2+.12); g.add(sign);
+    }
+    g.userData.kind='building';
+    g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.55;
+    return g;
+  }
+  function placeCityBuilding(b){ const side=Math.random()<.5?-1:1;
+    b.userData.solid=Math.random()<0.16;
+    b.userData.lane=side*(CONFIG.roadHalfWidth+(b.userData.solid?34:25)+Math.random()*(b.userData.solid?34:42));
+    b.position.z=-Math.random()*CONFIG.worldLength;
+    b.rotation.y=(Math.random()-.5)*0.24;
+    b.userData.hit=false;
+    b.userData.seenTimer=0;
+    b.userData.prevZ=b.position.z;
+  }
+  function createCityBuildings(){ for(let i=0;i<CONFIG.cityBuildingCount;i++){ const b=createCityBuilding(); placeCityBuilding(b); b.visible=false; scene.add(b); cityBuildings.push(b); } }
+
+  function createStreetLight(){
+    const g=new THREE.Group();
+    const metal=new THREE.MeshStandardMaterial({color:0x353941,roughness:.48,metalness:.35});
+    const glow=new THREE.MeshStandardMaterial({color:0xfff1b8,emissive:0xffd879,emissiveIntensity:.9,roughness:.3});
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,5.2,8),metal); pole.position.y=2.6; g.add(pole);
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(1.5,.09,.09),metal); arm.position.set(.68,5.0,0); g.add(arm);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.26,12,8),glow); lamp.position.set(1.45,4.88,0); g.add(lamp);
+    return g;
+  }
+  function placeStreetLight(l){ const side=Math.random()<.5?-1:1;
+    l.userData.lane=side*(CONFIG.roadHalfWidth+2.2+Math.random()*2.6);
+    l.position.z=-Math.random()*CONFIG.worldLength;
+    l.rotation.y=side<0?0:Math.PI;
+  }
+  function createStreetLights(){ for(let i=0;i<CONFIG.streetLightCount;i++){ const l=createStreetLight(); placeStreetLight(l); l.visible=false; scene.add(l); streetLights.push(l); } }
+
+  function createSidewalks(){
+    [-1,1].forEach(sign=>{
+      const mat=new THREE.MeshStandardMaterial({color:0xb8bcc2,roughness:.86,transparent:true,opacity:0});
+      const walk=new THREE.Mesh(new THREE.PlaneGeometry(7.5,700),mat);
+      walk.rotation.x=-Math.PI/2; walk.position.set(sign*(CONFIG.roadHalfWidth+3.9),0.025,-250);
+      scene.add(walk); sidewalks.push({mesh:walk,sign});
+    });
+  }
 
   /* ---------- init ---------- */
   function viewportSize(){
@@ -801,7 +1043,7 @@ const Scene3D = (() => {
     const pos=road.geometry.attributes.position; roadX0=new Float32Array(pos.count); roadDepth=new Float32Array(pos.count);
     for(let i=0;i<pos.count;i++){ roadX0[i]=pos.getX(i); roadDepth[i]=CAM_Z-(road.position.z-pos.getY(i)); }
 
-    createStructures(); createTrees(); createHills();
+    createStructures(); createTrees(); createHills(); createCityBuildings(); createStreetLights(); createSidewalks();
     if(window.ResizeObserver && viewportEl){
       resizeObserver=new ResizeObserver(onResize);
       resizeObserver.observe(viewportEl);
@@ -823,24 +1065,36 @@ const Scene3D = (() => {
     ob.userData.prevZ=ob.position.z;
     scene.add(ob); traffic.push(ob); return ob;
   }
-  function spawnTraffic(){ addTrafficVehicle(); }
-  function seedTraffic(){
+  function spawnTraffic(intensity=0){ addTrafficVehicle({z:CONFIG.spawnZ-Math.random()*(38+58*clampScene(intensity,0,1))}); }
+  function seedTraffic(intensity=0){
     const lanes=trafficLanes();
-    [
-      {lane:lanes[0],z:-58,speed:22}, {lane:lanes[1],z:-122,speed:27},
-      {lane:lanes[2],z:-94,speed:36}, {lane:lanes[3],z:-154,speed:43},
+    const seedCount=Math.max(1,Math.round(CONFIG.trafficStartCount+clampScene(intensity,0,1)*2));
+    const seeds=[
+      {lane:lanes[0],z:-104,speed:34}, {lane:lanes[2],z:-58,speed:22},
+      {lane:lanes[1],z:-142,speed:39}, {lane:lanes[3],z:-94,speed:27},
       {lane:lanes[0],z:-202,speed:25}, {lane:lanes[2],z:-224,speed:39},
-    ].forEach(addTrafficVehicle);
+    ];
+    seeds.slice(0,seedCount).forEach(addTrafficVehicle);
   }
   function clearTraffic(){ traffic.forEach(o=>scene.remove(o)); traffic.length=0; }
 
   /* ---------- per-frame update ---------- */
-  function update(dt, speed, distance, curveMul, invulnerable){
-    let crashes=0; D=distance; cMul=curveMul;
+  function update(dt, speed, distance, curveMul, invulnerable, cityMix=0){
+    const events={traffic:0,tree:0,building:0};
+    D=distance; cMul=curveMul; cityProgress=clampScene(cityMix,0,1);
     const heading=player.heading||0;
     const headingSin=Math.sin(heading), headingCos=Math.cos(heading);
     roadTex.offset.y += speed*dt*0.034;
-    if(grassTex) grassTex.offset.y += speed*dt*0.006;
+    if(grassTex){
+      grassTex.offset.y += speed*dt*0.032;
+      const prevGrassX=player.userDataPrevGrassX ?? player.x;
+      grassTex.offset.x += (player.x-prevGrassX)*0.012;
+      player.userDataPrevGrassX=player.x;
+    }
+    if(scene&&scene.fog){
+      scene.fog.near=80-cityProgress*18;
+      scene.fog.far=320-cityProgress*78;
+    }
 
     camera.position.x += (player.x - camera.position.x)*Math.min(1,CONFIG.cameraSmoothing*dt);
     camera.position.z = CAM_Z;
@@ -862,9 +1116,55 @@ const Scene3D = (() => {
     pos.needsUpdate=true;
 
     // scenery: approach, recycle, follow the curve
-    for(const b of houses){ b.position.z+=speed*dt; if(b.position.z>25){ placeStructure(b); b.position.z-=CONFIG.worldLength; } else if(b.position.z<-CONFIG.worldLength){ placeStructure(b); b.position.z+=CONFIG.worldLength; } b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z); }
-    for(const t of trees){ t.position.z+=speed*dt; if(t.position.z>25){ placeTree(t); t.position.z-=CONFIG.worldLength; } else if(t.position.z<-CONFIG.worldLength){ placeTree(t); t.position.z+=CONFIG.worldLength; } t.position.x=t.userData.lane+bendAt(CAM_Z-t.position.z); }
+    for(const b of houses){
+      const zPrev=b.position.z;
+      let recycled=false;
+      b.position.z+=speed*dt;
+      if(b.position.z>25){ placeStructure(b); b.position.z-=CONFIG.worldLength; recycled=true; }
+      else if(b.position.z<-CONFIG.worldLength){ placeStructure(b); b.position.z+=CONFIG.worldLength; recycled=true; }
+      b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z);
+      b.userData.prevZ=recycled?b.position.z:zPrev;
+      markScenerySeen(b,dt,player.x);
+      if(!recycled&&!invulnerable && sceneryCollides(player.x,b)) registerSceneryHit(events,b,'building');
+    }
+    for(const t of trees){
+      const zPrev=t.position.z;
+      let recycled=false;
+      t.position.z+=speed*dt;
+      if(t.position.z>25){ placeTree(t); t.position.z-=CONFIG.worldLength; recycled=true; }
+      else if(t.position.z<-CONFIG.worldLength){ placeTree(t); t.position.z+=CONFIG.worldLength; recycled=true; }
+      t.position.x=t.userData.lane+bendAt(CAM_Z-t.position.z);
+      t.userData.prevZ=recycled?t.position.z:zPrev;
+      markScenerySeen(t,dt,player.x);
+      if(!recycled&&!invulnerable && sceneryCollides(player.x,t)) registerSceneryHit(events,t,'tree');
+    }
     for(const h of hills){ h.position.z+=speed*dt; if(h.position.z>40){ placeHill(h); h.position.z-=CONFIG.worldLength; } else if(h.position.z<-CONFIG.worldLength){ placeHill(h); h.position.z+=CONFIG.worldLength; } h.position.x=h.userData.lane+bendAt(CAM_Z-h.position.z); }
+
+    const cityVisible=cityProgress>0.08;
+    for(const walk of sidewalks){
+      walk.mesh.visible=cityVisible;
+      walk.mesh.material.opacity=cityVisible ? 0.66*cityProgress : 0;
+      walk.mesh.position.x=bendAt(75)+walk.sign*(CONFIG.roadHalfWidth+3.9);
+    }
+    for(const b of cityBuildings){
+      b.visible=cityVisible;
+      const zPrev=b.position.z;
+      let recycled=false;
+      b.position.z+=speed*dt;
+      if(b.position.z>25){ placeCityBuilding(b); b.position.z-=CONFIG.worldLength; recycled=true; }
+      else if(b.position.z<-CONFIG.worldLength){ placeCityBuilding(b); b.position.z+=CONFIG.worldLength; recycled=true; }
+      b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z);
+      b.userData.prevZ=recycled?b.position.z:zPrev;
+      markScenerySeen(b,dt,player.x);
+      if(cityVisible&&!recycled&&!invulnerable && sceneryCollides(player.x,b)) registerSceneryHit(events,b,'building');
+    }
+    for(const l of streetLights){
+      l.visible=cityVisible;
+      l.position.z+=speed*dt;
+      if(l.position.z>25){ placeStreetLight(l); l.position.z-=CONFIG.worldLength; }
+      else if(l.position.z<-CONFIG.worldLength){ placeStreetLight(l); l.position.z+=CONFIG.worldLength; }
+      l.position.x=l.userData.lane+bendAt(CAM_Z-l.position.z);
+    }
 
     // traffic: oncoming cars move toward the camera; same-direction cars drive away down the road.
     for(let i=traffic.length-1;i>=0;i--){ const o=traffic[i];
@@ -873,9 +1173,9 @@ const Scene3D = (() => {
       o.position.z+=(speed + dir*o.userData.trafficSpeed)*dt;
       o.position.x=o.userData.lane+bendAt(CAM_Z-o.position.z);
       o.userData.prevZ=zPrev;
-      if(!invulnerable && trafficCollides(player.x,o)){ o.userData.hit=true; crashes++; }
+      if(!invulnerable && trafficCollides(player.x,o)){ o.userData.hit=true; events.traffic++; }
       if(o.position.z>CONFIG.despawnZ||o.position.z<CONFIG.spawnZ-130){ scene.remove(o); traffic.splice(i,1); } }
-    return crashes;
+    return events;
   }
   function dangerAhead(){
     const warn=trafficHitRadius()+1.1;
@@ -888,13 +1188,22 @@ const Scene3D = (() => {
     return false;
   }
   function trafficCounts(){
-    let oncoming=0, away=0;
-    for(const o of traffic){ if(o.userData.oncoming) oncoming++; else away++; }
-    return {total:traffic.length,oncoming,away};
+    let oncoming=0, away=0, oncomingLeft=0, oncomingRight=0, awayLeft=0, awayRight=0;
+    for(const o of traffic){
+      const left=o.userData.lane<0;
+      if(o.userData.oncoming){
+        oncoming++;
+        if(left) oncomingLeft++; else oncomingRight++;
+      } else {
+        away++;
+        if(left) awayLeft++; else awayRight++;
+      }
+    }
+    return {total:traffic.length,oncoming,away,oncomingLeft,oncomingRight,awayLeft,awayRight};
   }
 
   function render(){ renderer.render(scene,camera); }
-  return { init, update, render, spawnTraffic, seedTraffic, clearTraffic, dangerAhead, trafficCounts, setPlayerX:x=>player.x=x, getPlayerX:()=>player.x, setHeading:a=>player.heading=a };
+  return { init, update, render, spawnTraffic, seedTraffic, clearTraffic, dangerAhead, trafficCounts, setPlayerX:x=>player.x=x, getPlayerX:()=>player.x, setHeading:a=>player.heading=a, resetMotionTrack:()=>{ player.userDataPrevGrassX=player.x; } };
 })();
 
 /* =================================================================
@@ -964,10 +1273,12 @@ const Phone = (() => {
 const Game = (() => {
   const STATE={MENU:'menu',PLAY:'play',LEVEL:'level',OVER:'over',WIN:'win'};
   let state=STATE.MENU, levelIdx=0, score=0, vibe=CONFIG.startingVibe, distance=0, totalDistance=0;
-  let objectiveToastTimer=0, lastPhoneVibeGain=0;
+  let objectiveToastTimer=0, impactWarningTimer=0, lastPhoneVibeGain=0;
   let speed=0, invulnTimer=0, distSinceSpawn=0, trafficTimer=0, combo=1, comboTimer=0, battery=87, lastT=0;
   let wheelAngle=0, carHeading=0, lateralV=0, offRoadTimer=0;
   const keys={left:false,right:false,gas:false,brake:false};
+  const joystick={active:false,x:0,y:0,side:'left'};
+  const JOYSTICK_SIDE_KEY='rainbot_genz_drive_joystick_side';
 
   const $=id=>document.getElementById(id);
   const show=id=>$(id).classList.remove('hidden'); const hide=id=>$(id).classList.add('hidden');
@@ -975,6 +1286,23 @@ const Game = (() => {
   const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
   const moveToward=(value,target,step)=>Math.abs(target-value)<=step?target:value+Math.sign(target-value)*step;
   const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
+  function gasPressure(){ return keys.gas ? 1 : clamp(-joystick.y,0,1); }
+  function brakePressure(){ return keys.brake ? 1 : clamp(joystick.y,0,1); }
+  function trafficIntensity(){
+    const scoreMix=clamp(score/CONFIG.trafficScoreFull,0,1);
+    return clamp(Math.sqrt(scoreMix)+levelIdx*0.05,0,1);
+  }
+  function trafficTarget(){
+    return Math.round(CONFIG.trafficStartCount+trafficIntensity()*(CONFIG.trafficMaxCount-CONFIG.trafficStartCount));
+  }
+  function trafficSpawnDelay(){
+    const intensity=trafficIntensity();
+    const speedBonus=speed>12 ? 0.35 : 0;
+    return clamp(CONFIG.trafficSpawnTimeMax-intensity*(CONFIG.trafficSpawnTimeMax-CONFIG.trafficSpawnTimeMin)-speedBonus,CONFIG.trafficSpawnTimeMin,CONFIG.trafficSpawnTimeMax);
+  }
+  function cityMix(){
+    return clamp((score-CONFIG.cityScoreStart)/(CONFIG.cityScoreFull-CONFIG.cityScoreStart),0,1);
+  }
   function syncWheelVisual(){
     const wheel=$('steering-wheel');
     if(wheel) wheel.style.transform='translateX(-50%) rotate('+wheelAngle.toFixed(1)+'deg)';
@@ -989,8 +1317,15 @@ const Game = (() => {
     root.dataset.playerX=Scene3D.getPlayerX().toFixed(2);
     const traffic=Scene3D.trafficCounts();
     root.dataset.traffic=traffic.total;
+    root.dataset.trafficTarget=trafficTarget();
+    root.dataset.trafficIntensity=trafficIntensity().toFixed(3);
+    root.dataset.city=cityMix().toFixed(3);
     root.dataset.oncoming=traffic.oncoming;
     root.dataset.away=traffic.away;
+    root.dataset.joystickActive=joystick.active?'1':'0';
+    root.dataset.joystickX=joystick.x.toFixed(3);
+    root.dataset.joystickY=joystick.y.toFixed(3);
+    root.dataset.joystickSide=joystick.side;
   }
 
   function bumpCombo(){ comboTimer=CONFIG.comboWindow; combo=Math.min(CONFIG.comboMax,combo+1); }
@@ -1063,16 +1398,20 @@ const Game = (() => {
     $('hud-objective').textContent=lv.emoji+' Drive to '+lv.name;
     const mph=Math.round(speed*1.5); $('speed-num').textContent=mph;
     $('speed-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(speed/lv.maxSpeed)*240,-120,120)+'deg)';
-    const rpm=clamp((speed/lv.maxSpeed)*6+(keys.gas?1.4:0),0.6,7.5); $('rpm-num').textContent=rpm.toFixed(1);
+    const rpm=clamp((speed/lv.maxSpeed)*6+(gasPressure()>0.08?1.4:0),0.6,7.5); $('rpm-num').textContent=rpm.toFixed(1);
     $('rpm-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(rpm/8)*240,-120,120)+'deg)';
   }
 
-  function crash(){ addVibe(-CONFIG.collisionVibeDamage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; lateralV*=-0.35;
+  function crash(kind='traffic'){
+    const damage=kind==='building' ? CONFIG.buildingCollisionVibeDamage : (kind==='tree' ? CONFIG.treeCollisionVibeDamage : CONFIG.collisionVibeDamage);
+    addVibe(-damage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=kind==='traffic'?0.55:0.32; lateralV*=-0.35;
     const maxHeadingRad=CONFIG.maxHeadingDeg*Math.PI/180;
     carHeading=clamp(carHeading+0.1*Math.sign(lateralV||1),-maxHeadingRad,maxHeadingRad); SFX.crash();
     const fl=$('flash'); fl.style.opacity='.6'; setTimeout(()=>fl.style.opacity='0',120);
     document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
-    const warning=$('warning'); if(warning){ warning.textContent='💥 CAR HIT — VIBE DROPPING 💥'; warning.classList.add('show'); setTimeout(()=>warning.classList.remove('show'),900); }
+    const label=kind==='building' ? 'BUILDING CHECK' : (kind==='tree' ? 'TREE CHECK' : 'CAR HIT');
+    impactWarningTimer=0.9;
+    const warning=$('warning'); if(warning){ warning.textContent='💥 '+label+' — -'+damage+' VIBE 💥'; warning.classList.add('show'); }
     updateHUD(); if(vibe<=0) gameOver(); }
 
   function start(){ levelIdx=0; score=0; SFX.tap(); beginLevel(); }
@@ -1084,8 +1423,8 @@ const Game = (() => {
       if(rect.top<0||rect.bottom>window.innerHeight) wrap.scrollIntoView({block:'nearest',inline:'nearest'});
     });
   }
-  function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; totalDistance=0; speed=0; lateralV=0; carHeading=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; trafficTimer=0; invulnTimer=0; combo=1; comboTimer=0; battery=87; objectiveToastTimer=0; lastPhoneVibeGain=0;
-    Scene3D.clearTraffic(); Scene3D.seedTraffic(); Scene3D.setPlayerX(0); Scene3D.setHeading(0); keys.left=keys.right=keys.gas=keys.brake=false;
+  function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; totalDistance=0; speed=0; lateralV=0; carHeading=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; trafficTimer=0; invulnTimer=0; combo=1; comboTimer=0; battery=87; objectiveToastTimer=0; impactWarningTimer=0; lastPhoneVibeGain=0;
+    Scene3D.clearTraffic(); Scene3D.seedTraffic(trafficIntensity()); Scene3D.setPlayerX(0); Scene3D.resetMotionTrack(); Scene3D.setHeading(0); keys.left=keys.right=keys.gas=keys.brake=false; resetJoystickInput();
     hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); $('objective-toast')?.classList.remove('show'); syncWheelVisual(); updateHUD(); state=STATE.PLAY;
     const canvas=document.getElementById('scene-canvas');
     if(canvas&&canvas.focus) canvas.focus({preventScroll:true});
@@ -1143,6 +1482,92 @@ const Game = (() => {
     ['pointerup','pointerleave','pointercancel','lostpointercapture'].forEach(type=>button.addEventListener(type,event=>set(false,event)));
   }
 
+  function resetJoystickInput(){
+    joystick.active=false; joystick.x=0; joystick.y=0;
+    const layer=$('mobile-drive-controls');
+    const knob=$('drive-joystick-knob');
+    if(layer) layer.classList.remove('is-active');
+    if(knob) knob.style.transform='translate(-50%,-50%)';
+  }
+
+  function setJoystickSide(side){
+    joystick.side=side==='right'?'right':'left';
+    const layer=$('mobile-drive-controls');
+    if(layer) layer.dataset.joystickSide=joystick.side;
+    const left=$('btn-joystick-left');
+    const right=$('btn-joystick-right');
+    if(left) left.classList.toggle('is-active',joystick.side==='left');
+    if(right) right.classList.toggle('is-active',joystick.side==='right');
+    resetJoystickInput();
+    try{ localStorage.setItem(JOYSTICK_SIDE_KEY,joystick.side); }catch(_){}
+  }
+
+  function loadJoystickSide(){
+    let saved='left';
+    try{ saved=localStorage.getItem(JOYSTICK_SIDE_KEY)||'left'; }catch(_){}
+    setJoystickSide(saved);
+  }
+
+  function bindJoystickOptions(){
+    const left=$('btn-joystick-left');
+    const right=$('btn-joystick-right');
+    if(left) left.addEventListener('click',()=>setJoystickSide('left'));
+    if(right) right.addEventListener('click',()=>setJoystickSide('right'));
+    loadJoystickSide();
+  }
+
+  function bindMobileJoystick(){
+    const layer=$('mobile-drive-controls');
+    const zone=$('drive-joystick-zone');
+    const visual=$('drive-joystick');
+    const knob=$('drive-joystick-knob');
+    if(!layer||!zone||!visual||!knob) return;
+    let activePointer=null, originX=0, originY=0;
+    const radius=38;
+    const placeJoystick=event=>{
+      const layerRect=layer.getBoundingClientRect();
+      const zoneRect=zone.getBoundingClientRect();
+      const half=38;
+      originX=joystick.side==='right' ? zoneRect.right-half : zoneRect.left+half;
+      originY=clamp(event.clientY,zoneRect.top+half,zoneRect.bottom-half);
+      visual.style.left=(originX-layerRect.left)+'px';
+      visual.style.top=(originY-layerRect.top)+'px';
+    };
+    const moveJoystick=event=>{
+      const dx=event.clientX-originX;
+      const dy=event.clientY-originY;
+      const dist=Math.hypot(dx,dy);
+      const scale=dist>radius ? radius/dist : 1;
+      const px=dx*scale;
+      const py=dy*scale;
+      joystick.x=clamp(px/radius,-1,1);
+      joystick.y=clamp(py/radius,-1,1);
+      knob.style.transform='translate(calc(-50% + '+px.toFixed(1)+'px), calc(-50% + '+py.toFixed(1)+'px))';
+    };
+    const endJoystick=event=>{
+      if(activePointer!==null && event.pointerId!==activePointer) return;
+      activePointer=null;
+      resetJoystickInput();
+    };
+    zone.addEventListener('pointerdown',event=>{
+      event.preventDefault();
+      activePointer=event.pointerId;
+      joystick.active=true;
+      layer.classList.add('is-active');
+      placeJoystick(event);
+      moveJoystick(event);
+      if(zone.setPointerCapture){ try{ zone.setPointerCapture(event.pointerId); }catch(_){} }
+      const canvas=document.getElementById('scene-canvas');
+      if(canvas) canvas.focus();
+    });
+    zone.addEventListener('pointermove',event=>{
+      if(event.pointerId!==activePointer) return;
+      event.preventDefault();
+      moveJoystick(event);
+    });
+    ['pointerup','pointercancel','lostpointercapture'].forEach(type=>zone.addEventListener(type,endJoystick));
+  }
+
   function bindSideControls(){
     const startButton=$('btn-drive-start');
     const restartButton=$('btn-drive-restart');
@@ -1152,6 +1577,8 @@ const Game = (() => {
     bindHoldButton('btn-drive-brake','brake');
     bindHoldButton('btn-drive-left','left');
     bindHoldButton('btn-drive-right','right');
+    bindJoystickOptions();
+    bindMobileJoystick();
   }
 
   function bindFullscreen(){
@@ -1195,10 +1622,14 @@ const Game = (() => {
 
   function loop(t){ requestAnimationFrame(loop); const dt=Math.min(0.05,(t-lastT)/1000||0); lastT=t;
     if(state===STATE.PLAY){ const lv=level();
-      if(keys.gas) speed+=CONFIG.accel*dt; else if(keys.brake) speed-=CONFIG.brakePower*dt; else speed-=CONFIG.drag*dt;
+      const gas=gasPressure();
+      const brake=brakePressure();
+      if(gas>0.08) speed+=CONFIG.accel*gas*dt; else if(brake>0.08) speed-=CONFIG.brakePower*brake*dt; else speed-=CONFIG.drag*dt;
       speed=clamp(speed,0,lv.maxSpeed);
 
-      const steerInput=(keys.right?1:0)-(keys.left?1:0);
+      const keySteer=(keys.right?1:0)-(keys.left?1:0);
+      const joystickSteer=Math.abs(joystick.x)>0.12 ? joystick.x : 0;
+      const steerInput=keySteer||joystickSteer;
       if(steerInput){
         wheelAngle=clamp(wheelAngle+steerInput*CONFIG.wheelTurnRateDeg*dt,-CONFIG.wheelLockDeg,CONFIG.wheelLockDeg);
       } else {
@@ -1235,7 +1666,7 @@ const Game = (() => {
         const drain=(CONFIG.offRoadDrain+offRoad*CONFIG.offRoadDrainScale)*(0.55+speed/Math.max(1,lv.maxSpeed))*dt;
         addVibe(-drain);
         lateralV-=lateralV*Math.min(1,dt*1.05);
-        const offRoadSlowdown=keys.gas ? (0.7+offRoad*0.32) : (2.2+offRoad*0.9);
+        const offRoadSlowdown=gas>0.08 ? (0.7+offRoad*0.32) : (2.2+offRoad*0.9);
         speed=Math.max(0,speed-offRoadSlowdown*dt);
       } else {
         offRoadTimer=0;
@@ -1249,23 +1680,35 @@ const Game = (() => {
       distSinceSpawn+=Math.max(0,routeSpeed)*dt;
       trafficTimer+=dt;
       const trafficCount=Scene3D.trafficCounts().total;
-      const spawnByDistance=distSinceSpawn>=lv.spawnEveryM;
-      const spawnByTime=trafficTimer>=(speed>8?2.8:1.7);
-      if((spawnByDistance||spawnByTime)&&trafficCount<12){
-        Scene3D.spawnTraffic();
+      const intensity=trafficIntensity();
+      const targetTraffic=trafficTarget();
+      const spawnEveryM=lv.spawnEveryM*(1.18-intensity*(1.18-CONFIG.trafficSpawnDistanceMinScale));
+      const spawnByDistance=distSinceSpawn>=spawnEveryM;
+      const spawnByTime=trafficTimer>=trafficSpawnDelay();
+      const underFilled=trafficTimer>0.45 && trafficCount<Math.max(CONFIG.trafficStartCount,Math.floor(targetTraffic*0.72));
+      if((spawnByDistance||spawnByTime||underFilled)&&trafficCount<targetTraffic){
+        Scene3D.spawnTraffic(intensity);
         trafficTimer=0;
-        if(spawnByDistance) distSinceSpawn-=lv.spawnEveryM*(0.8+Math.random()*0.4);
+        if(spawnByDistance) distSinceSpawn-=spawnEveryM*(0.8+Math.random()*0.4);
       }
       if(invulnTimer>0) invulnTimer-=dt;
       if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=1; updateHUD(); } }
 
-      const crashes=Scene3D.update(dt,routeSpeed,totalDistance,lv.curveMul,invulnTimer>0); for(let i=0;i<crashes;i++) crash();
+      const crashes=Scene3D.update(dt,routeSpeed,totalDistance,lv.curveMul,invulnTimer>0,cityMix());
+      for(let i=0;i<crashes.traffic;i++) crash('traffic');
+      if(crashes.building>0) crash('building');
+      else if(crashes.tree>0) crash('tree');
       tickObjectiveToast(dt);
       const warning=$('warning');
       if(vibe<=0) gameOver();
       const danger=Scene3D.dangerAhead()&&invulnTimer<=0;
-      warning.textContent=offRoadTimer>0.12?'⚠️ OFF ROAD - VIBE DROPPING ⚠️':'⚠️ EYES ON THE ROAD ⚠️';
-      warning.classList.toggle('show',(danger||offRoadTimer>0.12)&&state===STATE.PLAY&&objectiveToastTimer<=0);
+      if(impactWarningTimer>0){
+        impactWarningTimer-=dt;
+        warning.classList.toggle('show',state===STATE.PLAY&&objectiveToastTimer<=0);
+      } else {
+        warning.textContent=offRoadTimer>0.12?'⚠️ OFF ROAD - VIBE DROPPING ⚠️':'⚠️ TRAFFIC CLOSE ⚠️';
+        warning.classList.toggle('show',(danger||offRoadTimer>0.12)&&state===STATE.PLAY&&objectiveToastTimer<=0);
+      }
       updateHUD();
       if(distance>=lv.distance) completeObjective();
     } else {
@@ -1273,7 +1716,7 @@ const Game = (() => {
       syncWheelVisual();
       syncDebugAttrs();
       Scene3D.setHeading(0);
-      Scene3D.update(dt,14,performance.now()*0.02,0.7,true); $('warning').classList.remove('show');
+      Scene3D.update(dt,14,performance.now()*0.02,0.7,true,0); $('warning').classList.remove('show');
     }
     Scene3D.render();
   }
@@ -1288,7 +1731,7 @@ const Game = (() => {
     Phone.tickStatus(); setInterval(Phone.tickStatus,10000); requestAnimationFrame(loop);
   }
   function debug(){
-    return { state, speed, distance, totalDistance, levelIdx, wheelAngle, carHeading, heading:wrapAngle(carHeading), lateralV, playerX:Scene3D.getPlayerX(), traffic:Scene3D.trafficCounts() };
+    return { state, speed, distance, totalDistance, levelIdx, score, wheelAngle, carHeading, heading:wrapAngle(carHeading), lateralV, playerX:Scene3D.getPlayerX(), joystick:{active:joystick.active,x:joystick.x,y:joystick.y,side:joystick.side}, trafficTarget:trafficTarget(), trafficIntensity:trafficIntensity(), city:cityMix(), traffic:Scene3D.trafficCounts() };
   }
   return { init, start, next, restart, addScore, phoneVibe, isPlaying, debug, STATE };
 })();

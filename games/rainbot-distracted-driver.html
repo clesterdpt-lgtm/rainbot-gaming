@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Rainbot: Distracted Driver 3000 🚗📱</title>
+
+<!-- ===== Tailwind ===== -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- ===== Three.js ===== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- ===== Fonts ===== -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* =========================================================
+     GLOBAL
+  ========================================================= */
+  :root {
+    --dash:#2b2b30; --dash2:#131316; --wheel:#17171a; --trim:#3c3c44; --panel:#34343c;
+    --accent:#4ea3ff; --amber:#ffb43a;
+    --phone-w: min(28vh, 72vw);
+    --phone-h: 48vh;     /* smaller phone => more road visible */
+  }
+  * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+  html, body { margin:0; padding:0; height:100%; width:100%; overflow:hidden; background:#0a0d12;
+    font-family:'Rubik',system-ui,sans-serif; color:#fff; user-select:none; touch-action:manipulation; }
+  .font-arcade { font-family:'Orbitron',sans-serif; letter-spacing:.03em; }
+  #scene-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; z-index:0; }
+
+  /* =========================================================
+     CAR INTERIOR / COCKPIT  (realistic)
+  ========================================================= */
+  #cockpit { position:fixed; inset:0; z-index:10; pointer-events:none; }
+
+  .roof { position:absolute; top:0; left:0; right:0; height:5.5vh;
+    background:linear-gradient(180deg,#202024,#161619); border-bottom:1px solid #000;
+    box-shadow:0 4px 18px rgba(0,0,0,.55); border-radius:0 0 38% 38% / 0 0 100% 100%; }
+  .visor { position:absolute; top:0; width:33vw; height:4vh; background:linear-gradient(180deg,#2a2a2e,#1c1c20);
+    border-radius:0 0 12px 12px; box-shadow:0 3px 8px rgba(0,0,0,.5); }
+  .visor.l { left:9vw; } .visor.r { right:9vw; }
+
+  .mirror { position:absolute; top:3.4vh; left:50%; transform:translateX(-50%);
+    width:122px; height:30px; border-radius:15px; background:linear-gradient(160deg,#26262b,#0c0c0f);
+    border:4px solid #050506; box-shadow:0 6px 12px rgba(0,0,0,.6); }
+  .mirror::after { content:""; position:absolute; inset:3px; border-radius:10px;
+    background:linear-gradient(120deg, rgba(150,180,205,.45), rgba(90,110,130,.25)); }
+
+  /* slimmer A-pillars so the windshield (and road) is wider */
+  .pillar { position:absolute; top:0; height:62vh; width:11vw;
+    background:linear-gradient(180deg,#2a2a30,#161619); box-shadow:inset 0 0 30px rgba(0,0,0,.6); }
+  .pillar.left  { left:3vw;  clip-path:polygon(62% 0,100% 0,40% 100%,0 100%); }
+  .pillar.right { right:3vw; clip-path:polygon(0 0,38% 0,100% 100%,60% 100%); }
+
+  .door { position:absolute; bottom:0; height:34vh; width:22vw;
+    background:linear-gradient(180deg,#3a3a42 0%,#202024 60%,#161619 100%); box-shadow:inset 0 0 40px rgba(0,0,0,.5); }
+  .door.left  { left:0;  border-radius:0 60% 0 0 / 0 80% 0 0; }
+  .door.right { right:0; border-radius:60% 0 0 0 / 80% 0 0 0; }
+  .door .sill { position:absolute; top:10%; height:5px; width:88%; background:#0b0b0d; }
+  .door.left .sill { right:0; } .door.right .sill { left:0; }
+  .door .insert { position:absolute; top:30%; height:22%; width:60%; border-radius:10px;
+    background:linear-gradient(180deg,#45454d,#2c2c33); box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
+  .door.left .insert { right:8%; } .door.right .insert { left:8%; }
+  .door .handle { position:absolute; top:34%; width:18%; height:9px; border-radius:6px; background:#5a5a62; }
+  .door.left .handle { right:14%; } .door.right .handle { left:14%; }
+
+  .dashboard { position:absolute; left:0; right:0; bottom:0; height:25vh;
+    background:linear-gradient(180deg,#2d2d33 0%, #1c1c20 45%, #0c0c0f 100%);
+    border-top:2px solid #0a0a0c; box-shadow:inset 0 6px 24px rgba(255,255,255,.04), 0 -6px 30px rgba(0,0,0,.5);
+    border-radius:46% 46% 0 0 / 30% 30% 0 0; }
+  .dash-strip { position:absolute; left:8%; right:8%; top:1.6vh; height:3px; background:#0a0a0c; opacity:.8; }
+  .vent { position:absolute; top:2.4vh; width:6.5vw; height:2vh; border-radius:4px;
+    background:repeating-linear-gradient(180deg,#0c0c0e 0 3px,#26262b 3px 6px); box-shadow:inset 0 0 6px #000; }
+  .vent.l { left:31vw; } .vent.r { right:31vw; }
+
+  .gauge { position:absolute; bottom:2.6vh; width:11vh; height:11vh; border-radius:50%;
+    background:radial-gradient(circle at 50% 38%, #25252b, #0a0a0d);
+    border:3px solid #050506; box-shadow:0 3px 10px rgba(0,0,0,.6), inset 0 0 14px rgba(0,0,0,.8);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; overflow:hidden; }
+  .gauge.speedo { left:7vw; } .gauge.rpm { right:7vw; }
+  .gauge .num { font-family:'Orbitron'; font-weight:800; font-size:2.2vh; color:#eef3f7; line-height:1; }
+  .gauge .lbl { font-size:1vh; color:#8a9099; letter-spacing:.12em; margin-top:2px; }
+  .gauge .needle { position:absolute; bottom:50%; left:50%; width:2.5px; height:40%;
+    background:#ff4438; transform-origin:bottom center; transform:translateX(-50%) rotate(-120deg);
+    box-shadow:0 0 4px rgba(255,68,56,.6); transition:transform .25s ease-out; border-radius:2px; }
+  .gauge .cap { position:absolute; top:50%; left:50%; width:1.5vh; height:1.5vh; border-radius:50%;
+    background:#3a3a40; transform:translate(-50%,-50%); box-shadow:inset 0 0 4px #000; }
+
+  .wheel { position:absolute; left:50%; bottom:-22vh; transform:translateX(-50%);
+    width:50vh; height:50vh; border-radius:50%; border:3.2vh solid #1a1a1e;
+    background:radial-gradient(circle, transparent 60%, rgba(0,0,0,.25) 72%);
+    box-shadow:0 0 0 .5vh #0a0a0c, inset 0 0 30px rgba(0,0,0,.6), 0 6px 30px rgba(0,0,0,.5); }
+  .wheel::before { content:""; position:absolute; top:calc(50% - .9vh); left:-1.5vh; right:-1.5vh; height:1.8vh;
+    background:linear-gradient(180deg,#222226,#141417); border-radius:1vh; box-shadow:0 1px 0 rgba(255,255,255,.05); }
+  .wheel .spoke-d { position:absolute; left:calc(50% - .9vh); top:50%; width:1.8vh; height:22vh;
+    background:linear-gradient(90deg,#222226,#141417); border-radius:1vh; }
+  .wheel .hub { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:13vh; height:8vh; border-radius:2.2vh; background:radial-gradient(circle at 50% 35%, #2c2c32, #111114);
+    border:1.5px solid #0a0a0c; box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 2px 8px rgba(0,0,0,.6);
+    display:flex; align-items:center; justify-content:center; }
+  .wheel .badge { font-size:2.2vh; opacity:.85; }
+  .hand { position:absolute; top:34%; width:7vh; height:5vh; border-radius:42% 42% 36% 36%;
+    background:linear-gradient(180deg,#d9a878,#b9895e); box-shadow:0 4px 10px rgba(0,0,0,.45); }
+  .hand.l { left:1.5vh; transform:rotate(20deg); } .hand.r { right:1.5vh; transform:rotate(-20deg); }
+
+  #freshener { position:absolute; top:4.4vh; left:50%; z-index:12; pointer-events:none;
+    transform-origin:top center; animation:swing 3.4s ease-in-out infinite; text-align:center; }
+  #freshener .string { width:2px; height:4vh; margin:0 auto; background:#0006; }
+  #freshener .tree { font-size:1.6rem; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+  @keyframes swing { 0%,100%{transform:rotate(-7deg)} 50%{transform:rotate(7deg)} }
+
+  /* =========================================================
+     THE PHONE
+  ========================================================= */
+  #phone { position:fixed; left:50%; bottom:4vh; transform:translateX(-50%);
+    width:var(--phone-w); height:var(--phone-h); z-index:20; background:#0b0b10; border-radius:28px; padding:8px;
+    border:2px solid #2a2a36; box-shadow:0 0 0 4px #161620,0 16px 44px rgba(0,0,0,.7),0 0 26px rgba(0,0,0,.5); }
+  #phone::after { content:""; position:absolute; bottom:-4.5vh; left:50%; transform:translateX(-50%);
+    width:4.5vh; height:5.5vh; background:linear-gradient(180deg,#222226,#111114); border-radius:0 0 28% 28%; z-index:-1; }
+  #phone-screen { position:relative; width:100%; height:100%; border-radius:21px; overflow:hidden;
+    background:linear-gradient(180deg,#141420,#0a0a12); display:flex; flex-direction:column; }
+  #phone-screen::before { content:""; position:absolute; top:6px; left:50%; transform:translateX(-50%);
+    width:32%; height:15px; background:#0b0b10; border-radius:0 0 11px 11px; z-index:25; }
+  .statusbar { display:flex; justify-content:space-between; align-items:center; padding:5px 13px 3px; font-size:.62rem; font-weight:600; flex:0 0 auto; }
+  .app-area { flex:1 1 auto; position:relative; overflow:hidden; }
+  .app-view { position:absolute; inset:0; display:none; flex-direction:column; }
+  .app-view.active { display:flex; }
+  .no-bar { scrollbar-width:none; -ms-overflow-style:none; } .no-bar::-webkit-scrollbar { display:none; }
+  .dock { flex:0 0 auto; display:flex; justify-content:space-around; align-items:center;
+    padding:5px 6px calc(5px + env(safe-area-inset-bottom)); background:rgba(255,255,255,.04); border-top:1px solid rgba(255,255,255,.08); }
+  .dock button { font-size:1.2rem; padding:4px 11px; border-radius:11px; transition:.15s; opacity:.55; }
+  .dock button.active { opacity:1; background:rgba(78,163,255,.2); transform:translateY(-2px); }
+  .floatpts { position:absolute; z-index:40; font-weight:800; font-family:'Orbitron'; color:var(--amber);
+    text-shadow:0 0 8px rgba(0,0,0,.6); pointer-events:none; animation:floatUp .9s ease-out forwards; font-size:1rem; }
+  @keyframes floatUp { from{opacity:1; transform:translateY(0) scale(1)} to{opacity:0; transform:translateY(-50px) scale(1.4)} }
+
+  /* =========================================================
+     HUD
+  ========================================================= */
+  #hud { position:fixed; top:6vh; left:0; right:0; z-index:30; pointer-events:none; }
+  .hud-card { background:rgba(10,14,20,.6); backdrop-filter:blur(5px);
+    border:1px solid rgba(255,255,255,.14); border-radius:12px; box-shadow:0 4px 14px rgba(0,0,0,.4); }
+  .accent { color:var(--accent); }
+  .vibe-wrap { margin-top:6px; min-width:150px; }
+  .vibe-row { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:.58rem; color:rgba(255,255,255,.62); text-transform:uppercase; letter-spacing:.12em; }
+  .vibe-track { height:8px; margin-top:3px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.12); }
+  #hud-vibe-bar { display:block; width:100%; height:100%; border-radius:999px; background:linear-gradient(90deg,#4cff8f,#ffe14c); box-shadow:0 0 12px rgba(76,255,143,.38); transition:width .12s linear, background .12s linear; }
+  #warning { position:fixed; top:17vh; left:50%; transform:translateX(-50%); z-index:28;
+    font-family:'Orbitron'; font-weight:900; font-size:clamp(1rem,3.2vw,1.6rem); color:#fff;
+    background:rgba(225,40,40,.9); padding:6px 18px; border-radius:8px; box-shadow:0 4px 18px rgba(0,0,0,.5); pointer-events:none; opacity:0; transition:opacity .12s; }
+  #warning.show { opacity:1; animation:pulseWarn .5s infinite alternate; }
+  @keyframes pulseWarn { from{transform:translateX(-50%) scale(1)} to{transform:translateX(-50%) scale(1.06)} }
+  #flash { position:fixed; inset:0; z-index:45; background:#c81e1e; opacity:0; pointer-events:none; transition:opacity .12s; }
+  .shake { animation:shake .4s; }
+  @keyframes shake { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-11px,5px)} 40%{transform:translate(9px,-7px)} 60%{transform:translate(-7px,-5px)} 80%{transform:translate(7px,7px)} }
+
+  /* =========================================================
+     MENUS
+  ========================================================= */
+  .screen { position:fixed; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:24px; background:radial-gradient(120% 120% at 50% 10%, rgba(40,70,110,.55), rgba(8,11,16,.95)); }
+  .screen.hidden { display:none; }
+  .btn-neon { font-family:'Orbitron'; font-weight:800; letter-spacing:.05em; padding:14px 34px; border-radius:14px; font-size:1.1rem;
+    background:linear-gradient(180deg,#4ea3ff,#2f6fd0); box-shadow:0 6px 20px rgba(47,111,208,.5); transition:transform .12s, box-shadow .12s; cursor:pointer; }
+  .btn-neon:hover { transform:scale(1.05); box-shadow:0 8px 28px rgba(78,163,255,.6); }
+  .title-glow { font-family:'Orbitron'; font-weight:900; color:#eef3f7; filter:drop-shadow(0 3px 10px rgba(0,0,0,.5)); }
+  .title-glow .rb { background:linear-gradient(90deg,#4ea3ff,#7ec8ff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .pill { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); }
+  kbd { background:#1c2330; border:1px solid #3a4456; border-bottom-width:3px; border-radius:6px; padding:1px 8px; font-family:'Orbitron'; font-size:.8em; }
+</style>
+</head>
+
+<body>
+<canvas id="scene-canvas"></canvas>
+
+<div id="game-root">
+  <div id="cockpit">
+    <div class="roof"></div><div class="visor l"></div><div class="visor r"></div>
+    <div class="mirror"></div>
+    <div class="pillar left"></div><div class="pillar right"></div>
+    <div class="door left"><div class="sill"></div><div class="insert"></div><div class="handle"></div></div>
+    <div class="door right"><div class="sill"></div><div class="insert"></div><div class="handle"></div></div>
+    <div class="dashboard"></div>
+    <div class="dash-strip"></div><div class="vent l"></div><div class="vent r"></div>
+    <div class="gauge speedo"><div class="needle" id="speed-needle"></div><div class="cap"></div><div class="num" id="speed-num">0</div><div class="lbl">MPH</div></div>
+    <div class="gauge rpm"><div class="needle" id="rpm-needle"></div><div class="cap"></div><div class="num" id="rpm-num">0</div><div class="lbl">x1000</div></div>
+    <div class="wheel" id="steering-wheel"><div class="spoke-d"></div><div class="hand l"></div><div class="hand r"></div><div class="hub"><span class="badge">🌈</span></div></div>
+  </div>
+  <div id="freshener"><div class="string"></div><div class="tree">🌲</div></div>
+
+  <div id="hud" class="px-3">
+    <div class="flex items-start justify-between gap-2">
+      <div class="hud-card px-3 py-2 max-w-[52%]">
+        <div class="text-[.6rem] uppercase tracking-widest text-white/50">Objective</div>
+        <div id="hud-objective" class="font-arcade text-sm sm:text-base accent leading-tight">🌮 Drive to Taco Bell</div>
+        <div class="mt-1 h-2 w-full rounded-full bg-white/10 overflow-hidden">
+          <div id="hud-progress" class="h-full w-0 rounded-full" style="background:linear-gradient(90deg,#4ea3ff,#7ec8ff)"></div>
+        </div>
+        <div id="hud-distance" class="text-[.58rem] mt-1 text-white/60">0 / 0 m</div>
+      </div>
+      <div class="hud-card px-3 py-2 text-right">
+        <div class="text-[.6rem] uppercase tracking-widest text-white/50">Score</div>
+        <div id="hud-score" class="font-arcade text-base sm:text-lg">0</div>
+        <div id="hud-combo" class="text-[.6rem] text-amber-300 font-bold h-3"></div>
+        <div class="vibe-wrap" aria-label="Vibe check meter">
+          <div class="vibe-row"><span>Vibe Check</span><b id="hud-vibe-text">100%</b></div>
+          <div class="vibe-track"><span id="hud-vibe-bar"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="warning">⚠️ EYES ON THE ROAD ⚠️</div>
+
+  <div id="phone">
+    <div id="phone-screen">
+      <div class="statusbar"><span id="clock">9:41</span>
+        <span class="font-arcade accent text-[.62rem]">RAINBOT OS</span>
+        <span>📶 <span id="battery">87</span>% 🔋</span></div>
+      <div class="app-area">
+        <div id="view-feed" class="app-view active">
+          <div class="px-4 py-2 flex items-center justify-between border-b border-white/10">
+            <span class="font-arcade text-base accent">RainGram</span><span class="text-[.6rem] text-white/40">scroll = 💰</span></div>
+          <div id="feed-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-3"></div>
+        </div>
+        <div id="view-music" class="app-view items-center justify-center text-center px-6">
+          <div id="album-art" class="w-28 h-28 rounded-2xl mb-3 flex items-center justify-center text-5xl shadow-2xl" style="background:linear-gradient(135deg,#4ea3ff,#2f6fd0)">🎧</div>
+          <div id="song-title" class="font-arcade text-base">Loading vibes…</div>
+          <div id="song-artist" class="text-sm text-white/50 mb-3">—</div>
+          <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-4"><div id="song-progress" class="h-full" style="width:30%;background:var(--accent)"></div></div>
+          <div class="flex items-center gap-6 text-2xl"><button onclick="Phone.prevSong()">⏮️</button><button onclick="Phone.togglePlay()" id="play-btn" class="text-3xl">⏸️</button><button onclick="Phone.nextSong()" class="text-3xl">⏭️</button></div>
+          <div class="text-[.66rem] text-white/40 mt-3">Tap ⏭️ for points (and chaos)</div>
+        </div>
+        <div id="view-chat" class="app-view">
+          <div class="px-4 py-2 border-b border-white/10 flex items-center gap-2"><span class="text-xl">🦆</span>
+            <div><div class="font-bold leading-none text-sm">Duck Dealer</div><div class="text-[.56rem] text-green-400">online</div></div></div>
+          <div id="chat-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-2 text-sm"></div>
+          <div id="quick-replies" class="flex flex-wrap gap-2 p-3 border-t border-white/10"></div>
+        </div>
+      </div>
+      <div class="dock"><button data-app="feed" class="active" onclick="Phone.switchApp('feed')">📱</button>
+        <button data-app="music" onclick="Phone.switchApp('music')">🎵</button>
+        <button data-app="chat" onclick="Phone.switchApp('chat')">💬</button></div>
+    </div>
+  </div>
+</div>
+<div id="flash"></div>
+
+<div id="screen-start" class="screen">
+  <div class="text-6xl mb-2">🚗💨📱</div>
+  <h1 class="title-glow text-4xl sm:text-6xl mb-2"><span class="rb">RAINBOT</span></h1>
+  <h2 class="font-arcade text-lg sm:text-2xl mb-5 text-white/80">Distracted Driver 3000</h2>
+  <p class="max-w-md text-white/80 mb-5 leading-relaxed">
+    You <b>cannot stop scrolling.</b> Rack up clout on your phone 📱 while you actually <b>drive</b> the
+    back roads — gas, brake, and steer through the bends. Glance past the phone to dodge cones, ducks &amp;
+    cursed memes. Steer into the curves, keep the vibe check alive, and tap the phone for bigger points the farther you get.</p>
+  <div class="flex flex-wrap gap-2 justify-center mb-7 text-sm">
+    <span class="pill rounded-lg px-3 py-1"><kbd>W</kbd> gas</span>
+    <span class="pill rounded-lg px-3 py-1"><kbd>S</kbd> brake</span>
+    <span class="pill rounded-lg px-3 py-1"><kbd>A</kbd><kbd>D</kbd> steer</span>
+    <span class="pill rounded-lg px-3 py-1">👆 tap phone = points</span>
+  </div>
+  <button class="btn-neon" onclick="Game.start()">START DRIVING ▶</button>
+  <p class="text-white/30 text-xs mt-6">A very responsible driving simulator™</p>
+</div>
+
+<div id="screen-level" class="screen hidden">
+  <div class="text-6xl mb-3">🏁</div><h1 class="title-glow text-3xl sm:text-5xl mb-2">YOU MADE IT!</h1>
+  <p id="level-msg" class="accent font-arcade text-lg mb-4">Nice driving.</p>
+  <p class="text-white/80 mb-6">Score so far: <span id="level-score" class="font-arcade">0</span></p>
+  <button class="btn-neon" onclick="Game.next()">NEXT DESTINATION ▶</button>
+</div>
+
+<div id="screen-over" class="screen hidden">
+  <div class="text-6xl mb-3">💥🚗</div><h1 class="title-glow text-4xl sm:text-6xl mb-2">VIBE CHECK FAILED</h1>
+  <p id="over-msg" class="text-red-300 mb-4 max-w-md">The meter hit zero. The road, phone, and grass all witnessed it.</p>
+  <p class="text-white/80 mb-1">Final score: <span id="over-score" class="font-arcade text-2xl">0</span></p>
+  <p id="over-distance" class="text-white/50 text-sm mb-6">You drove 0 m before becoming a meme.</p>
+  <button class="btn-neon" onclick="Game.restart()">TRY AGAIN ↻</button>
+</div>
+
+<div id="screen-win" class="screen hidden">
+  <div class="text-6xl mb-3">🏆</div><h1 class="title-glow text-4xl sm:text-6xl mb-2">ROAD LEGEND</h1>
+  <p class="text-white/80 mb-4 max-w-md">You reached every destination without losing your phone privileges. Reckless. Iconic.</p>
+  <p class="text-white/80 mb-6">Final score: <span id="win-score" class="font-arcade text-2xl">0</span></p>
+  <button class="btn-neon" onclick="Game.restart()">DRIVE AGAIN ↻</button>
+</div>
+
+<div id="screen-error" class="screen hidden">
+  <div class="text-6xl mb-3">📡💀</div><h1 class="title-glow text-3xl mb-3">No signal</h1>
+  <p class="text-white/80 max-w-md" id="error-msg">The 3D world couldn't load. This game pulls Three.js from a CDN — check your internet connection and reload.</p>
+</div>
+
+<script>
+/* =================================================================
+   ⚙️  CONFIG  —  tweak almost everything here
+================================================================= */
+const CONFIG = {
+  lives: 3,
+
+  // steering
+  steerSpeed: 12, cameraSmoothing: 7, laneLimit: 5.0, roadHalfWidth: 8,
+
+  // driving physics (W=gas, S=brake, coast otherwise)
+  accel: 26, brakePower: 50, drag: 12,
+
+  // curves  (the road follows a sine-wave curvature that travels toward you)
+  curveK: 0.0040,      // curvature amplitude — BIGGER = sharper bends
+  curveFreq: 0.015,    // how often bends come (1/m) — BIGGER = more frequent turns
+  bendDepthMax: 175,   // clamp so very-distant scenery doesn't fly off sideways
+  driftK: 0.03,        // how hard a bend pushes the car (you steer against it)
+  aimK: 0.5,           // how much the camera leans into the bend
+
+  // obstacles
+  spawnZ: -150, despawnZ: 16, collisionZ: -16, hitX: 1.7, hitInvuln: 1.1,
+
+  // scenery (country / small town)
+  houseCount: 16, treeCount: 30, hillCount: 7, worldLength: 300,
+
+  // scoring
+  comboWindow: 2.2, comboMax: 9, basePoints: 30, scrollPoints: 7,
+
+  // LEVELS  (maxSpeed = top speed; curveMul = how curvy this leg is)
+  levels: [
+    { name:"Taco Bell",     emoji:"🌮", distance:650,  maxSpeed:50, spawnEveryM:55, curveMul:0.8, blurb:"3rd meal acquired." },
+    { name:"Pine Hollow",   emoji:"🏡", distance:1000, maxSpeed:64, spawnEveryM:50, curveMul:1.2, blurb:"The whole town waved at you." },
+    { name:"Hilltop Farm",  emoji:"🚜", distance:1500, maxSpeed:78, spawnEveryM:44, curveMul:1.7, blurb:"You hugged every bend. Mostly." },
+  ],
+
+  songs: [
+    {t:"Rubber Duck Anthem", a:"DJ Quack"}, {t:"Highway to Wi-Fi", a:"The Buffering"},
+    {t:"Crashout (sped up)", a:"lil cone"}, {t:"Eyes On The Road?", a:"Nah Records"},
+    {t:"420m to Taco Bell", a:"GPS feat. Karen"}, {t:"Brake? I Hardly…", a:"The Tailgaters"},
+  ],
+  feedPosts: [
+    {u:"@gigachad_42", av:"🗿", txt:"told my car GPS to be quiet. it was right.", img:"🚙"},
+    {u:"@duck_lord", av:"🦆", txt:"new rubber duck just dropped 🔥🔥", img:"🦆"},
+    {u:"@tacobellbae", av:"🌮", txt:"crunchwrap supreme changed my life fr", img:"🌮"},
+    {u:"@404brain", av:"💀", txt:"who else reads texts at 70mph 😂😭", img:"📵"},
+    {u:"@barn_life", av:"🚜", txt:"this back road is so peaceful rn", img:"🌾"},
+    {u:"@cone_hater", av:"🚧", txt:"orange cones are my roman empire", img:"🚧"},
+    {u:"@mildpanic", av:"🥴", txt:"is that a giant duck or am i—", img:"🦆"},
+    {u:"@vibes_only", av:"😎", txt:"multitasking king (about to crash)", img:"📱"},
+  ],
+  quickReplies: ["lol ok 🦆","WHERE r u","send it 🔥","i'm driving 😅","omw 🚗💨","ducks???"],
+  chatSeed: [ {me:false,t:"yo u still bringing the duck??"}, {me:false,t:"it's like… a BIG duck 🦆"} ],
+};
+
+/* =================================================================
+   🔊  SOUND FX
+================================================================= */
+const SFX = (() => {
+  let ctx=null; const ensure=()=>{ if(!ctx) try{ctx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} };
+  const beep=(f,dur=.08,type='square',vol=.12)=>{ ensure(); if(!ctx) return;
+    const o=ctx.createOscillator(),g=ctx.createGain(); o.type=type; o.frequency.value=f;
+    g.gain.setValueAtTime(vol,ctx.currentTime); g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+dur);
+    o.connect(g).connect(ctx.destination); o.start(); o.stop(ctx.currentTime+dur); };
+  return { tap:()=>beep(660,.06,'square',.1), point:()=>beep(880,.07,'triangle',.1),
+    crash:()=>{beep(120,.25,'sawtooth',.22); setTimeout(()=>beep(80,.3,'sawtooth',.2),60);},
+    win:()=>[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.12,'triangle',.14),i*90)) };
+})();
+
+/* =================================================================
+   🏞️  THREE.JS WORLD  (country roads + travelling curves)
+================================================================= */
+const Scene3D = (() => {
+  let renderer, scene, camera, roadTex, road, roadX0, roadDepth;
+  const obstacles=[], houses=[], trees=[], hills=[];
+  let player={x:0}, D=0, cMul=1;
+  const CAM_Z=10, CAM_Y=5.0, f=CONFIG.curveK ? CONFIG.curveFreq : 0.013;
+
+  /* lateral offset of the road centre at depth `d` ahead — the double integral of a
+     sine-wave curvature, so curvature varies along the road and the bends travel toward you. */
+  function bendAt(d){
+    if(d<0) d=0; else if(d>CONFIG.bendDepthMax) d=CONFIG.bendDepthMax;
+    const A=CONFIG.curveK*cMul, fr=CONFIG.curveFreq;
+    return (A/fr)*d*Math.cos(fr*D) - (A/(fr*fr))*(Math.sin(fr*(D+d)) - Math.sin(fr*D));
+  }
+
+  /* ---------- textures ---------- */
+  function makeSkyTexture(){
+    const c=document.createElement('canvas'); c.width=16; c.height=256; const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,0,256);
+    g.addColorStop(0,'#3f86d4'); g.addColorStop(.5,'#84b6e6'); g.addColorStop(.8,'#c3dbef'); g.addColorStop(1,'#e9f0f4');
+    x.fillStyle=g; x.fillRect(0,0,16,256);
+    x.fillStyle='#ffffff';
+    for(let i=0;i<12;i++){ const cx=Math.random()*16, cy=18+Math.random()*95, r=2+Math.random()*4;
+      x.globalAlpha=.22+Math.random()*.32; x.beginPath(); x.ellipse(cx,cy,r*1.7,r,0,0,7); x.fill(); }
+    x.globalAlpha=1; return new THREE.CanvasTexture(c);
+  }
+  function makeAsphaltTexture(){
+    const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
+    x.fillStyle='#41434a'; x.fillRect(0,0,128,256);
+    for(let i=0;i<2200;i++){ const v=Math.random()*40-20; x.fillStyle=`rgba(${64+v|0},${66+v|0},${72+v|0},.5)`; x.fillRect(Math.random()*128,Math.random()*256,2,2); }
+    x.fillStyle='#d7d4c7'; x.fillRect(8,0,5,256); x.fillRect(115,0,5,256);      // edge lines
+    x.fillStyle='#e9e3c8'; for(let y=0;y<256;y+=50){ x.fillRect(61,y,5,28); }    // dashed centre
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,26); t.anisotropy=4; return t;
+  }
+  function makeGrassTexture(){
+    const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
+    x.fillStyle='#5c8a40'; x.fillRect(0,0,128,128);
+    for(let i=0;i<3200;i++){ const g=Math.random()*46-23; x.fillStyle=`rgba(${92+g|0},${138+g|0},${64+g|0},.6)`; x.fillRect(Math.random()*128,Math.random()*128,2,2); }
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(70,70); return t;
+  }
+  function makeMemeTexture(emoji,bg){ const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
+    x.fillStyle=bg; x.fillRect(0,0,128,128); x.font='90px serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(emoji,64,70); return new THREE.CanvasTexture(c); }
+
+  /* ---------- obstacle factories ---------- */
+  function createCone(){ const g=new THREE.Group();
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(1.1,2.4,18),new THREE.MeshStandardMaterial({color:0xff6a1a,roughness:.7})); cone.position.y=1.2;
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(.78,.95,.4,18),new THREE.MeshStandardMaterial({color:0xf2f2f2})); band.position.y=1.05;
+    const base=new THREE.Mesh(new THREE.BoxGeometry(2.2,.3,2.2),new THREE.MeshStandardMaterial({color:0x222222})); base.position.y=.15;
+    g.add(cone,band,base); g.userData.spin=0; return g; }
+  function createDuck(){ const g=new THREE.Group();
+    const yellow=new THREE.MeshStandardMaterial({color:0xffd21a,roughness:.5});
+    const body=new THREE.Mesh(new THREE.SphereGeometry(1.5,18,16),yellow); body.scale.set(1.3,1,1.1); body.position.y=1.4;
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.95,18,16),yellow); head.position.set(1.1,2.7,0);
+    const beak=new THREE.Mesh(new THREE.ConeGeometry(.4,.9,12),new THREE.MeshStandardMaterial({color:0xff7a00})); beak.rotation.z=-Math.PI/2; beak.position.set(2.0,2.6,0);
+    const eyeMat=new THREE.MeshStandardMaterial({color:0x111111});
+    const e1=new THREE.Mesh(new THREE.SphereGeometry(.13,8,8),eyeMat); e1.position.set(1.55,2.95,.45); const e2=e1.clone(); e2.position.z=-.45;
+    g.add(body,head,beak,e1,e2); g.userData.spin=0; return g; }
+  const MEME_FACES=[["💀","#dfe6ea"],["🤡","#ff5d7a"],["📉","#ffd43a"],["🗿","#9aa3ab"],["😭","#7fd1ff"],["🚽","#ffffff"]];
+  function createMeme(){ const [emoji,bg]=MEME_FACES[(Math.random()*MEME_FACES.length)|0];
+    const box=new THREE.Mesh(new THREE.BoxGeometry(2.2,2.2,2.2),new THREE.MeshStandardMaterial({map:makeMemeTexture(emoji,bg),roughness:.6})); box.position.y=1.6;
+    const g=new THREE.Group(); g.add(box); g.userData.spin=1; return g; }
+  const FACTORIES=[createCone,createDuck,createMeme];
+
+  /* ---------- country scenery ---------- */
+  const pick=a=>a[(Math.random()*a.length)|0];
+  const WALLS=[0xeae6dc,0xd8c9a8,0xb9cdd6,0xc8b89a,0xded6c4,0xcf8f6e];
+  const ROOFS=[0x6b4f3a,0x4a4a4e,0x7a3b30,0x554b42];
+  function createHouse(){
+    const g=new THREE.Group(); const w=3+Math.random()*2.4, h=2.2+Math.random()*1.4, d=3+Math.random()*2.4;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:pick(WALLS),roughness:.92})); body.position.y=h/2;
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.8, h*0.85, 4),new THREE.MeshStandardMaterial({color:pick(ROOFS),roughness:.9}));
+    roof.position.y=h+h*0.42; roof.rotation.y=Math.PI/4; g.add(body,roof); return g;
+  }
+  function createBarn(){
+    const g=new THREE.Group(); const w=5+Math.random()*2, h=3.4+Math.random()*1.2, d=7+Math.random()*2;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:0x9e3b32,roughness:.9})); body.position.y=h/2;
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.72, h*0.7, 4),new THREE.MeshStandardMaterial({color:0x3c3c40,roughness:.9}));
+    roof.position.y=h+h*0.34; roof.rotation.y=Math.PI/4; g.add(body,roof);
+    if(Math.random()<0.6){ // attach a silo
+      const silo=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,h+2,12),new THREE.MeshStandardMaterial({color:0xb9bdc2,roughness:.6})); silo.position.set(w/2+1.4,(h+2)/2,0);
+      const dome=new THREE.Mesh(new THREE.SphereGeometry(1.1,12,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:.6})); dome.position.set(w/2+1.4,h+2,0);
+      g.add(silo,dome); }
+    return g;
+  }
+  function placeStructure(b){ const side=Math.random()<.5?-1:1;
+    b.userData.lane=side*(CONFIG.roadHalfWidth+6+Math.random()*22); b.position.z=-Math.random()*CONFIG.worldLength; b.rotation.y=(Math.random()-.5)*0.7; }
+  function createStructures(){ for(let i=0;i<CONFIG.houseCount;i++){ const s=Math.random()<0.32?createBarn():createHouse(); placeStructure(s); scene.add(s); houses.push(s); } }
+
+  function createTree(){ const g=new THREE.Group();
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,2.2,7),new THREE.MeshStandardMaterial({color:0x5b4129,roughness:.9})); trunk.position.y=1.1; g.add(trunk);
+    if(Math.random()<0.5){ // pine
+      const fol=new THREE.MeshStandardMaterial({color:0x2f6b32,roughness:.9});
+      [[1.7,2.6,3],[1.3,2.2,4.3],[.9,1.8,5.5]].forEach(([r,h,y])=>{ const c=new THREE.Mesh(new THREE.ConeGeometry(r,h,9),fol); c.position.y=y; g.add(c); });
+    } else { // round / deciduous
+      const fol=new THREE.MeshStandardMaterial({color:pick([0x3f8a3a,0x4f9a44,0x357a32]),roughness:.9});
+      const a=new THREE.Mesh(new THREE.SphereGeometry(1.7,10,9),fol); a.position.y=3.4; a.scale.y=1.05;
+      const b2=new THREE.Mesh(new THREE.SphereGeometry(1.2,10,9),fol); b2.position.set(.9,2.9,.4);
+      const c2=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,9),fol); c2.position.set(-.8,3,-.3); g.add(a,b2,c2); }
+    return g; }
+  function placeTree(p){ const side=Math.random()<.5?-1:1; p.userData.lane=side*(CONFIG.roadHalfWidth+1.5+Math.random()*9); p.position.z=-Math.random()*CONFIG.worldLength; p.scale.setScalar(.8+Math.random()*.6); }
+  function createTrees(){ for(let i=0;i<CONFIG.treeCount;i++){ const t=createTree(); placeTree(t); scene.add(t); trees.push(t); } }
+
+  function createHill(){ const m=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshStandardMaterial({color:pick([0x4f7a3a,0x5c8a40,0x456e34]),roughness:1})); return m; }
+  function placeHill(h){ const side=Math.random()<.5?-1:1; const r=22+Math.random()*34;
+    h.scale.set(r,r*0.42,r); h.userData.lane=side*(40+Math.random()*70); h.position.y=-r*0.55; h.position.z=-Math.random()*CONFIG.worldLength; }
+  function createHills(){ for(let i=0;i<CONFIG.hillCount;i++){ const h=createHill(); placeHill(h); scene.add(h); hills.push(h); } }
+
+  /* ---------- init ---------- */
+  function init(){
+    const canvas=document.getElementById('scene-canvas');
+    renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)); renderer.setSize(window.innerWidth,window.innerHeight);
+
+    scene=new THREE.Scene(); scene.background=makeSkyTexture();
+    scene.fog=new THREE.Fog(0xcad9e6,80,320);
+
+    camera=new THREE.PerspectiveCamera(72, window.innerWidth/window.innerHeight, 0.1, 600);
+    camera.position.set(0,CAM_Y,CAM_Z); camera.lookAt(0,-10,-45);   // tilted down => lots of road visible
+
+    scene.add(new THREE.AmbientLight(0xffffff,0.6));
+    const sun=new THREE.DirectionalLight(0xfff6e6,0.95); sun.position.set(-40,80,20); scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xbcd7f0,0x5c8a40,0.55));
+
+    const grass=new THREE.Mesh(new THREE.PlaneGeometry(1000,1000),new THREE.MeshStandardMaterial({map:makeGrassTexture(),roughness:1}));
+    grass.rotation.x=-Math.PI/2; grass.position.y=-0.05; scene.add(grass);
+
+    roadTex=makeAsphaltTexture();
+    road=new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.roadHalfWidth*2,700,1,150),new THREE.MeshStandardMaterial({map:roadTex,roughness:.95}));
+    road.rotation.x=-Math.PI/2; road.position.set(0,0.02,-250); scene.add(road);
+    const pos=road.geometry.attributes.position; roadX0=new Float32Array(pos.count); roadDepth=new Float32Array(pos.count);
+    for(let i=0;i<pos.count;i++){ roadX0[i]=pos.getX(i); roadDepth[i]=CAM_Z-(road.position.z-pos.getY(i)); }
+
+    createStructures(); createTrees(); createHills();
+    window.addEventListener('resize',onResize);
+  }
+  function onResize(){ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); }
+
+  /* ---------- obstacles ---------- */
+  function spawnObstacle(){ const ob=FACTORIES[(Math.random()*FACTORIES.length)|0]();
+    ob.userData.lane=(Math.random()*2-1)*CONFIG.laneLimit; ob.position.z=CONFIG.spawnZ; ob.userData.hit=false; scene.add(ob); obstacles.push(ob); }
+  function clearObstacles(){ obstacles.forEach(o=>scene.remove(o)); obstacles.length=0; }
+
+  /* ---------- per-frame update ---------- */
+  function update(dt, speed, distance, curveMul, invulnerable){
+    let crashes=0; D=distance; cMul=curveMul;
+    roadTex.offset.y += speed*dt*0.034;   // FIX: road surface now flows TOWARD you
+
+    camera.position.x += (player.x - camera.position.x)*Math.min(1,CONFIG.cameraSmoothing*dt);
+    camera.position.z = CAM_Z;
+    const aheadX = bendAt(55);             // where the road is heading
+    camera.lookAt(camera.position.x*(1-CONFIG.aimK) + aheadX*CONFIG.aimK, -10, -45);
+    camera.rotation.z = (camera.position.x-player.x)*0.03 - Math.sin(CONFIG.curveFreq*D)*cMul*0.05;
+
+    // bend the road to follow the curve
+    const pos=road.geometry.attributes.position;
+    for(let i=0;i<pos.count;i++) pos.setX(i, roadX0[i]+bendAt(roadDepth[i]));
+    pos.needsUpdate=true;
+
+    // scenery: approach, recycle, follow the curve
+    for(const b of houses){ b.position.z+=speed*dt; if(b.position.z>25){ placeStructure(b); b.position.z-=CONFIG.worldLength; } b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z); }
+    for(const t of trees){ t.position.z+=speed*dt; if(t.position.z>25){ placeTree(t); t.position.z-=CONFIG.worldLength; } t.position.x=t.userData.lane+bendAt(CAM_Z-t.position.z); }
+    for(const h of hills){ h.position.z+=speed*dt; if(h.position.z>40){ placeHill(h); h.position.z-=CONFIG.worldLength; } h.position.x=h.userData.lane+bendAt(CAM_Z-h.position.z); }
+
+    // obstacles
+    for(let i=obstacles.length-1;i>=0;i--){ const o=obstacles[i]; o.position.z+=speed*dt;
+      o.position.x=o.userData.lane+bendAt(CAM_Z-o.position.z);
+      if(o.userData.spin) o.rotation.y+=dt*2; else o.rotation.y+=dt*0.4;
+      if(!o.userData.hit && !invulnerable && o.position.z>CONFIG.collisionZ && o.position.z<CONFIG.collisionZ+8){
+        if(Math.abs(o.userData.lane-player.x)<CONFIG.hitX){ o.userData.hit=true; crashes++; } }
+      if(o.position.z>CONFIG.despawnZ){ scene.remove(o); obstacles.splice(i,1); } }
+    return crashes;
+  }
+  function dangerAhead(){ for(const o of obstacles){ if(o.position.z>-95 && o.position.z<CONFIG.collisionZ && Math.abs(o.userData.lane-player.x)<CONFIG.hitX+0.6) return true; } return false; }
+
+  function render(){ renderer.render(scene,camera); }
+  return { init, update, render, spawnObstacle, clearObstacles, dangerAhead, setPlayerX:x=>player.x=x, getPlayerX:()=>player.x };
+})();
+
+/* =================================================================
+   📱  PHONE
+================================================================= */
+const Phone = (() => {
+  let songIdx=0, playing=true, lastScroll=0;
+  function init(){ renderFeed(); renderChat(); renderQuickReplies(); setSong(0);
+    const feed=document.getElementById('feed-list');
+    feed.addEventListener('scroll',()=>{ const now=performance.now();
+      if(now-lastScroll>220 && Game.isPlaying()){ lastScroll=now; Game.addScore(CONFIG.scrollPoints,feed,"+"+CONFIG.scrollPoints); SFX.tap(); }
+      if(feed.scrollTop+feed.clientHeight>feed.scrollHeight-80) appendPosts(); }); }
+  function postHTML(p){ return `<div class="bg-white/5 rounded-2xl overflow-hidden border border-white/5">
+    <div class="flex items-center gap-2 px-3 py-2"><span class="text-xl">${p.av}</span><span class="font-semibold text-sm">${p.u}</span></div>
+    <div class="h-20 flex items-center justify-center text-4xl" style="background:linear-gradient(135deg,rgba(78,163,255,.22),rgba(120,200,255,.22))">${p.img}</div>
+    <div class="px-3 py-2 text-sm text-white/90">${p.txt}</div>
+    <div class="flex gap-4 px-3 pb-3 text-lg"><button class="like-btn transition active:scale-125">🤍</button><button class="active:scale-125">💬</button><button class="active:scale-125">↗️</button></div></div>`; }
+  function wireLikes(scope){ scope.querySelectorAll('.like-btn').forEach(b=>{ if(b.dataset.wired) return; b.dataset.wired="1";
+    b.addEventListener('click',()=>{ if(!Game.isPlaying()) return; const liked=b.textContent==='❤️'; b.textContent=liked?'🤍':'❤️'; if(!liked){ Game.addScore(CONFIG.basePoints,b); SFX.point(); } }); }); }
+  function renderFeed(){ const l=document.getElementById('feed-list'); l.innerHTML=''; CONFIG.feedPosts.forEach(p=>l.insertAdjacentHTML('beforeend',postHTML(p))); wireLikes(l); }
+  function appendPosts(){ const l=document.getElementById('feed-list'); CONFIG.feedPosts.forEach(p=>l.insertAdjacentHTML('beforeend',postHTML(p))); wireLikes(l); }
+  function setSong(i){ songIdx=(i+CONFIG.songs.length)%CONFIG.songs.length; const s=CONFIG.songs[songIdx];
+    document.getElementById('song-title').textContent=s.t; document.getElementById('song-artist').textContent=s.a;
+    document.getElementById('song-progress').style.width=(10+Math.random()*70).toFixed(0)+'%';
+    const arts=['🎧','🎤','🎸','🥁','🎹','🦆']; document.getElementById('album-art').textContent=arts[songIdx%arts.length]; }
+  function nextSong(){ setSong(songIdx+1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art')); SFX.point(); } }
+  function prevSong(){ setSong(songIdx-1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art')); SFX.point(); } }
+  function togglePlay(){ playing=!playing; document.getElementById('play-btn').textContent=playing?'⏸️':'▶️'; SFX.tap(); }
+  function bubble(me,t){ return `<div class="flex ${me?'justify-end':'justify-start'}"><div class="${me?'bg-blue-500/80':'bg-white/10'} rounded-2xl px-3 py-2 max-w-[80%]">${t}</div></div>`; }
+  function renderChat(){ const l=document.getElementById('chat-list'); l.innerHTML=''; CONFIG.chatSeed.forEach(m=>l.insertAdjacentHTML('beforeend',bubble(m.me,m.t))); }
+  function renderQuickReplies(){ const box=document.getElementById('quick-replies'); box.innerHTML='';
+    CONFIG.quickReplies.forEach(txt=>{ const b=document.createElement('button');
+      b.className='bg-blue-500/20 border border-blue-400/40 rounded-full px-3 py-1 text-xs active:scale-95 transition'; b.textContent=txt; b.onclick=()=>sendReply(txt,b); box.appendChild(b); }); }
+  const REPLIES=["lmaooo","fr fr","🦆🦆🦆","omw don't crash","new phone who dis","stop texting me ur DRIVING"];
+  function sendReply(txt,el){ if(!Game.isPlaying()) return; const l=document.getElementById('chat-list'); l.insertAdjacentHTML('beforeend',bubble(true,txt));
+    Game.addScore(CONFIG.basePoints,el); SFX.point(); l.scrollTop=l.scrollHeight;
+    setTimeout(()=>{ l.insertAdjacentHTML('beforeend',bubble(false,REPLIES[(Math.random()*REPLIES.length)|0])); l.scrollTop=l.scrollHeight; },600); }
+  function switchApp(name){ document.querySelectorAll('.app-view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+name).classList.add('active'); document.querySelectorAll('.dock button').forEach(b=>b.classList.toggle('active',b.dataset.app===name)); SFX.tap(); }
+  function tickStatus(){ const d=new Date(); document.getElementById('clock').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); }
+  function setBattery(p){ document.getElementById('battery').textContent=Math.max(1,Math.round(p)); }
+  return { init, switchApp, nextSong, prevSong, togglePlay, tickStatus, setBattery };
+})();
+
+/* =================================================================
+   🎮  GAME
+================================================================= */
+const Game = (() => {
+  const STATE={MENU:'menu',PLAY:'play',LEVEL:'level',OVER:'over',WIN:'win'};
+  let state=STATE.MENU, levelIdx=0, score=0, lives=CONFIG.lives, distance=0;
+  let speed=0, invulnTimer=0, distSinceSpawn=0, combo=1, comboTimer=0, battery=87, lastT=0;
+  const keys={left:false,right:false,gas:false,brake:false};
+
+  const $=id=>document.getElementById(id);
+  const show=id=>$(id).classList.remove('hidden'); const hide=id=>$(id).classList.add('hidden');
+  const level=()=>CONFIG.levels[levelIdx]; const isPlaying=()=>state===STATE.PLAY;
+  const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+
+  function bumpCombo(){ comboTimer=CONFIG.comboWindow; combo=Math.min(CONFIG.comboMax,combo+1); }
+  function addScore(base,anchorEl,label){ bumpCombo(); const g=Math.round(base*combo); score+=g; updateHUD(); floatPoints(anchorEl,label||('+'+g)); }
+  function floatPoints(anchorEl,text){ const screen=document.getElementById('phone-screen'); if(!screen||!anchorEl) return;
+    const fEl=document.createElement('div'); fEl.className='floatpts'; fEl.textContent=text;
+    const sr=screen.getBoundingClientRect(), ar=anchorEl.getBoundingClientRect();
+    fEl.style.left=(ar.left-sr.left+ar.width/2-14)+'px'; fEl.style.top=(ar.top-sr.top-6)+'px'; screen.appendChild(fEl); setTimeout(()=>fEl.remove(),900); }
+
+  function updateHUD(){
+    $('hud-score').textContent=score.toLocaleString();
+    $('hud-lives').textContent='❤️'.repeat(lives)+'🖤'.repeat(CONFIG.lives-lives);
+    $('hud-combo').textContent=combo>1?('🔥 x'+combo):'';
+    const lv=level(); $('hud-progress').style.width=Math.min(100,(distance/lv.distance)*100)+'%';
+    $('hud-distance').textContent=Math.floor(distance)+' / '+lv.distance+' m';
+    $('hud-objective').textContent=lv.emoji+' Drive to '+lv.name;
+    const mph=Math.round(speed*1.5); $('speed-num').textContent=mph;
+    $('speed-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(speed/lv.maxSpeed)*240,-120,120)+'deg)';
+    const rpm=clamp((speed/lv.maxSpeed)*6+(keys.gas?1.4:0),0.6,7.5); $('rpm-num').textContent=rpm.toFixed(1);
+    $('rpm-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(rpm/8)*240,-120,120)+'deg)';
+  }
+
+  function crash(){ lives--; invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; SFX.crash();
+    const fl=$('flash'); fl.style.opacity='.6'; setTimeout(()=>fl.style.opacity='0',120);
+    document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
+    updateHUD(); if(lives<=0) gameOver(); }
+
+  function start(){ levelIdx=0; score=0; SFX.tap(); beginLevel(); }
+  function beginLevel(){ lives=CONFIG.lives; distance=0; speed=0; distSinceSpawn=0; invulnTimer=0; combo=1; comboTimer=0; battery=87;
+    Scene3D.clearObstacles(); Scene3D.setPlayerX(0); keys.left=keys.right=keys.gas=keys.brake=false;
+    hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); updateHUD(); state=STATE.PLAY; }
+  function next(){ levelIdx++; if(levelIdx>=CONFIG.levels.length) win(); else beginLevel(); }
+  function levelComplete(){ state=STATE.LEVEL; const lv=level(); $('level-msg').textContent=lv.emoji+' '+lv.blurb; $('level-score').textContent=score.toLocaleString(); SFX.win(); show('screen-level'); }
+  function gameOver(){ state=STATE.OVER; $('over-score').textContent=score.toLocaleString(); $('over-distance').textContent='You drove '+Math.floor(distance)+' m before becoming a meme.'; show('screen-over'); }
+  function win(){ state=STATE.WIN; $('win-score').textContent=score.toLocaleString(); SFX.win(); show('screen-win'); }
+  function restart(){ start(); }
+
+  function onKey(e,down){ const k=e.key.toLowerCase();
+    if(k==='arrowleft'||k==='a'){ keys.left=down; e.preventDefault(); }
+    else if(k==='arrowright'||k==='d'){ keys.right=down; e.preventDefault(); }
+    else if(k==='arrowup'||k==='w'){ keys.gas=down; e.preventDefault(); }
+    else if(k==='arrowdown'||k==='s'){ keys.brake=down; e.preventDefault(); } }
+
+  function loop(t){ requestAnimationFrame(loop); const dt=Math.min(0.05,(t-lastT)/1000||0); lastT=t;
+    if(state===STATE.PLAY){ const lv=level();
+      if(keys.gas) speed+=CONFIG.accel*dt; else if(keys.brake) speed-=CONFIG.brakePower*dt; else speed-=CONFIG.drag*dt;
+      speed=clamp(speed,0,lv.maxSpeed);
+
+      const sf=0.35+0.65*Math.min(1,speed/18); let px=Scene3D.getPlayerX();
+      if(keys.left) px-=CONFIG.steerSpeed*sf*dt; if(keys.right) px+=CONFIG.steerSpeed*sf*dt;
+      // a bend pushes the car toward its outside — steer into the turn to hold your lane
+      px -= Math.sin(CONFIG.curveFreq*distance)*lv.curveMul*speed*CONFIG.driftK*dt;
+      px=clamp(px,-CONFIG.laneLimit,CONFIG.laneLimit); Scene3D.setPlayerX(px);
+
+      distance+=speed*dt; battery=Math.max(1,battery-dt*0.6); Phone.setBattery(battery);
+
+      distSinceSpawn+=speed*dt; if(distSinceSpawn>=lv.spawnEveryM){ Scene3D.spawnObstacle(); distSinceSpawn-=lv.spawnEveryM*(0.8+Math.random()*0.4); }
+      if(invulnTimer>0) invulnTimer-=dt;
+      if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=1; updateHUD(); } }
+
+      const crashes=Scene3D.update(dt,speed,distance,lv.curveMul,invulnTimer>0); for(let i=0;i<crashes;i++) crash();
+      $('warning').classList.toggle('show',Scene3D.dangerAhead()&&invulnTimer<=0);
+      updateHUD();
+      if(distance>=lv.distance){ $('warning').classList.remove('show'); levelComplete(); }
+    } else { Scene3D.update(dt,14,performance.now()*0.02,0.7,true); $('warning').classList.remove('show'); }
+    Scene3D.render();
+  }
+
+  function init(){
+    if(typeof THREE==='undefined'){ hide('screen-start'); show('screen-error'); return; }
+    try { Scene3D.init(); } catch(e){ hide('screen-start'); $('error-msg').textContent='The 3D world failed to start: '+e.message; show('screen-error'); return; }
+    Phone.init();
+    window.addEventListener('keydown',e=>onKey(e,true)); window.addEventListener('keyup',e=>onKey(e,false));
+    Phone.tickStatus(); setInterval(Phone.tickStatus,10000); requestAnimationFrame(loop);
+  }
+  return { init, start, next, restart, addScore, isPlaying, STATE };
+})();
+
+window.addEventListener('load', Game.init);
+</script>
+</body>
+</html>

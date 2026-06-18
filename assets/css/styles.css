@@ -2521,7 +2521,8 @@ body.arcade-home::before {
 .poster-card--apop img,
 .directory-card__poster--apop img,
 .poster-card--bsr img,
-.directory-card__poster--bsr img {
+.directory-card__poster--bsr img,
+.directory-card__poster--genz img {
   object-fit: cover;
   filter: saturate(1.12) contrast(1.05);
 }
@@ -2566,7 +2567,8 @@ body.arcade-home::before {
 .poster-card--apop::before,
 .directory-card__poster--apop::before,
 .poster-card--bsr::before,
-.directory-card__poster--bsr::before {
+.directory-card__poster--bsr::before,
+.directory-card__poster--genz::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;

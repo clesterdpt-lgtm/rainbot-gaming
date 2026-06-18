@@ -62,8 +62,6 @@
     male: {
       hair: `../assets/img/skid-row-glow-up/layers/black-hair.png?v=${ASSET_VERSION}`,
       makeup: `../assets/img/skid-row-glow-up/layers/black-makeup.png?v=${ASSET_VERSION}`,
-      freshHoodie: `../assets/img/skid-row-glow-up/layers/black-fresh-hoodie.png?v=${ASSET_VERSION}`,
-      jacket: `../assets/img/skid-row-glow-up/layers/black-jacket.png?v=${ASSET_VERSION}`,
       shades: `../assets/img/skid-row-glow-up/layers/black-shades.png?v=${ASSET_VERSION}`,
       chain: `../assets/img/skid-row-glow-up/layers/black-chain.png?v=${ASSET_VERSION}`,
       scarf: `../assets/img/skid-row-glow-up/layers/black-scarf.png?v=${ASSET_VERSION}`,
@@ -72,8 +70,6 @@
     female: {
       hair: `../assets/img/skid-row-glow-up/layers/white-hair.png?v=${ASSET_VERSION}`,
       makeup: `../assets/img/skid-row-glow-up/layers/white-makeup.png?v=${ASSET_VERSION}`,
-      freshHoodie: `../assets/img/skid-row-glow-up/layers/white-fresh-hoodie.png?v=${ASSET_VERSION}`,
-      jacket: `../assets/img/skid-row-glow-up/layers/white-jacket.png?v=${ASSET_VERSION}`,
       shades: `../assets/img/skid-row-glow-up/layers/white-shades.png?v=${ASSET_VERSION}`,
       chain: `../assets/img/skid-row-glow-up/layers/white-chain.png?v=${ASSET_VERSION}`,
       scarf: `../assets/img/skid-row-glow-up/layers/white-scarf.png?v=${ASSET_VERSION}`,
@@ -1046,7 +1042,6 @@
     spriteMaskCtx.globalCompositeOperation = "destination-out";
     spriteMaskCtx.fillStyle = "#000";
     if (look.hair !== "beanie" && imageReady(characterLayers[state.gender].hair)) eraseBaseHair(spriteMaskCtx, state.gender);
-    if (look.outfit !== "worn hoodie" && imageReady(getOutfitLayer(look.outfit))) eraseBaseOutfit(spriteMaskCtx, state.gender);
     spriteMaskCtx.restore();
 
     ctx.save();
@@ -1070,24 +1065,6 @@
     target.fill();
   }
 
-  function eraseBaseOutfit(target, gender) {
-    const points = gender === "female"
-      ? [[88, 620], [936, 620], [892, 1200], [708, 1320], [316, 1320], [132, 1200]]
-      : [[96, 610], [928, 610], [878, 1180], [700, 1292], [326, 1292], [146, 1180]];
-    target.beginPath();
-    target.moveTo(points[0][0], points[0][1]);
-    for (let i = 1; i < points.length; i++) target.lineTo(points[i][0], points[i][1]);
-    target.closePath();
-    target.fill();
-  }
-
-  function getOutfitLayer(outfit) {
-    const layers = characterLayers[state.gender];
-    if (outfit === "fresh hoodie") return layers.freshHoodie;
-    if (outfit !== "worn hoodie") return layers.jacket;
-    return null;
-  }
-
   function drawFullFrameStyleLayers(x, y, drawW, drawH, look, time) {
     const layers = characterLayers[state.gender];
     let attempted = false;
@@ -1104,11 +1081,9 @@
       return true;
     };
 
-    const outfitLayer = getOutfitLayer(look.outfit);
-    if (outfitLayer) {
+    if (look.outfit !== "worn hoodie") {
       attempted = true;
-      const filter = look.outfit === "thrift blazer" ? "hue-rotate(18deg) saturate(0.9)" : look.outfit === "velvet jacket" ? "hue-rotate(62deg) saturate(1.18)" : "";
-      drew = drawLayer(outfitLayer, { alpha: 0.98, filter }) || drew;
+      drew = drawGeneratedOutfitLayer(x, y, drawW, drawH, look) || drew;
     }
 
     if (look.hair !== "beanie") {
@@ -1140,6 +1115,30 @@
     }
 
     return attempted && drew;
+  }
+
+  function drawGeneratedOutfitLayer(x, y, drawW, drawH, look) {
+    if (look.outfit === "worn hoodie") return false;
+    const atlas = state.gender === "female" ? art.whiteOverlays : art.blackOverlays;
+    if (!imageReady(atlas)) return false;
+
+    const cx = x + drawW / 2;
+    const footY = y + drawH;
+    const chestY = footY - drawH * 0.42;
+    const filter = getGeneratedOutfitFilter(look.outfit);
+    if (look.outfit === "fresh hoodie") {
+      drawAtlasCell(atlas, overlayCells.hoodie, cx - 122, chestY - 88, 244, 202, { alpha: 0.94, filter });
+    } else {
+      drawAtlasCell(atlas, overlayCells.jacket, cx - 136, chestY - 92, 272, 212, { alpha: 0.96, filter });
+    }
+    return true;
+  }
+
+  function getGeneratedOutfitFilter(outfit) {
+    if (outfit === "velvet jacket") return "hue-rotate(62deg) saturate(1.18)";
+    if (outfit === "thrift blazer" && state.gender === "female") return "hue-rotate(132deg) saturate(0.86) brightness(0.9)";
+    if (outfit === "thrift blazer") return "hue-rotate(18deg) saturate(0.9)";
+    return "";
   }
 
   function drawGeneratedStyleOverlays(cx, footY, drawH, look, time) {
@@ -1217,7 +1216,7 @@
     if (look.outfit === "fresh hoodie") {
       drawAtlasCell(atlas, overlayCells.hoodie, cx - 122, chestY - 88, 244, 202, { alpha: 0.94 });
     } else if (look.outfit !== "worn hoodie") {
-      drawAtlasCell(atlas, overlayCells.jacket, cx - 136, chestY - 92, 272, 212, { alpha: 0.96 });
+      drawAtlasCell(atlas, overlayCells.jacket, cx - 136, chestY - 92, 272, 212, { alpha: 0.96, filter: getGeneratedOutfitFilter(look.outfit) });
     }
 
     if (look.hair !== "beanie") {

@@ -901,10 +901,16 @@
   // ----- Input -----
   window.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase();
+    // Prevent arrow-key default (page scroll) from interfering with game focus
+    if (k === "arrowup" || k === "arrowdown" || k === "arrowleft" || k === "arrowright") {
+      e.preventDefault();
+    }
     if (k === "w" || k === "arrowup") keys.w = true;
     if (k === "a" || k === "arrowleft") keys.a = true;
     if (k === "s" || k === "arrowdown") keys.s = true;
     if (k === "d" || k === "arrowright") keys.d = true;
+    // [DIAG] Keydown reached the handler
+    console.log("[DIAG keydown]", k, "keys.w/a/s/d =", keys.w, keys.a, keys.s, keys.d, "state.mode =", state.mode);
     if (k === "escape") {
       if (state.mode === "playing") pauseGame();
       else if (state.mode === "paused") resumeGame();
@@ -1252,6 +1258,12 @@
   }
 
   function update(dt, now) {
+    // [DIAG] Throttled game-loop heartbeat (once per ~60 frames)
+    if (typeof update._frame === "undefined") update._frame = 0;
+    update._frame++;
+    if (update._frame % 60 === 0) {
+      console.log("[DIAG heartbeat] frame", update._frame, "state.mode =", state.mode, "keys =", keys.w, keys.a, keys.s, keys.d, "player.z =", player.position.z.toFixed(2));
+    }
     // movement (camera-relative, tank-style)
     const camForward = new THREE.Vector3();
     camera.getWorldDirection(camForward);
@@ -1359,6 +1371,15 @@
     scrPause.classList.add("scr--hide");
     scrEnd.classList.add("scr--hide");
     document.body.classList.add("playing");
+    // [DIAG] Game state transitioned to playing
+    console.log("[DIAG startShift] state.mode -> playing, activeElement =", document.activeElement ? document.activeElement.id || document.activeElement.tagName : "none");
+    // Reset key state on shift start so any keys held during the title screen
+    // don't carry over as stuck-movement
+    keys.w = keys.a = keys.s = keys.d = false;
+    // Focus the stage so window-level keydown events fire reliably across browsers
+    // (some browsers don't deliver window keydowns when focus is on a button or body
+    // and the user hasn't clicked into the canvas). tabindex="0" on #stage makes it focusable.
+    stage.focus();
     showPrompt("Find the Price Scanner. Right-click to scan bottles.", 4500);
   }
   function pauseGame() {

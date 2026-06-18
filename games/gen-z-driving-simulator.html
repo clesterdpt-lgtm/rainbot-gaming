@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Rainbot: Distracted Driver 3000 🚗📱</title>
+<title>Rainbot: Gen Z Driving Simulator 🚗📱</title>
 
 <!-- ===== Tailwind ===== -->
 <script src="https://cdn.tailwindcss.com"></script>
@@ -250,7 +250,7 @@
 <div id="screen-start" class="screen">
   <div class="text-6xl mb-2">🚗💨📱</div>
   <h1 class="title-glow text-4xl sm:text-6xl mb-2"><span class="rb">RAINBOT</span></h1>
-  <h2 class="font-arcade text-lg sm:text-2xl mb-5 text-white/80">Distracted Driver 3000</h2>
+  <h2 class="font-arcade text-lg sm:text-2xl mb-5 text-white/80">Gen Z Driving Simulator</h2>
   <p class="max-w-md text-white/80 mb-5 leading-relaxed">
     You <b>cannot stop scrolling.</b> Rack up clout on your phone 📱 while you actually <b>drive</b> the
     back roads — gas, brake, and steer through the bends. Glance past the phone to dodge cones, ducks &amp;
@@ -259,7 +259,7 @@
     <span class="pill rounded-lg px-3 py-1"><kbd>W</kbd> gas</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>S</kbd> brake</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>A</kbd><kbd>D</kbd> steer</span>
-    <span class="pill rounded-lg px-3 py-1">👆 tap phone = points</span>
+    <span class="pill rounded-lg px-3 py-1">👆 phone = bigger points farther in</span>
   </div>
   <button class="btn-neon" onclick="Game.start()">START DRIVING ▶</button>
   <p class="text-white/30 text-xs mt-6">A very responsible driving simulator™</p>
@@ -297,10 +297,12 @@
    ⚙️  CONFIG  —  tweak almost everything here
 ================================================================= */
 const CONFIG = {
-  lives: 3,
+  startingVibe: 100,
 
   // steering
-  steerSpeed: 12, cameraSmoothing: 7, laneLimit: 5.0, roadHalfWidth: 8,
+  steerResponse: 6.5, steerAccel: 22, sideGrip: 5.8, maxLateralSpeed: 9.5, cameraSmoothing: 7,
+  laneLimit: 5.0, carLimit: 12.5, roadHalfWidth: 8, safeRoadHalfWidth: 7.1,
+  offRoadDrain: 5.5, offRoadDrainScale: 4.8, collisionVibeDamage: 18,
 
   // driving physics (W=gas, S=brake, coast otherwise)
   accel: 26, brakePower: 50, drag: 12,
@@ -309,8 +311,8 @@ const CONFIG = {
   curveK: 0.0040,      // curvature amplitude — BIGGER = sharper bends
   curveFreq: 0.015,    // how often bends come (1/m) — BIGGER = more frequent turns
   bendDepthMax: 175,   // clamp so very-distant scenery doesn't fly off sideways
-  driftK: 0.03,        // how hard a bend pushes the car (you steer against it)
-  aimK: 0.5,           // how much the camera leans into the bend
+  driftK: 0.038,       // how hard a bend pushes the car (you steer against it)
+  aimK: 0.22,          // lower = less automatic camera steering through bends
 
   // obstacles
   spawnZ: -150, despawnZ: 16, collisionZ: -16, hitX: 1.7, hitInvuln: 1.1,
@@ -320,6 +322,7 @@ const CONFIG = {
 
   // scoring
   comboWindow: 2.2, comboMax: 9, basePoints: 30, scrollPoints: 7,
+  phoneDistanceScale: 2.2, phoneDangerDrain: 3.5,
 
   // LEVELS  (maxSpeed = top speed; curveMul = how curvy this leg is)
   levels: [
@@ -365,7 +368,7 @@ const SFX = (() => {
    🏞️  THREE.JS WORLD  (country roads + travelling curves)
 ================================================================= */
 const Scene3D = (() => {
-  let renderer, scene, camera, roadTex, road, roadX0, roadDepth;
+  let renderer, scene, camera, roadTex, grassTex, road, roadX0, roadDepth;
   const obstacles=[], houses=[], trees=[], hills=[];
   let player={x:0}, D=0, cMul=1;
   const CAM_Z=10, CAM_Y=5.0, f=CONFIG.curveK ? CONFIG.curveFreq : 0.013;
@@ -486,7 +489,8 @@ const Scene3D = (() => {
     const sun=new THREE.DirectionalLight(0xfff6e6,0.95); sun.position.set(-40,80,20); scene.add(sun);
     scene.add(new THREE.HemisphereLight(0xbcd7f0,0x5c8a40,0.55));
 
-    const grass=new THREE.Mesh(new THREE.PlaneGeometry(1000,1000),new THREE.MeshStandardMaterial({map:makeGrassTexture(),roughness:1}));
+    grassTex=makeGrassTexture();
+    const grass=new THREE.Mesh(new THREE.PlaneGeometry(1000,1000),new THREE.MeshStandardMaterial({map:grassTex,roughness:1}));
     grass.rotation.x=-Math.PI/2; grass.position.y=-0.05; scene.add(grass);
 
     roadTex=makeAsphaltTexture();
@@ -508,13 +512,14 @@ const Scene3D = (() => {
   /* ---------- per-frame update ---------- */
   function update(dt, speed, distance, curveMul, invulnerable){
     let crashes=0; D=distance; cMul=curveMul;
-    roadTex.offset.y += speed*dt*0.034;   // FIX: road surface now flows TOWARD you
+    roadTex.offset.y += speed*dt*0.034;
+    if(grassTex) grassTex.offset.y += speed*dt*0.006;
 
     camera.position.x += (player.x - camera.position.x)*Math.min(1,CONFIG.cameraSmoothing*dt);
     camera.position.z = CAM_Z;
     const aheadX = bendAt(55);             // where the road is heading
     camera.lookAt(camera.position.x*(1-CONFIG.aimK) + aheadX*CONFIG.aimK, -10, -45);
-    camera.rotation.z = (camera.position.x-player.x)*0.03 - Math.sin(CONFIG.curveFreq*D)*cMul*0.05;
+    camera.rotation.z = (camera.position.x-player.x)*0.03 - Math.sin(CONFIG.curveFreq*D)*cMul*0.035;
 
     // bend the road to follow the curve
     const pos=road.geometry.attributes.position;
@@ -549,7 +554,7 @@ const Phone = (() => {
   function init(){ renderFeed(); renderChat(); renderQuickReplies(); setSong(0);
     const feed=document.getElementById('feed-list');
     feed.addEventListener('scroll',()=>{ const now=performance.now();
-      if(now-lastScroll>220 && Game.isPlaying()){ lastScroll=now; Game.addScore(CONFIG.scrollPoints,feed,"+"+CONFIG.scrollPoints); SFX.tap(); }
+      if(now-lastScroll>220 && Game.isPlaying()){ lastScroll=now; Game.addScore(CONFIG.scrollPoints,feed); SFX.tap(); }
       if(feed.scrollTop+feed.clientHeight>feed.scrollHeight-80) appendPosts(); }); }
   function postHTML(p){ return `<div class="bg-white/5 rounded-2xl overflow-hidden border border-white/5">
     <div class="flex items-center gap-2 px-3 py-2"><span class="text-xl">${p.av}</span><span class="font-semibold text-sm">${p.u}</span></div>
@@ -588,8 +593,9 @@ const Phone = (() => {
 ================================================================= */
 const Game = (() => {
   const STATE={MENU:'menu',PLAY:'play',LEVEL:'level',OVER:'over',WIN:'win'};
-  let state=STATE.MENU, levelIdx=0, score=0, lives=CONFIG.lives, distance=0;
+  let state=STATE.MENU, levelIdx=0, score=0, vibe=CONFIG.startingVibe, distance=0;
   let speed=0, invulnTimer=0, distSinceSpawn=0, combo=1, comboTimer=0, battery=87, lastT=0;
+  let wheelAngle=0, lateralV=0, offRoadTimer=0;
   const keys={left:false,right:false,gas:false,brake:false};
 
   const $=id=>document.getElementById(id);
@@ -598,7 +604,19 @@ const Game = (() => {
   const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
 
   function bumpCombo(){ comboTimer=CONFIG.comboWindow; combo=Math.min(CONFIG.comboMax,combo+1); }
-  function addScore(base,anchorEl,label){ bumpCombo(); const g=Math.round(base*combo); score+=g; updateHUD(); floatPoints(anchorEl,label||('+'+g)); }
+  function addScore(base,anchorEl,label){
+    bumpCombo();
+    const lv=level();
+    const progress=lv ? clamp(distance/lv.distance,0,1) : 0;
+    const distanceBoost=1+progress*CONFIG.phoneDistanceScale+levelIdx*0.28;
+    const g=Math.round(base*combo*distanceBoost);
+    score+=g;
+    const phoneWhileSketchy=Scene3D.dangerAhead() || Math.abs(Scene3D.getPlayerX())>CONFIG.safeRoadHalfWidth*0.82;
+    if(phoneWhileSketchy) vibe=clamp(vibe-CONFIG.phoneDangerDrain,0,100);
+    updateHUD();
+    floatPoints(anchorEl,label||('+'+g));
+    if(vibe<=0) gameOver();
+  }
   function floatPoints(anchorEl,text){ const screen=document.getElementById('phone-screen'); if(!screen||!anchorEl) return;
     const fEl=document.createElement('div'); fEl.className='floatpts'; fEl.textContent=text;
     const sr=screen.getBoundingClientRect(), ar=anchorEl.getBoundingClientRect();
@@ -606,7 +624,10 @@ const Game = (() => {
 
   function updateHUD(){
     $('hud-score').textContent=score.toLocaleString();
-    $('hud-lives').textContent='❤️'.repeat(lives)+'🖤'.repeat(CONFIG.lives-lives);
+    const vibePct=clamp(vibe,0,100);
+    $('hud-vibe-text').textContent=Math.round(vibePct)+'%';
+    $('hud-vibe-bar').style.width=vibePct+'%';
+    $('hud-vibe-bar').style.background=vibePct>55?'linear-gradient(90deg,#4cff8f,#ffe14c)':(vibePct>24?'linear-gradient(90deg,#ffe14c,#ff8a3d)':'linear-gradient(90deg,#ff4d6d,#ff2a2a)');
     $('hud-combo').textContent=combo>1?('🔥 x'+combo):'';
     const lv=level(); $('hud-progress').style.width=Math.min(100,(distance/lv.distance)*100)+'%';
     $('hud-distance').textContent=Math.floor(distance)+' / '+lv.distance+' m';
@@ -617,18 +638,18 @@ const Game = (() => {
     $('rpm-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(rpm/8)*240,-120,120)+'deg)';
   }
 
-  function crash(){ lives--; invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; SFX.crash();
+  function crash(){ vibe=clamp(vibe-CONFIG.collisionVibeDamage,0,100); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; lateralV*=-0.35; SFX.crash();
     const fl=$('flash'); fl.style.opacity='.6'; setTimeout(()=>fl.style.opacity='0',120);
     document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
-    updateHUD(); if(lives<=0) gameOver(); }
+    updateHUD(); if(vibe<=0) gameOver(); }
 
   function start(){ levelIdx=0; score=0; SFX.tap(); beginLevel(); }
-  function beginLevel(){ lives=CONFIG.lives; distance=0; speed=0; distSinceSpawn=0; invulnTimer=0; combo=1; comboTimer=0; battery=87;
+  function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; speed=0; lateralV=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; invulnTimer=0; combo=1; comboTimer=0; battery=87;
     Scene3D.clearObstacles(); Scene3D.setPlayerX(0); keys.left=keys.right=keys.gas=keys.brake=false;
     hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); updateHUD(); state=STATE.PLAY; }
   function next(){ levelIdx++; if(levelIdx>=CONFIG.levels.length) win(); else beginLevel(); }
   function levelComplete(){ state=STATE.LEVEL; const lv=level(); $('level-msg').textContent=lv.emoji+' '+lv.blurb; $('level-score').textContent=score.toLocaleString(); SFX.win(); show('screen-level'); }
-  function gameOver(){ state=STATE.OVER; $('over-score').textContent=score.toLocaleString(); $('over-distance').textContent='You drove '+Math.floor(distance)+' m before becoming a meme.'; show('screen-over'); }
+  function gameOver(){ state=STATE.OVER; $('over-score').textContent=score.toLocaleString(); $('over-distance').textContent='You drove '+Math.floor(distance)+' m before the vibe check hit zero.'; show('screen-over'); }
   function win(){ state=STATE.WIN; $('win-score').textContent=score.toLocaleString(); SFX.win(); show('screen-win'); }
   function restart(){ start(); }
 
@@ -643,11 +664,30 @@ const Game = (() => {
       if(keys.gas) speed+=CONFIG.accel*dt; else if(keys.brake) speed-=CONFIG.brakePower*dt; else speed-=CONFIG.drag*dt;
       speed=clamp(speed,0,lv.maxSpeed);
 
-      const sf=0.35+0.65*Math.min(1,speed/18); let px=Scene3D.getPlayerX();
-      if(keys.left) px-=CONFIG.steerSpeed*sf*dt; if(keys.right) px+=CONFIG.steerSpeed*sf*dt;
-      // a bend pushes the car toward its outside — steer into the turn to hold your lane
-      px -= Math.sin(CONFIG.curveFreq*distance)*lv.curveMul*speed*CONFIG.driftK*dt;
-      px=clamp(px,-CONFIG.laneLimit,CONFIG.laneLimit); Scene3D.setPlayerX(px);
+      const steerInput=(keys.right?1:0)-(keys.left?1:0);
+      wheelAngle += (steerInput-wheelAngle)*Math.min(1,CONFIG.steerResponse*dt);
+      const speedGrip=0.38+0.92*Math.min(1,speed/26);
+      lateralV += wheelAngle*CONFIG.steerAccel*speedGrip*dt;
+      lateralV -= lateralV*Math.min(1,CONFIG.sideGrip*dt);
+      // a bend pushes the car toward its outside; steering changes heading, not lane position.
+      lateralV -= Math.sin(CONFIG.curveFreq*distance)*lv.curveMul*speed*CONFIG.driftK*dt;
+      lateralV=clamp(lateralV,-CONFIG.maxLateralSpeed,CONFIG.maxLateralSpeed);
+      let px=Scene3D.getPlayerX()+lateralV*dt;
+      px=clamp(px,-CONFIG.carLimit,CONFIG.carLimit); Scene3D.setPlayerX(px);
+
+      const wheel=$('steering-wheel');
+      if(wheel) wheel.style.transform='translateX(-50%) rotate('+(wheelAngle*58).toFixed(1)+'deg)';
+      const offRoad=Math.max(0,Math.abs(px)-CONFIG.safeRoadHalfWidth);
+      if(offRoad>0){
+        offRoadTimer+=dt;
+        const drain=(CONFIG.offRoadDrain+offRoad*CONFIG.offRoadDrainScale)*(0.55+speed/Math.max(1,lv.maxSpeed))*dt;
+        vibe=clamp(vibe-drain,0,100);
+        lateralV-=lateralV*Math.min(1,dt*2.2);
+        speed=Math.max(0,speed-(5+offRoad*2.4)*dt);
+      } else {
+        offRoadTimer=0;
+        vibe=clamp(vibe+dt*1.5,0,CONFIG.startingVibe);
+      }
 
       distance+=speed*dt; battery=Math.max(1,battery-dt*0.6); Phone.setBattery(battery);
 
@@ -656,10 +696,19 @@ const Game = (() => {
       if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=1; updateHUD(); } }
 
       const crashes=Scene3D.update(dt,speed,distance,lv.curveMul,invulnTimer>0); for(let i=0;i<crashes;i++) crash();
-      $('warning').classList.toggle('show',Scene3D.dangerAhead()&&invulnTimer<=0);
+      const warning=$('warning');
+      if(vibe<=0) gameOver();
+      const danger=Scene3D.dangerAhead()&&invulnTimer<=0;
+      warning.textContent=offRoadTimer>0.12?'⚠️ OFF ROAD - VIBE DROPPING ⚠️':'⚠️ EYES ON THE ROAD ⚠️';
+      warning.classList.toggle('show',(danger||offRoadTimer>0.12)&&state===STATE.PLAY);
       updateHUD();
       if(distance>=lv.distance){ $('warning').classList.remove('show'); levelComplete(); }
-    } else { Scene3D.update(dt,14,performance.now()*0.02,0.7,true); $('warning').classList.remove('show'); }
+    } else {
+      wheelAngle*=Math.max(0,1-dt*4);
+      const wheel=$('steering-wheel');
+      if(wheel) wheel.style.transform='translateX(-50%) rotate('+(wheelAngle*58).toFixed(1)+'deg)';
+      Scene3D.update(dt,14,performance.now()*0.02,0.7,true); $('warning').classList.remove('show');
+    }
     Scene3D.render();
   }
 

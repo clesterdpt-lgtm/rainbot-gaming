@@ -13,7 +13,7 @@
 <!-- ===== Fonts ===== -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-8" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-9" />
 
 <style>
   /* =========================================================
@@ -532,9 +532,10 @@ const CONFIG = {
   startingVibe: 82,
 
   // steering
-  wheelLockDeg: 720, wheelTurnRateDeg: 780, wheelReturnRateDeg: 190,
-  frontWheelMaxDeg: 38, wheelbase: 2.8, yawRateScale: 0.52,
-  sideGrip: 7.2, maxLateralSpeed: 26, headingCameraLook: 62, cameraSmoothing: 7,
+  wheelLockDeg: 540, wheelTurnRateDeg: 620, wheelReturnRateDeg: 210,
+  frontWheelMaxDeg: 34, wheelbase: 2.8, yawRateScale: 0.38, maxYawRate: 1.15,
+  maxHeadingDeg: 30, highSpeedSteerDamp: 0.42,
+  sideGrip: 7.2, maxLateralSpeed: 22, headingCameraLook: 38, cameraRollMax: 0.09, cameraSmoothing: 7,
   laneLimit: 9.4, carLimit: 24, roadHalfWidth: 12, safeRoadHalfWidth: 10.7,
   offRoadDrain: 0.45, offRoadDrainScale: 0.22, collisionVibeDamage: 18,
 
@@ -845,12 +846,15 @@ const Scene3D = (() => {
     camera.position.z = CAM_Z;
     const aheadX = bendAt(55);             // where the road is heading
     const roadAimX=camera.position.x*(1-CONFIG.aimK) + aheadX*CONFIG.aimK;
+    const camHeading=clampScene(heading,-0.52,0.52);
+    const camSin=Math.sin(camHeading), camCos=Math.cos(camHeading);
     camera.lookAt(
-      roadAimX + headingSin*CONFIG.headingCameraLook,
+      roadAimX + camSin*CONFIG.headingCameraLook,
       -10,
-      CAM_Z - headingCos*CONFIG.headingCameraLook
+      CAM_Z - camCos*CONFIG.headingCameraLook
     );
-    camera.rotation.z = (camera.position.x-player.x)*0.03 - headingSin*0.07 - Math.sin(CONFIG.curveFreq*D)*cMul*0.035;
+    const roll=(camera.position.x-player.x)*0.025 - camSin*0.045 - Math.sin(CONFIG.curveFreq*D)*cMul*0.028;
+    camera.rotation.z=clampScene(roll,-CONFIG.cameraRollMax,CONFIG.cameraRollMax);
 
     // bend the road to follow the curve
     const pos=road.geometry.attributes.position;
@@ -1063,7 +1067,9 @@ const Game = (() => {
     $('rpm-needle').style.transform='translateX(-50%) rotate('+clamp(-120+(rpm/8)*240,-120,120)+'deg)';
   }
 
-  function crash(){ addVibe(-CONFIG.collisionVibeDamage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; lateralV*=-0.35; carHeading+=0.22*Math.sign(lateralV||1); SFX.crash();
+  function crash(){ addVibe(-CONFIG.collisionVibeDamage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=0.55; lateralV*=-0.35;
+    const maxHeadingRad=CONFIG.maxHeadingDeg*Math.PI/180;
+    carHeading=clamp(carHeading+0.1*Math.sign(lateralV||1),-maxHeadingRad,maxHeadingRad); SFX.crash();
     const fl=$('flash'); fl.style.opacity='.6'; setTimeout(()=>fl.style.opacity='0',120);
     document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
     const warning=$('warning'); if(warning){ warning.textContent='💥 CAR HIT — VIBE DROPPING 💥'; warning.classList.add('show'); setTimeout(()=>warning.classList.remove('show'),900); }
@@ -1200,10 +1206,14 @@ const Game = (() => {
         wheelAngle=moveToward(wheelAngle,0,returnRate*dt);
       }
       const steer=wheelAngle/CONFIG.wheelLockDeg;
-      const frontWheelRad=steer*(CONFIG.frontWheelMaxDeg*Math.PI/180);
+      const speedSteerScale=clamp(1-(speed/Math.max(1,lv.maxSpeed))*CONFIG.highSpeedSteerDamp,0.48,1);
+      const frontWheelRad=steer*(CONFIG.frontWheelMaxDeg*Math.PI/180)*speedSteerScale;
       const speedMps=speed*0.45;
-      carHeading += (speedMps/CONFIG.wheelbase)*Math.tan(frontWheelRad)*CONFIG.yawRateScale*dt;
-      const headingNow=wrapAngle(carHeading);
+      const maxHeadingRad=CONFIG.maxHeadingDeg*Math.PI/180;
+      const yawDelta=(speedMps/CONFIG.wheelbase)*Math.tan(frontWheelRad)*CONFIG.yawRateScale*dt;
+      const yawStep=clamp(yawDelta,-CONFIG.maxYawRate*dt,CONFIG.maxYawRate*dt);
+      carHeading=clamp(carHeading+yawStep,-maxHeadingRad,maxHeadingRad);
+      const headingNow=carHeading;
       const routeSpeed=speed*Math.cos(headingNow);
       const targetLateralV=speed*Math.sin(headingNow);
       lateralV += (targetLateralV-lateralV)*Math.min(1,CONFIG.sideGrip*dt);

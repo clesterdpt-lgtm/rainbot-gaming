@@ -2526,6 +2526,13 @@ body.arcade-home::before {
   filter: saturate(1.12) contrast(1.05);
 }
 
+.poster-card--feast img,
+.directory-card__poster--feast img,
+.poster-card--looksmaxxing img,
+.directory-card__poster--looksmaxxing img {
+  object-position: left center;
+}
+
 .poster-card--escape::before {
   content: "";
   position: absolute;
@@ -2928,6 +2935,12 @@ body.arcade-home::before {
   image-rendering: pixelated;
 }
 
+.directory-card__poster--feast img,
+.directory-card__poster--looksmaxxing img {
+  object-fit: cover;
+  object-position: left center;
+}
+
 .directory-card__poster::after {
   content: "";
   position: absolute;
@@ -3268,6 +3281,7 @@ body.arcade-home::before {
 
 .after-dark-game--feast .after-dark-game__poster img {
   object-fit: cover;
+  object-position: left center;
   image-rendering: auto;
 }
 

@@ -13,7 +13,7 @@
 <!-- ===== Fonts ===== -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-9" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-12" />
 
 <style>
   /* =========================================================
@@ -155,10 +155,12 @@
      THE PHONE
   ========================================================= */
   #phone { position:absolute; left:50%; bottom:4cqh; transform:translateX(-50%) rotateZ(-1.2deg) rotateX(2deg);
-    width:var(--phone-w); height:var(--phone-h); z-index:20; background:#0b0b10;
+    width:var(--phone-w); height:var(--phone-h); z-index:43; background:#0b0b10;
     border-radius:clamp(14px, 7cqh, 28px); padding:clamp(4px, 2cqh, 8px);
     border:2px solid #303244; box-shadow:inset -8px -12px 18px rgba(0,0,0,.5), inset 4px 4px 10px rgba(255,255,255,.05), 0 0 0 4px #161620, 0 18px 54px rgba(0,0,0,.74), 0 0 28px rgba(78,163,255,.18);
-    pointer-events:auto; container-type:size; container-name:phone; flex-shrink:0; aspect-ratio:248 / 390; perspective:540px; }
+    pointer-events:auto; touch-action:manipulation; container-type:size; container-name:phone; flex-shrink:0; aspect-ratio:248 / 390; perspective:540px; }
+  #phone-screen, #phone .dock, #feed-list, #chat-list, #quick-replies { touch-action:manipulation; }
+  #feed-list, #chat-list { touch-action:pan-y; }
   #phone::after { content:""; position:absolute; bottom:calc(-1 * clamp(18px, 4.5cqh, 36px)); left:50%; transform:translateX(-50%);
     width:clamp(18px, 4.5cqh, 36px); height:clamp(22px, 5.5cqh, 44px); background:linear-gradient(180deg,#222226,#111114); border-radius:0 0 28% 28%; z-index:-1; }
   .phone-side { position:absolute; top:12%; bottom:14%; width:clamp(5px,2cqh,10px); border-radius:999px; background:linear-gradient(180deg,#4c5064,#151822); box-shadow:inset 1px 0 2px rgba(255,255,255,.12); pointer-events:none; }
@@ -304,81 +306,76 @@
   .genz-touch-grid .btn { min-height:44px; font-size:13px; padding:8px 10px; }
   .genz-touch-grid .btn.is-held { border-color:var(--accent-3); box-shadow:0 0 16px rgba(255,212,59,.22); transform:translateY(1px); }
   .genz-side-note { color:var(--ink-dim); font-family:var(--font-mono); font-size:11px; line-height:1.55; margin:10px 0 0; }
-  .genz-thumb-options { display:flex; gap:8px; margin-top:8px; }
-  .genz-thumb-options .btn { flex:1 1 0; min-height:36px; padding:7px 8px; font-size:11px; }
-  .genz-thumb-options .btn.is-active { border-color:var(--accent-2); box-shadow:0 0 16px rgba(46,224,255,.18); color:var(--accent-2); }
   .safety-disclaimer { max-width:min(34rem,82cqw); color:rgba(255,255,255,.7); font-size:.78rem; line-height:1.45; background:rgba(255,180,58,.1);
     border:1px solid rgba(255,180,58,.28); border-radius:10px; padding:9px 12px; }
   .genz-drive-touch-layer {
     position:absolute;
     inset:0;
-    z-index:36;
+    z-index:34;
     display:none;
     pointer-events:none;
-  }
-  .genz-drive-joystick-zone {
-    position:absolute;
-    bottom:0;
-    width:clamp(72px, 20cqw, 78px);
-    height:min(62cqh, 300px);
-    pointer-events:auto;
     touch-action:none;
   }
-  .genz-drive-touch-layer[data-joystick-side="left"] .genz-drive-joystick-zone { left:max(6px, env(safe-area-inset-left)); }
-  .genz-drive-touch-layer[data-joystick-side="right"] .genz-drive-joystick-zone { right:max(6px, env(safe-area-inset-right)); }
-  .genz-drive-joystick {
+  .genz-drive-pad {
     position:absolute;
-    left:0;
-    top:0;
-    width:76px;
-    height:76px;
-    border-radius:50%;
-    pointer-events:none;
-    opacity:0;
-    transform:translate(-50%,-50%) scale(.92);
-    transition:opacity .12s ease, transform .12s ease;
+    bottom:max(10px,2.2cqh);
+    display:grid;
+    gap:clamp(6px,1.6cqh,10px);
+    pointer-events:auto;
   }
-  .genz-drive-touch-layer.is-active .genz-drive-joystick {
-    opacity:.48;
-    transform:translate(-50%,-50%) scale(1);
+  .genz-drive-pedals {
+    left:max(8px,env(safe-area-inset-left));
+    grid-template-rows:1fr 1fr;
+    width:clamp(74px,18.5cqw,102px);
+    height:clamp(128px,30cqh,176px);
   }
-  .genz-drive-joystick::before {
-    content:"";
-    position:absolute;
-    inset:0;
-    border-radius:50%;
-    background:radial-gradient(circle, rgba(78,163,255,.08), rgba(78,163,255,.015) 58%, transparent 60%);
-    border:1px solid rgba(255,255,255,.26);
-    box-shadow:0 0 22px rgba(78,163,255,.2), inset 0 0 18px rgba(255,255,255,.08);
+  .genz-drive-steer {
+    right:max(8px,env(safe-area-inset-right));
+    grid-template-columns:1fr 1fr;
+    width:clamp(132px,33cqw,188px);
+    height:clamp(74px,18.5cqh,102px);
   }
-  .genz-drive-joystick::after {
-    content:"";
-    position:absolute;
-    left:50%;
-    top:12%;
-    width:1px;
-    height:76%;
-    background:rgba(255,255,255,.2);
-    transform:translateX(-50%);
+  @media (max-width: 900px) {
+    .genz-drive-steer {
+      width:clamp(96px,24cqw,148px);
+      height:clamp(68px,16.5cqh,92px);
+      bottom:max(8px,1.6cqh);
+    }
+    .genz-drive-pedals {
+      bottom:max(8px,1.6cqh);
+      width:clamp(68px,17cqw,92px);
+      height:clamp(118px,27cqh,160px);
+    }
   }
-  .genz-drive-joystick-knob {
-    position:absolute;
-    left:50%;
-    top:50%;
-    width:32px;
-    height:32px;
-    border-radius:50%;
-    background:rgba(255,255,255,.32);
-    border:1px solid rgba(255,255,255,.48);
-    box-shadow:0 6px 18px rgba(0,0,0,.28), 0 0 16px rgba(126,200,255,.22);
-    transform:translate(-50%,-50%);
+  .genz-drive-touch-btn {
+    touch-action:manipulation;
+    border-radius:14px;
+    border:1px solid rgba(255,255,255,.22);
+    font-family:'Orbitron',sans-serif;
+    font-weight:800;
+    font-size:clamp(.62rem,2.8cqh,.78rem);
+    letter-spacing:.06em;
+    color:#fff;
+    min-height:44px;
+    padding:8px 6px;
+    box-shadow:0 8px 20px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.12);
+    transition:transform .1s ease, box-shadow .1s ease, border-color .1s ease;
   }
-  .genz-drive-joystick-knob::after {
-    content:"";
-    position:absolute;
-    inset:9px;
-    border-radius:50%;
-    background:rgba(78,163,255,.48);
+  .genz-drive-touch-btn.is-held {
+    transform:translateY(1px) scale(.98);
+    border-color:rgba(126,200,255,.72);
+    box-shadow:0 0 18px rgba(78,163,255,.28), inset 0 0 14px rgba(255,255,255,.08);
+  }
+  .genz-drive-touch-btn--gas {
+    background:linear-gradient(180deg,rgba(56,176,104,.92),rgba(24,112,62,.95));
+  }
+  .genz-drive-touch-btn--brake {
+    background:linear-gradient(180deg,rgba(214,86,86,.92),rgba(132,34,34,.95));
+  }
+  .genz-drive-touch-btn--steer {
+    background:linear-gradient(180deg,rgba(64,126,214,.92),rgba(28,68,138,.95));
+    font-size:clamp(1rem,4.8cqh,1.35rem);
+    line-height:1;
   }
   .genz-driving-page .screen .text-6xl { font-size:clamp(2rem, 8cqh, 3.75rem); }
   .genz-driving-page .screen .text-4xl,
@@ -484,47 +481,50 @@
 
   <div id="warning" aria-live="polite"></div>
   <div id="objective-toast" aria-live="polite"></div>
-
-  <div id="phone">
-    <div class="phone-hand" aria-hidden="true"><span class="phone-thumb"></span></div>
-    <div class="phone-side phone-side--left" aria-hidden="true"></div>
-    <div class="phone-side phone-side--right" aria-hidden="true"></div>
-    <div class="phone-camera" aria-hidden="true"></div>
-    <div id="phone-screen">
-      <div class="statusbar"><span id="clock">9:41</span>
-        <span class="font-arcade accent text-[.62rem]">RAINBOT OS</span>
-        <span>📶 <span id="battery">87</span>% 🔋</span></div>
-      <div class="app-area">
-        <div id="view-feed" class="app-view active">
-          <div class="px-4 py-2 flex items-center justify-between border-b border-white/10">
-            <span class="font-arcade text-base accent">RainGram</span><span class="text-[.6rem] text-white/40">scroll = 💰</span></div>
-          <div id="feed-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-3"></div>
-        </div>
-        <div id="view-music" class="app-view items-center justify-center text-center px-6">
-          <div id="album-art" class="w-28 h-28 rounded-2xl mb-3 flex items-center justify-center text-5xl shadow-2xl" style="background:linear-gradient(135deg,#4ea3ff,#2f6fd0)">🎧</div>
-          <div id="song-title" class="font-arcade text-base">Loading vibes…</div>
-          <div id="song-artist" class="text-sm text-white/50 mb-3">—</div>
-          <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-4"><div id="song-progress" class="h-full" style="width:30%;background:var(--accent)"></div></div>
-          <div class="flex items-center gap-6 text-2xl"><button onclick="Phone.prevSong()">⏮️</button><button onclick="Phone.togglePlay()" id="play-btn" class="text-3xl">⏸️</button><button onclick="Phone.nextSong()" class="text-3xl">⏭️</button></div>
-          <div class="text-[.66rem] text-white/40 mt-3">Tap ⏭️ for points (and chaos)</div>
-        </div>
-        <div id="view-chat" class="app-view">
-          <div class="px-4 py-2 border-b border-white/10 flex items-center gap-2"><span class="text-xl">🦆</span>
-            <div><div class="font-bold leading-none text-sm">Duck Dealer</div><div class="text-[.56rem] text-green-400">online</div></div></div>
-          <div id="chat-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-2 text-sm"></div>
-          <div id="quick-replies" class="flex flex-wrap gap-2 p-3 border-t border-white/10"></div>
-        </div>
-      </div>
-      <div class="dock"><button data-app="feed" class="active" onclick="Phone.switchApp('feed')">📱</button>
-        <button data-app="music" onclick="Phone.switchApp('music')">🎵</button>
-        <button data-app="chat" onclick="Phone.switchApp('chat')">💬</button></div>
-    </div>
+</div>
+<div id="mobile-drive-controls" class="genz-drive-touch-layer" aria-label="Mobile driving controls">
+  <div class="genz-drive-pad genz-drive-pedals" aria-label="Gas and brake">
+    <button id="touch-gas" class="genz-drive-touch-btn genz-drive-touch-btn--gas" type="button">GAS</button>
+    <button id="touch-brake" class="genz-drive-touch-btn genz-drive-touch-btn--brake" type="button">BRK</button>
+  </div>
+  <div class="genz-drive-pad genz-drive-steer" aria-label="Steering">
+    <button id="touch-left" class="genz-drive-touch-btn genz-drive-touch-btn--steer" type="button" aria-label="Steer left">◀</button>
+    <button id="touch-right" class="genz-drive-touch-btn genz-drive-touch-btn--steer" type="button" aria-label="Steer right">▶</button>
   </div>
 </div>
-<div id="mobile-drive-controls" class="genz-drive-touch-layer" data-joystick-side="left" aria-label="Mobile joystick driving controls">
-  <div id="drive-joystick-zone" class="genz-drive-joystick-zone" aria-label="Drag joystick to steer, gas, or brake"></div>
-  <div id="drive-joystick" class="genz-drive-joystick" aria-hidden="true">
-    <span id="drive-joystick-knob" class="genz-drive-joystick-knob"></span>
+<div id="phone">
+  <div class="phone-hand" aria-hidden="true"><span class="phone-thumb"></span></div>
+  <div class="phone-side phone-side--left" aria-hidden="true"></div>
+  <div class="phone-side phone-side--right" aria-hidden="true"></div>
+  <div class="phone-camera" aria-hidden="true"></div>
+  <div id="phone-screen">
+    <div class="statusbar"><span id="clock">9:41</span>
+      <span class="font-arcade accent text-[.62rem]">RAINBOT OS</span>
+      <span>📶 <span id="battery">87</span>% 🔋</span></div>
+    <div class="app-area">
+      <div id="view-feed" class="app-view active">
+        <div class="px-4 py-2 flex items-center justify-between border-b border-white/10">
+          <span class="font-arcade text-base accent">RainGram</span><span class="text-[.6rem] text-white/40">scroll = 💰</span></div>
+        <div id="feed-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-3"></div>
+      </div>
+      <div id="view-music" class="app-view items-center justify-center text-center px-6">
+        <div id="album-art" class="w-28 h-28 rounded-2xl mb-3 flex items-center justify-center text-5xl shadow-2xl" style="background:linear-gradient(135deg,#4ea3ff,#2f6fd0)">🎧</div>
+        <div id="song-title" class="font-arcade text-base">Loading vibes…</div>
+        <div id="song-artist" class="text-sm text-white/50 mb-3">—</div>
+        <div class="w-full h-1.5 rounded-full bg-white/10 overflow-hidden mb-4"><div id="song-progress" class="h-full" style="width:30%;background:var(--accent)"></div></div>
+        <div class="flex items-center gap-6 text-2xl"><button onclick="Phone.prevSong()">⏮️</button><button onclick="Phone.togglePlay()" id="play-btn" class="text-3xl">⏸️</button><button onclick="Phone.nextSong()" class="text-3xl">⏭️</button></div>
+        <div class="text-[.66rem] text-white/40 mt-3">Tap ⏭️ for points (and chaos)</div>
+      </div>
+      <div id="view-chat" class="app-view">
+        <div class="px-4 py-2 border-b border-white/10 flex items-center gap-2"><span class="text-xl">🦆</span>
+          <div><div class="font-bold leading-none text-sm">Duck Dealer</div><div class="text-[.56rem] text-green-400">online</div></div></div>
+        <div id="chat-list" class="no-bar flex-1 overflow-y-scroll px-3 py-3 space-y-2 text-sm"></div>
+        <div id="quick-replies" class="flex flex-wrap gap-2 p-3 border-t border-white/10"></div>
+      </div>
+    </div>
+    <div class="dock"><button data-app="feed" class="active" onclick="Phone.switchApp('feed')">📱</button>
+      <button data-app="music" onclick="Phone.switchApp('music')">🎵</button>
+      <button data-app="chat" onclick="Phone.switchApp('chat')">💬</button></div>
   </div>
 </div>
 <div id="flash"></div>
@@ -542,7 +542,7 @@
     <span class="pill rounded-lg px-3 py-1"><kbd>W</kbd> gas</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>S</kbd> brake</span>
     <span class="pill rounded-lg px-3 py-1"><kbd>A</kbd><kbd>D</kbd> full wheel</span>
-    <span class="pill rounded-lg px-3 py-1">Mobile invisible joystick</span>
+    <span class="pill rounded-lg px-3 py-1">Mobile: gas/brake left · steer right</span>
     <span class="pill rounded-lg px-3 py-1">👆 phone = bigger points farther in</span>
   </div>
   <button class="btn-neon" onclick="Game.start()">START DRIVING ▶</button>
@@ -602,12 +602,8 @@
             <kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> rotate the wheel.
             Hold left/right to wind the wheel through multiple turns.
           </p>
-          <div class="genz-thumb-options" aria-label="Mobile joystick thumb side">
-            <button class="btn btn--ghost" id="btn-joystick-left" type="button">Left thumb</button>
-            <button class="btn btn--ghost" id="btn-joystick-right" type="button">Right thumb</button>
-          </div>
           <p class="genz-side-note">
-            Mobile: drag on your chosen screen edge. Up is gas, down is brake, sideways steers.
+            Mobile: gas/brake on the left, steer on the right — use a second finger on the phone at the same time.
           </p>
         </div>
 
@@ -1277,8 +1273,13 @@ const Game = (() => {
   let speed=0, invulnTimer=0, distSinceSpawn=0, trafficTimer=0, combo=1, comboTimer=0, battery=87, lastT=0;
   let wheelAngle=0, carHeading=0, lateralV=0, offRoadTimer=0;
   const keys={left:false,right:false,gas:false,brake:false};
-  const joystick={active:false,x:0,y:0,side:'left'};
-  const JOYSTICK_SIDE_KEY='rainbot_genz_drive_joystick_side';
+  const touchHeld={gas:new Set(),brake:new Set(),left:new Set(),right:new Set()};
+  const TOUCH_BTN_IDS=['touch-gas','touch-brake','touch-left','touch-right'];
+  const TOUCH_KEY_BY_ID={ 'touch-gas':'gas', 'touch-brake':'brake', 'touch-left':'left', 'touch-right':'right' };
+  function touchActive(key){ return touchHeld[key].size>0; }
+  function driveGas(){ return keys.gas||touchActive('gas'); }
+  function driveBrake(){ return keys.brake||touchActive('brake'); }
+  function driveSteer(){ return (keys.right||touchActive('right')?1:0)-(keys.left||touchActive('left')?1:0); }
 
   const $=id=>document.getElementById(id);
   const show=id=>$(id).classList.remove('hidden'); const hide=id=>$(id).classList.add('hidden');
@@ -1286,8 +1287,8 @@ const Game = (() => {
   const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
   const moveToward=(value,target,step)=>Math.abs(target-value)<=step?target:value+Math.sign(target-value)*step;
   const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
-  function gasPressure(){ return keys.gas ? 1 : clamp(-joystick.y,0,1); }
-  function brakePressure(){ return keys.brake ? 1 : clamp(joystick.y,0,1); }
+  function gasPressure(){ return driveGas() ? 1 : 0; }
+  function brakePressure(){ return driveBrake() ? 1 : 0; }
   function trafficIntensity(){
     const scoreMix=clamp(score/CONFIG.trafficScoreFull,0,1);
     return clamp(Math.sqrt(scoreMix)+levelIdx*0.05,0,1);
@@ -1322,10 +1323,6 @@ const Game = (() => {
     root.dataset.city=cityMix().toFixed(3);
     root.dataset.oncoming=traffic.oncoming;
     root.dataset.away=traffic.away;
-    root.dataset.joystickActive=joystick.active?'1':'0';
-    root.dataset.joystickX=joystick.x.toFixed(3);
-    root.dataset.joystickY=joystick.y.toFixed(3);
-    root.dataset.joystickSide=joystick.side;
   }
 
   function bumpCombo(){ comboTimer=CONFIG.comboWindow; combo=Math.min(CONFIG.comboMax,combo+1); }
@@ -1424,7 +1421,7 @@ const Game = (() => {
     });
   }
   function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; totalDistance=0; speed=0; lateralV=0; carHeading=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; trafficTimer=0; invulnTimer=0; combo=1; comboTimer=0; battery=87; objectiveToastTimer=0; impactWarningTimer=0; lastPhoneVibeGain=0;
-    Scene3D.clearTraffic(); Scene3D.seedTraffic(trafficIntensity()); Scene3D.setPlayerX(0); Scene3D.resetMotionTrack(); Scene3D.setHeading(0); keys.left=keys.right=keys.gas=keys.brake=false; resetJoystickInput();
+    Scene3D.clearTraffic(); Scene3D.seedTraffic(trafficIntensity()); Scene3D.setPlayerX(0); Scene3D.resetMotionTrack(); Scene3D.setHeading(0); keys.left=keys.right=keys.gas=keys.brake=false; resetTouchControls();
     hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); $('objective-toast')?.classList.remove('show'); syncWheelVisual(); updateHUD(); state=STATE.PLAY;
     const canvas=document.getElementById('scene-canvas');
     if(canvas&&canvas.focus) canvas.focus({preventScroll:true});
@@ -1465,6 +1462,7 @@ const Game = (() => {
     else if(k==='arrowup'||k==='w'){ keys.gas=down; e.preventDefault(); }
     else if(k==='arrowdown'||k==='s'){ keys.brake=down; e.preventDefault(); } }
 
+  const coarsePointer=window.matchMedia('(hover:none) and (pointer:coarse)');
   function bindHoldButton(id,key){
     const button=$(id);
     if(!button) return;
@@ -1477,95 +1475,60 @@ const Game = (() => {
     };
     button.addEventListener('pointerdown',event=>{
       set(true,event);
-      if(button.setPointerCapture){ try{ button.setPointerCapture(event.pointerId); }catch(_){} }
+      if(!coarsePointer.matches&&button.setPointerCapture){ try{ button.setPointerCapture(event.pointerId); }catch(_){} }
     });
     ['pointerup','pointerleave','pointercancel','lostpointercapture'].forEach(type=>button.addEventListener(type,event=>set(false,event)));
   }
 
-  function resetJoystickInput(){
-    joystick.active=false; joystick.x=0; joystick.y=0;
-    const layer=$('mobile-drive-controls');
-    const knob=$('drive-joystick-knob');
-    if(layer) layer.classList.remove('is-active');
-    if(knob) knob.style.transform='translate(-50%,-50%)';
+  function resetTouchControls(){
+    Object.values(touchHeld).forEach(set=>set.clear());
+    TOUCH_BTN_IDS.forEach(id=>{ const btn=$(id); if(btn) btn.classList.remove('is-held'); });
   }
 
-  function setJoystickSide(side){
-    joystick.side=side==='right'?'right':'left';
-    const layer=$('mobile-drive-controls');
-    if(layer) layer.dataset.joystickSide=joystick.side;
-    const left=$('btn-joystick-left');
-    const right=$('btn-joystick-right');
-    if(left) left.classList.toggle('is-active',joystick.side==='left');
-    if(right) right.classList.toggle('is-active',joystick.side==='right');
-    resetJoystickInput();
-    try{ localStorage.setItem(JOYSTICK_SIDE_KEY,joystick.side); }catch(_){}
+  function setTouchHold(key,down,pointerId,button){
+    const held=touchHeld[key];
+    if(down) held.add(pointerId); else held.delete(pointerId);
+    if(button) button.classList.toggle('is-held',held.size>0);
   }
 
-  function loadJoystickSide(){
-    let saved='left';
-    try{ saved=localStorage.getItem(JOYSTICK_SIDE_KEY)||'left'; }catch(_){}
-    setJoystickSide(saved);
-  }
-
-  function bindJoystickOptions(){
-    const left=$('btn-joystick-left');
-    const right=$('btn-joystick-right');
-    if(left) left.addEventListener('click',()=>setJoystickSide('left'));
-    if(right) right.addEventListener('click',()=>setJoystickSide('right'));
-    loadJoystickSide();
-  }
-
-  function bindMobileJoystick(){
-    const layer=$('mobile-drive-controls');
-    const zone=$('drive-joystick-zone');
-    const visual=$('drive-joystick');
-    const knob=$('drive-joystick-knob');
-    if(!layer||!zone||!visual||!knob) return;
-    let activePointer=null, originX=0, originY=0;
-    const radius=38;
-    const placeJoystick=event=>{
-      const layerRect=layer.getBoundingClientRect();
-      const zoneRect=zone.getBoundingClientRect();
-      const half=38;
-      originX=joystick.side==='right' ? zoneRect.right-half : zoneRect.left+half;
-      originY=clamp(event.clientY,zoneRect.top+half,zoneRect.bottom-half);
-      visual.style.left=(originX-layerRect.left)+'px';
-      visual.style.top=(originY-layerRect.top)+'px';
-    };
-    const moveJoystick=event=>{
-      const dx=event.clientX-originX;
-      const dy=event.clientY-originY;
-      const dist=Math.hypot(dx,dy);
-      const scale=dist>radius ? radius/dist : 1;
-      const px=dx*scale;
-      const py=dy*scale;
-      joystick.x=clamp(px/radius,-1,1);
-      joystick.y=clamp(py/radius,-1,1);
-      knob.style.transform='translate(calc(-50% + '+px.toFixed(1)+'px), calc(-50% + '+py.toFixed(1)+'px))';
-    };
-    const endJoystick=event=>{
-      if(activePointer!==null && event.pointerId!==activePointer) return;
-      activePointer=null;
-      resetJoystickInput();
-    };
-    zone.addEventListener('pointerdown',event=>{
-      event.preventDefault();
-      activePointer=event.pointerId;
-      joystick.active=true;
-      layer.classList.add('is-active');
-      placeJoystick(event);
-      moveJoystick(event);
-      if(zone.setPointerCapture){ try{ zone.setPointerCapture(event.pointerId); }catch(_){} }
-      const canvas=document.getElementById('scene-canvas');
-      if(canvas) canvas.focus();
+  function bindMobileHoldButton(id,key){
+    const button=$(id);
+    if(!button) return;
+    button.addEventListener('pointerdown',event=>{
+      event.stopPropagation();
+      setTouchHold(key,true,event.pointerId,button);
     });
-    zone.addEventListener('pointermove',event=>{
-      if(event.pointerId!==activePointer) return;
-      event.preventDefault();
-      moveJoystick(event);
+    ['pointerup','pointercancel'].forEach(type=>{
+      button.addEventListener(type,event=>{
+        event.stopPropagation();
+        setTouchHold(key,false,event.pointerId,button);
+      });
     });
-    ['pointerup','pointercancel','lostpointercapture'].forEach(type=>zone.addEventListener(type,endJoystick));
+  }
+
+  function bindMobileTouchControls(){
+    bindMobileHoldButton('touch-gas','gas');
+    bindMobileHoldButton('touch-brake','brake');
+    bindMobileHoldButton('touch-left','left');
+    bindMobileHoldButton('touch-right','right');
+    window.addEventListener('pointerup',event=>{
+      TOUCH_BTN_IDS.forEach(id=>{
+        const key=TOUCH_KEY_BY_ID[id];
+        if(touchHeld[key].delete(event.pointerId) && touchHeld[key].size===0){
+          const btn=$(id);
+          if(btn) btn.classList.remove('is-held');
+        }
+      });
+    });
+    window.addEventListener('pointercancel',event=>{
+      TOUCH_BTN_IDS.forEach(id=>{
+        const key=TOUCH_KEY_BY_ID[id];
+        if(touchHeld[key].delete(event.pointerId) && touchHeld[key].size===0){
+          const btn=$(id);
+          if(btn) btn.classList.remove('is-held');
+        }
+      });
+    });
   }
 
   function bindSideControls(){
@@ -1577,8 +1540,7 @@ const Game = (() => {
     bindHoldButton('btn-drive-brake','brake');
     bindHoldButton('btn-drive-left','left');
     bindHoldButton('btn-drive-right','right');
-    bindJoystickOptions();
-    bindMobileJoystick();
+    bindMobileTouchControls();
   }
 
   function bindFullscreen(){
@@ -1627,9 +1589,7 @@ const Game = (() => {
       if(gas>0.08) speed+=CONFIG.accel*gas*dt; else if(brake>0.08) speed-=CONFIG.brakePower*brake*dt; else speed-=CONFIG.drag*dt;
       speed=clamp(speed,0,lv.maxSpeed);
 
-      const keySteer=(keys.right?1:0)-(keys.left?1:0);
-      const joystickSteer=Math.abs(joystick.x)>0.12 ? joystick.x : 0;
-      const steerInput=keySteer||joystickSteer;
+      const steerInput=driveSteer();
       if(steerInput){
         wheelAngle=clamp(wheelAngle+steerInput*CONFIG.wheelTurnRateDeg*dt,-CONFIG.wheelLockDeg,CONFIG.wheelLockDeg);
       } else {
@@ -1731,7 +1691,7 @@ const Game = (() => {
     Phone.tickStatus(); setInterval(Phone.tickStatus,10000); requestAnimationFrame(loop);
   }
   function debug(){
-    return { state, speed, distance, totalDistance, levelIdx, score, wheelAngle, carHeading, heading:wrapAngle(carHeading), lateralV, playerX:Scene3D.getPlayerX(), joystick:{active:joystick.active,x:joystick.x,y:joystick.y,side:joystick.side}, trafficTarget:trafficTarget(), trafficIntensity:trafficIntensity(), city:cityMix(), traffic:Scene3D.trafficCounts() };
+    return { state, speed, distance, totalDistance, levelIdx, score, wheelAngle, carHeading, heading:wrapAngle(carHeading), lateralV, playerX:Scene3D.getPlayerX(), keys:{...keys}, trafficTarget:trafficTarget(), trafficIntensity:trafficIntensity(), city:cityMix(), traffic:Scene3D.trafficCounts() };
   }
   return { init, start, next, restart, addScore, phoneVibe, isPlaying, debug, STATE };
 })();

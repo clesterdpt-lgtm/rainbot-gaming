@@ -13,7 +13,7 @@
 <!-- ===== Fonts ===== -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-12" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260618-genz-drive-13" />
 
 <style>
   /* =========================================================
@@ -699,17 +699,33 @@ const CONFIG = {
 
   // traffic
   spawnZ: -165, despawnZ: 24, hitInvuln: 1.0,
-  trafficStartCount: 2,
+  trafficStartCount: 1,
   trafficMaxCount: 17,
-  trafficScoreFull: 12500,
-  trafficSpawnTimeMax: 4.8,
+  trafficSpawnTimeMax: 7.5,   // long gaps between cars early on
   trafficSpawnTimeMin: 1.15,
   trafficSpawnDistanceMinScale: 0.42,
 
+  // ── DIFFICULTY RAMP ──────────────────────────────────────────────
+  // Everything (traffic, obstacles, extra lanes, the city) scales off how far
+  // you've driven, NOT score — so the world stays calm at the start and only
+  // reaches full chaos after rampDistance metres (~5 min of driving).
+  rampDistance: 12500,
+  cityRampStart: 0.42, cityRampEnd: 0.88,      // fraction of the ramp where country→city happens
+  obstacleRampStart: 0.16, obstacleRampEnd: 0.95,
+
   // scenery (country / small town)
-  houseCount: 16, treeCount: 30, hillCount: 7, cityBuildingCount: 24, streetLightCount: 18, worldLength: 300,
-  cityScoreStart: 900,
-  cityScoreFull: 9500,
+  houseCount: 20, treeCount: 42, hillCount: 9, bushCount: 26, propCount: 11,
+  cityBuildingCount: 28, streetLightCount: 20, worldLength: 380,
+  scenerySpawnMinZ: 205,   // recycled scenery always re-enters at least this far ahead (no pop-in on top of you)
+
+  // road obstacles to dodge ON the pavement (cones, potholes, stray ducks…)
+  obstacleMaxCount: 7,
+  obstacleVibeDamage: 12,
+  obstacleSeenTime: 0.35,
+
+  // road / lanes — starts as a simple 2-lane road, opens to 4 lanes once busy
+  baseLaneCount: 2,        // 1 each way to start
+  maxLaneCount: 4,         // 2 each way at full traffic
 
   // scoring
   comboWindow: 2.2, comboMax: 9, basePoints: 30, scrollPoints: 7,
@@ -717,10 +733,11 @@ const CONFIG = {
   objectiveBonus:[420, 680, 1100],
 
   // LEVELS  (maxSpeed = top speed; curveMul = how curvy this leg is)
+  // distances are long so a full run is ~5 min and you actually live through the ramp
   levels: [
-    { name:"Taco Bell",     emoji:"🌮", distance:650,  maxSpeed:50, spawnEveryM:55, curveMul:0.8, blurb:"3rd meal acquired." },
-    { name:"Pine Hollow",   emoji:"🏡", distance:1000, maxSpeed:64, spawnEveryM:50, curveMul:1.2, blurb:"The whole town waved at you." },
-    { name:"Hilltop Farm",  emoji:"🚜", distance:1500, maxSpeed:78, spawnEveryM:44, curveMul:1.7, blurb:"You hugged every bend. Mostly." },
+    { name:"Taco Bell",     emoji:"🌮", distance:3000, maxSpeed:50, spawnEveryM:55, curveMul:0.8, blurb:"3rd meal acquired." },
+    { name:"Pine Hollow",   emoji:"🏡", distance:4500, maxSpeed:64, spawnEveryM:50, curveMul:1.2, blurb:"The whole town waved at you." },
+    { name:"Hilltop Farm",  emoji:"🚜", distance:6500, maxSpeed:78, spawnEveryM:44, curveMul:1.7, blurb:"You hugged every bend. Mostly." },
   ],
 
   songs: [
@@ -761,9 +778,16 @@ const SFX = (() => {
 ================================================================= */
 const Scene3D = (() => {
   let renderer, scene, camera, roadTex, grassTex, road, roadX0, roadDepth, canvas, viewportEl, resizeObserver;
+  let grass, grassX0, grassDepth, laneLines, laneTex;
   const traffic=[], houses=[], trees=[], hills=[], cityBuildings=[], streetLights=[], sidewalks=[];
+  const obstacles=[], bushes=[], props=[];
   let player={x:0}, D=0, cMul=1, cityProgress=0;
   const CAM_Z=10, CAM_Y=5.0, f=CONFIG.curveK ? CONFIG.curveFreq : 0.013;
+  const ROAD_SHOULDER=5.5;                               // gravel shoulder each side (visual, blends to grass)
+  const ROAD_MESH_HALF=CONFIG.roadHalfWidth+ROAD_SHOULDER;
+  const GRASS_SIZE=1000, GRASS_REPEAT=50;
+  // texture scroll factors tuned so road, gravel and grass all travel at the SAME apparent speed as the scenery
+  const ROAD_SCROLL=26/700, GRASS_SCROLL=GRASS_REPEAT/GRASS_SIZE;
 
   /* lateral offset of the road centre at depth `d` ahead — the double integral of a
      sine-wave curvature, so curvature varies along the road and the bends travel toward you. */
@@ -785,25 +809,58 @@ const Scene3D = (() => {
     x.globalAlpha=1; return new THREE.CanvasTexture(c);
   }
   function makeAsphaltTexture(){
+    // texture spans the whole road mesh (paved centre + gravel shoulders that blend into the grass)
     const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
-    x.fillStyle='#41434a'; x.fillRect(0,0,128,256);
-    for(let i=0;i<2200;i++){ const v=Math.random()*40-20; x.fillStyle=`rgba(${64+v|0},${66+v|0},${72+v|0},.5)`; x.fillRect(Math.random()*128,Math.random()*256,2,2); }
-    x.fillStyle='#d7d4c7'; x.fillRect(8,0,5,256); x.fillRect(115,0,5,256);      // edge lines
-    x.fillStyle='#e9e3c8'; for(let y=0;y<256;y+=50){ x.fillRect(61,y,5,28); }    // dashed centre
+    const PX=u=>64+u*(64/ROAD_MESH_HALF);            // world-x → pixel
+    const pavedL=PX(-CONFIG.roadHalfWidth), pavedR=PX(CONFIG.roadHalfWidth);
+    // gravel shoulders fill first
+    x.fillStyle='#6f6557'; x.fillRect(0,0,128,256);
+    for(let i=0;i<1400;i++){ const v=Math.random()*46-23; x.fillStyle=`rgba(${118+v|0},${104+v|0},${84+v|0},.55)`; x.fillRect(Math.random()*128,Math.random()*256,2,2); }
+    // asphalt slab
+    x.fillStyle='#41434a'; x.fillRect(pavedL,0,pavedR-pavedL,256);
+    for(let i=0;i<2600;i++){ const v=Math.random()*40-20; x.fillStyle=`rgba(${64+v|0},${66+v|0},${72+v|0},.5)`; x.fillRect(pavedL+Math.random()*(pavedR-pavedL),Math.random()*256,2,2); }
+    // tar-crack streaks for texture
+    x.strokeStyle='rgba(20,20,24,.5)'; x.lineWidth=1;
+    for(let i=0;i<10;i++){ const sx=pavedL+Math.random()*(pavedR-pavedL); x.beginPath(); x.moveTo(sx,Math.random()*256); x.lineTo(sx+(Math.random()-.5)*10,Math.random()*256); x.stroke(); }
+    // solid white edge lines (paved edge, world ±roadHalfWidth)
+    x.fillStyle='#d9d6c9'; x.fillRect(pavedL-2,0,4,256); x.fillRect(pavedR-2,0,4,256);
+    // centre double-yellow (always present — this is the base 2-lane road)
+    x.fillStyle='#e9c84a'; x.fillRect(PX(-1.4)-2,0,4,256); x.fillRect(PX(1.4)-2,0,4,256);
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,26); t.anisotropy=4; return t;
+  }
+  // transparent overlay drawn on top of the road; its dashed ±6 dividers fade in
+  // as extra lanes open up, turning the 2-lane road into a 4-lane one.
+  function makeLaneDividerTexture(){
+    const c=document.createElement('canvas'); c.width=128; c.height=256; const x=c.getContext('2d');
+    const PX=u=>64+u*(64/ROAD_MESH_HALF);
+    x.clearRect(0,0,128,256);
+    x.fillStyle='#eef0e6';
+    [PX(-6),PX(6)].forEach(dx=>{ for(let y=0;y<256;y+=50){ x.fillRect(dx-2,y,4,28); } });
     const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(1,26); t.anisotropy=4; return t;
   }
   function makeGrassTexture(){
     const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
-    x.fillStyle='#5c8a40'; x.fillRect(0,0,128,128);
-    for(let i=0;i<3200;i++){ const g=Math.random()*46-23; x.fillStyle=`rgba(${92+g|0},${138+g|0},${64+g|0},.6)`; x.fillRect(Math.random()*128,Math.random()*128,2,2); }
-    for(let i=0;i<180;i++){
-      const g=Math.random()*38-18;
-      x.strokeStyle=`rgba(${102+g|0},${152+g|0},${72+g|0},.42)`;
-      x.lineWidth=1+Math.random()*1.7;
-      const px=Math.random()*128, py=Math.random()*128;
-      x.beginPath(); x.moveTo(px,py); x.lineTo(px+(Math.random()-.5)*4,py+6+Math.random()*14); x.stroke();
+    // soft mottled base so the scroll reads as a connected field instead of swimming dots
+    const base=x.createLinearGradient(0,0,128,128);
+    base.addColorStop(0,'#5f8d43'); base.addColorStop(.5,'#578439'); base.addColorStop(1,'#638f47');
+    x.fillStyle=base; x.fillRect(0,0,128,128);
+    for(let i=0;i<26;i++){ // broad tone patches (low contrast)
+      const g=Math.random()*20-10; x.fillStyle=`rgba(${92+g|0},${136+g|0},${66+g|0},.16)`;
+      x.beginPath(); x.ellipse(Math.random()*128,Math.random()*128,8+Math.random()*22,7+Math.random()*16,Math.random()*3,0,7); x.fill();
     }
-    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(70,70); return t;
+    for(let i=0;i<1500;i++){ const g=Math.random()*30-15; x.fillStyle=`rgba(${94+g|0},${138+g|0},${66+g|0},.32)`; x.fillRect(Math.random()*128,Math.random()*128,2,2); }
+    for(let i=0;i<120;i++){
+      const g=Math.random()*30-14;
+      x.strokeStyle=`rgba(${104+g|0},${150+g|0},${74+g|0},.3)`;
+      x.lineWidth=1+Math.random()*1.4;
+      const px=Math.random()*128, py=Math.random()*128;
+      x.beginPath(); x.moveTo(px,py); x.lineTo(px+(Math.random()-.5)*4,py+5+Math.random()*11); x.stroke();
+    }
+    // occasional wildflowers + dirt specks for interest
+    const FLOWERS=['#f4d35e','#ef8aa8','#e8f0f2','#c9a3ff'];
+    for(let i=0;i<22;i++){ x.fillStyle=FLOWERS[(Math.random()*FLOWERS.length)|0]; x.beginPath(); x.arc(Math.random()*128,Math.random()*128,1+Math.random()*1.4,0,7); x.fill(); }
+    for(let i=0;i<10;i++){ x.fillStyle='rgba(120,98,70,.28)'; x.beginPath(); x.arc(Math.random()*128,Math.random()*128,3+Math.random()*5,0,7); x.fill(); }
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(GRASS_REPEAT,GRASS_REPEAT); return t;
   }
   function makeMemeTexture(emoji,bg){ const c=document.createElement('canvas'); c.width=128; c.height=128; const x=c.getContext('2d');
     x.fillStyle=bg; x.fillRect(0,0,128,128); x.font='90px serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(emoji,64,70); return new THREE.CanvasTexture(c); }
@@ -811,12 +868,23 @@ const Scene3D = (() => {
   /* ---------- traffic vehicles ---------- */
   const CAR_COLORS=[0xe64d3d,0x2f80ed,0xf2c94c,0x27ae60,0xf7f7f2,0x9b51e0,0x242a33];
   const clampScene=(v,a,b)=>v<a?a:(v>b?b:v);
-  function trafficLanes(){
-    const inner=CONFIG.roadHalfWidth*0.25, outer=CONFIG.roadHalfWidth*0.62;
-    return [
-      {x:-outer,oncoming:true},  {x:-inner,oncoming:true},
-      {x: inner,oncoming:false}, {x: outer,oncoming:false},
-    ];
+  function laneCountFor(intensity){
+    const span=CONFIG.maxLaneCount-CONFIG.baseLaneCount;
+    let n=CONFIG.baseLaneCount+Math.round(clampScene(intensity,0,1)*span);
+    if(n%2) n++;                                   // keep even so each direction gets equal lanes
+    return clampScene(n,2,CONFIG.maxLaneCount);
+  }
+  // lanes fan out from the centre line toward the edge; more open up as the road gets busy
+  function trafficLanes(intensity=1){
+    const perSide=laneCountFor(intensity)/2;
+    const inner=CONFIG.roadHalfWidth*0.22, outer=CONFIG.laneLimit*0.92;
+    const lanes=[];
+    for(let i=0;i<perSide;i++){
+      const t=perSide===1 ? 0.5 : i/(perSide-1);
+      const x=inner+(outer-inner)*t;
+      lanes.push({x:-x,oncoming:true},{x:x,oncoming:false});
+    }
+    return lanes;
   }
   function createTrafficVehicle(oncoming=false){
     const S=CONFIG.trafficScale;
@@ -890,6 +958,14 @@ const Scene3D = (() => {
     o.userData.hit=true;
     events[kind]=(events[kind]||0)+1;
   }
+  function obstacleCollides(playerX,o){
+    if(!o.userData.active||o.userData.hit) return false;
+    if((o.userData.seenTimer||0)<CONFIG.obstacleSeenTime) return false;
+    const range=collisionZRange();
+    const z=o.position.z, zPrev=o.userData.prevZ ?? z;
+    if(!overlapsZRange(Math.min(z,zPrev),Math.max(z,zPrev),range)) return false;
+    return Math.abs(o.userData.lane-playerX)<(o.userData.hitRadius ?? 1);
+  }
   function markScenerySeen(o,dt,playerX){
     const sameSide=Math.sign(playerX||o.userData.lane)===Math.sign(o.userData.lane);
     const forward=o.position.z<CAM_Z-CONFIG.sceneryCollisionFarAhead && o.position.z>CAM_Z-CONFIG.sceneryVisibilityLead;
@@ -901,13 +977,23 @@ const Scene3D = (() => {
 
   /* ---------- country scenery ---------- */
   const pick=a=>a[(Math.random()*a.length)|0];
-  const WALLS=[0xeae6dc,0xd8c9a8,0xb9cdd6,0xc8b89a,0xded6c4,0xcf8f6e];
-  const ROOFS=[0x6b4f3a,0x4a4a4e,0x7a3b30,0x554b42];
+  const WALLS=[0xeae6dc,0xd8c9a8,0xb9cdd6,0xc8b89a,0xded6c4,0xcf8f6e,0xa9c7b0,0xe6b89a];
+  const ROOFS=[0x6b4f3a,0x4a4a4e,0x7a3b30,0x554b42,0x3f5a6e,0x8a5a3a];
+  // re-entry depth: recycled scenery always reappears far down the road (never on top of you)
+  function farZ(){ return -(CONFIG.scenerySpawnMinZ + Math.random()*(CONFIG.worldLength-CONFIG.scenerySpawnMinZ)); }
+  function spreadZ(){ return -Math.random()*CONFIG.worldLength; }
+  function pickZ(far){ return far ? farZ() : spreadZ(); }
+
   function createHouse(){
-    const g=new THREE.Group(); const w=3+Math.random()*2.4, h=2.2+Math.random()*1.4, d=3+Math.random()*2.4;
+    const g=new THREE.Group(); const w=3+Math.random()*2.6, h=2.2+Math.random()*1.6, d=3+Math.random()*2.6;
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:pick(WALLS),roughness:.92})); body.position.y=h/2;
-    const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.8, h*0.85, 4),new THREE.MeshStandardMaterial({color:pick(ROOFS),roughness:.9}));
+    const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.82, h*0.85, 4),new THREE.MeshStandardMaterial({color:pick(ROOFS),roughness:.9}));
     roof.position.y=h+h*0.42; roof.rotation.y=Math.PI/4; g.add(body,roof);
+    const door=new THREE.Mesh(new THREE.BoxGeometry(w*0.22,h*0.5,.1),new THREE.MeshStandardMaterial({color:pick([0x5b4129,0x3f5a6e,0x7a3b30]),roughness:.8}));
+    door.position.set(0,h*0.25,d/2+.06); g.add(door);
+    const winMat=new THREE.MeshStandardMaterial({color:0xffe9a8,emissive:0xffcf6a,emissiveIntensity:.32,roughness:.5});
+    [-1,1].forEach(s=>{ const win=new THREE.Mesh(new THREE.BoxGeometry(w*0.2,h*0.26,.08),winMat); win.position.set(s*w*0.27,h*0.62,d/2+.06); g.add(win); });
+    if(Math.random()<0.6){ const ch=new THREE.Mesh(new THREE.BoxGeometry(.42,1.1,.42),new THREE.MeshStandardMaterial({color:0x7a3b30,roughness:.9})); ch.position.set(w*0.26,h+0.85,-d*0.15); g.add(ch); }
     g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.55;
     return g;
   }
@@ -916,6 +1002,10 @@ const Scene3D = (() => {
     const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color:0x9e3b32,roughness:.9})); body.position.y=h/2;
     const roof=new THREE.Mesh(new THREE.ConeGeometry(Math.max(w,d)*0.72, h*0.7, 4),new THREE.MeshStandardMaterial({color:0x3c3c40,roughness:.9}));
     roof.position.y=h+h*0.34; roof.rotation.y=Math.PI/4; g.add(body,roof);
+    // white barn-door cross trim
+    const trim=new THREE.MeshStandardMaterial({color:0xeae6dc,roughness:.8});
+    const v=new THREE.Mesh(new THREE.BoxGeometry(.22,h*0.7,.08),trim); v.position.set(0,h*0.42,d/2+.05);
+    const hz=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,.22,.08),trim); hz.position.set(0,h*0.42,d/2+.05); g.add(v,hz);
     if(Math.random()<0.6){ // attach a silo
       const silo=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,h+2,12),new THREE.MeshStandardMaterial({color:0xb9bdc2,roughness:.6})); silo.position.set(w/2+1.4,(h+2)/2,0);
       const dome=new THREE.Mesh(new THREE.SphereGeometry(1.1,12,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:.6})); dome.position.set(w/2+1.4,h+2,0);
@@ -923,30 +1013,195 @@ const Scene3D = (() => {
     g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.58;
     return g;
   }
-  function placeStructure(b){ const side=Math.random()<.5?-1:1;
+  function placeStructure(b,far){ const side=Math.random()<.5?-1:1;
     b.userData.solid=Math.random()<0.12;
     b.userData.lane=side*(CONFIG.roadHalfWidth+(b.userData.solid?34:24)+Math.random()*(b.userData.solid?28:34));
-    b.position.z=-Math.random()*CONFIG.worldLength; b.rotation.y=(Math.random()-.5)*0.7; b.userData.hit=false; b.userData.seenTimer=0; b.userData.prevZ=b.position.z; }
-  function createStructures(){ for(let i=0;i<CONFIG.houseCount;i++){ const s=Math.random()<0.32?createBarn():createHouse(); placeStructure(s); scene.add(s); houses.push(s); } }
+    b.position.z=pickZ(far); b.rotation.y=(Math.random()-.5)*0.7; b.userData.hit=false; b.userData.seenTimer=0; b.userData.prevZ=b.position.z; }
+  function createStructures(){ for(let i=0;i<CONFIG.houseCount;i++){ const s=Math.random()<0.32?createBarn():createHouse(); placeStructure(s,false); scene.add(s); houses.push(s); } }
 
   function createTree(){ const g=new THREE.Group();
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.32,2.2,7),new THREE.MeshStandardMaterial({color:0x5b4129,roughness:.9})); trunk.position.y=1.1; g.add(trunk);
-    if(Math.random()<0.5){ // pine
-      const fol=new THREE.MeshStandardMaterial({color:0x2f6b32,roughness:.9});
-      [[1.7,2.6,3],[1.3,2.2,4.3],[.9,1.8,5.5]].forEach(([r,h,y])=>{ const c=new THREE.Mesh(new THREE.ConeGeometry(r,h,9),fol); c.position.y=y; g.add(c); });
-    } else { // round / deciduous
-      const fol=new THREE.MeshStandardMaterial({color:pick([0x3f8a3a,0x4f9a44,0x357a32]),roughness:.9});
+    const r=Math.random();
+    const trunkMat=new THREE.MeshStandardMaterial({color:pick([0x5b4129,0x6a4a2c,0x4f3a24]),roughness:.9});
+    if(r<0.38){ // pine
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.2,.32,2,7),trunkMat); trunk.position.y=1; g.add(trunk);
+      const fol=new THREE.MeshStandardMaterial({color:pick([0x2f6b32,0x27602b,0x356f38]),roughness:.9});
+      [[1.7,2.6,3],[1.3,2.2,4.3],[.9,1.8,5.5]].forEach(([rr,h,y])=>{ const c=new THREE.Mesh(new THREE.ConeGeometry(rr,h,9),fol); c.position.y=y; g.add(c); });
+    } else if(r<0.74){ // round / deciduous
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.24,.34,2.2,7),trunkMat); trunk.position.y=1.1; g.add(trunk);
+      const fol=new THREE.MeshStandardMaterial({color:pick([0x3f8a3a,0x4f9a44,0x357a32,0x5aa83f]),roughness:.9});
       const a=new THREE.Mesh(new THREE.SphereGeometry(1.7,10,9),fol); a.position.y=3.4; a.scale.y=1.05;
       const b2=new THREE.Mesh(new THREE.SphereGeometry(1.2,10,9),fol); b2.position.set(.9,2.9,.4);
-      const c2=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,9),fol); c2.position.set(-.8,3,-.3); g.add(a,b2,c2); }
+      const c2=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,9),fol); c2.position.set(-.8,3,-.3); g.add(a,b2,c2);
+    } else if(r<0.9){ // autumn / blossom — funny pop of colour
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.24,.34,2.2,7),trunkMat); trunk.position.y=1.1; g.add(trunk);
+      const fol=new THREE.MeshStandardMaterial({color:pick([0xe08a2e,0xd85f4f,0xf0b13a,0xef8aa8]),roughness:.9});
+      const a=new THREE.Mesh(new THREE.SphereGeometry(1.8,10,9),fol); a.position.y=3.5; a.scale.y=1.04;
+      const b2=new THREE.Mesh(new THREE.SphereGeometry(1.15,10,9),fol); b2.position.set(.85,2.9,.3); g.add(a,b2);
+    } else { // tall skinny poplar
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.18,.26,3,7),trunkMat); trunk.position.y=1.5; g.add(trunk);
+      const fol=new THREE.MeshStandardMaterial({color:pick([0x356f38,0x2f6b32]),roughness:.9});
+      const cone=new THREE.Mesh(new THREE.ConeGeometry(1.05,5.4,9),fol); cone.position.y=4.3; g.add(cone);
+    }
     return g; }
-  function placeTree(p){ const side=Math.random()<.5?-1:1; p.userData.solid=Math.random()<0.18; p.userData.lane=side*(CONFIG.roadHalfWidth+(p.userData.solid?27:15)+Math.random()*(p.userData.solid?24:28)); p.position.z=-Math.random()*CONFIG.worldLength; p.scale.setScalar(.8+Math.random()*.6); p.userData.kind='tree'; p.userData.hit=false; p.userData.seenTimer=0; p.userData.prevZ=p.position.z; p.userData.hitRadius=CONFIG.playerCarWidth*0.5+Math.max(.38,.45*p.scale.x); }
-  function createTrees(){ for(let i=0;i<CONFIG.treeCount;i++){ const t=createTree(); placeTree(t); scene.add(t); trees.push(t); } }
+  function placeTree(p,far){ const side=Math.random()<.5?-1:1; p.userData.solid=Math.random()<0.18; p.userData.lane=side*(CONFIG.roadHalfWidth+(p.userData.solid?27:14)+Math.random()*(p.userData.solid?24:30)); p.position.z=pickZ(far); p.scale.setScalar(.8+Math.random()*.7); p.rotation.y=Math.random()*Math.PI; p.userData.kind='tree'; p.userData.hit=false; p.userData.seenTimer=0; p.userData.prevZ=p.position.z; p.userData.hitRadius=CONFIG.playerCarWidth*0.5+Math.max(.38,.45*p.scale.x); }
+  function createTrees(){ for(let i=0;i<CONFIG.treeCount;i++){ const t=createTree(); placeTree(t,false); scene.add(t); trees.push(t); } }
+
+  /* ---------- shrubs / hedges (decorative, soften the road→grass edge) ---------- */
+  function createBush(){
+    const g=new THREE.Group();
+    const mat=new THREE.MeshStandardMaterial({color:pick([0x3f7a36,0x4a8a3e,0x356f32,0x59963f]),roughness:.95});
+    const n=2+(Math.random()*3|0);
+    for(let i=0;i<n;i++){ const r=.5+Math.random()*.6; const s=new THREE.Mesh(new THREE.SphereGeometry(r,8,6),mat); s.position.set((Math.random()-.5)*1.2,r*0.8,(Math.random()-.5)*1.2); g.add(s); }
+    if(Math.random()<0.25){ const FL=[0xf4d35e,0xef8aa8,0xe8f0f2,0xc9a3ff]; const f=new THREE.Mesh(new THREE.SphereGeometry(.16,6,5),new THREE.MeshStandardMaterial({color:pick(FL),emissive:pick(FL),emissiveIntensity:.2})); f.position.set((Math.random()-.5),1,(Math.random()-.5)); g.add(f); }
+    return g;
+  }
+  function placeBush(b,far){ const side=Math.random()<.5?-1:1; b.userData.solid=false; b.userData.kind='bush'; b.userData.lane=side*(CONFIG.roadHalfWidth+1.5+Math.random()*28); b.position.z=pickZ(far); b.scale.setScalar(.7+Math.random()*.9); }
+  function createBushes(){ for(let i=0;i<CONFIG.bushCount;i++){ const b=createBush(); placeBush(b,false); scene.add(b); bushes.push(b); } }
+
+  /* ---------- funny roadside props (billboards, giant duck, water tower, cows) ---------- */
+  function makeSignTexture(lines,bg,fg){
+    const c=document.createElement('canvas'); c.width=256; c.height=128; const x=c.getContext('2d');
+    x.fillStyle=bg; x.fillRect(0,0,256,128);
+    x.fillStyle='rgba(255,255,255,.14)'; x.fillRect(6,6,244,116);
+    x.fillStyle=fg; x.font='900 30px Inter, sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+    const arr=Array.isArray(lines)?lines:[lines]; const lh=36; const startY=64-(arr.length-1)*lh/2;
+    arr.forEach((ln,i)=>x.fillText(ln,128,startY+i*lh));
+    return new THREE.CanvasTexture(c);
+  }
+  const BILLBOARDS=[
+    {t:['HONK IF YOU','LOVE DUCKS 🦆'],bg:'#1c2a44',fg:'#ffe14c'},
+    {t:['TACO BELL','NEXT EXIT 🌮'],bg:'#5a2a8a',fg:'#ffffff'},
+    {t:['EYES ON ROAD','…or don\'t 💀'],bg:'#b5232a',fg:'#ffffff'},
+    {t:'FREE WIFI 📶',bg:'#0f5a3a',fg:'#aef5cf'},
+    {t:['U R DOING','GREAT BESTIE 💅'],bg:'#d44b8a',fg:'#ffffff'},
+    {t:['GAS · GRASS','· CLOUT'],bg:'#23252e',fg:'#7ec8ff'},
+    {t:["WORLD'S LARGEST",'RUBBER DUCK →'],bg:'#e0a52e',fg:'#1c1c1c'},
+    {t:['SLOW DOWN','🐢 vibes'],bg:'#1c5a8a',fg:'#ffffff'},
+    {t:['NEW DUCK','JUST DROPPED 🔥'],bg:'#2a2350',fg:'#ffd23a'},
+  ];
+  function createBillboard(){
+    const g=new THREE.Group(); const spec=pick(BILLBOARDS);
+    const postMat=new THREE.MeshStandardMaterial({color:0x4a4038,roughness:.8});
+    const p1=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,5,8),postMat); p1.position.set(-1.7,2.5,0);
+    const p2=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,5,8),postMat); p2.position.set(1.7,2.5,0); g.add(p1,p2);
+    const board=new THREE.Mesh(new THREE.BoxGeometry(5.6,2.8,.2),new THREE.MeshStandardMaterial({map:makeSignTexture(spec.t,spec.bg,spec.fg),roughness:.7,emissive:0x1a1a1a,emissiveIntensity:.25}));
+    board.position.y=5.2; g.add(board);
+    g.userData.face=true; g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+1.2;
+    return g;
+  }
+  function createGiantDuck(){
+    const g=new THREE.Group();
+    const y=new THREE.MeshStandardMaterial({color:0xffd23a,roughness:.55});
+    const body=new THREE.Mesh(new THREE.SphereGeometry(2.4,16,12),y); body.position.y=2.4; body.scale.set(1.2,1,1.35);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(1.4,16,12),y); head.position.set(0,4.7,1.3);
+    const beak=new THREE.Mesh(new THREE.ConeGeometry(.6,1.3,10),new THREE.MeshStandardMaterial({color:0xff8a2e,roughness:.6})); beak.position.set(0,4.6,2.7); beak.rotation.x=Math.PI/2;
+    const eyeMat=new THREE.MeshStandardMaterial({color:0x10131c});
+    const e1=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),eyeMat); e1.position.set(.55,5.1,2.25);
+    const e2=new THREE.Mesh(new THREE.SphereGeometry(.18,8,8),eyeMat); e2.position.set(-.55,5.1,2.25);
+    const tail=new THREE.Mesh(new THREE.ConeGeometry(.85,1.5,8),y); tail.position.set(0,3.1,-2.4); tail.rotation.x=-Math.PI/2.3;
+    g.add(body,head,beak,e1,e2,tail);
+    g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+2.4;
+    return g;
+  }
+  function createWaterTower(){
+    const g=new THREE.Group();
+    const metal=new THREE.MeshStandardMaterial({color:0xb9c2c8,roughness:.55,metalness:.3});
+    for(let i=0;i<4;i++){ const a=i/4*Math.PI*2; const leg=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,6,6),metal); leg.position.set(Math.cos(a)*1.5,3,Math.sin(a)*1.5); leg.rotation.z=-Math.cos(a)*0.14; leg.rotation.x=Math.sin(a)*0.14; g.add(leg); }
+    const tank=new THREE.Mesh(new THREE.CylinderGeometry(2,2,2.6,14),metal); tank.position.y=7.2;
+    const top=new THREE.Mesh(new THREE.ConeGeometry(2,1.3,14),new THREE.MeshStandardMaterial({color:0x6e7a82,roughness:.6})); top.position.y=9.15;
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(2.03,2.03,.7,14),new THREE.MeshStandardMaterial({color:0x4ea3ff,emissive:0x16314a,emissiveIntensity:.3,roughness:.6})); band.position.y=7.2;
+    g.add(tank,top,band);
+    g.userData.kind='building'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+2;
+    return g;
+  }
+  function createCow(){
+    const g=new THREE.Group();
+    const white=new THREE.MeshStandardMaterial({color:0xf2efe9,roughness:.85});
+    const dark=new THREE.MeshStandardMaterial({color:0x2a2a2e,roughness:.85});
+    const pink=new THREE.MeshStandardMaterial({color:0xe6a3a8,roughness:.8});
+    const body=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.3,1.1),white); body.position.y=1.4;
+    const head=new THREE.Mesh(new THREE.BoxGeometry(.75,.7,.7),white); head.position.set(1.35,1.7,0);
+    const snout=new THREE.Mesh(new THREE.BoxGeometry(.4,.4,.4),pink); snout.position.set(1.75,1.55,0);
+    const patch=new THREE.Mesh(new THREE.BoxGeometry(.8,.6,1.12),dark); patch.position.set(-.3,1.6,0);
+    [[-.8,.6],[ .8,.6],[-.8,-.6],[.8,-.6]].forEach(([x,z])=>{ const l=new THREE.Mesh(new THREE.BoxGeometry(.24,1.2,.24),dark); l.position.set(x,.6,z); g.add(l); });
+    g.add(body,head,snout,patch);
+    g.scale.setScalar(1.05);
+    g.userData.kind='bush'; // décor only — a cow shouldn't nuke your vibe
+    return g;
+  }
+  function createProp(){
+    const r=Math.random();
+    if(r<0.44) return createBillboard();
+    if(r<0.62) return createGiantDuck();
+    if(r<0.80) return createWaterTower();
+    return createCow();
+  }
+  function placeProp(p,far){
+    const side=Math.random()<.5?-1:1;
+    p.userData.solid=(p.userData.kind==='building') && Math.random()<0.12;
+    p.userData.lane=side*(CONFIG.roadHalfWidth+9+Math.random()*42);
+    p.position.z=pickZ(far);
+    p.rotation.y=p.userData.face ? -side*0.32 : (Math.random()-.5)*0.7;
+    p.userData.hit=false; p.userData.seenTimer=0; p.userData.prevZ=p.position.z;
+  }
+  function createProps(){ for(let i=0;i<CONFIG.propCount;i++){ const p=createProp(); placeProp(p,false); scene.add(p); props.push(p); } }
+
+  /* ---------- road obstacles you dodge (cones, barrels, potholes, stray ducks) ---------- */
+  function createCone(){
+    const g=new THREE.Group();
+    const orange=new THREE.MeshStandardMaterial({color:0xff7a1a,roughness:.7,emissive:0x401800,emissiveIntensity:.18});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1,.14,1),orange); base.position.y=.07;
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(.5,1.3,12),orange); cone.position.y=.78;
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(.36,.44,.26,12),new THREE.MeshStandardMaterial({color:0xf2efe9,roughness:.6})); band.position.y=.72;
+    g.add(base,cone,band);
+    g.userData.otype='cone'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+0.55;
+    return g;
+  }
+  function createBarrel(){
+    const g=new THREE.Group();
+    const mat=new THREE.MeshStandardMaterial({color:pick([0xff7a1a,0xffd23a]),roughness:.6,emissive:0x301400,emissiveIntensity:.12});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(.6,.6,1.8,14),mat); body.position.y=.9;
+    const s1=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.32,14),new THREE.MeshStandardMaterial({color:0xf2efe9,roughness:.5})); s1.position.y=1.25;
+    const s2=s1.clone(); s2.position.y=.55; g.add(body,s1,s2);
+    g.userData.otype='barrel'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+0.72;
+    return g;
+  }
+  function createPothole(){
+    const g=new THREE.Group();
+    const m=new THREE.Mesh(new THREE.CircleGeometry(1.15,18),new THREE.MeshStandardMaterial({color:0x0c0e12,roughness:1}));
+    m.rotation.x=-Math.PI/2; m.position.y=0.05; g.add(m);
+    g.userData.otype='pothole'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+0.45;
+    return g;
+  }
+  function createRoadDuck(){
+    const g=new THREE.Group();
+    const y=new THREE.MeshStandardMaterial({color:0xffd23a,roughness:.6});
+    const body=new THREE.Mesh(new THREE.SphereGeometry(.55,12,10),y); body.position.y=.55; body.scale.set(1.1,1,1.25);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.34,12,10),y); head.position.set(0,1.05,.3);
+    const beak=new THREE.Mesh(new THREE.ConeGeometry(.14,.34,8),new THREE.MeshStandardMaterial({color:0xff8a2e})); beak.position.set(0,1.02,.64); beak.rotation.x=Math.PI/2;
+    g.add(body,head,beak);
+    g.userData.otype='duck'; g.userData.hitRadius=CONFIG.playerCarWidth*0.5+0.5;
+    return g;
+  }
+  function createObstacleObj(){
+    const r=Math.random();
+    if(r<0.5) return createCone();
+    if(r<0.72) return createBarrel();
+    if(r<0.88) return createPothole();
+    return createRoadDuck();
+  }
+  function placeObstacle(o,far){
+    o.userData.lane=clampScene((Math.random()*2-1)*CONFIG.laneLimit,-CONFIG.laneLimit,CONFIG.laneLimit);
+    o.position.z=far?farZ():(-70-Math.random()*(CONFIG.worldLength-70));
+    o.rotation.y=Math.random()*Math.PI;
+    o.userData.hit=false; o.userData.seenTimer=0; o.userData.prevZ=o.position.z;
+  }
+  function createObstacles(){ for(let i=0;i<CONFIG.obstacleMaxCount;i++){ const o=createObstacleObj(); placeObstacle(o,false); o.visible=false; o.userData.active=false; scene.add(o); obstacles.push(o); } }
 
   function createHill(){ const m=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshStandardMaterial({color:pick([0x4f7a3a,0x5c8a40,0x456e34]),roughness:1})); return m; }
-  function placeHill(h){ const side=Math.random()<.5?-1:1; const r=22+Math.random()*34;
-    h.scale.set(r,r*0.42,r); h.userData.lane=side*(40+Math.random()*70); h.position.y=-r*0.55; h.position.z=-Math.random()*CONFIG.worldLength; }
-  function createHills(){ for(let i=0;i<CONFIG.hillCount;i++){ const h=createHill(); placeHill(h); scene.add(h); hills.push(h); } }
+  function placeHill(h,far){ const side=Math.random()<.5?-1:1; const r=22+Math.random()*34;
+    h.scale.set(r,r*0.42,r); h.userData.lane=side*(48+Math.random()*80); h.position.y=-r*0.55; h.position.z=pickZ(far); }
+  function createHills(){ for(let i=0;i<CONFIG.hillCount;i++){ const h=createHill(); placeHill(h,false); scene.add(h); hills.push(h); } }
 
   /* ---------- city scenery ---------- */
   const CITY_WALLS=[0x3c465a,0x51505b,0x786a5f,0x40505c,0x5d5366];
@@ -969,16 +1224,16 @@ const Scene3D = (() => {
     g.userData.hitRadius=CONFIG.playerCarWidth*0.5+w*0.55;
     return g;
   }
-  function placeCityBuilding(b){ const side=Math.random()<.5?-1:1;
+  function placeCityBuilding(b,far){ const side=Math.random()<.5?-1:1;
     b.userData.solid=Math.random()<0.16;
     b.userData.lane=side*(CONFIG.roadHalfWidth+(b.userData.solid?34:25)+Math.random()*(b.userData.solid?34:42));
-    b.position.z=-Math.random()*CONFIG.worldLength;
+    b.position.z=pickZ(far);
     b.rotation.y=(Math.random()-.5)*0.24;
     b.userData.hit=false;
     b.userData.seenTimer=0;
     b.userData.prevZ=b.position.z;
   }
-  function createCityBuildings(){ for(let i=0;i<CONFIG.cityBuildingCount;i++){ const b=createCityBuilding(); placeCityBuilding(b); b.visible=false; scene.add(b); cityBuildings.push(b); } }
+  function createCityBuildings(){ for(let i=0;i<CONFIG.cityBuildingCount;i++){ const b=createCityBuilding(); placeCityBuilding(b,false); b.visible=false; scene.add(b); cityBuildings.push(b); } }
 
   function createStreetLight(){
     const g=new THREE.Group();
@@ -989,19 +1244,24 @@ const Scene3D = (() => {
     const lamp=new THREE.Mesh(new THREE.SphereGeometry(.26,12,8),glow); lamp.position.set(1.45,4.88,0); g.add(lamp);
     return g;
   }
-  function placeStreetLight(l){ const side=Math.random()<.5?-1:1;
-    l.userData.lane=side*(CONFIG.roadHalfWidth+2.2+Math.random()*2.6);
-    l.position.z=-Math.random()*CONFIG.worldLength;
+  function placeStreetLight(l,far){ const side=Math.random()<.5?-1:1;
+    l.userData.lane=side*(CONFIG.roadHalfWidth+1.6+Math.random()*2.4);
+    l.position.z=pickZ(far);
     l.rotation.y=side<0?0:Math.PI;
   }
-  function createStreetLights(){ for(let i=0;i<CONFIG.streetLightCount;i++){ const l=createStreetLight(); placeStreetLight(l); l.visible=false; scene.add(l); streetLights.push(l); } }
+  function createStreetLights(){ for(let i=0;i<CONFIG.streetLightCount;i++){ const l=createStreetLight(); placeStreetLight(l,false); l.visible=false; scene.add(l); streetLights.push(l); } }
 
   function createSidewalks(){
     [-1,1].forEach(sign=>{
       const mat=new THREE.MeshStandardMaterial({color:0xb8bcc2,roughness:.86,transparent:true,opacity:0});
-      const walk=new THREE.Mesh(new THREE.PlaneGeometry(7.5,700),mat);
-      walk.rotation.x=-Math.PI/2; walk.position.set(sign*(CONFIG.roadHalfWidth+3.9),0.025,-250);
-      scene.add(walk); sidewalks.push({mesh:walk,sign});
+      const geo=new THREE.PlaneGeometry(6,700,1,150);
+      const walk=new THREE.Mesh(geo,mat);
+      walk.rotation.x=-Math.PI/2; walk.position.set(0,0.03,-250);
+      const p=geo.attributes.position; const off=sign*(ROAD_MESH_HALF+2.6);
+      const x0=new Float32Array(p.count), depth=new Float32Array(p.count);
+      for(let i=0;i<p.count;i++){ p.setX(i,p.getX(i)+off); x0[i]=p.getX(i); depth[i]=CAM_Z-(walk.position.z-p.getY(i)); }
+      p.needsUpdate=true;
+      scene.add(walk); sidewalks.push({mesh:walk,sign,geo,x0,depth});
     });
   }
 
@@ -1029,17 +1289,26 @@ const Scene3D = (() => {
     const sun=new THREE.DirectionalLight(0xfff6e6,0.95); sun.position.set(-40,80,20); scene.add(sun);
     scene.add(new THREE.HemisphereLight(0xbcd7f0,0x5c8a40,0.55));
 
+    // grass is a segmented plane that bends along the SAME curve as the road, so the
+    // ground reads as one connected surface instead of sliding on its own plane
     grassTex=makeGrassTexture();
-    const grass=new THREE.Mesh(new THREE.PlaneGeometry(1000,1000),new THREE.MeshStandardMaterial({map:grassTex,roughness:1}));
-    grass.rotation.x=-Math.PI/2; grass.position.y=-0.05; scene.add(grass);
+    grass=new THREE.Mesh(new THREE.PlaneGeometry(GRASS_SIZE,GRASS_SIZE,1,160),new THREE.MeshStandardMaterial({map:grassTex,roughness:1}));
+    grass.rotation.x=-Math.PI/2; grass.position.set(0,-0.06,0); scene.add(grass);
+    const gpos=grass.geometry.attributes.position; grassX0=new Float32Array(gpos.count); grassDepth=new Float32Array(gpos.count);
+    for(let i=0;i<gpos.count;i++){ grassX0[i]=gpos.getX(i); grassDepth[i]=CAM_Z-(grass.position.z-gpos.getY(i)); }
 
     roadTex=makeAsphaltTexture();
-    road=new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.roadHalfWidth*2,700,1,150),new THREE.MeshStandardMaterial({map:roadTex,roughness:.95}));
+    road=new THREE.Mesh(new THREE.PlaneGeometry(ROAD_MESH_HALF*2,700,1,150),new THREE.MeshStandardMaterial({map:roadTex,roughness:.95}));
     road.rotation.x=-Math.PI/2; road.position.set(0,0.02,-250); scene.add(road);
     const pos=road.geometry.attributes.position; roadX0=new Float32Array(pos.count); roadDepth=new Float32Array(pos.count);
     for(let i=0;i<pos.count;i++){ roadX0[i]=pos.getX(i); roadDepth[i]=CAM_Z-(road.position.z-pos.getY(i)); }
 
-    createStructures(); createTrees(); createHills(); createCityBuildings(); createStreetLights(); createSidewalks();
+    // dashed lane-divider overlay shares the road geometry (so it bends identically); opacity ramps with lanes
+    laneTex=makeLaneDividerTexture();
+    laneLines=new THREE.Mesh(road.geometry,new THREE.MeshBasicMaterial({map:laneTex,transparent:true,opacity:0,depthWrite:false}));
+    laneLines.rotation.x=-Math.PI/2; laneLines.position.set(0,0.028,-250); laneLines.renderOrder=2; scene.add(laneLines);
+
+    createStructures(); createTrees(); createBushes(); createHills(); createProps(); createCityBuildings(); createStreetLights(); createSidewalks(); createObstacles();
     if(window.ResizeObserver && viewportEl){
       resizeObserver=new ResizeObserver(onResize);
       resizeObserver.observe(viewportEl);
@@ -1050,7 +1319,7 @@ const Scene3D = (() => {
 
   /* ---------- traffic ---------- */
   function addTrafficVehicle(opts={}){
-    const lanes=trafficLanes();
+    const lanes=opts.lanes || trafficLanes(opts.intensity ?? 1);
     const lane=opts.lane || lanes[(Math.random()*lanes.length)|0];
     const ob=createTrafficVehicle(lane.oncoming);
     ob.userData.lane=clampScene((opts.x ?? lane.x)+(Math.random()-.5)*0.55,-CONFIG.laneLimit,CONFIG.laneLimit);
@@ -1061,31 +1330,31 @@ const Scene3D = (() => {
     ob.userData.prevZ=ob.position.z;
     scene.add(ob); traffic.push(ob); return ob;
   }
-  function spawnTraffic(intensity=0){ addTrafficVehicle({z:CONFIG.spawnZ-Math.random()*(38+58*clampScene(intensity,0,1))}); }
+  function spawnTraffic(intensity=0){ addTrafficVehicle({intensity,z:CONFIG.spawnZ-Math.random()*(38+58*clampScene(intensity,0,1))}); }
   function seedTraffic(intensity=0){
-    const lanes=trafficLanes();
+    const lanes=trafficLanes(intensity);
     const seedCount=Math.max(1,Math.round(CONFIG.trafficStartCount+clampScene(intensity,0,1)*2));
-    const seeds=[
-      {lane:lanes[0],z:-104,speed:34}, {lane:lanes[2],z:-58,speed:22},
-      {lane:lanes[1],z:-142,speed:39}, {lane:lanes[3],z:-94,speed:27},
-      {lane:lanes[0],z:-202,speed:25}, {lane:lanes[2],z:-224,speed:39},
-    ];
-    seeds.slice(0,seedCount).forEach(addTrafficVehicle);
+    const zs=[-104,-58,-142,-94,-202,-224], speeds=[34,22,39,27,25,39];
+    for(let i=0;i<seedCount;i++){
+      addTrafficVehicle({lanes,lane:lanes[i%lanes.length],z:zs[i%zs.length],speed:speeds[i%speeds.length]});
+    }
   }
   function clearTraffic(){ traffic.forEach(o=>scene.remove(o)); traffic.length=0; }
 
   /* ---------- per-frame update ---------- */
-  function update(dt, speed, distance, curveMul, invulnerable, cityMix=0){
-    const events={traffic:0,tree:0,building:0};
+  function update(dt, speed, distance, curveMul, invulnerable, cityMix=0, obstacleMix=0, trafficIntensity=1, worldMix=1){
+    const events={traffic:0,tree:0,building:0,obstacle:0};
     D=distance; cMul=curveMul; cityProgress=clampScene(cityMix,0,1);
+    const obProgress=clampScene(obstacleMix,0,1);
+    const wProgress=clampScene(worldMix,0,1);
     const heading=player.heading||0;
-    const headingSin=Math.sin(heading), headingCos=Math.cos(heading);
-    roadTex.offset.y += speed*dt*0.034;
-    if(grassTex){
-      grassTex.offset.y += speed*dt*0.032;
-      const prevGrassX=player.userDataPrevGrassX ?? player.x;
-      grassTex.offset.x += (player.x-prevGrassX)*0.012;
-      player.userDataPrevGrassX=player.x;
+    roadTex.offset.y += speed*dt*ROAD_SCROLL;
+    if(grassTex) grassTex.offset.y += speed*dt*GRASS_SCROLL;
+    if(laneTex){ laneTex.offset.y = roadTex.offset.y; }
+    if(laneLines){ // dashed dividers fade in as the road grows past 2 lanes
+      const want=clampScene((clampScene(trafficIntensity,0,1)-0.12)/0.34,0,1);
+      laneLines.material.opacity += (want-laneLines.material.opacity)*Math.min(1,dt*2.4);
+      laneLines.visible=laneLines.material.opacity>0.02;
     }
     if(scene&&scene.fog){
       scene.fog.near=80-cityProgress*18;
@@ -1106,18 +1375,23 @@ const Scene3D = (() => {
     const roll=(camera.position.x-player.x)*0.025 - camSin*0.045 - Math.sin(CONFIG.curveFreq*D)*cMul*0.028;
     camera.rotation.z=clampScene(roll,-CONFIG.cameraRollMax,CONFIG.cameraRollMax);
 
-    // bend the road to follow the curve
+    // bend the road to follow the curve (the lane overlay shares this geometry)
     const pos=road.geometry.attributes.position;
     for(let i=0;i<pos.count;i++) pos.setX(i, roadX0[i]+bendAt(roadDepth[i]));
     pos.needsUpdate=true;
+    // bend the grass the SAME way so the whole ground curves together
+    if(grass){
+      const gp=grass.geometry.attributes.position;
+      for(let i=0;i<gp.count;i++) gp.setX(i, grassX0[i]+bendAt(grassDepth[i]));
+      gp.needsUpdate=true;
+    }
 
-    // scenery: approach, recycle, follow the curve
+    // scenery: approach, recycle far ahead (never on top of you), follow the curve
     for(const b of houses){
       const zPrev=b.position.z;
       let recycled=false;
       b.position.z+=speed*dt;
-      if(b.position.z>25){ placeStructure(b); b.position.z-=CONFIG.worldLength; recycled=true; }
-      else if(b.position.z<-CONFIG.worldLength){ placeStructure(b); b.position.z+=CONFIG.worldLength; recycled=true; }
+      if(b.position.z>25){ placeStructure(b,true); recycled=true; }
       b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z);
       b.userData.prevZ=recycled?b.position.z:zPrev;
       markScenerySeen(b,dt,player.x);
@@ -1127,28 +1401,55 @@ const Scene3D = (() => {
       const zPrev=t.position.z;
       let recycled=false;
       t.position.z+=speed*dt;
-      if(t.position.z>25){ placeTree(t); t.position.z-=CONFIG.worldLength; recycled=true; }
-      else if(t.position.z<-CONFIG.worldLength){ placeTree(t); t.position.z+=CONFIG.worldLength; recycled=true; }
+      if(t.position.z>25){ placeTree(t,true); recycled=true; }
       t.position.x=t.userData.lane+bendAt(CAM_Z-t.position.z);
       t.userData.prevZ=recycled?t.position.z:zPrev;
       markScenerySeen(t,dt,player.x);
       if(!recycled&&!invulnerable && sceneryCollides(player.x,t)) registerSceneryHit(events,t,'tree');
     }
-    for(const h of hills){ h.position.z+=speed*dt; if(h.position.z>40){ placeHill(h); h.position.z-=CONFIG.worldLength; } else if(h.position.z<-CONFIG.worldLength){ placeHill(h); h.position.z+=CONFIG.worldLength; } h.position.x=h.userData.lane+bendAt(CAM_Z-h.position.z); }
+    for(const b of bushes){
+      b.position.z+=speed*dt;
+      if(b.position.z>25) placeBush(b,true);
+      b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z);
+    }
+    // funny roadside props: a couple early, more of them the deeper you get
+    const activeProps=Math.round(2+wProgress*(props.length-2));
+    for(let i=0;i<props.length;i++){
+      const p=props[i];
+      const on=i<activeProps;
+      p.visible=on;
+      if(!on){ p.userData.wasOn=false; continue; }
+      if(!p.userData.wasOn && p.position.z>-CONFIG.scenerySpawnMinZ) placeProp(p,true);
+      p.userData.wasOn=true;
+      const zPrev=p.position.z;
+      let recycled=false;
+      p.position.z+=speed*dt;
+      if(p.position.z>25){ placeProp(p,true); recycled=true; }
+      p.position.x=p.userData.lane+bendAt(CAM_Z-p.position.z);
+      p.userData.prevZ=recycled?p.position.z:zPrev;
+      if(p.userData.solid){
+        markScenerySeen(p,dt,player.x);
+        if(!recycled&&!invulnerable && sceneryCollides(player.x,p)) registerSceneryHit(events,p,'building');
+      }
+    }
+    for(const h of hills){ h.position.z+=speed*dt; if(h.position.z>40){ placeHill(h,true); } h.position.x=h.userData.lane+bendAt(CAM_Z-h.position.z); }
 
     const cityVisible=cityProgress>0.08;
     for(const walk of sidewalks){
       walk.mesh.visible=cityVisible;
       walk.mesh.material.opacity=cityVisible ? 0.66*cityProgress : 0;
-      walk.mesh.position.x=bendAt(75)+walk.sign*(CONFIG.roadHalfWidth+3.9);
+      if(cityVisible){
+        const p=walk.geo.attributes.position;
+        for(let i=0;i<p.count;i++) p.setX(i, walk.x0[i]+bendAt(walk.depth[i]));
+        p.needsUpdate=true;
+      }
     }
     for(const b of cityBuildings){
       b.visible=cityVisible;
       const zPrev=b.position.z;
       let recycled=false;
       b.position.z+=speed*dt;
-      if(b.position.z>25){ placeCityBuilding(b); b.position.z-=CONFIG.worldLength; recycled=true; }
-      else if(b.position.z<-CONFIG.worldLength){ placeCityBuilding(b); b.position.z+=CONFIG.worldLength; recycled=true; }
+      if(b.position.z>25){ placeCityBuilding(b,true); recycled=true; }
       b.position.x=b.userData.lane+bendAt(CAM_Z-b.position.z);
       b.userData.prevZ=recycled?b.position.z:zPrev;
       markScenerySeen(b,dt,player.x);
@@ -1157,9 +1458,31 @@ const Scene3D = (() => {
     for(const l of streetLights){
       l.visible=cityVisible;
       l.position.z+=speed*dt;
-      if(l.position.z>25){ placeStreetLight(l); l.position.z-=CONFIG.worldLength; }
-      else if(l.position.z<-CONFIG.worldLength){ placeStreetLight(l); l.position.z+=CONFIG.worldLength; }
+      if(l.position.z>25) placeStreetLight(l,true);
       l.position.x=l.userData.lane+bendAt(CAM_Z-l.position.z);
+    }
+
+    // road obstacles: cones / barrels / potholes / stray ducks — more of them appear as you score higher
+    const activeObstacles=Math.round(obProgress*CONFIG.obstacleMaxCount);
+    for(let i=0;i<obstacles.length;i++){
+      const o=obstacles[i];
+      const active=i<activeObstacles;
+      o.userData.active=active;
+      o.visible=active;
+      if(!active){ o.userData.seenTimer=0; o.userData.wasActive=false; continue; }
+      // just switched on while sitting too close? send it back down the road so it never pops in on top of you
+      if(!o.userData.wasActive && o.position.z>-CONFIG.scenerySpawnMinZ) placeObstacle(o,true);
+      o.userData.wasActive=true;
+      const zPrev=o.position.z;
+      let recycled=false;
+      o.position.z+=speed*dt;
+      if(o.position.z>25){ placeObstacle(o,true); recycled=true; }
+      o.position.x=o.userData.lane+bendAt(CAM_Z-o.position.z);
+      o.userData.prevZ=recycled?o.position.z:zPrev;
+      if(o.position.z<CAM_Z-CONFIG.sceneryCollisionFarAhead && o.position.z>CAM_Z-CONFIG.sceneryVisibilityLead){
+        o.userData.seenTimer=Math.min(2,(o.userData.seenTimer||0)+dt);
+      } else o.userData.seenTimer=0;
+      if(!recycled&&!invulnerable && obstacleCollides(player.x,o)){ o.userData.hit=true; events.obstacle++; }
     }
 
     // traffic: oncoming cars move toward the camera; same-direction cars drive away down the road.
@@ -1180,6 +1503,11 @@ const Scene3D = (() => {
       if(o.userData.hit) continue;
       if(o.position.z<range.near-90 || o.position.z>range.far+10) continue;
       if(Math.abs(o.userData.lane-player.x)<warn) return true;
+    }
+    for(const o of obstacles){
+      if(!o.userData.active||o.userData.hit) continue;
+      if(o.position.z<range.near-70 || o.position.z>range.far+8) continue;
+      if(Math.abs(o.userData.lane-player.x)<(o.userData.hitRadius??1)+0.8) return true;
     }
     return false;
   }
@@ -1210,7 +1538,7 @@ const Phone = (() => {
   function init(){ renderFeed(); renderChat(); renderQuickReplies(); setSong(0);
     const feed=document.getElementById('feed-list');
     feed.addEventListener('scroll',()=>{ const now=performance.now();
-      if(now-lastScroll>220 && Game.isPlaying()){ lastScroll=now; Game.addScore(CONFIG.scrollPoints,feed); SFX.tap(); }
+      if(now-lastScroll>220 && Game.isPlaying()){ lastScroll=now; Game.addScore(CONFIG.scrollPoints,feed,null,'scroll'); SFX.tap(); }
       if(feed.scrollTop+feed.clientHeight>feed.scrollHeight-80) appendPosts(); }); }
   function postHTML(p){ return `<div class="bg-white/5 rounded-2xl overflow-hidden border border-white/5">
     <div class="flex items-center gap-2 px-3 py-2"><span class="text-xl">${p.av}</span><span class="font-semibold text-sm">${p.u}</span></div>
@@ -1226,10 +1554,11 @@ const Phone = (() => {
         if(b.classList.contains('like-btn')){
           const liked=b.textContent==='❤️';
           b.textContent=liked?'🤍':'❤️';
-          if(!liked){ Game.addScore(CONFIG.basePoints,b); SFX.point(); }
-          else { Game.phoneVibe(b); SFX.tap(); }
+          if(!liked){ Game.addScore(CONFIG.basePoints,b,null,'like'); SFX.point(); }
+          else { Game.phoneVibe(b,'like'); SFX.tap(); }
         } else {
-          Game.phoneVibe(b);
+          const actionId=b.textContent.includes('💬')?'comment':'share';
+          Game.phoneVibe(b,actionId);
           SFX.tap();
         }
       });
@@ -1241,9 +1570,9 @@ const Phone = (() => {
     document.getElementById('song-title').textContent=s.t; document.getElementById('song-artist').textContent=s.a;
     document.getElementById('song-progress').style.width=(10+Math.random()*70).toFixed(0)+'%';
     const arts=['🎧','🎤','🎸','🥁','🎹','🦆']; document.getElementById('album-art').textContent=arts[songIdx%arts.length]; }
-  function nextSong(){ setSong(songIdx+1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art')); SFX.point(); } }
-  function prevSong(){ setSong(songIdx-1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art')); SFX.point(); } }
-  function togglePlay(){ playing=!playing; document.getElementById('play-btn').textContent=playing?'⏸️':'▶️'; if(Game.isPlaying()) Game.phoneVibe(document.getElementById('play-btn')); SFX.tap(); }
+  function nextSong(){ setSong(songIdx+1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art'),null,'music-skip'); SFX.point(); } }
+  function prevSong(){ setSong(songIdx-1); if(Game.isPlaying()){ Game.addScore(CONFIG.basePoints,document.getElementById('album-art'),null,'music-skip'); SFX.point(); } }
+  function togglePlay(){ playing=!playing; document.getElementById('play-btn').textContent=playing?'⏸️':'▶️'; if(Game.isPlaying()) Game.phoneVibe(document.getElementById('play-btn'),'music-play'); SFX.tap(); }
   function bubble(me,t){ return `<div class="flex ${me?'justify-end':'justify-start'}"><div class="${me?'bg-blue-500/80':'bg-white/10'} rounded-2xl px-3 py-2 max-w-[80%]">${t}</div></div>`; }
   function renderChat(){ const l=document.getElementById('chat-list'); l.innerHTML=''; CONFIG.chatSeed.forEach(m=>l.insertAdjacentHTML('beforeend',bubble(m.me,m.t))); scrollChatToEnd(); }
   function renderQuickReplies(){ const box=document.getElementById('quick-replies'); box.innerHTML='';
@@ -1251,12 +1580,12 @@ const Phone = (() => {
       b.className='bg-blue-500/20 border border-blue-400/40 rounded-full px-3 py-1 text-xs active:scale-95 transition'; b.textContent=txt; b.onclick=()=>sendReply(txt,b); box.appendChild(b); }); }
   const REPLIES=["lmaooo","fr fr","🦆🦆🦆","omw don't crash","new phone who dis","stop texting me ur DRIVING"];
   function sendReply(txt,el){ if(!Game.isPlaying()) return; const l=document.getElementById('chat-list'); l.insertAdjacentHTML('beforeend',bubble(true,txt));
-    Game.addScore(CONFIG.basePoints,el); SFX.point(); l.scrollTop=l.scrollHeight;
+    Game.addScore(CONFIG.basePoints,el,null,'chat-reply'); SFX.point(); l.scrollTop=l.scrollHeight;
     setTimeout(()=>{ l.insertAdjacentHTML('beforeend',bubble(false,REPLIES[(Math.random()*REPLIES.length)|0])); l.scrollTop=l.scrollHeight; },600); }
   function scrollChatToEnd(){ const l=document.getElementById('chat-list'); if(!l) return; requestAnimationFrame(()=>{ l.scrollTop=l.scrollHeight; }); }
   function switchApp(name){ document.querySelectorAll('.app-view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+name).classList.add('active'); document.querySelectorAll('.dock button').forEach(b=>b.classList.toggle('active',b.dataset.app===name));
-    if(Game.isPlaying()) Game.phoneVibe(document.querySelector('.dock button[data-app="'+name+'"]'));
+    if(Game.isPlaying()) Game.phoneVibe(document.querySelector('.dock button[data-app="'+name+'"]'),'dock-'+name);
     if(name==='chat') scrollChatToEnd(); SFX.tap(); }
   function tickStatus(){ const d=new Date(); document.getElementById('clock').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); }
   function setBattery(p){ document.getElementById('battery').textContent=Math.max(1,Math.round(p)); }
@@ -1269,7 +1598,7 @@ const Phone = (() => {
 const Game = (() => {
   const STATE={MENU:'menu',PLAY:'play',LEVEL:'level',OVER:'over',WIN:'win'};
   let state=STATE.MENU, levelIdx=0, score=0, vibe=CONFIG.startingVibe, distance=0, totalDistance=0;
-  let objectiveToastTimer=0, impactWarningTimer=0, lastPhoneVibeGain=0;
+  let objectiveToastTimer=0, lastPhoneVibeGain=0, lastPhoneAction=null, phoneActionCount=0;
   let speed=0, invulnTimer=0, distSinceSpawn=0, trafficTimer=0, combo=1, comboTimer=0, battery=87, lastT=0;
   let wheelAngle=0, carHeading=0, lateralV=0, offRoadTimer=0;
   const keys={left:false,right:false,gas:false,brake:false};
@@ -1289,9 +1618,12 @@ const Game = (() => {
   const wrapAngle=a=>Math.atan2(Math.sin(a),Math.cos(a));
   function gasPressure(){ return driveGas() ? 1 : 0; }
   function brakePressure(){ return driveBrake() ? 1 : 0; }
+  // 0 → 1 over the whole ramp; everything below scales off how far you've driven this run
+  function rampProgress(){ return clamp(totalDistance/CONFIG.rampDistance,0,1); }
+  const rampBand=(p,a,b)=>clamp((p-a)/(b-a),0,1);
   function trafficIntensity(){
-    const scoreMix=clamp(score/CONFIG.trafficScoreFull,0,1);
-    return clamp(Math.sqrt(scoreMix)+levelIdx*0.05,0,1);
+    // ease in slowly — the first stretch stays almost empty
+    return clamp(Math.pow(rampProgress(),1.3),0,1);
   }
   function trafficTarget(){
     return Math.round(CONFIG.trafficStartCount+trafficIntensity()*(CONFIG.trafficMaxCount-CONFIG.trafficStartCount));
@@ -1302,8 +1634,12 @@ const Game = (() => {
     return clamp(CONFIG.trafficSpawnTimeMax-intensity*(CONFIG.trafficSpawnTimeMax-CONFIG.trafficSpawnTimeMin)-speedBonus,CONFIG.trafficSpawnTimeMin,CONFIG.trafficSpawnTimeMax);
   }
   function cityMix(){
-    return clamp((score-CONFIG.cityScoreStart)/(CONFIG.cityScoreFull-CONFIG.cityScoreStart),0,1);
+    return rampBand(rampProgress(),CONFIG.cityRampStart,CONFIG.cityRampEnd);
   }
+  function obstacleMix(){
+    return rampBand(rampProgress(),CONFIG.obstacleRampStart,CONFIG.obstacleRampEnd);
+  }
+  function worldMix(){ return rampProgress(); }
   function syncWheelVisual(){
     const wheel=$('steering-wheel');
     if(wheel) wheel.style.transform='translateX(-50%) rotate('+wheelAngle.toFixed(1)+'deg)';
@@ -1333,8 +1669,18 @@ const Game = (() => {
     if(vibe<CONFIG.onRoadRegenCap) addVibe(regen,CONFIG.onRoadRegenCap);
     else addVibe(regen*CONFIG.onRoadRegenTopScale);
   }
-  function phoneVibe(anchorEl){
-    if(state!==STATE.PLAY) return;
+  function canPhoneReward(actionId){
+    if(!actionId) return true;
+    if(actionId===lastPhoneAction){
+      if(phoneActionCount>=2) return false;
+      phoneActionCount++;
+      return true;
+    }
+    lastPhoneAction=actionId;
+    phoneActionCount=1;
+    return true;
+  }
+  function applyPhoneVibe(anchorEl){
     const now=performance.now();
     if(now-lastPhoneVibeGain<CONFIG.phoneVibeCooldown*1000) return;
     lastPhoneVibeGain=now;
@@ -1345,14 +1691,21 @@ const Game = (() => {
     updateHUD();
     if(vibe<=0) gameOver();
   }
-  function addScore(base,anchorEl,label){
+  function phoneVibe(anchorEl,actionId){
+    if(state!==STATE.PLAY) return;
+    if(!canPhoneReward(actionId)) return;
+    applyPhoneVibe(anchorEl);
+  }
+  function addScore(base,anchorEl,label,actionId){
+    if(state!==STATE.PLAY) return;
+    if(!canPhoneReward(actionId)) return;
     bumpCombo();
     const lv=level();
     const progress=lv ? clamp(distance/lv.distance,0,1) : 0;
     const distanceBoost=1+progress*CONFIG.phoneDistanceScale+levelIdx*0.28;
     const g=Math.round(base*combo*distanceBoost);
     score+=g;
-    phoneVibe(anchorEl);
+    applyPhoneVibe(anchorEl);
     floatPoints(anchorEl,label||('+'+g));
     if(vibe<=0) gameOver();
   }
@@ -1400,15 +1753,14 @@ const Game = (() => {
   }
 
   function crash(kind='traffic'){
-    const damage=kind==='building' ? CONFIG.buildingCollisionVibeDamage : (kind==='tree' ? CONFIG.treeCollisionVibeDamage : CONFIG.collisionVibeDamage);
-    addVibe(-damage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0; speed*=kind==='traffic'?0.55:0.32; lateralV*=-0.35;
+    const damageMap={building:CONFIG.buildingCollisionVibeDamage,tree:CONFIG.treeCollisionVibeDamage,obstacle:CONFIG.obstacleVibeDamage,traffic:CONFIG.collisionVibeDamage};
+    const damage=damageMap[kind] ?? CONFIG.collisionVibeDamage;
+    addVibe(-damage); invulnTimer=CONFIG.hitInvuln; combo=1; comboTimer=0;
+    speed*= kind==='traffic'?0.55 : (kind==='obstacle'?0.74 : 0.32); lateralV*=-0.35;
     const maxHeadingRad=CONFIG.maxHeadingDeg*Math.PI/180;
     carHeading=clamp(carHeading+0.1*Math.sign(lateralV||1),-maxHeadingRad,maxHeadingRad); SFX.crash();
     const fl=$('flash'); fl.style.opacity='.6'; setTimeout(()=>fl.style.opacity='0',120);
     document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
-    const label=kind==='building' ? 'BUILDING CHECK' : (kind==='tree' ? 'TREE CHECK' : 'CAR HIT');
-    impactWarningTimer=0.9;
-    const warning=$('warning'); if(warning){ warning.textContent='💥 '+label+' — -'+damage+' VIBE 💥'; warning.classList.add('show'); }
     updateHUD(); if(vibe<=0) gameOver(); }
 
   function start(){ levelIdx=0; score=0; SFX.tap(); beginLevel(); }
@@ -1420,9 +1772,9 @@ const Game = (() => {
       if(rect.top<0||rect.bottom>window.innerHeight) wrap.scrollIntoView({block:'nearest',inline:'nearest'});
     });
   }
-  function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; totalDistance=0; speed=0; lateralV=0; carHeading=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; trafficTimer=0; invulnTimer=0; combo=1; comboTimer=0; battery=87; objectiveToastTimer=0; impactWarningTimer=0; lastPhoneVibeGain=0;
+  function beginLevel(){ vibe=CONFIG.startingVibe; distance=0; totalDistance=0; speed=0; lateralV=0; carHeading=0; wheelAngle=0; offRoadTimer=0; distSinceSpawn=0; trafficTimer=0; invulnTimer=0; combo=1; comboTimer=0; battery=87; objectiveToastTimer=0; lastPhoneVibeGain=0; lastPhoneAction=null; phoneActionCount=0;
     Scene3D.clearTraffic(); Scene3D.seedTraffic(trafficIntensity()); Scene3D.setPlayerX(0); Scene3D.resetMotionTrack(); Scene3D.setHeading(0); keys.left=keys.right=keys.gas=keys.brake=false; resetTouchControls();
-    hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); $('objective-toast')?.classList.remove('show'); syncWheelVisual(); updateHUD(); state=STATE.PLAY;
+    hide('screen-start'); hide('screen-level'); hide('screen-over'); hide('screen-win'); $('objective-toast')?.classList.remove('show'); $('warning')?.classList.remove('show'); syncWheelVisual(); updateHUD(); state=STATE.PLAY;
     const canvas=document.getElementById('scene-canvas');
     if(canvas&&canvas.focus) canvas.focus({preventScroll:true});
     keepPlayfieldVisible();
@@ -1654,21 +2006,13 @@ const Game = (() => {
       if(invulnTimer>0) invulnTimer-=dt;
       if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=1; updateHUD(); } }
 
-      const crashes=Scene3D.update(dt,routeSpeed,totalDistance,lv.curveMul,invulnTimer>0,cityMix());
+      const crashes=Scene3D.update(dt,routeSpeed,totalDistance,lv.curveMul,invulnTimer>0,cityMix(),obstacleMix(),intensity,worldMix());
       for(let i=0;i<crashes.traffic;i++) crash('traffic');
       if(crashes.building>0) crash('building');
       else if(crashes.tree>0) crash('tree');
+      else if(crashes.obstacle>0) crash('obstacle');
       tickObjectiveToast(dt);
-      const warning=$('warning');
       if(vibe<=0) gameOver();
-      const danger=Scene3D.dangerAhead()&&invulnTimer<=0;
-      if(impactWarningTimer>0){
-        impactWarningTimer-=dt;
-        warning.classList.toggle('show',state===STATE.PLAY&&objectiveToastTimer<=0);
-      } else {
-        warning.textContent=offRoadTimer>0.12?'⚠️ OFF ROAD - VIBE DROPPING ⚠️':'⚠️ TRAFFIC CLOSE ⚠️';
-        warning.classList.toggle('show',(danger||offRoadTimer>0.12)&&state===STATE.PLAY&&objectiveToastTimer<=0);
-      }
       updateHUD();
       if(distance>=lv.distance) completeObjective();
     } else {

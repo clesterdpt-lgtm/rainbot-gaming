@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drone Hunter — Rainbot Gaming</title>
+  <meta name="description" content="A Duck Hunt parody for the surveillance age. Snipe delivery drones, surveillance cams, and rogue ad-bots out of the neon sky — but do NOT shoot the protected peace doves. The robo-dog is watching." />
+  <meta property="og:title" content="Drone Hunter — Rainbot Gaming" />
+  <meta property="og:description" content="Shoot drones out of the neon sky, hit your quota each round, and don't plug a protected dove. The robo-dog laughs when you miss." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-drone-hunter.png?v=20260619-cover-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-drone-hunter.png?v=20260619-cover-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260619-covers-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%232ee0ff' stroke-width='6'/%3E%3Cpath d='M50 12v18M50 70v18M12 50h18M70 50h18' stroke='%23ff2e88' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='5' fill='%23ffd43b'/%3E%3C/svg%3E" />
+  <style>
+    /* Drone Hunter is a canvas game; only a couple of page-local bits live here. */
+    .drone-page .canvas-wrap { background: #060512; cursor: default; }
+    /* Only hide the OS cursor while actually aiming — we draw our own crosshair then.
+       During the menu / round / game-over overlays the real pointer stays visible so
+       the Start / Next-round buttons are clickable. */
+    .drone-page .canvas-wrap.is-aiming { cursor: none; }
+
+    /* Ammo / quota mini-legend in the side panel */
+    .drone-legend {
+      display: grid;
+      gap: 8px;
+    }
+    .drone-legend__row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      line-height: 1.2;
+    }
+    .drone-legend__chip {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 16px;
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+    }
+    .drone-legend__chip--good { border-color: var(--accent-2); }
+    .drone-legend__chip--bad { border-color: var(--bad); }
+    .drone-legend__chip--gold { border-color: var(--accent-3); }
+    .drone-legend strong { color: var(--ink); }
+  </style>
+</head>
+<body class="drone-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">🎯 Drone Hunter</h1>
+        <div class="game-page__sub">Bag the drones · Spare the doves · Don't let the robo-dog laugh</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">ROUND</span><span class="hud__value" id="hud-round">1</span></div>
+          <div class="hud__item"><span class="hud__label">QUOTA</span><span class="hud__value" id="hud-hits">0/3</span></div>
+          <div class="hud__item"><span class="hud__label">AMMO</span><span class="hud__value" id="hud-ammo">🟡🟡🟡</span></div>
+          <div class="hud__item"><span class="hud__label">COMBO</span><span class="hud__value" id="hud-combo">x1</span></div>
+          <div class="hud__item"><span class="hud__label">STRIKES</span><span class="hud__value" id="hud-strikes">🕊️🕊️🕊️</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-900-600" style="--game-aspect:1.5; --game-aspect-ratio:3 / 2;">
+          <canvas id="gameCanvas" width="900" height="600" tabindex="0" aria-label="Drone Hunter playfield"></canvas>
+
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">🎯 DRONE HUNTER</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              The sky is full of drones — delivery bots, surveillance cams, and rogue ad-drones.
+              <strong>Aim and shoot</strong> to bag them before they buzz off.
+              Hit your <strong>quota each round</strong> to advance.
+              <br><br>
+              But the 🕊️ <strong>peace doves are protected</strong> — plug one and the robo-dog files a report.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start hunting</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          <strong>Move</strong> the crosshair with your mouse, <strong>click</strong> to fire (or just tap on mobile). <kbd>P</kbd> pauses. 3 shots per wave.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-drone-hunter.png?v=20260619-cover-1" alt="Drone Hunter cover art — a neon crosshair locking onto drones over a night city skyline" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-new" type="button" style="font-size:13px;padding:8px 12px;">New game</button>
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">TARGETS</h3>
+          <div class="drone-legend">
+            <div class="drone-legend__row"><span class="drone-legend__chip drone-legend__chip--good">📦</span><span><strong>Delivery drone</strong> — the bread and butter. +100.</span></div>
+            <div class="drone-legend__row"><span class="drone-legend__chip drone-legend__chip--good">👁️</span><span><strong>Surveillance cam</strong> — fast and jittery. +250.</span></div>
+            <div class="drone-legend__row"><span class="drone-legend__chip drone-legend__chip--gold">👑</span><span><strong>Mega ad-drone</strong> — rare jackpot. +500.</span></div>
+            <div class="drone-legend__row"><span class="drone-legend__chip">🎁</span><span><strong>Supply crate</strong> — shoot for a random power-up: ammo, EMP, or slow-mo.</span></div>
+            <div class="drone-legend__row"><span class="drone-legend__chip">🛸</span><span><strong>Prime Mothership</strong> — boss every 3rd round. Multi-hit, big bonus.</span></div>
+            <div class="drone-legend__row"><span class="drone-legend__chip drone-legend__chip--bad">🕊️</span><span><strong>Peace dove</strong> — PROTECTED. Three doves down = license revoked.</span></div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Snipe the drones.</strong> Each wave releases a drone or two. You get 3 shots — make them count before the drones escape off the top.</li>
+            <li><strong style="color:var(--ink);">Hit your quota.</strong> Bag enough drones each round to advance. Fall short and it's game over.</li>
+            <li><strong style="color:var(--ink);">Spare the doves.</strong> The 🕊️ peace doves are protected airspace. Each one you shoot is a strike — three strikes and your license is revoked.</li>
+            <li><strong style="color:var(--ink);">Build a combo.</strong> Consecutive hits stack a multiplier. A wasted shot or a dove resets it. Clear a whole wave with no misses for a <strong>PERFECT</strong> bonus and an extra bullet.</li>
+            <li><strong style="color:var(--ink);">Grab supply crates.</strong> Shoot a 🎁 crate for a random power-up — ammo refill, a screen-clearing EMP, or slow-motion.</li>
+            <li><strong style="color:var(--ink);">Survive the boss &amp; bonus rounds.</strong> A Prime Mothership shows up every 3rd round, and every 4th round is a no-penalty frenzy. Mind the dog — it fetches your kills and laughs when one gets away.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> A satirical light-gun homage to a certain 8-bit duck-shooting classic, reskinned for the age of delivery bots and doorbell cams. Not affiliated with anyone. No actual drones (or doves) were harmed.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Gaming. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-8"></script>
+  <script src="../assets/js/main.js?v=20260616-save-1"></script>
+  <script src="../assets/js/drone-hunter.js?v=20260619-2"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

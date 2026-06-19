@@ -57,29 +57,31 @@
   const GAZE_HALF_ANGLE = 0.52;
 
   const SUS_MAX        = 100;
-  const SUS_DECAY      = 9.5;    // %/sec when not looking
-  const SUS_DECAY_SHUT = 12.5;   // %/sec eyes closed
-  const SUS_GAIN_BASE  = 23;     // %/sec, one girl, point blank
-  const SUS_MUTUAL_MULT = 2.4;   // she sees you seeing her
-  const SUS_BUMP       = 14;     // walked into a girl (eyes open)
-  const BRUISER_SMACK_SUS = 10;  // got loud near a territorial gym bro
+  const SUS_DECAY      = 7.1;    // %/sec when not looking
+  const SUS_DECAY_SHUT = 9.0;    // %/sec eyes closed
+  const SUS_GAIN_BASE  = 29;     // %/sec, one girl, point blank
+  const SUS_MUTUAL_MULT = 2.75;  // she sees you seeing her
+  const SUS_BUMP       = 18;     // walked into a girl (eyes open)
+  const BRUISER_SMACK_SUS = 14;  // got loud near a territorial gym bro
   const BRUISER_RADIUS = 22;
-  const BRUISER_AGGRO_SCALE = 0.72;
-  const BRUISER_CHASE_MULT = 1.12;
+  const BRUISER_AGGRO_SCALE = 0.86;
+  const BRUISER_CHASE_MULT = 1.25;
   const WATER_BOTTLE_RADIUS = 9;
-  const WATER_BOTTLE_TRIGGER = 18;
-  const WATER_BOTTLE_TRIP_SUS = 7;
+  const WATER_BOTTLE_TRIGGER = 22;
+  const WATER_BOTTLE_TRIP_SUS = 11;
   const PATRON_RADIUS = 13;
-  const PATRON_BUMP_SUS = 3;
+  const PATRON_BUMP_SUS = 5;
   const STAIR_RADIUS = 26;
+  const STAIR_TRIGGER_RADIUS = 48;
+  const STAIR_LANDING_OFFSET = STAIR_TRIGGER_RADIUS + PLAYER_RADIUS + 10;
   const STAIR_COOLDOWN = 0.8;
 
-  const NOTICE_TIME   = 0.98;    // sustained mutual stare → accused
-  const NOTICE_DECAY  = 0.62;    // /sec when stare breaks
+  const NOTICE_TIME   = 0.94;    // sustained mutual stare → accused
+  const NOTICE_DECAY  = 0.45;    // /sec when stare breaks
 
-  const PULL_RANGE   = 318;      // the neck activates inside this radius
-  const DRIFT_BASE   = 5.15;     // rad/s at point blank × level pull
-  const ASSIST_RATE  = 2.05;     // rad/s, gaze eases back to mouse
+  const PULL_RANGE   = 354;      // the neck activates inside this radius
+  const DRIFT_BASE   = 6.65;     // rad/s at point blank × level pull
+  const ASSIST_RATE  = 1.82;     // rad/s, gaze eases back to mouse
   const SNAP_RATE    = 9.0;      // rad/s, when no girl in pull range
 
   const DOOR_Y0 = 250, DOOR_Y1 = 390;   // door bands on both walls
@@ -91,16 +93,18 @@
   const WORLD_DOOR_Y0 = DOOR_Y0 * WORLD_SCALE_Y; // 500
   const WORLD_DOOR_Y1 = DOOR_Y1 * WORLD_SCALE_Y; // 780
   const GYM_HEAT_LABELS = ["WARMUP", "ACTIVE", "BUSY", "PACKED", "PEAK"];
+  const LEVEL_PRESSURE = [1.18, 1.32, 1.48, 1.64, 1.82, 2.0, 2.18, 2.36];
+  const LEVEL_DECAY_SCALE = [0.82, 0.76, 0.70, 0.64, 0.58, 0.53, 0.49, 0.45];
 
   // =========================================================================
   // 2. GIRL ARCHETYPES
   // =========================================================================
   const TYPES = {
-    lifter:     { coneW: 0.55, range: 190, susMult: 1.0, pullW: 1.0, checkEvery: [4.5, 7.0], checkDur: 1.2 },
-    walker:     { coneW: 0.60, range: 200, susMult: 1.0, pullW: 1.0 },
-    stepper:    { coneW: 0.50, range: 200, susMult: 1.0, pullW: 1.7, checkEvery: [3.5, 6.0], checkDur: 0.8 },
-    scanner:    { coneW: 0.60, range: 210, susMult: 1.0, pullW: 1.0, rotate: 0.65 },
-    influencer: { coneW: 0.95, range: 240, susMult: 2.0, pullW: 1.35, flipEvery: [4.0, 6.5], flipDur: 2.0 }
+    lifter:     { coneW: 0.64, range: 220, susMult: 1.12, pullW: 1.12, checkEvery: [3.0, 5.1], checkDur: 1.45 },
+    walker:     { coneW: 0.70, range: 225, susMult: 1.08, pullW: 1.12 },
+    stepper:    { coneW: 0.62, range: 230, susMult: 1.15, pullW: 2.15, checkEvery: [2.4, 4.2], checkDur: 1.05 },
+    scanner:    { coneW: 0.70, range: 240, susMult: 1.12, pullW: 1.12, rotate: 0.9 },
+    influencer: { coneW: 1.08, range: 270, susMult: 2.25, pullW: 1.55, flipEvery: [2.8, 4.8], flipDur: 2.4 }
   };
 
   // =========================================================================
@@ -111,7 +115,7 @@
   const LEVELS = [
     {
       name: "6 AM. DEAD.", sub: "One girl at the rack. Equipment breaks the straight lane. Exit: Right wall.",
-      pull: 0.22, girlSpeed: 0, phoneChance: 0.3,
+      pull: 0.34, girlSpeed: 28, phoneChance: 0.18,
       exit: { side: "right", x: 640, y: 320 },
       obstacles: [
         { x: 200, y: 120, w: 56, h: 72, kind: "rack" },
@@ -133,7 +137,7 @@
     },
     {
       name: "THE CORNER LANE", sub: "Top-right corner blocked. Cover pockets force an L-shaped route. Exit: Top wall.",
-      pull: 0.30, girlSpeed: 36, phoneChance: 0.4,
+      pull: 0.46, girlSpeed: 44, phoneChance: 0.16,
       exit: { side: "top", x: 160, y: 0 },
       obstacles: [
         { x: 480, y: 160, w: 320, h: 320, kind: "wall" },
@@ -157,7 +161,7 @@
     },
     {
       name: "THE STEPPER WING", sub: "Bottom corners blocked. The center aisle pinches before the locker door.",
-      pull: 0.38, girlSpeed: 40, phoneChance: 0.5,
+      pull: 0.58, girlSpeed: 52, phoneChance: 0.14,
       exit: { side: "bottom", x: 320, y: 640 },
       obstacles: [
         { x: 120, y: 520, w: 240, h: 240, kind: "wall" },
@@ -185,7 +189,7 @@
     },
     {
       name: "THE TRI-CORRIDOR", sub: "Horizontal walls divide the floor into an S-route. Exit: Bottom wall.",
-      pull: 0.45, girlSpeed: 44, phoneChance: 0.5,
+      pull: 0.70, girlSpeed: 60, phoneChance: 0.12,
       exit: { side: "bottom", x: 100, y: 640 },
       obstacles: [
         { x: 360, y: 210, w: 560, h: 30, kind: "wall" },
@@ -214,7 +218,7 @@
     },
     {
       name: "LOOP-BACK SPIRAL", sub: "No same-wall shortcut. Loop through the upper lane to the northeast locker.",
-      pull: 0.52, girlSpeed: 48, phoneChance: 0.6,
+      pull: 0.83, girlSpeed: 68, phoneChance: 0.10,
       exit: { side: "right", x: 640, y: 120 },
       obstacles: [
         { x: 360, y: 320, w: 480, h: 40, kind: "wall" },
@@ -246,7 +250,7 @@
     },
     {
       name: "INFLUENCER RING", sub: "Central block plus stairs. Take 2F stairs to reach the locker balcony.",
-      pull: 0.60, girlSpeed: 52, phoneChance: 0.65,
+      pull: 0.98, girlSpeed: 76, phoneChance: 0.09,
       exit: { side: "top", x: 560, y: 0 }, startFloor: "1F", exitFloor: "2F",
       stairs: [
         { x: 86, y: 548, toX: 560, toY: 118, floor: "1F", toFloor: "2F", label: "UP" },
@@ -282,7 +286,7 @@
     },
     {
       name: "JUICE BAR ROOMS", sub: "Four rooms, door gaps, and a rear stairwell to the 2F locker hall.",
-      pull: 0.68, girlSpeed: 56, phoneChance: 0.7,
+      pull: 1.12, girlSpeed: 84, phoneChance: 0.08,
       exit: { side: "bottom", x: 520, y: 640 }, startFloor: "1F", exitFloor: "2F",
       stairs: [
         { x: 104, y: 104, toX: 540, toY: 560, floor: "1F", toFloor: "2F", label: "UP" },
@@ -322,7 +326,7 @@
     },
     {
       name: "PEAK HOURS. 6 PM.", sub: "Two-floor peak-hour cross. Survive the stairs before the final locker door.",
-      pull: 0.78, girlSpeed: 62, phoneChance: 0.8,
+      pull: 1.30, girlSpeed: 94, phoneChance: 0.07,
       exit: { side: "top", x: 320, y: 0 }, startFloor: "1F", exitFloor: "2F",
       stairs: [
         { x: 250, y: 320, toX: 350, toY: 90, floor: "1F", toFloor: "2F", label: "UP" },
@@ -643,12 +647,16 @@
     return state.obstacles;
   }
 
+  function getLevelIndex() {
+    return clamp((state.level || 1) - 1, 0, LEVEL_PRESSURE.length - 1);
+  }
+
   function getLevelPressure() {
-    return 1 + (state.level - 1) * 0.075;
+    return LEVEL_PRESSURE[getLevelIndex()] || LEVEL_PRESSURE[0];
   }
 
   function getLevelDecayScale() {
-    return clamp(1 - (state.level - 1) * 0.045, 0.64, 1);
+    return LEVEL_DECAY_SCALE[getLevelIndex()] || LEVEL_DECAY_SCALE[LEVEL_DECAY_SCALE.length - 1];
   }
 
   function getHeatLabel() {
@@ -707,6 +715,56 @@
     return false;
   }
 
+  function refreshSaveMenu() {
+    if (saveMenu && typeof saveMenu.refresh === "function") saveMenu.refresh();
+  }
+
+  function clearSave() {
+    if (!saveSlot) return;
+    saveSlot.clear();
+    refreshSaveMenu();
+  }
+
+  function saveProgress(meta = {}) {
+    if (!saveSlot || !state.started || state.won) return false;
+    const saved = saveSlot.save(snapshot(), meta);
+    if (saved) refreshSaveMenu();
+    return saved;
+  }
+
+  function findStairLanding(stair) {
+    const baseAngle = Math.atan2(stair.toY - stair.y, stair.toX - stair.x);
+    const angles = [
+      baseAngle,
+      baseAngle + Math.PI,
+      baseAngle + Math.PI / 2,
+      baseAngle - Math.PI / 2,
+      0,
+      Math.PI / 2,
+      Math.PI,
+      -Math.PI / 2,
+    ];
+    const radii = [
+      STAIR_LANDING_OFFSET,
+      STAIR_LANDING_OFFSET + 18,
+      STAIR_LANDING_OFFSET + 36,
+      PLAYER_RADIUS + 4,
+    ];
+
+    for (const radius of radii) {
+      for (const angle of angles) {
+        const x = clamp(stair.toX + Math.cos(angle) * radius, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS);
+        const y = clamp(stair.toY + Math.sin(angle) * radius, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS);
+        if (!collidesAny(x, y, PLAYER_RADIUS)) return { x, y };
+      }
+    }
+
+    return {
+      x: clamp(stair.toX, PLAYER_RADIUS, WORLD_W - PLAYER_RADIUS),
+      y: clamp(stair.toY, PLAYER_RADIUS, WORLD_H - PLAYER_RADIUS),
+    };
+  }
+
   function bottlePlacementBlocked(x, y, placed) {
     if (collidesAny(x, y, WATER_BOTTLE_RADIUS + 14)) return true;
     if (exitDistanceFrom(x, y) < 105) return true;
@@ -728,7 +786,7 @@
   }
 
   function spawnWaterBottles(levelNum) {
-    const target = clamp(3 + levelNum, 4, 10);
+    const target = Math.floor(clamp(5 + levelNum * 1.5, 6, 18));
     const bottles = [];
     const margin = 62;
     const attempts = target * 90;
@@ -805,7 +863,7 @@
       // phone
       phoneActive: false,
       phoneT: 0,
-      phoneCycle: rand(6, 11),
+      phoneCycle: rand(8, 14),
 
       // lifter / stepper checks
       checkT: def.type === "lifter" || def.type === "stepper" ? rand(t.checkEvery[0], t.checkEvery[1]) : 0,
@@ -1168,16 +1226,20 @@
     if (g.type !== "influencer" && g.type !== "scanner") {
       if (!g.phoneActive) {
         g.phoneT += dt;
-        if (g.phoneT > g.phoneCycle && Math.random() < lv.phoneChance) {
-          g.phoneActive = true;
+        if (g.phoneT > g.phoneCycle) {
           g.phoneT = 0;
+          if (Math.random() < lv.phoneChance) {
+            g.phoneActive = true;
+          } else {
+            g.phoneCycle = rand(5, 10);
+          }
         }
       } else {
         g.phoneT += dt;
         if (g.phoneT > 2.0) {
           g.phoneActive = false;
           g.phoneT = 0;
-          g.phoneCycle = rand(5, 10);
+          g.phoneCycle = rand(7, 13);
         }
       }
     }
@@ -1430,10 +1492,11 @@
     const p = state.player;
     for (const stair of state.stairs) {
       if (stair.floor && stair.floor !== state.floor) continue;
-      if (dist(p.x, p.y, stair.x, stair.y) > STAIR_RADIUS) continue;
+      if (dist(p.x, p.y, stair.x, stair.y) > STAIR_TRIGGER_RADIUS) continue;
 
-      p.x = stair.toX;
-      p.y = stair.toY;
+      const landing = findStairLanding(stair);
+      p.x = landing.x;
+      p.y = landing.y;
       state.floor = stair.toFloor || state.floor;
       state.stairCooldown = STAIR_COOLDOWN;
       state.knockX = 0;
@@ -1443,6 +1506,7 @@
       sfx.level();
       showBanner((state.floor === "2F" ? "2F LOCKER ACCESS" : "1F GYM FLOOR"), 1.1);
       RB.toast("Stairs to " + state.floor + ".", "good");
+      saveProgress({ checkpoint: "stairs", level: state.level, floor: state.floor });
       return;
     }
   }
@@ -1835,11 +1899,12 @@
     // Reset camera position
     state.cam.x = clamp(state.player.x - W / 2, 0, WORLD_W - W);
     state.cam.y = clamp(state.player.y - H / 2, 0, WORLD_H - H);
+    saveProgress({ checkpoint: "level", level: state.level, floor: state.floor });
   }
 
   function startGame() {
     if (state.started) return;
-    if (saveSlot) saveSlot.clear();
+    clearSave();
     state.started = true;
     state.running = true;
     state.gameOver = false;
@@ -1861,7 +1926,7 @@
     if (state.gameOver) return;
     state.gameOver = true;
     state.running = false;
-    if (saveSlot) saveSlot.clear();
+    refreshSaveMenu();
     state.bustReason = reason;
     state.cam.shake = 0.8;
     state.cam.flash = 1.0;
@@ -1872,7 +1937,7 @@
   function triggerWin() {
     state.won = true;
     state.running = false;
-    if (saveSlot) saveSlot.clear();
+    clearSave();
     state.cam.flash = 0.6;
     sfx.win();
     RB.recordScore("dont-look-gym-girl", state.score);
@@ -1880,7 +1945,7 @@
   }
 
   function restart() {
-    if (saveSlot) saveSlot.clear();
+    clearSave();
     document.getElementById("shame-mount").innerHTML = "";
     document.getElementById("gym-banner").style.display = "none";
     document.getElementById("overlay").classList.add("overlay--show");
@@ -1926,6 +1991,7 @@
   function showShameCard(reason) {
     const high = RB.getHighScore("dont-look-gym-girl") || 0;
     const cap = choice(SHAME_CAPTIONS);
+    const hasSave = !!(saveSlot && saveSlot.has());
     document.getElementById("shame-mount").innerHTML = `
       <div class="shame-card">
         <h3 class="shame-card__title">${BUST_TITLES[reason] || BUST_TITLES.sus}</h3>
@@ -1937,11 +2003,19 @@
         </div>
         <div class="shame-card__caption">"${cap}"</div>
         <div class="shame-card__actions">
-          <button class="btn btn--primary" id="shame-retry">Try again</button>
+          ${hasSave ? `<button class="btn btn--primary" id="shame-continue">Continue checkpoint</button>` : ""}
+          <button class="btn ${hasSave ? "btn--secondary" : "btn--primary"}" id="shame-retry">New run</button>
           <a class="btn btn--ghost" href="../games.html">All games</a>
         </div>
       </div>
     `;
+    const continueButton = document.getElementById("shame-continue");
+    if (continueButton) {
+      continueButton.addEventListener("click", () => {
+        const saved = saveSlot && saveSlot.read();
+        if (saved) restoreGame(saved);
+      });
+    }
     document.getElementById("shame-retry").addEventListener("click", restart);
   }
 
@@ -3457,7 +3531,6 @@
     document.getElementById("shame-mount").innerHTML = "";
     document.getElementById("overlay").classList.remove("overlay--show");
     showBanner("LEVEL " + state.level + " · CONTINUED", 1.4);
-    updateHUD();
   }
 
   if (document.readyState === "loading") {

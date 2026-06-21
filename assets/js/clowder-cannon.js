@@ -37,7 +37,7 @@
       bossColor: "#212838",
       bossAccent: "#ff2e88",
       bossPattern: "vacuum",
-      gateEvery: [720, 940],
+      gateEvery: [1040, 1320],
       objectEvery: [240, 380],
       hpMod: 1.14,
       damageMod: 1.14,
@@ -58,7 +58,7 @@
       bossColor: "#245f37",
       bossAccent: "#8cff72",
       bossPattern: "cucumber",
-      gateEvery: [660, 860],
+      gateEvery: [960, 1220],
       objectEvery: [190, 310],
       hpMod: 1.3,
       damageMod: 1.24,
@@ -79,7 +79,7 @@
       bossColor: "#1d5485",
       bossAccent: "#6dc8ff",
       bossPattern: "bath",
-      gateEvery: [610, 800],
+      gateEvery: [900, 1140],
       objectEvery: [155, 265],
       hpMod: 1.48,
       damageMod: 1.36,
@@ -100,7 +100,7 @@
       bossColor: "#3a2418",
       bossAccent: "#ffb347",
       bossPattern: "squeeze",
-      gateEvery: [570, 750],
+      gateEvery: [840, 1080],
       objectEvery: [135, 235],
       hpMod: 1.56,
       damageMod: 1.4,
@@ -121,7 +121,7 @@
       bossColor: "#4a1824",
       bossAccent: "#ff3b5c",
       bossPattern: "pointer",
-      gateEvery: [530, 710],
+      gateEvery: [790, 1020],
       objectEvery: [118, 210],
       hpMod: 1.64,
       damageMod: 1.46,
@@ -142,7 +142,7 @@
       bossColor: "#1f2a3d",
       bossAccent: "#7ec8ff",
       bossPattern: "cucumber",
-      gateEvery: [500, 680],
+      gateEvery: [750, 980],
       objectEvery: [102, 188],
       hpMod: 1.74,
       damageMod: 1.52,
@@ -163,7 +163,7 @@
       bossColor: "#2d2248",
       bossAccent: "#c9a7ff",
       bossPattern: "lint",
-      gateEvery: [470, 650],
+      gateEvery: [710, 940],
       objectEvery: [90, 168],
       hpMod: 1.84,
       damageMod: 1.58,
@@ -184,7 +184,7 @@
       bossColor: "#311d55",
       bossAccent: "#ffd43b",
       bossPattern: "lint",
-      gateEvery: [440, 620],
+      gateEvery: [680, 900],
       objectEvery: [78, 148],
       hpMod: 1.95,
       damageMod: 1.66,
@@ -250,6 +250,46 @@
     { type: "divide", value: 2, label: "/2 CUCUMBER", good: false, color: "#7ad65f" },
     { type: "subtract", value: 14, label: "-14 VET BILL", good: false, color: "#ff965e" },
     { type: "morale", value: -34, label: "-34 VACUUM", good: false, color: "#ff6f91" },
+  ];
+
+  const GATE_EDGE = 24;
+  const GATE_SPLIT = W / 2;
+  const GATE_PAIR_LAYOUT = [
+    { x: GATE_EDGE, w: GATE_SPLIT - GATE_EDGE },
+    { x: GATE_SPLIT, w: W - GATE_SPLIT - GATE_EDGE },
+  ];
+
+  const GATE_MATH_EASY = [
+    ["+6 KITTENS", "-10 BATH"],
+    ["+6 KITTENS", "-14 VET BILL"],
+    ["+4 BOX CATS", "-10 BATH"],
+    ["+4 BOX CATS", "-14 VET BILL"],
+    ["+6 KITTENS", "/2 CUCUMBER"],
+  ];
+
+  const GATE_MATH_MEDIUM = [
+    ["+6 KITTENS", "+4 BOX CATS"],
+    ["x2 ZOOMIES", "-10 BATH"],
+    ["x2 ZOOMIES", "-14 VET BILL"],
+    ["+12 MORALE", "-34 VACUUM"],
+    ["+4 BOX CATS", "/2 CUCUMBER"],
+  ];
+
+  const GATE_MATH_HARD = [
+    ["x2 ZOOMIES", "+6 KITTENS"],
+    ["x2 ZOOMIES", "+4 BOX CATS"],
+    ["+12 MORALE", "+4 BOX CATS"],
+    ["+6 KITTENS", "+12 MORALE"],
+    ["-10 BATH", "/2 CUCUMBER"],
+    ["-14 VET BILL", "/2 CUCUMBER"],
+  ];
+
+  const GATE_MATH_BRUTAL = [
+    ["x2 ZOOMIES", "+12 MORALE"],
+    ["+4 BOX CATS", "+12 MORALE"],
+    ["-10 BATH", "-14 VET BILL"],
+    ["+12 MORALE", "-34 VACUUM"],
+    ["x2 ZOOMIES", "/2 CUCUMBER"],
   ];
 
   const OBJECT_POOL = [
@@ -319,7 +359,7 @@
       time: 0,
       combo: 0,
       fireTimer: 0,
-      nextGateAt: 420,
+      nextGateAt: 620,
       nextObjectAt: 340,
       nextPairId: 1,
       appliedPairs: [],
@@ -579,83 +619,66 @@
     return 0;
   }
 
-  function decorateGateSpec(spec, difficulty, rank) {
-    const gate = { ...spec };
-    gate.pairDifficulty = difficulty;
-    const misleading = ["#9cffef", "#c8d46a", "#f0c97a", "#9ad8ff", "#d4b5ff", "#ffd43b"];
+  function gateByLabel(label) {
+    return GATE_POOL.find((gate) => gate.label === label);
+  }
 
-    if (difficulty < 0.28) {
-      gate.hint = rank === "better" ? "best" : "worst";
-      gate.displayColor = spec.color;
-    } else if (difficulty < 0.58) {
-      gate.hint = rank === "better" && difficulty < 0.42 ? "best" : null;
-      gate.displayColor = spec.color;
-    } else {
-      gate.hint = null;
-      if (rank === "worse" && Math.random() < 0.68) gate.displayColor = pick(misleading);
-      else gate.displayColor = spec.color;
+  function pickCloseValuePair() {
+    let bestGap = Infinity;
+    let pair = [pick(GATE_POOL), pick(GATE_POOL)];
+    for (let i = 0; i < 64; i++) {
+      const g1 = pick(GATE_POOL);
+      const g2 = pick(GATE_POOL.filter((g) => g.label !== g1.label));
+      const gap = Math.abs(estimateGateValue(g1) - estimateGateValue(g2));
+      if (gap < bestGap) {
+        bestGap = gap;
+        pair = [g1, g2];
+      }
     }
-    return gate;
+    return pair;
   }
 
   function pickGatePairSpecs() {
     const difficulty = gateDifficulty();
-    const goods = GATE_POOL.filter((g) => g.good);
-    const bads = GATE_POOL.filter((g) => !g.good);
-    let a;
-    let b;
+    let pool = GATE_MATH_EASY;
 
-    if (difficulty < 0.3) {
-      a = pick(goods.filter((g) => g.type === "add" || g.type === "multiply"));
-      b = pick(bads.filter((g) => g.type === "subtract" || g.type === "divide"));
-    } else if (difficulty < 0.62) {
-      a = pick(goods);
-      b = pick(bads);
-      if (b.label === a.label) b = pick(bads.filter((g) => g.label !== a.label));
+    if (difficulty < 0.24) {
+      pool = GATE_MATH_EASY;
+    } else if (difficulty < 0.48) {
+      pool = GATE_MATH_MEDIUM;
+    } else if (difficulty < 0.74) {
+      pool = GATE_MATH_HARD;
+    } else if (difficulty < 0.9) {
+      pool = GATE_MATH_BRUTAL;
     } else {
-      let bestGap = Infinity;
-      let pair = [pick(GATE_POOL), pick(GATE_POOL)];
-      for (let i = 0; i < 56; i++) {
-        const g1 = pick(GATE_POOL);
-        const g2 = pick(GATE_POOL.filter((g) => g.label !== g1.label));
-        const gap = Math.abs(estimateGateValue(g1) - estimateGateValue(g2));
-        if (gap < bestGap) {
-          bestGap = gap;
-          pair = [g1, g2];
-        }
-      }
-      [a, b] = pair;
+      const [a, b] = pickCloseValuePair();
+      return Math.random() > 0.5 ? [a, b] : [b, a];
     }
 
-    const va = estimateGateValue(a);
-    const vb = estimateGateValue(b);
-    const betterIdx = va >= vb ? 0 : 1;
-    const specs = [a, b].map((spec, i) => decorateGateSpec(spec, difficulty, i === betterIdx ? "better" : "worse"));
+    const labels = pick(pool);
+    const specs = labels.map((label) => ({ ...gateByLabel(label) }));
     if (Math.random() > 0.5) specs.reverse();
     return specs;
   }
 
-  function playerGateReach() {
-    return clamp(40 + state.cats * 0.34, 46, 92);
-  }
-
-  function gateHit(gate) {
-    const reach = playerGateReach();
-    return state.x + reach > gate.x && state.x - reach < gate.x + gate.w;
+  function gateForPlayer(gates) {
+    const left = gates.find((gate) => gate.x < GATE_SPLIT) || gates[0];
+    const right = gates.find((gate) => gate.x >= GATE_SPLIT) || gates[1];
+    return state.x < GATE_SPLIT ? left : right;
   }
 
   function spawnGatePair() {
     const level = currentLevel();
     const pairId = state.nextPairId++;
     const specs = pickGatePairSpecs();
-    const xs = [142, 598];
     specs.forEach((spec, i) => {
+      const layout = GATE_PAIR_LAYOUT[i];
       state.gates.push({
         ...spec,
         pairId,
-        x: xs[i],
+        x: layout.x,
         y: -112,
-        w: 220,
+        w: layout.w,
         h: 92,
         levelName: level.short,
       });
@@ -1048,7 +1071,7 @@
     state.obstacles = [];
     state.bullets = [];
     state.appliedPairs = [];
-    state.nextGateAt = 380;
+    state.nextGateAt = 560;
     state.nextObjectAt = 260;
     state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
     state.morale = clamp(state.morale + 8, 0, 100);
@@ -1169,18 +1192,7 @@
       if (!gates.length) return;
       const leadY = Math.max(...gates.map((gate) => gate.y + gate.h));
       if (leadY < PLAYER_Y - 18) return;
-      const hit = gates.find((gate) => gateHit(gate));
-      if (hit) {
-        applyGate(hit);
-      } else {
-        const forced = gates
-          .map((gate) => ({ gate, value: estimateGateValue(gate) }))
-          .sort((left, right) => left.value - right.value)[0].gate;
-        applyGate(forced);
-        state.morale = clamp(state.morale - 12, 0, 100);
-        addFloat(state.x, PLAYER_Y - 108, "FORCED PICK", C.red);
-        addLog("No gate chosen. The cats panic-picked the worse option.");
-      }
+      applyGate(gateForPlayer(gates));
       markPair(pairId);
     });
 
@@ -1406,33 +1418,20 @@
 
   function drawGate(gate) {
     const alpha = pairApplied(gate.pairId) ? 0.12 : 0.88;
-    const difficulty = gate.pairDifficulty ?? gateDifficulty();
-    const displayColor = gate.displayColor || gate.color;
+    const labelSize = clamp(Math.floor(gate.w * 0.055), 18, 28);
     ctx.save();
     ctx.globalAlpha = alpha;
-    if (difficulty < 0.35) {
-      ctx.fillStyle = gate.good ? "rgba(36, 255, 145, 0.22)" : "rgba(255, 84, 103, 0.22)";
-    } else if (difficulty < 0.62) {
-      ctx.fillStyle = gate.good ? "rgba(36, 255, 145, 0.12)" : "rgba(255, 84, 103, 0.13)";
-    } else {
-      ctx.fillStyle = "rgba(120, 128, 155, 0.14)";
-    }
-    ctx.strokeStyle = displayColor;
-    ctx.lineWidth = 6;
-    roundRect(gate.x, gate.y, gate.w, gate.h, 12);
+    ctx.fillStyle = "rgba(14, 22, 34, 0.58)";
+    ctx.strokeStyle = gate.color;
+    ctx.lineWidth = 5;
+    roundRect(gate.x, gate.y, gate.w, gate.h, 10);
     ctx.fill();
     ctx.stroke();
 
-    if (gate.hint === "best") {
-      fitText("BEST PICK", gate.x + gate.w / 2, gate.y + 14, gate.w - 24, 13, C.green, "center");
-    } else if (gate.hint === "worst") {
-      fitText("RISKY", gate.x + gate.w / 2, gate.y + 14, gate.w - 24, 13, C.red, "center");
-    }
-
     ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
-    roundRect(gate.x + 12, gate.y + 20, gate.w - 24, 52, 8);
+    roundRect(gate.x + 10, gate.y + 18, gate.w - 20, 54, 8);
     ctx.fill();
-    fitText(gate.label, gate.x + gate.w / 2, gate.y + 54, gate.w - 32, 25, displayColor, "center");
+    fitText(gate.label, gate.x + gate.w / 2, gate.y + 52, gate.w - 24, labelSize, gate.color, "center");
     ctx.restore();
   }
 

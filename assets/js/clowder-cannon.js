@@ -38,7 +38,7 @@
       bossAccent: "#ff2e88",
       bossPattern: "vacuum",
       gateEvery: [1040, 1320],
-      objectEvery: [240, 380],
+      objectEvery: [440, 640],
       hpMod: 1.14,
       damageMod: 1.14,
       clearBonus: 1100,
@@ -59,7 +59,7 @@
       bossAccent: "#8cff72",
       bossPattern: "cucumber",
       gateEvery: [960, 1220],
-      objectEvery: [190, 310],
+      objectEvery: [380, 560],
       hpMod: 1.3,
       damageMod: 1.24,
       clearBonus: 1500,
@@ -80,7 +80,7 @@
       bossAccent: "#6dc8ff",
       bossPattern: "bath",
       gateEvery: [900, 1140],
-      objectEvery: [155, 265],
+      objectEvery: [330, 500],
       hpMod: 1.48,
       damageMod: 1.36,
       clearBonus: 2050,
@@ -101,7 +101,7 @@
       bossAccent: "#ffb347",
       bossPattern: "squeeze",
       gateEvery: [840, 1080],
-      objectEvery: [135, 235],
+      objectEvery: [290, 450],
       hpMod: 1.56,
       damageMod: 1.4,
       clearBonus: 2350,
@@ -122,7 +122,7 @@
       bossAccent: "#ff3b5c",
       bossPattern: "pointer",
       gateEvery: [790, 1020],
-      objectEvery: [118, 210],
+      objectEvery: [260, 410],
       hpMod: 1.64,
       damageMod: 1.46,
       clearBonus: 2650,
@@ -143,7 +143,7 @@
       bossAccent: "#7ec8ff",
       bossPattern: "cucumber",
       gateEvery: [750, 980],
-      objectEvery: [102, 188],
+      objectEvery: [235, 370],
       hpMod: 1.74,
       damageMod: 1.52,
       clearBonus: 2950,
@@ -164,7 +164,7 @@
       bossAccent: "#c9a7ff",
       bossPattern: "lint",
       gateEvery: [710, 940],
-      objectEvery: [90, 168],
+      objectEvery: [210, 340],
       hpMod: 1.84,
       damageMod: 1.58,
       clearBonus: 3300,
@@ -185,7 +185,7 @@
       bossAccent: "#ffd43b",
       bossPattern: "lint",
       gateEvery: [680, 900],
-      objectEvery: [78, 148],
+      objectEvery: [190, 310],
       hpMod: 1.95,
       damageMod: 1.66,
       clearBonus: 4200,
@@ -360,7 +360,7 @@
       combo: 0,
       fireTimer: 0,
       nextGateAt: 620,
-      nextObjectAt: 340,
+      nextObjectAt: 540,
       nextPairId: 1,
       appliedPairs: [],
       bossSpawned: false,
@@ -603,6 +603,32 @@
     return state.gates.some((gate) => rectsOverlap(x, y, w, h, gate.x, gate.y, gate.w, gate.h, pad));
   }
 
+  function objectOverlapsObstacle(x, y, w, h) {
+    const pad = 56;
+    return state.obstacles.some((ob) => rectsOverlap(x, y, w, h, ob.x, ob.y, ob.w, ob.h, pad));
+  }
+
+  function shuffleList(list) {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      const tmp = copy[i];
+      copy[i] = copy[j];
+      copy[j] = tmp;
+    }
+    return copy;
+  }
+
+  function objectLaneCenters() {
+    const margin = PLAY_MIN_X + 48;
+    const usable = W - margin * 2;
+    const lanes = [];
+    for (let i = 0; i < 7; i++) {
+      lanes.push(margin + (usable * (i + 0.5)) / 7);
+    }
+    return shuffleList(lanes);
+  }
+
   function gateDifficulty() {
     const levelFrac = state.levelIndex / Math.max(1, LEVELS.length - 1);
     const runFrac = clamp(state.distance / currentLevel().length, 0, 1);
@@ -701,14 +727,16 @@
     const scale = (spec.kind === "roomba" && state.distance > level.length * 0.55 ? 1.16 : 1) * levelScale;
     const w = spec.w * scale;
     const h = spec.h * scale;
-    const y = -120;
-    const laneCenters = [W / 2, W / 2 - 92, W / 2 + 92, W / 2 - 176, W / 2 + 176, W / 2 - 248, W / 2 + 248];
+    const y = rand(-190, -88);
+    const minX = PLAY_MIN_X + 6;
+    const maxX = PLAY_MAX_X - w - 6;
+    const laneCenters = objectLaneCenters();
     let placed = false;
 
-    for (let attempt = 0; attempt < 22; attempt++) {
-      const lane = laneCenters[attempt % laneCenters.length] + rand(-28, 28);
-      const x = clamp(lane - w / 2, 24, W - w - 24);
-      if (!objectOverlapsGate(x, y, w, h)) {
+    for (let attempt = 0; attempt < laneCenters.length + 6; attempt++) {
+      const lane = (laneCenters[attempt % laneCenters.length] || rand(minX + w / 2, maxX + w / 2)) + rand(-34, 34);
+      const x = clamp(lane - w / 2, minX, maxX);
+      if (!objectOverlapsGate(x, y, w, h) && !objectOverlapsObstacle(x, y, w, h)) {
         state.obstacles.push({
           ...spec,
           x,
@@ -729,7 +757,7 @@
     }
 
     if (!placed) {
-      state.nextObjectAt += rand(55, 95);
+      state.nextObjectAt += rand(140, 220);
     }
   }
 
@@ -1072,7 +1100,7 @@
     state.bullets = [];
     state.appliedPairs = [];
     state.nextGateAt = 560;
-    state.nextObjectAt = 260;
+    state.nextObjectAt = 460;
     state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
     state.morale = clamp(state.morale + 8, 0, 100);
     state.levelBanner = 2.8;

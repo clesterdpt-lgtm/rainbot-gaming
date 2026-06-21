@@ -5,12 +5,12 @@
    - subscribe modal
    ============================================ */
 
-// Detect whether we're at site root or in a subdir (games/, legal/)
+// Detect whether we're at site root or in a subdir (games/, articles/, legal/)
 // so generated nav links are correct whether the site is served
 // from a server OR opened directly via file://
 const RB_BASE = (() => {
   const p = location.pathname;
-  if (p.includes("/games/") || p.includes("/legal/")) return "../";
+  if (p.includes("/games/") || p.includes("/articles/") || p.includes("/videos/") || p.includes("/legal/")) return "../";
   return "./";
 })();
 
@@ -24,9 +24,11 @@ function renderNav() {
       : "";
     const path = location.pathname;
     const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
+    const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
+    const isRainbotTv = path.endsWith("/videos.html") || path.includes("/videos/");
     const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
     const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
-    const isGames = !isAgentGames && !isAfterDark && (path.endsWith("/games.html") || path.includes("/games/"));
+    const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && (path.endsWith("/games.html") || path.includes("/games/"));
 
     slot.innerHTML = `
       <a href="${RB_BASE}" class="nav__brand" title="Rainbot Gaming — free browser arcade">
@@ -35,15 +37,14 @@ function renderNav() {
       <div class="nav__links">
         <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
         <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
+        <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
+        <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
         <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
         <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
-        <a href="${RB_BASE}#coming-soon">Coming Soon</a>
-        <a href="${RB_BASE}#after-dark">About</a>
-        <a href="${RB_BASE}#pricing">Merch</a>
       </div>
       <form class="nav__search" role="search">
-        <label class="sr-only" for="rb-search">Search games</label>
-        <input id="rb-search" type="search" placeholder="Search games..." autocomplete="off" />
+        <label class="sr-only" for="rb-search">Search Rainbot</label>
+        <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
         <button type="submit" aria-label="Search">Search</button>
       </form>
       <div class="nav__actions">
@@ -86,6 +87,13 @@ function bindSearch(root) {
   if (!form || !input) return;
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
 
+  const fallbackSearchPage = () => {
+    const path = location.pathname;
+    if (path.endsWith("/articles.html") || path.includes("/articles/")) return "articles.html";
+    if (path.endsWith("/videos.html") || path.includes("/videos/")) return "videos.html";
+    return "games.html";
+  };
+
   const syncGamesQueryUrl = (query) => {
     if (!window.RBGamesCatalog || !history.replaceState) return;
     const url = new URL(location.href);
@@ -113,6 +121,12 @@ function bindSearch(root) {
   if (window.RBGamesCatalog) {
     const initialQuery = window.RBGamesCatalog.getSearch();
     if (initialQuery) input.value = initialQuery;
+  } else {
+    const initialQuery = new URLSearchParams(location.search).get("q") || "";
+    if (initialQuery) {
+      input.value = initialQuery;
+      requestAnimationFrame(applySearch);
+    }
   }
 
   input.addEventListener("input", applySearch);
@@ -132,7 +146,8 @@ function bindSearch(root) {
       return;
     }
     const q = encodeURIComponent(input.value.trim());
-    location.href = q ? `${RB_BASE}games.html?q=${q}` : `${RB_BASE}games.html`;
+    const fallbackPage = fallbackSearchPage();
+    location.href = q ? `${RB_BASE}${fallbackPage}?q=${q}` : `${RB_BASE}${fallbackPage}`;
   });
 }
 

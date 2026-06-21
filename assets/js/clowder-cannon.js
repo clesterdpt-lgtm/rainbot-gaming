@@ -37,7 +37,7 @@
       bossColor: "#212838",
       bossAccent: "#ff2e88",
       bossPattern: "vacuum",
-      gateEvery: [470, 620],
+      gateEvery: [720, 940],
       objectEvery: [240, 380],
       hpMod: 1.14,
       damageMod: 1.14,
@@ -58,7 +58,7 @@
       bossColor: "#245f37",
       bossAccent: "#8cff72",
       bossPattern: "cucumber",
-      gateEvery: [420, 570],
+      gateEvery: [660, 860],
       objectEvery: [190, 310],
       hpMod: 1.3,
       damageMod: 1.24,
@@ -79,7 +79,7 @@
       bossColor: "#1d5485",
       bossAccent: "#6dc8ff",
       bossPattern: "bath",
-      gateEvery: [390, 530],
+      gateEvery: [610, 800],
       objectEvery: [155, 265],
       hpMod: 1.48,
       damageMod: 1.36,
@@ -100,7 +100,7 @@
       bossColor: "#3a2418",
       bossAccent: "#ffb347",
       bossPattern: "squeeze",
-      gateEvery: [360, 500],
+      gateEvery: [570, 750],
       objectEvery: [135, 235],
       hpMod: 1.56,
       damageMod: 1.4,
@@ -121,7 +121,7 @@
       bossColor: "#4a1824",
       bossAccent: "#ff3b5c",
       bossPattern: "pointer",
-      gateEvery: [340, 470],
+      gateEvery: [530, 710],
       objectEvery: [118, 210],
       hpMod: 1.64,
       damageMod: 1.46,
@@ -142,7 +142,7 @@
       bossColor: "#1f2a3d",
       bossAccent: "#7ec8ff",
       bossPattern: "cucumber",
-      gateEvery: [320, 450],
+      gateEvery: [500, 680],
       objectEvery: [102, 188],
       hpMod: 1.74,
       damageMod: 1.52,
@@ -163,7 +163,7 @@
       bossColor: "#2d2248",
       bossAccent: "#c9a7ff",
       bossPattern: "lint",
-      gateEvery: [300, 430],
+      gateEvery: [470, 650],
       objectEvery: [90, 168],
       hpMod: 1.84,
       damageMod: 1.58,
@@ -184,7 +184,7 @@
       bossColor: "#311d55",
       bossAccent: "#ffd43b",
       bossPattern: "lint",
-      gateEvery: [280, 400],
+      gateEvery: [440, 620],
       objectEvery: [78, 148],
       hpMod: 1.95,
       damageMod: 1.66,
@@ -319,7 +319,7 @@
       time: 0,
       combo: 0,
       fireTimer: 0,
-      nextGateAt: 230,
+      nextGateAt: 420,
       nextObjectAt: 340,
       nextPairId: 1,
       appliedPairs: [],
@@ -563,15 +563,91 @@
     return state.gates.some((gate) => rectsOverlap(x, y, w, h, gate.x, gate.y, gate.w, gate.h, pad));
   }
 
+  function gateDifficulty() {
+    const levelFrac = state.levelIndex / Math.max(1, LEVELS.length - 1);
+    const runFrac = clamp(state.distance / currentLevel().length, 0, 1);
+    return clamp(levelFrac * 0.7 + runFrac * 0.3, 0, 1);
+  }
+
+  function estimateGateValue(gate) {
+    const cats = state.cats;
+    if (gate.type === "add") return gate.value;
+    if (gate.type === "subtract") return -gate.value;
+    if (gate.type === "multiply") return cats >= 38 ? 7 : cats * (gate.value - 1);
+    if (gate.type === "divide") return -(cats - Math.floor(cats / gate.value));
+    if (gate.type === "morale") return gate.value * 0.12;
+    return 0;
+  }
+
+  function decorateGateSpec(spec, difficulty, rank) {
+    const gate = { ...spec };
+    gate.pairDifficulty = difficulty;
+    const misleading = ["#9cffef", "#c8d46a", "#f0c97a", "#9ad8ff", "#d4b5ff", "#ffd43b"];
+
+    if (difficulty < 0.28) {
+      gate.hint = rank === "better" ? "best" : "worst";
+      gate.displayColor = spec.color;
+    } else if (difficulty < 0.58) {
+      gate.hint = rank === "better" && difficulty < 0.42 ? "best" : null;
+      gate.displayColor = spec.color;
+    } else {
+      gate.hint = null;
+      if (rank === "worse" && Math.random() < 0.68) gate.displayColor = pick(misleading);
+      else gate.displayColor = spec.color;
+    }
+    return gate;
+  }
+
+  function pickGatePairSpecs() {
+    const difficulty = gateDifficulty();
+    const goods = GATE_POOL.filter((g) => g.good);
+    const bads = GATE_POOL.filter((g) => !g.good);
+    let a;
+    let b;
+
+    if (difficulty < 0.3) {
+      a = pick(goods.filter((g) => g.type === "add" || g.type === "multiply"));
+      b = pick(bads.filter((g) => g.type === "subtract" || g.type === "divide"));
+    } else if (difficulty < 0.62) {
+      a = pick(goods);
+      b = pick(bads);
+      if (b.label === a.label) b = pick(bads.filter((g) => g.label !== a.label));
+    } else {
+      let bestGap = Infinity;
+      let pair = [pick(GATE_POOL), pick(GATE_POOL)];
+      for (let i = 0; i < 56; i++) {
+        const g1 = pick(GATE_POOL);
+        const g2 = pick(GATE_POOL.filter((g) => g.label !== g1.label));
+        const gap = Math.abs(estimateGateValue(g1) - estimateGateValue(g2));
+        if (gap < bestGap) {
+          bestGap = gap;
+          pair = [g1, g2];
+        }
+      }
+      [a, b] = pair;
+    }
+
+    const va = estimateGateValue(a);
+    const vb = estimateGateValue(b);
+    const betterIdx = va >= vb ? 0 : 1;
+    const specs = [a, b].map((spec, i) => decorateGateSpec(spec, difficulty, i === betterIdx ? "better" : "worse"));
+    if (Math.random() > 0.5) specs.reverse();
+    return specs;
+  }
+
+  function playerGateReach() {
+    return clamp(40 + state.cats * 0.34, 46, 92);
+  }
+
+  function gateHit(gate) {
+    const reach = playerGateReach();
+    return state.x + reach > gate.x && state.x - reach < gate.x + gate.w;
+  }
+
   function spawnGatePair() {
     const level = currentLevel();
     const pairId = state.nextPairId++;
-    const positive = pick(GATE_POOL.filter((g) => g.good));
-    let other = pick(GATE_POOL);
-    if (Math.random() < 0.58 + state.levelIndex * 0.1) other = pick(GATE_POOL.filter((g) => !g.good));
-    if (other.label === positive.label) other = pick(GATE_POOL.filter((g) => g.label !== positive.label));
-    const leftFirst = Math.random() > 0.5;
-    const specs = leftFirst ? [positive, other] : [other, positive];
+    const specs = pickGatePairSpecs();
     const xs = [142, 598];
     specs.forEach((spec, i) => {
       state.gates.push({
@@ -972,7 +1048,7 @@
     state.obstacles = [];
     state.bullets = [];
     state.appliedPairs = [];
-    state.nextGateAt = 210;
+    state.nextGateAt = 380;
     state.nextObjectAt = 260;
     state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
     state.morale = clamp(state.morale + 8, 0, 100);
@@ -1093,11 +1169,17 @@
       if (!gates.length) return;
       const leadY = Math.max(...gates.map((gate) => gate.y + gate.h));
       if (leadY < PLAYER_Y - 18) return;
-      const hit = gates.find((gate) => state.x >= gate.x && state.x <= gate.x + gate.w);
-      if (hit) applyGate(hit);
-      else {
-        state.morale = clamp(state.morale - 6, 0, 100);
-        addLog("The cats ignored both gates and called it strategy.");
+      const hit = gates.find((gate) => gateHit(gate));
+      if (hit) {
+        applyGate(hit);
+      } else {
+        const forced = gates
+          .map((gate) => ({ gate, value: estimateGateValue(gate) }))
+          .sort((left, right) => left.value - right.value)[0].gate;
+        applyGate(forced);
+        state.morale = clamp(state.morale - 12, 0, 100);
+        addFloat(state.x, PLAYER_Y - 108, "FORCED PICK", C.red);
+        addLog("No gate chosen. The cats panic-picked the worse option.");
       }
       markPair(pairId);
     });
@@ -1324,19 +1406,33 @@
 
   function drawGate(gate) {
     const alpha = pairApplied(gate.pairId) ? 0.12 : 0.88;
+    const difficulty = gate.pairDifficulty ?? gateDifficulty();
+    const displayColor = gate.displayColor || gate.color;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = gate.good ? "rgba(36, 255, 145, 0.12)" : "rgba(255, 84, 103, 0.13)";
-    ctx.strokeStyle = gate.color;
+    if (difficulty < 0.35) {
+      ctx.fillStyle = gate.good ? "rgba(36, 255, 145, 0.22)" : "rgba(255, 84, 103, 0.22)";
+    } else if (difficulty < 0.62) {
+      ctx.fillStyle = gate.good ? "rgba(36, 255, 145, 0.12)" : "rgba(255, 84, 103, 0.13)";
+    } else {
+      ctx.fillStyle = "rgba(120, 128, 155, 0.14)";
+    }
+    ctx.strokeStyle = displayColor;
     ctx.lineWidth = 6;
     roundRect(gate.x, gate.y, gate.w, gate.h, 12);
     ctx.fill();
     ctx.stroke();
 
+    if (gate.hint === "best") {
+      fitText("BEST PICK", gate.x + gate.w / 2, gate.y + 14, gate.w - 24, 13, C.green, "center");
+    } else if (gate.hint === "worst") {
+      fitText("RISKY", gate.x + gate.w / 2, gate.y + 14, gate.w - 24, 13, C.red, "center");
+    }
+
     ctx.fillStyle = "rgba(0, 0, 0, 0.38)";
     roundRect(gate.x + 12, gate.y + 20, gate.w - 24, 52, 8);
     ctx.fill();
-    fitText(gate.label, gate.x + gate.w / 2, gate.y + 54, gate.w - 32, 25, gate.color, "center");
+    fitText(gate.label, gate.x + gate.w / 2, gate.y + 54, gate.w - 32, 25, displayColor, "center");
     ctx.restore();
   }
 

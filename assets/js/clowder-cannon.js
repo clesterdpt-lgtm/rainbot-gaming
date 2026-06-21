@@ -11,6 +11,13 @@
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
+  const VIEW_SCALE = 0.78;
+  const VIEW_PAD_X = (W - W * VIEW_SCALE) / 2;
+  const VIEW_PAD_Y = (H - H * VIEW_SCALE) / 2;
+  const PLAY_MIN_X = 42;
+  const PLAY_MAX_X = W - 42;
+  const PLAY_TARGET_MIN = 46;
+  const PLAY_TARGET_MAX = W - 46;
   const START_CATS = 9;
   const MAX_CATS = 84;
   const BOSS_ATTACK_WINDUP = 1.12;
@@ -31,7 +38,7 @@
       bossAccent: "#ff2e88",
       bossPattern: "vacuum",
       gateEvery: [470, 620],
-      objectEvery: [128, 210],
+      objectEvery: [240, 380],
       hpMod: 1.14,
       damageMod: 1.14,
       clearBonus: 1100,
@@ -52,7 +59,7 @@
       bossAccent: "#8cff72",
       bossPattern: "cucumber",
       gateEvery: [420, 570],
-      objectEvery: [108, 188],
+      objectEvery: [190, 310],
       hpMod: 1.3,
       damageMod: 1.24,
       clearBonus: 1500,
@@ -73,7 +80,7 @@
       bossAccent: "#6dc8ff",
       bossPattern: "bath",
       gateEvery: [390, 530],
-      objectEvery: [92, 168],
+      objectEvery: [155, 265],
       hpMod: 1.48,
       damageMod: 1.36,
       clearBonus: 2050,
@@ -94,7 +101,7 @@
       bossAccent: "#ffb347",
       bossPattern: "squeeze",
       gateEvery: [360, 500],
-      objectEvery: [88, 158],
+      objectEvery: [135, 235],
       hpMod: 1.56,
       damageMod: 1.4,
       clearBonus: 2350,
@@ -115,7 +122,7 @@
       bossAccent: "#ff3b5c",
       bossPattern: "pointer",
       gateEvery: [340, 470],
-      objectEvery: [82, 148],
+      objectEvery: [118, 210],
       hpMod: 1.64,
       damageMod: 1.46,
       clearBonus: 2650,
@@ -136,7 +143,7 @@
       bossAccent: "#7ec8ff",
       bossPattern: "cucumber",
       gateEvery: [320, 450],
-      objectEvery: [74, 138],
+      objectEvery: [102, 188],
       hpMod: 1.74,
       damageMod: 1.52,
       clearBonus: 2950,
@@ -157,7 +164,7 @@
       bossAccent: "#c9a7ff",
       bossPattern: "lint",
       gateEvery: [300, 430],
-      objectEvery: [68, 128],
+      objectEvery: [90, 168],
       hpMod: 1.84,
       damageMod: 1.58,
       clearBonus: 3300,
@@ -178,7 +185,7 @@
       bossAccent: "#ffd43b",
       bossPattern: "lint",
       gateEvery: [280, 400],
-      objectEvery: [62, 118],
+      objectEvery: [78, 148],
       hpMod: 1.95,
       damageMod: 1.66,
       clearBonus: 4200,
@@ -313,7 +320,7 @@
       combo: 0,
       fireTimer: 0,
       nextGateAt: 230,
-      nextObjectAt: 110,
+      nextObjectAt: 340,
       nextPairId: 1,
       appliedPairs: [],
       bossSpawned: false,
@@ -582,24 +589,26 @@
   function pickObjectSpec() {
     const hazards = OBJECT_POOL.filter((o) => !o.rewardCats);
     const rewards = OBJECT_POOL.filter((o) => o.rewardCats);
-    const hazardChance = state.cats >= 42 ? 0.84 : state.cats >= 26 ? 0.72 : state.cats >= 16 ? 0.58 : 0.46;
+    let hazardChance = state.cats >= 42 ? 0.66 : state.cats >= 26 ? 0.52 : state.cats >= 16 ? 0.36 : 0.22;
+    hazardChance += state.levelIndex * 0.045;
+    hazardChance = clamp(hazardChance, 0.18, 0.76);
     return { ...pick(Math.random() < hazardChance ? hazards : rewards) };
   }
 
   function spawnObject() {
     const level = currentLevel();
     const spec = pickObjectSpec();
-    const levelScale = 1 + state.levelIndex * 0.055;
+    const levelScale = 1 + state.levelIndex * 0.04;
     const scale = (spec.kind === "roomba" && state.distance > level.length * 0.55 ? 1.16 : 1) * levelScale;
     const w = spec.w * scale;
     const h = spec.h * scale;
     const y = -120;
-    const laneCenters = [W / 2, W / 2 - 72, W / 2 + 72, W / 2 - 138, W / 2 + 138];
+    const laneCenters = [W / 2, W / 2 - 92, W / 2 + 92, W / 2 - 176, W / 2 + 176, W / 2 - 248, W / 2 + 248];
     let placed = false;
 
-    for (let attempt = 0; attempt < 18; attempt++) {
-      const lane = laneCenters[attempt % laneCenters.length] + rand(-22, 22);
-      const x = clamp(lane - w / 2, 40, W - w - 40);
+    for (let attempt = 0; attempt < 22; attempt++) {
+      const lane = laneCenters[attempt % laneCenters.length] + rand(-28, 28);
+      const x = clamp(lane - w / 2, 24, W - w - 24);
       if (!objectOverlapsGate(x, y, w, h)) {
         state.obstacles.push({
           ...spec,
@@ -964,7 +973,7 @@
     state.bullets = [];
     state.appliedPairs = [];
     state.nextGateAt = 210;
-    state.nextObjectAt = 100;
+    state.nextObjectAt = 260;
     state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
     state.morale = clamp(state.morale + 8, 0, 100);
     state.levelBanner = 2.8;
@@ -1028,9 +1037,9 @@
     state.time += dt;
     if (input.left) state.targetX -= 560 * dt;
     if (input.right) state.targetX += 560 * dt;
-    state.targetX = clamp(state.targetX, 92, W - 92);
+    state.targetX = clamp(state.targetX, PLAY_TARGET_MIN, PLAY_TARGET_MAX);
     state.x += (state.targetX - state.x) * clamp(dt * 9.5, 0, 1);
-    state.x = clamp(state.x, 88, W - 88);
+    state.x = clamp(state.x, PLAY_MIN_X, PLAY_MAX_X);
 
     if (!state.boss) {
       const level = currentLevel();
@@ -1247,6 +1256,9 @@
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.translate(VIEW_PAD_X, VIEW_PAD_Y);
+    ctx.scale(VIEW_SCALE, VIEW_SCALE);
     drawBackground();
     state.gates.forEach(drawGate);
     state.obstacles.forEach(drawObject);
@@ -1260,6 +1272,7 @@
     drawFloats();
     drawTopBars();
     drawLevelBanner();
+    ctx.restore();
     if (state.paused) drawPause();
   }
 
@@ -1799,7 +1812,7 @@
       const radius = 12 + Math.sqrt(i + 1) * 11.5;
       const scatterX = scatter * Math.sin(i * 1.73 + state.time * 18) * 22 * (1 + (i % 3) * 0.18);
       const scatterY = scatter * Math.cos(i * 2.19 + state.time * 16) * 14;
-      const x = clamp(state.x + Math.cos(angle) * radius + scatterX, 22, W - 22);
+      const x = clamp(state.x + Math.cos(angle) * radius + scatterX, PLAY_MIN_X - 18, PLAY_MAX_X + 18);
       const y = PLAYER_Y + Math.sin(angle) * radius * 0.38 + ((i % 5) - 2) * 5 + Math.sin(state.time * 7 + i) * (1.5 + moraleBob) + scatterY;
       drawTinyCat(x, y, clamp(0.72 - i * 0.004, 0.46, 0.72), CAT_FURS[i % CAT_FURS.length], angle);
     }
@@ -1974,13 +1987,14 @@
     ctx.closePath();
   }
 
-  function pointerToCanvas(clientX) {
+  function pointerToWorld(clientX) {
     const rect = canvas.getBoundingClientRect();
-    return ((clientX - rect.left) / Math.max(1, rect.width)) * W;
+    const canvasX = ((clientX - rect.left) / Math.max(1, rect.width)) * W;
+    return (canvasX - VIEW_PAD_X) / VIEW_SCALE;
   }
 
   function setPointerTarget(clientX) {
-    state.targetX = clamp(pointerToCanvas(clientX), 88, W - 88);
+    state.targetX = clamp(pointerToWorld(clientX), PLAY_MIN_X, PLAY_MAX_X);
   }
 
   canvas.addEventListener("pointerdown", (event) => {

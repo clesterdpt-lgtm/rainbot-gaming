@@ -29,6 +29,7 @@
       bossDamage: 4,
       bossColor: "#212838",
       bossAccent: "#ff2e88",
+      bossPattern: "vacuum",
       gateEvery: [500, 660],
       objectEvery: [170, 265],
       hpMod: 1,
@@ -49,6 +50,7 @@
       bossDamage: 5,
       bossColor: "#245f37",
       bossAccent: "#8cff72",
+      bossPattern: "cucumber",
       gateEvery: [455, 610],
       objectEvery: [138, 225],
       hpMod: 1.16,
@@ -69,6 +71,7 @@
       bossDamage: 7,
       bossColor: "#1d5485",
       bossAccent: "#6dc8ff",
+      bossPattern: "bath",
       gateEvery: [420, 570],
       objectEvery: [118, 196],
       hpMod: 1.34,
@@ -89,6 +92,7 @@
       bossDamage: 9,
       bossColor: "#311d55",
       bossAccent: "#ffd43b",
+      bossPattern: "lint",
       gateEvery: [380, 520],
       objectEvery: [95, 170],
       hpMod: 1.55,
@@ -530,10 +534,154 @@
     }
   }
 
+  const BOSS_PATTERN_HINTS = {
+    vacuum: "Dodge the suction zone before it slurps your cats.",
+    cucumber: "Let the rolling cucumbers pass — don't stand in their lane.",
+    bath: "Rush to the dry lane before the splash hits.",
+    lint: "Slip into the gap before the lint roller crushes you.",
+  };
+
+  function playerLane() {
+    if (state.x < W * 0.34) return "left";
+    if (state.x > W * 0.66) return "right";
+    return "center";
+  }
+
+  function calcBossLoss(boss) {
+    return Math.max(2, Math.floor(boss.damage * 0.82 + (1 - boss.hp / boss.maxHp) * (2 + state.levelIndex * 0.7)));
+  }
+
+  function bossAttackCooldown(pattern) {
+    if (pattern === "cucumber") return rand(1.35, 1.95);
+    if (pattern === "bath") return rand(1.65, 2.35);
+    if (pattern === "lint") return rand(1.45, 2.1);
+    return rand(1.55, 2.25);
+  }
+
+  function beginBossAttack(boss) {
+    const loss = calcBossLoss(boss);
+    const pattern = boss.pattern || "vacuum";
+
+    if (pattern === "cucumber") {
+      const fromLeft = Math.random() > 0.5;
+      const count = state.levelIndex >= 2 && Math.random() > 0.45 ? 2 : 1;
+      const rollers = [];
+      for (let i = 0; i < count; i++) {
+        const left = count === 1 ? fromLeft : i === 0;
+        rollers.push({
+          x: left ? -80 - i * 40 : W + 80 + i * 40,
+          y: PLAYER_Y - 18 + i * 8,
+          vx: left ? rand(470, 560) : rand(-560, -470),
+          w: 56,
+          h: 30,
+        });
+      }
+      boss.attackFx = {
+        type: "cucumber",
+        ttl: 1.28,
+        maxTtl: 1.28,
+        strikeAt: 0.7,
+        loss,
+        resolved: false,
+        dodged: false,
+        rollers,
+      };
+      return;
+    }
+
+    if (pattern === "bath") {
+      const lanes = ["left", "center", "right"];
+      const dryLane = pick(lanes);
+      boss.attackFx = {
+        type: "bath",
+        ttl: 1.18,
+        maxTtl: 1.18,
+        strikeAt: 0.66,
+        loss,
+        resolved: false,
+        dodged: false,
+        dryLane,
+      };
+      return;
+    }
+
+    if (pattern === "lint") {
+      const gapCenters = [W * 0.24, W * 0.5, W * 0.76];
+      boss.attackFx = {
+        type: "lint",
+        ttl: 1.22,
+        maxTtl: 1.22,
+        strikeAt: 0.7,
+        loss,
+        resolved: false,
+        dodged: false,
+        gapX: pick(gapCenters) + rand(-28, 28),
+        gapWidth: 168,
+        sweepStart: boss.y + boss.h * 0.35,
+      };
+      return;
+    }
+
+    boss.attackFx = {
+      type: "vacuum",
+      ttl: BOSS_ATTACK_WINDUP,
+      maxTtl: BOSS_ATTACK_WINDUP,
+      strikeAt: 0.68,
+      loss,
+      resolved: false,
+      dodged: false,
+      aimX: state.x,
+      aimRadius: BOSS_ATTACK_AIM_RADIUS,
+      targetY: PLAYER_Y - 24,
+    };
+  }
+
+  function resolveBossAttack(boss, fx) {
+    fx.resolved = true;
+    let dodged = false;
+    let loss = fx.loss;
+    let dodgeLabel = "DODGED";
+
+    if (fx.type === "vacuum") {
+      const dodgeDist = (fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS) + BOSS_ATTACK_DODGE_MARGIN;
+      const missDist = Math.abs(state.x - fx.aimX);
+      if (missDist > dodgeDist) dodged = true;
+      else {
+        const edgeFactor = clamp((dodgeDist - missDist) / (fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS), 0.42, 1);
+        loss = Math.max(1, Math.round(fx.loss * edgeFactor));
+      }
+    } else if (fx.type === "cucumber") {
+      dodged = !(fx.rollers || []).some((roller) => Math.abs(state.x - roller.x) < 58);
+      dodgeLabel = "CLEAN DODGE";
+    } else if (fx.type === "bath") {
+      dodged = playerLane() === fx.dryLane;
+      dodgeLabel = "STAYED DRY";
+    } else if (fx.type === "lint") {
+      dodged = Math.abs(state.x - fx.gapX) <= fx.gapWidth / 2 - 8;
+      dodgeLabel = "GAP FOUND";
+    }
+
+    if (dodged) {
+      fx.dodged = true;
+      addFloat(state.x, PLAYER_Y - 90, dodgeLabel, C.cyan);
+      addLog(`${boss.label || "Boss"} whiffed. The cats looked insulted on purpose.`);
+      sfx("bossDodge");
+      return;
+    }
+
+    damageCats(loss, boss.label || "Boss", {
+      bossAttack: true,
+      fromX: boss.x,
+      fromY: boss.y + boss.h / 2,
+      accent: boss.accent || C.purple,
+    });
+  }
+
   function spawnBoss() {
     const level = currentLevel();
     state.bossSpawned = true;
     state.speed = level.bossSpeed;
+    const pattern = level.bossPattern || "vacuum";
     state.boss = {
       x: W / 2,
       y: -150,
@@ -546,12 +694,13 @@
       damage: level.bossDamage,
       color: level.bossColor,
       accent: level.bossAccent,
+      pattern,
       attackTimer: 2.35,
       phase: 0,
       hitFlash: 0,
     };
     state.gates.length = 0;
-    addLog(`${level.bossLabel} entered ${level.short}.`);
+    addLog(`${level.bossLabel} entered ${level.short}. ${BOSS_PATTERN_HINTS[pattern] || ""}`);
     sfx("boss");
   }
 
@@ -828,52 +977,45 @@
     if (!boss) return;
     boss.phase += dt;
     boss.y = Math.min(82, boss.y + dt * 48);
-    boss.x = W / 2 + Math.sin(boss.phase * 1.7) * 170;
+
+    if (boss.pattern === "cucumber") {
+      boss.x = W / 2 + Math.sin(boss.phase * 1.1) * 90;
+    } else if (boss.pattern === "bath") {
+      boss.x = W / 2 + Math.sin(boss.phase * 2.4) * 130;
+      boss.y = Math.min(96, boss.y + Math.sin(boss.phase * 3.1) * dt * 8);
+    } else if (boss.pattern === "lint") {
+      boss.x = W / 2 + Math.sin(boss.phase * 2.8) * 220;
+    } else {
+      boss.x = W / 2 + Math.sin(boss.phase * 1.7) * 170;
+    }
+
     if (boss.hitFlash > 0) boss.hitFlash -= dt;
     if (state.catHitFlash > 0) state.catHitFlash -= dt;
     if (state.catScatterTimer > 0) state.catScatterTimer -= dt;
 
     if (boss.attackFx) {
-      boss.attackFx.ttl -= dt;
-      const progress = 1 - boss.attackFx.ttl / boss.attackFx.maxTtl;
-      if (!boss.attackFx.resolved && progress >= 0.68) {
-        boss.attackFx.resolved = true;
-        const aimX = boss.attackFx.aimX;
-        const dodgeDist = BOSS_ATTACK_AIM_RADIUS + BOSS_ATTACK_DODGE_MARGIN;
-        const missDist = Math.abs(state.x - aimX);
-        if (missDist > dodgeDist) {
-          boss.attackFx.dodged = true;
-          addFloat(state.x, PLAYER_Y - 90, "DODGED", C.cyan);
-          addLog(`${boss.label || "Boss"} whiffed. The cats looked insulted on purpose.`);
-          sfx("bossDodge");
-        } else {
-          const edgeFactor = clamp((dodgeDist - missDist) / BOSS_ATTACK_AIM_RADIUS, 0.42, 1);
-          const loss = Math.max(1, Math.round(boss.attackFx.loss * edgeFactor));
-          damageCats(loss, boss.label || "Boss", {
-            bossAttack: true,
-            fromX: boss.x,
-            fromY: boss.y + boss.h / 2,
-            accent: boss.accent || C.purple,
-          });
-        }
+      const fx = boss.attackFx;
+      fx.ttl -= dt;
+      const progress = 1 - fx.ttl / fx.maxTtl;
+
+      if (fx.type === "cucumber") {
+        (fx.rollers || []).forEach((roller) => {
+          roller.x += roller.vx * dt;
+        });
+      } else if (fx.type === "lint") {
+        fx.sweepY = fx.sweepStart + (PLAYER_Y - 6 - fx.sweepStart) * clamp(progress / (fx.strikeAt || 0.7), 0, 1);
       }
-      if (boss.attackFx.ttl <= 0) boss.attackFx = null;
+
+      if (!fx.resolved && progress >= (fx.strikeAt ?? 0.68)) {
+        resolveBossAttack(boss, fx);
+      }
+      if (fx.ttl <= 0) boss.attackFx = null;
     }
 
     boss.attackTimer -= dt;
     if (boss.attackTimer <= 0 && !boss.attackFx) {
-      boss.attackTimer += rand(1.55, 2.25);
-      const loss = Math.max(2, Math.floor(boss.damage * 0.82 + (1 - boss.hp / boss.maxHp) * (2 + state.levelIndex * 0.7)));
-      boss.attackFx = {
-        ttl: BOSS_ATTACK_WINDUP,
-        maxTtl: BOSS_ATTACK_WINDUP,
-        loss,
-        resolved: false,
-        dodged: false,
-        aimX: state.x,
-        aimRadius: BOSS_ATTACK_AIM_RADIUS,
-        targetY: PLAYER_Y - 24,
-      };
+      boss.attackTimer += bossAttackCooldown(boss.pattern);
+      beginBossAttack(boss);
     }
   }
 
@@ -1197,6 +1339,26 @@
     ctx.arc(5, 18, 62, 0.2, Math.PI - 0.2, false);
     ctx.stroke();
     fitText(boss.label || "BOSS", 0, 48, boss.w * 0.78, 18, C.yellow, "center");
+    if (boss.pattern === "cucumber") {
+      ctx.fillStyle = "#45c966";
+      ctx.beginPath();
+      ctx.ellipse(92, 18, 18, 8, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (boss.pattern === "bath") {
+      ctx.fillStyle = "rgba(109, 200, 255, 0.55)";
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.arc(-70 + i * 18, -34 + (i % 2) * 8, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (boss.pattern === "lint") {
+      ctx.fillStyle = boss.accent || C.yellow;
+      roundRect(-92, -8, 184, 24, 8);
+      ctx.fill();
+      ctx.strokeStyle = C.black;
+      ctx.stroke();
+    }
     ctx.restore();
 
     const pct = clamp(boss.hp / boss.maxHp, 0, 1);
@@ -1212,6 +1374,13 @@
   function drawBossAttackFx(boss) {
     const fx = boss.attackFx;
     if (!fx) return;
+    if (fx.type === "cucumber") drawCucumberBossAttack(boss, fx);
+    else if (fx.type === "bath") drawBathBossAttack(boss, fx);
+    else if (fx.type === "lint") drawLintBossAttack(boss, fx);
+    else drawVacuumBossAttack(boss, fx);
+  }
+
+  function drawVacuumBossAttack(boss, fx) {
     const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
     const fromX = boss.x;
     const fromY = boss.y + boss.h / 2;
@@ -1250,23 +1419,102 @@
     const midY = fromY + (toY - fromY) * 0.52;
     ctx.quadraticCurveTo(midX, midY, aimX, toY);
     ctx.stroke();
-
     ctx.fillStyle = playerSafe ? "rgba(46, 224, 255, 0.14)" : "rgba(255, 94, 103, 0.24)";
     ctx.globalAlpha = 0.55 + progress * 0.35;
     ctx.beginPath();
     ctx.ellipse(aimX, PLAYER_Y + 8, zoneRadius * 1.08, zoneRadius * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+  }
 
-    if (fx.resolved && !fx.dodged) {
+  function drawCucumberBossAttack(boss, fx) {
+    const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
+    ctx.save();
+    ctx.strokeStyle = "rgba(120, 255, 120, 0.35)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath();
+    ctx.moveTo(0, PLAYER_Y + 6);
+    ctx.lineTo(W, PLAYER_Y + 6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    (fx.rollers || []).forEach((roller) => {
+      const safe = Math.abs(state.x - roller.x) >= 58;
       ctx.save();
-      ctx.globalAlpha = clamp(fx.ttl / (fx.maxTtl * 0.42), 0, 0.55);
-      ctx.fillStyle = "rgba(255, 46, 70, 0.28)";
+      ctx.translate(roller.x, roller.y);
+      ctx.fillStyle = safe ? "#45c966" : "#ff5e67";
+      ctx.strokeStyle = C.black;
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.ellipse(aimX, PLAYER_Y + 8, zoneRadius * 1.15, zoneRadius * 0.48, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, roller.w / 2, roller.h / 2, roller.vx > 0 ? 0.12 : -0.12, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#2f9b4d";
+      ctx.beginPath();
+      ctx.ellipse(-8, -4, 8, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.35 + progress * 0.45;
+      ctx.strokeStyle = boss.accent || C.green;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(roller.vx > 0 ? -roller.w : roller.w, 0);
+      ctx.lineTo(roller.vx > 0 ? -roller.w - 48 : roller.w + 48, 0);
+      ctx.stroke();
       ctx.restore();
-    }
+    });
+  }
+
+  function drawBathBossAttack(boss, fx) {
+    const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
+    const laneW = W / 3;
+    const lanes = [
+      { id: "left", x: 0, w: laneW },
+      { id: "center", x: laneW, w: laneW },
+      { id: "right", x: laneW * 2, w: laneW },
+    ];
+    const floodH = (PLAYER_Y + 40) * progress;
+
+    lanes.forEach((lane) => {
+      const dry = lane.id === fx.dryLane;
+      const here = playerLane() === lane.id;
+      ctx.save();
+      ctx.fillStyle = dry ? "rgba(46, 224, 255, 0.16)" : "rgba(55, 166, 255, 0.34)";
+      ctx.globalAlpha = dry ? 0.55 + progress * 0.35 : 0.35 + progress * 0.55;
+      ctx.fillRect(lane.x + 8, PLAYER_Y + 36 - floodH, lane.w - 16, floodH);
+      ctx.strokeStyle = dry ? C.cyan : boss.accent || C.cyan;
+      ctx.lineWidth = dry ? 4 : 2;
+      ctx.strokeRect(lane.x + 8, PLAYER_Y + 36 - floodH, lane.w - 16, floodH);
+      if (dry) fitText("DRY", lane.x + lane.w / 2, PLAYER_Y - 24 - progress * 18, lane.w - 24, 18, C.cyan, "center");
+      else if (here && !fx.resolved) fitText("SPLASH", lane.x + lane.w / 2, PLAYER_Y - 12, lane.w - 24, 16, "#9ed8ff", "center");
+      ctx.restore();
+    });
+  }
+
+  function drawLintBossAttack(boss, fx) {
+    const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
+    const sweepY = fx.sweepY ?? (fx.sweepStart + (PLAYER_Y - fx.sweepStart) * progress);
+    const gapX = fx.gapX;
+    const gapHalf = fx.gapWidth / 2;
+    const safe = Math.abs(state.x - gapX) <= gapHalf - 8;
+    const barH = 34;
+
+    ctx.save();
+    ctx.fillStyle = boss.color || "#311d55";
+    ctx.globalAlpha = 0.88;
+    if (gapX - gapHalf > 0) ctx.fillRect(0, sweepY - barH / 2, gapX - gapHalf, barH);
+    if (gapX + gapHalf < W) ctx.fillRect(gapX + gapHalf, sweepY - barH / 2, W - (gapX + gapHalf), barH);
+    ctx.fillStyle = boss.accent || C.yellow;
+    ctx.fillRect(gapX - gapHalf, sweepY - barH / 2, fx.gapWidth, 8);
+    ctx.fillRect(gapX - gapHalf, sweepY + barH / 2 - 8, fx.gapWidth, 8);
+    ctx.strokeStyle = safe ? C.cyan : C.red;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.strokeRect(gapX - gapHalf, sweepY - barH / 2, fx.gapWidth, barH);
+    ctx.setLineDash([]);
+    fitText(safe ? "SAFE GAP" : "MOVE!", gapX, sweepY + 5, fx.gapWidth - 20, 16, safe ? C.cyan : C.red, "center");
+    ctx.restore();
   }
 
   function drawBullet(b) {

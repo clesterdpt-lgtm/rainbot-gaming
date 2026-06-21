@@ -2237,7 +2237,7 @@ body.arcade-home::before {
   color: var(--arcade-white);
   font-family: var(--arcade-font);
   font-size: clamp(31px, 2.42vw, 37px);
-  line-height: 1.2;
+  line-height: 1.12;
   margin: 0 0 18px;
   text-transform: uppercase;
   transform: scaleX(0.74);
@@ -2246,8 +2246,19 @@ body.arcade-home::before {
   width: 150%;
 }
 
-.portal-hero__title span {
+.portal-hero__title-line,
+.portal-hero__tagline {
+  display: block;
+  width: max-content;
+}
+
+.portal-hero__title-line + .portal-hero__title-line {
+  margin-top: 3px;
+}
+
+.portal-hero__tagline {
   color: var(--arcade-pink);
+  margin-top: 12px;
 }
 
 .portal-hero__title::after {

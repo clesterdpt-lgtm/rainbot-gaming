@@ -4159,6 +4159,18 @@ body.arcade-home::before {
   object-position: center;
 }
 
+/* Dont F*ck with Cats generated poster stays 16:9 across preview surfaces. */
+.poster-card--clowder img,
+.directory-card__poster--clowder img,
+.clowder-page .game-side__poster {
+  object-fit: cover;
+  object-position: center;
+}
+
+.clowder-page .game-side__poster--wide {
+  aspect-ratio: 16 / 9;
+}
+
 .poster-card--weight img,
 .directory-card__poster--weight img {
   object-fit: cover;

@@ -11,8 +11,8 @@
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
-  const START_CATS = 12;
-  const MAX_CATS = 128;
+  const START_CATS = 9;
+  const MAX_CATS = 84;
   const BOSS_ATTACK_WINDUP = 1.12;
   const BOSS_ATTACK_AIM_RADIUS = 74;
   const BOSS_ATTACK_DODGE_MARGIN = 18;
@@ -21,19 +21,19 @@
       name: "Living Room Uprising",
       short: "Living Room",
       length: 2550,
-      speed: 222,
-      bossSpeed: 108,
+      speed: 238,
+      bossSpeed: 112,
       bossLabel: "Deluxe Vacuum",
       bossCaption: "VACUUM AUTHORITY",
-      bossHp: 170,
-      bossDamage: 4,
+      bossHp: 225,
+      bossDamage: 5,
       bossColor: "#212838",
       bossAccent: "#ff2e88",
       bossPattern: "vacuum",
-      gateEvery: [500, 660],
-      objectEvery: [170, 265],
-      hpMod: 1,
-      damageMod: 1,
+      gateEvery: [470, 620],
+      objectEvery: [128, 210],
+      hpMod: 1.14,
+      damageMod: 1.14,
       clearBonus: 1100,
       intro: "Level 1: the living room has declared martial law.",
       palette: { top: "#071326", mid: "#111c2d", bottom: "#0b1422", glowA: "#2ee0ff", glowB: "#ff2e88" },
@@ -42,19 +42,19 @@
       name: "Kitchen Counter Siege",
       short: "Kitchen",
       length: 2950,
-      speed: 250,
-      bossSpeed: 118,
+      speed: 268,
+      bossSpeed: 124,
       bossLabel: "Cucumber Warlord",
       bossCaption: "UNLICENSED PRODUCE",
-      bossHp: 230,
-      bossDamage: 5,
+      bossHp: 300,
+      bossDamage: 6,
       bossColor: "#245f37",
       bossAccent: "#8cff72",
       bossPattern: "cucumber",
-      gateEvery: [455, 610],
-      objectEvery: [138, 225],
-      hpMod: 1.16,
-      damageMod: 1.12,
+      gateEvery: [420, 570],
+      objectEvery: [108, 188],
+      hpMod: 1.3,
+      damageMod: 1.24,
       clearBonus: 1500,
       intro: "Level 2: the kitchen counter is all traps, no snacks.",
       palette: { top: "#0d1e19", mid: "#17301f", bottom: "#101421", glowA: "#6bff7d", glowB: "#ffd43b" },
@@ -63,19 +63,19 @@
       name: "Vet Lobby Ambush",
       short: "Vet Lobby",
       length: 3350,
-      speed: 276,
-      bossSpeed: 126,
+      speed: 294,
+      bossSpeed: 132,
       bossLabel: "Bath Protocol",
       bossCaption: "WETNESS COMPLIANCE",
-      bossHp: 300,
-      bossDamage: 7,
+      bossHp: 390,
+      bossDamage: 8,
       bossColor: "#1d5485",
       bossAccent: "#6dc8ff",
       bossPattern: "bath",
-      gateEvery: [420, 570],
-      objectEvery: [118, 196],
-      hpMod: 1.34,
-      damageMod: 1.25,
+      gateEvery: [390, 530],
+      objectEvery: [92, 168],
+      hpMod: 1.48,
+      damageMod: 1.36,
       clearBonus: 2050,
       intro: "Level 3: the vet lobby smells like betrayal.",
       palette: { top: "#08172c", mid: "#102d4c", bottom: "#0e1421", glowA: "#6dc8ff", glowB: "#ff6f91" },
@@ -84,19 +84,19 @@
       name: "Internet Comments Finale",
       short: "Comments",
       length: 3800,
-      speed: 302,
-      bossSpeed: 136,
+      speed: 318,
+      bossSpeed: 142,
       bossLabel: "Algorithmic Lint Roller",
       bossCaption: "ENGAGEMENT FARM",
-      bossHp: 390,
-      bossDamage: 9,
+      bossHp: 500,
+      bossDamage: 10,
       bossColor: "#311d55",
       bossAccent: "#ffd43b",
       bossPattern: "lint",
-      gateEvery: [380, 520],
-      objectEvery: [95, 170],
-      hpMod: 1.55,
-      damageMod: 1.42,
+      gateEvery: [350, 480],
+      objectEvery: [78, 145],
+      hpMod: 1.68,
+      damageMod: 1.5,
       clearBonus: 3000,
       intro: "Level 4: the comment section has found the cats.",
       palette: { top: "#160b28", mid: "#251841", bottom: "#08070f", glowA: "#ff2e88", glowB: "#ffd43b" },
@@ -151,23 +151,23 @@
   const CAT_FURS = ["#f6a94d", "#f5f0de", "#687483", "#1d2027", "#d97545", "#f7d7ae", "#c9beb3", "#f0c052"];
 
   const GATE_POOL = [
-    { type: "add", value: 10, label: "+10 KITTENS", good: true, color: C.green },
-    { type: "add", value: 6, label: "+6 BOX CATS", good: true, color: C.cyan },
+    { type: "add", value: 6, label: "+6 KITTENS", good: true, color: C.green },
+    { type: "add", value: 4, label: "+4 BOX CATS", good: true, color: C.cyan },
     { type: "multiply", value: 2, label: "x2 ZOOMIES", good: true, color: C.yellow },
-    { type: "morale", value: 20, label: "+20 MORALE", good: true, color: "#9cffef" },
-    { type: "subtract", value: 8, label: "-8 BATH", good: false, color: C.red },
+    { type: "morale", value: 12, label: "+12 MORALE", good: true, color: "#9cffef" },
+    { type: "subtract", value: 10, label: "-10 BATH", good: false, color: C.red },
     { type: "divide", value: 2, label: "/2 CUCUMBER", good: false, color: "#7ad65f" },
-    { type: "subtract", value: 12, label: "-12 VET BILL", good: false, color: "#ff965e" },
-    { type: "morale", value: -28, label: "-28 VACUUM", good: false, color: "#ff6f91" },
+    { type: "subtract", value: 14, label: "-14 VET BILL", good: false, color: "#ff965e" },
+    { type: "morale", value: -34, label: "-34 VACUUM", good: false, color: "#ff6f91" },
   ];
 
   const OBJECT_POOL = [
-    { kind: "roomba", label: "ROOMBA", hp: 8, damage: 6, score: 110, w: 112, h: 58, color: "#26364f" },
-    { kind: "cucumber", label: "CUCUMBER", hp: 4, damage: 4, score: 70, w: 92, h: 54, color: "#45c966" },
-    { kind: "spray", label: "SPRAY", hp: 6, damage: 7, score: 90, w: 78, h: 88, color: "#6dc8ff" },
-    { kind: "bath", label: "BATH WATER", hp: 7, damage: 9, score: 120, w: 132, h: 62, color: "#37a6ff" },
-    { kind: "box", label: "+4 BOX CATS", hp: 5, damage: 0, rewardCats: 4, score: 80, w: 118, h: 72, color: "#bd7a3a" },
-    { kind: "yarn", label: "+2 YARN CREW", hp: 3, damage: 0, rewardCats: 2, score: 60, w: 76, h: 76, color: "#ffb1d6" },
+    { kind: "roomba", label: "ROOMBA", hp: 10, damage: 8, score: 110, w: 112, h: 58, color: "#26364f" },
+    { kind: "cucumber", label: "CUCUMBER", hp: 5, damage: 6, score: 70, w: 92, h: 54, color: "#45c966" },
+    { kind: "spray", label: "SPRAY", hp: 8, damage: 9, score: 90, w: 78, h: 88, color: "#6dc8ff" },
+    { kind: "bath", label: "BATH WATER", hp: 9, damage: 11, score: 120, w: 132, h: 62, color: "#37a6ff" },
+    { kind: "box", label: "+2 BOX CATS", hp: 6, damage: 0, rewardCats: 2, score: 80, w: 118, h: 72, color: "#bd7a3a" },
+    { kind: "yarn", label: "+1 YARN CREW", hp: 4, damage: 0, rewardCats: 1, score: 60, w: 76, h: 76, color: "#ffb1d6" },
   ];
 
   const SOUND_PREF_KEY = "rainbot_dont_fck_with_cats_sound";
@@ -477,7 +477,7 @@
     const pairId = state.nextPairId++;
     const positive = pick(GATE_POOL.filter((g) => g.good));
     let other = pick(GATE_POOL);
-    if (Math.random() < 0.46 + state.levelIndex * 0.08) other = pick(GATE_POOL.filter((g) => !g.good));
+    if (Math.random() < 0.58 + state.levelIndex * 0.1) other = pick(GATE_POOL.filter((g) => !g.good));
     if (other.label === positive.label) other = pick(GATE_POOL.filter((g) => g.label !== positive.label));
     const leftFirst = Math.random() > 0.5;
     const specs = leftFirst ? [positive, other] : [other, positive];
@@ -495,9 +495,16 @@
     });
   }
 
+  function pickObjectSpec() {
+    const hazards = OBJECT_POOL.filter((o) => !o.rewardCats);
+    const rewards = OBJECT_POOL.filter((o) => o.rewardCats);
+    const hazardChance = state.cats >= 42 ? 0.84 : state.cats >= 26 ? 0.72 : state.cats >= 16 ? 0.58 : 0.46;
+    return { ...pick(Math.random() < hazardChance ? hazards : rewards) };
+  }
+
   function spawnObject() {
     const level = currentLevel();
-    const spec = { ...pick(OBJECT_POOL) };
+    const spec = pickObjectSpec();
     const levelScale = 1 + state.levelIndex * 0.055;
     const scale = (spec.kind === "roomba" && state.distance > level.length * 0.55 ? 1.16 : 1) * levelScale;
     const w = spec.w * scale;
@@ -520,7 +527,7 @@
           maxHp: Math.ceil(spec.hp * scale * level.hpMod),
           damage: Math.ceil(spec.damage * level.damageMod),
           score: Math.ceil(spec.score * (1 + state.levelIndex * 0.22)),
-          rewardCats: spec.rewardCats ? spec.rewardCats + (state.levelIndex >= 2 ? 1 : 0) : 0,
+          rewardCats: spec.rewardCats || 0,
           spin: rand(0, Math.PI * 2),
           hitFlash: 0,
         });
@@ -548,7 +555,7 @@
   }
 
   function calcBossLoss(boss) {
-    return Math.max(2, Math.floor(boss.damage * 0.82 + (1 - boss.hp / boss.maxHp) * (2 + state.levelIndex * 0.7)));
+    return Math.max(3, Math.floor(boss.damage * 1.02 + (1 - boss.hp / boss.maxHp) * (3 + state.levelIndex * 0.85)));
   }
 
   function bossAttackCooldown(pattern) {
@@ -712,7 +719,8 @@
     } else if (gate.type === "subtract") {
       state.cats = clamp(Math.round(state.cats - gate.value), 0, MAX_CATS);
     } else if (gate.type === "multiply") {
-      state.cats = clamp(Math.round(state.cats * gate.value), 0, MAX_CATS);
+      if (state.cats >= 38) state.cats = clamp(state.cats + 7, 0, MAX_CATS);
+      else state.cats = clamp(Math.round(state.cats * gate.value), 0, MAX_CATS);
     } else if (gate.type === "divide") {
       state.cats = clamp(Math.floor(state.cats / gate.value), 0, MAX_CATS);
     } else if (gate.type === "morale") {
@@ -762,7 +770,7 @@
     if (amount <= 0 || state.mode !== "playing") return;
     const loss = Math.min(state.cats, Math.ceil(amount));
     state.cats = clamp(state.cats - loss, 0, MAX_CATS);
-    state.morale = clamp(state.morale - amount * 1.6, 0, 100);
+    state.morale = clamp(state.morale - amount * 2.1, 0, 100);
     state.combo = 0;
     addFloat(state.x, PLAYER_Y - 72, `-${loss} CATS`, C.red);
     addLog(`${source} scattered ${loss} cat${loss === 1 ? "" : "s"}.`);
@@ -814,8 +822,8 @@
     state.appliedPairs = [];
     state.nextGateAt = 210;
     state.nextObjectAt = 100;
-    state.cats = clamp(state.cats + 5 + state.levelIndex * 2, 1, MAX_CATS);
-    state.morale = clamp(state.morale + 16, 0, 100);
+    state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
+    state.morale = clamp(state.morale + 8, 0, 100);
     state.levelBanner = 2.8;
     addFloat(W / 2, 124, `LEVEL ${levelNumber()}`, next.bossAccent || C.yellow);
     addLog(`${cleared.name} cleared. ${next.name} unlocked.`);
@@ -848,8 +856,8 @@
 
   function fireVolley() {
     if (state.mode !== "playing" || state.paused || state.cats <= 0) return;
-    const count = clamp(1 + Math.floor(state.cats / 18), 1, 8);
-    const spread = clamp(22 + state.cats * 0.55, 28, 104);
+    const count = clamp(1 + Math.floor(state.cats / 24), 1, 6);
+    const spread = clamp(20 + state.cats * 0.48, 26, 92);
     for (let i = 0; i < count; i++) {
       const t = count === 1 ? 0.5 : i / (count - 1);
       const sx = state.x + (t - 0.5) * spread + rand(-8, 8);
@@ -898,7 +906,7 @@
     }
 
     state.fireTimer -= dt;
-    const fireEvery = clamp(0.17 - state.cats * 0.00115, 0.055, 0.17);
+    const fireEvery = clamp(0.2 - state.cats * 0.00145, 0.085, 0.2);
     while (state.fireTimer <= 0) {
       state.fireTimer += fireEvery;
       fireVolley();
@@ -915,7 +923,7 @@
     if (state.levelBanner > 0) state.levelBanner -= dt;
 
     if (state.morale < 100 && state.time % 1 < dt && state.cats > 0) {
-      state.morale = clamp(state.morale + 0.25, 0, 100);
+      state.morale = clamp(state.morale + 0.1, 0, 100);
     }
 
     updateHud();
@@ -936,7 +944,7 @@
       const hit = gates.find((gate) => state.x >= gate.x && state.x <= gate.x + gate.w);
       if (hit) applyGate(hit);
       else {
-        state.morale = clamp(state.morale - 2, 0, 100);
+        state.morale = clamp(state.morale - 6, 0, 100);
         addLog("The cats ignored both gates and called it strategy.");
       }
       markPair(pairId);

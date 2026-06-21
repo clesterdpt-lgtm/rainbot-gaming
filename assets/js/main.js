@@ -31,8 +31,8 @@ function renderNav() {
     const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && (path.endsWith("/games.html") || path.includes("/games/"));
 
     slot.innerHTML = `
-      <a href="${RB_BASE}" class="nav__brand" title="Rainbot Gaming — free browser arcade">
-        <img src="${RB_BASE}assets/img/mockup/rainbot-logo.png?v=20260611-7" alt="Rainbot Gaming" />
+      <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network — free browser arcade">
+        <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260621-network-2" alt="Rainbot Network" />
       </a>
       <div class="nav__links">
         <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>

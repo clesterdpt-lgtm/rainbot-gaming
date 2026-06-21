@@ -1,7 +1,7 @@
 /* ============================================
    SKIBIDI TOILET TOWER DEFENSE
    --------------------------------------------
-   Static canvas tower defense for Rainbot Gaming.
+   Static canvas tower defense for Rainbot Network.
    Build towers on fixed pads, hold each map, and
    use the existing RB rewarded-ad hooks for boosts.
    ============================================ */

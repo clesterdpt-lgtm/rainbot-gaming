@@ -85,7 +85,7 @@ const RB = (() => {
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-ad-title">
           <div class="modal__title" id="rb-ad-title">📺 Watch a quick ad</div>
           <div class="modal__body">
-            Thanks for keeping Rainbot Gaming free. Watch the full ad to claim your power-up.
+            Thanks for keeping Rainbot Network free. Watch the full ad to claim your power-up.
           </div>
           <div class="modal__countdown" id="rb-ad-count">5</div>
           <div class="modal__body" style="font-size:12px;opacity:0.6;">

@@ -1,6 +1,6 @@
 /* ============================================================
    Tardigrade: Micro Mayhem
-   Low-poly 3D sandbox prototype for Rainbot Gaming.
+   Low-poly 3D sandbox prototype for Rainbot Network.
    Plain Three.js, no build step.
    ============================================================ */
 (() => {

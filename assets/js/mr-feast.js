@@ -1,6 +1,6 @@
 /* ============================================================
    Mr. Feast: Deadline Mansion
-   3D horror parody game for Rainbot Gaming.
+   3D horror parody game for Rainbot Network.
    Plain Three.js, no build step, procedural assets.
    ============================================================ */
 (() => {

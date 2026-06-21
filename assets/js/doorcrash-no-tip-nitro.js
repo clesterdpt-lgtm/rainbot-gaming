@@ -1,6 +1,6 @@
 /* ============================================================
    DoorCrash: No Tip Nitro
-   3D food-delivery lane runner for Rainbot Gaming.
+   3D food-delivery lane runner for Rainbot Network.
    Plain Three.js, no build step.
    ============================================================ */
 (() => {

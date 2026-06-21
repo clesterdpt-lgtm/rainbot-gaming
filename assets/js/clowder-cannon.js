@@ -20,7 +20,7 @@
     {
       name: "Living Room Uprising",
       short: "Living Room",
-      length: 2550,
+      length: 3200,
       speed: 238,
       bossSpeed: 112,
       bossLabel: "Deluxe Vacuum",
@@ -41,7 +41,7 @@
     {
       name: "Kitchen Counter Siege",
       short: "Kitchen",
-      length: 2950,
+      length: 3600,
       speed: 268,
       bossSpeed: 124,
       bossLabel: "Cucumber Warlord",
@@ -62,7 +62,7 @@
     {
       name: "Vet Lobby Ambush",
       short: "Vet Lobby",
-      length: 3350,
+      length: 4000,
       speed: 294,
       bossSpeed: 132,
       bossLabel: "Bath Protocol",
@@ -81,24 +81,108 @@
       palette: { top: "#08172c", mid: "#102d4c", bottom: "#0e1421", glowA: "#6dc8ff", glowB: "#ff6f91" },
     },
     {
+      name: "Hallway Doorbell Purge",
+      short: "Hallway",
+      length: 4400,
+      speed: 306,
+      bossSpeed: 136,
+      bossLabel: "Doorbell Revenant",
+      bossCaption: "RING RING RUIN",
+      bossHp: 430,
+      bossDamage: 8,
+      bossColor: "#3a2418",
+      bossAccent: "#ffb347",
+      bossPattern: "squeeze",
+      gateEvery: [360, 500],
+      objectEvery: [88, 158],
+      hpMod: 1.56,
+      damageMod: 1.4,
+      clearBonus: 2350,
+      intro: "Level 4: the hallway rings like a personal insult.",
+      palette: { top: "#1a120d", mid: "#2a1c14", bottom: "#120d0a", glowA: "#ffb347", glowB: "#ff5e67" },
+    },
+    {
+      name: "Backyard Laser Tribunal",
+      short: "Backyard",
+      length: 4800,
+      speed: 318,
+      bossSpeed: 140,
+      bossLabel: "Laser Pointer Council",
+      bossCaption: "RED DOT JURISDICTION",
+      bossHp: 470,
+      bossDamage: 9,
+      bossColor: "#4a1824",
+      bossAccent: "#ff3b5c",
+      bossPattern: "pointer",
+      gateEvery: [340, 470],
+      objectEvery: [82, 148],
+      hpMod: 1.64,
+      damageMod: 1.46,
+      clearBonus: 2650,
+      intro: "Level 5: the backyard has convened a red-dot hearing.",
+      palette: { top: "#1a0f14", mid: "#2a1820", bottom: "#0d080c", glowA: "#ff3b5c", glowB: "#ffd43b" },
+    },
+    {
+      name: "Garage Roomba Summit",
+      short: "Garage",
+      length: 5200,
+      speed: 328,
+      bossSpeed: 146,
+      bossLabel: "Roomba Prime",
+      bossCaption: "SUCTION CARTEL",
+      bossHp: 540,
+      bossDamage: 9,
+      bossColor: "#1f2a3d",
+      bossAccent: "#7ec8ff",
+      bossPattern: "cucumber",
+      gateEvery: [320, 450],
+      objectEvery: [74, 138],
+      hpMod: 1.74,
+      damageMod: 1.52,
+      clearBonus: 2950,
+      intro: "Level 6: the garage is full of upgraded household villains.",
+      palette: { top: "#0d121c", mid: "#182232", bottom: "#090d14", glowA: "#7ec8ff", glowB: "#ff2e88" },
+    },
+    {
+      name: "Balcony Lint Inquisition",
+      short: "Balcony",
+      length: 5600,
+      speed: 338,
+      bossSpeed: 152,
+      bossLabel: "Mega Lint Authority",
+      bossCaption: "FIBER ENFORCEMENT",
+      bossHp: 610,
+      bossDamage: 10,
+      bossColor: "#2d2248",
+      bossAccent: "#c9a7ff",
+      bossPattern: "lint",
+      gateEvery: [300, 430],
+      objectEvery: [68, 128],
+      hpMod: 1.84,
+      damageMod: 1.58,
+      clearBonus: 3300,
+      intro: "Level 7: the balcony judges your shedding habits.",
+      palette: { top: "#140f22", mid: "#221836", bottom: "#09070f", glowA: "#c9a7ff", glowB: "#6dc8ff" },
+    },
+    {
       name: "Internet Comments Finale",
       short: "Comments",
-      length: 3800,
-      speed: 318,
-      bossSpeed: 142,
-      bossLabel: "Algorithmic Lint Roller",
-      bossCaption: "ENGAGEMENT FARM",
-      bossHp: 500,
-      bossDamage: 10,
+      length: 6200,
+      speed: 348,
+      bossSpeed: 158,
+      bossLabel: "Algorithmic HOA",
+      bossCaption: "FINAL ENGAGEMENT FARM",
+      bossHp: 720,
+      bossDamage: 11,
       bossColor: "#311d55",
       bossAccent: "#ffd43b",
       bossPattern: "lint",
-      gateEvery: [350, 480],
-      objectEvery: [78, 145],
-      hpMod: 1.68,
-      damageMod: 1.5,
-      clearBonus: 3000,
-      intro: "Level 4: the comment section has found the cats.",
+      gateEvery: [280, 400],
+      objectEvery: [62, 118],
+      hpMod: 1.95,
+      damageMod: 1.66,
+      clearBonus: 4200,
+      intro: "Level 8: the comment section and the homeowners association have merged.",
       palette: { top: "#160b28", mid: "#251841", bottom: "#08070f", glowA: "#ff2e88", glowB: "#ffd43b" },
     },
   ];
@@ -448,7 +532,7 @@
     showOverlay({
       title: won ? "CATS WIN THE INTERNET" : "CATS HAVE LEFT THE CHAT",
       body: won
-        ? "Four levels of household nonsense have been reduced to apologetic debris. The cats accept no interviews and several treats."
+        ? `${LEVELS.length} levels of household nonsense have been reduced to apologetic debris. The cats accept no interviews and several treats.`
         : reason || "The last cat sat down, stared at you, and ended the campaign.",
       score: `Final score: <strong>${finalScore.toLocaleString()}</strong>${high ? "<br><strong>New high score</strong>" : "<br>High: <strong>" + api.getHighScore(GAME_ID).toLocaleString() + "</strong>"}`,
       button: "New run",
@@ -546,6 +630,8 @@
     cucumber: "Let the rolling cucumbers pass — don't stand in their lane.",
     bath: "Rush to the dry lane before the splash hits.",
     lint: "Slip into the gap before the lint roller crushes you.",
+    squeeze: "Hold the center lane while the sides get blasted.",
+    pointer: "Stay off the sweeping red dot when it locks in.",
   };
 
   function playerLane() {
@@ -562,6 +648,8 @@
     if (pattern === "cucumber") return rand(1.35, 1.95);
     if (pattern === "bath") return rand(1.65, 2.35);
     if (pattern === "lint") return rand(1.45, 2.1);
+    if (pattern === "squeeze") return rand(1.4, 2.05);
+    if (pattern === "pointer") return rand(1.3, 1.95);
     return rand(1.55, 2.25);
   }
 
@@ -584,7 +672,7 @@
 
     if (pattern === "cucumber") {
       const fromLeft = Math.random() > 0.5;
-      const count = state.levelIndex >= 2 && Math.random() > 0.45 ? 2 : 1;
+      const count = state.levelIndex >= 2 || boss.label === "Roomba Prime" ? (Math.random() > 0.2 ? 2 : 1) : 1;
       const rollers = [];
       for (let i = 0; i < count; i++) {
         const left = count === 1 ? fromLeft : i === 0;
@@ -636,8 +724,40 @@
         resolved: false,
         dodged: false,
         gapX: pick(gapCenters) + rand(-28, 28),
-        gapWidth: 168,
+        gapWidth: Math.max(124, 172 - state.levelIndex * 6),
         sweepStart: boss.y + boss.h * 0.35,
+      };
+      return;
+    }
+
+    if (pattern === "squeeze") {
+      boss.attackFx = {
+        type: "squeeze",
+        ttl: 1.18,
+        maxTtl: 1.18,
+        strikeAt: 0.66,
+        loss,
+        resolved: false,
+        dodged: false,
+      };
+      return;
+    }
+
+    if (pattern === "pointer") {
+      const startX = clamp(state.x + rand(-100, 100), W * 0.16, W * 0.84);
+      const travel = startX < W / 2 ? 1 : -1;
+      boss.attackFx = {
+        type: "pointer",
+        ttl: 1.22,
+        maxTtl: 1.22,
+        strikeAt: 0.64,
+        loss,
+        resolved: false,
+        dodged: false,
+        dotStart: startX,
+        dotEnd: clamp(startX + travel * rand(260, 360), 110, W - 110),
+        dotX: startX,
+        hitRadius: state.levelIndex >= 4 ? 54 : 48,
       };
       return;
     }
@@ -682,6 +802,12 @@
     } else if (fx.type === "lint") {
       dodged = Math.abs(state.x - fx.gapX) <= fx.gapWidth / 2 - 8;
       dodgeLabel = "GAP FOUND";
+    } else if (fx.type === "squeeze") {
+      dodged = playerLane() === "center";
+      dodgeLabel = "CENTER HOLD";
+    } else if (fx.type === "pointer") {
+      dodged = Math.abs(state.x - fx.dotX) > (fx.hitRadius || 48);
+      dodgeLabel = "DOT DODGED";
     }
 
     if (dodged) {
@@ -1005,6 +1131,10 @@
 
     if (boss.pattern === "cucumber") {
       boss.x = W / 2 + Math.sin(boss.phase * 1.1) * 90;
+    } else if (boss.pattern === "squeeze") {
+      boss.x = W / 2 + Math.sin(boss.phase * 2.1) * 60;
+    } else if (boss.pattern === "pointer") {
+      boss.x = W / 2 + Math.sin(boss.phase * 3.2) * 240;
     } else if (boss.pattern === "bath") {
       boss.x = W / 2 + Math.sin(boss.phase * 2.4) * 130;
       boss.y = Math.min(96, boss.y + Math.sin(boss.phase * 3.1) * dt * 8);
@@ -1026,6 +1156,9 @@
       if (fx.type === "vacuum" && !fx.resolved) {
         const track = fx.trackStrength ?? 2.1;
         fx.aimX += (state.x - fx.aimX) * clamp(dt * track, 0, 1);
+      } else if (fx.type === "pointer" && !fx.resolved) {
+        const sweep = clamp((1 - fx.ttl / fx.maxTtl) / (fx.strikeAt || 0.64), 0, 1);
+        fx.dotX = fx.dotStart + (fx.dotEnd - fx.dotStart) * sweep;
       } else if (fx.type === "cucumber") {
         (fx.rollers || []).forEach((roller) => {
           roller.x += roller.vx * dt;
@@ -1386,6 +1519,21 @@
       ctx.fill();
       ctx.strokeStyle = C.black;
       ctx.stroke();
+    } else if (boss.pattern === "squeeze") {
+      ctx.fillStyle = boss.accent || C.yellow;
+      ctx.beginPath();
+      ctx.arc(-58, -18, 14, 0, Math.PI * 2);
+      ctx.arc(58, -18, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (boss.pattern === "pointer") {
+      ctx.fillStyle = "#ff2244";
+      ctx.beginPath();
+      ctx.arc(0, 24, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
     ctx.restore();
 
@@ -1405,6 +1553,8 @@
     if (fx.type === "cucumber") drawCucumberBossAttack(boss, fx);
     else if (fx.type === "bath") drawBathBossAttack(boss, fx);
     else if (fx.type === "lint") drawLintBossAttack(boss, fx);
+    else if (fx.type === "squeeze") drawSqueezeBossAttack(boss, fx);
+    else if (fx.type === "pointer") drawPointerBossAttack(boss, fx);
     else drawVacuumBossAttack(boss, fx);
   }
 
@@ -1518,6 +1668,63 @@
       else if (here && !fx.resolved) fitText("SPLASH", lane.x + lane.w / 2, PLAYER_Y - 12, lane.w - 24, 16, "#9ed8ff", "center");
       ctx.restore();
     });
+  }
+
+  function drawSqueezeBossAttack(boss, fx) {
+    const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
+    const laneW = W / 3;
+    const lanes = [
+      { id: "left", x: 0, w: laneW },
+      { id: "center", x: laneW, w: laneW },
+      { id: "right", x: laneW * 2, w: laneW },
+    ];
+    const floodH = (PLAYER_Y + 40) * progress;
+    lanes.forEach((lane) => {
+      const safe = lane.id === "center";
+      const here = playerLane() === lane.id;
+      ctx.save();
+      ctx.fillStyle = safe ? "rgba(46, 224, 255, 0.16)" : "rgba(255, 94, 103, 0.34)";
+      ctx.globalAlpha = safe ? 0.55 + progress * 0.35 : 0.4 + progress * 0.55;
+      ctx.fillRect(lane.x + 8, PLAYER_Y + 36 - floodH, lane.w - 16, floodH);
+      ctx.strokeStyle = safe ? C.cyan : boss.accent || C.red;
+      ctx.lineWidth = safe ? 4 : 2;
+      ctx.strokeRect(lane.x + 8, PLAYER_Y + 36 - floodH, lane.w - 16, floodH);
+      if (safe) fitText("SAFE", lane.x + lane.w / 2, PLAYER_Y - 24 - progress * 18, lane.w - 24, 18, C.cyan, "center");
+      else if (here && !fx.resolved) fitText("BLAST", lane.x + lane.w / 2, PLAYER_Y - 12, lane.w - 24, 16, "#ff9b9b", "center");
+      ctx.restore();
+    });
+  }
+
+  function drawPointerBossAttack(boss, fx) {
+    const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
+    const dotX = fx.dotX ?? state.x;
+    const hitRadius = fx.hitRadius || 48;
+    const safe = Math.abs(state.x - dotX) > hitRadius;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 59, 92, 0.35)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.moveTo(fx.dotStart, PLAYER_Y + 10);
+    ctx.lineTo(fx.dotEnd, PLAYER_Y + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = safe ? "rgba(46, 224, 255, 0.14)" : "rgba(255, 59, 92, 0.28)";
+    ctx.beginPath();
+    ctx.arc(dotX, PLAYER_Y + 8, hitRadius * (0.72 + progress * 0.35), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = safe ? C.cyan : "#ff2244";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fillStyle = "#ff2244";
+    ctx.beginPath();
+    ctx.arc(dotX, PLAYER_Y + 8, 8 + progress * 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    fitText(safe ? "OFF THE DOT" : "MOVE!", dotX, PLAYER_Y - 28, 120, 16, safe ? C.cyan : "#ff2244", "center");
+    ctx.restore();
   }
 
   function drawLintBossAttack(boss, fx) {
@@ -1925,7 +2132,7 @@
     showOverlay({
       title: GAME_TITLE.toUpperCase(),
       body:
-        "Take a pack of extremely ungovernable cats through four levels of household nonsense. Hit the good gates, delete the hazards, and prove that every appliance on earth should mind its business.",
+        `Take a pack of extremely ungovernable cats through ${LEVELS.length} levels of household nonsense. Hit the good gates, delete the hazards, and survive eight appliance bosses.`,
       score: `High score: <strong>${api.getHighScore(GAME_ID).toLocaleString()}</strong>`,
       button: "Start level 1",
     });

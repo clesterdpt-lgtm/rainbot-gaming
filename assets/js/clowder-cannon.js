@@ -13,6 +13,9 @@
   const PLAYER_Y = 498;
   const START_CATS = 12;
   const MAX_CATS = 128;
+  const BOSS_ATTACK_WINDUP = 1.12;
+  const BOSS_ATTACK_AIM_RADIUS = 74;
+  const BOSS_ATTACK_DODGE_MARGIN = 18;
   const LEVELS = [
     {
       name: "Living Room Uprising",
@@ -297,6 +300,9 @@
     } else if (name === "bossHit") {
       tone(120, 0.12, { type: "sawtooth", gain: 0.03, to: 58 });
       tone(240, 0.08, { type: "triangle", gain: 0.022, delay: 0.05 });
+    } else if (name === "bossDodge") {
+      tone(520, 0.07, { type: "triangle", gain: 0.02 });
+      tone(780, 0.06, { type: "sine", gain: 0.016, delay: 0.04 });
     } else if (name === "win") {
       [392, 523, 659, 784].forEach((f, i) => tone(f, 0.11, { type: "triangle", gain: 0.03, delay: i * 0.07 }));
     } else if (name === "lose") {
@@ -540,7 +546,7 @@
       damage: level.bossDamage,
       color: level.bossColor,
       accent: level.bossAccent,
-      attackTimer: 1.4,
+      attackTimer: 2.35,
       phase: 0,
       hitFlash: 0,
     };
@@ -830,28 +836,42 @@
     if (boss.attackFx) {
       boss.attackFx.ttl -= dt;
       const progress = 1 - boss.attackFx.ttl / boss.attackFx.maxTtl;
-      if (!boss.attackFx.struck && progress >= 0.5) {
-        boss.attackFx.struck = true;
-        damageCats(boss.attackFx.loss, boss.label || "Boss", {
-          bossAttack: true,
-          fromX: boss.x,
-          fromY: boss.y + boss.h / 2,
-          accent: boss.accent || C.purple,
-        });
+      if (!boss.attackFx.resolved && progress >= 0.68) {
+        boss.attackFx.resolved = true;
+        const aimX = boss.attackFx.aimX;
+        const dodgeDist = BOSS_ATTACK_AIM_RADIUS + BOSS_ATTACK_DODGE_MARGIN;
+        const missDist = Math.abs(state.x - aimX);
+        if (missDist > dodgeDist) {
+          boss.attackFx.dodged = true;
+          addFloat(state.x, PLAYER_Y - 90, "DODGED", C.cyan);
+          addLog(`${boss.label || "Boss"} whiffed. The cats looked insulted on purpose.`);
+          sfx("bossDodge");
+        } else {
+          const edgeFactor = clamp((dodgeDist - missDist) / BOSS_ATTACK_AIM_RADIUS, 0.42, 1);
+          const loss = Math.max(1, Math.round(boss.attackFx.loss * edgeFactor));
+          damageCats(loss, boss.label || "Boss", {
+            bossAttack: true,
+            fromX: boss.x,
+            fromY: boss.y + boss.h / 2,
+            accent: boss.accent || C.purple,
+          });
+        }
       }
       if (boss.attackFx.ttl <= 0) boss.attackFx = null;
     }
 
     boss.attackTimer -= dt;
     if (boss.attackTimer <= 0 && !boss.attackFx) {
-      boss.attackTimer += rand(1.08, 1.58) - state.levelIndex * 0.08;
-      const loss = Math.max(2, Math.floor(boss.damage + (1 - boss.hp / boss.maxHp) * (4 + state.levelIndex)));
+      boss.attackTimer += rand(1.55, 2.25);
+      const loss = Math.max(2, Math.floor(boss.damage * 0.82 + (1 - boss.hp / boss.maxHp) * (2 + state.levelIndex * 0.7)));
       boss.attackFx = {
-        ttl: 0.78,
-        maxTtl: 0.78,
+        ttl: BOSS_ATTACK_WINDUP,
+        maxTtl: BOSS_ATTACK_WINDUP,
         loss,
-        struck: false,
-        targetX: state.x,
+        resolved: false,
+        dodged: false,
+        aimX: state.x,
+        aimRadius: BOSS_ATTACK_AIM_RADIUS,
         targetY: PLAYER_Y - 24,
       };
     }
@@ -1195,47 +1215,55 @@
     const progress = clamp(1 - fx.ttl / fx.maxTtl, 0, 1);
     const fromX = boss.x;
     const fromY = boss.y + boss.h / 2;
-    const toX = fx.targetX ?? state.x;
+    const aimX = fx.aimX ?? state.x;
     const toY = fx.targetY ?? PLAYER_Y - 24;
+    const aimRadius = fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS;
+    const dodgeDist = aimRadius + BOSS_ATTACK_DODGE_MARGIN;
+    const playerSafe = Math.abs(state.x - aimX) > dodgeDist;
     const pulse = 0.55 + Math.sin(progress * Math.PI * 5) * 0.18;
+    const zoneRadius = 28 + progress * aimRadius;
+
+    ctx.save();
+    ctx.setLineDash([10, 8]);
+    ctx.strokeStyle = playerSafe ? "rgba(46, 224, 255, 0.72)" : "rgba(255, 94, 103, 0.88)";
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.55 + progress * 0.35;
+    ctx.beginPath();
+    ctx.ellipse(aimX, PLAYER_Y + 8, zoneRadius * 1.08, zoneRadius * 0.42, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
 
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const beam = ctx.createLinearGradient(fromX, fromY, toX, toY);
+    const beam = ctx.createLinearGradient(fromX, fromY, aimX, toY);
     beam.addColorStop(0, boss.accent || C.purple);
     beam.addColorStop(0.45, "rgba(255,255,255,0.72)");
-    beam.addColorStop(1, "rgba(255,94,103,0.92)");
+    beam.addColorStop(1, playerSafe ? "rgba(46,224,255,0.72)" : "rgba(255,94,103,0.92)");
     ctx.strokeStyle = beam;
-    ctx.lineWidth = 10 + progress * 16;
-    ctx.globalAlpha = (1 - progress * 0.35) * pulse;
+    ctx.lineWidth = 8 + progress * 12;
+    ctx.globalAlpha = (0.42 + progress * 0.45) * pulse;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(fromX, fromY);
-    const midX = fromX + (toX - fromX) * 0.52 + Math.sin(progress * Math.PI * 2) * 18;
+    const midX = fromX + (aimX - fromX) * 0.52 + Math.sin(progress * Math.PI * 2) * 18;
     const midY = fromY + (toY - fromY) * 0.52;
-    ctx.quadraticCurveTo(midX, midY, toX, toY);
+    ctx.quadraticCurveTo(midX, midY, aimX, toY);
     ctx.stroke();
 
-    ctx.fillStyle = "rgba(255, 94, 103, 0.22)";
-    ctx.globalAlpha = (1 - progress) * 0.9;
+    ctx.fillStyle = playerSafe ? "rgba(46, 224, 255, 0.14)" : "rgba(255, 94, 103, 0.24)";
+    ctx.globalAlpha = 0.55 + progress * 0.35;
     ctx.beginPath();
-    ctx.arc(toX, toY, 34 + progress * 54, 0, Math.PI * 2);
+    ctx.ellipse(aimX, PLAYER_Y + 8, zoneRadius * 1.08, zoneRadius * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.strokeStyle = boss.accent || C.pink;
-    ctx.lineWidth = 4;
-    ctx.globalAlpha = 0.75;
-    ctx.beginPath();
-    ctx.arc(toX, toY, 18 + progress * 28, 0, Math.PI * 2);
-    ctx.stroke();
     ctx.restore();
 
-    if (fx.struck) {
+    if (fx.resolved && !fx.dodged) {
       ctx.save();
-      ctx.globalAlpha = clamp(fx.ttl / (fx.maxTtl * 0.45), 0, 0.55);
+      ctx.globalAlpha = clamp(fx.ttl / (fx.maxTtl * 0.42), 0, 0.55);
       ctx.fillStyle = "rgba(255, 46, 70, 0.28)";
       ctx.beginPath();
-      ctx.arc(toX, toY, 58 + (1 - fx.ttl / fx.maxTtl) * 36, 0, Math.PI * 2);
+      ctx.ellipse(aimX, PLAYER_Y + 8, zoneRadius * 1.15, zoneRadius * 0.48, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

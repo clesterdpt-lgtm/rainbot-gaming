@@ -565,9 +565,22 @@
     return rand(1.55, 2.25);
   }
 
+  function vacuumAttackParams(boss) {
+    const opener = (boss.attackCount || 0) === 0;
+    return {
+      ttl: opener ? 0.86 : BOSS_ATTACK_WINDUP,
+      maxTtl: opener ? 0.86 : BOSS_ATTACK_WINDUP,
+      strikeAt: opener ? 0.54 : 0.68,
+      aimRadius: opener ? 96 : BOSS_ATTACK_AIM_RADIUS,
+      dodgeMargin: opener ? 8 : BOSS_ATTACK_DODGE_MARGIN,
+      trackStrength: opener ? 4.6 : 2.1,
+    };
+  }
+
   function beginBossAttack(boss) {
     const loss = calcBossLoss(boss);
     const pattern = boss.pattern || "vacuum";
+    boss.attackCount = (boss.attackCount || 0) + 1;
 
     if (pattern === "cucumber") {
       const fromLeft = Math.random() > 0.5;
@@ -629,16 +642,19 @@
       return;
     }
 
+    const vacuum = vacuumAttackParams(boss);
     boss.attackFx = {
       type: "vacuum",
-      ttl: BOSS_ATTACK_WINDUP,
-      maxTtl: BOSS_ATTACK_WINDUP,
-      strikeAt: 0.68,
+      ttl: vacuum.ttl,
+      maxTtl: vacuum.maxTtl,
+      strikeAt: vacuum.strikeAt,
       loss,
       resolved: false,
       dodged: false,
       aimX: state.x,
-      aimRadius: BOSS_ATTACK_AIM_RADIUS,
+      aimRadius: vacuum.aimRadius,
+      dodgeMargin: vacuum.dodgeMargin,
+      trackStrength: vacuum.trackStrength,
       targetY: PLAYER_Y - 24,
     };
   }
@@ -650,7 +666,7 @@
     let dodgeLabel = "DODGED";
 
     if (fx.type === "vacuum") {
-      const dodgeDist = (fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS) + BOSS_ATTACK_DODGE_MARGIN;
+      const dodgeDist = (fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS) + (fx.dodgeMargin ?? BOSS_ATTACK_DODGE_MARGIN);
       const missDist = Math.abs(state.x - fx.aimX);
       if (missDist > dodgeDist) dodged = true;
       else {
@@ -702,7 +718,8 @@
       color: level.bossColor,
       accent: level.bossAccent,
       pattern,
-      attackTimer: 2.35,
+      attackTimer: pattern === "vacuum" ? 0.95 : 1.35,
+      attackCount: 0,
       phase: 0,
       hitFlash: 0,
     };
@@ -1006,7 +1023,10 @@
       fx.ttl -= dt;
       const progress = 1 - fx.ttl / fx.maxTtl;
 
-      if (fx.type === "cucumber") {
+      if (fx.type === "vacuum" && !fx.resolved) {
+        const track = fx.trackStrength ?? 2.1;
+        fx.aimX += (state.x - fx.aimX) * clamp(dt * track, 0, 1);
+      } else if (fx.type === "cucumber") {
         (fx.rollers || []).forEach((roller) => {
           roller.x += roller.vx * dt;
         });
@@ -1395,7 +1415,7 @@
     const aimX = fx.aimX ?? state.x;
     const toY = fx.targetY ?? PLAYER_Y - 24;
     const aimRadius = fx.aimRadius ?? BOSS_ATTACK_AIM_RADIUS;
-    const dodgeDist = aimRadius + BOSS_ATTACK_DODGE_MARGIN;
+    const dodgeDist = aimRadius + (fx.dodgeMargin ?? BOSS_ATTACK_DODGE_MARGIN);
     const playerSafe = Math.abs(state.x - aimX) > dodgeDist;
     const pulse = 0.55 + Math.sin(progress * Math.PI * 5) * 0.18;
     const zoneRadius = 28 + progress * aimRadius;

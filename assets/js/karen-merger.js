@@ -1,5 +1,5 @@
 /* ============================================
-   KAREN MERGER - bubble-drop merge game
+   COMPLAINT CHAIN - bubble-drop merge game
    - Canvas bubble physics with generated character art
    - Debug hook: window.__KAREN_MERGER
    ============================================ */

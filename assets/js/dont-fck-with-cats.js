@@ -10,7 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-attached-bg-1";
+  const ART_VERSION = "20260622-ingame-hud-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -1453,7 +1453,6 @@
   }
 
   function drawBackground() {
-    const offset = (state.distance * 0.45) % 70;
     const level = currentLevel();
     const palette = level.palette;
     if (imageReady(RASTER_ART.backdrop)) {
@@ -1479,27 +1478,6 @@
       ctx.fillRect(0, 0, W, H);
     }
 
-    ctx.save();
-    ctx.globalAlpha = 0.24;
-    ctx.strokeStyle = "#304b6f";
-    ctx.lineWidth = 2;
-    for (let y = -70 + offset; y < H + 70; y += 70) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y - 18);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = "#1c3453";
-    for (let i = 0; i < 7; i++) {
-      const x = 90 + i * 130;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x + (i - 3) * 40, H);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    fitText(level.name.toUpperCase(), W - 28, 34, 360, 18, "rgba(251,250,244,0.72)", "right");
   }
 
   function drawGate(gate) {
@@ -2109,15 +2087,41 @@
   function drawTopBars() {
     const level = currentLevel();
     const pct = levelProgress();
+    const distance = state.boss ? "BOSS" : `${Math.round(pct * 100)}%`;
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.48)";
-    roundRect(22, 18, 180, 12, 6);
+
+    ctx.fillStyle = "rgba(3, 6, 11, 0.66)";
+    roundRect(18, 16, W - 36, 58, 10);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(251,250,244,0.18)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    drawHudStat(34, 28, 122, "SCORE", Math.round(state.score).toLocaleString(), C.yellow);
+    drawHudStat(168, 28, 92, "LEVEL", `${levelNumber()}/${LEVELS.length}`, level.bossAccent || C.green);
+    drawHudStat(708, 28, 90, "CATS", Math.max(0, Math.round(state.cats)).toLocaleString(), C.yellow);
+    drawHudStat(810, 28, 112, "MORALE", `${Math.max(0, Math.round(state.morale))}%`, state.morale > 34 ? C.green : C.red);
+
+    ctx.fillStyle = "rgba(0,0,0,0.42)";
+    roundRect(282, 28, 404, 30, 8);
+    ctx.fill();
+    ctx.fillStyle = "rgba(251,250,244,0.12)";
+    roundRect(298, 48, 244, 6, 3);
     ctx.fill();
     ctx.fillStyle = level.bossAccent || C.green;
-    roundRect(22, 18, 180 * pct, 12, 6);
+    roundRect(298, 48, 244 * pct, 6, 3);
     ctx.fill();
-    fitText(state.boss ? "BOSS PHASE" : `LEVEL ${levelNumber()} / ${LEVELS.length}`, 112, 50, 170, 15, C.ink, "center");
+    fitText(level.short.toUpperCase(), 406, 41, 190, 15, C.ink, "center");
+    fitText(distance, 620, 41, 100, 15, state.boss ? C.red : C.cyan, "center");
     ctx.restore();
+  }
+
+  function drawHudStat(x, y, width, label, value, color) {
+    ctx.fillStyle = "rgba(0,0,0,0.36)";
+    roundRect(x, y, width, 30, 8);
+    ctx.fill();
+    fitText(label, x + 10, y + 10, width - 20, 9, "rgba(251,250,244,0.62)", "left");
+    fitText(value, x + 10, y + 23, width - 20, 15, color, "left");
   }
 
   function drawLevelBanner() {

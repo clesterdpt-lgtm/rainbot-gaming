@@ -10,7 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-shaped-assets-1";
+  const ART_VERSION = "20260622-attached-bg-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -1463,10 +1463,10 @@
       tint.addColorStop(0, palette.top);
       tint.addColorStop(0.56, palette.mid);
       tint.addColorStop(1, palette.bottom);
-      ctx.globalAlpha = 0.34;
+      ctx.globalAlpha = 0.2;
       ctx.fillStyle = tint;
       ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 0.06;
+      ctx.globalAlpha = 0.03;
       ctx.fillStyle = "#05070d";
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
@@ -1480,7 +1480,7 @@
     }
 
     ctx.save();
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = 0.24;
     ctx.strokeStyle = "#304b6f";
     ctx.lineWidth = 2;
     for (let y = -70 + offset; y < H + 70; y += 70) {

@@ -10,7 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-ingame-hud-1";
+  const ART_VERSION = "20260622-bottom-hud-bath-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -816,7 +816,7 @@
 
   function bossAttackCooldown(pattern) {
     if (pattern === "cucumber") return rand(1.35, 1.95);
-    if (pattern === "bath") return rand(1.65, 2.35);
+    if (pattern === "bath") return rand(2.25, 3.1);
     if (pattern === "lint") return rand(1.45, 2.1);
     if (pattern === "squeeze") return rand(1.4, 2.05);
     if (pattern === "pointer") return rand(1.3, 1.95);
@@ -872,9 +872,9 @@
       const dryLane = pick(lanes);
       boss.attackFx = {
         type: "bath",
-        ttl: 1.18,
-        maxTtl: 1.18,
-        strikeAt: 0.66,
+        ttl: 1.85,
+        maxTtl: 1.85,
+        strikeAt: 0.78,
         loss,
         resolved: false,
         dodged: false,
@@ -2085,43 +2085,29 @@
   }
 
   function drawTopBars() {
-    const level = currentLevel();
-    const pct = levelProgress();
-    const distance = state.boss ? "BOSS" : `${Math.round(pct * 100)}%`;
     ctx.save();
 
-    ctx.fillStyle = "rgba(3, 6, 11, 0.66)";
-    roundRect(18, 16, W - 36, 58, 10);
+    const panelW = 154;
+    const panelH = 98;
+    const x = W - panelW - 24;
+    const y = H - panelH - 24;
+
+    ctx.fillStyle = "rgba(3, 6, 11, 0.64)";
+    roundRect(x, y, panelW, panelH, 10);
     ctx.fill();
-    ctx.strokeStyle = "rgba(251,250,244,0.18)";
+    ctx.strokeStyle = "rgba(251,250,244,0.16)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    drawHudStat(34, 28, 122, "SCORE", Math.round(state.score).toLocaleString(), C.yellow);
-    drawHudStat(168, 28, 92, "LEVEL", `${levelNumber()}/${LEVELS.length}`, level.bossAccent || C.green);
-    drawHudStat(708, 28, 90, "CATS", Math.max(0, Math.round(state.cats)).toLocaleString(), C.yellow);
-    drawHudStat(810, 28, 112, "MORALE", `${Math.max(0, Math.round(state.morale))}%`, state.morale > 34 ? C.green : C.red);
-
-    ctx.fillStyle = "rgba(0,0,0,0.42)";
-    roundRect(282, 28, 404, 30, 8);
-    ctx.fill();
-    ctx.fillStyle = "rgba(251,250,244,0.12)";
-    roundRect(298, 48, 244, 6, 3);
-    ctx.fill();
-    ctx.fillStyle = level.bossAccent || C.green;
-    roundRect(298, 48, 244 * pct, 6, 3);
-    ctx.fill();
-    fitText(level.short.toUpperCase(), 406, 41, 190, 15, C.ink, "center");
-    fitText(distance, 620, 41, 100, 15, state.boss ? C.red : C.cyan, "center");
+    drawHudStat(x + 12, y + 15, panelW - 24, "CATS", Math.max(0, Math.round(state.cats)).toLocaleString(), C.yellow);
+    drawHudStat(x + 12, y + 42, panelW - 24, "MORALE", `${Math.max(0, Math.round(state.morale))}%`, state.morale > 34 ? C.green : C.red);
+    drawHudStat(x + 12, y + 69, panelW - 24, "SCORE", Math.round(state.score).toLocaleString(), C.cyan);
     ctx.restore();
   }
 
   function drawHudStat(x, y, width, label, value, color) {
-    ctx.fillStyle = "rgba(0,0,0,0.36)";
-    roundRect(x, y, width, 30, 8);
-    ctx.fill();
-    fitText(label, x + 10, y + 10, width - 20, 9, "rgba(251,250,244,0.62)", "left");
-    fitText(value, x + 10, y + 23, width - 20, 15, color, "left");
+    fitText(label, x, y + 10, 62, 10, "rgba(251,250,244,0.62)", "left");
+    fitText(value, x + width, y + 10, width - 72, 17, color, "right");
   }
 
   function drawLevelBanner() {

@@ -1081,12 +1081,24 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   height: 100dvh !important;
   max-width: none;
   aspect-ratio: auto;
+  border: 0;
   border-radius: 0;
   background: #05010a;
+  box-shadow: none;
+  outline: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
+}
+
+.canvas-wrap.is-maxed:focus,
+.canvas-wrap.is-maxed:focus-visible,
+.canvas-wrap.is-maxed #gameCanvas:focus,
+.canvas-wrap.is-maxed #gameCanvas:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: 0;
 }
 
 body.rb-game-maxed {
@@ -1101,6 +1113,8 @@ body.rb-game-maxed {
   aspect-ratio: var(--game-aspect-ratio, 16 / 9);
   border: none;
   border-radius: 0;
+  box-shadow: none;
+  outline: 0;
 }
 .canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
 .canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }

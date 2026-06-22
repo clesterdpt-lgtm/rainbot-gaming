@@ -224,6 +224,12 @@
       animation: managerPulse 900ms ease-in-out infinite alternate;
     }
 
+    .karen-manager-button--armed,
+    .karen-board.is-manager-armed .karen-board-manager {
+      border-color: rgba(46, 224, 255, 0.72);
+      box-shadow: 0 0 24px rgba(46, 224, 255, 0.34), inset 0 0 18px rgba(46, 224, 255, 0.12);
+    }
+
     .karen-powers .btn:disabled {
       opacity: 0.48;
       cursor: not-allowed;
@@ -433,7 +439,7 @@
             <span class="karen-board-manager__track"><span class="karen-meter__fill karen-meter__fill--manager" id="manager-fill"></span></span>
             <b class="karen-board-manager__value" id="manager-label">0%</b>
             <div class="karen-manager-actions" aria-label="Random manager ability">
-              <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button" title="Use the random manager ability">Manager 0%</button>
+              <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button" title="Arm the random manager ability">Manager 0%</button>
             </div>
           </div>
 
@@ -513,7 +519,7 @@
             <li><strong style="color:var(--ink);">Aim and drop</strong> generated portrait bubbles into the retail bin.</li>
             <li><strong style="color:var(--ink);">Match bubbles</strong> of the same tier. Contact fuses them into the next escalation.</li>
             <li><strong style="color:var(--ink);">Watch the line.</strong> If the pile crosses the escalation line too long, the store closes.</li>
-            <li><strong style="color:var(--ink);">Chain merges</strong> to fill the manager meter, then spend the random manager ability it gives you.</li>
+            <li><strong style="color:var(--ink);">Chain merges</strong> to fill the manager meter, then arm its random ability and tap the playfield to place it.</li>
             <li><strong style="color:var(--ink);">Spend energy</strong> on receipt and HOA powers when the aisle gets cursed.</li>
             <li><strong style="color:var(--ink);">Goal:</strong> reach <strong style="color:var(--ink);">Consumer Rights Kaiju</strong>.</li>
           </ul>
@@ -536,7 +542,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260621-network-7"></script>
-  <script src="../assets/js/karen-merger.js?v=20260622-random-manager-1"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-place-manager-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

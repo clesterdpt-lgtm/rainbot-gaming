@@ -21,8 +21,8 @@
   const DROP_COOLDOWN = 0.52;
   const MANAGER_METER_MAX = 100;
   const MANAGER_FILL_SCALE = 0.3;
-  const MANAGER_ABILITIES = ["clear", "merge", "pill"];
-  const MANAGER_WILD_RADIUS = 36;
+  const MANAGER_ABILITIES = ["clear", "pop", "pill"];
+  const MANAGER_POP_RADIUS = 36;
   const MANAGER_PILL_RADIUS = 46;
   const RECEIPT_COST = 80;
   const HOA_COST = 65;
@@ -94,6 +94,7 @@
   let heat = 0;
   let managerMeter = 0;
   let managerAbility = null;
+  let managerArmedAbility = null;
   let topTier = 1;
   let aimX = W / 2;
   let nextTier = 1;
@@ -242,6 +243,10 @@
       playTone(210, 0.22, { type: "sawtooth", to: 840, gain: 0.045 });
       playTone(520, 0.24, { type: "triangle", to: 260, gain: 0.032, delay: 0.06 });
       playNoise(0.28, { frequency: 680, gain: 0.035, delay: 0.02 });
+    } else if (name === "pop") {
+      playTone(520, 0.06, { type: "square", to: 860, gain: 0.034 });
+      playTone(1180, 0.08, { type: "triangle", to: 620, gain: 0.024, delay: 0.055 });
+      playNoise(0.08, { frequency: 2400, gain: 0.016, delay: 0.025 });
     } else if (name === "wildcard") {
       playTone(440, 0.08, { type: "triangle", to: 660, gain: 0.034 });
       playTone(880, 0.12, { type: "sine", to: 1320, gain: 0.024, delay: 0.06 });
@@ -303,22 +308,23 @@
 
   function managerAbilityLabel(ability) {
     if (ability === "clear") return "Clear";
-    if (ability === "merge") return "Merge";
+    if (ability === "pop") return "Pop";
     if (ability === "pill") return "Big Pill";
     return "Manager";
   }
 
+  function normalizeManagerAbility(ability) {
+    if (ability === "merge") return "pop";
+    return MANAGER_ABILITIES.includes(ability) ? ability : null;
+  }
+
   function managerAbilityPool() {
     if (!bubbles.length) return [];
-    const pool = MANAGER_ABILITIES.filter((ability) => ability !== "merge");
-    if (bubbles.some((bubble) => bubble.tier < MAX)) pool.push("merge");
-    return pool;
+    return MANAGER_ABILITIES.slice();
   }
 
   function managerAbilityIsValid(ability) {
-    if (!ability || !bubbles.length) return false;
-    if (ability === "merge") return bubbles.some((bubble) => bubble.tier < MAX);
-    return MANAGER_ABILITIES.includes(ability);
+    return Boolean(normalizeManagerAbility(ability) && bubbles.length);
   }
 
   function rollManagerAbility() {
@@ -332,6 +338,7 @@
       managerAbility = null;
       return null;
     }
+    managerAbility = normalizeManagerAbility(managerAbility);
     if (!managerAbilityIsValid(managerAbility)) rollManagerAbility();
     return managerAbility;
   }
@@ -384,12 +391,12 @@
     };
   }
 
-  function makeManagerToken(kind) {
-    const r = kind === "pill" ? MANAGER_PILL_RADIUS : MANAGER_WILD_RADIUS;
+  function makeManagerToken(kind, x = aimX) {
+    const r = kind === "pill" ? MANAGER_PILL_RADIUS : MANAGER_POP_RADIUS;
     return {
       id: ++uid,
       kind,
-      x: clamp(aimX, WALL + r, W - WALL - r),
+      x: clamp(x, WALL + r, W - WALL - r),
       y: ROOF - r - 16,
       vx: kind === "pill" ? rand(-30, 30) : 0,
       vy: kind === "pill" ? 250 : 150,
@@ -488,7 +495,7 @@
     ctx.quadraticCurveTo(x, y, x + rr, y);
   }
 
-  function drawWildcardToken(token) {
+  function drawPopToken(token) {
     const r = token.r;
     ctx.save();
     ctx.translate(token.x, token.y);
@@ -526,7 +533,7 @@
     ctx.fillText("ANY", 0, -2);
     ctx.fillStyle = "rgba(255,255,255,0.72)";
     ctx.font = "800 " + Math.round(r * 0.18) + "px JetBrains Mono, monospace";
-    ctx.fillText("MERGE", 0, r * 0.42);
+    ctx.fillText("POP", 0, r * 0.42);
     ctx.restore();
   }
 
@@ -572,7 +579,7 @@
   function drawManagerTokens() {
     for (const token of managerTokens) {
       if (token.kind === "pill") drawPillToken(token);
-      else drawWildcardToken(token);
+      else drawPopToken(token);
     }
   }
 
@@ -632,7 +639,6 @@
   function drawAim() {
     if (!running || pausedByOverlay) return;
     const tier = TIERS[nextTier];
-    const ghost = { tier: nextTier, x: aimX, y: 62, r: tier.radius };
     ctx.save();
     ctx.strokeStyle = "rgba(255,212,59,0.8)";
     ctx.setLineDash([10, 12]);
@@ -642,7 +648,23 @@
     ctx.lineTo(aimX, FLOOR - 24);
     ctx.stroke();
     ctx.setLineDash([]);
-    drawBubble(ghost, 0.64);
+    if (managerArmedAbility) {
+      const kind = managerArmedAbility === "pill" ? "pill" : "pop";
+      const r = kind === "pill" ? MANAGER_PILL_RADIUS : MANAGER_POP_RADIUS;
+      const token = {
+        kind,
+        x: clamp(aimX, WALL + r, W - WALL - r),
+        y: ROOF - r - 16,
+        r,
+        rot: kind === "pill" ? -0.08 : 0,
+      };
+      ctx.globalAlpha = 0.72;
+      if (kind === "pill") drawPillToken(token);
+      else drawPopToken(token);
+    } else {
+      const ghost = { tier: nextTier, x: aimX, y: 62, r: tier.radius };
+      drawBubble(ghost, 0.64);
+    }
     ctx.restore();
   }
 
@@ -809,33 +831,17 @@
     return dist <= (a.r + b.r) * 1.04;
   }
 
-  function awardWildcardMerge(target, now) {
-    if (target.tier >= MAX) {
-      pops.push({ x: target.x, y: target.y, r: target.r, color: "#ffd43b", life: 0.4, max: 0.4 });
-      playSfx("nope");
-      log("Wildcard merge bounced off the final form. Corporate has no form for that.");
-      return;
-    }
-
-    const tier = target.tier + 1;
-    const merged = makeBubble(tier, target.x, target.y, {
-      vx: target.vx * 0.25,
-      vy: Math.min(target.vy * 0.12, 0) - 150,
-      fresh: true,
-    });
-    merged.mergedAt = now;
+  function awardPopBubble(target) {
+    const tier = target.tier;
     bubbles = bubbles.filter((item) => item !== target);
-    bubbles.push(merged);
-    pops.push({ x: merged.x, y: merged.y, r: merged.r, color: TIERS[tier].color, life: 0.55, max: 0.55 });
-    spawnCouponStorm(8, merged.x, merged.y);
-    score += tierScore(tier);
-    energy += Math.ceil(tierEnergy(tier) * 0.7);
-    heat = clamp(heat + tier * 1.2 - 5, 0, 100);
-    topTier = Math.max(topTier, tier);
+    pops.push({ x: target.x, y: target.y, r: target.r, color: "#2ee0ff", life: 0.55, max: 0.55 });
+    spawnCouponStorm(7, target.x, target.y);
+    heat = clamp(heat - 9 - tier * 2, 0, 100);
+    dangerTime = Math.max(0, dangerTime - 0.6);
+    shake = Math.max(shake, 4);
     api.recordScore(GAME_ID, score);
-    playSfx("merge", { tier });
-    if (tier >= MAX && !won) showWin();
-    log("Wildcard merge tagged " + TIERS[target.tier].name + " into " + TIERS[tier].name + ".");
+    playSfx("pop", { tier });
+    log("Pop Any Bubble deleted " + TIERS[tier].name + ". Customer service has left the chat.");
     saveProgress();
   }
 
@@ -879,17 +885,17 @@
         token.vx = -Math.abs(token.vx) * 0.65;
       }
 
-      if (token.kind === "wild") {
+      if (token.kind === "pop") {
         const hit = bubbles.find((bubble) => Math.hypot(bubble.x - token.x, bubble.y - token.y) <= bubble.r + token.r * 0.86);
         if (hit) {
           managerTokens.splice(i, 1);
-          awardWildcardMerge(hit, now);
+          awardPopBubble(hit);
           continue;
         }
         if (token.y - token.r > FLOOR + 70 || token.life <= 0) {
           managerTokens.splice(i, 1);
           playSfx("nope");
-          log("Wildcard merge missed. Somewhere, a coupon lawyer smiled.");
+          log("Pop Any Bubble missed. The complaint escaped into the parking lot.");
         }
       } else {
         let hitCount = 0;
@@ -1071,7 +1077,7 @@
   }
 
   function canSpendManagerMeter() {
-    if (!running || pausedByOverlay) return;
+    if (!running || pausedByOverlay) return false;
     if (managerMeter < MANAGER_METER_MAX) {
       playSfx("nope");
       log("Chain more merges before asking for the manager.");
@@ -1083,22 +1089,52 @@
   function spendManagerMeter() {
     managerMeter = 0;
     managerAbility = null;
+    managerArmedAbility = null;
     managerFlash = Math.max(managerFlash, 0.35);
   }
 
+  function cancelArmedManagerAbility() {
+    if (!managerArmedAbility) return false;
+    const label = managerAbilityLabel(managerArmedAbility);
+    managerArmedAbility = null;
+    playSfx("toggle");
+    log(label + " canceled. The manager went back to judging receipts.");
+    updateHud();
+    return true;
+  }
+
   function useManager() {
+    if (managerArmedAbility) {
+      cancelArmedManagerAbility();
+      return;
+    }
     if (!canSpendManagerMeter()) return;
     const ability = ensureManagerAbility();
-    if (ability === "clear") {
-      useManagerClear();
-    } else if (ability === "merge") {
-      useManagerMerge();
-    } else if (ability === "pill") {
-      useManagerPill();
+    if (ability) {
+      managerArmedAbility = ability;
+      playSfx("toggle");
+      log("Manager armed: " + managerAbilityLabel(ability) + ". Tap the playfield to place it.");
+      updateHud();
     } else {
       playSfx("nope");
       log("The manager wandered off before choosing an ability.");
     }
+  }
+
+  function placeManagerAbilityAt(x = aimX) {
+    if (!managerArmedAbility) return false;
+    if (!canSpendManagerMeter() || !managerAbilityIsValid(managerArmedAbility)) {
+      managerArmedAbility = null;
+      updateHud();
+      return false;
+    }
+    aimX = clamp(Number(x) || aimX, WALL + 34, W - WALL - 34);
+    const ability = normalizeManagerAbility(managerArmedAbility);
+    if (ability === "clear") useManagerClear();
+    else if (ability === "pop") useManagerPop(aimX);
+    else if (ability === "pill") useManagerPill(aimX);
+    else cancelArmedManagerAbility();
+    return true;
   }
 
   function useManagerClear() {
@@ -1141,24 +1177,24 @@
     saveProgress();
   }
 
-  function useManagerMerge() {
+  function useManagerPop(x = aimX) {
     if (!canSpendManagerMeter()) return;
-    if (!bubbles.some((bubble) => bubble.tier < MAX)) {
+    if (!bubbles.length) {
       playSfx("nope");
-      log("Wildcard merge needs a bubble that can still escalate.");
+      log("Pop Any Bubble needs a bubble to delete.");
       return;
     }
 
     spendManagerMeter();
-    const token = makeManagerToken("wild");
+    const token = makeManagerToken("pop", x);
     managerTokens.push(token);
-    playSfx("wildcard");
-    log("Random manager ability: Merge. The wildcard will fuse with the first bubble it hits.");
+    playSfx("pop");
+    log("Random manager ability: Pop. It will delete the first bubble it hits.");
     updateHud();
     saveProgress();
   }
 
-  function useManagerPill() {
+  function useManagerPill(x = aimX) {
     if (!canSpendManagerMeter()) return;
     if (!bubbles.length) {
       playSfx("nope");
@@ -1167,7 +1203,7 @@
     }
 
     spendManagerMeter();
-    const token = makeManagerToken("pill");
+    const token = makeManagerToken("pill", x);
     managerTokens.push(token);
     shake = Math.max(shake, 4);
     playSfx("pill");
@@ -1238,6 +1274,10 @@
 
   function updateHud() {
     if (boardEl) boardEl.classList.toggle("karen-board--overlay", pausedByOverlay);
+    if (managerArmedAbility && (!running || pausedByOverlay || managerMeter < MANAGER_METER_MAX || !managerAbilityIsValid(managerArmedAbility))) {
+      managerArmedAbility = null;
+    }
+    if (boardEl) boardEl.classList.toggle("is-manager-armed", Boolean(managerArmedAbility));
     if (scoreEl) scoreEl.textContent = score.toLocaleString();
     if (energyEl) energyEl.textContent = Math.floor(energy).toLocaleString();
     if (topEl) topEl.textContent = TIERS[topTier] ? TIERS[topTier].name : "-";
@@ -1251,7 +1291,7 @@
     if (heatLabel) heatLabel.textContent = Math.round(heat) + "%";
     if (shakeFill) shakeFill.style.width = clamp(dangerTime / 2.25 * 100, 0, 100) + "%";
     if (shakeLabel) shakeLabel.textContent = Math.max(0, Math.ceil(2.25 - dangerTime)).toString();
-    const managerDisabled = !running || pausedByOverlay || !managerReady || !bubbles.length || !rolledAbility;
+    const managerDisabled = !running || pausedByOverlay || (!managerArmedAbility && (!managerReady || !bubbles.length || !rolledAbility));
     updateManagerButton(btnManager, managerDisabled, rolledAbility);
     if (btnReceipt) btnReceipt.disabled = !running || pausedByOverlay || energy < RECEIPT_COST || !findBestPair();
     if (btnHoa) btnHoa.disabled = !running || pausedByOverlay || energy < HOA_COST;
@@ -1262,8 +1302,14 @@
     if (!button) return;
     button.disabled = disabled;
     button.classList.toggle("karen-manager-button--ready", !disabled);
-    button.textContent = ability && !disabled ? "Use " + managerAbilityLabel(ability) : "Manager " + Math.round(managerMeter) + "%";
-    button.title = ability && !disabled ? "Use random manager ability: " + managerAbilityLabel(ability) : "Fill the manager meter to draw a random ability";
+    button.classList.toggle("karen-manager-button--armed", Boolean(managerArmedAbility));
+    if (managerArmedAbility) {
+      button.textContent = "Tap Board: " + managerAbilityLabel(managerArmedAbility);
+      button.title = "Tap the playfield to place " + managerAbilityLabel(managerArmedAbility) + ". Click here again to cancel.";
+    } else {
+      button.textContent = ability && !disabled ? "Arm " + managerAbilityLabel(ability) : "Manager " + Math.round(managerMeter) + "%";
+      button.title = ability && !disabled ? "Arm random manager ability: " + managerAbilityLabel(ability) : "Fill the manager meter to draw a random ability";
+    }
   }
 
   function hideContinueButton() {
@@ -1337,6 +1383,7 @@
     heat = 0;
     managerMeter = 0;
     managerAbility = null;
+    managerArmedAbility = null;
     topTier = 1;
     uid = 0;
     aimX = W / 2;
@@ -1402,7 +1449,8 @@
     energy = Number(data.energy) || 0;
     heat = clamp(Number(data.heat) || 0, 0, 100);
     managerMeter = clamp(Number(data.managerMeter) || 0, 0, MANAGER_METER_MAX);
-    managerAbility = MANAGER_ABILITIES.includes(data.managerAbility) ? data.managerAbility : null;
+    managerAbility = normalizeManagerAbility(data.managerAbility);
+    managerArmedAbility = null;
     topTier = clamp(Number(data.topTier) || 1, 1, MAX);
     uid = Number(data.uid) || bubbles.length;
     aimX = clamp(Number(data.aimX) || W / 2, WALL + 34, W - WALL - 34);
@@ -1423,7 +1471,7 @@
 
   function handlePointer(clientX, shouldDrop) {
     aimX = clamp(screenToCanvasX(clientX), WALL + 34, W - WALL - 34);
-    if (shouldDrop) dropBubble();
+    if (shouldDrop && !placeManagerAbilityAt(aimX)) dropBubble();
   }
 
   canvas.addEventListener("pointermove", (event) => handlePointer(event.clientX, false));
@@ -1444,12 +1492,16 @@
       aim(28);
     } else if (event.key === " " || event.key === "ArrowDown" || event.key === "Enter") {
       event.preventDefault();
-      dropBubble();
+      if (!placeManagerAbilityAt(aimX)) dropBubble();
+    } else if (event.key === "Escape") {
+      cancelArmedManagerAbility();
     }
   });
 
   if (btnNew) btnNew.addEventListener("click", newGame);
-  if (btnDrop) btnDrop.addEventListener("click", dropBubble);
+  if (btnDrop) btnDrop.addEventListener("click", () => {
+    if (!placeManagerAbilityAt(aimX)) dropBubble();
+  });
   if (btnAimLeft) btnAimLeft.addEventListener("click", () => aim(-42));
   if (btnAimRight) btnAimRight.addEventListener("click", () => aim(42));
   if (btnManager) btnManager.addEventListener("click", useManager);
@@ -1494,7 +1546,8 @@
     aim,
     manager: useManager,
     managerClear: useManagerClear,
-    managerMerge: useManagerMerge,
+    managerPop: useManagerPop,
+    managerMerge: useManagerPop,
     managerPill: useManagerPill,
     receipt: useReceiptBlast,
     hoa: useHoa,
@@ -1527,6 +1580,7 @@
       topTier = 1;
       managerMeter = 0;
       managerAbility = null;
+      managerArmedAbility = null;
       updateHud();
     },
     setManagerMeter(value = MANAGER_METER_MAX) {
@@ -1537,9 +1591,12 @@
       return managerMeter;
     },
     setManagerAbility(value) {
-      managerAbility = MANAGER_ABILITIES.includes(value) ? value : null;
+      managerAbility = normalizeManagerAbility(value);
       updateHud();
       return managerAbility;
+    },
+    placeManager(x = aimX) {
+      return placeManagerAbilityAt(Number(x) || aimX);
     },
     vals: () => bubbles.map((b) => ({ tier: b.tier, x: b.x, y: b.y, r: b.r })),
     managerVals: () => managerTokens.map((token) => ({ kind: token.kind, x: token.x, y: token.y, r: token.r })),
@@ -1548,6 +1605,7 @@
     get heat() { return heat; },
     get managerMeter() { return managerMeter; },
     get managerAbility() { return managerAbility; },
+    get managerArmedAbility() { return managerArmedAbility; },
     get managerReady() { return managerMeter >= MANAGER_METER_MAX; },
     get topTier() { return topTier; },
     get running() { return running; },

@@ -4178,7 +4178,7 @@ body.arcade-home::before {
   object-position: center;
 }
 
-/* Dont F*ck with Cats generated poster stays 16:9 across preview surfaces. */
+/* Don't F*ck with Cats generated poster stays 16:9 across preview surfaces. */
 .poster-card--clowder img,
 .directory-card__poster--clowder img,
 .clowder-page .game-side__poster {

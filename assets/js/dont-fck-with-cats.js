@@ -1,5 +1,5 @@
 /* ============================================
-   DONT F*CK WITH CATS
+   DON'T F*CK WITH CATS
    - Cat-swarm runner parody with gates, auto-fire, and a vacuum boss.
    - Debug hook: window.__CLOWDER
    ============================================ */
@@ -7,7 +7,9 @@
   "use strict";
 
   const GAME_ID = "dont-fck-with-cats";
-  const GAME_TITLE = "Dont F*ck with Cats";
+  const GAME_TITLE = "Don't F*ck with Cats";
+  const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
+  const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -240,6 +242,21 @@
   };
 
   const CAT_FURS = ["#f6a94d", "#f5f0de", "#687483", "#1d2027", "#d97545", "#f7d7ae", "#c9beb3", "#f0c052"];
+  const RASTER_ART = {
+    backdrop: loadRasterArt("generated-house-chaos-backdrop.png"),
+    cats: [
+      loadRasterArt("generated-cat-orange.png"),
+      loadRasterArt("generated-cat-cream.png"),
+      loadRasterArt("generated-cat-gray.png"),
+    ],
+    objects: {
+      roomba: loadRasterArt("generated-roomba.png"),
+      cucumber: loadRasterArt("generated-cucumber.png"),
+      vacuum: loadRasterArt("generated-vacuum.png"),
+      box: loadRasterArt("generated-cat-cream.png"),
+      yarn: loadRasterArt("generated-cat-gray.png"),
+    },
+  };
 
   const GATE_POOL = [
     { type: "add", value: 6, label: "+6 KITTENS", good: true, color: C.green },
@@ -328,6 +345,17 @@
 
   function pick(list) {
     return list[(Math.random() * list.length) | 0];
+  }
+
+  function loadRasterArt(fileName) {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = new URL(fileName, ART_ROOT).href;
+    return image;
+  }
+
+  function imageReady(image) {
+    return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
   }
 
   function currentLevel() {
@@ -1398,16 +1426,43 @@
     if (state.paused) drawPause();
   }
 
+  function drawImageCover(image, x, y, w, h) {
+    if (!imageReady(image)) return false;
+    const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (image.naturalWidth - sw) / 2;
+    const sy = (image.naturalHeight - sh) / 2;
+    ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    return true;
+  }
+
   function drawBackground() {
     const offset = (state.distance * 0.45) % 70;
     const level = currentLevel();
     const palette = level.palette;
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, palette.top);
-    grad.addColorStop(0.55, palette.mid);
-    grad.addColorStop(1, palette.bottom);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
+    if (imageReady(RASTER_ART.backdrop)) {
+      ctx.save();
+      drawImageCover(RASTER_ART.backdrop, 0, 0, W, H);
+      const tint = ctx.createLinearGradient(0, 0, 0, H);
+      tint.addColorStop(0, palette.top);
+      tint.addColorStop(0.56, palette.mid);
+      tint.addColorStop(1, palette.bottom);
+      ctx.globalAlpha = 0.62;
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = "#05070d";
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, palette.top);
+      grad.addColorStop(0.55, palette.mid);
+      grad.addColorStop(1, palette.bottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     ctx.save();
     ctx.globalAlpha = 0.35;
@@ -1480,7 +1535,34 @@
     drawObjectHp(ob);
   }
 
+  function drawRasterObject(kind, ob, label, radius = 12) {
+    const image = RASTER_ART.objects[kind];
+    if (!imageReady(image)) return false;
+
+    ctx.save();
+    roundRect(-ob.w / 2, -ob.h / 2, ob.w, ob.h, radius);
+    ctx.clip();
+    drawImageCover(image, -ob.w / 2, -ob.h / 2, ob.w, ob.h);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = 6;
+    roundRect(-ob.w / 2, -ob.h / 2, ob.w, ob.h, radius);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.68)";
+    ctx.lineWidth = 2;
+    roundRect(-ob.w / 2 + 4, -ob.h / 2 + 4, ob.w - 8, ob.h - 8, Math.max(4, radius - 4));
+    ctx.stroke();
+    if (label) {
+      fitText(label, 0, ob.h / 2 - 10, ob.w * 0.76, 13, C.yellow, "center");
+    }
+    ctx.restore();
+    return true;
+  }
+
   function drawRoomba(ob) {
+    if (drawRasterObject("roomba", ob, "VAC", ob.h / 2)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1501,6 +1583,7 @@
   }
 
   function drawCucumber(ob) {
+    if (drawRasterObject("cucumber", ob, "CUC", ob.h / 2)) return;
     ctx.rotate(Math.sin(ob.spin) * 0.18);
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
@@ -1553,6 +1636,7 @@
   }
 
   function drawBox(ob) {
+    if (drawRasterObject("box", ob, "+CATS", 10)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1573,6 +1657,7 @@
   }
 
   function drawYarn(ob) {
+    if (drawRasterObject("yarn", ob, "+CREW", Math.min(ob.w, ob.h) / 2)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1608,13 +1693,26 @@
       ctx.shadowColor = C.ink;
       ctx.shadowBlur = 24;
     }
-    ctx.fillStyle = boss.color || "#212838";
+    const bossArt = RASTER_ART.objects[boss.pattern === "cucumber" ? "cucumber" : "vacuum"];
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    if (imageReady(bossArt)) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
+      ctx.clip();
+      drawImageCover(bossArt, -boss.w / 2, -boss.h / 2, boss.w, boss.h);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = boss.color || "#212838";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.fillStyle = "#334159";
     ctx.beginPath();
     ctx.ellipse(-46, -10, 48, 26, -0.08, 0, Math.PI * 2);
@@ -1937,7 +2035,7 @@
       const scatterY = scatter * Math.cos(i * 2.19 + state.time * 16) * 14;
       const x = clamp(state.x + Math.cos(angle) * radius + scatterX, PLAY_MIN_X - 18, PLAY_MAX_X + 18);
       const y = PLAYER_Y + Math.sin(angle) * radius * 0.38 + ((i % 5) - 2) * 5 + Math.sin(state.time * 7 + i) * (1.5 + moraleBob) + scatterY;
-      drawTinyCat(x, y, clamp(0.72 - i * 0.004, 0.46, 0.72), CAT_FURS[i % CAT_FURS.length], angle);
+      drawTinyCat(x, y, clamp(0.72 - i * 0.004, 0.46, 0.72), CAT_FURS[i % CAT_FURS.length], angle, i);
     }
 
     if (state.cats > visible) {
@@ -1957,11 +2055,17 @@
     ctx.restore();
   }
 
-  function drawTinyCat(x, y, scale, fur, angle) {
+  function drawTinyCat(x, y, scale, fur, angle, artIndex = 0) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(Math.sin((angle || 0) + state.time * 2) * 0.08);
     ctx.scale(scale, scale);
+    const catArt = RASTER_ART.cats[Math.abs(artIndex) % RASTER_ART.cats.length];
+    if (imageReady(catArt)) {
+      drawRasterCat(catArt);
+      ctx.restore();
+      return;
+    }
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 5;
     ctx.lineJoin = "round";
@@ -2011,6 +2115,28 @@
     ctx.lineTo(10, 0);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
+  }
+
+  function drawRasterCat(image) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(2, -4, 35, 34, 0, 0, Math.PI * 2);
+    ctx.clip();
+    drawImageCover(image, -38, -48, 76, 86);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = C.black;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.ellipse(2, -4, 35, 34, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(2, -4, 39, 38, 0, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 

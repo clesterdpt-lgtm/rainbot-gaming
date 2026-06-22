@@ -10,7 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-boss-sheet-frame-1";
+  const ART_VERSION = "20260622-compact-hud-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -1437,7 +1437,6 @@
     drawCats();
     drawParticles();
     drawFloats();
-    drawTopBars();
     drawLevelBanner();
     ctx.restore();
     if (state.paused) drawPause();
@@ -1725,15 +1724,6 @@
     }
     fitText(boss.label || "BOSS", 0, 58, boss.w * 0.78, 18, C.yellow, "center");
     ctx.restore();
-
-    const pct = clamp(boss.hp / boss.maxHp, 0, 1);
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    roundRect(220, 18, 520, 16, 8);
-    ctx.fill();
-    ctx.fillStyle = boss.accent || C.pink;
-    roundRect(220, 18, 520 * pct, 16, 8);
-    ctx.fill();
-    fitText(boss.caption || "BOSS PHASE", 480, 51, 360, 17, C.ink, "center");
   }
 
   function drawBossAttackFx(boss) {
@@ -2104,32 +2094,6 @@
       fitText(f.text, f.x, f.y, 240, 24, f.color, "center");
       ctx.restore();
     });
-  }
-
-  function drawTopBars() {
-    ctx.save();
-
-    const panelW = 154;
-    const panelH = 98;
-    const x = W - panelW - 24;
-    const y = H - panelH - 24;
-
-    ctx.fillStyle = "rgba(3, 6, 11, 0.64)";
-    roundRect(x, y, panelW, panelH, 10);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(251,250,244,0.16)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    drawHudStat(x + 12, y + 15, panelW - 24, "CATS", Math.max(0, Math.round(state.cats)).toLocaleString(), C.yellow);
-    drawHudStat(x + 12, y + 42, panelW - 24, "MORALE", `${Math.max(0, Math.round(state.morale))}%`, state.morale > 34 ? C.green : C.red);
-    drawHudStat(x + 12, y + 69, panelW - 24, "SCORE", Math.round(state.score).toLocaleString(), C.cyan);
-    ctx.restore();
-  }
-
-  function drawHudStat(x, y, width, label, value, color) {
-    fitText(label, x, y + 10, 62, 10, "rgba(251,250,244,0.62)", "left");
-    fitText(value, x + width, y + 10, width - 72, 17, color, "right");
   }
 
   function drawLevelBanner() {

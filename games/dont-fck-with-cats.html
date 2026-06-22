@@ -30,11 +30,6 @@
       border-color: rgba(46, 224, 255, 0.32);
     }
 
-    .clowder-stage .hud {
-      background: rgba(2, 7, 14, 0.9);
-      border-color: rgba(255, 212, 59, 0.2);
-    }
-
     .canvas-wrap--clowder {
       aspect-ratio: 960 / 600;
       --game-aspect: 1.6;
@@ -57,6 +52,55 @@
       border: 0 !important;
       box-shadow: none !important;
       outline: 0 !important;
+    }
+
+    .clowder-mini-hud {
+      position: absolute;
+      top: 54px;
+      right: 8px;
+      z-index: 10;
+      display: grid;
+      gap: 4px;
+      width: 116px;
+      padding: 8px 9px;
+      border: 1px solid rgba(251, 250, 244, 0.18);
+      border-radius: 8px;
+      background: rgba(3, 6, 11, 0.58);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+      pointer-events: none;
+    }
+
+    .clowder-mini-hud__item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-width: 0;
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .clowder-mini-hud__label {
+      color: rgba(251, 250, 244, 0.62);
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .clowder-mini-hud__value {
+      color: var(--accent-3);
+      font-size: 13px;
+      font-weight: 900;
+      text-align: right;
+      min-width: 38px;
+    }
+
+    .clowder-mini-hud__value--morale {
+      color: var(--good);
+    }
+
+    .clowder-mini-hud__value--score {
+      color: var(--accent-2);
     }
 
     .clowder-page .overlay {
@@ -225,18 +269,14 @@
 
     <div class="game-layout">
       <div class="game-stage clowder-stage">
-        <div class="hud" aria-label="Don't F*ck with Cats status">
-          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
-          <div class="hud__item"><span class="hud__label">LEVEL</span><span class="hud__value" id="hud-level">1/4</span></div>
-          <div class="hud__item"><span class="hud__label">CATS</span><span class="hud__value" id="hud-cats">12</span></div>
-          <div class="hud__item"><span class="hud__label">MORALE</span><span class="hud__value" id="hud-morale">100%</span></div>
-          <div class="hud__item"><span class="hud__label">DISTANCE</span><span class="hud__value" id="hud-distance">0%</span></div>
-          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
-        </div>
-
         <div class="canvas-wrap canvas-wrap--clowder">
           <canvas id="gameCanvas" width="960" height="600" tabindex="0" aria-label="Don't F*ck with Cats playfield"></canvas>
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">Max</button>
+          <div class="clowder-mini-hud" aria-label="Don't F*ck with Cats status">
+            <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Cats</span><span class="clowder-mini-hud__value" id="hud-cats">9</span></div>
+            <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Morale</span><span class="clowder-mini-hud__value clowder-mini-hud__value--morale" id="hud-morale">100%</span></div>
+            <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Score</span><span class="clowder-mini-hud__value clowder-mini-hud__value--score" id="hud-score">0</span></div>
+          </div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">DON'T F*CK WITH CATS</h2>
@@ -320,7 +360,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
-  <script src="../assets/js/dont-fck-with-cats.js?v=20260622-boss-sheet-frame-1"></script>
+  <script src="../assets/js/dont-fck-with-cats.js?v=20260622-compact-hud-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

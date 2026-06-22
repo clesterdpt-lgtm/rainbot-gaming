@@ -32,7 +32,7 @@ function renderNav() {
 
     slot.innerHTML = `
       <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network — free browser arcade">
-        <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260621-network-3" alt="Rainbot Network" />
+        <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
       </a>
       <div class="nav__links">
         <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>

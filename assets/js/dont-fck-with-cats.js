@@ -2075,8 +2075,6 @@
 
   function drawRasterCat(image) {
     ctx.save();
-    ctx.shadowColor = "rgba(46,224,255,0.28)";
-    ctx.shadowBlur = 7;
     drawImageContain(image, -50, -60, 100, 112);
     ctx.restore();
   }

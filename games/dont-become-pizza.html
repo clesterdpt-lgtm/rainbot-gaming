@@ -1424,7 +1424,7 @@
       // filmic colour pipeline — the single biggest free quality win
       renderer.outputEncoding = THREE.sRGBEncoding;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 0.92;
+      renderer.toneMappingExposure = 0.85;
       renderer.physicallyCorrectLights = false;
       el.app.appendChild(renderer.domElement);
 
@@ -2515,7 +2515,7 @@
     function makeCanisterMesh() {
       const grp = new THREE.Group();
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.32),
-        new THREE.MeshStandardMaterial({ color: 0xb5151a, roughness: 0.5, metalness: 0.2, emissive: 0x300505, emissiveIntensity: 0.4 }));
+        new THREE.MeshStandardMaterial({ color: 0xd11a1f, roughness: 0.5, metalness: 0.2, emissive: 0x7a1010, emissiveIntensity: 1.0 }));
       grp.add(body);
       const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.18, 8),
         new THREE.MeshStandardMaterial({ color: 0x222222 }));
@@ -2557,18 +2557,18 @@
       const y = yOverride != null ? yOverride : groundY(x, z, level) + 0.6;
       mesh.position.set(x, y, z);
       (level === "bunker" ? bunkerGroup : surfaceGroup).add(mesh);
-      // glow halo light so pickups are findable in the dark
-      const glow = new THREE.PointLight(type === "can" ? 0xff5533 : type === "keycard" ? 0x3a8fd0 : 0xe6c84a, 0.8, 5, 2);
+      // glow halo light so pickups are findable in the dark (brighter for the darker world)
+      const glow = new THREE.PointLight(type === "can" ? 0xff5533 : type === "keycard" ? 0x3a8fd0 : 0xe6c84a, type === "can" ? 1.7 : 1.1, type === "can" ? 9 : 6, 2);
       glow.position.set(x, y, z);
       (level === "bunker" ? bunkerGroup : surfaceGroup).add(glow);
       pickups.push({ mesh, glow, type, x, z, level, taken: false, baseY: y, label: label || "" });
     }
     function spawnPickups() {
       // 4 fuel canisters — all in open, reachable spots (clear of walls/props)
-      addPickup("can", -14, 38, "surface", "Fuel canister — beach crates");      // beach
-      addPickup("can", -38, 5, "surface", "Fuel canister — mansion ruins");      // mansion (open ground)
+      addPickup("can", -10, 41, "surface", "Fuel canister — beach crates");      // beach (beside the crates, not inside one)
+      addPickup("can", -46, -11, "surface", "Fuel canister — mansion ruins");    // tucked deep in the rubble
       addPickup("can", -18, -24, "bunker", "Fuel canister — the cells");         // inside a cell (between dividers)
-      addPickup("can", 21, -22, "bunker", "Fuel canister — the lab");            // open lab corner
+      addPickup("can", 20, -32, "bunker", "Fuel canister — the lab");            // open lab corner (clear of the cart/tables)
       // boat keys — resting ON TOP of the deep-chamber altar (not embedded in it)
       addPickup("keys", -10, -42.6, "bunker", "Boat keys", BUNKER_Y + 1.25);
       // NOTE: the elevator keycard is NOT a ground pickup — it is carried by an
@@ -2787,16 +2787,16 @@
       if (level === "surface") {
         scene.fog = new THREE.FogExp2(0x04070c, 0.045);
         Audio.startBed("surface");
-        // much darker night — the flashlight is now essential, the moon only hints at silhouettes
-        ambient.color.setHex(0x1a2740); ambient.intensity = 0.13;
-        hemi.color.setHex(0x223247); hemi.intensity = 0.18; moonLight.intensity = 0.3;
+        // even darker night — without the flashlight you can barely make out silhouettes
+        ambient.color.setHex(0x141f33); ambient.intensity = 0.09;
+        hemi.color.setHex(0x1b2738); hemi.intensity = 0.12; moonLight.intensity = 0.22;
         if (moonMesh) moonMesh.visible = true;
       } else {
-        scene.fog = new THREE.FogExp2(0x070608, 0.085);
+        scene.fog = new THREE.FogExp2(0x070608, 0.092);
         Audio.startBed("bunker");
         // near-black underground; only the fluoros / red emergency lamps cut through
-        ambient.color.setHex(0x16141a); ambient.intensity = 0.08;
-        hemi.color.setHex(0x14171d); hemi.intensity = 0.05; moonLight.intensity = 0.0;
+        ambient.color.setHex(0x121016); ambient.intensity = 0.055;
+        hemi.color.setHex(0x101319); hemi.intensity = 0.035; moonLight.intensity = 0.0;
       }
       // enemies visibility handled by group; just reset their alert when player leaves
     }

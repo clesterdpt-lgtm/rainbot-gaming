@@ -1499,18 +1499,6 @@
     }
     ctx.restore();
 
-    ctx.save();
-    ctx.globalAlpha = 0.16;
-    ctx.fillStyle = palette.glowA;
-    ctx.beginPath();
-    ctx.arc(120, 80, 180, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = palette.glowB;
-    ctx.beginPath();
-    ctx.arc(870, 42, 150, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
     fitText(level.name.toUpperCase(), W - 28, 34, 360, 18, "rgba(251,250,244,0.72)", "right");
   }
 
@@ -1995,6 +1983,14 @@
       ctx.fill();
       ctx.restore();
     }
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = C.black;
+    ctx.beginPath();
+    ctx.ellipse(state.x, PLAYER_Y + 22, clamp(62 + state.cats * 0.44, 68, 126), 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
     for (let i = visible - 1; i >= 0; i--) {
       const angle = i * 2.399963 + state.time * 0.45;
       const radius = 12 + Math.sqrt(i + 1) * 11.5;
@@ -2012,14 +2008,6 @@
       fitText(`+${Math.round(state.cats - visible)}`, state.x + 87, PLAYER_Y + 53, 70, 22, C.yellow, "center");
     }
 
-    ctx.save();
-    ctx.strokeStyle = C.cyan;
-    ctx.lineWidth = 5;
-    ctx.globalAlpha = 0.5;
-    ctx.beginPath();
-    ctx.arc(state.x, PLAYER_Y, clamp(48 + state.cats * 0.42, 54, 118), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
   }
 
   function drawTinyCat(x, y, scale, fur, angle, artIndex = 0) {

@@ -10,11 +10,11 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-bottom-hud-bath-1";
+  const ART_VERSION = "20260622-boss-sheet-frame-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
-  const VIEW_SCALE = 0.78;
+  const VIEW_SCALE = 1;
   const VIEW_PAD_X = (W - W * VIEW_SCALE) / 2;
   const VIEW_PAD_Y = (H - H * VIEW_SCALE) / 2;
   const PLAY_MIN_X = 42;
@@ -259,6 +259,17 @@
       box: loadRasterArt("generated-box.png"),
       yarn: loadRasterArt("generated-yarn.png"),
       laser: loadRasterArt("generated-laser-pointer.png"),
+    },
+    bosses: {
+      roomba: loadRasterArt("generated-boss-roomba.png"),
+      vacuum: loadRasterArt("generated-boss-vacuum.png"),
+      cucumber: loadRasterArt("generated-boss-cucumber.png"),
+      spray: loadRasterArt("generated-boss-spray.png"),
+      bath: loadRasterArt("generated-boss-bath.png"),
+      box: loadRasterArt("generated-boss-box.png"),
+      yarn: loadRasterArt("generated-boss-yarn.png"),
+      laser: loadRasterArt("generated-boss-laser.png"),
+      blackCat: loadRasterArt("generated-boss-black-cat.png"),
     },
   };
 
@@ -1003,7 +1014,7 @@
     const pattern = level.bossPattern || "vacuum";
     state.boss = {
       x: W / 2,
-      y: -150,
+      y: 64,
       w: 256,
       h: 132,
       hp: level.bossHp,
@@ -1655,6 +1666,19 @@
     ctx.fill();
   }
 
+  function selectBossArt(boss) {
+    if (!boss) return null;
+    if (boss.label === "Roomba Prime") return RASTER_ART.bosses.roomba;
+    if (boss.label === "Algorithmic HOA") return RASTER_ART.bosses.blackCat;
+    if (boss.label === "Mega Lint Authority") return RASTER_ART.bosses.yarn;
+    if (boss.pattern === "cucumber") return RASTER_ART.bosses.cucumber;
+    if (boss.pattern === "bath") return RASTER_ART.bosses.bath;
+    if (boss.pattern === "pointer") return RASTER_ART.bosses.laser;
+    if (boss.pattern === "squeeze") return RASTER_ART.bosses.spray;
+    if (boss.pattern === "lint") return RASTER_ART.bosses.yarn;
+    return RASTER_ART.bosses.vacuum;
+  }
+
   function drawBoss(boss) {
     ctx.save();
     ctx.translate(boss.x, boss.y + boss.h / 2);
@@ -1662,9 +1686,7 @@
       ctx.shadowColor = C.ink;
       ctx.shadowBlur = 24;
     }
-    const bossArt = RASTER_ART.objects[
-      boss.pattern === "cucumber" ? "cucumber" : boss.pattern === "bath" ? "bath" : boss.pattern === "pointer" ? "laser" : "vacuum"
-    ];
+    const bossArt = selectBossArt(boss);
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 8;
     if (imageReady(bossArt)) {
@@ -1672,7 +1694,7 @@
       ctx.rotate(Math.sin(boss.phase) * 0.05);
       ctx.shadowColor = boss.accent || C.pink;
       ctx.shadowBlur = 14;
-      drawImageContain(bossArt, -boss.w * 0.62, -boss.h * 0.82, boss.w * 1.24, boss.h * 1.58);
+      drawImageContain(bossArt, -boss.w * 0.72, -boss.h * 0.85, boss.w * 1.44, boss.h * 1.62);
       ctx.restore();
     } else {
       ctx.fillStyle = boss.color || "#212838";

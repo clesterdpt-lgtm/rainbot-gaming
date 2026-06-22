@@ -1081,11 +1081,11 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   height: 100dvh !important;
   max-width: none;
   aspect-ratio: auto;
-  border: 0;
+  border: 0 !important;
   border-radius: 0;
   background: #05010a;
-  box-shadow: none;
-  outline: 0;
+  box-shadow: none !important;
+  outline: 0 !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1094,15 +1094,24 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 
 .canvas-wrap.is-maxed:focus,
 .canvas-wrap.is-maxed:focus-visible,
+.canvas-wrap:fullscreen,
+.canvas-wrap:-webkit-full-screen,
 .canvas-wrap.is-maxed #gameCanvas:focus,
 .canvas-wrap.is-maxed #gameCanvas:focus-visible {
-  border: 0;
-  box-shadow: none;
-  outline: 0;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
 }
 
 body.rb-game-maxed {
   overflow: hidden;
+}
+
+body.rb-game-maxed .game-stage,
+body.rb-game-maxed .clowder-stage {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  background: #05010a !important;
 }
 
 .canvas-wrap.is-maxed #gameCanvas {
@@ -1111,10 +1120,36 @@ body.rb-game-maxed {
   max-width: 100dvw;
   max-height: 100dvh;
   aspect-ratio: var(--game-aspect-ratio, 16 / 9);
-  border: none;
+  border: 0 !important;
   border-radius: 0;
-  box-shadow: none;
-  outline: 0;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.canvas-wrap:fullscreen,
+.canvas-wrap:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #05010a !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.canvas-wrap:fullscreen #gameCanvas,
+.canvas-wrap:-webkit-full-screen #gameCanvas,
+#gameCanvas:focus,
+#gameCanvas:focus-visible {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+
+.canvas-wrap:fullscreen::backdrop,
+.canvas-wrap:-webkit-full-screen::backdrop {
+  background: #05010a;
 }
 .canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
 .canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }

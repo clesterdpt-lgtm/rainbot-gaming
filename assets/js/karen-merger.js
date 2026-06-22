@@ -20,6 +20,10 @@
   const MERGE_COOLDOWN = 0.18;
   const DROP_COOLDOWN = 0.52;
   const MANAGER_METER_MAX = 100;
+  const MANAGER_FILL_SCALE = 0.3;
+  const MANAGER_ABILITIES = ["clear", "merge", "pill"];
+  const MANAGER_WILD_RADIUS = 36;
+  const MANAGER_PILL_RADIUS = 46;
   const RECEIPT_COST = 80;
   const HOA_COST = 65;
   const scriptUrl = document.currentScript ? document.currentScript.src : location.href;
@@ -82,12 +86,14 @@
   sheet.src = sheetUrl;
 
   let bubbles = [];
+  let managerTokens = [];
   let pops = [];
   let coupons = [];
   let score = 0;
   let energy = 35;
   let heat = 0;
   let managerMeter = 0;
+  let managerAbility = null;
   let topTier = 1;
   let aimX = W / 2;
   let nextTier = 1;
@@ -236,6 +242,14 @@
       playTone(210, 0.22, { type: "sawtooth", to: 840, gain: 0.045 });
       playTone(520, 0.24, { type: "triangle", to: 260, gain: 0.032, delay: 0.06 });
       playNoise(0.28, { frequency: 680, gain: 0.035, delay: 0.02 });
+    } else if (name === "wildcard") {
+      playTone(440, 0.08, { type: "triangle", to: 660, gain: 0.034 });
+      playTone(880, 0.12, { type: "sine", to: 1320, gain: 0.024, delay: 0.06 });
+      playNoise(0.1, { frequency: 2100, gain: 0.014, delay: 0.03 });
+    } else if (name === "pill") {
+      playTone(98, 0.18, { type: "sawtooth", to: 150, gain: 0.052 });
+      playTone(260, 0.12, { type: "square", to: 180, gain: 0.028, delay: 0.08 });
+      playNoise(0.24, { frequency: 360, gain: 0.034, delay: 0.02 });
     } else if (name === "receipt") {
       [840, 1180, 1460].forEach((freq, index) =>
         playTone(freq, 0.045, { type: "square", gain: 0.022, delay: index * 0.055 })
@@ -284,7 +298,42 @@
   }
 
   function managerChargeFor(tier) {
-    return 8 + tier * 3;
+    return Math.max(3, Math.round((8 + tier * 3) * MANAGER_FILL_SCALE));
+  }
+
+  function managerAbilityLabel(ability) {
+    if (ability === "clear") return "Clear";
+    if (ability === "merge") return "Merge";
+    if (ability === "pill") return "Big Pill";
+    return "Manager";
+  }
+
+  function managerAbilityPool() {
+    if (!bubbles.length) return [];
+    const pool = MANAGER_ABILITIES.filter((ability) => ability !== "merge");
+    if (bubbles.some((bubble) => bubble.tier < MAX)) pool.push("merge");
+    return pool;
+  }
+
+  function managerAbilityIsValid(ability) {
+    if (!ability || !bubbles.length) return false;
+    if (ability === "merge") return bubbles.some((bubble) => bubble.tier < MAX);
+    return MANAGER_ABILITIES.includes(ability);
+  }
+
+  function rollManagerAbility() {
+    const pool = managerAbilityPool();
+    managerAbility = pool.length ? pool[(Math.random() * pool.length) | 0] : null;
+    return managerAbility;
+  }
+
+  function ensureManagerAbility() {
+    if (managerMeter < MANAGER_METER_MAX) {
+      managerAbility = null;
+      return null;
+    }
+    if (!managerAbilityIsValid(managerAbility)) rollManagerAbility();
+    return managerAbility;
   }
 
   function randomNextTier() {
@@ -313,7 +362,10 @@
     const wasReady = managerMeter >= MANAGER_METER_MAX;
     managerMeter = clamp(managerMeter + managerChargeFor(tier), 0, MANAGER_METER_MAX);
     const readyNow = !wasReady && managerMeter >= MANAGER_METER_MAX;
-    if (readyNow && api.toast) api.toast("Manager ready!", "good");
+    if (readyNow) {
+      const ability = ensureManagerAbility();
+      if (ability && api.toast) api.toast("Manager drew: " + managerAbilityLabel(ability), "good");
+    }
     return readyNow;
   }
 
@@ -329,6 +381,23 @@
       r: def.radius,
       mergedAt: -10,
       fresh: opts.fresh ? 0.2 : 0,
+    };
+  }
+
+  function makeManagerToken(kind) {
+    const r = kind === "pill" ? MANAGER_PILL_RADIUS : MANAGER_WILD_RADIUS;
+    return {
+      id: ++uid,
+      kind,
+      x: clamp(aimX, WALL + r, W - WALL - r),
+      y: ROOF - r - 16,
+      vx: kind === "pill" ? rand(-30, 30) : 0,
+      vy: kind === "pill" ? 250 : 150,
+      r,
+      rot: kind === "pill" ? rand(-0.18, 0.18) : 0,
+      spin: kind === "pill" ? rand(-1.3, 1.3) : rand(-2.5, 2.5),
+      life: kind === "pill" ? 3.8 : 4.4,
+      hits: 0,
     };
   }
 
@@ -405,6 +474,106 @@
     ctx.stroke();
 
     ctx.restore();
+  }
+
+  function capsulePath(x, y, w, h) {
+    const rr = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+  }
+
+  function drawWildcardToken(token) {
+    const r = token.r;
+    ctx.save();
+    ctx.translate(token.x, token.y);
+    ctx.rotate(token.rot);
+
+    const glow = ctx.createRadialGradient(-r * 0.18, -r * 0.18, r * 0.18, 0, 0, r * 1.25);
+    glow.addColorStop(0, "rgba(255,255,255,0.98)");
+    glow.addColorStop(0.32, "rgba(46,224,255,0.88)");
+    glow.addColorStop(1, "rgba(255,46,136,0.2)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(7, 9, 22, 0.88)";
+    ctx.strokeStyle = "#2ee0ff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 212, 59, 0.9)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 5]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r - 10, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "900 " + Math.round(r * 0.48) + "px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("ANY", 0, -2);
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.font = "800 " + Math.round(r * 0.18) + "px JetBrains Mono, monospace";
+    ctx.fillText("MERGE", 0, r * 0.42);
+    ctx.restore();
+  }
+
+  function drawPillToken(token) {
+    const r = token.r;
+    const w = r * 2.35;
+    const h = r * 0.92;
+    ctx.save();
+    ctx.translate(token.x, token.y);
+    ctx.rotate(token.rot);
+    ctx.shadowColor = "rgba(255, 212, 59, 0.48)";
+    ctx.shadowBlur = 18;
+
+    ctx.save();
+    capsulePath(-w / 2, -h / 2, w, h);
+    ctx.clip();
+    ctx.fillStyle = "#fff8e8";
+    ctx.fillRect(-w / 2, -h / 2, w / 2, h);
+    ctx.fillStyle = "#ff2e88";
+    ctx.fillRect(0, -h / 2, w / 2, h);
+    ctx.fillStyle = "rgba(46,224,255,0.22)";
+    ctx.fillRect(-w / 2, -h / 2, w, h * 0.34);
+    ctx.restore();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(5, 7, 13, 0.88)";
+    ctx.lineWidth = 5;
+    capsulePath(-w / 2, -h / 2, w, h);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 2;
+    capsulePath(-w / 2 + 5, -h / 2 + 5, w - 10, h - 10);
+    ctx.stroke();
+
+    ctx.fillStyle = "#070916";
+    ctx.font = "900 " + Math.round(r * 0.2) + "px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("BIG PILL", 0, 1);
+    ctx.restore();
+  }
+
+  function drawManagerTokens() {
+    for (const token of managerTokens) {
+      if (token.kind === "pill") drawPillToken(token);
+      else drawWildcardToken(token);
+    }
   }
 
   function drawBackground() {
@@ -573,6 +742,7 @@
     ctx.translate(wobble, 0);
     drawAim();
     for (const bubble of bubbles) drawBubble(bubble);
+    drawManagerTokens();
     drawPops(dt);
     drawCoupons(dt);
     ctx.restore();
@@ -639,6 +809,105 @@
     return dist <= (a.r + b.r) * 1.04;
   }
 
+  function awardWildcardMerge(target, now) {
+    if (target.tier >= MAX) {
+      pops.push({ x: target.x, y: target.y, r: target.r, color: "#ffd43b", life: 0.4, max: 0.4 });
+      playSfx("nope");
+      log("Wildcard merge bounced off the final form. Corporate has no form for that.");
+      return;
+    }
+
+    const tier = target.tier + 1;
+    const merged = makeBubble(tier, target.x, target.y, {
+      vx: target.vx * 0.25,
+      vy: Math.min(target.vy * 0.12, 0) - 150,
+      fresh: true,
+    });
+    merged.mergedAt = now;
+    bubbles = bubbles.filter((item) => item !== target);
+    bubbles.push(merged);
+    pops.push({ x: merged.x, y: merged.y, r: merged.r, color: TIERS[tier].color, life: 0.55, max: 0.55 });
+    spawnCouponStorm(8, merged.x, merged.y);
+    score += tierScore(tier);
+    energy += Math.ceil(tierEnergy(tier) * 0.7);
+    heat = clamp(heat + tier * 1.2 - 5, 0, 100);
+    topTier = Math.max(topTier, tier);
+    api.recordScore(GAME_ID, score);
+    playSfx("merge", { tier });
+    if (tier >= MAX && !won) showWin();
+    log("Wildcard merge tagged " + TIERS[target.tier].name + " into " + TIERS[tier].name + ".");
+    saveProgress();
+  }
+
+  function resolvePillCollision(token, bubble) {
+    const dx = bubble.x - token.x;
+    const dy = bubble.y - token.y;
+    const dist = Math.hypot(dx, dy) || 0.0001;
+    const min = token.r * 0.84 + bubble.r;
+    if (dist >= min) return false;
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const overlap = min - dist;
+    bubble.x += nx * overlap * 1.12;
+    bubble.y += ny * overlap * 1.12;
+    bubble.vx += nx * (380 + Math.abs(token.vy) * 0.22) + token.vx * 0.2;
+    bubble.vy += ny * (300 + Math.abs(token.vy) * 0.14) + Math.max(0, token.vy) * 0.1;
+    token.vx -= nx * 28;
+    token.vy *= 0.992;
+    token.spin += nx * 0.55;
+    resolveWalls(bubble);
+    return true;
+  }
+
+  function updateManagerTokens(dt, now) {
+    for (let i = managerTokens.length - 1; i >= 0; i--) {
+      const token = managerTokens[i];
+      token.life -= dt;
+      token.vy += GRAVITY * (token.kind === "pill" ? 1.25 : 0.95) * dt;
+      token.x += token.vx * dt;
+      token.y += token.vy * dt;
+      token.vx *= token.kind === "pill" ? 0.996 : 0.992;
+      token.rot += token.spin * dt;
+
+      if (token.x - token.r < WALL) {
+        token.x = WALL + token.r;
+        token.vx = Math.abs(token.vx) * 0.65;
+      }
+      if (token.x + token.r > W - WALL) {
+        token.x = W - WALL - token.r;
+        token.vx = -Math.abs(token.vx) * 0.65;
+      }
+
+      if (token.kind === "wild") {
+        const hit = bubbles.find((bubble) => Math.hypot(bubble.x - token.x, bubble.y - token.y) <= bubble.r + token.r * 0.86);
+        if (hit) {
+          managerTokens.splice(i, 1);
+          awardWildcardMerge(hit, now);
+          continue;
+        }
+        if (token.y - token.r > FLOOR + 70 || token.life <= 0) {
+          managerTokens.splice(i, 1);
+          playSfx("nope");
+          log("Wildcard merge missed. Somewhere, a coupon lawyer smiled.");
+        }
+      } else {
+        let hitCount = 0;
+        for (const bubble of bubbles) {
+          if (resolvePillCollision(token, bubble)) hitCount++;
+        }
+        token.hits += hitCount;
+        if (hitCount) {
+          shake = Math.max(shake, clamp(hitCount * 1.4, 2, 8));
+        }
+        if (token.y - token.r > FLOOR + 140 || token.life <= 0) {
+          managerTokens.splice(i, 1);
+          log(token.hits ? "The Big Pill finished its prescription." : "The Big Pill hit absolutely nothing. Powerful placebo.");
+        }
+      }
+    }
+  }
+
   function mergeBubbles(a, b, now) {
     const tier = a.tier + 1;
     const x = (a.x + b.x) / 2;
@@ -658,7 +927,10 @@
     topTier = Math.max(topTier, tier);
     api.recordScore(GAME_ID, score);
     if (tier >= MAX && !won) showWin();
-    log(TIERS[tier].name + " bubble merged." + (managerReadyNow ? " Manager is ready." : ""));
+    log(
+      TIERS[tier].name + " bubble merged." +
+        (managerReadyNow && managerAbility ? " Manager drew " + managerAbilityLabel(managerAbility) + "." : "")
+    );
   }
 
   function stepPhysics(dt, now) {
@@ -682,6 +954,8 @@
       }
       for (const b of bubbles) resolveWalls(b);
     }
+
+    updateManagerTokens(dt, now);
 
     const mergeQueue = [];
     const used = new Set();
@@ -796,20 +1070,46 @@
     if (!fullscreenElement() && isMaxed()) setMaxed(false);
   }
 
-  function useManager() {
+  function canSpendManagerMeter() {
     if (!running || pausedByOverlay) return;
     if (managerMeter < MANAGER_METER_MAX) {
       playSfx("nope");
       log("Chain more merges before asking for the manager.");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function spendManagerMeter() {
+    managerMeter = 0;
+    managerAbility = null;
+    managerFlash = Math.max(managerFlash, 0.35);
+  }
+
+  function useManager() {
+    if (!canSpendManagerMeter()) return;
+    const ability = ensureManagerAbility();
+    if (ability === "clear") {
+      useManagerClear();
+    } else if (ability === "merge") {
+      useManagerMerge();
+    } else if (ability === "pill") {
+      useManagerPill();
+    } else {
+      playSfx("nope");
+      log("The manager wandered off before choosing an ability.");
+    }
+  }
+
+  function useManagerClear() {
+    if (!canSpendManagerMeter()) return;
     if (!bubbles.length) {
       playSfx("nope");
       log("The aisle is already clear enough to avoid eye contact.");
       return;
     }
 
-    managerMeter = 0;
+    spendManagerMeter();
     let targets = bubbles
       .filter((b) => b.tier <= 2)
       .sort((a, b) => (a.y - a.r) - (b.y - b.r));
@@ -836,7 +1136,42 @@
     managerFlash = 0.7;
     spawnCouponStorm(18 + targets.length * 4);
     playSfx("manager");
-    log("Manager summoned: " + targets.length + " low-tier complaint" + (targets.length === 1 ? "" : "s") + " escorted out.");
+    log("Random manager ability: Clear. " + targets.length + " low-tier complaint" + (targets.length === 1 ? "" : "s") + " escorted out.");
+    updateHud();
+    saveProgress();
+  }
+
+  function useManagerMerge() {
+    if (!canSpendManagerMeter()) return;
+    if (!bubbles.some((bubble) => bubble.tier < MAX)) {
+      playSfx("nope");
+      log("Wildcard merge needs a bubble that can still escalate.");
+      return;
+    }
+
+    spendManagerMeter();
+    const token = makeManagerToken("wild");
+    managerTokens.push(token);
+    playSfx("wildcard");
+    log("Random manager ability: Merge. The wildcard will fuse with the first bubble it hits.");
+    updateHud();
+    saveProgress();
+  }
+
+  function useManagerPill() {
+    if (!canSpendManagerMeter()) return;
+    if (!bubbles.length) {
+      playSfx("nope");
+      log("The Big Pill needs a pile to bully.");
+      return;
+    }
+
+    spendManagerMeter();
+    const token = makeManagerToken("pill");
+    managerTokens.push(token);
+    shake = Math.max(shake, 4);
+    playSfx("pill");
+    log("Random manager ability: Big Pill. It will shove through the bubble pile.");
     updateHud();
     saveProgress();
   }
@@ -909,20 +1244,26 @@
     if (heatEl) heatEl.textContent = Math.round(heat) + "%";
     if (bestEl) bestEl.textContent = api.getHighScore(GAME_ID).toLocaleString();
     const managerReady = managerMeter >= MANAGER_METER_MAX;
+    const rolledAbility = managerReady ? ensureManagerAbility() : null;
     if (managerFill) managerFill.style.width = clamp(managerMeter, 0, MANAGER_METER_MAX) + "%";
-    if (managerLabel) managerLabel.textContent = managerReady ? "READY" : Math.round(managerMeter) + "%";
+    if (managerLabel) managerLabel.textContent = managerReady && rolledAbility ? managerAbilityLabel(rolledAbility).toUpperCase() : Math.round(managerMeter) + "%";
     if (heatFill) heatFill.style.width = clamp(heat, 0, 100) + "%";
     if (heatLabel) heatLabel.textContent = Math.round(heat) + "%";
     if (shakeFill) shakeFill.style.width = clamp(dangerTime / 2.25 * 100, 0, 100) + "%";
     if (shakeLabel) shakeLabel.textContent = Math.max(0, Math.ceil(2.25 - dangerTime)).toString();
-    if (btnManager) {
-      btnManager.disabled = !running || pausedByOverlay || !managerReady || !bubbles.length;
-      btnManager.textContent = managerReady ? "Ask Manager" : "Manager " + Math.round(managerMeter) + "%";
-      btnManager.classList.toggle("karen-manager-button--ready", running && !pausedByOverlay && managerReady);
-    }
+    const managerDisabled = !running || pausedByOverlay || !managerReady || !bubbles.length || !rolledAbility;
+    updateManagerButton(btnManager, managerDisabled, rolledAbility);
     if (btnReceipt) btnReceipt.disabled = !running || pausedByOverlay || energy < RECEIPT_COST || !findBestPair();
     if (btnHoa) btnHoa.disabled = !running || pausedByOverlay || energy < HOA_COST;
     if (btnDrop) btnDrop.disabled = !running || pausedByOverlay;
+  }
+
+  function updateManagerButton(button, disabled, ability) {
+    if (!button) return;
+    button.disabled = disabled;
+    button.classList.toggle("karen-manager-button--ready", !disabled);
+    button.textContent = ability && !disabled ? "Use " + managerAbilityLabel(ability) : "Manager " + Math.round(managerMeter) + "%";
+    button.title = ability && !disabled ? "Use random manager ability: " + managerAbilityLabel(ability) : "Fill the manager meter to draw a random ability";
   }
 
   function hideContinueButton() {
@@ -988,12 +1329,14 @@
   function newGame() {
     if (saveSlot) saveSlot.clear();
     bubbles = [];
+    managerTokens = [];
     pops = [];
     coupons = [];
     score = 0;
     energy = 35;
     heat = 0;
     managerMeter = 0;
+    managerAbility = null;
     topTier = 1;
     uid = 0;
     aimX = W / 2;
@@ -1027,6 +1370,7 @@
       energy,
       heat,
       managerMeter,
+      managerAbility,
       topTier,
       uid,
       aimX,
@@ -1051,12 +1395,14 @@
         vy: Number(item.vy) || 0,
       }))
       .filter((b) => Number.isFinite(b.x) && Number.isFinite(b.y));
+    managerTokens = [];
     pops = [];
     coupons = [];
     score = Number(data.score) || 0;
     energy = Number(data.energy) || 0;
     heat = clamp(Number(data.heat) || 0, 0, 100);
     managerMeter = clamp(Number(data.managerMeter) || 0, 0, MANAGER_METER_MAX);
+    managerAbility = MANAGER_ABILITIES.includes(data.managerAbility) ? data.managerAbility : null;
     topTier = clamp(Number(data.topTier) || 1, 1, MAX);
     uid = Number(data.uid) || bubbles.length;
     aimX = clamp(Number(data.aimX) || W / 2, WALL + 34, W - WALL - 34);
@@ -1147,6 +1493,9 @@
     drop: dropBubble,
     aim,
     manager: useManager,
+    managerClear: useManagerClear,
+    managerMerge: useManagerMerge,
+    managerPill: useManagerPill,
     receipt: useReceiptBlast,
     hoa: useHoa,
     sound: playSfx,
@@ -1172,22 +1521,33 @@
     },
     clear() {
       bubbles = [];
+      managerTokens = [];
       pops = [];
       coupons = [];
       topTier = 1;
       managerMeter = 0;
+      managerAbility = null;
       updateHud();
     },
     setManagerMeter(value = MANAGER_METER_MAX) {
       managerMeter = clamp(Number(value) || 0, 0, MANAGER_METER_MAX);
+      if (managerMeter < MANAGER_METER_MAX) managerAbility = null;
+      else ensureManagerAbility();
       updateHud();
       return managerMeter;
     },
+    setManagerAbility(value) {
+      managerAbility = MANAGER_ABILITIES.includes(value) ? value : null;
+      updateHud();
+      return managerAbility;
+    },
     vals: () => bubbles.map((b) => ({ tier: b.tier, x: b.x, y: b.y, r: b.r })),
+    managerVals: () => managerTokens.map((token) => ({ kind: token.kind, x: token.x, y: token.y, r: token.r })),
     get score() { return score; },
     get energy() { return energy; },
     get heat() { return heat; },
     get managerMeter() { return managerMeter; },
+    get managerAbility() { return managerAbility; },
     get managerReady() { return managerMeter >= MANAGER_METER_MAX; },
     get topTier() { return topTier; },
     get running() { return running; },

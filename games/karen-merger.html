@@ -36,7 +36,7 @@
       --game-aspect: 0.8372;
       --game-aspect-ratio: 720 / 860;
       --game-max-width: 620px;
-      width: min(100%, var(--game-fit-width, clamp(340px, calc((100vh - 260px) * 720 / 860), 620px)));
+      width: min(100%, var(--game-fit-width, clamp(340px, calc((100vh - 280px) * 720 / 860), 620px)));
       aspect-ratio: 720 / 860;
       align-self: center;
       border: 2px solid rgba(255, 255, 255, 0.2);
@@ -51,7 +51,7 @@
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
       overflow: visible;
-      margin-bottom: 76px;
+      margin-bottom: 102px;
     }
 
     .karen-board.is-maxed {
@@ -103,10 +103,10 @@
       position: absolute;
       left: 12px;
       right: 12px;
-      bottom: -66px;
+      bottom: -92px;
       z-index: 6;
       display: grid;
-      grid-template-columns: 68px minmax(72px, 1fr) 54px minmax(94px, auto);
+      grid-template-columns: 68px minmax(72px, 1fr) 54px;
       gap: 8px;
       align-items: center;
       padding: 8px;
@@ -147,6 +147,13 @@
       min-width: 0;
       color: #fff;
       text-align: right;
+    }
+
+    .karen-manager-actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
     }
 
     .karen-meter {
@@ -207,8 +214,8 @@
     }
 
     .karen-board-manager .karen-manager-button {
-      min-height: 34px;
-      padding: 7px 10px;
+      min-height: 32px;
+      padding: 6px 7px;
       font-size: 10px;
     }
 
@@ -337,19 +344,18 @@
     @media (max-width: 760px) {
       .karen-board {
         width: min(100%, 92vw);
-        margin-bottom: 94px;
+        margin-bottom: 126px;
       }
 
       .karen-board-manager {
         left: 8px;
         right: 8px;
-        bottom: -86px;
+        bottom: -116px;
         grid-template-columns: 58px minmax(56px, 1fr) 46px;
       }
 
       .karen-board-manager .karen-manager-button {
-        grid-column: 1 / -1;
-        min-height: 38px;
+        min-height: 34px;
       }
 
       .karen-page .controls-row {
@@ -377,11 +383,11 @@
     .karen-board.is-maxed #gameCanvas {
       inset: auto;
       left: 50% !important;
-      top: calc((100dvh - 96px) / 2) !important;
+      top: calc((100dvh - 126px) / 2) !important;
       right: auto !important;
       bottom: auto !important;
-      width: min(100dvw, calc((100dvh - 96px) * 720 / 860));
-      height: min(calc(100dvh - 96px), calc(100dvw * 860 / 720));
+      width: min(100dvw, calc((100dvh - 126px) * 720 / 860));
+      height: min(calc(100dvh - 126px), calc(100dvw * 860 / 720));
       transform: translate(-50%, -50%);
     }
 
@@ -426,7 +432,9 @@
             <span class="karen-board-manager__name">Manager</span>
             <span class="karen-board-manager__track"><span class="karen-meter__fill karen-meter__fill--manager" id="manager-fill"></span></span>
             <b class="karen-board-manager__value" id="manager-label">0%</b>
-            <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button">Manager 0%</button>
+            <div class="karen-manager-actions" aria-label="Random manager ability">
+              <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button" title="Use the random manager ability">Manager 0%</button>
+            </div>
           </div>
 
           <div class="overlay overlay--show" id="overlay">
@@ -505,7 +513,7 @@
             <li><strong style="color:var(--ink);">Aim and drop</strong> generated portrait bubbles into the retail bin.</li>
             <li><strong style="color:var(--ink);">Match bubbles</strong> of the same tier. Contact fuses them into the next escalation.</li>
             <li><strong style="color:var(--ink);">Watch the line.</strong> If the pile crosses the escalation line too long, the store closes.</li>
-            <li><strong style="color:var(--ink);">Chain merges</strong> to fill the manager meter, then clear low-tier complaints in one scene.</li>
+            <li><strong style="color:var(--ink);">Chain merges</strong> to fill the manager meter, then spend the random manager ability it gives you.</li>
             <li><strong style="color:var(--ink);">Spend energy</strong> on receipt and HOA powers when the aisle gets cursed.</li>
             <li><strong style="color:var(--ink);">Goal:</strong> reach <strong style="color:var(--ink);">Consumer Rights Kaiju</strong>.</li>
           </ul>
@@ -528,7 +536,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260621-network-7"></script>
-  <script src="../assets/js/karen-merger.js?v=20260622-sfx-1"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-random-manager-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

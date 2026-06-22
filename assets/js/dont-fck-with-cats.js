@@ -1979,7 +1979,7 @@
       ctx.globalAlpha = clamp(state.catHitFlash / 0.34, 0, 0.42) * 0.55;
       ctx.fillStyle = C.red;
       ctx.beginPath();
-      ctx.arc(state.x, PLAYER_Y - 8, clamp(58 + state.cats * 0.45, 64, 132), 0, Math.PI * 2);
+      ctx.ellipse(state.x, PLAYER_Y + 18, clamp(64 + state.cats * 0.45, 70, 138), 30, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

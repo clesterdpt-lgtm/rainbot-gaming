@@ -10,6 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
+  const ART_VERSION = "20260622-shaped-assets-1";
   const W = 960;
   const H = 600;
   const PLAYER_Y = 498;
@@ -253,8 +254,11 @@
       roomba: loadRasterArt("generated-roomba.png"),
       cucumber: loadRasterArt("generated-cucumber.png"),
       vacuum: loadRasterArt("generated-vacuum.png"),
-      box: loadRasterArt("generated-cat-cream.png"),
-      yarn: loadRasterArt("generated-cat-gray.png"),
+      spray: loadRasterArt("generated-spray.png"),
+      bath: loadRasterArt("generated-bath.png"),
+      box: loadRasterArt("generated-box.png"),
+      yarn: loadRasterArt("generated-yarn.png"),
+      laser: loadRasterArt("generated-laser-pointer.png"),
     },
   };
 
@@ -350,7 +354,9 @@
   function loadRasterArt(fileName) {
     const image = new Image();
     image.decoding = "async";
-    image.src = new URL(fileName, ART_ROOT).href;
+    const src = new URL(fileName, ART_ROOT);
+    src.searchParams.set("v", ART_VERSION);
+    image.src = src.href;
     return image;
   }
 
@@ -1437,6 +1443,15 @@
     return true;
   }
 
+  function drawImageContain(image, x, y, w, h) {
+    if (!imageReady(image)) return false;
+    const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
+    const dw = image.naturalWidth * scale;
+    const dh = image.naturalHeight * scale;
+    ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    return true;
+  }
+
   function drawBackground() {
     const offset = (state.distance * 0.45) % 70;
     const level = currentLevel();
@@ -1448,10 +1463,10 @@
       tint.addColorStop(0, palette.top);
       tint.addColorStop(0.56, palette.mid);
       tint.addColorStop(1, palette.bottom);
-      ctx.globalAlpha = 0.62;
+      ctx.globalAlpha = 0.34;
       ctx.fillStyle = tint;
       ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = 0.2;
+      ctx.globalAlpha = 0.06;
       ctx.fillStyle = "#05070d";
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
@@ -1535,34 +1550,20 @@
     drawObjectHp(ob);
   }
 
-  function drawRasterObject(kind, ob, label, radius = 12) {
+  function drawRasterObject(kind, ob) {
     const image = RASTER_ART.objects[kind];
     if (!imageReady(image)) return false;
 
     ctx.save();
-    roundRect(-ob.w / 2, -ob.h / 2, ob.w, ob.h, radius);
-    ctx.clip();
-    drawImageCover(image, -ob.w / 2, -ob.h / 2, ob.w, ob.h);
-    ctx.restore();
-
-    ctx.save();
-    ctx.strokeStyle = C.black;
-    ctx.lineWidth = 6;
-    roundRect(-ob.w / 2, -ob.h / 2, ob.w, ob.h, radius);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(46, 224, 255, 0.68)";
-    ctx.lineWidth = 2;
-    roundRect(-ob.w / 2 + 4, -ob.h / 2 + 4, ob.w - 8, ob.h - 8, Math.max(4, radius - 4));
-    ctx.stroke();
-    if (label) {
-      fitText(label, 0, ob.h / 2 - 10, ob.w * 0.76, 13, C.yellow, "center");
-    }
+    ctx.shadowColor = ob.rewardCats ? "rgba(107,255,125,0.42)" : "rgba(255,94,103,0.38)";
+    ctx.shadowBlur = ob.hitFlash > 0 ? 18 : 8;
+    drawImageContain(image, -ob.w * 0.68, -ob.h * 0.78, ob.w * 1.36, ob.h * 1.5);
     ctx.restore();
     return true;
   }
 
   function drawRoomba(ob) {
-    if (drawRasterObject("roomba", ob, "VAC", ob.h / 2)) return;
+    if (drawRasterObject("roomba", ob)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1583,7 +1584,7 @@
   }
 
   function drawCucumber(ob) {
-    if (drawRasterObject("cucumber", ob, "CUC", ob.h / 2)) return;
+    if (drawRasterObject("cucumber", ob)) return;
     ctx.rotate(Math.sin(ob.spin) * 0.18);
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
@@ -1600,6 +1601,7 @@
   }
 
   function drawSpray(ob) {
+    if (drawRasterObject("spray", ob)) return;
     ctx.fillStyle = "#9fdcff";
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1621,6 +1623,7 @@
   }
 
   function drawBath(ob) {
+    if (drawRasterObject("bath", ob)) return;
     ctx.fillStyle = "#2467b7";
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1636,7 +1639,7 @@
   }
 
   function drawBox(ob) {
-    if (drawRasterObject("box", ob, "+CATS", 10)) return;
+    if (drawRasterObject("box", ob)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1657,7 +1660,7 @@
   }
 
   function drawYarn(ob) {
-    if (drawRasterObject("yarn", ob, "+CREW", Math.min(ob.w, ob.h) / 2)) return;
+    if (drawRasterObject("yarn", ob)) return;
     ctx.fillStyle = ob.color;
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 6;
@@ -1693,82 +1696,46 @@
       ctx.shadowColor = C.ink;
       ctx.shadowBlur = 24;
     }
-    const bossArt = RASTER_ART.objects[boss.pattern === "cucumber" ? "cucumber" : "vacuum"];
+    const bossArt = RASTER_ART.objects[
+      boss.pattern === "cucumber" ? "cucumber" : boss.pattern === "bath" ? "bath" : boss.pattern === "pointer" ? "laser" : "vacuum"
+    ];
     ctx.strokeStyle = C.black;
     ctx.lineWidth = 8;
     if (imageReady(bossArt)) {
       ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
-      ctx.clip();
-      drawImageCover(bossArt, -boss.w / 2, -boss.h / 2, boss.w, boss.h);
+      ctx.rotate(Math.sin(boss.phase) * 0.05);
+      ctx.shadowColor = boss.accent || C.pink;
+      ctx.shadowBlur = 14;
+      drawImageContain(bossArt, -boss.w * 0.62, -boss.h * 0.82, boss.w * 1.24, boss.h * 1.58);
       ctx.restore();
-      ctx.beginPath();
-      ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
-      ctx.stroke();
     } else {
       ctx.fillStyle = boss.color || "#212838";
       ctx.beginPath();
       ctx.ellipse(0, 0, boss.w / 2, boss.h / 2, Math.sin(boss.phase) * 0.06, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    }
-    ctx.fillStyle = "#334159";
-    ctx.beginPath();
-    ctx.ellipse(-46, -10, 48, 26, -0.08, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = boss.accent || C.pink;
-    ctx.beginPath();
-    ctx.ellipse(58, -10, 50, 29, 0.08, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = C.black;
-    ctx.beginPath();
-    ctx.arc(46, -16, 6, 0, Math.PI * 2);
-    ctx.arc(74, -16, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = C.cyan;
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.arc(5, 18, 62, 0.2, Math.PI - 0.2, false);
-    ctx.stroke();
-    fitText(boss.label || "BOSS", 0, 48, boss.w * 0.78, 18, C.yellow, "center");
-    if (boss.pattern === "cucumber") {
-      ctx.fillStyle = "#45c966";
+      ctx.fillStyle = "#334159";
       ctx.beginPath();
-      ctx.ellipse(92, 18, 18, 8, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(-46, -10, 48, 26, -0.08, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    } else if (boss.pattern === "bath") {
-      ctx.fillStyle = "rgba(109, 200, 255, 0.55)";
-      for (let i = 0; i < 5; i++) {
-        ctx.beginPath();
-        ctx.arc(-70 + i * 18, -34 + (i % 2) * 8, 5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else if (boss.pattern === "lint") {
-      ctx.fillStyle = boss.accent || C.yellow;
-      roundRect(-92, -8, 184, 24, 8);
-      ctx.fill();
-      ctx.strokeStyle = C.black;
-      ctx.stroke();
-    } else if (boss.pattern === "squeeze") {
       ctx.fillStyle = boss.accent || C.yellow;
       ctx.beginPath();
-      ctx.arc(-58, -18, 14, 0, Math.PI * 2);
-      ctx.arc(58, -18, 14, 0, Math.PI * 2);
+      ctx.ellipse(58, -10, 50, 29, 0.08, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-    } else if (boss.pattern === "pointer") {
-      ctx.fillStyle = "#ff2244";
+      ctx.fillStyle = C.black;
       ctx.beginPath();
-      ctx.arc(0, 24, 10, 0, Math.PI * 2);
+      ctx.arc(46, -16, 6, 0, Math.PI * 2);
+      ctx.arc(74, -16, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = C.cyan;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(5, 18, 62, 0.2, Math.PI - 0.2, false);
       ctx.stroke();
     }
+    fitText(boss.label || "BOSS", 0, 58, boss.w * 0.78, 18, C.yellow, "center");
     ctx.restore();
 
     const pct = clamp(boss.hp / boss.maxHp, 0, 1);
@@ -2120,23 +2087,9 @@
 
   function drawRasterCat(image) {
     ctx.save();
-    ctx.beginPath();
-    ctx.ellipse(2, -4, 35, 34, 0, 0, Math.PI * 2);
-    ctx.clip();
-    drawImageCover(image, -38, -48, 76, 86);
-    ctx.restore();
-
-    ctx.save();
-    ctx.strokeStyle = C.black;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.ellipse(2, -4, 35, 34, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(46, 224, 255, 0.72)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(2, -4, 39, 38, 0, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.shadowColor = "rgba(46,224,255,0.28)";
+    ctx.shadowBlur = 7;
+    drawImageContain(image, -50, -60, 100, 112);
     ctx.restore();
   }
 

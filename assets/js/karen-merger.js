@@ -119,7 +119,7 @@
   }
 
   function managerChargeFor(tier) {
-    return 14 + tier * 6;
+    return 8 + tier * 3;
   }
 
   function randomNextTier() {
@@ -737,6 +737,7 @@
   }
 
   function updateHud() {
+    if (boardEl) boardEl.classList.toggle("karen-board--overlay", pausedByOverlay);
     if (scoreEl) scoreEl.textContent = score.toLocaleString();
     if (energyEl) energyEl.textContent = Math.floor(energy).toLocaleString();
     if (topEl) topEl.textContent = TIERS[topTier] ? TIERS[topTier].name : "-";

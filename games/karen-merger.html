@@ -50,13 +50,16 @@
       user-select: none;
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
-      overflow: hidden;
+      overflow: visible;
+      margin-bottom: 76px;
     }
 
     .karen-board.is-maxed {
       border: 0;
       border-radius: 0;
       box-shadow: none;
+      margin-bottom: 0;
+      overflow: hidden;
     }
 
     .karen-board::before {
@@ -100,7 +103,7 @@
       position: absolute;
       left: 12px;
       right: 12px;
-      bottom: 12px;
+      bottom: -66px;
       z-index: 6;
       display: grid;
       grid-template-columns: 68px minmax(72px, 1fr) 54px minmax(94px, auto);
@@ -117,6 +120,11 @@
       font-family: var(--font-mono);
       font-size: 10px;
       pointer-events: auto;
+    }
+
+    .karen-board--overlay:not(.is-maxed) .karen-board-manager {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .karen-board-manager__name {
@@ -329,12 +337,13 @@
     @media (max-width: 760px) {
       .karen-board {
         width: min(100%, 92vw);
+        margin-bottom: 94px;
       }
 
       .karen-board-manager {
         left: 8px;
         right: 8px;
-        bottom: 8px;
+        bottom: -86px;
         grid-template-columns: 58px minmax(56px, 1fr) 46px;
       }
 
@@ -507,7 +516,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260621-network-7"></script>
-  <script src="../assets/js/karen-merger.js?v=20260622-mobile-1"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-mobile-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

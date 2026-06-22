@@ -44,6 +44,7 @@
       ? RB
       : { recordScore: () => false, getHighScore: () => 0, toast: () => {} };
 
+  const boardEl = document.getElementById("board");
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
   const overlayEl = document.getElementById("overlay");
@@ -58,6 +59,7 @@
   const btnManager = document.getElementById("btn-manager");
   const btnReceipt = document.getElementById("btn-receipt");
   const btnHoa = document.getElementById("btn-hoa");
+  const btnFullscreen = document.getElementById("btn-fullscreen");
   const scoreEl = document.getElementById("hud-score");
   const energyEl = document.getElementById("hud-energy");
   const topEl = document.getElementById("hud-top");
@@ -589,6 +591,54 @@
     return ((clientX - rect.left) / rect.width) * W;
   }
 
+  function fullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function isMaxed() {
+    return Boolean(boardEl && boardEl.classList.contains("is-maxed"));
+  }
+
+  function updateFullscreenButton(on) {
+    if (!btnFullscreen) return;
+    btnFullscreen.textContent = on ? "Min" : "\u26f6";
+    btnFullscreen.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+    btnFullscreen.title = on ? "Exit max screen" : "Max screen";
+  }
+
+  function setMaxed(on) {
+    if (!boardEl) return;
+    boardEl.classList.toggle("is-maxed", on);
+    document.body.classList.toggle("rb-game-maxed", on);
+    updateFullscreenButton(on);
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event("resize"));
+      render(0);
+    });
+  }
+
+  async function toggleMaxed() {
+    if (!boardEl) return;
+    const next = !isMaxed();
+    setMaxed(next);
+
+    try {
+      if (next) {
+        const request = boardEl.requestFullscreen || boardEl.webkitRequestFullscreen;
+        if (request) await request.call(boardEl);
+      } else if (fullscreenElement()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) await exit.call(document);
+      }
+    } catch (_) {
+      // The fixed-position maxed class is the reliable layout path; native fullscreen is best-effort.
+    }
+  }
+
+  function syncFullscreenState() {
+    if (!fullscreenElement() && isMaxed()) setMaxed(false);
+  }
+
   function useManager() {
     if (!running || pausedByOverlay) return;
     if (managerMeter < MANAGER_METER_MAX) {
@@ -889,6 +939,9 @@
   if (btnManager) btnManager.addEventListener("click", useManager);
   if (btnReceipt) btnReceipt.addEventListener("click", useReceiptBlast);
   if (btnHoa) btnHoa.addEventListener("click", useHoa);
+  if (btnFullscreen) btnFullscreen.addEventListener("click", toggleMaxed);
+  document.addEventListener("fullscreenchange", syncFullscreenState);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenState);
 
   btnPrimary.onclick = newGame;
   makeLadder();
@@ -924,6 +977,8 @@
     manager: useManager,
     receipt: useReceiptBlast,
     hoa: useHoa,
+    toggleMaxed,
+    isMaxed,
     forceBubble(tier, x, y, vx = 0, vy = 0) {
       const bubble = makeBubble(clamp(Number(tier) || 1, 1, MAX), Number(x) || W / 2, Number(y) || ROOF, { vx, vy });
       bubbles.push(bubble);

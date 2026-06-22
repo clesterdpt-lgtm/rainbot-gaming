@@ -33,7 +33,10 @@
 
     .karen-board {
       position: relative;
-      width: min(100%, clamp(340px, calc((100vh - 260px) * 720 / 860), 620px));
+      --game-aspect: 0.8372;
+      --game-aspect-ratio: 720 / 860;
+      --game-max-width: 620px;
+      width: min(100%, var(--game-fit-width, clamp(340px, calc((100vh - 260px) * 720 / 860), 620px)));
       aspect-ratio: 720 / 860;
       align-self: center;
       border: 2px solid rgba(255, 255, 255, 0.2);
@@ -48,6 +51,12 @@
       -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
       overflow: hidden;
+    }
+
+    .karen-board.is-maxed {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
     }
 
     .karen-board::before {
@@ -79,6 +88,57 @@
       background:
         linear-gradient(180deg, rgba(8, 8, 17, 0.95), rgba(17, 8, 23, 0.92)),
         rgba(10, 10, 20, 0.92);
+    }
+
+    .karen-max-button {
+      z-index: 12;
+      font-family: var(--font-display);
+      font-size: 14px;
+    }
+
+    .karen-board-manager {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 6;
+      display: grid;
+      grid-template-columns: 68px minmax(72px, 1fr) 54px minmax(94px, auto);
+      gap: 8px;
+      align-items: center;
+      padding: 8px;
+      border: 1px solid rgba(255, 212, 59, 0.28);
+      border-radius: 10px;
+      background: rgba(5, 7, 16, 0.78);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32), inset 0 0 18px rgba(255, 46, 136, 0.1);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      pointer-events: auto;
+    }
+
+    .karen-board-manager__name {
+      color: #fff;
+      font-weight: 900;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+
+    .karen-board-manager__track {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 46, 136, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .karen-board-manager__value {
+      min-width: 0;
+      color: #fff;
+      text-align: right;
     }
 
     .karen-meter {
@@ -114,28 +174,9 @@
       transition: width 140ms linear;
     }
 
-    .karen-meter__row--manager {
-      grid-template-columns: 78px minmax(0, 1fr) 56px;
-      padding: 7px;
-      border: 1px solid rgba(255, 212, 59, 0.22);
-      border-radius: 8px;
-      background: rgba(255, 212, 59, 0.06);
-    }
-
-    .karen-meter__row--manager .karen-meter__track {
-      height: 13px;
-      background: rgba(255, 46, 136, 0.14);
-      box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.38);
-    }
-
     .karen-meter__fill--manager {
       background: linear-gradient(90deg, #ff2e88, #ffd43b, #2ee0ff);
       box-shadow: 0 0 14px rgba(255, 212, 59, 0.48);
-    }
-
-    .karen-meter__row--manager b {
-      color: #fff;
-      text-align: right;
     }
 
     .karen-powers {
@@ -155,6 +196,12 @@
       border-color: rgba(255, 212, 59, 0.5);
       box-shadow: 0 0 0 rgba(255, 212, 59, 0);
       white-space: normal;
+    }
+
+    .karen-board-manager .karen-manager-button {
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: 10px;
     }
 
     .karen-manager-button--ready {
@@ -284,9 +331,38 @@
         width: min(100%, 92vw);
       }
 
+      .karen-board-manager {
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        grid-template-columns: 58px minmax(56px, 1fr) 46px;
+      }
+
+      .karen-board-manager .karen-manager-button {
+        grid-column: 1 / -1;
+        min-height: 38px;
+      }
+
       .karen-control-grid {
         grid-template-columns: 1fr;
       }
+    }
+
+    .karen-board.is-maxed .karen-board-manager {
+      left: max(10px, env(safe-area-inset-left));
+      right: max(10px, env(safe-area-inset-right));
+      bottom: max(10px, env(safe-area-inset-bottom));
+    }
+
+    .karen-board.is-maxed #gameCanvas {
+      inset: auto;
+      left: 50% !important;
+      top: calc((100dvh - 96px) / 2) !important;
+      right: auto !important;
+      bottom: auto !important;
+      width: min(100dvw, calc((100dvh - 96px) * 720 / 860));
+      height: min(calc(100dvh - 96px), calc(100dvw * 860 / 720));
+      transform: translate(-50%, -50%);
     }
 
     @keyframes managerPulse {
@@ -323,8 +399,15 @@
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
         </div>
 
-        <div class="karen-board" id="board" tabindex="0" aria-label="Complaint Chain bubble drop arena">
+        <div class="karen-board canvas-wrap" id="board" tabindex="0" aria-label="Complaint Chain bubble drop arena">
           <canvas class="karen-bubble-canvas" id="gameCanvas" width="720" height="860" aria-label="Complaint Chain bubble playfield"></canvas>
+          <button class="fs-btn karen-max-button" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">&#x26F6;</button>
+          <div class="karen-board-manager" aria-live="polite">
+            <span class="karen-board-manager__name">Manager</span>
+            <span class="karen-board-manager__track"><span class="karen-meter__fill karen-meter__fill--manager" id="manager-fill"></span></span>
+            <b class="karen-board-manager__value" id="manager-label">0%</b>
+            <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button">Manager 0%</button>
+          </div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">COMPLAINT CHAIN</h2>
@@ -367,13 +450,8 @@
         </div>
 
         <div class="game-side__panel">
-          <h3 class="game-side__title">MANAGER METER</h3>
+          <h3 class="game-side__title">AISLE TOOLS</h3>
           <div class="karen-meter">
-            <div class="karen-meter__row karen-meter__row--manager">
-              <span>Manager</span>
-              <span class="karen-meter__track"><span class="karen-meter__fill karen-meter__fill--manager" id="manager-fill"></span></span>
-              <b id="manager-label">0%</b>
-            </div>
             <div class="karen-meter__row">
               <span>Heat</span>
               <span class="karen-meter__track"><span class="karen-meter__fill" id="heat-fill"></span></span>
@@ -386,7 +464,6 @@
             </div>
           </div>
           <div class="karen-powers">
-            <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button">Manager 0%</button>
             <button class="btn btn--secondary" id="btn-receipt" type="button">Receipt Blast - 80</button>
             <button class="btn btn--ghost" id="btn-hoa" type="button">HOA Notice - 65</button>
           </div>
@@ -430,7 +507,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260621-network-7"></script>
-  <script src="../assets/js/karen-merger.js?v=20260622-manager-1"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-mobile-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

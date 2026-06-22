@@ -114,6 +114,30 @@
       transition: width 140ms linear;
     }
 
+    .karen-meter__row--manager {
+      grid-template-columns: 78px minmax(0, 1fr) 56px;
+      padding: 7px;
+      border: 1px solid rgba(255, 212, 59, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 212, 59, 0.06);
+    }
+
+    .karen-meter__row--manager .karen-meter__track {
+      height: 13px;
+      background: rgba(255, 46, 136, 0.14);
+      box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.38);
+    }
+
+    .karen-meter__fill--manager {
+      background: linear-gradient(90deg, #ff2e88, #ffd43b, #2ee0ff);
+      box-shadow: 0 0 14px rgba(255, 212, 59, 0.48);
+    }
+
+    .karen-meter__row--manager b {
+      color: #fff;
+      text-align: right;
+    }
+
     .karen-powers {
       display: grid;
       gap: 8px;
@@ -124,6 +148,18 @@
       width: 100%;
       padding: 9px 10px;
       font-size: 12px;
+    }
+
+    .karen-manager-button {
+      min-height: 46px;
+      border-color: rgba(255, 212, 59, 0.5);
+      box-shadow: 0 0 0 rgba(255, 212, 59, 0);
+      white-space: normal;
+    }
+
+    .karen-manager-button--ready {
+      box-shadow: 0 0 22px rgba(255, 212, 59, 0.42), inset 0 0 18px rgba(255, 255, 255, 0.14);
+      animation: managerPulse 900ms ease-in-out infinite alternate;
     }
 
     .karen-powers .btn:disabled {
@@ -252,6 +288,17 @@
         grid-template-columns: 1fr;
       }
     }
+
+    @keyframes managerPulse {
+      from { box-shadow: 0 0 14px rgba(255, 212, 59, 0.26), inset 0 0 12px rgba(255, 255, 255, 0.1); }
+      to { box-shadow: 0 0 26px rgba(255, 212, 59, 0.58), inset 0 0 20px rgba(255, 255, 255, 0.18); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .karen-manager-button--ready {
+        animation: none;
+      }
+    }
   </style>
 </head>
 <body class="karen-page">
@@ -320,8 +367,13 @@
         </div>
 
         <div class="game-side__panel">
-          <h3 class="game-side__title">COMPLAINT ENERGY</h3>
+          <h3 class="game-side__title">MANAGER METER</h3>
           <div class="karen-meter">
+            <div class="karen-meter__row karen-meter__row--manager">
+              <span>Manager</span>
+              <span class="karen-meter__track"><span class="karen-meter__fill karen-meter__fill--manager" id="manager-fill"></span></span>
+              <b id="manager-label">0%</b>
+            </div>
             <div class="karen-meter__row">
               <span>Heat</span>
               <span class="karen-meter__track"><span class="karen-meter__fill" id="heat-fill"></span></span>
@@ -334,7 +386,7 @@
             </div>
           </div>
           <div class="karen-powers">
-            <button class="btn btn--yellow" id="btn-manager" type="button">Ask Manager - 45</button>
+            <button class="btn btn--primary karen-manager-button" id="btn-manager" type="button">Manager 0%</button>
             <button class="btn btn--secondary" id="btn-receipt" type="button">Receipt Blast - 80</button>
             <button class="btn btn--ghost" id="btn-hoa" type="button">HOA Notice - 65</button>
           </div>
@@ -355,7 +407,8 @@
             <li><strong style="color:var(--ink);">Aim and drop</strong> generated portrait bubbles into the retail bin.</li>
             <li><strong style="color:var(--ink);">Match bubbles</strong> of the same tier. Contact fuses them into the next escalation.</li>
             <li><strong style="color:var(--ink);">Watch the line.</strong> If the pile crosses the escalation line too long, the store closes.</li>
-            <li><strong style="color:var(--ink);">Spend energy</strong> on manager, receipt, and HOA powers when the aisle gets cursed.</li>
+            <li><strong style="color:var(--ink);">Chain merges</strong> to fill the manager meter, then clear low-tier complaints in one scene.</li>
+            <li><strong style="color:var(--ink);">Spend energy</strong> on receipt and HOA powers when the aisle gets cursed.</li>
             <li><strong style="color:var(--ink);">Goal:</strong> reach <strong style="color:var(--ink);">Consumer Rights Kaiju</strong>.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
@@ -377,7 +430,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260621-network-7"></script>
-  <script src="../assets/js/karen-merger.js?v=20260621-2"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-manager-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

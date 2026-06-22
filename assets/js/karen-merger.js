@@ -19,7 +19,7 @@
   const RESTITUTION = 0.28;
   const MERGE_COOLDOWN = 0.18;
   const DROP_COOLDOWN = 0.52;
-  const MANAGER_COST = 45;
+  const MANAGER_METER_MAX = 100;
   const RECEIPT_COST = 80;
   const HOA_COST = 65;
   const scriptUrl = document.currentScript ? document.currentScript.src : location.href;
@@ -65,6 +65,8 @@
   const bestEl = document.getElementById("hud-best");
   const heatFill = document.getElementById("heat-fill");
   const heatLabel = document.getElementById("heat-label");
+  const managerFill = document.getElementById("manager-fill");
+  const managerLabel = document.getElementById("manager-label");
   const shakeFill = document.getElementById("shake-fill");
   const shakeLabel = document.getElementById("shake-label");
   const nextPreview = document.getElementById("next-preview");
@@ -78,9 +80,11 @@
 
   let bubbles = [];
   let pops = [];
+  let coupons = [];
   let score = 0;
   let energy = 35;
   let heat = 0;
+  let managerMeter = 0;
   let topTier = 1;
   let aimX = W / 2;
   let nextTier = 1;
@@ -92,11 +96,16 @@
   let lastFrame = 0;
   let dangerTime = 0;
   let shake = 0;
+  let managerFlash = 0;
   let bestAtStart = 0;
   let saveMenu = null;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function rand(min, max) {
+    return min + Math.random() * (max - min);
   }
 
   function tierScore(tier) {
@@ -105,6 +114,10 @@
 
   function tierEnergy(tier) {
     return 7 + tier * 5;
+  }
+
+  function managerChargeFor(tier) {
+    return 14 + tier * 6;
   }
 
   function randomNextTier() {
@@ -127,6 +140,14 @@
 
   function log(message) {
     if (logEl) logEl.textContent = message;
+  }
+
+  function chargeManager(tier) {
+    const wasReady = managerMeter >= MANAGER_METER_MAX;
+    managerMeter = clamp(managerMeter + managerChargeFor(tier), 0, MANAGER_METER_MAX);
+    const readyNow = !wasReady && managerMeter >= MANAGER_METER_MAX;
+    if (readyNow && api.toast) api.toast("Manager ready!", "good");
+    return readyNow;
   }
 
   function makeBubble(tier, x, y, opts = {}) {
@@ -319,11 +340,88 @@
     }
   }
 
+  function spawnCouponStorm(count, x = W / 2, y = ROOF + 24) {
+    const labels = ["VOID", "COUPON", "NEXT", "-5%", "NOPE", "MANAGER"];
+    const colors = ["#ffd43b", "#ff2e88", "#2ee0ff", "#ffffff"];
+    for (let i = 0; i < count; i++) {
+      const life = rand(0.85, 1.45);
+      coupons.push({
+        x: x + rand(-190, 190),
+        y: y + rand(-26, 52),
+        vx: rand(-190, 190),
+        vy: rand(-420, -150),
+        rot: rand(-0.7, 0.7),
+        spin: rand(-7, 7),
+        life,
+        max: life,
+        label: labels[(Math.random() * labels.length) | 0],
+        color: colors[(Math.random() * colors.length) | 0],
+      });
+    }
+  }
+
+  function drawCoupons(dt) {
+    for (let i = coupons.length - 1; i >= 0; i--) {
+      const coupon = coupons[i];
+      coupon.life -= dt;
+      if (coupon.life <= 0) {
+        coupons.splice(i, 1);
+        continue;
+      }
+      coupon.vy += 620 * dt;
+      coupon.x += coupon.vx * dt;
+      coupon.y += coupon.vy * dt;
+      coupon.rot += coupon.spin * dt;
+      const alpha = clamp(coupon.life / coupon.max, 0, 1);
+
+      ctx.save();
+      ctx.translate(coupon.x, coupon.y);
+      ctx.rotate(coupon.rot);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = coupon.color;
+      ctx.strokeStyle = "rgba(5, 7, 13, 0.78)";
+      ctx.lineWidth = 2;
+      ctx.fillRect(-34, -12, 68, 24);
+      ctx.strokeRect(-34, -12, 68, 24);
+      ctx.fillStyle = "#070916";
+      ctx.font = "900 10px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(coupon.label, 0, 1);
+      ctx.restore();
+    }
+  }
+
+  function drawManagerFlash() {
+    if (managerFlash <= 0) return;
+    const alpha = clamp(managerFlash / 0.7, 0, 1);
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 212, 59, " + 0.14 * alpha + ")";
+    ctx.fillRect(WALL, ROOF, W - WALL * 2, FLOOR - ROOF);
+    ctx.fillStyle = "rgba(255, 255, 255, " + 0.88 * alpha + ")";
+    ctx.strokeStyle = "rgba(5, 7, 13, " + 0.8 * alpha + ")";
+    ctx.lineWidth = 5;
+    ctx.font = "900 34px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.strokeText("MANAGER SUMMONED", W / 2, ROOF + 24);
+    ctx.fillText("MANAGER SUMMONED", W / 2, ROOF + 24);
+    ctx.restore();
+  }
+
   function render(dt) {
     drawBackground();
+    const wobble = shake > 0 ? Math.sin(performance.now() * 0.05) * shake : 0;
+    ctx.save();
+    ctx.translate(wobble, 0);
     drawAim();
     for (const bubble of bubbles) drawBubble(bubble);
     drawPops(dt);
+    drawCoupons(dt);
+    ctx.restore();
+    drawManagerFlash();
+    shake = Math.max(0, shake - dt * 6);
+    managerFlash = Math.max(0, managerFlash - dt);
   }
 
   function resolveWalls(b) {
@@ -397,11 +495,12 @@
     pops.push({ x, y, r: merged.r, color: TIERS[tier].color, life: 0.45, max: 0.45 });
     score += tierScore(tier);
     energy += tierEnergy(tier);
+    const managerReadyNow = chargeManager(tier);
     heat = clamp(heat + tier * 2.2 - 5, 0, 100);
     topTier = Math.max(topTier, tier);
     api.recordScore(GAME_ID, score);
     if (tier >= MAX && !won) showWin();
-    log(TIERS[tier].name + " bubble merged.");
+    log(TIERS[tier].name + " bubble merged." + (managerReadyNow ? " Manager is ready." : ""));
   }
 
   function stepPhysics(dt, now) {
@@ -491,22 +590,43 @@
   }
 
   function useManager() {
-    if (!running || energy < MANAGER_COST) {
-      log("Not enough complaint energy for a manager.");
+    if (!running || pausedByOverlay) return;
+    if (managerMeter < MANAGER_METER_MAX) {
+      log("Chain more merges before asking for the manager.");
       return;
     }
-    if (!bubbles.length) return;
-    energy -= MANAGER_COST;
-    let target = bubbles[0];
-    for (const b of bubbles) {
-      if (b.y - b.r < target.y - target.r || (b.y - b.r === target.y - target.r && b.tier < target.tier)) {
-        target = b;
-      }
+    if (!bubbles.length) {
+      log("The aisle is already clear enough to avoid eye contact.");
+      return;
     }
-    bubbles = bubbles.filter((b) => b !== target);
-    pops.push({ x: target.x, y: target.y, r: target.r, color: "#ffd43b", life: 0.45, max: 0.45 });
-    heat = clamp(heat - 20, 0, 100);
-    log("Manager removed " + TIERS[target.tier].name + " from the aisle.");
+
+    managerMeter = 0;
+    let targets = bubbles
+      .filter((b) => b.tier <= 2)
+      .sort((a, b) => (a.y - a.r) - (b.y - b.r));
+
+    if (!targets.length) {
+      targets = bubbles
+        .slice()
+        .sort((a, b) => a.tier - b.tier || (a.y - a.r) - (b.y - b.r));
+    }
+
+    targets = targets.slice(0, Math.min(8, targets.length));
+    const cleared = new Set(targets);
+    bubbles = bubbles.filter((b) => !cleared.has(b));
+    for (const target of targets) {
+      pops.push({ x: target.x, y: target.y, r: target.r, color: "#ffd43b", life: 0.6, max: 0.6 });
+    }
+    for (const b of bubbles) {
+      b.vy -= 150;
+      b.vx += (b.x < W / 2 ? -1 : 1) * rand(34, 92);
+    }
+    heat = clamp(heat - 30 - targets.length * 2, 0, 100);
+    dangerTime = 0;
+    shake = 8;
+    managerFlash = 0.7;
+    spawnCouponStorm(18 + targets.length * 4);
+    log("Manager summoned: " + targets.length + " low-tier complaint" + (targets.length === 1 ? "" : "s") + " escorted out.");
     updateHud();
     saveProgress();
   }
@@ -572,13 +692,20 @@
     if (topEl) topEl.textContent = TIERS[topTier] ? TIERS[topTier].name : "-";
     if (heatEl) heatEl.textContent = Math.round(heat) + "%";
     if (bestEl) bestEl.textContent = api.getHighScore(GAME_ID).toLocaleString();
+    const managerReady = managerMeter >= MANAGER_METER_MAX;
+    if (managerFill) managerFill.style.width = clamp(managerMeter, 0, MANAGER_METER_MAX) + "%";
+    if (managerLabel) managerLabel.textContent = managerReady ? "READY" : Math.round(managerMeter) + "%";
     if (heatFill) heatFill.style.width = clamp(heat, 0, 100) + "%";
     if (heatLabel) heatLabel.textContent = Math.round(heat) + "%";
     if (shakeFill) shakeFill.style.width = clamp(dangerTime / 2.25 * 100, 0, 100) + "%";
     if (shakeLabel) shakeLabel.textContent = Math.max(0, Math.ceil(2.25 - dangerTime)).toString();
-    if (btnManager) btnManager.disabled = !running || energy < MANAGER_COST || !bubbles.length;
-    if (btnReceipt) btnReceipt.disabled = !running || energy < RECEIPT_COST || !findBestPair();
-    if (btnHoa) btnHoa.disabled = !running || energy < HOA_COST;
+    if (btnManager) {
+      btnManager.disabled = !running || pausedByOverlay || !managerReady || !bubbles.length;
+      btnManager.textContent = managerReady ? "Ask Manager" : "Manager " + Math.round(managerMeter) + "%";
+      btnManager.classList.toggle("karen-manager-button--ready", running && !pausedByOverlay && managerReady);
+    }
+    if (btnReceipt) btnReceipt.disabled = !running || pausedByOverlay || energy < RECEIPT_COST || !findBestPair();
+    if (btnHoa) btnHoa.disabled = !running || pausedByOverlay || energy < HOA_COST;
     if (btnDrop) btnDrop.disabled = !running || pausedByOverlay;
   }
 
@@ -644,14 +771,18 @@
     if (saveSlot) saveSlot.clear();
     bubbles = [];
     pops = [];
+    coupons = [];
     score = 0;
     energy = 35;
     heat = 0;
+    managerMeter = 0;
     topTier = 1;
     uid = 0;
     aimX = W / 2;
     nextTier = randomNextTier();
     dangerTime = 0;
+    managerFlash = 0;
+    shake = 0;
     won = false;
     running = true;
     pausedByOverlay = false;
@@ -676,6 +807,7 @@
       score,
       energy,
       heat,
+      managerMeter,
       topTier,
       uid,
       aimX,
@@ -701,14 +833,18 @@
       }))
       .filter((b) => Number.isFinite(b.x) && Number.isFinite(b.y));
     pops = [];
+    coupons = [];
     score = Number(data.score) || 0;
     energy = Number(data.energy) || 0;
     heat = clamp(Number(data.heat) || 0, 0, 100);
+    managerMeter = clamp(Number(data.managerMeter) || 0, 0, MANAGER_METER_MAX);
     topTier = clamp(Number(data.topTier) || 1, 1, MAX);
     uid = Number(data.uid) || bubbles.length;
     aimX = clamp(Number(data.aimX) || W / 2, WALL + 34, W - WALL - 34);
     nextTier = clamp(Number(data.nextTier) || 1, 1, Math.min(5, MAX));
     dangerTime = clamp(Number(data.dangerTime) || 0, 0, 2);
+    managerFlash = 0;
+    shake = 0;
     won = Boolean(data.won);
     running = data.running !== false;
     pausedByOverlay = false;
@@ -808,13 +944,22 @@
     clear() {
       bubbles = [];
       pops = [];
+      coupons = [];
       topTier = 1;
+      managerMeter = 0;
       updateHud();
+    },
+    setManagerMeter(value = MANAGER_METER_MAX) {
+      managerMeter = clamp(Number(value) || 0, 0, MANAGER_METER_MAX);
+      updateHud();
+      return managerMeter;
     },
     vals: () => bubbles.map((b) => ({ tier: b.tier, x: b.x, y: b.y, r: b.r })),
     get score() { return score; },
     get energy() { return energy; },
     get heat() { return heat; },
+    get managerMeter() { return managerMeter; },
+    get managerReady() { return managerMeter >= MANAGER_METER_MAX; },
     get topTier() { return topTier; },
     get running() { return running; },
     get paused() { return pausedByOverlay; },

@@ -60,6 +60,7 @@
   const btnReceipt = document.getElementById("btn-receipt");
   const btnHoa = document.getElementById("btn-hoa");
   const btnFullscreen = document.getElementById("btn-fullscreen");
+  const btnSound = document.getElementById("btn-sound");
   const scoreEl = document.getElementById("hud-score");
   const energyEl = document.getElementById("hud-energy");
   const topEl = document.getElementById("hud-top");
@@ -101,6 +102,11 @@
   let managerFlash = 0;
   let bestAtStart = 0;
   let saveMenu = null;
+  const SOUND_PREF_KEY = GAME_ID + ":sound";
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+  let audioMaster = null;
+  let soundOn = readSoundPreference();
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -108,6 +114,165 @@
 
   function rand(min, max) {
     return min + Math.random() * (max - min);
+  }
+
+  function readSoundPreference() {
+    try {
+      return localStorage.getItem(SOUND_PREF_KEY) !== "off";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function writeSoundPreference() {
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, soundOn ? "on" : "off");
+    } catch (_) {}
+  }
+
+  function updateSoundButton() {
+    if (!btnSound) return;
+    if (!AudioContextCtor) {
+      btnSound.textContent = "Sound Off";
+      btnSound.setAttribute("aria-pressed", "false");
+      btnSound.disabled = true;
+      return;
+    }
+    btnSound.textContent = soundOn ? "Sound On" : "Sound Off";
+    btnSound.setAttribute("aria-pressed", soundOn ? "true" : "false");
+  }
+
+  function ensureAudio() {
+    if (!soundOn || !AudioContextCtor) return null;
+    if (!audioCtx) {
+      audioCtx = new AudioContextCtor();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = 0.11;
+      audioMaster.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioMaster) audioMaster.gain.setTargetAtTime(0.11, audioCtx.currentTime, 0.03);
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, options = {}) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + (options.delay || 0);
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    const attack = Math.min(options.attack || 0.012, duration * 0.45);
+    osc.type = options.type || "sine";
+    osc.frequency.setValueAtTime(Math.max(1, freq), t0);
+    if (options.to) {
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1, options.to), t0 + duration);
+    }
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(options.gain || 0.035, t0 + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(audioMaster || ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.04);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playNoise(duration, options = {}) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const length = Math.max(1, Math.floor(ac.sampleRate * duration));
+    const buffer = ac.createBuffer(1, length, ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    }
+
+    const t0 = ac.currentTime + (options.delay || 0);
+    const source = ac.createBufferSource();
+    const filter = ac.createBiquadFilter();
+    const gain = ac.createGain();
+    source.buffer = buffer;
+    filter.type = options.filter || "bandpass";
+    filter.frequency.setValueAtTime(options.frequency || 900, t0);
+    filter.Q.value = options.q || 0.8;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(options.gain || 0.026, t0 + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioMaster || ac.destination);
+    source.start(t0);
+    source.stop(t0 + duration + 0.04);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playSfx(name, detail = {}) {
+    if (!soundOn) return;
+    const tier = clamp(Number(detail.tier) || 1, 1, MAX);
+    const base = 240 + tier * 26;
+
+    if (name === "start") {
+      playTone(196, 0.08, { type: "triangle", to: 294, gain: 0.036 });
+      playTone(392, 0.12, { type: "triangle", to: 523, gain: 0.03, delay: 0.07 });
+    } else if (name === "drop") {
+      playTone(260, 0.07, { type: "triangle", to: 145, gain: 0.032 });
+      playNoise(0.035, { frequency: 1400, gain: 0.012, delay: 0.025 });
+    } else if (name === "merge") {
+      playTone(base, 0.075, { type: "triangle", to: base * 1.35, gain: 0.038 });
+      playTone(base * 1.55, 0.11, { type: "sine", to: base * 1.95, gain: 0.025, delay: 0.052 });
+      playNoise(0.055, { frequency: 1800, gain: 0.014, delay: 0.018 });
+    } else if (name === "managerReady") {
+      playTone(base, 0.07, { type: "triangle", to: base * 1.45, gain: 0.034 });
+      playTone(740, 0.12, { type: "square", to: 980, gain: 0.024, delay: 0.08 });
+      playTone(1180, 0.16, { type: "sine", gain: 0.02, delay: 0.16 });
+    } else if (name === "manager") {
+      playTone(210, 0.22, { type: "sawtooth", to: 840, gain: 0.045 });
+      playTone(520, 0.24, { type: "triangle", to: 260, gain: 0.032, delay: 0.06 });
+      playNoise(0.28, { frequency: 680, gain: 0.035, delay: 0.02 });
+    } else if (name === "receipt") {
+      [840, 1180, 1460].forEach((freq, index) =>
+        playTone(freq, 0.045, { type: "square", gain: 0.022, delay: index * 0.055 })
+      );
+      playNoise(0.12, { frequency: 2200, gain: 0.018, delay: 0.02 });
+    } else if (name === "hoa") {
+      playTone(150, 0.16, { type: "sawtooth", to: 78, gain: 0.05 });
+      playTone(340, 0.08, { type: "square", to: 220, gain: 0.022, delay: 0.06 });
+      playNoise(0.16, { frequency: 420, gain: 0.03 });
+    } else if (name === "win") {
+      [330, 494, 660, 990].forEach((freq, index) =>
+        playTone(freq, 0.14, { type: "triangle", gain: 0.034, delay: index * 0.085 })
+      );
+      playNoise(0.28, { frequency: 2600, gain: 0.018, delay: 0.18 });
+    } else if (name === "gameOver") {
+      playTone(220, 0.18, { type: "sawtooth", to: 130, gain: 0.045 });
+      playTone(120, 0.28, { type: "sawtooth", to: 50, gain: 0.038, delay: 0.12 });
+      playNoise(0.22, { frequency: 300, gain: 0.025, delay: 0.05 });
+    } else if (name === "nope") {
+      playTone(160, 0.08, { type: "square", to: 105, gain: 0.025 });
+    } else if (name === "toggle") {
+      playTone(440, 0.07, { type: "triangle", gain: 0.026 });
+      playTone(660, 0.08, { type: "triangle", gain: 0.022, delay: 0.055 });
+    }
+  }
+
+  function toggleSound() {
+    if (!AudioContextCtor) return;
+    soundOn = !soundOn;
+    writeSoundPreference();
+    updateSoundButton();
+    if (soundOn) {
+      ensureAudio();
+      playSfx("toggle");
+    } else if (audioCtx && audioMaster) {
+      audioMaster.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.025);
+    }
   }
 
   function tierScore(tier) {
@@ -238,16 +403,6 @@
     ctx.beginPath();
     ctx.arc(0, 0, r - 6, Math.PI * 1.15, Math.PI * 1.62);
     ctx.stroke();
-
-    ctx.fillStyle = "rgba(0,0,0,0.68)";
-    ctx.beginPath();
-    ctx.roundRect(-r * 0.42, r * 0.43, r * 0.84, Math.max(16, r * 0.26), 6);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "800 " + Math.max(9, Math.round(r * 0.16)) + "px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("T" + bubble.tier, 0, r * 0.56);
 
     ctx.restore();
   }
@@ -498,6 +653,7 @@
     score += tierScore(tier);
     energy += tierEnergy(tier);
     const managerReadyNow = chargeManager(tier);
+    playSfx(managerReadyNow ? "managerReady" : "merge", { tier });
     heat = clamp(heat + tier * 2.2 - 5, 0, 100);
     topTier = Math.max(topTier, tier);
     api.recordScore(GAME_ID, score);
@@ -579,6 +735,7 @@
     heat = clamp(heat + 2.5, 0, 100);
     updatePreview();
     saveProgress();
+    playSfx("drop", { tier });
     return true;
   }
 
@@ -642,10 +799,12 @@
   function useManager() {
     if (!running || pausedByOverlay) return;
     if (managerMeter < MANAGER_METER_MAX) {
+      playSfx("nope");
       log("Chain more merges before asking for the manager.");
       return;
     }
     if (!bubbles.length) {
+      playSfx("nope");
       log("The aisle is already clear enough to avoid eye contact.");
       return;
     }
@@ -676,6 +835,7 @@
     shake = 8;
     managerFlash = 0.7;
     spawnCouponStorm(18 + targets.length * 4);
+    playSfx("manager");
     log("Manager summoned: " + targets.length + " low-tier complaint" + (targets.length === 1 ? "" : "s") + " escorted out.");
     updateHud();
     saveProgress();
@@ -698,11 +858,13 @@
 
   function useReceiptBlast() {
     if (!running || energy < RECEIPT_COST) {
+      playSfx("nope");
       log("Not enough complaint energy for Receipt Blast.");
       return;
     }
     const pair = findBestPair();
     if (!pair) {
+      playSfx("nope");
       log("Receipt Blast needs two matching bubbles.");
       return;
     }
@@ -712,6 +874,7 @@
     pair.b.x = (pair.a.x + pair.b.x) / 2 + pair.b.r * 0.24;
     pair.a.y = Math.min(pair.a.y, pair.b.y);
     pair.b.y = pair.a.y;
+    playSfx("receipt");
     mergeBubbles(pair.a, pair.b, now + MERGE_COOLDOWN + 0.01);
     log("Receipt Blast forced a merge.");
     updateHud();
@@ -720,6 +883,7 @@
 
   function useHoa() {
     if (!running || energy < HOA_COST) {
+      playSfx("nope");
       log("Not enough complaint energy for an HOA Notice.");
       return;
     }
@@ -731,6 +895,7 @@
       b.vy -= 180;
       b.vx += (b.x < W / 2 ? -1 : 1) * 24;
     }
+    playSfx("hoa");
     log("HOA Notice shoved the pile down and cooled the room.");
     updateHud();
     saveProgress();
@@ -786,6 +951,7 @@
     if (!running) return;
     running = false;
     pausedByOverlay = true;
+    playSfx("gameOver");
     if (saveSlot) saveSlot.clear();
     api.recordScore(GAME_ID, score);
     const best = api.getHighScore(GAME_ID);
@@ -805,6 +971,7 @@
 
   function showWin() {
     won = true;
+    playSfx("win");
     api.recordScore(GAME_ID, score);
     const best = api.getHighScore(GAME_ID);
     showOverlay(
@@ -839,6 +1006,7 @@
     pausedByOverlay = false;
     lastDropAt = -10;
     bestAtStart = api.getHighScore(GAME_ID);
+    playSfx("start");
     log("Aim, drop, and merge matching portrait bubbles.");
     updatePreview();
     hideOverlay();
@@ -900,6 +1068,7 @@
     running = data.running !== false;
     pausedByOverlay = false;
     bestAtStart = api.getHighScore(GAME_ID);
+    playSfx("start");
     updatePreview();
     hideOverlay();
     log("Progress restored. The bubble pile remembers.");
@@ -941,12 +1110,14 @@
   if (btnReceipt) btnReceipt.addEventListener("click", useReceiptBlast);
   if (btnHoa) btnHoa.addEventListener("click", useHoa);
   if (btnFullscreen) btnFullscreen.addEventListener("click", toggleMaxed);
+  if (btnSound) btnSound.addEventListener("click", toggleSound);
   document.addEventListener("fullscreenchange", syncFullscreenState);
   document.addEventListener("webkitfullscreenchange", syncFullscreenState);
 
   btnPrimary.onclick = newGame;
   makeLadder();
   updatePreview();
+  updateSoundButton();
   updateHud();
 
   if (saveSlot) {
@@ -978,6 +1149,8 @@
     manager: useManager,
     receipt: useReceiptBlast,
     hoa: useHoa,
+    sound: playSfx,
+    toggleSound,
     toggleMaxed,
     isMaxed,
     forceBubble(tier, x, y, vx = 0, vy = 0) {
@@ -1020,6 +1193,8 @@
     get running() { return running; },
     get paused() { return pausedByOverlay; },
     get nextTier() { return nextTier; },
+    get soundOn() { return soundOn; },
+    get audioState() { return audioCtx ? audioCtx.state : "uninitialized"; },
     save: saveProgress,
     restore: () => restoreGame(saveSlot && saveSlot.read()),
   };

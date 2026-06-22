@@ -352,6 +352,17 @@
         min-height: 38px;
       }
 
+      .karen-page .controls-row {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .karen-page .controls-row .btn {
+        flex: 1 1 calc(50% - 5px);
+        width: auto;
+        min-height: 42px;
+      }
+
       .karen-control-grid {
         grid-template-columns: 1fr;
       }
@@ -450,6 +461,7 @@
           </div>
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-new" style="font-size:13px;padding:8px 12px;">New game</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
           </div>
           <div class="karen-control-grid" aria-label="Bubble controls">
             <button class="btn btn--ghost" id="btn-aim-left" type="button" aria-label="Aim left">&larr; Aim</button>
@@ -515,8 +527,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
-  <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
-  <script src="../assets/js/karen-merger.js?v=20260622-mobile-2"></script>
+  <script src="../assets/js/main.js?v=20260621-network-7"></script>
+  <script src="../assets/js/karen-merger.js?v=20260622-sfx-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

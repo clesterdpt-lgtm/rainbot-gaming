@@ -4220,6 +4220,13 @@ body.arcade-home::before {
   object-position: center;
 }
 
+/* Storm Area 51 generated poster fills both card layouts. */
+.poster-card--storm img,
+.directory-card__poster--storm img {
+  object-fit: cover;
+  object-position: center;
+}
+
 /* Drone Hunter generated poster fills both card layouts. */
 .poster-card--drone img,
 .directory-card__poster--drone img {

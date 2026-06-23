@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Storm Area 51: Raid The Base - Rainbot Network</title>
+  <meta name="description" content="A fictional reverse tower defense arcade game. Spend Hype to send raider squads through three defended lanes, break the lab, free the alien, and beat lockdown." />
+  <meta property="og:title" content="Storm Area 51: Raid The Base - Rainbot Network" />
+  <meta property="og:description" content="Send chaotic squads through defended lanes, overwhelm the base, crack the lab, and extract the alien before lockdown hits 100%." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260623-storm-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23040712'/%3E%3Cpath d='M50 16c14 0 26 12 26 26 0 19-18 40-26 40S24 61 24 42c0-14 12-26 26-26z' fill='%236bff7d'/%3E%3Ccircle cx='39' cy='42' r='8' fill='%23040712'/%3E%3Ccircle cx='61' cy='42' r='8' fill='%23040712'/%3E%3Cpath d='M18 78h64' stroke='%23ff2e88' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    .storm-page {
+      --storm-cyan: #2ee0ff;
+      --storm-pink: #ff2e88;
+      --storm-yellow: #ffd43b;
+      --storm-green: #6bff7d;
+      --storm-red: #ff4f68;
+    }
+
+    .storm-page .game-page {
+      max-width: 1680px;
+    }
+
+    .storm-page .game-stage {
+      border-color: rgba(46, 224, 255, 0.24);
+      background:
+        radial-gradient(circle at 12% 4%, rgba(255, 46, 136, 0.16), transparent 28%),
+        radial-gradient(circle at 84% 8%, rgba(46, 224, 255, 0.13), transparent 24%),
+        linear-gradient(180deg, rgba(9, 13, 31, 0.98), rgba(3, 6, 15, 0.98));
+    }
+
+    .storm-page .hud {
+      align-items: center;
+      background: rgba(3, 6, 17, 0.88);
+      border-color: rgba(46, 224, 255, 0.26);
+      box-shadow: 0 0 22px rgba(46, 224, 255, 0.08);
+    }
+
+    .storm-meter {
+      display: grid;
+      grid-template-columns: auto minmax(94px, 1fr) 34px;
+      gap: 7px;
+      align-items: center;
+      min-width: 176px;
+    }
+
+    .storm-meter__track {
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .storm-meter__fill {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      transition: width 120ms linear, background 120ms linear;
+    }
+
+    .storm-meter__fill--alert {
+      background: linear-gradient(90deg, #ffd43b, #ff7a3d 55%, #ff4f68);
+      box-shadow: 0 0 14px rgba(255, 79, 104, 0.48);
+    }
+
+    .storm-meter__fill--hype {
+      background: linear-gradient(90deg, #2ee0ff, #6bff7d 62%, #ffd43b);
+      box-shadow: 0 0 14px rgba(46, 224, 255, 0.42);
+    }
+
+    .storm-meter__value {
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .storm-stage-wrap {
+      background:
+        radial-gradient(circle at 50% 52%, rgba(46, 224, 255, 0.12), transparent 58%),
+        #02050a;
+    }
+
+    .storm-page .canvas-wrap {
+      border-radius: 8px;
+      --game-max-width: 1180px;
+      aspect-ratio: 16 / 9;
+    }
+
+    .storm-page #gameCanvas {
+      border-color: rgba(46, 224, 255, 0.34);
+      border-radius: 8px;
+      background: #02050a;
+    }
+
+    .storm-page .overlay {
+      background:
+        radial-gradient(circle at 50% 20%, rgba(107, 255, 125, 0.18), transparent 32%),
+        radial-gradient(circle at 18% 82%, rgba(255, 46, 136, 0.24), transparent 30%),
+        rgba(3, 6, 17, 0.82);
+      backdrop-filter: blur(3px);
+    }
+
+    .storm-page .overlay__title {
+      max-width: 480px;
+      color: #fbfaf4;
+      font-size: 48px;
+      line-height: 0.98;
+      text-transform: uppercase;
+    }
+
+    .storm-page .overlay__sub {
+      max-width: 520px;
+      color: #dbe6f3;
+    }
+
+    .storm-squads {
+      display: grid;
+      gap: 8px;
+    }
+
+    .storm-squad {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) 68px;
+      gap: 9px;
+      align-items: center;
+      width: 100%;
+      min-height: 52px;
+      padding: 8px 9px;
+      border: 1px solid rgba(113, 132, 156, 0.44);
+      border-radius: 8px;
+      background: rgba(3, 6, 17, 0.76);
+      color: var(--ink);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+    }
+
+    .storm-squad:hover,
+    .storm-squad.is-active {
+      border-color: var(--squad-color, var(--storm-cyan));
+      box-shadow: 0 0 18px color-mix(in srgb, var(--squad-color, var(--storm-cyan)) 28%, transparent);
+      transform: translateY(-1px);
+    }
+
+    .storm-squad__chip {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 2px solid var(--squad-color, var(--storm-cyan));
+      border-radius: 8px;
+      color: var(--squad-color, var(--storm-cyan));
+      font-family: var(--font-display);
+      font-size: 12px;
+    }
+
+    .storm-squad strong {
+      display: block;
+      min-width: 0;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .storm-squad span {
+      display: block;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .storm-squad__cooldown {
+      min-width: 68px;
+      color: var(--storm-yellow);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      text-align: right;
+    }
+
+    .storm-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .storm-actions .btn {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .storm-actions .btn[disabled] {
+      cursor: not-allowed;
+      filter: grayscale(0.55);
+      opacity: 0.52;
+    }
+
+    .storm-squad.is-active .storm-squad__cooldown {
+      color: var(--squad-color, var(--storm-cyan));
+    }
+
+    .storm-objective {
+      display: grid;
+      gap: 8px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .storm-objective strong {
+      color: var(--storm-green);
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    .storm-objective__log {
+      max-height: 138px;
+      overflow: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 5px;
+      color: #aeb8cc;
+    }
+
+    .storm-objective__log li {
+      padding: 5px 7px;
+      border-left: 2px solid rgba(46, 224, 255, 0.42);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 0 5px 5px 0;
+    }
+
+    .storm-page .game-side__poster {
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      object-position: center;
+      background: #02050a;
+    }
+
+    .storm-mobile-dock {
+      display: none;
+    }
+
+    @media (max-width: 760px) {
+      .storm-page {
+        padding-bottom: calc(178px + env(safe-area-inset-bottom));
+      }
+
+      .storm-page .game-page__header .btn {
+        width: 100%;
+      }
+
+      .storm-page .hud {
+        justify-content: start;
+      }
+
+      .storm-meter {
+        grid-template-columns: 54px minmax(78px, 1fr) 32px;
+        min-width: min(100%, 168px);
+      }
+
+      .storm-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .storm-page .overlay__title {
+        font-size: 32px;
+      }
+
+      .storm-mobile-dock {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 70;
+        display: grid;
+        gap: 7px;
+        padding: 8px 10px calc(9px + env(safe-area-inset-bottom));
+        border-top: 1px solid rgba(46, 224, 255, 0.34);
+        background: rgba(3, 6, 17, 0.96);
+        box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(10px);
+      }
+
+      .storm-mobile-dock__meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        color: var(--ink-dim);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .storm-mobile-dock__meta strong {
+        color: var(--storm-green);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .storm-mobile-dock__meta span {
+        white-space: nowrap;
+      }
+
+      .storm-mobile-squads,
+      .storm-mobile-lanes,
+      .storm-mobile-actions {
+        display: grid;
+        gap: 6px;
+      }
+
+      .storm-mobile-squads {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .storm-mobile-lanes {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .storm-mobile-actions {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      .storm-mobile-unit,
+      .storm-mobile-lane,
+      .storm-mobile-action {
+        min-width: 0;
+        border: 1px solid rgba(113, 132, 156, 0.48);
+        border-radius: 8px;
+        background: rgba(10, 14, 31, 0.96);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .storm-mobile-unit {
+        min-height: 42px;
+        padding: 6px 4px;
+        border-color: color-mix(in srgb, var(--squad-color, var(--storm-cyan)) 54%, rgba(113, 132, 156, 0.48));
+        color: var(--squad-color, var(--storm-cyan));
+      }
+
+      .storm-mobile-unit strong,
+      .storm-mobile-lane strong {
+        display: block;
+        font-size: 12px;
+        line-height: 1;
+      }
+
+      .storm-mobile-unit span,
+      .storm-mobile-lane span {
+        display: block;
+        margin-top: 4px;
+        color: var(--ink-dim);
+        font-size: 9px;
+        line-height: 1;
+      }
+
+      .storm-mobile-unit.is-active {
+        border-color: var(--squad-color, var(--storm-cyan));
+        background: color-mix(in srgb, var(--squad-color, var(--storm-cyan)) 17%, rgba(3, 6, 17, 0.96));
+        box-shadow: 0 0 18px color-mix(in srgb, var(--squad-color, var(--storm-cyan)) 32%, transparent);
+      }
+
+      .storm-mobile-unit.is-low span {
+        color: var(--storm-yellow);
+      }
+
+      .storm-mobile-lane {
+        min-height: 38px;
+        padding: 6px 4px;
+        color: var(--lane-color, var(--storm-cyan));
+      }
+
+      .storm-mobile-lane.is-active {
+        border-color: var(--lane-color, var(--storm-cyan));
+        box-shadow: inset 0 0 0 1px var(--lane-color, var(--storm-cyan));
+      }
+
+      .storm-mobile-action {
+        min-height: 36px;
+        padding: 7px 6px;
+        color: var(--storm-cyan);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .storm-mobile-action--deploy {
+        background: linear-gradient(90deg, rgba(46, 224, 255, 0.92), rgba(107, 255, 125, 0.82));
+        color: #030611;
+      }
+
+      .storm-mobile-action:disabled,
+      .storm-mobile-lane:disabled {
+        cursor: not-allowed;
+        filter: grayscale(0.55);
+        opacity: 0.46;
+      }
+    }
+  </style>
+</head>
+<body class="storm-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Storm Area 51: Raid The Base</h1>
+        <div class="game-page__sub">Reverse tower defense · deploy squads · crack the lab · extract the alien</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="storm-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="storm-phase">RALLY</span></div>
+          <div class="storm-meter" aria-label="Lockdown meter">
+            <span class="hud__label">LOCK</span>
+            <span class="storm-meter__track"><span class="storm-meter__fill storm-meter__fill--alert" id="storm-alert-fill"></span></span>
+            <span class="storm-meter__value" id="storm-alert-value">0%</span>
+          </div>
+          <div class="storm-meter" aria-label="Hype meter">
+            <span class="hud__label">HYPE</span>
+            <span class="storm-meter__track"><span class="storm-meter__fill storm-meter__fill--hype" id="storm-hype-fill"></span></span>
+            <span class="storm-meter__value" id="storm-hype-value">50%</span>
+          </div>
+          <div class="hud__item"><span class="hud__label">ALIEN</span><span class="hud__value" id="storm-alien">CAPTIVE</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="storm-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap storm-stage-wrap">
+          <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Storm Area 51 playfield"></canvas>
+
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="overlay overlay--show" id="storm-overlay">
+            <h2 class="overlay__title" id="storm-overlay-title">Raid The Base</h2>
+            <p class="overlay__sub" id="storm-overlay-sub">
+              Spend Hype to send squads through three defended lanes. Crack two lab shields, overwhelm the lab, free the alien, and reach the van before lockdown hits 100%.
+            </p>
+            <div class="overlay__score" id="storm-overlay-score"></div>
+            <button class="btn btn--primary" id="btn-start">Start raid</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          <strong>Click</strong> a deploy card, then <strong>click/tap</strong> a lane to send it. Keyboard: <kbd>1</kbd>-<kbd>4</kbd> squads, <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> lanes, <kbd>Q</kbd> deploys, <kbd>E</kbd> rushes, <kbd>P</kbd> pauses.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">DEPLOY</h3>
+          <div class="storm-squads" id="storm-squad-list"></div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">COMMANDS</h3>
+          <div class="storm-actions">
+            <button class="btn btn--secondary" id="btn-ability" type="button">Deploy</button>
+            <button class="btn btn--ghost" id="btn-rally" type="button">Rush wave</button>
+            <button class="btn btn--ghost" id="btn-pause" type="button">Pause</button>
+            <button class="btn btn--ghost" id="btn-new" type="button">New raid</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">MISSION</h3>
+          <div class="storm-objective">
+            <strong id="storm-objective">Rally outside the fence</strong>
+            <span id="storm-tip">Click a squad card, then click a lane. Guards, drones, lights, and sirens are the enemy defenses.</span>
+            <ul class="storm-objective__log" id="storm-log"></ul>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>Raid notes</summary>
+          <ul>
+            <li>This is reverse tower defense: you send units through lanes while the base tries to stop them.</li>
+            <li>Click a deploy card to choose a squad. The selected card says SELECTED, then click a lane to send it.</li>
+            <li>Runners are fast, Sign Guys tank, Livestreamers generate Hype, and Tinfoil Crew jams nearby defenses.</li>
+            <li>Break the pink Lab Shield gate in two different lanes before the lab core can take damage.</li>
+            <li>Once the lab opens, escort the alien to the van before lockdown reaches 100%.</li>
+            <li>Enemy defenses are labeled on the map. Sirens raise lockdown fastest, drones punish clusters, lights soften lanes, and guards shoot front units.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            Fictional arcade satire. Not instructions, not affiliated with any real place, organization, or event.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <div class="storm-mobile-dock" id="storm-mobile-dock" aria-label="Mobile raid controls">
+    <div class="storm-mobile-dock__meta">
+      <strong id="storm-mobile-selected">NR · Main Road</strong>
+      <span id="storm-mobile-hype">Hype 0%</span>
+    </div>
+    <div class="storm-mobile-squads" id="storm-mobile-squads"></div>
+    <div class="storm-mobile-lanes" id="storm-mobile-lanes"></div>
+    <div class="storm-mobile-actions">
+      <button class="storm-mobile-action storm-mobile-action--deploy" id="storm-mobile-deploy" type="button">Deploy</button>
+      <button class="storm-mobile-action" id="storm-mobile-rush" type="button">Rush</button>
+      <button class="storm-mobile-action" id="storm-mobile-pause" type="button">Pause</button>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260611-8"></script>
+  <script src="../assets/js/main.js?v=20260621-network-3"></script>
+  <script src="../assets/js/storm-area-51.js?v=20260623-rtdef-9"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

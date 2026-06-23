@@ -1394,7 +1394,7 @@
     const run = player.runPhase;
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
     const bodyBob = player.onGround ? Math.abs(Math.sin(run)) * 2 : 0;
-    if (drawSpriteCutout(RASTER_ART.player, -56, -113 + bodyBob, 112, 116, CYAN, player.hitFlash)) {
+    if (drawSpriteCutout(RASTER_ART.player, -48, -97 + bodyBob, 96, 100, CYAN, player.hitFlash)) {
       const beatGlow = state.beatPulse;
       if (player.shootT > 0.3 || beatGlow > 0.15) {
         ctx.save();
@@ -2054,8 +2054,8 @@
     else if (k === "arrowup" || k === "w") { input.up = true; e.preventDefault(); }      // aim up
     else if (k === "arrowdown" || k === "s") { input.down = true; e.preventDefault(); }   // crouch
     else if (k === " ") { if (!e.repeat) jump(); e.preventDefault(); }                    // jump
-    else if (k === "z" || k === "j") { e.preventDefault(); shoot(); }
-    else if (k === "x" || k === "k") { e.preventDefault(); special(); }
+    else if (k === "e" || k === "j") { e.preventDefault(); shoot(); }
+    else if (k === "f" || k === "k") { e.preventDefault(); special(); }
     else if (k === "p") { pauseGame(); }
   });
   document.addEventListener("keyup", (e) => {

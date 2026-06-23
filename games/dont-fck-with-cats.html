@@ -31,10 +31,10 @@
     }
 
     .canvas-wrap--clowder {
-      aspect-ratio: 960 / 600;
-      --game-aspect: 1.6;
-      --game-aspect-ratio: 960 / 600;
-      --game-max-width: 1180px;
+      aspect-ratio: 960 / 900;
+      --game-aspect: 1.0667;
+      --game-aspect-ratio: 960 / 900;
+      --game-max-width: 920px;
       background: #05010a;
     }
 
@@ -70,6 +70,10 @@
       pointer-events: none;
     }
 
+    .clowder-mini-hud [hidden] {
+      display: none !important;
+    }
+
     .clowder-mini-hud__item {
       display: flex;
       align-items: center;
@@ -101,6 +105,29 @@
 
     .clowder-mini-hud__value--score {
       color: var(--accent-2);
+    }
+
+    .clowder-mini-hud__boss {
+      display: grid;
+      gap: 4px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(251, 250, 244, 0.12);
+    }
+
+    .clowder-mini-hud__bar {
+      height: 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(251, 250, 244, 0.16);
+    }
+
+    .clowder-mini-hud__bar span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 0.12s ease;
     }
 
     .clowder-page .overlay {
@@ -270,12 +297,16 @@
     <div class="game-layout">
       <div class="game-stage clowder-stage">
         <div class="canvas-wrap canvas-wrap--clowder">
-          <canvas id="gameCanvas" width="960" height="600" tabindex="0" aria-label="Don't F*ck with Cats playfield"></canvas>
+          <canvas id="gameCanvas" width="960" height="900" tabindex="0" aria-label="Don't F*ck with Cats playfield"></canvas>
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">Max</button>
           <div class="clowder-mini-hud" aria-label="Don't F*ck with Cats status">
             <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Cats</span><span class="clowder-mini-hud__value" id="hud-cats">9</span></div>
             <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Morale</span><span class="clowder-mini-hud__value clowder-mini-hud__value--morale" id="hud-morale">100%</span></div>
             <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Score</span><span class="clowder-mini-hud__value clowder-mini-hud__value--score" id="hud-score">0</span></div>
+            <div class="clowder-mini-hud__boss" id="hud-boss-wrap" hidden>
+              <div class="clowder-mini-hud__item"><span class="clowder-mini-hud__label">Boss</span><span class="clowder-mini-hud__value" id="hud-boss-value">100%</span></div>
+              <div class="clowder-mini-hud__bar" aria-hidden="true"><span id="hud-boss-fill"></span></div>
+            </div>
           </div>
 
           <div class="overlay overlay--show" id="overlay">
@@ -360,7 +391,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
-  <script src="../assets/js/dont-fck-with-cats.js?v=20260622-compact-hud-1"></script>
+  <script src="../assets/js/dont-fck-with-cats.js?v=20260622-tall-boss-hp-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

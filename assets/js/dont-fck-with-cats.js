@@ -10,10 +10,10 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-compact-hud-1";
+  const ART_VERSION = "20260622-tall-boss-hp-1";
   const W = 960;
-  const H = 600;
-  const PLAYER_Y = 498;
+  const H = 900;
+  const PLAYER_Y = H - 126;
   const VIEW_SCALE = 1;
   const VIEW_PAD_X = (W - W * VIEW_SCALE) / 2;
   const VIEW_PAD_Y = (H - H * VIEW_SCALE) / 2;
@@ -23,9 +23,11 @@
   const PLAY_TARGET_MAX = W - 46;
   const START_CATS = 9;
   const MAX_CATS = 84;
-  const BOSS_ATTACK_WINDUP = 1.12;
+  const BOSS_ATTACK_WINDUP = 1.32;
   const BOSS_ATTACK_AIM_RADIUS = 74;
   const BOSS_ATTACK_DODGE_MARGIN = 18;
+  const GATE_SPACING_MULT = 1.1;
+  const OBJECT_SPACING_MULT = 1.18;
   const LEVELS = [
     {
       name: "Living Room Uprising",
@@ -225,6 +227,9 @@
     morale: document.getElementById("hud-morale"),
     distance: document.getElementById("hud-distance"),
     best: document.getElementById("hud-best"),
+    bossWrap: document.getElementById("hud-boss-wrap"),
+    bossValue: document.getElementById("hud-boss-value"),
+    bossFill: document.getElementById("hud-boss-fill"),
   };
 
   const C = {
@@ -404,8 +409,8 @@
       time: 0,
       combo: 0,
       fireTimer: 0,
-      nextGateAt: 620,
-      nextObjectAt: 540,
+      nextGateAt: 700,
+      nextObjectAt: 650,
       nextPairId: 1,
       appliedPairs: [],
       bossSpawned: false,
@@ -553,6 +558,18 @@
       hud.distance.textContent = state.boss ? "BOSS" : `${Math.round(levelProgress() * 100)}%`;
     }
     if (hud.best) hud.best.textContent = api.getHighScore(GAME_ID).toLocaleString();
+    if (hud.bossWrap) {
+      const hasBoss = Boolean(state.boss && state.boss.maxHp > 0);
+      hud.bossWrap.hidden = !hasBoss;
+      if (hasBoss) {
+        const pct = clamp(state.boss.hp / state.boss.maxHp, 0, 1);
+        if (hud.bossValue) hud.bossValue.textContent = `${Math.max(0, Math.ceil(pct * 100))}%`;
+        if (hud.bossFill) {
+          hud.bossFill.style.width = `${Math.max(0, Math.round(pct * 100))}%`;
+          hud.bossFill.style.backgroundColor = state.boss.accent || C.pink;
+        }
+      }
+    }
     if (btnPause) btnPause.textContent = state.paused ? "Resume" : "Pause";
   }
 
@@ -748,7 +765,7 @@
         ...spec,
         pairId,
         x: layout.x,
-        y: -112,
+        y: -156,
         w: layout.w,
         h: 92,
         levelName: level.short,
@@ -772,7 +789,7 @@
     const scale = (spec.kind === "roomba" && state.distance > level.length * 0.55 ? 1.16 : 1) * levelScale;
     const w = spec.w * scale;
     const h = spec.h * scale;
-    const y = rand(-190, -88);
+    const y = rand(-290, -132);
     const minX = PLAY_MIN_X + 6;
     const maxX = PLAY_MAX_X - w - 6;
     const laneCenters = objectLaneCenters();
@@ -802,7 +819,7 @@
     }
 
     if (!placed) {
-      state.nextObjectAt += rand(140, 220);
+      state.nextObjectAt += rand(180, 290);
     }
   }
 
@@ -826,23 +843,23 @@
   }
 
   function bossAttackCooldown(pattern) {
-    if (pattern === "cucumber") return rand(1.35, 1.95);
-    if (pattern === "bath") return rand(2.25, 3.1);
-    if (pattern === "lint") return rand(1.45, 2.1);
-    if (pattern === "squeeze") return rand(1.4, 2.05);
-    if (pattern === "pointer") return rand(1.3, 1.95);
-    return rand(1.55, 2.25);
+    if (pattern === "cucumber") return rand(1.65, 2.25);
+    if (pattern === "bath") return rand(2.45, 3.35);
+    if (pattern === "lint") return rand(1.7, 2.35);
+    if (pattern === "squeeze") return rand(1.65, 2.3);
+    if (pattern === "pointer") return rand(1.6, 2.25);
+    return rand(1.8, 2.55);
   }
 
   function vacuumAttackParams(boss) {
     const opener = (boss.attackCount || 0) === 0;
     return {
-      ttl: opener ? 0.86 : BOSS_ATTACK_WINDUP,
-      maxTtl: opener ? 0.86 : BOSS_ATTACK_WINDUP,
-      strikeAt: opener ? 0.54 : 0.68,
+      ttl: opener ? 1.05 : BOSS_ATTACK_WINDUP,
+      maxTtl: opener ? 1.05 : BOSS_ATTACK_WINDUP,
+      strikeAt: opener ? 0.6 : 0.72,
       aimRadius: opener ? 96 : BOSS_ATTACK_AIM_RADIUS,
       dodgeMargin: opener ? 8 : BOSS_ATTACK_DODGE_MARGIN,
-      trackStrength: opener ? 4.6 : 2.1,
+      trackStrength: opener ? 3.8 : 2.1,
     };
   }
 
@@ -867,9 +884,9 @@
       }
       boss.attackFx = {
         type: "cucumber",
-        ttl: 1.28,
-        maxTtl: 1.28,
-        strikeAt: 0.7,
+        ttl: 1.52,
+        maxTtl: 1.52,
+        strikeAt: 0.74,
         loss,
         resolved: false,
         dodged: false,
@@ -883,9 +900,9 @@
       const dryLane = pick(lanes);
       boss.attackFx = {
         type: "bath",
-        ttl: 1.85,
-        maxTtl: 1.85,
-        strikeAt: 0.78,
+        ttl: 2.05,
+        maxTtl: 2.05,
+        strikeAt: 0.8,
         loss,
         resolved: false,
         dodged: false,
@@ -898,9 +915,9 @@
       const gapCenters = [W * 0.24, W * 0.5, W * 0.76];
       boss.attackFx = {
         type: "lint",
-        ttl: 1.22,
-        maxTtl: 1.22,
-        strikeAt: 0.7,
+        ttl: 1.48,
+        maxTtl: 1.48,
+        strikeAt: 0.74,
         loss,
         resolved: false,
         dodged: false,
@@ -914,9 +931,9 @@
     if (pattern === "squeeze") {
       boss.attackFx = {
         type: "squeeze",
-        ttl: 1.18,
-        maxTtl: 1.18,
-        strikeAt: 0.66,
+        ttl: 1.44,
+        maxTtl: 1.44,
+        strikeAt: 0.72,
         loss,
         resolved: false,
         dodged: false,
@@ -929,9 +946,9 @@
       const travel = startX < W / 2 ? 1 : -1;
       boss.attackFx = {
         type: "pointer",
-        ttl: 1.22,
-        maxTtl: 1.22,
-        strikeAt: 0.64,
+        ttl: 1.5,
+        maxTtl: 1.5,
+        strikeAt: 0.72,
         loss,
         resolved: false,
         dodged: false,
@@ -1144,8 +1161,8 @@
     state.obstacles = [];
     state.bullets = [];
     state.appliedPairs = [];
-    state.nextGateAt = 560;
-    state.nextObjectAt = 460;
+    state.nextGateAt = 700;
+    state.nextObjectAt = 650;
     state.cats = clamp(state.cats + 2 + state.levelIndex, 1, MAX_CATS);
     state.morale = clamp(state.morale + 8, 0, 100);
     state.levelBanner = 2.8;
@@ -1218,11 +1235,11 @@
       state.distance += state.speed * dt;
       if (state.distance >= state.nextGateAt) {
         spawnGatePair();
-        state.nextGateAt += rand(level.gateEvery[0], level.gateEvery[1]);
+        state.nextGateAt += rand(level.gateEvery[0], level.gateEvery[1]) * GATE_SPACING_MULT;
       }
       if (state.distance >= state.nextObjectAt) {
         spawnObject();
-        state.nextObjectAt += rand(level.objectEvery[0], level.objectEvery[1]);
+        state.nextObjectAt += rand(level.objectEvery[0], level.objectEvery[1]) * OBJECT_SPACING_MULT;
       }
       if (state.distance >= level.length) {
         spawnBoss();
@@ -1437,7 +1454,6 @@
     drawCats();
     drawParticles();
     drawFloats();
-    drawLevelBanner();
     ctx.restore();
     if (state.paused) drawPause();
   }
@@ -2094,20 +2110,6 @@
       fitText(f.text, f.x, f.y, 240, 24, f.color, "center");
       ctx.restore();
     });
-  }
-
-  function drawLevelBanner() {
-    if (state.levelBanner <= 0 || state.mode !== "playing") return;
-    const level = currentLevel();
-    const alpha = clamp(state.levelBanner / 2.8, 0, 1);
-    ctx.save();
-    ctx.globalAlpha = Math.min(0.92, alpha);
-    ctx.fillStyle = "rgba(3, 6, 11, 0.62)";
-    roundRect(238, 82, 484, 78, 10);
-    ctx.fill();
-    fitText(`LEVEL ${levelNumber()} / ${LEVELS.length}`, W / 2, 112, 320, 20, level.bossAccent || C.yellow, "center");
-    fitText(level.name.toUpperCase(), W / 2, 142, 430, 24, C.ink, "center");
-    ctx.restore();
   }
 
   function drawPause() {

@@ -4564,6 +4564,12 @@ body.arcade-home::before {
   border-color: rgba(255, 212, 59, 0.42);
 }
 
+.media-hero--slopwire .media-hero__visual {
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(255, 212, 59, 0.28);
+  box-shadow: 0 0 28px rgba(255, 212, 59, 0.12), 0 0 30px rgba(35, 223, 242, 0.12);
+}
+
 .media-hero--tv {
   border-color: rgba(35, 223, 242, 0.44);
 }
@@ -4616,8 +4622,7 @@ body.arcade-home::before {
 }
 
 .media-hero--slopwire .media-hero__visual img {
-  object-fit: contain;
-  image-rendering: pixelated;
+  object-fit: cover;
 }
 
 .media-hero__visual--screen {

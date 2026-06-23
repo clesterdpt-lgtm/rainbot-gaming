@@ -321,32 +321,34 @@
     return true;
   }
 
-  function drawRasterPanel(image, x, y, w, h, radius, accent, flash = 0) {
+  function drawImageContain(image, x, y, w, h, alignX = 0.5, alignY = 0.5) {
+    if (!imageReady(image)) return false;
+    const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
+    const dw = image.naturalWidth * scale;
+    const dh = image.naturalHeight * scale;
+    const dx = x + (w - dw) * alignX;
+    const dy = y + (h - dh) * alignY;
+    ctx.drawImage(image, dx, dy, dw, dh);
+    return { x: dx, y: dy, w: dw, h: dh };
+  }
+
+  function drawSpriteCutout(image, x, y, w, h, accent, flash = 0) {
     if (!imageReady(image)) return false;
     ctx.save();
     ctx.shadowColor = accent;
-    ctx.shadowBlur = 12;
-    roundRectXY(x, y, w, h, radius);
-    ctx.clip();
-    drawImageCover(image, x, y, w, h);
+    ctx.shadowBlur = 9;
+    drawImageContain(image, x, y, w, h);
+    ctx.restore();
+
     if (flash > 0) {
+      ctx.save();
+      drawImageContain(image, x, y, w, h);
+      ctx.globalCompositeOperation = "source-in";
       ctx.globalAlpha = clamp(flash, 0, 0.75);
       ctx.fillStyle = "#fff";
       ctx.fillRect(x, y, w, h);
+      ctx.restore();
     }
-    ctx.restore();
-
-    ctx.save();
-    ctx.strokeStyle = "rgba(5,7,18,0.88)";
-    ctx.lineWidth = 5;
-    roundRectXY(x, y, w, h, radius);
-    ctx.stroke();
-    ctx.strokeStyle = accent;
-    ctx.globalAlpha = 0.72;
-    ctx.lineWidth = 2;
-    roundRectXY(x + 3, y + 3, w - 6, h - 6, Math.max(4, radius - 3));
-    ctx.stroke();
-    ctx.restore();
     return true;
   }
 
@@ -1392,7 +1394,7 @@
     const run = player.runPhase;
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
     const bodyBob = player.onGround ? Math.abs(Math.sin(run)) * 2 : 0;
-    if (drawRasterPanel(RASTER_ART.player, -32, -94 + bodyBob, 64, 96, 16, CYAN, player.hitFlash)) {
+    if (drawSpriteCutout(RASTER_ART.player, -64, -129 + bodyBob, 128, 132, CYAN, player.hitFlash)) {
       const beatGlow = state.beatPulse;
       if (player.shootT > 0.3 || beatGlow > 0.15) {
         ctx.save();
@@ -1517,10 +1519,10 @@
     ctx.ellipse(cx, GROUND_Y - 2, e.w / 2, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const artH = isAirEnemyType(e.behavior) ? 54 : clamp(e.h + 24, 56, 78);
-    const artW = artH * 0.66;
+    const artH = isAirEnemyType(e.behavior) ? 58 : clamp(e.h + 26, 58, 82);
+    const artW = artH * 0.62;
     const artY = e.y + e.h - artH + wob;
-    if (drawRasterPanel(RASTER_ART.enemy, cx - artW / 2, artY, artW, artH, 12, e.color, e.hitFlash)) {
+    if (drawSpriteCutout(RASTER_ART.enemy, cx - artW / 2, artY, artW, artH, e.color, e.hitFlash)) {
       ctx.fillStyle = "rgba(0,0,0,0.72)";
       ctx.beginPath();
       ctx.arc(cx, artY + 11, 10, 0, Math.PI * 2);
@@ -1624,7 +1626,8 @@
     ctx.translate(cx, b.y);
     ctx.scale(b.facing, 1);
 
-    if (!drawRasterPanel(RASTER_ART.boss, -58, -36 + Math.sin(b.bob) * 2, 116, 158, 18, GOLD, b.hitFlash)) {
+    const bossCutoutReady = imageReady(RASTER_ART.boss);
+    if (!drawSpriteCutout(RASTER_ART.boss, -68, -48 + Math.sin(b.bob) * 2, 136, 178, GOLD, b.hitFlash)) {
       // body (slick demon-idol suit)
       ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#1a0a1e";
       roundRectXY(-b.w / 2, 20, b.w, b.h - 20, 14); ctx.fill();
@@ -1680,14 +1683,15 @@
       ctx.font = "bold 12px JetBrains Mono, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText("👔 LUCIFER LIPSYNC — PHASE " + (b.phase + 1) + "/3", cx, b.y - 24);
+      const labelY = bossCutoutReady ? b.y - 54 : b.y - 24;
+      ctx.fillText("👔 LUCIFER LIPSYNC — PHASE " + (b.phase + 1) + "/3", cx, labelY);
       const hw = 130;
       ctx.fillStyle = "rgba(0,0,0,0.7)";
-      ctx.fillRect(cx - hw / 2 - 2, b.y - 20, hw + 4, 8);
+      ctx.fillRect(cx - hw / 2 - 2, labelY + 4, hw + 4, 8);
       ctx.fillStyle = "#dc2626";
-      ctx.fillRect(cx - hw / 2, b.y - 18, hw * (b.hp / b.maxHp), 4);
+      ctx.fillRect(cx - hw / 2, labelY + 6, hw * (b.hp / b.maxHp), 4);
       ctx.fillStyle = GOLD;
-      ctx.fillRect(cx - hw / 2, b.y - 14, hw * (b.hp / b.maxHp), 2);
+      ctx.fillRect(cx - hw / 2, labelY + 10, hw * (b.hp / b.maxHp), 2);
     }
 
     // speech bubble taunt
@@ -2270,6 +2274,14 @@
     get boss() { return state.boss; },
     get stageCount() { return stageCount(); },
     get stageNames() { return STAGES.map(s => s.name); },
+    artReady() {
+      return Object.fromEntries(
+        Object.entries(RASTER_ART).map(([name, image]) => [
+          name,
+          imageReady(image) ? `${image.naturalWidth}x${image.naturalHeight}` : false
+        ])
+      );
+    },
     start: startGame,
     loadStage,
     pause: pauseGame,

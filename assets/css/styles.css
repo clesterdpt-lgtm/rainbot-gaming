@@ -4623,6 +4623,8 @@ body.arcade-home::before {
 
 .media-hero--slopwire .media-hero__visual img {
   object-fit: cover;
+  transform: scale(1.55);
+  transform-origin: 64% 54%;
 }
 
 .media-hero__visual--screen {

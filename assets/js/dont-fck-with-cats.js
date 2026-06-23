@@ -10,7 +10,7 @@
   const GAME_TITLE = "Don't F*ck with Cats";
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/clowder/", SCRIPT_URL);
-  const ART_VERSION = "20260622-tall-boss-hp-1";
+  const ART_VERSION = "20260622-longer-boss-gaps-1";
   const W = 960;
   const H = 900;
   const PLAYER_Y = H - 126;
@@ -28,6 +28,7 @@
   const BOSS_ATTACK_DODGE_MARGIN = 18;
   const GATE_SPACING_MULT = 1.1;
   const OBJECT_SPACING_MULT = 1.18;
+  const BOSS_INTERVAL_MULT = 1.32;
   const LEVELS = [
     {
       name: "Living Room Uprising",
@@ -384,13 +385,17 @@
     return LEVELS[clamp(Math.round(state?.levelIndex || 0), 0, LEVELS.length - 1)];
   }
 
+  function levelRunLength(level = currentLevel()) {
+    return level.length * BOSS_INTERVAL_MULT;
+  }
+
   function levelNumber() {
     return clamp(Math.round(state?.levelIndex || 0), 0, LEVELS.length - 1) + 1;
   }
 
   function levelProgress() {
     const level = currentLevel();
-    return clamp(state.distance / level.length, 0, 1);
+    return clamp(state.distance / levelRunLength(level), 0, 1);
   }
 
   function makeInitialState() {
@@ -693,7 +698,7 @@
 
   function gateDifficulty() {
     const levelFrac = state.levelIndex / Math.max(1, LEVELS.length - 1);
-    const runFrac = clamp(state.distance / currentLevel().length, 0, 1);
+    const runFrac = clamp(state.distance / levelRunLength(currentLevel()), 0, 1);
     return clamp(levelFrac * 0.7 + runFrac * 0.3, 0, 1);
   }
 
@@ -786,7 +791,7 @@
     const level = currentLevel();
     const spec = pickObjectSpec();
     const levelScale = 1 + state.levelIndex * 0.04;
-    const scale = (spec.kind === "roomba" && state.distance > level.length * 0.55 ? 1.16 : 1) * levelScale;
+    const scale = (spec.kind === "roomba" && state.distance > levelRunLength(level) * 0.55 ? 1.16 : 1) * levelScale;
     const w = spec.w * scale;
     const h = spec.h * scale;
     const y = rand(-290, -132);
@@ -1241,7 +1246,7 @@
         spawnObject();
         state.nextObjectAt += rand(level.objectEvery[0], level.objectEvery[1]) * OBJECT_SPACING_MULT;
       }
-      if (state.distance >= level.length) {
+      if (state.distance >= levelRunLength(level)) {
         spawnBoss();
       }
     }
@@ -2357,7 +2362,7 @@
       updateHud();
     },
     setDistance: (value) => {
-      state.distance = clamp(Number(value) || 0, 0, currentLevel().length);
+      state.distance = clamp(Number(value) || 0, 0, levelRunLength(currentLevel()));
       updateHud();
     },
     setLevel: (value) => {

@@ -1394,7 +1394,7 @@
     const run = player.runPhase;
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
     const bodyBob = player.onGround ? Math.abs(Math.sin(run)) * 2 : 0;
-    if (drawSpriteCutout(RASTER_ART.player, -64, -129 + bodyBob, 128, 132, CYAN, player.hitFlash)) {
+    if (drawSpriteCutout(RASTER_ART.player, -56, -113 + bodyBob, 112, 116, CYAN, player.hitFlash)) {
       const beatGlow = state.beatPulse;
       if (player.shootT > 0.3 || beatGlow > 0.15) {
         ctx.save();

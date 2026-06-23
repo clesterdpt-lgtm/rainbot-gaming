@@ -17,6 +17,8 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width;   // 750
   const H = canvas.height;  // 500
+  const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
+  const ART_ROOT = new URL("../img/apop/", SCRIPT_URL);
 
   // ----- World / physics constants -----
   const GROUND_Y = H - 64;        // y of the stage floor surface
@@ -35,6 +37,12 @@
   const CYAN = "#2ee0ff";
   const GOLD = "#f7d716";
   const GREEN = "#22c55e";
+  const RASTER_ART = {
+    backdrop: loadRasterArt("generated-pop-stage-backdrop.png"),
+    player: loadRasterArt("generated-moggadonna.png"),
+    enemy: loadRasterArt("generated-demon-lackey.png"),
+    boss: loadRasterArt("generated-lucifer-lipsync.png"),
+  };
 
   // ----- Game state -----
   const state = {
@@ -290,6 +298,57 @@
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
   function isAirEnemyType(behavior) { return behavior === "fly" || behavior === "hoverShoot"; }
+
+  function loadRasterArt(fileName) {
+    const image = new Image();
+    image.decoding = "async";
+    image.src = new URL(fileName, ART_ROOT).href;
+    return image;
+  }
+
+  function imageReady(image) {
+    return Boolean(image && image.complete && image.naturalWidth > 0 && image.naturalHeight > 0);
+  }
+
+  function drawImageCover(image, x, y, w, h, alignX = 0.5, alignY = 0.5) {
+    if (!imageReady(image)) return false;
+    const scale = Math.max(w / image.naturalWidth, h / image.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    const sx = (image.naturalWidth - sw) * alignX;
+    const sy = (image.naturalHeight - sh) * alignY;
+    ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+    return true;
+  }
+
+  function drawRasterPanel(image, x, y, w, h, radius, accent, flash = 0) {
+    if (!imageReady(image)) return false;
+    ctx.save();
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 12;
+    roundRectXY(x, y, w, h, radius);
+    ctx.clip();
+    drawImageCover(image, x, y, w, h);
+    if (flash > 0) {
+      ctx.globalAlpha = clamp(flash, 0, 0.75);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(x, y, w, h);
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(5,7,18,0.88)";
+    ctx.lineWidth = 5;
+    roundRectXY(x, y, w, h, radius);
+    ctx.stroke();
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = 0.72;
+    ctx.lineWidth = 2;
+    roundRectXY(x + 3, y + 3, w - 6, h - 6, Math.max(4, radius - 3));
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
 
   // ----- Beat (light pop-rhythm bonus) -----
   const BEAT_MS = () => 60000 / state.bpm;
@@ -1050,11 +1109,24 @@
   }
 
   function drawBackground(def) {
+    const artBacked = imageReady(RASTER_ART.backdrop);
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, def.sky[0]);
     grad.addColorStop(1, def.sky[1]);
-    ctx.fillStyle = grad;
-    ctx.fillRect(-30, -30, W + 60, H + 60);
+    if (artBacked) {
+      ctx.save();
+      drawImageCover(RASTER_ART.backdrop, -30, -30, W + 60, H + 60);
+      ctx.globalAlpha = 0.46;
+      ctx.fillStyle = grad;
+      ctx.fillRect(-30, -30, W + 60, H + 60);
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#02030a";
+      ctx.fillRect(-30, -30, W + 60, H + 60);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = grad;
+      ctx.fillRect(-30, -30, W + 60, H + 60);
+    }
 
     // moving spotlights from the rafters
     const t = state.lastTime / 1000;
@@ -1073,25 +1145,27 @@
 
     drawSceneBackdrops(def, t);
 
-    // far skyline (parallax 0.3)
-    const off1 = (state.bgScroll * 0.3) % 160;
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    for (let i = -1; i < W / 80 + 2; i++) {
-      const x = i * 80 - off1;
-      const bh = 70 + ((i * 53) % 7) * 14;
-      ctx.fillRect(x, GROUND_Y - bh, 60, bh);
-    }
-    // near skyline (parallax 0.55) with lit windows
-    const off2 = (state.bgScroll * 0.55) % 130;
-    for (let i = -1; i < W / 110 + 2; i++) {
-      const x = i * 110 - off2;
-      const bh = 120 + ((i * 31) % 5) * 22;
-      ctx.fillStyle = "rgba(10,8,24,0.7)";
-      ctx.fillRect(x, GROUND_Y - bh, 84, bh);
-      ctx.fillStyle = `rgba(247,215,22,${0.18 + Math.sin(t * 2 + i) * 0.08})`;
-      for (let wy = GROUND_Y - bh + 14; wy < GROUND_Y - 16; wy += 22) {
-        for (let wx = x + 10; wx < x + 74; wx += 22) {
-          if ((wx + wy + i) % 3 === 0) ctx.fillRect(wx, wy, 8, 10);
+    if (!artBacked) {
+      // far skyline (parallax 0.3)
+      const off1 = (state.bgScroll * 0.3) % 160;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      for (let i = -1; i < W / 80 + 2; i++) {
+        const x = i * 80 - off1;
+        const bh = 70 + ((i * 53) % 7) * 14;
+        ctx.fillRect(x, GROUND_Y - bh, 60, bh);
+      }
+      // near skyline (parallax 0.55) with lit windows
+      const off2 = (state.bgScroll * 0.55) % 130;
+      for (let i = -1; i < W / 110 + 2; i++) {
+        const x = i * 110 - off2;
+        const bh = 120 + ((i * 31) % 5) * 22;
+        ctx.fillStyle = "rgba(10,8,24,0.7)";
+        ctx.fillRect(x, GROUND_Y - bh, 84, bh);
+        ctx.fillStyle = `rgba(247,215,22,${0.18 + Math.sin(t * 2 + i) * 0.08})`;
+        for (let wy = GROUND_Y - bh + 14; wy < GROUND_Y - 16; wy += 22) {
+          for (let wx = x + 10; wx < x + 74; wx += 22) {
+            if ((wx + wy + i) % 3 === 0) ctx.fillRect(wx, wy, 8, 10);
+          }
         }
       }
     }
@@ -1318,6 +1392,20 @@
     const run = player.runPhase;
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
     const bodyBob = player.onGround ? Math.abs(Math.sin(run)) * 2 : 0;
+    if (drawRasterPanel(RASTER_ART.player, -32, -94 + bodyBob, 64, 96, 16, CYAN, player.hitFlash)) {
+      const beatGlow = state.beatPulse;
+      if (player.shootT > 0.3 || beatGlow > 0.15) {
+        ctx.save();
+        ctx.globalAlpha = 0.5 + Math.max(player.shootT, beatGlow) * 0.35;
+        ctx.fillStyle = beatGlow > 0.3 ? GREEN : HOT;
+        ctx.beginPath();
+        ctx.arc(28, -72 + bodyBob, 9 + beatGlow * 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+      return;
+    }
 
     // Legs (sparkly boots)
     ctx.strokeStyle = "#3a1030";
@@ -1429,6 +1517,27 @@
     ctx.ellipse(cx, GROUND_Y - 2, e.w / 2, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    const artH = isAirEnemyType(e.behavior) ? 54 : clamp(e.h + 24, 56, 78);
+    const artW = artH * 0.66;
+    const artY = e.y + e.h - artH + wob;
+    if (drawRasterPanel(RASTER_ART.enemy, cx - artW / 2, artY, artW, artH, 12, e.color, e.hitFlash)) {
+      ctx.fillStyle = "rgba(0,0,0,0.72)";
+      ctx.beginPath();
+      ctx.arc(cx, artY + 11, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = "12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(e.icon, cx, artY + 11);
+      if (e.hp < e.maxHp) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillRect(cx - 18, e.y - 22 + wob, 36, 4);
+        ctx.fillStyle = "#ef4444";
+        ctx.fillRect(cx - 18, e.y - 22 + wob, 36 * (e.hp / e.maxHp), 4);
+      }
+      return;
+    }
+
     // body
     ctx.fillStyle = e.hitFlash > 0 ? "#fff" : e.color;
     if (isAirEnemyType(e.behavior)) {
@@ -1515,52 +1624,54 @@
     ctx.translate(cx, b.y);
     ctx.scale(b.facing, 1);
 
-    // body (slick demon-idol suit)
-    ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#1a0a1e";
-    roundRectXY(-b.w / 2, 20, b.w, b.h - 20, 14); ctx.fill();
-    // glowing red lapels
-    ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#7a1f1f";
-    ctx.beginPath();
-    ctx.moveTo(-6, 26); ctx.lineTo(-22, 30); ctx.lineTo(-6, 80); ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(6, 26); ctx.lineTo(22, 30); ctx.lineTo(6, 80); ctx.closePath(); ctx.fill();
-    // gold chain
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(-16, 28); ctx.quadraticCurveTo(0, 50, 16, 28); ctx.stroke();
-    ctx.fillStyle = GOLD;
-    ctx.beginPath(); ctx.arc(0, 48, 6, 0, Math.PI * 2); ctx.fill();
+    if (!drawRasterPanel(RASTER_ART.boss, -58, -36 + Math.sin(b.bob) * 2, 116, 158, 18, GOLD, b.hitFlash)) {
+      // body (slick demon-idol suit)
+      ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#1a0a1e";
+      roundRectXY(-b.w / 2, 20, b.w, b.h - 20, 14); ctx.fill();
+      // glowing red lapels
+      ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#7a1f1f";
+      ctx.beginPath();
+      ctx.moveTo(-6, 26); ctx.lineTo(-22, 30); ctx.lineTo(-6, 80); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(6, 26); ctx.lineTo(22, 30); ctx.lineTo(6, 80); ctx.closePath(); ctx.fill();
+      // gold chain
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(-16, 28); ctx.quadraticCurveTo(0, 50, 16, 28); ctx.stroke();
+      ctx.fillStyle = GOLD;
+      ctx.beginPath(); ctx.arc(0, 48, 6, 0, Math.PI * 2); ctx.fill();
 
-    // head
-    ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#c97b54";
-    ctx.beginPath();
-    ctx.arc(0, 6, 22, 0, Math.PI * 2);
-    ctx.fill();
-    // horns
-    ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#7a1f1f";
-    ctx.beginPath(); ctx.moveTo(-16, -8); ctx.lineTo(-26, -30); ctx.lineTo(-8, -12); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(16, -8); ctx.lineTo(26, -30); ctx.lineTo(8, -12); ctx.closePath(); ctx.fill();
-    // frosted-tips hair
-    ctx.fillStyle = "#e5e7eb";
-    ctx.beginPath();
-    ctx.ellipse(0, -10, 20, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // shades
-    ctx.fillStyle = "#0a0a14";
-    ctx.fillRect(-18, 0, 15, 9);
-    ctx.fillRect(3, 0, 15, 9);
-    ctx.fillRect(-3, 2, 6, 3);
-    ctx.fillStyle = "rgba(247,215,22,0.5)";
-    ctx.fillRect(-15, 2, 5, 3);
-    // smirk
-    ctx.strokeStyle = "#3a0a0a"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(-7, 16); ctx.quadraticCurveTo(0, 22, 9, 14); ctx.stroke();
+      // head
+      ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#c97b54";
+      ctx.beginPath();
+      ctx.arc(0, 6, 22, 0, Math.PI * 2);
+      ctx.fill();
+      // horns
+      ctx.fillStyle = b.hitFlash > 0 ? "#fff" : "#7a1f1f";
+      ctx.beginPath(); ctx.moveTo(-16, -8); ctx.lineTo(-26, -30); ctx.lineTo(-8, -12); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(16, -8); ctx.lineTo(26, -30); ctx.lineTo(8, -12); ctx.closePath(); ctx.fill();
+      // frosted-tips hair
+      ctx.fillStyle = "#e5e7eb";
+      ctx.beginPath();
+      ctx.ellipse(0, -10, 20, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // shades
+      ctx.fillStyle = "#0a0a14";
+      ctx.fillRect(-18, 0, 15, 9);
+      ctx.fillRect(3, 0, 15, 9);
+      ctx.fillRect(-3, 2, 6, 3);
+      ctx.fillStyle = "rgba(247,215,22,0.5)";
+      ctx.fillRect(-15, 2, 5, 3);
+      // smirk
+      ctx.strokeStyle = "#3a0a0a"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-7, 16); ctx.quadraticCurveTo(0, 22, 9, 14); ctx.stroke();
 
-    // mic in hand
-    ctx.fillStyle = "#0a0a14";
-    ctx.fillRect(b.w / 2 - 8, 30, 6, 16);
-    ctx.fillStyle = b.action === "throw" ? PINK : GOLD;
-    ctx.beginPath(); ctx.arc(b.w / 2 - 5, 28, 8, 0, Math.PI * 2); ctx.fill();
+      // mic in hand
+      ctx.fillStyle = "#0a0a14";
+      ctx.fillRect(b.w / 2 - 8, 30, 6, 16);
+      ctx.fillStyle = b.action === "throw" ? PINK : GOLD;
+      ctx.beginPath(); ctx.arc(b.w / 2 - 5, 28, 8, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
 
     if (!intro) {

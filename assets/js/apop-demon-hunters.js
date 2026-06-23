@@ -362,29 +362,31 @@
 
   // ----- Particles -----
   function spawnBurst(x, y, color, count = 8, speed = 220) {
+    count = Math.min(count, 8);
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = rand(40, speed);
+      const s = rand(35, Math.min(speed, 180));
       state.particles.push({
         x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60,
-        life: rand(0.3, 0.7), maxLife: 0.7, color, size: rand(3, 7), grav: true,
+        life: rand(0.28, 0.55), maxLife: 0.55, color, size: rand(2, 5), grav: true,
       });
     }
   }
   function spawnConfetti(x, y, count = 14) {
+    count = Math.min(count, 12);
     const cols = [PINK, CYAN, GOLD, HOT, GREEN, "#a855f7"];
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const s = rand(80, 320);
+      const s = rand(60, 180);
       state.particles.push({
-        x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 120,
-        life: rand(0.6, 1.1), maxLife: 1.1, color: choose(cols), size: rand(3, 6), grav: true,
+        x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 90,
+        life: rand(0.45, 0.85), maxLife: 0.85, color: choose(cols), size: rand(2, 4), grav: true,
       });
     }
   }
   function spawnText(x, y, text, color = GOLD, size = 18) {
     state.particles.push({
-      x, y, vx: rand(-20, 20), vy: -70, life: 1.0, maxLife: 1.0, color, text, size,
+      x, y, vx: rand(-10, 10), vy: -44, life: 0.72, maxLife: 0.72, color, text, size: Math.min(size, 18),
     });
   }
 
@@ -392,17 +394,18 @@
     if (!state.stageDef) return;
     state.ambientTimer -= dt;
     if (state.ambientTimer > 0) return;
-    state.ambientTimer = rand(0.035, 0.085);
-    const cols = [state.stageDef.accent, PINK, CYAN, GOLD, GREEN, HOT];
+    const artBacked = imageReady(RASTER_ART.backdrop);
+    state.ambientTimer = artBacked ? rand(0.45, 0.85) : rand(0.12, 0.22);
+    const cols = artBacked ? [state.stageDef.accent, CYAN] : [state.stageDef.accent, PINK, CYAN, GOLD, GREEN, HOT];
     state.particles.push({
       x: state.camX + rand(-20, W + 40),
       y: rand(28, GROUND_Y - 28),
-      vx: rand(-38, 18),
-      vy: rand(-18, 26),
-      life: rand(0.45, 1.0),
-      maxLife: 1.0,
+      vx: rand(-18, 10),
+      vy: rand(-10, 16),
+      life: rand(0.4, 0.75),
+      maxLife: 0.75,
       color: choose(cols),
-      size: rand(1.5, 4.5),
+      size: artBacked ? rand(1, 2.2) : rand(1.5, 3.5),
       grav: false,
     });
   }
@@ -512,7 +515,7 @@
   }
 
   // ----- Banner -----
-  function showBanner(text, sub, t = 2.4) {
+  function showBanner(text, sub, t = 1.5) {
     state.bannerText = text;
     state.bannerSub = sub || "";
     state.bannerT = t;
@@ -532,11 +535,11 @@
     player.vx = 0; player.vy = 0;
     player.onGround = true; player.jumps = 0;
     for (const s of state.stageDef.spawns) s._done = false;
-    showBanner("STAGE " + n + " / " + stageCount(), state.stageDef.name);
+    showBanner("STAGE " + n + "/" + stageCount(), state.stageDef.name);
     if (state.stageDef.boss) {
       // brief arena, then boss appears
       spawnBoss();
-      showBanner("BOSS", "Lucifer Lipsync — Boyz II Hell", 2.6);
+      showBanner("BOSS", "Lucifer Lipsync", 1.8);
     }
   }
 
@@ -595,10 +598,10 @@
     if (!state.running || state.paused || state.gameOver) return;
     if (state.mog < 1) return;
     state.mog = 0;
-    state.shaking = 1.2;
-    state.flash = 0.35; state.flashColor = "255,92,138";
-    spawnConfetti(player.x + player.w / 2, player.y + 10, 40);
-    spawnText(player.x + player.w / 2, player.y - 20, "💅 MOG AURA", PINK, 26);
+    state.shaking = 0.5;
+    state.flash = 0.16; state.flashColor = "255,92,138";
+    spawnConfetti(player.x + player.w / 2, player.y + 10, 10);
+    spawnText(player.x + player.w / 2, player.y - 20, "AURA", PINK, 18);
     state.hostiles.length = 0; // wipe incoming projectiles
     const cx = player.x + player.w / 2;
     for (const e of state.enemies) {
@@ -606,13 +609,13 @@
       if (d < 360) {
         e.hp -= 90;
         e.hitFlash = 0.2;
-        spawnBurst(e.x + e.w / 2, e.y + e.h / 2, PINK, 10);
+        spawnBurst(e.x + e.w / 2, e.y + e.h / 2, PINK, 5);
       }
     }
     if (state.boss && !state.boss.defeated && Math.abs((state.boss.x + state.boss.w / 2) - cx) < 460) {
       state.boss.hp -= 70;
       state.boss.hitFlash = 0.3;
-      spawnBurst(state.boss.x + state.boss.w / 2, state.boss.y + 40, PINK, 18);
+      spawnBurst(state.boss.x + state.boss.w / 2, state.boss.y + 40, PINK, 8);
       checkBossDeath();
     }
     cullEnemies();
@@ -637,13 +640,12 @@
     state.hp -= amount;
     state.hurtCd = 0.85;   // i-frames after a hit (forgiving when shoving through a crowd)
     state.combo = 0;
-    state.shaking = Math.max(state.shaking, 0.5);
-    state.flash = 0.18; state.flashColor = "255,46,136";
+    state.shaking = Math.max(state.shaking, 0.25);
+    state.flash = 0.12; state.flashColor = "255,46,136";
     player.hitFlash = 0.4;
     player.vx += knock;
     player.vy = Math.min(player.vy, -200);
-    spawnBurst(player.x + player.w / 2, player.y + player.h / 2, PINK, 12);
-    spawnText(player.x + player.w / 2, player.y - 14, choose(HURT_WORDS), PINK, 14);
+    spawnBurst(player.x + player.w / 2, player.y + player.h / 2, PINK, 6);
     if (state.hp <= 0) {
       state.hp = 0;
       endGame(false);
@@ -656,9 +658,9 @@
     state.defeated++;
     bumpCombo();
     gainMog(0.14);
-    state.shaking = Math.max(state.shaking, 0.3);
-    spawnConfetti(e.x + e.w / 2, e.y + e.h / 2, 12);
-    spawnText(e.x + e.w / 2, e.y - 8, choose(MOG_WORDS), choose([GOLD, CYAN, GREEN, HOT]), 17);
+    state.shaking = Math.max(state.shaking, 0.18);
+    spawnConfetti(e.x + e.w / 2, e.y + e.h / 2, 6);
+    spawnText(e.x + e.w / 2, e.y - 8, "+MOG", GOLD, 13);
   }
 
   function cullEnemies() {
@@ -674,10 +676,10 @@
       b.hp = 0;
       b.defeated = true;
       state.score += 5000;
-      state.shaking = 1.4;
-      state.flash = 0.4; state.flashColor = "247,215,22";
-      spawnConfetti(b.x + b.w / 2, b.y + 40, 60);
-      spawnText(b.x + b.w / 2, b.y - 10, "DISBANDED 💔", GOLD, 26);
+      state.shaking = 0.7;
+      state.flash = 0.22; state.flashColor = "247,215,22";
+      spawnConfetti(b.x + b.w / 2, b.y + 40, 14);
+      spawnText(b.x + b.w / 2, b.y - 10, "DISBANDED", GOLD, 18);
       setTimeout(() => endGame(true), 1700);
     }
   }
@@ -1063,8 +1065,8 @@
   function draw() {
     let sx = 0, sy = 0;
     if (state.shaking > 0) {
-      sx = (Math.random() - 0.5) * state.shaking * 18;
-      sy = (Math.random() - 0.5) * state.shaking * 18;
+      sx = (Math.random() - 0.5) * state.shaking * 10;
+      sy = (Math.random() - 0.5) * state.shaking * 10;
     }
     ctx.save();
     ctx.translate(sx, sy);
@@ -1118,10 +1120,10 @@
     if (artBacked) {
       ctx.save();
       drawImageCover(RASTER_ART.backdrop, -30, -30, W + 60, H + 60);
-      ctx.globalAlpha = 0.46;
+      ctx.globalAlpha = 0.26;
       ctx.fillStyle = grad;
       ctx.fillRect(-30, -30, W + 60, H + 60);
-      ctx.globalAlpha = 0.18;
+      ctx.globalAlpha = 0.42;
       ctx.fillStyle = "#02030a";
       ctx.fillRect(-30, -30, W + 60, H + 60);
       ctx.restore();
@@ -1130,22 +1132,24 @@
       ctx.fillRect(-30, -30, W + 60, H + 60);
     }
 
-    // moving spotlights from the rafters
     const t = state.lastTime / 1000;
-    for (let i = 0; i < 4; i++) {
-      const baseX = (i * 220 - (state.bgScroll * 0.15) % 220);
-      const sway = Math.sin(t * 0.7 + i) * 60;
-      const x = ((baseX % (W + 220)) + (W + 220)) % (W + 220) - 110;
-      ctx.fillStyle = `hsla(${(t * 30 + i * 70) % 360}, 90%, 60%, 0.07)`;
-      ctx.beginPath();
-      ctx.moveTo(x + sway, -20);
-      ctx.lineTo(x - 70, GROUND_Y);
-      ctx.lineTo(x + 70, GROUND_Y);
-      ctx.closePath();
-      ctx.fill();
-    }
+    if (!artBacked) {
+      // moving spotlights from the rafters
+      for (let i = 0; i < 3; i++) {
+        const baseX = (i * 220 - (state.bgScroll * 0.15) % 220);
+        const sway = Math.sin(t * 0.7 + i) * 50;
+        const x = ((baseX % (W + 220)) + (W + 220)) % (W + 220) - 110;
+        ctx.fillStyle = `hsla(${(t * 30 + i * 70) % 360}, 90%, 60%, 0.05)`;
+        ctx.beginPath();
+        ctx.moveTo(x + sway, -20);
+        ctx.lineTo(x - 70, GROUND_Y);
+        ctx.lineTo(x + 70, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+      }
 
-    drawSceneBackdrops(def, t);
+      drawSceneBackdrops(def, t);
+    }
 
     if (!artBacked) {
       // far skyline (parallax 0.3)
@@ -1172,7 +1176,7 @@
       }
     }
 
-    drawNeonGrid(def, t);
+    if (!artBacked) drawNeonGrid(def, t);
   }
 
   function drawSceneBackdrops(def, t) {
@@ -1259,35 +1263,40 @@
   }
 
   function drawPlatforms(def) {
+    const artBacked = imageReady(RASTER_ART.backdrop);
     // ground floor (tiled neon-edged stage)
-    ctx.fillStyle = "#120a1e";
+    ctx.fillStyle = artBacked ? "#090b16" : "#120a1e";
     ctx.fillRect(state.camX - 40, GROUND_Y, W + 80, H - GROUND_Y + 40);
     ctx.fillStyle = def.accent;
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = artBacked ? 0.55 : 0.9;
     ctx.fillRect(state.camX - 40, GROUND_Y, W + 80, 3);
     ctx.globalAlpha = 1;
     // floor stripes
-    ctx.fillStyle = "rgba(255,255,255,0.04)";
+    ctx.fillStyle = artBacked ? "rgba(255,255,255,0.018)" : "rgba(255,255,255,0.04)";
     const stripeOff = state.camX % 60;
     for (let x = state.camX - stripeOff; x < state.camX + W + 60; x += 60) {
       ctx.fillRect(x, GROUND_Y + 8, 30, H - GROUND_Y);
     }
     // crowd silhouette bobbing along the floor
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    const cOff = state.camX % 26;
-    for (let x = state.camX - cOff; x < state.camX + W + 26; x += 26) {
-      const head = 6 + Math.sin(state.lastTime / 200 + x) * 2;
-      ctx.beginPath();
-      ctx.arc(x + 13, GROUND_Y + 18 - head, 8, 0, Math.PI * 2);
-      ctx.fill();
+    if (!artBacked) {
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      const cOff = state.camX % 26;
+      for (let x = state.camX - cOff; x < state.camX + W + 26; x += 26) {
+        const head = 6 + Math.sin(state.lastTime / 200 + x) * 2;
+        ctx.beginPath();
+        ctx.arc(x + 13, GROUND_Y + 18 - head, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     // platforms
     for (const p of def.platforms) {
       ctx.fillStyle = "#241433";
       ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.globalAlpha = artBacked ? 0.65 : 1;
       ctx.fillStyle = def.accent;
       ctx.fillRect(p.x, p.y, p.w, 3);
+      ctx.globalAlpha = 1;
       ctx.fillStyle = "rgba(0,0,0,0.4)";
       ctx.fillRect(p.x, p.y + p.h, p.w, 5);
     }
@@ -1398,10 +1407,10 @@
       const beatGlow = state.beatPulse;
       if (player.shootT > 0.3 || beatGlow > 0.15) {
         ctx.save();
-        ctx.globalAlpha = 0.5 + Math.max(player.shootT, beatGlow) * 0.35;
+        ctx.globalAlpha = 0.25 + Math.max(player.shootT, beatGlow) * 0.22;
         ctx.fillStyle = beatGlow > 0.3 ? GREEN : HOT;
         ctx.beginPath();
-        ctx.arc(28, -72 + bodyBob, 9 + beatGlow * 5, 0, Math.PI * 2);
+        ctx.arc(26, -67 + bodyBob, 5 + beatGlow * 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
@@ -1809,7 +1818,7 @@
     ctx.fillRect(mX, mY, mW * state.mog, 10);
     ctx.fillStyle = "#fff";
     ctx.font = "bold 9px JetBrains Mono, monospace";
-    ctx.fillText(state.mog >= 1 ? "💅 MOG AURA READY (K / X)" : "MOG " + Math.floor(state.mog * 100) + "%", mX + 6, mY + 5);
+    ctx.fillText(state.mog >= 1 ? "AURA READY (F)" : "MOG " + Math.floor(state.mog * 100) + "%", mX + 6, mY + 5);
 
     // Score + stage (top center) — keeps the count visible in max-screen mode
     ctx.fillStyle = "rgba(255,255,255,0.92)";
@@ -1856,17 +1865,25 @@
 
   function drawBanner() {
     if (state.bannerT <= 0) return;
-    const a = clamp(state.bannerT, 0, 1);
+    const a = clamp(state.bannerT * 1.35, 0, 0.82);
+    ctx.save();
     ctx.globalAlpha = a;
+    ctx.fillStyle = "rgba(3,7,18,0.72)";
+    roundRectXY(W / 2 - 112, 68, 224, 48, 8);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(247,215,22,0.58)";
+    ctx.lineWidth = 1;
+    roundRectXY(W / 2 - 112, 68, 224, 48, 8);
+    ctx.stroke();
     ctx.fillStyle = GOLD;
-    ctx.font = "bold 40px Bungee, sans-serif";
+    ctx.font = "bold 18px Bungee, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(state.bannerText, W / 2, H / 2 - 30);
-    ctx.fillStyle = "#fff";
-    ctx.font = "600 17px Inter, sans-serif";
-    ctx.fillText(state.bannerSub, W / 2, H / 2 + 8);
-    ctx.globalAlpha = 1;
+    ctx.fillText(state.bannerText, W / 2, 88);
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.font = "600 12px Inter, sans-serif";
+    ctx.fillText(state.bannerSub, W / 2, 106);
+    ctx.restore();
   }
 
   function drawTransition() {

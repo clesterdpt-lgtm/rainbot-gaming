@@ -45,6 +45,7 @@
   const overlayScore = document.getElementById("overlay-score");
   const btnPrimary = document.getElementById("btn-primary");
   const btnNew = document.getElementById("btn-new");
+  const btnSound = document.getElementById("btn-sound");
   const scoreEl = document.getElementById("hud-score");
   const bestEl = document.getElementById("hud-best");
   const topEl = document.getElementById("hud-top");
@@ -61,6 +62,198 @@
   let bestAtStart = 0;
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
   let saveMenu = null;
+  const SOUND_PREF_KEY = GAME_ID + ":sound";
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+  let audioMaster = null;
+  let soundOn = readSoundPreference();
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function readSoundPreference() {
+    try {
+      return localStorage.getItem(SOUND_PREF_KEY) !== "off";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function writeSoundPreference() {
+    try {
+      localStorage.setItem(SOUND_PREF_KEY, soundOn ? "on" : "off");
+    } catch (_) {}
+  }
+
+  function updateSoundButton() {
+    if (!btnSound) return;
+    if (!AudioContextCtor) {
+      btnSound.textContent = "Sound Off";
+      btnSound.setAttribute("aria-pressed", "false");
+      btnSound.disabled = true;
+      return;
+    }
+    btnSound.textContent = soundOn ? "Sound On" : "Sound Off";
+    btnSound.setAttribute("aria-pressed", soundOn ? "true" : "false");
+  }
+
+  function ensureAudio() {
+    if (!soundOn || !AudioContextCtor) return null;
+    if (!audioCtx) {
+      audioCtx = new AudioContextCtor();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = 0.12;
+      audioMaster.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (audioMaster) audioMaster.gain.setTargetAtTime(0.12, audioCtx.currentTime, 0.03);
+    return audioCtx;
+  }
+
+  function playTone(freq, duration, options = {}) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const t0 = ac.currentTime + (options.delay || 0);
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    const attack = Math.min(options.attack || 0.012, duration * 0.45);
+    osc.type = options.type || "sine";
+    osc.frequency.setValueAtTime(Math.max(1, freq), t0);
+    if (options.to) {
+      osc.frequency.exponentialRampToValueAtTime(Math.max(1, options.to), t0 + duration);
+    }
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(options.gain || 0.032, t0 + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(audioMaster || ac.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.04);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playNoise(duration, options = {}) {
+    const ac = ensureAudio();
+    if (!ac) return;
+    const length = Math.max(1, Math.floor(ac.sampleRate * duration));
+    const buffer = ac.createBuffer(1, length, ac.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      const fade = 1 - i / length;
+      data[i] = (Math.random() * 2 - 1) * fade * fade;
+    }
+
+    const t0 = ac.currentTime + (options.delay || 0);
+    const source = ac.createBufferSource();
+    const filter = ac.createBiquadFilter();
+    const gain = ac.createGain();
+    source.buffer = buffer;
+    filter.type = options.filter || "bandpass";
+    filter.frequency.setValueAtTime(options.frequency || 900, t0);
+    filter.Q.value = options.q || 0.8;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(options.gain || 0.024, t0 + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioMaster || ac.destination);
+    source.start(t0);
+    source.stop(t0 + duration + 0.04);
+    source.onended = () => {
+      source.disconnect();
+      filter.disconnect();
+      gain.disconnect();
+    };
+  }
+
+  function playTileSfx(tier, index = 0) {
+    if (!soundOn) return;
+    const t = clamp(Number(tier) || 1, 1, MAX);
+    const delay = Math.min(index, 3) * 0.055;
+
+    if (t === 1) {
+      playTone(86, 0.18, { type: "sawtooth", to: 43, gain: 0.07, delay, attack: 0.018 });
+      playTone(52, 0.24, { type: "sine", to: 36, gain: 0.038, delay: delay + 0.045 });
+      playNoise(0.24, { filter: "lowpass", frequency: 220, q: 0.9, gain: 0.036, delay: delay + 0.02 });
+    } else if (t === 2) {
+      [330, 440, 392].forEach((freq, i) =>
+        playTone(freq, 0.07, { type: "square", to: freq * 1.28, gain: 0.028, delay: delay + i * 0.045 })
+      );
+      playNoise(0.08, { filter: "bandpass", frequency: 1200, q: 2.2, gain: 0.012, delay: delay + 0.04 });
+    } else if (t === 3) {
+      [523, 659, 880].forEach((freq, i) =>
+        playTone(freq, 0.095, { type: "triangle", gain: 0.03, delay: delay + i * 0.04 })
+      );
+      playNoise(0.12, { filter: "highpass", frequency: 2600, gain: 0.01, delay: delay + 0.08 });
+    } else if (t === 4) {
+      playTone(130, 0.13, { type: "sine", to: 260, gain: 0.052, delay });
+      playTone(260, 0.16, { type: "triangle", to: 120, gain: 0.034, delay: delay + 0.07 });
+    } else if (t === 5) {
+      playTone(98, 0.2, { type: "triangle", to: 74, gain: 0.05, delay });
+      playTone(294, 0.08, { type: "square", gain: 0.018, delay: delay + 0.12 });
+    } else if (t === 6) {
+      playNoise(0.055, { filter: "highpass", frequency: 1800, q: 1.7, gain: 0.035, delay });
+      playTone(185, 0.12, { type: "sawtooth", to: 370, gain: 0.032, delay: delay + 0.035 });
+      playNoise(0.05, { filter: "bandpass", frequency: 900, gain: 0.022, delay: delay + 0.11 });
+    } else if (t === 7) {
+      playNoise(0.24, { filter: "highpass", frequency: 1400, q: 0.7, gain: 0.022, delay });
+      playTone(440, 0.22, { type: "sine", to: 1320, gain: 0.024, delay: delay + 0.015 });
+      playTone(880, 0.18, { type: "triangle", to: 1760, gain: 0.018, delay: delay + 0.08 });
+    } else if (t === 8) {
+      [147, 220, 294].forEach((freq, i) =>
+        playTone(freq, 0.18, { type: "sawtooth", gain: 0.026, delay: delay + i * 0.035 })
+      );
+      playNoise(0.1, { filter: "lowpass", frequency: 320, gain: 0.026, delay: delay + 0.06 });
+    } else if (t === 9) {
+      [988, 1319, 1568].forEach((freq, i) =>
+        playTone(freq, 0.045, { type: "square", gain: 0.022, delay: delay + i * 0.05 })
+      );
+      playNoise(0.08, { filter: "bandpass", frequency: 3200, q: 3, gain: 0.014, delay: delay + 0.06 });
+    } else if (t === 10) {
+      playTone(740, 0.22, { type: "sawtooth", to: 196, gain: 0.04, delay });
+      playTone(330, 0.09, { type: "square", to: 660, gain: 0.021, delay: delay + 0.13 });
+    } else {
+      [392, 587, 784, 1175, 1568].forEach((freq, i) =>
+        playTone(freq, 0.16, { type: "triangle", gain: 0.026, delay: delay + i * 0.055 })
+      );
+      playNoise(0.34, { filter: "highpass", frequency: 2400, q: 0.9, gain: 0.026, delay: delay + 0.12 });
+    }
+  }
+
+  function playUiSfx(name) {
+    if (!soundOn) return;
+    if (name === "start") {
+      playTone(196, 0.08, { type: "triangle", to: 294, gain: 0.032 });
+      playTone(392, 0.1, { type: "triangle", to: 523, gain: 0.026, delay: 0.065 });
+    } else if (name === "win") {
+      playTileSfx(MAX);
+    } else if (name === "gameOver") {
+      playTone(180, 0.16, { type: "sawtooth", to: 92, gain: 0.045 });
+      playTone(82, 0.28, { type: "sine", to: 45, gain: 0.038, delay: 0.1 });
+      playNoise(0.18, { filter: "lowpass", frequency: 240, gain: 0.022, delay: 0.04 });
+    } else if (name === "toggle") {
+      playTone(440, 0.07, { type: "triangle", gain: 0.026 });
+      playTone(660, 0.08, { type: "triangle", gain: 0.022, delay: 0.055 });
+    }
+  }
+
+  function toggleSound() {
+    if (!AudioContextCtor) return;
+    soundOn = !soundOn;
+    writeSoundPreference();
+    updateSoundButton();
+    if (!soundOn && audioMaster && audioCtx) {
+      audioMaster.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.03);
+    }
+    if (soundOn) {
+      ensureAudio();
+      playUiSfx("toggle");
+    }
+  }
 
   function tileImageUrl(tier) {
     return tileImageBase + tier.image;
@@ -159,6 +352,7 @@
 
   function move(dir) {
     if (!running || animating || !VEC[dir]) return false;
+    ensureAudio();
     const [dr, dc] = VEC[dir];
     let moved = false;
     const merges = [];
@@ -206,16 +400,19 @@
 
     animating = true;
     setTimeout(() => {
+      let highestMergedTier = 0;
       for (const { survivor, eaten } of merges) {
         const i = tiles.indexOf(eaten);
         if (i >= 0) tiles.splice(i, 1);
         if (eaten.el.parentNode) eaten.el.parentNode.removeChild(eaten.el);
+        highestMergedTier = Math.max(highestMergedTier, survivor.val);
         survivor.val += 1;
         styleTile(survivor);
         flash(survivor.el, "merge-tile--pop", 200);
         score += Math.pow(2, survivor.val);
         if (survivor.val > topTier) topTier = survivor.val;
       }
+      if (highestMergedTier) playTileSfx(highestMergedTier);
       spawnTile();
       api.recordScore(GAME_ID, score);
       updateHud();
@@ -267,6 +464,7 @@
   function showGameOver() {
     running = false;
     if (saveSlot) saveSlot.clear();
+    playUiSfx("gameOver");
     const best = api.getHighScore(GAME_ID);
     if (score > 0 && score >= best && score > bestAtStart) {
       setTimeout(() => api.toast("New high score!", "good"), 300);
@@ -285,6 +483,7 @@
   function showWin() {
     const best = api.getHighScore(GAME_ID);
     saveProgress();
+    playUiSfx("win");
     showOverlay(
       "GALAXY BRAIN",
       "You merged all the way to the top of the brainrot food chain. Keep going for a higher score, or reset.",
@@ -296,6 +495,8 @@
   }
 
   function newGame() {
+    ensureAudio();
+    playUiSfx("start");
     if (saveSlot) saveSlot.clear();
     tilesEl.innerHTML = "";
     grid = [];
@@ -376,6 +577,7 @@
   });
 
   if (btnNew) btnNew.addEventListener("click", newGame);
+  if (btnSound) btnSound.addEventListener("click", toggleSound);
 
   let sx = 0;
   let sy = 0;
@@ -399,6 +601,7 @@
 
   makeCells();
   makeLadder();
+  updateSoundButton();
   grid = [];
   for (let r = 0; r < SIZE; r++) grid.push(new Array(SIZE).fill(null));
   tiles = [];
@@ -459,6 +662,8 @@
     get topTier() { return topTier; },
     get animating() { return animating; },
     get running() { return running; },
+    get soundOn() { return soundOn; },
+    playTileSfx,
     save: saveProgress,
     restore: () => restoreGame(saveSlot && saveSlot.read()),
   };

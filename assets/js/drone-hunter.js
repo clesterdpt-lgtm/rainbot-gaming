@@ -79,6 +79,8 @@
   let speedMul = 1;
   let flyTimeBase = 4200;
   let doveChance = 0;
+  let doveFlockMax = 1;
+  let doveSpeedMul = 1;
   let supplyChance = 0;
   let isBonusRound = false;
 
@@ -294,7 +296,9 @@
     roundQuota = Math.max(1, Math.ceil(dronesPerRound * ratio));
     speedMul = 1 + (n - 1) * 0.16;
     flyTimeBase = Math.max(2500, 4200 - n * 200);
-    doveChance = n >= 2 ? 0.4 : 0;
+    doveChance = Math.min(0.88, 0.26 + n * 0.075);
+    doveFlockMax = n < 3 ? 1 : n < 6 ? 2 : 3;
+    doveSpeedMul = 1 + Math.min(0.45, (n - 1) * 0.06);
     supplyChance = n >= 2 ? 0.16 : 0;
     isBonusRound = n % 4 === 0; // every 4th round is a frenzy bonus round
     roundReleased = 0;
@@ -313,7 +317,7 @@
     const o = opts || {};
     const x = o.x != null ? o.x : fromLeft ? 80 + Math.random() * 120 : W - 80 - Math.random() * 120;
     const y = o.y != null ? o.y : GROUND_Y - 50 - Math.random() * 80;
-    const base = (1.7 + Math.random() * 0.7) * t.speed * (kind === "dove" ? 1 : speedMul);
+    const base = (1.7 + Math.random() * 0.7) * t.speed * (kind === "dove" ? doveSpeedMul : speedMul);
     const dirX = o.dirX != null ? o.dirX : fromLeft ? 1 : -1;
     const drone = {
       kind,
@@ -340,6 +344,22 @@
     return drone;
   }
 
+  function spawnDoveFlock() {
+    const count = 1 + Math.floor(Math.random() * doveFlockMax);
+    const fromLeft = Math.random() < 0.5;
+    const dirX = fromLeft ? 1 : -1;
+    const startX = fromLeft ? -30 - Math.random() * 40 : W + 30 + Math.random() * 40;
+    const y = 104 + Math.random() * (GROUND_Y - 214);
+    for (let i = 0; i < count; i++) {
+      spawnTarget("dove", {
+        inWave: false,
+        dirX,
+        x: startX + dirX * i * (42 + Math.random() * 30),
+        y: y + (Math.random() - 0.5) * 46,
+      });
+    }
+  }
+
   function startWave() {
     phase = "play";
     ammo = SHOTS_PER_WAVE + bonusAmmo; // PERFECT-wave bonus bullet rolls in here
@@ -356,9 +376,9 @@
       spawnTarget(kind, { inWave: true });
       roundReleased++;
     }
-    // Occasionally toss in a protected dove as a distractor (not part of the quota).
+    // Protected dove flocks cross the sightline as distractors (not part of the quota).
     if (doveChance > 0 && Math.random() < doveChance) {
-      spawnTarget("dove", { inWave: false });
+      spawnDoveFlock();
     }
     // Rare supply crate — shoot it for a random power-up.
     if (supplyChance > 0 && Math.random() < supplyChance) {

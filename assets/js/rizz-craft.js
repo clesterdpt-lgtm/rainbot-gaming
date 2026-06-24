@@ -33,14 +33,16 @@
   }
 
   const THREE = window.THREE;
-  const SAVE_VERSION = 3;
-  const WORLD_X = 96;
-  const WORLD_Y = 48;
-  const WORLD_Z = 96;
+  const SAVE_VERSION = 4;
+  const WORLD_X = 160;
+  const WORLD_Y = 56;
+  const WORLD_Z = 160;
   const CHUNK = 16;
   const SEA_LEVEL = 12;
   const HOTBAR = 9;
-  const MAX_HP = 20;
+  const MAX_HP = 100;
+  const DAMAGE_GRACE = 1.1;
+  const SPAWN_GRACE = 4;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -130,11 +132,14 @@
   ];
 
   const BIOMES = [
-    { id: 0, name: "Meadow", grass: "#63d45d", tree: 0.12, flowers: 0.08 },
-    { id: 1, name: "Forest", grass: "#3fae46", tree: 0.31, flowers: 0.03 },
-    { id: 2, name: "Highland", grass: "#84bd56", tree: 0.07, flowers: 0.02 },
-    { id: 3, name: "Marsh", grass: "#4fa866", tree: 0.15, flowers: 0.05 },
-    { id: 4, name: "Neon Grove", grass: "#42d998", tree: 0.22, flowers: 0.16 },
+    { id: 0, name: "Meadow", grass: "#63d45d", tree: 0.05, flowers: 0.08 },
+    { id: 1, name: "Forest", grass: "#3fae46", tree: 0.16, flowers: 0.03 },
+    { id: 2, name: "Highland", grass: "#84bd56", tree: 0.035, flowers: 0.02 },
+    { id: 3, name: "Marsh", grass: "#4fa866", tree: 0.07, flowers: 0.06 },
+    { id: 4, name: "Neon Grove", grass: "#42d998", tree: 0.10, flowers: 0.18 },
+    { id: 5, name: "Prairie", grass: "#d0c45b", tree: 0.025, flowers: 0.12 },
+    { id: 6, name: "Crystal Ridge", grass: "#70c7d9", tree: 0.03, flowers: 0.05 },
+    { id: 7, name: "Ash Flats", grass: "#9a9186", tree: 0.012, flowers: 0.02 },
   ];
 
   const FACES = [
@@ -258,7 +263,18 @@
   let raf = 0;
   let decorDirty = true;
   let cloudsBuilt = false;
+  let rendererWidth = 0;
+  let rendererHeight = 0;
+  let rendererPixelRatio = 0;
   const reusableVector = new THREE.Vector3();
+  const moveForwardVector = new THREE.Vector3();
+  const moveRightVector = new THREE.Vector3();
+  const worldUpVector = new THREE.Vector3(0, 1, 0);
+  const keyMove = { forward: false, back: false, left: false, right: false };
+  const moveSources = {
+    keyboard: { forward: 0, right: 0 },
+    touch: { forward: 0, right: 0 },
+  };
 
   function hexToRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -267,6 +283,40 @@
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function applyDirectionalInput() {
+    state.input.forward = clamp(moveSources.keyboard.forward + moveSources.touch.forward, -1, 1);
+    state.input.right = clamp(moveSources.keyboard.right + moveSources.touch.right, -1, 1);
+  }
+  function refreshKeyboardMovement() {
+    moveSources.keyboard.forward = (keyMove.forward ? 1 : 0) - (keyMove.back ? 1 : 0);
+    moveSources.keyboard.right = (keyMove.right ? 1 : 0) - (keyMove.left ? 1 : 0);
+    applyDirectionalInput();
+  }
+  function clearDirectionalInput() {
+    keyMove.forward = false;
+    keyMove.back = false;
+    keyMove.left = false;
+    keyMove.right = false;
+    moveSources.keyboard.forward = 0;
+    moveSources.keyboard.right = 0;
+    moveSources.touch.forward = 0;
+    moveSources.touch.right = 0;
+    applyDirectionalInput();
+    state.input.jump = false;
+    state.input.mine = false;
+    state.input.place = false;
+    state.input.sprint = false;
+  }
+  function setKeyboardMove(key, down) {
+    if (key === "w" || key === "arrowup") keyMove.forward = down;
+    else if (key === "s" || key === "arrowdown") keyMove.back = down;
+    else if (key === "a" || key === "arrowleft") keyMove.left = down;
+    else if (key === "d" || key === "arrowright") keyMove.right = down;
+    else return false;
+    refreshKeyboardMovement();
+    return true;
+  }
   function smooth(t) { return t * t * (3 - 2 * t); }
   function index(x, y, z) { return (y * WORLD_Z + z) * WORLD_X + x; }
   function surfaceIndex(x, z) { return z * WORLD_X + x; }
@@ -378,10 +428,14 @@
         const height = clamp(Math.round(h), 4, WORLD_Y - 8);
         const moisture = fbm2(x - 300, z + 300, 0.027, 3);
         const weird = fbm2(x + 700, z + 80, 0.02, 4);
+        const temp = fbm2(x + 90, z - 840, 0.018, 4);
         let biome = 0;
-        if (height > SEA_LEVEL + 15) biome = 2;
+        if (height > SEA_LEVEL + 21 || ridges > 0.82) biome = 6;
+        else if (weird < 0.24 && temp > 0.55) biome = 7;
         else if (moisture > 0.62 && height <= SEA_LEVEL + 5) biome = 3;
         else if (weird > 0.68) biome = 4;
+        else if (temp > 0.62 && moisture < 0.45) biome = 5;
+        else if (height > SEA_LEVEL + 14) biome = 2;
         else if (moisture > 0.52) biome = 1;
         state.biome[surfaceIndex(x, z)] = biome;
         state.surface[surfaceIndex(x, z)] = height;
@@ -439,7 +493,7 @@
         const biome = BIOMES[state.biome[si]];
         const spawnDist = Math.hypot(x - WORLD_X / 2, z - WORLD_Z / 2);
         const r = hash2(x * 17 + 3, z * 19 - 5);
-        if (spawnDist > 8 && r < biome.tree) {
+        if (spawnDist > 16 && r < biome.tree) {
           placeTree(x, y + 1, z, state.biome[si]);
         } else if (r < biome.tree + 0.17) {
           setBase(x, y + 1, z, r < biome.tree + biome.flowers ? FLOWER : TALL_GRASS);
@@ -451,7 +505,7 @@
     const trunkH = 4 + Math.floor(hash2(x + 41, z - 83) * 3);
     for (let i = 0; i < trunkH && y + i < WORLD_Y - 1; i++) setBase(x, y + i, z, LOG);
     const top = y + trunkH;
-    const radius = biomeId === 4 ? 3 : 2;
+    const radius = biomeId === 4 || biomeId === 1 ? 2 : 1;
     for (let oy = -2; oy <= 2; oy++) {
       for (let oz = -radius; oz <= radius; oz++) {
         for (let ox = -radius; ox <= radius; ox++) {
@@ -468,11 +522,11 @@
   function carveSpawnMeadow() {
     const cx = WORLD_X >> 1;
     const cz = WORLD_Z >> 1;
-    for (let z = cz - 5; z <= cz + 5; z++) {
-      for (let x = cx - 5; x <= cx + 5; x++) {
+    for (let z = cz - 8; z <= cz + 8; z++) {
+      for (let x = cx - 8; x <= cx + 8; x++) {
         if (!inWorld(x, 1, z)) continue;
         const d = Math.hypot(x - cx, z - cz);
-        if (d > 5.5) continue;
+        if (d > 8.5) continue;
         const h = SEA_LEVEL + 7 + Math.round(Math.sin(x * 0.3) * 0.4 + Math.cos(z * 0.3) * 0.4);
         for (let y = 1; y < WORLD_Y; y++) {
           let code = AIR;
@@ -484,7 +538,7 @@
         state.surface[surfaceIndex(x, z)] = h;
       }
     }
-    placeTree(cx + 5, state.surface[surfaceIndex(cx + 5, cz + 3)] + 1, cz + 3, 1);
+    placeTree(cx + 11, state.surface[surfaceIndex(cx + 11, cz + 8)] + 1, cz + 8, 1);
   }
   function setBase(x, y, z, code) {
     if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -577,7 +631,10 @@
   function faceColor(code, shade, x, y, z, topFace) {
     const d = DEF[code];
     let base = d.rgb;
-    if (code === GRASS && !topFace) base = hexToRgb(d.side);
+    if (code === GRASS && topFace) {
+      const b = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
+      base = hexToRgb(b.grass);
+    } else if (code === GRASS && !topFace) base = hexToRgb(d.side);
     if ((code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) && hash3(x, y, z) < 0.36) base = hexToRgb(d.ore);
     if (code === LEAVES) {
       const b = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
@@ -615,7 +672,8 @@
   function pushPlant(arr, x, y, z, code) {
     const h = code === FLOWER ? 0.64 : 0.78;
     const w = code === FLOWER ? 0.33 : 0.42;
-    const color = code === FLOWER ? hexToRgb(hash2(x, z) > 0.5 ? "#ff6fa8" : "#ffe45c") : hexToRgb("#72d168");
+    const biome = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
+    const color = code === FLOWER ? hexToRgb(hash2(x, z) > 0.5 ? "#ff6fa8" : "#ffe45c") : hexToRgb(biome.grass);
     pushBillboard(arr, x + 0.5, y, z + 0.5, w, h, color, 0);
     pushBillboard(arr, x + 0.5, y, z + 0.5, w, h, color, Math.PI / 2);
   }
@@ -698,7 +756,7 @@
     const x = WORLD_X / 2 + 0.5;
     const z = WORLD_Z / 2 + 0.5;
     const y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
-    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: 0 });
+    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE });
     syncCamera();
   }
   function syncCamera() {
@@ -754,7 +812,8 @@
     const forward = state.input.forward;
     const right = state.input.right;
     const speed = state.input.sprint ? SPRINT_SPEED : MOVE_SPEED;
-    const move = movementVectorForYaw(p.yaw, forward, right);
+    syncCamera();
+    const move = movementVectorForCamera(forward, right);
     let mx = move.x;
     let mz = move.z;
     const len = Math.hypot(mx, mz);
@@ -785,6 +844,17 @@
     return {
       x: forward * -sin + right * cos,
       z: forward * -cos + right * -sin,
+    };
+  }
+  function movementVectorForCamera(forward, right) {
+    camera.getWorldDirection(moveForwardVector);
+    moveForwardVector.y = 0;
+    if (moveForwardVector.lengthSq() < 0.00001) return movementVectorForYaw(state.player.yaw, forward, right);
+    moveForwardVector.normalize();
+    moveRightVector.crossVectors(moveForwardVector, worldUpVector).normalize();
+    return {
+      x: forward * moveForwardVector.x + right * moveRightVector.x,
+      z: forward * moveForwardVector.z + right * moveRightVector.z,
     };
   }
   function movePlayerAxis(axis, amount) {
@@ -835,7 +905,8 @@
     const p = state.player;
     if (p.hurtCd > 0) return;
     p.hp -= dmg;
-    p.hurtCd = 0.75;
+    p.hurtCd = DAMAGE_GRACE;
+    p.vy = Math.max(p.vy, 4);
     if (p.hp <= 0) {
       api.toast("You got flushed. Respawning...", "bad");
       state.mobs.forEach((m) => removeMob(m));
@@ -847,8 +918,8 @@
   }
 
   const MOB = {
-    toilet: { hp: 9, speed: 2.3, damage: 3, score: 15, radius: 0.55 },
-    grimace: { hp: 17, speed: 1.55, damage: 5, score: 30, radius: 0.7 },
+    toilet: { hp: 9, speed: 2.15, damage: 8, score: 15, radius: 0.55 },
+    grimace: { hp: 17, speed: 1.45, damage: 14, score: 30, radius: 0.7 },
   };
   function spawnMob() {
     if (state.mobs.length >= Math.min(6 + state.day * 2, 18)) return;
@@ -910,7 +981,7 @@
       if (mob.hitCd > 0) mob.hitCd -= dt;
       if (dist < 1.25 && Math.abs((p.y + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
         hurtPlayer(cfg.damage);
-        mob.hitCd = 1;
+        mob.hitCd = 1.25;
       }
       if (!isNight() && skyVisible(Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z))) {
         mob.hp -= dt * 5;
@@ -1251,11 +1322,16 @@
     return { crosshair, objective, target, progress: progress.firstElementChild, hotbar };
   }
 
-  function resizeRenderer() {
+  function resizeRenderer(force = false) {
     const rect = canvas.getBoundingClientRect();
     const width = Math.max(320, Math.floor(rect.width || canvas.width));
     const height = Math.max(220, Math.floor(rect.height || canvas.height));
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    if (!force && width === rendererWidth && height === rendererHeight && pixelRatio === rendererPixelRatio) return;
+    rendererWidth = width;
+    rendererHeight = height;
+    rendererPixelRatio = pixelRatio;
+    renderer.setPixelRatio(pixelRatio);
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
@@ -1265,6 +1341,7 @@
     state.started = false;
     state.paused = false;
     state.crafting = false;
+    clearDirectionalInput();
     state.mining = null;
     state.mobs.forEach(removeMob);
     state.mobs = [];
@@ -1380,26 +1457,22 @@
       const tag = event.target && event.target.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       const key = event.key.toLowerCase();
-      if (key === "w" || key === "arrowup") state.input.forward = 1;
-      if (key === "s" || key === "arrowdown") state.input.forward = -1;
-      if (key === "a" || key === "arrowleft") state.input.right = -1;
-      if (key === "d" || key === "arrowright") state.input.right = 1;
+      const movementHandled = setKeyboardMove(key, true);
       if (key === " " || key === "spacebar") state.input.jump = true;
       if (key === "shift") state.input.sprint = true;
       if (key >= "1" && key <= "9") state.selected = Number(key) - 1;
       if (key === "e") toggleCrafting();
       if (key === "p") togglePause();
-      if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(event.key)) event.preventDefault();
+      if (movementHandled || [" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) event.preventDefault();
     });
     window.addEventListener("keyup", (event) => {
       const key = event.key.toLowerCase();
-      if ((key === "w" || key === "arrowup") && state.input.forward > 0) state.input.forward = 0;
-      if ((key === "s" || key === "arrowdown") && state.input.forward < 0) state.input.forward = 0;
-      if ((key === "a" || key === "arrowleft") && state.input.right < 0) state.input.right = 0;
-      if ((key === "d" || key === "arrowright") && state.input.right > 0) state.input.right = 0;
+      setKeyboardMove(key, false);
       if (key === " " || key === "spacebar") state.input.jump = false;
       if (key === "shift") state.input.sprint = false;
     });
+    window.addEventListener("blur", clearDirectionalInput);
+    document.addEventListener("visibilitychange", () => { if (document.hidden) clearDirectionalInput(); });
     canvas.addEventListener("click", () => {
       if (state.started && !state.paused && !state.crafting && document.pointerLockElement !== canvas) canvas.requestPointerLock && canvas.requestPointerLock();
     });
@@ -1439,8 +1512,8 @@
     bind("btn-craft-close", () => toggleCrafting(false));
     bind("btn-mine", () => { state.mode = "mine"; updateModeButtons(); });
     bind("btn-place", () => { state.mode = "place"; updateModeButtons(); });
-    bindHold("btn-left", () => { state.input.right = -1; }, () => { if (state.input.right < 0) state.input.right = 0; });
-    bindHold("btn-right", () => { state.input.right = 1; }, () => { if (state.input.right > 0) state.input.right = 0; });
+    bindHold("btn-left", () => { moveSources.touch.right = -1; applyDirectionalInput(); }, () => { if (moveSources.touch.right < 0) { moveSources.touch.right = 0; applyDirectionalInput(); } });
+    bindHold("btn-right", () => { moveSources.touch.right = 1; applyDirectionalInput(); }, () => { if (moveSources.touch.right > 0) { moveSources.touch.right = 0; applyDirectionalInput(); } });
     bindHold("btn-jump", () => { state.input.jump = true; }, () => { state.input.jump = false; });
     bind("btn-heal", async () => {
       if (!state.started) return api.toast("Start the game first", "");
@@ -1461,6 +1534,7 @@
         api.toast("Stone kit + Crafting Toilet", "good");
       }
     });
+    bindFullscreen();
   }
   function bind(id, fn) {
     const el = document.getElementById(id);
@@ -1483,6 +1557,55 @@
     if (mine) mine.classList.toggle("is-active", state.mode === "mine");
     if (place) place.classList.toggle("is-active", state.mode === "place");
     state.input.mine = state.mode === "mine" && state.input.mine;
+  }
+
+  function bindFullscreen() {
+    const fsBtn = document.getElementById("btn-fullscreen");
+    const fsTarget = canvas.closest(".canvas-wrap");
+    if (!fsBtn || !fsTarget) return;
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const updateButton = () => {
+      const on = isMaxed();
+      fsBtn.textContent = on ? "×" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateButton();
+      requestAnimationFrame(() => {
+        resizeRenderer(true);
+        if (on) canvas.focus();
+      });
+    };
+    const toggle = () => {
+      const on = !isMaxed();
+      setMaxed(on);
+      if (on) {
+        const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+        if (req) {
+          try {
+            const ret = req.call(fsTarget);
+            if (ret && ret.catch) ret.catch(() => {});
+          } catch (_) {}
+        }
+      } else if (nativeFsEl()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) {
+          try { exit.call(document); } catch (_) {}
+        }
+      }
+    };
+    fsBtn.addEventListener("click", toggle);
+    const onNativeFsChange = () => { if (!nativeFsEl() && isMaxed()) setMaxed(false); };
+    document.addEventListener("fullscreenchange", onNativeFsChange);
+    document.addEventListener("webkitfullscreenchange", onNativeFsChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+    });
+    updateButton();
   }
 
   initGame();
@@ -1521,6 +1644,8 @@
     getBlock,
     setBlock,
     movementVectorForYaw,
+    movementVectorForCamera,
+    resizeRenderer,
     daylight,
     isNight,
     setTime(t) { state.time = t; },

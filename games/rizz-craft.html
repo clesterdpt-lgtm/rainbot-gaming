@@ -35,6 +35,16 @@
     .sc-mobile .btn.is-active { border-color: var(--accent-3); box-shadow: 0 0 14px rgba(255,212,59,0.25); }
     @media (hover: none) and (pointer: coarse) { .sc-mobile { display: grid; } }
 
+    .canvas-wrap--rizzcraft.is-maxed #gameCanvas,
+    .canvas-wrap--rizzcraft:fullscreen #gameCanvas,
+    .canvas-wrap--rizzcraft:-webkit-full-screen #gameCanvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+    }
+
     /* crafting panel slides over the stage */
     .craft-panel {
       position: absolute; inset: 0; z-index: 6;
@@ -84,8 +94,9 @@
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
         </div>
 
-        <div class="canvas-wrap canvas-wrap--ar-832-512">
+        <div class="canvas-wrap canvas-wrap--ar-832-512 canvas-wrap--rizzcraft" style="--game-aspect: 1.625; --game-aspect-ratio: 832 / 512;">
           <canvas id="gameCanvas" width="832" height="512" tabindex="0" aria-label="Rizz-Craft 3D voxel mining world"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
 
           <!-- Crafting overlay -->
           <div class="craft-panel" id="craft-panel" aria-label="Crafting">
@@ -188,7 +199,7 @@
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260624-controls-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260624-controls-world-3"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

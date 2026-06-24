@@ -342,11 +342,9 @@
 
     if (flash > 0) {
       ctx.save();
+      ctx.globalAlpha = clamp(flash, 0, 0.65);
+      ctx.filter = "brightness(2.4) saturate(0.15)";
       drawImageContain(image, x, y, w, h);
-      ctx.globalCompositeOperation = "source-in";
-      ctx.globalAlpha = clamp(flash, 0, 0.75);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(x, y, w, h);
       ctx.restore();
     }
     return true;
@@ -463,7 +461,10 @@
       type,
       name: t.name, icon: t.icon, color: t.color, behavior: t.behavior,
       w: t.w, h: t.h,
-      x, y: isAirEnemyType(t.behavior) ? GROUND_Y - 170 : GROUND_Y - t.h,
+      x,
+      y: isAirEnemyType(t.behavior)
+        ? GROUND_Y - (t.behavior === "hoverShoot" ? 120 : 102)
+        : GROUND_Y - t.h,
       vx: 0, vy: 0,
       hp: Math.round(t.hp * scale), maxHp: Math.round(t.hp * scale),
       dmg: Math.round(t.dmg * (1 + (state.stage - 1) * 0.15)),
@@ -829,13 +830,13 @@
         if (e.y + e.h >= GROUND_Y) { e.y = GROUND_Y - e.h; e.vy = 0; }
       } else if (e.behavior === "fly") {
         e.bob += dt * 3;
-        const targetY = player.y - 30 + Math.sin(e.bob) * 30;
-        e.y = lerp(e.y, clamp(targetY, 40, GROUND_Y - e.h), 0.04);
+        const targetY = player.y - 6 + Math.sin(e.bob) * 16;
+        e.y = lerp(e.y, clamp(targetY, GROUND_Y - 140, GROUND_Y - e.h - 24), 0.05);
         e.x += dir * e.speed * dt;
       } else if (e.behavior === "hoverShoot") {
         e.bob += dt * 3.6;
-        const targetY = clamp(player.y - 70 + Math.sin(e.bob) * 48, 48, GROUND_Y - e.h - 20);
-        e.y = lerp(e.y, targetY, 0.045);
+        const targetY = clamp(player.y - 22 + Math.sin(e.bob) * 20, GROUND_Y - 160, GROUND_Y - e.h - 36);
+        e.y = lerp(e.y, targetY, 0.055);
         const dist = pcx - (e.x + e.w / 2);
         const ideal = 250;
         if (Math.abs(dist) > ideal) e.x += Math.sign(dist) * e.speed * dt;
@@ -1302,6 +1303,46 @@
     }
   }
 
+  function drawSpotlightSprite(cx, y, active, accent) {
+    ctx.save();
+    ctx.translate(cx, y + 16);
+
+    ctx.fillStyle = active ? "rgba(247,215,22,0.95)" : "rgba(148,163,184,0.72)";
+    ctx.strokeStyle = active ? GOLD : "rgba(203,213,225,0.62)";
+    ctx.lineWidth = 2;
+    roundRectXY(-26, -13, 52, 26, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = active ? "#fff7b0" : "#1f2937";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 14, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(3,7,18,0.88)";
+    roundRectXY(-19, -34, 38, 15, 5);
+    ctx.fill();
+    ctx.fillStyle = active ? "#fde047" : "#94a3b8";
+    ctx.font = "bold 9px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(active ? "ON" : "OFF", 0, -26.5);
+
+    ctx.strokeStyle = active ? "rgba(247,215,22,0.9)" : "rgba(148,163,184,0.52)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-18, -13);
+    ctx.lineTo(-28, -23);
+    ctx.moveTo(18, -13);
+    ctx.lineTo(28, -23);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
   function drawHazards(def) {
     const hazards = def.hazards || [];
     for (const h of hazards) {
@@ -1350,23 +1391,39 @@
       } else if (h.type === "spotlight") {
         ctx.save();
         const cx = hb.x + hb.w / 2;
-        ctx.globalAlpha = active ? 0.28 : 0.1;
-        const cone = ctx.createLinearGradient(cx, hb.y, cx, GROUND_Y);
-        cone.addColorStop(0, "rgba(255,255,255,0.34)");
-        cone.addColorStop(1, active ? "rgba(247,215,22,0.22)" : "rgba(255,255,255,0.05)");
-        ctx.fillStyle = cone;
+        const coneTop = hb.y + 28;
         ctx.beginPath();
-        ctx.moveTo(cx - 18, hb.y);
-        ctx.lineTo(cx + 18, hb.y);
+        ctx.moveTo(cx - 14, coneTop);
+        ctx.lineTo(cx + 14, coneTop);
         ctx.lineTo(cx + hb.w / 2, GROUND_Y);
         ctx.lineTo(cx - hb.w / 2, GROUND_Y);
         ctx.closePath();
-        ctx.fill();
-        ctx.globalAlpha = active ? 0.9 : 0.35;
-        ctx.fillStyle = active ? "rgba(247,215,22,0.28)" : "rgba(255,255,255,0.10)";
+
+        if (active) {
+          const cone = ctx.createLinearGradient(cx, coneTop, cx, GROUND_Y);
+          cone.addColorStop(0, "rgba(255,255,220,0.54)");
+          cone.addColorStop(1, "rgba(247,215,22,0.26)");
+          ctx.fillStyle = cone;
+          ctx.fill();
+          ctx.strokeStyle = "rgba(247,215,22,0.82)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          ctx.globalAlpha = 0.58;
+          ctx.setLineDash([8, 7]);
+          ctx.strokeStyle = "rgba(148,163,184,0.45)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        ctx.globalAlpha = active ? 0.82 : 0.28;
+        ctx.fillStyle = active ? "rgba(247,215,22,0.42)" : "rgba(148,163,184,0.16)";
         ctx.beginPath();
         ctx.ellipse(cx, GROUND_Y - 5, hb.w * 0.55, 12, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
+        drawSpotlightSprite(cx, hb.y, active, def.accent);
         ctx.restore();
       }
     }

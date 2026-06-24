@@ -5046,12 +5046,20 @@ body.arcade-home::before {
   box-shadow: 0 0 24px rgba(35, 223, 242, 0.18);
 }
 
-.tv-screen img {
+.tv-screen img,
+.tv-screen video {
+  display: block;
   width: 100%;
   height: 100%;
+  background: #02050a;
   object-fit: cover;
   object-position: center;
   filter: saturate(1.1) contrast(1.06);
+}
+
+.tv-screen img[hidden],
+.tv-screen video[hidden] {
+  display: none;
 }
 
 .tv-screen__scan {
@@ -5072,7 +5080,12 @@ body.arcade-home::before {
   border: 2px solid rgba(255, 255, 255, 0.7);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.5);
+  pointer-events: none;
   transform: translate(-50%, -50%);
+}
+
+.tv-screen[data-tv-mode="video"] .tv-screen__play {
+  display: none;
 }
 
 .tv-screen__play::before {

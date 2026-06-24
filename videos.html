@@ -11,7 +11,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-arcade-hero.png?v=20260611-7" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260621-heading-1" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260623-area51-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Crect x='18' y='26' width='64' height='42' rx='7' fill='%2323dff2'/%3E%3Cpath d='M45 38l18 9-18 9z' fill='%2305070d'/%3E%3Cpath d='M32 78h36' stroke='%23ff1490' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="arcade-home rainbot-tv-index">
@@ -44,20 +44,21 @@
     </header>
 
     <section class="tv-stage arcade-panel" id="featured">
-      <div class="tv-screen" aria-label="Featured Rainbot TV clip">
-        <img src="assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" alt="AI Slop Factory robot moderator poster art" data-tv-active-image />
+      <div class="tv-screen" aria-label="Featured Rainbot TV clip" data-tv-mode="video">
+        <video src="assets/video/rainbot-tv/area-51-raid.mp4?v=20260623-area51-1" poster="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" controls playsinline preload="metadata" data-tv-active-video aria-label="Area 51 Raid: Clap Alien Cheeks"></video>
+        <img src="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" alt="Area 51 raid crowd holding alien signs outside a desert fence" hidden data-tv-active-image />
         <span class="tv-screen__scan" aria-hidden="true"></span>
         <span class="tv-screen__play" aria-hidden="true"></span>
         <span class="tv-screen__bug">RBTV</span>
       </div>
       <div class="tv-stage__copy">
-        <span data-tv-active-meta>2:14 - Orientation Tape</span>
-        <h2 data-tv-active-title>AI Slop Factory Orientation Tape</h2>
-        <p data-tv-active-deck>Rainbot welcomes new moderators to the content conveyor and gently explains that the red button is not legally called "the truth blender."</p>
+        <span data-tv-active-meta>1:20 - Found Footage</span>
+        <h2 data-tv-active-title>Area 51 Raid: Clap Alien Cheeks</h2>
+        <p data-tv-active-deck>A heroic raid team discovers the aliens were real, the alarms were louder, and the gift shop still closed at 5.</p>
         <div class="tv-stage__rail">
-          <span>Sketch</span>
-          <span>Workplace panic</span>
-          <span>Fake VHS</span>
+          <span>Found footage</span>
+          <span>Gate panic</span>
+          <span>Alien tourism</span>
         </div>
       </div>
     </section>
@@ -69,18 +70,18 @@
       </div>
 
       <div class="tv-grid">
-        <button class="tv-card" type="button" aria-pressed="true" data-title="AI Slop Factory Orientation Tape funny video sketch content moderation fake VHS" data-tv-title="AI Slop Factory Orientation Tape" data-tv-meta="2:14 - Orientation Tape" data-tv-deck="Rainbot welcomes new moderators to the content conveyor and gently explains that the red button is not legally called 'the truth blender.'" data-tv-image="assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" data-tv-alt="AI Slop Factory robot moderator poster art">
+        <button class="tv-card" type="button" aria-pressed="true" data-title="Area 51 Raid Clap Alien Cheeks funny video storm area 51 aliens raid found footage" data-tv-title="Area 51 Raid: Clap Alien Cheeks" data-tv-meta="1:20 - Found Footage" data-tv-deck="A heroic raid team discovers the aliens were real, the alarms were louder, and the gift shop still closed at 5." data-tv-image="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" data-tv-alt="Area 51 raid crowd holding alien signs outside a desert fence" data-tv-video="assets/video/rainbot-tv/area-51-raid.mp4?v=20260623-area51-1" data-tv-poster="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" data-tv-tags="Found footage|Gate panic|Alien tourism">
           <span class="tv-card__thumb">
-            <img src="assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" alt="" />
-            <span>2:14</span>
+            <img src="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" alt="" />
+            <span>1:20</span>
           </span>
           <span class="tv-card__body">
-            <strong>AI Slop Factory Orientation Tape</strong>
-            <em>Sketch</em>
+            <strong>Area 51 Raid: Clap Alien Cheeks</strong>
+            <em>Found Footage</em>
           </span>
         </button>
 
-        <button class="tv-card" type="button" aria-pressed="false" data-title="Drone Attempts Motivational Speech funny video drone hunter parody delivery bot public access" data-tv-title="Drone Attempts Motivational Speech" data-tv-meta="1:08 - Public Access" data-tv-deck="A delivery drone tries to inspire the workforce, loses GPS confidence, and accidentally declares the parking lot a sovereign nation." data-tv-image="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" data-tv-alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves">
+        <button class="tv-card" type="button" aria-pressed="false" data-title="Drone Attempts Motivational Speech funny video drone hunter parody delivery bot public access" data-tv-title="Drone Attempts Motivational Speech" data-tv-meta="1:08 - Public Access" data-tv-deck="A delivery drone tries to inspire the workforce, loses GPS confidence, and accidentally declares the parking lot a sovereign nation." data-tv-image="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" data-tv-alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves" data-tv-tags="Public access|Motivation malfunction|Drone panic">
           <span class="tv-card__thumb">
             <img src="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" alt="" />
             <span>1:08</span>
@@ -91,7 +92,7 @@
           </span>
         </button>
 
-        <button class="tv-card" type="button" aria-pressed="false" data-title="Cat Council Emergency Broadcast funny video cats council swarm runner" data-tv-title="Cat Council Emergency Broadcast" data-tv-meta="0:46 - Emergency Broadcast" data-tv-deck="The Cat Council interrupts all programming to remind viewers that every cup on the counter is temporary." data-tv-image="assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1" data-tv-alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room">
+        <button class="tv-card" type="button" aria-pressed="false" data-title="Cat Council Emergency Broadcast funny video cats council swarm runner" data-tv-title="Cat Council Emergency Broadcast" data-tv-meta="0:46 - Emergency Broadcast" data-tv-deck="The Cat Council interrupts all programming to remind viewers that every cup on the counter is temporary." data-tv-image="assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1" data-tv-alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room" data-tv-tags="Emergency broadcast|Countertop law|Cat council">
           <span class="tv-card__thumb">
             <img src="assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1" alt="" />
             <span>0:46</span>
@@ -102,7 +103,7 @@
           </span>
         </button>
 
-        <button class="tv-card" type="button" aria-pressed="false" data-title="Smooth Brain Life Hack funny video worm productivity parody" data-tv-title="Smooth Brain Life Hack" data-tv-meta="1:32 - Self Improvement" data-tv-deck="A brain worm reveals the one productivity trick doctors hate: simply forget what productivity is and become emotionally laminated." data-tv-image="assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" data-tv-alt="Smooth Brain Snacker brain-worm snake parody cover art">
+        <button class="tv-card" type="button" aria-pressed="false" data-title="Smooth Brain Life Hack funny video worm productivity parody" data-tv-title="Smooth Brain Life Hack" data-tv-meta="1:32 - Self Improvement" data-tv-deck="A brain worm reveals the one productivity trick doctors hate: simply forget what productivity is and become emotionally laminated." data-tv-image="assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" data-tv-alt="Smooth Brain Snacker brain-worm snake parody cover art" data-tv-tags="Self improvement|Brain worm|Life hack">
           <span class="tv-card__thumb">
             <img src="assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" alt="" />
             <span>1:32</span>
@@ -113,7 +114,7 @@
           </span>
         </button>
 
-        <button class="tv-card" type="button" aria-pressed="false" data-title="Billionaire Space Race Mission Debrief funny video rocket parody" data-tv-title="Billionaire Space Race Mission Debrief" data-tv-meta="2:01 - Mission Debrief" data-tv-deck="A rocket team reviews a mission where everything technically worked, except the part where the moon asked them to leave." data-tv-image="assets/img/mockup/card-billionaire-space-race.png?v=20260613-6" data-tv-alt="Billionaire Space Race satirical rocket-race poster art">
+        <button class="tv-card" type="button" aria-pressed="false" data-title="Billionaire Space Race Mission Debrief funny video rocket parody" data-tv-title="Billionaire Space Race Mission Debrief" data-tv-meta="2:01 - Mission Debrief" data-tv-deck="A rocket team reviews a mission where everything technically worked, except the part where the moon asked them to leave." data-tv-image="assets/img/mockup/card-billionaire-space-race.png?v=20260613-6" data-tv-alt="Billionaire Space Race satirical rocket-race poster art" data-tv-tags="Mission debrief|Rocket panic|Moon complaint">
           <span class="tv-card__thumb">
             <img src="assets/img/mockup/card-billionaire-space-race.png?v=20260613-6" alt="" />
             <span>2:01</span>
@@ -124,7 +125,7 @@
           </span>
         </button>
 
-        <button class="tv-card" type="button" aria-pressed="false" data-title="Rainbot After Dark VHS Warning funny video horror parody" data-tv-title="Rainbot After Dark VHS Warning" data-tv-meta="0:59 - Late Night" data-tv-deck="A network safety disclaimer gradually realizes it is trapped inside the tape and asks viewers to rewind responsibly." data-tv-image="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" data-tv-alt="The Weight sleep paralysis horror poster art">
+        <button class="tv-card" type="button" aria-pressed="false" data-title="Rainbot After Dark VHS Warning funny video horror parody" data-tv-title="Rainbot After Dark VHS Warning" data-tv-meta="0:59 - Late Night" data-tv-deck="A network safety disclaimer gradually realizes it is trapped inside the tape and asks viewers to rewind responsibly." data-tv-image="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" data-tv-alt="The Weight sleep paralysis horror poster art" data-tv-tags="Late night|VHS warning|Tape horror">
           <span class="tv-card__thumb">
             <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="" />
             <span>0:59</span>
@@ -162,21 +163,53 @@
   <script>
     (() => {
       const cards = Array.from(document.querySelectorAll(".tv-card"));
+      const screen = document.querySelector(".tv-screen");
+      const video = document.querySelector("[data-tv-active-video]");
       const image = document.querySelector("[data-tv-active-image]");
       const title = document.querySelector("[data-tv-active-title]");
       const meta = document.querySelector("[data-tv-active-meta]");
       const deck = document.querySelector("[data-tv-active-deck]");
-      if (!cards.length || !image || !title || !meta || !deck) return;
+      const railItems = Array.from(document.querySelectorAll(".tv-stage__rail span"));
+      if (!cards.length || !screen || !video || !image || !title || !meta || !deck) return;
+
+      const loadCard = (card) => {
+        const videoSrc = card.dataset.tvVideo || "";
+        if (videoSrc) {
+          screen.dataset.tvMode = "video";
+          image.hidden = true;
+          video.hidden = false;
+          video.poster = card.dataset.tvPoster || card.dataset.tvImage || "";
+          video.setAttribute("aria-label", card.dataset.tvTitle || "Rainbot TV video");
+          if (video.getAttribute("src") !== videoSrc) {
+            video.src = videoSrc;
+            video.load();
+          }
+        } else {
+          video.pause();
+          video.removeAttribute("src");
+          video.load();
+          video.hidden = true;
+          image.hidden = false;
+          image.src = card.dataset.tvImage;
+          image.alt = card.dataset.tvAlt || "";
+          screen.dataset.tvMode = "image";
+        }
+
+        title.textContent = card.dataset.tvTitle;
+        meta.textContent = card.dataset.tvMeta;
+        deck.textContent = card.dataset.tvDeck;
+        const tags = (card.dataset.tvTags || "").split("|").filter(Boolean);
+        railItems.forEach((item, index) => {
+          item.textContent = tags[index] || "";
+          item.hidden = !tags[index];
+        });
+      };
 
       cards.forEach((card) => {
         card.addEventListener("click", () => {
           cards.forEach((item) => item.setAttribute("aria-pressed", "false"));
           card.setAttribute("aria-pressed", "true");
-          image.src = card.dataset.tvImage;
-          image.alt = card.dataset.tvAlt || "";
-          title.textContent = card.dataset.tvTitle;
-          meta.textContent = card.dataset.tvMeta;
-          deck.textContent = card.dataset.tvDeck;
+          loadCard(card);
         });
       });
     })();

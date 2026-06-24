@@ -500,94 +500,92 @@
   // ============================================================
   //  INPUT
   // ============================================================
-  const keys = new Set();
   const touch = Object.create(null);
-  const KEYMAP = {
-    left: ["ArrowLeft", "a", "A"],
-    right: ["ArrowRight", "d", "D"],
-    up: ["ArrowUp", "w", "W"],
-    down: ["ArrowDown", "s", "S"],
-    jump: [" ", "Spacebar"],
-    attack: ["j", "J"],
-    special: ["k", "K"],
-    shield: ["l", "L"],
-    grab: ["i", "I", "u", "U"],
-    pause: ["p", "P", "Escape"],
+  const CODE_MAP = {
+    left: ["KeyA", "ArrowLeft"],
+    right: ["KeyD", "ArrowRight"],
+    up: ["KeyW", "ArrowUp"],
+    down: ["KeyS", "ArrowDown"],
+    jump: ["Space"],
+    attack: ["KeyJ"],
+    special: ["KeyK"],
+    shield: ["KeyL"],
+    grab: ["KeyI", "KeyU"],
+    pause: ["KeyP", "Escape"],
   };
-  function keyIs(e, action) { return KEYMAP[action].includes(e.key); }
+  const keysDown = new Set();
+
+  function actionFromCode(code) {
+    for (const [action, codes] of Object.entries(CODE_MAP)) {
+      if (codes.includes(code)) return action;
+    }
+    return null;
+  }
+
+  function isActionDown(action) {
+    const codes = CODE_MAP[action];
+    return codes ? codes.some((code) => keysDown.has(code)) : false;
+  }
 
   // edge / flick tracking for the human
-  const humanRaw = { left: false, right: false, up: false, down: false, jump: false, attack: false, special: false, shield: false, grab: false };
   const flick = { x: 0, xTime: -1, y: 0, yTime: -1 };
   const human = blankControl();
   const humanPrev = blankControl();
 
-  window.addEventListener("keydown", (e) => {
-    if (e.repeat) return;
-    let handled = false;
-    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab", "pause"]) {
-      if (keyIs(e, action)) { handled = true; onKey(action, true); }
+  // Capture on document so A/D keep working after focus moves to pause/menu buttons.
+  // Repeat keydown events re-affirm held keys if the browser drops a keyup.
+  document.addEventListener("keydown", (e) => {
+    const action = actionFromCode(e.code);
+    if (!action) return;
+    if (action === "pause") {
+      if (!e.repeat) togglePause();
+      e.preventDefault();
+      return;
     }
-    if (handled) { e.preventDefault(); Sound.resume(); }
-  });
-  window.addEventListener("keyup", (e) => {
-    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab"]) {
-      if (keyIs(e, action)) onKey(action, false);
-    }
-  });
-  window.addEventListener("blur", clearHumanInput);
-  canvas.addEventListener("keydown", (e) => {
-    if (e.repeat) return;
-    let handled = false;
-    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab", "pause"]) {
-      if (keyIs(e, action)) { handled = true; onKey(action, true); }
-    }
-    if (handled) { e.preventDefault(); Sound.resume(); }
-  });
-  canvas.addEventListener("keyup", (e) => {
-    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab"]) {
-      if (keyIs(e, action)) onKey(action, false);
-    }
+    keysDown.add(e.code);
+    if (!e.repeat) noteActionPress(action);
+    e.preventDefault();
+    Sound.resume();
+  }, true);
+
+  document.addEventListener("keyup", (e) => {
+    const action = actionFromCode(e.code);
+    if (!action || action === "pause") return;
+    keysDown.delete(e.code);
+  }, true);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearHumanInput();
   });
 
-  function onKey(action, down) {
-    if (action === "pause") { if (down) togglePause(); return; }
-    if (action === "left") humanRaw.left = down;
-    else if (action === "right") humanRaw.right = down;
-    else if (action === "up") humanRaw.up = down;
-    else if (action === "down") humanRaw.down = down;
-    else humanRaw[action] = down;
-
-    // Smash flicks are tied to attack/special presses — not plain movement.
-    if (!down) return;
-    if (action === "attack" || action === "special") {
-      if (humanRaw.left || touch.left) { flick.x = -1; flick.xTime = state.time; }
-      else if (humanRaw.right || touch.right) { flick.x = 1; flick.xTime = state.time; }
-      if (humanRaw.up || touch.up) { flick.y = -1; flick.yTime = state.time; }
-      else if (humanRaw.down || touch.down) { flick.y = 1; flick.yTime = state.time; }
-    }
+  function noteActionPress(action) {
+    if (action !== "attack" && action !== "special") return;
+    if (isActionDown("left") || touch.left) { flick.x = -1; flick.xTime = state.time; }
+    else if (isActionDown("right") || touch.right) { flick.x = 1; flick.xTime = state.time; }
+    if (isActionDown("up") || touch.up) { flick.y = -1; flick.yTime = state.time; }
+    else if (isActionDown("down") || touch.down) { flick.y = 1; flick.yTime = state.time; }
   }
 
   function clearHumanInput() {
-    for (const k of Object.keys(humanRaw)) humanRaw[k] = false;
+    keysDown.clear();
     for (const k of Object.keys(touch)) touch[k] = false;
     flick.x = 0; flick.xTime = -1; flick.y = 0; flick.yTime = -1;
   }
 
   function readHuman() {
     Object.assign(humanPrev, human);
-    const left = humanRaw.left || touch.left;
-    const right = humanRaw.right || touch.right;
+    const left = isActionDown("left") || touch.left;
+    const right = isActionDown("right") || touch.right;
     human.x = (right ? 1 : 0) - (left ? 1 : 0);
-    human.up = humanRaw.up || touch.up;
-    human.down = humanRaw.down || touch.down;
+    human.up = isActionDown("up") || touch.up;
+    human.down = isActionDown("down") || touch.down;
     // Tap-jump: Up / W also jumps (matches the on-screen hint and Smash convention).
-    human.jumpHeld = humanRaw.jump || humanRaw.up || touch.jump;
+    human.jumpHeld = isActionDown("jump") || isActionDown("up") || touch.jump;
     human.jump = human.jumpHeld;
-    human.attack = humanRaw.attack || touch.attack;
-    human.special = humanRaw.special || touch.special;
-    human.shield = humanRaw.shield || touch.shield;
-    human.grab = humanRaw.grab || touch.grab;
+    human.attack = isActionDown("attack") || touch.attack;
+    human.special = isActionDown("special") || touch.special;
+    human.shield = isActionDown("shield") || touch.shield;
+    human.grab = isActionDown("grab") || touch.grab;
     // flick window for smash inputs (~150ms after attack/special + direction)
     const fresh = (t) => t >= 0 && state.time - t < 0.15;
     human.smashX = fresh(flick.xTime) ? flick.x : 0;

@@ -1608,6 +1608,27 @@
   }
   function inventorySlots() { return state.hotbar.concat(state.bag); }
   function selectedSlot() { return state.hotbar[state.selected]; }
+  function hasToolType(type) {
+    return inventorySlots().some((slot) => slot && DEF[slot.code] && DEF[slot.code].tool && DEF[slot.code].tool.type === type);
+  }
+  function ensureStarterPick(selectPick = false) {
+    if (hasToolType("pick")) return false;
+    const pickSlot = { code: PICK_WOOD, n: 1 };
+    let pickIndex = state.hotbar.findIndex((slot) => !slot);
+    if (pickIndex >= 0) {
+      state.hotbar[pickIndex] = pickSlot;
+    } else {
+      const selectedIndex = state.selected >= 0 && state.selected < HOTBAR ? state.selected : 0;
+      const bagIndex = state.bag.findIndex((slot) => !slot);
+      if (bagIndex >= 0) state.bag[bagIndex] = state.hotbar[selectedIndex];
+      state.hotbar[selectedIndex] = pickSlot;
+      pickIndex = selectedIndex;
+    }
+    if (selectPick) state.selected = pickIndex;
+    heldRenderCode = null;
+    bagRenderKey = null;
+    return true;
+  }
   function selectedDef() {
     const slot = selectedSlot();
     return slot && DEF[slot.code] ? DEF[slot.code] : null;
@@ -2278,7 +2299,7 @@
       const selected = i === state.selected ? " is-selected" : "";
       const label = slot ? DEF[slot.code].name : "";
       const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
-      const swatch = slot ? `<span class="rizz3d-swatch" style="background:${DEF[slot.code].color}"></span>` : "";
+      const swatch = slotSwatch(slot);
       return `<button class="rizz3d-slot${selected}" data-slot="${i}" title="${label || "Empty"}"><em>${i + 1}</em>${swatch}${count}</button>`;
     }).join("");
     if (ui.bagButton) {
@@ -2397,8 +2418,21 @@
   function bagSlotHtml(slot, i, attr, selected = false) {
     const label = slot ? DEF[slot.code].name : "Empty";
     const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
-    const swatch = slot ? `<span class="rizz3d-swatch" style="background:${DEF[slot.code].color}"></span>` : "";
+    const swatch = slotSwatch(slot);
     return `<button class="rizz3d-bag-slot${selected ? " is-selected" : ""}" ${attr} title="${label}"><em>${i + 1}</em>${swatch}${count}</button>`;
+  }
+  function slotSwatch(slot) {
+    if (!slot || !DEF[slot.code]) return "";
+    const d = DEF[slot.code];
+    const tool = d.tool && d.tool.type;
+    const kind = tool ? ` is-${tool}` : codeSwatchClass(slot.code, d);
+    const color = d.color || "#ffffff";
+    return `<span class="rizz3d-swatch${kind}" style="--item-color:${color};background:${color}"></span>`;
+  }
+  function codeSwatchClass(code, d) {
+    if (code === TORCH) return " is-torch";
+    if (d.kind === "block") return " is-block";
+    return " is-item";
   }
   function renderBag() {
     if (!ui.bagPanel) return;
@@ -2443,6 +2477,15 @@
       .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28)}
       .rizz3d-slot em{position:absolute;left:4px;top:2px;color:rgba(255,255,255,.55);font:700 9px var(--font-mono);font-style:normal}.rizz3d-slot b{position:absolute;right:4px;bottom:2px;color:#fff;font:800 11px var(--font-mono)}
       .rizz3d-swatch{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:4px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.22)}
+      .rizz3d-swatch.is-pick,.rizz3d-swatch.is-sword,.rizz3d-swatch.is-axe,.rizz3d-swatch.is-torch{width:26px;height:26px;background:transparent!important;border-radius:0;box-shadow:none}
+      .rizz3d-swatch.is-pick:before{content:"";position:absolute;left:11px;top:4px;width:4px;height:22px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(38deg)}
+      .rizz3d-swatch.is-pick:after{content:"";position:absolute;left:2px;top:5px;width:22px;height:6px;border-radius:3px;background:var(--item-color);box-shadow:inset 0 -2px 0 rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.22);transform:rotate(-17deg)}
+      .rizz3d-swatch.is-sword:before{content:"";position:absolute;left:12px;top:2px;width:4px;height:20px;border-radius:2px;background:var(--item-color);box-shadow:inset 0 -5px 0 rgba(255,255,255,.24),0 0 0 1px rgba(255,255,255,.18);transform:rotate(42deg)}
+      .rizz3d-swatch.is-sword:after{content:"";position:absolute;left:7px;top:16px;width:15px;height:4px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(42deg)}
+      .rizz3d-swatch.is-axe:before{content:"";position:absolute;left:11px;top:4px;width:4px;height:21px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(35deg)}
+      .rizz3d-swatch.is-axe:after{content:"";position:absolute;left:5px;top:4px;width:15px;height:14px;border-radius:3px 7px 7px 3px;background:var(--item-color);box-shadow:inset -4px -3px 0 rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.2);transform:rotate(18deg)}
+      .rizz3d-swatch.is-torch:before{content:"";position:absolute;left:11px;top:7px;width:5px;height:18px;border-radius:2px;background:#8a572d;box-shadow:0 0 0 1px rgba(255,255,255,.14);transform:rotate(24deg)}
+      .rizz3d-swatch.is-torch:after{content:"";position:absolute;left:7px;top:1px;width:13px;height:13px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 50% 34%,#fff2a8 0 22%,#ffd75a 23% 55%,#ff6a1a 56% 100%);box-shadow:0 0 10px rgba(255,163,45,.75)}
       .rizz3d-bag-button{position:absolute;left:calc(50% + 204px);bottom:10px;z-index:7;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.86);color:#fff;font:800 10px var(--font-mono);padding:0 10px;cursor:pointer}.rizz3d-bag-button.is-open{border-color:#43e6ff;box-shadow:0 0 0 2px rgba(67,230,255,.22)}
       .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
@@ -2615,6 +2658,7 @@
     state.mined = Number(data.mined) || 0;
     state.score = Number(data.score) || 0;
     state.sigmaForged = !!data.sigmaForged;
+    if (ensureStarterPick(true)) api.toast("Wood Pickaxe added", "good");
     state.started = true;
     state.paused = false;
     state.bagOpen = false;

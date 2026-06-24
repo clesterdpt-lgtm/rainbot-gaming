@@ -619,7 +619,7 @@
     c.pAttack = false; c.pSpecial = false; c.pJump = false; c.pShield = false; c.pGrab = false;
 
     const L = aiLevel();
-    f.ai = f.ai || { think: 0, action: "approach", atkCd: 0, jitter: Math.random() * 1000, commitRecover: Math.random() < L.recover };
+    f.ai = f.ai || { think: 0, action: "approach", atkCd: 0, jitter: Math.random() * 1000 };
 
     if (f.hitstun > 0) {
       // DI toward stage center, scaled by skill (weaker CPUs barely DI)
@@ -639,14 +639,13 @@
     const main = stage.platforms.find((p) => p.solid);
     const offStage = f.x < main.x - 30 || f.x > main.x + main.w + 30;
     const belowStage = f.y > main.y + 40;
-    if (!f.onGround && (offStage || belowStage) && f.y > 200) {
-      if (!f.ai.commitRecover) return c; // weaker CPUs sometimes whiff the recovery and SD
+    if (!f.onGround && (offStage || belowStage) && f.y > 160) {
+      // Always recover — a CPU that SDs is broken, not "easy". Beeline for the stage.
       c.x = sign((main.x + main.w / 2) - f.x);
-      if (f.vy > -60 && f.jumps > 0) { c.jump = true; c.jumpHeld = true; c.pJump = true; }
-      else if (f.vy > 120 && f.specialCd <= 0) { c.up = true; c.special = true; c.pSpecial = true; } // up-B
+      if (f.vy > 30 && f.jumps > 0) { c.jump = true; c.jumpHeld = true; c.pJump = true; } // burn the double-jump first
+      if ((f.vy > 140 || f.jumps <= 0) && f.specialCd <= 0) { c.up = true; c.special = true; c.pSpecial = true; } // then up-B
       return c;
     }
-    if (f.onGround) f.ai.commitRecover = Math.random() < L.recover; // re-roll once safe
 
     if (!target) return c;
     const dx = target.x - f.x;
@@ -669,10 +668,18 @@
       else f.ai.action = "approach";
     }
 
+    // Edge-awareness: never step off the main stage chasing a launched target.
+    const safeL = main.x + 38, safeR = main.x + main.w - 38;
+    const targetOnStage = target.x > main.x - 10 && target.x < main.x + main.w + 10;
+    let mv = sign(dx);
+    if (f.onGround) {
+      if (mv < 0 && f.x <= safeL) mv = 0;
+      if (mv > 0 && f.x >= safeR) mv = 0;
+    }
     // approach (sometimes hang back so the player isn't smothered)
-    if (adx > 44 && Math.random() < L.approach) c.x = sign(dx);
-    // jump toward a higher target / hop
-    if (dy < -70 && f.onGround && Math.random() < 0.35 * L.approach) { c.jump = true; c.jumpHeld = true; c.pJump = true; }
+    if (adx > 44 && mv !== 0 && Math.random() < L.approach) c.x = mv;
+    // jump toward a higher on-stage target / hop (don't leap after an off-stage target)
+    if (dy < -70 && f.onGround && targetOnStage && Math.random() < 0.35 * L.approach) { c.jump = true; c.jumpHeld = true; c.pJump = true; }
     // drop through a platform to chase down
     if (dy > 90 && f.onPlatform && !f.onPlatform.solid && Math.random() < 0.25) c.down = true;
 

@@ -200,6 +200,7 @@
   //   solid:true  = main stage, landable from above, has grabbable ledges
   //   solid:false = floating pass-through (land from above, drop with down)
   const STAGE_FLOOR = 548;
+  const STAGE_MOVE_SCALE = 1.28; // wider stages need snappier traversal
   const BLAST = { left: -220, right: W + 220, top: -320, bottom: H + 220 };
 
   const STAGES = [
@@ -467,7 +468,7 @@
     const targetZoom = clamp(Math.max(actionZoom, stageZoom * 0.98), 0.94, 1.38);
     const targetX = (minX + maxX) / 2;
     const targetY = (minY + maxY) / 2 - 28;
-    const ease = 1 - Math.pow(0.0007, Math.max(dt, 0.001));
+    const ease = 1 - Math.pow(0.00025, Math.max(dt, 0.001));
 
     camera.x = lerp(camera.x, targetX, ease);
     camera.y = lerp(camera.y, targetY, ease);
@@ -534,14 +535,43 @@
       if (keyIs(e, action)) onKey(action, false);
     }
   });
+  window.addEventListener("blur", clearHumanInput);
+  canvas.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    let handled = false;
+    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab", "pause"]) {
+      if (keyIs(e, action)) { handled = true; onKey(action, true); }
+    }
+    if (handled) { e.preventDefault(); Sound.resume(); }
+  });
+  canvas.addEventListener("keyup", (e) => {
+    for (const action of ["left", "right", "up", "down", "jump", "attack", "special", "shield", "grab"]) {
+      if (keyIs(e, action)) onKey(action, false);
+    }
+  });
 
   function onKey(action, down) {
     if (action === "pause") { if (down) togglePause(); return; }
-    if (action === "left") { humanRaw.left = down; if (down) { flick.x = -1; flick.xTime = state.time; } }
-    else if (action === "right") { humanRaw.right = down; if (down) { flick.x = 1; flick.xTime = state.time; } }
-    else if (action === "up") { humanRaw.up = down; if (down) { flick.y = -1; flick.yTime = state.time; } }
-    else if (action === "down") { humanRaw.down = down; if (down) { flick.y = 1; flick.yTime = state.time; } }
+    if (action === "left") humanRaw.left = down;
+    else if (action === "right") humanRaw.right = down;
+    else if (action === "up") humanRaw.up = down;
+    else if (action === "down") humanRaw.down = down;
     else humanRaw[action] = down;
+
+    // Smash flicks are tied to attack/special presses — not plain movement.
+    if (!down) return;
+    if (action === "attack" || action === "special") {
+      if (humanRaw.left || touch.left) { flick.x = -1; flick.xTime = state.time; }
+      else if (humanRaw.right || touch.right) { flick.x = 1; flick.xTime = state.time; }
+      if (humanRaw.up || touch.up) { flick.y = -1; flick.yTime = state.time; }
+      else if (humanRaw.down || touch.down) { flick.y = 1; flick.yTime = state.time; }
+    }
+  }
+
+  function clearHumanInput() {
+    for (const k of Object.keys(humanRaw)) humanRaw[k] = false;
+    for (const k of Object.keys(touch)) touch[k] = false;
+    flick.x = 0; flick.xTime = -1; flick.y = 0; flick.yTime = -1;
   }
 
   function readHuman() {
@@ -558,13 +588,21 @@
     human.special = humanRaw.special || touch.special;
     human.shield = humanRaw.shield || touch.shield;
     human.grab = humanRaw.grab || touch.grab;
-    // flick window for smash inputs (~150ms)
+    // flick window for smash inputs (~150ms after attack/special + direction)
     const fresh = (t) => t >= 0 && state.time - t < 0.15;
     human.smashX = fresh(flick.xTime) ? flick.x : 0;
     human.smashY = fresh(flick.yTime) ? flick.y : 0;
     // edges
     human.pAttack = human.attack && !humanPrev.attack;
     human.pSpecial = human.special && !humanPrev.special;
+    if (human.pAttack || human.pSpecial) {
+      if (left) { flick.x = -1; flick.xTime = state.time; }
+      else if (right) { flick.x = 1; flick.xTime = state.time; }
+      if (human.up) { flick.y = -1; flick.yTime = state.time; }
+      else if (human.down) { flick.y = 1; flick.yTime = state.time; }
+      human.smashX = fresh(flick.xTime) ? flick.x : 0;
+      human.smashY = fresh(flick.yTime) ? flick.y : 0;
+    }
     human.pJump = human.jump && !humanPrev.jump;
     human.pShield = human.shield && !humanPrev.shield;
     human.pGrab = human.grab && !humanPrev.grab;
@@ -1155,15 +1193,16 @@
 
     // ---- horizontal movement ----
     if (canMove && !f.shielding && f.dodgeKind !== "roll") {
+      const moveRate = (rate) => 1 - Math.pow(1 - rate, dt * 60);
       if (f.onGround) {
         if (c.x !== 0) {
           f.facing = sign(c.x);
           // Snappy ground accel so input feels immediate (slippery on oil slicks).
-          const accel = f.slipping > 0 ? 0.05 : 0.5;
-          f.vx = lerp(f.vx, c.x * f.def.run, accel);
-          f.state = Math.abs(f.vx) > f.def.walk ? "run" : "walk";
+          const accel = f.slipping > 0 ? moveRate(0.08) : moveRate(0.72);
+          f.vx = lerp(f.vx, c.x * f.def.run * STAGE_MOVE_SCALE, accel);
+          f.state = Math.abs(f.vx) > f.def.walk * STAGE_MOVE_SCALE ? "run" : "walk";
         } else {
-          const fric = f.slipping > 0 ? 0.05 : 0.5;
+          const fric = f.slipping > 0 ? moveRate(0.06) : moveRate(0.62);
           f.vx = lerp(f.vx, 0, fric);
           if (Math.abs(f.vx) < 10) { f.vx = 0; if (f.state === "walk" || f.state === "run") f.state = "idle"; }
         }
@@ -1171,9 +1210,10 @@
         if (c.x !== 0) {
           f.facing = f.attack ? f.facing : sign(c.x);
           // Responsive air drift.
-          f.vx = clamp(f.vx + c.x * f.def.air * 0.34, -f.def.air, f.def.air);
+          const airCap = f.def.air * STAGE_MOVE_SCALE;
+          f.vx = clamp(f.vx + c.x * airCap * 0.42 * dt * 60, -airCap, airCap);
         } else {
-          f.vx = lerp(f.vx, 0, 0.04);
+          f.vx = lerp(f.vx, 0, moveRate(0.06));
         }
       }
     }
@@ -1249,12 +1289,15 @@
     for (const p of stage.platforms) {
       const px = p.curX !== undefined ? p.curX : p.x;
       const py = p.curY !== undefined ? p.curY : p.y;
-      const withinX = f.x > px - 6 && f.x < px + p.w + 6;
+      const withinX = f.x > px - 8 && f.x < px + p.w + 8;
       if (!withinX) continue;
+      const wantsDrop = !p.solid && (f.control.down || f.dropTimer > 0);
       // land on top when crossing the top going down
-      const landing = f.vy >= 0 && prevBottom <= py + 2 && f.y >= py;
-      if (landing) {
-        if (!p.solid && (f.control.down || f.dropTimer > 0)) continue; // drop through
+      const landing = f.vy >= 0 && prevBottom <= py + 3 && f.y >= py - 1;
+      // keep grounded while walking — prevents micro-bounce jitter on wide stages
+      const standing = !wantsDrop && f.vy <= 40 && Math.abs(f.y - py) <= 6;
+      if (landing || standing) {
+        if (wantsDrop) continue; // drop through pass-through platforms
         f.y = py; f.vy = 0; f.onGround = true; f.onPlatform = p; f.jumps = 2;
         if (f.state === "fall" || f.state === "jump" || f.state === "hit") {
           f.state = Math.abs(f.vx) > 12 ? "walk" : "idle";
@@ -1280,7 +1323,7 @@
       const outside = dir < 0 ? f.x < edgeX + 8 : f.x > edgeX - 8;
       if (nearX && belowLip && outside && f.vy > 0) {
         f.state = "ledge"; f.ledge = { x: edgeX, y: lipY, dir };
-        f.x = edgeX - dir * 14; f.y = lipY + 52;
+        f.x = edgeX - dir * 14; f.y = lipY + Math.round(f.h * 0.55);
         f.vx = 0; f.vy = 0; f.jumps = 2; f.invuln = Math.max(f.invuln, 0.5);
         f.ledgeTimer = 6;
         return;
@@ -1908,6 +1951,7 @@
   //  GAME FLOW  (menu / start / results)
   // ============================================================
   function showMenu() {
+    clearHumanInput();
     state.screen = "menu";
     state.paused = false;
     overlay.classList.add("overlay--show");
@@ -1969,6 +2013,7 @@
   }
 
   function startMatch() {
+    clearHumanInput();
     Sound.resume();
     Sound.play("start");
     state.screen = "fight";

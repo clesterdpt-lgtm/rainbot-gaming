@@ -1977,27 +1977,31 @@
 
     overlayBody.innerHTML = `
       <div class="ssb-select">
-        <div class="ssb-select__group">
-          <h3 class="ssb-select__title">Your fighter</h3>
-          <div class="ssb-grid ssb-grid--char">${charCards}</div>
-        </div>
-        <div class="ssb-select__group">
-          <h3 class="ssb-select__title">Stage</h3>
-          <div class="ssb-grid ssb-grid--stage">${stageCards}</div>
-        </div>
-        <div class="ssb-select__group">
-          <div class="ssb-row">
-            <div><span class="ssb-select__title">Rivals</span><div class="ssb-chips">${rivalBtns}</div></div>
-            <div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>
-            <div><span class="ssb-select__title">CPU skill</span><div class="ssb-chips">${diffBtns}</div></div>
+        <div class="ssb-select__main">
+          <div class="ssb-select__group">
+            <h3 class="ssb-select__title">Your fighter</h3>
+            <div class="ssb-grid ssb-grid--char">${charCards}</div>
+          </div>
+          <div class="ssb-select__group">
+            <h3 class="ssb-select__title">Stage</h3>
+            <div class="ssb-grid ssb-grid--stage">${stageCards}</div>
+          </div>
+          <div class="ssb-select__group">
+            <div class="ssb-row">
+              <div><span class="ssb-select__title">Rivals</span><div class="ssb-chips">${rivalBtns}</div></div>
+              <div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>
+              <div><span class="ssb-select__title">CPU skill</span><div class="ssb-chips">${diffBtns}</div></div>
+            </div>
           </div>
         </div>
-        <button class="btn btn--primary ssb-start" id="ssb-start" type="button">FIGHT! ⚔️</button>
-        <p class="ssb-controls-hint">
-          <b>Move</b> ←→ / A D &nbsp;·&nbsp; <b>Jump</b> ↑ / W / Space (double-jump) &nbsp;·&nbsp; <b>Drop/Fast-fall</b> ↓ / S<br>
-          <b>Attack</b> J &nbsp;·&nbsp; <b>Special</b> K &nbsp;·&nbsp; <b>Shield</b> L (hold) &nbsp;·&nbsp; <b>Grab</b> I &nbsp;·&nbsp; <b>Pause</b> P<br>
-          <span class="ssb-controls-hint__tip">Flick a direction + Attack = a launching <b>smash</b>. Shield + a direction = roll/dodge.</span>
-        </p>
+        <div class="ssb-select__footer">
+          <button class="btn btn--primary ssb-start" id="ssb-start" type="button">FIGHT! ⚔️</button>
+          <p class="ssb-controls-hint">
+            <b>Move</b> ←→ / A D &nbsp;·&nbsp; <b>Jump</b> ↑ / W / Space (double-jump) &nbsp;·&nbsp; <b>Drop/Fast-fall</b> ↓ / S<br>
+            <b>Attack</b> J &nbsp;·&nbsp; <b>Special</b> K &nbsp;·&nbsp; <b>Shield</b> L (hold) &nbsp;·&nbsp; <b>Grab</b> I &nbsp;·&nbsp; <b>Pause</b> P<br>
+            <span class="ssb-controls-hint__tip">Flick a direction + Attack = a launching <b>smash</b>. Shield + a direction = roll/dodge.</span>
+          </p>
+        </div>
       </div>`;
 
     overlayBody.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => { settings.p1 = b.dataset.char; Sound.play("select"); renderSelect(); }));

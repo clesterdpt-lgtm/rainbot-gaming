@@ -40,7 +40,55 @@
     .ssb-page .game-side__poster { aspect-ratio: 16 / 9; object-fit: cover; background: #0b0b14; }
 
     /* ---------- select / results overlay UI ---------- */
-    .ssb-select { width: 100%; max-width: 620px; text-align: left; }
+    /* Keep the fight button visible when the canvas is short (non-maxed view). */
+    .ssb-page .canvas-wrap .overlay {
+      justify-content: flex-start;
+      align-items: stretch;
+      overflow: hidden;
+      padding: 10px 14px 12px;
+      gap: 6px;
+    }
+    .ssb-page .canvas-wrap .overlay__title {
+      font-size: clamp(18px, 3.2vw, 28px);
+      margin: 0;
+      flex-shrink: 0;
+    }
+    .ssb-page .canvas-wrap .overlay__sub {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.35;
+      flex-shrink: 0;
+    }
+    .ssb-page #ssb-overlay-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    .ssb-select {
+      width: 100%;
+      max-width: 620px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+    .ssb-select__main {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 2px;
+    }
+    .ssb-select__footer {
+      flex-shrink: 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(10, 10, 20, 0) 0%, rgba(10, 10, 20, 0.92) 28%);
+    }
     .ssb-select__group { margin-bottom: 14px; }
     .ssb-select__title { font-family: var(--font-display, 'Bungee'), sans-serif; font-size: 12px; letter-spacing: 1px; color: var(--ink-dim, #95a0b8); text-transform: uppercase; margin: 0 0 7px; }
     .ssb-grid { display: grid; gap: 8px; }
@@ -68,8 +116,14 @@
     }
     .ssb-chip.is-sel { border-color: var(--accent-3, #f7d716); color: var(--accent-3, #f7d716); }
 
-    .ssb-start { width: 100%; margin-top: 6px; font-size: 18px; }
-    .ssb-controls-hint { font-size: 11px; color: var(--ink-dim, #95a0b8); line-height: 1.6; margin: 12px 0 0; text-align: center; }
+    .ssb-start { width: 100%; margin-top: 0; font-size: 18px; }
+    .ssb-controls-hint { font-size: 11px; color: var(--ink-dim, #95a0b8); line-height: 1.6; margin: 10px 0 0; text-align: center; }
+    @media (max-height: 560px) {
+      .ssb-page .canvas-wrap .overlay__sub { display: none; }
+      .ssb-page .ssb-controls-hint { display: none; }
+      .ssb-page .ssb-pick__role { display: none; }
+      .ssb-select__group { margin-bottom: 10px; }
+    }
     .ssb-controls-hint b { color: var(--ink, #f4f7fb); }
     .ssb-controls-hint__tip { color: var(--accent-2, #2ee0ff); }
 
@@ -228,7 +282,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260621-network-3"></script>
-  <script src="../assets/js/super-slop-brothers.js?v=20260623-ssb-5"></script>
+  <script src="../assets/js/super-slop-brothers.js?v=20260623-ssb-6"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

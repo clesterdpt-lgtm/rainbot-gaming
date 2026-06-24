@@ -1243,6 +1243,11 @@
         speed: 0.65 + hash2(i * 67 + 1, i * 71 - 2) * 0.45,
         action: "idle",
         actionTimer: 0.4 + hash2(i * 73 - 6, i * 79 + 8) * 2,
+        buddy: -1,
+        walkPhase: hash2(i * 37 + 2, i * 41 - 4) * Math.PI * 2,
+        stepTimer: 0.2 + hash2(i * 59 + 6, i * 43 - 7) * 0.5,
+        hopTimer: 0,
+        fxTimer: 1 + hash2(i * 89 - 3, i * 97 + 5) * 2.5,
         phase: hash2(i * 43 + 9, i * 61 - 5) * Math.PI * 2,
         turn: hash2(i * 47 - 3, i * 53 + 7) * Math.PI * 2,
       };
@@ -1287,12 +1292,12 @@
       addBox(group, [-0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
       addBox(group, [0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
       addBox(group, [0, 0.45, -0.39], [0.28, 0.06, 0.04], friendlyMaterials.blush);
-      addBox(group, [0, 0.86, 0], [0.46, 0.18, 0.46], friendlyMaterials.mango);
+      parts.top = addBox(group, [0, 0.86, 0], [0.46, 0.18, 0.46], friendlyMaterials.mango);
     } else if (type === 1) {
       addBox(group, [0, 0.36, 0], [0.58, 0.72, 0.58], friendlyMaterials.cream);
       parts.left = addBox(group, [-0.43, 0.38, -0.02], [0.12, 0.28, 0.14], friendlyMaterials.cream);
       parts.right = addBox(group, [0.43, 0.38, -0.02], [0.12, 0.28, 0.14], friendlyMaterials.cream);
-      addBox(group, [0, 0.86, 0], [0.88, 0.28, 0.88], friendlyMaterials.berry);
+      parts.top = addBox(group, [0, 0.86, 0], [0.88, 0.28, 0.88], friendlyMaterials.berry);
       addBox(group, [-0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0, 0.43, -0.33], [0.22, 0.05, 0.04], friendlyMaterials.blush);
@@ -1308,7 +1313,7 @@
       addBox(group, [-0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0, 0.38, -0.35], [0.24, 0.06, 0.04], friendlyMaterials.blush);
-      addBox(group, [0, 0.78, 0], [0.28, 0.38, 0.28], friendlyMaterials.berry);
+      parts.top = addBox(group, [0, 0.78, 0], [0.28, 0.38, 0.28], friendlyMaterials.berry);
     }
     group.userData.parts = parts;
     group.traverse((child) => { child.castShadow = true; child.receiveShadow = true; });
@@ -1319,86 +1324,326 @@
     for (let i = 0; i < state.friendlies.length; i++) {
       const friendly = state.friendlies[i];
       friendly.actionTimer -= dt;
-      if (friendly.actionTimer <= 0) chooseFriendlyAction(friendly, i);
-      if (friendly.action === "wander") {
-        const dx = friendly.targetX - friendly.x;
-        const dz = friendly.targetZ - friendly.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist < 0.18) {
-          chooseFriendlyAction(friendly, i + 31);
-        } else {
-          const step = Math.min(dist, friendly.speed * dt);
-          const nx = friendly.x + dx / dist * step;
-          const nz = friendly.z + dz / dist * step;
-          if (friendlyCanStandAt(nx, nz)) {
-            friendly.x = nx;
-            friendly.z = nz;
-            friendly.y = groundYAt(nx, nz) + 1;
-            friendly.turn = Math.atan2(dx, dz) + Math.PI;
-          } else {
-            chooseFriendlyAction(friendly, i + 61);
-          }
-        }
-      }
-      const phase = now * (1.8 + (friendly.type + 1) * 0.16) + friendly.phase;
-      const busy = friendly.action === "dance" ? 1 : friendly.action === "graze" ? 0.45 : 0.25;
-      const bounce = Math.abs(Math.sin(phase * (friendly.action === "wander" ? 1.3 : 1))) * (0.06 + busy * 0.11);
-      const sway = Math.sin(phase * 0.58) * (0.07 + busy * 0.08);
-      const facePlayer = friendly.action === "idle" && Math.hypot(state.player.x - friendly.x, state.player.z - friendly.z) < 9
-        ? Math.atan2(state.player.x - friendly.x, state.player.z - friendly.z) + Math.PI
-        : friendly.turn;
-      friendly.mesh.position.set(friendly.x + Math.sin(phase * 0.37) * 0.05, friendly.y + bounce, friendly.z + Math.cos(phase * 0.41) * 0.05);
-      friendly.mesh.rotation.y = facePlayer + sway;
-      friendly.mesh.rotation.x = friendly.action === "graze" ? 0.28 + Math.sin(phase * 1.4) * 0.06 : 0;
-      friendly.mesh.rotation.z = Math.sin(phase) * (friendly.action === "dance" ? 0.16 : 0.07);
-      const base = 1.28;
-      friendly.mesh.scale.set(base + bounce * 0.18, base - bounce * 0.1, base + bounce * 0.18);
-      animateFriendlyParts(friendly, phase);
+      friendly.stepTimer = Math.max(0, (friendly.stepTimer || 0) - dt);
+      friendly.hopTimer = Math.max(0, (friendly.hopTimer || 0) - dt);
+      friendly.fxTimer = Math.max(0, (friendly.fxTimer || 0) - dt);
+      const threat = nearestFriendlyThreat(friendly, 9);
+      if (threat && friendly.action !== "flee") chooseFriendlyFlee(friendly, threat, i);
+      else if (friendly.action === "flee" && !threat && friendly.actionTimer < 0.35) chooseFriendlyAction(friendly, i + 17);
+      else if (friendly.actionTimer <= 0) chooseFriendlyAction(friendly, i);
+      const moved = updateFriendlyMovement(friendly, dt, i);
+      maybeEmitFriendlyMood(friendly, i);
+      renderFriendly(friendly, now, moved);
     }
   }
   function chooseFriendlyAction(friendly, salt) {
     const roll = hash2(Math.floor(friendly.x * 11) + salt, Math.floor(friendly.z * 13) - salt);
-    if (roll < 0.48) {
+    const dxp = state.player.x - friendly.x;
+    const dzp = state.player.z - friendly.z;
+    const playerDist = Math.hypot(dxp, dzp);
+    const threat = nearestFriendlyThreat(friendly, 9);
+    if (threat) {
+      chooseFriendlyFlee(friendly, threat, salt);
+    } else if (isNight() && roll < 0.38) {
+      friendly.action = "sleep";
+      friendly.actionTimer = 2.4 + roll * 5.5;
+      friendly.buddy = -1;
+    } else if (playerDist < 7.5 && roll < 0.26) {
+      friendly.buddy = -1;
+      if (playerDist > 3.3 && setFriendlyFollowTarget(friendly, salt)) {
+        friendly.action = "follow";
+        friendly.actionTimer = 1.1 + roll * 2.2;
+      } else {
+        friendly.action = "look";
+        friendly.actionTimer = 0.9 + roll * 1.6;
+        friendly.turn = Math.atan2(dxp, dzp) + Math.PI;
+      }
+    } else if (roll < 0.44 && chooseFriendlyBuddyAction(friendly, salt)) {
+      return;
+    } else if (friendly.type === 2 && roll < 0.58 && setFriendlyRoamTarget(friendly, salt, 1.4, 4.2, 0.15)) {
+      friendly.action = "hop";
+      friendly.actionTimer = 1.1 + roll * 2.1;
+    } else if (roll < 0.66) {
       friendly.action = "wander";
       friendly.actionTimer = 2.2 + roll * 3.6;
-      const angle = hash2(salt * 17 + 3, salt * 19 - 5) * Math.PI * 2;
-      const dist = 2 + hash2(salt * 23 - 7, salt * 29 + 11) * 7;
-      friendly.targetX = clamp(friendly.homeX + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
-      friendly.targetZ = clamp(friendly.homeZ + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
-      if (!friendlyCanStandAt(friendly.targetX, friendly.targetZ)) {
-        friendly.targetX = friendly.homeX;
-        friendly.targetZ = friendly.homeZ;
-      }
-    } else if (roll < 0.7) {
-      friendly.action = "graze";
+      friendly.buddy = -1;
+      setFriendlyRoamTarget(friendly, salt, 2, 8.5, 0.32);
+    } else if (roll < 0.82) {
+      friendly.action = friendly.type === 2 ? "peck" : "graze";
       friendly.actionTimer = 1.4 + roll * 2;
-    } else if (roll < 0.88) {
+      friendly.buddy = -1;
+    } else if (roll < 0.93) {
       friendly.action = "dance";
       friendly.actionTimer = 1.1 + roll * 1.8;
+      friendly.buddy = -1;
     } else {
       friendly.action = "idle";
       friendly.actionTimer = 1.2 + roll * 2.4;
+      friendly.buddy = -1;
     }
   }
-  function friendlyCanStandAt(x, z) {
+  function updateFriendlyMovement(friendly, dt, salt) {
+    if (!friendlyMovingAction(friendly.action)) return false;
+    if (friendly.action === "follow") setFriendlyFollowTarget(friendly, salt);
+    if (friendly.action === "herd") refreshFriendlyHerdTarget(friendly);
+    const dx = friendly.targetX - friendly.x;
+    const dz = friendly.targetZ - friendly.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < (friendly.action === "flee" ? 0.55 : 0.22)) {
+      chooseFriendlyAction(friendly, salt + 31);
+      return false;
+    }
+    const sep = friendlySeparation(friendly, 1.25);
+    let dirX = dx / dist + sep.x * 0.85;
+    let dirZ = dz / dist + sep.z * 0.85;
+    const dirLen = Math.hypot(dirX, dirZ) || 1;
+    dirX /= dirLen;
+    dirZ /= dirLen;
+    const speed = friendlySpeedForAction(friendly);
+    const step = Math.min(dist, speed * dt);
+    const nx = friendly.x + dirX * step;
+    const nz = friendly.z + dirZ * step;
+    const ground = friendlyGroundAt(nx, nz);
+    if (ground === null) {
+      if (friendly.action === "flee") {
+        const threat = nearestFriendlyThreat(friendly, 12);
+        if (threat) chooseFriendlyFlee(friendly, threat, salt + 61);
+      } else chooseFriendlyAction(friendly, salt + 61);
+      return false;
+    }
+    const nextY = ground + 1;
+    if (Math.abs(nextY - friendly.y) > 1.25) {
+      chooseFriendlyAction(friendly, salt + 73);
+      return false;
+    }
+    friendly.x = nx;
+    friendly.z = nz;
+    if (Math.abs(nextY - friendly.y) > 0.28 || friendly.action === "hop") friendly.hopTimer = Math.max(friendly.hopTimer || 0, 0.32);
+    friendly.y = nextY;
+    friendly.turn = Math.atan2(dirX, dirZ) + Math.PI;
+    friendly.walkPhase = (friendly.walkPhase || 0) + step * (friendly.action === "flee" ? 13 : friendly.action === "hop" ? 10 : 7);
+    if (friendly.stepTimer <= 0) {
+      friendly.stepTimer = 0.24 + hash2(Math.floor(friendly.x * 19) + salt, Math.floor(friendly.z * 23) - salt) * 0.34;
+      if (friendly.action === "flee" || friendly.action === "hop" || friendly.type === 2) friendly.hopTimer = Math.max(friendly.hopTimer || 0, 0.28);
+    }
+    return true;
+  }
+  function friendlyMovingAction(action) {
+    return action === "wander" || action === "flee" || action === "follow" || action === "herd" || action === "hop";
+  }
+  function friendlySpeedForAction(friendly) {
+    if (friendly.action === "flee") return friendly.speed * 2.45;
+    if (friendly.action === "follow") return friendly.speed * 1.22;
+    if (friendly.action === "herd") return friendly.speed * 0.92;
+    if (friendly.action === "hop") return friendly.speed * 1.1;
+    return friendly.speed;
+  }
+  function friendlyGroundAt(x, z) {
     const ix = clamp(Math.floor(x), 1, WORLD_X - 2);
     const iz = clamp(Math.floor(z), 1, WORLD_Z - 2);
-    if (edgeOceanStrength(ix, iz) > 0.48) return false;
+    if (edgeOceanStrength(ix, iz) > 0.48) return null;
     const y = state.surface[surfaceIndex(ix, iz)];
-    if (y <= SEA_LEVEL) return false;
+    if (y <= SEA_LEVEL) return null;
     const top = getBlock(ix, y, iz);
-    return top === DIRT || top === GRASS || top === SAND || top === SNOW;
+    if (top !== DIRT && top !== GRASS && top !== SAND && top !== SNOW) return null;
+    if (getBlock(ix, y + 1, iz) === WATER || getBlock(ix, y + 1, iz) === LAVA) return null;
+    return y;
+  }
+  function friendlyCanStandAt(x, z) {
+    return friendlyGroundAt(x, z) !== null;
+  }
+  function setFriendlyRoamTarget(friendly, salt, minDist, maxDist, homePull = 0.25) {
+    const homeDist = Math.hypot(friendly.homeX - friendly.x, friendly.homeZ - friendly.z);
+    const anchorX = homeDist > 16 ? friendly.homeX : lerp(friendly.x, friendly.homeX, homePull);
+    const anchorZ = homeDist > 16 ? friendly.homeZ : lerp(friendly.z, friendly.homeZ, homePull);
+    for (let tries = 0; tries < 10; tries++) {
+      const angle = hash2(salt * 17 + tries * 13 + 3, salt * 19 - tries * 7 - 5) * Math.PI * 2;
+      const dist = minDist + hash2(salt * 23 - tries * 11 - 7, salt * 29 + tries * 5 + 11) * (maxDist - minDist);
+      const tx = clamp(anchorX + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
+      const tz = clamp(anchorZ + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
+      if (friendlyCanStandAt(tx, tz)) {
+        friendly.targetX = tx;
+        friendly.targetZ = tz;
+        return true;
+      }
+    }
+    if (friendlyCanStandAt(friendly.homeX, friendly.homeZ)) {
+      friendly.targetX = friendly.homeX;
+      friendly.targetZ = friendly.homeZ;
+      return true;
+    }
+    return false;
+  }
+  function setFriendlyFollowTarget(friendly, salt) {
+    const dx = friendly.x - state.player.x;
+    const dz = friendly.z - state.player.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const keepAway = 2.5 + friendly.type * 0.28;
+    const orbit = (hash2(salt * 31 + friendly.type, salt * 37 - friendly.type) - 0.5) * 1.35;
+    const tx = state.player.x + dx / dist * keepAway + Math.cos(orbit) * 0.55;
+    const tz = state.player.z + dz / dist * keepAway + Math.sin(orbit) * 0.55;
+    if (!friendlyCanStandAt(tx, tz)) return setFriendlyRoamTarget(friendly, salt + 101, 1.6, 4.5, 0.1);
+    friendly.targetX = clamp(tx, 2.5, WORLD_X - 2.5);
+    friendly.targetZ = clamp(tz, 2.5, WORLD_Z - 2.5);
+    return true;
+  }
+  function chooseFriendlyBuddyAction(friendly, salt) {
+    const buddyIndex = findFriendlyBuddy(friendly, 5.6, salt);
+    if (buddyIndex < 0) return false;
+    const buddy = state.friendlies[buddyIndex];
+    friendly.buddy = buddyIndex;
+    const dist = Math.hypot(buddy.x - friendly.x, buddy.z - friendly.z);
+    if (dist > 2.1) {
+      friendly.action = "herd";
+      friendly.actionTimer = 1.2 + hash2(salt * 13, salt * 17) * 2.2;
+      refreshFriendlyHerdTarget(friendly);
+    } else {
+      friendly.action = "social";
+      friendly.actionTimer = 1.1 + hash2(salt * 19, salt * 23) * 2.4;
+    }
+    return true;
+  }
+  function refreshFriendlyHerdTarget(friendly) {
+    const buddy = state.friendlies[friendly.buddy];
+    if (!buddy) return;
+    const dx = friendly.x - buddy.x;
+    const dz = friendly.z - buddy.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    friendly.targetX = clamp(buddy.x + dx / dist * 1.45, 2.5, WORLD_X - 2.5);
+    friendly.targetZ = clamp(buddy.z + dz / dist * 1.45, 2.5, WORLD_Z - 2.5);
+  }
+  function findFriendlyBuddy(friendly, radius, salt) {
+    let best = -1;
+    let bestD = radius * radius;
+    const start = Math.floor(hash2(salt * 7 + 1, salt * 11 - 3) * state.friendlies.length);
+    for (let n = 0; n < state.friendlies.length; n++) {
+      const i = (start + n) % state.friendlies.length;
+      const other = state.friendlies[i];
+      if (!other || other === friendly || other.action === "sleep" || other.action === "flee") continue;
+      const dx = other.x - friendly.x;
+      const dz = other.z - friendly.z;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+  function nearestFriendlyThreat(friendly, radius) {
+    let best = null;
+    let bestD = radius * radius;
+    for (const mob of state.mobs) {
+      const dx = mob.x - friendly.x;
+      const dz = mob.z - friendly.z;
+      const d = dx * dx + dz * dz;
+      if (d < bestD) {
+        bestD = d;
+        best = mob;
+      }
+    }
+    return best;
+  }
+  function chooseFriendlyFlee(friendly, threat, salt) {
+    friendly.action = "flee";
+    friendly.actionTimer = 0.9 + hash2(salt * 41 + 5, salt * 43 - 9) * 1.3;
+    friendly.buddy = -1;
+    const away = Math.atan2(friendly.z - threat.z, friendly.x - threat.x);
+    for (let tries = 0; tries < 8; tries++) {
+      const bend = (tries % 2 ? 1 : -1) * tries * 0.34;
+      const dist = 5.5 + hash2(salt * 47 + tries, salt * 53 - tries) * 6;
+      const tx = clamp(friendly.x + Math.cos(away + bend) * dist, 2.5, WORLD_X - 2.5);
+      const tz = clamp(friendly.z + Math.sin(away + bend) * dist, 2.5, WORLD_Z - 2.5);
+      if (friendlyCanStandAt(tx, tz)) {
+        friendly.targetX = tx;
+        friendly.targetZ = tz;
+        return;
+      }
+    }
+    setFriendlyRoamTarget(friendly, salt + 211, 3, 7, 0.6);
+  }
+  function friendlySeparation(friendly, radius) {
+    const out = { x: 0, z: 0 };
+    const r2 = radius * radius;
+    for (const other of state.friendlies) {
+      if (!other || other === friendly) continue;
+      const dx = friendly.x - other.x;
+      const dz = friendly.z - other.z;
+      const d = dx * dx + dz * dz;
+      if (d > 0.0001 && d < r2) {
+        const pull = (radius - Math.sqrt(d)) / radius;
+        out.x += dx * pull / d;
+        out.z += dz * pull / d;
+      }
+    }
+    return out;
+  }
+  function maybeEmitFriendlyMood(friendly, salt) {
+    if (!state.started || friendly.fxTimer > 0 || state.fx.length > 90) return;
+    let rgb = null;
+    let count = 2;
+    if (friendly.action === "dance") {
+      rgb = cachedRgb("#ffbd3f");
+      count = 3;
+    } else if (friendly.action === "social" || friendly.action === "look") {
+      rgb = cachedRgb("#ff7aa8");
+    } else if (friendly.action === "graze" || friendly.action === "peck") {
+      rgb = cachedRgb("#7dff66");
+    }
+    if (!rgb) return;
+    spawnBurst(friendly.x, friendly.y + 0.78, friendly.z, rgb, count, 0.42);
+    friendly.fxTimer = 2.2 + hash2(Math.floor(friendly.x * 13) + salt, Math.floor(friendly.z * 17) - salt) * 3.2;
+  }
+  function renderFriendly(friendly, now) {
+    const phase = now * (1.8 + (friendly.type + 1) * 0.16) + friendly.phase;
+    const moving = friendlyMovingAction(friendly.action);
+    const graze = friendly.action === "graze" || friendly.action === "peck";
+    const sleeping = friendly.action === "sleep";
+    const stridePhase = moving ? (friendly.walkPhase || phase) : phase;
+    const busy = friendly.action === "dance" ? 1.1 : friendly.action === "flee" ? 1.25 : moving ? 0.65 : graze ? 0.46 : 0.18;
+    const bounce = sleeping ? 0 : Math.abs(Math.sin(stridePhase * (moving ? 1.25 : 1))) * (0.035 + busy * 0.095);
+    const hop = friendly.hopTimer > 0 ? Math.sin((1 - friendly.hopTimer / 0.32) * Math.PI) * 0.2 : 0;
+    const sway = sleeping ? 0 : Math.sin(phase * 0.58) * (0.055 + busy * 0.075);
+    const face = friendlyFaceAngle(friendly);
+    const wiggle = sleeping ? 0 : 0.035;
+    friendly.mesh.position.set(
+      friendly.x + Math.sin(phase * 0.37) * wiggle,
+      friendly.y + bounce + hop,
+      friendly.z + Math.cos(phase * 0.41) * wiggle
+    );
+    friendly.mesh.rotation.y = face + sway;
+    friendly.mesh.rotation.x = sleeping ? 0.5 : graze ? 0.3 + Math.sin(phase * (friendly.action === "peck" ? 3.4 : 1.4)) * 0.08 : friendly.action === "flee" ? -0.08 : 0;
+    friendly.mesh.rotation.z = sleeping ? 0.22 : Math.sin(phase) * (friendly.action === "dance" ? 0.18 : friendly.action === "flee" ? 0.1 : 0.055);
+    const base = 1.28;
+    if (sleeping) friendly.mesh.scale.set(base * 1.08, base * 0.62, base * 1.02);
+    else friendly.mesh.scale.set(base + bounce * 0.18, base - bounce * 0.1, base + bounce * 0.18);
+    animateFriendlyParts(friendly, phase);
+  }
+  function friendlyFaceAngle(friendly) {
+    if ((friendly.action === "idle" || friendly.action === "look" || friendly.action === "follow") && Math.hypot(state.player.x - friendly.x, state.player.z - friendly.z) < 9) {
+      return Math.atan2(state.player.x - friendly.x, state.player.z - friendly.z) + Math.PI;
+    }
+    if (friendly.action === "social") {
+      const buddy = state.friendlies[friendly.buddy];
+      if (buddy) return Math.atan2(buddy.x - friendly.x, buddy.z - friendly.z) + Math.PI;
+    }
+    return friendly.turn;
   }
   function animateFriendlyParts(friendly, phase) {
     const parts = friendly.mesh.userData.parts || {};
-    const wave = Math.sin(phase * (friendly.action === "dance" ? 2.4 : 1.2));
+    const wave = Math.sin(phase * (friendly.action === "dance" ? 2.4 : friendly.action === "flee" ? 2.8 : 1.2));
+    const graze = friendly.action === "graze" || friendly.action === "peck";
     if (parts.left) {
-      parts.left.rotation.z = friendly.action === "graze" ? 0.25 : wave * 0.45;
-      parts.left.rotation.x = friendly.action === "wander" ? Math.sin(phase * 2.2) * 0.25 : 0;
+      parts.left.rotation.z = friendly.action === "sleep" ? 0.12 : graze ? 0.25 : wave * (friendly.action === "social" ? 0.22 : 0.45);
+      parts.left.rotation.x = friendlyMovingAction(friendly.action) ? Math.sin(phase * 2.2) * 0.32 : friendly.action === "look" ? -0.14 : 0;
     }
     if (parts.right) {
-      parts.right.rotation.z = friendly.action === "graze" ? -0.25 : -wave * 0.45;
-      parts.right.rotation.x = friendly.action === "wander" ? -Math.sin(phase * 2.2) * 0.25 : 0;
+      parts.right.rotation.z = friendly.action === "sleep" ? -0.12 : graze ? -0.25 : -wave * (friendly.action === "social" ? 0.22 : 0.45);
+      parts.right.rotation.x = friendlyMovingAction(friendly.action) ? -Math.sin(phase * 2.2) * 0.32 : friendly.action === "look" ? -0.14 : 0;
+    }
+    if (parts.top) {
+      parts.top.rotation.x = graze ? Math.sin(phase * 1.6) * 0.12 : friendly.action === "sleep" ? -0.18 : 0;
+      parts.top.rotation.z = friendly.action === "dance" ? Math.sin(phase * 2.1) * 0.16 : friendly.action === "flee" ? Math.sin(phase * 3.1) * 0.08 : 0;
     }
   }
 
@@ -2934,7 +3179,11 @@
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
         friendlyCount: state.friendlies.length,
-        movingFriendlies: state.friendlies.filter((friendly) => friendly.action === "wander").length,
+        movingFriendlies: state.friendlies.filter((friendly) => friendlyMovingAction(friendly.action)).length,
+        friendlyActions: state.friendlies.reduce((counts, friendly) => {
+          counts[friendly.action] = (counts[friendly.action] || 0) + 1;
+          return counts;
+        }, {}),
         bagSlots: state.bag.length,
         bagUsed: state.bag.filter(Boolean).length,
         fxCount: state.fx.length,

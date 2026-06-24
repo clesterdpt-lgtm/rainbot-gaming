@@ -2203,6 +2203,48 @@ body.arcade-home::before {
   padding: 5px 7px;
 }
 
+@media (max-width: 1600px) and (min-width: 1341px) {
+  .nav {
+    min-height: 124px;
+    padding-block: 8px 12px;
+  }
+
+  #nav-slot {
+    grid-template-areas:
+      "brand links actions"
+      "search search search";
+    grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) auto;
+    row-gap: 8px;
+  }
+
+  .nav__brand {
+    grid-area: brand;
+    height: 62px;
+  }
+
+  .nav__links {
+    grid-area: links;
+    flex-wrap: wrap;
+    gap: 8px clamp(12px, 1.45vw, 22px);
+    line-height: 1.25;
+  }
+
+  .nav__links a.is-active::after {
+    bottom: -8px;
+  }
+
+  .nav__search {
+    display: grid;
+    grid-area: search;
+    justify-self: center;
+    width: min(100%, 620px);
+  }
+
+  .nav__actions {
+    grid-area: actions;
+  }
+}
+
 .arcade-shell {
   position: relative;
   z-index: 1;

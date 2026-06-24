@@ -1,0 +1,14 @@
+# External hosts currently allowed in source-controlled pages and docs.
+# Additions should be reviewed before publishing because GitHub Pages serves
+# this repo directly from main.
+buy.stripe.com
+cdn.jsdelivr.net
+cdn.tailwindcss.com
+cdnjs.cloudflare.com
+clesterdpt-lgtm.github.io
+fonts.googleapis.com
+fonts.gstatic.com
+github.com
+pagead2.googlesyndication.com
+unpkg.com
+www.profitabledisplaynetwork.com

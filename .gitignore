@@ -1,4 +1,24 @@
 .DS_Store
-.playwright-mcp/
 *.bak
+*.log
+
+# Local config and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local tooling and generated QA artifacts
 .claude/
+.playwright-cli/
+.playwright-mcp/
+output/
+test-artifacts/
+tmp/
+
+# Dependency/build caches
+node_modules/
+.cache/

@@ -298,6 +298,27 @@
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
   function isAirEnemyType(behavior) { return behavior === "fly" || behavior === "hoverShoot"; }
+  function beamHitbox(m) {
+    return {
+      x: m.x - m.w * 0.5,
+      y: m.y - m.h * 0.25,
+      w: m.w * 2,
+      h: m.h * 1.5,
+    };
+  }
+  function enemyHurtbox(e) {
+    if (!isAirEnemyType(e.behavior)) return e;
+    const cx = e.x + e.w / 2;
+    const artH = 58;
+    const artW = artH * 0.62;
+    const artY = e.y + e.h - artH;
+    return {
+      x: cx - artW / 2 - 5,
+      y: artY + 4,
+      w: artW + 10,
+      h: artH - 2,
+    };
+  }
 
   function loadRasterArt(fileName) {
     const image = new Image();
@@ -523,7 +544,7 @@
   }
 
   // ----- Stage setup -----
-  function loadStage(n) {
+  function loadStage(n, refillHp = true) {
     state.stage = n;
     state.stageDef = STAGES[n - 1];
     state.camX = 0;
@@ -531,6 +552,11 @@
     state.beams = [];
     state.hostiles = [];
     state.boss = null;
+    if (refillHp) {
+      state.hp = state.maxHp;
+      state.hurtCd = 0;
+      player.hitFlash = 0;
+    }
     player.x = 80;
     player.y = GROUND_Y - player.h;
     player.vx = 0; player.vy = 0;
@@ -990,9 +1016,10 @@
   function updateBeams(dt) {
     for (const m of state.beams) {
       m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
+      const hit = beamHitbox(m);
       // hit enemies
       for (const e of state.enemies) {
-        if (e.hp > 0 && aabb(m, e)) {
+        if (e.hp > 0 && aabb(hit, enemyHurtbox(e))) {
           e.hp -= m.dmg; e.hitFlash = 0.18;
           spawnBurst(m.x, m.y, e.color, 5, 120);
           bumpCombo(); gainMog(0.02);
@@ -1002,7 +1029,7 @@
         }
       }
       // hit boss
-      if (m.life > 0 && state.boss && !state.boss.defeated && state.bossIntro <= 0 && aabb(m, state.boss)) {
+      if (m.life > 0 && state.boss && !state.boss.defeated && state.bossIntro <= 0 && aabb(hit, state.boss)) {
         state.boss.hp -= m.dmg; state.boss.hitFlash = 0.12;
         spawnBurst(m.x, m.y, GOLD, 6, 140);
         bumpCombo(); gainMog(0.025);
@@ -2287,14 +2314,16 @@
     state.started = true;
     state.score = Number(data.score) || 0;
     state.combo = Number(data.combo) || 0;
-    state.hp = Math.max(1, Number(data.hp) || 100);
+    const savedHp = Math.max(1, Number(data.hp) || 100);
+    state.hp = savedHp;
     state.maxHp = Math.max(1, Number(data.maxHp) || 100);
     state.mog = Math.max(0, Math.min(1, Number(data.mog) || 0));
     state.defeated = Number(data.defeated) || 0;
     state.lastTime = 0;
     state.transitioning = false;
     state.transition = 0;
-    loadStage(Math.max(1, Math.min(stageCount(), Number(data.stage) || 1)));
+    loadStage(Math.max(1, Math.min(stageCount(), Number(data.stage) || 1)), false);
+    state.hp = savedHp;
     if (data.player) {
       player.x = Number(data.player.x) || player.x;
       player.y = Number(data.player.y) || player.y;

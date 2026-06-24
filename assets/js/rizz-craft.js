@@ -33,16 +33,18 @@
   }
 
   const THREE = window.THREE;
-  const SAVE_VERSION = 6;
+  const SAVE_VERSION = 7;
   const WORLD_X = 512;
-  const WORLD_Y = 72;
+  const WORLD_Y = 128;
   const WORLD_Z = 512;
   const CHUNK = 16;
-  const SEA_LEVEL = 16;
+  const SEA_LEVEL = 36;
+  const LAVA_LEVEL = 15;
   const EDGE_OCEAN = 44;
   const RENDER_RADIUS_CHUNKS = 6;
   const DECOR_RADIUS_CHUNKS = 6;
   const HOTBAR = 9;
+  const BAG_SLOTS = 27;
   const MAX_HP = 100;
   const DAMAGE_GRACE = 1.1;
   const SPAWN_GRACE = 4;
@@ -87,6 +89,7 @@
   const FLOWER = 15;
   const SAND = 16;
   const SNOW = 17;
+  const LAVA = 18;
 
   const STICK = 100;
   const COAL = 101;
@@ -107,14 +110,14 @@
   }
 
   def(AIR, { name: "Air", kind: "air", solid: false, color: "#000000" });
-  def(GRASS, { name: "Grass", kind: "block", solid: true, hardness: 0.45, drop: DIRT, color: "#5fcf58", side: "#7a5732" });
+  def(GRASS, { name: "Legacy Grass Top", kind: "block", solid: true, hardness: 0.45, drop: DIRT, color: "#5fcf58", side: "#7a5732" });
   def(DIRT, { name: "Dirt", kind: "block", solid: true, hardness: 0.45, color: "#80542f" });
   def(STONE, { name: "Ohio Stone", kind: "block", solid: true, hardness: 1.25, needTool: "pick", drop: STONE, color: "#868894" });
   def(BEDROCK, { name: "Bedrock", kind: "block", solid: true, hardness: Infinity, color: "#262630" });
   def(LOG, { name: "Skibidi Log", kind: "block", solid: true, hardness: 0.85, best: "axe", color: "#78502f" });
   def(LEAVES, { name: "Brainrot Leaves", kind: "block", solid: true, hardness: 0.2, drop: null, color: "#3da34a", transparent: true });
   def(PLANKS, { name: "Toilet Planks", kind: "block", solid: true, hardness: 0.55, best: "axe", color: "#b98245" });
-  def(TABLE, { name: "Crafting Toilet", kind: "block", solid: true, hardness: 0.75, best: "axe", color: "#d7e1e8" });
+  def(TABLE, { name: "Crafting Toilet", kind: "block", solid: true, hardness: 0.75, best: "axe", color: "#d7e1e8", decor: true });
   def(COAL_ORE, { name: "Gyatt Coal Ore", kind: "block", solid: true, hardness: 1.55, needTool: "pick", drop: COAL, color: "#6f707b", ore: "#22232b" });
   def(RIZZ_ORE, { name: "Rizz Ore", kind: "block", solid: true, hardness: 1.8, needTool: "pick", drop: RIZZ, color: "#777985", ore: "#ffcf3a" });
   def(SIGMA_ORE, { name: "Sigma Ore", kind: "block", solid: true, hardness: 2.45, needTool: "pick", needTier: 2, drop: SIGMA, color: "#767987", ore: "#4beaff" });
@@ -124,6 +127,7 @@
   def(FLOWER, { name: "Rizz Bloom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#ff6fa8", decor: true });
   def(SAND, { name: "Ohio Sand", kind: "block", solid: true, hardness: 0.45, color: "#d8c073" });
   def(SNOW, { name: "Powder Snow", kind: "block", solid: true, hardness: 0.28, color: "#e9f6ff" });
+  def(LAVA, { name: "Deep Lava", kind: "liquid", solid: false, hardness: Infinity, drop: null, color: "#ff6a1a", transparent: true, liquid: true });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -185,12 +189,13 @@
 
   const worldGroup = new THREE.Group();
   const waterGroup = new THREE.Group();
+  const lavaGroup = new THREE.Group();
   const decorGroup = new THREE.Group();
   const mobGroup = new THREE.Group();
   const friendlyGroup = new THREE.Group();
   const effectGroup = new THREE.Group();
   const cloudGroup = new THREE.Group();
-  scene.add(worldGroup, waterGroup, decorGroup, friendlyGroup, mobGroup, effectGroup, cloudGroup);
+  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, friendlyGroup, mobGroup, effectGroup, cloudGroup);
 
   const ambient = new THREE.HemisphereLight(0xcdf6ff, 0x3b2b22, 0.95);
   const sun = new THREE.DirectionalLight(0xfff6df, 1.22);
@@ -232,6 +237,14 @@
     shininess: 92,
     side: THREE.DoubleSide,
     depthWrite: false,
+  });
+  const lavaMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff5a14,
+    vertexColors: true,
+    transparent: false,
+    opacity: 1,
+    side: THREE.DoubleSide,
+    depthWrite: true,
   });
   const enemyMaterials = {
     porcelain: new THREE.MeshLambertMaterial({ color: 0xe8edf1 }),
@@ -294,6 +307,8 @@
     friendlies: [],
     fx: [],
     hotbar: [],
+    bag: [],
+    bagOpen: false,
     selected: 0,
     target: null,
     mining: null,
@@ -302,6 +317,7 @@
     swingKind: "gather",
     gatherPhase: 0,
     attackFlash: 0,
+    placeQueued: false,
     placeCd: 0,
     day: 1,
     time: 0.21,
@@ -328,6 +344,8 @@
   let rendererWidth = 0;
   let rendererHeight = 0;
   let rendererPixelRatio = 0;
+  let heldRenderCode = null;
+  let bagRenderKey = "";
   let chunkCenterKey = "";
   let decorCenterKey = "";
   let sunDisk = null;
@@ -443,6 +461,7 @@
     state.input.jump = false;
     state.input.mine = false;
     state.input.place = false;
+    state.placeQueued = false;
     state.input.sprint = false;
   }
   function setKeyboardMove(key, down) {
@@ -504,13 +523,20 @@
   }
   function surfaceBlockForBiome(biome, shoreline) {
     if (shoreline || biome.surface === "sand") return SAND;
-    if (biome.surface === "snow") return SNOW;
-    return GRASS;
+    return DIRT;
   }
   function nearSurfaceBlockForBiome(biome, shoreline) {
     if (shoreline || biome.surface === "sand") return SAND;
-    if (biome.surface === "snow") return DIRT;
     return DIRT;
+  }
+  function dirtTopOverlay(x, y, z) {
+    const ix = clamp(x | 0, 0, WORLD_X - 1);
+    const iz = clamp(z | 0, 0, WORLD_Z - 1);
+    if (y !== state.surface[surfaceIndex(ix, iz)]) return null;
+    const biome = biomeAt(ix, iz);
+    if (biome.surface === "snow" || biome.id === 11) return "snow";
+    if (biome.surface === "sand") return null;
+    return "grass";
   }
   function canPlaceTreeSeed(x, z, biome, spawnDist) {
     if (spawnDist < 26 || biome.tree <= 0) return false;
@@ -591,7 +617,7 @@
     }
     updateSurfaceColumn(x, z);
     rebuildChunksNear(x, z);
-    if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER) decorDirty = true;
+    if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
   function flowWaterNear(x, y, z, limit = WATER_FLOW_LIMIT) {
     const seeds = [];
@@ -651,7 +677,7 @@
     return filled;
   }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
-  function occludes(code) { return code !== AIR && code !== WATER && code !== TORCH && code !== TALL_GRASS && code !== FLOWER; }
+  function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && code !== TORCH && code !== TALL_GRASS && code !== FLOWER && code !== TABLE; }
 
   function generateWorld(seed = ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0)) {
     state.seed = seed >>> 0;
@@ -720,9 +746,15 @@
               else {
                 const r = hash3(x, y, z);
                 if (y < height - 6 && r < 0.035) code = COAL_ORE;
-                if (y < 31 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
-                if (y < 18 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
+                if (y < 45 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
+                if (y < 26 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
               }
+            }
+            if (y > 1 && y < LAVA_LEVEL) {
+              const pocket = noise3(x - 1600, y * 2.6, z + 1800, 0.082);
+              const vein = noise3(x + 230, y * 3.1, z - 510, 0.14);
+              if (code === AIR && pocket > 0.52) code = LAVA;
+              else if (code === STONE && pocket > 0.77 && vein > 0.62) code = LAVA;
             }
           }
           state.world[index(x, y, z)] = code;
@@ -748,7 +780,7 @@
         const y = state.surface[si];
         const top = getBlock(x, y, z);
         const biome = BIOMES[state.biome[si]];
-        if (top !== GRASS && top !== SNOW && !(top === SAND && biome.surface === "sand")) continue;
+        if (top !== DIRT && top !== GRASS && top !== SNOW && !(top === SAND && biome.surface === "sand")) continue;
         const spawnDist = Math.hypot(x - WORLD_X / 2, z - WORLD_Z / 2);
         if (canPlaceTreeSeed(x, z, biome, spawnDist)) {
           placeTree(x, y + 1, z, state.biome[si]);
@@ -835,7 +867,7 @@
           let code = AIR;
           if (y < h - 3) code = STONE;
           else if (y < h) code = DIRT;
-          else if (y === h) code = GRASS;
+          else if (y === h) code = DIRT;
           setBase(x, y, z, code);
         }
         state.surface[surfaceIndex(x, z)] = h;
@@ -851,7 +883,7 @@
     let y = WORLD_Y - 1;
     while (y > 0) {
       const code = getBlock(x, y, z);
-      if (code !== AIR && code !== WATER && code !== TALL_GRASS && code !== FLOWER && code !== TORCH) break;
+      if (code !== AIR && code !== WATER && code !== LAVA && code !== TALL_GRASS && code !== FLOWER && code !== TORCH) break;
       y--;
     }
     state.surface[surfaceIndex(x, z)] = y;
@@ -860,6 +892,7 @@
   function rebuildAllChunks() {
     disposeGroup(worldGroup);
     disposeGroup(waterGroup);
+    disposeGroup(lavaGroup);
     state.chunks.clear();
     chunkCenterKey = "";
     updateVisibleChunks(true);
@@ -904,6 +937,7 @@
   function disposeChunkEntry(key, entry) {
     if (entry.mesh) { worldGroup.remove(entry.mesh); disposeMesh(entry.mesh); }
     if (entry.water) { waterGroup.remove(entry.water); disposeMesh(entry.water); }
+    if (entry.lava) { lavaGroup.remove(entry.lava); disposeMesh(entry.lava); }
     state.chunks.delete(key);
   }
   function rebuildChunk(cx, cz) {
@@ -913,6 +947,7 @@
     if (old) disposeChunkEntry(key, old);
     const solid = makeGeometryArrays();
     const water = makeGeometryArrays();
+    const lava = makeGeometryArrays();
     const x0 = cx * CHUNK;
     const z0 = cz * CHUNK;
     for (let z = z0; z < z0 + CHUNK; z++) {
@@ -920,13 +955,13 @@
         for (let x = x0; x < x0 + CHUNK; x++) {
           const code = getBlock(x, y, z);
           if (code === AIR || DEF[code].decor) continue;
-          const arr = code === WATER ? water : solid;
+          const arr = code === WATER ? water : code === LAVA ? lava : solid;
           for (const face of FACES) {
             const nx = x + face.n[0];
             const ny = y + face.n[1];
             const nz = z + face.n[2];
             const neighbor = getBlock(nx, ny, nz);
-            const visible = code === WATER ? neighbor !== WATER && neighbor !== BEDROCK : !occludes(neighbor);
+            const visible = code === WATER ? neighbor !== WATER && neighbor !== BEDROCK : code === LAVA ? neighbor !== LAVA && neighbor !== BEDROCK : !occludes(neighbor);
             if (visible) pushFace(arr, x, y, z, code, face);
           }
         }
@@ -943,6 +978,10 @@
       entry.water = buildMesh(water, waterMaterial);
       waterGroup.add(entry.water);
     }
+    if (lava.positions.length) {
+      entry.lava = buildMesh(lava, lavaMaterial);
+      lavaGroup.add(entry.lava);
+    }
     state.chunks.set(key, entry);
   }
   function makeGeometryArrays() {
@@ -950,7 +989,7 @@
   }
   function pushFace(arr, x, y, z, code, face) {
     const start = arr.positions.length / 3;
-    const tile = textureTileForFace(code, face);
+    const tile = textureTileForFace(code, face, x, y, z);
     const col = tile % TEX_COLS;
     const row = Math.floor(tile / TEX_COLS);
     const u0 = (col + 0.015) / TEX_COLS;
@@ -968,10 +1007,15 @@
     }
     arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   }
-  function textureTileForFace(code, face) {
+  function textureTileForFace(code, face, x, y, z) {
     const topFace = face.n[1] > 0;
     const bottomFace = face.n[1] < 0;
-    if (code === GRASS) return topFace ? TEX.grassTop : TEX.grassSide;
+    if ((code === DIRT || code === GRASS) && topFace) {
+      const overlay = dirtTopOverlay(x, y, z);
+      if (overlay === "snow") return TEX.snow;
+      if (overlay === "grass") return TEX.grassTop;
+    }
+    if (code === GRASS) return TEX.dirt;
     if (code === DIRT) return TEX.dirt;
     if (code === STONE) return TEX.stone;
     if (code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) return TEX.ore;
@@ -982,6 +1026,7 @@
     if (code === TABLE) return TEX.table;
     if (code === SAND) return TEX.sand;
     if (code === SNOW) return TEX.snow;
+    if (code === LAVA) return TEX.ore;
     return TEX.stone;
   }
   function faceColor(code, shade, x, y, z, face, corner) {
@@ -993,15 +1038,15 @@
     const grain = hash3(x * 2 + corner[0], y * 2 + corner[1], z * 2 + corner[2]);
     const blockGrain = hash3(x + 17, y - 19, z + 23);
 
-    if (code === GRASS) {
-      if (topFace) {
+    if (code === GRASS || code === DIRT) {
+      const overlay = topFace ? dirtTopOverlay(x, y, z) : null;
+      if (overlay === "grass") {
         base = biomeRgb(biome, "grass");
+      } else if (overlay === "snow") {
+        base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
       } else {
-        const side = biomeRgb(biome, "side");
-        base = mixRgb(side, biomeRgb(biome, "grass"), corner[1] > 0 ? 0.34 : 0.06);
+        base = mixRgb(cachedRgb("#684126"), cachedRgb("#9b6638"), grain * 0.75 + blockGrain * 0.25);
       }
-    } else if (code === DIRT) {
-      base = mixRgb(cachedRgb("#684126"), cachedRgb("#9b6638"), grain * 0.75 + blockGrain * 0.25);
     } else if (code === STONE || code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) {
       const rock = mixRgb(cachedRgb("#686b75"), cachedRgb("#a0a3ad"), grain * 0.6 + blockGrain * 0.4);
       base = mixRgb(rock, biomeRgb(biome, "grass"), code === STONE ? 0.05 : 0.02);
@@ -1030,6 +1075,9 @@
       base = mixRgb(dune, cachedRgb("#f2df9a"), grain * 0.45);
     } else if (code === SNOW) {
       base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
+    } else if (code === LAVA) {
+      const glow = Math.sin((x * 1.7 + y * 2.3 + z * 1.1 + blockGrain * 8) * 1.4) * 0.5 + 0.5;
+      base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
     }
     if (code === LEAVES) {
       base = mixRgb(biomeRgb(biome, "leaf"), biomeRgb(biome, "grass"), grain * 0.25);
@@ -1066,6 +1114,7 @@
             for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
               const code = getBlock(x, y, z);
               if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
+              if (code === TABLE) pushCraftingToilet(arr, x, y, z);
               if (code === TORCH) pushTorch(arr, x, y, z);
             }
           }
@@ -1082,24 +1131,56 @@
     if (code === FLOWER) {
       const palette = biome.palette || ["#ff6fa8", "#ffe45c"];
       const bloom = cachedRgb(palette[Math.floor(seed * palette.length) % palette.length]);
-      const stem = mixRgb(grass, cachedRgb("#2f6f3a"), 0.36);
+      const stem = vividRgb(mixRgb(grass, cachedRgb("#2f6f3a"), 0.38), 1.22, 1.06);
       const cx = x + 0.44 + hash2(x + 2, z - 4) * 0.12;
       const cz = z + 0.44 + hash2(x - 4, z + 2) * 0.12;
-      pushBillboard(arr, cx, y, cz, 0.16, 0.54 + seed * 0.14, stem, seed * Math.PI);
-      pushBillboard(arr, cx, y + 0.42 + seed * 0.08, cz, 0.34, 0.28, bloom, Math.PI / 4);
-      pushBillboard(arr, cx, y + 0.42 + seed * 0.08, cz, 0.34, 0.28, bloom, Math.PI * 0.75);
+      const h = 0.58 + seed * 0.18;
+      pushBlade(arr, cx, y, cz, 0.11, h, stem, seed * Math.PI, 0.04);
+      pushBlade(arr, cx, y, cz, 0.09, h * 0.86, stem, seed * Math.PI + Math.PI / 2, -0.03);
+      pushBlade(arr, cx - 0.08, y + 0.16, cz + 0.02, 0.12, 0.22, stem, seed * 4.3, 0.09);
+      pushBlade(arr, cx + 0.09, y + 0.19, cz - 0.03, 0.11, 0.2, stem, seed * 5.1 + 1.4, -0.08);
+      const bloomY = y + h - 0.02;
+      const petal = vividRgb(bloom, 1.28, 1.12);
+      for (let i = 0; i < 4; i++) {
+        pushBlade(arr, cx, bloomY, cz, 0.3, 0.22, petal, seed * Math.PI + i * Math.PI / 4, 0.015);
+      }
+      pushTinyBox(arr, cx - 0.035, bloomY + 0.065, cz - 0.035, 0.07, 0.07, 0.07, cachedRgb("#ffe46b"));
       return;
     }
 
-    const clusters = 2 + Math.floor(seed * 3);
+    const clusters = 5 + Math.floor(seed * 4);
     for (let i = 0; i < clusters; i++) {
-      const ox = (hash2(x + i * 11, z - i * 7) - 0.5) * 0.42;
-      const oz = (hash2(x - i * 5, z + i * 13) - 0.5) * 0.42;
-      const h = 0.42 + hash2(x + i * 17, z + i * 19) * 0.46;
-      const w = 0.13 + hash2(x - i * 23, z + i * 3) * 0.12;
-      const color = mixRgb(grass, cachedRgb("#f0e89a"), biome.id === 5 ? 0.20 : 0.04 + hash2(x + i, z - i) * 0.10);
-      pushBillboard(arr, x + 0.5 + ox, y, z + 0.5 + oz, w, h, color, seed * Math.PI + i * 1.03);
+      const ox = (hash2(x + i * 11, z - i * 7) - 0.5) * 0.52;
+      const oz = (hash2(x - i * 5, z + i * 13) - 0.5) * 0.52;
+      const h = 0.34 + hash2(x + i * 17, z + i * 19) * 0.58;
+      const w = 0.08 + hash2(x - i * 23, z + i * 3) * 0.11;
+      const straw = biome.id === 5 || biome.id === 7 ? 0.22 : 0.06;
+      const color = vividRgb(mixRgb(grass, cachedRgb("#f0e89a"), straw + hash2(x + i, z - i) * 0.12), 1.18, 1.06);
+      const rot = seed * Math.PI + i * 0.72;
+      const lean = (hash2(x + i * 31, z - i * 29) - 0.5) * 0.16;
+      pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, w, h, color, rot, lean);
+      if (i % 2 === 0) pushBlade(arr, x + 0.5 + ox * 0.7, y, z + 0.5 + oz * 0.7, w * 0.75, h * 0.78, color, rot + Math.PI / 2, -lean * 0.6);
     }
+  }
+  function pushBlade(arr, cx, y, cz, w, h, rgb, rot, lean) {
+    const start = arr.positions.length / 3;
+    const sideX = Math.cos(rot) * w / 2;
+    const sideZ = Math.sin(rot) * w / 2;
+    const leanX = Math.cos(rot + Math.PI / 2) * lean;
+    const leanZ = Math.sin(rot + Math.PI / 2) * lean;
+    arr.positions.push(
+      cx - sideX, y, cz - sideZ,
+      cx + sideX, y, cz + sideZ,
+      cx + sideX * 0.3 + leanX, y + h, cz + sideZ * 0.3 + leanZ,
+      cx - sideX * 0.3 + leanX, y + h, cz - sideZ * 0.3 + leanZ
+    );
+    const tip = vividRgb(rgb, 1.08, 1.13);
+    for (let i = 0; i < 4; i++) {
+      arr.normals.push(0, 1, 0);
+      const c = i < 2 ? rgb : tip;
+      arr.colors.push(c[0], c[1], c[2]);
+    }
+    arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   }
   function pushBillboard(arr, cx, y, cz, w, h, rgb, rot) {
     const start = arr.positions.length / 3;
@@ -1115,6 +1196,17 @@
   function pushTorch(arr, x, y, z) {
     pushTinyBox(arr, x + 0.42, y, z + 0.42, 0.16, 0.56, 0.16, hexToRgb("#8a572d"));
     pushTinyBox(arr, x + 0.34, y + 0.52, z + 0.34, 0.32, 0.28, 0.32, hexToRgb("#ffd75a"));
+  }
+  function pushCraftingToilet(arr, x, y, z) {
+    const porcelain = cachedRgb("#ecf8ff");
+    const shade = cachedRgb("#b8c6d2");
+    const water = cachedRgb("#4ecaff");
+    pushTinyBox(arr, x + 0.18, y, z + 0.18, 0.64, 0.32, 0.7, porcelain);
+    pushTinyBox(arr, x + 0.26, y + 0.26, z + 0.06, 0.48, 0.18, 0.34, shade);
+    pushTinyBox(arr, x + 0.32, y + 0.34, z + 0.18, 0.36, 0.05, 0.42, water);
+    pushTinyBox(arr, x + 0.18, y + 0.42, z + 0.65, 0.64, 0.58, 0.22, porcelain);
+    pushTinyBox(arr, x + 0.24, y + 0.84, z + 0.59, 0.52, 0.16, 0.16, shade);
+    pushTinyBox(arr, x + 0.69, y + 0.94, z + 0.66, 0.08, 0.05, 0.08, cachedRgb("#ffd75a"));
   }
   function pushTinyBox(arr, x, y, z, w, h, d, rgb) {
     const corners = [[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z], [x, y, z + d], [x + w, y, z + d], [x + w, y + h, z + d], [x, y + h, z + d]];
@@ -1144,6 +1236,13 @@
         x: spot.x + 0.5,
         y: spot.y + 1,
         z: spot.z + 0.5,
+        homeX: spot.x + 0.5,
+        homeZ: spot.z + 0.5,
+        targetX: spot.x + 0.5,
+        targetZ: spot.z + 0.5,
+        speed: 0.65 + hash2(i * 67 + 1, i * 71 - 2) * 0.45,
+        action: "idle",
+        actionTimer: 0.4 + hash2(i * 73 - 6, i * 79 + 8) * 2,
         phase: hash2(i * 43 + 9, i * 61 - 5) * Math.PI * 2,
         turn: hash2(i * 47 - 3, i * 53 + 7) * Math.PI * 2,
       };
@@ -1174,20 +1273,25 @@
       const y = state.surface[surfaceIndex(x, z)];
       if (y <= SEA_LEVEL) continue;
       const top = getBlock(x, y, z);
-      if (top === GRASS || top === SAND || top === SNOW) return { x, y, z };
+      if (top === DIRT || top === GRASS || top === SAND || top === SNOW) return { x, y, z };
     }
     return null;
   }
   function createFriendlyMesh(type, seed) {
     const group = new THREE.Group();
+    const parts = {};
     if (type === 0) {
       addBox(group, [0, 0.34, 0], [0.72, 0.68, 0.72], friendlyMaterials.lime);
+      parts.left = addBox(group, [-0.48, 0.38, -0.02], [0.14, 0.32, 0.16], friendlyMaterials.lime);
+      parts.right = addBox(group, [0.48, 0.38, -0.02], [0.14, 0.32, 0.16], friendlyMaterials.lime);
       addBox(group, [-0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
       addBox(group, [0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
       addBox(group, [0, 0.45, -0.39], [0.28, 0.06, 0.04], friendlyMaterials.blush);
       addBox(group, [0, 0.86, 0], [0.46, 0.18, 0.46], friendlyMaterials.mango);
     } else if (type === 1) {
       addBox(group, [0, 0.36, 0], [0.58, 0.72, 0.58], friendlyMaterials.cream);
+      parts.left = addBox(group, [-0.43, 0.38, -0.02], [0.12, 0.28, 0.14], friendlyMaterials.cream);
+      parts.right = addBox(group, [0.43, 0.38, -0.02], [0.12, 0.28, 0.14], friendlyMaterials.cream);
       addBox(group, [0, 0.86, 0], [0.88, 0.28, 0.88], friendlyMaterials.berry);
       addBox(group, [-0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
@@ -1199,13 +1303,14 @@
       }
     } else {
       addBox(group, [0, 0.4, 0], [0.62, 0.5, 0.62], friendlyMaterials.sky);
-      addBox(group, [-0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
-      addBox(group, [0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
+      parts.left = addBox(group, [-0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
+      parts.right = addBox(group, [0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
       addBox(group, [-0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
       addBox(group, [0, 0.38, -0.35], [0.24, 0.06, 0.04], friendlyMaterials.blush);
       addBox(group, [0, 0.78, 0], [0.28, 0.38, 0.28], friendlyMaterials.berry);
     }
+    group.userData.parts = parts;
     group.traverse((child) => { child.castShadow = true; child.receiveShadow = true; });
     return group;
   }
@@ -1213,15 +1318,87 @@
     const now = performance.now() * 0.001;
     for (let i = 0; i < state.friendlies.length; i++) {
       const friendly = state.friendlies[i];
+      friendly.actionTimer -= dt;
+      if (friendly.actionTimer <= 0) chooseFriendlyAction(friendly, i);
+      if (friendly.action === "wander") {
+        const dx = friendly.targetX - friendly.x;
+        const dz = friendly.targetZ - friendly.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < 0.18) {
+          chooseFriendlyAction(friendly, i + 31);
+        } else {
+          const step = Math.min(dist, friendly.speed * dt);
+          const nx = friendly.x + dx / dist * step;
+          const nz = friendly.z + dz / dist * step;
+          if (friendlyCanStandAt(nx, nz)) {
+            friendly.x = nx;
+            friendly.z = nz;
+            friendly.y = groundYAt(nx, nz) + 1;
+            friendly.turn = Math.atan2(dx, dz) + Math.PI;
+          } else {
+            chooseFriendlyAction(friendly, i + 61);
+          }
+        }
+      }
       const phase = now * (1.8 + (friendly.type + 1) * 0.16) + friendly.phase;
-      const bounce = Math.abs(Math.sin(phase)) * 0.11;
-      const sway = Math.sin(phase * 0.58) * 0.1;
-      const facePlayer = Math.atan2(state.player.x - friendly.x, state.player.z - friendly.z) + Math.PI;
+      const busy = friendly.action === "dance" ? 1 : friendly.action === "graze" ? 0.45 : 0.25;
+      const bounce = Math.abs(Math.sin(phase * (friendly.action === "wander" ? 1.3 : 1))) * (0.06 + busy * 0.11);
+      const sway = Math.sin(phase * 0.58) * (0.07 + busy * 0.08);
+      const facePlayer = friendly.action === "idle" && Math.hypot(state.player.x - friendly.x, state.player.z - friendly.z) < 9
+        ? Math.atan2(state.player.x - friendly.x, state.player.z - friendly.z) + Math.PI
+        : friendly.turn;
       friendly.mesh.position.set(friendly.x + Math.sin(phase * 0.37) * 0.05, friendly.y + bounce, friendly.z + Math.cos(phase * 0.41) * 0.05);
       friendly.mesh.rotation.y = facePlayer + sway;
-      friendly.mesh.rotation.z = Math.sin(phase) * 0.07;
+      friendly.mesh.rotation.x = friendly.action === "graze" ? 0.28 + Math.sin(phase * 1.4) * 0.06 : 0;
+      friendly.mesh.rotation.z = Math.sin(phase) * (friendly.action === "dance" ? 0.16 : 0.07);
       const base = 1.28;
       friendly.mesh.scale.set(base + bounce * 0.18, base - bounce * 0.1, base + bounce * 0.18);
+      animateFriendlyParts(friendly, phase);
+    }
+  }
+  function chooseFriendlyAction(friendly, salt) {
+    const roll = hash2(Math.floor(friendly.x * 11) + salt, Math.floor(friendly.z * 13) - salt);
+    if (roll < 0.48) {
+      friendly.action = "wander";
+      friendly.actionTimer = 2.2 + roll * 3.6;
+      const angle = hash2(salt * 17 + 3, salt * 19 - 5) * Math.PI * 2;
+      const dist = 2 + hash2(salt * 23 - 7, salt * 29 + 11) * 7;
+      friendly.targetX = clamp(friendly.homeX + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
+      friendly.targetZ = clamp(friendly.homeZ + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
+      if (!friendlyCanStandAt(friendly.targetX, friendly.targetZ)) {
+        friendly.targetX = friendly.homeX;
+        friendly.targetZ = friendly.homeZ;
+      }
+    } else if (roll < 0.7) {
+      friendly.action = "graze";
+      friendly.actionTimer = 1.4 + roll * 2;
+    } else if (roll < 0.88) {
+      friendly.action = "dance";
+      friendly.actionTimer = 1.1 + roll * 1.8;
+    } else {
+      friendly.action = "idle";
+      friendly.actionTimer = 1.2 + roll * 2.4;
+    }
+  }
+  function friendlyCanStandAt(x, z) {
+    const ix = clamp(Math.floor(x), 1, WORLD_X - 2);
+    const iz = clamp(Math.floor(z), 1, WORLD_Z - 2);
+    if (edgeOceanStrength(ix, iz) > 0.48) return false;
+    const y = state.surface[surfaceIndex(ix, iz)];
+    if (y <= SEA_LEVEL) return false;
+    const top = getBlock(ix, y, iz);
+    return top === DIRT || top === GRASS || top === SAND || top === SNOW;
+  }
+  function animateFriendlyParts(friendly, phase) {
+    const parts = friendly.mesh.userData.parts || {};
+    const wave = Math.sin(phase * (friendly.action === "dance" ? 2.4 : 1.2));
+    if (parts.left) {
+      parts.left.rotation.z = friendly.action === "graze" ? 0.25 : wave * 0.45;
+      parts.left.rotation.x = friendly.action === "wander" ? Math.sin(phase * 2.2) * 0.25 : 0;
+    }
+    if (parts.right) {
+      parts.right.rotation.z = friendly.action === "graze" ? -0.25 : -wave * 0.45;
+      parts.right.rotation.x = friendly.action === "wander" ? -Math.sin(phase * 2.2) * 0.25 : 0;
     }
   }
 
@@ -1347,6 +1524,7 @@
   function disposeMesh(obj) {
     obj.traverse((child) => {
       if (child.geometry) child.geometry.dispose();
+      if (child.material && child.material.userData && child.material.userData.disposeWithMesh) child.material.dispose();
     });
   }
 
@@ -1377,43 +1555,94 @@
 
   function initHotbar() {
     state.hotbar = Array.from({ length: HOTBAR }, () => null);
+    state.bag = Array.from({ length: BAG_SLOTS }, () => null);
+    state.bagOpen = false;
   }
   function giveItem(code, n = 1) {
     if (!code || n <= 0) return;
     const cap = maxStack(code);
-    for (const slot of state.hotbar) {
+    n = addToExistingSlots(state.hotbar, code, n, cap);
+    n = addToExistingSlots(state.bag, code, n, cap);
+    n = addToEmptySlots(state.hotbar, code, n, cap);
+    n = addToEmptySlots(state.bag, code, n, cap);
+    if (n > 0) api.toast("Bag full", "bad");
+  }
+  function addToExistingSlots(slots, code, n, cap) {
+    for (const slot of slots) {
       if (slot && slot.code === code && slot.n < cap) {
         const add = Math.min(n, cap - slot.n);
         slot.n += add;
         n -= add;
-        if (n <= 0) return;
+        if (n <= 0) return 0;
       }
     }
-    for (let i = 0; i < state.hotbar.length && n > 0; i++) {
-      if (!state.hotbar[i]) {
+    return n;
+  }
+  function addToEmptySlots(slots, code, n, cap) {
+    for (let i = 0; i < slots.length && n > 0; i++) {
+      if (!slots[i]) {
         const add = Math.min(n, cap);
-        state.hotbar[i] = { code, n: add };
+        slots[i] = { code, n: add };
         n -= add;
       }
     }
+    return n;
   }
   function countItem(code) {
-    return state.hotbar.reduce((sum, slot) => sum + (slot && slot.code === code ? slot.n : 0), 0);
+    return inventorySlots().reduce((sum, slot) => sum + (slot && slot.code === code ? slot.n : 0), 0);
   }
   function takeItem(code, n) {
-    for (let i = 0; i < state.hotbar.length && n > 0; i++) {
-      const slot = state.hotbar[i];
+    n = takeFromSlots(state.hotbar, code, n);
+    takeFromSlots(state.bag, code, n);
+  }
+  function takeFromSlots(slots, code, n) {
+    for (let i = 0; i < slots.length && n > 0; i++) {
+      const slot = slots[i];
       if (!slot || slot.code !== code) continue;
       const take = Math.min(n, slot.n);
       slot.n -= take;
       n -= take;
-      if (slot.n <= 0) state.hotbar[i] = null;
+      if (slot.n <= 0) slots[i] = null;
     }
+    return n;
   }
+  function inventorySlots() { return state.hotbar.concat(state.bag); }
   function selectedSlot() { return state.hotbar[state.selected]; }
+  function selectedDef() {
+    const slot = selectedSlot();
+    return slot && DEF[slot.code] ? DEF[slot.code] : null;
+  }
+  function selectedIsBlock() {
+    const d = selectedDef();
+    return !!(d && d.kind === "block");
+  }
   function selectedTool() {
     const slot = selectedSlot();
     return slot && DEF[slot.code] && DEF[slot.code].tool ? DEF[slot.code].tool : null;
+  }
+  function decrementSelectedSlot() {
+    const slot = selectedSlot();
+    if (!slot) return;
+    slot.n--;
+    if (slot.n <= 0) state.hotbar[state.selected] = null;
+  }
+  function swapBagSlotWithHotbar(bagIndex, hotbarIndex = state.selected) {
+    if (bagIndex < 0 || bagIndex >= state.bag.length || hotbarIndex < 0 || hotbarIndex >= state.hotbar.length) return;
+    const tmp = state.hotbar[hotbarIndex];
+    state.hotbar[hotbarIndex] = state.bag[bagIndex];
+    state.bag[bagIndex] = tmp;
+    state.selected = hotbarIndex;
+    heldRenderCode = null;
+  }
+  function toggleBag(force) {
+    if (!state.started) return;
+    state.bagOpen = typeof force === "boolean" ? force : !state.bagOpen;
+    if (state.bagOpen) {
+      state.crafting = false;
+      if (craftPanel) craftPanel.classList.remove("is-open");
+      unlockPointer();
+    }
+    renderBag();
   }
   function triggerHeldSwing(kind = "gather") {
     state.swingKind = kind;
@@ -1474,6 +1703,7 @@
     movePlayerAxis("y", p.vy * dt);
     p.x = clamp(p.x, 1.5, WORLD_X - 1.5);
     p.z = clamp(p.z, 1.5, WORLD_Z - 1.5);
+    if (playerInLava()) hurtPlayer(18);
     if (p.y < 1) hurtPlayer(4);
     if (p.hurtCd > 0) p.hurtCd -= dt;
     updateOceanFatigue(dt);
@@ -1484,6 +1714,12 @@
     const x = Math.floor(p.x);
     const z = Math.floor(p.z);
     return getBlock(x, Math.floor(p.y + 0.15), z) === WATER || getBlock(x, Math.floor(p.y + EYE_HEIGHT * 0.72), z) === WATER;
+  }
+  function playerInLava() {
+    const p = state.player;
+    const x = Math.floor(p.x);
+    const z = Math.floor(p.z);
+    return getBlock(x, Math.floor(p.y + 0.15), z) === LAVA || getBlock(x, Math.floor(p.y + EYE_HEIGHT * 0.72), z) === LAVA;
   }
   function updateOceanFatigue(dt) {
     const p = state.player;
@@ -1627,6 +1863,7 @@
     mesh.scale.set(scale[0], scale[1], scale[2]);
     if (mesh.material && mesh.material.color) mesh.userData.baseColor = mesh.material.color.clone();
     group.add(mesh);
+    return mesh;
   }
   function updateMobs(dt) {
     const p = state.player;
@@ -1732,7 +1969,10 @@
       selectionBox.scale.setScalar(1 + pulse);
       selectionBox.material.opacity = miningThis ? 0.72 + Math.abs(Math.sin(state.gatherPhase * 1.6)) * 0.28 : 0.9;
       selectionBox.material.color.setHex(miningThis ? 0xffdf55 : 0xffffff);
-      ui.target.textContent = `${DEF[getBlock(state.target.x, state.target.y, state.target.z)].name}`;
+      const code = getBlock(state.target.x, state.target.y, state.target.z);
+      if (code === TABLE) ui.target.textContent = "Crafting Toilet - right-click to craft";
+      else if (selectedIsBlock()) ui.target.textContent = `${DEF[code].name} - select a tool to mine`;
+      else ui.target.textContent = `${DEF[code].name}`;
     } else {
       selectionBox.scale.setScalar(1);
       ui.target.textContent = "";
@@ -1760,6 +2000,11 @@
       ui.progress.style.width = "0%";
       return;
     }
+    if (selectedIsBlock()) {
+      state.mining = null;
+      ui.progress.style.width = "0%";
+      return;
+    }
     if (tryAttack()) return;
     const t = state.target;
     if (!t || !t.hit) {
@@ -1767,7 +2012,7 @@
       return;
     }
     const code = getBlock(t.x, t.y, t.z);
-    if (code === BEDROCK || code === WATER) return;
+    if (code === BEDROCK || code === WATER || code === LAVA) return;
     const need = breakTimeFor(code);
     if (!state.mining || state.mining.x !== t.x || state.mining.y !== t.y || state.mining.z !== t.z) {
       state.mining = { x: t.x, y: t.y, z: t.z, progress: 0, need };
@@ -1811,17 +2056,29 @@
   }
   function updatePlacing(dt) {
     if (state.placeCd > 0) state.placeCd -= dt;
-    if (!state.input.place || state.placeCd > 0 || state.crafting || state.paused) return;
+    if ((!state.input.place && !state.placeQueued) || state.placeCd > 0 || state.crafting || state.paused) return;
+    state.placeQueued = false;
     const t = state.target;
+    if (t && t.hit && getBlock(t.x, t.y, t.z) === TABLE) {
+      toggleCrafting(true);
+      state.placeCd = 0.24;
+      state.input.place = false;
+      return;
+    }
     const slot = selectedSlot();
+    if ((!slot || !isPlaceable(slot.code)) && nearTable()) {
+      toggleCrafting(true);
+      state.placeCd = 0.24;
+      state.input.place = false;
+      return;
+    }
     if (!t || !t.hit || !t.prev || !slot || !isPlaceable(slot.code)) return;
     const p = t.prev;
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     setBlock(p.x, p.y, p.z, slot.code);
     flowWaterNear(p.x, p.y, p.z);
-    slot.n--;
-    if (slot.n <= 0) state.hotbar[state.selected] = null;
+    decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
   }
@@ -1829,6 +2086,7 @@
     return x + 1 > b.minX && x < b.maxX && y + 1 > b.minY && y < b.maxY && z + 1 > b.minZ && z < b.maxZ;
   }
   function tryAttack() {
+    if (selectedIsBlock()) return false;
     if (state.attackCd > 0) return false;
     const dir = reusableVector;
     camera.getWorldDirection(dir);
@@ -1918,6 +2176,8 @@
     state.crafting = typeof force === "boolean" ? force : !state.crafting;
     if (craftPanel) craftPanel.classList.toggle("is-open", state.crafting);
     if (state.crafting) {
+      state.bagOpen = false;
+      renderBag();
       unlockPointer();
       renderCrafting();
     }
@@ -2013,7 +2273,7 @@
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
     setText("hud-high", state.high.toLocaleString());
-    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z} procedural world - ${state.mobs.length} enemies - ${state.friendlies.length} pals`;
+    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z}x${WORLD_Y} world - lava below ${LAVA_LEVEL} - ${state.mobs.length} enemies - ${state.friendlies.length} pals`;
     ui.hotbar.innerHTML = state.hotbar.map((slot, i) => {
       const selected = i === state.selected ? " is-selected" : "";
       const label = slot ? DEF[slot.code].name : "";
@@ -2021,6 +2281,12 @@
       const swatch = slot ? `<span class="rizz3d-swatch" style="background:${DEF[slot.code].color}"></span>` : "";
       return `<button class="rizz3d-slot${selected}" data-slot="${i}" title="${label || "Empty"}"><em>${i + 1}</em>${swatch}${count}</button>`;
     }).join("");
+    if (ui.bagButton) {
+      const used = state.bag.filter(Boolean).length;
+      ui.bagButton.textContent = `Bag ${used}/${BAG_SLOTS}`;
+      ui.bagButton.classList.toggle("is-open", state.bagOpen);
+    }
+    renderBag();
     updateHeldItem();
   }
   function setText(id, value) {
@@ -2028,22 +2294,81 @@
     if (el) el.textContent = value;
   }
   function updateHeldItem() {
-    disposeGroup(heldGroup);
     const slot = selectedSlot();
+    const code = slot ? slot.code : 0;
+    if (heldRenderCode === code) {
+      applyHeldAnimation();
+      return;
+    }
+    heldRenderCode = code;
+    disposeGroup(heldGroup);
     if (!slot) {
       applyHeldAnimation();
       return;
     }
-    const mat = new THREE.MeshLambertMaterial({ color: DEF[slot.code].color || "#ffffff" });
-    const handle = new THREE.Mesh(new THREE.BoxBufferGeometry(0.08, 0.48, 0.08), mat);
-    handle.position.set(0.38, -0.33, -0.72);
-    handle.rotation.z = -0.55;
-    heldGroup.add(handle);
-    const head = new THREE.Mesh(new THREE.BoxBufferGeometry(0.28, 0.16, 0.12), mat);
-    head.position.set(0.25, -0.15, -0.82);
-    head.rotation.z = -0.55;
-    heldGroup.add(head);
+    buildHeldModel(slot.code);
     applyHeldAnimation();
+  }
+  function buildHeldModel(code) {
+    const d = DEF[code] || DEF[DIRT];
+    const tool = d.tool;
+    if (tool && tool.type === "pick") return buildHeldPick(d.color || "#b98245");
+    if (tool && tool.type === "sword") return buildHeldSword(d.color || "#a6a9b5");
+    if (tool && tool.type === "axe") return buildHeldAxe(d.color || "#b98245");
+    if (code === TORCH) return buildHeldTorch();
+    if (d.kind === "block") return buildHeldBlock(code);
+    return buildHeldItem(code);
+  }
+  function heldMaterial(color) {
+    const mat = new THREE.MeshLambertMaterial({ color });
+    mat.userData.disposeWithMesh = true;
+    return mat;
+  }
+  function addHeldBox(pos, scale, material, rot = [0, 0, 0]) {
+    const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), material);
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    mesh.rotation.set(rot[0], rot[1], rot[2]);
+    heldGroup.add(mesh);
+    return mesh;
+  }
+  function buildHeldPick(color) {
+    const wood = heldMaterial("#7c4e29");
+    const head = heldMaterial(color);
+    addHeldBox([0.38, -0.34, -0.72], [0.07, 0.56, 0.07], wood, [0, 0, -0.54]);
+    addHeldBox([0.23, -0.12, -0.82], [0.38, 0.09, 0.11], head, [0, 0, -0.54]);
+    addHeldBox([0.08, -0.14, -0.82], [0.08, 0.17, 0.1], head, [0, 0, -0.92]);
+  }
+  function buildHeldSword(color) {
+    const grip = heldMaterial("#6f4624");
+    const blade = heldMaterial(color);
+    addHeldBox([0.36, -0.36, -0.72], [0.07, 0.28, 0.07], grip, [0, 0, -0.44]);
+    addHeldBox([0.25, -0.16, -0.8], [0.08, 0.58, 0.08], blade, [0, 0, -0.44]);
+    addHeldBox([0.31, -0.28, -0.76], [0.28, 0.06, 0.08], grip, [0, 0, -0.44]);
+  }
+  function buildHeldAxe(color) {
+    const wood = heldMaterial("#7c4e29");
+    const head = heldMaterial(color);
+    addHeldBox([0.38, -0.34, -0.72], [0.07, 0.54, 0.07], wood, [0, 0, -0.54]);
+    addHeldBox([0.21, -0.13, -0.82], [0.26, 0.24, 0.1], head, [0, 0, -0.54]);
+    addHeldBox([0.11, -0.19, -0.82], [0.1, 0.18, 0.1], head, [0, 0, -0.18]);
+  }
+  function buildHeldTorch() {
+    addHeldBox([0.38, -0.33, -0.72], [0.08, 0.46, 0.08], heldMaterial("#8a572d"), [0, 0, -0.42]);
+    addHeldBox([0.28, -0.11, -0.78], [0.18, 0.18, 0.18], heldMaterial("#ffd75a"), [0, 0, -0.42]);
+    addHeldBox([0.28, -0.07, -0.78], [0.11, 0.11, 0.11], heldMaterial("#ff6a1a"), [0, 0, -0.42]);
+  }
+  function buildHeldBlock(code) {
+    addHeldBox([0.32, -0.24, -0.78], [0.3, 0.3, 0.3], heldMaterial(DEF[code].color || "#ffffff"), [0.2, 0.42, -0.18]);
+  }
+  function buildHeldItem(code) {
+    const color = DEF[code].color || "#ffffff";
+    if (code === STICK) {
+      addHeldBox([0.36, -0.32, -0.74], [0.06, 0.44, 0.06], heldMaterial(color), [0, 0, -0.62]);
+      return;
+    }
+    addHeldBox([0.32, -0.22, -0.78], [0.2, 0.2, 0.2], heldMaterial(color), [0.42, 0.25, -0.18]);
+    addHeldBox([0.32, -0.22, -0.78], [0.28, 0.07, 0.28], heldMaterial("#ffffff"), [0.42, 0.25, -0.18]);
   }
   function applyHeldAnimation() {
     const idle = Math.sin(performance.now() * 0.0022) * 0.012;
@@ -2069,6 +2394,39 @@
       heldGroup.rotation.z -= swing * 0.18;
     }
   }
+  function bagSlotHtml(slot, i, attr, selected = false) {
+    const label = slot ? DEF[slot.code].name : "Empty";
+    const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
+    const swatch = slot ? `<span class="rizz3d-swatch" style="background:${DEF[slot.code].color}"></span>` : "";
+    return `<button class="rizz3d-bag-slot${selected ? " is-selected" : ""}" ${attr} title="${label}"><em>${i + 1}</em>${swatch}${count}</button>`;
+  }
+  function renderBag() {
+    if (!ui.bagPanel) return;
+    const key = state.bagOpen
+      ? `${state.selected}|${state.hotbar.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(",")}|${state.bag.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(",")}`
+      : "closed";
+    ui.bagPanel.classList.toggle("is-open", state.bagOpen);
+    if (key === bagRenderKey) return;
+    bagRenderKey = key;
+    if (!state.bagOpen) {
+      ui.bagPanel.innerHTML = "";
+      return;
+    }
+    ui.bagPanel.innerHTML = `
+      <div class="rizz3d-bag-head">
+        <strong>Bag</strong>
+        <span>Click a bag item to swap it into the selected action slot.</span>
+      </div>
+      <div class="rizz3d-bag-label">Action bar</div>
+      <div class="rizz3d-bag-hotbar">
+        ${state.hotbar.map((slot, i) => bagSlotHtml(slot, i, `data-bag-hotbar="${i}"`, i === state.selected)).join("")}
+      </div>
+      <div class="rizz3d-bag-label">Bag storage</div>
+      <div class="rizz3d-bag-grid">
+        ${state.bag.map((slot, i) => bagSlotHtml(slot, i, `data-bag-slot="${i}"`)).join("")}
+      </div>
+    `;
+  }
 
   function buildHud() {
     const wrap = canvas.closest(".canvas-wrap") || canvas.parentElement;
@@ -2085,8 +2443,13 @@
       .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28)}
       .rizz3d-slot em{position:absolute;left:4px;top:2px;color:rgba(255,255,255,.55);font:700 9px var(--font-mono);font-style:normal}.rizz3d-slot b{position:absolute;right:4px;bottom:2px;color:#fff;font:800 11px var(--font-mono)}
       .rizz3d-swatch{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:4px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.22)}
+      .rizz3d-bag-button{position:absolute;left:calc(50% + 204px);bottom:10px;z-index:7;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.86);color:#fff;font:800 10px var(--font-mono);padding:0 10px;cursor:pointer}.rizz3d-bag-button.is-open{border-color:#43e6ff;box-shadow:0 0 0 2px rgba(67,230,255,.22)}
+      .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
+      .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
+      .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}
+      .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
-      @media (max-width:760px){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-chip{bottom:50px;font-size:9px;max-width:70%}}
+      @media (max-width:760px){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-chip{bottom:50px;font-size:9px;max-width:70%}.rizz3d-bag-button{left:auto;right:8px;height:32px}.rizz3d-bag-panel{right:8px;bottom:48px}}
     `;
     document.head.appendChild(style);
     const damage = document.createElement("div");
@@ -2104,10 +2467,32 @@
     hotbar.className = "rizz3d-hotbar";
     hotbar.addEventListener("click", (event) => {
       const button = event.target.closest("[data-slot]");
-      if (button) state.selected = Number(button.dataset.slot);
+      if (button) {
+        state.selected = Number(button.dataset.slot);
+        renderBag();
+      }
     });
-    wrap.append(damage, crosshair, objective, target, progress, hotbar);
-    return { damage, crosshair, objective, target, progress: progress.firstElementChild, hotbar };
+    const bagButton = document.createElement("button");
+    bagButton.className = "rizz3d-bag-button";
+    bagButton.type = "button";
+    bagButton.addEventListener("click", () => toggleBag());
+    const bagPanel = document.createElement("div");
+    bagPanel.className = "rizz3d-bag-panel";
+    bagPanel.addEventListener("click", (event) => {
+      const hotbarButton = event.target.closest("[data-bag-hotbar]");
+      if (hotbarButton) {
+        state.selected = Number(hotbarButton.dataset.bagHotbar);
+        renderBag();
+        return;
+      }
+      const bagButton = event.target.closest("[data-bag-slot]");
+      if (bagButton) {
+        swapBagSlotWithHotbar(Number(bagButton.dataset.bagSlot));
+        updateHud();
+      }
+    });
+    wrap.append(damage, crosshair, objective, target, progress, hotbar, bagButton, bagPanel);
+    return { damage, crosshair, objective, target, progress: progress.firstElementChild, hotbar, bagButton, bagPanel };
   }
 
   function resizeRenderer(force = false) {
@@ -2129,6 +2514,7 @@
     state.started = false;
     state.paused = false;
     state.crafting = false;
+    state.bagOpen = false;
     clearDirectionalInput();
     state.mining = null;
     state.mobs.forEach(removeMob);
@@ -2142,6 +2528,7 @@
     state.score = 0;
     state.high = api.getHighScore(GAME_ID) || 0;
     state.selected = 0;
+    heldRenderCode = null;
     state.sigmaForged = false;
     state.swingTimer = 0;
     state.swingKind = "gather";
@@ -2162,6 +2549,8 @@
     state.started = true;
     state.paused = false;
     if (overlay) overlay.classList.remove("overlay--show");
+    state.bagOpen = false;
+    renderBag();
     canvas.focus();
   }
   function restart() {
@@ -2172,6 +2561,10 @@
   function togglePause() {
     if (!state.started) return;
     state.paused = !state.paused;
+    if (state.paused) {
+      state.bagOpen = false;
+      renderBag();
+    }
     unlockPointer();
     if (overlay) {
       overlay.classList.toggle("overlay--show", state.paused);
@@ -2190,6 +2583,7 @@
       edits: Array.from(state.edits.entries()).slice(0, 15000),
       player: { ...state.player },
       hotbar: state.hotbar.map((slot) => slot ? { ...slot } : null),
+      bag: state.bag.map((slot) => slot ? { ...slot } : null),
       selected: state.selected,
       day: state.day,
       time: state.time,
@@ -2213,6 +2607,8 @@
     rebuildDecorations();
     if (Array.isArray(data.hotbar)) state.hotbar = data.hotbar.map((slot) => slot ? { ...slot } : null).slice(0, HOTBAR);
     while (state.hotbar.length < HOTBAR) state.hotbar.push(null);
+    state.bag = Array.isArray(data.bag) ? data.bag.map((slot) => slot ? { ...slot } : null).slice(0, BAG_SLOTS) : Array.from({ length: BAG_SLOTS }, () => null);
+    while (state.bag.length < BAG_SLOTS) state.bag.push(null);
     state.selected = Number(data.selected) || 0;
     state.day = Number(data.day) || 1;
     state.time = Number(data.time) || 0.21;
@@ -2221,7 +2617,10 @@
     state.sigmaForged = !!data.sigmaForged;
     state.started = true;
     state.paused = false;
+    state.bagOpen = false;
+    heldRenderCode = null;
     if (overlay) overlay.classList.remove("overlay--show");
+    renderBag();
     syncCamera();
   }
 
@@ -2234,7 +2633,7 @@
     updateActionAnimations(dt);
     updateFriendlies(dt);
     updateFx(dt);
-    if (state.started && !state.paused && !state.crafting) {
+    if (state.started && !state.paused && !state.crafting && !state.bagOpen) {
       updateTime(dt);
       updatePlayer(dt);
       updateVisibleChunks();
@@ -2260,6 +2659,7 @@
       if (key === "shift") state.input.sprint = true;
       if (key >= "1" && key <= "9") state.selected = Number(key) - 1;
       if (key === "e") toggleCrafting();
+      if (key === "b") toggleBag();
       if (key === "p") togglePause();
       if (movementHandled || [" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) event.preventDefault();
     });
@@ -2272,13 +2672,16 @@
     window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => { if (document.hidden) clearDirectionalInput(); });
     canvas.addEventListener("click", () => {
-      if (state.started && !state.paused && !state.crafting && document.pointerLockElement !== canvas) canvas.requestPointerLock && canvas.requestPointerLock();
+      if (state.started && !state.paused && !state.crafting && !state.bagOpen && document.pointerLockElement !== canvas) canvas.requestPointerLock && canvas.requestPointerLock();
     });
     canvas.addEventListener("mousedown", (event) => {
-      if (!state.started || state.paused || state.crafting) return;
+      if (!state.started || state.paused || state.crafting || state.bagOpen) return;
       canvas.focus();
-      if (event.button === 2) state.input.place = true;
-      else {
+      if (event.button === 2) {
+        state.input.place = true;
+        state.placeQueued = true;
+      }
+      else if (!selectedIsBlock()) {
         state.input.mine = true;
         triggerHeldSwing("gather");
       }
@@ -2408,6 +2811,22 @@
     });
     updateButton();
   }
+  function findBlock(code, minY = 0, maxY = WORLD_Y - 1) {
+    for (let y = clamp(minY, 0, WORLD_Y - 1); y <= clamp(maxY, 0, WORLD_Y - 1); y++) {
+      for (let z = 1; z < WORLD_Z - 1; z++) {
+        for (let x = 1; x < WORLD_X - 1; x++) {
+          if (getBlock(x, y, z) === code) return { x, y, z };
+        }
+      }
+    }
+    return null;
+  }
+  function teleportTo(x, y, z) {
+    Object.assign(state.player, { x: x + 0.5, y: y + 1.05, z: z + 0.5, vx: 0, vy: 0, vz: 0, onGround: false, hurtCd: 0 });
+    updateVisibleChunks(true);
+    decorDirty = true;
+    syncCamera();
+  }
 
   initGame();
   bindInput();
@@ -2451,6 +2870,8 @@
     damageMob,
     spawnBlockBurst,
     spawnFriendlies,
+    findBlock,
+    teleportTo,
     edgeOceanStrength,
     movementVectorForYaw,
     movementVectorForCamera,
@@ -2463,11 +2884,15 @@
         worldY: WORLD_Y,
         worldZ: WORLD_Z,
         seaLevel: SEA_LEVEL,
+        lavaLevel: LAVA_LEVEL,
         daySeconds: DAY_SECONDS,
         edgeOcean: EDGE_OCEAN,
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
         friendlyCount: state.friendlies.length,
+        movingFriendlies: state.friendlies.filter((friendly) => friendly.action === "wander").length,
+        bagSlots: state.bag.length,
+        bagUsed: state.bag.filter(Boolean).length,
         fxCount: state.fx.length,
         swingTimer: state.swingTimer,
         playerHurtAnim: state.player.hurtAnim,

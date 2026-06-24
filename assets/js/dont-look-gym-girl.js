@@ -46,7 +46,7 @@
   const H = canvas.height;
   const SCRIPT_URL = new URL(document.currentScript ? document.currentScript.src : window.location.href);
   const ART_ROOT = new URL("../img/gym-girl/", SCRIPT_URL);
-  const ART_VERSION = "20260624-genart-1";
+  const ART_VERSION = "20260624-layout-1";
   const RASTER_ART = {
     backdrop: loadRasterArt("generated-gym-floor-backdrop.png"),
     sprites: loadRasterArt("generated-gym-sprite-sheet.png"),
@@ -248,6 +248,7 @@
         { x: 72, y: 430, w: 34, h: 210, kind: "wall" },
         { x: 120, y: 180, w: 56, h: 72, kind: "rack" },
         { x: 520, y: 180, w: 56, h: 72, kind: "rack" },
+        { x: 440, y: 510, w: 44, h: 70, kind: "tread" },
         { x: 230, y: 440, w: 70, h: 40, kind: "bench" },
         { x: 420, y: 440, w: 70, h: 40, kind: "bench" },
         { x: 580, y: 460, w: 38, h: 38, kind: "plant" },
@@ -265,7 +266,7 @@
         { type: "scanner", x: 320, y: 200, facing: 0 },
         { type: "lifter", x: 120, y: 220, facing: 0 },
         { type: "lifter", x: 520, y: 220, facing: Math.PI },
-        { type: "stepper", x: 440, y: 530, facing: Math.PI / 2 },
+        { type: "stepper", x: 440, y: 518, facing: Math.PI / 2 },
         { type: "walker", path: [[140, 480], [500, 480], [500, 520], [140, 520]] }
       ]
     },
@@ -300,7 +301,7 @@
         { type: "influencer", x: 320, y: 520, facing: -Math.PI / 2 },
         { type: "scanner", x: 480, y: 420, facing: 0 },
         { type: "stepper", x: 250, y: 118, facing: -Math.PI / 2 },
-        { type: "lifter", x: 390, y: 160, facing: Math.PI / 2 },
+        { type: "stepper", x: 390, y: 118, facing: -Math.PI / 2 },
         { type: "walker", path: [[120, 460], [120, 540], [240, 540], [240, 460]] },
         { type: "walker", path: [[540, 240], [540, 540], [460, 540], [460, 240]] }
       ]
@@ -359,6 +360,8 @@
         { x: 130, y: 510, w: 260, h: 260, kind: "wall" },
         { x: 510, y: 510, w: 260, h: 260, kind: "wall" },
         { x: 320, y: 320, w: 84, h: 44, kind: "cable" },
+        { x: 320, y: 100, w: 44, h: 80, kind: "tread" },
+        { x: 320, y: 560, w: 44, h: 80, kind: "tread" },
         { x: 320, y: 220, w: 70, h: 40, kind: "bench" },
         { x: 320, y: 420, w: 70, h: 40, kind: "bench" },
         { x: 160, y: 320, w: 40, h: 70, kind: "bench" },
@@ -2250,7 +2253,7 @@
       ctx.fillStyle = "#ff2e88";
       ctx.font = "bold 8px 'Press Start 2P', monospace";
       ctx.textAlign = "center";
-      ctx.fillText("FLEX ZONE", o.x, o.y + 3);
+      ctx.fillText("BLOCKED", o.x, o.y + 3);
       ctx.restore();
     }
   }
@@ -2439,6 +2442,333 @@
     }
   }
 
+  function traceRoundRect(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+  }
+
+  function drawFloorLabel(text, x, y, color, size = 8, align = "center") {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = "bold " + size + "px JetBrains Mono, monospace";
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function doorVisualBounds(ex) {
+    const rx = ex.x - ex.w / 2;
+    const ry = ex.y - ex.h / 2;
+    if (ex.side === "right") return { x: WORLD_W - ex.w, y: clamp(ry, 0, WORLD_H - ex.h), w: ex.w, h: ex.h };
+    if (ex.side === "left") return { x: 0, y: clamp(ry, 0, WORLD_H - ex.h), w: ex.w, h: ex.h };
+    if (ex.side === "top") return { x: clamp(rx, 0, WORLD_W - ex.w), y: 0, w: ex.w, h: ex.h };
+    if (ex.side === "bottom") return { x: clamp(rx, 0, WORLD_W - ex.w), y: WORLD_H - ex.h, w: ex.w, h: ex.h };
+    return { x: clamp(rx, 0, WORLD_W - ex.w), y: clamp(ry, 0, WORLD_H - ex.h), w: ex.w, h: ex.h };
+  }
+
+  function drawHatch(x, y, w, h, color) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    for (let xx = x - h; xx < x + w + h; xx += 30) {
+      ctx.beginPath();
+      ctx.moveTo(xx, y + h);
+      ctx.lineTo(xx + h, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDoorThreshold(label, bounds, color, locked = false) {
+    ctx.save();
+    ctx.fillStyle = locked ? "rgba(42,37,16,0.88)" : "rgba(18,18,28,0.92)";
+    traceRoundRect(bounds.x, bounds.y, bounds.w, bounds.h, 6);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    traceRoundRect(bounds.x + 2, bounds.y + 2, bounds.w - 4, bounds.h - 4, 5);
+    ctx.stroke();
+
+    const cx = bounds.x + bounds.w / 2;
+    const cy = bounds.y + bounds.h / 2;
+    ctx.fillStyle = color;
+    ctx.font = "bold 9px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    if (bounds.h > bounds.w) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    } else {
+      ctx.fillText(label, cx, cy);
+    }
+    ctx.restore();
+  }
+
+  function drawWallZone(o) {
+    const x = o.x - o.w / 2;
+    const y = o.y - o.h / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(2,5,10,0.92)";
+    traceRoundRect(x, y, o.w, o.h, 8);
+    ctx.fill();
+    drawHatch(x + 4, y + 4, o.w - 8, o.h - 8, "rgba(46,224,255,0.10)");
+    ctx.strokeStyle = "rgba(46,224,255,0.28)";
+    ctx.lineWidth = 3;
+    traceRoundRect(x, y, o.w, o.h, 8);
+    ctx.stroke();
+    if (o.w > 170 || o.h > 170) drawFloorLabel("WALL", o.x, o.y, "rgba(46,224,255,0.18)", 12);
+    ctx.restore();
+  }
+
+  function drawTreadmillFloorPad(o, label = "TREADMILL") {
+    const x = o.x - o.w / 2 - 12;
+    const y = o.y - o.h / 2 - 12;
+    const w = o.w + 24;
+    const h = o.h + 24;
+    ctx.save();
+    ctx.fillStyle = "rgba(5,13,20,0.88)";
+    traceRoundRect(x, y, w, h, 12);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(46,224,255,0.46)";
+    ctx.lineWidth = 2.5;
+    traceRoundRect(x, y, w, h, 12);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(0,0,0,0.52)";
+    traceRoundRect(o.x - o.w / 2 + 4, o.y - o.h / 2 + 8, o.w - 8, o.h - 12, 7);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 1;
+    const off = (state.t * 42) % 18;
+    for (let yy = o.y - o.h / 2 + 10 - off; yy < o.y + o.h / 2 - 6; yy += 18) {
+      ctx.beginPath();
+      ctx.moveTo(o.x - o.w / 2 + 9, yy);
+      ctx.lineTo(o.x + o.w / 2 - 9, yy);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(46,224,255,0.34)";
+    traceRoundRect(o.x - o.w / 2 + 5, o.y - o.h / 2 + 3, o.w - 10, 12, 4);
+    ctx.fill();
+    drawFloorLabel(label, o.x, o.y + o.h / 2 + 20, "rgba(46,224,255,0.62)", 7);
+    ctx.restore();
+  }
+
+  function drawEquipmentFloorPad(o) {
+    if (o.kind === "wall") {
+      drawWallZone(o);
+      return;
+    }
+
+    const x = o.x - o.w / 2;
+    const y = o.y - o.h / 2;
+    ctx.save();
+
+    switch (o.kind) {
+      case "tread":
+        drawTreadmillFloorPad(o);
+        break;
+
+      case "rack":
+        ctx.fillStyle = "rgba(44,31,19,0.88)";
+        traceRoundRect(x - 14, y - 10, o.w + 28, o.h + 20, 8);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,125,223,0.36)";
+        ctx.lineWidth = 2.5;
+        traceRoundRect(x - 14, y - 10, o.w + 28, o.h + 20, 8);
+        ctx.stroke();
+        drawFloorLabel("RACK", o.x, y - 20, "rgba(255,125,223,0.58)", 7);
+        break;
+
+      case "bench":
+        ctx.fillStyle = "rgba(9,16,24,0.82)";
+        traceRoundRect(x - 12, y - 12, o.w + 24, o.h + 24, 9);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(77,255,201,0.34)";
+        ctx.lineWidth = 2;
+        traceRoundRect(x - 12, y - 12, o.w + 24, o.h + 24, 9);
+        ctx.stroke();
+        drawFloorLabel("BENCH", o.x, o.y + o.h / 2 + 18, "rgba(77,255,201,0.50)", 7);
+        break;
+
+      case "cable":
+        ctx.fillStyle = "rgba(8,18,16,0.84)";
+        traceRoundRect(x - 12, y - 12, o.w + 24, o.h + 24, 10);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(77,255,201,0.40)";
+        ctx.lineWidth = 2.5;
+        traceRoundRect(x - 12, y - 12, o.w + 24, o.h + 24, 10);
+        ctx.stroke();
+        drawFloorLabel("CABLE", o.x, y - 18, "rgba(77,255,201,0.56)", 7);
+        break;
+
+      case "plant":
+        ctx.fillStyle = "rgba(40,70,45,0.34)";
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, Math.max(o.w, o.h) / 2 + 16, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(77,255,201,0.22)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+
+      case "fountain":
+        ctx.fillStyle = "rgba(26,70,95,0.72)";
+        traceRoundRect(x - 10, y - 10, o.w + 20, o.h + 20, 8);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(46,224,255,0.38)";
+        ctx.lineWidth = 2;
+        traceRoundRect(x - 10, y - 10, o.w + 20, o.h + 20, 8);
+        ctx.stroke();
+        drawFloorLabel("WATER", o.x, o.y, "rgba(210,250,255,0.45)", 7);
+        break;
+
+      case "ring":
+        ctx.strokeStyle = "rgba(255,255,220,0.34)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 30, 0, TAU);
+        ctx.stroke();
+        drawFloorLabel("FILM", o.x, o.y + 26, "rgba(255,255,220,0.45)", 7);
+        break;
+    }
+
+    ctx.restore();
+  }
+
+  function drawFloorPolyline(path, color, width = 2, dash = [12, 12]) {
+    if (!path || path.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    ctx.lineDashOffset = -state.t * 18;
+    ctx.beginPath();
+    ctx.moveTo(path[0][0], path[0][1]);
+    for (let i = 1; i < path.length; i++) ctx.lineTo(path[i][0], path[i][1]);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPatrolFloorLanes() {
+    for (const g of state.girls) {
+      if (g.path && g.type === "walker") {
+        drawFloorPolyline(g.path, "rgba(255,46,136,0.18)", 2, [18, 14]);
+      }
+    }
+    for (const b of state.bruisers) {
+      if (b.path && b.path.length > 1) {
+        drawFloorPolyline(b.path, "rgba(247,215,22,0.12)", 1.5, [10, 13]);
+      }
+    }
+  }
+
+  function drawLevelFloorPlan(heat) {
+    ctx.save();
+    ctx.fillStyle = "rgba(5,8,13," + (0.68 + heat * 0.08) + ")";
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.055)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 20, WORLD_W - 40, WORLD_H - 40);
+
+    ctx.fillStyle = "rgba(7,12,18,0.62)";
+    for (let y = 80; y < WORLD_H; y += 160) {
+      ctx.fillRect(28, y, WORLD_W - 56, 2);
+    }
+    ctx.restore();
+
+    const entryBounds = { x: 0, y: WORLD_DOOR_Y0, w: 30, h: WORLD_DOOR_Y1 - WORLD_DOOR_Y0 };
+    drawDoorThreshold("ENTRY", entryBounds, "rgba(77,255,125,0.74)");
+
+    for (const o of state.obstacles) drawEquipmentFloorPad(o);
+    drawPatrolFloorLanes();
+
+    for (const stair of state.stairs) {
+      if (stair.floor && stair.floor !== state.floor) continue;
+      ctx.save();
+      ctx.fillStyle = "rgba(247,215,22,0.12)";
+      traceRoundRect(stair.x - 58, stair.y - 48, 116, 96, 12);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(247,215,22,0.42)";
+      ctx.lineWidth = 2.5;
+      traceRoundRect(stair.x - 58, stair.y - 48, 116, 96, 12);
+      ctx.stroke();
+      drawFloorLabel("STAIRS " + stair.label, stair.x, stair.y + 52, "rgba(247,215,22,0.66)", 8);
+      ctx.restore();
+    }
+
+    const locked = state.exitFloor && state.floor !== state.exitFloor;
+    drawDoorThreshold(locked ? state.exitFloor + " LOCKER" : "LOCKER", doorVisualBounds(state.exit), locked ? "rgba(247,215,22,0.76)" : "rgba(255,125,223,0.74)", locked);
+  }
+
+  function findNearestObstacle(kind, x, y, maxDistance) {
+    let best = null;
+    let bestD = maxDistance;
+    for (const o of state.obstacles) {
+      if (o.kind !== kind) continue;
+      const d = dist(x, y, o.x, o.y);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  function drawGirlEquipmentDock(g) {
+    if (g.type === "stepper") {
+      const tread = findNearestObstacle("tread", g.x, g.y, 145);
+      const dock = tread || { x: g.x, y: g.y, w: 56, h: 88 };
+      ctx.save();
+      ctx.translate(dock.x - g.x, dock.y - g.y + 8);
+      ctx.globalAlpha = tread ? 0.72 : 0.92;
+      ctx.fillStyle = "rgba(4,9,14,0.92)";
+      traceRoundRect(-dock.w / 2 + 4, -dock.h / 2, dock.w - 8, dock.h, 9);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(46,224,255,0.55)";
+      ctx.lineWidth = 2;
+      traceRoundRect(-dock.w / 2 + 4, -dock.h / 2, dock.w - 8, dock.h, 9);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.11)";
+      ctx.lineWidth = 1;
+      const off = (state.t * 42) % 14;
+      for (let y = -dock.h / 2 + 10 - off; y < dock.h / 2 - 8; y += 14) {
+        ctx.beginPath();
+        ctx.moveTo(-dock.w / 2 + 12, y);
+        ctx.lineTo(dock.w / 2 - 12, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (g.type === "lifter") {
+      ctx.save();
+      ctx.fillStyle = "rgba(44,31,19,0.45)";
+      traceRoundRect(-34, -14, 68, 40, 7);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,125,223,0.22)";
+      ctx.lineWidth = 1.5;
+      traceRoundRect(-34, -14, 68, 40, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   function drawGymFloor() {
     const heat = Math.min(1, (state.level - 1) / (LEVELS.length - 1));
     const baseGrad = ctx.createLinearGradient(0, 0, WORLD_W, WORLD_H);
@@ -2475,12 +2805,9 @@
       ctx.stroke();
     }
 
-    // Turf lane
-    drawTurfLane();
-
-    // Center logo
+    // Center logo sits under the per-level floor plan so it never fights the map.
     drawGymLogo();
-    drawAmbientTraffic();
+    drawLevelFloorPlan(heat);
     drawExitHalo();
 
     // Ambient spotlighting: soft circular glow tracking the player
@@ -2508,7 +2835,7 @@
 
     // Front door (left, center band)
     ctx.fillStyle = "#2a3a2a";
-    ctx.fillRect(0, WORLD_DOOR_Y0, 16, WORLD_DOOR_Y1 - WORLD_DOOR_Y0);
+    ctx.fillRect(0, WORLD_DOOR_Y0, 30, WORLD_DOOR_Y1 - WORLD_DOOR_Y0);
     ctx.fillStyle = "#4dff7d";
     ctx.font = "11px JetBrains Mono, monospace";
     ctx.textAlign = "left";
@@ -2517,14 +2844,15 @@
 
     // Dynamic Locker room exit door
     const ex = state.exit;
-    const rx = ex.x - ex.w / 2;
-    const ry = ex.y - ex.h / 2;
+    const doorBounds = doorVisualBounds(ex);
+    const rx = doorBounds.x;
+    const ry = doorBounds.y;
     const exitLocked = state.exitFloor && state.floor !== state.exitFloor;
     ctx.fillStyle = exitLocked ? "#2e2a18" : "#3a2a3a";
-    ctx.fillRect(rx, ry, ex.w, ex.h);
+    ctx.fillRect(rx, ry, doorBounds.w, doorBounds.h);
     ctx.strokeStyle = exitLocked ? "rgba(247,215,22,0.75)" : "rgba(255,125,223,0.48)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(rx, ry, ex.w, ex.h);
+    ctx.strokeRect(rx, ry, doorBounds.w, doorBounds.h);
 
     const pulse = 0.5 + 0.5 * Math.sin(state.t * 4);
     const exitColor = exitLocked ? "#f7d716" : "#ff7ddf";
@@ -2535,7 +2863,7 @@
       ctx.textAlign = "right";
       ctx.font = "11px JetBrains Mono, monospace";
       ctx.fillText(exitLocked ? state.exitFloor : "LOCKER", WORLD_W - 4, ry - 8);
-      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", WORLD_W - 4, ry + ex.h + 16);
+      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", WORLD_W - 4, ry + doorBounds.h + 16);
       ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("→", WORLD_W - 22, ex.y + 6);
@@ -2544,7 +2872,7 @@
       ctx.textAlign = "left";
       ctx.font = "11px JetBrains Mono, monospace";
       ctx.fillText(exitLocked ? state.exitFloor : "LOCKER", 4, ry - 8);
-      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", 4, ry + ex.h + 16);
+      ctx.fillText(exitLocked ? "LOCKER" : "ROOM", 4, ry + doorBounds.h + 16);
       ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("←", 22, ex.y + 6);
@@ -2552,7 +2880,7 @@
       ctx.fillStyle = exitColor;
       ctx.textAlign = "center";
       ctx.font = "11px JetBrains Mono, monospace";
-      ctx.fillText(exitText, ex.x, 24 + ex.h);
+      ctx.fillText(exitText, ex.x, 24 + doorBounds.h);
       ctx.fillStyle = "rgba(" + (exitLocked ? "247,215,22" : "255,125,223") + "," + (0.3 + 0.4 * pulse) + ")";
       ctx.font = "18px Arial";
       ctx.fillText("↑", ex.x, 22);
@@ -3138,6 +3466,8 @@
     ctx.save();
     ctx.translate(g.x, g.y);
 
+    drawGirlEquipmentDock(g);
+
     // 1. Drop shadow
     ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
     ctx.beginPath();
@@ -3476,14 +3806,14 @@
     grad.addColorStop(1, "rgba(0,0,0,0.985)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(255,255,255,0.45)";
-    ctx.font = "bold 13px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("eyes closed. walking on vibes.", W / 2, 40);
+
     ctx.restore();
   }
 
   function drawHud() {
+    const canvasWrap = canvas && canvas.parentElement;
+    if (canvasWrap) canvasWrap.dataset.eyesClosed = state.player.eyesClosed ? "true" : "false";
+
     // SUS bar
     const fill = document.getElementById("hud-sus-fill");
     const pct = document.getElementById("hud-sus-pct");

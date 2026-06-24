@@ -28,21 +28,71 @@
     .gym-hud {
       display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
       justify-content: center;
-      padding: 10px 12px;
+      padding: 8px 12px;
       background:
-        linear-gradient(135deg, rgba(10,10,20,0.92), rgba(20,18,34,0.86)),
+        linear-gradient(135deg, rgba(10,10,20,0.72), rgba(20,18,34,0.58)),
         radial-gradient(circle at 10% 20%, rgba(46,224,255,0.14), transparent 42%);
-      border: 1px solid rgba(46,224,255,0.26);
+      border: 1px solid rgba(46,224,255,0.18);
       border-radius: 8px;
       font-family: var(--font-mono);
       font-size: 12px;
       color: var(--ink-dim);
-      margin-bottom: 10px;
-      box-shadow: 0 14px 36px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06);
+      margin-bottom: 8px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .gym-hud__item { display: flex; align-items: center; gap: 6px; }
     .gym-hud__label { color: var(--ink-dim); letter-spacing: 1.5px; }
     .gym-hud__value { color: var(--ink); font-weight: 700; }
+
+    .gym-screen-hud {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 6;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 8px;
+      pointer-events: none;
+      font-family: var(--font-mono);
+      color: var(--ink);
+    }
+    .gym-screen-hud__cluster {
+      display: grid;
+      gap: 6px;
+      min-width: 208px;
+      padding: 8px 9px;
+      background: linear-gradient(135deg, rgba(5,8,14,0.82), rgba(20,18,34,0.62));
+      border: 1px solid rgba(46,224,255,0.34);
+      border-radius: 8px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.07);
+      backdrop-filter: blur(6px);
+    }
+    .gym-screen-hud__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .gym-screen-hud__label {
+      color: rgba(216,230,239,0.72);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1.3px;
+    }
+    .gym-screen-hud__value {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 900;
+      text-shadow: 0 1px 0 #000;
+    }
+    .gym-screen-hud__metrics {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      gap: 8px;
+    }
 
     .sus-bar {
       width: 130px; height: 12px;
@@ -60,6 +110,12 @@
     .sus-bar__fill[data-zone="warn"] { background: #f7d716; }
     .sus-bar__fill[data-zone="crit"] { background: var(--bad); animation: susPulse 0.35s infinite; }
     @keyframes susPulse { 50% { opacity: 0.6; } }
+    .gym-screen-hud .sus-bar {
+      width: 100%;
+      min-width: 86px;
+      height: 10px;
+      box-shadow: 0 0 18px rgba(46,224,255,0.12);
+    }
 
     .eyes-chip {
       font-weight: 700;
@@ -70,6 +126,57 @@
     }
     .eyes-chip[data-zone="crit"] { background: rgba(255,46,136,0.2); color: var(--accent); animation: susPulse 0.4s infinite; }
     .eyes-chip[data-zone="shut"] { background: #111; color: #888; }
+    .gym-screen-hud .eyes-chip {
+      padding: 2px 7px;
+      font-size: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(42,42,58,0.76);
+    }
+    .canvas-wrap[data-eyes-closed="true"] .gym-screen-hud__cluster {
+      background: linear-gradient(135deg, rgba(5,8,14,0.96), rgba(20,18,34,0.88));
+      border-color: rgba(247,215,22,0.48);
+      box-shadow: 0 12px 34px rgba(0,0,0,0.56), 0 0 24px rgba(247,215,22,0.16);
+    }
+    .canvas-wrap[data-eyes-closed="true"] .gym-screen-hud__value {
+      color: #fff;
+    }
+    .canvas-wrap[data-eyes-closed="true"] .gym-screen-hud .sus-bar {
+      border-color: rgba(247,215,22,0.35);
+    }
+    .eyes-closed-note {
+      position: absolute;
+      left: 50%;
+      top: 52%;
+      transform: translate(-50%, -50%);
+      z-index: 7;
+      display: none;
+      min-width: min(270px, calc(100% - 48px));
+      padding: 8px 14px;
+      pointer-events: none;
+      text-align: center;
+      font-family: var(--font-mono);
+      background: rgba(4,7,12,0.9);
+      border: 1px solid rgba(247,215,22,0.74);
+      border-radius: 8px;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.54), 0 0 26px rgba(247,215,22,0.18);
+    }
+    .eyes-closed-note strong {
+      display: block;
+      color: #f7d716;
+      font-size: 13px;
+      letter-spacing: 0.6px;
+      line-height: 1.15;
+    }
+    .eyes-closed-note span {
+      display: block;
+      margin-top: 2px;
+      color: rgba(255,255,255,0.78);
+      font-size: 10px;
+      line-height: 1.25;
+    }
+    .canvas-wrap[data-eyes-closed="true"] .eyes-closed-note {
+      display: block;
+    }
 
     .panic-banner {
       position: absolute; top: 70px; left: 50%;
@@ -335,8 +442,8 @@
     .game-stage:-webkit-full-screen .gym-hud {
       width: 100% !important;
       max-width: 640px !important;
-      margin-bottom: 12px !important;
-      background: rgba(10, 10, 20, 0.95) !important;
+      margin-bottom: 8px !important;
+      background: rgba(10, 10, 20, 0.62) !important;
     }
     .game-stage:fullscreen .canvas-wrap,
     .game-stage:-webkit-full-screen .canvas-wrap {
@@ -354,6 +461,29 @@
       object-fit: contain !important;
     }
     @media (max-width: 560px) {
+      .gym-screen-hud {
+        top: 7px;
+        left: 7px;
+        right: 7px;
+      }
+      .gym-screen-hud__cluster {
+        min-width: min(198px, calc(100% - 86px));
+        padding: 6px 7px;
+        gap: 4px;
+      }
+      .gym-screen-hud__label { font-size: 8px; letter-spacing: 1px; }
+      .gym-screen-hud__value { font-size: 11px; }
+      .gym-screen-hud__metrics { gap: 6px; }
+      .gym-screen-hud .eyes-chip { font-size: 9px; padding: 1px 6px; }
+      .gym-screen-hud .sus-bar { height: 8px; }
+      .eyes-closed-note {
+        top: 52%;
+        min-width: min(236px, calc(100% - 36px));
+        padding: 7px 10px;
+      }
+      .eyes-closed-note strong { font-size: 12px; }
+      .eyes-closed-note span { font-size: 9px; }
+      .gym-hud { gap: 10px; padding: 7px 9px; font-size: 11px; }
       .gym-page .controls-row {
         align-items: center;
         flex-direction: row;
@@ -384,27 +514,10 @@
 
     <div class="game-layout">
       <div class="game-stage" style="position:relative;">
-        <div class="gym-hud">
-          <div class="gym-hud__item">
-            <span class="gym-hud__label">SUS</span>
-            <span class="sus-bar"><span class="sus-bar__fill" id="hud-sus-fill"></span></span>
-            <span class="gym-hud__value" id="hud-sus-pct">0%</span>
-          </div>
-          <div class="gym-hud__item">
-            <span class="gym-hud__label">EYES</span>
-            <span class="eyes-chip" id="hud-eyes" data-zone="ok">OPEN</span>
-          </div>
-          <div class="gym-hud__item">
-            <span class="gym-hud__label">LEVEL</span>
-            <span class="gym-hud__value" id="hud-level">1/8</span>
-          </div>
+        <div class="gym-hud" aria-label="Run score">
           <div class="gym-hud__item">
             <span class="gym-hud__label">HEAT</span>
             <span class="gym-hud__value" id="hud-heat">WARMUP</span>
-          </div>
-          <div class="gym-hud__item">
-            <span class="gym-hud__label">DIST</span>
-            <span class="gym-hud__value" id="hud-dist">0%</span>
           </div>
           <div class="gym-hud__item">
             <span class="gym-hud__label">SCORE</span>
@@ -418,6 +531,24 @@
 
         <div class="canvas-wrap canvas-wrap--ar-640-640">
           <canvas id="gameCanvas" width="640" height="640" tabindex="0"></canvas>
+          <div class="gym-screen-hud" aria-label="In-game status">
+            <div class="gym-screen-hud__cluster">
+              <div class="gym-screen-hud__row">
+                <span class="gym-screen-hud__label">SUS</span>
+                <span class="gym-screen-hud__value" id="hud-sus-pct">0%</span>
+              </div>
+              <span class="sus-bar"><span class="sus-bar__fill" id="hud-sus-fill"></span></span>
+              <div class="gym-screen-hud__row gym-screen-hud__metrics">
+                <span><span class="gym-screen-hud__label">EYES</span> <span class="eyes-chip" id="hud-eyes" data-zone="ok">OPEN</span></span>
+                <span><span class="gym-screen-hud__label">LVL</span> <span class="gym-screen-hud__value" id="hud-level">1/8</span></span>
+                <span><span class="gym-screen-hud__label">EXIT</span> <span class="gym-screen-hud__value" id="hud-dist">0%</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="eyes-closed-note" aria-hidden="true">
+            <strong>EYES CLOSED</strong>
+            <span>walking blind - HUD still visible</span>
+          </div>
           <button class="fullscreen-btn" id="btn-fullscreen" type="button">⛶ Maximize</button>
 
           <div class="panic-banner" id="gym-banner" style="display:none;"></div>
@@ -513,7 +644,7 @@
 
   <script src="../assets/js/ads.js?v=20260611-7"></script>
   <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
-  <script src="../assets/js/dont-look-gym-girl.js?v=20260624-genart-1"></script>
+  <script src="../assets/js/dont-look-gym-girl.js?v=20260624-layout-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

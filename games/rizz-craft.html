@@ -85,7 +85,7 @@
         </div>
 
         <div class="canvas-wrap canvas-wrap--ar-832-512">
-          <canvas id="gameCanvas" width="832" height="512" tabindex="0" aria-label="Rizz-Craft mining world"></canvas>
+          <canvas id="gameCanvas" width="832" height="512" tabindex="0" aria-label="Rizz-Craft 3D voxel mining world"></canvas>
 
           <!-- Crafting overlay -->
           <div class="craft-panel" id="craft-panel" aria-label="Crafting">
@@ -99,7 +99,7 @@
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">⛏️ RIZZ-CRAFT</h2>
             <p class="overlay__sub" id="overlay-sub">
-              You spawned in Ohio. Chop Skibidi Logs, mine Ohio Stone, and dig for Rizz and Sigma Ore.
+              You spawned in a full 3D Ohio voxel world. Chop Skibidi Logs, mine Ohio Stone, and dig for Rizz and Sigma Ore.
               <br><br>
               Build a Crafting Toilet, light Rizz Torches, and <strong>survive the night</strong> when the Skibidi Toilets come.
             </p>
@@ -125,7 +125,7 @@
           </div>
 
           <p class="sc-tips">
-            <kbd>A</kbd>/<kbd>D</kbd> move · <kbd>W</kbd>/<kbd>Space</kbd> jump ·
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse look · <kbd>Space</kbd> jump ·
             <strong style="color:var(--ink);">Left-click</strong> mine / attack ·
             <strong style="color:var(--ink);">Right-click</strong> place ·
             <kbd>1</kbd>–<kbd>9</kbd> or scroll to pick a slot · <kbd>E</kbd> craft · <kbd>P</kbd> pause.
@@ -187,7 +187,8 @@
 
   <script src="../assets/js/ads.js?v=20260611-8"></script>
   <script src="../assets/js/main.js?v=20260622-network-font-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260616-save-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260623-world-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

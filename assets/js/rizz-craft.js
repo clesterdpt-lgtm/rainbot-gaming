@@ -346,6 +346,7 @@
   let rendererPixelRatio = 0;
   let heldRenderCode = null;
   let bagRenderKey = "";
+  let selectionCueTimer = 0;
   let chunkCenterKey = "";
   let decorCenterKey = "";
   let sunDisk = null;
@@ -1899,6 +1900,7 @@
     state.bag[bagIndex] = tmp;
     state.selected = hotbarIndex;
     heldRenderCode = null;
+    showSelectionCue();
   }
   function toggleBag(force) {
     if (!state.started) return;
@@ -2542,10 +2544,10 @@
     ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z}x${WORLD_Y} world - lava below ${LAVA_LEVEL} - ${state.mobs.length} enemies - ${state.friendlies.length} pals`;
     ui.hotbar.innerHTML = state.hotbar.map((slot, i) => {
       const selected = i === state.selected ? " is-selected" : "";
-      const label = slot ? DEF[slot.code].name : "";
+      const label = slotName(slot, "");
       const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
       const swatch = slotSwatch(slot);
-      return `<button class="rizz3d-slot${selected}" data-slot="${i}" title="${label || "Empty"}"><em>${i + 1}</em>${swatch}${count}</button>`;
+      return `<button class="rizz3d-slot${selected}" data-slot="${i}" title="${escapeAttr(label || "Empty")}"><em>${i + 1}</em>${swatch}${count}</button>`;
     }).join("");
     if (ui.bagButton) {
       const used = state.bag.filter(Boolean).length;
@@ -2558,6 +2560,36 @@
   function setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+  }
+  function slotName(slot, empty = "Empty") {
+    return slot && DEF[slot.code] ? DEF[slot.code].name : empty;
+  }
+  function slotDetail(slot, empty = "Empty") {
+    if (!slot || !DEF[slot.code]) return empty;
+    return slot.n > 1 ? `${DEF[slot.code].name} x${slot.n}` : DEF[slot.code].name;
+  }
+  function escapeAttr(value) {
+    return String(value).replace(/[&"<>]/g, (ch) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" }[ch]));
+  }
+  function setSelectedSlot(index, announce = true) {
+    state.selected = clamp(Number(index) || 0, 0, HOTBAR - 1);
+    heldRenderCode = null;
+    renderBag();
+    if (announce) showSelectionCue();
+  }
+  function showSelectionCue(prefix = "Selected") {
+    if (!ui.selectionCue) return;
+    ui.selectionCue.textContent = `${prefix}: ${slotDetail(selectedSlot())}`;
+    ui.selectionCue.classList.add("is-visible");
+    window.clearTimeout(selectionCueTimer);
+    selectionCueTimer = window.setTimeout(() => {
+      if (ui.selectionCue) ui.selectionCue.classList.remove("is-visible");
+    }, 1350);
+  }
+  function setBagHoverText(text = "") {
+    if (!ui.bagPanel) return;
+    const hover = ui.bagPanel.querySelector("[data-bag-hover]");
+    if (hover) hover.textContent = text || "Hover a slot to inspect it.";
   }
   function updateHeldItem() {
     const slot = selectedSlot();
@@ -2599,11 +2631,17 @@
     return mesh;
   }
   function buildHeldPick(color) {
-    const wood = heldMaterial("#7c4e29");
+    const handle = heldMaterial("#6f4624");
+    const wrap = heldMaterial("#3b2416");
     const head = heldMaterial(color);
-    addHeldBox([0.38, -0.34, -0.72], [0.07, 0.56, 0.07], wood, [0, 0, -0.54]);
-    addHeldBox([0.23, -0.12, -0.82], [0.38, 0.09, 0.11], head, [0, 0, -0.54]);
-    addHeldBox([0.08, -0.14, -0.82], [0.08, 0.17, 0.1], head, [0, 0, -0.92]);
+    const edge = heldMaterial("#d9b176");
+    addHeldBox([0.5, -0.43, -0.98], [0.05, 0.48, 0.05], handle, [0.08, 0.04, -0.58]);
+    addHeldBox([0.58, -0.58, -0.96], [0.095, 0.065, 0.065], wrap, [0.08, 0.04, -0.58]);
+    addHeldBox([0.4, -0.28, -0.99], [0.095, 0.062, 0.065], wrap, [0.08, 0.04, -0.58]);
+    addHeldBox([0.34, -0.2, -1.06], [0.38, 0.06, 0.08], head, [0.02, 0.08, -0.28]);
+    addHeldBox([0.2, -0.235, -1.055], [0.16, 0.04, 0.082], head, [0.02, 0.08, -0.76]);
+    addHeldBox([0.51, -0.145, -1.055], [0.15, 0.04, 0.082], head, [0.02, 0.08, 0.19]);
+    addHeldBox([0.34, -0.175, -1.105], [0.28, 0.014, 0.024], edge, [0.02, 0.08, -0.28]);
   }
   function buildHeldSword(color) {
     const grip = heldMaterial("#6f4624");
@@ -2660,11 +2698,12 @@
       heldGroup.rotation.z -= swing * 0.18;
     }
   }
-  function bagSlotHtml(slot, i, attr, selected = false) {
-    const label = slot ? DEF[slot.code].name : "Empty";
+  function bagSlotHtml(slot, i, attr, selected = false, scope = "Slot") {
+    const label = slotName(slot);
+    const detail = `${scope} ${i + 1}: ${slotDetail(slot)}`;
     const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
     const swatch = slotSwatch(slot);
-    return `<button class="rizz3d-bag-slot${selected ? " is-selected" : ""}" ${attr} title="${label}"><em>${i + 1}</em>${swatch}${count}</button>`;
+    return `<button class="rizz3d-bag-slot${selected ? " is-selected" : ""}" ${attr} data-item-name="${escapeAttr(detail)}" title="${escapeAttr(detail)}"><em>${i + 1}</em>${swatch}${count}</button>`;
   }
   function slotSwatch(slot) {
     if (!slot || !DEF[slot.code]) return "";
@@ -2696,13 +2735,14 @@
         <strong>Bag</strong>
         <span>Click a bag item to swap it into the selected action slot.</span>
       </div>
+      <div class="rizz3d-bag-hover" data-bag-hover>Hover a slot to inspect it.</div>
       <div class="rizz3d-bag-label">Action bar</div>
       <div class="rizz3d-bag-hotbar">
-        ${state.hotbar.map((slot, i) => bagSlotHtml(slot, i, `data-bag-hotbar="${i}"`, i === state.selected)).join("")}
+        ${state.hotbar.map((slot, i) => bagSlotHtml(slot, i, `data-bag-hotbar="${i}"`, i === state.selected, "Action")).join("")}
       </div>
       <div class="rizz3d-bag-label">Bag storage</div>
       <div class="rizz3d-bag-grid">
-        ${state.bag.map((slot, i) => bagSlotHtml(slot, i, `data-bag-slot="${i}"`)).join("")}
+        ${state.bag.map((slot, i) => bagSlotHtml(slot, i, `data-bag-slot="${i}"`, false, "Bag")).join("")}
       </div>
     `;
   }
@@ -2718,13 +2758,14 @@
       .rizz3d-target{display:none;position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target.is-visible{display:block}
       .rizz3d-progress{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);z-index:5;width:min(340px,72%);height:5px;background:rgba(0,0,0,.55);border-radius:3px;overflow:hidden;pointer-events:none}.rizz3d-progress span{display:block;width:0;height:100%;background:#ffd43b}
+      .rizz3d-selection-cue{position:absolute;left:50%;bottom:60px;transform:translate(-50%,8px);z-index:8;max-width:min(320px,72%);padding:6px 10px;border:1px solid rgba(255,212,59,.45);border-radius:6px;background:rgba(5,7,13,.86);color:#fff;font:900 11px var(--font-mono);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;pointer-events:none;transition:opacity 120ms ease,transform 120ms ease}.rizz3d-selection-cue.is-visible{opacity:1;transform:translate(-50%,0)}
       .rizz3d-hotbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:7;display:grid;grid-template-columns:repeat(9,40px);gap:4px;pointer-events:auto}
-      .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28)}
+      .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28),0 0 18px rgba(255,212,59,.18)}.rizz3d-slot.is-selected:after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:2px;border-radius:2px;background:#ffd43b}
       .rizz3d-slot em{position:absolute;left:4px;top:2px;color:rgba(255,255,255,.55);font:700 9px var(--font-mono);font-style:normal}.rizz3d-slot b{position:absolute;right:4px;bottom:2px;color:#fff;font:800 11px var(--font-mono)}
       .rizz3d-swatch{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:4px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.22)}
       .rizz3d-swatch.is-pick,.rizz3d-swatch.is-sword,.rizz3d-swatch.is-axe,.rizz3d-swatch.is-torch{width:26px;height:26px;background:transparent!important;border-radius:0;box-shadow:none}
-      .rizz3d-swatch.is-pick:before{content:"";position:absolute;left:11px;top:4px;width:4px;height:22px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(38deg)}
-      .rizz3d-swatch.is-pick:after{content:"";position:absolute;left:2px;top:5px;width:22px;height:6px;border-radius:3px;background:var(--item-color);box-shadow:inset 0 -2px 0 rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.22);transform:rotate(-17deg)}
+      .rizz3d-swatch.is-pick:before{content:"";position:absolute;left:11px;top:5px;width:4px;height:21px;border-radius:3px;background:#6f4624;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(34deg)}
+      .rizz3d-swatch.is-pick:after{content:"";position:absolute;left:2px;top:5px;width:23px;height:6px;border-radius:5px 5px 3px 3px;background:linear-gradient(90deg,rgba(0,0,0,.12),var(--item-color) 24%,var(--item-color) 76%,rgba(255,255,255,.22));box-shadow:inset 0 -2px 0 rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.22);transform:rotate(-15deg)}
       .rizz3d-swatch.is-sword:before{content:"";position:absolute;left:12px;top:2px;width:4px;height:20px;border-radius:2px;background:var(--item-color);box-shadow:inset 0 -5px 0 rgba(255,255,255,.24),0 0 0 1px rgba(255,255,255,.18);transform:rotate(42deg)}
       .rizz3d-swatch.is-sword:after{content:"";position:absolute;left:7px;top:16px;width:15px;height:4px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(42deg)}
       .rizz3d-swatch.is-axe:before{content:"";position:absolute;left:11px;top:4px;width:4px;height:21px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(35deg)}
@@ -2734,6 +2775,7 @@
       .rizz3d-bag-button{position:absolute;left:calc(50% + 204px);bottom:10px;z-index:7;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.86);color:#fff;font:800 10px var(--font-mono);padding:0 10px;cursor:pointer}.rizz3d-bag-button.is-open{border-color:#43e6ff;box-shadow:0 0 0 2px rgba(67,230,255,.22)}
       .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
+      .rizz3d-bag-hover{min-height:24px;margin:6px 0 9px;padding:6px 8px;border:1px solid rgba(67,230,255,.22);border-radius:6px;background:rgba(67,230,255,.08);color:#fff;font:900 10px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
@@ -2751,14 +2793,13 @@
     const progress = document.createElement("div");
     progress.className = "rizz3d-progress";
     progress.innerHTML = "<span></span>";
+    const selectionCue = document.createElement("div");
+    selectionCue.className = "rizz3d-selection-cue";
     const hotbar = document.createElement("div");
     hotbar.className = "rizz3d-hotbar";
     hotbar.addEventListener("click", (event) => {
       const button = event.target.closest("[data-slot]");
-      if (button) {
-        state.selected = Number(button.dataset.slot);
-        renderBag();
-      }
+      if (button) setSelectedSlot(Number(button.dataset.slot));
     });
     const bagButton = document.createElement("button");
     bagButton.className = "rizz3d-bag-button";
@@ -2769,8 +2810,7 @@
     bagPanel.addEventListener("click", (event) => {
       const hotbarButton = event.target.closest("[data-bag-hotbar]");
       if (hotbarButton) {
-        state.selected = Number(hotbarButton.dataset.bagHotbar);
-        renderBag();
+        setSelectedSlot(Number(hotbarButton.dataset.bagHotbar));
         return;
       }
       const bagButton = event.target.closest("[data-bag-slot]");
@@ -2779,8 +2819,17 @@
         updateHud();
       }
     });
-    wrap.append(damage, crosshair, objective, target, progress, hotbar, bagButton, bagPanel);
-    return { damage, crosshair, objective, target, progress: progress.firstElementChild, hotbar, bagButton, bagPanel };
+    bagPanel.addEventListener("pointerover", (event) => {
+      const button = event.target.closest("[data-item-name]");
+      if (button) setBagHoverText(button.dataset.itemName);
+    });
+    bagPanel.addEventListener("focusin", (event) => {
+      const button = event.target.closest("[data-item-name]");
+      if (button) setBagHoverText(button.dataset.itemName);
+    });
+    bagPanel.addEventListener("pointerleave", () => setBagHoverText());
+    wrap.append(damage, crosshair, objective, target, progress, selectionCue, hotbar, bagButton, bagPanel);
+    return { damage, crosshair, objective, target, progress: progress.firstElementChild, selectionCue, hotbar, bagButton, bagPanel };
   }
 
   function resizeRenderer(force = false) {
@@ -2946,7 +2995,7 @@
       const movementHandled = setKeyboardMove(key, true);
       if (key === " " || key === "spacebar") state.input.jump = true;
       if (key === "shift") state.input.sprint = true;
-      if (key >= "1" && key <= "9") state.selected = Number(key) - 1;
+      if (key >= "1" && key <= "9") setSelectedSlot(Number(key) - 1);
       if (key === "e") toggleCrafting();
       if (key === "b") toggleBag();
       if (key === "p") togglePause();
@@ -2982,7 +3031,7 @@
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("wheel", (event) => {
       event.preventDefault();
-      state.selected = (state.selected + (event.deltaY > 0 ? 1 : -1) + HOTBAR) % HOTBAR;
+      setSelectedSlot((state.selected + (event.deltaY > 0 ? 1 : -1) + HOTBAR) % HOTBAR);
     }, { passive: false });
     document.addEventListener("mousemove", (event) => {
       if (document.pointerLockElement !== canvas || state.paused || state.crafting) return;

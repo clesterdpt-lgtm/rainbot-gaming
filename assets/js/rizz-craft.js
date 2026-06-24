@@ -33,16 +33,24 @@
   }
 
   const THREE = window.THREE;
-  const SAVE_VERSION = 5;
-  const WORLD_X = 224;
-  const WORLD_Y = 64;
-  const WORLD_Z = 224;
+  const SAVE_VERSION = 6;
+  const WORLD_X = 512;
+  const WORLD_Y = 72;
+  const WORLD_Z = 512;
   const CHUNK = 16;
-  const SEA_LEVEL = 14;
+  const SEA_LEVEL = 16;
+  const EDGE_OCEAN = 44;
+  const RENDER_RADIUS_CHUNKS = 6;
+  const DECOR_RADIUS_CHUNKS = 6;
   const HOTBAR = 9;
   const MAX_HP = 100;
   const DAMAGE_GRACE = 1.1;
   const SPAWN_GRACE = 4;
+  const OCEAN_FATIGUE_LIMIT = 8.5;
+  const WATER_MOVE_MULT = 0.55;
+  const WATER_GRAVITY_MULT = 0.22;
+  const SWIM_UP_SPEED = 4.4;
+  const WATER_FLOW_LIMIT = 96;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -51,7 +59,7 @@
   const SPRINT_SPEED = 7.2;
   const JUMP_SPEED = 8.6;
   const REACH = 6.1;
-  const DAY_SECONDS = 150;
+  const DAY_SECONDS = 420;
 
   const AIR = 0;
   const GRASS = 1;
@@ -258,6 +266,7 @@
       onGround: false,
       hp: MAX_HP,
       hurtCd: 0,
+      inWater: false,
     },
     input: { forward: 0, right: 0, jump: false, mine: false, place: false, sprint: false },
     mobs: [],
@@ -274,6 +283,8 @@
     score: 0,
     high: 0,
     sigmaForged: false,
+    oceanFatigue: 0,
+    visibleChunkCount: 0,
     mode: "mine",
   };
 
@@ -290,10 +301,16 @@
   let rendererWidth = 0;
   let rendererHeight = 0;
   let rendererPixelRatio = 0;
+  let chunkCenterKey = "";
+  let decorCenterKey = "";
+  let sunDisk = null;
+  let moonDisk = null;
   const reusableVector = new THREE.Vector3();
   const moveForwardVector = new THREE.Vector3();
   const moveRightVector = new THREE.Vector3();
   const worldUpVector = new THREE.Vector3(0, 1, 0);
+  const sunOrbitVector = new THREE.Vector3();
+  const moonOrbitVector = new THREE.Vector3();
   const keyMove = { forward: false, back: false, left: false, right: false };
   const moveSources = {
     keyboard: { forward: 0, right: 0 },
@@ -414,6 +431,9 @@
   function inWorld(x, y, z) { return x >= 0 && x < WORLD_X && y >= 0 && y < WORLD_Y && z >= 0 && z < WORLD_Z; }
   function isPlaceable(code) { return code > AIR && DEF[code] && DEF[code].kind === "block" && code !== WATER && code !== TALL_GRASS && code !== FLOWER; }
   function maxStack(code) { return (DEF[code] && DEF[code].stack) || 99; }
+  function canWaterFill(code) {
+    return code === AIR || code === TALL_GRASS || code === FLOWER || code === TORCH;
+  }
 
   function hash32(n) {
     n = (n ^ 61) ^ (n >>> 16);
@@ -465,6 +485,10 @@
     const pickX = cellX * spacing + margin + Math.floor(hash2(cellX * 19 + 5, cellZ * 23 - 7) * usable);
     const pickZ = cellZ * spacing + margin + Math.floor(hash2(cellX * 29 - 11, cellZ * 31 + 13) * usable);
     return x === pickX && z === pickZ && hash2(cellX + 101, cellZ - 73) < biome.tree;
+  }
+  function edgeOceanStrength(x, z) {
+    const edge = Math.min(x, z, WORLD_X - 1 - x, WORLD_Z - 1 - z);
+    return clamp((EDGE_OCEAN - edge) / EDGE_OCEAN, 0, 1);
   }
   function noise2(x, z, scale) {
     const sx = x * scale;
@@ -532,6 +556,63 @@
     rebuildChunksNear(x, z);
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER) decorDirty = true;
   }
+  function flowWaterNear(x, y, z, limit = WATER_FLOW_LIMIT) {
+    const seeds = [];
+    const seenSeeds = new Set();
+    const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+    for (const dir of seedDirs) {
+      const sx = x + dir[0];
+      const sy = y + dir[1];
+      const sz = z + dir[2];
+      const key = `${sx},${sy},${sz}`;
+      if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== WATER) continue;
+      seenSeeds.add(key);
+      seeds.push({ x: sx, y: sy, z: sz });
+    }
+    if (!seeds.length) return 0;
+    return spreadWaterFrom(seeds, limit);
+  }
+  function spreadWaterFrom(seeds, limit = WATER_FLOW_LIMIT) {
+    const queue = seeds.slice();
+    const queued = new Set(queue.map((p) => `${p.x},${p.y},${p.z}`));
+    let filled = 0;
+
+    function pushIfWater(x, y, z) {
+      const key = `${x},${y},${z}`;
+      if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== WATER) return;
+      queued.add(key);
+      queue.push({ x, y, z });
+    }
+    function fill(x, y, z) {
+      if (!inWorld(x, y, z) || !canWaterFill(getBlock(x, y, z)) || filled >= limit) return false;
+      setBlock(x, y, z, WATER);
+      filled++;
+      const key = `${x},${y},${z}`;
+      if (!queued.has(key)) {
+        queued.add(key);
+        queue.push({ x, y, z });
+      }
+      return true;
+    }
+
+    for (let i = 0; i < queue.length && filled < limit; i++) {
+      const p = queue[i];
+      if (getBlock(p.x, p.y, p.z) !== WATER) continue;
+      const below = getBlock(p.x, p.y - 1, p.z);
+      if (canWaterFill(below)) {
+        fill(p.x, p.y - 1, p.z);
+        continue;
+      }
+      if (below !== WATER && !isSolidBlock(below)) continue;
+      for (const dir of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = p.x + dir[0];
+        const nz = p.z + dir[1];
+        if (fill(nx, p.y, nz)) continue;
+        pushIfWater(nx, p.y, nz);
+      }
+    }
+    return filled;
+  }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
   function occludes(code) { return code !== AIR && code !== WATER && code !== TORCH && code !== TALL_GRASS && code !== FLOWER; }
 
@@ -551,6 +632,11 @@
         const detail = fbm2(x - 900, z + 700, 0.052, 4);
         const ridges = Math.abs(fbm2(x + 20, z + 20, 0.024, 4) - 0.5) * 2;
         let h = SEA_LEVEL + 10 + (continent - 0.48) * 34 + (detail - 0.5) * 8 + Math.pow(ridges, 1.7) * 10;
+        const ocean = edgeOceanStrength(x, z);
+        if (ocean > 0) {
+          const shelf = SEA_LEVEL - 9 + noise2(x + 17, z - 23, 0.09) * 2;
+          h = lerp(h, shelf, smooth(ocean));
+        }
         const spawnBlend = clamp(1 - center / 20, 0, 1);
         h = lerp(h, SEA_LEVEL + 7 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
         const height = clamp(Math.round(h), 4, WORLD_Y - 9);
@@ -569,6 +655,7 @@
         else if (weird > 0.58 && moisture > 0.40) biome = 9;
         else if (height > SEA_LEVEL + 16) biome = 2;
         else if (moisture > 0.52) biome = 1;
+        if (ocean > 0.62) biome = 10;
         state.biome[surfaceIndex(x, z)] = biome;
         state.surface[surfaceIndex(x, z)] = height;
       }
@@ -613,6 +700,7 @@
     rebuildDecorations();
     buildClouds();
     buildStars();
+    buildCelestials();
   }
 
   function growTreesAndDetails() {
@@ -735,9 +823,8 @@
     disposeGroup(worldGroup);
     disposeGroup(waterGroup);
     state.chunks.clear();
-    for (let cz = 0; cz < WORLD_Z / CHUNK; cz++) {
-      for (let cx = 0; cx < WORLD_X / CHUNK; cx++) rebuildChunk(cx, cz);
-    }
+    chunkCenterKey = "";
+    updateVisibleChunks(true);
   }
   function rebuildChunksNear(x, z) {
     const cx = Math.floor(x / CHUNK);
@@ -745,19 +832,47 @@
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
         if ((dx === 0 && dz === 0) || x % CHUNK === 0 || x % CHUNK === CHUNK - 1 || z % CHUNK === 0 || z % CHUNK === CHUNK - 1) {
-          rebuildChunk(cx + dx, cz + dz);
+          const key = `${cx + dx},${cz + dz}`;
+          if (state.chunks.has(key)) rebuildChunk(cx + dx, cz + dz);
         }
       }
     }
+  }
+  function updateVisibleChunks(force = false) {
+    const p = state.player;
+    const pcx = clamp(Math.floor((p && Number.isFinite(p.x) ? p.x : WORLD_X / 2) / CHUNK), 0, WORLD_X / CHUNK - 1);
+    const pcz = clamp(Math.floor((p && Number.isFinite(p.z) ? p.z : WORLD_Z / 2) / CHUNK), 0, WORLD_Z / CHUNK - 1);
+    const key = `${pcx},${pcz}`;
+    if (!force && key === chunkCenterKey) return;
+    chunkCenterKey = key;
+    const wanted = new Set();
+    for (let dz = -RENDER_RADIUS_CHUNKS; dz <= RENDER_RADIUS_CHUNKS; dz++) {
+      for (let dx = -RENDER_RADIUS_CHUNKS; dx <= RENDER_RADIUS_CHUNKS; dx++) {
+        const cx = pcx + dx;
+        const cz = pcz + dz;
+        if (cx < 0 || cz < 0 || cx >= WORLD_X / CHUNK || cz >= WORLD_Z / CHUNK) continue;
+        if (Math.hypot(dx, dz) > RENDER_RADIUS_CHUNKS + 0.45) continue;
+        const ckey = `${cx},${cz}`;
+        wanted.add(ckey);
+        if (!state.chunks.has(ckey)) rebuildChunk(cx, cz);
+      }
+    }
+    for (const [ckey, entry] of state.chunks.entries()) {
+      if (!wanted.has(ckey)) disposeChunkEntry(ckey, entry);
+    }
+    state.visibleChunkCount = state.chunks.size;
+    decorDirty = true;
+  }
+  function disposeChunkEntry(key, entry) {
+    if (entry.mesh) { worldGroup.remove(entry.mesh); disposeMesh(entry.mesh); }
+    if (entry.water) { waterGroup.remove(entry.water); disposeMesh(entry.water); }
+    state.chunks.delete(key);
   }
   function rebuildChunk(cx, cz) {
     if (cx < 0 || cz < 0 || cx >= WORLD_X / CHUNK || cz >= WORLD_Z / CHUNK) return;
     const key = `${cx},${cz}`;
     const old = state.chunks.get(key);
-    if (old) {
-      if (old.mesh) { worldGroup.remove(old.mesh); disposeMesh(old.mesh); }
-      if (old.water) { waterGroup.remove(old.water); disposeMesh(old.water); }
-    }
+    if (old) disposeChunkEntry(key, old);
     const solid = makeGeometryArrays();
     const water = makeGeometryArrays();
     const x0 = cx * CHUNK;
@@ -899,12 +1014,21 @@
   function rebuildDecorations() {
     disposeGroup(decorGroup);
     const arr = makeGeometryArrays();
-    for (let z = 0; z < WORLD_Z; z++) {
-      for (let y = 1; y < WORLD_Y; y++) {
-        for (let x = 0; x < WORLD_X; x++) {
-          const code = getBlock(x, y, z);
-          if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
-          if (code === TORCH) pushTorch(arr, x, y, z);
+    const pcx = clamp(Math.floor(state.player.x / CHUNK), 0, WORLD_X / CHUNK - 1);
+    const pcz = clamp(Math.floor(state.player.z / CHUNK), 0, WORLD_Z / CHUNK - 1);
+    decorCenterKey = `${pcx},${pcz}`;
+    for (let cz = pcz - DECOR_RADIUS_CHUNKS; cz <= pcz + DECOR_RADIUS_CHUNKS; cz++) {
+      for (let cx = pcx - DECOR_RADIUS_CHUNKS; cx <= pcx + DECOR_RADIUS_CHUNKS; cx++) {
+        if (cx < 0 || cz < 0 || cx >= WORLD_X / CHUNK || cz >= WORLD_Z / CHUNK) continue;
+        if (Math.hypot(cx - pcx, cz - pcz) > DECOR_RADIUS_CHUNKS + 0.45) continue;
+        for (let z = cz * CHUNK; z < cz * CHUNK + CHUNK; z++) {
+          for (let y = 1; y < WORLD_Y; y++) {
+            for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
+              const code = getBlock(x, y, z);
+              if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
+              if (code === TORCH) pushTorch(arr, x, y, z);
+            }
+          }
         }
       }
     }
@@ -985,6 +1109,7 @@
     }
   }
   function buildStars() {
+    if (scene.getObjectByName("stars")) return;
     const positions = [];
     for (let i = 0; i < 420; i++) {
       const a = hash2(i, 1) * Math.PI * 2;
@@ -994,10 +1119,34 @@
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, transparent: true, opacity: 0 });
+    const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, transparent: true, opacity: 0, fog: false });
     const stars = new THREE.Points(geometry, material);
     stars.name = "stars";
     scene.add(stars);
+  }
+  function buildCelestials() {
+    if (sunDisk && moonDisk) return;
+    const sunGeo = new THREE.CircleBufferGeometry(7.8, 48);
+    const moonGeo = new THREE.CircleBufferGeometry(6.8, 40);
+    sunDisk = new THREE.Mesh(sunGeo, new THREE.MeshBasicMaterial({
+      color: 0xffdc67,
+      transparent: true,
+      opacity: 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+    }));
+    moonDisk = new THREE.Mesh(moonGeo, new THREE.MeshBasicMaterial({
+      color: 0xf2f7ff,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+    }));
+    sunDisk.name = "sun-disk";
+    moonDisk.name = "moon-disk";
+    scene.add(sunDisk, moonDisk);
   }
 
   function disposeGroup(group) {
@@ -1016,7 +1165,10 @@
     const x = WORLD_X / 2 + 0.5;
     const z = WORLD_Z / 2 + 0.5;
     const y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
-    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE });
+    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false });
+    state.oceanFatigue = 0;
+    updateVisibleChunks(true);
+    decorDirty = true;
     syncCamera();
   }
   function syncCamera() {
@@ -1071,7 +1223,9 @@
     const p = state.player;
     const forward = state.input.forward;
     const right = state.input.right;
-    const speed = state.input.sprint ? SPRINT_SPEED : MOVE_SPEED;
+    const inWater = playerInWater();
+    p.inWater = inWater;
+    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * (inWater ? WATER_MOVE_MULT : 1);
     syncCamera();
     const move = movementVectorForCamera(forward, right);
     let mx = move.x;
@@ -1083,12 +1237,20 @@
     }
     p.vx = mx * speed;
     p.vz = mz * speed;
-    if (state.input.jump && p.onGround) {
+    if (inWater && state.input.jump) {
+      p.vy = Math.max(p.vy, SWIM_UP_SPEED);
+      p.onGround = false;
+    } else if (state.input.jump && p.onGround) {
       p.vy = JUMP_SPEED;
       p.onGround = false;
     }
-    p.vy -= GRAVITY * dt;
-    p.vy = Math.max(p.vy, -32);
+    p.vy -= GRAVITY * (inWater ? WATER_GRAVITY_MULT : 1) * dt;
+    if (inWater) {
+      p.vy = Math.max(p.vy, -2.2);
+      if (!state.input.jump && p.vy < 0) p.vy *= 0.92;
+    } else {
+      p.vy = Math.max(p.vy, -32);
+    }
     movePlayerAxis("x", p.vx * dt);
     movePlayerAxis("z", p.vz * dt);
     movePlayerAxis("y", p.vy * dt);
@@ -1096,7 +1258,29 @@
     p.z = clamp(p.z, 1.5, WORLD_Z - 1.5);
     if (p.y < 1) hurtPlayer(4);
     if (p.hurtCd > 0) p.hurtCd -= dt;
+    updateOceanFatigue(dt);
     syncCamera();
+  }
+  function playerInWater() {
+    const p = state.player;
+    const x = Math.floor(p.x);
+    const z = Math.floor(p.z);
+    return getBlock(x, Math.floor(p.y + 0.15), z) === WATER || getBlock(x, Math.floor(p.y + EYE_HEIGHT * 0.72), z) === WATER;
+  }
+  function updateOceanFatigue(dt) {
+    const p = state.player;
+    const inBorderOcean = p.inWater && edgeOceanStrength(p.x, p.z) > 0.55;
+    if (inBorderOcean) {
+      state.oceanFatigue += dt;
+      if (state.oceanFatigue > OCEAN_FATIGUE_LIMIT) {
+        api.toast("You got exhausted in the border ocean. Respawning...", "bad");
+        p.hp = MAX_HP;
+        state.oceanFatigue = 0;
+        spawnPlayer();
+      }
+    } else {
+      state.oceanFatigue = Math.max(0, state.oceanFatigue - dt * 1.6);
+    }
   }
   function movementVectorForYaw(yaw, forward, right) {
     const sin = Math.sin(yaw);
@@ -1282,6 +1466,7 @@
   function updateTarget() {
     state.target = raycastBlocks(REACH);
     selectionBox.visible = !!(state.target && state.target.hit);
+    ui.target.classList.toggle("is-visible", selectionBox.visible);
     if (selectionBox.visible) {
       selectionBox.position.set(state.target.x + 0.5, state.target.y + 0.5, state.target.z + 0.5);
       ui.target.textContent = `${DEF[getBlock(state.target.x, state.target.y, state.target.z)].name}`;
@@ -1350,6 +1535,7 @@
   function finishMine(x, y, z, code) {
     const d = DEF[code];
     setBlock(x, y, z, AIR);
+    flowWaterNear(x, y, z);
     state.mined++;
     addScore(1);
     if (d.drop !== null && canDrop(code)) giveItem(d.drop === undefined ? code : d.drop, 1);
@@ -1365,6 +1551,7 @@
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     setBlock(p.x, p.y, p.z, slot.code);
+    flowWaterNear(p.x, p.y, p.z);
     slot.n--;
     if (slot.n <= 0) state.hotbar[state.selected] = null;
     state.placeCd = 0.18;
@@ -1399,11 +1586,33 @@
       }
     }
     if (!hit) return false;
-    const tool = selectedTool();
-    hit.hp -= tool && tool.type === "sword" ? tool.damage : 1;
+    const damage = heldAttackDamage();
+    hit.hp -= damage;
     state.attackCd = 0.32;
-    api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"}`, "");
+    api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"} -${damage}`, "");
     return true;
+  }
+  function heldAttackDamage() {
+    const slot = selectedSlot();
+    if (!slot) return 1;
+    const d = DEF[slot.code];
+    if (!d) return 1;
+    const tool = d.tool;
+    if (tool) {
+      if (tool.type === "sword") return tool.damage;
+      const typeBonus = tool.type === "axe" ? 1.1 : 0.55;
+      return Math.round((1.5 + tool.tier * 1.35 + tool.mult * 0.32 + typeBonus) * 10) / 10;
+    }
+    if (slot.code === SIGMA) return 4.8;
+    if (slot.code === RIZZ) return 3.2;
+    if (slot.code === COAL) return 1.6;
+    if (slot.code === STICK) return 1.3;
+    if (d.kind === "block") {
+      const hardness = Number.isFinite(d.hardness) ? d.hardness : 0.35;
+      const blockBonus = d.solid ? 0.65 : 0.15;
+      return Math.round((1 + clamp(hardness, 0.05, 3) * 1.55 + blockBonus) * 10) / 10;
+    }
+    return 1;
   }
 
   function nearTable() {
@@ -1495,13 +1704,31 @@
     ambient.intensity = lerp(0.18, 0.9, d);
     sun.intensity = lerp(0.1, 1.2, d);
     const a = state.time * Math.PI * 2;
-    sun.position.set(Math.cos(a) * 65, Math.sin(a) * 70 + 18, Math.sin(a * 0.7) * 46);
+    sunOrbitVector.set(Math.cos(a) * 65, Math.sin(a) * 70 + 18, Math.sin(a * 0.7) * 46);
+    moonOrbitVector.set(-sunOrbitVector.x, -sunOrbitVector.y + 8, -sunOrbitVector.z);
+    sun.position.copy(sunOrbitVector);
+    if (sunDisk && moonDisk) {
+      positionCelestial(sunDisk, sunOrbitVector, 185, clamp((sunOrbitVector.y + 8) / 72, 0, 1) * lerp(0.5, 1, d));
+      positionCelestial(moonDisk, moonOrbitVector, 175, clamp((moonOrbitVector.y + 8) / 74, 0, 1) * clamp((0.72 - d) / 0.72, 0.2, 1));
+    }
     const stars = scene.getObjectByName("stars");
     if (stars) stars.material.opacity = clamp((0.38 - d) / 0.38, 0, 1);
     cloudGroup.children.forEach((cloud, i) => {
       cloud.position.x += 0.006 + i * 0.0002;
       if (cloud.position.x > WORLD_X + 20) cloud.position.x = -20;
     });
+  }
+  function positionCelestial(mesh, orbit, distance, opacity) {
+    if (orbit.lengthSq() < 0.001) orbit.set(0, 1, 0);
+    orbit.normalize();
+    mesh.position.set(
+      camera.position.x + orbit.x * distance,
+      camera.position.y + orbit.y * distance,
+      camera.position.z + orbit.z * distance
+    );
+    mesh.lookAt(camera.position);
+    mesh.material.opacity = opacity;
+    mesh.visible = opacity > 0.025;
   }
 
   function addScore(n) {
@@ -1554,7 +1781,8 @@
       .rizz3d-crosshair:before,.rizz3d-crosshair:after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 6px rgba(0,0,0,.7)}
       .rizz3d-crosshair:before{left:8px;top:1px;width:2px;height:16px}.rizz3d-crosshair:after{left:1px;top:8px;width:16px;height:2px}
       .rizz3d-chip{position:absolute;left:12px;bottom:62px;z-index:5;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.72);color:#fff;font:700 11px var(--font-mono);pointer-events:none}
-      .rizz3d-target{position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none;min-height:14px}
+      .rizz3d-target{display:none;position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none}
+      .rizz3d-target.is-visible{display:block}
       .rizz3d-progress{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);z-index:5;width:min(340px,72%);height:5px;background:rgba(0,0,0,.55);border-radius:3px;overflow:hidden;pointer-events:none}.rizz3d-progress span{display:block;width:0;height:100%;background:#ffd43b}
       .rizz3d-hotbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:7;display:grid;grid-template-columns:repeat(9,40px);gap:4px;pointer-events:auto}
       .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28)}
@@ -1674,9 +1902,9 @@
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
     }
     for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) updateSurfaceColumn(x, z);
+    if (data.player) Object.assign(state.player, data.player);
     rebuildAllChunks();
     rebuildDecorations();
-    if (data.player) Object.assign(state.player, data.player);
     if (Array.isArray(data.hotbar)) state.hotbar = data.hotbar.map((slot) => slot ? { ...slot } : null).slice(0, HOTBAR);
     while (state.hotbar.length < HOTBAR) state.hotbar.push(null);
     state.selected = Number(data.selected) || 0;
@@ -1700,6 +1928,7 @@
     if (state.started && !state.paused && !state.crafting) {
       updateTime(dt);
       updatePlayer(dt);
+      updateVisibleChunks();
       updateMobs(dt);
       updateTarget();
       updateMining(dt);
@@ -1901,13 +2130,33 @@
     spawnMob,
     generateWorld,
     rebuildAllChunks,
+    updateVisibleChunks,
     getBlock,
     setBlock,
+    flowWaterNear,
+    heldAttackDamage,
+    edgeOceanStrength,
     movementVectorForYaw,
     movementVectorForCamera,
     resizeRenderer,
     daylight,
     isNight,
+    debugInfo() {
+      return {
+        worldX: WORLD_X,
+        worldY: WORLD_Y,
+        worldZ: WORLD_Z,
+        seaLevel: SEA_LEVEL,
+        daySeconds: DAY_SECONDS,
+        edgeOcean: EDGE_OCEAN,
+        renderRadiusChunks: RENDER_RADIUS_CHUNKS,
+        visibleChunkCount: state.visibleChunkCount,
+        sunVisible: !!(sunDisk && sunDisk.visible),
+        sunOpacity: sunDisk ? sunDisk.material.opacity : 0,
+        moonVisible: !!(moonDisk && moonDisk.visible),
+        moonOpacity: moonDisk ? moonDisk.material.opacity : 0,
+      };
+    },
     setTime(t) { state.time = t; },
     teleportSpawn() { spawnPlayer(); },
   };

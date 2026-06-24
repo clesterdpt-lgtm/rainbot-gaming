@@ -754,10 +754,9 @@
     const forward = state.input.forward;
     const right = state.input.right;
     const speed = state.input.sprint ? SPRINT_SPEED : MOVE_SPEED;
-    const sin = Math.sin(p.yaw);
-    const cos = Math.cos(p.yaw);
-    let mx = right * cos - forward * sin;
-    let mz = right * sin + forward * cos;
+    const move = movementVectorForYaw(p.yaw, forward, right);
+    let mx = move.x;
+    let mz = move.z;
     const len = Math.hypot(mx, mz);
     if (len > 0) {
       mx /= len;
@@ -779,6 +778,14 @@
     if (p.y < 1) hurtPlayer(4);
     if (p.hurtCd > 0) p.hurtCd -= dt;
     syncCamera();
+  }
+  function movementVectorForYaw(yaw, forward, right) {
+    const sin = Math.sin(yaw);
+    const cos = Math.cos(yaw);
+    return {
+      x: forward * -sin + right * cos,
+      z: forward * -cos + right * -sin,
+    };
   }
   function movePlayerAxis(axis, amount) {
     if (amount === 0) return;
@@ -1513,6 +1520,7 @@
     rebuildAllChunks,
     getBlock,
     setBlock,
+    movementVectorForYaw,
     daylight,
     isNight,
     setTime(t) { state.time = t; },

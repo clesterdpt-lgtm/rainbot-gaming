@@ -33,12 +33,12 @@
   }
 
   const THREE = window.THREE;
-  const SAVE_VERSION = 4;
-  const WORLD_X = 160;
-  const WORLD_Y = 56;
-  const WORLD_Z = 160;
+  const SAVE_VERSION = 5;
+  const WORLD_X = 224;
+  const WORLD_Y = 64;
+  const WORLD_Z = 224;
   const CHUNK = 16;
-  const SEA_LEVEL = 12;
+  const SEA_LEVEL = 14;
   const HOTBAR = 9;
   const MAX_HP = 100;
   const DAMAGE_GRACE = 1.1;
@@ -70,6 +70,7 @@
   const TALL_GRASS = 14;
   const FLOWER = 15;
   const SAND = 16;
+  const SNOW = 17;
 
   const STICK = 100;
   const COAL = 101;
@@ -106,6 +107,7 @@
   def(TALL_GRASS, { name: "Tall Grass", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#76d06a", decor: true });
   def(FLOWER, { name: "Rizz Bloom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#ff6fa8", decor: true });
   def(SAND, { name: "Ohio Sand", kind: "block", solid: true, hardness: 0.45, color: "#d8c073" });
+  def(SNOW, { name: "Powder Snow", kind: "block", solid: true, hardness: 0.28, color: "#e9f6ff" });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -132,14 +134,18 @@
   ];
 
   const BIOMES = [
-    { id: 0, name: "Meadow", grass: "#63d45d", tree: 0.05, flowers: 0.08 },
-    { id: 1, name: "Forest", grass: "#3fae46", tree: 0.16, flowers: 0.03 },
-    { id: 2, name: "Highland", grass: "#84bd56", tree: 0.035, flowers: 0.02 },
-    { id: 3, name: "Marsh", grass: "#4fa866", tree: 0.07, flowers: 0.06 },
-    { id: 4, name: "Neon Grove", grass: "#42d998", tree: 0.10, flowers: 0.18 },
-    { id: 5, name: "Prairie", grass: "#d0c45b", tree: 0.025, flowers: 0.12 },
-    { id: 6, name: "Crystal Ridge", grass: "#70c7d9", tree: 0.03, flowers: 0.05 },
-    { id: 7, name: "Ash Flats", grass: "#9a9186", tree: 0.012, flowers: 0.02 },
+    { id: 0, name: "Meadow", grass: "#66d95d", side: "#7d5a34", leaf: "#59bb58", tree: 0.12, treeSpacing: 12, flora: 0.16, flowers: 0.28, palette: ["#ff6fa8", "#ffe45c", "#e8fff3"] },
+    { id: 1, name: "Open Forest", grass: "#42b54b", side: "#6f5231", leaf: "#3a9c45", tree: 0.62, treeSpacing: 10, flora: 0.10, flowers: 0.12, treeStyle: "oak", palette: ["#ff85bd", "#f5d85a"] },
+    { id: 2, name: "Highland", grass: "#91bd58", side: "#75613a", leaf: "#7aa84f", tree: 0.16, treeSpacing: 13, flora: 0.08, flowers: 0.10, palette: ["#fff0a6", "#ccefff"] },
+    { id: 3, name: "Marsh", grass: "#4fa866", side: "#5f5134", leaf: "#4b9860", tree: 0.18, treeSpacing: 12, flora: 0.22, flowers: 0.22, treeStyle: "willow", palette: ["#d6f7a6", "#b4f0ff"] },
+    { id: 4, name: "Neon Grove", grass: "#42d998", side: "#4d6541", leaf: "#34e0a8", tree: 0.30, treeSpacing: 11, flora: 0.24, flowers: 0.40, treeStyle: "oak", palette: ["#43e6ff", "#ff4fd8", "#faff6a"] },
+    { id: 5, name: "Prairie", grass: "#d0c45b", side: "#8b7339", leaf: "#b4b85d", tree: 0.05, treeSpacing: 16, flora: 0.26, flowers: 0.34, palette: ["#ffe45c", "#ffffff", "#ff9b5c"] },
+    { id: 6, name: "Crystal Ridge", grass: "#70c7d9", side: "#677f83", leaf: "#86efff", tree: 0.10, treeSpacing: 15, flora: 0.10, flowers: 0.26, treeStyle: "crystal", palette: ["#8af7ff", "#d9fffb"] },
+    { id: 7, name: "Ash Flats", grass: "#9a9186", side: "#6d6259", leaf: "#86817a", tree: 0.03, treeSpacing: 18, flora: 0.06, flowers: 0.08, palette: ["#c8b6a6", "#e7ddc8"] },
+    { id: 8, name: "Pine Barrens", grass: "#4d8f58", side: "#654b33", leaf: "#1f6f3d", tree: 0.56, treeSpacing: 11, flora: 0.08, flowers: 0.08, treeStyle: "pine", palette: ["#c9ffe0", "#fff1a8"] },
+    { id: 9, name: "Birch Glade", grass: "#8bdc72", side: "#795d36", leaf: "#8ac95d", tree: 0.28, treeSpacing: 12, flora: 0.18, flowers: 0.36, treeStyle: "birch", palette: ["#ffffff", "#ffd1eb", "#ffe45c"] },
+    { id: 10, name: "Sun-Baked Dunes", grass: "#d9bf65", side: "#b18a48", leaf: "#c9b55a", tree: 0.02, treeSpacing: 18, flora: 0.05, flowers: 0.10, surface: "sand", palette: ["#fff0a0", "#f7a85a"] },
+    { id: 11, name: "Frost Peaks", grass: "#dff7ff", side: "#91a7af", leaf: "#c9f5ff", tree: 0.08, treeSpacing: 16, flora: 0.05, flowers: 0.16, surface: "snow", treeStyle: "pine", palette: ["#dfffff", "#bfe8ff"] },
   ];
 
   const FACES = [
@@ -152,7 +158,7 @@
   ];
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(72, 1, 0.03, 420);
+  const camera = new THREE.PerspectiveCamera(72, 1, 0.03, 560);
   camera.rotation.order = "YXZ";
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.outputEncoding = THREE.sRGBEncoding;
@@ -174,14 +180,32 @@
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 150;
-  sun.shadow.camera.left = -50;
-  sun.shadow.camera.right = 50;
-  sun.shadow.camera.top = 50;
-  sun.shadow.camera.bottom = -50;
+  sun.shadow.camera.far = 190;
+  sun.shadow.camera.left = -70;
+  sun.shadow.camera.right = 70;
+  sun.shadow.camera.top = 70;
+  sun.shadow.camera.bottom = -70;
   scene.add(ambient, sun);
 
-  const blockMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  const TEX = {
+    grassTop: 0,
+    grassSide: 1,
+    dirt: 2,
+    stone: 3,
+    bedrock: 4,
+    logSide: 5,
+    logTop: 6,
+    leaves: 7,
+    planks: 8,
+    table: 9,
+    ore: 10,
+    sand: 11,
+    snow: 12,
+  };
+  const TEX_COLS = 8;
+  const TEX_ROWS = 2;
+  const blockTexture = buildBlockTextureAtlas();
+  const blockMaterial = new THREE.MeshLambertMaterial({ map: blockTexture, vertexColors: true, side: THREE.DoubleSide });
   const plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, alphaTest: 0.2 });
   const waterMaterial = new THREE.MeshPhongMaterial({
     color: 0x2f8fe8,
@@ -280,6 +304,73 @@
     const n = parseInt(hex.slice(1), 16);
     return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255];
   }
+  const rgbCache = new Map();
+  function cachedRgb(hex) {
+    if (!rgbCache.has(hex)) rgbCache.set(hex, hexToRgb(hex));
+    return rgbCache.get(hex);
+  }
+
+  function buildBlockTextureAtlas() {
+    const tile = 16;
+    const canvasTex = document.createElement("canvas");
+    canvasTex.width = TEX_COLS * tile;
+    canvasTex.height = TEX_ROWS * tile;
+    const ctx = canvasTex.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    function px(tileId, x, y, v) {
+      const tx = (tileId % TEX_COLS) * tile;
+      const ty = Math.floor(tileId / TEX_COLS) * tile;
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(tx + x, ty + y, 1, 1);
+    }
+    function noise(tileId, base, spread, salt = 0) {
+      for (let y = 0; y < tile; y++) {
+        for (let x = 0; x < tile; x++) {
+          const h = hash32(tileId * 901 + x * 37 + y * 101);
+          let v = base + ((h & 255) / 255 - 0.5) * spread;
+          if (salt && (h >>> 8) % salt === 0) v += spread * 0.6;
+          px(tileId, x, y, Math.max(35, Math.min(255, Math.round(v))));
+        }
+      }
+    }
+    function stripes(tileId, base, spread, vertical = true) {
+      for (let y = 0; y < tile; y++) {
+        for (let x = 0; x < tile; x++) {
+          const band = vertical ? x : y;
+          const h = hash32(tileId * 701 + x * 19 + y * 53);
+          const wave = Math.sin((band + (h & 3)) * 0.9) * 0.5 + 0.5;
+          px(tileId, x, y, Math.round(base + wave * spread + ((h & 255) / 255 - 0.5) * 18));
+        }
+      }
+    }
+    noise(TEX.grassTop, 210, 56, 13);
+    noise(TEX.grassSide, 176, 36, 0);
+    for (let x = 0; x < tile; x++) for (let y = 0; y < 4; y++) px(TEX.grassSide, x, y, 224 - y * 10);
+    noise(TEX.dirt, 165, 62, 9);
+    noise(TEX.stone, 182, 52, 11);
+    noise(TEX.bedrock, 116, 72, 7);
+    stripes(TEX.logSide, 164, 58, true);
+    noise(TEX.logTop, 190, 42, 0);
+    for (let r = 3; r < 8; r += 2) {
+      ctx.strokeStyle = `rgb(${135 + r * 8},${135 + r * 8},${135 + r * 8})`;
+      ctx.strokeRect((TEX.logTop % TEX_COLS) * tile + 8 - r, Math.floor(TEX.logTop / TEX_COLS) * tile + 8 - r, r * 2, r * 2);
+    }
+    noise(TEX.leaves, 188, 70, 6);
+    stripes(TEX.planks, 182, 54, false);
+    noise(TEX.table, 218, 28, 0);
+    noise(TEX.ore, 170, 56, 5);
+    noise(TEX.sand, 214, 32, 17);
+    noise(TEX.snow, 236, 24, 23);
+
+    const texture = new THREE.CanvasTexture(canvasTex);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    return texture;
+  }
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -337,6 +428,43 @@
   }
   function hash3(x, y, z, seed = state.seed) {
     return hash32(Math.imul(x | 0, 1597334677) ^ Math.imul(y | 0, 3812015801) ^ Math.imul(z | 0, 958682123) ^ seed) / 4294967295;
+  }
+  function biomeAt(x, z) {
+    const bx = clamp(Math.floor(x), 0, WORLD_X - 1);
+    const bz = clamp(Math.floor(z), 0, WORLD_Z - 1);
+    return BIOMES[state.biome[surfaceIndex(bx, bz)]] || BIOMES[0];
+  }
+  function biomeRgb(biome, key, fallback = "grass") {
+    const rgbKey = `${key}Rgb`;
+    if (!biome[rgbKey]) biome[rgbKey] = hexToRgb(biome[key] || biome[fallback] || "#ffffff");
+    return biome[rgbKey];
+  }
+  function mixRgb(a, b, t) {
+    return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  }
+  function scaleRgb(rgb, f) {
+    return [rgb[0] * f, rgb[1] * f, rgb[2] * f];
+  }
+  function surfaceBlockForBiome(biome, shoreline) {
+    if (shoreline || biome.surface === "sand") return SAND;
+    if (biome.surface === "snow") return SNOW;
+    return GRASS;
+  }
+  function nearSurfaceBlockForBiome(biome, shoreline) {
+    if (shoreline || biome.surface === "sand") return SAND;
+    if (biome.surface === "snow") return DIRT;
+    return DIRT;
+  }
+  function canPlaceTreeSeed(x, z, biome, spawnDist) {
+    if (spawnDist < 26 || biome.tree <= 0) return false;
+    const spacing = biome.treeSpacing || 12;
+    const cellX = Math.floor(x / spacing);
+    const cellZ = Math.floor(z / spacing);
+    const margin = Math.min(3, Math.floor(spacing / 3));
+    const usable = Math.max(1, spacing - margin * 2);
+    const pickX = cellX * spacing + margin + Math.floor(hash2(cellX * 19 + 5, cellZ * 23 - 7) * usable);
+    const pickZ = cellZ * spacing + margin + Math.floor(hash2(cellX * 29 - 11, cellZ * 31 + 13) * usable);
+    return x === pickX && z === pickZ && hash2(cellX + 101, cellZ - 73) < biome.tree;
   }
   function noise2(x, z, scale) {
     const sx = x * scale;
@@ -419,23 +547,27 @@
         const dx = x - WORLD_X / 2;
         const dz = z - WORLD_Z / 2;
         const center = Math.sqrt(dx * dx + dz * dz);
-        const continent = fbm2(x + 1200, z - 500, 0.019, 5);
-        const detail = fbm2(x - 900, z + 700, 0.075, 4);
-        const ridges = Math.abs(fbm2(x + 20, z + 20, 0.035, 3) - 0.5) * 2;
-        let h = SEA_LEVEL + 8 + (continent - 0.48) * 25 + (detail - 0.5) * 8 + ridges * 5;
-        const spawnBlend = clamp(1 - center / 14, 0, 1);
-        h = lerp(h, SEA_LEVEL + 7 + Math.sin(x * 0.22) * 0.7 + Math.cos(z * 0.19) * 0.7, spawnBlend);
-        const height = clamp(Math.round(h), 4, WORLD_Y - 8);
-        const moisture = fbm2(x - 300, z + 300, 0.027, 3);
-        const weird = fbm2(x + 700, z + 80, 0.02, 4);
-        const temp = fbm2(x + 90, z - 840, 0.018, 4);
+        const continent = fbm2(x + 1200, z - 500, 0.011, 5);
+        const detail = fbm2(x - 900, z + 700, 0.052, 4);
+        const ridges = Math.abs(fbm2(x + 20, z + 20, 0.024, 4) - 0.5) * 2;
+        let h = SEA_LEVEL + 10 + (continent - 0.48) * 34 + (detail - 0.5) * 8 + Math.pow(ridges, 1.7) * 10;
+        const spawnBlend = clamp(1 - center / 20, 0, 1);
+        h = lerp(h, SEA_LEVEL + 7 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
+        const height = clamp(Math.round(h), 4, WORLD_Y - 9);
+        const moisture = fbm2(x - 300, z + 300, 0.016, 4);
+        const weird = fbm2(x + 700, z + 80, 0.014, 4);
+        const temp = fbm2(x + 90, z - 840, 0.012, 4);
         let biome = 0;
-        if (height > SEA_LEVEL + 21 || ridges > 0.82) biome = 6;
-        else if (weird < 0.24 && temp > 0.55) biome = 7;
-        else if (moisture > 0.62 && height <= SEA_LEVEL + 5) biome = 3;
-        else if (weird > 0.68) biome = 4;
-        else if (temp > 0.62 && moisture < 0.45) biome = 5;
-        else if (height > SEA_LEVEL + 14) biome = 2;
+        if (temp < 0.34 && height > SEA_LEVEL + 10) biome = 11;
+        else if (height > SEA_LEVEL + 21 || ridges > 0.64) biome = 6;
+        else if (temp > 0.72 && moisture < 0.34 && height <= SEA_LEVEL + 12) biome = 10;
+        else if (weird < 0.30 && moisture < 0.54) biome = 7;
+        else if (moisture > 0.68 && height <= SEA_LEVEL + 7) biome = 3;
+        else if (weird > 0.72 && moisture > 0.38) biome = 4;
+        else if (moisture < 0.28 && temp > 0.50) biome = 5;
+        else if (moisture > 0.58 && temp < 0.48) biome = 8;
+        else if (weird > 0.58 && moisture > 0.40) biome = 9;
+        else if (height > SEA_LEVEL + 16) biome = 2;
         else if (moisture > 0.52) biome = 1;
         state.biome[surfaceIndex(x, z)] = biome;
         state.surface[surfaceIndex(x, z)] = height;
@@ -445,16 +577,16 @@
     for (let z = 0; z < WORLD_Z; z++) {
       for (let x = 0; x < WORLD_X; x++) {
         const height = state.surface[surfaceIndex(x, z)];
-        const biome = state.biome[surfaceIndex(x, z)];
+        const biome = BIOMES[state.biome[surfaceIndex(x, z)]];
         for (let y = 0; y < WORLD_Y; y++) {
           let code = AIR;
           if (y === 0) code = BEDROCK;
           else if (y > height) code = y <= SEA_LEVEL ? WATER : AIR;
           else {
             const depth = height - y;
-            const shoreline = height <= SEA_LEVEL + 1 || biome === 3;
-            if (depth === 0) code = shoreline ? SAND : GRASS;
-            else if (depth < 4) code = shoreline ? SAND : DIRT;
+            const shoreline = height <= SEA_LEVEL + 1 || biome.id === 3;
+            if (depth === 0) code = surfaceBlockForBiome(biome, shoreline);
+            else if (depth < (biome.surface === "sand" ? 5 : 4)) code = nearSurfaceBlockForBiome(biome, shoreline);
             else code = STONE;
 
             if (code === STONE && y > 3 && y < height - 4) {
@@ -464,8 +596,8 @@
               else {
                 const r = hash3(x, y, z);
                 if (y < height - 6 && r < 0.035) code = COAL_ORE;
-                if (y < 25 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
-                if (y < 15 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
+                if (y < 31 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
+                if (y < 18 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
               }
             }
           }
@@ -489,44 +621,89 @@
         const si = surfaceIndex(x, z);
         const y = state.surface[si];
         const top = getBlock(x, y, z);
-        if (top !== GRASS) continue;
         const biome = BIOMES[state.biome[si]];
+        if (top !== GRASS && top !== SNOW && !(top === SAND && biome.surface === "sand")) continue;
         const spawnDist = Math.hypot(x - WORLD_X / 2, z - WORLD_Z / 2);
-        const r = hash2(x * 17 + 3, z * 19 - 5);
-        if (spawnDist > 16 && r < biome.tree) {
+        if (canPlaceTreeSeed(x, z, biome, spawnDist)) {
           placeTree(x, y + 1, z, state.biome[si]);
-        } else if (r < biome.tree + 0.17) {
-          setBase(x, y + 1, z, r < biome.tree + biome.flowers ? FLOWER : TALL_GRASS);
+        } else if (spawnDist > 10) {
+          const r = hash2(x * 37 + 3, z * 41 - 5);
+          if (r < biome.flora) {
+            const flowerRoll = hash2(x * 43 - 9, z * 47 + 17);
+            setBase(x, y + 1, z, flowerRoll < biome.flowers ? FLOWER : TALL_GRASS);
+          }
         }
       }
     }
   }
   function placeTree(x, y, z, biomeId) {
-    const trunkH = 4 + Math.floor(hash2(x + 41, z - 83) * 3);
+    const biome = BIOMES[biomeId] || BIOMES[0];
+    const style = biome.treeStyle || "oak";
+    const trunkH = (style === "pine" ? 6 : 4) + Math.floor(hash2(x + 41, z - 83) * (style === "pine" ? 4 : 3));
     for (let i = 0; i < trunkH && y + i < WORLD_Y - 1; i++) setBase(x, y + i, z, LOG);
     const top = y + trunkH;
-    const radius = biomeId === 4 || biomeId === 1 ? 2 : 1;
+
+    if (style === "pine") {
+      for (let layer = -3; layer <= 2; layer++) {
+        const radius = layer < -1 ? 2 : layer < 2 ? 1 : 0;
+        placeLeafLayer(x, top + layer, z, radius, 0.11);
+      }
+      return;
+    }
+
+    if (style === "willow") {
+      placeLeafLayer(x, top - 1, z, 2, 0.08);
+      placeLeafLayer(x, top, z, 2, 0.12);
+      placeLeafLayer(x, top + 1, z, 1, 0.08);
+      for (let i = 0; i < 5; i++) {
+        const ox = Math.round(hash2(x + i, z - i) * 4) - 2;
+        const oz = Math.round(hash2(x - i, z + i) * 4) - 2;
+        for (let oy = -2; oy <= 0; oy++) setLeaf(x + ox, top + oy, z + oz);
+      }
+      return;
+    }
+
+    if (style === "crystal") {
+      placeLeafLayer(x, top - 1, z, 1, 0.03);
+      placeLeafLayer(x, top, z, 1, 0.03);
+      setLeaf(x, top + 1, z);
+      setLeaf(x + 1, top, z);
+      setLeaf(x - 1, top, z);
+      setLeaf(x, top, z + 1);
+      setLeaf(x, top, z - 1);
+      return;
+    }
+
+    const radius = style === "birch" ? 1 : 2;
     for (let oy = -2; oy <= 2; oy++) {
       for (let oz = -radius; oz <= radius; oz++) {
         for (let ox = -radius; ox <= radius; ox++) {
           const d = Math.abs(ox) + Math.abs(oz) + Math.max(0, oy);
-          if (d > radius + 1 || hash3(x + ox, top + oy, z + oz) < 0.08) continue;
-          const lx = x + ox;
-          const ly = top + oy;
-          const lz = z + oz;
-          if (inWorld(lx, ly, lz) && getBlock(lx, ly, lz) === AIR) setBase(lx, ly, lz, LEAVES);
+          if (d > radius + 1 || hash3(x + ox, top + oy, z + oz) < 0.12) continue;
+          setLeaf(x + ox, top + oy, z + oz);
         }
       }
     }
   }
+  function placeLeafLayer(x, y, z, radius, skip) {
+    for (let oz = -radius; oz <= radius; oz++) {
+      for (let ox = -radius; ox <= radius; ox++) {
+        if (Math.abs(ox) + Math.abs(oz) > radius + 1 || hash3(x + ox, y, z + oz) < skip) continue;
+        setLeaf(x + ox, y, z + oz);
+      }
+    }
+  }
+  function setLeaf(x, y, z) {
+    if (inWorld(x, y, z) && getBlock(x, y, z) === AIR) setBase(x, y, z, LEAVES);
+  }
   function carveSpawnMeadow() {
     const cx = WORLD_X >> 1;
     const cz = WORLD_Z >> 1;
-    for (let z = cz - 8; z <= cz + 8; z++) {
-      for (let x = cx - 8; x <= cx + 8; x++) {
+    for (let z = cz - 12; z <= cz + 12; z++) {
+      for (let x = cx - 12; x <= cx + 12; x++) {
         if (!inWorld(x, 1, z)) continue;
         const d = Math.hypot(x - cx, z - cz);
-        if (d > 8.5) continue;
+        if (d > 12.5) continue;
         const h = SEA_LEVEL + 7 + Math.round(Math.sin(x * 0.3) * 0.4 + Math.cos(z * 0.3) * 0.4);
         for (let y = 1; y < WORLD_Y; y++) {
           let code = AIR;
@@ -538,7 +715,7 @@
         state.surface[surfaceIndex(x, z)] = h;
       }
     }
-    placeTree(cx + 11, state.surface[surfaceIndex(cx + 11, cz + 8)] + 1, cz + 8, 1);
+    placeTree(cx + 16, state.surface[surfaceIndex(cx + 16, cz + 11)] + 1, cz + 11, 1);
   }
   function setBase(x, y, z, code) {
     if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -616,39 +793,104 @@
     state.chunks.set(key, entry);
   }
   function makeGeometryArrays() {
-    return { positions: [], normals: [], colors: [], indices: [] };
+    return { positions: [], normals: [], colors: [], uvs: [], indices: [] };
   }
   function pushFace(arr, x, y, z, code, face) {
     const start = arr.positions.length / 3;
-    const rgb = faceColor(code, face.shade, x, y, z, face.n[1] > 0);
-    for (const c of face.c) {
+    const tile = textureTileForFace(code, face);
+    const col = tile % TEX_COLS;
+    const row = Math.floor(tile / TEX_COLS);
+    const u0 = (col + 0.015) / TEX_COLS;
+    const u1 = (col + 0.985) / TEX_COLS;
+    const v0 = 1 - (row + 0.985) / TEX_ROWS;
+    const v1 = 1 - (row + 0.015) / TEX_ROWS;
+    const localUv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    for (let i = 0; i < face.c.length; i++) {
+      const c = face.c[i];
+      const rgb = faceColor(code, face.shade, x, y, z, face, c);
       arr.positions.push(x + c[0], y + c[1], z + c[2]);
       arr.normals.push(face.n[0], face.n[1], face.n[2]);
       arr.colors.push(rgb[0], rgb[1], rgb[2]);
+      arr.uvs.push(lerp(u0, u1, localUv[i][0]), lerp(v0, v1, localUv[i][1]));
     }
     arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   }
-  function faceColor(code, shade, x, y, z, topFace) {
+  function textureTileForFace(code, face) {
+    const topFace = face.n[1] > 0;
+    const bottomFace = face.n[1] < 0;
+    if (code === GRASS) return topFace ? TEX.grassTop : TEX.grassSide;
+    if (code === DIRT) return TEX.dirt;
+    if (code === STONE) return TEX.stone;
+    if (code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) return TEX.ore;
+    if (code === BEDROCK) return TEX.bedrock;
+    if (code === LOG) return topFace || bottomFace ? TEX.logTop : TEX.logSide;
+    if (code === LEAVES) return TEX.leaves;
+    if (code === PLANKS) return TEX.planks;
+    if (code === TABLE) return TEX.table;
+    if (code === SAND) return TEX.sand;
+    if (code === SNOW) return TEX.snow;
+    return TEX.stone;
+  }
+  function faceColor(code, shade, x, y, z, face, corner) {
     const d = DEF[code];
     let base = d.rgb;
-    if (code === GRASS && topFace) {
-      const b = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
-      base = hexToRgb(b.grass);
-    } else if (code === GRASS && !topFace) base = hexToRgb(d.side);
-    if ((code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) && hash3(x, y, z) < 0.36) base = hexToRgb(d.ore);
-    if (code === LEAVES) {
-      const b = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
-      base = hexToRgb(b.id === 4 ? "#33dda4" : b.grass);
+    const biome = biomeAt(x, z);
+    const topFace = face.n[1] > 0;
+    const bottomFace = face.n[1] < 0;
+    const grain = hash3(x * 2 + corner[0], y * 2 + corner[1], z * 2 + corner[2]);
+    const blockGrain = hash3(x + 17, y - 19, z + 23);
+
+    if (code === GRASS) {
+      if (topFace) {
+        base = biomeRgb(biome, "grass");
+      } else {
+        const side = biomeRgb(biome, "side");
+        base = mixRgb(side, biomeRgb(biome, "grass"), corner[1] > 0 ? 0.34 : 0.06);
+      }
+    } else if (code === DIRT) {
+      base = mixRgb(cachedRgb("#684126"), cachedRgb("#9b6638"), grain * 0.75 + blockGrain * 0.25);
+    } else if (code === STONE || code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) {
+      const rock = mixRgb(cachedRgb("#686b75"), cachedRgb("#a0a3ad"), grain * 0.6 + blockGrain * 0.4);
+      base = mixRgb(rock, biomeRgb(biome, "grass"), code === STONE ? 0.05 : 0.02);
+      if ((code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) && grain < 0.34) {
+        if (!d.oreRgb) d.oreRgb = hexToRgb(d.ore);
+        base = mixRgb(base, d.oreRgb, code === COAL_ORE ? 0.62 : 0.78);
+      }
+    } else if (code === BEDROCK) {
+      base = mixRgb(cachedRgb("#17171e"), cachedRgb("#383844"), grain);
+    } else if (code === LOG) {
+      if (biome.treeStyle === "birch" && !topFace && !bottomFace) {
+        base = grain < 0.22 ? cachedRgb("#2c2a28") : mixRgb(cachedRgb("#d7d1bd"), cachedRgb("#f1ead2"), blockGrain);
+      } else if (topFace || bottomFace) {
+        base = mixRgb(cachedRgb("#c49354"), cachedRgb("#70451f"), Math.abs(corner[0] - 0.5) + Math.abs(corner[2] - 0.5));
+      } else {
+        const stripe = (Math.floor((y + corner[1]) * 2 + blockGrain * 4) % 2) ? 0.22 : 0;
+        base = mixRgb(cachedRgb("#6f4624"), cachedRgb("#a36b38"), grain * 0.45 + stripe);
+      }
+    } else if (code === PLANKS) {
+      const stripe = (Math.floor((x + z + corner[0] + corner[2]) * 2) % 2) ? 0.18 : 0;
+      base = mixRgb(cachedRgb("#9f6730"), cachedRgb("#d59a55"), grain * 0.45 + stripe);
+    } else if (code === TABLE) {
+      base = mixRgb(cachedRgb("#cbd8df"), cachedRgb("#f4fbff"), grain);
+    } else if (code === SAND) {
+      const dune = biome.surface === "sand" ? cachedRgb("#d9bd6d") : biome.id === 7 ? cachedRgb("#9f9588") : cachedRgb("#d9c579");
+      base = mixRgb(dune, cachedRgb("#f2df9a"), grain * 0.45);
+    } else if (code === SNOW) {
+      base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
     }
-    const jitter = 0.89 + hash3(x + 11, y - 7, z + 3) * 0.18;
+    if (code === LEAVES) {
+      base = mixRgb(biomeRgb(biome, "leaf"), biomeRgb(biome, "grass"), grain * 0.25);
+    }
+    const jitter = 0.84 + grain * 0.20 + blockGrain * 0.08;
     const f = shade * jitter;
-    return [base[0] * f, base[1] * f, base[2] * f];
+    return scaleRgb(base, f);
   }
   function buildMesh(arr, material) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(arr.positions, 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute(arr.normals, 3));
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(arr.colors, 3));
+    if (arr.uvs.length) geometry.setAttribute("uv", new THREE.Float32BufferAttribute(arr.uvs, 2));
     geometry.setIndex(arr.indices);
     geometry.computeBoundingSphere();
     return new THREE.Mesh(geometry, material);
@@ -670,12 +912,30 @@
     decorDirty = false;
   }
   function pushPlant(arr, x, y, z, code) {
-    const h = code === FLOWER ? 0.64 : 0.78;
-    const w = code === FLOWER ? 0.33 : 0.42;
-    const biome = BIOMES[state.biome[surfaceIndex(clamp(x, 0, WORLD_X - 1), clamp(z, 0, WORLD_Z - 1))]];
-    const color = code === FLOWER ? hexToRgb(hash2(x, z) > 0.5 ? "#ff6fa8" : "#ffe45c") : hexToRgb(biome.grass);
-    pushBillboard(arr, x + 0.5, y, z + 0.5, w, h, color, 0);
-    pushBillboard(arr, x + 0.5, y, z + 0.5, w, h, color, Math.PI / 2);
+    const biome = biomeAt(x, z);
+    const grass = biomeRgb(biome, "grass");
+    const seed = hash2(x * 53 + 7, z * 59 - 3);
+    if (code === FLOWER) {
+      const palette = biome.palette || ["#ff6fa8", "#ffe45c"];
+      const bloom = cachedRgb(palette[Math.floor(seed * palette.length) % palette.length]);
+      const stem = mixRgb(grass, cachedRgb("#2f6f3a"), 0.36);
+      const cx = x + 0.44 + hash2(x + 2, z - 4) * 0.12;
+      const cz = z + 0.44 + hash2(x - 4, z + 2) * 0.12;
+      pushBillboard(arr, cx, y, cz, 0.16, 0.54 + seed * 0.14, stem, seed * Math.PI);
+      pushBillboard(arr, cx, y + 0.42 + seed * 0.08, cz, 0.34, 0.28, bloom, Math.PI / 4);
+      pushBillboard(arr, cx, y + 0.42 + seed * 0.08, cz, 0.34, 0.28, bloom, Math.PI * 0.75);
+      return;
+    }
+
+    const clusters = 2 + Math.floor(seed * 3);
+    for (let i = 0; i < clusters; i++) {
+      const ox = (hash2(x + i * 11, z - i * 7) - 0.5) * 0.42;
+      const oz = (hash2(x - i * 5, z + i * 13) - 0.5) * 0.42;
+      const h = 0.42 + hash2(x + i * 17, z + i * 19) * 0.46;
+      const w = 0.13 + hash2(x - i * 23, z + i * 3) * 0.12;
+      const color = mixRgb(grass, cachedRgb("#f0e89a"), biome.id === 5 ? 0.20 : 0.04 + hash2(x + i, z - i) * 0.10);
+      pushBillboard(arr, x + 0.5 + ox, y, z + 0.5 + oz, w, h, color, seed * Math.PI + i * 1.03);
+    }
   }
   function pushBillboard(arr, cx, y, cz, w, h, rgb, rot) {
     const start = arr.positions.length / 3;

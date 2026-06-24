@@ -17,8 +17,8 @@
   const canvas = document.getElementById("gameCanvas");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
-  const W = canvas.width;   // 960
-  const H = canvas.height;  // 600
+  const W = canvas.width;   // 1280
+  const H = canvas.height;  // 720
   const GAME_ID = "super-slop-brothers";
 
   const api =
@@ -199,20 +199,20 @@
   // platform: { x, y, w, h, solid }  (y is the TOP of the platform)
   //   solid:true  = main stage, landable from above, has grabbable ledges
   //   solid:false = floating pass-through (land from above, drop with down)
-  const STAGE_FLOOR = 472;
-  const BLAST = { left: -150, right: W + 150, top: -200, bottom: H + 170 };
+  const STAGE_FLOOR = 548;
+  const BLAST = { left: -220, right: W + 220, top: -320, bottom: H + 220 };
 
   const STAGES = [
     {
       id: "rooftop", name: "Slop HQ Rooftop", short: "Rooftop",
       hazardName: "Ad-drone fly-by",
       platforms: [
-        { x: 270, y: STAGE_FLOOR, w: 420, h: 60, solid: true },
-        { x: 250, y: 360, w: 150, h: 18, solid: false },
-        { x: 560, y: 360, w: 150, h: 18, solid: false },
-        { x: 405, y: 268, w: 150, h: 18, solid: false },
+        { x: 120, y: STAGE_FLOOR, w: 1040, h: 76, solid: true },
+        { x: 140, y: 410, w: 210, h: 22, solid: false },
+        { x: 930, y: 410, w: 210, h: 22, solid: false },
+        { x: 510, y: 290, w: 210, h: 22, solid: false },
       ],
-      spawns: [{ x: 340, y: 360 }, { x: 620, y: 360 }, { x: 480, y: 268 }, { x: 480, y: 400 }],
+      spawns: [{ x: 420, y: 410 }, { x: 860, y: 410 }, { x: 640, y: 290 }, { x: 640, y: 470 }],
       blast: BLAST,
       sky: ["#10243a", "#1b1030"],
       hazard: makeDroneHazard,
@@ -221,12 +221,12 @@
       id: "hormuz", name: "Strait of Hormuz", short: "Hormuz",
       hazardName: "Oil slicks + missile strike",
       platforms: [
-        { x: 230, y: 484, w: 500, h: 70, solid: true },
-        { x: 250, y: 372, w: 150, h: 16, solid: false, move: { axis: "x", amp: 64, speed: 0.5, phase: 0 } },
-        { x: 560, y: 320, w: 150, h: 16, solid: false, move: { axis: "x", amp: 70, speed: 0.42, phase: 2.4 } },
+        { x: 100, y: 562, w: 1080, h: 82, solid: true },
+        { x: 150, y: 420, w: 210, h: 20, solid: false, move: { axis: "x", amp: 85, speed: 0.5, phase: 0 } },
+        { x: 750, y: 360, w: 210, h: 20, solid: false, move: { axis: "x", amp: 92, speed: 0.42, phase: 2.4 } },
       ],
-      oil: [{ x: 300, y: 484, w: 130 }, { x: 530, y: 484, w: 130 }],
-      spawns: [{ x: 340, y: 372 }, { x: 620, y: 320 }, { x: 480, y: 410 }, { x: 420, y: 410 }],
+      oil: [{ x: 280, y: 562, w: 180 }, { x: 720, y: 562, w: 180 }],
+      spawns: [{ x: 420, y: 420 }, { x: 860, y: 360 }, { x: 640, y: 490 }, { x: 560, y: 490 }],
       blast: BLAST,
       sky: ["#1a2a3a", "#2a1622"],
       hazard: makeMissileHazard,
@@ -235,12 +235,12 @@
       id: "subway", name: "Brainrot Subway", short: "Subway",
       hazardName: "Express train rush",
       platforms: [
-        { x: 230, y: 474, w: 500, h: 64, solid: true },
-        { x: 300, y: 380, w: 130, h: 16, solid: false },
-        { x: 530, y: 380, w: 130, h: 16, solid: false },
-        { x: 405, y: 300, w: 150, h: 16, solid: false },
+        { x: 100, y: 552, w: 1080, h: 76, solid: true },
+        { x: 200, y: 430, w: 180, h: 20, solid: false },
+        { x: 900, y: 430, w: 180, h: 20, solid: false },
+        { x: 530, y: 330, w: 200, h: 20, solid: false },
       ],
-      spawns: [{ x: 350, y: 380 }, { x: 610, y: 380 }, { x: 480, y: 300 }, { x: 480, y: 410 }],
+      spawns: [{ x: 420, y: 430 }, { x: 860, y: 430 }, { x: 640, y: 330 }, { x: 640, y: 490 }],
       blast: BLAST,
       sky: ["#161226", "#241526"],
       hazard: makeTrainHazard,
@@ -249,12 +249,12 @@
       id: "mansion", name: "Feast Mansion Lawn", short: "Mansion",
       hazardName: "Bounce fountain + falling chandelier",
       platforms: [
-        { x: 230, y: 480, w: 500, h: 66, solid: true },
-        { x: 270, y: 372, w: 140, h: 16, solid: false },
-        { x: 550, y: 352, w: 140, h: 16, solid: false },
+        { x: 100, y: 558, w: 1080, h: 78, solid: true },
+        { x: 180, y: 430, w: 190, h: 20, solid: false },
+        { x: 910, y: 405, w: 190, h: 20, solid: false },
       ],
-      bounce: [{ x: 430, y: 466, w: 100, power: 1050 }],
-      spawns: [{ x: 330, y: 372 }, { x: 620, y: 352 }, { x: 480, y: 410 }, { x: 420, y: 410 }],
+      bounce: [{ x: 580, y: 544, w: 130, power: 1050 }],
+      spawns: [{ x: 420, y: 430 }, { x: 860, y: 405 }, { x: 640, y: 490 }, { x: 560, y: 490 }],
       blast: BLAST,
       sky: ["#13261c", "#241a12"],
       hazard: makeChandelierHazard,
@@ -282,6 +282,8 @@
     sweat:  { label: "Sweat",  think: [0.14, 0.3], atkCd: [0.16, 0.34], atk: 0.95, range: 82, smash: 0.6,  special: 0.5,  recover: 0.96, shield: 0.06, di: 1.0,  approach: 1.0 },
   };
   function aiLevel() { return AI_LEVELS[settings.difficulty] || AI_LEVELS.normal; }
+
+  const camera = { x: W / 2, y: H * 0.44, zoom: 1.12 };
 
   const state = {
     screen: "menu", // menu | fight | results
@@ -380,7 +382,7 @@
       def, id: def.id, slot, isCpu,
       name: def.name, glyph: def.glyph, color: def.color, accent: def.accent,
       moves: buildMoves(def),
-      w: 44, h: 64,
+      w: 48, h: 70,
       x: spawn.x, y: spawn.y, vx: 0, vy: 0,
       facing: spawn.x < W / 2 ? 1 : -1,
       onGround: false,
@@ -425,6 +427,58 @@
   }
 
   function getStage() { return STAGE_BY_ID[settings.stage] || STAGES[0]; }
+
+  function mainPlatform(stage = getStage()) {
+    return stage.platforms.find((p) => p.solid) || stage.platforms[0];
+  }
+
+  function resetCamera() {
+    const main = mainPlatform();
+    camera.x = main.x + main.w / 2;
+    camera.y = main.y + main.h / 2 - 52;
+    camera.zoom = clamp(
+      Math.min(W / (main.w + 120), (H - 96) / (main.y + 96)),
+      1.04,
+      1.34,
+    );
+  }
+
+  function updateCamera(dt) {
+    const stage = getStage();
+    const main = mainPlatform(stage);
+    let minX = main.x - 48;
+    let maxX = main.x + main.w + 48;
+    let minY = main.y - 260;
+    let maxY = main.y + main.h + 72;
+
+    for (const f of state.fighters) {
+      if (f.hidden || f.respawnTimer > 0) continue;
+      const top = f.y - f.h;
+      minX = Math.min(minX, f.x - f.w * 0.7);
+      maxX = Math.max(maxX, f.x + f.w * 0.7);
+      minY = Math.min(minY, top - 36);
+      maxY = Math.max(maxY, f.y + 48);
+    }
+
+    const spanX = maxX - minX + 180;
+    const spanY = maxY - minY + 150;
+    const actionZoom = Math.min(W / spanX, H / spanY);
+    const stageZoom = Math.min(W / (main.w + 110), (H - 92) / (main.y + 88));
+    const targetZoom = clamp(Math.max(actionZoom, stageZoom * 0.98), 0.94, 1.38);
+    const targetX = (minX + maxX) / 2;
+    const targetY = (minY + maxY) / 2 - 28;
+    const ease = 1 - Math.pow(0.0007, Math.max(dt, 0.001));
+
+    camera.x = lerp(camera.x, targetX, ease);
+    camera.y = lerp(camera.y, targetY, ease);
+    camera.zoom = lerp(camera.zoom, targetZoom, ease);
+  }
+
+  function applyCameraTransform() {
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
+  }
 
   function fighterRect(f) {
     return { x: f.x - f.w / 2, y: f.y - f.h, w: f.w, h: f.h };
@@ -857,7 +911,7 @@
           if (this.timer <= 0) {
             this.timer = rand(7, 11);
             const fromLeft = Math.random() < 0.5;
-            this.active = { x: fromLeft ? -100 : W + 100, y: rand(180, 320), vx: (fromLeft ? 1 : -1) * 360, warn: 1.0, used: new Set() };
+            this.active = { x: fromLeft ? -100 : W + 100, y: rand(210, 390), vx: (fromLeft ? 1 : -1) * 360, warn: 1.0, used: new Set() };
           }
         }
       },
@@ -923,7 +977,7 @@
           state.fighters.forEach((f) => {
             if (f.hidden || f.respawnTimer > 0) return;
             const c = fighterCenter(f);
-            if (c.y > 420 && Math.abs(c.x - this.x) < 130 && !this.used.has(f.slot)) {
+            if (c.y > 500 && Math.abs(c.x - this.x) < 130 && !this.used.has(f.slot)) {
               this.used.add(f.slot);
               applyHit(-1, f, { x: this.x, y: c.y, dmg: 16, base: 380, scale: 5, angle: this.dir > 0 ? 20 : 160 });
             }
@@ -936,11 +990,11 @@
           g.save();
           g.globalAlpha = 0.5 + 0.4 * Math.sin(state.time * 16);
           g.fillStyle = C.yellow; g.textAlign = "center"; g.font = "bold 22px sans-serif";
-          g.fillText(this.dir > 0 ? "🚇 TRAIN ▶" : "◀ TRAIN 🚇", W / 2, 150);
+          g.fillText(this.dir > 0 ? "🚇 TRAIN ▶" : "◀ TRAIN 🚇", W / 2, 170);
           g.restore();
         } else if (this.phase === "run") {
           g.save();
-          g.translate(this.x, 452);
+          g.translate(this.x, 530);
           g.fillStyle = "#2a2f44"; g.strokeStyle = C.cyan; g.lineWidth = 3;
           g.fillRect(-120, -70, 240, 84); g.strokeRect(-120, -70, 240, 84);
           g.fillStyle = C.yellow;
@@ -1010,7 +1064,7 @@
       f.respawnTimer -= dt;
       f.invuln = Math.max(f.invuln, 0.05);
       if (f.respawnTimer <= 0) {
-        f.x = W / 2 + (f.slot - 1.5) * 40; f.y = 80; f.vx = 0; f.vy = 0;
+        f.x = W / 2 + (f.slot - 1.5) * 48; f.y = 96; f.vx = 0; f.vy = 0;
         f.damage = 0; f.state = "fall"; f.invuln = 1.4; f.hitstun = 0;
       } else {
         return;
@@ -1460,7 +1514,7 @@
     } else {
       f.respawnTimer = 1.0;
       f.damage = 0; f.vx = 0; f.vy = 0; f.attack = null; f.hitstun = 0;
-      f.x = W / 2 + (f.slot - 1.5) * 36; f.y = -30;
+      f.x = W / 2 + (f.slot - 1.5) * 44; f.y = -36;
     }
   }
 
@@ -1522,7 +1576,13 @@
     if (state.koFlash > 0) state.koFlash -= dt;
     if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 30);
 
-    if (state.screen !== "fight" || state.paused) { updateParticles(dt); return; }
+    if (state.screen !== "fight" || state.paused) {
+      resetCamera();
+      updateParticles(dt);
+      return;
+    }
+
+    updateCamera(dt);
 
     readHuman();
     updateMovingPlatforms(dt);
@@ -1550,6 +1610,8 @@
   // ============================================================
   function draw() {
     ctx.save();
+    applyCameraTransform();
+
     // camera shake
     let sx = 0, sy = 0;
     if (state.shake > 0) { sx = rand(-state.shake, state.shake); sy = rand(-state.shake, state.shake); }
@@ -1583,22 +1645,22 @@
     ctx.save();
     if (stage.id === "rooftop") {
       ctx.fillStyle = "rgba(46,224,255,0.06)";
-      for (let i = 0; i < 6; i++) { const bx = 60 + i * 150; ctx.fillRect(bx, 120 + (i % 3) * 40, 90, 360); }
+      for (let i = 0; i < 8; i++) { const bx = 40 + i * 160; ctx.fillRect(bx, 120 + (i % 3) * 44, 100, 430); }
       ctx.fillStyle = "rgba(255,255,255,0.5)";
-      for (let i = 0; i < 30; i++) ctx.fillRect((i * 137) % W, (i * 53) % 200, 2, 2);
+      for (let i = 0; i < 36; i++) ctx.fillRect((i * 137) % W, (i * 53) % 240, 2, 2);
     } else if (stage.id === "hormuz") {
       ctx.fillStyle = "rgba(43,80,110,0.5)";
-      ctx.fillRect(-20, 360, W + 40, H);
+      ctx.fillRect(-20, 430, W + 40, H);
       ctx.fillStyle = "rgba(120,160,200,0.12)";
-      for (let i = 0; i < 8; i++) ctx.fillRect(i * 130, 380 + (i % 2) * 16, 80, 6);
+      for (let i = 0; i < 10; i++) ctx.fillRect(i * 130, 450 + (i % 2) * 16, 90, 6);
     } else if (stage.id === "subway") {
       ctx.fillStyle = "rgba(255,255,255,0.04)";
-      for (let i = 0; i < 10; i++) ctx.fillRect(i * 100, 90, 60, 420);
+      for (let i = 0; i < 12; i++) ctx.fillRect(i * 110, 90, 70, 500);
       ctx.fillStyle = "rgba(176,123,255,0.10)";
-      ctx.fillRect(-20, 420, W + 40, 160);
+      ctx.fillRect(-20, 500, W + 40, 190);
     } else if (stage.id === "mansion") {
       ctx.fillStyle = "rgba(20,40,28,0.5)";
-      for (let i = 0; i < 12; i++) { ctx.beginPath(); ctx.arc(40 + i * 80, 200, 40, 0, TAU); ctx.fill(); }
+      for (let i = 0; i < 14; i++) { ctx.beginPath(); ctx.arc(30 + i * 90, 230, 44, 0, TAU); ctx.fill(); }
       ctx.fillStyle = "rgba(255,255,255,0.4)";
       for (let i = 0; i < 20; i++) ctx.fillRect((i * 211) % W, (i * 71) % 160, 2, 2);
     }
@@ -1931,6 +1993,7 @@
 
     state.fighters = ids.map((id, i) => makeFighter(id, i, i !== 0));
     state.hazard = getStage().hazard ? getStage().hazard() : null;
+    resetCamera();
     refreshMeta();
     canvas.focus();
   }

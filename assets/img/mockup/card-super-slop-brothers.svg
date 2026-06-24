@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400" font-family="'Bungee','Arial Black',sans-serif">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a1140"/>
+      <stop offset="0.55" stop-color="#120b26"/>
+      <stop offset="1" stop-color="#0a0814"/>
+    </linearGradient>
+    <radialGradient id="flash" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#ff2e88" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#2ee0ff" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#2ee0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff6a8"/>
+      <stop offset="0.5" stop-color="#f7d716"/>
+      <stop offset="1" stop-color="#ff8a3d"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="600" height="400" fill="url(#sky)"/>
+  <rect width="600" height="400" fill="url(#flash)"/>
+
+  <!-- city skyline silhouette -->
+  <g fill="#1d2748" opacity="0.85">
+    <rect x="20" y="210" width="48" height="150"/>
+    <rect x="78" y="170" width="40" height="190"/>
+    <rect x="128" y="230" width="54" height="130"/>
+    <rect x="420" y="200" width="50" height="160"/>
+    <rect x="478" y="160" width="44" height="200"/>
+    <rect x="530" y="225" width="50" height="135"/>
+  </g>
+  <!-- window dots -->
+  <g fill="#2ee0ff" opacity="0.5">
+    <rect x="30" y="225" width="6" height="8"/><rect x="46" y="245" width="6" height="8"/>
+    <rect x="88" y="190" width="6" height="8"/><rect x="100" y="220" width="6" height="8"/>
+    <rect x="488" y="185" width="6" height="8"/><rect x="504" y="215" width="6" height="8"/>
+    <rect x="540" y="245" width="6" height="8"/>
+  </g>
+
+  <!-- speed streaks -->
+  <g stroke-linecap="round" opacity="0.7">
+    <line x1="150" y1="120" x2="250" y2="120" stroke="#ff2e88" stroke-width="5"/>
+    <line x1="360" y1="150" x2="470" y2="150" stroke="#2ee0ff" stroke-width="5"/>
+    <line x1="120" y1="300" x2="210" y2="300" stroke="#58ff8a" stroke-width="4"/>
+  </g>
+
+  <!-- main neon platform -->
+  <g>
+    <rect x="150" y="300" width="300" height="26" rx="6" fill="#22253a" stroke="#2ee0ff" stroke-width="3"/>
+    <rect x="150" y="300" width="300" height="7" rx="4" fill="#3a3f5a"/>
+    <rect x="220" y="252" width="74" height="12" rx="4" fill="#2c3150" stroke="#ff2e88" stroke-width="2"/>
+    <rect x="320" y="252" width="74" height="12" rx="4" fill="#2c3150" stroke="#f7d716" stroke-width="2"/>
+  </g>
+
+  <!-- fighters leaping (glyph "characters") -->
+  <g filter="url(#glow)" font-size="58" text-anchor="middle">
+    <text x="210" y="248">🌈</text>
+    <text x="300" y="232">🗿</text>
+    <text x="392" y="250">🤑</text>
+  </g>
+  <g font-size="40" text-anchor="middle" opacity="0.95">
+    <text x="160" y="296">🚽</text>
+    <text x="440" y="296">🤖</text>
+    <text x="300" y="300">🐺</text>
+  </g>
+
+  <!-- VS + percent splash -->
+  <g text-anchor="middle">
+    <text x="248" y="190" font-size="30" fill="#ff2e88" font-weight="900">128%</text>
+    <text x="356" y="178" font-size="24" fill="#58ff8a" font-weight="900">∞%</text>
+  </g>
+
+  <!-- title -->
+  <g text-anchor="middle">
+    <text x="301" y="71" font-size="44" fill="#0a0814" opacity="0.5" font-weight="900" letter-spacing="1">SUPER</text>
+    <text x="300" y="70" font-size="44" fill="url(#title)" font-weight="900" letter-spacing="1" filter="url(#glow)">SUPER</text>
+    <text x="301" y="118" font-size="40" fill="#0a0814" opacity="0.5" font-weight="900" letter-spacing="1">SLOP BROTHERS</text>
+    <text x="300" y="117" font-size="40" fill="#2ee0ff" font-weight="900" letter-spacing="1" filter="url(#glow)">SLOP BROTHERS</text>
+  </g>
+
+  <!-- tagline ribbon -->
+  <g text-anchor="middle">
+    <rect x="196" y="346" width="208" height="30" rx="15" fill="#ff2e88"/>
+    <text x="300" y="367" font-size="16" fill="#0a0814" font-weight="900" letter-spacing="1">PLATFORM FIGHTER</text>
+  </g>
+</svg>

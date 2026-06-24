@@ -60,6 +60,14 @@
   const JUMP_SPEED = 8.6;
   const REACH = 6.1;
   const DAY_SECONDS = 420;
+  const FRIENDLY_COUNT = 58;
+  const FRIENDLY_SPAWN_RING = 12;
+  const HELD_SWING_SECONDS = 0.32;
+  const HELD_GATHER_SECONDS = 0.24;
+  const MOB_HURT_SECONDS = 0.28;
+  const MOB_ATTACK_SECONDS = 0.42;
+  const PLAYER_HURT_SECONDS = 0.46;
+  const FX_GRAVITY = 10;
 
   const AIR = 0;
   const GRASS = 1;
@@ -171,7 +179,7 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.98;
+  renderer.toneMappingExposure = 1.14;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -179,11 +187,13 @@
   const waterGroup = new THREE.Group();
   const decorGroup = new THREE.Group();
   const mobGroup = new THREE.Group();
+  const friendlyGroup = new THREE.Group();
+  const effectGroup = new THREE.Group();
   const cloudGroup = new THREE.Group();
-  scene.add(worldGroup, waterGroup, decorGroup, mobGroup, cloudGroup);
+  scene.add(worldGroup, waterGroup, decorGroup, friendlyGroup, mobGroup, effectGroup, cloudGroup);
 
-  const ambient = new THREE.HemisphereLight(0xbfe5ff, 0x2f271d, 0.85);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+  const ambient = new THREE.HemisphereLight(0xcdf6ff, 0x3b2b22, 0.95);
+  const sun = new THREE.DirectionalLight(0xfff6df, 1.22);
   sun.position.set(36, 70, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -216,10 +226,10 @@
   const blockMaterial = new THREE.MeshLambertMaterial({ map: blockTexture, vertexColors: true, side: THREE.DoubleSide });
   const plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, alphaTest: 0.2 });
   const waterMaterial = new THREE.MeshPhongMaterial({
-    color: 0x2f8fe8,
+    color: 0x1aa9ff,
     transparent: true,
-    opacity: 0.58,
-    shininess: 70,
+    opacity: 0.64,
+    shininess: 92,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -230,6 +240,16 @@
     red: new THREE.MeshLambertMaterial({ color: 0xb8233a }),
     purple: new THREE.MeshLambertMaterial({ color: 0x7842a1 }),
     cyan: new THREE.MeshLambertMaterial({ color: 0x43e6ff }),
+  };
+  const friendlyMaterials = {
+    lime: new THREE.MeshLambertMaterial({ color: 0x7dff66 }),
+    mango: new THREE.MeshLambertMaterial({ color: 0xffbd3f }),
+    berry: new THREE.MeshLambertMaterial({ color: 0xff5ac8 }),
+    sky: new THREE.MeshLambertMaterial({ color: 0x49d8ff }),
+    cream: new THREE.MeshLambertMaterial({ color: 0xfff2c9 }),
+    black: new THREE.MeshLambertMaterial({ color: 0x080912 }),
+    blush: new THREE.MeshLambertMaterial({ color: 0xff7aa8 }),
+    white: new THREE.MeshLambertMaterial({ color: 0xffffff }),
   };
 
   const selectionBox = new THREE.LineSegments(
@@ -267,14 +287,21 @@
       hp: MAX_HP,
       hurtCd: 0,
       inWater: false,
+      hurtAnim: 0,
     },
     input: { forward: 0, right: 0, jump: false, mine: false, place: false, sprint: false },
     mobs: [],
+    friendlies: [],
+    fx: [],
     hotbar: [],
     selected: 0,
     target: null,
     mining: null,
     attackCd: 0,
+    swingTimer: 0,
+    swingKind: "gather",
+    gatherPhase: 0,
+    attackFlash: 0,
     placeCd: 0,
     day: 1,
     time: 0.21,
@@ -311,6 +338,8 @@
   const worldUpVector = new THREE.Vector3(0, 1, 0);
   const sunOrbitVector = new THREE.Vector3();
   const moonOrbitVector = new THREE.Vector3();
+  const mobHurtColor = new THREE.Color(0xfff0f0);
+  const mobAttackColor = new THREE.Color(0xffd45a);
   const keyMove = { forward: false, back: false, left: false, right: false };
   const moveSources = {
     keyboard: { forward: 0, right: 0 },
@@ -464,6 +493,14 @@
   }
   function scaleRgb(rgb, f) {
     return [rgb[0] * f, rgb[1] * f, rgb[2] * f];
+  }
+  function vividRgb(rgb, saturation = 1.22, brightness = 1.08) {
+    const luma = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
+    return [
+      clamp((luma + (rgb[0] - luma) * saturation) * brightness, 0, 1),
+      clamp((luma + (rgb[1] - luma) * saturation) * brightness, 0, 1),
+      clamp((luma + (rgb[2] - luma) * saturation) * brightness, 0, 1),
+    ];
   }
   function surfaceBlockForBiome(biome, shoreline) {
     if (shoreline || biome.surface === "sand") return SAND;
@@ -701,6 +738,7 @@
     buildClouds();
     buildStars();
     buildCelestials();
+    spawnFriendlies();
   }
 
   function growTreesAndDetails() {
@@ -998,7 +1036,9 @@
     }
     const jitter = 0.84 + grain * 0.20 + blockGrain * 0.08;
     const f = shade * jitter;
-    return scaleRgb(base, f);
+    const saturation = code === BEDROCK ? 1.05 : code === STONE ? 1.13 : 1.28;
+    const brightness = code === BEDROCK ? 1.02 : 1.1;
+    return vividRgb(scaleRgb(base, f), saturation, brightness);
   }
   function buildMesh(arr, material) {
     const geometry = new THREE.BufferGeometry();
@@ -1090,6 +1130,155 @@
     }
   }
 
+  function spawnFriendlies() {
+    disposeGroup(friendlyGroup);
+    state.friendlies = [];
+    for (let i = 0; i < FRIENDLY_COUNT; i++) {
+      const spot = friendlySpot(i);
+      if (!spot) continue;
+      const type = i % 3;
+      const mesh = createFriendlyMesh(type, i);
+      const friendly = {
+        type,
+        mesh,
+        x: spot.x + 0.5,
+        y: spot.y + 1,
+        z: spot.z + 0.5,
+        phase: hash2(i * 43 + 9, i * 61 - 5) * Math.PI * 2,
+        turn: hash2(i * 47 - 3, i * 53 + 7) * Math.PI * 2,
+      };
+      mesh.position.set(friendly.x, friendly.y, friendly.z);
+      mesh.rotation.y = friendly.turn;
+      friendlyGroup.add(mesh);
+      state.friendlies.push(friendly);
+    }
+  }
+  function friendlySpot(i) {
+    const cx = WORLD_X / 2;
+    const cz = WORLD_Z / 2;
+    for (let tries = 0; tries < 80; tries++) {
+      let x;
+      let z;
+      if (i < FRIENDLY_SPAWN_RING) {
+        const angle = hash2(i * 17 + tries, i * 23 - tries) * Math.PI * 2;
+        const dist = 8 + hash2(i * 29 - tries, i * 31 + tries) * 24;
+        x = Math.round(cx + Math.cos(angle) * dist);
+        z = Math.round(cz + Math.sin(angle) * dist);
+      } else {
+        x = 2 + Math.floor(hash2(i * 71 + tries * 11, i * 97 - tries * 13) * (WORLD_X - 4));
+        z = 2 + Math.floor(hash2(i * 101 - tries * 7, i * 83 + tries * 17) * (WORLD_Z - 4));
+      }
+      x = clamp(x, 2, WORLD_X - 3);
+      z = clamp(z, 2, WORLD_Z - 3);
+      if (edgeOceanStrength(x, z) > 0.45) continue;
+      const y = state.surface[surfaceIndex(x, z)];
+      if (y <= SEA_LEVEL) continue;
+      const top = getBlock(x, y, z);
+      if (top === GRASS || top === SAND || top === SNOW) return { x, y, z };
+    }
+    return null;
+  }
+  function createFriendlyMesh(type, seed) {
+    const group = new THREE.Group();
+    if (type === 0) {
+      addBox(group, [0, 0.34, 0], [0.72, 0.68, 0.72], friendlyMaterials.lime);
+      addBox(group, [-0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
+      addBox(group, [0.18, 0.62, -0.37], [0.11, 0.13, 0.04], friendlyMaterials.black);
+      addBox(group, [0, 0.45, -0.39], [0.28, 0.06, 0.04], friendlyMaterials.blush);
+      addBox(group, [0, 0.86, 0], [0.46, 0.18, 0.46], friendlyMaterials.mango);
+    } else if (type === 1) {
+      addBox(group, [0, 0.36, 0], [0.58, 0.72, 0.58], friendlyMaterials.cream);
+      addBox(group, [0, 0.86, 0], [0.88, 0.28, 0.88], friendlyMaterials.berry);
+      addBox(group, [-0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
+      addBox(group, [0.16, 0.6, -0.31], [0.09, 0.11, 0.04], friendlyMaterials.black);
+      addBox(group, [0, 0.43, -0.33], [0.22, 0.05, 0.04], friendlyMaterials.blush);
+      for (let i = 0; i < 4; i++) {
+        const ox = (hash2(seed + i, seed - i) - 0.5) * 0.44;
+        const oz = (hash2(seed - i * 2, seed + i * 3) - 0.5) * 0.44;
+        addBox(group, [ox, 1.03, oz], [0.12, 0.08, 0.12], friendlyMaterials.white);
+      }
+    } else {
+      addBox(group, [0, 0.4, 0], [0.62, 0.5, 0.62], friendlyMaterials.sky);
+      addBox(group, [-0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
+      addBox(group, [0.36, 0.42, 0], [0.18, 0.24, 0.5], friendlyMaterials.mango);
+      addBox(group, [-0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
+      addBox(group, [0.16, 0.58, -0.33], [0.09, 0.11, 0.04], friendlyMaterials.black);
+      addBox(group, [0, 0.38, -0.35], [0.24, 0.06, 0.04], friendlyMaterials.blush);
+      addBox(group, [0, 0.78, 0], [0.28, 0.38, 0.28], friendlyMaterials.berry);
+    }
+    group.traverse((child) => { child.castShadow = true; child.receiveShadow = true; });
+    return group;
+  }
+  function updateFriendlies(dt) {
+    const now = performance.now() * 0.001;
+    for (let i = 0; i < state.friendlies.length; i++) {
+      const friendly = state.friendlies[i];
+      const phase = now * (1.8 + (friendly.type + 1) * 0.16) + friendly.phase;
+      const bounce = Math.abs(Math.sin(phase)) * 0.11;
+      const sway = Math.sin(phase * 0.58) * 0.1;
+      const facePlayer = Math.atan2(state.player.x - friendly.x, state.player.z - friendly.z) + Math.PI;
+      friendly.mesh.position.set(friendly.x + Math.sin(phase * 0.37) * 0.05, friendly.y + bounce, friendly.z + Math.cos(phase * 0.41) * 0.05);
+      friendly.mesh.rotation.y = facePlayer + sway;
+      friendly.mesh.rotation.z = Math.sin(phase) * 0.07;
+      const base = 1.28;
+      friendly.mesh.scale.set(base + bounce * 0.18, base - bounce * 0.1, base + bounce * 0.18);
+    }
+  }
+
+  function spawnBlockBurst(x, y, z, code) {
+    const d = DEF[code] || DEF[DIRT];
+    const rgb = vividRgb(d.rgb || cachedRgb("#ffffff"), 1.28, 1.16);
+    spawnBurst(x + 0.5, y + 0.5, z + 0.5, rgb, 14, 2.8);
+  }
+  function spawnHitBurst(x, y, z, rgb) {
+    spawnBurst(x, y, z, rgb, 10, 3.5);
+  }
+  function spawnBurst(x, y, z, rgb, count, power) {
+    for (let i = 0; i < count; i++) {
+      const size = 0.08 + hash3(x + i, y - i, z + i) * 0.08;
+      const mesh = new THREE.Mesh(
+        new THREE.BoxBufferGeometry(size, size, size),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(rgb[0], rgb[1], rgb[2]), transparent: true, opacity: 0.88 })
+      );
+      const a = hash3(x * 17 + i, y * 19 - i, z * 23 + i) * Math.PI * 2;
+      const lift = 1.5 + hash3(x - i, y + i, z * 3) * 2.5;
+      const speed = 0.8 + hash3(x * 5 - i, y * 7 + i, z * 11) * power;
+      mesh.position.set(x, y, z);
+      mesh.rotation.set(hash3(x + i, y, z) * Math.PI, hash3(x, y + i, z) * Math.PI, hash3(x, y, z + i) * Math.PI);
+      effectGroup.add(mesh);
+      state.fx.push({
+        mesh,
+        vx: Math.cos(a) * speed,
+        vy: lift,
+        vz: Math.sin(a) * speed,
+        spin: 2 + hash3(x - i, y + i, z - i) * 5,
+        life: 0.55 + hash3(x + i * 3, y - i * 5, z + i * 7) * 0.35,
+        maxLife: 0,
+      });
+      state.fx[state.fx.length - 1].maxLife = state.fx[state.fx.length - 1].life;
+    }
+  }
+  function updateFx(dt) {
+    for (let i = state.fx.length - 1; i >= 0; i--) {
+      const fx = state.fx[i];
+      fx.life -= dt;
+      if (fx.life <= 0) {
+        effectGroup.remove(fx.mesh);
+        if (fx.mesh.geometry) fx.mesh.geometry.dispose();
+        if (fx.mesh.material) fx.mesh.material.dispose();
+        state.fx.splice(i, 1);
+        continue;
+      }
+      fx.vy -= FX_GRAVITY * dt;
+      fx.mesh.position.x += fx.vx * dt;
+      fx.mesh.position.y += fx.vy * dt;
+      fx.mesh.position.z += fx.vz * dt;
+      fx.mesh.rotation.x += fx.spin * dt;
+      fx.mesh.rotation.y += fx.spin * 0.7 * dt;
+      fx.mesh.material.opacity = clamp(fx.life / fx.maxLife, 0, 1) * 0.88;
+    }
+  }
+
   function buildClouds() {
     if (cloudsBuilt) return;
     cloudsBuilt = true;
@@ -1165,7 +1354,7 @@
     const x = WORLD_X / 2 + 0.5;
     const z = WORLD_Z / 2 + 0.5;
     const y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
-    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false });
+    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false, hurtAnim: 0 });
     state.oceanFatigue = 0;
     updateVisibleChunks(true);
     decorDirty = true;
@@ -1176,6 +1365,14 @@
     camera.position.set(p.x, p.y + EYE_HEIGHT, p.z);
     camera.rotation.y = p.yaw;
     camera.rotation.x = p.pitch;
+    camera.rotation.z = 0;
+    if (p.hurtAnim > 0) {
+      const strength = p.hurtAnim / PLAYER_HURT_SECONDS;
+      const shake = Math.sin(performance.now() * 0.09) * 0.035 * strength;
+      camera.position.x += Math.sin(performance.now() * 0.073) * 0.045 * strength;
+      camera.position.y += Math.cos(performance.now() * 0.061) * 0.03 * strength;
+      camera.rotation.z = shake;
+    }
   }
 
   function initHotbar() {
@@ -1217,6 +1414,27 @@
   function selectedTool() {
     const slot = selectedSlot();
     return slot && DEF[slot.code] && DEF[slot.code].tool ? DEF[slot.code].tool : null;
+  }
+  function triggerHeldSwing(kind = "gather") {
+    state.swingKind = kind;
+    state.swingTimer = kind === "attack" ? HELD_SWING_SECONDS : HELD_GATHER_SECONDS;
+  }
+  function updateActionAnimations(dt) {
+    if (state.swingTimer > 0) state.swingTimer = Math.max(0, state.swingTimer - dt);
+    if (state.player.hurtAnim > 0) state.player.hurtAnim = Math.max(0, state.player.hurtAnim - dt);
+    if (state.attackFlash > 0) state.attackFlash = Math.max(0, state.attackFlash - dt);
+    if (state.input.mine && state.target && state.target.hit && !state.paused && !state.crafting) {
+      state.gatherPhase += dt * 10.5;
+    } else {
+      state.gatherPhase += dt * 2.5;
+    }
+    updateDamageOverlay();
+  }
+  function updateDamageOverlay() {
+    if (!ui.damage) return;
+    const t = clamp(state.attackFlash / PLAYER_HURT_SECONDS, 0, 1);
+    ui.damage.style.opacity = `${t * 0.62}`;
+    ui.damage.style.transform = `scale(${1 + t * 0.035})`;
   }
 
   function updatePlayer(dt) {
@@ -1350,6 +1568,8 @@
     if (p.hurtCd > 0) return;
     p.hp -= dmg;
     p.hurtCd = DAMAGE_GRACE;
+    p.hurtAnim = PLAYER_HURT_SECONDS;
+    state.attackFlash = PLAYER_HURT_SECONDS;
     p.vy = Math.max(p.vy, 4);
     if (p.hp <= 0) {
       api.toast("You got flushed. Respawning...", "bad");
@@ -1376,7 +1596,7 @@
       const y = state.surface[surfaceIndex(x, z)] + 1;
       if (y <= SEA_LEVEL || torchLightAt(x, y, z) > 0.2) continue;
       const type = state.day > 1 && hash2(x + 8, z - 6) > 0.7 ? "grimace" : "toilet";
-      const mob = { type, x: x + 0.5, y, z: z + 0.5, hp: MOB[type].hp, hitCd: 0, mesh: createMobMesh(type) };
+      const mob = { type, x: x + 0.5, y, z: z + 0.5, hp: MOB[type].hp, hitCd: 0, hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0, mesh: createMobMesh(type) };
       mob.mesh.position.set(mob.x, mob.y, mob.z);
       mobGroup.add(mob.mesh);
       state.mobs.push(mob);
@@ -1401,9 +1621,11 @@
     return group;
   }
   function addBox(group, pos, scale, material) {
-    const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), material);
+    const meshMaterial = material && material.clone ? material.clone() : material;
+    const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), meshMaterial);
     mesh.position.set(pos[0], pos[1], pos[2]);
     mesh.scale.set(scale[0], scale[1], scale[2]);
+    if (mesh.material && mesh.material.color) mesh.userData.baseColor = mesh.material.color.clone();
     group.add(mesh);
   }
   function updateMobs(dt) {
@@ -1414,16 +1636,32 @@
       const dx = p.x - mob.x;
       const dz = p.z - mob.z;
       const dist = Math.hypot(dx, dz) || 1;
-      mob.x += (dx / dist) * cfg.speed * dt;
-      mob.z += (dz / dist) * cfg.speed * dt;
+      if (mob.knockTimer > 0) {
+        mob.knockTimer -= dt;
+        mob.x += mob.knockX * dt;
+        mob.z += mob.knockZ * dt;
+        mob.knockX *= 0.84;
+        mob.knockZ *= 0.84;
+      } else {
+        mob.x += (dx / dist) * cfg.speed * dt;
+        mob.z += (dz / dist) * cfg.speed * dt;
+      }
       mob.x = clamp(mob.x, 1, WORLD_X - 1);
       mob.z = clamp(mob.z, 1, WORLD_Z - 1);
       mob.y = groundYAt(mob.x, mob.z) + 1;
-      mob.mesh.position.set(mob.x, mob.y, mob.z);
-      mob.mesh.rotation.y = Math.atan2(dx, dz);
-      mob.mesh.position.y += Math.sin(performance.now() / 160 + i) * 0.04;
+      if (mob.hurtTimer > 0) mob.hurtTimer -= dt;
+      if (mob.attackTimer > 0) mob.attackTimer -= dt;
+      const attackPulse = mob.attackTimer > 0 ? Math.sin((1 - mob.attackTimer / MOB_ATTACK_SECONDS) * Math.PI) : 0;
+      const hurtPulse = mob.hurtTimer > 0 ? Math.sin((1 - mob.hurtTimer / MOB_HURT_SECONDS) * Math.PI) : 0;
+      const bob = Math.sin(performance.now() / 160 + i) * 0.04;
+      mob.mesh.position.set(mob.x + (dx / dist) * attackPulse * 0.38, mob.y + bob + hurtPulse * 0.12, mob.z + (dz / dist) * attackPulse * 0.38);
+      mob.mesh.rotation.y = Math.atan2(dx, dz) + Math.PI;
+      mob.mesh.rotation.x = -attackPulse * 0.22 + hurtPulse * 0.08;
+      mob.mesh.scale.set(1 + hurtPulse * 0.16, 1 - attackPulse * 0.08 + hurtPulse * 0.08, 1 + hurtPulse * 0.16);
+      applyMobFlash(mob, hurtPulse, attackPulse);
       if (mob.hitCd > 0) mob.hitCd -= dt;
       if (dist < 1.25 && Math.abs((p.y + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
+        mob.attackTimer = MOB_ATTACK_SECONDS;
         hurtPlayer(cfg.damage);
         mob.hitCd = 1.25;
       }
@@ -1436,6 +1674,26 @@
         state.mobs.splice(i, 1);
       }
     }
+  }
+  function damageMob(mob, damage) {
+    const dx = mob.x - state.player.x;
+    const dz = mob.z - state.player.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    mob.hp -= damage;
+    mob.hurtTimer = MOB_HURT_SECONDS;
+    mob.knockTimer = 0.16;
+    mob.knockX = (dx / dist) * 3.2;
+    mob.knockZ = (dz / dist) * 3.2;
+    spawnHitBurst(mob.x, mob.y + 0.72, mob.z, cachedRgb("#fff0f0"));
+  }
+  function applyMobFlash(mob, hurtPulse, attackPulse) {
+    if (!mob.mesh) return;
+    mob.mesh.traverse((child) => {
+      if (!child.material || !child.material.color || !child.userData.baseColor) return;
+      child.material.color.copy(child.userData.baseColor);
+      if (attackPulse > 0) child.material.color.lerp(mobAttackColor, attackPulse * 0.24);
+      if (hurtPulse > 0) child.material.color.lerp(mobHurtColor, hurtPulse * 0.82);
+    });
   }
   function removeMob(mob) {
     mobGroup.remove(mob.mesh);
@@ -1469,8 +1727,14 @@
     ui.target.classList.toggle("is-visible", selectionBox.visible);
     if (selectionBox.visible) {
       selectionBox.position.set(state.target.x + 0.5, state.target.y + 0.5, state.target.z + 0.5);
+      const miningThis = state.mining && state.mining.x === state.target.x && state.mining.y === state.target.y && state.mining.z === state.target.z;
+      const pulse = miningThis ? Math.sin(state.gatherPhase * 2.1) * 0.045 + 0.055 : 0;
+      selectionBox.scale.setScalar(1 + pulse);
+      selectionBox.material.opacity = miningThis ? 0.72 + Math.abs(Math.sin(state.gatherPhase * 1.6)) * 0.28 : 0.9;
+      selectionBox.material.color.setHex(miningThis ? 0xffdf55 : 0xffffff);
       ui.target.textContent = `${DEF[getBlock(state.target.x, state.target.y, state.target.z)].name}`;
     } else {
+      selectionBox.scale.setScalar(1);
       ui.target.textContent = "";
     }
   }
@@ -1507,6 +1771,9 @@
     const need = breakTimeFor(code);
     if (!state.mining || state.mining.x !== t.x || state.mining.y !== t.y || state.mining.z !== t.z) {
       state.mining = { x: t.x, y: t.y, z: t.z, progress: 0, need };
+      triggerHeldSwing("gather");
+    } else if (state.swingTimer <= 0.02) {
+      triggerHeldSwing("gather");
     }
     state.mining.progress += dt;
     ui.progress.style.width = `${clamp(state.mining.progress / need, 0, 1) * 100}%`;
@@ -1534,6 +1801,7 @@
   }
   function finishMine(x, y, z, code) {
     const d = DEF[code];
+    spawnBlockBurst(x, y, z, code);
     setBlock(x, y, z, AIR);
     flowWaterNear(x, y, z);
     state.mined++;
@@ -1587,7 +1855,8 @@
     }
     if (!hit) return false;
     const damage = heldAttackDamage();
-    hit.hp -= damage;
+    triggerHeldSwing("attack");
+    damageMob(hit, damage);
     state.attackCd = 0.32;
     api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"} -${damage}`, "");
     return true;
@@ -1697,12 +1966,12 @@
   function isNight() { return daylight() < 0.22; }
   function updateLighting() {
     const d = daylight();
-    const sky = new THREE.Color(0x10152d).lerp(new THREE.Color(0x79c7ff), d);
-    const fog = new THREE.Color(0x14172f).lerp(new THREE.Color(0x9fd5ff), d);
+    const sky = new THREE.Color(0x101a46).lerp(new THREE.Color(0x68cfff), d);
+    const fog = new THREE.Color(0x131d48).lerp(new THREE.Color(0xb7ecff), d);
     scene.background = sky;
     scene.fog = new THREE.FogExp2(fog, lerp(0.029, 0.0065, d));
-    ambient.intensity = lerp(0.18, 0.9, d);
-    sun.intensity = lerp(0.1, 1.2, d);
+    ambient.intensity = lerp(0.22, 1.0, d);
+    sun.intensity = lerp(0.12, 1.34, d);
     const a = state.time * Math.PI * 2;
     sunOrbitVector.set(Math.cos(a) * 65, Math.sin(a) * 70 + 18, Math.sin(a * 0.7) * 46);
     moonOrbitVector.set(-sunOrbitVector.x, -sunOrbitVector.y + 8, -sunOrbitVector.z);
@@ -1744,7 +2013,7 @@
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
     setText("hud-high", state.high.toLocaleString());
-    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z} procedural world - ${state.mobs.length} enemies`;
+    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z} procedural world - ${state.mobs.length} enemies - ${state.friendlies.length} pals`;
     ui.hotbar.innerHTML = state.hotbar.map((slot, i) => {
       const selected = i === state.selected ? " is-selected" : "";
       const label = slot ? DEF[slot.code].name : "";
@@ -1759,9 +2028,12 @@
     if (el) el.textContent = value;
   }
   function updateHeldItem() {
-    heldGroup.clear();
+    disposeGroup(heldGroup);
     const slot = selectedSlot();
-    if (!slot) return;
+    if (!slot) {
+      applyHeldAnimation();
+      return;
+    }
     const mat = new THREE.MeshLambertMaterial({ color: DEF[slot.code].color || "#ffffff" });
     const handle = new THREE.Mesh(new THREE.BoxBufferGeometry(0.08, 0.48, 0.08), mat);
     handle.position.set(0.38, -0.33, -0.72);
@@ -1771,6 +2043,31 @@
     head.position.set(0.25, -0.15, -0.82);
     head.rotation.z = -0.55;
     heldGroup.add(head);
+    applyHeldAnimation();
+  }
+  function applyHeldAnimation() {
+    const idle = Math.sin(performance.now() * 0.0022) * 0.012;
+    heldGroup.position.set(0, idle, 0);
+    heldGroup.rotation.set(0, 0, 0);
+    if (state.mining) {
+      const chop = (Math.sin(state.gatherPhase * 2.4) + 1) * 0.5;
+      heldGroup.position.y -= chop * 0.045;
+      heldGroup.position.z -= chop * 0.055;
+      heldGroup.rotation.x -= chop * 0.34;
+      heldGroup.rotation.y += chop * 0.08;
+    }
+    if (state.swingTimer > 0) {
+      const dur = state.swingKind === "attack" ? HELD_SWING_SECONDS : HELD_GATHER_SECONDS;
+      const t = clamp(1 - state.swingTimer / dur, 0, 1);
+      const swing = Math.sin(t * Math.PI);
+      const attack = state.swingKind === "attack" ? 1 : 0.62;
+      heldGroup.position.x += swing * 0.05 * attack;
+      heldGroup.position.y -= swing * 0.11 * attack;
+      heldGroup.position.z -= swing * 0.16 * attack;
+      heldGroup.rotation.x -= swing * 0.72 * attack;
+      heldGroup.rotation.y += swing * 0.28 * attack;
+      heldGroup.rotation.z -= swing * 0.18;
+    }
   }
 
   function buildHud() {
@@ -1788,9 +2085,12 @@
       .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28)}
       .rizz3d-slot em{position:absolute;left:4px;top:2px;color:rgba(255,255,255,.55);font:700 9px var(--font-mono);font-style:normal}.rizz3d-slot b{position:absolute;right:4px;bottom:2px;color:#fff;font:800 11px var(--font-mono)}
       .rizz3d-swatch{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:4px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.22)}
+      .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
       @media (max-width:760px){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-chip{bottom:50px;font-size:9px;max-width:70%}}
     `;
     document.head.appendChild(style);
+    const damage = document.createElement("div");
+    damage.className = "rizz3d-damage";
     const crosshair = document.createElement("div");
     crosshair.className = "rizz3d-crosshair";
     const objective = document.createElement("div");
@@ -1806,8 +2106,8 @@
       const button = event.target.closest("[data-slot]");
       if (button) state.selected = Number(button.dataset.slot);
     });
-    wrap.append(crosshair, objective, target, progress, hotbar);
-    return { crosshair, objective, target, progress: progress.firstElementChild, hotbar };
+    wrap.append(damage, crosshair, objective, target, progress, hotbar);
+    return { damage, crosshair, objective, target, progress: progress.firstElementChild, hotbar };
   }
 
   function resizeRenderer(force = false) {
@@ -1833,6 +2133,8 @@
     state.mining = null;
     state.mobs.forEach(removeMob);
     state.mobs = [];
+    disposeGroup(effectGroup);
+    state.fx = [];
     state.time = 0.21;
     state.day = 1;
     state.spawnTimer = 2;
@@ -1841,6 +2143,10 @@
     state.high = api.getHighScore(GAME_ID) || 0;
     state.selected = 0;
     state.sigmaForged = false;
+    state.swingTimer = 0;
+    state.swingKind = "gather";
+    state.attackFlash = 0;
+    state.player.hurtAnim = 0;
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -1925,6 +2231,9 @@
     let dt = Math.min((ts - last) / 1000, 1 / 30);
     last = ts;
     resizeRenderer();
+    updateActionAnimations(dt);
+    updateFriendlies(dt);
+    updateFx(dt);
     if (state.started && !state.paused && !state.crafting) {
       updateTime(dt);
       updatePlayer(dt);
@@ -1969,7 +2278,10 @@
       if (!state.started || state.paused || state.crafting) return;
       canvas.focus();
       if (event.button === 2) state.input.place = true;
-      else state.input.mine = true;
+      else {
+        state.input.mine = true;
+        triggerHeldSwing("gather");
+      }
     });
     window.addEventListener("mouseup", (event) => {
       if (event.button === 2) state.input.place = false;
@@ -2135,6 +2447,10 @@
     setBlock,
     flowWaterNear,
     heldAttackDamage,
+    triggerHeldSwing,
+    damageMob,
+    spawnBlockBurst,
+    spawnFriendlies,
     edgeOceanStrength,
     movementVectorForYaw,
     movementVectorForCamera,
@@ -2151,6 +2467,10 @@
         edgeOcean: EDGE_OCEAN,
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
+        friendlyCount: state.friendlies.length,
+        fxCount: state.fx.length,
+        swingTimer: state.swingTimer,
+        playerHurtAnim: state.player.hurtAnim,
         sunVisible: !!(sunDisk && sunDisk.visible),
         sunOpacity: sunDisk ? sunDisk.material.opacity : 0,
         moonVisible: !!(moonDisk && moonDisk.visible),

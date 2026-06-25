@@ -2389,14 +2389,21 @@
   function movePlayerAxis(axis, amount) {
     if (amount === 0) return;
     const p = state.player;
+    const start = p[axis];
     p[axis] += amount;
     const box = playerBox();
     if (boxCollides(box)) {
-      const dir = Math.sign(amount);
+      const collidedPos = p[axis];
+      p[axis] = start;
       if (axis === "y") {
-        if (dir < 0) p.onGround = true;
+        if (amount < 0) {
+          p.onGround = true;
+          p.y = Math.floor(collidedPos - 0.0001) + 1;
+        }
         p.vy = 0;
+        return;
       }
+      const dir = Math.sign(amount);
       let guard = 0;
       while (boxCollides(playerBox()) && guard < 20) {
         p[axis] -= dir * 0.02;
@@ -2685,8 +2692,9 @@
     const origin = camera.position.clone();
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
+    const step = 0.03;
     let prev = null;
-    for (let t = 0; t <= maxDist; t += 0.045) {
+    for (let t = 0; t <= maxDist; t += step) {
       const x = Math.floor(origin.x + dir.x * t);
       const y = Math.floor(origin.y + dir.y * t);
       const z = Math.floor(origin.z + dir.z * t);

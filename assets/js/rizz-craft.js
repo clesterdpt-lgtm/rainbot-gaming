@@ -1833,7 +1833,7 @@
         puff.position.set(j * 5.4, hash2(i, j + 9) * 0.9, hash2(j + 10, i) * 7.4);
         group.add(puff);
       }
-      group.position.set(hash2(i, 1) * WORLD_X, 70 + hash2(i, 2) * 30, hash2(i, 4) * WORLD_Z);
+      group.position.set(hash2(i, 1) * WORLD_X, WORLD_Y + 24 + hash2(i, 2) * 32, hash2(i, 4) * WORLD_Z);
       cloudGroup.add(group);
     }
   }
@@ -1843,7 +1843,7 @@
     for (let i = 0; i < 420; i++) {
       const a = hash2(i, 1) * Math.PI * 2;
       const r = 95 + hash2(i, 2) * 80;
-      const y = 55 + hash2(i, 3) * 85;
+      const y = WORLD_Y + 64 + hash2(i, 3) * 140;
       positions.push(Math.cos(a) * r + WORLD_X / 2, y, Math.sin(a) * r + WORLD_Z / 2);
     }
     const geometry = new THREE.BufferGeometry();

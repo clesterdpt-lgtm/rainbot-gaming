@@ -309,16 +309,19 @@ const RBBackend = (() => {
     const user = await requireUser();
     const displayName = cleanText(values && values.display_name, 32);
     if (displayName.length < 2) throw new Error("Display name needs at least 2 characters.");
-    const avatarUrl = cleanText(values && values.avatar_url, 300);
+    await ensureProfile(user);
     const payload = {
-      id: user.id,
       display_name: displayName,
-      avatar_url: avatarUrl || null,
       updated_at: new Date().toISOString(),
     };
+    if (Object.prototype.hasOwnProperty.call(values || {}, "avatar_url")) {
+      const avatarUrl = cleanText(values && values.avatar_url, 300);
+      payload.avatar_url = avatarUrl || null;
+    }
     const { data, error } = await client
       .from("profiles")
-      .upsert(payload, { onConflict: "id" })
+      .update(payload)
+      .eq("id", user.id)
       .select("id, display_name, avatar_url, role, created_at, updated_at")
       .single();
     if (error) throw error;

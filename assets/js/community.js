@@ -45,6 +45,20 @@
     return (CATEGORIES.find((category) => category.id === id) || CATEGORIES[0]).label;
   }
 
+  function isModerator(currentBackendState = backendState()) {
+    const role = currentBackendState && currentBackendState.profile && currentBackendState.profile.role;
+    return role === "moderator" || role === "admin";
+  }
+
+  function moderationViewActive() {
+    return new URLSearchParams(location.search).get("moderation") === "reports";
+  }
+
+  function shortBody(value, maxLength = 120) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+  }
+
   function setStatus(message, kind = "") {
     const status = document.querySelector("[data-community-status]");
     if (!status) return;
@@ -52,9 +66,24 @@
     status.dataset.kind = kind;
   }
 
+  function buttonEl(label, className, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.addEventListener("click", onClick);
+    return button;
+  }
+
+  function toast(message, kind = "") {
+    if (window.RB && typeof window.RB.toast === "function") window.RB.toast(message, kind);
+    else setStatus(message, kind);
+  }
+
   function renderCategories() {
     const root = document.querySelector("[data-community-categories]");
     if (!root) return;
+    const currentBackendState = backendState();
     clear(root);
     CATEGORIES.forEach((category) => {
       const link = document.createElement("a");
@@ -62,7 +91,8 @@
       url.search = "";
       if (category.id !== "general") url.searchParams.set("category", category.id);
       link.href = url.pathname.split("/").pop() + url.search;
-      link.className = "forum-category" + (state.category === category.id || (!state.category && category.id === "general") ? " is-active" : "");
+      const isActive = !moderationViewActive() && (state.category === category.id || (!state.category && category.id === "general"));
+      link.className = "forum-category" + (isActive ? " is-active" : "");
       link.dataset.category = category.id;
       const strong = textEl("strong", "", category.label);
       const span = textEl("span", "", category.detail);
@@ -78,6 +108,21 @@
       });
       root.append(link);
     });
+    if (isModerator(currentBackendState)) {
+      const link = document.createElement("a");
+      const url = new URL(location.href);
+      url.search = "";
+      url.searchParams.set("moderation", "reports");
+      link.href = url.pathname.split("/").pop() + url.search;
+      link.className = "forum-category forum-category--mod" + (moderationViewActive() ? " is-active" : "");
+      link.append(textEl("strong", "", "Moderation"), textEl("span", "", "Reports and cleanup"));
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        history.pushState(null, "", url);
+        renderCommunity();
+      });
+      root.append(link);
+    }
   }
 
   function renderSetup(root) {
@@ -177,7 +222,81 @@
     root.append(form);
   }
 
-  function topicCard(topic) {
+  function renderBadges(topic) {
+    const badges = document.createElement("div");
+    badges.className = "forum-badges";
+    if (topic.is_pinned) badges.append(textEl("span", "forum-badge forum-badge--pinned", "Pinned"));
+    if (topic.is_locked) badges.append(textEl("span", "forum-badge forum-badge--locked", "Locked"));
+    if (topic.is_hidden) badges.append(textEl("span", "forum-badge forum-badge--hidden", "Hidden"));
+    return badges;
+  }
+
+  async function reportItem(type, id) {
+    const reason = window.prompt("Reason for report");
+    if (reason === null) return;
+    try {
+      if (type === "topic") await window.RBBackend.reportTopic(id, reason);
+      else await window.RBBackend.reportReply(id, reason);
+      toast("Report sent", "good");
+    } catch (error) {
+      toast(error.message || "Report failed.", "bad");
+    }
+  }
+
+  async function moderateTopic(topic, values) {
+    try {
+      await window.RBBackend.moderateTopic(topic.id, values);
+      toast("Topic updated", "good");
+      if (values.is_hidden) {
+        const url = new URL(location.href);
+        url.search = "";
+        history.pushState(null, "", url);
+      }
+      await renderCommunity();
+    } catch (error) {
+      toast(error.message || "Moderator action failed.", "bad");
+    }
+  }
+
+  async function moderateReply(reply, values) {
+    try {
+      await window.RBBackend.moderateReply(reply.id, values);
+      toast("Reply updated", "good");
+      await renderCommunity();
+    } catch (error) {
+      toast(error.message || "Moderator action failed.", "bad");
+    }
+  }
+
+  function renderTopicActions(topic, currentBackendState) {
+    const actions = document.createElement("div");
+    actions.className = "forum-actions";
+    if (currentBackendState.user) {
+      actions.append(buttonEl("Report", "forum-action", () => reportItem("topic", topic.id)));
+    }
+    if (isModerator(currentBackendState)) {
+      actions.append(
+        buttonEl(topic.is_pinned ? "Unpin" : "Pin", "forum-action forum-action--mod", () => moderateTopic(topic, { is_pinned: !topic.is_pinned })),
+        buttonEl(topic.is_locked ? "Unlock" : "Lock", "forum-action forum-action--mod", () => moderateTopic(topic, { is_locked: !topic.is_locked })),
+        buttonEl(topic.is_hidden ? "Unhide" : "Hide", "forum-action forum-action--danger", () => moderateTopic(topic, { is_hidden: !topic.is_hidden }))
+      );
+    }
+    return actions;
+  }
+
+  function renderReplyActions(reply, currentBackendState) {
+    const actions = document.createElement("div");
+    actions.className = "forum-actions";
+    if (currentBackendState.user) {
+      actions.append(buttonEl("Report", "forum-action", () => reportItem("reply", reply.id)));
+    }
+    if (isModerator(currentBackendState)) {
+      actions.append(buttonEl(reply.is_hidden ? "Unhide" : "Hide", "forum-action forum-action--danger", () => moderateReply(reply, { is_hidden: !reply.is_hidden })));
+    }
+    return actions;
+  }
+
+  function topicCard(topic, currentBackendState) {
     const card = document.createElement("article");
     card.className = "forum-topic";
     const meta = textEl("div", "forum-topic__meta", `${categoryLabel(topic.category)} / ${authorName(topic)} / ${formatDate(topic.last_activity_at || topic.created_at)}`);
@@ -195,7 +314,7 @@
     });
     const body = textEl("p", "forum-topic__body", topic.body);
     const foot = textEl("div", "forum-topic__foot", `${Number(topic.reply_count) || 0} replies`);
-    card.append(meta, title, body, foot);
+    card.append(meta, renderBadges(topic), title, body, foot, renderTopicActions(topic, currentBackendState));
     return card;
   }
 
@@ -214,15 +333,16 @@
       list.append(textEl("div", "forum-empty", "No posts here yet."));
       return;
     }
-    topics.forEach((topic) => list.append(topicCard(topic)));
+    topics.forEach((topic) => list.append(topicCard(topic, currentBackendState)));
   }
 
-  function replyCard(reply) {
+  function replyCard(reply, currentBackendState) {
     const card = document.createElement("article");
     card.className = "forum-reply";
     card.append(
       textEl("div", "forum-topic__meta", `${authorName(reply)} / ${formatDate(reply.created_at)}`),
-      textEl("p", "forum-reply__body", reply.body)
+      textEl("p", "forum-reply__body", reply.body),
+      renderReplyActions(reply, currentBackendState)
     );
     return card;
   }
@@ -292,10 +412,115 @@
       textEl("p", "forum-reply__body", topic.body),
       textEl("div", "forum-topic__foot", `${replies.length} replies`)
     );
+    topicFull.append(renderBadges(topic), renderTopicActions(topic, currentBackendState));
     root.append(topicFull);
-    replies.forEach((reply) => root.append(replyCard(reply)));
-    if (currentBackendState.user) renderReplyForm(root, topicId);
+    replies.forEach((reply) => root.append(replyCard(reply, currentBackendState)));
+    if (topic.is_locked) root.append(textEl("div", "forum-empty", "This topic is locked."));
+    else if (currentBackendState.user) renderReplyForm(root, topicId);
     else renderLoginPrompt(root);
+  }
+
+  async function updateReportStatus(report, status) {
+    try {
+      await window.RBBackend.updateReportStatus(report.id, status);
+      toast("Report updated", "good");
+      await renderCommunity();
+    } catch (error) {
+      toast(error.message || "Report update failed.", "bad");
+    }
+  }
+
+  async function moderateFromReport(report, action) {
+    try {
+      if (report.topic_id) {
+        await window.RBBackend.moderateTopic(report.topic_id, {
+          ...action,
+          report_id: report.id,
+          report_status: "closed",
+        });
+      } else if (report.reply_id) {
+        await window.RBBackend.moderateReply(report.reply_id, {
+          ...action,
+          report_id: report.id,
+          report_status: "closed",
+        });
+      }
+      toast("Moderation applied", "good");
+      await renderCommunity();
+    } catch (error) {
+      toast(error.message || "Moderator action failed.", "bad");
+    }
+  }
+
+  function reportCard(report) {
+    const card = document.createElement("article");
+    card.className = "forum-report";
+    const target = report.topic
+      ? `Topic: ${report.topic.title || `#${report.topic_id}`}`
+      : `Reply: ${shortBody(report.reply && report.reply.body ? report.reply.body : `#${report.reply_id}`)}`;
+    card.append(
+      textEl("div", "forum-topic__meta", `${report.status} / ${authorName({ author: report.reporter })} / ${formatDate(report.created_at)}`),
+      textEl("h3", "forum-report__target", target),
+      textEl("p", "forum-reply__body", report.reason)
+    );
+    const actions = document.createElement("div");
+    actions.className = "forum-actions";
+    if (report.topic_id) {
+      const link = document.createElement("a");
+      link.className = "forum-action forum-action--link";
+      link.href = `community.html?topic=${report.topic_id}`;
+      link.textContent = "Open Topic";
+      actions.append(link);
+      actions.append(buttonEl("Hide Topic", "forum-action forum-action--danger", () => moderateFromReport(report, { is_hidden: true })));
+      actions.append(buttonEl("Lock Topic", "forum-action forum-action--mod", () => moderateFromReport(report, { is_locked: true })));
+    } else if (report.reply_id) {
+      if (report.reply && report.reply.topic_id) {
+        const link = document.createElement("a");
+        link.className = "forum-action forum-action--link";
+        link.href = `community.html?topic=${report.reply.topic_id}`;
+        link.textContent = "Open Topic";
+        actions.append(link);
+      }
+      actions.append(buttonEl("Hide Reply", "forum-action forum-action--danger", () => moderateFromReport(report, { is_hidden: true })));
+    }
+    if (report.status !== "reviewing") actions.append(buttonEl("Reviewing", "forum-action", () => updateReportStatus(report, "reviewing")));
+    if (report.status !== "closed") actions.append(buttonEl("Close", "forum-action", () => updateReportStatus(report, "closed")));
+    card.append(actions);
+    return card;
+  }
+
+  async function renderModeration(root, currentBackendState) {
+    clear(root);
+    if (!isModerator(currentBackendState)) {
+      setStatus("Moderator only", "bad");
+      root.append(textEl("div", "forum-empty", "Moderator access required."));
+      return;
+    }
+    setStatus("Moderator tools", "good");
+    const header = document.createElement("div");
+    header.className = "forum-mod-header";
+    header.append(textEl("h2", "", "Reports"));
+    const status = new URLSearchParams(location.search).get("status") || "open";
+    const filters = document.createElement("div");
+    filters.className = "forum-actions";
+    ["open", "reviewing", "closed", "all"].forEach((value) => {
+      filters.append(buttonEl(value, "forum-action" + (status === value ? " is-active" : ""), () => {
+        const url = new URL(location.href);
+        url.search = "";
+        url.searchParams.set("moderation", "reports");
+        url.searchParams.set("status", value);
+        history.pushState(null, "", url);
+        renderCommunity();
+      }));
+    });
+    header.append(filters);
+    root.append(header);
+    const reports = await window.RBBackend.listReports({ status, limit: 50 });
+    if (!reports.length) {
+      root.append(textEl("div", "forum-empty", "No reports here."));
+      return;
+    }
+    reports.forEach((report) => root.append(reportCard(report)));
   }
 
   async function renderCommunity() {
@@ -331,7 +556,8 @@
         renderSetup(root);
         return;
       }
-      if (topicId) await renderTopic(root, Number(topicId), currentBackendState);
+      if (moderationViewActive()) await renderModeration(root, currentBackendState);
+      else if (topicId) await renderTopic(root, Number(topicId), currentBackendState);
       else await renderTopicList(root, currentBackendState);
     } catch (error) {
       clear(root);

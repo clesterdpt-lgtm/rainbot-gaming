@@ -30,6 +30,7 @@ The migration creates:
 - `forum_reports`
 - RLS policies and indexes
 - `record_high_score(...)` for atomic leaderboard updates
+- moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
 
 ## 3. Enable the frontend config
 
@@ -55,7 +56,21 @@ In Supabase Auth settings:
 - Email/password and magic links share the same Supabase profiles.
 - To enable Google login, create a Google OAuth client, then add its client ID and secret in Supabase Auth > Sign In / Providers > Google.
 
-## 5. Smoke test
+## 5. Moderators
+
+Forum moderator tools appear only when the signed-in profile has `role` set to `moderator` or `admin`.
+
+Run this in Supabase SQL Editor for a trusted account:
+
+```sql
+update public.profiles
+set role = 'admin'
+where id = 'USER_UUID_HERE';
+```
+
+Use `moderator` instead of `admin` if you want a non-owner moderation account.
+
+## 6. Smoke test
 
 1. Open `community.html`.
 2. Create an account with email/password or send yourself a magic link.
@@ -63,3 +78,5 @@ In Supabase Auth settings:
 4. Create a forum topic and reply.
 5. Play a game with a saved run, sign in, and use Profile > Sync Now.
 6. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `game_saves`, and `game_scores`.
+7. Report a topic or reply.
+8. Sign in with a moderator/admin profile, open the Moderation board, and hide/lock/pin from the report queue.

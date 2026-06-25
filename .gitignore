@@ -18,6 +18,7 @@
 output/
 test-artifacts/
 tmp/
+supabase/.temp/
 
 # Dependency/build caches
 node_modules/

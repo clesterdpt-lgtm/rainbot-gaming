@@ -8,6 +8,7 @@ const RBBackend = (() => {
     "scores-clips",
     "announcements",
   ]);
+  const REPORT_STATUSES = new Set(["open", "reviewing", "closed"]);
 
   let client = null;
   let config = {};
@@ -89,6 +90,11 @@ const RBBackend = (() => {
 
   function cleanBody(value, maxLength) {
     return String(value || "").trim().slice(0, maxLength);
+  }
+
+  function cleanReportStatus(value) {
+    const normalized = cleanText(value || "open", 20).toLowerCase();
+    return REPORT_STATUSES.has(normalized) ? normalized : "open";
   }
 
   function cleanCategory(value) {
@@ -414,10 +420,11 @@ const RBBackend = (() => {
     const category = options.category ? cleanCategory(options.category) : "";
     let query = client
       .from("forum_topics")
-      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
-      .eq("is_hidden", false)
+      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .order("is_pinned", { ascending: false })
       .order("last_activity_at", { ascending: false })
       .limit(Math.max(1, Math.min(50, Number(options.limit) || 30)));
+    if (!options.includeHidden) query = query.eq("is_hidden", false);
     if (category) query = query.eq("category", category);
     const { data, error } = await query;
     if (error) throw error;
@@ -428,9 +435,8 @@ const RBBackend = (() => {
     await requireClient();
     const { data, error } = await client
       .from("forum_topics")
-      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
       .eq("id", Number(topicId))
-      .eq("is_hidden", false)
       .maybeSingle();
     if (error) throw error;
     return data;
@@ -452,7 +458,7 @@ const RBBackend = (() => {
     const { data, error } = await client
       .from("forum_topics")
       .insert(payload)
-      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
       .single();
     if (error) throw error;
     return data;
@@ -462,7 +468,7 @@ const RBBackend = (() => {
     await requireClient();
     const { data, error } = await client
       .from("forum_replies")
-      .select("id, body, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .select("id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
       .eq("topic_id", Number(topicId))
       .eq("is_hidden", false)
       .order("created_at", { ascending: true })
@@ -478,8 +484,88 @@ const RBBackend = (() => {
     const { data, error } = await client
       .from("forum_replies")
       .insert({ topic_id: Number(topicId), author_id: user.id, body: cleanedBody })
-      .select("id, body, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .select("id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
       .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function reportTopic(topicId, reason) {
+    const user = await requireUser();
+    const cleanedReason = cleanBody(reason, 800);
+    if (cleanedReason.length < 4) throw new Error("Report reason needs at least 4 characters.");
+    const { data, error } = await client
+      .from("forum_reports")
+      .insert({ reporter_id: user.id, topic_id: Number(topicId), reason: cleanedReason })
+      .select("id, status, created_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function reportReply(replyId, reason) {
+    const user = await requireUser();
+    const cleanedReason = cleanBody(reason, 800);
+    if (cleanedReason.length < 4) throw new Error("Report reason needs at least 4 characters.");
+    const { data, error } = await client
+      .from("forum_reports")
+      .insert({ reporter_id: user.id, reply_id: Number(replyId), reason: cleanedReason })
+      .select("id, status, created_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function listReports(options = {}) {
+    await requireUser();
+    const requestedStatus = cleanText(options.status || "open", 20).toLowerCase();
+    const status = requestedStatus === "all" ? "all" : cleanReportStatus(requestedStatus);
+    let query = client
+      .from("forum_reports")
+      .select("id, reason, status, created_at, topic_id, reply_id, reporter:profiles!forum_reports_reporter_id_fkey(display_name, avatar_url), topic:forum_topics!forum_reports_topic_id_fkey(id, title, is_hidden, is_locked, is_pinned), reply:forum_replies!forum_reports_reply_id_fkey(id, body, is_hidden, topic_id)")
+      .order("created_at", { ascending: false })
+      .limit(Math.max(1, Math.min(100, Number(options.limit) || 50)));
+    if (status !== "all") query = query.eq("status", status);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function updateReportStatus(reportId, status) {
+    await requireUser();
+    const cleanedStatus = cleanReportStatus(status);
+    const { data, error } = await client
+      .from("forum_reports")
+      .update({ status: cleanedStatus, updated_at: new Date().toISOString() })
+      .eq("id", Number(reportId))
+      .select("id, status, updated_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function moderateTopic(topicId, values = {}) {
+    await requireUser();
+    const { data, error } = await client.rpc("moderate_forum_topic", {
+      p_topic_id: Number(topicId),
+      p_is_hidden: Object.prototype.hasOwnProperty.call(values, "is_hidden") ? Boolean(values.is_hidden) : null,
+      p_is_locked: Object.prototype.hasOwnProperty.call(values, "is_locked") ? Boolean(values.is_locked) : null,
+      p_is_pinned: Object.prototype.hasOwnProperty.call(values, "is_pinned") ? Boolean(values.is_pinned) : null,
+      p_report_id: values.report_id ? Number(values.report_id) : null,
+      p_report_status: values.report_status ? cleanReportStatus(values.report_status) : null,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function moderateReply(replyId, values = {}) {
+    await requireUser();
+    const { data, error } = await client.rpc("moderate_forum_reply", {
+      p_reply_id: Number(replyId),
+      p_is_hidden: Object.prototype.hasOwnProperty.call(values, "is_hidden") ? Boolean(values.is_hidden) : null,
+      p_report_id: values.report_id ? Number(values.report_id) : null,
+      p_report_status: values.report_status ? cleanReportStatus(values.report_status) : null,
+    });
     if (error) throw error;
     return data;
   }
@@ -508,6 +594,12 @@ const RBBackend = (() => {
     createTopic,
     listReplies,
     createReply,
+    reportTopic,
+    reportReply,
+    listReports,
+    updateReportStatus,
+    moderateTopic,
+    moderateReply,
   };
 })();
 

@@ -52,19 +52,20 @@
   const WATER_MOVE_MULT = 0.55;
   const WATER_GRAVITY_MULT = 0.22;
   const SWIM_UP_SPEED = 4.4;
-  const WATER_FLOW_LIMIT = 24;
-  const WATER_FLOW_BURST_LIMIT = 4;
-  const WATER_FLOW_TICK_SECONDS = 0.075;
+  const WATER_FLOW_LIMIT = 8;
+  const WATER_FLOW_BURST_LIMIT = 2;
+  const WATER_FLOW_TICK_SECONDS = 0.18;
   const LAVA_MOVE_MULT = 0.34;
   const LAVA_GRAVITY_MULT = 0.12;
   const LAVA_SWIM_UP_SPEED = 2.2;
   const LAVA_FALL_SPEED = -1.15;
-  const LAVA_FLOW_LIMIT = 10;
-  const LAVA_FLOW_BURST_LIMIT = 2;
-  const LAVA_FLOW_TICK_SECONDS = 0.28;
+  const LAVA_FLOW_LIMIT = 4;
+  const LAVA_FLOW_BURST_LIMIT = 1;
+  const LAVA_FLOW_TICK_SECONDS = 0.45;
   const LAVA_LATERAL_RANGE = 3;
-  const ACTIVE_FLUID_QUEUE_LIMIT = 3000;
-  const FLUID_SCAN_MULTIPLIER = 6;
+  const ACTIVE_FLUID_QUEUE_LIMIT = 900;
+  const FLUID_SCAN_MULTIPLIER = 3;
+  const FLUID_CHUNK_REBUILDS_PER_FRAME = 3;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -421,6 +422,7 @@
   let activeLavaHead = 0;
   const activeWaterKeys = new Set();
   const activeLavaKeys = new Set();
+  const pendingFluidChunks = new Set();
   const reusableVector = new THREE.Vector3();
   const moveForwardVector = new THREE.Vector3();
   const moveRightVector = new THREE.Vector3();
@@ -571,6 +573,7 @@
     activeLavaKeys.clear();
     activeWaterHead = 0;
     activeLavaHead = 0;
+    pendingFluidChunks.clear();
     state.waterFlowTimer = 0;
     state.lavaFlowTimer = 0;
   }
@@ -971,7 +974,7 @@
     if (x < 0 || x >= WORLD_X || z < 0 || z >= WORLD_Z) return BEDROCK;
     return state.world[index(x, y, z)];
   }
-  function setBlock(x, y, z, code, track = true) {
+  function setBlock(x, y, z, code, track = true, rebuild = true) {
     if (!inWorld(x, y, z)) return;
     const i = index(x, y, z);
     const prev = state.world[i];
@@ -983,25 +986,28 @@
       else state.edits.set(key, code);
     }
     updateSurfaceColumn(x, z);
-    rebuildChunksNear(x, z);
+    if (rebuild) rebuildChunksNear(x, z);
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
+  function setFluidBlock(x, y, z, code) {
+    setBlock(x, y, z, code, false, false);
+    queueFluidChunkRebuildsNear(x, z);
+  }
   function flowWaterNear(x, y, z, limit = WATER_FLOW_BURST_LIMIT) {
-    const seeds = [];
     const seenSeeds = new Set();
+    let queued = 0;
     const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const dir of seedDirs) {
+      if (queued >= limit) break;
       const sx = x + dir[0];
       const sy = y + dir[1];
       const sz = z + dir[2];
       const key = `${sx},${sy},${sz}`;
       if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== WATER) continue;
       seenSeeds.add(key);
-      seeds.push({ x: sx, y: sy, z: sz });
-      queueActiveFluid(WATER, sx, sy, sz);
+      if (queueActiveFluid(WATER, sx, sy, sz)) queued++;
     }
-    if (!seeds.length) return 0;
-    return spreadWaterFrom(seeds, limit);
+    return queued;
   }
   function spreadWaterFrom(seeds, limit = WATER_FLOW_LIMIT) {
     const queue = seeds.slice();
@@ -1018,7 +1024,7 @@
     }
     function fill(x, y, z) {
       if (!inWorld(x, y, z) || !canWaterFill(getBlock(x, y, z)) || filled >= limit) return false;
-      setBlock(x, y, z, WATER);
+      setFluidBlock(x, y, z, WATER);
       queueActiveFluid(WATER, x, y, z);
       filled++;
       return true;
@@ -1043,21 +1049,20 @@
     return filled;
   }
   function flowLavaNear(x, y, z, limit = LAVA_FLOW_BURST_LIMIT) {
-    const seeds = [];
     const seenSeeds = new Set();
+    let queued = 0;
     const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const dir of seedDirs) {
+      if (queued >= limit) break;
       const sx = x + dir[0];
       const sy = y + dir[1];
       const sz = z + dir[2];
       const key = `${sx},${sy},${sz}`;
       if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== LAVA) continue;
       seenSeeds.add(key);
-      seeds.push({ x: sx, y: sy, z: sz, flow: 0 });
-      queueActiveFluid(LAVA, sx, sy, sz, 0);
+      if (queueActiveFluid(LAVA, sx, sy, sz, 0)) queued++;
     }
-    if (!seeds.length) return 0;
-    return spreadLavaFrom(seeds, limit);
+    return queued;
   }
   function spreadLavaFrom(seeds, limit = LAVA_FLOW_LIMIT) {
     const queue = seeds.slice();
@@ -1076,7 +1081,7 @@
       if (!inWorld(x, y, z) || filled >= limit) return false;
       const code = getBlock(x, y, z);
       if (!canLavaFill(code)) return false;
-      setBlock(x, y, z, code === WATER ? STONE : LAVA);
+      setFluidBlock(x, y, z, code === WATER ? STONE : LAVA);
       filled++;
       if (code !== WATER) {
         queueActiveFluid(LAVA, x, y, z, flow);
@@ -1108,8 +1113,12 @@
   }
   function processActiveWater(limit = WATER_FLOW_LIMIT) {
     let filled = 0;
-    while (activeWaterHead < state.activeWater.length && filled < limit) {
+    let scanned = 0;
+    const end = state.activeWater.length;
+    const scanLimit = Math.max(limit + 1, limit * FLUID_SCAN_MULTIPLIER);
+    while (activeWaterHead < end && filled < limit && scanned < scanLimit) {
       const p = state.activeWater[activeWaterHead++];
+      scanned++;
       activeWaterKeys.delete(fluidKey(p.x, p.y, p.z));
       if (getBlock(p.x, p.y, p.z) !== WATER) continue;
       filled += spreadWaterFrom([{ x: p.x, y: p.y, z: p.z }], limit - filled);
@@ -1119,8 +1128,12 @@
   }
   function processActiveLava(limit = LAVA_FLOW_LIMIT) {
     let filled = 0;
-    while (activeLavaHead < state.activeLava.length && filled < limit) {
+    let scanned = 0;
+    const end = state.activeLava.length;
+    const scanLimit = Math.max(limit + 1, limit * FLUID_SCAN_MULTIPLIER);
+    while (activeLavaHead < end && filled < limit && scanned < scanLimit) {
       const p = state.activeLava[activeLavaHead++];
+      scanned++;
       activeLavaKeys.delete(fluidKey(p.x, p.y, p.z));
       const code = getBlock(p.x, p.y, p.z);
       if (code !== LAVA) continue;
@@ -1413,8 +1426,40 @@
     disposeGroup(waterGroup);
     disposeGroup(lavaGroup);
     state.chunks.clear();
+    pendingFluidChunks.clear();
     chunkCenterKey = "";
     updateVisibleChunks(true);
+  }
+  function queueChunkRebuild(cx, cz) {
+    if (cx < 0 || cz < 0 || cx >= WORLD_X / CHUNK || cz >= WORLD_Z / CHUNK) return;
+    const key = `${cx},${cz}`;
+    if (state.chunks.has(key)) pendingFluidChunks.add(key);
+  }
+  function queueFluidChunkRebuildsNear(x, z) {
+    const cx = Math.floor(x / CHUNK);
+    const cz = Math.floor(z / CHUNK);
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if ((dx === 0 && dz === 0) || x % CHUNK === 0 || x % CHUNK === CHUNK - 1 || z % CHUNK === 0 || z % CHUNK === CHUNK - 1) {
+          queueChunkRebuild(cx + dx, cz + dz);
+        }
+      }
+    }
+  }
+  function flushFluidChunkRebuilds(limit = FLUID_CHUNK_REBUILDS_PER_FRAME) {
+    let rebuilt = 0;
+    for (const key of pendingFluidChunks) {
+      pendingFluidChunks.delete(key);
+      const parts = key.split(",");
+      const cx = Number(parts[0]);
+      const cz = Number(parts[1]);
+      if (Number.isFinite(cx) && Number.isFinite(cz) && state.chunks.has(key)) {
+        rebuildChunk(cx, cz);
+        rebuilt++;
+      }
+      if (rebuilt >= limit) break;
+    }
+    return rebuilt;
   }
   function rebuildChunksNear(x, z) {
     const cx = Math.floor(x / CHUNK);
@@ -4313,6 +4358,7 @@
       updateMining(dt);
       updatePlacing(dt);
       updateFluidSimulation(dt);
+      flushFluidChunkRebuilds();
       if (state.attackCd > 0) state.attackCd -= dt;
     }
     if (decorDirty) rebuildDecorations();
@@ -4539,6 +4585,7 @@
     flowLavaNear,
     processActiveWater,
     processActiveLava,
+    flushFluidChunkRebuilds,
     spreadLavaFrom,
     settleGeneratedLava,
     flowLiquidsNear,
@@ -4567,6 +4614,7 @@
         edgeOcean: EDGE_OCEAN,
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
+        pendingFluidChunks: pendingFluidChunks.size,
         caveCreatureCount: state.caveCreatures.length,
         activeWater: state.activeWater.length - activeWaterHead,
         activeLava: state.activeLava.length - activeLavaHead,

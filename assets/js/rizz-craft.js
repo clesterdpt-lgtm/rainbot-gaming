@@ -2156,13 +2156,6 @@
     camera.rotation.y = p.yaw;
     camera.rotation.x = p.pitch;
     camera.rotation.z = 0;
-    if (p.hurtAnim > 0) {
-      const strength = p.hurtAnim / PLAYER_HURT_SECONDS;
-      const shake = Math.sin(performance.now() * 0.09) * 0.035 * strength;
-      camera.position.x += Math.sin(performance.now() * 0.073) * 0.045 * strength;
-      camera.position.y += Math.cos(performance.now() * 0.061) * 0.03 * strength;
-      camera.rotation.z = shake;
-    }
   }
 
   function initHotbar() {

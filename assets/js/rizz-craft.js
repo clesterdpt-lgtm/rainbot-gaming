@@ -40,9 +40,9 @@
   const CHUNK = 16;
   const SEA_LEVEL = 48;
   const LAVA_LEVEL = 18;
-  const EDGE_OCEAN = 56;
-  const RENDER_RADIUS_CHUNKS = 6;
-  const DECOR_RADIUS_CHUNKS = 6;
+  const EDGE_OCEAN = 118;
+  const RENDER_RADIUS_CHUNKS = 8;
+  const DECOR_RADIUS_CHUNKS = 7;
   const HOTBAR = 9;
   const BAG_SLOTS = 27;
   const MAX_HP = 100;
@@ -1037,7 +1037,7 @@
         let h = SEA_LEVEL + 12 + (continent - 0.48) * 38 + (detail - 0.5) * 9 + Math.pow(ridges, 1.7) * 12;
         const ocean = edgeOceanStrength(x, z);
         if (ocean > 0) {
-          const shelf = SEA_LEVEL - 9 + noise2(x + 17, z - 23, 0.09) * 2;
+          const shelf = SEA_LEVEL - 8 - smooth(ocean) * 16 + noise2(x + 17, z - 23, 0.055) * 4 + fbm2(x - 160, z + 220, 0.018, 3) * 3;
           h = lerp(h, shelf, smooth(ocean));
         }
         const spawnBlend = clamp(1 - center / 20, 0, 1);
@@ -1120,6 +1120,7 @@
         const y = state.surface[si];
         const top = getBlock(x, y, z);
         const biome = BIOMES[state.biome[si]];
+        if (y <= SEA_LEVEL) continue;
         if (top !== DIRT && top !== GRASS && top !== SNOW && !(top === SAND && biome.surface === "sand")) continue;
         const spawnDist = Math.hypot(x - WORLD_X / 2, z - WORLD_Z / 2);
         if (canPlaceTreeSeed(x, z, biome, spawnDist)) {
@@ -1301,7 +1302,7 @@
             const ny = y + face.n[1];
             const nz = z + face.n[2];
             const neighbor = getBlock(nx, ny, nz);
-            const visible = code === WATER ? neighbor !== WATER && neighbor !== BEDROCK : code === LAVA ? neighbor !== LAVA && neighbor !== BEDROCK : !occludes(neighbor);
+            const visible = code === WATER ? !waterOccupiesNeighbor(neighbor) : code === LAVA ? neighbor !== LAVA && neighbor !== BEDROCK : !occludes(neighbor);
             if (visible) pushFace(arr, x, y, z, code, face);
           }
         }
@@ -1323,6 +1324,9 @@
       lavaGroup.add(entry.lava);
     }
     state.chunks.set(key, entry);
+  }
+  function waterOccupiesNeighbor(code) {
+    return code === WATER || code === BEDROCK || code === TALL_GRASS || code === FLOWER;
   }
   function makeGeometryArrays() {
     return { positions: [], normals: [], colors: [], uvs: [], indices: [] };
@@ -1451,13 +1455,14 @@
         if (cx < 0 || cz < 0 || cx >= WORLD_X / CHUNK || cz >= WORLD_Z / CHUNK) continue;
         if (Math.hypot(cx - pcx, cz - pcz) > DECOR_RADIUS_CHUNKS + 0.45) continue;
         for (let z = cz * CHUNK; z < cz * CHUNK + CHUNK; z++) {
-          for (let y = 1; y < WORLD_Y; y++) {
-            for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
+          for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
+            for (let y = 1; y < WORLD_Y; y++) {
               const code = getBlock(x, y, z);
               if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
               if (code === TABLE) pushCraftingToilet(arr, x, y, z);
               if (code === TORCH) pushTorch(arr, x, y, z);
             }
+            pushAquaticDecor(arr, x, z);
           }
         }
       }
@@ -1502,6 +1507,54 @@
       pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, w, h, color, rot, lean);
       if (i % 2 === 0) pushBlade(arr, x + 0.5 + ox * 0.7, y, z + 0.5 + oz * 0.7, w * 0.75, h * 0.78, color, rot + Math.PI / 2, -lean * 0.6);
     }
+  }
+  function pushAquaticDecor(arr, x, z) {
+    if (x < 1 || z < 1 || x >= WORLD_X - 1 || z >= WORLD_Z - 1) return;
+    const floorY = state.surface[surfaceIndex(x, z)];
+    const depth = SEA_LEVEL - floorY;
+    if (depth < 2 || getBlock(x, floorY + 1, z) !== WATER) return;
+    const floor = getBlock(x, floorY, z);
+    if (floor !== SAND && floor !== DIRT && floor !== STONE) return;
+    const ocean = edgeOceanStrength(x, z);
+    const roll = hash2(x * 97 + 13, z * 101 - 17);
+    if (roll < 0.34 || (ocean > 0.32 && roll < 0.5)) pushSeaGrass(arr, x, floorY + 1, z, depth, roll);
+    if (depth > 3 && roll > 0.58 && roll < 0.68) pushCoral(arr, x, floorY + 1, z, roll);
+    if (depth > 5 && roll > 0.83) pushFish(arr, x, floorY + 1 + Math.min(depth - 2, 3) * hash2(x - 31, z + 47), z, roll);
+  }
+  function pushSeaGrass(arr, x, y, z, depth, seed) {
+    const clusters = 3 + Math.floor(hash2(x + 19, z - 23) * 4);
+    const maxHeight = Math.min(depth - 0.45, 2.4);
+    for (let i = 0; i < clusters; i++) {
+      const ox = (hash2(x + i * 7, z - i * 11) - 0.5) * 0.62;
+      const oz = (hash2(x - i * 13, z + i * 17) - 0.5) * 0.62;
+      const h = clamp(0.45 + hash2(x + i * 23, z - i * 29) * 1.6, 0.3, maxHeight);
+      const w = 0.09 + hash2(x - i * 31, z + i * 5) * 0.08;
+      const color = vividRgb(mixRgb(cachedRgb("#1fbf7a"), cachedRgb("#83ff9b"), hash2(x + i, z - i) * 0.4), 1.22, 1.05);
+      const rot = seed * Math.PI * 2 + i * 0.86;
+      const lean = (hash2(x + i * 37, z - i * 41) - 0.5) * 0.22;
+      pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, w, h, color, rot, lean);
+      pushBlade(arr, x + 0.5 + ox * 0.7, y, z + 0.5 + oz * 0.7, w * 0.72, h * 0.82, color, rot + Math.PI / 2, -lean * 0.5);
+    }
+  }
+  function pushCoral(arr, x, y, z, seed) {
+    const palette = ["#ff6fa8", "#ffbd3f", "#43e6ff", "#9bff66"];
+    const color = cachedRgb(palette[Math.floor(seed * palette.length) % palette.length]);
+    const cx = x + 0.34 + hash2(x + 3, z - 5) * 0.32;
+    const cz = z + 0.34 + hash2(x - 7, z + 11) * 0.32;
+    pushTinyBox(arr, cx, y, cz, 0.22, 0.22, 0.22, vividRgb(color, 1.14, 1.04));
+    pushTinyBox(arr, cx + 0.08, y + 0.16, cz + 0.05, 0.16, 0.34, 0.16, vividRgb(color, 1.18, 1.08));
+    pushTinyBox(arr, cx - 0.08, y + 0.28, cz + 0.09, 0.14, 0.22, 0.14, vividRgb(color, 1.18, 1.1));
+    pushTinyBox(arr, cx + 0.18, y + 0.38, cz - 0.05, 0.12, 0.18, 0.12, vividRgb(color, 1.22, 1.12));
+  }
+  function pushFish(arr, x, y, z, seed) {
+    const palette = ["#ffbd3f", "#43e6ff", "#ff6fa8", "#e8fff3"];
+    const color = cachedRgb(palette[Math.floor(seed * palette.length) % palette.length]);
+    const cx = x + 0.3 + hash2(x + 41, z - 43) * 0.4;
+    const cz = z + 0.3 + hash2(x - 47, z + 53) * 0.4;
+    const body = vividRgb(color, 1.2, 1.12);
+    pushTinyBox(arr, cx - 0.16, y, cz - 0.05, 0.32, 0.12, 0.1, body);
+    pushTinyBox(arr, cx + 0.11, y + 0.02, cz - 0.035, 0.1, 0.08, 0.07, vividRgb(body, 1.05, 0.9));
+    pushBlade(arr, cx - 0.2, y - 0.01, cz, 0.16, 0.18, body, seed * Math.PI * 2, 0.02);
   }
   function pushBlade(arr, cx, y, cz, w, h, rgb, rot, lean) {
     const start = arr.positions.length / 3;

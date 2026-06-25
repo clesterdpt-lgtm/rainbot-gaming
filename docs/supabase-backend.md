@@ -52,12 +52,13 @@ In Supabase Auth settings:
 
 - Add the live site URL to allowed redirect URLs.
 - For local testing, add your localhost URL.
-- Email magic links work first. OAuth providers can be added later.
+- Email/password and magic links share the same Supabase profiles.
+- To enable Google login, create a Google OAuth client, then add its client ID and secret in Supabase Auth > Sign In / Providers > Google.
 
 ## 5. Smoke test
 
 1. Open `community.html`.
-2. Send yourself a magic link.
+2. Create an account with email/password or send yourself a magic link.
 3. Set a display name from the Profile modal.
 4. Create a forum topic and reply.
 5. Play a game with a saved run, sign in, and use Profile > Sync Now.

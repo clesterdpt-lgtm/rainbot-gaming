@@ -20,6 +20,7 @@ const RBBackend = (() => {
     user: null,
     profile: null,
     error: "",
+    passwordRecovery: false,
   };
 
   function getState() {
@@ -66,6 +67,24 @@ const RBBackend = (() => {
 
   function cleanText(value, maxLength) {
     return String(value || "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+  }
+
+  function cleanEmail(value) {
+    return cleanText(value, 254).toLowerCase();
+  }
+
+  function cleanPassword(value) {
+    return String(value || "");
+  }
+
+  function validateEmail(email) {
+    if (!email || !email.includes("@")) throw new Error("Enter a valid email.");
+    return email;
+  }
+
+  function validatePassword(password) {
+    if (password.length < 8) throw new Error("Password needs at least 8 characters.");
+    return password;
   }
 
   function cleanBody(value, maxLength) {
@@ -181,8 +200,13 @@ const RBBackend = (() => {
           },
         });
 
-        client.auth.onAuthStateChange((_event, session) => {
-          hydrateUser(session && session.user ? session.user : null);
+        client.auth.onAuthStateChange((event, session) => {
+          const isRecovery = event === "PASSWORD_RECOVERY";
+          if (event === "SIGNED_OUT") setState({ passwordRecovery: false });
+          hydrateUser(session && session.user ? session.user : null).then(() => {
+            if (isRecovery) setState({ passwordRecovery: true });
+            else if (event === "SIGNED_IN") setState({ passwordRecovery: false });
+          });
         });
 
         const { data, error } = await client.auth.getSession();
@@ -204,10 +228,9 @@ const RBBackend = (() => {
     return initPromise;
   }
 
-  async function signInWithEmail(email) {
+  async function signInWithMagicLink(email) {
     const activeClient = await requireClient();
-    const cleanedEmail = cleanText(email, 254).toLowerCase();
-    if (!cleanedEmail || !cleanedEmail.includes("@")) throw new Error("Enter a valid email.");
+    const cleanedEmail = validateEmail(cleanEmail(email));
     const { error } = await activeClient.auth.signInWithOtp({
       email: cleanedEmail,
       options: { emailRedirectTo: config.emailRedirectTo || window.location.href },
@@ -215,6 +238,65 @@ const RBBackend = (() => {
     if (error) throw error;
     return true;
   }
+
+  async function signUpWithPassword(email, password) {
+    const activeClient = await requireClient();
+    const cleanedEmail = validateEmail(cleanEmail(email));
+    const cleanedPassword = validatePassword(cleanPassword(password));
+    const { data, error } = await activeClient.auth.signUp({
+      email: cleanedEmail,
+      password: cleanedPassword,
+      options: { emailRedirectTo: config.emailRedirectTo || window.location.href },
+    });
+    if (error) throw error;
+    if (data && data.session && data.session.user) await hydrateUser(data.session.user);
+    return data;
+  }
+
+  async function signInWithPassword(email, password) {
+    const activeClient = await requireClient();
+    const cleanedEmail = validateEmail(cleanEmail(email));
+    const cleanedPassword = validatePassword(cleanPassword(password));
+    const { data, error } = await activeClient.auth.signInWithPassword({
+      email: cleanedEmail,
+      password: cleanedPassword,
+    });
+    if (error) throw error;
+    if (data && data.user) await hydrateUser(data.user);
+    return data;
+  }
+
+  async function requestPasswordReset(email) {
+    const activeClient = await requireClient();
+    const cleanedEmail = validateEmail(cleanEmail(email));
+    const { error } = await activeClient.auth.resetPasswordForEmail(cleanedEmail, {
+      redirectTo: config.emailRedirectTo || window.location.href,
+    });
+    if (error) throw error;
+    return true;
+  }
+
+  async function updatePassword(password) {
+    const activeClient = await requireClient();
+    const cleanedPassword = validatePassword(cleanPassword(password));
+    const { data, error } = await activeClient.auth.updateUser({ password: cleanedPassword });
+    if (error) throw error;
+    setState({ passwordRecovery: false, error: "" });
+    if (data && data.user) await hydrateUser(data.user);
+    return data;
+  }
+
+  async function signInWithGoogle() {
+    const activeClient = await requireClient();
+    const { data, error } = await activeClient.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: config.emailRedirectTo || window.location.href },
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  const signInWithEmail = signInWithMagicLink;
 
   async function signOut() {
     const activeClient = await requireClient();
@@ -404,6 +486,12 @@ const RBBackend = (() => {
     onChange,
     getState,
     signInWithEmail,
+    signInWithMagicLink,
+    signUpWithPassword,
+    signInWithPassword,
+    requestPasswordReset,
+    updatePassword,
+    signInWithGoogle,
     signOut,
     updateProfile,
     saveGame,

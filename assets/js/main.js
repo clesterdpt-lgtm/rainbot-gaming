@@ -392,13 +392,34 @@ function openAuthModal() {
     </div>
   `;
   const loginBody = `
-    <form class="rb-auth-form" id="rb-auth-form">
-      <label class="rb-form-field" for="rb-auth-email">
+    <div class="rb-auth-tabs" role="tablist" aria-label="Login method">
+      <button class="rb-auth-tab is-active" type="button" role="tab" aria-selected="true" data-auth-mode="password">Password</button>
+      <button class="rb-auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="magic">Magic Link</button>
+    </div>
+    <form class="rb-auth-form rb-auth-panel" id="rb-password-auth-form" data-auth-panel="password">
+      <label class="rb-form-field" for="rb-password-email">
         <span>Email</span>
-        <input id="rb-auth-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+        <input id="rb-password-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </label>
+      <label class="rb-form-field" for="rb-auth-password">
+        <span>Password</span>
+        <input id="rb-auth-password" type="password" autocomplete="current-password" minlength="8" required />
+      </label>
+      <div class="rb-auth-actions">
+        <button class="btn btn--primary" type="submit">Sign In</button>
+        <button class="btn btn--secondary" id="rb-create-account" type="button">Create Account</button>
+        <button class="btn btn--ghost" id="rb-reset-password" type="button">Reset Password</button>
+      </div>
+    </form>
+    <form class="rb-auth-form rb-auth-panel" id="rb-magic-auth-form" data-auth-panel="magic" hidden>
+      <label class="rb-form-field" for="rb-magic-email">
+        <span>Email</span>
+        <input id="rb-magic-email" type="email" autocomplete="email" placeholder="you@example.com" required />
       </label>
       <button class="btn btn--primary" type="submit">Send Magic Link</button>
     </form>
+    <div class="rb-auth-divider"><span>or</span></div>
+    <button class="btn btn--secondary rb-google-button" id="rb-google-auth" type="button">Continue with Google</button>
     <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, and forum posts.</p>
     <div class="modal__actions">
       <button class="btn btn--ghost" id="rb-close-auth" type="button">Close</button>
@@ -418,17 +439,80 @@ function openAuthModal() {
     if (event.target === backdrop) close();
   });
 
-  const form = backdrop.querySelector("#rb-auth-form");
-  if (form) {
-    const email = form.querySelector("#rb-auth-email");
-    email.focus();
-    form.addEventListener("submit", async (event) => {
+  const passwordForm = backdrop.querySelector("#rb-password-auth-form");
+  const magicForm = backdrop.querySelector("#rb-magic-auth-form");
+  const googleButton = backdrop.querySelector("#rb-google-auth");
+  if (passwordForm && magicForm) {
+    const passwordEmail = passwordForm.querySelector("#rb-password-email");
+    const passwordInput = passwordForm.querySelector("#rb-auth-password");
+    const magicEmail = magicForm.querySelector("#rb-magic-email");
+    const setMode = (mode) => {
+      const usePassword = mode === "password";
+      passwordForm.hidden = !usePassword;
+      magicForm.hidden = usePassword;
+      backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
+        const isActive = button.dataset.authMode === mode;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      setModalStatus(backdrop, "", "");
+      (usePassword ? passwordEmail : magicEmail).focus();
+    };
+    backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
+      button.addEventListener("click", () => setMode(button.dataset.authMode));
+    });
+    passwordEmail.focus();
+    passwordForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const button = form.querySelector("button[type='submit']");
+      const button = passwordForm.querySelector("button[type='submit']");
+      button.disabled = true;
+      setModalStatus(backdrop, "Signing in...", "");
+      try {
+        await window.RBBackend.signInWithPassword(passwordEmail.value, passwordInput.value);
+        setModalStatus(backdrop, "Signed in.", "good");
+        RB.toast("Signed in", "good");
+        close();
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    backdrop.querySelector("#rb-create-account").addEventListener("click", async () => {
+      const button = backdrop.querySelector("#rb-create-account");
+      button.disabled = true;
+      setModalStatus(backdrop, "Creating account...", "");
+      try {
+        await window.RBBackend.signUpWithPassword(passwordEmail.value, passwordInput.value);
+        setModalStatus(backdrop, "Account created. Check your email if confirmation is required.", "good");
+        RB.toast("Account created", "good");
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Account creation failed.", "bad");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    backdrop.querySelector("#rb-reset-password").addEventListener("click", async () => {
+      const button = backdrop.querySelector("#rb-reset-password");
+      button.disabled = true;
+      setModalStatus(backdrop, "Sending reset email...", "");
+      try {
+        await window.RBBackend.requestPasswordReset(passwordEmail.value);
+        setModalStatus(backdrop, "Check your email for the password reset link.", "good");
+        RB.toast("Reset email sent", "good");
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Reset failed.", "bad");
+      } finally {
+        button.disabled = false;
+      }
+    });
+    magicForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = magicForm.querySelector("button[type='submit']");
       button.disabled = true;
       setModalStatus(backdrop, "Sending sign-in link...", "");
       try {
-        await window.RBBackend.signInWithEmail(email.value);
+        await window.RBBackend.signInWithMagicLink(magicEmail.value);
         setModalStatus(backdrop, "Check your email for the Rainbot sign-in link.", "good");
         RB.toast("Magic link sent", "good");
       } catch (error) {
@@ -438,6 +522,75 @@ function openAuthModal() {
       }
     });
   }
+  if (googleButton) {
+    googleButton.addEventListener("click", async () => {
+      googleButton.disabled = true;
+      setModalStatus(backdrop, "Opening Google sign-in...", "");
+      try {
+        await window.RBBackend.signInWithGoogle();
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Google sign-in failed.", "bad");
+        googleButton.disabled = false;
+      }
+    });
+  }
+}
+
+function openPasswordRecoveryModal() {
+  if (document.getElementById("rb-password-recovery-modal")) return;
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop modal-backdrop--open";
+  backdrop.id = "rb-password-recovery-modal";
+  backdrop.innerHTML = `
+    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-password-recovery-title">
+      <div class="modal__title" id="rb-password-recovery-title">Reset Password</div>
+      <form class="rb-auth-form" id="rb-password-recovery-form">
+        <label class="rb-form-field" for="rb-new-password">
+          <span>New Password</span>
+          <input id="rb-new-password" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <label class="rb-form-field" for="rb-confirm-password">
+          <span>Confirm Password</span>
+          <input id="rb-confirm-password" type="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <button class="btn btn--primary" type="submit">Save Password</button>
+      </form>
+      <div class="modal__actions">
+        <button class="btn btn--ghost" id="rb-close-recovery" type="button">Close</button>
+      </div>
+      <p class="rb-modal-status" data-modal-status></p>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  const form = backdrop.querySelector("#rb-password-recovery-form");
+  const passwordInput = backdrop.querySelector("#rb-new-password");
+  const confirmInput = backdrop.querySelector("#rb-confirm-password");
+  backdrop.querySelector("#rb-close-recovery").addEventListener("click", close);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) close();
+  });
+  passwordInput.focus();
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = form.querySelector("button[type='submit']");
+    if (passwordInput.value !== confirmInput.value) {
+      setModalStatus(backdrop, "Passwords do not match.", "bad");
+      return;
+    }
+    button.disabled = true;
+    setModalStatus(backdrop, "Saving password...", "");
+    try {
+      await window.RBBackend.updatePassword(passwordInput.value);
+      setModalStatus(backdrop, "Password saved.", "good");
+      RB.toast("Password updated", "good");
+      close();
+    } catch (error) {
+      setModalStatus(backdrop, error.message || "Password update failed.", "bad");
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 function openProfileModal() {
@@ -539,8 +692,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260624-backend-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260624-backend-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-auth-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-auth-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }
@@ -569,6 +722,9 @@ let lastCloudSyncUserId = "";
 function handleBackendAuthChange(event) {
   const backendState = event.detail || getBackendState();
   renderNav(RB.state);
+  if (backendState.passwordRecovery && backendState.user) {
+    openPasswordRecoveryModal();
+  }
   if (!backendState.ready || !backendState.user) {
     lastCloudSyncUserId = "";
     return;

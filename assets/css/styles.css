@@ -6333,6 +6333,70 @@ body.arcade-home::before {
   margin: 18px 0;
 }
 
+.rb-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 16px 0 4px;
+  padding: 4px;
+  border: 1px solid rgba(151, 171, 194, 0.22);
+  border-radius: 6px;
+  background: rgba(5, 7, 13, 0.72);
+}
+
+.rb-auth-tab {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--arcade-muted);
+  cursor: pointer;
+  font: 800 12px/1 var(--font-mono);
+  padding: 10px 8px;
+  text-transform: uppercase;
+}
+
+.rb-auth-tab.is-active {
+  background: rgba(35, 223, 242, 0.14);
+  color: var(--arcade-cyan);
+}
+
+.rb-auth-panel[hidden] {
+  display: none;
+}
+
+.rb-auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.rb-auth-actions .btn:first-child {
+  grid-column: 1 / -1;
+}
+
+.rb-auth-divider {
+  align-items: center;
+  color: var(--arcade-muted);
+  display: grid;
+  font: 800 11px/1 var(--font-mono);
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  letter-spacing: 0;
+  margin: 12px 0;
+  text-transform: uppercase;
+}
+
+.rb-auth-divider::before,
+.rb-auth-divider::after {
+  background: rgba(151, 171, 194, 0.24);
+  content: "";
+  height: 1px;
+}
+
+.rb-google-button {
+  width: 100%;
+}
+
 .rb-form-field {
   display: grid;
   gap: 7px;
@@ -6705,5 +6769,13 @@ body.arcade-home::before {
   .rb-profile-actions .btn,
   .rb-auth-form .btn {
     width: 100%;
+  }
+
+  .rb-auth-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .rb-auth-actions .btn:first-child {
+    grid-column: auto;
   }
 }

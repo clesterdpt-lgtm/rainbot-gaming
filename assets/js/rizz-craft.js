@@ -53,11 +53,17 @@
   const WATER_GRAVITY_MULT = 0.22;
   const SWIM_UP_SPEED = 4.4;
   const WATER_FLOW_LIMIT = 96;
+  const WATER_FLOW_BURST_LIMIT = 18;
+  const WATER_FLOW_TICK_SECONDS = 0.025;
   const LAVA_MOVE_MULT = 0.34;
   const LAVA_GRAVITY_MULT = 0.12;
   const LAVA_SWIM_UP_SPEED = 2.2;
   const LAVA_FALL_SPEED = -1.15;
   const LAVA_FLOW_LIMIT = 64;
+  const LAVA_FLOW_BURST_LIMIT = 7;
+  const LAVA_FLOW_TICK_SECONDS = 0.14;
+  const LAVA_LATERAL_RANGE = 6;
+  const ACTIVE_FLUID_QUEUE_LIMIT = 7000;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -351,6 +357,10 @@
     mobs: [],
     caveCreatures: [],
     friendlies: [],
+    activeWater: [],
+    activeLava: [],
+    waterFlowTimer: 0,
+    lavaFlowTimer: 0,
     fx: [],
     hotbar: [],
     bag: [],
@@ -406,6 +416,10 @@
   let mobSpawnSerial = 0;
   let sunDisk = null;
   let moonDisk = null;
+  let activeWaterHead = 0;
+  let activeLavaHead = 0;
+  const activeWaterKeys = new Set();
+  const activeLavaKeys = new Set();
   const reusableVector = new THREE.Vector3();
   const moveForwardVector = new THREE.Vector3();
   const moveRightVector = new THREE.Vector3();
@@ -545,6 +559,56 @@
   }
   function canLavaFill(code) {
     return code === AIR || isReplaceableDecor(code) || code === WATER;
+  }
+  function fluidKey(x, y, z) {
+    return `${x | 0},${y | 0},${z | 0}`;
+  }
+  function resetActiveFluids() {
+    state.activeWater.length = 0;
+    state.activeLava.length = 0;
+    activeWaterKeys.clear();
+    activeLavaKeys.clear();
+    activeWaterHead = 0;
+    activeLavaHead = 0;
+    state.waterFlowTimer = 0;
+    state.lavaFlowTimer = 0;
+  }
+  function trimActiveFluidQueue(code) {
+    if (code === WATER && activeWaterHead > 256) {
+      state.activeWater = state.activeWater.slice(activeWaterHead);
+      activeWaterHead = 0;
+    } else if (code === LAVA && activeLavaHead > 256) {
+      state.activeLava = state.activeLava.slice(activeLavaHead);
+      activeLavaHead = 0;
+    }
+  }
+  function queueActiveFluid(code, x, y, z, flow = 0, ambient = false) {
+    x |= 0; y |= 0; z |= 0;
+    if (!inWorld(x, y, z)) return false;
+    trimActiveFluidQueue(code);
+    const isWater = code === WATER;
+    const queue = isWater ? state.activeWater : state.activeLava;
+    const keys = isWater ? activeWaterKeys : activeLavaKeys;
+    const head = isWater ? activeWaterHead : activeLavaHead;
+    if (queue.length - head >= ACTIVE_FLUID_QUEUE_LIMIT) return false;
+    const key = fluidKey(x, y, z);
+    if (keys.has(key)) return false;
+    keys.add(key);
+    queue.push({ x, y, z, flow, ambient: !!ambient });
+    return true;
+  }
+  function queueFluidNeighborhood(x, y, z) {
+    const dirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+    for (const dir of dirs) {
+      const sx = x + dir[0];
+      const sy = y + dir[1];
+      const sz = z + dir[2];
+      const code = getBlock(sx, sy, sz);
+      if (code === WATER) queueActiveFluid(WATER, sx, sy, sz);
+      else if (code === LAVA) queueActiveFluid(LAVA, sx, sy, sz, 0);
+    }
+    if (y <= LAVA_LEVEL && canLavaFill(getBlock(x, y, z))) queueActiveFluid(LAVA, x, y, z, 0, true);
+    if (y - 1 <= LAVA_LEVEL && canLavaFill(getBlock(x, y - 1, z))) queueActiveFluid(LAVA, x, y - 1, z, 0, true);
   }
 
   function hash32(n) {
@@ -921,7 +985,7 @@
     rebuildChunksNear(x, z);
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
-  function flowWaterNear(x, y, z, limit = WATER_FLOW_LIMIT) {
+  function flowWaterNear(x, y, z, limit = WATER_FLOW_BURST_LIMIT) {
     const seeds = [];
     const seenSeeds = new Set();
     const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
@@ -933,6 +997,7 @@
       if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== WATER) continue;
       seenSeeds.add(key);
       seeds.push({ x: sx, y: sy, z: sz });
+      queueActiveFluid(WATER, sx, sy, sz);
     }
     if (!seeds.length) return 0;
     return spreadWaterFrom(seeds, limit);
@@ -947,10 +1012,12 @@
       if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== WATER) return;
       queued.add(key);
       queue.push({ x, y, z });
+      queueActiveFluid(WATER, x, y, z);
     }
     function fill(x, y, z) {
       if (!inWorld(x, y, z) || !canWaterFill(getBlock(x, y, z)) || filled >= limit) return false;
       setBlock(x, y, z, WATER);
+      queueActiveFluid(WATER, x, y, z);
       filled++;
       const key = `${x},${y},${z}`;
       if (!queued.has(key)) {
@@ -978,7 +1045,7 @@
     }
     return filled;
   }
-  function flowLavaNear(x, y, z, limit = LAVA_FLOW_LIMIT) {
+  function flowLavaNear(x, y, z, limit = LAVA_FLOW_BURST_LIMIT) {
     const seeds = [];
     const seenSeeds = new Set();
     const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
@@ -990,6 +1057,7 @@
       if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== LAVA) continue;
       seenSeeds.add(key);
       seeds.push({ x: sx, y: sy, z: sz, flow: 0 });
+      queueActiveFluid(LAVA, sx, sy, sz, 0);
     }
     if (!seeds.length) return 0;
     return spreadLavaFrom(seeds, limit);
@@ -1004,6 +1072,7 @@
       if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== LAVA) return;
       queued.add(key);
       queue.push({ x, y, z, flow });
+      queueActiveFluid(LAVA, x, y, z, flow);
     }
     function fill(x, y, z, flow) {
       if (!inWorld(x, y, z) || filled >= limit) return false;
@@ -1012,6 +1081,7 @@
       setBlock(x, y, z, code === WATER ? STONE : LAVA);
       filled++;
       if (code !== WATER) {
+        queueActiveFluid(LAVA, x, y, z, flow);
         const key = `${x},${y},${z}`;
         if (!queued.has(key)) {
           queued.add(key);
@@ -1030,7 +1100,7 @@
         continue;
       }
       if (below !== LAVA && !isSolidBlock(below)) continue;
-      if (p.flow >= 2) continue;
+      if (p.flow >= LAVA_LATERAL_RANGE) continue;
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
       const offset = Math.floor(hash3(p.x, p.y, p.z) * dirs.length);
       for (let step = 0; step < dirs.length && filled < limit; step++) {
@@ -1042,6 +1112,53 @@
       }
     }
     return filled;
+  }
+  function processActiveWater(limit = WATER_FLOW_LIMIT) {
+    let filled = 0;
+    while (activeWaterHead < state.activeWater.length && filled < limit) {
+      const p = state.activeWater[activeWaterHead++];
+      activeWaterKeys.delete(fluidKey(p.x, p.y, p.z));
+      if (getBlock(p.x, p.y, p.z) !== WATER) continue;
+      filled += spreadWaterFrom([{ x: p.x, y: p.y, z: p.z }], limit - filled);
+    }
+    trimActiveFluidQueue(WATER);
+    return filled;
+  }
+  function processActiveLava(limit = LAVA_FLOW_LIMIT) {
+    let filled = 0;
+    while (activeLavaHead < state.activeLava.length && filled < limit) {
+      const p = state.activeLava[activeLavaHead++];
+      activeLavaKeys.delete(fluidKey(p.x, p.y, p.z));
+      let code = getBlock(p.x, p.y, p.z);
+      if (code !== LAVA) {
+        if (!p.ambient || p.y > LAVA_LEVEL || !canLavaFill(code)) continue;
+        setBlock(p.x, p.y, p.z, code === WATER ? STONE : LAVA);
+        filled++;
+        if (code === WATER || filled >= limit) continue;
+        queueActiveFluid(LAVA, p.x, p.y, p.z, 0);
+        code = LAVA;
+      }
+      if (code !== LAVA) continue;
+      filled += spreadLavaFrom([{ x: p.x, y: p.y, z: p.z, flow: p.flow || 0 }], limit - filled);
+    }
+    trimActiveFluidQueue(LAVA);
+    return filled;
+  }
+  function updateFluidSimulation(dt) {
+    state.waterFlowTimer += dt;
+    state.lavaFlowTimer += dt;
+    let waterSteps = 0;
+    while (state.waterFlowTimer >= WATER_FLOW_TICK_SECONDS && waterSteps < 4) {
+      state.waterFlowTimer -= WATER_FLOW_TICK_SECONDS;
+      processActiveWater(WATER_FLOW_BURST_LIMIT);
+      waterSteps++;
+    }
+    let lavaSteps = 0;
+    while (state.lavaFlowTimer >= LAVA_FLOW_TICK_SECONDS && lavaSteps < 2) {
+      state.lavaFlowTimer -= LAVA_FLOW_TICK_SECONDS;
+      processActiveLava(LAVA_FLOW_BURST_LIMIT);
+      lavaSteps++;
+    }
   }
   function settleGeneratedLava() {
     for (let z = 1; z < WORLD_Z - 1; z++) {
@@ -1063,8 +1180,9 @@
     }
   }
   function flowLiquidsNear(x, y, z) {
-    const water = flowWaterNear(x, y, z);
-    const lava = flowLavaNear(x, y, z);
+    queueFluidNeighborhood(x, y, z);
+    const water = flowWaterNear(x, y, z, WATER_FLOW_BURST_LIMIT);
+    const lava = flowLavaNear(x, y, z, LAVA_FLOW_BURST_LIMIT);
     return water + lava;
   }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
@@ -1073,6 +1191,7 @@
   function generateWorld(seed = ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0)) {
     state.seed = seed >>> 0;
     state.edits.clear();
+    resetActiveFluids();
     state.world.fill(AIR);
     state.surface.fill(SEA_LEVEL);
     state.biome.fill(0);
@@ -1779,6 +1898,7 @@
         knockTimer: 0,
         knockX: 0,
         knockZ: 0,
+        stuckTimer: 0,
         buddy: -1,
         walkPhase: hash2(i * 37 + 2, i * 41 - 4) * Math.PI * 2,
         stepTimer: 0.2 + hash2(i * 59 + 6, i * 43 - 7) * 0.5,
@@ -1894,11 +2014,11 @@
     const threat = nearestFriendlyThreat(friendly, 9);
     if (threat) {
       chooseFriendlyFlee(friendly, threat, salt);
-    } else if (isNight() && roll < 0.26) {
+    } else if (isNight() && roll < 0.12) {
       friendly.action = "sleep";
-      friendly.actionTimer = 2.4 + roll * 5.5;
+      friendly.actionTimer = 1.5 + roll * 3.2;
       friendly.buddy = -1;
-    } else if (playerDist < 6.8 && roll < 0.35) {
+    } else if (playerDist < 6.8 && roll < 0.24) {
       friendly.buddy = -1;
       if (playerDist > 3.3 && setFriendlyFollowTarget(friendly, salt)) {
         friendly.action = "follow";
@@ -1908,27 +2028,22 @@
         friendly.actionTimer = 0.9 + roll * 1.6;
         friendly.turn = Math.atan2(dxp, dzp) + Math.PI;
       }
-    } else if (roll < 0.3 && chooseFriendlyBuddyAction(friendly, salt)) {
+    } else if (roll < 0.2 && chooseFriendlyBuddyAction(friendly, salt)) {
       return;
-    } else if (friendly.type === 2 && roll < 0.58 && setFriendlyRoamTarget(friendly, salt, 1.4, 4.2, 0.15)) {
+    } else if (friendly.type === 2 && roll < 0.44 && setFriendlyRoamTarget(friendly, salt, 1.4, 4.8, 0.15)) {
       friendly.action = "hop";
       friendly.actionTimer = 1.1 + roll * 2.1;
-    } else if (roll < 0.78) {
+    } else if (roll < 0.9 && setFriendlyRoamTarget(friendly, salt, 1.4, 10.5, 0.28)) {
       friendly.action = "wander";
-      friendly.actionTimer = 2.2 + roll * 3.6;
+      friendly.actionTimer = 1.8 + roll * 3.2;
       friendly.buddy = -1;
-      setFriendlyRoamTarget(friendly, salt, 2, 8.5, 0.32);
-    } else if (roll < 0.9) {
+    } else if (roll < 0.96) {
       friendly.action = friendly.type === 2 ? "peck" : "graze";
-      friendly.actionTimer = 1.4 + roll * 2;
-      friendly.buddy = -1;
-    } else if (roll < 0.98) {
-      friendly.action = "dance";
-      friendly.actionTimer = 1.1 + roll * 1.8;
+      friendly.actionTimer = 0.9 + roll * 1.35;
       friendly.buddy = -1;
     } else {
-      friendly.action = "idle";
-      friendly.actionTimer = 1.2 + roll * 2.4;
+      friendly.action = "dance";
+      friendly.actionTimer = 0.9 + roll * 1.5;
       friendly.buddy = -1;
     }
   }
@@ -1964,6 +2079,13 @@
     const nz = friendly.z + dirZ * step;
     const ground = friendlyGroundAt(nx, nz);
     if (ground === null) {
+      friendly.stuckTimer = (friendly.stuckTimer || 0) + dt;
+      if (friendly.stuckTimer > 0.16 && setFriendlyRoamTarget(friendly, salt + 137, 1.2, 5.5, 0.55)) {
+        friendly.action = "wander";
+        friendly.actionTimer = 1.2 + hash2(salt * 31 + 7, salt * 37 - 11) * 1.8;
+        friendly.stuckTimer = 0;
+        return false;
+      }
       if (friendly.action === "flee") {
         const threat = nearestFriendlyThreat(friendly, 12);
         if (threat) chooseFriendlyFlee(friendly, threat, salt + 61);
@@ -1972,11 +2094,13 @@
     }
     const nextY = ground + 1;
     if (Math.abs(nextY - friendly.y) > 1.25) {
+      friendly.stuckTimer = (friendly.stuckTimer || 0) + dt;
       chooseFriendlyAction(friendly, salt + 73);
       return false;
     }
     friendly.x = nx;
     friendly.z = nz;
+    friendly.stuckTimer = 0;
     if (Math.abs(nextY - friendly.y) > 0.28 || friendly.action === "hop") friendly.hopTimer = Math.max(friendly.hopTimer || 0, 0.32);
     friendly.y = nextY;
     friendly.turn = Math.atan2(dirX, dirZ) + Math.PI;
@@ -2031,6 +2155,25 @@
       friendly.targetZ = friendly.homeZ;
       return true;
     }
+    return setFriendlyFallbackStep(friendly, salt);
+  }
+  function setFriendlyFallbackStep(friendly, salt) {
+    const baseGround = friendlyGroundAt(friendly.x, friendly.z);
+    for (let ring = 0; ring < 3; ring++) {
+      const dist = 1.15 + ring * 1.1;
+      const start = hash2(salt * 59 + ring * 7, salt * 61 - ring * 11) * Math.PI * 2;
+      for (let step = 0; step < 10; step++) {
+        const angle = start + step * (Math.PI * 2 / 10);
+        const tx = clamp(friendly.x + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
+        const tz = clamp(friendly.z + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
+        const ground = friendlyGroundAt(tx, tz);
+        if (ground === null) continue;
+        if (baseGround !== null && Math.abs(ground - baseGround) > 1) continue;
+        friendly.targetX = tx;
+        friendly.targetZ = tz;
+        return true;
+      }
+    }
     return false;
   }
   function setFriendlyFollowTarget(friendly, salt) {
@@ -2068,8 +2211,14 @@
     const dx = friendly.x - buddy.x;
     const dz = friendly.z - buddy.z;
     const dist = Math.hypot(dx, dz) || 1;
-    friendly.targetX = clamp(buddy.x + dx / dist * 1.45, 2.5, WORLD_X - 2.5);
-    friendly.targetZ = clamp(buddy.z + dz / dist * 1.45, 2.5, WORLD_Z - 2.5);
+    const tx = clamp(buddy.x + dx / dist * 1.45, 2.5, WORLD_X - 2.5);
+    const tz = clamp(buddy.z + dz / dist * 1.45, 2.5, WORLD_Z - 2.5);
+    if (friendlyCanStandAt(tx, tz)) {
+      friendly.targetX = tx;
+      friendly.targetZ = tz;
+    } else {
+      setFriendlyRoamTarget(friendly, Math.floor((friendly.x + friendly.z) * 17), 1.2, 4.5, 0.45);
+    }
   }
   function findFriendlyBuddy(friendly, radius, salt) {
     let best = -1;
@@ -3306,6 +3455,7 @@
     friendly.knockTimer = 0.18;
     friendly.knockX = (dx / dist) * 2.8;
     friendly.knockZ = (dz / dist) * 2.8;
+    chooseFriendlyFlee(friendly, state.player, Math.floor((friendly.x + friendly.z) * 31));
     spawnHitBurst(friendly.x, friendly.y + 0.72, friendly.z, cachedRgb("#ffd3ef"));
     if (friendly.hp <= 0) {
       addScore(cfg.drops * 6);
@@ -4067,6 +4217,7 @@
     state.swingKind = "gather";
     state.attackFlash = 0;
     state.player.hurtAnim = 0;
+    resetActiveFluids();
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -4186,6 +4337,7 @@
       updateTarget();
       updateMining(dt);
       updatePlacing(dt);
+      updateFluidSimulation(dt);
       if (state.attackCd > 0) state.attackCd -= dt;
     }
     if (decorDirty) rebuildDecorations();
@@ -4410,6 +4562,8 @@
     setBlock,
     flowWaterNear,
     flowLavaNear,
+    processActiveWater,
+    processActiveLava,
     spreadLavaFrom,
     settleGeneratedLava,
     flowLiquidsNear,
@@ -4439,6 +4593,8 @@
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
         caveCreatureCount: state.caveCreatures.length,
+        activeWater: state.activeWater.length - activeWaterHead,
+        activeLava: state.activeLava.length - activeLavaHead,
         caveCreatureTypes: state.caveCreatures.reduce((counts, creature) => {
           counts[creature.type] = (counts[creature.type] || 0) + 1;
           return counts;

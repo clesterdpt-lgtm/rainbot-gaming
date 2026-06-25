@@ -52,18 +52,19 @@
   const WATER_MOVE_MULT = 0.55;
   const WATER_GRAVITY_MULT = 0.22;
   const SWIM_UP_SPEED = 4.4;
-  const WATER_FLOW_LIMIT = 96;
-  const WATER_FLOW_BURST_LIMIT = 18;
-  const WATER_FLOW_TICK_SECONDS = 0.025;
+  const WATER_FLOW_LIMIT = 24;
+  const WATER_FLOW_BURST_LIMIT = 4;
+  const WATER_FLOW_TICK_SECONDS = 0.075;
   const LAVA_MOVE_MULT = 0.34;
   const LAVA_GRAVITY_MULT = 0.12;
   const LAVA_SWIM_UP_SPEED = 2.2;
   const LAVA_FALL_SPEED = -1.15;
-  const LAVA_FLOW_LIMIT = 64;
-  const LAVA_FLOW_BURST_LIMIT = 7;
-  const LAVA_FLOW_TICK_SECONDS = 0.14;
-  const LAVA_LATERAL_RANGE = 6;
-  const ACTIVE_FLUID_QUEUE_LIMIT = 7000;
+  const LAVA_FLOW_LIMIT = 10;
+  const LAVA_FLOW_BURST_LIMIT = 2;
+  const LAVA_FLOW_TICK_SECONDS = 0.28;
+  const LAVA_LATERAL_RANGE = 3;
+  const ACTIVE_FLUID_QUEUE_LIMIT = 3000;
+  const FLUID_SCAN_MULTIPLIER = 6;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -598,17 +599,17 @@
     return true;
   }
   function queueFluidNeighborhood(x, y, z) {
+    let queued = 0;
     const dirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     for (const dir of dirs) {
       const sx = x + dir[0];
       const sy = y + dir[1];
       const sz = z + dir[2];
       const code = getBlock(sx, sy, sz);
-      if (code === WATER) queueActiveFluid(WATER, sx, sy, sz);
-      else if (code === LAVA) queueActiveFluid(LAVA, sx, sy, sz, 0);
+      if (code === WATER && queueActiveFluid(WATER, sx, sy, sz)) queued++;
+      else if (code === LAVA && queueActiveFluid(LAVA, sx, sy, sz, 0)) queued++;
     }
-    if (y <= LAVA_LEVEL && canLavaFill(getBlock(x, y, z))) queueActiveFluid(LAVA, x, y, z, 0, true);
-    if (y - 1 <= LAVA_LEVEL && canLavaFill(getBlock(x, y - 1, z))) queueActiveFluid(LAVA, x, y - 1, z, 0, true);
+    return queued;
   }
 
   function hash32(n) {
@@ -1005,11 +1006,12 @@
   function spreadWaterFrom(seeds, limit = WATER_FLOW_LIMIT) {
     const queue = seeds.slice();
     const queued = new Set(queue.map((p) => `${p.x},${p.y},${p.z}`));
+    const scanLimit = Math.max(queue.length, limit * FLUID_SCAN_MULTIPLIER);
     let filled = 0;
 
     function pushIfWater(x, y, z) {
       const key = `${x},${y},${z}`;
-      if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== WATER) return;
+      if (queue.length >= scanLimit || !inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== WATER) return;
       queued.add(key);
       queue.push({ x, y, z });
       queueActiveFluid(WATER, x, y, z);
@@ -1019,15 +1021,10 @@
       setBlock(x, y, z, WATER);
       queueActiveFluid(WATER, x, y, z);
       filled++;
-      const key = `${x},${y},${z}`;
-      if (!queued.has(key)) {
-        queued.add(key);
-        queue.push({ x, y, z });
-      }
       return true;
     }
 
-    for (let i = 0; i < queue.length && filled < limit; i++) {
+    for (let i = 0, scanned = 0; i < queue.length && filled < limit && scanned < scanLimit; i++, scanned++) {
       const p = queue[i];
       if (getBlock(p.x, p.y, p.z) !== WATER) continue;
       const below = getBlock(p.x, p.y - 1, p.z);
@@ -1065,11 +1062,12 @@
   function spreadLavaFrom(seeds, limit = LAVA_FLOW_LIMIT) {
     const queue = seeds.slice();
     const queued = new Set(queue.map((p) => `${p.x},${p.y},${p.z}`));
+    const scanLimit = Math.max(queue.length, limit * FLUID_SCAN_MULTIPLIER);
     let filled = 0;
 
     function pushIfLava(x, y, z, flow) {
       const key = `${x},${y},${z}`;
-      if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== LAVA) return;
+      if (queue.length >= scanLimit || !inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== LAVA) return;
       queued.add(key);
       queue.push({ x, y, z, flow });
       queueActiveFluid(LAVA, x, y, z, flow);
@@ -1082,16 +1080,11 @@
       filled++;
       if (code !== WATER) {
         queueActiveFluid(LAVA, x, y, z, flow);
-        const key = `${x},${y},${z}`;
-        if (!queued.has(key)) {
-          queued.add(key);
-          queue.push({ x, y, z, flow });
-        }
       }
       return true;
     }
 
-    for (let i = 0; i < queue.length && filled < limit; i++) {
+    for (let i = 0, scanned = 0; i < queue.length && filled < limit && scanned < scanLimit; i++, scanned++) {
       const p = queue[i];
       if (getBlock(p.x, p.y, p.z) !== LAVA) continue;
       const below = getBlock(p.x, p.y - 1, p.z);
@@ -1129,15 +1122,7 @@
     while (activeLavaHead < state.activeLava.length && filled < limit) {
       const p = state.activeLava[activeLavaHead++];
       activeLavaKeys.delete(fluidKey(p.x, p.y, p.z));
-      let code = getBlock(p.x, p.y, p.z);
-      if (code !== LAVA) {
-        if (!p.ambient || p.y > LAVA_LEVEL || !canLavaFill(code)) continue;
-        setBlock(p.x, p.y, p.z, code === WATER ? STONE : LAVA);
-        filled++;
-        if (code === WATER || filled >= limit) continue;
-        queueActiveFluid(LAVA, p.x, p.y, p.z, 0);
-        code = LAVA;
-      }
+      const code = getBlock(p.x, p.y, p.z);
       if (code !== LAVA) continue;
       filled += spreadLavaFrom([{ x: p.x, y: p.y, z: p.z, flow: p.flow || 0 }], limit - filled);
     }
@@ -1145,16 +1130,16 @@
     return filled;
   }
   function updateFluidSimulation(dt) {
-    state.waterFlowTimer += dt;
-    state.lavaFlowTimer += dt;
+    state.waterFlowTimer = Math.min(state.waterFlowTimer + dt, WATER_FLOW_TICK_SECONDS * 3);
+    state.lavaFlowTimer = Math.min(state.lavaFlowTimer + dt, LAVA_FLOW_TICK_SECONDS * 2);
     let waterSteps = 0;
-    while (state.waterFlowTimer >= WATER_FLOW_TICK_SECONDS && waterSteps < 4) {
+    while (state.waterFlowTimer >= WATER_FLOW_TICK_SECONDS && waterSteps < 1) {
       state.waterFlowTimer -= WATER_FLOW_TICK_SECONDS;
       processActiveWater(WATER_FLOW_BURST_LIMIT);
       waterSteps++;
     }
     let lavaSteps = 0;
-    while (state.lavaFlowTimer >= LAVA_FLOW_TICK_SECONDS && lavaSteps < 2) {
+    while (state.lavaFlowTimer >= LAVA_FLOW_TICK_SECONDS && lavaSteps < 1) {
       state.lavaFlowTimer -= LAVA_FLOW_TICK_SECONDS;
       processActiveLava(LAVA_FLOW_BURST_LIMIT);
       lavaSteps++;
@@ -1165,25 +1150,16 @@
       for (let x = 1; x < WORLD_X - 1; x++) {
         for (let y = LAVA_LEVEL + 22; y >= 2; y--) {
           if (getBlock(x, y, z) !== LAVA) continue;
-          let cy = y - 1;
-          let guard = 0;
-          while (cy > 0 && guard < 80) {
-            const below = getBlock(x, cy, z);
-            if (!canLavaFill(below)) break;
-            setBase(x, cy, z, below === WATER ? STONE : LAVA);
-            if (below === WATER) break;
-            cy--;
-            guard++;
-          }
+          const below = getBlock(x, y - 1, z);
+          if (!canLavaFill(below)) continue;
+          setBase(x, y, z, AIR);
+          setBase(x, y - 1, z, below === WATER ? STONE : LAVA);
         }
       }
     }
   }
   function flowLiquidsNear(x, y, z) {
-    queueFluidNeighborhood(x, y, z);
-    const water = flowWaterNear(x, y, z, WATER_FLOW_BURST_LIMIT);
-    const lava = flowLavaNear(x, y, z, LAVA_FLOW_BURST_LIMIT);
-    return water + lava;
+    return queueFluidNeighborhood(x, y, z);
   }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
   function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && !isReplaceableDecor(code); }
@@ -3638,7 +3614,6 @@
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     setBlock(p.x, p.y, p.z, slot.code);
-    flowLiquidsNear(p.x, p.y, p.z);
     decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;

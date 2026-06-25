@@ -285,6 +285,9 @@
   camera.add(heldGroup);
   scene.add(camera);
 
+  const TARGET_HOLD_FRAMES = 1;
+  let targetHoldFrames = 0;
+
   const state = {
     started: false,
     paused: false,
@@ -2669,7 +2672,23 @@
   }
 
   function updateTarget() {
-    state.target = raycastBlocks(REACH);
+    const rawTarget = raycastBlocks(REACH);
+    const prevTarget = state.target;
+    if (rawTarget && rawTarget.hit) {
+      if (prevTarget && prevTarget.x === rawTarget.x && prevTarget.y === rawTarget.y && prevTarget.z === rawTarget.z) {
+        targetHoldFrames = 0;
+        state.target = rawTarget;
+      } else if (targetHoldFrames < TARGET_HOLD_FRAMES && prevTarget) {
+        targetHoldFrames++;
+      } else {
+        targetHoldFrames = 0;
+        state.target = rawTarget;
+      }
+    } else {
+      targetHoldFrames = 0;
+      state.target = null;
+    }
+
     selectionBox.visible = !!(state.target && state.target.hit);
     ui.target.classList.toggle("is-visible", selectionBox.visible);
     if (selectionBox.visible) {
@@ -3153,7 +3172,7 @@
     addHeldBox([0.32, -0.22, -0.78], [0.28, 0.07, 0.28], heldMaterial("#ffffff"), [0.42, 0.25, -0.18]);
   }
   function applyHeldAnimation() {
-    const idle = Math.sin(performance.now() * 0.0022) * 0.012;
+    const idle = Math.sin(performance.now() * 0.0022) * 0.004;
     heldGroup.position.set(0, idle, 0);
     heldGroup.rotation.set(0, 0, 0);
     if (state.mining) {

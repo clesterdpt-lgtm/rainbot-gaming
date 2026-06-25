@@ -18,6 +18,8 @@ Open Supabase SQL Editor and run:
 ```sql
 -- Paste the full contents of:
 -- supabase/migrations/20260624000000_rainbot_accounts_forum.sql
+-- Then run:
+-- supabase/migrations/20260625002000_profile_customization.sql
 ```
 
 The migration creates:
@@ -31,6 +33,8 @@ The migration creates:
 - RLS policies and indexes
 - `record_high_score(...)` for atomic leaderboard updates
 - moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
+
+The profile customization migration adds public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color.
 
 ## 3. Enable the frontend config
 
@@ -74,7 +78,7 @@ Use `moderator` instead of `admin` if you want a non-owner moderation account.
 
 1. Open `community.html`.
 2. Create an account with email/password or send yourself a magic link.
-3. Set a display name from the Profile modal.
+3. Set a display name, title, bio, favorite game, avatar style, and accent color from the Profile modal.
 4. Create a forum topic and reply.
 5. Play a game with a saved run, sign in, and use Profile > Sync Now.
 6. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `game_saves`, and `game_scores`.

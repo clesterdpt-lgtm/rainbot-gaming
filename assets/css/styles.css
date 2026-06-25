@@ -6457,6 +6457,319 @@ body.arcade-home::before {
   justify-content: flex-start;
 }
 
+.rb-profile-modal {
+  max-height: calc(100vh - 32px);
+  max-width: min(920px, calc(100vw - 24px));
+  overflow-y: auto;
+}
+
+.rb-profile-shell {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(240px, 0.85fr) minmax(0, 1.15fr);
+  margin: 18px 0 4px;
+}
+
+.rb-profile-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.rb-profile-card {
+  --profile-accent: var(--arcade-cyan);
+  --profile-glow: rgba(35, 223, 242, 0.2);
+  align-items: start;
+  border: 1px solid var(--profile-accent);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, var(--profile-glow), rgba(8, 11, 19, 0.94) 56%),
+    #070b13;
+  box-shadow: inset 0 0 0 1px rgba(249, 251, 255, 0.04), 0 16px 32px rgba(0, 0, 0, 0.26);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 178px;
+  padding: 16px;
+}
+
+.rb-profile-avatar,
+.forum-avatar {
+  --profile-accent: var(--arcade-cyan);
+  --profile-glow: rgba(35, 223, 242, 0.2);
+}
+
+.rb-profile-card--cyan,
+.rb-profile-avatar--cyan,
+.forum-avatar--cyan {
+  --profile-accent: var(--arcade-cyan);
+  --profile-glow: rgba(35, 223, 242, 0.2);
+}
+
+.rb-profile-card--pink,
+.rb-profile-avatar--pink,
+.forum-avatar--pink {
+  --profile-accent: var(--arcade-pink);
+  --profile-glow: rgba(255, 20, 144, 0.2);
+}
+
+.rb-profile-card--yellow,
+.rb-profile-avatar--yellow,
+.forum-avatar--yellow {
+  --profile-accent: var(--arcade-yellow);
+  --profile-glow: rgba(247, 217, 36, 0.2);
+}
+
+.rb-profile-card--green,
+.rb-profile-avatar--green,
+.forum-avatar--green {
+  --profile-accent: var(--arcade-green);
+  --profile-glow: rgba(72, 243, 90, 0.18);
+}
+
+.rb-profile-card--red,
+.rb-profile-avatar--red,
+.forum-avatar--red {
+  --profile-accent: #ff6b7b;
+  --profile-glow: rgba(255, 107, 123, 0.2);
+}
+
+.rb-profile-card--white,
+.rb-profile-avatar--white,
+.forum-avatar--white {
+  --profile-accent: var(--arcade-white);
+  --profile-glow: rgba(249, 251, 255, 0.14);
+}
+
+.rb-profile-avatar {
+  align-items: center;
+  border: 1px solid var(--profile-accent);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, var(--profile-glow), rgba(8, 11, 19, 0.88)),
+    #05070d;
+  color: var(--arcade-white);
+  display: inline-flex;
+  font-family: var(--arcade-font);
+  font-size: 19px;
+  height: 72px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  text-transform: uppercase;
+  width: 72px;
+}
+
+.rb-profile-avatar::after,
+.forum-avatar::after {
+  background: var(--profile-accent);
+  content: "";
+  inset: auto 9px 9px;
+  height: 2px;
+  opacity: 0.8;
+  position: absolute;
+}
+
+.rb-profile-avatar--glitch,
+.forum-avatar--glitch {
+  transform: skew(-4deg);
+}
+
+.rb-profile-avatar--storm::before,
+.forum-avatar--storm::before {
+  background: linear-gradient(90deg, transparent, var(--profile-accent), transparent);
+  content: "";
+  height: 1px;
+  left: 6px;
+  position: absolute;
+  right: 6px;
+  top: 16px;
+}
+
+.rb-profile-avatar--slime,
+.forum-avatar--slime {
+  border-radius: 34% 44% 38% 48%;
+}
+
+.rb-profile-avatar--crown::before,
+.forum-avatar--crown::before {
+  border-bottom: 7px solid var(--profile-accent);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.rb-profile-avatar--skull,
+.forum-avatar--skull {
+  background:
+    radial-gradient(circle at 36% 38%, rgba(249, 251, 255, 0.28) 0 4px, transparent 5px),
+    radial-gradient(circle at 64% 38%, rgba(249, 251, 255, 0.28) 0 4px, transparent 5px),
+    linear-gradient(135deg, var(--profile-glow), rgba(8, 11, 19, 0.94)),
+    #05070d;
+}
+
+.rb-profile-card__copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rb-profile-card__copy strong {
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.rb-profile-card__copy span:not(.rb-profile-kicker),
+.rb-profile-card__copy p,
+.rb-profile-card__copy em {
+  color: #dce6f2;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rb-profile-card__copy em {
+  color: var(--profile-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rb-profile-kicker {
+  color: var(--profile-accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rb-profile-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.rb-profile-stat {
+  border: 1px solid rgba(151, 171, 194, 0.26);
+  border-radius: 6px;
+  background: rgba(8, 11, 19, 0.72);
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.rb-profile-stat--email {
+  grid-column: 1 / -1;
+}
+
+.rb-profile-stat span {
+  color: var(--arcade-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.rb-profile-stat strong {
+  color: var(--arcade-white);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.rb-profile-form {
+  margin: 0;
+}
+
+.rb-profile-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rb-profile-accent-field {
+  border: 1px solid rgba(151, 171, 194, 0.28);
+  border-radius: 6px;
+  margin: 0;
+  padding: 12px;
+}
+
+.rb-profile-accent-field legend {
+  color: var(--arcade-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.rb-profile-swatches {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rb-profile-swatch {
+  --swatch-color: var(--arcade-cyan);
+  cursor: pointer;
+  min-width: 0;
+  position: relative;
+}
+
+.rb-profile-swatch input {
+  opacity: 0;
+  position: absolute;
+}
+
+.rb-profile-swatch span {
+  align-items: center;
+  border: 1px solid rgba(151, 171, 194, 0.3);
+  border-radius: 4px;
+  color: var(--arcade-muted);
+  display: flex;
+  font: 900 10px/1 var(--font-mono);
+  gap: 7px;
+  justify-content: center;
+  min-height: 36px;
+  overflow: hidden;
+  padding: 8px 6px;
+  text-transform: uppercase;
+}
+
+.rb-profile-swatch span::before {
+  background: var(--swatch-color);
+  border-radius: 999px;
+  content: "";
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.rb-profile-swatch input:checked + span,
+.rb-profile-swatch:focus-within span {
+  border-color: var(--swatch-color);
+  color: var(--arcade-white);
+  box-shadow: 0 0 0 3px rgba(35, 223, 242, 0.1);
+}
+
+.rb-profile-swatch--cyan { --swatch-color: var(--arcade-cyan); }
+.rb-profile-swatch--pink { --swatch-color: var(--arcade-pink); }
+.rb-profile-swatch--yellow { --swatch-color: var(--arcade-yellow); }
+.rb-profile-swatch--green { --swatch-color: var(--arcade-green); }
+.rb-profile-swatch--red { --swatch-color: #ff6b7b; }
+.rb-profile-swatch--white { --swatch-color: var(--arcade-white); }
+
 .community-shell {
   display: grid;
   gap: 18px;
@@ -6858,9 +7171,11 @@ body.arcade-home::before {
 
 .forum-avatar {
   align-items: center;
-  border: 1px solid rgba(35, 223, 242, 0.42);
+  border: 1px solid var(--profile-accent);
   border-radius: 4px;
-  background: linear-gradient(135deg, rgba(255, 20, 144, 0.24), rgba(35, 223, 242, 0.12));
+  background:
+    linear-gradient(135deg, var(--profile-glow), rgba(8, 11, 19, 0.9)),
+    #05070d;
   color: var(--arcade-white);
   display: inline-flex;
   flex: 0 0 auto;
@@ -6868,6 +7183,9 @@ body.arcade-home::before {
   font-size: 13px;
   height: 42px;
   justify-content: center;
+  overflow: hidden;
+  position: relative;
+  text-transform: uppercase;
   width: 42px;
 }
 
@@ -6979,6 +7297,11 @@ body.arcade-home::before {
   border-radius: 4px;
   color: var(--arcade-cyan);
   padding: 3px 6px;
+}
+
+.forum-meta-row .forum-meta-chip--title {
+  border-color: rgba(247, 217, 36, 0.52);
+  color: var(--arcade-yellow);
 }
 
 .forum-meta-row .forum-meta-chip::after {
@@ -7138,6 +7461,12 @@ body.arcade-home::before {
   text-transform: uppercase;
 }
 
+@media (max-width: 820px) {
+  .rb-profile-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 980px) {
   .forum-hero,
   .forum-layout {
@@ -7236,6 +7565,24 @@ body.arcade-home::before {
   .forum-reply .forum-actions {
     grid-column: auto;
     justify-content: flex-start;
+  }
+
+  .rb-profile-modal {
+    padding: 18px;
+  }
+
+  .rb-profile-card,
+  .rb-profile-form-grid,
+  .rb-profile-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .rb-profile-card {
+    min-height: 0;
+  }
+
+  .rb-profile-swatches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .rb-profile-actions .btn,

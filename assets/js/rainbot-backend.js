@@ -9,6 +9,10 @@ const RBBackend = (() => {
     "announcements",
   ]);
   const REPORT_STATUSES = new Set(["open", "reviewing", "closed"]);
+  const PROFILE_AVATARS = new Set(["bot", "glitch", "storm", "slime", "crown", "skull"]);
+  const PROFILE_ACCENTS = new Set(["cyan", "pink", "yellow", "green", "red", "white"]);
+  const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, created_at, updated_at";
+  const PROFILE_PUBLIC_SELECT = "display_name, avatar_url, profile_title, avatar_style, accent_color";
 
   let client = null;
   let config = {};
@@ -102,6 +106,11 @@ const RBBackend = (() => {
     return TOPIC_CATEGORIES.has(normalized) ? normalized : "general";
   }
 
+  function cleanProfileChoice(value, allowed, fallback) {
+    const normalized = cleanGameId(value || fallback);
+    return allowed.has(normalized) ? normalized : fallback;
+  }
+
   function displayNameFromUser(user) {
     const meta = user && user.user_metadata ? user.user_metadata : {};
     const name = cleanText(meta.display_name || meta.full_name || meta.name || (user.email || "").split("@")[0] || "Rainbot Player", 32);
@@ -150,7 +159,7 @@ const RBBackend = (() => {
     if (!client || !user) return null;
     const { data: existingProfile, error: selectError } = await client
       .from("profiles")
-      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .select(PROFILE_SELECT)
       .eq("id", user.id)
       .maybeSingle();
     if (selectError) throw selectError;
@@ -160,12 +169,15 @@ const RBBackend = (() => {
     const payload = {
       id: user.id,
       display_name: fallbackName,
+      profile_title: "Arcade Regular",
+      avatar_style: "bot",
+      accent_color: "cyan",
       updated_at: new Date().toISOString(),
     };
     const { data, error } = await client
       .from("profiles")
       .insert(payload)
-      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .select(PROFILE_SELECT)
       .single();
     if (error) throw error;
     return data;
@@ -316,8 +328,15 @@ const RBBackend = (() => {
     const displayName = cleanText(values && values.display_name, 32);
     if (displayName.length < 2) throw new Error("Display name needs at least 2 characters.");
     await ensureProfile(user);
+    const profileTitle = cleanText((values && values.profile_title) || "Arcade Regular", 40) || "Arcade Regular";
+    if (profileTitle.length < 2) throw new Error("Profile title needs at least 2 characters.");
     const payload = {
       display_name: displayName,
+      profile_title: profileTitle,
+      bio: cleanBody(values && values.bio, 180),
+      favorite_game: cleanText(values && values.favorite_game, 80),
+      avatar_style: cleanProfileChoice(values && values.avatar_style, PROFILE_AVATARS, "bot"),
+      accent_color: cleanProfileChoice(values && values.accent_color, PROFILE_ACCENTS, "cyan"),
       updated_at: new Date().toISOString(),
     };
     if (Object.prototype.hasOwnProperty.call(values || {}, "avatar_url")) {
@@ -328,7 +347,7 @@ const RBBackend = (() => {
       .from("profiles")
       .update(payload)
       .eq("id", user.id)
-      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .select(PROFILE_SELECT)
       .single();
     if (error) throw error;
     setState({ profile: data, error: "" });
@@ -407,7 +426,7 @@ const RBBackend = (() => {
     if (!normalizedGameId) return [];
     const { data, error } = await client
       .from("game_scores")
-      .select("game_id, score, updated_at, author:profiles!game_scores_user_id_fkey(display_name, avatar_url)")
+      .select(`game_id, score, updated_at, author:profiles!game_scores_user_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .eq("game_id", normalizedGameId)
       .order("score", { ascending: false })
       .limit(Math.max(1, Math.min(50, Number(limit) || 10)));
@@ -420,7 +439,7 @@ const RBBackend = (() => {
     const category = options.category ? cleanCategory(options.category) : "";
     let query = client
       .from("forum_topics")
-      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .select(`id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .order("is_pinned", { ascending: false })
       .order("last_activity_at", { ascending: false })
       .limit(Math.max(1, Math.min(50, Number(options.limit) || 30)));
@@ -435,7 +454,7 @@ const RBBackend = (() => {
     await requireClient();
     const { data, error } = await client
       .from("forum_topics")
-      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .select(`id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .eq("id", Number(topicId))
       .maybeSingle();
     if (error) throw error;
@@ -458,7 +477,7 @@ const RBBackend = (() => {
     const { data, error } = await client
       .from("forum_topics")
       .insert(payload)
-      .select("id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .select(`id, title, body, category, game_id, reply_count, is_pinned, is_locked, is_hidden, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .single();
     if (error) throw error;
     return data;
@@ -468,7 +487,7 @@ const RBBackend = (() => {
     await requireClient();
     const { data, error } = await client
       .from("forum_replies")
-      .select("id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .eq("topic_id", Number(topicId))
       .eq("is_hidden", false)
       .order("created_at", { ascending: true })
@@ -484,7 +503,7 @@ const RBBackend = (() => {
     const { data, error } = await client
       .from("forum_replies")
       .insert({ topic_id: Number(topicId), author_id: user.id, body: cleanedBody })
-      .select("id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .single();
     if (error) throw error;
     return data;
@@ -522,7 +541,7 @@ const RBBackend = (() => {
     const status = requestedStatus === "all" ? "all" : cleanReportStatus(requestedStatus);
     let query = client
       .from("forum_reports")
-      .select("id, reason, status, created_at, topic_id, reply_id, reporter:profiles!forum_reports_reporter_id_fkey(display_name, avatar_url), topic:forum_topics!forum_reports_topic_id_fkey(id, title, is_hidden, is_locked, is_pinned), reply:forum_replies!forum_reports_reply_id_fkey(id, body, is_hidden, topic_id)")
+      .select(`id, reason, status, created_at, topic_id, reply_id, reporter:profiles!forum_reports_reporter_id_fkey(${PROFILE_PUBLIC_SELECT}), topic:forum_topics!forum_reports_topic_id_fkey(id, title, is_hidden, is_locked, is_pinned), reply:forum_replies!forum_reports_reply_id_fkey(id, body, is_hidden, topic_id)`)
       .order("created_at", { ascending: false })
       .limit(Math.max(1, Math.min(100, Number(options.limit) || 50)));
     if (status !== "all") query = query.eq("status", status);

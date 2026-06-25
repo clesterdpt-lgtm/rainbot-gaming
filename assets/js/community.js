@@ -37,12 +37,24 @@
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
-  function authorName(row) {
-    return (row && row.author && row.author.display_name) || "Rainbot Player";
+  function authorProfile(row) {
+    return row && row.author ? row.author : {};
   }
 
-  function avatarEl(name) {
-    const avatar = textEl("span", "forum-avatar", String(name || "R").trim().slice(0, 1).toUpperCase() || "R");
+  function authorName(row) {
+    return authorProfile(row).display_name || "Rainbot Player";
+  }
+
+  function authorTitle(row) {
+    return authorProfile(row).profile_title || "";
+  }
+
+  function avatarEl(profileOrName) {
+    const profile = typeof profileOrName === "object" && profileOrName ? profileOrName : {};
+    const name = profile.display_name || profileOrName || "Rainbot Player";
+    const style = profile.avatar_style || "bot";
+    const accent = profile.accent_color || "cyan";
+    const avatar = textEl("span", `forum-avatar forum-avatar--${style} forum-avatar--${accent}`, String(name || "R").trim().slice(0, 1).toUpperCase() || "R");
     avatar.setAttribute("aria-hidden", "true");
     return avatar;
   }
@@ -354,6 +366,7 @@
     const card = document.createElement("article");
     card.className = "forum-topic" + (topic.is_pinned ? " forum-topic--pinned" : "") + (topic.is_hidden ? " forum-topic--hidden" : "");
     const name = authorName(topic);
+    const profileTitle = authorTitle(topic);
     const header = document.createElement("div");
     header.className = "forum-topic__header";
     const identity = document.createElement("div");
@@ -364,10 +377,11 @@
         { text: categoryLabel(topic.category) },
         { text: name },
         { text: formatDate(topic.last_activity_at || topic.created_at) },
+        profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
       ]),
       renderBadges(topic)
     );
-    header.append(avatarEl(name), identity, statEl(String(Number(topic.reply_count) || 0), "Replies"));
+    header.append(avatarEl(authorProfile(topic)), identity, statEl(String(Number(topic.reply_count) || 0), "Replies"));
     const title = document.createElement("a");
     title.className = "forum-topic__title";
     title.href = `community.html?topic=${topic.id}`;
@@ -378,6 +392,7 @@
       url.search = "";
       url.searchParams.set("topic", topic.id);
       history.pushState(null, "", url);
+      scrollForumTop();
       renderCommunity();
     });
     const body = textEl("p", "forum-topic__body", topic.body);
@@ -410,11 +425,19 @@
     const card = document.createElement("article");
     card.className = "forum-reply";
     const name = authorName(reply);
+    const profileTitle = authorTitle(reply);
     const copy = document.createElement("div");
     copy.className = "forum-reply__content";
-    copy.append(metaRow([{ text: name }, { text: formatDate(reply.created_at) }]), textEl("p", "forum-reply__body", reply.body));
+    copy.append(
+      metaRow([
+        { text: name },
+        profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
+        { text: formatDate(reply.created_at) },
+      ]),
+      textEl("p", "forum-reply__body", reply.body)
+    );
     card.append(
-      avatarEl(name),
+      avatarEl(authorProfile(reply)),
       copy,
       renderReplyActions(reply, currentBackendState)
     );
@@ -489,11 +512,13 @@
     const topicFull = document.createElement("article");
     topicFull.className = "forum-topic forum-topic--full";
     const name = authorName(topic);
+    const profileTitle = authorTitle(topic);
     topicFull.append(
       metaRow([
         { text: categoryCode(topic.category), className: "forum-meta-chip" },
         { text: categoryLabel(topic.category) },
         { text: name },
+        profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
         { text: formatDate(topic.created_at) },
       ]),
       textEl("h2", "forum-topic__heading", topic.title),

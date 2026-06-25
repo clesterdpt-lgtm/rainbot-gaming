@@ -37,6 +37,35 @@ function getBackendDisplayName(backendState) {
   return profileName || (userEmail ? userEmail.split("@")[0] : "Profile");
 }
 
+const RB_PROFILE_AVATARS = [
+  { value: "bot", label: "Bot" },
+  { value: "glitch", label: "Glitch" },
+  { value: "storm", label: "Storm" },
+  { value: "slime", label: "Slime" },
+  { value: "crown", label: "Crown" },
+  { value: "skull", label: "Skull" },
+];
+
+const RB_PROFILE_ACCENTS = [
+  { value: "cyan", label: "Cyan" },
+  { value: "pink", label: "Pink" },
+  { value: "yellow", label: "Yellow" },
+  { value: "green", label: "Green" },
+  { value: "red", label: "Red" },
+  { value: "white", label: "White" },
+];
+
+function getLocalSaveCount() {
+  if (!window.RBGameSaves || typeof window.RBGameSaves.listLocalSaves !== "function") return 0;
+  return window.RBGameSaves.listLocalSaves().length;
+}
+
+function cleanProfileUiChoice(value, options, fallback) {
+  const allowed = new Set(options.map((option) => option.value));
+  const normalized = String(value || fallback).trim().toLowerCase();
+  return allowed.has(normalized) ? normalized : fallback;
+}
+
 function renderNav(state = RB.state) {
   const slot = document.getElementById("nav-slot");
   if (!slot) return;
@@ -600,24 +629,89 @@ function openProfileModal() {
     return;
   }
   if (document.getElementById("rb-profile-modal")) return;
+  const profile = backendState.profile || {};
   const displayName = getBackendDisplayName(backendState);
   const email = backendState.user.email || "";
+  const role = profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
+  const profileTitle = profile.profile_title || "Arcade Regular";
+  const bio = profile.bio || "";
+  const favoriteGame = profile.favorite_game || "";
+  const avatarStyle = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
+  const accentColor = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
+  const avatarOptions = RB_PROFILE_AVATARS.map((option) => `<option value="${option.value}"${option.value === avatarStyle ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+  const accentOptions = RB_PROFILE_ACCENTS.map((option) => `
+    <label class="rb-profile-swatch rb-profile-swatch--${option.value}">
+      <input type="radio" name="accent_color" value="${option.value}"${option.value === accentColor ? " checked" : ""} />
+      <span>${escapeHtml(option.label)}</span>
+    </label>
+  `).join("");
+  const initial = String(displayName || "R").trim().slice(0, 1).toUpperCase() || "R";
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-profile-modal";
   backdrop.innerHTML = `
-    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-profile-title">
+    <div class="modal rb-account-modal rb-profile-modal" role="dialog" aria-modal="true" aria-labelledby="rb-profile-title">
       <div class="modal__title" id="rb-profile-title">Profile</div>
-      <p class="modal__body rb-modal-note">Signed in as ${escapeHtml(email)}. Cloud saves and high scores sync when the backend is connected.</p>
-      <form class="rb-auth-form" id="rb-profile-form">
-        <label class="rb-form-field" for="rb-display-name">
-          <span>Display Name</span>
-          <input id="rb-display-name" type="text" maxlength="32" value="${escapeHtml(displayName)}" required />
-        </label>
-        <button class="btn btn--primary" type="submit">Save Profile</button>
-      </form>
+      <div class="rb-profile-shell">
+        <section class="rb-profile-preview" aria-label="Profile preview">
+          <div class="rb-profile-card rb-profile-card--${accentColor}" data-profile-card>
+            <span class="rb-profile-avatar rb-profile-avatar--${avatarStyle} rb-profile-avatar--${accentColor}" data-profile-avatar aria-hidden="true">${escapeHtml(initial)}</span>
+            <div class="rb-profile-card__copy">
+              <span class="rb-profile-kicker">${escapeHtml(role)}</span>
+              <strong data-profile-preview-name>${escapeHtml(displayName)}</strong>
+              <span data-profile-preview-title>${escapeHtml(profileTitle)}</span>
+              <p data-profile-preview-bio>${escapeHtml(bio || "No bio yet.")}</p>
+              <em data-profile-preview-favorite>${escapeHtml(favoriteGame ? `Favorite: ${favoriteGame}` : "Favorite game not set")}</em>
+            </div>
+          </div>
+          <div class="rb-profile-summary">
+            <div class="rb-profile-stat">
+              <span>Account</span>
+              <strong>${escapeHtml(role)}</strong>
+            </div>
+            <div class="rb-profile-stat">
+              <span>Saves</span>
+              <strong>${String(getLocalSaveCount())}</strong>
+            </div>
+            <div class="rb-profile-stat rb-profile-stat--email">
+              <span>Email</span>
+              <strong>${escapeHtml(email || "Connected")}</strong>
+            </div>
+          </div>
+        </section>
+        <form class="rb-auth-form rb-profile-form" id="rb-profile-form">
+          <div class="rb-profile-form-grid">
+            <label class="rb-form-field" for="rb-display-name">
+              <span>Display Name</span>
+              <input id="rb-display-name" type="text" maxlength="32" value="${escapeHtml(displayName)}" required />
+            </label>
+            <label class="rb-form-field" for="rb-profile-title-input">
+              <span>Title</span>
+              <input id="rb-profile-title-input" type="text" maxlength="40" value="${escapeHtml(profileTitle)}" required />
+            </label>
+            <label class="rb-form-field" for="rb-favorite-game">
+              <span>Favorite Game</span>
+              <input id="rb-favorite-game" type="text" maxlength="80" value="${escapeHtml(favoriteGame)}" />
+            </label>
+            <label class="rb-form-field" for="rb-avatar-style">
+              <span>Avatar</span>
+              <select id="rb-avatar-style">${avatarOptions}</select>
+            </label>
+          </div>
+          <label class="rb-form-field" for="rb-profile-bio">
+            <span>Bio</span>
+            <textarea id="rb-profile-bio" maxlength="180" rows="4">${escapeHtml(bio)}</textarea>
+          </label>
+          <fieldset class="rb-profile-accent-field">
+            <legend>Accent</legend>
+            <div class="rb-profile-swatches">${accentOptions}</div>
+          </fieldset>
+          <button class="btn btn--primary" type="submit">Save Profile</button>
+        </form>
+      </div>
       <div class="modal__actions rb-profile-actions">
         <button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
+        <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
         <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>
         <button class="btn btn--ghost" id="rb-close-profile" type="button">Close</button>
       </div>
@@ -630,22 +724,65 @@ function openProfileModal() {
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
-  backdrop.querySelector("#rb-profile-form").addEventListener("submit", async (event) => {
+  const form = backdrop.querySelector("#rb-profile-form");
+  const displayInput = backdrop.querySelector("#rb-display-name");
+  const titleInput = backdrop.querySelector("#rb-profile-title-input");
+  const favoriteInput = backdrop.querySelector("#rb-favorite-game");
+  const avatarSelect = backdrop.querySelector("#rb-avatar-style");
+  const bioInput = backdrop.querySelector("#rb-profile-bio");
+  const accentInputs = Array.from(backdrop.querySelectorAll("input[name='accent_color']"));
+  const profileCard = backdrop.querySelector("[data-profile-card]");
+  const profileAvatar = backdrop.querySelector("[data-profile-avatar]");
+  const previewName = backdrop.querySelector("[data-profile-preview-name]");
+  const previewTitle = backdrop.querySelector("[data-profile-preview-title]");
+  const previewBio = backdrop.querySelector("[data-profile-preview-bio]");
+  const previewFavorite = backdrop.querySelector("[data-profile-preview-favorite]");
+  const selectedAccent = () => (accentInputs.find((input) => input.checked) || accentInputs[0] || {}).value || "cyan";
+  const updatePreview = () => {
+    const nextName = displayInput.value.trim() || "Rainbot Player";
+    const nextTitle = titleInput.value.trim() || "Arcade Regular";
+    const nextBio = bioInput.value.trim() || "No bio yet.";
+    const nextFavorite = favoriteInput.value.trim();
+    const nextAvatar = cleanProfileUiChoice(avatarSelect.value, RB_PROFILE_AVATARS, "bot");
+    const nextAccent = cleanProfileUiChoice(selectedAccent(), RB_PROFILE_ACCENTS, "cyan");
+    profileCard.className = `rb-profile-card rb-profile-card--${nextAccent}`;
+    profileAvatar.className = `rb-profile-avatar rb-profile-avatar--${nextAvatar} rb-profile-avatar--${nextAccent}`;
+    profileAvatar.textContent = nextName.slice(0, 1).toUpperCase() || "R";
+    previewName.textContent = nextName;
+    previewTitle.textContent = nextTitle;
+    previewBio.textContent = nextBio;
+    previewFavorite.textContent = nextFavorite ? `Favorite: ${nextFavorite}` : "Favorite game not set";
+  };
+  [displayInput, titleInput, favoriteInput, bioInput].forEach((input) => input.addEventListener("input", updatePreview));
+  avatarSelect.addEventListener("change", updatePreview);
+  accentInputs.forEach((input) => input.addEventListener("change", updatePreview));
+  displayInput.focus();
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const button = event.currentTarget.querySelector("button[type='submit']");
-    const displayInput = backdrop.querySelector("#rb-display-name");
+    const button = form.querySelector("button[type='submit']");
     button.disabled = true;
     setModalStatus(backdrop, "Saving profile...", "");
     try {
-      await window.RBBackend.updateProfile({ display_name: displayInput.value });
+      await window.RBBackend.updateProfile({
+        display_name: displayInput.value,
+        profile_title: titleInput.value,
+        favorite_game: favoriteInput.value,
+        bio: bioInput.value,
+        avatar_style: avatarSelect.value,
+        accent_color: selectedAccent(),
+      });
       setModalStatus(backdrop, "Profile saved.", "good");
       RB.toast("Profile saved", "good");
       renderNav(RB.state);
+      updatePreview();
     } catch (error) {
       setModalStatus(backdrop, error.message || "Profile save failed.", "bad");
     } finally {
       button.disabled = false;
     }
+  });
+  backdrop.querySelector("#rb-change-password").addEventListener("click", () => {
+    openPasswordRecoveryModal();
   });
   backdrop.querySelector("#rb-sync-now").addEventListener("click", async () => {
     setModalStatus(backdrop, "Syncing local saves and high scores...", "");
@@ -692,8 +829,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-forum-mod-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-forum-mod-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-profile-ui-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-profile-ui-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }
@@ -924,7 +1061,7 @@ const RBGameSaves = (() => {
     await syncLocalSavesToCloud();
   }
 
-  return { create, formatSavedAt, syncWithCloud };
+  return { create, formatSavedAt, listLocalSaves, syncWithCloud };
 })();
 
 window.RBGameSaves = RBGameSaves;

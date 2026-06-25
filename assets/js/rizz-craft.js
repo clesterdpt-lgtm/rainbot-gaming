@@ -68,8 +68,11 @@
   const REACH = 6.1;
   const DAY_SECONDS = 420;
   const FRIENDLY_COUNT = 58;
+  const CAVE_CREATURE_COUNT = 72;
   const FRIENDLY_SPAWN_RING = 12;
   const FRIENDLY_HURT_SECONDS = 0.24;
+  const CAVE_CREATURE_HURT_SECONDS = 0.26;
+  const CAVE_CREATURE_ATTACK_SECONDS = 0.36;
   const FRIENDLY_HIT_COOLDOWN = 0.5;
   const HELD_SWING_SECONDS = 0.32;
   const HELD_GATHER_SECONDS = 0.24;
@@ -97,6 +100,11 @@
   const SAND = 16;
   const SNOW = 17;
   const LAVA = 18;
+  const GLOW_SHROOM = 19;
+  const CAVE_CRYSTAL = 20;
+  const DRIPSTONE_UP = 21;
+  const DRIPSTONE_DOWN = 22;
+  const CAVE_VINE = 23;
 
   const STICK = 100;
   const COAL = 101;
@@ -136,6 +144,11 @@
   def(SAND, { name: "Ohio Sand", kind: "block", solid: true, hardness: 0.45, color: "#d8c073" });
   def(SNOW, { name: "Powder Snow", kind: "block", solid: true, hardness: 0.28, color: "#e9f6ff" });
   def(LAVA, { name: "Deep Lava", kind: "liquid", solid: false, hardness: Infinity, drop: null, color: "#ff6a1a", transparent: true, liquid: true });
+  def(GLOW_SHROOM, { name: "Glowcap Mushroom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#65ffd7", decor: true });
+  def(CAVE_CRYSTAL, { name: "Cave Crystal Cluster", kind: "block", solid: false, hardness: 0.18, drop: RIZZ, color: "#58eaff", decor: true });
+  def(DRIPSTONE_UP, { name: "Dripstone Fang", kind: "block", solid: false, hardness: 0.22, drop: STONE, color: "#b19b7f", decor: true });
+  def(DRIPSTONE_DOWN, { name: "Hanging Dripstone", kind: "block", solid: false, hardness: 0.22, drop: STONE, color: "#b19b7f", decor: true });
+  def(CAVE_VINE, { name: "Hanging Cave Vine", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#3cff9e", decor: true });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -201,10 +214,11 @@
   const lavaGroup = new THREE.Group();
   const decorGroup = new THREE.Group();
   const mobGroup = new THREE.Group();
+  const caveCreatureGroup = new THREE.Group();
   const friendlyGroup = new THREE.Group();
   const effectGroup = new THREE.Group();
   const cloudGroup = new THREE.Group();
-  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, friendlyGroup, mobGroup, effectGroup, cloudGroup);
+  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, friendlyGroup, mobGroup, caveCreatureGroup, effectGroup, cloudGroup);
 
   const ambient = new THREE.HemisphereLight(0xd9fbff, 0x3b2b22, 0.98);
   const sun = new THREE.DirectionalLight(0xfff7df, 1.26);
@@ -267,6 +281,19 @@
     pink: new THREE.MeshLambertMaterial({ color: 0xff4fb8 }),
     shadow: new THREE.MeshLambertMaterial({ color: 0x191a2b }),
     bone: new THREE.MeshLambertMaterial({ color: 0xffefc7 }),
+    lime: new THREE.MeshLambertMaterial({ color: 0xb7ff56 }),
+    amber: new THREE.MeshLambertMaterial({ color: 0xffc34f }),
+  };
+  const caveMaterials = {
+    glow: new THREE.MeshBasicMaterial({ color: 0x65ffd7 }),
+    glowBlue: new THREE.MeshBasicMaterial({ color: 0x58eaff }),
+    glowPink: new THREE.MeshBasicMaterial({ color: 0xff6fd6 }),
+    stone: new THREE.MeshLambertMaterial({ color: 0x8d8790 }),
+    dark: new THREE.MeshLambertMaterial({ color: 0x151826 }),
+    mite: new THREE.MeshLambertMaterial({ color: 0xcda66b }),
+    crawler: new THREE.MeshLambertMaterial({ color: 0x34403d }),
+    crystal: new THREE.MeshLambertMaterial({ color: 0x7defff }),
+    vine: new THREE.MeshLambertMaterial({ color: 0x3cff9e }),
   };
   const friendlyMaterials = {
     lime: new THREE.MeshLambertMaterial({ color: 0x7dff66 }),
@@ -322,6 +349,7 @@
     },
     input: { forward: 0, right: 0, jump: false, mine: false, place: false, sprint: false },
     mobs: [],
+    caveCreatures: [],
     friendlies: [],
     fx: [],
     hotbar: [],
@@ -506,13 +534,17 @@
   function index(x, y, z) { return (y * WORLD_Z + z) * WORLD_X + x; }
   function surfaceIndex(x, z) { return z * WORLD_X + x; }
   function inWorld(x, y, z) { return x >= 0 && x < WORLD_X && y >= 0 && y < WORLD_Y && z >= 0 && z < WORLD_Z; }
-  function isPlaceable(code) { return code > AIR && DEF[code] && DEF[code].kind === "block" && code !== WATER && code !== TALL_GRASS && code !== FLOWER; }
+  function isPlaceable(code) { return code > AIR && DEF[code] && DEF[code].kind === "block" && code !== WATER && !isReplaceableDecor(code); }
   function maxStack(code) { return (DEF[code] && DEF[code].stack) || 99; }
+  function isReplaceableDecor(code) {
+    const d = DEF[code];
+    return !!(d && d.decor && !d.solid);
+  }
   function canWaterFill(code) {
-    return code === AIR || code === TALL_GRASS || code === FLOWER || code === TORCH;
+    return code === AIR || isReplaceableDecor(code);
   }
   function canLavaFill(code) {
-    return code === AIR || code === TALL_GRASS || code === FLOWER || code === TORCH || code === WATER;
+    return code === AIR || isReplaceableDecor(code) || code === WATER;
   }
 
   function hash32(n) {
@@ -1036,7 +1068,7 @@
     return water + lava;
   }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
-  function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && code !== TORCH && code !== TALL_GRASS && code !== FLOWER && code !== TABLE; }
+  function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && !isReplaceableDecor(code); }
 
   function generateWorld(seed = ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0)) {
     state.seed = seed >>> 0;
@@ -1122,6 +1154,7 @@
     }
 
     settleGeneratedLava();
+    growCaveFeatures();
     growTreesAndDetails();
     carveSpawnMeadow();
     state.baseWorld.set(state.world);
@@ -1130,7 +1163,37 @@
     buildClouds();
     buildStars();
     buildCelestials();
+    spawnCaveCreatures();
     spawnFriendlies();
+  }
+
+  function growCaveFeatures() {
+    for (let z = 2; z < WORLD_Z - 2; z++) {
+      for (let x = 2; x < WORLD_X - 2; x++) {
+        const surface = state.surface[surfaceIndex(x, z)];
+        const maxY = Math.min(surface - 4, WORLD_Y - 5);
+        if (maxY < 8) continue;
+        for (let y = 5; y <= maxY; y++) {
+          if (getBlock(x, y, z) !== AIR) continue;
+          if (getBlock(x, y, z + 1) === WATER || getBlock(x, y, z - 1) === WATER) continue;
+          const floor = getBlock(x, y - 1, z);
+          const ceiling = getBlock(x, y + 1, z);
+          const floorSolid = isSolidBlock(floor) && floor !== BEDROCK;
+          const ceilingSolid = isSolidBlock(ceiling) && ceiling !== BEDROCK;
+          const openAbove = getBlock(x, y + 1, z) === AIR && getBlock(x, y + 2, z) === AIR;
+          const openBelow = getBlock(x, y - 1, z) === AIR && getBlock(x, y - 2, z) === AIR;
+          const roll = hash3(x * 17 + 11, y * 19 - 7, z * 23 + 5);
+          if (floorSolid) {
+            if (roll < 0.0042 && openAbove && y > LAVA_LEVEL + 4) setBase(x, y, z, GLOW_SHROOM);
+            else if (roll >= 0.0042 && roll < 0.0066 && openAbove && y < SEA_LEVEL + 12) setBase(x, y, z, CAVE_CRYSTAL);
+            else if (roll > 0.989 && openAbove) setBase(x, y, z, DRIPSTONE_UP);
+          } else if (ceilingSolid) {
+            if (roll > 0.995 && openBelow) setBase(x, y, z, DRIPSTONE_DOWN);
+            else if (roll > 0.988 && openBelow && y > LAVA_LEVEL + 8) setBase(x, y, z, CAVE_VINE);
+          }
+        }
+      }
+    }
   }
 
   function growTreesAndDetails() {
@@ -1244,7 +1307,7 @@
     let y = WORLD_Y - 1;
     while (y > 0) {
       const code = getBlock(x, y, z);
-      if (code !== AIR && code !== WATER && code !== LAVA && code !== TALL_GRASS && code !== FLOWER && code !== TORCH) break;
+      if (code !== AIR && code !== WATER && code !== LAVA && !isReplaceableDecor(code)) break;
       y--;
     }
     state.surface[surfaceIndex(x, z)] = y;
@@ -1346,7 +1409,7 @@
     state.chunks.set(key, entry);
   }
   function waterOccupiesNeighbor(code) {
-    return code === WATER || code === BEDROCK || code === TALL_GRASS || code === FLOWER;
+    return code === WATER || code === BEDROCK || isReplaceableDecor(code);
   }
   function makeGeometryArrays() {
     return { positions: [], normals: [], colors: [], uvs: [], indices: [] };
@@ -1479,6 +1542,7 @@
             for (let y = 1; y < WORLD_Y; y++) {
               const code = getBlock(x, y, z);
               if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
+              else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) pushCaveFeature(arr, x, y, z, code);
               if (code === TABLE) pushCraftingToilet(arr, x, y, z);
               if (code === TORCH) pushTorch(arr, x, y, z);
             }
@@ -1575,6 +1639,55 @@
     pushTinyBox(arr, cx - 0.16, y, cz - 0.05, 0.32, 0.12, 0.1, body);
     pushTinyBox(arr, cx + 0.11, y + 0.02, cz - 0.035, 0.1, 0.08, 0.07, vividRgb(body, 1.05, 0.9));
     pushBlade(arr, cx - 0.2, y - 0.01, cz, 0.16, 0.18, body, seed * Math.PI * 2, 0.02);
+  }
+  function pushCaveFeature(arr, x, y, z, code) {
+    const seed = hash3(x * 31 + 3, y * 37 - 5, z * 41 + 7);
+    if (code === GLOW_SHROOM) {
+      const stem = vividRgb(cachedRgb("#b7ffe8"), 1.12, 1.05);
+      const cap = vividRgb(cachedRgb(seed > 0.5 ? "#65ffd7" : "#ff6fd6"), 1.35, 1.2);
+      const cx = x + 0.38 + hash2(x + 5, z - 5) * 0.24;
+      const cz = z + 0.38 + hash2(x - 7, z + 7) * 0.24;
+      pushTinyBox(arr, cx, y, cz, 0.14, 0.34, 0.14, stem);
+      pushTinyBox(arr, cx - 0.11, y + 0.28, cz - 0.11, 0.36, 0.13, 0.36, cap);
+      if (seed > 0.62) {
+        pushTinyBox(arr, cx + 0.22, y, cz + 0.16, 0.1, 0.22, 0.1, stem);
+        pushTinyBox(arr, cx + 0.14, y + 0.18, cz + 0.08, 0.26, 0.1, 0.26, cap);
+      }
+      return;
+    }
+    if (code === CAVE_CRYSTAL) {
+      const colors = ["#58eaff", "#9bff66", "#ffd75a", "#ff6fd6"];
+      const crystal = vividRgb(cachedRgb(colors[Math.floor(seed * colors.length) % colors.length]), 1.3, 1.16);
+      for (let i = 0; i < 4; i++) {
+        const ox = 0.28 + hash2(x + i * 3, z - i * 5) * 0.36;
+        const oz = 0.28 + hash2(x - i * 7, z + i * 11) * 0.36;
+        const h = 0.28 + hash2(x + i * 13, z - i * 17) * 0.46;
+        pushTinyBox(arr, x + ox, y, z + oz, 0.13, h, 0.13, crystal);
+        pushTinyBox(arr, x + ox + 0.025, y + h, z + oz + 0.025, 0.08, 0.12, 0.08, vividRgb(crystal, 1.1, 1.14));
+      }
+      return;
+    }
+    if (code === CAVE_VINE) {
+      const vine = vividRgb(cachedRgb("#3cff9e"), 1.28, 0.98);
+      const strands = 2 + Math.floor(seed * 3);
+      for (let i = 0; i < strands; i++) {
+        const ox = 0.25 + hash2(x + i * 19, z - i * 23) * 0.5;
+        const oz = 0.25 + hash2(x - i * 29, z + i * 31) * 0.5;
+        const h = 0.55 + hash2(x + i * 37, z - i * 41) * 1.1;
+        pushBlade(arr, x + ox, y + 1, z + oz, 0.08, -h, vine, seed * Math.PI + i * 0.6, 0.08);
+      }
+      return;
+    }
+    const drip = vividRgb(mixRgb(cachedRgb("#776657"), cachedRgb("#c4b092"), seed), 1.08, 1.02);
+    const layers = code === DRIPSTONE_DOWN
+      ? [[0.24, 0.78], [0.18, 0.48], [0.1, 0.22]]
+      : [[0.3, 0.18], [0.2, 0.48], [0.1, 0.78]];
+    for (let i = 0; i < layers.length; i++) {
+      const w = layers[i][0];
+      const off = layers[i][1];
+      const yy = code === DRIPSTONE_DOWN ? y + 1 - off : y + off - 0.18;
+      pushTinyBox(arr, x + 0.5 - w / 2, yy, z + 0.5 - w / 2, w, 0.22, w, drip);
+    }
   }
   function pushBlade(arr, cx, y, cz, w, h, rgb, rot, lean) {
     const start = arr.positions.length / 3;
@@ -2562,6 +2675,16 @@
     rizzler: { hp: 7, speed: 2.65, roamSpeed: 0.72, damage: 6, score: 18, radius: 0.48, sight: 18, memory: 1.25, attackRange: 1.15 },
     doomscroll: { hp: 14, speed: 1.7, roamSpeed: 0.42, damage: 12, score: 28, radius: 0.62, sight: 19, memory: 1.9, attackRange: 1.28 },
     shadow: { hp: 20, speed: 1.85, roamSpeed: 0.4, damage: 16, score: 38, radius: 0.66, sight: 22, memory: 2.2, attackRange: 1.35 },
+    hater: { hp: 10, speed: 2.35, roamSpeed: 0.58, damage: 7, score: 20, radius: 0.5, sight: 18, memory: 1.35, attackRange: 1.16 },
+    clout: { hp: 16, speed: 1.9, roamSpeed: 0.48, damage: 11, score: 32, radius: 0.62, sight: 20, memory: 1.75, attackRange: 1.24 },
+    phantom: { hp: 11, speed: 2.45, roamSpeed: 0.62, damage: 9, score: 34, radius: 0.52, sight: 24, memory: 1.5, attackRange: 1.2 },
+    warden: { hp: 24, speed: 1.55, roamSpeed: 0.34, damage: 18, score: 56, radius: 0.74, sight: 17, memory: 2.4, attackRange: 1.38 },
+  };
+  const CAVE_CREATURE = {
+    glowbat: { name: "Glow Bat", hp: 5, speed: 2.0, roamSpeed: 0.78, damage: 0, score: 8, radius: 0.42, sight: 0, passive: true, flying: true, drop: RIZZ },
+    oreMite: { name: "Ore Mite", hp: 7, speed: 1.45, roamSpeed: 0.5, damage: 2, score: 12, radius: 0.38, sight: 5.5, skittish: true, drop: COAL },
+    caveCrawler: { name: "Cave Crawler", hp: 14, speed: 1.72, roamSpeed: 0.42, damage: 7, score: 28, radius: 0.58, sight: 10.5, memory: 1.7, attackRange: 1.18, drop: RIZZ },
+    crystalMimic: { name: "Crystal Mimic", hp: 18, speed: 1.12, roamSpeed: 0.24, damage: 12, score: 42, radius: 0.64, sight: 8.5, memory: 2.2, attackRange: 1.25, drop: SIGMA },
   };
   const FRIENDLY_CONFIG = [
     { name: "Lilac", hp: 8, speed: 0.58, radius: 0.52, drops: 1 },
@@ -2633,12 +2756,30 @@
   }
   function chooseMobType(x, z, salt) {
     const roll = hash2(x + salt * 11, z - salt * 7);
-    if (state.day >= 3 && roll > 0.86) return "shadow";
-    if (state.day >= 2 && roll > 0.7) return "doomscroll";
-    if (roll > 0.52) return "rizzler";
-    if (roll > 0.32) return "skibidi";
-    if (state.day >= 2 && roll > 0.18) return "grimace";
+    if (state.day >= 4 && roll > 0.82) return "warden";
+    if (state.day >= 3 && roll > 0.72) return "phantom";
+    if (state.day >= 3 && roll > 0.64) return "shadow";
+    if (state.day >= 2 && roll > 0.54) return "clout";
+    if (state.day >= 2 && roll > 0.46) return "doomscroll";
+    if (roll > 0.36) return "hater";
+    if (roll > 0.26) return "rizzler";
+    if (roll > 0.14) return "skibidi";
+    if (state.day >= 2 && roll > 0.06) return "grimace";
     return "toilet";
+  }
+  function mobDisplayName(type) {
+    return {
+      toilet: "Skibidi Toilet",
+      grimace: "Grimace Shake",
+      skibidi: "Skibidi Head",
+      rizzler: "Rizzler",
+      doomscroll: "Doomscroll",
+      shadow: "Shadow Lurker",
+      hater: "Hater Shade",
+      clout: "Clout Chaser",
+      phantom: "Cringe Phantom",
+      warden: "Sigma Warden",
+    }[type] || "Night Enemy";
   }
   function createMobMesh(type) {
     const group = new THREE.Group();
@@ -2672,6 +2813,36 @@
       addBox(group, [0, 0.88, -0.23], [0.5, 0.08, 0.04], enemyMaterials.cyan);
       addBox(group, [0, 0.58, -0.23], [0.48, 0.08, 0.04], enemyMaterials.pink);
       addBox(group, [0, 0.28, -0.23], [0.34, 0.08, 0.04], enemyMaterials.red);
+    } else if (type === "hater") {
+      addBox(group, [0, 0.45, 0], [0.58, 0.86, 0.5], enemyMaterials.shadow);
+      addBox(group, [0, 0.98, -0.02], [0.48, 0.34, 0.42], enemyMaterials.black);
+      addBox(group, [-0.13, 1.03, -0.26], [0.08, 0.08, 0.04], enemyMaterials.lime);
+      addBox(group, [0.13, 1.03, -0.26], [0.08, 0.08, 0.04], enemyMaterials.lime);
+      addBox(group, [0, 0.33, -0.3], [0.38, 0.08, 0.06], enemyMaterials.purple);
+    } else if (type === "clout") {
+      addBox(group, [0, 0.48, 0], [0.78, 0.9, 0.58], enemyMaterials.orange);
+      addBox(group, [0, 1.02, -0.02], [0.62, 0.34, 0.5], enemyMaterials.pink);
+      addBox(group, [-0.18, 1.08, -0.29], [0.09, 0.1, 0.04], enemyMaterials.cyan);
+      addBox(group, [0.18, 1.08, -0.29], [0.09, 0.1, 0.04], enemyMaterials.cyan);
+      addBox(group, [-0.46, 0.72, 0], [0.14, 0.52, 0.14], enemyMaterials.amber);
+      addBox(group, [0.46, 0.72, 0], [0.14, 0.52, 0.14], enemyMaterials.amber);
+      addBox(group, [0, 1.3, 0], [0.28, 0.16, 0.28], enemyMaterials.cyan);
+    } else if (type === "phantom") {
+      addBox(group, [0, 0.66, 0], [0.44, 1.05, 0.36], enemyMaterials.bone);
+      addBox(group, [0, 1.28, -0.02], [0.42, 0.28, 0.34], enemyMaterials.porcelain);
+      addBox(group, [-0.12, 1.32, -0.21], [0.07, 0.1, 0.04], enemyMaterials.cyan);
+      addBox(group, [0.12, 1.32, -0.21], [0.07, 0.1, 0.04], enemyMaterials.cyan);
+      addBox(group, [-0.36, 0.74, 0.02], [0.12, 0.72, 0.12], enemyMaterials.bone);
+      addBox(group, [0.36, 0.74, 0.02], [0.12, 0.72, 0.12], enemyMaterials.bone);
+      addBox(group, [0, 0.2, 0], [0.7, 0.18, 0.48], enemyMaterials.porcelainDark);
+    } else if (type === "warden") {
+      addBox(group, [0, 0.62, 0], [0.96, 1.18, 0.82], enemyMaterials.black);
+      addBox(group, [0, 1.36, -0.02], [0.72, 0.44, 0.62], enemyMaterials.shadow);
+      addBox(group, [-0.2, 1.44, -0.36], [0.1, 0.13, 0.05], enemyMaterials.red);
+      addBox(group, [0.2, 1.44, -0.36], [0.1, 0.13, 0.05], enemyMaterials.red);
+      addBox(group, [0, 0.82, -0.46], [0.52, 0.12, 0.08], enemyMaterials.cyan);
+      addBox(group, [-0.58, 0.72, 0], [0.16, 0.74, 0.16], enemyMaterials.shadow);
+      addBox(group, [0.58, 0.72, 0], [0.16, 0.74, 0.16], enemyMaterials.shadow);
     } else {
       addBox(group, [0, 0.6, 0], [0.54, 1.2, 0.5], enemyMaterials.shadow);
       addBox(group, [0, 1.28, -0.02], [0.52, 0.38, 0.46], enemyMaterials.black);
@@ -2691,6 +2862,286 @@
     if (mesh.material && mesh.material.color) mesh.userData.baseColor = mesh.material.color.clone();
     group.add(mesh);
     return mesh;
+  }
+  function spawnCaveCreatures() {
+    disposeGroup(caveCreatureGroup);
+    state.caveCreatures = [];
+    for (let i = 0; i < CAVE_CREATURE_COUNT; i++) {
+      const spot = caveCreatureSpot(i);
+      if (!spot) continue;
+      const type = chooseCaveCreatureType(spot, i);
+      const cfg = CAVE_CREATURE[type] || CAVE_CREATURE.oreMite;
+      const creature = {
+        type,
+        x: spot.x + 0.5,
+        y: spot.y + (cfg.flying ? 1.75 + hash2(i * 17, i * 19) * 1.2 : 1),
+        z: spot.z + 0.5,
+        homeX: spot.x + 0.5,
+        homeY: spot.y + 1,
+        homeZ: spot.z + 0.5,
+        targetX: spot.x + 0.5,
+        targetY: spot.y + 1,
+        targetZ: spot.z + 0.5,
+        hp: cfg.hp,
+        mode: cfg.passive ? "drift" : "wander",
+        alertTimer: 0,
+        wanderTimer: 0,
+        hurtTimer: 0,
+        attackTimer: 0,
+        hitCd: 0,
+        knockTimer: 0,
+        knockX: 0,
+        knockZ: 0,
+        phase: hash2(i * 31 + 3, i * 37 - 5) * Math.PI * 2,
+        turn: hash2(i * 41 - 7, i * 43 + 11) * Math.PI * 2,
+        mesh: createCaveCreatureMesh(type),
+      };
+      creature.mesh.position.set(creature.x, creature.y, creature.z);
+      caveCreatureGroup.add(creature.mesh);
+      state.caveCreatures.push(creature);
+    }
+  }
+  function caveCreatureSpot(i) {
+    const cx = WORLD_X / 2;
+    const cz = WORLD_Z / 2;
+    for (let tries = 0; tries < 170; tries++) {
+      const x = 3 + Math.floor(hash2(i * 101 + tries * 23, i * 103 - tries * 29) * (WORLD_X - 6));
+      const z = 3 + Math.floor(hash2(i * 107 - tries * 31, i * 109 + tries * 37) * (WORLD_Z - 6));
+      if (Math.hypot(x - cx, z - cz) < 24) continue;
+      if (edgeOceanStrength(x, z) > 0.55) continue;
+      const surface = state.surface[surfaceIndex(x, z)];
+      const maxY = Math.min(surface - 5, SEA_LEVEL + 30);
+      if (maxY < 8) continue;
+      const y = 4 + Math.floor(hash3(x + tries * 3, i * 11 - tries, z - tries * 5) * (maxY - 4));
+      const stand = caveStandYAt(x + 0.5, z + 0.5, y);
+      if (stand === null) continue;
+      if (getBlock(x, stand + 1, z) === WATER || getBlock(x, stand + 1, z) === LAVA) continue;
+      if (torchLightAt(x, stand + 1, z) > 0.12) continue;
+      return { x, y: stand, z };
+    }
+    return null;
+  }
+  function chooseCaveCreatureType(spot, salt) {
+    const roll = hash3(spot.x + salt * 13, spot.y - salt * 17, spot.z + salt * 19);
+    if (spot.y < LAVA_LEVEL + 14 && roll > 0.72) return "crystalMimic";
+    if (roll > 0.58) return "caveCrawler";
+    if (roll > 0.32) return "oreMite";
+    return "glowbat";
+  }
+  function caveStandYAt(x, z, nearY) {
+    const ix = clamp(Math.floor(x), 1, WORLD_X - 2);
+    const iz = clamp(Math.floor(z), 1, WORLD_Z - 2);
+    const surface = state.surface[surfaceIndex(ix, iz)];
+    const start = clamp(Math.floor(nearY), 2, Math.max(2, surface - 4));
+    for (let offset = 0; offset <= 3; offset++) {
+      for (const y of [start - offset, start + offset]) {
+        if (y < 2 || y >= surface - 3 || y >= WORLD_Y - 3) continue;
+        const floor = getBlock(ix, y, iz);
+        const feet = getBlock(ix, y + 1, iz);
+        const head = getBlock(ix, y + 2, iz);
+        if (!isSolidBlock(floor) || floor === BEDROCK) continue;
+        if ((feet === AIR || isReplaceableDecor(feet)) && (head === AIR || isReplaceableDecor(head))) return y;
+      }
+    }
+    return null;
+  }
+  function createCaveCreatureMesh(type) {
+    const group = new THREE.Group();
+    if (type === "glowbat") {
+      addBox(group, [0, 0.28, 0], [0.42, 0.26, 0.28], caveMaterials.dark);
+      addBox(group, [-0.48, 0.28, 0], [0.58, 0.08, 0.24], caveMaterials.glow);
+      addBox(group, [0.48, 0.28, 0], [0.58, 0.08, 0.24], caveMaterials.glow);
+      addBox(group, [-0.1, 0.34, -0.16], [0.07, 0.08, 0.04], caveMaterials.glowBlue);
+      addBox(group, [0.1, 0.34, -0.16], [0.07, 0.08, 0.04], caveMaterials.glowBlue);
+    } else if (type === "oreMite") {
+      addBox(group, [0, 0.24, 0], [0.58, 0.32, 0.48], caveMaterials.mite);
+      addBox(group, [0, 0.44, -0.02], [0.36, 0.22, 0.34], caveMaterials.stone);
+      addBox(group, [-0.16, 0.5, -0.23], [0.07, 0.07, 0.04], enemyMaterials.black);
+      addBox(group, [0.16, 0.5, -0.23], [0.07, 0.07, 0.04], enemyMaterials.black);
+      for (let i = 0; i < 4; i++) addBox(group, [-0.32 + i * 0.21, 0.12, -0.26], [0.08, 0.08, 0.18], caveMaterials.mite);
+    } else if (type === "caveCrawler") {
+      addBox(group, [0, 0.34, 0], [0.78, 0.38, 0.66], caveMaterials.crawler);
+      addBox(group, [0, 0.58, -0.08], [0.52, 0.34, 0.42], caveMaterials.dark);
+      addBox(group, [-0.16, 0.64, -0.32], [0.09, 0.1, 0.04], caveMaterials.glowPink);
+      addBox(group, [0.16, 0.64, -0.32], [0.09, 0.1, 0.04], caveMaterials.glowPink);
+      for (let i = 0; i < 3; i++) {
+        addBox(group, [-0.46, 0.24 + i * 0.06, -0.22 + i * 0.22], [0.12, 0.1, 0.36], caveMaterials.crawler);
+        addBox(group, [0.46, 0.24 + i * 0.06, -0.22 + i * 0.22], [0.12, 0.1, 0.36], caveMaterials.crawler);
+      }
+    } else {
+      addBox(group, [0, 0.34, 0], [0.72, 0.58, 0.68], caveMaterials.stone);
+      addBox(group, [0, 0.84, 0], [0.46, 0.36, 0.46], caveMaterials.crystal);
+      addBox(group, [-0.17, 0.54, -0.36], [0.09, 0.12, 0.04], caveMaterials.glowBlue);
+      addBox(group, [0.17, 0.54, -0.36], [0.09, 0.12, 0.04], caveMaterials.glowBlue);
+      addBox(group, [0, 0.26, -0.38], [0.34, 0.07, 0.04], enemyMaterials.red);
+    }
+    group.traverse((child) => { child.castShadow = true; child.receiveShadow = true; });
+    return group;
+  }
+  function updateCaveCreatures(dt) {
+    const p = state.player;
+    const now = performance.now() * 0.001;
+    for (let i = state.caveCreatures.length - 1; i >= 0; i--) {
+      const creature = state.caveCreatures[i];
+      const cfg = CAVE_CREATURE[creature.type] || CAVE_CREATURE.oreMite;
+      const dx = p.x - creature.x;
+      const dy = (p.y + 0.55) - creature.y;
+      const dz = p.z - creature.z;
+      const dist = Math.hypot(dx, dz) || 1;
+      const seesPlayer = !cfg.passive && dist < (cfg.sight || 0) && Math.abs(dy) < 4.8 && !skyVisible(Math.floor(creature.x), Math.floor(creature.y), Math.floor(creature.z)) && clearMobSight(creature.x, creature.y + 0.35, creature.z, p.x, p.y + EYE_HEIGHT * 0.55, p.z);
+      if (cfg.skittish && dist < 4.8) {
+        creature.mode = "flee";
+        creature.alertTimer = 1.2;
+      } else if (seesPlayer) {
+        creature.mode = "hunt";
+        creature.alertTimer = cfg.memory || 1.2;
+      } else if (creature.alertTimer > 0) {
+        creature.alertTimer = Math.max(0, creature.alertTimer - dt);
+      } else if (creature.mode === "hunt" || creature.mode === "flee") {
+        creature.mode = cfg.passive || cfg.flying ? "drift" : "wander";
+      }
+
+      if (creature.knockTimer > 0) {
+        creature.knockTimer -= dt;
+        creature.x += creature.knockX * dt;
+        creature.z += creature.knockZ * dt;
+        creature.knockX *= 0.84;
+        creature.knockZ *= 0.84;
+      } else if (creature.mode === "hunt") {
+        creature.x += (dx / dist) * cfg.speed * dt;
+        creature.z += (dz / dist) * cfg.speed * dt;
+      } else if (creature.mode === "flee") {
+        creature.x -= (dx / dist) * cfg.speed * 1.25 * dt;
+        creature.z -= (dz / dist) * cfg.speed * 1.25 * dt;
+      } else {
+        updateCaveCreatureWander(creature, cfg, dt, i);
+      }
+      creature.x = clamp(creature.x, 1, WORLD_X - 1);
+      creature.z = clamp(creature.z, 1, WORLD_Z - 1);
+      if (cfg.flying) {
+        creature.y += Math.sin(now * 1.4 + creature.phase) * 0.01;
+      } else {
+        const ground = caveStandYAt(creature.x, creature.z, creature.y - 1);
+        if (ground !== null) creature.y = ground + 1;
+      }
+      if (creature.hurtTimer > 0) creature.hurtTimer -= dt;
+      if (creature.attackTimer > 0) creature.attackTimer -= dt;
+      if (creature.hitCd > 0) creature.hitCd -= dt;
+      if (creature.mode === "hunt" && dist < (cfg.attackRange || 1.1) && Math.abs(dy) < 1.9 && cfg.damage > 0 && creature.hitCd <= 0) {
+        creature.attackTimer = CAVE_CREATURE_ATTACK_SECONDS;
+        creature.hitCd = 1.05;
+        hurtPlayer(cfg.damage);
+      }
+      if (creature.hp <= 0) {
+        addScore(cfg.score || 5);
+        dropCaveCreatureLoot(creature, cfg);
+        removeCaveCreature(creature, i);
+        continue;
+      }
+      renderCaveCreature(creature, cfg, now, i);
+    }
+  }
+  function updateCaveCreatureWander(creature, cfg, dt, salt) {
+    creature.wanderTimer = Math.max(0, (creature.wanderTimer || 0) - dt);
+    const tx = (creature.targetX || creature.x) - creature.x;
+    const tz = (creature.targetZ || creature.z) - creature.z;
+    const dist = Math.hypot(tx, tz);
+    if (creature.wanderTimer <= 0 || dist < 0.35) chooseCaveCreatureTarget(creature, cfg, salt);
+    const dx = (creature.targetX || creature.x) - creature.x;
+    const dz = (creature.targetZ || creature.z) - creature.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const speed = cfg.roamSpeed || 0.35;
+    creature.x += (dx / len) * speed * dt;
+    creature.z += (dz / len) * speed * dt;
+    creature.turn = Math.atan2(dx, dz);
+    if (cfg.flying) creature.y = lerp(creature.y, creature.targetY || creature.y, 0.025);
+  }
+  function chooseCaveCreatureTarget(creature, cfg, salt) {
+    const baseX = Math.floor(creature.homeX * 9 + salt * 23);
+    const baseZ = Math.floor(creature.homeZ * 9 - salt * 29);
+    const baseY = Math.floor(creature.homeY);
+    for (let tries = 0; tries < 10; tries++) {
+      const angle = hash2(baseX + tries * 7, baseZ - tries * 11) * Math.PI * 2;
+      const dist = 2.5 + hash2(baseX - tries * 13, baseZ + tries * 17) * 7.5;
+      const tx = clamp(creature.homeX + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
+      const tz = clamp(creature.homeZ + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
+      const ty = cfg.flying ? clamp(baseY + 1.4 + (hash2(baseX + tries, baseZ - tries) - 0.5) * 3.2, 4, WORLD_Y - 4) : baseY;
+      if (cfg.flying) {
+        if (getBlock(Math.floor(tx), Math.floor(ty), Math.floor(tz)) === AIR && !skyVisible(Math.floor(tx), Math.floor(ty), Math.floor(tz))) {
+          creature.targetX = tx;
+          creature.targetY = ty;
+          creature.targetZ = tz;
+          creature.wanderTimer = 1.2 + hash2(baseX + tries * 19, baseZ - tries * 23) * 2.8;
+          return;
+        }
+      } else {
+        const ground = caveStandYAt(tx, tz, baseY);
+        if (ground !== null) {
+          creature.targetX = tx;
+          creature.targetY = ground + 1;
+          creature.targetZ = tz;
+          creature.wanderTimer = 1.2 + hash2(baseX + tries * 19, baseZ - tries * 23) * 2.8;
+          return;
+        }
+      }
+    }
+    creature.targetX = creature.homeX;
+    creature.targetY = creature.homeY + (cfg.flying ? 1.4 : 0);
+    creature.targetZ = creature.homeZ;
+    creature.wanderTimer = 1;
+  }
+  function renderCaveCreature(creature, cfg, now, salt) {
+    const hurtPulse = creature.hurtTimer > 0 ? Math.sin((1 - creature.hurtTimer / CAVE_CREATURE_HURT_SECONDS) * Math.PI) : 0;
+    const attackPulse = creature.attackTimer > 0 ? Math.sin((1 - creature.attackTimer / CAVE_CREATURE_ATTACK_SECONDS) * Math.PI) : 0;
+    const bob = Math.sin(now * (cfg.flying ? 5.6 : 2.8) + creature.phase) * (cfg.flying ? 0.16 : 0.04);
+    const faceX = creature.mode === "hunt" ? state.player.x - creature.x : Math.sin(creature.turn || 0);
+    const faceZ = creature.mode === "hunt" ? state.player.z - creature.z : Math.cos(creature.turn || 0);
+    creature.mesh.position.set(creature.x, creature.y + bob + hurtPulse * 0.09, creature.z);
+    creature.mesh.rotation.y = Math.atan2(faceX, faceZ) + Math.PI;
+    creature.mesh.rotation.x = creature.mode === "hunt" ? -attackPulse * 0.22 : Math.sin(now * 1.4 + salt) * 0.04;
+    creature.mesh.rotation.z = cfg.flying ? Math.sin(now * 6 + creature.phase) * 0.18 : Math.sin(now * 2 + creature.phase) * 0.04;
+    const base = creature.type === "glowbat" ? 1.0 : creature.type === "crystalMimic" ? 1.18 : 1.08;
+    creature.mesh.scale.set(base + hurtPulse * 0.12, base - attackPulse * 0.06 + hurtPulse * 0.06, base + hurtPulse * 0.12);
+    applyCreatureFlash(creature, hurtPulse, attackPulse);
+  }
+  function damageCaveCreature(creature, damage) {
+    const cfg = CAVE_CREATURE[creature.type] || CAVE_CREATURE.oreMite;
+    const dx = creature.x - state.player.x;
+    const dz = creature.z - state.player.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    creature.hp -= damage;
+    creature.hurtTimer = CAVE_CREATURE_HURT_SECONDS;
+    creature.knockTimer = 0.16;
+    creature.knockX = (dx / dist) * 3;
+    creature.knockZ = (dz / dist) * 3;
+    if (!cfg.passive && !cfg.skittish) creature.mode = "hunt";
+    else creature.mode = "flee";
+    creature.alertTimer = cfg.memory || 1.4;
+    spawnHitBurst(creature.x, creature.y + 0.45, creature.z, cachedRgb(creature.type === "crystalMimic" ? "#58eaff" : "#b7ffe8"));
+  }
+  function dropCaveCreatureLoot(creature, cfg) {
+    if (!cfg.drop) return;
+    const bonus = creature.type === "crystalMimic" && hash2(creature.x, creature.z) > 0.62 ? 1 : 0;
+    giveItem(cfg.drop, 1 + bonus);
+    spawnBurst(creature.x, creature.y + 0.4, creature.z, DEF[cfg.drop].rgb || cachedRgb("#ffffff"), 7 + bonus * 4, 2.4);
+  }
+  function applyCreatureFlash(creature, hurtPulse, attackPulse) {
+    if (!creature.mesh) return;
+    creature.mesh.traverse((child) => {
+      if (!child.material || !child.material.color || !child.userData.baseColor) return;
+      child.material.color.copy(child.userData.baseColor);
+      if (attackPulse > 0) child.material.color.lerp(mobAttackColor, attackPulse * 0.24);
+      if (hurtPulse > 0) child.material.color.lerp(mobHurtColor, hurtPulse * 0.78);
+    });
+  }
+  function removeCaveCreature(creature, index) {
+    if (index >= 0) removeAtIndex(state.caveCreatures, index);
+    caveCreatureGroup.remove(creature.mesh);
+    disposeMesh(creature.mesh);
+  }
+  function caveCreatureName(type) {
+    const cfg = CAVE_CREATURE[type];
+    return cfg ? cfg.name : "Cave Creature";
   }
   function updateMobs(dt) {
     const p = state.player;
@@ -2774,7 +3225,7 @@
       const y = Math.floor(y0 + dy * t);
       const z = Math.floor(z0 + dz * t);
       const code = getBlock(x, y, z);
-      if (code !== AIR && code !== WATER && code !== TALL_GRASS && code !== FLOWER && code !== TORCH) return false;
+      if (code !== AIR && code !== WATER && !isReplaceableDecor(code)) return false;
     }
     return true;
   }
@@ -3062,6 +3513,15 @@
         radius: MOB[mob.type].radius,
       });
     }
+    for (const creature of state.caveCreatures) {
+      const cfg = CAVE_CREATURE[creature.type] || CAVE_CREATURE.oreMite;
+      allTargets.push({
+        kind: "cave",
+        type: creature.type,
+        target: creature,
+        radius: cfg.radius,
+      });
+    }
     for (const friendly of state.friendlies) {
       allTargets.push({
         kind: "friendly",
@@ -3095,9 +3555,12 @@
     if (hit.kind === "friendly") {
       damageFriendly(hit.target, damage);
       api.toast(`Hit ${friendlyName(hit.type)} -${damage}`, "");
+    } else if (hit.kind === "cave") {
+      damageCaveCreature(hit.target, damage);
+      api.toast(`Hit ${caveCreatureName(hit.type)} -${damage}`, "");
     } else {
       damageMob(hit.target, damage);
-      api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"} -${damage}`, "");
+      api.toast(`Hit ${mobDisplayName(hit.type)} -${damage}`, "");
     }
     state.attackCd = 0.32;
     return true;
@@ -3262,7 +3725,7 @@
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
     setText("hud-high", state.high.toLocaleString());
-    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z}x${WORLD_Y} world - lava below ${LAVA_LEVEL} - ${state.mobs.length} enemies - ${state.friendlies.length} pals`;
+    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z}x${WORLD_Y} world - lava below ${LAVA_LEVEL} - ${state.mobs.length} enemies - ${state.caveCreatures.length} cave creatures - ${state.friendlies.length} pals`;
     ui.hotbar.innerHTML = state.hotbar.map((slot, i) => {
       const selected = i === state.selected ? " is-selected" : "";
       const label = slotName(slot, "");
@@ -3719,6 +4182,7 @@
       updatePlayer(dt);
       updateVisibleChunks();
       updateMobs(dt);
+      updateCaveCreatures(dt);
       updateTarget();
       updateMining(dt);
       updatePlacing(dt);
@@ -3938,6 +4402,7 @@
     readWorldIndex,
     saveCurrentWorld,
     spawnMob,
+    spawnCaveCreatures,
     generateWorld,
     rebuildAllChunks,
     updateVisibleChunks,
@@ -3951,6 +4416,7 @@
     heldAttackDamage,
     triggerHeldSwing,
     damageMob,
+    damageCaveCreature,
     spawnBlockBurst,
     spawnFriendlies,
     findBlock,
@@ -3972,6 +4438,11 @@
         edgeOcean: EDGE_OCEAN,
         renderRadiusChunks: RENDER_RADIUS_CHUNKS,
         visibleChunkCount: state.visibleChunkCount,
+        caveCreatureCount: state.caveCreatures.length,
+        caveCreatureTypes: state.caveCreatures.reduce((counts, creature) => {
+          counts[creature.type] = (counts[creature.type] || 0) + 1;
+          return counts;
+        }, {}),
         friendlyCount: state.friendlies.length,
         movingFriendlies: state.friendlies.filter((friendly) => friendlyMovingAction(friendly.action)).length,
         worldId: currentWorldId,

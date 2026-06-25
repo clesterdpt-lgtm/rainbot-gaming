@@ -262,6 +262,11 @@
     red: new THREE.MeshLambertMaterial({ color: 0xb8233a }),
     purple: new THREE.MeshLambertMaterial({ color: 0x7842a1 }),
     cyan: new THREE.MeshLambertMaterial({ color: 0x43e6ff }),
+    toxic: new THREE.MeshLambertMaterial({ color: 0x73ff45 }),
+    orange: new THREE.MeshLambertMaterial({ color: 0xff8d2a }),
+    pink: new THREE.MeshLambertMaterial({ color: 0xff4fb8 }),
+    shadow: new THREE.MeshLambertMaterial({ color: 0x191a2b }),
+    bone: new THREE.MeshLambertMaterial({ color: 0xffefc7 }),
   };
   const friendlyMaterials = {
     lime: new THREE.MeshLambertMaterial({ color: 0x7dff66 }),
@@ -370,6 +375,7 @@
   let selectionCueTimer = 0;
   let chunkCenterKey = "";
   let decorCenterKey = "";
+  let mobSpawnSerial = 0;
   let sunDisk = null;
   let moonDisk = null;
   const reusableVector = new THREE.Vector3();
@@ -2474,8 +2480,12 @@
   }
 
   const MOB = {
-    toilet: { hp: 9, speed: 2.15, damage: 8, score: 15, radius: 0.55 },
-    grimace: { hp: 17, speed: 1.45, damage: 14, score: 30, radius: 0.7 },
+    toilet: { hp: 9, speed: 2.15, roamSpeed: 0.48, damage: 8, score: 15, radius: 0.55, sight: 16, memory: 1.45, attackRange: 1.25 },
+    grimace: { hp: 17, speed: 1.45, roamSpeed: 0.36, damage: 14, score: 30, radius: 0.7, sight: 14, memory: 1.75, attackRange: 1.3 },
+    skibidi: { hp: 12, speed: 1.95, roamSpeed: 0.5, damage: 10, score: 24, radius: 0.62, sight: 17, memory: 1.55, attackRange: 1.25 },
+    rizzler: { hp: 7, speed: 2.65, roamSpeed: 0.72, damage: 6, score: 18, radius: 0.48, sight: 18, memory: 1.25, attackRange: 1.15 },
+    doomscroll: { hp: 14, speed: 1.7, roamSpeed: 0.42, damage: 12, score: 28, radius: 0.62, sight: 19, memory: 1.9, attackRange: 1.28 },
+    shadow: { hp: 20, speed: 1.85, roamSpeed: 0.4, damage: 16, score: 38, radius: 0.66, sight: 22, memory: 2.2, attackRange: 1.35 },
   };
   const FRIENDLY_CONFIG = [
     { name: "Lilac", hp: 8, speed: 0.58, radius: 0.52, drops: 1 },
@@ -2491,22 +2501,55 @@
     return getFriendlyConfig(type).name || "friendly";
   }
   function spawnMob() {
-    if (state.mobs.length >= Math.min(6 + state.day * 2, 18)) return;
+    if (state.mobs.length >= Math.min(8 + state.day * 3, 28)) return;
     const p = state.player;
-    for (let tries = 0; tries < 20; tries++) {
-      const angle = hash2(tries, state.day * 11) * Math.PI * 2;
-      const dist = 14 + hash2(tries, state.day * 7) * 18;
-      const x = clamp(Math.round(p.x + Math.cos(angle) * dist), 2, WORLD_X - 3);
-      const z = clamp(Math.round(p.z + Math.sin(angle) * dist), 2, WORLD_Z - 3);
+    const serial = ++mobSpawnSerial;
+    const tick = Math.floor(performance.now() * 0.017) + state.day * 997 + serial * 7919;
+    for (let tries = 0; tries < 56; tries++) {
+      const x = 2 + Math.floor(hash2(tick + tries * 31, state.day * 41 - tries * 13) * (WORLD_X - 4));
+      const z = 2 + Math.floor(hash2(state.day * 67 + tries * 19, tick - tries * 37) * (WORLD_Z - 4));
+      const dx = x + 0.5 - p.x;
+      const dz = z + 0.5 - p.z;
+      if (dx * dx + dz * dz < 34 * 34) continue;
+      if (state.mobs.some((other) => Math.hypot(other.x - (x + 0.5), other.z - (z + 0.5)) < 5)) continue;
       const y = state.surface[surfaceIndex(x, z)] + 1;
-      if (y <= SEA_LEVEL || torchLightAt(x, y, z) > 0.2) continue;
-      const type = state.day > 1 && hash2(x + 8, z - 6) > 0.7 ? "grimace" : "toilet";
-      const mob = { type, x: x + 0.5, y, z: z + 0.5, hp: MOB[type].hp, hitCd: 0, hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0, mesh: createMobMesh(type) };
+      if (y <= SEA_LEVEL || !skyVisible(x, y, z) || torchLightAt(x, y, z) > 0.2) continue;
+      const type = chooseMobType(x, z, serial + tries);
+      const turn = hash2(x + tries, z - tries) * Math.PI * 2;
+      const mob = {
+        type,
+        x: x + 0.5,
+        y,
+        z: z + 0.5,
+        hp: MOB[type].hp,
+        mode: "wander",
+        turn,
+        alertTimer: 0,
+        wanderTimer: 0,
+        targetX: x + 0.5,
+        targetZ: z + 0.5,
+        hitCd: 0,
+        hurtTimer: 0,
+        attackTimer: 0,
+        knockTimer: 0,
+        knockX: 0,
+        knockZ: 0,
+        mesh: createMobMesh(type),
+      };
       mob.mesh.position.set(mob.x, mob.y, mob.z);
       mobGroup.add(mob.mesh);
       state.mobs.push(mob);
       return;
     }
+  }
+  function chooseMobType(x, z, salt) {
+    const roll = hash2(x + salt * 11, z - salt * 7);
+    if (state.day >= 3 && roll > 0.86) return "shadow";
+    if (state.day >= 2 && roll > 0.7) return "doomscroll";
+    if (roll > 0.52) return "rizzler";
+    if (roll > 0.32) return "skibidi";
+    if (state.day >= 2 && roll > 0.18) return "grimace";
+    return "toilet";
   }
   function createMobMesh(type) {
     const group = new THREE.Group();
@@ -2516,11 +2559,37 @@
       addBox(group, [-0.18, 0.95, -0.24], [0.09, 0.09, 0.04], enemyMaterials.black);
       addBox(group, [0.18, 0.95, -0.24], [0.09, 0.09, 0.04], enemyMaterials.black);
       addBox(group, [0, 0.74, -0.38], [0.34, 0.06, 0.05], enemyMaterials.red);
-    } else {
+    } else if (type === "grimace") {
       addBox(group, [0, 0.5, 0], [1.05, 1.05, 0.92], enemyMaterials.purple);
       addBox(group, [-0.22, 0.74, -0.45], [0.16, 0.16, 0.04], enemyMaterials.cyan);
       addBox(group, [0.22, 0.74, -0.45], [0.16, 0.16, 0.04], enemyMaterials.cyan);
       addBox(group, [0, 0.42, -0.48], [0.34, 0.07, 0.05], enemyMaterials.black);
+    } else if (type === "skibidi") {
+      addBox(group, [0, 0.35, 0], [0.84, 0.62, 0.74], enemyMaterials.porcelain);
+      addBox(group, [0, 0.9, -0.04], [0.7, 0.34, 0.42], enemyMaterials.bone);
+      addBox(group, [0, 1.18, -0.04], [0.36, 0.28, 0.34], enemyMaterials.orange);
+      addBox(group, [-0.11, 1.23, -0.23], [0.07, 0.07, 0.04], enemyMaterials.black);
+      addBox(group, [0.11, 1.23, -0.23], [0.07, 0.07, 0.04], enemyMaterials.black);
+      addBox(group, [0, 1.1, -0.25], [0.2, 0.05, 0.04], enemyMaterials.red);
+    } else if (type === "rizzler") {
+      addBox(group, [0, 0.42, 0], [0.68, 0.76, 0.58], enemyMaterials.toxic);
+      addBox(group, [0, 0.92, -0.04], [0.52, 0.34, 0.48], enemyMaterials.orange);
+      addBox(group, [-0.15, 0.98, -0.28], [0.09, 0.09, 0.04], enemyMaterials.cyan);
+      addBox(group, [0.15, 0.98, -0.28], [0.09, 0.09, 0.04], enemyMaterials.cyan);
+      addBox(group, [0, 0.28, -0.36], [0.44, 0.12, 0.09], enemyMaterials.pink);
+    } else if (type === "doomscroll") {
+      addBox(group, [0, 0.55, 0], [0.92, 1.0, 0.32], enemyMaterials.black);
+      addBox(group, [0, 0.58, -0.18], [0.76, 0.72, 0.05], enemyMaterials.purple);
+      addBox(group, [0, 0.88, -0.23], [0.5, 0.08, 0.04], enemyMaterials.cyan);
+      addBox(group, [0, 0.58, -0.23], [0.48, 0.08, 0.04], enemyMaterials.pink);
+      addBox(group, [0, 0.28, -0.23], [0.34, 0.08, 0.04], enemyMaterials.red);
+    } else {
+      addBox(group, [0, 0.6, 0], [0.54, 1.2, 0.5], enemyMaterials.shadow);
+      addBox(group, [0, 1.28, -0.02], [0.52, 0.38, 0.46], enemyMaterials.black);
+      addBox(group, [-0.13, 1.34, -0.27], [0.08, 0.12, 0.04], enemyMaterials.red);
+      addBox(group, [0.13, 1.34, -0.27], [0.08, 0.12, 0.04], enemyMaterials.red);
+      addBox(group, [-0.36, 0.64, 0], [0.12, 0.68, 0.12], enemyMaterials.shadow);
+      addBox(group, [0.36, 0.64, 0], [0.12, 0.68, 0.12], enemyMaterials.shadow);
     }
     group.traverse((child) => { child.castShadow = true; child.receiveShadow = true; });
     return group;
@@ -2538,19 +2607,30 @@
     const p = state.player;
     for (let i = state.mobs.length - 1; i >= 0; i--) {
       const mob = state.mobs[i];
-      const cfg = MOB[mob.type];
+      const cfg = MOB[mob.type] || MOB.toilet;
       const dx = p.x - mob.x;
       const dz = p.z - mob.z;
       const dist = Math.hypot(dx, dz) || 1;
+      const seesPlayer = canMobSeePlayer(mob, cfg, dist);
+      if (seesPlayer) {
+        mob.mode = "hunt";
+        mob.alertTimer = cfg.memory;
+      } else if (mob.alertTimer > 0) {
+        mob.alertTimer = Math.max(0, mob.alertTimer - dt);
+      } else {
+        mob.mode = "wander";
+      }
       if (mob.knockTimer > 0) {
         mob.knockTimer -= dt;
         mob.x += mob.knockX * dt;
         mob.z += mob.knockZ * dt;
         mob.knockX *= 0.84;
         mob.knockZ *= 0.84;
-      } else {
+      } else if (mob.mode === "hunt") {
         mob.x += (dx / dist) * cfg.speed * dt;
         mob.z += (dz / dist) * cfg.speed * dt;
+      } else {
+        updateMobWander(mob, cfg, dt, i);
       }
       mob.x = clamp(mob.x, 1, WORLD_X - 1);
       mob.z = clamp(mob.z, 1, WORLD_Z - 1);
@@ -2560,13 +2640,15 @@
       const attackPulse = mob.attackTimer > 0 ? Math.sin((1 - mob.attackTimer / MOB_ATTACK_SECONDS) * Math.PI) : 0;
       const hurtPulse = mob.hurtTimer > 0 ? Math.sin((1 - mob.hurtTimer / MOB_HURT_SECONDS) * Math.PI) : 0;
       const bob = Math.sin(performance.now() / 160 + i) * 0.04;
+      const faceX = mob.mode === "hunt" ? dx : Math.sin(mob.turn || 0);
+      const faceZ = mob.mode === "hunt" ? dz : Math.cos(mob.turn || 0);
       mob.mesh.position.set(mob.x + (dx / dist) * attackPulse * 0.38, mob.y + bob + hurtPulse * 0.12, mob.z + (dz / dist) * attackPulse * 0.38);
-      mob.mesh.rotation.y = Math.atan2(dx, dz) + Math.PI;
+      mob.mesh.rotation.y = Math.atan2(faceX, faceZ) + Math.PI;
       mob.mesh.rotation.x = -attackPulse * 0.22 + hurtPulse * 0.08;
       mob.mesh.scale.set(1 + hurtPulse * 0.16, 1 - attackPulse * 0.08 + hurtPulse * 0.08, 1 + hurtPulse * 0.16);
       applyMobFlash(mob, hurtPulse, attackPulse);
       if (mob.hitCd > 0) mob.hitCd -= dt;
-      if (dist < 1.25 && Math.abs((p.y + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
+      if (mob.mode === "hunt" && dist < cfg.attackRange && Math.abs((p.y + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
         mob.attackTimer = MOB_ATTACK_SECONDS;
         hurtPlayer(cfg.damage);
         mob.hitCd = 1.25;
@@ -2580,6 +2662,65 @@
         state.mobs.splice(i, 1);
       }
     }
+  }
+  function canMobSeePlayer(mob, cfg, dist) {
+    if (!isNight() || dist > cfg.sight || Math.abs((state.player.y + EYE_HEIGHT * 0.65) - (mob.y + 0.75)) > 5) return false;
+    if (dist > 4 && mob.mode !== "hunt") {
+      const facingX = Math.sin(mob.turn || 0);
+      const facingZ = Math.cos(mob.turn || 0);
+      const toPlayerX = (state.player.x - mob.x) / dist;
+      const toPlayerZ = (state.player.z - mob.z) / dist;
+      if (facingX * toPlayerX + facingZ * toPlayerZ < -0.18) return false;
+    }
+    return clearMobSight(mob.x, mob.y + 0.82, mob.z, state.player.x, state.player.y + EYE_HEIGHT * 0.72, state.player.z);
+  }
+  function clearMobSight(x0, y0, z0, x1, y1, z1) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dz = z1 - z0;
+    const steps = Math.max(8, Math.ceil(Math.hypot(dx, dy, dz) * 2.5));
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = Math.floor(x0 + dx * t);
+      const y = Math.floor(y0 + dy * t);
+      const z = Math.floor(z0 + dz * t);
+      const code = getBlock(x, y, z);
+      if (code !== AIR && code !== WATER && code !== TALL_GRASS && code !== FLOWER && code !== TORCH) return false;
+    }
+    return true;
+  }
+  function updateMobWander(mob, cfg, dt, salt) {
+    mob.wanderTimer = Math.max(0, (mob.wanderTimer || 0) - dt);
+    const ddx = (mob.targetX || mob.x) - mob.x;
+    const ddz = (mob.targetZ || mob.z) - mob.z;
+    const dist = Math.hypot(ddx, ddz);
+    if (mob.wanderTimer <= 0 || dist < 0.45) chooseMobWanderTarget(mob, salt);
+    const tx = (mob.targetX || mob.x) - mob.x;
+    const tz = (mob.targetZ || mob.z) - mob.z;
+    const targetDist = Math.hypot(tx, tz) || 1;
+    const speed = cfg.roamSpeed || 0.4;
+    mob.x += (tx / targetDist) * speed * dt;
+    mob.z += (tz / targetDist) * speed * dt;
+    mob.turn = Math.atan2(tx, tz);
+  }
+  function chooseMobWanderTarget(mob, salt) {
+    const baseX = Math.floor(mob.x * 7 + salt * 17 + state.day * 13);
+    const baseZ = Math.floor(mob.z * 7 - salt * 19 + state.day * 11);
+    for (let tries = 0; tries < 8; tries++) {
+      const angle = hash2(baseX + tries * 5, baseZ - tries * 3) * Math.PI * 2;
+      const dist = 4 + hash2(baseX - tries * 11, baseZ + tries * 7) * 11;
+      const tx = clamp(mob.x + Math.cos(angle) * dist, 2.5, WORLD_X - 2.5);
+      const tz = clamp(mob.z + Math.sin(angle) * dist, 2.5, WORLD_Z - 2.5);
+      const y = groundYAt(tx, tz);
+      if (y <= SEA_LEVEL || torchLightAt(Math.floor(tx), y + 1, Math.floor(tz)) > 0.25) continue;
+      mob.targetX = tx;
+      mob.targetZ = tz;
+      mob.wanderTimer = 1.4 + hash2(baseX + tries * 23, baseZ - tries * 29) * 3.4;
+      return;
+    }
+    mob.targetX = mob.x;
+    mob.targetZ = mob.z;
+    mob.wanderTimer = 1.1;
   }
   function damageMob(mob, damage) {
     const dx = mob.x - state.player.x;

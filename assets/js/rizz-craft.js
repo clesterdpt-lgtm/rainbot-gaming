@@ -52,9 +52,9 @@
   const WATER_MOVE_MULT = 0.55;
   const WATER_GRAVITY_MULT = 0.22;
   const SWIM_UP_SPEED = 4.4;
-  const WATER_FLOW_LIMIT = 8;
-  const WATER_FLOW_BURST_LIMIT = 2;
-  const WATER_FLOW_TICK_SECONDS = 0.18;
+  const WATER_FLOW_LIMIT = 4;
+  const WATER_FLOW_BURST_LIMIT = 1;
+  const WATER_FLOW_TICK_SECONDS = 0.12;
   const LAVA_MOVE_MULT = 0.34;
   const LAVA_GRAVITY_MULT = 0.12;
   const LAVA_SWIM_UP_SPEED = 2.2;
@@ -63,9 +63,10 @@
   const LAVA_FLOW_BURST_LIMIT = 1;
   const LAVA_FLOW_TICK_SECONDS = 0.45;
   const LAVA_LATERAL_RANGE = 3;
-  const ACTIVE_FLUID_QUEUE_LIMIT = 900;
+  const WATER_LATERAL_RANGE = 5;
+  const ACTIVE_FLUID_QUEUE_LIMIT = 600;
   const FLUID_SCAN_MULTIPLIER = 3;
-  const FLUID_CHUNK_REBUILDS_PER_FRAME = 3;
+  const FLUID_CHUNK_REBUILDS_PER_FRAME = 2;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -586,7 +587,7 @@
       activeLavaHead = 0;
     }
   }
-  function queueActiveFluid(code, x, y, z, flow = 0, ambient = false) {
+  function queueActiveFluid(code, x, y, z, flow = 0, ambient = false, falling = false) {
     x |= 0; y |= 0; z |= 0;
     if (!inWorld(x, y, z)) return false;
     trimActiveFluidQueue(code);
@@ -598,8 +599,15 @@
     const key = fluidKey(x, y, z);
     if (keys.has(key)) return false;
     keys.add(key);
-    queue.push({ x, y, z, flow, ambient: !!ambient });
+    queue.push({ x, y, z, flow, ambient: !!ambient, falling: !!falling });
     return true;
+  }
+  function waterIsFallingAt(x, y, z) {
+    const below = getBlock(x, y - 1, z);
+    if (canWaterFill(below)) return true;
+    if (below !== WATER) return false;
+    const lower = getBlock(x, y - 2, z);
+    return canWaterFill(lower);
   }
   function queueFluidNeighborhood(x, y, z) {
     let queued = 0;
@@ -609,7 +617,7 @@
       const sy = y + dir[1];
       const sz = z + dir[2];
       const code = getBlock(sx, sy, sz);
-      if (code === WATER && queueActiveFluid(WATER, sx, sy, sz)) queued++;
+      if (code === WATER && queueActiveFluid(WATER, sx, sy, sz, 0, false, waterIsFallingAt(sx, sy, sz))) queued++;
       else if (code === LAVA && queueActiveFluid(LAVA, sx, sy, sz, 0)) queued++;
     }
     return queued;
@@ -1005,7 +1013,7 @@
       const key = `${sx},${sy},${sz}`;
       if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== WATER) continue;
       seenSeeds.add(key);
-      if (queueActiveFluid(WATER, sx, sy, sz)) queued++;
+      if (queueActiveFluid(WATER, sx, sy, sz, 0, false, waterIsFallingAt(sx, sy, sz))) queued++;
     }
     return queued;
   }
@@ -1015,17 +1023,17 @@
     const scanLimit = Math.max(queue.length, limit * FLUID_SCAN_MULTIPLIER);
     let filled = 0;
 
-    function pushIfWater(x, y, z) {
+    function pushIfWater(x, y, z, flow = 0, falling = false) {
       const key = `${x},${y},${z}`;
       if (queue.length >= scanLimit || !inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== WATER) return;
       queued.add(key);
-      queue.push({ x, y, z });
-      queueActiveFluid(WATER, x, y, z);
+      queue.push({ x, y, z, flow, falling });
+      queueActiveFluid(WATER, x, y, z, flow, false, falling);
     }
-    function fill(x, y, z) {
+    function fill(x, y, z, flow = 0, falling = false) {
       if (!inWorld(x, y, z) || !canWaterFill(getBlock(x, y, z)) || filled >= limit) return false;
       setFluidBlock(x, y, z, WATER);
-      queueActiveFluid(WATER, x, y, z);
+      queueActiveFluid(WATER, x, y, z, flow, false, falling);
       filled++;
       return true;
     }
@@ -1033,17 +1041,24 @@
     for (let i = 0, scanned = 0; i < queue.length && filled < limit && scanned < scanLimit; i++, scanned++) {
       const p = queue[i];
       if (getBlock(p.x, p.y, p.z) !== WATER) continue;
+      const flow = p.flow || 0;
+      const falling = !!p.falling || waterIsFallingAt(p.x, p.y, p.z);
       const below = getBlock(p.x, p.y - 1, p.z);
       if (canWaterFill(below)) {
-        fill(p.x, p.y - 1, p.z);
+        fill(p.x, p.y - 1, p.z, 0, true);
+        continue;
+      }
+      if (falling && below === WATER) {
+        pushIfWater(p.x, p.y - 1, p.z, 0, true);
         continue;
       }
       if (below !== WATER && !isSolidBlock(below)) continue;
+      if (flow >= WATER_LATERAL_RANGE) continue;
       for (const dir of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = p.x + dir[0];
         const nz = p.z + dir[1];
-        if (fill(nx, p.y, nz)) continue;
-        pushIfWater(nx, p.y, nz);
+        if (fill(nx, p.y, nz, flow + 1, false)) continue;
+        pushIfWater(nx, p.y, nz, flow + 1, false);
       }
     }
     return filled;
@@ -1121,7 +1136,7 @@
       scanned++;
       activeWaterKeys.delete(fluidKey(p.x, p.y, p.z));
       if (getBlock(p.x, p.y, p.z) !== WATER) continue;
-      filled += spreadWaterFrom([{ x: p.x, y: p.y, z: p.z }], limit - filled);
+      filled += spreadWaterFrom([{ x: p.x, y: p.y, z: p.z, flow: p.flow || 0, falling: !!p.falling }], limit - filled);
     }
     trimActiveFluidQueue(WATER);
     return filled;

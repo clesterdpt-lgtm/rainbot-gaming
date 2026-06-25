@@ -64,6 +64,8 @@
   const DAY_SECONDS = 420;
   const FRIENDLY_COUNT = 58;
   const FRIENDLY_SPAWN_RING = 12;
+  const FRIENDLY_HURT_SECONDS = 0.24;
+  const FRIENDLY_HIT_COOLDOWN = 0.5;
   const HELD_SWING_SECONDS = 0.32;
   const HELD_GATHER_SECONDS = 0.24;
   const MOB_HURT_SECONDS = 0.28;
@@ -101,6 +103,7 @@
   const SWORD_WOOD = 113;
   const SWORD_STONE = 114;
   const SWORD_SIGMA = 115;
+  const FRIENDLY_FRUIT = 116;
 
   const DEF = {};
   function def(code, d) {
@@ -139,6 +142,7 @@
   def(SWORD_WOOD, { name: "Wood Sword", kind: "item", stack: 1, tool: { type: "sword", tier: 1, damage: 3 }, color: "#b98245" });
   def(SWORD_STONE, { name: "Stone Sword", kind: "item", stack: 1, tool: { type: "sword", tier: 2, damage: 5 }, color: "#a6a9b5" });
   def(SWORD_SIGMA, { name: "Sigma Blade", kind: "item", stack: 1, tool: { type: "sword", tier: 3, damage: 11 }, color: "#4beaff" });
+  def(FRIENDLY_FRUIT, { name: "Rizz Fruit", kind: "item", stack: 12, color: "#ff6fa8" });
 
   const RECIPES = [
     { out: { code: PLANKS, n: 4 }, in: [[LOG, 1]], table: false },
@@ -364,6 +368,7 @@
     keyboard: { forward: 0, right: 0 },
     touch: { forward: 0, right: 0 },
   };
+  const friendlyHurtColor = new THREE.Color(0xffc5f0);
 
   function hexToRgb(hex) {
     const n = parseInt(hex.slice(1), 16);
@@ -1231,6 +1236,7 @@
       if (!spot) continue;
       const type = i % 3;
       const mesh = createFriendlyMesh(type, i);
+      const cfg = FRIENDLY_CONFIG[type] || FRIENDLY_CONFIG[0];
       const friendly = {
         type,
         mesh,
@@ -1241,9 +1247,17 @@
         homeZ: spot.z + 0.5,
         targetX: spot.x + 0.5,
         targetZ: spot.z + 0.5,
-        speed: 0.65 + hash2(i * 67 + 1, i * 71 - 2) * 0.45,
+        speed: 0.58 + hash2(i * 67 + 1, i * 71 - 2) * 0.16 + cfg.speed * 0.6,
         action: "idle",
         actionTimer: 0.4 + hash2(i * 73 - 6, i * 79 + 8) * 2,
+        hp: cfg.hp + Math.floor(hash2(i + 11, i + 19) * 2.2),
+        maxHp: cfg.hp,
+        radius: cfg.radius,
+        hitCd: 0,
+        hurtTimer: 0,
+        knockTimer: 0,
+        knockX: 0,
+        knockZ: 0,
         buddy: -1,
         walkPhase: hash2(i * 37 + 2, i * 41 - 4) * Math.PI * 2,
         stepTimer: 0.2 + hash2(i * 59 + 6, i * 43 - 7) * 0.5,
@@ -1256,6 +1270,7 @@
       mesh.rotation.y = friendly.turn;
       friendlyGroup.add(mesh);
       state.friendlies.push(friendly);
+      chooseFriendlyAction(friendly, i);
     }
   }
   function friendlySpot(i) {
@@ -1324,6 +1339,8 @@
     const now = performance.now() * 0.001;
     for (let i = 0; i < state.friendlies.length; i++) {
       const friendly = state.friendlies[i];
+      if (friendly.hitCd > 0) friendly.hitCd -= dt;
+      if (friendly.hurtTimer > 0) friendly.hurtTimer -= dt;
       friendly.actionTimer -= dt;
       friendly.stepTimer = Math.max(0, (friendly.stepTimer || 0) - dt);
       friendly.hopTimer = Math.max(0, (friendly.hopTimer || 0) - dt);
@@ -1333,6 +1350,17 @@
       else if (friendly.action === "flee" && !threat && friendly.actionTimer < 0.35) chooseFriendlyAction(friendly, i + 17);
       else if (friendly.actionTimer <= 0) chooseFriendlyAction(friendly, i);
       const moved = updateFriendlyMovement(friendly, dt, i);
+      if (friendly.hurtTimer > 0 && friendly.mesh) {
+        applyFriendlyFlash(friendly, Math.sin((1 - friendly.hurtTimer / FRIENDLY_HURT_SECONDS) * Math.PI));
+      } else if (friendly.mesh && friendly.hurtTimer <= 0) {
+        applyFriendlyFlash(friendly, 0);
+      }
+      if (friendly.hp <= 0) {
+        dropFriendlyFood(friendly);
+        removeFriendly(friendly, i);
+        i--;
+        continue;
+      }
       maybeEmitFriendlyMood(friendly, i);
       renderFriendly(friendly, now, moved);
     }
@@ -1345,11 +1373,11 @@
     const threat = nearestFriendlyThreat(friendly, 9);
     if (threat) {
       chooseFriendlyFlee(friendly, threat, salt);
-    } else if (isNight() && roll < 0.38) {
+    } else if (isNight() && roll < 0.26) {
       friendly.action = "sleep";
       friendly.actionTimer = 2.4 + roll * 5.5;
       friendly.buddy = -1;
-    } else if (playerDist < 7.5 && roll < 0.26) {
+    } else if (playerDist < 6.8 && roll < 0.35) {
       friendly.buddy = -1;
       if (playerDist > 3.3 && setFriendlyFollowTarget(friendly, salt)) {
         friendly.action = "follow";
@@ -1359,21 +1387,21 @@
         friendly.actionTimer = 0.9 + roll * 1.6;
         friendly.turn = Math.atan2(dxp, dzp) + Math.PI;
       }
-    } else if (roll < 0.44 && chooseFriendlyBuddyAction(friendly, salt)) {
+    } else if (roll < 0.3 && chooseFriendlyBuddyAction(friendly, salt)) {
       return;
     } else if (friendly.type === 2 && roll < 0.58 && setFriendlyRoamTarget(friendly, salt, 1.4, 4.2, 0.15)) {
       friendly.action = "hop";
       friendly.actionTimer = 1.1 + roll * 2.1;
-    } else if (roll < 0.66) {
+    } else if (roll < 0.78) {
       friendly.action = "wander";
       friendly.actionTimer = 2.2 + roll * 3.6;
       friendly.buddy = -1;
       setFriendlyRoamTarget(friendly, salt, 2, 8.5, 0.32);
-    } else if (roll < 0.82) {
+    } else if (roll < 0.9) {
       friendly.action = friendly.type === 2 ? "peck" : "graze";
       friendly.actionTimer = 1.4 + roll * 2;
       friendly.buddy = -1;
-    } else if (roll < 0.93) {
+    } else if (roll < 0.98) {
       friendly.action = "dance";
       friendly.actionTimer = 1.1 + roll * 1.8;
       friendly.buddy = -1;
@@ -1384,6 +1412,15 @@
     }
   }
   function updateFriendlyMovement(friendly, dt, salt) {
+    if (friendly.knockTimer > 0) {
+      friendly.knockTimer -= dt;
+      friendly.x += (friendly.knockX || 0) * dt;
+      friendly.z += (friendly.knockZ || 0) * dt;
+      friendly.knockX *= 0.84;
+      friendly.knockZ *= 0.84;
+      friendly.walkPhase += dt * 9;
+      return true;
+    }
     if (!friendlyMovingAction(friendly.action)) return false;
     if (friendly.action === "follow") setFriendlyFollowTarget(friendly, salt);
     if (friendly.action === "herd") refreshFriendlyHerdTarget(friendly);
@@ -1770,7 +1807,10 @@
   function disposeMesh(obj) {
     obj.traverse((child) => {
       if (child.geometry) child.geometry.dispose();
-      if (child.material && child.material.userData && child.material.userData.disposeWithMesh) child.material.dispose();
+      if (child.material && child.material.userData && child.material.userData.disposeWithMesh) {
+        if (child.material.map) child.material.map.dispose();
+        child.material.dispose();
+      }
     });
   }
 
@@ -2089,6 +2129,19 @@
     toilet: { hp: 9, speed: 2.15, damage: 8, score: 15, radius: 0.55 },
     grimace: { hp: 17, speed: 1.45, damage: 14, score: 30, radius: 0.7 },
   };
+  const FRIENDLY_CONFIG = [
+    { name: "Lilac", hp: 8, speed: 0.58, radius: 0.52, drops: 1 },
+    { name: "Bunny", hp: 11, speed: 0.68, radius: 0.56, drops: 1 },
+    { name: "Mog", hp: 16, speed: 0.74, radius: 0.6, drops: 2 },
+  ];
+  const FRIENDLY_DROP_MIN = 1;
+  const FRIENDLY_DROP_VARIATION = 2;
+  function getFriendlyConfig(type) {
+    return FRIENDLY_CONFIG[type] || FRIENDLY_CONFIG[0];
+  }
+  function friendlyName(type) {
+    return getFriendlyConfig(type).name || "friendly";
+  }
   function spawnMob() {
     if (state.mobs.length >= Math.min(6 + state.day * 2, 18)) return;
     const p = state.player;
@@ -2203,6 +2256,50 @@
   function removeMob(mob) {
     mobGroup.remove(mob.mesh);
     disposeMesh(mob.mesh);
+  }
+  function applyFriendlyFlash(friendly, hurtPulse) {
+    if (!friendly.mesh) return;
+    friendly.mesh.traverse((child) => {
+      if (!child.material || !child.material.color || !child.userData.baseColor) return;
+      child.material.color.copy(child.userData.baseColor);
+      if (hurtPulse > 0) child.material.color.lerp(friendlyHurtColor, hurtPulse * 0.82);
+    });
+  }
+  function damageFriendly(friendly, damage) {
+    if (friendly.hitCd > 0) return;
+    const cfg = getFriendlyConfig(friendly.type);
+    const dx = friendly.x - state.player.x;
+    const dz = friendly.z - state.player.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    friendly.hp -= damage;
+    friendly.hurtTimer = FRIENDLY_HURT_SECONDS;
+    friendly.hitCd = FRIENDLY_HIT_COOLDOWN;
+    friendly.knockTimer = 0.18;
+    friendly.knockX = (dx / dist) * 2.8;
+    friendly.knockZ = (dz / dist) * 2.8;
+    spawnHitBurst(friendly.x, friendly.y + 0.72, friendly.z, cachedRgb("#ffd3ef"));
+    if (friendly.hp <= 0) {
+      addScore(cfg.drops * 6);
+      friendly.deathPulse = 0.2;
+    }
+  }
+  function dropFriendlyFood(friendly) {
+    const cfg = getFriendlyConfig(friendly.type);
+    const count = cfg.drops + Math.floor(hash2(friendly.x, friendly.z) * FRIENDLY_DROP_VARIATION);
+    const drop = clamp(count, FRIENDLY_DROP_MIN, 5);
+    if (drop <= 0) return;
+    giveItem(FRIENDLY_FRUIT, drop);
+    spawnBurst(friendly.x + 0.1, friendly.y + 0.55, friendly.z + 0.1, cachedRgb("#ff6fa8"), 6 + drop * 2, 2.2);
+    api.toast(`Rizz Fruit x${drop} dropped`, "good");
+  }
+  function removeFriendly(friendly, index) {
+    removeAtIndex(state.friendlies, index);
+    friendlyGroup.remove(friendly.mesh);
+    disposeMesh(friendly.mesh);
+  }
+  function removeAtIndex(arr, index) {
+    if (index < 0 || index >= arr.length) return;
+    arr.splice(index, 1);
   }
   function groundYAt(x, z) {
     const ix = clamp(Math.floor(x), 0, WORLD_X - 1);
@@ -2361,10 +2458,28 @@
     const origin = camera.position;
     let hit = null;
     let best = 5.4;
+    const allTargets = [];
     for (const mob of state.mobs) {
-      const cx = mob.x;
-      const cy = mob.y + 0.6;
-      const cz = mob.z;
+      allTargets.push({
+        kind: "mob",
+        type: mob.type,
+        target: mob,
+        radius: MOB[mob.type].radius,
+      });
+    }
+    for (const friendly of state.friendlies) {
+      allTargets.push({
+        kind: "friendly",
+        type: friendly.type,
+        target: friendly,
+        radius: friendly.radius || getFriendlyConfig(friendly.type).radius,
+      });
+    }
+    for (const item of allTargets) {
+      const t = item.target;
+      const cx = t.x;
+      const cy = t.y + 0.6;
+      const cz = t.z;
       const vx = cx - origin.x;
       const vy = cy - origin.y;
       const vz = cz - origin.z;
@@ -2374,17 +2489,22 @@
       const py = origin.y + dir.y * along;
       const pz = origin.z + dir.z * along;
       const off = Math.hypot(cx - px, cy - py, cz - pz);
-      if (off < MOB[mob.type].radius && along < best) {
+      if (off < item.radius && along < best) {
         best = along;
-        hit = mob;
+        hit = item;
       }
     }
     if (!hit) return false;
     const damage = heldAttackDamage();
     triggerHeldSwing("attack");
-    damageMob(hit, damage);
+    if (hit.kind === "friendly") {
+      damageFriendly(hit.target, damage);
+      api.toast(`Hit ${friendlyName(hit.type)} -${damage}`, "");
+    } else {
+      damageMob(hit.target, damage);
+      api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"} -${damage}`, "");
+    }
     state.attackCd = 0.32;
-    api.toast(`Hit ${hit.type === "toilet" ? "Skibidi Toilet" : "Grimace Shake"} -${damage}`, "");
     return true;
   }
   function heldAttackDamage() {
@@ -2630,25 +2750,37 @@
     heldGroup.add(mesh);
     return mesh;
   }
+  function addHeldToolGroup(pos, rot) {
+    const group = new THREE.Group();
+    group.position.set(pos[0], pos[1], pos[2]);
+    group.rotation.set(rot[0], rot[1], rot[2]);
+    heldGroup.add(group);
+    return group;
+  }
+  function addHeldToolBox(group, pos, scale, material) {
+    const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), material);
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    group.add(mesh);
+    return mesh;
+  }
   function buildHeldPick(color) {
-    const handle = heldMaterial("#6f4624");
-    const wrap = heldMaterial("#3b2416");
-    const head = heldMaterial(color);
-    const edge = heldMaterial("#d9b176");
-    addHeldBox([0.5, -0.43, -0.98], [0.05, 0.48, 0.05], handle, [0.08, 0.04, -0.58]);
-    addHeldBox([0.58, -0.58, -0.96], [0.095, 0.065, 0.065], wrap, [0.08, 0.04, -0.58]);
-    addHeldBox([0.4, -0.28, -0.99], [0.095, 0.062, 0.065], wrap, [0.08, 0.04, -0.58]);
-    addHeldBox([0.34, -0.2, -1.06], [0.38, 0.06, 0.08], head, [0.02, 0.08, -0.28]);
-    addHeldBox([0.2, -0.235, -1.055], [0.16, 0.04, 0.082], head, [0.02, 0.08, -0.76]);
-    addHeldBox([0.51, -0.145, -1.055], [0.15, 0.04, 0.082], head, [0.02, 0.08, 0.19]);
-    addHeldBox([0.34, -0.175, -1.105], [0.28, 0.014, 0.024], edge, [0.02, 0.08, -0.28]);
+    const handle = heldMaterial("#7c4e29");
+    const headColor = (color || "#b98245").toLowerCase() === "#b98245" ? "#9b6532" : color || "#b98245";
+    const head = heldMaterial(headColor);
+    const tool = addHeldToolGroup([0.42, -0.42, -0.78], [0.08, 0.04, -0.58]);
+    addHeldToolBox(tool, [0, 0, 0], [0.07, 0.62, 0.07], handle);
+    addHeldToolBox(tool, [0, 0.29, 0], [0.36, 0.075, 0.08], head);
   }
   function buildHeldSword(color) {
-    const grip = heldMaterial("#6f4624");
-    const blade = heldMaterial(color);
-    addHeldBox([0.36, -0.36, -0.72], [0.07, 0.28, 0.07], grip, [0, 0, -0.44]);
-    addHeldBox([0.25, -0.16, -0.8], [0.08, 0.58, 0.08], blade, [0, 0, -0.44]);
-    addHeldBox([0.31, -0.28, -0.76], [0.28, 0.06, 0.08], grip, [0, 0, -0.44]);
+    const bladeColor = (color || "#a6a9b5").toLowerCase() === "#b98245" ? "#9b6532" : color || "#a6a9b5";
+    const blade = heldMaterial(bladeColor);
+    const guard = heldMaterial("#8a572d");
+    const handle = heldMaterial("#5a3218");
+    const tool = addHeldToolGroup([0.36, -0.34, -0.8], [0.08, 0.04, -0.58]);
+    addHeldToolBox(tool, [0, 0.2, 0], [0.06, 0.62, 0.06], blade);
+    addHeldToolBox(tool, [0, -0.1, 0], [0.28, 0.07, 0.08], guard);
+    addHeldToolBox(tool, [0, -0.27, 0], [0.075, 0.3, 0.075], handle);
   }
   function buildHeldAxe(color) {
     const wood = heldMaterial("#7c4e29");

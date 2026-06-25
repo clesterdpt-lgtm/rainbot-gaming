@@ -1,11 +1,11 @@
 (function () {
   const CATEGORIES = [
-    { id: "general", label: "General", detail: "Site chatter and loose ideas" },
-    { id: "game-feedback", label: "Game Feedback", detail: "What works, what misses" },
-    { id: "bug-reports", label: "Bug Reports", detail: "Broken buttons and cursed saves" },
-    { id: "ideas", label: "Ideas", detail: "New games, modes, and bits" },
-    { id: "scores-clips", label: "Scores / Clips", detail: "Runs, clips, and proof" },
-    { id: "announcements", label: "Announcements", detail: "Drops and backend notices" },
+    { id: "general", code: "GEN", label: "General", detail: "Site chatter and loose ideas" },
+    { id: "game-feedback", code: "FBK", label: "Game Feedback", detail: "What works, what misses" },
+    { id: "bug-reports", code: "BUG", label: "Bug Reports", detail: "Broken buttons and cursed saves" },
+    { id: "ideas", code: "IDE", label: "Ideas", detail: "New games, modes, and bits" },
+    { id: "scores-clips", code: "RUN", label: "Scores / Clips", detail: "Runs, clips, and proof" },
+    { id: "announcements", code: "ANN", label: "Announcements", detail: "Drops and backend notices" },
   ];
 
   const state = {
@@ -41,8 +41,18 @@
     return (row && row.author && row.author.display_name) || "Rainbot Player";
   }
 
+  function avatarEl(name) {
+    const avatar = textEl("span", "forum-avatar", String(name || "R").trim().slice(0, 1).toUpperCase() || "R");
+    avatar.setAttribute("aria-hidden", "true");
+    return avatar;
+  }
+
   function categoryLabel(id) {
     return (CATEGORIES.find((category) => category.id === id) || CATEGORIES[0]).label;
+  }
+
+  function categoryCode(id) {
+    return (CATEGORIES.find((category) => category.id === id) || CATEGORIES[0]).code;
   }
 
   function isModerator(currentBackendState = backendState()) {
@@ -66,6 +76,12 @@
     status.dataset.kind = kind;
   }
 
+  function scrollForumTop() {
+    const target = document.querySelector(".forum-layout");
+    if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ block: "start" });
+    else window.scrollTo({ top: 0 });
+  }
+
   function buttonEl(label, className, onClick) {
     const button = document.createElement("button");
     button.type = "button";
@@ -73,6 +89,20 @@
     button.textContent = label;
     button.addEventListener("click", onClick);
     return button;
+  }
+
+  function metaRow(items) {
+    const row = document.createElement("div");
+    row.className = "forum-meta-row";
+    items.filter(Boolean).forEach((item) => row.append(textEl("span", item.className || "", item.text || item)));
+    return row;
+  }
+
+  function statEl(value, label) {
+    const stat = document.createElement("div");
+    stat.className = "forum-stat";
+    stat.append(textEl("strong", "", value), textEl("span", "", label));
+    return stat;
   }
 
   function toast(message, kind = "") {
@@ -94,9 +124,11 @@
       const isActive = !moderationViewActive() && (state.category === category.id || (!state.category && category.id === "general"));
       link.className = "forum-category" + (isActive ? " is-active" : "");
       link.dataset.category = category.id;
-      const strong = textEl("strong", "", category.label);
-      const span = textEl("span", "", category.detail);
-      link.append(strong, span);
+      const code = textEl("span", "forum-category__code", category.code);
+      const copy = document.createElement("span");
+      copy.className = "forum-category__copy";
+      copy.append(textEl("strong", "", category.label), textEl("span", "", category.detail));
+      link.append(code, copy);
       link.addEventListener("click", (event) => {
         event.preventDefault();
         state.category = category.id === "general" ? "" : category.id;
@@ -104,6 +136,7 @@
         nextUrl.search = "";
         if (state.category) nextUrl.searchParams.set("category", state.category);
         history.pushState(null, "", nextUrl);
+        scrollForumTop();
         renderCommunity();
       });
       root.append(link);
@@ -115,10 +148,19 @@
       url.searchParams.set("moderation", "reports");
       link.href = url.pathname.split("/").pop() + url.search;
       link.className = "forum-category forum-category--mod" + (moderationViewActive() ? " is-active" : "");
-      link.append(textEl("strong", "", "Moderation"), textEl("span", "", "Reports and cleanup"));
+      link.append(
+        textEl("span", "forum-category__code", "MOD"),
+        (() => {
+          const copy = document.createElement("span");
+          copy.className = "forum-category__copy";
+          copy.append(textEl("strong", "", "Moderation"), textEl("span", "", "Reports and cleanup"));
+          return copy;
+        })()
+      );
       link.addEventListener("click", (event) => {
         event.preventDefault();
         history.pushState(null, "", url);
+        scrollForumTop();
         renderCommunity();
       });
       root.append(link);
@@ -153,8 +195,9 @@
   function renderLoginPrompt(root) {
     const prompt = document.createElement("div");
     prompt.className = "forum-card forum-login-card";
-    prompt.append(textEl("h2", "", "Sign in to post"));
-    prompt.append(textEl("p", "", "Browsing is public. Posting, replies, cloud saves, and high scores use your Rainbot account."));
+    const copy = document.createElement("div");
+    copy.className = "forum-login-card__copy";
+    copy.append(textEl("span", "forum-kicker", "Read mode"), textEl("h2", "", "Sign in to post"), textEl("p", "", "Browsing is public. Posting, replies, cloud saves, and high scores use your Rainbot account."));
     const button = document.createElement("button");
     button.type = "button";
     button.className = "btn btn--primary";
@@ -162,7 +205,7 @@
     button.addEventListener("click", () => {
       if (typeof openAuthModal === "function") openAuthModal();
     });
-    prompt.append(button);
+    prompt.append(copy, button);
     root.append(prompt);
   }
 
@@ -170,21 +213,31 @@
     const form = document.createElement("form");
     form.className = "forum-form";
     form.innerHTML = `
-      <h2>Start a Topic</h2>
-      <label class="rb-form-field">
-        <span>Board</span>
-        <select name="category"></select>
-      </label>
-      <label class="rb-form-field">
-        <span>Title</span>
-        <input name="title" type="text" maxlength="110" required />
-      </label>
+      <div class="forum-form__header">
+        <div>
+          <span class="forum-kicker">New thread</span>
+          <h2>Start a Topic</h2>
+        </div>
+        <p>Drop a bug, bit, clip, or idea into the right board.</p>
+      </div>
+      <div class="forum-form__grid">
+        <label class="rb-form-field">
+          <span>Board</span>
+          <select name="category"></select>
+        </label>
+        <label class="rb-form-field">
+          <span>Title</span>
+          <input name="title" type="text" maxlength="110" required />
+        </label>
+      </div>
       <label class="rb-form-field">
         <span>Post</span>
         <textarea name="body" rows="5" maxlength="6000" required></textarea>
       </label>
-      <button class="btn btn--primary" type="submit">Post Topic</button>
-      <p class="rb-modal-status" data-form-status></p>
+      <div class="forum-form__footer">
+        <button class="btn btn--primary" type="submit">Post Topic</button>
+        <p class="rb-modal-status" data-form-status></p>
+      </div>
     `;
     const select = form.elements.category;
     CATEGORIES.forEach((category) => {
@@ -211,6 +264,7 @@
         url.search = "";
         url.searchParams.set("topic", topic.id);
         history.pushState(null, "", url);
+        scrollForumTop();
         await renderCommunity();
       } catch (error) {
         status.textContent = error.message || "Post failed.";
@@ -270,7 +324,7 @@
 
   function renderTopicActions(topic, currentBackendState) {
     const actions = document.createElement("div");
-    actions.className = "forum-actions";
+    actions.className = "forum-actions forum-actions--topic";
     if (currentBackendState.user) {
       actions.append(buttonEl("Report", "forum-action", () => reportItem("topic", topic.id)));
     }
@@ -286,7 +340,7 @@
 
   function renderReplyActions(reply, currentBackendState) {
     const actions = document.createElement("div");
-    actions.className = "forum-actions";
+    actions.className = "forum-actions forum-actions--reply";
     if (currentBackendState.user) {
       actions.append(buttonEl("Report", "forum-action", () => reportItem("reply", reply.id)));
     }
@@ -298,8 +352,22 @@
 
   function topicCard(topic, currentBackendState) {
     const card = document.createElement("article");
-    card.className = "forum-topic";
-    const meta = textEl("div", "forum-topic__meta", `${categoryLabel(topic.category)} / ${authorName(topic)} / ${formatDate(topic.last_activity_at || topic.created_at)}`);
+    card.className = "forum-topic" + (topic.is_pinned ? " forum-topic--pinned" : "") + (topic.is_hidden ? " forum-topic--hidden" : "");
+    const name = authorName(topic);
+    const header = document.createElement("div");
+    header.className = "forum-topic__header";
+    const identity = document.createElement("div");
+    identity.className = "forum-topic__identity";
+    identity.append(
+      metaRow([
+        { text: categoryCode(topic.category), className: "forum-meta-chip" },
+        { text: categoryLabel(topic.category) },
+        { text: name },
+        { text: formatDate(topic.last_activity_at || topic.created_at) },
+      ]),
+      renderBadges(topic)
+    );
+    header.append(avatarEl(name), identity, statEl(String(Number(topic.reply_count) || 0), "Replies"));
     const title = document.createElement("a");
     title.className = "forum-topic__title";
     title.href = `community.html?topic=${topic.id}`;
@@ -313,8 +381,10 @@
       renderCommunity();
     });
     const body = textEl("p", "forum-topic__body", topic.body);
-    const foot = textEl("div", "forum-topic__foot", `${Number(topic.reply_count) || 0} replies`);
-    card.append(meta, renderBadges(topic), title, body, foot, renderTopicActions(topic, currentBackendState));
+    const content = document.createElement("div");
+    content.className = "forum-topic__content";
+    content.append(title, body);
+    card.append(header, content, renderTopicActions(topic, currentBackendState));
     return card;
   }
 
@@ -339,9 +409,13 @@
   function replyCard(reply, currentBackendState) {
     const card = document.createElement("article");
     card.className = "forum-reply";
+    const name = authorName(reply);
+    const copy = document.createElement("div");
+    copy.className = "forum-reply__content";
+    copy.append(metaRow([{ text: name }, { text: formatDate(reply.created_at) }]), textEl("p", "forum-reply__body", reply.body));
     card.append(
-      textEl("div", "forum-topic__meta", `${authorName(reply)} / ${formatDate(reply.created_at)}`),
-      textEl("p", "forum-reply__body", reply.body),
+      avatarEl(name),
+      copy,
       renderReplyActions(reply, currentBackendState)
     );
     return card;
@@ -351,13 +425,20 @@
     const form = document.createElement("form");
     form.className = "forum-form forum-form--reply";
     form.innerHTML = `
-      <h2>Reply</h2>
+      <div class="forum-form__header">
+        <div>
+          <span class="forum-kicker">Thread reply</span>
+          <h2>Reply</h2>
+        </div>
+      </div>
       <label class="rb-form-field">
         <span>Message</span>
         <textarea name="body" rows="4" maxlength="6000" required></textarea>
       </label>
-      <button class="btn btn--primary" type="submit">Post Reply</button>
-      <p class="rb-modal-status" data-form-status></p>
+      <div class="forum-form__footer">
+        <button class="btn btn--primary" type="submit">Post Reply</button>
+        <p class="rb-modal-status" data-form-status></p>
+      </div>
     `;
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -390,6 +471,7 @@
       const url = new URL(location.href);
       url.search = "";
       history.pushState(null, "", url);
+      scrollForumTop();
       renderCommunity();
     });
     root.append(back);
@@ -406,11 +488,17 @@
     setStatus(currentBackendState.user ? "Signed in and ready" : "Read-only until login", currentBackendState.user ? "good" : "");
     const topicFull = document.createElement("article");
     topicFull.className = "forum-topic forum-topic--full";
+    const name = authorName(topic);
     topicFull.append(
-      textEl("div", "forum-topic__meta", `${categoryLabel(topic.category)} / ${authorName(topic)} / ${formatDate(topic.created_at)}`),
+      metaRow([
+        { text: categoryCode(topic.category), className: "forum-meta-chip" },
+        { text: categoryLabel(topic.category) },
+        { text: name },
+        { text: formatDate(topic.created_at) },
+      ]),
       textEl("h2", "forum-topic__heading", topic.title),
       textEl("p", "forum-reply__body", topic.body),
-      textEl("div", "forum-topic__foot", `${replies.length} replies`)
+      statEl(String(replies.length), "Replies")
     );
     topicFull.append(renderBadges(topic), renderTopicActions(topic, currentBackendState));
     root.append(topicFull);
@@ -454,12 +542,16 @@
 
   function reportCard(report) {
     const card = document.createElement("article");
-    card.className = "forum-report";
+    card.className = `forum-report forum-report--${report.status || "open"}`;
     const target = report.topic
       ? `Topic: ${report.topic.title || `#${report.topic_id}`}`
       : `Reply: ${shortBody(report.reply && report.reply.body ? report.reply.body : `#${report.reply_id}`)}`;
     card.append(
-      textEl("div", "forum-topic__meta", `${report.status} / ${authorName({ author: report.reporter })} / ${formatDate(report.created_at)}`),
+      metaRow([
+        { text: report.status || "open", className: "forum-meta-chip" },
+        { text: authorName({ author: report.reporter }) },
+        { text: formatDate(report.created_at) },
+      ]),
       textEl("h3", "forum-report__target", target),
       textEl("p", "forum-reply__body", report.reason)
     );
@@ -499,7 +591,9 @@
     setStatus("Moderator tools", "good");
     const header = document.createElement("div");
     header.className = "forum-mod-header";
-    header.append(textEl("h2", "", "Reports"));
+    const title = document.createElement("div");
+    title.append(textEl("span", "forum-kicker", "Moderator queue"), textEl("h2", "", "Reports"));
+    header.append(title);
     const status = new URLSearchParams(location.search).get("status") || "open";
     const filters = document.createElement("div");
     filters.className = "forum-actions";
@@ -510,6 +604,7 @@
         url.searchParams.set("moderation", "reports");
         url.searchParams.set("status", value);
         history.pushState(null, "", url);
+        scrollForumTop();
         renderCommunity();
       }));
     });

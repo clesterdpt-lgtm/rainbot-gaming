@@ -70,6 +70,33 @@
     .craft-need.ok { color: #9be870; }
     .craft-need.no { color: #ff8aa6; }
     .craft-lock { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #2a1a12; color: #ffb648; }
+
+    .canvas-wrap--rizzcraft .overlay { justify-content: flex-start; overflow: auto; }
+    .world-panel {
+      display: grid; gap: 10px; width: min(560px, 100%); max-height: 58vh; overflow: auto;
+      margin: 0 auto 14px; padding-right: 2px; text-align: left;
+    }
+    .world-panel[hidden] { display: none; }
+    .world-create, .world-card {
+      border: 1px solid rgba(255,255,255,0.16); border-radius: 8px;
+      background: rgba(6,8,18,0.82); padding: 10px;
+    }
+    .world-create { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; align-items: end; }
+    .world-field { display: grid; gap: 4px; color: var(--ink-dim); font: 800 10px var(--font-mono); text-transform: uppercase; }
+    .world-field input {
+      width: 100%; border: 1px solid var(--panel-2); border-radius: 6px; background: #070913;
+      color: var(--ink); font: 800 12px var(--font-mono); padding: 8px 9px;
+    }
+    .world-list { display: grid; gap: 8px; }
+    .world-card { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; align-items: center; }
+    .world-card__name { color: var(--ink); font: 900 13px var(--font-display); letter-spacing: 0; }
+    .world-card__meta { color: var(--ink-dim); font: 800 10px var(--font-mono); margin-top: 4px; }
+    .world-card__actions { display: flex; gap: 6px; }
+    .world-empty { color: var(--ink-dim); font: 800 11px var(--font-mono); text-align: center; padding: 8px; }
+    @media (max-width: 720px) {
+      .world-create, .world-card { grid-template-columns: 1fr; }
+      .world-card__actions { display: grid; grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body class="rizz-craft-page">
@@ -115,6 +142,7 @@
               Build a Crafting Toilet, light Rizz Torches, and <strong>survive the night</strong> when the Skibidi Toilets come.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
+            <div class="world-panel" id="world-panel"></div>
             <button class="btn btn--primary" id="btn-primary">Spawn in</button>
           </div>
         </div>
@@ -199,7 +227,7 @@
   <script src="../assets/js/ads.js?v=20260624-backend-1"></script>
   <script src="../assets/js/main.js?v=20260624-backend-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260625-sky-height-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260625-world-slots-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -341,12 +341,20 @@
     mode: "mine",
   };
 
-  const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
+  const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
+  const WORLD_INDEX_KEY = "rainbot_rizz_craft_worlds:v1";
+  const WORLD_SAVE_PREFIX = "rainbot_rizz_craft_world:";
+  const MAX_WORLDS = 12;
 
   const ui = buildHud();
   const overlay = document.getElementById("overlay");
+  const worldPanel = document.getElementById("world-panel");
   const craftPanel = document.getElementById("craft-panel");
   const craftList = document.getElementById("craft-list");
+  let currentWorldId = "";
+  let currentWorldName = "";
+  let currentWorldSeed = 0;
+  let worldAutosaveTimer = 0;
   let last = 0;
   let raf = 0;
   let decorDirty = true;
@@ -511,6 +519,244 @@
   }
   function hash3(x, y, z, seed = state.seed) {
     return hash32(Math.imul(x | 0, 1597334677) ^ Math.imul(y | 0, 3812015801) ^ Math.imul(z | 0, 958682123) ^ seed) / 4294967295;
+  }
+  function readJson(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    } catch (error) {
+      return fallback;
+    }
+  }
+  function writeJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      api.toast("Could not save world list", "bad");
+      return false;
+    }
+  }
+  function removeJson(key) {
+    try { localStorage.removeItem(key); } catch (error) {}
+  }
+  function escapeWorldHtml(value) {
+    return String(value == null ? "" : value).replace(/[&"<>]/g, (ch) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" }[ch]));
+  }
+  function cleanWorldName(value) {
+    const name = String(value || "").trim().replace(/\s+/g, " ").slice(0, 28);
+    return name || `World ${readWorldIndex().length + 1}`;
+  }
+  function randomSeed() {
+    return ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
+  }
+  function seedFromInput(value) {
+    const text = String(value || "").trim();
+    if (!text) return randomSeed();
+    if (/^-?\d+$/.test(text)) return Number(text) >>> 0;
+    let h = 2166136261;
+    for (let i = 0; i < text.length; i++) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return hash32(h) >>> 0;
+  }
+  function worldSaveKey(id) {
+    return WORLD_SAVE_PREFIX + id;
+  }
+  function worldId(seed) {
+    return `world-${(Date.now()).toString(36)}-${(seed >>> 0).toString(36)}-${Math.floor(Math.random() * 0xffff).toString(36)}`;
+  }
+  function readWorldIndex() {
+    const worlds = readJson(WORLD_INDEX_KEY, []);
+    if (!Array.isArray(worlds)) return [];
+    return worlds
+      .filter((world) => world && world.id && typeof world.seed === "number")
+      .slice(0, MAX_WORLDS)
+      .sort((a, b) => Number(b.savedAt || b.createdAt || 0) - Number(a.savedAt || a.createdAt || 0));
+  }
+  function writeWorldIndex(worlds) {
+    const clean = (Array.isArray(worlds) ? worlds : [])
+      .filter((world) => world && world.id && typeof world.seed === "number")
+      .slice(0, MAX_WORLDS);
+    return writeJson(WORLD_INDEX_KEY, clean);
+  }
+  function readWorldSave(id) {
+    const saved = readJson(worldSaveKey(id), null);
+    if (!saved || saved.version !== SAVE_VERSION || !saved.data) return null;
+    return saved;
+  }
+  function writeWorldSave(id, data, meta = {}) {
+    if (!id || !data) return false;
+    const saved = {
+      version: SAVE_VERSION,
+      savedAt: Date.now(),
+      meta,
+      data,
+    };
+    return writeJson(worldSaveKey(id), saved);
+  }
+  function deleteWorldSave(id) {
+    removeJson(worldSaveKey(id));
+  }
+  function formatWorldSavedAt(value) {
+    if (window.RBGameSaves && window.RBGameSaves.formatSavedAt) return window.RBGameSaves.formatSavedAt(value);
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return "Saved progress";
+    return "Saved " + date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function upsertWorldSummary(id, summary) {
+    const worlds = readWorldIndex().filter((world) => world.id !== id);
+    worlds.unshift({ ...summary, id });
+    writeWorldIndex(worlds);
+  }
+  function migrateLegacyWorld() {
+    if (!legacySaveSlot || !legacySaveSlot.read) return;
+    const legacy = legacySaveSlot.read();
+    if (!legacy || !legacy.data || typeof legacy.data.seed !== "number") return;
+    const worlds = readWorldIndex();
+    if (worlds.some((world) => world.legacy)) return;
+    const id = worldId(legacy.data.seed);
+    const name = "Legacy World";
+    const savedAt = Number(legacy.savedAt || Date.now());
+    const copied = writeWorldSave(id, legacy.data, { id, name, seed: legacy.data.seed >>> 0 });
+    if (!copied) return;
+    worlds.unshift({
+      id,
+      name,
+      seed: legacy.data.seed >>> 0,
+      createdAt: savedAt,
+      savedAt,
+      day: Number(legacy.data.day || 1),
+      score: Number(legacy.data.score || 0),
+      legacy: true,
+    });
+    writeWorldIndex(worlds);
+    legacySaveSlot.clear();
+  }
+  function saveCurrentWorld() {
+    if (!currentWorldId || !state.started) return false;
+    const data = snapshot();
+    const savedAt = Date.now();
+    const name = currentWorldName || "World";
+    const seed = currentWorldSeed >>> 0;
+    const existing = readWorldIndex().find((world) => world.id === currentWorldId);
+    const ok = writeWorldSave(currentWorldId, data, { id: currentWorldId, name, seed });
+    if (ok) {
+      upsertWorldSummary(currentWorldId, {
+        name,
+        seed,
+        createdAt: Number(existing && existing.createdAt) || savedAt,
+        savedAt,
+        day: Number(data.day || 1),
+        score: Number(data.score || 0),
+      });
+      renderWorldPanel();
+    }
+    return ok;
+  }
+  function renderWorldPanel() {
+    if (!worldPanel) return;
+    const worlds = readWorldIndex();
+    const cards = worlds.map((world) => {
+      const active = world.id === currentWorldId ? " - active" : "";
+      return `<div class="world-card" data-world-id="${escapeWorldHtml(world.id)}">
+        <div>
+          <div class="world-card__name">${escapeWorldHtml(world.name || "World")}${active}</div>
+          <div class="world-card__meta">Seed ${escapeWorldHtml(world.seed >>> 0)} - Day ${Number(world.day || 1)} - Score ${Number(world.score || 0).toLocaleString()} - ${escapeWorldHtml(formatWorldSavedAt(world.savedAt || world.createdAt))}</div>
+        </div>
+        <div class="world-card__actions">
+          <button class="btn btn--secondary" type="button" data-world-load="${escapeWorldHtml(world.id)}">Play</button>
+          <button class="btn btn--ghost" type="button" data-world-delete="${escapeWorldHtml(world.id)}">Delete</button>
+        </div>
+      </div>`;
+    }).join("");
+    worldPanel.hidden = false;
+    worldPanel.innerHTML = `<div class="world-create">
+      <label class="world-field">World name<input id="world-name-input" maxlength="28" value="New World" autocomplete="off" /></label>
+      <label class="world-field">Seed<input id="world-seed-input" placeholder="random" autocomplete="off" /></label>
+      <button class="btn btn--primary" type="button" id="world-create-btn">Create</button>
+    </div>
+    <div class="world-list">${cards || `<div class="world-empty">No saved worlds yet.</div>`}</div>`;
+    const createButton = document.getElementById("world-create-btn");
+    if (createButton) createButton.addEventListener("click", () => {
+      const name = document.getElementById("world-name-input");
+      const seed = document.getElementById("world-seed-input");
+      createWorld(name && name.value, seed && seed.value);
+    });
+    worldPanel.querySelectorAll("[data-world-load]").forEach((button) => {
+      button.addEventListener("click", () => loadWorld(button.dataset.worldLoad));
+    });
+    worldPanel.querySelectorAll("[data-world-delete]").forEach((button) => {
+      button.addEventListener("click", () => deleteWorld(button.dataset.worldDelete));
+    });
+  }
+  function setWorldOverlay() {
+    if (!overlay) return;
+    document.getElementById("overlay-title").textContent = "RIZZ-CRAFT WORLDS";
+    document.getElementById("overlay-sub").innerHTML = "Choose a saved world or enter a seed to generate a new one.";
+    document.getElementById("overlay-score").innerHTML = "";
+    document.getElementById("btn-primary").textContent = state.started ? "Resume" : "Random World";
+    overlay.classList.add("overlay--show");
+    renderWorldPanel();
+  }
+  function openWorldManager() {
+    clearDirectionalInput();
+    unlockPointer();
+    if (state.started) state.paused = true;
+    state.crafting = false;
+    state.bagOpen = false;
+    if (craftPanel) craftPanel.classList.remove("is-open");
+    renderBag();
+    setWorldOverlay();
+  }
+  function hideWorldPanel() {
+    if (worldPanel) {
+      worldPanel.hidden = true;
+      worldPanel.innerHTML = "";
+    }
+  }
+  function createWorld(nameValue = "", seedValue = "") {
+    const seed = seedFromInput(seedValue);
+    const name = cleanWorldName(nameValue);
+    const id = worldId(seed);
+    currentWorldId = id;
+    currentWorldName = name;
+    currentWorldSeed = seed >>> 0;
+    initGame(seed);
+    startGame();
+    saveCurrentWorld();
+    api.toast(`Created ${name}`, "good");
+  }
+  function loadWorld(id) {
+    const world = readWorldIndex().find((item) => item.id === id);
+    const saved = readWorldSave(id);
+    if (!world || !saved) {
+      api.toast("World save missing", "bad");
+      renderWorldPanel();
+      return;
+    }
+    currentWorldId = world.id;
+    currentWorldName = world.name || "World";
+    currentWorldSeed = world.seed >>> 0;
+    restoreGame(saved);
+    api.toast(`Loaded ${currentWorldName}`, "good");
+  }
+  function deleteWorld(id) {
+    const world = readWorldIndex().find((item) => item.id === id);
+    if (!world) return;
+    if (!window.confirm(`Delete ${world.name || "this world"}?`)) return;
+    deleteWorldSave(id);
+    writeWorldIndex(readWorldIndex().filter((item) => item.id !== id));
+    if (currentWorldId === id) {
+      currentWorldId = "";
+      currentWorldName = "";
+      currentWorldSeed = 0;
+      state.started = false;
+      state.paused = false;
+      initGame();
+    }
+    renderWorldPanel();
   }
   function biomeAt(x, z) {
     const bx = clamp(Math.floor(x), 0, WORLD_X - 1);
@@ -3113,18 +3359,16 @@
   }
   function startGame() {
     if (state.started) return;
-    if (saveSlot) saveSlot.clear();
     state.started = true;
     state.paused = false;
+    hideWorldPanel();
     if (overlay) overlay.classList.remove("overlay--show");
     state.bagOpen = false;
     renderBag();
     canvas.focus();
   }
   function restart() {
-    if (saveSlot) saveSlot.clear();
-    initGame();
-    startGame();
+    openWorldManager();
   }
   function togglePause() {
     if (!state.started) return;
@@ -3137,10 +3381,13 @@
     if (overlay) {
       overlay.classList.toggle("overlay--show", state.paused);
       if (state.paused) {
+        hideWorldPanel();
         document.getElementById("overlay-title").textContent = "Paused";
         document.getElementById("overlay-sub").innerHTML = "Press <b>P</b> or Resume to keep mining.";
         document.getElementById("overlay-score").innerHTML = "";
         document.getElementById("btn-primary").textContent = "Resume";
+      } else {
+        hideWorldPanel();
       }
     }
   }
@@ -3148,6 +3395,8 @@
   function snapshot() {
     return {
       seed: state.seed,
+      worldId: currentWorldId,
+      worldName: currentWorldName,
       edits: Array.from(state.edits.entries()).slice(0, 15000),
       player: { ...state.player },
       hotbar: state.hotbar.map((slot) => slot ? { ...slot } : null),
@@ -3163,6 +3412,9 @@
   function restoreGame(saved) {
     const data = saved && saved.data;
     if (!data || typeof data.seed !== "number") return;
+    currentWorldId = currentWorldId || data.worldId || (saved.meta && saved.meta.id) || "";
+    currentWorldName = currentWorldName || data.worldName || (saved.meta && saved.meta.name) || "World";
+    currentWorldSeed = data.seed >>> 0;
     initGame(data.seed);
     state.edits = new Map(Array.isArray(data.edits) ? data.edits : []);
     for (const [key, code] of state.edits.entries()) {
@@ -3191,6 +3443,7 @@
     state.paused = false;
     state.bagOpen = false;
     heldRenderCode = null;
+    hideWorldPanel();
     if (overlay) overlay.classList.remove("overlay--show");
     renderBag();
     syncCamera();
@@ -3280,7 +3533,7 @@
     const primary = document.getElementById("btn-primary");
     if (primary) primary.addEventListener("click", () => {
       if (state.paused) togglePause();
-      else if (!state.started) startGame();
+      else if (!state.started) createWorld("New World", "");
     });
     bind("btn-pause", togglePause);
     bind("btn-restart", restart);
@@ -3401,26 +3654,20 @@
   }
 
   initGame();
+  migrateLegacyWorld();
   bindInput();
   bindButtons();
   updateModeButtons();
   resizeRenderer();
   raf = requestAnimationFrame(loop);
-
-  if (saveSlot) {
-    saveSlot.attachButtons({
-      primary: document.getElementById("btn-primary"),
-      scoreEl: document.getElementById("overlay-score"),
-      continueLabel: "Continue world",
-      newLabel: "New world",
-      onContinue: restoreGame,
-      summary: (saved) => {
-        const data = saved.data || {};
-        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} - Day <strong>${Number(data.day || 1)}</strong> - Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
-      },
-    });
-    saveSlot.startAutosave(snapshot, () => state.started && !state.paused);
-  }
+  setWorldOverlay();
+  worldAutosaveTimer = setInterval(() => {
+    if (state.started && !state.paused) saveCurrentWorld();
+  }, 2500);
+  window.addEventListener("beforeunload", () => {
+    if (state.started) saveCurrentWorld();
+    if (worldAutosaveTimer) clearInterval(worldAutosaveTimer);
+  });
 
   window.addEventListener("resize", resizeRenderer);
   window.__RIZZ = {
@@ -3430,6 +3677,10 @@
     startGame,
     restart,
     giveItem,
+    createWorld,
+    loadWorld,
+    readWorldIndex,
+    saveCurrentWorld,
     spawnMob,
     generateWorld,
     rebuildAllChunks,
@@ -3466,6 +3717,10 @@
         visibleChunkCount: state.visibleChunkCount,
         friendlyCount: state.friendlies.length,
         movingFriendlies: state.friendlies.filter((friendly) => friendlyMovingAction(friendly.action)).length,
+        worldId: currentWorldId,
+        worldName: currentWorldName,
+        worldSeed: currentWorldSeed >>> 0,
+        worldCount: readWorldIndex().length,
         friendlyActions: state.friendlies.reduce((counts, friendly) => {
           counts[friendly.action] = (counts[friendly.action] || 0) + 1;
           return counts;

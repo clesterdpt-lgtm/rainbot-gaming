@@ -57,7 +57,7 @@
   const LAVA_GRAVITY_MULT = 0.12;
   const LAVA_SWIM_UP_SPEED = 2.2;
   const LAVA_FALL_SPEED = -1.15;
-  const LAVA_FLOW_LIMIT = 18;
+  const LAVA_FLOW_LIMIT = 64;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -998,7 +998,7 @@
         continue;
       }
       if (below !== LAVA && !isSolidBlock(below)) continue;
-      if (p.flow >= 3) continue;
+      if (p.flow >= 2) continue;
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
       const offset = Math.floor(hash3(p.x, p.y, p.z) * dirs.length);
       for (let step = 0; step < dirs.length && filled < limit; step++) {
@@ -1010,6 +1010,25 @@
       }
     }
     return filled;
+  }
+  function settleGeneratedLava() {
+    for (let z = 1; z < WORLD_Z - 1; z++) {
+      for (let x = 1; x < WORLD_X - 1; x++) {
+        for (let y = LAVA_LEVEL + 22; y >= 2; y--) {
+          if (getBlock(x, y, z) !== LAVA) continue;
+          let cy = y - 1;
+          let guard = 0;
+          while (cy > 0 && guard < 80) {
+            const below = getBlock(x, cy, z);
+            if (!canLavaFill(below)) break;
+            setBase(x, cy, z, below === WATER ? STONE : LAVA);
+            if (below === WATER) break;
+            cy--;
+            guard++;
+          }
+        }
+      }
+    }
   }
   function flowLiquidsNear(x, y, z) {
     const water = flowWaterNear(x, y, z);
@@ -1102,6 +1121,7 @@
       }
     }
 
+    settleGeneratedLava();
     growTreesAndDetails();
     carveSpawnMeadow();
     state.baseWorld.set(state.world);
@@ -2148,17 +2168,20 @@
   function buildStars() {
     if (scene.getObjectByName("stars")) return;
     const positions = [];
-    for (let i = 0; i < 420; i++) {
+    for (let i = 0; i < 720; i++) {
       const a = hash2(i, 1) * Math.PI * 2;
-      const r = 95 + hash2(i, 2) * 80;
-      const y = WORLD_Y + 64 + hash2(i, 3) * 140;
-      positions.push(Math.cos(a) * r + WORLD_X / 2, y, Math.sin(a) * r + WORLD_Z / 2);
+      const elevation = 0.22 + hash2(i, 3) * 1.04;
+      const r = 230 + hash2(i, 2) * 250;
+      const flat = Math.cos(elevation) * r;
+      const y = Math.sin(elevation) * r + 38;
+      positions.push(Math.cos(a) * flat, y, Math.sin(a) * flat);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({ color: 0xffffff, size: 0.7, transparent: true, opacity: 0, fog: false });
     const stars = new THREE.Points(geometry, material);
     stars.name = "stars";
+    stars.frustumCulled = false;
     scene.add(stars);
   }
   function buildCelestials() {
@@ -2547,6 +2570,7 @@
   ];
   const FRIENDLY_DROP_MIN = 1;
   const FRIENDLY_DROP_VARIATION = 2;
+  const NIGHT_SPAWN_QUICK_RETRY = 0.35;
   function getFriendlyConfig(type) {
     return FRIENDLY_CONFIG[type] || FRIENDLY_CONFIG[0];
   }
@@ -2554,16 +2578,27 @@
     return getFriendlyConfig(type).name || "friendly";
   }
   function spawnMob() {
-    if (state.mobs.length >= Math.min(8 + state.day * 3, 28)) return;
+    if (state.mobs.length >= Math.min(8 + state.day * 3, 28)) return false;
     const p = state.player;
     const serial = ++mobSpawnSerial;
     const tick = Math.floor(performance.now() * 0.017) + state.day * 997 + serial * 7919;
-    for (let tries = 0; tries < 56; tries++) {
-      const x = 2 + Math.floor(hash2(tick + tries * 31, state.day * 41 - tries * 13) * (WORLD_X - 4));
-      const z = 2 + Math.floor(hash2(state.day * 67 + tries * 19, tick - tries * 37) * (WORLD_Z - 4));
+    for (let tries = 0; tries < 72; tries++) {
+      let x;
+      let z;
+      if (tries < 54) {
+        const angle = hash2(tick + tries * 31, state.day * 41 - tries * 13) * Math.PI * 2;
+        const dist = 22 + hash2(state.day * 67 + tries * 19, tick - tries * 37) * 52;
+        x = Math.round(p.x + Math.cos(angle) * dist);
+        z = Math.round(p.z + Math.sin(angle) * dist);
+      } else {
+        x = 2 + Math.floor(hash2(tick + tries * 31, state.day * 41 - tries * 13) * (WORLD_X - 4));
+        z = 2 + Math.floor(hash2(state.day * 67 + tries * 19, tick - tries * 37) * (WORLD_Z - 4));
+      }
+      x = clamp(x, 2, WORLD_X - 3);
+      z = clamp(z, 2, WORLD_Z - 3);
       const dx = x + 0.5 - p.x;
       const dz = z + 0.5 - p.z;
-      if (dx * dx + dz * dz < 34 * 34) continue;
+      if (dx * dx + dz * dz < 20 * 20) continue;
       if (state.mobs.some((other) => Math.hypot(other.x - (x + 0.5), other.z - (z + 0.5)) < 5)) continue;
       const y = state.surface[surfaceIndex(x, z)] + 1;
       if (y <= SEA_LEVEL || !skyVisible(x, y, z) || torchLightAt(x, y, z) > 0.2) continue;
@@ -2592,8 +2627,9 @@
       mob.mesh.position.set(mob.x, mob.y, mob.z);
       mobGroup.add(mob.mesh);
       state.mobs.push(mob);
-      return;
+      return true;
     }
+    return false;
   }
   function chooseMobType(x, z, salt) {
     const roll = hash2(x + salt * 11, z - salt * 7);
@@ -3162,8 +3198,11 @@
     if (isNight() && state.started && !state.paused && !state.crafting) {
       state.spawnTimer -= dt;
       if (state.spawnTimer <= 0) {
-        spawnMob();
-        state.spawnTimer = 1.6 + hash2(Math.floor(performance.now()), state.day) * 2.4;
+        const spawned = spawnMob();
+        const hurry = state.mobs.length < 4;
+        state.spawnTimer = spawned
+          ? (hurry ? 0.55 : 0.9) + hash2(Math.floor(performance.now()), state.day) * (hurry ? 0.95 : 1.6)
+          : NIGHT_SPAWN_QUICK_RETRY;
       }
     }
   }
@@ -3188,7 +3227,10 @@
       positionCelestial(moonDisk, moonOrbitVector, 175, clamp((moonOrbitVector.y + 8) / 74, 0, 1) * clamp((0.72 - d) / 0.72, 0.2, 1));
     }
     const stars = scene.getObjectByName("stars");
-    if (stars) stars.material.opacity = clamp((0.38 - d) / 0.38, 0, 1);
+    if (stars) {
+      stars.position.copy(camera.position);
+      stars.material.opacity = clamp((0.38 - d) / 0.38, 0, 1);
+    }
     cloudGroup.children.forEach((cloud, i) => {
       cloud.position.x += 0.006 + i * 0.0002;
       if (cloud.position.x > WORLD_X + 20) cloud.position.x = -20;
@@ -3904,6 +3946,7 @@
     flowWaterNear,
     flowLavaNear,
     spreadLavaFrom,
+    settleGeneratedLava,
     flowLiquidsNear,
     heldAttackDamage,
     triggerHeldSwing,

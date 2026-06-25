@@ -6560,6 +6560,30 @@ body.arcade-home::before {
   width: 72px;
 }
 
+.rb-profile-avatar--image,
+.forum-avatar--image {
+  background: #05070d;
+  border-color: var(--profile-accent);
+  padding: 0;
+  transform: none;
+}
+
+.rb-profile-avatar--image::before,
+.rb-profile-avatar--image::after,
+.forum-avatar--image::before,
+.forum-avatar--image::after {
+  display: none;
+}
+
+.rb-profile-avatar img,
+.forum-avatar img {
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
 .rb-profile-avatar::after,
 .forum-avatar::after {
   background: var(--profile-accent);
@@ -6609,6 +6633,12 @@ body.arcade-home::before {
     radial-gradient(circle at 64% 38%, rgba(249, 251, 255, 0.28) 0 4px, transparent 5px),
     linear-gradient(135deg, var(--profile-glow), rgba(8, 11, 19, 0.94)),
     #05070d;
+}
+
+.rb-profile-avatar--image,
+.forum-avatar--image {
+  border-radius: 6px;
+  transform: none;
 }
 
 .rb-profile-card__copy {
@@ -6696,6 +6726,84 @@ body.arcade-home::before {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rb-profile-avatar-field {
+  border: 1px solid rgba(151, 171, 194, 0.28);
+  border-radius: 6px;
+  margin: 0;
+  padding: 12px;
+}
+
+.rb-profile-avatar-field legend {
+  color: var(--arcade-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.rb-avatar-choice-grid {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.rb-avatar-choice {
+  cursor: pointer;
+  min-width: 0;
+  position: relative;
+}
+
+.rb-avatar-choice input {
+  opacity: 0;
+  position: absolute;
+}
+
+.rb-avatar-choice__card {
+  align-items: center;
+  border: 1px solid rgba(151, 171, 194, 0.32);
+  border-radius: 6px;
+  background: rgba(5, 7, 13, 0.82);
+  color: var(--arcade-muted);
+  display: grid;
+  gap: 6px;
+  min-height: 94px;
+  padding: 7px;
+  pointer-events: none;
+  text-align: center;
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.rb-avatar-choice__card img {
+  aspect-ratio: 1;
+  border: 1px solid rgba(249, 251, 255, 0.12);
+  border-radius: 5px;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.rb-avatar-choice__card span {
+  font: 900 8px/1.15 var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rb-avatar-choice:hover .rb-avatar-choice__card,
+.rb-avatar-choice:focus-within .rb-avatar-choice__card {
+  border-color: rgba(35, 223, 242, 0.72);
+  color: var(--arcade-cyan);
+  transform: translateY(-1px);
+}
+
+.rb-avatar-choice input:checked + .rb-avatar-choice__card {
+  border-color: var(--arcade-yellow);
+  box-shadow: 0 0 0 3px rgba(247, 217, 36, 0.12);
+  color: var(--arcade-white);
 }
 
 .rb-profile-accent-field {
@@ -7583,6 +7691,15 @@ body.arcade-home::before {
 
   .rb-profile-swatches {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rb-avatar-choice-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .rb-avatar-choice__card {
+    min-height: 84px;
+    padding: 6px;
   }
 
   .rb-profile-actions .btn,

@@ -49,12 +49,33 @@
     return authorProfile(row).profile_title || "";
   }
 
+  function safeToken(value, fallback) {
+    const normalized = String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return normalized || fallback;
+  }
+
+  function profileAvatarAsset(value) {
+    if (window.RBProfileAvatars && typeof window.RBProfileAvatars.get === "function") {
+      return window.RBProfileAvatars.get(value);
+    }
+    return null;
+  }
+
   function avatarEl(profileOrName) {
     const profile = typeof profileOrName === "object" && profileOrName ? profileOrName : {};
     const name = profile.display_name || profileOrName || "Rainbot Player";
-    const style = profile.avatar_style || "bot";
-    const accent = profile.accent_color || "cyan";
-    const avatar = textEl("span", `forum-avatar forum-avatar--${style} forum-avatar--${accent}`, String(name || "R").trim().slice(0, 1).toUpperCase() || "R");
+    const style = safeToken(profile.avatar_style, "bot");
+    const accent = safeToken(profile.accent_color, "cyan");
+    const asset = profileAvatarAsset(style);
+    const avatar = textEl("span", `forum-avatar forum-avatar--${style} forum-avatar--${accent}${asset ? " forum-avatar--image" : ""}`, asset ? "" : String(name || "R").trim().slice(0, 1).toUpperCase() || "R");
+    if (asset) {
+      const img = document.createElement("img");
+      img.src = asset.src;
+      img.alt = "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      avatar.append(img);
+    }
     avatar.setAttribute("aria-hidden", "true");
     return avatar;
   }

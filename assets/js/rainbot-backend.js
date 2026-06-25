@@ -9,7 +9,28 @@ const RBBackend = (() => {
     "announcements",
   ]);
   const REPORT_STATUSES = new Set(["open", "reviewing", "closed"]);
-  const PROFILE_AVATARS = new Set(["bot", "glitch", "storm", "slime", "crown", "skull"]);
+  const PROFILE_AVATARS = new Set([
+    "bot",
+    "glitch",
+    "storm",
+    "slime",
+    "crown",
+    "skull",
+    "wizard",
+    "ninja",
+    "pilot",
+    "lava",
+    "crystal",
+    "joystick",
+    "cassette",
+    "racer",
+    "hacker",
+    "comet",
+    "moon",
+    "cube",
+    "flame",
+    "trophy",
+  ]);
   const PROFILE_ACCENTS = new Set(["cyan", "pink", "yellow", "green", "red", "white"]);
   const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, created_at, updated_at";
   const PROFILE_PUBLIC_SELECT = "display_name, avatar_url, profile_title, avatar_style, accent_color";

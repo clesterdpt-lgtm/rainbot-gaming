@@ -37,14 +37,30 @@ function getBackendDisplayName(backendState) {
   return profileName || (userEmail ? userEmail.split("@")[0] : "Profile");
 }
 
+const RB_PROFILE_AVATAR_ROOT = "assets/img/avatars/";
 const RB_PROFILE_AVATARS = [
-  { value: "bot", label: "Bot" },
-  { value: "glitch", label: "Glitch" },
-  { value: "storm", label: "Storm" },
-  { value: "slime", label: "Slime" },
-  { value: "crown", label: "Crown" },
-  { value: "skull", label: "Skull" },
+  { value: "bot", label: "Rainbot", file: "rainbot-avatar-01-rainbot.png" },
+  { value: "glitch", label: "Glitch", file: "rainbot-avatar-02-glitch-helmet.png" },
+  { value: "storm", label: "Storm", file: "rainbot-avatar-03-storm-mask.png" },
+  { value: "slime", label: "Slime", file: "rainbot-avatar-04-slime.png" },
+  { value: "crown", label: "Crown", file: "rainbot-avatar-05-neon-crown.png" },
+  { value: "skull", label: "Skull", file: "rainbot-avatar-06-pixel-skull.png" },
+  { value: "wizard", label: "Wizard", file: "rainbot-avatar-07-arcade-wizard.png" },
+  { value: "ninja", label: "Ninja", file: "rainbot-avatar-08-synth-ninja.png" },
+  { value: "pilot", label: "Pilot", file: "rainbot-avatar-09-star-pilot.png" },
+  { value: "lava", label: "Lava", file: "rainbot-avatar-10-lava-core.png" },
+  { value: "crystal", label: "Crystal", file: "rainbot-avatar-11-crystal-face.png" },
+  { value: "joystick", label: "Joystick", file: "rainbot-avatar-12-joystick-hero.png" },
+  { value: "cassette", label: "Cassette", file: "rainbot-avatar-13-cassette-dj.png" },
+  { value: "racer", label: "Racer", file: "rainbot-avatar-14-speed-racer.png" },
+  { value: "hacker", label: "Hacker", file: "rainbot-avatar-15-hacker-mask.png" },
+  { value: "comet", label: "Comet", file: "rainbot-avatar-16-comet-face.png" },
+  { value: "moon", label: "Moon", file: "rainbot-avatar-17-moon-bot.png" },
+  { value: "cube", label: "Cube", file: "rainbot-avatar-18-thunder-cube.png" },
+  { value: "flame", label: "Flame", file: "rainbot-avatar-19-flame-visor.png" },
+  { value: "trophy", label: "Trophy", file: "rainbot-avatar-20-trophy-bot.png" },
 ];
+const RB_PROFILE_AVATAR_MAP = new Map(RB_PROFILE_AVATARS.map((avatar) => [avatar.value, avatar]));
 
 const RB_PROFILE_ACCENTS = [
   { value: "cyan", label: "Cyan" },
@@ -65,6 +81,24 @@ function cleanProfileUiChoice(value, options, fallback) {
   const normalized = String(value || fallback).trim().toLowerCase();
   return allowed.has(normalized) ? normalized : fallback;
 }
+
+function getProfileAvatar(value) {
+  const normalized = cleanProfileUiChoice(value, RB_PROFILE_AVATARS, "bot");
+  return RB_PROFILE_AVATAR_MAP.get(normalized) || RB_PROFILE_AVATARS[0];
+}
+
+function profileAvatarSrc(value) {
+  const avatar = getProfileAvatar(value);
+  return `${RB_BASE}${RB_PROFILE_AVATAR_ROOT}${avatar.file}`;
+}
+
+window.RBProfileAvatars = {
+  list: RB_PROFILE_AVATARS.map((avatar) => ({ ...avatar, src: profileAvatarSrc(avatar.value) })),
+  get(value) {
+    const avatar = getProfileAvatar(value);
+    return { ...avatar, src: profileAvatarSrc(avatar.value) };
+  },
+};
 
 function renderNav(state = RB.state) {
   const slot = document.getElementById("nav-slot");
@@ -638,14 +672,21 @@ function openProfileModal() {
   const favoriteGame = profile.favorite_game || "";
   const avatarStyle = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
   const accentColor = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
-  const avatarOptions = RB_PROFILE_AVATARS.map((option) => `<option value="${option.value}"${option.value === avatarStyle ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+  const avatarOptions = RB_PROFILE_AVATARS.map((option) => `
+    <label class="rb-avatar-choice">
+      <input type="radio" name="avatar_style" value="${option.value}"${option.value === avatarStyle ? " checked" : ""} />
+      <span class="rb-avatar-choice__card">
+        <img src="${escapeHtml(profileAvatarSrc(option.value))}" alt="" loading="lazy" decoding="async" />
+        <span>${escapeHtml(option.label)}</span>
+      </span>
+    </label>
+  `).join("");
   const accentOptions = RB_PROFILE_ACCENTS.map((option) => `
     <label class="rb-profile-swatch rb-profile-swatch--${option.value}">
       <input type="radio" name="accent_color" value="${option.value}"${option.value === accentColor ? " checked" : ""} />
       <span>${escapeHtml(option.label)}</span>
     </label>
   `).join("");
-  const initial = String(displayName || "R").trim().slice(0, 1).toUpperCase() || "R";
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-profile-modal";
@@ -655,7 +696,9 @@ function openProfileModal() {
       <div class="rb-profile-shell">
         <section class="rb-profile-preview" aria-label="Profile preview">
           <div class="rb-profile-card rb-profile-card--${accentColor}" data-profile-card>
-            <span class="rb-profile-avatar rb-profile-avatar--${avatarStyle} rb-profile-avatar--${accentColor}" data-profile-avatar aria-hidden="true">${escapeHtml(initial)}</span>
+            <span class="rb-profile-avatar rb-profile-avatar--image rb-profile-avatar--${avatarStyle} rb-profile-avatar--${accentColor}" data-profile-avatar aria-hidden="true">
+              <img data-profile-avatar-img src="${escapeHtml(profileAvatarSrc(avatarStyle))}" alt="" />
+            </span>
             <div class="rb-profile-card__copy">
               <span class="rb-profile-kicker">${escapeHtml(role)}</span>
               <strong data-profile-preview-name>${escapeHtml(displayName)}</strong>
@@ -693,11 +736,11 @@ function openProfileModal() {
               <span>Favorite Game</span>
               <input id="rb-favorite-game" type="text" maxlength="80" value="${escapeHtml(favoriteGame)}" />
             </label>
-            <label class="rb-form-field" for="rb-avatar-style">
-              <span>Avatar</span>
-              <select id="rb-avatar-style">${avatarOptions}</select>
-            </label>
           </div>
+          <fieldset class="rb-profile-avatar-field">
+            <legend>Avatar</legend>
+            <div class="rb-avatar-choice-grid">${avatarOptions}</div>
+          </fieldset>
           <label class="rb-form-field" for="rb-profile-bio">
             <span>Bio</span>
             <textarea id="rb-profile-bio" maxlength="180" rows="4">${escapeHtml(bio)}</textarea>
@@ -728,33 +771,35 @@ function openProfileModal() {
   const displayInput = backdrop.querySelector("#rb-display-name");
   const titleInput = backdrop.querySelector("#rb-profile-title-input");
   const favoriteInput = backdrop.querySelector("#rb-favorite-game");
-  const avatarSelect = backdrop.querySelector("#rb-avatar-style");
   const bioInput = backdrop.querySelector("#rb-profile-bio");
+  const avatarInputs = Array.from(backdrop.querySelectorAll("input[name='avatar_style']"));
   const accentInputs = Array.from(backdrop.querySelectorAll("input[name='accent_color']"));
   const profileCard = backdrop.querySelector("[data-profile-card]");
   const profileAvatar = backdrop.querySelector("[data-profile-avatar]");
+  const profileAvatarImg = backdrop.querySelector("[data-profile-avatar-img]");
   const previewName = backdrop.querySelector("[data-profile-preview-name]");
   const previewTitle = backdrop.querySelector("[data-profile-preview-title]");
   const previewBio = backdrop.querySelector("[data-profile-preview-bio]");
   const previewFavorite = backdrop.querySelector("[data-profile-preview-favorite]");
+  const selectedAvatar = () => (avatarInputs.find((input) => input.checked) || avatarInputs[0] || {}).value || "bot";
   const selectedAccent = () => (accentInputs.find((input) => input.checked) || accentInputs[0] || {}).value || "cyan";
   const updatePreview = () => {
     const nextName = displayInput.value.trim() || "Rainbot Player";
     const nextTitle = titleInput.value.trim() || "Arcade Regular";
     const nextBio = bioInput.value.trim() || "No bio yet.";
     const nextFavorite = favoriteInput.value.trim();
-    const nextAvatar = cleanProfileUiChoice(avatarSelect.value, RB_PROFILE_AVATARS, "bot");
+    const nextAvatar = cleanProfileUiChoice(selectedAvatar(), RB_PROFILE_AVATARS, "bot");
     const nextAccent = cleanProfileUiChoice(selectedAccent(), RB_PROFILE_ACCENTS, "cyan");
     profileCard.className = `rb-profile-card rb-profile-card--${nextAccent}`;
-    profileAvatar.className = `rb-profile-avatar rb-profile-avatar--${nextAvatar} rb-profile-avatar--${nextAccent}`;
-    profileAvatar.textContent = nextName.slice(0, 1).toUpperCase() || "R";
+    profileAvatar.className = `rb-profile-avatar rb-profile-avatar--image rb-profile-avatar--${nextAvatar} rb-profile-avatar--${nextAccent}`;
+    profileAvatarImg.src = profileAvatarSrc(nextAvatar);
     previewName.textContent = nextName;
     previewTitle.textContent = nextTitle;
     previewBio.textContent = nextBio;
     previewFavorite.textContent = nextFavorite ? `Favorite: ${nextFavorite}` : "Favorite game not set";
   };
   [displayInput, titleInput, favoriteInput, bioInput].forEach((input) => input.addEventListener("input", updatePreview));
-  avatarSelect.addEventListener("change", updatePreview);
+  avatarInputs.forEach((input) => input.addEventListener("change", updatePreview));
   accentInputs.forEach((input) => input.addEventListener("change", updatePreview));
   displayInput.focus();
   form.addEventListener("submit", async (event) => {
@@ -768,7 +813,7 @@ function openProfileModal() {
         profile_title: titleInput.value,
         favorite_game: favoriteInput.value,
         bio: bioInput.value,
-        avatar_style: avatarSelect.value,
+        avatar_style: selectedAvatar(),
         accent_color: selectedAccent(),
       });
       setModalStatus(backdrop, "Profile saved.", "good");
@@ -829,8 +874,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-profile-ui-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-profile-ui-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-avatar-art-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-avatar-art-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }

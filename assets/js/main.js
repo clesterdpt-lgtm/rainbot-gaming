@@ -14,70 +14,100 @@ const RB_BASE = (() => {
   return "./";
 })();
 
-function renderNav() {
+function escapeHtml(value) {
+  return String(value == null ? "" : value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char]);
+}
+
+function getBackendState() {
+  if (!window.RBBackend || typeof window.RBBackend.getState !== "function") {
+    return { configured: false, ready: false, status: "disabled", user: null, profile: null, error: "" };
+  }
+  return window.RBBackend.getState();
+}
+
+function getBackendDisplayName(backendState) {
+  const profileName = backendState && backendState.profile && backendState.profile.display_name;
+  const userEmail = backendState && backendState.user && backendState.user.email;
+  return profileName || (userEmail ? userEmail.split("@")[0] : "Profile");
+}
+
+function renderNav(state = RB.state) {
   const slot = document.getElementById("nav-slot");
   if (!slot) return;
 
-  RB.subscribe((state) => {
-    const proBadge = state.isPro
-      ? `<span class="nav__pro-state">PRO ACTIVE</span>`
-      : "";
-    const path = location.pathname;
-    const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-    const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
-    const isRainbotTv = path.endsWith("/videos.html") || path.includes("/videos/");
-    const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
-    const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
-    const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && (path.endsWith("/games.html") || path.includes("/games/"));
+  const backendState = getBackendState();
+  const proBadge = state.isPro
+    ? `<span class="nav__pro-state">PRO ACTIVE</span>`
+    : "";
+  const syncBadge = backendState.user
+    ? `<span class="nav__pro-state nav__pro-state--sync">SYNC ON</span>`
+    : "";
+  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : "Login";
+  const path = location.pathname;
+  const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
+  const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
+  const isRainbotTv = path.endsWith("/videos.html") || path.includes("/videos/");
+  const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
+  const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
+  const isForum = path.endsWith("/community.html");
+  const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && !isForum && (path.endsWith("/games.html") || path.includes("/games/"));
 
-    slot.innerHTML = `
-      <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network — free browser arcade">
-        <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
-      </a>
-      <div class="nav__links">
-        <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
-        <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
-        <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
-        <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
-        <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
-        <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
-      </div>
-      <form class="nav__search" role="search">
-        <label class="sr-only" for="rb-search">Search Rainbot</label>
-        <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
-        <button type="submit" aria-label="Search">Search</button>
-      </form>
-      <div class="nav__actions">
-        ${proBadge}
-        ${
-          state.isPro
-            ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro</a>`
-        }
-        <a href="#" id="rb-login" class="nav__cta nav__cta--login">Login</a>
-      </div>
-    `;
-
-    bindSearch(slot);
-
-    const goPro = document.getElementById("rb-go-pro");
-    if (goPro) goPro.addEventListener("click", (e) => {
-      e.preventDefault();
-      openProModal();
-    });
-    const manage = document.getElementById("rb-manage-pro");
-    if (manage) manage.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (confirm("Cancel Pro subscription? (mock — wire to your backend)")) {
-        RB.cancelPro();
-        RB.toast("Pro cancelled", "bad");
+  slot.innerHTML = `
+    <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network - free browser arcade">
+      <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
+    </a>
+    <div class="nav__links">
+      <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
+      <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
+      <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
+      <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
+      <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
+      <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
+      <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Forum</a>
+    </div>
+    <form class="nav__search" role="search">
+      <label class="sr-only" for="rb-search">Search Rainbot</label>
+      <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
+      <button type="submit" aria-label="Search">Search</button>
+    </form>
+    <div class="nav__actions">
+      ${proBadge}
+      ${syncBadge}
+      ${
+        state.isPro
+          ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
+          : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro</a>`
       }
-    });
-    const login = document.getElementById("rb-login");
-    if (login) login.addEventListener("click", (e) => {
-      e.preventDefault();
-      RB.toast("Login is coming soon", "good");
-    });
+      <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
+    </div>
+  `;
+
+  bindSearch(slot);
+
+  const goPro = document.getElementById("rb-go-pro");
+  if (goPro) goPro.addEventListener("click", (e) => {
+    e.preventDefault();
+    openProModal();
+  });
+  const manage = document.getElementById("rb-manage-pro");
+  if (manage) manage.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (confirm("Cancel Pro subscription? (mock - wire to your backend)")) {
+      RB.cancelPro();
+      RB.toast("Pro cancelled", "bad");
+    }
+  });
+  const login = document.getElementById("rb-login");
+  if (login) login.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (getBackendState().user) openProfileModal();
+    else openAuthModal();
   });
 }
 
@@ -340,8 +370,219 @@ function openProModal(defaultPlan = "monthly") {
   backdrop.querySelector("#rb-close-pro").addEventListener("click", () => backdrop.remove());
 }
 
+function setModalStatus(root, message, kind = "") {
+  const status = root.querySelector("[data-modal-status]");
+  if (!status) return;
+  status.textContent = message || "";
+  status.dataset.kind = kind;
+}
+
+function openAuthModal() {
+  if (document.getElementById("rb-auth-modal")) return;
+  const backendState = getBackendState();
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop modal-backdrop--open";
+  backdrop.id = "rb-auth-modal";
+  const setupBody = `
+    <div class="modal__body">
+      Rainbot accounts are staged, but Supabase is not connected yet. Add your project URL and anon key in <code>assets/js/supabase-config.js</code>, then run the SQL in <code>supabase/migrations</code>.
+    </div>
+    <div class="modal__actions">
+      <button class="btn btn--secondary" id="rb-close-auth">Got it</button>
+    </div>
+  `;
+  const loginBody = `
+    <form class="rb-auth-form" id="rb-auth-form">
+      <label class="rb-form-field" for="rb-auth-email">
+        <span>Email</span>
+        <input id="rb-auth-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </label>
+      <button class="btn btn--primary" type="submit">Send Magic Link</button>
+    </form>
+    <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, and forum posts.</p>
+    <div class="modal__actions">
+      <button class="btn btn--ghost" id="rb-close-auth" type="button">Close</button>
+    </div>
+  `;
+  backdrop.innerHTML = `
+    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-auth-title">
+      <div class="modal__title" id="rb-auth-title">Rainbot Account</div>
+      ${backendState.configured ? loginBody : setupBody}
+      <p class="rb-modal-status" data-modal-status></p>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#rb-close-auth").addEventListener("click", close);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) close();
+  });
+
+  const form = backdrop.querySelector("#rb-auth-form");
+  if (form) {
+    const email = form.querySelector("#rb-auth-email");
+    email.focus();
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button[type='submit']");
+      button.disabled = true;
+      setModalStatus(backdrop, "Sending sign-in link...", "");
+      try {
+        await window.RBBackend.signInWithEmail(email.value);
+        setModalStatus(backdrop, "Check your email for the Rainbot sign-in link.", "good");
+        RB.toast("Magic link sent", "good");
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+}
+
+function openProfileModal() {
+  const backendState = getBackendState();
+  if (!backendState.user) {
+    openAuthModal();
+    return;
+  }
+  if (document.getElementById("rb-profile-modal")) return;
+  const displayName = getBackendDisplayName(backendState);
+  const email = backendState.user.email || "";
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop modal-backdrop--open";
+  backdrop.id = "rb-profile-modal";
+  backdrop.innerHTML = `
+    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-profile-title">
+      <div class="modal__title" id="rb-profile-title">Profile</div>
+      <p class="modal__body rb-modal-note">Signed in as ${escapeHtml(email)}. Cloud saves and high scores sync when the backend is connected.</p>
+      <form class="rb-auth-form" id="rb-profile-form">
+        <label class="rb-form-field" for="rb-display-name">
+          <span>Display Name</span>
+          <input id="rb-display-name" type="text" maxlength="32" value="${escapeHtml(displayName)}" required />
+        </label>
+        <button class="btn btn--primary" type="submit">Save Profile</button>
+      </form>
+      <div class="modal__actions rb-profile-actions">
+        <button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
+        <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>
+        <button class="btn btn--ghost" id="rb-close-profile" type="button">Close</button>
+      </div>
+      <p class="rb-modal-status" data-modal-status></p>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  backdrop.querySelector("#rb-close-profile").addEventListener("click", close);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) close();
+  });
+  backdrop.querySelector("#rb-profile-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector("button[type='submit']");
+    const displayInput = backdrop.querySelector("#rb-display-name");
+    button.disabled = true;
+    setModalStatus(backdrop, "Saving profile...", "");
+    try {
+      await window.RBBackend.updateProfile({ display_name: displayInput.value });
+      setModalStatus(backdrop, "Profile saved.", "good");
+      RB.toast("Profile saved", "good");
+      renderNav(RB.state);
+    } catch (error) {
+      setModalStatus(backdrop, error.message || "Profile save failed.", "bad");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  backdrop.querySelector("#rb-sync-now").addEventListener("click", async () => {
+    setModalStatus(backdrop, "Syncing local saves and high scores...", "");
+    try {
+      await syncRainbotCloudState();
+      setModalStatus(backdrop, "Sync complete.", "good");
+      RB.toast("Cloud sync complete", "good");
+    } catch (error) {
+      setModalStatus(backdrop, error.message || "Sync failed.", "bad");
+    }
+  });
+  backdrop.querySelector("#rb-sign-out").addEventListener("click", async () => {
+    setModalStatus(backdrop, "Signing out...", "");
+    try {
+      await window.RBBackend.signOut();
+      RB.toast("Signed out", "good");
+      close();
+    } catch (error) {
+      setModalStatus(backdrop, error.message || "Sign out failed.", "bad");
+    }
+  });
+}
+
+function loadScriptOnce(src, id) {
+  return new Promise((resolve, reject) => {
+    const existing = document.getElementById(id);
+    if (existing) {
+      if (existing.dataset.loaded === "true") resolve();
+      else existing.addEventListener("load", () => resolve(), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.id = id;
+    script.async = false;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Could not load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function initRainbotBackend() {
+  try {
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260624-backend-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260624-backend-1`, "rb-backend-runtime");
+    if (window.RBBackend && typeof window.RBBackend.init === "function") {
+      await window.RBBackend.init();
+    }
+  } catch (error) {
+    console.warn("[Rainbot] Backend scripts failed to load", error);
+  } finally {
+    renderNav(RB.state);
+  }
+}
+
+async function syncRainbotCloudState() {
+  const backend = window.RBBackend;
+  if (!backend || !backend.getState().user || !backend.getState().ready) return;
+  if (window.RBGameSaves && typeof window.RBGameSaves.syncWithCloud === "function") {
+    await window.RBGameSaves.syncWithCloud();
+  }
+  const localScores = RB.state.scores || {};
+  const scoreEntries = Object.entries(localScores).filter((entry) => Number(entry[1]) > 0);
+  await Promise.allSettled(scoreEntries.map(([gameId, score]) => backend.recordScore(gameId, score)));
+  const cloudScores = await backend.loadMyScores();
+  RB.mergeHighScores(cloudScores);
+}
+
+let lastCloudSyncUserId = "";
+
+function handleBackendAuthChange(event) {
+  const backendState = event.detail || getBackendState();
+  renderNav(RB.state);
+  if (!backendState.ready || !backendState.user) {
+    lastCloudSyncUserId = "";
+    return;
+  }
+  if (lastCloudSyncUserId === backendState.user.id) return;
+  lastCloudSyncUserId = backendState.user.id;
+  syncRainbotCloudState().catch((error) => {
+    console.warn("[Rainbot] Initial cloud sync failed", error);
+  });
+}
+
 const RBGameSaves = (() => {
   const PREFIX = "rainbot_game_save:";
+  const slots = new Map();
 
   function storageKey(gameId) {
     return PREFIX + gameId;
@@ -370,6 +611,41 @@ const RBGameSaves = (() => {
     } catch (error) {}
   }
 
+  function canUseCloud() {
+    const backend = window.RBBackend;
+    if (!backend || typeof backend.getState !== "function") return false;
+    const backendState = backend.getState();
+    return Boolean(backendState.ready && backendState.user);
+  }
+
+  function saveCloud(gameId, saved) {
+    if (!canUseCloud() || !saved) return;
+    window.RBBackend.saveGame(gameId, saved).catch((error) => {
+      console.warn("[Rainbot] Cloud save failed", error);
+    });
+  }
+
+  function clearCloud(gameId) {
+    if (!canUseCloud()) return;
+    window.RBBackend.deleteGame(gameId).catch((error) => {
+      console.warn("[Rainbot] Cloud save delete failed", error);
+    });
+  }
+
+  function listLocalSaves() {
+    const saves = [];
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(PREFIX)) continue;
+        const gameId = key.slice(PREFIX.length);
+        const saved = readRaw(key);
+        if (gameId && saved && saved.data) saves.push({ gameId, key, saved });
+      }
+    } catch (error) {}
+    return saves;
+  }
+
   function formatSavedAt(value) {
     const date = new Date(value || 0);
     if (Number.isNaN(date.getTime())) return "Saved progress";
@@ -380,9 +656,12 @@ const RBGameSaves = (() => {
     const key = storageKey(gameId);
     const version = options.version || 1;
     let timer = 0;
+    const refreshers = new Set();
 
     const slot = {
       key,
+      gameId,
+      version,
       read() {
         const saved = readRaw(key);
         if (!saved || saved.version !== version || !saved.data) return null;
@@ -393,15 +672,19 @@ const RBGameSaves = (() => {
       },
       save(data, meta = {}) {
         if (!data || typeof data !== "object") return false;
-        return writeRaw(key, {
+        const saved = {
           version,
           savedAt: Date.now(),
           meta,
           data,
-        });
+        };
+        const ok = writeRaw(key, saved);
+        if (ok) saveCloud(gameId, saved);
+        return ok;
       },
       clear() {
         clearRaw(key);
+        clearCloud(gameId);
       },
       startAutosave(getData, shouldSave = () => true, intervalMs = 2500) {
         const tick = () => {
@@ -436,6 +719,7 @@ const RBGameSaves = (() => {
             }
           }
         };
+        refreshers.add(refresh);
 
         continueButton.addEventListener("click", () => {
           const saved = this.read();
@@ -449,12 +733,42 @@ const RBGameSaves = (() => {
         refresh();
         return { button: continueButton, refresh };
       },
+      refresh() {
+        refreshers.forEach((refresh) => refresh());
+      },
     };
 
+    slots.set(gameId, slot);
     return slot;
   }
 
-  return { create, formatSavedAt };
+  async function syncActiveCloudSaves() {
+    if (!canUseCloud()) return;
+    const tasks = Array.from(slots.values()).map(async (slot) => {
+      const cloud = await window.RBBackend.loadGame(slot.gameId);
+      if (!cloud || cloud.version !== slot.version || !cloud.data) return;
+      const local = slot.read();
+      if (!local || Number(cloud.savedAt) > Number(local.savedAt || 0)) {
+        writeRaw(slot.key, cloud);
+        slot.refresh();
+      }
+    });
+    await Promise.allSettled(tasks);
+  }
+
+  async function syncLocalSavesToCloud() {
+    if (!canUseCloud()) return;
+    const saves = listLocalSaves();
+    await Promise.allSettled(saves.map(({ gameId, saved }) => window.RBBackend.saveGame(gameId, saved)));
+  }
+
+  async function syncWithCloud() {
+    if (!canUseCloud()) return;
+    await syncActiveCloudSaves();
+    await syncLocalSavesToCloud();
+  }
+
+  return { create, formatSavedAt, syncWithCloud };
 })();
 
 window.RBGameSaves = RBGameSaves;
@@ -521,7 +835,9 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
-  renderNav();
+  RB.subscribe((state) => renderNav(state));
+  window.addEventListener("rainbot:authchange", handleBackendAuthChange);
+  initRainbotBackend();
   scheduleGameCanvasFit();
 });
 

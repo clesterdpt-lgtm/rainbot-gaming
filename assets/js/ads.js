@@ -175,6 +175,11 @@ const RB = (() => {
     if (score > prev) {
       state.scores[gameId] = score;
       emit();
+      if (window.RBBackend && typeof window.RBBackend.recordScore === "function") {
+        window.RBBackend.recordScore(gameId, score).catch((error) => {
+          console.warn("[Rainbot] Cloud score sync failed", error);
+        });
+      }
       return true; // new high score
     }
     return false;
@@ -182,6 +187,20 @@ const RB = (() => {
 
   function getHighScore(gameId) {
     return state.scores[gameId] || 0;
+  }
+
+  function mergeHighScores(scores) {
+    if (!scores || typeof scores !== "object") return false;
+    let changed = false;
+    Object.entries(scores).forEach(([gameId, score]) => {
+      const numericScore = Number(score) || 0;
+      if (numericScore > (state.scores[gameId] || 0)) {
+        state.scores[gameId] = numericScore;
+        changed = true;
+      }
+    });
+    if (changed) emit();
+    return changed;
   }
 
   // ---------- Toasts ----------
@@ -221,6 +240,7 @@ const RB = (() => {
     consumePowerup,
     recordScore,
     getHighScore,
+    mergeHighScores,
     toast,
     addNotify,
   };

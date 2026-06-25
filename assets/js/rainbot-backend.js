@@ -1,0 +1,423 @@
+const RBBackend = (() => {
+  const SUPABASE_MODULE_URL = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+  const TOPIC_CATEGORIES = new Set([
+    "general",
+    "game-feedback",
+    "bug-reports",
+    "ideas",
+    "scores-clips",
+    "announcements",
+  ]);
+
+  let client = null;
+  let config = {};
+  let initPromise = null;
+  const listeners = new Set();
+  let state = {
+    configured: false,
+    ready: false,
+    status: "disabled",
+    user: null,
+    profile: null,
+    error: "",
+  };
+
+  function getState() {
+    return { ...state };
+  }
+
+  function emit() {
+    const snapshot = getState();
+    listeners.forEach((listener) => listener(snapshot));
+    window.dispatchEvent(new CustomEvent("rainbot:authchange", { detail: snapshot }));
+  }
+
+  function setState(patch) {
+    state = { ...state, ...patch };
+    emit();
+  }
+
+  function onChange(listener) {
+    listeners.add(listener);
+    listener(getState());
+    return () => listeners.delete(listener);
+  }
+
+  function readConfig() {
+    const raw = window.RB_SUPABASE_CONFIG || {};
+    const url = String(raw.url || "").trim();
+    const anonKey = String(raw.anonKey || "").trim();
+    return {
+      enabled: Boolean(raw.enabled && url && anonKey),
+      url,
+      anonKey,
+      emailRedirectTo: String(raw.emailRedirectTo || "").trim() || window.location.href,
+    };
+  }
+
+  function cleanGameId(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9:_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 96);
+  }
+
+  function cleanText(value, maxLength) {
+    return String(value || "").trim().replace(/\s+/g, " ").slice(0, maxLength);
+  }
+
+  function cleanBody(value, maxLength) {
+    return String(value || "").trim().slice(0, maxLength);
+  }
+
+  function cleanCategory(value) {
+    const normalized = cleanGameId(value || "general");
+    return TOPIC_CATEGORIES.has(normalized) ? normalized : "general";
+  }
+
+  function displayNameFromUser(user) {
+    const meta = user && user.user_metadata ? user.user_metadata : {};
+    const name = cleanText(meta.display_name || meta.full_name || meta.name || (user.email || "").split("@")[0] || "Rainbot Player", 32);
+    return name.length >= 2 ? name : "Rainbot Player";
+  }
+
+  function localSaveToRow(gameId, saved) {
+    const savedAt = Number(saved && saved.savedAt) || Date.now();
+    return {
+      game_id: cleanGameId(gameId),
+      version: Number(saved && saved.version) || 1,
+      save_data: saved && saved.data && typeof saved.data === "object" ? saved.data : {},
+      metadata: saved && saved.meta && typeof saved.meta === "object" ? saved.meta : {},
+      local_saved_at: new Date(savedAt).toISOString(),
+    };
+  }
+
+  function rowToLocalSave(row) {
+    if (!row) return null;
+    return {
+      version: Number(row.version) || 1,
+      savedAt: Date.parse(row.local_saved_at || row.updated_at || "") || Date.now(),
+      meta: row.metadata || {},
+      data: row.save_data || {},
+    };
+  }
+
+  async function requireClient() {
+    await init();
+    if (!client) throw new Error("Rainbot backend is not configured yet.");
+    return client;
+  }
+
+  async function requireUser() {
+    const activeClient = await requireClient();
+    const { data, error } = await activeClient.auth.getUser();
+    if (error) throw error;
+    if (!data || !data.user) throw new Error("Sign in to use Rainbot cloud features.");
+    if (!state.user || state.user.id !== data.user.id) {
+      await hydrateUser(data.user);
+    }
+    return data.user;
+  }
+
+  async function ensureProfile(user) {
+    if (!client || !user) return null;
+    const { data: existingProfile, error: selectError } = await client
+      .from("profiles")
+      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (selectError) throw selectError;
+    if (existingProfile) return existingProfile;
+
+    const fallbackName = displayNameFromUser(user);
+    const payload = {
+      id: user.id,
+      display_name: fallbackName,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await client
+      .from("profiles")
+      .insert(payload)
+      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function hydrateUser(user) {
+    if (!user) {
+      setState({ user: null, profile: null });
+      return;
+    }
+    setState({ user });
+    try {
+      const profile = await ensureProfile(user);
+      setState({ profile, error: "" });
+    } catch (error) {
+      setState({ profile: null, error: error.message || "Profile load failed." });
+      console.warn("[Rainbot] Profile load failed", error);
+    }
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+    initPromise = (async () => {
+      config = readConfig();
+      if (!config.enabled) {
+        setState({ configured: false, ready: false, status: "disabled", error: "" });
+        return getState();
+      }
+
+      setState({ configured: true, ready: false, status: "loading", error: "" });
+      try {
+        const supabase = await import(SUPABASE_MODULE_URL);
+        client = supabase.createClient(config.url, config.anonKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+          },
+        });
+
+        client.auth.onAuthStateChange((_event, session) => {
+          hydrateUser(session && session.user ? session.user : null);
+        });
+
+        const { data, error } = await client.auth.getSession();
+        if (error) throw error;
+        await hydrateUser(data && data.session ? data.session.user : null);
+        setState({ ready: true, status: "ready", error: "" });
+      } catch (error) {
+        client = null;
+        setState({
+          configured: true,
+          ready: false,
+          status: "error",
+          error: error.message || "Supabase could not load.",
+        });
+        console.warn("[Rainbot] Supabase init failed", error);
+      }
+      return getState();
+    })();
+    return initPromise;
+  }
+
+  async function signInWithEmail(email) {
+    const activeClient = await requireClient();
+    const cleanedEmail = cleanText(email, 254).toLowerCase();
+    if (!cleanedEmail || !cleanedEmail.includes("@")) throw new Error("Enter a valid email.");
+    const { error } = await activeClient.auth.signInWithOtp({
+      email: cleanedEmail,
+      options: { emailRedirectTo: config.emailRedirectTo || window.location.href },
+    });
+    if (error) throw error;
+    return true;
+  }
+
+  async function signOut() {
+    const activeClient = await requireClient();
+    const { error } = await activeClient.auth.signOut();
+    if (error) throw error;
+    await hydrateUser(null);
+  }
+
+  async function updateProfile(values) {
+    const user = await requireUser();
+    const displayName = cleanText(values && values.display_name, 32);
+    if (displayName.length < 2) throw new Error("Display name needs at least 2 characters.");
+    const avatarUrl = cleanText(values && values.avatar_url, 300);
+    const payload = {
+      id: user.id,
+      display_name: displayName,
+      avatar_url: avatarUrl || null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await client
+      .from("profiles")
+      .upsert(payload, { onConflict: "id" })
+      .select("id, display_name, avatar_url, role, created_at, updated_at")
+      .single();
+    if (error) throw error;
+    setState({ profile: data, error: "" });
+    return data;
+  }
+
+  async function saveGame(gameId, saved) {
+    const user = await requireUser();
+    const payload = {
+      user_id: user.id,
+      ...localSaveToRow(gameId, saved),
+      updated_at: new Date().toISOString(),
+    };
+    if (!payload.game_id) throw new Error("Missing game id.");
+    const { data, error } = await client
+      .from("game_saves")
+      .upsert(payload, { onConflict: "user_id,game_id" })
+      .select("game_id, version, save_data, metadata, local_saved_at, updated_at")
+      .single();
+    if (error) throw error;
+    return rowToLocalSave(data);
+  }
+
+  async function loadGame(gameId) {
+    await requireUser();
+    const normalizedGameId = cleanGameId(gameId);
+    if (!normalizedGameId) return null;
+    const { data, error } = await client
+      .from("game_saves")
+      .select("game_id, version, save_data, metadata, local_saved_at, updated_at")
+      .eq("game_id", normalizedGameId)
+      .maybeSingle();
+    if (error) throw error;
+    return rowToLocalSave(data);
+  }
+
+  async function deleteGame(gameId) {
+    await requireUser();
+    const normalizedGameId = cleanGameId(gameId);
+    if (!normalizedGameId) return false;
+    const { error } = await client.from("game_saves").delete().eq("game_id", normalizedGameId);
+    if (error) throw error;
+    return true;
+  }
+
+  async function recordScore(gameId, score, metadata = {}) {
+    await requireUser();
+    const normalizedGameId = cleanGameId(gameId);
+    const numericScore = Math.max(0, Math.floor(Number(score) || 0));
+    if (!normalizedGameId || numericScore <= 0) return null;
+    const { data, error } = await client.rpc("record_high_score", {
+      p_game_id: normalizedGameId,
+      p_score: numericScore,
+      p_metadata: metadata && typeof metadata === "object" ? metadata : {},
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function loadMyScores() {
+    const user = await requireUser();
+    const { data, error } = await client
+      .from("game_scores")
+      .select("game_id, score")
+      .eq("user_id", user.id);
+    if (error) throw error;
+    return (data || []).reduce((scores, row) => {
+      scores[row.game_id] = Number(row.score) || 0;
+      return scores;
+    }, {});
+  }
+
+  async function listLeaderboard(gameId, limit = 10) {
+    await requireClient();
+    const normalizedGameId = cleanGameId(gameId);
+    if (!normalizedGameId) return [];
+    const { data, error } = await client
+      .from("game_scores")
+      .select("game_id, score, updated_at, author:profiles!game_scores_user_id_fkey(display_name, avatar_url)")
+      .eq("game_id", normalizedGameId)
+      .order("score", { ascending: false })
+      .limit(Math.max(1, Math.min(50, Number(limit) || 10)));
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function listTopics(options = {}) {
+    await requireClient();
+    const category = options.category ? cleanCategory(options.category) : "";
+    let query = client
+      .from("forum_topics")
+      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .eq("is_hidden", false)
+      .order("last_activity_at", { ascending: false })
+      .limit(Math.max(1, Math.min(50, Number(options.limit) || 30)));
+    if (category) query = query.eq("category", category);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function getTopic(topicId) {
+    await requireClient();
+    const { data, error } = await client
+      .from("forum_topics")
+      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .eq("id", Number(topicId))
+      .eq("is_hidden", false)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  async function createTopic(values) {
+    const user = await requireUser();
+    const title = cleanText(values && values.title, 110);
+    const body = cleanBody(values && values.body, 6000);
+    if (title.length < 4) throw new Error("Topic title needs at least 4 characters.");
+    if (body.length < 4) throw new Error("Topic body needs at least 4 characters.");
+    const payload = {
+      author_id: user.id,
+      title,
+      body,
+      category: cleanCategory(values && values.category),
+      game_id: values && values.game_id ? cleanGameId(values.game_id) : null,
+    };
+    const { data, error } = await client
+      .from("forum_topics")
+      .insert(payload)
+      .select("id, title, body, category, game_id, reply_count, last_activity_at, created_at, author:profiles!forum_topics_author_id_fkey(display_name, avatar_url)")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  async function listReplies(topicId) {
+    await requireClient();
+    const { data, error } = await client
+      .from("forum_replies")
+      .select("id, body, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .eq("topic_id", Number(topicId))
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function createReply(topicId, body) {
+    const user = await requireUser();
+    const cleanedBody = cleanBody(body, 6000);
+    if (cleanedBody.length < 2) throw new Error("Reply needs at least 2 characters.");
+    const { data, error } = await client
+      .from("forum_replies")
+      .insert({ topic_id: Number(topicId), author_id: user.id, body: cleanedBody })
+      .select("id, body, created_at, author:profiles!forum_replies_author_id_fkey(display_name, avatar_url)")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  return {
+    init,
+    onChange,
+    getState,
+    signInWithEmail,
+    signOut,
+    updateProfile,
+    saveGame,
+    loadGame,
+    deleteGame,
+    recordScore,
+    loadMyScores,
+    listLeaderboard,
+    listTopics,
+    getTopic,
+    createTopic,
+    listReplies,
+    createReply,
+  };
+})();
+
+window.RBBackend = RBBackend;

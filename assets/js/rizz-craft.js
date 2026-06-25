@@ -34,13 +34,13 @@
 
   const THREE = window.THREE;
   const SAVE_VERSION = 7;
-  const WORLD_X = 512;
-  const WORLD_Y = 128;
-  const WORLD_Z = 512;
+  const WORLD_X = 640;
+  const WORLD_Y = 160;
+  const WORLD_Z = 640;
   const CHUNK = 16;
-  const SEA_LEVEL = 36;
-  const LAVA_LEVEL = 15;
-  const EDGE_OCEAN = 44;
+  const SEA_LEVEL = 48;
+  const LAVA_LEVEL = 18;
+  const EDGE_OCEAN = 56;
   const RENDER_RADIUS_CHUNKS = 6;
   const DECOR_RADIUS_CHUNKS = 6;
   const HOTBAR = 9;
@@ -53,6 +53,11 @@
   const WATER_GRAVITY_MULT = 0.22;
   const SWIM_UP_SPEED = 4.4;
   const WATER_FLOW_LIMIT = 96;
+  const LAVA_MOVE_MULT = 0.34;
+  const LAVA_GRAVITY_MULT = 0.12;
+  const LAVA_SWIM_UP_SPEED = 2.2;
+  const LAVA_FALL_SPEED = -1.15;
+  const LAVA_FLOW_LIMIT = 18;
   const PLAYER_RADIUS = 0.32;
   const PLAYER_HEIGHT = 1.75;
   const EYE_HEIGHT = 1.55;
@@ -113,12 +118,12 @@
   }
 
   def(AIR, { name: "Air", kind: "air", solid: false, color: "#000000" });
-  def(GRASS, { name: "Legacy Grass Top", kind: "block", solid: true, hardness: 0.45, drop: DIRT, color: "#5fcf58", side: "#7a5732" });
+  def(GRASS, { name: "Legacy Grass Top", kind: "block", solid: true, hardness: 0.45, drop: DIRT, color: "#34d63b", side: "#7a5732" });
   def(DIRT, { name: "Dirt", kind: "block", solid: true, hardness: 0.45, color: "#80542f" });
   def(STONE, { name: "Ohio Stone", kind: "block", solid: true, hardness: 1.25, needTool: "pick", drop: STONE, color: "#868894" });
   def(BEDROCK, { name: "Bedrock", kind: "block", solid: true, hardness: Infinity, color: "#262630" });
   def(LOG, { name: "Skibidi Log", kind: "block", solid: true, hardness: 0.85, best: "axe", color: "#78502f" });
-  def(LEAVES, { name: "Brainrot Leaves", kind: "block", solid: true, hardness: 0.2, drop: null, color: "#3da34a", transparent: true });
+  def(LEAVES, { name: "Brainrot Leaves", kind: "block", solid: true, hardness: 0.2, drop: null, color: "#21b83a", transparent: true });
   def(PLANKS, { name: "Toilet Planks", kind: "block", solid: true, hardness: 0.55, best: "axe", color: "#b98245" });
   def(TABLE, { name: "Crafting Toilet", kind: "block", solid: true, hardness: 0.75, best: "axe", color: "#d7e1e8", decor: true });
   def(COAL_ORE, { name: "Gyatt Coal Ore", kind: "block", solid: true, hardness: 1.55, needTool: "pick", drop: COAL, color: "#6f707b", ore: "#22232b" });
@@ -126,7 +131,7 @@
   def(SIGMA_ORE, { name: "Sigma Ore", kind: "block", solid: true, hardness: 2.45, needTool: "pick", needTier: 2, drop: SIGMA, color: "#767987", ore: "#4beaff" });
   def(TORCH, { name: "Rizz Torch", kind: "block", solid: false, hardness: 0.05, drop: TORCH, light: 1, color: "#ffd75a", decor: true });
   def(WATER, { name: "Rizzwater", kind: "block", solid: false, hardness: Infinity, drop: null, color: "#2f8fe8", transparent: true, liquid: true });
-  def(TALL_GRASS, { name: "Tall Grass", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#76d06a", decor: true });
+  def(TALL_GRASS, { name: "Tall Grass", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#48d83e", decor: true });
   def(FLOWER, { name: "Rizz Bloom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#ff6fa8", decor: true });
   def(SAND, { name: "Ohio Sand", kind: "block", solid: true, hardness: 0.45, color: "#d8c073" });
   def(SNOW, { name: "Powder Snow", kind: "block", solid: true, hardness: 0.28, color: "#e9f6ff" });
@@ -158,18 +163,18 @@
   ];
 
   const BIOMES = [
-    { id: 0, name: "Meadow", grass: "#66d95d", side: "#7d5a34", leaf: "#59bb58", tree: 0.12, treeSpacing: 12, flora: 0.16, flowers: 0.28, palette: ["#ff6fa8", "#ffe45c", "#e8fff3"] },
-    { id: 1, name: "Open Forest", grass: "#42b54b", side: "#6f5231", leaf: "#3a9c45", tree: 0.62, treeSpacing: 10, flora: 0.10, flowers: 0.12, treeStyle: "oak", palette: ["#ff85bd", "#f5d85a"] },
-    { id: 2, name: "Highland", grass: "#91bd58", side: "#75613a", leaf: "#7aa84f", tree: 0.16, treeSpacing: 13, flora: 0.08, flowers: 0.10, palette: ["#fff0a6", "#ccefff"] },
-    { id: 3, name: "Marsh", grass: "#4fa866", side: "#5f5134", leaf: "#4b9860", tree: 0.18, treeSpacing: 12, flora: 0.22, flowers: 0.22, treeStyle: "willow", palette: ["#d6f7a6", "#b4f0ff"] },
-    { id: 4, name: "Neon Grove", grass: "#42d998", side: "#4d6541", leaf: "#34e0a8", tree: 0.30, treeSpacing: 11, flora: 0.24, flowers: 0.40, treeStyle: "oak", palette: ["#43e6ff", "#ff4fd8", "#faff6a"] },
-    { id: 5, name: "Prairie", grass: "#d0c45b", side: "#8b7339", leaf: "#b4b85d", tree: 0.05, treeSpacing: 16, flora: 0.26, flowers: 0.34, palette: ["#ffe45c", "#ffffff", "#ff9b5c"] },
-    { id: 6, name: "Crystal Ridge", grass: "#70c7d9", side: "#677f83", leaf: "#86efff", tree: 0.10, treeSpacing: 15, flora: 0.10, flowers: 0.26, treeStyle: "crystal", palette: ["#8af7ff", "#d9fffb"] },
-    { id: 7, name: "Ash Flats", grass: "#9a9186", side: "#6d6259", leaf: "#86817a", tree: 0.03, treeSpacing: 18, flora: 0.06, flowers: 0.08, palette: ["#c8b6a6", "#e7ddc8"] },
-    { id: 8, name: "Pine Barrens", grass: "#4d8f58", side: "#654b33", leaf: "#1f6f3d", tree: 0.56, treeSpacing: 11, flora: 0.08, flowers: 0.08, treeStyle: "pine", palette: ["#c9ffe0", "#fff1a8"] },
-    { id: 9, name: "Birch Glade", grass: "#8bdc72", side: "#795d36", leaf: "#8ac95d", tree: 0.28, treeSpacing: 12, flora: 0.18, flowers: 0.36, treeStyle: "birch", palette: ["#ffffff", "#ffd1eb", "#ffe45c"] },
-    { id: 10, name: "Sun-Baked Dunes", grass: "#d9bf65", side: "#b18a48", leaf: "#c9b55a", tree: 0.02, treeSpacing: 18, flora: 0.05, flowers: 0.10, surface: "sand", palette: ["#fff0a0", "#f7a85a"] },
-    { id: 11, name: "Frost Peaks", grass: "#dff7ff", side: "#91a7af", leaf: "#c9f5ff", tree: 0.08, treeSpacing: 16, flora: 0.05, flowers: 0.16, surface: "snow", treeStyle: "pine", palette: ["#dfffff", "#bfe8ff"] },
+    { id: 0, name: "Meadow", grass: "#34d63b", side: "#7d5a34", leaf: "#21b83a", tree: 0.12, treeSpacing: 12, flora: 0.16, flowers: 0.28, palette: ["#ff6fa8", "#ffe45c", "#e8fff3"] },
+    { id: 1, name: "Open Forest", grass: "#1fb83a", side: "#6f5231", leaf: "#147f2f", tree: 0.62, treeSpacing: 10, flora: 0.10, flowers: 0.12, treeStyle: "oak", palette: ["#ff85bd", "#f5d85a"] },
+    { id: 2, name: "Highland", grass: "#84c937", side: "#75613a", leaf: "#65b936", tree: 0.16, treeSpacing: 13, flora: 0.08, flowers: 0.10, palette: ["#fff0a6", "#ccefff"] },
+    { id: 3, name: "Marsh", grass: "#36ca6f", side: "#5f5134", leaf: "#27b05f", tree: 0.18, treeSpacing: 12, flora: 0.22, flowers: 0.22, treeStyle: "willow", palette: ["#d6f7a6", "#b4f0ff"] },
+    { id: 4, name: "Neon Grove", grass: "#25ee9a", side: "#4d6541", leaf: "#16eeb1", tree: 0.30, treeSpacing: 11, flora: 0.24, flowers: 0.40, treeStyle: "oak", palette: ["#43e6ff", "#ff4fd8", "#faff6a"] },
+    { id: 5, name: "Prairie", grass: "#9ed647", side: "#8b7339", leaf: "#85bd3a", tree: 0.05, treeSpacing: 16, flora: 0.26, flowers: 0.34, palette: ["#ffe45c", "#ffffff", "#ff9b5c"] },
+    { id: 6, name: "Crystal Ridge", grass: "#5fd9ea", side: "#677f83", leaf: "#76f6ff", tree: 0.10, treeSpacing: 15, flora: 0.10, flowers: 0.26, treeStyle: "crystal", palette: ["#8af7ff", "#d9fffb"] },
+    { id: 7, name: "Ash Flats", grass: "#9dab88", side: "#6d6259", leaf: "#819f72", tree: 0.03, treeSpacing: 18, flora: 0.06, flowers: 0.08, palette: ["#c8b6a6", "#e7ddc8"] },
+    { id: 8, name: "Pine Barrens", grass: "#38a94d", side: "#654b33", leaf: "#157c38", tree: 0.56, treeSpacing: 11, flora: 0.08, flowers: 0.08, treeStyle: "pine", palette: ["#c9ffe0", "#fff1a8"] },
+    { id: 9, name: "Birch Glade", grass: "#80e869", side: "#795d36", leaf: "#76d85c", tree: 0.28, treeSpacing: 12, flora: 0.18, flowers: 0.36, treeStyle: "birch", palette: ["#ffffff", "#ffd1eb", "#ffe45c"] },
+    { id: 10, name: "Sun-Baked Dunes", grass: "#d9c85e", side: "#b18a48", leaf: "#c3c64d", tree: 0.02, treeSpacing: 18, flora: 0.05, flowers: 0.10, surface: "sand", palette: ["#fff0a0", "#f7a85a"] },
+    { id: 11, name: "Frost Peaks", grass: "#e6fbff", side: "#91a7af", leaf: "#d7fbff", tree: 0.08, treeSpacing: 16, flora: 0.05, flowers: 0.16, surface: "snow", treeStyle: "pine", palette: ["#dfffff", "#bfe8ff"] },
   ];
 
   const FACES = [
@@ -187,7 +192,7 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.14;
+  renderer.toneMappingExposure = 1.08;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -201,8 +206,8 @@
   const cloudGroup = new THREE.Group();
   scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, friendlyGroup, mobGroup, effectGroup, cloudGroup);
 
-  const ambient = new THREE.HemisphereLight(0xcdf6ff, 0x3b2b22, 0.95);
-  const sun = new THREE.DirectionalLight(0xfff6df, 1.22);
+  const ambient = new THREE.HemisphereLight(0xd9fbff, 0x3b2b22, 0.98);
+  const sun = new THREE.DirectionalLight(0xfff7df, 1.26);
   sun.position.set(36, 70, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -304,6 +309,7 @@
       hp: MAX_HP,
       hurtCd: 0,
       inWater: false,
+      inLava: false,
       hurtAnim: 0,
     },
     input: { forward: 0, right: 0, jump: false, mine: false, place: false, sprint: false },
@@ -414,9 +420,9 @@
         }
       }
     }
-    noise(TEX.grassTop, 210, 56, 13);
-    noise(TEX.grassSide, 176, 36, 0);
-    for (let x = 0; x < tile; x++) for (let y = 0; y < 4; y++) px(TEX.grassSide, x, y, 224 - y * 10);
+    noise(TEX.grassTop, 186, 42, 13);
+    noise(TEX.grassSide, 158, 30, 0);
+    for (let x = 0; x < tile; x++) for (let y = 0; y < 4; y++) px(TEX.grassSide, x, y, 198 - y * 8);
     noise(TEX.dirt, 165, 62, 9);
     noise(TEX.stone, 182, 52, 11);
     noise(TEX.bedrock, 116, 72, 7);
@@ -426,7 +432,7 @@
       ctx.strokeStyle = `rgb(${135 + r * 8},${135 + r * 8},${135 + r * 8})`;
       ctx.strokeRect((TEX.logTop % TEX_COLS) * tile + 8 - r, Math.floor(TEX.logTop / TEX_COLS) * tile + 8 - r, r * 2, r * 2);
     }
-    noise(TEX.leaves, 188, 70, 6);
+    noise(TEX.leaves, 172, 48, 6);
     stripes(TEX.planks, 182, 54, false);
     noise(TEX.table, 218, 28, 0);
     noise(TEX.ore, 170, 56, 5);
@@ -487,6 +493,9 @@
   function maxStack(code) { return (DEF[code] && DEF[code].stack) || 99; }
   function canWaterFill(code) {
     return code === AIR || code === TALL_GRASS || code === FLOWER || code === TORCH;
+  }
+  function canLavaFill(code) {
+    return code === AIR || code === TALL_GRASS || code === FLOWER || code === TORCH || code === WATER;
   }
 
   function hash32(n) {
@@ -682,6 +691,76 @@
     }
     return filled;
   }
+  function flowLavaNear(x, y, z, limit = LAVA_FLOW_LIMIT) {
+    const seeds = [];
+    const seenSeeds = new Set();
+    const seedDirs = [[0, 0, 0], [0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+    for (const dir of seedDirs) {
+      const sx = x + dir[0];
+      const sy = y + dir[1];
+      const sz = z + dir[2];
+      const key = `${sx},${sy},${sz}`;
+      if (!inWorld(sx, sy, sz) || seenSeeds.has(key) || getBlock(sx, sy, sz) !== LAVA) continue;
+      seenSeeds.add(key);
+      seeds.push({ x: sx, y: sy, z: sz, flow: 0 });
+    }
+    if (!seeds.length) return 0;
+    return spreadLavaFrom(seeds, limit);
+  }
+  function spreadLavaFrom(seeds, limit = LAVA_FLOW_LIMIT) {
+    const queue = seeds.slice();
+    const queued = new Set(queue.map((p) => `${p.x},${p.y},${p.z}`));
+    let filled = 0;
+
+    function pushIfLava(x, y, z, flow) {
+      const key = `${x},${y},${z}`;
+      if (!inWorld(x, y, z) || queued.has(key) || getBlock(x, y, z) !== LAVA) return;
+      queued.add(key);
+      queue.push({ x, y, z, flow });
+    }
+    function fill(x, y, z, flow) {
+      if (!inWorld(x, y, z) || filled >= limit) return false;
+      const code = getBlock(x, y, z);
+      if (!canLavaFill(code)) return false;
+      setBlock(x, y, z, code === WATER ? STONE : LAVA);
+      filled++;
+      if (code !== WATER) {
+        const key = `${x},${y},${z}`;
+        if (!queued.has(key)) {
+          queued.add(key);
+          queue.push({ x, y, z, flow });
+        }
+      }
+      return true;
+    }
+
+    for (let i = 0; i < queue.length && filled < limit; i++) {
+      const p = queue[i];
+      if (getBlock(p.x, p.y, p.z) !== LAVA) continue;
+      const below = getBlock(p.x, p.y - 1, p.z);
+      if (canLavaFill(below)) {
+        fill(p.x, p.y - 1, p.z, 0);
+        continue;
+      }
+      if (below !== LAVA && !isSolidBlock(below)) continue;
+      if (p.flow >= 3) continue;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      const offset = Math.floor(hash3(p.x, p.y, p.z) * dirs.length);
+      for (let step = 0; step < dirs.length && filled < limit; step++) {
+        const dir = dirs[(step + offset) % dirs.length];
+        const nx = p.x + dir[0];
+        const nz = p.z + dir[1];
+        if (fill(nx, p.y, nz, p.flow + 1)) continue;
+        pushIfLava(nx, p.y, nz, p.flow + 1);
+      }
+    }
+    return filled;
+  }
+  function flowLiquidsNear(x, y, z) {
+    const water = flowWaterNear(x, y, z);
+    const lava = flowLavaNear(x, y, z);
+    return water + lava;
+  }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
   function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && code !== TORCH && code !== TALL_GRASS && code !== FLOWER && code !== TABLE; }
 
@@ -700,14 +779,14 @@
         const continent = fbm2(x + 1200, z - 500, 0.011, 5);
         const detail = fbm2(x - 900, z + 700, 0.052, 4);
         const ridges = Math.abs(fbm2(x + 20, z + 20, 0.024, 4) - 0.5) * 2;
-        let h = SEA_LEVEL + 10 + (continent - 0.48) * 34 + (detail - 0.5) * 8 + Math.pow(ridges, 1.7) * 10;
+        let h = SEA_LEVEL + 12 + (continent - 0.48) * 38 + (detail - 0.5) * 9 + Math.pow(ridges, 1.7) * 12;
         const ocean = edgeOceanStrength(x, z);
         if (ocean > 0) {
           const shelf = SEA_LEVEL - 9 + noise2(x + 17, z - 23, 0.09) * 2;
           h = lerp(h, shelf, smooth(ocean));
         }
         const spawnBlend = clamp(1 - center / 20, 0, 1);
-        h = lerp(h, SEA_LEVEL + 7 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
+        h = lerp(h, SEA_LEVEL + 8 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
         const height = clamp(Math.round(h), 4, WORLD_Y - 9);
         const moisture = fbm2(x - 300, z + 300, 0.016, 4);
         const weird = fbm2(x + 700, z + 80, 0.014, 4);
@@ -752,15 +831,15 @@
               else {
                 const r = hash3(x, y, z);
                 if (y < height - 6 && r < 0.035) code = COAL_ORE;
-                if (y < 45 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
-                if (y < 26 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
+                if (y < SEA_LEVEL + 10 && r >= 0.035 && r < 0.055) code = RIZZ_ORE;
+                if (y < LAVA_LEVEL + 18 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
               }
             }
             if (y > 1 && y < LAVA_LEVEL) {
               const pocket = noise3(x - 1600, y * 2.6, z + 1800, 0.082);
               const vein = noise3(x + 230, y * 3.1, z - 510, 0.14);
-              if (code === AIR && pocket > 0.52) code = LAVA;
-              else if (code === STONE && pocket > 0.77 && vein > 0.62) code = LAVA;
+              if (code === AIR && pocket > 0.46) code = LAVA;
+              else if (code === STONE && pocket > 0.72 && vein > 0.58) code = LAVA;
             }
           }
           state.world[index(x, y, z)] = code;
@@ -1047,15 +1126,15 @@
     if (code === GRASS || code === DIRT) {
       const overlay = topFace ? dirtTopOverlay(x, y, z) : null;
       if (overlay === "grass") {
-        base = biomeRgb(biome, "grass");
+        base = mixRgb(biomeRgb(biome, "grass"), cachedRgb("#20d63a"), 0.18);
       } else if (overlay === "snow") {
         base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
       } else {
         base = mixRgb(cachedRgb("#684126"), cachedRgb("#9b6638"), grain * 0.75 + blockGrain * 0.25);
       }
     } else if (code === STONE || code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) {
-      const rock = mixRgb(cachedRgb("#686b75"), cachedRgb("#a0a3ad"), grain * 0.6 + blockGrain * 0.4);
-      base = mixRgb(rock, biomeRgb(biome, "grass"), code === STONE ? 0.05 : 0.02);
+      const rock = mixRgb(cachedRgb("#6b6f7b"), cachedRgb("#acafbb"), grain * 0.6 + blockGrain * 0.4);
+      base = mixRgb(rock, biomeRgb(biome, "grass"), code === STONE ? 0.02 : 0.01);
       if ((code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE) && grain < 0.34) {
         if (!d.oreRgb) d.oreRgb = hexToRgb(d.ore);
         base = mixRgb(base, d.oreRgb, code === COAL_ORE ? 0.62 : 0.78);
@@ -1086,12 +1165,13 @@
       base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
     }
     if (code === LEAVES) {
-      base = mixRgb(biomeRgb(biome, "leaf"), biomeRgb(biome, "grass"), grain * 0.25);
+      base = mixRgb(biomeRgb(biome, "leaf"), mixRgb(biomeRgb(biome, "grass"), cachedRgb("#18d43c"), 0.16), grain * 0.18);
     }
-    const jitter = 0.84 + grain * 0.20 + blockGrain * 0.08;
+    const jitter = 0.9 + grain * 0.17 + blockGrain * 0.07;
     const f = shade * jitter;
-    const saturation = code === BEDROCK ? 1.05 : code === STONE ? 1.13 : 1.28;
-    const brightness = code === BEDROCK ? 1.02 : 1.1;
+    const greenSurface = (code === DIRT || code === GRASS) && topFace && dirtTopOverlay(x, y, z) === "grass";
+    const saturation = code === BEDROCK ? 1.04 : code === STONE ? 1.08 : code === LEAVES ? 1.68 : greenSurface ? 1.62 : 1.36;
+    const brightness = code === BEDROCK ? 1.02 : code === STONE ? 1.06 : code === LEAVES ? 1.0 : greenSurface ? 0.98 : 1.08;
     return vividRgb(scaleRgb(base, f), saturation, brightness);
   }
   function buildMesh(arr, material) {
@@ -1742,18 +1822,18 @@
   function buildClouds() {
     if (cloudsBuilt) return;
     cloudsBuilt = true;
-    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.76 });
+    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, fog: false });
     const box = new THREE.BoxBufferGeometry(1, 1, 1);
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 64; i++) {
       const group = new THREE.Group();
-      const count = 4 + Math.floor(hash2(i, 3) * 5);
+      const count = 6 + Math.floor(hash2(i, 3) * 8);
       for (let j = 0; j < count; j++) {
         const puff = new THREE.Mesh(box, material);
-        puff.scale.set(3 + hash2(i, j) * 5, 0.45 + hash2(j, i) * 0.7, 2 + hash2(i + 7, j) * 3);
-        puff.position.set(j * 3.2, hash2(i, j + 9) * 0.5, hash2(j + 10, i) * 4);
+        puff.scale.set(6 + hash2(i, j) * 10, 0.7 + hash2(j, i) * 1.0, 3.2 + hash2(i + 7, j) * 6.2);
+        puff.position.set(j * 5.4, hash2(i, j + 9) * 0.9, hash2(j + 10, i) * 7.4);
         group.add(puff);
       }
-      group.position.set(hash2(i, 1) * WORLD_X, 36 + hash2(i, 2) * 7, hash2(i, 4) * WORLD_Z);
+      group.position.set(hash2(i, 1) * WORLD_X, 70 + hash2(i, 2) * 30, hash2(i, 4) * WORLD_Z);
       cloudGroup.add(group);
     }
   }
@@ -1818,7 +1898,7 @@
     const x = WORLD_X / 2 + 0.5;
     const z = WORLD_Z / 2 + 0.5;
     const y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
-    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false, hurtAnim: 0 });
+    Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false, inLava: false, hurtAnim: 0 });
     state.oceanFatigue = 0;
     updateVisibleChunks(true);
     decorDirty = true;
@@ -1979,8 +2059,12 @@
     const forward = state.input.forward;
     const right = state.input.right;
     const inWater = playerInWater();
+    const inLava = playerInLava();
     p.inWater = inWater;
-    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * (inWater ? WATER_MOVE_MULT : 1);
+    p.inLava = inLava;
+    const liquidMoveMult = inLava ? LAVA_MOVE_MULT : inWater ? WATER_MOVE_MULT : 1;
+    const liquidGravityMult = inLava ? LAVA_GRAVITY_MULT : inWater ? WATER_GRAVITY_MULT : 1;
+    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * liquidMoveMult;
     syncCamera();
     const move = movementVectorForCamera(forward, right);
     let mx = move.x;
@@ -1992,16 +2076,16 @@
     }
     p.vx = mx * speed;
     p.vz = mz * speed;
-    if (inWater && state.input.jump) {
-      p.vy = Math.max(p.vy, SWIM_UP_SPEED);
+    if ((inWater || inLava) && state.input.jump) {
+      p.vy = Math.max(p.vy, inLava ? LAVA_SWIM_UP_SPEED : SWIM_UP_SPEED);
       p.onGround = false;
     } else if (state.input.jump && p.onGround) {
       p.vy = JUMP_SPEED;
       p.onGround = false;
     }
-    p.vy -= GRAVITY * (inWater ? WATER_GRAVITY_MULT : 1) * dt;
-    if (inWater) {
-      p.vy = Math.max(p.vy, -2.2);
+    p.vy -= GRAVITY * liquidGravityMult * dt;
+    if (inWater || inLava) {
+      p.vy = Math.max(p.vy, inLava ? LAVA_FALL_SPEED : -2.2);
       if (!state.input.jump && p.vy < 0) p.vy *= 0.92;
     } else {
       p.vy = Math.max(p.vy, -32);
@@ -2106,6 +2190,21 @@
       }
     }
     return false;
+  }
+  function rescuePlayerFromSolid() {
+    const p = state.player;
+    p.x = clamp(p.x, 1.5, WORLD_X - 1.5);
+    p.z = clamp(p.z, 1.5, WORLD_Z - 1.5);
+    p.y = clamp(p.y, 2, WORLD_Y - PLAYER_HEIGHT - 2);
+    if (!boxCollides(playerBox())) return false;
+    const x = clamp(Math.floor(p.x), 0, WORLD_X - 1);
+    const z = clamp(Math.floor(p.z), 0, WORLD_Z - 1);
+    p.y = clamp(state.surface[surfaceIndex(x, z)] + 1.05, 2, WORLD_Y - PLAYER_HEIGHT - 2);
+    p.vx = 0;
+    p.vy = 0;
+    p.vz = 0;
+    p.onGround = false;
+    return true;
   }
   function hurtPlayer(dmg) {
     const p = state.player;
@@ -2413,7 +2512,7 @@
     const d = DEF[code];
     spawnBlockBurst(x, y, z, code);
     setBlock(x, y, z, AIR);
-    flowWaterNear(x, y, z);
+    flowLiquidsNear(x, y, z);
     state.mined++;
     addScore(1);
     if (d.drop !== null && canDrop(code)) giveItem(d.drop === undefined ? code : d.drop, 1);
@@ -2442,7 +2541,7 @@
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     setBlock(p.x, p.y, p.z, slot.code);
-    flowWaterNear(p.x, p.y, p.z);
+    flowLiquidsNear(p.x, p.y, p.z);
     decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
@@ -2614,10 +2713,10 @@
   function isNight() { return daylight() < 0.22; }
   function updateLighting() {
     const d = daylight();
-    const sky = new THREE.Color(0x101a46).lerp(new THREE.Color(0x68cfff), d);
-    const fog = new THREE.Color(0x131d48).lerp(new THREE.Color(0xb7ecff), d);
+    const sky = new THREE.Color(0x101a46).lerp(new THREE.Color(0x53cfff), d);
+    const fog = new THREE.Color(0x131d48).lerp(new THREE.Color(0x8edfff), d);
     scene.background = sky;
-    scene.fog = new THREE.FogExp2(fog, lerp(0.029, 0.0065, d));
+    scene.fog = new THREE.FogExp2(fog, lerp(0.027, 0.0054, d));
     ambient.intensity = lerp(0.22, 1.0, d);
     sun.intensity = lerp(0.12, 1.34, d);
     const a = state.time * Math.PI * 2;
@@ -3071,7 +3170,10 @@
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
     }
     for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) updateSurfaceColumn(x, z);
-    if (data.player) Object.assign(state.player, data.player);
+    if (data.player) {
+      Object.assign(state.player, data.player);
+      rescuePlayerFromSolid();
+    }
     rebuildAllChunks();
     rebuildDecorations();
     if (Array.isArray(data.hotbar)) state.hotbar = data.hotbar.map((slot) => slot ? { ...slot } : null).slice(0, HOTBAR);
@@ -3335,6 +3437,9 @@
     getBlock,
     setBlock,
     flowWaterNear,
+    flowLavaNear,
+    spreadLavaFrom,
+    flowLiquidsNear,
     heldAttackDamage,
     triggerHeldSwing,
     damageMob,

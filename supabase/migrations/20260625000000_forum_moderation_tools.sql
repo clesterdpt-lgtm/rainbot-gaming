@@ -100,5 +100,7 @@ $$;
 
 revoke all on function public.moderate_forum_topic(bigint, boolean, boolean, boolean, bigint, text) from public;
 revoke all on function public.moderate_forum_reply(bigint, boolean, bigint, text) from public;
+revoke all on function public.moderate_forum_topic(bigint, boolean, boolean, boolean, bigint, text) from anon;
+revoke all on function public.moderate_forum_reply(bigint, boolean, bigint, text) from anon;
 grant execute on function public.moderate_forum_topic(bigint, boolean, boolean, boolean, bigint, text) to authenticated;
 grant execute on function public.moderate_forum_reply(bigint, boolean, bigint, text) to authenticated;

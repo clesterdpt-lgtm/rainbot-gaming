@@ -10,5 +10,6 @@ fonts.googleapis.com
 fonts.gstatic.com
 github.com
 pagead2.googlesyndication.com
+qzvrrpzmalskayushbrv.supabase.co
 unpkg.com
 www.profitabledisplaynetwork.com

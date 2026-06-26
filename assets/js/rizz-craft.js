@@ -85,10 +85,15 @@
   const FRIENDLY_HIT_COOLDOWN = 0.5;
   const HELD_SWING_SECONDS = 0.32;
   const HELD_GATHER_SECONDS = 0.24;
+  const HELD_TORCH_LIGHT_DISTANCE = 16;
+  const TORCH_FIRE_DAMAGE = 3.8;
+  const TORCH_BURN_SECONDS = 2.4;
+  const TORCH_BURN_DPS = 2.2;
   const MOB_HURT_SECONDS = 0.28;
   const MOB_ATTACK_SECONDS = 0.42;
   const PLAYER_HURT_SECONDS = 0.46;
   const FX_GRAVITY = 10;
+  const FISH_COUNT = 86;
 
   // --- Voxel lighting ---
   // Each cell stores skylight (high nibble) + block light (low nibble) in state.light.
@@ -199,18 +204,18 @@
   ];
 
   const BIOMES = [
-    { id: 0, name: "Meadow", grass: "#34d63b", side: "#7d5a34", leaf: "#21b83a", tree: 0.12, treeSpacing: 12, flora: 0.16, flowers: 0.28, palette: ["#ff6fa8", "#ffe45c", "#e8fff3"] },
-    { id: 1, name: "Open Forest", grass: "#1fb83a", side: "#6f5231", leaf: "#147f2f", tree: 0.62, treeSpacing: 10, flora: 0.10, flowers: 0.12, treeStyle: "oak", palette: ["#ff85bd", "#f5d85a"] },
-    { id: 2, name: "Highland", grass: "#84c937", side: "#75613a", leaf: "#65b936", tree: 0.16, treeSpacing: 13, flora: 0.08, flowers: 0.10, palette: ["#fff0a6", "#ccefff"] },
-    { id: 3, name: "Marsh", grass: "#36ca6f", side: "#5f5134", leaf: "#27b05f", tree: 0.18, treeSpacing: 12, flora: 0.22, flowers: 0.22, treeStyle: "willow", palette: ["#d6f7a6", "#b4f0ff"] },
-    { id: 4, name: "Neon Grove", grass: "#25ee9a", side: "#4d6541", leaf: "#16eeb1", tree: 0.30, treeSpacing: 11, flora: 0.24, flowers: 0.40, treeStyle: "oak", palette: ["#43e6ff", "#ff4fd8", "#faff6a"] },
-    { id: 5, name: "Prairie", grass: "#9ed647", side: "#8b7339", leaf: "#85bd3a", tree: 0.05, treeSpacing: 16, flora: 0.26, flowers: 0.34, palette: ["#ffe45c", "#ffffff", "#ff9b5c"] },
-    { id: 6, name: "Crystal Ridge", grass: "#5fd9ea", side: "#677f83", leaf: "#76f6ff", tree: 0.10, treeSpacing: 15, flora: 0.10, flowers: 0.26, treeStyle: "crystal", palette: ["#8af7ff", "#d9fffb"] },
-    { id: 7, name: "Ash Flats", grass: "#9dab88", side: "#6d6259", leaf: "#819f72", tree: 0.03, treeSpacing: 18, flora: 0.06, flowers: 0.08, palette: ["#c8b6a6", "#e7ddc8"] },
-    { id: 8, name: "Pine Barrens", grass: "#38a94d", side: "#654b33", leaf: "#157c38", tree: 0.56, treeSpacing: 11, flora: 0.08, flowers: 0.08, treeStyle: "pine", palette: ["#c9ffe0", "#fff1a8"] },
-    { id: 9, name: "Birch Glade", grass: "#80e869", side: "#795d36", leaf: "#76d85c", tree: 0.28, treeSpacing: 12, flora: 0.18, flowers: 0.36, treeStyle: "birch", palette: ["#ffffff", "#ffd1eb", "#ffe45c"] },
-    { id: 10, name: "Sun-Baked Dunes", grass: "#d9c85e", side: "#b18a48", leaf: "#c3c64d", tree: 0.02, treeSpacing: 18, flora: 0.05, flowers: 0.10, surface: "sand", palette: ["#fff0a0", "#f7a85a"] },
-    { id: 11, name: "Frost Peaks", grass: "#e6fbff", side: "#91a7af", leaf: "#d7fbff", tree: 0.08, treeSpacing: 16, flora: 0.05, flowers: 0.16, surface: "snow", treeStyle: "pine", palette: ["#dfffff", "#bfe8ff"] },
+    { id: 0, name: "Meadow", grass: "#34d63b", side: "#7d5a34", leaf: "#21b83a", tree: 0.12, treeSpacing: 12, flora: 0.18, flowers: 0.32, floraStyle: "clover", palette: ["#ff6fa8", "#ffe45c", "#e8fff3"] },
+    { id: 1, name: "Open Forest", grass: "#1fb83a", side: "#6f5231", leaf: "#147f2f", tree: 0.62, treeSpacing: 10, flora: 0.13, flowers: 0.12, floraStyle: "fern", treeStyle: "oak", palette: ["#ff85bd", "#f5d85a"] },
+    { id: 2, name: "Highland", grass: "#84c937", side: "#75613a", leaf: "#65b936", tree: 0.16, treeSpacing: 13, flora: 0.12, flowers: 0.14, floraStyle: "alpine", palette: ["#fff0a6", "#ccefff"] },
+    { id: 3, name: "Marsh", grass: "#36ca6f", side: "#5f5134", leaf: "#27b05f", tree: 0.18, treeSpacing: 12, flora: 0.25, flowers: 0.22, floraStyle: "reeds", treeStyle: "willow", palette: ["#d6f7a6", "#b4f0ff"] },
+    { id: 4, name: "Neon Grove", grass: "#25ee9a", side: "#4d6541", leaf: "#16eeb1", tree: 0.30, treeSpacing: 11, flora: 0.27, flowers: 0.42, floraStyle: "neon", treeStyle: "oak", palette: ["#43e6ff", "#ff4fd8", "#faff6a"] },
+    { id: 5, name: "Prairie", grass: "#9ed647", side: "#8b7339", leaf: "#85bd3a", tree: 0.05, treeSpacing: 16, flora: 0.28, flowers: 0.34, floraStyle: "wheat", palette: ["#ffe45c", "#ffffff", "#ff9b5c"] },
+    { id: 6, name: "Crystal Ridge", grass: "#5fd9ea", side: "#677f83", leaf: "#76f6ff", tree: 0.10, treeSpacing: 15, flora: 0.14, flowers: 0.30, floraStyle: "crystal", treeStyle: "crystal", palette: ["#8af7ff", "#d9fffb"] },
+    { id: 7, name: "Ash Flats", grass: "#9dab88", side: "#6d6259", leaf: "#819f72", tree: 0.03, treeSpacing: 18, flora: 0.12, flowers: 0.08, floraStyle: "ash", palette: ["#c8b6a6", "#e7ddc8"] },
+    { id: 8, name: "Pine Barrens", grass: "#38a94d", side: "#654b33", leaf: "#157c38", tree: 0.56, treeSpacing: 11, flora: 0.12, flowers: 0.08, floraStyle: "sapling", treeStyle: "pine", palette: ["#c9ffe0", "#fff1a8"] },
+    { id: 9, name: "Birch Glade", grass: "#80e869", side: "#795d36", leaf: "#76d85c", tree: 0.28, treeSpacing: 12, flora: 0.20, flowers: 0.38, floraStyle: "daisy", treeStyle: "birch", palette: ["#ffffff", "#ffd1eb", "#ffe45c"] },
+    { id: 10, name: "Sun-Baked Dunes", grass: "#d9c85e", side: "#b18a48", leaf: "#c3c64d", tree: 0.02, treeSpacing: 18, flora: 0.10, flowers: 0.05, floraStyle: "cactus", surface: "sand", palette: ["#fff0a0", "#f7a85a"] },
+    { id: 11, name: "Frost Peaks", grass: "#e6fbff", side: "#91a7af", leaf: "#d7fbff", tree: 0.10, treeSpacing: 16, flora: 0.11, flowers: 0.12, floraStyle: "frost", surface: "snow", treeStyle: "pine", palette: ["#dfffff", "#bfe8ff"] },
   ];
 
   const FACES = [
@@ -236,12 +241,13 @@
   const waterGroup = new THREE.Group();
   const lavaGroup = new THREE.Group();
   const decorGroup = new THREE.Group();
+  const fishGroup = new THREE.Group();
   const mobGroup = new THREE.Group();
   const caveCreatureGroup = new THREE.Group();
   const friendlyGroup = new THREE.Group();
   const effectGroup = new THREE.Group();
   const cloudGroup = new THREE.Group();
-  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, friendlyGroup, mobGroup, caveCreatureGroup, effectGroup, cloudGroup);
+  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, fishGroup, friendlyGroup, mobGroup, caveCreatureGroup, effectGroup, cloudGroup);
 
   const ambient = new THREE.HemisphereLight(0xd9fbff, 0x3b2b22, 0.98);
   const sun = new THREE.DirectionalLight(0xfff7df, 1.26);
@@ -274,13 +280,17 @@
   const TEX_COLS = 8;
   const TEX_ROWS = 2;
   const blockTexture = buildBlockTextureAtlas();
+  const waterTexture = buildWaterTexture();
   const blockMaterial = new THREE.MeshLambertMaterial({ map: blockTexture, vertexColors: true, side: THREE.DoubleSide });
   const plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, alphaTest: 0.2 });
   const waterMaterial = new THREE.MeshPhongMaterial({
-    color: 0x1aa9ff,
+    color: 0x35bfff,
+    map: waterTexture,
+    vertexColors: true,
     transparent: true,
-    opacity: 0.64,
-    shininess: 92,
+    opacity: 0.72,
+    shininess: 118,
+    specular: 0x9defff,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -328,6 +338,12 @@
     blush: new THREE.MeshLambertMaterial({ color: 0xff7aa8 }),
     white: new THREE.MeshLambertMaterial({ color: 0xffffff }),
   };
+  const fishMaterials = [
+    new THREE.MeshLambertMaterial({ color: 0xffbd3f }),
+    new THREE.MeshLambertMaterial({ color: 0x43e6ff }),
+    new THREE.MeshLambertMaterial({ color: 0xff6fa8 }),
+    new THREE.MeshLambertMaterial({ color: 0xe8fff3 }),
+  ];
 
   const selectionBox = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxBufferGeometry(1.03, 1.03, 1.03)),
@@ -338,6 +354,9 @@
 
   const heldGroup = new THREE.Group();
   camera.add(heldGroup);
+  const heldTorchLight = new THREE.PointLight(0xffa23a, 0, HELD_TORCH_LIGHT_DISTANCE, 2.15);
+  heldTorchLight.position.set(0.33, -0.08, -0.82);
+  camera.add(heldTorchLight);
   scene.add(camera);
 
   const TARGET_HOLD_FRAMES = 1;
@@ -376,6 +395,7 @@
     mobs: [],
     caveCreatures: [],
     friendlies: [],
+    fish: [],
     activeWater: [],
     activeLava: [],
     waterFlowTimer: 0,
@@ -523,6 +543,49 @@
     texture.minFilter = THREE.NearestFilter;
     texture.wrapS = THREE.ClampToEdgeWrapping;
     texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function buildWaterTexture() {
+    const size = 64;
+    const texCanvas = document.createElement("canvas");
+    texCanvas.width = size;
+    texCanvas.height = size;
+    const ctx = texCanvas.getContext("2d");
+    const image = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const waveA = Math.sin((x + y * 0.55) * 0.42);
+        const waveB = Math.sin((x * 0.35 - y * 0.9) * 0.55);
+        const noise = hash32(x * 37 + y * 101 + 991) / 4294967295;
+        const foam = (waveA + waveB) * 0.5 + noise * 0.75;
+        const i = (y * size + x) * 4;
+        image.data[i] = 24 + Math.floor(clamp(foam, 0, 1.6) * 34);
+        image.data[i + 1] = 120 + Math.floor(clamp(foam, 0, 1.6) * 58);
+        image.data[i + 2] = 190 + Math.floor(clamp(foam, 0, 1.6) * 52);
+        image.data[i + 3] = 205 + Math.floor(noise * 44);
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    ctx.strokeStyle = "rgba(195,245,255,0.52)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 9; i++) {
+      ctx.beginPath();
+      const y = i * 8 + (i % 2 ? 2 : -1);
+      for (let x = -4; x <= size + 4; x += 4) {
+        const yy = y + Math.sin((x + i * 11) * 0.18) * 2.4;
+        if (x === -4) ctx.moveTo(x, yy);
+        else ctx.lineTo(x, yy);
+      }
+      ctx.stroke();
+    }
+    const texture = new THREE.CanvasTexture(texCanvas);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1.6, 1.6);
     texture.needsUpdate = true;
     return texture;
   }
@@ -1508,15 +1571,19 @@
         const dz = z - WORLD_Z / 2;
         const center = Math.sqrt(dx * dx + dz * dz);
         // Macro elevation: big, slow landmasses sweep from deep valleys to highlands.
-        const continent = fbm2(x + 1200, z - 500, 0.0072, 6);
+        const continent = fbm2(x + 1200, z - 500, 0.0064, 6);
         const detail = fbm2(x - 900, z + 700, 0.05, 4);
         // Ridged noise (peaks near 1) carves sharp mountain crests along ridgelines.
-        const ridges = 1 - Math.abs(fbm2(x + 20, z + 20, 0.016, 5) * 2 - 1);
+        const ridges = 1 - Math.abs(fbm2(x + 20, z + 20, 0.014, 5) * 2 - 1);
+        const valley = 1 - Math.abs(fbm2(x - 2400, z + 1700, 0.0105, 5) * 2 - 1);
         let h = SEA_LEVEL + 6 + (continent - 0.46) * 120 + (detail - 0.5) * 10;
         // Mountains only rise where the continent runs high, leaving plains and
         // valleys between the ranges so the world is not wall-to-wall peaks.
         const mtn = smooth(clamp((continent - 0.54) / 0.26, 0, 1));
         h += Math.pow(ridges, 1.9) * 108 * mtn;
+        const lowland = smooth(clamp((0.53 - continent) / 0.22, 0, 1));
+        h -= Math.pow(1 - ridges, 2.35) * 42 * mtn;
+        h -= Math.pow(valley, 2.25) * (22 + lowland * 24);
         const ocean = edgeOceanStrength(x, z);
         if (ocean > 0) {
           const shelf = SEA_LEVEL - 8 - smooth(ocean) * 14 + noise2(x + 17, z - 23, 0.055) * 4 + fbm2(x - 160, z + 220, 0.018, 3) * 3;
@@ -1525,14 +1592,14 @@
         const spawnBlend = clamp(1 - center / 20, 0, 1);
         h = lerp(h, SEA_LEVEL + 8 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
         const height = clamp(Math.round(h), 32, WORLD_Y - 9);
-        const moisture = fbm2(x - 300, z + 300, 0.016, 4);
-        const weird = fbm2(x + 700, z + 80, 0.014, 4);
-        const temp = fbm2(x + 90, z - 840, 0.012, 4);
+        const moisture = fbm2(x - 300, z + 300, 0.0048, 4);
+        const weird = fbm2(x + 700, z + 80, 0.0056, 4);
+        const temp = fbm2(x + 90, z - 840, 0.0046, 4);
         let biome = 0;
         if (height > SEA_LEVEL + 86) biome = 11;
-        else if (temp < 0.34 && height > SEA_LEVEL + 10) biome = 11;
-        else if (height > SEA_LEVEL + 21 || ridges > 0.64) biome = 6;
-        else if (temp > 0.72 && moisture < 0.34 && height <= SEA_LEVEL + 12) biome = 10;
+        else if (temp < 0.43 && height > SEA_LEVEL + 3) biome = 11;
+        else if (temp > 0.66 && moisture < 0.42 && height <= SEA_LEVEL + 28) biome = 10;
+        else if (height > SEA_LEVEL + 28 || ridges > 0.68) biome = 6;
         else if (weird < 0.30 && moisture < 0.54) biome = 7;
         else if (moisture > 0.68 && height <= SEA_LEVEL + 7) biome = 3;
         else if (weird > 0.72 && moisture > 0.38) biome = 4;
@@ -1614,6 +1681,7 @@
     buildCelestials();
     spawnCaveCreatures();
     spawnFriendlies();
+    spawnFish();
   }
 
   function growCaveFeatures() {
@@ -1909,12 +1977,20 @@
   function pushFace(arr, x, y, z, code, face) {
     const start = arr.positions.length / 3;
     const tile = textureTileForFace(code, face, x, y, z);
-    const col = tile % TEX_COLS;
-    const row = Math.floor(tile / TEX_COLS);
-    const u0 = (col + 0.015) / TEX_COLS;
-    const u1 = (col + 0.985) / TEX_COLS;
-    const v0 = 1 - (row + 0.985) / TEX_ROWS;
-    const v1 = 1 - (row + 0.015) / TEX_ROWS;
+    let u0, u1, v0, v1;
+    if (code === WATER) {
+      u0 = 0;
+      u1 = 1;
+      v0 = 0;
+      v1 = 1;
+    } else {
+      const col = tile % TEX_COLS;
+      const row = Math.floor(tile / TEX_COLS);
+      u0 = (col + 0.015) / TEX_COLS;
+      u1 = (col + 0.985) / TEX_COLS;
+      v0 = 1 - (row + 0.985) / TEX_ROWS;
+      v1 = 1 - (row + 0.015) / TEX_ROWS;
+    }
     const localUv = [[0, 0], [1, 0], [1, 1], [0, 1]];
     let lr, lg, lb;
     if (code === LAVA) {
@@ -2002,6 +2078,9 @@
       base = mixRgb(dune, cachedRgb("#f2df9a"), grain * 0.45);
     } else if (code === SNOW) {
       base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
+    } else if (code === WATER) {
+      const ripple = Math.sin((x + z) * 0.72 + blockGrain * 8) * 0.5 + 0.5;
+      base = mixRgb(cachedRgb("#1685d6"), cachedRgb("#7ee7ff"), ripple * 0.42 + grain * 0.22);
     } else if (code === LAVA) {
       const glow = Math.sin((x * 1.7 + y * 2.3 + z * 1.1 + blockGrain * 8) * 1.4) * 0.5 + 0.5;
       base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
@@ -2015,6 +2094,11 @@
     const saturation = code === BEDROCK ? 1.04 : code === STONE ? 1.08 : code === LEAVES ? 1.68 : greenSurface ? 1.62 : 1.36;
     const brightness = code === BEDROCK ? 1.02 : code === STONE ? 1.06 : code === LEAVES ? 1.0 : greenSurface ? 0.98 : 1.08;
     return vividRgb(scaleRgb(base, f), saturation, brightness);
+  }
+  function updateWaterTexture(dt) {
+    if (!waterTexture) return;
+    waterTexture.offset.x = (waterTexture.offset.x + dt * 0.018) % 1;
+    waterTexture.offset.y = (waterTexture.offset.y + dt * 0.011) % 1;
   }
   function buildMesh(arr, material) {
     const geometry = new THREE.BufferGeometry();
@@ -2077,6 +2161,7 @@
     const biome = biomeAt(x, z);
     const grass = biomeRgb(biome, "grass");
     const seed = hash2(x * 53 + 7, z * 59 - 3);
+    if (pushBiomePlant(arr, x, y, z, code, biome, seed)) return;
     if (code === FLOWER) {
       const palette = biome.palette || ["#ff6fa8", "#ffe45c"];
       const bloom = cachedRgb(palette[Math.floor(seed * palette.length) % palette.length]);
@@ -2111,6 +2196,157 @@
       if (i % 2 === 0) pushBlade(arr, x + 0.5 + ox * 0.7, y, z + 0.5 + oz * 0.7, w * 0.75, h * 0.78, color, rot + Math.PI / 2, -lean * 0.6);
     }
   }
+  function pushBiomePlant(arr, x, y, z, code, biome, seed) {
+    const style = biome.floraStyle || "grass";
+    if (style === "cactus") return pushCactusPlant(arr, x, y, z, seed);
+    if (style === "frost") return pushFrostPlant(arr, x, y, z, seed, code);
+    if (style === "reeds") return pushReedPlant(arr, x, y, z, seed, code);
+    if (style === "neon") return pushNeonPlant(arr, x, y, z, seed, code);
+    if (style === "crystal") return pushCrystalPlant(arr, x, y, z, seed, code);
+    if (style === "ash") return pushAshBrush(arr, x, y, z, seed);
+    if (style === "sapling") return pushPineSapling(arr, x, y, z, seed);
+    if (style === "fern") return pushFernPlant(arr, x, y, z, seed);
+    if (style === "wheat") return pushWheatPlant(arr, x, y, z, seed, code);
+    if (style === "alpine") return pushAlpinePlant(arr, x, y, z, seed, code);
+    if (style === "daisy" && code === FLOWER) return pushDaisyPlant(arr, x, y, z, seed);
+    if (style === "clover" && code === FLOWER) return pushCloverPlant(arr, x, y, z, seed);
+    return false;
+  }
+  function pushCactusPlant(arr, x, y, z, seed) {
+    const cactus = vividRgb(cachedRgb("#5fa95a"), 1.12, 0.94);
+    const cx = x + 0.4 + hash2(x + 13, z - 17) * 0.2;
+    const cz = z + 0.4 + hash2(x - 19, z + 23) * 0.2;
+    const h = 0.72 + seed * 0.72;
+    pushTinyBox(arr, cx - 0.09, y, cz - 0.09, 0.18, h, 0.18, cactus);
+    if (seed > 0.34) pushTinyBox(arr, cx + 0.05, y + h * 0.44, cz - 0.065, 0.26, 0.12, 0.13, cactus);
+    if (seed > 0.68) pushTinyBox(arr, cx - 0.31, y + h * 0.58, cz - 0.06, 0.24, 0.12, 0.12, cactus);
+    return true;
+  }
+  function pushFrostPlant(arr, x, y, z, seed, code) {
+    const ice = vividRgb(cachedRgb(code === FLOWER ? "#dfffff" : "#bdeeff"), 1.08, 1.08);
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    for (let i = 0; i < 4; i++) {
+      const rot = seed * Math.PI * 2 + i * Math.PI / 4;
+      pushBlade(arr, cx, y, cz, 0.1, 0.42 + seed * 0.34, ice, rot, (i % 2 ? 1 : -1) * 0.1);
+    }
+    if (code === FLOWER) pushTinyBox(arr, cx - 0.06, y + 0.48, cz - 0.06, 0.12, 0.1, 0.12, cachedRgb("#ffffff"));
+    return true;
+  }
+  function pushReedPlant(arr, x, y, z, seed, code) {
+    const reed = vividRgb(cachedRgb("#62d477"), 1.2, 0.98);
+    const cattail = cachedRgb("#8a5a2f");
+    const count = 3 + Math.floor(seed * 3);
+    for (let i = 0; i < count; i++) {
+      const ox = (hash2(x + i * 3, z - i * 5) - 0.5) * 0.46;
+      const oz = (hash2(x - i * 7, z + i * 11) - 0.5) * 0.46;
+      const h = 0.7 + hash2(x + i * 13, z - i * 17) * 0.85;
+      pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, 0.07, h, reed, seed * Math.PI + i * 0.45, 0.04);
+      if (code === FLOWER || i === 0) pushTinyBox(arr, x + 0.47 + ox, y + h * 0.72, z + 0.47 + oz, 0.06, 0.22, 0.06, cattail);
+    }
+    return true;
+  }
+  function pushNeonPlant(arr, x, y, z, seed, code) {
+    const savedR = dlR, savedG = dlG, savedB = dlB;
+    setDecorLightGlow();
+    const colors = code === FLOWER ? ["#43e6ff", "#ff4fd8", "#faff6a"] : ["#34ffd2", "#8dff64"];
+    const glow = vividRgb(cachedRgb(colors[Math.floor(seed * colors.length) % colors.length]), 1.35, 1.12);
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    pushBlade(arr, cx, y, cz, 0.12, 0.5 + seed * 0.38, glow, seed * Math.PI * 2, 0.1);
+    pushBlade(arr, cx, y, cz, 0.12, 0.44 + seed * 0.28, glow, seed * Math.PI * 2 + Math.PI / 2, -0.08);
+    pushTinyBox(arr, cx - 0.08, y + 0.44, cz - 0.08, 0.16, 0.12, 0.16, glow);
+    dlR = savedR; dlG = savedG; dlB = savedB;
+    return true;
+  }
+  function pushCrystalPlant(arr, x, y, z, seed, code) {
+    const crystal = vividRgb(cachedRgb(code === FLOWER ? "#d9fffb" : "#78ecff"), 1.28, 1.1);
+    const count = 2 + Math.floor(seed * 4);
+    for (let i = 0; i < count; i++) {
+      const ox = 0.3 + hash2(x + i * 7, z - i * 11) * 0.4;
+      const oz = 0.3 + hash2(x - i * 13, z + i * 17) * 0.4;
+      const h = 0.28 + hash2(x + i * 19, z - i * 23) * 0.52;
+      pushTinyBox(arr, x + ox - 0.05, y, z + oz - 0.05, 0.1, h, 0.1, crystal);
+      pushTinyBox(arr, x + ox - 0.035, y + h, z + oz - 0.035, 0.07, 0.12, 0.07, vividRgb(crystal, 1.05, 1.14));
+    }
+    return true;
+  }
+  function pushAshBrush(arr, x, y, z, seed) {
+    const twig = vividRgb(cachedRgb("#c9beb0"), 0.92, 0.88);
+    for (let i = 0; i < 5; i++) {
+      const rot = seed * Math.PI + i * 0.7;
+      pushBlade(arr, x + 0.5, y, z + 0.5, 0.055, 0.32 + seed * 0.28, twig, rot, (i - 2) * 0.045);
+    }
+    return true;
+  }
+  function pushPineSapling(arr, x, y, z, seed) {
+    const trunk = cachedRgb("#6f4624");
+    const pine = vividRgb(cachedRgb("#1e9a45"), 1.2, 0.95);
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    pushTinyBox(arr, cx - 0.035, y, cz - 0.035, 0.07, 0.42, 0.07, trunk);
+    for (let i = 0; i < 3; i++) {
+      const yy = y + 0.14 + i * 0.16;
+      pushBlade(arr, cx, yy, cz, 0.48 - i * 0.09, 0.18, pine, seed * Math.PI + i, 0.02);
+      pushBlade(arr, cx, yy, cz, 0.48 - i * 0.09, 0.18, pine, seed * Math.PI + Math.PI / 2 + i, -0.02);
+    }
+    return true;
+  }
+  function pushFernPlant(arr, x, y, z, seed) {
+    const fern = vividRgb(cachedRgb("#35c55b"), 1.24, 0.96);
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    for (let i = 0; i < 6; i++) {
+      const rot = seed * Math.PI * 2 + i * Math.PI / 3;
+      pushBlade(arr, cx, y + 0.04, cz, 0.11, 0.5, fern, rot, 0.18);
+    }
+    return true;
+  }
+  function pushWheatPlant(arr, x, y, z, seed, code) {
+    const stem = vividRgb(cachedRgb("#d8c35f"), 1.05, 1.04);
+    const head = cachedRgb(code === FLOWER ? "#fff0a6" : "#bfa442");
+    const count = 4 + Math.floor(seed * 4);
+    for (let i = 0; i < count; i++) {
+      const ox = (hash2(x + i * 5, z - i * 3) - 0.5) * 0.5;
+      const oz = (hash2(x - i * 7, z + i * 9) - 0.5) * 0.5;
+      const h = 0.46 + hash2(x + i * 11, z - i * 13) * 0.44;
+      pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, 0.055, h, stem, seed * Math.PI + i * 0.4, 0.08);
+      pushTinyBox(arr, x + 0.47 + ox, y + h - 0.02, z + 0.47 + oz, 0.06, 0.13, 0.06, head);
+    }
+    return true;
+  }
+  function pushAlpinePlant(arr, x, y, z, seed, code) {
+    const moss = vividRgb(cachedRgb("#b6e86b"), 1.16, 0.98);
+    const bloom = cachedRgb(code === FLOWER ? "#fff0a6" : "#d9fff2");
+    for (let i = 0; i < 4; i++) {
+      const ox = (hash2(x + i * 17, z - i * 19) - 0.5) * 0.44;
+      const oz = (hash2(x - i * 23, z + i * 29) - 0.5) * 0.44;
+      pushBlade(arr, x + 0.5 + ox, y, z + 0.5 + oz, 0.1, 0.28 + seed * 0.2, moss, seed * Math.PI + i * 0.8, 0.05);
+    }
+    if (code === FLOWER) pushTinyBox(arr, x + 0.45, y + 0.24, z + 0.45, 0.1, 0.08, 0.1, bloom);
+    return true;
+  }
+  function pushDaisyPlant(arr, x, y, z, seed) {
+    const stem = vividRgb(cachedRgb("#57d66b"), 1.12, 0.98);
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    pushBlade(arr, cx, y, cz, 0.08, 0.52, stem, seed * Math.PI, 0.04);
+    for (let i = 0; i < 5; i++) pushBlade(arr, cx, y + 0.48, cz, 0.23, 0.13, cachedRgb("#ffffff"), i * 0.63, 0.01);
+    pushTinyBox(arr, cx - 0.035, y + 0.53, cz - 0.035, 0.07, 0.06, 0.07, cachedRgb("#ffd75a"));
+    return true;
+  }
+  function pushCloverPlant(arr, x, y, z, seed) {
+    const leaf = vividRgb(cachedRgb("#3ee45a"), 1.24, 0.95);
+    const bloom = cachedRgb("#ff6fa8");
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    for (let i = 0; i < 4; i++) {
+      const rot = seed * Math.PI + i * Math.PI / 2;
+      pushBlade(arr, cx, y, cz, 0.22, 0.2, leaf, rot, 0.03);
+    }
+    pushTinyBox(arr, cx - 0.04, y + 0.2, cz - 0.04, 0.08, 0.08, 0.08, bloom);
+    return true;
+  }
   function pushAquaticDecor(arr, x, z) {
     if (x < 1 || z < 1 || x >= WORLD_X - 1 || z >= WORLD_Z - 1) return;
     const floorY = state.surface[surfaceIndex(x, z)];
@@ -2123,7 +2359,6 @@
     const roll = hash2(x * 97 + 13, z * 101 - 17);
     if (roll < 0.34 || (ocean > 0.32 && roll < 0.5)) pushSeaGrass(arr, x, floorY + 1, z, depth, roll);
     if (depth > 3 && roll > 0.58 && roll < 0.68) pushCoral(arr, x, floorY + 1, z, roll);
-    if (depth > 5 && roll > 0.83) pushFish(arr, x, floorY + 1 + Math.min(depth - 2, 3) * hash2(x - 31, z + 47), z, roll);
   }
   function pushSeaGrass(arr, x, y, z, depth, seed) {
     const clusters = 3 + Math.floor(hash2(x + 19, z - 23) * 4);
@@ -2159,6 +2394,125 @@
     pushTinyBox(arr, cx - 0.16, y, cz - 0.05, 0.32, 0.12, 0.1, body);
     pushTinyBox(arr, cx + 0.11, y + 0.02, cz - 0.035, 0.1, 0.08, 0.07, vividRgb(body, 1.05, 0.9));
     pushBlade(arr, cx - 0.2, y - 0.01, cz, 0.16, 0.18, body, seed * Math.PI * 2, 0.02);
+  }
+  function spawnFish() {
+    disposeGroup(fishGroup);
+    state.fish = [];
+    for (let i = 0; i < FISH_COUNT; i++) {
+      const spot = fishSpot(i);
+      if (!spot) continue;
+      const mesh = createFishMesh(i);
+      const fish = {
+        mesh,
+        x: spot.x + 0.5,
+        y: spot.y,
+        z: spot.z + 0.5,
+        homeX: spot.x + 0.5,
+        homeZ: spot.z + 0.5,
+        targetX: spot.x + 0.5,
+        targetY: spot.y,
+        targetZ: spot.z + 0.5,
+        speed: 0.65 + hash2(i * 31 + 5, i * 37 - 7) * 0.55,
+        phase: hash2(i * 41 - 3, i * 43 + 9) * Math.PI * 2,
+        turn: hash2(i * 47 + 11, i * 53 - 13) * Math.PI * 2,
+        targetTimer: 0,
+      };
+      chooseFishTarget(fish, i);
+      fish.mesh.position.set(fish.x, fish.y, fish.z);
+      fishGroup.add(fish.mesh);
+      state.fish.push(fish);
+    }
+  }
+  function fishSpot(i) {
+    for (let tries = 0; tries < 180; tries++) {
+      const x = 2 + Math.floor(hash2(i * 97 + tries * 11, i * 101 - tries * 13) * (WORLD_X - 4));
+      const z = 2 + Math.floor(hash2(i * 103 - tries * 17, i * 107 + tries * 19) * (WORLD_Z - 4));
+      const range = fishWaterRangeAt(x, z);
+      if (!range || range.depth < 3) continue;
+      const y = lerp(range.min, range.max, hash2(i * 109 + tries, i * 113 - tries));
+      return { x, y, z };
+    }
+    return null;
+  }
+  function fishWaterRangeAt(x, z) {
+    const ix = clamp(Math.floor(x), 1, WORLD_X - 2);
+    const iz = clamp(Math.floor(z), 1, WORLD_Z - 2);
+    const floorY = state.surface[surfaceIndex(ix, iz)];
+    const depth = SEA_LEVEL - floorY;
+    if (depth < 2 || getBlock(ix, floorY + 1, iz) !== WATER) return null;
+    return {
+      min: floorY + 1.25,
+      max: Math.max(floorY + 1.45, SEA_LEVEL + 0.55),
+      depth,
+    };
+  }
+  function createFishMesh(seed) {
+    const group = new THREE.Group();
+    const bodyMat = fishMaterials[seed % fishMaterials.length];
+    const finMat = fishMaterials[(seed + 1) % fishMaterials.length];
+    addBox(group, [0, 0, 0], [0.44, 0.16, 0.22], bodyMat);
+    addBox(group, [0, 0.01, -0.24], [0.2, 0.1, 0.16], finMat);
+    addBox(group, [-0.18, 0.01, 0.03], [0.12, 0.04, 0.24], finMat);
+    addBox(group, [0.18, 0.01, 0.03], [0.12, 0.04, 0.24], finMat);
+    addBox(group, [-0.09, 0.045, 0.13], [0.045, 0.045, 0.03], enemyMaterials.black);
+    addBox(group, [0.09, 0.045, 0.13], [0.045, 0.045, 0.03], enemyMaterials.black);
+    group.scale.setScalar(1.05 + hash2(seed + 1, seed + 3) * 0.52);
+    return group;
+  }
+  function chooseFishTarget(fish, salt) {
+    const baseX = Math.floor(fish.homeX * 7 + salt * 23);
+    const baseZ = Math.floor(fish.homeZ * 7 - salt * 29);
+    for (let tries = 0; tries < 12; tries++) {
+      const angle = hash2(baseX + tries * 5, baseZ - tries * 7) * Math.PI * 2;
+      const dist = 2.5 + hash2(baseX - tries * 11, baseZ + tries * 13) * 9.5;
+      const x = clamp(fish.homeX + Math.cos(angle) * dist, 1.5, WORLD_X - 1.5);
+      const z = clamp(fish.homeZ + Math.sin(angle) * dist, 1.5, WORLD_Z - 1.5);
+      const range = fishWaterRangeAt(x, z);
+      if (!range) continue;
+      fish.targetX = x;
+      fish.targetZ = z;
+      fish.targetY = lerp(range.min, range.max, hash2(baseX + tries * 17, baseZ - tries * 19));
+      fish.targetTimer = 1.4 + hash2(baseX + tries * 31, baseZ - tries * 37) * 2.6;
+      return true;
+    }
+    const range = fishWaterRangeAt(fish.homeX, fish.homeZ);
+    if (range) {
+      fish.targetX = fish.homeX;
+      fish.targetZ = fish.homeZ;
+      fish.targetY = lerp(range.min, range.max, 0.5);
+      fish.targetTimer = 1.2;
+      return true;
+    }
+    return false;
+  }
+  function updateFish(dt) {
+    const now = performance.now() * 0.001;
+    for (let i = 0; i < state.fish.length; i++) {
+      const fish = state.fish[i];
+      fish.targetTimer -= dt;
+      const dx = fish.targetX - fish.x;
+      const dy = fish.targetY - fish.y;
+      const dz = fish.targetZ - fish.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (fish.targetTimer <= 0 || dist < 0.22 || !fishWaterRangeAt(fish.x, fish.z)) chooseFishTarget(fish, i + Math.floor(now * 5));
+      const tx = fish.targetX - fish.x;
+      const ty = fish.targetY - fish.y;
+      const tz = fish.targetZ - fish.z;
+      const len = Math.hypot(tx, ty, tz) || 1;
+      const pulse = 0.82 + Math.sin(now * 2.8 + fish.phase) * 0.18;
+      fish.x += (tx / len) * fish.speed * pulse * dt;
+      fish.y += (ty / len) * fish.speed * 0.42 * dt;
+      fish.z += (tz / len) * fish.speed * pulse * dt;
+      const range = fishWaterRangeAt(fish.x, fish.z);
+      if (range) fish.y = clamp(fish.y, range.min, range.max);
+      if (Math.hypot(tx, tz) > 0.001) fish.turn = Math.atan2(tx, tz);
+      fish.mesh.position.set(fish.x, fish.y + Math.sin(now * 5.2 + fish.phase) * 0.045, fish.z);
+      fish.mesh.rotation.y = fish.turn;
+      fish.mesh.rotation.x = Math.sin(now * 2 + fish.phase) * 0.08;
+      fish.mesh.rotation.z = Math.sin(now * 5.8 + fish.phase) * 0.16;
+      const tail = fish.mesh.children[1];
+      if (tail) tail.rotation.y = Math.sin(now * 9.4 + fish.phase) * 0.65;
+    }
   }
   function pushCaveFeature(arr, x, y, z, code) {
     const seed = hash3(x * 31 + 3, y * 37 - 5, z * 41 + 7);
@@ -2411,6 +2765,7 @@
       } else if (friendly.mesh && friendly.hurtTimer <= 0) {
         applyFriendlyFlash(friendly, 0);
       }
+      updateBurningEntity(friendly, dt, 0.68);
       if (friendly.hp <= 0) {
         dropFriendlyFood(friendly);
         removeFriendly(friendly, i);
@@ -2999,6 +3354,13 @@
   function selectedDef() {
     const slot = selectedSlot();
     return slot && DEF[slot.code] ? DEF[slot.code] : null;
+  }
+  function selectedCode() {
+    const slot = selectedSlot();
+    return slot ? slot.code : 0;
+  }
+  function selectedIsTorch() {
+    return selectedCode() === TORCH;
   }
   function selectedIsBlock() {
     const d = selectedDef();
@@ -3596,6 +3958,7 @@
         creature.hitCd = 1.05;
         hurtPlayer(cfg.damage);
       }
+      updateBurningEntity(creature, dt, cfg.flying ? 0.28 : 0.55);
       if (creature.hp <= 0) {
         addScore(cfg.score || 5);
         dropCaveCreatureLoot(creature, cfg);
@@ -3760,6 +4123,7 @@
       if (!isNight() && skyVisible(Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z))) {
         mob.hp -= dt * 5;
       }
+      updateBurningEntity(mob, dt, 0.82);
       if (mob.hp <= 0) {
         addScore(cfg.score);
         removeMob(mob);
@@ -3976,12 +4340,19 @@
       ui.progress.style.width = "0%";
       return;
     }
-    if (selectedIsBlock()) {
+    const torchSelected = selectedIsTorch();
+    if (selectedIsBlock() && !torchSelected) {
       state.mining = null;
       ui.progress.style.width = "0%";
       return;
     }
     if (tryAttack()) return;
+    if (torchSelected) {
+      state.mining = null;
+      ui.progress.style.width = "0%";
+      if (state.swingTimer <= 0.02) triggerHeldSwing("attack");
+      return;
+    }
     const t = state.target;
     if (!t || !t.hit) {
       state.mining = null;
@@ -4116,15 +4487,19 @@
     if (!hit) return false;
     const damage = heldAttackDamage();
     triggerHeldSwing("attack");
+    const fireHit = selectedIsTorch();
     if (hit.kind === "friendly") {
       damageFriendly(hit.target, damage);
-      api.toast(`Hit ${friendlyName(hit.type)} -${damage}`, "");
+      if (fireHit) applyTorchBurn(hit.target, 0.68);
+      api.toast(`Hit ${friendlyName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
     } else if (hit.kind === "cave") {
       damageCaveCreature(hit.target, damage);
-      api.toast(`Hit ${caveCreatureName(hit.type)} -${damage}`, "");
+      if (fireHit) applyTorchBurn(hit.target, 0.55);
+      api.toast(`Hit ${caveCreatureName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
     } else {
       damageMob(hit.target, damage);
-      api.toast(`Hit ${mobDisplayName(hit.type)} -${damage}`, "");
+      if (fireHit) applyTorchBurn(hit.target, 0.82);
+      api.toast(`Hit ${mobDisplayName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
     }
     state.attackCd = 0.32;
     return true;
@@ -4135,6 +4510,7 @@
     const d = DEF[slot.code];
     if (!d) return 1;
     const tool = d.tool;
+    if (slot.code === TORCH) return TORCH_FIRE_DAMAGE;
     if (tool) {
       if (tool.type === "sword") return tool.damage;
       const typeBonus = tool.type === "axe" ? 1.1 : 0.55;
@@ -4150,6 +4526,36 @@
       return Math.round((1 + clamp(hardness, 0.05, 3) * 1.55 + blockBonus) * 10) / 10;
     }
     return 1;
+  }
+  function applyTorchBurn(target, yOffset) {
+    if (!target) return;
+    target.burnTimer = Math.max(target.burnTimer || 0, TORCH_BURN_SECONDS);
+    target.burnDps = TORCH_BURN_DPS;
+    target.burnFxTimer = 0;
+    spawnFireBurst(target.x, target.y + yOffset, target.z, 8, 2.2);
+  }
+  function updateBurningEntity(entity, dt, yOffset) {
+    if (!entity || !(entity.burnTimer > 0)) return;
+    entity.burnTimer = Math.max(0, entity.burnTimer - dt);
+    entity.hp -= (entity.burnDps || TORCH_BURN_DPS) * dt;
+    entity.burnFxTimer = Math.max(0, (entity.burnFxTimer || 0) - dt);
+    if (entity.burnFxTimer <= 0 && state.fx.length < 120) {
+      spawnFireBurst(entity.x, entity.y + yOffset, entity.z, 3, 0.9);
+      entity.burnFxTimer = 0.28;
+    }
+  }
+  function spawnFireBurst(x, y, z, count = 6, power = 1.4) {
+    for (let i = 0; i < count; i++) {
+      const hot = i % 3 === 0 ? cachedRgb("#fff4b0") : i % 2 === 0 ? cachedRgb("#ffd75a") : cachedRgb("#ff6a1a");
+      spawnBurst(
+        x + (hash3(x + i, y, z) - 0.5) * 0.28,
+        y + (hash3(x, y + i, z) - 0.5) * 0.18,
+        z + (hash3(x, y, z + i) - 0.5) * 0.28,
+        hot,
+        1,
+        power
+      );
+    }
   }
 
   function nearTable() {
@@ -4285,6 +4691,7 @@
   }
   function updateHud() {
     setText("hud-hp", `${Math.max(0, Math.ceil(state.player.hp))}/${MAX_HP}`);
+    updateHealthMeter();
     setText("hud-day", `${isNight() ? "Moon" : "Sun"} ${state.day}`);
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
@@ -4304,6 +4711,14 @@
     }
     renderBag();
     updateHeldItem();
+  }
+  function updateHealthMeter() {
+    if (!ui.healthFill || !ui.healthValue) return;
+    const hp = clamp(state.player.hp, 0, MAX_HP);
+    const pct = hp / MAX_HP;
+    ui.healthValue.textContent = `${Math.ceil(hp)}/${MAX_HP}`;
+    ui.healthFill.style.width = `${pct * 100}%`;
+    ui.healthFill.style.filter = pct < 0.32 ? "hue-rotate(120deg) saturate(1.25)" : pct < 0.6 ? "hue-rotate(45deg)" : "none";
   }
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -4370,6 +4785,11 @@
     mat.userData.disposeWithMesh = true;
     return mat;
   }
+  function heldFlameMaterial(color) {
+    const mat = new THREE.MeshBasicMaterial({ color });
+    mat.userData.disposeWithMesh = true;
+    return mat;
+  }
   function addHeldBox(pos, scale, material, rot = [0, 0, 0]) {
     const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), material);
     mesh.position.set(pos[0], pos[1], pos[2]);
@@ -4418,9 +4838,12 @@
     addHeldBox([0.11, -0.19, -0.82], [0.1, 0.18, 0.1], head, [0, 0, -0.18]);
   }
   function buildHeldTorch() {
-    addHeldBox([0.38, -0.33, -0.72], [0.08, 0.46, 0.08], heldMaterial("#8a572d"), [0, 0, -0.42]);
-    addHeldBox([0.28, -0.11, -0.78], [0.18, 0.18, 0.18], heldMaterial("#ffd75a"), [0, 0, -0.42]);
-    addHeldBox([0.28, -0.07, -0.78], [0.11, 0.11, 0.11], heldMaterial("#ff6a1a"), [0, 0, -0.42]);
+    const tool = addHeldToolGroup([0.38, -0.38, -0.76], [0.06, 0.05, -0.55]);
+    addHeldToolBox(tool, [0, 0, 0], [0.08, 0.55, 0.08], heldMaterial("#8a572d"));
+    addHeldToolBox(tool, [0, 0.29, 0], [0.12, 0.14, 0.12], heldMaterial("#5a3218"));
+    addHeldToolBox(tool, [0, 0.39, 0], [0.18, 0.14, 0.18], heldFlameMaterial("#ff6a1a"));
+    addHeldToolBox(tool, [0, 0.49, 0], [0.14, 0.16, 0.14], heldFlameMaterial("#ffd75a"));
+    addHeldToolBox(tool, [0, 0.61, 0], [0.08, 0.1, 0.08], heldFlameMaterial("#fff4b0"));
   }
   function buildHeldBlock(code) {
     addHeldBox([0.32, -0.24, -0.78], [0.3, 0.3, 0.3], heldMaterial(DEF[code].color || "#ffffff"), [0.2, 0.42, -0.18]);
@@ -4457,6 +4880,19 @@
       heldGroup.rotation.y += swing * 0.28 * attack;
       heldGroup.rotation.z -= swing * 0.18;
     }
+    updateHeldTorchLight();
+  }
+  function updateHeldTorchLight() {
+    const active = selectedIsTorch() && state.started && !state.paused;
+    if (!active) {
+      heldTorchLight.intensity = 0;
+      return;
+    }
+    const flicker = Math.sin(performance.now() * 0.018) * 0.12 + Math.sin(performance.now() * 0.047) * 0.06;
+    const swingBoost = state.swingKind === "attack" ? clamp(state.swingTimer / HELD_SWING_SECONDS, 0, 1) * 0.42 : 0;
+    heldTorchLight.intensity = 1.45 + flicker + swingBoost;
+    heldTorchLight.distance = HELD_TORCH_LIGHT_DISTANCE;
+    heldTorchLight.position.set(0.33, -0.08, -0.82);
   }
   function bagSlotHtml(slot, i, attr, selected = false, scope = "Slot") {
     const label = slotName(slot);
@@ -4514,6 +4950,10 @@
       .rizz3d-crosshair{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);pointer-events:none;z-index:5}
       .rizz3d-crosshair:before,.rizz3d-crosshair:after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 6px rgba(0,0,0,.7)}
       .rizz3d-crosshair:before{left:8px;top:1px;width:2px;height:16px}.rizz3d-crosshair:after{left:1px;top:8px;width:16px;height:2px}
+      .rizz3d-health{position:absolute;left:12px;top:12px;z-index:6;width:min(260px,44%);padding:7px 9px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.76);box-shadow:0 8px 24px rgba(0,0,0,.22);pointer-events:none}
+      .rizz3d-health__row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#fff;font:900 10px var(--font-mono);text-transform:uppercase}.rizz3d-health__value{font-size:11px;color:#ffd75a}
+      .rizz3d-health__track{height:10px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+      .rizz3d-health__fill{display:block;width:100%;height:100%;border-radius:5px;background:linear-gradient(90deg,#55f06c,#ffd75a 62%,#ff4c6d);box-shadow:0 0 16px rgba(85,240,108,.35);transition:width 120ms ease,filter 120ms ease}
       .rizz3d-chip{position:absolute;left:12px;bottom:62px;z-index:5;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.72);color:#fff;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target{display:none;position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target.is-visible{display:block}
@@ -4544,6 +4984,9 @@
     document.head.appendChild(style);
     const damage = document.createElement("div");
     damage.className = "rizz3d-damage";
+    const health = document.createElement("div");
+    health.className = "rizz3d-health";
+    health.innerHTML = `<div class="rizz3d-health__row"><span>Health</span><b class="rizz3d-health__value">100/100</b></div><div class="rizz3d-health__track"><span class="rizz3d-health__fill"></span></div>`;
     const crosshair = document.createElement("div");
     crosshair.className = "rizz3d-crosshair";
     const objective = document.createElement("div");
@@ -4588,8 +5031,21 @@
       if (button) setBagHoverText(button.dataset.itemName);
     });
     bagPanel.addEventListener("pointerleave", () => setBagHoverText());
-    wrap.append(damage, crosshair, objective, target, progress, selectionCue, hotbar, bagButton, bagPanel);
-    return { damage, crosshair, objective, target, progress: progress.firstElementChild, selectionCue, hotbar, bagButton, bagPanel };
+    wrap.append(damage, health, crosshair, objective, target, progress, selectionCue, hotbar, bagButton, bagPanel);
+    return {
+      damage,
+      health,
+      healthValue: health.querySelector(".rizz3d-health__value"),
+      healthFill: health.querySelector(".rizz3d-health__fill"),
+      crosshair,
+      objective,
+      target,
+      progress: progress.firstElementChild,
+      selectionCue,
+      hotbar,
+      bagButton,
+      bagPanel,
+    };
   }
 
   function resizeRenderer(force = false) {
@@ -4617,7 +5073,9 @@
     state.mobs.forEach(removeMob);
     state.mobs = [];
     disposeGroup(effectGroup);
+    disposeGroup(fishGroup);
     state.fx = [];
+    state.fish = [];
     state.time = 0.21;
     state.day = 1;
     state.spawnTimer = 2;
@@ -4713,6 +5171,7 @@
     }
     rebuildAllChunks();
     rebuildDecorations();
+    spawnFish();
     if (Array.isArray(data.hotbar)) state.hotbar = data.hotbar.map((slot) => slot ? { ...slot } : null).slice(0, HOTBAR);
     while (state.hotbar.length < HOTBAR) state.hotbar.push(null);
     state.bag = Array.isArray(data.bag) ? data.bag.map((slot) => slot ? { ...slot } : null).slice(0, BAG_SLOTS) : Array.from({ length: BAG_SLOTS }, () => null);
@@ -4742,6 +5201,7 @@
     resizeRenderer();
     updateActionAnimations(dt);
     updateFriendlies(dt);
+    updateFish(dt);
     updateFx(dt);
     if (state.started && !state.paused && !state.crafting && !state.bagOpen) {
       updateTime(dt);
@@ -4757,6 +5217,7 @@
       if (state.attackCd > 0) state.attackCd -= dt;
     }
     if (decorDirty) rebuildDecorations();
+    updateWaterTexture(dt);
     updateLighting();
     updateHud();
     renderer.render(scene, camera);
@@ -4794,9 +5255,9 @@
         state.input.place = true;
         state.placeQueued = true;
       }
-      else if (!selectedIsBlock()) {
+      else if (!selectedIsBlock() || selectedIsTorch()) {
         state.input.mine = true;
-        triggerHeldSwing("gather");
+        triggerHeldSwing(selectedIsTorch() ? "attack" : "gather");
       }
     });
     window.addEventListener("mouseup", (event) => {
@@ -4942,6 +5403,79 @@
     decorDirty = true;
     syncCamera();
   }
+  function findBiomeSpot(biomeId) {
+    let best = null;
+    let bestScore = -1;
+    for (let z = 14; z < WORLD_Z - 14; z += 4) {
+      for (let x = 14; x < WORLD_X - 14; x += 4) {
+        const si = surfaceIndex(x, z);
+        if (state.biome[si] !== biomeId) continue;
+        const y = state.surface[si];
+        if (y <= SEA_LEVEL || getBlock(x, y + 1, z) === WATER) continue;
+        let score = 0;
+        for (let oz = -12; oz <= 12; oz += 4) {
+          for (let ox = -12; ox <= 12; ox += 4) {
+            if (state.biome[surfaceIndex(x + ox, z + oz)] === biomeId) score++;
+          }
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x, y, z, biome: BIOMES[biomeId] && BIOMES[biomeId].name, localScore: score };
+        }
+      }
+    }
+    if (best) return best;
+    for (let z = 2; z < WORLD_Z - 2; z++) {
+      for (let x = 2; x < WORLD_X - 2; x++) {
+        const si = surfaceIndex(x, z);
+        if (state.biome[si] !== biomeId) continue;
+        const y = state.surface[si];
+        if (y > SEA_LEVEL && getBlock(x, y + 1, z) !== WATER) return { x, y, z, biome: BIOMES[biomeId] && BIOMES[biomeId].name, localScore: 1 };
+      }
+    }
+    return null;
+  }
+  function findWaterSpot() {
+    for (let z = 2; z < WORLD_Z - 2; z += 2) {
+      for (let x = 2; x < WORLD_X - 2; x += 2) {
+        const range = fishWaterRangeAt(x, z);
+        if (range && range.depth >= 5) return { x, y: Math.floor(range.min), z, depth: range.depth };
+      }
+    }
+    return null;
+  }
+  function findValleySpot() {
+    let best = null;
+    let bestScore = -Infinity;
+    for (let z = 12; z < WORLD_Z - 12; z += 4) {
+      for (let x = 12; x < WORLD_X - 12; x += 4) {
+        const y = state.surface[surfaceIndex(x, z)];
+        if (y <= SEA_LEVEL + 1 || getBlock(x, y + 1, z) === WATER) continue;
+        const n = state.surface[surfaceIndex(x, z - 10)];
+        const s = state.surface[surfaceIndex(x, z + 10)];
+        const e = state.surface[surfaceIndex(x + 10, z)];
+        const w = state.surface[surfaceIndex(x - 10, z)];
+        const rim = Math.max(n, s, e, w);
+        const avg = (n + s + e + w) / 4;
+        const score = (rim - y) * 1.3 + (avg - y);
+        if (score > bestScore) {
+          bestScore = score;
+          best = { x, y, z, score: Math.round(score * 10) / 10 };
+        }
+      }
+    }
+    return best;
+  }
+  function selectInventoryCode(code) {
+    for (let i = 0; i < state.hotbar.length; i++) {
+      if (state.hotbar[i] && state.hotbar[i].code === code) {
+        setSelectedSlot(i, false);
+        return true;
+      }
+    }
+    giveItem(code, 1);
+    return selectInventoryCode(code);
+  }
 
   initGame();
   migrateLegacyWorld();
@@ -4963,6 +5497,7 @@
   window.__RIZZ = {
     state,
     DEF,
+    BIOMES,
     RECIPES,
     startGame,
     restart,
@@ -4990,10 +5525,17 @@
     triggerHeldSwing,
     damageMob,
     damageCaveCreature,
+    damageFriendly,
+    applyTorchBurn,
     spawnBlockBurst,
     spawnFriendlies,
     findBlock,
     teleportTo,
+    findBiomeSpot,
+    findWaterSpot,
+    findValleySpot,
+    selectInventoryCode,
+    hurtPlayer,
     edgeOceanStrength,
     movementVectorForYaw,
     movementVectorForCamera,
@@ -5020,6 +5562,7 @@
           return counts;
         }, {}),
         friendlyCount: state.friendlies.length,
+        fishCount: state.fish.length,
         movingFriendlies: state.friendlies.filter((friendly) => friendlyMovingAction(friendly.action)).length,
         worldId: currentWorldId,
         worldName: currentWorldName,
@@ -5033,6 +5576,7 @@
         bagUsed: state.bag.filter(Boolean).length,
         fxCount: state.fx.length,
         swingTimer: state.swingTimer,
+        heldTorchLight: heldTorchLight.intensity,
         playerHurtAnim: state.player.hurtAnim,
         sunVisible: !!(sunDisk && sunDisk.visible),
         sunOpacity: sunDisk ? sunDisk.material.opacity : 0,

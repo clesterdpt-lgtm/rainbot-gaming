@@ -34,12 +34,12 @@
 
   const THREE = window.THREE;
   const SAVE_VERSION = 7;
-  const WORLD_X = 640;
-  const WORLD_Y = 160;
-  const WORLD_Z = 640;
+  const WORLD_X = 704;
+  const WORLD_Y = 320;
+  const WORLD_Z = 704;
   const CHUNK = 16;
   const SEA_LEVEL = 48;
-  const LAVA_LEVEL = 18;
+  const LAVA_LEVEL = 22;
   const EDGE_OCEAN = 118;
   const RENDER_RADIUS_CHUNKS = 8;
   const DECOR_RADIUS_CHUNKS = 7;
@@ -95,11 +95,11 @@
   // Light bakes into vertex colours so caves darken with distance from any opening,
   // while lava, glow features and torches cast a local pool of light.
   const SKY_LIGHT = 15;            // light value of a cell open to the sky
-  const CAVE_AMBIENT = 0.1;        // surface multiplier for a pitch-black cave face
+  const CAVE_AMBIENT = 0.045;      // surface multiplier for a pitch-black cave face
   const BLOCK_LIGHT_GAIN = 1.55;   // how strongly block light brightens a surface
   const LIGHT_RADIUS = 15;         // max propagation distance (also relight box half-size)
   const TORCH_LIGHT = 14;          // torches: bright, warm
-  const LAVA_LIGHT = 9;            // lava: small, smouldering glow
+  const LAVA_LIGHT = 5;            // lava: faint, smouldering glow
   const GLOW_SHROOM_LIGHT = 12;    // glowcap mushrooms
   const CAVE_CRYSTAL_LIGHT = 9;    // crystal clusters
   const LIGHT_Y_STRIDE = WORLD_X * WORLD_Z;
@@ -975,11 +975,20 @@
     const tx = smooth(sx - x0);
     const ty = smooth(sy - y0);
     const tz = smooth(sz - z0);
-    function n(dx, dy, dz) { return hash3(x0 + dx, y0 + dy, z0 + dz); }
-    const x00 = lerp(n(0, 0, 0), n(1, 0, 0), tx);
-    const x10 = lerp(n(0, 1, 0), n(1, 1, 0), tx);
-    const x01 = lerp(n(0, 0, 1), n(1, 0, 1), tx);
-    const x11 = lerp(n(0, 1, 1), n(1, 1, 1), tx);
+    // Inlined lattice samples — avoids allocating a closure on every call, which
+    // matters because world-gen evaluates this tens of millions of times.
+    const c000 = hash3(x0, y0, z0);
+    const c100 = hash3(x0 + 1, y0, z0);
+    const c010 = hash3(x0, y0 + 1, z0);
+    const c110 = hash3(x0 + 1, y0 + 1, z0);
+    const c001 = hash3(x0, y0, z0 + 1);
+    const c101 = hash3(x0 + 1, y0, z0 + 1);
+    const c011 = hash3(x0, y0 + 1, z0 + 1);
+    const c111 = hash3(x0 + 1, y0 + 1, z0 + 1);
+    const x00 = lerp(c000, c100, tx);
+    const x10 = lerp(c010, c110, tx);
+    const x01 = lerp(c001, c101, tx);
+    const x11 = lerp(c011, c111, tx);
     return lerp(lerp(x00, x10, ty), lerp(x01, x11, ty), tz);
   }
   function fbm2(x, z, scale, octaves) {
@@ -1021,8 +1030,18 @@
       relightAround(x, y, z);
     }
     if (rebuild) {
-      if (lit) rebuildChunksForLight(x - LIGHT_RADIUS, z - LIGHT_RADIUS, x + LIGHT_RADIUS, z + LIGHT_RADIUS);
-      else rebuildChunksNear(x, z);
+      if (lit) {
+        // Rebuild only the chunks whose light moved, unioned with the edited block's
+        // own cell (+1 ring) so its changed faces refresh even when light barely shifts.
+        let bx0 = x - 1, bx1 = x + 1, bz0 = z - 1, bz1 = z + 1;
+        if (lightDirtyX1 >= 0) {
+          if (lightDirtyX0 < bx0) bx0 = lightDirtyX0;
+          if (lightDirtyX1 > bx1) bx1 = lightDirtyX1;
+          if (lightDirtyZ0 < bz0) bz0 = lightDirtyZ0;
+          if (lightDirtyZ1 > bz1) bz1 = lightDirtyZ1;
+        }
+        rebuildChunksForLight(bx0, bz0, bx1, bz1);
+      } else rebuildChunksNear(x, z);
     }
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
@@ -1259,8 +1278,10 @@
       || blockEmission(prev) !== blockEmission(code);
   }
   // First sky-open y for a column (lowest cell with nothing opaque above it).
-  function computeSkyHeight(x, z) {
-    let y = WORLD_Y - 1;
+  // startY caps the downward scan: callers that know the column's top solid is at
+  // most a few blocks above the recorded surface pass it to skip empty sky.
+  function computeSkyHeight(x, z, startY) {
+    let y = startY === undefined ? WORLD_Y - 1 : startY;
     while (y > 0 && !blocksSky(getBlock(x, y, z))) y--;
     return y + 1;
   }
@@ -1312,8 +1333,12 @@
     let maxSurface = 1;
     for (let z = 0; z < WORLD_Z; z++) {
       for (let x = 0; x < WORLD_X; x++) {
-        const sh = computeSkyHeight(x, z);
-        state.skyHeight[surfaceIndex(x, z)] = sh;
+        const si = surfaceIndex(x, z);
+        // The top solid sits at most a few blocks above the recorded surface (trees,
+        // or player builds already folded into surface), so cap the downward scan
+        // instead of walking the whole empty sky on this much taller world.
+        const sh = computeSkyHeight(x, z, Math.min(WORLD_Y - 1, state.surface[si] + 16));
+        state.skyHeight[si] = sh;
         if (sh > maxSurface) maxSurface = sh;
       }
     }
@@ -1360,6 +1385,10 @@
     }
     propagateLight(blkQ, false, 0, 0, 0, x1, y1, z1);
   }
+  // Snapshot buffer + dirty x/z bounds so an edit only rebuilds the chunks whose
+  // baked light actually changed (a tall mountain chunk is expensive to re-mesh).
+  const _relightScratch = new Uint8Array((2 * LIGHT_RADIUS + 1) ** 3);
+  let lightDirtyX0 = -1, lightDirtyX1 = -1, lightDirtyZ0 = -1, lightDirtyZ1 = -1;
   // Local relight of a box around an edit. Box half-size >= LIGHT_RADIUS keeps it correct.
   function relightAround(cx, cy, cz) {
     const R = LIGHT_RADIUS;
@@ -1368,6 +1397,15 @@
     const z0 = clamp(cz - R, 0, WORLD_Z - 1), z1 = clamp(cz + R, 0, WORLD_Z - 1);
     const light = state.light;
     const world = state.world;
+    const bw = x1 - x0 + 1, bd = z1 - z0 + 1;
+    const scratch = _relightScratch;
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        const base = (y * WORLD_Z + z) * WORLD_X;
+        const sbase = (((y - y0) * bd) + (z - z0)) * bw - x0;
+        for (let x = x0; x <= x1; x++) scratch[sbase + x] = light[base + x];
+      }
+    }
     for (let y = y0; y <= y1; y++) {
       for (let z = z0; z <= z1; z++) {
         const base = (y * WORLD_Z + z) * WORLD_X;
@@ -1410,6 +1448,21 @@
     }
     propagateLight(skyQ, true, x0, y0, z0, x1, y1, z1);
     propagateLight(blkQ, false, x0, y0, z0, x1, y1, z1);
+    // Record the x/z span of cells whose light value actually moved.
+    let dx0 = WORLD_X, dx1 = -1, dz0 = WORLD_Z, dz1 = -1;
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        const base = (y * WORLD_Z + z) * WORLD_X;
+        const sbase = (((y - y0) * bd) + (z - z0)) * bw - x0;
+        for (let x = x0; x <= x1; x++) {
+          if (light[base + x] !== scratch[sbase + x]) {
+            if (x < dx0) dx0 = x; if (x > dx1) dx1 = x;
+            if (z < dz0) dz0 = z; if (z > dz1) dz1 = z;
+          }
+        }
+      }
+    }
+    lightDirtyX0 = dx0; lightDirtyX1 = dx1; lightDirtyZ0 = dz0; lightDirtyZ1 = dz1;
   }
   function rebuildChunksForLight(x0, z0, x1, z1) {
     const cx0 = clamp(Math.floor(x0 / CHUNK), 0, WORLD_X / CHUNK - 1);
@@ -1454,23 +1507,30 @@
         const dx = x - WORLD_X / 2;
         const dz = z - WORLD_Z / 2;
         const center = Math.sqrt(dx * dx + dz * dz);
-        const continent = fbm2(x + 1200, z - 500, 0.011, 5);
-        const detail = fbm2(x - 900, z + 700, 0.052, 4);
-        const ridges = Math.abs(fbm2(x + 20, z + 20, 0.024, 4) - 0.5) * 2;
-        let h = SEA_LEVEL + 12 + (continent - 0.48) * 38 + (detail - 0.5) * 9 + Math.pow(ridges, 1.7) * 12;
+        // Macro elevation: big, slow landmasses sweep from deep valleys to highlands.
+        const continent = fbm2(x + 1200, z - 500, 0.0072, 6);
+        const detail = fbm2(x - 900, z + 700, 0.05, 4);
+        // Ridged noise (peaks near 1) carves sharp mountain crests along ridgelines.
+        const ridges = 1 - Math.abs(fbm2(x + 20, z + 20, 0.016, 5) * 2 - 1);
+        let h = SEA_LEVEL + 6 + (continent - 0.46) * 120 + (detail - 0.5) * 10;
+        // Mountains only rise where the continent runs high, leaving plains and
+        // valleys between the ranges so the world is not wall-to-wall peaks.
+        const mtn = smooth(clamp((continent - 0.54) / 0.26, 0, 1));
+        h += Math.pow(ridges, 1.9) * 108 * mtn;
         const ocean = edgeOceanStrength(x, z);
         if (ocean > 0) {
-          const shelf = SEA_LEVEL - 8 - smooth(ocean) * 16 + noise2(x + 17, z - 23, 0.055) * 4 + fbm2(x - 160, z + 220, 0.018, 3) * 3;
+          const shelf = SEA_LEVEL - 8 - smooth(ocean) * 14 + noise2(x + 17, z - 23, 0.055) * 4 + fbm2(x - 160, z + 220, 0.018, 3) * 3;
           h = lerp(h, shelf, smooth(ocean));
         }
         const spawnBlend = clamp(1 - center / 20, 0, 1);
         h = lerp(h, SEA_LEVEL + 8 + Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.16) * 0.7, spawnBlend);
-        const height = clamp(Math.round(h), 4, WORLD_Y - 9);
+        const height = clamp(Math.round(h), 32, WORLD_Y - 9);
         const moisture = fbm2(x - 300, z + 300, 0.016, 4);
         const weird = fbm2(x + 700, z + 80, 0.014, 4);
         const temp = fbm2(x + 90, z - 840, 0.012, 4);
         let biome = 0;
-        if (temp < 0.34 && height > SEA_LEVEL + 10) biome = 11;
+        if (height > SEA_LEVEL + 86) biome = 11;
+        else if (temp < 0.34 && height > SEA_LEVEL + 10) biome = 11;
         else if (height > SEA_LEVEL + 21 || ridges > 0.64) biome = 6;
         else if (temp > 0.72 && moisture < 0.34 && height <= SEA_LEVEL + 12) biome = 10;
         else if (weird < 0.30 && moisture < 0.54) biome = 7;
@@ -1491,10 +1551,18 @@
       for (let x = 0; x < WORLD_X; x++) {
         const height = state.surface[surfaceIndex(x, z)];
         const biome = BIOMES[state.biome[surfaceIndex(x, z)]];
-        for (let y = 0; y < WORLD_Y; y++) {
+        // Everything above the surface (and above the waterline) is already AIR from
+        // the initial fill — only iterate the solid/submerged span so the much taller
+        // world does not pay for scanning empty sky on every column.
+        const yMax = height > SEA_LEVEL ? height : SEA_LEVEL;
+        // Cave/tunnel noise is low frequency (its vertical lattice spans ~9 blocks),
+        // so sample it once per pair of levels and reuse — halves the dominant cost
+        // of world-gen with no visible change to cave shape.
+        let caveYc = -1, caveCarved = false;
+        for (let y = 0; y <= yMax; y++) {
           let code = AIR;
           if (y === 0) code = BEDROCK;
-          else if (y > height) code = y <= SEA_LEVEL ? WATER : AIR;
+          else if (y > height) code = WATER;
           else {
             const depth = height - y;
             const shoreline = height <= SEA_LEVEL + 1 || biome.id === 3;
@@ -1503,9 +1571,15 @@
             else code = STONE;
 
             if (code === STONE && y > 3 && y < height - 4) {
-              const cave = noise3(x + 400, y * 1.35, z - 200, 0.08);
-              const tunnel = noise3(x - 700, y * 1.8, z + 300, 0.045);
-              if (cave > 0.72 || (tunnel > 0.63 && y < WORLD_Y - 10)) code = AIR;
+              const yc = y & ~1;
+              if (yc !== caveYc) {
+                caveYc = yc;
+                // Short-circuit the tunnel field so the common (uncarved) cell only
+                // pays for one 3D-noise sample instead of two.
+                caveCarved = noise3(x + 400, yc * 1.35, z - 200, 0.08) > 0.72;
+                if (!caveCarved && yc < WORLD_Y - 10) caveCarved = noise3(x - 700, yc * 1.8, z + 300, 0.045) > 0.63;
+              }
+              if (caveCarved) code = AIR;
               else {
                 const r = hash3(x, y, z);
                 if (y < height - 6 && r < 0.035) code = COAL_ORE;
@@ -1513,11 +1587,13 @@
                 if (y < LAVA_LEVEL + 18 && r >= 0.055 && r < 0.064) code = SIGMA_ORE;
               }
             }
-            if (y > 1 && y < LAVA_LEVEL) {
+            if (y > 1 && y < LAVA_LEVEL && (code === AIR || code === STONE)) {
               const pocket = noise3(x - 1600, y * 2.6, z + 1800, 0.082);
-              const vein = noise3(x + 230, y * 3.1, z - 510, 0.14);
-              if (code === AIR && pocket > 0.46) code = LAVA;
-              else if (code === STONE && pocket > 0.72 && vein > 0.58) code = LAVA;
+              if (pocket > 0.46) {
+                // vein only matters for the rarer stone-replacing case, so defer it.
+                if (code === AIR) code = LAVA;
+                else if (pocket > 0.72 && noise3(x + 230, y * 3.1, z - 510, 0.14) > 0.58) code = LAVA;
+              }
             }
           }
           state.world[index(x, y, z)] = code;
@@ -1779,8 +1855,19 @@
     const lava = makeGeometryArrays();
     const x0 = cx * CHUNK;
     const z0 = cz * CHUNK;
+    // Cap the vertical scan to the tallest column in this chunk (plus headroom for
+    // trees / builds the surface map already tracks) so the much taller world does
+    // not mesh hundreds of empty sky cells per column on every rebuild.
+    let chunkTop = SEA_LEVEL;
     for (let z = z0; z < z0 + CHUNK; z++) {
-      for (let y = 0; y < WORLD_Y; y++) {
+      for (let x = x0; x < x0 + CHUNK; x++) {
+        const s = state.surface[surfaceIndex(x, z)];
+        if (s > chunkTop) chunkTop = s;
+      }
+    }
+    const yEnd = Math.min(WORLD_Y - 1, chunkTop + 16);
+    for (let z = z0; z < z0 + CHUNK; z++) {
+      for (let y = 0; y <= yEnd; y++) {
         for (let x = x0; x < x0 + CHUNK; x++) {
           const code = getBlock(x, y, z);
           if (code === AIR || DEF[code].decor) continue;
@@ -1831,8 +1918,8 @@
     const localUv = [[0, 0], [1, 0], [1, 1], [0, 1]];
     let lr, lg, lb;
     if (code === LAVA) {
-      // Lava is its own light source — keep its faces glowing, not cave-darkened.
-      lr = 1.22; lg = 1.02; lb = 0.84;
+      // Lava is its own light source — its faces still glow, but only faintly now.
+      lr = 1.06; lg = 0.88; lb = 0.7;
     } else {
       computeLight(x + face.n[0], y + face.n[1], z + face.n[2], _faceLight);
       lr = _faceLight.r; lg = _faceLight.g; lb = _faceLight.b;
@@ -1967,7 +2054,10 @@
         if (Math.hypot(cx - pcx, cz - pcz) > DECOR_RADIUS_CHUNKS + 0.45) continue;
         for (let z = cz * CHUNK; z < cz * CHUNK + CHUNK; z++) {
           for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
-            for (let y = 1; y < WORLD_Y; y++) {
+            // Decor (plants, glow features, torches) sits at or below each column's
+            // solid surface, so cap the scan instead of walking the empty sky.
+            const yTop = Math.min(WORLD_Y - 1, state.surface[surfaceIndex(x, z)] + 18);
+            for (let y = 1; y <= yTop; y++) {
               const code = getBlock(x, y, z);
               if (code === TALL_GRASS || code === FLOWER) { setDecorLight(x, y, z); pushPlant(arr, x, y, z, code); }
               else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) { setDecorLight(x, y, z); pushCaveFeature(arr, x, y, z, code); }

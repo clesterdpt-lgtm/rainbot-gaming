@@ -642,9 +642,41 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   overscroll-behavior: contain;
   padding-right: 2px;
   scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent-3) 65%, transparent) color-mix(in srgb, var(--panel-2) 70%, transparent);
 }
 @media (max-width: 900px) {
   .game-side { position: static; max-height: none; }
+}
+.game-side::-webkit-scrollbar,
+.game-side__howto::-webkit-scrollbar {
+  width: 8px;
+}
+.game-side::-webkit-scrollbar-track,
+.game-side__howto::-webkit-scrollbar-track {
+  background: rgba(8, 12, 22, 0.8);
+  border-radius: 999px;
+}
+.game-side::-webkit-scrollbar-thumb,
+.game-side__howto::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-3) 80%, transparent),
+    color-mix(in srgb, var(--accent) 70%, transparent)
+  );
+  border-radius: 999px;
+  border: 2px solid rgba(8, 12, 22, 0.8);
+}
+.game-side::-webkit-scrollbar-thumb:hover,
+.game-side__howto::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 86%, transparent),
+    color-mix(in srgb, var(--accent-3) 78%, transparent)
+  );
+}
+.game-side::-webkit-scrollbar-corner,
+.game-side__howto::-webkit-scrollbar-corner {
+  background: transparent;
 }
 .game-side__panel {
   background: linear-gradient(180deg, rgba(31, 30, 54, 0.96), rgba(16, 16, 31, 0.96));
@@ -682,6 +714,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   overflow: auto;
   padding: 11px 12px;
   scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent-3) 65%, transparent) color-mix(in srgb, var(--panel-2) 70%, transparent);
 }
 .game-side__howto summary {
   cursor: pointer;

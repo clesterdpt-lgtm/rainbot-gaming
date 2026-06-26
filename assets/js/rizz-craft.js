@@ -90,6 +90,20 @@
   const PLAYER_HURT_SECONDS = 0.46;
   const FX_GRAVITY = 10;
 
+  // --- Voxel lighting ---
+  // Each cell stores skylight (high nibble) + block light (low nibble) in state.light.
+  // Light bakes into vertex colours so caves darken with distance from any opening,
+  // while lava, glow features and torches cast a local pool of light.
+  const SKY_LIGHT = 15;            // light value of a cell open to the sky
+  const CAVE_AMBIENT = 0.1;        // surface multiplier for a pitch-black cave face
+  const BLOCK_LIGHT_GAIN = 1.55;   // how strongly block light brightens a surface
+  const LIGHT_RADIUS = 15;         // max propagation distance (also relight box half-size)
+  const TORCH_LIGHT = 14;          // torches: bright, warm
+  const LAVA_LIGHT = 9;            // lava: small, smouldering glow
+  const GLOW_SHROOM_LIGHT = 12;    // glowcap mushrooms
+  const CAVE_CRYSTAL_LIGHT = 9;    // crystal clusters
+  const LIGHT_Y_STRIDE = WORLD_X * WORLD_Z;
+
   const AIR = 0;
   const GRASS = 1;
   const DIRT = 2;
@@ -146,7 +160,7 @@
   def(COAL_ORE, { name: "Gyatt Coal Ore", kind: "block", solid: true, hardness: 1.55, needTool: "pick", drop: COAL, color: "#6f707b", ore: "#22232b" });
   def(RIZZ_ORE, { name: "Rizz Ore", kind: "block", solid: true, hardness: 1.8, needTool: "pick", drop: RIZZ, color: "#777985", ore: "#ffcf3a" });
   def(SIGMA_ORE, { name: "Sigma Ore", kind: "block", solid: true, hardness: 2.45, needTool: "pick", needTier: 2, drop: SIGMA, color: "#767987", ore: "#4beaff" });
-  def(TORCH, { name: "Rizz Torch", kind: "block", solid: false, hardness: 0.05, drop: TORCH, light: 1, color: "#ffd75a", decor: true });
+  def(TORCH, { name: "Rizz Torch", kind: "block", solid: false, hardness: 0.05, drop: TORCH, light: TORCH_LIGHT, color: "#ffd75a", decor: true, placeable: true });
   def(WATER, { name: "Rizzwater", kind: "block", solid: false, hardness: Infinity, drop: null, color: "#2f8fe8", transparent: true, liquid: true });
   def(TALL_GRASS, { name: "Tall Grass", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#48d83e", decor: true });
   def(FLOWER, { name: "Rizz Bloom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#ff6fa8", decor: true });
@@ -335,7 +349,9 @@
     crafting: false,
     world: new Uint8Array(WORLD_X * WORLD_Y * WORLD_Z),
     baseWorld: new Uint8Array(WORLD_X * WORLD_Y * WORLD_Z),
+    light: new Uint8Array(WORLD_X * WORLD_Y * WORLD_Z),
     surface: new Int16Array(WORLD_X * WORLD_Z),
+    skyHeight: new Int16Array(WORLD_X * WORLD_Z),
     biome: new Uint8Array(WORLD_X * WORLD_Z),
     edits: new Map(),
     chunks: new Map(),
@@ -552,7 +568,12 @@
   function index(x, y, z) { return (y * WORLD_Z + z) * WORLD_X + x; }
   function surfaceIndex(x, z) { return z * WORLD_X + x; }
   function inWorld(x, y, z) { return x >= 0 && x < WORLD_X && y >= 0 && y < WORLD_Y && z >= 0 && z < WORLD_Z; }
-  function isPlaceable(code) { return code > AIR && DEF[code] && DEF[code].kind === "block" && code !== WATER && !isReplaceableDecor(code); }
+  function isPlaceable(code) {
+    const d = DEF[code];
+    if (!d || code <= AIR || d.kind !== "block" || code === WATER) return false;
+    if (d.placeable) return true;
+    return !isReplaceableDecor(code);
+  }
   function maxStack(code) { return (DEF[code] && DEF[code].stack) || 99; }
   function isReplaceableDecor(code) {
     const d = DEF[code];
@@ -994,7 +1015,15 @@
       else state.edits.set(key, code);
     }
     updateSurfaceColumn(x, z);
-    if (rebuild) rebuildChunksNear(x, z);
+    const lit = lightingAffected(prev, code);
+    if (lit) {
+      state.skyHeight[surfaceIndex(x, z)] = computeSkyHeight(x, z);
+      relightAround(x, y, z);
+    }
+    if (rebuild) {
+      if (lit) rebuildChunksForLight(x - LIGHT_RADIUS, z - LIGHT_RADIUS, x + LIGHT_RADIUS, z + LIGHT_RADIUS);
+      else rebuildChunksNear(x, z);
+    }
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
   function setFluidBlock(x, y, z, code) {
@@ -1192,6 +1221,226 @@
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
   function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && !isReplaceableDecor(code); }
 
+  // --- Voxel lighting engine ---------------------------------------------------
+  // blocksSky: casts a sky shadow (opaque solids + water, so depth darkens).
+  function blocksSky(code) {
+    if (code === AIR) return false;
+    if (code === WATER) return true;
+    const d = DEF[code];
+    if (!d) return true;
+    if (d.liquid) return false;        // lava lets light pass (and emits)
+    if (d.decor) return false;         // torches, grass, glow, crystals, vines...
+    if (d.transparent) return false;   // leaves
+    return !!d.solid;                  // stone, dirt, sand, snow, logs, planks...
+  }
+  // lightTransmits: light can travel through this cell (and beyond it).
+  function lightTransmits(code) {
+    if (code === AIR) return true;
+    const d = DEF[code];
+    if (!d) return false;
+    if (d.liquid) return true;         // water + lava
+    if (d.decor) return true;
+    if (d.transparent) return true;    // leaves
+    return false;                      // opaque solids stop light
+  }
+  function blockEmission(code) {
+    switch (code) {
+      case TORCH: return TORCH_LIGHT;
+      case LAVA: return LAVA_LIGHT;
+      case GLOW_SHROOM: return GLOW_SHROOM_LIGHT;
+      case CAVE_CRYSTAL: return CAVE_CRYSTAL_LIGHT;
+      default: return 0;
+    }
+  }
+  // Whether a block swap actually changes the light field (skip relight otherwise).
+  function lightingAffected(prev, code) {
+    return blocksSky(prev) !== blocksSky(code)
+      || lightTransmits(prev) !== lightTransmits(code)
+      || blockEmission(prev) !== blockEmission(code);
+  }
+  // First sky-open y for a column (lowest cell with nothing opaque above it).
+  function computeSkyHeight(x, z) {
+    let y = WORLD_Y - 1;
+    while (y > 0 && !blocksSky(getBlock(x, y, z))) y--;
+    return y + 1;
+  }
+  function skyOpen(x, y, z) {
+    return y >= state.skyHeight[surfaceIndex(x, z)];
+  }
+  function getSkyLight(i) { return state.light[i] >> 4; }
+  function getBlockLight(i) { return state.light[i] & 15; }
+
+  function relaxLight(nx, ny, nz, ni, nl, sky, queue, x0, y0, z0, x1, y1, z1) {
+    if (nx < x0 || nx > x1 || ny < y0 || ny > y1 || nz < z0 || nz > z1) return;
+    if (!lightTransmits(state.world[ni])) return;
+    const light = state.light;
+    if (sky) {
+      if ((light[ni] >> 4) >= nl) return;
+      light[ni] = (light[ni] & 0x0f) | (nl << 4);
+    } else {
+      if ((light[ni] & 15) >= nl) return;
+      light[ni] = (light[ni] & 0xf0) | nl;
+    }
+    queue.push(ni);
+  }
+  // BFS flood fill of one channel, clamped to a box (full world for a global solve).
+  function propagateLight(queue, sky, x0, y0, z0, x1, y1, z1) {
+    const light = state.light;
+    let head = 0;
+    while (head < queue.length) {
+      const i = queue[head++];
+      const x = i % WORLD_X;
+      const t = (i / WORLD_X) | 0;
+      const z = t % WORLD_Z;
+      const y = (t / WORLD_Z) | 0;
+      const cur = sky ? (light[i] >> 4) : (light[i] & 15);
+      if (cur <= 1) continue;
+      const nl = cur - 1;
+      relaxLight(x + 1, y, z, i + 1, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+      relaxLight(x - 1, y, z, i - 1, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+      relaxLight(x, y, z + 1, i + WORLD_X, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+      relaxLight(x, y, z - 1, i - WORLD_X, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+      relaxLight(x, y + 1, z, i + LIGHT_Y_STRIDE, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+      relaxLight(x, y - 1, z, i - LIGHT_Y_STRIDE, nl, sky, queue, x0, y0, z0, x1, y1, z1);
+    }
+  }
+  // Full-world solve, run once after generation / load.
+  function computeWorldLight() {
+    const light = state.light;
+    const world = state.world;
+    light.fill(0);
+    let maxSurface = 1;
+    for (let z = 0; z < WORLD_Z; z++) {
+      for (let x = 0; x < WORLD_X; x++) {
+        const sh = computeSkyHeight(x, z);
+        state.skyHeight[surfaceIndex(x, z)] = sh;
+        if (sh > maxSurface) maxSurface = sh;
+      }
+    }
+    const yTop = Math.min(WORLD_Y - 1, maxSurface);
+    const x1 = WORLD_X - 1;
+    const y1 = WORLD_Y - 1;
+    const z1 = WORLD_Z - 1;
+    // Skylight: seed cells that are NOT sky-open but border an open cell, then flood.
+    const skyQ = [];
+    for (let z = 0; z < WORLD_Z; z++) {
+      for (let x = 0; x < WORLD_X; x++) {
+        const sh = state.skyHeight[surfaceIndex(x, z)];
+        const top = Math.min(sh - 1, yTop);
+        for (let y = top; y >= 1; y--) {
+          const i = index(x, y, z);
+          if (!lightTransmits(world[i])) continue;
+          // border with sky? (only need to test neighbours that could be open)
+          if ((x > 0 && skyOpen(x - 1, y, z)) || (x < x1 && skyOpen(x + 1, y, z)) ||
+              (z > 0 && skyOpen(x, y, z - 1)) || (z < z1 && skyOpen(x, y, z + 1)) ||
+              (y < y1 && skyOpen(x, y + 1, z))) {
+            if ((light[i] >> 4) < SKY_LIGHT - 1) {
+              light[i] = (light[i] & 0x0f) | ((SKY_LIGHT - 1) << 4);
+              skyQ.push(i);
+            }
+          }
+        }
+      }
+    }
+    propagateLight(skyQ, true, 0, 0, 0, x1, y1, z1);
+    // Block light: seed every emitter, then flood.
+    const blkQ = [];
+    const emitTop = Math.min(WORLD_Y - 1, Math.max(maxSurface, SEA_LEVEL + 14));
+    for (let y = 1; y <= emitTop; y++) {
+      for (let z = 0; z < WORLD_Z; z++) {
+        for (let x = 0; x < WORLD_X; x++) {
+          const i = index(x, y, z);
+          const e = blockEmission(world[i]);
+          if (e > 0 && (light[i] & 15) < e) {
+            light[i] = (light[i] & 0xf0) | e;
+            blkQ.push(i);
+          }
+        }
+      }
+    }
+    propagateLight(blkQ, false, 0, 0, 0, x1, y1, z1);
+  }
+  // Local relight of a box around an edit. Box half-size >= LIGHT_RADIUS keeps it correct.
+  function relightAround(cx, cy, cz) {
+    const R = LIGHT_RADIUS;
+    const x0 = clamp(cx - R, 0, WORLD_X - 1), x1 = clamp(cx + R, 0, WORLD_X - 1);
+    const y0 = clamp(cy - R, 0, WORLD_Y - 1), y1 = clamp(cy + R, 0, WORLD_Y - 1);
+    const z0 = clamp(cz - R, 0, WORLD_Z - 1), z1 = clamp(cz + R, 0, WORLD_Z - 1);
+    const light = state.light;
+    const world = state.world;
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        const base = (y * WORLD_Z + z) * WORLD_X;
+        for (let x = x0; x <= x1; x++) light[base + x] = 0;
+      }
+    }
+    const skyQ = [];
+    const blkQ = [];
+    // Interior seeds: emitters + cells bordering a sky-open cell.
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) {
+        for (let x = x0; x <= x1; x++) {
+          const i = (y * WORLD_Z + z) * WORLD_X + x;
+          const code = world[i];
+          const e = blockEmission(code);
+          if (e > 0) { light[i] = (light[i] & 0xf0) | e; blkQ.push(i); }
+          if (!lightTransmits(code) || skyOpen(x, y, z)) continue;
+          if ((x > 0 && skyOpen(x - 1, y, z)) || (x < WORLD_X - 1 && skyOpen(x + 1, y, z)) ||
+              (z > 0 && skyOpen(x, y, z - 1)) || (z < WORLD_Z - 1 && skyOpen(x, y, z + 1)) ||
+              (y < WORLD_Y - 1 && skyOpen(x, y + 1, z))) {
+            light[i] = (light[i] & 0x0f) | ((SKY_LIGHT - 1) << 4);
+            skyQ.push(i);
+          }
+        }
+      }
+    }
+    // Shell seeds: the layer just outside the box keeps its (correct) values and feeds inward.
+    const shell = (x, y, z) => {
+      if (x < 0 || x >= WORLD_X || y < 0 || y >= WORLD_Y || z < 0 || z >= WORLD_Z) return;
+      const i = index(x, y, z);
+      if ((light[i] >> 4) > 0) skyQ.push(i);
+      if ((light[i] & 15) > 0) blkQ.push(i);
+    };
+    for (let y = y0; y <= y1; y++) {
+      for (let z = z0; z <= z1; z++) { shell(x0 - 1, y, z); shell(x1 + 1, y, z); }
+      for (let x = x0; x <= x1; x++) { shell(x, y, z0 - 1); shell(x, y, z1 + 1); }
+    }
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) { shell(x, y0 - 1, z); shell(x, y1 + 1, z); }
+    }
+    propagateLight(skyQ, true, x0, y0, z0, x1, y1, z1);
+    propagateLight(blkQ, false, x0, y0, z0, x1, y1, z1);
+  }
+  function rebuildChunksForLight(x0, z0, x1, z1) {
+    const cx0 = clamp(Math.floor(x0 / CHUNK), 0, WORLD_X / CHUNK - 1);
+    const cx1 = clamp(Math.floor(x1 / CHUNK), 0, WORLD_X / CHUNK - 1);
+    const cz0 = clamp(Math.floor(z0 / CHUNK), 0, WORLD_Z / CHUNK - 1);
+    const cz1 = clamp(Math.floor(z1 / CHUNK), 0, WORLD_Z / CHUNK - 1);
+    for (let cz = cz0; cz <= cz1; cz++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        if (state.chunks.has(`${cx},${cz}`)) rebuildChunk(cx, cz);
+      }
+    }
+  }
+  // Light multiplier applied to a surface exposed to cell (x,y,z). Warm block glow + cool sky.
+  const _faceLight = { r: 1, g: 1, b: 1 };
+  function computeLight(x, y, z, out) {
+    let sky;
+    let blk;
+    if (y >= WORLD_Y) { sky = SKY_LIGHT; blk = 0; }
+    else if (x < 0 || x >= WORLD_X || y < 0 || z < 0 || z >= WORLD_Z) { sky = SKY_LIGHT; blk = 0; }
+    else if (skyOpen(x, y, z)) { sky = SKY_LIGHT; blk = state.light[index(x, y, z)] & 15; }
+    else { const v = state.light[index(x, y, z)]; sky = v >> 4; blk = v & 15; }
+    const s = sky / SKY_LIGHT;
+    const env = CAVE_AMBIENT + (1 - CAVE_AMBIENT) * (s * s * (3 - 2 * s));
+    const b = blk / SKY_LIGHT;
+    const glow = b * b * BLOCK_LIGHT_GAIN;
+    out.r = env + glow;
+    out.g = env + glow * 0.78;
+    out.b = env + glow * 0.5;
+    return out;
+  }
+
   function generateWorld(seed = ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0)) {
     state.seed = seed >>> 0;
     state.edits.clear();
@@ -1281,6 +1530,7 @@
     growTreesAndDetails();
     carveSpawnMeadow();
     state.baseWorld.set(state.world);
+    computeWorldLight();
     rebuildAllChunks();
     rebuildDecorations();
     buildClouds();
@@ -1579,12 +1829,20 @@
     const v0 = 1 - (row + 0.985) / TEX_ROWS;
     const v1 = 1 - (row + 0.015) / TEX_ROWS;
     const localUv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let lr, lg, lb;
+    if (code === LAVA) {
+      // Lava is its own light source — keep its faces glowing, not cave-darkened.
+      lr = 1.22; lg = 1.02; lb = 0.84;
+    } else {
+      computeLight(x + face.n[0], y + face.n[1], z + face.n[2], _faceLight);
+      lr = _faceLight.r; lg = _faceLight.g; lb = _faceLight.b;
+    }
     for (let i = 0; i < face.c.length; i++) {
       const c = face.c[i];
       const rgb = faceColor(code, face.shade, x, y, z, face, c);
       arr.positions.push(x + c[0], y + c[1], z + c[2]);
       arr.normals.push(face.n[0], face.n[1], face.n[2]);
-      arr.colors.push(rgb[0], rgb[1], rgb[2]);
+      arr.colors.push(rgb[0] * lr, rgb[1] * lg, rgb[2] * lb);
       arr.uvs.push(lerp(u0, u1, localUv[i][0]), lerp(v0, v1, localUv[i][1]));
     }
     arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
@@ -1682,6 +1940,21 @@
     return new THREE.Mesh(geometry, material);
   }
 
+  // Decor (grass, glow features, torches, toilets) is one merged mesh; bake light into
+  // its vertex colours via these module globals that pushTinyBox/pushBlade multiply by.
+  let dlR = 1, dlG = 1, dlB = 1;
+  function setDecorLight(x, y, z) {
+    computeLight(x, y, z, _faceLight);
+    dlR = _faceLight.r; dlG = _faceLight.g; dlB = _faceLight.b;
+  }
+  function setDecorLightEmissive() {
+    // Warm self-lit parts (torch flame) stay bright regardless of cave dark.
+    dlR = 1.32; dlG = 1.16; dlB = 0.92;
+  }
+  function setDecorLightGlow() {
+    // Neutral bright so glow features keep their own cyan/pink colour in the dark.
+    dlR = 1.18; dlG = 1.18; dlB = 1.18;
+  }
   function rebuildDecorations() {
     disposeGroup(decorGroup);
     const arr = makeGeometryArrays();
@@ -1696,10 +1969,10 @@
           for (let x = cx * CHUNK; x < cx * CHUNK + CHUNK; x++) {
             for (let y = 1; y < WORLD_Y; y++) {
               const code = getBlock(x, y, z);
-              if (code === TALL_GRASS || code === FLOWER) pushPlant(arr, x, y, z, code);
-              else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) pushCaveFeature(arr, x, y, z, code);
-              if (code === TABLE) pushCraftingToilet(arr, x, y, z);
-              if (code === TORCH) pushTorch(arr, x, y, z);
+              if (code === TALL_GRASS || code === FLOWER) { setDecorLight(x, y, z); pushPlant(arr, x, y, z, code); }
+              else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) { setDecorLight(x, y, z); pushCaveFeature(arr, x, y, z, code); }
+              if (code === TABLE) { setDecorLight(x, y, z); pushCraftingToilet(arr, x, y, z); }
+              if (code === TORCH) { setDecorLight(x, y, z); pushTorch(arr, x, y, z); }
             }
             pushAquaticDecor(arr, x, z);
           }
@@ -1707,6 +1980,7 @@
       }
     }
     if (arr.positions.length) decorGroup.add(buildMesh(arr, plantMaterial));
+    dlR = dlG = dlB = 1;
     decorDirty = false;
   }
   function pushPlant(arr, x, y, z, code) {
@@ -1754,6 +2028,7 @@
     if (depth < 2 || getBlock(x, floorY + 1, z) !== WATER) return;
     const floor = getBlock(x, floorY, z);
     if (floor !== SAND && floor !== DIRT && floor !== STONE) return;
+    setDecorLight(x, floorY + 1, z);
     const ocean = edgeOceanStrength(x, z);
     const roll = hash2(x * 97 + 13, z * 101 - 17);
     if (roll < 0.34 || (ocean > 0.32 && roll < 0.5)) pushSeaGrass(arr, x, floorY + 1, z, depth, roll);
@@ -1798,6 +2073,7 @@
   function pushCaveFeature(arr, x, y, z, code) {
     const seed = hash3(x * 31 + 3, y * 37 - 5, z * 41 + 7);
     if (code === GLOW_SHROOM) {
+      setDecorLightGlow();
       const stem = vividRgb(cachedRgb("#b7ffe8"), 1.12, 1.05);
       const cap = vividRgb(cachedRgb(seed > 0.5 ? "#65ffd7" : "#ff6fd6"), 1.35, 1.2);
       const cx = x + 0.38 + hash2(x + 5, z - 5) * 0.24;
@@ -1811,6 +2087,7 @@
       return;
     }
     if (code === CAVE_CRYSTAL) {
+      setDecorLightGlow();
       const colors = ["#58eaff", "#9bff66", "#ffd75a", "#ff6fd6"];
       const crystal = vividRgb(cachedRgb(colors[Math.floor(seed * colors.length) % colors.length]), 1.3, 1.16);
       for (let i = 0; i < 4; i++) {
@@ -1860,7 +2137,7 @@
     for (let i = 0; i < 4; i++) {
       arr.normals.push(0, 1, 0);
       const c = i < 2 ? rgb : tip;
-      arr.colors.push(c[0], c[1], c[2]);
+      arr.colors.push(c[0] * dlR, c[1] * dlG, c[2] * dlB);
     }
     arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   }
@@ -1876,8 +2153,19 @@
     arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
   }
   function pushTorch(arr, x, y, z) {
-    pushTinyBox(arr, x + 0.42, y, z + 0.42, 0.16, 0.56, 0.16, hexToRgb("#8a572d"));
-    pushTinyBox(arr, x + 0.34, y + 0.52, z + 0.34, 0.32, 0.28, 0.32, hexToRgb("#ffd75a"));
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    // Centred wooden handle rising from the floor (lit by its surroundings).
+    pushTinyBox(arr, cx - 0.07, y, cz - 0.07, 0.14, 0.46, 0.14, hexToRgb("#7c4a23"));
+    pushTinyBox(arr, cx - 0.075, y + 0.42, cz - 0.075, 0.15, 0.14, 0.15, hexToRgb("#5a3a1e"));
+    // Flame: glowing ember + tapering tongues that sit directly on the handle, no gap.
+    const savedR = dlR, savedG = dlG, savedB = dlB;
+    setDecorLightEmissive();
+    pushTinyBox(arr, cx - 0.1, y + 0.5, cz - 0.1, 0.2, 0.12, 0.2, hexToRgb("#ff7a1a"));
+    pushTinyBox(arr, cx - 0.105, y + 0.58, cz - 0.105, 0.21, 0.14, 0.21, hexToRgb("#ffb43a"));
+    pushTinyBox(arr, cx - 0.08, y + 0.7, cz - 0.08, 0.16, 0.12, 0.16, hexToRgb("#ffe066"));
+    pushTinyBox(arr, cx - 0.05, y + 0.8, cz - 0.05, 0.1, 0.1, 0.1, hexToRgb("#fff4b0"));
+    dlR = savedR; dlG = savedG; dlB = savedB;
   }
   function pushCraftingToilet(arr, x, y, z) {
     const porcelain = cachedRgb("#ecf8ff");
@@ -1893,12 +2181,13 @@
   function pushTinyBox(arr, x, y, z, w, h, d, rgb) {
     const corners = [[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z], [x, y, z + d], [x + w, y, z + d], [x + w, y + h, z + d], [x, y + h, z + d]];
     const faces = [[0, 1, 2, 3], [5, 4, 7, 6], [1, 5, 6, 2], [4, 0, 3, 7], [3, 2, 6, 7], [4, 5, 1, 0]];
+    const r = rgb[0] * dlR, g = rgb[1] * dlG, b = rgb[2] * dlB;
     for (const f of faces) {
       const start = arr.positions.length / 3;
       for (const ci of f) {
         arr.positions.push(corners[ci][0], corners[ci][1], corners[ci][2]);
         arr.normals.push(0, 1, 0);
-        arr.colors.push(rgb[0], rgb[1], rgb[2]);
+        arr.colors.push(r, g, b);
       }
       arr.indices.push(start, start + 1, start + 2, start, start + 2, start + 3);
     }
@@ -4327,6 +4616,7 @@
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
     }
     for (let z = 0; z < WORLD_Z; z++) for (let x = 0; x < WORLD_X; x++) updateSurfaceColumn(x, z);
+    computeWorldLight();
     if (data.player) {
       Object.assign(state.player, data.player);
       rescuePlayerFromSolid();
@@ -4554,8 +4844,10 @@
     }
     return null;
   }
-  function teleportTo(x, y, z) {
+  function teleportTo(x, y, z, yaw, pitch) {
     Object.assign(state.player, { x: x + 0.5, y: y + 1.05, z: z + 0.5, vx: 0, vy: 0, vz: 0, onGround: false, hurtCd: 0 });
+    if (typeof yaw === "number") state.player.yaw = yaw;
+    if (typeof pitch === "number") state.player.pitch = pitch;
     updateVisibleChunks(true);
     decorDirty = true;
     syncCamera();
@@ -4660,5 +4952,12 @@
     },
     setTime(t) { state.time = t; },
     teleportSpawn() { spawnPlayer(); },
+    lightAt(x, y, z) {
+      x |= 0; y |= 0; z |= 0;
+      if (!inWorld(x, y, z)) return null;
+      const i = index(x, y, z);
+      return { sky: getSkyLight(i), block: getBlockLight(i), skyOpen: skyOpen(x, y, z), skyHeight: state.skyHeight[surfaceIndex(x, z)] };
+    },
+    recomputeLight() { computeWorldLight(); rebuildAllChunks(); decorDirty = true; },
   };
 })();

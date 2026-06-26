@@ -2653,6 +2653,24 @@ body.arcade-home::before {
   pointer-events: none;
 }
 
+.poster-card--stonks img,
+.directory-card__poster--stonks img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.poster-card--stonks::before,
+.directory-card__poster--stonks::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 34px;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.18) 58%, transparent),
+    linear-gradient(180deg, transparent 48%, rgba(0, 0, 0, 0.42));
+  pointer-events: none;
+}
+
 .poster-card--slop::before,
 .directory-card__poster--slop::before {
   content: "";

@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 827" role="img" aria-labelledby="title desc">
+  <title id="title">Flappy Stonks cover art</title>
+  <desc id="desc">A neon stock chart arcade poster with candlesticks, a flying trader, and a jagged price line.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111b"/>
+      <stop offset="0.48" stop-color="#101421"/>
+      <stop offset="1" stop-color="#020409"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4f68"/>
+      <stop offset="0.45" stop-color="#ffd43b"/>
+      <stop offset="1" stop-color="#58ff8a"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="827" fill="url(#bg)"/>
+  <g opacity="0.24" stroke="#2ee0ff" stroke-width="2">
+    <path d="M0 108h1200M0 214h1200M0 320h1200M0 426h1200M0 532h1200M0 638h1200M0 744h1200"/>
+    <path d="M112 0v827M224 0v827M336 0v827M448 0v827M560 0v827M672 0v827M784 0v827M896 0v827M1008 0v827M1120 0v827"/>
+  </g>
+
+  <g opacity="0.9">
+    <g transform="translate(165 142)">
+      <line x1="0" y1="-58" x2="0" y2="172" stroke="#58ff8a" stroke-width="15" stroke-linecap="round"/>
+      <rect x="-39" y="-10" width="78" height="116" rx="12" fill="#58ff8a"/>
+    </g>
+    <g transform="translate(330 80)">
+      <line x1="0" y1="-22" x2="0" y2="250" stroke="#ff4f68" stroke-width="15" stroke-linecap="round"/>
+      <rect x="-42" y="32" width="84" height="158" rx="12" fill="#ff4f68"/>
+    </g>
+    <g transform="translate(872 118)">
+      <line x1="0" y1="-48" x2="0" y2="230" stroke="#ffd43b" stroke-width="15" stroke-linecap="round"/>
+      <rect x="-42" y="4" width="84" height="136" rx="12" fill="#ffd43b"/>
+    </g>
+    <g transform="translate(1035 86)">
+      <line x1="0" y1="-8" x2="0" y2="280" stroke="#ff4f68" stroke-width="15" stroke-linecap="round"/>
+      <rect x="-44" y="66" width="88" height="166" rx="12" fill="#ff4f68"/>
+    </g>
+  </g>
+
+  <path d="M34 618 C100 568 162 590 226 545 S344 414 432 454 552 558 634 498 770 262 856 320 984 512 1168 326"
+        fill="none" stroke="#001216" stroke-width="34" stroke-linecap="round" stroke-linejoin="round" opacity="0.74"/>
+  <path d="M34 618 C100 568 162 590 226 545 S344 414 432 454 552 558 634 498 770 262 856 320 984 512 1168 326"
+        fill="none" stroke="url(#line)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+
+  <g transform="translate(542 390) rotate(-10)" filter="url(#glow)">
+    <path d="M-98 0 C-62 -58 36 -72 98 -14 C38 6 36 74 -30 78 C-66 80 -92 50 -98 0Z" fill="#2ee0ff"/>
+    <circle cx="-28" cy="-8" r="32" fill="#fbfaf4"/>
+    <circle cx="-18" cy="-12" r="10" fill="#07111b"/>
+    <path d="M18 2 L96 -14 L36 34Z" fill="#ffd43b"/>
+    <path d="M-92 3 C-142 -20 -170 -6 -196 20 C-156 16 -132 36 -92 48Z" fill="#ff2e88"/>
+    <text x="-58" y="124" font-family="Arial Black, Impact, sans-serif" font-size="44" fill="#fbfaf4" stroke="#000" stroke-width="8" paint-order="stroke">$STONK</text>
+  </g>
+
+  <g transform="translate(70 74)">
+    <rect x="0" y="0" width="462" height="118" rx="12" fill="#020409" opacity="0.82" stroke="#2ee0ff" stroke-width="3"/>
+    <text x="28" y="52" font-family="Arial Black, Impact, sans-serif" font-size="58" fill="#fbfaf4">FLAPPY</text>
+    <text x="28" y="103" font-family="Arial Black, Impact, sans-serif" font-size="58" fill="#58ff8a">STONKS</text>
+  </g>
+
+  <g transform="translate(726 660)">
+    <rect x="0" y="0" width="386" height="64" rx="10" fill="#020409" opacity="0.86" stroke="#ffd43b" stroke-width="3"/>
+    <text x="25" y="43" font-family="JetBrains Mono, monospace" font-size="31" fill="#ffd43b">BUY THE DIP TO LIVE</text>
+  </g>
+</svg>

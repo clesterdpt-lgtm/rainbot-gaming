@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flappy Stonks - Rainbot Network</title>
+  <meta name="description" content="Tap to buy the dip in Flappy Stonks, a one-button stock-market arcade game where your flight path becomes the price chart." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260625-avatar-art-2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M8 68 C22 52 34 60 48 44 S68 18 92 31' fill='none' stroke='%2358ff8a' stroke-width='10' stroke-linecap='round'/%3E%3Cpath d='M27 30h16v38H27zM62 18h16v56H62z' fill='%23ff4f68'/%3E%3C/svg%3E" />
+  <style>
+    .stonks-page {
+      max-width: 1640px;
+    }
+
+    .stonks-stage {
+      background:
+        radial-gradient(circle at 20% 0%, rgba(88, 255, 138, 0.13), transparent 28%),
+        radial-gradient(circle at 82% 10%, rgba(46, 224, 255, 0.12), transparent 30%),
+        linear-gradient(180deg, rgba(6, 11, 18, 0.98), rgba(4, 5, 10, 0.99));
+      border-color: rgba(88, 255, 138, 0.22);
+    }
+
+    .canvas-wrap--stonks {
+      --game-aspect: 1.5;
+      --game-aspect-ratio: 3 / 2;
+      --game-max-width: 1100px;
+      aspect-ratio: 3 / 2;
+      background: #05070d;
+      border: 1px solid rgba(46, 224, 255, 0.38);
+      box-shadow: 0 18px 56px rgba(0, 0, 0, 0.58), 0 0 28px rgba(88, 255, 138, 0.1);
+    }
+
+    .canvas-wrap--stonks #gameCanvas {
+      background: #05070d;
+      border-color: rgba(88, 255, 138, 0.34);
+      cursor: pointer;
+    }
+
+    .canvas-wrap--stonks.is-paused #gameCanvas {
+      cursor: default;
+    }
+
+    .canvas-wrap--stonks .fs-btn {
+      z-index: 12;
+    }
+
+    .canvas-wrap--stonks .overlay {
+      background: rgba(5, 7, 13, 0.76);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+
+    .stonks-hint {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      margin: 0;
+      text-align: center;
+    }
+
+    .stonks-legend {
+      display: grid;
+      gap: 9px;
+      margin: 0;
+    }
+
+    .stonks-legend__row {
+      align-items: start;
+      color: var(--ink-dim);
+      display: grid;
+      font-size: 12px;
+      gap: 10px;
+      grid-template-columns: 26px minmax(0, 1fr);
+      line-height: 1.35;
+    }
+
+    .stonks-legend__chip {
+      border-radius: 5px;
+      display: inline-block;
+      height: 22px;
+      margin-top: 1px;
+      width: 22px;
+    }
+
+    .stonks-legend__chip--green { background: #58ff8a; }
+    .stonks-legend__chip--red { background: #ff4f68; }
+    .stonks-legend__chip--yellow { background: #ffd43b; }
+    .stonks-legend__chip--cyan { background: #2ee0ff; }
+
+    .stonks-statline {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.45;
+      margin: 0;
+    }
+
+    .stonks-statline strong {
+      color: var(--ink);
+    }
+
+    @media (max-width: 768px) {
+      .stonks-page {
+        padding-inline: 10px;
+      }
+
+      .stonks-page .game-page__title {
+        font-size: 23px;
+      }
+
+      .stonks-page .game-page__sub {
+        font-size: 10px;
+      }
+
+      .stonks-stage {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body class="stonks-body">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page stonks-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Flappy Stonks</h1>
+        <div class="game-page__sub">Tap to buy the dip - dodge candle walls - leave a live stock-chart trail</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage stonks-stage">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">PRICE</span><span class="hud__value" id="hud-price">$100.00</span></div>
+          <div class="hud__item"><span class="hud__label">MARKET</span><span class="hud__value" id="hud-market">OPEN</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-900-600 canvas-wrap--stonks">
+          <canvas id="gameCanvas" width="900" height="600" tabindex="0" aria-label="Flappy Stonks game canvas"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">Max</button>
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">FLAPPY STONKS</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Tap, click, or press space to buy the dip. Your flight path becomes the live $STONK chart.
+              Thread the gap between candle walls before the market closes you out.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary" type="button">Start trading</button>
+          </div>
+        </div>
+
+        <p class="stonks-hint">
+          Tap/click/space to flap. Press <kbd>P</kbd> to pause. Grab dividends and stop-loss shields.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-flappy-stonks.svg?v=20260626-1" alt="Flappy Stonks cover art with candlesticks, a flying trader, and a jagged stock chart line" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-new" type="button" style="font-size:13px;padding:8px 12px;">New run</button>
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">MARKET RULES</h3>
+          <div class="stonks-legend">
+            <div class="stonks-legend__row"><span class="stonks-legend__chip stonks-legend__chip--green"></span><span><strong style="color:var(--ink);">Green candles</strong> are still walls. Number go up, you still crash.</span></div>
+            <div class="stonks-legend__row"><span class="stonks-legend__chip stonks-legend__chip--red"></span><span><strong style="color:var(--ink);">Red candles</strong> mean volatility. The gap gets tighter as your run heats up.</span></div>
+            <div class="stonks-legend__row"><span class="stonks-legend__chip stonks-legend__chip--yellow"></span><span><strong style="color:var(--ink);">Dividends</strong> add bonus points and nudge the close higher.</span></div>
+            <div class="stonks-legend__row"><span class="stonks-legend__chip stonks-legend__chip--cyan"></span><span><strong style="color:var(--ink);">Stop-loss shields</strong> save one ugly trade and clear the candle you hit.</span></div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CHART TRAIL</h3>
+          <p class="stonks-statline">
+            The glowing line is not a background effect. It samples your actual vertical movement, scrolls behind you, and freezes as your closing chart when the run ends.
+          </p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Stay in the channel.</strong> Fly through the gap between top and bottom candlesticks.</li>
+            <li><strong style="color:var(--ink);">Watch volatility.</strong> Fake news events change speed, gravity, and gap size for a few seconds.</li>
+            <li><strong style="color:var(--ink);">Collect bonuses.</strong> Dividends boost score. Stop-loss shields save one collision.</li>
+            <li><strong style="color:var(--ink);">Make a chart.</strong> Your movement draws the stock line. Green segments rise, red segments fall.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> Fake tickers, fake prices, fake financial wisdom. Not investment advice. It is barely bird advice.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
+  <script src="../assets/js/main.js?v=20260625-avatar-art-2"></script>
+  <script src="../assets/js/flappy-stonks.js?v=20260626-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

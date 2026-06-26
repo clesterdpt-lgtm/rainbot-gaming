@@ -59,6 +59,16 @@ const RB_PROFILE_AVATARS = [
   { value: "cube", label: "Cube", file: "rainbot-avatar-18-thunder-cube.png" },
   { value: "flame", label: "Flame", file: "rainbot-avatar-19-flame-visor.png" },
   { value: "trophy", label: "Trophy", file: "rainbot-avatar-20-trophy-bot.png" },
+  { value: "toaster", label: "Chaos Toaster", file: "rainbot-avatar-21-chaos-toaster.png" },
+  { value: "brain", label: "Melty Brain", file: "rainbot-avatar-22-melty-brain.png" },
+  { value: "cereal", label: "Cereal Boss", file: "rainbot-avatar-23-cereal-boss.png" },
+  { value: "panic", label: "Panic Headset", file: "rainbot-avatar-24-panic-headset.png" },
+  { value: "confused", label: "Confused Crown", file: "rainbot-avatar-25-confused-crown.png" },
+  { value: "lag", label: "Lag Face", file: "rainbot-avatar-26-lag-face.png" },
+  { value: "hotdog", label: "Hotdog Hero", file: "rainbot-avatar-27-hotdog-hero.png" },
+  { value: "keycap", label: "Keycap Rage", file: "rainbot-avatar-28-keycap-rage.png" },
+  { value: "dumpster", label: "Dumpster Fire", file: "rainbot-avatar-29-dumpster-fire.png" },
+  { value: "npc", label: "NPC Smile", file: "rainbot-avatar-30-npc-smile.png" },
 ];
 const RB_PROFILE_AVATAR_MAP = new Map(RB_PROFILE_AVATARS.map((avatar) => [avatar.value, avatar]));
 
@@ -874,8 +884,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-avatar-art-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-avatar-art-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-avatar-art-2`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-avatar-art-2`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }

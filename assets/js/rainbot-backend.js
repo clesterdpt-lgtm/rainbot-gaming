@@ -30,6 +30,16 @@ const RBBackend = (() => {
     "cube",
     "flame",
     "trophy",
+    "toaster",
+    "brain",
+    "cereal",
+    "panic",
+    "confused",
+    "lag",
+    "hotdog",
+    "keycap",
+    "dumpster",
+    "npc",
   ]);
   const PROFILE_ACCENTS = new Set(["cyan", "pink", "yellow", "green", "red", "white"]);
   const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, created_at, updated_at";

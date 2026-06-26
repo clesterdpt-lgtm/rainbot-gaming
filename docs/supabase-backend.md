@@ -35,7 +35,7 @@ The migration creates:
 - `record_high_score(...)` for atomic leaderboard updates
 - moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
 
-The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migration expands `avatar_style` to the generated 20-choice avatar set used by the profile picker.
+The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 30-choice avatar set used by the profile picker, including 10 funny avatar options.
 
 ## 3. Enable the frontend config
 

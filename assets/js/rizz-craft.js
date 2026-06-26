@@ -446,6 +446,217 @@
     new THREE.MeshLambertMaterial({ color: 0xe8fff3 }),
   ];
 
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  const sfx = {
+    ctx: null,
+    master: null,
+    noise: null,
+    last: Object.create(null),
+    primed: false,
+  };
+  const SFX_COOLDOWNS = {
+    mineSwing: 0.11,
+    swing: 0.12,
+    hitMob: 0.06,
+    hurt: 0.2,
+    select: 0.04,
+    place: 0.06,
+    break: 0.08,
+    eat: 0.12,
+  };
+
+  function getSfxContext() {
+    if (!AudioContextCtor) return null;
+    if (!sfx.ctx) {
+      try {
+        sfx.ctx = new AudioContextCtor();
+        sfx.master = sfx.ctx.createGain();
+        sfx.master.gain.value = 0.18;
+        sfx.master.connect(sfx.ctx.destination);
+      } catch (error) {
+        sfx.ctx = null;
+        sfx.master = null;
+        return null;
+      }
+    }
+    if (sfx.ctx.state === "suspended") {
+      const resume = sfx.ctx.resume();
+      if (resume && resume.catch) resume.catch(() => {});
+    }
+    return sfx.ctx;
+  }
+
+  function primeAudio() {
+    const ctx = getSfxContext();
+    if (!ctx || !sfx.master || sfx.primed) return;
+    sfx.primed = true;
+    const t = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.setValueAtTime(0.0001, t + 0.02);
+    gain.connect(sfx.master);
+    const osc = ctx.createOscillator();
+    osc.frequency.value = 440;
+    osc.connect(gain);
+    osc.start(t);
+    osc.stop(t + 0.02);
+  }
+
+  function sfxGain(ctx, t, volume, duration, attack = 0.006) {
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), t + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(attack + 0.01, duration));
+    gain.connect(sfx.master);
+    return gain;
+  }
+
+  function tone(ctx, t, freq, duration, volume = 0.28, type = "triangle", endFreq = freq) {
+    const osc = ctx.createOscillator();
+    const gain = sfxGain(ctx, t, volume, duration);
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(20, freq), t);
+    if (endFreq !== freq) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), t + duration);
+    osc.connect(gain);
+    osc.start(t);
+    osc.stop(t + duration + 0.03);
+  }
+
+  function noiseBuffer(ctx) {
+    if (sfx.noise && sfx.noise.sampleRate === ctx.sampleRate) return sfx.noise;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length * 0.22);
+    }
+    sfx.noise = buffer;
+    return buffer;
+  }
+
+  function noise(ctx, t, duration, volume = 0.2, frequency = 800, filterType = "bandpass") {
+    const src = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = sfxGain(ctx, t, volume, duration, 0.003);
+    src.buffer = noiseBuffer(ctx);
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(frequency, t);
+    filter.frequency.exponentialRampToValueAtTime(Math.max(60, frequency * 0.55), t + duration);
+    src.connect(filter);
+    filter.connect(gain);
+    src.start(t, Math.random() * 0.45, duration);
+  }
+
+  function arpeggio(ctx, t, notes, step = 0.055, volume = 0.2) {
+    notes.forEach((freq, i) => tone(ctx, t + i * step, freq, 0.095, volume, "triangle", freq * 1.012));
+  }
+
+  function playSfx(name, options = {}) {
+    const ctx = getSfxContext();
+    if (!ctx || !sfx.master) return;
+    const nowMs = performance.now();
+    const key = options.key || name;
+    const cooldown = options.cooldown == null ? (SFX_COOLDOWNS[key] || SFX_COOLDOWNS[name] || 0.035) : options.cooldown;
+    if (sfx.last[key] && nowMs - sfx.last[key] < cooldown * 1000) return;
+    sfx.last[key] = nowMs;
+    const t = ctx.currentTime + 0.004;
+    const pitch = options.pitch || 1;
+    const volume = options.volume || 1;
+
+    if (name === "mineSwing") {
+      noise(ctx, t, 0.075, 0.1 * volume, 520 * pitch, "bandpass");
+      tone(ctx, t, 135 * pitch, 0.065, 0.055 * volume, "sine", 92 * pitch);
+    } else if (name === "swing") {
+      noise(ctx, t, 0.11, 0.16 * volume, 980 * pitch, "highpass");
+      tone(ctx, t, 210 * pitch, 0.08, 0.08 * volume, "triangle", 120 * pitch);
+    } else if (name === "hitMob") {
+      noise(ctx, t, 0.09, 0.2 * volume, 340 * pitch, "lowpass");
+      tone(ctx, t, 155 * pitch, 0.095, 0.13 * volume, "square", 85 * pitch);
+    } else if (name === "hitSoft") {
+      noise(ctx, t, 0.07, 0.12 * volume, 480 * pitch, "bandpass");
+      tone(ctx, t, 230 * pitch, 0.07, 0.07 * volume, "sine", 170 * pitch);
+    } else if (name === "mobDown") {
+      tone(ctx, t, 260 * pitch, 0.12, 0.11 * volume, "triangle", 92 * pitch);
+      noise(ctx, t + 0.02, 0.16, 0.11 * volume, 260, "lowpass");
+    } else if (name === "hurt") {
+      noise(ctx, t, 0.13, 0.24 * volume, 220, "lowpass");
+      tone(ctx, t, 140, 0.16, 0.18 * volume, "sawtooth", 62);
+    } else if (name === "death") {
+      arpeggio(ctx, t, [220, 165, 110, 72], 0.075, 0.14 * volume);
+      noise(ctx, t + 0.16, 0.22, 0.18 * volume, 150, "lowpass");
+    } else if (name === "eat") {
+      noise(ctx, t, 0.045, 0.2 * volume, 1500, "bandpass");
+      noise(ctx, t + 0.065, 0.05, 0.16 * volume, 1150, "bandpass");
+      tone(ctx, t + 0.08, 360, 0.08, 0.055 * volume, "sine", 430);
+    } else if (name === "buff") {
+      arpeggio(ctx, t, [520, 780, 1040], 0.045, 0.13 * volume);
+    } else if (name === "craft") {
+      noise(ctx, t, 0.09, 0.1 * volume, 1200, "bandpass");
+      arpeggio(ctx, t + 0.01, [392, 588, 784], 0.045, 0.16 * volume);
+    } else if (name === "sigmaCraft") {
+      arpeggio(ctx, t, [440, 660, 880, 1320], 0.05, 0.17 * volume);
+      tone(ctx, t + 0.18, 1760, 0.18, 0.1 * volume, "sine", 2200);
+    } else if (name === "craftOpen") {
+      tone(ctx, t, 360, 0.08, 0.1 * volume, "triangle", 520);
+      noise(ctx, t, 0.08, 0.05 * volume, 700, "bandpass");
+    } else if (name === "craftClose") {
+      tone(ctx, t, 430, 0.07, 0.085 * volume, "triangle", 250);
+    } else if (name === "place") {
+      noise(ctx, t, 0.07, 0.12 * volume, (options.freq || 360) * pitch, "lowpass");
+      tone(ctx, t, (options.thump || 110) * pitch, 0.075, 0.075 * volume, "sine", 78 * pitch);
+    } else if (name === "break") {
+      noise(ctx, t, options.duration || 0.12, (options.noise || 0.2) * volume, (options.freq || 620) * pitch, options.filter || "bandpass");
+      tone(ctx, t + 0.01, (options.thump || 150) * pitch, 0.1, (options.tone || 0.08) * volume, options.wave || "triangle", (options.end || 90) * pitch);
+    } else if (name === "select") {
+      tone(ctx, t, 520, 0.035, 0.07 * volume, "square", 650);
+    } else if (name === "bagOpen") {
+      arpeggio(ctx, t, [320, 420], 0.04, 0.09 * volume);
+    } else if (name === "bagClose") {
+      arpeggio(ctx, t, [420, 280], 0.04, 0.08 * volume);
+    } else if (name === "pause") {
+      tone(ctx, t, 260, 0.08, 0.095 * volume, "triangle", 190);
+    } else if (name === "resume") {
+      tone(ctx, t, 260, 0.08, 0.095 * volume, "triangle", 390);
+    } else if (name === "flight") {
+      tone(ctx, t, options.on ? 420 : 720, 0.16, 0.12 * volume, "sine", options.on ? 880 : 280);
+    } else if (name === "reward") {
+      arpeggio(ctx, t, [523, 784, 1046], 0.055, 0.15 * volume);
+    } else if (name === "spawn") {
+      arpeggio(ctx, t, [196, 294, 392, 588], 0.05, 0.11 * volume);
+      noise(ctx, t + 0.02, 0.18, 0.055 * volume, 900, "bandpass");
+    } else if (name === "nightfall") {
+      tone(ctx, t, 360, 0.18, 0.1 * volume, "sine", 180);
+      tone(ctx, t + 0.1, 146, 0.28, 0.12 * volume, "triangle", 98);
+    } else if (name === "daybreak") {
+      arpeggio(ctx, t, [330, 495, 660, 990], 0.075, 0.12 * volume);
+    }
+  }
+
+  function blockSoundKind(code) {
+    if (code === LOG || code === PLANKS || code === TABLE) return "wood";
+    if (code === DIRT || code === SAND || code === SNOW || code === GRASS) return "dirt";
+    if (code === LEAVES || code === TALL_GRASS || code === FLOWER || code === CAVE_VINE) return "leaf";
+    if (code === COAL_ORE || code === RIZZ_ORE || code === SIGMA_ORE || code === RIZZ_BLOCK || code === SIGMA_BLOCK || code === CAVE_CRYSTAL) return "ore";
+    if (code === TORCH || code === GLOW_SHROOM || code === GLOWSTONE || code === SIGMA_LANTERN || code === CRYSTAL_GLASS) return "glow";
+    return "stone";
+  }
+
+  function playBreakSfx(code) {
+    const kind = blockSoundKind(code);
+    if (kind === "wood") playSfx("break", { key: "break", freq: 430, thump: 165, end: 86, noise: 0.18, tone: 0.09, filter: "bandpass" });
+    else if (kind === "dirt") playSfx("break", { key: "break", freq: 230, thump: 105, end: 70, noise: 0.19, tone: 0.05, filter: "lowpass" });
+    else if (kind === "leaf") playSfx("break", { key: "break", freq: 1280, thump: 240, end: 180, noise: 0.13, tone: 0.04, duration: 0.08, filter: "highpass" });
+    else if (kind === "ore") playSfx("break", { key: "break", freq: 1180, thump: 220, end: 140, noise: 0.16, tone: 0.12, wave: "square" });
+    else if (kind === "glow") playSfx("break", { key: "break", freq: 1600, thump: 420, end: 260, noise: 0.12, tone: 0.1, filter: "bandpass" });
+    else playSfx("break", { key: "break", freq: 660, thump: 145, end: 80, noise: 0.22, tone: 0.07, filter: "bandpass" });
+  }
+
+  function playPlaceSfx(code) {
+    const kind = blockSoundKind(code);
+    const freq = kind === "wood" ? 420 : kind === "dirt" ? 210 : kind === "glow" ? 900 : kind === "leaf" ? 1200 : 340;
+    const thump = kind === "glow" ? 180 : kind === "leaf" ? 210 : kind === "dirt" ? 86 : 115;
+    playSfx("place", { freq, thump, pitch: kind === "ore" ? 1.18 : 1 });
+  }
+
   const selectionBox = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.BoxBufferGeometry(1.03, 1.03, 1.03)),
     new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
@@ -563,6 +774,7 @@
   let moonDisk = null;
   let activeWaterHead = 0;
   let activeLavaHead = 0;
+  let wasNight = false;
   const activeWaterKeys = new Set();
   const activeLavaKeys = new Set();
   const pendingFluidChunks = new Set();
@@ -795,6 +1007,7 @@
     bagRenderKey = null;
     updateCreativeButtons();
     updateHud();
+    playSfx(next ? "spawn" : "bagClose", { volume: 0.85 });
     api.toast(next ? "Creative mode on: fly (double-jump), unlimited blocks, no damage" : "Survival mode on - inventory restored", next ? "good" : "");
   }
   function updateCreativeButtons() {
@@ -844,6 +1057,7 @@
     if (on === state.flying) return;
     state.flying = on;
     state.player.vy = 0;
+    playSfx("flight", { on, volume: 0.9 });
     api.toast(on ? "Flight ON — Space ascend, Shift descend" : "Flight OFF", on ? "good" : "");
     updateHud();
   }
@@ -1173,6 +1387,7 @@
     currentWorldName = world.name || "World";
     currentWorldSeed = world.seed >>> 0;
     restoreGame(saved);
+    playSfx("spawn", { volume: 0.75 });
     api.toast(`Loaded ${currentWorldName}`, "good");
   }
   function deleteWorld(id) {
@@ -3688,11 +3903,15 @@
       if (craftPanel) craftPanel.classList.remove("is-open");
       unlockPointer();
     }
+    playSfx(state.bagOpen ? "bagOpen" : "bagClose");
     renderBag();
   }
-  function triggerHeldSwing(kind = "gather") {
+  function triggerHeldSwing(kind = "gather", sound = true) {
     state.swingKind = kind;
     state.swingTimer = kind === "attack" ? HELD_SWING_SECONDS : HELD_GATHER_SECONDS;
+    if (sound && state.started && !state.paused && !state.crafting) {
+      playSfx(kind === "attack" ? "swing" : "mineSwing");
+    }
   }
   function updateActionAnimations(dt) {
     if (state.swingTimer > 0) state.swingTimer = Math.max(0, state.swingTimer - dt);
@@ -3896,7 +4115,9 @@
     if (food.heal) p.hp = clamp(p.hp + food.heal, 0, MAX_HP);
     if (food.effects) applyEffects(food.effects);
     if (!state.creative) decrementSelectedSlot();
-    triggerHeldSwing("gather");
+    triggerHeldSwing("gather", false);
+    playSfx("eat");
+    if (food.effects) playSfx("buff", { key: "buff-food", volume: 0.9 });
     api.toast(food.msg || `Ate ${DEF[slot.code].name}`, "good");
     state.placeCd = EAT_COOLDOWN;
     return true;
@@ -3929,11 +4150,13 @@
     if (p.hurtCd > 0) return;
     if (state.effects.resist > 0) dmg *= RESIST_MULT;
     p.hp -= dmg;
+    playSfx("hurt", { volume: clamp(dmg / 14, 0.55, 1.35) });
     p.hurtCd = DAMAGE_GRACE;
     p.hurtAnim = PLAYER_HURT_SECONDS;
     state.attackFlash = PLAYER_HURT_SECONDS;
     p.vy = Math.max(p.vy, 4);
     if (p.hp <= 0) {
+      playSfx("death", { volume: 1.1 });
       api.toast("You got flushed. Respawning...", "bad");
       state.mobs.forEach((m) => removeMob(m));
       state.mobs = [];
@@ -4310,6 +4533,7 @@
       updateBurningEntity(creature, dt, cfg.flying ? 0.28 : 0.55);
       if (creature.hp <= 0) {
         addScore(cfg.score || 5);
+        playSfx("mobDown", { pitch: cfg.flying ? 1.35 : 1 });
         dropCaveCreatureLoot(creature, cfg);
         removeCaveCreature(creature, i);
         continue;
@@ -4393,6 +4617,7 @@
     if (!cfg.passive && !cfg.skittish) creature.mode = "hunt";
     else creature.mode = "flee";
     creature.alertTimer = cfg.memory || 1.4;
+    playSfx("hitMob", { pitch: creature.type === "glowbat" ? 1.45 : creature.type === "crystalMimic" ? 1.2 : 1 });
     spawnHitBurst(creature.x, creature.y + 0.45, creature.z, cachedRgb(creature.type === "crystalMimic" ? "#58eaff" : "#b7ffe8"));
   }
   function dropCaveCreatureLoot(creature, cfg) {
@@ -4475,6 +4700,7 @@
       updateBurningEntity(mob, dt, 0.82);
       if (mob.hp <= 0) {
         addScore(cfg.score);
+        playSfx("mobDown", { pitch: mob.type === "warden" ? 0.8 : 1 });
         removeMob(mob);
         state.mobs.splice(i, 1);
       }
@@ -4548,6 +4774,7 @@
     mob.knockTimer = 0.16;
     mob.knockX = (dx / dist) * 3.2;
     mob.knockZ = (dz / dist) * 3.2;
+    playSfx("hitMob", { pitch: mob.type === "phantom" ? 1.24 : mob.type === "warden" ? 0.82 : 1 });
     spawnHitBurst(mob.x, mob.y + 0.72, mob.z, cachedRgb("#fff0f0"));
   }
   function applyMobFlash(mob, hurtPulse, attackPulse) {
@@ -4584,6 +4811,7 @@
     friendly.knockX = (dx / dist) * 2.8;
     friendly.knockZ = (dz / dist) * 2.8;
     chooseFriendlyFlee(friendly, state.player, Math.floor((friendly.x + friendly.z) * 31));
+    playSfx("hitSoft", { pitch: 1.1 });
     spawnHitBurst(friendly.x, friendly.y + 0.72, friendly.z, cachedRgb("#ffd3ef"));
     if (friendly.hp <= 0) {
       addScore(cfg.drops * 6);
@@ -4743,6 +4971,7 @@
   function finishMine(x, y, z, code) {
     const d = DEF[code];
     spawnBlockBurst(x, y, z, code);
+    playBreakSfx(code);
     setBlock(x, y, z, AIR);
     flowLiquidsNear(x, y, z);
     state.mined++;
@@ -4785,6 +5014,7 @@
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     if (slot.code === TABLE) state.toiletFacing[`${p.x},${p.y},${p.z}`] = toiletTurnsToward(p.x, p.z);
     setBlock(p.x, p.y, p.z, slot.code);
+    playPlaceSfx(slot.code);
     if (slot.code === TABLE) decorDirty = true;
     if (!state.creative) decrementSelectedSlot();
     state.placeCd = 0.18;
@@ -4955,6 +5185,7 @@
       state.sigmaForged = true;
       addScore(500);
     }
+    playSfx(recipe.out.code === SWORD_SIGMA ? "sigmaCraft" : "craft");
     api.toast(`Crafted ${DEF[recipe.out.code].name}`, "good");
     renderCrafting();
     return true;
@@ -4963,6 +5194,7 @@
     if (!state.started) return;
     state.crafting = typeof force === "boolean" ? force : !state.crafting;
     if (craftPanel) craftPanel.classList.toggle("is-open", state.crafting);
+    playSfx(state.crafting ? "craftOpen" : "craftClose");
     if (state.crafting) {
       state.bagOpen = false;
       renderBag();
@@ -4994,7 +5226,7 @@
       return `<div class="craft-cat">${cat}</div>${rows}`;
     }).join("");
     craftList.querySelectorAll("[data-recipe]").forEach((button) => {
-      button.addEventListener("click", () => doCraft(RECIPES[Number(button.dataset.recipe)]));
+      button.addEventListener("click", () => { primeAudio(); doCraft(RECIPES[Number(button.dataset.recipe)]); });
     });
   }
 
@@ -5004,10 +5236,14 @@
     if (state.time < prev) {
       state.day++;
       addScore(70);
+      playSfx("daybreak", { volume: 0.9 });
       api.toast(`Survived the night. Day ${state.day}`, "good");
       state.mobs.slice().forEach(removeMob);
       state.mobs = [];
     }
+    const nightNow = isNight();
+    if (nightNow && !wasNight) playSfx("nightfall", { volume: 0.85 });
+    wasNight = nightNow;
     if (isNight() && state.started && !state.paused && !state.crafting) {
       state.spawnTimer -= dt;
       if (state.spawnTimer <= 0) {
@@ -5135,10 +5371,14 @@
     return String(value).replace(/[&"<>]/g, (ch) => ({ "&": "&amp;", '"': "&quot;", "<": "&lt;", ">": "&gt;" }[ch]));
   }
   function setSelectedSlot(index, announce = true) {
+    const previous = state.selected;
     state.selected = clamp(Number(index) || 0, 0, HOTBAR - 1);
     heldRenderCode = null;
     renderBag();
-    if (announce) showSelectionCue();
+    if (announce) {
+      showSelectionCue();
+      if (previous !== state.selected) playSfx("select");
+    }
   }
   function showSelectionCue(prefix = "Selected") {
     if (!ui.selectionCue) return;
@@ -5411,16 +5651,18 @@
     const hotbar = document.createElement("div");
     hotbar.className = "rizz3d-hotbar";
     hotbar.addEventListener("click", (event) => {
+      primeAudio();
       const button = event.target.closest("[data-slot]");
       if (button) setSelectedSlot(Number(button.dataset.slot));
     });
     const bagButton = document.createElement("button");
     bagButton.className = "rizz3d-bag-button";
     bagButton.type = "button";
-    bagButton.addEventListener("click", () => toggleBag());
+    bagButton.addEventListener("click", () => { primeAudio(); toggleBag(); });
     const bagPanel = document.createElement("div");
     bagPanel.className = "rizz3d-bag-panel";
     bagPanel.addEventListener("click", (event) => {
+      primeAudio();
       const hotbarButton = event.target.closest("[data-bag-hotbar]");
       if (hotbarButton) {
         setSelectedSlot(Number(hotbarButton.dataset.bagHotbar));
@@ -5509,6 +5751,7 @@
     state.fx = [];
     state.fish = [];
     state.time = 0.21;
+    wasNight = isNight();
     state.day = 1;
     state.spawnTimer = 2;
     state.mined = 0;
@@ -5545,6 +5788,7 @@
     state.bagOpen = false;
     renderBag();
     canvas.focus();
+    playSfx("spawn", { volume: 0.8 });
   }
   function restart() {
     openWorldManager();
@@ -5552,6 +5796,7 @@
   function togglePause() {
     if (!state.started) return;
     state.paused = !state.paused;
+    playSfx(state.paused ? "pause" : "resume");
     if (state.paused) {
       state.bagOpen = false;
       renderBag();
@@ -5672,6 +5917,7 @@
 
   function bindInput() {
     window.addEventListener("keydown", (event) => {
+      primeAudio();
       const tag = event.target && event.target.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       const key = event.key.toLowerCase();
@@ -5696,10 +5942,12 @@
     window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => { if (document.hidden) clearDirectionalInput(); });
     canvas.addEventListener("click", () => {
+      primeAudio();
       if (performance.now() < suppressMouseUntil) return;
       if (state.started && !state.paused && !state.crafting && !state.bagOpen && document.pointerLockElement !== canvas) canvas.requestPointerLock && canvas.requestPointerLock();
     });
     canvas.addEventListener("mousedown", (event) => {
+      primeAudio();
       if (performance.now() < suppressMouseUntil) return;
       if (!state.started || state.paused || state.crafting || state.bagOpen) return;
       canvas.focus();
@@ -5719,6 +5967,7 @@
     });
     canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     canvas.addEventListener("wheel", (event) => {
+      primeAudio();
       event.preventDefault();
       setSelectedSlot((state.selected + (event.deltaY > 0 ? 1 : -1) + HOTBAR) % HOTBAR);
     }, { passive: false });
@@ -5728,6 +5977,7 @@
       state.player.pitch = clamp(state.player.pitch - event.movementY * 0.0022, -1.45, 1.45);
     });
     canvas.addEventListener("pointerdown", (event) => {
+      primeAudio();
       if (event.pointerType === "mouse" || !canUseMobileAction()) return;
       suppressMouseUntil = performance.now() + 700;
       touchLook.pointerId = event.pointerId;
@@ -5759,6 +6009,7 @@
   function bindButtons() {
     const primary = document.getElementById("btn-primary");
     if (primary) primary.addEventListener("click", () => {
+      primeAudio();
       if (state.paused) togglePause();
       else if (!state.started) createWorld("New World", "");
     });
@@ -5778,6 +6029,7 @@
       if (ok) {
         state.player.hp = MAX_HP;
         giveItem(TORCH, 16);
+        playSfx("reward");
         api.toast("Full heal + 16 torches", "good");
       }
     });
@@ -5788,6 +6040,7 @@
         giveItem(PICK_STONE, 1);
         giveItem(SWORD_STONE, 1);
         giveItem(TABLE, 1);
+        playSfx("reward");
         api.toast("Stone kit + Crafting Toilet", "good");
       }
     });
@@ -5795,12 +6048,15 @@
   }
   function bind(id, fn) {
     const el = document.getElementById(id);
-    if (el && fn) el.addEventListener("click", fn);
+    if (el && fn) el.addEventListener("click", (event) => {
+      primeAudio();
+      fn(event);
+    });
   }
   function bindHold(id, down, up) {
     const el = document.getElementById(id);
     if (!el) return;
-    const on = (event) => { event.preventDefault(); down(); };
+    const on = (event) => { event.preventDefault(); primeAudio(); down(); };
     const off = (event) => { event.preventDefault(); up(); };
     el.addEventListener("touchstart", on, { passive: false });
     el.addEventListener("touchend", off, { passive: false });
@@ -5821,9 +6077,9 @@
       else if (action === "place") bindTouchButton(button, () => queueMobilePlace(), () => { state.input.place = false; });
       else if (action === "jump") bindTouchButton(button, () => { handleJumpTap(); state.input.jump = true; }, () => { state.input.jump = false; });
       else if (action === "sprint") bindTouchButton(button, () => { state.input.sprint = true; }, () => { state.input.sprint = false; });
-      else if (action === "bag") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleBag(); });
-      else if (action === "craft") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleCrafting(); });
-      else if (action === "creative") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleCreativeMode(); });
+      else if (action === "bag") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleBag(); });
+      else if (action === "craft") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleCrafting(); });
+      else if (action === "creative") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleCreativeMode(); });
     });
   }
   function bindTouchButton(el, down, up) {
@@ -5831,6 +6087,7 @@
     const start = (event) => {
       event.preventDefault();
       event.stopPropagation();
+      primeAudio();
       active = true;
       el.classList.add("is-active");
       if (event.pointerId !== undefined && el.setPointerCapture) el.setPointerCapture(event.pointerId);
@@ -5879,6 +6136,7 @@
       });
     };
     const toggle = () => {
+      primeAudio();
       const on = !isMaxed();
       setMaxed(on);
       if (on) {
@@ -6056,6 +6314,8 @@
     findValleySpot,
     selectInventoryCode,
     hurtPlayer,
+    playSfx,
+    primeAudio,
     edgeOceanStrength,
     movementVectorForYaw,
     movementVectorForCamera,

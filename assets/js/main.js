@@ -1131,20 +1131,40 @@ function scheduleGameCanvasFit() {
   });
 }
 
+function parseGameAspect(value) {
+  const text = String(value || "").trim();
+  if (!text || text === "auto") return NaN;
+  if (text.includes("/")) {
+    const parts = text.split("/").map((part) => Number.parseFloat(part));
+    if (parts.length >= 2 && parts[0] > 0 && parts[1] > 0) return parts[0] / parts[1];
+  }
+  const numeric = Number.parseFloat(text);
+  return numeric > 0 ? numeric : NaN;
+}
+
 function fitGameCanvases() {
-  const wraps = Array.from(document.querySelectorAll(".canvas-wrap"));
-  if (!wraps.length) return;
+  const targets = Array.from(document.querySelectorAll(".canvas-wrap, .merge-board"));
+  if (!targets.length) return;
 
-  const isCompact = window.matchMedia("(max-width: 900px)").matches;
+  const isNarrow = window.matchMedia("(max-width: 900px)").matches;
+  const isShortLandscape = window.matchMedia("(max-height: 560px) and (orientation: landscape)").matches;
 
-  wraps.forEach((wrap) => {
-    const canvas = wrap.querySelector("canvas");
-    const stage = wrap.closest(".game-stage");
-    if (!canvas || !stage) return;
+  targets.forEach((target) => {
+    const canvas = target.querySelector("canvas");
+    const stage = target.closest(".game-stage");
+    if (!stage) return;
 
-    const naturalWidth = Number(canvas.getAttribute("width")) || canvas.width || wrap.clientWidth;
-    const naturalHeight = Number(canvas.getAttribute("height")) || canvas.height || wrap.clientHeight;
-    const aspect = naturalWidth / Math.max(1, naturalHeight);
+    const targetStyle = window.getComputedStyle(target);
+    const naturalWidth = canvas
+      ? Number(canvas.getAttribute("width")) || canvas.width || target.clientWidth
+      : target.clientWidth;
+    const naturalHeight = canvas
+      ? Number(canvas.getAttribute("height")) || canvas.height || target.clientHeight
+      : target.clientHeight;
+    const aspect =
+      parseGameAspect(targetStyle.getPropertyValue("--game-aspect")) ||
+      parseGameAspect(targetStyle.aspectRatio) ||
+      naturalWidth / Math.max(1, naturalHeight);
     const stageStyle = window.getComputedStyle(stage);
     const stagePaddingX =
       (parseFloat(stageStyle.paddingLeft) || 0) +
@@ -1152,22 +1172,23 @@ function fitGameCanvases() {
     const availableWidth = Math.max(0, stage.clientWidth - stagePaddingX);
     let fitWidth = availableWidth;
 
-    if (!isCompact) {
-      const wrapRect = wrap.getBoundingClientRect();
+    if (!isNarrow || isShortLandscape) {
+      const targetRect = target.getBoundingClientRect();
       const visibleChildren = Array.from(stage.children).filter((child) => {
         const style = window.getComputedStyle(child);
         const rect = child.getBoundingClientRect();
         return style.display !== "none" && style.visibility !== "hidden" && rect.width >= 0;
       });
-      const wrapIndex = visibleChildren.indexOf(wrap);
-      const belowChildren = wrapIndex >= 0 ? visibleChildren.slice(wrapIndex + 1) : [];
+      const targetIndex = visibleChildren.indexOf(target);
+      const belowChildren = targetIndex >= 0 ? visibleChildren.slice(targetIndex + 1) : [];
       const belowHeight = belowChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0);
       const gap = parseFloat(stageStyle.rowGap || stageStyle.gap) || 0;
       const gapsBelow = Math.max(0, belowChildren.length) * gap;
       const bottomPadding = parseFloat(stageStyle.paddingBottom) || 0;
-      const availableHeight = window.innerHeight - wrapRect.top - belowHeight - gapsBelow - bottomPadding - 20;
+      const targetMarginBottom = parseFloat(targetStyle.marginBottom) || 0;
+      const availableHeight = window.innerHeight - targetRect.top - belowHeight - gapsBelow - bottomPadding - targetMarginBottom - 18;
       const heightBoundWidth = availableHeight > 0 ? availableHeight * aspect : availableWidth;
-      const maxWidth = parseFloat(window.getComputedStyle(wrap).getPropertyValue("--game-max-width"));
+      const maxWidth = parseFloat(targetStyle.getPropertyValue("--game-max-width"));
 
       fitWidth = Math.min(availableWidth, heightBoundWidth);
       if (Number.isFinite(maxWidth) && maxWidth > 0) {
@@ -1176,7 +1197,7 @@ function fitGameCanvases() {
     }
 
     if (Number.isFinite(fitWidth) && fitWidth > 0) {
-      wrap.style.setProperty("--game-fit-width", `${Math.floor(fitWidth)}px`);
+      target.style.setProperty("--game-fit-width", `${Math.floor(fitWidth)}px`);
     }
   });
 }

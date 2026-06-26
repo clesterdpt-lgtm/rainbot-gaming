@@ -576,9 +576,11 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 
 /* ===== Game page ===== */
 .game-page {
-  padding: 10px 16px 14px;
-  width: min(100%, 1600px);
-  max-width: 1600px;
+  --game-shell-gap: 14px;
+  --game-side-width: clamp(270px, 20vw, 320px);
+  padding: 10px clamp(10px, 2vw, 18px) 14px;
+  width: min(100%, 1560px);
+  max-width: 1560px;
   margin: 0 auto;
   min-height: calc(100dvh - 170px);
   display: flex;
@@ -587,25 +589,42 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   box-sizing: border-box;
 }
 .game-page__header {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 8px; flex-wrap: wrap; gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  margin-bottom: 8px;
+  gap: 10px 14px;
   flex-shrink: 0;
 }
+.game-page__header > div { min-width: 0; }
 .game-page__title {
   font-family: var(--font-display);
-  font-size: 22px; margin: 0; letter-spacing: 0.5px;
+  font-size: clamp(18px, 1.35vw, 24px); margin: 0; letter-spacing: 0;
   text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
-  line-height: 1.1;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
-.game-page__sub { color: var(--ink-dim); font-size: 11px; margin-top: 2px; }
+.game-page__sub {
+  color: var(--ink-dim);
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 3px;
+  max-width: 98ch;
+}
+.game-page__header .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+}
 
 /* Two-column layout: canvas (left) + side panel (right).
    Collapses to single column on narrow screens.
    The game-layout flex-grows to fill the remaining viewport. */
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) var(--game-side-width);
+  gap: var(--game-shell-gap);
   align-items: start;
   flex: 1;
   min-height: 0;
@@ -616,27 +635,31 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 
 /* Right-column side panel: controls, power-ups, instructions, ads. */
 .game-side {
-  display: flex; flex-direction: column; gap: 12px;
-  position: sticky; top: 12px;
-  max-height: calc(100vh - 24px);
+  display: flex; flex-direction: column; gap: 10px;
+  position: sticky; top: 96px;
+  max-height: calc(100dvh - 196px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-width: thin;
 }
 @media (max-width: 900px) {
   .game-side { position: static; max-height: none; }
 }
 .game-side__panel {
-  background: var(--panel);
-  border: 1px solid var(--panel-2);
+  background: linear-gradient(180deg, rgba(31, 30, 54, 0.96), rgba(16, 16, 31, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 11px 12px;
 }
 .game-side__poster {
   aspect-ratio: 1200 / 827;
-  border: 2px solid var(--panel-2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   display: block;
   object-fit: cover;
   width: 100%;
+  max-height: clamp(120px, 18dvh, 175px);
 }
 .game-side__poster--wide {
   aspect-ratio: 1116 / 488;
@@ -648,9 +671,17 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   margin: 0 0 8px;
 }
 .game-side__howto {
+  order: 7;
+  background: linear-gradient(180deg, rgba(31, 30, 54, 0.96), rgba(16, 16, 31, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-dim);
+  max-height: min(36dvh, 360px);
+  overflow: auto;
+  padding: 11px 12px;
+  scrollbar-width: thin;
 }
 .game-side__howto summary {
   cursor: pointer;
@@ -671,12 +702,20 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .game-side__howto[open] summary::before { transform: rotate(90deg); }
 .game-side__howto ul { padding-left: 18px; margin: 8px 0 0; }
 .game-side__howto li { margin-bottom: 4px; }
+.game-side > #ad-leaderboard,
+.game-side > #ad-rectangle,
+.game-side > .ad-slot {
+  order: 20;
+}
+.game-side #ad-leaderboard {
+  margin-top: 2px;
+}
 
 .game-stage {
   background: linear-gradient(180deg, var(--bg-soft) 0%, var(--panel) 100%);
-  border: 2px solid var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--r);
-  padding: 12px;
+  padding: 10px;
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   box-shadow: var(--shadow-soft);
   min-height: 0;
@@ -685,16 +724,16 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .hud {
   display: flex; gap: 12px; flex-wrap: wrap;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
   background: var(--bg);
-  padding: 8px 14px; border-radius: 8px;
+  padding: 7px 10px; border-radius: 8px;
   width: 100%; max-width: 100%; justify-content: space-between;
   border: 1px solid var(--panel-2);
   flex-shrink: 0;
 }
 .hud__item { display: flex; gap: 6px; align-items: center; }
 .hud__label { color: var(--ink-dim); font-size: 11px; letter-spacing: 1.5px; }
-.hud__value { color: var(--accent-3); font-weight: 700; font-size: 16px; }
+.hud__value { color: var(--accent-3); font-weight: 700; font-size: 15px; }
 
 .canvas-wrap {
   position: relative;
@@ -709,29 +748,31 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   align-self: center;
   /* Default to square canvas; specific games override with .canvas-wrap--ar-* */
   --game-max-width: 820px;
+  --game-aspect: 1;
+  --game-aspect-ratio: 1 / 1;
   width: min(100%, var(--game-fit-width, var(--game-max-width)));
-  aspect-ratio: 1 / 1;
+  aspect-ratio: var(--game-aspect-ratio);
   background: #001a33;
 }
 /* Per-game aspect ratios (canvas natural size) */
-.canvas-wrap--ar-585-720  { aspect-ratio: 585 / 720; --game-max-width: 680px; }   /* strait-of-hormuz */
-.canvas-wrap--ar-700-480  { aspect-ratio: 700 / 480; --game-max-width: 1120px; }  /* mr-feast */
-.canvas-wrap--ar-750-500  { aspect-ratio: 750 / 500; --game-max-width: 1160px; }  /* a-pop */
-.canvas-wrap--ar-500-640  { aspect-ratio: 500 / 640; --game-max-width: 650px; }   /* looksmaxxing */
-.canvas-wrap--ar-640-640  { aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
-.canvas-wrap--ar-800-520  { aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
-.canvas-wrap--ar-832-512  { aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
-.canvas-wrap--ar-760-620  { aspect-ratio: 760 / 620; --game-max-width: 900px; }   /* billionaire space race */
-.canvas-wrap--ar-700-700  { aspect-ratio: 1 / 1; --game-max-width: 760px; }       /* smooth brain snacker */
-.canvas-wrap--ar-900-600  { aspect-ratio: 3 / 2; --game-max-width: 1100px; }      /* drone hunter */
-.canvas-wrap--ar-960-600  { aspect-ratio: 8 / 5; --game-max-width: 1120px; }      /* super slop brothers (legacy) */
-.canvas-wrap--ar-1280-720 { aspect-ratio: 16 / 9; --game-max-width: 1520px; }      /* super slop brothers */
+.canvas-wrap--ar-585-720  { --game-aspect: 0.8125; --game-aspect-ratio: 585 / 720; --game-max-width: 680px; }   /* strait-of-hormuz */
+.canvas-wrap--ar-700-480  { --game-aspect: 1.4583; --game-aspect-ratio: 700 / 480; --game-max-width: 1120px; }  /* mr-feast */
+.canvas-wrap--ar-750-500  { --game-aspect: 1.5; --game-aspect-ratio: 750 / 500; --game-max-width: 1160px; }  /* a-pop */
+.canvas-wrap--ar-500-640  { --game-aspect: 0.78125; --game-aspect-ratio: 500 / 640; --game-max-width: 650px; }   /* looksmaxxing */
+.canvas-wrap--ar-640-640  { --game-aspect: 1; --game-aspect-ratio: 1 / 1; --game-max-width: 820px; }       /* gym girl (default) */
+.canvas-wrap--ar-800-520  { --game-aspect: 1.5385; --game-aspect-ratio: 800 / 520; --game-max-width: 1180px; }  /* skibidi toilet tower defense */
+.canvas-wrap--ar-832-512  { --game-aspect: 1.625; --game-aspect-ratio: 832 / 512; --game-max-width: 1200px; }  /* rizz-craft */
+.canvas-wrap--ar-760-620  { --game-aspect: 1.2258; --game-aspect-ratio: 760 / 620; --game-max-width: 900px; }   /* billionaire space race */
+.canvas-wrap--ar-700-700  { --game-aspect: 1; --game-aspect-ratio: 1 / 1; --game-max-width: 760px; }       /* smooth brain snacker */
+.canvas-wrap--ar-900-600  { --game-aspect: 1.5; --game-aspect-ratio: 3 / 2; --game-max-width: 1100px; }      /* drone hunter */
+.canvas-wrap--ar-960-600  { --game-aspect: 1.6; --game-aspect-ratio: 8 / 5; --game-max-width: 1120px; }      /* super slop brothers (legacy) */
+.canvas-wrap--ar-1280-720 { --game-aspect: 1.7778; --game-aspect-ratio: 16 / 9; --game-max-width: 1520px; }      /* super slop brothers */
 #gameCanvas {
   display: block;
   width: 100%;
   height: 100%;
   background: #001a33;
-  border: 3px solid var(--panel-2);
+  border: 2px solid var(--panel-2);
   border-radius: 10px;
   touch-action: none;
   user-select: none;
@@ -1372,16 +1413,30 @@ body.rb-game-maxed .clowder-stage {
   }
 
   .game-page {
-    padding: 8px 8px 12px;
+    padding: 8px max(8px, env(safe-area-inset-left)) 12px max(8px, env(safe-area-inset-right));
   }
 
   .game-page__header {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
     gap: 8px;
     margin-bottom: 8px;
   }
 
   .game-page__header .btn {
+    justify-self: start;
+    min-height: 36px;
     padding: 7px 10px !important;
+    width: auto;
+  }
+
+  .game-page__title {
+    font-size: clamp(19px, 5.6vw, 26px);
+  }
+
+  .game-page__sub {
+    font-size: 11px;
+    line-height: 1.3;
   }
 
   .game-layout {
@@ -1409,9 +1464,19 @@ body.rb-game-maxed .clowder-stage {
 
   .game-side {
     gap: 8px;
+    padding-right: 0;
   }
 
   .game-side__panel {
+    padding: 10px;
+  }
+
+  .game-side__poster {
+    max-height: 180px;
+  }
+
+  .game-side__howto {
+    max-height: none;
     padding: 10px;
   }
 
@@ -1449,6 +1514,12 @@ body.rb-game-maxed .clowder-stage {
 @media (max-width: 480px) {
   .hero { padding: 40px 14px 30px; }
   .hero__pill { font-size: 10px; padding: 5px 10px; }
+  .game-page__header .btn {
+    width: 100%;
+  }
+  .game-page__sub {
+    display: none;
+  }
   .powerup { min-width: 100px; padding: 8px 10px; font-size: 11px; }
   .powerup__icon { font-size: 16px; }
   .overlay {
@@ -1464,6 +1535,20 @@ body.rb-game-maxed .clowder-stage {
   .mobile-controls__dpad {
     grid-template-columns: repeat(3, 48px);
     grid-template-rows: repeat(3, 48px);
+  }
+}
+
+@media (min-width: 901px) and (max-height: 760px) {
+  .game-side__poster {
+    max-height: 118px;
+  }
+
+  .game-side__panel {
+    padding-block: 9px;
+  }
+
+  .game-side__howto {
+    max-height: 30dvh;
   }
 }
 
@@ -4097,7 +4182,10 @@ body.arcade-home::before {
 /* ===== Brainrot 2048 (slide-to-merge) ===== */
 .merge-board {
   position: relative;
-  width: min(100%, 62vh, 540px);
+  --game-aspect: 1;
+  --game-aspect-ratio: 1 / 1;
+  --game-max-width: 540px;
+  width: min(100%, var(--game-fit-width, var(--game-max-width)), 58dvh);
   aspect-ratio: 1 / 1;
   background: #100f1f;
   border: 2px solid var(--panel-2);
@@ -4108,6 +4196,12 @@ body.arcade-home::before {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+}
+
+@media (min-width: 901px) {
+  .merge-board {
+    width: min(100%, var(--game-fit-width, var(--game-max-width)), calc(100dvh - 250px));
+  }
 }
 .merge-field {
   position: absolute;
@@ -5506,7 +5600,7 @@ body.arcade-home::before {
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(390px, 0.88fr);
   gap: 12px;
-  height: clamp(560px, 72dvh, 790px);
+  height: clamp(440px, calc(100dvh - 320px), 720px);
   min-height: 0;
 }
 
@@ -5826,7 +5920,7 @@ body.arcade-home::before {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.92fr);
   gap: 12px;
-  height: clamp(590px, 74dvh, 820px);
+  height: clamp(440px, calc(100dvh - 320px), 720px);
   min-height: 0;
 }
 

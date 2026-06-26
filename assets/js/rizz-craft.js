@@ -80,6 +80,9 @@
   const MOVE_SPEED = 5.3;
   const SPRINT_SPEED = 7.2;
   const JUMP_SPEED = 8.6;
+  const FLY_SPEED = 9.5;          // creative horizontal flight speed
+  const FLY_VERTICAL_SPEED = 8.5; // creative ascend/descend speed
+  const FLY_TOGGLE_WINDOW = 0.32; // double-tap jump within this to toggle flight
   const REACH = 6.1;
   const DAY_SECONDS = 420;
   const FRIENDLY_COUNT = 58;
@@ -523,6 +526,8 @@
     visibleChunkCount: 0,
     mode: "mine",
     creative: false,
+    flying: false,          // creative-only free flight
+    survivalBackup: null,   // inventory snapshot taken when entering creative
     effects: { regen: 0, speed: 0, strength: 0, resist: 0 },
     toiletFacing: {}, // "x,y,z" -> quarter-turns (0-3) so toilets face the placer
   };
@@ -759,13 +764,38 @@
     state.hotbar.forEach((slot) => { if (slot) slot.n = Math.max(1, maxStack(slot.code)); });
     state.bag.forEach((slot) => { if (slot) slot.n = Math.max(1, maxStack(slot.code)); });
   }
+  function cloneSlots(slots) { return slots.map((slot) => (slot ? { ...slot } : null)); }
   function toggleCreativeMode(force) {
     const next = typeof force === "boolean" ? force : !state.creative;
-    state.creative = next;
-    if (next) applyCreativeLoadout();
+    if (next === state.creative) return;
+    if (next) {
+      // Entering creative: stash the survival inventory so it can be handed back.
+      state.survivalBackup = {
+        hotbar: cloneSlots(state.hotbar),
+        bag: cloneSlots(state.bag),
+        selected: state.selected,
+      };
+      state.creative = true;
+      applyCreativeLoadout();
+    } else {
+      // Leaving creative: restore exactly what the player had, and stop flying.
+      state.creative = false;
+      state.flying = false;
+      if (state.survivalBackup) {
+        state.hotbar = cloneSlots(state.survivalBackup.hotbar).slice(0, HOTBAR);
+        state.bag = cloneSlots(state.survivalBackup.bag).slice(0, BAG_SLOTS);
+        while (state.hotbar.length < HOTBAR) state.hotbar.push(null);
+        while (state.bag.length < BAG_SLOTS) state.bag.push(null);
+        state.selected = clamp(Number(state.survivalBackup.selected) || 0, 0, HOTBAR - 1);
+        state.survivalBackup = null;
+      }
+      ensureStarterPick(false);
+    }
+    heldRenderCode = null;
+    bagRenderKey = null;
     updateCreativeButtons();
     updateHud();
-    api.toast(next ? "Creative mode on: unlimited blocks + no damage" : "Survival mode on", next ? "good" : "");
+    api.toast(next ? "Creative mode on: fly (double-jump), unlimited blocks, no damage" : "Survival mode on - inventory restored", next ? "good" : "");
   }
   function updateCreativeButtons() {
     const button = document.getElementById("btn-creative");
@@ -807,6 +837,27 @@
     else return false;
     refreshKeyboardMovement();
     return true;
+  }
+  let lastJumpTap = 0;
+  function setFlying(on) {
+    on = !!on && state.creative;
+    if (on === state.flying) return;
+    state.flying = on;
+    state.player.vy = 0;
+    api.toast(on ? "Flight ON — Space ascend, Shift descend" : "Flight OFF", on ? "good" : "");
+    updateHud();
+  }
+  // Double-tap Space (creative only) toggles free flight. Called on the *initial*
+  // jump press, never on key autorepeat.
+  function handleJumpTap() {
+    if (!state.creative) return;
+    const now = performance.now() / 1000;
+    if (now - lastJumpTap < FLY_TOGGLE_WINDOW) {
+      setFlying(!state.flying);
+      lastJumpTap = 0;
+    } else {
+      lastJumpTap = now;
+    }
   }
   function smooth(t) { return t * t * (3 - 2 * t); }
   function index(x, y, z) { return (y * WORLD_Z + z) * WORLD_X + x; }
@@ -3671,8 +3722,10 @@
     p.inLava = inLava;
     const liquidMoveMult = inLava ? LAVA_MOVE_MULT : inWater ? WATER_MOVE_MULT : 1;
     const liquidGravityMult = inLava ? LAVA_GRAVITY_MULT : inWater ? WATER_GRAVITY_MULT : 1;
+    const flying = state.creative && state.flying;
     const speedBuff = state.effects.speed > 0 ? SPEED_BUFF_MULT : 1;
-    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * liquidMoveMult * speedBuff;
+    const baseSpeed = flying ? FLY_SPEED : (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED);
+    const speed = baseSpeed * (flying ? 1 : liquidMoveMult) * speedBuff;
     syncCamera();
     const move = movementVectorForCamera(forward, right);
     let mx = move.x;
@@ -3684,19 +3737,26 @@
     }
     p.vx = mx * speed;
     p.vz = mz * speed;
-    if ((inWater || inLava) && state.input.jump) {
-      p.vy = Math.max(p.vy, inLava ? LAVA_SWIM_UP_SPEED : SWIM_UP_SPEED);
+    if (flying) {
+      // Free flight: no gravity, Space rises and Shift descends.
+      const vert = (state.input.jump ? 1 : 0) - (state.input.sprint ? 1 : 0);
+      p.vy = vert * FLY_VERTICAL_SPEED;
       p.onGround = false;
-    } else if (state.input.jump && p.onGround) {
-      p.vy = JUMP_SPEED;
-      p.onGround = false;
-    }
-    p.vy -= GRAVITY * liquidGravityMult * dt;
-    if (inWater || inLava) {
-      p.vy = Math.max(p.vy, inLava ? LAVA_FALL_SPEED : -2.2);
-      if (!state.input.jump && p.vy < 0) p.vy *= 0.92;
     } else {
-      p.vy = Math.max(p.vy, -32);
+      if ((inWater || inLava) && state.input.jump) {
+        p.vy = Math.max(p.vy, inLava ? LAVA_SWIM_UP_SPEED : SWIM_UP_SPEED);
+        p.onGround = false;
+      } else if (state.input.jump && p.onGround) {
+        p.vy = JUMP_SPEED;
+        p.onGround = false;
+      }
+      p.vy -= GRAVITY * liquidGravityMult * dt;
+      if (inWater || inLava) {
+        p.vy = Math.max(p.vy, inLava ? LAVA_FALL_SPEED : -2.2);
+        if (!state.input.jump && p.vy < 0) p.vy *= 0.92;
+      } else {
+        p.vy = Math.max(p.vy, -32);
+      }
     }
     movePlayerAxis("x", p.vx * dt);
     movePlayerAxis("z", p.vz * dt);
@@ -4599,7 +4659,7 @@
       selectionBox.material.color.setHex(miningThis ? 0xffdf55 : 0xffffff);
       const code = getBlock(state.target.x, state.target.y, state.target.z);
       if (code === TABLE) ui.target.textContent = "Crafting Toilet - right-click to craft";
-      else if (selectedIsBlock()) ui.target.textContent = `${DEF[code].name} - select a tool to mine`;
+      else if (selectedIsBlock() && !state.creative) ui.target.textContent = `${DEF[code].name} - select a tool to mine`;
       else ui.target.textContent = `${DEF[code].name}`;
     } else {
       selectionBox.scale.setScalar(1);
@@ -4630,7 +4690,7 @@
       return;
     }
     const torchSelected = selectedIsTorch();
-    if (selectedIsBlock() && !torchSelected) {
+    if (selectedIsBlock() && !torchSelected && !state.creative) {
       state.mining = null;
       ui.progress.style.width = "0%";
       return;
@@ -5014,7 +5074,7 @@
     setText("hud-hp", `${Math.max(0, Math.ceil(state.player.hp))}/${MAX_HP}`);
     updateHealthMeter();
     setText("hud-day", `${isNight() ? "Moon" : "Sun"} ${state.day}`);
-    setText("hud-mode", state.creative ? "Creative" : "Survival");
+    setText("hud-mode", state.creative ? (state.flying ? "Creative ✈" : "Creative") : "Survival");
     updateBuffHud();
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
@@ -5458,6 +5518,8 @@
     heldRenderCode = null;
     state.sigmaForged = false;
     state.creative = false;
+    state.flying = false;
+    state.survivalBackup = null;
     state.swingTimer = 0;
     state.swingKind = "gather";
     state.attackFlash = 0;
@@ -5525,6 +5587,7 @@
       score: state.score,
       sigmaForged: state.sigmaForged,
       creative: state.creative,
+      survivalBackup: state.survivalBackup,
       toiletFacing: { ...state.toiletFacing },
     };
   }
@@ -5561,6 +5624,8 @@
     state.score = Number(data.score) || 0;
     state.sigmaForged = !!data.sigmaForged;
     state.creative = !!data.creative;
+    state.flying = false;
+    state.survivalBackup = (data.survivalBackup && typeof data.survivalBackup === "object") ? data.survivalBackup : null;
     if (state.creative) refillCreativeInventory();
     updateCreativeButtons();
     if (ensureStarterPick(true)) api.toast("Wood Pickaxe added", "good");
@@ -5611,7 +5676,10 @@
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       const key = event.key.toLowerCase();
       const movementHandled = setKeyboardMove(key, true);
-      if (key === " " || key === "spacebar") state.input.jump = true;
+      if (key === " " || key === "spacebar") {
+        if (!event.repeat) handleJumpTap();
+        state.input.jump = true;
+      }
       if (key === "shift") state.input.sprint = true;
       if (key >= "1" && key <= "9") setSelectedSlot(Number(key) - 1);
       if (key === "e") toggleCrafting();
@@ -5639,7 +5707,8 @@
         state.input.place = true;
         state.placeQueued = true;
       }
-      else if (!selectedIsBlock() || selectedIsTorch()) {
+      else if (state.creative || !selectedIsBlock() || selectedIsTorch()) {
+        // Creative breaks anything on left-click, even while holding a block to place.
         state.input.mine = true;
         triggerHeldSwing(selectedIsTorch() ? "attack" : "gather");
       }
@@ -5702,7 +5771,7 @@
     bind("btn-place", () => { state.mode = "place"; updateModeButtons(); });
     bindHold("btn-left", () => { moveSources.touch.right = -1; applyDirectionalInput(); }, () => { if (moveSources.touch.right < 0) { moveSources.touch.right = 0; applyDirectionalInput(); } });
     bindHold("btn-right", () => { moveSources.touch.right = 1; applyDirectionalInput(); }, () => { if (moveSources.touch.right > 0) { moveSources.touch.right = 0; applyDirectionalInput(); } });
-    bindHold("btn-jump", () => { state.input.jump = true; }, () => { state.input.jump = false; });
+    bindHold("btn-jump", () => { handleJumpTap(); state.input.jump = true; }, () => { state.input.jump = false; });
     bind("btn-heal", async () => {
       if (!state.started) return api.toast("Start the game first", "");
       const ok = api.isAdFree() || await api.showRewarded();
@@ -5750,7 +5819,7 @@
       const action = button.dataset.mobileAction;
       if (action === "mine") bindTouchButton(button, () => setMobileMine(true), () => setMobileMine(false));
       else if (action === "place") bindTouchButton(button, () => queueMobilePlace(), () => { state.input.place = false; });
-      else if (action === "jump") bindTouchButton(button, () => { state.input.jump = true; }, () => { state.input.jump = false; });
+      else if (action === "jump") bindTouchButton(button, () => { handleJumpTap(); state.input.jump = true; }, () => { state.input.jump = false; });
       else if (action === "sprint") bindTouchButton(button, () => { state.input.sprint = true; }, () => { state.input.sprint = false; });
       else if (action === "bag") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleBag(); });
       else if (action === "craft") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleCrafting(); });

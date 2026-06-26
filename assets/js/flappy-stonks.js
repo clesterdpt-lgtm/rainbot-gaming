@@ -72,8 +72,27 @@
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   const SOUND_PREF_KEY = GAME_ID + ":sound";
+  const PLAYER_SPRITE_SRC = (() => {
+    const scriptSrc = document.currentScript && document.currentScript.src;
+    if (scriptSrc) {
+      return new URL("../img/flappy-stonks/flappy-stonks-bird.png?v=20260626-1", scriptSrc).href;
+    }
+    return "../assets/img/flappy-stonks/flappy-stonks-bird.png?v=20260626-1";
+  })();
   let audioCtx = null;
   let soundOn = readSoundPreference();
+  let playerSpriteReady = false;
+
+  const playerSprite = new Image();
+  playerSprite.decoding = "async";
+  playerSprite.onload = () => {
+    playerSpriteReady = true;
+    render();
+  };
+  playerSprite.onerror = () => {
+    playerSpriteReady = false;
+  };
+  playerSprite.src = PLAYER_SPRITE_SRC;
 
   const player = {
     x: PLAYER_X,
@@ -776,6 +795,14 @@
     ctx.beginPath();
     ctx.ellipse(-4, 8, 38, 25, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    if (playerSpriteReady) {
+      const spriteH = 92;
+      const spriteW = spriteH * (playerSprite.naturalWidth / playerSprite.naturalHeight);
+      ctx.drawImage(playerSprite, -spriteW * 0.5, -spriteH * 0.52, spriteW, spriteH);
+      ctx.restore();
+      return;
+    }
 
     ctx.fillStyle = C.cyan;
     ctx.beginPath();

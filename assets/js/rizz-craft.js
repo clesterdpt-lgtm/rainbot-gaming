@@ -46,6 +46,12 @@
   const HOTBAR = 9;
   const BAG_SLOTS = 27;
   const MAX_HP = 100;
+  // Food buff tuning
+  const REGEN_RATE = 5;          // HP per second while regen is active
+  const SPEED_BUFF_MULT = 1.4;   // movement multiplier while "speed" is active
+  const STRENGTH_BUFF = 5;       // extra attack damage while "strength" is active
+  const RESIST_MULT = 0.45;      // damage taken multiplier while "resist" is active
+  const EAT_COOLDOWN = 0.55;     // seconds between bites
   const DAMAGE_GRACE = 1.1;
   const SPAWN_GRACE = 4;
   const OCEAN_FATIGUE_LIMIT = 8.5;
@@ -133,6 +139,19 @@
   const DRIPSTONE_UP = 21;
   const DRIPSTONE_DOWN = 22;
   const CAVE_VINE = 23;
+  // Craftable building blocks
+  const STONE_BRICK = 24;
+  const GLOWSTONE = 25;
+  const SIGMA_LANTERN = 26;
+  const CRYSTAL_GLASS = 27;
+  const COAL_BLOCK = 28;
+  const RIZZ_BLOCK = 29;
+  const SIGMA_BLOCK = 30;
+
+  // Light levels for craftable lamps
+  const GLOWSTONE_LIGHT = 13;
+  const SIGMA_LANTERN_LIGHT = 15;
+  const SIGMA_BLOCK_LIGHT = 6;
 
   const STICK = 100;
   const COAL = 101;
@@ -145,6 +164,23 @@
   const SWORD_STONE = 114;
   const SWORD_SIGMA = 115;
   const FRIENDLY_FRUIT = 116;
+  // Food + ingredients
+  const WHEAT = 117;
+  const BERRY = 118;
+  const BREAD = 119;
+  const SHROOM_STEW = 120;
+  const SIGMA_BREW = 121;
+  const GRIMACE_SHAKE = 122;
+  const GOLDEN_APPLE = 123;
+  const OHIO_BURGER = 124;
+  const COOKED_SHROOM = 125;
+  // Extra tools / weapons
+  const AXE_STONE = 126;
+  const PICK_RIZZ = 127;
+  const AXE_RIZZ = 128;
+  const SWORD_RIZZ = 129;
+  const PICK_SIGMA = 130;
+  const AXE_SIGMA = 131;
 
   const DEF = {};
   function def(code, d) {
@@ -171,12 +207,20 @@
   def(FLOWER, { name: "Rizz Bloom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#ff6fa8", decor: true });
   def(SAND, { name: "Ohio Sand", kind: "block", solid: true, hardness: 0.45, color: "#d8c073" });
   def(SNOW, { name: "Powder Snow", kind: "block", solid: true, hardness: 0.28, color: "#e9f6ff" });
-  def(LAVA, { name: "Deep Lava", kind: "liquid", solid: false, hardness: Infinity, drop: null, color: "#ff6a1a", transparent: true, liquid: true });
-  def(GLOW_SHROOM, { name: "Glowcap Mushroom", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#65ffd7", decor: true });
-  def(CAVE_CRYSTAL, { name: "Cave Crystal Cluster", kind: "block", solid: false, hardness: 0.18, drop: RIZZ, color: "#58eaff", decor: true });
+  def(LAVA, { name: "Deep Lava", kind: "liquid", solid: false, hardness: Infinity, drop: null, color: "#ff6a1a", transparent: true, liquid: true, light: LAVA_LIGHT });
+  def(GLOW_SHROOM, { name: "Glowcap Mushroom", kind: "block", solid: false, hardness: 0.05, drop: GLOW_SHROOM, color: "#65ffd7", decor: true, placeable: true, light: GLOW_SHROOM_LIGHT });
+  def(CAVE_CRYSTAL, { name: "Cave Crystal Cluster", kind: "block", solid: false, hardness: 0.18, drop: RIZZ, color: "#58eaff", decor: true, light: CAVE_CRYSTAL_LIGHT });
   def(DRIPSTONE_UP, { name: "Dripstone Fang", kind: "block", solid: false, hardness: 0.22, drop: STONE, color: "#b19b7f", decor: true });
   def(DRIPSTONE_DOWN, { name: "Hanging Dripstone", kind: "block", solid: false, hardness: 0.22, drop: STONE, color: "#b19b7f", decor: true });
   def(CAVE_VINE, { name: "Hanging Cave Vine", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#3cff9e", decor: true });
+
+  def(STONE_BRICK, { name: "Ohio Bricks", kind: "block", solid: true, hardness: 1.4, needTool: "pick", drop: STONE_BRICK, color: "#8a8d99" });
+  def(GLOWSTONE, { name: "Rizz Lamp", kind: "block", solid: true, hardness: 0.55, drop: GLOWSTONE, color: "#ffd75a", light: GLOWSTONE_LIGHT });
+  def(SIGMA_LANTERN, { name: "Sigma Lantern", kind: "block", solid: true, hardness: 0.6, drop: SIGMA_LANTERN, color: "#7ff2ff", light: SIGMA_LANTERN_LIGHT });
+  def(CRYSTAL_GLASS, { name: "Rizz Glass", kind: "block", solid: true, hardness: 0.4, drop: CRYSTAL_GLASS, color: "#bfeaff", transparent: true });
+  def(COAL_BLOCK, { name: "Gyatt Coal Block", kind: "block", solid: true, hardness: 1.6, needTool: "pick", drop: COAL_BLOCK, color: "#2a2b36" });
+  def(RIZZ_BLOCK, { name: "Rizz Block", kind: "block", solid: true, hardness: 1.5, needTool: "pick", drop: RIZZ_BLOCK, color: "#ffcf3a" });
+  def(SIGMA_BLOCK, { name: "Sigma Block", kind: "block", solid: true, hardness: 1.7, needTool: "pick", drop: SIGMA_BLOCK, color: "#4beaff", light: SIGMA_BLOCK_LIGHT });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -187,20 +231,67 @@
   def(AXE_WOOD, { name: "Wood Axe", kind: "item", stack: 1, tool: { type: "axe", tier: 1, mult: 3 }, color: "#b98245" });
   def(SWORD_WOOD, { name: "Wood Sword", kind: "item", stack: 1, tool: { type: "sword", tier: 1, damage: 3 }, color: "#b98245" });
   def(SWORD_STONE, { name: "Stone Sword", kind: "item", stack: 1, tool: { type: "sword", tier: 2, damage: 5 }, color: "#a6a9b5" });
-  def(SWORD_SIGMA, { name: "Sigma Blade", kind: "item", stack: 1, tool: { type: "sword", tier: 3, damage: 11 }, color: "#4beaff" });
-  def(FRIENDLY_FRUIT, { name: "Rizz Fruit", kind: "item", stack: 12, color: "#ff6fa8" });
+  def(SWORD_SIGMA, { name: "Sigma Blade", kind: "item", stack: 1, tool: { type: "sword", tier: 4, damage: 12 }, color: "#4beaff" });
+  def(FRIENDLY_FRUIT, { name: "Rizz Fruit", kind: "item", stack: 16, color: "#ff6fa8", food: { heal: 6, msg: "Ate a Rizz Fruit" } });
+
+  // Food ingredients
+  def(WHEAT, { name: "Ohio Wheat", kind: "item", stack: 64, color: "#e7c65a" });
+  def(BERRY, { name: "Gyatt Berry", kind: "item", stack: 32, color: "#c8324f", food: { heal: 3, msg: "Snacked on Gyatt Berries" } });
+  // Cooked / crafted foods
+  def(BREAD, { name: "Rizzbread", kind: "item", stack: 16, color: "#d79a4e", food: { heal: 9, msg: "Ate fresh Rizzbread" } });
+  def(COOKED_SHROOM, { name: "Toasted Glowcap", kind: "item", stack: 16, color: "#9bf0d4", food: { heal: 6, msg: "Ate a toasted glowcap" } });
+  def(OHIO_BURGER, { name: "Ohio Burger", kind: "item", stack: 8, color: "#b8743a", food: { heal: 18, msg: "Demolished an Ohio Burger" } });
+  def(SHROOM_STEW, { name: "Glowcap Stew", kind: "item", stack: 8, color: "#64e6b8", food: { heal: 12, effects: { regen: 6 }, msg: "Slurped Glowcap Stew" } });
+  def(SIGMA_BREW, { name: "Sigma Energy Drink", kind: "item", stack: 8, color: "#46d6ff", food: { heal: 6, effects: { speed: 22, strength: 16 }, msg: "Chugged a Sigma Energy Drink" } });
+  def(GRIMACE_SHAKE, { name: "Grimace Shake", kind: "item", stack: 8, color: "#8a4fd6", food: { heal: 30, msg: "Drank the Grimace Shake (you feel weird)" } });
+  def(GOLDEN_APPLE, { name: "Gilded Rizz Apple", kind: "item", stack: 8, color: "#ffd75a", food: { heal: 100, effects: { regen: 8, resist: 14 }, msg: "Bit into a Gilded Rizz Apple" } });
+
+  // Extra tools / weapons
+  def(AXE_STONE, { name: "Stone Axe", kind: "item", stack: 1, tool: { type: "axe", tier: 2, mult: 5 }, color: "#a6a9b5" });
+  def(PICK_RIZZ, { name: "Rizz Pickaxe", kind: "item", stack: 1, tool: { type: "pick", tier: 3, mult: 7 }, color: "#ffcf3a" });
+  def(AXE_RIZZ, { name: "Rizz Axe", kind: "item", stack: 1, tool: { type: "axe", tier: 3, mult: 7 }, color: "#ffcf3a" });
+  def(SWORD_RIZZ, { name: "Rizz Sword", kind: "item", stack: 1, tool: { type: "sword", tier: 3, damage: 8 }, color: "#ffcf3a" });
+  def(PICK_SIGMA, { name: "Sigma Pickaxe", kind: "item", stack: 1, tool: { type: "pick", tier: 4, mult: 9 }, color: "#4beaff" });
+  def(AXE_SIGMA, { name: "Sigma Axe", kind: "item", stack: 1, tool: { type: "axe", tier: 4, mult: 9 }, color: "#4beaff" });
 
   const RECIPES = [
-    { out: { code: PLANKS, n: 4 }, in: [[LOG, 1]], table: false },
-    { out: { code: STICK, n: 4 }, in: [[PLANKS, 2]], table: false },
-    { out: { code: TABLE, n: 1 }, in: [[PLANKS, 4]], table: false },
-    { out: { code: TORCH, n: 4 }, in: [[COAL, 1], [STICK, 1]], table: false },
-    { out: { code: PICK_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
-    { out: { code: AXE_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
-    { out: { code: SWORD_WOOD, n: 1 }, in: [[PLANKS, 2], [STICK, 1]], table: true },
-    { out: { code: PICK_STONE, n: 1 }, in: [[STONE, 3], [STICK, 2]], table: true },
-    { out: { code: SWORD_STONE, n: 1 }, in: [[STONE, 2], [STICK, 1]], table: true },
-    { out: { code: SWORD_SIGMA, n: 1 }, in: [[SIGMA, 2], [STICK, 1]], table: true },
+    // --- Basics (no bench needed) ---
+    { cat: "Basics", out: { code: PLANKS, n: 4 }, in: [[LOG, 1]], table: false },
+    { cat: "Basics", out: { code: STICK, n: 4 }, in: [[PLANKS, 2]], table: false },
+    { cat: "Basics", out: { code: TABLE, n: 1 }, in: [[PLANKS, 4]], table: false },
+    { cat: "Basics", out: { code: TORCH, n: 4 }, in: [[COAL, 1], [STICK, 1]], table: false },
+
+    // --- Tools & Weapons ---
+    { cat: "Tools", out: { code: PICK_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: AXE_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: SWORD_WOOD, n: 1 }, in: [[PLANKS, 2], [STICK, 1]], table: true },
+    { cat: "Tools", out: { code: PICK_STONE, n: 1 }, in: [[STONE, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: AXE_STONE, n: 1 }, in: [[STONE, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: SWORD_STONE, n: 1 }, in: [[STONE, 2], [STICK, 1]], table: true },
+    { cat: "Tools", out: { code: PICK_RIZZ, n: 1 }, in: [[RIZZ, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: AXE_RIZZ, n: 1 }, in: [[RIZZ, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: SWORD_RIZZ, n: 1 }, in: [[RIZZ, 2], [STICK, 1]], table: true },
+    { cat: "Tools", out: { code: PICK_SIGMA, n: 1 }, in: [[SIGMA, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: AXE_SIGMA, n: 1 }, in: [[SIGMA, 3], [STICK, 2]], table: true },
+    { cat: "Tools", out: { code: SWORD_SIGMA, n: 1 }, in: [[SIGMA, 2], [STICK, 1]], table: true },
+
+    // --- Light & Build ---
+    { cat: "Light & Build", out: { code: STONE_BRICK, n: 4 }, in: [[STONE, 4]], table: true },
+    { cat: "Light & Build", out: { code: CRYSTAL_GLASS, n: 4 }, in: [[SAND, 4], [COAL, 1]], table: true },
+    { cat: "Light & Build", out: { code: GLOWSTONE, n: 2 }, in: [[GLOW_SHROOM, 2], [RIZZ, 1]], table: true },
+    { cat: "Light & Build", out: { code: SIGMA_LANTERN, n: 2 }, in: [[SIGMA, 1], [STICK, 2], [COAL, 1]], table: true },
+    { cat: "Light & Build", out: { code: COAL_BLOCK, n: 1 }, in: [[COAL, 9]], table: true },
+    { cat: "Light & Build", out: { code: RIZZ_BLOCK, n: 1 }, in: [[RIZZ, 9]], table: true },
+    { cat: "Light & Build", out: { code: SIGMA_BLOCK, n: 1 }, in: [[SIGMA, 9]], table: true },
+
+    // --- Food (cook at the Crafting Toilet) ---
+    { cat: "Food", out: { code: BREAD, n: 1 }, in: [[WHEAT, 3]], table: true },
+    { cat: "Food", out: { code: COOKED_SHROOM, n: 1 }, in: [[GLOW_SHROOM, 1], [COAL, 1]], table: true },
+    { cat: "Food", out: { code: OHIO_BURGER, n: 1 }, in: [[BREAD, 2], [GLOW_SHROOM, 1]], table: true },
+    { cat: "Food", out: { code: SHROOM_STEW, n: 1 }, in: [[GLOW_SHROOM, 3], [COAL, 1]], table: true },
+    { cat: "Food", out: { code: SIGMA_BREW, n: 1 }, in: [[SIGMA, 1], [BERRY, 2]], table: true },
+    { cat: "Food", out: { code: GRIMACE_SHAKE, n: 1 }, in: [[BERRY, 4], [RIZZ, 1]], table: true },
+    { cat: "Food", out: { code: GOLDEN_APPLE, n: 1 }, in: [[FRIENDLY_FRUIT, 1], [RIZZ, 4]], table: true },
   ];
 
   const BIOMES = [
@@ -425,6 +516,7 @@
     visibleChunkCount: 0,
     mode: "mine",
     creative: false,
+    effects: { regen: 0, speed: 0, strength: 0, resist: 0 },
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -1407,13 +1499,8 @@
     return false;                      // opaque solids stop light
   }
   function blockEmission(code) {
-    switch (code) {
-      case TORCH: return TORCH_LIGHT;
-      case LAVA: return LAVA_LIGHT;
-      case GLOW_SHROOM: return GLOW_SHROOM_LIGHT;
-      case CAVE_CRYSTAL: return CAVE_CRYSTAL_LIGHT;
-      default: return 0;
-    }
+    const d = DEF[code];
+    return d && d.light ? d.light : 0;
   }
   // Whether a block swap actually changes the light field (skip relight otherwise).
   function lightingAffected(prev, code) {
@@ -2111,6 +2198,10 @@
     if (code === SAND) return TEX.sand;
     if (code === SNOW) return TEX.snow;
     if (code === LAVA) return TEX.ore;
+    if (code === STONE_BRICK) return TEX.stone;
+    if (code === COAL_BLOCK) return TEX.stone;
+    if (code === GLOWSTONE || code === RIZZ_BLOCK || code === SIGMA_BLOCK) return TEX.ore;
+    if (code === SIGMA_LANTERN || code === CRYSTAL_GLASS) return TEX.table;
     return TEX.stone;
   }
   function faceColor(code, shade, x, y, z, face, corner) {
@@ -2165,6 +2256,26 @@
     } else if (code === LAVA) {
       const glow = Math.sin((x * 1.7 + y * 2.3 + z * 1.1 + blockGrain * 8) * 1.4) * 0.5 + 0.5;
       base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
+    } else if (code === STONE_BRICK) {
+      // Mortar lines between bricks (offset rows) over a stony base.
+      const rock = mixRgb(cachedRgb("#7d808c"), cachedRgb("#9da0ac"), grain * 0.5 + blockGrain * 0.3);
+      const row = Math.floor((y + corner[1]) * 2);
+      const mortar = ((y + corner[1]) * 2) % 1 < 0.12 || ((x + z + corner[0] + corner[2] + row) * 2) % 2 < 0.12;
+      base = mortar ? cachedRgb("#54565f") : rock;
+    } else if (code === COAL_BLOCK) {
+      base = mixRgb(cachedRgb("#1c1d26"), cachedRgb("#34353f"), grain * 0.6 + blockGrain * 0.4);
+    } else if (code === GLOWSTONE) {
+      const speck = grain < 0.4 ? 1 : 0.7;
+      base = mixRgb(cachedRgb("#caa238"), cachedRgb("#fff0a8"), grain * 0.7);
+      base = scaleRgb(base, speck);
+    } else if (code === SIGMA_LANTERN) {
+      base = grain < 0.28 ? cachedRgb("#163842") : mixRgb(cachedRgb("#7ff2ff"), cachedRgb("#e6ffff"), grain);
+    } else if (code === CRYSTAL_GLASS) {
+      base = mixRgb(cachedRgb("#a6def5"), cachedRgb("#eafbff"), grain * 0.6);
+    } else if (code === RIZZ_BLOCK) {
+      base = mixRgb(cachedRgb("#e8b62f"), cachedRgb("#ffe680"), grain * 0.55 + blockGrain * 0.25);
+    } else if (code === SIGMA_BLOCK) {
+      base = mixRgb(cachedRgb("#2fbfe0"), cachedRgb("#9bf6ff"), grain * 0.55 + blockGrain * 0.25);
     }
     if (code === LEAVES) {
       base = mixRgb(biomeRgb(biome, "leaf"), mixRgb(biomeRgb(biome, "grass"), cachedRgb("#18d43c"), 0.16), grain * 0.18);
@@ -3508,7 +3619,8 @@
     p.inLava = inLava;
     const liquidMoveMult = inLava ? LAVA_MOVE_MULT : inWater ? WATER_MOVE_MULT : 1;
     const liquidGravityMult = inLava ? LAVA_GRAVITY_MULT : inWater ? WATER_GRAVITY_MULT : 1;
-    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * liquidMoveMult;
+    const speedBuff = state.effects.speed > 0 ? SPEED_BUFF_MULT : 1;
+    const speed = (state.input.sprint ? SPRINT_SPEED : MOVE_SPEED) * liquidMoveMult * speedBuff;
     syncCamera();
     const move = movementVectorForCamera(forward, right);
     let mx = move.x;
@@ -3657,6 +3769,42 @@
     p.onGround = false;
     return true;
   }
+  // --- Food + temporary buffs -------------------------------------------------
+  function isFood(code) { return !!(DEF[code] && DEF[code].food && DEF[code].kind !== "block"); }
+  function tryEatSelected() {
+    const slot = selectedSlot();
+    if (!slot || !isFood(slot.code)) return false;
+    const food = DEF[slot.code].food;
+    const p = state.player;
+    const wouldHeal = p.hp < MAX_HP && (food.heal || 0) > 0;
+    if (!wouldHeal && !food.effects) {
+      api.toast("Already at full HP", "");
+      return true; // consumed the click, just no effect
+    }
+    if (food.heal) p.hp = clamp(p.hp + food.heal, 0, MAX_HP);
+    if (food.effects) applyEffects(food.effects);
+    if (!state.creative) decrementSelectedSlot();
+    triggerHeldSwing("gather");
+    api.toast(food.msg || `Ate ${DEF[slot.code].name}`, "good");
+    state.placeCd = EAT_COOLDOWN;
+    return true;
+  }
+  function applyEffects(effects) {
+    const e = state.effects;
+    for (const key of ["regen", "speed", "strength", "resist"]) {
+      if (effects[key]) e[key] = Math.max(e[key], effects[key]);
+    }
+  }
+  function updateEffects(dt) {
+    const e = state.effects;
+    if (e.regen > 0) {
+      e.regen = Math.max(0, e.regen - dt);
+      if (!state.creative) state.player.hp = clamp(state.player.hp + REGEN_RATE * dt, 0, MAX_HP);
+    }
+    e.speed = Math.max(0, e.speed - dt);
+    e.strength = Math.max(0, e.strength - dt);
+    e.resist = Math.max(0, e.resist - dt);
+  }
   function hurtPlayer(dmg) {
     const p = state.player;
     if (state.creative) {
@@ -3667,6 +3815,7 @@
       return;
     }
     if (p.hurtCd > 0) return;
+    if (state.effects.resist > 0) dmg *= RESIST_MULT;
     p.hp -= dmg;
     p.hurtCd = DAMAGE_GRACE;
     p.hurtAnim = PLAYER_HURT_SECONDS;
@@ -4487,6 +4636,10 @@
     state.mined++;
     addScore(1);
     if (d.drop !== null && canDrop(code)) giveItem(d.drop === undefined ? code : d.drop, 1);
+    // Foraging: greenery occasionally yields food ingredients.
+    const forage = hash3(x * 13 + 5, y * 17 - 3, z * 19 + 7);
+    if (code === TALL_GRASS && forage < 0.35) giveItem(WHEAT, 1);
+    else if (code === LEAVES && forage < 0.12) giveItem(BERRY, 1);
     api.toast(`Mined ${d.name}`, "");
   }
   function updatePlacing(dt) {
@@ -4494,6 +4647,13 @@
     if ((!state.input.place && !state.placeQueued) || state.placeCd > 0 || state.crafting || state.paused) return;
     state.placeQueued = false;
     const t = state.target;
+    // Eating takes priority over placing/opening the bench when holding food and
+    // not aiming at the Crafting Toilet itself.
+    if (isFood(selectedSlot() && selectedSlot().code) && !(t && t.hit && getBlock(t.x, t.y, t.z) === TABLE)) {
+      tryEatSelected();
+      state.input.place = false;
+      return;
+    }
     if (t && t.hit && getBlock(t.x, t.y, t.z) === TABLE) {
       toggleCrafting(true);
       state.placeCd = 0.24;
@@ -4593,6 +4753,9 @@
     return true;
   }
   function heldAttackDamage() {
+    return Math.round((baseHeldAttackDamage() + (state.effects.strength > 0 ? STRENGTH_BUFF : 0)) * 10) / 10;
+  }
+  function baseHeldAttackDamage() {
     const slot = selectedSlot();
     if (!slot) return 1;
     const d = DEF[slot.code];
@@ -4689,17 +4852,25 @@
   function renderCrafting() {
     if (!craftList) return;
     const near = nearTable();
-    craftList.innerHTML = RECIPES.map((r, i) => {
-      const ok = canCraft(r);
-      const needs = r.in.map(([c, n]) => {
-        const have = countItem(c);
-        return `<span class="craft-need ${have >= n ? "ok" : "no"}">${DEF[c].name} ${have}/${n}</span>`;
+    const cats = [];
+    const seen = new Set();
+    RECIPES.forEach((r) => { const c = r.cat || "Other"; if (!seen.has(c)) { seen.add(c); cats.push(c); } });
+    craftList.innerHTML = cats.map((cat) => {
+      const rows = RECIPES.map((r, i) => [r, i]).filter(([r]) => (r.cat || "Other") === cat).map(([r, i]) => {
+        const ok = canCraft(r);
+        const food = DEF[r.out.code] && DEF[r.out.code].food;
+        const needs = r.in.map(([c, n]) => {
+          const have = countItem(c);
+          return `<span class="craft-need ${have >= n ? "ok" : "no"}">${DEF[c].name} ${have}/${n}</span>`;
+        }).join("");
+        const lock = r.table && !near ? `<span class="craft-lock">needs Crafting Toilet</span>` : "";
+        const tag = food ? `<span class="craft-tag">+${food.heal} HP${food.effects ? " ⚡" : ""}</span>` : "";
+        return `<button class="craft-recipe" data-recipe="${i}" ${ok ? "" : "disabled"}>
+          <span class="craft-out"><b>${DEF[r.out.code].name}</b>${r.out.n > 1 ? " x" + r.out.n : ""}${tag}</span>
+          <span class="craft-ins">${needs}${lock}</span>
+        </button>`;
       }).join("");
-      const lock = r.table && !near ? `<span class="craft-lock">needs Crafting Toilet</span>` : "";
-      return `<button class="craft-recipe" data-recipe="${i}" ${ok ? "" : "disabled"}>
-        <span class="craft-out"><b>${DEF[r.out.code].name}</b>${r.out.n > 1 ? " x" + r.out.n : ""}</span>
-        <span class="craft-ins">${needs}${lock}</span>
-      </button>`;
+      return `<div class="craft-cat">${cat}</div>${rows}`;
     }).join("");
     craftList.querySelectorAll("[data-recipe]").forEach((button) => {
       button.addEventListener("click", () => doCraft(RECIPES[Number(button.dataset.recipe)]));
@@ -4783,6 +4954,7 @@
     updateHealthMeter();
     setText("hud-day", `${isNight() ? "Moon" : "Sun"} ${state.day}`);
     setText("hud-mode", state.creative ? "Creative" : "Survival");
+    updateBuffHud();
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
     setText("hud-high", state.high.toLocaleString());
@@ -4801,6 +4973,23 @@
     renderBag();
     updateCreativeButtons();
     updateHeldItem();
+  }
+  function updateBuffHud() {
+    const el = document.getElementById("hud-buffs");
+    if (!el) return;
+    const e = state.effects;
+    const parts = [];
+    if (e.regen > 0) parts.push(`❤️${Math.ceil(e.regen)}`);
+    if (e.speed > 0) parts.push(`⚡${Math.ceil(e.speed)}`);
+    if (e.strength > 0) parts.push(`💪${Math.ceil(e.strength)}`);
+    if (e.resist > 0) parts.push(`🛡️${Math.ceil(e.resist)}`);
+    const item = el.closest(".hud__item");
+    if (parts.length) {
+      el.textContent = parts.join(" ");
+      if (item) item.style.display = "";
+    } else if (item) {
+      item.style.display = "none";
+    }
   }
   function updateHealthMeter() {
     if (!ui.healthFill || !ui.healthValue) return;
@@ -5213,6 +5402,7 @@
     state.attackFlash = 0;
     state.player.hurtAnim = 0;
     resetActiveFluids();
+    state.effects.regen = state.effects.speed = state.effects.strength = state.effects.resist = 0;
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -5332,6 +5522,7 @@
     updateFx(dt);
     if (state.started && !state.paused && !state.crafting && !state.bagOpen) {
       updateTime(dt);
+      updateEffects(dt);
       updatePlayer(dt);
       updateVisibleChunks();
       updateMobs(dt);
@@ -5789,5 +5980,9 @@
       return { sky: getSkyLight(i), block: getBlockLight(i), skyOpen: skyOpen(x, y, z), skyHeight: state.skyHeight[surfaceIndex(x, z)] };
     },
     recomputeLight() { computeWorldLight(); rebuildAllChunks(); decorDirty = true; },
+    craftByOutput(code) { const r = RECIPES.find((x) => x.out.code === code); return r ? doCraft(r) : false; },
+    canCraftByOutput(code) { const r = RECIPES.find((x) => x.out.code === code); return r ? canCraft(r) : false; },
+    eatSelected() { return tryEatSelected(); },
+    effects() { return { ...state.effects }; },
   };
 })();

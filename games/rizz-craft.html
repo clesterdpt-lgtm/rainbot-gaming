@@ -47,7 +47,13 @@
     .craft-panel.is-open { display: flex; }
     .craft-panel__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .craft-panel__head h3 { font-family: var(--font-display); font-size: 18px; margin: 0; }
-    .craft-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; overflow: auto; padding-right: 4px; }
+    .craft-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; overflow: auto; padding-right: 4px; align-content: start; }
+    .craft-cat {
+      grid-column: 1 / -1; margin: 6px 0 0; padding-bottom: 2px;
+      font: 800 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--accent-2); border-bottom: 1px solid var(--panel-2);
+    }
+    .craft-cat:first-child { margin-top: 0; }
     .craft-recipe {
       background: #0a0d18; border: 2px solid var(--panel-2); border-radius: 8px;
       color: var(--ink); cursor: pointer; display: grid; gap: 5px; padding: 9px 10px; text-align: left;
@@ -55,8 +61,9 @@
     }
     .craft-recipe:hover:not(:disabled) { border-color: var(--accent-2); transform: translateY(-1px); }
     .craft-recipe:disabled { cursor: not-allowed; opacity: 0.55; }
-    .craft-out { font-family: var(--font-display); font-size: 12px; }
+    .craft-out { font-family: var(--font-display); font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
     .craft-out b { color: var(--accent-3); }
+    .craft-tag { font: 800 9px var(--font-mono); padding: 1px 5px; border-radius: 4px; background: #14301c; color: #8df0a0; }
     .craft-ins { display: flex; flex-wrap: wrap; gap: 4px; }
     .craft-need { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--panel); }
     .craft-need.ok { color: #9be870; }
@@ -109,6 +116,7 @@
           <div class="hud__item"><span class="hud__label">HEALTH</span><span class="hud__value" id="hud-hp">20/20</span></div>
           <div class="hud__item"><span class="hud__label">DAY</span><span class="hud__value" id="hud-day">☀️ 1</span></div>
           <div class="hud__item"><span class="hud__label">MODE</span><span class="hud__value" id="hud-mode">Survival</span></div>
+          <div class="hud__item" id="hud-buffs-item" style="display:none;"><span class="hud__label">BUFFS</span><span class="hud__value" id="hud-buffs"></span></div>
           <div class="hud__item"><span class="hud__label">MINED</span><span class="hud__value" id="hud-mined">0</span></div>
           <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
@@ -156,7 +164,10 @@
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">New world</button>
             <button class="btn btn--yellow" id="btn-creative" style="font-size:13px;padding:8px 12px;">Creative: Off</button>
           </div>
-
+          <p class="sc-tips">
+            <strong style="color:var(--ink);">Right-click</strong> to place blocks, or <strong style="color:var(--ink);">eat</strong> when holding food.
+            Open <strong style="color:var(--ink);">Crafting (E)</strong> at a Crafting Toilet to build tools, lamps, and meals.
+          </p>
         </div>
 
         <div class="game-side__panel">
@@ -177,7 +188,8 @@
             <li><strong style="color:var(--ink);">Punch trees</strong> for Skibidi Logs, then craft Toilet Planks &amp; Ohio Sticks.</li>
             <li><strong style="color:var(--ink);">Build a Crafting Toilet</strong> and place it — right-click it or stand near it to craft tools.</li>
             <li><strong style="color:var(--ink);">Mine down</strong> with a pickaxe: Gyatt Coal → torches, Rizz Ore, deep Sigma Ore, and lava pockets far below.</li>
-            <li><strong style="color:var(--ink);">Light Rizz Torches</strong> to keep the dark (and the mobs) away.</li>
+            <li><strong style="color:var(--ink);">Light Rizz Torches</strong>, Rizz Lamps &amp; Sigma Lanterns to keep the dark (and the mobs) away.</li>
+            <li><strong style="color:var(--ink);">Cook &amp; eat.</strong> Forage Wheat from grass and Berries from leaves, then craft Rizzbread, Glowcap Stew, a Sigma Energy Drink, or the Gilded Rizz Apple — right-click to eat and heal. Some give buffs.</li>
             <li><strong style="color:var(--ink);">Survive the night.</strong> Skibidi Toilets and Grimace Shakes spawn in the dark — swing a sword to send them back to Ohio.</li>
             <li><strong style="color:var(--ink);">Endgame:</strong> forge the <strong style="color:var(--accent-3);">Sigma Blade</strong> from Sigma Gems for the big score.</li>
           </ul>
@@ -202,7 +214,7 @@
   <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
   <script src="../assets/js/main.js?v=20260625-avatar-art-2"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260626-rizzcraft-creative-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260626-crafting-food-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

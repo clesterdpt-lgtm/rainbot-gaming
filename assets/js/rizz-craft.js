@@ -34,9 +34,9 @@
 
   const THREE = window.THREE;
   const SAVE_VERSION = 7;
-  const WORLD_X = 704;
+  const WORLD_X = 768;
   const WORLD_Y = 320;
-  const WORLD_Z = 704;
+  const WORLD_Z = 768;
   const CHUNK = 16;
   const SEA_LEVEL = 48;
   const LAVA_LEVEL = 22;
@@ -374,14 +374,17 @@
   const waterTexture = buildWaterTexture();
   const blockMaterial = new THREE.MeshLambertMaterial({ map: blockTexture, vertexColors: true, side: THREE.DoubleSide });
   const plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, alphaTest: 0.2 });
+  // Water is shaded purely from vertex colours (the ripple in faceColor) plus a phong
+  // specular highlight. It deliberately has no texture map: the chunk mesher assigns
+  // atlas UVs, so a standalone water texture sampled a tiny garbage sub-rect and looked
+  // glitchy. A clean translucent gradient reads far better.
   const waterMaterial = new THREE.MeshPhongMaterial({
-    color: 0x35bfff,
-    map: waterTexture,
+    color: 0x3bb6ff,
     vertexColors: true,
     transparent: true,
-    opacity: 0.82,
-    shininess: 34,
-    specular: 0x64cfee,
+    opacity: 0.8,
+    shininess: 48,
+    specular: 0x8fe4ff,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -517,6 +520,7 @@
     mode: "mine",
     creative: false,
     effects: { regen: 0, speed: 0, strength: 0, resist: 0 },
+    toiletFacing: {}, // "x,y,z" -> quarter-turns (0-3) so toilets face the placer
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -1279,6 +1283,7 @@
         rebuildChunksForLight(bx0, bz0, bx1, bz1);
       } else rebuildChunksNear(x, z);
     }
+    if (prev === TABLE && code !== TABLE) delete state.toiletFacing[`${x},${y},${z}`];
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
   function setFluidBlock(x, y, z, code) {
@@ -1474,7 +1479,14 @@
     return queueFluidNeighborhood(x, y, z);
   }
   function isSolidBlock(code) { return !!(DEF[code] && DEF[code].solid); }
-  function occludes(code) { return code !== AIR && code !== WATER && code !== LAVA && !isReplaceableDecor(code); }
+  // Decor blocks (incl. the solid Crafting Toilet) are drawn as their own little models
+  // in the decor group, never in the chunk mesh — so they must NOT occlude neighbour
+  // faces, otherwise the ground/walls behind them get culled and you see through.
+  function occludes(code) {
+    if (code === AIR || code === WATER || code === LAVA) return false;
+    const d = DEF[code];
+    return !!d && !d.decor;
+  }
 
   // --- Voxel lighting engine ---------------------------------------------------
   // blocksSky: casts a sky shadow (opaque solids + water, so depth darkens).
@@ -1738,20 +1750,17 @@
         const dx = x - WORLD_X / 2;
         const dz = z - WORLD_Z / 2;
         const center = Math.sqrt(dx * dx + dz * dz);
-        // Macro elevation: big, slow landmasses sweep from deep valleys to highlands.
-        const continent = fbm2(x + 1200, z - 500, 0.0064, 6);
-        const detail = fbm2(x - 900, z + 700, 0.05, 4);
-        // Ridged noise (peaks near 1) carves sharp mountain crests along ridgelines.
-        const ridges = 1 - Math.abs(fbm2(x + 20, z + 20, 0.014, 5) * 2 - 1);
-        const valley = 1 - Math.abs(fbm2(x - 2400, z + 1700, 0.0105, 5) * 2 - 1);
-        let h = SEA_LEVEL + 6 + (continent - 0.46) * 120 + (detail - 0.5) * 10;
-        // Mountains only rise where the continent runs high, leaving plains and
-        // valleys between the ranges so the world is not wall-to-wall peaks.
-        const mtn = smooth(clamp((continent - 0.54) / 0.26, 0, 1));
-        h += Math.pow(ridges, 1.9) * 108 * mtn;
-        const lowland = smooth(clamp((0.53 - continent) / 0.22, 0, 1));
-        h -= Math.pow(1 - ridges, 2.35) * 42 * mtn;
-        h -= Math.pow(valley, 2.25) * (22 + lowland * 24);
+        // Gentle rolling base — this is where MOST of the world lives: plains, hills,
+        // and shallow valleys/lakes. Low amplitude keeps it from spiking everywhere.
+        const continent = fbm2(x + 1200, z - 500, 0.0055, 5);
+        const hills = fbm2(x - 900, z + 700, 0.022, 4);
+        let h = SEA_LEVEL + 6 + (continent - 0.5) * 42 + (hills - 0.5) * 18;
+        // Mountain ranges are confined to their own large, independent regions, so the
+        // map reads as rolling country with the occasional range — not wall-to-wall peaks.
+        const mountainness = fbm2(x + 4100, z - 3300, 0.0042, 4);
+        const ridges = 1 - Math.abs(fbm2(x + 20, z + 20, 0.013, 5) * 2 - 1);
+        const mtn = smooth(clamp((mountainness - 0.62) / 0.18, 0, 1));
+        h += Math.pow(ridges, 2.0) * 150 * mtn;
         const ocean = edgeOceanStrength(x, z);
         if (ocean > 0) {
           const shelf = SEA_LEVEL - 8 - smooth(ocean) * 14 + noise2(x + 17, z - 23, 0.055) * 4 + fbm2(x - 160, z + 220, 0.018, 3) * 3;
@@ -1764,17 +1773,17 @@
         const weird = fbm2(x + 700, z + 80, 0.0056, 4);
         const temp = fbm2(x + 90, z - 840, 0.0046, 4);
         let biome = 0;
-        if (height > SEA_LEVEL + 86) biome = 11;
-        else if (temp < 0.43 && height > SEA_LEVEL + 3) biome = 11;
-        else if (temp > 0.66 && moisture < 0.42 && height <= SEA_LEVEL + 28) biome = 10;
-        else if (height > SEA_LEVEL + 28 || ridges > 0.68) biome = 6;
+        if (height > SEA_LEVEL + 78) biome = 11;                       // snow-capped summits
+        else if (height > SEA_LEVEL + 30 && mtn > 0.2) biome = 6;       // mountain rock (only in ranges)
+        else if (temp < 0.36 && height > SEA_LEVEL + 3) biome = 11;     // cold highlands
+        else if (temp > 0.66 && moisture < 0.42 && height <= SEA_LEVEL + 20) biome = 10;
         else if (weird < 0.30 && moisture < 0.54) biome = 7;
         else if (moisture > 0.68 && height <= SEA_LEVEL + 7) biome = 3;
         else if (weird > 0.72 && moisture > 0.38) biome = 4;
         else if (moisture < 0.28 && temp > 0.50) biome = 5;
         else if (moisture > 0.58 && temp < 0.48) biome = 8;
         else if (weird > 0.58 && moisture > 0.40) biome = 9;
-        else if (height > SEA_LEVEL + 16) biome = 2;
+        else if (height > SEA_LEVEL + 18) biome = 2;                    // highland hills
         else if (moisture > 0.52) biome = 1;
         if (ocean > 0.62) biome = 10;
         state.biome[surfaceIndex(x, z)] = biome;
@@ -2251,8 +2260,9 @@
     } else if (code === SNOW) {
       base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
     } else if (code === WATER) {
-      const ripple = Math.sin((x + z) * 0.72 + blockGrain * 8) * 0.5 + 0.5;
-      base = mixRgb(cachedRgb("#1685d6"), cachedRgb("#7ee7ff"), ripple * 0.42 + grain * 0.22);
+      // Smooth, large-scale swell — no per-vertex hash so it doesn't shimmer like static.
+      const ripple = (Math.sin(x * 0.28 + z * 0.19) + Math.sin(x * 0.11 - z * 0.24)) * 0.25 + 0.5;
+      base = mixRgb(cachedRgb("#1f8edd"), cachedRgb("#6fe0ff"), clamp(ripple, 0, 1) * 0.5);
     } else if (code === LAVA) {
       const glow = Math.sin((x * 1.7 + y * 2.3 + z * 1.1 + blockGrain * 8) * 1.4) * 0.5 + 0.5;
       base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
@@ -2807,12 +2817,26 @@
     const porcelain = cachedRgb("#ecf8ff");
     const shade = cachedRgb("#b8c6d2");
     const water = cachedRgb("#4ecaff");
-    pushTinyBox(arr, x + 0.18, y, z + 0.18, 0.64, 0.32, 0.7, porcelain);
-    pushTinyBox(arr, x + 0.26, y + 0.26, z + 0.06, 0.48, 0.18, 0.34, shade);
-    pushTinyBox(arr, x + 0.32, y + 0.34, z + 0.18, 0.36, 0.05, 0.42, water);
-    pushTinyBox(arr, x + 0.18, y + 0.42, z + 0.65, 0.64, 0.58, 0.22, porcelain);
-    pushTinyBox(arr, x + 0.24, y + 0.84, z + 0.59, 0.52, 0.16, 0.16, shade);
-    pushTinyBox(arr, x + 0.69, y + 0.94, z + 0.66, 0.08, 0.05, 0.08, cachedRgb("#ffd75a"));
+    // The model is authored facing -Z (bowl toward -Z, tank at +Z). Rotate it in
+    // 90° steps so the bowl faces whoever placed it.
+    const turns = state.toiletFacing[`${x},${y},${z}`] | 0;
+    const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
+    box(0.18, 0, 0.18, 0.64, 0.32, 0.7, porcelain);   // base
+    box(0.26, 0.26, 0.06, 0.48, 0.18, 0.34, shade);   // seat back lip
+    box(0.32, 0.34, 0.18, 0.36, 0.05, 0.42, water);   // bowl water
+    box(0.18, 0.42, 0.65, 0.64, 0.58, 0.22, porcelain); // tank
+    box(0.24, 0.84, 0.59, 0.52, 0.16, 0.16, shade);   // tank lid
+    box(0.69, 0.94, 0.66, 0.08, 0.05, 0.08, cachedRgb("#ffd75a")); // flush button
+  }
+  // Rotate a sub-box's footprint by `turns` quarter-turns (clockwise) around the
+  // block centre, then emit it. lx/lz/w/d are local 0..1 coordinates.
+  function pushRotatedBox(arr, bx, by, bz, lx, ly, lz, w, h, d, rgb, turns) {
+    let nx = lx, nz = lz, nw = w, nd = d;
+    for (let t = 0; t < (turns & 3); t++) {
+      const px = nx, pz = nz, pw = nw, pd = nd;
+      nx = pz; nz = 1 - px - pw; nw = pd; nd = pw;
+    }
+    pushTinyBox(arr, bx + nx, by + ly, bz + nz, nw, h, nd, rgb);
   }
   function pushTinyBox(arr, x, y, z, w, h, d, rgb) {
     const corners = [[x, y, z], [x + w, y, z], [x + w, y + h, z], [x, y + h, z], [x, y, z + d], [x + w, y, z + d], [x + w, y + h, z + d], [x, y + h, z + d]];
@@ -4671,10 +4695,19 @@
     const p = t.prev;
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
+    if (slot.code === TABLE) state.toiletFacing[`${p.x},${p.y},${p.z}`] = toiletTurnsToward(p.x, p.z);
     setBlock(p.x, p.y, p.z, slot.code);
+    if (slot.code === TABLE) decorDirty = true;
     if (!state.creative) decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
+  }
+  // Quarter-turns so the toilet's bowl faces the player who placed it.
+  function toiletTurnsToward(cellX, cellZ) {
+    const dx = state.player.x - (cellX + 0.5);
+    const dz = state.player.z - (cellZ + 0.5);
+    if (Math.abs(dx) >= Math.abs(dz)) return dx < 0 ? 1 : 3;
+    return dz < 0 ? 0 : 2;
   }
   function boxContainsBlock(b, x, y, z) {
     return x + 1 > b.minX && x < b.maxX && y + 1 > b.minY && y < b.maxY && z + 1 > b.minZ && z < b.maxZ;
@@ -5403,6 +5436,7 @@
     state.player.hurtAnim = 0;
     resetActiveFluids();
     state.effects.regen = state.effects.speed = state.effects.strength = state.effects.resist = 0;
+    state.toiletFacing = {};
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -5463,6 +5497,7 @@
       score: state.score,
       sigmaForged: state.sigmaForged,
       creative: state.creative,
+      toiletFacing: { ...state.toiletFacing },
     };
   }
   function restoreGame(saved) {
@@ -5473,6 +5508,7 @@
     currentWorldSeed = data.seed >>> 0;
     initGame(data.seed);
     state.edits = new Map(Array.isArray(data.edits) ? data.edits : []);
+    state.toiletFacing = (data.toiletFacing && typeof data.toiletFacing === "object") ? { ...data.toiletFacing } : {};
     for (const [key, code] of state.edits.entries()) {
       const [x, y, z] = key.split(",").map(Number);
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;

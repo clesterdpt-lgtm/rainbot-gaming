@@ -14,6 +14,11 @@
   const PLAYER_R = 24;
   const FLOOR = H - 44;
   const CEILING = 34;
+  const GRAVITY = 1050;
+  const START_VY = -160;
+  const FLAP_VY = -430;
+  const SHIELD_BOUNCE_VY = -360;
+  const MAX_FALL_VY = 640;
 
   const C = {
     bg0: "#05070d",
@@ -266,7 +271,7 @@
     paused = false;
     running = true;
     player.y = H * 0.5;
-    player.vy = -3.8;
+    player.vy = START_VY;
     player.rot = 0;
     player.shield = 0;
     player.pulse = 0;
@@ -372,7 +377,7 @@
       return;
     }
     const mods = activeMods();
-    player.vy = -8.2 / Math.sqrt(mods.gravity || 1);
+    player.vy = FLAP_VY / Math.sqrt(mods.gravity || 1);
     player.pulse = 1;
     addParticles(player.x - 20, player.y + 8, C.cyan, 8, -150);
     sfx("flap");
@@ -446,7 +451,7 @@
   function hitCandle(candle) {
     if (player.shield > 0) {
       player.shield -= 1;
-      player.vy = -7.4;
+      player.vy = SHIELD_BOUNCE_VY;
       shake = 16;
       candle.x = -999;
       addParticles(player.x + 12, player.y, C.cyan, 26, -160);
@@ -498,7 +503,7 @@
     const dts = dt / 1000;
     const mods = activeMods();
     const speed = baseSpeed() * mods.speed;
-    const gravity = 1260 * mods.gravity;
+    const gravity = GRAVITY * mods.gravity;
     distance += speed * dts;
     spawnT -= dt;
     eventT -= dt;
@@ -516,7 +521,7 @@
       triggerHeadline(false);
     }
 
-    player.vy += gravity * dts;
+    player.vy = Math.min(MAX_FALL_VY, player.vy + gravity * dts);
     player.y += player.vy * dts;
     player.rot = clamp(player.vy / 760, -0.55, 0.78);
     player.pulse = Math.max(0, player.pulse - dts * 3.8);
@@ -1050,8 +1055,17 @@
         paused,
         score,
         price: Number(price.toFixed(2)),
+        y: Math.round(player.y),
+        vy: Math.round(player.vy),
         trail: trail.length,
         candles: candles.length,
+        nextCandle: candles[0]
+          ? {
+              x: Math.round(candles[0].x),
+              gapY: Math.round(candles[0].gapY),
+              gap: Math.round(candles[0].gap),
+            }
+          : null,
         pickups: pickups.length,
         shield: player.shield,
         market: marketLabel,

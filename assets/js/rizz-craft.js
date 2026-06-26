@@ -344,13 +344,17 @@
   const sun = new THREE.DirectionalLight(0xfff7df, 1.26);
   sun.position.set(36, 70, 22);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 190;
   sun.shadow.camera.left = -70;
   sun.shadow.camera.right = 70;
   sun.shadow.camera.top = 70;
   sun.shadow.camera.bottom = -70;
+  // Bias keeps the low-res shadow map from self-shadowing flat surfaces (snow/water/
+  // sand) into a dithered mess of dark speckles.
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.6;
   scene.add(ambient, sun);
 
   const TEX = {
@@ -379,12 +383,12 @@
   // atlas UVs, so a standalone water texture sampled a tiny garbage sub-rect and looked
   // glitchy. A clean translucent gradient reads far better.
   const waterMaterial = new THREE.MeshPhongMaterial({
-    color: 0x3bb6ff,
+    color: 0x4fc1ff,
     vertexColors: true,
     transparent: true,
-    opacity: 0.8,
-    shininess: 48,
-    specular: 0x8fe4ff,
+    opacity: 0.88,
+    shininess: 60,
+    specular: 0xa8eeff,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -1162,11 +1166,12 @@
   }
   function surfaceBlockForBiome(biome, shoreline) {
     if (shoreline || biome.surface === "sand") return SAND;
+    if (biome.surface === "snow") return SNOW;   // real snow block, not a flat white overlay
     return DIRT;
   }
   function nearSurfaceBlockForBiome(biome, shoreline) {
     if (shoreline || biome.surface === "sand") return SAND;
-    return DIRT;
+    return DIRT;   // dirt sits beneath the snow cap
   }
   function dirtTopOverlay(x, y, z) {
     const ix = clamp(x | 0, 0, WORLD_X - 1);
@@ -1177,16 +1182,20 @@
     if (biome.surface === "sand") return null;
     return "grass";
   }
-  function canPlaceTreeSeed(x, z, biome, spawnDist) {
+  function canPlaceTreeSeed(x, z, biome, spawnDist, forest = 0) {
     if (spawnDist < 26 || biome.tree <= 0) return false;
-    const spacing = biome.treeSpacing || 12;
+    // Dense forest regions pull trees closer together and raise their odds, so the map
+    // grows real woodland patches instead of an even scatter everywhere.
+    const dense = clamp((forest - 0.52) / 0.32, 0, 1);
+    const spacing = Math.max(3, Math.round((biome.treeSpacing || 12) * (1 - dense * 0.62)));
+    const prob = Math.min(0.96, biome.tree * (1 + dense * 2.6));
     const cellX = Math.floor(x / spacing);
     const cellZ = Math.floor(z / spacing);
     const margin = Math.min(3, Math.floor(spacing / 3));
     const usable = Math.max(1, spacing - margin * 2);
     const pickX = cellX * spacing + margin + Math.floor(hash2(cellX * 19 + 5, cellZ * 23 - 7) * usable);
     const pickZ = cellZ * spacing + margin + Math.floor(hash2(cellX * 29 - 11, cellZ * 31 + 13) * usable);
-    return x === pickX && z === pickZ && hash2(cellX + 101, cellZ - 73) < biome.tree;
+    return x === pickX && z === pickZ && hash2(cellX + 101, cellZ - 73) < prob;
   }
   function edgeOceanStrength(x, z) {
     const edge = Math.min(x, z, WORLD_X - 1 - x, WORLD_Z - 1 - z);
@@ -1900,7 +1909,8 @@
         if (y <= SEA_LEVEL) continue;
         if (top !== DIRT && top !== GRASS && top !== SNOW && !(top === SAND && biome.surface === "sand")) continue;
         const spawnDist = Math.hypot(x - WORLD_X / 2, z - WORLD_Z / 2);
-        if (canPlaceTreeSeed(x, z, biome, spawnDist)) {
+        const forest = fbm2(x + 5200, z - 6100, 0.0085, 4);
+        if (canPlaceTreeSeed(x, z, biome, spawnDist, forest)) {
           placeTree(x, y + 1, z, state.biome[si]);
         } else if (spawnDist > 10) {
           const r = hash2(x * 37 + 3, z * 41 - 5);
@@ -2258,11 +2268,23 @@
       const dune = biome.surface === "sand" ? cachedRgb("#d9bd6d") : biome.id === 7 ? cachedRgb("#9f9588") : cachedRgb("#d9c579");
       base = mixRgb(dune, cachedRgb("#f2df9a"), grain * 0.45);
     } else if (code === SNOW) {
-      base = mixRgb(cachedRgb("#d9eef8"), cachedRgb("#ffffff"), grain * 0.7);
+      // Bright, faintly sparkling crown; cooler blue-shadowed sides give it real depth
+      // instead of a flat white sheet.
+      if (topFace) {
+        const sparkle = grain > 0.92 ? 0.16 : grain > 0.82 ? 0.06 : 0;
+        base = mixRgb(cachedRgb("#eef7ff"), cachedRgb("#ffffff"), clamp(grain * 0.55 + 0.25 + sparkle, 0, 1));
+      } else if (bottomFace) {
+        base = cachedRgb("#bcd2e8");
+      } else {
+        base = mixRgb(cachedRgb("#bcd2ea"), cachedRgb("#dcebf8"), grain * 0.5 + blockGrain * 0.2);
+      }
     } else if (code === WATER) {
-      // Smooth, large-scale swell — no per-vertex hash so it doesn't shimmer like static.
-      const ripple = (Math.sin(x * 0.28 + z * 0.19) + Math.sin(x * 0.11 - z * 0.24)) * 0.25 + 0.5;
-      base = mixRgb(cachedRgb("#1f8edd"), cachedRgb("#6fe0ff"), clamp(ripple, 0, 1) * 0.5);
+      // Smooth, large-scale swell (no per-vertex hash so it doesn't shimmer like static).
+      // Bright sky-lit crown vs. deeper blue walls reads clearly as water.
+      const ripple = clamp((Math.sin(x * 0.26 + z * 0.18) + Math.sin(x * 0.1 - z * 0.23)) * 0.25 + 0.5, 0, 1);
+      base = topFace
+        ? mixRgb(cachedRgb("#2a9fe6"), cachedRgb("#8ae8ff"), ripple * 0.7)
+        : mixRgb(cachedRgb("#1668bd"), cachedRgb("#3fb2e6"), ripple * 0.4);
     } else if (code === LAVA) {
       const glow = Math.sin((x * 1.7 + y * 2.3 + z * 1.1 + blockGrain * 8) * 1.4) * 0.5 + 0.5;
       base = mixRgb(cachedRgb("#ff3b0d"), cachedRgb("#ffd34f"), glow * 0.78);
@@ -2289,12 +2311,18 @@
     }
     if (code === LEAVES) {
       base = mixRgb(biomeRgb(biome, "leaf"), mixRgb(biomeRgb(biome, "grass"), cachedRgb("#18d43c"), 0.16), grain * 0.18);
+      // Snow settles on the foliage in cold biomes — heavy on top, a dusting on the sides.
+      if (biome.surface === "snow" || biome.id === 11) {
+        if (topFace) base = mixRgb(base, cachedRgb("#f2f9ff"), 0.78);
+        else if (!bottomFace && grain > 0.55) base = mixRgb(base, cachedRgb("#e6f1fb"), 0.5);
+      }
     }
+    const snowyLeaf = code === LEAVES && (biome.surface === "snow" || biome.id === 11) && topFace;
     const jitter = 0.9 + grain * 0.17 + blockGrain * 0.07;
     const f = shade * jitter;
     const greenSurface = (code === DIRT || code === GRASS) && topFace && dirtTopOverlay(x, y, z) === "grass";
-    const saturation = code === BEDROCK ? 1.04 : code === STONE ? 1.08 : code === LEAVES ? 1.68 : greenSurface ? 1.62 : 1.36;
-    const brightness = code === BEDROCK ? 1.02 : code === STONE ? 1.06 : code === LEAVES ? 1.0 : greenSurface ? 0.98 : 1.08;
+    const saturation = code === BEDROCK ? 1.04 : code === STONE ? 1.08 : snowyLeaf ? 0.7 : code === LEAVES ? 1.68 : greenSurface ? 1.62 : 1.36;
+    const brightness = code === BEDROCK ? 1.02 : code === STONE ? 1.06 : snowyLeaf ? 1.05 : code === LEAVES ? 1.0 : greenSurface ? 0.98 : 1.08;
     return vividRgb(scaleRgb(base, f), saturation, brightness);
   }
   function updateWaterTexture(dt) {

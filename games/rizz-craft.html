@@ -11,7 +11,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-rizz-craft.png?v=20260613-2" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260626-game-shell-1" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260626-howto-readable-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%235fd35a'/%3E%3Crect y='52' width='100' height='48' fill='%238a623c'/%3E%3Crect x='14' y='14' width='22' height='22' fill='%23fff' stroke='%2305070d' stroke-width='5'/%3E%3Ccircle cx='21' cy='25' r='3' fill='%2305070d'/%3E%3Ccircle cx='30' cy='25' r='3' fill='%2305070d'/%3E%3C/svg%3E" />
   <style>
     /* ===== Rizz-Craft page-specific UI ===== */
@@ -39,36 +39,96 @@
 
     /* crafting panel slides over the stage */
     .craft-panel {
-      position: absolute; inset: 0; z-index: 6;
+      position: absolute; inset: 0; z-index: 12;
       display: none; flex-direction: column;
-      background: rgba(6,7,16,0.93); backdrop-filter: blur(3px);
-      padding: 18px; border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(11,14,28,0.96), rgba(4,6,13,0.96)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 42px);
+      backdrop-filter: blur(4px);
+      padding: 16px; border-radius: 12px;
     }
     .craft-panel.is-open { display: flex; }
-    .craft-panel__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .craft-panel__head h3 { font-family: var(--font-display); font-size: 18px; margin: 0; }
-    .craft-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; overflow: auto; padding-right: 4px; align-content: start; }
+    .craft-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .craft-panel__title { display: grid; gap: 5px; min-width: 0; }
+    .craft-panel__head h3 { font-family: var(--font-display); font-size: 18px; line-height: 1.1; margin: 0; }
+    .craft-panel__status {
+      width: fit-content; max-width: 100%; padding: 4px 8px; border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--ink-dim);
+      font: 900 10px var(--font-mono); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .craft-panel__status.is-ready { border-color: rgba(86,232,135,0.36); color: #9be870; background: rgba(86,232,135,0.1); }
+    .craft-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .craft-tab {
+      min-height: 30px; border: 1px solid rgba(255,255,255,0.16); border-radius: 6px;
+      background: rgba(255,255,255,0.06); color: var(--ink-dim); cursor: pointer;
+      font: 900 10px var(--font-mono); padding: 6px 9px; text-transform: uppercase;
+    }
+    .craft-tab.is-active {
+      border-color: rgba(255,212,59,0.58); background: rgba(255,212,59,0.16);
+      color: var(--ink); box-shadow: inset 0 -2px 0 rgba(255,212,59,0.55);
+    }
+    .craft-tab b { color: var(--accent-3); font: inherit; margin-left: 4px; }
+    .craft-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(235px, 1fr)); gap: 10px; overflow: auto; padding-right: 4px; align-content: start; }
     .craft-cat {
-      grid-column: 1 / -1; margin: 6px 0 0; padding-bottom: 2px;
-      font: 800 11px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase;
-      color: var(--accent-2); border-bottom: 1px solid var(--panel-2);
+      grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      margin: 8px 0 -2px; padding: 0 2px 5px; border-bottom: 1px solid rgba(255,255,255,0.14);
+      font: 900 11px var(--font-mono); text-transform: uppercase; color: var(--accent-2);
     }
     .craft-cat:first-child { margin-top: 0; }
+    .craft-cat__count { color: var(--ink-dim); font: 800 10px var(--font-mono); }
     .craft-recipe {
-      background: #0a0d18; border: 2px solid var(--panel-2); border-radius: 8px;
-      color: var(--ink); cursor: pointer; display: grid; gap: 5px; padding: 9px 10px; text-align: left;
-      transition: border-color 120ms ease, transform 120ms ease;
+      min-height: 126px; background: rgba(10,13,24,0.86); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px;
+      color: var(--ink); cursor: pointer; display: grid; grid-template-rows: auto 1fr; gap: 9px; padding: 10px; text-align: left;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+      transition: border-color 120ms ease, transform 120ms ease, background 120ms ease, opacity 120ms ease;
     }
-    .craft-recipe:hover:not(:disabled) { border-color: var(--accent-2); transform: translateY(-1px); }
-    .craft-recipe:disabled { cursor: not-allowed; opacity: 0.55; }
-    .craft-out { font-family: var(--font-display); font-size: 12px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .craft-out b { color: var(--accent-3); }
-    .craft-tag { font: 800 9px var(--font-mono); padding: 1px 5px; border-radius: 4px; background: #14301c; color: #8df0a0; }
-    .craft-ins { display: flex; flex-wrap: wrap; gap: 4px; }
-    .craft-need { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: var(--panel); }
-    .craft-need.ok { color: #9be870; }
-    .craft-need.no { color: #ff8aa6; }
-    .craft-lock { font-family: var(--font-mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #2a1a12; color: #ffb648; }
+    .craft-recipe:hover:not(:disabled) { border-color: rgba(67,230,255,0.65); transform: translateY(-1px); background: rgba(13,20,34,0.94); }
+    .craft-recipe.is-ready { border-color: rgba(86,232,135,0.44); background: linear-gradient(180deg, rgba(21,38,28,0.88), rgba(9,14,22,0.9)); }
+    .craft-recipe:disabled { cursor: not-allowed; opacity: 0.72; }
+    .craft-recipe.is-locked { border-color: rgba(255,182,72,0.26); }
+    .craft-out { display: grid; grid-template-columns: 34px minmax(0,1fr) auto; gap: 9px; align-items: center; }
+    .craft-icon {
+      width: 34px; height: 34px; border-radius: 7px; background: var(--item-color);
+      box-shadow: inset 0 -9px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.28), 0 0 0 1px rgba(255,255,255,0.2);
+    }
+    .craft-name { display: grid; gap: 2px; min-width: 0; }
+    .craft-name b { color: var(--ink); font-family: var(--font-display); font-size: 12px; line-height: 1.1; overflow-wrap: anywhere; }
+    .craft-name span { color: var(--ink-dim); font: 800 9px var(--font-mono); text-transform: uppercase; }
+    .craft-status {
+      justify-self: end; white-space: nowrap; border: 1px solid rgba(255,255,255,0.14); border-radius: 999px;
+      padding: 3px 7px; background: rgba(255,255,255,0.07); color: var(--ink-dim);
+      font: 900 9px var(--font-mono); text-transform: uppercase;
+    }
+    .craft-status.is-ready { border-color: rgba(86,232,135,0.42); background: rgba(86,232,135,0.12); color: #9be870; }
+    .craft-status.is-locked { border-color: rgba(255,182,72,0.4); background: rgba(255,182,72,0.12); color: #ffcf72; }
+    .craft-tags { display: flex; flex-wrap: wrap; gap: 5px; min-height: 18px; }
+    .craft-tag { font: 900 9px var(--font-mono); padding: 2px 6px; border-radius: 999px; background: rgba(67,230,255,0.1); color: #9bf0ff; }
+    .craft-tag--food { background: rgba(86,232,135,0.12); color: #9be870; }
+    .craft-ins { display: grid; gap: 7px; align-content: start; }
+    .craft-ins__label { color: var(--ink-dim); font: 900 9px var(--font-mono); text-transform: uppercase; }
+    .craft-needs { display: flex; flex-wrap: wrap; gap: 5px; }
+    .craft-need {
+      display: inline-grid; grid-template-columns: 10px minmax(0,auto) auto; align-items: center; gap: 5px;
+      max-width: 100%; font: 800 10px var(--font-mono); padding: 4px 6px; border-radius: 6px;
+      background: rgba(255,255,255,0.06); color: var(--ink-dim); border: 1px solid rgba(255,255,255,0.1);
+    }
+    .craft-need__dot { width: 10px; height: 10px; border-radius: 3px; background: var(--item-color); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.22); }
+    .craft-need b { color: inherit; font: inherit; }
+    .craft-need.ok { color: #9be870; border-color: rgba(86,232,135,0.22); }
+    .craft-need.no { color: #ff8aa6; border-color: rgba(255,138,166,0.28); background: rgba(255,91,67,0.08); }
+    .craft-empty {
+      grid-column: 1 / -1; min-height: 140px; display: grid; place-items: center; text-align: center;
+      border: 1px dashed rgba(255,255,255,0.18); border-radius: 8px; color: var(--ink-dim);
+      font: 900 11px var(--font-mono); text-transform: uppercase; padding: 18px;
+    }
+    @media (max-width: 620px) {
+      .craft-panel { padding: 12px; }
+      .craft-panel__head { align-items: stretch; }
+      .craft-panel__status { white-space: normal; }
+      .craft-list { grid-template-columns: 1fr; }
+      .craft-out { grid-template-columns: 32px minmax(0,1fr); }
+      .craft-status { grid-column: 1 / -1; justify-self: start; }
+    }
 
     .canvas-wrap--rizzcraft .overlay { justify-content: flex-start; overflow: auto; }
     .world-panel {
@@ -92,6 +152,25 @@
     .world-card__meta { color: var(--ink-dim); font: 800 10px var(--font-mono); margin-top: 4px; }
     .world-card__actions { display: flex; gap: 6px; }
     .world-empty { color: var(--ink-dim); font: 800 11px var(--font-mono); text-align: center; padding: 8px; }
+    .world-loading {
+      display: inline-grid; grid-template-columns: 20px auto; align-items: center; gap: 10px;
+      margin: 2px auto 14px; padding: 9px 13px; border: 1px solid rgba(255,212,59,0.36);
+      border-radius: 8px; background: rgba(7,9,18,0.86); color: var(--ink);
+      font: 900 11px var(--font-mono); text-transform: uppercase;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .world-loading[hidden] { display: none; }
+    .world-loading__spinner {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--accent-3);
+      animation: world-spin 720ms linear infinite;
+    }
+    .canvas-wrap--rizzcraft .overlay.is-loading .world-panel { opacity: 0.45; pointer-events: none; }
+    .canvas-wrap--rizzcraft .overlay.is-loading #btn-primary { opacity: 0.65; cursor: progress; }
+    @keyframes world-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .world-loading__spinner { animation: none; border-top-color: rgba(255,255,255,0.2); box-shadow: inset 0 0 0 4px var(--accent-3); }
+    }
     @media (max-width: 720px) {
       .world-create, .world-card { grid-template-columns: 1fr; }
       .world-card__actions { display: grid; grid-template-columns: 1fr 1fr; }
@@ -129,9 +208,13 @@
           <!-- Crafting overlay -->
           <div class="craft-panel" id="craft-panel" aria-label="Crafting">
             <div class="craft-panel__head">
-              <h3>🚽 Crafting</h3>
+              <div class="craft-panel__title">
+                <h3>Crafting</h3>
+                <div class="craft-panel__status" id="craft-status">Checking bench...</div>
+              </div>
               <button class="btn btn--ghost" id="btn-craft-close" style="font-size:12px;padding:6px 12px;">Close (E)</button>
             </div>
+            <div class="craft-tabs" id="craft-tabs" aria-label="Crafting categories"></div>
             <div class="craft-list" id="craft-list"></div>
           </div>
 
@@ -143,6 +226,10 @@
               Build a Crafting Toilet, light Rizz Torches, and <strong>survive the night</strong> when the Skibidi Toilets come.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
+            <div class="world-loading" id="world-loading" hidden role="status" aria-live="polite" aria-busy="false">
+              <span class="world-loading__spinner" aria-hidden="true"></span>
+              <span class="world-loading__text" id="world-loading-text">Loading world...</span>
+            </div>
             <div class="world-panel" id="world-panel"></div>
             <button class="btn btn--primary" id="btn-primary">Spawn in</button>
           </div>
@@ -215,7 +302,7 @@
   <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
   <script src="../assets/js/main.js?v=20260626-game-shell-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260626-sfx-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260626-craft-ui-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

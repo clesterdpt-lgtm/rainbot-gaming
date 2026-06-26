@@ -577,7 +577,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 /* ===== Game page ===== */
 .game-page {
   --game-shell-gap: 14px;
-  --game-side-width: clamp(270px, 20vw, 320px);
+  --game-side-width: clamp(300px, 22vw, 370px);
   padding: 10px clamp(10px, 2vw, 18px) 14px;
   width: min(100%, 1560px);
   max-width: 1560px;
@@ -644,6 +644,9 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent-3) 65%, transparent) color-mix(in srgb, var(--panel-2) 70%, transparent);
 }
+.game-side > * {
+  flex-shrink: 0;
+}
 @media (max-width: 900px) {
   .game-side { position: static; max-height: none; }
 }
@@ -707,22 +710,23 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   background: linear-gradient(180deg, rgba(31, 30, 54, 0.96), rgba(16, 16, 31, 0.96));
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.62;
   color: var(--ink-dim);
-  max-height: min(36dvh, 360px);
-  overflow: auto;
-  padding: 11px 12px;
+  max-height: none;
+  overflow: visible;
+  padding: 14px 15px;
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--accent-3) 65%, transparent) color-mix(in srgb, var(--panel-2) 70%, transparent);
 }
 .game-side__howto summary {
   cursor: pointer;
   font-family: var(--font-display);
-  font-size: 14px; letter-spacing: 1px;
+  font-size: 15px; letter-spacing: 1px;
   color: var(--accent-3);
   list-style: none;
-  padding: 2px 0;
+  min-height: 32px;
+  padding: 4px 0;
   user-select: none;
 }
 .game-side__howto summary::-webkit-details-marker { display: none; }
@@ -733,8 +737,12 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   transition: transform 0.15s;
 }
 .game-side__howto[open] summary::before { transform: rotate(90deg); }
-.game-side__howto ul { padding-left: 18px; margin: 8px 0 0; }
-.game-side__howto li { margin-bottom: 4px; }
+.game-side__howto ul { padding-left: 20px; margin: 10px 0 0; }
+.game-side__howto li { margin-bottom: 7px; }
+.game-side__howto p {
+  font-size: 12.5px !important;
+  line-height: 1.45;
+}
 .game-side > #ad-leaderboard,
 .game-side > #ad-rectangle,
 .game-side > .ad-slot {
@@ -1581,7 +1589,8 @@ body.rb-game-maxed .clowder-stage {
   }
 
   .game-side__howto {
-    max-height: 30dvh;
+    max-height: none;
+    overflow: visible;
   }
 }
 

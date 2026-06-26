@@ -27,14 +27,6 @@
       color: var(--ink); font-family: var(--font-mono); font-size: 10px; padding: 1px 5px;
     }
 
-    /* mobile touch controls (hidden on desktop) */
-    .sc-mobile { display: none; gap: 8px; margin-top: 10px; }
-    .sc-mobile .btn { min-height: 46px; font-size: 13px; }
-    .sc-mobile__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .sc-mobile__row--mode { grid-template-columns: 1fr 1fr; }
-    .sc-mobile .btn.is-active { border-color: var(--accent-3); box-shadow: 0 0 14px rgba(255,212,59,0.25); }
-    @media (hover: none) and (pointer: coarse) { .sc-mobile { display: grid; } }
-
     .canvas-wrap--rizzcraft.is-maxed #gameCanvas,
     .canvas-wrap--rizzcraft:fullscreen #gameCanvas,
     .canvas-wrap--rizzcraft:-webkit-full-screen #gameCanvas {
@@ -116,6 +108,7 @@
         <div class="hud">
           <div class="hud__item"><span class="hud__label">HEALTH</span><span class="hud__value" id="hud-hp">20/20</span></div>
           <div class="hud__item"><span class="hud__label">DAY</span><span class="hud__value" id="hud-day">☀️ 1</span></div>
+          <div class="hud__item"><span class="hud__label">MODE</span><span class="hud__value" id="hud-mode">Survival</span></div>
           <div class="hud__item"><span class="hud__label">MINED</span><span class="hud__value" id="hud-mined">0</span></div>
           <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
@@ -161,27 +154,9 @@
           </div>
           <div class="sc-controls">
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">New world</button>
+            <button class="btn btn--yellow" id="btn-creative" style="font-size:13px;padding:8px 12px;">Creative: Off</button>
           </div>
 
-          <p class="sc-tips">
-            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · mouse look · <kbd>Space</kbd> jump ·
-            <strong style="color:var(--ink);">Left-click</strong> mine / attack ·
-            <strong style="color:var(--ink);">Right-click</strong> place ·
-            <kbd>1</kbd>–<kbd>9</kbd> or scroll to pick a slot · <kbd>B</kbd> bag · <kbd>E</kbd> craft · <kbd>P</kbd> pause.
-          </p>
-
-          <!-- Touch controls -->
-          <div class="sc-mobile" aria-label="Touch controls">
-            <div class="sc-mobile__row">
-              <button class="btn btn--secondary" id="btn-left" type="button">◀</button>
-              <button class="btn btn--yellow" id="btn-jump" type="button">⤒ Jump</button>
-              <button class="btn btn--secondary" id="btn-right" type="button">▶</button>
-            </div>
-            <div class="sc-mobile__row sc-mobile__row--mode">
-              <button class="btn btn--primary is-active" id="btn-mine" type="button">⛏ Mine</button>
-              <button class="btn btn--secondary" id="btn-place" type="button">▣ Place</button>
-            </div>
-          </div>
         </div>
 
         <div class="game-side__panel">
@@ -227,7 +202,7 @@
   <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
   <script src="../assets/js/main.js?v=20260625-avatar-art-2"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260626-rizzcraft-worldplay-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260626-rizzcraft-creative-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

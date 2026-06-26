@@ -288,9 +288,9 @@
     map: waterTexture,
     vertexColors: true,
     transparent: true,
-    opacity: 0.72,
-    shininess: 118,
-    specular: 0x9defff,
+    opacity: 0.82,
+    shininess: 34,
+    specular: 0x64cfee,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
@@ -424,6 +424,7 @@
     oceanFatigue: 0,
     visibleChunkCount: 0,
     mode: "mine",
+    creative: false,
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -473,6 +474,9 @@
     keyboard: { forward: 0, right: 0 },
     touch: { forward: 0, right: 0 },
   };
+  const touchMoveHeld = { forward: false, back: false, left: false, right: false };
+  const touchLook = { pointerId: null, x: 0, y: 0 };
+  let suppressMouseUntil = 0;
   const friendlyHurtColor = new THREE.Color(0xffc5f0);
 
   function hexToRgb(hex) {
@@ -556,25 +560,25 @@
     const image = ctx.createImageData(size, size);
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        const waveA = Math.sin((x + y * 0.55) * 0.42);
-        const waveB = Math.sin((x * 0.35 - y * 0.9) * 0.55);
+        const waveA = Math.sin(x * 0.16 + y * 0.06);
+        const waveB = Math.sin(x * 0.05 - y * 0.18 + 1.7);
         const noise = hash32(x * 37 + y * 101 + 991) / 4294967295;
-        const foam = (waveA + waveB) * 0.5 + noise * 0.75;
+        const foam = 0.62 + waveA * 0.22 + waveB * 0.16 + (noise - 0.5) * 0.12;
         const i = (y * size + x) * 4;
-        image.data[i] = 24 + Math.floor(clamp(foam, 0, 1.6) * 34);
-        image.data[i + 1] = 120 + Math.floor(clamp(foam, 0, 1.6) * 58);
-        image.data[i + 2] = 190 + Math.floor(clamp(foam, 0, 1.6) * 52);
-        image.data[i + 3] = 205 + Math.floor(noise * 44);
+        image.data[i] = 28 + Math.floor(clamp(foam, 0, 1) * 24);
+        image.data[i + 1] = 128 + Math.floor(clamp(foam, 0, 1) * 42);
+        image.data[i + 2] = 196 + Math.floor(clamp(foam, 0, 1) * 34);
+        image.data[i + 3] = 232;
       }
     }
     ctx.putImageData(image, 0, 0);
-    ctx.strokeStyle = "rgba(195,245,255,0.52)";
+    ctx.strokeStyle = "rgba(195,245,255,0.28)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 5; i++) {
       ctx.beginPath();
-      const y = i * 8 + (i % 2 ? 2 : -1);
+      const y = 8 + i * 12 + (i % 2 ? 2 : -1);
       for (let x = -4; x <= size + 4; x += 4) {
-        const yy = y + Math.sin((x + i * 11) * 0.18) * 2.4;
+        const yy = y + Math.sin((x + i * 11) * 0.12) * 1.4;
         if (x === -4) ctx.moveTo(x, yy);
         else ctx.lineTo(x, yy);
       }
@@ -582,10 +586,11 @@
     }
     const texture = new THREE.CanvasTexture(texCanvas);
     texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1.6, 1.6);
+    texture.repeat.set(1.05, 1.05);
     texture.needsUpdate = true;
     return texture;
   }
@@ -602,11 +607,87 @@
     moveSources.keyboard.right = (keyMove.right ? 1 : 0) - (keyMove.left ? 1 : 0);
     applyDirectionalInput();
   }
+  function refreshTouchMovement() {
+    moveSources.touch.forward = (touchMoveHeld.forward ? 1 : 0) - (touchMoveHeld.back ? 1 : 0);
+    moveSources.touch.right = (touchMoveHeld.right ? 1 : 0) - (touchMoveHeld.left ? 1 : 0);
+    applyDirectionalInput();
+  }
+  function setTouchMove(direction, down) {
+    if (!Object.prototype.hasOwnProperty.call(touchMoveHeld, direction)) return;
+    touchMoveHeld[direction] = down;
+    refreshTouchMovement();
+  }
+  function canUseMobileAction() {
+    return state.started && !state.paused && !state.crafting && !state.bagOpen;
+  }
+  function setMobileMine(down) {
+    if (!down) {
+      state.input.mine = false;
+      return;
+    }
+    if (!canUseMobileAction()) return;
+    state.input.mine = true;
+    triggerHeldSwing(selectedIsTorch() ? "attack" : "gather");
+  }
+  function queueMobilePlace() {
+    if (!canUseMobileAction()) return;
+    state.input.place = true;
+    state.placeQueued = true;
+  }
+  function creativeItemCodes() {
+    return Object.keys(DEF).map(Number).filter((code) => {
+      const d = DEF[code];
+      return d && code > AIR && (isPlaceable(code) || d.kind === "tool");
+    });
+  }
+  function creativeStack(code) {
+    return { code, n: Math.max(1, maxStack(code)) };
+  }
+  function applyCreativeLoadout() {
+    const codes = creativeItemCodes();
+    const blocks = codes.filter((code) => isPlaceable(code));
+    const tools = codes.filter((code) => !isPlaceable(code));
+    const ordered = blocks.concat(tools);
+    state.hotbar = ordered.slice(0, HOTBAR).map(creativeStack);
+    state.bag = ordered.slice(HOTBAR, HOTBAR + BAG_SLOTS).map(creativeStack);
+    while (state.hotbar.length < HOTBAR) state.hotbar.push(null);
+    while (state.bag.length < BAG_SLOTS) state.bag.push(null);
+  }
+  function refillCreativeInventory() {
+    if (!state.creative) return;
+    state.player.hp = MAX_HP;
+    state.hotbar.forEach((slot) => { if (slot) slot.n = Math.max(1, maxStack(slot.code)); });
+    state.bag.forEach((slot) => { if (slot) slot.n = Math.max(1, maxStack(slot.code)); });
+  }
+  function toggleCreativeMode(force) {
+    const next = typeof force === "boolean" ? force : !state.creative;
+    state.creative = next;
+    if (next) applyCreativeLoadout();
+    updateCreativeButtons();
+    updateHud();
+    api.toast(next ? "Creative mode on: unlimited blocks + no damage" : "Survival mode on", next ? "good" : "");
+  }
+  function updateCreativeButtons() {
+    const button = document.getElementById("btn-creative");
+    if (button) {
+      button.textContent = state.creative ? "Creative: On" : "Creative: Off";
+      button.classList.toggle("is-active", state.creative);
+    }
+    if (ui && ui.mobileControls) {
+      ui.mobileControls.querySelectorAll('[data-mobile-action="creative"]').forEach((el) => {
+        el.classList.toggle("is-active", state.creative);
+      });
+    }
+  }
   function clearDirectionalInput() {
     keyMove.forward = false;
     keyMove.back = false;
     keyMove.left = false;
     keyMove.right = false;
+    touchMoveHeld.forward = false;
+    touchMoveHeld.back = false;
+    touchMoveHeld.left = false;
+    touchMoveHeld.right = false;
     moveSources.keyboard.forward = 0;
     moveSources.keyboard.right = 0;
     moveSources.touch.forward = 0;
@@ -2097,8 +2178,8 @@
   }
   function updateWaterTexture(dt) {
     if (!waterTexture) return;
-    waterTexture.offset.x = (waterTexture.offset.x + dt * 0.018) % 1;
-    waterTexture.offset.y = (waterTexture.offset.y + dt * 0.011) % 1;
+    waterTexture.offset.x = (waterTexture.offset.x + dt * 0.0025) % 1;
+    waterTexture.offset.y = (waterTexture.offset.y + dt * 0.0015) % 1;
   }
   function buildMesh(arr, material) {
     const geometry = new THREE.BufferGeometry();
@@ -3578,6 +3659,13 @@
   }
   function hurtPlayer(dmg) {
     const p = state.player;
+    if (state.creative) {
+      p.hp = MAX_HP;
+      p.hurtCd = 0;
+      p.hurtAnim = 0;
+      state.attackFlash = 0;
+      return;
+    }
     if (p.hurtCd > 0) return;
     p.hp -= dmg;
     p.hurtCd = DAMAGE_GRACE;
@@ -4360,7 +4448,7 @@
     }
     const code = getBlock(t.x, t.y, t.z);
     if (code === BEDROCK || code === WATER || code === LAVA) return;
-    const need = breakTimeFor(code);
+    const need = state.creative ? 0.04 : breakTimeFor(code);
     if (!state.mining || state.mining.x !== t.x || state.mining.y !== t.y || state.mining.z !== t.z) {
       state.mining = { x: t.x, y: t.y, z: t.z, progress: 0, need };
       triggerHeldSwing("gather");
@@ -4424,7 +4512,7 @@
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
     setBlock(p.x, p.y, p.z, slot.code);
-    decrementSelectedSlot();
+    if (!state.creative) decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
   }
@@ -4690,17 +4778,18 @@
     }
   }
   function updateHud() {
+    refillCreativeInventory();
     setText("hud-hp", `${Math.max(0, Math.ceil(state.player.hp))}/${MAX_HP}`);
     updateHealthMeter();
     setText("hud-day", `${isNight() ? "Moon" : "Sun"} ${state.day}`);
+    setText("hud-mode", state.creative ? "Creative" : "Survival");
     setText("hud-mined", state.mined.toLocaleString());
     setText("hud-score", state.score.toLocaleString());
     setText("hud-high", state.high.toLocaleString());
-    ui.objective.textContent = `${BIOMES[state.biome[surfaceIndex(Math.floor(state.player.x), Math.floor(state.player.z))]].name} - ${WORLD_X}x${WORLD_Z}x${WORLD_Y} world - lava below ${LAVA_LEVEL} - ${state.mobs.length} enemies - ${state.caveCreatures.length} cave creatures - ${state.friendlies.length} pals`;
     ui.hotbar.innerHTML = state.hotbar.map((slot, i) => {
       const selected = i === state.selected ? " is-selected" : "";
       const label = slotName(slot, "");
-      const count = slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
+      const count = state.creative && slot ? "<b>∞</b>" : slot && slot.n > 1 ? `<b>${slot.n}</b>` : "";
       const swatch = slotSwatch(slot);
       return `<button class="rizz3d-slot${selected}" data-slot="${i}" title="${escapeAttr(label || "Empty")}"><em>${i + 1}</em>${swatch}${count}</button>`;
     }).join("");
@@ -4710,6 +4799,7 @@
       ui.bagButton.classList.toggle("is-open", state.bagOpen);
     }
     renderBag();
+    updateCreativeButtons();
     updateHeldItem();
   }
   function updateHealthMeter() {
@@ -4948,13 +5038,13 @@
     const style = document.createElement("style");
     style.textContent = `
       .rizz3d-crosshair{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);pointer-events:none;z-index:5}
+      .canvas-wrap--rizzcraft #gameCanvas{touch-action:none}
       .rizz3d-crosshair:before,.rizz3d-crosshair:after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 6px rgba(0,0,0,.7)}
       .rizz3d-crosshair:before{left:8px;top:1px;width:2px;height:16px}.rizz3d-crosshair:after{left:1px;top:8px;width:16px;height:2px}
       .rizz3d-health{position:absolute;left:12px;top:12px;z-index:6;width:min(260px,44%);padding:7px 9px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.76);box-shadow:0 8px 24px rgba(0,0,0,.22);pointer-events:none}
       .rizz3d-health__row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#fff;font:900 10px var(--font-mono);text-transform:uppercase}.rizz3d-health__value{font-size:11px;color:#ffd75a}
       .rizz3d-health__track{height:10px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
       .rizz3d-health__fill{display:block;width:100%;height:100%;border-radius:5px;background:linear-gradient(90deg,#55f06c,#ffd75a 62%,#ff4c6d);box-shadow:0 0 16px rgba(85,240,108,.35);transition:width 120ms ease,filter 120ms ease}
-      .rizz3d-chip{position:absolute;left:12px;bottom:62px;z-index:5;padding:7px 10px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.72);color:#fff;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target{display:none;position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target.is-visible{display:block}
       .rizz3d-progress{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);z-index:5;width:min(340px,72%);height:5px;background:rgba(0,0,0,.55);border-radius:3px;overflow:hidden;pointer-events:none}.rizz3d-progress span{display:block;width:0;height:100%;background:#ffd43b}
@@ -4979,7 +5069,19 @@
       .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
-      @media (max-width:760px){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-chip{bottom:50px;font-size:9px;max-width:70%}.rizz3d-bag-button{left:auto;right:8px;height:32px}.rizz3d-bag-panel{right:8px;bottom:48px}}
+      .rizz3d-mobile-controls{display:none;position:absolute;inset:0;z-index:9;pointer-events:none;touch-action:none}
+      .rizz3d-mobile-pad,.rizz3d-mobile-actions{position:absolute;display:grid;gap:6px;pointer-events:auto}
+      .rizz3d-mobile-pad{left:12px;bottom:56px;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}
+      .rizz3d-mobile-actions{right:12px;bottom:56px;grid-template-columns:repeat(2,58px)}
+      .rizz3d-mobile-look{position:absolute;right:12px;top:54px;max-width:142px;padding:5px 7px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(5,7,13,.48);color:rgba(255,255,255,.72);font:900 9px var(--font-mono);text-transform:uppercase;letter-spacing:.04em;pointer-events:none}
+      .rizz3d-mobile-button{min-width:0;min-height:46px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(5,7,13,.62);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.13);color:#fff;font:900 11px var(--font-mono);text-transform:uppercase;letter-spacing:.02em;touch-action:none;user-select:none;-webkit-user-select:none}
+      .rizz3d-mobile-button:active,.rizz3d-mobile-button.is-active{border-color:#ffd43b;background:rgba(255,212,59,.24);box-shadow:0 0 0 2px rgba(255,212,59,.24),0 10px 28px rgba(0,0,0,.3)}
+      .rizz3d-mobile-button--primary{background:rgba(255,212,59,.82);border-color:rgba(255,255,255,.32);color:#120d05}
+      .rizz3d-mobile-button--danger{background:rgba(255,91,67,.78);border-color:rgba(255,255,255,.3);color:#fff}
+      .rizz3d-mobile-button--wide{grid-column:1 / -1}
+      .rizz3d-mobile-button[data-mobile-move="forward"]{grid-column:2;grid-row:1}.rizz3d-mobile-button[data-mobile-move="left"]{grid-column:1;grid-row:2}.rizz3d-mobile-button[data-mobile-move="right"]{grid-column:3;grid-row:2}.rizz3d-mobile-button[data-mobile-move="back"]{grid-column:2;grid-row:3}
+      @media (hover:none) and (pointer:coarse),(max-width:760px){.rizz3d-mobile-controls{display:block}.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
+      @media (max-width:520px){.rizz3d-mobile-pad{left:8px;bottom:50px;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:5px}.rizz3d-mobile-actions{right:8px;bottom:50px;grid-template-columns:repeat(2,52px);gap:5px}.rizz3d-mobile-button{min-height:40px;border-radius:10px;font-size:9px}.rizz3d-mobile-look{display:none}.rizz3d-health{width:min(214px,56%)}}
     `;
     document.head.appendChild(style);
     const damage = document.createElement("div");
@@ -4989,8 +5091,6 @@
     health.innerHTML = `<div class="rizz3d-health__row"><span>Health</span><b class="rizz3d-health__value">100/100</b></div><div class="rizz3d-health__track"><span class="rizz3d-health__fill"></span></div>`;
     const crosshair = document.createElement("div");
     crosshair.className = "rizz3d-crosshair";
-    const objective = document.createElement("div");
-    objective.className = "rizz3d-chip";
     const target = document.createElement("div");
     target.className = "rizz3d-target";
     const progress = document.createElement("div");
@@ -5031,20 +5131,42 @@
       if (button) setBagHoverText(button.dataset.itemName);
     });
     bagPanel.addEventListener("pointerleave", () => setBagHoverText());
-    wrap.append(damage, health, crosshair, objective, target, progress, selectionCue, hotbar, bagButton, bagPanel);
+    const mobileControls = document.createElement("div");
+    mobileControls.className = "rizz3d-mobile-controls";
+    mobileControls.setAttribute("aria-label", "Mobile controls");
+    mobileControls.innerHTML = `
+      <div class="rizz3d-mobile-look">Drag screen to look</div>
+      <div class="rizz3d-mobile-pad" aria-label="Move">
+        <button class="rizz3d-mobile-button" type="button" data-mobile-move="forward" aria-label="Move forward">▲</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-move="left" aria-label="Move left">◀</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-move="right" aria-label="Move right">▶</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-move="back" aria-label="Move backward">▼</button>
+      </div>
+      <div class="rizz3d-mobile-actions" aria-label="Actions">
+        <button class="rizz3d-mobile-button rizz3d-mobile-button--danger" type="button" data-mobile-action="mine">Mine</button>
+        <button class="rizz3d-mobile-button rizz3d-mobile-button--primary" type="button" data-mobile-action="place">Place</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-action="jump">Jump</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-action="sprint">Run</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-action="bag">Bag</button>
+        <button class="rizz3d-mobile-button" type="button" data-mobile-action="craft">Craft</button>
+        <button class="rizz3d-mobile-button rizz3d-mobile-button--wide" type="button" data-mobile-action="creative">Creative</button>
+      </div>
+    `;
+    bindMobileHudControls(mobileControls);
+    wrap.append(damage, health, crosshair, target, progress, selectionCue, hotbar, bagButton, bagPanel, mobileControls);
     return {
       damage,
       health,
       healthValue: health.querySelector(".rizz3d-health__value"),
       healthFill: health.querySelector(".rizz3d-health__fill"),
       crosshair,
-      objective,
       target,
       progress: progress.firstElementChild,
       selectionCue,
       hotbar,
       bagButton,
       bagPanel,
+      mobileControls,
     };
   }
 
@@ -5085,6 +5207,7 @@
     state.selected = 0;
     heldRenderCode = null;
     state.sigmaForged = false;
+    state.creative = false;
     state.swingTimer = 0;
     state.swingKind = "gather";
     state.attackFlash = 0;
@@ -5149,6 +5272,7 @@
       mined: state.mined,
       score: state.score,
       sigmaForged: state.sigmaForged,
+      creative: state.creative,
     };
   }
   function restoreGame(saved) {
@@ -5182,6 +5306,9 @@
     state.mined = Number(data.mined) || 0;
     state.score = Number(data.score) || 0;
     state.sigmaForged = !!data.sigmaForged;
+    state.creative = !!data.creative;
+    if (state.creative) refillCreativeInventory();
+    updateCreativeButtons();
     if (ensureStarterPick(true)) api.toast("Wood Pickaxe added", "good");
     state.started = true;
     state.paused = false;
@@ -5246,9 +5373,11 @@
     window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => { if (document.hidden) clearDirectionalInput(); });
     canvas.addEventListener("click", () => {
+      if (performance.now() < suppressMouseUntil) return;
       if (state.started && !state.paused && !state.crafting && !state.bagOpen && document.pointerLockElement !== canvas) canvas.requestPointerLock && canvas.requestPointerLock();
     });
     canvas.addEventListener("mousedown", (event) => {
+      if (performance.now() < suppressMouseUntil) return;
       if (!state.started || state.paused || state.crafting || state.bagOpen) return;
       canvas.focus();
       if (event.button === 2) {
@@ -5274,6 +5403,31 @@
       state.player.yaw -= event.movementX * 0.0022;
       state.player.pitch = clamp(state.player.pitch - event.movementY * 0.0022, -1.45, 1.45);
     });
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" || !canUseMobileAction()) return;
+      suppressMouseUntil = performance.now() + 700;
+      touchLook.pointerId = event.pointerId;
+      touchLook.x = event.clientX;
+      touchLook.y = event.clientY;
+      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener("pointermove", (event) => {
+      if (touchLook.pointerId !== event.pointerId) return;
+      const dx = event.clientX - touchLook.x;
+      const dy = event.clientY - touchLook.y;
+      touchLook.x = event.clientX;
+      touchLook.y = event.clientY;
+      state.player.yaw -= dx * 0.006;
+      state.player.pitch = clamp(state.player.pitch - dy * 0.006, -1.45, 1.45);
+      event.preventDefault();
+    }, { passive: false });
+    const stopTouchLook = (event) => {
+      if (touchLook.pointerId === event.pointerId) touchLook.pointerId = null;
+    };
+    canvas.addEventListener("pointerup", stopTouchLook);
+    canvas.addEventListener("pointercancel", stopTouchLook);
+    canvas.addEventListener("lostpointercapture", stopTouchLook);
   }
   function unlockPointer() {
     if (document.pointerLockElement === canvas && document.exitPointerLock) document.exitPointerLock();
@@ -5286,6 +5440,7 @@
     });
     bind("btn-pause", togglePause);
     bind("btn-restart", restart);
+    bind("btn-creative", () => toggleCreativeMode());
     bind("btn-craft", () => toggleCrafting());
     bind("btn-craft-close", () => toggleCrafting(false));
     bind("btn-mine", () => { state.mode = "mine"; updateModeButtons(); });
@@ -5328,6 +5483,47 @@
     el.addEventListener("mousedown", on);
     el.addEventListener("mouseup", off);
     el.addEventListener("mouseleave", off);
+  }
+  function bindMobileHudControls(root) {
+    if (!root) return;
+    root.addEventListener("contextmenu", (event) => event.preventDefault());
+    root.querySelectorAll("[data-mobile-move]").forEach((button) => {
+      const direction = button.dataset.mobileMove;
+      bindTouchButton(button, () => setTouchMove(direction, true), () => setTouchMove(direction, false));
+    });
+    root.querySelectorAll("[data-mobile-action]").forEach((button) => {
+      const action = button.dataset.mobileAction;
+      if (action === "mine") bindTouchButton(button, () => setMobileMine(true), () => setMobileMine(false));
+      else if (action === "place") bindTouchButton(button, () => queueMobilePlace(), () => { state.input.place = false; });
+      else if (action === "jump") bindTouchButton(button, () => { state.input.jump = true; }, () => { state.input.jump = false; });
+      else if (action === "sprint") bindTouchButton(button, () => { state.input.sprint = true; }, () => { state.input.sprint = false; });
+      else if (action === "bag") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleBag(); });
+      else if (action === "craft") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleCrafting(); });
+      else if (action === "creative") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); toggleCreativeMode(); });
+    });
+  }
+  function bindTouchButton(el, down, up) {
+    let active = false;
+    const start = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      active = true;
+      el.classList.add("is-active");
+      if (event.pointerId !== undefined && el.setPointerCapture) el.setPointerCapture(event.pointerId);
+      down();
+    };
+    const end = (event) => {
+      if (!active) return;
+      event.preventDefault();
+      event.stopPropagation();
+      active = false;
+      el.classList.remove("is-active");
+      up();
+    };
+    el.addEventListener("pointerdown", start, { passive: false });
+    el.addEventListener("pointerup", end, { passive: false });
+    el.addEventListener("pointercancel", end, { passive: false });
+    el.addEventListener("lostpointercapture", end);
   }
   function updateModeButtons() {
     const mine = document.getElementById("btn-mine");

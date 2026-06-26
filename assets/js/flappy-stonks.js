@@ -19,6 +19,8 @@
   const FLAP_VY = -430;
   const SHIELD_BOUNCE_VY = -360;
   const MAX_FALL_VY = 640;
+  const WARMUP_MS = 120000;
+  const HARD_MS = 240000;
 
   const C = {
     bg0: "#05070d",
@@ -118,6 +120,7 @@
   let trailT = 0;
   let eventT = 0;
   let headlineT = 0;
+  let runMs = 0;
   let distance = 0;
   let shake = 0;
   let candles = [];
@@ -300,8 +303,9 @@
     marketLabel = "OPEN";
     spawnT = 520;
     trailT = 0;
-    eventT = 5500;
+    eventT = 45000;
     headlineT = 0;
+    runMs = 0;
     distance = 0;
     shake = 0;
     candles = [];
@@ -311,8 +315,8 @@
     headline = null;
     closeLine = null;
     resetTrail();
-    spawnCandle(W + 120, true);
-    spawnCandle(W + 460, false);
+    spawnCandle(W + 180, true);
+    spawnCandle(W + 680, false);
     hideOverlay();
     if (wrap) wrap.classList.remove("is-paused");
     updateHud();
@@ -321,32 +325,47 @@
   }
 
   function currentDifficulty() {
-    return clamp(score / 26, 0, 1);
+    const t = clamp((runMs - WARMUP_MS) / (HARD_MS - WARMUP_MS), 0, 1);
+    const timePressure = t * t * (3 - 2 * t);
+    const scorePressure = clamp((score - 45) / 85, 0, 1) * 0.75;
+    return clamp(Math.max(timePressure, scorePressure), 0, 1);
+  }
+
+  function eventImpact() {
+    return clamp(0.18 + currentDifficulty() * 0.82, 0.18, 1);
   }
 
   function activeMods() {
     if (!headline || headlineT <= 0) return { gravity: 1, speed: 1, gap: 0 };
+    const impact = eventImpact();
     return {
-      gravity: headline.gravity || 1,
-      speed: headline.speed || 1,
-      gap: headline.gap || 0,
+      gravity: 1 + ((headline.gravity || 1) - 1) * impact,
+      speed: 1 + ((headline.speed || 1) - 1) * impact,
+      gap: (headline.gap || 0) * impact,
     };
   }
 
   function baseSpeed() {
-    return 205 + currentDifficulty() * 72;
+    return 168 + currentDifficulty() * 108;
   }
 
   function gapSize() {
     const mods = activeMods();
-    return clamp(192 - currentDifficulty() * 44 + mods.gap, 138, 218);
+    return clamp(262 - currentDifficulty() * 104 + mods.gap, 150, 286);
+  }
+
+  function nextEventDelay() {
+    const d = currentDifficulty();
+    return rand(28000 - d * 17000, 43000 - d * 25000);
   }
 
   function spawnCandle(x, first) {
-    const gap = first ? 250 : gapSize();
+    const d = currentDifficulty();
+    const gap = first ? 292 : gapSize();
     const margin = 92;
     const last = candles[candles.length - 1];
-    const center = last ? clamp(last.gapY + rand(-120, 120), margin + gap / 2, H - margin - gap / 2) : H * 0.5;
+    const maxStep = 72 + d * 56;
+    const center = last ? clamp(last.gapY + rand(-maxStep, maxStep), margin + gap / 2, H - margin - gap / 2) : H * 0.5;
     const red = Math.random() < 0.52;
     const width = rand(76, 94);
     const candle = {
@@ -364,7 +383,7 @@
     };
     candles.push(candle);
 
-    if (!first && Math.random() < 0.72) {
+    if (!first && Math.random() < 0.84 - d * 0.24) {
       pickups.push({
         type: Math.random() < 0.78 ? "dividend" : "shield",
         x: x + width * 0.5,
@@ -520,6 +539,7 @@
     }
 
     const dts = dt / 1000;
+    runMs += dt;
     const mods = activeMods();
     const speed = baseSpeed() * mods.speed;
     const gravity = GRAVITY * mods.gravity;
@@ -536,7 +556,7 @@
       }
     }
     if (eventT <= 0) {
-      eventT = rand(8200, 12000);
+      eventT = nextEventDelay();
       triggerHeadline(false);
     }
 
@@ -560,7 +580,7 @@
     trail = trail.filter((point) => point.x > -30);
 
     if (spawnT <= 0) {
-      const spacing = clamp(330 - currentDifficulty() * 34, 285, 340);
+      const spacing = clamp(440 - currentDifficulty() * 142, 298, 460);
       spawnT += (spacing / speed) * 1000;
       const last = candles[candles.length - 1];
       spawnCandle(Math.max(W + 70, last ? last.x + spacing : W + 70), false);
@@ -1081,6 +1101,8 @@
         phase,
         paused,
         score,
+        runSeconds: Math.round(runMs / 1000),
+        difficulty: Number(currentDifficulty().toFixed(3)),
         price: Number(price.toFixed(2)),
         y: Math.round(player.y),
         vy: Math.round(player.vy),

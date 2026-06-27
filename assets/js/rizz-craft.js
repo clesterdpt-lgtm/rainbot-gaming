@@ -2479,7 +2479,12 @@
             const ny = y + face.n[1];
             const nz = z + face.n[2];
             const neighbor = getBlock(nx, ny, nz);
-            const visible = code === WATER ? !waterOccupiesNeighbor(neighbor) : code === LAVA ? neighbor !== LAVA && neighbor !== BEDROCK : !occludes(neighbor);
+            // Fluids only show faces that meet open air (or the other fluid). Rendering
+            // faces against the solid seabed/shore puts a translucent face on the exact
+            // same plane as the block beneath it, which z-fights into a shimmering mess.
+            const visible = code === WATER ? (neighbor === AIR || neighbor === LAVA)
+              : code === LAVA ? (neighbor === AIR || neighbor === WATER)
+              : !occludes(neighbor);
             if (visible) pushFace(arr, x, y, z, code, face);
           }
         }
@@ -5592,23 +5597,56 @@
     group.add(mesh);
     return mesh;
   }
+  function addHeldToolBoxRot(group, pos, scale, material, rot) {
+    const mesh = new THREE.Mesh(new THREE.BoxBufferGeometry(1, 1, 1), material);
+    mesh.position.set(pos[0], pos[1], pos[2]);
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    mesh.rotation.set(rot[0], rot[1], rot[2]);
+    group.add(mesh);
+    return mesh;
+  }
+  // Lighten (f>1) or darken (f<1) a hex colour, returned as an rgb() string THREE accepts.
+  function shadeHex(hex, f) {
+    const c = hexToRgb(hex);
+    const v = (x) => Math.round(clamp(x * f, 0, 1) * 255);
+    return `rgb(${v(c[0])},${v(c[1])},${v(c[2])})`;
+  }
   function buildHeldPick(color) {
-    const handle = heldMaterial("#7c4e29");
-    const headColor = (color || "#b98245").toLowerCase() === "#b98245" ? "#9b6532" : color || "#b98245";
-    const head = heldMaterial(headColor);
-    const tool = addHeldToolGroup([0.42, -0.42, -0.78], [0.08, 0.04, -0.58]);
-    addHeldToolBox(tool, [0, 0, 0], [0.07, 0.62, 0.07], handle);
-    addHeldToolBox(tool, [0, 0.29, 0], [0.36, 0.075, 0.08], head);
+    const handleMat = heldMaterial("#7c4e29");
+    const gripMat = heldMaterial("#5a3218");
+    const baseHead = (color || "#b98245").toLowerCase() === "#b98245" ? "#9b6532" : (color || "#b98245");
+    const headMat = heldMaterial(baseHead);
+    const tipMat = heldMaterial(shadeHex(baseHead, 0.72));
+    const shineMat = heldMaterial(shadeHex(baseHead, 1.3));
+    const tool = addHeldToolGroup([0.42, -0.46, -0.78], [0.1, 0.04, -0.55]);
+    // wooden handle + leather grip
+    addHeldToolBox(tool, [0, -0.03, 0], [0.075, 0.74, 0.075], handleMat);
+    addHeldToolBox(tool, [0, -0.27, 0], [0.1, 0.22, 0.1], gripMat);
+    // head collar + two prongs that curve down and out, with sharpened tips
+    addHeldToolBox(tool, [0, 0.34, 0], [0.14, 0.13, 0.13], headMat);
+    addHeldToolBoxRot(tool, [0.16, 0.33, 0], [0.27, 0.1, 0.1], headMat, [0, 0, -0.5]);
+    addHeldToolBoxRot(tool, [-0.16, 0.33, 0], [0.27, 0.1, 0.1], headMat, [0, 0, 0.5]);
+    addHeldToolBoxRot(tool, [0.33, 0.21, 0], [0.1, 0.16, 0.08], tipMat, [0, 0, -0.5]);
+    addHeldToolBoxRot(tool, [-0.33, 0.21, 0], [0.1, 0.16, 0.08], tipMat, [0, 0, 0.5]);
+    addHeldToolBox(tool, [0, 0.41, 0.02], [0.4, 0.03, 0.05], shineMat);
   }
   function buildHeldSword(color) {
-    const bladeColor = (color || "#a6a9b5").toLowerCase() === "#b98245" ? "#9b6532" : color || "#a6a9b5";
-    const blade = heldMaterial(bladeColor);
-    const guard = heldMaterial("#8a572d");
-    const handle = heldMaterial("#5a3218");
-    const tool = addHeldToolGroup([0.36, -0.34, -0.8], [0.08, 0.04, -0.58]);
-    addHeldToolBox(tool, [0, 0.2, 0], [0.06, 0.62, 0.06], blade);
-    addHeldToolBox(tool, [0, -0.1, 0], [0.28, 0.07, 0.08], guard);
-    addHeldToolBox(tool, [0, -0.27, 0], [0.075, 0.3, 0.075], handle);
+    const baseBlade = (color || "#a6a9b5").toLowerCase() === "#b98245" ? "#9b6532" : (color || "#a6a9b5");
+    const bladeMat = heldMaterial(baseBlade);
+    const shineMat = heldMaterial(shadeHex(baseBlade, 1.38));
+    const edgeMat = heldMaterial(shadeHex(baseBlade, 0.68));
+    const guardMat = heldMaterial("#caa24a");
+    const handleMat = heldMaterial("#5a3218");
+    const tool = addHeldToolGroup([0.36, -0.4, -0.8], [0.08, 0.04, -0.58]);
+    // tapered blade with a bright fuller and a darker edge
+    addHeldToolBox(tool, [0, 0.27, 0], [0.085, 0.66, 0.04], bladeMat);
+    addHeldToolBox(tool, [0, 0.63, 0], [0.05, 0.14, 0.035], bladeMat);
+    addHeldToolBox(tool, [-0.02, 0.27, 0.006], [0.024, 0.62, 0.046], shineMat);
+    addHeldToolBox(tool, [0.032, 0.25, -0.006], [0.018, 0.58, 0.046], edgeMat);
+    // gold cross-guard, leather grip, gold pommel
+    addHeldToolBox(tool, [0, -0.12, 0], [0.32, 0.075, 0.085], guardMat);
+    addHeldToolBox(tool, [0, -0.29, 0], [0.07, 0.32, 0.07], handleMat);
+    addHeldToolBox(tool, [0, -0.47, 0], [0.11, 0.09, 0.11], guardMat);
   }
   function buildHeldAxe(color) {
     const wood = heldMaterial("#7c4e29");

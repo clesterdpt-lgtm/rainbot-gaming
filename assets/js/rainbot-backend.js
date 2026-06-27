@@ -44,6 +44,7 @@ const RBBackend = (() => {
   const PROFILE_ACCENTS = new Set(["cyan", "pink", "yellow", "green", "red", "white"]);
   const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, created_at, updated_at";
   const PROFILE_PUBLIC_SELECT = "display_name, avatar_url, profile_title, avatar_style, accent_color";
+  const PROFILE_LOOKUP_SELECT = `id, ${PROFILE_PUBLIC_SELECT}`;
 
   let client = null;
   let config = {};
@@ -451,18 +452,47 @@ const RBBackend = (() => {
     }, {});
   }
 
+  async function attachScoreAuthors(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const userIds = Array.from(new Set(list.map((row) => row.user_id).filter(Boolean)));
+    if (!userIds.length) return list.map(({ user_id, ...row }) => ({ ...row, author: {} }));
+    const { data, error } = await client
+      .from("profiles")
+      .select(PROFILE_LOOKUP_SELECT)
+      .in("id", userIds);
+    if (error) throw error;
+    const profilesById = new Map((data || []).map((profile) => [profile.id, profile]));
+    return list.map(({ user_id, ...row }) => {
+      const profile = profilesById.get(user_id) || {};
+      const { id, ...author } = profile;
+      return { ...row, author };
+    });
+  }
+
   async function listLeaderboard(gameId, limit = 10) {
     await requireClient();
     const normalizedGameId = cleanGameId(gameId);
     if (!normalizedGameId) return [];
     const { data, error } = await client
       .from("game_scores")
-      .select(`game_id, score, updated_at, author:profiles!game_scores_user_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+      .select("user_id, game_id, score, updated_at")
       .eq("game_id", normalizedGameId)
       .order("score", { ascending: false })
       .limit(Math.max(1, Math.min(50, Number(limit) || 10)));
     if (error) throw error;
-    return data || [];
+    return attachScoreAuthors(data || []);
+  }
+
+  async function listGlobalLeaderboard(limit = 20) {
+    await requireClient();
+    const { data, error } = await client
+      .from("game_scores")
+      .select("user_id, game_id, score, updated_at")
+      .order("score", { ascending: false })
+      .order("updated_at", { ascending: false })
+      .limit(Math.max(1, Math.min(50, Number(limit) || 20)));
+    if (error) throw error;
+    return attachScoreAuthors(data || []);
   }
 
   async function listTopics(options = {}) {
@@ -639,6 +669,7 @@ const RBBackend = (() => {
     recordScore,
     loadMyScores,
     listLeaderboard,
+    listGlobalLeaderboard,
     listTopics,
     getTopic,
     createTopic,

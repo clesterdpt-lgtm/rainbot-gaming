@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forum - Rainbot Network</title>
-  <meta name="description" content="Rainbot Network community forum for game feedback, bug reports, ideas, scores, clips, and announcements." />
+  <title>Community - Rainbot Network</title>
+  <meta name="description" content="Rainbot Network community hub for forum threads, game feedback, high scores, clips, and announcements." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260625-avatar-art-2" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260627-leaderboards-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="community-page arcade-home">
@@ -15,13 +15,13 @@
   <main class="arcade-shell community-shell">
     <header class="forum-hero arcade-panel">
       <div>
-        <span class="forum-hero__eyebrow">Rainbot Forum</span>
+        <span class="forum-hero__eyebrow">Rainbot Community</span>
         <h1>The Arcade Backchannel.</h1>
-        <p>Bug reports, game feedback, clips, high-score claims, and extremely questionable ideas from the Rainbot regulars.</p>
+        <p>Forum threads, game feedback, clips, high-score runs, and extremely questionable ideas from the Rainbot regulars.</p>
         <div class="forum-hero__chips" aria-label="Forum highlights">
-          <span>Live boards</span>
+          <span>Forum boards</span>
+          <span>General leaderboard</span>
           <span>Cloud profiles</span>
-          <span>Moderator tools</span>
         </div>
       </div>
       <div class="forum-hero__panel" aria-label="Forum connection status">
@@ -29,6 +29,10 @@
         <div class="forum-hero__status" data-community-status>Backend check pending</div>
       </div>
     </header>
+
+    <section id="leaderboard" class="community-leaderboard arcade-panel" data-rb-leaderboard="global" data-rb-leaderboard-mode="global" data-rb-leaderboard-limit="12" aria-label="General leaderboard">
+      <div class="rb-leaderboard-empty">Loading leaderboard...</div>
+    </section>
 
     <section class="forum-layout">
       <aside class="forum-sidebar arcade-panel" aria-label="Forum categories">
@@ -53,12 +57,12 @@
       <a href="legal/privacy.html">Privacy</a>
     </div>
     <div class="site-footer__social">
-      <a href="community.html">Forum</a>
+      <a href="community.html">Community</a>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260625-forum-mod-1"></script>
-  <script src="assets/js/main.js?v=20260625-avatar-art-2"></script>
-  <script src="assets/js/community.js?v=20260625-avatar-art-2"></script>
+  <script src="assets/js/main.js?v=20260627-leaderboards-1"></script>
+  <script src="assets/js/community.js?v=20260627-leaderboards-1"></script>
 </body>
 </html>

@@ -81,6 +81,49 @@ const RB_PROFILE_ACCENTS = [
   { value: "white", label: "White" },
 ];
 
+const RB_GAME_META = {
+  "again": { title: "AGAIN.", scoreIds: ["again"] },
+  "ai-slop-factory": { title: "AI Slop Factory", scoreIds: ["ai-slop-factory"] },
+  "apop-demon-hunters": { title: "Apop Demon Moggers", scoreIds: ["apop"] },
+  "billionaire-space-race": { title: "Billionaire Space Race", scoreIds: ["bsr"] },
+  "boomer-monopoly": { title: "Boomer Monopoly", scoreIds: ["boomer_monopoly"] },
+  "brainrot-2048": { title: "Brainrot 2048", scoreIds: ["brainrot2048"] },
+  "consensus-collapse": { title: "Consensus Collapse", scoreIds: ["consensus-collapse"] },
+  "dont-become-pizza": { title: "Don't Become Pizza", scoreIds: ["dont-become-pizza"] },
+  "dont-fck-with-cats": { title: "Don't F*ck with Cats", scoreIds: ["dont-fck-with-cats"] },
+  "dont-look-gym-girl": { title: "Don't Look at the Gym Girl", scoreIds: ["dont-look-gym-girl"] },
+  "doorcrash-no-tip-nitro": { title: "DoorCrash: No Tip Nitro", scoreIds: ["doorcrash"] },
+  "drone-hunter": { title: "Drone Hunter", scoreIds: ["dronehunter"] },
+  "flappy-stonks": { title: "Flappy Stonks", scoreIds: ["flappy-stonks"] },
+  "gen-z-driving-simulator": { title: "Gen Z Driving Simulator", scoreIds: ["gen-z-driving-simulator"] },
+  "karen-merger": { title: "Complaint Chain", scoreIds: ["karen-merger"] },
+  "looksmaxxing-grindset": { title: "Looksmaxxing Grindset", scoreIds: ["looksmax"] },
+  "mr-feast-mansion": { title: "Mr. Feast: Deadline Mansion", scoreIds: ["mrfeast3d"] },
+  "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
+  "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
+  "skibidi-toilet-tower-defense": {
+    title: "Skibidi Toilet Tower Defense",
+    scoreIds: [
+      "skibidi_toilet_tower_defense_bathroom",
+      "skibidi_toilet_tower_defense_sewer",
+      "skibidi_toilet_tower_defense_rooftop",
+    ],
+  },
+  "smooth-brain-snacker": { title: "Smooth Brain Snacker", scoreIds: ["smoothbrain"] },
+  "storm-area-51": { title: "Storm Area 51: Raid The Base", scoreIds: ["storm-area-51"] },
+  "strait-of-hormuz": { title: "Escape the Straight", scoreIds: ["hormuz"] },
+  "super-slop-brothers": { title: "Super Slop Brothers", scoreIds: ["super-slop-brothers"] },
+  "tardigrade-micro-mayhem": { title: "Tardigrade: Micro Mayhem", scoreIds: ["tardigrade-micro-mayhem"] },
+  "the-weight": { title: "The Weight", scoreIds: ["the-weight"] },
+  "unhoused-and-unhinged": { title: "Unhoused and Unhinged", scoreIds: ["unhoused-and-unhinged"] },
+};
+
+const RB_SCORE_TITLE_OVERRIDES = {
+  skibidi_toilet_tower_defense_bathroom: "Skibidi TD: Bathroom",
+  skibidi_toilet_tower_defense_sewer: "Skibidi TD: Sewer",
+  skibidi_toilet_tower_defense_rooftop: "Skibidi TD: Rooftop",
+};
+
 function getLocalSaveCount() {
   if (!window.RBGameSaves || typeof window.RBGameSaves.listLocalSaves !== "function") return 0;
   return window.RBGameSaves.listLocalSaves().length;
@@ -91,6 +134,59 @@ function cleanProfileUiChoice(value, options, fallback) {
   const normalized = String(value || fallback).trim().toLowerCase();
   return allowed.has(normalized) ? normalized : fallback;
 }
+
+function currentGameSlug() {
+  const file = location.pathname.split("/").pop() || "";
+  return file.replace(/\.html$/i, "");
+}
+
+function cleanVisibleGameTitle(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^[^\w#]+/, "")
+    .replace(/\s+[-\u2014]\s+Rainbot.*$/i, "")
+    .trim();
+}
+
+function fallbackGameTitle() {
+  return cleanVisibleGameTitle(
+    document.querySelector(".game-page__title")?.textContent ||
+    document.querySelector(".scr__title")?.textContent ||
+    document.title ||
+    "This Game"
+  ) || "This Game";
+}
+
+function getGameMeta(slug = currentGameSlug()) {
+  const normalized = String(slug || "").replace(/\.html$/i, "");
+  const known = RB_GAME_META[normalized];
+  if (known) return { slug: normalized, ...known };
+  return { slug: normalized, title: fallbackGameTitle(), scoreIds: [normalized || "game"] };
+}
+
+function scoreIdsForMeta(meta) {
+  const ids = Array.isArray(meta && meta.scoreIds) ? meta.scoreIds : [meta && meta.scoreId];
+  return ids.map((id) => String(id || "").trim()).filter(Boolean);
+}
+
+function titleForScoreId(scoreId) {
+  const id = String(scoreId || "").trim();
+  if (RB_SCORE_TITLE_OVERRIDES[id]) return RB_SCORE_TITLE_OVERRIDES[id];
+  const found = Object.values(RB_GAME_META).find((meta) => scoreIdsForMeta(meta).includes(id));
+  return found ? found.title : cleanVisibleGameTitle(id.replace(/[_-]+/g, " ")) || "Rainbot Game";
+}
+
+function formatStatNumber(value) {
+  return Math.max(0, Math.floor(Number(value) || 0)).toLocaleString();
+}
+
+window.RBGameInfo = {
+  all: Object.entries(RB_GAME_META).map(([slug, meta]) => ({ slug, ...meta })),
+  current: () => getGameMeta(),
+  get: getGameMeta,
+  scoreIdsForMeta,
+  titleForScoreId,
+};
 
 function getProfileAvatar(value) {
   const normalized = cleanProfileUiChoice(value, RB_PROFILE_AVATARS, "bot");
@@ -142,7 +238,7 @@ function renderNav(state = RB.state) {
       <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
       <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
       <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
-      <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Forum</a>
+      <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
     </div>
     <form class="nav__search" role="search">
       <label class="sr-only" for="rb-search">Search Rainbot</label>
@@ -666,6 +762,60 @@ function openPasswordRecoveryModal() {
   });
 }
 
+function localScoreEntries() {
+  const scores = (RB && RB.state && RB.state.scores) || {};
+  return Object.entries(scores)
+    .map(([gameId, score]) => ({ gameId, score: Math.max(0, Math.floor(Number(score) || 0)) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || titleForScoreId(a.gameId).localeCompare(titleForScoreId(b.gameId)));
+}
+
+function profileGamerStatsMarkup(backendState = getBackendState()) {
+  const profile = backendState.profile || {};
+  const role = profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
+  const scoreEntries = localScoreEntries();
+  const best = scoreEntries[0] || null;
+  const totalScore = scoreEntries.reduce((sum, entry) => sum + entry.score, 0);
+  const cloudState = backendState.ready && backendState.user
+    ? "Sync on"
+    : backendState.configured
+      ? "Cloud ready"
+      : "Local only";
+  return `
+    <div class="rb-profile-stat">
+      <span>Rank</span>
+      <strong>${escapeHtml(role)}</strong>
+    </div>
+    <div class="rb-profile-stat">
+      <span>Saves</span>
+      <strong>${formatStatNumber(getLocalSaveCount())}</strong>
+    </div>
+    <div class="rb-profile-stat">
+      <span>Games Scored</span>
+      <strong>${formatStatNumber(scoreEntries.length)}</strong>
+    </div>
+    <div class="rb-profile-stat">
+      <span>Total Points</span>
+      <strong>${formatStatNumber(totalScore)}</strong>
+    </div>
+    <div class="rb-profile-stat rb-profile-stat--wide">
+      <span>Best Run</span>
+      <strong>${best ? formatStatNumber(best.score) : "0"}</strong>
+      <small>${escapeHtml(best ? titleForScoreId(best.gameId) : "No run logged yet")}</small>
+    </div>
+    <div class="rb-profile-stat rb-profile-stat--wide">
+      <span>Cloud</span>
+      <strong>${escapeHtml(cloudState)}</strong>
+      <small>${backendState.user ? "Saves and highs sync after login" : "Login turns on cloud scores"}</small>
+    </div>
+  `;
+}
+
+function refreshProfileGamerStats(root) {
+  const summary = root && root.querySelector("[data-profile-gamer-stats]");
+  if (summary) summary.innerHTML = profileGamerStatsMarkup(getBackendState());
+}
+
 function openProfileModal() {
   const backendState = getBackendState();
   if (!backendState.user) {
@@ -717,19 +867,12 @@ function openProfileModal() {
               <em data-profile-preview-favorite>${escapeHtml(favoriteGame ? `Favorite: ${favoriteGame}` : "Favorite game not set")}</em>
             </div>
           </div>
-          <div class="rb-profile-summary">
-            <div class="rb-profile-stat">
-              <span>Account</span>
-              <strong>${escapeHtml(role)}</strong>
-            </div>
-            <div class="rb-profile-stat">
-              <span>Saves</span>
-              <strong>${String(getLocalSaveCount())}</strong>
-            </div>
-            <div class="rb-profile-stat rb-profile-stat--email">
-              <span>Email</span>
-              <strong>${escapeHtml(email || "Connected")}</strong>
-            </div>
+          <div class="rb-profile-summary" data-profile-gamer-stats>
+            ${profileGamerStatsMarkup(backendState)}
+          </div>
+          <div class="rb-profile-account-line">
+            <span>Email</span>
+            <strong>${escapeHtml(email || "Connected")}</strong>
           </div>
         </section>
         <form class="rb-auth-form rb-profile-form" id="rb-profile-form">
@@ -843,6 +986,7 @@ function openProfileModal() {
     setModalStatus(backdrop, "Syncing local saves and high scores...", "");
     try {
       await syncRainbotCloudState();
+      refreshProfileGamerStats(backdrop);
       setModalStatus(backdrop, "Sync complete.", "good");
       RB.toast("Cloud sync complete", "good");
     } catch (error) {
@@ -884,8 +1028,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260625-avatar-art-2`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260625-avatar-art-2`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260627-leaderboards-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260627-leaderboards-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }
@@ -909,11 +1053,275 @@ async function syncRainbotCloudState() {
   RB.mergeHighScores(cloudScores);
 }
 
+const RBLeaderboards = (() => {
+  const DEFAULT_GAME_LIMIT = 8;
+  const DEFAULT_GLOBAL_LIMIT = 12;
+
+  function currentAuthorProfile() {
+    const backendState = getBackendState();
+    const profile = backendState.profile || {};
+    return {
+      display_name: backendState.user ? getBackendDisplayName(backendState) : "You",
+      avatar_style: profile.avatar_style || "bot",
+      accent_color: profile.accent_color || "cyan",
+      profile_title: profile.profile_title || "Local Player",
+    };
+  }
+
+  function leaderboardAvatarMarkup(profile = {}) {
+    const style = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
+    const accent = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
+    return `
+      <span class="rb-leaderboard-avatar rb-profile-avatar--${style} rb-profile-avatar--${accent} rb-profile-avatar--image" aria-hidden="true">
+        <img src="${escapeHtml(profileAvatarSrc(style))}" alt="" loading="lazy" decoding="async" />
+      </span>
+    `;
+  }
+
+  function rootMode(root) {
+    return root.dataset.rbLeaderboardMode || root.dataset.rbLeaderboard || "game";
+  }
+
+  function rootLimit(root) {
+    const fallback = rootMode(root) === "global" ? DEFAULT_GLOBAL_LIMIT : DEFAULT_GAME_LIMIT;
+    return Math.max(1, Math.min(30, Number(root.dataset.rbLeaderboardLimit) || fallback));
+  }
+
+  function rootScoreIds(root) {
+    if (root.dataset.rbScoreIds) {
+      return root.dataset.rbScoreIds.split(",").map((id) => id.trim()).filter(Boolean);
+    }
+    return scoreIdsForMeta(getGameMeta(root.dataset.rbGameSlug || currentGameSlug()));
+  }
+
+  function localRowsForScoreIds(scoreIds, limit) {
+    const allowed = new Set(scoreIds);
+    const author = currentAuthorProfile();
+    return localScoreEntries()
+      .filter((entry) => allowed.has(entry.gameId))
+      .slice(0, limit)
+      .map((entry) => ({
+        game_id: entry.gameId,
+        score: entry.score,
+        updated_at: "",
+        author,
+        local: true,
+      }));
+  }
+
+  function localGlobalRows(limit) {
+    const author = currentAuthorProfile();
+    return localScoreEntries().slice(0, limit).map((entry) => ({
+      game_id: entry.gameId,
+      score: entry.score,
+      updated_at: "",
+      author,
+      local: true,
+    }));
+  }
+
+  function leaderboardRowMarkup(row, index, mode) {
+    const profile = row.author || {};
+    const name = profile.display_name || (row.local ? "You" : "Rainbot Player");
+    const gameTitle = titleForScoreId(row.game_id);
+    const metaText = mode === "global" ? gameTitle : (row.local ? "Local best" : gameTitle);
+    return `
+      <article class="rb-leaderboard-row${row.local ? " rb-leaderboard-row--local" : ""}">
+        <span class="rb-leaderboard-row__rank">#${index + 1}</span>
+        ${leaderboardAvatarMarkup(profile)}
+        <span class="rb-leaderboard-row__who">
+          <strong>${escapeHtml(name)}</strong>
+          <em>${escapeHtml(metaText)}</em>
+        </span>
+        <span class="rb-leaderboard-row__score">${formatStatNumber(row.score)}</span>
+      </article>
+    `;
+  }
+
+  function renderRows(root, rows, note, emptyText) {
+    const rowsRoot = root.querySelector("[data-rb-leaderboard-rows]");
+    const noteRoot = root.querySelector("[data-rb-leaderboard-note]");
+    const mode = rootMode(root);
+    if (!rowsRoot || !noteRoot) return;
+    rowsRoot.innerHTML = rows.length
+      ? rows.map((row, index) => leaderboardRowMarkup(row, index, mode)).join("")
+      : `<div class="rb-leaderboard-empty">${escapeHtml(emptyText || "No scores posted yet.")}</div>`;
+    noteRoot.textContent = note || "";
+  }
+
+  async function fetchGameRows(scoreIds, limit) {
+    if (!window.RBBackend || typeof window.RBBackend.listLeaderboard !== "function") return [];
+    const results = await Promise.allSettled(scoreIds.map((scoreId) => window.RBBackend.listLeaderboard(scoreId, limit)));
+    return results
+      .flatMap((result) => result.status === "fulfilled" ? result.value : [])
+      .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+      .slice(0, limit);
+  }
+
+  async function fetchGlobalRows(limit) {
+    if (!window.RBBackend) return [];
+    if (typeof window.RBBackend.listGlobalLeaderboard === "function") {
+      return window.RBBackend.listGlobalLeaderboard(limit);
+    }
+    const allIds = Object.values(RB_GAME_META).flatMap((meta) => scoreIdsForMeta(meta));
+    return fetchGameRows(allIds, limit);
+  }
+
+  function renderShell(root) {
+    const mode = rootMode(root);
+    const meta = getGameMeta(root.dataset.rbGameSlug || currentGameSlug());
+    const title = root.dataset.rbGameTitle || meta.title;
+    const heading = mode === "global" ? "General Leaderboard" : "Leaderboard";
+    const kicker = mode === "global" ? "All games" : title;
+    const headingTag = mode === "global" ? "h2" : "h3";
+    const scoreIds = rootScoreIds(root);
+    const localBest = localRowsForScoreIds(scoreIds, 1)[0];
+    root.classList.add("rb-leaderboard");
+    if (mode === "global") root.classList.add("rb-leaderboard--global");
+    root.innerHTML = `
+      <div class="rb-leaderboard__header">
+        <div>
+          <span class="rb-leaderboard__kicker">${escapeHtml(kicker)}</span>
+          <${headingTag} class="rb-leaderboard__title">${escapeHtml(heading)}</${headingTag}>
+        </div>
+        ${mode === "game" ? `<a class="rb-leaderboard__link" href="${RB_BASE}community.html#leaderboard">Community</a>` : ""}
+      </div>
+      ${mode === "game" ? `
+        <div class="rb-leaderboard__self">
+          <span>Your best</span>
+          <strong>${localBest ? formatStatNumber(localBest.score) : "0"}</strong>
+        </div>
+      ` : ""}
+      <div class="rb-leaderboard__rows" data-rb-leaderboard-rows>
+        <div class="rb-leaderboard-empty">Loading scores...</div>
+      </div>
+      <div class="rb-leaderboard__note" data-rb-leaderboard-note></div>
+    `;
+  }
+
+  async function render(root) {
+    if (!root) return;
+    const token = String(Date.now()) + Math.random().toString(36).slice(2);
+    root.dataset.rbLeaderboardToken = token;
+    renderShell(root);
+
+    const mode = rootMode(root);
+    const limit = rootLimit(root);
+    const scoreIds = rootScoreIds(root);
+    const localRows = mode === "global" ? localGlobalRows(limit) : localRowsForScoreIds(scoreIds, limit);
+    const backendState = getBackendState();
+
+    if (!window.RBBackend || !backendState.configured) {
+      renderRows(
+        root,
+        localRows,
+        backendState.configured ? "Cloud leaderboard is loading." : "Cloud leaderboard turns on when Supabase is connected.",
+        mode === "global" ? "No local high scores yet." : "No local high score yet."
+      );
+      return;
+    }
+
+    if (!backendState.ready) {
+      renderRows(root, localRows, "Connecting to the cloud leaderboard.", localRows.length ? "" : "Cloud scores are loading.");
+      return;
+    }
+
+    try {
+      const cloudRows = mode === "global" ? await fetchGlobalRows(limit) : await fetchGameRows(scoreIds, limit);
+      if (root.dataset.rbLeaderboardToken !== token) return;
+      renderRows(
+        root,
+        cloudRows.length ? cloudRows : localRows,
+        cloudRows.length ? "Live cloud scores." : "No cloud scores yet. Showing local highs when available.",
+        mode === "global" ? "No community scores posted yet." : "No cloud scores posted for this game yet."
+      );
+    } catch (error) {
+      if (root.dataset.rbLeaderboardToken !== token) return;
+      console.warn("[Rainbot] Leaderboard load failed", error);
+      renderRows(root, localRows, "Leaderboard could not load. Showing local highs.", "No local high score yet.");
+    }
+  }
+
+  function createStandardGamePanel(meta) {
+    const side = document.querySelector(".game-side");
+    if (!side || side.querySelector("[data-rb-leaderboard]")) return null;
+    const panel = document.createElement("section");
+    panel.className = "game-side__panel";
+    panel.dataset.rbLeaderboard = "game";
+    panel.dataset.rbLeaderboardMode = "game";
+    panel.dataset.rbGameSlug = meta.slug;
+    panel.dataset.rbGameTitle = meta.title;
+    panel.dataset.rbScoreIds = scoreIdsForMeta(meta).join(",");
+    const before = side.querySelector("#ad-leaderboard") || side.querySelector(".game-side__howto");
+    if (before) side.insertBefore(panel, before);
+    else side.append(panel);
+    return panel;
+  }
+
+  function createStandaloneGamePanel(meta) {
+    if (document.querySelector("[data-rb-leaderboard]")) return null;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "rb-standalone-leaderboard-btn";
+    button.textContent = "Scores";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", "rb-standalone-leaderboard");
+
+    const panel = document.createElement("section");
+    panel.id = "rb-standalone-leaderboard";
+    panel.className = "rb-standalone-leaderboard";
+    panel.dataset.rbLeaderboard = "game";
+    panel.dataset.rbLeaderboardMode = "game";
+    panel.dataset.rbGameSlug = meta.slug;
+    panel.dataset.rbGameTitle = meta.title;
+    panel.dataset.rbScoreIds = scoreIdsForMeta(meta).join(",");
+    panel.hidden = true;
+
+    button.addEventListener("click", () => {
+      panel.hidden = !panel.hidden;
+      button.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
+      if (!panel.hidden) render(panel);
+    });
+
+    document.body.append(button, panel);
+    return panel;
+  }
+
+  function ensureGameLeaderboard() {
+    if (!location.pathname.includes("/games/")) return;
+    const meta = getGameMeta();
+    if (document.querySelector("[data-rb-leaderboard]")) return;
+    const panel = createStandardGamePanel(meta);
+    if (!panel) createStandaloneGamePanel(meta);
+  }
+
+  function roots() {
+    return Array.from(document.querySelectorAll("[data-rb-leaderboard]"));
+  }
+
+  function renderAll() {
+    ensureGameLeaderboard();
+    roots().forEach((root) => {
+      if (root.hidden) return;
+      render(root);
+    });
+  }
+
+  function init() {
+    renderAll();
+  }
+
+  return { init, renderAll, render };
+})();
+
+window.RBLeaderboards = RBLeaderboards;
+
 let lastCloudSyncUserId = "";
 
 function handleBackendAuthChange(event) {
   const backendState = event.detail || getBackendState();
   renderNav(RB.state);
+  RBLeaderboards.renderAll();
   if (backendState.passwordRecovery && backendState.user) {
     openPasswordRecoveryModal();
   }
@@ -1365,7 +1773,11 @@ function fitGameCanvases() {
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initGameEscapeMenu();
-  RB.subscribe((state) => renderNav(state));
+  RBLeaderboards.init();
+  RB.subscribe((state) => {
+    renderNav(state);
+    RBLeaderboards.renderAll();
+  });
   window.addEventListener("rainbot:authchange", handleBackendAuthChange);
   initRainbotBackend();
   scheduleGameCanvasFit();

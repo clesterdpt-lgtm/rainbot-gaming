@@ -151,6 +151,12 @@
   const COAL_BLOCK = 28;
   const RIZZ_BLOCK = 29;
   const SIGMA_BLOCK = 30;
+  // Base-building furniture
+  const CHEST = 31;
+  const BED = 32;
+  const DOOR = 33;       // closed (solid)
+  const DOOR_OPEN = 34;  // open (passable)
+  const CHEST_SLOTS = 18;
 
   // Light levels for craftable lamps
   const GLOWSTONE_LIGHT = 13;
@@ -225,6 +231,10 @@
   def(COAL_BLOCK, { name: "Gyatt Coal Block", kind: "block", solid: true, hardness: 1.6, needTool: "pick", drop: COAL_BLOCK, color: "#2a2b36" });
   def(RIZZ_BLOCK, { name: "Rizz Block", kind: "block", solid: true, hardness: 1.5, needTool: "pick", drop: RIZZ_BLOCK, color: "#ffcf3a" });
   def(SIGMA_BLOCK, { name: "Sigma Block", kind: "block", solid: true, hardness: 1.7, needTool: "pick", drop: SIGMA_BLOCK, color: "#4beaff", light: SIGMA_BLOCK_LIGHT });
+  def(CHEST, { name: "Rizz Chest", kind: "block", solid: true, hardness: 0.7, best: "axe", drop: CHEST, color: "#9b6532", decor: true, placeable: true });
+  def(BED, { name: "Sigma Bed", kind: "block", solid: false, hardness: 0.3, drop: BED, color: "#d94f6a", decor: true, placeable: true });
+  def(DOOR, { name: "Toilet Door", kind: "block", solid: true, hardness: 0.6, best: "axe", drop: DOOR, color: "#b98245", decor: true, placeable: true });
+  def(DOOR_OPEN, { name: "Toilet Door", kind: "block", solid: false, hardness: 0.6, best: "axe", drop: DOOR, color: "#b98245", decor: true });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -296,6 +306,11 @@
     { cat: "Food", out: { code: SIGMA_BREW, n: 1 }, in: [[SIGMA, 1], [BERRY, 2]], table: true },
     { cat: "Food", out: { code: GRIMACE_SHAKE, n: 1 }, in: [[BERRY, 4], [RIZZ, 1]], table: true },
     { cat: "Food", out: { code: GOLDEN_APPLE, n: 1 }, in: [[FRIENDLY_FRUIT, 1], [RIZZ, 4]], table: true },
+
+    // --- Home (base-building) ---
+    { cat: "Home", out: { code: CHEST, n: 1 }, in: [[PLANKS, 6]], table: true },
+    { cat: "Home", out: { code: BED, n: 1 }, in: [[PLANKS, 3], [WHEAT, 3]], table: true },
+    { cat: "Home", out: { code: DOOR, n: 1 }, in: [[PLANKS, 4]], table: true },
   ];
 
   const BIOMES = [
@@ -741,7 +756,10 @@
     flying: false,          // creative-only free flight
     survivalBackup: null,   // inventory snapshot taken when entering creative
     effects: { regen: 0, speed: 0, strength: 0, resist: 0 },
-    toiletFacing: {}, // "x,y,z" -> quarter-turns (0-3) so toilets face the placer
+    toiletFacing: {}, // "x,y,z" -> quarter-turns (0-3) so furniture faces the placer
+    chests: {},       // "x,y,z" -> array of CHEST_SLOTS item slots
+    openChest: null,  // key of the chest currently open
+    bedSpawn: null,   // {x,y,z} respawn point set by sleeping in a bed
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -1635,7 +1653,11 @@
         rebuildChunksForLight(bx0, bz0, bx1, bz1);
       } else rebuildChunksNear(x, z);
     }
-    if (prev === TABLE && code !== TABLE) delete state.toiletFacing[`${x},${y},${z}`];
+    // A door swapping open<->closed keeps its facing; any other furniture removal clears it.
+    const facingFurniture = prev === TABLE || prev === CHEST || prev === BED || prev === DOOR || prev === DOOR_OPEN;
+    const stillDoor = (prev === DOOR || prev === DOOR_OPEN) && (code === DOOR || code === DOOR_OPEN);
+    if (facingFurniture && prev !== code && !stillDoor) delete state.toiletFacing[`${x},${y},${z}`];
+    if (prev === CHEST && code !== CHEST) spillChest(x, y, z);
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
   function setFluidBlock(x, y, z, code) {
@@ -2725,6 +2747,9 @@
               else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) { setDecorLight(x, y, z); pushCaveFeature(arr, x, y, z, code); }
               if (code === TABLE) { setDecorLight(x, y, z); pushCraftingToilet(arr, x, y, z); }
               if (code === TORCH) { setDecorLight(x, y, z); pushTorch(arr, x, y, z); }
+              if (code === CHEST) { setDecorLight(x, y, z); pushChest(arr, x, y, z); }
+              if (code === BED) { setDecorLight(x, y, z); pushBed(arr, x, y, z); }
+              if (code === DOOR || code === DOOR_OPEN) { setDecorLight(x, y, z); pushDoor(arr, x, y, z, code === DOOR_OPEN); }
             }
             pushAquaticDecor(arr, x, z);
           }
@@ -3203,6 +3228,39 @@
     box(0.18, 0.42, 0.65, 0.64, 0.58, 0.22, porcelain); // tank
     box(0.24, 0.84, 0.59, 0.52, 0.16, 0.16, shade);   // tank lid
     box(0.69, 0.94, 0.66, 0.08, 0.05, 0.08, cachedRgb("#ffd75a")); // flush button
+  }
+  function pushChest(arr, x, y, z) {
+    const wood = cachedRgb("#9b6532");
+    const lid = cachedRgb("#7a4a23");
+    const latch = cachedRgb("#caa24a");
+    const turns = state.toiletFacing[`${x},${y},${z}`] | 0; // latch faces the placer (-Z)
+    const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
+    box(0.1, 0, 0.1, 0.8, 0.5, 0.8, wood);          // body
+    box(0.08, 0.5, 0.08, 0.84, 0.22, 0.84, lid);    // lid
+    box(0.42, 0.34, 0.05, 0.16, 0.22, 0.06, latch); // front latch
+  }
+  function pushBed(arr, x, y, z) {
+    const frame = cachedRgb("#7c4e29");
+    const sheet = cachedRgb("#d94f6a");
+    const pillow = cachedRgb("#f3f4fb");
+    const turns = state.toiletFacing[`${x},${y},${z}`] | 0; // pillow at the head (-Z)
+    const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
+    box(0.05, 0, 0.03, 0.9, 0.14, 0.94, frame);     // wooden base
+    box(0.1, 0.14, 0.06, 0.8, 0.16, 0.88, sheet);   // blanket
+    box(0.16, 0.3, 0.07, 0.68, 0.12, 0.24, pillow); // pillow
+  }
+  function pushDoor(arr, x, y, z, open) {
+    const wood = cachedRgb("#b98245");
+    const inset = cachedRgb("#7c4e29");
+    const knob = cachedRgb("#caa24a");
+    // The panel hangs on the -Z face; swinging open rotates it 90° onto the -X face,
+    // which clears the cell so the (now non-solid) doorway is walkable.
+    const turns = ((state.toiletFacing[`${x},${y},${z}`] | 0) + (open ? 1 : 0)) & 3;
+    const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
+    box(0.03, 0, 0.0, 0.94, 1.0, 0.16, wood);       // full-height panel
+    box(0.12, 0.12, 0.015, 0.36, 0.3, 0.14, inset); // upper recessed panel
+    box(0.12, 0.5, 0.015, 0.36, 0.36, 0.14, inset); // lower recessed panel
+    box(0.82, 0.46, 0.0, 0.09, 0.12, 0.18, knob);   // handle
   }
   // Rotate a sub-box's footprint by `turns` quarter-turns (clockwise) around the
   // block centre, then emit it. lx/lz/w/d are local 0..1 coordinates.
@@ -3850,9 +3908,16 @@
   }
 
   function spawnPlayer() {
-    const x = WORLD_X / 2 + 0.5;
-    const z = WORLD_Z / 2 + 0.5;
-    const y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
+    let x = WORLD_X / 2 + 0.5;
+    let z = WORLD_Z / 2 + 0.5;
+    let y = state.surface[surfaceIndex(Math.floor(x), Math.floor(z))] + 1.05;
+    // Respawn at a slept-in bed when one is set and still there.
+    const bed = state.bedSpawn;
+    if (bed && inWorld(bed.x, bed.y, bed.z) && (getBlock(bed.x, bed.y - 1, bed.z) === BED || getBlock(bed.x, bed.y, bed.z) === BED)) {
+      x = bed.x + 0.5; z = bed.z + 0.5; y = bed.y + 0.05;
+    } else if (bed) {
+      state.bedSpawn = null; // bed was removed
+    }
     Object.assign(state.player, { x, y, z, vx: 0, vy: 0, vz: 0, yaw: -Math.PI / 4, pitch: -0.12, onGround: false, hp: MAX_HP, hurtCd: SPAWN_GRACE, inWater: false, inLava: false, hurtAnim: 0 });
     state.oceanFatigue = 0;
     updateVisibleChunks(true);
@@ -3984,7 +4049,10 @@
       state.crafting = false;
       if (craftPanel) craftPanel.classList.remove("is-open");
       unlockPointer();
+    } else {
+      state.openChest = null; // closing the bag also closes any open chest
     }
+    bagRenderKey = null;
     playSfx(state.bagOpen ? "bagOpen" : "bagClose");
     renderBag();
   }
@@ -4219,6 +4287,90 @@
     e.speed = Math.max(0, e.speed - dt);
     e.strength = Math.max(0, e.strength - dt);
     e.resist = Math.max(0, e.resist - dt);
+  }
+
+  // --- Base-building furniture --------------------------------------------------
+  function chestKey(x, y, z) { return `${x},${y},${z}`; }
+  function chestSlots(key) {
+    if (!state.chests[key]) state.chests[key] = new Array(CHEST_SLOTS).fill(null);
+    return state.chests[key];
+  }
+  function toggleChestAt(x, y, z) {
+    const key = chestKey(x, y, z);
+    if (state.openChest === key && state.bagOpen) { closeChest(); return; }
+    state.openChest = key;
+    chestSlots(key); // ensure it exists
+    state.crafting = false;
+    if (craftPanel) craftPanel.classList.remove("is-open");
+    state.bagOpen = true;
+    unlockPointer();
+    bagRenderKey = null;
+    renderBag();
+    playSfx && playSfx("bagOpen");
+  }
+  function closeChest() {
+    state.openChest = null;
+    state.bagOpen = false;
+    bagRenderKey = null;
+    renderBag();
+    playSfx && playSfx("bagClose");
+  }
+  // Move a whole stack from the player's inventory slot into the open chest.
+  function depositToChest(area, idx) {
+    if (!state.openChest) return;
+    const list = area === "hotbar" ? state.hotbar : state.bag;
+    const slot = list[idx];
+    if (!slot) return;
+    const left = addToSlotArray(chestSlots(state.openChest), slot.code, slot.n);
+    if (left <= 0) list[idx] = null; else slot.n = left;
+    bagRenderKey = null; updateHud();
+  }
+  // Move a whole stack from the open chest back into the player's inventory.
+  function withdrawFromChest(idx) {
+    if (!state.openChest) return;
+    const slots = chestSlots(state.openChest);
+    const slot = slots[idx];
+    if (!slot) return;
+    giveItem(slot.code, slot.n);
+    slots[idx] = null;
+    bagRenderKey = null; updateHud();
+  }
+  // Generic "add as many as fit into this slot array" used by chest deposits.
+  function addToSlotArray(slots, code, n, cap = maxStack(code)) {
+    for (const s of slots) { if (s && s.code === code && s.n < cap) { const a = Math.min(n, cap - s.n); s.n += a; n -= a; if (n <= 0) return 0; } }
+    for (let i = 0; i < slots.length && n > 0; i++) { if (!slots[i]) { const a = Math.min(n, cap); slots[i] = { code, n: a }; n -= a; } }
+    return n;
+  }
+  // Drop a broken chest's contents at its position so nothing is lost.
+  function spillChest(x, y, z) {
+    const key = chestKey(x, y, z);
+    const slots = state.chests[key];
+    if (slots) { for (const s of slots) if (s) giveItem(s.code, s.n); delete state.chests[key]; }
+    if (state.openChest === key) closeChest();
+  }
+  function sleepInBed(x, y, z) {
+    state.bedSpawn = { x, y: y + 1, z };
+    if (isNight()) {
+      state.time = 0.0;            // jump to dawn
+      state.spawnTimer = SPAWN_GRACE;
+      state.mobs.slice().forEach(removeMob);
+      state.mobs = [];
+      state.player.hp = clamp(state.player.hp + 6, 0, MAX_HP);
+      api.toast("You slept. Good morning! Respawn point set.", "good");
+    } else {
+      api.toast("Respawn point set. (Beds only skip the night.)", "");
+    }
+  }
+  function toggleDoor(x, y, z) {
+    const code = getBlock(x, y, z);
+    if (code === DOOR) setBlock(x, y, z, DOOR_OPEN);
+    else if (code === DOOR_OPEN) {
+      // Don't slam a closed (solid) door shut on top of the player.
+      if (boxContainsBlock(playerBox(), x, y, z)) { api.toast("Step back to close the door", ""); return; }
+      setBlock(x, y, z, DOOR);
+    }
+    decorDirty = true;
+    playSfx && playSfx("place");
   }
   function hurtPlayer(dmg) {
     const p = state.player;
@@ -5070,16 +5222,17 @@
     if ((!state.input.place && !state.placeQueued) || state.placeCd > 0 || state.crafting || state.paused) return;
     state.placeQueued = false;
     const t = state.target;
-    // Eating takes priority over placing/opening the bench when holding food and
-    // not aiming at the Crafting Toilet itself.
-    if (isFood(selectedSlot() && selectedSlot().code) && !(t && t.hit && getBlock(t.x, t.y, t.z) === TABLE)) {
-      tryEatSelected();
-      state.input.place = false;
-      return;
+    const aimed = (t && t.hit) ? getBlock(t.x, t.y, t.z) : AIR;
+    // Right-clicking an interactive block always takes priority over placing/eating.
+    if (t && t.hit) {
+      if (aimed === TABLE) { toggleCrafting(true); state.placeCd = 0.24; state.input.place = false; return; }
+      if (aimed === CHEST) { toggleChestAt(t.x, t.y, t.z); state.placeCd = 0.24; state.input.place = false; return; }
+      if (aimed === BED) { sleepInBed(t.x, t.y, t.z); state.placeCd = 0.3; state.input.place = false; return; }
+      if (aimed === DOOR || aimed === DOOR_OPEN) { toggleDoor(t.x, t.y, t.z); state.placeCd = 0.22; state.input.place = false; return; }
     }
-    if (t && t.hit && getBlock(t.x, t.y, t.z) === TABLE) {
-      toggleCrafting(true);
-      state.placeCd = 0.24;
+    // Eating (when holding food and not aiming at an interactive block).
+    if (isFood(selectedSlot() && selectedSlot().code)) {
+      tryEatSelected();
       state.input.place = false;
       return;
     }
@@ -5094,10 +5247,11 @@
     const p = t.prev;
     if (getBlock(p.x, p.y, p.z) !== AIR && getBlock(p.x, p.y, p.z) !== WATER) return;
     if (boxContainsBlock(playerBox(), p.x, p.y, p.z)) return;
-    if (slot.code === TABLE) state.toiletFacing[`${p.x},${p.y},${p.z}`] = toiletTurnsToward(p.x, p.z);
+    const facesPlacer = slot.code === TABLE || slot.code === CHEST || slot.code === BED || slot.code === DOOR;
+    if (facesPlacer) state.toiletFacing[`${p.x},${p.y},${p.z}`] = toiletTurnsToward(p.x, p.z);
     setBlock(p.x, p.y, p.z, slot.code);
     playPlaceSfx(slot.code);
-    if (slot.code === TABLE) decorDirty = true;
+    if (facesPlacer) decorDirty = true;
     if (!state.creative) decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
@@ -5728,29 +5882,41 @@
     if (d.kind === "block") return " is-block";
     return " is-item";
   }
+  function slotsKey(slots) { return slots.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(","); }
   function renderBag() {
     if (!ui.bagPanel) return;
+    const chest = state.openChest ? chestSlots(state.openChest) : null;
     const key = state.bagOpen
-      ? `${state.selected}|${state.hotbar.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(",")}|${state.bag.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(",")}`
+      ? `${state.selected}|${state.openChest || ""}|${slotsKey(state.hotbar)}|${slotsKey(state.bag)}|${chest ? slotsKey(chest) : ""}`
       : "closed";
     ui.bagPanel.classList.toggle("is-open", state.bagOpen);
+    ui.bagPanel.classList.toggle("is-chest", !!chest);
     if (key === bagRenderKey) return;
     bagRenderKey = key;
     if (!state.bagOpen) {
       ui.bagPanel.innerHTML = "";
       return;
     }
+    const chestHtml = chest ? `
+      <div class="rizz3d-bag-label">Rizz Chest — click to take</div>
+      <div class="rizz3d-bag-grid rizz3d-bag-chest">
+        ${chest.map((slot, i) => bagSlotHtml(slot, i, `data-chest-slot="${i}"`, false, "Chest")).join("")}
+      </div>` : "";
+    const helpLine = chest
+      ? "Click chest items to take them; click your items to store them."
+      : "Click a bag item to swap it into the selected action slot.";
     ui.bagPanel.innerHTML = `
       <div class="rizz3d-bag-head">
-        <strong>Bag</strong>
-        <span>Click a bag item to swap it into the selected action slot.</span>
+        <strong>${chest ? "Rizz Chest" : "Bag"}</strong>
+        <span>${helpLine}</span>
       </div>
       <div class="rizz3d-bag-hover" data-bag-hover>Hover a slot to inspect it.</div>
-      <div class="rizz3d-bag-label">Action bar</div>
+      ${chestHtml}
+      <div class="rizz3d-bag-label">Action bar${chest ? " — click to store" : ""}</div>
       <div class="rizz3d-bag-hotbar">
         ${state.hotbar.map((slot, i) => bagSlotHtml(slot, i, `data-bag-hotbar="${i}"`, i === state.selected, "Action")).join("")}
       </div>
-      <div class="rizz3d-bag-label">Bag storage</div>
+      <div class="rizz3d-bag-label">Bag storage${chest ? " — click to store" : ""}</div>
       <div class="rizz3d-bag-grid">
         ${state.bag.map((slot, i) => bagSlotHtml(slot, i, `data-bag-slot="${i}"`, false, "Bag")).join("")}
       </div>
@@ -5790,7 +5956,7 @@
       .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
       .rizz3d-bag-hover{min-height:24px;margin:6px 0 9px;padding:6px 8px;border:1px solid rgba(67,230,255,.22);border-radius:6px;background:rgba(67,230,255,.08);color:#fff;font:900 10px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}
+      .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}.rizz3d-bag-chest{grid-template-rows:repeat(2,32px)}.rizz3d-bag-panel.is-chest{border-color:rgba(255,212,59,.4)}
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
       .rizz3d-mobile-controls{display:none;position:absolute;inset:0;z-index:9;pointer-events:none;touch-action:none}
@@ -5850,14 +6016,20 @@
     bagPanel.className = "rizz3d-bag-panel";
     bagPanel.addEventListener("click", (event) => {
       primeAudio();
+      const chestButton = event.target.closest("[data-chest-slot]");
+      if (chestButton) { withdrawFromChest(Number(chestButton.dataset.chestSlot)); return; }
       const hotbarButton = event.target.closest("[data-bag-hotbar]");
       if (hotbarButton) {
-        setSelectedSlot(Number(hotbarButton.dataset.bagHotbar));
+        const i = Number(hotbarButton.dataset.bagHotbar);
+        if (state.openChest) depositToChest("hotbar", i);
+        else setSelectedSlot(i);
         return;
       }
       const bagButton = event.target.closest("[data-bag-slot]");
       if (bagButton) {
-        swapBagSlotWithHotbar(Number(bagButton.dataset.bagSlot));
+        const i = Number(bagButton.dataset.bagSlot);
+        if (state.openChest) depositToChest("bag", i);
+        else swapBagSlotWithHotbar(i);
         updateHud();
       }
     });
@@ -5960,6 +6132,9 @@
     resetActiveFluids();
     state.effects.regen = state.effects.speed = state.effects.strength = state.effects.resist = 0;
     state.toiletFacing = {};
+    state.chests = {};
+    state.openChest = null;
+    state.bedSpawn = null;
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -6024,6 +6199,8 @@
       creative: state.creative,
       survivalBackup: state.survivalBackup,
       toiletFacing: { ...state.toiletFacing },
+      chests: state.chests,
+      bedSpawn: state.bedSpawn,
     };
   }
   function restoreGame(saved) {
@@ -6035,6 +6212,9 @@
     initGame(data.seed);
     state.edits = new Map(Array.isArray(data.edits) ? data.edits : []);
     state.toiletFacing = (data.toiletFacing && typeof data.toiletFacing === "object") ? { ...data.toiletFacing } : {};
+    state.chests = (data.chests && typeof data.chests === "object") ? data.chests : {};
+    state.bedSpawn = (data.bedSpawn && typeof data.bedSpawn === "object") ? data.bedSpawn : null;
+    state.openChest = null;
     for (const [key, code] of state.edits.entries()) {
       const [x, y, z] = key.split(",").map(Number);
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -6579,5 +6759,12 @@
     canCraftByOutput(code) { const r = RECIPES.find((x) => x.out.code === code); return r ? canCraft(r) : false; },
     eatSelected() { return tryEatSelected(); },
     effects() { return { ...state.effects }; },
+    openChest(x, y, z) { toggleChestAt(x | 0, y | 0, z | 0); },
+    chestAt(x, y, z) { return state.chests[chestKey(x | 0, y | 0, z | 0)] || null; },
+    depositSlot(area, i) { depositToChest(area, i); },
+    withdrawSlot(i) { withdrawFromChest(i); },
+    sleep(x, y, z) { sleepInBed(x | 0, y | 0, z | 0); },
+    toggleDoorAt(x, y, z) { toggleDoor(x | 0, y | 0, z | 0); },
+    snapshotData() { return snapshot(); },
   };
 })();

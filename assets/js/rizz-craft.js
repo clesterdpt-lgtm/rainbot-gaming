@@ -748,7 +748,7 @@
   const WORLD_INDEX_KEY = "rainbot_rizz_craft_worlds:v1";
   const WORLD_SAVE_PREFIX = "rainbot_rizz_craft_world:";
   const MAX_WORLDS = 12;
-  const touchControlsQuery = window.matchMedia ? window.matchMedia("(hover: none) and (pointer: coarse), (max-width: 760px)") : null;
+  const touchControlsQuery = window.matchMedia ? window.matchMedia("(hover: none) and (pointer: coarse)") : null;
 
   const ui = buildHud();
   const overlay = document.getElementById("overlay");
@@ -946,11 +946,7 @@
     return state.started && !state.paused && !state.crafting && !state.bagOpen;
   }
   function shouldShowTouchControls() {
-    return !!(
-      (touchControlsQuery && touchControlsQuery.matches) ||
-      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
-      window.innerWidth <= 760
-    );
+    return !!(touchControlsQuery && touchControlsQuery.matches);
   }
   function setTouchControlsVisible(on) {
     if (canvasWrap) canvasWrap.classList.toggle("has-touch-controls", !!on);
@@ -5820,7 +5816,7 @@
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="craft"],
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="fly"],
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="creative"]{display:none}
-      @media (hover:none) and (pointer:coarse),(max-width:760px){.rizz3d-mobile-controls.is-playable{display:block}.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px;bottom:calc(10px + env(safe-area-inset-bottom))}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
+      @media (hover:none) and (pointer:coarse){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px;bottom:calc(10px + env(safe-area-inset-bottom))}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
       @media (max-width:520px){.rizz3d-mobile-pad{left:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:5px}.rizz3d-mobile-actions{right:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(2,54px);gap:5px}.rizz3d-mobile-button{min-height:42px;border-radius:10px;font-size:9px}.rizz3d-mobile-look{top:50px;max-width:54%;font-size:8px}.rizz3d-health{width:min(214px,56%)}}
       @media (max-height:560px){.rizz3d-mobile-look{display:none}.rizz3d-mobile-pad{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-actions{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-button{min-height:38px}}
     `;
@@ -6146,12 +6142,6 @@
     }
     window.addEventListener("resize", refreshTouchControls);
     window.addEventListener("orientationchange", refreshTouchControls);
-    window.addEventListener("pointerdown", (event) => {
-      if (event.pointerType && event.pointerType !== "mouse") {
-        setTouchControlsVisible(true);
-        updateMobileControlState();
-      }
-    }, { passive: true });
     canvas.addEventListener("click", () => {
       primeAudio();
       if (performance.now() < suppressMouseUntil) return;

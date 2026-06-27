@@ -6944,6 +6944,13 @@ body.arcade-home::before {
   padding: 10px;
 }
 
+.rb-profile-stat--hero {
+  background:
+    linear-gradient(135deg, rgba(35, 223, 242, 0.16), rgba(255, 20, 144, 0.08)),
+    rgba(8, 11, 19, 0.82);
+  border-color: rgba(35, 223, 242, 0.4);
+}
+
 .rb-profile-stat--email {
   grid-column: 1 / -1;
 }
@@ -6975,6 +6982,33 @@ body.arcade-home::before {
 
 .rb-profile-stat--wide {
   grid-column: 1 / -1;
+}
+
+.rb-profile-recent-list {
+  display: grid;
+  gap: 7px;
+}
+
+.rb-profile-recent-list span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rb-profile-recent-list b {
+  color: var(--arcade-white);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.rb-profile-recent-list em {
+  color: var(--arcade-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .rb-profile-account-line {

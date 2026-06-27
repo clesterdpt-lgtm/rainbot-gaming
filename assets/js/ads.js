@@ -9,6 +9,9 @@
 const RB = (() => {
   const STORAGE_KEY = "ets_state_v1";
   const AD_DURATION_MS = 5000; // mock ad length
+  const GAMEPLAY_FLUSH_MS = 15000;
+  const MAX_SESSION_DELTA_MS = 5 * 60 * 1000;
+  const SAVE_TOUCH_FLUSH_MS = 60000;
 
   const defaultState = {
     isPro: false,
@@ -23,15 +26,112 @@ const RB = (() => {
     },
     scores: {},             // per-game high score
     notify: [],             // email captures (for now, local only)
+    localProfile: {
+      displayName: "Rainbot Player",
+      profileTitle: "Arcade Regular",
+      bio: "",
+      favoriteGame: "",
+      avatarStyle: "bot",
+      accentColor: "cyan",
+    },
+    stats: {
+      schemaVersion: 1,
+      totalPlayMs: 0,
+      sessions: 0,
+      firstPlayedAt: 0,
+      lastPlayedAt: 0,
+      lastPlayedGame: "",
+      lastSavedAt: 0,
+      playDays: {},
+      games: {},
+    },
   };
+
+  function clone(value) {
+    if (typeof structuredClone === "function") return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function cleanText(value, maxLength) {
+    return String(value == null ? "" : value).replace(/\s+/g, " ").trim().slice(0, maxLength);
+  }
+
+  function cleanGameId(gameId) {
+    return String(gameId == null ? "" : gameId)
+      .trim()
+      .toLowerCase()
+      .replace(/\.html$/i, "")
+      .replace(/[^a-z0-9:_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 96);
+  }
+
+  function normalizeLocalProfile(raw = {}) {
+    const base = clone(defaultState.localProfile);
+    const merged = { ...base, ...raw };
+    return {
+      displayName: cleanText(merged.displayName || merged.display_name || base.displayName, 32) || base.displayName,
+      profileTitle: cleanText(merged.profileTitle || merged.profile_title || base.profileTitle, 40) || base.profileTitle,
+      bio: cleanText(merged.bio, 180),
+      favoriteGame: cleanText(merged.favoriteGame || merged.favorite_game, 80),
+      avatarStyle: cleanText(merged.avatarStyle || merged.avatar_style || base.avatarStyle, 32).toLowerCase() || base.avatarStyle,
+      accentColor: cleanText(merged.accentColor || merged.accent_color || base.accentColor, 32).toLowerCase() || base.accentColor,
+    };
+  }
+
+  function normalizeGameStats(raw = {}) {
+    return {
+      playMs: Math.max(0, Number(raw.playMs) || 0),
+      sessions: Math.max(0, Math.floor(Number(raw.sessions) || 0)),
+      firstPlayedAt: Math.max(0, Number(raw.firstPlayedAt) || 0),
+      lastPlayedAt: Math.max(0, Number(raw.lastPlayedAt) || 0),
+      lastSavedAt: Math.max(0, Number(raw.lastSavedAt) || 0),
+      bestScore: Math.max(0, Math.floor(Number(raw.bestScore) || 0)),
+      bestScoreAt: Math.max(0, Number(raw.bestScoreAt) || 0),
+      lastScore: Math.max(0, Math.floor(Number(raw.lastScore) || 0)),
+      lastScoreAt: Math.max(0, Number(raw.lastScoreAt) || 0),
+    };
+  }
+
+  function normalizeStats(raw = {}) {
+    const stats = {
+      ...clone(defaultState.stats),
+      ...raw,
+      totalPlayMs: Math.max(0, Number(raw.totalPlayMs) || 0),
+      sessions: Math.max(0, Math.floor(Number(raw.sessions) || 0)),
+      firstPlayedAt: Math.max(0, Number(raw.firstPlayedAt) || 0),
+      lastPlayedAt: Math.max(0, Number(raw.lastPlayedAt) || 0),
+      lastPlayedGame: cleanGameId(raw.lastPlayedGame),
+      lastSavedAt: Math.max(0, Number(raw.lastSavedAt) || 0),
+      playDays: raw.playDays && typeof raw.playDays === "object" ? { ...raw.playDays } : {},
+      games: {},
+    };
+    const rawGames = raw.games && typeof raw.games === "object" ? raw.games : {};
+    Object.entries(rawGames).forEach(([gameId, gameStats]) => {
+      const id = cleanGameId(gameId);
+      if (id) stats.games[id] = normalizeGameStats(gameStats);
+    });
+    return stats;
+  }
+
+  function normalizeState(raw = {}) {
+    const base = clone(defaultState);
+    const next = { ...base, ...raw };
+    next.powerups = { ...base.powerups, ...(raw.powerups || {}) };
+    next.scores = raw.scores && typeof raw.scores === "object" ? { ...raw.scores } : {};
+    next.notify = Array.isArray(raw.notify) ? raw.notify.slice() : [];
+    next.localProfile = normalizeLocalProfile(raw.localProfile || raw.profile || {});
+    next.stats = normalizeStats(raw.stats || {});
+    return next;
+  }
 
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return structuredClone(defaultState);
-      return { ...structuredClone(defaultState), ...JSON.parse(raw) };
+      if (!raw) return normalizeState();
+      return normalizeState(JSON.parse(raw));
     } catch (e) {
-      return structuredClone(defaultState);
+      return normalizeState();
     }
   }
 
@@ -52,6 +152,156 @@ const RB = (() => {
     listeners.add(fn);
     fn(state);
     return () => listeners.delete(fn);
+  }
+
+  // ---------- Profile stats ----------
+
+  function currentGameIdFromPath() {
+    if (!location.pathname.includes("/games/")) return "";
+    const file = location.pathname.split("/").pop() || "";
+    return cleanGameId(file);
+  }
+
+  function dayKey(time = Date.now()) {
+    const date = new Date(time);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function ensureStats() {
+    if (
+      !state.stats ||
+      typeof state.stats !== "object" ||
+      !state.stats.games ||
+      typeof state.stats.games !== "object" ||
+      !state.stats.playDays ||
+      typeof state.stats.playDays !== "object"
+    ) {
+      state.stats = normalizeStats(state.stats || {});
+    }
+    return state.stats;
+  }
+
+  function ensureGameStats(gameId) {
+    const id = cleanGameId(gameId);
+    if (!id) return null;
+    const stats = ensureStats();
+    if (!stats.games[id]) stats.games[id] = normalizeGameStats();
+    return stats.games[id];
+  }
+
+  function touchGameStats(gameId, time = Date.now()) {
+    const id = cleanGameId(gameId);
+    const gameStats = ensureGameStats(id);
+    if (!gameStats) return null;
+    const stats = ensureStats();
+    if (!stats.firstPlayedAt) stats.firstPlayedAt = time;
+    if (!gameStats.firstPlayedAt) gameStats.firstPlayedAt = time;
+    stats.lastPlayedAt = time;
+    stats.lastPlayedGame = id;
+    stats.playDays[dayKey(time)] = true;
+    gameStats.lastPlayedAt = time;
+    return gameStats;
+  }
+
+  function addPlayTime(gameId, elapsedMs) {
+    const id = cleanGameId(gameId);
+    const delta = Math.max(0, Math.min(Number(elapsedMs) || 0, MAX_SESSION_DELTA_MS));
+    if (!id || delta < 1000) return false;
+    const stats = ensureStats();
+    const gameStats = touchGameStats(id);
+    if (!gameStats) return false;
+    stats.totalPlayMs += delta;
+    gameStats.playMs += delta;
+    return true;
+  }
+
+  function rememberHighScore(gameId, score, time = Date.now()) {
+    const numericScore = Math.max(0, Math.floor(Number(score) || 0));
+    const gameStats = touchGameStats(gameId, time);
+    if (!gameStats) return;
+    gameStats.lastScore = numericScore;
+    gameStats.lastScoreAt = time;
+    if (numericScore >= gameStats.bestScore) {
+      gameStats.bestScore = numericScore;
+      gameStats.bestScoreAt = time;
+    }
+  }
+
+  function recordGameSave(gameId) {
+    const time = Date.now();
+    const gameStats = ensureGameStats(gameId);
+    if (!gameStats) return false;
+    if (time - Number(gameStats.lastSavedAt || 0) < SAVE_TOUCH_FLUSH_MS) return false;
+    const stats = ensureStats();
+    touchGameStats(gameId, time);
+    gameStats.lastSavedAt = time;
+    stats.lastSavedAt = time;
+    emit();
+    return true;
+  }
+
+  let activeGameSession = null;
+
+  function flushGameSession(persist = false) {
+    if (!activeGameSession) return false;
+    const now = Date.now();
+    if (!activeGameSession.lastTick) {
+      activeGameSession.lastTick = document.visibilityState === "visible" ? now : 0;
+      return false;
+    }
+    const changed = addPlayTime(activeGameSession.gameId, now - activeGameSession.lastTick);
+    activeGameSession.lastTick = document.visibilityState === "visible" ? now : 0;
+    if (changed && persist) emit();
+    return changed;
+  }
+
+  function startGameSession(gameId = currentGameIdFromPath()) {
+    const id = cleanGameId(gameId);
+    if (!id || activeGameSession) return false;
+    const stats = ensureStats();
+    const gameStats = touchGameStats(id);
+    if (!gameStats) return false;
+    stats.sessions += 1;
+    gameStats.sessions += 1;
+    activeGameSession = {
+      gameId: id,
+      lastTick: document.visibilityState === "visible" ? Date.now() : 0,
+      timer: window.setInterval(() => flushGameSession(true), GAMEPLAY_FLUSH_MS),
+    };
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        flushGameSession(true);
+        if (activeGameSession) activeGameSession.lastTick = 0;
+      } else if (activeGameSession) {
+        activeGameSession.lastTick = Date.now();
+        touchGameStats(activeGameSession.gameId);
+        emit();
+      }
+    });
+    window.addEventListener("beforeunload", () => {
+      flushGameSession(true);
+    });
+    emit();
+    return true;
+  }
+
+  function getGameplayStats() {
+    flushGameSession(false);
+    return clone(ensureStats());
+  }
+
+  function getLocalProfile() {
+    state.localProfile = normalizeLocalProfile(state.localProfile || {});
+    return { ...state.localProfile };
+  }
+
+  function updateLocalProfile(patch = {}) {
+    state.localProfile = normalizeLocalProfile({ ...getLocalProfile(), ...patch });
+    emit();
+    return getLocalProfile();
   }
 
   // ---------- Ads ----------
@@ -171,12 +421,18 @@ const RB = (() => {
   // ---------- Scores ----------
 
   function recordScore(gameId, score) {
-    const prev = state.scores[gameId] || 0;
-    if (score > prev) {
-      state.scores[gameId] = score;
+    const id = cleanGameId(gameId);
+    const numericScore = Math.max(0, Math.floor(Number(score) || 0));
+    const prev = state.scores[id] || 0;
+    if (id) rememberHighScore(id, numericScore);
+    if (id && numericScore > prev) {
+      state.scores[id] = numericScore;
       emit();
-      if (window.RBBackend && typeof window.RBBackend.recordScore === "function") {
-        window.RBBackend.recordScore(gameId, score).catch((error) => {
+      const backendState = window.RBBackend && typeof window.RBBackend.getState === "function"
+        ? window.RBBackend.getState()
+        : null;
+      if (backendState && backendState.ready && backendState.user && typeof window.RBBackend.recordScore === "function") {
+        window.RBBackend.recordScore(id, numericScore).catch((error) => {
           console.warn("[Rainbot] Cloud score sync failed", error);
         });
       }
@@ -186,16 +442,18 @@ const RB = (() => {
   }
 
   function getHighScore(gameId) {
-    return state.scores[gameId] || 0;
+    return state.scores[cleanGameId(gameId)] || 0;
   }
 
   function mergeHighScores(scores) {
     if (!scores || typeof scores !== "object") return false;
     let changed = false;
     Object.entries(scores).forEach(([gameId, score]) => {
+      const id = cleanGameId(gameId);
       const numericScore = Number(score) || 0;
-      if (numericScore > (state.scores[gameId] || 0)) {
-        state.scores[gameId] = numericScore;
+      if (id && numericScore > (state.scores[id] || 0)) {
+        state.scores[id] = numericScore;
+        rememberHighScore(id, numericScore);
         changed = true;
       }
     });
@@ -227,6 +485,12 @@ const RB = (() => {
     return true;
   }
 
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => startGameSession(), { once: true });
+  } else {
+    startGameSession();
+  }
+
   // ---------- Public API ----------
 
   return {
@@ -241,10 +505,17 @@ const RB = (() => {
     recordScore,
     getHighScore,
     mergeHighScores,
+    recordGameSave,
+    startGameSession,
+    getGameplayStats,
+    getLocalProfile,
+    updateLocalProfile,
     toast,
     addNotify,
   };
 })();
+
+window.RB = RB;
 
 // Tiny helper: render a "powered by ad" placeholder
 function renderAdSlot(element, size = "leaderboard") {

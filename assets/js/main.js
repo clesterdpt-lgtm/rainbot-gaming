@@ -217,7 +217,6 @@ function renderNav(state = RB.state) {
   const syncBadge = backendState.user
     ? `<span class="nav__pro-state nav__pro-state--sync">SYNC ON</span>`
     : "";
-  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : "Login";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
   const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
@@ -226,6 +225,10 @@ function renderNav(state = RB.state) {
   const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
   const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && !isForum && (path.endsWith("/games.html") || path.includes("/games/"));
+  const localProfile = RB && typeof RB.getLocalProfile === "function" ? RB.getLocalProfile() : {};
+  const localName = cleanVisibleGameTitle(localProfile.displayName || "");
+  const localProfileLabel = localName && localName !== "Rainbot Player" ? localName : "Profile";
+  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : escapeHtml(localProfileLabel);
 
   slot.innerHTML = `
     <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network - free browser arcade">
@@ -275,8 +278,7 @@ function renderNav(state = RB.state) {
   const login = document.getElementById("rb-login");
   if (login) login.addEventListener("click", (e) => {
     e.preventDefault();
-    if (getBackendState().user) openProfileModal();
-    else openAuthModal();
+    openProfileModal();
   });
 }
 
@@ -770,33 +772,152 @@ function localScoreEntries() {
     .sort((a, b) => b.score - a.score || titleForScoreId(a.gameId).localeCompare(titleForScoreId(b.gameId)));
 }
 
+function getLocalProfileSnapshot() {
+  if (RB && typeof RB.getLocalProfile === "function") return RB.getLocalProfile();
+  return {
+    displayName: "Rainbot Player",
+    profileTitle: "Arcade Regular",
+    bio: "",
+    favoriteGame: "",
+    avatarStyle: "bot",
+    accentColor: "cyan",
+  };
+}
+
+function profileField(profile, snakeKey, camelKey, fallback = "") {
+  return profile && (profile[snakeKey] || profile[camelKey]) || fallback;
+}
+
+function gameplayStatsSnapshot() {
+  if (RB && typeof RB.getGameplayStats === "function") return RB.getGameplayStats();
+  return { totalPlayMs: 0, sessions: 0, playDays: {}, games: {} };
+}
+
+function formatPlayDuration(ms) {
+  const minutes = Math.floor(Math.max(0, Number(ms) || 0) / 60000);
+  if (minutes < 1) return "0m";
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours < 1) return `${minutes}m`;
+  if (hours < 24) return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const dayHours = hours % 24;
+  return dayHours ? `${days}d ${dayHours}h` : `${days}d`;
+}
+
+function formatShortDate(value) {
+  const date = new Date(value || 0);
+  if (Number.isNaN(date.getTime()) || date.getTime() <= 0) return "Not yet";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function localDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function currentPlayStreak(playDays = {}) {
+  let streak = 0;
+  const date = new Date();
+  for (let i = 0; i < 366; i += 1) {
+    if (!playDays[localDateKey(date)]) break;
+    streak += 1;
+    date.setDate(date.getDate() - 1);
+  }
+  return streak;
+}
+
+function titleForProfileGame(gameId) {
+  const id = String(gameId || "");
+  if (RB_GAME_META[id]) return RB_GAME_META[id].title;
+  return titleForScoreId(id);
+}
+
+function gameplayEntries(stats) {
+  const games = stats && stats.games && typeof stats.games === "object" ? stats.games : {};
+  return Object.entries(games).map(([gameId, gameStats]) => ({
+    gameId,
+    title: titleForProfileGame(gameId),
+    playMs: Math.max(0, Number(gameStats.playMs) || 0),
+    sessions: Math.max(0, Math.floor(Number(gameStats.sessions) || 0)),
+    lastPlayedAt: Math.max(0, Number(gameStats.lastPlayedAt) || 0),
+    lastSavedAt: Math.max(0, Number(gameStats.lastSavedAt) || 0),
+    bestScore: Math.max(0, Math.floor(Number(gameStats.bestScore) || 0)),
+  }));
+}
+
+function localSaveEntries() {
+  if (!window.RBGameSaves || typeof window.RBGameSaves.listLocalSaves !== "function") return [];
+  return window.RBGameSaves.listLocalSaves();
+}
+
+function profileRecentGamesMarkup(entries) {
+  const recent = entries
+    .filter((entry) => entry.lastPlayedAt)
+    .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt)
+    .slice(0, 3);
+  if (!recent.length) return "<small>No games opened yet</small>";
+  return `
+    <div class="rb-profile-recent-list">
+      ${recent.map((entry) => `
+        <span>
+          <b>${escapeHtml(entry.title)}</b>
+          <em>${escapeHtml(formatPlayDuration(entry.playMs))} - ${escapeHtml(formatShortDate(entry.lastPlayedAt))}</em>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
 function profileGamerStatsMarkup(backendState = getBackendState()) {
   const profile = backendState.profile || {};
-  const role = profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
+  const role = backendState.user
+    ? profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
+    : "Local Player";
   const scoreEntries = localScoreEntries();
   const best = scoreEntries[0] || null;
   const totalScore = scoreEntries.reduce((sum, entry) => sum + entry.score, 0);
+  const stats = gameplayStatsSnapshot();
+  const entries = gameplayEntries(stats);
+  const playedEntries = entries.filter((entry) => entry.sessions > 0 || entry.playMs > 0);
+  const mostPlayed = playedEntries.slice().sort((a, b) => b.playMs - a.playMs || b.sessions - a.sessions)[0] || null;
+  const saveEntries = localSaveEntries();
+  const lastSaveAt = Math.max(
+    Number(stats.lastSavedAt) || 0,
+    ...saveEntries.map((entry) => Number(entry.saved && entry.saved.savedAt) || 0)
+  );
+  const playDays = stats.playDays && typeof stats.playDays === "object" ? Object.keys(stats.playDays).length : 0;
+  const streak = currentPlayStreak(stats.playDays || {});
   const cloudState = backendState.ready && backendState.user
     ? "Sync on"
     : backendState.configured
       ? "Cloud ready"
       : "Local only";
   return `
+    <div class="rb-profile-stat rb-profile-stat--hero rb-profile-stat--wide">
+      <span>Gameplay Time</span>
+      <strong>${escapeHtml(formatPlayDuration(stats.totalPlayMs))}</strong>
+      <small>${formatStatNumber(stats.sessions)} sessions - ${formatStatNumber(playedEntries.length)} games played</small>
+    </div>
     <div class="rb-profile-stat">
       <span>Rank</span>
       <strong>${escapeHtml(role)}</strong>
     </div>
     <div class="rb-profile-stat">
-      <span>Saves</span>
-      <strong>${formatStatNumber(getLocalSaveCount())}</strong>
-    </div>
-    <div class="rb-profile-stat">
-      <span>Games Scored</span>
+      <span>High Scores</span>
       <strong>${formatStatNumber(scoreEntries.length)}</strong>
+      <small>${best ? `${escapeHtml(titleForScoreId(best.gameId))}` : "No scores yet"}</small>
     </div>
     <div class="rb-profile-stat">
       <span>Total Points</span>
       <strong>${formatStatNumber(totalScore)}</strong>
+    </div>
+    <div class="rb-profile-stat">
+      <span>Play Days</span>
+      <strong>${formatStatNumber(playDays)}</strong>
+      <small>${streak ? `${formatStatNumber(streak)} day streak` : "Start a streak"}</small>
     </div>
     <div class="rb-profile-stat rb-profile-stat--wide">
       <span>Best Run</span>
@@ -804,9 +925,23 @@ function profileGamerStatsMarkup(backendState = getBackendState()) {
       <small>${escapeHtml(best ? titleForScoreId(best.gameId) : "No run logged yet")}</small>
     </div>
     <div class="rb-profile-stat rb-profile-stat--wide">
+      <span>Most Played</span>
+      <strong>${escapeHtml(mostPlayed ? mostPlayed.title : "No favorite yet")}</strong>
+      <small>${mostPlayed ? `${escapeHtml(formatPlayDuration(mostPlayed.playMs))} - ${formatStatNumber(mostPlayed.sessions)} sessions` : "Play any game to start tracking"}</small>
+    </div>
+    <div class="rb-profile-stat">
+      <span>Active Saves</span>
+      <strong>${formatStatNumber(saveEntries.length || getLocalSaveCount())}</strong>
+      <small>${escapeHtml(formatShortDate(lastSaveAt))}</small>
+    </div>
+    <div class="rb-profile-stat rb-profile-stat--wide">
       <span>Cloud</span>
       <strong>${escapeHtml(cloudState)}</strong>
-      <small>${backendState.user ? "Saves and highs sync after login" : "Login turns on cloud scores"}</small>
+      <small>${backendState.user ? "Saves and highs sync after login" : "Sign in to sync highs and saves"}</small>
+    </div>
+    <div class="rb-profile-stat rb-profile-stat--wide">
+      <span>Recent Games</span>
+      ${profileRecentGamesMarkup(entries)}
     </div>
   `;
 }
@@ -818,20 +953,20 @@ function refreshProfileGamerStats(root) {
 
 function openProfileModal() {
   const backendState = getBackendState();
-  if (!backendState.user) {
-    openAuthModal();
-    return;
-  }
   if (document.getElementById("rb-profile-modal")) return;
-  const profile = backendState.profile || {};
-  const displayName = getBackendDisplayName(backendState);
-  const email = backendState.user.email || "";
-  const role = profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
-  const profileTitle = profile.profile_title || "Arcade Regular";
+  const signedIn = Boolean(backendState.user);
+  const localProfile = getLocalProfileSnapshot();
+  const profile = signedIn ? (backendState.profile || {}) : localProfile;
+  const displayName = signedIn ? getBackendDisplayName(backendState) : (localProfile.displayName || "Rainbot Player");
+  const email = signedIn ? (backendState.user.email || "") : "Saved on this device";
+  const role = signedIn
+    ? profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
+    : "Local Player";
+  const profileTitle = profileField(profile, "profile_title", "profileTitle", "Arcade Regular");
   const bio = profile.bio || "";
-  const favoriteGame = profile.favorite_game || "";
-  const avatarStyle = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
-  const accentColor = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
+  const favoriteGame = profileField(profile, "favorite_game", "favoriteGame", "");
+  const avatarStyle = cleanProfileUiChoice(profileField(profile, "avatar_style", "avatarStyle", "bot"), RB_PROFILE_AVATARS, "bot");
+  const accentColor = cleanProfileUiChoice(profileField(profile, "accent_color", "accentColor", "cyan"), RB_PROFILE_ACCENTS, "cyan");
   const avatarOptions = RB_PROFILE_AVATARS.map((option) => `
     <label class="rb-avatar-choice">
       <input type="radio" name="avatar_style" value="${option.value}"${option.value === avatarStyle ? " checked" : ""} />
@@ -871,7 +1006,7 @@ function openProfileModal() {
             ${profileGamerStatsMarkup(backendState)}
           </div>
           <div class="rb-profile-account-line">
-            <span>Email</span>
+            <span>${signedIn ? "Email" : "Profile Mode"}</span>
             <strong>${escapeHtml(email || "Connected")}</strong>
           </div>
         </section>
@@ -906,9 +1041,13 @@ function openProfileModal() {
         </form>
       </div>
       <div class="modal__actions rb-profile-actions">
-        <button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
-        <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
-        <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>
+        ${
+          signedIn
+            ? `<button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
+               <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
+               <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>`
+            : `<button class="btn btn--secondary" id="rb-sign-in-profile" type="button">Sign In to Sync</button>`
+        }
         <button class="btn btn--ghost" id="rb-close-profile" type="button">Close</button>
       </div>
       <p class="rb-modal-status" data-modal-status></p>
@@ -959,18 +1098,29 @@ function openProfileModal() {
     event.preventDefault();
     const button = form.querySelector("button[type='submit']");
     button.disabled = true;
-    setModalStatus(backdrop, "Saving profile...", "");
+    setModalStatus(backdrop, signedIn ? "Saving profile..." : "Saving local profile...", "");
     try {
-      await window.RBBackend.updateProfile({
-        display_name: displayInput.value,
-        profile_title: titleInput.value,
-        favorite_game: favoriteInput.value,
-        bio: bioInput.value,
-        avatar_style: selectedAvatar(),
-        accent_color: selectedAccent(),
-      });
-      setModalStatus(backdrop, "Profile saved.", "good");
-      RB.toast("Profile saved", "good");
+      if (signedIn) {
+        await window.RBBackend.updateProfile({
+          display_name: displayInput.value,
+          profile_title: titleInput.value,
+          favorite_game: favoriteInput.value,
+          bio: bioInput.value,
+          avatar_style: selectedAvatar(),
+          accent_color: selectedAccent(),
+        });
+      } else if (RB && typeof RB.updateLocalProfile === "function") {
+        RB.updateLocalProfile({
+          displayName: displayInput.value,
+          profileTitle: titleInput.value,
+          favoriteGame: favoriteInput.value,
+          bio: bioInput.value,
+          avatarStyle: selectedAvatar(),
+          accentColor: selectedAccent(),
+        });
+      }
+      setModalStatus(backdrop, signedIn ? "Profile saved." : "Local profile saved.", "good");
+      RB.toast(signedIn ? "Profile saved" : "Local profile saved", "good");
       renderNav(RB.state);
       updatePreview();
     } catch (error) {
@@ -979,30 +1129,46 @@ function openProfileModal() {
       button.disabled = false;
     }
   });
-  backdrop.querySelector("#rb-change-password").addEventListener("click", () => {
-    openPasswordRecoveryModal();
-  });
-  backdrop.querySelector("#rb-sync-now").addEventListener("click", async () => {
-    setModalStatus(backdrop, "Syncing local saves and high scores...", "");
-    try {
-      await syncRainbotCloudState();
-      refreshProfileGamerStats(backdrop);
-      setModalStatus(backdrop, "Sync complete.", "good");
-      RB.toast("Cloud sync complete", "good");
-    } catch (error) {
-      setModalStatus(backdrop, error.message || "Sync failed.", "bad");
-    }
-  });
-  backdrop.querySelector("#rb-sign-out").addEventListener("click", async () => {
-    setModalStatus(backdrop, "Signing out...", "");
-    try {
-      await window.RBBackend.signOut();
-      RB.toast("Signed out", "good");
+  const changePasswordButton = backdrop.querySelector("#rb-change-password");
+  if (changePasswordButton) {
+    changePasswordButton.addEventListener("click", () => {
+      openPasswordRecoveryModal();
+    });
+  }
+  const syncButton = backdrop.querySelector("#rb-sync-now");
+  if (syncButton) {
+    syncButton.addEventListener("click", async () => {
+      setModalStatus(backdrop, "Syncing local saves and high scores...", "");
+      try {
+        await syncRainbotCloudState();
+        refreshProfileGamerStats(backdrop);
+        setModalStatus(backdrop, "Sync complete.", "good");
+        RB.toast("Cloud sync complete", "good");
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Sync failed.", "bad");
+      }
+    });
+  }
+  const signInButton = backdrop.querySelector("#rb-sign-in-profile");
+  if (signInButton) {
+    signInButton.addEventListener("click", () => {
       close();
-    } catch (error) {
-      setModalStatus(backdrop, error.message || "Sign out failed.", "bad");
-    }
-  });
+      openAuthModal();
+    });
+  }
+  const signOutButton = backdrop.querySelector("#rb-sign-out");
+  if (signOutButton) {
+    signOutButton.addEventListener("click", async () => {
+      setModalStatus(backdrop, "Signing out...", "");
+      try {
+        await window.RBBackend.signOut();
+        RB.toast("Signed out", "good");
+        close();
+      } catch (error) {
+        setModalStatus(backdrop, error.message || "Sign out failed.", "bad");
+      }
+    });
+  }
 }
 
 function loadScriptOnce(src, id) {
@@ -1436,6 +1602,7 @@ const RBGameSaves = (() => {
         };
         const ok = writeRaw(key, saved);
         if (ok) saveCloud(gameId, saved);
+        if (ok && typeof RB !== "undefined" && typeof RB.recordGameSave === "function") RB.recordGameSave(gameId);
         return ok;
       },
       clear() {
@@ -1777,6 +1944,8 @@ document.addEventListener("DOMContentLoaded", () => {
   RB.subscribe((state) => {
     renderNav(state);
     RBLeaderboards.renderAll();
+    const profileModal = document.getElementById("rb-profile-modal");
+    if (profileModal) refreshProfileGamerStats(profileModal);
   });
   window.addEventListener("rainbot:authchange", handleBackendAuthChange);
   initRainbotBackend();

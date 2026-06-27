@@ -1121,6 +1121,166 @@ const RBGameSaves = (() => {
 
 window.RBGameSaves = RBGameSaves;
 
+function initGameEscapeMenu() {
+  const isGamePage = location.pathname.includes("/games/") && document.querySelector(".game-stage");
+  if (!isGamePage || document.getElementById("rb-escape-menu")) return;
+
+  let pausedByMenu = false;
+  let lastFocus = null;
+
+  const playSurface =
+    document.querySelector(".canvas-wrap") ||
+    document.querySelector(".merge-board") ||
+    document.querySelector(".game-stage") ||
+    document.querySelector("main");
+  if (!playSurface) return;
+
+  const menuButton = document.createElement("button");
+  menuButton.type = "button";
+  menuButton.className = "rb-escape-btn";
+  menuButton.setAttribute("aria-label", "Open game menu");
+  menuButton.setAttribute("title", "Menu (Esc)");
+  menuButton.textContent = "\u2630";
+  playSurface.appendChild(menuButton);
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "rb-escape-menu";
+  backdrop.id = "rb-escape-menu";
+  backdrop.hidden = true;
+  backdrop.setAttribute("role", "dialog");
+  backdrop.setAttribute("aria-modal", "true");
+  backdrop.setAttribute("aria-labelledby", "rb-escape-menu-title");
+  backdrop.innerHTML = `
+    <div class="rb-escape-menu__panel">
+      <div class="rb-escape-menu__eyebrow">Game Menu</div>
+      <h2 class="rb-escape-menu__title" id="rb-escape-menu-title">Paused</h2>
+      <p class="rb-escape-menu__body">Take a beat, then jump back in.</p>
+      <div class="rb-escape-menu__actions">
+        <button class="btn btn--primary" type="button" data-rb-escape-action="resume">Resume</button>
+        <button class="btn btn--secondary" type="button" data-rb-escape-action="restart">Restart</button>
+        <button class="btn btn--secondary" type="button" data-rb-escape-action="exit-max">Exit max screen</button>
+        <button class="btn btn--ghost" type="button" data-rb-escape-action="games">All games</button>
+      </div>
+    </div>
+  `;
+  playSurface.appendChild(backdrop);
+
+  const resumeButton = backdrop.querySelector('[data-rb-escape-action="resume"]');
+  const restartButton = backdrop.querySelector('[data-rb-escape-action="restart"]');
+  const exitMaxButton = backdrop.querySelector('[data-rb-escape-action="exit-max"]');
+
+  const findPauseButton = () => (
+    document.getElementById("btn-pause") ||
+    document.getElementById("ssb-btn-pause") ||
+    document.getElementById("btn-touch-pause") ||
+    document.getElementById("storm-mobile-pause")
+  );
+  const findRestartButton = () => (
+    document.getElementById("btn-restart") ||
+    document.getElementById("btn-new") ||
+    document.getElementById("btn-drive-restart")
+  );
+  const findMaxButton = () => document.getElementById("btn-fullscreen") || document.querySelector(".fullscreen-btn");
+  const textIncludes = (element, needle) => element && element.textContent.toLowerCase().includes(needle);
+  const isMaxed = () => Boolean(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.body.classList.contains("rb-game-maxed") ||
+    document.querySelector(".is-maxed")
+  );
+  const pageLooksPaused = () => {
+    const pauseButton = findPauseButton();
+    if (textIncludes(pauseButton, "resume")) return true;
+    if (document.body.classList.contains("micro-play-paused")) return true;
+    return Array.from(document.querySelectorAll(".overlay--show, .scr--show"))
+      .some((overlay) => overlay.textContent.toLowerCase().includes("paused"));
+  };
+  const shouldIgnoreEscape = (event) => {
+    const target = event.target;
+    if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return true;
+    return Boolean(document.querySelector(".modal-backdrop--open:not(#rb-escape-menu)"));
+  };
+  const refreshActions = () => {
+    if (restartButton) restartButton.hidden = !findRestartButton();
+    if (exitMaxButton) exitMaxButton.hidden = !isMaxed();
+  };
+  const pauseGameIfPossible = () => {
+    if (pageLooksPaused()) return false;
+    const pauseButton = findPauseButton();
+    if (!pauseButton || pauseButton.disabled) return false;
+    pauseButton.click();
+    return true;
+  };
+  const resumeGameIfPossible = () => {
+    const pauseButton = findPauseButton();
+    if (!pauseButton || pauseButton.disabled) return;
+    if (pausedByMenu || pageLooksPaused()) pauseButton.click();
+  };
+  const exitMaxScreen = () => {
+    const exitNative = document.exitFullscreen || document.webkitExitFullscreen;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      try {
+        const result = exitNative && exitNative.call(document);
+        if (result && result.catch) result.catch(() => {});
+      } catch (error) {}
+    }
+
+    const maxButton = findMaxButton();
+    if (isMaxed() && maxButton && !maxButton.disabled) maxButton.click();
+    document.querySelectorAll(".is-maxed").forEach((element) => element.classList.remove("is-maxed"));
+    document.body.classList.remove("rb-game-maxed");
+  };
+  const closeMenu = ({ resume = false } = {}) => {
+    if (resume) resumeGameIfPossible();
+    backdrop.hidden = true;
+    document.body.classList.remove("rb-escape-menu-open");
+    if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus({ preventScroll: true });
+    lastFocus = null;
+    pausedByMenu = false;
+  };
+  const openMenu = () => {
+    lastFocus = document.activeElement;
+    pausedByMenu = pauseGameIfPossible();
+    refreshActions();
+    backdrop.hidden = false;
+    document.body.classList.add("rb-escape-menu-open");
+    if (resumeButton) resumeButton.focus({ preventScroll: true });
+  };
+
+  menuButton.addEventListener("click", openMenu);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) closeMenu();
+  });
+  backdrop.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-rb-escape-action]")?.dataset.rbEscapeAction;
+    if (!action) return;
+    if (action === "resume") closeMenu({ resume: true });
+    if (action === "restart") {
+      const restartButton = findRestartButton();
+      closeMenu();
+      if (restartButton && !restartButton.disabled) restartButton.click();
+    }
+    if (action === "exit-max") {
+      exitMaxScreen();
+      refreshActions();
+      window.setTimeout(refreshActions, 100);
+    }
+    if (action === "games") {
+      window.location.href = `${RB_BASE}games.html`;
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (shouldIgnoreEscape(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (backdrop.hidden) openMenu();
+    else closeMenu({ resume: true });
+  }, true);
+  document.addEventListener("fullscreenchange", refreshActions);
+  document.addEventListener("webkitfullscreenchange", refreshActions);
+}
+
 let gameCanvasFitFrame = 0;
 
 function scheduleGameCanvasFit() {
@@ -1204,6 +1364,7 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
+  initGameEscapeMenu();
   RB.subscribe((state) => renderNav(state));
   window.addEventListener("rainbot:authchange", handleBackendAuthChange);
   initRainbotBackend();

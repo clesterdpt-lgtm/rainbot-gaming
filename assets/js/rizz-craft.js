@@ -11,6 +11,7 @@
   const GAME_ID = "rizz-craft";
   const canvas = document.getElementById("gameCanvas");
   if (!canvas) return;
+  const canvasWrap = canvas.closest(".canvas-wrap") || canvas.parentElement;
 
   const api = window.RB || {
     recordScore() { return false; },
@@ -747,16 +748,23 @@
   const WORLD_INDEX_KEY = "rainbot_rizz_craft_worlds:v1";
   const WORLD_SAVE_PREFIX = "rainbot_rizz_craft_world:";
   const MAX_WORLDS = 12;
+  const touchControlsQuery = window.matchMedia ? window.matchMedia("(hover: none) and (pointer: coarse), (max-width: 760px)") : null;
 
   const ui = buildHud();
   const overlay = document.getElementById("overlay");
   const worldPanel = document.getElementById("world-panel");
+  const worldLoading = document.getElementById("world-loading");
+  const worldLoadingText = document.getElementById("world-loading-text");
   const craftPanel = document.getElementById("craft-panel");
   const craftList = document.getElementById("craft-list");
+  const craftTabs = document.getElementById("craft-tabs");
+  const craftStatus = document.getElementById("craft-status");
   let currentWorldId = "";
   let currentWorldName = "";
   let currentWorldSeed = 0;
   let worldAutosaveTimer = 0;
+  let worldLoadingActive = false;
+  let craftFilter = "All";
   let last = 0;
   let raf = 0;
   let decorDirty = true;
@@ -937,6 +945,49 @@
   function canUseMobileAction() {
     return state.started && !state.paused && !state.crafting && !state.bagOpen;
   }
+  function shouldShowTouchControls() {
+    return !!(
+      (touchControlsQuery && touchControlsQuery.matches) ||
+      (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+      window.innerWidth <= 760
+    );
+  }
+  function setTouchControlsVisible(on) {
+    if (canvasWrap) canvasWrap.classList.toggle("has-touch-controls", !!on);
+    if (ui && ui.mobileControls) ui.mobileControls.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+  function updateMobileControlState() {
+    if (!ui || !ui.mobileControls) return;
+    const playable = canUseMobileAction();
+    const flying = state.creative && state.flying;
+    ui.mobileControls.classList.toggle("is-playable", playable);
+    ui.mobileControls.classList.toggle("is-creative", state.creative);
+    ui.mobileControls.classList.toggle("is-flying", flying);
+    const selected = selectedSlot();
+    const placeButton = ui.mobileControls.querySelector('[data-mobile-action="place"]');
+    if (placeButton) {
+      const label = isFood(selected && selected.code) ? "Eat" : selected && isPlaceable(selected.code) ? "Place" : "Use";
+      placeButton.textContent = label;
+      placeButton.setAttribute("aria-label", `${label} selected item`);
+    }
+    const jumpButton = ui.mobileControls.querySelector('[data-mobile-action="jump"]');
+    if (jumpButton) {
+      jumpButton.textContent = flying ? "Up" : "Jump";
+      jumpButton.setAttribute("aria-label", flying ? "Fly up" : "Jump");
+    }
+    const sprintButton = ui.mobileControls.querySelector('[data-mobile-action="sprint"]');
+    if (sprintButton) {
+      sprintButton.textContent = flying ? "Down" : "Run";
+      sprintButton.setAttribute("aria-label", flying ? "Fly down" : "Run");
+    }
+    const flyButton = ui.mobileControls.querySelector('[data-mobile-action="fly"]');
+    if (flyButton) {
+      flyButton.disabled = !state.creative;
+      flyButton.textContent = flying ? "Land" : "Fly";
+      flyButton.classList.toggle("is-active", flying);
+      flyButton.setAttribute("aria-label", flying ? "Turn flight off" : "Turn flight on");
+    }
+  }
   function setMobileMine(down) {
     if (!down) {
       state.input.mine = false;
@@ -1021,6 +1072,7 @@
         el.classList.toggle("is-active", state.creative);
       });
     }
+    updateMobileControlState();
   }
   function clearDirectionalInput() {
     keyMove.forward = false;
@@ -1340,6 +1392,7 @@
   }
   function setWorldOverlay() {
     if (!overlay) return;
+    setWorldLoading(false);
     document.getElementById("overlay-title").textContent = "RIZZ-CRAFT WORLDS";
     document.getElementById("overlay-sub").innerHTML = "Choose a saved world or enter a seed to generate a new one.";
     document.getElementById("overlay-score").innerHTML = "";
@@ -1363,19 +1416,41 @@
       worldPanel.innerHTML = "";
     }
   }
-  function createWorld(nameValue = "", seedValue = "") {
+  function setWorldLoading(on, message = "Loading world...") {
+    worldLoadingActive = !!on;
+    if (overlay) overlay.classList.toggle("is-loading", worldLoadingActive);
+    if (worldLoading) {
+      worldLoading.hidden = !worldLoadingActive;
+      worldLoading.setAttribute("aria-busy", worldLoadingActive ? "true" : "false");
+    }
+    if (worldLoadingText) worldLoadingText.textContent = message;
+    const primary = document.getElementById("btn-primary");
+    if (primary) primary.disabled = worldLoadingActive;
+  }
+  function waitForWorldLoadingPaint() {
+    return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  }
+  async function createWorld(nameValue = "", seedValue = "") {
+    if (worldLoadingActive) return;
     const seed = seedFromInput(seedValue);
     const name = cleanWorldName(nameValue);
     const id = worldId(seed);
-    currentWorldId = id;
-    currentWorldName = name;
-    currentWorldSeed = seed >>> 0;
-    initGame(seed);
-    startGame();
-    saveCurrentWorld();
-    api.toast(`Created ${name}`, "good");
+    setWorldLoading(true, `Generating ${name}...`);
+    await waitForWorldLoadingPaint();
+    try {
+      currentWorldId = id;
+      currentWorldName = name;
+      currentWorldSeed = seed >>> 0;
+      initGame(seed);
+      startGame();
+      saveCurrentWorld();
+      api.toast(`Created ${name}`, "good");
+    } finally {
+      setWorldLoading(false);
+    }
   }
-  function loadWorld(id) {
+  async function loadWorld(id) {
+    if (worldLoadingActive) return;
     const world = readWorldIndex().find((item) => item.id === id);
     const saved = readWorldSave(id);
     if (!world || !saved) {
@@ -1383,12 +1458,18 @@
       renderWorldPanel();
       return;
     }
-    currentWorldId = world.id;
-    currentWorldName = world.name || "World";
-    currentWorldSeed = world.seed >>> 0;
-    restoreGame(saved);
-    playSfx("spawn", { volume: 0.75 });
-    api.toast(`Loaded ${currentWorldName}`, "good");
+    setWorldLoading(true, `Loading ${world.name || "World"}...`);
+    await waitForWorldLoadingPaint();
+    try {
+      currentWorldId = world.id;
+      currentWorldName = world.name || "World";
+      currentWorldSeed = world.seed >>> 0;
+      restoreGame(saved);
+      playSfx("spawn", { volume: 0.75 });
+      api.toast(`Loaded ${currentWorldName}`, "good");
+    } finally {
+      setWorldLoading(false);
+    }
   }
   function deleteWorld(id) {
     const world = readWorldIndex().find((item) => item.id === id);
@@ -5205,26 +5286,84 @@
   function renderCrafting() {
     if (!craftList) return;
     const near = nearTable();
+    const recipes = RECIPES.map((r, i) => {
+      const ok = canCraft(r);
+      const tableLocked = !!(r.table && !near);
+      const food = DEF[r.out.code] && DEF[r.out.code].food;
+      const missing = r.in.reduce((sum, [code, n]) => sum + Math.max(0, n - countItem(code)), 0);
+      return { r, i, ok, tableLocked, food, missing, cat: r.cat || "Other" };
+    });
     const cats = [];
     const seen = new Set();
     RECIPES.forEach((r) => { const c = r.cat || "Other"; if (!seen.has(c)) { seen.add(c); cats.push(c); } });
+    if (!["All", "Ready", ...cats].includes(craftFilter)) craftFilter = "All";
+    const readyCount = recipes.filter((entry) => entry.ok).length;
+    if (craftStatus) {
+      craftStatus.textContent = near ? "Crafting Toilet nearby" : "Basics only - stand near a Crafting Toilet";
+      craftStatus.classList.toggle("is-ready", near);
+    }
+    if (craftTabs) {
+      const tabs = [
+        { id: "All", label: "All", count: recipes.length },
+        { id: "Ready", label: "Ready", count: readyCount },
+        ...cats.map((cat) => ({ id: cat, label: cat, count: recipes.filter((entry) => entry.cat === cat).length })),
+      ];
+      craftTabs.innerHTML = tabs.map((tab) => `<button class="craft-tab${craftFilter === tab.id ? " is-active" : ""}" type="button" data-craft-filter="${escapeAttr(tab.id)}">${escapeWorldHtml(tab.label)}<b>${tab.count}</b></button>`).join("");
+      craftTabs.querySelectorAll("[data-craft-filter]").forEach((button) => {
+        button.addEventListener("click", () => {
+          primeAudio();
+          craftFilter = button.dataset.craftFilter || "All";
+          renderCrafting();
+        });
+      });
+    }
+    const visibleCats = cats.filter((cat) => {
+      if (craftFilter === "All") return true;
+      if (craftFilter === "Ready") return recipes.some((entry) => entry.cat === cat && entry.ok);
+      return craftFilter === cat;
+    });
     craftList.innerHTML = cats.map((cat) => {
-      const rows = RECIPES.map((r, i) => [r, i]).filter(([r]) => (r.cat || "Other") === cat).map(([r, i]) => {
-        const ok = canCraft(r);
-        const food = DEF[r.out.code] && DEF[r.out.code].food;
+      if (!visibleCats.includes(cat)) return "";
+      const entries = recipes
+        .filter((entry) => entry.cat === cat)
+        .filter((entry) => craftFilter !== "Ready" || entry.ok)
+        .sort((a, b) => Number(b.ok) - Number(a.ok) || Number(a.tableLocked) - Number(b.tableLocked) || a.missing - b.missing || a.i - b.i);
+      if (!entries.length) return "";
+      const rows = entries.map(({ r, i, ok, tableLocked, food }) => {
+        const outDef = DEF[r.out.code] || {};
+        const tags = [
+          r.table ? `<span class="craft-tag">Toilet</span>` : `<span class="craft-tag">Pocket</span>`,
+          food ? `<span class="craft-tag craft-tag--food">+${food.heal} HP${food.effects ? " +buff" : ""}</span>` : "",
+        ].filter(Boolean).join("");
         const needs = r.in.map(([c, n]) => {
+          const def = DEF[c] || {};
           const have = countItem(c);
-          return `<span class="craft-need ${have >= n ? "ok" : "no"}">${DEF[c].name} ${have}/${n}</span>`;
+          const enough = have >= n;
+          return `<span class="craft-need ${enough ? "ok" : "no"}"><span class="craft-need__dot" style="--item-color:${escapeAttr(def.color || "#ffffff")}"></span><span>${escapeWorldHtml(def.name || "Item")}</span><b>${have}/${n}</b></span>`;
         }).join("");
-        const lock = r.table && !near ? `<span class="craft-lock">needs Crafting Toilet</span>` : "";
-        const tag = food ? `<span class="craft-tag">+${food.heal} HP${food.effects ? " ⚡" : ""}</span>` : "";
-        return `<button class="craft-recipe" data-recipe="${i}" ${ok ? "" : "disabled"}>
-          <span class="craft-out"><b>${DEF[r.out.code].name}</b>${r.out.n > 1 ? " x" + r.out.n : ""}${tag}</span>
-          <span class="craft-ins">${needs}${lock}</span>
+        const statusClass = ok ? "is-ready" : tableLocked ? "is-locked" : "";
+        const statusText = ok ? "Craft" : tableLocked ? "Toilet needed" : "Missing";
+        const recipeClass = `craft-recipe${ok ? " is-ready" : ""}${tableLocked ? " is-locked" : ""}`;
+        const quantity = r.out.n > 1 ? `Makes ${r.out.n}` : "Makes 1";
+        return `<button class="${recipeClass}" data-recipe="${i}" aria-label="${escapeAttr(`${outDef.name || "Recipe"} - ${statusText}`)}" ${ok ? "" : "disabled"}>
+          <span class="craft-out">
+            <span class="craft-icon" style="--item-color:${escapeAttr(outDef.color || "#ffffff")}"></span>
+            <span class="craft-name"><b>${escapeWorldHtml(outDef.name || "Recipe")}</b><span>${quantity}</span></span>
+            <span class="craft-status ${statusClass}">${statusText}</span>
+          </span>
+          <span class="craft-ins">
+            <span class="craft-tags">${tags}</span>
+            <span class="craft-ins__label">Needs</span>
+            <span class="craft-needs">${needs}</span>
+          </span>
         </button>`;
       }).join("");
-      return `<div class="craft-cat">${cat}</div>${rows}`;
+      const catReady = entries.filter((entry) => entry.ok).length;
+      return `<div class="craft-cat"><span>${escapeWorldHtml(cat)}</span><span class="craft-cat__count">${catReady}/${entries.length} ready</span></div>${rows}`;
     }).join("");
+    if (!craftList.innerHTML) {
+      craftList.innerHTML = `<div class="craft-empty">No ready recipes yet. Gather more materials or stand near a Crafting Toilet.</div>`;
+    }
     craftList.querySelectorAll("[data-recipe]").forEach((button) => {
       button.addEventListener("click", () => { primeAudio(); doCraft(RECIPES[Number(button.dataset.recipe)]); });
     });
@@ -5329,6 +5468,7 @@
     }
     renderBag();
     updateCreativeButtons();
+    updateMobileControlState();
     updateHeldItem();
   }
   function updateBuffHud() {
@@ -5620,18 +5760,31 @@
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
       .rizz3d-mobile-controls{display:none;position:absolute;inset:0;z-index:9;pointer-events:none;touch-action:none}
+      .canvas-wrap--rizzcraft.has-touch-controls .rizz3d-mobile-controls.is-playable{display:block}
       .rizz3d-mobile-pad,.rizz3d-mobile-actions{position:absolute;display:grid;gap:6px;pointer-events:auto}
-      .rizz3d-mobile-pad{left:12px;bottom:56px;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}
-      .rizz3d-mobile-actions{right:12px;bottom:56px;grid-template-columns:repeat(2,58px)}
-      .rizz3d-mobile-look{position:absolute;right:12px;top:54px;max-width:142px;padding:5px 7px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(5,7,13,.48);color:rgba(255,255,255,.72);font:900 9px var(--font-mono);text-transform:uppercase;letter-spacing:.04em;pointer-events:none}
-      .rizz3d-mobile-button{min-width:0;min-height:46px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(5,7,13,.62);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.13);color:#fff;font:900 11px var(--font-mono);text-transform:uppercase;letter-spacing:.02em;touch-action:none;user-select:none;-webkit-user-select:none}
+      .rizz3d-mobile-pad{left:max(10px,env(safe-area-inset-left));bottom:calc(58px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px)}
+      .rizz3d-mobile-actions{right:max(10px,env(safe-area-inset-right));bottom:calc(58px + env(safe-area-inset-bottom));grid-template-columns:repeat(2,62px)}
+      .rizz3d-mobile-look{position:absolute;left:50%;top:54px;transform:translateX(-50%);max-width:min(280px,62%);padding:5px 9px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(5,7,13,.5);color:rgba(255,255,255,.74);font:900 9px var(--font-mono);text-transform:uppercase;letter-spacing:.04em;pointer-events:none;text-align:center}
+      .rizz3d-mobile-pad:before{content:"Move";grid-column:2;grid-row:2;align-self:center;justify-self:center;color:rgba(255,255,255,.46);font:900 9px var(--font-mono);text-transform:uppercase;pointer-events:none}
+      .rizz3d-mobile-button{min-width:0;min-height:48px;border:1px solid rgba(255,255,255,.24);border-radius:12px;background:rgba(5,7,13,.66);box-shadow:0 10px 28px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.13);color:#fff;font:900 11px var(--font-mono);text-transform:uppercase;letter-spacing:0;touch-action:none;user-select:none;-webkit-user-select:none}
       .rizz3d-mobile-button:active,.rizz3d-mobile-button.is-active{border-color:#ffd43b;background:rgba(255,212,59,.24);box-shadow:0 0 0 2px rgba(255,212,59,.24),0 10px 28px rgba(0,0,0,.3)}
+      .rizz3d-mobile-button:disabled{opacity:.45;filter:saturate(.7);cursor:not-allowed}
       .rizz3d-mobile-button--primary{background:rgba(255,212,59,.82);border-color:rgba(255,255,255,.32);color:#120d05}
       .rizz3d-mobile-button--danger{background:rgba(255,91,67,.78);border-color:rgba(255,255,255,.3);color:#fff}
+      .rizz3d-mobile-button--flight{background:rgba(67,230,255,.2);border-color:rgba(67,230,255,.42);color:#c9fbff}
       .rizz3d-mobile-button--wide{grid-column:1 / -1}
       .rizz3d-mobile-button[data-mobile-move="forward"]{grid-column:2;grid-row:1}.rizz3d-mobile-button[data-mobile-move="left"]{grid-column:1;grid-row:2}.rizz3d-mobile-button[data-mobile-move="right"]{grid-column:3;grid-row:2}.rizz3d-mobile-button[data-mobile-move="back"]{grid-column:2;grid-row:3}
-      @media (hover:none) and (pointer:coarse),(max-width:760px){.rizz3d-mobile-controls{display:block}.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
-      @media (max-width:520px){.rizz3d-mobile-pad{left:8px;bottom:50px;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:5px}.rizz3d-mobile-actions{right:8px;bottom:50px;grid-template-columns:repeat(2,52px);gap:5px}.rizz3d-mobile-button{min-height:40px;border-radius:10px;font-size:9px}.rizz3d-mobile-look{display:none}.rizz3d-health{width:min(214px,56%)}}
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-look{display:none}
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-pad{left:8px;bottom:42px;grid-template-columns:repeat(3,36px);grid-template-rows:repeat(3,36px);gap:4px}
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions{right:8px;bottom:44px;grid-template-columns:repeat(2,50px);gap:4px}
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-button{min-height:36px;border-radius:9px;font-size:8px}
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="bag"],
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="craft"],
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="fly"],
+      .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="creative"]{display:none}
+      @media (hover:none) and (pointer:coarse),(max-width:760px){.rizz3d-mobile-controls.is-playable{display:block}.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px;bottom:calc(10px + env(safe-area-inset-bottom))}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
+      @media (max-width:520px){.rizz3d-mobile-pad{left:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:5px}.rizz3d-mobile-actions{right:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(2,54px);gap:5px}.rizz3d-mobile-button{min-height:42px;border-radius:10px;font-size:9px}.rizz3d-mobile-look{top:50px;max-width:54%;font-size:8px}.rizz3d-health{width:min(214px,56%)}}
+      @media (max-height:560px){.rizz3d-mobile-look{display:none}.rizz3d-mobile-pad{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-actions{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-button{min-height:38px}}
     `;
     document.head.appendChild(style);
     const damage = document.createElement("div");
@@ -5701,9 +5854,12 @@
         <button class="rizz3d-mobile-button" type="button" data-mobile-action="sprint">Run</button>
         <button class="rizz3d-mobile-button" type="button" data-mobile-action="bag">Bag</button>
         <button class="rizz3d-mobile-button" type="button" data-mobile-action="craft">Craft</button>
+        <button class="rizz3d-mobile-button rizz3d-mobile-button--flight" type="button" data-mobile-action="fly">Fly</button>
         <button class="rizz3d-mobile-button rizz3d-mobile-button--wide" type="button" data-mobile-action="creative">Creative</button>
       </div>
     `;
+    if (wrap) wrap.classList.toggle("has-touch-controls", shouldShowTouchControls());
+    mobileControls.setAttribute("aria-hidden", shouldShowTouchControls() ? "false" : "true");
     bindMobileHudControls(mobileControls);
     wrap.append(damage, health, crosshair, target, progress, selectionCue, hotbar, bagButton, bagPanel, mobileControls);
     return {
@@ -5941,6 +6097,23 @@
     });
     window.addEventListener("blur", clearDirectionalInput);
     document.addEventListener("visibilitychange", () => { if (document.hidden) clearDirectionalInput(); });
+    const refreshTouchControls = () => {
+      setTouchControlsVisible(shouldShowTouchControls());
+      updateMobileControlState();
+    };
+    refreshTouchControls();
+    if (touchControlsQuery) {
+      if (touchControlsQuery.addEventListener) touchControlsQuery.addEventListener("change", refreshTouchControls);
+      else if (touchControlsQuery.addListener) touchControlsQuery.addListener(refreshTouchControls);
+    }
+    window.addEventListener("resize", refreshTouchControls);
+    window.addEventListener("orientationchange", refreshTouchControls);
+    window.addEventListener("pointerdown", (event) => {
+      if (event.pointerType && event.pointerType !== "mouse") {
+        setTouchControlsVisible(true);
+        updateMobileControlState();
+      }
+    }, { passive: true });
     canvas.addEventListener("click", () => {
       primeAudio();
       if (performance.now() < suppressMouseUntil) return;
@@ -5983,7 +6156,7 @@
       touchLook.pointerId = event.pointerId;
       touchLook.x = event.clientX;
       touchLook.y = event.clientY;
-      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
+      try { if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId); } catch (error) {}
       event.preventDefault();
     }, { passive: false });
     canvas.addEventListener("pointermove", (event) => {
@@ -6069,7 +6242,7 @@
     root.addEventListener("contextmenu", (event) => event.preventDefault());
     root.querySelectorAll("[data-mobile-move]").forEach((button) => {
       const direction = button.dataset.mobileMove;
-      bindTouchButton(button, () => setTouchMove(direction, true), () => setTouchMove(direction, false));
+      bindTouchButton(button, () => { if (canUseMobileAction()) setTouchMove(direction, true); }, () => setTouchMove(direction, false));
     });
     root.querySelectorAll("[data-mobile-action]").forEach((button) => {
       const action = button.dataset.mobileAction;
@@ -6079,6 +6252,7 @@
       else if (action === "sprint") bindTouchButton(button, () => { state.input.sprint = true; }, () => { state.input.sprint = false; });
       else if (action === "bag") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleBag(); });
       else if (action === "craft") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleCrafting(); });
+      else if (action === "fly") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); if (state.creative) setFlying(!state.flying); updateMobileControlState(); });
       else if (action === "creative") button.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); primeAudio(); toggleCreativeMode(); });
     });
   }
@@ -6090,7 +6264,7 @@
       primeAudio();
       active = true;
       el.classList.add("is-active");
-      if (event.pointerId !== undefined && el.setPointerCapture) el.setPointerCapture(event.pointerId);
+      try { if (event.pointerId !== undefined && el.setPointerCapture) el.setPointerCapture(event.pointerId); } catch (error) {}
       down();
     };
     const end = (event) => {

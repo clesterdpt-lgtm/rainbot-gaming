@@ -6011,7 +6011,7 @@
           const def = DEF[c] || {};
           const have = countItem(c);
           const enough = have >= n;
-          return `<span class="craft-need ${enough ? "ok" : "no"}"><span class="craft-need__dot" style="--item-color:${escapeAttr(def.color || "#ffffff")}"></span><span>${escapeWorldHtml(def.name || "Item")}</span><b>${have}/${n}</b></span>`;
+          return `<span class="craft-need ${enough ? "ok" : "no"}"><span class="craft-need__dot">${itemIconHtml(c, "craft-need__icon")}</span><span>${escapeWorldHtml(def.name || "Item")}</span><b>${have}/${n}</b></span>`;
         }).join("");
         const statusClass = ok ? "is-ready" : tableLocked ? "is-locked" : "";
         const statusText = ok ? "Craft" : tableLocked ? "Toilet needed" : "Missing";
@@ -6019,7 +6019,7 @@
         const quantity = r.out.n > 1 ? `Makes ${r.out.n}` : "Makes 1";
         return `<button class="${recipeClass}" data-recipe="${i}" aria-label="${escapeAttr(`${outDef.name || "Recipe"} - ${statusText}`)}" ${ok ? "" : "disabled"}>
           <span class="craft-out">
-            <span class="craft-icon" style="--item-color:${escapeAttr(outDef.color || "#ffffff")}"></span>
+            <span class="craft-icon">${itemIconHtml(r.out.code, "craft-icon__art")}</span>
             <span class="craft-name"><b>${escapeWorldHtml(outDef.name || "Recipe")}</b><span>${quantity}</span></span>
             <span class="craft-status ${statusClass}">${statusText}</span>
           </span>
@@ -6400,16 +6400,322 @@
   }
   function slotSwatch(slot) {
     if (!slot || !DEF[slot.code]) return "";
-    const d = DEF[slot.code];
-    const tool = d.tool && d.tool.type;
-    const kind = tool ? ` is-${tool}` : codeSwatchClass(slot.code, d);
-    const color = d.color || "#ffffff";
-    return `<span class="rizz3d-swatch${kind}" style="--item-color:${color};background:${color}"></span>`;
+    return itemIconHtml(slot.code, "rizz3d-swatch");
   }
-  function codeSwatchClass(code, d) {
-    if (code === TORCH) return " is-torch";
-    if (d.kind === "block") return " is-block";
-    return " is-item";
+  function itemIconHtml(code, extraClass = "") {
+    const d = DEF[code] || {};
+    const kind = itemIconKind(code, d);
+    const baseRaw = d.color || "#ffffff";
+    const accentRaw = itemIconAccent(code, d, kind);
+    const base = escapeAttr(baseRaw);
+    const accent = escapeAttr(accentRaw);
+    const dark = escapeAttr(shadeHex(baseRaw, 0.58));
+    const midDark = escapeAttr(shadeHex(baseRaw, 0.76));
+    const light = escapeAttr(shadeHex(baseRaw, 1.34));
+    const className = escapeAttr(`rizz3d-icon rizz3d-icon--${kind}${extraClass ? ` ${extraClass}` : ""}`);
+    return `<svg class="${className}" viewBox="0 0 32 32" aria-hidden="true" focusable="false" style="--item-color:${base}" shape-rendering="geometricPrecision">${itemIconBody(kind, { base, accent, dark, midDark, light }, code)}</svg>`;
+  }
+  function itemIconKind(code, d) {
+    const tool = d.tool && d.tool.type;
+    if (tool) return tool;
+    switch (code) {
+      case GRASS: return "grass";
+      case LOG: return "log";
+      case LEAVES: return "leaves";
+      case PLANKS: return "planks";
+      case TABLE: return "toilet";
+      case COAL_ORE:
+      case RIZZ_ORE:
+      case SIGMA_ORE: return "ore";
+      case TORCH: return "torch";
+      case WATER: return "water";
+      case LAVA: return "lava";
+      case TALL_GRASS:
+      case CAVE_VINE: return "grass-blades";
+      case FLOWER: return "flower";
+      case GLOW_SHROOM:
+      case COOKED_SHROOM: return "mushroom";
+      case CAVE_CRYSTAL:
+      case RIZZ:
+      case SIGMA: return "gem";
+      case DRIPSTONE_UP:
+      case DRIPSTONE_DOWN: return "dripstone";
+      case GLOWSTONE:
+      case SIGMA_LANTERN: return "lamp";
+      case CRYSTAL_GLASS: return "glass";
+      case CHEST: return "chest";
+      case BED: return "bed";
+      case DOOR:
+      case DOOR_OPEN: return "door";
+      case FURNACE: return "furnace";
+      case CROP_1:
+      case CROP_2:
+      case CROP_3:
+      case WHEAT: return "wheat";
+      case STICK: return "stick";
+      case COAL:
+      case CHARCOAL: return "coal";
+      case FRIENDLY_FRUIT: return "apple";
+      case BERRY: return "berries";
+      case BREAD: return "bread";
+      case RAW_MEAT:
+      case COOKED_MEAT: return "meat";
+      case OHIO_BURGER: return "burger";
+      case SHROOM_STEW: return "stew";
+      case SIGMA_BREW: return "drink";
+      case GRIMACE_SHAKE: return "shake";
+      case GOLDEN_APPLE: return "apple";
+      case WHEAT_SEEDS: return "seeds";
+      case SKIBIDI_GOO: return "goo";
+      case CURSED_IDOL: return "idol";
+      case SIGMA_CROWN: return "crown";
+      default:
+        if (d.kind === "block") return d.transparent ? "glass" : "block";
+        return "item";
+    }
+  }
+  function itemIconAccent(code, d, kind) {
+    switch (code) {
+      case GRASS: return d.side || "#7a5732";
+      case LOG: return "#d09a58";
+      case LEAVES: return "#8aff7c";
+      case TABLE: return "#4ecaff";
+      case COAL_ORE: return "#1c1d26";
+      case RIZZ_ORE: return "#ffd75a";
+      case SIGMA_ORE: return "#8af7ff";
+      case WATER: return "#b8f7ff";
+      case LAVA: return "#ffd75a";
+      case GLOW_SHROOM: return "#ff6fd6";
+      case CAVE_CRYSTAL: return "#d9fffb";
+      case GLOWSTONE: return "#fff0a6";
+      case SIGMA_LANTERN: return "#ffd75a";
+      case CRYSTAL_GLASS: return "#ffffff";
+      case COAL:
+      case CHARCOAL: return "#666879";
+      case RIZZ:
+      case RIZZ_BLOCK: return "#fff0a6";
+      case SIGMA:
+      case SIGMA_BLOCK: return "#d9fffb";
+      case BERRY: return "#ff91bd";
+      case BREAD: return "#fff0a6";
+      case OHIO_BURGER: return "#7bd24a";
+      case SIGMA_BREW: return "#ff4fd8";
+      case GRIMACE_SHAKE: return "#d29bff";
+      case GOLDEN_APPLE: return "#fff4b0";
+      case SKIBIDI_GOO: return "#c7ff5a";
+      case CURSED_IDOL: return "#ffd75a";
+      case SIGMA_CROWN: return "#4beaff";
+      default: return d.ore || d.side || (kind === "tool" ? "#7c4e29" : shadeHex(d.color || "#ffffff", 1.22));
+    }
+  }
+  function itemIconBody(kind, c, code) {
+    const line = `stroke="#05070d" stroke-opacity=".76" stroke-width="1.45" stroke-linejoin="round"`;
+    const roundLine = `${line} stroke-linecap="round"`;
+    const shine = `stroke="#ffffff" stroke-opacity=".45" stroke-width="1.1" stroke-linecap="round"`;
+    const cube = (topFill = c.light, leftFill = c.base, rightFill = c.dark) => `
+      <path d="M6 10.5 16 5.5 26 10.5 26 22 16 27 6 22Z" fill="${c.midDark}" ${line}/>
+      <path d="M6 10.5 16 15.4 16 27 6 22Z" fill="${leftFill}"/>
+      <path d="M26 10.5 16 15.4 16 27 26 22Z" fill="${rightFill}"/>
+      <path d="M6 10.5 16 5.5 26 10.5 16 15.4Z" fill="${topFill}"/>
+      <path d="M16 15.4V27M6 10.5 16 15.4 26 10.5" fill="none" stroke="#05070d" stroke-opacity=".32" stroke-width="1"/>`;
+    switch (kind) {
+      case "grass": return `
+        ${cube(c.base, c.accent, c.dark)}
+        <path d="M8 10.2 16 6.1 24 10.2 16 14.2Z" fill="${c.base}"/>
+        <path d="M8.4 11.2c2.6-1.4 4.7-1.2 7.1.2 2.2 1.2 4.9 1 8-1" fill="none" ${shine}/>`;
+      case "ore": return `
+        ${cube(shadeHex("#868894", 1.18), "#767987", "#565966")}
+        <path d="m11 16 3-2 2 3-2 2-3-1Z" fill="${c.accent}" ${line}/>
+        <path d="m19 20 2-2 2 1-1 3-3 1Z" fill="${c.accent}" ${line}/>
+        <path d="m17 9 2-1 2 1.5-1.5 2-2.5-.4Z" fill="${c.accent}"/>`;
+      case "log": return `
+        <path d="M9 9.5h13.5c3 0 5 2.2 5 5.1v7.2c0 2.1-1.6 3.7-3.7 3.7H10.5c-3.1 0-5.5-2.4-5.5-5.5v-6c0-2.5 1.7-4.5 4-4.5Z" fill="${c.dark}" ${line}/>
+        <path d="M8.2 10.2h13.7v13.9H8.2Z" fill="${c.base}"/>
+        <ellipse cx="8.3" cy="17.2" rx="4.5" ry="7" fill="${c.accent}" ${line}/>
+        <ellipse cx="8.3" cy="17.2" rx="2.3" ry="3.8" fill="none" stroke="#7c4e29" stroke-opacity=".6" stroke-width="1"/>
+        <path d="M13 13h9M13 18h9M13 22h8" ${shine}/>`;
+      case "leaves": return `
+        <path d="M10 8h12v4h4v10h-4v4H10v-4H6V12h4Z" fill="${c.base}" ${line}/>
+        <path d="M11 20c5-8 9-8 13-8-2 5-6 9-13 8Z" fill="${c.accent}" opacity=".5"/>
+        <path d="M9 13c4 0 6 1 8 5" ${shine}/>`;
+      case "planks": return `
+        <path d="M6 8h20v17H6Z" fill="${c.dark}" ${line}/>
+        <path d="M7.5 9.5h17v4.5h-17ZM7.5 15.2h17v4.5h-17ZM7.5 20.9h17v2.7h-17Z" fill="${c.base}"/>
+        <path d="M11 10v4M18 15.4v4M13 21v2M8.5 13.8h15M8.5 19.5h15" stroke="#5a3218" stroke-opacity=".55" stroke-width="1"/>`;
+      case "toilet": return `
+        <path d="M9 8h13v7H9Z" fill="#e8f6ff" ${line}/>
+        <path d="M12 15h12c1 5.5-1.4 10-7.1 10h-4.3c-2.6 0-4.6-2-4.6-4.5V19c0-2.2 1.8-4 4-4Z" fill="#d7e1e8" ${line}/>
+        <path d="M12 17.2h8.8c.4 2.6-1 4.5-4 4.5H13c-1.4 0-2.5-1-2.5-2.3 0-1.2.6-2.2 1.5-2.2Z" fill="${c.accent}" opacity=".8"/>
+        <path d="M19.5 9.8h2.2" ${shine}/>`;
+      case "torch": return `
+        <path d="M13 13 18.8 27" stroke="#05070d" stroke-opacity=".76" stroke-width="6" stroke-linecap="round"/>
+        <path d="M13 13 18.8 27" stroke="#8a572d" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M13.5 13.5 18.2 25.8" stroke="#c27a36" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 4c4 3.2 5.6 6.2 2.5 9.5-2.4 2.6-6.9 1.2-7.2-2.6C11.1 8.3 14.4 7.1 16 4Z" fill="#ff6a1a" ${line}/>
+        <path d="M16.2 7.1c1.8 1.6 2.4 3.1 1 4.5-1.1 1.1-3.1.6-3.2-1 .1-1.1 1.4-1.8 2.2-3.5Z" fill="#fff2a8"/>`;
+      case "water": return `
+        <path d="M5.5 9h21v15h-21Z" fill="${c.dark}" ${line}/>
+        <path d="M7 13c3.2-2.4 5.8 2.2 9 0s5.8 2.2 9 0v9H7Z" fill="${c.base}"/>
+        <path d="M7 15c3.2-2.4 5.8 2.2 9 0s5.8 2.2 9 0M8 19c2.8-1.7 5.1 1.5 7.7 0s5.1 1.5 7.7 0" stroke="${c.accent}" stroke-width="1.4" stroke-linecap="round" fill="none"/>`;
+      case "lava": return `
+        <path d="M5.5 9h21v15h-21Z" fill="${c.dark}" ${line}/>
+        <path d="M7 22V12c3-2 4.2 2.2 6.5.3 2.4-2 4 2.7 6.1.5 2-2.1 3.3 1.1 5.4-.8v10Z" fill="#ff5a14"/>
+        <path d="M9 21c1.2-4 3.5-3.6 4.4-7.8 1.7 3 4.6 3 4.8 7.8M19 21c1-2.3 3-2.1 3.8-5" stroke="${c.accent}" stroke-width="1.6" stroke-linecap="round" fill="none"/>`;
+      case "grass-blades": return `
+        <path d="M8 25c1.3-7.5 3.3-12.4 6.1-17-.5 7.1.2 12.5 2.1 17M15 25c1-6.3 4-11 8.4-14-2 6.3-2.7 10.7-2.2 14M6 25c2.8-3.9 5.4-5.3 8.6-6.7" fill="none" stroke="${c.base}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7 26h18" stroke="#05070d" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>`;
+      case "flower": return `
+        <path d="M16 15v11M16 20c-3-1-5.2-.2-7 2.5M16 21c3.2-1.4 5.8-.7 8 2" stroke="#35c55b" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+        <circle cx="16" cy="11.5" r="3.2" fill="${c.accent}" ${line}/>
+        <circle cx="11.8" cy="12.7" r="3.2" fill="${c.base}" ${line}/>
+        <circle cx="20.2" cy="12.7" r="3.2" fill="${c.base}" ${line}/>
+        <circle cx="16" cy="16" r="3.2" fill="${c.base}" ${line}/>
+        <circle cx="16" cy="13.2" r="2" fill="#ffd75a"/>`;
+      case "mushroom": return `
+        <path d="M13 15h6l1 10h-8Z" fill="#f2ead2" ${line}/>
+        <path d="M8 16c.5-5.2 4-8.6 8.2-8.6 4.4 0 7.3 3.2 7.8 8.6Z" fill="${c.base}" ${line}/>
+        <circle cx="14" cy="12.2" r="1.4" fill="${c.accent}"/>
+        <circle cx="19.8" cy="13.2" r="1.6" fill="${c.accent}"/>
+        <path d="M12.5 19h7" ${shine}/>`;
+      case "gem": return `
+        <path d="M10.5 6h11L27 13.5 16 27 5 13.5Z" fill="${c.base}" ${line}/>
+        <path d="M10.5 6 16 13.5 21.5 6M5 13.5h22M16 13.5V27" fill="none" stroke="#05070d" stroke-opacity=".28" stroke-width="1"/>
+        <path d="M11.2 8.2h4.2M8.4 13.5l3-4.2" ${shine}/>`;
+      case "dripstone": return `
+        <path d="M16 5 23 25H9Z" fill="${c.base}" ${line}/>
+        <path d="M16 5 17.8 25H9Z" fill="${c.light}" opacity=".55"/>
+        <path d="M16 8v13M13 17h6" stroke="#6a5a4a" stroke-opacity=".55" stroke-width="1"/>`;
+      case "lamp": return `
+        <path d="M10 8h12l2 3v12l-2 3H10l-2-3V11Z" fill="${c.base}" ${line}/>
+        <path d="M12 11h8v12h-8Z" fill="${c.accent}" opacity=".68"/>
+        <path d="M8 6h16M8 27h16" stroke="#7c4e29" stroke-width="2" stroke-linecap="round"/>
+        <path d="M13 13h6M13 21h6" ${shine}/>`;
+      case "glass": return `
+        <path d="M9 5.5h14v21H9Z" fill="${c.base}" fill-opacity=".52" ${line}/>
+        <path d="M12 8h7M12 24h6M20 8 12 20" ${shine}/>
+        <path d="M22 11v11" stroke="${c.accent}" stroke-opacity=".7" stroke-width="1.2"/>`;
+      case "chest": return `
+        <path d="M6 13h20v12H6Z" fill="${c.base}" ${line}/>
+        <path d="M8 8h16l2 5H6Z" fill="${c.dark}" ${line}/>
+        <path d="M16 8v17M6 16h20" stroke="#5a3218" stroke-opacity=".65" stroke-width="1.2"/>
+        <path d="M13.5 15h5v5h-5Z" fill="#caa24a" ${line}/>`;
+      case "bed": return `
+        <path d="M6 14h20v9H6Z" fill="${c.base}" ${line}/>
+        <path d="M6 10h9v7H6Z" fill="#f3f4fb" ${line}/>
+        <path d="M15 11h11v6H15Z" fill="${c.dark}" ${line}/>
+        <path d="M7 23v3M25 23v3" ${roundLine}/>`;
+      case "door": return `
+        <path d="M9 5h14v23H9Z" fill="${c.base}" ${line}/>
+        <path d="M12 8h8v17h-8Z" fill="${c.dark}" opacity=".32"/>
+        <circle cx="19.8" cy="16" r="1.5" fill="#ffd75a" ${line}/>
+        <path d="M12 8h8M12 25h8" ${shine}/>`;
+      case "furnace": return `
+        <path d="M6.5 7h19v20h-19Z" fill="${c.base}" ${line}/>
+        <path d="M10 10h12v5H10ZM9 17h14v7H9Z" fill="${c.dark}" ${line}/>
+        <path d="M13 23c-.5-3 2.2-3.8 2.6-6 2 1.7 3.8 3.3 3.1 6Z" fill="#ff6a1a"/>
+        <path d="M16 22c-.2-1.5.8-2.1 1-3.1 1 .8 1.7 1.8 1.3 3.1Z" fill="#ffd75a"/>`;
+      case "wheat": return `
+        <path d="M16 26V8M12 24V11M20 24V11" stroke="#9b7832" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 10c-3 1-4 2.2-5 4 3-.3 4.4-1.4 5-4ZM16 14c-3 1-4 2.2-5 4 3-.3 4.4-1.4 5-4ZM16 18c-3 1-4 2.2-5 4 3-.3 4.4-1.4 5-4ZM16 10c3 1 4 2.2 5 4-3-.3-4.4-1.4-5-4ZM16 14c3 1 4 2.2 5 4-3-.3-4.4-1.4-5-4ZM16 18c3 1 4 2.2 5 4-3-.3-4.4-1.4-5-4Z" fill="${c.base}" ${line}/>`;
+      case "stick": return `
+        <path d="M10 25 22 7" stroke="#05070d" stroke-opacity=".76" stroke-width="6.5" stroke-linecap="round"/>
+        <path d="M10 25 22 7" stroke="${c.base}" stroke-width="5" stroke-linecap="round"/>
+        <path d="M13 20 22 7" ${shine}/>`;
+      case "coal": return `
+        <path d="M8 11 15 6 24 9 27 17 21 25 11 24 5 17Z" fill="${c.base}" ${line}/>
+        <path d="M11 13 16 9 23 11M9 18l7-2 6 4" fill="none" stroke="${c.accent}" stroke-opacity=".48" stroke-width="1.5" stroke-linecap="round"/>`;
+      case "pick": return `
+        <path d="M12 27 20 9" stroke="#05070d" stroke-opacity=".76" stroke-width="5.8" stroke-linecap="round"/>
+        <path d="M12 27 20 9" stroke="#7c4e29" stroke-width="4" stroke-linecap="round"/>
+        <path d="M7 10c5-4.2 13-4.2 18 0l-3.2 3.5c-3.5-2-8.2-2-11.6 0Z" fill="${c.base}" ${line}/>
+        <path d="M10 11c3-1.4 8-1.8 12 0" ${shine}/>`;
+      case "axe": return `
+        <path d="M12 27 20 8" stroke="#05070d" stroke-opacity=".76" stroke-width="5.8" stroke-linecap="round"/>
+        <path d="M12 27 20 8" stroke="#7c4e29" stroke-width="4" stroke-linecap="round"/>
+        <path d="M10 9h10c4.1 0 6.6 2.3 7.8 5.5-3.8.6-7 .2-9.3-1.9L15 18l-5-2.8Z" fill="${c.base}" ${line}/>
+        <path d="M19 10c2.5.2 4.3 1.4 5.6 3.2" ${shine}/>`;
+      case "sword": return `
+        <path d="M17 4 23 10 17.8 21.4 14.2 17.8Z" fill="${c.base}" ${line}/>
+        <path d="M17 4 17.8 21.4 14.2 17.8Z" fill="${c.light}" opacity=".62"/>
+        <path d="m10.3 18 3.7-3.7 4.2 4.2-3.7 3.7Z" fill="#caa24a" ${line}/>
+        <path d="M10 22 7.2 24.8M13.5 25.5 6.5 18.5" stroke="#05070d" stroke-opacity=".76" stroke-width="4.6" stroke-linecap="round"/>
+        <path d="M10 22 7.2 24.8M13.5 25.5 6.5 18.5" stroke="#7c4e29" stroke-width="3" stroke-linecap="round"/>`;
+      case "hoe": return `
+        <path d="M12 27 20 8" stroke="#05070d" stroke-opacity=".76" stroke-width="5.8" stroke-linecap="round"/>
+        <path d="M12 27 20 8" stroke="#7c4e29" stroke-width="4" stroke-linecap="round"/>
+        <path d="M18 8h8v4h-8Z" fill="${c.base}" ${line}/>
+        <path d="M21 12v5" stroke="#05070d" stroke-opacity=".76" stroke-width="5.6" stroke-linecap="round"/>
+        <path d="M21 12v5" stroke="${c.base}" stroke-width="4" stroke-linecap="round"/>`;
+      case "apple": return `
+        <path d="M16 10c3.8-4 9.5-.4 9.5 5.8 0 6.6-4.3 10.9-8.2 9.2-.8-.4-1.8-.4-2.6 0-3.9 1.7-8.2-2.6-8.2-9.2C6.5 9.6 12.2 6 16 10Z" fill="${c.base}" ${line}/>
+        <path d="M15.5 10c.1-3 1.6-4.8 4.7-5.2.1 3.1-1.8 4.7-4.7 5.2Z" fill="#55d86a" ${line}/>
+        <path d="M12 13.5c1.8-1.4 3.4-1.7 4.7-.9" ${shine}/>`;
+      case "berries": return `
+        <circle cx="13" cy="13" r="5" fill="${c.base}" ${line}/>
+        <circle cx="19.5" cy="14" r="5" fill="${c.dark}" ${line}/>
+        <circle cx="16" cy="20" r="5" fill="${c.base}" ${line}/>
+        <path d="M15.5 8c1-2.1 2.8-2.9 5.3-2.4" stroke="#55d86a" stroke-width="2" stroke-linecap="round"/>`;
+      case "bread": return `
+        <path d="M7 16c0-5 4.4-8.5 9.4-8.5 5.1 0 8.6 3.2 8.6 8.5v8H7Z" fill="${c.base}" ${line}/>
+        <path d="M10 15c1.2-2.7 3.2-4 6-4M16 15c1.3-2.3 3.2-3.3 5.6-3" ${shine}/>
+        <path d="M8 20h16" stroke="#8f5629" stroke-opacity=".42" stroke-width="1.4"/>`;
+      case "meat": return `
+        <path d="M10 20c-2.5-2.5-2.2-7.5 1.2-10.2 3.2-2.6 8.1-2.3 10.8.4 2.7 2.7 2.7 7.2 0 9.9-3.1 3.2-8.8 3-12-.1Z" fill="${c.base}" ${line}/>
+        <path d="M21.5 20.2 26 24.7M24.7 21.8l2.4-2.4M24.7 24.7l-2.4 2.4" stroke="#05070d" stroke-opacity=".72" stroke-width="5.8" stroke-linecap="round"/>
+        <path d="M21.5 20.2 26 24.7M24.7 21.8l2.4-2.4M24.7 24.7l-2.4 2.4" stroke="#f2ead2" stroke-width="4" stroke-linecap="round"/>
+        <path d="M12.5 11.5c2-1.4 5.4-1.3 7.4.5" ${shine}/>`;
+      case "burger": return `
+        <path d="M7 14c1.2-4.7 5-7 9.2-7 4.5 0 8.3 2.3 9.8 7Z" fill="#d79a4e" ${line}/>
+        <path d="M7 15h18v3H7Z" fill="${c.accent}" ${line}/>
+        <path d="M8 18h17v4H8Z" fill="#7b3f20" ${line}/>
+        <path d="M7 22h19v4H7Z" fill="#d79a4e" ${line}/>
+        <path d="M12 11h1M17 10h1M21 12h1" stroke="#fff0a6" stroke-width="1.6" stroke-linecap="round"/>`;
+      case "stew": return `
+        <path d="M7 14h18l-2.2 10H9.2Z" fill="#7a5732" ${line}/>
+        <path d="M8.5 14c1.5-3 5-4.4 7.7-2.4 2.5-1.8 6.3-.6 7.3 2.4Z" fill="${c.base}" ${line}/>
+        <circle cx="14" cy="13.5" r="1.6" fill="${c.accent}"/>
+        <circle cx="19.5" cy="13.6" r="1.2" fill="#fff0a6"/>`;
+      case "drink": return `
+        <path d="M11 7h11l-1.5 20h-8Z" fill="${c.base}" ${line}/>
+        <path d="M12 10h9l-.4 4h-8.2Z" fill="${c.accent}" opacity=".75"/>
+        <path d="M14 17h5M14 21h4" ${shine}/>`;
+      case "shake": return `
+        <path d="M10 10h13l-2 17h-9Z" fill="${c.base}" ${line}/>
+        <path d="M11 8h11v4H11Z" fill="${c.accent}" ${line}/>
+        <path d="M16 8 19 4" stroke="#05070d" stroke-opacity=".76" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M16 8 19 4" stroke="${c.accent}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M13 15c2 1.8 4.8-1.8 7 0" ${shine}/>`;
+      case "seeds": return `
+        <ellipse cx="11" cy="17" rx="3.2" ry="5" fill="${c.base}" ${line} transform="rotate(-35 11 17)"/>
+        <ellipse cx="18" cy="12" rx="3" ry="4.8" fill="${c.accent}" ${line} transform="rotate(28 18 12)"/>
+        <ellipse cx="20.5" cy="21" rx="3.2" ry="4.8" fill="${c.base}" ${line} transform="rotate(38 20.5 21)"/>`;
+      case "goo": return `
+        <path d="M9 16c-3-5.5 4.5-10.5 8-6.8 4-2.2 8.2 1.4 7.2 5.8 4 2.4 1.4 9.4-3.5 8.7-2.2 3.2-8.1 3.1-9.7-.6-4.6.2-6-5.2-2-7.1Z" fill="${c.base}" ${line}/>
+        <circle cx="14" cy="14" r="1.3" fill="${c.accent}"/>
+        <circle cx="20.5" cy="18.8" r="1.6" fill="${c.accent}"/>
+        <path d="M11 20c2.6 1.8 5.5 2.1 8.6.6" ${shine}/>`;
+      case "idol": return `
+        <path d="M10 6h12l3 6-2 14H9L7 12Z" fill="${c.base}" ${line}/>
+        <path d="M10 12h12M11 21h10" stroke="#05070d" stroke-opacity=".36" stroke-width="1.2"/>
+        <circle cx="13" cy="16" r="1.5" fill="#05070d"/>
+        <circle cx="19" cy="16" r="1.5" fill="#05070d"/>
+        <path d="M13 22c2.2-2 4.3-2 6.2 0" stroke="${c.accent}" stroke-width="1.7" stroke-linecap="round" fill="none"/>`;
+      case "crown": return `
+        <path d="M7 23h18v4H7Z" fill="${c.base}" ${line}/>
+        <path d="M8 23 10 9l6 7 6-7 2 14Z" fill="${c.base}" ${line}/>
+        <path d="M10 9 16 16 22 9M11 22h10" ${shine}/>
+        <circle cx="10" cy="9" r="2" fill="${c.accent}" ${line}/>
+        <circle cx="22" cy="9" r="2" fill="${c.accent}" ${line}/>
+        <circle cx="16" cy="16" r="2" fill="${c.accent}" ${line}/>`;
+      case "item":
+        return `
+          <path d="M10 8h12l4 5-10 13L6 13Z" fill="${c.base}" ${line}/>
+          <path d="M10 8 16 13l6-5M6 13h20M16 13v13" fill="none" stroke="#05070d" stroke-opacity=".25" stroke-width="1"/>
+          <path d="M10.5 10.2h4" ${shine}/>`;
+      case "block":
+      default:
+        return cube();
+    }
   }
   function slotsKey(slots) { return slots.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(","); }
   function furnaceKeyStr(f) { return f ? `${slotsKey([f.input, f.fuel, f.output])}|${(f.burn > 0 ? 1 : 0)}|${Math.round(f.cook * 4)}` : ""; }
@@ -6501,16 +6807,9 @@
       .rizz3d-hotbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:7;display:grid;grid-template-columns:repeat(9,40px);gap:4px;pointer-events:auto}
       .rizz3d-slot{position:relative;width:40px;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.8);cursor:pointer}.rizz3d-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.28),0 0 18px rgba(255,212,59,.18)}.rizz3d-slot.is-selected:after{content:"";position:absolute;left:6px;right:6px;bottom:3px;height:2px;border-radius:2px;background:#ffd43b}
       .rizz3d-slot em{position:absolute;left:4px;top:2px;color:rgba(255,255,255,.55);font:700 9px var(--font-mono);font-style:normal}.rizz3d-slot b{position:absolute;right:4px;bottom:2px;color:#fff;font:800 11px var(--font-mono)}
-      .rizz3d-swatch{position:absolute;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:4px;box-shadow:inset 0 -4px 0 rgba(0,0,0,.22),0 0 0 1px rgba(255,255,255,.22)}
-      .rizz3d-swatch.is-pick,.rizz3d-swatch.is-sword,.rizz3d-swatch.is-axe,.rizz3d-swatch.is-torch{width:26px;height:26px;background:transparent!important;border-radius:0;box-shadow:none}
-      .rizz3d-swatch.is-pick:before{content:"";position:absolute;left:11px;top:5px;width:4px;height:21px;border-radius:3px;background:#6f4624;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(34deg)}
-      .rizz3d-swatch.is-pick:after{content:"";position:absolute;left:2px;top:5px;width:23px;height:6px;border-radius:5px 5px 3px 3px;background:linear-gradient(90deg,rgba(0,0,0,.12),var(--item-color) 24%,var(--item-color) 76%,rgba(255,255,255,.22));box-shadow:inset 0 -2px 0 rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.22);transform:rotate(-15deg)}
-      .rizz3d-swatch.is-sword:before{content:"";position:absolute;left:12px;top:2px;width:4px;height:20px;border-radius:2px;background:var(--item-color);box-shadow:inset 0 -5px 0 rgba(255,255,255,.24),0 0 0 1px rgba(255,255,255,.18);transform:rotate(42deg)}
-      .rizz3d-swatch.is-sword:after{content:"";position:absolute;left:7px;top:16px;width:15px;height:4px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(42deg)}
-      .rizz3d-swatch.is-axe:before{content:"";position:absolute;left:11px;top:4px;width:4px;height:21px;border-radius:3px;background:#7c4e29;box-shadow:0 0 0 1px rgba(255,255,255,.16);transform:rotate(35deg)}
-      .rizz3d-swatch.is-axe:after{content:"";position:absolute;left:5px;top:4px;width:15px;height:14px;border-radius:3px 7px 7px 3px;background:var(--item-color);box-shadow:inset -4px -3px 0 rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.2);transform:rotate(18deg)}
-      .rizz3d-swatch.is-torch:before{content:"";position:absolute;left:11px;top:7px;width:5px;height:18px;border-radius:2px;background:#8a572d;box-shadow:0 0 0 1px rgba(255,255,255,.14);transform:rotate(24deg)}
-      .rizz3d-swatch.is-torch:after{content:"";position:absolute;left:7px;top:1px;width:13px;height:13px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 50% 34%,#fff2a8 0 22%,#ffd75a 23% 55%,#ff6a1a 56% 100%);box-shadow:0 0 10px rgba(255,163,45,.75)}
+      .rizz3d-icon{display:block;pointer-events:none;overflow:visible}
+      .rizz3d-swatch{position:absolute;left:50%;top:50%;width:28px;height:28px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 2px rgba(0,0,0,.48))}
+      .rizz3d-bag-slot .rizz3d-swatch{width:23px;height:23px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.46))}
       .rizz3d-bag-button{position:absolute;left:calc(50% + 204px);bottom:10px;z-index:7;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.86);color:#fff;font:800 10px var(--font-mono);padding:0 10px;cursor:pointer}.rizz3d-bag-button.is-open{border-color:#43e6ff;box-shadow:0 0 0 2px rgba(67,230,255,.22)}
       .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
       .rizz3d-goals{display:none;position:absolute;inset:0;z-index:11;flex-direction:column;padding:16px 18px;background:linear-gradient(180deg,rgba(11,14,28,.96),rgba(4,6,13,.96));backdrop-filter:blur(4px);overflow:auto;pointer-events:auto}.rizz3d-goals.is-open{display:flex}
@@ -6556,7 +6855,7 @@
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="craft"],
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="fly"],
       .canvas-wrap--rizzcraft.has-touch-controls:not(.is-maxed) .rizz3d-mobile-actions [data-mobile-action="creative"]{display:none}
-      @media (hover:none) and (pointer:coarse){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px;bottom:calc(10px + env(safe-area-inset-bottom))}.rizz3d-slot{width:32px;height:32px}.rizz3d-bag-button{left:auto;right:8px;top:10px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:48px;bottom:auto;max-height:calc(100% - 58px)}}
+      @media (hover:none) and (pointer:coarse){.rizz3d-hotbar{grid-template-columns:repeat(9,32px);gap:3px;bottom:calc(10px + env(safe-area-inset-bottom))}.rizz3d-slot{width:32px;height:32px}.rizz3d-slot .rizz3d-swatch{width:23px;height:23px}.rizz3d-bag-button{left:auto;right:8px;top:50px;bottom:auto;height:32px}.rizz3d-bag-panel{right:8px;top:88px;bottom:auto;max-height:calc(100% - 98px)}}
       @media (max-width:520px){.rizz3d-mobile-pad{left:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px);gap:5px}.rizz3d-mobile-actions{right:8px;bottom:calc(50px + env(safe-area-inset-bottom));grid-template-columns:repeat(2,54px);gap:5px}.rizz3d-mobile-button{min-height:42px;border-radius:10px;font-size:9px}.rizz3d-mobile-look{top:50px;max-width:54%;font-size:8px}.rizz3d-health{width:min(214px,56%)}}
       @media (max-height:560px){.rizz3d-mobile-look{display:none}.rizz3d-mobile-pad{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-actions{bottom:calc(46px + env(safe-area-inset-bottom))}.rizz3d-mobile-button{min-height:38px}}
     `;

@@ -203,6 +203,10 @@
   const WHEAT_SEEDS = 134;  // plantable on farmland
   const RAW_MEAT = 135;     // dropped by friendlies
   const COOKED_MEAT = 136;  // smelted raw meat
+  // Combat items
+  const SKIBIDI_GOO = 137;  // currency dropped by hostiles
+  const CURSED_IDOL = 138;  // right-click to summon the boss
+  const SIGMA_CROWN = 139;  // boss trophy
 
   const DEF = {};
   function def(code, d) {
@@ -292,6 +296,11 @@
   def(RAW_MEAT, { name: "Raw Drumstick", kind: "item", stack: 16, color: "#e88a86", food: { heal: 2, msg: "Ate it raw (ugh)" } });
   def(COOKED_MEAT, { name: "Skibidi Drumstick", kind: "item", stack: 16, color: "#c4733a", food: { heal: 14, msg: "Ate a Skibidi Drumstick" } });
 
+  // Combat items
+  def(SKIBIDI_GOO, { name: "Skibidi Goo", kind: "item", stack: 64, color: "#7fd14a" });
+  def(CURSED_IDOL, { name: "Cursed Idol", kind: "item", stack: 4, color: "#8a4fd6" });
+  def(SIGMA_CROWN, { name: "Sigma Crown", kind: "item", stack: 8, color: "#ffd75a" });
+
   // Smelting recipes: input code -> { out, time, count }. Fuel is consumed separately.
   const SMELTING = {
     [SAND]: { out: CRYSTAL_GLASS, time: 2.2 },
@@ -350,6 +359,32 @@
     { cat: "Home", out: { code: CHEST, n: 1 }, in: [[PLANKS, 6]], table: true },
     { cat: "Home", out: { code: BED, n: 1 }, in: [[PLANKS, 3], [WHEAT, 3]], table: true },
     { cat: "Home", out: { code: DOOR, n: 1 }, in: [[PLANKS, 4]], table: true },
+
+    // --- Combat ---
+    { cat: "Combat", out: { code: CURSED_IDOL, n: 1 }, in: [[SKIBIDI_GOO, 12], [SIGMA, 3], [STICK, 2]], table: true },
+  ];
+
+  // Objectives that guide players through every system. done(s) reads game state;
+  // reward grants score (+ optional items) on completion.
+  const ACHIEVEMENTS = [
+    { id: "wood", tier: "Start", name: "Timber!", desc: "Punch a tree for a Skibidi Log", icon: "#78502f", score: 20, done: (s) => s.everHad[LOG] },
+    { id: "craft", tier: "Start", name: "Handy", desc: "Craft Toilet Planks", icon: "#b98245", score: 20, done: (s) => s.everHad[PLANKS] },
+    { id: "bench", tier: "Start", name: "Workshop", desc: "Place a Crafting Toilet", icon: "#d7e1e8", score: 40, done: (s) => s.flags.placedTable },
+    { id: "pick", tier: "Start", name: "Toolsmith", desc: "Craft any pickaxe", icon: "#a6a9b5", score: 40, item: [TORCH, 8], done: (s) => hasToolType("pick") },
+    { id: "light", tier: "Start", name: "Let There Be Light", desc: "Place a torch or lamp", icon: "#ffd75a", score: 30, done: (s) => s.flags.placedLight },
+    { id: "miner", tier: "Mine", name: "Miner 49er", desc: "Mine 100 blocks", icon: "#868894", score: 60, done: (s) => s.mined >= 100 },
+    { id: "rizz", tier: "Mine", name: "Rizz Rush", desc: "Collect a Rizz Crystal", icon: "#ffcf3a", score: 40, done: (s) => s.everHad[RIZZ] },
+    { id: "sigma", tier: "Mine", name: "Sigma Grindset", desc: "Collect a Sigma Gem", icon: "#4beaff", score: 70, done: (s) => s.everHad[SIGMA] },
+    { id: "home", tier: "Build", name: "Home Sweet Home", desc: "Place a Rizz Chest", icon: "#9b6532", score: 50, done: (s) => s.flags.placedChest },
+    { id: "sleep", tier: "Build", name: "Sweet Dreams", desc: "Sleep in a Sigma Bed", icon: "#d94f6a", score: 40, done: (s) => s.flags.slept },
+    { id: "farm", tier: "Build", name: "Green Thumb", desc: "Harvest ripe Wheat", icon: "#e7c65a", score: 50, done: (s) => s.counters.crops >= 1 },
+    { id: "smelt", tier: "Build", name: "Master Chef", desc: "Smelt something in a furnace", icon: "#6e7078", score: 50, done: (s) => s.counters.smelts >= 1 },
+    { id: "eat", tier: "Survive", name: "Gourmand", desc: "Eat 10 helpings of food", icon: "#9be870", score: 50, done: (s) => s.counters.eaten >= 10 },
+    { id: "hunter", tier: "Survive", name: "Monster Hunter", desc: "Defeat 25 night mobs", icon: "#b8233a", score: 80, item: [COOKED_MEAT, 3], done: (s) => s.counters.mobKills >= 25 },
+    { id: "survive", tier: "Survive", name: "Survivor", desc: "Reach Day 5", icon: "#53cfff", score: 80, done: (s) => s.day >= 5 },
+    { id: "loot", tier: "Explore", name: "Treasure Hunter", desc: "Loot a hidden chest", icon: "#caa24a", score: 70, done: (s) => s.counters.looted >= 1 },
+    { id: "blade", tier: "Endgame", name: "Sigma Blade", desc: "Forge the Sigma Blade", icon: "#4beaff", score: 200, done: (s) => s.sigmaForged || s.everHad[SWORD_SIGMA] },
+    { id: "boss", tier: "Endgame", name: "Titan Slayer", desc: "Defeat the Skibidi Titan", icon: "#8a4fd6", score: 500, item: [SIGMA_LANTERN, 2], done: (s) => s.counters.bossKills >= 1 },
   ];
 
   const BIOMES = [
@@ -802,6 +837,12 @@
     furnaces: {},     // "x,y,z" -> { input, fuel, output, cook, burn, burnMax }
     openFurnace: null,// key of the furnace currently open
     cropTick: 0,      // accumulator for the crop-growth tick
+    achievements: {}, // id -> true once earned
+    counters: { mobKills: 0, bossKills: 0, crops: 0, smelts: 0, looted: 0, eaten: 0, placed: 0 },
+    everHad: {},      // item/block code -> true once obtained
+    flags: {},        // one-off action flags (placedTable, slept, ...)
+    goalsOpen: false,
+    achvTick: 0,
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -2157,6 +2198,9 @@
   function generateWorld(seed = ((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0)) {
     state.seed = seed >>> 0;
     state.edits.clear();
+    // World-specific block metadata is regenerated below, so start clean.
+    state.chests = {}; state.furnaces = {}; state.toiletFacing = {};
+    state.openChest = null; state.openFurnace = null;
     resetActiveFluids();
     state.world.fill(AIR);
     state.surface.fill(SEA_LEVEL);
@@ -2265,6 +2309,7 @@
     settleGeneratedLava();
     growCaveFeatures();
     growTreesAndDetails();
+    placeStructures();
     carveSpawnMeadow();
     state.baseWorld.set(state.world);
     computeWorldLight();
@@ -2410,6 +2455,116 @@
       }
     }
     placeTree(cx + 16, state.surface[surfaceIndex(cx + 16, cz + 11)] + 1, cz + 11, 1);
+  }
+
+  // --- Structures & loot -------------------------------------------------------
+  // Weighted loot tables: [code, minCount, maxCount, weight].
+  const LOOT_COMMON = [
+    [PLANKS, 4, 12, 4], [STICK, 2, 6, 3], [COAL, 1, 5, 3], [TORCH, 2, 6, 3],
+    [STONE_BRICK, 4, 10, 3], [WHEAT_SEEDS, 1, 4, 2], [BREAD, 1, 3, 2], [CHARCOAL, 1, 4, 2],
+    [RIZZ, 1, 2, 2], [PICK_STONE, 1, 1, 1], [SWORD_STONE, 1, 1, 1], [GLOW_SHROOM, 1, 3, 1],
+  ];
+  const LOOT_RARE = [
+    [RIZZ, 2, 6, 4], [SIGMA, 1, 4, 3], [GLOWSTONE, 1, 3, 2], [CHARCOAL, 2, 6, 2],
+    [SIGMA_LANTERN, 1, 2, 2], [COOKED_MEAT, 2, 4, 2], [PICK_RIZZ, 1, 1, 1], [SWORD_RIZZ, 1, 1, 1],
+    [GOLDEN_APPLE, 1, 1, 1], [SIGMA_BLOCK, 1, 2, 1], [SIGMA_BREW, 1, 2, 1],
+  ];
+  function lootRng(x, y, z) {
+    let s = ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791) ^ state.seed) >>> 0) || 1;
+    return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  }
+  function fillLoot(x, y, z, table, rolls) {
+    const slots = chestSlots(chestKey(x, y, z));
+    const rng = lootRng(x, y, z);
+    const total = table.reduce((a, e) => a + e[3], 0);
+    const picks = rolls[0] + Math.floor(rng() * (rolls[1] - rolls[0] + 1));
+    for (let i = 0; i < picks; i++) {
+      let r = rng() * total, entry = table[0];
+      for (const e of table) { r -= e[3]; if (r <= 0) { entry = e; break; } }
+      const n = entry[1] + Math.floor(rng() * (entry[2] - entry[1] + 1));
+      addToSlotArray(slots, entry[0], n);
+    }
+  }
+  function flatEnough(x, z, r, maxDelta) {
+    const h = state.surface[surfaceIndex(x, z)];
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (!inWorld(x + dx, 1, z + dz)) return false;
+      if (Math.abs(state.surface[surfaceIndex(x + dx, z + dz)] - h) > maxDelta) return false;
+    }
+    return h > SEA_LEVEL + 1 && h < WORLD_Y - 8;
+  }
+  function buildSurfaceRuin(cx, cz) {
+    const sy = state.surface[surfaceIndex(cx, cz)];
+    const r = 2;
+    const wall = STONE_BRICK, floor = PLANKS;
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        setBase(cx + dx, sy, cz + dz, floor);                 // floor
+        for (let h = 1; h <= 3; h++) {
+          const edge = Math.abs(dx) === r || Math.abs(dz) === r;
+          if (edge) {
+            // ruined walls: some blocks crumbled away, taller corners
+            const keep = hash3(cx + dx * 5, sy + h * 3, cz + dz * 7) > (h === 3 ? 0.55 : 0.22);
+            setBase(cx + dx, sy + h, cz + dz, keep ? wall : AIR);
+          } else {
+            setBase(cx + dx, sy + h, cz + dz, AIR);            // hollow interior
+          }
+        }
+      }
+    }
+    setBase(cx, sy + 1, cz, CHEST);
+    state.toiletFacing[chestKey(cx, sy + 1, cz)] = (hash2(cx, cz) * 4) | 0;
+    fillLoot(cx, sy + 1, cz, LOOT_COMMON, [3, 6]);
+    // a lantern beacon on a post so the ruin is visible from afar
+    setBase(cx + r, sy + 1, cz + r, STONE_BRICK);
+    setBase(cx + r, sy + 2, cz + r, STONE_BRICK);
+    setBase(cx + r, sy + 3, cz + r, SIGMA_LANTERN);
+    for (let dz = -r - 1; dz <= r + 1; dz++) for (let dx = -r - 1; dx <= r + 1; dx++) updateSurfaceColumn(cx + dx, cz + dz);
+  }
+  function buildDeepVault(cx, cy, cz) {
+    const r = 2;
+    // require mostly-solid stone so we're carving into rock, not open cave
+    let solid = 0, n = 0;
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) for (let dy = 0; dy <= 3; dy++) {
+      n++; if (isSolidBlock(getBlock(cx + dx, cy + dy, cz + dz))) solid++;
+    }
+    if (solid / n < 0.8) return false;
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = 0; dy <= 3; dy++) {
+          const shell = Math.abs(dx) === r || Math.abs(dz) === r || dy === 0 || dy === 3;
+          setBase(cx + dx, cy + dy, cz + dz, shell ? STONE_BRICK : AIR);
+        }
+      }
+    }
+    setBase(cx, cy + 1, cz, CHEST);
+    state.toiletFacing[chestKey(cx, cy + 1, cz)] = (hash2(cx + 3, cz - 3) * 4) | 0;
+    fillLoot(cx, cy + 1, cz, LOOT_RARE, [4, 7]);
+    setBase(cx + 1, cy + 2, cz + 1, GLOWSTONE); // lights the vault
+    return true;
+  }
+  function placeStructures() {
+    const ccx = WORLD_X >> 1, ccz = WORLD_Z >> 1;
+    // Surface ruins on flat, dry ground (visible by their lantern beacon).
+    for (let z = 30; z < WORLD_Z - 30; z += 13) {
+      for (let x = 30; x < WORLD_X - 30; x += 13) {
+        if (Math.hypot(x - ccx, z - ccz) < 40) continue;             // keep spawn clear
+        if (hash2(x * 3 + 11, z * 3 - 7) > 0.06) continue;           // sparse
+        if (!flatEnough(x, z, 3, 1)) continue;
+        buildSurfaceRuin(x, z);
+      }
+    }
+    // Deep vaults hidden in the rock — better loot the deeper you dig.
+    for (let z = 24; z < WORLD_Z - 24; z += 14) {
+      for (let x = 24; x < WORLD_X - 24; x += 14) {
+        if (hash2(x * 7 - 5, z * 7 + 9) > 0.022) continue;
+        const sy = state.surface[surfaceIndex(x, z)];
+        const top = Math.min(sy - 14, SEA_LEVEL - 6);
+        if (top < LAVA_LEVEL + 6) continue;
+        const cy = LAVA_LEVEL + 4 + ((hash3(x, 1, z) * (top - LAVA_LEVEL - 4)) | 0);
+        buildDeepVault(x, cy, z);
+      }
+    }
   }
   function setBase(x, y, z, code) {
     if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -4022,6 +4177,7 @@
   }
   function giveItem(code, n = 1) {
     if (!code || n <= 0) return;
+    if (state.everHad) state.everHad[code] = true;
     const cap = maxStack(code);
     n = addToExistingSlots(state.hotbar, code, n, cap);
     n = addToExistingSlots(state.bag, code, n, cap);
@@ -4348,6 +4504,7 @@
     }
     if (food.heal) p.hp = clamp(p.hp + food.heal, 0, MAX_HP);
     if (food.effects) applyEffects(food.effects);
+    state.counters.eaten++;
     if (!state.creative) decrementSelectedSlot();
     triggerHeldSwing("gather", false);
     playSfx("eat");
@@ -4415,6 +4572,8 @@
     const slots = chestSlots(state.openChest);
     const slot = slots[idx];
     if (!slot) return;
+    // Chests that aren't player-placed edits are structure loot — count the haul.
+    if (!state.edits.has(state.openChest)) state.counters.looted++;
     giveItem(slot.code, slot.n);
     slots[idx] = null;
     bagRenderKey = null; updateHud();
@@ -4434,6 +4593,7 @@
   }
   function sleepInBed(x, y, z) {
     state.bedSpawn = { x, y: y + 1, z };
+    state.flags.slept = true;
     if (isNight()) {
       state.time = 0.0;            // jump to dawn
       state.spawnTimer = SPAWN_GRACE;
@@ -4535,6 +4695,7 @@
           f.cook = 0;
           f.input.n -= 1; if (f.input.n <= 0) f.input = null;
           if (f.output) f.output.n += 1; else f.output = { code: recipe.out, n: 1 };
+          state.counters.smelts++;
         }
         openChanged = true;
       } else if (f.cook > 0) {
@@ -4566,8 +4727,68 @@
     if (grew) decorDirty = true;
   }
   function harvestCrop(x, y, z, code) {
-    if (code === CROP_3) { giveItem(WHEAT, 1 + (hash3(x, y, z) < 0.5 ? 1 : 0)); giveItem(WHEAT_SEEDS, 1); }
+    if (code === CROP_3) { giveItem(WHEAT, 1 + (hash3(x, y, z) < 0.5 ? 1 : 0)); giveItem(WHEAT_SEEDS, 1); state.counters.crops++; }
     else giveItem(WHEAT_SEEDS, 1); // immature crop just returns a seed
+  }
+
+  // --- Objectives / achievements ----------------------------------------------
+  function completeAchievement(a) {
+    if (state.achievements[a.id]) return;
+    state.achievements[a.id] = true;
+    if (a.score) addScore(a.score);
+    if (a.item) giveItem(a.item[0], a.item[1]);
+    api.toast(`🏆 ${a.name}${a.item ? " (+reward)" : ""} +${a.score}`, "good");
+    playSfx("reward");
+    if (state.goalsOpen) renderGoals();
+  }
+  function checkAchievements() {
+    for (const a of ACHIEVEMENTS) {
+      if (state.achievements[a.id]) continue;
+      try { if (a.done(state)) completeAchievement(a); } catch (e) { /* ignore bad probe */ }
+    }
+  }
+  function achievementsEarned() { return ACHIEVEMENTS.filter((a) => state.achievements[a.id]).length; }
+  function toggleGoals(force) {
+    state.goalsOpen = typeof force === "boolean" ? force : !state.goalsOpen;
+    if (state.goalsOpen) { state.crafting = false; state.bagOpen = false; if (craftPanel) craftPanel.classList.remove("is-open"); unlockPointer(); checkAchievements(); }
+    renderGoals();
+    playSfx(state.goalsOpen ? "bagOpen" : "bagClose");
+  }
+  function progressText(a) {
+    const c = state.counters;
+    if (a.id === "miner") return `${Math.min(state.mined, 100)}/100`;
+    if (a.id === "eat") return `${Math.min(c.eaten, 10)}/10`;
+    if (a.id === "hunter") return `${Math.min(c.mobKills, 25)}/25`;
+    if (a.id === "survive") return `Day ${state.day}/5`;
+    return "";
+  }
+  function renderGoals() {
+    if (!ui.goalsPanel) return;
+    ui.goalsPanel.classList.toggle("is-open", state.goalsOpen);
+    if (!state.goalsOpen) { ui.goalsPanel.innerHTML = ""; return; }
+    const earned = achievementsEarned();
+    const tiers = [];
+    const seen = new Set();
+    ACHIEVEMENTS.forEach((a) => { if (!seen.has(a.tier)) { seen.add(a.tier); tiers.push(a.tier); } });
+    const body = tiers.map((tier) => {
+      const rows = ACHIEVEMENTS.filter((a) => a.tier === tier).map((a) => {
+        const done = !!state.achievements[a.id];
+        const prog = !done ? progressText(a) : "";
+        return `<div class="rizz3d-goal${done ? " is-done" : ""}">
+          <span class="rizz3d-goal__icon" style="background:${a.icon}">${done ? "✓" : ""}</span>
+          <span class="rizz3d-goal__text"><b>${a.name}</b><span>${a.desc}${prog ? ` · ${prog}` : ""}</span></span>
+          <span class="rizz3d-goal__pts">+${a.score}</span>
+        </div>`;
+      }).join("");
+      return `<div class="rizz3d-goal-tier">${tier}</div>${rows}`;
+    }).join("");
+    ui.goalsPanel.innerHTML = `
+      <div class="rizz3d-goal-head">
+        <strong>🏆 Objectives</strong>
+        <span>${earned}/${ACHIEVEMENTS.length} complete — earn score &amp; rewards as you explore every system.</span>
+      </div>
+      <div class="rizz3d-goal-list">${body}</div>
+      <button class="rizz3d-goal-close" data-goal-close type="button">Close (G)</button>`;
   }
   function hurtPlayer(dmg) {
     const p = state.player;
@@ -4608,6 +4829,21 @@
     clout: { hp: 16, speed: 1.9, roamSpeed: 0.48, damage: 11, score: 32, radius: 0.62, sight: 20, memory: 1.75, attackRange: 1.24 },
     phantom: { hp: 11, speed: 2.45, roamSpeed: 0.62, damage: 9, score: 34, radius: 0.52, sight: 24, memory: 1.5, attackRange: 1.2 },
     warden: { hp: 24, speed: 1.55, roamSpeed: 0.34, damage: 18, score: 56, radius: 0.74, sight: 17, memory: 2.4, attackRange: 1.38 },
+    titan: { hp: 260, speed: 1.7, roamSpeed: 0.5, damage: 22, score: 600, radius: 1.45, sight: 40, memory: 6, attackRange: 2.0, boss: true },
+  };
+  // Loot dropped on death: [code, chance, min, max]. Every hostile drops Skibidi Goo.
+  const MOB_LOOT = {
+    toilet: [[SKIBIDI_GOO, 1, 1, 2], [COAL, 0.3, 1, 1]],
+    skibidi: [[SKIBIDI_GOO, 1, 1, 2], [STICK, 0.3, 1, 2]],
+    grimace: [[SKIBIDI_GOO, 1, 1, 3], [BERRY, 0.4, 1, 2]],
+    rizzler: [[SKIBIDI_GOO, 1, 1, 2], [PLANKS, 0.25, 1, 2]],
+    doomscroll: [[SKIBIDI_GOO, 1, 2, 3], [COAL, 0.35, 1, 2]],
+    shadow: [[SKIBIDI_GOO, 1, 2, 3], [RIZZ, 0.3, 1, 1]],
+    hater: [[SKIBIDI_GOO, 1, 1, 2], [STICK, 0.3, 1, 2]],
+    clout: [[SKIBIDI_GOO, 1, 2, 3], [RIZZ, 0.25, 1, 1]],
+    phantom: [[SKIBIDI_GOO, 1, 2, 3], [RIZZ, 0.35, 1, 1]],
+    warden: [[SKIBIDI_GOO, 1, 3, 5], [SIGMA, 0.4, 1, 1], [RIZZ, 0.6, 1, 2]],
+    titan: [[SIGMA_CROWN, 1, 1, 1], [SIGMA, 1, 8, 14], [RIZZ, 1, 10, 18], [SKIBIDI_GOO, 1, 12, 20], [GOLDEN_APPLE, 1, 1, 2], [SWORD_SIGMA, 1, 1, 1], [GLOWSTONE, 1, 4, 8]],
   };
   const CAVE_CREATURE = {
     glowbat: { name: "Glow Bat", hp: 5, speed: 2.0, roamSpeed: 0.78, damage: 0, score: 8, radius: 0.42, sight: 0, passive: true, flying: true, drop: RIZZ },
@@ -4661,7 +4897,7 @@
         x: x + 0.5,
         y,
         z: z + 0.5,
-        hp: MOB[type].hp,
+        hp: Math.round(MOB[type].hp * (1 + Math.min(state.day - 1, 10) * 0.05)), // nights get tougher
         mode: "wander",
         turn,
         alertTimer: 0,
@@ -4772,6 +5008,20 @@
       addBox(group, [0, 0.82, -0.46], [0.52, 0.12, 0.08], enemyMaterials.cyan);
       addBox(group, [-0.58, 0.72, 0], [0.16, 0.74, 0.16], enemyMaterials.shadow);
       addBox(group, [0.58, 0.72, 0], [0.16, 0.74, 0.16], enemyMaterials.shadow);
+    } else if (type === "titan") {
+      // A towering Skibidi King — giant porcelain body, big head, gold crown.
+      addBox(group, [0, 0.85, 0], [2.2, 1.7, 1.9], enemyMaterials.porcelain);
+      addBox(group, [0, 1.5, -0.2], [1.7, 0.7, 0.7], enemyMaterials.porcelainDark);
+      addBox(group, [0, 2.25, -0.1], [1.4, 0.95, 1.2], enemyMaterials.bone);
+      addBox(group, [-0.34, 2.42, -0.62], [0.22, 0.22, 0.08], enemyMaterials.red);
+      addBox(group, [0.34, 2.42, -0.62], [0.22, 0.22, 0.08], enemyMaterials.red);
+      addBox(group, [0, 2.05, -0.66], [0.7, 0.12, 0.08], enemyMaterials.black);
+      addBox(group, [0, 2.86, 0], [1.1, 0.3, 1.0], enemyMaterials.amber);   // crown band
+      addBox(group, [-0.42, 3.08, 0], [0.18, 0.3, 0.18], enemyMaterials.amber);
+      addBox(group, [0.42, 3.08, 0], [0.18, 0.3, 0.18], enemyMaterials.amber);
+      addBox(group, [0, 3.08, 0], [0.18, 0.34, 0.18], enemyMaterials.amber);
+      addBox(group, [-1.2, 0.9, 0], [0.34, 1.3, 0.34], enemyMaterials.porcelainDark); // arms
+      addBox(group, [1.2, 0.9, 0], [0.34, 1.3, 0.34], enemyMaterials.porcelainDark);
     } else {
       addBox(group, [0, 0.6, 0], [0.54, 1.2, 0.5], enemyMaterials.shadow);
       addBox(group, [0, 1.28, -0.02], [0.52, 0.38, 0.46], enemyMaterials.black);
@@ -5125,13 +5375,19 @@
         hurtPlayer(cfg.damage);
         mob.hitCd = 1.25;
       }
-      if (!isNight() && skyVisible(Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z))) {
+      if (!cfg.boss && !isNight() && skyVisible(Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z))) {
         mob.hp -= dt * 5;
       }
       updateBurningEntity(mob, dt, 0.82);
       if (mob.hp <= 0) {
         addScore(cfg.score);
-        playSfx("mobDown", { pitch: mob.type === "warden" ? 0.8 : 1 });
+        if (cfg.boss) state.counters.bossKills++; else state.counters.mobKills++;
+        playSfx("mobDown", { pitch: cfg.boss ? 0.6 : mob.type === "warden" ? 0.8 : 1 });
+        dropMobLoot(mob);
+        if (cfg.boss) {
+          api.toast("The Skibidi Titan falls! Loot secured.", "good");
+          spawnBurst(mob.x, mob.y + 1.4, mob.z, cachedRgb("#ffd75a"), 40, 4.2);
+        }
         removeMob(mob);
         state.mobs.splice(i, 1);
       }
@@ -5220,6 +5476,40 @@
   function removeMob(mob) {
     mobGroup.remove(mob.mesh);
     disposeMesh(mob.mesh);
+  }
+  function dropMobLoot(mob) {
+    const table = MOB_LOOT[mob.type];
+    if (!table) return;
+    const seed = Math.floor((mob.x * 53 + mob.z * 131 + performance.now() * 0.03));
+    table.forEach(([code, chance, min, max], k) => {
+      if (hash2(seed + k * 17, seed - k * 31) > chance) return;
+      const n = min + Math.floor(hash2(seed + k * 7, mob.z + k) * (max - min + 1));
+      if (n > 0) giveItem(code, n);
+    });
+    spawnBurst(mob.x, mob.y + 0.6, mob.z, cachedRgb("#9be870"), 5, 1.8);
+  }
+  function bossActive() { return state.mobs.some((m) => MOB[m.type] && MOB[m.type].boss); }
+  function summonBoss() {
+    if (bossActive()) { api.toast("A Titan already stalks the land", "bad"); return false; }
+    const p = state.player;
+    // place it a short distance in front of the player on solid ground
+    const yaw = p.yaw;
+    let bx = Math.round(p.x - Math.sin(yaw) * 7);
+    let bz = Math.round(p.z - Math.cos(yaw) * 7);
+    bx = clamp(bx, 3, WORLD_X - 4); bz = clamp(bz, 3, WORLD_Z - 4);
+    const by = state.surface[surfaceIndex(bx, bz)] + 1;
+    const mob = {
+      type: "titan", x: bx + 0.5, y: by, z: bz + 0.5, hp: MOB.titan.hp, maxHp: MOB.titan.hp,
+      mode: "hunt", turn: yaw + Math.PI, alertTimer: 99, wanderTimer: 0, targetX: p.x, targetZ: p.z,
+      hitCd: 0, hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0, mesh: createMobMesh("titan"),
+    };
+    mob.mesh.position.set(mob.x, mob.y, mob.z);
+    mobGroup.add(mob.mesh);
+    state.mobs.push(mob);
+    api.toast("☠️ The SKIBIDI TITAN rises! Defend yourself!", "bad");
+    playSfx("nightfall");
+    spawnBurst(mob.x, mob.y + 1.5, mob.z, cachedRgb("#8a4fd6"), 30, 3.6);
+    return true;
   }
   function applyFriendlyFlash(friendly, hurtPulse) {
     if (!friendly.mesh) return;
@@ -5447,6 +5737,11 @@
         playSfx("place"); state.placeCd = 0.2; state.input.place = false; return;
       }
     }
+    // Cursed Idol: right-click to summon the boss.
+    if (held && held.code === CURSED_IDOL) {
+      if (summonBoss() && !state.creative) decrementSelectedSlot();
+      state.placeCd = 0.5; state.input.place = false; return;
+    }
     // Eating (when holding food and not aiming at an interactive block).
     if (isFood(selectedSlot() && selectedSlot().code)) {
       tryEatSelected();
@@ -5469,6 +5764,10 @@
     setBlock(p.x, p.y, p.z, slot.code);
     playPlaceSfx(slot.code);
     if (facesPlacer) decorDirty = true;
+    state.counters.placed++;
+    if (slot.code === TABLE) state.flags.placedTable = true;
+    else if (slot.code === CHEST) state.flags.placedChest = true;
+    else if (slot.code === TORCH || slot.code === GLOWSTONE || slot.code === SIGMA_LANTERN) state.flags.placedLight = true;
     if (!state.creative) decrementSelectedSlot();
     state.placeCd = 0.18;
     state.input.place = false;
@@ -5650,6 +5949,7 @@
     playSfx(state.crafting ? "craftOpen" : "craftClose");
     if (state.crafting) {
       state.bagOpen = false;
+      if (state.goalsOpen) toggleGoals(false);
       renderBag();
       unlockPointer();
       renderCrafting();
@@ -5749,8 +6049,9 @@
       addScore(70);
       playSfx("daybreak", { volume: 0.9 });
       api.toast(`Survived the night. Day ${state.day}`, "good");
-      state.mobs.slice().forEach(removeMob);
-      state.mobs = [];
+      // Dawn clears the night horde, but a summoned boss fights on into the day.
+      state.mobs.slice().forEach((m) => { if (!(MOB[m.type] && MOB[m.type].boss)) removeMob(m); });
+      state.mobs = state.mobs.filter((m) => MOB[m.type] && MOB[m.type].boss);
     }
     const nightNow = isNight();
     if (nightNow && !wasNight) playSfx("nightfall", { volume: 0.85 });
@@ -5867,6 +6168,17 @@
     ui.healthValue.textContent = `${Math.ceil(hp)}/${MAX_HP}`;
     ui.healthFill.style.width = `${pct * 100}%`;
     ui.healthFill.style.filter = pct < 0.32 ? "hue-rotate(120deg) saturate(1.25)" : pct < 0.6 ? "hue-rotate(45deg)" : "none";
+    updateBossBar();
+  }
+  function updateBossBar() {
+    if (!ui.bossBar) return;
+    const boss = state.mobs.find((m) => MOB[m.type] && MOB[m.type].boss);
+    if (!boss) { ui.bossBar.classList.remove("is-active"); return; }
+    const max = boss.maxHp || MOB[boss.type].hp;
+    const pct = clamp(boss.hp / max, 0, 1);
+    ui.bossBar.classList.add("is-active");
+    if (ui.bossFill) ui.bossFill.style.width = `${pct * 100}%`;
+    if (ui.bossValue) ui.bossValue.textContent = `${Math.max(0, Math.ceil(boss.hp))}/${max}`;
   }
   function setText(id, value) {
     const el = document.getElementById(id);
@@ -6177,6 +6489,11 @@
       .rizz3d-health__row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#fff;font:900 10px var(--font-mono);text-transform:uppercase}.rizz3d-health__value{font-size:11px;color:#ffd75a}
       .rizz3d-health__track{height:10px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
       .rizz3d-health__fill{display:block;width:100%;height:100%;border-radius:5px;background:linear-gradient(90deg,#55f06c,#ffd75a 62%,#ff4c6d);box-shadow:0 0 16px rgba(85,240,108,.35);transition:width 120ms ease,filter 120ms ease}
+      .rizz3d-boss{display:none;position:absolute;left:50%;top:46px;transform:translateX(-50%);z-index:6;width:min(440px,80%);padding:7px 10px;border:1px solid rgba(255,79,184,.5);border-radius:7px;background:rgba(14,5,18,.82);box-shadow:0 8px 28px rgba(0,0,0,.4);pointer-events:none}
+      .rizz3d-boss.is-active{display:block}
+      .rizz3d-boss__row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#ff9be6;font:900 11px var(--font-mono);text-transform:uppercase;letter-spacing:.04em}.rizz3d-boss__value{color:#fff}
+      .rizz3d-boss__track{height:12px;border-radius:6px;background:rgba(255,255,255,.1);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,79,184,.3)}
+      .rizz3d-boss__fill{display:block;width:100%;height:100%;border-radius:6px;background:linear-gradient(90deg,#ff4f6d,#ffd75a);box-shadow:0 0 16px rgba(255,79,109,.45);transition:width 140ms ease}
       .rizz3d-target{display:none;position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);z-index:5;color:#fff;background:rgba(5,7,13,.6);border-radius:5px;padding:4px 8px;font:700 11px var(--font-mono);pointer-events:none}
       .rizz3d-target.is-visible{display:block}
       .rizz3d-progress{position:absolute;left:50%;bottom:54px;transform:translateX(-50%);z-index:5;width:min(340px,72%);height:5px;background:rgba(0,0,0,.55);border-radius:3px;overflow:hidden;pointer-events:none}.rizz3d-progress span{display:block;width:0;height:100%;background:#ffd43b}
@@ -6196,6 +6513,17 @@
       .rizz3d-swatch.is-torch:after{content:"";position:absolute;left:7px;top:1px;width:13px;height:13px;border-radius:50% 50% 46% 46%;background:radial-gradient(circle at 50% 34%,#fff2a8 0 22%,#ffd75a 23% 55%,#ff6a1a 56% 100%);box-shadow:0 0 10px rgba(255,163,45,.75)}
       .rizz3d-bag-button{position:absolute;left:calc(50% + 204px);bottom:10px;z-index:7;height:40px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(8,10,18,.86);color:#fff;font:800 10px var(--font-mono);padding:0 10px;cursor:pointer}.rizz3d-bag-button.is-open{border-color:#43e6ff;box-shadow:0 0 0 2px rgba(67,230,255,.22)}
       .rizz3d-bag-panel{display:none;position:absolute;right:12px;bottom:62px;z-index:8;width:min(360px,calc(100% - 24px));max-height:min(420px,72%);overflow:auto;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(5,7,13,.91);box-shadow:0 18px 44px rgba(0,0,0,.38);padding:10px;pointer-events:auto}.rizz3d-bag-panel.is-open{display:block}
+      .rizz3d-goals{display:none;position:absolute;inset:0;z-index:11;flex-direction:column;padding:16px 18px;background:linear-gradient(180deg,rgba(11,14,28,.96),rgba(4,6,13,.96));backdrop-filter:blur(4px);overflow:auto;pointer-events:auto}.rizz3d-goals.is-open{display:flex}
+      .rizz3d-goal-head{display:grid;gap:3px;margin-bottom:12px}.rizz3d-goal-head strong{color:#fff;font:900 18px var(--font-display)}.rizz3d-goal-head span{color:rgba(255,255,255,.7);font:700 11px var(--font-mono)}
+      .rizz3d-goal-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;align-content:start}
+      .rizz3d-goal-tier{grid-column:1/-1;margin:8px 0 0;padding-bottom:3px;border-bottom:1px solid rgba(255,255,255,.14);color:var(--accent-2);font:900 10px var(--font-mono);text-transform:uppercase;letter-spacing:.08em}.rizz3d-goal-tier:first-child{margin-top:0}
+      .rizz3d-goal{display:grid;grid-template-columns:30px 1fr auto;gap:9px;align-items:center;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(10,13,24,.8)}
+      .rizz3d-goal.is-done{border-color:rgba(86,232,135,.42);background:linear-gradient(180deg,rgba(21,38,28,.85),rgba(9,14,22,.88))}
+      .rizz3d-goal__icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#06210f;font:900 16px var(--font-mono);box-shadow:inset 0 -7px 0 rgba(0,0,0,.2),0 0 0 1px rgba(255,255,255,.2)}
+      .rizz3d-goal__text{display:grid;gap:1px;min-width:0}.rizz3d-goal__text b{color:#fff;font:900 12px var(--font-display)}.rizz3d-goal__text span{color:rgba(255,255,255,.62);font:700 9px var(--font-mono)}
+      .rizz3d-goal.is-done .rizz3d-goal__text b{color:#9be870}
+      .rizz3d-goal__pts{color:#ffd75a;font:900 11px var(--font-mono)}
+      .rizz3d-goal-close{margin-top:14px;align-self:center;min-height:38px;padding:8px 20px;border:1px solid rgba(255,212,59,.5);border-radius:8px;background:rgba(255,212,59,.16);color:#fff;font:900 12px var(--font-mono);cursor:pointer}
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
       .rizz3d-bag-hover{min-height:24px;margin:6px 0 9px;padding:6px 8px;border:1px solid rgba(67,230,255,.22);border-radius:6px;background:rgba(67,230,255,.08);color:#fff;font:900 10px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}.rizz3d-bag-chest{grid-template-rows:repeat(2,32px)}.rizz3d-bag-panel.is-chest{border-color:rgba(255,212,59,.4)}
@@ -6240,6 +6568,9 @@
     health.innerHTML = `<div class="rizz3d-health__row"><span>Health</span><b class="rizz3d-health__value">100/100</b></div><div class="rizz3d-health__track"><span class="rizz3d-health__fill"></span></div>`;
     const crosshair = document.createElement("div");
     crosshair.className = "rizz3d-crosshair";
+    const bossBar = document.createElement("div");
+    bossBar.className = "rizz3d-boss";
+    bossBar.innerHTML = `<div class="rizz3d-boss__row"><span>☠️ SKIBIDI TITAN</span><b class="rizz3d-boss__value"></b></div><div class="rizz3d-boss__track"><span class="rizz3d-boss__fill"></span></div>`;
     const target = document.createElement("div");
     target.className = "rizz3d-target";
     const progress = document.createElement("div");
@@ -6292,6 +6623,11 @@
       if (button) setBagHoverText(button.dataset.itemName);
     });
     bagPanel.addEventListener("pointerleave", () => setBagHoverText());
+    const goalsPanel = document.createElement("div");
+    goalsPanel.className = "rizz3d-goals";
+    goalsPanel.addEventListener("click", (event) => {
+      if (event.target.closest("[data-goal-close]")) { primeAudio(); toggleGoals(false); }
+    });
     const mobileControls = document.createElement("div");
     mobileControls.className = "rizz3d-mobile-controls";
     mobileControls.setAttribute("aria-label", "Mobile controls");
@@ -6317,12 +6653,15 @@
     if (wrap) wrap.classList.toggle("has-touch-controls", shouldShowTouchControls());
     mobileControls.setAttribute("aria-hidden", shouldShowTouchControls() ? "false" : "true");
     bindMobileHudControls(mobileControls);
-    wrap.append(damage, health, crosshair, target, progress, selectionCue, hotbar, bagButton, bagPanel, mobileControls);
+    wrap.append(damage, health, bossBar, crosshair, target, progress, selectionCue, hotbar, bagButton, bagPanel, goalsPanel, mobileControls);
     return {
       damage,
       health,
       healthValue: health.querySelector(".rizz3d-health__value"),
       healthFill: health.querySelector(".rizz3d-health__fill"),
+      bossBar,
+      bossValue: bossBar.querySelector(".rizz3d-boss__value"),
+      bossFill: bossBar.querySelector(".rizz3d-boss__fill"),
       crosshair,
       target,
       progress: progress.firstElementChild,
@@ -6330,6 +6669,7 @@
       hotbar,
       bagButton,
       bagPanel,
+      goalsPanel,
       mobileControls,
     };
   }
@@ -6388,6 +6728,11 @@
     state.furnaces = {};
     state.openFurnace = null;
     state.cropTick = 0;
+    state.achievements = {};
+    state.counters = { mobKills: 0, bossKills: 0, crops: 0, smelts: 0, looted: 0, eaten: 0, placed: 0 };
+    state.everHad = {};
+    state.flags = {};
+    state.goalsOpen = false;
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -6455,6 +6800,10 @@
       chests: state.chests,
       bedSpawn: state.bedSpawn,
       furnaces: state.furnaces,
+      achievements: state.achievements,
+      counters: state.counters,
+      everHad: state.everHad,
+      flags: state.flags,
     };
   }
   function restoreGame(saved) {
@@ -6469,9 +6818,14 @@
     state.chests = (data.chests && typeof data.chests === "object") ? data.chests : {};
     state.bedSpawn = (data.bedSpawn && typeof data.bedSpawn === "object") ? data.bedSpawn : null;
     state.furnaces = (data.furnaces && typeof data.furnaces === "object") ? data.furnaces : {};
+    state.achievements = (data.achievements && typeof data.achievements === "object") ? data.achievements : {};
+    state.counters = Object.assign({ mobKills: 0, bossKills: 0, crops: 0, smelts: 0, looted: 0, eaten: 0, placed: 0 }, data.counters || {});
+    state.everHad = (data.everHad && typeof data.everHad === "object") ? data.everHad : {};
+    state.flags = (data.flags && typeof data.flags === "object") ? data.flags : {};
     state.openChest = null;
     state.openFurnace = null;
     state.cropTick = 0;
+    state.goalsOpen = false;
     for (const [key, code] of state.edits.entries()) {
       const [x, y, z] = key.split(",").map(Number);
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -6536,6 +6890,8 @@
       updateFluidSimulation(dt);
       flushFluidChunkRebuilds();
       if (state.attackCd > 0) state.attackCd -= dt;
+      state.achvTick += dt;
+      if (state.achvTick >= 1) { state.achvTick = 0; checkAchievements(); }
     }
     if (decorDirty) rebuildDecorations();
     updateWaterTexture(dt);
@@ -6559,6 +6915,7 @@
       if (key >= "1" && key <= "9") setSelectedSlot(Number(key) - 1);
       if (key === "e") toggleCrafting();
       if (key === "b") toggleBag();
+      if (key === "g") toggleGoals();
       if (key === "p") togglePause();
       if (movementHandled || [" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) event.preventDefault();
     });
@@ -6657,6 +7014,7 @@
     bind("btn-restart", restart);
     bind("btn-creative", () => toggleCreativeMode());
     bind("btn-craft", () => toggleCrafting());
+    bind("btn-goals", () => toggleGoals());
     bind("btn-craft-close", () => toggleCrafting(false));
     bind("btn-mine", () => { state.mode = "mine"; updateModeButtons(); });
     bind("btn-place", () => { state.mode = "place"; updateModeButtons(); });
@@ -7031,5 +7389,23 @@
     furnaceTake(which) { takeFurnace(which); },
     tickFurnaces(dt) { updateFurnaces(dt); },
     tickCrops(dt) { state.cropTick = 99; updateCrops(dt); },
+    summonBoss() { return summonBoss(); },
+    goalsState() { return { earned: achievementsEarned(), total: ACHIEVEMENTS.length, done: Object.keys(state.achievements), counters: { ...state.counters } }; },
+    checkGoals() { checkAchievements(); },
+    openGoals() { toggleGoals(true); },
+    bossInfo() { const b = state.mobs.find((m) => MOB[m.type] && MOB[m.type].boss); return b ? { hp: b.hp, maxHp: b.maxHp, type: b.type } : null; },
+    damageBoss(d) { const b = state.mobs.find((m) => MOB[m.type] && MOB[m.type].boss); if (b) damageMob(b, d); },
+    mobLootFor(type) { return (MOB_LOOT[type] || []).map((e) => `${DEF[e[0]].name} ${Math.round(e[1] * 100)}% x${e[2]}-${e[3]}`); },
+    structureStats() {
+      let surfaceChests = 0, deepChests = 0, lootChests = 0;
+      for (const key in state.chests) {
+        const [x, y, z] = key.split(",").map(Number);
+        if (getBlock(x, y, z) !== CHEST) continue;
+        if (state.chests[key].some((s) => s)) lootChests++;
+        if (y >= SEA_LEVEL) surfaceChests++; else deepChests++;
+      }
+      return { surfaceChests, deepChests, lootChests, totalChests: Object.keys(state.chests).length };
+    },
+    chestLootAt(x, y, z) { const s = state.chests[chestKey(x | 0, y | 0, z | 0)]; return s ? s.filter(Boolean).map((it) => `${DEF[it.code].name} x${it.n}`) : null; },
   };
 })();

@@ -245,6 +245,9 @@
           <h3 class="game-side__title">CONTROLS</h3>
           <div class="sc-controls">
             <button class="btn btn--secondary" id="btn-craft" style="font-size:13px;padding:8px 12px;">Crafting (E)</button>
+            <button class="btn btn--secondary" id="btn-goals" style="font-size:13px;padding:8px 12px;">Goals (G)</button>
+          </div>
+          <div class="sc-controls">
             <button class="btn btn--ghost" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause (P)</button>
           </div>
           <div class="sc-controls">
@@ -254,6 +257,7 @@
           <p class="sc-tips">
             <strong style="color:var(--ink);">Right-click</strong> to place blocks, or <strong style="color:var(--ink);">eat</strong> when holding food.
             Open <strong style="color:var(--ink);">Crafting (E)</strong> at a Crafting Toilet to build tools, lamps, and meals.
+            Press <strong style="color:var(--ink);">Goals (G)</strong> to track 18 objectives that guide you through every system &amp; pay out score and rewards.
             In <strong style="color:var(--ink);">Creative</strong>, left-click breaks any block instantly and <strong style="color:var(--ink);">double-tap <kbd>Space</kbd></strong> to fly (<kbd>Space</kbd> up, <kbd>Shift</kbd> down). Switching back to Survival restores your inventory.
           </p>
         </div>
@@ -280,8 +284,9 @@
             <li><strong style="color:var(--ink);">Farm &amp; smelt.</strong> Hoe grass into soil, plant Wheat Seeds (from grass) and let them ripen, then harvest renewable Wheat. Build an Ohio Furnace to smelt ore, glass &amp; charcoal and cook raw drumsticks (dropped by pals) into food.</li>
             <li><strong style="color:var(--ink);">Cook &amp; eat.</strong> Craft Rizzbread, Ohio Burgers, a Sigma Energy Drink, or the Gilded Rizz Apple — right-click to eat and heal. Some give buffs.</li>
             <li><strong style="color:var(--ink);">Build a base.</strong> Craft a Rizz Chest for storage (right-click to open), a Sigma Bed to sleep through the night &amp; set your respawn, and Toilet Doors (right-click to open/close) to lock the mobs out.</li>
-            <li><strong style="color:var(--ink);">Survive the night.</strong> Skibidi Toilets and Grimace Shakes spawn in the dark — swing a sword to send them back to Ohio.</li>
+            <li><strong style="color:var(--ink);">Survive the night.</strong> Skibidi Toilets &amp; Grimace Shakes spawn in the dark (and get tougher each night) — swing a sword to drop them for <strong style="color:var(--ink);">Skibidi Goo</strong> and loot.</li>
             <li><strong style="color:var(--ink);">Explore for loot.</strong> Crumbling outposts (spot their lantern beacons) hide supply chests, and Sigma Vaults buried deep in the rock hold rare gear, gems &amp; a Gilded Rizz Apple — dig deep to find them.</li>
+            <li><strong style="color:var(--ink);">Beat the boss.</strong> Craft a <strong style="color:var(--accent-3);">Cursed Idol</strong> from Skibidi Goo + Sigma Gems, then right-click it to raise the <strong style="color:var(--ink);">Skibidi Titan</strong> — defeat it for a Sigma Crown, a Sigma Blade, gems &amp; Golden Apples.</li>
             <li><strong style="color:var(--ink);">Endgame:</strong> forge the <strong style="color:var(--accent-3);">Sigma Blade</strong> from Sigma Gems for the big score.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
@@ -305,7 +310,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260627-structures-1"></script>
+  <script src="../assets/js/rizz-craft.js?v=20260627-objectives-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

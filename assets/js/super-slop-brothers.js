@@ -311,6 +311,7 @@
   const settings = {
     p1: "rainbot",
     stage: "rooftop",
+    mode: "versus",
     rivals: 1,
     stocks: 3,
     difficulty: "normal",
@@ -323,7 +324,7 @@
     normal: { label: "Normal", think: [0.32, 0.6], atkCd: [0.35, 0.7], atk: 0.72, range: 74, smash: 0.28, special: 0.32, recover: 0.82, shield: 0.02, di: 0.7,  approach: 0.92 },
     sweat:  { label: "Sweat",  think: [0.14, 0.3], atkCd: [0.16, 0.34], atk: 0.95, range: 82, smash: 0.6,  special: 0.5,  recover: 0.96, shield: 0.06, di: 1.0,  approach: 1.0 },
   };
-  function aiLevel() { return AI_LEVELS[settings.difficulty] || AI_LEVELS.normal; }
+  function aiLevel() { return AI_LEVELS[state.matchDifficulty || settings.difficulty] || AI_LEVELS.normal; }
 
   const CPU_PERSONAS = {
     rainbot: { style: "balanced", approach: 1.0, attack: 1.0, special: 1.08, jump: 1.0, shield: 1.25, smash: 1.0, range: 1.0, specialRange: 280 },
@@ -338,8 +339,13 @@
   const camera = { x: W / 2, y: H * 0.44, zoom: 1.12 };
 
   const state = {
-    screen: "menu", // menu | fight | results
+    screen: "menu", // menu | fight | arcade | results
     paused: false,
+    matchStage: null,
+    matchDifficulty: null,
+    matchMode: "versus",
+    matchTitle: "",
+    arcade: null,
     fighters: [],
     entities: [],
     particles: [],
@@ -434,6 +440,7 @@
     const f = {
       def, id: def.id, slot, isCpu,
       name: def.name, glyph: def.glyph, color: def.color, accent: def.accent,
+      arcadeBoss: false,
       moves: buildMoves(def),
       w: 48, h: 70,
       x: spawn.x, y: spawn.y, vx: 0, vy: 0,
@@ -492,7 +499,7 @@
     return f;
   }
 
-  function getStage() { return STAGE_BY_ID[settings.stage] || STAGES[0]; }
+  function getStage() { return STAGE_BY_ID[state.matchStage || settings.stage] || STAGES[0]; }
 
   function mainPlatform(stage = getStage()) {
     return stage.platforms.find((p) => p.solid) || stage.platforms[0];
@@ -1215,7 +1222,7 @@
 
     // timers
     if (f.invuln > 0) f.invuln -= dt;
-    if (f.specialCd > 0) f.specialCd -= dt;
+    if (f.specialCd > 0) f.specialCd -= dt * (f.arcadeBoss ? 1.45 : 1);
     if (f.dodgeTimer > 0) {
       f.dodgeTimer = Math.max(0, f.dodgeTimer - dt);
       if (f.dodgeTimer === 0) {
@@ -1731,6 +1738,10 @@
   function applyHit(attackerSlot, target, hit) {
     if (target.invuln > 0 && !hit.forceThrow) return;
     if (tryTraitArmor(target, hit)) return;
+    const attacker = attackerSlot >= 0 ? state.fighters.find((o) => o.slot === attackerSlot) : null;
+    if (attacker && attacker.arcadeBoss && !hit.forceThrow) {
+      hit = { ...hit, dmg: Math.round(hit.dmg * 1.12), base: hit.base + 34, scale: hit.scale + 0.25 };
+    }
     const prevDamage = target.damage;
     target.damage = Math.min(999, target.damage + hit.dmg);
     const weight = target.def.weight;
@@ -1747,7 +1758,6 @@
     target.attack = null;
     target.lastHitBy = attackerSlot;
     target.lastHitTime = state.time;
-    const attacker = attackerSlot >= 0 ? state.fighters.find((o) => o.slot === attackerSlot) : null;
     if (attacker) {
       attacker.hitlag = Math.max(attacker.hitlag, target.hitlag * 0.72);
       attacker.comboHits = state.time - attacker.comboTimer < 1.25 ? attacker.comboHits + 1 : 1;
@@ -2516,7 +2526,10 @@
   function refreshMeta() {
     if (hudStage) hudStage.textContent = getStage().short;
     const rivalCount = state.screen === "fight" ? state.fighters.length - 1 : settings.rivals;
-    if (hudMode) hudMode.textContent = rivalCount + " CPU";
+    if (hudMode) {
+      if (state.arcade && state.arcade.active) hudMode.textContent = "Arcade " + (state.arcade.round + 1) + "/" + state.arcade.rounds.length;
+      else hudMode.textContent = settings.mode === "arcade" && state.screen === "menu" ? "Arcade" : rivalCount + " CPU";
+    }
     if (hudKos) hudKos.textContent = state.p1Kos;
     if (hudHigh) hudHigh.textContent = state.best;
   }
@@ -2524,31 +2537,139 @@
   // ============================================================
   //  GAME FLOW  (menu / start / results)
   // ============================================================
+  const ARCADE_TEMPLATE = [
+    { title: "Open Qualifier", difficulty: "chill", bonus: 0 },
+    { title: "Meme Bracket", difficulty: "normal", bonus: 80 },
+    { title: "Hazard Special", difficulty: "normal", bonus: 140 },
+    { title: "Sweat Semifinal", difficulty: "sweat", bonus: 220 },
+    { title: "Final Boss", difficulty: "sweat", bonus: 520, boss: true },
+  ];
+
   function showMenu() {
     clearHumanInput();
     state.screen = "menu";
     state.paused = false;
+    state.matchStage = null;
+    state.matchDifficulty = null;
+    state.matchMode = "versus";
+    state.matchTitle = "";
+    if (state.arcade) state.arcade.active = false;
     overlay.classList.add("overlay--show");
     overlayTitle.innerHTML = "🥊 SUPER SLOP BROTHERS";
     overlaySub.innerHTML = "Knock rivals off the stage. The higher their <b>%</b>, the farther they fly. Last slop standing wins.";
     renderSelect();
   }
 
+  function shuffleCopy(arr) {
+    const out = arr.slice();
+    for (let i = out.length - 1; i > 0; i--) { const j = randInt(0, i); [out[i], out[j]] = [out[j], out[i]]; }
+    return out;
+  }
+
+  function buildArcadeRounds() {
+    const stageStart = Math.max(0, STAGES.findIndex((s) => s.id === settings.stage));
+    const bossId = settings.p1 === "slopbot" ? "gigachad" : "slopbot";
+    const pool = shuffleCopy(FIGHTERS.map((f) => f.id).filter((id) => id !== settings.p1 && id !== bossId));
+    return ARCADE_TEMPLATE.map((r, i) => {
+      const stage = STAGES[(stageStart + i) % STAGES.length];
+      const opponent = r.boss ? bossId : pool[i % pool.length];
+      return { ...r, index: i, stage: stage.id, opponent };
+    });
+  }
+
+  function startSelectedMode() {
+    if (settings.mode === "arcade") startArcadeRun();
+    else startMatch();
+  }
+
+  function startArcadeRun() {
+    state.arcade = {
+      active: true,
+      round: 0,
+      score: 0,
+      totalKos: 0,
+      results: [],
+      rounds: buildArcadeRounds(),
+      p1: settings.p1,
+      stocks: settings.stocks,
+      startedAt: Date.now(),
+    };
+    startArcadeRound(0);
+  }
+
+  function startArcadeRound(index) {
+    const run = state.arcade;
+    if (!run || !run.rounds[index]) { showMenu(); return; }
+    run.round = index;
+    const round = run.rounds[index];
+    startMatch({
+      arcade: true,
+      ids: [run.p1, round.opponent],
+      stage: round.stage,
+      difficulty: round.difficulty,
+      title: round.title,
+      boss: !!round.boss,
+      humanStocks: run.stocks,
+      cpuStocks: run.stocks + (round.boss ? 1 : 0),
+    });
+  }
+
+  function gradeArcade(score, cleared) {
+    if (cleared && score >= 5200) return "S";
+    if (cleared && score >= 4200) return "A";
+    if (cleared && score >= 3000) return "B";
+    if (score >= 1800) return "C";
+    return "D";
+  }
+
   function renderSelect() {
     state.best = api.getHighScore(GAME_ID) || 0;
+    const selected = FIGHTER_BY_ID[settings.p1] || FIGHTERS[0];
+    const selectedStage = STAGE_BY_ID[settings.stage] || STAGES[0];
+    const selectedArt = FIGHTER_ART[selected.id] || { pos: "50% 50%" };
+    const selectedStageArt = STAGE_ART[selectedStage.id] || { pos: "50% 50%" };
+    const kitTags = {
+      rainbot: ["Prism", "Reflect", "Balanced"],
+      gigachad: ["Armor", "Heavy", "Brawler"],
+      mrfeast: ["Zoner", "Cashout", "Bombs"],
+      skibidi: ["Slip", "Traps", "Speed"],
+      sigma: ["Heat", "Combo", "Counter"],
+      slopbot: ["Glitch", "Decoy", "Teleport"],
+    };
+    const stageTone = {
+      rooftop: C.cyan,
+      hormuz: C.orange,
+      subway: C.purple,
+      mansion: C.green,
+    };
+    const statPct = (v, min, max) => clamp(Math.round(((v - min) / (max - min)) * 100), 8, 100);
+    const statRows = [
+      ["Speed", statPct(selected.run, 300, 410), Math.round(selected.run / 10)],
+      ["Power", statPct(selected.power, 0.88, 1.22), Math.round(selected.power * 100)],
+      ["Weight", statPct(selected.weight, 0.84, 1.3), Math.round(selected.weight * 100)],
+      ["Reach", statPct(selected.reach, 0.92, 1.08), Math.round(selected.reach * 100)],
+    ].map(([label, pct, value]) => `
+      <div class="ssb-stat">
+        <span>${label}</span>
+        <span class="ssb-stat__track"><span class="ssb-stat__bar" style="--pct:${pct}%"></span></span>
+        <b>${value}</b>
+      </div>`).join("");
     const charCards = FIGHTERS.map((f) => {
       const art = FIGHTER_ART[f.id] || { pos: "50% 50%" };
       return `
-      <button class="ssb-pick ssb-pick--char${settings.p1 === f.id ? " is-sel" : ""}" data-char="${f.id}" type="button" title="${f.blurb}">
+      <button class="ssb-pick ssb-pick--char${settings.p1 === f.id ? " is-sel" : ""}" data-char="${f.id}" type="button" title="${f.blurb}" style="--c:${f.color}">
         <span class="ssb-pick__avatar" style="--avatar-pos:${art.pos}; --c:${f.color}"><span>${f.glyph}</span></span>
-        <span class="ssb-pick__name">${f.name}</span>
-        <span class="ssb-pick__role">${f.blurb}</span>
+        <span class="ssb-pick__copy">
+          <span class="ssb-pick__name">${f.name}</span>
+          <span class="ssb-pick__role">${f.blurb}</span>
+          <span class="ssb-pick__badge">${(kitTags[f.id] || ["Ready"])[0]}</span>
+        </span>
       </button>`;
     }).join("");
     const stageCards = STAGES.map((s) => {
       const art = STAGE_ART[s.id] || { pos: "50% 50%" };
       return `
-      <button class="ssb-pick ssb-pick--stage${settings.stage === s.id ? " is-sel" : ""}" data-stage="${s.id}" type="button">
+      <button class="ssb-pick ssb-pick--stage${settings.stage === s.id ? " is-sel" : ""}" data-stage="${s.id}" type="button" style="--c:${stageTone[s.id] || C.cyan}; --stage-pos:${art.pos}">
         <span class="ssb-pick__stage-art" style="--stage-pos:${art.pos}"></span>
         <span class="ssb-pick__name">${s.name}</span>
         <span class="ssb-pick__role">⚠ ${s.hazardName}</span>
@@ -2557,52 +2678,95 @@
     const rivalBtns = [1, 2, 3].map((n) => `<button class="ssb-chip${settings.rivals === n ? " is-sel" : ""}" data-rivals="${n}" type="button">${n} CPU</button>`).join("");
     const stockBtns = [2, 3, 5].map((n) => `<button class="ssb-chip${settings.stocks === n ? " is-sel" : ""}" data-stocks="${n}" type="button">${n} stock</button>`).join("");
     const diffBtns = ["chill", "normal", "sweat"].map((d) => `<button class="ssb-chip${settings.difficulty === d ? " is-sel" : ""}" data-diff="${d}" type="button">${AI_LEVELS[d].label}</button>`).join("");
+    const modeBtns = [
+      { id: "versus", title: "Quick Fight", sub: settings.rivals + " CPU battle" },
+      { id: "arcade", title: "Arcade Run", sub: "5 fights + boss" },
+    ].map((m) => `
+      <button class="ssb-mode-card${settings.mode === m.id ? " is-sel" : ""}" data-mode="${m.id}" type="button">
+        <span>${m.title}</span>
+        <small>${m.sub}</small>
+      </button>`).join("");
+    const isArcade = settings.mode === "arcade";
+    const modeLine = isArcade ? "Arcade ladder · 5 fights · boss finale" : `Fighter select · ${settings.rivals} rival${settings.rivals === 1 ? "" : "s"} · ${settings.stocks} stock`;
+    const controlsLine = isArcade
+      ? `<div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>`
+      : `<div><span class="ssb-select__title">Rivals</span><div class="ssb-chips">${rivalBtns}</div></div>
+         <div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>
+         <div><span class="ssb-select__title">CPU skill</span><div class="ssb-chips">${diffBtns}</div></div>`;
 
     overlayBody.innerHTML = `
       <div class="ssb-select">
+        <div class="ssb-select__topline">
+          <span>${modeLine}</span>
+          <span>Best <b>${state.best.toLocaleString()}</b></span>
+        </div>
         <div class="ssb-select__main">
-          <div class="ssb-select__group">
-            <h3 class="ssb-select__title">Your fighter</h3>
-            <div class="ssb-grid ssb-grid--char">${charCards}</div>
-          </div>
-          <div class="ssb-select__group">
-            <h3 class="ssb-select__title">Stage</h3>
-            <div class="ssb-grid ssb-grid--stage">${stageCards}</div>
-          </div>
-          <div class="ssb-select__group">
-            <div class="ssb-row">
-              <div><span class="ssb-select__title">Rivals</span><div class="ssb-chips">${rivalBtns}</div></div>
-              <div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>
-              <div><span class="ssb-select__title">CPU skill</span><div class="ssb-chips">${diffBtns}</div></div>
+          <div class="ssb-select__panel">
+            <div class="ssb-select__group">
+              <h3 class="ssb-select__title"><span>Mode</span><span>${isArcade ? "RUN" : "VS"}</span></h3>
+              <div class="ssb-mode-row">${modeBtns}</div>
+            </div>
+            <div class="ssb-select__group">
+              <h3 class="ssb-select__title"><span>Your fighter</span><span>${selected.short}</span></h3>
+              <div class="ssb-grid ssb-grid--char">${charCards}</div>
+            </div>
+            <div class="ssb-select__group">
+              <h3 class="ssb-select__title"><span>Stage</span><span>${selectedStage.short}</span></h3>
+              <div class="ssb-grid ssb-grid--stage">${stageCards}</div>
+            </div>
+            <div class="ssb-select__group">
+              <div class="ssb-row">
+                ${controlsLine}
+              </div>
             </div>
           </div>
+
+          <aside class="ssb-select__panel ssb-select__panel--preview" style="--c:${selected.color}; --a:${selected.accent}">
+            <div class="ssb-preview__art" style="--avatar-pos:${selectedArt.pos}">
+              <div class="ssb-preview__name">
+                <strong>${selected.name}</strong>
+                <span>${selected.glyph}</span>
+              </div>
+            </div>
+            <p class="ssb-preview__role">${selected.blurb}</p>
+            <div class="ssb-preview__tags">${(kitTags[selected.id] || []).map((tag) => `<span class="ssb-preview__tag">${tag}</span>`).join("")}</div>
+            <div class="ssb-stat-grid">${statRows}</div>
+            <div class="ssb-stage-strip" style="--stage-pos:${selectedStageArt.pos}">
+              <strong>${selectedStage.name}</strong>
+              <span>${selectedStage.hazardName}</span>
+            </div>
+          </aside>
         </div>
         <div class="ssb-select__footer">
-          <button class="btn btn--primary ssb-start" id="ssb-start" type="button">FIGHT! ⚔️</button>
           <p class="ssb-controls-hint">
-            <b>Move</b> ←→ / A D &nbsp;·&nbsp; <b>Jump</b> ↑ / W / Space (double-jump) &nbsp;·&nbsp; <b>Drop/Fast-fall</b> ↓ / S<br>
-            <b>Attack</b> J &nbsp;·&nbsp; <b>Special</b> K &nbsp;·&nbsp; <b>Shield</b> L (hold) &nbsp;·&nbsp; <b>Grab</b> I &nbsp;·&nbsp; <b>Pause</b> P<br>
-            <span class="ssb-controls-hint__tip">Flick a direction + Attack = a launching <b>smash</b>. Shield + a direction = roll/dodge.</span>
+            <b>${selected.name}</b> on <b>${selectedStage.short}</b> · ${isArcade ? "5-round Arcade Run" : settings.rivals + " CPU · " + settings.stocks + " stock · " + AI_LEVELS[settings.difficulty].label}<br>
+            <span class="ssb-controls-hint__tip">A/D move · W/Space jump · J attack · K special · L shield · I grab · flick + J for smash</span>
           </p>
+          <button class="btn btn--primary ssb-start" id="ssb-start" type="button">${isArcade ? "START ARCADE" : "START MATCH"}</button>
         </div>
       </div>`;
 
+    overlayBody.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { settings.mode = b.dataset.mode; Sound.play("select"); renderSelect(); }));
     overlayBody.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => { settings.p1 = b.dataset.char; Sound.play("select"); renderSelect(); }));
     overlayBody.querySelectorAll("[data-stage]").forEach((b) => b.addEventListener("click", () => { settings.stage = b.dataset.stage; Sound.play("select"); renderSelect(); }));
     overlayBody.querySelectorAll("[data-rivals]").forEach((b) => b.addEventListener("click", () => { settings.rivals = +b.dataset.rivals; Sound.play("select"); renderSelect(); }));
     overlayBody.querySelectorAll("[data-stocks]").forEach((b) => b.addEventListener("click", () => { settings.stocks = +b.dataset.stocks; Sound.play("select"); renderSelect(); }));
     overlayBody.querySelectorAll("[data-diff]").forEach((b) => b.addEventListener("click", () => { settings.difficulty = b.dataset.diff; Sound.play("select"); renderSelect(); }));
     const startBtn = document.getElementById("ssb-start");
-    if (startBtn) startBtn.addEventListener("click", startMatch);
+    if (startBtn) startBtn.addEventListener("click", startSelectedMode);
     refreshMeta();
   }
 
-  function startMatch() {
+  function startMatch(options = {}) {
     clearHumanInput();
     Sound.resume();
     Sound.play("start");
     state.screen = "fight";
     state.paused = false;
+    state.matchStage = options.stage || null;
+    state.matchDifficulty = options.difficulty || null;
+    state.matchMode = options.arcade ? "arcade" : "versus";
+    state.matchTitle = options.title || "";
     state.entities = [];
     state.particles = [];
     state.impacts = [];
@@ -2615,21 +2779,140 @@
     getStage().platforms.forEach((p) => { delete p.curX; delete p.curY; delete p.lastDX; });
 
     // build roster: human + N distinct CPU rivals
-    const used = new Set([settings.p1]);
-    const pool = FIGHTERS.map((f) => f.id).filter((id) => id !== settings.p1);
-    // shuffle
-    for (let i = pool.length - 1; i > 0; i--) { const j = randInt(0, i); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    const ids = [settings.p1];
-    for (let i = 0; i < settings.rivals; i++) ids.push(pool[i % pool.length]);
+    let ids;
+    if (options.ids) {
+      ids = options.ids.slice();
+    } else {
+      const pool = FIGHTERS.map((f) => f.id).filter((id) => id !== settings.p1);
+      for (let i = pool.length - 1; i > 0; i--) { const j = randInt(0, i); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      ids = [settings.p1];
+      for (let i = 0; i < settings.rivals; i++) ids.push(pool[i % pool.length]);
+    }
 
     state.fighters = ids.map((id, i) => makeFighter(id, i, i !== 0));
+    if (options.humanStocks) state.fighters[0].stocks = options.humanStocks;
+    if (options.cpuStocks) {
+      state.fighters.forEach((f) => { if (f.isCpu) f.stocks = options.cpuStocks; });
+    }
+    if (options.boss && state.fighters[1]) {
+      const boss = state.fighters[1];
+      boss.arcadeBoss = true;
+      boss.name = "Boss " + boss.name;
+      boss.invuln = Math.max(boss.invuln, 1.0);
+      pushFloater(boss.x, boss.y - boss.h - 18, "FINAL BOSS", C.red, 22, 1.1);
+    }
     state.hazard = getStage().hazard ? getStage().hazard() : null;
     resetCamera();
     refreshMeta();
     canvas.focus();
   }
 
+  function arcadeResultRows(run) {
+    return run.results.map((r) => `
+      <div class="ssb-result-row${r.won ? " is-win" : ""}">
+        <span class="ssb-result-row__who"><span style="font-size:20px">${r.glyph}</span> ${r.title}</span>
+        <span class="ssb-result-row__stat">${r.kos} KO${r.kos === 1 ? "" : "s"}</span>
+        <span class="ssb-result-row__stat">+${r.score}</span>
+      </div>`).join("");
+  }
+
+  function endArcadeMatch(winner) {
+    const run = state.arcade;
+    if (!run) return;
+    const human = state.fighters.find((f) => !f.isCpu);
+    const won = !!(winner && !winner.isCpu);
+    const round = run.rounds[run.round];
+    const opponent = state.fighters.find((f) => f.isCpu);
+    const stocksLeft = human ? Math.max(0, human.stocks) : 0;
+    const damage = human ? Math.round(human.damage) : 0;
+    const survival = won ? Math.max(0, 180 - damage) : 0;
+    const roundScore = (won ? 520 : 120) + state.p1Kos * 140 + stocksLeft * 170 + survival + (round.bonus || 0);
+    run.score += roundScore;
+    run.totalKos += state.p1Kos;
+    run.results.push({
+      title: round.title,
+      stage: getStage().short,
+      opponent: opponent ? opponent.name : "CPU",
+      glyph: opponent ? opponent.glyph : "⚔️",
+      kos: state.p1Kos,
+      stocksLeft,
+      damage,
+      score: roundScore,
+      won,
+    });
+
+    if (won && run.round < run.rounds.length - 1) showArcadeRoundClear(roundScore);
+    else finishArcadeRun(won, winner);
+  }
+
+  function showArcadeRoundClear(roundScore) {
+    const run = state.arcade;
+    const next = run.rounds[run.round + 1];
+    const nextFighter = FIGHTER_BY_ID[next.opponent] || FIGHTERS[0];
+    const nextStage = STAGE_BY_ID[next.stage] || STAGES[0];
+    state.screen = "arcade";
+    state.paused = false;
+    overlay.classList.add("overlay--show");
+    overlayTitle.innerHTML = "✅ ROUND CLEAR";
+    overlaySub.innerHTML = `Run score <b>${run.score.toLocaleString()}</b> · Round bonus <b>+${roundScore.toLocaleString()}</b>`;
+    overlayBody.innerHTML = `
+      <div class="ssb-results ssb-arcade-card">
+        <div class="ssb-score">Next: <b>${next.title}</b></div>
+        <div class="ssb-arcade-next" style="--c:${nextFighter.color}">
+          <span class="ssb-arcade-next__glyph">${nextFighter.glyph}</span>
+          <span><strong>${next.boss ? "Boss " : ""}${nextFighter.name}</strong><small>${nextStage.name} · ${AI_LEVELS[next.difficulty].label}</small></span>
+        </div>
+        <div class="ssb-result-table">${arcadeResultRows(run)}</div>
+        <div class="ssb-result-actions">
+          <button class="btn btn--primary" id="ssb-arcade-next" type="button">Next fight</button>
+          <button class="btn btn--ghost" id="ssb-arcade-menu" type="button">End run</button>
+        </div>
+      </div>`;
+    document.getElementById("ssb-arcade-next").addEventListener("click", () => startArcadeRound(run.round + 1));
+    document.getElementById("ssb-arcade-menu").addEventListener("click", showMenu);
+    refreshMeta();
+  }
+
+  function finishArcadeRun(cleared, winner) {
+    const run = state.arcade;
+    if (!run) return;
+    run.active = false;
+    state.screen = "results";
+    const score = Math.max(0, Math.round(run.score));
+    const grade = gradeArcade(score, cleared);
+    const prevBest = api.getHighScore(GAME_ID) || 0;
+    api.recordScore(GAME_ID, score);
+    const isBest = score > prevBest;
+    state.best = Math.max(prevBest, score);
+
+    overlay.classList.add("overlay--show");
+    overlayTitle.innerHTML = cleared ? "🏆 ARCADE CLEAR!" : "💀 RUN ENDED";
+    overlaySub.innerHTML = cleared
+      ? `Grade <b>${grade}</b> · ${run.totalKos} total KO${run.totalKos === 1 ? "" : "s"}`
+      : (winner ? `<b style="color:${winner.color}">${winner.name}</b> stopped the run.` : "The bracket collapsed into pure slop.");
+    overlayBody.innerHTML = `
+      <div class="ssb-results ssb-arcade-card">
+        <div class="ssb-arcade-grade">
+          <span>${grade}</span>
+          <div>Arcade Score <b>${score.toLocaleString()}</b>${isBest ? ' <em>NEW BEST!</em>' : ` · Best ${state.best.toLocaleString()}`}</div>
+        </div>
+        <div class="ssb-result-table">${arcadeResultRows(run)}</div>
+        <div class="ssb-result-actions">
+          <button class="btn btn--primary" id="ssb-arcade-again" type="button">Run it back</button>
+          <button class="btn btn--ghost" id="ssb-tomenu" type="button">Change setup</button>
+        </div>
+      </div>`;
+    document.getElementById("ssb-arcade-again").addEventListener("click", startArcadeRun);
+    document.getElementById("ssb-tomenu").addEventListener("click", showMenu);
+    if (isBest && score > 0) setTimeout(() => api.toast("🏆 New arcade best!", "good"), 250);
+    refreshMeta();
+  }
+
   function endMatch(winner) {
+    if (state.arcade && state.arcade.active) {
+      endArcadeMatch(winner);
+      return;
+    }
     state.screen = "results";
     const human = state.fighters.find((f) => !f.isCpu);
     const won = winner && !winner.isCpu;
@@ -2743,6 +3026,7 @@
   window.__SLOP = {
     state, settings, FIGHTERS, STAGES,
     start: startMatch, menu: showMenu, results: endMatch,
+    arcade: startArcadeRun,
     setStage(id) { settings.stage = id; },
     setChar(id) { settings.p1 = id; },
     setRivals(n) { settings.rivals = n; },

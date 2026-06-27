@@ -53,12 +53,21 @@
 
   // Phases (from the GDD)
   const PHASE_GATES = [0.52, 0.88]; // later, less frequent ad-wall checkpoints per sector
+  const BOSS_UNLOCK_SECTOR = 6;
+  const HAZARD_UNLOCKS = [
+    { sector: 1, type: "mine", label: "mines" },
+    { sector: 2, type: "slick", label: "oil slicks" },
+    { sector: 3, type: "sub", label: "merchant subs" },
+    { sector: 4, type: "rocket", label: "smiley rockets" },
+    { sector: 5, type: "drone", label: "customs drones" },
+    { sector: BOSS_UNLOCK_SECTOR, type: "container", label: "loose containers and boss walls" },
+  ];
   const PHASE_DEFS = [
-    { id: 1, name: "OPEN WATER",        width: 220, spawnEvery: 1.25, mix: { mine: 0.72, sub: 0.16, rocket: 0.00, drone: 0.00, slick: 0.12 }, fog: 0.00 },
-    { id: 2, name: "TIGHTEN UP",        width: 188, spawnEvery: 0.95, mix: { mine: 0.48, sub: 0.25, rocket: 0.12, drone: 0.00, slick: 0.15 }, fog: 0.05 },
-    { id: 3, name: "FOG OF HORMUZ",     width: 152, spawnEvery: 0.68, mix: { mine: 0.33, sub: 0.25, rocket: 0.22, drone: 0.08, slick: 0.12 }, fog: 0.34 },
-    { id: 4, name: "NO REFUNDS",        width: 116, spawnEvery: 0.48, mix: { mine: 0.27, sub: 0.22, rocket: 0.28, drone: 0.13, slick: 0.10 }, fog: 0.48 },
-    { id: 5, name: "BOSS WALL",         width: 184, spawnEvery: 0.72, mix: { mine: 0.34, sub: 0.00, rocket: 0.24, drone: 0.22, slick: 0.20 }, fog: 0.18 },
+    { id: 1, name: "OPEN WATER",        width: 220, spawnEvery: 1.70, mix: { mine: 1.00, slick: 0.00, sub: 0.00, rocket: 0.00, drone: 0.00, container: 0.00 }, fog: 0.00 },
+    { id: 2, name: "TIGHTEN UP",        width: 196, spawnEvery: 1.42, mix: { mine: 0.78, slick: 0.16, sub: 0.06, rocket: 0.00, drone: 0.00, container: 0.00 }, fog: 0.04 },
+    { id: 3, name: "FOG OF HORMUZ",     width: 166, spawnEvery: 1.16, mix: { mine: 0.62, slick: 0.16, sub: 0.15, rocket: 0.07, drone: 0.00, container: 0.00 }, fog: 0.28 },
+    { id: 4, name: "NO REFUNDS",        width: 136, spawnEvery: 0.96, mix: { mine: 0.46, slick: 0.10, sub: 0.20, rocket: 0.18, drone: 0.06, container: 0.00 }, fog: 0.40 },
+    { id: 5, name: "BOSS WALL",         width: 178, spawnEvery: 1.08, mix: { mine: 0.38, slick: 0.08, sub: 0.14, rocket: 0.18, drone: 0.16, container: 0.06 }, fog: 0.16 },
   ];
 
   const SECTOR_THEMES = [
@@ -271,12 +280,12 @@
     const localDistance = Math.max(0, distance - sectorStart);
     const progress = clamp(localDistance / SECTOR_LENGTH, 0, 0.9999);
     let phase = 1;
-    if (progress >= 0.92) phase = 5;
-    else if (progress >= 0.70) phase = 4;
-    else if (progress >= 0.40) phase = 3;
-    else if (progress >= 0.15) phase = 2;
-    const sectorRamp = 1 + sectorIndex * 0.18;
-    const pressureRamp = 1 + progress * 0.22;
+    if (progress >= 0.95) phase = 5;
+    else if (progress >= 0.80) phase = 4;
+    else if (progress >= 0.58) phase = 3;
+    else if (progress >= 0.30) phase = 2;
+    const sectorRamp = 1 + Math.min(1.6, sectorIndex * 0.10);
+    const pressureRamp = 1 + progress * 0.12;
     const threat = sectorRamp * pressureRamp;
     return { sectorIndex, sector, sectorStart, localDistance, progress, phase, threat };
   }
@@ -292,7 +301,7 @@
   function getLaneHalfWidth() {
     const metrics = getPhaseProgress();
     const def = PHASE_DEFS[metrics.phase - 1];
-    const squeeze = Math.min(48, (metrics.sector - 1) * 7);
+    const squeeze = Math.min(42, (metrics.sector - 1) * 5);
     return Math.max(86, def.width - squeeze);
   }
 
@@ -302,6 +311,26 @@
 
   function getTheme(sector = getPhaseProgress().sector) {
     return SECTOR_THEMES[(sector - 1) % SECTOR_THEMES.length];
+  }
+
+  function getUnlockedHazards(sector = getPhaseProgress().sector) {
+    return HAZARD_UNLOCKS
+      .filter((hazard) => sector >= hazard.sector)
+      .map((hazard) => hazard.type);
+  }
+
+  function getHazardMix(metrics = getPhaseProgress()) {
+    const unlocked = new Set(getUnlockedHazards(metrics.sector));
+    const base = PHASE_DEFS[metrics.phase - 1].mix;
+    const mix = {};
+    Object.entries(base).forEach(([type, weight]) => {
+      if (unlocked.has(type) && weight > 0) mix[type] = weight;
+    });
+    return Object.keys(mix).length ? mix : { mine: 1 };
+  }
+
+  function getNewHazardForSector(sector) {
+    return HAZARD_UNLOCKS.find((hazard) => hazard.sector === sector);
   }
 
   // =========================================================================
@@ -666,9 +695,8 @@
 
   function spawnObstacle(typeOverride = null) {
     const metrics = getPhaseProgress();
-    const def = PHASE_DEFS[metrics.phase - 1];
-    const type = typeOverride || pickWeighted(def.mix);
-    const difficulty = metrics.threat;
+    const type = typeOverride || pickWeighted(getHazardMix(metrics));
+    const difficulty = Math.min(1.9, metrics.threat);
     const laneHalf = getLaneHalfWidth();
 
     const s = state.ship;
@@ -761,14 +789,14 @@
         o.y += o.vy * dt + Math.sin(o.age * 8 + o.blink) * 10 * dt;
         const lane = getLaneHalfWidth();
         if (Math.abs(o.x) > lane + 40) o.vx *= -1;
-        if (o.age > 0.9 && !o.dropped && Math.abs(o.x - state.ship.x) < 34) {
-          o.dropped = true;
-          spawnObstacle("mine");
-          const mine = state.obstacles[state.obstacles.length - 1];
-          mine.x = o.x;
-          mine.y = o.y + 18;
-          mine.vy = -80 * state.threat;
-        }
+      if (o.age > 0.9 && !o.dropped && Math.abs(o.x - state.ship.x) < 34) {
+        o.dropped = true;
+        spawnObstacle("mine");
+        const mine = state.obstacles[state.obstacles.length - 1];
+        mine.x = o.x;
+        mine.y = o.y + 18;
+        mine.vy = -72 * Math.min(1.8, state.threat);
+      }
       } else if (o.type === "slick") {
         o.x += o.vx * dt + Math.sin(o.age * 2 + o.seed) * 4 * dt;
         o.y += o.vy * dt;
@@ -806,14 +834,12 @@
       if (o.slipped) return;
       o.slipped = true;
       o.dead = true;
-      applyScorePenalty(180, "OIL SLICK");
       state.ship.vx += (state.ship.x < o.x ? -1 : 1) * 92 * state.threat;
       state.ship.vy *= 0.55;
-      state.ship.iframe = Math.max(state.ship.iframe, 0.35);
       state.cam.shake = Math.max(state.cam.shake, 0.18);
       spawnParticles(o.x, o.y, "#b7ffef", 12, 160);
       playSfx("slip");
-      RB.toast("🛢 Oil slick! steering filed for divorce", "bad");
+      takeHit(o);
       return;
     }
     takeHit(o);
@@ -823,18 +849,33 @@
     const s = state.ship;
     const dx = s.x - o.x, dy = s.y - o.y;
     if (o.type === "slick") {
-      const nx = dx / Math.max(18, SHIP_COLLISION_HALF_WIDTH + o.w * 0.5);
-      const ny = dy / Math.max(12, SHIP_COLLISION_HALF_LENGTH + o.h * 0.45);
+      const nx = dx / Math.max(18, SHIP_COLLISION_HALF_WIDTH + o.w * 0.82);
+      const ny = dy / Math.max(12, SHIP_COLLISION_HALF_LENGTH + o.h * 0.92);
       return (nx * nx + ny * ny) < 1.15;
     }
+    if (o.type === "drone") {
+      return Math.abs(dx) < SHIP_COLLISION_HALF_WIDTH + 30
+        && Math.abs(dy) < SHIP_COLLISION_HALF_LENGTH + 24;
+    }
     if (o.type === "container") {
-      return Math.abs(dx) < SHIP_COLLISION_HALF_WIDTH + o.w * 0.5
-        && Math.abs(dy) < SHIP_COLLISION_HALF_LENGTH + o.h * 0.5;
+      return Math.abs(dx) < SHIP_COLLISION_HALF_WIDTH + o.w * 0.92
+        && Math.abs(dy) < SHIP_COLLISION_HALF_LENGTH + o.h * 1.05;
     }
     const rObs = Math.max(o.w, o.h) * 0.5;
-    const nx = dx / (SHIP_COLLISION_HALF_WIDTH + rObs * 0.8);
-    const ny = dy / (SHIP_COLLISION_HALF_LENGTH + rObs * 0.8);
+    const scale = o.type === "rocket" ? 1.15 : o.type === "mine" ? 1.05 : 0.95;
+    const nx = dx / (SHIP_COLLISION_HALF_WIDTH + rObs * scale);
+    const ny = dy / (SHIP_COLLISION_HALF_LENGTH + rObs * scale);
     return (nx * nx + ny * ny) < 1;
+  }
+
+  function resolveDamagingContact(source) {
+    if (!source || !source.type || source.type === "boss") return;
+    if (source.type === "sub") {
+      source.retreat = true;
+      source.vy = Math.min(source.vy || 0, -90);
+      return;
+    }
+    source.dead = true;
   }
 
   // =========================================================================
@@ -843,6 +884,7 @@
 
   function takeHit(source) {
     const s = state.ship;
+    resolveDamagingContact(source);
     // Shield check first
     if (hasShield()) {
       consumeShield();
@@ -862,6 +904,7 @@
               : source?.type === "sub"  ? "Angry Merchant Sub"
               : source?.type === "rocket" ? "Friendly Fire from a Smiley Rocket"
               : source?.type === "drone" ? "Customs Drone with Boundary Issues"
+              : source?.type === "slick" ? "Oil Slick with Legal Immunity"
               : source?.type === "container" ? "Loose Container of Bad Ideas"
               : source?.type === "boss" ? "Container Ship With Main Character Energy"
               : "Mystery Explosion";
@@ -874,6 +917,7 @@
                 : source?.type === "sub"  ? "💥 Sub clipped — " + s.hull + " hull left"
                 : source?.type === "rocket" ? "💥 Rocket hit — " + s.hull + " hull left"
                 : source?.type === "drone" ? "💥 Drone bonk — " + s.hull + " hull left"
+                : source?.type === "slick" ? "💥 Oil slick crash — " + s.hull + " hull left"
                 : source?.type === "container" ? "💥 Container crunch — " + s.hull + " hull left"
                 : "💥 Hull hit — " + s.hull + " hull left";
       RB.toast(msg, "bad");
@@ -2334,7 +2378,10 @@
     if (repair) state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + repair);
     const bonus = 900 + metrics.sector * 180;
     state.score += bonus;
-    state.bannerText = `SECTOR ${metrics.sector} · ${getTheme(metrics.sector).name.toUpperCase()}`;
+    const unlocked = getNewHazardForSector(metrics.sector);
+    state.bannerText = unlocked
+      ? `SECTOR ${metrics.sector} · NEW: ${unlocked.label.toUpperCase()}`
+      : `SECTOR ${metrics.sector} · ${getTheme(metrics.sector).name.toUpperCase()}`;
     state.bannerUntil = performance.now() + 2300;
     playSfx("phase");
     RB.toast(`Sector ${previous} escaped. +${bonus.toLocaleString()}${repair ? " · +1 hull" : ""}`, "good");
@@ -2367,20 +2414,20 @@
       updateEngineHum();
 
       // Spawn obstacles based on phase
-      if (state.phase < 5) {
+      if (state.phase < 5 || state.sector < BOSS_UNLOCK_SECTOR) {
         state._spawnT = (state._spawnT || 0) + dt;
         const def = PHASE_DEFS[state.phase - 1];
-        const spawnEvery = Math.max(0.25, def.spawnEvery / Math.min(2.35, state.threat));
+        const spawnEvery = Math.max(0.52, def.spawnEvery / Math.min(1.8, state.threat));
         while (state._spawnT >= spawnEvery) {
           state._spawnT -= spawnEvery;
           spawnObstacle();
-          if (state.threat > 1.28 && Math.random() < Math.min(0.38, (state.threat - 1.12) * 0.18)) {
+          if (state.sector >= 5 && state.threat > 1.5 && Math.random() < Math.min(0.22, (state.threat - 1.4) * 0.10)) {
             spawnObstacle();
           }
           maybeSpawnPickup();
         }
       } else {
-        // Phase 5: boss gate. It repeats every sector until wipeout.
+        // Phase 5 boss gates unlock after the core hazard families have been introduced.
         if (!state.bossArmed && state.sectorCleared !== state.sector) armBoss();
       }
 

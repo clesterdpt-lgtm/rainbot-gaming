@@ -51,7 +51,7 @@
   const sign = (v) => (v < 0 ? -1 : v > 0 ? 1 : 0);
   const TAU = Math.PI * 2;
   const rad = (deg) => (deg * Math.PI) / 180;
-  const ART_VERSION = "20260627-generative-1";
+  const ART_VERSION = "20260627-body-1";
 
   function loadArt(name) {
     const img = new Image();
@@ -63,6 +63,7 @@
   const ART = {
     stageAtlas: loadArt("stage-atlas.png"),
     rosterAtlas: loadArt("roster-atlas.png"),
+    bodyAtlas: loadArt("body-atlas.png"),
   };
 
   const STAGE_ART = {
@@ -79,6 +80,15 @@
     skibidi: { col: 1, row: 1, pos: "100% 50%" },
     sigma: { col: 0, row: 2, pos: "0% 100%" },
     slopbot: { col: 1, row: 2, pos: "100% 100%" },
+  };
+
+  const BODY_ART = {
+    rainbot: { col: 0, row: 0, sx: 169, sy: 9, sw: 321, sh: 409, h: 86 },
+    gigachad: { col: 1, row: 0, sx: 48, sy: 4, sw: 422, sh: 414, h: 94 },
+    mrfeast: { col: 0, row: 1, sx: 112, sy: 0, sw: 417, sh: 418, h: 96 },
+    skibidi: { col: 1, row: 1, sx: 55, sy: 0, sw: 420, sh: 418, h: 88 },
+    sigma: { col: 0, row: 2, sx: 139, sy: 0, sw: 358, sh: 403, h: 90 },
+    slopbot: { col: 1, row: 2, sx: 63, sy: 0, sw: 378, sh: 395, h: 94 },
   };
 
   const imageReady = (img) => img && img.complete && img.naturalWidth > 0;
@@ -1761,21 +1771,132 @@
     return true;
   }
 
+  function drawBodySprite(f) {
+    const art = BODY_ART[f.id];
+    const img = ART.bodyAtlas;
+    if (!imageReady(img) || !art) return false;
+
+    const cellW = img.naturalWidth / 2;
+    const cellH = img.naturalHeight / 3;
+    const sw = art.sw;
+    const sh = art.sh;
+    const srcX = art.col * cellW + art.sx;
+    const srcY = art.row * cellH + art.sy;
+
+    const speed = Math.abs(f.vx);
+    const runT = clamp(speed / (f.def.run * STAGE_MOVE_SCALE), 0, 1);
+    const runCycle = Math.sin(f.animTime * 18);
+    const airT = clamp(f.vy / 1200, -1, 1);
+    const attackT = f.attack ? clamp(f.attack.t / Math.max(f.attack.dur, 0.001), 0, 1) : 0;
+    const attackPulse = f.attack ? Math.sin(attackT * Math.PI) : 0;
+    const hitPulse = f.hitstun > 0 ? Math.sin(state.time * 34) : 0;
+    const dodgePulse = f.dodgeTimer > 0 ? Math.sin(f.dodgeTimer * 24) : 0;
+
+    const baseH = art.h;
+    const renderH =
+      baseH * (1 + (f.attack ? attackPulse * 0.05 : 0) + (f.hitstun > 0 ? 0.03 : 0));
+    const renderW = renderH * (sw / sh);
+    const bob =
+      (f.onGround ? -Math.abs(runCycle) * 2.8 * runT : airT * 2.5) +
+      (f.attack ? -attackPulse * 2 : 0);
+    const lean =
+      (f.onGround ? runT * 0.08 : airT * 0.12) +
+      (f.attack ? attackPulse * (f.attackKind && f.attackKind.includes("smash") ? 0.22 : 0.14) : 0) -
+      (f.hitstun > 0 ? 0.18 + hitPulse * 0.04 : 0) +
+      (f.dodgeTimer > 0 ? dodgePulse * 0.08 : 0);
+    const squashX = 1 + runT * Math.abs(runCycle) * 0.035 + attackPulse * 0.06;
+    const squashY = 1 - runT * Math.abs(runCycle) * 0.025 - attackPulse * 0.035;
+
+    function drawPass(offsetX, offsetY, alpha, scale = 1, blur = 0) {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.translate(f.x + offsetX, f.y + bob + offsetY);
+      ctx.scale(f.facing, 1);
+      ctx.rotate(lean);
+      ctx.scale(squashX * scale, squashY * scale);
+      ctx.shadowColor = f.accent;
+      ctx.shadowBlur = blur;
+      ctx.drawImage(img, srcX, srcY, sw, sh, -renderW / 2, -renderH, renderW, renderH);
+      ctx.restore();
+    }
+
+    if (f.attack || f.hitstun > 0 || (f.onGround && runT > 0.7)) {
+      const dir = f.facing;
+      const trailCount = f.attack ? 3 : 2;
+      for (let i = trailCount; i >= 1; i--) {
+        const alpha = f.attack ? 0.12 / i : 0.08 / i;
+        drawPass(-dir * i * (f.attack ? 11 : 7), i * 0.8, alpha, 1 + i * 0.01, 12 - i * 2);
+      }
+    }
+
+    drawPass(0, 0, 1, 1, f.invuln > 0 || f.counterTimer > 0 || f.reflectTimer > 0 ? 14 : 4);
+
+    if (f.onGround && runT > 0.45) {
+      ctx.save();
+      ctx.globalAlpha = 0.14 + runT * 0.1;
+      ctx.fillStyle = f.accent;
+      ctx.beginPath();
+      ctx.ellipse(f.x - f.facing * (24 + runT * 12), f.y + 3, 18 + runT * 10, 4, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    return true;
+  }
+
+  function drawAttackFx(f) {
+    if (!f.attack || !activeHitboxes(f).length) return;
+    const boxes = activeHitboxes(f);
+    const isSmash = f.attackKind && f.attackKind.includes("smash");
+    const progress = clamp(f.attack.t / Math.max(f.attack.dur, 0.001), 0, 1);
+    const color = isSmash ? C.red : f.accent;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const b of boxes) {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      const r = Math.max(b.w, b.h) * (isSmash ? 0.62 : 0.5);
+      const start = -0.55 + progress * 1.1;
+      const end = start + (isSmash ? 1.9 : 1.45);
+
+      ctx.globalAlpha = isSmash ? 0.44 : 0.32;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = isSmash ? 12 : 8;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, start, end);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.48;
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = isSmash ? 3 : 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.72, start + 0.12, end - 0.12);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawBackground() {
     const stage = getStage();
+    const bgX = -720;
+    const bgY = -300;
+    const bgW = W + 1440;
+    const bgH = H + 620;
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, stage.sky[0]); g.addColorStop(1, stage.sky[1]);
-    ctx.fillStyle = g; ctx.fillRect(-140, -100, W + 280, H + 200);
+    ctx.fillStyle = g; ctx.fillRect(bgX, bgY, bgW, bgH);
 
     const painted = drawAtlasPanel(
       ART.stageAtlas,
       STAGE_ART[stage.id],
       2,
       2,
-      -120,
-      -80,
-      W + 240,
-      H + 160,
+      bgX,
+      bgY,
+      bgW,
+      bgH,
       "stretch",
     );
     if (painted) {
@@ -1783,7 +1904,7 @@
       ctx.globalAlpha = 0.23;
       ctx.globalCompositeOperation = "multiply";
       ctx.fillStyle = g;
-      ctx.fillRect(-140, -100, W + 280, H + 200);
+      ctx.fillRect(bgX, bgY, bgW, bgH);
       ctx.restore();
 
       ctx.save();
@@ -1792,7 +1913,7 @@
       vignette.addColorStop(0.66, "rgba(3,5,14,0.08)");
       vignette.addColorStop(1, "rgba(0,0,0,0.46)");
       ctx.fillStyle = vignette;
-      ctx.fillRect(-140, -100, W + 280, H + 200);
+      ctx.fillRect(bgX, bgY, bgW, bgH);
       ctx.restore();
     }
 
@@ -1936,48 +2057,41 @@
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.beginPath(); ctx.ellipse(cx, f.y + 2, f.w * 0.5, 6, 0, 0, TAU); ctx.fill();
 
-    // body
-    const bob = Math.sin(f.animTime * (f.state === "run" ? 18 : 6)) * (f.onGround ? 2 : 0);
-    ctx.translate(cx, top + f.h / 2 + bob);
-    ctx.scale(f.facing, 1);
+    if (!drawBodySprite(f)) {
+      // fallback procedural body while the full-body atlas is loading
+      const bob = Math.sin(f.animTime * (f.state === "run" ? 18 : 6)) * (f.onGround ? 2 : 0);
+      ctx.translate(cx, top + f.h / 2 + bob);
+      ctx.scale(f.facing, 1);
 
-    // legs
-    ctx.strokeStyle = f.accent; ctx.lineWidth = 6; ctx.lineCap = "round";
-    const legSwing = f.onGround ? Math.sin(f.animTime * 16) * 6 : 5;
-    ctx.beginPath(); ctx.moveTo(-6, 12); ctx.lineTo(-10 - legSwing * 0.4, f.h / 2 - 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(6, 12); ctx.lineTo(10 + legSwing * 0.4, f.h / 2 - 2); ctx.stroke();
+      // legs
+      ctx.strokeStyle = f.accent; ctx.lineWidth = 6; ctx.lineCap = "round";
+      const legSwing = f.onGround ? Math.sin(f.animTime * 16) * 6 : 5;
+      ctx.beginPath(); ctx.moveTo(-6, 12); ctx.lineTo(-10 - legSwing * 0.4, f.h / 2 - 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(6, 12); ctx.lineTo(10 + legSwing * 0.4, f.h / 2 - 2); ctx.stroke();
 
-    // torso
-    ctx.fillStyle = f.color;
-    roundRect(ctx, -f.w / 2 + 4, -f.h / 2 + 14, f.w - 8, f.h - 22, 10);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 2; ctx.stroke();
+      // torso
+      ctx.fillStyle = f.color;
+      roundRect(ctx, -f.w / 2 + 4, -f.h / 2 + 14, f.w - 8, f.h - 22, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.35)"; ctx.lineWidth = 2; ctx.stroke();
 
-    // arm (attack pose)
-    ctx.strokeStyle = f.color; ctx.lineWidth = 7; ctx.lineCap = "round";
-    let armX = 12, armY = -2;
-    if (f.attack && f.attackKind !== "grab" && f.attackKind !== "counter") { armX = 26; armY = -10; }
-    ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(armX, armY); ctx.stroke();
+      // arm (attack pose)
+      ctx.strokeStyle = f.color; ctx.lineWidth = 7; ctx.lineCap = "round";
+      let armX = 12, armY = -2;
+      if (f.attack && f.attackKind !== "grab" && f.attackKind !== "counter") { armX = 26; armY = -10; }
+      ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(armX, armY); ctx.stroke();
 
-    // head
-    ctx.scale(f.facing, 1); // unflip for glyph
-    if (!drawPortrait(f, f.facing * 2, -f.h / 2 + 2, 38, { strokeColor: f.accent, lineWidth: 2 })) {
-      ctx.font = "30px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(f.glyph, f.facing * 2, -f.h / 2 + 2);
+      // head
+      ctx.scale(f.facing, 1); // unflip for glyph
+      if (!drawPortrait(f, f.facing * 2, -f.h / 2 + 2, 38, { strokeColor: f.accent, lineWidth: 2 })) {
+        ctx.font = "30px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(f.glyph, f.facing * 2, -f.h / 2 + 2);
+      }
     }
 
     ctx.restore();
 
-    // attack arc
-    if (f.attack && activeHitboxes(f).length) {
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = f.attackKind && f.attackKind.includes("smash") ? C.red : C.yellow;
-      for (const b of activeHitboxes(f)) {
-        ctx.beginPath(); ctx.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, TAU); ctx.fill();
-      }
-      ctx.restore();
-    }
+    drawAttackFx(f);
 
     // shield bubble
     if (f.shielding) {

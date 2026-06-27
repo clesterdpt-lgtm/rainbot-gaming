@@ -157,6 +157,12 @@
   const DOOR = 33;       // closed (solid)
   const DOOR_OPEN = 34;  // open (passable)
   const CHEST_SLOTS = 18;
+  // Homestead: furnace + crop farming
+  const FURNACE = 35;
+  const FARMLAND = 36;
+  const CROP_1 = 37;     // wheat seedling
+  const CROP_2 = 38;     // wheat growing
+  const CROP_3 = 39;     // wheat ripe (harvestable)
 
   // Light levels for craftable lamps
   const GLOWSTONE_LIGHT = 13;
@@ -191,6 +197,12 @@
   const SWORD_RIZZ = 129;
   const PICK_SIGMA = 130;
   const AXE_SIGMA = 131;
+  // Homestead items
+  const CHARCOAL = 132;     // renewable fuel from smelting logs
+  const HOE_WOOD = 133;     // tills soil into farmland
+  const WHEAT_SEEDS = 134;  // plantable on farmland
+  const RAW_MEAT = 135;     // dropped by friendlies
+  const COOKED_MEAT = 136;  // smelted raw meat
 
   const DEF = {};
   function def(code, d) {
@@ -235,6 +247,11 @@
   def(BED, { name: "Sigma Bed", kind: "block", solid: false, hardness: 0.3, drop: BED, color: "#d94f6a", decor: true, placeable: true });
   def(DOOR, { name: "Toilet Door", kind: "block", solid: true, hardness: 0.6, best: "axe", drop: DOOR, color: "#b98245", decor: true, placeable: true });
   def(DOOR_OPEN, { name: "Toilet Door", kind: "block", solid: false, hardness: 0.6, best: "axe", drop: DOOR, color: "#b98245", decor: true });
+  def(FURNACE, { name: "Ohio Furnace", kind: "block", solid: true, hardness: 1.5, needTool: "pick", drop: FURNACE, color: "#6e7078", decor: true, placeable: true });
+  def(FARMLAND, { name: "Tilled Soil", kind: "block", solid: true, hardness: 0.5, drop: DIRT, color: "#5a3a1e" });
+  def(CROP_1, { name: "Wheat Sprout", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#7bd24a", decor: true });
+  def(CROP_2, { name: "Growing Wheat", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#aacb46", decor: true });
+  def(CROP_3, { name: "Ripe Wheat", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#e7c65a", decor: true });
 
   def(STICK, { name: "Ohio Stick", kind: "item", color: "#9a672f" });
   def(COAL, { name: "Gyatt Coal", kind: "item", color: "#252631" });
@@ -268,17 +285,40 @@
   def(PICK_SIGMA, { name: "Sigma Pickaxe", kind: "item", stack: 1, tool: { type: "pick", tier: 4, mult: 9 }, color: "#4beaff" });
   def(AXE_SIGMA, { name: "Sigma Axe", kind: "item", stack: 1, tool: { type: "axe", tier: 4, mult: 9 }, color: "#4beaff" });
 
+  // Homestead items
+  def(CHARCOAL, { name: "Charcoal", kind: "item", stack: 64, color: "#3a3b46" });
+  def(HOE_WOOD, { name: "Ohio Hoe", kind: "item", stack: 1, tool: { type: "hoe", tier: 1, mult: 1 }, color: "#b98245" });
+  def(WHEAT_SEEDS, { name: "Wheat Seeds", kind: "item", stack: 64, color: "#bcd66a" });
+  def(RAW_MEAT, { name: "Raw Drumstick", kind: "item", stack: 16, color: "#e88a86", food: { heal: 2, msg: "Ate it raw (ugh)" } });
+  def(COOKED_MEAT, { name: "Skibidi Drumstick", kind: "item", stack: 16, color: "#c4733a", food: { heal: 14, msg: "Ate a Skibidi Drumstick" } });
+
+  // Smelting recipes: input code -> { out, time, count }. Fuel is consumed separately.
+  const SMELTING = {
+    [SAND]: { out: CRYSTAL_GLASS, time: 2.2 },
+    [GLOW_SHROOM]: { out: COOKED_SHROOM, time: 2.5 },
+    [RAW_MEAT]: { out: COOKED_MEAT, time: 3.0 },
+    [LOG]: { out: CHARCOAL, time: 3.4 },
+    [STONE]: { out: STONE_BRICK, time: 2.6 },
+    [COAL_ORE]: { out: COAL, time: 2.4 },
+  };
+  // Fuel item -> seconds of burn it provides.
+  const FUELS = {
+    [COAL]: 8, [CHARCOAL]: 8, [COAL_BLOCK]: 74, [LOG]: 2.6, [PLANKS]: 1.4, [STICK]: 0.6,
+  };
+
   const RECIPES = [
     // --- Basics (no bench needed) ---
     { cat: "Basics", out: { code: PLANKS, n: 4 }, in: [[LOG, 1]], table: false },
     { cat: "Basics", out: { code: STICK, n: 4 }, in: [[PLANKS, 2]], table: false },
     { cat: "Basics", out: { code: TABLE, n: 1 }, in: [[PLANKS, 4]], table: false },
     { cat: "Basics", out: { code: TORCH, n: 4 }, in: [[COAL, 1], [STICK, 1]], table: false },
+    { cat: "Basics", out: { code: TORCH, n: 4 }, in: [[CHARCOAL, 1], [STICK, 1]], table: false },
 
     // --- Tools & Weapons ---
     { cat: "Tools", out: { code: PICK_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
     { cat: "Tools", out: { code: AXE_WOOD, n: 1 }, in: [[PLANKS, 3], [STICK, 2]], table: true },
     { cat: "Tools", out: { code: SWORD_WOOD, n: 1 }, in: [[PLANKS, 2], [STICK, 1]], table: true },
+    { cat: "Tools", out: { code: HOE_WOOD, n: 1 }, in: [[PLANKS, 2], [STICK, 2]], table: true },
     { cat: "Tools", out: { code: PICK_STONE, n: 1 }, in: [[STONE, 3], [STICK, 2]], table: true },
     { cat: "Tools", out: { code: AXE_STONE, n: 1 }, in: [[STONE, 3], [STICK, 2]], table: true },
     { cat: "Tools", out: { code: SWORD_STONE, n: 1 }, in: [[STONE, 2], [STICK, 1]], table: true },
@@ -291,7 +331,6 @@
 
     // --- Light & Build ---
     { cat: "Light & Build", out: { code: STONE_BRICK, n: 4 }, in: [[STONE, 4]], table: true },
-    { cat: "Light & Build", out: { code: CRYSTAL_GLASS, n: 4 }, in: [[SAND, 4], [COAL, 1]], table: true },
     { cat: "Light & Build", out: { code: GLOWSTONE, n: 2 }, in: [[GLOW_SHROOM, 2], [RIZZ, 1]], table: true },
     { cat: "Light & Build", out: { code: SIGMA_LANTERN, n: 2 }, in: [[SIGMA, 1], [STICK, 2], [COAL, 1]], table: true },
     { cat: "Light & Build", out: { code: COAL_BLOCK, n: 1 }, in: [[COAL, 9]], table: true },
@@ -300,14 +339,14 @@
 
     // --- Food (cook at the Crafting Toilet) ---
     { cat: "Food", out: { code: BREAD, n: 1 }, in: [[WHEAT, 3]], table: true },
-    { cat: "Food", out: { code: COOKED_SHROOM, n: 1 }, in: [[GLOW_SHROOM, 1], [COAL, 1]], table: true },
-    { cat: "Food", out: { code: OHIO_BURGER, n: 1 }, in: [[BREAD, 2], [GLOW_SHROOM, 1]], table: true },
+    { cat: "Food", out: { code: OHIO_BURGER, n: 1 }, in: [[BREAD, 2], [COOKED_MEAT, 1]], table: true },
     { cat: "Food", out: { code: SHROOM_STEW, n: 1 }, in: [[GLOW_SHROOM, 3], [COAL, 1]], table: true },
     { cat: "Food", out: { code: SIGMA_BREW, n: 1 }, in: [[SIGMA, 1], [BERRY, 2]], table: true },
     { cat: "Food", out: { code: GRIMACE_SHAKE, n: 1 }, in: [[BERRY, 4], [RIZZ, 1]], table: true },
     { cat: "Food", out: { code: GOLDEN_APPLE, n: 1 }, in: [[FRIENDLY_FRUIT, 1], [RIZZ, 4]], table: true },
 
     // --- Home (base-building) ---
+    { cat: "Home", out: { code: FURNACE, n: 1 }, in: [[STONE, 8]], table: true },
     { cat: "Home", out: { code: CHEST, n: 1 }, in: [[PLANKS, 6]], table: true },
     { cat: "Home", out: { code: BED, n: 1 }, in: [[PLANKS, 3], [WHEAT, 3]], table: true },
     { cat: "Home", out: { code: DOOR, n: 1 }, in: [[PLANKS, 4]], table: true },
@@ -760,6 +799,9 @@
     chests: {},       // "x,y,z" -> array of CHEST_SLOTS item slots
     openChest: null,  // key of the chest currently open
     bedSpawn: null,   // {x,y,z} respawn point set by sleeping in a bed
+    furnaces: {},     // "x,y,z" -> { input, fuel, output, cook, burn, burnMax }
+    openFurnace: null,// key of the furnace currently open
+    cropTick: 0,      // accumulator for the crop-growth tick
   };
 
   const legacySaveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: SAVE_VERSION });
@@ -1658,6 +1700,7 @@
     const stillDoor = (prev === DOOR || prev === DOOR_OPEN) && (code === DOOR || code === DOOR_OPEN);
     if (facingFurniture && prev !== code && !stillDoor) delete state.toiletFacing[`${x},${y},${z}`];
     if (prev === CHEST && code !== CHEST) spillChest(x, y, z);
+    if (prev === FURNACE && code !== FURNACE) spillFurnace(x, y, z);
     if (DEF[prev].decor || DEF[code].decor || prev === WATER || code === WATER || prev === LAVA || code === LAVA) decorDirty = true;
   }
   function setFluidBlock(x, y, z, code) {
@@ -2589,6 +2632,8 @@
     if (code === LAVA) return TEX.ore;
     if (code === STONE_BRICK) return TEX.stone;
     if (code === COAL_BLOCK) return TEX.stone;
+    if (code === FURNACE) return TEX.stone;
+    if (code === FARMLAND) return TEX.dirt;
     if (code === GLOWSTONE || code === RIZZ_BLOCK || code === SIGMA_BLOCK) return TEX.ore;
     if (code === SIGMA_LANTERN || code === CRYSTAL_GLASS) return TEX.table;
     return TEX.stone;
@@ -2666,6 +2711,14 @@
       base = mortar ? cachedRgb("#54565f") : rock;
     } else if (code === COAL_BLOCK) {
       base = mixRgb(cachedRgb("#1c1d26"), cachedRgb("#34353f"), grain * 0.6 + blockGrain * 0.4);
+    } else if (code === FARMLAND) {
+      // Damp tilled soil: dark, with furrow rows raked across the top face.
+      if (topFace) {
+        const furrow = ((x + corner[0]) * 2) % 2 < 1 ? 0.12 : 0;
+        base = mixRgb(cachedRgb("#4a2f17"), cachedRgb("#6a431f"), grain * 0.4 + furrow);
+      } else {
+        base = mixRgb(cachedRgb("#5e3c20"), cachedRgb("#80542f"), grain * 0.55 + blockGrain * 0.25);
+      }
     } else if (code === GLOWSTONE) {
       const speck = grain < 0.4 ? 1 : 0.7;
       base = mixRgb(cachedRgb("#caa238"), cachedRgb("#fff0a8"), grain * 0.7);
@@ -2750,6 +2803,8 @@
               if (code === CHEST) { setDecorLight(x, y, z); pushChest(arr, x, y, z); }
               if (code === BED) { setDecorLight(x, y, z); pushBed(arr, x, y, z); }
               if (code === DOOR || code === DOOR_OPEN) { setDecorLight(x, y, z); pushDoor(arr, x, y, z, code === DOOR_OPEN); }
+              if (code === FURNACE) { setDecorLight(x, y, z); pushFurnace(arr, x, y, z); }
+              if (code === CROP_1 || code === CROP_2 || code === CROP_3) { setDecorLight(x, y, z); pushCrop(arr, x, y, z, code); }
             }
             pushAquaticDecor(arr, x, z);
           }
@@ -3261,6 +3316,34 @@
     box(0.12, 0.12, 0.015, 0.36, 0.3, 0.14, inset); // upper recessed panel
     box(0.12, 0.5, 0.015, 0.36, 0.36, 0.14, inset); // lower recessed panel
     box(0.82, 0.46, 0.0, 0.09, 0.12, 0.18, knob);   // handle
+  }
+  function pushFurnace(arr, x, y, z) {
+    const stone = cachedRgb("#6e7078");
+    const dark = cachedRgb("#3a3c44");
+    const turns = state.toiletFacing[`${x},${y},${z}`] | 0; // opening faces the placer (-Z)
+    const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
+    box(0.04, 0, 0.04, 0.92, 0.98, 0.92, stone);      // stone body
+    box(0.22, 0.1, 0.0, 0.56, 0.5, 0.06, dark);       // dark opening on the front
+    const f = state.furnaces[`${x},${y},${z}`];
+    if (f && f.burn > 0) {                              // glowing embers while lit
+      const saved = [dlR, dlG, dlB]; setDecorLightEmissive();
+      box(0.3, 0.12, 0.015, 0.4, 0.26, 0.05, cachedRgb("#ff7a1a"));
+      dlR = saved[0]; dlG = saved[1]; dlB = saved[2];
+    }
+    box(0.16, 0.86, 0.16, 0.68, 0.12, 0.68, dark);    // chimney cap
+  }
+  function pushCrop(arr, x, y, z, code) {
+    const stage = code === CROP_1 ? 0 : code === CROP_2 ? 1 : 2;
+    const h = [0.26, 0.5, 0.78][stage];
+    const col = code === CROP_1 ? cachedRgb("#7bd24a") : code === CROP_2 ? cachedRgb("#aacb46") : cachedRgb("#e7c65a");
+    const tip = code === CROP_3 ? cachedRgb("#f6e08a") : col;
+    // four little stalks in a row, taller and more golden as they ripen
+    for (let i = 0; i < 4; i++) {
+      const ox = 0.2 + (i % 2) * 0.42 + (hash2(x + i, z - i) - 0.5) * 0.08;
+      const oz = 0.24 + Math.floor(i / 2) * 0.4 + (hash2(x - i, z + i) - 0.5) * 0.08;
+      pushTinyBox(arr, x + ox, y, z + oz, 0.07, h, 0.07, col);
+      if (code === CROP_3) pushTinyBox(arr, x + ox - 0.015, y + h - 0.12, z + oz - 0.015, 0.1, 0.14, 0.1, tip); // wheat head
+    }
   }
   // Rotate a sub-box's footprint by `turns` quarter-turns (clockwise) around the
   // block centre, then emit it. lx/lz/w/d are local 0..1 coordinates.
@@ -4050,7 +4133,8 @@
       if (craftPanel) craftPanel.classList.remove("is-open");
       unlockPointer();
     } else {
-      state.openChest = null; // closing the bag also closes any open chest
+      state.openChest = null; // closing the bag also closes any open chest/furnace
+      state.openFurnace = null;
     }
     bagRenderKey = null;
     playSfx(state.bagOpen ? "bagOpen" : "bagClose");
@@ -4371,6 +4455,119 @@
     }
     decorDirty = true;
     playSfx && playSfx("place");
+  }
+
+  // --- Furnace / smelting ------------------------------------------------------
+  function furnaceState(key) {
+    if (!state.furnaces[key]) state.furnaces[key] = { input: null, fuel: null, output: null, cook: 0, burn: 0, burnMax: 0 };
+    return state.furnaces[key];
+  }
+  function toggleFurnaceAt(x, y, z) {
+    const key = chestKey(x, y, z);
+    if (state.openFurnace === key && state.bagOpen) { closeFurnace(); return; }
+    state.openChest = null;
+    state.openFurnace = key;
+    furnaceState(key);
+    state.crafting = false;
+    if (craftPanel) craftPanel.classList.remove("is-open");
+    state.bagOpen = true;
+    unlockPointer();
+    bagRenderKey = null;
+    renderBag();
+    playSfx("bagOpen");
+  }
+  function closeFurnace() {
+    state.openFurnace = null;
+    state.bagOpen = false;
+    bagRenderKey = null;
+    renderBag();
+    playSfx("bagClose");
+  }
+  // Route a clicked inventory stack into the open furnace's fuel or input slot.
+  function loadFurnace(area, idx) {
+    if (!state.openFurnace) return;
+    const f = furnaceState(state.openFurnace);
+    const list = area === "hotbar" ? state.hotbar : state.bag;
+    const slot = list[idx];
+    if (!slot) return;
+    // Smeltable items go to the input slot first (e.g. logs smelt to charcoal rather
+    // than being burnt as fuel); pure fuels go to the fuel slot.
+    const dest = SMELTING[slot.code] ? "input" : FUELS[slot.code] ? "fuel" : null;
+    if (!dest) { api.toast("That can't be smelted or burned", ""); return; }
+    if (f[dest] && f[dest].code !== slot.code) return; // slot occupied by another item
+    const cap = maxStack(slot.code);
+    if (!f[dest]) f[dest] = { code: slot.code, n: 0 };
+    const add = Math.min(slot.n, cap - f[dest].n);
+    f[dest].n += add; slot.n -= add;
+    if (slot.n <= 0) list[idx] = null;
+    bagRenderKey = null; updateHud();
+  }
+  function takeFurnace(which) {
+    if (!state.openFurnace) return;
+    const f = furnaceState(state.openFurnace);
+    if (!f[which]) return;
+    giveItem(f[which].code, f[which].n);
+    f[which] = null;
+    bagRenderKey = null; updateHud();
+  }
+  function spillFurnace(x, y, z) {
+    const key = chestKey(x, y, z);
+    const f = state.furnaces[key];
+    if (f) { ["input", "fuel", "output"].forEach((s) => { if (f[s]) giveItem(f[s].code, f[s].n); }); delete state.furnaces[key]; }
+    if (state.openFurnace === key) closeFurnace();
+  }
+  function updateFurnaces(dt) {
+    let openChanged = false;
+    for (const key in state.furnaces) {
+      const f = state.furnaces[key];
+      const recipe = f.input ? SMELTING[f.input.code] : null;
+      const roomForOut = recipe && (!f.output || (f.output.code === recipe.out && f.output.n < maxStack(recipe.out)));
+      if (f.burn > 0) f.burn = Math.max(0, f.burn - dt);
+      // Ignite a fresh fuel only when there is something to smelt.
+      if (f.burn <= 0 && recipe && roomForOut && f.fuel && FUELS[f.fuel.code]) {
+        f.burnMax = FUELS[f.fuel.code];
+        f.burn = f.burnMax;
+        f.fuel.n -= 1; if (f.fuel.n <= 0) f.fuel = null;
+      }
+      if (f.burn > 0 && recipe && roomForOut) {
+        f.cook += dt;
+        if (f.cook >= recipe.time) {
+          f.cook = 0;
+          f.input.n -= 1; if (f.input.n <= 0) f.input = null;
+          if (f.output) f.output.n += 1; else f.output = { code: recipe.out, n: 1 };
+        }
+        openChanged = true;
+      } else if (f.cook > 0) {
+        f.cook = Math.max(0, f.cook - dt * 2);
+        openChanged = true;
+      }
+    }
+    if (openChanged && state.openFurnace) bagRenderKey = null;
+  }
+
+  // --- Crop farming ------------------------------------------------------------
+  function updateCrops(dt) {
+    state.cropTick += dt;
+    if (state.cropTick < 1.8) return;
+    state.cropTick = 0;
+    const px = Math.floor(state.player.x), pz = Math.floor(state.player.z), R = 30;
+    const growChance = isNight() ? 0.12 : 0.28;
+    const z0 = Math.max(1, pz - R), z1 = Math.min(WORLD_Z - 2, pz + R);
+    const x0 = Math.max(1, px - R), x1 = Math.min(WORLD_X - 2, px + R);
+    let grew = false;
+    for (let z = z0; z <= z1; z++) {
+      for (let x = x0; x <= x1; x++) {
+        const fy = state.surface[surfaceIndex(x, z)];
+        const c = getBlock(x, fy + 1, z);
+        if ((c !== CROP_1 && c !== CROP_2) || getBlock(x, fy, z) !== FARMLAND) continue;
+        if (Math.random() < growChance) { setBlock(x, fy + 1, z, c === CROP_1 ? CROP_2 : CROP_3, true, false); grew = true; }
+      }
+    }
+    if (grew) decorDirty = true;
+  }
+  function harvestCrop(x, y, z, code) {
+    if (code === CROP_3) { giveItem(WHEAT, 1 + (hash3(x, y, z) < 0.5 ? 1 : 0)); giveItem(WHEAT_SEEDS, 1); }
+    else giveItem(WHEAT_SEEDS, 1); // immature crop just returns a seed
   }
   function hurtPlayer(dmg) {
     const p = state.player;
@@ -5058,6 +5255,9 @@
     const drop = clamp(count, FRIENDLY_DROP_MIN, 5);
     if (drop <= 0) return;
     giveItem(FRIENDLY_FRUIT, drop);
+    // Sometimes they also drop a raw drumstick to cook at the furnace.
+    const meat = 1 + Math.floor(hash2(friendly.z, friendly.x) * 2);
+    if (hash2(friendly.x + 7, friendly.z - 3) < 0.6) giveItem(RAW_MEAT, meat);
     spawnBurst(friendly.x + 0.1, friendly.y + 0.55, friendly.z + 0.1, cachedRgb("#ff6fa8"), 6 + drop * 2, 2.2);
     api.toast(`Rizz Fruit x${drop} dropped`, "good");
   }
@@ -5211,9 +5411,10 @@
     state.mined++;
     addScore(1);
     if (d.drop !== null && canDrop(code)) giveItem(d.drop === undefined ? code : d.drop, 1);
-    // Foraging: greenery occasionally yields food ingredients.
+    if (code === CROP_1 || code === CROP_2 || code === CROP_3) harvestCrop(x, y, z, code);
+    // Foraging: greenery occasionally yields seeds/berries to kick off farming.
     const forage = hash3(x * 13 + 5, y * 17 - 3, z * 19 + 7);
-    if (code === TALL_GRASS && forage < 0.35) giveItem(WHEAT, 1);
+    if (code === TALL_GRASS && forage < 0.4) giveItem(WHEAT_SEEDS, 1);
     else if (code === LEAVES && forage < 0.12) giveItem(BERRY, 1);
     api.toast(`Mined ${d.name}`, "");
   }
@@ -5229,6 +5430,22 @@
       if (aimed === CHEST) { toggleChestAt(t.x, t.y, t.z); state.placeCd = 0.24; state.input.place = false; return; }
       if (aimed === BED) { sleepInBed(t.x, t.y, t.z); state.placeCd = 0.3; state.input.place = false; return; }
       if (aimed === DOOR || aimed === DOOR_OPEN) { toggleDoor(t.x, t.y, t.z); state.placeCd = 0.22; state.input.place = false; return; }
+      if (aimed === FURNACE) { toggleFurnaceAt(t.x, t.y, t.z); state.placeCd = 0.24; state.input.place = false; return; }
+    }
+    // Farming: a hoe tills soil, seeds plant on tilled soil.
+    const held = selectedSlot();
+    if (t && t.hit && held) {
+      const heldDef = DEF[held.code];
+      const above = getBlock(t.x, t.y + 1, t.z);
+      if (heldDef.tool && heldDef.tool.type === "hoe" && (aimed === GRASS || aimed === DIRT) && above === AIR) {
+        setBlock(t.x, t.y, t.z, FARMLAND); playSfx("place"); triggerHeldSwing("gather");
+        state.placeCd = 0.25; state.input.place = false; return;
+      }
+      if (held.code === WHEAT_SEEDS && aimed === FARMLAND && above === AIR) {
+        setBlock(t.x, t.y + 1, t.z, CROP_1); decorDirty = true;
+        if (!state.creative) decrementSelectedSlot();
+        playSfx("place"); state.placeCd = 0.2; state.input.place = false; return;
+      }
     }
     // Eating (when holding food and not aiming at an interactive block).
     if (isFood(selectedSlot() && selectedSlot().code)) {
@@ -5883,40 +6100,65 @@
     return " is-item";
   }
   function slotsKey(slots) { return slots.map((slot) => slot ? `${slot.code}:${slot.n}` : "-").join(","); }
+  function furnaceKeyStr(f) { return f ? `${slotsKey([f.input, f.fuel, f.output])}|${(f.burn > 0 ? 1 : 0)}|${Math.round(f.cook * 4)}` : ""; }
   function renderBag() {
     if (!ui.bagPanel) return;
     const chest = state.openChest ? chestSlots(state.openChest) : null;
+    const furnace = state.openFurnace ? furnaceState(state.openFurnace) : null;
     const key = state.bagOpen
-      ? `${state.selected}|${state.openChest || ""}|${slotsKey(state.hotbar)}|${slotsKey(state.bag)}|${chest ? slotsKey(chest) : ""}`
+      ? `${state.selected}|${state.openChest || ""}|${state.openFurnace || ""}|${slotsKey(state.hotbar)}|${slotsKey(state.bag)}|${chest ? slotsKey(chest) : ""}|${furnaceKeyStr(furnace)}`
       : "closed";
     ui.bagPanel.classList.toggle("is-open", state.bagOpen);
-    ui.bagPanel.classList.toggle("is-chest", !!chest);
+    ui.bagPanel.classList.toggle("is-chest", !!(chest || furnace));
     if (key === bagRenderKey) return;
     bagRenderKey = key;
     if (!state.bagOpen) {
       ui.bagPanel.innerHTML = "";
       return;
     }
-    const chestHtml = chest ? `
-      <div class="rizz3d-bag-label">Rizz Chest — click to take</div>
-      <div class="rizz3d-bag-grid rizz3d-bag-chest">
-        ${chest.map((slot, i) => bagSlotHtml(slot, i, `data-chest-slot="${i}"`, false, "Chest")).join("")}
-      </div>` : "";
-    const helpLine = chest
-      ? "Click chest items to take them; click your items to store them."
-      : "Click a bag item to swap it into the selected action slot.";
+    let stationHtml = "";
+    let title = "Bag";
+    let helpLine = "Click a bag item to swap it into the selected action slot.";
+    if (chest) {
+      title = "Rizz Chest";
+      helpLine = "Click chest items to take them; click your items to store them.";
+      stationHtml = `
+        <div class="rizz3d-bag-label">Rizz Chest — click to take</div>
+        <div class="rizz3d-bag-grid rizz3d-bag-chest">
+          ${chest.map((slot, i) => bagSlotHtml(slot, i, `data-chest-slot="${i}"`, false, "Chest")).join("")}
+        </div>`;
+    } else if (furnace) {
+      title = "Ohio Furnace";
+      helpLine = "Click your items to add ore/food or fuel; click a furnace slot to take it out.";
+      const recipe = furnace.input ? SMELTING[furnace.input.code] : null;
+      const pct = recipe ? Math.round(clamp(furnace.cook / recipe.time, 0, 1) * 100) : 0;
+      stationHtml = `
+        <div class="rizz3d-furnace">
+          <div class="rizz3d-furnace__col">
+            <span class="rizz3d-furnace__lab">Smelt</span>
+            ${bagSlotHtml(furnace.input, 0, `data-furnace-slot="input"`, false, "Input")}
+            <span class="rizz3d-furnace__lab">Fuel ${furnace.burn > 0 ? "🔥" : ""}</span>
+            ${bagSlotHtml(furnace.fuel, 0, `data-furnace-slot="fuel"`, false, "Fuel")}
+          </div>
+          <div class="rizz3d-furnace__arrow"><span style="width:${pct}%"></span></div>
+          <div class="rizz3d-furnace__col">
+            <span class="rizz3d-furnace__lab">Output</span>
+            ${bagSlotHtml(furnace.output, 0, `data-furnace-slot="output"`, false, "Output")}
+          </div>
+        </div>`;
+    }
     ui.bagPanel.innerHTML = `
       <div class="rizz3d-bag-head">
-        <strong>${chest ? "Rizz Chest" : "Bag"}</strong>
+        <strong>${title}</strong>
         <span>${helpLine}</span>
       </div>
       <div class="rizz3d-bag-hover" data-bag-hover>Hover a slot to inspect it.</div>
-      ${chestHtml}
-      <div class="rizz3d-bag-label">Action bar${chest ? " — click to store" : ""}</div>
+      ${stationHtml}
+      <div class="rizz3d-bag-label">Action bar${(chest || furnace) ? " — click to load" : ""}</div>
       <div class="rizz3d-bag-hotbar">
         ${state.hotbar.map((slot, i) => bagSlotHtml(slot, i, `data-bag-hotbar="${i}"`, i === state.selected, "Action")).join("")}
       </div>
-      <div class="rizz3d-bag-label">Bag storage${chest ? " — click to store" : ""}</div>
+      <div class="rizz3d-bag-label">Bag storage${(chest || furnace) ? " — click to load" : ""}</div>
       <div class="rizz3d-bag-grid">
         ${state.bag.map((slot, i) => bagSlotHtml(slot, i, `data-bag-slot="${i}"`, false, "Bag")).join("")}
       </div>
@@ -5957,6 +6199,10 @@
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
       .rizz3d-bag-hover{min-height:24px;margin:6px 0 9px;padding:6px 8px;border:1px solid rgba(67,230,255,.22);border-radius:6px;background:rgba(67,230,255,.08);color:#fff;font:900 10px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}.rizz3d-bag-chest{grid-template-rows:repeat(2,32px)}.rizz3d-bag-panel.is-chest{border-color:rgba(255,212,59,.4)}
+      .rizz3d-furnace{display:flex;align-items:center;gap:10px;margin:6px 0 10px;padding:8px;border:1px solid rgba(255,212,59,.22);border-radius:8px;background:rgba(255,150,40,.08)}
+      .rizz3d-furnace__col{display:grid;gap:3px;justify-items:center}
+      .rizz3d-furnace__lab{color:rgba(255,255,255,.7);font:900 8px var(--font-mono);text-transform:uppercase}
+      .rizz3d-furnace__arrow{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}.rizz3d-furnace__arrow span{display:block;height:100%;background:linear-gradient(90deg,#ff7a1a,#ffd75a)}
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
       .rizz3d-mobile-controls{display:none;position:absolute;inset:0;z-index:9;pointer-events:none;touch-action:none}
@@ -6018,10 +6264,13 @@
       primeAudio();
       const chestButton = event.target.closest("[data-chest-slot]");
       if (chestButton) { withdrawFromChest(Number(chestButton.dataset.chestSlot)); return; }
+      const furnaceButton = event.target.closest("[data-furnace-slot]");
+      if (furnaceButton) { takeFurnace(furnaceButton.dataset.furnaceSlot); return; }
       const hotbarButton = event.target.closest("[data-bag-hotbar]");
       if (hotbarButton) {
         const i = Number(hotbarButton.dataset.bagHotbar);
         if (state.openChest) depositToChest("hotbar", i);
+        else if (state.openFurnace) loadFurnace("hotbar", i);
         else setSelectedSlot(i);
         return;
       }
@@ -6029,6 +6278,7 @@
       if (bagButton) {
         const i = Number(bagButton.dataset.bagSlot);
         if (state.openChest) depositToChest("bag", i);
+        else if (state.openFurnace) loadFurnace("bag", i);
         else swapBagSlotWithHotbar(i);
         updateHud();
       }
@@ -6135,6 +6385,9 @@
     state.chests = {};
     state.openChest = null;
     state.bedSpawn = null;
+    state.furnaces = {};
+    state.openFurnace = null;
+    state.cropTick = 0;
     initHotbar();
     generateWorld(seed);
     spawnPlayer();
@@ -6201,6 +6454,7 @@
       toiletFacing: { ...state.toiletFacing },
       chests: state.chests,
       bedSpawn: state.bedSpawn,
+      furnaces: state.furnaces,
     };
   }
   function restoreGame(saved) {
@@ -6214,7 +6468,10 @@
     state.toiletFacing = (data.toiletFacing && typeof data.toiletFacing === "object") ? { ...data.toiletFacing } : {};
     state.chests = (data.chests && typeof data.chests === "object") ? data.chests : {};
     state.bedSpawn = (data.bedSpawn && typeof data.bedSpawn === "object") ? data.bedSpawn : null;
+    state.furnaces = (data.furnaces && typeof data.furnaces === "object") ? data.furnaces : {};
     state.openChest = null;
+    state.openFurnace = null;
+    state.cropTick = 0;
     for (const [key, code] of state.edits.entries()) {
       const [x, y, z] = key.split(",").map(Number);
       if (inWorld(x, y, z)) state.world[index(x, y, z)] = code;
@@ -6274,6 +6531,8 @@
       updateTarget();
       updateMining(dt);
       updatePlacing(dt);
+      updateFurnaces(dt);
+      updateCrops(dt);
       updateFluidSimulation(dt);
       flushFluidChunkRebuilds();
       if (state.attackCd > 0) state.attackCd -= dt;
@@ -6766,5 +7025,11 @@
     sleep(x, y, z) { sleepInBed(x | 0, y | 0, z | 0); },
     toggleDoorAt(x, y, z) { toggleDoor(x | 0, y | 0, z | 0); },
     snapshotData() { return snapshot(); },
+    openFurnace(x, y, z) { toggleFurnaceAt(x | 0, y | 0, z | 0); },
+    furnaceAt(x, y, z) { return state.furnaces[chestKey(x | 0, y | 0, z | 0)] || null; },
+    furnaceLoad(area, i) { loadFurnace(area, i); },
+    furnaceTake(which) { takeFurnace(which); },
+    tickFurnaces(dt) { updateFurnaces(dt); },
+    tickCrops(dt) { state.cropTick = 99; updateCrops(dt); },
   };
 })();

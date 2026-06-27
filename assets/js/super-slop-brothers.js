@@ -333,6 +333,7 @@
     fighters: [],
     entities: [],
     particles: [],
+    impacts: [],
     floaters: [],
     hazard: null,
     time: 0,
@@ -441,6 +442,8 @@
       dodgeTimer: 0,
       dodgeKind: null,
       dodgeDir: 0,
+      inputBuffer: { jump: 0, attack: 0, special: 0, grab: 0 },
+      coyoteTimer: 0,
       invuln: 0.5,
       specialCd: 0,
       recoveryUsed: false,
@@ -457,6 +460,8 @@
       grabTimer: 0,
       lastHitBy: -1,
       lastHitTime: 0,
+      comboHits: 0,
+      comboTimer: -99,
       kos: 0,
       falls: 0,
       facingFlash: 0,
@@ -601,6 +606,7 @@
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) clearHumanInput();
   });
+  window.addEventListener("blur", clearHumanInput);
 
   function noteActionPress(action) {
     if (action !== "attack" && action !== "special") return;
@@ -1136,6 +1142,8 @@
   //  FIGHTER UPDATE / PHYSICS
   // ============================================================
   const GRAV = 1.0; // multiplier already baked into per-fighter fall
+  const INPUT_BUFFER_TIME = 0.12;
+  const COYOTE_TIME = 0.09;
 
   function updateFighter(f, dt) {
     if (f.hidden) return;
@@ -1159,6 +1167,14 @@
     if (f.reflectTimer > 0) f.reflectTimer -= dt;
     if (f.counterTimer > 0) f.counterTimer -= dt;
     if (f.slipping > 0) f.slipping -= dt;
+    if (f.inputBuffer) {
+      f.inputBuffer.jump = Math.max(0, f.inputBuffer.jump - dt);
+      f.inputBuffer.attack = Math.max(0, f.inputBuffer.attack - dt);
+      f.inputBuffer.special = Math.max(0, f.inputBuffer.special - dt);
+      f.inputBuffer.grab = Math.max(0, f.inputBuffer.grab - dt);
+    }
+    if (f.onGround) f.coyoteTimer = COYOTE_TIME;
+    else f.coyoteTimer = Math.max(0, f.coyoteTimer - dt);
 
     // respawn handling
     if (f.respawnTimer > 0) {
@@ -1168,6 +1184,8 @@
         f.x = W / 2 + (f.slot - 1.5) * 48; f.y = 96; f.vx = 0; f.vy = 0;
         f.damage = 0; f.state = "fall"; f.invuln = 1.4; f.hitstun = 0;
         f.jumps = 2; f.recoveryUsed = false; f.dodgeKind = null; f.dodgeDir = 0;
+        f.inputBuffer = { jump: 0, attack: 0, special: 0, grab: 0 };
+        f.coyoteTimer = 0; f.comboHits = 0; f.comboTimer = -99;
       } else {
         return;
       }
@@ -1181,6 +1199,10 @@
     }
 
     const c = f.control;
+    if (c.pJump) f.inputBuffer.jump = INPUT_BUFFER_TIME;
+    if (c.pAttack) f.inputBuffer.attack = INPUT_BUFFER_TIME;
+    if (c.pSpecial) f.inputBuffer.special = INPUT_BUFFER_TIME;
+    if (c.pGrab) f.inputBuffer.grab = INPUT_BUFFER_TIME;
 
     // ---- ledge hang ----
     if (f.state === "ledge") {
@@ -1240,19 +1262,25 @@
 
     // ---- action inputs ----
     if (canMove && !f.shielding) {
-      if (c.pGrab && f.onGround) tryGrab(f);
-      else if (c.pAttack) startAttack(f, c);
-      else if (c.pSpecial) performSpecial(f, c);
+      if (f.inputBuffer.grab > 0 && f.onGround) { tryGrab(f); f.inputBuffer.grab = 0; }
+      else if (f.inputBuffer.attack > 0) { startAttack(f, c); f.inputBuffer.attack = 0; }
+      else if (f.inputBuffer.special > 0 && f.specialCd <= 0) { performSpecial(f, c); f.inputBuffer.special = 0; }
     }
     if (!f.onGround && !f.attack && f.hitstun <= 0) {
-      if (c.pAttack) startAttack(f, c);
-      else if (c.pSpecial) performSpecial(f, c);
+      if (f.inputBuffer.attack > 0) { startAttack(f, c); f.inputBuffer.attack = 0; }
+      else if (f.inputBuffer.special > 0 && f.specialCd <= 0) { performSpecial(f, c); f.inputBuffer.special = 0; }
     }
 
     // ---- jumping ----
-    if (canMove && !f.shielding && c.pJump) {
-      if (f.onGround) { f.vy = c.jumpHeld ? -f.def.jump : -f.def.hop; f.onGround = false; f.jumps = 1; f.state = "jump"; Sound.play("jump"); }
-      else if (f.jumps > 0) { f.vy = -f.def.doubleJump; f.jumps--; f.state = "jump"; Sound.play("jump"); burst(f.x, f.y - 8, f.accent, 8); }
+    if (canMove && !f.shielding && f.inputBuffer.jump > 0) {
+      if (f.onGround || f.coyoteTimer > 0) {
+        f.vy = c.jumpHeld ? -f.def.jump : -f.def.hop;
+        f.onGround = false; f.jumps = 1; f.coyoteTimer = 0; f.inputBuffer.jump = 0;
+        f.state = "jump"; Sound.play("jump");
+      } else if (f.jumps > 0) {
+        f.vy = -f.def.doubleJump; f.jumps--; f.coyoteTimer = 0; f.inputBuffer.jump = 0;
+        f.state = "jump"; Sound.play("jump"); burst(f.x, f.y - 8, f.accent, 8);
+      }
     }
 
     // ---- horizontal movement ----
@@ -1261,24 +1289,31 @@
       if (f.onGround) {
         if (c.x !== 0) {
           f.facing = sign(c.x);
-          // Snappy ground accel so input feels immediate (slippery on oil slicks).
-          const accel = f.slipping > 0 ? moveRate(0.08) : moveRate(0.72);
+          // Snappy ground accel, with oil acting like a small hazard instead of full ice.
+          const accel = f.slipping > 0 ? moveRate(0.38) : moveRate(0.84);
           f.vx = lerp(f.vx, c.x * f.def.run * STAGE_MOVE_SCALE, accel);
           f.state = Math.abs(f.vx) > f.def.walk * STAGE_MOVE_SCALE ? "run" : "walk";
         } else {
-          const fric = f.slipping > 0 ? moveRate(0.06) : moveRate(0.62);
+          const fric = f.slipping > 0 ? moveRate(0.48) : moveRate(0.88);
           f.vx = lerp(f.vx, 0, fric);
-          if (Math.abs(f.vx) < 10) { f.vx = 0; if (f.state === "walk" || f.state === "run") f.state = "idle"; }
+          if (Math.abs(f.vx) < 34) { f.vx = 0; if (f.state === "walk" || f.state === "run") f.state = "idle"; }
         }
       } else {
         if (c.x !== 0) {
           f.facing = f.attack ? f.facing : sign(c.x);
           // Responsive air drift.
           const airCap = f.def.air * STAGE_MOVE_SCALE;
-          f.vx = clamp(f.vx + c.x * airCap * 0.42 * dt * 60, -airCap, airCap);
+          f.vx = clamp(f.vx + c.x * airCap * 0.46 * dt * 60, -airCap, airCap);
         } else {
-          f.vx = lerp(f.vx, 0, moveRate(0.06));
+          f.vx = lerp(f.vx, 0, moveRate(0.16));
         }
+      }
+    } else if (!f.shielding && f.dodgeTimer <= 0 && f.hitstun <= 0) {
+      const moveRate = (rate) => 1 - Math.pow(1 - rate, dt * 60);
+      const lockedLunge = f.attack && f.attack.lunge && f.attack.t < f.attack.lungeTime;
+      if (!lockedLunge && c.x === 0) {
+        f.vx = lerp(f.vx, 0, moveRate(f.onGround ? 0.34 : 0.1));
+        if (f.onGround && Math.abs(f.vx) < 28) f.vx = 0;
       }
     }
 
@@ -1362,7 +1397,7 @@
       const standing = !wantsDrop && f.vy <= 40 && Math.abs(f.y - py) <= 6;
       if (landing || standing) {
         if (wantsDrop) continue; // drop through pass-through platforms
-        f.y = py; f.vy = 0; f.onGround = true; f.onPlatform = p; f.jumps = 2; f.recoveryUsed = false;
+        f.y = py; f.vy = 0; f.onGround = true; f.onPlatform = p; f.jumps = 2; f.recoveryUsed = false; f.coyoteTimer = COYOTE_TIME;
         if (f.state === "fall" || f.state === "jump" || f.state === "hit") {
           f.state = Math.abs(f.vx) > 12 ? "walk" : "idle";
         }
@@ -1560,6 +1595,7 @@
 
   function applyHit(attackerSlot, target, hit) {
     if (target.invuln > 0 && !hit.forceThrow) return;
+    const prevDamage = target.damage;
     target.damage = Math.min(999, target.damage + hit.dmg);
     const weight = target.def.weight;
     const launch = (hit.base + target.damage * hit.scale) * (1.55 / weight);
@@ -1568,18 +1604,30 @@
     target.vy = -Math.sin(a) * launch;
     if (hit.spike) target.vy = Math.abs(launch) * 0.7; // drive downward
     target.hitstun = clamp(launch * 0.00045, 0.08, 1.4);
-    target.hitlag = clamp(0.04 + hit.dmg * 0.004, 0.04, 0.14);
+    target.hitlag = clamp(0.04 + hit.dmg * 0.004 + launch * 0.00003, 0.045, 0.18);
     target.state = "hit";
     target.onGround = false;
     target.shielding = false;
     target.attack = null;
     target.lastHitBy = attackerSlot;
     target.lastHitTime = state.time;
-    if (attackerSlot >= 0) { const a2 = state.fighters.find((o) => o.slot === attackerSlot); if (a2) a2.hitlag = Math.max(a2.hitlag, target.hitlag * 0.7); }
+    const attacker = attackerSlot >= 0 ? state.fighters.find((o) => o.slot === attackerSlot) : null;
+    if (attacker) {
+      attacker.hitlag = Math.max(attacker.hitlag, target.hitlag * 0.72);
+      attacker.comboHits = state.time - attacker.comboTimer < 1.25 ? attacker.comboHits + 1 : 1;
+      attacker.comboTimer = state.time;
+      if (attacker.comboHits >= 2) {
+        pushFloater(attacker.x, attacker.y - attacker.h - 24, attacker.comboHits + " HIT!", attacker.accent, 20, 0.75);
+      }
+    }
     // fx
-    burst(hit.x, hit.y, launch > 1100 ? C.red : C.yellow, launch > 1100 ? 16 : 9, launch);
-    pushFloater(target.x, target.y - target.h - 6, Math.round(target.damage) + "%", launch > 1100 ? C.red : C.ink);
-    state.shake = Math.max(state.shake, clamp(launch / 250, 2, 12));
+    const heavy = launch > 1100;
+    const color = heavy ? C.red : launch > 780 ? C.yellow : C.ink;
+    burst(hit.x, hit.y, color, heavy ? 20 : 11, launch);
+    pushImpact(hit.x, hit.y, hit.angle, launch, color);
+    pushFloater(target.x, target.y - target.h - 6, Math.round(target.damage) + "%", color, heavy ? 22 : 16, heavy ? 0.95 : 0.8);
+    if (prevDamage < 100 && target.damage >= 100) pushFloater(target.x, target.y - target.h - 28, "DANGER!", C.red, 24, 1.0);
+    state.shake = Math.max(state.shake, clamp(launch / 220, 2.5, 15));
     Sound.play(launch > 1100 ? "smash" : "hit");
   }
 
@@ -1643,14 +1691,40 @@
       state.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, life: rand(0.3, 0.7), max: 0.7, color, r: rand(2, 5) });
     }
   }
-  function pushFloater(x, y, text, color) {
-    state.floaters.push({ x, y, text, color, life: 0.8, vy: -40 });
+  function pushImpact(x, y, angle, launch, color) {
+    const speed = clamp(launch, 360, 1500);
+    const a = rad(angle);
+    const size = clamp(launch / 22, 28, 74);
+    state.impacts.push({ x, y, angle, color, size, life: 0.22, max: 0.22, heavy: launch > 1100 });
+    for (let i = 0; i < 5; i++) {
+      const spread = rand(-0.32, 0.32);
+      const s = speed * rand(0.18, 0.34);
+      state.particles.push({
+        kind: "streak",
+        x,
+        y,
+        vx: Math.cos(a + spread) * s,
+        vy: -Math.sin(a + spread) * s,
+        life: 0.18,
+        max: 0.18,
+        color,
+        r: rand(10, 22),
+      });
+    }
+  }
+  function pushFloater(x, y, text, color, size = 16, life = 0.8) {
+    state.floaters.push({ x, y, text, color, size, life, max: life, vy: -40 });
   }
   function updateParticles(dt) {
     for (let i = state.particles.length - 1; i >= 0; i--) {
       const p = state.particles[i];
       p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 600 * dt; p.life -= dt;
       if (p.life <= 0) state.particles.splice(i, 1);
+    }
+    for (let i = state.impacts.length - 1; i >= 0; i--) {
+      const im = state.impacts[i];
+      im.life -= dt;
+      if (im.life <= 0) state.impacts.splice(i, 1);
     }
     for (let i = state.floaters.length - 1; i >= 0; i--) {
       const fl = state.floaters[i];
@@ -1729,6 +1803,7 @@
     if (state.hazard && state.hazard.draw) state.hazard.draw(ctx);
     drawEntities();
     for (const f of state.fighters) if (!f.hidden && f.respawnTimer <= 0) drawFighter(f);
+    drawImpacts();
     drawParticles();
     drawFloaters();
     ctx.restore();
@@ -2149,16 +2224,56 @@
     for (const p of state.particles) {
       ctx.save();
       ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
-      ctx.fillStyle = p.color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+      if (p.kind === "streak") {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, TAU); ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+  function drawImpacts() {
+    for (const im of state.impacts) {
+      const life = clamp(im.life / im.max, 0, 1);
+      const grow = 1 - life;
+      const a = rad(im.angle);
+      const r = im.size * (0.65 + grow * 0.7);
+      ctx.save();
+      ctx.globalAlpha = life;
+      ctx.translate(im.x, im.y);
+      ctx.rotate(-a);
+      ctx.strokeStyle = im.color;
+      ctx.lineWidth = im.heavy ? 7 : 5;
+      ctx.lineCap = "round";
+      ctx.shadowBlur = im.heavy ? 18 : 10;
+      ctx.shadowColor = im.color;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, -0.9, 0.9);
+      ctx.stroke();
+      ctx.strokeStyle = "#fff";
+      ctx.globalAlpha = life * 0.75;
+      ctx.lineWidth = im.heavy ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.25, 0);
+      ctx.lineTo(r * 0.95, 0);
+      ctx.stroke();
       ctx.restore();
     }
   }
   function drawFloaters() {
     for (const fl of state.floaters) {
       ctx.save();
-      ctx.globalAlpha = clamp(fl.life / 0.8, 0, 1);
-      ctx.fillStyle = fl.color; ctx.font = "bold 16px 'Bungee', sans-serif"; ctx.textAlign = "center";
+      ctx.globalAlpha = clamp(fl.life / (fl.max || 0.8), 0, 1);
+      ctx.fillStyle = fl.color; ctx.font = `bold ${fl.size || 16}px 'Bungee', sans-serif`; ctx.textAlign = "center";
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(5, 5, 12, 0.75)";
+      ctx.strokeText(fl.text, fl.x, fl.y);
       ctx.fillText(fl.text, fl.x, fl.y);
       ctx.restore();
     }
@@ -2307,6 +2422,7 @@
     state.paused = false;
     state.entities = [];
     state.particles = [];
+    state.impacts = [];
     state.floaters = [];
     state.p1Kos = 0;
     state.time = 0;

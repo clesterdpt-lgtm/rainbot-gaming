@@ -51,6 +51,37 @@
   const sign = (v) => (v < 0 ? -1 : v > 0 ? 1 : 0);
   const TAU = Math.PI * 2;
   const rad = (deg) => (deg * Math.PI) / 180;
+  const ART_VERSION = "20260627-generative-1";
+
+  function loadArt(name) {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = "../assets/img/super-slop-brothers/" + name + "?v=" + ART_VERSION;
+    return img;
+  }
+
+  const ART = {
+    stageAtlas: loadArt("stage-atlas.png"),
+    rosterAtlas: loadArt("roster-atlas.png"),
+  };
+
+  const STAGE_ART = {
+    rooftop: { col: 0, row: 0, pos: "0% 0%" },
+    hormuz: { col: 1, row: 0, pos: "100% 0%" },
+    subway: { col: 0, row: 1, pos: "0% 100%" },
+    mansion: { col: 1, row: 1, pos: "100% 100%" },
+  };
+
+  const FIGHTER_ART = {
+    rainbot: { col: 0, row: 0, pos: "0% 0%" },
+    gigachad: { col: 1, row: 0, pos: "100% 0%" },
+    mrfeast: { col: 0, row: 1, pos: "0% 50%" },
+    skibidi: { col: 1, row: 1, pos: "100% 50%" },
+    sigma: { col: 0, row: 2, pos: "0% 100%" },
+    slopbot: { col: 1, row: 2, pos: "100% 100%" },
+  };
+
+  const imageReady = (img) => img && img.complete && img.naturalWidth > 0;
 
   function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
@@ -1684,13 +1715,90 @@
     }
   }
 
+  function drawAtlasPanel(img, map, cols, rows, dx, dy, dw, dh, mode = "stretch") {
+    if (!imageReady(img) || !map) return false;
+    const cellW = img.naturalWidth / cols;
+    const cellH = img.naturalHeight / rows;
+    let sx = map.col * cellW;
+    let sy = map.row * cellH;
+    let sw = cellW;
+    let sh = cellH;
+    if (mode === "cover") {
+      const srcAspect = sw / sh;
+      const dstAspect = dw / dh;
+      if (srcAspect > dstAspect) {
+        const nextW = sh * dstAspect;
+        sx += (sw - nextW) / 2;
+        sw = nextW;
+      } else {
+        const nextH = sw / dstAspect;
+        sy += (sh - nextH) / 2;
+        sh = nextH;
+      }
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    return true;
+  }
+
+  function drawPortrait(f, x, y, size, opts = {}) {
+    const map = FIGHTER_ART[f.id];
+    if (!imageReady(ART.rosterAtlas) || !map) return false;
+    ctx.save();
+    const radius = opts.radius || size / 2;
+    roundRect(ctx, x - size / 2, y - size / 2, size, size, radius);
+    ctx.clip();
+    drawAtlasPanel(ART.rosterAtlas, map, 2, 3, x - size / 2, y - size / 2, size, size, "cover");
+    ctx.restore();
+
+    if (opts.stroke !== false) {
+      ctx.save();
+      ctx.strokeStyle = opts.strokeColor || f.color;
+      ctx.lineWidth = opts.lineWidth || 3;
+      roundRect(ctx, x - size / 2, y - size / 2, size, size, radius);
+      ctx.stroke();
+      ctx.restore();
+    }
+    return true;
+  }
+
   function drawBackground() {
     const stage = getStage();
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, stage.sky[0]); g.addColorStop(1, stage.sky[1]);
-    ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
+    ctx.fillStyle = g; ctx.fillRect(-140, -100, W + 280, H + 200);
+
+    const painted = drawAtlasPanel(
+      ART.stageAtlas,
+      STAGE_ART[stage.id],
+      2,
+      2,
+      -120,
+      -80,
+      W + 240,
+      H + 160,
+      "stretch",
+    );
+    if (painted) {
+      ctx.save();
+      ctx.globalAlpha = 0.23;
+      ctx.globalCompositeOperation = "multiply";
+      ctx.fillStyle = g;
+      ctx.fillRect(-140, -100, W + 280, H + 200);
+      ctx.restore();
+
+      ctx.save();
+      const vignette = ctx.createRadialGradient(W / 2, H * 0.46, 140, W / 2, H * 0.46, 760);
+      vignette.addColorStop(0, "rgba(255,255,255,0.04)");
+      vignette.addColorStop(0.66, "rgba(3,5,14,0.08)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.46)");
+      ctx.fillStyle = vignette;
+      ctx.fillRect(-140, -100, W + 280, H + 200);
+      ctx.restore();
+    }
+
     // parallax shapes per stage
     ctx.save();
+    ctx.globalAlpha = painted ? 0.42 : 1;
     if (stage.id === "rooftop") {
       ctx.fillStyle = "rgba(46,224,255,0.06)";
       for (let i = 0; i < 8; i++) { const bx = 40 + i * 160; ctx.fillRect(bx, 120 + (i % 3) * 44, 100, 430); }
@@ -1753,16 +1861,42 @@
     let edge = stage.id === "rooftop" ? C.cyan : stage.id === "hormuz" ? C.orange : stage.id === "subway" ? C.purple : C.green;
     if (stage.id === "hormuz" && p.solid) { top = "#4a4030"; face = "#2a2418"; }
     if (stage.id === "mansion" && p.solid) { top = "#2c5a36"; face = "#1c3a24"; }
-    ctx.fillStyle = face;
-    ctx.fillRect(px, py, p.w, p.h);
-    ctx.fillStyle = top;
-    ctx.fillRect(px, py, p.w, p.solid ? 8 : 6);
-    ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.globalAlpha = 0.7;
-    ctx.strokeRect(px + 0.5, py + 0.5, p.w - 1, (p.solid ? p.h : p.h) - 1);
+
+    const depth = p.solid ? p.h : Math.max(14, p.h);
+    ctx.shadowColor = edge;
+    ctx.shadowBlur = p.solid ? 18 : 10;
+    const faceGrad = ctx.createLinearGradient(0, py, 0, py + depth);
+    faceGrad.addColorStop(0, top);
+    faceGrad.addColorStop(0.18, face);
+    faceGrad.addColorStop(1, "rgba(7,9,19,0.96)");
+    ctx.fillStyle = faceGrad;
+    roundRect(ctx, px, py, p.w, depth, p.solid ? 12 : 8);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    const lip = p.solid ? 12 : 8;
+    const lipGrad = ctx.createLinearGradient(px, py, px + p.w, py);
+    lipGrad.addColorStop(0, edge);
+    lipGrad.addColorStop(0.45, top);
+    lipGrad.addColorStop(1, edge);
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = lipGrad;
+    roundRect(ctx, px + 2, py + 2, p.w - 4, lip, p.solid ? 8 : 5);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = "#fff";
+    for (let i = 0; i < p.w; i += 54) ctx.fillRect(px + i + 12, py + lip + 8, 22, 2);
+
+    ctx.globalAlpha = 0.8;
+    ctx.strokeStyle = edge; ctx.lineWidth = p.solid ? 3 : 2;
+    roundRect(ctx, px + 0.5, py + 0.5, p.w - 1, depth - 1, p.solid ? 12 : 8);
+    ctx.stroke();
     // ledge nubs on solid
     if (p.solid) {
       ctx.globalAlpha = 0.9; ctx.fillStyle = edge;
-      ctx.fillRect(px - 3, py, 4, 18); ctx.fillRect(px + p.w - 1, py, 4, 18);
+      roundRect(ctx, px - 6, py + 2, 8, 22, 4); ctx.fill();
+      roundRect(ctx, px + p.w - 2, py + 2, 8, 22, 4); ctx.fill();
     }
     ctx.restore();
   }
@@ -1827,8 +1961,10 @@
 
     // head
     ctx.scale(f.facing, 1); // unflip for glyph
-    ctx.font = "30px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(f.glyph, f.facing * 2, -f.h / 2 + 2);
+    if (!drawPortrait(f, f.facing * 2, -f.h / 2 + 2, 38, { strokeColor: f.accent, lineWidth: 2 })) {
+      ctx.font = "30px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(f.glyph, f.facing * 2, -f.h / 2 + 2);
+    }
 
     ctx.restore();
 
@@ -1913,11 +2049,14 @@
       ctx.fillStyle = "rgba(12,12,22,0.82)";
       roundRect(ctx, x, y0, panelW, 66, 10); ctx.fill();
       ctx.strokeStyle = f.color; ctx.lineWidth = 2; ctx.stroke();
-      // glyph + name
-      ctx.font = "22px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      ctx.fillText(f.glyph, x + 10, y0 + 18);
+      // portrait + name
+      if (!drawPortrait(f, x + 22, y0 + 22, 34, { strokeColor: f.color, lineWidth: 2 })) {
+        ctx.font = "22px sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+        ctx.fillText(f.glyph, x + 10, y0 + 18);
+      }
       ctx.fillStyle = f.color; ctx.font = "bold 11px 'Bungee', sans-serif";
-      ctx.fillText(f.def.short + (f.isCpu ? "" : " (YOU)"), x + 38, y0 + 16);
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(f.def.short + (f.isCpu ? "" : " (YOU)"), x + 44, y0 + 16);
       // damage %
       const pct = Math.round(f.damage);
       const dcol = pct < 60 ? C.ink : pct < 110 ? C.yellow : pct < 160 ? C.orange : C.red;
@@ -1967,17 +2106,24 @@
 
   function renderSelect() {
     state.best = api.getHighScore(GAME_ID) || 0;
-    const charCards = FIGHTERS.map((f) => `
+    const charCards = FIGHTERS.map((f) => {
+      const art = FIGHTER_ART[f.id] || { pos: "50% 50%" };
+      return `
       <button class="ssb-pick ssb-pick--char${settings.p1 === f.id ? " is-sel" : ""}" data-char="${f.id}" type="button" title="${f.blurb}">
-        <span class="ssb-pick__glyph" style="--c:${f.color}">${f.glyph}</span>
+        <span class="ssb-pick__avatar" style="--avatar-pos:${art.pos}; --c:${f.color}"><span>${f.glyph}</span></span>
         <span class="ssb-pick__name">${f.name}</span>
         <span class="ssb-pick__role">${f.blurb}</span>
-      </button>`).join("");
-    const stageCards = STAGES.map((s) => `
+      </button>`;
+    }).join("");
+    const stageCards = STAGES.map((s) => {
+      const art = STAGE_ART[s.id] || { pos: "50% 50%" };
+      return `
       <button class="ssb-pick ssb-pick--stage${settings.stage === s.id ? " is-sel" : ""}" data-stage="${s.id}" type="button">
+        <span class="ssb-pick__stage-art" style="--stage-pos:${art.pos}"></span>
         <span class="ssb-pick__name">${s.name}</span>
         <span class="ssb-pick__role">⚠ ${s.hazardName}</span>
-      </button>`).join("");
+      </button>`;
+    }).join("");
     const rivalBtns = [1, 2, 3].map((n) => `<button class="ssb-chip${settings.rivals === n ? " is-sel" : ""}" data-rivals="${n}" type="button">${n} CPU</button>`).join("");
     const stockBtns = [2, 3, 5].map((n) => `<button class="ssb-chip${settings.stocks === n ? " is-sel" : ""}" data-stocks="${n}" type="button">${n} stock</button>`).join("");
     const diffBtns = ["chill", "normal", "sweat"].map((d) => `<button class="ssb-chip${settings.difficulty === d ? " is-sel" : ""}" data-diff="${d}" type="button">${AI_LEVELS[d].label}</button>`).join("");

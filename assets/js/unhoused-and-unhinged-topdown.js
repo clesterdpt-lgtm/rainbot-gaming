@@ -436,6 +436,80 @@
     policeStation: { x: -40, z: -6.5 },
   };
 
+  const FAVORS = [
+    {
+      id: "busk-park-crowd",
+      name: "Pack Busk Park",
+      district: "Busk Park",
+      target: points.park,
+      kind: "act",
+      goal: 3,
+      minAudience: 4,
+      hud: "Busk Park crowd",
+      intro: "District Favor: draw three real crowds in Busk Park.",
+      reward: "Busk Park tipped heavy. +$8, heat cooled.",
+    },
+    {
+      id: "camp-row-supplies",
+      name: "Camp Supply Run",
+      district: "Camp Row",
+      target: points.camp,
+      kind: "pickup",
+      types: ["snack", "scrap"],
+      goal: 2,
+      hud: "Camp supplies",
+      intro: "District Favor: grab two snacks or scrap piles around Camp Row.",
+      reward: "Camp Row patched you up. Max health up.",
+    },
+    {
+      id: "tweeker-alley-traps",
+      name: "Alley Trap Prep",
+      district: "Tweeker Alley",
+      target: points.alley,
+      kind: "trap",
+      goal: 3,
+      hud: "Alley traps",
+      intro: "District Favor: drop three banana peels in Tweeker Alley before night.",
+      reward: "Alley traps armed. Tonight's wave thins out.",
+    },
+    {
+      id: "pawn-alley-tools",
+      name: "Pawn Alley Finds",
+      district: "Pawn Alley",
+      target: points.cache,
+      kind: "pickup",
+      types: ["scrap", "boombox", "sign", "chicken"],
+      goal: 2,
+      hud: "Pawn finds",
+      intro: "District Favor: scavenge two useful finds in Pawn Alley.",
+      reward: "Pawn Alley kicked loose spare props.",
+    },
+    {
+      id: "crosswalk-circus-bit",
+      name: "Crosswalk Circus",
+      district: "Crosswalk Circus",
+      target: points.busk,
+      kind: "act",
+      goal: 3,
+      minAudience: 2,
+      hud: "Crosswalk bits",
+      intro: "District Favor: land three sidewalk bits at Crosswalk Circus.",
+      reward: "Crosswalk Circus loved it. Cash up, heat down.",
+    },
+    {
+      id: "coupon-canyon-restock",
+      name: "Coupon Canyon Restock",
+      district: "Coupon Canyon",
+      target: points.kiosk,
+      kind: "pickup",
+      types: ["snack", "cone", "peel"],
+      goal: 3,
+      hud: "Coupon restock",
+      intro: "District Favor: restock three supplies in Coupon Canyon.",
+      reward: "Coupon Canyon doubled the coupons.",
+    },
+  ];
+
   const keys = Object.create(null);
   const mobileMove = { x: 0, z: 0 };
   const clock = new THREE.Clock();
@@ -525,6 +599,7 @@
     },
     tasks: {
       buskCash: 0,
+      nightRelief: 0,
     },
     cooldowns: {
       act: 0,
@@ -537,6 +612,7 @@
     waveTarget: 8,
     waveKills: 0,
     objective: "Earn $20 before nightfall",
+    favor: null,
     lastAudience: {
       watching: 0,
       panicked: 0,
@@ -2905,9 +2981,11 @@
     state.lastAudience = { watching: 0, panicked: 0, cash: 0, wanted: 0 };
     initBag();
     state.tasks.buskCash = 0;
+    state.tasks.nightRelief = 0;
     state.waveTarget = 8;
     state.waveKills = 0;
     state.objective = "Earn $20 before nightfall";
+    startFavorForCycle();
     Object.keys(state.cooldowns).forEach((key) => {
       state.cooldowns[key] = 0;
     });
@@ -3036,6 +3114,93 @@
 
   function activeItem() {
     return ITEMS[state.hotbar[state.activeSlot]] || ITEMS.fists;
+  }
+
+  function favorById(id) {
+    return FAVORS.find((favor) => favor.id === id) || null;
+  }
+
+  function activeFavor() {
+    if (!state.favor || state.favor.completed) return null;
+    return favorById(state.favor.id);
+  }
+
+  function startFavorForCycle(id = null) {
+    const favor = id ? favorById(id) : FAVORS[(Math.max(1, state.cycle) - 1) % FAVORS.length];
+    if (!favor || state.cycle > 3) {
+      state.favor = null;
+      return null;
+    }
+    state.favor = {
+      id: favor.id,
+      cycle: state.cycle,
+      progress: 0,
+      goal: favor.goal,
+      completed: false,
+    };
+    logLine(favor.intro);
+    return favor;
+  }
+
+  function favorProgressText() {
+    const favor = activeFavor();
+    if (!favor || !state.favor) return "";
+    return `Favor: ${favor.hud} ${state.favor.progress}/${favor.goal}`;
+  }
+
+  function grantFavorReward(favor) {
+    if (!favor) return;
+    if (favor.id === "busk-park-crowd") {
+      state.cash += 8;
+      state.wanted = clamp(state.wanted - 8, 0, 100);
+    } else if (favor.id === "camp-row-supplies") {
+      state.maxHealth = Math.min(130, state.maxHealth + 8);
+      state.health = clamp(state.health + 34, 0, state.maxHealth);
+    } else if (favor.id === "tweeker-alley-traps") {
+      state.tasks.nightRelief = Math.max(state.tasks.nightRelief || 0, 3);
+      addToBag("peel", 2);
+    } else if (favor.id === "pawn-alley-tools") {
+      state.cash += 4;
+      addToBag(choose(["boombox", "sign", "chicken"]), 1);
+    } else if (favor.id === "crosswalk-circus-bit") {
+      state.cash += 6;
+      state.wanted = clamp(state.wanted - 12, 0, 100);
+    } else if (favor.id === "coupon-canyon-restock") {
+      addToBag("cone", 3);
+      addToBag("peel", 2);
+      state.health = clamp(state.health + 12, 0, state.maxHealth);
+    }
+    refreshHotbar();
+    if (state.bagOpen) renderBag();
+  }
+
+  function completeFavor(favor) {
+    if (!favor || !state.favor || state.favor.completed) return;
+    state.favor.completed = true;
+    state.favor.progress = favor.goal;
+    grantFavorReward(favor);
+    logLine(`Favor complete: ${favor.reward}`);
+    addFloater("Favor complete!", player.x, player.z, "#ffd43b");
+    addPulse(player.x, player.z, 0xffd43b, 6.2, 0.7);
+  }
+
+  function progressFavor(kind, amount = 1, context = {}) {
+    const favor = activeFavor();
+    if (!favor || !state.favor) return false;
+    if (state.phase !== "day") return false;
+    if (favor.kind !== kind) return false;
+    const currentDistrict = districts.find((district) => pointInDistrict(player, district)) || state.district;
+    if (favor.district && currentDistrict.name !== favor.district) return false;
+    if (favor.types && !favor.types.includes(context.type)) return false;
+    if (favor.minAudience && (context.audienceCount || 0) < favor.minAudience) return false;
+    if (favor.kind === "trap" && context.itemId !== "peel") return false;
+
+    state.favor.progress = clamp(state.favor.progress + amount, 0, favor.goal);
+    addFloater(`${favor.hud} ${state.favor.progress}/${favor.goal}`, player.x, player.z, "#ffd43b");
+    if (state.favor.progress >= favor.goal) {
+      completeFavor(favor);
+    }
+    return true;
   }
 
   function ownsItem(id) {
@@ -3857,7 +4022,8 @@
     state.phase = "night";
     state.phaseTime = 0;
     state.waveKills = 0;
-    state.waveTarget = 7 + state.cycle * 4;
+    state.waveTarget = Math.max(5, 7 + state.cycle * 4 - (state.tasks.nightRelief || 0));
+    state.tasks.nightRelief = 0;
     state.objective = "Survive the Tweeker Zombie wave";
     state.wanted = clamp(state.wanted * 0.5, 8, 45);
     state.arrest = 0;
@@ -3877,6 +4043,7 @@
     zombies.splice(0).forEach((zombie) => actorGroup.remove(zombie.mesh));
     spawnDayPickups();
     logLine(`Dawn cycle ${state.cycle}. The block resets, mostly.`);
+    startFavorForCycle();
     if (state.cycle > 3) {
       endGame("BLOCK LEGEND", "Three cycles survived. This is the new top-down baseline.");
     }
@@ -4849,6 +5016,7 @@
       refreshHotbar();
       if (state.bagOpen) renderBag();
     }
+    progressFavor("pickup", 1, { type: pickup.type, pickup });
     addPulse(pickup.x, pickup.z, 0xffffff, 2.5, 0.35);
   }
 
@@ -4914,6 +5082,7 @@
     spawnActFX(item.id, audience.length, false);
     addFloater(`+$${gain.toFixed(0)} ${earn.label || ""} x${audience.length}`.trim(), player.x, player.z, "#73ff91");
     addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 7.2 : 4.8 + crowd * 0.28, 0.55);
+    progressFavor("act", 1, { audienceCount: audience.length, itemId: item.id, gain });
   }
 
   // ATTACK button: dispatches on the active item's attack type. Aggression near
@@ -5038,6 +5207,7 @@
       z,
       witnessReaction.witnesses.length ? "#ffcc73" : "#ffe96d"
     );
+    progressFavor("trap", 1, { itemId: item.id, x, z });
     refreshHotbar();
   }
 
@@ -5112,10 +5282,12 @@
     ui.setText(els.districtName, state.district.name);
 
     // Objective line with live progress.
-    const objective =
+    const favorText = state.phase === "day" ? favorProgressText() : "";
+    const objective = favorText || (
       state.phase === "day"
         ? `Earn $${Math.min(20, Math.floor(state.tasks.buskCash))}/20 before dusk`
-        : `Survive — ${Math.max(0, state.waveTarget - state.waveKills)} zombies left`;
+        : `Survive - ${Math.max(0, state.waveTarget - state.waveKills)} zombies left`
+    );
     ui.setText(els.objectiveText, objective);
     if (els.objectiveArrow) {
       const target = objectivePoint();
@@ -5142,6 +5314,8 @@
       return nearest ? nearest.zombie : points.alley;
     }
     if (copsChasing()) return points.camp;
+    const favor = activeFavor();
+    if (favor && favor.target) return favor.target;
     // Point at the nearest prop pickup, else the busk plaza.
     let target = null;
     pickups.forEach((pickup) => {
@@ -5299,6 +5473,7 @@
       waveTarget: state.waveTarget,
       waveKills: state.waveKills,
       objective: state.objective,
+      favor: state.favor ? { ...state.favor } : null,
       player: {
         x: player.x,
         z: player.z,
@@ -5333,6 +5508,15 @@
       waveTarget: Number(data.waveTarget) || 8,
       waveKills: Number(data.waveKills) || 0,
       objective: data.objective || "Earn $20 before nightfall",
+      favor: data.favor && favorById(data.favor.id)
+        ? {
+            id: data.favor.id,
+            cycle: Math.max(1, Number(data.favor.cycle) || 1),
+            progress: clamp(Number(data.favor.progress) || 0, 0, Number(data.favor.goal) || 99),
+            goal: Number(data.favor.goal) || favorById(data.favor.id).goal,
+            completed: !!data.favor.completed,
+          }
+        : null,
     });
     // Always own whatever sits on the hotbar (guards against corrupt saves).
     state.hotbar.forEach((id) => {
@@ -5619,6 +5803,7 @@
         },
         setPlayer: (x, z) => {
           setActorPosition(player, Number(x) || points.start.x, Number(z) || points.start.z);
+          updateDistrict();
           updateCamera(1);
           updateHUD();
           return { x: player.x, z: player.z };
@@ -5652,6 +5837,32 @@
         god: (on) => {
           state._god = on !== false;
           state.health = state.maxHealth;
+        },
+        favor: () => ({
+          active: state.favor ? { ...state.favor } : null,
+          definition: state.favor ? favorById(state.favor.id) : null,
+        }),
+        setFavor: (id, place = true) => {
+          const favor = startFavorForCycle(id);
+          if (favor && place && favor.target) {
+            setActorPosition(player, favor.target.x, favor.target.z);
+            updateDistrict();
+            updateCamera(1);
+          }
+          updateHUD();
+          return window.__UNHINGED.favor();
+        },
+        tickFavor: () => {
+          const favor = activeFavor();
+          if (!favor || !state.favor) return window.__UNHINGED.favor();
+          state.favor.progress = Math.max(0, favor.goal - 1);
+          progressFavor(favor.kind, 1, {
+            type: favor.types ? favor.types[0] : null,
+            audienceCount: favor.minAudience || 99,
+            itemId: favor.kind === "trap" ? "peel" : activeItem().id,
+          });
+          updateHUD();
+          return window.__UNHINGED.favor();
         },
         activeItem: () => activeItem().id,
       };

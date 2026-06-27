@@ -48,6 +48,8 @@
   const IFRAME_DURATION = 1.4;            // seconds of invincibility after a hit
   const HORN_RADIUS = 90;                 // how far the horn pushes mines/subs
   const HORN_COOLDOWN = 0.6;
+  const SHIP_COLLISION_HALF_WIDTH = 18;
+  const SHIP_COLLISION_HALF_LENGTH = 42;
 
   // Phases (from the GDD)
   const PHASE_GATES = [0.52, 0.88]; // later, less frequent ad-wall checkpoints per sector
@@ -696,11 +698,11 @@
       o.vy = -rand(28, 52) * difficulty;     // sub approaches the player, not just sits still
       o.tell = rand(0.45, 1.05);  // telegraph duration
       o.dove = false;
-      o.w = 38; o.h = 18;
+      o.w = 50; o.h = 22;
     } else if (type === "rocket") {
       o.vx = 0;
       o.vy = -rand(52, 82) * difficulty;     // slow-mo approach
-      o.w = 8; o.h = 24;
+      o.w = 14; o.h = 36;
       o.faceDropped = false;
     } else if (type === "drone") {
       o.dir = Math.random() < 0.5 ? 1 : -1;
@@ -804,6 +806,7 @@
       if (o.slipped) return;
       o.slipped = true;
       o.dead = true;
+      applyScorePenalty(180, "OIL SLICK");
       state.ship.vx += (state.ship.x < o.x ? -1 : 1) * 92 * state.threat;
       state.ship.vy *= 0.55;
       state.ship.iframe = Math.max(state.ship.iframe, 0.35);
@@ -818,18 +821,20 @@
 
   function collideShipObstacle(o) {
     const s = state.ship;
-    // Approximate the ship as a small circle for forgiving collision
     const dx = s.x - o.x, dy = s.y - o.y;
     if (o.type === "slick") {
-      const nx = dx / Math.max(18, o.w * 0.5);
-      const ny = dy / Math.max(12, o.h * 0.5);
+      const nx = dx / Math.max(18, SHIP_COLLISION_HALF_WIDTH + o.w * 0.5);
+      const ny = dy / Math.max(12, SHIP_COLLISION_HALF_LENGTH + o.h * 0.45);
       return (nx * nx + ny * ny) < 1.15;
     }
     if (o.type === "container") {
-      return Math.abs(dx) < o.w * 0.5 + 12 && Math.abs(dy) < o.h * 0.5 + 14;
+      return Math.abs(dx) < SHIP_COLLISION_HALF_WIDTH + o.w * 0.5
+        && Math.abs(dy) < SHIP_COLLISION_HALF_LENGTH + o.h * 0.5;
     }
-    const rShip = 12, rObs = Math.max(o.w, o.h) * 0.5;
-    return (dx * dx + dy * dy) < (rShip + rObs) * (rShip + rObs);
+    const rObs = Math.max(o.w, o.h) * 0.5;
+    const nx = dx / (SHIP_COLLISION_HALF_WIDTH + rObs * 0.8);
+    const ny = dy / (SHIP_COLLISION_HALF_LENGTH + rObs * 0.8);
+    return (nx * nx + ny * ny) < 1;
   }
 
   // =========================================================================
@@ -844,6 +849,7 @@
       s.iframe = IFRAME_DURATION;
       return;
     }
+    applyScorePenalty(Math.round(220 + state.threat * 80), "HULL HIT");
     s.hull = Math.max(0, s.hull - 1);
     s.iframe = IFRAME_DURATION;
     state.cam.shake = 0.5;
@@ -873,6 +879,14 @@
       RB.toast(msg, "bad");
       updateHUD();
     }
+  }
+
+  function applyScorePenalty(amount, label) {
+    const penalty = Math.min(state.score, Math.max(0, Math.round(amount)));
+    if (!penalty) return;
+    state.score -= penalty;
+    RB.toast(`-${penalty.toLocaleString()} ${label}`, "bad");
+    updateHUD();
   }
 
   function wipeout() {
@@ -1778,6 +1792,39 @@
     ctx.globalAlpha = 1;
   }
 
+  function drawHazardHalo(x, y, r, color) {
+    const pulse = 0.55 + 0.45 * Math.sin(performance.now() * 0.008);
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.24 + pulse * 0.2;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function drawObjectTag(x, y, text, color, offsetY = -24) {
+    ctx.save();
+    ctx.font = "800 9px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = Math.max(26, ctx.measureText(text).width + 10);
+    const tx = x;
+    const ty = y + offsetY;
+    ctx.fillStyle = "rgba(5,7,15,0.72)";
+    roundRect(ctx, tx - w / 2, ty - 8, w, 16, 4);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fbfaf4";
+    ctx.fillText(text, tx, ty + 0.5);
+    ctx.restore();
+  }
+
   function drawMine(o) {
     const s = worldToScreen(o.x, o.y);
     if (s.y < -20 || s.y > H + 20) return;
@@ -1838,17 +1885,34 @@
   function drawSub(o) {
     const s = worldToScreen(o.x, o.y);
     if (s.y < -20 || s.y > H + 20) return;
+    drawHazardHalo(s.x, s.y, 31, "rgba(46,224,255,0.85)");
+    drawObjectTag(s.x, s.y, "SUB", "#2ee0ff", -26);
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(Math.atan2(o.vy, o.vx) - Math.PI / 2);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(0, o.h * 0.55, o.w * 0.58, 7, 0, 0, TAU);
+    ctx.fill();
     // Hull
     ctx.fillStyle = o.dove ? "#3a3a4a" : "#5a5a6a";
     roundRect(ctx, -o.w * 0.5, -o.h * 0.5, o.w, o.h, 6);
     ctx.fill();
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = "#0bf0ff"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillRect(-o.w * 0.34, -o.h * 0.28, o.w * 0.68, 4);
     // Conning tower
-    ctx.fillStyle = "#444";
-    ctx.fillRect(-4, -3, 8, 6);
+    ctx.fillStyle = "#2b2d38";
+    roundRect(ctx, -7, -13, 14, 11, 4);
+    ctx.fill();
+    ctx.strokeStyle = "#050510";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#2ee0ff";
+    ctx.font = "800 7px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("SUB", 0, 2);
     // Googly eyes
     if (o.dove) {
       ctx.fillStyle = "#fff";
@@ -1863,8 +1927,13 @@
       ctx.fill();
     } else {
       // Periscope tell
-      ctx.fillStyle = "#888";
-      ctx.fillRect(-1, -8, 2, 5);
+      ctx.strokeStyle = "#d7fbff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -13);
+      ctx.lineTo(0, -22);
+      ctx.lineTo(7 * o.dir, -22);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -1872,14 +1941,37 @@
   function drawRocket(o) {
     const s = worldToScreen(o.x, o.y);
     if (s.y < -20 || s.y > H + 20) return;
+    drawHazardHalo(s.x, s.y, 29, "rgba(255,140,26,0.95)");
+    drawObjectTag(s.x, s.y, "ROCKET", "#ff8c1a", -31);
     ctx.save();
     ctx.translate(s.x, s.y);
     const ang = Math.atan2(o.vy, o.vx) + Math.PI / 2;
     ctx.rotate(ang);
     // Body
-    ctx.fillStyle = "#ddd";
-    ctx.fillRect(-o.w * 0.5, -o.h * 0.5, o.w, o.h);
-    ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.strokeRect(-o.w * 0.5, -o.h * 0.5, o.w, o.h);
+    ctx.fillStyle = "#f5f2e9";
+    roundRect(ctx, -o.w * 0.45, -o.h * 0.45, o.w * 0.9, o.h * 0.82, 5);
+    ctx.fill();
+    ctx.strokeStyle = "#050510"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#ff5c5c";
+    ctx.beginPath();
+    ctx.moveTo(0, -o.h * 0.62);
+    ctx.lineTo(-o.w * 0.5, -o.h * 0.34);
+    ctx.lineTo(o.w * 0.5, -o.h * 0.34);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#2ee0ff";
+    ctx.fillRect(-o.w * 0.26, -o.h * 0.1, o.w * 0.52, 4);
+    ctx.fillStyle = "#ff5c5c";
+    ctx.beginPath();
+    ctx.moveTo(-o.w * 0.45, o.h * 0.28);
+    ctx.lineTo(-o.w * 0.95, o.h * 0.5);
+    ctx.lineTo(-o.w * 0.38, o.h * 0.48);
+    ctx.moveTo(o.w * 0.45, o.h * 0.28);
+    ctx.lineTo(o.w * 0.95, o.h * 0.5);
+    ctx.lineTo(o.w * 0.38, o.h * 0.48);
+    ctx.fill();
+    ctx.stroke();
     // Smiley face (only if not dropped)
     if (!o.faceDropped) {
       ctx.fillStyle = "#000";
@@ -1970,24 +2062,38 @@
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(Math.sin(t) * 0.2 + o.spin * 0.2);
-    if (drawArt("slick", 0, 0, o.w * 1.8, o.h * 2.2, 0.82)) {
-      ctx.restore();
-      return;
+    const drewArt = drawArt("slick", 0, 0, o.w * 1.95, o.h * 2.35, 0.9);
+    if (!drewArt) {
+      const slick = ctx.createRadialGradient(0, 0, 2, 0, 0, o.w * 0.55);
+      slick.addColorStop(0, "rgba(255,255,255,0.20)");
+      slick.addColorStop(0.38, "rgba(46,224,255,0.24)");
+      slick.addColorStop(0.68, "rgba(255,46,136,0.18)");
+      slick.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = slick;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, o.w * 0.5, o.h * 0.5, 0, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, o.w * 0.38, o.h * 0.34, Math.sin(t) * 0.4, 0, TAU);
+      ctx.stroke();
     }
-    const slick = ctx.createRadialGradient(0, 0, 2, 0, 0, o.w * 0.55);
-    slick.addColorStop(0, "rgba(255,255,255,0.20)");
-    slick.addColorStop(0.38, "rgba(46,224,255,0.24)");
-    slick.addColorStop(0.68, "rgba(255,46,136,0.18)");
-    slick.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = slick;
+    ctx.strokeStyle = "#b7ffef";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(0, 0, o.w * 0.5, o.h * 0.5, 0, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.16)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, o.w * 0.38, o.h * 0.34, Math.sin(t) * 0.4, 0, TAU);
+    ctx.ellipse(0, 0, o.w * 0.58, o.h * 0.6, 0, 0, TAU);
     ctx.stroke();
+    ctx.fillStyle = "rgba(5,7,15,0.7)";
+    roundRect(ctx, -14, -7, 28, 14, 5);
+    ctx.fill();
+    ctx.strokeStyle = "#b7ffef";
+    ctx.stroke();
+    ctx.fillStyle = "#fbfaf4";
+    ctx.font = "800 9px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("OIL", 0, 1);
     ctx.restore();
   }
 
@@ -1997,28 +2103,38 @@
     ctx.save();
     ctx.translate(s.x, s.y);
     ctx.rotate(Math.sin(o.age * 1.8 + o.seed) * 0.25);
-    if (drawArt("container", 0, 0, o.w * 1.9, o.h * 2.2)) {
-      ctx.restore();
-      return;
-    }
-    ctx.fillStyle = o.color || "#ff5c5c";
-    roundRect(ctx, -o.w * 0.5, -o.h * 0.5, o.w, o.h, 3);
-    ctx.fill();
-    ctx.strokeStyle = "#050510";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(0,0,0,0.35)";
-    ctx.lineWidth = 1;
-    for (let x = -o.w * 0.35; x <= o.w * 0.36; x += o.w * 0.18) {
-      ctx.beginPath();
-      ctx.moveTo(x, -o.h * 0.45);
-      ctx.lineTo(x, o.h * 0.45);
+    const drewArt = drawArt("container", 0, 0, o.w * 2.05, o.h * 2.35);
+    if (!drewArt) {
+      ctx.fillStyle = o.color || "#ff5c5c";
+      roundRect(ctx, -o.w * 0.5, -o.h * 0.5, o.w, o.h, 3);
+      ctx.fill();
+      ctx.strokeStyle = "#050510";
+      ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.strokeStyle = "rgba(0,0,0,0.35)";
+      ctx.lineWidth = 1;
+      for (let x = -o.w * 0.35; x <= o.w * 0.36; x += o.w * 0.18) {
+        ctx.beginPath();
+        ctx.moveTo(x, -o.h * 0.45);
+        ctx.lineTo(x, o.h * 0.45);
+        ctx.stroke();
+      }
     }
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "bold 6px JetBrains Mono, monospace";
+    ctx.strokeStyle = "#ffd43b";
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, -o.w * 0.58, -o.h * 0.62, o.w * 1.16, o.h * 1.24, 5);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(5,7,15,0.72)";
+    roundRect(ctx, -20, -8, 40, 16, 4);
+    ctx.fill();
+    ctx.strokeStyle = "#ffd43b";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = "#fbfaf4";
+    ctx.font = "800 8px JetBrains Mono, monospace";
     ctx.textAlign = "center";
-    ctx.fillText("NOPE", 0, 2);
+    ctx.textBaseline = "middle";
+    ctx.fillText("CARGO", 0, 1);
     ctx.restore();
   }
 
@@ -2105,7 +2221,20 @@
     ctx.beginPath();
     ctx.arc(s.x, s.y, 14, 0, TAU);
     ctx.fill();
-    if (isPatch && drawArt("repairBuoy", s.x, s.y, 34, 34)) return;
+    if (isPatch && drawArt("repairBuoy", s.x, s.y, 40, 40)) {
+      ctx.fillStyle = "rgba(5,7,15,0.72)";
+      roundRect(ctx, s.x - 18, s.y + 12, 36, 14, 4);
+      ctx.fill();
+      ctx.strokeStyle = "#6bff7d";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = "#fbfaf4";
+      ctx.font = "800 8px JetBrains Mono, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("PATCH", s.x, s.y + 19);
+      return;
+    }
     // Barrel
     ctx.fillStyle = isPatch ? "#2f8a4a" : "#7a3a1a";
     if (isPatch) {

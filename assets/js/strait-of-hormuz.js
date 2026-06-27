@@ -28,7 +28,7 @@
   const SECTOR_LENGTH = 6200;     // virtual units per endless sector
   const NAUTICAL_MILE_UNITS = 880;
   const VISIBLE_AHEAD = 600;      // how far ahead of the ship we render
-  const VISIBLE_BEHIND = 80;      // trail length behind the ship
+  const VISIBLE_BEHIND = Math.ceil((H * 0.5) / 0.7) + 170; // keep objects visible until fully below the camera
   const LANE_HALF_WIDTH = 220;    // total play width is +/- this from centerline
 
   // Ship — camera-relative controls (see updateShip for the new model).
@@ -50,7 +50,7 @@
   const HORN_COOLDOWN = 0.6;
 
   // Phases (from the GDD)
-  const PHASE_GATES = [0.25, 0.60, 0.82]; // ad-wall checkpoints per sector
+  const PHASE_GATES = [0.52, 0.88]; // later, less frequent ad-wall checkpoints per sector
   const PHASE_DEFS = [
     { id: 1, name: "OPEN WATER",        width: 220, spawnEvery: 1.25, mix: { mine: 0.72, sub: 0.16, rocket: 0.00, drone: 0.00, slick: 0.12 }, fog: 0.00 },
     { id: 2, name: "TIGHTEN UP",        width: 188, spawnEvery: 0.95, mix: { mine: 0.48, sub: 0.25, rocket: 0.12, drone: 0.00, slick: 0.15 }, fog: 0.05 },
@@ -779,8 +779,8 @@
       // Despawn behind ship
       if (o.y < state.ship.y - VISIBLE_BEHIND) o.dead = true;
       if (o.y > state.ship.y + VISIBLE_AHEAD * 1.5) o.dead = true;
-      const laneLimit = getLaneHalfWidth();
-      if (o.x < -laneLimit - 90 || o.x > laneLimit + 90) o.dead = true;
+      const offscreenX = W * 0.5 + Math.max(o.w || 0, o.h || 0) + 80;
+      if (o.x < -offscreenX || o.x > offscreenX) o.dead = true;
       if (o.age > o.life) o.dead = true;
 
       if (o.dead) {
@@ -1258,7 +1258,7 @@
   function renderGate(gateIndex, offered) {
     const mount = document.getElementById("gate-mount");
     if (!mount) return;
-    const labels = ["FIRST", "SECOND", "FINAL"];
+    const labels = ["MID", "FINAL"];
     const label = labels[gateIndex] || "EXTRA";
     const sector = getPhaseProgress().sector;
     mount.innerHTML = `
@@ -2531,6 +2531,56 @@
     }).join("");
   }
 
+  function bindFullscreen() {
+    const fsBtn = document.getElementById("btn-fullscreen");
+    const fsTarget = canvas.closest(".canvas-wrap");
+    if (!fsBtn || !fsTarget) return;
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const updateButton = () => {
+      const on = isMaxed();
+      fsBtn.textContent = on ? "x" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit max screen" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateButton();
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+        if (on) canvas.focus();
+      });
+    };
+    const toggle = () => {
+      ensureAudio();
+      const on = !isMaxed();
+      setMaxed(on);
+      if (on) {
+        const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+        if (req) {
+          try {
+            const ret = req.call(fsTarget);
+            if (ret && ret.catch) ret.catch(() => {});
+          } catch (_) {}
+        }
+      } else if (nativeFsEl()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) {
+          try { exit.call(document); } catch (_) {}
+        }
+      }
+    };
+    fsBtn.addEventListener("click", toggle);
+    const onNativeFsChange = () => { if (!nativeFsEl() && isMaxed()) setMaxed(false); };
+    document.addEventListener("fullscreenchange", onNativeFsChange);
+    document.addEventListener("webkitfullscreenchange", onNativeFsChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+    });
+    updateButton();
+  }
+
   // =========================================================================
   // 22. WIRING
   // =========================================================================
@@ -2562,6 +2612,7 @@
     });
     saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
   }
+  bindFullscreen();
 
   RB.subscribe(renderPowerups);
   setupTouch();

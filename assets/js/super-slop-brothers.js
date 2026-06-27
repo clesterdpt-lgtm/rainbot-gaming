@@ -123,7 +123,7 @@
   const FIGHTERS = [
     {
       id: "rainbot", name: "Rainbot", short: "RAIN", glyph: "🌈",
-      blurb: "The mascot. Balanced all-rounder with a reflector.",
+      blurb: "Balanced mascot. Every 3 hits pops a Prism Burst follow-up.",
       color: C.cyan, accent: C.pink,
       weight: 1.0, power: 1.0, reach: 1.0,
       walk: 230, run: 360, air: 300, jump: 800, hop: 470, doubleJump: 760, fall: 920, fastFall: 1500,
@@ -136,7 +136,7 @@
     },
     {
       id: "gigachad", name: "Gigachad", short: "CHAD", glyph: "🗿",
-      blurb: "Heavy brawler. Slow, but lands sledgehammer counters.",
+      blurb: "Heavy brawler. Startup armor lets big swings bully through hits.",
       color: C.grey, accent: C.dim,
       weight: 1.28, power: 1.18, reach: 1.05,
       walk: 200, run: 320, air: 250, jump: 780, hop: 460, doubleJump: 720, fall: 1000, fastFall: 1650,
@@ -149,7 +149,7 @@
     },
     {
       id: "mrfeast", name: "Mr. Feast", short: "FEAST", glyph: "🤑",
-      blurb: "Explosive zoner. Lobs burger bombs and drops safes.",
+      blurb: "Explosive zoner. Cashes in hit streaks for sponsor healing.",
       color: C.red, accent: C.yellow,
       weight: 1.18, power: 1.05, reach: 1.0,
       walk: 215, run: 330, air: 280, jump: 770, hop: 450, doubleJump: 730, fall: 940, fastFall: 1520,
@@ -162,7 +162,7 @@
     },
     {
       id: "skibidi", name: "Skibidi", short: "SKIB", glyph: "🚽",
-      blurb: "Fast lightweight. Flush sprays and floor traps.",
+      blurb: "Fast lightweight. Sprays and traps leave rivals slipping.",
       color: C.purple, accent: C.cyan,
       weight: 0.86, power: 0.92, reach: 0.95,
       walk: 255, run: 400, air: 330, jump: 830, hop: 480, doubleJump: 800, fall: 880, fastFall: 1450,
@@ -175,7 +175,7 @@
     },
     {
       id: "sigma", name: "Sigma", short: "SIGMA", glyph: "🐺",
-      blurb: "Agile grindset combo machine with a hard counter.",
+      blurb: "Combo machine. Heat speeds up attacks after multi-hit strings.",
       color: C.blue, accent: C.ink,
       weight: 0.96, power: 0.98, reach: 1.0,
       walk: 245, run: 385, air: 320, jump: 820, hop: 475, doubleJump: 780, fall: 900, fastFall: 1480,
@@ -188,7 +188,7 @@
     },
     {
       id: "slopbot", name: "AI Slop Bot", short: "SLOP", glyph: "🤖",
-      blurb: "Glitch summoner. Teleports and unleashes a glitch dog.",
+      blurb: "Glitch summoner. Teleports leave unstable decoys behind.",
       color: C.green, accent: C.pink,
       weight: 0.92, power: 0.95, reach: 1.0,
       walk: 235, run: 365, air: 305, jump: 800, hop: 470, doubleJump: 770, fall: 910, fastFall: 1500,
@@ -325,6 +325,16 @@
   };
   function aiLevel() { return AI_LEVELS[settings.difficulty] || AI_LEVELS.normal; }
 
+  const CPU_PERSONAS = {
+    rainbot: { style: "balanced", approach: 1.0, attack: 1.0, special: 1.08, jump: 1.0, shield: 1.25, smash: 1.0, range: 1.0, specialRange: 280 },
+    gigachad: { style: "bruiser", approach: 1.16, attack: 1.28, special: 0.72, jump: 0.72, shield: 1.5, smash: 1.45, range: 1.15, specialRange: 210 },
+    mrfeast: { style: "zoner", approach: 0.74, attack: 0.84, special: 1.65, jump: 0.78, shield: 0.9, smash: 0.85, range: 0.95, keepaway: 0.52, retreatAt: 165, specialRange: 380 },
+    skibidi: { style: "skirmisher", approach: 1.2, attack: 1.08, special: 1.22, jump: 1.28, shield: 0.72, smash: 0.85, range: 0.94, feint: 0.12, specialRange: 245 },
+    sigma: { style: "juggler", approach: 1.08, attack: 1.22, special: 0.86, jump: 1.45, shield: 0.82, smash: 0.78, range: 0.98, specialRange: 230 },
+    slopbot: { style: "glitch", approach: 0.94, attack: 0.94, special: 1.6, jump: 1.16, shield: 0.7, smash: 1.0, range: 1.0, feint: 0.18, specialRange: 330 },
+  };
+  function cpuPersona(id) { return CPU_PERSONAS[id] || CPU_PERSONAS.rainbot; }
+
   const camera = { x: W / 2, y: H * 0.44, zoom: 1.12 };
 
   const state = {
@@ -450,6 +460,12 @@
       counterTimer: 0,
       counterMult: 1,
       reflectTimer: 0,
+      traitCd: 0,
+      armorFlash: 0,
+      prismCharge: 0,
+      feastCash: 0,
+      sigmaHeat: 0,
+      sigmaHeatTimer: 0,
       chargeTimer: 0,
       chargingMove: null,
       ledge: null,
@@ -674,6 +690,7 @@
     };
 
     const L = aiLevel();
+    const P = cpuPersona(f.id);
     f.ai = f.ai || { think: 0, action: "approach", atkCd: 0, jitter: Math.random() * 1000 };
 
     if (f.hitstun > 0) {
@@ -710,16 +727,20 @@
     f.facingWant = sign(dx);
 
     // occasionally shield an incoming attack
-    if (target.attack && adx < 86 && ady < 70 && Math.random() < L.shield) {
+    if (target.attack && adx < 86 && ady < 70 && Math.random() < clamp(L.shield * (P.shield || 1), 0, 0.8)) {
       c.shield = true;
       if (Math.random() < 0.35) { c.smashX = -sign(dx); c.pShield = true; } // roll away
       return c;
     }
 
+    const attackRange = L.range * (P.range || 1);
+    const specialChance = clamp(L.special * (P.special || 1), 0, 0.95);
+    const specialRange = P.specialRange || 260;
     if (f.ai.think <= 0) {
       f.ai.think = rand(L.think[0], L.think[1]);
-      if (adx < L.range && ady < 80) f.ai.action = "attack";
-      else if (adx < 220 && f.specialCd <= 0 && Math.random() < L.special) f.ai.action = "special";
+      if ((P.keepaway || 0) > 0 && adx < (P.retreatAt || 150) && Math.random() < P.keepaway) f.ai.action = "retreat";
+      else if (adx < attackRange && ady < 80) f.ai.action = "attack";
+      else if (adx < specialRange && f.specialCd <= 0 && Math.random() < specialChance) f.ai.action = "special";
       else f.ai.action = "approach";
     }
 
@@ -727,27 +748,34 @@
     const safeL = main.x + 38, safeR = main.x + main.w - 38;
     const targetOnStage = target.x > main.x - 10 && target.x < main.x + main.w + 10;
     let mv = sign(dx);
+    if (f.ai.action === "retreat") mv = -mv;
+    if ((P.feint || 0) > 0 && Math.random() < P.feint * dt * 6) mv = -mv;
     if (f.onGround) {
       if (mv < 0 && f.x <= safeL) mv = 0;
       if (mv > 0 && f.x >= safeR) mv = 0;
     }
     // approach (sometimes hang back so the player isn't smothered)
-    if (adx > 44 && mv !== 0 && Math.random() < L.approach) c.x = mv;
+    if (adx > 44 && mv !== 0 && Math.random() < clamp(L.approach * (P.approach || 1), 0, 1)) c.x = mv;
     // jump toward a higher on-stage target / hop (don't leap after an off-stage target)
-    if (dy < -70 && f.onGround && targetOnStage && Math.random() < 0.35 * L.approach) pressJump();
+    if (dy < -70 && f.onGround && targetOnStage && Math.random() < clamp(0.35 * L.approach * (P.jump || 1), 0, 0.85)) pressJump();
     // drop through a platform to chase down
-    if (dy > 90 && f.onPlatform && !f.onPlatform.solid && Math.random() < 0.25) c.down = true;
+    if (dy > 90 && f.onPlatform && !f.onPlatform.solid && Math.random() < 0.25 * (P.jump || 1)) c.down = true;
 
-    if (f.ai.action === "attack" && adx < L.range && ady < 84 && f.ai.atkCd <= 0) {
-      if (Math.random() < L.atk) {
+    if (f.ai.action === "attack" && adx < attackRange && ady < 84 && f.ai.atkCd <= 0) {
+      if (Math.random() < clamp(L.atk * (P.attack || 1), 0, 1)) {
         c.attack = true; c.pAttack = true;
         f.ai.atkCd = rand(L.atkCd[0], L.atkCd[1]); // can't spam attacks
-        if (target.damage > 85 && Math.random() < L.smash) { c.smashX = sign(dx); c.x = sign(dx); } // go for kill
-        else if (dy < -40 && Math.random() < L.smash + 0.2) { c.smashY = -1; c.up = true; }
+        if (target.damage > 85 && Math.random() < clamp(L.smash * (P.smash || 1), 0, 0.95)) { c.smashX = sign(dx); c.x = sign(dx); } // go for kill
+        else if (dy < -40 && Math.random() < clamp(L.smash * (P.smash || 1) + 0.2, 0, 0.95)) { c.smashY = -1; c.up = true; }
       }
-    } else if (f.ai.action === "special" && f.specialCd <= 0 && adx < 260) {
+    } else if (f.ai.action === "special" && f.specialCd <= 0 && adx < specialRange) {
       c.special = true; c.pSpecial = true;
-      c.x = sign(dx);
+      c.x = 0; c.up = false; c.down = false;
+      if (f.id === "mrfeast" && f.onGround && Math.random() < 0.42) c.down = true;
+      else if (f.id === "skibidi" && f.onGround && Math.random() < 0.55) c.down = true;
+      else if (f.id === "slopbot" && Math.random() < 0.46) c.up = true;
+      else if (dy < -65 && Math.random() < 0.35 * (P.jump || 1)) c.up = true;
+      else if (!["rainbot", "mrfeast", "sigma"].includes(f.id) || adx < 110 || Math.random() < 0.4) c.x = sign(dx);
     }
     return c;
   }
@@ -780,6 +808,11 @@
     const move = f.moves[moveName];
     if (!move) return;
     f.attack = instantiateMove(move, moveName);
+    if (f.id === "sigma" && f.sigmaHeat > 0) {
+      const speed = 1 - Math.min(0.18, f.sigmaHeat * 0.055);
+      f.attack.dur *= speed;
+      f.attack.hits.forEach((h) => { h.s *= speed; h.e *= speed; });
+    }
     f.attackKind = moveName;
     f.state = "attack";
     if (move.lunge) { f.vx = f.facing * move.lunge; }
@@ -861,7 +894,9 @@
       case "teleport": {
         const dx = f.control.x || f.facing;
         const dy = f.control.up ? -1 : f.control.down ? 0.4 : -0.5;
-        burst(f.x, f.y - f.h / 2, f.color, 16);
+        const oldX = f.x, oldY = f.y;
+        burst(oldX, oldY - f.h / 2, f.color, 16);
+        if (f.id === "slopbot") spawnGlitchClone(f, oldX, oldY);
         f.x = clamp(f.x + dx * desc.dist, 40, W - 40);
         f.y = clamp(f.y + dy * desc.dist, 80, H);
         f.vx = dx * 160; f.vy = dy < 0 ? -260 : 80;
@@ -932,6 +967,16 @@
     });
   }
 
+  function spawnGlitchClone(f, x, y) {
+    state.entities.push({
+      type: "clone", owner: f.slot, fighterId: f.id, color: f.color, accent: f.accent,
+      x, y, facing: f.facing, w: f.w, h: f.h,
+      life: 0.75, max: 0.75, armed: 0.34, popped: false,
+      dmg: 5, base: 230, scale: 3.4, angle: f.facing > 0 ? 34 : 146,
+      used: new Set(),
+    });
+  }
+
   function groundYAt(x) {
     // top of the main solid platform if x within it, else stage floor
     const stage = getStage();
@@ -966,6 +1011,21 @@
         // follow ground
         e.y = groundYAt(e.x);
         if (e.x < -40 || e.x > W + 40) e.life = 0;
+      } else if (e.type === "clone") {
+        e.armed -= dt;
+        if (e.armed <= 0 && !e.popped) {
+          e.popped = true;
+          e.life = Math.min(e.life, 0.18);
+          burst(e.x, e.y - e.h / 2, e.color, 14, 420);
+          state.fighters.forEach((f) => {
+            if (f.hidden || f.respawnTimer > 0 || f.slot === e.owner || e.used.has(f.slot)) return;
+            if (Math.abs(f.x - e.x) < 62 && Math.abs((f.y - f.h / 2) - (e.y - e.h / 2)) < 58) {
+              e.used.add(f.slot);
+              applyHit(e.owner, f, { x: e.x, y: e.y - e.h / 2, dmg: e.dmg, base: e.base, scale: e.scale, angle: e.angle });
+            }
+          });
+          pushFloater(e.x, e.y - e.h - 10, "GLITCH!", e.color, 16, 0.65);
+        }
       }
       if (e.life <= 0) state.entities.splice(i, 1);
     }
@@ -1166,6 +1226,12 @@
     }
     if (f.reflectTimer > 0) f.reflectTimer -= dt;
     if (f.counterTimer > 0) f.counterTimer -= dt;
+    if (f.traitCd > 0) f.traitCd -= dt;
+    if (f.armorFlash > 0) f.armorFlash -= dt;
+    if (f.sigmaHeatTimer > 0) {
+      f.sigmaHeatTimer -= dt;
+      if (f.sigmaHeatTimer <= 0) f.sigmaHeat = 0;
+    }
     if (f.slipping > 0) f.slipping -= dt;
     if (f.inputBuffer) {
       f.inputBuffer.jump = Math.max(0, f.inputBuffer.jump - dt);
@@ -1186,6 +1252,7 @@
         f.jumps = 2; f.recoveryUsed = false; f.dodgeKind = null; f.dodgeDir = 0;
         f.inputBuffer = { jump: 0, attack: 0, special: 0, grab: 0 };
         f.coyoteTimer = 0; f.comboHits = 0; f.comboTimer = -99;
+        f.traitCd = 0; f.armorFlash = 0; f.prismCharge = 0; f.feastCash = 0; f.sigmaHeat = 0; f.sigmaHeatTimer = 0;
       } else {
         return;
       }
@@ -1593,8 +1660,77 @@
     }
   }
 
+  function tryTraitArmor(target, hit) {
+    const kind = target.attackKind || "";
+    if (target.id !== "gigachad" || hit.forceThrow || !target.attack || target.hitstun > 0 || (target.traitCd || 0) > 0) return false;
+    if (kind === "grab" || kind === "counter") return false;
+    if (target.attack.t > Math.max(0.14, target.attack.dur * 0.58)) return false;
+
+    const reduced = Math.max(1, Math.round((hit.dmg || 1) * 0.35));
+    const hx = hit.x === undefined ? target.x : hit.x;
+    target.damage = Math.min(999, target.damage + reduced);
+    target.vx += sign(target.x - hx) * 95;
+    target.hitlag = Math.max(target.hitlag, 0.08);
+    target.traitCd = 0.65;
+    target.armorFlash = 0.28;
+    burst(target.x, target.y - target.h / 2, target.color, 10, 360);
+    pushImpact(target.x, target.y - target.h / 2, hit.angle || (target.x >= hx ? 24 : 156), 560, C.grey);
+    pushFloater(target.x, target.y - target.h - 12, "ARMOR!", C.grey, 18, 0.65);
+    state.shake = Math.max(state.shake, 4);
+    Sound.play("shield");
+    return true;
+  }
+
+  function applyConnectedTrait(attacker, target, hit, launch) {
+    if (!attacker) return;
+
+    if (attacker.id === "rainbot") {
+      attacker.prismCharge = Math.min(3, (attacker.prismCharge || 0) + 1);
+      if (attacker.prismCharge >= 3) {
+        attacker.prismCharge = 0;
+        target.damage = Math.min(999, target.damage + 4);
+        target.vy -= 120;
+        target.hitstun = Math.max(target.hitstun, 0.16);
+        attacker.specialCd = Math.min(attacker.specialCd || 0, 0.12);
+        burst(target.x, target.y - target.h / 2, C.cyan, 16, 520);
+        pushImpact(target.x, target.y - target.h / 2, 86, 680, C.cyan);
+        pushFloater(target.x, target.y - target.h - 30, "PRISM!", C.cyan, 20, 0.75);
+      }
+    } else if (attacker.id === "mrfeast") {
+      attacker.feastCash = (attacker.feastCash || 0) + 1;
+      if (attacker.feastCash >= 4) {
+        attacker.feastCash = 0;
+        const heal = Math.min(attacker.damage, 6);
+        attacker.damage -= heal;
+        attacker.specialCd = Math.min(attacker.specialCd || 0, 0.1);
+        burst(attacker.x, attacker.y - attacker.h / 2, C.yellow, 14, 360);
+        pushFloater(attacker.x, attacker.y - attacker.h - 14, "SPONSORED!", C.yellow, 18, 0.8);
+      }
+    } else if (attacker.id === "skibidi") {
+      const wasSlipping = (target.slipping || 0) > 0.2;
+      target.slipping = Math.max(target.slipping || 0, 0.75);
+      target.vx += sign(target.x - attacker.x) * 55;
+      if (!wasSlipping) pushFloater(target.x, target.y - target.h - 24, "SLIP!", C.purple, 18, 0.65);
+    } else if (attacker.id === "sigma" && attacker.comboHits >= 2) {
+      attacker.sigmaHeat = Math.min(3, (attacker.sigmaHeat || 0) + 1);
+      attacker.sigmaHeatTimer = 2.4;
+      attacker.specialCd = Math.min(attacker.specialCd || 0, 0.08);
+      target.hitstun += 0.04;
+      if (!attacker.lastTraitFloater || state.time - attacker.lastTraitFloater > 0.8) {
+        attacker.lastTraitFloater = state.time;
+        pushFloater(attacker.x, attacker.y - attacker.h - 16, "HEAT x" + attacker.sigmaHeat, C.blue, 18, 0.7);
+      }
+    } else if (attacker.id === "slopbot" && launch > 620 && Math.random() < 0.22) {
+      target.vx += sign(target.x - attacker.x) * 90;
+      target.hitlag = Math.max(target.hitlag, 0.08);
+      burst(target.x, target.y - target.h / 2, C.green, 10, 380);
+      pushFloater(target.x, target.y - target.h - 24, "DESYNC!", C.green, 17, 0.65);
+    }
+  }
+
   function applyHit(attackerSlot, target, hit) {
     if (target.invuln > 0 && !hit.forceThrow) return;
+    if (tryTraitArmor(target, hit)) return;
     const prevDamage = target.damage;
     target.damage = Math.min(999, target.damage + hit.dmg);
     const weight = target.def.weight;
@@ -1619,6 +1755,7 @@
       if (attacker.comboHits >= 2) {
         pushFloater(attacker.x, attacker.y - attacker.h - 24, attacker.comboHits + " HIT!", attacker.accent, 20, 0.75);
       }
+      applyConnectedTrait(attacker, target, hit, launch);
     }
     // fx
     const heavy = launch > 1100;
@@ -2133,6 +2270,20 @@
       } else if (e.type === "dog") {
         ctx.font = "28px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.save(); ctx.scale(e.dir, 1); ctx.fillText("🐕", e.x * e.dir, e.y - 14); ctx.restore();
+      } else if (e.type === "clone") {
+        const a = clamp(e.life / (e.max || 0.75), 0, 1);
+        ctx.globalAlpha = e.popped ? a * 0.45 : 0.22 + a * 0.36;
+        ctx.translate(e.x, e.y);
+        ctx.scale(e.facing, 1);
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = e.popped ? 22 : 12;
+        ctx.fillStyle = e.color;
+        roundRect(ctx, -e.w / 2, -e.h, e.w, e.h, 12);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        drawPortrait({ id: e.fighterId, color: e.color, glyph: "🤖" }, 0, -e.h + 18, 34, { strokeColor: e.accent || e.color, lineWidth: 2 });
       }
       ctx.restore();
     }
@@ -2198,6 +2349,38 @@
     if (f.counterTimer > 0) {
       ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = C.yellow; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(cx, top + f.h / 2, f.w * 0.8, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (f.armorFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = clamp(f.armorFlash / 0.28, 0, 1) * 0.7;
+      ctx.strokeStyle = C.grey;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(cx, top + f.h / 2, f.w * 0.9, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (f.id === "rainbot" && f.prismCharge > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.34 + f.prismCharge * 0.12;
+      ctx.strokeStyle = f.prismCharge >= 2 ? C.cyan : f.accent;
+      ctx.lineWidth = 2;
+      for (let i = 0; i < f.prismCharge; i++) {
+        ctx.beginPath();
+        ctx.arc(cx, top + f.h / 2, f.w * (0.62 + i * 0.12), state.time * 2 + i, state.time * 2 + i + 1.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    if (f.id === "sigma" && f.sigmaHeat > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.18 + f.sigmaHeat * 0.08;
+      ctx.strokeStyle = C.blue;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx, top + f.h / 2, f.w * (0.7 + f.sigmaHeat * 0.08), -state.time * 4, -state.time * 4 + Math.PI * 1.4);
+      ctx.stroke();
+      ctx.restore();
     }
     if (f.reflectTimer > 0) {
       ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = C.cyan;

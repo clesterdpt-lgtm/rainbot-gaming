@@ -439,8 +439,11 @@
       shieldHealth: 1,
       shielding: false,
       dodgeTimer: 0,
+      dodgeKind: null,
+      dodgeDir: 0,
       invuln: 0.5,
       specialCd: 0,
+      recoveryUsed: false,
       counterTimer: 0,
       counterMult: 1,
       reflectTimer: 0,
@@ -658,6 +661,11 @@
     c.attack = false; c.special = false; c.shield = false; c.grab = false;
     c.smashX = 0; c.smashY = 0;
     c.pAttack = false; c.pSpecial = false; c.pJump = false; c.pShield = false; c.pGrab = false;
+    const pressJump = () => {
+      c.jump = true;
+      c.jumpHeld = true;
+      c.pJump = !f.prevControl.jump;
+    };
 
     const L = aiLevel();
     f.ai = f.ai || { think: 0, action: "approach", atkCd: 0, jitter: Math.random() * 1000 };
@@ -683,7 +691,7 @@
     if (!f.onGround && (offStage || belowStage) && f.y > 160) {
       // Always recover — a CPU that SDs is broken, not "easy". Beeline for the stage.
       c.x = sign((main.x + main.w / 2) - f.x);
-      if (f.vy > 30 && f.jumps > 0) { c.jump = true; c.jumpHeld = true; c.pJump = true; } // burn the double-jump first
+      if (f.vy > 30 && f.jumps > 0) pressJump(); // burn the double-jump first
       if ((f.vy > 140 || f.jumps <= 0) && f.specialCd <= 0) { c.up = true; c.special = true; c.pSpecial = true; } // then up-B
       return c;
     }
@@ -720,7 +728,7 @@
     // approach (sometimes hang back so the player isn't smothered)
     if (adx > 44 && mv !== 0 && Math.random() < L.approach) c.x = mv;
     // jump toward a higher on-stage target / hop (don't leap after an off-stage target)
-    if (dy < -70 && f.onGround && targetOnStage && Math.random() < 0.35 * L.approach) { c.jump = true; c.jumpHeld = true; c.pJump = true; }
+    if (dy < -70 && f.onGround && targetOnStage && Math.random() < 0.35 * L.approach) pressJump();
     // drop through a platform to chase down
     if (dy > 90 && f.onPlatform && !f.onPlatform.solid && Math.random() < 0.25) c.down = true;
 
@@ -794,6 +802,8 @@
     else dir = "neutral";
     const desc = sp[dir];
     if (!desc) return;
+    const isAirRecovery = !f.onGround && (desc.type === "recovery" || desc.type === "teleport");
+    if (isAirRecovery && f.recoveryUsed) return;
     f.specialCd = desc.cd || 0.4;
     runSpecial(f, desc, dir);
   }
@@ -820,7 +830,7 @@
       case "recovery": {
         f.vy = desc.vy;
         f.vx = f.facing * (desc.vx || 0);
-        f.jumps = Math.max(f.jumps, 1); // can still act after
+        if (!f.onGround) f.recoveryUsed = true;
         f.attack = instantiateMove({ dur: desc.dur, type: "air", hits: desc.hits || [] }, "recover-" + dir);
         f.attackKind = "special";
         f.state = "attack";
@@ -850,7 +860,7 @@
         f.y = clamp(f.y + dy * desc.dist, 80, H);
         f.vx = dx * 160; f.vy = dy < 0 ? -260 : 80;
         f.invuln = Math.max(f.invuln, 0.25);
-        f.jumps = Math.max(f.jumps, 1);
+        if (!f.onGround) f.recoveryUsed = true;
         burst(f.x, f.y - f.h / 2, f.color, 16);
         break;
       }
@@ -1138,7 +1148,14 @@
     // timers
     if (f.invuln > 0) f.invuln -= dt;
     if (f.specialCd > 0) f.specialCd -= dt;
-    if (f.dodgeTimer > 0) f.dodgeTimer -= dt;
+    if (f.dodgeTimer > 0) {
+      f.dodgeTimer = Math.max(0, f.dodgeTimer - dt);
+      if (f.dodgeTimer === 0) {
+        f.dodgeKind = null;
+        f.dodgeDir = 0;
+        if (f.state === "dodge") f.state = f.onGround ? "idle" : "fall";
+      }
+    }
     if (f.reflectTimer > 0) f.reflectTimer -= dt;
     if (f.counterTimer > 0) f.counterTimer -= dt;
     if (f.slipping > 0) f.slipping -= dt;
@@ -1150,6 +1167,7 @@
       if (f.respawnTimer <= 0) {
         f.x = W / 2 + (f.slot - 1.5) * 48; f.y = 96; f.vx = 0; f.vy = 0;
         f.damage = 0; f.state = "fall"; f.invuln = 1.4; f.hitstun = 0;
+        f.jumps = 2; f.recoveryUsed = false; f.dodgeKind = null; f.dodgeDir = 0;
       } else {
         return;
       }
@@ -1173,9 +1191,9 @@
       if (c.up || c.pJump || (c.x === f.ledge.dir)) {
         f.state = "fall"; f.onGround = false;
         f.y = f.ledge.y - 6; f.x += f.ledge.dir * 30; f.vy = -560; f.vx = f.ledge.dir * 120;
-        f.jumps = 2; f.invuln = 0.4; f.ledge = null;
+        f.jumps = 2; f.recoveryUsed = false; f.invuln = 0.4; f.ledge = null;
       } else if (c.down || c.x === -f.ledge.dir) {
-        f.state = "fall"; f.ledge = null; f.vy = 60; f.jumps = 1; f.dropTimer = 0.25;
+        f.state = "fall"; f.ledge = null; f.vy = 60; f.jumps = 1; f.recoveryUsed = false; f.dropTimer = 0.25;
       }
       return;
     }
@@ -1238,7 +1256,7 @@
     }
 
     // ---- horizontal movement ----
-    if (canMove && !f.shielding && f.dodgeKind !== "roll") {
+    if (canMove && !f.shielding) {
       const moveRate = (rate) => 1 - Math.pow(1 - rate, dt * 60);
       if (f.onGround) {
         if (c.x !== 0) {
@@ -1344,7 +1362,7 @@
       const standing = !wantsDrop && f.vy <= 40 && Math.abs(f.y - py) <= 6;
       if (landing || standing) {
         if (wantsDrop) continue; // drop through pass-through platforms
-        f.y = py; f.vy = 0; f.onGround = true; f.onPlatform = p; f.jumps = 2;
+        f.y = py; f.vy = 0; f.onGround = true; f.onPlatform = p; f.jumps = 2; f.recoveryUsed = false;
         if (f.state === "fall" || f.state === "jump" || f.state === "hit") {
           f.state = Math.abs(f.vx) > 12 ? "walk" : "idle";
         }
@@ -1370,7 +1388,7 @@
       if (nearX && belowLip && outside && f.vy > 0) {
         f.state = "ledge"; f.ledge = { x: edgeX, y: lipY, dir };
         f.x = edgeX - dir * 14; f.y = lipY + Math.round(f.h * 0.55);
-        f.vx = 0; f.vy = 0; f.jumps = 2; f.invuln = Math.max(f.invuln, 0.5);
+        f.vx = 0; f.vy = 0; f.jumps = 2; f.recoveryUsed = false; f.invuln = Math.max(f.invuln, 0.5);
         f.ledgeTimer = 6;
         return;
       }

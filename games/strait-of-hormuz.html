@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Escape the Straight — Rainbot Network</title>
-  <meta name="description" content="You're a 2-million-barrel VLCC duct-taped to the moon. Iran has mines. The US has rockets. Just get to open water." />
+  <meta name="description" content="Steer an overmatched tanker through endless Strait sectors with escalating hazards, procedural sea clutter, boss walls, and extremely questionable maritime audio." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260627-escape-menu-1" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260627-endless-strait-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231e3a5f'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='50' fill='%23fff' text-anchor='middle'%3E%E2%9B%B4%3C/text%3E%3C/svg%3E" />
   <style>
     /* ===== New game-specific styles for the continuous-dodger ===== */
@@ -132,6 +132,55 @@
       z-index: 5;
     }
 
+    .strait-sound-btn[aria-pressed="false"] {
+      border-color: var(--bad);
+      color: var(--bad);
+    }
+
+    .strait-mini-hud {
+      position: absolute;
+      left: 58px;
+      right: 10px;
+      top: 10px;
+      z-index: 6;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .strait-mini-hud span {
+      background: rgba(5, 7, 15, 0.52);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 5px 8px;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.65);
+      white-space: nowrap;
+    }
+    .strait-mini-hud b {
+      color: var(--accent-3);
+      font-weight: 800;
+    }
+    @media (max-width: 900px) {
+      .strait-mini-hud { display: flex; }
+    }
+    .canvas-wrap.is-maxed .strait-mini-hud { display: flex; }
+
+    .rb-touch-layer--strait .rb-touch-cluster--right {
+      align-items: flex-end;
+      flex-direction: column;
+    }
+
+    .rb-touch-layer--strait .rb-touch-btn {
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+    }
+
     .phase-banner {
       position: absolute; top: 60px; left: 50%;
       transform: translateX(-50%);
@@ -163,6 +212,12 @@
       font-size: 22px; cursor: pointer;
       touch-action: none;
     }
+    .dpad--continuous button[data-ctrl="horn"] {
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
     .dpad--continuous button:active { background: var(--accent-2); color: var(--bg); }
   </style>
 </head>
@@ -173,7 +228,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">⛴ Escape the Straight</h1>
-        <div class="game-page__sub">Arrow keys / WASD · Hold to steer · Space = horn · Get to open water</div>
+        <div class="game-page__sub">Arrow keys / WASD · Hold to steer · Space = horn · Endless sectors, louder danger</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -182,27 +237,48 @@
       <div class="game-stage" style="position:relative;">
         <div class="hud">
           <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
-          <div class="hud__item"><span class="hud__label">DIST</span><span class="hud__value" id="hud-dist">0%</span></div>
+          <div class="hud__item"><span class="hud__label">RUN</span><span class="hud__value" id="hud-dist">0.0 NM</span></div>
+          <div class="hud__item"><span class="hud__label">SECTOR</span><span class="hud__value" id="hud-sector">1</span></div>
           <div class="hud__item"><span class="hud__label">HULL</span><span class="hud__value hull-pips" id="hud-hull"></span></div>
           <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">1</span></div>
+          <div class="hud__item"><span class="hud__label">THREAT</span><span class="hud__value" id="hud-threat">1.0x</span></div>
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
         </div>
 
         <div class="canvas-wrap canvas-wrap--ar-585-720">
           <canvas id="gameCanvas" width="585" height="720" tabindex="0"></canvas>
+          <div class="strait-mini-hud" id="strait-mini-hud" aria-hidden="true">
+            <span>SC <b id="mini-score">0</b></span>
+            <span>S <b id="mini-sector">1</b></span>
+            <span>HL <b id="mini-hull">3</b></span>
+          </div>
 
           <div class="phase-banner" id="phase-banner">PHASE 1 · OPEN WATER</div>
           <div class="boss-honkhud" id="boss-honkhud" style="display:none;">HONK! <span id="honk-count">0/5</span></div>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">⛴ READY?</h2>
-            <p class="overlay__sub" id="overlay-sub">You're the <strong style="color:var(--accent-3)">SST Patience</strong> — a 2-million-barrel VLCC held together by gaffer tape and prayers. Iran has mines. The US has questions. Just get to open water.</p>
+            <p class="overlay__sub" id="overlay-sub">You're the <strong style="color:var(--accent-3)">SST Patience</strong> — a 2-million-barrel VLCC held together by gaffer tape and prayers. Survive endless Strait sectors, bully the boss wall with your horn, and watch the sea get progressively less normal.</p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Start voyage</button>
           </div>
 
           <div id="wipeout-mount"></div>
           <div id="gate-mount"></div>
+
+          <div class="rb-touch-layer rb-touch-layer--strait" id="strait-touch-layer" data-strait-controls aria-label="Touch controls">
+            <div class="rb-touch-dpad">
+              <button class="rb-touch-btn" data-ctrl="thrust" aria-label="Throttle">▲</button>
+              <button class="rb-touch-btn" data-ctrl="left" aria-label="Left">◀</button>
+              <button class="rb-touch-btn rb-touch-btn--yellow" data-ctrl="horn" aria-label="Horn">HORN</button>
+              <button class="rb-touch-btn" data-ctrl="right" aria-label="Right">▶</button>
+              <button class="rb-touch-btn" data-ctrl="brake" aria-label="Brake">▼</button>
+            </div>
+            <div class="rb-touch-cluster rb-touch-cluster--right">
+              <button class="rb-touch-btn rb-touch-btn--wide rb-touch-btn--accent" data-ctrl="pause" aria-label="Pause">PAUSE</button>
+              <button class="rb-touch-btn rb-touch-btn--wide rb-touch-btn--primary" data-ctrl="sound" aria-label="Sound">SOUND</button>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -213,9 +289,10 @@
           <div class="controls-row" style="margin-bottom: 8px;">
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+            <button class="btn btn--ghost strait-sound-btn" id="btn-sound" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound on</button>
           </div>
           <!-- Continuous d-pad (mobile) — left side steer, right side throttle/horn -->
-          <div class="dpad dpad--continuous" id="dpad" aria-label="Controls" style="margin: 0 auto;">
+          <div class="dpad dpad--continuous" id="dpad" data-strait-controls aria-label="Controls" style="margin: 0 auto;">
             <div></div>
             <button data-ctrl="thrust" aria-label="Throttle">▲</button>
             <div></div>
@@ -240,9 +317,10 @@
           <ul>
             <li><strong style="color:var(--ink);">Steer</strong> with A/D or ←/→ — hold for continuous turning.</li>
             <li><strong style="color:var(--ink);">Throttle</strong> with W/↑, brake with S/↓.</li>
-            <li><strong style="color:var(--ink);">Horn</strong> (Space) clears nearby mines and the boss.</li>
+            <li><strong style="color:var(--ink);">Horn</strong> (Space) clears nearby hazards and forces boss ships to move.</li>
             <li><strong style="color:var(--ink);">Take 3 hits</strong> and you explode. Share the wipeout card.</li>
-            <li><strong style="color:var(--ink);">Ad walls</strong> at 25%, 60%, 90% offer temporary upgrades.</li>
+            <li><strong style="color:var(--ink);">Survive sectors</strong> that loop forever with tighter lanes, nastier spawns, and weirder sea junk.</li>
+            <li><strong style="color:var(--ink);">Ad walls</strong> inside each sector offer temporary upgrades.</li>
           </ul>
         </details>
       </aside>
@@ -259,8 +337,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
-  <script src="../assets/js/main.js?v=20260627-escape-menu-1"></script>
-  <script src="../assets/js/strait-of-hormuz.js?v=20260616-save-1"></script>
+  <script src="../assets/js/main.js?v=20260627-endless-strait-1"></script>
+  <script src="../assets/js/strait-of-hormuz.js?v=20260627-endless-strait-assets-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

@@ -1,9 +1,10 @@
 /* ============================================
    ESCAPE THE STRAIT — continuous dodger
    --------------------------------------------
-   v3 — replaces the v1 Frogger engine.
-   Real-time floaty steering, 3-hit hull, 5
-   ad-powered upgrades, container ship boss,
+   v4 — endless-sector refit.
+   Real-time floaty steering, 3-hit hull,
+   procedural sea assets, Web Audio SFX,
+   boss gates every sector, escalating pressure,
    wipeout share card. 100% vanilla canvas.
 
    Drop-in replacement for the existing
@@ -24,9 +25,8 @@
   // =========================================================================
 
   // World space
-  const STRAIT_LENGTH = 6000;     // virtual units; the "distance" to open water
-  const STRAIT_START  = 0;
-  const STRAIT_END    = STRAIT_LENGTH;
+  const SECTOR_LENGTH = 6200;     // virtual units per endless sector
+  const NAUTICAL_MILE_UNITS = 880;
   const VISIBLE_AHEAD = 600;      // how far ahead of the ship we render
   const VISIBLE_BEHIND = 80;      // trail length behind the ship
   const LANE_HALF_WIDTH = 220;    // total play width is +/- this from centerline
@@ -50,13 +50,20 @@
   const HORN_COOLDOWN = 0.6;
 
   // Phases (from the GDD)
-  const PHASE_GATES = [0.25, 0.60, 0.90]; // ad-wall checkpoints
+  const PHASE_GATES = [0.25, 0.60, 0.82]; // ad-wall checkpoints per sector
   const PHASE_DEFS = [
-    { id: 1, name: "OPEN WATER",        width: 220, spawnEvery: 1.4, mix: { mine: 0.85, sub: 0.15, rocket: 0    }, fog: 0    },
-    { id: 2, name: "TIGHTEN UP",        width: 180, spawnEvery: 1.0, mix: { mine: 0.55, sub: 0.30, rocket: 0.15 }, fog: 0    },
-    { id: 3, name: "FOG OF HORMUZ",     width: 140, spawnEvery: 0.7, mix: { mine: 0.40, sub: 0.30, rocket: 0.30 }, fog: 0.35 },
-    { id: 4, name: "NO REFUNDS",        width: 100, spawnEvery: 0.45,mix: { mine: 0.30, sub: 0.30, rocket: 0.40 }, fog: 0.55 },
-    { id: 5, name: "THE BOSS WALL",     width: 240, spawnEvery: 999, mix: { mine: 0,    sub: 0,    rocket: 0    }, fog: 0    }, // boss only
+    { id: 1, name: "OPEN WATER",        width: 220, spawnEvery: 1.25, mix: { mine: 0.72, sub: 0.16, rocket: 0.00, drone: 0.00, slick: 0.12 }, fog: 0.00 },
+    { id: 2, name: "TIGHTEN UP",        width: 188, spawnEvery: 0.95, mix: { mine: 0.48, sub: 0.25, rocket: 0.12, drone: 0.00, slick: 0.15 }, fog: 0.05 },
+    { id: 3, name: "FOG OF HORMUZ",     width: 152, spawnEvery: 0.68, mix: { mine: 0.33, sub: 0.25, rocket: 0.22, drone: 0.08, slick: 0.12 }, fog: 0.34 },
+    { id: 4, name: "NO REFUNDS",        width: 116, spawnEvery: 0.48, mix: { mine: 0.27, sub: 0.22, rocket: 0.28, drone: 0.13, slick: 0.10 }, fog: 0.48 },
+    { id: 5, name: "BOSS WALL",         width: 184, spawnEvery: 0.72, mix: { mine: 0.34, sub: 0.00, rocket: 0.24, drone: 0.22, slick: 0.20 }, fog: 0.18 },
+  ];
+
+  const SECTOR_THEMES = [
+    { name: "Neon Gulf", top: "#09546f", mid: "#0a334f", bottom: "#041a2f", foam: "#9ff7ff", coast: "#2d2b3c", glow: "#2ee0ff" },
+    { name: "Rustwater", top: "#304c57", mid: "#123746", bottom: "#071a27", foam: "#ffd43b", coast: "#493220", glow: "#ff8c1a" },
+    { name: "Pink Alert", top: "#233a68", mid: "#17294a", bottom: "#080d22", foam: "#ffc5df", coast: "#382846", glow: "#ff2e88" },
+    { name: "Black Glass", top: "#102c36", mid: "#091d29", bottom: "#030913", foam: "#d7fbff", coast: "#1c2230", glow: "#6bff7d" },
   ];
 
   // Upgrades (5 funny/strong options)
@@ -104,6 +111,9 @@
     score: 0,
     distance: 0,             // current z position along the strait
     phase: 1,
+    sector: 1,
+    threat: 1,
+    assetSeed: Math.floor(Math.random() * 999999),
 
     // Ship (world-space)
     ship: {
@@ -136,6 +146,9 @@
     boss: null,              // {x, y, w, h, honks, required, resolved, mode}
     bossActive: false,
     bossArmed: false,        // true once the player has been told to honk
+    bossSector: 0,
+    sectorCleared: 0,
+    bossSpawnT: 0,
 
     // Phase gates
     phaseGatesHit: new Set(),
@@ -158,6 +171,37 @@
   };
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create("hormuz", { version: 1 });
   let saveMenu = null;
+
+  const audio = {
+    ctx: null,
+    master: null,
+    engineOsc: null,
+    engineGain: null,
+    enabled: localStorage.getItem("rb-hormuz-sound") !== "off",
+  };
+
+  const ASSET_PATHS = {
+    background: "../assets/img/strait/background-neon-strait.png",
+    tanker: "../assets/img/strait/tanker.png",
+    mine: "../assets/img/strait/mine.png",
+    drone: "../assets/img/strait/drone.png",
+    container: "../assets/img/strait/container.png",
+    slick: "../assets/img/strait/oil-slick.png",
+    repairBuoy: "../assets/img/strait/repair-buoy.png",
+  };
+
+  const artAssets = {};
+  Object.entries(ASSET_PATHS).forEach(([key, src]) => {
+    const img = new Image();
+    artAssets[key] = { img, ready: false, failed: false };
+    img.decoding = "async";
+    img.onload = () => {
+      artAssets[key].ready = true;
+      if (!state.running && typeof draw === "function") requestAnimationFrame(draw);
+    };
+    img.onerror = () => { artAssets[key].failed = true; };
+    img.src = src;
+  });
 
   // =========================================================================
   // 3. UTILITIES
@@ -187,26 +231,253 @@
     ctx.closePath();
   }
 
-  function getPhase(progress01) {
-    if (progress01 < 0.15) return PHASE_DEFS[0];
-    if (progress01 < 0.40) return PHASE_DEFS[1];
-    if (progress01 < 0.70) return PHASE_DEFS[2];
-    if (progress01 < 0.92) return PHASE_DEFS[3];
-    return PHASE_DEFS[4];
+  function getArt(key) {
+    const asset = artAssets[key];
+    return asset && asset.ready ? asset.img : null;
+  }
+
+  function drawArt(key, x, y, w, h, alpha = 1) {
+    const img = getArt(key);
+    if (!img) return false;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+    ctx.restore();
+    return true;
+  }
+
+  function hash01(n) {
+    const x = Math.sin(n * 127.1 + state.assetSeed * 311.7) * 43758.5453123;
+    return x - Math.floor(x);
+  }
+
+  function pickWeighted(weights) {
+    const entries = Object.entries(weights);
+    const total = entries.reduce((sum, [, weight]) => sum + Math.max(0, weight), 0) || 1;
+    let roll = Math.random() * total;
+    for (const [key, weight] of entries) {
+      roll -= Math.max(0, weight);
+      if (roll <= 0) return key;
+    }
+    return entries[entries.length - 1][0];
+  }
+
+  function getSectorMetrics(distance = state.distance) {
+    const sectorIndex = Math.max(0, Math.floor(distance / SECTOR_LENGTH));
+    const sector = sectorIndex + 1;
+    const sectorStart = sectorIndex * SECTOR_LENGTH;
+    const localDistance = Math.max(0, distance - sectorStart);
+    const progress = clamp(localDistance / SECTOR_LENGTH, 0, 0.9999);
+    let phase = 1;
+    if (progress >= 0.92) phase = 5;
+    else if (progress >= 0.70) phase = 4;
+    else if (progress >= 0.40) phase = 3;
+    else if (progress >= 0.15) phase = 2;
+    const sectorRamp = 1 + sectorIndex * 0.18;
+    const pressureRamp = 1 + progress * 0.22;
+    const threat = sectorRamp * pressureRamp;
+    return { sectorIndex, sector, sectorStart, localDistance, progress, phase, threat };
+  }
+
+  function getPhaseProgress() {
+    return getSectorMetrics();
+  }
+
+  function getPhaseDef() {
+    return PHASE_DEFS[getPhaseProgress().phase - 1];
+  }
+
+  function getLaneHalfWidth() {
+    const metrics = getPhaseProgress();
+    const def = PHASE_DEFS[metrics.phase - 1];
+    const squeeze = Math.min(48, (metrics.sector - 1) * 7);
+    return Math.max(86, def.width - squeeze);
+  }
+
+  function formatRunDistance(distance = state.distance) {
+    return (distance / NAUTICAL_MILE_UNITS).toFixed(1) + " NM";
+  }
+
+  function getTheme(sector = getPhaseProgress().sector) {
+    return SECTOR_THEMES[(sector - 1) % SECTOR_THEMES.length];
   }
 
   // =========================================================================
-  // 4. INPUT
+  // 4. AUDIO
+  // =========================================================================
+
+  function ensureAudio() {
+    if (!audio.enabled || audio.ctx) return audio.ctx;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audio.ctx = new Ctx();
+      audio.master = audio.ctx.createGain();
+      audio.master.gain.value = 0.22;
+      audio.master.connect(audio.ctx.destination);
+      startEngineHum();
+      updateSoundButton();
+      return audio.ctx;
+    } catch (err) {
+      audio.enabled = false;
+      updateSoundButton();
+      return null;
+    }
+  }
+
+  function startEngineHum() {
+    const ctxAudio = audio.ctx;
+    if (!ctxAudio || audio.engineOsc) return;
+    audio.engineOsc = ctxAudio.createOscillator();
+    audio.engineGain = ctxAudio.createGain();
+    audio.engineOsc.type = "sawtooth";
+    audio.engineOsc.frequency.value = 42;
+    audio.engineGain.gain.value = 0;
+    audio.engineOsc.connect(audio.engineGain);
+    audio.engineGain.connect(audio.master);
+    audio.engineOsc.start();
+  }
+
+  function stopEngineHum() {
+    if (!audio.ctx || !audio.engineGain) return;
+    audio.engineGain.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.06);
+  }
+
+  function updateEngineHum() {
+    if (!audio.ctx || !audio.engineGain || !audio.engineOsc) return;
+    const speed = Math.hypot(state.ship.vx, state.ship.vy);
+    const active = state.running && !state.paused && !state.gameOver && audio.enabled;
+    const targetGain = active ? clamp(0.018 + speed / 9000, 0.018, 0.055) : 0;
+    const targetFreq = 38 + clamp(speed, 0, 220) * 0.34 + state.threat * 3;
+    audio.engineGain.gain.setTargetAtTime(targetGain, audio.ctx.currentTime, 0.08);
+    audio.engineOsc.frequency.setTargetAtTime(targetFreq, audio.ctx.currentTime, 0.08);
+  }
+
+  function playTone(freq, dur = 0.12, type = "sine", gain = 0.12, delay = 0) {
+    const ctxAudio = ensureAudio();
+    if (!ctxAudio || !audio.master) return;
+    const now = ctxAudio.currentTime + delay;
+    const osc = ctxAudio.createOscillator();
+    const g = ctxAudio.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(gain, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(g);
+    g.connect(audio.master);
+    osc.start(now);
+    osc.stop(now + dur + 0.03);
+  }
+
+  function playNoise(dur = 0.18, gain = 0.14, filterFreq = 800) {
+    const ctxAudio = ensureAudio();
+    if (!ctxAudio || !audio.master) return;
+    const buffer = ctxAudio.createBuffer(1, Math.floor(ctxAudio.sampleRate * dur), ctxAudio.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctxAudio.createBufferSource();
+    const filter = ctxAudio.createBiquadFilter();
+    const g = ctxAudio.createGain();
+    src.buffer = buffer;
+    filter.type = "lowpass";
+    filter.frequency.value = filterFreq;
+    g.gain.setValueAtTime(gain, ctxAudio.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctxAudio.currentTime + dur);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(audio.master);
+    src.start();
+  }
+
+  function playSfx(kind) {
+    if (!audio.enabled) return;
+    switch (kind) {
+      case "start":
+        playTone(196, 0.12, "triangle", 0.08);
+        playTone(294, 0.12, "triangle", 0.07, 0.09);
+        playTone(392, 0.18, "triangle", 0.06, 0.18);
+        break;
+      case "honk":
+        playTone(180, 0.22, "square", 0.14);
+        playTone(142, 0.28, "sawtooth", 0.09, 0.04);
+        break;
+      case "hit":
+        playNoise(0.22, 0.18, 520);
+        playTone(74, 0.28, "sawtooth", 0.16);
+        break;
+      case "boom":
+        playNoise(0.5, 0.26, 360);
+        playTone(54, 0.55, "sawtooth", 0.22);
+        break;
+      case "pickup":
+        playTone(740, 0.08, "sine", 0.08);
+        playTone(980, 0.1, "sine", 0.07, 0.07);
+        break;
+      case "upgrade":
+        playTone(330, 0.08, "triangle", 0.08);
+        playTone(495, 0.08, "triangle", 0.08, 0.08);
+        playTone(660, 0.12, "triangle", 0.08, 0.16);
+        break;
+      case "phase":
+        playTone(260, 0.08, "square", 0.07);
+        playTone(520, 0.14, "square", 0.06, 0.08);
+        break;
+      case "boss":
+        playTone(92, 0.35, "sawtooth", 0.16);
+        playTone(138, 0.24, "square", 0.09, 0.16);
+        break;
+      case "slip":
+        playNoise(0.12, 0.08, 1400);
+        playTone(220, 0.14, "sine", 0.05);
+        break;
+    }
+  }
+
+  function setSoundEnabled(enabled) {
+    audio.enabled = enabled;
+    localStorage.setItem("rb-hormuz-sound", enabled ? "on" : "off");
+    updateSoundButton();
+    if (enabled) {
+      ensureAudio();
+      if (audio.ctx?.state === "suspended") audio.ctx.resume();
+      RB.toast("Sound on", "good");
+    } else {
+      stopEngineHum();
+      RB.toast("Sound muted", "");
+    }
+  }
+
+  function updateSoundButton() {
+    const btn = document.getElementById("btn-sound");
+    if (!btn) return;
+    btn.textContent = audio.enabled ? "Sound on" : "Muted";
+    btn.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
+  }
+
+  // =========================================================================
+  // 5. INPUT
   // =========================================================================
 
   const keys = {};
   window.addEventListener("keydown", (e) => {
+    const editingText = e.target?.matches?.("input, textarea, select, [contenteditable='true']");
+    if (editingText) return;
+    if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
     keys[e.code] = true;
+    if (audio.enabled && (e.code === "Space" || e.code.startsWith("Arrow") || e.code.startsWith("Key"))) {
+      ensureAudio();
+      if (audio.ctx?.state === "suspended") audio.ctx.resume();
+    }
     if (e.code === "Space" && state.running && !state.paused && !state.gameOver) {
       tryHonk();
     }
   });
-  window.addEventListener("keyup", (e) => { keys[e.code] = false; });
+  window.addEventListener("keyup", (e) => {
+    const editingText = e.target?.matches?.("input, textarea, select, [contenteditable='true']");
+    if (editingText) return;
+    keys[e.code] = false;
+  });
 
   function readInput() {
     let throttle = 0, steer = 0;
@@ -218,29 +489,36 @@
     state.input.steer = steer;
   }
 
-  // On-screen d-pad (mobile) — replicates held inputs
+  // On-screen controls (mobile / maxed canvas) — replicates held inputs
   function setupTouch() {
-    const dpad = document.getElementById("dpad");
-    if (!dpad) return;
     const set = (ctrl, down) => {
       const code = ({
         thrust: "KeyW", brake: "KeyS",
         left:   "KeyA", right:  "KeyD",
         horn:   "Space"
       })[ctrl];
+      if (ctrl === "pause" && down) {
+        pauseGame();
+        return;
+      }
+      if (ctrl === "sound" && down) {
+        setSoundEnabled(!audio.enabled);
+        return;
+      }
       if (!code) return;
       keys[code] = down;
+      if (down && audio.enabled) ensureAudio();
       if (down && ctrl === "horn" && state.running && !state.paused && !state.gameOver) {
         tryHonk();
       }
     };
-    dpad.querySelectorAll("button[data-ctrl]").forEach((btn) => {
+    document.querySelectorAll("[data-strait-controls] button[data-ctrl]").forEach((btn) => {
       const ctrl = btn.dataset.ctrl;
       const press = (e) => { e.preventDefault(); set(ctrl, true); };
       const release = (e) => { e.preventDefault(); set(ctrl, false); };
       btn.addEventListener("touchstart", press, { passive: false });
-      btn.addEventListener("touchend", release);
-      btn.addEventListener("touchcancel", release);
+      btn.addEventListener("touchend", release, { passive: false });
+      btn.addEventListener("touchcancel", release, { passive: false });
       btn.addEventListener("mousedown", press);
       btn.addEventListener("mouseup", release);
       btn.addEventListener("mouseleave", release);
@@ -315,9 +593,10 @@
     s.x += s.vx * dt;
     s.y += s.vy * dt;
 
-    // ---- CLAMP TO LANE ----
-    if (s.x < -LANE_HALF_WIDTH) { s.x = -LANE_HALF_WIDTH; s.vx = 0; }
-    if (s.x >  LANE_HALF_WIDTH) { s.x =  LANE_HALF_WIDTH; s.vx = 0; }
+    // ---- CLAMP TO CURRENT LANE ----
+    const laneHalf = getLaneHalfWidth();
+    if (s.x < -laneHalf) { s.x = -laneHalf; s.vx = 0; }
+    if (s.x >  laneHalf) { s.x =  laneHalf; s.vx = 0; }
     // Don't let the player go backward past start
     if (s.y < 0) { s.y = 0; s.vy = Math.max(0, s.vy); }
 
@@ -339,12 +618,11 @@
   // =========================================================================
 
   function tryHonk() {
+    ensureAudio();
     const s = state.ship;
     if (s.hornCooldown > 0) return;
     s.hornCooldown = HORN_COOLDOWN;
-
-    // SFX hook (omitted in the mock — RB.toast instead)
-    // playHornSfx();
+    playSfx("honk");
 
     // Boss interaction
     if (state.bossActive && state.boss && !state.boss.resolved) {
@@ -355,6 +633,7 @@
         const el = document.getElementById("honk-count");
         if (el) el.textContent = `${state.boss.honks}/${state.boss.required}`;
         spawnParticles(state.boss.x, state.boss.y - 10, "#f7d716", 20, 220);
+        state.cam.shake = Math.max(state.cam.shake, 0.12);
         if (state.boss.honks >= state.boss.required) {
           resolveBoss(true);
         }
@@ -371,6 +650,9 @@
         if (o.type === "mine") { o.dead = true; cleared++; spawnParticles(o.x, o.y, "#ff5c5c", 16, 180); }
         else if (o.type === "sub") { o.retreat = true; cleared++; spawnParticles(o.x, o.y, "#2ee0ff", 14, 160); }
         else if (o.type === "rocket") { o.dead = true; cleared++; spawnParticles(o.x, o.y, "#ff8c1a", 18, 200); }
+        else if (o.type === "drone") { o.dead = true; cleared++; spawnParticles(o.x, o.y, "#2ee0ff", 18, 220); }
+        else if (o.type === "slick") { o.dead = true; cleared++; spawnParticles(o.x, o.y, "#b7ffef", 10, 120); }
+        else if (o.type === "container") { o.vx += (o.x < s.x ? -80 : 80); cleared++; spawnParticles(o.x, o.y, "#ffd43b", 12, 150); }
       }
     }
     if (cleared > 0) RB.toast(`📯 HORN! cleared ${cleared} hazard${cleared === 1 ? "" : "s"}`, "good");
@@ -380,38 +662,65 @@
   // 7. OBSTACLES
   // =========================================================================
 
-  function spawnObstacle() {
-    const phase = getPhaseProgress().phase;
-    const def = PHASE_DEFS[phase - 1];
-    const r = Math.random();
-    let type;
-    if (r < def.mix.mine) type = "mine";
-    else if (r < def.mix.mine + def.mix.sub) type = "sub";
-    else type = "rocket";
+  function spawnObstacle(typeOverride = null) {
+    const metrics = getPhaseProgress();
+    const def = PHASE_DEFS[metrics.phase - 1];
+    const type = typeOverride || pickWeighted(def.mix);
+    const difficulty = metrics.threat;
+    const laneHalf = getLaneHalfWidth();
 
     const s = state.ship;
     const aheadY = s.y + VISIBLE_AHEAD + rand(0, 60);
-    const lateral = rand(-LANE_HALF_WIDTH, LANE_HALF_WIDTH);
-    const o = { type, x: lateral, y: aheadY, age: 0, life: 18 };
+    const lateral = rand(-laneHalf + 14, laneHalf - 14);
+    const o = {
+      type,
+      x: lateral,
+      y: aheadY,
+      age: 0,
+      life: 18,
+      seed: Math.floor(Math.random() * 99999),
+      tint: getTheme(metrics.sector).glow
+    };
 
     if (type === "mine") {
-      o.vx = 0; o.vy = -40;     // approach speed (world units/sec) toward player
+      o.vx = rand(-7, 7) * difficulty;
+      o.vy = -rand(38, 56) * difficulty;     // approach speed (world units/sec) toward player
       o.phase_offset = Math.random() * TAU;
-      o.bob_amp = 1.5;
+      o.bob_amp = rand(1.2, 2.5);
       o.face = choice(["smug", "surprised", "offended"]);
-      o.w = 22; o.h = 22;
+      o.spikes = randi(7, 11);
+      o.w = 22 + Math.min(7, metrics.sector); o.h = o.w;
     } else if (type === "sub") {
       o.dir = Math.random() < 0.5 ? 1 : -1;
-      o.vx = o.dir * rand(35, 55);
-      o.vy = -rand(25, 50);     // sub approaches the player, not just sits still
-      o.tell = rand(0.6, 1.2);  // telegraph duration
+      o.vx = o.dir * rand(38, 64) * difficulty;
+      o.vy = -rand(28, 52) * difficulty;     // sub approaches the player, not just sits still
+      o.tell = rand(0.45, 1.05);  // telegraph duration
       o.dove = false;
-      o.w = 36; o.h = 18;
+      o.w = 38; o.h = 18;
     } else if (type === "rocket") {
       o.vx = 0;
-      o.vy = -rand(45, 65);     // slow-mo approach
+      o.vy = -rand(52, 82) * difficulty;     // slow-mo approach
       o.w = 8; o.h = 24;
       o.faceDropped = false;
+    } else if (type === "drone") {
+      o.dir = Math.random() < 0.5 ? 1 : -1;
+      o.vx = o.dir * rand(80, 126) * difficulty;
+      o.vy = -rand(22, 44) * difficulty;
+      o.w = 28; o.h = 18;
+      o.blink = Math.random() * TAU;
+    } else if (type === "slick") {
+      o.vx = rand(-10, 10);
+      o.vy = -rand(20, 40) * difficulty;
+      o.w = rand(42, 68);
+      o.h = rand(20, 34);
+      o.spin = rand(-1.4, 1.4);
+      o.slipped = false;
+    } else if (type === "container") {
+      o.vx = rand(-22, 22) * difficulty;
+      o.vy = -rand(36, 62) * difficulty;
+      o.w = rand(34, 54);
+      o.h = rand(22, 30);
+      o.color = choice(["#ff5c5c", "#2ee0ff", "#ffd43b", "#ff8c1a"]);
     }
 
     state.obstacles.push(o);
@@ -431,23 +740,47 @@
         o.x += o.vx * dt;
         o.y += o.vy * dt;
         // Mid-life switch direction (the "tariff" two-step)
-        if (o.age > 2.0) o.vx = -o.vx;
+        if (o.age > 2.0 && !o.switched) {
+          o.vx = -o.vx;
+          o.switched = true;
+        }
         if (o.retreat) o.vy += 80 * dt; // dive away
       } else if (o.type === "rocket") {
         o.y += o.vy * dt;
         // Gentle homing
         const dx = state.ship.x - o.x;
-        const targetVx = clamp(dx * 0.5, -25, 25);
+        const targetVx = clamp(dx * 0.58, -34 * state.threat, 34 * state.threat);
         o.vx += (targetVx - o.vx) * dt * 1.2;
         o.x += o.vx * dt;
         // Face falls off at half life
         if (!o.faceDropped && o.age > 1.2) o.faceDropped = true;
+      } else if (o.type === "drone") {
+        o.x += o.vx * dt;
+        o.y += o.vy * dt + Math.sin(o.age * 8 + o.blink) * 10 * dt;
+        const lane = getLaneHalfWidth();
+        if (Math.abs(o.x) > lane + 40) o.vx *= -1;
+        if (o.age > 0.9 && !o.dropped && Math.abs(o.x - state.ship.x) < 34) {
+          o.dropped = true;
+          spawnObstacle("mine");
+          const mine = state.obstacles[state.obstacles.length - 1];
+          mine.x = o.x;
+          mine.y = o.y + 18;
+          mine.vy = -80 * state.threat;
+        }
+      } else if (o.type === "slick") {
+        o.x += o.vx * dt + Math.sin(o.age * 2 + o.seed) * 4 * dt;
+        o.y += o.vy * dt;
+      } else if (o.type === "container") {
+        o.x += o.vx * dt;
+        o.y += o.vy * dt;
+        o.vx += Math.sin(o.age * 1.7 + o.seed) * 8 * dt;
       }
 
       // Despawn behind ship
       if (o.y < state.ship.y - VISIBLE_BEHIND) o.dead = true;
       if (o.y > state.ship.y + VISIBLE_AHEAD * 1.5) o.dead = true;
-      if (o.x < -LANE_HALF_WIDTH - 80 || o.x > LANE_HALF_WIDTH + 80) o.dead = true;
+      const laneLimit = getLaneHalfWidth();
+      if (o.x < -laneLimit - 90 || o.x > laneLimit + 90) o.dead = true;
       if (o.age > o.life) o.dead = true;
 
       if (o.dead) {
@@ -461,15 +794,40 @@
 
       // Collision with ship
       if (!state.ship.iframe && collideShipObstacle(o)) {
-        takeHit(o);
+        handleObstacleContact(o);
       }
     }
+  }
+
+  function handleObstacleContact(o) {
+    if (o.type === "slick") {
+      if (o.slipped) return;
+      o.slipped = true;
+      o.dead = true;
+      state.ship.vx += (state.ship.x < o.x ? -1 : 1) * 92 * state.threat;
+      state.ship.vy *= 0.55;
+      state.ship.iframe = Math.max(state.ship.iframe, 0.35);
+      state.cam.shake = Math.max(state.cam.shake, 0.18);
+      spawnParticles(o.x, o.y, "#b7ffef", 12, 160);
+      playSfx("slip");
+      RB.toast("🛢 Oil slick! steering filed for divorce", "bad");
+      return;
+    }
+    takeHit(o);
   }
 
   function collideShipObstacle(o) {
     const s = state.ship;
     // Approximate the ship as a small circle for forgiving collision
     const dx = s.x - o.x, dy = s.y - o.y;
+    if (o.type === "slick") {
+      const nx = dx / Math.max(18, o.w * 0.5);
+      const ny = dy / Math.max(12, o.h * 0.5);
+      return (nx * nx + ny * ny) < 1.15;
+    }
+    if (o.type === "container") {
+      return Math.abs(dx) < o.w * 0.5 + 12 && Math.abs(dy) < o.h * 0.5 + 14;
+    }
     const rShip = 12, rObs = Math.max(o.w, o.h) * 0.5;
     return (dx * dx + dy * dy) < (rShip + rObs) * (rShip + rObs);
   }
@@ -492,10 +850,14 @@
     state.cam.flash = 0.4;
     spawnParticles(s.x, s.y, "#ff5c5c", 24, 240);
     spawnParticles(s.x, s.y, "#ff8c1a", 16, 200);
+    playSfx(s.hull <= 0 ? "boom" : "hit");
 
     let reason = source?.type === "mine" ? "Sentient Mine"
               : source?.type === "sub"  ? "Angry Merchant Sub"
               : source?.type === "rocket" ? "Friendly Fire from a Smiley Rocket"
+              : source?.type === "drone" ? "Customs Drone with Boundary Issues"
+              : source?.type === "container" ? "Loose Container of Bad Ideas"
+              : source?.type === "boss" ? "Container Ship With Main Character Energy"
               : "Mystery Explosion";
     state.lastCauseOfDeath = reason;
 
@@ -504,7 +866,10 @@
     } else {
       const msg = source?.type === "mine" ? "💥 Mine hit — " + s.hull + " hull left"
                 : source?.type === "sub"  ? "💥 Sub clipped — " + s.hull + " hull left"
-                : "💥 Rocket hit — " + s.hull + " hull left";
+                : source?.type === "rocket" ? "💥 Rocket hit — " + s.hull + " hull left"
+                : source?.type === "drone" ? "💥 Drone bonk — " + s.hull + " hull left"
+                : source?.type === "container" ? "💥 Container crunch — " + s.hull + " hull left"
+                : "💥 Hull hit — " + s.hull + " hull left";
       RB.toast(msg, "bad");
       updateHUD();
     }
@@ -516,7 +881,9 @@
     if (saveSlot) saveSlot.clear();
     state._dethTime = performance.now();
     state.lastDeathScore = state.score;
-    state.lastDeathDistance = Math.round((state.distance / STRAIT_LENGTH) * 100);
+    state.lastDeathDistance = formatRunDistance(state.distance);
+    state.lastDeathSector = getPhaseProgress().sector;
+    stopEngineHum();
 
     // Big explosion
     spawnParticles(state.ship.x, state.ship.y, "#ff5c5c", 60, 320);
@@ -541,10 +908,15 @@
   // =========================================================================
 
   function maybeSpawnPickup() {
-    if (Math.random() > 0.012) return; // rare-ish
+    const metrics = getPhaseProgress();
+    const pickupChance = clamp(0.018 - (metrics.sector - 1) * 0.0015, 0.008, 0.018);
+    if (Math.random() > pickupChance) return; // rare-ish
     const s = state.ship;
+    const laneHalf = getLaneHalfWidth();
+    const type = Math.random() < 0.18 && s.hull < s.maxHull ? "patch" : "oil";
     state.pickups.push({
-      x: rand(-LANE_HALF_WIDTH + 20, LANE_HALF_WIDTH - 20),
+      type,
+      x: rand(-laneHalf + 22, laneHalf - 22),
       y: s.y + rand(80, VISIBLE_AHEAD),
       age: 0
     });
@@ -557,10 +929,18 @@
       if (p.y < state.ship.y - VISIBLE_BEHIND) { state.pickups.splice(i, 1); continue; }
       if (dist2(p.x, p.y, state.ship.x, state.ship.y) < 22 * 22) {
         state.pickups.splice(i, 1);
-        state.score += 50;
-        spawnParticles(p.x, p.y, "#f7d716", 14, 200);
-        spawnParticles(p.x, p.y, "#ff8c1a", 8, 140);
-        RB.toast("+50 OIL", "good");
+        if (p.type === "patch") {
+          state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + 1);
+          state.score += 120;
+          spawnParticles(p.x, p.y, "#6bff7d", 16, 180);
+          RB.toast("+1 HULL PATCH", "good");
+        } else {
+          state.score += 50;
+          spawnParticles(p.x, p.y, "#f7d716", 14, 200);
+          spawnParticles(p.x, p.y, "#ff8c1a", 8, 140);
+          RB.toast("+50 OIL", "good");
+        }
+        playSfx("pickup");
         updateHUD();
       }
     }
@@ -604,36 +984,76 @@
   // =========================================================================
 
   function armBoss() {
-    if (state.boss || state.bossArmed) return;
+    const metrics = getPhaseProgress();
+    if (state.bossSector === metrics.sector || state.sectorCleared === metrics.sector) return;
     state.bossArmed = true;
     state.bossActive = true;
+    state.bossSector = metrics.sector;
+    state.bossSpawnT = 0;
     state.boss = {
       x: 0,
-      y: state.ship.y + 400,
-      w: 560, h: 80,
+      y: metrics.sectorStart + SECTOR_LENGTH - 210,
+      w: Math.max(420, 560 - (metrics.sector - 1) * 12),
+      h: 80,
       honks: 0,
-      required: 5,
+      required: Math.min(9, 4 + metrics.sector),
       resolved: false,
-      mode: "idle"
+      mode: "idle",
+      sector: metrics.sector,
+      wobble: Math.random() * TAU
     };
-    state.bannerText = "🚢 CONTAINER SHIP — HONK 5 TIMES!";
+    state.bannerText = `🚢 SECTOR ${metrics.sector} BOSS — HONK ${state.boss.required} TIMES!`;
     state.bannerUntil = performance.now() + 2400;
+    playSfx("boss");
     const hud = document.getElementById("boss-honkhud");
     if (hud) hud.style.display = "block";
     const el = document.getElementById("honk-count");
     if (el) el.textContent = `0/${state.boss.required}`;
   }
 
+  function updateBoss(dt) {
+    const b = state.boss;
+    if (!b || !state.bossActive) return;
+    b.age = (b.age || 0) + dt;
+    b.x = Math.sin(b.age * 0.75 + b.wobble) * Math.min(52, 16 + b.sector * 5);
+    b.y -= Math.min(18 + b.sector * 2, 42) * dt;
+
+    if (!b.resolved) {
+      state.bossSpawnT += dt;
+      const spawnCadence = Math.max(0.55, 1.35 - b.sector * 0.08);
+      if (state.bossSpawnT >= spawnCadence) {
+        state.bossSpawnT = 0;
+        spawnObstacle(Math.random() < 0.55 ? "container" : "drone");
+        const latest = state.obstacles[state.obstacles.length - 1];
+        latest.x = clamp(b.x + rand(-b.w * 0.42, b.w * 0.42), -getLaneHalfWidth() + 20, getLaneHalfWidth() - 20);
+        latest.y = b.y + rand(40, 90);
+      }
+
+      if (state.ship.y > b.y - 88) {
+        state.ship.y = b.y - 88;
+        state.ship.vy = Math.min(state.ship.vy, -80);
+        if (!state.ship.iframe) takeHit({ type: "boss" });
+      }
+    } else if (b.age > (b.resolvedAt || 0) + 1.2) {
+      state.bossActive = false;
+      state.boss = null;
+    }
+  }
+
   function resolveBoss(success) {
     const b = state.boss;
     if (!b || b.resolved) return;
     b.resolved = true;
+    b.resolvedAt = b.age || 0;
     b.mode = success ? "success" : "fail";
     if (success) {
-      state.score += 5000;
-      RB.toast("🚢 +5000 CONTAINER CLEARED!", "good");
+      const bonus = 4200 + b.sector * 900;
+      state.score += bonus;
+      state.sectorCleared = b.sector;
+      RB.toast(`🚢 +${bonus.toLocaleString()} SECTOR ${b.sector} CLEARED!`, "good");
       spawnParticles(b.x, b.y - 20, "#6bff7d", 40, 280);
       spawnParticles(b.x, b.y - 20, "#2ee0ff", 30, 220);
+      playSfx("upgrade");
     } else {
       RB.toast("🚢 ignored. The ship passed on its own.", "");
     }
@@ -647,21 +1067,12 @@
   // 12. PHASE GATES (ad-wall)
   // =========================================================================
 
-  function getPhaseProgress() {
-    const p = clamp(state.distance / STRAIT_LENGTH, 0, 1);
-    let phase = 1;
-    if (p >= 0.92) phase = 5;
-    else if (p >= 0.70) phase = 4;
-    else if (p >= 0.40) phase = 3;
-    else if (p >= 0.15) phase = 2;
-    return { progress: p, phase };
-  }
-
   function checkPhaseGates() {
-    const { progress } = getPhaseProgress();
+    const { progress, sector } = getPhaseProgress();
     for (let i = 0; i < PHASE_GATES.length; i++) {
-      if (progress >= PHASE_GATES[i] && !state.phaseGatesHit.has(i)) {
-        state.phaseGatesHit.add(i);
+      const gateKey = `${sector}:${i}`;
+      if (progress >= PHASE_GATES[i] && !state.phaseGatesHit.has(gateKey)) {
+        state.phaseGatesHit.add(gateKey);
         openGate(i);
         return;
       }
@@ -726,6 +1137,8 @@
       }
     }
     updateHUD();
+    renderPowerups();
+    playSfx("upgrade");
   }
 
   function tickUpgrades() {
@@ -736,11 +1149,22 @@
       s.turboMult = 1;
       delete state.activeUpgrades.turbo;
       RB.toast("⏰ Turbo expired", "");
+      renderPowerups();
     }
     // Radar expiry
     if (state.activeUpgrades.radar && now > state.activeUpgrades.radar) {
       delete state.activeUpgrades.radar;
       RB.toast("🦆 Duck radar offline", "");
+      renderPowerups();
+    }
+    if (state.activeUpgrades.fuzzyDice && now > state.activeUpgrades.fuzzyDice) {
+      delete state.activeUpgrades.fuzzyDice;
+      RB.toast("🎲 Dice stopped judging", "");
+      renderPowerups();
+    }
+    if (!state._nextPowerupRender || now >= state._nextPowerupRender) {
+      state._nextPowerupRender = now + 1;
+      renderPowerups();
     }
   }
 
@@ -753,6 +1177,7 @@
     state.cam.flash = 0.2;
     spawnParticles(state.ship.x, state.ship.y, "#2ee0ff", 18, 180);
     RB.toast("🫧 Soap-bubble popped! (Shield gone)", "");
+    renderPowerups();
   }
 
   // (shield check is now done inside takeHit itself)
@@ -766,14 +1191,15 @@
     if (!mount) return;
     const caption = choice(WIPEOUT_CAPTIONS);
     const cause = state.lastCauseOfDeath || "Mystery Explosion";
-    const distPct = state.lastDeathDistance ?? Math.round((state.distance / STRAIT_LENGTH) * 100);
+    const runDistance = state.lastDeathDistance || formatRunDistance(state.distance);
+    const sector = state.lastDeathSector || getPhaseProgress().sector;
     const isHigh = RB.getHighScore("hormuz") === state.score;
     mount.innerHTML = `
       <div class="wipeout-card">
         <div class="wipeout-card__death">💀 ${escapeHtml(cause)}</div>
         <div class="wipeout-card__stats">
           Score: <strong>${state.score.toLocaleString()}</strong> ·
-          Distance: <strong>${distPct}%</strong> · Phase: <strong>${state.phase}</strong>
+          Run: <strong>${runDistance}</strong> · Sector: <strong>${sector}</strong> · Phase: <strong>${state.phase}</strong>
           ${isHigh ? '<br/><span style="color:var(--good)">🏆 NEW HIGH SCORE</span>' : ""}
         </div>
         <div class="wipeout-card__caption">"${escapeHtml(caption)}"</div>
@@ -799,7 +1225,7 @@
   function shareWipeout() {
     // Use the most recent frame in the ring buffer if we have one
     const recent = state.ringBuffer[state.ringBuffer.length - 1];
-    const caption = `I just died in Escape the Straight 🚢💥 Score: ${state.score.toLocaleString()} #EscapeTheStraight`;
+    const caption = `I just died in Escape the Straight 🚢💥 Score: ${state.score.toLocaleString()} · ${formatRunDistance(state.distance)} · Sector ${getPhaseProgress().sector} #EscapeTheStraight`;
     if (recent && navigator.canShare && navigator.share) {
       recent.canvas.toBlob((blob) => {
         if (!blob) return fallbackCopy(caption);
@@ -834,10 +1260,11 @@
     if (!mount) return;
     const labels = ["FIRST", "SECOND", "FINAL"];
     const label = labels[gateIndex] || "EXTRA";
+    const sector = getPhaseProgress().sector;
     mount.innerHTML = `
       <div class="gate-card">
-        <div class="gate-card__title">⚡ ${label} AD WALL</div>
-        <div class="gate-card__sub">You made it to the ${label} checkpoint. Pick an upgrade — but first, watch a 5s ad.</div>
+        <div class="gate-card__title">⚡ SECTOR ${sector} · ${label} AD WALL</div>
+        <div class="gate-card__sub">You made it to the ${label} checkpoint. Pick an upgrade before the Strait gets louder.</div>
         <div class="gate-card__grid" id="gate-options">
           ${offered.map((k) => `
             <button class="gate-card__option" data-kind="${k}">
@@ -891,6 +1318,225 @@
     };
   }
 
+  function drawGeneratedWorld(metrics, phaseDef) {
+    const theme = getTheme(metrics.sector);
+    const bg = getArt("background");
+    if (bg) {
+      ctx.drawImage(bg, 0, 0, W, H);
+      ctx.fillStyle = `rgba(3, 9, 18, ${Math.min(0.20, (metrics.sector - 1) * 0.025)})`;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      const water = ctx.createLinearGradient(0, 0, 0, H);
+      water.addColorStop(0, theme.top);
+      water.addColorStop(0.45, theme.mid);
+      water.addColorStop(1, theme.bottom);
+      ctx.fillStyle = water;
+      ctx.fillRect(0, 0, W, H);
+      drawCoastSilhouettes(metrics, theme);
+    }
+
+    drawCurrentBands(metrics, theme);
+    drawGeneratedProps(metrics, theme);
+    drawSectorMarkers(metrics, theme);
+
+    if (phaseDef.fog > 0) {
+      const fog = ctx.createLinearGradient(0, 0, W, H);
+      fog.addColorStop(0, `rgba(190, 220, 230, ${phaseDef.fog * 0.18})`);
+      fog.addColorStop(0.5, `rgba(255, 255, 255, ${phaseDef.fog * 0.08})`);
+      fog.addColorStop(1, `rgba(180, 200, 220, ${phaseDef.fog * 0.22})`);
+      ctx.fillStyle = fog;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function drawCurrentBands(metrics, theme) {
+    const baseCell = Math.floor((state.ship.y - VISIBLE_BEHIND) / 44);
+    for (let i = 0; i < 25; i++) {
+      const cell = baseCell + i;
+      const wy = cell * 44;
+      const p = worldToScreen(0, wy);
+      if (p.y < -60 || p.y > H + 60) continue;
+      const drift = (hash01(cell + metrics.sector * 17) - 0.5) * 120;
+      const width = 80 + hash01(cell * 3.7) * 210;
+      const alpha = 0.06 + hash01(cell * 9.1) * 0.10;
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = 1 + hash01(cell * 5.3) * 2.5;
+      ctx.beginPath();
+      ctx.moveTo(W / 2 - width + drift, p.y);
+      ctx.quadraticCurveTo(W / 2 + drift * 0.2, p.y + 14, W / 2 + width + drift, p.y + 2);
+      ctx.stroke();
+      if (i % 4 === 0) {
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.6})`;
+        ctx.fillRect(W / 2 + drift * 0.5, p.y + 12, 18 + hash01(cell * 11) * 42, 1);
+      }
+    }
+
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.0016 + metrics.sector);
+    ctx.strokeStyle = `rgba(46,224,255,${0.06 + pulse * 0.05})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([18, 18]);
+    for (let x = -120; x <= 120; x += 120) {
+      ctx.beginPath();
+      ctx.moveTo(W / 2 + x, 0);
+      ctx.bezierCurveTo(W / 2 + x + 30, H * 0.25, W / 2 + x - 28, H * 0.65, W / 2 + x + 18, H);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  function drawCoastSilhouettes(metrics, theme) {
+    const laneHalf = getLaneHalfWidth();
+    const leftEdge = worldToScreen(-laneHalf, 0).x;
+    const rightEdge = worldToScreen(laneHalf, 0).x;
+    ctx.fillStyle = theme.coast;
+    ctx.globalAlpha = 0.72;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (let y = 0; y <= H + 40; y += 40) {
+      const wy = state.ship.y + (H / 2 - y) / 0.7;
+      const n = hash01(Math.floor(wy / 120) + metrics.sector * 19);
+      ctx.lineTo(leftEdge - 36 - n * 52, y);
+    }
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(W, 0);
+    for (let y = 0; y <= H + 40; y += 40) {
+      const wy = state.ship.y + (H / 2 - y) / 0.7;
+      const n = hash01(Math.floor(wy / 120) + metrics.sector * 31);
+      ctx.lineTo(rightEdge + 36 + n * 52, y);
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftEdge, 0); ctx.lineTo(leftEdge, H);
+    ctx.moveTo(rightEdge, 0); ctx.lineTo(rightEdge, H);
+    ctx.stroke();
+  }
+
+  function drawGeneratedProps(metrics, theme) {
+    const laneHalf = getLaneHalfWidth();
+    const baseCell = Math.floor((state.ship.y - VISIBLE_BEHIND) / 170);
+    for (let i = 0; i < 9; i++) {
+      const cell = baseCell + i;
+      const wy = cell * 170 + hash01(cell * 2.13) * 90;
+      const side = hash01(cell * 5.91 + metrics.sector) < 0.5 ? -1 : 1;
+      const wx = side * (laneHalf + 28 + hash01(cell * 7.77) * 70);
+      const p = worldToScreen(wx, wy);
+      if (p.y < -80 || p.y > H + 80) continue;
+      const kindRoll = hash01(cell * 11.17 + metrics.sector * 23);
+      if (kindRoll < 0.32) drawGeneratedBuoy(p.x, p.y, theme, cell);
+      else if (kindRoll < 0.58) drawGeneratedWreckage(p.x, p.y, theme, cell);
+      else if (kindRoll < 0.78) drawGeneratedRig(p.x, p.y, theme, side);
+      else drawGeneratedSign(p.x, p.y, theme, metrics.sector);
+    }
+  }
+
+  function drawGeneratedBuoy(x, y, theme, seed) {
+    const bob = Math.sin(performance.now() * 0.003 + seed) * 3;
+    if (drawArt("repairBuoy", x, y + bob, 28, 28, 0.72)) return;
+    ctx.save();
+    ctx.translate(x, y + bob);
+    ctx.fillStyle = theme.glow;
+    ctx.globalAlpha = 0.24;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#ffd43b";
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(11, 10);
+    ctx.lineTo(-11, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#111124";
+    ctx.fillRect(-8, 2, 16, 4);
+    ctx.restore();
+  }
+
+  function drawGeneratedWreckage(x, y, theme, seed) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((hash01(seed) - 0.5) * 0.7);
+    ctx.fillStyle = "rgba(8,8,16,0.62)";
+    roundRect(ctx, -22, -6, 44, 12, 3);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255,255,255,${0.12 + hash01(seed * 3) * 0.12})`;
+    ctx.beginPath();
+    ctx.moveTo(-16, -1); ctx.lineTo(16, 2);
+    ctx.moveTo(-4, -8); ctx.lineTo(8, 8);
+    ctx.stroke();
+    ctx.fillStyle = theme.glow;
+    ctx.globalAlpha = 0.16;
+    ctx.fillRect(-18, 8, 36, 2);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGeneratedRig(x, y, theme, side) {
+    ctx.save();
+    ctx.translate(x + side * 12, y - 16);
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-16, 32); ctx.lineTo(0, -18); ctx.lineTo(16, 32);
+    ctx.moveTo(-12, 8); ctx.lineTo(12, 8);
+    ctx.moveTo(-8, 20); ctx.lineTo(8, 20);
+    ctx.stroke();
+    ctx.fillStyle = theme.glow;
+    ctx.globalAlpha = 0.35;
+    ctx.fillRect(-4, -24, 8, 8);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGeneratedSign(x, y, theme, sector) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.sin(sector + y) * 0.08);
+    ctx.fillStyle = "rgba(8,8,16,0.78)";
+    roundRect(ctx, -28, -12, 56, 24, 4);
+    ctx.fill();
+    ctx.strokeStyle = theme.glow;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#fbfaf4";
+    ctx.font = "bold 7px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(`S${sector}`, 0, 2);
+    ctx.restore();
+  }
+
+  function drawSectorMarkers(metrics, theme) {
+    const marks = [0.25, 0.60, 0.82, 0.92, 1];
+    for (const mark of marks) {
+      const wy = metrics.sectorStart + SECTOR_LENGTH * mark;
+      const p = worldToScreen(0, wy);
+      if (p.y < -20 || p.y > H + 20) continue;
+      ctx.strokeStyle = mark >= 0.92 ? `rgba(255,46,136,0.45)` : `rgba(255,212,59,0.28)`;
+      ctx.lineWidth = mark >= 0.92 ? 3 : 2;
+      ctx.setLineDash(mark >= 0.92 ? [6, 6] : [18, 10]);
+      ctx.beginPath();
+      ctx.moveTo(24, p.y);
+      ctx.lineTo(W - 24, p.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = mark >= 0.92 ? "#ff2e88" : theme.foam;
+      ctx.font = "bold 10px JetBrains Mono, monospace";
+      ctx.textAlign = "right";
+      const label = mark >= 0.92 ? "BOSS WATER" : "UPGRADE WAKE";
+      ctx.fillText(label, W - 30, p.y - 6);
+    }
+  }
+
   function draw() {
     // Camera shake
     const shake = state.cam.shake;
@@ -899,24 +1545,15 @@
     ctx.save();
     ctx.translate(sx, sy);
 
-    // Background water — striped for movement
+    // Generated water, shoreline, props, and fog
     const phase = getPhaseProgress();
     const phaseDef = PHASE_DEFS[phase.phase - 1];
-
-    // Base color shifts by phase
-    const phaseColors = ["#0a3a5a", "#0a3250", "#0a2840", "#082030", "#062028"];
-    ctx.fillStyle = phaseColors[phase.phase - 1];
-    ctx.fillRect(0, 0, W, H);
-
-    // Fog (later phases)
-    if (phaseDef.fog > 0) {
-      ctx.fillStyle = `rgba(180, 200, 220, ${phaseDef.fog * 0.35})`;
-      ctx.fillRect(0, 0, W, H);
-    }
+    drawGeneratedWorld(phase, phaseDef);
 
     // Lane guides
-    const laneLeft = worldToScreen(-LANE_HALF_WIDTH, 0).x;
-    const laneRight = worldToScreen( LANE_HALF_WIDTH, 0).x;
+    const laneHalf = getLaneHalfWidth();
+    const laneLeft = worldToScreen(-laneHalf, 0).x;
+    const laneRight = worldToScreen( laneHalf, 0).x;
     ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.lineWidth = 2;
     ctx.setLineDash([10, 12]);
@@ -937,7 +1574,7 @@
       ctx.fillStyle = "rgba(255,255,255,0.25)";
       ctx.font = "10px JetBrains Mono, monospace";
       ctx.textAlign = "left";
-      ctx.fillText(`${d}m`, 8, p.y - 4);
+      ctx.fillText(`${formatRunDistance(d)}`, 8, p.y - 4);
     }
 
     // Boss
@@ -952,13 +1589,16 @@
       if (o.type === "mine") drawMine(o);
       else if (o.type === "sub") drawSub(o);
       else if (o.type === "rocket") drawRocket(o);
+      else if (o.type === "drone") drawDrone(o);
+      else if (o.type === "slick") drawSlick(o);
+      else if (o.type === "container") drawContainer(o);
     }
 
     // Pickups
     for (const p of state.pickups) {
       if (p.y < state.ship.y - VISIBLE_BEHIND) continue;
       if (p.y > state.ship.y + VISIBLE_AHEAD) continue;
-      drawBarrel(p.x, p.y);
+      drawBarrel(p.x, p.y, p.type);
     }
 
     // Splashes
@@ -1040,6 +1680,24 @@
     ctx.rotate(r + (roll * Math.PI / 180));
     ctx.scale(s.shipScale, s.shipScale);
     // (r is already radians; -r flips the heading for screen orientation)
+
+    if (getArt("tanker")) {
+      ctx.shadowColor = "rgba(46,224,255,0.22)";
+      ctx.shadowBlur = state.activeUpgrades.turbo ? 12 : 5;
+      drawArt("tanker", 0, 3, 42, 94);
+      ctx.shadowBlur = 0;
+      if (s.hull < s.maxHull) {
+        ctx.strokeStyle = "#ff5c5c";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(-8, -8); ctx.lineTo(-2, 0);
+        ctx.moveTo(3, 10);  ctx.lineTo(10, 18);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      return;
+    }
 
     // Hull body (orange tanker, low-poly)
     ctx.fillStyle = "#ff8c1a";
@@ -1123,8 +1781,24 @@
   function drawMine(o) {
     const s = worldToScreen(o.x, o.y);
     if (s.y < -20 || s.y > H + 20) return;
+    const pulse = 0.55 + 0.45 * Math.sin(performance.now() * 0.006 + o.phase_offset);
+    ctx.fillStyle = `rgba(255,92,92,${0.12 + pulse * 0.10})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, o.w * 0.88, 0, TAU);
+    ctx.fill();
+    if (drawArt("mine", s.x, s.y, o.w * 2.25, o.w * 2.25)) return;
+    ctx.strokeStyle = "#2a0909";
+    ctx.lineWidth = 2;
+    const spikes = o.spikes || 8;
+    for (let i = 0; i < spikes; i++) {
+      const a = i / spikes * TAU + o.phase_offset * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(s.x + Math.cos(a) * o.w * 0.42, s.y + Math.sin(a) * o.w * 0.42);
+      ctx.lineTo(s.x + Math.cos(a) * o.w * 0.68, s.y + Math.sin(a) * o.w * 0.68);
+      ctx.stroke();
+    }
     // Barrel body
-    ctx.fillStyle = "#7a3a1a";
+    ctx.fillStyle = "#7a241a";
     ctx.beginPath();
     ctx.arc(s.x, s.y, o.w * 0.5, 0, TAU);
     ctx.fill();
@@ -1248,28 +1922,141 @@
     }
   }
 
+  function drawDrone(o) {
+    const s = worldToScreen(o.x, o.y);
+    if (s.y < -24 || s.y > H + 24) return;
+    const blink = 0.4 + 0.6 * Math.sin(performance.now() * 0.014 + o.blink);
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(Math.atan2(o.vy, o.vx) + Math.PI / 2);
+    if (getArt("drone")) {
+      ctx.shadowColor = `rgba(255,46,136,${0.22 + blink * 0.22})`;
+      ctx.shadowBlur = 8;
+      drawArt("drone", 0, 0, 58, 58);
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.ellipse(0, 9, 20, 7, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "#050510";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-18, 0); ctx.lineTo(18, 0);
+    ctx.moveTo(0, -10); ctx.lineTo(0, 10);
+    ctx.stroke();
+    ctx.fillStyle = "#d9edf5";
+    roundRect(ctx, -9, -7, 18, 14, 5);
+    ctx.fill();
+    ctx.strokeStyle = "#000";
+    ctx.stroke();
+    ctx.fillStyle = `rgba(255,46,136,${0.45 + blink * 0.45})`;
+    for (const [px, py] of [[-18, 0], [18, 0], [0, -10], [0, 10]]) {
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#111124";
+    ctx.fillRect(-4, -2, 8, 4);
+    ctx.restore();
+  }
+
+  function drawSlick(o) {
+    const s = worldToScreen(o.x, o.y);
+    if (s.y < -40 || s.y > H + 40) return;
+    const t = performance.now() * 0.001 + o.seed;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(Math.sin(t) * 0.2 + o.spin * 0.2);
+    if (drawArt("slick", 0, 0, o.w * 1.8, o.h * 2.2, 0.82)) {
+      ctx.restore();
+      return;
+    }
+    const slick = ctx.createRadialGradient(0, 0, 2, 0, 0, o.w * 0.55);
+    slick.addColorStop(0, "rgba(255,255,255,0.20)");
+    slick.addColorStop(0.38, "rgba(46,224,255,0.24)");
+    slick.addColorStop(0.68, "rgba(255,46,136,0.18)");
+    slick.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = slick;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, o.w * 0.5, o.h * 0.5, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.16)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, o.w * 0.38, o.h * 0.34, Math.sin(t) * 0.4, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawContainer(o) {
+    const s = worldToScreen(o.x, o.y);
+    if (s.y < -40 || s.y > H + 40) return;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(Math.sin(o.age * 1.8 + o.seed) * 0.25);
+    if (drawArt("container", 0, 0, o.w * 1.9, o.h * 2.2)) {
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = o.color || "#ff5c5c";
+    roundRect(ctx, -o.w * 0.5, -o.h * 0.5, o.w, o.h, 3);
+    ctx.fill();
+    ctx.strokeStyle = "#050510";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 1;
+    for (let x = -o.w * 0.35; x <= o.w * 0.36; x += o.w * 0.18) {
+      ctx.beginPath();
+      ctx.moveTo(x, -o.h * 0.45);
+      ctx.lineTo(x, o.h * 0.45);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "bold 6px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("NOPE", 0, 2);
+    ctx.restore();
+  }
+
   function drawBoss(b) {
     const s = worldToScreen(b.x, b.y);
     if (s.y < -100 || s.y > H + 100) return;
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y + b.h * 0.5, b.w * 0.48, 18, 0, 0, TAU);
+    ctx.fill();
     // Wide container block
     ctx.fillStyle = b.mode === "success" ? "#3a8a4a" : b.mode === "fail" ? "#8a3a3a" : "#5a3a2a";
-    ctx.fillRect(s.x - b.w * 0.5, s.y - b.h * 0.5, b.w, b.h);
+    roundRect(ctx, s.x - b.w * 0.5, s.y - b.h * 0.5, b.w, b.h, 8);
+    ctx.fill();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 2;
-    ctx.strokeRect(s.x - b.w * 0.5, s.y - b.h * 0.5, b.w, b.h);
+    ctx.stroke();
     // Container ribs
-    for (let i = 0; i < 8; i++) {
-      const x = s.x - b.w * 0.5 + (i + 1) * b.w / 9;
+    for (let i = 0; i < 11; i++) {
+      const x = s.x - b.w * 0.5 + (i + 1) * b.w / 12;
       ctx.beginPath();
       ctx.moveTo(x, s.y - b.h * 0.5);
       ctx.lineTo(x, s.y + b.h * 0.5);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 7; i++) {
+      const x = s.x - b.w * 0.42 + i * b.w / 7;
+      ctx.fillStyle = i % 3 === 0 ? "#ff5c5c" : i % 3 === 1 ? "#2ee0ff" : "#ffd43b";
+      roundRect(ctx, x, s.y - b.h * 0.38, b.w / 9, b.h * 0.28, 3);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.45)";
       ctx.stroke();
     }
     // Top text
     ctx.fillStyle = "#fff";
     ctx.font = "bold 14px Bungee, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(b.mode === "success" ? "MOVE!" : "HONK ME!", s.x, s.y - b.h * 0.5 - 8);
+    ctx.fillText(b.mode === "success" ? "LANE CLEAR!" : `HONK ${b.required - b.honks}`, s.x, s.y - b.h * 0.5 - 8);
   }
 
   function drawRadar() {
@@ -1309,29 +2096,42 @@
     ctx.restore();
   }
 
-  function drawBarrel(wx, wy) {
+  function drawBarrel(wx, wy, type = "oil") {
     const s = worldToScreen(wx, wy);
     if (s.y < -20 || s.y > H + 20) return;
     // Glow
-    ctx.fillStyle = "rgba(247,215,22,0.25)";
+    const isPatch = type === "patch";
+    ctx.fillStyle = isPatch ? "rgba(107,255,125,0.25)" : "rgba(247,215,22,0.25)";
     ctx.beginPath();
     ctx.arc(s.x, s.y, 14, 0, TAU);
     ctx.fill();
+    if (isPatch && drawArt("repairBuoy", s.x, s.y, 34, 34)) return;
     // Barrel
-    ctx.fillStyle = "#7a3a1a";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, 9, 0, TAU);
-    ctx.fill();
-    ctx.strokeStyle = "#1a1a1a";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, 9, 0, TAU);
-    ctx.stroke();
+    ctx.fillStyle = isPatch ? "#2f8a4a" : "#7a3a1a";
+    if (isPatch) {
+      roundRect(ctx, s.x - 10, s.y - 8, 20, 16, 4);
+      ctx.fill();
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = "#fbfaf4";
+      ctx.fillRect(s.x - 6, s.y - 2, 12, 4);
+      ctx.fillRect(s.x - 2, s.y - 6, 4, 12);
+    } else {
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 9, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, 9, 0, TAU);
+      ctx.stroke();
+    }
     ctx.fillStyle = "#fff";
     ctx.font = "bold 6px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("OIL", s.x, s.y + 1);
+    if (!isPatch) ctx.fillText("OIL", s.x, s.y + 1);
   }
 
   // =========================================================================
@@ -1392,6 +2192,25 @@
   // 18. GAME LOOP
   // =========================================================================
 
+  function enterSector(metrics) {
+    const previous = state.sector;
+    state.sector = metrics.sector;
+    state.boss = null;
+    state.bossActive = false;
+    state.bossArmed = false;
+    state.bossSpawnT = 0;
+    const ghud = document.getElementById("boss-honkhud");
+    if (ghud) ghud.style.display = "none";
+    const repair = state.ship.hull < state.ship.maxHull ? 1 : 0;
+    if (repair) state.ship.hull = Math.min(state.ship.maxHull, state.ship.hull + repair);
+    const bonus = 900 + metrics.sector * 180;
+    state.score += bonus;
+    state.bannerText = `SECTOR ${metrics.sector} · ${getTheme(metrics.sector).name.toUpperCase()}`;
+    state.bannerUntil = performance.now() + 2300;
+    playSfx("phase");
+    RB.toast(`Sector ${previous} escaped. +${bonus.toLocaleString()}${repair ? " · +1 hull" : ""}`, "good");
+  }
+
   let rafId = null;
   function loop(now) {
     if (!state.running) return;
@@ -1402,44 +2221,68 @@
     if (!state.paused && !state.gameOver && !state.inGate) {
       readInput();
       updateShip(dt);
+      let metrics = getPhaseProgress();
+      if (metrics.sector !== state.sector) {
+        enterSector(metrics);
+        metrics = getPhaseProgress();
+      }
+      state.phase = metrics.phase;
+      state.sector = metrics.sector;
+      state.threat = metrics.threat;
+
+      updateBoss(dt);
       updateObstacles(dt);
       updatePickups(dt);
       updateParticles(dt);
       tickUpgrades();
+      updateEngineHum();
 
       // Spawn obstacles based on phase
-      const phase = getPhaseProgress();
-      state.phase = phase.phase;
       if (state.phase < 5) {
         state._spawnT = (state._spawnT || 0) + dt;
-        const def = PHASE_DEFS[phase.phase - 1];
-        if (state._spawnT >= def.spawnEvery) {
-          state._spawnT = 0;
+        const def = PHASE_DEFS[state.phase - 1];
+        const spawnEvery = Math.max(0.25, def.spawnEvery / Math.min(2.35, state.threat));
+        while (state._spawnT >= spawnEvery) {
+          state._spawnT -= spawnEvery;
           spawnObstacle();
+          if (state.threat > 1.28 && Math.random() < Math.min(0.38, (state.threat - 1.12) * 0.18)) {
+            spawnObstacle();
+          }
           maybeSpawnPickup();
         }
       } else {
-        // Phase 5: arm the boss once
-        if (!state.bossArmed) armBoss();
+        // Phase 5: boss gate. It repeats every sector until wipeout.
+        if (!state.bossArmed && state.sectorCleared !== state.sector) armBoss();
       }
 
       // Phase gates
       checkPhaseGates();
 
       // Phase transition banner
-      const prevPhase = state._lastPhaseDrawn || 0;
-      if (state.phase !== prevPhase) {
+      const phaseKey = `${state.sector}:${state.phase}`;
+      const prevPhase = state._lastPhaseDrawn || "";
+      if (phaseKey !== prevPhase) {
         const def = PHASE_DEFS[state.phase - 1];
-        state.bannerText = `PHASE ${state.phase} · ${def.name}`;
+        state.bannerText = `SECTOR ${state.sector} · ${def.name}`;
         state.bannerUntil = performance.now() + 2000;
-        state._lastPhaseDrawn = state.phase;
+        playSfx("phase");
+        state._lastPhaseDrawn = phaseKey;
       }
 
       // Score
-      state.score += Math.floor(20 * dt);
+      const scoreMult = state.activeUpgrades.fuzzyDice ? 2 : 1;
+      state._scoreCarry = (state._scoreCarry || 0) + (24 + state.threat * 18) * scoreMult * dt;
+      const addScore = Math.floor(state._scoreCarry);
+      if (addScore > 0) {
+        state.score += addScore;
+        state._scoreCarry -= addScore;
+      }
 
       // Frame buffer for share
       pushRingBuffer();
+    } else {
+      updateEngineHum();
+      if (state.gameOver) updateParticles(dt);
     }
 
     // Decay
@@ -1459,9 +2302,19 @@
     const s = state.ship;
     const p = getPhaseProgress();
     document.getElementById("hud-score").textContent = state.score.toLocaleString();
-    document.getElementById("hud-dist").textContent = Math.floor(p.progress * 100) + "%";
-    document.getElementById("hud-phase").textContent = state.phase;
+    document.getElementById("hud-dist").textContent = formatRunDistance(state.distance);
+    const sectorEl = document.getElementById("hud-sector");
+    if (sectorEl) sectorEl.textContent = p.sector;
+    document.getElementById("hud-phase").textContent = `${state.phase}`;
+    const threatEl = document.getElementById("hud-threat");
+    if (threatEl) threatEl.textContent = `${p.threat.toFixed(1)}x`;
     document.getElementById("hud-high").textContent = RB.getHighScore("hormuz").toLocaleString();
+    const miniScore = document.getElementById("mini-score");
+    if (miniScore) miniScore.textContent = state.score.toLocaleString();
+    const miniSector = document.getElementById("mini-sector");
+    if (miniSector) miniSector.textContent = p.sector;
+    const miniHull = document.getElementById("mini-hull");
+    if (miniHull) miniHull.textContent = `${s.hull}/${s.maxHull}`;
 
     // Hull pips
     const hullEl = document.getElementById("hud-hull");
@@ -1492,6 +2345,9 @@
     state.score = 0;
     state.distance = 0;
     state.phase = 1;
+    state.sector = 1;
+    state.threat = 1;
+    state.assetSeed = Math.floor(Math.random() * 999999);
     state.ship = {
       x: 0, y: 0, vx: 0, vy: 0,
       heading: 0, angVel: 0,
@@ -1506,13 +2362,17 @@
     state.boss = null;
     state.bossActive = false;
     state.bossArmed = false;
+    state.bossSector = 0;
+    state.sectorCleared = 0;
+    state.bossSpawnT = 0;
     state.phaseGatesHit = new Set();
     state.inGate = false;
     state.activeUpgrades = {};
     state.cam.shake = 0; state.cam.flash = 0;
     state.ringBuffer = [];
     state._spawnT = 0;
-    state._lastPhaseDrawn = 0;
+    state._scoreCarry = 0;
+    state._lastPhaseDrawn = "";
     state._dethTime = 0;
     state.lastCauseOfDeath = "";
 
@@ -1523,6 +2383,9 @@
     if (ghud) ghud.style.display = "none";
 
     hideOverlay();
+    ensureAudio();
+    if (audio.ctx?.state === "suspended") audio.ctx.resume();
+    playSfx("start");
     updateHUD();
     canvas.focus();
     if (rafId) cancelAnimationFrame(rafId);
@@ -1530,7 +2393,7 @@
   }
 
   function snapshot() {
-    const now = performance.now();
+    const now = performance.now() / 1000;
     const activeUpgrades = {};
     Object.keys(state.activeUpgrades).forEach((key) => {
       activeUpgrades[key] = Math.max(0, state.activeUpgrades[key] - now);
@@ -1539,25 +2402,34 @@
       score: state.score,
       distance: state.distance,
       phase: state.phase,
+      sector: state.sector,
+      threat: state.threat,
+      assetSeed: state.assetSeed,
       ship: { ...state.ship },
       phaseGatesHit: Array.from(state.phaseGatesHit),
       activeUpgrades,
       bossActive: state.bossActive,
       bossArmed: state.bossArmed,
+      bossSector: state.bossSector,
+      sectorCleared: state.sectorCleared,
     };
   }
 
   function restoreGame(saved) {
     const data = saved && saved.data;
     if (!data) return;
-    const now = performance.now();
+    const now = performance.now() / 1000;
     state.running = true;
     state.paused = false;
     state.gameOver = false;
     state.started = true;
     state.score = Number(data.score) || 0;
-    state.distance = clamp(Number(data.distance) || 0, 0, STRAIT_LENGTH - 1);
-    state.phase = Number(data.phase) || getPhaseProgress().phase;
+    state.distance = Math.max(0, Number(data.distance) || 0);
+    state.assetSeed = Number(data.assetSeed) || Math.floor(Math.random() * 999999);
+    const restoredMetrics = getPhaseProgress();
+    state.sector = restoredMetrics.sector;
+    state.phase = restoredMetrics.phase;
+    state.threat = restoredMetrics.threat;
     state.ship = {
       x: 0, y: state.distance, vx: 0, vy: 0,
       heading: 0, angVel: 0,
@@ -1571,8 +2443,11 @@
     state.particles = [];
     state.splashes = [];
     state.boss = null;
-    state.bossActive = Boolean(data.bossActive);
-    state.bossArmed = Boolean(data.bossArmed);
+    state.bossActive = false;
+    state.bossArmed = false;
+    state.bossSector = 0;
+    state.sectorCleared = Number(data.sectorCleared) || 0;
+    state.bossSpawnT = 0;
     state.phaseGatesHit = new Set(Array.isArray(data.phaseGatesHit) ? data.phaseGatesHit : []);
     state.inGate = false;
     state.activeUpgrades = {};
@@ -1582,7 +2457,8 @@
     state.cam.shake = 0; state.cam.flash = 0;
     state.ringBuffer = [];
     state._spawnT = 0;
-    state._lastPhaseDrawn = 0;
+    state._scoreCarry = 0;
+    state._lastPhaseDrawn = "";
     state._dethTime = 0;
     state.lastCauseOfDeath = "";
     const mount = document.getElementById("wipeout-mount");
@@ -1590,6 +2466,9 @@
     const ghud = document.getElementById("boss-honkhud");
     if (ghud) ghud.style.display = "none";
     hideOverlay();
+    ensureAudio();
+    if (audio.ctx?.state === "suspended") audio.ctx.resume();
+    playSfx("start");
     updateHUD();
     canvas.focus();
     if (rafId) cancelAnimationFrame(rafId);
@@ -1610,7 +2489,7 @@
     const scoreEl = document.getElementById("overlay-score");
     if (showScore) {
       scoreEl.style.display = "block";
-      scoreEl.innerHTML = `Score: <strong style="color:var(--accent-3)">${state.score.toLocaleString()}</strong> · High: <strong>${RB.getHighScore("hormuz").toLocaleString()}</strong> · Distance: <strong>${Math.round((state.distance / STRAIT_LENGTH) * 100)}%</strong>`;
+      scoreEl.innerHTML = `Score: <strong style="color:var(--accent-3)">${state.score.toLocaleString()}</strong> · High: <strong>${RB.getHighScore("hormuz").toLocaleString()}</strong> · Run: <strong>${formatRunDistance(state.distance)}</strong> · Sector: <strong>${getPhaseProgress().sector}</strong>`;
     } else {
       scoreEl.style.display = "none";
     }
@@ -1628,7 +2507,7 @@
   function renderPowerups() {
     const slot = document.getElementById("powerups");
     if (!slot) return;
-    const s = RB.state;
+    const now = performance.now() / 1000;
     const items = [
       { key: "turbo",     icon: "🌀", label: "Turbo" },
       { key: "shield",    icon: "🫧", label: "Shield" },
@@ -1636,13 +2515,20 @@
       { key: "plating",   icon: "🩹", label: "Plating" },
       { key: "fuzzyDice", icon: "🎲", label: "Dice" }
     ];
-    slot.innerHTML = items.map((it) => `
-      <div class="powerup powerup--locked" title="${UPGRADES[it.key].desc}">
+    slot.innerHTML = items.map((it) => {
+      const expires = state.activeUpgrades[it.key];
+      const active = expires != null;
+      const permanent = it.key === "plating" && active;
+      const ready = it.key === "shield" && active;
+      const remaining = ready ? "READY" : active && !permanent ? Math.max(0, Math.ceil(expires - now)) + "S" : active ? "ON" : "AD WALL";
+      return `
+      <div class="powerup ${active ? "" : "powerup--locked"}" title="${UPGRADES[it.key].desc}">
         <span class="powerup__icon">${it.icon}</span>
         <span class="powerup__label">${it.label}</span>
-        <span class="powerup__cost">AD WALL</span>
+        <span class="powerup__cost">${remaining}</span>
       </div>
-    `).join("");
+    `;
+    }).join("");
   }
 
   // =========================================================================
@@ -1651,6 +2537,7 @@
 
   document.getElementById("btn-primary").addEventListener("click", startGame);
   document.getElementById("btn-pause").addEventListener("click", pauseGame);
+  document.getElementById("btn-sound").addEventListener("click", () => setSoundEnabled(!audio.enabled));
   document.getElementById("btn-restart").addEventListener("click", () => {
     showOverlay(
       "⛴ RESTART?",
@@ -1668,7 +2555,9 @@
       onContinue: restoreGame,
       summary: (saved) => {
         const data = saved.data || {};
-        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Distance <strong>${Math.round((Number(data.distance || 0) / STRAIT_LENGTH) * 100)}%</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
+        const distance = Number(data.distance || 0);
+        const sector = Math.max(1, Math.floor(distance / SECTOR_LENGTH) + 1);
+        return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Run <strong>${formatRunDistance(distance)}</strong> · Sector <strong>${sector}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
       },
     });
     saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
@@ -1676,6 +2565,7 @@
 
   RB.subscribe(renderPowerups);
   setupTouch();
+  updateSoundButton();
   updateHUD();
   renderPowerups();
 

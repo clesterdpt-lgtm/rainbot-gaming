@@ -72,6 +72,7 @@
     .micro-arcade-hud,
     .micro-callout,
     .micro-prompt,
+    .micro-stage-ready,
     .micro-advance {
       position: absolute;
       font-family: var(--font-mono);
@@ -113,6 +114,22 @@
       color: rgba(234, 247, 255, 0.78);
       font-size: 10px;
       line-height: 1.35;
+    }
+
+    .micro-chip strong {
+      display: inline-flex;
+      min-height: 22px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 8px;
+      border: 1px solid rgba(107, 255, 125, 0.28);
+      border-radius: 999px;
+      background: rgba(5, 7, 13, 0.42);
+      color: #6bff7d;
+      font-family: var(--font-display);
+      font-size: 10px;
+      line-height: 1;
+      padding: 5px 9px;
     }
 
     .micro-status-strip {
@@ -587,6 +604,58 @@
     .micro-advance.is-visible {
       display: inline-flex;
       transform: translateX(-50%) translateY(0);
+    }
+
+    .micro-stage-ready {
+      left: 50%;
+      bottom: 68px;
+      display: none;
+      width: min(430px, calc(100% - 32px));
+      justify-items: center;
+      gap: 8px;
+      border: 1px solid rgba(107, 255, 125, 0.42);
+      border-radius: 8px;
+      background: rgba(3, 9, 13, 0.78);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42), 0 0 26px rgba(107, 255, 125, 0.18);
+      color: #f7fbff;
+      padding: 12px;
+      pointer-events: auto;
+      text-align: center;
+      transform: translateX(-50%) translateY(10px);
+      z-index: 28;
+    }
+
+    .micro-stage-ready.is-visible {
+      display: grid;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .micro-stage-ready b {
+      color: #6bff7d;
+      font-family: var(--font-display);
+      font-size: 18px;
+      line-height: 1;
+      text-shadow: 0 2px 0 #05070d;
+    }
+
+    .micro-stage-ready span {
+      color: rgba(247, 251, 255, 0.78);
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .micro-stage-ready .micro-advance,
+    .micro-stage-ready .micro-advance.is-visible {
+      position: static;
+      display: inline-flex;
+      width: auto;
+      min-width: min(210px, 100%);
+      min-height: 40px;
+      padding: 10px 16px;
+      transform: none;
+      justify-content: center;
+      white-space: nowrap;
     }
 
     .micro-target-marker {
@@ -1811,6 +1880,234 @@
         display: none;
       }
     }
+
+    body.micro-play-active .micro-arcade-title,
+    body.micro-play-active .micro-missions,
+    body.micro-play-active .micro-levelboard,
+    body.micro-play-active .micro-status-strip,
+    body.micro-play-active .micro-wallet-chip {
+      display: none !important;
+    }
+
+    body.micro-play-active .micro-arcade-hud {
+      inset: 0;
+    }
+
+    body.micro-play-active .micro-scoreboard {
+      left: 50%;
+      top: 16px;
+      min-width: 128px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      background: rgba(3, 9, 13, 0.48);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+      transform: translateX(-50%);
+    }
+
+    body.micro-play-active .micro-scoreboard span {
+      font-size: 10px;
+    }
+
+    body.micro-play-active .micro-scoreboard strong {
+      font-size: clamp(26px, 3vw, 40px);
+    }
+
+    body.micro-play-active .micro-scoreboard em {
+      font-size: 13px;
+    }
+
+    body.micro-play-active .micro-chip {
+      left: 18px;
+      top: 18px;
+      bottom: auto;
+      width: min(360px, calc(100vw - 360px));
+      min-width: 260px;
+      background: rgba(3, 9, 13, 0.58);
+      backdrop-filter: blur(8px);
+      z-index: 9;
+    }
+
+    body.micro-play-active .micro-chip b {
+      font-size: 13px;
+    }
+
+    body.micro-play-active .micro-chip span {
+      font-size: 10px;
+    }
+
+    body.micro-play-active .micro-play-meters {
+      left: 18px;
+      right: auto;
+      bottom: 18px;
+      width: min(330px, calc(100vw - 220px));
+      transform: none;
+    }
+
+    body.micro-play-active .micro-play-meters span {
+      grid-template-columns: 58px minmax(0, 1fr) 38px;
+    }
+
+    body.micro-play-active .micro-play-meters span:nth-child(3) {
+      display: none;
+    }
+
+    body.micro-play-active .micro-prompt {
+      bottom: 28px;
+      max-width: min(480px, calc(100vw - 760px));
+      background: rgba(3, 9, 13, 0.58);
+    }
+
+    body.micro-stage-ready-open .micro-prompt {
+      display: none;
+    }
+
+    body.micro-play-active .micro-stage-ready {
+      bottom: 82px;
+    }
+
+    body.micro-play-active .micro-radar {
+      right: 18px;
+      bottom: 18px;
+      width: clamp(108px, 11vw, 150px);
+      height: clamp(108px, 11vw, 150px);
+    }
+
+    @media (max-width: 1100px) {
+      body.micro-play-active .micro-chip {
+        width: min(330px, calc(100vw - 260px));
+      }
+
+      body.micro-play-active .micro-prompt {
+        display: none;
+      }
+    }
+
+    @media (max-width: 900px) {
+      body.micro-play-active .micro-scoreboard {
+        left: 10px;
+        top: 10px;
+        min-width: 92px;
+        justify-items: start;
+        transform: none;
+      }
+
+      body.micro-play-active .micro-scoreboard strong {
+        font-size: 24px;
+      }
+
+      body.micro-play-active .micro-chip {
+        left: 10px;
+        top: 76px;
+        display: block;
+        width: min(280px, calc(100vw - 132px));
+        min-width: 0;
+        padding: 8px 9px;
+      }
+
+      body.micro-play-active .micro-chip span {
+        display: none;
+      }
+
+      body.micro-play-active .micro-play-meters {
+        left: 10px;
+        right: 138px;
+        bottom: calc(142px + env(safe-area-inset-bottom));
+        width: auto;
+      }
+
+      body.micro-play-active .micro-radar {
+        right: 10px;
+        bottom: calc(154px + env(safe-area-inset-bottom));
+        width: 84px;
+        height: 84px;
+      }
+
+      body.micro-play-active .micro-stage-ready {
+        bottom: calc(152px + env(safe-area-inset-bottom));
+        width: min(340px, calc(100vw - 24px));
+        padding: 10px;
+      }
+
+      body.micro-stage-ready-open .micro-play-meters,
+      body.micro-stage-ready-open .micro-radar {
+        display: none;
+      }
+    }
+
+    @media (max-height: 480px) and (orientation: landscape) {
+      body.micro-play-active .micro-chip {
+        display: none;
+      }
+
+      body.micro-play-active .micro-scoreboard {
+        left: 12px;
+        top: 10px;
+        transform: none;
+      }
+
+      body.micro-play-active .micro-play-meters {
+        left: 148px;
+        right: 150px;
+        bottom: calc(104px + env(safe-area-inset-bottom));
+      }
+
+      body.micro-play-active .micro-stage-ready {
+        bottom: calc(94px + env(safe-area-inset-bottom));
+        width: min(340px, calc(100vw - 330px));
+      }
+    }
+
+    @media (max-width: 520px) {
+      body.micro-play-active .micro-chip {
+        top: 58px;
+        width: min(220px, calc(100vw - 128px));
+      }
+
+      body.micro-play-active .micro-chip b {
+        font-size: 10px;
+      }
+
+      body.micro-play-active .micro-chip strong {
+        min-height: 20px;
+        font-size: 9px;
+        padding: 4px 7px;
+      }
+
+      body.micro-play-active .micro-play-meters {
+        left: 10px;
+        right: 122px;
+        bottom: calc(138px + env(safe-area-inset-bottom));
+      }
+
+      body.micro-play-active .micro-play-meters span {
+        grid-template-columns: 38px minmax(0, 1fr) 30px;
+      }
+
+      body.micro-play-active .micro-radar {
+        bottom: calc(164px + env(safe-area-inset-bottom));
+        width: 76px;
+        height: 76px;
+      }
+
+      body.micro-play-active .micro-stage-ready {
+        bottom: calc(150px + env(safe-area-inset-bottom));
+        width: calc(100vw - 20px);
+      }
+
+      body.micro-play-active .micro-stage-ready b {
+        font-size: 15px;
+      }
+
+      body.micro-play-active .micro-stage-ready span {
+        font-size: 9px;
+      }
+
+      body.micro-play-active .micro-stage-ready .micro-advance {
+        min-width: 148px;
+        padding-inline: 14px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1874,6 +2171,7 @@
           <div class="micro-chip" aria-live="polite">
             <b id="objective-title">Eat some algae</b>
             <span id="objective-text">Scuttle into two green algae chunks. They heal hydration and teach movement.</span>
+            <strong id="objective-progress">0 / 2</strong>
           </div>
           <div class="micro-status-strip" aria-label="Tardigrade status">
             <span>Level <b id="status-level">Petri Dish</b></span>
@@ -1898,7 +2196,11 @@
             <em id="radar-distance">0 um</em>
           </div>
           <div class="micro-prompt micro-prompt--show" id="micro-prompt">Move mouse to look. WASD moves. Shift bonks.</div>
-          <button class="btn btn--yellow micro-advance" id="btn-advance-stage" type="button">Continue research</button>
+          <div class="micro-stage-ready" id="stage-ready" aria-live="assertive">
+            <b id="stage-ready-title">Next level ready</b>
+            <span id="stage-ready-text">The next research environment is unlocked.</span>
+            <button class="btn btn--yellow micro-advance" id="btn-advance-stage" type="button">Go next</button>
+          </div>
           <div class="micro-target-marker" id="micro-target-marker" aria-live="polite">
             <b id="target-marker-title">Target</b>
             <span id="target-marker-distance">0 um</span>
@@ -2026,7 +2328,7 @@
 
   <script src="../assets/js/ads.js?v=20260625-forum-mod-1"></script>
   <script src="../assets/js/main.js?v=20260627-escape-menu-1"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260616-save-1"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260627-ui-motion-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

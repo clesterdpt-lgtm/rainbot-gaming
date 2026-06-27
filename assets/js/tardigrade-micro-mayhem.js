@@ -35,9 +35,12 @@
   const GRAVITY = 22;
   const GROUND_Y = 0.42;
   const TERRAIN_VISUAL_OFFSET = 0.24;
+  const JUMP_VELOCITY = 11.2;
+  const CURL_JUMP_VELOCITY = 12.6;
+  const JUMP_BUFFER_TIME = 0.16;
+  const COYOTE_TIME = 0.14;
   const CAMERA_YAW_SENSITIVITY = 0.0048;
   const CAMERA_PITCH_SENSITIVITY = 0.0032;
-  const LEVEL_ONE_GOAL_COUNT = 6;
   const LEVEL_CONFIGS = {
     1: {
       id: "petri",
@@ -45,7 +48,7 @@
       shortName: "Petri",
       shape: "circle",
       radius: LEVEL_ONE_RADIUS,
-      requiredGoals: LEVEL_ONE_GOAL_COUNT,
+      requiredGoals: 4,
       populationScale: 0.82,
       advanceTitle: "SCIENTIST INTEREST DETECTED",
       advanceText: "The scientists think you are worth studying more, which is either an honor or a paperwork error.",
@@ -91,7 +94,7 @@
       shape: "square",
       halfSize: LEVEL_TWO_HALF_SIZE,
       radius: WORLD_RADIUS,
-      requiredGoals: 3,
+      requiredGoals: 2,
       populationScale: MAP_POPULATION_SCALE,
       advanceTitle: "RESEARCH ESCALATED",
       advanceText: "The aquarium report says you are thriving, so the scientists made the normal decision to involve a rat.",
@@ -180,7 +183,7 @@
       shortName: "Stomach",
       shape: "circle",
       radius: LEVEL_THREE_RADIUS,
-      requiredGoals: 4,
+      requiredGoals: 3,
       populationScale: 1.35,
       advanceTitle: "DIGESTION STUDY COMPLETE",
       advanceText: "The rat coughed politely, the scientists wrote 'probably fine,' and a lava sample somehow became the next logical step.",
@@ -227,7 +230,7 @@
       shortName: "Lava",
       shape: "circle",
       radius: LEVEL_FOUR_RADIUS,
-      requiredGoals: 4,
+      requiredGoals: 3,
       populationScale: 1.18,
       advanceTitle: "GEOTHERMAL NOTES FILED",
       advanceText: "You survived lava, which means the scientists upgraded your file from 'mysterious damp bean' to 'space-program damp bean.'",
@@ -676,6 +679,7 @@
     high: $("hud-high"),
     objectiveTitle: $("objective-title"),
     objectiveText: $("objective-text"),
+    objectiveProgress: $("objective-progress"),
     prompt: $("micro-prompt"),
     dashStatus: $("status-dash"),
     ringStatus: $("status-ring"),
@@ -713,6 +717,9 @@
     targetMarker: $("micro-target-marker"),
     targetMarkerTitle: $("target-marker-title"),
     targetMarkerDistance: $("target-marker-distance"),
+    stageReady: $("stage-ready"),
+    stageReadyTitle: $("stage-ready-title"),
+    stageReadyText: $("stage-ready-text"),
     advance: $("btn-advance-stage"),
     missionAlgae: $("mission-algae"),
     missionBacteria: $("mission-bacteria"),
@@ -796,6 +803,8 @@
       yaw: 0,
       targetYaw: 0,
       grounded: true,
+      groundGrace: COYOTE_TIME,
+      jumpBuffer: 0,
       wobble: 0,
     },
     camera: {
@@ -977,15 +986,17 @@
 
   function stageAdvanceGoal() {
     const config = levelConfig();
+    const next = LEVEL_CONFIGS[state.pendingStage];
+    const nextName = next ? next.name : "the next level";
     return {
       id: "advance",
       stage: state.stage,
       title: config.advanceTitle || "Research path unlocked",
-      text: config.advanceText || "The next research environment is ready when you are.",
+      text: config.advanceText || `${nextName} is ready. Continue when you are done exploring this biome.`,
       target: 1,
       progress: () => 1,
-      hint: `${config.advanceText || "The next research environment is ready."} Press the continue research button when ready.`,
-      mobileHint: `${config.advanceText || "The next research environment is ready."} Tap continue research when ready.`,
+      hint: `${nextName} is ready. Press Enter or use the next level button when ready.`,
+      mobileHint: `${nextName} is ready. Tap the next level button when ready.`,
     };
   }
 
@@ -4987,6 +4998,8 @@
       lastTime: performance.now(),
     });
     Object.assign(state.player, data.player || {});
+    state.player.groundGrace = Number.isFinite(state.player.groundGrace) ? state.player.groundGrace : COYOTE_TIME;
+    state.player.jumpBuffer = 0;
     Object.assign(state.camera, data.camera || {});
     world.landmarks.forEach((landmark) => {
       landmark.userData.found = state.landmarksFound.has(landmark.userData.id);
@@ -5005,6 +5018,7 @@
     document.body.classList.toggle("micro-play-active", active);
     document.body.classList.toggle("micro-play-paused", active && state.paused);
     if (!active || state.paused) resetVirtualControls();
+    syncAdvancePrompt();
     requestAnimationFrame(resize);
   }
 
@@ -5105,6 +5119,8 @@
       vy: 0,
       vz: 0,
       grounded: true,
+      groundGrace: COYOTE_TIME,
+      jumpBuffer: 0,
       wobble: 0.2,
     });
     if (world.camera && world.camera.userData) world.camera.userData.ready = false;
@@ -5178,6 +5194,8 @@
       yaw: 0,
       targetYaw: 0,
       grounded: true,
+      groundGrace: COYOTE_TIME,
+      jumpBuffer: 0,
       wobble: 0,
     });
     Object.assign(state.camera, {
@@ -5241,6 +5259,8 @@
       yaw: 0,
       targetYaw: 0,
       grounded: true,
+      groundGrace: COYOTE_TIME,
+      jumpBuffer: 0,
       wobble: 0.3,
     });
     Object.assign(state.camera, {
@@ -5307,11 +5327,21 @@
 
   function jump() {
     if (!state.running || state.paused || state.gameOver) return;
-    if (!state.player.grounded) return;
-    state.player.vy = state.curlHeld ? 10.8 : 9.1;
+    state.player.jumpBuffer = JUMP_BUFFER_TIME;
+    tryStartJump();
+  }
+
+  function tryStartJump() {
+    const player = state.player;
+    if (player.jumpBuffer <= 0 || (!player.grounded && player.groundGrace <= 0)) return false;
+    player.jumpBuffer = 0;
+    player.groundGrace = 0;
+    player.vy = state.curlHeld ? CURL_JUMP_VELOCITY : JUMP_VELOCITY;
     state.player.grounded = false;
-    state.player.wobble = 0.4;
+    state.player.y = Math.max(state.player.y, groundYAt(state.player.x, state.player.z) + 0.18);
+    state.player.wobble = 0.46;
     playTone("jump");
+    return true;
   }
 
   function dash() {
@@ -5392,6 +5422,11 @@
 
   function updateInputMovement(dt) {
     const player = state.player;
+    const wasGrounded = player.grounded;
+    const previousGroundY = groundYAt(player.x, player.z);
+    player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
+    player.groundGrace = Math.max(0, player.groundGrace - dt);
+
     const forwardInput = clamp(state.input.forward + state.input.virtualForward, -1, 1);
     const rightInput = clamp(state.input.right + state.input.virtualRight, -1, 1);
     const yaw = state.camera.targetYaw;
@@ -5405,18 +5440,18 @@
     if (length > 0.001) {
       moveX /= length;
       moveZ /= length;
-      player.targetYaw = yaw;
+      player.targetYaw = Math.atan2(-moveX, -moveZ);
     }
 
     const curl = state.curlHeld ? 0.76 : 1;
     const dashBoost = state.dashPulse > 0 ? 1.45 : 1;
     const stationFloat = levelConfig().id === "station" ? 0.82 : 1;
-    const maxSpeed = (state.player.grounded ? 12.4 : 8.6) * curl * dashBoost * (levelConfig().id === "stomach" ? 0.94 : 1);
-    const accel = (state.player.grounded ? 34 : 14) * (levelConfig().id === "station" ? 0.78 : 1);
+    const maxSpeed = (state.player.grounded ? 16.2 : 11.2) * curl * dashBoost * (levelConfig().id === "stomach" ? 0.98 : 1);
+    const accel = (state.player.grounded ? 56 : 22) * (levelConfig().id === "station" ? 0.84 : 1);
     const targetVX = moveX * maxSpeed;
     const targetVZ = moveZ * maxSpeed;
     const control = Math.min(1, dt * accel);
-    const stopControl = Math.min(1, dt * 10.5);
+    const stopControl = Math.min(1, dt * (state.player.grounded ? 15.5 : 7.5));
     player.vx = lerp(player.vx, targetVX, length > 0.001 ? control : stopControl);
     player.vz = lerp(player.vz, targetVZ, length > 0.001 ? control : stopControl);
     if (state.curlHeld) {
@@ -5425,17 +5460,26 @@
     }
 
     player.vy -= GRAVITY * stationFloat * dt;
+    const horizontalSpeed = Math.hypot(player.vx, player.vz);
     player.x += player.vx * dt;
     player.y += player.vy * dt;
     player.z += player.vz * dt;
     const groundY = groundYAt(player.x, player.z);
-    if (player.y <= groundY) {
+    const groundDelta = groundY - previousGroundY;
+    const climbAllowance = wasGrounded ? 1.05 + horizontalSpeed * 0.02 : 0.18;
+    const dropAllowance = wasGrounded ? 1.15 + horizontalSpeed * 0.035 : 0.08;
+    const canStepUp = wasGrounded && groundDelta <= climbAllowance;
+    const belowGround = player.y <= groundY && (player.vy <= 1.2 || canStepUp);
+    const closeDownSlope = wasGrounded && player.vy <= 1.2 && player.y > groundY && player.y - groundY <= dropAllowance;
+    if (belowGround || closeDownSlope) {
       player.y = groundY;
       player.vy = 0;
       player.grounded = true;
+      player.groundGrace = COYOTE_TIME;
     } else {
       player.grounded = false;
     }
+    tryStartJump();
 
     const constrained = constrainPointToPlayable(player.x, player.z, PLAYER_RADIUS + 0.8);
     if (constrained.clamped) {
@@ -6039,7 +6083,7 @@
     syncAdvancePrompt();
     updateHUD();
     showCallout("RESEARCH UNLOCKED!", LEVEL_CONFIGS[nextStage].name);
-    showPrompt(config.advanceText || "The next research environment is ready when you are.");
+    showPrompt(`${LEVEL_CONFIGS[nextStage].name} unlocked. Use the next level button when ready, or keep exploring here.`, 5.5);
     playTone("level", 1.25);
   }
 
@@ -6053,13 +6097,20 @@
   }
 
   function syncAdvancePrompt() {
-    if (!el.advance) return;
-    const visible = !!(state.running && !state.gameOver && state.stageAdvanceAvailable && state.pendingStage);
-    el.advance.classList.toggle("is-visible", visible);
-    el.advance.disabled = !visible;
+    const visible = !!(state.running && !state.paused && !state.gameOver && state.stageAdvanceAvailable && state.pendingStage);
+    if (el.stageReady) el.stageReady.classList.toggle("is-visible", visible);
+    document.body.classList.toggle("micro-stage-ready-open", visible);
+    if (el.advance) {
+      el.advance.classList.toggle("is-visible", visible);
+      el.advance.disabled = !visible;
+    }
     if (visible) {
       const next = LEVEL_CONFIGS[state.pendingStage];
-      el.advance.textContent = levelConfig().advanceButton || `Continue to ${next ? next.name : "next level"}`;
+      const nextName = next ? next.name : "next level";
+      const nextShortName = next ? (next.shortName || next.name) : "Next";
+      if (el.stageReadyTitle) el.stageReadyTitle.textContent = `Next level: ${nextName}`;
+      if (el.stageReadyText) el.stageReadyText.textContent = levelConfig().advanceText || `${nextName} is ready when you are.`;
+      if (el.advance) el.advance.textContent = `Go to ${nextShortName}`;
     }
   }
 
@@ -6126,10 +6177,13 @@
 
   function updateGoalText() {
     const goal = activeGoal();
+    const target = targetValue(goal);
+    const progress = clamp(goal.progress(), 0, target);
     el.objectiveTitle.textContent = goal.title;
     el.objectiveText.textContent = goal.text;
     el.goalCardTitle.textContent = goal.title;
     el.goalCardText.textContent = goal.text;
+    if (el.objectiveProgress) el.objectiveProgress.textContent = formatGoalProgress(goal, progress);
   }
 
   function formatGoalProgress(goal, value) {
@@ -6158,10 +6212,10 @@
     if (state.promptTimer <= 0) el.prompt.classList.remove("micro-prompt--show");
   }
 
-  function showPrompt(message) {
+  function showPrompt(message, duration = 3.2) {
     el.prompt.textContent = message;
     el.prompt.classList.add("micro-prompt--show");
-    state.promptTimer = 3.2;
+    state.promptTimer = duration;
   }
 
   function updatePlayerTransform(dt) {
@@ -6378,9 +6432,7 @@
     if (goal && goal.id === "hazards") {
       return nearestHazardProp(goal.propTypes);
     }
-    if (goal && goal.id === "advance") {
-      return { x: state.player.x, y: state.player.y + 0.2, z: state.player.z };
-    }
+    if (goal && goal.id === "advance") return null;
     const type = goal && goal.id === "algae"
       ? "algae"
       : goal && goal.id === "bacteria"
@@ -6514,6 +6566,7 @@
     el.goal.textContent = `${currentStageGoalOrdinal()}/${currentStageGoals().length}`;
     el.high.textContent = api.getHighScore(GAME_ID).toLocaleString();
     el.goalCardProgress.textContent = formatGoalProgress(goal, progress);
+    if (el.objectiveProgress) el.objectiveProgress.textContent = formatGoalProgress(goal, progress);
     el.dashStatus.textContent = state.dashCooldown <= 0 ? "Ready" : `${Math.ceil(state.dashCooldown * 10) / 10}s`;
     const ringMission = missionById("ring");
     const ringTarget = targetValue(ringMission);

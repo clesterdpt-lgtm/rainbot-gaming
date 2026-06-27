@@ -51,7 +51,7 @@
   const sign = (v) => (v < 0 ? -1 : v > 0 ? 1 : 0);
   const TAU = Math.PI * 2;
   const rad = (deg) => (deg * Math.PI) / 180;
-  const ART_VERSION = "20260627-body-1";
+  const ART_VERSION = "20260627-rainbot-site-1";
 
   function loadArt(name) {
     const img = new Image();
@@ -62,8 +62,8 @@
 
   const ART = {
     stageAtlas: loadArt("stage-atlas.png"),
-    rosterAtlas: loadArt("roster-atlas.png"),
-    bodyAtlas: loadArt("body-atlas.png"),
+    rosterAtlas: loadArt("roster-atlas-rainbot-site-20260627.png"),
+    bodyAtlas: loadArt("body-atlas-rainbot-site-20260627.png"),
   };
 
   const STAGE_ART = {
@@ -83,7 +83,7 @@
   };
 
   const BODY_ART = {
-    rainbot: { col: 0, row: 0, sx: 169, sy: 9, sw: 321, sh: 409, h: 86 },
+    rainbot: { col: 0, row: 0, sx: 197, sy: 16, sw: 233, sh: 398, h: 94 },
     gigachad: { col: 1, row: 0, sx: 48, sy: 4, sw: 422, sh: 414, h: 94 },
     mrfeast: { col: 0, row: 1, sx: 112, sy: 0, sw: 417, sh: 418, h: 96 },
     skibidi: { col: 1, row: 1, sx: 55, sy: 0, sw: 420, sh: 418, h: 88 },

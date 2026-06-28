@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Escape the Poop Cruise - Rainbot Network</title>
+  <meta name="description" content="A low-poly horror FPS where Roe Jogan is trapped on a cursed cruise. Cure infected passengers, manage the infection meter, and reach the lifeboats." />
+  <meta property="og:title" content="Escape the Poop Cruise - Rainbot Network" />
+  <meta property="og:description" content="Low-poly horror FPS cruise chaos. Cure the fictional cruise crud, keep your distance, and escape the deck." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260627-profile-stats-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M16 64h68l-9 16H25z' fill='%232ee0ff'/%3E%3Cpath d='M30 24h40l8 40H22z' fill='%23b7ff54'/%3E%3Ccircle cx='38' cy='44' r='5' fill='%2305070d'/%3E%3Ccircle cx='62' cy='44' r='5' fill='%2305070d'/%3E%3C/svg%3E" />
+  <style>
+    .poop-cruise-page .game-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(292px, 330px);
+    }
+
+    .poop-cruise-stage {
+      background:
+        radial-gradient(circle at 28% 0%, rgba(183, 255, 84, 0.13), transparent 30%),
+        radial-gradient(circle at 80% 12%, rgba(46, 224, 255, 0.12), transparent 28%),
+        linear-gradient(180deg, rgba(6, 8, 18, 0.98), rgba(3, 5, 12, 0.99));
+      border-color: rgba(183, 255, 84, 0.32);
+      position: relative;
+    }
+
+    .canvas-wrap--poop-cruise {
+      aspect-ratio: 16 / 9;
+      --game-aspect: 1.7777778;
+      --game-aspect-ratio: 16 / 9;
+      --game-max-width: 1440px;
+      background: #02050a;
+      border: 1px solid rgba(183, 255, 84, 0.34);
+      container-type: size;
+      overflow: hidden;
+    }
+
+    .canvas-wrap--poop-cruise #gameCanvas {
+      background: #02050a;
+      border-color: rgba(46, 224, 255, 0.36);
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .canvas-wrap--poop-cruise.is-maxed #gameCanvas,
+    .canvas-wrap--poop-cruise:fullscreen #gameCanvas,
+    .canvas-wrap--poop-cruise:-webkit-full-screen #gameCanvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+    }
+
+    .poop-hud {
+      color: #f7fbff;
+      font-family: var(--font-mono);
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.82);
+      z-index: 6;
+    }
+
+    .poop-hud__top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: clamp(5px, 1cqw, 10px);
+      left: clamp(52px, 6.8cqw, 68px);
+      max-width: calc(100% - clamp(104px, 13cqw, 146px));
+      position: absolute;
+      top: clamp(8px, 1.4cqw, 16px);
+    }
+
+    .poop-chip {
+      background: rgba(2, 5, 10, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 7px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28), 0 12px 28px rgba(0, 0, 0, 0.24);
+      display: grid;
+      gap: 2px;
+      min-width: clamp(72px, 10cqw, 138px);
+      padding: clamp(5px, 0.9cqw, 9px) clamp(7px, 1.1cqw, 12px);
+    }
+
+    .poop-chip span {
+      color: rgba(247, 251, 255, 0.68);
+      font-size: clamp(8px, 1.05cqw, 11px);
+      font-weight: 900;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .poop-chip strong {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(11px, 1.7cqw, 17px);
+      line-height: 1;
+      overflow-wrap: anywhere;
+      text-transform: uppercase;
+    }
+
+    .poop-meter {
+      background: rgba(2, 5, 10, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      bottom: clamp(9px, 1.4cqw, 18px);
+      left: clamp(8px, 1.6cqw, 18px);
+      max-width: min(420px, calc(100% - 88px));
+      padding: clamp(7px, 1.1cqw, 12px);
+      position: absolute;
+      width: clamp(210px, 34cqw, 420px);
+    }
+
+    .poop-meter__row {
+      align-items: center;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .poop-meter__row span,
+    .poop-meter__row strong {
+      font-size: clamp(9px, 1.15cqw, 12px);
+      font-weight: 900;
+      line-height: 1;
+      text-transform: uppercase;
+    }
+
+    .poop-meter__row span {
+      color: #b7ff54;
+    }
+
+    .poop-meter__track {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.72);
+      border-radius: 999px;
+      display: block;
+      height: clamp(10px, 1.6cqw, 17px);
+      overflow: hidden;
+    }
+
+    .poop-meter__fill {
+      background: linear-gradient(90deg, #2ee0ff, #b7ff54 48%, #ffd43b 70%, #ff2e88 100%);
+      display: block;
+      height: 100%;
+      transition: width 100ms linear;
+      width: 0%;
+    }
+
+    .poop-status {
+      background: rgba(2, 5, 10, 0.74);
+      border: 1px solid rgba(46, 224, 255, 0.28);
+      border-radius: 999px;
+      bottom: clamp(10px, 1.6cqw, 18px);
+      color: #fff;
+      font-size: clamp(9px, 1.15cqw, 12px);
+      font-weight: 900;
+      left: 50%;
+      max-width: min(430px, calc(100% - 94px));
+      overflow: hidden;
+      padding: 8px 12px;
+      position: absolute;
+      text-overflow: ellipsis;
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+
+    .poop-reticle {
+      height: clamp(24px, 4.1cqw, 42px);
+      left: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: clamp(24px, 4.1cqw, 42px);
+    }
+
+    .poop-reticle::before,
+    .poop-reticle::after {
+      background: rgba(247, 251, 255, 0.9);
+      box-shadow: 0 0 12px rgba(46, 224, 255, 0.45);
+      content: "";
+      left: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .poop-reticle::before {
+      height: 2px;
+      width: 100%;
+    }
+
+    .poop-reticle::after {
+      height: 100%;
+      width: 2px;
+    }
+
+    .poop-vignette {
+      background:
+        radial-gradient(circle at 50% 45%, transparent 38%, rgba(0, 0, 0, 0.28) 76%, rgba(0, 0, 0, 0.62) 100%),
+        linear-gradient(180deg, rgba(183, 255, 84, 0.06), transparent 24%, rgba(100, 63, 8, 0.16));
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      z-index: 5;
+    }
+
+    .poop-vignette::after {
+      background: rgba(120, 70, 10, var(--crud-flash, 0));
+      content: "";
+      inset: 0;
+      position: absolute;
+      transition: background 90ms linear;
+    }
+
+    .poop-mobile-controls {
+      display: none;
+      inset: auto 0 0 0;
+      padding: 0 12px 12px;
+      pointer-events: none;
+      position: absolute;
+      z-index: 9;
+    }
+
+    .poop-mobile-pad,
+    .poop-mobile-actions {
+      pointer-events: auto;
+    }
+
+    .poop-mobile-pad {
+      bottom: 12px;
+      display: grid;
+      gap: 5px;
+      grid-template-columns: repeat(3, 42px);
+      grid-template-rows: repeat(3, 42px);
+      left: 12px;
+      position: absolute;
+    }
+
+    .poop-mobile-actions {
+      bottom: 12px;
+      display: grid;
+      gap: 7px;
+      grid-template-columns: repeat(2, 58px);
+      position: absolute;
+      right: 12px;
+    }
+
+    .poop-touch-btn {
+      align-items: center;
+      background: rgba(5, 10, 18, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 9px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 10px 24px rgba(0, 0, 0, 0.26);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      font: 900 10px var(--font-display);
+      justify-content: center;
+      letter-spacing: 0;
+      min-height: 42px;
+      padding: 0;
+      text-transform: uppercase;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .poop-touch-btn:active,
+    .poop-touch-btn.is-held {
+      background: rgba(46, 224, 255, 0.24);
+      border-color: rgba(46, 224, 255, 0.76);
+      transform: translateY(1px);
+    }
+
+    .poop-touch-btn--fire {
+      background: linear-gradient(180deg, #ff2e88, #9e185a);
+      border-color: rgba(255, 255, 255, 0.34);
+      grid-column: 1 / -1;
+      min-height: 50px;
+    }
+
+    .poop-touch-btn--yellow {
+      background: linear-gradient(180deg, #ffd43b, #a86c11);
+      color: #070913;
+    }
+
+    .poop-mobile-pad [data-mobile-dir="forward"] { grid-column: 2; grid-row: 1; }
+    .poop-mobile-pad [data-mobile-dir="left"] { grid-column: 1; grid-row: 2; }
+    .poop-mobile-pad [data-mobile-dir="back"] { grid-column: 2; grid-row: 3; }
+    .poop-mobile-pad [data-mobile-dir="right"] { grid-column: 3; grid-row: 2; }
+
+    .poop-side-note {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.55;
+      margin: 10px 0 0;
+    }
+
+    .poop-side-note kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 1px 5px;
+    }
+
+    .poop-controls {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .poop-controls .btn {
+      font-size: 12px;
+      min-height: 34px;
+      padding: 8px 10px;
+    }
+
+    @media (max-width: 760px) {
+      .poop-cruise-page .game-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .canvas-wrap--poop-cruise {
+        aspect-ratio: auto;
+        min-height: min(66dvh, 520px);
+      }
+
+      .canvas-wrap--poop-cruise #gameCanvas {
+        height: 100%;
+      }
+
+      .canvas-wrap--poop-cruise .overlay {
+        justify-content: flex-start;
+        overflow: auto;
+        padding: 42px 16px 16px;
+      }
+
+      .canvas-wrap--poop-cruise .overlay__title {
+        font-size: clamp(24px, 9vw, 38px);
+        line-height: 0.98;
+      }
+
+      .canvas-wrap--poop-cruise .overlay__sub {
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .canvas-wrap--poop-cruise .overlay .btn {
+        min-height: 42px;
+      }
+
+      .canvas-wrap--poop-cruise.is-playing .poop-mobile-controls {
+        display: block;
+      }
+
+      .canvas-wrap--poop-cruise.is-playing .poop-meter {
+        bottom: 128px;
+        max-width: calc(100% - 24px);
+        width: calc(100% - 24px);
+      }
+
+      .canvas-wrap--poop-cruise.is-playing .poop-hud__top {
+        left: 12px;
+        max-width: calc(100% - 68px);
+        top: 52px;
+      }
+
+      .canvas-wrap--poop-cruise.is-playing .poop-chip {
+        min-width: 66px;
+        padding: 5px 7px;
+      }
+
+      .poop-status {
+        display: none;
+      }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+      .canvas-wrap--poop-cruise.is-playing .poop-mobile-controls {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body class="poop-cruise-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Escape the Poop Cruise</h1>
+        <div class="game-page__sub">Low-poly horror FPS · cure the cruise crud · keep distance · reach the lifeboats</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage poop-cruise-stage">
+        <div class="canvas-wrap canvas-wrap--poop-cruise">
+          <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Escape the Poop Cruise 3D horror FPS playfield"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">+</button>
+
+          <div class="poop-vignette" id="crud-vignette" aria-hidden="true"></div>
+          <div class="poop-hud" aria-label="Cruise survival stats">
+            <div class="poop-hud__top">
+              <div class="poop-chip"><span>Deck</span><strong id="hud-deck">1</strong></div>
+              <div class="poop-chip"><span>Cured</span><strong id="hud-cures">0/0</strong></div>
+              <div class="poop-chip"><span>Weapon</span><strong id="hud-weapon">Dart</strong></div>
+              <div class="poop-chip"><span>Ammo</span><strong id="hud-ammo">Ready</strong></div>
+              <div class="poop-chip"><span>Score</span><strong id="hud-score">0</strong></div>
+              <div class="poop-chip"><span>High</span><strong id="hud-high">0</strong></div>
+            </div>
+
+            <div class="poop-reticle" aria-hidden="true"></div>
+
+            <div class="poop-meter">
+              <div class="poop-meter__row">
+                <span>Infection meter</span>
+                <strong id="hud-infection">0%</strong>
+              </div>
+              <span class="poop-meter__track"><span class="poop-meter__fill" id="infection-fill"></span></span>
+            </div>
+
+            <div class="poop-status" id="hud-status">Click start, then click the canvas for mouse look.</div>
+          </div>
+
+          <div class="poop-mobile-controls" id="mobile-controls" aria-label="Mobile game controls">
+            <div class="poop-mobile-pad" aria-label="Move">
+              <button class="poop-touch-btn" type="button" data-mobile-dir="forward" aria-label="Move forward">UP</button>
+              <button class="poop-touch-btn" type="button" data-mobile-dir="left" aria-label="Move left">L</button>
+              <button class="poop-touch-btn" type="button" data-mobile-dir="right" aria-label="Move right">R</button>
+              <button class="poop-touch-btn" type="button" data-mobile-dir="back" aria-label="Move backward">DN</button>
+            </div>
+            <div class="poop-mobile-actions" aria-label="Actions">
+              <button class="poop-touch-btn poop-touch-btn--fire" type="button" data-mobile-action="fire">Fire</button>
+              <button class="poop-touch-btn" type="button" data-mobile-action="sprint">Run</button>
+              <button class="poop-touch-btn" type="button" data-mobile-action="switch">Swap</button>
+              <button class="poop-touch-btn poop-touch-btn--yellow" type="button" data-mobile-action="use">Use</button>
+            </div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">ESCAPE THE POOP CRUISE</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Roe Jogan woke up on the SS Gut Check. The passengers have a fictional cruise crud,
+              the buffet is glowing, and the lifeboats will not open until enough people are cured.
+              Keep distance so your infection meter drains.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary" type="button">Start deck 1</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="poop-controls">
+            <button class="btn btn--secondary" id="btn-pause" type="button">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button">Restart</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true">Sound on</button>
+            <button class="btn btn--yellow" id="btn-lock" type="button">Mouse look</button>
+          </div>
+          <p class="poop-side-note">
+            <kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> cure dart ·
+            <kbd>Shift</kbd> sprint · <kbd>1</kbd>/<kbd>2</kbd> switch weapons ·
+            <kbd>E</kbd> use lifeboat door.
+          </p>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">AD BOOSTS</h3>
+          <div class="poop-controls">
+            <button class="btn btn--yellow" id="btn-fresh-air" type="button">Fresh air purge</button>
+            <button class="btn btn--secondary" id="btn-shells" type="button">Shotgun kit</button>
+          </div>
+          <p class="poop-side-note">Pro players get these instantly. Everyone else watches the mock rewarded ad.</p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Cure enough infected passengers</strong> to unlock the lifeboat door on each procedural deck.</li>
+            <li><strong style="color:var(--ink);">Keep distance.</strong> The infection meter fills near infected passengers, cough clouds, and contaminated buffet zones.</li>
+            <li><strong style="color:var(--ink);">Recover in clean air.</strong> Balcony tiles and open porthole areas drain infection faster.</li>
+            <li><strong style="color:var(--ink);">Start with the dart gun.</strong> Later decks add the Ivermectin Shotgun pickup for close-range panic curing.</li>
+            <li><strong style="color:var(--ink);">Escape scores big.</strong> Leaderboard score rewards cured passengers, accuracy, deck reached, and fast lifeboat exits.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody horror fiction.</strong> The cruise crud is fictional. The cure weapons are absurd game props, not medical advice.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260628-mobile-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

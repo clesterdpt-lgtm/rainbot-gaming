@@ -94,6 +94,7 @@ const RB_GAME_META = {
   "dont-look-gym-girl": { title: "Don't Look at the Gym Girl", scoreIds: ["dont-look-gym-girl"] },
   "doorcrash-no-tip-nitro": { title: "DoorCrash: No Tip Nitro", scoreIds: ["doorcrash"] },
   "drone-hunter": { title: "Drone Hunter", scoreIds: ["dronehunter"] },
+  "escape-poop-cruise": { title: "Escape the Poop Cruise", scoreIds: ["escape-poop-cruise"] },
   "flappy-stonks": { title: "Flappy Stonks", scoreIds: ["flappy-stonks"] },
   "gen-z-driving-simulator": { title: "Gen Z Driving Simulator", scoreIds: ["gen-z-driving-simulator"] },
   "karen-merger": { title: "Complaint Chain", scoreIds: ["karen-merger"] },

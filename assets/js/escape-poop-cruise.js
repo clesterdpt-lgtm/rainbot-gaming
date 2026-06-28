@@ -697,6 +697,10 @@
   function syncPlayStateClass() {
     if (!canvasWrap) return;
     canvasWrap.classList.toggle("is-playing", state.mode === "playing");
+    canvasWrap.dataset.playerYaw = player.yaw.toFixed(4);
+    canvasWrap.dataset.playerPitch = player.pitch.toFixed(4);
+    canvasWrap.dataset.playerX = player.x.toFixed(3);
+    canvasWrap.dataset.playerZ = player.z.toFixed(3);
   }
 
   function tryUseExit() {
@@ -1150,14 +1154,16 @@
   }
 
   function movePlayer(dt) {
-    const forward = new THREE.Vector3(Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-    const right = new THREE.Vector3(Math.cos(player.yaw), 0, Math.sin(player.yaw));
+    const forwardX = -Math.sin(player.yaw);
+    const forwardZ = -Math.cos(player.yaw);
+    const rightX = Math.cos(player.yaw);
+    const rightZ = -Math.sin(player.yaw);
     let mx = 0;
     let mz = 0;
-    if (input.forward) { mx += forward.x; mz += forward.z; }
-    if (input.back) { mx -= forward.x; mz -= forward.z; }
-    if (input.right) { mx += right.x; mz += right.z; }
-    if (input.left) { mx -= right.x; mz -= right.z; }
+    if (input.forward) { mx += forwardX; mz += forwardZ; }
+    if (input.back) { mx -= forwardX; mz -= forwardZ; }
+    if (input.right) { mx += rightX; mz += rightZ; }
+    if (input.left) { mx -= rightX; mz -= rightZ; }
     const len = Math.hypot(mx, mz);
     if (len > 0) {
       mx /= len;
@@ -1262,6 +1268,41 @@
     return event.pointerType === "touch" || event.pointerType === "pen";
   }
 
+  function applyLookDelta(dx, dy, scale = 1) {
+    player.yaw -= dx * MOUSE_SENS * scale;
+    if (player.yaw > Math.PI) player.yaw -= Math.PI * 2;
+    if (player.yaw < -Math.PI) player.yaw += Math.PI * 2;
+    player.pitch = clamp(player.pitch - dy * MOUSE_SENS * scale, -MAX_PITCH, MAX_PITCH);
+  }
+
+  function isLookBlockedTarget(target) {
+    return Boolean(target && target.closest && target.closest(
+      "button, a, input, select, textarea, .poop-mobile-pad, .poop-mobile-actions, .overlay--show"
+    ));
+  }
+
+  function beginTouchLook(clientX, clientY, pointerId = "touch") {
+    touchLook.active = true;
+    touchLook.pointerId = pointerId;
+    touchLook.lastX = clientX;
+    touchLook.lastY = clientY;
+  }
+
+  function moveTouchLook(clientX, clientY) {
+    if (!touchLook.active || state.mode !== "playing") return;
+    const dx = clientX - touchLook.lastX;
+    const dy = clientY - touchLook.lastY;
+    touchLook.lastX = clientX;
+    touchLook.lastY = clientY;
+    applyLookDelta(dx, dy, 1.45);
+  }
+
+  function endTouchLook(pointerId) {
+    if (!touchLook.active || touchLook.pointerId !== pointerId) return;
+    touchLook.active = false;
+    touchLook.pointerId = null;
+  }
+
   function bindHoldButton(button, onPress, onRelease) {
     const release = (event) => {
       if (event && event.cancelable) event.preventDefault();
@@ -1311,51 +1352,70 @@
   }
 
   function bindMobileControls() {
-    if (!el.mobileControls || !window.PointerEvent) return;
-    el.mobileControls.querySelectorAll("[data-mobile-dir]").forEach((button) => {
-      const direction = button.dataset.mobileDir;
-      bindHoldButton(button, () => setMobileDirection(direction, true), () => setMobileDirection(direction, false));
-    });
+    if (el.mobileControls && window.PointerEvent) {
+      el.mobileControls.querySelectorAll("[data-mobile-dir]").forEach((button) => {
+        const direction = button.dataset.mobileDir;
+        bindHoldButton(button, () => setMobileDirection(direction, true), () => setMobileDirection(direction, false));
+      });
 
-    const fireButton = el.mobileControls.querySelector("[data-mobile-action='fire']");
-    const sprintButton = el.mobileControls.querySelector("[data-mobile-action='sprint']");
-    const switchButton = el.mobileControls.querySelector("[data-mobile-action='switch']");
-    const useButton = el.mobileControls.querySelector("[data-mobile-action='use']");
-    if (fireButton) bindTapButton(fireButton, fireWeapon);
-    if (sprintButton) bindHoldButton(sprintButton, () => { input.sprint = true; }, () => { input.sprint = false; });
-    if (switchButton) bindTapButton(switchButton, switchWeapon);
-    if (useButton) bindTapButton(useButton, tryUseExit);
+      const fireButton = el.mobileControls.querySelector("[data-mobile-action='fire']");
+      const sprintButton = el.mobileControls.querySelector("[data-mobile-action='sprint']");
+      const switchButton = el.mobileControls.querySelector("[data-mobile-action='switch']");
+      const useButton = el.mobileControls.querySelector("[data-mobile-action='use']");
+      if (fireButton) bindTapButton(fireButton, fireWeapon);
+      if (sprintButton) bindHoldButton(sprintButton, () => { input.sprint = true; }, () => { input.sprint = false; });
+      if (switchButton) bindTapButton(switchButton, switchWeapon);
+      if (useButton) bindTapButton(useButton, tryUseExit);
+    }
 
-    canvas.addEventListener("pointerdown", (event) => {
-      if (!isTouchLikePointer(event) || state.mode !== "playing") return;
-      event.preventDefault();
-      touchLook.active = true;
-      touchLook.pointerId = event.pointerId;
-      touchLook.lastX = event.clientX;
-      touchLook.lastY = event.clientY;
-      if (canvas.setPointerCapture) {
-        try { canvas.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
-      }
-    });
+    if (window.PointerEvent) {
+      canvasWrap.addEventListener("pointerdown", (event) => {
+        if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
+        if (event.pointerType === "mouse" && isPointerLocked()) return;
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (isTouchLikePointer(event) && event.cancelable) event.preventDefault();
+        beginTouchLook(event.clientX, event.clientY, event.pointerId);
+        if (canvasWrap.setPointerCapture) {
+          try { canvasWrap.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
+        }
+      });
 
-    canvas.addEventListener("pointermove", (event) => {
-      if (!touchLook.active || touchLook.pointerId !== event.pointerId || state.mode !== "playing") return;
-      event.preventDefault();
-      const dx = event.clientX - touchLook.lastX;
-      const dy = event.clientY - touchLook.lastY;
-      touchLook.lastX = event.clientX;
-      touchLook.lastY = event.clientY;
-      player.yaw -= dx * MOUSE_SENS * 1.45;
-      player.pitch = clamp(player.pitch - dy * MOUSE_SENS * 1.25, -MAX_PITCH, MAX_PITCH);
-    });
+      canvasWrap.addEventListener("pointermove", (event) => {
+        if (!touchLook.active || touchLook.pointerId !== event.pointerId || state.mode !== "playing") return;
+        if (isTouchLikePointer(event) && event.cancelable) event.preventDefault();
+        moveTouchLook(event.clientX, event.clientY);
+      });
 
-    const endLook = (event) => {
-      if (!touchLook.active || touchLook.pointerId !== event.pointerId) return;
-      touchLook.active = false;
-      touchLook.pointerId = null;
-    };
-    canvas.addEventListener("pointerup", endLook);
-    canvas.addEventListener("pointercancel", endLook);
+      const endPointerLook = (event) => endTouchLook(event.pointerId);
+      canvasWrap.addEventListener("pointerup", endPointerLook);
+      canvasWrap.addEventListener("pointercancel", endPointerLook);
+      window.addEventListener("pointerup", endPointerLook);
+      window.addEventListener("pointercancel", endPointerLook);
+    } else {
+      canvasWrap.addEventListener("touchstart", (event) => {
+        if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
+        const touch = event.changedTouches && event.changedTouches[0];
+        if (!touch) return;
+        event.preventDefault();
+        beginTouchLook(touch.clientX, touch.clientY, touch.identifier);
+      }, { passive: false });
+
+      canvasWrap.addEventListener("touchmove", (event) => {
+        if (!touchLook.active || state.mode !== "playing") return;
+        const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
+        if (!touch) return;
+        event.preventDefault();
+        moveTouchLook(touch.clientX, touch.clientY);
+      }, { passive: false });
+
+      const endTouch = (event) => {
+        const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
+        if (touch) endTouchLook(touch.identifier);
+      };
+      canvasWrap.addEventListener("touchend", endTouch);
+      canvasWrap.addEventListener("touchcancel", endTouch);
+    }
+
     window.addEventListener("blur", resetMobileInput);
   }
 
@@ -1385,8 +1445,7 @@
 
     document.addEventListener("mousemove", (event) => {
       if (!isPointerLocked() || state.mode !== "playing") return;
-      player.yaw -= event.movementX * MOUSE_SENS;
-      player.pitch = clamp(player.pitch - event.movementY * MOUSE_SENS, -MAX_PITCH, MAX_PITCH);
+      applyLookDelta(event.movementX, event.movementY);
     });
 
     document.addEventListener("mousedown", (event) => {

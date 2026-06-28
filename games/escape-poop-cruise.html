@@ -38,7 +38,7 @@
       overflow: hidden;
     }
 
-    .canvas-wrap--poop-cruise #gameCanvas {
+    .poop-cruise-page .canvas-wrap--poop-cruise #gameCanvas {
       background: #02050a;
       border-color: rgba(46, 224, 255, 0.36);
       cursor: crosshair;
@@ -389,6 +389,13 @@
         display: block;
       }
     }
+
+    @media (hover: none) and (pointer: coarse), (max-width: 900px) {
+      body.poop-cruise-page:not(.rb-game-maxed) .game-page .canvas-wrap--poop-cruise,
+      body.poop-cruise-page:not(.rb-game-maxed) .game-page .canvas-wrap--poop-cruise #gameCanvas {
+        touch-action: none;
+      }
+    }
   </style>
 </head>
 <body class="poop-cruise-page">
@@ -523,7 +530,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260628-comments-reddit-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/escape-poop-cruise.js?v=20260628-mobile-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260628-controls-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

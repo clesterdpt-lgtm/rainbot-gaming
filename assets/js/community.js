@@ -10,6 +10,7 @@
 
   const state = {
     category: new URLSearchParams(location.search).get("category") || "",
+    replyParentId: null,
     sort: new URLSearchParams(location.search).get("sort") || "hot",
     rendering: false,
   };
@@ -162,6 +163,33 @@
     });
   }
 
+  function buildReplyTree(replies) {
+    const nodes = new Map();
+    const roots = [];
+    (Array.isArray(replies) ? replies : []).forEach((reply) => {
+      const id = Number(reply && reply.id);
+      if (!Number.isFinite(id) || id <= 0) return;
+      const parentId = Number(reply.parent_id);
+      nodes.set(id, {
+        ...reply,
+        id,
+        parent_id: Number.isFinite(parentId) && parentId > 0 ? parentId : null,
+        children: [],
+      });
+    });
+    nodes.forEach((reply) => {
+      const parent = reply.parent_id ? nodes.get(reply.parent_id) : null;
+      if (parent && parent.id !== reply.id) parent.children.push(reply);
+      else roots.push(reply);
+    });
+    const sortBranch = (branch) => {
+      branch.sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || "") || Number(a.id) - Number(b.id));
+      branch.forEach((reply) => sortBranch(reply.children));
+      return branch;
+    };
+    return sortBranch(roots);
+  }
+
   function renderFeedControls(root) {
     const controls = document.createElement("div");
     controls.className = "forum-feed-controls";
@@ -220,6 +248,7 @@
       link.addEventListener("click", (event) => {
         event.preventDefault();
         state.category = category.id === "general" ? "" : category.id;
+        state.replyParentId = null;
         const nextUrl = new URL(location.href);
         nextUrl.search = "";
         if (state.category) nextUrl.searchParams.set("category", state.category);
@@ -247,6 +276,7 @@
       );
       link.addEventListener("click", (event) => {
         event.preventDefault();
+        state.replyParentId = null;
         history.pushState(null, "", url);
         scrollForumTop();
         renderCommunity();
@@ -426,10 +456,21 @@
     return actions;
   }
 
-  function renderReplyActions(reply, currentBackendState) {
+  function toggleReplyComposer(replyId) {
+    const id = Number(replyId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    state.replyParentId = state.replyParentId === id ? null : id;
+    renderCommunity();
+  }
+
+  function renderReplyActions(reply, currentBackendState, canReply) {
     const actions = document.createElement("div");
     actions.className = "forum-actions forum-actions--reply";
     if (currentBackendState.user) {
+      if (canReply) {
+        const isActive = state.replyParentId === Number(reply.id);
+        actions.append(buttonEl(isActive ? "Cancel" : "Reply", `forum-action${isActive ? " is-active" : ""}`, () => toggleReplyComposer(reply.id)));
+      }
       actions.append(buttonEl("Report", "forum-action", () => reportItem("reply", reply.id)));
     }
     if (isModerator(currentBackendState)) {
@@ -464,6 +505,7 @@
     title.textContent = topic.title;
     title.addEventListener("click", (event) => {
       event.preventDefault();
+      state.replyParentId = null;
       const url = new URL(location.href);
       url.search = "";
       url.searchParams.set("topic", topic.id);
@@ -498,9 +540,14 @@
     sortTopics(topics).forEach((topic) => list.append(topicCard(topic, currentBackendState)));
   }
 
-  function replyCard(reply, currentBackendState) {
+  function replyCard(reply, currentBackendState, topic, depth = 0) {
+    const replyId = Number(reply.id);
+    const safeDepth = Math.max(0, Math.min(8, Number(depth) || 0));
+    const canReply = Boolean(currentBackendState.user && topic && !topic.is_locked);
     const card = document.createElement("article");
-    card.className = "forum-reply";
+    card.className = "forum-reply" + (safeDepth ? " forum-reply--child" : "") + (state.replyParentId === replyId ? " forum-reply--replying" : "");
+    card.dataset.replyId = String(replyId);
+    card.style.setProperty("--reply-depth", String(safeDepth));
     const name = authorName(reply);
     const profileTitle = authorTitle(reply);
     const copy = document.createElement("div");
@@ -513,22 +560,30 @@
       ]),
       textEl("p", "forum-reply__body", reply.body)
     );
+    if (canReply && state.replyParentId === replyId) renderReplyForm(copy, topic.id, reply);
     card.append(
       avatarEl(authorProfile(reply)),
       copy,
-      renderReplyActions(reply, currentBackendState)
+      renderReplyActions(reply, currentBackendState, canReply)
     );
     return card;
   }
 
-  function renderReplyForm(root, topicId) {
+  function appendReplyBranch(root, reply, currentBackendState, topic, depth = 0) {
+    root.append(replyCard(reply, currentBackendState, topic, depth));
+    (reply.children || []).forEach((child) => appendReplyBranch(root, child, currentBackendState, topic, depth + 1));
+  }
+
+  function renderReplyForm(root, topicId, parentReply = null) {
+    const parentId = parentReply ? Number(parentReply.id) : null;
+    const isNested = Number.isFinite(parentId) && parentId > 0;
     const form = document.createElement("form");
-    form.className = "forum-form forum-form--reply";
+    form.className = `forum-form forum-form--reply${isNested ? " forum-form--reply-inline" : ""}`;
     form.innerHTML = `
       <div class="forum-form__header">
         <div>
-          <span class="forum-kicker">Thread reply</span>
-          <h2>Reply</h2>
+          <span class="forum-kicker" data-reply-kicker></span>
+          <h2 data-reply-heading></h2>
         </div>
       </div>
       <label class="rb-form-field">
@@ -536,10 +591,22 @@
         <textarea name="body" rows="4" maxlength="6000" required></textarea>
       </label>
       <div class="forum-form__footer">
-        <button class="btn btn--primary" type="submit">Post Reply</button>
         <p class="rb-modal-status" data-form-status></p>
+        <div class="forum-form__actions">
+          ${isNested ? '<button class="btn btn--ghost" type="button" data-cancel-reply>Cancel</button>' : ""}
+          <button class="btn btn--primary" type="submit">Post Reply</button>
+        </div>
       </div>
     `;
+    form.querySelector("[data-reply-kicker]").textContent = isNested ? "Nested reply" : "Thread reply";
+    form.querySelector("[data-reply-heading]").textContent = isNested ? `Reply to ${authorName(parentReply)}` : "Reply";
+    const cancelButton = form.querySelector("[data-cancel-reply]");
+    if (cancelButton) {
+      cancelButton.addEventListener("click", () => {
+        state.replyParentId = null;
+        renderCommunity();
+      });
+    }
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const status = form.querySelector("[data-form-status]");
@@ -547,7 +614,8 @@
       button.disabled = true;
       status.textContent = "Posting...";
       try {
-        await window.RBBackend.createReply(topicId, form.elements.body.value);
+        await window.RBBackend.createReply(topicId, form.elements.body.value, { parentId });
+        state.replyParentId = null;
         form.reset();
         await renderCommunity();
       } catch (error) {
@@ -568,6 +636,7 @@
     back.textContent = "Back to Forum";
     back.addEventListener("click", (event) => {
       event.preventDefault();
+      state.replyParentId = null;
       const url = new URL(location.href);
       url.search = "";
       history.pushState(null, "", url);
@@ -605,7 +674,12 @@
     );
     topicFull.append(topicScoreRail({ reply_count: replies.length }), topicMain, renderBadges(topic), renderTopicActions(topic, currentBackendState));
     root.append(topicFull);
-    replies.forEach((reply) => root.append(replyCard(reply, currentBackendState)));
+    if (replies.length) {
+      const replyList = document.createElement("div");
+      replyList.className = "forum-reply-list";
+      buildReplyTree(replies).forEach((reply) => appendReplyBranch(replyList, reply, currentBackendState, topic));
+      root.append(replyList);
+    }
     if (topic.is_locked) root.append(textEl("div", "forum-empty", "This topic is locked."));
     else if (currentBackendState.user) renderReplyForm(root, topicId);
     else renderLoginPrompt(root);
@@ -732,6 +806,7 @@
     }
     const currentBackendState = backendState();
     const topicId = new URLSearchParams(location.search).get("topic");
+    if (!topicId || moderationViewActive()) state.replyParentId = null;
 
     try {
       if (!currentBackendState.configured && currentBackendState.status !== "loading") {

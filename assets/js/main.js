@@ -1196,7 +1196,7 @@ function loadScriptOnce(src, id) {
 async function initRainbotBackend() {
   try {
     await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260628-comments-reddit-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260628-comments-reddit-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260628-nested-replies-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }

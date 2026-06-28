@@ -822,6 +822,21 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   -webkit-tap-highlight-color: transparent;
 }
 
+@media (hover: none) and (pointer: coarse), (max-width: 900px) {
+  body:not(.rb-game-maxed) .game-page .game-stage,
+  body:not(.rb-game-maxed) .game-page .canvas-wrap,
+  body:not(.rb-game-maxed) .game-page #gameCanvas {
+    touch-action: pan-y;
+  }
+
+  body.rb-game-maxed .canvas-wrap,
+  body.rb-game-maxed .canvas-wrap #gameCanvas,
+  .canvas-wrap.is-maxed,
+  .canvas-wrap.is-maxed #gameCanvas {
+    touch-action: none;
+  }
+}
+
 .controls-row {
   display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
   margin-top: 4px;
@@ -1596,6 +1611,9 @@ body.rb-game-maxed .clowder-stage {
 
   .game-side {
     gap: 8px;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
     padding-right: 0;
   }
 
@@ -7623,6 +7641,12 @@ body.arcade-home::before {
   gap: 9px;
 }
 
+.forum-reply-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .forum-category-list {
   scrollbar-width: none;
 }
@@ -7765,6 +7789,14 @@ body.arcade-home::before {
 
 .forum-form__footer {
   align-items: center;
+}
+
+.forum-form__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .forum-kicker {
@@ -8093,14 +8125,34 @@ body.arcade-home::before {
 
 .forum-reply {
   align-items: start;
+  --reply-indent: min(calc(var(--reply-depth, 0) * 22px), 154px);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  margin-bottom: 10px;
+  margin-left: var(--reply-indent);
+  overflow: visible;
+  position: relative;
 }
 
 .forum-reply .forum-actions {
   grid-column: 2;
+}
+
+.forum-reply--child {
+  border-left: 2px solid rgba(151, 171, 194, 0.22);
+}
+
+.forum-reply--child::before {
+  content: "";
+  position: absolute;
+  inset: -9px auto auto -2px;
+  width: 18px;
+  height: 22px;
+  border-bottom: 2px solid rgba(151, 171, 194, 0.18);
+}
+
+.forum-reply--replying {
+  border-color: rgba(35, 223, 242, 0.58);
 }
 
 .forum-reply__content {
@@ -8111,6 +8163,21 @@ body.arcade-home::before {
 
 .forum-form--reply {
   margin-top: 16px;
+}
+
+.forum-form--reply-inline {
+  border-left: 2px solid rgba(35, 223, 242, 0.42);
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 12px;
+}
+
+.forum-form--reply-inline h2 {
+  margin-bottom: 0;
+}
+
+.forum-form--reply-inline textarea {
+  min-height: 82px;
 }
 
 .forum-back-link {
@@ -8753,6 +8820,32 @@ body.arcade-home::before {
 
   .forum-topic__vote-rail {
     padding-inline: 4px;
+  }
+
+  .forum-reply {
+    --reply-indent: min(calc(var(--reply-depth, 0) * 10px), 42px);
+    gap: 8px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .forum-reply .forum-avatar {
+    height: 34px;
+    width: 34px;
+  }
+
+  .forum-reply .forum-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .forum-form__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .forum-form__actions .btn {
+    width: 100%;
   }
 
   .rb-comments {

@@ -159,6 +159,11 @@ const RBBackend = (() => {
     return ["best", "new", "top"].includes(normalized) ? normalized : "best";
   }
 
+  function isMissingForumReplyParentColumn(error) {
+    const text = `${error && error.message ? error.message : ""} ${error && error.details ? error.details : ""}`;
+    return /forum_replies\.parent_id|parent_id.*does not exist|could not find.*parent_id/i.test(text);
+  }
+
   function cleanProfileChoice(value, allowed, fallback) {
     const normalized = cleanGameId(value || fallback);
     return allowed.has(normalized) ? normalized : fallback;
@@ -567,26 +572,54 @@ const RBBackend = (() => {
 
   async function listReplies(topicId) {
     await requireClient();
-    const { data, error } = await client
+    let { data, error } = await client
       .from("forum_replies")
-      .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+      .select(`id, parent_id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .eq("topic_id", Number(topicId))
       .eq("is_hidden", false)
       .order("created_at", { ascending: true })
-      .limit(100);
+      .limit(200);
+    if (error && isMissingForumReplyParentColumn(error)) {
+      const fallback = await client
+        .from("forum_replies")
+        .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+        .eq("topic_id", Number(topicId))
+        .eq("is_hidden", false)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      data = (fallback.data || []).map((reply) => ({ ...reply, parent_id: null }));
+      error = fallback.error;
+    }
     if (error) throw error;
     return data || [];
   }
 
-  async function createReply(topicId, body) {
+  async function createReply(topicId, body, options = {}) {
     const user = await requireUser();
     const cleanedBody = cleanBody(body, 6000);
+    const parentId = options && options.parentId ? Number(options.parentId) : null;
     if (cleanedBody.length < 2) throw new Error("Reply needs at least 2 characters.");
+    const payload = {
+      topic_id: Number(topicId),
+      author_id: user.id,
+      body: cleanedBody,
+    };
+    if (Number.isFinite(parentId) && parentId > 0) payload.parent_id = parentId;
     const { data, error } = await client
       .from("forum_replies")
-      .insert({ topic_id: Number(topicId), author_id: user.id, body: cleanedBody })
-      .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+      .insert(payload)
+      .select(`id, parent_id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
       .single();
+    if (error && isMissingForumReplyParentColumn(error)) {
+      if (payload.parent_id) throw new Error("Nested replies need the forum nested replies migration.");
+      const fallback = await client
+        .from("forum_replies")
+        .insert({ topic_id: payload.topic_id, author_id: payload.author_id, body: payload.body })
+        .select(`id, body, is_hidden, created_at, author:profiles!forum_replies_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+        .single();
+      if (fallback.error) throw fallback.error;
+      return { ...fallback.data, parent_id: null };
+    }
     if (error) throw error;
     return data;
   }

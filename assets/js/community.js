@@ -10,6 +10,7 @@
 
   const state = {
     category: new URLSearchParams(location.search).get("category") || "",
+    sort: new URLSearchParams(location.search).get("sort") || "hot",
     rendering: false,
   };
 
@@ -136,6 +137,60 @@
     stat.className = "forum-stat";
     stat.append(textEl("strong", "", value), textEl("span", "", label));
     return stat;
+  }
+
+  function topicScoreRail(topic) {
+    const rail = document.createElement("div");
+    rail.className = "forum-topic__vote-rail";
+    rail.setAttribute("aria-label", `${Number(topic.reply_count) || 0} replies`);
+    rail.append(
+      textEl("span", "", "▲"),
+      textEl("strong", "", String(Number(topic.reply_count) || 0)),
+      textEl("span", "", "▼")
+    );
+    return rail;
+  }
+
+  function sortTopics(topics) {
+    const list = Array.isArray(topics) ? topics.slice() : [];
+    return list.sort((a, b) => {
+      if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) return a.is_pinned ? -1 : 1;
+      if (state.sort === "new") return Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
+      if (state.sort === "top") return (Number(b.reply_count) || 0) - (Number(a.reply_count) || 0) || Date.parse(b.last_activity_at || "") - Date.parse(a.last_activity_at || "");
+      return Date.parse(b.last_activity_at || "") - Date.parse(a.last_activity_at || "") ||
+        (Number(b.reply_count) || 0) - (Number(a.reply_count) || 0);
+    });
+  }
+
+  function renderFeedControls(root) {
+    const controls = document.createElement("div");
+    controls.className = "forum-feed-controls";
+    const title = document.createElement("div");
+    title.className = "forum-feed-controls__title";
+    title.append(
+      textEl("span", "forum-kicker", state.category ? categoryLabel(state.category) : "r/RainbotNetwork"),
+      textEl("h2", "", state.category ? `${categoryLabel(state.category)} Board` : "Community Feed")
+    );
+    const sorts = document.createElement("div");
+    sorts.className = "forum-sort-tabs";
+    [
+      { value: "hot", label: "Hot" },
+      { value: "new", label: "New" },
+      { value: "top", label: "Top" },
+    ].forEach((sort) => {
+      sorts.append(buttonEl(sort.label, "forum-sort-tab" + (state.sort === sort.value ? " is-active" : ""), () => {
+        state.sort = sort.value;
+        const url = new URL(location.href);
+        if (state.sort === "hot") url.searchParams.delete("sort");
+        else url.searchParams.set("sort", state.sort);
+        if (state.category) url.searchParams.set("category", state.category);
+        else url.searchParams.delete("category");
+        history.pushState(null, "", url);
+        renderCommunity();
+      }));
+    });
+    controls.append(title, sorts);
+    root.append(controls);
   }
 
   function toast(message, kind = "") {
@@ -402,7 +457,7 @@
       ]),
       renderBadges(topic)
     );
-    header.append(avatarEl(authorProfile(topic)), identity, statEl(String(Number(topic.reply_count) || 0), "Replies"));
+    header.append(avatarEl(authorProfile(topic)), identity);
     const title = document.createElement("a");
     title.className = "forum-topic__title";
     title.href = `community.html?topic=${topic.id}`;
@@ -419,8 +474,8 @@
     const body = textEl("p", "forum-topic__body", topic.body);
     const content = document.createElement("div");
     content.className = "forum-topic__content";
-    content.append(title, body);
-    card.append(header, content, renderTopicActions(topic, currentBackendState));
+    content.append(header, title, body);
+    card.append(topicScoreRail(topic), content, renderTopicActions(topic, currentBackendState));
     return card;
   }
 
@@ -429,6 +484,7 @@
     setStatus(currentBackendState.user ? "Signed in and ready" : "Read-only until login", currentBackendState.user ? "good" : "");
     if (currentBackendState.user) renderTopicForm(root);
     else renderLoginPrompt(root);
+    renderFeedControls(root);
 
     const list = document.createElement("div");
     list.className = "forum-topic-list";
@@ -439,7 +495,7 @@
       list.append(textEl("div", "forum-empty", "No posts here yet."));
       return;
     }
-    topics.forEach((topic) => list.append(topicCard(topic, currentBackendState)));
+    sortTopics(topics).forEach((topic) => list.append(topicCard(topic, currentBackendState)));
   }
 
   function replyCard(reply, currentBackendState) {
@@ -534,7 +590,9 @@
     topicFull.className = "forum-topic forum-topic--full";
     const name = authorName(topic);
     const profileTitle = authorTitle(topic);
-    topicFull.append(
+    const topicMain = document.createElement("div");
+    topicMain.className = "forum-topic__content";
+    topicMain.append(
       metaRow([
         { text: categoryCode(topic.category), className: "forum-meta-chip" },
         { text: categoryLabel(topic.category) },
@@ -543,10 +601,9 @@
         { text: formatDate(topic.created_at) },
       ]),
       textEl("h2", "forum-topic__heading", topic.title),
-      textEl("p", "forum-reply__body", topic.body),
-      statEl(String(replies.length), "Replies")
+      textEl("p", "forum-reply__body", topic.body)
     );
-    topicFull.append(renderBadges(topic), renderTopicActions(topic, currentBackendState));
+    topicFull.append(topicScoreRail({ reply_count: replies.length }), topicMain, renderBadges(topic), renderTopicActions(topic, currentBackendState));
     root.append(topicFull);
     replies.forEach((reply) => root.append(replyCard(reply, currentBackendState)));
     if (topic.is_locked) root.append(textEl("div", "forum-empty", "This topic is locked."));
@@ -711,6 +768,7 @@
 
   window.addEventListener("popstate", () => {
     state.category = new URLSearchParams(location.search).get("category") || "";
+    state.sort = new URLSearchParams(location.search).get("sort") || "hot";
     renderCommunity();
   });
   window.addEventListener("rainbot:authchange", () => renderCommunity());

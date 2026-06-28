@@ -1,6 +1,6 @@
 # Rainbot Supabase Backend
 
-This repo now has a backend-ready account, forum, cloud-save, and high-score layer. It stays disabled until Supabase is configured.
+This repo now has a backend-ready account, forum, content-comment, cloud-save, and high-score layer. It stays disabled until Supabase is configured.
 
 ## 1. Create the Supabase project
 
@@ -21,6 +21,7 @@ Open Supabase SQL Editor and run:
 -- Then run:
 -- supabase/migrations/20260625002000_profile_customization.sql
 -- supabase/migrations/20260625003000_profile_avatar_art.sql
+-- supabase/migrations/20260628000000_content_comments.sql
 ```
 
 The migration creates:
@@ -31,11 +32,13 @@ The migration creates:
 - `forum_topics`
 - `forum_replies`
 - `forum_reports`
+- `content_comments`
+- `content_comment_votes`
 - RLS policies and indexes
 - `record_high_score(...)` for atomic leaderboard updates
 - moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
 
-The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 30-choice avatar set used by the profile picker, including 10 funny avatar options.
+The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 30-choice avatar set used by the profile picker, including 10 funny avatar options. The content comments migration adds Reddit-style comment threads and voting for game pages, Rainbot TV clips, and Slopwire articles.
 
 ## 3. Enable the frontend config
 
@@ -81,7 +84,9 @@ Use `moderator` instead of `admin` if you want a non-owner moderation account.
 2. Create an account with email/password or send yourself a magic link.
 3. Set a display name, title, bio, favorite game, generated avatar, and accent color from the Profile modal.
 4. Create a forum topic and reply.
-5. Play a game with a saved run, sign in, and use Profile > Sync Now.
-6. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `game_saves`, and `game_scores`.
-7. Report a topic or reply.
-8. Sign in with a moderator/admin profile, open the Moderation board, and hide/lock/pin from the report queue.
+5. Open a game page, article page, or Rainbot TV clip and post a comment.
+6. Upvote/downvote a comment.
+7. Play a game with a saved run, sign in, and use Profile > Sync Now.
+8. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `content_comments`, `content_comment_votes`, `game_saves`, and `game_scores`.
+9. Report a topic or reply.
+10. Sign in with a moderator/admin profile, open the Moderation board, and hide/lock/pin from the report queue.

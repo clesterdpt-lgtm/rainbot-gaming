@@ -9,6 +9,7 @@ const RBBackend = (() => {
     "announcements",
   ]);
   const REPORT_STATUSES = new Set(["open", "reviewing", "closed"]);
+  const CONTENT_TYPES = new Set(["game", "video", "article"]);
   const PROFILE_AVATARS = new Set([
     "bot",
     "glitch",
@@ -136,6 +137,26 @@ const RBBackend = (() => {
   function cleanCategory(value) {
     const normalized = cleanGameId(value || "general");
     return TOPIC_CATEGORIES.has(normalized) ? normalized : "general";
+  }
+
+  function cleanContentType(value) {
+    const normalized = cleanGameId(value || "");
+    if (!CONTENT_TYPES.has(normalized)) throw new Error("Unsupported comment type.");
+    return normalized;
+  }
+
+  function cleanContentId(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9:_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120);
+  }
+
+  function cleanCommentSort(value) {
+    const normalized = cleanGameId(value || "best");
+    return ["best", "new", "top"].includes(normalized) ? normalized : "best";
   }
 
   function cleanProfileChoice(value, allowed, fallback) {
@@ -650,6 +671,107 @@ const RBBackend = (() => {
     return data;
   }
 
+  function sortContentComments(rows, sort) {
+    const normalizedSort = cleanCommentSort(sort);
+    return (Array.isArray(rows) ? rows : []).slice().sort((a, b) => {
+      if (normalizedSort === "new") {
+        return Date.parse(b.created_at || "") - Date.parse(a.created_at || "") || Number(b.id) - Number(a.id);
+      }
+      if (normalizedSort === "top") {
+        return (Number(b.vote_score) || 0) - (Number(a.vote_score) || 0) ||
+          Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
+      }
+      return (Number(b.vote_score) || 0) - (Number(a.vote_score) || 0) ||
+        (Number(b.reply_count) || 0) - (Number(a.reply_count) || 0) ||
+        Date.parse(b.created_at || "") - Date.parse(a.created_at || "");
+    });
+  }
+
+  async function attachContentCommentVotes(rows) {
+    const list = Array.isArray(rows) ? rows : [];
+    const user = state.user;
+    if (!user || !list.length) return list.map((row) => ({ ...row, user_vote: 0 }));
+    const ids = list.map((row) => row.id).filter(Boolean);
+    const { data, error } = await client
+      .from("content_comment_votes")
+      .select("comment_id, vote")
+      .eq("user_id", user.id)
+      .in("comment_id", ids);
+    if (error) throw error;
+    const votesByComment = new Map((data || []).map((vote) => [Number(vote.comment_id), Number(vote.vote) || 0]));
+    return list.map((row) => ({ ...row, user_vote: votesByComment.get(Number(row.id)) || 0 }));
+  }
+
+  async function listContentComments(options = {}) {
+    await requireClient();
+    const contentType = cleanContentType(options.contentType);
+    const contentId = cleanContentId(options.contentId);
+    if (!contentId) throw new Error("Missing comment target.");
+    const { data, error } = await client
+      .from("content_comments")
+      .select(`id, parent_id, content_type, content_id, page_url, page_title, body, vote_score, reply_count, is_hidden, created_at, updated_at, author:profiles!content_comments_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+      .eq("content_type", contentType)
+      .eq("content_id", contentId)
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: false })
+      .limit(Math.max(1, Math.min(200, Number(options.limit) || 120)));
+    if (error) throw error;
+    return sortContentComments(await attachContentCommentVotes(data || []), options.sort);
+  }
+
+  async function createContentComment(values = {}) {
+    const user = await requireUser();
+    const contentType = cleanContentType(values.contentType);
+    const contentId = cleanContentId(values.contentId);
+    const body = cleanBody(values.body, 6000);
+    const pageTitle = cleanText(values.pageTitle || "Rainbot", 140);
+    const pageUrl = cleanText(values.pageUrl || window.location.pathname, 300);
+    const parentId = values.parentId ? Number(values.parentId) : null;
+    if (!contentId) throw new Error("Missing comment target.");
+    if (pageTitle.length < 2) throw new Error("Missing page title.");
+    if (body.length < 2) throw new Error("Comment needs at least 2 characters.");
+    const payload = {
+      parent_id: Number.isFinite(parentId) && parentId > 0 ? parentId : null,
+      author_id: user.id,
+      content_type: contentType,
+      content_id: contentId,
+      page_url: pageUrl,
+      page_title: pageTitle,
+      body,
+    };
+    const { data, error } = await client
+      .from("content_comments")
+      .insert(payload)
+      .select(`id, parent_id, content_type, content_id, page_url, page_title, body, vote_score, reply_count, is_hidden, created_at, updated_at, author:profiles!content_comments_author_id_fkey(${PROFILE_PUBLIC_SELECT})`)
+      .single();
+    if (error) throw error;
+    return { ...data, user_vote: 0 };
+  }
+
+  async function voteContentComment(commentId, vote) {
+    const user = await requireUser();
+    const id = Number(commentId);
+    const numericVote = Number(vote);
+    if (!Number.isFinite(id) || id <= 0) throw new Error("Missing comment id.");
+    if (![1, 0, -1].includes(numericVote)) throw new Error("Invalid vote.");
+    if (numericVote === 0) {
+      const { error } = await client
+        .from("content_comment_votes")
+        .delete()
+        .eq("comment_id", id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+      return { comment_id: id, vote: 0 };
+    }
+    const { data, error } = await client
+      .from("content_comment_votes")
+      .upsert({ comment_id: id, user_id: user.id, vote: numericVote }, { onConflict: "comment_id,user_id" })
+      .select("comment_id, vote")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   return {
     init,
     onChange,
@@ -681,6 +803,9 @@ const RBBackend = (() => {
     updateReportStatus,
     moderateTopic,
     moderateReply,
+    listContentComments,
+    createContentComment,
+    voteContentComment,
   };
 })();
 

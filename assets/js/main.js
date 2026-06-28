@@ -592,7 +592,7 @@ function openAuthModal() {
     </form>
     <div class="rb-auth-divider"><span>or</span></div>
     <button class="btn btn--secondary rb-google-button" id="rb-google-auth" type="button">Continue with Google</button>
-    <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, and forum posts.</p>
+    <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, forum posts, and comments.</p>
     <div class="modal__actions">
       <button class="btn btn--ghost" id="rb-close-auth" type="button">Close</button>
     </div>
@@ -1195,8 +1195,8 @@ function loadScriptOnce(src, id) {
 
 async function initRainbotBackend() {
   try {
-    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260627-leaderboards-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260627-leaderboards-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260628-comments-reddit-1`, "rb-supabase-config");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260628-comments-reddit-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }
@@ -1483,12 +1483,455 @@ const RBLeaderboards = (() => {
 
 window.RBLeaderboards = RBLeaderboards;
 
+const RBComments = (() => {
+  const DEFAULT_SORT = "best";
+  const SORTS = [
+    { value: "best", label: "Best" },
+    { value: "new", label: "New" },
+    { value: "top", label: "Top" },
+  ];
+
+  function cleanCommentContentId(value, fallback = "page") {
+    const normalized = String(value || fallback)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9:_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120);
+    return normalized || fallback;
+  }
+
+  function cleanCommentTitle(value, fallback = "Rainbot Thread") {
+    return cleanVisibleGameTitle(value || fallback).slice(0, 140) || fallback;
+  }
+
+  function formatCommentTime(value) {
+    const date = new Date(value || 0);
+    if (Number.isNaN(date.getTime())) return "recently";
+    const delta = Date.now() - date.getTime();
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (delta < minute) return "just now";
+    if (delta < hour) return `${Math.floor(delta / minute)}m ago`;
+    if (delta < day) return `${Math.floor(delta / hour)}h ago`;
+    if (delta < 7 * day) return `${Math.floor(delta / day)}d ago`;
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function profileName(profile = {}) {
+    return profile.display_name || "Rainbot Player";
+  }
+
+  function commentAvatarMarkup(profile = {}) {
+    const style = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
+    const accent = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
+    const asset = profileAvatarSrc(style);
+    return `
+      <span class="rb-comment-avatar rb-profile-avatar--${style} rb-profile-avatar--${accent}" aria-hidden="true">
+        <img src="${escapeHtml(asset)}" alt="" loading="lazy" decoding="async" />
+      </span>
+    `;
+  }
+
+  function currentPathSlug() {
+    return cleanCommentContentId((location.pathname.split("/").pop() || "page").replace(/\.html$/i, ""));
+  }
+
+  function activeVideoContext() {
+    const card = document.querySelector(".tv-card[aria-pressed='true']") || document.querySelector(".tv-card");
+    const title = cleanCommentTitle(
+      card?.dataset.tvTitle ||
+      document.querySelector("[data-tv-active-title]")?.textContent ||
+      "Rainbot TV"
+    );
+    return {
+      contentType: "video",
+      contentId: cleanCommentContentId(card?.dataset.tvTitle || title, "rainbot-tv"),
+      pageTitle: title,
+      pageUrl: `${location.pathname}${location.search}`,
+      kicker: "Rainbot TV",
+      mountAfter: document.querySelector(".tv-stage"),
+      mountParent: document.querySelector(".content-directory") || document.querySelector("main"),
+    };
+  }
+
+  function detectContext() {
+    const path = location.pathname;
+    if (path.includes("/games/") && path.endsWith(".html")) {
+      const meta = getGameMeta();
+      return {
+        contentType: "game",
+        contentId: cleanCommentContentId(meta.slug || currentGameSlug(), "game"),
+        pageTitle: cleanCommentTitle(meta.title || fallbackGameTitle(), "This Game"),
+        pageUrl: `${location.pathname}${location.search}`,
+        kicker: "Game thread",
+        mountAfter: document.querySelector(".game-layout"),
+        mountParent: document.querySelector(".game-page") || document.querySelector("main"),
+      };
+    }
+    if (path.includes("/articles/") && path.endsWith(".html")) {
+      const title = cleanCommentTitle(document.querySelector(".slopwire-article h1")?.textContent || document.title, "Slopwire Article");
+      return {
+        contentType: "article",
+        contentId: currentPathSlug(),
+        pageTitle: title,
+        pageUrl: `${location.pathname}${location.search}`,
+        kicker: "Article thread",
+        mountAfter: document.querySelector(".related-slat") || document.querySelector(".slopwire-article"),
+        mountParent: document.querySelector(".article-shell") || document.querySelector("main"),
+      };
+    }
+    if (path.endsWith("/videos.html") || path.endsWith("/videos/")) return activeVideoContext();
+    return null;
+  }
+
+  function contextFromRoot(root) {
+    return {
+      contentType: root.dataset.rbCommentsType,
+      contentId: root.dataset.rbCommentsId,
+      pageTitle: root.dataset.rbCommentsTitle,
+      pageUrl: root.dataset.rbCommentsUrl || `${location.pathname}${location.search}`,
+      kicker: root.dataset.rbCommentsKicker || "Thread",
+    };
+  }
+
+  function updateRootContext(root, context) {
+    root.dataset.rbCommentsType = context.contentType;
+    root.dataset.rbCommentsId = context.contentId;
+    root.dataset.rbCommentsTitle = context.pageTitle;
+    root.dataset.rbCommentsUrl = context.pageUrl;
+    root.dataset.rbCommentsKicker = context.kicker;
+  }
+
+  function ensureRoot(context) {
+    if (!context || !context.mountParent) return null;
+    let root = document.querySelector("[data-rb-comments]");
+    if (!root) {
+      root = document.createElement("section");
+      root.className = "rb-comments arcade-panel";
+      root.dataset.rbComments = "";
+      root.dataset.rbCommentsSort = DEFAULT_SORT;
+      if (context.mountAfter && context.mountAfter.parentElement === context.mountParent) {
+        context.mountAfter.insertAdjacentElement("afterend", root);
+      } else {
+        context.mountParent.append(root);
+      }
+      bindRoot(root);
+    }
+    updateRootContext(root, context);
+    return root;
+  }
+
+  function sortLabel(sort) {
+    return (SORTS.find((item) => item.value === sort) || SORTS[0]).label;
+  }
+
+  function renderFrame(root, status = "Loading comments...") {
+    const context = contextFromRoot(root);
+    const sort = root.dataset.rbCommentsSort || DEFAULT_SORT;
+    root.innerHTML = `
+      <header class="rb-comments__header">
+        <div>
+          <span class="rb-comments__kicker">${escapeHtml(context.kicker)}</span>
+          <h2>Comments</h2>
+          <p>${escapeHtml(context.pageTitle)}</p>
+        </div>
+        <div class="rb-comments__sort" role="tablist" aria-label="Comment sort">
+          ${SORTS.map((item) => `
+            <button type="button" class="${item.value === sort ? "is-active" : ""}" data-rb-comment-sort="${item.value}" aria-selected="${item.value === sort ? "true" : "false"}">
+              ${escapeHtml(item.label)}
+            </button>
+          `).join("")}
+        </div>
+      </header>
+      <div class="rb-comments__status" data-rb-comments-status>${escapeHtml(status)}</div>
+      <div class="rb-comments__composer" data-rb-comments-composer></div>
+      <div class="rb-comments__list" data-rb-comments-list></div>
+    `;
+  }
+
+  function renderPrompt(root, message, actionLabel = "") {
+    const composer = root.querySelector("[data-rb-comments-composer]");
+    if (!composer) return;
+    composer.innerHTML = `
+      <div class="rb-comments__prompt">
+        <span>${escapeHtml(message)}</span>
+        ${actionLabel ? `<button class="btn btn--secondary" type="button" data-rb-comment-login>${escapeHtml(actionLabel)}</button>` : ""}
+      </div>
+    `;
+  }
+
+  function renderComposer(root) {
+    const composer = root.querySelector("[data-rb-comments-composer]");
+    if (!composer) return;
+    composer.innerHTML = `
+      <form class="rb-comment-form" data-rb-comment-form>
+        <label class="sr-only" for="rb-comment-body">Add a comment</label>
+        <textarea id="rb-comment-body" name="body" rows="3" maxlength="6000" placeholder="Add a public comment"></textarea>
+        <div class="rb-comment-form__actions">
+          <span data-rb-comment-form-status></span>
+          <button class="btn btn--primary" type="submit">Comment</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function sortedRows(rows, sort, child = false) {
+    const list = Array.isArray(rows) ? rows.slice() : [];
+    if (child) {
+      return list.sort((a, b) => Date.parse(a.created_at || "") - Date.parse(b.created_at || ""));
+    }
+    if (sort === "new") {
+      return list.sort((a, b) => Date.parse(b.created_at || "") - Date.parse(a.created_at || "") || Number(b.id) - Number(a.id));
+    }
+    if (sort === "top") {
+      return list.sort((a, b) => (Number(b.vote_score) || 0) - (Number(a.vote_score) || 0) || Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
+    }
+    return list.sort((a, b) => (Number(b.vote_score) || 0) - (Number(a.vote_score) || 0) || (Number(b.reply_count) || 0) - (Number(a.reply_count) || 0) || Date.parse(b.created_at || "") - Date.parse(a.created_at || ""));
+  }
+
+  function buildTree(rows, sort) {
+    const byId = new Map();
+    const roots = [];
+    rows.forEach((row) => byId.set(Number(row.id), { ...row, children: [] }));
+    byId.forEach((row) => {
+      const parentId = Number(row.parent_id) || 0;
+      if (parentId && byId.has(parentId)) byId.get(parentId).children.push(row);
+      else roots.push(row);
+    });
+    byId.forEach((row) => {
+      row.children = sortedRows(row.children, sort, true);
+    });
+    return sortedRows(roots, sort, false);
+  }
+
+  function commentMarkup(comment, depth = 0) {
+    const profile = comment.author || {};
+    const score = Number(comment.vote_score) || 0;
+    const userVote = Number(comment.user_vote) || 0;
+    const title = profile.profile_title ? `<span>${escapeHtml(profile.profile_title)}</span>` : "";
+    const children = comment.children && comment.children.length
+      ? `<div class="rb-comment__children">${comment.children.map((child) => commentMarkup(child, depth + 1)).join("")}</div>`
+      : "";
+    return `
+      <article class="rb-comment" id="comment-${Number(comment.id)}" data-rb-comment-id="${Number(comment.id)}" data-rb-comment-user-vote="${userVote}" style="--comment-depth:${Math.min(depth, 4)}">
+        <div class="rb-comment__vote" aria-label="Comment voting">
+          <button type="button" class="${userVote === 1 ? "is-active" : ""}" data-rb-comment-vote="1" aria-label="Upvote">▲</button>
+          <strong>${formatStatNumber(score)}</strong>
+          <button type="button" class="${userVote === -1 ? "is-active" : ""}" data-rb-comment-vote="-1" aria-label="Downvote">▼</button>
+        </div>
+        <div class="rb-comment__main">
+          <div class="rb-comment__meta">
+            ${commentAvatarMarkup(profile)}
+            <strong>${escapeHtml(profileName(profile))}</strong>
+            ${title}
+            <span>${escapeHtml(formatCommentTime(comment.created_at))}</span>
+          </div>
+          <div class="rb-comment__body">${escapeHtml(comment.body)}</div>
+          <div class="rb-comment__actions">
+            <button type="button" data-rb-comment-reply>Reply</button>
+            <a href="${escapeHtml(location.pathname + location.search)}#comment-${Number(comment.id)}">Share</a>
+          </div>
+          <form class="rb-comment-form rb-comment-form--reply" data-rb-comment-form data-rb-comment-parent-id="${Number(comment.id)}" hidden>
+            <label class="sr-only">Reply</label>
+            <textarea name="body" rows="3" maxlength="6000" placeholder="Write a reply"></textarea>
+            <div class="rb-comment-form__actions">
+              <span data-rb-comment-form-status></span>
+              <button class="btn btn--secondary" type="button" data-rb-comment-cancel>Cancel</button>
+              <button class="btn btn--primary" type="submit">Reply</button>
+            </div>
+          </form>
+          ${children}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderList(root, rows) {
+    const list = root.querySelector("[data-rb-comments-list]");
+    if (!list) return;
+    if (!rows.length) {
+      list.innerHTML = `<div class="rb-comments__empty">No comments yet. Start the thread.</div>`;
+      return;
+    }
+    const tree = buildTree(rows, root.dataset.rbCommentsSort || DEFAULT_SORT);
+    list.innerHTML = tree.map((comment) => commentMarkup(comment)).join("");
+  }
+
+  function friendlyCommentError(error) {
+    const message = String(error && error.message ? error.message : error || "");
+    if (/content_comments|content_comment_votes|schema cache|relation .* does not exist/i.test(message)) {
+      return "Comments need the latest Supabase migration before posting goes live.";
+    }
+    return message || "Comments could not load.";
+  }
+
+  async function render(root) {
+    if (!root) return;
+    const context = contextFromRoot(root);
+    const backendState = getBackendState();
+    renderFrame(root);
+    const status = root.querySelector("[data-rb-comments-status]");
+    if (!window.RBBackend || !backendState.configured) {
+      if (status) status.textContent = "Comments are ready once Supabase is connected.";
+      renderPrompt(root, "Connect Supabase and run the content comments migration to enable posting.");
+      renderList(root, []);
+      return;
+    }
+    if (!backendState.ready) {
+      if (status) status.textContent = "Connecting to comments...";
+      renderPrompt(root, "Loading account state.");
+      renderList(root, []);
+      return;
+    }
+    if (!backendState.user) renderPrompt(root, "Sign in to comment or vote. Reading stays public.", "Sign In");
+    else renderComposer(root);
+
+    try {
+      const rows = await window.RBBackend.listContentComments({
+        contentType: context.contentType,
+        contentId: context.contentId,
+        sort: root.dataset.rbCommentsSort || DEFAULT_SORT,
+      });
+      if (status) status.textContent = rows.length ? `${formatStatNumber(rows.length)} comments · sorted by ${sortLabel(root.dataset.rbCommentsSort || DEFAULT_SORT)}` : "No comments yet.";
+      renderList(root, rows);
+    } catch (error) {
+      if (status) {
+        status.textContent = friendlyCommentError(error);
+        status.dataset.kind = "bad";
+      }
+      renderList(root, []);
+    }
+  }
+
+  async function submitComment(root, form) {
+    const context = contextFromRoot(root);
+    const textarea = form.querySelector("textarea[name='body']");
+    const status = form.querySelector("[data-rb-comment-form-status]");
+    const button = form.querySelector("button[type='submit']");
+    const body = textarea ? textarea.value : "";
+    if (button) button.disabled = true;
+    if (status) status.textContent = "Posting...";
+    try {
+      await window.RBBackend.createContentComment({
+        ...context,
+        body,
+        parentId: form.dataset.rbCommentParentId || "",
+      });
+      if (textarea) textarea.value = "";
+      if (form.dataset.rbCommentParentId) form.hidden = true;
+      await render(root);
+    } catch (error) {
+      if (status) status.textContent = error.message || "Comment failed.";
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function vote(root, comment, requestedVote) {
+    const backendState = getBackendState();
+    if (!backendState.user) {
+      openAuthModal();
+      return;
+    }
+    const currentVote = Number(comment.dataset.rbCommentUserVote) || 0;
+    const nextVote = currentVote === requestedVote ? 0 : requestedVote;
+    try {
+      await window.RBBackend.voteContentComment(Number(comment.dataset.rbCommentId), nextVote);
+      await render(root);
+    } catch (error) {
+      RB.toast(error.message || "Vote failed", "bad");
+    }
+  }
+
+  function bindRoot(root) {
+    if (!root || root.dataset.rbCommentsBound === "true") return;
+    root.dataset.rbCommentsBound = "true";
+    root.addEventListener("click", (event) => {
+      const sortButton = event.target.closest("[data-rb-comment-sort]");
+      if (sortButton && root.contains(sortButton)) {
+        root.dataset.rbCommentsSort = sortButton.dataset.rbCommentSort || DEFAULT_SORT;
+        render(root);
+        return;
+      }
+      const loginButton = event.target.closest("[data-rb-comment-login]");
+      if (loginButton && root.contains(loginButton)) {
+        openAuthModal();
+        return;
+      }
+      const replyButton = event.target.closest("[data-rb-comment-reply]");
+      if (replyButton && root.contains(replyButton)) {
+        const card = replyButton.closest(".rb-comment");
+        const form = card && card.querySelector(":scope > .rb-comment__main > .rb-comment-form--reply");
+        if (form) {
+          form.hidden = !form.hidden;
+          if (!form.hidden) form.querySelector("textarea")?.focus();
+        }
+        return;
+      }
+      const cancelButton = event.target.closest("[data-rb-comment-cancel]");
+      if (cancelButton && root.contains(cancelButton)) {
+        const form = cancelButton.closest("[data-rb-comment-form]");
+        if (form) form.hidden = true;
+        return;
+      }
+      const voteButton = event.target.closest("[data-rb-comment-vote]");
+      if (voteButton && root.contains(voteButton)) {
+        const comment = voteButton.closest(".rb-comment");
+        if (comment) vote(root, comment, Number(voteButton.dataset.rbCommentVote));
+      }
+    });
+    root.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-rb-comment-form]");
+      if (!form || !root.contains(form)) return;
+      event.preventDefault();
+      submitComment(root, form);
+    });
+  }
+
+  function refreshVideoContext(root) {
+    const context = activeVideoContext();
+    if (!context || !root) return;
+    updateRootContext(root, context);
+    render(root);
+  }
+
+  function initVideoBindings(root) {
+    if (!root || root.dataset.rbVideoCommentsBound === "true") return;
+    root.dataset.rbVideoCommentsBound = "true";
+    document.querySelectorAll(".tv-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        window.setTimeout(() => refreshVideoContext(root), 0);
+      });
+    });
+  }
+
+  function init() {
+    const context = detectContext();
+    if (!context) return;
+    const root = ensureRoot(context);
+    if (!root) return;
+    if (context.contentType === "video") initVideoBindings(root);
+    render(root);
+  }
+
+  function renderAll() {
+    document.querySelectorAll("[data-rb-comments]").forEach((root) => render(root));
+  }
+
+  return { init, renderAll, render };
+})();
+
+window.RBComments = RBComments;
+
 let lastCloudSyncUserId = "";
 
 function handleBackendAuthChange(event) {
   const backendState = event.detail || getBackendState();
   renderNav(RB.state);
   RBLeaderboards.renderAll();
+  RBComments.renderAll();
   if (backendState.passwordRecovery && backendState.user) {
     openPasswordRecoveryModal();
   }
@@ -1942,9 +2385,11 @@ document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initGameEscapeMenu();
   RBLeaderboards.init();
+  RBComments.init();
   RB.subscribe((state) => {
     renderNav(state);
     RBLeaderboards.renderAll();
+    RBComments.renderAll();
     const profileModal = document.getElementById("rb-profile-modal");
     if (profileModal) refreshProfileGamerStats(profileModal);
   });

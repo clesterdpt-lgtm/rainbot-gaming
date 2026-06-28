@@ -58,7 +58,7 @@
     { sector: 1, type: "mine", label: "mines" },
     { sector: 2, type: "slick", label: "oil slicks" },
     { sector: 3, type: "sub", label: "merchant subs" },
-    { sector: 4, type: "rocket", label: "smiley rockets" },
+    { sector: 4, type: "rocket", label: "crossing rockets" },
     { sector: 5, type: "drone", label: "customs drones" },
     { sector: BOSS_UNLOCK_SECTOR, type: "container", label: "loose containers and boss walls" },
   ];
@@ -728,10 +728,14 @@
       o.dove = false;
       o.w = 50; o.h = 22;
     } else if (type === "rocket") {
-      o.vx = 0;
-      o.vy = -rand(52, 82) * difficulty;     // slow-mo approach
-      o.w = 14; o.h = 36;
-      o.faceDropped = false;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const rocketSpeed = rand(250, 360) * Math.min(1.45, 0.95 + difficulty * 0.22);
+      o.x = side * (laneHalf + rand(70, 130));
+      o.y = state.ship.y + rand(-70, VISIBLE_AHEAD * 0.78);
+      o.vx = -side * rocketSpeed;
+      o.vy = -rand(12, 34) * Math.min(1.25, difficulty);
+      o.w = 14; o.h = 44;
+      o.life = 3.4;
     } else if (type === "drone") {
       o.dir = Math.random() < 0.5 ? 1 : -1;
       o.vx = o.dir * rand(80, 126) * difficulty;
@@ -776,14 +780,8 @@
         }
         if (o.retreat) o.vy += 80 * dt; // dive away
       } else if (o.type === "rocket") {
-        o.y += o.vy * dt;
-        // Gentle homing
-        const dx = state.ship.x - o.x;
-        const targetVx = clamp(dx * 0.58, -34 * state.threat, 34 * state.threat);
-        o.vx += (targetVx - o.vx) * dt * 1.2;
         o.x += o.vx * dt;
-        // Face falls off at half life
-        if (!o.faceDropped && o.age > 1.2) o.faceDropped = true;
+        o.y += o.vy * dt;
       } else if (o.type === "drone") {
         o.x += o.vx * dt;
         o.y += o.vy * dt + Math.sin(o.age * 8 + o.blink) * 10 * dt;
@@ -902,7 +900,7 @@
 
     let reason = source?.type === "mine" ? "Sentient Mine"
               : source?.type === "sub"  ? "Angry Merchant Sub"
-              : source?.type === "rocket" ? "Friendly Fire from a Smiley Rocket"
+              : source?.type === "rocket" ? "Crossfire Rocket"
               : source?.type === "drone" ? "Customs Drone with Boundary Issues"
               : source?.type === "slick" ? "Oil Slick with Legal Immunity"
               : source?.type === "container" ? "Loose Container of Bad Ideas"
@@ -1490,34 +1488,9 @@
       const p = worldToScreen(wx, wy);
       if (p.y < -80 || p.y > H + 80) continue;
       const kindRoll = hash01(cell * 11.17 + metrics.sector * 23);
-      if (kindRoll < 0.32) drawGeneratedBuoy(p.x, p.y, theme, cell);
-      else if (kindRoll < 0.58) drawGeneratedWreckage(p.x, p.y, theme, cell);
+      if (kindRoll < 0.58) drawGeneratedWreckage(p.x, p.y, theme, cell);
       else if (kindRoll < 0.78) drawGeneratedRig(p.x, p.y, theme, side);
-      else drawGeneratedSign(p.x, p.y, theme, metrics.sector);
     }
-  }
-
-  function drawGeneratedBuoy(x, y, theme, seed) {
-    const bob = Math.sin(performance.now() * 0.003 + seed) * 3;
-    if (drawArt("repairBuoy", x, y + bob, 28, 28, 0.72)) return;
-    ctx.save();
-    ctx.translate(x, y + bob);
-    ctx.fillStyle = theme.glow;
-    ctx.globalAlpha = 0.24;
-    ctx.beginPath();
-    ctx.arc(0, 0, 18, 0, TAU);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#ffd43b";
-    ctx.beginPath();
-    ctx.moveTo(0, -14);
-    ctx.lineTo(11, 10);
-    ctx.lineTo(-11, 10);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#111124";
-    ctx.fillRect(-8, 2, 16, 4);
-    ctx.restore();
   }
 
   function drawGeneratedWreckage(x, y, theme, seed) {
@@ -1556,41 +1529,24 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawGeneratedSign(x, y, theme, sector) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(Math.sin(sector + y) * 0.08);
-    ctx.fillStyle = "rgba(8,8,16,0.78)";
-    roundRect(ctx, -28, -12, 56, 24, 4);
-    ctx.fill();
-    ctx.strokeStyle = theme.glow;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = "#fbfaf4";
-    ctx.font = "bold 7px JetBrains Mono, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(`S${sector}`, 0, 2);
-    ctx.restore();
-  }
-
   function drawSectorMarkers(metrics, theme) {
-    const marks = [0.25, 0.60, 0.82, 0.92, 1];
+    const marks = [1];
     for (const mark of marks) {
       const wy = metrics.sectorStart + SECTOR_LENGTH * mark;
       const p = worldToScreen(0, wy);
       if (p.y < -20 || p.y > H + 20) continue;
-      ctx.strokeStyle = mark >= 0.92 ? `rgba(255,46,136,0.45)` : `rgba(255,212,59,0.28)`;
-      ctx.lineWidth = mark >= 0.92 ? 3 : 2;
-      ctx.setLineDash(mark >= 0.92 ? [6, 6] : [18, 10]);
+      ctx.strokeStyle = `rgba(255,46,136,0.45)`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 6]);
       ctx.beginPath();
       ctx.moveTo(24, p.y);
       ctx.lineTo(W - 24, p.y);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = mark >= 0.92 ? "#ff2e88" : theme.foam;
+      ctx.fillStyle = "#ff2e88";
       ctx.font = "bold 10px JetBrains Mono, monospace";
       ctx.textAlign = "right";
-      const label = mark >= 0.92 ? "BOSS WATER" : "UPGRADE WAKE";
+      const label = "BOSS WATER";
       ctx.fillText(label, W - 30, p.y - 6);
     }
   }
@@ -1985,12 +1941,30 @@
   function drawRocket(o) {
     const s = worldToScreen(o.x, o.y);
     if (s.y < -20 || s.y > H + 20) return;
-    drawHazardHalo(s.x, s.y, 29, "rgba(255,140,26,0.95)");
-    drawObjectTag(s.x, s.y, "ROCKET", "#ff8c1a", -31);
     ctx.save();
     ctx.translate(s.x, s.y);
     const ang = Math.atan2(o.vy, o.vx) + Math.PI / 2;
     ctx.rotate(ang);
+    const streak = 30 + Math.min(38, Math.abs(o.vx) * 0.08);
+    ctx.globalAlpha = 0.72;
+    const exhaust = ctx.createLinearGradient(0, o.h * 0.34, 0, o.h * 0.34 + streak);
+    exhaust.addColorStop(0, "rgba(255,140,26,0.90)");
+    exhaust.addColorStop(0.34, "rgba(255,212,59,0.42)");
+    exhaust.addColorStop(1, "rgba(255,92,92,0)");
+    ctx.fillStyle = exhaust;
+    ctx.beginPath();
+    ctx.moveTo(-o.w * 0.46, o.h * 0.36);
+    ctx.lineTo(0, o.h * 0.36 + streak + Math.random() * 8);
+    ctx.lineTo(o.w * 0.46, o.h * 0.36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(255,212,59,0.38)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, o.h * 0.46);
+    ctx.lineTo(0, o.h * 0.46 + streak * 0.75);
+    ctx.stroke();
     // Body
     ctx.fillStyle = "#f5f2e9";
     roundRect(ctx, -o.w * 0.45, -o.h * 0.45, o.w * 0.9, o.h * 0.82, 5);
@@ -2016,46 +1990,7 @@
     ctx.lineTo(o.w * 0.38, o.h * 0.48);
     ctx.fill();
     ctx.stroke();
-    // Smiley face (only if not dropped)
-    if (!o.faceDropped) {
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(-1.5, -o.h * 0.25, 0.8, 0, TAU);
-      ctx.arc( 1.5, -o.h * 0.25, 0.8, 0, TAU);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(0, -o.h * 0.05, 1.5, 0, Math.PI);
-      ctx.stroke();
-    }
-    // Exhaust
-    ctx.fillStyle = "#ff8c1a";
-    ctx.beginPath();
-    ctx.moveTo(-o.w * 0.4, o.h * 0.5);
-    ctx.lineTo(0, o.h * 0.5 + 6 + Math.random() * 4);
-    ctx.lineTo(o.w * 0.4, o.h * 0.5);
-    ctx.closePath();
-    ctx.fill();
     ctx.restore();
-
-    // Dropped face (physics-ish: just drift away)
-    if (o.faceDropped && o._faceOffY == null) o._faceOffY = 0;
-    if (o.faceDropped) {
-      o._faceOffY = (o._faceOffY || 0) + 0.6;
-      const fy = s.y - o.h * 0.3 - o._faceOffY;
-      ctx.fillStyle = "#fff";
-      ctx.beginPath();
-      ctx.arc(s.x, fy, 4, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(s.x, fy, 4, 0, TAU);
-      ctx.stroke();
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(s.x - 1.5, fy - 0.5, 0.6, 0, TAU);
-      ctx.arc(s.x + 1.5, fy - 0.5, 0.6, 0, TAU);
-      ctx.fill();
-    }
   }
 
   function drawDrone(o) {

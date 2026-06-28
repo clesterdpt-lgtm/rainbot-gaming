@@ -241,9 +241,9 @@
   def(CAVE_VINE, { name: "Hanging Cave Vine", kind: "block", solid: false, hardness: 0.05, drop: null, color: "#3cff9e", decor: true });
 
   def(STONE_BRICK, { name: "Ohio Bricks", kind: "block", solid: true, hardness: 1.4, needTool: "pick", drop: STONE_BRICK, color: "#8a8d99" });
-  def(GLOWSTONE, { name: "Rizz Lamp", kind: "block", solid: true, hardness: 0.55, drop: GLOWSTONE, color: "#ffd75a", light: GLOWSTONE_LIGHT });
-  def(SIGMA_LANTERN, { name: "Sigma Lantern", kind: "block", solid: true, hardness: 0.6, drop: SIGMA_LANTERN, color: "#7ff2ff", light: SIGMA_LANTERN_LIGHT });
-  def(CRYSTAL_GLASS, { name: "Rizz Glass", kind: "block", solid: true, hardness: 0.4, drop: CRYSTAL_GLASS, color: "#bfeaff", transparent: true });
+  def(GLOWSTONE, { name: "Rizz Lamp", kind: "block", solid: true, hardness: 0.55, drop: GLOWSTONE, color: "#ffd75a", light: GLOWSTONE_LIGHT, decor: true });
+  def(SIGMA_LANTERN, { name: "Sigma Lantern", kind: "block", solid: true, hardness: 0.6, drop: SIGMA_LANTERN, color: "#7ff2ff", light: SIGMA_LANTERN_LIGHT, decor: true });
+  def(CRYSTAL_GLASS, { name: "Rizz Glass", kind: "block", solid: true, hardness: 0.4, drop: CRYSTAL_GLASS, color: "#bfeaff", transparent: true, decor: true });
   def(COAL_BLOCK, { name: "Gyatt Coal Block", kind: "block", solid: true, hardness: 1.6, needTool: "pick", drop: COAL_BLOCK, color: "#2a2b36" });
   def(RIZZ_BLOCK, { name: "Rizz Block", kind: "block", solid: true, hardness: 1.5, needTool: "pick", drop: RIZZ_BLOCK, color: "#ffcf3a" });
   def(SIGMA_BLOCK, { name: "Sigma Block", kind: "block", solid: true, hardness: 1.7, needTool: "pick", drop: SIGMA_BLOCK, color: "#4beaff", light: SIGMA_BLOCK_LIGHT });
@@ -425,13 +425,14 @@
   const waterGroup = new THREE.Group();
   const lavaGroup = new THREE.Group();
   const decorGroup = new THREE.Group();
+  const glassDecorGroup = new THREE.Group();
   const fishGroup = new THREE.Group();
   const mobGroup = new THREE.Group();
   const caveCreatureGroup = new THREE.Group();
   const friendlyGroup = new THREE.Group();
   const effectGroup = new THREE.Group();
   const cloudGroup = new THREE.Group();
-  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, fishGroup, friendlyGroup, mobGroup, caveCreatureGroup, effectGroup, cloudGroup);
+  scene.add(worldGroup, waterGroup, lavaGroup, decorGroup, glassDecorGroup, fishGroup, friendlyGroup, mobGroup, caveCreatureGroup, effectGroup, cloudGroup);
 
   const ambient = new THREE.HemisphereLight(0xd9fbff, 0x3b2b22, 0.98);
   const sun = new THREE.DirectionalLight(0xfff7df, 1.26);
@@ -471,6 +472,13 @@
   const waterTexture = buildWaterTexture();
   const blockMaterial = new THREE.MeshLambertMaterial({ map: blockTexture, vertexColors: true, side: THREE.DoubleSide });
   const plantMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, alphaTest: 0.2 });
+  const glassDecorMaterial = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.38,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
   // Water is shaded purely from vertex colours (the ripple in faceColor) plus a phong
   // specular highlight. It deliberately has no texture map: the chunk mesher assigns
   // atlas UVs, so a standalone water texture sampled a tiny garbage sub-rect and looked
@@ -2919,7 +2927,7 @@
     return new THREE.Mesh(geometry, material);
   }
 
-  // Decor (grass, glow features, torches, toilets) is one merged mesh; bake light into
+  // Decor (plants, cave features, furniture, lamps) is one merged mesh; bake light into
   // its vertex colours via these module globals that pushTinyBox/pushBlade multiply by.
   let dlR = 1, dlG = 1, dlB = 1;
   function setDecorLight(x, y, z) {
@@ -2936,7 +2944,9 @@
   }
   function rebuildDecorations() {
     disposeGroup(decorGroup);
+    disposeGroup(glassDecorGroup);
     const arr = makeGeometryArrays();
+    const glassArr = makeGeometryArrays();
     const pcx = clamp(Math.floor(state.player.x / CHUNK), 0, WORLD_X / CHUNK - 1);
     const pcz = clamp(Math.floor(state.player.z / CHUNK), 0, WORLD_Z / CHUNK - 1);
     decorCenterKey = `${pcx},${pcz}`;
@@ -2955,6 +2965,8 @@
               else if (code === GLOW_SHROOM || code === CAVE_CRYSTAL || code === DRIPSTONE_UP || code === DRIPSTONE_DOWN || code === CAVE_VINE) { setDecorLight(x, y, z); pushCaveFeature(arr, x, y, z, code); }
               if (code === TABLE) { setDecorLight(x, y, z); pushCraftingToilet(arr, x, y, z); }
               if (code === TORCH) { setDecorLight(x, y, z); pushTorch(arr, x, y, z); }
+              if (code === GLOWSTONE || code === SIGMA_LANTERN) { setDecorLight(x, y, z); pushLamp(arr, x, y, z, code); }
+              if (code === CRYSTAL_GLASS) { setDecorLight(x, y, z); pushCrystalGlass(arr, glassArr, x, y, z); }
               if (code === CHEST) { setDecorLight(x, y, z); pushChest(arr, x, y, z); }
               if (code === BED) { setDecorLight(x, y, z); pushBed(arr, x, y, z); }
               if (code === DOOR || code === DOOR_OPEN) { setDecorLight(x, y, z); pushDoor(arr, x, y, z, code === DOOR_OPEN); }
@@ -2967,6 +2979,7 @@
       }
     }
     if (arr.positions.length) decorGroup.add(buildMesh(arr, plantMaterial));
+    if (glassArr.positions.length) glassDecorGroup.add(buildMesh(glassArr, glassDecorMaterial));
     dlR = dlG = dlB = 1;
     decorDirty = false;
   }
@@ -3424,20 +3437,80 @@
     pushTinyBox(arr, cx - 0.05, y + 0.8, cz - 0.05, 0.1, 0.1, 0.1, hexToRgb("#fff4b0"));
     dlR = savedR; dlG = savedG; dlB = savedB;
   }
+  function pushLamp(arr, x, y, z, code) {
+    const metal = code === SIGMA_LANTERN ? cachedRgb("#163842") : cachedRgb("#6a4d28");
+    const dark = code === SIGMA_LANTERN ? cachedRgb("#0e2228") : cachedRgb("#44311d");
+    const glow = code === SIGMA_LANTERN ? cachedRgb("#8ff8ff") : cachedRgb("#ffe077");
+    const core = code === SIGMA_LANTERN ? cachedRgb("#d8ffff") : cachedRgb("#fff3b6");
+    const cx = x + 0.5;
+    const cz = z + 0.5;
+    if (code === SIGMA_LANTERN) {
+      pushTinyBox(arr, cx - 0.2, y + 0.08, cz - 0.2, 0.4, 0.08, 0.4, dark);
+      pushTinyBox(arr, cx - 0.17, y + 0.72, cz - 0.17, 0.34, 0.08, 0.34, dark);
+      pushTinyBox(arr, cx - 0.18, y + 0.16, cz - 0.18, 0.06, 0.58, 0.06, metal);
+      pushTinyBox(arr, cx + 0.12, y + 0.16, cz - 0.18, 0.06, 0.58, 0.06, metal);
+      pushTinyBox(arr, cx - 0.18, y + 0.16, cz + 0.12, 0.06, 0.58, 0.06, metal);
+      pushTinyBox(arr, cx + 0.12, y + 0.16, cz + 0.12, 0.06, 0.58, 0.06, metal);
+      pushTinyBox(arr, cx - 0.05, y + 0.8, cz - 0.05, 0.1, 0.16, 0.1, metal);
+      pushTinyBox(arr, cx - 0.13, y + 0.94, cz - 0.025, 0.26, 0.05, 0.05, metal);
+      const savedR = dlR, savedG = dlG, savedB = dlB;
+      setDecorLightGlow();
+      pushTinyBox(arr, cx - 0.13, y + 0.24, cz - 0.13, 0.26, 0.36, 0.26, glow);
+      pushTinyBox(arr, cx - 0.07, y + 0.34, cz - 0.07, 0.14, 0.2, 0.14, core);
+      dlR = savedR; dlG = savedG; dlB = savedB;
+      return;
+    }
+    pushTinyBox(arr, cx - 0.25, y, cz - 0.25, 0.5, 0.08, 0.5, dark);
+    pushTinyBox(arr, cx - 0.06, y + 0.08, cz - 0.06, 0.12, 0.44, 0.12, metal);
+    pushTinyBox(arr, cx - 0.22, y + 0.46, cz - 0.22, 0.44, 0.08, 0.44, metal);
+    pushTinyBox(arr, cx - 0.28, y + 0.78, cz - 0.28, 0.56, 0.08, 0.56, metal);
+    const savedR = dlR, savedG = dlG, savedB = dlB;
+    setDecorLightEmissive();
+    pushTinyBox(arr, cx - 0.24, y + 0.54, cz - 0.24, 0.48, 0.28, 0.48, glow);
+    pushTinyBox(arr, cx - 0.14, y + 0.6, cz - 0.14, 0.28, 0.18, 0.28, core);
+    dlR = savedR; dlG = savedG; dlB = savedB;
+    pushTinyBox(arr, cx - 0.18, y + 0.86, cz - 0.18, 0.36, 0.08, 0.36, dark);
+  }
+  function pushCrystalGlass(arr, glassArr, x, y, z) {
+    const frame = cachedRgb("#d6fbff");
+    const edge = cachedRgb("#6feaff");
+    const pane = cachedRgb("#c7f7ff");
+    pushTinyBox(glassArr, x + 0.1, y + 0.08, z + 0.47, 0.8, 0.84, 0.06, pane);
+    pushTinyBox(glassArr, x + 0.47, y + 0.08, z + 0.1, 0.06, 0.84, 0.8, pane);
+    pushTinyBox(arr, x + 0.08, y + 0.04, z + 0.44, 0.84, 0.06, 0.12, edge);
+    pushTinyBox(arr, x + 0.08, y + 0.9, z + 0.44, 0.84, 0.06, 0.12, frame);
+    pushTinyBox(arr, x + 0.08, y + 0.08, z + 0.45, 0.06, 0.82, 0.1, frame);
+    pushTinyBox(arr, x + 0.86, y + 0.08, z + 0.45, 0.06, 0.82, 0.1, frame);
+    pushTinyBox(arr, x + 0.44, y + 0.04, z + 0.08, 0.12, 0.06, 0.84, edge);
+    pushTinyBox(arr, x + 0.44, y + 0.9, z + 0.08, 0.12, 0.06, 0.84, frame);
+    pushTinyBox(arr, x + 0.45, y + 0.08, z + 0.08, 0.1, 0.82, 0.06, frame);
+    pushTinyBox(arr, x + 0.45, y + 0.08, z + 0.86, 0.1, 0.82, 0.06, frame);
+  }
   function pushCraftingToilet(arr, x, y, z) {
-    const porcelain = cachedRgb("#ecf8ff");
-    const shade = cachedRgb("#b8c6d2");
-    const water = cachedRgb("#4ecaff");
+    const porcelain = cachedRgb("#ffffff");
+    const shade = cachedRgb("#f7fdff");
+    const trim = cachedRgb("#ffffff");
+    const water = cachedRgb("#55d6ff");
+    const shadow = cachedRgb("#ddfbff");
     // The model is authored facing -Z (bowl toward -Z, tank at +Z). Rotate it in
     // 90° steps so the bowl faces whoever placed it.
     const turns = state.toiletFacing[`${x},${y},${z}`] | 0;
     const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
-    box(0.18, 0, 0.18, 0.64, 0.32, 0.7, porcelain);   // base
-    box(0.26, 0.26, 0.06, 0.48, 0.18, 0.34, shade);   // seat back lip
-    box(0.32, 0.34, 0.18, 0.36, 0.05, 0.42, water);   // bowl water
-    box(0.18, 0.42, 0.65, 0.64, 0.58, 0.22, porcelain); // tank
-    box(0.24, 0.84, 0.59, 0.52, 0.16, 0.16, shade);   // tank lid
-    box(0.69, 0.94, 0.66, 0.08, 0.05, 0.08, cachedRgb("#ffd75a")); // flush button
+    const savedR = dlR, savedG = dlG, savedB = dlB;
+    dlR = Math.max(dlR, 1.42);
+    dlG = Math.max(dlG, 1.5);
+    dlB = Math.max(dlB, 1.62);
+    box(0.32, 0, 0.28, 0.36, 0.12, 0.44, shade);        // floor foot
+    box(0.27, 0.1, 0.25, 0.46, 0.24, 0.5, porcelain);   // pedestal
+    box(0.17, 0.3, 0.08, 0.66, 0.26, 0.62, porcelain);  // rounded bowl shell
+    box(0.24, 0.42, 0.0, 0.52, 0.13, 0.2, porcelain);   // front lip
+    box(0.24, 0.5, 0.14, 0.52, 0.06, 0.48, trim);       // white seat rim
+    box(0.3, 0.47, 0.18, 0.4, 0.04, 0.38, shadow);      // bowl shadow
+    box(0.32, 0.53, 0.22, 0.36, 0.04, 0.3, water);      // bowl water
+    box(0.15, 0.56, 0.7, 0.7, 0.38, 0.22, porcelain);   // tank
+    box(0.12, 0.92, 0.67, 0.76, 0.08, 0.28, trim);      // tank lid
+    box(0.68, 0.98, 0.73, 0.1, 0.04, 0.08, cachedRgb("#d0b45c")); // flush handle
+    dlR = savedR; dlG = savedG; dlB = savedB;
   }
   function pushChest(arr, x, y, z) {
     const wood = cachedRgb("#9b6532");
@@ -3451,41 +3524,68 @@
   }
   function pushBed(arr, x, y, z) {
     const frame = cachedRgb("#7c4e29");
+    const dark = cachedRgb("#4c2f1b");
     const sheet = cachedRgb("#d94f6a");
+    const blanket = cachedRgb("#b92f50");
     const pillow = cachedRgb("#f3f4fb");
     const turns = state.toiletFacing[`${x},${y},${z}`] | 0; // pillow at the head (-Z)
     const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
-    box(0.05, 0, 0.03, 0.9, 0.14, 0.94, frame);     // wooden base
-    box(0.1, 0.14, 0.06, 0.8, 0.16, 0.88, sheet);   // blanket
-    box(0.16, 0.3, 0.07, 0.68, 0.12, 0.24, pillow); // pillow
+    box(0.04, 0, 0.04, 0.92, 0.14, 1.88, frame);       // two-block wooden base
+    box(0.0, 0.08, 0.0, 1.0, 0.36, 0.12, dark);        // headboard
+    box(0.08, 0.14, 0.12, 0.84, 0.14, 1.74, sheet);    // mattress
+    box(0.12, 0.28, 0.58, 0.76, 0.16, 1.16, blanket);  // long blanket
+    box(0.16, 0.29, 0.16, 0.68, 0.13, 0.32, pillow);   // pillow
+    box(0.08, -0.12, 0.12, 0.12, 0.16, 0.12, dark);
+    box(0.8, -0.12, 0.12, 0.12, 0.16, 0.12, dark);
+    box(0.08, -0.12, 1.72, 0.12, 0.16, 0.12, dark);
+    box(0.8, -0.12, 1.72, 0.12, 0.16, 0.12, dark);
   }
   function pushDoor(arr, x, y, z, open) {
     const wood = cachedRgb("#b98245");
     const inset = cachedRgb("#7c4e29");
     const knob = cachedRgb("#caa24a");
+    const hinge = cachedRgb("#56515a");
     // The panel hangs on the -Z face; swinging open rotates it 90° onto the -X face,
     // which clears the cell so the (now non-solid) doorway is walkable.
     const turns = ((state.toiletFacing[`${x},${y},${z}`] | 0) + (open ? 1 : 0)) & 3;
     const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
-    box(0.03, 0, 0.0, 0.94, 1.0, 0.16, wood);       // full-height panel
-    box(0.12, 0.12, 0.015, 0.36, 0.3, 0.14, inset); // upper recessed panel
-    box(0.12, 0.5, 0.015, 0.36, 0.36, 0.14, inset); // lower recessed panel
-    box(0.82, 0.46, 0.0, 0.09, 0.12, 0.18, knob);   // handle
+    box(0.05, 0, 0.03, 0.9, 1.95, 0.12, wood);        // two-block-tall slab
+    box(0.1, 0.1, 0.0, 0.14, 1.75, 0.06, inset);      // left stile
+    box(0.76, 0.1, 0.0, 0.14, 1.75, 0.06, inset);     // right stile
+    box(0.18, 0.88, 0.0, 0.64, 0.1, 0.06, inset);     // middle rail
+    box(0.18, 1.74, 0.0, 0.64, 0.1, 0.06, inset);     // top rail
+    box(0.28, 0.2, 0.0, 0.44, 0.48, 0.05, cachedRgb("#9b6532"));
+    box(0.28, 1.12, 0.0, 0.44, 0.42, 0.05, cachedRgb("#9b6532"));
+    box(0.82, 0.9, -0.01, 0.09, 0.12, 0.08, knob);    // handle at hand height
+    box(0.02, 0.28, -0.01, 0.05, 0.18, 0.08, hinge);
+    box(0.02, 1.36, -0.01, 0.05, 0.18, 0.08, hinge);
   }
   function pushFurnace(arr, x, y, z) {
-    const stone = cachedRgb("#6e7078");
-    const dark = cachedRgb("#3a3c44");
+    const stone = cachedRgb("#747882");
+    const light = cachedRgb("#9296a0");
+    const dark = cachedRgb("#24262d");
+    const mortar = cachedRgb("#4d5058");
     const turns = state.toiletFacing[`${x},${y},${z}`] | 0; // opening faces the placer (-Z)
     const box = (lx, ly, lz, w, h, d, rgb) => pushRotatedBox(arr, x, y, z, lx, ly, lz, w, h, d, rgb, turns);
-    box(0.04, 0, 0.04, 0.92, 0.98, 0.92, stone);      // stone body
-    box(0.22, 0.1, 0.0, 0.56, 0.5, 0.06, dark);       // dark opening on the front
+    box(0.04, 0, 0.04, 0.92, 0.92, 0.92, stone);      // stone body
+    box(0.08, 0.1, 0.0, 0.84, 0.08, 0.08, mortar);    // bottom sill
+    box(0.08, 0.76, 0.0, 0.84, 0.08, 0.08, mortar);   // top lintel
+    box(0.08, 0.18, 0.0, 0.1, 0.58, 0.08, light);     // left brick column
+    box(0.82, 0.18, 0.0, 0.1, 0.58, 0.08, light);     // right brick column
+    box(0.24, 0.2, 0.0, 0.52, 0.38, 0.07, dark);      // black firebox
+    box(0.3, 0.6, 0.0, 0.4, 0.08, 0.06, mortar);      // arched lip
+    const saved = [dlR, dlG, dlB];
+    setDecorLightEmissive();
+    box(0.32, 0.18, 0.015, 0.36, 0.12, 0.05, cachedRgb("#ff7a1a"));
+    dlR = saved[0]; dlG = saved[1]; dlB = saved[2];
     const f = state.furnaces[`${x},${y},${z}`];
     if (f && f.burn > 0) {                              // glowing embers while lit
-      const saved = [dlR, dlG, dlB]; setDecorLightEmissive();
-      box(0.3, 0.12, 0.015, 0.4, 0.26, 0.05, cachedRgb("#ff7a1a"));
-      dlR = saved[0]; dlG = saved[1]; dlB = saved[2];
+      const lit = [dlR, dlG, dlB]; setDecorLightEmissive();
+      box(0.28, 0.28, 0.02, 0.44, 0.2, 0.06, cachedRgb("#ffd75a"));
+      dlR = lit[0]; dlG = lit[1]; dlB = lit[2];
     }
-    box(0.16, 0.86, 0.16, 0.68, 0.12, 0.68, dark);    // chimney cap
+    box(0.14, 0.86, 0.14, 0.72, 0.1, 0.72, mortar);   // top cap
+    box(0.32, 0.94, 0.32, 0.36, 0.2, 0.36, dark);     // squat chimney
   }
   function pushCrop(arr, x, y, z, code) {
     const stage = code === CROP_1 ? 0 : code === CROP_2 ? 1 : 2;
@@ -4295,6 +4395,22 @@
     bagRenderKey = null;
     playSfx(state.bagOpen ? "bagOpen" : "bagClose");
     renderBag();
+  }
+  function closeActivePanel() {
+    if (!state.started) return false;
+    if (state.crafting) {
+      toggleCrafting(false);
+      return true;
+    }
+    if (state.bagOpen || state.openChest || state.openFurnace) {
+      toggleBag(false);
+      return true;
+    }
+    if (state.goalsOpen) {
+      toggleGoals(false);
+      return true;
+    }
+    return false;
   }
   function triggerHeldSwing(kind = "gather", sound = true) {
     state.swingKind = kind;
@@ -5949,6 +6065,8 @@
     playSfx(state.crafting ? "craftOpen" : "craftClose");
     if (state.crafting) {
       state.bagOpen = false;
+      state.openChest = null;
+      state.openFurnace = null;
       if (state.goalsOpen) toggleGoals(false);
       renderBag();
       unlockPointer();
@@ -5971,7 +6089,8 @@
     if (!["All", "Ready", ...cats].includes(craftFilter)) craftFilter = "All";
     const readyCount = recipes.filter((entry) => entry.ok).length;
     if (craftStatus) {
-      craftStatus.textContent = near ? "Crafting Toilet nearby" : "Basics only - stand near a Crafting Toilet";
+      craftStatus.textContent = near ? `${readyCount} ready - Toilet nearby` : `${readyCount} ready - basics only`;
+      craftStatus.title = near ? "Crafting Toilet nearby" : "Stand near a Crafting Toilet for advanced recipes";
       craftStatus.classList.toggle("is-ready", near);
     }
     if (craftTabs) {
@@ -6011,7 +6130,7 @@
           const def = DEF[c] || {};
           const have = countItem(c);
           const enough = have >= n;
-          return `<span class="craft-need ${enough ? "ok" : "no"}"><span class="craft-need__dot">${itemIconHtml(c, "craft-need__icon")}</span><span>${escapeWorldHtml(def.name || "Item")}</span><b>${have}/${n}</b></span>`;
+          return `<span class="craft-need ${enough ? "ok" : "no"}"><span class="craft-need__dot">${itemIconHtml(c, "craft-need__icon")}</span><span class="craft-need__name">${escapeWorldHtml(def.name || "Item")}</span><b>${have}/${n}</b></span>`;
         }).join("");
         const statusClass = ok ? "is-ready" : tableLocked ? "is-locked" : "";
         const statusText = ok ? "Craft" : tableLocked ? "Toilet needed" : "Missing";
@@ -6750,18 +6869,42 @@
       helpLine = "Click your items to add ore/food or fuel; click a furnace slot to take it out.";
       const recipe = furnace.input ? SMELTING[furnace.input.code] : null;
       const pct = recipe ? Math.round(clamp(furnace.cook / recipe.time, 0, 1) * 100) : 0;
+      const burnPct = furnace.burnMax ? Math.round(clamp(furnace.burn / furnace.burnMax, 0, 1) * 100) : 0;
+      const stationState = recipe
+        ? furnace.burn > 0 ? "Cooking" : furnace.fuel ? "Ready to light" : "Needs fuel"
+        : "Needs input";
+      const outputName = recipe && DEF[recipe.out] ? DEF[recipe.out].name : "Waiting";
       stationHtml = `
         <div class="rizz3d-furnace">
-          <div class="rizz3d-furnace__col">
-            <span class="rizz3d-furnace__lab">Smelt</span>
-            ${bagSlotHtml(furnace.input, 0, `data-furnace-slot="input"`, false, "Input")}
-            <span class="rizz3d-furnace__lab">Fuel ${furnace.burn > 0 ? "🔥" : ""}</span>
-            ${bagSlotHtml(furnace.fuel, 0, `data-furnace-slot="fuel"`, false, "Fuel")}
+          <div class="rizz3d-furnace__top">
+            <strong>Smelting</strong>
+            <span class="rizz3d-furnace__state">${stationState}</span>
           </div>
-          <div class="rizz3d-furnace__arrow"><span style="width:${pct}%"></span></div>
-          <div class="rizz3d-furnace__col">
-            <span class="rizz3d-furnace__lab">Output</span>
-            ${bagSlotHtml(furnace.output, 0, `data-furnace-slot="output"`, false, "Output")}
+          <div class="rizz3d-furnace__slots">
+            <div class="rizz3d-furnace__col">
+              <span class="rizz3d-furnace__lab">Input</span>
+              ${bagSlotHtml(furnace.input, 0, `data-furnace-slot="input"`, false, "Input")}
+              <span class="rizz3d-furnace__item">${escapeWorldHtml(slotDetail(furnace.input, "Add ore/food"))}</span>
+              <span class="rizz3d-furnace__lab">Fuel</span>
+              ${bagSlotHtml(furnace.fuel, 0, `data-furnace-slot="fuel"`, false, "Fuel")}
+              <span class="rizz3d-furnace__item">${escapeWorldHtml(slotDetail(furnace.fuel, "Add fuel"))}</span>
+            </div>
+            <div class="rizz3d-furnace__meters">
+              <div class="rizz3d-furnace__meter">
+                <div class="rizz3d-furnace__arrow-label"><span>Cook</span><b>${pct}%</b></div>
+                <div class="rizz3d-furnace__track"><span style="width:${pct}%"></span></div>
+              </div>
+              <div class="rizz3d-furnace__meter">
+                <div class="rizz3d-furnace__arrow-label"><span>Fuel</span><b>${burnPct}%</b></div>
+                <div class="rizz3d-furnace__track rizz3d-furnace__track--burn"><span style="width:${burnPct}%"></span></div>
+              </div>
+              <div class="rizz3d-furnace__hint">${escapeWorldHtml(recipe ? `Making ${outputName}` : "Sand, meat, logs, stone, and ores can cook here.")}</div>
+            </div>
+            <div class="rizz3d-furnace__col">
+              <span class="rizz3d-furnace__lab">Output</span>
+              ${bagSlotHtml(furnace.output, 0, `data-furnace-slot="output"`, false, "Output")}
+              <span class="rizz3d-furnace__item">${escapeWorldHtml(slotDetail(furnace.output, outputName))}</span>
+            </div>
           </div>
         </div>`;
     }
@@ -6791,7 +6934,7 @@
       .canvas-wrap--rizzcraft #gameCanvas{touch-action:none}
       .rizz3d-crosshair:before,.rizz3d-crosshair:after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 6px rgba(0,0,0,.7)}
       .rizz3d-crosshair:before{left:8px;top:1px;width:2px;height:16px}.rizz3d-crosshair:after{left:1px;top:8px;width:16px;height:2px}
-      .rizz3d-health{position:absolute;left:12px;top:12px;z-index:6;width:min(260px,44%);padding:7px 9px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.76);box-shadow:0 8px 24px rgba(0,0,0,.22);pointer-events:none}
+      .rizz3d-health{position:absolute;left:56px;top:10px;z-index:6;width:min(260px,42%);padding:7px 9px;border:1px solid rgba(255,255,255,.18);border-radius:6px;background:rgba(5,7,13,.78);box-shadow:0 8px 24px rgba(0,0,0,.22);pointer-events:none}
       .rizz3d-health__row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;color:#fff;font:900 10px var(--font-mono);text-transform:uppercase}.rizz3d-health__value{font-size:11px;color:#ffd75a}
       .rizz3d-health__track{height:10px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
       .rizz3d-health__fill{display:block;width:100%;height:100%;border-radius:5px;background:linear-gradient(90deg,#55f06c,#ffd75a 62%,#ff4c6d);box-shadow:0 0 16px rgba(85,240,108,.35);transition:width 120ms ease,filter 120ms ease}
@@ -6825,11 +6968,12 @@
       .rizz3d-goal-close{margin-top:14px;align-self:center;min-height:38px;padding:8px 20px;border:1px solid rgba(255,212,59,.5);border-radius:8px;background:rgba(255,212,59,.16);color:#fff;font:900 12px var(--font-mono);cursor:pointer}
       .rizz3d-bag-head{display:grid;gap:2px;margin-bottom:8px}.rizz3d-bag-head strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-bag-head span,.rizz3d-bag-label{color:rgba(255,255,255,.68);font:700 10px var(--font-mono)}
       .rizz3d-bag-hover{min-height:24px;margin:6px 0 9px;padding:6px 8px;border:1px solid rgba(67,230,255,.22);border-radius:6px;background:rgba(67,230,255,.08);color:#fff;font:900 10px var(--font-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}.rizz3d-bag-chest{grid-template-rows:repeat(2,32px)}.rizz3d-bag-panel.is-chest{border-color:rgba(255,212,59,.4)}
-      .rizz3d-furnace{display:flex;align-items:center;gap:10px;margin:6px 0 10px;padding:8px;border:1px solid rgba(255,212,59,.22);border-radius:8px;background:rgba(255,150,40,.08)}
-      .rizz3d-furnace__col{display:grid;gap:3px;justify-items:center}
-      .rizz3d-furnace__lab{color:rgba(255,255,255,.7);font:900 8px var(--font-mono);text-transform:uppercase}
-      .rizz3d-furnace__arrow{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}.rizz3d-furnace__arrow span{display:block;height:100%;background:linear-gradient(90deg,#ff7a1a,#ffd75a)}
+      .rizz3d-bag-hotbar,.rizz3d-bag-grid{display:grid;grid-template-columns:repeat(9,32px);gap:4px;margin:5px 0 9px}.rizz3d-bag-grid{grid-template-rows:repeat(3,32px)}.rizz3d-bag-chest{grid-template-rows:repeat(2,32px)}.rizz3d-bag-panel.is-chest{border-color:rgba(255,212,59,.4);width:min(430px,calc(100% - 24px))}
+      .rizz3d-furnace{display:grid;gap:9px;margin:6px 0 10px;padding:10px;border:1px solid rgba(255,212,59,.28);border-radius:8px;background:linear-gradient(180deg,rgba(255,150,40,.12),rgba(14,7,4,.22));box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+      .rizz3d-furnace__top{display:flex;align-items:center;justify-content:space-between;gap:8px}.rizz3d-furnace__top strong{color:#fff;font:900 13px var(--font-display)}.rizz3d-furnace__state{border:1px solid rgba(255,212,59,.32);border-radius:999px;background:rgba(255,212,59,.1);color:#ffd75a;font:900 8px var(--font-mono);padding:3px 7px;text-transform:uppercase;white-space:nowrap}
+      .rizz3d-furnace__slots{display:grid;grid-template-columns:68px minmax(92px,1fr) 68px;gap:8px;align-items:center}.rizz3d-furnace__col{display:grid;gap:4px;justify-items:center;min-width:0}
+      .rizz3d-furnace__lab{color:rgba(255,255,255,.72);font:900 8px var(--font-mono);text-transform:uppercase}.rizz3d-furnace__item{max-width:100%;color:rgba(255,255,255,.58);font:800 8px var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center}
+      .rizz3d-furnace__meters{display:grid;gap:8px;min-width:0}.rizz3d-furnace__meter{display:grid;gap:4px}.rizz3d-furnace__arrow-label{display:flex;align-items:center;justify-content:space-between;gap:6px;color:rgba(255,255,255,.72);font:900 8px var(--font-mono);text-transform:uppercase}.rizz3d-furnace__arrow-label b{color:#fff;font:inherit}.rizz3d-furnace__track{height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}.rizz3d-furnace__track span{display:block;height:100%;background:linear-gradient(90deg,#ff7a1a,#ffd75a);transition:width 120ms ease}.rizz3d-furnace__track--burn span{background:linear-gradient(90deg,#43e6ff,#ffd75a)}.rizz3d-furnace__hint{color:rgba(255,255,255,.62);font:800 9px var(--font-mono);line-height:1.25;text-align:center}
       .rizz3d-bag-slot{position:relative;width:32px;height:32px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:rgba(12,15,26,.92);cursor:pointer}.rizz3d-bag-slot.is-selected{border-color:#ffd43b;box-shadow:0 0 0 2px rgba(255,212,59,.22)}.rizz3d-bag-slot em{position:absolute;left:3px;top:1px;color:rgba(255,255,255,.45);font:700 8px var(--font-mono);font-style:normal}.rizz3d-bag-slot b{position:absolute;right:3px;bottom:1px;color:#fff;font:800 9px var(--font-mono)}
       .rizz3d-damage{position:absolute;inset:-2%;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,rgba(255,54,54,0) 44%,rgba(255,40,40,.44) 100%);transition:opacity 80ms linear}
       .rizz3d-mobile-controls{display:none;position:absolute;inset:0;z-index:9;pointer-events:none;touch-action:none}
@@ -7200,6 +7344,15 @@
   }
 
   function bindInput() {
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      const target = event.target;
+      if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!closeActivePanel()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    }, true);
     window.addEventListener("keydown", (event) => {
       primeAudio();
       const tag = event.target && event.target.tagName;

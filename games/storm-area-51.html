@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Storm Area 51: Raid The Base - Rainbot Network</title>
-  <meta name="description" content="A fictional reverse tower defense arcade game. Spend Hype to send raider squads through three defended lanes, break the lab, free the alien, and beat lockdown." />
+  <meta name="description" content="A fictional isometric strategy siege game. Spend Hype to deploy raider squads on the perimeter, breach the fences and gates, crack the central lab, free the alien, and escort it to the van before lockdown." />
   <meta property="og:title" content="Storm Area 51: Raid The Base - Rainbot Network" />
-  <meta property="og:description" content="Send chaotic squads through defended lanes, overwhelm the base, crack the lab, and extract the alien before lockdown hits 100%." />
+  <meta property="og:description" content="Deploy chaotic squads around an isometric desert base, breach the perimeter, crack the lab, free the alien, and escort it to the getaway van before lockdown hits 100%." />
   <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" />
@@ -429,7 +429,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">Storm Area 51: Raid The Base</h1>
-        <div class="game-page__sub">Reverse tower defense · deploy squads · crack the lab · extract the alien</div>
+        <div class="game-page__sub">Isometric siege RTS · deploy squads · breach the base · crack the lab · escort the alien</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
     </div>
@@ -461,7 +461,7 @@
           <div class="overlay overlay--show" id="storm-overlay">
             <h2 class="overlay__title" id="storm-overlay-title">Raid The Base</h2>
             <p class="overlay__sub" id="storm-overlay-sub">
-              Spend Hype to send squads through three defended lanes. Crack two lab shields, overwhelm the lab, free the alien, and reach the van before lockdown hits 100%.
+              Pick a squad, then click a glowing deployment sector. Breach the perimeter, crack the central Laboratory, free the alien, and escort it west to the van before lockdown hits 100%.
             </p>
             <div class="overlay__score" id="storm-overlay-score"></div>
             <button class="btn btn--primary" id="btn-start">Start raid</button>
@@ -469,7 +469,7 @@
         </div>
 
         <p class="merge-hint">
-          <strong>Click</strong> a deploy card, then <strong>click/tap</strong> a lane to send it. Keyboard: <kbd>1</kbd>-<kbd>4</kbd> squads, <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> lanes, <kbd>Q</kbd> deploys, <kbd>E</kbd> rushes, <kbd>P</kbd> pauses.
+          <strong>Click</strong> a deploy card, then <strong>click/tap</strong> a glowing perimeter sector to send raiders in. Keyboard: <kbd>1</kbd>-<kbd>4</kbd> squads, <kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> sectors, <kbd>Q</kbd> deploys, <kbd>E</kbd> rushes, <kbd>P</kbd> pauses.
         </p>
       </div>
 
@@ -496,8 +496,8 @@
         <div class="game-side__panel">
           <h3 class="game-side__title">MISSION</h3>
           <div class="storm-objective">
-            <strong id="storm-objective">Rally outside the fence</strong>
-            <span id="storm-tip">Click a squad card, then click a lane. Guards, drones, lights, and sirens are the enemy defenses.</span>
+            <strong id="storm-objective">Rally on the perimeter</strong>
+            <span id="storm-tip">Pick a squad card, then click a glowing sector. Guard towers, searchlights, and patrols are the base defenses.</span>
             <ul class="storm-objective__log" id="storm-log"></ul>
           </div>
         </div>
@@ -508,12 +508,12 @@
         <details class="game-side__howto">
           <summary>Raid notes</summary>
           <ul>
-            <li>This is reverse tower defense: you send units through lanes while the base tries to stop them.</li>
-            <li>Click a deploy card to choose a squad. The selected card says SELECTED, then click a lane to send it.</li>
-            <li>Runners are fast, Sign Guys tank, Livestreamers generate Hype, and Tinfoil Crew jams nearby defenses.</li>
-            <li>Break the pink Lab Shield gate in two different lanes before the lab core can take damage.</li>
-            <li>Once the lab opens, escort the alien to the van before lockdown reaches 100%.</li>
-            <li>Enemy defenses are labeled on the map. Sirens raise lockdown fastest, drones punish clusters, lights soften lanes, and guards shoot front units.</li>
+            <li>This is an isometric siege: deploy raiders on the outer perimeter and they pathfind to the central Laboratory, smashing whatever blocks them.</li>
+            <li>Click a deploy card to choose a squad (it says SELECTED), then click a glowing North / East / South sector to send raiders in.</li>
+            <li>Runners are fast and shred fences, Sign Guys tank and shield allies, Livestreamers generate Hype, and Tinfoil Crew jams nearby towers and lights.</li>
+            <li>Raiders breach the fences and gates to get inside, then pound the Laboratory dome until the core fails and the alien is freed.</li>
+            <li>Once the lab opens, escort the alien west to the getaway van before lockdown reaches 100%.</li>
+            <li>Guard towers snipe raiders, searchlights raise lockdown and buff nearby fire when they catch a raider, and patrolling guards rush in to engage.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             Fictional arcade satire. Not instructions, not affiliated with any real place, organization, or event.
@@ -525,7 +525,7 @@
 
   <div class="storm-mobile-dock" id="storm-mobile-dock" aria-label="Mobile raid controls">
     <div class="storm-mobile-dock__meta">
-      <strong id="storm-mobile-selected">NR · Main Road</strong>
+      <strong id="storm-mobile-selected">NR · North</strong>
       <span id="storm-mobile-hype">Hype 0%</span>
     </div>
     <div class="storm-mobile-squads" id="storm-mobile-squads"></div>
@@ -548,7 +548,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/storm-area-51.js?v=20260623-rtdef-9"></script>
+  <script src="../assets/js/storm-area-51.js?v=20260627-iso-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

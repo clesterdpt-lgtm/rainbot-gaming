@@ -15,6 +15,7 @@
 .claude/
 .playwright-cli/
 .playwright-mcp/
+RainbotGaming-*/
 output/
 test-artifacts/
 tmp/

@@ -3475,16 +3475,21 @@
     const frame = cachedRgb("#d6fbff");
     const edge = cachedRgb("#6feaff");
     const pane = cachedRgb("#c7f7ff");
-    pushTinyBox(glassArr, x + 0.1, y + 0.08, z + 0.47, 0.8, 0.84, 0.06, pane);
-    pushTinyBox(glassArr, x + 0.47, y + 0.08, z + 0.1, 0.06, 0.84, 0.8, pane);
-    pushTinyBox(arr, x + 0.08, y + 0.04, z + 0.44, 0.84, 0.06, 0.12, edge);
-    pushTinyBox(arr, x + 0.08, y + 0.9, z + 0.44, 0.84, 0.06, 0.12, frame);
-    pushTinyBox(arr, x + 0.08, y + 0.08, z + 0.45, 0.06, 0.82, 0.1, frame);
-    pushTinyBox(arr, x + 0.86, y + 0.08, z + 0.45, 0.06, 0.82, 0.1, frame);
-    pushTinyBox(arr, x + 0.44, y + 0.04, z + 0.08, 0.12, 0.06, 0.84, edge);
-    pushTinyBox(arr, x + 0.44, y + 0.9, z + 0.08, 0.12, 0.06, 0.84, frame);
-    pushTinyBox(arr, x + 0.45, y + 0.08, z + 0.08, 0.1, 0.82, 0.06, frame);
-    pushTinyBox(arr, x + 0.45, y + 0.08, z + 0.86, 0.1, 0.82, 0.06, frame);
+    const xNeighbors = Number(isSolidBlock(getBlock(x - 1, y, z))) + Number(isSolidBlock(getBlock(x + 1, y, z)));
+    const zNeighbors = Number(isSolidBlock(getBlock(x, y, z - 1))) + Number(isSolidBlock(getBlock(x, y, z + 1)));
+    if (xNeighbors >= zNeighbors) {
+      pushTinyBox(glassArr, x + 0.06, y + 0.06, z + 0.48, 0.88, 0.88, 0.04, pane);
+      pushTinyBox(arr, x + 0.02, y + 0.02, z + 0.45, 0.96, 0.06, 0.1, edge);
+      pushTinyBox(arr, x + 0.02, y + 0.92, z + 0.45, 0.96, 0.06, 0.1, frame);
+      pushTinyBox(arr, x + 0.02, y + 0.08, z + 0.46, 0.06, 0.84, 0.08, frame);
+      pushTinyBox(arr, x + 0.92, y + 0.08, z + 0.46, 0.06, 0.84, 0.08, frame);
+      return;
+    }
+    pushTinyBox(glassArr, x + 0.48, y + 0.06, z + 0.06, 0.04, 0.88, 0.88, pane);
+    pushTinyBox(arr, x + 0.45, y + 0.02, z + 0.02, 0.1, 0.06, 0.96, edge);
+    pushTinyBox(arr, x + 0.45, y + 0.92, z + 0.02, 0.1, 0.06, 0.96, frame);
+    pushTinyBox(arr, x + 0.46, y + 0.08, z + 0.02, 0.08, 0.84, 0.06, frame);
+    pushTinyBox(arr, x + 0.46, y + 0.08, z + 0.92, 0.08, 0.84, 0.06, frame);
   }
   function pushCraftingToilet(arr, x, y, z) {
     const porcelain = cachedRgb("#ffffff");
@@ -4397,11 +4402,16 @@
     renderBag();
   }
   function closeActivePanel() {
-    if (!state.started) return false;
-    if (state.crafting) {
-      toggleCrafting(false);
+    const craftOpen = craftPanel && craftPanel.classList.contains("is-open");
+    if (state.crafting || craftOpen) {
+      if (state.started) toggleCrafting(false);
+      else {
+        state.crafting = false;
+        if (craftPanel) craftPanel.classList.remove("is-open");
+      }
       return true;
     }
+    if (!state.started) return false;
     if (state.bagOpen || state.openChest || state.openFurnace) {
       toggleBag(false);
       return true;

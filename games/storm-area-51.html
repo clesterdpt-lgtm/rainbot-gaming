@@ -92,6 +92,10 @@
     .storm-page .canvas-wrap {
       border-radius: 8px;
       --game-max-width: 1180px;
+      /* 960x540 canvas — drive both normal and max-screen sizing off a true 16:9 ratio
+         so the board never squishes (normal) or stretches tall (maxed) */
+      --game-aspect: 1.7778;
+      --game-aspect-ratio: 16 / 9;
       aspect-ratio: 16 / 9;
     }
 
@@ -548,7 +552,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/storm-area-51.js?v=20260627-iso-2"></script>
+  <script src="../assets/js/storm-area-51.js?v=20260627-iso-8"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

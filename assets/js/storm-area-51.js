@@ -16,13 +16,13 @@
   const H = 540;
 
   const GRID = 22;                 // 22 x 22 tiles
-  const TILE_W = 44;               // iso tile width (px)
-  const TILE_H = 22;               // iso tile height (px)
+  const TILE_W = 40;               // iso tile width (px) — 2:1 iso, fits 960x540 with margins
+  const TILE_H = 20;               // iso tile height (px)
   const ORIGIN_X = W / 2;          // diamond apex x
-  const ORIGIN_Y = 48;             // top padding so wall heights have room
+  const ORIGIN_Y = 56;             // top padding so wall heights + HUD ribbon have room
 
   const LAB_C = 9, LAB_R = 9, LAB_SPAN = 4;       // lab footprint cols/rows 9..12
-  const LAB_MAX_HP = 660;
+  const LAB_MAX_HP = 880;
   const VAN_TILE = { c: 1, r: 10 };               // alien escort goal (west, outside the keep)
   const VAN_DRAW = { c: 0.2, r: 10.5 };           // van art sits just outside the west gate
 
@@ -108,7 +108,7 @@
     {
       id: "tinfoil", hotkey: "3", name: "Tinfoil Crew", short: "TF", color: C.yellow,
       cost: 24, hp: 74, speed: 1.55, damage: 6, wallBonus: 1, range: 0.95,
-      attackRate: 0.95, desc: "EMP jammer", jamRadius: 3.6,
+      attackRate: 0.95, desc: "EMP jammer", jamRadius: 3.0,
       role: "Projects an EMP field that disables towers and searchlights.",
     },
     {
@@ -140,7 +140,7 @@
     score: 0,
     best: 0,
     alert: 0,
-    hype: 70,
+    hype: 64,
     time: 0,
     labHp: LAB_MAX_HP,
     alien: null,
@@ -207,7 +207,7 @@
       cd: 0.4 + Math.random() * 0.6,
       sweep: Math.random() * Math.PI * 2,
       fireRate: type === "tower" ? 1.0 : 0,
-      range: type === "tower" ? 4.8 : type === "light" ? 6.4 : 0,
+      range: type === "tower" ? 4.9 : type === "light" ? 6.4 : 0,
       damage: type === "tower" ? 13 : 0,
     };
     for (let rr = r; rr < r + h; rr++)
@@ -408,7 +408,7 @@
     state.score = 0;
     state.best = Number(api.getHighScore(GAME_ID) || 0);
     state.alert = 0;
-    state.hype = 70;
+    state.hype = 64;
     state.time = 0;
     state.labHp = LAB_MAX_HP;
     state.alien = null;
@@ -653,13 +653,13 @@
       .filter((u) => u.alive && u.id === "streamer")
       .reduce((s, u) => s + (u.hypeAura || 0), 0);
     const pressure = state.labHp <= 0 ? 0.3 : (LAB_MAX_HP - state.labHp) * 0.0018;
-    state.hype = clamp(state.hype + (4.6 + streamerGain + pressure) * dt, 0, 100);
+    state.hype = clamp(state.hype + (4.4 + streamerGain + pressure) * dt, 0, 100);
 
     const litCount = state.units.filter((u) => u.alive && u.lit > 0).length;
     const crowd = Math.max(0, state.units.filter((u) => u.alive).length - 10) * 0.02;
     // lockdown pressure eases once the base is in escort-phase chaos
     const escortEase = state.labHp <= 0 ? 0.55 : 1;
-    state.alert = clamp(state.alert + (0.45 + litCount * 0.8 + crowd) * escortEase * dt, 0, 100);
+    state.alert = clamp(state.alert + (0.3 + litCount * 0.55 + crowd) * escortEase * dt, 0, 100);
   }
 
   function updateAuras(dt) {
@@ -821,7 +821,7 @@
   function spawnAlien() {
     state.alien = {
       col: LAB_C + LAB_SPAN / 2, row: LAB_R + LAB_SPAN / 2,
-      hp: 240, maxHp: 240, speed: 1.7,
+      hp: 185, maxHp: 185, speed: 1.6,
       escaped: false, panic: 0, bob: 0, hit: 0, attackCd: 0,
     };
   }
@@ -852,7 +852,7 @@
         if (d <= g.range) {
           if (g.attackCd <= 0) {
             g.attackCd = g.attackRate;
-            damageRaiderOrAlien(tgt, tgt === state.alien ? g.damage * 0.5 : g.damage);
+            damageRaiderOrAlien(tgt, tgt === state.alien ? g.damage * 0.7 : g.damage);
             const p = scr(tgt.col, tgt.row);
             addEffect("hit", p.x, p.y - 18, C.red, { r: 7 });
           }
@@ -921,7 +921,7 @@
       if (s.type !== "tower" || !s.alive) return;
       s.shake = Math.max(0, s.shake - dt);
       s.cd = Math.max(0, s.cd - dt);
-      if (s.jam > 0) { s.cd = Math.max(s.cd, 0.2); return; }
+      if (s.jam > 0) { s.cd = Math.max(s.cd, 0.2); return; }  // EMP silences this tower
       const tgt = chooseTowerTarget(s);
       if (tgt && s.cd <= 0) {
         fireTower(s, tgt);
@@ -955,6 +955,7 @@
       tx: tp.x, ty: tp.y - 16,
       targetUid: tgt.uid, alien: !!tgt.isAlien,
       damage: s.damage, color: C.blue,
+      splash: 0.75,                 // light splash so over-massing a single tile still hurts
       ttl: 0.22, life: 0.22,
     });
     s.shake = 0.12;
@@ -970,11 +971,21 @@
   }
 
   function applyProjectile(p) {
-    if (p.alien) { if (state.alien) damageAlien(p.damage * 0.45); return; }
+    if (p.alien) { if (state.alien) damageAlien(p.damage * 0.6); return; }
     const t = state.units.find((u) => u.uid === p.targetUid && u.alive);
     if (!t) return;
     damageRaiderOrAlien(t, p.damage);
     addEffect("hit", scr(t.col, t.row).x, scr(t.col, t.row).y - 18, p.color, { r: 8 });
+    // splash damage to clustered raiders around the impact
+    if (p.splash) {
+      const px = scr(t.col, t.row);
+      state.units.forEach((u) => {
+        if (u.alive && u.uid !== t.uid && dist(u.col, u.row, t.col, t.row) < p.splash) {
+          damageRaiderOrAlien(u, p.damage * 0.25);
+        }
+      });
+      addEffect("hit", px.x, px.y - 14, C.orange, { r: 14 });
+    }
   }
 
   /* ---------- alien ---------- */

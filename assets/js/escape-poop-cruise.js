@@ -1890,6 +1890,7 @@
   }
 
   function beginTouchLook(clientX, clientY, pointerId = "touch") {
+    if (touchLook.active) return;
     touchLook.active = true;
     touchLook.pointerId = pointerId;
     touchLook.lastX = clientX;
@@ -1976,17 +1977,21 @@
       if (useButton) bindTapButton(useButton, tryUseExit);
     }
 
+    const hasTouchInput = "ontouchstart" in window || (navigator && navigator.maxTouchPoints > 0);
+
     if (window.PointerEvent) {
       canvasWrap.addEventListener("pointerdown", (event) => {
         if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
+        if (touchLook.active) return;
         if (event.pointerType === "mouse" && isPointerLocked()) return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
-        if (isTouchLikePointer(event) && event.cancelable) event.preventDefault();
+        if (event.cancelable) event.preventDefault();
+        if (isTouchLikePointer(event)) event.stopPropagation();
         beginTouchLook(event.clientX, event.clientY, event.pointerId);
         if (canvasWrap.setPointerCapture) {
           try { canvasWrap.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
         }
-      });
+      }, { passive: false });
 
       canvasWrap.addEventListener("pointermove", (event) => {
         if (!touchLook.active || touchLook.pointerId !== event.pointerId || state.mode !== "playing") return;
@@ -1999,12 +2004,15 @@
       canvasWrap.addEventListener("pointercancel", endPointerLook);
       window.addEventListener("pointerup", endPointerLook);
       window.addEventListener("pointercancel", endPointerLook);
-    } else {
+    }
+
+    if (!window.PointerEvent || hasTouchInput) {
       canvasWrap.addEventListener("touchstart", (event) => {
         if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
+        if (touchLook.active) return;
         const touch = event.changedTouches && event.changedTouches[0];
         if (!touch) return;
-        event.preventDefault();
+        if (event.cancelable) event.preventDefault();
         beginTouchLook(touch.clientX, touch.clientY, touch.identifier);
       }, { passive: false });
 
@@ -2012,7 +2020,7 @@
         if (!touchLook.active || state.mode !== "playing") return;
         const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
         if (!touch) return;
-        event.preventDefault();
+        if (event.cancelable) event.preventDefault();
         moveTouchLook(touch.clientX, touch.clientY);
       }, { passive: false });
 
@@ -2022,6 +2030,8 @@
       };
       canvasWrap.addEventListener("touchend", endTouch);
       canvasWrap.addEventListener("touchcancel", endTouch);
+      window.addEventListener("touchend", endTouch);
+      window.addEventListener("touchcancel", endTouch);
     }
 
     window.addEventListener("blur", resetMobileInput);

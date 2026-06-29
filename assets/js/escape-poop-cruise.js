@@ -154,6 +154,7 @@
     floor: new URL("floor-atlas-ai-v1.png", textureAssetBase).href,
     ceiling: new URL("ceiling-atlas-ai-v1.png", textureAssetBase).href,
     details: new URL("detail-decal-atlas-ai-v1.png", textureAssetBase).href,
+    objects: new URL("object-atlas-ai-v1.png", textureAssetBase).href,
   };
 
   const textureAnisotropy = Math.min(
@@ -436,6 +437,34 @@
     return materials;
   }
 
+  function makeObjectMaterials(atlasUrl) {
+    const fallbacks = [
+      { color: 0x6d1f1b, emissive: 0x180505 },
+      { color: 0x123d46, emissive: 0x0d363a },
+      { color: 0x8c6c1a, emissive: 0x171004 },
+      { color: 0x2f2d29, emissive: 0x030303 },
+      { color: 0x15586a, emissive: 0x08232b },
+      { color: 0x6b5630, emissive: 0x120d06 },
+      { color: 0x8f1d56, emissive: 0x210716 },
+      { color: 0x5f5a52, emissive: 0x050505 },
+      { color: 0x35522a, emissive: 0x071407 },
+      { color: 0xa5621e, emissive: 0x170b02 },
+      { color: 0x5f543e, emissive: 0x060504 },
+      { color: 0x5b3617, emissive: 0x0b0502 },
+      { color: 0x46352b, emissive: 0x050303 },
+      { color: 0x4a4a3a, emissive: 0x050504 },
+      { color: 0x735a25, emissive: 0x0d0902 },
+      { color: 0x222a2c, emissive: 0x050808 },
+    ];
+    const materials = fallbacks.map((fallback) => new THREE.MeshLambertMaterial({
+      color: fallback.color,
+      emissive: fallback.emissive,
+      side: THREE.DoubleSide,
+    }));
+    if (atlasUrl) loadAtlasIntoMaterials(atlasUrl, materials, { grid: 4, size: 256, cropInset: 0.034 });
+    return materials;
+  }
+
   const materialSets = {
     wall: makeMaterialVariants("wall", 16, textureAssets.wall),
     floor: makeMaterialVariants("floor", 16, textureAssets.floor),
@@ -469,6 +498,26 @@
   };
 
   const detailMats = makeGeneratedDetailMaterials(16, textureAssets.details);
+  const objectMats = makeObjectMaterials(textureAssets.objects);
+
+  const ObjectTex = {
+    EXIT_LOCKED: 0,
+    EXIT_OPEN: 1,
+    CAUTION: 2,
+    VENT: 3,
+    MEDKIT: 4,
+    SHELLS: 5,
+    WEAPON_CRATE: 6,
+    PASSENGER_SHIRT: 7,
+    COUGHER_JACKET: 8,
+    LIFE_VEST: 9,
+    LUGGAGE_TAG: 10,
+    BUFFET_TRAY: 11,
+    PIPE: 12,
+    MAP_POSTER: 13,
+    BRASS_SIGN: 14,
+    CONTROL_PANEL: 15,
+  };
 
   const world = new THREE.Group();
   const enemyRoot = new THREE.Group();
@@ -490,24 +539,29 @@
     floor: materialSets.floor[0],
     carpet: materialSets.floor[4],
     ceiling: materialSets.ceiling[0],
-    exitLocked: new THREE.MeshLambertMaterial({ color: 0x922746, emissive: 0x240711 }),
-    exitOpen: new THREE.MeshLambertMaterial({ color: 0x42f2ff, emissive: 0x104a4f }),
+    exitLocked: objectMats[ObjectTex.EXIT_LOCKED],
+    exitOpen: objectMats[ObjectTex.EXIT_OPEN],
     fresh: materialSets.fresh[0],
     hazard: materialSets.hazard[0],
     trim: new THREE.MeshLambertMaterial({ color: 0x8d6f23, emissive: 0x1f1604 }),
     skin: new THREE.MeshLambertMaterial({ color: 0xb7ff54, emissive: 0x1b3b0a }),
-    passenger: new THREE.MeshLambertMaterial({ color: 0x3f5456 }),
-    cougher: new THREE.MeshLambertMaterial({ color: 0x5e4d70 }),
-    sprinter: new THREE.MeshLambertMaterial({ color: 0x5d6145 }),
+    passenger: objectMats[ObjectTex.PASSENGER_SHIRT],
+    cougher: objectMats[ObjectTex.COUGHER_JACKET],
+    sprinter: objectMats[ObjectTex.LIFE_VEST],
     dart: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
     heal: new THREE.MeshBasicMaterial({ color: 0xb7ff54 }),
-    pickup: new THREE.MeshLambertMaterial({ color: 0xffd43b, emissive: 0x4d3500 }),
-    shotgun: new THREE.MeshLambertMaterial({ color: 0xff2e88, emissive: 0x3a071d }),
+    pickup: objectMats[ObjectTex.SHELLS],
+    freshPickup: objectMats[ObjectTex.MEDKIT],
+    shotgun: objectMats[ObjectTex.WEAPON_CRATE],
+    hazardProp: objectMats[ObjectTex.BUFFET_TRAY],
     porthole: new THREE.MeshLambertMaterial({ color: 0x163b54, emissive: 0x071a29 }),
     sickLight: new THREE.MeshBasicMaterial({ color: 0xb7ff54, transparent: true, opacity: 0.58 }),
     debrisDark: new THREE.MeshLambertMaterial({ color: 0x14120e }),
-    debrisPaper: new THREE.MeshLambertMaterial({ color: 0x6f6a55 }),
-    debrisRust: new THREE.MeshLambertMaterial({ color: 0x5b3515 }),
+    debrisPaper: objectMats[ObjectTex.MAP_POSTER],
+    debrisRust: objectMats[ObjectTex.PIPE],
+    luggage: objectMats[ObjectTex.LUGGAGE_TAG],
+    exitFrame: new THREE.MeshLambertMaterial({ color: 0x6f5523, emissive: 0x0c0802 }),
+    exitGlow: new THREE.MeshBasicMaterial({ color: 0x37f2ff, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
   };
 
   const geoms = {
@@ -515,11 +569,19 @@
     floor: new THREE.BoxGeometry(TILE, 0.08, TILE),
     ceiling: new THREE.BoxGeometry(TILE, 0.08, TILE),
     door: new THREE.BoxGeometry(TILE * 0.82, WALL_H * 0.78, 0.22),
+    doorPost: new THREE.BoxGeometry(0.16, WALL_H * 0.82, 0.28),
+    doorHeader: new THREE.BoxGeometry(TILE * 1.02, 0.18, 0.3),
+    stairStep: new THREE.BoxGeometry(TILE * 0.68, 0.13, 0.42),
     trim: new THREE.BoxGeometry(TILE * 0.9, 0.08, TILE * 0.12),
     body: new THREE.CylinderGeometry(0.38, 0.48, 1.1, 7),
     head: new THREE.SphereGeometry(0.34, 8, 6),
     arm: new THREE.BoxGeometry(0.18, 0.78, 0.18),
     leg: new THREE.BoxGeometry(0.2, 0.68, 0.2),
+    hand: new THREE.BoxGeometry(0.22, 0.2, 0.22),
+    foot: new THREE.BoxGeometry(0.26, 0.16, 0.36),
+    eye: new THREE.SphereGeometry(0.062, 6, 5),
+    maw: new THREE.BoxGeometry(0.3, 0.14, 0.18),
+    belly: new THREE.SphereGeometry(0.42, 8, 6),
     pickup: new THREE.BoxGeometry(0.64, 0.64, 0.64),
     tube: new THREE.CylinderGeometry(0.06, 0.06, 0.75, 8),
     sphere: new THREE.SphereGeometry(1, 12, 8),
@@ -650,6 +712,23 @@
     return { grid, rooms: [roomA, roomC, roomB] };
   }
 
+  function chooseExitPlacement(room, start, grid) {
+    const candidates = [
+      { gx: room.x + room.w - 1, gy: room.cy, face: { dx: 1, dy: 0 } },
+      { gx: room.x, gy: room.cy, face: { dx: -1, dy: 0 } },
+      { gx: room.cx, gy: room.y + room.h - 1, face: { dx: 0, dy: 1 } },
+      { gx: room.cx, gy: room.y, face: { dx: 0, dy: -1 } },
+    ];
+    candidates.sort((a, b) => {
+      const aWall = grid[a.gy + a.face.dy] && grid[a.gy + a.face.dy][a.gx + a.face.dx] === Tile.WALL ? 1000 : 0;
+      const bWall = grid[b.gy + b.face.dy] && grid[b.gy + b.face.dy][b.gx + b.face.dx] === Tile.WALL ? 1000 : 0;
+      const aDist = Math.abs(a.gx - start.gx) + Math.abs(a.gy - start.gy);
+      const bDist = Math.abs(b.gx - start.gx) + Math.abs(b.gy - start.gy);
+      return (bWall + bDist) - (aWall + aDist);
+    });
+    return candidates[0];
+  }
+
   function generateMap(level) {
     const rng = mulberry32(seedForLevel(level));
     const w = Math.min(35, 19 + level * 2);
@@ -690,7 +769,8 @@
     }
 
     const start = { gx: rooms[0].cx, gy: rooms[0].cy };
-    const exit = { gx: rooms[rooms.length - 1].cx, gy: rooms[rooms.length - 1].cy };
+    const exitPlacement = chooseExitPlacement(rooms[rooms.length - 1], start, grid);
+    const exit = { gx: exitPlacement.gx, gy: exitPlacement.gy };
     grid[exit.gy][exit.gx] = Tile.EXIT;
 
     const floors = [];
@@ -718,7 +798,7 @@
       if (tile) grid[tile.gy][tile.gx] = Tile.HAZARD;
     }
 
-    return { w, h, grid, rooms, floors, start, exit, rng };
+    return { w, h, grid, rooms, floors, start, exit, exitFace: exitPlacement.face, rng };
   }
 
   function clearGroup(group) {
@@ -805,6 +885,65 @@
     return mesh;
   }
 
+  function exitFaceRotation(face) {
+    if (face && face.dx === 1) return Math.PI / 2;
+    if (face && face.dx === -1) return -Math.PI / 2;
+    if (face && face.dy === -1) return Math.PI;
+    return 0;
+  }
+
+  function addExitStairwell(gx, gy, pos, map) {
+    const face = map.exitFace || { dx: 1, dy: 0 };
+    const group = new THREE.Group();
+    group.position.set(
+      pos.x + face.dx * (TILE / 2 - 0.08),
+      0,
+      pos.z + face.dy * (TILE / 2 - 0.08)
+    );
+    group.rotation.y = exitFaceRotation(face);
+    world.add(group);
+
+    addBox(group, geoms.doorPost, mats.exitFrame, -TILE * 0.48, 1.45, -0.02);
+    addBox(group, geoms.doorPost, mats.exitFrame, TILE * 0.48, 1.45, -0.02);
+    addBox(group, geoms.doorHeader, mats.exitFrame, 0, 2.78, -0.02);
+    addBox(group, geoms.doorHeader, objectMats[ObjectTex.CAUTION], 0, 0.24, -0.18, 0.88, 0.78, 0.7);
+
+    const door = addBox(group, geoms.door, mats.exitLocked, 0, 1.36, -0.06);
+    const glow = addBox(group, geoms.door, mats.exitGlow, 0, 1.36, -0.12, 1.08, 1.05, 1.02);
+    glow.visible = false;
+
+    const sign = new THREE.Mesh(geoms.wallDecal, objectMats[ObjectTex.BRASS_SIGN]);
+    sign.position.set(0, 2.42, -0.22);
+    sign.scale.set(0.72, 0.28, 1);
+    group.add(sign);
+
+    const panel = new THREE.Mesh(geoms.wallDecal, objectMats[ObjectTex.CONTROL_PANEL]);
+    panel.position.set(TILE * 0.64, 1.3, -0.22);
+    panel.scale.set(0.34, 0.5, 1);
+    group.add(panel);
+
+    for (let i = 0; i < 3; i += 1) {
+      const step = addBox(
+        group,
+        geoms.stairStep,
+        i === 0 ? mats.exitFrame : objectMats[ObjectTex.VENT],
+        0,
+        0.1 + i * 0.08,
+        -0.48 - i * 0.36,
+        1 - i * 0.09,
+        1,
+        1
+      );
+      step.rotation.x = -0.04 * i;
+    }
+
+    exitDoor = door;
+    exitDoor.userData.lockedMat = mats.exitLocked;
+    exitDoor.userData.openMat = mats.exitOpen;
+    exitDoor.userData.glow = glow;
+    exitDoor.userData.panel = panel;
+  }
+
   function addFloorGrime(gx, gy, tile, pos) {
     if (tile === Tile.EXIT) return;
     const chaos = tileHash(gx, gy, 41);
@@ -857,7 +996,7 @@
     if (tile === Tile.EXIT || tile === Tile.FRESH) return;
     const roll = tileHash(gx, gy, 111);
     const count = tile === Tile.HAZARD ? (roll > 0.25 ? 2 : 1) : roll > 0.82 ? 2 : roll > 0.58 ? 1 : 0;
-    const matsByKind = [mats.debrisDark, mats.debrisPaper, mats.debrisRust];
+    const matsByKind = [mats.debrisDark, mats.debrisPaper, mats.debrisRust, mats.luggage];
     const geomsByKind = [geoms.debrisSmall, geoms.debrisLong, geoms.debrisFlat];
     for (let i = 0; i < count; i += 1) {
       const salt = 119 + i * 17;
@@ -1034,12 +1173,11 @@
 
         if (tile === Tile.HAZARD) {
           addBox(world, geoms.trim, mats.trim, pos.x, 0.22, pos.z, 0.85, 1.8, 0.52);
-          addBox(world, geoms.pickup, mats.hazard, pos.x, 0.58, pos.z, 1.6, 0.24, 0.72);
+          addBox(world, geoms.pickup, mats.hazardProp, pos.x, 0.58, pos.z, 1.6, 0.24, 0.72);
         }
 
         if (tile === Tile.EXIT) {
-          exitDoor = addBox(world, geoms.door, mats.exitLocked, pos.x, 1.36, pos.z, 1, 1, 1);
-          addBox(world, geoms.trim, mats.heal, pos.x, 2.95, pos.z, 1.05, 1.25, 0.35);
+          addExitStairwell(gx, gy, pos, map);
         }
 
         addFloorGrime(gx, gy, tile, pos);
@@ -1132,7 +1270,7 @@
 
   function createPickupMesh(type) {
     const group = new THREE.Group();
-    const mat = type === "shotgun" ? mats.shotgun : type === "fresh-air" ? mats.heal : mats.pickup;
+    const mat = type === "shotgun" ? mats.shotgun : type === "fresh-air" ? mats.freshPickup : mats.pickup;
     const body = new THREE.Mesh(geoms.pickup, mat);
     body.position.y = 0.55;
     group.add(body);
@@ -1199,7 +1337,7 @@
     spawnEnemies();
     spawnPickups();
     rebuildFlow();
-    setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then reach the lifeboats.`);
+    setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then find the stairwell door.`);
     updateExitDoor();
     updateHud();
     hideOverlay();
@@ -1234,7 +1372,7 @@
     unlockPointer();
     showOverlay(
       `DECK ${state.level} CLEARED`,
-      `The lifeboat door coughed open. Infection dropped during the fresh-air shuffle. Next deck adds more rooms, faster passengers, and worse buffet decisions.`,
+      `The stairwell door clanked open. Infection dropped during the fresh-air shuffle. Next deck adds more rooms, faster passengers, and worse buffet decisions.`,
       `Score: <strong>${state.score.toLocaleString()}</strong> · Deck bonus: <strong>${scoreGain.toLocaleString()}</strong>${high ? " · <strong>New high score</strong>" : ""}`,
       `Enter deck ${state.level + 1}`
     );
@@ -1251,7 +1389,7 @@
     unlockPointer();
     showOverlay(
       "CRUISE CRUD MAXED",
-      reason || "The infection meter hit the red zone. Roe Jogan did not make it to the lifeboats.",
+      reason || "The infection meter hit the red zone. Roe Jogan did not make it to the stairwell.",
       `Final score: <strong>${state.score.toLocaleString()}</strong> · Deck reached: <strong>${state.level}</strong>${high ? " · <strong>New high score</strong>" : " · High: <strong>" + state.high.toLocaleString() + "</strong>"}`,
       "Restart cruise"
     );
@@ -1298,8 +1436,10 @@
 
   function updateExitDoor() {
     if (!exitDoor) return;
-    exitDoor.material = state.cures >= state.neededCures ? mats.exitOpen : mats.exitLocked;
-    exitDoor.scale.y = state.cures >= state.neededCures ? 0.72 : 1;
+    const open = state.cures >= state.neededCures;
+    exitDoor.material = open ? exitDoor.userData.openMat : exitDoor.userData.lockedMat;
+    exitDoor.scale.y = open ? 0.96 : 1;
+    if (exitDoor.userData.glow) exitDoor.userData.glow.visible = open;
   }
 
   function syncPlayStateClass() {
@@ -1315,11 +1455,11 @@
     if (state.mode !== "playing" || !state.map) return;
     const exitPos = tileToWorld(state.map.exit.gx, state.map.exit.gy, state.map);
     if (Math.hypot(player.x - exitPos.x, player.z - exitPos.z) >= 2.2) {
-      setStatus("Find the glowing lifeboat door first.");
+      setStatus("Find the stairwell door at the end of the deck.");
       return;
     }
     if (state.cures >= state.neededCures) completeLevel();
-    else setStatus(`Lifeboat locked. Cure ${state.neededCures - state.cures} more.`);
+    else setStatus(`Stairwell locked. Cure ${state.neededCures - state.cures} more.`);
   }
 
   function switchWeapon() {
@@ -1757,7 +1897,7 @@
 
     state.infection = clamp(state.infection, 0, 100);
     if (state.infection >= 100) {
-      gameOver("The infection meter maxed out. Too much cough cloud, too little lifeboat.");
+      gameOver("The infection meter maxed out. Too much cough cloud, not enough stairwell.");
     }
   }
 
@@ -1815,7 +1955,7 @@
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
       if (state.statusTimer <= 0 && el.status) {
-        el.status.textContent = state.cures >= state.neededCures ? "Find the glowing lifeboat exit." : "Cure passengers and keep your distance.";
+        el.status.textContent = state.cures >= state.neededCures ? "Find the glowing stairwell door." : "Cure passengers and keep your distance.";
       }
     }
   }

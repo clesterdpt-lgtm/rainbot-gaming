@@ -64,6 +64,7 @@
     particles: [],
     ambientTimer: 0,
     boss: null,
+    miniboss: null,
     bossIntro: 0,       // boss entrance timer
     camX: 0,
     bgScroll: 0,
@@ -84,9 +85,21 @@
     transitioning: false,
     nextStage: 0,
     defeated: 0,
+    upgrades: [],
+    dealOpen: false,
+    dealChoices: [],
+    dealNextStage: 0,
+    stageShieldReady: false,
+    dealBoostT: 0,
+    miniBossCleared: [],
+    runStats: null,
+    nextEnemyId: 1,
   };
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create("apop", { version: 1 });
   let saveMenu = null;
+  let recordDealOverlay = null;
+  const TOUR_PASS_KEY = "rb_apop_tour_pass_v1";
+  let tourPass = null;
 
   // ----- Player -----
   const player = {
@@ -131,6 +144,97 @@
     "This is my VILLAIN ERA.",
     "My label OWNS your soul.",
   ];
+
+  const RECORD_DEALS = [
+    {
+      id: "auto-tune-beam",
+      icon: "🎚",
+      name: "Auto-Tune Beam",
+      desc: "Mog Beam pierces one extra demon before fading.",
+    },
+    {
+      id: "stan-shield",
+      icon: "🛡",
+      name: "Stan Shield",
+      desc: "Block the first hit in every stage.",
+    },
+    {
+      id: "main-character-energy",
+      icon: "⭐",
+      name: "Main Character Energy",
+      desc: "On-beat beam hits build extra Mog meter.",
+    },
+    {
+      id: "choreo-cancel",
+      icon: "🕺",
+      name: "Choreo Cancel",
+      desc: "Air kills refresh one jump and pop you upward.",
+    },
+    {
+      id: "label-advance",
+      icon: "📀",
+      name: "Label Advance",
+      desc: "Start stages with a damage boost, but demons move faster.",
+    },
+    {
+      id: "diva-tax",
+      icon: "💎",
+      name: "Diva Tax",
+      desc: "Combo windows shrink, but streak scoring climbs higher.",
+    },
+  ];
+
+  const TOUR_BADGES = [
+    {
+      id: "first-clear",
+      icon: "👑",
+      title: "Chart Topper",
+      desc: "Clear all five stages.",
+      reward: "Profile flex badge",
+    },
+    {
+      id: "algorithm-breaker",
+      icon: "#",
+      title: "Algorithm Breaker",
+      desc: "Cut The Algorithm Twins after landing an on-beat sync break.",
+      reward: "Tour Pass badge",
+    },
+    {
+      id: "independent-artist",
+      icon: "$",
+      title: "Independent Artist",
+      desc: "Beat Payola Phantom without contract damage.",
+      reward: "Tour Pass badge",
+    },
+    {
+      id: "diva-tax-win",
+      icon: "♦",
+      title: "Diva Tax Deluxe",
+      desc: "Win a run after signing Diva Tax.",
+      reward: "Gold stage fit",
+      cosmetic: "gold-fit",
+    },
+    {
+      id: "pure-mog",
+      icon: "✦",
+      title: "Pure Mog",
+      desc: "Win without using ad power-ups.",
+      reward: "Profile flex badge",
+    },
+    {
+      id: "bad-contract-survivor",
+      icon: "◎",
+      title: "Bad Contract Survivor",
+      desc: "Beat Lucifer after signing Label Advance.",
+      reward: "Tour Pass badge",
+    },
+  ];
+
+  const TOUR_COSMETICS = [
+    { id: "classic", label: "Classic fit", unlocked: true },
+    { id: "gold-fit", label: "Gold stage fit", badge: "diva-tax-win" },
+  ];
+  tourPass = loadTourPass();
 
   // ----- Stage definitions -----
   // Each: name, sub, worldWidth, palette, platforms[], hazards[], spawns[{x, type}], boss flag.
@@ -194,6 +298,7 @@
           { x: 2700, type: "drone" }, { x: 2900, type: "pig" }, { x: 2960, type: "imp" }, { x: 3020, type: "lackey" },
           { x: 3300, type: "bouncer" },
         ],
+        miniBoss: { id: "algorithm-twins", kind: "twins", triggerX: 3360, x: 3540 },
       },
       {
         name: "THE STREAMING FARM BASEMENT",
@@ -261,6 +366,7 @@
           { x: 3400, type: "bouncer" }, { x: 3580, type: "dancer" },
           { x: 3860, type: "pig" }, { x: 3980, type: "drone" },
         ],
+        miniBoss: { id: "payola-phantom", kind: "phantom", triggerX: 3960, x: 4140 },
       },
       {
         name: "BOYZ II HELL — FINAL LIVESTREAM",
@@ -294,6 +400,96 @@
   function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function choose(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function hasDeal(id) { return state.upgrades.includes(id); }
+  function dealById(id) { return RECORD_DEALS.find((deal) => deal.id === id); }
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;",
+    }[ch]));
+  }
+  function clearInput() {
+    input.left = false;
+    input.right = false;
+    input.up = false;
+    input.down = false;
+  }
+  function miniBossCleared(id) { return state.miniBossCleared.includes(id); }
+  function markMiniBossCleared(id) {
+    if (id && !miniBossCleared(id)) state.miniBossCleared.push(id);
+  }
+  function pickRecordDeals(count = 3) {
+    const available = RECORD_DEALS.filter((deal) => !hasDeal(deal.id));
+    for (let i = available.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [available[i], available[j]] = [available[j], available[i]];
+    }
+    return available.slice(0, count);
+  }
+  function makeRunStats() {
+    return {
+      usedPowerups: false,
+      algorithmOnBeat: false,
+      payolaContractDamage: false,
+      unlockedThisRun: [],
+    };
+  }
+  function loadTourPass() {
+    const fallback = { version: 1, unlocked: [], cosmetics: ["classic"], selectedCosmetic: "classic" };
+    try {
+      const raw = JSON.parse(localStorage.getItem(TOUR_PASS_KEY) || "null");
+      if (!raw || typeof raw !== "object") return fallback;
+      const unlocked = Array.isArray(raw.unlocked)
+        ? raw.unlocked.filter((id, index, arr) => TOUR_BADGES.some((badge) => badge.id === id) && arr.indexOf(id) === index)
+        : [];
+      const cosmetics = Array.isArray(raw.cosmetics)
+        ? raw.cosmetics.filter((id, index, arr) => TOUR_COSMETICS.some((fit) => fit.id === id) && arr.indexOf(id) === index)
+        : [];
+      if (!cosmetics.includes("classic")) cosmetics.unshift("classic");
+      const selectedCosmetic = cosmetics.includes(raw.selectedCosmetic) ? raw.selectedCosmetic : "classic";
+      return { version: 1, unlocked, cosmetics, selectedCosmetic };
+    } catch (_) {
+      return fallback;
+    }
+  }
+  function saveTourPass() {
+    try { localStorage.setItem(TOUR_PASS_KEY, JSON.stringify(tourPass)); }
+    catch (error) { console.warn("[APOP] Tour Pass save failed", error); }
+  }
+  function hasTourBadge(id) {
+    return Boolean(tourPass && tourPass.unlocked.includes(id));
+  }
+  function hasCosmetic(id) {
+    return Boolean(tourPass && tourPass.cosmetics.includes(id));
+  }
+  function selectedCosmetic() {
+    return tourPass && tourPass.selectedCosmetic ? tourPass.selectedCosmetic : "classic";
+  }
+  function unlockTourBadge(id) {
+    const badge = TOUR_BADGES.find((item) => item.id === id);
+    if (!badge || hasTourBadge(id)) return false;
+    tourPass.unlocked.push(id);
+    if (badge.cosmetic && !hasCosmetic(badge.cosmetic)) {
+      tourPass.cosmetics.push(badge.cosmetic);
+      tourPass.selectedCosmetic = badge.cosmetic;
+    }
+    if (state.runStats && !state.runStats.unlockedThisRun.includes(id)) state.runStats.unlockedThisRun.push(id);
+    saveTourPass();
+    renderTourPass();
+    if (window.RB && typeof RB.toast === "function") RB.toast(`Tour Pass unlocked: ${badge.title}`, "good");
+    return true;
+  }
+  function setCosmetic(id) {
+    if (!hasCosmetic(id)) return false;
+    tourPass.selectedCosmetic = id;
+    saveTourPass();
+    renderTourPass();
+    if (window.RB && typeof RB.toast === "function") RB.toast(id === "gold-fit" ? "Gold stage fit equipped" : "Classic fit equipped", "good");
+    return true;
+  }
   function aabb(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
   }
@@ -478,7 +674,9 @@
   function spawnEnemy(type, x) {
     const t = ENEMY_TYPES[type];
     const scale = 1 + (state.stage - 1) * 0.25;
+    const speedMult = hasDeal("label-advance") ? 1.12 : 1;
     const e = {
+      id: state.nextEnemyId++,
       type,
       name: t.name, icon: t.icon, color: t.color, behavior: t.behavior,
       w: t.w, h: t.h,
@@ -489,7 +687,7 @@
       vx: 0, vy: 0,
       hp: Math.round(t.hp * scale), maxHp: Math.round(t.hp * scale),
       dmg: Math.round(t.dmg * (1 + (state.stage - 1) * 0.15)),
-      speed: t.speed,
+      speed: t.speed * speedMult,
       score: t.score,
       hitFlash: 0, contactCd: 0, shootCd: rand(0.6, 1.6), wobble: rand(0, 6.28),
       bob: rand(0, 6.28),
@@ -508,6 +706,12 @@
         spawnEnemy(s.type, s.x);
       }
     }
+  }
+
+  function activateMiniBoss() {
+    const spec = state.stageDef && state.stageDef.miniBoss;
+    if (!spec || state.miniboss || miniBossCleared(spec.id)) return;
+    if (player.x >= spec.triggerX) spawnMiniBoss(state.stageDef);
   }
 
   function spawnBoss() {
@@ -530,10 +734,73 @@
     state.bossIntro = 2.4;
   }
 
+  function spawnMiniBoss(def) {
+    const spec = def && def.miniBoss;
+    if (!spec || miniBossCleared(spec.id) || state.miniboss) return;
+    if (spec.kind === "twins") {
+      state.miniboss = {
+        id: spec.id,
+        kind: "twins",
+        name: "The Algorithm Twins",
+        title: "Mirror-match opening act",
+        x: spec.x,
+        y: GROUND_Y - 162,
+        w: 64,
+        h: 76,
+        hp: 280,
+        maxHp: 280,
+        hitFlash: 0,
+        atkCd: 1.0,
+        contactCd: 0,
+        bob: 0,
+        taunt: "SYNCHRONIZE THIS.",
+        tauntT: 1.8,
+        defeated: false,
+        members: [
+          { side: -1, x: spec.x - 72, y: GROUND_Y - 164, w: 50, h: 68 },
+          { side: 1, x: spec.x + 72, y: GROUND_Y - 164, w: 50, h: 68 },
+        ],
+      };
+    } else {
+      state.miniboss = {
+        id: spec.id,
+        kind: "phantom",
+        name: "The Payola Phantom",
+        title: "Shielded industry specter",
+        x: spec.x,
+        y: GROUND_Y - 104,
+        w: 78,
+        h: 104,
+        hp: 340,
+        maxHp: 340,
+        hitFlash: 0,
+        atkCd: 1.0,
+        action: "shield",
+        actionT: 1.2,
+        vulnerableT: 0,
+        spotlightT: 0,
+        spotlightX: spec.x - 130,
+        contactCd: 0,
+        bob: 0,
+        taunt: "MY LABEL SAYS NO.",
+        tauntT: 1.8,
+        defeated: false,
+      };
+    }
+    state.shaking = Math.max(state.shaking, 0.28);
+    showBanner("OPENING ACT", state.miniboss.name, 1.8);
+  }
+
   function bossSay(msg, t = 2.4) {
     if (!state.boss) return;
     state.boss.taunt = msg;
     state.boss.tauntT = t;
+  }
+
+  function miniBossSay(msg, t = 1.6) {
+    if (!state.miniboss) return;
+    state.miniboss.taunt = msg;
+    state.miniboss.tauntT = t;
   }
 
   // ----- Banner -----
@@ -541,6 +808,136 @@
     state.bannerText = text;
     state.bannerSub = sub || "";
     state.bannerT = t;
+  }
+
+  function ensureRecordDealOverlay() {
+    if (recordDealOverlay) return recordDealOverlay;
+    const wrap = canvas.closest(".canvas-wrap") || canvas.parentElement;
+    recordDealOverlay = document.createElement("div");
+    recordDealOverlay.className = "apop-record-deal";
+    recordDealOverlay.hidden = true;
+    recordDealOverlay.innerHTML = `
+      <div class="apop-record-deal__panel" role="dialog" aria-modal="true" aria-labelledby="apop-record-deal-title">
+        <p class="apop-record-deal__kicker">Stage clear</p>
+        <h2 class="apop-record-deal__title" id="apop-record-deal-title">Record Deal Offer</h2>
+        <p class="apop-record-deal__sub" data-record-deal-sub></p>
+        <div class="apop-record-deal__choices" data-record-deal-choices></div>
+      </div>`;
+    recordDealOverlay.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-deal-id]");
+      if (!btn) return;
+      applyRecordDeal(btn.dataset.dealId);
+    });
+    wrap.appendChild(recordDealOverlay);
+    return recordDealOverlay;
+  }
+
+  function renderRecordDeals() {
+    const slot = document.getElementById("record-deals");
+    if (!slot) return;
+    const deals = state.upgrades.map(dealById).filter(Boolean);
+    if (!deals.length) {
+      slot.innerHTML = `<div class="apop-deals__empty">No deals signed.</div>`;
+      return;
+    }
+    slot.innerHTML = deals.map((deal) => {
+      const status = deal.id === "stan-shield" && state.stageShieldReady ? " Ready this stage." : "";
+      const boost = deal.id === "label-advance" && state.dealBoostT > 0 ? ` Boost ${Math.ceil(state.dealBoostT)}s.` : "";
+      return `
+        <div class="apop-deals__chip">
+          <span aria-hidden="true">${escapeHtml(deal.icon)}</span>
+          <span><strong>${escapeHtml(deal.name)}</strong>${escapeHtml(deal.desc + status + boost)}</span>
+        </div>`;
+    }).join("");
+  }
+
+  function renderTourPass() {
+    const slot = document.getElementById("tour-pass");
+    if (!slot || !tourPass) return;
+    const unlockedCount = TOUR_BADGES.filter((badge) => hasTourBadge(badge.id)).length;
+    const badges = TOUR_BADGES.map((badge) => {
+      const unlocked = hasTourBadge(badge.id);
+      return `
+        <div class="apop-tour-pass__badge ${unlocked ? "apop-tour-pass__badge--unlocked" : ""}">
+          <span class="apop-tour-pass__icon" aria-hidden="true">${escapeHtml(badge.icon)}</span>
+          <span><strong>${escapeHtml(badge.title)}</strong>${escapeHtml(badge.desc)}</span>
+          <span class="apop-tour-pass__state">${unlocked ? "YES" : "LOCK"}</span>
+        </div>`;
+    }).join("");
+    const cosmetics = TOUR_COSMETICS.map((fit) => {
+      const unlocked = fit.unlocked || hasCosmetic(fit.id) || (fit.badge && hasTourBadge(fit.badge));
+      const active = selectedCosmetic() === fit.id;
+      return `
+        <button class="apop-tour-pass__fit ${active ? "apop-tour-pass__fit--active" : ""}" type="button" data-fit="${escapeHtml(fit.id)}" ${unlocked ? "" : "disabled"}>
+          ${escapeHtml(fit.label)}${unlocked ? active ? " · ON" : "" : " · LOCK"}
+        </button>`;
+    }).join("");
+    slot.innerHTML = `
+      <div class="apop-tour-pass__summary">
+        <span>Tour Pass</span>
+        <strong>${unlockedCount}/${TOUR_BADGES.length}</strong>
+      </div>
+      <div class="apop-tour-pass__badges">${badges}</div>
+      <div class="apop-tour-pass__cosmetics" aria-label="Stage fit cosmetics">${cosmetics}</div>`;
+    slot.querySelectorAll("[data-fit]").forEach((button) => {
+      button.addEventListener("click", () => setCosmetic(button.dataset.fit));
+    });
+  }
+
+  function openRecordDeal(nextStage) {
+    const choices = pickRecordDeals();
+    if (!choices.length) {
+      startStageTransition(nextStage);
+      return;
+    }
+    state.dealOpen = true;
+    state.paused = true;
+    state.dealNextStage = nextStage;
+    state.dealChoices = choices.map((deal) => deal.id);
+    clearInput();
+    const pauseBtn = document.getElementById("btn-pause");
+    if (pauseBtn) pauseBtn.textContent = "Pause";
+
+    const overlay = ensureRecordDealOverlay();
+    const sub = overlay.querySelector("[data-record-deal-sub]");
+    const list = overlay.querySelector("[data-record-deal-choices]");
+    sub.textContent = `${state.stageDef.name} cleared. Pick one contract for the rest of this run.`;
+    list.innerHTML = choices.map((deal) => `
+      <button class="apop-record-deal__choice" type="button" data-deal-id="${escapeHtml(deal.id)}">
+        <span class="apop-record-deal__icon" aria-hidden="true">${escapeHtml(deal.icon)}</span>
+        <span class="apop-record-deal__name">${escapeHtml(deal.name)}</span>
+        <span class="apop-record-deal__desc">${escapeHtml(deal.desc)}</span>
+      </button>`).join("");
+    overlay.hidden = false;
+    const first = overlay.querySelector(".apop-record-deal__choice");
+    if (first) first.focus({ preventScroll: true });
+  }
+
+  function closeRecordDeal() {
+    if (recordDealOverlay) recordDealOverlay.hidden = true;
+    state.dealOpen = false;
+    state.dealChoices = [];
+    state.dealNextStage = 0;
+    state.paused = false;
+    canvas.focus();
+  }
+
+  function startStageTransition(nextStage) {
+    state.nextStage = nextStage;
+    state.transitioning = true;
+    state.transition = 0;
+  }
+
+  function applyRecordDeal(id) {
+    if (!state.dealOpen || !state.dealChoices.includes(id)) return;
+    const deal = dealById(id);
+    if (!deal) return;
+    if (!hasDeal(id)) state.upgrades.push(id);
+    renderRecordDeals();
+    if (window.RB && typeof RB.toast === "function") RB.toast(`${deal.name} signed`, "good");
+    const nextStage = state.dealNextStage;
+    closeRecordDeal();
+    startStageTransition(nextStage);
   }
 
   // ----- Stage setup -----
@@ -552,6 +949,7 @@
     state.beams = [];
     state.hostiles = [];
     state.boss = null;
+    state.miniboss = null;
     if (refillHp) {
       state.hp = state.maxHp;
       state.hurtCd = 0;
@@ -562,6 +960,9 @@
     player.vx = 0; player.vy = 0;
     player.onGround = true; player.jumps = 0;
     for (const s of state.stageDef.spawns) s._done = false;
+    state.stageShieldReady = hasDeal("stan-shield");
+    if (hasDeal("label-advance")) state.dealBoostT = Math.max(state.dealBoostT, 5.5);
+    renderRecordDeals();
     showBanner("STAGE " + n + "/" + stageCount(), state.stageDef.name);
     if (state.stageDef.boss) {
       // brief arena, then boss appears
@@ -589,12 +990,12 @@
   }
 
   function shoot() {
-    if (!state.running || state.paused || state.gameOver) return;
+    if (!state.running || state.paused || state.gameOver || state.dealOpen) return;
     if (player.shootCd > 0) return;
     player.shootCd = 0.2;
     player.shootT = 1;
     const onBeat = inBeatWindow();
-    const dmg = 11 * state.dmgMult * (onBeat ? 1.7 : 1);
+    const dmg = 11 * beamDamageMult() * (onBeat ? 1.7 : 1);
     const aim = aimVec();
     const baseMuzzleY = player.y + (player.crouching ? 30 : 14);
     const muzzleX = player.x + player.w / 2 + aim.x * 22;
@@ -603,6 +1004,8 @@
       x: muzzleX - 6, y: muzzleY - 6, w: 18, h: 12,
       vx: aim.x * BEAM_SPEED, vy: aim.y * BEAM_SPEED,
       life: 1.1, dmg, onBeat, hue: onBeat ? GREEN : HOT,
+      pierce: hasDeal("auto-tune-beam") ? 1 : 0,
+      hits: [],
     });
     if (onBeat) {
       state.beatPulse = 1;
@@ -615,14 +1018,25 @@
 
   function bumpCombo() {
     state.combo++;
-    state.comboTimer = 2.6;
+    state.comboTimer = hasDeal("diva-tax") ? 1.85 : 2.6;
   }
 
-  function comboMult() { return 1 + Math.min(state.combo, 30) * 0.08; }
+  function comboMult() {
+    if (hasDeal("diva-tax")) return 1 + Math.min(state.combo, 42) * 0.115;
+    return 1 + Math.min(state.combo, 30) * 0.08;
+  }
+
+  function beamDamageMult() {
+    return state.dmgMult * (state.dealBoostT > 0 ? 1.5 : 1);
+  }
+
+  function rewardOnBeatHit() {
+    if (hasDeal("main-character-energy")) gainMog(0.045);
+  }
 
   // ----- Special: Mog Aura -----
   function special() {
-    if (!state.running || state.paused || state.gameOver) return;
+    if (!state.running || state.paused || state.gameOver || state.dealOpen) return;
     if (state.mog < 1) return;
     state.mog = 0;
     state.shaking = 0.5;
@@ -645,6 +1059,12 @@
       spawnBurst(state.boss.x + state.boss.w / 2, state.boss.y + 40, PINK, 8);
       checkBossDeath();
     }
+    if (state.miniboss && !state.miniboss.defeated) {
+      const hitBox = miniBossHurtboxes(state.miniboss).find((box) => Math.abs((box.x + box.w / 2) - cx) < 440);
+      if (hitBox) {
+        hurtMiniBoss(78, { x: hitBox.x + hitBox.w / 2, y: hitBox.y + hitBox.h / 2, onBeat: false });
+      }
+    }
     cullEnemies();
     state.score += 500;
     updateHUD();
@@ -652,7 +1072,7 @@
 
   // ----- Jump -----
   function jump() {
-    if (!state.running || state.paused || state.gameOver) return;
+    if (!state.running || state.paused || state.gameOver || state.dealOpen) return;
     if (player.jumps < MAX_JUMPS) {
       player.vy = -JUMP_V;
       player.jumps++;
@@ -664,6 +1084,17 @@
   // ----- Damage to player -----
   function hurtPlayer(amount, knock = 0) {
     if (state.invulnTime > 0 || state.hurtCd > 0 || state.gameOver) return;
+    if (state.stageShieldReady) {
+      state.stageShieldReady = false;
+      state.hurtCd = 0.45;
+      state.shaking = Math.max(state.shaking, 0.18);
+      state.flash = 0.1; state.flashColor = "247,215,22";
+      spawnBurst(player.x + player.w / 2, player.y + player.h / 2, GOLD, 8, 160);
+      spawnText(player.x + player.w / 2, player.y - 12, "STAN SHIELD", GOLD, 14);
+      renderRecordDeals();
+      updateHUD();
+      return;
+    }
     state.hp -= amount;
     state.hurtCd = 0.85;   // i-frames after a hit (forgiving when shoving through a crowd)
     state.combo = 0;
@@ -685,6 +1116,11 @@
     state.defeated++;
     bumpCombo();
     gainMog(0.14);
+    if (hasDeal("choreo-cancel") && isAirEnemyType(e.behavior) && !player.onGround) {
+      player.jumps = Math.min(player.jumps, MAX_JUMPS - 1);
+      player.vy = Math.min(player.vy, -190);
+      spawnText(player.x + player.w / 2, player.y - 10, "AIR RESET", CYAN, 12);
+    }
     state.shaking = Math.max(state.shaking, 0.18);
     spawnConfetti(e.x + e.w / 2, e.y + e.h / 2, 6);
     spawnText(e.x + e.w / 2, e.y - 8, "+MOG", GOLD, 13);
@@ -713,11 +1149,17 @@
 
   // ----- Update -----
   function update(dt) {
+    if (state.dealOpen) return;
     state.beatPulse = Math.max(0, state.beatPulse - dt * 3);
     if (state.shaking > 0) state.shaking = Math.max(0, state.shaking - dt * 1.8);
     if (state.flash > 0) state.flash = Math.max(0, state.flash - dt * 2.2);
     if (state.invulnTime > 0) state.invulnTime -= dt;
     if (state.hurtCd > 0) state.hurtCd -= dt;
+    if (state.dealBoostT > 0) {
+      const before = Math.ceil(state.dealBoostT);
+      state.dealBoostT = Math.max(0, state.dealBoostT - dt);
+      if (Math.ceil(state.dealBoostT) !== before || state.dealBoostT === 0) renderRecordDeals();
+    }
     if (state.bannerT > 0) state.bannerT -= dt;
     if (state.comboTimer > 0) { state.comboTimer -= dt; if (state.comboTimer <= 0) state.combo = 0; }
     if (state.bossIntro > 0) state.bossIntro -= dt;
@@ -736,7 +1178,9 @@
     spawnAmbientFx(dt);
     updatePlayer(dt);
     activateSpawns();
+    activateMiniBoss();
     updateEnemies(dt);
+    updateMiniBoss(dt);
     updateBoss(dt);
     updateBeams(dt);
     updateHostiles(dt);
@@ -997,6 +1441,145 @@
     }
   }
 
+  function updateMiniBoss(dt) {
+    const m = state.miniboss;
+    if (!m || m.defeated) return;
+    if (m.hitFlash > 0) m.hitFlash -= dt;
+    if (m.tauntT > 0) m.tauntT -= dt;
+    if (m.contactCd > 0) m.contactCd -= dt;
+    m.bob += dt * 3;
+
+    if (m.kind === "twins") updateTwinMiniBoss(m, dt);
+    else updatePhantomMiniBoss(m, dt);
+
+    if (m.contactCd <= 0) {
+      for (const box of miniBossHurtboxes(m)) {
+        if (aabb(pbox(), box)) {
+          m.contactCd = 0.9;
+          hurtPlayer(m.kind === "twins" ? 10 : 13, player.x < box.x ? -160 : 160);
+          break;
+        }
+      }
+    }
+  }
+
+  function updateTwinMiniBoss(m, dt) {
+    const pcx = player.x + player.w / 2;
+    const arenaMin = Math.max(80, state.stageDef.worldWidth - 590);
+    const arenaMax = state.stageDef.worldWidth - 160;
+    m.x = lerp(m.x, clamp(pcx + (pcx < m.x ? 210 : -210), arenaMin, arenaMax), 0.018);
+    const wave = Math.sin(m.bob * 1.6);
+    m.members[0].x = m.x - 72;
+    m.members[1].x = m.x + 72;
+    m.members[0].y = GROUND_Y - 166 + wave * 34;
+    m.members[1].y = GROUND_Y - 166 - wave * 34;
+
+    m.atkCd -= dt;
+    if (m.atkCd <= 0) {
+      m.atkCd = m.hp < m.maxHp * 0.45 ? 0.78 : 1.08;
+      for (const twin of m.members) {
+        fireHostile(twin.x + twin.w / 2, twin.y + 24, m.hp < m.maxHp * 0.55 ? "disc" : "camera");
+      }
+      if (Math.random() < 0.38) miniBossSay("THE FEED LOVES US.", 1.2);
+    }
+  }
+
+  function updatePhantomMiniBoss(m, dt) {
+    const pcx = player.x + player.w / 2;
+    const arenaMin = Math.max(80, state.stageDef.worldWidth - 520);
+    const arenaMax = state.stageDef.worldWidth - 130;
+    m.x = lerp(m.x, clamp(pcx + (pcx < m.x ? 250 : -250), arenaMin, arenaMax), 0.012);
+    m.y = GROUND_Y - m.h + Math.sin(m.bob) * 3;
+
+    if (m.spotlightT > 0) {
+      m.spotlightT -= dt;
+      const hb = { x: m.spotlightX - 42, y: 52, w: 84, h: GROUND_Y - 52 };
+      if (aabb(pbox(), hb) && !m._spotlightHit) {
+        m._spotlightHit = true;
+        if (state.runStats) state.runStats.payolaContractDamage = true;
+        hurtPlayer(16, player.x < m.spotlightX ? -170 : 170);
+      }
+      if (m.spotlightT <= 0) {
+        m.action = "vulnerable";
+        m.vulnerableT = 2.35;
+        m._spotlightHit = false;
+        miniBossSay("CONTRACT WINDOW OPEN.", 1.2);
+      }
+      return;
+    }
+
+    if (m.action === "vulnerable") {
+      m.vulnerableT -= dt;
+      if (m.vulnerableT <= 0) {
+        m.action = "shield";
+        m.actionT = 1.35;
+        miniBossSay("PAYWALLED.", 1.0);
+      }
+      return;
+    }
+
+    m.actionT -= dt;
+    if (m.actionT <= 0) {
+      m.spotlightX = clamp(player.x + player.w / 2 + rand(-50, 50), state.camX + 70, state.camX + W - 70);
+      m.spotlightT = 0.62;
+      m.actionT = 0;
+      miniBossSay("DODGE THE CONTRACT.", 1.0);
+    }
+  }
+
+  function miniBossHurtboxes(m) {
+    if (!m || m.defeated) return [];
+    if (m.kind === "twins") {
+      return m.members.map((twin) => ({ x: twin.x, y: twin.y, w: twin.w, h: twin.h }));
+    }
+    return [{ x: m.x, y: m.y, w: m.w, h: m.h }];
+  }
+
+  function hurtMiniBoss(amount, source) {
+    const m = state.miniboss;
+    if (!m || m.defeated) return false;
+    if (m.kind === "phantom" && m.action !== "vulnerable") {
+      m.hitFlash = 0.08;
+      spawnText(source.x, source.y - 10, "PAYWALLED", GOLD, 12);
+      return false;
+    }
+
+    const dmg = amount * (m.kind === "twins" && source.onBeat ? 1.18 : 1);
+    if (m.kind === "twins" && source.onBeat && state.runStats) state.runStats.algorithmOnBeat = true;
+    m.hp -= dmg;
+    m.hitFlash = 0.18;
+    state.shaking = Math.max(state.shaking, 0.1);
+    spawnBurst(source.x, source.y, m.kind === "twins" ? CYAN : GOLD, 6, 135);
+    bumpCombo();
+    gainMog(0.035);
+    if (source.onBeat) {
+      rewardOnBeatHit();
+      spawnText(source.x, source.y - 12, m.kind === "twins" ? "SYNC BREAK" : "PERFECT", GREEN, 12);
+    }
+    state.score += Math.round((m.kind === "twins" ? 16 : 18) * comboMult());
+    if (m.hp <= 0) defeatMiniBoss(m);
+    return true;
+  }
+
+  function defeatMiniBoss(m) {
+    if (!m || m.defeated) return;
+    const boxes = miniBossHurtboxes(m);
+    m.defeated = true;
+    markMiniBossCleared(m.id);
+    state.score += m.kind === "twins" ? 2500 : 3200;
+    state.shaking = Math.max(state.shaking, 0.55);
+    state.flash = 0.18; state.flashColor = m.kind === "twins" ? "46,224,255" : "247,215,22";
+    for (const box of boxes) {
+      spawnConfetti(box.x + box.w / 2, box.y + box.h / 2, 12);
+      spawnBurst(box.x + box.w / 2, box.y + box.h / 2, m.kind === "twins" ? CYAN : GOLD, 12, 240);
+    }
+    spawnText(m.x + m.w / 2, m.y - 14, "OPENING ACT CUT", GOLD, 17);
+    if (m.kind === "twins" && state.runStats && state.runStats.algorithmOnBeat) unlockTourBadge("algorithm-breaker");
+    if (m.kind === "phantom" && state.runStats && !state.runStats.payolaContractDamage) unlockTourBadge("independent-artist");
+    state.miniboss = null;
+    updateHUD();
+  }
+
   function chooseBossAction() {
     const b = state.boss;
     const r = Math.random();
@@ -1019,20 +1602,35 @@
       const hit = beamHitbox(m);
       // hit enemies
       for (const e of state.enemies) {
+        if (m.life <= 0) break;
+        if (e.id && m.hits.includes(e.id)) continue;
         if (e.hp > 0 && aabb(hit, enemyHurtbox(e))) {
           e.hp -= m.dmg; e.hitFlash = 0.18;
           spawnBurst(m.x, m.y, e.color, 5, 120);
-          bumpCombo(); gainMog(0.02);
+          bumpCombo(); gainMog(0.02); if (m.onBeat) rewardOnBeatHit();
           state.score += Math.round(6 * comboMult());
+          if (e.id) m.hits.push(e.id);
+          if (m.pierce > 0) {
+            m.pierce--;
+            spawnText(m.x, m.y - 12, "PIERCE", CYAN, 11);
+          } else {
+            m.life = 0;
+          }
+        }
+      }
+      // hit mini-boss
+      if (m.life > 0 && state.miniboss && !state.miniboss.defeated) {
+        const miniHit = miniBossHurtboxes(state.miniboss).some((box) => aabb(hit, box));
+        if (miniHit) {
+          hurtMiniBoss(m.dmg, m);
           m.life = 0;
-          break;
         }
       }
       // hit boss
       if (m.life > 0 && state.boss && !state.boss.defeated && state.bossIntro <= 0 && aabb(hit, state.boss)) {
         state.boss.hp -= m.dmg; state.boss.hitFlash = 0.12;
         spawnBurst(m.x, m.y, GOLD, 6, 140);
-        bumpCombo(); gainMog(0.025);
+        bumpCombo(); gainMog(0.025); if (m.onBeat) rewardOnBeatHit();
         state.score += Math.round(10 * comboMult());
         if (m.onBeat) spawnText(m.x, m.y - 10, "PERFECT", GREEN, 13);
         m.life = 0;
@@ -1074,15 +1672,17 @@
     if (state.transitioning || state.gameOver) return;
     const def = state.stageDef;
     if (def.boss) return; // boss stage ends on boss death (endGame)
+    if (def.miniBoss && !miniBossCleared(def.miniBoss.id)) {
+      if (!state.miniboss && player.x >= def.miniBoss.triggerX) spawnMiniBoss(def);
+      return;
+    }
     // cleared when player reaches the end and remaining enemies are few/far
     if (player.x >= def.worldWidth - player.w - 30) {
       const ahead = state.enemies.length;
       if (ahead <= 1) {
-        state.nextStage = state.stage + 1;
-        state.transitioning = true;
-        state.transition = 0;
         state.score += 1000;
         spawnText(player.x + 10, player.y - 20, "STAGE CLEAR +1000", GOLD, 18);
+        openRecordDeal(state.stage + 1);
       }
     }
   }
@@ -1110,6 +1710,7 @@
     drawHazards(def);
     // entities
     for (const e of state.enemies) drawEnemy(e);
+    if (state.miniboss && !state.miniboss.defeated) drawMiniBoss(state.miniboss);
     if (state.boss && !state.boss.defeated) drawBoss(state.boss);
     for (const h of state.hostiles) drawHostile(h);
     drawBeams();
@@ -1488,6 +2089,25 @@
     const legSwing = player.onGround ? Math.sin(run) * 8 : 6;
     const bodyBob = player.onGround ? Math.abs(Math.sin(run)) * 2 : 0;
     if (drawSpriteCutout(RASTER_ART.player, -48, -97 + bodyBob, 96, 100, CYAN, player.hitFlash)) {
+      if (selectedCosmetic() === "gold-fit") {
+        ctx.save();
+        ctx.globalAlpha = 0.34 + Math.sin(state.lastTime / 120) * 0.08;
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(0, -45 + bodyBob, 34, 48, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.82;
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.moveTo(-20, -47 + bodyBob);
+        ctx.lineTo(18, -36 + bodyBob);
+        ctx.lineTo(14, -29 + bodyBob);
+        ctx.lineTo(-24, -40 + bodyBob);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
       const beatGlow = state.beatPulse;
       if (player.shootT > 0.3 || beatGlow > 0.15) {
         ctx.save();
@@ -1516,7 +2136,7 @@
 
     // Dress (neon pink triangle with gold trim)
     const topY = -48 + bodyBob;
-    ctx.fillStyle = PINK;
+    ctx.fillStyle = selectedCosmetic() === "gold-fit" ? GOLD : PINK;
     ctx.beginPath();
     ctx.moveTo(0, topY + 6);
     ctx.lineTo(-18, -10);
@@ -1695,6 +2315,151 @@
       ctx.fillStyle = "#ef4444";
       ctx.fillRect(cx - 18, e.y - 22 + wob, 36 * (e.hp / e.maxHp), 4);
     }
+  }
+
+  function drawMiniBoss(m) {
+    if (m.kind === "twins") drawTwinMiniBoss(m);
+    else drawPhantomMiniBoss(m);
+    drawMiniBossLabel(m);
+    if (m.tauntT > 0) drawSpeechBubble(m.x + m.w / 2, m.y - 12, m.taunt);
+  }
+
+  function drawTwinMiniBoss(m) {
+    ctx.save();
+    for (const twin of m.members) {
+      const cx = twin.x + twin.w / 2;
+      const cy = twin.y + twin.h / 2;
+      ctx.fillStyle = "rgba(0,0,0,0.32)";
+      ctx.beginPath();
+      ctx.ellipse(cx, GROUND_Y - 2, 26, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.sin(m.bob * 1.8 + twin.side) * 0.08);
+      ctx.fillStyle = `rgba(46,224,255,${0.1 + Math.sin(m.bob * 2) * 0.03})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, 48, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = m.hitFlash > 0 ? "#fff" : "#17172d";
+      roundRectXY(-twin.w / 2, -twin.h / 2, twin.w, twin.h, 12);
+      ctx.fill();
+      ctx.strokeStyle = twin.side < 0 ? CYAN : PINK;
+      ctx.lineWidth = 3;
+      roundRectXY(-twin.w / 2, -twin.h / 2, twin.w, twin.h, 12);
+      ctx.stroke();
+      ctx.fillStyle = "#0a0a14";
+      ctx.fillRect(-15, -10, 12, 7);
+      ctx.fillRect(3, -10, 12, 7);
+      ctx.fillStyle = twin.side < 0 ? CYAN : PINK;
+      ctx.fillRect(-13, -8, 4, 3);
+      ctx.fillRect(5, -8, 4, 3);
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-11, 10);
+      ctx.quadraticCurveTo(0, 18, 11, 10);
+      ctx.stroke();
+      ctx.fillStyle = GOLD;
+      ctx.font = "18px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(twin.side < 0 ? "#" : "@", 0, -25);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawPhantomMiniBoss(m) {
+    if (m.spotlightT > 0) {
+      const a = clamp(m.spotlightT / 0.62, 0.18, 0.75);
+      ctx.fillStyle = `rgba(247,215,22,${a * 0.24})`;
+      ctx.beginPath();
+      ctx.moveTo(m.spotlightX - 28, 38);
+      ctx.lineTo(m.spotlightX - 46, GROUND_Y);
+      ctx.lineTo(m.spotlightX + 46, GROUND_Y);
+      ctx.lineTo(m.spotlightX + 28, 38);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = `rgba(247,215,22,${a})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(m.spotlightX - 42, 52, 84, GROUND_Y - 52);
+    }
+
+    const cx = m.x + m.w / 2;
+    const cy = m.y + m.h / 2;
+    ctx.fillStyle = "rgba(0,0,0,0.34)";
+    ctx.beginPath();
+    ctx.ellipse(cx, GROUND_Y - 2, 42, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (m.action !== "vulnerable") {
+      ctx.strokeStyle = `rgba(247,215,22,${0.55 + Math.sin(m.bob * 4) * 0.12})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 66, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(cx, cy + Math.sin(m.bob * 1.4) * 3);
+    ctx.fillStyle = m.hitFlash > 0 ? "#fff" : "rgba(20,16,36,0.96)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 39, 52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = m.action === "vulnerable" ? PINK : GOLD;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 39, 52, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = GOLD;
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("$", 0, -24);
+    ctx.fillStyle = "#0a0a14";
+    ctx.fillRect(-18, -6, 14, 7);
+    ctx.fillRect(4, -6, 14, 7);
+    ctx.strokeStyle = m.action === "vulnerable" ? PINK : GOLD;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-14, 16);
+    ctx.quadraticCurveTo(0, 8, 14, 16);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(247,215,22,0.62)";
+    ctx.beginPath();
+    ctx.moveTo(-30, 12);
+    ctx.quadraticCurveTo(-55, 30, -24, 42);
+    ctx.quadraticCurveTo(-15, 28, -30, 12);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(30, 12);
+    ctx.quadraticCurveTo(55, 30, 24, 42);
+    ctx.quadraticCurveTo(15, 28, 30, 12);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMiniBossLabel(m) {
+    const cx = m.kind === "twins" ? m.x : m.x + m.w / 2;
+    const labelY = m.kind === "twins"
+      ? Math.min(m.members[0].y, m.members[1].y) - 28
+      : m.y - 28;
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 12px JetBrains Mono, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    const stateText = m.kind === "phantom"
+      ? (m.action === "vulnerable" ? "CONTRACT OPEN" : "SHIELDED")
+      : "SYNC DUO";
+    ctx.fillText(`${m.name.toUpperCase()} — ${stateText}`, cx, labelY);
+    const hw = m.kind === "twins" ? 150 : 138;
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    ctx.fillRect(cx - hw / 2 - 2, labelY + 4, hw + 4, 8);
+    ctx.fillStyle = m.kind === "twins" ? CYAN : GOLD;
+    ctx.fillRect(cx - hw / 2, labelY + 6, hw * clamp(m.hp / m.maxHp, 0, 1), 4);
+    ctx.fillStyle = m.kind === "twins" ? PINK : "#dc2626";
+    ctx.fillRect(cx - hw / 2, labelY + 10, hw * clamp(m.hp / m.maxHp, 0, 1), 2);
   }
 
   function drawBoss(b) {
@@ -1904,6 +2669,23 @@
     ctx.font = "bold 9px JetBrains Mono, monospace";
     ctx.fillText(state.mog >= 1 ? "AURA READY (F)" : "MOG " + Math.floor(state.mog * 100) + "%", mX + 6, mY + 5);
 
+    const dealBadges = [];
+    if (state.stageShieldReady) dealBadges.push("SHIELD READY");
+    if (state.dealBoostT > 0) dealBadges.push("LABEL BOOST " + Math.ceil(state.dealBoostT) + "s");
+    if (dealBadges.length) {
+      ctx.font = "bold 8px JetBrains Mono, monospace";
+      ctx.textBaseline = "top";
+      let badgeX = 16;
+      for (const badge of dealBadges) {
+        const tw = ctx.measureText(badge).width + 14;
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(badgeX - 1, 55, tw + 2, 14);
+        ctx.fillStyle = GOLD;
+        ctx.fillText(badge, badgeX + 6, 58);
+        badgeX += tw + 6;
+      }
+    }
+
     // Score + stage (top center) — keeps the count visible in max-screen mode
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.font = "bold 16px Bungee, sans-serif";
@@ -2057,6 +2839,7 @@
 
   function usePowerup(key) {
     if (!RB.consumePowerup(key)) return;
+    if (state.runStats) state.runStats.usedPowerups = true;
     if (key === "shield") {
       state.invulnTime = 6;
       spawnConfetti(player.x + player.w / 2, player.y, 18);
@@ -2070,6 +2853,10 @@
       let n = 0;
       for (const e of state.enemies) { e.hp -= 60; e.hitFlash = 0.2; spawnBurst(e.x + e.w / 2, e.y + e.h / 2, GOLD, 8); n++; }
       if (state.boss && !state.boss.defeated) { state.boss.hp -= 50; state.boss.hitFlash = 0.3; checkBossDeath(); }
+      if (state.miniboss && !state.miniboss.defeated) {
+        const box = miniBossHurtboxes(state.miniboss)[0] || state.miniboss;
+        if (hurtMiniBoss(62, { x: box.x + box.w / 2, y: box.y + box.h / 2, onBeat: false })) n++;
+      }
       state.hostiles.length = 0;
       state.shaking = 0.7;
       cullEnemies();
@@ -2078,9 +2865,19 @@
     updateHUD();
   }
 
+  function evaluateTourPassCompletion(won) {
+    if (!won || !state.runStats) return;
+    unlockTourBadge("first-clear");
+    if (!state.runStats.usedPowerups) unlockTourBadge("pure-mog");
+    if (hasDeal("diva-tax")) unlockTourBadge("diva-tax-win");
+    if (hasDeal("label-advance")) unlockTourBadge("bad-contract-survivor");
+  }
+
   // ----- Game lifecycle -----
   function endGame(won) {
     if (state.gameOver) return;
+    closeRecordDeal();
+    evaluateTourPassCompletion(won);
     state.gameOver = true;
     state.won = won;
     state.running = false;
@@ -2098,7 +2895,16 @@
       : "The demon boy band out-mogged you and went platinum. Run it back?";
     const scoreEl = document.getElementById("overlay-score");
     scoreEl.style.display = "block";
-    scoreEl.innerHTML = `Score: <strong style="color:var(--accent-3)">${state.score.toLocaleString()}</strong> · High: ${RB.getHighScore("apop").toLocaleString()}`;
+    const newBadges = state.runStats && state.runStats.unlockedThisRun.length
+      ? state.runStats.unlockedThisRun
+          .map((id) => TOUR_BADGES.find((badge) => badge.id === id))
+          .filter(Boolean)
+          .map((badge) => badge.title)
+      : [];
+    const unlockLine = newBadges.length
+      ? `<br>Tour Pass: <strong style="color:var(--accent-3)">${newBadges.map(escapeHtml).join(" · ")}</strong>`
+      : "";
+    scoreEl.innerHTML = `Score: <strong style="color:var(--accent-3)">${state.score.toLocaleString()}</strong> · High: ${RB.getHighScore("apop").toLocaleString()}${unlockLine}`;
     document.getElementById("btn-primary").textContent = "Run it back";
     ov.classList.add("overlay--show");
   }
@@ -2122,6 +2928,7 @@
     state.ambientTimer = 0;
     state.beams = [];
     state.hostiles = [];
+    state.miniboss = null;
     state.shaking = 0;
     state.flash = 0;
     state.invulnTime = 0;
@@ -2132,17 +2939,29 @@
     state.transition = 0;
     state.transitioning = false;
     state.bossIntro = 0;
+    state.upgrades = [];
+    state.dealOpen = false;
+    state.dealChoices = [];
+    state.dealNextStage = 0;
+    state.stageShieldReady = false;
+    state.dealBoostT = 0;
+    state.miniBossCleared = [];
+    state.runStats = makeRunStats();
+    state.nextEnemyId = 1;
     player.shootCd = 0;
     player.shootT = 0;
     player.hitFlash = 0;
     loadStage(1);
+    closeRecordDeal();
     hideOverlay();
     updateHUD();
+    renderRecordDeals();
+    renderTourPass();
     canvas.focus();
   }
 
   function pauseGame() {
-    if (!state.running || state.gameOver) return;
+    if (!state.running || state.gameOver || state.dealOpen) return;
     state.paused = !state.paused;
     document.getElementById("btn-pause").textContent = state.paused ? "Resume" : "Pause";
   }
@@ -2271,14 +3090,26 @@
   document.getElementById("btn-pause").addEventListener("click", pauseGame);
   document.getElementById("btn-restart").addEventListener("click", () => {
     if (saveSlot) saveSlot.clear();
+    closeRecordDeal();
     state.running = false;
     state.gameOver = false;
+    state.paused = false;
+    state.upgrades = [];
+    state.stageShieldReady = false;
+    state.dealBoostT = 0;
+    state.miniboss = null;
+    state.miniBossCleared = [];
+    state.runStats = null;
+    state.dealChoices = [];
+    state.dealNextStage = 0;
     const ov = document.getElementById("overlay");
     document.getElementById("overlay-title").textContent = "🎤 APOP DEMON MOGGERS";
     document.getElementById("overlay-sub").innerHTML = OVERLAY_INTRO;
     document.getElementById("overlay-score").style.display = "none";
     document.getElementById("btn-primary").textContent = "Take the stage";
     ov.classList.add("overlay--show");
+    renderRecordDeals();
+    renderTourPass();
     if (saveMenu) saveMenu.refresh();
   });
 
@@ -2293,6 +3124,11 @@
       maxHp: state.maxHp,
       mog: state.mog,
       defeated: state.defeated,
+      upgrades: state.upgrades.slice(),
+      stageShieldReady: state.stageShieldReady,
+      dealBoostT: state.dealBoostT,
+      miniBossCleared: state.miniBossCleared.slice(),
+      runStats: state.runStats ? { ...state.runStats, unlockedThisRun: state.runStats.unlockedThisRun.slice() } : null,
       player: {
         x: player.x,
         y: player.y,
@@ -2319,11 +3155,41 @@
     state.maxHp = Math.max(1, Number(data.maxHp) || 100);
     state.mog = Math.max(0, Math.min(1, Number(data.mog) || 0));
     state.defeated = Number(data.defeated) || 0;
+    state.upgrades = Array.isArray(data.upgrades)
+      ? data.upgrades.filter((id, index, arr) => dealById(id) && arr.indexOf(id) === index)
+      : [];
+    state.miniBossCleared = Array.isArray(data.miniBossCleared)
+      ? data.miniBossCleared.filter((id, index, arr) => typeof id === "string" && arr.indexOf(id) === index)
+      : [];
+    state.runStats = data.runStats && typeof data.runStats === "object"
+      ? {
+          ...makeRunStats(),
+          usedPowerups: Boolean(data.runStats.usedPowerups),
+          algorithmOnBeat: Boolean(data.runStats.algorithmOnBeat),
+          payolaContractDamage: Boolean(data.runStats.payolaContractDamage),
+          unlockedThisRun: Array.isArray(data.runStats.unlockedThisRun)
+            ? data.runStats.unlockedThisRun.filter((id, index, arr) => typeof id === "string" && arr.indexOf(id) === index)
+            : [],
+        }
+      : makeRunStats();
+    const savedShieldReady = Object.prototype.hasOwnProperty.call(data, "stageShieldReady")
+      ? Boolean(data.stageShieldReady)
+      : null;
+    const savedDealBoostT = Object.prototype.hasOwnProperty.call(data, "dealBoostT")
+      ? Math.max(0, Number(data.dealBoostT) || 0)
+      : null;
+    state.dealOpen = false;
+    state.dealChoices = [];
+    state.dealNextStage = 0;
+    state.miniboss = null;
+    state.nextEnemyId = 1;
     state.lastTime = 0;
     state.transitioning = false;
     state.transition = 0;
     loadStage(Math.max(1, Math.min(stageCount(), Number(data.stage) || 1)), false);
     state.hp = savedHp;
+    if (savedShieldReady !== null) state.stageShieldReady = hasDeal("stan-shield") && savedShieldReady;
+    if (savedDealBoostT !== null) state.dealBoostT = savedDealBoostT;
     if (data.player) {
       player.x = Number(data.player.x) || player.x;
       player.y = Number(data.player.y) || player.y;
@@ -2331,8 +3197,11 @@
       player.vy = Number(data.player.vy) || 0;
       player.facing = Number(data.player.facing) || player.facing;
     }
+    closeRecordDeal();
     hideOverlay();
     updateHUD();
+    renderRecordDeals();
+    renderTourPass();
     canvas.focus();
   }
 
@@ -2348,7 +3217,7 @@
         return `${window.RBGameSaves.formatSavedAt(saved.savedAt)} · Stage <strong>${Number(data.stage || 1)}/${stageCount()}</strong> · Score <strong>${Number(data.score || 0).toLocaleString()}</strong>`;
       },
     });
-    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver);
+    saveSlot.startAutosave(snapshot, () => state.running && !state.gameOver && !state.dealOpen);
   }
 
   // ----- Main loop -----
@@ -2365,6 +3234,8 @@
   RB.subscribe(renderPowerups);
   updateHUD();
   renderPowerups();
+  renderRecordDeals();
+  renderTourPass();
   state.stageDef = STAGES[0];
   draw();
   requestAnimationFrame(loop);
@@ -2375,6 +3246,9 @@
     aimVec,
     get enemies() { return state.enemies; },
     get boss() { return state.boss; },
+    get miniboss() { return state.miniboss; },
+    get deals() { return state.upgrades.map(dealById).filter(Boolean); },
+    get tourPass() { return tourPass; },
     get stageCount() { return stageCount(); },
     get stageNames() { return STAGES.map(s => s.name); },
     artReady() {
@@ -2397,8 +3271,28 @@
       loadStage(stageCount());
     },
     killStage() { for (const e of state.enemies) e.hp = 0; cullEnemies(); },
+    spawnMiniBoss(kind = "twins") {
+      startGame();
+      const stage = kind === "phantom" ? 4 : 2;
+      loadStage(stage);
+      player.x = STAGES[stage - 1].miniBoss.triggerX + 10;
+      state.enemies.length = 0;
+      activateMiniBoss();
+    },
+    damageMiniBoss(n = 100) {
+      if (state.miniboss) hurtMiniBoss(n, { x: state.miniboss.x + state.miniboss.w / 2, y: state.miniboss.y + state.miniboss.h / 2, onBeat: true });
+    },
     damageBoss(n = 100) { if (state.boss) { state.boss.hp -= n; checkBossDeath(); } },
     win() { if (state.boss) { state.boss.hp = 0; checkBossDeath(); } else endGame(true); },
     teleport(x) { player.x = x; },
+    openDeal(nextStage = Math.min(stageCount(), state.stage + 1)) { openRecordDeal(nextStage); },
+    signDeal(id) { applyRecordDeal(id); },
+    resetTourPass() {
+      tourPass = { version: 1, unlocked: [], cosmetics: ["classic"], selectedCosmetic: "classic" };
+      saveTourPass();
+      renderTourPass();
+    },
+    unlockTourBadge,
+    setCosmetic,
   };
 })();

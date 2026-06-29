@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Apop Demon Moggers — Rainbot Network</title>
-  <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A five-stage 2D side-scroller parody — run, jump, and blast a demon boy band back to the group chat. Disband Boyz II Hell." />
+  <meta name="description" content="K-pop had demon hunters. America has demon MOGGERS. A five-stage 2D side-scroller parody — run, jump, sign cursed record deals, beat opening-act mini-bosses, and disband Boyz II Hell." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260628-mobile-nav-community-4" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260628-apop-tour-pass-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23ec1a5e'/%3E%3Ctext x='50' y='72' font-family='Arial Black' font-size='60' fill='%23fff' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
@@ -16,7 +16,7 @@
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">🎤 Apop Demon Moggers</h1>
-        <div class="game-page__sub">Five-stage run-and-gun pop parody · Mog demons off the charts · Disband Boyz II Hell</div>
+        <div class="game-page__sub">Five-stage run-and-gun pop parody · Sign record deals · Cut the opening acts · Disband Boyz II Hell</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
@@ -49,7 +49,7 @@
             </div>
           </div>
 
-          <div class="overlay overlay--show" id="overlay">
+          <div class="overlay overlay--apop overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">🎤 APOP DEMON MOGGERS</h2>
             <p class="overlay__sub" id="overlay-sub">
               K-pop had demon <em>hunters</em>. America has demon <strong>MOGGERS</strong>.
@@ -71,7 +71,7 @@
           <img class="game-side__poster game-side__poster--wide" src="../assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5" alt="Apop Demon Moggers updated cartoon poster art" />
         </div>
 
-        <div class="game-side__panel">
+        <div class="game-side__panel game-side__panel--controls">
           <h3 class="game-side__title">CONTROLS</h3>
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
@@ -88,9 +88,19 @@
           </p>
         </div>
 
-        <div class="game-side__panel">
+        <div class="game-side__panel game-side__panel--powerups">
           <h3 class="game-side__title">POWER-UPS</h3>
           <div class="powerups" id="powerups"></div>
+        </div>
+
+        <div class="game-side__panel game-side__panel--deals">
+          <h3 class="game-side__title">RECORD DEALS</h3>
+          <div class="apop-deals" id="record-deals" aria-live="polite"></div>
+        </div>
+
+        <div class="game-side__panel game-side__panel--tour-pass">
+          <h3 class="game-side__title">TOUR PASS</h3>
+          <div class="apop-tour-pass" id="tour-pass" aria-live="polite"></div>
         </div>
 
         <div id="ad-leaderboard"></div>
@@ -104,6 +114,9 @@
             <li><strong style="color:var(--ink);">Press E</strong> to fire your Mog Beam. Fire when the beat dot flashes <strong style="color:var(--accent-3);">green</strong> for bonus damage.</li>
             <li><strong style="color:var(--ink);">Mog demons</strong> to build your MOG meter. When it's full, press F for a screen-clearing <strong style="color:var(--accent);">Mog Aura</strong>.</li>
             <li><strong style="color:var(--ink);">Reach the EXIT flag</strong> to clear stages 1–4. Stage 5 is the boss: Lucifer Lipsync (3 phases).</li>
+            <li><strong style="color:var(--ink);">Record Deals:</strong> after each cleared stage, pick one ridiculous upgrade for the rest of the run.</li>
+            <li><strong style="color:var(--ink);">Opening Acts:</strong> stages 2 and 4 end with mini-bosses. The Algorithm Twins reward on-beat shots; the Payola Phantom only takes real damage when its contract window opens.</li>
+            <li><strong style="color:var(--ink);">Tour Pass:</strong> clear challenge badges to unlock profile-flex titles and a gold stage-fit cosmetic.</li>
             <li><strong style="color:var(--ink);">Power-ups (ad):</strong> Crowd Surf (6s invincible), Power Note (2× damage 8s), Encore Blast (wipe demons on screen).</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
@@ -126,7 +139,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260628-comments-reddit-1"></script>
-  <script src="../assets/js/apop-demon-hunters.js?v=20260623-apop-fix-2"></script>
+  <script src="../assets/js/apop-demon-hunters.js?v=20260628-apop-tour-pass-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

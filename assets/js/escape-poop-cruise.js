@@ -100,6 +100,8 @@
     shotgunAmmo: 0,
     dartCooldown: 0,
     shotgunCooldown: 0,
+    recoil: 0,
+    muzzleFlash: 0,
     lurchTimer: 0,
     flowTimer: 0,
     flow: [],
@@ -597,6 +599,100 @@
   let exitDoor = null;
   let lastTime = performance.now();
   let raf = 0;
+
+  // ---- First-person weapon viewmodel ----
+  // The camera is added to the scene graph so meshes parented to it render as
+  // a held viewmodel (bottom-right of the view), swapped by the active weapon.
+  scene.add(camera);
+  const weaponGroup = new THREE.Group();
+  weaponGroup.position.set(0.2, -0.18, -0.5);
+  camera.add(weaponGroup);
+
+  const weaponMats = {
+    metal: new THREE.MeshLambertMaterial({ color: 0x343b44, emissive: 0x0c0f14 }),
+    dark: new THREE.MeshLambertMaterial({ color: 0x171a1f, emissive: 0x070809 }),
+    dartGlow: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
+    shotGlow: new THREE.MeshBasicMaterial({ color: 0xff2e88 }),
+    muzzle: new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: 0 }),
+  };
+
+  function buildDartGun() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.32), weaponMats.metal);
+    body.position.set(0, 0, -0.04);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.2), weaponMats.dark);
+    top.position.set(0, 0.075, -0.06);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.034, 0.26, 10), weaponMats.dark);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.015, -0.24);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 12), weaponMats.dartGlow);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 0.015, -0.34);
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 10), weaponMats.dartGlow);
+    tank.rotation.z = Math.PI / 2;
+    tank.position.set(0, -0.04, 0.05);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.17, 0.09), weaponMats.dark);
+    handle.position.set(0, -0.13, 0.08);
+    handle.rotation.x = 0.25;
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), weaponMats.muzzle);
+    muzzle.position.set(0, 0.015, -0.4);
+    g.add(body, top, barrel, ring, tank, handle, muzzle);
+    return { group: g, muzzle };
+  }
+
+  function buildShotgun() {
+    const g = new THREE.Group();
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.13, 0.34), weaponMats.metal);
+    receiver.position.set(0, 0, -0.02);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.11, 0.18), weaponMats.dark);
+    stock.position.set(0, -0.03, 0.2);
+    stock.rotation.x = 0.12;
+    const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.5, 10), weaponMats.dark);
+    barrelL.rotation.x = Math.PI / 2;
+    barrelL.position.set(-0.032, 0.03, -0.34);
+    const barrelR = barrelL.clone();
+    barrelR.position.x = 0.032;
+    const pump = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.14), weaponMats.shotGlow);
+    pump.position.set(0, -0.06, -0.18);
+    const accent = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.03, 0.1), weaponMats.shotGlow);
+    accent.position.set(0, 0.07, -0.02);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), weaponMats.dark);
+    handle.position.set(0, -0.13, 0.06);
+    handle.rotation.x = 0.22;
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), weaponMats.muzzle);
+    muzzle.position.set(0, 0.03, -0.6);
+    g.add(receiver, stock, barrelL, barrelR, pump, accent, handle, muzzle);
+    return { group: g, muzzle };
+  }
+
+  const dartGun = buildDartGun();
+  const shotgun = buildShotgun();
+  weaponGroup.add(dartGun.group, shotgun.group);
+
+  function triggerRecoil(kind) {
+    state.recoil = kind === "shotgun" ? 1 : 0.55;
+    state.muzzleFlash = 1;
+  }
+
+  function updateWeapon(dt) {
+    weaponGroup.visible = state.mode === "playing";
+    if (!weaponGroup.visible) return;
+    const isShotgun = state.weapon === "shotgun";
+    dartGun.group.visible = !isShotgun;
+    shotgun.group.visible = isShotgun;
+    state.recoil = Math.max(0, state.recoil - dt * 6);
+    state.muzzleFlash = Math.max(0, state.muzzleFlash - dt * 9);
+    const t = performance.now() * 0.004;
+    const moving = input.forward || input.back || input.left || input.right;
+    const bob = Math.sin(t * 2) * (moving ? 0.012 : 0.004);
+    const sway = Math.cos(t) * 0.006;
+    weaponGroup.position.set(0.2 + sway, -0.18 + bob, -0.5 + state.recoil * 0.14);
+    weaponGroup.rotation.x = -state.recoil * 0.4;
+    weaponMats.muzzle.opacity = state.muzzleFlash;
+    const mscale = 0.5 + state.muzzleFlash * 1.4;
+    dartGun.muzzle.scale.setScalar(mscale);
+    shotgun.muzzle.scale.setScalar(mscale);
+  }
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -1278,13 +1374,14 @@
     upper.add(headPivot);
 
     const armBase = 0.2 + look.armRaise;
+    const shoulderX = 0.4;
     const armL = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
-    armL.position.set(-0.46, 0.66, 0.02);
-    armL.rotation.z = 0.32;
+    armL.position.set(-shoulderX, 0.66, 0.02);
+    armL.rotation.z = -0.14;
     armL.rotation.x = armBase;
     const armR = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
-    armR.position.set(0.46, 0.66, 0.02);
-    armR.rotation.z = -0.32;
+    armR.position.set(shoulderX, 0.66, 0.02);
+    armR.rotation.z = 0.14;
     armR.rotation.x = armBase;
     upper.add(armL, armR);
 
@@ -1730,6 +1827,7 @@
     if (state.dartCooldown > 0) return;
     state.dartCooldown = 0.55;
     state.totalShots += 1;
+    triggerRecoil("dart");
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
     const hit = traceEnemy(dir, DART_RANGE, 0.06);
@@ -1758,6 +1856,7 @@
     state.shotgunCooldown = 0.85;
     state.shotgunAmmo -= 1;
     state.totalShots += 1;
+    triggerRecoil("shotgun");
     playBeep("shotgun");
 
     const base = new THREE.Vector3();
@@ -2112,11 +2211,13 @@
   function update(dt) {
     updateTimers(dt);
     if (state.mode !== "playing") {
+      updateWeapon(dt);
       updateFx(dt);
       updateHud();
       return;
     }
     movePlayer(dt);
+    updateWeapon(dt);
     const closest = updateEnemies(dt);
     updateClouds(dt);
     updatePickups(dt);

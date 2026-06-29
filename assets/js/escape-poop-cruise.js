@@ -545,6 +545,8 @@
     hazard: materialSets.hazard[0],
     trim: new THREE.MeshLambertMaterial({ color: 0x8d6f23, emissive: 0x1f1604 }),
     skin: new THREE.MeshLambertMaterial({ color: 0xb7ff54, emissive: 0x1b3b0a }),
+    maw: new THREE.MeshBasicMaterial({ color: 0x07090a }),
+    shoe: new THREE.MeshLambertMaterial({ color: 0x1a1712, emissive: 0x050403 }),
     passenger: objectMats[ObjectTex.PASSENGER_SHIRT],
     cougher: objectMats[ObjectTex.COUGHER_JACKET],
     sprinter: objectMats[ObjectTex.LIFE_VEST],
@@ -1198,33 +1200,110 @@
     world.add(ocean);
   }
 
+  // Per-type silhouette + palette. scale/lean/head shape the body so each
+  // threat reads at a glance in the dark; eye/glow set the infected tint.
+  const ENEMY_LOOK = {
+    passenger: { scale: 1.0, lean: 0.07, head: 1.0, armRaise: 0.0, swing: 1.0, gut: false, eye: 0xb7ff54, glow: 0x6cff3a },
+    cougher: { scale: 1.05, lean: 0.34, head: 1.2, armRaise: 0.95, swing: 0.45, gut: true, eye: 0xe6ff45, glow: 0x9bff2e },
+    sprinter: { scale: 0.94, lean: 0.5, head: 0.9, armRaise: -0.4, swing: 1.5, gut: false, eye: 0xff5a35, glow: 0xff6a2e },
+  };
+
+  // Build a limb that pivots from its top (shoulder/hip) so rotating the
+  // returned group swings the whole limb naturally.
+  function makeLimb(geom, mat, length, opts = {}) {
+    const pivot = new THREE.Group();
+    const limb = new THREE.Mesh(geom, mat);
+    limb.position.y = -length / 2;
+    pivot.add(limb);
+    if (opts.foot) {
+      const foot = new THREE.Mesh(geoms.foot, mats.shoe);
+      foot.position.set(0, -length + 0.05, 0.07);
+      pivot.add(foot);
+    }
+    if (opts.hand) {
+      const hand = new THREE.Mesh(geoms.hand, mats.skin);
+      hand.position.y = -length;
+      pivot.add(hand);
+    }
+    return pivot;
+  }
+
   function createEnemyMesh(type) {
-    const group = new THREE.Group();
+    const look = ENEMY_LOOK[type] || ENEMY_LOOK.passenger;
     const bodyMat = type === "cougher" ? mats.cougher : type === "sprinter" ? mats.sprinter : mats.passenger;
+    const group = new THREE.Group();
+
+    const hipY = 0.7;
+    const armLen = 0.78;
+    const legLen = 0.68;
+
+    // Legs hang from the hips and stay planted on the deck; the upper body
+    // (a separate pivot) does the leaning, hunching and bobbing.
+    const legL = makeLimb(geoms.leg, bodyMat, legLen, { foot: true });
+    legL.position.set(-0.2, hipY, 0);
+    const legR = makeLimb(geoms.leg, bodyMat, legLen, { foot: true });
+    legR.position.set(0.2, hipY, 0);
+
+    const upper = new THREE.Group();
+    const upperBaseY = hipY;
+    upper.position.y = upperBaseY;
+    upper.rotation.x = look.lean;
+
     const body = new THREE.Mesh(geoms.body, bodyMat);
-    body.position.y = 0.92;
+    body.position.y = 0.25;
+    upper.add(body);
+
+    if (look.gut) {
+      const belly = new THREE.Mesh(geoms.belly, bodyMat);
+      belly.position.set(0, 0.12, 0.2);
+      belly.scale.set(1.05, 0.82, 0.9);
+      upper.add(belly);
+    }
+
+    const headPivot = new THREE.Group();
+    headPivot.position.y = 0.9;
     const head = new THREE.Mesh(geoms.head, mats.skin);
-    head.position.y = 1.62;
-    const armA = new THREE.Mesh(geoms.arm, mats.skin);
-    armA.position.set(-0.45, 0.95, 0.05);
-    armA.rotation.z = 0.45;
-    const armB = new THREE.Mesh(geoms.arm, mats.skin);
-    armB.position.set(0.45, 0.95, 0.05);
-    armB.rotation.z = -0.45;
-    const legA = new THREE.Mesh(geoms.leg, bodyMat);
-    legA.position.set(-0.22, 0.22, 0);
-    const legB = new THREE.Mesh(geoms.leg, bodyMat);
-    legB.position.set(0.22, 0.22, 0);
-    group.add(body, head, armA, armB, legA, legB);
+    head.scale.setScalar(look.head);
+    headPivot.add(head);
+
+    // Glowing eyes use a per-enemy material so each can pulse and fade on cure.
+    const eyeMat = new THREE.MeshBasicMaterial({ color: look.eye, transparent: true });
+    const eyeL = new THREE.Mesh(geoms.eye, eyeMat);
+    eyeL.position.set(-0.13, 0.05, 0.27 * look.head);
+    const eyeR = new THREE.Mesh(geoms.eye, eyeMat);
+    eyeR.position.set(0.13, 0.05, 0.27 * look.head);
+    const maw = new THREE.Mesh(geoms.maw, mats.maw);
+    maw.position.set(0, -0.16 * look.head, 0.26 * look.head);
+    headPivot.add(eyeL, eyeR, maw);
+    upper.add(headPivot);
+
+    const armBase = 0.2 + look.armRaise;
+    const armL = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
+    armL.position.set(-0.46, 0.66, 0.02);
+    armL.rotation.z = 0.32;
+    armL.rotation.x = armBase;
+    const armR = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
+    armR.position.set(0.46, 0.66, 0.02);
+    armR.rotation.z = -0.32;
+    armR.rotation.x = armBase;
+    upper.add(armL, armR);
+
+    group.add(legL, legR, upper);
+    group.scale.setScalar(look.scale);
 
     const glow = new THREE.Mesh(
       geoms.sphere,
-      new THREE.MeshBasicMaterial({ color: 0xb7ff54, transparent: true, opacity: type === "cougher" ? 0.18 : 0.1 })
+      new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: type === "cougher" ? 0.18 : 0.1, depthWrite: false })
     );
     glow.scale.set(0.82, 1.2, 0.82);
     glow.position.y = 0.95;
     group.add(glow);
-    group.userData.glow = glow;
+
+    group.userData.baseScale = look.scale;
+    group.userData.parts = {
+      upper, legL, legR, armL, armR, headPivot, eyeMat, glow,
+      leanBase: look.lean, upperBaseY, armBase, swing: look.swing,
+    };
     return group;
   }
 
@@ -1258,6 +1337,10 @@
         speed: (type === "sprinter" ? 2.35 : type === "cougher" ? 1.35 : 1.6) + Math.min(0.7, state.level * 0.06),
         coughTimer: 1 + rng() * 2,
         stagger: 0,
+        walkPhase: rng() * Math.PI * 2,
+        coughAnim: 0,
+        dissolving: false,
+        dissolveT: 0,
         mesh: createEnemyMesh(type),
       };
       enemy.mesh.position.set(enemy.x, 0, enemy.z);
@@ -1588,6 +1671,18 @@
     }
   }
 
+  function spawnCurePuddle(x, z) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xb7ff54, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geoms.floorDecal, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.05, z);
+    mesh.scale.set(1.1, 1.1, 1);
+    fxRoot.add(mesh);
+    state.particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0.6, puddle: true });
+  }
+
   function playBeep(kind) {
     if (!state.sound) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -1620,7 +1715,10 @@
       return;
     }
     enemy.cured = true;
-    enemy.mesh.visible = false;
+    enemy.dissolving = true;
+    enemy.dissolveT = 0;
+    addParticles(enemy.x, enemy.z, 0xb7ff54, 20);
+    spawnCurePuddle(enemy.x, enemy.z);
     state.cures += 1;
     const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : 100;
     state.score += typeBonus + state.level * 12;
@@ -1769,6 +1867,7 @@
 
     let closest = Infinity;
     for (const enemy of state.enemies) {
+      if (enemy.dissolving) { animateDissolve(enemy, dt); continue; }
       if (enemy.cured) continue;
       enemy.stagger = Math.max(0, enemy.stagger - dt);
       const dxp = player.x - enemy.x;
@@ -1796,18 +1895,62 @@
         enemy.coughTimer -= dt;
         if (enemy.coughTimer <= 0 && dist < 12) {
           enemy.coughTimer = 2.4 + Math.random() * 2.4;
+          enemy.coughAnim = 1;
           spawnCloud(enemy.x, enemy.z, 1.65 + Math.random() * 0.65);
         }
       }
 
       enemy.mesh.position.set(enemy.x, 0, enemy.z);
       enemy.mesh.lookAt(player.x, 0.7, player.z);
-      if (enemy.mesh.userData.glow) {
-        enemy.mesh.userData.glow.material.opacity = enemy.stagger > 0 ? 0.28 : enemy.type === "cougher" ? 0.18 : 0.1;
-      }
+      animateEnemy(enemy, dt, dist, enemy.stagger <= 0);
     }
 
     return closest;
+  }
+
+  // Drives the limb rig each frame: a lurching walk cycle (legs/arms swing,
+  // body bobs), a cough hunch for coughers, a flinch when staggered, and a
+  // pulsing eye glow.
+  function animateEnemy(enemy, dt, dist, moving) {
+    const parts = enemy.mesh.userData.parts;
+    if (!parts) return;
+    enemy.coughAnim = Math.max(0, enemy.coughAnim - dt * 2.4);
+
+    const stride = moving ? 0.55 + enemy.speed * 0.12 : 0.1;
+    enemy.walkPhase += dt * (moving ? 5 + enemy.speed * 1.6 : 2);
+    const swing = Math.sin(enemy.walkPhase) * stride * parts.swing;
+    parts.legL.rotation.x = swing;
+    parts.legR.rotation.x = -swing;
+
+    const armSwing = swing * 0.7;
+    parts.armL.rotation.x = parts.armBase - armSwing + enemy.coughAnim * 0.4;
+    parts.armR.rotation.x = parts.armBase + armSwing + enemy.coughAnim * 0.4;
+
+    const flinch = enemy.stagger > 0 ? Math.sin((enemy.stagger / 0.22) * Math.PI) * 0.5 : 0;
+    parts.upper.rotation.x = parts.leanBase + enemy.coughAnim * 0.45 - flinch;
+    parts.upper.position.y = parts.upperBaseY + Math.abs(Math.cos(enemy.walkPhase)) * (moving ? 0.05 : 0.012);
+    parts.headPivot.rotation.x = enemy.coughAnim * 0.7;
+
+    parts.eyeMat.opacity = 0.55 + Math.sin(performance.now() * 0.005 + enemy.walkPhase * 2) * 0.45;
+    parts.glow.material.opacity = enemy.stagger > 0 ? 0.34 : enemy.type === "cougher" ? 0.18 : 0.1;
+  }
+
+  // Cured passengers melt into the deck: squash down, sink, fade the glow.
+  function animateDissolve(enemy, dt) {
+    const parts = enemy.mesh.userData.parts;
+    const base = enemy.mesh.userData.baseScale || 1;
+    enemy.dissolveT += dt;
+    const t = clamp(enemy.dissolveT / 0.5, 0, 1);
+    enemy.mesh.position.y = -t * 1.25;
+    enemy.mesh.scale.set(base * (1 + t * 0.55), base * (1 - t * 0.7), base * (1 + t * 0.55));
+    if (parts) {
+      parts.eyeMat.opacity = 1 - t;
+      parts.glow.material.opacity = (1 - t) * 0.4;
+    }
+    if (t >= 1) {
+      enemy.mesh.visible = false;
+      enemy.dissolving = false;
+    }
   }
 
   function updateClouds(dt) {
@@ -1842,11 +1985,17 @@
     for (let i = state.particles.length - 1; i >= 0; i -= 1) {
       const particle = state.particles[i];
       particle.life -= dt;
-      particle.vy -= 6 * dt;
-      particle.mesh.position.x += particle.vx * dt;
-      particle.mesh.position.y += particle.vy * dt;
-      particle.mesh.position.z += particle.vz * dt;
-      particle.mesh.material.opacity = clamp(particle.life / 0.65, 0, 1);
+      if (particle.puddle) {
+        particle.mesh.material.opacity = clamp(particle.life / 0.6, 0, 1) * 0.5;
+        const s = 1.0 + (0.6 - particle.life) * 1.6;
+        particle.mesh.scale.set(s, s, 1);
+      } else {
+        particle.vy -= 6 * dt;
+        particle.mesh.position.x += particle.vx * dt;
+        particle.mesh.position.y += particle.vy * dt;
+        particle.mesh.position.z += particle.vz * dt;
+        particle.mesh.material.opacity = clamp(particle.life / 0.65, 0, 1);
+      }
       if (particle.life <= 0) {
         fxRoot.remove(particle.mesh);
         state.particles.splice(i, 1);

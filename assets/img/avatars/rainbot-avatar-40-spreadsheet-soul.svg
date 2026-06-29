@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Spreadsheet Soul avatar">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#06391f"/>
+      <stop offset="1" stop-color="#07131f"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="103" fill="#111827" stroke="#6bff7d" stroke-width="6"/>
+  <rect x="65" y="62" width="126" height="132" rx="13" fill="#eaf7ee" stroke="#23dff2" stroke-width="7"/>
+  <g stroke="#78bd8b" stroke-width="4">
+    <path d="M65 95h126M65 128h126M65 161h126M96 62v132M128 62v132M160 62v132"/>
+  </g>
+  <rect x="66" y="63" width="125" height="32" rx="10" fill="#28a745"/>
+  <text x="128" y="87" text-anchor="middle" fill="#f9fbff" font-family="Verdana, sans-serif" font-size="20" font-weight="900">XLS</text>
+  <circle cx="111" cy="132" r="7" fill="#07131f"/>
+  <circle cx="146" cy="132" r="7" fill="#07131f"/>
+  <path d="M112 154c10-9 24-9 34 0" fill="none" stroke="#07131f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M179 113c20 19 15 43-2 55" fill="none" stroke="#ff2e88" stroke-width="7" stroke-linecap="round"/>
+</svg>

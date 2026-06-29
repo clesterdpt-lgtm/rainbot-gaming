@@ -69,6 +69,18 @@ const RB_PROFILE_AVATARS = [
   { value: "keycap", label: "Keycap Rage", file: "rainbot-avatar-28-keycap-rage.png" },
   { value: "dumpster", label: "Dumpster Fire", file: "rainbot-avatar-29-dumpster-fire.png" },
   { value: "npc", label: "NPC Smile", file: "rainbot-avatar-30-npc-smile.png" },
+  { value: "pizza", label: "Pizza Panic", file: "rainbot-avatar-31-pizza-panic.svg" },
+  { value: "fries", label: "Sad Fries", file: "rainbot-avatar-32-sad-fries.svg" },
+  { value: "pickle", label: "Pickle CEO", file: "rainbot-avatar-33-pickle-ceo.svg" },
+  { value: "violin", label: "Tiny Violin", file: "rainbot-avatar-34-tiny-violin.svg" },
+  { value: "coffee", label: "Cursed Coffee", file: "rainbot-avatar-35-cursed-coffee.svg" },
+  { value: "error404", label: "Error 404", file: "rainbot-avatar-36-error-404.svg" },
+  { value: "disco", label: "Disco Dump", file: "rainbot-avatar-37-disco-dump.svg" },
+  { value: "sock", label: "Gym Sock", file: "rainbot-avatar-38-gym-sock.svg" },
+  { value: "nosignal", label: "No Signal", file: "rainbot-avatar-39-no-signal.svg" },
+  { value: "spreadsheet", label: "Spreadsheet Soul", file: "rainbot-avatar-40-spreadsheet-soul.svg" },
+  { value: "microwave", label: "Microwave Meltdown", file: "rainbot-avatar-41-microwave-meltdown.svg" },
+  { value: "banana", label: "Chaos Banana", file: "rainbot-avatar-42-chaos-banana.svg" },
 ];
 const RB_PROFILE_AVATAR_MAP = new Map(RB_PROFILE_AVATARS.map((avatar) => [avatar.value, avatar]));
 
@@ -1196,7 +1208,7 @@ function loadScriptOnce(src, id) {
 async function initRainbotBackend() {
   try {
     await loadScriptOnce(`${RB_BASE}assets/js/supabase-config.js?v=20260628-comments-reddit-1`, "rb-supabase-config");
-    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260628-nested-replies-1`, "rb-backend-runtime");
+    await loadScriptOnce(`${RB_BASE}assets/js/rainbot-backend.js?v=20260629-avatar-icons-1`, "rb-backend-runtime");
     if (window.RBBackend && typeof window.RBBackend.init === "function") {
       await window.RBBackend.init();
     }

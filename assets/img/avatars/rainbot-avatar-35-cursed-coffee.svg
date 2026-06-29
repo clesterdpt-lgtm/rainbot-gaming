@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Cursed Coffee avatar">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#2a143d"/>
+      <stop offset="1" stop-color="#070a12"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="28" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="103" fill="#111827" stroke="#ff2e88" stroke-width="6"/>
+  <path d="M78 96h90l-11 99H90Z" fill="#f2f0e9" stroke="#23dff2" stroke-width="7"/>
+  <path d="M169 113h22c20 0 20 45-4 45h-21" fill="none" stroke="#23dff2" stroke-width="10"/>
+  <path d="M87 111h73l-6 22H93Z" fill="#684122"/>
+  <circle cx="109" cy="151" r="8" fill="#07131f"/>
+  <circle cx="140" cy="151" r="8" fill="#07131f"/>
+  <path d="M110 176c11-11 25-11 36 0" fill="none" stroke="#07131f" stroke-width="7" stroke-linecap="round"/>
+  <g fill="none" stroke="#f7d924" stroke-width="7" stroke-linecap="round">
+    <path d="M94 76c-11-13 11-20 0-35"/>
+    <path d="M128 78c-11-13 11-20 0-35"/>
+    <path d="M160 76c-11-13 11-20 0-35"/>
+  </g>
+  <text x="124" y="129" text-anchor="middle" fill="#f9fbff" font-family="Verdana, sans-serif" font-size="18" font-weight="900">WHY</text>
+</svg>

@@ -43,6 +43,12 @@
     metal: "#5b6678",
   };
 
+  const TROOP_ASSET_VERSION = "20260629-troop-art-1";
+  const TROOP_ASSET_BASE = "../assets/img/storm-area-51/troops/";
+  function troopAsset(file) {
+    return `${TROOP_ASSET_BASE}${file}?v=${TROOP_ASSET_VERSION}`;
+  }
+
   const NB8 = [
     [-1, -1], [0, -1], [1, -1],
     [-1, 0], [1, 0],
@@ -95,24 +101,28 @@
   const unitDefs = [
     {
       id: "runner", hotkey: "1", name: "Naruto Runner", short: "NR", color: C.cyan,
+      icon: troopAsset("runner-icon.png"), model: troopAsset("runner-model.png"), modelHeight: 72,
       cost: 16, hp: 46, speed: 2.75, damage: 15, wallBonus: 1.4, range: 0.85,
       attackRate: 0.55, desc: "Fast breacher",
       role: "Fast, zig-zags past fire, shreds fences and gates.",
     },
     {
       id: "streamer", hotkey: "2", name: "Livestreamer", short: "LS", color: C.pink,
+      icon: troopAsset("streamer-icon.png"), model: troopAsset("streamer-model.png"), modelHeight: 68,
       cost: 19, hp: 84, speed: 1.75, damage: 8, wallBonus: 1, range: 0.9,
       attackRate: 0.72, desc: "Hype economy", hypeAura: 0.6, taunt: 1.5,
       role: "Generates Hype while alive and taunts guard fire.",
     },
     {
       id: "tinfoil", hotkey: "3", name: "Tinfoil Crew", short: "TF", color: C.yellow,
+      icon: troopAsset("tinfoil-icon.png"), model: troopAsset("tinfoil-model.png"), modelHeight: 70,
       cost: 24, hp: 74, speed: 1.55, damage: 6, wallBonus: 1, range: 0.95,
       attackRate: 0.95, desc: "EMP jammer", jamRadius: 3.0,
       role: "Projects an EMP field that disables towers and searchlights.",
     },
     {
       id: "sign", hotkey: "4", name: "Sign Guy", short: "SG", color: C.green,
+      icon: troopAsset("sign-icon.png"), model: troopAsset("sign-model.png"), modelHeight: 72,
       cost: 24, hp: 168, speed: 1.3, damage: 8, wallBonus: 1.1, range: 0.85,
       attackRate: 0.82, desc: "Shield tank", shieldRadius: 2.7, taunt: 1.7,
       role: "Soaks projectiles and gives nearby raiders damage cover.",
@@ -169,6 +179,18 @@
   let paused = false;
   let lastT = 0;
   let raf = 0;
+  const troopModels = {};
+
+  function loadTroopAssets() {
+    unitDefs.forEach((u) => {
+      if (troopModels[u.id]) return;
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => markDirty();
+      img.src = u.model;
+      troopModels[u.id] = img;
+    });
+  }
 
   /* ---------- small math helpers ---------- */
   function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
@@ -1418,6 +1440,12 @@
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 13, 6, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = u.dying > 0 ? clamp(u.dying / 0.35, 0, 1) : 1;
     }
+    const art = drawTroopModel(u, p, dy, flash);
+    if (art) {
+      healthBar(p.x - 14, p.y + dy - art.h - 7, 28, 3.5, u.hp / u.maxHp, u.color);
+      ctx.restore();
+      return;
+    }
     const body = flash ? "#ffb3c0" : u.color;
     ctx.shadowColor = u.color; ctx.shadowBlur = 8;
     const bx = p.x, by = p.y - 10 + dy;
@@ -1443,6 +1471,22 @@
     // short id + health
     healthBar(bx - 12, by - 30, 24, 3.5, u.hp / u.maxHp, u.color);
     ctx.restore();
+  }
+
+  function drawTroopModel(u, p, dy, flash) {
+    const img = troopModels[u.id];
+    if (!img || !img.complete || !img.naturalWidth) return null;
+    const h = u.modelHeight || 54;
+    const w = h * (img.naturalWidth / img.naturalHeight);
+    ctx.save();
+    ctx.translate(p.x, p.y + dy + (u.modelLift || 0));
+    if (u.face < 0) ctx.scale(-1, 1);
+    ctx.shadowColor = flash ? "#fbfaf4" : u.color;
+    ctx.shadowBlur = flash ? 12 : 8;
+    ctx.filter = flash ? "brightness(1.65) saturate(1.25)" : "none";
+    ctx.drawImage(img, -w / 2, -h, w, h);
+    ctx.restore();
+    return { w, h };
   }
 
   function drawGuard(g) {
@@ -1669,8 +1713,8 @@
       const status = u.id === state.selected ? "SELECTED" : afford ? "PICK" : "NEED HYPE";
       return `
         <button class="storm-squad${cls}" type="button" data-squad="${u.id}" style="--squad-color:${u.color}" aria-label="Select ${u.name}">
-          <span class="storm-squad__chip">${u.short}</span>
-          <span><strong>${u.name}</strong><span>${u.desc} · ${u.cost} hype</span></span>
+          <span class="storm-squad__chip" aria-hidden="true"><img src="${u.icon}" alt="" loading="lazy" /></span>
+          <span class="storm-squad__copy"><strong>${u.name}</strong><span>${u.desc} · ${u.cost} hype</span></span>
           <span class="storm-squad__cooldown">${status}</span>
         </button>`;
     }).join("");
@@ -1691,6 +1735,7 @@
     if (!mobileSquadList.children.length) {
       mobileSquadList.innerHTML = unitDefs.map((u) => `
         <button class="storm-mobile-unit" type="button" data-mobile-squad="${u.id}" style="--squad-color:${u.color}" aria-label="Select ${u.name}">
+          <img class="storm-mobile-unit__icon" src="${u.icon}" alt="" aria-hidden="true" loading="lazy" />
           <strong>${u.short}</strong><span>${u.cost}</span>
         </button>`).join("");
     }
@@ -1850,6 +1895,7 @@
   }
 
   function init() {
+    loadTroopAssets();
     bindEvents();
     resetGame();
     draw();
@@ -1867,6 +1913,7 @@
     freeAlien: () => { const l = labStruct(); if (l) { l.alive = false; l.hp = 0; state.labHp = 0; onStructureDown(l); } },
     addHype: (n) => { state.hype = clamp(state.hype + (n || 50), 0, 100); markDirty(); },
     setAlert: (n) => { state.alert = clamp(n, 0, 100); markDirty(); },
+    troopModels,
     // deterministic stepper so balance can be verified without the hidden-tab rAF throttle
     step: (n, dt) => { n = n || 60; dt = dt || 1 / 60; for (let i = 0; i < n; i++) update(dt); draw(); updateUi(); },
     fields: () => ({ labField, vanField, costGrid }),

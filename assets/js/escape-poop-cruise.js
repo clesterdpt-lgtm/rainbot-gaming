@@ -1885,8 +1885,8 @@
     ));
   }
 
-  function beginTouchLook(clientX, clientY, pointerId = "touch") {
-    if (touchLook.active) return;
+  function beginTouchLook(clientX, clientY, pointerId = "touch", force = false) {
+    if (touchLook.active && !force) return;
     touchLook.active = true;
     touchLook.pointerId = pointerId;
     touchLook.lastX = clientX;
@@ -1983,44 +1983,47 @@
         if (event.pointerType === "mouse" && event.button !== 0) return;
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
-        beginTouchLook(event.clientX, event.clientY, event.pointerId);
+        beginTouchLook(event.clientX, event.clientY, `pointer-${event.pointerId}`);
         if (lookSurface.setPointerCapture) {
           try { lookSurface.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
         }
       }, { passive: false });
 
       lookSurface.addEventListener("pointermove", (event) => {
-        if (!touchLook.active || touchLook.pointerId !== event.pointerId || state.mode !== "playing") return;
+        if (!touchLook.active || touchLook.pointerId !== `pointer-${event.pointerId}` || state.mode !== "playing") return;
         if (event.cancelable) event.preventDefault();
         moveTouchLook(event.clientX, event.clientY);
       });
 
-      const endPointerLook = (event) => endTouchLook(event.pointerId);
+      const endPointerLook = (event) => endTouchLook(`pointer-${event.pointerId}`);
       lookSurface.addEventListener("pointerup", endPointerLook);
       lookSurface.addEventListener("pointercancel", endPointerLook);
       window.addEventListener("pointerup", endPointerLook);
       window.addEventListener("pointercancel", endPointerLook);
-    if (!window.PointerEvent) {
+    }
+
+    const supportsRawTouch = typeof TouchEvent !== "undefined" || "ontouchstart" in window || (navigator && navigator.maxTouchPoints > 0);
+
+    if (supportsRawTouch) {
       lookSurface.addEventListener("touchstart", (event) => {
         if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
-        if (touchLook.active) return;
         const touch = event.changedTouches && event.changedTouches[0];
         if (!touch) return;
         if (event.cancelable) event.preventDefault();
-        beginTouchLook(touch.clientX, touch.clientY, touch.identifier);
+        beginTouchLook(touch.clientX, touch.clientY, `touch-${touch.identifier}`, true);
       }, { passive: false });
 
       lookSurface.addEventListener("touchmove", (event) => {
         if (!touchLook.active || state.mode !== "playing") return;
-        const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
+        const touch = [...event.changedTouches].find((item) => `touch-${item.identifier}` === touchLook.pointerId);
         if (!touch) return;
         if (event.cancelable) event.preventDefault();
         moveTouchLook(touch.clientX, touch.clientY);
       }, { passive: false });
 
       const endTouch = (event) => {
-        const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
-        if (touch) endTouchLook(touch.identifier);
+        const touch = [...event.changedTouches].find((item) => `touch-${item.identifier}` === touchLook.pointerId);
+        if (touch) endTouchLook(`touch-${touch.identifier}`);
       };
       lookSurface.addEventListener("touchend", endTouch);
       lookSurface.addEventListener("touchcancel", endTouch);

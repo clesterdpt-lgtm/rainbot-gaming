@@ -12,19 +12,19 @@
 
   /* ---------- core constants ---------- */
   const GAME_ID = "storm-area-51";
-  const W = 960;
-  const H = 540;
+  const W = 1280;                  // 16:9 internal resolution (CSS scales to fit)
+  const H = 720;
 
-  const GRID = 22;                 // 22 x 22 tiles
-  const TILE_W = 40;               // iso tile width (px) — 2:1 iso, fits 960x540 with margins
+  const GRID = 30;                 // 30 x 30 tiles — a big, sprawling desert base
+  const TILE_W = 40;               // iso tile width (px) — 2:1 iso
   const TILE_H = 20;               // iso tile height (px)
   const ORIGIN_X = W / 2;          // diamond apex x
-  const ORIGIN_Y = 56;             // top padding so wall heights + HUD ribbon have room
+  const ORIGIN_Y = 70;             // top padding so wall heights + HUD ribbon have room
 
-  const LAB_C = 9, LAB_R = 9, LAB_SPAN = 4;       // lab footprint cols/rows 9..12
-  const LAB_MAX_HP = 880;
-  const VAN_TILE = { c: 1, r: 10 };               // alien escort goal (west, outside the keep)
-  const VAN_DRAW = { c: 0.2, r: 10.5 };           // van art sits just outside the west gate
+  const LAB_C = 13, LAB_R = 13, LAB_SPAN = 4;     // lab footprint cols/rows 13..16, centre (15,15)
+  const LAB_MAX_HP = 820;
+  const VAN_TILE = { c: 1, r: 14 };               // alien escort goal (west, outside the perimeter)
+  const VAN_DRAW = { c: 0.4, r: 14.5 };           // van art sits just outside the west gate
 
   const C = {
     ink: "#fbfaf4",
@@ -121,14 +121,14 @@
 
   /* ---------- spawn sectors (outer perimeter) ---------- */
   const ZONES = [
-    { id: "N", name: "North", color: C.cyan, c: 10.5, r: 1.2 },
-    { id: "E", name: "East", color: C.pink, c: 19.5, r: 10.5 },
-    { id: "S", name: "South", color: C.yellow, c: 10.5, r: 19.8 },
+    { id: "N", name: "North", color: C.cyan, c: 14.5, r: 1.8 },
+    { id: "E", name: "East", color: C.pink, c: 27.5, r: 14.5 },
+    { id: "S", name: "South", color: C.yellow, c: 14.5, r: 27.5 },
   ];
   function zoneAt(c, r) {
-    if (r >= 0 && r <= 2 && c >= 3 && c <= 18) return 0;       // North band
-    if (c >= 19 && c <= 21 && r >= 3 && r <= 18) return 1;     // East band
-    if (r >= 19 && r <= 21 && c >= 3 && c <= 18) return 2;     // South band
+    if (r >= 0 && r <= 3 && c >= 4 && c <= 25) return 0;       // North band
+    if (c >= 26 && c <= 29 && r >= 4 && r <= 25) return 1;     // East band
+    if (r >= 26 && r <= 29 && c >= 4 && c <= 25) return 2;     // South band
     return -1;
   }
 
@@ -140,7 +140,7 @@
     score: 0,
     best: 0,
     alert: 0,
-    hype: 64,
+    hype: 68,
     time: 0,
     labHp: LAB_MAX_HP,
     alien: null,
@@ -207,7 +207,7 @@
       cd: 0.4 + Math.random() * 0.6,
       sweep: Math.random() * Math.PI * 2,
       fireRate: type === "tower" ? 1.0 : 0,
-      range: type === "tower" ? 4.9 : type === "light" ? 6.4 : 0,
+      range: type === "tower" ? 5.0 : type === "light" ? 7.0 : 0,
       damage: type === "tower" ? 13 : 0,
     };
     for (let rr = r; rr < r + h; rr++)
@@ -233,59 +233,59 @@
     state.structures = [];
     occ = new Array(GRID * GRID).fill(null);
 
-    // ---- outer perimeter fence ring (square 3..18) with a gate on each side ----
-    const OA = 3, OB = 18;
+    // ---- outer perimeter fence ring (square 4..25) with a gate on each side ----
+    const OA = 4, OB = 25;
     const outerGate = (c, r) => (
-      ((r === OA || r === OB) && (c === 10 || c === 11)) ||
-      ((c === OA || c === OB) && (r === 10 || r === 11))
+      ((r === OA || r === OB) && (c === 14 || c === 15)) ||
+      ((c === OA || c === OB) && (r === 14 || r === 15))
     );
     ringSquare(OA, OB).forEach(([c, r]) => {
       if (outerGate(c, r)) makeStruct("gate", c, r, 1, 1, 160, 24);
       else makeStruct("fence", c, r, 1, 1, 70, 15);
     });
 
-    // ---- inner keep wall ring (square 7..14): tougher walls + keep gates on
+    // ---- inner keep wall ring (square 10..19): tougher walls + keep gates on
     //      N/E/S, with a permanent OPEN gap on the west as the escape corridor ----
-    const KA = 7, KB = 14;
+    const KA = 10, KB = 19;
     const keepGate = (c, r) => (
-      ((r === KA || r === KB) && (c === 10 || c === 11)) ||  // north & south keep gates
-      (c === KB && (r === 10 || r === 11))                   // east keep gate
+      ((r === KA || r === KB) && (c === 14 || c === 15)) ||  // north & south keep gates
+      (c === KB && (r === 14 || r === 15))                   // east keep gate
     );
-    const keepOpen = (c, r) => (c === KA && (r === 10 || r === 11)); // west escape gap
+    const keepOpen = (c, r) => (c === KA && (r === 14 || r === 15)); // west escape gap
     ringSquare(KA, KB).forEach(([c, r]) => {
       if (keepOpen(c, r)) return;
       if (keepGate(c, r)) makeStruct("gate", c, r, 1, 1, 220, 30);
       else makeStruct("wall", c, r, 1, 1, 150, 26);
     });
 
-    // ---- hangars (permanent — funnel raiders out of the corners into corridors) ----
-    [[4, 4], [16, 4], [4, 16], [16, 16]].forEach(([c, r]) =>
-      makeStruct("hangar", c, r, 2, 2, 9999, 30)
+    // ---- hangars (big, permanent — sit in the open courtyard corners) ----
+    [[5, 5], [22, 5], [5, 22], [22, 22]].forEach(([c, r]) =>
+      makeStruct("hangar", c, r, 3, 3, 9999, 32)
     );
 
-    // ---- guard towers: courtyard gate-flankers + keep-interior turrets. The west
-    //      keep interior is deliberately left clear as the alien's escape back-door ----
-    [[8, 5], [13, 5], [8, 16], [13, 16], [16, 8], [16, 13],
-     [13, 8], [13, 13]].forEach(([c, r]) =>
+    // ---- guard towers: courtyard gate-flankers + a pair of keep turrets east of
+    //      the lab. The west keep interior stays clear as the escape back-door ----
+    [[11, 7], [18, 7], [11, 22], [18, 22], [22, 11], [22, 18],
+     [16, 12], [16, 17]].forEach(([c, r]) =>
       makeStruct("tower", c, r, 1, 1, 95, 40)
     );
 
-    // ---- searchlights (sweeping) in the courtyard corners ----
-    [[6, 6], [15, 6], [6, 15], [15, 15]].forEach(([c, r]) =>
-      makeStruct("light", c, r, 1, 1, 70, 46)
+    // ---- searchlights (sweeping) spread through the courtyard ----
+    [[8, 8], [21, 8], [8, 21], [21, 21]].forEach(([c, r]) =>
+      makeStruct("light", c, r, 1, 1, 70, 48)
     );
 
     // ---- central laboratory dome ----
-    makeStruct("lab", LAB_C, LAB_R, LAB_SPAN, LAB_SPAN, LAB_MAX_HP, 56);
+    makeStruct("lab", LAB_C, LAB_R, LAB_SPAN, LAB_SPAN, LAB_MAX_HP, 60);
 
     // ---- patrolling guards covering the corridors and the escape mouth ----
     state.guards = [];
-    spawnGuard(10.5, 5, [[9, 5], [12, 5]]);
-    spawnGuard(10.5, 16, [[9, 16], [12, 16]]);
-    spawnGuard(16, 10.5, [[16, 9], [16, 12]]);
-    spawnGuard(8, 10.5, [[8, 9.5], [8, 11.5]]);
-    spawnGuard(10.5, 8, [[9, 8], [12, 8]]);
-    spawnGuard(10.5, 13, [[9, 13], [12, 13]]);
+    spawnGuard(14.5, 8, [[13, 8], [16, 8]]);
+    spawnGuard(14.5, 21, [[13, 21], [16, 21]]);
+    spawnGuard(22, 14.5, [[22, 13], [22, 16]]);
+    spawnGuard(11, 14.5, [[11, 13], [11, 16]]);
+    spawnGuard(14.5, 12, [[13, 12], [16, 12]]);
+    spawnGuard(14.5, 17, [[13, 17], [16, 17]]);
 
     state.reinforceCd = 16;
     rebuildFields();
@@ -377,7 +377,7 @@
         labGoals.push({ c, r });
     labField = computeField(labGoals);
     // goals are all on col 1 so the gradient keeps pulling the alien past the win line
-    vanField = computeField([VAN_TILE, { c: 1, r: 11 }, { c: 1, r: 9 }, { c: 1, r: 12 }]);
+    vanField = computeField([VAN_TILE, { c: 1, r: 15 }, { c: 1, r: 13 }, { c: 1, r: 16 }]);
   }
 
   // pick the downhill neighbour tile from a continuous position
@@ -408,7 +408,7 @@
     state.score = 0;
     state.best = Number(api.getHighScore(GAME_ID) || 0);
     state.alert = 0;
-    state.hype = 64;
+    state.hype = 68;
     state.time = 0;
     state.labHp = LAB_MAX_HP;
     state.alien = null;
@@ -520,7 +520,7 @@
   function deploy(pos) {
     if (state.mode !== "playing" || paused) return false;
     const def = selectedDef();
-    if (state.units.filter((u) => u.alive).length >= 48) {
+    if (state.units.filter((u) => u.alive).length >= 64) {
       bumpBanner("Field is full", C.yellow);
       return false;
     }
@@ -653,13 +653,13 @@
       .filter((u) => u.alive && u.id === "streamer")
       .reduce((s, u) => s + (u.hypeAura || 0), 0);
     const pressure = state.labHp <= 0 ? 0.3 : (LAB_MAX_HP - state.labHp) * 0.0018;
-    state.hype = clamp(state.hype + (4.4 + streamerGain + pressure) * dt, 0, 100);
+    state.hype = clamp(state.hype + (4.8 + streamerGain + pressure) * dt, 0, 100);
 
     const litCount = state.units.filter((u) => u.alive && u.lit > 0).length;
     const crowd = Math.max(0, state.units.filter((u) => u.alive).length - 10) * 0.02;
     // lockdown pressure eases once the base is in escort-phase chaos
     const escortEase = state.labHp <= 0 ? 0.55 : 1;
-    state.alert = clamp(state.alert + (0.3 + litCount * 0.55 + crowd) * escortEase * dt, 0, 100);
+    state.alert = clamp(state.alert + (0.45 + litCount * 0.7 + crowd) * escortEase * dt, 0, 100);
   }
 
   function updateAuras(dt) {
@@ -875,10 +875,11 @@
     state.reinforceCd -= dt;
     if (state.reinforceCd <= 0 && state.guards.length < 7) {
       state.reinforceCd = 22;
-      const gates = [[10.5, 7.5], [10.5, 13.5], [13.5, 10.5]];
-      const g = gates[Math.floor(Math.random() * gates.length)];
-      spawnGuard(10.5, 11.5, [[10.5, 11.5], g]);
-      const p = scr(10.5, 11.5);
+      // muster at the inner mouth of a random keep gate (walkable) and push to the gate
+      const spots = [[14.5, 11, 14.5, 10.5], [14.5, 18, 14.5, 19.5], [18, 14.5, 19.5, 14.5]];
+      const s = spots[Math.floor(Math.random() * spots.length)];
+      spawnGuard(s[0], s[1], [[s[0], s[1]], [s[2], s[3]]]);
+      const p = scr(s[0], s[1]);
       addEffect("deploy", p.x, p.y, C.red);
     }
   }
@@ -1010,7 +1011,7 @@
     a.attackCd = Math.max(0, a.attackCd - dt);
 
     // win once it slips past the western perimeter toward the van
-    if (a.col <= 2.2) { a.escaped = true; addScore(2600, "EXTRACT", VAN_DRAW.c + 1, VAN_DRAW.r, C.green); endGame(true); return; }
+    if (a.col <= 2.7) { a.escaped = true; addScore(2600, "EXTRACT", VAN_DRAW.c + 1, VAN_DRAW.r, C.green); endGame(true); return; }
 
     const step = bestStep(a.col, a.row, vanField);
     if (!step) {
@@ -1099,8 +1100,8 @@
   }
 
   function isCorridor(c, r) {
-    const inside = c >= 3 && c <= 18 && r >= 3 && r <= 18;
-    return inside && (c === 10 || c === 11 || r === 10 || r === 11);
+    const inside = c >= 4 && c <= 25 && r >= 4 && r <= 25;
+    return inside && (c === 14 || c === 15 || r === 14 || r === 15);
   }
 
   function drawGround() {

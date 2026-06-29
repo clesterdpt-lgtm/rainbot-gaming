@@ -157,6 +157,7 @@
     ceiling: new URL("ceiling-atlas-ai-v1.png", textureAssetBase).href,
     details: new URL("detail-decal-atlas-ai-v1.png", textureAssetBase).href,
     objects: new URL("object-atlas-ai-v1.png", textureAssetBase).href,
+    infection: new URL("infection-hazard-atlas-ai-v1.png", textureAssetBase).href,
   };
 
   const textureAnisotropy = Math.min(
@@ -353,6 +354,56 @@
     return setupTexture(new THREE.CanvasTexture(canvasTexture));
   }
 
+  function makeInfectionCueTexture(kind) {
+    const size = 128;
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+
+    if (kind === "vapor") {
+      const haze = ctx.createLinearGradient(0, size, 0, 0);
+      haze.addColorStop(0, "rgba(138, 255, 46, 0)");
+      haze.addColorStop(0.38, "rgba(138, 255, 46, 0.18)");
+      haze.addColorStop(0.76, "rgba(198, 255, 56, 0.08)");
+      haze.addColorStop(1, "rgba(138, 255, 46, 0)");
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.lineCap = "round";
+      for (let i = 0; i < 5; i += 1) {
+        const x = 26 + i * 19;
+        ctx.strokeStyle = `rgba(198, 255, 56, ${0.11 + i * 0.018})`;
+        ctx.lineWidth = 5 - i * 0.35;
+        ctx.beginPath();
+        ctx.moveTo(x, size - 10);
+        ctx.bezierCurveTo(x - 20, 86, x + 24, 58, x - 4, 18);
+        ctx.stroke();
+      }
+    } else {
+      const glow = ctx.createRadialGradient(size / 2, size / 2, 4, size / 2, size / 2, size * 0.54);
+      glow.addColorStop(0, "rgba(198, 255, 56, 0.62)");
+      glow.addColorStop(0.32, "rgba(138, 255, 46, 0.34)");
+      glow.addColorStop(0.72, "rgba(92, 128, 19, 0.13)");
+      glow.addColorStop(1, "rgba(92, 128, 19, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.strokeStyle = "rgba(210, 255, 93, 0.3)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i += 1) {
+        ctx.beginPath();
+        ctx.ellipse(size / 2, size / 2, 17 + i * 11, 7 + i * 7, i * 0.7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    return setupTexture(new THREE.CanvasTexture(canvasTexture), {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+    });
+  }
+
   function keyBlackToAlpha(ctx, size, threshold = 12) {
     const imageData = ctx.getImageData(0, 0, size, size);
     const pixels = imageData.data;
@@ -471,7 +522,7 @@
     wall: makeMaterialVariants("wall", 16, textureAssets.wall),
     floor: makeMaterialVariants("floor", 16, textureAssets.floor),
     ceiling: makeMaterialVariants("ceiling", 16, textureAssets.ceiling),
-    hazard: makeMaterialVariants("hazard", 16, textureAssets.floor),
+    hazard: makeMaterialVariants("hazard", 16, textureAssets.infection),
     fresh: makeMaterialVariants("fresh", 16, textureAssets.floor),
   };
 
@@ -560,6 +611,24 @@
     hazardProp: objectMats[ObjectTex.BUFFET_TRAY],
     porthole: new THREE.MeshLambertMaterial({ color: 0x163b54, emissive: 0x071a29 }),
     sickLight: new THREE.MeshBasicMaterial({ color: 0xb7ff54, transparent: true, opacity: 0.58 }),
+    infectionGlow: new THREE.MeshBasicMaterial({
+      map: makeInfectionCueTexture("glow"),
+      transparent: true,
+      opacity: 0.72,
+      alphaTest: 0.025,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+    infectionBubble: new THREE.MeshBasicMaterial({ color: 0xc8ff36, transparent: true, opacity: 0.62, depthWrite: false }),
+    infectionVapor: new THREE.MeshBasicMaterial({
+      map: makeInfectionCueTexture("vapor"),
+      transparent: true,
+      opacity: 0.46,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
     debrisDark: new THREE.MeshLambertMaterial({ color: 0x14120e }),
     debrisPaper: objectMats[ObjectTex.MAP_POSTER],
     debrisRust: objectMats[ObjectTex.PIPE],
@@ -1043,7 +1112,7 @@
   }
 
   function addFloorGrime(gx, gy, tile, pos) {
-    if (tile === Tile.EXIT) return;
+    if (tile === Tile.EXIT || tile === Tile.HAZARD) return;
     const chaos = tileHash(gx, gy, 41);
     const count = tile === Tile.HAZARD ? 3 : tile === Tile.FRESH ? (chaos > 0.72 ? 1 : 0) : chaos > 0.72 ? 2 : chaos > 0.34 ? 1 : 0;
     for (let i = 0; i < count; i += 1) {
@@ -1111,6 +1180,71 @@
       );
       mesh.rotation.y = tileRange(gx, gy, salt + 7, -Math.PI, Math.PI);
       mesh.rotation.z = tileRange(gx, gy, salt + 8, -0.18, 0.18);
+    }
+  }
+
+  function addInfectionHazardCues(gx, gy, pos) {
+    addPlane(
+      world,
+      geoms.floorDecal,
+      mats.infectionGlow,
+      pos.x + tileRange(gx, gy, 501, -0.22, 0.22),
+      0.068,
+      pos.z + tileRange(gx, gy, 502, -0.22, 0.22),
+      tileRange(gx, gy, 503, 1.4, 2.35),
+      tileRange(gx, gy, 504, 1.05, 2.05),
+      -Math.PI / 2,
+      0,
+      tileRange(gx, gy, 505, -Math.PI, Math.PI)
+    );
+
+    if (tileHash(gx, gy, 506) > 0.28) {
+      addPlane(
+        world,
+        geoms.floorDecal,
+        objectMats[ObjectTex.CAUTION],
+        pos.x + tileRange(gx, gy, 507, -TILE * 0.28, TILE * 0.28),
+        0.074,
+        pos.z + tileRange(gx, gy, 508, -TILE * 0.28, TILE * 0.28),
+        tileRange(gx, gy, 509, 0.58, 1.15),
+        tileRange(gx, gy, 510, 0.16, 0.34),
+        -Math.PI / 2,
+        0,
+        tileRange(gx, gy, 511, -Math.PI, Math.PI)
+      );
+    }
+
+    const bubbleCount = 2 + Math.floor(tileHash(gx, gy, 512) * 3);
+    for (let i = 0; i < bubbleCount; i += 1) {
+      const salt = 520 + i * 7;
+      const bubble = addBox(
+        world,
+        geoms.sphere,
+        mats.infectionBubble,
+        pos.x + tileRange(gx, gy, salt, -TILE * 0.28, TILE * 0.28),
+        tileRange(gx, gy, salt + 1, 0.08, 0.18),
+        pos.z + tileRange(gx, gy, salt + 2, -TILE * 0.28, TILE * 0.28),
+        tileRange(gx, gy, salt + 3, 0.06, 0.16),
+        tileRange(gx, gy, salt + 4, 0.025, 0.075),
+        tileRange(gx, gy, salt + 5, 0.06, 0.16)
+      );
+      bubble.userData.baseY = bubble.position.y;
+    }
+
+    if (tileHash(gx, gy, 548) > 0.52) {
+      addPlane(
+        world,
+        geoms.wallDecal,
+        mats.infectionVapor,
+        pos.x + tileRange(gx, gy, 549, -0.36, 0.36),
+        tileRange(gx, gy, 550, 0.34, 0.62),
+        pos.z + tileRange(gx, gy, 551, -0.36, 0.36),
+        tileRange(gx, gy, 552, 0.35, 0.72),
+        tileRange(gx, gy, 553, 0.55, 1.05),
+        0,
+        tileRange(gx, gy, 554, -Math.PI, Math.PI),
+        tileRange(gx, gy, 555, -0.1, 0.1)
+      );
     }
   }
 
@@ -1260,7 +1394,8 @@
                 : floorVariantPools.mixed;
         const ceilingRoll = tileHash(gx, gy, 42);
         const ceilingPool = ceilingRoll > 0.78 ? ceilingVariantPools.dirty : ceilingRoll < 0.22 ? ceilingVariantPools.cleaner : ceilingVariantPools.detailed;
-        const floorMat = pickVariantFromIndices(materialSets.floor, floorPool, gx, gy, 37);
+        const floorSet = tile === Tile.HAZARD ? materialSets.hazard : tile === Tile.FRESH ? materialSets.fresh : materialSets.floor;
+        const floorMat = pickVariantFromIndices(floorSet, floorPool, gx, gy, 37);
         const ceilingMat = pickVariantFromIndices(materialSets.ceiling, ceilingPool, gx, gy, 43);
         addBox(world, geoms.floor, floorMat, pos.x, -0.04, pos.z);
         addBox(world, geoms.ceiling, ceilingMat, pos.x, WALL_H + 0.05, pos.z);
@@ -1270,8 +1405,7 @@
         }
 
         if (tile === Tile.HAZARD) {
-          addBox(world, geoms.trim, mats.trim, pos.x, 0.22, pos.z, 0.85, 1.8, 0.52);
-          addBox(world, geoms.pickup, mats.hazardProp, pos.x, 0.58, pos.z, 1.6, 0.24, 0.72);
+          addInfectionHazardCues(gx, gy, pos);
         }
 
         if (tile === Tile.EXIT) {

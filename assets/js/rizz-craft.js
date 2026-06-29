@@ -1403,6 +1403,18 @@
   function deleteWorldSave(id) {
     removeJson(worldSaveKey(id));
   }
+  function readWorldCreateFields() {
+    const nameInput = document.getElementById("world-name-input");
+    const seedInput = document.getElementById("world-seed-input");
+    return {
+      name: nameInput ? nameInput.value : "",
+      seed: seedInput ? seedInput.value : "",
+    };
+  }
+  function createWorldFromPanel() {
+    const fields = readWorldCreateFields();
+    createWorld(fields.name, fields.seed);
+  }
   function formatWorldSavedAt(value) {
     if (window.RBGameSaves && window.RBGameSaves.formatSavedAt) return window.RBGameSaves.formatSavedAt(value);
     const date = new Date(value || 0);
@@ -1440,10 +1452,11 @@
   }
   function saveCurrentWorld() {
     if (!currentWorldId || !state.started) return false;
-    const data = snapshot();
+    currentWorldName = cleanWorldName(currentWorldName);
     const savedAt = Date.now();
-    const name = currentWorldName || "World";
+    const name = currentWorldName;
     const seed = currentWorldSeed >>> 0;
+    const data = snapshot();
     const existing = readWorldIndex().find((world) => world.id === currentWorldId);
     const ok = writeWorldSave(currentWorldId, data, { id: currentWorldId, name, seed });
     if (ok) {
@@ -1462,6 +1475,7 @@
   function renderWorldPanel() {
     if (!worldPanel) return;
     const worlds = readWorldIndex();
+    const nextWorldName = `World ${Math.min(worlds.length + 1, MAX_WORLDS)}`;
     const cards = worlds.map((world) => {
       const active = world.id === currentWorldId ? " - active" : "";
       return `<div class="world-card" data-world-id="${escapeWorldHtml(world.id)}">
@@ -1477,16 +1491,19 @@
     }).join("");
     worldPanel.hidden = false;
     worldPanel.innerHTML = `<div class="world-create">
-      <label class="world-field">World name<input id="world-name-input" maxlength="28" value="New World" autocomplete="off" /></label>
+      <label class="world-field">World name<input id="world-name-input" maxlength="28" value="${escapeWorldHtml(nextWorldName)}" autocomplete="off" /></label>
       <label class="world-field">Seed<input id="world-seed-input" placeholder="random" autocomplete="off" /></label>
       <button class="btn btn--primary" type="button" id="world-create-btn">Create</button>
     </div>
     <div class="world-list">${cards || `<div class="world-empty">No saved worlds yet.</div>`}</div>`;
     const createButton = document.getElementById("world-create-btn");
-    if (createButton) createButton.addEventListener("click", () => {
-      const name = document.getElementById("world-name-input");
-      const seed = document.getElementById("world-seed-input");
-      createWorld(name && name.value, seed && seed.value);
+    if (createButton) createButton.addEventListener("click", createWorldFromPanel);
+    worldPanel.querySelectorAll("#world-name-input, #world-seed-input").forEach((input) => {
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        createWorldFromPanel();
+      });
     });
     worldPanel.querySelectorAll("[data-world-load]").forEach((button) => {
       button.addEventListener("click", () => loadWorld(button.dataset.worldLoad));
@@ -1547,6 +1564,9 @@
       currentWorldName = name;
       currentWorldSeed = seed >>> 0;
       initGame(seed);
+      currentWorldId = id;
+      currentWorldName = name;
+      currentWorldSeed = seed >>> 0;
       startGame();
       saveCurrentWorld();
       api.toast(`Created ${name}`, "good");
@@ -1566,8 +1586,9 @@
     setWorldLoading(true, `Loading ${world.name || "World"}...`);
     await waitForWorldLoadingPaint();
     try {
+      const savedName = (saved.data && saved.data.worldName) || (saved.meta && saved.meta.name) || world.name || "World";
       currentWorldId = world.id;
-      currentWorldName = world.name || "World";
+      currentWorldName = cleanWorldName(savedName);
       currentWorldSeed = world.seed >>> 0;
       restoreGame(saved);
       playSfx("spawn", { volume: 0.75 });
@@ -7263,7 +7284,7 @@
     const data = saved && saved.data;
     if (!data || typeof data.seed !== "number") return;
     currentWorldId = currentWorldId || data.worldId || (saved.meta && saved.meta.id) || "";
-    currentWorldName = currentWorldName || data.worldName || (saved.meta && saved.meta.name) || "World";
+    currentWorldName = cleanWorldName(currentWorldName || data.worldName || (saved.meta && saved.meta.name) || "World");
     currentWorldSeed = data.seed >>> 0;
     initGame(data.seed);
     state.edits = new Map(Array.isArray(data.edits) ? data.edits : []);
@@ -7470,7 +7491,7 @@
     if (primary) primary.addEventListener("click", () => {
       primeAudio();
       if (state.paused) togglePause();
-      else if (!state.started) createWorld("New World", "");
+      else if (!state.started) createWorldFromPanel();
     });
     bind("btn-pause", togglePause);
     bind("btn-restart", restart);

@@ -147,6 +147,329 @@
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.shadowMap.enabled = false;
 
+  const scriptUrl = document.currentScript && document.currentScript.src ? document.currentScript.src : window.location.href;
+  const textureAssetBase = new URL("../img/escape-poop-cruise/", scriptUrl).href;
+  const textureAssets = {
+    wall: new URL("wall-atlas-ai-v1.png", textureAssetBase).href,
+    floor: new URL("floor-atlas-ai-v1.png", textureAssetBase).href,
+    ceiling: new URL("ceiling-atlas-ai-v1.png", textureAssetBase).href,
+    details: new URL("detail-decal-atlas-ai-v1.png", textureAssetBase).href,
+  };
+
+  const textureAnisotropy = Math.min(
+    4,
+    renderer.capabilities && renderer.capabilities.getMaxAnisotropy
+      ? renderer.capabilities.getMaxAnisotropy()
+      : 1
+  );
+
+  function rgb(hex, shift = 0) {
+    return {
+      r: clamp(((hex >> 16) & 255) + shift, 0, 255),
+      g: clamp(((hex >> 8) & 255) + shift, 0, 255),
+      b: clamp((hex & 255) + shift, 0, 255),
+    };
+  }
+
+  function rgba(hex, alpha, shift = 0) {
+    const color = rgb(hex, shift);
+    return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+  }
+
+  function setupTexture(texture, options = {}) {
+    texture.wrapS = options.wrapS || THREE.RepeatWrapping;
+    texture.wrapT = options.wrapT || THREE.RepeatWrapping;
+    texture.anisotropy = textureAnisotropy;
+    texture.encoding = THREE.sRGBEncoding;
+    texture.minFilter = options.minFilter || THREE.LinearMipmapLinearFilter || THREE.LinearMipMapLinearFilter || THREE.LinearFilter;
+    texture.magFilter = options.magFilter || THREE.LinearFilter;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function drawGrimeNoise(ctx, rng, size, density = 420) {
+    for (let i = 0; i < density; i += 1) {
+      const shade = randInt(rng, 0, 52);
+      const alpha = 0.025 + rng() * 0.12;
+      ctx.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${alpha})`;
+      ctx.fillRect(rng() * size, rng() * size, 1 + rng() * 5, 1 + rng() * 5);
+    }
+  }
+
+  function drawBlot(ctx, rng, x, y, rx, ry, color, alpha) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate((rng() - 0.5) * Math.PI);
+    ctx.fillStyle = rgba(color, alpha, randInt(rng, -12, 8));
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 5; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(
+        (rng() - 0.5) * rx * 1.5,
+        (rng() - 0.5) * ry * 1.4,
+        rx * (0.12 + rng() * 0.36),
+        ry * (0.1 + rng() * 0.32),
+        0,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function makeSurfaceTexture(kind, seed) {
+    const size = 128;
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+    const rng = mulberry32(seed);
+
+    const palette = {
+      wall: { base: 0x111927, deep: 0x05090f, grime: 0x5b4422, accent: 0x28384a },
+      floor: { base: 0x1f1420, deep: 0x060507, grime: 0x43300f, accent: 0x473744 },
+      ceiling: { base: 0x0d121c, deep: 0x020409, grime: 0x2c2b19, accent: 0x1e2a37 },
+      hazard: { base: 0x261609, deep: 0x050301, grime: 0x5d4213, accent: 0x6b5f1e },
+      fresh: { base: 0x10293a, deep: 0x031019, grime: 0x154851, accent: 0x2ee0ff },
+    }[kind];
+
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, rgba(palette.base, 1, randInt(rng, -6, 6)));
+    gradient.addColorStop(0.58, rgba(palette.deep, 1, randInt(rng, -2, 5)));
+    gradient.addColorStop(1, rgba(palette.base, 1, randInt(rng, -24, -8)));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    drawGrimeNoise(ctx, rng, size, kind === "wall" ? 540 : 620);
+
+    if (kind === "wall") {
+      const seamX = 18 + rng() * 34;
+      ctx.strokeStyle = rgba(0x000000, 0.45);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(seamX, 0);
+      ctx.lineTo(seamX + (rng() - 0.5) * 8, size);
+      ctx.stroke();
+      ctx.strokeStyle = rgba(palette.accent, 0.35);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(5 + rng() * 12, 6 + rng() * 8, size - 18 - rng() * 18, size - 16 - rng() * 16);
+      for (let i = 0; i < 5; i += 1) {
+        const x = rng() * size;
+        ctx.fillStyle = rgba(palette.grime, 0.25 + rng() * 0.18);
+        ctx.fillRect(x, rng() * 32, 2 + rng() * 8, 24 + rng() * 78);
+      }
+    }
+
+    if (kind === "floor" || kind === "hazard" || kind === "fresh") {
+      ctx.strokeStyle = rgba(0x000000, 0.36);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, size * 0.5 + (rng() - 0.5) * 14);
+      ctx.lineTo(size, size * 0.5 + (rng() - 0.5) * 14);
+      ctx.moveTo(size * 0.5 + (rng() - 0.5) * 14, 0);
+      ctx.lineTo(size * 0.5 + (rng() - 0.5) * 14, size);
+      ctx.stroke();
+      for (let i = 0; i < (kind === "hazard" ? 6 : 3); i += 1) {
+        drawBlot(
+          ctx,
+          rng,
+          rng() * size,
+          rng() * size,
+          10 + rng() * 30,
+          7 + rng() * 24,
+          kind === "fresh" ? 0x0d4c5b : palette.grime,
+          kind === "hazard" ? 0.5 : 0.26
+        );
+      }
+      if (kind === "fresh") {
+        ctx.strokeStyle = rgba(palette.accent, 0.32);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(12, 20 + rng() * 24);
+        ctx.lineTo(size - 14, 16 + rng() * 30);
+        ctx.stroke();
+      }
+    }
+
+    if (kind === "ceiling") {
+      ctx.strokeStyle = rgba(0x000000, 0.48);
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i += 1) {
+        const y = 18 + i * 26 + (rng() - 0.5) * 6;
+        ctx.beginPath();
+        ctx.moveTo(4, y);
+        ctx.lineTo(size - 4, y + (rng() - 0.5) * 5);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 4; i += 1) {
+        drawBlot(ctx, rng, rng() * size, rng() * size, 8 + rng() * 22, 18 + rng() * 30, palette.grime, 0.25);
+      }
+    }
+
+    ctx.fillStyle = rgba(0x000000, 0.24);
+    ctx.fillRect(0, 0, size, 4);
+    ctx.fillRect(0, size - 4, size, 4);
+    ctx.fillRect(0, 0, 4, size);
+    ctx.fillRect(size - 4, 0, 4, size);
+
+    return setupTexture(new THREE.CanvasTexture(canvasTexture));
+  }
+
+  function makeDecalTexture(seed, kind) {
+    const size = 128;
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+    const rng = mulberry32(seed);
+    const base = kind === "puddle" ? 0x231707 : kind === "ceiling" ? 0x252315 : 0x4b3514;
+    for (let i = 0; i < 7; i += 1) {
+      drawBlot(
+        ctx,
+        rng,
+        size * (0.22 + rng() * 0.56),
+        size * (0.22 + rng() * 0.56),
+        12 + rng() * 34,
+        8 + rng() * 32,
+        base,
+        kind === "wall" ? 0.42 : 0.5
+      );
+    }
+    if (kind === "puddle") {
+      ctx.strokeStyle = "rgba(143, 122, 53, 0.34)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 5; i += 1) {
+        ctx.beginPath();
+        ctx.ellipse(size / 2, size / 2, 20 + rng() * 36, 7 + rng() * 18, rng() * Math.PI, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    return setupTexture(new THREE.CanvasTexture(canvasTexture));
+  }
+
+  function keyBlackToAlpha(ctx, size, threshold = 12) {
+    const imageData = ctx.getImageData(0, 0, size, size);
+    const pixels = imageData.data;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const max = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+      if (max <= threshold) {
+        pixels[i + 3] = 0;
+      } else if (max < threshold + 62) {
+        pixels[i + 3] = Math.min(pixels[i + 3], Math.round((max - threshold) * 4.1));
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  function makeAtlasCellTexture(image, index, options = {}) {
+    const grid = options.grid || 4;
+    const size = options.size || 256;
+    const inset = options.cropInset ?? 0.026;
+    const cellW = image.naturalWidth / grid;
+    const cellH = image.naturalHeight / grid;
+    const col = index % grid;
+    const row = Math.floor(index / grid);
+    const sx = col * cellW + cellW * inset;
+    const sy = row * cellH + cellH * inset;
+    const sw = cellW * (1 - inset * 2);
+    const sh = cellH * (1 - inset * 2);
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, size, size);
+    if (options.blackKey) keyBlackToAlpha(ctx, size, options.blackKeyThreshold || 12);
+    return setupTexture(new THREE.CanvasTexture(canvasTexture), {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+    });
+  }
+
+  function loadAtlasIntoMaterials(url, materials, options = {}) {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      const grid = options.grid || 4;
+      const maxCells = grid * grid;
+      materials.forEach((mat, index) => {
+        mat.map = makeAtlasCellTexture(image, index % maxCells, options);
+        mat.color.set(0xffffff);
+        mat.needsUpdate = true;
+      });
+    };
+    image.onerror = () => console.warn(`Texture atlas failed to load: ${url}`);
+    image.src = url;
+  }
+
+  function makeMaterialVariants(kind, count, atlasUrl) {
+    const materials = Array.from({ length: count }, (_, index) => {
+      const texture = makeSurfaceTexture(kind, 0x9E3779B9 ^ Math.imul(index + 1, 0x85ebca6b));
+      return new THREE.MeshLambertMaterial({ color: 0xffffff, map: texture });
+    });
+    if (atlasUrl) loadAtlasIntoMaterials(atlasUrl, materials, { grid: 4, size: 256, cropInset: 0.032 });
+    return materials;
+  }
+
+  function makeGeneratedDetailMaterials(count, atlasUrl) {
+    const materials = Array.from({ length: count }, (_, index) => new THREE.MeshBasicMaterial({
+      map: makeDecalTexture(0xD37A11 ^ Math.imul(index + 11, 0x45d9f3b), index % 3 === 0 ? "puddle" : "wall"),
+      transparent: true,
+      opacity: 0.86,
+      alphaTest: 0.05,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }));
+    if (atlasUrl) {
+      loadAtlasIntoMaterials(atlasUrl, materials, {
+        grid: 4,
+        size: 256,
+        cropInset: 0.045,
+        blackKey: true,
+        blackKeyThreshold: 10,
+      });
+    }
+    return materials;
+  }
+
+  const materialSets = {
+    wall: makeMaterialVariants("wall", 16, textureAssets.wall),
+    floor: makeMaterialVariants("floor", 16, textureAssets.floor),
+    ceiling: makeMaterialVariants("ceiling", 16, textureAssets.ceiling),
+    hazard: makeMaterialVariants("hazard", 16, textureAssets.floor),
+    fresh: makeMaterialVariants("fresh", 16, textureAssets.floor),
+  };
+
+  const decalMats = {
+    floor: Array.from({ length: 10 }, (_, index) => new THREE.MeshBasicMaterial({
+      map: makeDecalTexture(0xA511E9 ^ Math.imul(index + 3, 0x27d4eb2d), "puddle"),
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })),
+    wall: Array.from({ length: 8 }, (_, index) => new THREE.MeshBasicMaterial({
+      map: makeDecalTexture(0xBADC0DE ^ Math.imul(index + 5, 0x165667b1), "wall"),
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })),
+    ceiling: Array.from({ length: 6 }, (_, index) => new THREE.MeshBasicMaterial({
+      map: makeDecalTexture(0xCE11A9 ^ Math.imul(index + 7, 0x1b873593), "ceiling"),
+      transparent: true,
+      opacity: 0.54,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })),
+  };
+
+  const detailMats = makeGeneratedDetailMaterials(16, textureAssets.details);
+
   const world = new THREE.Group();
   const enemyRoot = new THREE.Group();
   const pickupRoot = new THREE.Group();
@@ -162,16 +485,16 @@
   flashlight.target = flashlightTarget;
 
   const mats = {
-    wall: new THREE.MeshLambertMaterial({ color: 0x17253a }),
-    wallDark: new THREE.MeshLambertMaterial({ color: 0x0b1424 }),
-    floor: new THREE.MeshLambertMaterial({ color: 0x2b1631 }),
-    carpet: new THREE.MeshLambertMaterial({ color: 0x451a37 }),
-    ceiling: new THREE.MeshLambertMaterial({ color: 0x0c1220 }),
+    wall: materialSets.wall[0],
+    wallDark: materialSets.wall[3],
+    floor: materialSets.floor[0],
+    carpet: materialSets.floor[4],
+    ceiling: materialSets.ceiling[0],
     exitLocked: new THREE.MeshLambertMaterial({ color: 0x922746, emissive: 0x240711 }),
     exitOpen: new THREE.MeshLambertMaterial({ color: 0x42f2ff, emissive: 0x104a4f }),
-    fresh: new THREE.MeshLambertMaterial({ color: 0x16435f, emissive: 0x061e28 }),
-    hazard: new THREE.MeshLambertMaterial({ color: 0x4c3211, emissive: 0x211303 }),
-    trim: new THREE.MeshLambertMaterial({ color: 0xffd43b }),
+    fresh: materialSets.fresh[0],
+    hazard: materialSets.hazard[0],
+    trim: new THREE.MeshLambertMaterial({ color: 0x8d6f23, emissive: 0x1f1604 }),
     skin: new THREE.MeshLambertMaterial({ color: 0xb7ff54, emissive: 0x1b3b0a }),
     passenger: new THREE.MeshLambertMaterial({ color: 0x3f5456 }),
     cougher: new THREE.MeshLambertMaterial({ color: 0x5e4d70 }),
@@ -181,6 +504,10 @@
     pickup: new THREE.MeshLambertMaterial({ color: 0xffd43b, emissive: 0x4d3500 }),
     shotgun: new THREE.MeshLambertMaterial({ color: 0xff2e88, emissive: 0x3a071d }),
     porthole: new THREE.MeshLambertMaterial({ color: 0x163b54, emissive: 0x071a29 }),
+    sickLight: new THREE.MeshBasicMaterial({ color: 0xb7ff54, transparent: true, opacity: 0.58 }),
+    debrisDark: new THREE.MeshLambertMaterial({ color: 0x14120e }),
+    debrisPaper: new THREE.MeshLambertMaterial({ color: 0x6f6a55 }),
+    debrisRust: new THREE.MeshLambertMaterial({ color: 0x5b3515 }),
   };
 
   const geoms = {
@@ -196,6 +523,11 @@
     pickup: new THREE.BoxGeometry(0.64, 0.64, 0.64),
     tube: new THREE.CylinderGeometry(0.06, 0.06, 0.75, 8),
     sphere: new THREE.SphereGeometry(1, 12, 8),
+    floorDecal: new THREE.PlaneGeometry(1, 1),
+    wallDecal: new THREE.PlaneGeometry(1, 1),
+    debrisSmall: new THREE.BoxGeometry(0.32, 0.08, 0.22),
+    debrisLong: new THREE.BoxGeometry(0.68, 0.07, 0.16),
+    debrisFlat: new THREE.BoxGeometry(0.55, 0.035, 0.42),
   };
 
   let exitDoor = null;
@@ -401,6 +733,258 @@
     return mesh;
   }
 
+  function tileHash(gx, gy, salt = 0) {
+    let h = Math.imul(gx + 0x9E3779B1, 0x85ebca6b);
+    h ^= Math.imul(gy + 0xC2B2AE35, 0x27d4eb2d);
+    h ^= Math.imul(salt + state.level * 131, 0x165667b1);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  }
+
+  function pickVariant(list, gx, gy, salt = 0) {
+    return list[Math.floor(tileHash(gx, gy, salt) * list.length) % list.length];
+  }
+
+  function pickVariantFromIndices(list, indices, gx, gy, salt = 0) {
+    const index = indices[Math.floor(tileHash(gx, gy, salt) * indices.length) % indices.length];
+    return list[index % list.length];
+  }
+
+  function tileRange(gx, gy, salt, min, max) {
+    return lerp(min, max, tileHash(gx, gy, salt));
+  }
+
+  const wallVariantPools = {
+    cleaner: [0, 2, 4, 5, 8, 10, 12, 14],
+    detailed: [1, 2, 4, 6, 8, 9, 10, 11, 15],
+    dirty: [3, 5, 7, 12, 13, 15],
+  };
+
+  const floorVariantPools = {
+    cleaner: [0, 1, 5, 6, 9, 10, 13, 14],
+    mixed: [0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 13, 14],
+    dirty: [3, 7, 12, 15, 4, 5],
+    hazard: [3, 7, 12, 15],
+  };
+
+  const ceilingVariantPools = {
+    cleaner: [0, 3, 5, 7, 11, 12, 15],
+    detailed: [1, 3, 5, 6, 8, 10, 12, 14],
+    dirty: [2, 4, 9, 11, 13],
+  };
+
+  const Detail = {
+    PORTHOLE: 0,
+    VENT: 1,
+    PEEL: 2,
+    PUDDLE: 3,
+    DRAIN: 4,
+    FOOTPRINTS: 5,
+    DRIPS: 6,
+    HANDRAIL: 7,
+    BROKEN_TILE: 8,
+    STRIPES: 9,
+    CABLE: 10,
+    LIFE_VEST: 11,
+    SMEAR: 12,
+    PAPER: 13,
+    HATCH: 14,
+    WIRES: 15,
+  };
+
+  function pickDetail(indices, gx, gy, salt = 0) {
+    return detailMats[indices[Math.floor(tileHash(gx, gy, salt) * indices.length) % indices.length]];
+  }
+
+  function addPlane(group, geom, mat, x, y, z, sx, sy, rx, ry = 0, rz = 0) {
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, 1);
+    mesh.rotation.set(rx, ry, rz);
+    group.add(mesh);
+    return mesh;
+  }
+
+  function addFloorGrime(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT) return;
+    const chaos = tileHash(gx, gy, 41);
+    const count = tile === Tile.HAZARD ? 3 : tile === Tile.FRESH ? (chaos > 0.72 ? 1 : 0) : chaos > 0.72 ? 2 : chaos > 0.34 ? 1 : 0;
+    for (let i = 0; i < count; i += 1) {
+      const salt = 53 + i * 11;
+      const scaleBoost = tile === Tile.HAZARD ? 1.25 : 1;
+      const sx = tileRange(gx, gy, salt, 1.1, 2.9) * scaleBoost;
+      const sy = tileRange(gx, gy, salt + 1, 0.75, 2.45) * scaleBoost;
+      const ox = tileRange(gx, gy, salt + 2, -TILE * 0.28, TILE * 0.28);
+      const oz = tileRange(gx, gy, salt + 3, -TILE * 0.28, TILE * 0.28);
+      const angle = tileRange(gx, gy, salt + 4, -Math.PI, Math.PI);
+      addPlane(
+        world,
+        geoms.floorDecal,
+        pickVariant(decalMats.floor, gx, gy, salt + 5),
+        pos.x + ox,
+        0.018 + i * 0.006,
+        pos.z + oz,
+        sx,
+        sy,
+        -Math.PI / 2,
+        0,
+        angle
+      );
+    }
+  }
+
+  function addCeilingGrime(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT || tileHash(gx, gy, 87) < 0.33) return;
+    const sx = tileRange(gx, gy, 89, 0.85, 2.4);
+    const sy = tileRange(gx, gy, 90, 0.9, 2.8);
+    const angle = tileRange(gx, gy, 91, -Math.PI, Math.PI);
+    addPlane(
+      world,
+      geoms.wallDecal,
+      pickVariant(decalMats.ceiling, gx, gy, 92),
+      pos.x + tileRange(gx, gy, 93, -0.45, 0.45),
+      WALL_H + 0.006,
+      pos.z + tileRange(gx, gy, 94, -0.45, 0.45),
+      sx,
+      sy,
+      Math.PI / 2,
+      0,
+      angle
+    );
+  }
+
+  function addFloorDebris(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT || tile === Tile.FRESH) return;
+    const roll = tileHash(gx, gy, 111);
+    const count = tile === Tile.HAZARD ? (roll > 0.25 ? 2 : 1) : roll > 0.82 ? 2 : roll > 0.58 ? 1 : 0;
+    const matsByKind = [mats.debrisDark, mats.debrisPaper, mats.debrisRust];
+    const geomsByKind = [geoms.debrisSmall, geoms.debrisLong, geoms.debrisFlat];
+    for (let i = 0; i < count; i += 1) {
+      const salt = 119 + i * 17;
+      const mesh = addBox(
+        world,
+        geomsByKind[Math.floor(tileHash(gx, gy, salt) * geomsByKind.length) % geomsByKind.length],
+        matsByKind[Math.floor(tileHash(gx, gy, salt + 1) * matsByKind.length) % matsByKind.length],
+        pos.x + tileRange(gx, gy, salt + 2, -TILE * 0.34, TILE * 0.34),
+        0.055 + i * 0.015,
+        pos.z + tileRange(gx, gy, salt + 3, -TILE * 0.34, TILE * 0.34),
+        tileRange(gx, gy, salt + 4, 0.65, 1.55),
+        tileRange(gx, gy, salt + 5, 0.65, 1.25),
+        tileRange(gx, gy, salt + 6, 0.65, 1.55)
+      );
+      mesh.rotation.y = tileRange(gx, gy, salt + 7, -Math.PI, Math.PI);
+      mesh.rotation.z = tileRange(gx, gy, salt + 8, -0.18, 0.18);
+    }
+  }
+
+  function addCeilingFixture(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT || tileHash(gx, gy, 151) < 0.88) return;
+    const mesh = addBox(world, geoms.trim, mats.sickLight, pos.x, WALL_H - 0.06, pos.z, 0.72, 0.7, 0.28);
+    mesh.rotation.y = tileHash(gx, gy, 152) > 0.5 ? Math.PI / 2 : 0;
+  }
+
+  function addWallGrime(gx, gy, pos, map) {
+    [
+      { dx: 1, dy: 0, x: pos.x + TILE / 2 + 0.012, z: pos.z, ry: Math.PI / 2, salt: 201 },
+      { dx: -1, dy: 0, x: pos.x - TILE / 2 - 0.012, z: pos.z, ry: -Math.PI / 2, salt: 211 },
+      { dx: 0, dy: 1, x: pos.x, z: pos.z + TILE / 2 + 0.012, ry: 0, salt: 221 },
+      { dx: 0, dy: -1, x: pos.x, z: pos.z - TILE / 2 - 0.012, ry: Math.PI, salt: 231 },
+    ].forEach((face) => {
+      if (!isWalkableTile(gx + face.dx, gy + face.dy, map) || tileHash(gx, gy, face.salt) < 0.43) return;
+      addPlane(
+        world,
+        geoms.wallDecal,
+        pickVariant(decalMats.wall, gx, gy, face.salt + 1),
+        face.x,
+        tileRange(gx, gy, face.salt + 2, 0.85, 2.18),
+        face.z,
+        tileRange(gx, gy, face.salt + 3, 1.05, 2.85),
+        tileRange(gx, gy, face.salt + 4, 0.8, 2.05),
+        0,
+        face.ry,
+        tileRange(gx, gy, face.salt + 5, -0.08, 0.08)
+      );
+    });
+  }
+
+  function addWallCruiseDetails(gx, gy, pos, map) {
+    [
+      { dx: 1, dy: 0, x: pos.x + TILE / 2 + 0.019, z: pos.z, ry: Math.PI / 2, salt: 301 },
+      { dx: -1, dy: 0, x: pos.x - TILE / 2 - 0.019, z: pos.z, ry: -Math.PI / 2, salt: 311 },
+      { dx: 0, dy: 1, x: pos.x, z: pos.z + TILE / 2 + 0.019, ry: 0, salt: 321 },
+      { dx: 0, dy: -1, x: pos.x, z: pos.z - TILE / 2 - 0.019, ry: Math.PI, salt: 331 },
+    ].forEach((face) => {
+      if (!isWalkableTile(gx + face.dx, gy + face.dy, map) || tileHash(gx, gy, face.salt) < 0.78) return;
+      const detail = pickDetail(
+        [Detail.PORTHOLE, Detail.VENT, Detail.PEEL, Detail.DRIPS, Detail.HANDRAIL, Detail.STRIPES, Detail.HATCH],
+        gx,
+        gy,
+        face.salt + 1
+      );
+      const longDetail = detail === detailMats[Detail.HANDRAIL] || detail === detailMats[Detail.STRIPES];
+      addPlane(
+        world,
+        geoms.wallDecal,
+        detail,
+        face.x,
+        tileRange(gx, gy, face.salt + 2, 1.05, 2.35),
+        face.z,
+        longDetail ? tileRange(gx, gy, face.salt + 3, 1.4, 2.4) : tileRange(gx, gy, face.salt + 3, 0.62, 1.35),
+        longDetail ? tileRange(gx, gy, face.salt + 4, 0.35, 0.82) : tileRange(gx, gy, face.salt + 4, 0.62, 1.35),
+        0,
+        face.ry,
+        tileRange(gx, gy, face.salt + 5, -0.05, 0.05)
+      );
+    });
+  }
+
+  function addFloorCruiseDetails(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT) return;
+    const threshold = tile === Tile.HAZARD ? 0.45 : tile === Tile.FRESH ? 0.91 : 0.76;
+    if (tileHash(gx, gy, 371) < threshold) return;
+    const detail = pickDetail(
+      tile === Tile.HAZARD
+        ? [Detail.PUDDLE, Detail.FOOTPRINTS, Detail.SMEAR, Detail.DRAIN]
+        : [Detail.PUDDLE, Detail.DRAIN, Detail.FOOTPRINTS, Detail.BROKEN_TILE, Detail.CABLE, Detail.LIFE_VEST, Detail.SMEAR, Detail.PAPER],
+      gx,
+      gy,
+      373
+    );
+    const large = detail === detailMats[Detail.PUDDLE] || detail === detailMats[Detail.SMEAR] || detail === detailMats[Detail.CABLE];
+    addPlane(
+      world,
+      geoms.floorDecal,
+      detail,
+      pos.x + tileRange(gx, gy, 374, -TILE * 0.24, TILE * 0.24),
+      0.05,
+      pos.z + tileRange(gx, gy, 375, -TILE * 0.24, TILE * 0.24),
+      large ? tileRange(gx, gy, 376, 1.1, 2.25) : tileRange(gx, gy, 376, 0.55, 1.15),
+      large ? tileRange(gx, gy, 377, 0.85, 1.9) : tileRange(gx, gy, 377, 0.55, 1.15),
+      -Math.PI / 2,
+      0,
+      tileRange(gx, gy, 378, -Math.PI, Math.PI)
+    );
+  }
+
+  function addCeilingCruiseDetails(gx, gy, tile, pos) {
+    if (tile === Tile.EXIT || tileHash(gx, gy, 401) < 0.82) return;
+    const detail = pickDetail([Detail.VENT, Detail.DRIPS, Detail.CABLE, Detail.HATCH, Detail.WIRES], gx, gy, 403);
+    const cable = detail === detailMats[Detail.CABLE] || detail === detailMats[Detail.WIRES];
+    addPlane(
+      world,
+      geoms.wallDecal,
+      detail,
+      pos.x + tileRange(gx, gy, 404, -0.34, 0.34),
+      WALL_H + 0.014,
+      pos.z + tileRange(gx, gy, 405, -0.34, 0.34),
+      cable ? tileRange(gx, gy, 406, 1.15, 2.25) : tileRange(gx, gy, 406, 0.7, 1.35),
+      cable ? tileRange(gx, gy, 407, 0.85, 1.85) : tileRange(gx, gy, 407, 0.7, 1.35),
+      Math.PI / 2,
+      0,
+      tileRange(gx, gy, 408, -Math.PI, Math.PI)
+    );
+  }
+
   function buildWorld() {
     clearGroup(world);
     clearGroup(enemyRoot);
@@ -415,17 +999,34 @@
         const pos = tileToWorld(gx, gy, map);
 
         if (tile === Tile.WALL) {
-          const mat = (gx + gy) % 3 === 0 ? mats.wallDark : mats.wall;
+          const wallRoll = tileHash(gx, gy, 12);
+          const wallPool = wallRoll > 0.78 ? wallVariantPools.dirty : wallRoll > 0.34 ? wallVariantPools.detailed : wallVariantPools.cleaner;
+          const mat = pickVariantFromIndices(materialSets.wall, wallPool, gx, gy, 13);
           addBox(world, geoms.wall, mat, pos.x, WALL_H / 2, pos.z);
           if ((gx === 0 || gy === 0 || gx === map.w - 1 || gy === map.h - 1) && (gx + gy) % 4 === 0) {
             addBox(world, geoms.trim, mats.porthole, pos.x, 1.75, pos.z, 0.72, 1, 1);
           }
+          addWallGrime(gx, gy, pos, map);
+          addWallCruiseDetails(gx, gy, pos, map);
           continue;
         }
 
-        const floorMat = tile === Tile.FRESH ? mats.fresh : tile === Tile.HAZARD ? mats.hazard : ((gx + gy) % 2 ? mats.floor : mats.carpet);
+        const floorRoll = tileHash(gx, gy, 28);
+        const floorPool = tile === Tile.FRESH
+          ? floorVariantPools.cleaner
+          : tile === Tile.HAZARD
+            ? floorVariantPools.hazard
+            : floorRoll > 0.82
+              ? floorVariantPools.dirty
+              : floorRoll < 0.24
+                ? floorVariantPools.cleaner
+                : floorVariantPools.mixed;
+        const ceilingRoll = tileHash(gx, gy, 42);
+        const ceilingPool = ceilingRoll > 0.78 ? ceilingVariantPools.dirty : ceilingRoll < 0.22 ? ceilingVariantPools.cleaner : ceilingVariantPools.detailed;
+        const floorMat = pickVariantFromIndices(materialSets.floor, floorPool, gx, gy, 37);
+        const ceilingMat = pickVariantFromIndices(materialSets.ceiling, ceilingPool, gx, gy, 43);
         addBox(world, geoms.floor, floorMat, pos.x, -0.04, pos.z);
-        addBox(world, geoms.ceiling, mats.ceiling, pos.x, WALL_H + 0.05, pos.z);
+        addBox(world, geoms.ceiling, ceilingMat, pos.x, WALL_H + 0.05, pos.z);
 
         if (tile === Tile.FRESH) {
           addBox(world, geoms.trim, mats.heal, pos.x, 0.06, pos.z, 0.95, 1, 0.95);
@@ -440,6 +1041,13 @@
           exitDoor = addBox(world, geoms.door, mats.exitLocked, pos.x, 1.36, pos.z, 1, 1, 1);
           addBox(world, geoms.trim, mats.heal, pos.x, 2.95, pos.z, 1.05, 1.25, 0.35);
         }
+
+        addFloorGrime(gx, gy, tile, pos);
+        addCeilingGrime(gx, gy, tile, pos);
+        addFloorDebris(gx, gy, tile, pos);
+        addCeilingFixture(gx, gy, tile, pos);
+        addFloorCruiseDetails(gx, gy, tile, pos);
+        addCeilingCruiseDetails(gx, gy, tile, pos);
       }
     }
 

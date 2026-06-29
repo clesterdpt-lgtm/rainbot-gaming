@@ -1872,10 +1872,6 @@
     }
   }
 
-  function isTouchLikePointer(event) {
-    return event.pointerType === "touch" || event.pointerType === "pen";
-  }
-
   function applyLookDelta(dx, dy, scale = 1) {
     player.yaw -= dx * MOUSE_SENS * scale;
     if (player.yaw > Math.PI) player.yaw -= Math.PI * 2;
@@ -1977,37 +1973,35 @@
       if (useButton) bindTapButton(useButton, tryUseExit);
     }
 
-    const hasTouchInput = "ontouchstart" in window || (navigator && navigator.maxTouchPoints > 0);
+    const lookSurface = canvas || canvasWrap;
 
     if (window.PointerEvent) {
-      canvasWrap.addEventListener("pointerdown", (event) => {
+      lookSurface.addEventListener("pointerdown", (event) => {
         if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
         if (touchLook.active) return;
         if (event.pointerType === "mouse" && isPointerLocked()) return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
         if (event.cancelable) event.preventDefault();
-        if (isTouchLikePointer(event)) event.stopPropagation();
+        event.stopPropagation();
         beginTouchLook(event.clientX, event.clientY, event.pointerId);
-        if (canvasWrap.setPointerCapture) {
-          try { canvasWrap.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
+        if (lookSurface.setPointerCapture) {
+          try { lookSurface.setPointerCapture(event.pointerId); } catch (error) { /* ignore */ }
         }
       }, { passive: false });
 
-      canvasWrap.addEventListener("pointermove", (event) => {
+      lookSurface.addEventListener("pointermove", (event) => {
         if (!touchLook.active || touchLook.pointerId !== event.pointerId || state.mode !== "playing") return;
-        if (isTouchLikePointer(event) && event.cancelable) event.preventDefault();
+        if (event.cancelable) event.preventDefault();
         moveTouchLook(event.clientX, event.clientY);
       });
 
       const endPointerLook = (event) => endTouchLook(event.pointerId);
-      canvasWrap.addEventListener("pointerup", endPointerLook);
-      canvasWrap.addEventListener("pointercancel", endPointerLook);
+      lookSurface.addEventListener("pointerup", endPointerLook);
+      lookSurface.addEventListener("pointercancel", endPointerLook);
       window.addEventListener("pointerup", endPointerLook);
       window.addEventListener("pointercancel", endPointerLook);
-    }
-
-    if (!window.PointerEvent || hasTouchInput) {
-      canvasWrap.addEventListener("touchstart", (event) => {
+    if (!window.PointerEvent) {
+      lookSurface.addEventListener("touchstart", (event) => {
         if (state.mode !== "playing" || isLookBlockedTarget(event.target)) return;
         if (touchLook.active) return;
         const touch = event.changedTouches && event.changedTouches[0];
@@ -2016,7 +2010,7 @@
         beginTouchLook(touch.clientX, touch.clientY, touch.identifier);
       }, { passive: false });
 
-      canvasWrap.addEventListener("touchmove", (event) => {
+      lookSurface.addEventListener("touchmove", (event) => {
         if (!touchLook.active || state.mode !== "playing") return;
         const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
         if (!touch) return;
@@ -2028,8 +2022,8 @@
         const touch = [...event.changedTouches].find((item) => item.identifier === touchLook.pointerId);
         if (touch) endTouchLook(touch.identifier);
       };
-      canvasWrap.addEventListener("touchend", endTouch);
-      canvasWrap.addEventListener("touchcancel", endTouch);
+      lookSurface.addEventListener("touchend", endTouch);
+      lookSurface.addEventListener("touchcancel", endTouch);
       window.addEventListener("touchend", endTouch);
       window.addEventListener("touchcancel", endTouch);
     }

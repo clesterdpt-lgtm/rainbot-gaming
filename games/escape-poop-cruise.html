@@ -364,9 +364,15 @@
       }
 
       .canvas-wrap--poop-cruise.is-playing .poop-meter {
-        bottom: 128px;
+        bottom: 186px;
         max-width: calc(100% - 24px);
         width: calc(100% - 24px);
+      }
+
+      @media (max-width: 760px) and (orientation: portrait) {
+        .canvas-wrap--poop-cruise.is-playing .poop-meter {
+          bottom: clamp(178px, 31vh, 214px);
+        }
       }
 
       .canvas-wrap--poop-cruise.is-playing .poop-hud__top {
@@ -531,7 +537,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260629-avatar-icons-2"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/escape-poop-cruise.js?v=20260629-touch-fix-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260629-touch-fix-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

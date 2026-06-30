@@ -69,7 +69,7 @@
   const SPRINT_SPEED = 6.1;
   const MOUSE_SENS = 0.00215;
   const MAX_PITCH = Math.PI * 0.46;
-  const DART_RANGE = 22;
+  const DART_RANGE = 13;
   const SHOTGUN_RANGE = 15;
   const FLOW_REFRESH = 0.36;
   const WALKABLE = new Set([0, 2, 3, 4]);
@@ -1592,8 +1592,26 @@
   const mawVoxGeo = new THREE.BoxGeometry(0.22, 0.09, 0.06);
   const voxelMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x080a0c });
 
-  // Healthy (cured) skin tone — swaps in over the infected green when cured.
+  // Healthy (cured) skin tones — one is picked per enemy and swaps in over the
+  // infected green when cured.
   const HEALTHY_SKIN = 0xe3b083;
+  const HEALTHY_SKIN_TONES = [0xe3b083, 0xc98a5e, 0x8d5a3b, 0xf0c8a0, 0x6b4530, 0xd9a878];
+  const NORMAL_EYE_COLORS = [0x5a3a22, 0x355a78, 0x3a6b30, 0x6b4f30, 0x55555f];
+  const HAIR_COLORS = [0x1a1310, 0x4a3422, 0x7a5230, 0xb89060, 0x2a2a2a, 0xd6c9a8, 0x8a3a2a];
+  const HAT_COLORS = [0xcf3b3b, 0xe0c14a, 0x3b6fcf, 0xdedede, 0x4f8a4f, 0x8a4fae];
+  // Hue-shifting tints multiplied onto the shared per-type baked clothing
+  // colour, so a crowd gets visibly different outfit colours from the same
+  // cached geometry instead of just brightness jitter.
+  const CLOTH_TINTS = [
+    { r: 1, g: 1, b: 1 },
+    { r: 1.35, g: 0.55, b: 0.5 },
+    { r: 0.55, g: 0.65, b: 1.35 },
+    { r: 1.3, g: 1.1, b: 0.45 },
+    { r: 0.55, g: 1.25, b: 0.6 },
+    { r: 1.2, g: 0.6, b: 1.15 },
+    { r: 0.7, g: 0.7, b: 0.72 },
+    { r: 1.25, g: 0.85, b: 0.5 },
+  ];
   const FUNNY_LINES = [
     "Refund. I want a refund.",
     "Never trust a midnight buffet.",
@@ -1801,17 +1819,25 @@
     // material colour multiplies the baked vertex colours (shared geometry).
     // Skin and clothes get separate materials so curing can fade ONLY the
     // infected-green skin over to a healthy tone without recolouring clothes.
-    const tintR = 0.9 + Math.random() * 0.18, tintG = 0.92 + Math.random() * 0.14, tintB = 0.88 + Math.random() * 0.16;
+    // Clothes get a bold hue-shift pick (different colour outfits); skin keeps
+    // a subtle jitter only, so the "infected" identity stays readable.
+    const clothTint = CLOTH_TINTS[Math.floor(Math.random() * CLOTH_TINTS.length)];
     const clothMat = voxelMat.clone();
-    clothMat.color.setRGB(tintR, tintG, tintB);
+    clothMat.color.setRGB(
+      clothTint.r * (0.92 + Math.random() * 0.16),
+      clothTint.g * (0.92 + Math.random() * 0.16),
+      clothTint.b * (0.92 + Math.random() * 0.16)
+    );
+    const skinTint = 0.92 + Math.random() * 0.14;
     const skinMat = voxelMat.clone();
-    skinMat.color.setRGB(tintR, tintG, tintB);
+    skinMat.color.setRGB(skinTint, 0.94 + Math.random() * 0.12, skinTint);
     skinMat.transparent = true;
     skinMat.depthWrite = false;
     // Healthy overlay shares the same geometry but ignores baked vertex colour,
     // so it renders as a flat normal skin tone. Crossfades in as skinMat fades out.
     const healthyMat = new THREE.MeshLambertMaterial({
-      color: HEALTHY_SKIN, emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
+      color: HEALTHY_SKIN_TONES[Math.floor(Math.random() * HEALTHY_SKIN_TONES.length)],
+      emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
     });
     const girth = 0.92 + Math.random() * 0.16;
     const height = 0.94 + Math.random() * 0.14;
@@ -1852,9 +1878,28 @@
     eyeL.position.set(-d.eyeX, d.eyeY, d.eyeZ);
     const eyeR = new THREE.Mesh(eyeVoxGeo, eyeMat);
     eyeR.position.set(d.eyeX, d.eyeY, d.eyeZ);
+    // Normal (non-glowing) eyes crossfade in as the infected glow fades out,
+    // so cured passengers end up with calm eyes instead of a blank face.
+    // renderOrder must be ABOVE the healthy-head overlay (1): both are
+    // transparent + depthWrite:false, so paint order (not real depth) decides
+    // what's on top — without this the opaque-looking head paints over them.
+    const normalEyeMat = new THREE.MeshLambertMaterial({
+      color: NORMAL_EYE_COLORS[Math.floor(Math.random() * NORMAL_EYE_COLORS.length)],
+      emissive: 0x100c08, transparent: true, opacity: 0, depthWrite: false,
+    });
+    const eyeLNormal = new THREE.Mesh(eyeVoxGeo, normalEyeMat);
+    eyeLNormal.position.copy(eyeL.position);
+    eyeLNormal.position.z += 0.012;
+    eyeLNormal.scale.setScalar(0.82);
+    eyeLNormal.renderOrder = 2;
+    const eyeRNormal = new THREE.Mesh(eyeVoxGeo, normalEyeMat);
+    eyeRNormal.position.copy(eyeR.position);
+    eyeRNormal.position.z += 0.012;
+    eyeRNormal.scale.setScalar(0.82);
+    eyeRNormal.renderOrder = 2;
     const maw = new THREE.Mesh(mawVoxGeo, mats.maw);
     maw.position.set(0, d.mawY, d.mawZ);
-    headPivot.add(eyeL, eyeR, maw);
+    headPivot.add(eyeL, eyeR, eyeLNormal, eyeRNormal, maw);
     upper.add(headPivot);
 
     const armBase = 0.2 + look.armRaise;
@@ -1878,15 +1923,22 @@
     armR.add(armRSkin, armRHealthy);
     upper.add(armL, armR);
 
-    // Occasional cruise hat for crowd variety.
+    // Occasional cruise hat, otherwise hair — crowd variety up top.
     if (Math.random() < 0.4) {
-      const hatHex = [0xcf3b3b, 0xe0c14a, 0x3b6fcf, 0xdedede][Math.floor(Math.random() * 4)];
+      const hatHex = HAT_COLORS[Math.floor(Math.random() * HAT_COLORS.length)];
       const hatMat = new THREE.MeshLambertMaterial({ color: hatHex, emissive: 0x070707 });
       const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 12), hatMat);
       brim.position.y = d.eyeY + 0.17;
       const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.14, 12), hatMat);
       crown.position.y = d.eyeY + 0.25;
       headPivot.add(brim, crown);
+    } else if (Math.random() < 0.8) {
+      const hairHex = HAIR_COLORS[Math.floor(Math.random() * HAIR_COLORS.length)];
+      const hairMat = new THREE.MeshLambertMaterial({ color: hairHex, emissive: 0x040302 });
+      const hair = new THREE.Mesh(geoms.sphere, hairMat);
+      hair.scale.set(0.31, 0.21, 0.31);
+      hair.position.y = d.eyeY + 0.13;
+      headPivot.add(hair);
     }
 
     group.add(legL, legR, upper);
@@ -1901,7 +1953,7 @@
 
     group.userData.baseScale = look.scale;
     group.userData.parts = {
-      upper, legL, legR, armL, armR, headPivot, eyeMat, maw, rimMat, skinMat, healthyMat,
+      upper, legL, legR, armL, armR, headPivot, eyeMat, normalEyeMat, maw, rimMat, skinMat, healthyMat,
       leanBase: look.lean, upperBaseY: d.hipY, armBase, swing: look.swing,
     };
     return group;
@@ -1933,7 +1985,7 @@
         vz: 0,
         cured: false,
         inoculation: 0,
-        resistance: type === "cougher" ? 1.65 : type === "sprinter" ? 1.25 : 1,
+        resistance: type === "cougher" ? 1.65 : type === "sprinter" ? 1.25 : 1.15,
         speed: (type === "sprinter" ? 2.35 : type === "cougher" ? 1.35 : 1.6) + Math.min(0.7, state.level * 0.06),
         coughTimer: 1 + rng() * 2,
         stagger: 0,
@@ -2362,7 +2414,7 @@
 
   function fireDart() {
     if (state.dartCooldown > 0) return;
-    state.dartCooldown = 0.55;
+    state.dartCooldown = 0.78;
     state.totalShots += 1;
     triggerRecoil("dart");
     const dir = new THREE.Vector3();
@@ -2536,7 +2588,10 @@
       }
 
       enemy.mesh.position.set(enemy.x, 0, enemy.z);
-      enemy.mesh.lookAt(player.x, 0.7, player.z);
+      // Target the same height as the mesh's own pivot (ground level) so this
+      // only ever yaws the figure — targeting a raised point pitches the whole
+      // body backward as the horizontal distance shrinks (e.g. up close).
+      if (dist > 0.05) enemy.mesh.lookAt(player.x, 0, player.z);
       animateEnemy(enemy, dt, dist, enemy.stagger <= 0);
     }
 
@@ -2614,6 +2669,7 @@
       parts.healthyMat.opacity = t;
       parts.rimMat.opacity = Math.max(0, parts.rimMat.opacity - dt * 1.8);
       parts.eyeMat.opacity = Math.max(0, parts.eyeMat.opacity - dt * 1.6);
+      parts.normalEyeMat.opacity = Math.min(1, parts.normalEyeMat.opacity + dt * 1.6);
       parts.armL.rotation.x = lerp(parts.armL.rotation.x, 0.08, dt * 3);
       parts.armR.rotation.x = lerp(parts.armR.rotation.x, 0.08, dt * 3);
       parts.upper.rotation.x = lerp(parts.upper.rotation.x, 0.02, dt * 3);
@@ -2623,6 +2679,7 @@
         parts.healthyMat.opacity = 1;
         parts.rimMat.opacity = 0;
         parts.eyeMat.opacity = 0;
+        parts.normalEyeMat.opacity = 1;
       }
     }
 
@@ -2654,7 +2711,10 @@
         const speed = 0.85;
         moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, 0.34);
         enemy.mesh.position.set(enemy.x, 0, enemy.z);
-        enemy.mesh.lookAt(enemy.x + dx, 0.7, enemy.z + dz);
+        // Same-height target as the mesh's own pivot: yaw only, never pitch.
+        // (A raised target made the figure lean back hard as it neared the
+        // target and the horizontal distance shrank toward zero.)
+        enemy.mesh.lookAt(enemy.x + dx, 0, enemy.z + dz);
       }
     }
     enemy.mesh.position.set(enemy.x, 0, enemy.z);
@@ -2813,14 +2873,18 @@
       state.lurchTimer = Math.max(state.lurchTimer, 0.1);
     }
 
-    const safeDistance = closestEnemy > 7.2;
+    // Safe distance is pushed out past the proximity-damage falloff (6.5) so
+    // the passive-drain and proximity-gain zones no longer overlap — standing
+    // at mid-range used to net-heal even with an enemy nearby, since the old
+    // drain band (>4.5) started well inside the gain band (<6.5).
+    const safeDistance = closestEnemy > 9;
     if (tile === Tile.FRESH) {
       state.infection -= 10.5 * dt;
       if (state.statusTimer <= 0) setStatus("Fresh-air vent active. Infection dropping fast.", 0.85);
     } else if (safeDistance) {
-      state.infection -= 3.25 * dt;
-    } else if (closestEnemy > 4.5) {
-      state.infection -= 1.25 * dt;
+      state.infection -= 2.1 * dt;
+    } else if (closestEnemy > 6.5) {
+      state.infection -= 0.9 * dt;
     }
 
     state.infection = clamp(state.infection, 0, 100);

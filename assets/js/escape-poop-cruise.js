@@ -158,6 +158,7 @@
     details: new URL("detail-decal-atlas-ai-v1.png", textureAssetBase).href,
     objects: new URL("object-atlas-ai-v1.png", textureAssetBase).href,
     infection: new URL("infection-hazard-atlas-ai-v1.png", textureAssetBase).href,
+    exitDoor: new URL("exit-door-ai-v2.png", textureAssetBase).href,
   };
 
   const textureAnisotropy = Math.min(
@@ -622,6 +623,57 @@
     CONTROL_PANEL: 15,
   };
 
+  function makeObjectCellMaterial(index, fallback, tintColor = 0xffffff) {
+    const mat = new THREE.MeshLambertMaterial({
+      color: fallback.color,
+      emissive: fallback.emissive || 0x000000,
+      transparent: Boolean(fallback.transparent),
+      opacity: fallback.opacity ?? 1,
+      depthWrite: fallback.depthWrite ?? true,
+      side: THREE.DoubleSide,
+    });
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      mat.map = makeAtlasCellTexture(image, index, { grid: 4, size: 256, cropInset: 0.034 });
+      mat.color.set(tintColor);
+      mat.needsUpdate = true;
+    };
+    image.onerror = () => console.warn(`Texture atlas failed to load: ${textureAssets.objects}`);
+    image.src = textureAssets.objects;
+    return mat;
+  }
+
+  function makeTextureMaterial(url, fallback, options = {}) {
+    const mat = new THREE.MeshLambertMaterial({
+      color: fallback.color,
+      emissive: fallback.emissive || 0x000000,
+      transparent: Boolean(fallback.transparent),
+      opacity: fallback.opacity ?? 1,
+      depthWrite: fallback.depthWrite ?? true,
+      side: options.side || THREE.DoubleSide,
+    });
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      mat.map = setupTexture(new THREE.Texture(image), {
+        wrapS: THREE.ClampToEdgeWrapping,
+        wrapT: THREE.ClampToEdgeWrapping,
+      });
+      mat.color.set(options.tintColor || 0xffffff);
+      mat.needsUpdate = true;
+    };
+    image.onerror = () => console.warn(`Texture failed to load: ${url}`);
+    image.src = url;
+    return mat;
+  }
+
+  const exitDoorMat = makeTextureMaterial(
+    textureAssets.exitDoor,
+    { color: 0x263039, emissive: 0x020405 },
+    { tintColor: 0xffffff }
+  );
+
   const world = new THREE.Group();
   const enemyRoot = new THREE.Group();
   const pickupRoot = new THREE.Group();
@@ -642,8 +694,8 @@
     floor: materialSets.floor[0],
     carpet: materialSets.floor[4],
     ceiling: materialSets.ceiling[0],
-    exitLocked: objectMats[ObjectTex.EXIT_LOCKED],
-    exitOpen: objectMats[ObjectTex.EXIT_OPEN],
+    exitLocked: exitDoorMat,
+    exitOpen: exitDoorMat,
     fresh: materialSets.fresh[0],
     hazard: materialSets.hazard[0],
     trim: new THREE.MeshLambertMaterial({ color: 0x8d6f23, emissive: 0x1f1604 }),
@@ -674,7 +726,7 @@
     }),
     freshAirCore: new THREE.MeshBasicMaterial({ color: 0xb5fff5, transparent: true, opacity: 0.62, depthWrite: false }),
     pickup: objectMats[ObjectTex.SHELLS],
-    freshPickup: objectMats[ObjectTex.MEDKIT],
+    freshPickup: makeObjectCellMaterial(ObjectTex.MEDKIT, { color: 0x6d7b72, emissive: 0x060909 }, 0xdfe6dc),
     shotgun: objectMats[ObjectTex.WEAPON_CRATE],
     hazardProp: objectMats[ObjectTex.BUFFET_TRAY],
     porthole: new THREE.MeshLambertMaterial({ color: 0x163b54, emissive: 0x071a29 }),
@@ -701,8 +753,11 @@
     debrisPaper: objectMats[ObjectTex.MAP_POSTER],
     debrisRust: objectMats[ObjectTex.PIPE],
     luggage: objectMats[ObjectTex.LUGGAGE_TAG],
-    exitFrame: new THREE.MeshLambertMaterial({ color: 0x6f5523, emissive: 0x0c0802 }),
-    exitGlow: new THREE.MeshBasicMaterial({ color: 0x37f2ff, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }),
+    exitLightBack: new THREE.MeshLambertMaterial({ color: 0x171a18, emissive: 0x010101 }),
+    exitLightLocked: new THREE.MeshBasicMaterial({ color: 0xff2b36 }),
+    exitLightOpen: new THREE.MeshBasicMaterial({ color: 0x68ff72 }),
+    exitLightHaloLocked: new THREE.MeshBasicMaterial({ color: 0xff2b36, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }),
+    exitLightHaloOpen: new THREE.MeshBasicMaterial({ color: 0x68ff72, transparent: true, opacity: 0.18, depthWrite: false, side: THREE.DoubleSide }),
   };
 
   const geoms = {
@@ -1138,17 +1193,14 @@
     group.rotation.y = exitFaceRotation(face);
     world.add(group);
 
-    addBox(group, geoms.doorPost, mats.exitFrame, -TILE * 0.48, 1.45, -0.02);
-    addBox(group, geoms.doorPost, mats.exitFrame, TILE * 0.48, 1.45, -0.02);
-    addBox(group, geoms.doorHeader, mats.exitFrame, 0, 2.78, -0.02);
-    addBox(group, geoms.doorHeader, objectMats[ObjectTex.CAUTION], 0, 0.24, -0.18, 0.88, 0.78, 0.7);
-
-    const door = addBox(group, geoms.door, mats.exitLocked, 0, 1.36, -0.06);
-    const glow = addBox(group, geoms.door, mats.exitGlow, 0, 1.36, -0.12, 1.08, 1.05, 1.02);
-    glow.visible = false;
+    addBox(group, geoms.door, mats.exitLightBack, 0, 1.36, -0.08, 1.08, 1.06, 1);
+    const door = addPlane(group, geoms.wallDecal, mats.exitLocked, 0, 1.36, -0.205, TILE * 0.89, WALL_H * 0.85, 0, 0, 0);
+    const lightBack = addBox(group, geoms.debrisSmall, mats.exitLightBack, 0, 2.78, -0.28, 1.45, 0.72, 0.32);
+    const indicatorHalo = addPlane(group, geoms.wallDecal, mats.exitLightHaloLocked, 0, 2.78, -0.48, 0.64, 0.38, 0, 0, 0);
+    const indicator = addBox(group, geoms.sphere, mats.exitLightLocked, 0, 2.78, -0.5, 0.15, 0.15, 0.08);
 
     const sign = new THREE.Mesh(geoms.wallDecal, objectMats[ObjectTex.BRASS_SIGN]);
-    sign.position.set(0, 2.42, -0.22);
+    sign.position.set(0, 2.42, -0.26);
     sign.scale.set(0.72, 0.28, 1);
     group.add(sign);
 
@@ -1161,7 +1213,7 @@
       const step = addBox(
         group,
         geoms.stairStep,
-        i === 0 ? mats.exitFrame : objectMats[ObjectTex.VENT],
+        i === 0 ? mats.exitLightBack : objectMats[ObjectTex.VENT],
         0,
         0.1 + i * 0.08,
         -0.48 - i * 0.36,
@@ -1175,7 +1227,9 @@
     exitDoor = door;
     exitDoor.userData.lockedMat = mats.exitLocked;
     exitDoor.userData.openMat = mats.exitOpen;
-    exitDoor.userData.glow = glow;
+    exitDoor.userData.indicator = indicator;
+    exitDoor.userData.indicatorHalo = indicatorHalo;
+    exitDoor.userData.lightBack = lightBack;
     exitDoor.userData.panel = panel;
   }
 
@@ -1705,16 +1759,37 @@
 
   function createPickupMesh(type) {
     const group = new THREE.Group();
+    if (type === "shotgun") {
+      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.82), weaponMats.metal);
+      receiver.position.set(0, 0.6, -0.02);
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.42), weaponMats.dark);
+      stock.position.set(0, 0.54, 0.56);
+      stock.rotation.x = 0.12;
+      const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.18, 10), weaponMats.dark);
+      barrelL.rotation.x = Math.PI / 2;
+      barrelL.position.set(-0.07, 0.67, -0.78);
+      const barrelR = barrelL.clone();
+      barrelR.position.x = 0.07;
+      const pump = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.13, 0.34), weaponMats.shotGlow);
+      pump.position.set(0, 0.5, -0.42);
+      const accent = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.24), weaponMats.shotGlow);
+      accent.position.set(0, 0.76, -0.02);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.18), weaponMats.dark);
+      handle.position.set(0, 0.36, 0.22);
+      handle.rotation.x = 0.22;
+      const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.055, 12), weaponMats.shotGlow);
+      muzzle.rotation.x = Math.PI / 2;
+      muzzle.position.set(0, 0.67, -1.39);
+      group.add(receiver, stock, barrelL, barrelR, pump, accent, handle, muzzle);
+      group.scale.setScalar(0.9);
+      group.rotation.z = -0.08;
+      return group;
+    }
+
     const mat = type === "shotgun" ? mats.shotgun : type === "fresh-air" ? mats.freshPickup : mats.pickup;
     const body = new THREE.Mesh(geoms.pickup, mat);
     body.position.y = 0.55;
     group.add(body);
-    if (type === "shotgun") {
-      const barrel = new THREE.Mesh(geoms.tube, mats.dart);
-      barrel.rotation.z = Math.PI / 2;
-      barrel.position.set(0.45, 0.75, 0);
-      group.add(barrel);
-    }
     return group;
   }
 
@@ -1873,8 +1948,12 @@
     if (!exitDoor) return;
     const open = state.cures >= state.neededCures;
     exitDoor.material = open ? exitDoor.userData.openMat : exitDoor.userData.lockedMat;
-    exitDoor.scale.y = open ? 0.96 : 1;
-    if (exitDoor.userData.glow) exitDoor.userData.glow.visible = open;
+    if (exitDoor.userData.indicator) {
+      exitDoor.userData.indicator.material = open ? mats.exitLightOpen : mats.exitLightLocked;
+    }
+    if (exitDoor.userData.indicatorHalo) {
+      exitDoor.userData.indicatorHalo.material = open ? mats.exitLightHaloOpen : mats.exitLightHaloLocked;
+    }
   }
 
   function syncPlayStateClass() {
@@ -2459,7 +2538,7 @@
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
       if (state.statusTimer <= 0 && el.status) {
-        el.status.textContent = state.cures >= state.neededCures ? "Find the glowing stairwell door." : "Cure passengers and keep your distance.";
+        el.status.textContent = state.cures >= state.neededCures ? "Find the stairwell door." : "Cure passengers and keep your distance.";
       }
     }
   }

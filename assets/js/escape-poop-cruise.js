@@ -109,6 +109,7 @@
     enemies: [],
     pickups: [],
     clouds: [],
+    shards: [],
     beams: [],
     particles: [],
   };
@@ -1582,102 +1583,296 @@
     sprinter: { scale: 0.94, lean: 0.5, head: 0.9, armRaise: -0.4, swing: 1.5, gut: false, eye: 0xff5a35, glow: 0xff6a2e },
   };
 
-  // Build a limb that pivots from its top (shoulder/hip) so rotating the
-  // returned group swings the whole limb naturally.
-  function makeLimb(geom, mat, length, opts = {}) {
-    const pivot = new THREE.Group();
-    const limb = new THREE.Mesh(geom, mat);
-    limb.position.y = -length / 2;
-    pivot.add(limb);
-    if (opts.foot) {
-      const foot = new THREE.Mesh(geoms.foot, mats.shoe);
-      foot.position.set(0, -length + 0.05, 0.07);
-      pivot.add(foot);
+  // ---- Voxel enemy construction ----
+  // Each body part is a grid of small cubes (voxels) merged into ONE geometry
+  // with interior faces culled, so the figures keep a chunky voxel look without
+  // exploding the draw-call/triangle count. Geometry is cached per type.
+  const VOX = 0.055;
+  const eyeVoxGeo = new THREE.BoxGeometry(0.13, 0.11, 0.07);
+  const mawVoxGeo = new THREE.BoxGeometry(0.22, 0.09, 0.06);
+  const voxelMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x080a0c });
+
+  // Voxel-shatter death: shared cube + per-colour material cache for the burst.
+  const shardGeo = new THREE.BoxGeometry(1, 1, 1);
+  const shardMatCache = {};
+  function shardMaterial(hex) {
+    if (!shardMatCache[hex]) shardMatCache[hex] = new THREE.MeshLambertMaterial({ color: hex, emissive: 0x0a0c08 });
+    return shardMatCache[hex];
+  }
+
+  // Soft radial contact-shadow texture so enemies read as grounded on the deck.
+  const shadowTex = (function () {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    const grad = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+    grad.addColorStop(0, "rgba(0,0,0,0.55)");
+    grad.addColorStop(0.6, "rgba(0,0,0,0.26)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+    const t = new THREE.Texture(c);
+    t.needsUpdate = true;
+    return t;
+  })();
+  const shadowGeo = new THREE.PlaneGeometry(1, 1);
+  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 0.8 });
+
+  const VOX_FACES = [
+    { n: [1, 0, 0], c: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+    { n: [-1, 0, 0], c: [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]] },
+    { n: [0, 1, 0], c: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+    { n: [0, -1, 0], c: [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]] },
+    { n: [0, 0, 1], c: [[1, 0, 1], [1, 1, 1], [0, 1, 1], [0, 0, 1]] },
+    { n: [0, 0, -1], c: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] },
+  ];
+  const VOX_NB = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  const VOX_TRIS = [0, 1, 2, 0, 2, 3];
+
+  const ENEMY_PAL = {
+    passenger: { skin: 0x8fce3a, shirt: 0x2f6f7a, pants: 0x222d36, shoe: 0x14110d },
+    cougher: { skin: 0x7cc23a, shirt: 0x243349, pants: 0x1a2330, shoe: 0x141009 },
+    sprinter: { skin: 0x9bd84a, shirt: 0xdd6a22, pants: 0x202a33, shoe: 0x14110d },
+  };
+
+  // Signed-distance of a rounded box (Inigo Quilez): negative inside. Used to
+  // carve rounded corners/edges so the figures read less boxy.
+  function sdRoundBox(px, py, pz, bx, by, bz, r) {
+    const qx = Math.abs(px) - bx + r;
+    const qy = Math.abs(py) - by + r;
+    const qz = Math.abs(pz) - bz + r;
+    const mx = Math.max(qx, 0);
+    const my = Math.max(qy, 0);
+    const mz = Math.max(qz, 0);
+    return Math.sqrt(mx * mx + my * my + mz * mz) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - r;
+  }
+
+  // Fill voxels inside an arbitrary shape `inside(px,py,pz)` over a bounding box
+  // centered at (cx,cy,cz) with voxel-unit radii (rx,ry,rz). Dedupes via `seen`
+  // so later shapes can extend earlier ones without overlapping faces.
+  function voxShape(list, seen, cx, cy, cz, rx, ry, rz, hex, jitter, inside, colorFn) {
+    const x0 = Math.floor(cx - rx), x1 = Math.ceil(cx + rx);
+    const y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry);
+    const z0 = Math.floor(cz - rz), z1 = Math.ceil(cz + rz);
+    for (let x = x0; x <= x1; x += 1) {
+      for (let y = y0; y <= y1; y += 1) {
+        for (let z = z0; z <= z1; z += 1) {
+          const key = `${x}|${y}|${z}`;
+          if (seen.has(key)) continue;
+          const px = (x + 0.5) - cx, py = (y + 0.5) - cy, pz = (z + 0.5) - cz;
+          if (inside(px, py, pz)) {
+            seen.add(key);
+            const c = colorFn ? colorFn(px, py, pz) : null;
+            list.push({ x, y, z, hex: c == null ? hex : c, jitter: jitter || 0.08 });
+          }
+        }
+      }
     }
-    if (opts.hand) {
-      const hand = new THREE.Mesh(geoms.hand, mats.skin);
-      hand.position.y = -length;
-      pivot.add(hand);
+  }
+
+  function buildVoxelGeometry(voxels) {
+    const occ = new Set();
+    for (const v of voxels) occ.add(`${v.x}|${v.y}|${v.z}`);
+    const pos = [];
+    const nor = [];
+    const col = [];
+    const base = new THREE.Color();
+    for (const v of voxels) {
+      base.setHex(v.hex);
+      const hash = ((v.x * 73856093) ^ (v.y * 19349663) ^ (v.z * 83492791)) >>> 0;
+      const shade = 1 + (((hash % 1000) / 1000) - 0.5) * 2 * v.jitter;
+      const r = clamp(base.r * shade, 0, 1);
+      const g = clamp(base.g * shade, 0, 1);
+      const b = clamp(base.b * shade, 0, 1);
+      for (let f = 0; f < 6; f += 1) {
+        const nb = VOX_NB[f];
+        if (occ.has(`${v.x + nb[0]}|${v.y + nb[1]}|${v.z + nb[2]}`)) continue;
+        const face = VOX_FACES[f];
+        const n = face.n;
+        for (const idx of VOX_TRIS) {
+          const corner = face.c[idx];
+          pos.push((v.x + corner[0]) * VOX, (v.y + corner[1]) * VOX, (v.z + corner[2]) * VOX);
+          nor.push(n[0], n[1], n[2]);
+          col.push(r, g, b);
+        }
+      }
     }
-    return pivot;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    return geo;
+  }
+
+  const voxelCache = {};
+  function getVoxelSet(type) {
+    if (voxelCache[type]) return voxelCache[type];
+    const pal = ENEMY_PAL[type] || ENEMY_PAL.passenger;
+    const isSprint = type === "sprinter";
+    const isCough = type === "cougher";
+    const u = (m) => m / VOX; // metres -> voxel units
+
+    // Body sizes in METRES (converted to voxel units below). With the fine voxel
+    // grid plus near-maximal corner radii, the SDF carves smoothly rounded edges:
+    // a near-spherical head, capsule limbs, and slim legs.
+    const headR = isCough ? 0.295 : isSprint ? 0.235 : 0.255;
+    const hA = u(headR), hB = u(headR * 1.06), hC = u(headR);
+    const tHX = u(isSprint ? 0.205 : isCough ? 0.275 : 0.25);
+    const tHY = u(0.335), tHZ = u(0.155), tR = u(0.14);
+    const aR = u(0.11), aHY = u(0.36);
+    const lR = u(0.1), lHY = u(0.42); // slim legs
+    const handR = u(0.125), gutR = u(0.155);
+    const footHX = u(0.14), footHY = u(0.065), footHZ = u(0.19), footR = u(0.05), footZ = u(0.11);
+
+    const torso = [];
+    let seen = new Set();
+    voxShape(torso, seen, 0, tHY, 0, tHX + 2, tHY + 2, tHZ + 2, pal.shirt, 0.07,
+      (x, y, z) => sdRoundBox(x, y, z, tHX, tHY, tHZ, tR) <= 0.05);
+    if (isCough) {
+      voxShape(torso, seen, 0, tHY * 0.55, tHZ + gutR * 0.45, gutR + 2, gutR + 2, gutR + 2, pal.shirt, 0.07,
+        (x, y, z) => x * x + y * y + z * z <= gutR * gutR); // sick gut bulge
+    }
+
+    const head = [];
+    seen = new Set();
+    // Dark recessed eye sockets so the glowing eyes read against the green skin.
+    const eyeOX = 0.11 / VOX, eyeOY = hB * 0.18;
+    const socket = (px, py, pz) => {
+      if (pz < hC * 0.4) return false; // front of the face only
+      const dy = py - eyeOY;
+      return (Math.abs(py - eyeOY) < 1.6) &&
+        (Math.abs(px - eyeOX) < 1.9 || Math.abs(px + eyeOX) < 1.9) && dy < 1.6;
+    };
+    voxShape(head, seen, 0, hB, 0, hA + 2, hB + 2, hC + 2, pal.skin, 0.1,
+      (x, y, z) => (x * x) / (hA * hA) + (y * y) / (hB * hB) + (z * z) / (hC * hC) <= 1.0,
+      (px, py, pz) => (socket(px, py, pz) ? 0x0a1305 : null));
+
+    const arm = [];
+    seen = new Set();
+    voxShape(arm, seen, 0, -aHY, 0, aR + 2, aHY + 2, aR + 2, pal.skin, 0.1,
+      (x, y, z) => sdRoundBox(x, y, z, aR, aHY, aR, aR * 0.97) <= 0.05);
+    voxShape(arm, seen, 0, -2 * aHY + u(0.03), 0, handR + 2, handR + 2, handR + 2, pal.skin, 0.12,
+      (x, y, z) => x * x + y * y + z * z <= handR * handR); // hand
+
+    const leg = [];
+    seen = new Set();
+    voxShape(leg, seen, 0, -lHY, 0, lR + 2, lHY + 2, lR + 2, pal.pants, 0.07,
+      (x, y, z) => sdRoundBox(x, y, z, lR, lHY, lR, lR * 0.97) <= 0.05);
+    voxShape(leg, seen, 0, -2 * lHY, footZ, footHX + 2, footHY + 2, footHZ + 2, pal.shoe, 0.05,
+      (x, y, z) => sdRoundBox(x, y, z, footHX, footHY, footHZ, footR) <= 0.05); // foot, toes forward (+Z)
+
+    const dims = {
+      hipY: (2 * lHY + footHY) * VOX,
+      legX: 0.14,
+      shoulderX: tHX * VOX + 0.02,
+      shoulderY: (2 * tHY) * VOX * 0.85,
+      headY: (2 * tHY) * VOX - 0.05,
+      eyeX: 0.11,
+      eyeY: hB * VOX * 1.15,
+      eyeZ: hC * VOX + 0.03,
+      mawY: hB * VOX * 0.55,
+      mawZ: hC * VOX + 0.005,
+    };
+
+    voxelCache[type] = {
+      torso: buildVoxelGeometry(torso),
+      head: buildVoxelGeometry(head),
+      arm: buildVoxelGeometry(arm),
+      leg: buildVoxelGeometry(leg),
+      shardColors: [pal.shirt, pal.skin, pal.pants],
+      dims,
+    };
+    return voxelCache[type];
   }
 
   function createEnemyMesh(type) {
     const look = ENEMY_LOOK[type] || ENEMY_LOOK.passenger;
-    const bodyMat = type === "cougher" ? mats.cougher : type === "sprinter" ? mats.sprinter : mats.passenger;
+    const vox = getVoxelSet(type);
+    const d = vox.dims;
     const group = new THREE.Group();
 
-    const hipY = 0.7;
-    const armLen = 0.78;
-    const legLen = 0.68;
+    // Per-enemy tint + size jitter so a crowd doesn't look like clones. The
+    // material colour multiplies the baked vertex colours (shared geometry).
+    const bodyMat = voxelMat.clone();
+    bodyMat.color.setRGB(0.9 + Math.random() * 0.18, 0.92 + Math.random() * 0.14, 0.88 + Math.random() * 0.16);
+    const girth = 0.92 + Math.random() * 0.16;
+    const height = 0.94 + Math.random() * 0.14;
 
-    // Legs hang from the hips and stay planted on the deck; the upper body
-    // (a separate pivot) does the leaning, hunching and bobbing.
-    const legL = makeLimb(geoms.leg, bodyMat, legLen, { foot: true });
-    legL.position.set(-0.2, hipY, 0);
-    const legR = makeLimb(geoms.leg, bodyMat, legLen, { foot: true });
-    legR.position.set(0.2, hipY, 0);
+    // Legs hang from the hips and stay planted; the upper body leans/bobs.
+    const legL = new THREE.Group();
+    legL.position.set(-d.legX, d.hipY, 0);
+    legL.add(new THREE.Mesh(vox.leg, bodyMat));
+    const legR = new THREE.Group();
+    legR.position.set(d.legX, d.hipY, 0);
+    legR.add(new THREE.Mesh(vox.leg, bodyMat));
 
     const upper = new THREE.Group();
-    const upperBaseY = hipY;
-    upper.position.y = upperBaseY;
+    upper.position.y = d.hipY;
     upper.rotation.x = look.lean;
-
-    const body = new THREE.Mesh(geoms.body, bodyMat);
-    body.position.y = 0.25;
-    upper.add(body);
-
-    if (look.gut) {
-      const belly = new THREE.Mesh(geoms.belly, bodyMat);
-      belly.position.set(0, 0.12, 0.2);
-      belly.scale.set(1.05, 0.82, 0.9);
-      upper.add(belly);
-    }
+    upper.add(new THREE.Mesh(vox.torso, bodyMat));
 
     const headPivot = new THREE.Group();
-    headPivot.position.y = 0.9;
-    const head = new THREE.Mesh(geoms.head, mats.skin);
-    head.scale.setScalar(look.head);
-    headPivot.add(head);
+    headPivot.position.y = d.headY;
+    headPivot.add(new THREE.Mesh(vox.head, bodyMat));
 
-    // Glowing eyes use a per-enemy material so each can pulse and fade on cure.
-    const eyeMat = new THREE.MeshBasicMaterial({ color: look.eye, transparent: true });
-    const eyeL = new THREE.Mesh(geoms.eye, eyeMat);
-    eyeL.position.set(-0.13, 0.05, 0.27 * look.head);
-    const eyeR = new THREE.Mesh(geoms.eye, eyeMat);
-    eyeR.position.set(0.13, 0.05, 0.27 * look.head);
-    const maw = new THREE.Mesh(geoms.maw, mats.maw);
-    maw.position.set(0, -0.16 * look.head, 0.26 * look.head);
+    // Sickly rim-light: an additive back-face shell that haloes the silhouette.
+    const rimMat = new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: 0.22, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const torsoRim = new THREE.Mesh(vox.torso, rimMat);
+    torsoRim.scale.setScalar(1.12);
+    upper.add(torsoRim);
+    const headRim = new THREE.Mesh(vox.head, rimMat);
+    headRim.scale.setScalar(1.14);
+    headPivot.add(headRim);
+
+    // Glowing eyes use a per-enemy material so each can pulse, blink and fade.
+    const eyeMat = new THREE.MeshBasicMaterial({ color: look.eye, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const eyeL = new THREE.Mesh(eyeVoxGeo, eyeMat);
+    eyeL.position.set(-d.eyeX, d.eyeY, d.eyeZ);
+    const eyeR = new THREE.Mesh(eyeVoxGeo, eyeMat);
+    eyeR.position.set(d.eyeX, d.eyeY, d.eyeZ);
+    const maw = new THREE.Mesh(mawVoxGeo, mats.maw);
+    maw.position.set(0, d.mawY, d.mawZ);
     headPivot.add(eyeL, eyeR, maw);
     upper.add(headPivot);
 
     const armBase = 0.2 + look.armRaise;
-    const shoulderX = 0.4;
-    const armL = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
-    armL.position.set(-shoulderX, 0.66, 0.02);
-    armL.rotation.z = -0.14;
+    const armL = new THREE.Group();
+    armL.position.set(-d.shoulderX, d.shoulderY, 0);
+    armL.rotation.z = -0.12;
     armL.rotation.x = armBase;
-    const armR = makeLimb(geoms.arm, mats.skin, armLen, { hand: true });
-    armR.position.set(shoulderX, 0.66, 0.02);
-    armR.rotation.z = 0.14;
+    armL.add(new THREE.Mesh(vox.arm, bodyMat));
+    const armR = new THREE.Group();
+    armR.position.set(d.shoulderX, d.shoulderY, 0);
+    armR.rotation.z = 0.12;
     armR.rotation.x = armBase;
+    armR.add(new THREE.Mesh(vox.arm, bodyMat));
     upper.add(armL, armR);
 
-    group.add(legL, legR, upper);
-    group.scale.setScalar(look.scale);
+    // Occasional cruise hat for crowd variety.
+    if (Math.random() < 0.4) {
+      const hatHex = [0xcf3b3b, 0xe0c14a, 0x3b6fcf, 0xdedede][Math.floor(Math.random() * 4)];
+      const hatMat = new THREE.MeshLambertMaterial({ color: hatHex, emissive: 0x070707 });
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 12), hatMat);
+      brim.position.y = d.eyeY + 0.17;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.14, 12), hatMat);
+      crown.position.y = d.eyeY + 0.25;
+      headPivot.add(brim, crown);
+    }
 
-    const glow = new THREE.Mesh(
-      geoms.sphere,
-      new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: type === "cougher" ? 0.18 : 0.1, depthWrite: false })
-    );
-    glow.scale.set(0.82, 1.2, 0.82);
-    glow.position.y = 0.95;
-    group.add(glow);
+    group.add(legL, legR, upper);
+    group.scale.set(look.scale * girth, look.scale * height, look.scale * girth);
+
+    // Soft contact shadow grounds the figure on the deck.
+    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.05;
+    shadow.scale.set(0.95, 0.95, 0.95);
+    group.add(shadow);
 
     group.userData.baseScale = look.scale;
     group.userData.parts = {
-      upper, legL, legR, armL, armR, headPivot, eyeMat, glow,
-      leanBase: look.lean, upperBaseY, armBase, swing: look.swing,
+      upper, legL, legR, armL, armR, headPivot, eyeMat, maw, rimMat,
+      leanBase: look.lean, upperBaseY: d.hipY, armBase, swing: look.swing,
     };
     return group;
   }
@@ -1714,8 +1909,8 @@
         stagger: 0,
         walkPhase: rng() * Math.PI * 2,
         coughAnim: 0,
-        dissolving: false,
-        dissolveT: 0,
+        lunge: 0,
+        blink: rng() * 3,
         mesh: createEnemyMesh(type),
       };
       enemy.mesh.position.set(enemy.x, 0, enemy.z);
@@ -1798,6 +1993,7 @@
     state.dartCooldown = 0;
     state.shotgunCooldown = 0;
     state.clouds = [];
+    state.shards = [];
     state.beams = [];
     state.particles = [];
     state.flowTimer = 0;
@@ -2115,9 +2311,9 @@
       return;
     }
     enemy.cured = true;
-    enemy.dissolving = true;
-    enemy.dissolveT = 0;
-    addParticles(enemy.x, enemy.z, 0xb7ff54, 20);
+    enemy.mesh.visible = false;
+    spawnVoxelBurst(enemy);
+    addParticles(enemy.x, enemy.z, 0xb7ff54, 16);
     spawnCurePuddle(enemy.x, enemy.z);
     state.cures += 1;
     const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : 100;
@@ -2269,7 +2465,6 @@
 
     let closest = Infinity;
     for (const enemy of state.enemies) {
-      if (enemy.dissolving) { animateDissolve(enemy, dt); continue; }
       if (enemy.cured) continue;
       enemy.stagger = Math.max(0, enemy.stagger - dt);
       const dxp = player.x - enemy.x;
@@ -2310,9 +2505,9 @@
     return closest;
   }
 
-  // Drives the limb rig each frame: a lurching walk cycle (legs/arms swing,
-  // body bobs), a cough hunch for coughers, a flinch when staggered, and a
-  // pulsing eye glow.
+  // Drives the limb rig each frame: a lurching walk cycle, cough hunch, flinch,
+  // idle breathing, an attack-lunge telegraph when close, and an eye glow that
+  // pulses and occasionally blinks.
   function animateEnemy(enemy, dt, dist, moving) {
     const parts = enemy.mesh.userData.parts;
     if (!parts) return;
@@ -2328,30 +2523,71 @@
     parts.armL.rotation.x = parts.armBase - armSwing + enemy.coughAnim * 0.4;
     parts.armR.rotation.x = parts.armBase + armSwing + enemy.coughAnim * 0.4;
 
-    const flinch = enemy.stagger > 0 ? Math.sin((enemy.stagger / 0.22) * Math.PI) * 0.5 : 0;
-    parts.upper.rotation.x = parts.leanBase + enemy.coughAnim * 0.45 - flinch;
-    parts.upper.position.y = parts.upperBaseY + Math.abs(Math.cos(enemy.walkPhase)) * (moving ? 0.05 : 0.012);
-    parts.headPivot.rotation.x = enemy.coughAnim * 0.7;
+    // Attack-lunge telegraph: when crowding the player, surge forward, maw agape.
+    let lunge = 0;
+    if (dist < 2.1 && enemy.stagger <= 0) {
+      enemy.lunge += dt * (5 + enemy.speed);
+      lunge = Math.max(0, Math.sin(enemy.lunge));
+    } else {
+      enemy.lunge = 0;
+    }
 
-    parts.eyeMat.opacity = 0.55 + Math.sin(performance.now() * 0.005 + enemy.walkPhase * 2) * 0.45;
-    parts.glow.material.opacity = enemy.stagger > 0 ? 0.34 : enemy.type === "cougher" ? 0.18 : 0.1;
+    const flinch = enemy.stagger > 0 ? Math.sin((enemy.stagger / 0.22) * Math.PI) * 0.5 : 0;
+    const breath = moving ? 0 : Math.sin(performance.now() * 0.0024 + enemy.walkPhase) * 0.05;
+    parts.upper.rotation.x = parts.leanBase + enemy.coughAnim * 0.45 + lunge * 0.4 - flinch + breath * 0.18;
+    parts.upper.position.y = parts.upperBaseY + Math.abs(Math.cos(enemy.walkPhase)) * (moving ? 0.05 : 0.012) + (moving ? 0 : breath * 0.02);
+    parts.headPivot.rotation.x = enemy.coughAnim * 0.7 - lunge * 0.25;
+    parts.maw.scale.y = 1 + (enemy.coughAnim + lunge) * 1.6;
+
+    enemy.blink -= dt;
+    if (enemy.blink <= 0) enemy.blink = 2.4 + Math.random() * 3;
+    const blinkClose = enemy.blink < 0.12 ? 1 - Math.abs(enemy.blink - 0.06) / 0.06 : 0;
+    const pulse = 0.78 + Math.sin(performance.now() * 0.005 + enemy.walkPhase * 2) * 0.22;
+    parts.eyeMat.opacity = Math.max(0, (pulse + lunge * 0.4) * (1 - blinkClose));
+    parts.rimMat.opacity = (enemy.stagger > 0 ? 0.42 : enemy.type === "cougher" ? 0.28 : 0.2) + lunge * 0.15;
   }
 
-  // Cured passengers melt into the deck: squash down, sink, fade the glow.
-  function animateDissolve(enemy, dt) {
-    const parts = enemy.mesh.userData.parts;
-    const base = enemy.mesh.userData.baseScale || 1;
-    enemy.dissolveT += dt;
-    const t = clamp(enemy.dissolveT / 0.5, 0, 1);
-    enemy.mesh.position.y = -t * 1.25;
-    enemy.mesh.scale.set(base * (1 + t * 0.55), base * (1 - t * 0.7), base * (1 + t * 0.55));
-    if (parts) {
-      parts.eyeMat.opacity = 1 - t;
-      parts.glow.material.opacity = (1 - t) * 0.4;
+  // Voxel-shatter death: burst the cured body into a spray of tumbling cubes.
+  function spawnVoxelBurst(enemy) {
+    const colors = getVoxelSet(enemy.type).shardColors;
+    for (let i = 0; i < 24; i += 1) {
+      const size = 0.08 + Math.random() * 0.06;
+      const mesh = new THREE.Mesh(shardGeo, shardMaterial(colors[i % colors.length]));
+      mesh.scale.setScalar(size);
+      mesh.position.set(
+        enemy.x + (Math.random() - 0.5) * 0.45,
+        0.35 + Math.random() * 1.45,
+        enemy.z + (Math.random() - 0.5) * 0.45
+      );
+      mesh.rotation.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
+      fxRoot.add(mesh);
+      state.shards.push({
+        mesh, size,
+        vx: (Math.random() - 0.5) * 3.4,
+        vy: 1.6 + Math.random() * 3.6,
+        vz: (Math.random() - 0.5) * 3.4,
+        rvx: (Math.random() - 0.5) * 12,
+        rvy: (Math.random() - 0.5) * 12,
+        rvz: (Math.random() - 0.5) * 12,
+        life: 0.8 + Math.random() * 0.5,
+      });
     }
-    if (t >= 1) {
-      enemy.mesh.visible = false;
-      enemy.dissolving = false;
+  }
+
+  function updateShards(dt) {
+    for (let i = state.shards.length - 1; i >= 0; i -= 1) {
+      const s = state.shards[i];
+      s.life -= dt;
+      s.vy -= 11 * dt;
+      s.mesh.position.x += s.vx * dt;
+      s.mesh.position.y += s.vy * dt;
+      s.mesh.position.z += s.vz * dt;
+      if (s.mesh.position.y < 0.05) { s.mesh.position.y = 0.05; s.vy *= -0.34; s.vx *= 0.62; s.vz *= 0.62; }
+      s.mesh.rotation.x += s.rvx * dt;
+      s.mesh.rotation.y += s.rvy * dt;
+      s.mesh.rotation.z += s.rvz * dt;
+      s.mesh.scale.setScalar(s.size * clamp(s.life / 0.45, 0, 1)); // shrink away at the end
+      if (s.life <= 0) { fxRoot.remove(s.mesh); state.shards.splice(i, 1); }
     }
   }
 
@@ -2516,6 +2752,7 @@
     updateTimers(dt);
     if (state.mode !== "playing") {
       updateWeapon(dt);
+      updateShards(dt);
       updateFx(dt);
       updateHud();
       return;
@@ -2524,6 +2761,7 @@
     updateWeapon(dt);
     const closest = updateEnemies(dt);
     updateClouds(dt);
+    updateShards(dt);
     updatePickups(dt);
     updateFx(dt);
     updateInfection(dt, closest);

@@ -109,7 +109,7 @@
     enemies: [],
     pickups: [],
     clouds: [],
-    shards: [],
+    speeches: [],
     beams: [],
     particles: [],
   };
@@ -1592,13 +1592,20 @@
   const mawVoxGeo = new THREE.BoxGeometry(0.22, 0.09, 0.06);
   const voxelMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x080a0c });
 
-  // Voxel-shatter death: shared cube + per-colour material cache for the burst.
-  const shardGeo = new THREE.BoxGeometry(1, 1, 1);
-  const shardMatCache = {};
-  function shardMaterial(hex) {
-    if (!shardMatCache[hex]) shardMatCache[hex] = new THREE.MeshLambertMaterial({ color: hex, emissive: 0x0a0c08 });
-    return shardMatCache[hex];
-  }
+  // Healthy (cured) skin tone — swaps in over the infected green when cured.
+  const HEALTHY_SKIN = 0xe3b083;
+  const FUNNY_LINES = [
+    "Refund. I want a refund.",
+    "Never trust a midnight buffet.",
+    "Where the heck are my pants?",
+    "Is the wifi back yet?",
+    "I feel 40% less gassy.",
+    "Worth it for the pool, honestly.",
+    "Tell no one about this.",
+    "Back to the lido deck!",
+    "Was that... a cruise?",
+    "Five stars. No notes.",
+  ];
 
   // Soft radial contact-shadow texture so enemies read as grounded on the deck.
   const shadowTex = (function () {
@@ -1779,7 +1786,6 @@
       head: buildVoxelGeometry(head),
       arm: buildVoxelGeometry(arm),
       leg: buildVoxelGeometry(leg),
-      shardColors: [pal.shirt, pal.skin, pal.pants],
       dims,
     };
     return voxelCache[type];
@@ -1793,27 +1799,43 @@
 
     // Per-enemy tint + size jitter so a crowd doesn't look like clones. The
     // material colour multiplies the baked vertex colours (shared geometry).
-    const bodyMat = voxelMat.clone();
-    bodyMat.color.setRGB(0.9 + Math.random() * 0.18, 0.92 + Math.random() * 0.14, 0.88 + Math.random() * 0.16);
+    // Skin and clothes get separate materials so curing can fade ONLY the
+    // infected-green skin over to a healthy tone without recolouring clothes.
+    const tintR = 0.9 + Math.random() * 0.18, tintG = 0.92 + Math.random() * 0.14, tintB = 0.88 + Math.random() * 0.16;
+    const clothMat = voxelMat.clone();
+    clothMat.color.setRGB(tintR, tintG, tintB);
+    const skinMat = voxelMat.clone();
+    skinMat.color.setRGB(tintR, tintG, tintB);
+    skinMat.transparent = true;
+    skinMat.depthWrite = false;
+    // Healthy overlay shares the same geometry but ignores baked vertex colour,
+    // so it renders as a flat normal skin tone. Crossfades in as skinMat fades out.
+    const healthyMat = new THREE.MeshLambertMaterial({
+      color: HEALTHY_SKIN, emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
+    });
     const girth = 0.92 + Math.random() * 0.16;
     const height = 0.94 + Math.random() * 0.14;
 
     // Legs hang from the hips and stay planted; the upper body leans/bobs.
     const legL = new THREE.Group();
     legL.position.set(-d.legX, d.hipY, 0);
-    legL.add(new THREE.Mesh(vox.leg, bodyMat));
+    legL.add(new THREE.Mesh(vox.leg, clothMat));
     const legR = new THREE.Group();
     legR.position.set(d.legX, d.hipY, 0);
-    legR.add(new THREE.Mesh(vox.leg, bodyMat));
+    legR.add(new THREE.Mesh(vox.leg, clothMat));
 
     const upper = new THREE.Group();
     upper.position.y = d.hipY;
     upper.rotation.x = look.lean;
-    upper.add(new THREE.Mesh(vox.torso, bodyMat));
+    upper.add(new THREE.Mesh(vox.torso, clothMat));
 
     const headPivot = new THREE.Group();
     headPivot.position.y = d.headY;
-    headPivot.add(new THREE.Mesh(vox.head, bodyMat));
+    const headSkin = new THREE.Mesh(vox.head, skinMat);
+    headSkin.renderOrder = 0;
+    const headHealthy = new THREE.Mesh(vox.head, healthyMat);
+    headHealthy.renderOrder = 1;
+    headPivot.add(headSkin, headHealthy);
 
     // Sickly rim-light: an additive back-face shell that haloes the silhouette.
     const rimMat = new THREE.MeshBasicMaterial({ color: look.glow, transparent: true, opacity: 0.22, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -1840,12 +1862,20 @@
     armL.position.set(-d.shoulderX, d.shoulderY, 0);
     armL.rotation.z = -0.12;
     armL.rotation.x = armBase;
-    armL.add(new THREE.Mesh(vox.arm, bodyMat));
+    const armLSkin = new THREE.Mesh(vox.arm, skinMat);
+    armLSkin.renderOrder = 0;
+    const armLHealthy = new THREE.Mesh(vox.arm, healthyMat);
+    armLHealthy.renderOrder = 1;
+    armL.add(armLSkin, armLHealthy);
     const armR = new THREE.Group();
     armR.position.set(d.shoulderX, d.shoulderY, 0);
     armR.rotation.z = 0.12;
     armR.rotation.x = armBase;
-    armR.add(new THREE.Mesh(vox.arm, bodyMat));
+    const armRSkin = new THREE.Mesh(vox.arm, skinMat);
+    armRSkin.renderOrder = 0;
+    const armRHealthy = new THREE.Mesh(vox.arm, healthyMat);
+    armRHealthy.renderOrder = 1;
+    armR.add(armRSkin, armRHealthy);
     upper.add(armL, armR);
 
     // Occasional cruise hat for crowd variety.
@@ -1871,7 +1901,7 @@
 
     group.userData.baseScale = look.scale;
     group.userData.parts = {
-      upper, legL, legR, armL, armR, headPivot, eyeMat, maw, rimMat,
+      upper, legL, legR, armL, armR, headPivot, eyeMat, maw, rimMat, skinMat, healthyMat,
       leanBase: look.lean, upperBaseY: d.hipY, armBase, swing: look.swing,
     };
     return group;
@@ -1911,6 +1941,11 @@
         coughAnim: 0,
         lunge: 0,
         blink: rng() * 3,
+        healing: false,
+        healT: 0,
+        talkTimer: 0,
+        wanderTarget: null,
+        wanderTimer: 0,
         mesh: createEnemyMesh(type),
       };
       enemy.mesh.position.set(enemy.x, 0, enemy.z);
@@ -1993,7 +2028,7 @@
     state.dartCooldown = 0;
     state.shotgunCooldown = 0;
     state.clouds = [];
-    state.shards = [];
+    state.speeches = [];
     state.beams = [];
     state.particles = [];
     state.flowTimer = 0;
@@ -2311,10 +2346,13 @@
       return;
     }
     enemy.cured = true;
-    enemy.mesh.visible = false;
-    spawnVoxelBurst(enemy);
-    addParticles(enemy.x, enemy.z, 0xb7ff54, 16);
+    enemy.healing = true;
+    enemy.healT = 0;
+    enemy.talkTimer = 1.3;
+    enemy.wanderTimer = 0;
+    addParticles(enemy.x, enemy.z, 0xb7ff54, 14);
     spawnCurePuddle(enemy.x, enemy.z);
+    spawnSpeech(enemy.x, enemy.z, FUNNY_LINES[Math.floor(Math.random() * FUNNY_LINES.length)]);
     state.cures += 1;
     const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : 100;
     state.score += typeBonus + state.level * 12;
@@ -2465,7 +2503,7 @@
 
     let closest = Infinity;
     for (const enemy of state.enemies) {
-      if (enemy.cured) continue;
+      if (enemy.cured) { updateCuredEnemy(enemy, dt); continue; }
       enemy.stagger = Math.max(0, enemy.stagger - dt);
       const dxp = player.x - enemy.x;
       const dzp = player.z - enemy.z;
@@ -2547,47 +2585,149 @@
     parts.rimMat.opacity = (enemy.stagger > 0 ? 0.42 : enemy.type === "cougher" ? 0.28 : 0.2) + lunge * 0.15;
   }
 
-  // Voxel-shatter death: burst the cured body into a spray of tumbling cubes.
-  function spawnVoxelBurst(enemy) {
-    const colors = getVoxelSet(enemy.type).shardColors;
-    for (let i = 0; i < 24; i += 1) {
-      const size = 0.08 + Math.random() * 0.06;
-      const mesh = new THREE.Mesh(shardGeo, shardMaterial(colors[i % colors.length]));
-      mesh.scale.setScalar(size);
-      mesh.position.set(
-        enemy.x + (Math.random() - 0.5) * 0.45,
-        0.35 + Math.random() * 1.45,
-        enemy.z + (Math.random() - 0.5) * 0.45
-      );
-      mesh.rotation.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
-      fxRoot.add(mesh);
-      state.shards.push({
-        mesh, size,
-        vx: (Math.random() - 0.5) * 3.4,
-        vy: 1.6 + Math.random() * 3.6,
-        vz: (Math.random() - 0.5) * 3.4,
-        rvx: (Math.random() - 0.5) * 12,
-        rvy: (Math.random() - 0.5) * 12,
-        rvz: (Math.random() - 0.5) * 12,
-        life: 0.8 + Math.random() * 0.5,
-      });
+  const HEAL_DURATION = 0.9;
+
+  // Tries a handful of random nearby points and returns the first walkable
+  // one, so cured passengers wander instead of beelining through walls.
+  function pickWanderTarget(enemy) {
+    for (let i = 0; i < 8; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 1.5 + Math.random() * 4;
+      const x = enemy.x + Math.cos(angle) * dist;
+      const z = enemy.z + Math.sin(angle) * dist;
+      if (isWalkableWorld(x, z, 0.34)) return { x, z };
     }
+    return null;
   }
 
-  function updateShards(dt) {
-    for (let i = state.shards.length - 1; i >= 0; i -= 1) {
-      const s = state.shards[i];
+  // Cured enemies stop being a threat: skin crossfades from infected green to
+  // a healthy tone, the eye-glow/rim fade out, they flap their mouth while the
+  // speech bubble is up, and they amble off to wander the halls harmlessly.
+  function updateCuredEnemy(enemy, dt) {
+    const parts = enemy.mesh.userData.parts;
+    if (!parts) return;
+
+    if (enemy.healing) {
+      enemy.healT = Math.min(1, enemy.healT + dt / HEAL_DURATION);
+      const t = enemy.healT;
+      parts.skinMat.opacity = 1 - t;
+      parts.healthyMat.opacity = t;
+      parts.rimMat.opacity = Math.max(0, parts.rimMat.opacity - dt * 1.8);
+      parts.eyeMat.opacity = Math.max(0, parts.eyeMat.opacity - dt * 1.6);
+      parts.armL.rotation.x = lerp(parts.armL.rotation.x, 0.08, dt * 3);
+      parts.armR.rotation.x = lerp(parts.armR.rotation.x, 0.08, dt * 3);
+      parts.upper.rotation.x = lerp(parts.upper.rotation.x, 0.02, dt * 3);
+      if (t >= 1) {
+        enemy.healing = false;
+        parts.skinMat.opacity = 0;
+        parts.healthyMat.opacity = 1;
+        parts.rimMat.opacity = 0;
+        parts.eyeMat.opacity = 0;
+      }
+    }
+
+    if (enemy.talkTimer > 0) {
+      enemy.talkTimer -= dt;
+      parts.maw.scale.y = 1 + Math.abs(Math.sin(performance.now() * 0.02)) * 1.1;
+    } else {
+      parts.maw.scale.y = 1;
+    }
+
+    enemy.wanderTimer -= dt;
+    let needsTarget = !enemy.wanderTarget;
+    if (enemy.wanderTarget) {
+      const dToTarget = Math.hypot(enemy.wanderTarget.x - enemy.x, enemy.wanderTarget.z - enemy.z);
+      if (dToTarget < 0.35) needsTarget = true;
+    }
+    if (enemy.wanderTimer <= 0 || needsTarget) {
+      enemy.wanderTimer = 2.5 + Math.random() * 3;
+      enemy.wanderTarget = pickWanderTarget(enemy);
+    }
+
+    let moving = false;
+    if (enemy.wanderTarget) {
+      const dx = enemy.wanderTarget.x - enemy.x;
+      const dz = enemy.wanderTarget.z - enemy.z;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.1) {
+        moving = true;
+        const speed = 0.85;
+        moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, 0.34);
+        enemy.mesh.position.set(enemy.x, 0, enemy.z);
+        enemy.mesh.lookAt(enemy.x + dx, 0.7, enemy.z + dz);
+      }
+    }
+    enemy.mesh.position.set(enemy.x, 0, enemy.z);
+
+    enemy.walkPhase += dt * (moving ? 3.6 : 1.6);
+    const stride = moving ? 0.4 : 0.06;
+    const swing = Math.sin(enemy.walkPhase) * stride;
+    parts.legL.rotation.x = swing;
+    parts.legR.rotation.x = -swing;
+    if (!enemy.healing) {
+      parts.armL.rotation.x = 0.08 - swing * 0.5;
+      parts.armR.rotation.x = 0.08 + swing * 0.5;
+    }
+    parts.upper.position.y = parts.upperBaseY + Math.abs(Math.cos(enemy.walkPhase)) * (moving ? 0.035 : 0.01);
+  }
+
+  // Floating speech-bubble billboards for the cured one-liners.
+  function makeSpeechTexture(text) {
+    const w = 256, h = 96;
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    const bw = w - 14, bh = h - 28, bx = 7, by = 6, r = 16;
+    g.fillStyle = "rgba(248,248,244,0.96)";
+    g.strokeStyle = "rgba(18,18,22,0.9)";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(bx + r, by);
+    g.arcTo(bx + bw, by, bx + bw, by + bh, r);
+    g.arcTo(bx + bw, by + bh, bx, by + bh, r);
+    g.arcTo(bx, by + bh, bx, by, r);
+    g.arcTo(bx, by, bx + bw, by, r);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.beginPath();
+    g.moveTo(w / 2 - 12, by + bh - 2);
+    g.lineTo(w / 2 + 6, by + bh - 2);
+    g.lineTo(w / 2 - 4, by + bh + 16);
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.fillStyle = "#181818";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    let fontSize = 21;
+    do {
+      g.font = `700 ${fontSize}px sans-serif`;
+      fontSize -= 1;
+    } while (g.measureText(text).width > bw - 22 && fontSize > 11);
+    g.fillText(text, w / 2, by + bh / 2 - 2);
+    const tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function spawnSpeech(x, z, text) {
+    const tex = makeSpeechTexture(text);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.15, 1.15 * (96 / 256), 1);
+    sprite.position.set(x, 2.05, z);
+    fxRoot.add(sprite);
+    state.speeches.push({ mesh: sprite, life: 2.1, maxLife: 2.1 });
+  }
+
+  function updateSpeeches(dt) {
+    for (let i = state.speeches.length - 1; i >= 0; i -= 1) {
+      const s = state.speeches[i];
       s.life -= dt;
-      s.vy -= 11 * dt;
-      s.mesh.position.x += s.vx * dt;
-      s.mesh.position.y += s.vy * dt;
-      s.mesh.position.z += s.vz * dt;
-      if (s.mesh.position.y < 0.05) { s.mesh.position.y = 0.05; s.vy *= -0.34; s.vx *= 0.62; s.vz *= 0.62; }
-      s.mesh.rotation.x += s.rvx * dt;
-      s.mesh.rotation.y += s.rvy * dt;
-      s.mesh.rotation.z += s.rvz * dt;
-      s.mesh.scale.setScalar(s.size * clamp(s.life / 0.45, 0, 1)); // shrink away at the end
-      if (s.life <= 0) { fxRoot.remove(s.mesh); state.shards.splice(i, 1); }
+      s.mesh.position.y += dt * 0.3;
+      s.mesh.material.opacity = s.life < 0.5 ? clamp(s.life / 0.5, 0, 1) : clamp((s.maxLife - s.life) / 0.2, 0, 1);
+      if (s.life <= 0) { fxRoot.remove(s.mesh); state.speeches.splice(i, 1); }
     }
   }
 
@@ -2752,7 +2892,7 @@
     updateTimers(dt);
     if (state.mode !== "playing") {
       updateWeapon(dt);
-      updateShards(dt);
+      updateSpeeches(dt);
       updateFx(dt);
       updateHud();
       return;
@@ -2761,7 +2901,7 @@
     updateWeapon(dt);
     const closest = updateEnemies(dt);
     updateClouds(dt);
-    updateShards(dt);
+    updateSpeeches(dt);
     updatePickups(dt);
     updateFx(dt);
     updateInfection(dt, closest);

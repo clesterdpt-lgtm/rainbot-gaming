@@ -1193,44 +1193,15 @@
     group.rotation.y = exitFaceRotation(face);
     world.add(group);
 
-    addBox(group, geoms.door, mats.exitLightBack, 0, 1.36, -0.08, 1.08, 1.06, 1);
-    const door = addPlane(group, geoms.wallDecal, mats.exitLocked, 0, 1.36, -0.205, TILE * 0.89, WALL_H * 0.85, 0, 0, 0);
-    const lightBack = addBox(group, geoms.debrisSmall, mats.exitLightBack, 0, 2.78, -0.28, 1.45, 0.72, 0.32);
-    const indicatorHalo = addPlane(group, geoms.wallDecal, mats.exitLightHaloLocked, 0, 2.78, -0.48, 0.64, 0.38, 0, 0, 0);
-    const indicator = addBox(group, geoms.sphere, mats.exitLightLocked, 0, 2.78, -0.5, 0.15, 0.15, 0.08);
-
-    const sign = new THREE.Mesh(geoms.wallDecal, objectMats[ObjectTex.BRASS_SIGN]);
-    sign.position.set(0, 2.42, -0.26);
-    sign.scale.set(0.72, 0.28, 1);
-    group.add(sign);
-
-    const panel = new THREE.Mesh(geoms.wallDecal, objectMats[ObjectTex.CONTROL_PANEL]);
-    panel.position.set(TILE * 0.64, 1.3, -0.22);
-    panel.scale.set(0.34, 0.5, 1);
-    group.add(panel);
-
-    for (let i = 0; i < 3; i += 1) {
-      const step = addBox(
-        group,
-        geoms.stairStep,
-        i === 0 ? mats.exitLightBack : objectMats[ObjectTex.VENT],
-        0,
-        0.1 + i * 0.08,
-        -0.48 - i * 0.36,
-        1 - i * 0.09,
-        1,
-        1
-      );
-      step.rotation.x = -0.04 * i;
-    }
+    const door = addPlane(group, geoms.wallDecal, mats.exitLocked, 0, WALL_H / 2, -0.045, TILE, WALL_H, 0, 0, 0);
+    const indicatorHalo = addPlane(group, geoms.wallDecal, mats.exitLightHaloLocked, 0, WALL_H - 0.28, -0.062, 0.32, 0.32, 0, 0, 0);
+    const indicator = addBox(group, geoms.sphere, mats.exitLightLocked, 0, WALL_H - 0.28, -0.12, 0.09, 0.09, 0.045);
 
     exitDoor = door;
     exitDoor.userData.lockedMat = mats.exitLocked;
     exitDoor.userData.openMat = mats.exitOpen;
     exitDoor.userData.indicator = indicator;
     exitDoor.userData.indicatorHalo = indicatorHalo;
-    exitDoor.userData.lightBack = lightBack;
-    exitDoor.userData.panel = panel;
   }
 
   function addFloorGrime(gx, gy, tile, pos) {
@@ -1424,9 +1395,7 @@
   }
 
   function addCeilingFixture(gx, gy, tile, pos) {
-    if (tile === Tile.EXIT || tileHash(gx, gy, 151) < 0.88) return;
-    const mesh = addBox(world, geoms.trim, mats.sickLight, pos.x, WALL_H - 0.06, pos.z, 0.72, 0.7, 0.28);
-    mesh.rotation.y = tileHash(gx, gy, 152) > 0.5 ? Math.PI / 2 : 0;
+    return;
   }
 
   function addWallGrime(gx, gy, pos, map) {

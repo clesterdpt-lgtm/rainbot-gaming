@@ -404,6 +404,56 @@
     });
   }
 
+  function makeFreshAirCueTexture(kind) {
+    const size = 128;
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+
+    if (kind === "flow") {
+      const haze = ctx.createLinearGradient(0, size, 0, 0);
+      haze.addColorStop(0, "rgba(46, 224, 255, 0)");
+      haze.addColorStop(0.32, "rgba(46, 224, 255, 0.22)");
+      haze.addColorStop(0.72, "rgba(183, 255, 84, 0.15)");
+      haze.addColorStop(1, "rgba(46, 224, 255, 0)");
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.lineCap = "round";
+      for (let i = 0; i < 6; i += 1) {
+        const x = 18 + i * 18;
+        ctx.strokeStyle = `rgba(181, 255, 245, ${0.13 + i * 0.012})`;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(x, size - 8);
+        ctx.bezierCurveTo(x + 16, 92, x - 18, 58, x + 6, 16);
+        ctx.stroke();
+      }
+    } else {
+      const glow = ctx.createRadialGradient(size / 2, size / 2, 6, size / 2, size / 2, size * 0.55);
+      glow.addColorStop(0, "rgba(181, 255, 245, 0.68)");
+      glow.addColorStop(0.32, "rgba(46, 224, 255, 0.35)");
+      glow.addColorStop(0.7, "rgba(183, 255, 84, 0.16)");
+      glow.addColorStop(1, "rgba(46, 224, 255, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.strokeStyle = "rgba(181, 255, 245, 0.36)";
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i += 1) {
+        ctx.beginPath();
+        ctx.ellipse(size / 2, size / 2, 18 + i * 10, 10 + i * 8, i * 0.62, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    return setupTexture(new THREE.CanvasTexture(canvasTexture), {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+    });
+  }
+
   function keyBlackToAlpha(ctx, size, threshold = 12) {
     const imageData = ctx.getImageData(0, 0, size, size);
     const pixels = imageData.data;
@@ -604,7 +654,25 @@
     cougher: objectMats[ObjectTex.COUGHER_JACKET],
     sprinter: objectMats[ObjectTex.LIFE_VEST],
     dart: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
-    heal: new THREE.MeshBasicMaterial({ color: 0xb7ff54 }),
+    freshVent: objectMats[ObjectTex.VENT],
+    freshAirGlow: new THREE.MeshBasicMaterial({
+      map: makeFreshAirCueTexture("glow"),
+      transparent: true,
+      opacity: 0.78,
+      alphaTest: 0.025,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+    freshAirFlow: new THREE.MeshBasicMaterial({
+      map: makeFreshAirCueTexture("flow"),
+      transparent: true,
+      opacity: 0.58,
+      alphaTest: 0.02,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+    freshAirCore: new THREE.MeshBasicMaterial({ color: 0xb5fff5, transparent: true, opacity: 0.62, depthWrite: false }),
     pickup: objectMats[ObjectTex.SHELLS],
     freshPickup: objectMats[ObjectTex.MEDKIT],
     shotgun: objectMats[ObjectTex.WEAPON_CRATE],
@@ -1248,6 +1316,59 @@
     }
   }
 
+  function addFreshAirVentCues(gx, gy, pos) {
+    addPlane(
+      world,
+      geoms.floorDecal,
+      mats.freshAirGlow,
+      pos.x,
+      0.071,
+      pos.z,
+      2.55,
+      2.15,
+      -Math.PI / 2,
+      0,
+      tileRange(gx, gy, 460, -0.34, 0.34)
+    );
+
+    const vent = addBox(world, geoms.debrisFlat, mats.freshVent, pos.x, 0.084, pos.z, 4.5, 1, 3.45);
+    vent.rotation.y = tileHash(gx, gy, 461) > 0.5 ? Math.PI / 2 : 0;
+
+    for (let i = -2; i <= 2; i += 1) {
+      const slat = addBox(
+        world,
+        geoms.debrisLong,
+        mats.debrisDark,
+        pos.x + (vent.rotation.y ? i * 0.24 : 0),
+        0.122,
+        pos.z + (vent.rotation.y ? 0 : i * 0.24),
+        vent.rotation.y ? 0.5 : 2.7,
+        0.62,
+        vent.rotation.y ? 2.7 : 0.5
+      );
+      slat.rotation.y = vent.rotation.y;
+    }
+
+    for (let i = 0; i < 3; i += 1) {
+      const salt = 470 + i * 9;
+      addPlane(
+        world,
+        geoms.wallDecal,
+        mats.freshAirFlow,
+        pos.x + tileRange(gx, gy, salt, -0.62, 0.62),
+        tileRange(gx, gy, salt + 1, 0.36, 0.88),
+        pos.z + tileRange(gx, gy, salt + 2, -0.52, 0.52),
+        tileRange(gx, gy, salt + 3, 0.32, 0.58),
+        tileRange(gx, gy, salt + 4, 0.8, 1.42),
+        0,
+        tileRange(gx, gy, salt + 5, -Math.PI, Math.PI),
+        tileRange(gx, gy, salt + 6, -0.12, 0.12)
+      );
+    }
+
+    addBox(world, geoms.tube, mats.freshAirCore, pos.x, 0.22, pos.z, 5.2, 0.08, 5.2);
+  }
+
   function addCeilingFixture(gx, gy, tile, pos) {
     if (tile === Tile.EXIT || tileHash(gx, gy, 151) < 0.88) return;
     const mesh = addBox(world, geoms.trim, mats.sickLight, pos.x, WALL_H - 0.06, pos.z, 0.72, 0.7, 0.28);
@@ -1401,7 +1522,7 @@
         addBox(world, geoms.ceiling, ceilingMat, pos.x, WALL_H + 0.05, pos.z);
 
         if (tile === Tile.FRESH) {
-          addBox(world, geoms.trim, mats.heal, pos.x, 0.06, pos.z, 0.95, 1, 0.95);
+          addFreshAirVentCues(gx, gy, pos);
         }
 
         if (tile === Tile.HAZARD) {
@@ -2271,6 +2392,7 @@
     const safeDistance = closestEnemy > 7.2;
     if (tile === Tile.FRESH) {
       state.infection -= 10.5 * dt;
+      if (state.statusTimer <= 0) setStatus("Fresh-air vent active. Infection dropping fast.", 0.85);
     } else if (safeDistance) {
       state.infection -= 3.25 * dt;
     } else if (closestEnemy > 4.5) {

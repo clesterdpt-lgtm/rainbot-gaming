@@ -114,6 +114,7 @@
     recoil: 0,
     muzzleFlash: 0,
     lurchTimer: 0,
+    stuckTimer: 0,
     flowTimer: 0,
     flow: [],
     map: null,
@@ -482,9 +483,12 @@
     ctx.putImageData(imageData, 0, 0);
   }
 
-  function makeAtlasCellTexture(image, index, options = {}) {
+  function isFileProtocol() {
+    return window.location && window.location.protocol === "file:";
+  }
+
+  function atlasCellBounds(image, index, options = {}) {
     const grid = options.grid || 4;
-    const size = options.size || 256;
     const inset = options.cropInset ?? 0.026;
     const cellW = image.naturalWidth / grid;
     const cellH = image.naturalHeight / grid;
@@ -494,6 +498,28 @@
     const sy = row * cellH + cellH * inset;
     const sw = cellW * (1 - inset * 2);
     const sh = cellH * (1 - inset * 2);
+    return { sx, sy, sw, sh };
+  }
+
+  function makeAtlasCellTextureDirect(image, index, options = {}) {
+    const { sx, sy, sw, sh } = atlasCellBounds(image, index, options);
+    const texture = setupTexture(new THREE.Texture(image), {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+    });
+    texture.repeat.set(sw / image.naturalWidth, sh / image.naturalHeight);
+    texture.offset.set(sx / image.naturalWidth, 1 - (sy + sh) / image.naturalHeight);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  function makeAtlasCellTexture(image, index, options = {}) {
+    if (isFileProtocol() && !options.blackKey) {
+      return makeAtlasCellTextureDirect(image, index, options);
+    }
+    const grid = options.grid || 4;
+    const size = options.size || 256;
+    const { sx, sy, sw, sh } = atlasCellBounds(image, index, options);
     const canvasTexture = document.createElement("canvas");
     canvasTexture.width = size;
     canvasTexture.height = size;
@@ -508,10 +534,51 @@
     });
   }
 
-  function loadAtlasIntoMaterials(url, materials, options = {}) {
+  const textureLoadStatus = { pending: 0, loaded: 0, failed: 0, skipped: 0 };
+  const textureReadyPromises = [];
+
+  function trackTextureLoad(url, label, applyImage) {
+    textureLoadStatus.pending += 1;
     const image = new Image();
     image.decoding = "async";
-    image.onload = () => {
+    const promise = new Promise((resolve) => {
+      image.onload = () => {
+        try {
+          applyImage(image);
+          textureLoadStatus.loaded += 1;
+        } catch (error) {
+          textureLoadStatus.failed += 1;
+          console.warn(`${label} failed to apply: ${url}`, error);
+        } finally {
+          textureLoadStatus.pending = Math.max(0, textureLoadStatus.pending - 1);
+          resolve(image);
+        }
+      };
+      image.onerror = () => {
+        textureLoadStatus.failed += 1;
+        textureLoadStatus.pending = Math.max(0, textureLoadStatus.pending - 1);
+        console.warn(`${label} failed to load: ${url}`);
+        resolve(null);
+      };
+    });
+    textureReadyPromises.push(promise);
+    image.src = url;
+    return image;
+  }
+
+  function skipExternalTextureForFileProtocol() {
+    if (!isFileProtocol()) return false;
+    textureLoadStatus.skipped += 1;
+    return true;
+  }
+
+  function waitForTextureLoads() {
+    return Promise.all(textureReadyPromises).then(() => textureLoadStatus);
+  }
+
+  function loadAtlasIntoMaterials(url, materials, options = {}) {
+    if (skipExternalTextureForFileProtocol()) return;
+    trackTextureLoad(url, "Texture atlas", (image) => {
       const grid = options.grid || 4;
       const maxCells = grid * grid;
       materials.forEach((mat, index) => {
@@ -519,9 +586,7 @@
         mat.color.set(0xffffff);
         mat.needsUpdate = true;
       });
-    };
-    image.onerror = () => console.warn(`Texture atlas failed to load: ${url}`);
-    image.src = url;
+    });
   }
 
   function makeMaterialVariants(kind, count, atlasUrl) {
@@ -645,15 +710,12 @@
       depthWrite: fallback.depthWrite ?? true,
       side: THREE.DoubleSide,
     });
-    const image = new Image();
-    image.decoding = "async";
-    image.onload = () => {
+    if (skipExternalTextureForFileProtocol()) return mat;
+    trackTextureLoad(textureAssets.objects, "Object texture atlas", (image) => {
       mat.map = makeAtlasCellTexture(image, index, { grid: 4, size: 256, cropInset: 0.034 });
       mat.color.set(tintColor);
       mat.needsUpdate = true;
-    };
-    image.onerror = () => console.warn(`Texture atlas failed to load: ${textureAssets.objects}`);
-    image.src = textureAssets.objects;
+    });
     return mat;
   }
 
@@ -666,18 +728,15 @@
       depthWrite: fallback.depthWrite ?? true,
       side: options.side || THREE.DoubleSide,
     });
-    const image = new Image();
-    image.decoding = "async";
-    image.onload = () => {
+    if (skipExternalTextureForFileProtocol()) return mat;
+    trackTextureLoad(url, "Texture", (image) => {
       mat.map = setupTexture(new THREE.Texture(image), {
         wrapS: THREE.ClampToEdgeWrapping,
         wrapT: THREE.ClampToEdgeWrapping,
       });
       mat.color.set(options.tintColor || 0xffffff);
       mat.needsUpdate = true;
-    };
-    image.onerror = () => console.warn(`Texture failed to load: ${url}`);
-    image.src = url;
+    });
     return mat;
   }
 
@@ -1715,7 +1774,8 @@
   const ENEMY_LOOK = {
     passenger: { scale: 1.0, lean: 0.07, head: 1.0, armRaise: 0.0, swing: 1.0, gut: false, eye: 0xb7ff54, glow: 0x6cff3a },
     cougher: { scale: 1.05, lean: 0.34, head: 1.2, armRaise: 0.95, swing: 0.45, gut: true, eye: 0xe6ff45, glow: 0x9bff2e },
-    sprinter: { scale: 0.94, lean: 0.5, head: 0.9, armRaise: -0.4, swing: 1.5, gut: false, eye: 0xff5a35, glow: 0xff6a2e },
+    sprinter: { scale: 0.94, lean: 0.55, head: 0.9, armRaise: -0.48, swing: 1.7, gut: false, eye: 0xff5a35, glow: 0xff6a2e },
+    bloater: { scale: 1.28, lean: 0.2, head: 1.08, armRaise: 0.45, swing: 0.32, gut: true, eye: 0x78ff1f, glow: 0x45ff1f },
     // Small, hunched forward hard enough to read as quadrupedal; arms angle
     // steeply down to act as "front legs". Rendered upside-down near the
     // ceiling — see the crawler branch in updateEnemies.
@@ -1797,9 +1857,60 @@
     passenger: { skin: 0x8fce3a, shirt: 0x2f6f7a, pants: 0x222d36, shoe: 0x14110d },
     cougher: { skin: 0x7cc23a, shirt: 0x243349, pants: 0x1a2330, shoe: 0x141009 },
     sprinter: { skin: 0x9bd84a, shirt: 0xdd6a22, pants: 0x202a33, shoe: 0x14110d },
+    bloater: { skin: 0x76c83a, shirt: 0x596225, pants: 0x252817, shoe: 0x151309 },
     // Faded onesie palette — pants/shoe match the shirt so it reads as one
     // sleeper suit instead of separate clothing pieces.
     crawler: { skin: 0x9be066, shirt: 0xc9d6a0, pants: 0xc9d6a0, shoe: 0xb7c590 },
+  };
+
+  const ENEMY_RESISTANCE = {
+    passenger: 1.15,
+    cougher: 1.65,
+    sprinter: 1.35,
+    crawler: 1.2,
+    bloater: 3.45,
+  };
+  const ENEMY_BASE_SPEED = {
+    passenger: 1.6,
+    cougher: 1.35,
+    sprinter: 2.9,
+    crawler: 2.55,
+    bloater: 0.84,
+  };
+  const ENEMY_COLLISION_RADIUS = {
+    passenger: 0.38,
+    cougher: 0.42,
+    sprinter: 0.36,
+    crawler: 0.34,
+    bloater: 0.54,
+  };
+  const ENEMY_HIT_RADIUS = {
+    passenger: 0.62,
+    cougher: 0.72,
+    sprinter: 0.6,
+    crawler: 0.5,
+    bloater: 0.95,
+  };
+  const ENEMY_TOUCH_INFECTION = {
+    passenger: 8.2,
+    cougher: 8.8,
+    sprinter: 11.2,
+    crawler: 4.5,
+    bloater: 9.8,
+  };
+  const ENEMY_PROXIMITY_MULTIPLIER = {
+    passenger: 1,
+    cougher: 1.05,
+    sprinter: 1.12,
+    crawler: 0.4,
+    bloater: 1.16,
+  };
+  const ENEMY_CURE_SCORE = {
+    passenger: 100,
+    cougher: 175,
+    sprinter: 165,
+    crawler: 160,
+    bloater: 260,
   };
 
   // Signed-distance of a rounded box (Inigo Quilez): negative inside. Used to
@@ -1878,28 +1989,38 @@
     const isSprint = type === "sprinter";
     const isCough = type === "cougher";
     const isCrawler = type === "crawler";
+    const isBloater = type === "bloater";
     const u = (m) => m / VOX; // metres -> voxel units
 
     // Body sizes in METRES (converted to voxel units below). With the fine voxel
     // grid plus near-maximal corner radii, the SDF carves smoothly rounded edges:
     // a near-spherical head, capsule limbs, and slim legs. The crawler is built
     // with toddler proportions: oversized head, short stubby torso and limbs.
-    const headR = isCough ? 0.295 : isSprint ? 0.235 : isCrawler ? 0.24 : 0.255;
+    const headR = isBloater ? 0.305 : isCough ? 0.295 : isSprint ? 0.235 : isCrawler ? 0.24 : 0.255;
     const hA = u(headR), hB = u(headR * 1.06), hC = u(headR);
-    const tHX = u(isSprint ? 0.205 : isCough ? 0.275 : isCrawler ? 0.195 : 0.25);
-    const tHY = u(isCrawler ? 0.205 : 0.335), tHZ = u(isCrawler ? 0.175 : 0.155), tR = u(0.14);
-    const aR = u(isCrawler ? 0.1 : 0.11), aHY = u(isCrawler ? 0.21 : 0.36);
-    const lR = u(isCrawler ? 0.095 : 0.1), lHY = u(isCrawler ? 0.19 : 0.42); // slim legs (crawler's are stubby)
-    const handR = u(0.125), gutR = u(0.155);
-    const footHX = u(0.14), footHY = u(0.065), footHZ = u(0.19), footR = u(0.05), footZ = u(0.11);
+    const tHX = u(isBloater ? 0.38 : isSprint ? 0.205 : isCough ? 0.275 : isCrawler ? 0.195 : 0.25);
+    const tHY = u(isCrawler ? 0.205 : isBloater ? 0.38 : 0.335);
+    const tHZ = u(isCrawler ? 0.175 : isBloater ? 0.22 : 0.155);
+    const tR = u(isBloater ? 0.18 : 0.14);
+    const aR = u(isBloater ? 0.135 : isCrawler ? 0.1 : 0.11), aHY = u(isCrawler ? 0.21 : isBloater ? 0.34 : 0.36);
+    const lR = u(isBloater ? 0.13 : isCrawler ? 0.095 : 0.1), lHY = u(isCrawler ? 0.19 : isBloater ? 0.36 : 0.42); // slim legs (crawler's are stubby)
+    const handR = u(isBloater ? 0.16 : 0.125), gutR = u(isBloater ? 0.31 : 0.155);
+    const footHX = u(isBloater ? 0.19 : 0.14), footHY = u(isBloater ? 0.075 : 0.065), footHZ = u(isBloater ? 0.22 : 0.19), footR = u(0.05), footZ = u(0.11);
 
     const torso = [];
     let seen = new Set();
     voxShape(torso, seen, 0, tHY, 0, tHX + 2, tHY + 2, tHZ + 2, pal.shirt, 0.07,
       (x, y, z) => sdRoundBox(x, y, z, tHX, tHY, tHZ, tR) <= 0.05);
-    if (isCough) {
-      voxShape(torso, seen, 0, tHY * 0.55, tHZ + gutR * 0.45, gutR + 2, gutR + 2, gutR + 2, pal.shirt, 0.07,
-        (x, y, z) => x * x + y * y + z * z <= gutR * gutR); // sick gut bulge
+    if (isCough || isBloater) {
+      const gutY = isBloater ? tHY * 0.42 : tHY * 0.55;
+      const gutZ = tHZ + gutR * (isBloater ? 0.58 : 0.45);
+      voxShape(torso, seen, 0, gutY, gutZ, gutR + 2, gutR + 2, gutR + 2, pal.shirt, 0.07,
+        (x, y, z) => {
+          const rx = gutR * (isBloater ? 1.22 : 1);
+          const ry = gutR * (isBloater ? 0.9 : 1);
+          const rz = gutR * (isBloater ? 1.05 : 1);
+          return (x * x) / (rx * rx) + (y * y) / (ry * ry) + (z * z) / (rz * rz) <= 1;
+        }); // sick gut bulge
     }
 
     const head = [];
@@ -2113,6 +2234,7 @@
     const map = state.map;
     const rng = map.rng;
     const count = clamp(4 + state.level * 2, 4, 24);
+    const guaranteedBloaterIndex = state.level >= 4 ? Math.floor(rng() * count) : -1;
     const floors = map.floors.filter((tile) => {
       const startDistance = Math.abs(tile.gx - map.start.gx) + Math.abs(tile.gy - map.start.gy);
       const exitDistance = Math.abs(tile.gx - map.exit.gx) + Math.abs(tile.gy - map.exit.gy);
@@ -2127,10 +2249,13 @@
       if (state.level >= 3 && rng() < 0.22 + state.level * 0.01) type = "cougher";
       if (state.level >= 5 && rng() < 0.12 + state.level * 0.006) type = "sprinter";
       if (state.level >= 4 && rng() < 0.14 + state.level * 0.006) type = "crawler";
+      if (state.level >= 3 && rng() < 0.09 + state.level * 0.007) type = "bloater";
+      if (i === guaranteedBloaterIndex) type = "bloater";
       // Speed jitter is per-instance (seeded, so it's reproducible within a
       // run) on top of the per-type/level formula, so a pack of the same type
       // doesn't move in perfect lockstep.
       const speedJitter = 0.88 + rng() * 0.28;
+      const levelSpeed = type === "bloater" ? Math.min(0.42, state.level * 0.035) : Math.min(0.7, state.level * 0.06);
       const enemy = {
         id: `e${state.level}-${i}`,
         type,
@@ -2140,15 +2265,22 @@
         vz: 0,
         cured: false,
         inoculation: 0,
-        resistance: type === "cougher" ? 1.65 : type === "sprinter" ? 1.25 : type === "crawler" ? 1.2 : 1.15,
-        speed: ((type === "sprinter" ? 2.35 : type === "cougher" ? 1.35 : type === "crawler" ? 2.55 : 1.6) + Math.min(0.7, state.level * 0.06)) * speedJitter,
+        resistance: ENEMY_RESISTANCE[type] || ENEMY_RESISTANCE.passenger,
+        speed: ((ENEMY_BASE_SPEED[type] || ENEMY_BASE_SPEED.passenger) + levelSpeed) * speedJitter,
+        radius: ENEMY_COLLISION_RADIUS[type] || ENEMY_COLLISION_RADIUS.passenger,
         crawlY: WALL_H - 0.4,
-        spitTimer: 1.5 + rng() * 2,
+        spitTimer: type === "bloater" ? 1 + rng() * 1.6 : 1.5 + rng() * 2,
         coughTimer: 1 + rng() * 2,
         stagger: 0,
         walkPhase: rng() * Math.PI * 2,
         coughAnim: 0,
         lunge: 0,
+        lungeWindup: 0,
+        lungeTime: 0,
+        lungeCooldown: type === "sprinter" ? 0.9 + rng() * 1.4 : 0,
+        lungeVx: 0,
+        lungeVz: 0,
+        hitTimer: 0,
         blink: rng() * 3,
         healing: false,
         healT: 0,
@@ -2246,6 +2378,7 @@
     state.beams = [];
     state.particles = [];
     state.slimeBolts = [];
+    state.stuckTimer = 0;
     state.flowTimer = 0;
     state.deckStart = performance.now();
     state.map = generateMap(level);
@@ -2356,7 +2489,7 @@
     if (el.infectionFill) el.infectionFill.style.width = `${clamp(state.infection, 0, 100)}%`;
     if (el.vignette) {
       const flash = state.infection > 80 ? 0.22 : state.infection > 60 ? 0.12 : state.infection > 42 ? 0.06 : 0;
-      el.vignette.style.setProperty("--crud-flash", String(flash + Math.max(0, state.lurchTimer) * 0.12));
+      el.vignette.style.setProperty("--crud-flash", String(flash + Math.max(0, state.lurchTimer) * 0.12 + (state.stuckTimer > 0 ? 0.08 : 0)));
     }
   }
 
@@ -2476,13 +2609,13 @@
       if (enemy.cured) continue;
       // Crawlers are hit where they're actually rendered (near the ceiling),
       // not at the usual standing-height centre.
-      const hitY = enemy.type === "crawler" ? enemy.crawlY : 1.18;
+      const hitY = enemy.type === "crawler" ? enemy.crawlY : enemy.type === "bloater" ? 1.35 : 1.18;
       const center = new THREE.Vector3(enemy.x, hitY, enemy.z);
       const toEnemy = center.clone().sub(origin);
       const projected = toEnemy.dot(dir);
       if (projected <= 0.2 || projected > range) continue;
       const closest = origin.clone().addScaledVector(dir, projected);
-      const radius = (enemy.type === "cougher" ? 0.72 : enemy.type === "crawler" ? 0.5 : 0.62) + radiusBoost;
+      const radius = (ENEMY_HIT_RADIUS[enemy.type] || ENEMY_HIT_RADIUS.passenger) + radiusBoost;
       const miss = closest.distanceTo(center);
       if (miss > radius) continue;
       if (rayBlocked(origin, dir, projected)) continue;
@@ -2608,9 +2741,11 @@
   }
 
   function cureEnemy(enemy, dose) {
-    const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : 1.2;
+    const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : enemy.type === "bloater" ? 1.35 : 1.2;
     enemy.inoculation += dose;
     enemy.stagger = 0.22;
+    enemy.lungeWindup = 0;
+    enemy.lungeTime = 0;
     state.totalHits += 1;
     addParticles(enemy.x, enemy.z, 0xb7ff54, 9, hitBaseY);
     playBeep("hit");
@@ -2627,11 +2762,13 @@
     spawnCurePuddle(enemy.x, enemy.z);
     spawnSpeech(enemy.x, enemy.z, FUNNY_LINES[Math.floor(Math.random() * FUNNY_LINES.length)]);
     state.cures += 1;
-    const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : enemy.type === "crawler" ? 160 : 100;
+    const typeBonus = ENEMY_CURE_SCORE[enemy.type] || ENEMY_CURE_SCORE.passenger;
     state.score += typeBonus + state.level * 12;
     setStatus(
       enemy.type === "cougher" ? "Cougher cured. The air is less terrible."
+        : enemy.type === "bloater" ? "Bloater cured. That took a suspicious amount of serum."
         : enemy.type === "crawler" ? "Crawler cured. It toddles off the ceiling."
+          : enemy.type === "sprinter" ? "Sprinter cured. Your ankles are safer."
         : "Passenger cured."
     );
     updateExitDoor();
@@ -2774,17 +2911,33 @@
   const slimeBoltGeo = new THREE.SphereGeometry(0.1, 6, 5);
   const slimeBoltMat = new THREE.MeshBasicMaterial({ color: 0x8aff2e, transparent: true, opacity: 0.92 });
 
-  // A spit projectile: lerps from the crawler toward where the player was
-  // standing when it fired, with a little upward arc, then splats into a
-  // lingering hazard puddle (reusing the cougher's cloud system) and spikes
-  // infection if the player is still standing in the impact zone.
-  function spawnSlimeBolt(fromX, fromY, fromZ, toX, toY, toZ) {
+  // A spit projectile: lerps toward where the player was standing when it
+  // fired, with a little upward arc, then splats into a lingering hazard puddle.
+  // Bloaters fire the larger snaring version; crawlers keep the lighter spit.
+  function spawnSlimeBolt(fromX, fromY, fromZ, toX, toY, toZ, options = {}) {
     const dist = Math.hypot(toX - fromX, toY - fromY, toZ - fromZ);
-    const travel = clamp(dist / 9, 0.3, 1.2);
+    const travel = clamp(dist / (options.speed || 9), options.minTravel || 0.3, options.maxTravel || 1.2);
     const mesh = new THREE.Mesh(slimeBoltGeo, slimeBoltMat);
+    mesh.scale.setScalar(options.scale || 1);
     mesh.position.set(fromX, fromY, fromZ);
     fxRoot.add(mesh);
-    state.slimeBolts.push({ mesh, fromX, fromY, fromZ, toX, toY, toZ, t: 0, travel });
+    state.slimeBolts.push({
+      mesh,
+      fromX,
+      fromY,
+      fromZ,
+      toX,
+      toY,
+      toZ,
+      t: 0,
+      travel,
+      impactRadius: options.impactRadius || 1.6,
+      infection: options.infection || 9,
+      stuckTime: options.stuckTime || 0,
+      cloudRadius: options.cloudRadius || 1.1,
+      status: options.status || "Slime hit! Infection spiked.",
+      particleCount: options.particleCount || 10,
+    });
   }
 
   function updateSlimeBolts(dt) {
@@ -2802,17 +2955,56 @@
       b.mesh.rotation.y += dt * 7;
       if (p >= 1) {
         const dist = Math.hypot(player.x - b.toX, player.z - b.toZ);
-        if (dist < 1.6) {
-          state.infection = clamp(state.infection + 9, 0, 100);
-          state.lurchTimer = Math.max(state.lurchTimer, 0.2);
-          setStatus("Slime hit! Infection spiked.", 1.4);
+        if (dist < b.impactRadius) {
+          state.infection = clamp(state.infection + b.infection, 0, 100);
+          state.lurchTimer = Math.max(state.lurchTimer, b.stuckTime > 0 ? 0.34 : 0.2);
+          if (b.stuckTime > 0) state.stuckTimer = Math.max(state.stuckTimer, b.stuckTime);
+          setStatus(b.status, b.stuckTime > 0 ? b.stuckTime : 1.4);
         }
-        addParticles(b.toX, b.toZ, 0x8aff2e, 10, 0.25);
-        spawnCloud(b.toX, b.toZ, 1.1);
+        addParticles(b.toX, b.toZ, 0x8aff2e, b.particleCount, 0.25);
+        spawnCloud(b.toX, b.toZ, b.cloudRadius);
         fxRoot.remove(b.mesh);
         state.slimeBolts.splice(i, 1);
       }
     }
+  }
+
+  function updateSprinterLunge(enemy, dt, dist) {
+    if (enemy.type !== "sprinter") return false;
+
+    enemy.lungeCooldown = Math.max(0, enemy.lungeCooldown - dt);
+
+    if (enemy.lungeTime > 0) {
+      enemy.lungeTime = Math.max(0, enemy.lungeTime - dt);
+      moveEntity(enemy, enemy.lungeVx * dt, enemy.lungeVz * dt, enemy.radius || ENEMY_COLLISION_RADIUS.sprinter);
+      enemy.coughAnim = Math.max(enemy.coughAnim, 0.35);
+      return true;
+    }
+
+    if (enemy.lungeWindup > 0) {
+      enemy.lungeWindup = Math.max(0, enemy.lungeWindup - dt);
+      enemy.coughAnim = Math.max(enemy.coughAnim, 0.75);
+      if (enemy.lungeWindup <= 0) {
+        const dx = player.x - enemy.x;
+        const dz = player.z - enemy.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const burst = enemy.speed * 3.25;
+        enemy.lungeVx = (dx / len) * burst;
+        enemy.lungeVz = (dz / len) * burst;
+        enemy.lungeTime = 0.28;
+        addParticles(enemy.x, enemy.z, 0xff6a2e, 5, 1.1);
+      }
+      return true;
+    }
+
+    if (enemy.lungeCooldown <= 0 && dist > 2.05 && dist < 7.2 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
+      enemy.lungeWindup = 0.24;
+      enemy.lungeCooldown = 1.65 + Math.random() * 1.3;
+      enemy.coughAnim = 1;
+      return true;
+    }
+
+    return false;
   }
 
   function updateEnemies(dt) {
@@ -2826,26 +3018,41 @@
     for (const enemy of state.enemies) {
       if (enemy.cured) { updateCuredEnemy(enemy, dt); continue; }
       enemy.stagger = Math.max(0, enemy.stagger - dt);
+      enemy.hitTimer = Math.max(0, (enemy.hitTimer || 0) - dt);
       const dxp = player.x - enemy.x;
       const dzp = player.z - enemy.z;
       const dist = Math.hypot(dxp, dzp);
       closest = Math.min(closest, dist);
 
       if (enemy.stagger <= 0) {
-        const target = bestEnemyTarget(enemy);
-        const dx = target.x - enemy.x;
-        const dz = target.z - enemy.z;
-        const len = Math.hypot(dx, dz) || 1;
-        const speed = enemy.speed * (dist < 2.2 ? 0.72 : 1);
-        moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, 0.38);
+        const lunging = updateSprinterLunge(enemy, dt, dist);
+        if (!lunging) {
+          const target = bestEnemyTarget(enemy);
+          const dx = target.x - enemy.x;
+          const dz = target.z - enemy.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const slowNearPlayer = enemy.type === "bloater" ? 0.58 : 0.72;
+          const speed = enemy.speed * (dist < 2.2 ? slowNearPlayer : 1);
+          moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, enemy.radius || ENEMY_COLLISION_RADIUS.passenger);
+        }
+      } else {
+        enemy.lungeWindup = 0;
+        enemy.lungeTime = 0;
       }
 
-      if (dist < 1.25) {
+      const touchRange = enemy.type === "bloater" ? 1.55 : 1.25;
+      if (dist < touchRange) {
         // Crawlers barely infect by touch — their threat is the ranged spit below.
-        state.infection += (enemy.type === "sprinter" ? 10.5 : enemy.type === "crawler" ? 4.5 : 8.2) * dt;
+        state.infection += (ENEMY_TOUCH_INFECTION[enemy.type] || ENEMY_TOUCH_INFECTION.passenger) * dt;
         state.lurchTimer = Math.max(state.lurchTimer, 0.18);
+        if (enemy.type === "sprinter" && enemy.lungeTime > 0 && enemy.hitTimer <= 0) {
+          enemy.hitTimer = 0.75;
+          state.infection = clamp(state.infection + 4, 0, 100);
+          state.lurchTimer = Math.max(state.lurchTimer, 0.32);
+          setStatus("Sprinter lunge clipped you.", 0.9);
+        }
       } else if (dist < 6.5) {
-        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt * (enemy.type === "crawler" ? 0.4 : 1);
+        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt * (ENEMY_PROXIMITY_MULTIPLIER[enemy.type] || 1);
       }
 
       if (enemy.type === "cougher") {
@@ -2863,6 +3070,25 @@
           enemy.spitTimer = 2.2 + Math.random() * 1.8;
           enemy.coughAnim = 1; // reuses the head-dip/maw-open telegraph
           spawnSlimeBolt(enemy.x, enemy.crawlY, enemy.z, player.x, EYE_Y, player.z);
+        }
+      }
+
+      if (enemy.type === "bloater") {
+        enemy.spitTimer -= dt;
+        if (enemy.spitTimer <= 0 && dist < 12.5 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
+          enemy.spitTimer = 3.3 + Math.random() * 1.8;
+          enemy.coughAnim = 1;
+          spawnSlimeBolt(enemy.x, 1.45, enemy.z, player.x, EYE_Y, player.z, {
+            speed: 7,
+            scale: 1.65,
+            maxTravel: 1.45,
+            impactRadius: 1.9,
+            infection: 7,
+            stuckTime: 2.55,
+            cloudRadius: 1.35,
+            particleCount: 16,
+            status: "Bloater slime stuck your shoes. Hold them off.",
+          });
         }
       }
 
@@ -2908,7 +3134,11 @@
 
     // Attack-lunge telegraph: when crowding the player, surge forward, maw agape.
     let lunge = 0;
-    if (dist < 2.1 && enemy.stagger <= 0) {
+    if (enemy.lungeTime > 0) {
+      lunge = 1;
+    } else if (enemy.lungeWindup > 0) {
+      lunge = 0.45 + (1 - enemy.lungeWindup / 0.24) * 0.35;
+    } else if (dist < 2.1 && enemy.stagger <= 0) {
       enemy.lunge += dt * (5 + enemy.speed);
       lunge = Math.max(0, Math.sin(enemy.lunge));
     } else {
@@ -2999,7 +3229,7 @@
       if (len > 0.1) {
         moving = true;
         const speed = 0.85;
-        moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, 0.34);
+        moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, Math.min(enemy.radius || 0.34, 0.5));
         enemy.mesh.position.set(enemy.x, 0, enemy.z);
         // Same-height target as the mesh's own pivot: yaw only, never pitch.
         // (A raised target made the figure lean back hard as it neared the
@@ -3203,7 +3433,8 @@
       mz /= len;
     }
     const infectionSlow = state.infection > 84 ? 0.72 : state.infection > 66 ? 0.84 : 1;
-    const speed = (input.sprint ? SPRINT_SPEED : PLAYER_SPEED) * infectionSlow;
+    const slimeSlow = state.stuckTimer > 0 ? 0.08 : 1;
+    const speed = (input.sprint ? SPRINT_SPEED : PLAYER_SPEED) * infectionSlow * slimeSlow;
     const dx = mx * speed * dt;
     const dz = mz * speed * dt;
     const nx = player.x + dx;
@@ -3237,6 +3468,11 @@
     state.dartCooldown = Math.max(0, state.dartCooldown - dt);
     state.shotgunCooldown = Math.max(0, state.shotgunCooldown - dt);
     state.lurchTimer = Math.max(0, state.lurchTimer - dt);
+    const wasStuck = state.stuckTimer > 0;
+    state.stuckTimer = Math.max(0, state.stuckTimer - dt);
+    if (wasStuck && state.stuckTimer <= 0 && state.mode === "playing") {
+      setStatus("Slime broke loose. Move.", 1.1);
+    }
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
       if (state.statusTimer <= 0 && el.status) {
@@ -3579,7 +3815,7 @@
     });
   }
 
-  function init() {
+  function bootGame() {
     state.map = generateMap(1);
     buildWorld();
     spawnEnemies();
@@ -3590,6 +3826,7 @@
     camera.position.set(player.x, EYE_Y, player.z);
     updateExitDoor();
     updateHud();
+    if (el.status) el.status.textContent = "Click start, then click the canvas for mouse look.";
     bindControls();
     bindMobileControls();
     bindButtons();
@@ -3599,12 +3836,21 @@
     raf = requestAnimationFrame(renderLoop);
   }
 
+  async function init() {
+    if (el.status) el.status.textContent = "Loading cruise textures...";
+    await waitForTextureLoads();
+    bootGame();
+  }
+
   window.__POOP_CRUISE = {
     state,
     player,
     startRun,
     loadLevel,
     fireWeapon,
+    getTextureStatus() {
+      return { ...textureLoadStatus };
+    },
     setInfection(value) {
       state.infection = clamp(Number(value) || 0, 0, 100);
       updateHud();
@@ -3614,5 +3860,8 @@
     },
   };
 
-  init();
+  init().catch((error) => {
+    console.warn("Cruise init failed after texture preload; starting with fallbacks.", error);
+    bootGame();
+  });
 })();

@@ -70,7 +70,12 @@
   const MOUSE_SENS = 0.00215;
   const MAX_PITCH = Math.PI * 0.46;
   const DART_RANGE = 13;
-  const SHOTGUN_RANGE = 15;
+  const SHOTGUN_RANGE = 18;
+  const SHOTGUN_PELLETS = 10;
+  const SHOTGUN_RADIUS_BOOST = 0.34;
+  const SHOTGUN_DOSE = 1.9;
+  const SHOTGUN_COOLDOWN = 0.62;
+  const PROJECTILE_LIFE = 0.22;
   const WEAPON_LABELS = {
     dart: "Ivermectin Pistol",
     shotgun: "Silver Pumper",
@@ -887,49 +892,6 @@
     return texture;
   }
 
-  function makeWeaponLabelMaterial(lines, background, accent) {
-    const canvasTexture = document.createElement("canvas");
-    canvasTexture.width = 256;
-    canvasTexture.height = 96;
-    const ctx = canvasTexture.getContext("2d");
-    ctx.fillStyle = rgba(background, 0.94);
-    ctx.fillRect(0, 0, canvasTexture.width, canvasTexture.height);
-    ctx.fillStyle = rgba(accent, 0.92);
-    ctx.fillRect(0, 0, 256, 12);
-    ctx.fillRect(0, 84, 256, 12);
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(5, 5, 246, 86);
-    ctx.fillStyle = "#f7fbff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "900 32px Arial, sans-serif";
-    ctx.fillText(lines[0], 128, lines.length > 1 ? 38 : 48);
-    if (lines[1]) {
-      ctx.fillStyle = rgba(accent, 1);
-      ctx.font = "900 24px Arial, sans-serif";
-      ctx.fillText(lines[1], 128, 66);
-    }
-    const texture = setupTexture(new THREE.CanvasTexture(canvasTexture), {
-      wrapS: THREE.ClampToEdgeWrapping,
-      wrapT: THREE.ClampToEdgeWrapping,
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-    });
-    return new THREE.MeshBasicMaterial({
-      map: texture,
-      side: THREE.DoubleSide,
-      transparent: true,
-      depthWrite: false,
-    });
-  }
-
-  function makeLabelPlate(material, width, height, x, y, z) {
-    const label = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
-    label.position.set(x, y, z);
-    return label;
-  }
-
   const weaponMats = {
     metal: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x0b1014, map: makeWeaponTexture("pistolMetal", 0x1) }),
     dark: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x050607, map: makeWeaponTexture("barrel", 0x2) }),
@@ -941,8 +903,6 @@
     dartGlow: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
     shotGlow: new THREE.MeshBasicMaterial({ color: 0xff2e88 }),
     muzzle: new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: 0 }),
-    pistolLabel: makeWeaponLabelMaterial(["IVERMECTIN", "PISTOL"], 0x10293a, 0x2ee0ff),
-    shotgunLabel: makeWeaponLabelMaterial(["COLLOIDAL", "SILVER PUMPER"], 0x182432, 0x2ee0ff),
   };
 
   function buildDartGun() {
@@ -979,10 +939,9 @@
     rib2.position.y = -0.14;
     const rib3 = rib1.clone();
     rib3.position.y = -0.18;
-    const label = makeLabelPlate(weaponMats.pistolLabel, 0.142, 0.052, 0, 0.086, 0.134);
     const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), weaponMats.muzzle);
     muzzle.position.set(0, 0.02, -0.42);
-    g.add(body, slide, barrel, ring, vial, vialCapL, vialCapR, plunger, handle, rib1, rib2, rib3, label, muzzle);
+    g.add(body, slide, barrel, ring, vial, vialCapL, vialCapR, plunger, handle, rib1, rib2, rib3, muzzle);
     return { group: g, muzzle };
   }
 
@@ -1007,13 +966,12 @@
     barrelBandA.position.set(0, 0.034, -0.18);
     const barrelBandB = barrelBandA.clone();
     barrelBandB.position.z = -0.48;
-    const label = makeLabelPlate(weaponMats.shotgunLabel, 0.17, 0.06, 0, 0.082, 0.164);
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.074, 0.17, 0.094), weaponMats.grip);
     handle.position.set(0, -0.13, 0.06);
     handle.rotation.x = 0.22;
     const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), weaponMats.muzzle);
     muzzle.position.set(0, 0.035, -0.62);
-    g.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, label, handle, muzzle);
+    g.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, handle, muzzle);
     return { group: g, muzzle };
   }
 
@@ -2229,14 +2187,13 @@
       barrelBandA.position.set(0, 0.68, -0.48);
       const barrelBandB = barrelBandA.clone();
       barrelBandB.position.z = -1.05;
-      const label = makeLabelPlate(weaponMats.shotgunLabel, 0.48, 0.17, 0, 0.72, 0.42);
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.18), weaponMats.grip);
       handle.position.set(0, 0.36, 0.22);
       handle.rotation.x = 0.22;
       const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.055, 12), weaponMats.shotGlow);
       muzzle.rotation.x = Math.PI / 2;
       muzzle.position.set(0, 0.67, -1.39);
-      group.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, label, handle, muzzle);
+      group.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, handle, muzzle);
       group.scale.setScalar(0.9);
       group.rotation.z = -0.08;
       return group;
@@ -2536,14 +2493,67 @@
     return best;
   }
 
-  function addBeam(targetPoint, color = 0x2ee0ff) {
-    const origin = camera.position.clone();
-    const points = [origin, targetPoint.clone()];
-    const geom = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.9 });
-    const line = new THREE.Line(geom, mat);
-    fxRoot.add(line);
-    state.beams.push({ mesh: line, life: 0.08 });
+  function getMuzzleWorldPosition(kind = state.weapon) {
+    camera.updateMatrixWorld(true);
+    weaponGroup.updateMatrixWorld(true);
+    const muzzle = kind === "shotgun" ? shotgun.muzzle : dartGun.muzzle;
+    const origin = muzzle.getWorldPosition(new THREE.Vector3());
+    if (!Number.isFinite(origin.x)) return camera.position.clone();
+    return origin;
+  }
+
+  function makeTracerMaterial(color, opacity) {
+    return new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    });
+  }
+
+  function addBeam(targetPoint, color = 0x2ee0ff, kind = state.weapon) {
+    const origin = getMuzzleWorldPosition(kind);
+    const target = targetPoint.clone();
+    const shot = target.clone().sub(origin);
+    const length = shot.length();
+    if (length < 0.1) return;
+
+    const group = new THREE.Group();
+    const dir = shot.clone().normalize();
+    const mid = origin.clone().addScaledVector(dir, length * 0.5);
+    const radius = kind === "shotgun" ? 0.036 : 0.046;
+    const glowRadius = kind === "shotgun" ? 0.12 : 0.14;
+    const coreMat = makeTracerMaterial(color, kind === "shotgun" ? 0.9 : 0.96);
+    const glowMat = makeTracerMaterial(kind === "shotgun" ? 0xc8f7ff : 0xb7ff54, 0.48);
+    const sparkMat = makeTracerMaterial(0xfff4c2, 0.9);
+
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 0.42, length, 8), coreMat);
+    const glow = new THREE.Mesh(new THREE.CylinderGeometry(glowRadius, glowRadius * 0.25, length, 10), glowMat);
+    core.position.copy(mid);
+    glow.position.copy(mid);
+    core.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    glow.quaternion.copy(core.quaternion);
+
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(kind === "shotgun" ? 0.105 : 0.075, 8, 6), sparkMat);
+    spark.position.copy(origin);
+    const impact = new THREE.Mesh(new THREE.SphereGeometry(kind === "shotgun" ? 0.085 : 0.07, 8, 6), coreMat.clone());
+    impact.position.copy(target);
+
+    group.add(glow, core, spark, impact);
+    fxRoot.add(group);
+    state.beams.push({
+      mesh: group,
+      materials: [
+        { mat: coreMat, opacity: coreMat.opacity },
+        { mat: glowMat, opacity: glowMat.opacity },
+        { mat: sparkMat, opacity: sparkMat.opacity },
+        { mat: impact.material, opacity: impact.material.opacity },
+      ],
+      life: PROJECTILE_LIFE,
+      maxLife: PROJECTILE_LIFE,
+    });
   }
 
   function addParticles(x, z, color = 0xb7ff54, count = 8, baseY = 1.2) {
@@ -2637,10 +2647,10 @@
     const hit = traceEnemy(dir, DART_RANGE, 0.06);
     if (hit) {
       cureEnemy(hit.enemy, 1);
-      addBeam(hit.point, 0x2ee0ff);
+      addBeam(hit.point, 0x2ee0ff, "dart");
     } else {
       const miss = camera.position.clone().addScaledVector(dir, DART_RANGE);
-      addBeam(miss, 0x2ee0ff);
+      addBeam(miss, 0x2ee0ff, "dart");
       setStatus("Ivermectin cure shot fired.");
       playBeep("miss");
     }
@@ -2657,7 +2667,7 @@
       return;
     }
     if (state.shotgunCooldown > 0) return;
-    state.shotgunCooldown = 0.85;
+    state.shotgunCooldown = SHOTGUN_COOLDOWN;
     state.shotgunAmmo -= 1;
     state.totalShots += 1;
     triggerRecoil("shotgun");
@@ -2669,19 +2679,19 @@
     camera.getWorldDirection(base);
 
     const hitSet = new Set();
-    for (let i = 0; i < 7; i += 1) {
-      const spreadX = (Math.random() - 0.5) * 0.18;
-      const spreadY = (Math.random() - 0.5) * 0.12;
+    for (let i = 0; i < SHOTGUN_PELLETS; i += 1) {
+      const spreadX = (Math.random() - 0.5) * 0.24;
+      const spreadY = (Math.random() - 0.5) * 0.16;
       const dir = base.clone().addScaledVector(right, spreadX).addScaledVector(up, spreadY).normalize();
-      const hit = traceEnemy(dir, SHOTGUN_RANGE, 0.22);
+      const hit = traceEnemy(dir, SHOTGUN_RANGE, SHOTGUN_RADIUS_BOOST);
       if (hit) {
         hitSet.add(hit.enemy);
-        addBeam(hit.point, 0xff2e88);
+        addBeam(hit.point, 0xff2e88, "shotgun");
       } else {
-        addBeam(camera.position.clone().addScaledVector(dir, SHOTGUN_RANGE), 0xff2e88);
+        addBeam(camera.position.clone().addScaledVector(dir, SHOTGUN_RANGE), 0xff2e88, "shotgun");
       }
     }
-    hitSet.forEach((enemy) => cureEnemy(enemy, 0.95));
+    hitSet.forEach((enemy) => cureEnemy(enemy, SHOTGUN_DOSE));
     if (!hitSet.size) {
       state.totalHits = Math.max(0, state.totalHits);
       setStatus(`${SHOTGUN_DISPLAY_NAME} blast fired.`);
@@ -3093,7 +3103,10 @@
     for (let i = state.beams.length - 1; i >= 0; i -= 1) {
       const beam = state.beams[i];
       beam.life -= dt;
-      beam.mesh.material.opacity = clamp(beam.life / 0.08, 0, 1);
+      const fade = clamp(beam.life / beam.maxLife, 0, 1);
+      beam.materials.forEach(({ mat, opacity }) => {
+        mat.opacity = opacity * fade;
+      });
       if (beam.life <= 0) {
         fxRoot.remove(beam.mesh);
         state.beams.splice(i, 1);

@@ -71,6 +71,11 @@
   const MAX_PITCH = Math.PI * 0.46;
   const DART_RANGE = 13;
   const SHOTGUN_RANGE = 15;
+  const WEAPON_LABELS = {
+    dart: "Ivermectin Pistol",
+    shotgun: "Silver Pumper",
+  };
+  const SHOTGUN_DISPLAY_NAME = "Colloidal Silver Pumper";
   const FLOW_REFRESH = 0.36;
   const WALKABLE = new Set([0, 2, 3, 4]);
 
@@ -803,60 +808,212 @@
   weaponGroup.position.set(0.2, -0.18, -0.5);
   camera.add(weaponGroup);
 
+  function makeWeaponTexture(kind, seed = 0x51c0ffee) {
+    const size = 128;
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = size;
+    canvasTexture.height = size;
+    const ctx = canvasTexture.getContext("2d");
+    const rng = mulberry32(seed ^ kind.length);
+    const profile = {
+      pistolMetal: { base: 0x516371, deep: 0x1a222c, accent: 0x2ee0ff, scratches: 90 },
+      pistolGrip: { base: 0x171a1f, deep: 0x070809, accent: 0xb7ff54, scratches: 50 },
+      barrel: { base: 0x24282e, deep: 0x05070d, accent: 0x6f7782, scratches: 74 },
+      vialGlass: { base: 0x2ee0ff, deep: 0x0b4c53, accent: 0xb7ff54, scratches: 36 },
+      shotgunBody: { base: 0x544a58, deep: 0x15111a, accent: 0xff2e88, scratches: 86 },
+      shotgunPump: { base: 0xdad2a1, deep: 0x4f4022, accent: 0xb7ff54, scratches: 60 },
+      silverTube: { base: 0xcde9f5, deep: 0x37586b, accent: 0x2ee0ff, scratches: 46 },
+    }[kind] || { base: 0x343b44, deep: 0x0c0f14, accent: 0x2ee0ff, scratches: 64 };
+
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, rgba(profile.base, 1, 18));
+    gradient.addColorStop(0.48, rgba(profile.base, 1, -4));
+    gradient.addColorStop(1, rgba(profile.deep, 1));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.globalAlpha = 0.34;
+    ctx.fillStyle = rgba(profile.accent, 0.55);
+    for (let y = -size; y < size * 2; y += kind === "shotgunPump" ? 28 : 42) {
+      ctx.save();
+      ctx.translate(size * 0.5, y);
+      ctx.rotate(-0.45);
+      ctx.fillRect(-size, -4, size * 2, kind === "silverTube" ? 10 : 6);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = rgba(0x000000, 0.48);
+    ctx.lineWidth = 2;
+    for (let x = 18; x < size; x += 28) {
+      ctx.beginPath();
+      ctx.moveTo(x + rng() * 6, 0);
+      ctx.lineTo(x - 10 + rng() * 10, size);
+      ctx.stroke();
+    }
+
+    for (let i = 0; i < profile.scratches; i += 1) {
+      const x = rng() * size;
+      const y = rng() * size;
+      const len = 4 + rng() * 24;
+      const alpha = 0.08 + rng() * 0.24;
+      ctx.strokeStyle = rng() > 0.52 ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
+      ctx.lineWidth = rng() > 0.72 ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + len, y + (rng() - 0.5) * 8);
+      ctx.stroke();
+    }
+
+    if (kind === "pistolGrip") {
+      ctx.fillStyle = "rgba(0,0,0,0.42)";
+      for (let y = 12; y < size; y += 14) {
+        ctx.fillRect(0, y, size, 5);
+      }
+    }
+
+    if (kind === "vialGlass" || kind === "silverTube") {
+      ctx.fillStyle = "rgba(255,255,255,0.34)";
+      ctx.fillRect(10, 8, 12, size - 16);
+      ctx.fillStyle = rgba(profile.accent, 0.62);
+      ctx.fillRect(28, 20, size - 48, size - 40);
+    }
+
+    const texture = setupTexture(new THREE.CanvasTexture(canvasTexture), {
+      wrapS: THREE.RepeatWrapping,
+      wrapT: THREE.RepeatWrapping,
+    });
+    texture.repeat.set(1.5, 1.5);
+    return texture;
+  }
+
+  function makeWeaponLabelMaterial(lines, background, accent) {
+    const canvasTexture = document.createElement("canvas");
+    canvasTexture.width = 256;
+    canvasTexture.height = 96;
+    const ctx = canvasTexture.getContext("2d");
+    ctx.fillStyle = rgba(background, 0.94);
+    ctx.fillRect(0, 0, canvasTexture.width, canvasTexture.height);
+    ctx.fillStyle = rgba(accent, 0.92);
+    ctx.fillRect(0, 0, 256, 12);
+    ctx.fillRect(0, 84, 256, 12);
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(5, 5, 246, 86);
+    ctx.fillStyle = "#f7fbff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "900 32px Arial, sans-serif";
+    ctx.fillText(lines[0], 128, lines.length > 1 ? 38 : 48);
+    if (lines[1]) {
+      ctx.fillStyle = rgba(accent, 1);
+      ctx.font = "900 24px Arial, sans-serif";
+      ctx.fillText(lines[1], 128, 66);
+    }
+    const texture = setupTexture(new THREE.CanvasTexture(canvasTexture), {
+      wrapS: THREE.ClampToEdgeWrapping,
+      wrapT: THREE.ClampToEdgeWrapping,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+    });
+    return new THREE.MeshBasicMaterial({
+      map: texture,
+      side: THREE.DoubleSide,
+      transparent: true,
+      depthWrite: false,
+    });
+  }
+
+  function makeLabelPlate(material, width, height, x, y, z) {
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
+    label.position.set(x, y, z);
+    return label;
+  }
+
   const weaponMats = {
-    metal: new THREE.MeshLambertMaterial({ color: 0x343b44, emissive: 0x0c0f14 }),
-    dark: new THREE.MeshLambertMaterial({ color: 0x171a1f, emissive: 0x070809 }),
+    metal: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x0b1014, map: makeWeaponTexture("pistolMetal", 0x1) }),
+    dark: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x050607, map: makeWeaponTexture("barrel", 0x2) }),
+    grip: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x030405, map: makeWeaponTexture("pistolGrip", 0x3) }),
+    vial: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x06343c, map: makeWeaponTexture("vialGlass", 0x4), transparent: true, opacity: 0.82 }),
+    shotgunBody: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x130812, map: makeWeaponTexture("shotgunBody", 0x5) }),
+    shotgunPump: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x1f1808, map: makeWeaponTexture("shotgunPump", 0x6) }),
+    silverTube: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x0e2630, map: makeWeaponTexture("silverTube", 0x7) }),
     dartGlow: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
     shotGlow: new THREE.MeshBasicMaterial({ color: 0xff2e88 }),
     muzzle: new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: 0 }),
+    pistolLabel: makeWeaponLabelMaterial(["IVERMECTIN", "PISTOL"], 0x10293a, 0x2ee0ff),
+    shotgunLabel: makeWeaponLabelMaterial(["COLLOIDAL", "SILVER PUMPER"], 0x182432, 0x2ee0ff),
   };
 
   function buildDartGun() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.32), weaponMats.metal);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.12, 0.34), weaponMats.metal);
     body.position.set(0, 0, -0.04);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.2), weaponMats.dark);
-    top.position.set(0, 0.075, -0.06);
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.034, 0.26, 10), weaponMats.dark);
+    const slide = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.05, 0.24), weaponMats.dark);
+    slide.position.set(0, 0.08, -0.08);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.28, 12), weaponMats.dark);
     barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.015, -0.24);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 12), weaponMats.dartGlow);
+    barrel.position.set(0, 0.02, -0.27);
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.038, 12), weaponMats.dartGlow);
     ring.rotation.x = Math.PI / 2;
-    ring.position.set(0, 0.015, -0.34);
-    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 10), weaponMats.dartGlow);
-    tank.rotation.z = Math.PI / 2;
-    tank.position.set(0, -0.04, 0.05);
-    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.17, 0.09), weaponMats.dark);
-    handle.position.set(0, -0.13, 0.08);
+    ring.position.set(0, 0.02, -0.37);
+    const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.04, 0.18, 12), weaponMats.vial);
+    vial.rotation.z = Math.PI / 2;
+    vial.position.set(0, -0.058, 0.04);
+    const vialCapL = new THREE.Mesh(new THREE.CylinderGeometry(0.039, 0.039, 0.018, 10), weaponMats.dark);
+    vialCapL.rotation.z = Math.PI / 2;
+    vialCapL.position.set(-0.102, -0.058, 0.04);
+    const vialCapR = vialCapL.clone();
+    vialCapR.position.x = 0.102;
+    const plunger = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.18, 8), weaponMats.dartGlow);
+    plunger.rotation.z = Math.PI / 2;
+    plunger.position.set(0, -0.02, 0.15);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.18, 0.095), weaponMats.grip);
+    handle.position.set(0, -0.14, 0.08);
     handle.rotation.x = 0.25;
+    const ribGeom = new THREE.BoxGeometry(0.078, 0.009, 0.1);
+    const rib1 = new THREE.Mesh(ribGeom, weaponMats.dark);
+    rib1.position.set(0, -0.1, 0.03);
+    rib1.rotation.x = 0.25;
+    const rib2 = rib1.clone();
+    rib2.position.y = -0.14;
+    const rib3 = rib1.clone();
+    rib3.position.y = -0.18;
+    const label = makeLabelPlate(weaponMats.pistolLabel, 0.142, 0.052, 0, 0.086, 0.134);
     const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), weaponMats.muzzle);
-    muzzle.position.set(0, 0.015, -0.4);
-    g.add(body, top, barrel, ring, tank, handle, muzzle);
+    muzzle.position.set(0, 0.02, -0.42);
+    g.add(body, slide, barrel, ring, vial, vialCapL, vialCapR, plunger, handle, rib1, rib2, rib3, label, muzzle);
     return { group: g, muzzle };
   }
 
   function buildShotgun() {
     const g = new THREE.Group();
-    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.13, 0.34), weaponMats.metal);
+    const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.36), weaponMats.shotgunBody);
     receiver.position.set(0, 0, -0.02);
-    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.11, 0.18), weaponMats.dark);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.2), weaponMats.grip);
     stock.position.set(0, -0.03, 0.2);
     stock.rotation.x = 0.12;
-    const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.5, 10), weaponMats.dark);
+    const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.52, 12), weaponMats.dark);
     barrelL.rotation.x = Math.PI / 2;
-    barrelL.position.set(-0.032, 0.03, -0.34);
+    barrelL.position.set(-0.036, 0.035, -0.35);
     const barrelR = barrelL.clone();
-    barrelR.position.x = 0.032;
-    const pump = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.14), weaponMats.shotGlow);
+    barrelR.position.x = 0.036;
+    const pump = new THREE.Mesh(new THREE.BoxGeometry(0.118, 0.068, 0.16), weaponMats.shotgunPump);
     pump.position.set(0, -0.06, -0.18);
-    const accent = new THREE.Mesh(new THREE.BoxGeometry(0.125, 0.03, 0.1), weaponMats.shotGlow);
-    accent.position.set(0, 0.07, -0.02);
-    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.16, 0.09), weaponMats.dark);
+    const silverTube = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.42, 12), weaponMats.silverTube);
+    silverTube.rotation.x = Math.PI / 2;
+    silverTube.position.set(0, -0.005, -0.35);
+    const barrelBandA = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.034), weaponMats.shotGlow);
+    barrelBandA.position.set(0, 0.034, -0.18);
+    const barrelBandB = barrelBandA.clone();
+    barrelBandB.position.z = -0.48;
+    const label = makeLabelPlate(weaponMats.shotgunLabel, 0.17, 0.06, 0, 0.082, 0.164);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.074, 0.17, 0.094), weaponMats.grip);
     handle.position.set(0, -0.13, 0.06);
     handle.rotation.x = 0.22;
     const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), weaponMats.muzzle);
-    muzzle.position.set(0, 0.03, -0.6);
-    g.add(receiver, stock, barrelL, barrelR, pump, accent, handle, muzzle);
+    muzzle.position.set(0, 0.035, -0.62);
+    g.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, label, handle, muzzle);
     return { group: g, muzzle };
   }
 
@@ -881,7 +1038,13 @@
     const moving = input.forward || input.back || input.left || input.right;
     const bob = Math.sin(t * 2) * (moving ? 0.012 : 0.004);
     const sway = Math.cos(t) * 0.006;
-    weaponGroup.position.set(0.2 + sway, -0.18 + bob, -0.5 + state.recoil * 0.14);
+    const portraitView = camera.aspect < 1.05;
+    weaponGroup.scale.setScalar(portraitView ? 0.72 : 1);
+    weaponGroup.position.set(
+      (portraitView ? -0.02 : 0.2) + sway,
+      (portraitView ? -0.145 : -0.18) + bob,
+      (portraitView ? -0.62 : -0.5) + state.recoil * 0.14
+    );
     weaponGroup.rotation.x = -state.recoil * 0.4;
     weaponMats.muzzle.opacity = state.muzzleFlash;
     const mscale = 0.5 + state.muzzleFlash * 1.4;
@@ -2047,9 +2210,9 @@
   function createPickupMesh(type) {
     const group = new THREE.Group();
     if (type === "shotgun") {
-      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.82), weaponMats.metal);
+      const receiver = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.19, 0.86), weaponMats.shotgunBody);
       receiver.position.set(0, 0.6, -0.02);
-      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.42), weaponMats.dark);
+      const stock = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.17, 0.44), weaponMats.grip);
       stock.position.set(0, 0.54, 0.56);
       stock.rotation.x = 0.12;
       const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.18, 10), weaponMats.dark);
@@ -2057,17 +2220,23 @@
       barrelL.position.set(-0.07, 0.67, -0.78);
       const barrelR = barrelL.clone();
       barrelR.position.x = 0.07;
-      const pump = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.13, 0.34), weaponMats.shotGlow);
+      const pump = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.36), weaponMats.shotgunPump);
       pump.position.set(0, 0.5, -0.42);
-      const accent = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.24), weaponMats.shotGlow);
-      accent.position.set(0, 0.76, -0.02);
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.18), weaponMats.dark);
+      const silverTube = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.78, 12), weaponMats.silverTube);
+      silverTube.rotation.x = Math.PI / 2;
+      silverTube.position.set(0, 0.52, -0.82);
+      const barrelBandA = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.08), weaponMats.shotGlow);
+      barrelBandA.position.set(0, 0.68, -0.48);
+      const barrelBandB = barrelBandA.clone();
+      barrelBandB.position.z = -1.05;
+      const label = makeLabelPlate(weaponMats.shotgunLabel, 0.48, 0.17, 0, 0.72, 0.42);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.18), weaponMats.grip);
       handle.position.set(0, 0.36, 0.22);
       handle.rotation.x = 0.22;
       const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.055, 12), weaponMats.shotGlow);
       muzzle.rotation.x = Math.PI / 2;
       muzzle.position.set(0, 0.67, -1.39);
-      group.add(receiver, stock, barrelL, barrelR, pump, accent, handle, muzzle);
+      group.add(receiver, stock, barrelL, barrelR, pump, silverTube, barrelBandA, barrelBandB, label, handle, muzzle);
       group.scale.setScalar(0.9);
       group.rotation.z = -0.08;
       return group;
@@ -2222,7 +2391,7 @@
     syncPlayStateClass();
     if (el.deck) el.deck.textContent = String(state.level);
     if (el.cures) el.cures.textContent = `${state.cures}/${state.neededCures}`;
-    if (el.weapon) el.weapon.textContent = state.weapon === "shotgun" ? "Shotgun" : "Dart";
+    if (el.weapon) el.weapon.textContent = WEAPON_LABELS[state.weapon] || WEAPON_LABELS.dart;
     if (el.ammo) el.ammo.textContent = formatAmmo();
     if (el.score) el.score.textContent = Math.floor(state.score).toLocaleString();
     if (el.high) el.high.textContent = Math.floor(state.high).toLocaleString();
@@ -2269,14 +2438,14 @@
   function switchWeapon() {
     if (state.weapon === "shotgun") {
       state.weapon = "dart";
-      setStatus("Dart gun ready.");
+      setStatus("Ivermectin Pistol ready.");
       return;
     }
     if (state.shotgunUnlocked) {
       state.weapon = "shotgun";
-      setStatus("Ivermectin Shotgun ready.");
+      setStatus(`${SHOTGUN_DISPLAY_NAME} ready.`);
     } else {
-      setStatus("Shotgun is still somewhere on the ship.");
+      setStatus(`${SHOTGUN_DISPLAY_NAME} is still somewhere on the ship.`);
     }
   }
 
@@ -2472,18 +2641,18 @@
     } else {
       const miss = camera.position.clone().addScaledVector(dir, DART_RANGE);
       addBeam(miss, 0x2ee0ff);
-      setStatus("Cure dart fired.");
+      setStatus("Ivermectin cure shot fired.");
       playBeep("miss");
     }
   }
 
   function fireShotgun() {
     if (!state.shotgunUnlocked) {
-      setStatus("Find the Ivermectin Shotgun pickup first.");
+      setStatus(`Find the ${SHOTGUN_DISPLAY_NAME} pickup first.`);
       return;
     }
     if (state.shotgunAmmo <= 0) {
-      setStatus("Shotgun empty. Switch to darts or find a shell kit.");
+      setStatus(`${SHOTGUN_DISPLAY_NAME} empty. Switch to the Ivermectin Pistol or find a silver kit.`);
       state.weapon = "dart";
       return;
     }
@@ -2515,7 +2684,7 @@
     hitSet.forEach((enemy) => cureEnemy(enemy, 0.95));
     if (!hitSet.size) {
       state.totalHits = Math.max(0, state.totalHits);
-      setStatus("Shotgun blast fired.");
+      setStatus(`${SHOTGUN_DISPLAY_NAME} blast fired.`);
     }
   }
 
@@ -2965,10 +3134,10 @@
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 10;
         state.weapon = "shotgun";
-        setStatus("Ivermectin Shotgun acquired. Press 1/2 to switch weapons.");
+        setStatus(`${SHOTGUN_DISPLAY_NAME} acquired. Press 1/2 to switch weapons.`);
       } else if (pickup.type === "shells") {
         state.shotgunAmmo += 6;
-        setStatus("Shotgun shells recovered.");
+        setStatus("Silver ampoules recovered.");
       } else {
         state.infection = Math.max(0, state.infection - 24);
         setStatus("Fresh-air canister used. Infection dropping.");
@@ -3361,7 +3530,7 @@
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 12;
         state.weapon = "shotgun";
-        setStatus("Shotgun kit unlocked.");
+        setStatus(`${SHOTGUN_DISPLAY_NAME} kit unlocked.`);
       });
     }
   }

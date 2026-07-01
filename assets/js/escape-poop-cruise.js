@@ -85,6 +85,7 @@
   const state = {
     mode: "menu",
     level: 1,
+    runSeed: 0,
     score: 0,
     infection: 0,
     cures: 0,
@@ -112,6 +113,7 @@
     speeches: [],
     beams: [],
     particles: [],
+    slimeBolts: [],
   };
 
   const player = {
@@ -910,7 +912,15 @@
   }
 
   function seedForLevel(level) {
-    return (0xC0FFEE ^ Math.imul(level, 0x45d9f3b)) >>> 0;
+    // Mixes in the per-run seed so layouts vary between runs but stay fixed
+    // for a given level within the same run (e.g. if that level reloads).
+    return (0xC0FFEE ^ Math.imul(level, 0x45d9f3b) ^ Math.imul(state.runSeed, 0x2545f491)) >>> 0;
+  }
+
+  function levelMapSize(level) {
+    const base = 19 + Math.min(level, 8) * 2; // unchanged through level 8 (was the old hard cap)
+    const extra = level > 8 ? Math.floor(Math.sqrt(level - 8) * 4) : 0;
+    return Math.min(47, base + extra);
   }
 
   function tileToWorld(gx, gy, map = state.map) {
@@ -1022,11 +1032,15 @@
 
   function generateMap(level) {
     const rng = mulberry32(seedForLevel(level));
-    const w = Math.min(35, 19 + level * 2);
-    const h = Math.min(35, 19 + level * 2);
+    // Grows linearly (same curve as before) through level 8, then keeps
+    // growing at a decelerating rate instead of flatlining, so decks keep
+    // getting longer well past where the old hard cap used to kick in.
+    const size = levelMapSize(level);
+    const w = size;
+    const h = size;
     let grid = Array.from({ length: h }, () => Array(w).fill(Tile.WALL));
     let rooms = [];
-    const targetRooms = clamp(6 + Math.floor(level * 0.8), 6, 13);
+    const targetRooms = clamp(6 + Math.floor(level * 0.8), 6, 26);
 
     for (let attempt = 0; attempt < 180 && rooms.length < targetRooms; attempt += 1) {
       const rw = randInt(rng, 4, Math.min(8, w - 4));
@@ -1581,6 +1595,10 @@
     passenger: { scale: 1.0, lean: 0.07, head: 1.0, armRaise: 0.0, swing: 1.0, gut: false, eye: 0xb7ff54, glow: 0x6cff3a },
     cougher: { scale: 1.05, lean: 0.34, head: 1.2, armRaise: 0.95, swing: 0.45, gut: true, eye: 0xe6ff45, glow: 0x9bff2e },
     sprinter: { scale: 0.94, lean: 0.5, head: 0.9, armRaise: -0.4, swing: 1.5, gut: false, eye: 0xff5a35, glow: 0xff6a2e },
+    // Small, hunched forward hard enough to read as quadrupedal; arms angle
+    // steeply down to act as "front legs". Rendered upside-down near the
+    // ceiling — see the crawler branch in updateEnemies.
+    crawler: { scale: 0.6, lean: 1.05, head: 1.4, armRaise: 1.15, swing: 1.9, gut: false, eye: 0xccff33, glow: 0x9dff2e },
   };
 
   // ---- Voxel enemy construction ----
@@ -1658,6 +1676,9 @@
     passenger: { skin: 0x8fce3a, shirt: 0x2f6f7a, pants: 0x222d36, shoe: 0x14110d },
     cougher: { skin: 0x7cc23a, shirt: 0x243349, pants: 0x1a2330, shoe: 0x141009 },
     sprinter: { skin: 0x9bd84a, shirt: 0xdd6a22, pants: 0x202a33, shoe: 0x14110d },
+    // Faded onesie palette — pants/shoe match the shirt so it reads as one
+    // sleeper suit instead of separate clothing pieces.
+    crawler: { skin: 0x9be066, shirt: 0xc9d6a0, pants: 0xc9d6a0, shoe: 0xb7c590 },
   };
 
   // Signed-distance of a rounded box (Inigo Quilez): negative inside. Used to
@@ -1735,17 +1756,19 @@
     const pal = ENEMY_PAL[type] || ENEMY_PAL.passenger;
     const isSprint = type === "sprinter";
     const isCough = type === "cougher";
+    const isCrawler = type === "crawler";
     const u = (m) => m / VOX; // metres -> voxel units
 
     // Body sizes in METRES (converted to voxel units below). With the fine voxel
     // grid plus near-maximal corner radii, the SDF carves smoothly rounded edges:
-    // a near-spherical head, capsule limbs, and slim legs.
-    const headR = isCough ? 0.295 : isSprint ? 0.235 : 0.255;
+    // a near-spherical head, capsule limbs, and slim legs. The crawler is built
+    // with toddler proportions: oversized head, short stubby torso and limbs.
+    const headR = isCough ? 0.295 : isSprint ? 0.235 : isCrawler ? 0.24 : 0.255;
     const hA = u(headR), hB = u(headR * 1.06), hC = u(headR);
-    const tHX = u(isSprint ? 0.205 : isCough ? 0.275 : 0.25);
-    const tHY = u(0.335), tHZ = u(0.155), tR = u(0.14);
-    const aR = u(0.11), aHY = u(0.36);
-    const lR = u(0.1), lHY = u(0.42); // slim legs
+    const tHX = u(isSprint ? 0.205 : isCough ? 0.275 : isCrawler ? 0.195 : 0.25);
+    const tHY = u(isCrawler ? 0.205 : 0.335), tHZ = u(isCrawler ? 0.175 : 0.155), tR = u(0.14);
+    const aR = u(isCrawler ? 0.1 : 0.11), aHY = u(isCrawler ? 0.21 : 0.36);
+    const lR = u(isCrawler ? 0.095 : 0.1), lHY = u(isCrawler ? 0.19 : 0.42); // slim legs (crawler's are stubby)
     const handR = u(0.125), gutR = u(0.155);
     const footHX = u(0.14), footHY = u(0.065), footHZ = u(0.19), footR = u(0.05), footZ = u(0.11);
 
@@ -1839,8 +1862,11 @@
       color: HEALTHY_SKIN_TONES[Math.floor(Math.random() * HEALTHY_SKIN_TONES.length)],
       emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
     });
-    const girth = 0.92 + Math.random() * 0.16;
-    const height = 0.94 + Math.random() * 0.14;
+    // Widened per-instance size + posture jitter so instances of the same
+    // type read as individuals, not clones.
+    const girth = 0.86 + Math.random() * 0.28;
+    const height = 0.88 + Math.random() * 0.22;
+    const leanJitter = (Math.random() - 0.5) * 0.14;
 
     // Legs hang from the hips and stay planted; the upper body leans/bobs.
     const legL = new THREE.Group();
@@ -1852,7 +1878,7 @@
 
     const upper = new THREE.Group();
     upper.position.y = d.hipY;
-    upper.rotation.x = look.lean;
+    upper.rotation.x = look.lean + leanJitter;
     upper.add(new THREE.Mesh(vox.torso, clothMat));
 
     const headPivot = new THREE.Group();
@@ -1944,17 +1970,20 @@
     group.add(legL, legR, upper);
     group.scale.set(look.scale * girth, look.scale * height, look.scale * girth);
 
-    // Soft contact shadow grounds the figure on the deck.
-    const shadow = new THREE.Mesh(shadowGeo, shadowMat);
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.05;
-    shadow.scale.set(0.95, 0.95, 0.95);
-    group.add(shadow);
+    // Soft contact shadow grounds the figure on the deck — skipped for the
+    // ceiling-crawler, which isn't standing on the floor.
+    if (type !== "crawler") {
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.05;
+      shadow.scale.set(0.95, 0.95, 0.95);
+      group.add(shadow);
+    }
 
     group.userData.baseScale = look.scale;
     group.userData.parts = {
       upper, legL, legR, armL, armR, headPivot, eyeMat, normalEyeMat, maw, rimMat, skinMat, healthyMat,
-      leanBase: look.lean, upperBaseY: d.hipY, armBase, swing: look.swing,
+      leanBase: look.lean + leanJitter, upperBaseY: d.hipY, armBase, swing: look.swing,
     };
     return group;
   }
@@ -1976,6 +2005,11 @@
       let type = "passenger";
       if (state.level >= 3 && rng() < 0.22 + state.level * 0.01) type = "cougher";
       if (state.level >= 5 && rng() < 0.12 + state.level * 0.006) type = "sprinter";
+      if (state.level >= 4 && rng() < 0.14 + state.level * 0.006) type = "crawler";
+      // Speed jitter is per-instance (seeded, so it's reproducible within a
+      // run) on top of the per-type/level formula, so a pack of the same type
+      // doesn't move in perfect lockstep.
+      const speedJitter = 0.88 + rng() * 0.28;
       const enemy = {
         id: `e${state.level}-${i}`,
         type,
@@ -1985,8 +2019,10 @@
         vz: 0,
         cured: false,
         inoculation: 0,
-        resistance: type === "cougher" ? 1.65 : type === "sprinter" ? 1.25 : 1.15,
-        speed: (type === "sprinter" ? 2.35 : type === "cougher" ? 1.35 : 1.6) + Math.min(0.7, state.level * 0.06),
+        resistance: type === "cougher" ? 1.65 : type === "sprinter" ? 1.25 : type === "crawler" ? 1.2 : 1.15,
+        speed: ((type === "sprinter" ? 2.35 : type === "cougher" ? 1.35 : type === "crawler" ? 2.55 : 1.6) + Math.min(0.7, state.level * 0.06)) * speedJitter,
+        crawlY: WALL_H - 0.4,
+        spitTimer: 1.5 + rng() * 2,
         coughTimer: 1 + rng() * 2,
         stagger: 0,
         walkPhase: rng() * Math.PI * 2,
@@ -2000,7 +2036,7 @@
         wanderTimer: 0,
         mesh: createEnemyMesh(type),
       };
-      enemy.mesh.position.set(enemy.x, 0, enemy.z);
+      enemy.mesh.position.set(enemy.x, type === "crawler" ? enemy.crawlY : 0, enemy.z);
       enemyRoot.add(enemy.mesh);
       state.enemies.push(enemy);
     }
@@ -2083,6 +2119,7 @@
     state.speeches = [];
     state.beams = [];
     state.particles = [];
+    state.slimeBolts = [];
     state.flowTimer = 0;
     state.deckStart = performance.now();
     state.map = generateMap(level);
@@ -2107,6 +2144,7 @@
   }
 
   function startRun() {
+    state.runSeed = (Math.random() * 0xffffffff) >>> 0;
     state.score = 0;
     state.infection = 0;
     state.level = 1;
@@ -2310,12 +2348,15 @@
     let best = null;
     for (const enemy of state.enemies) {
       if (enemy.cured) continue;
-      const center = new THREE.Vector3(enemy.x, 1.18, enemy.z);
+      // Crawlers are hit where they're actually rendered (near the ceiling),
+      // not at the usual standing-height centre.
+      const hitY = enemy.type === "crawler" ? enemy.crawlY : 1.18;
+      const center = new THREE.Vector3(enemy.x, hitY, enemy.z);
       const toEnemy = center.clone().sub(origin);
       const projected = toEnemy.dot(dir);
       if (projected <= 0.2 || projected > range) continue;
       const closest = origin.clone().addScaledVector(dir, projected);
-      const radius = (enemy.type === "cougher" ? 0.72 : 0.62) + radiusBoost;
+      const radius = (enemy.type === "cougher" ? 0.72 : enemy.type === "crawler" ? 0.5 : 0.62) + radiusBoost;
       const miss = closest.distanceTo(center);
       if (miss > radius) continue;
       if (rayBlocked(origin, dir, projected)) continue;
@@ -2336,13 +2377,13 @@
     state.beams.push({ mesh: line, life: 0.08 });
   }
 
-  function addParticles(x, z, color = 0xb7ff54, count = 8) {
+  function addParticles(x, z, color = 0xb7ff54, count = 8, baseY = 1.2) {
     for (let i = 0; i < count; i += 1) {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.055 + Math.random() * 0.04, 6, 4),
         new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 })
       );
-      mesh.position.set(x, 1.2 + Math.random() * 0.7, z);
+      mesh.position.set(x, baseY + Math.random() * 0.7, z);
       fxRoot.add(mesh);
       state.particles.push({
         mesh,
@@ -2388,10 +2429,11 @@
   }
 
   function cureEnemy(enemy, dose) {
+    const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : 1.2;
     enemy.inoculation += dose;
     enemy.stagger = 0.22;
     state.totalHits += 1;
-    addParticles(enemy.x, enemy.z, 0xb7ff54, 9);
+    addParticles(enemy.x, enemy.z, 0xb7ff54, 9, hitBaseY);
     playBeep("hit");
     if (enemy.inoculation < enemy.resistance) {
       setStatus("Partial cure. Hit them again before they crowd you.");
@@ -2402,13 +2444,17 @@
     enemy.healT = 0;
     enemy.talkTimer = 1.3;
     enemy.wanderTimer = 0;
-    addParticles(enemy.x, enemy.z, 0xb7ff54, 14);
+    addParticles(enemy.x, enemy.z, 0xb7ff54, 14, hitBaseY);
     spawnCurePuddle(enemy.x, enemy.z);
     spawnSpeech(enemy.x, enemy.z, FUNNY_LINES[Math.floor(Math.random() * FUNNY_LINES.length)]);
     state.cures += 1;
-    const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : 100;
+    const typeBonus = enemy.type === "cougher" ? 175 : enemy.type === "sprinter" ? 150 : enemy.type === "crawler" ? 160 : 100;
     state.score += typeBonus + state.level * 12;
-    setStatus(enemy.type === "cougher" ? "Cougher cured. The air is less terrible." : "Passenger cured.");
+    setStatus(
+      enemy.type === "cougher" ? "Cougher cured. The air is less terrible."
+        : enemy.type === "crawler" ? "Crawler cured. It toddles off the ceiling."
+        : "Passenger cured."
+    );
     updateExitDoor();
   }
 
@@ -2546,6 +2592,50 @@
     state.clouds.push({ x, z, radius, life: 4.2, mesh });
   }
 
+  const slimeBoltGeo = new THREE.SphereGeometry(0.1, 6, 5);
+  const slimeBoltMat = new THREE.MeshBasicMaterial({ color: 0x8aff2e, transparent: true, opacity: 0.92 });
+
+  // A spit projectile: lerps from the crawler toward where the player was
+  // standing when it fired, with a little upward arc, then splats into a
+  // lingering hazard puddle (reusing the cougher's cloud system) and spikes
+  // infection if the player is still standing in the impact zone.
+  function spawnSlimeBolt(fromX, fromY, fromZ, toX, toY, toZ) {
+    const dist = Math.hypot(toX - fromX, toY - fromY, toZ - fromZ);
+    const travel = clamp(dist / 9, 0.3, 1.2);
+    const mesh = new THREE.Mesh(slimeBoltGeo, slimeBoltMat);
+    mesh.position.set(fromX, fromY, fromZ);
+    fxRoot.add(mesh);
+    state.slimeBolts.push({ mesh, fromX, fromY, fromZ, toX, toY, toZ, t: 0, travel });
+  }
+
+  function updateSlimeBolts(dt) {
+    for (let i = state.slimeBolts.length - 1; i >= 0; i -= 1) {
+      const b = state.slimeBolts[i];
+      b.t += dt;
+      const p = clamp(b.t / b.travel, 0, 1);
+      const arc = Math.sin(p * Math.PI) * 0.6;
+      b.mesh.position.set(
+        lerp(b.fromX, b.toX, p),
+        lerp(b.fromY, b.toY, p) + arc,
+        lerp(b.fromZ, b.toZ, p)
+      );
+      b.mesh.rotation.x += dt * 9;
+      b.mesh.rotation.y += dt * 7;
+      if (p >= 1) {
+        const dist = Math.hypot(player.x - b.toX, player.z - b.toZ);
+        if (dist < 1.6) {
+          state.infection = clamp(state.infection + 9, 0, 100);
+          state.lurchTimer = Math.max(state.lurchTimer, 0.2);
+          setStatus("Slime hit! Infection spiked.", 1.4);
+        }
+        addParticles(b.toX, b.toZ, 0x8aff2e, 10, 0.25);
+        spawnCloud(b.toX, b.toZ, 1.1);
+        fxRoot.remove(b.mesh);
+        state.slimeBolts.splice(i, 1);
+      }
+    }
+  }
+
   function updateEnemies(dt) {
     state.flowTimer -= dt;
     if (state.flowTimer <= 0) {
@@ -2572,10 +2662,11 @@
       }
 
       if (dist < 1.25) {
-        state.infection += (enemy.type === "sprinter" ? 10.5 : 8.2) * dt;
+        // Crawlers barely infect by touch — their threat is the ranged spit below.
+        state.infection += (enemy.type === "sprinter" ? 10.5 : enemy.type === "crawler" ? 4.5 : 8.2) * dt;
         state.lurchTimer = Math.max(state.lurchTimer, 0.18);
       } else if (dist < 6.5) {
-        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt;
+        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt * (enemy.type === "crawler" ? 0.4 : 1);
       }
 
       if (enemy.type === "cougher") {
@@ -2587,11 +2678,31 @@
         }
       }
 
-      enemy.mesh.position.set(enemy.x, 0, enemy.z);
-      // Target the same height as the mesh's own pivot (ground level) so this
-      // only ever yaws the figure — targeting a raised point pitches the whole
-      // body backward as the horizontal distance shrinks (e.g. up close).
-      if (dist > 0.05) enemy.mesh.lookAt(player.x, 0, player.z);
+      if (enemy.type === "crawler") {
+        enemy.spitTimer -= dt;
+        if (enemy.spitTimer <= 0 && dist < 11 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
+          enemy.spitTimer = 2.2 + Math.random() * 1.8;
+          enemy.coughAnim = 1; // reuses the head-dip/maw-open telegraph
+          spawnSlimeBolt(enemy.x, enemy.crawlY, enemy.z, player.x, EYE_Y, player.z);
+        }
+      }
+
+      if (enemy.type === "crawler") {
+        // Rendered upside-down near the ceiling: same XZ pathing/collision as
+        // every other enemy (the flow-field doesn't know about height), just
+        // repositioned and flipped for the ceiling-crawl illusion.
+        enemy.mesh.position.set(enemy.x, enemy.crawlY, enemy.z);
+        if (dist > 0.05) {
+          enemy.mesh.lookAt(player.x, enemy.crawlY, player.z);
+          enemy.mesh.rotateZ(Math.PI);
+        }
+      } else {
+        enemy.mesh.position.set(enemy.x, 0, enemy.z);
+        // Target the same height as the mesh's own pivot (ground level) so this
+        // only ever yaws the figure — targeting a raised point pitches the whole
+        // body backward as the horizontal distance shrinks (e.g. up close).
+        if (dist > 0.05) enemy.mesh.lookAt(player.x, 0, player.z);
+      }
       animateEnemy(enemy, dt, dist, enemy.stagger <= 0);
     }
 
@@ -2965,6 +3076,7 @@
     updateWeapon(dt);
     const closest = updateEnemies(dt);
     updateClouds(dt);
+    updateSlimeBolts(dt);
     updateSpeeches(dt);
     updatePickups(dt);
     updateFx(dt);

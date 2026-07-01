@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260628-mobile-nav-community-4" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260701-home-hub-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
 <body class="home-page arcade-home">
@@ -45,99 +45,71 @@
       </div>
     </header>
 
+    <section class="arcade-panel home-recent-panel" id="recently-played" data-home-recent>
+      <div class="arcade-panel__header">
+        <h2><span class="panel-glyph">+</span>Most Recently Played</h2>
+        <button class="home-profile-button" type="button" data-home-profile>Profile</button>
+      </div>
+      <div class="home-recent-shell" data-home-recent-content>
+        <div class="home-recent-empty">
+          <span>
+            <strong>No recent games yet</strong>
+            <em>Start a run and it will land here.</em>
+          </span>
+          <a href="games.html">Browse games</a>
+          <button type="button" data-home-profile>Sign in</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="arcade-panel latest-release-panel" id="latest-release" data-search-scope>
+      <div class="arcade-panel__header">
+        <h2><span class="panel-glyph">+</span>Latest Release</h2>
+        <a href="games.html">All games</a>
+      </div>
+      <div class="latest-release-grid">
+        <a class="latest-release-hero" href="games/escape-poop-cruise.html" data-title="Latest release Escape the Poop Cruise low poly 3D horror FPS cruise crud infected passengers cure dart shotgun lifeboat">
+          <span class="latest-release-hero__poster">
+            <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" />
+            <span>Fresh Drop</span>
+          </span>
+          <span class="latest-release-hero__body">
+            <small>New Release</small>
+            <strong>Escape the Poop Cruise</strong>
+            <span>Cure fictional cruise-crud passengers, manage infection, unlock stronger cure weapons, and reach the lifeboats through procedural decks.</span>
+          </span>
+          <span class="latest-release-hero__meta"><b>Horror FPS</b><em>Play now</em></span>
+        </a>
+        <div class="latest-release-stack" aria-label="Recent releases">
+          <a class="latest-release-slat" href="games/flappy-stonks.html" data-title="Recent release Flappy Stonks stock market arcade runner candle walls dividends fake news volatility">
+            <img src="assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2" alt="" />
+            <span>
+              <small>Recent drop</small>
+              <strong>Flappy Stonks</strong>
+              <em>Arcade market panic</em>
+            </span>
+          </a>
+          <a class="latest-release-slat" href="games/drone-hunter.html" data-title="Recent release Drone Hunter duck hunt parody drone shooting gallery protected doves robo dog">
+            <img src="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" alt="" />
+            <span>
+              <small>Recent drop</small>
+              <strong>Drone Hunter</strong>
+              <em>Neon shooting gallery</em>
+            </span>
+          </a>
+        </div>
+      </div>
+    </section>
+
     <section class="arcade-panel featured-panel" id="games">
       <div class="arcade-panel__header">
         <h2><span class="panel-glyph">+</span>Featured Live Games</h2>
         <a href="games.html">View all games</a>
       </div>
       <div class="poster-grid" data-search-scope>
-        <a class="poster-card poster-card--poop-cruise" href="games/escape-poop-cruise.html" data-title="Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural">
-          <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" />
-          <span class="poster-card__label">Escape the<br />Poop Cruise</span>
-          <span class="poster-card__meta"><b>Horror FPS</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--stonks" href="games/flappy-stonks.html" data-title="Flappy Stonks stock market flappy bird parody candlestick chart trail dividends stop loss shield arcade runner">
-          <img src="assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2" alt="Funny Flappy Stonks cover art with a panicked investor bird, candlestick obstacles, and a jagged stock chart trail" />
-          <span class="poster-card__label">Flappy<br />Stonks</span>
-          <span class="poster-card__meta"><b>Arcade</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--storm" href="games/storm-area-51.html" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
-          <img src="assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
-          <span class="poster-card__label">Storm<br />Area 51</span>
-          <span class="poster-card__meta"><b>Crowd Heist</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--drone" href="games/drone-hunter.html" data-title="Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade">
-          <img src="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves" />
-          <span class="poster-card__label">Drone<br />Hunter</span>
-          <span class="poster-card__meta"><b>Shooter</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--pizza" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark">
-          <img src="assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2" alt="Don't Become Pizza cover art with a moonlit private island, glowing pizza oven, and masked searchlights" />
-          <span class="poster-card__label">Don't Become<br />Pizza</span>
-          <span class="poster-card__meta"><b>Horror</b><em>After Dark</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
         <a class="poster-card poster-card--ssb" href="games/super-slop-brothers.html" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
           <img src="assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" />
           <span class="poster-card__meta"><b>Fighter</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--clowder" href="games/dont-fck-with-cats.html" data-title="Don't F*ck with Cats cat swarm runner levels gates multiplier laser pointer hairball roomba cucumber vacuum arcade">
-          <img src="assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1" alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room" />
-          <span class="poster-card__label">Don't F*ck<br />with Cats</span>
-          <span class="poster-card__meta"><b>Runner</b><em>8 levels</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--slop" href="games/ai-slop-factory.html" data-title="AI Slop Factory content moderation conveyor arcade boost demonetize fact check delete milk engagement ai thumbnails ragebait bots misinformation">
-          <img src="assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" alt="AI Slop Factory robot moderator poster art" />
-          <span class="poster-card__label">AI Slop<br />Factory</span>
-          <span class="poster-card__meta"><b>Arcade</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--karen" href="games/karen-merger.html" data-title="Complaint Chain bubble drop physics manager ascension complaints coupons retail kaiju">
-          <img src="assets/img/mockup/card-karen-merger.png?v=20260621-cover-2" alt="Complaint Chain generated arcade poster art" />
-          <span class="poster-card__label">Complaint<br />Chain</span>
-          <span class="poster-card__meta"><b>Bubble Merge</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--snake" href="games/smooth-brain-snacker.html" data-title="Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade">
-          <img src="assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" alt="Smooth Brain Snacker brain-worm snake parody cover art" />
-          <span class="poster-card__label">Smooth Brain<br />Snacker</span>
-          <span class="poster-card__meta"><b>Arcade</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--merge" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
-          <img src="assets/img/mockup/card-brainrot-2048.png?v=20260614-3" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" />
-          <span class="poster-card__meta"><b>Puzzle</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-
-        <a class="poster-card poster-card--unhinged" href="games/unhoused-and-unhinged.html" data-title="Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival">
-          <img src="assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1" alt="Unhoused and Unhinged low-poly city sandbox cover art" />
-          <span class="poster-card__label">Unhoused<br />and Unhinged</span>
-          <span class="poster-card__meta"><b>3D Sandbox</b><em>Prototype</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--bsr" href="games/billionaire-space-race.html" data-title="Billionaire Space Race rocket launch land lunar lander parody musk bezos platform dodge satellites drones">
-          <img src="assets/img/mockup/card-billionaire-space-race.png?v=20260613-6" alt="Billionaire Space Race satirical rocket-race poster art" />
-          <span class="poster-card__label">Billionaire<br />Space Race</span>
-          <span class="poster-card__meta"><b>Lander</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
@@ -148,30 +120,16 @@
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--tardigrade" href="games/tardigrade-micro-mayhem.html" data-title="Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade">
-          <img src="assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3" alt="Tardigrade: Micro Mayhem generated game preview" />
-          <span class="poster-card__label">Tardigrade:<br />Micro Mayhem</span>
-          <span class="poster-card__meta"><b>3D Sandbox</b><em>Prototype</em></span>
+        <a class="poster-card poster-card--storm" href="games/storm-area-51.html" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
+          <img src="assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
+          <span class="poster-card__label">Storm<br />Area 51</span>
+          <span class="poster-card__meta"><b>Crowd Heist</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--doorcrash" href="games/doorcrash-no-tip-nitro.html" data-title="DoorCrash No Tip Nitro 3D delivery runner food car obstacles">
-          <img src="assets/img/mockup/card-doorcrash-no-tip-nitro.png?v=20260612-1" alt="DoorCrash: No Tip Nitro poster art" />
-          <span class="poster-card__label">DoorCrash:<br />No Tip Nitro</span>
-          <span class="poster-card__meta"><b>3D Runner</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--escape" href="games/strait-of-hormuz.html" data-title="Escape the Straight action tanker mines drones">
-          <img src="assets/img/mockup/card-escape-straight-wide.png?v=20260611-7" alt="Escape the Straight tanker poster art" />
-          <span class="poster-card__label">Escape the<br />Straight</span>
-          <span class="poster-card__meta"><b>Action</b><em>12.4K playing</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--feast" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Leave the Mansion horror challenge">
-          <img src="assets/img/mockup/card-mr-feast.png?v=20260611-7" alt="Mr. Feast: Last To Leave the Mansion poster art" />
-          <span class="poster-card__meta"><b>Horror</b><em>8.7K playing</em></span>
+        <a class="poster-card poster-card--merge" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
+          <img src="assets/img/mockup/card-brainrot-2048.png?v=20260614-3" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" />
+          <span class="poster-card__meta"><b>Puzzle</b><em>New drop</em></span>
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
@@ -182,31 +140,13 @@
           <span class="poster-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a class="poster-card poster-card--looksmaxxing" href="games/looksmaxxing-grindset.html" data-title="Looksmaxxing Grindset idle sim gym mewing water">
-          <img src="assets/img/mockup/card-looksmaxxing.png?v=20260611-7" alt="Looksmaxxing Grindset poster art" />
-          <span class="poster-card__meta"><b>Sim / Idle</b><em>25.1K playing</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--escape" href="games/skibidi-toilet-tower-defense.html" data-title="Skibidi Toilet Tower Defense toilets towers camera speaker plunger">
-          <img src="assets/img/mockup/card-skibidi-toilet-tower-defense.png?v=20260611-9" alt="Skibidi Toilet Tower Defense poster art" />
-          <span class="poster-card__meta"><b>Defense</b><em>18.2K playing</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
-
-        <a class="poster-card poster-card--apop" href="games/apop-demon-hunters.html" data-title="Apop Demon Moggers side-scroller platformer pop action boyz ii hell">
-          <img src="assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5" alt="Apop Demon Moggers updated cartoon poster art" />
-          <span class="poster-card__label">Apop<br />Demon Moggers</span>
-          <span class="poster-card__meta"><b>Side-scroller</b><em>15.6K playing</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
-        </a>
       </div>
     </section>
 
     <section class="arcade-panel home-media-panel" id="rainbot-media">
       <div class="arcade-panel__header">
-        <h2><span class="panel-glyph">+</span>The Slopwire + Rainbot TV</h2>
-        <a href="videos.html">Watch Rainbot TV</a>
+        <h2><span class="panel-glyph">+</span>Latest From Slopwire + TV</h2>
+        <a href="articles.html">Open feed</a>
       </div>
       <div class="home-media-grid" data-search-scope>
         <a class="slopwire-card" href="articles/local-man-shadowbanned-by-own-fridge.html" data-title="The Slopwire Local Man Announces He Has Been Shadowbanned By Own Refrigerator fake news satire">
@@ -393,7 +333,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260629-avatar-icons-2"></script>
+  <script src="assets/js/main.js?v=20260701-home-hub-1"></script>
   <script>
     document.querySelectorAll("[data-pro-plan]").forEach((button) => {
       button.addEventListener("click", () => openProModal(button.dataset.proPlan));

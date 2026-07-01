@@ -137,6 +137,37 @@ const RB_SCORE_TITLE_OVERRIDES = {
   skibidi_toilet_tower_defense_rooftop: "Skibidi TD: Rooftop",
 };
 
+const RB_GAME_VISUALS = {
+  "again": { image: "assets/img/mockup/card-again.png?v=20260614-1", kind: "Horror" },
+  "ai-slop-factory": { image: "assets/img/mockup/card-ai-slop-factory.png?v=20260614-3", kind: "Arcade" },
+  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5", kind: "Side-scroller" },
+  "billionaire-space-race": { image: "assets/img/mockup/card-billionaire-space-race.png?v=20260613-6", kind: "Lander" },
+  "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.png?v=20260611-7", kind: "Board" },
+  "brainrot-2048": { image: "assets/img/mockup/card-brainrot-2048.png?v=20260614-3", kind: "Puzzle" },
+  "consensus-collapse": { image: "assets/img/agent-games/consensus-collapse.png?v=20260615-1", kind: "Agent Treaty" },
+  "dont-become-pizza": { image: "assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2", kind: "Horror" },
+  "dont-fck-with-cats": { image: "assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1", kind: "Runner" },
+  "dont-look-gym-girl": { image: "assets/img/mockup/card-gym-girl.png?v=20260611-7", kind: "Stealth" },
+  "doorcrash-no-tip-nitro": { image: "assets/img/mockup/card-doorcrash-no-tip-nitro.png?v=20260612-1", kind: "3D Runner" },
+  "drone-hunter": { image: "assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2", kind: "Shooter" },
+  "escape-poop-cruise": { image: "assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2", kind: "Horror FPS" },
+  "flappy-stonks": { image: "assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2", kind: "Arcade" },
+  "gen-z-driving-simulator": { image: "assets/img/mockup/card-gen-z-driving-simulator.png?v=20260618-1", kind: "3D Driving" },
+  "karen-merger": { image: "assets/img/mockup/card-karen-merger.png?v=20260621-cover-2", kind: "Bubble Merge" },
+  "looksmaxxing-grindset": { image: "assets/img/mockup/card-looksmaxxing.png?v=20260611-7", kind: "Sim / Idle" },
+  "mr-feast-mansion": { image: "assets/img/mockup/card-mr-feast.png?v=20260611-7", kind: "Horror" },
+  "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1", kind: "Agent Protocol" },
+  "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.png?v=20260613-2", kind: "Sandbox" },
+  "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.png?v=20260611-9", kind: "Defense" },
+  "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1", kind: "Arcade" },
+  "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1", kind: "Crowd Heist" },
+  "strait-of-hormuz": { image: "assets/img/mockup/card-escape-straight-wide.png?v=20260611-7", kind: "Action" },
+  "super-slop-brothers": { image: "assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2", kind: "Fighter" },
+  "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3", kind: "3D Sandbox" },
+  "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4", kind: "Horror" },
+  "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
+};
+
 function getLocalSaveCount() {
   if (!window.RBGameSaves || typeof window.RBGameSaves.listLocalSaves !== "function") return 0;
   return window.RBGameSaves.listLocalSaves().length;
@@ -962,6 +993,142 @@ function profileGamerStatsMarkup(backendState = getBackendState()) {
 function refreshProfileGamerStats(root) {
   const summary = root && root.querySelector("[data-profile-gamer-stats]");
   if (summary) summary.innerHTML = profileGamerStatsMarkup(getBackendState());
+}
+
+function canonicalGameSlug(gameId) {
+  const id = String(gameId || "").replace(/\.html$/i, "");
+  if (RB_GAME_META[id]) return id;
+  const found = Object.entries(RB_GAME_META).find(([, meta]) => scoreIdsForMeta(meta).includes(id));
+  return found ? found[0] : id;
+}
+
+function gameVisualForHome(gameId) {
+  const slug = canonicalGameSlug(gameId);
+  const meta = RB_GAME_META[slug] || {};
+  const visual = RB_GAME_VISUALS[slug] || {};
+  return {
+    slug,
+    title: meta.title || titleForProfileGame(gameId),
+    href: `${RB_BASE}games/${slug}.html`,
+    image: `${RB_BASE}${visual.image || "assets/img/mockup/rainbot-logo.png?v=20260622-network-font-1"}`,
+    alt: visual.alt || "",
+    kind: visual.kind || "Game",
+  };
+}
+
+function formatRelativeActivity(value) {
+  const time = Number(value) || 0;
+  if (!time) return "Not played yet";
+  const diffMs = Date.now() - time;
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatShortDate(time);
+}
+
+function recentHomeGameEntries(limit = 3) {
+  const stats = gameplayStatsSnapshot();
+  const bySlug = new Map();
+  gameplayEntries(stats).forEach((entry) => {
+    const slug = canonicalGameSlug(entry.gameId);
+    if (!slug) return;
+    const existing = bySlug.get(slug) || {
+      gameId: slug,
+      title: titleForProfileGame(slug),
+      playMs: 0,
+      sessions: 0,
+      lastPlayedAt: 0,
+      lastSavedAt: 0,
+      bestScore: 0,
+      activityAt: 0,
+    };
+    existing.playMs += Math.max(0, Number(entry.playMs) || 0);
+    existing.sessions += Math.max(0, Math.floor(Number(entry.sessions) || 0));
+    existing.lastPlayedAt = Math.max(existing.lastPlayedAt, Number(entry.lastPlayedAt) || 0);
+    existing.lastSavedAt = Math.max(existing.lastSavedAt, Number(entry.lastSavedAt) || 0);
+    existing.bestScore = Math.max(existing.bestScore, Number(entry.bestScore) || 0);
+    existing.activityAt = Math.max(existing.activityAt, existing.lastPlayedAt, existing.lastSavedAt);
+    bySlug.set(slug, existing);
+  });
+  return Array.from(bySlug.values())
+    .filter((entry) => entry.activityAt > 0)
+    .sort((a, b) => b.activityAt - a.activityAt || b.sessions - a.sessions)
+    .slice(0, limit);
+}
+
+function homeRecentCardMarkup(entry, index) {
+  const visual = gameVisualForHome(entry.gameId);
+  const sessionText = `${formatStatNumber(entry.sessions)} ${entry.sessions === 1 ? "session" : "sessions"}`;
+  const timeText = formatPlayDuration(entry.playMs);
+  const detailText = entry.sessions || entry.playMs
+    ? `${timeText} played - ${sessionText}`
+    : entry.bestScore
+      ? `Best ${formatStatNumber(entry.bestScore)} - local run`
+      : "Open your last run";
+  return `
+    <a class="home-recent-card ${index === 0 ? "home-recent-card--primary" : ""}" href="${escapeHtml(visual.href)}" data-title="${escapeHtml(`${visual.title} recently played ${visual.kind}`)}">
+      <span class="home-recent-card__poster">
+        <img src="${escapeHtml(visual.image)}" alt="${escapeHtml(visual.alt)}" loading="lazy" decoding="async" />
+        <em>${escapeHtml(visual.kind)}</em>
+      </span>
+      <span class="home-recent-card__body">
+        <small>${escapeHtml(formatRelativeActivity(entry.activityAt))}</small>
+        <strong>${escapeHtml(visual.title)}</strong>
+        <span>${escapeHtml(detailText)}</span>
+      </span>
+      <span class="home-recent-card__play" aria-hidden="true">Resume</span>
+    </a>
+  `;
+}
+
+function renderHomeRecentPanel() {
+  const root = document.querySelector("[data-home-recent]");
+  if (!root) return;
+  const content = root.querySelector("[data-home-recent-content]");
+  const profileButton = root.querySelector(".arcade-panel__header [data-home-profile]");
+  if (!content) return;
+
+  const backendState = getBackendState();
+  const signedIn = Boolean(backendState.user);
+  const entries = recentHomeGameEntries(3);
+  if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Sign in";
+
+  if (entries.length) {
+    content.innerHTML = `<div class="home-recent-grid">${entries.map(homeRecentCardMarkup).join("")}</div>`;
+    return;
+  }
+
+  const emptyKicker = signedIn
+    ? `Welcome back, ${getBackendDisplayName(backendState)}`
+    : "Sign in to sync";
+  content.innerHTML = `
+    <div class="home-recent-empty">
+      <span>
+        <small>${escapeHtml(emptyKicker)}</small>
+        <strong>No recent games yet</strong>
+        <em>Start a run and it will land here.</em>
+      </span>
+      <a href="${RB_BASE}games.html">Browse games</a>
+      <button type="button" data-home-profile>${signedIn ? "Profile" : "Sign in"}</button>
+    </div>
+  `;
+}
+
+function initHomeRecentPanel() {
+  const root = document.querySelector("[data-home-recent]");
+  if (!root || root.dataset.homeRecentBound === "true") return;
+  root.dataset.homeRecentBound = "true";
+  root.addEventListener("click", (event) => {
+    const profileButton = event.target.closest("[data-home-profile]");
+    if (!profileButton || !root.contains(profileButton)) return;
+    event.preventDefault();
+    openProfileModal();
+  });
+  renderHomeRecentPanel();
 }
 
 function openProfileModal() {
@@ -1942,6 +2109,7 @@ let lastCloudSyncUserId = "";
 function handleBackendAuthChange(event) {
   const backendState = event.detail || getBackendState();
   renderNav(RB.state);
+  renderHomeRecentPanel();
   RBLeaderboards.renderAll();
   RBComments.renderAll();
   if (backendState.passwordRecovery && backendState.user) {
@@ -2396,10 +2564,12 @@ function fitGameCanvases() {
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initGameEscapeMenu();
+  initHomeRecentPanel();
   RBLeaderboards.init();
   RBComments.init();
   RB.subscribe((state) => {
     renderNav(state);
+    renderHomeRecentPanel();
     RBLeaderboards.renderAll();
     RBComments.renderAll();
     const profileModal = document.getElementById("rb-profile-modal");

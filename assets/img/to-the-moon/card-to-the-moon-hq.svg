@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">To The Moon cover art</title>
+  <desc id="desc">A rocket launches toward a glowing moon above a neon blockchain mining world while turrets defend against a virus swarm.</desc>
+  <defs>
+    <linearGradient id="bottom-fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#020610" stop-opacity="0"/>
+      <stop offset="0.42" stop-color="#020610" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="#020610" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="title-fill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ee0ff"/>
+      <stop offset="0.46" stop-color="#6bff7d"/>
+      <stop offset="0.72" stop-color="#ff2e88"/>
+      <stop offset="1" stop-color="#ffd43b"/>
+    </linearGradient>
+    <linearGradient id="scanline" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-20%" y="-60%" width="140%" height="220%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="title-shadow" x="-10%" y="-50%" width="120%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000713" flood-opacity="0.86"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#2ee0ff" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="800" fill="#020610"/>
+  <image href="card-to-the-moon-hq-bg.png" x="0" y="0" width="1200" height="800" preserveAspectRatio="xMidYMid slice"/>
+  <rect width="1200" height="800" fill="url(#scanline)"/>
+  <rect y="430" width="1200" height="370" fill="url(#bottom-fade)"/>
+
+  <g opacity="0.78" filter="url(#soft-glow)">
+    <path d="M156 610 C288 563 384 622 512 566 C634 512 735 548 842 469 C929 406 994 315 1052 229"
+      fill="none" stroke="#6bff7d" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M156 610 C288 563 384 622 512 566 C634 512 735 548 842 469 C929 406 994 315 1052 229"
+      fill="none" stroke="#2ee0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.68"/>
+  </g>
+
+  <g font-family="'Segoe UI', Arial, Helvetica, sans-serif" text-anchor="middle">
+    <text x="600" y="668"
+      font-size="121"
+      font-weight="900"
+      fill="url(#title-fill)"
+      stroke="#020610"
+      stroke-width="10"
+      paint-order="stroke fill"
+      filter="url(#title-shadow)">TO THE MOON</text>
+    <text x="600" y="725"
+      font-size="28"
+      font-weight="800"
+      fill="#d9f8ff"
+      stroke="#020610"
+      stroke-width="5"
+      paint-order="stroke fill"
+      opacity="0.96">MINE MEMECOINS - SURVIVE THE BEARS - MOON</text>
+  </g>
+</svg>

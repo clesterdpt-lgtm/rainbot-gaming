@@ -174,6 +174,38 @@
     infection: new URL("infection-hazard-atlas-ai-v1.png", textureAssetBase).href,
     exitDoor: new URL("exit-door-ai-v2.png", textureAssetBase).href,
   };
+  const soundAssetBase = new URL("../Sounds/escape-poop-cruise/", scriptUrl).href;
+  const audioSamples = {
+    dart: [{ file: "dart.mp3", volume: 0.36 }],
+    shotgun: [{ file: "shotgun.mp3", volume: 0.72 }],
+    hit: [{ file: "hit.mp3", volume: 0.36 }],
+    cure: [{ file: "cure.mp3", volume: 0.46 }],
+    pickup: [{ file: "pickup.mp3", volume: 0.42 }],
+    damage: [{ file: "damage.mp3", volume: 0.46 }],
+    spit: [{ file: "spit.mp3", volume: 0.34 }],
+    level: [{ file: "level.mp3", volume: 0.5 }],
+    gameover: [{ file: "gameover.mp3", volume: 0.58 }],
+    step: [
+      { file: "footstep-1.mp3", volume: 0.18 },
+      { file: "footstep-2.mp3", volume: 0.18 },
+      { file: "footstep-3.mp3", volume: 0.18 },
+    ],
+  };
+  const audioStatus = {
+    supported: Boolean(window.AudioContext || window.webkitAudioContext),
+    unlocked: false,
+    loading: 0,
+    loaded: 0,
+    failed: 0,
+    played: 0,
+    fallback: 0,
+  };
+  let audioCtx = null;
+  let audioMaster = null;
+  const audioBuffers = new Map();
+  const audioLoads = new Map();
+  const audioCooldowns = new Map();
+  const stepAudio = { timer: 0, index: 0 };
 
   const textureAnisotropy = Math.min(
     4,
@@ -2380,6 +2412,7 @@
     state.slimeBolts = [];
     state.stuckTimer = 0;
     state.flowTimer = 0;
+    stepAudio.timer = 0;
     state.deckStart = performance.now();
     state.map = generateMap(level);
 
@@ -2400,6 +2433,7 @@
     updateHud();
     hideOverlay();
     lockPointer();
+    playSound("level", { cooldown: 0.75, fallbackKind: "hit", volume: 0.42 });
   }
 
   function startRun() {
@@ -2429,6 +2463,7 @@
     const high = api.recordScore(GAME_ID, state.score);
     state.high = api.getHighScore(GAME_ID) || state.high;
     unlockPointer();
+    playSound("level", { cooldown: 0.85, fallbackKind: "hit", volume: 0.5 });
     showOverlay(
       `DECK ${state.level} CLEARED`,
       `The stairwell door clanked open. Infection dropped during the fresh-air shuffle. Next deck adds more rooms, faster passengers, and worse buffet decisions.`,
@@ -2446,6 +2481,7 @@
     const high = api.recordScore(GAME_ID, state.score);
     state.high = api.getHighScore(GAME_ID) || state.high;
     unlockPointer();
+    playSound("gameover", { cooldown: 1, fallbackKind: "bad", volume: 0.58 });
     showOverlay(
       "CRUISE CRUD MAXED",
       reason || "The infection meter hit the red zone. Roe Jogan did not make it to the stairwell.",
@@ -2522,19 +2558,25 @@
       return;
     }
     if (state.cures >= state.neededCures) completeLevel();
-    else setStatus(`Stairwell locked. Cure ${state.neededCures - state.cures} more.`);
+    else {
+      playSound("damage", { cooldown: 0.45, fallbackKind: "bad", volume: 0.28 });
+      setStatus(`Stairwell locked. Cure ${state.neededCures - state.cures} more.`);
+    }
   }
 
   function switchWeapon() {
     if (state.weapon === "shotgun") {
       state.weapon = "dart";
+      playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.18 });
       setStatus("Ivermectin Pistol ready.");
       return;
     }
     if (state.shotgunUnlocked) {
       state.weapon = "shotgun";
+      playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.2 });
       setStatus(`${SHOTGUN_DISPLAY_NAME} ready.`);
     } else {
+      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
       setStatus(`${SHOTGUN_DISPLAY_NAME} is still somewhere on the ship.`);
     }
   }
@@ -2719,25 +2761,174 @@
     state.particles.push({ mesh, vx: 0, vy: 0, vz: 0, life: 0.6, puddle: true });
   }
 
-  function playBeep(kind) {
-    if (!state.sound) return;
+  function ensureAudioContext() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    if (!playBeep.ctx) playBeep.ctx = new Ctx();
-    const ctx = playBeep.ctx;
+    if (!Ctx) return null;
+    if (!audioCtx) {
+      audioCtx = new Ctx();
+      audioMaster = audioCtx.createGain();
+      audioMaster.gain.value = 0.82;
+      audioMaster.connect(audioCtx.destination);
+    }
+    audioStatus.unlocked = audioCtx.state === "running";
+    return audioCtx;
+  }
+
+  function sampleUrl(sample) {
+    if (!sample.url) sample.url = new URL(sample.file, soundAssetBase).href;
+    return sample.url;
+  }
+
+  function decodeAudio(ctx, arrayBuffer) {
+    return new Promise((resolve, reject) => {
+      ctx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+    });
+  }
+
+  function loadAudioSample(sample) {
+    const ctx = ensureAudioContext();
+    if (!ctx) return Promise.resolve(null);
+    const url = sampleUrl(sample);
+    if (audioBuffers.has(url)) return Promise.resolve(audioBuffers.get(url));
+    if (audioLoads.has(url)) return audioLoads.get(url);
+
+    audioStatus.loading += 1;
+    const promise = fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((arrayBuffer) => decodeAudio(ctx, arrayBuffer))
+      .then((buffer) => {
+        audioBuffers.set(url, buffer);
+        audioStatus.loaded += 1;
+        return buffer;
+      })
+      .catch((error) => {
+        audioStatus.failed += 1;
+        console.warn(`SFX failed to load: ${url}`, error);
+        return null;
+      })
+      .finally(() => {
+        audioStatus.loading = Math.max(0, audioStatus.loading - 1);
+      });
+    audioLoads.set(url, promise);
+    return promise;
+  }
+
+  function preloadAudio() {
+    Object.values(audioSamples).forEach((samples) => {
+      samples.forEach(loadAudioSample);
+    });
+  }
+
+  function unlockAudio() {
+    const ctx = ensureAudioContext();
+    if (!ctx) return null;
+    if (ctx.state === "suspended" && ctx.resume) {
+      ctx.resume()
+        .then(() => { audioStatus.unlocked = ctx.state === "running"; })
+        .catch(() => {});
+    }
+    preloadAudio();
+    audioStatus.unlocked = ctx.state === "running";
+    return ctx;
+  }
+
+  function pickAudioSample(kind) {
+    const samples = audioSamples[kind];
+    if (!samples || !samples.length) return null;
+    if (kind === "step") {
+      const sample = samples[stepAudio.index % samples.length];
+      stepAudio.index += 1;
+      return sample;
+    }
+    return samples[Math.floor(Math.random() * samples.length)];
+  }
+
+  function playBeep(kind, volume = 1) {
+    if (!state.sound) return;
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const now = ctx.currentTime;
-    const freq = kind === "hit" ? 740 : kind === "shotgun" ? 180 : kind === "bad" ? 92 : 420;
+    const freq = kind === "hit" || kind === "cure" ? 740 : kind === "shotgun" ? 180 : kind === "bad" || kind === "damage" || kind === "gameover" ? 92 : 420;
     osc.type = kind === "shotgun" ? "sawtooth" : "square";
     osc.frequency.setValueAtTime(freq, now);
     osc.frequency.exponentialRampToValueAtTime(Math.max(60, freq * 0.54), now + 0.12);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(kind === "shotgun" ? 0.075 : 0.045, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime((kind === "shotgun" ? 0.075 : 0.045) * volume, now + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(audioMaster || ctx.destination);
     osc.start(now);
     osc.stop(now + 0.18);
+    audioStatus.fallback += 1;
+  }
+
+  function playSound(kind, options = {}) {
+    if (!state.sound) return false;
+    const ctx = unlockAudio();
+    if (!ctx) {
+      if (options.fallback !== false) playBeep(options.fallbackKind || kind, options.volume || 1);
+      return false;
+    }
+
+    const now = ctx.currentTime || performance.now() / 1000;
+    const cooldown = options.cooldown || 0;
+    const cooldownKey = options.cooldownKey || kind;
+    if (cooldown > 0 && (audioCooldowns.get(cooldownKey) || 0) > now) return false;
+    if (cooldown > 0) audioCooldowns.set(cooldownKey, now + cooldown);
+
+    const sample = pickAudioSample(kind);
+    if (!sample) {
+      if (options.fallback !== false) playBeep(options.fallbackKind || kind, options.volume || 1);
+      return false;
+    }
+
+    const url = sampleUrl(sample);
+    const buffer = audioBuffers.get(url);
+    if (!buffer) {
+      loadAudioSample(sample);
+      if (options.fallback !== false) playBeep(options.fallbackKind || kind, options.volume || 1);
+      return false;
+    }
+
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    const volume = options.volume ?? sample.volume ?? 0.5;
+    const rate = options.rate ?? sample.rate ?? 1;
+    source.buffer = buffer;
+    source.playbackRate.setValueAtTime(rate, now);
+    gain.gain.setValueAtTime(clamp(volume, 0, 1), now);
+    source.connect(gain).connect(audioMaster || ctx.destination);
+    try {
+      if (options.duration) source.start(now, options.offset || 0, options.duration);
+      else source.start(now, options.offset || 0);
+      audioStatus.played += 1;
+      return true;
+    } catch (error) {
+      if (options.fallback !== false) playBeep(options.fallbackKind || kind, options.volume || 1);
+      return false;
+    }
+  }
+
+  function updateFootstepAudio(dt, moving) {
+    if (!moving || state.mode !== "playing") {
+      stepAudio.timer = 0;
+      return;
+    }
+    stepAudio.timer -= dt;
+    if (stepAudio.timer > 0) return;
+    const onHazard = currentTileType() === Tile.HAZARD;
+    playSound("step", {
+      cooldown: 0.05,
+      cooldownKey: "step",
+      fallback: false,
+      rate: 0.94 + Math.random() * 0.12,
+      volume: onHazard ? 0.26 : 0.18,
+    });
+    stepAudio.timer = input.sprint ? 0.28 : 0.41;
   }
 
   function cureEnemy(enemy, dose) {
@@ -2748,8 +2939,8 @@
     enemy.lungeTime = 0;
     state.totalHits += 1;
     addParticles(enemy.x, enemy.z, 0xb7ff54, 9, hitBaseY);
-    playBeep("hit");
     if (enemy.inoculation < enemy.resistance) {
+      playSound("hit", { cooldown: 0.06, fallbackKind: "hit" });
       setStatus("Partial cure. Hit them again before they crowd you.");
       return;
     }
@@ -2761,6 +2952,7 @@
     addParticles(enemy.x, enemy.z, 0xb7ff54, 14, hitBaseY);
     spawnCurePuddle(enemy.x, enemy.z);
     spawnSpeech(enemy.x, enemy.z, FUNNY_LINES[Math.floor(Math.random() * FUNNY_LINES.length)]);
+    playSound("cure", { cooldown: 0.12, fallbackKind: "hit" });
     state.cures += 1;
     const typeBonus = ENEMY_CURE_SCORE[enemy.type] || ENEMY_CURE_SCORE.passenger;
     state.score += typeBonus + state.level * 12;
@@ -2779,6 +2971,7 @@
     state.dartCooldown = 0.78;
     state.totalShots += 1;
     triggerRecoil("dart");
+    playSound("dart", { cooldown: 0.05, fallbackKind: "miss", volume: 0.3 });
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
     const hit = traceEnemy(dir, DART_RANGE, 0.06);
@@ -2789,16 +2982,17 @@
       const miss = camera.position.clone().addScaledVector(dir, DART_RANGE);
       addBeam(miss, 0x2ee0ff, "dart");
       setStatus("Ivermectin cure shot fired.");
-      playBeep("miss");
     }
   }
 
   function fireShotgun() {
     if (!state.shotgunUnlocked) {
+      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
       setStatus(`Find the ${SHOTGUN_DISPLAY_NAME} pickup first.`);
       return;
     }
     if (state.shotgunAmmo <= 0) {
+      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.24 });
       setStatus(`${SHOTGUN_DISPLAY_NAME} empty. Switch to the Ivermectin Pistol or find a silver kit.`);
       state.weapon = "dart";
       return;
@@ -2808,7 +3002,7 @@
     state.shotgunAmmo -= 1;
     state.totalShots += 1;
     triggerRecoil("shotgun");
-    playBeep("shotgun");
+    playSound("shotgun", { cooldown: SHOTGUN_COOLDOWN * 0.8, fallbackKind: "shotgun" });
 
     const base = new THREE.Vector3();
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
@@ -2959,6 +3153,7 @@
           state.infection = clamp(state.infection + b.infection, 0, 100);
           state.lurchTimer = Math.max(state.lurchTimer, b.stuckTime > 0 ? 0.34 : 0.2);
           if (b.stuckTime > 0) state.stuckTimer = Math.max(state.stuckTimer, b.stuckTime);
+          playSound("damage", { cooldown: 0.38, fallbackKind: "bad" });
           setStatus(b.status, b.stuckTime > 0 ? b.stuckTime : 1.4);
         }
         addParticles(b.toX, b.toZ, 0x8aff2e, b.particleCount, 0.25);
@@ -3045,10 +3240,12 @@
         // Crawlers barely infect by touch — their threat is the ranged spit below.
         state.infection += (ENEMY_TOUCH_INFECTION[enemy.type] || ENEMY_TOUCH_INFECTION.passenger) * dt;
         state.lurchTimer = Math.max(state.lurchTimer, 0.18);
+        playSound("damage", { cooldown: 0.72, fallbackKind: "bad", volume: 0.28 });
         if (enemy.type === "sprinter" && enemy.lungeTime > 0 && enemy.hitTimer <= 0) {
           enemy.hitTimer = 0.75;
           state.infection = clamp(state.infection + 4, 0, 100);
           state.lurchTimer = Math.max(state.lurchTimer, 0.32);
+          playSound("damage", { cooldown: 0.25, fallbackKind: "bad", volume: 0.42 });
           setStatus("Sprinter lunge clipped you.", 0.9);
         }
       } else if (dist < 6.5) {
@@ -3060,6 +3257,7 @@
         if (enemy.coughTimer <= 0 && dist < 12) {
           enemy.coughTimer = 2.4 + Math.random() * 2.4;
           enemy.coughAnim = 1;
+          playSound("spit", { cooldown: 0.7, fallback: false, volume: 0.22 });
           spawnCloud(enemy.x, enemy.z, 1.65 + Math.random() * 0.65);
         }
       }
@@ -3069,6 +3267,7 @@
         if (enemy.spitTimer <= 0 && dist < 11 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
           enemy.spitTimer = 2.2 + Math.random() * 1.8;
           enemy.coughAnim = 1; // reuses the head-dip/maw-open telegraph
+          playSound("spit", { cooldown: 0.38, fallback: false });
           spawnSlimeBolt(enemy.x, enemy.crawlY, enemy.z, player.x, EYE_Y, player.z);
         }
       }
@@ -3078,6 +3277,7 @@
         if (enemy.spitTimer <= 0 && dist < 12.5 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
           enemy.spitTimer = 3.3 + Math.random() * 1.8;
           enemy.coughAnim = 1;
+          playSound("spit", { cooldown: 0.38, fallback: false, volume: 0.42 });
           spawnSlimeBolt(enemy.x, 1.45, enemy.z, player.x, EYE_Y, player.z, {
             speed: 7,
             scale: 1.65,
@@ -3377,15 +3577,17 @@
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 10;
         state.weapon = "shotgun";
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.5 });
         setStatus(`${SHOTGUN_DISPLAY_NAME} acquired. Press 1/2 to switch weapons.`);
       } else if (pickup.type === "shells") {
         state.shotgunAmmo += 6;
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.42 });
         setStatus("Silver ampoules recovered.");
       } else {
         state.infection = Math.max(0, state.infection - 24);
+        playSound("cure", { cooldown: 0.25, fallbackKind: "hit", volume: 0.32 });
         setStatus("Fresh-air canister used. Infection dropping.");
       }
-      playBeep("hit");
     }
   }
 
@@ -3417,6 +3619,8 @@
   }
 
   function movePlayer(dt) {
+    const prevX = player.x;
+    const prevZ = player.z;
     const forwardX = -Math.sin(player.yaw);
     const forwardZ = -Math.cos(player.yaw);
     const rightX = Math.cos(player.yaw);
@@ -3441,6 +3645,7 @@
     const nz = player.z + dz;
     if (isWalkableWorld(nx, player.z)) player.x = nx;
     if (isWalkableWorld(player.x, nz)) player.z = nz;
+    updateFootstepAudio(dt, len > 0 && Math.hypot(player.x - prevX, player.z - prevZ) > 0.002);
 
     const bob = Math.sin(performance.now() * 0.006) * (len > 0 ? 0.025 : 0.006);
     const sickBob = state.infection > 70 ? Math.sin(performance.now() * 0.015) * 0.045 : 0;
@@ -3749,6 +3954,7 @@
   function bindButtons() {
     if (el.primary) {
       el.primary.addEventListener("click", () => {
+        unlockAudio();
         if (state.mode === "paused") setPaused(false);
         else if (state.mode === "complete") loadLevel(state.level + 1);
         else startRun();
@@ -3762,6 +3968,7 @@
         state.sound = !state.sound;
         el.sound.textContent = state.sound ? "Sound on" : "Sound off";
         el.sound.setAttribute("aria-pressed", state.sound ? "true" : "false");
+        if (state.sound) playSound("pickup", { fallbackKind: "hit", volume: 0.24 });
       });
     }
     if (el.freshAir) {
@@ -3769,6 +3976,7 @@
         const ok = api.isAdFree && api.isAdFree() ? true : await api.showRewarded("fresh-air-purge");
         if (!ok) return;
         state.infection = Math.max(0, state.infection - 45);
+        playSound("cure", { fallbackKind: "hit", volume: 0.38 });
         setStatus("Fresh-air purge activated.");
       });
     }
@@ -3779,6 +3987,7 @@
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 12;
         state.weapon = "shotgun";
+        playSound("pickup", { fallbackKind: "hit", volume: 0.46 });
         setStatus(`${SHOTGUN_DISPLAY_NAME} kit unlocked.`);
       });
     }
@@ -3850,6 +4059,17 @@
     fireWeapon,
     getTextureStatus() {
       return { ...textureLoadStatus };
+    },
+    getAudioStatus() {
+      return {
+        ...audioStatus,
+        contextState: audioCtx ? audioCtx.state : "idle",
+        buffered: audioBuffers.size,
+        queued: audioLoads.size,
+      };
+    },
+    playSound(kind) {
+      return playSound(kind, { fallbackKind: kind });
     },
     setInfection(value) {
       state.infection = clamp(Number(value) || 0, 0, 100);

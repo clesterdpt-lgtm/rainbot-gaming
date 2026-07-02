@@ -8931,12 +8931,31 @@ body.arcade-home::before {
 }
 
 .rb-leaderboard-row__who strong {
+  align-items: center;
   color: var(--arcade-white);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
   font-size: 13px;
   font-weight: 900;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rb-bot-badge {
+  border: 1px solid rgba(247, 217, 36, 0.58);
+  border-radius: 4px;
+  color: var(--arcade-yellow);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 3px 5px;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -8994,6 +9013,273 @@ body.arcade-home::before {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.rb-game-hub {
+  border: 1px solid rgba(151, 171, 194, 0.26);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(255, 20, 144, 0.09), rgba(5, 7, 13, 0.92) 40%),
+    radial-gradient(circle at 100% 0, rgba(35, 223, 242, 0.16), transparent 34%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+  display: grid;
+  gap: 14px;
+  margin: 18px auto 0;
+  max-width: 1200px;
+  padding: 16px;
+  width: 100%;
+}
+
+.game-page > .rb-game-hub {
+  grid-column: 1 / -1;
+}
+
+.rb-game-hub__header {
+  align-items: start;
+  border-bottom: 1px solid rgba(151, 171, 194, 0.18);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+}
+
+.rb-game-hub__header h2 {
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: clamp(16px, 2vw, 23px);
+  line-height: 1.35;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.rb-game-hub__header p {
+  color: var(--arcade-muted);
+  font: 800 11px/1.5 var(--font-mono);
+  margin: 6px 0 0;
+  text-transform: uppercase;
+}
+
+.rb-game-hub__eyebrow,
+.rb-game-hub__panel-title small,
+.rb-game-hub-challenge small,
+.rb-game-hub-rec small,
+.rb-game-hub-stat small {
+  color: var(--arcade-cyan);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.rb-game-hub__eyebrow {
+  margin-bottom: 6px;
+}
+
+.rb-game-hub__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.rb-game-hub__actions button {
+  border: 1px solid rgba(35, 223, 242, 0.44);
+  border-radius: 4px;
+  background: rgba(5, 7, 13, 0.76);
+  color: var(--arcade-white);
+  cursor: pointer;
+  font: 900 10px/1 var(--font-mono);
+  min-height: 34px;
+  padding: 9px 10px;
+  text-transform: uppercase;
+}
+
+.rb-game-hub__actions button:first-child {
+  background: linear-gradient(135deg, var(--arcade-pink), #9b185d);
+  border-color: rgba(255, 20, 144, 0.8);
+  color: #05070d;
+}
+
+.rb-game-hub__actions button:hover,
+.rb-game-hub__actions button:focus-visible {
+  background: rgba(35, 223, 242, 0.14);
+  outline: none;
+  text-decoration: none;
+}
+
+.rb-game-hub__actions button:first-child:hover,
+.rb-game-hub__actions button:first-child:focus-visible {
+  background: linear-gradient(135deg, var(--arcade-yellow), var(--arcade-pink));
+}
+
+.rb-game-hub__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(250px, 0.95fr) minmax(235px, 0.85fr) minmax(280px, 1.1fr);
+}
+
+.rb-game-hub__panel {
+  border: 1px solid rgba(151, 171, 194, 0.2);
+  border-radius: 5px;
+  background: rgba(5, 7, 13, 0.72);
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+  padding: 12px;
+  width: 100%;
+}
+
+.rb-game-hub__panel-title {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.rb-game-hub__panel-title strong {
+  color: var(--arcade-white);
+  font: 900 12px/1.25 var(--font-mono);
+  overflow-wrap: anywhere;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.rb-game-hub__stats {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rb-game-hub-stat {
+  border: 1px solid rgba(151, 171, 194, 0.2);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(35, 223, 242, 0.09), transparent 54%),
+    rgba(0, 0, 0, 0.2);
+  display: grid;
+  gap: 4px;
+  min-height: 78px;
+  padding: 10px;
+}
+
+.rb-game-hub-stat strong {
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.rb-game-hub-stat em,
+.rb-game-hub-challenge em {
+  color: var(--arcade-muted);
+  font: 800 10px/1.35 var(--font-mono);
+  font-style: normal;
+}
+
+.rb-game-hub-challenge {
+  border: 1px solid rgba(247, 217, 36, 0.36);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(247, 217, 36, 0.1), rgba(0, 0, 0, 0.14)),
+    rgba(5, 7, 13, 0.48);
+  color: inherit;
+  display: grid;
+  gap: 10px;
+  min-height: 100%;
+  padding: 12px;
+  text-decoration: none;
+}
+
+.rb-game-hub-challenge:hover,
+.rb-game-hub-challenge:focus-visible,
+.rb-game-hub-rec:hover,
+.rb-game-hub-rec:focus-visible {
+  border-color: rgba(35, 223, 242, 0.58);
+  outline: none;
+  text-decoration: none;
+}
+
+.rb-game-hub-challenge strong {
+  color: var(--arcade-white);
+  display: block;
+  font-family: var(--arcade-font);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0 5px;
+  text-transform: uppercase;
+}
+
+.rb-game-hub-challenge b {
+  color: var(--arcade-yellow);
+  font: 900 10px/1.35 var(--font-mono);
+  text-transform: uppercase;
+}
+
+.rb-game-hub-progress {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.42);
+  border-radius: 999px;
+  display: block;
+  height: 10px;
+  overflow: hidden;
+}
+
+.rb-game-hub-progress i {
+  background: linear-gradient(90deg, var(--arcade-cyan), var(--arcade-yellow), var(--arcade-pink));
+  display: block;
+  height: 100%;
+  width: var(--progress, 0%);
+}
+
+.rb-game-hub__recs {
+  display: grid;
+  gap: 8px;
+}
+
+.rb-game-hub-rec {
+  align-items: center;
+  border: 1px solid rgba(151, 171, 194, 0.2);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  min-height: 64px;
+  padding: 7px;
+  text-decoration: none;
+}
+
+.rb-game-hub-rec img {
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 4px;
+  height: 50px;
+  object-fit: cover;
+  width: 50px;
+}
+
+.rb-game-hub-rec span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rb-game-hub-rec strong {
+  color: var(--arcade-white);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rb-standalone-leaderboard-btn {
   border: 1px solid rgba(216, 210, 198, 0.34);
   border-radius: 4px;
@@ -9009,6 +9295,25 @@ body.arcade-home::before {
   bottom: 16px;
   text-transform: uppercase;
   z-index: 42;
+}
+
+@media (max-width: 1100px) {
+  .rb-game-hub__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rb-game-hub__panel--more .rb-game-hub__recs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rb-game-hub-rec {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .rb-game-hub-rec img {
+    height: 44px;
+    width: 44px;
+  }
 }
 
 .rb-standalone-leaderboard-btn:hover {
@@ -9582,6 +9887,11 @@ body.arcade-home::before {
 .forum-meta-row .forum-meta-chip--title {
   border-color: rgba(247, 217, 36, 0.52);
   color: var(--arcade-yellow);
+}
+
+.forum-meta-row .forum-meta-chip--bot {
+  border-color: rgba(252, 91, 245, 0.62);
+  color: var(--arcade-pink);
 }
 
 .forum-meta-row .forum-meta-chip::after {
@@ -10383,6 +10693,44 @@ body.arcade-home::before {
 }
 
 @media (max-width: 760px) {
+  .rb-game-hub {
+    padding: 12px;
+  }
+
+  .rb-game-hub__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rb-game-hub__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+  }
+
+  .rb-game-hub__actions button {
+    width: 100%;
+  }
+
+  .rb-game-hub__panel-title {
+    align-items: start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .rb-game-hub__panel-title strong {
+    text-align: left;
+  }
+
+  .rb-game-hub__stats,
+  .rb-game-hub__panel--more .rb-game-hub__recs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rb-game-hub-rec strong {
+    white-space: normal;
+  }
+
   .forum-feed-controls,
   .rb-comments__header,
   .rb-comments__prompt {

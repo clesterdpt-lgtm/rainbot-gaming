@@ -296,6 +296,19 @@ function profileAvatarSrc(value) {
   return `${RB_BASE}${RB_PROFILE_AVATAR_ROOT}${avatar.file}`;
 }
 
+function isOfficialBotProfile(profile = {}) {
+  return Boolean(profile && profile.is_bot);
+}
+
+function profileBotLabel(profile = {}) {
+  return String(profile.bot_label || "Official Bot").trim().slice(0, 40) || "Official Bot";
+}
+
+function profileBotBadgeMarkup(profile = {}) {
+  if (!isOfficialBotProfile(profile)) return "";
+  return `<span class="rb-bot-badge" title="Official Rainbot Network bot">${escapeHtml(profileBotLabel(profile))}</span>`;
+}
+
 window.RBProfileAvatars = {
   list: RB_PROFILE_AVATARS.map((avatar) => ({ ...avatar, src: profileAvatarSrc(avatar.value) })),
   get(value) {
@@ -1280,7 +1293,7 @@ function playerLevelInfo() {
 function profileGamerStatsMarkup(backendState = getBackendState()) {
   const profile = backendState.profile || {};
   const role = backendState.user
-    ? profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
+    ? profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
     : "Local Player";
   const scoreEntries = localScoreEntries();
   const best = scoreEntries[0] || null;
@@ -1388,6 +1401,247 @@ function gameVisualForHome(gameId) {
     alt: visual.alt || "",
     kind: visual.kind || "Game",
   };
+}
+
+function currentGameSaveEntry(meta) {
+  const slug = meta && meta.slug ? meta.slug : currentGameSlug();
+  const allowed = new Set([slug, ...scoreIdsForMeta(meta || getGameMeta())]);
+  return localSaveEntries()
+    .filter((entry) => allowed.has(entry.gameId) || canonicalGameSlug(entry.gameId) === slug)
+    .sort((a, b) => Number(b.saved && b.saved.savedAt) - Number(a.saved && a.saved.savedAt))[0] || null;
+}
+
+function gameHubSummary(meta) {
+  const stats = gameplayStatsSnapshot();
+  const totals = gameplayTotalsForSlug(stats, meta.slug);
+  const saved = currentGameSaveEntry(meta);
+  const bestScore = Math.max(bestScoreForSlug(meta.slug), Number(totals.bestScore) || 0);
+  const lastActivity = Math.max(
+    Number(totals.lastPlayedAt) || 0,
+    Number(totals.lastSavedAt) || 0,
+    Number(saved && saved.saved && saved.saved.savedAt) || 0
+  );
+  const backendState = getBackendState();
+  return {
+    bestScore,
+    playMs: totals.playMs,
+    sessions: totals.sessions,
+    lastActivity,
+    saved,
+    syncState: backendState.user ? "Sync on" : backendState.configured ? "Sign in to sync" : "Local only",
+  };
+}
+
+function gameHubStatMarkup(label, value, detail = "") {
+  return `
+    <span class="rb-game-hub-stat">
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value)}</strong>
+      ${detail ? `<em>${escapeHtml(detail)}</em>` : ""}
+    </span>
+  `;
+}
+
+function gameHubRecommendations(meta, limit = 3) {
+  const currentVisual = RB_GAME_VISUALS[meta.slug] || {};
+  const currentKind = currentVisual.kind || "";
+  const recent = new Set(recentHomeGameEntries(6).map((entry) => canonicalGameSlug(entry.gameId)));
+  return Object.entries(RB_GAME_META)
+    .filter(([slug]) => slug !== meta.slug && RB_GAME_VISUALS[slug])
+    .map(([slug, item], index) => {
+      const visual = RB_GAME_VISUALS[slug] || {};
+      const sameKind = currentKind && visual.kind === currentKind ? 1 : 0;
+      const sameMood = /horror/i.test(currentKind) && /horror/i.test(visual.kind || "") ? 1 : 0;
+      const recentBoost = recent.has(slug) ? 1 : 0;
+      return { slug, ...item, visual, score: sameKind * 8 + sameMood * 5 + recentBoost * 2 - index / 100 };
+    })
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, limit);
+}
+
+function gameHubRecommendationsMarkup(meta) {
+  const rows = gameHubRecommendations(meta);
+  return rows.map((entry) => {
+    const visual = gameVisualForHome(entry.slug);
+    return `
+      <a class="rb-game-hub-rec" href="${escapeHtml(visual.href)}" data-title="${escapeHtml(`${entry.title} recommendation ${visual.kind}`)}">
+        <img src="${escapeHtml(visual.image)}" alt="${escapeHtml(visual.alt)}" loading="lazy" decoding="async" />
+        <span>
+          <small>${escapeHtml(visual.kind)}</small>
+          <strong>${escapeHtml(entry.title)}</strong>
+        </span>
+      </a>
+    `;
+  }).join("");
+}
+
+function gameHubChallengeMarkup(meta) {
+  const challenge = currentDailyChallenge();
+  const progress = dailyChallengeProgress(challenge);
+  const visual = gameVisualForHome(challenge.slug);
+  const isCurrent = challenge.slug === meta.slug;
+  return `
+    <a class="rb-game-hub-challenge${isCurrent ? " is-current" : ""}" href="${escapeHtml(isCurrent ? "#" : visual.href)}" data-rb-game-hub-action="${isCurrent ? "play" : ""}">
+      <span>
+        <small>${isCurrent ? "Current Daily" : "Today's Daily"}</small>
+        <strong>${escapeHtml(challenge.title)}</strong>
+        <em>${escapeHtml(isCurrent ? challenge.objective : `${visual.title} - ${challenge.objective}`)}</em>
+      </span>
+      <span class="rb-game-hub-progress" style="--progress: ${progress.percent}%"><i></i></span>
+      <b>${escapeHtml(progress.complete ? "Complete" : progress.label)}</b>
+    </a>
+  `;
+}
+
+function gameHubMarkup(meta) {
+  const visual = gameVisualForHome(meta.slug);
+  const summary = gameHubSummary(meta);
+  const savedAt = summary.saved && summary.saved.saved ? Number(summary.saved.saved.savedAt) || 0 : 0;
+  const hasSave = Boolean(summary.saved);
+  const lastText = summary.lastActivity ? formatRelativeActivity(summary.lastActivity) : "Not played yet";
+  return `
+    <header class="rb-game-hub__header">
+      <div>
+        <span class="rb-game-hub__eyebrow">Game Hub</span>
+        <h2>${escapeHtml(meta.title)}</h2>
+        <p>${escapeHtml(visual.kind)} - ${escapeHtml(summary.syncState)}</p>
+      </div>
+      <div class="rb-game-hub__actions" aria-label="Game hub actions">
+        <button type="button" data-rb-game-hub-action="play">${hasSave ? "Resume" : "Play"}</button>
+        <button type="button" data-rb-game-hub-action="leaderboard">Scores</button>
+        <button type="button" data-rb-game-hub-action="comments">Comments</button>
+        <button type="button" data-rb-game-hub-action="share">Share</button>
+      </div>
+    </header>
+    <div class="rb-game-hub__grid">
+      <section class="rb-game-hub__panel rb-game-hub__panel--stats" aria-label="Your progress">
+        <div class="rb-game-hub__panel-title">
+          <small>Your Progress</small>
+          <strong>${escapeHtml(lastText)}</strong>
+        </div>
+        <div class="rb-game-hub__stats">
+          ${gameHubStatMarkup("Best", formatStatNumber(summary.bestScore), summary.bestScore ? "Local high" : "No score")}
+          ${gameHubStatMarkup("Runs", formatStatNumber(summary.sessions), summary.sessions === 1 ? "Session" : "Sessions")}
+          ${gameHubStatMarkup("Time", formatPlayDuration(summary.playMs), "Played")}
+          ${gameHubStatMarkup("Save", hasSave ? "Ready" : "None", hasSave ? formatShortDate(savedAt) : "Start a run")}
+        </div>
+      </section>
+      <section class="rb-game-hub__panel rb-game-hub__panel--daily" aria-label="Daily challenge">
+        <div class="rb-game-hub__panel-title">
+          <small>Daily</small>
+          <strong>Challenge</strong>
+        </div>
+        ${gameHubChallengeMarkup(meta)}
+      </section>
+      <section class="rb-game-hub__panel rb-game-hub__panel--more" aria-label="More games">
+        <div class="rb-game-hub__panel-title">
+          <small>More Like This</small>
+          <strong>Keep Playing</strong>
+        </div>
+        <div class="rb-game-hub__recs">${gameHubRecommendationsMarkup(meta)}</div>
+      </section>
+    </div>
+  `;
+}
+
+function renderGameHub(root = document.querySelector("[data-rb-game-hub]")) {
+  if (!root) return;
+  const meta = getGameMeta(root.dataset.rbGameSlug || currentGameSlug());
+  root.dataset.rbGameSlug = meta.slug;
+  root.innerHTML = gameHubMarkup(meta);
+}
+
+function findVisibleElement(selector) {
+  return Array.from(document.querySelectorAll(selector)).find((element) => {
+    if (element.hidden) return false;
+    const style = window.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  }) || null;
+}
+
+function scrollToGameStage() {
+  const target = document.querySelector(".game-stage") || document.querySelector(".game-layout") || document.querySelector(".game-page");
+  if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function handleGameHubPlay() {
+  const resume = findVisibleElement(".rb-save-continue, [id$='-continue-save']");
+  if (resume && typeof resume.click === "function") {
+    resume.click();
+    return;
+  }
+  scrollToGameStage();
+}
+
+function handleGameHubLeaderboard() {
+  const toggle = document.querySelector(".rb-standalone-leaderboard-btn");
+  const hiddenPanel = document.querySelector("[data-rb-leaderboard][hidden]");
+  if (hiddenPanel && toggle && typeof toggle.click === "function") toggle.click();
+  const target = document.querySelector("[data-rb-leaderboard]");
+  if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function handleGameHubComments() {
+  if (window.RBComments && typeof window.RBComments.init === "function") window.RBComments.init();
+  const target = document.querySelector("[data-rb-comments]");
+  if (target && typeof target.scrollIntoView === "function") target.scrollIntoView({ behavior: "smooth", block: "start" });
+  const textarea = target && target.querySelector("textarea");
+  if (textarea && typeof textarea.focus === "function") window.setTimeout(() => textarea.focus({ preventScroll: true }), 250);
+}
+
+async function handleGameHubShare(meta) {
+  const shareData = {
+    title: `${meta.title} - Rainbot Network`,
+    text: `Play ${meta.title} on Rainbot Network.`,
+    url: location.href.split("#")[0],
+  };
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+      RB.toast("Share link copied", "good");
+      return;
+    }
+  } catch (error) {
+    if (error && error.name === "AbortError") return;
+  }
+  RB.toast("Share link ready in the address bar", "");
+}
+
+function bindGameHub(root) {
+  if (!root || root.dataset.rbGameHubBound === "true") return;
+  root.dataset.rbGameHubBound = "true";
+  root.addEventListener("click", (event) => {
+    const actionTarget = event.target.closest("[data-rb-game-hub-action]");
+    if (!actionTarget || !root.contains(actionTarget)) return;
+    const action = actionTarget.dataset.rbGameHubAction;
+    if (!action) return;
+    event.preventDefault();
+    const meta = getGameMeta(root.dataset.rbGameSlug || currentGameSlug());
+    if (action === "play") handleGameHubPlay();
+    if (action === "leaderboard") handleGameHubLeaderboard();
+    if (action === "comments") handleGameHubComments();
+    if (action === "share") handleGameHubShare(meta);
+  });
+}
+
+function initGameHub() {
+  if (!location.pathname.includes("/games/")) return;
+  const page = document.querySelector(".game-page");
+  const layout = document.querySelector(".game-layout");
+  if (!page || !layout) return;
+  let root = document.querySelector("[data-rb-game-hub]");
+  if (!root) {
+    root = document.createElement("section");
+    root.className = "rb-game-hub";
+    root.dataset.rbGameHub = "";
+    layout.insertAdjacentElement("afterend", root);
+  }
+  bindGameHub(root);
+  renderGameHub(root);
 }
 
 function formatRelativeActivity(value) {
@@ -1893,7 +2147,7 @@ function openProfileModal() {
   const displayName = signedIn ? getBackendDisplayName(backendState) : (localProfile.displayName || "Rainbot Player");
   const email = signedIn ? (backendState.user.email || "") : "Saved on this device";
   const role = signedIn
-    ? profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
+    ? profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
     : "Local Player";
   const profileTitle = profileField(profile, "profile_title", "profileTitle", "Arcade Regular");
   const bio = profile.bio || "";
@@ -2176,6 +2430,8 @@ const RBLeaderboards = (() => {
       avatar_style: profile.avatar_style || "bot",
       accent_color: profile.accent_color || "cyan",
       profile_title: profile.profile_title || "Local Player",
+      is_bot: Boolean(profile.is_bot),
+      bot_label: profile.bot_label || "",
     };
   }
 
@@ -2236,12 +2492,13 @@ const RBLeaderboards = (() => {
     const name = profile.display_name || (row.local ? "You" : "Rainbot Player");
     const gameTitle = titleForScoreId(row.game_id);
     const metaText = mode === "global" ? gameTitle : (row.local ? "Local best" : gameTitle);
+    const botBadge = profileBotBadgeMarkup(profile);
     return `
       <article class="rb-leaderboard-row${row.local ? " rb-leaderboard-row--local" : ""}">
         <span class="rb-leaderboard-row__rank">#${index + 1}</span>
         ${leaderboardAvatarMarkup(profile)}
         <span class="rb-leaderboard-row__who">
-          <strong>${escapeHtml(name)}</strong>
+          <strong>${escapeHtml(name)}${botBadge}</strong>
           <em>${escapeHtml(metaText)}</em>
         </span>
         <span class="rb-leaderboard-row__score">${formatStatNumber(row.score)}</span>
@@ -2655,6 +2912,7 @@ const RBComments = (() => {
     const score = Number(comment.vote_score) || 0;
     const userVote = Number(comment.user_vote) || 0;
     const title = profile.profile_title ? `<span>${escapeHtml(profile.profile_title)}</span>` : "";
+    const botBadge = profileBotBadgeMarkup(profile);
     const children = comment.children && comment.children.length
       ? `<div class="rb-comment__children">${comment.children.map((child) => commentMarkup(child, depth + 1)).join("")}</div>`
       : "";
@@ -2669,6 +2927,7 @@ const RBComments = (() => {
           <div class="rb-comment__meta">
             ${commentAvatarMarkup(profile)}
             <strong>${escapeHtml(profileName(profile))}</strong>
+            ${botBadge}
             ${title}
             <span>${escapeHtml(formatCommentTime(comment.created_at))}</span>
           </div>
@@ -2877,6 +3136,7 @@ function handleBackendAuthChange(event) {
   renderHomeRecentPanel();
   renderHomeProgressPanel();
   renderHomeCommunityPanel();
+  renderGameHub();
   RBLeaderboards.renderAll();
   RBComments.renderAll();
   if (backendState.passwordRecovery && backendState.user) {
@@ -3336,11 +3596,13 @@ document.addEventListener("DOMContentLoaded", () => {
   initHomeCommunityPanel();
   RBLeaderboards.init();
   RBComments.init();
+  initGameHub();
   RB.subscribe((state) => {
     renderNav(state);
     renderHomeRecentPanel();
     renderHomeProgressPanel();
     renderHomeCommunityPanel();
+    renderGameHub();
     RBLeaderboards.renderAll();
     RBComments.renderAll();
     const profileModal = document.getElementById("rb-profile-modal");

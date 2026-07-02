@@ -10612,3 +10612,10 @@ body.arcade-home::before {
   object-fit: cover;
   object-position: center;
 }
+
+/* To The Moon key art fills both card layouts. */
+.poster-card--tothemoon img,
+.directory-card__poster--tothemoon img {
+  object-fit: cover;
+  object-position: center;
+}

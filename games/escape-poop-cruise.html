@@ -458,6 +458,7 @@
               <button class="poop-touch-btn poop-touch-btn--fire" type="button" data-mobile-action="fire">Fire</button>
               <button class="poop-touch-btn" type="button" data-mobile-action="sprint">Run</button>
               <button class="poop-touch-btn" type="button" data-mobile-action="switch">Swap</button>
+              <button class="poop-touch-btn" type="button" data-mobile-action="reload">Reload</button>
               <button class="poop-touch-btn poop-touch-btn--yellow" type="button" data-mobile-action="use">Use</button>
             </div>
           </div>
@@ -467,7 +468,7 @@
             <p class="overlay__sub" id="overlay-sub">
               Roe Jogan woke up on the SS Gut Check. The passengers have a fictional cruise crud,
               the buffet is glowing, and the stairwell doors will not open until enough people are cured.
-              Keep distance so your infection meter drains.
+              Keep distance so the infection meter stops climbing; vents, canisters, and purges bring it down.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary" type="button">Start deck 1</button>
@@ -490,7 +491,7 @@
           </div>
           <p class="poop-side-note">
             <kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> IVM shot ·
-            <kbd>Shift</kbd> sprint · <kbd>1</kbd>/<kbd>2</kbd> switch weapons ·
+            <kbd>Shift</kbd> sprint · <kbd>R</kbd> reload · <kbd>1</kbd>/<kbd>2</kbd> switch weapons ·
             <kbd>E</kbd> use stairwell door.
           </p>
         </div>
@@ -538,7 +539,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260701-games-consolidated-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/escape-poop-cruise.js?v=20260701-sfx-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260702-vents-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

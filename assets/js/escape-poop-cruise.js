@@ -75,6 +75,11 @@
   const SHOTGUN_RADIUS_BOOST = 0.34;
   const SHOTGUN_DOSE = 1.9;
   const SHOTGUN_COOLDOWN = 0.62;
+  const DART_MAG_SIZE = 6;
+  const DART_RELOAD_TIME = 1.18;
+  const SHOTGUN_TUBE_SIZE = 3;
+  const SHOTGUN_RELOAD_TIME = 1.55;
+  const FRESH_VENT_HEAL_RATE = 4.6;
   const PROJECTILE_LIFE = 0.22;
   const WEAPON_LABELS = {
     dart: "Ivermectin Pistol",
@@ -108,9 +113,14 @@
     sound: true,
     weapon: "dart",
     shotgunUnlocked: false,
+    dartAmmo: DART_MAG_SIZE,
+    shotgunLoaded: 0,
     shotgunAmmo: 0,
     dartCooldown: 0,
     shotgunCooldown: 0,
+    reloadTimer: 0,
+    reloadDuration: 0,
+    reloadWeapon: null,
     recoil: 0,
     muzzleFlash: 0,
     lurchTimer: 0,
@@ -2405,6 +2415,9 @@
     state.cures = 0;
     state.dartCooldown = 0;
     state.shotgunCooldown = 0;
+    state.reloadTimer = 0;
+    state.reloadDuration = 0;
+    state.reloadWeapon = null;
     state.clouds = [];
     state.speeches = [];
     state.beams = [];
@@ -2445,7 +2458,12 @@
     state.totalHits = 0;
     state.weapon = "dart";
     state.shotgunUnlocked = false;
+    state.dartAmmo = DART_MAG_SIZE;
+    state.shotgunLoaded = 0;
     state.shotgunAmmo = 0;
+    state.reloadTimer = 0;
+    state.reloadDuration = 0;
+    state.reloadWeapon = null;
     loadLevel(1);
   }
 
@@ -2459,14 +2477,13 @@
     const infectionBonus = Math.max(0, Math.floor((100 - state.infection) * 8));
     const scoreGain = levelBonus + timeBonus + infectionBonus + Math.floor(accuracy * 350);
     state.score += scoreGain;
-    state.infection = Math.max(0, state.infection - 18);
     const high = api.recordScore(GAME_ID, state.score);
     state.high = api.getHighScore(GAME_ID) || state.high;
     unlockPointer();
     playSound("level", { cooldown: 0.85, fallbackKind: "hit", volume: 0.5 });
     showOverlay(
       `DECK ${state.level} CLEARED`,
-      `The stairwell door clanked open. Infection dropped during the fresh-air shuffle. Next deck adds more rooms, faster passengers, and worse buffet decisions.`,
+      `The stairwell door clanked open. Infection now carries into the next deck, so every bad cough matters. Next deck adds more rooms, faster passengers, and worse buffet decisions.`,
       `Score: <strong>${state.score.toLocaleString()}</strong> · Deck bonus: <strong>${scoreGain.toLocaleString()}</strong>${high ? " · <strong>New high score</strong>" : ""}`,
       `Enter deck ${state.level + 1}`
     );
@@ -2509,8 +2526,9 @@
   }
 
   function formatAmmo() {
-    if (state.weapon === "shotgun") return `${state.shotgunAmmo}`;
-    return state.dartCooldown > 0 ? "Reloading" : "Ready";
+    if (state.reloadTimer > 0) return `Reload ${Math.max(0.1, state.reloadTimer).toFixed(1)}s`;
+    if (state.weapon === "shotgun") return `${state.shotgunLoaded}/${state.shotgunAmmo}`;
+    return `${state.dartAmmo}/${DART_MAG_SIZE}`;
   }
 
   function updateHud() {
@@ -2566,12 +2584,20 @@
 
   function switchWeapon() {
     if (state.weapon === "shotgun") {
+      if (state.reloadTimer > 0) {
+        setStatus("Finish the reload first.");
+        return;
+      }
       state.weapon = "dart";
       playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.18 });
       setStatus("Ivermectin Pistol ready.");
       return;
     }
     if (state.shotgunUnlocked) {
+      if (state.reloadTimer > 0) {
+        setStatus("Finish the reload first.");
+        return;
+      }
       state.weapon = "shotgun";
       playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.2 });
       setStatus(`${SHOTGUN_DISPLAY_NAME} ready.`);
@@ -2931,6 +2957,56 @@
     stepAudio.timer = input.sprint ? 0.28 : 0.41;
   }
 
+  function canReloadWeapon(weapon = state.weapon) {
+    if (state.reloadTimer > 0) return false;
+    if (weapon === "shotgun") {
+      return state.shotgunUnlocked && state.shotgunLoaded < SHOTGUN_TUBE_SIZE && state.shotgunAmmo > 0;
+    }
+    return state.dartAmmo < DART_MAG_SIZE;
+  }
+
+  function startReload(weapon = state.weapon, options = {}) {
+    if (state.mode !== "playing" || state.reloadTimer > 0) return false;
+    if (!canReloadWeapon(weapon)) {
+      if (!options.silent) {
+        if (weapon === "shotgun") {
+          setStatus(state.shotgunAmmo > 0 ? `${SHOTGUN_DISPLAY_NAME} is already topped off.` : `${SHOTGUN_DISPLAY_NAME} has no silver ampoules left.`);
+        } else {
+          setStatus("Ivermectin Pistol is already loaded.");
+        }
+      }
+      return false;
+    }
+
+    state.reloadWeapon = weapon;
+    state.reloadDuration = weapon === "shotgun" ? SHOTGUN_RELOAD_TIME : DART_RELOAD_TIME;
+    state.reloadTimer = state.reloadDuration;
+    playSound("pickup", { cooldown: 0.25, fallbackKind: "hit", volume: weapon === "shotgun" ? 0.28 : 0.2 });
+    setStatus(weapon === "shotgun" ? `Reloading ${SHOTGUN_DISPLAY_NAME}.` : "Reloading Ivermectin Pistol.");
+    return true;
+  }
+
+  function finishReload() {
+    const weapon = state.reloadWeapon;
+    state.reloadTimer = 0;
+    state.reloadDuration = 0;
+    state.reloadWeapon = null;
+
+    if (weapon === "shotgun") {
+      const need = Math.max(0, SHOTGUN_TUBE_SIZE - state.shotgunLoaded);
+      const loaded = Math.min(need, state.shotgunAmmo);
+      state.shotgunLoaded += loaded;
+      state.shotgunAmmo -= loaded;
+      playSound("pickup", { cooldown: 0.25, fallbackKind: "hit", volume: 0.3 });
+      setStatus(loaded > 0 ? `${SHOTGUN_DISPLAY_NAME} reloaded.` : `${SHOTGUN_DISPLAY_NAME} has no silver ampoules left.`, 1.25);
+      return;
+    }
+
+    state.dartAmmo = DART_MAG_SIZE;
+    playSound("pickup", { cooldown: 0.25, fallbackKind: "hit", volume: 0.24 });
+    setStatus("Ivermectin Pistol reloaded.", 1.25);
+  }
+
   function cureEnemy(enemy, dose) {
     const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : enemy.type === "bloater" ? 1.35 : 1.2;
     enemy.inoculation += dose;
@@ -2967,8 +3043,17 @@
   }
 
   function fireDart() {
+    if (state.reloadTimer > 0) {
+      setStatus("Reloading. Keep moving.");
+      return;
+    }
     if (state.dartCooldown > 0) return;
+    if (state.dartAmmo <= 0) {
+      startReload("dart");
+      return;
+    }
     state.dartCooldown = 0.78;
+    state.dartAmmo -= 1;
     state.totalShots += 1;
     triggerRecoil("dart");
     playSound("dart", { cooldown: 0.05, fallbackKind: "miss", volume: 0.3 });
@@ -2981,17 +3066,25 @@
     } else {
       const miss = camera.position.clone().addScaledVector(dir, DART_RANGE);
       addBeam(miss, 0x2ee0ff, "dart");
-      setStatus("Ivermectin cure shot fired.");
+      setStatus(state.dartAmmo <= 0 ? "Pistol empty. Press R to reload." : "Ivermectin cure shot fired.");
     }
   }
 
   function fireShotgun() {
+    if (state.reloadTimer > 0) {
+      setStatus("Reloading. Keep moving.");
+      return;
+    }
     if (!state.shotgunUnlocked) {
       playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
       setStatus(`Find the ${SHOTGUN_DISPLAY_NAME} pickup first.`);
       return;
     }
-    if (state.shotgunAmmo <= 0) {
+    if (state.shotgunLoaded <= 0) {
+      if (state.shotgunAmmo > 0) {
+        startReload("shotgun");
+        return;
+      }
       playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.24 });
       setStatus(`${SHOTGUN_DISPLAY_NAME} empty. Switch to the Ivermectin Pistol or find a silver kit.`);
       state.weapon = "dart";
@@ -2999,7 +3092,7 @@
     }
     if (state.shotgunCooldown > 0) return;
     state.shotgunCooldown = SHOTGUN_COOLDOWN;
-    state.shotgunAmmo -= 1;
+    state.shotgunLoaded -= 1;
     state.totalShots += 1;
     triggerRecoil("shotgun");
     playSound("shotgun", { cooldown: SHOTGUN_COOLDOWN * 0.8, fallbackKind: "shotgun" });
@@ -3025,7 +3118,7 @@
     hitSet.forEach((enemy) => cureEnemy(enemy, SHOTGUN_DOSE));
     if (!hitSet.size) {
       state.totalHits = Math.max(0, state.totalHits);
-      setStatus(`${SHOTGUN_DISPLAY_NAME} blast fired.`);
+      setStatus(state.shotgunLoaded <= 0 ? `${SHOTGUN_DISPLAY_NAME} empty. Press R to reload.` : `${SHOTGUN_DISPLAY_NAME} blast fired.`);
     }
   }
 
@@ -3576,40 +3669,36 @@
       if (pickup.type === "shotgun") {
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 10;
+        if (state.shotgunLoaded <= 0) {
+          const loaded = Math.min(SHOTGUN_TUBE_SIZE, state.shotgunAmmo);
+          state.shotgunLoaded += loaded;
+          state.shotgunAmmo -= loaded;
+        }
         state.weapon = "shotgun";
         playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.5 });
-        setStatus(`${SHOTGUN_DISPLAY_NAME} acquired. Press 1/2 to switch weapons.`);
+        setStatus(`${SHOTGUN_DISPLAY_NAME} acquired. Press R to reload when empty.`);
       } else if (pickup.type === "shells") {
         state.shotgunAmmo += 6;
         playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.42 });
-        setStatus("Silver ampoules recovered.");
+        setStatus("Silver ampoules recovered. Press R to reload.");
       } else {
         state.infection = Math.max(0, state.infection - 24);
         playSound("cure", { cooldown: 0.25, fallbackKind: "hit", volume: 0.32 });
-        setStatus("Fresh-air canister used. Infection dropping.");
+        setStatus("Fresh-air canister used. Infection reduced.");
       }
     }
   }
 
-  function updateInfection(dt, closestEnemy) {
+  function updateInfection(dt) {
     const tile = currentTileType();
     if (tile === Tile.HAZARD) {
       state.infection += (6.2 + state.level * 0.25) * dt;
       state.lurchTimer = Math.max(state.lurchTimer, 0.1);
     }
 
-    // Safe distance is pushed out past the proximity-damage falloff (6.5) so
-    // the passive-drain and proximity-gain zones no longer overlap — standing
-    // at mid-range used to net-heal even with an enemy nearby, since the old
-    // drain band (>4.5) started well inside the gain band (<6.5).
-    const safeDistance = closestEnemy > 9;
     if (tile === Tile.FRESH) {
-      state.infection -= 10.5 * dt;
-      if (state.statusTimer <= 0) setStatus("Fresh-air vent active. Infection dropping fast.", 0.85);
-    } else if (safeDistance) {
-      state.infection -= 2.1 * dt;
-    } else if (closestEnemy > 6.5) {
-      state.infection -= 0.9 * dt;
+      state.infection -= FRESH_VENT_HEAL_RATE * dt;
+      if (state.statusTimer <= 0) setStatus("Fresh-air vent easing the infection down.", 0.85);
     }
 
     state.infection = clamp(state.infection, 0, 100);
@@ -3672,6 +3761,10 @@
   function updateTimers(dt) {
     state.dartCooldown = Math.max(0, state.dartCooldown - dt);
     state.shotgunCooldown = Math.max(0, state.shotgunCooldown - dt);
+    if (state.reloadTimer > 0) {
+      state.reloadTimer = Math.max(0, state.reloadTimer - dt);
+      if (state.reloadTimer <= 0) finishReload();
+    }
     state.lurchTimer = Math.max(0, state.lurchTimer - dt);
     const wasStuck = state.stuckTimer > 0;
     state.stuckTimer = Math.max(0, state.stuckTimer - dt);
@@ -3681,7 +3774,7 @@
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
       if (state.statusTimer <= 0 && el.status) {
-        el.status.textContent = state.cures >= state.neededCures ? "Find the stairwell door." : "Cure passengers and keep your distance.";
+        el.status.textContent = state.cures >= state.neededCures ? "Find the stairwell door." : "Cure passengers, reload, and keep your distance.";
       }
     }
   }
@@ -3697,13 +3790,13 @@
     }
     movePlayer(dt);
     updateWeapon(dt);
-    const closest = updateEnemies(dt);
+    updateEnemies(dt);
     updateClouds(dt);
     updateSlimeBolts(dt);
     updateSpeeches(dt);
     updatePickups(dt);
     updateFx(dt);
-    updateInfection(dt, closest);
+    updateInfection(dt);
     state.score += dt * (state.level * 2);
     updateHud();
   }
@@ -3837,10 +3930,12 @@
       const fireButton = el.mobileControls.querySelector("[data-mobile-action='fire']");
       const sprintButton = el.mobileControls.querySelector("[data-mobile-action='sprint']");
       const switchButton = el.mobileControls.querySelector("[data-mobile-action='switch']");
+      const reloadButton = el.mobileControls.querySelector("[data-mobile-action='reload']");
       const useButton = el.mobileControls.querySelector("[data-mobile-action='use']");
       if (fireButton) bindTapButton(fireButton, fireWeapon);
       if (sprintButton) bindHoldButton(sprintButton, () => { input.sprint = true; }, () => { input.sprint = false; });
       if (switchButton) bindTapButton(switchButton, switchWeapon);
+      if (reloadButton) bindTapButton(reloadButton, () => startReload(state.weapon));
       if (useButton) bindTapButton(useButton, tryUseExit);
     }
 
@@ -3913,8 +4008,15 @@
       if (key === "a" || key === "arrowleft") input.left = true;
       if (key === "d" || key === "arrowright") input.right = true;
       if (key === "shift") input.sprint = true;
-      if (key === "1") state.weapon = "dart";
+      if (key === "1") {
+        if (state.reloadTimer > 0) setStatus("Finish the reload first.");
+        else state.weapon = "dart";
+      }
       if (key === "2") switchWeapon();
+      if (key === "r" && state.mode === "playing") {
+        event.preventDefault();
+        startReload(state.weapon);
+      }
       if (key === "e" && state.mode === "playing") tryUseExit();
       if (key === "p") setPaused(state.mode === "playing");
       if (key === "escape" && state.mode === "playing") setPaused(true);
@@ -3986,9 +4088,14 @@
         if (!ok) return;
         state.shotgunUnlocked = true;
         state.shotgunAmmo += 12;
+        if (state.shotgunLoaded <= 0) {
+          const loaded = Math.min(SHOTGUN_TUBE_SIZE, state.shotgunAmmo);
+          state.shotgunLoaded += loaded;
+          state.shotgunAmmo -= loaded;
+        }
         state.weapon = "shotgun";
         playSound("pickup", { fallbackKind: "hit", volume: 0.46 });
-        setStatus(`${SHOTGUN_DISPLAY_NAME} kit unlocked.`);
+        setStatus(`${SHOTGUN_DISPLAY_NAME} kit unlocked. Press R to reload.`);
       });
     }
   }
@@ -4070,6 +4177,21 @@
     },
     playSound(kind) {
       return playSound(kind, { fallbackKind: kind });
+    },
+    reload(weapon = state.weapon) {
+      return startReload(weapon);
+    },
+    getAmmoStatus() {
+      return {
+        weapon: state.weapon,
+        dartAmmo: state.dartAmmo,
+        dartMagSize: DART_MAG_SIZE,
+        shotgunLoaded: state.shotgunLoaded,
+        shotgunTubeSize: SHOTGUN_TUBE_SIZE,
+        shotgunReserve: state.shotgunAmmo,
+        reloadTimer: state.reloadTimer,
+        reloadWeapon: state.reloadWeapon,
+      };
     },
     setInfection(value) {
       state.infection = clamp(Number(value) || 0, 0, 100);

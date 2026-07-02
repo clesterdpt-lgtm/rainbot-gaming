@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>TO THE MOON — Mine memecoins. Survive the bears. Moon.</title>
+<meta name="description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
+<meta name="theme-color" content="#05060f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305060f'/%3E%3Ccircle cx='58' cy='40' r='22' fill='%23e9c24a'/%3E%3Ccircle cx='50' cy='34' r='6' fill='%23c79a2e'/%3E%3Cpath d='M50 88 L34 50 L50 60 L66 50 Z' fill='%235fdf6a'/%3E%3C/svg%3E" />
+<style>
+  /* ============================================================
+     TO THE MOON — single-file crypto-mining / tower-defense survival
+     Pure HTML + CSS + Canvas. No dependencies. Artifact-ready.
+     ============================================================ */
+  :root{
+    --bg:#05060f; --panel:#0c1024; --panel-2:#161c3a;
+    --ink:#eaf2ff; --dim:#8b93b8;
+    --cyan:#2ee0ff; --pink:#ff2e88; --yellow:#ffd43b;
+    --green:#6bff7d; --red:#ff5c5c; --purple:#b06cff; --orange:#ff9d4d;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --disp:"Bungee",Impact,"Arial Black",sans-serif;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;background:var(--bg);}
+  body{
+    font-family:var(--mono); color:var(--ink);
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color:transparent; touch-action:none;
+  }
+  #game{ position:fixed; inset:0; overflow:hidden; background:#02030a; }
+  canvas#c{ display:block; position:absolute; inset:0; }
+
+  /* ---------- HUD ---------- */
+  .hud{ position:absolute; z-index:5; pointer-events:none; }
+  .panel{
+    background:linear-gradient(180deg,rgba(14,18,40,.82),rgba(8,10,24,.82));
+    border:1px solid rgba(46,224,255,.28); border-radius:10px;
+    box-shadow:0 6px 24px rgba(0,0,0,.5), inset 0 0 22px rgba(46,224,255,.05);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  .mono-label{ font-size:9px; letter-spacing:.18em; color:var(--dim); text-transform:uppercase; }
+
+  /* top-left: phase + clock */
+  #hud-phase{ top:12px; left:12px; padding:10px 14px; min-width:182px; }
+  #phase-name{ font-family:var(--disp); font-size:18px; line-height:1; letter-spacing:.04em; }
+  #phase-name.day{ color:var(--green); text-shadow:0 0 14px rgba(107,255,125,.4); }
+  #phase-name.night{ color:var(--red); text-shadow:0 0 14px rgba(255,92,92,.5); }
+  #phase-clock{ font-size:22px; font-weight:800; color:var(--ink); margin-top:2px; }
+  #phase-sub{ margin-top:5px; }
+  #phase-bar{ height:5px; border-radius:4px; background:rgba(255,255,255,.1); overflow:hidden; margin-top:7px; }
+  #phase-bar > i{ display:block; height:100%; width:50%; border-radius:4px; transition:width .2s linear; }
+
+  /* top-right: minerals bank */
+  #hud-bank{ top:12px; right:12px; padding:9px 12px; display:flex; gap:13px; }
+  .ore{ display:flex; flex-direction:column; align-items:center; gap:3px; min-width:34px; }
+  .ore .dot{ width:13px; height:13px; border-radius:50%; box-shadow:0 0 9px currentColor; }
+  .ore b{ font-size:15px; font-weight:800; }
+  .ore.iron{ color:#e9b84a } .ore.copper{ color:#ff7a33 }
+  .ore.plasma{ color:#5fdf6a } .ore.dark{ color:#c06cff }
+
+  /* minimap / radar (top-right, under the bank) */
+  #minimap-panel{ top:96px; right:12px; padding:6px; }
+  #minimap{ display:block; width:150px; height:150px; border-radius:6px; background:#04060e; }
+  @media (max-width:560px){ #minimap{ width:104px; height:104px; } #minimap-panel{ top:84px; } }
+  .boot-best{ margin-top:14px; font-size:12px; letter-spacing:.04em; color:var(--yellow); min-height:14px; }
+  /* Black Swan boss bar (top-center) */
+  #boss-bar{ display:none; top:52px; left:50%; transform:translateX(-50%); width:min(420px,80vw); text-align:center; }
+  #boss-bar > span{ font-family:var(--disp); font-size:12px; letter-spacing:.12em; color:var(--red); text-shadow:0 0 10px rgba(255,46,90,.55); }
+  #boss-bar .bbtrack{ height:9px; margin-top:4px; border-radius:6px; border:1px solid rgba(255,46,90,.5); background:rgba(20,5,10,.7); overflow:hidden; box-shadow:0 0 14px rgba(255,46,90,.3); }
+  #boss-bar .bbtrack > i{ display:block; height:100%; width:100%; background:linear-gradient(90deg,#ff2e5a,#ff7a8a); transition:width .12s linear; }
+
+  /* bottom-left: rover stats */
+  #hud-stats{ left:12px; bottom:12px; padding:11px 13px; width:230px; display:grid; gap:8px; }
+  .bar{ display:grid; grid-template-columns:48px 1fr 44px; align-items:center; gap:8px; }
+  .bar .track{ height:9px; border-radius:6px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); overflow:hidden; }
+  .bar .track > i{ display:block; height:100%; border-radius:6px; transition:width .12s linear, background-color .2s; }
+  .bar .val{ font-size:11px; text-align:right; color:var(--ink); font-weight:700; }
+  .bar .mono-label{ font-size:8.5px; }
+  #depth-chip{ display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-top:1px; }
+  #depth-chip b{ color:var(--cyan); font-weight:700; }
+
+  /* top-center buttons */
+  #hud-actions{ top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; }
+  .hbtn{
+    font-family:var(--mono); font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink); background:linear-gradient(180deg,rgba(22,28,58,.92),rgba(12,16,36,.92));
+    border:1px solid rgba(46,224,255,.32); border-radius:9px; padding:9px 13px; cursor:pointer;
+    transition:transform .08s, border-color .15s, background .15s; white-space:nowrap;
+  }
+  .hbtn:hover{ border-color:var(--cyan); transform:translateY(-1px); }
+  .hbtn:active{ transform:translateY(1px) scale(.98); }
+  .hbtn .k{ color:var(--dim); font-weight:600; }
+  .hbtn[disabled]{ opacity:.4; cursor:not-allowed; filter:grayscale(.5); }
+  .hbtn.on{ border-color:var(--yellow); color:var(--yellow); box-shadow:0 0 16px rgba(255,212,59,.25); }
+  .hbtn.danger{ border-color:rgba(255,92,92,.5); color:var(--red); }
+
+  /* center hint / big message */
+  #hint{ left:50%; bottom:96px; transform:translateX(-50%); font-size:12px; color:var(--cyan);
+    background:rgba(5,6,15,.6); padding:6px 14px; border-radius:999px; border:1px solid rgba(46,224,255,.25);
+    opacity:0; transition:opacity .2s; max-width:84vw; text-align:center; }
+  #hint.show{ opacity:1; }
+  #bigmsg{ left:50%; top:38%; transform:translate(-50%,-50%); font-family:var(--disp); font-size:clamp(30px,7vw,68px);
+    text-align:center; opacity:0; transition:opacity .5s; text-shadow:0 4px 30px rgba(0,0,0,.8); width:100%; }
+  #bigmsg small{ display:block; font-family:var(--mono); font-size:13px; letter-spacing:.2em; margin-top:8px; color:var(--ink); }
+
+  /* toasts */
+  #toasts{ right:12px; bottom:90px; display:flex; flex-direction:column; gap:7px; align-items:flex-end; }
+  .toast{ font-size:11.5px; padding:8px 13px; border-radius:8px; background:rgba(12,16,36,.92);
+    border-left:3px solid var(--cyan); box-shadow:0 6px 18px rgba(0,0,0,.45);
+    transform:translateX(120%); transition:transform .26s cubic-bezier(.2,.9,.3,1); max-width:280px; }
+  .toast.show{ transform:translateX(0); }
+  .toast.good{ border-color:var(--green) } .toast.bad{ border-color:var(--red) } .toast.warn{ border-color:var(--yellow) }
+
+  /* ---------- Build palette (non-modal, left) ---------- */
+  #build-panel{ left:12px; top:84px; width:236px; padding:12px; display:none; pointer-events:auto; }
+  #build-panel.open{ display:block; }
+  #build-panel h3{ font-family:var(--disp); font-size:14px; color:var(--cyan); letter-spacing:.04em; margin-bottom:3px; }
+  #build-panel .blurb{ font-size:10px; color:var(--dim); line-height:1.4; margin-bottom:10px; }
+  .build-item{ display:grid; grid-template-columns:34px 1fr; gap:10px; align-items:center; padding:8px; border-radius:9px;
+    border:1px solid rgba(255,255,255,.09); margin-bottom:7px; cursor:pointer; transition:border-color .12s, background .12s; }
+  .build-item:hover{ border-color:rgba(46,224,255,.5); background:rgba(46,224,255,.06); }
+  .build-item.sel{ border-color:var(--yellow); background:rgba(255,212,59,.08); box-shadow:inset 0 0 0 1px rgba(255,212,59,.3); }
+  .build-item.cant{ opacity:.5; }
+  .build-ico{ width:34px; height:34px; border-radius:7px; display:grid; place-items:center; font-size:18px;
+    background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.12); }
+  .build-item b{ font-size:12px; display:block; }
+  .build-item .cost{ font-size:10px; color:var(--dim); margin-top:2px; }
+  .build-item .cost span{ color:var(--ink); }
+  .build-foot{ font-size:9.5px; color:var(--dim); margin-top:4px; line-height:1.5; }
+
+  /* ---------- Modal overlays (boot / ship / pause / over / win) ---------- */
+  .scr{ position:absolute; inset:0; z-index:30; display:none; align-items:center; justify-content:center; padding:18px;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(20,12,48,.6), rgba(2,3,10,.92)); backdrop-filter:blur(3px); }
+  .scr.show{ display:flex; }
+  .scr-card{ width:min(640px,96vw); max-height:94vh; overflow:auto; padding:26px; text-align:center; }
+  .scr h1{ font-family:var(--disp); font-size:clamp(34px,8vw,62px); line-height:.92; letter-spacing:.02em;
+    background:linear-gradient(90deg,var(--cyan),var(--pink) 60%,var(--yellow)); -webkit-background-clip:text;
+    background-clip:text; color:transparent; filter:drop-shadow(0 3px 18px rgba(46,224,255,.25)); }
+  .scr .tag{ font-size:11px; letter-spacing:.34em; color:var(--pink); text-transform:uppercase; margin-bottom:14px; }
+  .scr p.lore{ color:var(--dim); font-size:13.5px; line-height:1.7; max-width:520px; margin:14px auto; }
+  .scr .keys{ display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:center; margin:18px auto; font-size:12px; color:var(--ink); }
+  .scr .keys span{ color:var(--dim); }
+  .scr .keys kbd{ font-family:var(--mono); background:#1a2146; border:1px solid #2a3450; border-bottom-width:2px;
+    border-radius:5px; padding:2px 7px; color:var(--cyan); font-size:11px; }
+  .cta{ font-family:var(--disp); font-size:18px; letter-spacing:.04em; color:#05060f; cursor:pointer;
+    background:linear-gradient(180deg,var(--cyan),#13b9d8); border:none; border-radius:11px; padding:14px 40px;
+    box-shadow:0 8px 26px rgba(46,224,255,.35); transition:transform .08s, filter .15s; margin-top:6px; }
+  .cta:hover{ filter:brightness(1.08); transform:translateY(-1px); }
+  .cta:active{ transform:translateY(1px); }
+  .cta.alt{ background:linear-gradient(180deg,#222a52,#161c3a); color:var(--ink); box-shadow:none; border:1px solid rgba(255,255,255,.15); font-size:14px; padding:11px 22px; }
+  .scr .row{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; align-items:center; }
+
+  /* ship menu */
+  #ship-card{ text-align:left; }
+  #ship-card .stitle{ font-family:var(--disp); font-size:22px; color:var(--cyan); text-align:center; }
+  #ship-card .ssub{ font-size:11px; color:var(--dim); text-align:center; margin:4px 0 12px; }
+  .ship-wallet{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:0 0 4px; padding:9px;
+    border:1px solid rgba(46,224,255,.22); border-radius:9px; background:rgba(46,224,255,.05); }
+  .ship-wallet .wlt{ display:flex; align-items:center; gap:6px; font-size:14px; font-weight:800; }
+  .ship-wallet .wlt i{ width:11px; height:11px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+  .ship-wallet .wlt b{ font-family:var(--mono); }
+  .ship-wallet .wlt span{ font-size:9px; color:var(--dim); letter-spacing:.1em; text-transform:uppercase; }
+  .sec-h{ font-family:var(--disp); font-size:13px; letter-spacing:.06em; color:var(--yellow); margin:16px 0 9px; display:flex; align-items:center; gap:8px; }
+  .sec-h::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,rgba(255,212,59,.4),transparent); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .card{ border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:11px; background:rgba(255,255,255,.025); }
+  .card .top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .card .nm{ font-size:12.5px; font-weight:800; }
+  .card .lv{ font-size:10px; color:var(--cyan); }
+  .card .ef{ font-size:10px; color:var(--dim); margin:5px 0 9px; line-height:1.4; min-height:26px; }
+  .card .cost{ font-size:10.5px; color:var(--dim); margin-bottom:8px; }
+  .card .cost span{ color:var(--ink); font-weight:700; }
+  .buy{ width:100%; font-family:var(--mono); font-weight:800; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:#05060f; background:var(--green); border:none; border-radius:7px; padding:8px; cursor:pointer; transition:filter .12s; }
+  .buy:hover{ filter:brightness(1.08); }
+  .buy[disabled]{ background:#2a3157; color:var(--dim); cursor:not-allowed; }
+  .buy.max{ background:var(--yellow); }
+  .part-done{ background:rgba(107,255,125,.12); border-color:rgba(107,255,125,.4); }
+  .part-done .buy{ background:transparent; color:var(--green); border:1px solid rgba(107,255,125,.5); cursor:default; }
+  #ship-progress{ text-align:center; font-size:11px; color:var(--dim); margin-top:14px; }
+  #ship-progress b{ color:var(--green); }
+
+  .stat-line{ font-size:12px; color:var(--dim); margin:6px 0; }
+  .stat-line b{ color:var(--ink); }
+  .win h1, .over h1{ font-size:clamp(40px,9vw,76px); }
+  .over h1{ background:linear-gradient(90deg,var(--red),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .win h1{ background:linear-gradient(90deg,var(--green),var(--cyan),var(--yellow)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+  /* ---------- mobile controls ---------- */
+  #touch{ position:absolute; inset:0; z-index:8; display:none; pointer-events:none; }
+  body.touch #touch{ display:block; }
+  .tpad{ position:absolute; bottom:18px; display:flex; gap:12px; pointer-events:auto; }
+  #tpad-l{ left:16px; } #tpad-r{ right:16px; }
+  .tbtn{ width:62px; height:62px; border-radius:50%; display:grid; place-items:center; font-size:22px; font-weight:800;
+    color:var(--ink); background:rgba(12,16,36,.66); border:1.5px solid rgba(46,224,255,.4);
+    -webkit-user-select:none; user-select:none; touch-action:none; }
+  .tbtn:active,.tbtn.held{ background:rgba(46,224,255,.28); transform:scale(.95); }
+  .tbtn.drill{ border-color:rgba(255,212,59,.5); } .tbtn.thrust{ border-color:rgba(107,255,125,.5); }
+
+  .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  @media (max-width:560px){
+    #hud-stats{ width:188px; } #hud-bank{ gap:9px; padding:7px 9px; } .ore{ min-width:26px; }
+    #build-panel{ width:200px; top:74px; }
+    #hud-actions .k{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="c"></canvas>
+
+  <!-- HUD -->
+  <div class="hud panel" id="hud-phase">
+    <div class="mono-label" id="phase-day">DAY 1</div>
+    <div id="phase-name" class="day">BULL MARKET</div>
+    <div id="phase-clock">2:00</div>
+    <div class="mono-label" id="phase-sub">Mine · stack coins</div>
+    <div id="phase-bar"><i></i></div>
+  </div>
+
+  <div class="hud" id="hud-actions">
+    <button class="hbtn" id="btn-build">⛏ Build <span class="k">[B]</span></button>
+    <button class="hbtn" id="btn-ship" disabled>🚀 Rocket <span class="k">[E]</span></button>
+    <button class="hbtn" id="btn-sound">🔊</button>
+    <button class="hbtn" id="btn-pause">❚❚</button>
+  </div>
+
+  <div class="hud" id="boss-bar"><span>⚫ BLACK SWAN</span><div class="bbtrack"><i></i></div></div>
+
+  <div class="hud panel" id="hud-bank">
+    <div class="ore iron"><span class="dot" style="background:#e9b84a"></span><b id="bk-iron">0</b><span class="mono-label">Doge</span></div>
+    <div class="ore copper"><span class="dot" style="background:#ff7a33"></span><b id="bk-copper">0</b><span class="mono-label">Shib</span></div>
+    <div class="ore plasma"><span class="dot" style="background:#5fdf6a"></span><b id="bk-plasma">0</b><span class="mono-label">Pepe</span></div>
+    <div class="ore dark"><span class="dot" style="background:#c06cff"></span><b id="bk-dark">0</b><span class="mono-label">Bonk</span></div>
+  </div>
+
+  <div class="hud panel" id="hud-stats">
+    <div class="bar"><span class="mono-label">Gas</span><span class="track"><i id="b-fuel" style="background:var(--yellow)"></i></span><span class="val" id="v-fuel">100</span></div>
+    <div class="bar"><span class="mono-label">Wallet</span><span class="track"><i id="b-cargo" style="background:var(--cyan)"></i></span><span class="val" id="v-cargo">0/18</span></div>
+    <div class="bar"><span class="mono-label">Rig</span><span class="track"><i id="b-rover" style="background:var(--green)"></i></span><span class="val" id="v-rover">100</span></div>
+    <div class="bar"><span class="mono-label">Rocket</span><span class="track"><i id="b-ship" style="background:var(--pink)"></i></span><span class="val" id="v-ship">300</span></div>
+    <div id="depth-chip"><span id="biome-name">Surface</span><b id="depth-val">0 m</b></div>
+  </div>
+
+  <div class="hud panel" id="minimap-panel"><canvas id="minimap" width="150" height="150"></canvas></div>
+
+  <!-- Build palette -->
+  <div class="hud panel" id="build-panel">
+    <h3>Construct</h3>
+    <div class="blurb">Pick a structure, then click a glowing surface cell to place it. Defenses win the night for you.</div>
+    <div id="build-list"></div>
+    <div class="build-foot">Tip: walls funnel the horde, turrets do the killing, repair bays keep both alive. [B] to close.</div>
+  </div>
+
+  <!-- floating HUD bits -->
+  <div class="hud" id="hint"></div>
+  <div class="hud" id="bigmsg"></div>
+  <div class="hud" id="toasts"></div>
+
+  <!-- touch controls -->
+  <div id="touch">
+    <div class="tpad" id="tpad-l">
+      <div class="tbtn" data-k="left">◀</div>
+      <div class="tbtn" data-k="right">▶</div>
+    </div>
+    <div class="tpad" id="tpad-r">
+      <div class="tbtn drill" data-k="down">⛏</div>
+      <div class="tbtn thrust" data-k="up">▲</div>
+    </div>
+  </div>
+
+  <!-- BOOT -->
+  <div class="scr show" id="scr-boot">
+    <div class="scr-card panel">
+      <div class="tag">Rainbot Gaming · Degen Protocol</div>
+      <h1>TO THE MOON</h1>
+      <p class="lore">Your trading rig crash-landed deep in the blockchain. During the <b style="color:var(--green)">bull market</b> the viruses sleep — drill the digital crust for <b style="color:var(--cyan)">$DOGE, $SHIB, $PEPE &amp; $BONK</b>, top up your gas, and build automated cyber-defenses. When the <b style="color:var(--red)">bear market</b> hits, a swarm of viruses erupts and rushes your rocket. You can't out-click them by hand — your <b>firewalls and turrets</b> must hold. Mine enough to assemble the <b style="color:var(--green)">Liquidity Engine, Moon Nav &amp; Diamond Hull</b>, and launch 🚀 <b>to the moon</b>.</p>
+      <div class="keys">
+        <span><kbd>A</kbd><kbd>D</kbd> drive</span>
+        <span><kbd>W</kbd> fly / thrust</span>
+        <span><kbd>S</kbd> drill down</span>
+        <span><kbd>B</kbd> build</span>
+        <span><kbd>E</kbd> rocket menu (when docked)</span>
+        <span><kbd>P</kbd> pause</span>
+      </div>
+      <div class="row"><button class="cta" id="btn-start">APE IN 🚀</button></div>
+      <div class="boot-best" id="boot-best"></div>
+      <p class="lore" style="font-size:11px;margin-top:16px;color:#5b6688;">Dock at the rocket to auto–cash out coins &amp; refuel gas. The grid wraps — keep driving one way and you'll loop right back to the rocket. Mining during a bear market wakes aggressive worms; surface and defend instead.</p>
+    </div>
+  </div>
+
+  <!-- SHIP MENU -->
+  <div class="scr" id="scr-ship">
+    <div class="scr-card panel" id="ship-card">
+      <div class="stitle">🚀 ROCKET TERMINAL</div>
+      <div class="ssub">Docked · coins cashed out · refueling gas</div>
+      <div class="ship-wallet" id="ship-wallet"></div>
+
+      <div class="sec-h">Rig Upgrades</div>
+      <div class="grid2" id="upgrade-grid"></div>
+
+      <div class="sec-h">Rocket Assembly</div>
+      <div class="grid2" id="parts-grid"></div>
+      <div id="ship-progress"></div>
+
+      <div class="row" style="margin-top:20px;">
+        <button class="cta alt" id="btn-close-ship">▸ Back to Mining [E]</button>
+        <button class="cta alt" id="btn-skip-day" style="border-color:rgba(255,92,92,.5);color:var(--red)">⏩ Trigger Bear Market</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div class="scr" id="scr-pause">
+    <div class="scr-card panel">
+      <div class="tag">Standby</div>
+      <h1 style="font-size:46px">PAUSED</h1>
+      <div class="row" style="margin-top:20px">
+        <button class="cta" id="btn-resume">▸ Resume</button>
+        <button class="cta alt" id="btn-restart-p">↻ Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="scr over" id="scr-over">
+    <div class="scr-card panel">
+      <div class="tag" style="color:var(--red)">Rugged</div>
+      <h1 id="over-title">REKT</h1>
+      <p class="lore" id="over-msg"></p>
+      <div id="over-stats"></div>
+      <div class="row" style="margin-top:18px"><button class="cta" id="btn-retry">↻ Try Again</button></div>
+    </div>
+  </div>
+
+  <!-- WIN -->
+  <div class="scr win" id="scr-win">
+    <div class="scr-card panel">
+      <div class="tag" style="color:var(--green)">WAGMI 🚀</div>
+      <h1>TO THE MOON</h1>
+      <p class="lore">The rocket screams skyward, the virus swarm crashes into the dirt, and your bags pump to the heavens. Diamond hands rewarded. You made it — to the moon. 🌕</p>
+      <div id="win-stats"></div>
+      <div class="row" style="margin-top:18px"><button class="cta" id="btn-again">↻ Play Again</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   TO THE MOON  —  game module
+   ===================================================================== */
+(function(){
+
+  // ---------------- Config ----------------
+  const CFG = {
+    TILE:40, COLS:72, ROWS:102, GROUND:12,
+    DAY:120, NIGHT:60,
+    GRAV:1150, THRUST:2250, MOVE_ACC:1500, MAX_VX:235, MAX_VY_DOWN:760, MAX_VY_UP:430,
+    FUEL_BURN:23, FUEL_REFUEL:62, FALL_DMG_SPEED:560, FALL_DMG_K:0.10,
+    SHIP_COL:36, SHIP_HULL:300,
+  };
+  const BIOMES = [
+    { name:"Cache Layer",  from:12, to:41 },
+    { name:"The Mempool",  from:42, to:71 },
+    { name:"Mainnet Core", from:72, to:101 },
+  ];
+  // tile ids
+  const T = { EMPTY:0, DIRT1:1, DIRT2:2, DIRT3:3, BEDROCK:4, IRON:5, COPPER:6, PLASMA:7, DARK:8, LAVA:9 };
+  const ORE_OF = { [T.IRON]:"iron", [T.COPPER]:"copper", [T.PLASMA]:"plasma", [T.DARK]:"darkmatter" };
+  const HARDNESS = { [T.DIRT1]:0.34,[T.DIRT2]:0.62,[T.DIRT3]:0.98,[T.IRON]:0.52,[T.COPPER]:0.74,[T.PLASMA]:1.08,[T.DARK]:1.55 };
+
+  // upgrade tables (index by level-1)
+  const DRILL_SPD = [1.0, 1.5, 2.1, 3.0];
+  const MAX_FUEL  = [100, 140, 190, 250];
+  const CARGO_CAP = [18, 28, 40, 56];
+  const MAX_HULL  = [100, 145, 195, 260];
+  const UPGRADES = {
+    drill: { name:"Hash Rate",   icon:"⛏", ef:["Slow hash","Faster","Rapid","ASIC rig"], costs:[{iron:8},{iron:14,copper:6},{copper:14,plasma:3}] },
+    fuel:  { name:"Gas Tank",    icon:"⛽", ef:["100 gas","140 gas","190 gas","250 gas"], costs:[{iron:6},{iron:10,copper:5},{copper:10,plasma:2}] },
+    cargo: { name:"Cold Wallet", icon:"🧊", ef:["18 coins","28 coins","40 coins","56 coins"], costs:[{iron:7},{iron:12,copper:6},{copper:12,plasma:3}] },
+    armor: { name:"Rig Armor",   icon:"🛡", ef:["100 HP","145 HP","195 HP","260 HP"], costs:[{iron:10},{iron:16,copper:8},{copper:14,plasma:4}] },
+  };
+  const PARTS = {
+    engine: { name:"Liquidity Engine", icon:"🔧", cost:{copper:8,  plasma:3} },
+    nav:    { name:"Moon Nav",          icon:"🛰", cost:{plasma:5,  darkmatter:2} },
+    hull:   { name:"Diamond Hull",      icon:"💎", cost:{iron:12, plasma:4, darkmatter:1} },
+  };
+  const STRUCTS = {
+    wall:   { name:"Firewall",      icon:"🧱", cost:{iron:3},          hp:130, color:"#7c8aa8" },
+    turret: { name:"Antivirus",     icon:"🔫", cost:{iron:5,copper:3}, hp:65,  color:"#2ee0ff", range:5.6, cd:0.42, dmg:7.5, pspd:640 },
+    tesla:  { name:"EMP Node",      icon:"⚡", cost:{iron:6,copper:5}, hp:50,  color:"#b06cff", range:3.2, cd:1.05, dmg:8 },
+    repair: { name:"Backup Server", icon:"💾", cost:{iron:4,copper:4}, hp:55,  color:"#6bff7d", radius:2.7, rate:7 },
+  };
+
+  // ---------------- Utility ----------------
+  const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const randInt=(a,b)=>Math.floor(rand(a,b+1));
+  const choice=a=>a[(Math.random()*a.length)|0];
+  function hash(x,y){ let h=(x*374761393+y*668265263)>>>0; h=(h^(h>>13))*1274126177>>>0; return (h>>>0)/4294967296; }
+  const mod=(n,m)=>((n%m)+m)%m;
+
+  // ---------------- DOM ----------------
+  const $=id=>document.getElementById(id);
+  const canvas=$("c"), ctx=canvas.getContext("2d");
+  const mmCanvas=$("minimap"), mmCtx=mmCanvas?mmCanvas.getContext("2d"):null;
+  const wrap=$("game");
+  let lightCanvas=document.createElement("canvas"), lctx=lightCanvas.getContext("2d");
+  let VIEW_W=0, VIEW_H=0, dpr=1;
+
+  function resize(){
+    VIEW_W=Math.max(1,wrap.clientWidth); VIEW_H=Math.max(1,wrap.clientHeight);
+    dpr=Math.min(2, window.devicePixelRatio||1);
+    canvas.width=Math.round(VIEW_W*dpr); canvas.height=Math.round(VIEW_H*dpr);
+    canvas.style.width=VIEW_W+"px"; canvas.style.height=VIEW_H+"px";
+    lightCanvas.width=Math.max(2,Math.round(VIEW_W/2)); lightCanvas.height=Math.max(2,Math.round(VIEW_H/2));
+  }
+  window.addEventListener("resize", resize);
+
+  // ---------------- World ----------------
+  const COLS=CFG.COLS, ROWS=CFG.ROWS, TILE=CFG.TILE, GROUND=CFG.GROUND;
+  const WORLD_W=COLS*TILE, WORLD_H=ROWS*TILE;
+  // The world is a horizontal cylinder: X wraps, so travelling far enough loops back to the ship.
+  const wrapX=x=>mod(x,WORLD_W);
+  const wrapDX=(a,b)=>{ let d=a-b; if(d>WORLD_W/2)d-=WORLD_W; else if(d<-WORLD_W/2)d+=WORLD_W; return d; };
+  let tiles=new Uint8Array(COLS*ROWS);
+  let lavaLvl=new Uint8Array(COLS*ROWS);   // flow "pressure" per lava tile (spread distance)
+  let lavaActive=new Set(), lavaAccum=0; const LAVA_MAX=4;
+  const idx=(c,r)=>r*COLS+c;
+  function tileAt(c,r){
+    if(r<0) return T.EMPTY;                    // sky
+    if(r>=ROWS) return T.BEDROCK;              // floor
+    return tiles[idx(mod(c,COLS),r)];          // X wraps — no walls
+  }
+  function setTile(c,r,v){ if(r<0||r>=ROWS) return; tiles[idx(mod(c,COLS),r)]=v; }
+  const isSolid=t=>t!==T.EMPTY&&t!==T.LAVA;
+  const solidAt=(c,r)=>isSolid(tileAt(c,r));
+  function biomeAt(r){ if(r<GROUND) return -1; for(let i=0;i<BIOMES.length;i++) if(r<=BIOMES[i].to) return i; return 2; }
+
+  function genWorld(){
+    tiles=new Uint8Array(COLS*ROWS);
+    lavaLvl=new Uint8Array(COLS*ROWS); lavaActive=new Set(); lavaAccum=0;
+    for(let r=0;r<ROWS;r++){
+      if(r<GROUND){ for(let c=0;c<COLS;c++) tiles[idx(c,r)]=T.EMPTY; continue; }
+      const b=biomeAt(r);
+      const baseDirt=[T.DIRT1,T.DIRT2,T.DIRT3][b]||T.DIRT1;
+      const depthInBiome=(r-BIOMES[b].from)/(BIOMES[b].to-BIOMES[b].from+1); // 0..1
+      for(let c=0;c<COLS;c++){
+        let t=baseDirt;
+        const n=hash(c,r);
+        // ore distribution by biome
+        if(b===0){
+          if(n<0.085) t=T.IRON; else if(n<0.115) t=T.COPPER;
+        }else if(b===1){
+          if(n<0.04) t=T.IRON; else if(n<0.13) t=T.COPPER;
+          else if(n<0.13+ (0.02+0.04*depthInBiome)) t=T.PLASMA;
+        }else{
+          if(n<0.04) t=T.COPPER;
+          else if(n<0.10+0.04*depthInBiome) t=T.PLASMA;
+          else if(n<0.10+0.04*depthInBiome+ (0.012+0.03*depthInBiome)) t=T.DARK;
+          else if(hash(c*3+1,r*3+7) < 0.05+0.04*depthInBiome) t=T.LAVA;
+        }
+        // occasional bedrock veins deeper down (not in topmost rows)
+        if(r>GROUND+3 && hash(c*7+3,r*5+11) < 0.025+0.03*(r/ROWS)) t=T.BEDROCK;
+        tiles[idx(c,r)]=t;
+        if(t===T.LAVA) lavaLvl[idx(c,r)]=LAVA_MAX;   // worldgen pockets are full-pressure sources
+      }
+    }
+    // keep the crust surface row clean & easy; clear a small launch pad under the ship is NOT needed
+    for(let c=0;c<COLS;c++){ if(tileAt(c,GROUND)===T.BEDROCK) tiles[idx(c,GROUND)]=T.DIRT1; }
+    tiles[idx(0,ROWS-1)]=T.BEDROCK;
+  }
+
+  // ---------------- Game state ----------------
+  const SHIP = {
+    cx:(CFG.SHIP_COL+0.5)*TILE, top:(GROUND-4)*TILE, bottom:GROUND*TILE,
+    left:(CFG.SHIP_COL-1)*TILE, right:(CFG.SHIP_COL+2)*TILE,
+    hull:CFG.SHIP_HULL, maxHull:CFG.SHIP_HULL,
+  };
+  let state="boot";            // boot | play | menu | pause | launch | over | win
+  let G=null;                  // mutable run state
+  const rover={x:0,y:0,w:32,h:28,vx:0,vy:0,onGround:false,face:1,drillT:0,drillTarget:null,drillAnim:0,hull:100,maxHull:100,hurt:0};
+  const enemies=[], projectiles=[], particles=[], scraps=[], builds=[]; const buildMap=new Map();
+  let cam={x:0,y:0};
+
+  function freshRun(){
+    genWorld();
+    SHIP.hull=SHIP.maxHull;
+    enemies.length=projectiles.length=particles.length=scraps.length=builds.length=0;
+    buildMap.clear();
+    G={
+      day:1, phase:"day", t:CFG.DAY, nightCount:0,
+      bank:{iron:8, copper:4, plasma:0, darkmatter:0},
+      cargo:{iron:0,copper:0,plasma:0,darkmatter:0}, cargoTotal:0,
+      fuel:100, maxFuel:100,
+      up:{drill:1,fuel:1,cargo:1,armor:1},
+      cargoCap:CARGO_CAP[0], drillSpd:DRILL_SPD[0],
+      parts:{engine:false,nav:false,hull:false},
+      build:{open:false, sel:null, hoverC:-1, hoverR:-1, valid:false},
+      shake:0, ambient:0, launchT:0,
+      minedOre:0, kills:0, elapsed:0, undergroundSpawnT:2,
+      nightSpawnT:0, nightToSpawn:0, nightSpawned:0, bossT:-1,
+      flash:0,
+    };
+    rover.x=(CFG.SHIP_COL-3)*TILE; rover.y=GROUND*TILE-rover.h-0.5;
+    rover.vx=rover.vy=0; rover.face=1; rover.drillT=0; rover.drillTarget=null;
+    rover.maxHull=MAX_HULL[0]; rover.hull=rover.maxHull; rover.hurt=0;
+    G.fuel=G.maxFuel=MAX_FUEL[0];
+    cam.x=wrapX(rover.x+rover.w/2-VIEW_W/2);
+    cam.y=clamp(rover.y-VIEW_H/2,0,Math.max(0,WORLD_H-VIEW_H));
+    refreshBuildList(); refreshShipMenu();
+  }
+
+  // ---------------- Input ----------------
+  const keys={left:false,right:false,up:false,down:false};
+  let audioReady=false;
+  function onKey(e,down){
+    const k=e.key.toLowerCase();
+    let used=true;
+    if(k==="a"||k==="arrowleft") keys.left=down;
+    else if(k==="d"||k==="arrowright") keys.right=down;
+    else if(k==="w"||k==="arrowup") keys.up=down;
+    else if(k==="s"||k==="arrowdown") keys.down=down;
+    else used=false;
+    if(down){
+      if(k==="b"){ toggleBuild(); }
+      else if(k==="e"||k==="enter"){ if(state==="menu") closeShip(); else tryOpenShip(); }
+      else if(k==="p"||k==="escape"){
+        if(state==="play") doPause(); else if(state==="pause") resumeGame();
+        else if(state==="menu") closeShip(); else if(G&&G.build.open && k==="escape") toggleBuild();
+      }
+      else if(k==="m"){ toggleSound(); }
+    }
+    if(used) e.preventDefault();
+    initAudio();
+  }
+  window.addEventListener("keydown",e=>onKey(e,true));
+  window.addEventListener("keyup",e=>onKey(e,false));
+
+  // pointer for building (place on click)
+  canvas.addEventListener("pointermove",e=>{ if(G&&G.build.open) updateHover(e); });
+  canvas.addEventListener("pointerdown",e=>{ initAudio(); if(G&&G.build.open){ updateHover(e); placeAtHover(); } });
+  function pointerToCell(e){
+    const r=canvas.getBoundingClientRect();
+    const wx=(e.clientX-r.left)+cam.x, wy=(e.clientY-r.top)+cam.y;
+    return { c:mod(Math.floor(wx/TILE),COLS), r:Math.floor(wy/TILE) };
+  }
+  function updateHover(e){
+    const {c,r}=pointerToCell(e);
+    G.build.hoverC=c; G.build.hoverR=r;
+    G.build.valid=canPlace(c,r,G.build.sel);
+  }
+
+  // touch buttons
+  if(("ontouchstart" in window)|| (navigator.maxTouchPoints>0)) document.body.classList.add("touch");
+  document.querySelectorAll(".tbtn").forEach(btn=>{
+    const k=btn.dataset.k;
+    const on=e=>{e.preventDefault(); keys[k]=true; btn.classList.add("held"); initAudio();};
+    const off=e=>{e.preventDefault(); keys[k]=false; btn.classList.remove("held");};
+    btn.addEventListener("pointerdown",on); btn.addEventListener("pointerup",off);
+    btn.addEventListener("pointercancel",off); btn.addEventListener("pointerleave",off);
+  });
+
+  // ---------------- Audio (tiny procedural sfx) ----------------
+  let actx=null, muted=false;
+  function initAudio(){ if(audioReady) return; audioReady=true;
+    try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ actx=null; }
+  }
+  function tone(freq,dur,type="square",vol=0.12,slideTo){
+    if(!actx||muted) return;
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type=type; o.frequency.setValueAtTime(freq,actx.currentTime);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20,slideTo),actx.currentTime+dur);
+    g.gain.setValueAtTime(vol,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+  }
+  function noise(dur,vol=0.2){
+    if(!actx||muted) return;
+    const n=Math.floor(actx.sampleRate*dur), buf=actx.createBuffer(1,n,actx.sampleRate), d=buf.getChannelData(0);
+    for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+    const s=actx.createBufferSource(), g=actx.createGain(); s.buffer=buf;
+    g.gain.setValueAtTime(vol,actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
+    s.connect(g); g.connect(actx.destination); s.start();
+  }
+  const SFX={
+    shoot:()=>tone(660,0.05,"square",0.05,300),
+    hit:()=>noise(0.06,0.10),
+    boom:()=>{noise(0.22,0.25); tone(120,0.22,"sawtooth",0.10,40);},
+    build:()=>{tone(420,0.07,"square",0.10,720);},
+    err:()=>tone(160,0.12,"sawtooth",0.10,90),
+    ore:()=>tone(880,0.07,"sine",0.10,1320),
+    night:()=>{tone(200,0.6,"sawtooth",0.12,80);},
+    day:()=>{tone(523,0.3,"sine",0.1,784);},
+    craft:()=>{tone(523,0.1,"square",0.12,784);setTimeout(()=>tone(784,0.18,"square",0.12,1046),90);},
+  };
+
+  // ---------------- Economy helpers ----------------
+  function canAfford(cost){ for(const k in cost) if((G.bank[k]||0)<cost[k]) return false; return true; }
+  function pay(cost){ for(const k in cost) G.bank[k]-=cost[k]; }
+  function costStr(cost){
+    const map={iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK"};
+    return Object.keys(cost).map(k=>`<span>${cost[k]}</span> ${map[k]}`).join("  ");
+  }
+
+  // ---------------- Build system ----------------
+  function toggleBuild(){
+    if(state!=="play") return;
+    G.build.open=!G.build.open;
+    $("build-panel").classList.toggle("open",G.build.open);
+    $("btn-build").classList.toggle("on",G.build.open);
+    if(G.build.open && !G.build.sel) G.build.sel="turret";
+    refreshBuildList();
+  }
+  function refreshBuildList(){
+    if(!G) return;
+    const list=$("build-list"); list.innerHTML="";
+    for(const key in STRUCTS){
+      const s=STRUCTS[key]; const aff=canAfford(s.cost);
+      const div=document.createElement("div");
+      div.className="build-item"+(G.build.sel===key?" sel":"")+(aff?"":" cant");
+      div.innerHTML=`<div class="build-ico">${s.icon}</div>
+        <div><b>${s.name}</b><div class="cost">${costStr(s.cost)}</div></div>`;
+      div.addEventListener("click",()=>{ G.build.sel=key; SFX.build(); refreshBuildList(); });
+      list.appendChild(div);
+    }
+  }
+  function canPlace(c,r,key){
+    if(!key) return false;
+    if(r!==GROUND-1) return false;                       // single defensive row on the surface
+    if(c>=CFG.SHIP_COL-1 && c<=CFG.SHIP_COL+1) return false; // not on the ship
+    if(tileAt(c,r)!==T.EMPTY) return false;
+    if(!solidAt(c,GROUND)) return false;                 // must rest on ground
+    if(buildMap.has(c+","+r)) return false;
+    return canAfford(STRUCTS[key].cost);
+  }
+  function placeAtHover(){
+    const {hoverC:c,hoverR:r,sel}=G.build;
+    if(!canPlace(c,r,sel)){ SFX.err(); flashHint(canAfford(STRUCTS[sel].cost)?"Can't build there — surface only":"Not enough coins"); return; }
+    const s=STRUCTS[sel]; pay(s.cost);
+    const b={c,r,type:sel,hp:s.hp,maxHp:s.hp,cd:0,x:c*TILE+TILE/2,y:r*TILE+TILE/2,fire:0};
+    builds.push(b); buildMap.set(c+","+r,b);
+    SFX.build(); puff(b.x,b.y,s.color,10); refreshBuildList(); syncBank();
+  }
+  function removeBuild(b){
+    const i=builds.indexOf(b); if(i>=0) builds.splice(i,1);
+    buildMap.delete(b.c+","+b.r);
+  }
+
+  // ---------------- Ship menu ----------------
+  function dockedNearShip(){
+    return Math.abs(wrapDX(rover.x+rover.w/2, SHIP.cx)) < (SHIP.right-SHIP.left)/2 + TILE*1.4
+      && rover.y+rover.h>SHIP.top-TILE && rover.y<SHIP.bottom+6;
+  }
+  function tryOpenShip(){
+    if(state!=="play") return;
+    if(!dockedNearShip()){ flashHint("Return to the rocket to open the terminal"); SFX.err(); return; }
+    state="menu"; refreshShipMenu(); $("scr-ship").classList.add("show");
+  }
+  function closeShip(){ if(state!=="menu") return; $("scr-ship").classList.remove("show"); state="play"; }
+
+  function refreshShipMenu(){
+    if(!G) return;
+    // upgrades
+    const ug=$("upgrade-grid"); ug.innerHTML="";
+    for(const key in UPGRADES){
+      const u=UPGRADES[key], lv=G.up[key], maxed=lv>=4;
+      const cost=maxed?null:u.costs[lv-1], aff=cost&&canAfford(cost);
+      const card=document.createElement("div"); card.className="card";
+      card.innerHTML=`<div class="top"><span class="nm">${u.icon} ${u.name}</span><span class="lv">Lv ${lv}/4</span></div>
+        <div class="ef">${u.ef[lv-1]}${maxed?"":` ▸ <b style="color:var(--cyan)">${u.ef[lv]}</b>`}</div>
+        <div class="cost">${maxed?"&nbsp;":costStr(cost)}</div>
+        <button class="buy ${maxed?'max':''}" ${maxed||!aff?'disabled':''} data-up="${key}">${maxed?"MAX":"Upgrade"}</button>`;
+      ug.appendChild(card);
+    }
+    ug.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>buyUpgrade(b.dataset.up)));
+    // parts
+    const pg=$("parts-grid"); pg.innerHTML="";
+    for(const key in PARTS){
+      const p=PARTS[key], done=G.parts[key], aff=canAfford(p.cost);
+      const card=document.createElement("div"); card.className="card"+(done?" part-done":"");
+      card.innerHTML=`<div class="top"><span class="nm">${p.icon} ${p.name}</span></div>
+        <div class="cost" style="margin-top:6px">${done?"INSTALLED ✓":costStr(p.cost)}</div>
+        <button class="buy" ${done||!aff?'disabled':''} data-part="${key}">${done?"✓ Done":"Craft"}</button>`;
+      pg.appendChild(card);
+    }
+    pg.querySelectorAll("[data-part]").forEach(b=>b.addEventListener("click",()=>craftPart(b.dataset.part)));
+    const made=Object.values(G.parts).filter(Boolean).length;
+    $("ship-progress").innerHTML=`Rocket parts: <b>${made}/3</b> assembled — build all three to launch to the moon.`;
+    // current minerals on hand
+    $("ship-wallet").innerHTML=[["iron","#e9b84a","Doge"],["copper","#ff7a33","Shib"],["plasma","#5fdf6a","Pepe"],["darkmatter","#c06cff","Bonk"]]
+      .map(([k,col,lab])=>`<span class="wlt" style="color:${col}"><i style="background:${col}"></i><b>${G.bank[k]||0}</b><span>${lab}</span></span>`).join("");
+  }
+  function buyUpgrade(key){
+    const lv=G.up[key]; if(lv>=4) return; const cost=UPGRADES[key].costs[lv-1];
+    if(!canAfford(cost)){ SFX.err(); return; }
+    pay(cost); G.up[key]++;
+    if(key==="drill") G.drillSpd=DRILL_SPD[G.up.drill-1];
+    if(key==="fuel"){ const old=G.maxFuel; G.maxFuel=MAX_FUEL[G.up.fuel-1]; G.fuel+=G.maxFuel-old; }
+    if(key==="cargo") G.cargoCap=CARGO_CAP[G.up.cargo-1];
+    if(key==="armor"){ const old=rover.maxHull; rover.maxHull=MAX_HULL[G.up.armor-1]; rover.hull+=rover.maxHull-old; }
+    SFX.craft(); toast(`${UPGRADES[key].name} → Lv ${G.up[key]}`,"good");
+    refreshShipMenu(); refreshBuildList(); syncBank();
+  }
+  function craftPart(key){
+    if(G.parts[key]) return; const p=PARTS[key];
+    if(!canAfford(p.cost)){ SFX.err(); return; }
+    pay(p.cost); G.parts[key]=true; SFX.craft(); toast(`${p.name} installed!`,"good");
+    refreshShipMenu(); refreshBuildList(); syncBank();
+    if(Object.values(G.parts).every(Boolean)) startLaunch();
+  }
+
+  // ---------------- Phase / day-night ----------------
+  function setPhase(phase){
+    G.phase=phase;
+    if(phase==="night"){
+      G.nightCount++; SFX.night();
+      const n=G.nightCount;
+      G.nightToSpawn = 7 + n*4;     // total enemies this night
+      G.nightSpawned=0; G.nightSpawnT=0.6;
+      G.bossT = (n%3===0) ? 6 : -1; // Black Swan boss every 3rd bear market
+      bigMessage("BEAR MARKET", "bear #"+n+" · FUD incoming", "var(--red)");
+      toast("Defenses online — HODL through the dip","warn");
+    }else{
+      SFX.day();
+      // dawn: surviving surface enemies flee/despawn, underground burrowers gone
+      for(const e of enemies) puff(e.x,e.y,"#3a2030",6);
+      enemies.length=0;
+      bigMessage("BULL MARKET", "day "+G.day+" · stack & build", "var(--green)");
+    }
+  }
+  function updatePhase(dt){
+    G.t-=dt;
+    if(G.t<=0){
+      if(G.phase==="day"){ setPhase("night"); G.t=CFG.NIGHT; }
+      else { G.day++; setPhase("day"); G.t=CFG.DAY; }
+    }
+    // 5-second night warning
+    if(G.phase==="day" && G.t<=5 && G.t+dt>5){ toast("⚠ Bear market in 5s — surface & defend!","bad"); SFX.err(); }
+    // ambient darkness target — day surface is fully lit; it darkens with depth & at night
+    let amb=0;
+    const belowSurface = rover.y > GROUND*TILE - 6;
+    if(belowSurface){ const dk=clamp((rover.y-GROUND*TILE)/(26*TILE),0,1); amb=lerp(0.16,0.86,dk); }
+    if(G.phase==="night") amb=Math.max(amb, belowSurface?0.90:0.76);
+    G.ambient=lerp(G.ambient,amb,1-Math.pow(0.001,dt));
+  }
+
+  // ---------------- Spawning ----------------
+  function spawnSurfaceEnemy(){
+    const n=G.nightCount;
+    const side=Math.random()<0.5?-1:1;
+    const x=wrapX(SHIP.cx + side*rand(8,14)*TILE);   // approach the ship from across the surface
+    let type=choice(["crawler","crawler","runner","brute","flyer"]);
+    if(n>=3 && Math.random()<0.25) type="brute";
+    if(Math.random()<0.22) type="flyer";
+    const hpScale=1+(n-1)*0.14, base={
+      crawler:{hp:20,spd:40,dmg:7,w:40,h:38,c:"#5fe07a"},   // green trojan
+      runner:{hp:11,spd:78,dmg:4,w:32,h:28,c:"#ffb03a"},    // amber bot
+      brute:{hp:62,spd:25,dmg:15,w:60,h:54,c:"#ff3a5a"},    // red ransomware
+      flyer:{hp:15,spd:58,dmg:7,w:40,h:32,c:"#4fd6ff"},     // cyan spyware
+    }[type];
+    const e={ type, x, y:0, vx:0, w:base.w, h:base.h, hp:base.hp*hpScale, maxHp:base.hp*hpScale,
+      spd:base.spd*(1+(n-1)*0.03), dmg:base.dmg, c:base.c, dir:0, flying:type==="flyer",
+      atkT:0, wob:Math.random()*6, ground:!(type==="flyer") };
+    e.dir=Math.sign(wrapDX(SHIP.cx,e.x))||1;
+    e.y = e.flying ? (GROUND-1)*TILE - rand(40,120) : GROUND*TILE - e.h;
+    enemies.push(e);
+  }
+  function spawnBurrower(){
+    // underground night threat: spawns in nearby dug/empty space, phases through rock toward rover
+    const ang=rand(0,Math.PI*2), d=rand(3,5)*TILE;
+    const x=wrapX(rover.x+Math.cos(ang)*d);
+    const y=clamp(rover.y+Math.sin(ang)*d, (GROUND+1)*TILE, WORLD_H-TILE);
+    const segs=[]; for(let i=0;i<8;i++) segs.push({x,y});   // trailing worm body
+    enemies.push({ type:"burrower", x,y,vx:0,vy:0,w:30,h:28, hp:30,maxHp:30, spd:90, dmg:10, c:"#7dff9a",
+      flying:true, ground:false, burrow:true, atkT:0, wob:Math.random()*6, dir:1, segs });
+  }
+  function spawnBoss(n){
+    // "Black Swan" — a massive flying crash-event boss; turrets must focus it
+    const side=Math.random()<0.5?-1:1, x=wrapX(SHIP.cx + side*rand(10,14)*TILE), hp=240+n*55;
+    enemies.push({ type:"boss", x, y:(GROUND-1)*TILE-90, vx:0, w:84, h:72, hp, maxHp:hp, spd:34, dmg:22, c:"#ff2e5a",
+      dir:Math.sign(wrapDX(SHIP.cx,x))||1, flying:true, ground:false, atkT:0, wob:Math.random()*6, boss:true });
+    bigMessage("⚫ BLACK SWAN", "the crash event approaches", "var(--red)"); SFX.night(); G.shake=Math.max(G.shake,7);
+    toast("⚫ Black Swan incoming — focus fire!","bad");
+  }
+
+  // ---------------- Rover update ----------------
+  function moveAxis(axis,dt){
+    // returns blocking tile {c,r} if collided (for drilling), else null
+    let block=null;
+    if(axis==="x"){
+      rover.x += rover.vx*dt;
+      const top=Math.floor(rover.y/TILE), bot=Math.floor((rover.y+rover.h-0.01)/TILE);
+      if(rover.vx>0){
+        const c=Math.floor((rover.x+rover.w)/TILE);
+        for(let r=top;r<=bot;r++) if(solidAt(c,r)){ rover.x=c*TILE-rover.w-0.001; rover.vx=0; block={c,r,side:"r"}; break; }
+      } else if(rover.vx<0){
+        const c=Math.floor(rover.x/TILE);
+        for(let r=top;r<=bot;r++) if(solidAt(c,r)){ rover.x=(c+1)*TILE+0.001; rover.vx=0; block={c,r,side:"l"}; break; }
+      }
+    } else {
+      rover.y += rover.vy*dt;
+      const lft=Math.floor(rover.x/TILE), rgt=Math.floor((rover.x+rover.w-0.01)/TILE);
+      if(rover.vy>0){
+        const r=Math.floor((rover.y+rover.h)/TILE);
+        for(let c=lft;c<=rgt;c++) if(solidAt(c,r)){
+          if(rover.vy>CFG.FALL_DMG_SPEED){ const d=(rover.vy-CFG.FALL_DMG_SPEED)*CFG.FALL_DMG_K; damageRover(d); if(d>4){SFX.hit(); G.shake=Math.max(G.shake,6);} }
+          rover.y=r*TILE-rover.h-0.001; rover.vy=0; rover.onGround=true; block={c,r,side:"d"}; break;
+        }
+      } else if(rover.vy<0){
+        const r=Math.floor(rover.y/TILE);
+        for(let c=lft;c<=rgt;c++) if(solidAt(c,r)){ rover.y=(r+1)*TILE+0.001; rover.vy=0; break; }
+      }
+    }
+    return block;
+  }
+
+  function updateRover(dt){
+    const mining = G.phase==="day" || rover.y < (GROUND)*TILE; // info only
+    // horizontal
+    if(keys.left){ rover.vx-=CFG.MOVE_ACC*dt; rover.face=-1; }
+    if(keys.right){ rover.vx+=CFG.MOVE_ACC*dt; rover.face=1; }
+    if(!keys.left&&!keys.right) rover.vx*=Math.pow(0.0009,dt);
+    rover.vx=clamp(rover.vx,-CFG.MAX_VX,CFG.MAX_VX);
+    // thrust
+    let thrusting=false;
+    if(keys.up && G.fuel>0){ rover.vy-=CFG.THRUST*dt; G.fuel-=CFG.FUEL_BURN*dt; thrusting=true;
+      if(Math.random()<0.6) addParticle(rover.x+rover.w/2+rand(-6,6), rover.y+rover.h, rand(-30,30), rand(60,150), rand(0.2,0.4), choice(["#ffd43b","#ff9d4d","#ff5c5c"]), rand(2,4)); }
+    G.fuel=clamp(G.fuel,0,G.maxFuel);
+    // gravity
+    rover.vy+=CFG.GRAV*dt;
+    rover.vy=clamp(rover.vy,-CFG.MAX_VY_UP,CFG.MAX_VY_DOWN);
+    rover.onGround=false;
+    // move + collide
+    moveAxis("x",dt);
+    moveAxis("y",dt);
+    rover.x=wrapX(rover.x);
+
+    // ---- drilling (adjacency-based: robust at tile boundaries) ----
+    let target=null;
+    const midRow=Math.floor((rover.y+rover.h/2)/TILE), midCol=Math.floor((rover.x+rover.w/2)/TILE);
+    const drillable=(c,r)=>{ const t=tileAt(c,r); return t!==T.EMPTY&&t!==T.LAVA&&t!==T.BEDROCK; };
+    if(keys.down){ const r=Math.floor((rover.y+rover.h+1)/TILE); if(drillable(midCol,r)) target={c:mod(midCol,COLS),r,side:"d"}; }
+    else if(keys.right){ const c=Math.floor((rover.x+rover.w+1)/TILE); if(drillable(c,midRow)) target={c:mod(c,COLS),r:midRow,side:"r"}; }
+    else if(keys.left){ const c=Math.floor((rover.x-1)/TILE); if(drillable(c,midRow)) target={c:mod(c,COLS),r:midRow,side:"l"}; }
+    if(target){
+      const tt=tileAt(target.c,target.r);
+      if(tt===T.BEDROCK || tt===T.EMPTY){ rover.drillTarget=null; rover.drillT=0; }
+      else{
+        if(!rover.drillTarget||rover.drillTarget.c!==target.c||rover.drillTarget.r!==target.r){ rover.drillTarget=target; rover.drillT=0; }
+        const need=HARDNESS[tt]||1;
+        rover.drillT+=G.drillSpd*dt; rover.drillAnim+=dt*16;
+        // dig sparks at the rover's working edge (rover-relative → correct across the wrap seam)
+        const ex=target.side==="d"?rover.x+rover.w/2:target.side==="r"?rover.x+rover.w:rover.x;
+        const ey=target.side==="d"?rover.y+rover.h:rover.y+rover.h/2;
+        if(Math.random()<0.6) addParticle(ex+rand(-7,7),ey+rand(-7,7),rand(-50,50),rand(-50,10),0.3,tileColor(tt,target.c,target.r),rand(2,3.5));
+        if(rover.drillT>=need){ mineTile(target.c,target.r,tt); rover.drillTarget=null; rover.drillT=0; }
+      }
+    } else { rover.drillTarget=null; rover.drillT=0; }
+
+    // ---- hazards: lava ----
+    const cc=Math.floor((rover.x+rover.w/2)/TILE), cr=Math.floor((rover.y+rover.h/2)/TILE);
+    if(tileAt(cc,cr)===T.LAVA){ damageRover(34*dt); rover.hurt=Math.max(rover.hurt,.4);
+      if(Math.random()<0.5) addParticle(rover.x+rand(0,rover.w),rover.y+rover.h,rand(-20,20),rand(-60,-20),0.4,choice(["#ff9d4d","#ff5c5c"]),3); }
+
+    // ---- dock: unload + refuel + slow repair ----
+    if(dockedNearShip()){
+      if(G.cargoTotal>0){
+        for(const k in G.cargo){ if(G.cargo[k]>0){ G.bank[k]+=G.cargo[k]; G.cargo[k]=0; } }
+        const had=G.cargoTotal; G.cargoTotal=0; SFX.ore(); toast(`Cashed out ${had} coins`,"good"); syncBank(); refreshBuildList(); refreshShipMenu();
+      }
+      if(G.fuel<G.maxFuel){ G.fuel=Math.min(G.maxFuel,G.fuel+CFG.FUEL_REFUEL*dt); }
+      if(rover.hull<rover.maxHull && G.phase==="day"){ rover.hull=Math.min(rover.maxHull,rover.hull+10*dt); }
+    }
+
+    // contact damage from surface/burrower enemies
+    for(const e of enemies){
+      if(Math.abs(wrapDX(e.x,rover.x+rover.w/2))<(e.w/2+rover.w/2) && Math.abs((e.y)-(rover.y+rover.h/2))<(e.h/2+rover.h/2)){
+        damageRover(e.dmg*dt*1.1); rover.hurt=Math.max(rover.hurt,.3);
+      }
+    }
+    if(rover.hurt>0) rover.hurt-=dt;
+  }
+
+  function mineTile(c,r,tt){
+    const ore=ORE_OF[tt];
+    if(ore){
+      if(G.cargoTotal>=G.cargoCap){ flashHint("Wallet full — cash out at the rocket"); return; } // leave coin in place
+      G.cargo[ore]++; G.cargoTotal++; G.minedOre++; SFX.ore();
+      addFloater(c*TILE+TILE/2, r*TILE, "+"+oreShort(ore), oreColor(ore));
+    } else SFX.hit();
+    setTile(c,r,T.EMPTY); lavaLvl[idx(mod(c,COLS),r)]=0;
+    activateLavaAround(c,r);                      // breaching dirt lets nearby lava flow in
+    puff(c*TILE+TILE/2,r*TILE+TILE/2,tileColor(tt,c,r),ore?9:5);
+    G.shake=Math.max(G.shake,ore?3:1.4);
+  }
+  const oreShort=o=>({iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK"}[o]);
+  const oreColor=o=>({iron:"#e9b84a",copper:"#ff7a33",plasma:"#5fdf6a",darkmatter:"#c06cff"}[o]);
+
+  function damageRover(d){
+    rover.hull-=d;
+    if(rover.hull<=0){ rover.hull=0; endGame(false,"Your rig got rekt. The bears feast. ngmi."); }
+  }
+  function damageShip(d){
+    SHIP.hull-=d;
+    if(SHIP.hull<=0){ SHIP.hull=0; endGame(false,"The bears tore your rocket apart. Rugged for good."); }
+  }
+
+  // ---------------- Enemies update ----------------
+  function structAtCol(c){ return buildMap.get(c+","+(GROUND-1)); }
+  function updateEnemies(dt){
+    for(let i=enemies.length-1;i>=0;i--){
+      const e=enemies[i];
+      if(e.burrow){
+        // chase rover the short way around, phasing through rock
+        const dx=wrapDX(rover.x+rover.w/2,e.x), dy=(rover.y+rover.h/2)-e.y, L=Math.hypot(dx,dy)||1;
+        e.x=wrapX(e.x+dx/L*e.spd*dt); e.y+=dy/L*e.spd*dt; e.wob+=dt*8;
+        // worm physics: each segment trails the one ahead at fixed spacing (wrap-aware)
+        let px=e.x, py=e.y;
+        for(let si=0;si<e.segs.length;si++){ const sg=e.segs[si];
+          const sdx=wrapDX(px,sg.x), sdy=py-sg.y, sd=Math.hypot(sdx,sdy)||1;
+          if(sd>10){ sg.x=wrapX(sg.x+sdx*(1-10/sd)); sg.y+=sdy*(1-10/sd); }
+          px=sg.x; py=sg.y; }
+        if(G.phase==="day"){ puff(e.x,e.y,"#3a2030",4); enemies.splice(i,1); continue; }
+      } else if(e.flying){
+        e.wob+=dt*4;
+        const d=wrapDX(SHIP.cx,e.x);
+        if(Math.abs(d)>e.w*0.5){ e.dir=Math.sign(d); e.x=wrapX(e.x+e.dir*e.spd*dt); }
+        else { e.atkT-=dt; if(e.atkT<=0){ damageShip(e.dmg); e.atkT=0.7; puff(SHIP.cx,SHIP.top+rand(0,40),"#ff2e88",4);} }
+        e.y=(GROUND-1)*TILE - 70 - Math.sin(e.wob)*22;
+      } else {
+        // ground: walk the short way toward the ship; attack walls / ship in the way
+        e.y=GROUND*TILE-e.h;
+        e.dir=Math.sign(wrapDX(SHIP.cx,e.x))||e.dir;
+        if(Math.abs(wrapDX(e.x,SHIP.cx)) < (SHIP.right-SHIP.left)/2 + 6){
+          e.atkT-=dt; if(e.atkT<=0){ damageShip(e.dmg); e.atkT=0.6; puff(SHIP.cx,SHIP.bottom-20,"#ff2e88",4);}
+        } else {
+          const lead=e.x + e.dir*(e.w/2+3);
+          const st=structAtCol(mod(Math.floor(lead/TILE),COLS));
+          if(st){
+            e.atkT-=dt; if(e.atkT<=0){ st.hp-=e.dmg; e.atkT=0.5; puff(st.x,st.y,STRUCTS[st.type].color,4);
+              if(st.hp<=0){ removeBuild(st); puff(st.x,st.y,STRUCTS[st.type].color,16); SFX.boom(); refreshBuildList(); } }
+          } else {
+            e.x=wrapX(e.x+e.dir*e.spd*dt);
+          }
+        }
+      }
+      if(e.hp<=0){
+        SFX.boom(); puff(e.x,e.y,e.c,e.boss?42:18); G.kills++; G.shake=Math.max(G.shake,e.boss?11:4);
+        if(e.boss){
+          G.bank.iron+=8; G.bank.copper+=5; G.bank.plasma+=3; G.bank.darkmatter+=1; G.flash=0.3;
+          for(let k=0;k<12;k++) scraps.push({x:e.x+rand(-30,30),y:e.y,vy:-rand(60,150),vx:rand(-90,90),t:0,kind:Math.random()<0.4?"copper":"iron"});
+          bigMessage("BLACK SWAN SURVIVED","+8 DOGE +5 SHIB +3 PEPE +1 BONK","var(--green)");
+          toast("Black Swan crushed — bags secured 💎","good"); syncBank(); refreshBuildList(); refreshShipMenu();
+        } else if(Math.random()<0.7) scraps.push({x:e.x,y:e.y,vy:-rand(40,90),vx:rand(-40,40),t:0,kind:Math.random()<0.25?"copper":"iron"});
+        enemies.splice(i,1);
+      }
+    }
+    // night spawns
+    if(G.phase==="night"){
+      // surface horde
+      if(G.nightSpawned<G.nightToSpawn){
+        G.nightSpawnT-=dt;
+        if(G.nightSpawnT<=0){ spawnSurfaceEnemy(); G.nightSpawned++; G.nightSpawnT=Math.max(0.35, 1.5-G.nightCount*0.08); }
+      }
+      // underground burrowers if the player insists on mining at night
+      if(rover.y>(GROUND+2)*TILE){
+        G.undergroundSpawnT-=dt;
+        if(G.undergroundSpawnT<=0){ spawnBurrower(); G.undergroundSpawnT=rand(2.2,3.6); }
+      }
+      // Black Swan boss (scheduled at bear-market start on every 3rd night)
+      if(G.bossT>0){ G.bossT-=dt; if(G.bossT<=0){ G.bossT=-1; spawnBoss(G.nightCount); } }
+    }
+  }
+
+  // ---------------- Structures (turrets / repair) ----------------
+  function updateStructures(dt){
+    for(const b of builds){
+      const s=STRUCTS[b.type];
+      if(b.type==="turret"){
+        b.cd-=dt; if(b.fire>0) b.fire-=dt;
+        if(b.cd<=0){
+          // nearest enemy in range (short way around the world)
+          let best=null,bd=s.range*TILE, bdx=0,bdy=0;
+          for(const e of enemies){ if(e.burrow) continue; const dx=wrapDX(e.x,b.x), dy=e.y-b.y, d=Math.hypot(dx,dy); if(d<bd){bd=d;best=e;bdx=dx;bdy=dy;} }
+          if(best){
+            const L=Math.hypot(bdx,bdy)||1;
+            projectiles.push({x:b.x,y:b.y-6,vx:bdx/L*s.pspd,vy:bdy/L*s.pspd,dmg:s.dmg,life:1.2});
+            b.cd=s.cd; b.fire=0.08; b.aim=Math.atan2(bdy,bdx); SFX.shoot();
+            addParticle(b.x+Math.cos(b.aim)*16,b.y-6+Math.sin(b.aim)*16,Math.cos(b.aim)*120,Math.sin(b.aim)*120,0.12,"#ffd43b",3);
+          }
+        }
+      } else if(b.type==="tesla"){
+        b.cd-=dt; if(b.fire>0) b.fire-=dt;
+        if(b.cd<=0){
+          // AoE pulse — zap every (non-burrowing) enemy in range at once
+          const R=s.range*TILE, arcs=[];
+          for(const e of enemies){ if(e.burrow) continue; const dx=wrapDX(e.x,b.x), dy=e.y-b.y;
+            if(Math.hypot(dx,dy)<=R){ e.hp-=s.dmg; arcs.push({x:b.x+dx,y:e.y}); puff(b.x+dx,e.y,"#b06cff",3); } }
+          if(arcs.length){ b.cd=s.cd; b.fire=0.14; b.arcs=arcs; SFX.shoot(); G.shake=Math.max(G.shake,2); }
+          else b.cd=0.2;   // recheck sooner when nothing's in range
+        }
+      } else if(b.type==="repair"){
+        b.cd-=dt;
+        if(b.cd<=0){ b.cd=0.5;
+          for(const o of builds){ if(o===b||o.hp>=o.maxHp) continue;
+            if(Math.abs(wrapDX(o.x,b.x))<=s.radius*TILE && Math.abs(o.y-b.y)<=s.radius*TILE){ o.hp=Math.min(o.maxHp,o.hp+s.rate*0.5); if(Math.random()<0.4) addParticle(o.x,o.y,0,-40,0.4,"#6bff7d",2);} }
+          if(Math.abs(wrapDX(SHIP.cx,b.x))<=s.radius*TILE*1.4 && SHIP.hull<SHIP.maxHull){ SHIP.hull=Math.min(SHIP.maxHull,SHIP.hull+s.rate*0.5*0.8); addParticle(b.x,b.y-10,rand(-10,10),-40,0.5,"#6bff7d",2);} }
+      }
+    }
+  }
+  function updateProjectiles(dt){
+    for(let i=projectiles.length-1;i>=0;i--){
+      const p=projectiles[i]; p.x=wrapX(p.x+p.vx*dt); p.y+=p.vy*dt; p.life-=dt;
+      let hit=false;
+      for(const e of enemies){ if(e.burrow) continue;
+        if(Math.abs(wrapDX(e.x,p.x))<e.w/2+4 && Math.abs(e.y-p.y)<e.h/2+4){ e.hp-=p.dmg; SFX.hit(); puff(p.x,p.y,"#ffd43b",4); hit=true; break; } }
+      if(hit||p.life<=0||p.y<0||p.y>WORLD_H) projectiles.splice(i,1);
+    }
+  }
+  function updateScrap(dt){
+    for(let i=scraps.length-1;i>=0;i--){
+      const s=scraps[i]; s.t+=dt; s.vy+=CFG.GRAV*0.5*dt; s.x=wrapX(s.x+s.vx*dt); s.y+=s.vy*dt;
+      const gy=GROUND*TILE-8; if(s.y>gy){ s.y=gy; s.vy=0; s.vx*=0.8; }
+      // attract to rover when close, collect on touch
+      const dx=wrapDX(rover.x+rover.w/2,s.x), dy=(rover.y+rover.h/2)-s.y, d=Math.hypot(dx,dy)||1;
+      if(d<TILE*2.4){ s.x=wrapX(s.x+dx/d*180*dt); s.y+=dy/d*180*dt; }
+      if(d<22){ const amt=s.kind==="copper"?1:randInt(1,2); G.bank[s.kind]+=amt; SFX.ore();
+        addFloater(s.x,s.y,"+"+amt+" "+oreShort(s.kind),oreColor(s.kind)); scraps.splice(i,1); syncBank(); refreshBuildList(); refreshShipMenu(); continue; }
+      if(s.t>18) scraps.splice(i,1);
+    }
+  }
+
+  // ---------------- Lava liquid flow (cellular, active-set) ----------------
+  function setLavaCell(c,r,lvl){ c=mod(c,COLS); tiles[idx(c,r)]=T.LAVA; lavaLvl[idx(c,r)]=lvl; }
+  function activateLavaAround(c,r){
+    const ns=[[0,1],[0,-1],[1,0],[-1,0]];
+    for(const [dc,dr] of ns){ const nc=mod(c+dc,COLS), nr=r+dr; if(nr<0||nr>=ROWS) continue;
+      if(tiles[idx(nc,nr)]===T.LAVA) lavaActive.add(idx(nc,nr)); }
+  }
+  function lavaStep(){
+    if(lavaActive.size===0) return;
+    const cells=[...lavaActive], next=new Set();
+    for(const key of cells){
+      const c=key%COLS, r=(key/COLS)|0;
+      if(tiles[idx(c,r)]!==T.LAVA) continue;
+      const L=lavaLvl[key]||LAVA_MAX;
+      if(tileAt(c,r+1)===T.EMPTY){                       // pour straight down (stays full pressure)
+        setLavaCell(c,r+1,LAVA_MAX); next.add(idx(c,r+1));
+        if(Math.random()<0.3) addParticle(c*TILE+TILE/2+rand(-6,6),(r+1)*TILE,rand(-12,12),rand(-30,-8),0.5,"#ff9d4d",2);
+      } else if(L>1){                                     // spread sideways with falling pressure
+        for(const s of [-1,1]){ const nc=mod(c+s,COLS);
+          if(tiles[idx(nc,r)]===T.EMPTY){ setLavaCell(nc,r,L-1); next.add(idx(nc,r)); } }
+      }
+    }
+    lavaActive=next;
+  }
+  function updateLava(dt){ lavaAccum+=dt; let g=0; while(lavaAccum>=0.09 && g++<3){ lavaAccum-=0.09; lavaStep(); } }
+
+  // ---------------- Particles / floaters ----------------
+  function addParticle(x,y,vx,vy,life,color,size){ if(particles.length>420) return; particles.push({x,y,vx,vy,life,max:life,color,size,kind:"p"}); }
+  function puff(x,y,color,n){ for(let i=0;i<n;i++){ const a=rand(0,Math.PI*2),s=rand(30,180); addParticle(x,y,Math.cos(a)*s,Math.sin(a)*s,rand(0.25,0.6),color,rand(2,4)); } }
+  function addFloater(x,y,text,color){ if(particles.length>420) return; particles.push({x,y,vx:0,vy:-46,life:0.9,max:0.9,color,text,kind:"f"}); }
+  function updateParticles(dt){
+    for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; if(p.life<=0){particles.splice(i,1);continue;} p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.kind==="p"){p.vy+=520*dt; p.vx*=Math.pow(0.2,dt);} }
+  }
+
+  // ---------------- Camera ----------------
+  function updateCamera(dt){
+    const tx=rover.x+rover.w/2-VIEW_W/2;
+    const ty=clamp(rover.y+rover.h/2-VIEW_H/2, 0, Math.max(0,WORLD_H-VIEW_H));
+    const k=1-Math.pow(0.0006,dt);
+    cam.x=wrapX(cam.x + wrapDX(tx,cam.x)*k);   // follow the short way across the seam
+    cam.y=lerp(cam.y,ty,k);
+    if(G.shake>0){ G.shake=Math.max(0,G.shake-dt*22); }
+  }
+  // nearest on-screen copy of a wrapped world-x (for drawing on the cylinder)
+  function drawX(wx){ const center=cam.x+VIEW_W/2; return center+wrapDX(wx,center); }
+
+  // ---------------- Rendering ----------------
+  function tileColorRGB(t,c,r){
+    const v=hash(c,r)*0.18-0.09, f=1+v; let b;
+    switch(t){
+      case T.DIRT1: b=[26,42,66]; break;    // Cache Layer — blue data block
+      case T.DIRT2: b=[42,30,66]; break;    // The Mempool — violet data block
+      case T.DIRT3: b=[58,24,36]; break;    // Mainnet Core — red data block
+      case T.BEDROCK: b=[44,50,72]; break;  // immutable / encrypted block
+      case T.IRON: b=[60,52,32]; break;     // coin-bearing blocks (coin drawn on top)
+      case T.COPPER: b=[64,42,26]; break;
+      case T.PLASMA: b=[28,54,38]; break;
+      case T.DARK: b=[48,34,64]; break;
+      case T.LAVA: b=[170,46,30]; break;    // data corruption
+      default: b=[16,18,28];
+    }
+    return [clamp(b[0]*f|0,0,255),clamp(b[1]*f|0,0,255),clamp(b[2]*f|0,0,255)];
+  }
+  function tileColor(t,c,r){ const b=tileColorRGB(t,c,r); return `rgb(${b[0]},${b[1]},${b[2]})`; }
+
+  function render(){
+    if(VIEW_W<2||VIEW_H<2) return;          // skip degenerate (0-size) canvas — avoids non-finite gradients
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    drawSky();
+    let shx=0,shy=0;
+    if(G && G.shake>0.2){ shx=rand(-1,1)*G.shake; shy=rand(-1,1)*G.shake; }
+    ctx.save();
+    ctx.translate(-Math.round(cam.x)+shx,-Math.round(cam.y)+shy);
+
+    drawWorld();
+    drawShip();
+    drawStructures();
+    drawScrap();
+    drawEnemies();
+    drawProjectiles();
+    if(G && state!=="launch") drawRover();
+    drawParticles();
+    if(G && G.build.open) drawBuildGhost();
+
+    ctx.restore();
+
+    if(G) drawLighting();
+    if(G && G.flash>0){ ctx.fillStyle=`rgba(255,255,255,${G.flash})`; ctx.fillRect(0,0,VIEW_W,VIEW_H); G.flash-=0.04; }
+    if(G){ if(mmTick<=0){ drawMinimap(); mmTick=5; } mmTick--; }   // throttled radar redraw
+  }
+
+  let mmTick=0;
+  function drawMinimap(){
+    if(!mmCtx||!G) return;
+    const W=mmCanvas.width, H=mmCanvas.height, MR=18, cell=W/(MR*2+1);
+    const rcx=rover.x+rover.w/2, rcy=rover.y+rover.h/2, pc=Math.floor(rcx/TILE), pr=Math.floor(rcy/TILE);
+    mmCtx.fillStyle="#04060e"; mmCtx.fillRect(0,0,W,H);
+    for(let dy=-MR;dy<=MR;dy++){
+      const r=pr+dy; if(r<0||r>=ROWS) continue;
+      for(let dx=-MR;dx<=MR;dx++){
+        const tt=tiles[idx(mod(pc+dx,COLS),r)]; if(tt===T.EMPTY) continue;
+        let col;
+        if(tt===T.LAVA) col="#ff5a2a";
+        else if(tt===T.BEDROCK) col="#3a3f55";
+        else if(ORE_OF[tt]) col=oreColor(ORE_OF[tt]);
+        else col = r<=BIOMES[0].to?"#5a4636":(r<=BIOMES[1].to?"#37452a":"#4a2622");
+        mmCtx.fillStyle=col; mmCtx.fillRect((dx+MR)*cell,(dy+MR)*cell,Math.ceil(cell),Math.ceil(cell));
+      }
+    }
+    const cx=W/2, cy=H/2;
+    mmCtx.fillStyle="#ff5c5c";                                    // enemies
+    for(const e of enemies){ const ex=wrapDX(e.x,rcx)/TILE, ey=(e.y-rcy)/TILE;
+      if(Math.abs(ex)<=MR&&Math.abs(ey)<=MR) mmCtx.fillRect(cx+ex*cell-1.5,cy+ey*cell-1.5,3,3); }
+    const sdx=wrapDX(SHIP.cx,rcx)/TILE, sdy=(SHIP.bottom-rcy)/TILE;   // ship marker / off-radar arrow
+    if(Math.abs(sdx)<=MR&&Math.abs(sdy)<=MR){ mmCtx.fillStyle="#2ee0ff"; mmCtx.fillRect(cx+sdx*cell-3,cy+sdy*cell-3,6,6); }
+    else { const ang=Math.atan2(sdy,sdx), ax=cx+Math.cos(ang)*(W/2-7), ay=cy+Math.sin(ang)*(H/2-7);
+      mmCtx.save(); mmCtx.translate(ax,ay); mmCtx.rotate(ang); mmCtx.fillStyle="#2ee0ff";
+      mmCtx.beginPath(); mmCtx.moveTo(6,0); mmCtx.lineTo(-4,-4); mmCtx.lineTo(-4,4); mmCtx.closePath(); mmCtx.fill(); mmCtx.restore(); }
+    mmCtx.fillStyle="#ffd43b"; mmCtx.fillRect(cx-2.5,cy-2.5,5,5);  // rover at center
+    mmCtx.strokeStyle="rgba(46,224,255,0.14)"; mmCtx.lineWidth=1;
+    mmCtx.beginPath(); mmCtx.moveTo(cx,0); mmCtx.lineTo(cx,H); mmCtx.moveTo(0,cy); mmCtx.lineTo(W,cy); mmCtx.stroke();
+  }
+
+  function drawSky(){
+    const night = G ? (G.phase==="night") : false;
+    const surfaceScreenY = GROUND*TILE - cam.y;             // screen y of the ground line
+    const skyH = clamp(surfaceScreenY,0,VIEW_H);
+    // digital sky — bull = cyber-teal, bear = red
+    if(skyH>0){
+      const g=ctx.createLinearGradient(0,0,0,Math.max(2,surfaceScreenY));
+      if(night){ g.addColorStop(0,"#0a0307"); g.addColorStop(0.55,"#1a0810"); g.addColorStop(1,"#2a0c16"); }
+      else { g.addColorStop(0,"#04070f"); g.addColorStop(0.55,"#06161a"); g.addColorStop(1,"#0a2a26"); }
+      ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,skyH);
+    }
+    // underground digital void — biome-tinted, with a faint cyber grid showing through tunnels
+    if(surfaceScreenY<VIEW_H){
+      const top=Math.max(0,surfaceScreenY);
+      const camBiome=biomeAt(Math.floor((cam.y+VIEW_H*0.5)/TILE));
+      const caveTop = camBiome===2?[30,8,16] : camBiome===1?[22,12,34] : [10,20,34];
+      const cg=ctx.createLinearGradient(0,top,0,VIEW_H);
+      cg.addColorStop(0,`rgb(${caveTop[0]},${caveTop[1]},${caveTop[2]})`); cg.addColorStop(1,"#04050a");
+      ctx.fillStyle=cg; ctx.fillRect(0,top,VIEW_W,VIEW_H-top);
+      ctx.strokeStyle="rgba(80,180,255,0.05)"; ctx.lineWidth=1; ctx.beginPath();
+      for(let gx=-(cam.x%TILE); gx<VIEW_W; gx+=TILE){ ctx.moveTo(gx,top); ctx.lineTo(gx,VIEW_H); }
+      for(let gy=-(cam.y%TILE); gy<VIEW_H; gy+=TILE){ if(gy>=top){ ctx.moveTo(0,gy); ctx.lineTo(VIEW_W,gy); } }
+      ctx.stroke();
+    }
+    // sky band: cyber-grid horizon, data motes, and THE MOON (the goal)
+    if(skyH>4){
+      ctx.save(); ctx.beginPath(); ctx.rect(0,0,VIEW_W,skyH); ctx.clip();
+      ctx.strokeStyle=night?"rgba(255,90,120,0.06)":"rgba(80,220,200,0.07)"; ctx.lineWidth=1; ctx.beginPath();
+      for(let gx=-((cam.x*0.5)%TILE); gx<VIEW_W; gx+=TILE){ ctx.moveTo(gx,0); ctx.lineTo(gx,skyH); } ctx.stroke();
+      ctx.fillStyle=night?"#ff9aa6":"#9affd0";
+      for(let i=0;i<70;i++){ const sx=(i*97.3)%VIEW_W, sy=(i*53.7)%Math.max(40,skyH); ctx.globalAlpha=hash(i,3)*0.5+0.15; ctx.fillRect(sx,sy,1.6,1.6); }
+      ctx.globalAlpha=1;
+      // the moon
+      const mx=VIEW_W*0.8-cam.x*0.03, my=Math.min(surfaceScreenY*0.42, VIEW_H*0.28);
+      const mg=ctx.createRadialGradient(mx-10,my-10,6,mx,my,46);
+      mg.addColorStop(0,"#fdf6e3"); mg.addColorStop(0.7,"#e9dcc2"); mg.addColorStop(1,"#b9a98a");
+      ctx.save(); ctx.shadowColor="rgba(240,230,200,0.6)"; ctx.shadowBlur=40;
+      ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,44,0,7); ctx.fill(); ctx.restore();
+      ctx.fillStyle="rgba(150,135,108,0.5)";
+      ctx.beginPath(); ctx.arc(mx-14,my-8,7,0,7); ctx.arc(mx+12,my+10,9,0,7); ctx.arc(mx+7,my-17,4,0,7); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawWorld(){
+    // iterate continuous world columns so the seam is invisible (X wraps via mod)
+    const c0=Math.floor(cam.x/TILE)-1, c1=Math.floor((cam.x+VIEW_W)/TILE)+1;
+    const r0=Math.max(0,Math.floor(cam.y/TILE)-1), r1=Math.min(ROWS-1,Math.floor((cam.y+VIEW_H)/TILE)+1);
+    const t=performance.now()/1000;
+    for(let r=r0;r<=r1;r++){
+      for(let wc=c0;wc<=c1;wc++){
+        const c=mod(wc,COLS), tt=tiles[idx(c,r)];
+        if(tt===T.EMPTY) continue;
+        drawTile(tt,c,r,wc*TILE,r*TILE,t);
+      }
+    }
+  }
+  const isEmpty=v=>v===T.EMPTY;
+  function drawTile(tt,c,r,x,y,t){
+    if(tt===T.LAVA){
+      const fl=0.5+0.5*Math.sin(t*3+c*0.7+r*0.5);
+      ctx.fillStyle=`rgb(${165+fl*75|0},${46+fl*48|0},18)`; ctx.fillRect(x,y,TILE,TILE);
+      ctx.fillStyle="rgba(255,214,96,0.55)"; ctx.fillRect(x,y+TILE*0.12*fl+2,TILE,3);
+      if(isEmpty(tileAt(c,r-1)) && Math.random()<0.05) addParticle(x+rand(2,TILE-2),y+3,rand(-10,10),rand(-46,-14),0.7,"#ffb24d",2);
+      return;
+    }
+    const b=tileColorRGB(tt,c,r);
+    ctx.fillStyle=`rgb(${b[0]},${b[1]},${b[2]})`; ctx.fillRect(x,y,TILE,TILE);
+    ctx.fillStyle="rgba(0,0,0,0.20)"; ctx.fillRect(x,y+TILE*0.56,TILE,TILE*0.44);   // cheap depth shade
+    // deterministic speckle texture
+    const s1=hash(c*2+7,r*2+3), s2=hash(c*5+1,r*3+9);
+    ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(x+2+s1*(TILE-8), y+4+s2*(TILE-10), 4,4);
+    ctx.fillStyle="rgba(90,210,255,0.10)"; ctx.fillRect(x+2+s2*(TILE-6), y+3+s1*(TILE-8), 3,3);   // cyan data bit
+    // lit/shaded rims on exposed faces — makes tunnels read clearly
+    if(isEmpty(tileAt(c,r-1))){ ctx.fillStyle="rgba(255,255,255,0.20)"; ctx.fillRect(x,y,TILE,3); }
+    if(isEmpty(tileAt(c,r+1))){ ctx.fillStyle="rgba(0,0,0,0.34)"; ctx.fillRect(x,y+TILE-3,TILE,3); }
+    if(isEmpty(tileAt(c-1,r))){ ctx.fillStyle="rgba(255,255,255,0.08)"; ctx.fillRect(x,y,3,TILE); }
+    if(isEmpty(tileAt(c+1,r))){ ctx.fillStyle="rgba(0,0,0,0.24)"; ctx.fillRect(x+TILE-3,y,3,TILE); }
+    // neon data-surface on the very top row
+    if(r===GROUND && tt===T.DIRT1){ ctx.fillStyle="#147a8a"; ctx.fillRect(x,y,TILE,5); ctx.fillStyle="#3fe0ff"; ctx.fillRect(x,y,TILE,2);
+      for(let k=0;k<3;k++) ctx.fillRect(x+6+k*12,y-3,2,3); }
+    // memecoin deposit (drawn as a glowing coin with its ticker glyph)
+    if(ORE_OF[tt]){
+      const ore=ORE_OF[tt], col=oreColor(ore), cx=x+TILE/2, cy=y+TILE/2, glowy=(tt===T.PLASMA||tt===T.DARK);
+      const R=glowy?9:8, glow=glowy?(0.55+0.45*Math.sin(t*3+c+r)):0.5;
+      ctx.save();
+      ctx.shadowColor=col; ctx.shadowBlur=glowy?15*glow:7;
+      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.strokeStyle="rgba(0,0,0,0.35)"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.stroke();
+      ctx.fillStyle="rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(cx-R*0.32,cy-R*0.32,R*0.34,0,7); ctx.fill();
+      ctx.fillStyle="rgba(8,8,14,0.82)"; ctx.font="bold "+Math.round(R*1.05)+"px ui-monospace,monospace";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(({iron:"Ð",copper:"S",plasma:"P",darkmatter:"B"})[ore],cx,cy+0.5);
+      ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+      ctx.restore();
+    }
+  }
+
+  function drawShip(){
+    // Rebuild state: starts as a crashed wreck and is restored as each part is crafted.
+    const sx=drawX(SHIP.cx), liftY=(state==="launch")?-Math.pow(G.launchT,2)*120:0;
+    const P=G?G.parts:{}, rep=(P.engine?1:0)+(P.nav?1:0)+(P.hull?1:0), wrecked=state!=="launch"&&rep<3;
+    // smoke + sparks while still a wreck (more the more broken it is)
+    if(G&&wrecked&&Math.random()<(3-rep)*0.05+0.01) addParticle(SHIP.cx+rand(-14,14),SHIP.top+rand(0,26),rand(-10,10),rand(-34,-14),rand(0.9,1.6),rep===0?"#42454f":"#787f8c",rand(3,6));
+    if(G&&wrecked&&Math.random()<0.05) addParticle(SHIP.cx+rand(-16,16),SHIP.bottom-rand(4,28),rand(-26,26),rand(-46,-10),0.4,choice(["#ff9d4d","#ffd43b"]),2);
+    const tilt=(state==="launch")?0:(3-rep)*0.045;       // leans when wrecked, upright once rebuilt
+    ctx.save(); ctx.translate(sx,SHIP.bottom+liftY); ctx.rotate(tilt);
+    // body (brightens as it's rebuilt) — local coords, base at origin, up is negative
+    const bl=1-(3-rep)*0.12;
+    ctx.fillStyle=`rgb(${(207*bl)|0},${(214*bl)|0},${(230*bl)|0})`; ctx.strokeStyle="#3a4358"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(22,-150); ctx.lineTo(22,-6); ctx.lineTo(-22,-6); ctx.lineTo(-22,-150); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(-22,-150,8,144);
+    // ENGINE → fins + nozzle (else broken fin + blown engine)
+    if(P.engine||state==="launch"){
+      ctx.fillStyle="#ff2e88";
+      ctx.beginPath(); ctx.moveTo(-22,-22); ctx.lineTo(-34,-4); ctx.lineTo(-22,-4); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(22,-22); ctx.lineTo(34,-4); ctx.lineTo(22,-4); ctx.fill();
+      ctx.fillStyle="#9aa3bb"; ctx.fillRect(-9,-6,18,6);
+      if(state==="launch"){ for(let i=0;i<3;i++) addParticle(SHIP.cx+rand(-10,10),SHIP.bottom-6,rand(-30,30),rand(120,260),0.4,choice(["#ffd43b","#ff9d4d","#fff"]),rand(3,6)); }
+    } else {
+      ctx.fillStyle="#7a3a52"; ctx.beginPath(); ctx.moveTo(-22,-20); ctx.lineTo(-30,-8); ctx.lineTo(-22,-6); ctx.fill();  // bent stub fin
+      ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(7,-6,9,0,7); ctx.fill();                                  // blown engine scorch
+    }
+    // HULL → sealed (else jagged breaches)
+    if(!P.hull && state!=="launch"){
+      ctx.fillStyle="#191c27";
+      ctx.beginPath(); ctx.moveTo(-14,-112); ctx.lineTo(-2,-98); ctx.lineTo(-16,-86); ctx.lineTo(-20,-102); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(10,-72); ctx.lineTo(20,-60); ctx.lineTo(8,-50); ctx.lineTo(4,-66); ctx.closePath(); ctx.fill();
+    } else {
+      ctx.fillStyle="rgba(255,255,255,0.10)"; ctx.fillRect(-18,-150,4,144);
+    }
+    // NAV → glowing window + antenna light (else dark cracked window + bent antenna)
+    if(P.nav||state==="launch"){
+      ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(0,-146,8,0,7); ctx.fill(); ctx.shadowBlur=0;
+      ctx.fillStyle="rgba(255,255,255,.6)"; ctx.beginPath(); ctx.arc(-2,-149,2.5,0,7); ctx.fill();
+      ctx.strokeStyle="#9aa3bb"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(6,-196); ctx.stroke();
+      ctx.fillStyle=(Math.sin(performance.now()/220)>0)?"#6bff7d":"#1a3a1a"; ctx.beginPath(); ctx.arc(6,-197,2.4,0,7); ctx.fill();
+    } else {
+      ctx.fillStyle="#243049"; ctx.beginPath(); ctx.arc(0,-146,8,0,7); ctx.fill();
+      ctx.strokeStyle="#0c1020"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-5,-149); ctx.lineTo(4,-143); ctx.moveTo(2,-150); ctx.lineTo(-1,-141); ctx.stroke();
+      ctx.strokeStyle="#6b7280"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(5,-189); ctx.lineTo(-2,-193); ctx.stroke();
+    }
+    // battle-damage tint (from hull HP lost to the horde)
+    const dmg=1-(SHIP.hull/SHIP.maxHull);
+    if(dmg>0){ ctx.fillStyle=`rgba(70,12,12,${dmg*0.5})`; ctx.fillRect(-22,-178,44,172); }
+    // hull bar (rides above the nose)
+    ctx.fillStyle="rgba(0,0,0,.5)"; ctx.fillRect(-27,-206,54,5);
+    ctx.fillStyle="#ff2e88"; ctx.fillRect(-27,-206,54*(SHIP.hull/SHIP.maxHull),5);
+    ctx.restore();
+  }
+
+  function drawStructures(){
+    for(const b of builds){
+      const s=STRUCTS[b.type], x=drawX(b.x), y=b.y, t=performance.now()/1000;
+      ctx.save();
+      if(b.type==="wall"){
+        ctx.fillStyle="#6b7791"; ctx.fillRect(x-TILE/2+3,y-TILE/2+2,TILE-6,TILE-2);
+        ctx.fillStyle="#525c74"; for(let i=0;i<3;i++) ctx.fillRect(x-TILE/2+3,y-TILE/2+4+i*12,TILE-6,2);
+        ctx.fillStyle="#8b97b1"; ctx.fillRect(x-TILE/2+3,y-TILE/2+2,TILE-6,3);
+      } else if(b.type==="turret"){
+        ctx.fillStyle="#1a2340"; ctx.beginPath(); ctx.arc(x,y+6,12,0,7); ctx.fill();
+        ctx.strokeStyle="#2ee0ff"; ctx.lineWidth=2; ctx.stroke();
+        const aim=b.aim||0;
+        ctx.strokeStyle=b.fire>0?"#fff":"#2ee0ff"; ctx.lineWidth=4; ctx.beginPath();
+        ctx.moveTo(x,y+2); ctx.lineTo(x+Math.cos(aim)*16,y+2+Math.sin(aim)*16); ctx.stroke();
+        ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(x,y+2,4,0,7); ctx.fill();
+      } else if(b.type==="tesla"){
+        ctx.fillStyle="#241a40"; ctx.fillRect(x-7,y-2,14,12);
+        ctx.fillStyle="#3a2a5a"; ctx.fillRect(x-9,y+8,18,4);
+        ctx.strokeStyle="#7a5ab0"; ctx.lineWidth=2;        // coil rings
+        for(let i=0;i<3;i++){ ctx.beginPath(); ctx.ellipse(x,y-4-i*4,7-i*1.6,2.4,0,0,7); ctx.stroke(); }
+        const pz=0.5+0.5*Math.sin(t*6);                    // pulsing orb
+        ctx.fillStyle="#d9b0ff"; ctx.shadowColor="#b06cff"; ctx.shadowBlur=12+10*pz;
+        ctx.beginPath(); ctx.arc(x,y-16,5,0,7); ctx.fill(); ctx.shadowBlur=0;
+        if(b.fire>0 && b.arcs){                            // jagged lightning to each hit
+          ctx.strokeStyle="#e6c8ff"; ctx.lineWidth=2; ctx.shadowColor="#b06cff"; ctx.shadowBlur=8;
+          for(const h of b.arcs){ const hx=drawX(h.x), hy=h.y;
+            ctx.beginPath(); ctx.moveTo(x,y-16);
+            ctx.lineTo((x+hx)/2+rand(-7,7),(y-16+hy)/2+rand(-7,7)); ctx.lineTo(hx,hy); ctx.stroke(); }
+          ctx.shadowBlur=0;
+        }
+      } else {
+        ctx.fillStyle="#10301a"; ctx.fillRect(x-12,y-8,24,20);
+        ctx.strokeStyle="#6bff7d"; ctx.lineWidth=2; ctx.strokeRect(x-12,y-8,24,20);
+        const pulse=0.5+0.5*Math.sin(t*3);
+        ctx.fillStyle="#6bff7d"; ctx.shadowColor="#6bff7d"; ctx.shadowBlur=8*pulse;
+        ctx.fillRect(x-3,y-3,6,2); ctx.fillRect(x-1,y-5,2,6);
+      }
+      ctx.restore();
+      // hp bar if damaged
+      if(b.hp<b.maxHp){ const bw=TILE-8; ctx.fillStyle="rgba(0,0,0,.5)"; ctx.fillRect(x-bw/2,y-TILE/2-6,bw,3);
+        ctx.fillStyle=b.hp/b.maxHp>0.4?"#6bff7d":"#ff5c5c"; ctx.fillRect(x-bw/2,y-TILE/2-6,bw*(b.hp/b.maxHp),3); }
+    }
+  }
+
+  function drawScrap(){
+    const t=performance.now()/1000;
+    for(const s of scraps){
+      const x=drawX(s.x), col=oreColor(s.kind), bob=Math.sin(t*5+s.t*3)*2;
+      ctx.save(); ctx.shadowColor=col; ctx.shadowBlur=10; ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(x,s.y+bob,5,0,7); ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle="rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.arc(x-1.5,s.y+bob-1.5,1.7,0,7); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawWorm(e){
+    const pts=[{x:e.x,y:e.y}]; for(const s of e.segs) pts.push(s);
+    const n=pts.length;
+    ctx.save(); ctx.shadowColor=e.c; ctx.shadowBlur=10;
+    for(let i=n-1;i>=0;i--){                        // tail → head so the head sits on top
+      const x=drawX(pts[i].x), y=pts[i].y;
+      const rad=i===0? e.w*0.46 : Math.max(2.5, e.w*0.42*(1-i/(n+1)));
+      ctx.fillStyle=e.c; ctx.beginPath(); ctx.arc(x,y,rad,0,7); ctx.fill();
+      ctx.fillStyle="rgba(6,32,15,0.4)"; ctx.beginPath(); ctx.arc(x,y+rad*0.35,rad*0.55,0,7); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    const hx=drawX(e.x), hy=e.y, dir=Math.sign(wrapDX(rover.x+rover.w/2,e.x))||1;
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(hx+dir*4,hy-4,2.6,0,7); ctx.arc(hx+dir*4,hy+4,2.6,0,7); ctx.fill();
+    ctx.fillStyle="#06200f"; ctx.beginPath(); ctx.arc(hx+dir*5,hy-4,1.3,0,7); ctx.arc(hx+dir*5,hy+4,1.3,0,7); ctx.fill();
+    ctx.strokeStyle=e.c; ctx.lineWidth=2.5;   // mandibles
+    ctx.beginPath(); ctx.moveTo(hx+dir*8,hy-6); ctx.lineTo(hx+dir*13,hy-10); ctx.moveTo(hx+dir*8,hy+6); ctx.lineTo(hx+dir*13,hy+10); ctx.stroke();
+    ctx.restore();
+    if(e.hp<e.maxHp){ const bw=Math.max(22,e.w), x=drawX(e.x); ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(x-bw/2,e.y-e.w*0.5-9,bw,4);
+      ctx.fillStyle=e.hp/e.maxHp>0.4?"#6bff7d":"#ff5c5c"; ctx.fillRect(x-bw/2,e.y-e.w*0.5-9,bw*(e.hp/e.maxHp),4); }
+  }
+
+  function drawBoss(e){
+    const x=drawX(e.x), y=e.y, t=performance.now()/1000, w=e.w, h=e.h, fl=Math.sin(t*8+e.wob);
+    ctx.save(); ctx.translate(x,y);
+    ctx.shadowColor="#ff2e5a"; ctx.shadowBlur=26;
+    ctx.fillStyle="rgba(255,46,90,0.32)";                       // glitch wings
+    ctx.beginPath(); ctx.ellipse(-w*0.46,fl*9,w*0.5,15,0.4,0,7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(w*0.46,-fl*9,w*0.5,15,-0.4,0,7); ctx.fill();
+    ctx.fillStyle="#1a0510"; ctx.strokeStyle="#ff2e5a"; ctx.lineWidth=3;   // body
+    ctx.beginPath(); ctx.ellipse(0,0,w*0.46,h*0.44,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.fillStyle="rgba(255,46,90,0.45)";                       // glitch scanlines
+    for(let i=0;i<3;i++){ const yy=-h*0.28+i*h*0.28+Math.sin(t*10+i)*3; ctx.fillRect(-w*0.4,yy,w*0.8,2); }
+    ctx.fillStyle="#ffd43b"; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*13,-5,4.5,0,7); ctx.fill(); }   // eye cluster
+    ctx.fillStyle="#1a0510"; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*13+e.dir*1.6,-5,2.2,0,7); ctx.fill(); }
+    ctx.strokeStyle="#ff2e5a"; ctx.lineWidth=3;                 // spikes
+    for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*15,h*0.34); ctx.lineTo(i*15,h*0.5); ctx.stroke(); }
+    ctx.restore();
+  }
+  function drawEnemies(){
+    const t=performance.now()/1000;
+    for(const e of enemies){
+      if(e.type==="burrower" && e.segs){ drawWorm(e); continue; }
+      if(e.type==="boss"){ drawBoss(e); continue; }
+      const ex=drawX(e.x), w=e.w, h=e.h;
+      ctx.save(); ctx.translate(ex,e.y);
+      ctx.shadowColor=e.c; ctx.shadowBlur=12;             // glow so they read against terrain & dark
+      if(e.type==="flyer"){
+        const fl=Math.sin(t*18+e.wob);
+        ctx.fillStyle="rgba(255,79,160,.45)";
+        ctx.beginPath(); ctx.ellipse(-w*0.4,fl*5,w*0.5,6,0.5,0,7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(w*0.4,-fl*5,w*0.5,6,-0.5,0,7); ctx.fill();
+        ctx.fillStyle=e.c; ctx.strokeStyle="#1a0510"; ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.ellipse(0,0,w*0.42,h*0.4,0,0,7); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur=0; ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(e.dir>=0?5:-5,-2,2.6,0,7); ctx.fill();
+        ctx.fillStyle="#1a0510"; ctx.beginPath(); ctx.arc((e.dir>=0?5:-5)+e.dir,-2,1.2,0,7); ctx.fill();
+      } else {
+        // ground crawler/runner/brute — legs + carapace + outline + eyes
+        const legs=Math.sin(t*12+e.wob)*3;
+        ctx.shadowBlur=0; ctx.strokeStyle=e.c; ctx.lineWidth=2.5;
+        for(let s=-1;s<=1;s+=2) for(let l=0;l<3;l++){ ctx.beginPath(); ctx.moveTo(s*w*0.2,h*0.18); ctx.lineTo(s*w*0.52,h*0.5+(l-1)*5+legs*s); ctx.stroke(); }
+        ctx.shadowColor=e.c; ctx.shadowBlur=12;
+        ctx.fillStyle=e.c; ctx.strokeStyle="#180a14"; ctx.lineWidth=2.5;
+        ctx.beginPath(); ctx.ellipse(0,0,w*0.44,h*0.4,0,0,7); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur=0; ctx.fillStyle="rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(0,-2,w*0.3,h*0.22,0,0,7); ctx.fill();
+        ctx.fillStyle=e.type==="brute"?"#ffd43b":"#fff";
+        ctx.beginPath(); ctx.arc(e.dir*w*0.22-3.2,-3,2.7,0,7); ctx.arc(e.dir*w*0.22+3.2,-3,2.7,0,7); ctx.fill();
+        ctx.fillStyle="#180a14"; ctx.beginPath(); ctx.arc(e.dir*w*0.22-3.2+e.dir,-3,1.3,0,7); ctx.arc(e.dir*w*0.22+3.2+e.dir,-3,1.3,0,7); ctx.fill();
+        if(e.type==="brute"){ ctx.fillStyle=e.c;
+          ctx.beginPath(); ctx.moveTo(-w*0.3,-h*0.36); ctx.lineTo(-w*0.44,-h*0.62); ctx.lineTo(-w*0.16,-h*0.4); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(w*0.3,-h*0.36); ctx.lineTo(w*0.44,-h*0.62); ctx.lineTo(w*0.16,-h*0.4); ctx.fill(); }
+      }
+      ctx.restore();
+      // hp bar
+      if(e.hp<e.maxHp){ const bw=Math.max(20,e.w*0.9); ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(ex-bw/2,e.y-e.h*0.5-8,bw,4);
+        ctx.fillStyle=e.hp/e.maxHp>0.4?"#ffd43b":"#ff5c5c"; ctx.fillRect(ex-bw/2,e.y-e.h*0.5-8,bw*(e.hp/e.maxHp),4); }
+    }
+  }
+
+  function drawProjectiles(){
+    ctx.save(); ctx.fillStyle="#ffd43b"; ctx.shadowColor="#ffd43b"; ctx.shadowBlur=10;
+    for(const p of projectiles){ const x=drawX(p.x); ctx.beginPath(); ctx.arc(x,p.y,3.5,0,7); ctx.fill();
+      ctx.globalAlpha=0.4; ctx.fillRect(x-p.vx*0.012,p.y-p.vy*0.012,2,2); ctx.globalAlpha=1; }
+    ctx.restore();
+  }
+
+  function drawRover(){
+    const w=rover.w, h=rover.h, cx=drawX(rover.x+w/2), cy=rover.y+h/2;
+    ctx.save(); ctx.translate(cx,cy);
+    if(rover.hurt>0){ ctx.globalAlpha=0.55+0.45*Math.sin(performance.now()/40); }
+    // contact shadow
+    ctx.fillStyle="rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(0,h/2+2,w*0.5,4,0,0,7); ctx.fill();
+    // thrust flame (behind body)
+    if(keys.up && G.fuel>0){ ctx.fillStyle="rgba(255,170,60,0.85)"; ctx.beginPath(); ctx.moveTo(-7,h/2-2); ctx.lineTo(7,h/2-2); ctx.lineTo(0,h/2+12+Math.random()*7); ctx.closePath(); ctx.fill(); }
+    // treads
+    ctx.fillStyle="#161b2e"; ctx.fillRect(-w/2-2,h/2-7,w+4,8);
+    ctx.fillStyle="#0b0f1e"; for(let i=0;i<4;i++) ctx.fillRect(-w/2+2+i*(w/4),h/2-6,3,6);
+    // body (bright + outline + glow)
+    ctx.shadowColor="#ffd43b"; ctx.shadowBlur=16;
+    ctx.fillStyle= rover.hurt>0?"#ff9a9a":"#ffd43b"; ctx.strokeStyle="#1a1206"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(-w/2,h/2-4); ctx.lineTo(-w/2+4,-h/2); ctx.lineTo(w/2-4,-h/2); ctx.lineTo(w/2,h/2-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.fillStyle="#e0a800"; ctx.fillRect(-w/2+3,-2,w-6,5);
+    // cockpit
+    ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10;
+    ctx.beginPath(); ctx.arc(rover.face*3,-4,7,0,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle="#0a3a44"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle="rgba(255,255,255,.75)"; ctx.beginPath(); ctx.arc(rover.face*3-2,-6,2.2,0,7); ctx.fill();
+    // drill bit (spins while drilling)
+    ctx.save();
+    let dx=0,dy=h/2,ang=Math.PI/2;
+    if(rover.drillTarget){ if(rover.drillTarget.side==="r"){dx=w/2;dy=0;ang=0;} else if(rover.drillTarget.side==="l"){dx=-w/2;dy=0;ang=Math.PI;} }
+    ctx.translate(dx,dy); ctx.rotate(ang-Math.PI/2);
+    ctx.fillStyle="#aab4c8"; ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(6,0); ctx.lineTo(0,12+(rover.drillTarget?Math.sin(rover.drillAnim)*2:0)); ctx.closePath(); ctx.fill();
+    if(rover.drillTarget){ ctx.strokeStyle="#fff"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-5,3+(rover.drillAnim%4)); ctx.lineTo(5,3+(rover.drillAnim%4)); ctx.stroke(); }
+    ctx.restore();
+    ctx.restore();
+    // drill progress ring — positioned relative to the rover (wrap-safe)
+    if(rover.drillTarget){
+      const tt=tileAt(rover.drillTarget.c,rover.drillTarget.r), need=HARDNESS[tt]||1, side=rover.drillTarget.side;
+      const rx=cx + (side==="r"?w/2+TILE/2 : side==="l"?-(w/2+TILE/2) : 0);
+      const ry=cy + (side==="d"?h/2+TILE/2 : 0);
+      ctx.strokeStyle="rgba(255,212,59,.9)"; ctx.lineWidth=3; ctx.beginPath();
+      ctx.arc(rx,ry,TILE*0.30,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(rover.drillT/need,0,1)); ctx.stroke();
+    }
+  }
+
+  function drawParticles(){
+    for(const p of particles){
+      const a=clamp(p.life/p.max,0,1), x=drawX(p.x);
+      if(p.kind==="f"){ ctx.globalAlpha=a; ctx.fillStyle=p.color; ctx.font="bold 13px "+getComputedStyle(document.body).fontFamily;
+        ctx.textAlign="center"; ctx.fillText(p.text,x,p.y); ctx.globalAlpha=1; ctx.textAlign="left"; }
+      else { ctx.globalAlpha=a; ctx.fillStyle=p.color; ctx.fillRect(x-p.size/2,p.y-p.size/2,p.size,p.size); ctx.globalAlpha=1; }
+    }
+  }
+
+  function drawBuildGhost(){
+    // glowing placement grid across the visible surface (X wraps)
+    const c0=Math.floor(cam.x/TILE)-1, c1=Math.floor((cam.x+VIEW_W)/TILE)+1, r=GROUND-1;
+    ctx.lineWidth=1;
+    for(let wc=c0;wc<=c1;wc++){
+      const c=mod(wc,COLS);
+      if(c>=CFG.SHIP_COL-1&&c<=CFG.SHIP_COL+1) continue;
+      if(buildMap.has(c+","+r)) continue;
+      ctx.strokeStyle="rgba(46,224,255,0.16)"; ctx.strokeRect(wc*TILE+1,r*TILE+1,TILE-2,TILE-2);
+    }
+    const {hoverC:c,hoverR:rr,sel,valid}=G.build;
+    if(c>=0&&sel){
+      const gx=drawX(c*TILE+TILE/2)-TILE/2;
+      ctx.save(); ctx.globalAlpha=0.6;
+      ctx.fillStyle=valid?"rgba(107,255,125,0.4)":"rgba(255,92,92,0.4)";
+      ctx.fillRect(gx+2,rr*TILE+2,TILE-4,TILE-4);
+      ctx.strokeStyle=valid?"#6bff7d":"#ff5c5c"; ctx.lineWidth=2; ctx.strokeRect(gx+2,rr*TILE+2,TILE-4,TILE-4);
+      ctx.restore();
+    }
+  }
+
+  function drawLighting(){
+    if(G.ambient<0.02) return;
+    const W=lightCanvas.width, H=lightCanvas.height, sx=W/VIEW_W, sy=H/VIEW_H;
+    lctx.setTransform(1,0,0,1,0,0);
+    // base darkness (slightly red in magma)
+    const magma = rover.y>BIOMES[2].from*TILE;
+    lctx.fillStyle= magma? `rgba(30,4,4,${G.ambient})` : `rgba(3,5,16,${G.ambient})`;
+    lctx.fillRect(0,0,W,H);
+    lctx.globalCompositeOperation="destination-out";
+    const light=(wx,wy,rad,strength=1)=>{
+      const x=(drawX(wx)-cam.x)*sx, y=(wy-cam.y)*sy, R=rad*sx;
+      if(x<-R||x>W+R||y<-R||y>H+R) return;        // cull off-screen lights
+      const g=lctx.createRadialGradient(x,y,0,x,y,R);
+      g.addColorStop(0,`rgba(0,0,0,${strength})`); g.addColorStop(0.6,`rgba(0,0,0,${strength*0.6})`); g.addColorStop(1,"rgba(0,0,0,0)");
+      lctx.fillStyle=g; lctx.beginPath(); lctx.arc(x,y,R,0,7); lctx.fill();
+    };
+    light(rover.x+rover.w/2,rover.y+rover.h/2, TILE*6, 1);    // rover headlight
+    light(SHIP.cx,SHIP.bottom-20,TILE*5,0.95);                 // ship glow
+    for(const b of builds){ if(b.type==="turret") light(b.x,b.y,TILE*(b.fire>0?3.6:2.6),0.9);
+      else if(b.type==="tesla") light(b.x,b.y-12,TILE*(b.fire>0?3.6:2.2),0.85);
+      else if(b.type==="repair") light(b.x,b.y,TILE*2.4,0.8); else light(b.x,b.y,TILE*1.3,0.5); }
+    for(const e of enemies) light(e.x,e.y,TILE*(e.boss?4:e.type==="brute"?2.2:1.7), e.boss?0.95:0.85);  // every enemy carries a glow
+    for(const p of projectiles) light(p.x,p.y,TILE*0.9,0.7);
+    const c0=Math.floor(cam.x/TILE)-1,c1=Math.floor((cam.x+VIEW_W)/TILE)+1;
+    const r0=Math.max(0,Math.floor(cam.y/TILE)-1),r1=Math.min(ROWS-1,Math.floor((cam.y+VIEW_H)/TILE)+1);
+    for(let r=r0;r<=r1;r++) for(let wc=c0;wc<=c1;wc++) if(tiles[idx(mod(wc,COLS),r)]===T.LAVA) light(wc*TILE+TILE/2,r*TILE+TILE/2,TILE*1.6,0.7);
+    lctx.globalCompositeOperation="source-over";
+    ctx.drawImage(lightCanvas,0,0,VIEW_W,VIEW_H);
+  }
+
+  // ---------------- HUD update ----------------
+  let lastBank="";
+  function syncBank(){
+    if(!G) return;
+    $("bk-iron").textContent=G.bank.iron; $("bk-copper").textContent=G.bank.copper;
+    $("bk-plasma").textContent=G.bank.plasma; $("bk-dark").textContent=G.bank.darkmatter;
+  }
+  function updateHUD(){
+    if(!G) return;
+    const mm=Math.floor(Math.max(0,G.t)/60), ss=Math.floor(Math.max(0,G.t)%60);
+    $("phase-clock").textContent=mm+":"+(ss<10?"0":"")+ss;
+    $("phase-day").textContent="DAY "+G.day;
+    const pn=$("phase-name");
+    if(G.phase==="day"){ pn.textContent="BULL MARKET"; pn.className="day"; $("phase-sub").textContent="Mine · refuel · build"; }
+    else { pn.textContent="BEAR MARKET"; pn.className="night"; $("phase-sub").textContent=`Swarm ${enemies.filter(e=>!e.burrow).length} · HODL`; }
+    const total=G.phase==="day"?CFG.DAY:CFG.NIGHT;
+    const bar=$("phase-bar").firstElementChild; bar.style.width=(G.t/total*100)+"%";
+    bar.style.background=G.phase==="day"?"var(--green)":"var(--red)";
+    // bars
+    setBar("b-fuel","v-fuel",G.fuel,G.maxFuel,Math.round(G.fuel), G.fuel/G.maxFuel<0.2?"var(--red)":"var(--yellow)");
+    setBar("b-cargo","v-cargo",G.cargoTotal,G.cargoCap,G.cargoTotal+"/"+G.cargoCap, G.cargoTotal>=G.cargoCap?"var(--red)":"var(--cyan)");
+    setBar("b-rover","v-rover",rover.hull,rover.maxHull,Math.round(rover.hull), rover.hull/rover.maxHull<0.3?"var(--red)":"var(--green)");
+    setBar("b-ship","v-ship",SHIP.hull,SHIP.maxHull,Math.round(SHIP.hull), SHIP.hull/SHIP.maxHull<0.3?"var(--red)":"var(--pink)");
+    // depth & biome
+    const depth=Math.max(0,Math.round((rover.y-(GROUND-1)*TILE)/TILE*2));
+    $("depth-val").textContent=depth+" m";
+    const br=Math.floor((rover.y+rover.h)/TILE); const b=biomeAt(br);
+    $("biome-name").textContent= rover.y<(GROUND-1)*TILE ? "Surface" : (BIOMES[b]?BIOMES[b].name:"Surface");
+    // ship button enabled when docked
+    $("btn-ship").disabled = !dockedNearShip() || state!=="play";
+    // Black Swan boss bar
+    const boss=enemies.find(e=>e.boss), bb=$("boss-bar");
+    if(boss){ bb.style.display="block"; bb.querySelector("i").style.width=clamp(boss.hp/boss.maxHp*100,0,100)+"%"; }
+    else if(bb.style.display!=="none") bb.style.display="none";
+    syncBank();
+  }
+  function setBar(barId,valId,v,max,txt,color){ const i=$(barId); i.style.width=clamp(v/max*100,0,100)+"%"; if(color)i.style.background=color; $(valId).textContent=txt; }
+
+  // ---------------- Messages ----------------
+  function toast(msg,kind=""){ const el=document.createElement("div"); el.className="toast "+kind; el.textContent=msg;
+    $("toasts").appendChild(el); requestAnimationFrame(()=>el.classList.add("show"));
+    setTimeout(()=>{ el.classList.remove("show"); setTimeout(()=>el.remove(),300); },2600); }
+  let hintT=0;
+  function flashHint(msg){ const el=$("hint"); el.textContent=msg; el.classList.add("show"); hintT=2; }
+  function bigMessage(big,small,color){ const el=$("bigmsg"); el.innerHTML=big+(small?`<small>${small}</small>`:""); el.style.color=color||"var(--cyan)";
+    el.style.opacity="1"; G.flash=0.25; setTimeout(()=>el.style.opacity="0",1700); }
+
+  // ---------------- End states ----------------
+  function startLaunch(){ if(state==="launch"||state==="win") return; closeShip(); state="launch"; G.launchT=0; SFX.craft();
+    bigMessage("TO THE MOON","🚀 wagmi","var(--green)"); }
+  function endGame(won,msg){
+    if(state==="over"||state==="win") return;
+    state=won?"win":"over";
+    const cur={nights:G.nightCount,day:G.day,kills:G.kills,mined:G.minedOre,won};
+    const prev=loadBest(), isBest=!prev||runScore(cur)>runScore(prev);
+    if(isBest) saveBest(cur);
+    const bestHTML=`<div class="stat-line" style="margin-top:10px;color:${isBest?'var(--yellow)':'var(--dim)'}">${isBest?'🏆 NEW BEST RUN!':bestLine(prev)}</div>`;
+    if(won){
+      $("win-stats").innerHTML=statBlock()+bestHTML;
+      $("scr-win").classList.add("show");
+    } else {
+      $("over-title").textContent= SHIP.hull<=0 ? "RUGGED" : "REKT";
+      $("over-msg").textContent=msg||"";
+      $("over-stats").innerHTML=statBlock()+bestHTML;
+      $("scr-over").classList.add("show"); SFX.boom();
+    }
+  }
+  function statBlock(){
+    return `<div class="stat-line">HODLed: <b>${G.nightCount} bear market${G.nightCount!==1?"s":""}</b> · Reached day <b>${G.day}</b></div>
+      <div class="stat-line">Viruses purged: <b>${G.kills}</b> · Coins mined: <b>${G.minedOre}</b></div>
+      <div class="stat-line">Rocket parts built: <b>${Object.values(G.parts).filter(Boolean).length}/3</b></div>`;
+  }
+  // ---- best-run persistence (localStorage) ----
+  const BEST_KEY="tothemoon_best_v1";
+  function loadBest(){ try{ return JSON.parse(localStorage.getItem(BEST_KEY)); }catch(e){ return null; } }
+  function saveBest(b){ try{ localStorage.setItem(BEST_KEY,JSON.stringify(b)); }catch(e){} }
+  function runScore(r){ return (r.won?1e6:0)+r.nights*1000+r.kills*5+(r.mined||0); }
+  function bestLine(b){ if(!b) return ""; return b.won
+    ? `★ Best: mooned on day ${b.day} · ${b.kills} viruses purged`
+    : `★ Best: HODLed ${b.nights} bear market${b.nights!==1?"s":""} · day ${b.day} · ${b.kills} purged`; }
+
+  // ---------------- Pause / sound ----------------
+  function doPause(){ if(state!=="play")return; state="pause"; $("scr-pause").classList.add("show"); }
+  function resumeGame(){ if(state!=="pause")return; $("scr-pause").classList.remove("show"); state="play"; }
+  function toggleSound(){ muted=!muted; $("btn-sound").textContent=muted?"🔇":"🔊"; $("btn-sound").classList.toggle("on",!muted); }
+
+  // ---------------- Loop ----------------
+  // Driven by requestAnimationFrame when the page is visible; a Web Worker timer keeps it
+  // ticking when the page is hidden (browsers pause rAF on hidden tabs / collapsed preview
+  // panels), so the game never freezes and the canvas always shows a live frame.
+  let last=0, lastStep=0;
+  function gameStep(){
+    const t=performance.now();
+    if(!last) last=t; let dt=(t-last)/1000; last=t; if(dt>0.05) dt=0.05;
+    lastStep=t;
+    if(state==="play"){
+      G.elapsed+=dt;
+      updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt);
+      updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt);
+      updateHUD();
+      if(hintT>0){ hintT-=dt; if(hintT<=0) $("hint").classList.remove("show"); }
+    } else if(state==="launch"){
+      G.launchT+=dt*0.7; updateParticles(dt);
+      cam.y=lerp(cam.y, clamp(SHIP.top-VIEW_H*0.4,0,WORLD_H-VIEW_H), 1-Math.pow(0.01,dt));
+      if(G.launchT>2.4){ endGame(true); }
+    } else { updateParticles(dt); }
+    render();
+  }
+  function rafLoop(){ requestAnimationFrame(rafLoop); gameStep(); }
+
+  // ---------------- Wire UI ----------------
+  function startGame(){ initAudio(); freshRun(); $("scr-boot").classList.remove("show");
+    document.querySelectorAll(".scr").forEach(s=>s.classList.remove("show")); state="play"; }
+  $("btn-start").addEventListener("click",startGame);
+  $("btn-retry").addEventListener("click",startGame);
+  $("btn-again").addEventListener("click",startGame);
+  $("btn-restart-p").addEventListener("click",startGame);
+  $("btn-build").addEventListener("click",toggleBuild);
+  $("btn-ship").addEventListener("click",tryOpenShip);
+  $("btn-close-ship").addEventListener("click",closeShip);
+  $("btn-skip-day").addEventListener("click",()=>{ if(G&&G.phase==="day"){ closeShip(); G.t=0.01; } });
+  $("btn-pause").addEventListener("click",()=>{ state==="pause"?resumeGame():doPause(); });
+  $("btn-resume").addEventListener("click",resumeGame);
+  $("btn-sound").addEventListener("click",toggleSound);
+  $("boot-best").textContent=bestLine(loadBest());   // show best run on the title screen
+
+  // ---------------- Boot ----------------
+  resize();
+  // idle boot scene: gentle camera on surface
+  cam.x=wrapX((CFG.SHIP_COL-6)*TILE); cam.y=Math.max(0,(GROUND-3)*TILE);
+  genWorld();
+  requestAnimationFrame(rafLoop);
+  // Fallback ticker so the game keeps running while the page/preview is hidden (rAF paused).
+  // It only steps when rAF hasn't fired recently, so visible playback stays pure rAF (no double-stepping).
+  try{
+    const blob=new Blob(["setInterval(function(){postMessage(0)},33)"],{type:"application/javascript"});
+    const w=new Worker(URL.createObjectURL(blob));
+    w.onmessage=function(){ if(performance.now()-lastStep>40) gameStep(); };
+  }catch(e){ /* workers unavailable — rAF only */ }
+
+  // debug hook
+  function __step(dt){ if(state!=="play") return; dt=dt||1/60;
+    updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt); updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); }
+  window.__MOON={ get G(){return G;}, get state(){return state;}, rover, enemies, builds, projectiles, scraps, particles, SHIP, CFG, T, get tiles(){return tiles;}, get lavaActive(){return lavaActive;}, mineTile, startGame, step:__step, render };
+})();
+</script>
+</body>
+</html>

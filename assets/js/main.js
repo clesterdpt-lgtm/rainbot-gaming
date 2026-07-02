@@ -126,6 +126,7 @@ const RB_GAME_META = {
   "strait-of-hormuz": { title: "Escape the Straight", scoreIds: ["hormuz"] },
   "super-slop-brothers": { title: "Super Slop Brothers", scoreIds: ["super-slop-brothers"] },
   "tardigrade-micro-mayhem": { title: "Tardigrade: Micro Mayhem", scoreIds: ["tardigrade-micro-mayhem"] },
+  "the-last-signal": { title: "The Last Signal", scoreIds: ["the-last-signal"] },
   "the-weight": { title: "The Weight", scoreIds: ["the-weight"] },
   "unhoused-and-unhinged": { title: "Unhoused and Unhinged", scoreIds: ["unhoused-and-unhinged"] },
 };
@@ -163,6 +164,7 @@ const RB_GAME_VISUALS = {
   "strait-of-hormuz": { image: "assets/img/mockup/card-escape-straight-wide.png?v=20260611-7", kind: "Action" },
   "super-slop-brothers": { image: "assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2", kind: "Fighter" },
   "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3", kind: "3D Sandbox" },
+  "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v2.jpg?v=20260702-tls-cover-2", kind: "RTS" },
   "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4", kind: "Horror" },
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
 };

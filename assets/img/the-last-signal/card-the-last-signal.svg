@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" role="img" aria-label="The Last Signal key art: a buried signal glowing beneath a dark excavation site, watched by three factions">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#05070f"/>
+      <stop offset="0.55" stop-color="#0a1020"/>
+      <stop offset="1" stop-color="#141324"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#171a28"/>
+      <stop offset="1" stop-color="#0b0d16"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#efe6ff"/>
+      <stop offset="0.25" stop-color="#b06cff"/>
+      <stop offset="0.7" stop-color="#5b2c9e" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#5b2c9e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haze" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7d4fd1" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#7d4fd1" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="675" fill="url(#sky)"/>
+
+  <!-- stars -->
+  <g fill="#cdd7ee">
+    <circle cx="96" cy="64" r="1.6" opacity="0.8"/><circle cx="212" cy="128" r="1.1" opacity="0.5"/>
+    <circle cx="342" cy="52" r="1.3" opacity="0.6"/><circle cx="486" cy="102" r="1.0" opacity="0.45"/>
+    <circle cx="618" cy="44" r="1.5" opacity="0.7"/><circle cx="744" cy="118" r="1.1" opacity="0.5"/>
+    <circle cx="872" cy="60" r="1.4" opacity="0.65"/><circle cx="1006" cy="112" r="1.0" opacity="0.5"/>
+    <circle cx="1108" cy="48" r="1.6" opacity="0.8"/><circle cx="1156" cy="150" r="1.0" opacity="0.4"/>
+    <circle cx="60" cy="190" r="1.0" opacity="0.4"/><circle cx="930" cy="176" r="1.2" opacity="0.55"/>
+  </g>
+
+  <!-- signal rings rising from the crust -->
+  <g fill="none" stroke="#b06cff">
+    <ellipse cx="600" cy="470" rx="360" ry="96" stroke-opacity="0.10" stroke-width="2"/>
+    <ellipse cx="600" cy="470" rx="270" ry="70" stroke-opacity="0.18" stroke-width="2"/>
+    <ellipse cx="600" cy="470" rx="185" ry="46" stroke-opacity="0.30" stroke-width="2.5"/>
+    <ellipse cx="600" cy="470" rx="105" ry="25" stroke-opacity="0.55" stroke-width="3"/>
+  </g>
+  <ellipse cx="600" cy="452" rx="330" ry="150" fill="url(#haze)"/>
+
+  <!-- ground / excavation -->
+  <path d="M0 500 L210 482 L360 494 L520 478 L700 492 L880 476 L1040 490 L1200 480 L1200 675 L0 675 Z" fill="url(#ground)"/>
+  <path d="M0 500 L210 482 L360 494 L520 478 L700 492 L880 476 L1040 490 L1200 480" fill="none" stroke="#2a3049" stroke-width="2"/>
+
+  <!-- the scar -->
+  <path d="M330 675 L432 585 L512 560 L575 512 L600 470 L628 514 L695 562 L780 590 L900 675 Z" fill="#07050d"/>
+  <path d="M462 675 L512 596 L562 552 L600 486 L640 556 L688 600 L742 675" fill="none" stroke="#b06cff" stroke-width="3" stroke-opacity="0.65" stroke-linejoin="round"/>
+  <path d="M540 675 L566 608 L600 520 L636 612 L664 675" fill="none" stroke="#e6d5ff" stroke-width="2" stroke-opacity="0.8" stroke-linejoin="round"/>
+  <ellipse cx="600" cy="480" rx="120" ry="42" fill="url(#core)"/>
+
+  <!-- hairline signal veins -->
+  <g fill="none" stroke="#8a5fd6" stroke-width="1.6" stroke-opacity="0.5">
+    <path d="M600 500 L470 540 L360 548 L250 588"/>
+    <path d="M600 500 L740 542 L860 552 L965 592"/>
+    <path d="M600 520 L560 590 L500 640"/>
+    <path d="M600 520 L660 596 L716 648"/>
+  </g>
+
+  <!-- three faction watchers: silhouettes on ridges -->
+  <!-- Humans: angular bunker + antenna, blue/amber -->
+  <g transform="translate(150,520)">
+    <path d="M-58 34 L-58 6 L-38 -10 L30 -10 L52 8 L52 34 Z" fill="#101a2c" stroke="#4da9ff" stroke-width="2"/>
+    <rect x="-14" y="-40" width="6" height="32" fill="#4da9ff"/>
+    <circle cx="-11" cy="-44" r="5" fill="#ffb454"/>
+    <rect x="-46" y="8" width="16" height="9" fill="#4da9ff" opacity="0.85"/>
+    <rect x="8" y="8" width="16" height="9" fill="#4da9ff" opacity="0.85"/>
+  </g>
+
+  <!-- Robots: hex core, red/cyan -->
+  <g transform="translate(1046,514)">
+    <path d="M0 -44 L38 -22 L38 22 L0 44 L-38 22 L-38 -22 Z" fill="#180d12" stroke="#ff4a57" stroke-width="2.5"/>
+    <path d="M0 -24 L20 -12 L20 12 L0 24 L-20 12 L-20 -12 Z" fill="none" stroke="#7df3ff" stroke-width="2"/>
+    <circle cx="0" cy="0" r="6" fill="#ff4a57"/>
+  </g>
+
+  <!-- Aliens: floating petal seed, violet/green -->
+  <g transform="translate(600,300)">
+    <ellipse cx="0" cy="52" rx="34" ry="8" fill="#b06cff" opacity="0.16"/>
+    <path d="M0 -34 C20 -20 24 6 0 30 C-24 6 -20 -20 0 -34 Z" fill="#1a1030" stroke="#b06cff" stroke-width="2.5"/>
+    <path d="M0 -14 C9 -6 10 8 0 18 C-10 8 -9 -6 0 -14 Z" fill="#7dff9a" opacity="0.8"/>
+  </g>
+
+  <!-- title -->
+  <g text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif">
+    <text x="600" y="160" font-size="76" font-weight="900" letter-spacing="6" fill="#f2ecff" stroke="#0a0716" stroke-width="10" paint-order="stroke">THE LAST SIGNAL</text>
+    <text x="600" y="204" font-size="21" letter-spacing="9" fill="#9aa5c4" font-family="Arial, Helvetica, sans-serif">THREE POWERS. ONE BURIED ANSWER.</text>
+  </g>
+
+  <!-- bottom classification strip -->
+  <g font-family="Courier New, monospace" font-size="15" fill="#7f88a6">
+    <text x="24" y="656">SITE 9 // THE HOLLOW</text>
+    <text x="1176" y="656" text-anchor="end">RTS SKIRMISH · RAINBOT</text>
+  </g>
+</svg>

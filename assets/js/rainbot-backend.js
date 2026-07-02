@@ -55,8 +55,8 @@ const RBBackend = (() => {
     "banana",
   ]);
   const PROFILE_ACCENTS = new Set(["cyan", "pink", "yellow", "green", "red", "white"]);
-  const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, created_at, updated_at";
-  const PROFILE_PUBLIC_SELECT = "display_name, avatar_url, profile_title, avatar_style, accent_color";
+  const PROFILE_SELECT = "id, display_name, avatar_url, role, profile_title, bio, favorite_game, avatar_style, accent_color, is_bot, bot_label, bot_mode, bot_posting_enabled, created_at, updated_at";
+  const PROFILE_PUBLIC_SELECT = "display_name, avatar_url, profile_title, avatar_style, accent_color, is_bot, bot_label";
   const PROFILE_LOOKUP_SELECT = `id, ${PROFILE_PUBLIC_SELECT}`;
 
   let client = null;

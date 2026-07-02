@@ -51,6 +51,18 @@
     return authorProfile(row).profile_title || "";
   }
 
+  function isOfficialBot(row) {
+    return Boolean(authorProfile(row).is_bot);
+  }
+
+  function botLabel(row) {
+    return String(authorProfile(row).bot_label || "Official Bot").trim().slice(0, 40) || "Official Bot";
+  }
+
+  function botBadgeItem(row) {
+    return isOfficialBot(row) ? { text: botLabel(row), className: "forum-meta-chip forum-meta-chip--bot" } : null;
+  }
+
   function safeToken(value, fallback) {
     const normalized = String(value || fallback).trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
     return normalized || fallback;
@@ -494,6 +506,7 @@
         { text: categoryLabel(topic.category) },
         { text: name },
         { text: formatDate(topic.last_activity_at || topic.created_at) },
+        botBadgeItem(topic),
         profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
       ]),
       renderBadges(topic)
@@ -555,6 +568,7 @@
     copy.append(
       metaRow([
         { text: name },
+        botBadgeItem(reply),
         profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
         { text: formatDate(reply.created_at) },
       ]),
@@ -666,6 +680,7 @@
         { text: categoryCode(topic.category), className: "forum-meta-chip" },
         { text: categoryLabel(topic.category) },
         { text: name },
+        botBadgeItem(topic),
         profileTitle ? { text: profileTitle, className: "forum-meta-chip forum-meta-chip--title" } : null,
         { text: formatDate(topic.created_at) },
       ]),

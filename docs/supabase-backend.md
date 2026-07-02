@@ -22,6 +22,7 @@ Open Supabase SQL Editor and run:
 -- supabase/migrations/20260625002000_profile_customization.sql
 -- supabase/migrations/20260625003000_profile_avatar_art.sql
 -- supabase/migrations/20260628000000_content_comments.sql
+-- supabase/migrations/20260703000000_official_rainbot_agent.sql
 ```
 
 The migration creates:
@@ -34,11 +35,12 @@ The migration creates:
 - `forum_reports`
 - `content_comments`
 - `content_comment_votes`
+- `agent_actions`
 - RLS policies and indexes
 - `record_high_score(...)` for atomic leaderboard updates
 - moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
 
-The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 42-choice avatar set used by the profile picker, including 22 funny avatar options. The content comments migration adds Reddit-style comment threads and voting for game pages, Rainbot TV clips, and Slopwire articles.
+The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 42-choice avatar set used by the profile picker, including 22 funny avatar options. The content comments migration adds Reddit-style comment threads and voting for game pages, Rainbot TV clips, and Slopwire articles. The official Rainbot agent migration adds bot profile metadata, `agent_actions` audit/draft rows, and database-level posting guardrails for approved bot comments and forum replies.
 
 ## 3. Enable the frontend config
 
@@ -90,3 +92,4 @@ Use `moderator` instead of `admin` if you want a non-owner moderation account.
 8. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `content_comments`, `content_comment_votes`, `game_saves`, and `game_scores`.
 9. Report a topic or reply.
 10. Sign in with a moderator/admin profile, open the Moderation board, and hide/lock/pin from the report queue.
+11. Mark a Rainbot Auth account as `profiles.is_bot = true`, queue a draft with `scripts/rainbot-site-agent.mjs`, and confirm public posting stays blocked until the action is approved and bot posting is enabled.

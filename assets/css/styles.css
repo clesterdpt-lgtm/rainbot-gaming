@@ -3359,7 +3359,7 @@ body.arcade-home::before {
 
 .home-daily-card {
   display: grid;
-  grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1fr) 54px;
   min-height: 280px;
   position: relative;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
@@ -3368,6 +3368,8 @@ body.arcade-home::before {
 .home-daily-card__poster {
   background: #02050a;
   display: block;
+  grid-column: 1;
+  grid-row: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -3414,6 +3416,8 @@ body.arcade-home::before {
   align-content: center;
   display: grid;
   gap: 12px;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   padding: 22px;
 }
@@ -3482,7 +3486,10 @@ body.arcade-home::before {
   display: flex;
   font-size: 10px;
   font-weight: 900;
+  grid-column: 3;
+  grid-row: 1;
   justify-content: center;
+  min-width: 54px;
   padding: 0 14px;
   writing-mode: vertical-rl;
 }
@@ -5506,7 +5513,10 @@ body.arcade-home::before {
   .home-daily-card__play {
     border-left: 0;
     border-top: 1px solid rgba(113, 132, 156, 0.38);
+    grid-column: 1;
+    grid-row: auto;
     min-height: 42px;
+    min-width: 0;
     writing-mode: horizontal-tb;
   }
 

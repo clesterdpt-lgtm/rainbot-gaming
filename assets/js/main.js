@@ -318,10 +318,15 @@ function renderNav(state = RB.state) {
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
   const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
   const isRainbotTv = path.endsWith("/videos.html") || path.includes("/videos/");
-  const isAgentGames = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
-  const isAfterDark = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
+  const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
+  const isAfterDarkRoute = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
-  const isGames = !isAgentGames && !isAfterDark && !isSlopwire && !isRainbotTv && !isForum && (path.endsWith("/games.html") || path.includes("/games/"));
+  const isGames = !isSlopwire && !isRainbotTv && !isForum && (
+    path.endsWith("/games.html") ||
+    path.includes("/games/") ||
+    isAgentGamesRoute ||
+    isAfterDarkRoute
+  );
   const localProfile = RB && typeof RB.getLocalProfile === "function" ? RB.getLocalProfile() : {};
   const localName = cleanVisibleGameTitle(localProfile.displayName || "");
   const localProfileLabel = localName && localName !== "Rainbot Player" ? localName : "Profile";
@@ -336,8 +341,6 @@ function renderNav(state = RB.state) {
       <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
       <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
       <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
-      <a href="${RB_BASE}agent-games.html" class="${isAgentGames ? "is-active" : ""}">Agent Games</a>
-      <a href="${RB_BASE}after-dark.html" class="${isAfterDark ? "is-active" : ""}">After Dark</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
     </div>
     <form class="nav__search" role="search">
@@ -462,6 +465,98 @@ function initGamesCatalog() {
   if (!grid || !categorySelect || !sortSelect) return;
 
   const normalize = (value) => (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const gamesSections = [
+    {
+      key: "human",
+      id: "human-games",
+      eyebrow: "Human",
+      title: "Human Games",
+      deck: "Finger-operated arcade chaos, meme sims, runners, fighters, puzzles, and browser weirdness.",
+    },
+    {
+      key: "agent",
+      id: "agent-games",
+      eyebrow: "Agent",
+      title: "Agent Games",
+      deck: "Protocol-first challenges built for AI agents, strict command grammars, and machine-readable state.",
+    },
+    {
+      key: "after-dark",
+      id: "after-dark-games",
+      eyebrow: "After Dark",
+      title: "After Dark",
+      deck: "The cursed horror line: headphones, bad rooms, late-night decisions, and exits that feel optional.",
+    },
+  ];
+  const afterDarkGameHrefs = new Set([
+    "games/escape-poop-cruise.html",
+    "games/dont-become-pizza.html",
+    "games/again.html",
+    "games/the-weight.html",
+    "games/mr-feast-mansion.html",
+  ]);
+  const sectionForCard = (card) => {
+    const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
+    const text = normalize(`${card.dataset.title || ""} ${card.textContent || ""}`);
+    if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse")) {
+      return "agent";
+    }
+    if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {
+      return "after-dark";
+    }
+    return "human";
+  };
+  const organizeCatalogSections = () => {
+    const existingSections = Array.from(grid.children)
+      .filter((child) => child.matches && child.matches("[data-games-section]"))
+      .map((section) => ({
+      key: section.dataset.gamesSection,
+      section,
+      grid: section.querySelector("[data-games-section-grid]") || grid,
+      count: section.querySelector("[data-games-section-count]"),
+    }));
+    if (existingSections.length) return existingSections;
+
+    const directCards = Array.from(grid.children).filter((child) => child.classList && child.classList.contains("directory-card"));
+    if (!directCards.length) return [];
+
+    grid.classList.add("games-section-stack");
+    const fragment = document.createDocumentFragment();
+    const sections = gamesSections.map((config) => {
+      const section = document.createElement("section");
+      section.className = `games-section games-section--${config.key}`;
+      section.id = config.id;
+      section.dataset.gamesSection = config.key;
+      section.innerHTML = `
+        <div class="games-section__header">
+          <div>
+            <span class="games-section__eyebrow">${config.eyebrow}</span>
+            <h3>${config.title}</h3>
+            <p>${config.deck}</p>
+          </div>
+          <span class="games-section__count" data-games-section-count>0 games</span>
+        </div>
+        <div class="directory-grid games-section__grid" data-games-section-grid></div>
+      `;
+      fragment.append(section);
+      return {
+        key: config.key,
+        section,
+        grid: section.querySelector("[data-games-section-grid]"),
+        count: section.querySelector("[data-games-section-count]"),
+      };
+    });
+    const sectionLookup = new Map(sections.map((section) => [section.key, section]));
+    directCards.forEach((card) => {
+      const sectionKey = sectionForCard(card);
+      card.dataset.gameSection = sectionKey;
+      (sectionLookup.get(sectionKey)?.grid || grid).append(card);
+    });
+    grid.append(fragment);
+    return sections;
+  };
+  const sectionEls = organizeCatalogSections();
+  const sectionGrids = new Map(sectionEls.map((section) => [section.key, section.grid]));
   const categoryKey = (value) => normalize(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const parsePopularity = (value) => {
     const match = normalize(value).match(/([\d.]+)\s*k\s+playing/);
@@ -499,6 +594,7 @@ function initGamesCatalog() {
       card,
       order,
       title: title || `Game ${order + 1}`,
+      sectionKey: card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card),
       category,
       categoryKey: categoryKey(category),
       detail,
@@ -545,7 +641,10 @@ function initGamesCatalog() {
       return a.order - b.order;
     });
 
-    sorted.forEach((item) => grid.append(item.card));
+    sorted.forEach((item) => {
+      const sectionGrid = sectionGrids.get(item.sectionKey) || grid;
+      sectionGrid.append(item.card);
+    });
   };
 
   const applyFilters = () => {
@@ -554,12 +653,22 @@ function initGamesCatalog() {
     sortCards();
 
     let visible = 0;
+    const sectionVisible = new Map(sectionEls.map((section) => [section.key, 0]));
     cards.forEach((item) => {
       const categoryMatch = state.category === "all" || item.categoryKey === state.category;
       const searchMatch = !state.search || item.searchText.includes(state.search);
       const show = categoryMatch && searchMatch;
       item.card.toggleAttribute("hidden", !show);
-      if (show) visible += 1;
+      if (show) {
+        visible += 1;
+        sectionVisible.set(item.sectionKey, (sectionVisible.get(item.sectionKey) || 0) + 1);
+      }
+    });
+
+    sectionEls.forEach((item) => {
+      const sectionCount = sectionVisible.get(item.key) || 0;
+      item.section.hidden = sectionCount === 0;
+      if (item.count) item.count.textContent = `${sectionCount} ${sectionCount === 1 ? "game" : "games"}`;
     });
 
     if (countEl) {

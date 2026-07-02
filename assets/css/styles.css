@@ -4268,6 +4268,68 @@ body.arcade-home::before {
   font-weight: 800;
 }
 
+.games-modebar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 8px 14px;
+}
+
+.games-modebar a {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  overflow: hidden;
+  border: 1px solid rgba(113, 132, 156, 0.58);
+  background:
+    linear-gradient(135deg, rgba(35, 223, 242, 0.1), transparent 44%),
+    rgba(3, 6, 11, 0.96);
+  color: var(--arcade-white);
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+.games-modebar a::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  border-left: 13px solid var(--arcade-yellow);
+  transform: translateY(-50%);
+}
+
+.games-modebar a:hover {
+  border-color: var(--arcade-cyan);
+  box-shadow: 0 0 22px rgba(35, 223, 242, 0.18);
+  text-decoration: none;
+}
+
+.games-modebar b,
+.games-modebar span {
+  display: block;
+  padding-right: 26px;
+  text-transform: uppercase;
+}
+
+.games-modebar b {
+  color: var(--arcade-yellow);
+  font-family: var(--arcade-font);
+  font-size: clamp(16px, 2.1vw, 24px);
+  line-height: 1;
+}
+
+.games-modebar span {
+  color: #9eb6cb;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .games-filterbar {
   align-items: end;
   display: flex;
@@ -4359,6 +4421,107 @@ body.arcade-home::before {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 0 8px 8px;
+}
+
+.games-section-stack {
+  gap: 14px;
+}
+
+.games-section {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  min-width: 0;
+  scroll-margin-top: 96px;
+}
+
+.games-section__header {
+  position: relative;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(113, 132, 156, 0.48);
+  background:
+    radial-gradient(circle at 86% 18%, rgba(255, 212, 59, 0.16), transparent 28%),
+    linear-gradient(90deg, rgba(255, 20, 144, 0.14), transparent 42%),
+    rgba(3, 6, 11, 0.96);
+  padding: 18px 20px;
+}
+
+.games-section__header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 58px, rgba(35, 223, 242, 0.06) 58px 60px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 5px);
+  pointer-events: none;
+}
+
+.games-section__header > * {
+  position: relative;
+  z-index: 1;
+}
+
+.games-section__eyebrow,
+.games-section__count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.games-section__eyebrow {
+  color: var(--arcade-cyan);
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.games-section h3 {
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: clamp(26px, 3.8vw, 44px);
+  line-height: 1;
+  margin: 0;
+  text-transform: uppercase;
+  text-shadow: 3px 0 0 rgba(255, 20, 144, 0.28), -2px 0 0 rgba(35, 223, 242, 0.2);
+}
+
+.games-section p {
+  color: #bfccd9;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 720px;
+  margin: 10px 0 0;
+  text-transform: uppercase;
+}
+
+.games-section__count {
+  flex: 0 0 auto;
+  border: 1px solid rgba(247, 217, 36, 0.44);
+  background: rgba(247, 217, 36, 0.1);
+  color: var(--arcade-yellow);
+  padding: 9px 11px;
+}
+
+.games-section--agent .games-section__header {
+  border-color: rgba(35, 223, 242, 0.46);
+  background:
+    radial-gradient(circle at 86% 18%, rgba(35, 223, 242, 0.18), transparent 30%),
+    linear-gradient(90deg, rgba(35, 223, 242, 0.12), transparent 42%),
+    rgba(2, 5, 10, 0.98);
+}
+
+.games-section--after-dark .games-section__header {
+  border-color: rgba(162, 29, 45, 0.62);
+  background:
+    radial-gradient(circle at 82% 18%, rgba(162, 29, 45, 0.28), transparent 32%),
+    linear-gradient(90deg, rgba(255, 20, 144, 0.12), transparent 38%),
+    rgba(12, 4, 6, 0.98);
 }
 
 .directory-card {
@@ -5492,6 +5655,20 @@ body.arcade-home::before {
 
   .directory-grid {
     grid-template-columns: 1fr;
+  }
+
+  .games-modebar {
+    grid-template-columns: 1fr;
+  }
+
+  .games-section__header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .games-section__count {
+    width: fit-content;
   }
 
   .games-filterbar {
@@ -10427,4 +10604,11 @@ body.arcade-home::before {
   .community-page .forum-category-list {
     grid-template-columns: 1fr;
   }
+}
+
+/* The Last Signal key art fills both card layouts. */
+.poster-card--tls img,
+.directory-card__poster--tls img {
+  object-fit: cover;
+  object-position: center;
 }

@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Games — Rainbot Network</title>
-  <meta name="description" content="All Rainbot Network browser games. Free, instant-play, meme-worthy." />
+  <meta name="description" content="All Rainbot Network browser games, grouped into Human, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260628-mobile-nav-community-4" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260701-games-consolidated-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="games-index arcade-home">
@@ -16,21 +16,36 @@
     <header class="games-hero arcade-panel">
       <div class="games-hero__copy">
         <span class="games-hero__eyebrow">All Games</span>
-        <h1>Pick Your Glitch.</h1>
-        <p>Free browser chaos for people whose attention span has already rage-quit.</p>
+        <h1>One Vault. Three Flavors.</h1>
+        <p>Human arcade chaos, agent protocol experiments, and After Dark horror now live under one Games roof.</p>
       </div>
       <div class="games-hero__stats" aria-label="Arcade directory stats">
-        <span><b>28</b> games online</span>
-        <span><b>0</b> downloads</span>
+        <span><b>29</b> games online</span>
+        <span><b>3</b> sections</span>
         <span><b>100%</b> browser</span>
       </div>
     </header>
 
     <section class="arcade-panel games-catalog" data-search-scope data-games-catalog>
       <div class="arcade-panel__header">
-        <h2><span class="panel-glyph">+</span>Full Game Vault</h2>
+        <h2><span class="panel-glyph">+</span>Games Vault</h2>
         <span class="games-catalog__count" data-games-count>New weirdness weekly</span>
       </div>
+
+      <nav class="games-modebar" aria-label="Game sections">
+        <a href="#human-games">
+          <b>Human</b>
+          <span>Arcade chaos</span>
+        </a>
+        <a href="#agent-games">
+          <b>Agent</b>
+          <span>Protocol runs</span>
+        </a>
+        <a href="#after-dark-games">
+          <b>After Dark</b>
+          <span>Horror vault</span>
+        </a>
+      </nav>
 
       <div class="games-filterbar" aria-label="Game filters">
         <label class="games-filterbar__field" for="games-category-filter">
@@ -57,6 +72,18 @@
       </div>
 
       <div class="directory-grid" data-games-grid>
+        <a href="games/the-last-signal.html" class="directory-card" data-title="The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow">
+          <div class="directory-card__poster directory-card__poster--tls">
+            <img src="assets/img/the-last-signal/card-the-last-signal.svg?v=20260701-tls-1" alt="The Last Signal key art — a buried signal glowing beneath a dark excavation site, watched by three factions" />
+            <span class="directory-card__status">New</span>
+          </div>
+          <div class="directory-card__body">
+            <p>A serious, lore-forward RTS-lite skirmish. A deep signal wakes beneath Earth's crust — command Humans, Robots, or Aliens, harvest three resources, raise a base, and break the enemy command core before their waves break yours.</p>
+          </div>
+          <span class="directory-card__meta"><b>RTS</b><em>Fresh drop</em></span>
+          <span class="directory-card__play" aria-hidden="true">Play</span>
+        </a>
+
         <a href="games/escape-poop-cruise.html" class="directory-card" data-title="Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural">
           <div class="directory-card__poster directory-card__poster--poop-cruise">
             <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" />
@@ -443,7 +470,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260629-avatar-icons-2"></script>
+  <script src="assets/js/main.js?v=20260701-games-consolidated-1"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

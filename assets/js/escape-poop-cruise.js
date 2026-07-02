@@ -2389,6 +2389,18 @@
     });
     state.pickups = [];
 
+    function pickNearSpawnTile() {
+      const candidates = map.floors
+        .filter((tile) => map.grid[tile.gy][tile.gx] === Tile.FLOOR)
+        .map((tile) => ({
+          tile,
+          distance: Math.abs(tile.gx - map.start.gx) + Math.abs(tile.gy - map.start.gy),
+        }))
+        .filter((item) => item.distance > 0)
+        .sort((a, b) => a.distance - b.distance || a.tile.gy - b.tile.gy || a.tile.gx - b.tile.gx);
+      return candidates.length ? candidates[0].tile : map.start;
+    }
+
     function addPickup(type, tile) {
       if (!tile) return;
       const pos = tileToWorld(tile.gx, tile.gy, map);
@@ -2404,8 +2416,8 @@
       const type = rng() < 0.45 ? "fresh-air" : "shells";
       addPickup(type, tile);
     }
-    if (state.level >= 2 && !state.shotgunUnlocked && floors.length) {
-      addPickup("shotgun", floors.splice(Math.floor(rng() * floors.length), 1)[0]);
+    if (state.level >= 3 && !state.shotgunUnlocked) {
+      addPickup("shotgun", pickNearSpawnTile());
     }
   }
 
@@ -2441,7 +2453,11 @@
     spawnEnemies();
     spawnPickups();
     rebuildFlow();
-    setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then find the stairwell door.`);
+    if (state.level >= 3 && !state.shotgunUnlocked) {
+      setStatus(`Deck ${level}: ${SHOTGUN_DISPLAY_NAME} is staged near spawn. Grab it, cure ${state.neededCures} passengers, then find the stairwell door.`);
+    } else {
+      setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then find the stairwell door.`);
+    }
     updateExitDoor();
     updateHud();
     hideOverlay();

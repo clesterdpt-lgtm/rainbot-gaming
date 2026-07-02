@@ -33,8 +33,7 @@ function getBackendState() {
 
 function getBackendDisplayName(backendState) {
   const profileName = backendState && backendState.profile && backendState.profile.display_name;
-  const userEmail = backendState && backendState.user && backendState.user.email;
-  return profileName || (userEmail ? userEmail.split("@")[0] : "Profile");
+  return profileName || "Profile";
 }
 
 const RB_PROFILE_AVATAR_ROOT = "assets/img/avatars/";
@@ -757,6 +756,9 @@ function setModalStatus(root, message, kind = "") {
 function openAuthModal() {
   if (document.getElementById("rb-auth-modal")) return;
   const backendState = getBackendState();
+  const localProfile = getLocalProfileSnapshot();
+  const localProfileName = cleanVisibleGameTitle(localProfile.displayName || "");
+  const signupNameValue = localProfileName && localProfileName !== "Rainbot Player" ? localProfileName : "";
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-auth-modal";
@@ -774,6 +776,10 @@ function openAuthModal() {
       <button class="rb-auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="magic">Magic Link</button>
     </div>
     <form class="rb-auth-form rb-auth-panel" id="rb-password-auth-form" data-auth-panel="password">
+      <label class="rb-form-field" for="rb-signup-display-name">
+        <span>Player Name</span>
+        <input id="rb-signup-display-name" type="text" autocomplete="nickname" maxlength="32" placeholder="Rainbot Player" value="${escapeHtml(signupNameValue)}" />
+      </label>
       <label class="rb-form-field" for="rb-password-email">
         <span>Email</span>
         <input id="rb-password-email" type="email" autocomplete="email" placeholder="you@example.com" required />
@@ -820,6 +826,7 @@ function openAuthModal() {
   const magicForm = backdrop.querySelector("#rb-magic-auth-form");
   const googleButton = backdrop.querySelector("#rb-google-auth");
   if (passwordForm && magicForm) {
+    const signupDisplayName = passwordForm.querySelector("#rb-signup-display-name");
     const passwordEmail = passwordForm.querySelector("#rb-password-email");
     const passwordInput = passwordForm.querySelector("#rb-auth-password");
     const magicEmail = magicForm.querySelector("#rb-magic-email");
@@ -857,10 +864,16 @@ function openAuthModal() {
     });
     backdrop.querySelector("#rb-create-account").addEventListener("click", async () => {
       const button = backdrop.querySelector("#rb-create-account");
+      const displayName = signupDisplayName.value.trim();
+      if (displayName.length < 2) {
+        setModalStatus(backdrop, "Enter a player name before creating an account.", "bad");
+        signupDisplayName.focus();
+        return;
+      }
       button.disabled = true;
       setModalStatus(backdrop, "Creating account...", "");
       try {
-        await window.RBBackend.signUpWithPassword(passwordEmail.value, passwordInput.value);
+        await window.RBBackend.signUpWithPassword(passwordEmail.value, passwordInput.value, { display_name: displayName });
         setModalStatus(backdrop, "Account created. Check your email if confirmation is required.", "good");
         RB.toast("Account created", "good");
       } catch (error) {

@@ -183,7 +183,7 @@ const RBBackend = (() => {
 
   function displayNameFromUser(user) {
     const meta = user && user.user_metadata ? user.user_metadata : {};
-    const name = cleanText(meta.display_name || meta.full_name || meta.name || (user.email || "").split("@")[0] || "Rainbot Player", 32);
+    const name = cleanText(meta.display_name || meta.full_name || meta.name || "Rainbot Player", 32);
     return name.length >= 2 ? name : "Rainbot Player";
   }
 
@@ -316,25 +316,33 @@ const RBBackend = (() => {
     return initPromise;
   }
 
-  async function signInWithMagicLink(email) {
+  async function signInWithMagicLink(email, profile = {}) {
     const activeClient = await requireClient();
     const cleanedEmail = validateEmail(cleanEmail(email));
+    const displayName = cleanText(profile && profile.display_name, 32);
     const { error } = await activeClient.auth.signInWithOtp({
       email: cleanedEmail,
-      options: { emailRedirectTo: config.emailRedirectTo || window.location.href },
+      options: {
+        emailRedirectTo: config.emailRedirectTo || window.location.href,
+        data: { display_name: displayName.length >= 2 ? displayName : "Rainbot Player" },
+      },
     });
     if (error) throw error;
     return true;
   }
 
-  async function signUpWithPassword(email, password) {
+  async function signUpWithPassword(email, password, profile = {}) {
     const activeClient = await requireClient();
     const cleanedEmail = validateEmail(cleanEmail(email));
     const cleanedPassword = validatePassword(cleanPassword(password));
+    const displayName = cleanText(profile && profile.display_name, 32);
     const { data, error } = await activeClient.auth.signUp({
       email: cleanedEmail,
       password: cleanedPassword,
-      options: { emailRedirectTo: config.emailRedirectTo || window.location.href },
+      options: {
+        emailRedirectTo: config.emailRedirectTo || window.location.href,
+        data: { display_name: displayName.length >= 2 ? displayName : "Rainbot Player" },
+      },
     });
     if (error) throw error;
     if (data && data.session && data.session.user) await hydrateUser(data.session.user);

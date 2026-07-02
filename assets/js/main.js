@@ -168,6 +168,59 @@ const RB_GAME_VISUALS = {
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
 };
 
+const RB_DAILY_CHALLENGES = [
+  {
+    slug: "brainrot-2048",
+    metric: "score",
+    target: 2048,
+    title: "Merge To 2048",
+    objective: "Post a 2,048+ local best in Brainrot 2048.",
+  },
+  {
+    slug: "escape-poop-cruise",
+    metric: "sessions",
+    target: 1,
+    title: "Board The Cruise",
+    objective: "Open Escape the Poop Cruise and start one run.",
+  },
+  {
+    slug: "rizz-craft",
+    metric: "minutes",
+    target: 10,
+    title: "Ten-Minute Build",
+    objective: "Spend 10 minutes in Rizz-Craft.",
+  },
+  {
+    slug: "storm-area-51",
+    metric: "sessions",
+    target: 2,
+    title: "Double Raid",
+    objective: "Log two Storm Area 51 attempts.",
+  },
+  {
+    slug: "drone-hunter",
+    metric: "score",
+    target: 1000,
+    title: "Target Practice",
+    objective: "Set a 1,000+ local best in Drone Hunter.",
+  },
+  {
+    slug: "flappy-stonks",
+    metric: "score",
+    target: 50,
+    title: "Market Lift",
+    objective: "Post a 50+ local best in Flappy Stonks.",
+  },
+];
+
+const HOME_COMMUNITY_COMMENT_TARGETS = [
+  { contentType: "game", contentId: "escape-poop-cruise", title: "Escape the Poop Cruise", href: "games/escape-poop-cruise.html", kicker: "Game thread" },
+  { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
+  { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
+  { contentType: "article", contentId: "local-man-shadowbanned-by-own-fridge", title: "Shadowbanned By Own Refrigerator", href: "articles/local-man-shadowbanned-by-own-fridge.html", kicker: "Slopwire" },
+  { contentType: "video", contentId: "area-51-raid-clap-alien-cheeks", title: "Area 51 Raid", href: "videos.html#featured", kicker: "Rainbot TV" },
+];
+
 function getLocalSaveCount() {
   if (!window.RBGameSaves || typeof window.RBGameSaves.listLocalSaves !== "function") return 0;
   return window.RBGameSaves.listLocalSaves().length;
@@ -915,6 +968,191 @@ function profileRecentGamesMarkup(entries) {
   `;
 }
 
+function bestScoreForSlug(slug) {
+  const meta = RB_GAME_META[slug] || { scoreIds: [slug] };
+  const allowed = new Set([slug, ...scoreIdsForMeta(meta)]);
+  return localScoreEntries()
+    .filter((entry) => allowed.has(entry.gameId) || canonicalGameSlug(entry.gameId) === slug)
+    .reduce((best, entry) => Math.max(best, entry.score), 0);
+}
+
+function gameplayTotalsForSlug(stats, slug) {
+  return gameplayEntries(stats).reduce((totals, entry) => {
+    if (canonicalGameSlug(entry.gameId) !== slug) return totals;
+    totals.playMs += Math.max(0, Number(entry.playMs) || 0);
+    totals.sessions += Math.max(0, Math.floor(Number(entry.sessions) || 0));
+    totals.lastPlayedAt = Math.max(totals.lastPlayedAt, Number(entry.lastPlayedAt) || 0);
+    totals.lastSavedAt = Math.max(totals.lastSavedAt, Number(entry.lastSavedAt) || 0);
+    totals.bestScore = Math.max(totals.bestScore, Number(entry.bestScore) || 0);
+    return totals;
+  }, { playMs: 0, sessions: 0, lastPlayedAt: 0, lastSavedAt: 0, bestScore: 0 });
+}
+
+function achievementEntries() {
+  const stats = gameplayStatsSnapshot();
+  const entries = gameplayEntries(stats);
+  const playedEntries = entries.filter((entry) => entry.sessions > 0 || entry.playMs > 0);
+  const scoreEntries = localScoreEntries();
+  const totalScore = scoreEntries.reduce((sum, entry) => sum + entry.score, 0);
+  const bestScore = scoreEntries[0] ? scoreEntries[0].score : 0;
+  const saveCount = localSaveEntries().length || getLocalSaveCount();
+  const streak = currentPlayStreak(stats.playDays || {});
+  const cruiseStats = gameplayTotalsForSlug(stats, "escape-poop-cruise");
+  const achievements = [
+    {
+      id: "first-run",
+      title: "First Run",
+      detail: "Open any Rainbot game.",
+      unlocked: (Number(stats.sessions) || 0) > 0 || playedEntries.length > 0,
+      progress: `${formatStatNumber(stats.sessions)} sessions`,
+    },
+    {
+      id: "scoreboard-rookie",
+      title: "Scoreboard Rookie",
+      detail: "Log one local high score.",
+      unlocked: scoreEntries.length > 0,
+      progress: `${formatStatNumber(scoreEntries.length)} scores`,
+    },
+    {
+      id: "five-game-sampler",
+      title: "Five-Game Sampler",
+      detail: "Play five different games.",
+      unlocked: playedEntries.length >= 5,
+      progress: `${formatStatNumber(playedEntries.length)}/5 games`,
+    },
+    {
+      id: "return-trip",
+      title: "Return Trip",
+      detail: "Build a two-day play streak.",
+      unlocked: streak >= 2,
+      progress: `${formatStatNumber(streak)}/2 days`,
+    },
+    {
+      id: "save-slot",
+      title: "Save Slot",
+      detail: "Keep one active save.",
+      unlocked: saveCount > 0,
+      progress: `${formatStatNumber(saveCount)} saves`,
+    },
+    {
+      id: "one-hour-chaos",
+      title: "One-Hour Chaos",
+      detail: "Play for one total hour.",
+      unlocked: (Number(stats.totalPlayMs) || 0) >= 3600000,
+      progress: `${formatPlayDuration(stats.totalPlayMs)}/1h`,
+    },
+    {
+      id: "ten-k-club",
+      title: "10K Club",
+      detail: "Bank 10,000 total local points.",
+      unlocked: totalScore >= 10000,
+      progress: `${formatStatNumber(totalScore)}/10,000`,
+    },
+    {
+      id: "cruise-survivor",
+      title: "Cruise Survivor",
+      detail: "Start a cruise run.",
+      unlocked: cruiseStats.sessions > 0 || bestScoreForSlug("escape-poop-cruise") > 0,
+      progress: cruiseStats.sessions > 0 ? `${formatStatNumber(cruiseStats.sessions)} runs` : "0 runs",
+    },
+    {
+      id: "best-run",
+      title: "Best Run",
+      detail: "Post a 5,000+ local best.",
+      unlocked: bestScore >= 5000,
+      progress: `${formatStatNumber(bestScore)}/5,000`,
+    },
+  ];
+  return achievements.sort((a, b) => Number(b.unlocked) - Number(a.unlocked));
+}
+
+function achievementBadgeImageSrc(id) {
+  return `${RB_BASE}assets/img/badges/achievement-${id}.png?v=20260701-badge-art-1`;
+}
+
+function achievementBadgeMarkup(entry) {
+  return `
+    <span class="rb-achievement-badge ${entry.unlocked ? "is-unlocked" : "is-locked"}">
+      <span class="rb-achievement-badge__art" aria-hidden="true">
+        <img src="${escapeHtml(achievementBadgeImageSrc(entry.id))}" alt="" loading="lazy" decoding="async" />
+      </span>
+      <span class="rb-achievement-badge__copy">
+        <b>${escapeHtml(entry.title)}</b>
+        <small>${escapeHtml(entry.unlocked ? "Unlocked" : entry.progress)}</small>
+        <em>${escapeHtml(entry.detail)}</em>
+      </span>
+    </span>
+  `;
+}
+
+function profileAchievementsMarkup(limit = 6) {
+  const entries = achievementEntries();
+  const unlocked = entries.filter((entry) => entry.unlocked).length;
+  return `
+    <div class="rb-achievement-summary">
+      <strong>${formatStatNumber(unlocked)}/${formatStatNumber(entries.length)}</strong>
+      <small>Unlocked</small>
+    </div>
+    <div class="rb-achievement-list">
+      ${entries.slice(0, limit).map(achievementBadgeMarkup).join("")}
+    </div>
+  `;
+}
+
+function levelTitleFor(level) {
+  if (level >= 15) return "Arcade Legend";
+  if (level >= 10) return "Challenge Grinder";
+  if (level >= 6) return "Neon Regular";
+  if (level >= 3) return "Slop Cadet";
+  return "Arcade Rookie";
+}
+
+function xpNeededForLevel(level) {
+  return 420 + Math.max(1, Number(level) || 1) * 180;
+}
+
+function playerLevelInfo() {
+  const stats = gameplayStatsSnapshot();
+  const entries = gameplayEntries(stats);
+  const playedEntries = entries.filter((entry) => entry.sessions > 0 || entry.playMs > 0);
+  const scoreEntries = localScoreEntries();
+  const totalScore = scoreEntries.reduce((sum, entry) => sum + entry.score, 0);
+  const saveCount = localSaveEntries().length || getLocalSaveCount();
+  const achievements = achievementEntries();
+  const unlockedAchievements = achievements.filter((entry) => entry.unlocked).length;
+  const playMinutes = Math.floor((Number(stats.totalPlayMs) || 0) / 60000);
+  const streak = currentPlayStreak(stats.playDays || {});
+  const xp = Math.max(0, Math.floor(
+    (Number(stats.sessions) || 0) * 25 +
+    playedEntries.length * 120 +
+    playMinutes * 5 +
+    scoreEntries.length * 85 +
+    Math.floor(totalScore / 100) +
+    saveCount * 70 +
+    unlockedAchievements * 260 +
+    streak * 110
+  ));
+  let level = 1;
+  let progressXp = xp;
+  while (progressXp >= xpNeededForLevel(level) && level < 99) {
+    progressXp -= xpNeededForLevel(level);
+    level += 1;
+  }
+  const nextLevelXp = xpNeededForLevel(level);
+  const percent = Math.max(0, Math.min(100, Math.round((progressXp / nextLevelXp) * 100)));
+  return {
+    level,
+    title: levelTitleFor(level),
+    xp,
+    progressXp,
+    nextLevelXp,
+    percent,
+    remainingXp: Math.max(0, nextLevelXp - progressXp),
+    unlockedAchievements,
+    totalAchievements: achievements.length,
+  };
+}
+
 function profileGamerStatsMarkup(backendState = getBackendState()) {
   const profile = backendState.profile || {};
   const role = backendState.user
@@ -939,7 +1177,15 @@ function profileGamerStatsMarkup(backendState = getBackendState()) {
     : backendState.configured
       ? "Cloud ready"
       : "Local only";
+  const levelInfo = playerLevelInfo();
   return `
+    <div class="rb-profile-stat rb-profile-stat--hero rb-profile-stat--wide rb-profile-stat--level">
+      <span>Player Level</span>
+      <strong>Level ${formatStatNumber(levelInfo.level)}</strong>
+      <small>${escapeHtml(levelInfo.title)} - ${formatStatNumber(levelInfo.xp)} XP</small>
+      <span class="rb-xp-bar" style="--progress: ${levelInfo.percent}%"><i></i></span>
+      <small>${formatStatNumber(levelInfo.remainingXp)} XP to Level ${formatStatNumber(levelInfo.level + 1)}</small>
+    </div>
     <div class="rb-profile-stat rb-profile-stat--hero rb-profile-stat--wide">
       <span>Gameplay Time</span>
       <strong>${escapeHtml(formatPlayDuration(stats.totalPlayMs))}</strong>
@@ -986,6 +1232,10 @@ function profileGamerStatsMarkup(backendState = getBackendState()) {
     <div class="rb-profile-stat rb-profile-stat--wide">
       <span>Recent Games</span>
       ${profileRecentGamesMarkup(entries)}
+    </div>
+    <div class="rb-profile-stat rb-profile-stat--wide rb-profile-stat--achievements">
+      <span>Achievements</span>
+      ${profileAchievementsMarkup(6)}
     </div>
   `;
 }
@@ -1085,6 +1335,385 @@ function homeRecentCardMarkup(entry, index) {
   `;
 }
 
+function currentDailyChallenge() {
+  const today = localDateKey(new Date());
+  const hash = Array.from(today).reduce((sum, char, index) => sum + (char.charCodeAt(0) * (index + 3)), 0);
+  return { ...RB_DAILY_CHALLENGES[hash % RB_DAILY_CHALLENGES.length], dateKey: today };
+}
+
+function dailyChallengeProgress(challenge) {
+  const stats = gameplayStatsSnapshot();
+  const totals = gameplayTotalsForSlug(stats, challenge.slug);
+  let current = 0;
+  let label = "";
+  if (challenge.metric === "score") {
+    current = Math.max(bestScoreForSlug(challenge.slug), totals.bestScore);
+    label = `Best ${formatStatNumber(current)} / ${formatStatNumber(challenge.target)}`;
+  } else if (challenge.metric === "minutes") {
+    current = Math.floor(totals.playMs / 60000);
+    label = `${formatStatNumber(current)} / ${formatStatNumber(challenge.target)} min`;
+  } else {
+    current = totals.sessions;
+    label = `${formatStatNumber(current)} / ${formatStatNumber(challenge.target)} runs`;
+  }
+  const percent = Math.max(0, Math.min(100, Math.round((current / Math.max(1, challenge.target)) * 100)));
+  return {
+    current,
+    label,
+    percent,
+    complete: current >= challenge.target,
+  };
+}
+
+function homeDailyChallengeMarkup() {
+  const challenge = currentDailyChallenge();
+  const progress = dailyChallengeProgress(challenge);
+  const visual = gameVisualForHome(challenge.slug);
+  const status = progress.complete ? "Complete" : "In progress";
+  return `
+    <a class="home-daily-card ${progress.complete ? "is-complete" : ""}" href="${escapeHtml(visual.href)}" data-title="${escapeHtml(`${challenge.title} daily challenge ${visual.title}`)}">
+      <span class="home-daily-card__poster">
+        <img src="${escapeHtml(visual.image)}" alt="${escapeHtml(visual.alt)}" loading="lazy" decoding="async" />
+        <em>${escapeHtml(status)}</em>
+      </span>
+      <span class="home-daily-card__body">
+        <small>Today - ${escapeHtml(visual.kind)}</small>
+        <strong>${escapeHtml(challenge.title)}</strong>
+        <span>${escapeHtml(challenge.objective)}</span>
+        <span class="home-progress-bar" style="--progress: ${progress.percent}%"><i></i></span>
+        <b>${escapeHtml(progress.label)}</b>
+      </span>
+      <span class="home-daily-card__play" aria-hidden="true">${progress.complete ? "Play again" : "Start challenge"}</span>
+    </a>
+  `;
+}
+
+function homeAchievementsMarkup() {
+  const entries = achievementEntries();
+  const unlocked = entries.filter((entry) => entry.unlocked).length;
+  const levelInfo = playerLevelInfo();
+  return `
+    <div class="home-achievements-card">
+      <div class="home-level-card">
+        <span class="home-level-card__badge" aria-hidden="true">
+          <b>${formatStatNumber(levelInfo.level)}</b>
+          <em>LVL</em>
+        </span>
+        <span class="home-level-card__body">
+          <small>Player Level</small>
+          <strong>${escapeHtml(levelInfo.title)}</strong>
+          <span class="home-progress-bar" style="--progress: ${levelInfo.percent}%"><i></i></span>
+          <em>${formatStatNumber(levelInfo.progressXp)} / ${formatStatNumber(levelInfo.nextLevelXp)} XP - ${formatStatNumber(levelInfo.remainingXp)} to next</em>
+        </span>
+      </div>
+      <div class="home-achievements-card__header">
+        <span>
+          <small>Profile Progress</small>
+          <strong>${formatStatNumber(unlocked)}/${formatStatNumber(entries.length)} unlocked</strong>
+        </span>
+        <button type="button" data-home-profile>Profile</button>
+      </div>
+      <div class="home-achievement-grid">
+        ${entries.slice(0, 6).map((entry) => `
+          <span class="home-achievement-badge ${entry.unlocked ? "is-unlocked" : "is-locked"}">
+            <span class="home-achievement-badge__art" aria-hidden="true">
+              <img src="${escapeHtml(achievementBadgeImageSrc(entry.id))}" alt="" loading="lazy" decoding="async" />
+            </span>
+            <span class="home-achievement-badge__copy">
+              <b>${escapeHtml(entry.title)}</b>
+              <em>${escapeHtml(entry.unlocked ? "Unlocked" : entry.progress)}</em>
+            </span>
+          </span>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function homeCommunityAuthorName(profile = {}) {
+  return profile.display_name || profile.name || "Rainbot Player";
+}
+
+function homeCommunityAvatarMarkup(profile = {}) {
+  const style = cleanProfileUiChoice(profile.avatar_style, RB_PROFILE_AVATARS, "bot");
+  const accent = cleanProfileUiChoice(profile.accent_color, RB_PROFILE_ACCENTS, "cyan");
+  return `
+    <span class="home-community-avatar rb-profile-avatar--${style} rb-profile-avatar--${accent} rb-profile-avatar--image" aria-hidden="true">
+      <img src="${escapeHtml(profileAvatarSrc(style))}" alt="" loading="lazy" decoding="async" />
+    </span>
+  `;
+}
+
+function formatCommunityTime(value) {
+  const time = typeof value === "number" ? value : Date.parse(value || "");
+  if (!Number.isFinite(time) || time <= 0) return "recently";
+  return formatRelativeActivity(time);
+}
+
+function homeCommunityLocalScoreRows(limit = 3) {
+  const localProfile = getLocalProfileSnapshot();
+  const backendState = getBackendState();
+  const author = {
+    display_name: backendState.user ? getBackendDisplayName(backendState) : (localProfile.displayName || "You"),
+    avatar_style: profileField(backendState.profile || localProfile, "avatar_style", "avatarStyle", "bot"),
+    accent_color: profileField(backendState.profile || localProfile, "accent_color", "accentColor", "cyan"),
+  };
+  return localScoreEntries().slice(0, limit).map((entry, index) => ({
+    name: author.display_name,
+    score: entry.score,
+    detail: titleForScoreId(entry.gameId),
+    href: "community.html#leaderboard",
+    author,
+    rank: index + 1,
+    local: true,
+  }));
+}
+
+function homeCommunityFallbackTopics() {
+  return [
+    {
+      title: "Daily Slop Challenge is live",
+      meta: "Homepage loop",
+      href: "#daily-challenge",
+    },
+    {
+      title: "Show off your best local run",
+      meta: "Community board",
+      href: "community.html",
+    },
+    {
+      title: "New achievements are tracking",
+      meta: "Profile progress",
+      href: "#community-pulse",
+    },
+  ];
+}
+
+function homeCommunityFallbackActivity() {
+  const recent = recentHomeGameEntries(3);
+  if (recent.length) {
+    return recent.map((entry) => {
+      const visual = gameVisualForHome(entry.gameId);
+      return {
+        title: visual.title,
+        body: `${formatPlayDuration(entry.playMs)} played - ${formatRelativeActivity(entry.activityAt)}`,
+        meta: visual.kind,
+        href: visual.href,
+      };
+    });
+  }
+  return [
+    {
+      title: "Escape the Poop Cruise",
+      body: "Players are boarding the latest release.",
+      meta: "Now playing",
+      href: "games/escape-poop-cruise.html",
+    },
+    {
+      title: "Rainbot TV",
+      body: "Area 51 footage is sitting in the featured slot.",
+      meta: "Watch",
+      href: "videos.html#featured",
+    },
+    {
+      title: "The Slopwire",
+      body: "Fresh fake-news dispatches are open for comments.",
+      meta: "Read",
+      href: "articles.html",
+    },
+  ];
+}
+
+function homeCommunityScoreRowsMarkup(rows) {
+  if (!rows.length) {
+    return `<div class="home-community-empty">No scores yet. A single run puts you on the board.</div>`;
+  }
+  return rows.map((row, index) => `
+    <a class="home-community-row home-community-row--score" href="${escapeHtml(row.href || "community.html#leaderboard")}">
+      ${homeCommunityAvatarMarkup(row.author || {})}
+      <span>
+        <strong>#${formatStatNumber(row.rank || index + 1)} ${escapeHtml(row.name || homeCommunityAuthorName(row.author))}</strong>
+        <em>${escapeHtml(row.detail || titleForScoreId(row.game_id))}</em>
+      </span>
+      <b>${formatStatNumber(row.score)}</b>
+    </a>
+  `).join("");
+}
+
+function homeCommunityTextRowsMarkup(rows, emptyText) {
+  if (!rows.length) return `<div class="home-community-empty">${escapeHtml(emptyText)}</div>`;
+  return rows.map((row) => `
+    <a class="home-community-row" href="${escapeHtml(row.href || "community.html")}">
+      <span>
+        <strong>${escapeHtml(row.title)}</strong>
+        <em>${escapeHtml(row.meta || "")}</em>
+      </span>
+      ${row.body ? `<p>${escapeHtml(row.body)}</p>` : ""}
+    </a>
+  `).join("");
+}
+
+function homeCommunityPanelMarkup(data = {}) {
+  const scoreRows = data.scoreRows || homeCommunityLocalScoreRows(3);
+  const topicRows = data.topicRows || homeCommunityFallbackTopics();
+  const activityRows = data.activityRows || homeCommunityFallbackActivity();
+  const stateText = data.stateText || "Local pulse";
+  return `
+    <article class="home-community-card home-community-card--leaderboard">
+      <div class="home-community-card__header">
+        <span>
+          <small>${escapeHtml(stateText)}</small>
+          <strong>Top Players</strong>
+        </span>
+        <a href="community.html#leaderboard">Board</a>
+      </div>
+      <div class="home-community-list">${homeCommunityScoreRowsMarkup(scoreRows)}</div>
+    </article>
+    <article class="home-community-card">
+      <div class="home-community-card__header">
+        <span>
+          <small>Latest Posts</small>
+          <strong>Community Board</strong>
+        </span>
+        <a href="community.html">Post</a>
+      </div>
+      <div class="home-community-list">${homeCommunityTextRowsMarkup(topicRows, "No community posts yet.")}</div>
+    </article>
+    <article class="home-community-card">
+      <div class="home-community-card__header">
+        <span>
+          <small>${data.hotLabel || "Hot Now"}</small>
+          <strong>${data.hotTitle || "Activity Feed"}</strong>
+        </span>
+        <a href="articles.html">Feed</a>
+      </div>
+      <div class="home-community-list">${homeCommunityTextRowsMarkup(activityRows, "No activity yet.")}</div>
+    </article>
+  `;
+}
+
+function normalizeHomeCommunityScoreRows(rows = []) {
+  return rows.slice(0, 3).map((row, index) => ({
+    name: homeCommunityAuthorName(row.author || {}),
+    score: Math.max(0, Math.floor(Number(row.score) || 0)),
+    detail: titleForScoreId(row.game_id),
+    href: "community.html#leaderboard",
+    author: row.author || {},
+    rank: index + 1,
+  }));
+}
+
+function normalizeHomeCommunityTopics(rows = []) {
+  return rows.slice(0, 3).map((topic) => ({
+    title: topic.title || "Community topic",
+    meta: `${topic.category || "General"} - ${formatCommunityTime(topic.last_activity_at || topic.created_at)}`,
+    href: `community.html?topic=${Number(topic.id) || ""}`,
+  }));
+}
+
+async function fetchHomeCommunityComments(limit = 3) {
+  if (!window.RBBackend || typeof window.RBBackend.listContentComments !== "function") return [];
+  const results = await Promise.allSettled(HOME_COMMUNITY_COMMENT_TARGETS.map(async (target) => {
+    const rows = await window.RBBackend.listContentComments({
+      contentType: target.contentType,
+      contentId: target.contentId,
+      sort: "best",
+      limit: 4,
+    });
+    return rows.map((row) => ({ ...row, target }));
+  }));
+  return results
+    .flatMap((result) => result.status === "fulfilled" ? result.value : [])
+    .sort((a, b) => (Number(b.vote_score) || 0) - (Number(a.vote_score) || 0) || Date.parse(b.created_at || "") - Date.parse(a.created_at || ""))
+    .slice(0, limit)
+    .map((comment) => ({
+      title: comment.target.title,
+      body: comment.body || "Community comment",
+      meta: `${comment.target.kicker} - ${formatCommunityTime(comment.created_at)}`,
+      href: `${comment.target.href}#comment-${Number(comment.id) || ""}`,
+    }));
+}
+
+async function loadHomeCommunityLive(root, key) {
+  const content = root && root.querySelector("[data-home-community-content]");
+  if (!content || !window.RBBackend) return;
+  try {
+    const [scoreResult, topicResult, commentResult] = await Promise.allSettled([
+      typeof window.RBBackend.listGlobalLeaderboard === "function" ? window.RBBackend.listGlobalLeaderboard(3) : Promise.resolve([]),
+      typeof window.RBBackend.listTopics === "function" ? window.RBBackend.listTopics({ limit: 3 }) : Promise.resolve([]),
+      fetchHomeCommunityComments(3),
+    ]);
+    if (root.dataset.homeCommunityFetchKey !== key) return;
+    const scoreRows = scoreResult.status === "fulfilled" && scoreResult.value.length
+      ? normalizeHomeCommunityScoreRows(scoreResult.value)
+      : homeCommunityLocalScoreRows(3);
+    const topicRows = topicResult.status === "fulfilled" && topicResult.value.length
+      ? normalizeHomeCommunityTopics(topicResult.value)
+      : homeCommunityFallbackTopics();
+    const commentRows = commentResult.status === "fulfilled" && commentResult.value.length
+      ? commentResult.value
+      : homeCommunityFallbackActivity();
+    content.innerHTML = homeCommunityPanelMarkup({
+      scoreRows,
+      topicRows,
+      activityRows: commentRows,
+      stateText: scoreResult.status === "fulfilled" && scoreResult.value.length ? "Live leaderboard" : "Local pulse",
+      hotLabel: commentResult.status === "fulfilled" && commentResult.value.length ? "Hot Comment" : "Hot Now",
+      hotTitle: commentResult.status === "fulfilled" && commentResult.value.length ? "Community Chatter" : "Activity Feed",
+    });
+    root.dataset.homeCommunityLive = "true";
+  } catch (error) {
+    console.warn("[Rainbot] Community pulse failed", error);
+  }
+}
+
+function renderHomeCommunityPanel() {
+  const root = document.querySelector("[data-home-community]");
+  if (!root) return;
+  const content = root.querySelector("[data-home-community-content]");
+  if (!content) return;
+  const backendState = getBackendState();
+  const key = backendState.ready && backendState.user ? `user:${backendState.user.id}` : "anon";
+  if (backendState.ready && root.dataset.homeCommunityFetchKey === key && root.dataset.homeCommunityLive === "true") return;
+  content.innerHTML = homeCommunityPanelMarkup();
+  root.dataset.homeCommunityLive = "false";
+  if (!window.RBBackend || !backendState.ready) return;
+  if (root.dataset.homeCommunityFetchKey === key) return;
+  root.dataset.homeCommunityFetchKey = key;
+  loadHomeCommunityLive(root, key);
+}
+
+function initHomeCommunityPanel() {
+  const root = document.querySelector("[data-home-community]");
+  if (!root) return;
+  renderHomeCommunityPanel();
+}
+
+function renderHomeProgressPanel() {
+  const root = document.querySelector("[data-home-progression]");
+  if (!root) return;
+  const challengeRoot = root.querySelector("[data-daily-challenge-content]");
+  const achievementRoot = root.querySelector("[data-home-achievements-content]");
+  const profileButton = root.querySelector(".arcade-panel__header [data-home-profile]");
+  const signedIn = Boolean(getBackendState().user);
+  if (profileButton) profileButton.textContent = signedIn ? "Achievements" : "Sign in";
+  if (challengeRoot) challengeRoot.innerHTML = homeDailyChallengeMarkup();
+  if (achievementRoot) achievementRoot.innerHTML = homeAchievementsMarkup();
+}
+
+function initHomeProgressPanel() {
+  const root = document.querySelector("[data-home-progression]");
+  if (!root || root.dataset.homeProgressBound === "true") return;
+  root.dataset.homeProgressBound = "true";
+  root.addEventListener("click", (event) => {
+    const profileButton = event.target.closest("[data-home-profile]");
+    if (!profileButton || !root.contains(profileButton)) return;
+    event.preventDefault();
+    openProfileModal();
+  });
+  renderHomeProgressPanel();
+}
+
 function renderHomeRecentPanel() {
   const root = document.querySelector("[data-home-recent]");
   if (!root) return;
@@ -1147,6 +1776,8 @@ function openProfileModal() {
   const favoriteGame = profileField(profile, "favorite_game", "favoriteGame", "");
   const avatarStyle = cleanProfileUiChoice(profileField(profile, "avatar_style", "avatarStyle", "bot"), RB_PROFILE_AVATARS, "bot");
   const accentColor = cleanProfileUiChoice(profileField(profile, "accent_color", "accentColor", "cyan"), RB_PROFILE_ACCENTS, "cyan");
+  const accountState = signedIn ? "Cloud Sync" : "Local Profile";
+  const accountDetail = signedIn ? (email || "Connected") : "Saved on this device";
   const avatarOptions = RB_PROFILE_AVATARS.map((option) => `
     <label class="rb-avatar-choice">
       <input type="radio" name="avatar_style" value="${option.value}"${option.value === avatarStyle ? " checked" : ""} />
@@ -1167,56 +1798,66 @@ function openProfileModal() {
   backdrop.id = "rb-profile-modal";
   backdrop.innerHTML = `
     <div class="modal rb-account-modal rb-profile-modal" role="dialog" aria-modal="true" aria-labelledby="rb-profile-title">
-      <div class="modal__title" id="rb-profile-title">Profile</div>
+      <div class="modal__title rb-profile-titlebar">
+        <span id="rb-profile-title">Player Profile</span>
+        <small>${escapeHtml(accountState)}</small>
+      </div>
+      <section class="rb-profile-card rb-profile-hero rb-profile-card--${accentColor}" data-profile-card aria-label="Profile preview">
+        <span class="rb-profile-avatar rb-profile-avatar--image rb-profile-avatar--${avatarStyle} rb-profile-avatar--${accentColor}" data-profile-avatar aria-hidden="true">
+          <img data-profile-avatar-img src="${escapeHtml(profileAvatarSrc(avatarStyle))}" alt="" />
+        </span>
+        <div class="rb-profile-card__copy">
+          <span class="rb-profile-kicker">${escapeHtml(role)}</span>
+          <strong data-profile-preview-name>${escapeHtml(displayName)}</strong>
+          <span data-profile-preview-title>${escapeHtml(profileTitle)}</span>
+          <p data-profile-preview-bio>${escapeHtml(bio || "No bio yet.")}</p>
+          <em data-profile-preview-favorite>${escapeHtml(favoriteGame ? `Favorite: ${favoriteGame}` : "Favorite game not set")}</em>
+        </div>
+        <div class="rb-profile-account-line">
+          <span>${escapeHtml(accountState)}</span>
+          <strong>${escapeHtml(accountDetail)}</strong>
+        </div>
+      </section>
       <div class="rb-profile-shell">
-        <section class="rb-profile-preview" aria-label="Profile preview">
-          <div class="rb-profile-card rb-profile-card--${accentColor}" data-profile-card>
-            <span class="rb-profile-avatar rb-profile-avatar--image rb-profile-avatar--${avatarStyle} rb-profile-avatar--${accentColor}" data-profile-avatar aria-hidden="true">
-              <img data-profile-avatar-img src="${escapeHtml(profileAvatarSrc(avatarStyle))}" alt="" />
-            </span>
-            <div class="rb-profile-card__copy">
-              <span class="rb-profile-kicker">${escapeHtml(role)}</span>
-              <strong data-profile-preview-name>${escapeHtml(displayName)}</strong>
-              <span data-profile-preview-title>${escapeHtml(profileTitle)}</span>
-              <p data-profile-preview-bio>${escapeHtml(bio || "No bio yet.")}</p>
-              <em data-profile-preview-favorite>${escapeHtml(favoriteGame ? `Favorite: ${favoriteGame}` : "Favorite game not set")}</em>
-            </div>
-          </div>
+        <section class="rb-profile-preview" aria-label="Gameplay stats">
+          <div class="rb-profile-section-label">Player Stats</div>
           <div class="rb-profile-summary" data-profile-gamer-stats>
             ${profileGamerStatsMarkup(backendState)}
           </div>
-          <div class="rb-profile-account-line">
-            <span>${signedIn ? "Email" : "Profile Mode"}</span>
-            <strong>${escapeHtml(email || "Connected")}</strong>
-          </div>
         </section>
         <form class="rb-auth-form rb-profile-form" id="rb-profile-form">
-          <div class="rb-profile-form-grid">
-            <label class="rb-form-field" for="rb-display-name">
-              <span>Display Name</span>
-              <input id="rb-display-name" type="text" maxlength="32" value="${escapeHtml(displayName)}" required />
-            </label>
-            <label class="rb-form-field" for="rb-profile-title-input">
-              <span>Title</span>
-              <input id="rb-profile-title-input" type="text" maxlength="40" value="${escapeHtml(profileTitle)}" required />
-            </label>
-            <label class="rb-form-field" for="rb-favorite-game">
-              <span>Favorite Game</span>
-              <input id="rb-favorite-game" type="text" maxlength="80" value="${escapeHtml(favoriteGame)}" />
-            </label>
+          <div class="rb-profile-form-section">
+            <div class="rb-profile-section-label">Identity</div>
+            <div class="rb-profile-form-grid">
+              <label class="rb-form-field" for="rb-display-name">
+                <span>Display Name</span>
+                <input id="rb-display-name" type="text" maxlength="32" value="${escapeHtml(displayName)}" required />
+              </label>
+              <label class="rb-form-field" for="rb-profile-title-input">
+                <span>Title</span>
+                <input id="rb-profile-title-input" type="text" maxlength="40" value="${escapeHtml(profileTitle)}" required />
+              </label>
+              <label class="rb-form-field rb-form-field--wide" for="rb-favorite-game">
+                <span>Favorite Game</span>
+                <input id="rb-favorite-game" type="text" maxlength="80" value="${escapeHtml(favoriteGame)}" />
+              </label>
+              <label class="rb-form-field rb-form-field--wide" for="rb-profile-bio">
+                <span>Bio</span>
+                <textarea id="rb-profile-bio" maxlength="180" rows="4">${escapeHtml(bio)}</textarea>
+              </label>
+            </div>
           </div>
-          <fieldset class="rb-profile-avatar-field">
-            <legend>Avatar</legend>
-            <div class="rb-avatar-choice-grid">${avatarOptions}</div>
-          </fieldset>
-          <label class="rb-form-field" for="rb-profile-bio">
-            <span>Bio</span>
-            <textarea id="rb-profile-bio" maxlength="180" rows="4">${escapeHtml(bio)}</textarea>
-          </label>
-          <fieldset class="rb-profile-accent-field">
-            <legend>Accent</legend>
-            <div class="rb-profile-swatches">${accentOptions}</div>
-          </fieldset>
+          <div class="rb-profile-form-section">
+            <div class="rb-profile-section-label">Style</div>
+            <fieldset class="rb-profile-avatar-field">
+              <legend>Avatar</legend>
+              <div class="rb-avatar-choice-grid">${avatarOptions}</div>
+            </fieldset>
+            <fieldset class="rb-profile-accent-field">
+              <legend>Accent</legend>
+              <div class="rb-profile-swatches">${accentOptions}</div>
+            </fieldset>
+          </div>
           <button class="btn btn--primary" type="submit">Save Profile</button>
         </form>
       </div>
@@ -1262,7 +1903,7 @@ function openProfileModal() {
     const nextFavorite = favoriteInput.value.trim();
     const nextAvatar = cleanProfileUiChoice(selectedAvatar(), RB_PROFILE_AVATARS, "bot");
     const nextAccent = cleanProfileUiChoice(selectedAccent(), RB_PROFILE_ACCENTS, "cyan");
-    profileCard.className = `rb-profile-card rb-profile-card--${nextAccent}`;
+    profileCard.className = `rb-profile-card rb-profile-hero rb-profile-card--${nextAccent}`;
     profileAvatar.className = `rb-profile-avatar rb-profile-avatar--image rb-profile-avatar--${nextAvatar} rb-profile-avatar--${nextAccent}`;
     profileAvatarImg.src = profileAvatarSrc(nextAvatar);
     previewName.textContent = nextName;
@@ -2110,6 +2751,8 @@ function handleBackendAuthChange(event) {
   const backendState = event.detail || getBackendState();
   renderNav(RB.state);
   renderHomeRecentPanel();
+  renderHomeProgressPanel();
+  renderHomeCommunityPanel();
   RBLeaderboards.renderAll();
   RBComments.renderAll();
   if (backendState.passwordRecovery && backendState.user) {
@@ -2565,11 +3208,15 @@ document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initGameEscapeMenu();
   initHomeRecentPanel();
+  initHomeProgressPanel();
+  initHomeCommunityPanel();
   RBLeaderboards.init();
   RBComments.init();
   RB.subscribe((state) => {
     renderNav(state);
     renderHomeRecentPanel();
+    renderHomeProgressPanel();
+    renderHomeCommunityPanel();
     RBLeaderboards.renderAll();
     RBComments.renderAll();
     const profileModal = document.getElementById("rb-profile-modal");

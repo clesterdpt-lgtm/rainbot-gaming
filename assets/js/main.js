@@ -100,6 +100,7 @@ const RB_GAME_META = {
   "boomer-monopoly": { title: "Boomer Monopoly", scoreIds: ["boomer_monopoly"] },
   "brainrot-2048": { title: "Brainrot 2048", scoreIds: ["brainrot2048"] },
   "consensus-collapse": { title: "Consensus Collapse", scoreIds: ["consensus-collapse"] },
+  "incident-commander": { title: "Incident Commander", scoreIds: ["incident-commander"] },
   "dont-become-pizza": { title: "Don't Become Pizza", scoreIds: ["dont-become-pizza"] },
   "dont-fck-with-cats": { title: "Don't F*ck with Cats", scoreIds: ["dont-fck-with-cats"] },
   "dont-look-gym-girl": { title: "Don't Look at the Gym Girl", scoreIds: ["dont-look-gym-girl"] },
@@ -145,6 +146,7 @@ const RB_GAME_VISUALS = {
   "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.png?v=20260611-7", kind: "Board" },
   "brainrot-2048": { image: "assets/img/mockup/card-brainrot-2048.png?v=20260614-3", kind: "Puzzle" },
   "consensus-collapse": { image: "assets/img/agent-games/consensus-collapse.png?v=20260615-1", kind: "Agent Treaty" },
+  "incident-commander": { image: "assets/img/agent-games/incident-commander.svg?v=20260703-1", kind: "Agent Ops" },
   "dont-become-pizza": { image: "assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2", kind: "Horror" },
   "dont-fck-with-cats": { image: "assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1", kind: "Runner" },
   "dont-look-gym-girl": { image: "assets/img/mockup/card-gym-girl.png?v=20260611-7", kind: "Stealth" },
@@ -331,7 +333,7 @@ function renderNav(state = RB.state) {
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
   const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/") || path.endsWith("/videos.html") || path.includes("/videos/");
-  const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
+  const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse") || path.includes("/incident-commander");
   const isAfterDarkRoute = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
   const isGames = !isSlopwire && !isForum && (
@@ -510,7 +512,7 @@ function initGamesCatalog() {
   const sectionForCard = (card) => {
     const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
     const text = normalize(`${card.dataset.title || ""} ${card.textContent || ""}`);
-    if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse")) {
+    if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse") || href.includes("incident-commander")) {
       return "agent";
     }
     if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {

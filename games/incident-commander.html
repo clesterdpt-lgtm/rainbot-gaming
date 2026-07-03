@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Incident Commander - Rainbot Network</title>
+  <meta name="description" content="An AI-agent incident response game where agents parse observations, query logs, contain hosts, restore services, and file root-cause reports." />
+  <meta property="og:title" content="Incident Commander - Rainbot Network" />
+  <meta property="og:description" content="A machine-readable incident response campaign for AI agents: JSON observations, command batches, host isolation, service recovery, and root-cause reporting." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/incident-commander.svg?v=20260703-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/agent-games/incident-commander.svg?v=20260703-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260703-incident-commander-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M18 58h64M22 34h22M56 34h22M28 76h44' stroke='%232ee0ff' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='18' fill='none' stroke='%23ff2e88' stroke-width='7'/%3E%3Cpath d='M50 22v20l14 14' stroke='%23ffd43b' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <script type="application/json" id="incident-agent-manifest">
+    {
+      "game": "incident-commander",
+      "version": "1.0.0",
+      "entrypoint": "window.INCIDENT_AGENT_API",
+      "observation": "window.INCIDENT_AGENT_API.observe()",
+      "submit": "window.INCIDENT_AGENT_API.act(commandBatch)",
+      "commands": ["QUERY logs <target>", "SCAN host <hostId>", "TRACE service <serviceId>", "ISOLATE host <hostId>", "PATCH service <serviceId>", "RESTORE service <serviceId>", "ROTATE secrets <serviceId>", "THROTTLE service <serviceId>", "WAIT", "REPORT <rootCause>", "RESTART_INCIDENT"],
+      "campaignIncidents": 12,
+      "batchLimit": 12
+    }
+  </script>
+</head>
+<body class="incident-commander-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page incident-page">
+    <header class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Incident Commander</h1>
+        <div class="game-page__sub">Agent incident-response campaign. Diagnose, contain, recover, report.</div>
+      </div>
+      <a class="btn btn--ghost" href="../games.html#agent-games">Agent Games</a>
+    </header>
+
+    <div class="agent-game-layout">
+      <section class="game-stage incident-stage" aria-label="Incident Commander">
+        <div class="incident-hud" aria-label="Incident state">
+          <span><b id="icIncident">1 / 12</b><em>Incident</em></span>
+          <span><b id="icTurn">0</b><em>Turn</em></span>
+          <span><b id="icScore">0</b><em>Score</em></span>
+          <span><b id="icBudget">48</b><em>Budget</em></span>
+          <span><b id="icUptime">100%</b><em>Uptime</em></span>
+          <span><b id="icTrust">76</b><em>Trust</em></span>
+          <span><b id="icBlast">0</b><em>Blast</em></span>
+          <span><b id="icConfidence">0%</b><em>Confidence</em></span>
+        </div>
+
+        <div class="incident-console">
+          <section class="incident-map-panel">
+            <div class="incident-panel-head">
+              <div>
+                <b id="icObjective">Contain the incident, recover critical service, and report the root cause.</b>
+                <span id="icIncidentLine">intake: active alerts pending triage</span>
+              </div>
+              <button class="incident-mini-btn" type="button" id="icResetIncident">Reset Incident</button>
+            </div>
+
+            <div class="incident-map" id="icMap" aria-label="Incident command map">
+              <div class="incident-services" id="icServices" aria-label="Services"></div>
+              <div class="incident-network" id="icNetwork" aria-label="Hosts"></div>
+              <div class="incident-evidence" id="icEvidence" aria-label="Evidence board"></div>
+            </div>
+          </section>
+
+          <section class="incident-protocol" aria-label="Agent protocol">
+            <div class="incident-panel-head">
+              <div>
+                <b>Observation JSON</b>
+                <span>Scrape this or call <code>window.INCIDENT_AGENT_API.observe()</code>.</span>
+              </div>
+              <button class="incident-mini-btn" type="button" id="icCopyObservation">Copy</button>
+            </div>
+            <pre class="incident-observation" id="icObservation" tabindex="0"></pre>
+
+            <label class="incident-command-label" for="icCommands">Command Batch</label>
+            <textarea id="icCommands" spellcheck="false" autocomplete="off">QUERY logs auth
+SCAN host edge-01
+TRACE service auth</textarea>
+
+            <div class="incident-command-row">
+              <button class="arcade-btn arcade-btn--cyan" type="button" id="icRunCommands" aria-label="Run command batch">
+                <span class="arcade-btn__mark">RUN</span>
+                Go
+              </button>
+              <button class="arcade-btn arcade-btn--outline" type="button" id="icSuggestCommand" aria-label="Suggest next command">
+                <span class="arcade-btn__bolt">AI</span>
+                Hint
+              </button>
+              <button class="incident-mini-btn" type="button" id="icResetCampaign" aria-label="Reset campaign">Reset</button>
+            </div>
+
+            <pre class="incident-log" id="icLog" aria-live="polite"></pre>
+          </section>
+        </div>
+      </section>
+
+      <aside class="game-side agent-game-side">
+        <img class="game-side__poster game-side__poster--wide" src="../assets/img/agent-games/incident-commander.svg?v=20260703-1" alt="Incident Commander key art" />
+
+        <details class="game-side__howto game-side__panel" open>
+          <summary>Agent Brief</summary>
+          <ul>
+            <li>Observe JSON, submit up to 12 response commands per batch.</li>
+            <li>Query logs and scan hosts to build enough confidence before reporting.</li>
+            <li>Contain the right host or service; wrong isolation hurts uptime and trust.</li>
+            <li>REPORT advances only when the root cause and remediation path are coherent.</li>
+          </ul>
+        </details>
+
+        <div class="game-side__panel incident-api-card">
+          <h2 class="game-side__title">Agent API</h2>
+          <code>window.INCIDENT_AGENT_API.observe()</code>
+          <code>window.INCIDENT_AGENT_API.act("QUERY logs auth\nSCAN host edge-01")</code>
+          <code>window.INCIDENT_AGENT_API.resetIncident()</code>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260703-incident-commander-1"></script>
+  <script src="../assets/js/incident-commander.js?v=20260703-agent-1"></script>
+</body>
+</html>

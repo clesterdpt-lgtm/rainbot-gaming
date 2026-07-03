@@ -221,7 +221,7 @@ const HOME_COMMUNITY_COMMENT_TARGETS = [
   { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
   { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
   { contentType: "article", contentId: "local-man-shadowbanned-by-own-fridge", title: "Shadowbanned By Own Refrigerator", href: "articles/local-man-shadowbanned-by-own-fridge.html", kicker: "Slopwire" },
-  { contentType: "video", contentId: "area-51-raid-clap-alien-cheeks", title: "Area 51 Raid", href: "videos.html#featured", kicker: "Rainbot TV" },
+  { contentType: "video", contentId: "area-51-raid-clap-alien-cheeks", title: "Area 51 Raid", href: "videos.html#featured", kicker: "The Slopwire" },
 ];
 
 function getLocalSaveCount() {
@@ -332,12 +332,11 @@ function renderNav(state = RB.state) {
     : "";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-  const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/");
-  const isRainbotTv = path.endsWith("/videos.html") || path.includes("/videos/");
+  const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/") || path.endsWith("/videos.html") || path.includes("/videos/");
   const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse");
   const isAfterDarkRoute = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
-  const isGames = !isSlopwire && !isRainbotTv && !isForum && (
+  const isGames = !isSlopwire && !isForum && (
     path.endsWith("/games.html") ||
     path.includes("/games/") ||
     isAgentGamesRoute ||
@@ -356,7 +355,6 @@ function renderNav(state = RB.state) {
       <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
       <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
       <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
-      <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
     </div>
     <form class="nav__search" role="search">
@@ -1890,9 +1888,9 @@ function homeCommunityFallbackActivity() {
       href: "games/escape-poop-cruise.html",
     },
     {
-      title: "Rainbot TV",
-      body: "Area 51 footage is sitting in the featured slot.",
-      meta: "Watch",
+      title: "The Slopwire",
+      body: "Area 51 footage is sitting in the occasional clips slot.",
+      meta: "Clip",
       href: "videos.html#featured",
     },
     {
@@ -2746,14 +2744,14 @@ const RBComments = (() => {
     const title = cleanCommentTitle(
       card?.dataset.tvTitle ||
       document.querySelector("[data-tv-active-title]")?.textContent ||
-      "Rainbot TV"
+      "The Slopwire"
     );
     return {
       contentType: "video",
-      contentId: cleanCommentContentId(card?.dataset.tvTitle || title, "rainbot-tv"),
+      contentId: cleanCommentContentId(card?.dataset.tvTitle || title, "slopwire-clip"),
       pageTitle: title,
       pageUrl: `${location.pathname}${location.search}`,
-      kicker: "Rainbot TV",
+      kicker: "The Slopwire",
       mountAfter: document.querySelector(".tv-stage"),
       mountParent: document.querySelector(".content-directory") || document.querySelector("main"),
     };

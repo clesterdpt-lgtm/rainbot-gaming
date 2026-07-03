@@ -5712,6 +5712,18 @@ body.arcade-home::before {
 
   .portal-hero__title {
     font-size: 23px;
+    transform: none;
+    width: 100%;
+  }
+
+  .portal-hero__title-line,
+  .portal-hero__tagline {
+    max-width: 100%;
+    width: auto;
+  }
+
+  .portal-hero__tagline {
+    overflow-wrap: anywhere;
   }
 
   .portal-hero__sub {
@@ -6387,7 +6399,7 @@ body.arcade-home::before {
   gap: 12px;
 }
 
-/* ===== The Slopwire and Rainbot TV ===== */
+/* ===== The Slopwire media ===== */
 .content-directory {
   max-width: 1480px;
   padding-top: 12px;

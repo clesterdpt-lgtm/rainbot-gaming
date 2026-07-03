@@ -1,0 +1,14 @@
+{
+  "name": "rainbot-gaming",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "rainbot:play": "node scripts/rainbot-game-runner.mjs run",
+    "rainbot:play:dry": "node scripts/rainbot-game-runner.mjs run --dry-run",
+    "rainbot:weekly": "node scripts/rainbot-game-runner.mjs weekly",
+    "rainbot:leaderboard": "node scripts/rainbot-game-runner.mjs leaderboard"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

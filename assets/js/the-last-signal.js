@@ -16,7 +16,7 @@
      ================================================== */
   const GAME_ID = "the-last-signal";
   const W = 1280, H = 720;               // canvas viewport
-  const WORLD_W = 4200, WORLD_H = 3000;  // world size
+  const WORLD_W = 5600, WORLD_H = 4000;  // world size
   const MM = { x: 14, y: H - 168, w: 244, h: 154 }; // minimap rect (canvas space)
   const BUILD_RADIUS = 320;              // max distance from a friendly building
   const CLAIM_TIME = 2.4;                // seconds to secure a resource node
@@ -25,6 +25,14 @@
   const EDGE_SCROLL = 820;               // px/s
   const CENTER = { x: WORLD_W / 2, y: WORLD_H / 2 };
   const TAU = Math.PI * 2;
+  const VISION = {
+    worker: 360,
+    combat: 430,
+    building: 520,
+    hq: 650,
+    claimedNode: 500,
+    claimingNode: 330,
+  };
 
   const BASE_RATES = { matter: 0.9, energy: 1.0, signal: 0.3 };
   const NODE_RES = { matter: "m", energy: "e", signal: "s" };
@@ -363,6 +371,7 @@
     particles: [],
     commandFx: [],
     decals: [],
+    vision: [],
     selection: [],
     selVersion: 0,
     placing: null,       // {def, x, y, node, valid}
@@ -440,56 +449,76 @@
     offsets.forEach(([ox, oy]) => addNode(kind, cx + ox, cy + oy, amount));
   }
 
-  const HQ_POS = [{ x: 620, y: WORLD_H - 620 }, mirror({ x: 620, y: WORLD_H - 620 })];
+  const HQ_POS = [{ x: 760, y: WORLD_H - 720 }, mirror({ x: 760, y: WORLD_H - 720 })];
 
   function initWorld() {
     state.nodes = [];
     state.obstacles = [];
-    const richOffs = [[0, 0], [54, -30], [-48, 34], [42, 50], [-36, -54], [86, 18], [-82, -8]];
-    const fieldOffs = [[0, 0], [64, -26], [-58, 42], [50, 60], [-44, -62]];
+    const richOffs = [[0, 0], [54, -30], [-48, 34], [42, 50], [-36, -54], [86, 18], [-82, -8], [108, -62], [-112, 58]];
+    const fieldOffs = [[0, 0], [64, -26], [-58, 42], [50, 60], [-44, -62], [92, 36]];
 
     // matter fields: safe starts, flank routes, forward fields, and contested center deposits.
-    addMirroredCluster("matter", HQ_POS[0].x - 145, HQ_POS[0].y - 330, richOffs, 1900);
-    addMirroredCluster("matter", HQ_POS[0].x + 360, HQ_POS[0].y + 270, fieldOffs, 1500);
-    addMirroredCluster("matter", 1120, WORLD_H - 1030, fieldOffs, 1750);
-    addMirroredCluster("matter", 1540, WORLD_H - 1470, fieldOffs.slice(0, 4), 1650);
-    addMirroredCluster("matter", 860, CENTER.y - 260, fieldOffs.slice(0, 4), 1450);
-    addMirroredCluster("matter", CENTER.x - 520, CENTER.y + 410, fieldOffs, 1650);
-    addMirroredCluster("matter", CENTER.x - 210, CENTER.y - 520, fieldOffs.slice(0, 4), 1350);
+    addMirroredCluster("matter", HQ_POS[0].x - 155, HQ_POS[0].y - 360, richOffs, 2200);
+    addMirroredCluster("matter", HQ_POS[0].x + 430, HQ_POS[0].y + 310, fieldOffs, 1700);
+    addMirroredCluster("matter", 1120, WORLD_H - 1440, fieldOffs, 1850);
+    addMirroredCluster("matter", 1650, WORLD_H - 2120, fieldOffs, 1750);
+    addMirroredCluster("matter", 980, 790, fieldOffs, 1650);
+    addMirroredCluster("matter", 1780, 650, fieldOffs.slice(0, 5), 1500);
+    addMirroredCluster("matter", CENTER.x - 970, CENTER.y + 620, fieldOffs, 1700);
+    addMirroredCluster("matter", CENTER.x - 350, CENTER.y - 760, fieldOffs.slice(0, 5), 1550);
+    addMirroredCluster("matter", CENTER.x - 1340, CENTER.y - 190, fieldOffs.slice(0, 5), 1500);
 
     // energy vents (infinite geothermal)
     [
-      { x: HQ_POS[0].x + 245, y: HQ_POS[0].y + 255 },
-      { x: HQ_POS[0].x + 740, y: HQ_POS[0].y - 70 },
-      { x: 1280, y: WORLD_H - 1160 },
-      { x: 620, y: CENTER.y - 350 },
-      { x: CENTER.x - 820, y: CENTER.y + 660 },
+      { x: HQ_POS[0].x + 300, y: HQ_POS[0].y + 285 },
+      { x: HQ_POS[0].x + 910, y: HQ_POS[0].y - 95 },
+      { x: 1380, y: WORLD_H - 1540 },
+      { x: 720, y: 980 },
+      { x: 1580, y: 860 },
+      { x: CENTER.x - 1110, y: CENTER.y + 790 },
+      { x: CENTER.x - 1160, y: CENTER.y - 540 },
     ].forEach((p) => addMirroredNode("energy", p.x, p.y, Infinity));
 
     // signal fractures: a broader contested fault line plus one safer side node per team
     addNode("signal", CENTER.x, CENTER.y, Infinity);
     [
-      { x: CENTER.x - 185, y: CENTER.y + 120 },
-      { x: CENTER.x - 410, y: CENTER.y - 290 },
-      { x: CENTER.x - 160, y: CENTER.y + 450 },
-      { x: CENTER.x - 720, y: CENTER.y + 50 },
-      { x: HQ_POS[0].x + 560, y: HQ_POS[0].y - 700 },
-      { x: 1450, y: WORLD_H - 1830 },
+      { x: CENTER.x - 260, y: CENTER.y + 160 },
+      { x: CENTER.x - 560, y: CENTER.y - 370 },
+      { x: CENTER.x - 240, y: CENTER.y + 650 },
+      { x: CENTER.x - 980, y: CENTER.y + 60 },
+      { x: HQ_POS[0].x + 720, y: HQ_POS[0].y - 860 },
+      { x: 1580, y: 920 },
+      { x: 940, y: 1290 },
     ].forEach((p) => addMirroredNode("signal", p.x, p.y, Infinity));
 
     // rock formations (impassable-ish circles; units are pushed out)
-    addMirroredRock(900, WORLD_H - 760, 58);
-    addMirroredRock(1070, WORLD_H - 900, 38);
-    addMirroredRock(620, WORLD_H - 1120, 52);
-    addMirroredRock(1350, WORLD_H - 1450, 56);
-    addMirroredRock(1740, WORLD_H - 1740, 46);
-    addMirroredRock(CENTER.x - 720, CENTER.y + 180, 68);
-    addMirroredRock(CENTER.x - 430, CENTER.y - 340, 46);
-    addMirroredRock(CENTER.x - 190, CENTER.y + 660, 52);
-    addRock(CENTER.x, CENTER.y - 690, 58);
-    addRock(CENTER.x, CENTER.y + 690, 58);
-    addRock(260, 310, 44);
-    addRock(WORLD_W - 260, WORLD_H - 310, 44);
+    [
+      [920, WORLD_H - 930, 68],
+      [1110, WORLD_H - 1080, 46],
+      [650, WORLD_H - 1280, 60],
+      [1400, WORLD_H - 1640, 64],
+      [1860, WORLD_H - 1960, 54],
+      [2360, WORLD_H - 1760, 46],
+      [CENTER.x - 900, CENTER.y + 240, 74],
+      [CENTER.x - 580, CENTER.y - 440, 54],
+      [CENTER.x - 250, CENTER.y + 820, 60],
+      [CENTER.x - 1320, CENTER.y - 520, 58],
+      [560, 560, 64],
+      [820, 1140, 48],
+      [1300, 560, 58],
+      [1900, 1070, 52],
+      [2380, 760, 44],
+    ].forEach(([x, y, r]) => addMirroredRock(x, y, r));
+    [
+      [CENTER.x, CENTER.y - 880, 66],
+      [CENTER.x, CENTER.y + 880, 66],
+      [CENTER.x - 370, CENTER.y + 20, 42],
+      [CENTER.x + 370, CENTER.y - 20, 42],
+      [320, 360, 48],
+      [WORLD_W - 320, WORLD_H - 360, 48],
+      [WORLD_W - 620, 520, 52],
+      [620, WORLD_H - 520, 52],
+    ].forEach(([x, y, r]) => addRock(x, y, r));
     buildTerrain();
   }
 
@@ -586,6 +615,45 @@
   function canUseNodeForExtractor(team, n) {
     return !!(n && nodeHasResources(n) && !n.rig && isNodeClaimedBy(n, team));
   }
+  function refreshVision() {
+    const pt = playerTeam();
+    state.vision = [];
+    if (!pt || state.phase !== "playing" && state.phase !== "over") return;
+    for (const u of state.units) {
+      if (u.dead || u.team !== pt) continue;
+      state.vision.push({ x: u.x, y: u.y, r: u.def.worker ? VISION.worker : VISION.combat, kind: "unit" });
+    }
+    for (const b of state.buildings) {
+      if (b.dead || b.team !== pt) continue;
+      state.vision.push({ x: b.x, y: b.y, r: b.def.kind === "hq" ? VISION.hq : VISION.building, kind: "building" });
+    }
+    for (const n of state.nodes) {
+      if (isNodeClaimedBy(n, pt)) {
+        state.vision.push({ x: n.x, y: n.y, r: VISION.claimedNode, kind: "node" });
+      } else if (n.claimTeam === pt && n.claimProgress > 0) {
+        state.vision.push({ x: n.x, y: n.y, r: VISION.claimingNode, kind: "claim" });
+      }
+    }
+  }
+  function isVisibleToPlayer(x, y, extra = 0) {
+    if (state.phase !== "playing" && state.phase !== "over") return true;
+    if (!playerTeam()) return true;
+    for (const s of state.vision) {
+      const rr = s.r + extra;
+      if (d2(x, y, s.x, s.y) <= rr * rr) return true;
+    }
+    return false;
+  }
+  function thingVisibleToPlayer(o) {
+    if (!o) return false;
+    if (o.team === playerTeam()) return true;
+    const r = o.kind === "unit" || o.kind === "building" ? o.def.r : o.r || 0;
+    return isVisibleToPlayer(o.x, o.y, r + 18);
+  }
+  function pruneHiddenSelection() {
+    const next = state.selection.filter((o) => !o.dead && thingVisibleToPlayer(o));
+    if (next.length !== state.selection.length) setSelection(next);
+  }
   function claimNode(n, team) {
     if (!n || !team) return false;
     n.team = team;
@@ -616,15 +684,18 @@
     let best = null, bd = Infinity;
     for (const u of state.units) {
       if (u.dead) continue;
+      if (!thingVisibleToPlayer(u)) continue;
       const dd = d2(wx, wy, u.x, u.y), rr = (u.def.r + 8) * (u.def.r + 8);
       if (dd < rr && dd < bd) { bd = dd; best = u; }
     }
     if (best) return best;
     for (const b of state.buildings) {
       if (b.dead) continue;
+      if (!thingVisibleToPlayer(b)) continue;
       if (d2(wx, wy, b.x, b.y) < b.def.r * b.def.r) return b;
     }
     for (const n of state.nodes) {
+      if (!thingVisibleToPlayer(n)) continue;
       if (d2(wx, wy, n.x, n.y) < (n.r + 8) * (n.r + 8)) return n;
     }
     return null;
@@ -1434,6 +1505,8 @@
     state.units = state.units.filter((u) => !u.dead);
     state.buildings = state.buildings.filter((b) => !b.dead);
 
+    refreshVision();
+    pruneHiddenSelection();
     updateGhost();
   }
 
@@ -1501,7 +1574,7 @@
   }
 
   function setSelection(arr) {
-    state.selection = arr;
+    state.selection = arr.filter((o) => o && !o.dead && thingVisibleToPlayer(o));
     state.selVersion++;
   }
 
@@ -2007,6 +2080,8 @@
      19. TERRAIN (pre-rendered) + RENDER
      ================================================== */
   let terrain = null;
+  let fogCanvas = null;
+  let fogCtx = null;
   function buildTerrain() {
     terrain = document.createElement("canvas");
     terrain.width = WORLD_W; terrain.height = WORLD_H;
@@ -2067,26 +2142,52 @@
     }
     // rocks
     for (const o of state.obstacles) {
-      t.fillStyle = "#1a1f2e";
-      t.beginPath();
+      const pts = [];
       for (let i = 0; i < 8; i++) {
         const a = (i / 8) * TAU + o.seed;
         const rr = o.r * (0.82 + 0.22 * Math.sin(o.seed * 3 + i * 2.1));
-        const px = o.x + Math.cos(a) * rr, py = o.y + Math.sin(a) * rr;
-        i ? t.lineTo(px, py) : t.moveTo(px, py);
+        pts.push([o.x + Math.cos(a) * rr, o.y + Math.sin(a) * rr]);
       }
-      t.closePath(); t.fill();
-      t.strokeStyle = "rgba(150,165,205,0.16)";
-      t.lineWidth = 2;
-      t.stroke();
+      const rockPath = () => {
+        t.beginPath();
+        pts.forEach(([px, py], i) => (i ? t.lineTo(px, py) : t.moveTo(px, py)));
+        t.closePath();
+      };
+      t.save();
+      t.shadowColor = "rgba(0,0,0,0.64)";
+      t.shadowBlur = 18;
+      t.shadowOffsetY = 10;
+      const rockGrd = t.createRadialGradient(o.x - o.r * 0.24, o.y - o.r * 0.34, 2, o.x, o.y, o.r * 1.35);
+      rockGrd.addColorStop(0, "#3a4158");
+      rockGrd.addColorStop(0.55, "#202635");
+      rockGrd.addColorStop(1, "#0d111c");
+      t.fillStyle = rockGrd;
+      rockPath(); t.fill();
+      t.restore();
+      t.strokeStyle = "rgba(255,214,91,0.42)";
+      t.lineWidth = 4;
+      rockPath(); t.stroke();
+      t.strokeStyle = "rgba(225,235,255,0.34)";
+      t.lineWidth = 1.6;
+      rockPath(); t.stroke();
       t.fillStyle = "rgba(0,0,0,0.3)";
       t.beginPath(); t.ellipse(o.x + 4, o.y + 6, o.r * 0.7, o.r * 0.4, 0.4, 0, TAU); t.fill();
+      t.strokeStyle = "rgba(205,220,255,0.26)";
+      t.lineWidth = 1.2;
+      for (let i = 0; i < 3; i++) {
+        const a = o.seed + i * 1.85;
+        t.beginPath();
+        t.moveTo(o.x + Math.cos(a) * o.r * 0.18, o.y + Math.sin(a) * o.r * 0.18);
+        t.lineTo(o.x + Math.cos(a + 0.55) * o.r * 0.64, o.y + Math.sin(a + 0.55) * o.r * 0.48);
+        t.stroke();
+      }
     }
   }
 
   function render() {
     const cam = state.cam;
     ctx.clearRect(0, 0, W, H);
+    refreshVision();
     if (terrain) ctx.drawImage(terrain, cam.x, cam.y, W, H, 0, 0, W, H);
 
     // signal pulse rings from the scar center
@@ -2106,6 +2207,7 @@
     renderProjectiles(cam);
     renderParticles(cam);
     renderBarsAndRanges(cam);
+    renderFog(cam);
     renderCommandFeedback(cam);
     if (dragging && dragStart) {
       ctx.strokeStyle = "rgba(140,240,180,0.9)";
@@ -2119,8 +2221,50 @@
     if (state.phase === "playing" || state.phase === "over") renderMinimap();
   }
 
+  function renderFog(cam) {
+    if (state.phase !== "playing" && state.phase !== "over") return;
+    if (!fogCanvas) {
+      fogCanvas = document.createElement("canvas");
+      fogCanvas.width = W;
+      fogCanvas.height = H;
+      fogCtx = fogCanvas.getContext("2d");
+    }
+    fogCtx.clearRect(0, 0, W, H);
+    fogCtx.globalCompositeOperation = "source-over";
+    fogCtx.fillStyle = "rgb(1,2,8)";
+    fogCtx.fillRect(0, 0, W, H);
+    fogCtx.globalCompositeOperation = "destination-out";
+    for (const s of state.vision) {
+      const x = s.x - cam.x, y = s.y - cam.y, r = s.r;
+      if (x < -r || y < -r || x > W + r || y > H + r) continue;
+      const grd = fogCtx.createRadialGradient(x, y, Math.max(12, r * 0.46), x, y, r);
+      grd.addColorStop(0, "rgba(0,0,0,1)");
+      grd.addColorStop(0.68, "rgba(0,0,0,0.9)");
+      grd.addColorStop(1, "rgba(0,0,0,0)");
+      fogCtx.fillStyle = grd;
+      fogCtx.beginPath();
+      fogCtx.arc(x, y, r, 0, TAU);
+      fogCtx.fill();
+    }
+    fogCtx.globalCompositeOperation = "source-over";
+    ctx.drawImage(fogCanvas, 0, 0);
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(125,243,255,0.08)";
+    ctx.lineWidth = 1;
+    for (const s of state.vision) {
+      const x = s.x - cam.x, y = s.y - cam.y, r = s.r;
+      if (x < -r || y < -r || x > W + r || y > H + r) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function renderDecals(cam) {
     for (const d of state.decals) {
+      if (!isVisibleToPlayer(d.x, d.y, d.r)) continue;
       ctx.fillStyle = `rgba(6,6,10,${Math.min(0.55, d.ttl / 20)})`;
       ctx.beginPath();
       ctx.ellipse(d.x - cam.x, d.y - cam.y, d.r * 1.1, d.r * 0.8, 0, 0, TAU);
@@ -2130,6 +2274,7 @@
 
   function renderNodes(cam) {
     for (const n of state.nodes) {
+      if (!thingVisibleToPlayer(n)) continue;
       const x = n.x - cam.x, y = n.y - cam.y;
       if (x < -60 || y < -60 || x > W + 60 || y > H + 60) continue;
       const c = NODE_COLORS[n.kind];
@@ -2238,6 +2383,7 @@
   function renderSelectionRings(cam) {
     for (const o of state.selection) {
       if (o.dead) continue;
+      if (!thingVisibleToPlayer(o)) continue;
       const r = o.def.r + 5;
       ctx.strokeStyle = o.team === playerTeam() ? "rgba(140,240,180,0.85)" : "rgba(255,120,120,0.8)";
       ctx.lineWidth = 1.6;
@@ -2262,8 +2408,8 @@
 
   function renderEntities(cam) {
     const drawables = [];
-    for (const b of state.buildings) if (!b.dead) drawables.push(b);
-    for (const u of state.units) if (!u.dead) drawables.push(u);
+    for (const b of state.buildings) if (!b.dead && thingVisibleToPlayer(b)) drawables.push(b);
+    for (const u of state.units) if (!u.dead && thingVisibleToPlayer(u)) drawables.push(u);
     drawables.sort((a, b2) => a.y - b2.y);
     for (const o of drawables) {
       const x = o.x - cam.x, y = o.y - cam.y;
@@ -2832,6 +2978,7 @@
 
   function renderBeams(cam) {
     for (const b of state.beams) {
+      if (!isVisibleToPlayer(b.x1, b.y1, 24) && !isVisibleToPlayer(b.x2, b.y2, 24)) continue;
       const a = b.ttl / 0.14;
       ctx.lineWidth = 2.2;
       ctx.strokeStyle = b.color;
@@ -2859,6 +3006,7 @@
 
   function renderProjectiles(cam) {
     for (const p of state.projectiles) {
+      if (!isVisibleToPlayer(p.x, p.y, 24) && !isVisibleToPlayer(p.tx, p.ty, 24)) continue;
       const x = p.x - cam.x, y = p.y - cam.y;
       if (p.type === "rail") {
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy) || 1;
@@ -2879,6 +3027,7 @@
 
   function renderParticles(cam) {
     for (const p of state.particles) {
+      if (!isVisibleToPlayer(p.x, p.y, p.size || 10)) continue;
       const a = clamp(p.ttl / p.max, 0, 1);
       const x = p.x - cam.x, y = p.y - cam.y;
       if (p.type === "ring") {
@@ -2903,6 +3052,7 @@
     const showAll = state.selection.length > 0;
     for (const o of [...state.units, ...state.buildings]) {
       if (o.dead) continue;
+      if (!thingVisibleToPlayer(o)) continue;
       const sel = state.selection.includes(o);
       const hurt = o.hp < o.maxHp || (o.maxShield > 0 && o.shield < o.maxShield);
       const recent = state.time - o.lastHit < 3;
@@ -3175,6 +3325,28 @@
     ctx.strokeStyle = "rgba(140,160,210,0.5)";
     ctx.lineWidth = 1;
     ctx.strokeRect(MM.x - 3, MM.y - 3, MM.w + 6, MM.h + 6);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(MM.x, MM.y, MM.w, MM.h);
+    ctx.clip();
+    ctx.fillStyle = "rgba(125,243,255,0.08)";
+    for (const s of state.vision) {
+      ctx.beginPath();
+      ctx.arc(MM.x + s.x * sx, MM.y + s.y * sy, Math.max(3, s.r * Math.max(sx, sy)), 0, TAU);
+      ctx.fill();
+    }
+    if (!state.vision.length) {
+      ctx.restore();
+      return;
+    }
+    if (state.vision.length) {
+      ctx.beginPath();
+      for (const s of state.vision) {
+        ctx.moveTo(MM.x + s.x * sx + Math.max(3, s.r * Math.max(sx, sy)), MM.y + s.y * sy);
+        ctx.arc(MM.x + s.x * sx, MM.y + s.y * sy, Math.max(3, s.r * Math.max(sx, sy)), 0, TAU);
+      }
+      ctx.clip();
+    }
     // scar hint
     ctx.strokeStyle = "rgba(176,108,255,0.5)";
     ctx.beginPath();
@@ -3184,6 +3356,7 @@
     });
     ctx.stroke();
     for (const n of state.nodes) {
+      if (!thingVisibleToPlayer(n)) continue;
       const nx = MM.x + n.x * sx, ny = MM.y + n.y * sy;
       ctx.fillStyle = n.amount !== Infinity && n.amount <= 0 ? "#2c3440" : NODE_COLORS[n.kind];
       ctx.fillRect(nx - 1.5, ny - 1.5, 3, 3);
@@ -3195,17 +3368,20 @@
     }
     for (const b of state.buildings) {
       if (b.dead) continue;
+      if (!thingVisibleToPlayer(b)) continue;
       ctx.fillStyle = b.team.faction.color;
       const s = b.def.kind === "hq" ? 6 : 4;
       ctx.fillRect(MM.x + b.x * sx - s / 2, MM.y + b.y * sy - s / 2, s, s);
     }
     for (const u of state.units) {
       if (u.dead) continue;
+      if (!thingVisibleToPlayer(u)) continue;
       ctx.fillStyle = u.team.faction.color;
       ctx.fillRect(MM.x + u.x * sx - 1, MM.y + u.y * sy - 1, 2, 2);
     }
+    ctx.restore();
     // alarm ping
-    if (state.time - state.alarmT < 3 && state.alarmPos) {
+    if (state.time - state.alarmT < 3 && state.alarmPos && isVisibleToPlayer(state.alarmPos.x, state.alarmPos.y, 80)) {
       const t = (state.time - state.alarmT) % 1;
       ctx.strokeStyle = `rgba(255,80,80,${1 - t})`;
       ctx.lineWidth = 1.5;
@@ -3427,6 +3603,7 @@
     }
 
     state.phase = "playing";
+    refreshVision();
     showOverlay(false);
     renderActionsPanel();
     renderSelPanel();
@@ -3506,6 +3683,8 @@
       const p = commandPreviewAt(x, y);
       return p ? { type: p.type, x: p.x, y: p.y, targetId: p.target && p.target.id } : null;
     },
+    visibleAt: (x, y, extra = 0) => isVisibleToPlayer(x, y, extra),
+    vision: () => state.vision.map((s) => ({ x: s.x, y: s.y, r: s.r, kind: s.kind })),
     aiForPlayer() { const t = playerTeam(); if (t && !t.ai) { t.ai = makeAI(t); t.isAI = true; } },
     win: () => endGame(playerTeam()),
     lose: () => endGame(aiTeam()),

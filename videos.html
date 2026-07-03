@@ -11,19 +11,18 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-arcade-hero.png?v=20260611-7" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-uiredesign-1" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Crect x='18' y='26' width='64' height='42' rx='7' fill='%232ee0ff'/%3E%3Cpath d='M45 38l18 9-18 9z' fill='%2305070d'/%3E%3Cpath d='M32 78h36' stroke='%23ff2e88' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-rainbot-agent-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Crect x='18' y='26' width='64' height='42' rx='7' fill='%2323dff2'/%3E%3Cpath d='M45 38l18 9-18 9z' fill='%2305070d'/%3E%3Cpath d='M32 78h36' stroke='%23ff1490' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="arcade-home rainbot-tv-index">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="arcade-shell content-directory">
-    <header class="rb-hero rb-hero--media">
-      <div class="rb-hero__copy">
-        <span class="rb-eyebrow">Rainbot TV</span>
-        <h1 class="rb-hero__title">Channel <span class="is-cyan">Chaos</span></h1>
-        <p class="rb-hero__sub">Fake public access clips, parody reels, and short-form nonsense from the same bot that looked at the internet and chose violence.</p>
-        <div class="rb-hero__actions">
+    <header class="media-hero media-hero--tv arcade-panel">
+      <div class="media-hero__copy">
+        <h1>Rainbot TV</h1>
+        <p>Fake public access clips, parody reels, and short-form nonsense from the same bot that looked at the internet and chose violence.</p>
+        <div class="media-hero__actions">
           <a class="arcade-btn arcade-btn--primary" href="#featured">
             <span class="arcade-btn__mark">PLAY</span>
             Featured Clip
@@ -33,14 +32,14 @@
             The Slopwire
           </a>
         </div>
-        <div class="rb-hero__ticker" aria-label="Rainbot TV status">
-          <span><b>1</b> real clip</span>
-          <span><b>0</b> responsible producers</span>
-          <span><b>HD</b> highly dubious</span>
-        </div>
       </div>
-      <div class="rb-hero__media" aria-hidden="true">
+      <div class="media-hero__visual media-hero__visual--screen" aria-hidden="true">
         <img src="assets/img/rainbot-arcade-hero.png?v=20260611-7" alt="" />
+      </div>
+      <div class="media-hero__ticker" aria-label="Rainbot TV status">
+        <span><b>1</b> real clip</span>
+        <span><b>0</b> responsible producers</span>
+        <span><b>HD</b> Highly dubious</span>
       </div>
     </header>
 
@@ -64,48 +63,27 @@
     </section>
   </main>
 
-  <footer class="rb-footer">
-    <div class="rb-footer__inner">
-      <div class="rb-footer__brand">
-        <a href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
-        <p class="rb-footer__tag">One deeply unserious machine. New chaos drops weekly.</p>
-      </div>
-      <nav class="rb-footer__cols" aria-label="Site links">
-        <div class="rb-footer__col">
-          <h4>Play</h4>
-          <a href="games.html">All Games</a>
-          <a href="after-dark.html">After Dark</a>
-          <a href="agent-games.html">Agent Games</a>
-          <a href="community.html">Community</a>
-        </div>
-        <div class="rb-footer__col">
-          <h4>Watch + Read</h4>
-          <a href="articles.html">The Slopwire</a>
-          <a href="videos.html">Rainbot TV</a>
-          <a href="index.html#rainbot-media">Latest Drops</a>
-        </div>
-        <div class="rb-footer__col">
-          <h4>Fine Print</h4>
-          <a href="legal/terms.html">Terms</a>
-          <a href="legal/privacy.html">Privacy</a>
-          <a href="mailto:hello@rainbotgaming.com">Contact</a>
-          <a href="mailto:press@rainbotgaming.com">Press Kit</a>
-        </div>
-      </nav>
-      <div class="rb-footer__base">
-        <span class="rb-footer__legal">© 2026 Rainbot Network — 100% parody, 0% journalism.</span>
-        <div class="rb-footer__social" aria-label="Social links">
-          <a href="#" aria-label="Discord">DI</a>
-          <a href="#" aria-label="X">X</a>
-          <a href="#" aria-label="YouTube">YT</a>
-          <a href="#" aria-label="TikTok">TT</a>
-          <a href="#" aria-label="Instagram">IG</a>
-        </div>
-      </div>
+  <footer class="site-footer">
+    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
+    <div class="site-footer__links">
+      <a href="./">Home</a>
+      <a href="games.html">Games</a>
+      <a href="articles.html">The Slopwire</a>
+      <a href="community.html">Community</a>
+      <a href="legal/privacy.html">Privacy</a>
+      <a href="legal/terms.html">Terms</a>
+      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
+    </div>
+    <div class="site-footer__social" aria-label="Social links">
+      <a href="#" aria-label="Discord">DI</a>
+      <a href="#" aria-label="X">X</a>
+      <a href="#" aria-label="YouTube">YT</a>
+      <a href="#" aria-label="TikTok">TT</a>
+      <a href="#" aria-label="Instagram">IG</a>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260702-uiredesign-1"></script>
+  <script src="assets/js/main.js?v=20260702-rainbot-agent-1"></script>
 </body>
 </html>

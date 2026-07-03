@@ -6,29 +6,27 @@
   <title>Community - Rainbot Network</title>
   <meta name="description" content="Rainbot Network community hub for forum threads, game feedback, high scores, clips, and announcements." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-uiredesign-1" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff2e88'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%232ee0ff'/%3E%3Cpath d='M28 68h44' stroke='%23ffd43b' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-rainbot-agent-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="community-page arcade-home">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="arcade-shell community-shell">
-    <header class="rb-hero">
-      <div class="rb-hero__copy">
-        <span class="rb-eyebrow">Rainbot Community</span>
-        <h1 class="rb-hero__title">The Arcade <span class="is-cyan">Backchannel</span></h1>
-        <p class="rb-hero__sub">Forum threads, game feedback, clips, high-score runs, and extremely questionable ideas from the Rainbot regulars.</p>
-        <div class="rb-hero__ticker" aria-label="Forum highlights">
-          <span><b>+</b> Forum boards</span>
-          <span><b>+</b> General leaderboard</span>
-          <span><b>+</b> Cloud profiles</span>
+    <header class="forum-hero arcade-panel">
+      <div>
+        <span class="forum-hero__eyebrow">Rainbot Community</span>
+        <h1>The Arcade Backchannel.</h1>
+        <p>Forum threads, game feedback, clips, high-score runs, and extremely questionable ideas from the Rainbot regulars.</p>
+        <div class="forum-hero__chips" aria-label="Forum highlights">
+          <span>Forum boards</span>
+          <span>General leaderboard</span>
+          <span>Cloud profiles</span>
         </div>
       </div>
-      <div class="rb-hero__aside" aria-label="Forum connection status">
-        <div class="rb-hero__aside-panel">
-          <small>Connection</small>
-          <div class="forum-hero__status" data-community-status>Backend check pending</div>
-        </div>
+      <div class="forum-hero__panel" aria-label="Forum connection status">
+        <span class="forum-hero__panel-label">Connection</span>
+        <div class="forum-hero__status" data-community-status>Backend check pending</div>
       </div>
     </header>
 
@@ -48,49 +46,23 @@
     </section>
   </main>
 
-  <footer class="rb-footer">
-    <div class="rb-footer__inner">
-      <div class="rb-footer__brand">
-        <a href="./" aria-label="Rainbot Network home"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
-        <p class="rb-footer__tag">One deeply unserious machine. New chaos drops weekly.</p>
-      </div>
-      <nav class="rb-footer__cols" aria-label="Site links">
-        <div class="rb-footer__col">
-          <h4>Play</h4>
-          <a href="games.html">All Games</a>
-          <a href="after-dark.html">After Dark</a>
-          <a href="agent-games.html">Agent Games</a>
-          <a href="community.html">Community</a>
-        </div>
-        <div class="rb-footer__col">
-          <h4>Watch + Read</h4>
-          <a href="articles.html">The Slopwire</a>
-          <a href="videos.html">Rainbot TV</a>
-          <a href="index.html#rainbot-media">Latest Drops</a>
-        </div>
-        <div class="rb-footer__col">
-          <h4>Fine Print</h4>
-          <a href="legal/terms.html">Terms</a>
-          <a href="legal/privacy.html">Privacy</a>
-          <a href="mailto:hello@rainbotgaming.com">Contact</a>
-          <a href="mailto:press@rainbotgaming.com">Press Kit</a>
-        </div>
-      </nav>
-      <div class="rb-footer__base">
-        <span class="rb-footer__legal">© 2026 Rainbot Network — 100% parody, 0% journalism.</span>
-        <div class="rb-footer__social" aria-label="Social links">
-          <a href="#" aria-label="Discord">DI</a>
-          <a href="#" aria-label="X">X</a>
-          <a href="#" aria-label="YouTube">YT</a>
-          <a href="#" aria-label="TikTok">TT</a>
-          <a href="#" aria-label="Instagram">IG</a>
-        </div>
-      </div>
+  <footer class="site-footer">
+    <a class="site-footer__brand" href="./" aria-label="Rainbot Network home">
+      <img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
+    </a>
+    <div class="site-footer__links">
+      <a href="games.html">Games</a>
+      <a href="articles.html">The Slopwire</a>
+      <a href="videos.html">Rainbot TV</a>
+      <a href="legal/privacy.html">Privacy</a>
+    </div>
+    <div class="site-footer__social">
+      <a href="community.html">Community</a>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260702-uiredesign-1"></script>
-  <script src="assets/js/community.js?v=20260702-uiredesign-1"></script>
+  <script src="assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+  <script src="assets/js/community.js?v=20260702-rainbot-agent-1"></script>
 </body>
 </html>

@@ -144,8 +144,24 @@
     }
   </style>
 </head>
-<body>
-  <div id="app"></div>
+<body class="rb-standalone-shell rb-afterdark-shell again-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">AGAIN.</h1>
+        <div class="game-page__sub">Loop-horror hallway · headphones recommended · start minimized, then max when ready</div>
+      </div>
+      <a href="../games.html#after-dark-games" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">After Dark</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage">
+        <div class="canvas-wrap rb-standalone-surface rb-standalone-surface--afterdark">
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">Max</button>
+
+          <div id="app"></div>
 
   <!-- fx layers -->
   <div class="fx" id="fx-vignette"></div>
@@ -216,8 +232,50 @@
     </div>
   </div>
 
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster game-side__poster--wide" src="../assets/img/mockup/card-again.png?v=20260614-1" alt="AGAIN horror hallway poster art" />
+        </div>
+
+        <div class="game-side__panel game-side__panel--afterdark">
+          <h3 class="game-side__title">SESSION</h3>
+          <p>WASD to walk. Mouse to look. Esc pauses.</p>
+          <p>The game stays embedded here until you choose Max.</p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Press enter inside the game panel to begin.</li>
+            <li>Use headphones and keep the page minimized if you want comments and scores visible.</li>
+            <li>Use Max only when you want a full-screen run.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
   <script src="../assets/js/again.js?v=20260616-save-1"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
 </body>
 </html>

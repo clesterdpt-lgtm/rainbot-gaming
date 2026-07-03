@@ -1571,6 +1571,90 @@ body.rb-game-maxed .clowder-stage {
 .canvas-wrap:-webkit-full-screen::backdrop {
   background: #05010a;
 }
+
+html:has(body.rb-standalone-shell) {
+  height: auto !important;
+  overflow: auto !important;
+}
+
+body.rb-standalone-shell {
+  background: var(--bg) !important;
+  height: auto !important;
+  min-height: 100dvh;
+  overflow: auto !important;
+  touch-action: auto !important;
+}
+
+.rb-standalone-stage {
+  background: #05010a;
+  border-color: rgba(216, 210, 198, 0.16);
+  padding: 10px;
+}
+
+.rb-standalone-surface {
+  --game-aspect: 1.7778;
+  --game-aspect-ratio: 16 / 9;
+  --game-max-width: 1180px;
+  aspect-ratio: var(--game-aspect-ratio);
+  background: #000;
+  border: 1px solid rgba(216, 210, 198, 0.16);
+  isolation: isolate;
+  min-height: min(68dvh, 620px);
+}
+
+.rb-standalone-surface > :is(#app, #stage, #game, #hud, #jump, #touch, #touch-layer, .fx, .scr),
+.rb-standalone-surface #app canvas {
+  height: 100% !important;
+  inset: 0 !important;
+  position: absolute !important;
+  width: 100% !important;
+}
+
+.rb-standalone-surface > :is(
+  #fx-sub,
+  #fx-title,
+  #fx-hint,
+  #fx-hint-paralysis,
+  #fx-hint-astral,
+  #obe-hud,
+  #btn-touch-pause,
+  #fx-rec,
+  #fx-timecode,
+  #fx-battlow,
+  #joy-base,
+  #joy-thumb,
+  #btn-blink,
+  #btn-pause
+) {
+  position: absolute !important;
+}
+
+.rb-standalone-surface #stage canvas,
+.rb-standalone-surface #game canvas {
+  max-width: none;
+}
+
+.rb-standalone-surface > .fs-btn {
+  z-index: 43;
+}
+
+.rb-standalone-surface.is-maxed {
+  min-height: 100dvh;
+}
+
+.rb-standalone-shell .game-side__panel--afterdark {
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rb-standalone-shell .game-side__panel--afterdark p {
+  margin: 0;
+}
+
+.rb-standalone-shell .game-side__panel--afterdark p + p {
+  margin-top: 8px;
+}
 .canvas-wrap.is-maxed .joystick { width: 40vw; max-width: 300px; height: 52vh; }
 .canvas-wrap.is-maxed .touch-btn { width: 76px; height: 76px; }
 .canvas-wrap.is-maxed .touch-btn--beam { width: 88px; height: 88px; }

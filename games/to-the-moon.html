@@ -7,6 +7,7 @@
 <meta name="description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
 <meta name="theme-color" content="#05060f" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305060f'/%3E%3Ccircle cx='58' cy='40' r='22' fill='%23e9c24a'/%3E%3Ccircle cx='50' cy='34' r='6' fill='%23c79a2e'/%3E%3Cpath d='M50 88 L34 50 L50 60 L66 50 Z' fill='%235fdf6a'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260702-rainbot-agent-1" />
 <style>
   /* ============================================================
      TO THE MOON — single-file crypto-mining / tower-defense survival
@@ -205,8 +206,24 @@
   }
 </style>
 </head>
-<body>
-<div id="game">
+<body class="rb-standalone-shell moon-page">
+<nav class="nav"><div id="nav-slot"></div></nav>
+
+<main class="game-page">
+  <div class="game-page__header">
+    <div>
+      <h1 class="game-page__title">To The Moon</h1>
+      <div class="game-page__sub">Mine memecoins · survive bear-market viruses · build the rocket</div>
+    </div>
+    <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+  </div>
+
+  <div class="game-layout">
+    <div class="game-stage rb-standalone-stage">
+      <div class="canvas-wrap rb-standalone-surface rb-standalone-surface--moon">
+        <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">Max</button>
+
+        <div id="game">
   <canvas id="c"></canvas>
 
   <!-- HUD -->
@@ -344,6 +361,55 @@
     </div>
   </div>
 </div>
+      </div>
+    </div>
+
+    <aside class="game-side">
+      <div class="game-side__panel">
+        <img class="game-side__poster game-side__poster--wide" src="../assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1" alt="To The Moon cover art with a rocket launching toward a glowing moon over a digital mining world" />
+      </div>
+
+      <div class="game-side__panel">
+        <h3 class="game-side__title">CONTROLS</h3>
+        <div class="controls-row">
+          <span class="btn btn--secondary" style="font-size:12px;padding:8px 10px;">A/D Drive</span>
+          <span class="btn btn--secondary" style="font-size:12px;padding:8px 10px;">W Thrust</span>
+          <span class="btn btn--secondary" style="font-size:12px;padding:8px 10px;">S Drill</span>
+        </div>
+      </div>
+
+      <div class="game-side__panel">
+        <h3 class="game-side__title">RUN PLAN</h3>
+        <ul style="margin:0;padding-left:18px;color:var(--ink-dim);font-size:13px;line-height:1.5;">
+          <li>Mine during bull markets and cash out at the rocket.</li>
+          <li>Build surface defenses before the bear-market swarm hits.</li>
+          <li>Craft all rocket parts, then launch.</li>
+        </ul>
+      </div>
+
+      <div id="ad-leaderboard"></div>
+      <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+      <details class="game-side__howto">
+        <summary>How to play</summary>
+        <ul>
+          <li>Use B to open the build menu and E at the rocket terminal.</li>
+          <li>Use P to pause and M to toggle sound.</li>
+          <li>Use Max only when you want the full-screen mining view.</li>
+        </ul>
+      </details>
+    </aside>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="footer__links">
+    <a href="../">Home</a>
+    <a href="../games.html">All games</a>
+    <a href="../legal/privacy.html">Privacy</a>
+  </div>
+  <div>&copy; 2026 Rainbot Network. Parody.</div>
+</footer>
 
 <script>
 "use strict";
@@ -1695,6 +1761,12 @@
     updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt); updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); }
   window.__MOON={ get G(){return G;}, get state(){return state;}, rover, enemies, builds, projectiles, scraps, particles, SHIP, CFG, T, get tiles(){return tiles;}, get lavaActive(){return lavaActive;}, mineTile, startGame, step:__step, render };
 })();
+</script>
+<script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+<script src="../assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+<script>
+  renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+  renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
 </script>
 </body>
 </html>

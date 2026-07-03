@@ -128,6 +128,7 @@ const RB_GAME_META = {
   "tardigrade-micro-mayhem": { title: "Tardigrade: Micro Mayhem", scoreIds: ["tardigrade-micro-mayhem"] },
   "the-last-signal": { title: "The Last Signal", scoreIds: ["the-last-signal"] },
   "the-weight": { title: "The Weight", scoreIds: ["the-weight"] },
+  "to-the-moon": { title: "To The Moon", scoreIds: ["to-the-moon"] },
   "unhoused-and-unhinged": { title: "Unhoused and Unhinged", scoreIds: ["unhoused-and-unhinged"] },
 };
 
@@ -166,6 +167,7 @@ const RB_GAME_VISUALS = {
   "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3", kind: "3D Sandbox" },
   "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260702-tls-title-4", kind: "RTS" },
   "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4", kind: "Horror" },
+  "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1", kind: "Survival" },
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
 };
 
@@ -3417,7 +3419,7 @@ function initGameEscapeMenu() {
   const pageLooksPaused = () => {
     const pauseButton = findPauseButton();
     if (textIncludes(pauseButton, "resume")) return true;
-    if (document.body.classList.contains("micro-play-paused")) return true;
+    if (document.body.classList.contains("micro-play-paused") || document.body.classList.contains("micro-embedded-paused")) return true;
     return Array.from(document.querySelectorAll(".overlay--show, .scr--show"))
       .some((overlay) => overlay.textContent.toLowerCase().includes("paused"));
   };
@@ -3507,6 +3509,59 @@ function initGameEscapeMenu() {
   document.addEventListener("webkitfullscreenchange", refreshActions);
 }
 
+function initStandaloneGameShell() {
+  const surface = document.querySelector(".rb-standalone-surface");
+  const fsButton = surface && surface.querySelector("#btn-fullscreen");
+  if (!surface || !fsButton || fsButton.dataset.rbStandaloneFsBound === "true") return;
+
+  fsButton.dataset.rbStandaloneFsBound = "true";
+
+  const isNativeFullscreen = () => (
+    document.fullscreenElement === surface ||
+    document.webkitFullscreenElement === surface
+  );
+  const isMaxed = () => surface.classList.contains("is-maxed") || isNativeFullscreen();
+  const updateButton = () => {
+    const active = isMaxed();
+    fsButton.textContent = active ? "Min" : "Max";
+    fsButton.setAttribute("aria-label", active ? "Minimize game" : "Max screen");
+    fsButton.setAttribute("title", active ? "Minimize game" : "Max screen");
+  };
+  const setMaxed = (active) => {
+    surface.classList.toggle("is-maxed", active);
+    document.body.classList.toggle("rb-game-maxed", active);
+    updateButton();
+    scheduleGameCanvasFit();
+  };
+
+  fsButton.addEventListener("click", () => {
+    const next = !surface.classList.contains("is-maxed");
+    setMaxed(next);
+
+    try {
+      if (next) {
+        const request = surface.requestFullscreen || surface.webkitRequestFullscreen;
+        const result = request && request.call(surface);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        const result = exit && exit.call(document);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      }
+    } catch (error) {}
+  });
+
+  const syncFullscreenState = () => {
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fullscreenElement && surface.classList.contains("is-maxed")) setMaxed(false);
+    else updateButton();
+  };
+
+  document.addEventListener("fullscreenchange", syncFullscreenState);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+  updateButton();
+}
+
 let gameCanvasFitFrame = 0;
 
 function scheduleGameCanvasFit() {
@@ -3590,6 +3645,7 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
+  initStandaloneGameShell();
   initGameEscapeMenu();
   initHomeRecentPanel();
   initHomeProgressPanel();

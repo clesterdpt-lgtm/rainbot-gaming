@@ -5015,8 +5015,9 @@
 
   function syncPlayMode() {
     const active = state.running && !state.gameOver;
-    document.body.classList.toggle("micro-play-active", active);
-    document.body.classList.toggle("micro-play-paused", active && state.paused);
+    document.body.classList.remove("micro-play-active", "micro-play-paused");
+    document.body.classList.toggle("micro-embedded-active", active);
+    document.body.classList.toggle("micro-embedded-paused", active && state.paused);
     if (!active || state.paused) resetVirtualControls();
     syncAdvancePrompt();
     requestAnimationFrame(resize);

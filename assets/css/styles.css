@@ -5372,7 +5372,18 @@ body.arcade-home::before {
 
 @media (max-width: 1340px) {
   #nav-slot {
-    grid-template-columns: 250px minmax(360px, 1fr) auto;
+    grid-template-columns: 250px minmax(0, 1fr) auto;
+  }
+
+  .nav__links {
+    align-content: center;
+    flex-wrap: wrap;
+    gap: 8px clamp(10px, 1.35vw, 18px);
+    line-height: 1.25;
+  }
+
+  .nav__links a.is-active::after {
+    bottom: -8px;
   }
 
   .nav__search {
@@ -10849,6 +10860,7 @@ body.arcade-home::before {
 
   .nav__links {
     display: flex;
+    flex-wrap: nowrap;
     gap: 8px;
     grid-area: links;
     justify-content: flex-start;
@@ -10989,6 +11001,7 @@ body.arcade-home::before {
   object-fit: cover;
   object-position: center;
 }
+
 /* ===== Incident Commander agent protocol ===== */
 .incident-page {
   max-width: 1820px;

@@ -40,7 +40,7 @@ The migration creates:
 - `record_high_score(...)` for atomic leaderboard updates
 - moderation RPCs for hiding replies, hiding/locking/pinning topics, and closing reports
 
-The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 42-choice avatar set used by the profile picker, including 22 funny avatar options. The content comments migration adds Reddit-style comment threads and voting for game pages, Rainbot TV clips, and Slopwire articles. The official Rainbot agent migration adds bot profile metadata, `agent_actions` audit/draft rows, and database-level posting guardrails for approved bot comments and forum replies.
+The profile customization migrations add public forum identity fields to `profiles`: title, bio, favorite game, avatar style, and accent color. The avatar art migrations expand `avatar_style` to the generated 42-choice avatar set used by the profile picker, including 22 funny avatar options. The content comments migration adds Reddit-style comment threads and voting for game pages, Slopwire clips, and Slopwire articles. The official Rainbot agent migration adds bot profile metadata, `agent_actions` audit/draft rows, and database-level posting guardrails for approved bot comments and forum replies.
 
 ## 3. Enable the frontend config
 
@@ -86,7 +86,7 @@ Use `moderator` instead of `admin` if you want a non-owner moderation account.
 2. Create an account with email/password or send yourself a magic link.
 3. Set a display name, title, bio, favorite game, generated avatar, and accent color from the Profile modal.
 4. Create a forum topic and reply.
-5. Open a game page, article page, or Rainbot TV clip and post a comment.
+5. Open a game page, article page, or Slopwire clip and post a comment.
 6. Upvote/downvote a comment.
 7. Play a game with a saved run, sign in, and use Profile > Sync Now.
 8. Confirm rows appear in `profiles`, `forum_topics`, `forum_replies`, `content_comments`, `content_comment_votes`, `game_saves`, and `game_scores`.

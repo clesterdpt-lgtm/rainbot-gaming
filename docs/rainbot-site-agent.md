@@ -75,6 +75,9 @@ List queued drafts:
 node scripts/rainbot-site-agent.mjs list-drafts
 ```
 
+For automated OpenClaw/MiniMax draft creation, see `docs/rainbot-draft-generator.md`.
+For Telegram approval buttons, see `docs/rainbot-telegram-approvals.md`.
+
 ## Approve And Publish
 
 Approval is a deliberate database step. A moderator/admin can approve one draft:

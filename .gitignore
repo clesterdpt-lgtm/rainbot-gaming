@@ -20,6 +20,8 @@ output/
 test-artifacts/
 tmp/
 supabase/.temp/
+.rainbot-telegram-approvals-state.json
+.rainbot-draft-generator-state.json
 
 # Dependency/build caches
 node_modules/

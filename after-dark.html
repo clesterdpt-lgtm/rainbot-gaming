@@ -11,25 +11,27 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/after-dark/rainbot-after-dark-hero.png?v=20260616-1" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-rainbot-agent-1" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 52h60M50 22v60M27 31l46 42M73 31L27 73' stroke='%23ff1490' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='52' r='13' fill='%2323dff2'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-uiredesign-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 52h60M50 22v60M27 31l46 42M73 31L27 73' stroke='%23b03434' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='52' r='13' fill='%23d8d2c4'/%3E%3C/svg%3E" />
 </head>
-<body class="games-index arcade-home after-dark-index">
+<body class="games-index arcade-home after-dark-index theme-afterdark">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="arcade-shell after-dark-directory">
-    <header class="after-dark-hero arcade-panel">
-      <div class="after-dark-hero__copy">
-        <h1>Rainbot After Dark</h1>
-        <p>The lights are off, the exits are locked, and your browser has developed a suspicious sense of malice. Sleep is DLC.</p>
-        <div class="after-dark-hero__actions">
+    <header class="rb-hero rb-hero--dark">
+      <span class="rb-hero__bg" aria-hidden="true"><img src="assets/img/after-dark/rainbot-after-dark-hero.png?v=20260616-1" alt="" /></span>
+      <div class="rb-hero__copy">
+        <span class="rb-eyebrow">Rainbot After Dark</span>
+        <h1 class="rb-hero__title">The Lights Are Off.</h1>
+        <p class="rb-hero__sub">The exits are locked, and your browser has developed a suspicious sense of malice. Sleep is DLC.</p>
+        <div class="rb-hero__actions">
           <a class="arcade-btn arcade-btn--primary" href="#games-catalog">
             <span class="arcade-btn__mark">▼</span>
             Enter the Vault
           </a>
         </div>
       </div>
-      <div class="after-dark-hero__ticker" aria-label="After Dark warnings">
+      <div class="rb-hero__stats" aria-label="After Dark warnings">
         <span><b>5</b> playable nightmares</span>
         <span><b>0</b> OSHA-approved exits</span>
         <span><b>999</b> bad decisions after midnight</span>
@@ -37,104 +39,123 @@
     </header>
 
     <section class="arcade-panel after-dark-vault" id="games-catalog" data-search-scope>
-      <div class="arcade-panel__header arcade-panel__header--pink">
+      <div class="arcade-panel__header">
         <h2><span class="panel-glyph">+</span>After Dark Games</h2>
         <span class="games-catalog__count">No refunds after the jump scare</span>
       </div>
 
-      <div class="after-dark-grid">
-        <a class="after-dark-game after-dark-game--poop-cruise" href="games/escape-poop-cruise.html" data-title="Escape the Poop Cruise low poly horror FPS cruise crud infected passengers lifeboat after dark">
-          <span class="after-dark-game__poster">
+      <div class="rb-grid rb-grid--dark">
+        <a class="rb-card rb-card--detail rb-card--dark" href="games/escape-poop-cruise.html" data-title="Escape the Poop Cruise low poly horror FPS cruise crud infected passengers lifeboat after dark">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art" />
-            <span class="after-dark-game__label">Cruise Crud FPS</span>
+            <span class="rb-card__badge rb-badge rb-badge--dark">Cruise Crud FPS</span>
           </span>
-          <span class="after-dark-game__body">
-            <strong>Escape the Poop Cruise</strong>
-            <span>Roe Jogan is trapped on the SS Gut Check. Cure the fictional cruise crud, keep the infection meter down, and reach the lifeboats before the buffet fumes win.</span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Escape the Poop Cruise</strong>
+            <span class="rb-card__desc">Roe Jogan is trapped on the SS Gut Check. Cure the fictional cruise crud, keep the infection meter down, and reach the lifeboats before the buffet fumes win.</span>
           </span>
-          <span class="after-dark-game__play">Board the ship</span>
+          <span class="rb-card__meta"><b>Horror FPS</b><em>Board the ship</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="after-dark-game after-dark-game--pizza" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy masked elites oven after dark">
-          <span class="after-dark-game__poster">
+        <a class="rb-card rb-card--detail rb-card--dark" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy masked elites oven after dark">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2" alt="Don't Become Pizza cover art with a moonlit private island and glowing pizza oven" />
-            <span class="after-dark-game__label">Conspiracy Horror</span>
+            <span class="rb-card__badge rb-badge rb-badge--dark">Conspiracy Horror</span>
           </span>
-          <span class="after-dark-game__body">
-            <strong>Don't Become Pizza</strong>
-            <span>The private island tasting went sideways. The boat is dry, the ovens are awake, and every masked elite is looking for tonight's special.</span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Don't Become Pizza</strong>
+            <span class="rb-card__desc">The private island tasting went sideways. The boat is dry, the ovens are awake, and every masked elite is looking for tonight's special.</span>
           </span>
-          <span class="after-dark-game__play">Stay off the menu</span>
+          <span class="rb-card__meta"><b>Stealth Horror</b><em>Stay off the menu</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="after-dark-game after-dark-game--weight" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark body entity bedroom 3am">
-          <span class="after-dark-game__poster">
+        <a class="rb-card rb-card--detail rb-card--dark" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark body entity bedroom 3am">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" />
-            <span class="after-dark-game__label">Sleep Paralysis</span>
+            <span class="rb-card__badge rb-badge rb-badge--dark">Sleep Paralysis</span>
           </span>
-          <span class="after-dark-game__body">
-            <strong>The Weight</strong>
-            <span>You wake at 3:47 AM. You cannot move. Something is at the foot of the bed — and it is getting closer. Survive the paralysis, then find your way back to your body before it does.</span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">The Weight</strong>
+            <span class="rb-card__desc">You wake at 3:47 AM. You cannot move. Something is at the foot of the bed — and it is getting closer. Survive the paralysis, then find your way back to your body before it does.</span>
           </span>
-          <span class="after-dark-game__play">Lie still</span>
+          <span class="rb-card__meta"><b>Horror</b><em>Lie still</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="after-dark-game after-dark-game--again" href="games/again.html" data-title="Again horror hallway after dark loop spooky">
-          <span class="after-dark-game__poster">
+        <a class="rb-card rb-card--detail rb-card--dark" href="games/again.html" data-title="Again horror hallway after dark loop spooky">
+          <span class="rb-card__media rb-card__media--contain">
             <img src="assets/img/mockup/card-again.png?v=20260614-1" alt="AGAIN horror hallway poster art" />
-            <span class="after-dark-game__label">Loop Horror</span>
+            <span class="rb-card__badge rb-badge rb-badge--dark">Loop Horror</span>
           </span>
-          <span class="after-dark-game__body">
-            <strong>AGAIN.</strong>
-            <span>One hallway. It repeats. It remembers. Your flashlight has commitment issues and the carpet is definitely withholding evidence.</span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">AGAIN.</strong>
+            <span class="rb-card__desc">One hallway. It repeats. It remembers. Your flashlight has commitment issues and the carpet is definitely withholding evidence.</span>
           </span>
-          <span class="after-dark-game__play">Play the loop</span>
+          <span class="rb-card__meta"><b>Horror</b><em>Play the loop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="after-dark-game after-dark-game--feast" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Leave the Mansion horror challenge after dark">
-          <span class="after-dark-game__poster">
+        <a class="rb-card rb-card--detail rb-card--dark" href="games/mr-feast-mansion.html" data-title="Mr Feast Last to Leave the Mansion horror challenge after dark">
+          <span class="rb-card__media rb-card__media--left">
             <img src="assets/img/mockup/card-mr-feast.png?v=20260611-7" alt="Mr. Feast: Last To Leave the Mansion poster art" />
-            <span class="after-dark-game__label">Game Show Panic</span>
+            <span class="rb-card__badge rb-badge rb-badge--dark">Game Show Panic</span>
           </span>
-          <span class="after-dark-game__body">
-            <strong>Mr. Feast: Last To Leave The Mansion</strong>
-            <span>The prize is exposure. The mansion is sponsored by panic. Last one out gets to keep their nervous system, probably.</span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Mr. Feast: Last To Leave The Mansion</strong>
+            <span class="rb-card__desc">The prize is exposure. The mansion is sponsored by panic. Last one out gets to keep their nervous system, probably.</span>
           </span>
-          <span class="after-dark-game__play">Enter the mansion</span>
+          <span class="rb-card__meta"><b>Horror</b><em>Enter the mansion</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
       </div>
     </section>
 
-    <section class="after-dark-marquee arcade-panel" aria-label="After Dark taglines">
+    <section class="rb-marquee arcade-panel" aria-label="After Dark taglines">
       <span>Do not tap the mirror.</span>
       <span>The vibes failed inspection.</span>
       <span>Bring headphones and a bad idea.</span>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
-    <div class="site-footer__links">
-      <a href="./">Home</a>
-      <a href="games.html">Games</a>
-      <a href="articles.html">The Slopwire</a>
-      <a href="videos.html">Rainbot TV</a>
-      <a href="community.html">Community</a>
-      <a href="games.html#agent-games">Agent Games</a>
-      <a href="legal/privacy.html">Privacy</a>
-      <a href="legal/terms.html">Terms</a>
-      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
-    </div>
-    <div class="site-footer__social" aria-label="Social links">
-      <a href="#" aria-label="Discord">DI</a>
-      <a href="#" aria-label="X">X</a>
-      <a href="#" aria-label="YouTube">YT</a>
-      <a href="#" aria-label="TikTok">TT</a>
-      <a href="#" aria-label="Instagram">IG</a>
+  <footer class="rb-footer">
+    <div class="rb-footer__inner">
+      <div class="rb-footer__brand">
+        <a href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
+        <p class="rb-footer__tag">One deeply unserious machine. New chaos drops weekly.</p>
+      </div>
+      <nav class="rb-footer__cols" aria-label="Site links">
+        <div class="rb-footer__col">
+          <h4>Play</h4>
+          <a href="games.html">All Games</a>
+          <a href="after-dark.html">After Dark</a>
+          <a href="agent-games.html">Agent Games</a>
+          <a href="community.html">Community</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Watch + Read</h4>
+          <a href="articles.html">The Slopwire</a>
+          <a href="videos.html">Rainbot TV</a>
+          <a href="index.html#rainbot-media">Latest Drops</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Fine Print</h4>
+          <a href="legal/terms.html">Terms</a>
+          <a href="legal/privacy.html">Privacy</a>
+          <a href="mailto:hello@rainbotgaming.com">Contact</a>
+          <a href="mailto:press@rainbotgaming.com">Press Kit</a>
+        </div>
+      </nav>
+      <div class="rb-footer__base">
+        <span class="rb-footer__legal">© 2026 Rainbot Network — 100% parody, 0% journalism.</span>
+        <div class="rb-footer__social" aria-label="Social links">
+          <a href="#" aria-label="Discord">DI</a>
+          <a href="#" aria-label="X">X</a>
+          <a href="#" aria-label="YouTube">YT</a>
+          <a href="#" aria-label="TikTok">TT</a>
+          <a href="#" aria-label="Instagram">IG</a>
+        </div>
+      </div>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+  <script src="assets/js/main.js?v=20260702-uiredesign-1"></script>
 </body>
 </html>

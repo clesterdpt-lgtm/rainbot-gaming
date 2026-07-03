@@ -128,6 +128,7 @@ const RB_GAME_META = {
   "tardigrade-micro-mayhem": { title: "Tardigrade: Micro Mayhem", scoreIds: ["tardigrade-micro-mayhem"] },
   "the-last-signal": { title: "The Last Signal", scoreIds: ["the-last-signal"] },
   "the-weight": { title: "The Weight", scoreIds: ["the-weight"] },
+  "to-the-moon": { title: "To The Moon", scoreIds: ["to-the-moon"] },
   "unhoused-and-unhinged": { title: "Unhoused and Unhinged", scoreIds: ["unhoused-and-unhinged"] },
 };
 
@@ -166,6 +167,7 @@ const RB_GAME_VISUALS = {
   "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3", kind: "3D Sandbox" },
   "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260702-tls-title-4", kind: "RTS" },
   "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4", kind: "Horror" },
+  "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1", kind: "Survival" },
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
 };
 
@@ -323,10 +325,10 @@ function renderNav(state = RB.state) {
 
   const backendState = getBackendState();
   const proBadge = state.isPro
-    ? `<span class="nav__pro-state">PRO ACTIVE</span>`
+    ? `<span class="rb-nav__chip">PRO ACTIVE</span>`
     : "";
   const syncBadge = backendState.user
-    ? `<span class="nav__pro-state nav__pro-state--sync">SYNC ON</span>`
+    ? `<span class="rb-nav__chip rb-nav__chip--sync">SYNC ON</span>`
     : "";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
@@ -347,32 +349,53 @@ function renderNav(state = RB.state) {
   const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : escapeHtml(localProfileLabel);
 
   slot.innerHTML = `
-    <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network - free browser arcade">
-      <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
-    </a>
-    <div class="nav__links">
-      <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
-      <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
-      <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
-      <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
-      <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
-    </div>
-    <form class="nav__search" role="search">
-      <label class="sr-only" for="rb-search">Search Rainbot</label>
-      <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
-      <button type="submit" aria-label="Search">Search</button>
-    </form>
-    <div class="nav__actions">
-      ${proBadge}
-      ${syncBadge}
-      ${
-        state.isPro
-          ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-          : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro</a>`
-      }
-      <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
+    <div class="rb-nav">
+      <a href="${RB_BASE}" class="rb-nav__brand" title="Rainbot Network - free browser arcade">
+        <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
+      </a>
+      <button class="rb-nav__toggle" type="button" aria-expanded="false" aria-label="Open menu"><span></span></button>
+      <div class="rb-nav__panel">
+        <div class="rb-nav__links">
+          <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
+          <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
+          <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
+          <a href="${RB_BASE}videos.html" class="${isRainbotTv ? "is-active" : ""}">Rainbot TV</a>
+          <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
+        </div>
+        <form class="rb-nav__search" role="search">
+          <label class="sr-only" for="rb-search">Search Rainbot</label>
+          <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
+          <button type="submit" aria-label="Search">Search</button>
+        </form>
+      </div>
+      <div class="rb-nav__actions">
+        ${proBadge}
+        ${syncBadge}
+        ${
+          state.isPro
+            ? `<a href="#" id="rb-manage-pro" class="rb-nav__cta rb-nav__cta--pro">Manage</a>`
+            : `<a href="#" id="rb-go-pro" class="rb-nav__cta rb-nav__cta--pro">Pro</a>`
+        }
+        <a href="#" id="rb-login" class="rb-nav__cta rb-nav__cta--login">${authLabel}</a>
+      </div>
     </div>
   `;
+
+  const navRoot = slot.closest(".nav");
+  const navToggle = slot.querySelector(".rb-nav__toggle");
+  if (navRoot && navToggle) {
+    navToggle.addEventListener("click", () => {
+      const open = navRoot.classList.toggle("is-open");
+      navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      navToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    });
+    slot.querySelectorAll(".rb-nav__links a").forEach((link) => {
+      link.addEventListener("click", () => {
+        navRoot.classList.remove("is-open");
+        navToggle.setAttribute("aria-expanded", "false");
+      });
+    });
+  }
 
   bindSearch(slot);
 
@@ -397,7 +420,7 @@ function renderNav(state = RB.state) {
 }
 
 function bindSearch(root) {
-  const form = root.querySelector(".nav__search");
+  const form = root.querySelector(".rb-nav__search");
   const input = root.querySelector("#rb-search");
   if (!form || !input) return;
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
@@ -512,7 +535,7 @@ function initGamesCatalog() {
   const sectionForCard = (card) => {
     const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
     const text = normalize(`${card.dataset.title || ""} ${card.textContent || ""}`);
-    if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse")) {
+    if (card.classList.contains("rb-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse")) {
       return "agent";
     }
     if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {
@@ -531,7 +554,7 @@ function initGamesCatalog() {
     }));
     if (existingSections.length) return existingSections;
 
-    const directCards = Array.from(grid.children).filter((child) => child.classList && child.classList.contains("directory-card"));
+    const directCards = Array.from(grid.children).filter((child) => child.classList && child.classList.contains("rb-card"));
     if (!directCards.length) return [];
 
     grid.classList.add("games-section-stack");
@@ -550,7 +573,7 @@ function initGamesCatalog() {
           </div>
           <span class="games-section__count" data-games-section-count>0 games</span>
         </div>
-        <div class="directory-grid games-section__grid" data-games-section-grid></div>
+        <div class="rb-grid rb-grid--directory games-section__grid" data-games-section-grid></div>
       `;
       fragment.append(section);
       return {
@@ -577,12 +600,12 @@ function initGamesCatalog() {
     return match ? Number(match[1]) * 1000 : 0;
   };
 
-  const cards = Array.from(grid.querySelectorAll(".directory-card")).map((card, order) => {
-    const category = card.querySelector(".directory-card__meta b")?.textContent.trim() || "Other";
-    const detail = card.querySelector(".directory-card__meta em")?.textContent.trim() || "";
-    const status = card.querySelector(".directory-card__status")?.textContent.trim() || "";
+  const cards = Array.from(grid.querySelectorAll(".rb-card")).map((card, order) => {
+    const category = card.querySelector(".rb-card__meta b")?.textContent.trim() || "Other";
+    const detail = card.querySelector(".rb-card__meta em")?.textContent.trim() || "";
+    const status = card.querySelector(".rb-card__badge")?.textContent.trim() || "";
     const title = (
-      card.querySelector(".directory-card__poster-title")?.textContent ||
+      card.querySelector(".rb-card__title")?.textContent ||
       card.dataset.title ||
       card.getAttribute("href") ||
       ""
@@ -3417,7 +3440,7 @@ function initGameEscapeMenu() {
   const pageLooksPaused = () => {
     const pauseButton = findPauseButton();
     if (textIncludes(pauseButton, "resume")) return true;
-    if (document.body.classList.contains("micro-play-paused")) return true;
+    if (document.body.classList.contains("micro-play-paused") || document.body.classList.contains("micro-embedded-paused")) return true;
     return Array.from(document.querySelectorAll(".overlay--show, .scr--show"))
       .some((overlay) => overlay.textContent.toLowerCase().includes("paused"));
   };
@@ -3507,6 +3530,59 @@ function initGameEscapeMenu() {
   document.addEventListener("webkitfullscreenchange", refreshActions);
 }
 
+function initStandaloneGameShell() {
+  const surface = document.querySelector(".rb-standalone-surface");
+  const fsButton = surface && surface.querySelector("#btn-fullscreen");
+  if (!surface || !fsButton || fsButton.dataset.rbStandaloneFsBound === "true") return;
+
+  fsButton.dataset.rbStandaloneFsBound = "true";
+
+  const isNativeFullscreen = () => (
+    document.fullscreenElement === surface ||
+    document.webkitFullscreenElement === surface
+  );
+  const isMaxed = () => surface.classList.contains("is-maxed") || isNativeFullscreen();
+  const updateButton = () => {
+    const active = isMaxed();
+    fsButton.textContent = active ? "Min" : "Max";
+    fsButton.setAttribute("aria-label", active ? "Minimize game" : "Max screen");
+    fsButton.setAttribute("title", active ? "Minimize game" : "Max screen");
+  };
+  const setMaxed = (active) => {
+    surface.classList.toggle("is-maxed", active);
+    document.body.classList.toggle("rb-game-maxed", active);
+    updateButton();
+    scheduleGameCanvasFit();
+  };
+
+  fsButton.addEventListener("click", () => {
+    const next = !surface.classList.contains("is-maxed");
+    setMaxed(next);
+
+    try {
+      if (next) {
+        const request = surface.requestFullscreen || surface.webkitRequestFullscreen;
+        const result = request && request.call(surface);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        const result = exit && exit.call(document);
+        if (result && typeof result.catch === "function") result.catch(() => {});
+      }
+    } catch (error) {}
+  });
+
+  const syncFullscreenState = () => {
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fullscreenElement && surface.classList.contains("is-maxed")) setMaxed(false);
+    else updateButton();
+  };
+
+  document.addEventListener("fullscreenchange", syncFullscreenState);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+  updateButton();
+}
+
 let gameCanvasFitFrame = 0;
 
 function scheduleGameCanvasFit() {
@@ -3590,6 +3666,7 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
+  initStandaloneGameShell();
   initGameEscapeMenu();
   initHomeRecentPanel();
   initHomeProgressPanel();

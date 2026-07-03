@@ -8,23 +8,22 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-rainbot-agent-1" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-uiredesign-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
 <body class="home-page arcade-home">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="arcade-shell">
-    <header class="portal-hero" id="home">
-      <div class="portal-hero__scan" aria-hidden="true"></div>
-      <div class="portal-hero__copy">
-        <h1 class="portal-hero__title">
-          <span class="portal-hero__title-line">Rainbot</span>
-          <span class="portal-hero__title-line">Network</span>
-          <span class="portal-hero__tagline">Games. Slop. TV.</span>
+    <header class="rb-hero" id="home">
+      <div class="rb-hero__copy">
+        <span class="rb-eyebrow">Free browser arcade</span>
+        <h1 class="rb-hero__title">
+          Rainbot Network<br />
+          <span class="is-pink">Games.</span> <span class="is-cyan">Slop.</span> <span class="is-yellow">TV.</span>
         </h1>
-        <p class="portal-hero__sub">Free browser games, fake headlines, and funny video nonsense from one deeply unserious machine.</p>
-        <div class="portal-hero__actions">
+        <p class="rb-hero__sub">Free browser games, fake headlines, and funny video nonsense from one deeply unserious machine.</p>
+        <div class="rb-hero__actions">
           <a class="arcade-btn arcade-btn--primary" href="games.html">
             <span class="arcade-btn__mark">PLAY</span>
             Games
@@ -34,13 +33,13 @@
             The Slopwire
           </a>
         </div>
-        <div class="portal-hero__status" aria-label="Arcade status">
+        <div class="rb-hero__ticker" aria-label="Arcade status">
           <span><i></i>387 bots online</span>
-          <span>New chaos drops weekly</span>
-          <span>100% free to play</span>
+          <span><b>NEW</b> chaos drops weekly</span>
+          <span><b>100%</b> free to play</span>
         </div>
       </div>
-      <div class="portal-hero__media" aria-label="Rainbot robot mascot and arcade stickers">
+      <div class="rb-hero__media" aria-label="Rainbot robot mascot and arcade stickers">
         <img src="assets/img/mockup/hero-bot-stickers.png?v=20260611-7" alt="" />
       </div>
     </header>
@@ -92,34 +91,34 @@
         <h2><span class="panel-glyph">+</span>Latest Release</h2>
         <a href="games.html">All games</a>
       </div>
-      <div class="latest-release-grid">
-        <a class="latest-release-hero" href="games/the-last-signal.html" data-title="Latest release The Last Signal RTS real time strategy skirmish humans robots aliens factions matter energy signal serious sci-fi">
-          <span class="latest-release-hero__poster">
+      <div class="rb-split">
+        <a class="rb-card rb-card--feature" href="games/the-last-signal.html" data-title="Latest release The Last Signal RTS real time strategy skirmish humans robots aliens factions matter energy signal serious sci-fi">
+          <span class="rb-card__media">
             <img src="assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260702-tls-title-4" alt="The Last Signal titled key art - three sci-fi factions surround a violet signal beam rising from a vast excavation crater" />
-            <span>Fresh Drop</span>
+            <span class="rb-card__badge rb-badge">Fresh Drop</span>
           </span>
-          <span class="latest-release-hero__body">
-            <small>New Release</small>
-            <strong>The Last Signal</strong>
-            <span>A serious, lore-forward RTS-lite. Command Humans, Robots, or Aliens over an ancient signal buried under Earth — harvest, build, and break the enemy command core.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">New release</span>
+            <strong class="rb-card__title">The Last Signal</strong>
+            <span class="rb-card__desc">A serious, lore-forward RTS-lite. Command Humans, Robots, or Aliens over an ancient signal buried under Earth — harvest, build, and break the enemy command core.</span>
           </span>
-          <span class="latest-release-hero__meta"><b>RTS</b><em>Play now</em></span>
+          <span class="rb-card__meta"><b>RTS</b><em>Play now</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
-        <div class="latest-release-stack" aria-label="Recent releases">
-          <a class="latest-release-slat" href="games/escape-poop-cruise.html" data-title="Recent release Escape the Poop Cruise low poly 3D horror FPS cruise crud cure dart lifeboats">
-            <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="" />
-            <span>
-              <small>Recent drop</small>
-              <strong>Escape the Poop Cruise</strong>
-              <em>Low-poly horror FPS</em>
+        <div class="rb-stack" aria-label="Recent releases">
+          <a class="rb-card rb-card--slat" href="games/escape-poop-cruise.html" data-title="Recent release Escape the Poop Cruise low poly 3D horror FPS cruise crud cure dart lifeboats">
+            <span class="rb-card__media"><img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="" /></span>
+            <span class="rb-card__body">
+              <span class="rb-card__kicker">Recent drop</span>
+              <strong class="rb-card__title">Escape the Poop Cruise</strong>
+              <span class="rb-card__desc">Low-poly horror FPS</span>
             </span>
           </a>
-          <a class="latest-release-slat" href="games/flappy-stonks.html" data-title="Recent release Flappy Stonks stock market arcade runner candle walls dividends fake news volatility">
-            <img src="assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2" alt="" />
-            <span>
-              <small>Recent drop</small>
-              <strong>Flappy Stonks</strong>
-              <em>Arcade market panic</em>
+          <a class="rb-card rb-card--slat" href="games/flappy-stonks.html" data-title="Recent release Flappy Stonks stock market arcade runner candle walls dividends fake news volatility">
+            <span class="rb-card__media"><img src="assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2" alt="" /></span>
+            <span class="rb-card__body">
+              <span class="rb-card__kicker">Recent drop</span>
+              <strong class="rb-card__title">Flappy Stonks</strong>
+              <span class="rb-card__desc">Arcade market panic</span>
             </span>
           </a>
         </div>
@@ -131,46 +130,57 @@
         <h2><span class="panel-glyph">+</span>Featured Live Games</h2>
         <a href="games.html">View all games</a>
       </div>
-      <div class="poster-grid" data-search-scope>
-        <a class="poster-card poster-card--tothemoon" href="games/to-the-moon.html" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands">
-          <img src="assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" />
-          <span class="poster-card__meta"><b>Crypto Miner</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+      <div class="rb-grid rb-grid--featured" data-search-scope>
+        <a class="rb-card rb-card--game" href="games/to-the-moon.html" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands">
+          <span class="rb-card__media">
+            <img src="assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" />
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__meta"><b>Crypto Miner</b><em>New drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="poster-card poster-card--ssb" href="games/super-slop-brothers.html" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
-          <img src="assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" />
-          <span class="poster-card__meta"><b>Fighter</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+        <a class="rb-card rb-card--game" href="games/super-slop-brothers.html" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
+          <span class="rb-card__media">
+            <img src="assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" />
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__meta"><b>Fighter</b><em>New drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="poster-card" href="games/rizz-craft.html" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
-          <img src="assets/img/mockup/card-rizz-craft.png?v=20260613-2" alt="Rizz-Craft voxel mining poster art" />
-          <span class="poster-card__label">Rizz-<br />Craft</span>
-          <span class="poster-card__meta"><b>Sandbox</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+        <a class="rb-card rb-card--game" href="games/rizz-craft.html" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
+          <span class="rb-card__media rb-card__media--scrim">
+            <img src="assets/img/mockup/card-rizz-craft.png?v=20260613-2" alt="Rizz-Craft voxel mining poster art" />
+            <span class="rb-card__badge rb-badge">New</span>
+            <span class="rb-card__label">Rizz-Craft</span>
+          </span>
+          <span class="rb-card__meta"><b>Sandbox</b><em>New drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="poster-card poster-card--storm" href="games/storm-area-51.html" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
-          <img src="assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
-          <span class="poster-card__label">Storm<br />Area 51</span>
-          <span class="poster-card__meta"><b>Crowd Heist</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+        <a class="rb-card rb-card--game" href="games/storm-area-51.html" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
+          <span class="rb-card__media rb-card__media--scrim">
+            <img src="assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
+            <span class="rb-card__badge rb-badge">New</span>
+            <span class="rb-card__label">Storm Area 51</span>
+          </span>
+          <span class="rb-card__meta"><b>Crowd Heist</b><em>New drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="poster-card poster-card--merge" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
-          <img src="assets/img/mockup/card-brainrot-2048.png?v=20260614-3" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" />
-          <span class="poster-card__meta"><b>Puzzle</b><em>New drop</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+        <a class="rb-card rb-card--game" href="games/brainrot-2048.html" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
+          <span class="rb-card__media">
+            <img src="assets/img/mockup/card-brainrot-2048.png?v=20260614-3" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" />
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__meta"><b>Puzzle</b><em>New drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a class="poster-card poster-card--weight" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
-          <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" />
-          <span class="poster-card__label">The<br />Weight</span>
-          <span class="poster-card__meta"><b>Horror</b><em>After Dark</em></span>
-          <span class="poster-card__play" aria-hidden="true">Play</span>
+        <a class="rb-card rb-card--game rb-card--dark" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
+          <span class="rb-card__media rb-card__media--scrim">
+            <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" />
+            <span class="rb-card__badge rb-badge rb-badge--dark">After Dark</span>
+            <span class="rb-card__label">The Weight</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror</b><em>After Dark</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
-
       </div>
     </section>
 
@@ -179,44 +189,44 @@
         <h2><span class="panel-glyph">+</span>Latest From Slopwire + TV</h2>
         <a href="articles.html">Open feed</a>
       </div>
-      <div class="home-media-grid" data-search-scope>
-        <a class="slopwire-card" href="articles/smart-toaster-giving-life-advice.html" data-title="The Slopwire Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire">
-          <span class="slopwire-card__poster">
+      <div class="rb-grid rb-grid--articles" data-search-scope>
+        <a class="rb-card rb-card--article" href="articles/smart-toaster-giving-life-advice.html" data-title="The Slopwire Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire">
+          <span class="rb-card__media">
             <img src="assets/img/slopwire/toaster-life-advice.png?v=20260702-slopwire-1" alt="Satirical news image of a glowing smart toaster giving life advice" />
-            <span>The Slopwire</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">The Slopwire</span>
           </span>
-          <span class="slopwire-card__body">
-            <small>Fresh article</small>
-            <strong>Smart Toaster Starts Giving Life Advice After Firmware Update</strong>
-            <span>The appliance reportedly got very centered while ruining breakfast.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">Fresh article · Home Tech</span>
+            <strong class="rb-card__title">Smart Toaster Starts Giving Life Advice After Firmware Update</strong>
+            <span class="rb-card__desc">The appliance reportedly got very centered while ruining breakfast.</span>
           </span>
-          <span class="slopwire-card__meta"><b>3 min read</b><em>Home Tech</em></span>
+          <span class="rb-card__meta"><b>3 min read</b><em>Home Tech</em><span class="rb-card__play" aria-hidden="true">Read</span></span>
         </a>
 
-        <a class="slopwire-card" href="articles/group-chat-declares-state-of-emergency.html" data-title="The Slopwire Group Chat Declares State Of Emergency After Someone Replies K fake news satire">
-          <span class="slopwire-card__poster">
+        <a class="rb-card rb-card--article" href="articles/group-chat-declares-state-of-emergency.html" data-title="The Slopwire Group Chat Declares State Of Emergency After Someone Replies K fake news satire">
+          <span class="rb-card__media">
             <img src="assets/img/slopwire/group-chat-emergency.png?v=20260702-slopwire-1" alt="Satirical news image of friends panicking over a group chat alert" />
-            <span>The Slopwire</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">The Slopwire</span>
           </span>
-          <span class="slopwire-card__body">
-            <small>Social report</small>
-            <strong>Group Chat Declares State Of Emergency After Someone Replies "K"</strong>
-            <span>Brunch stability entered crisis mode after one very small message.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">Social report</span>
+            <strong class="rb-card__title">Group Chat Declares State Of Emergency After Someone Replies "K"</strong>
+            <span class="rb-card__desc">Brunch stability entered crisis mode after one very small message.</span>
           </span>
-          <span class="slopwire-card__meta"><b>2 min read</b><em>Social</em></span>
+          <span class="rb-card__meta"><b>2 min read</b><em>Social</em><span class="rb-card__play" aria-hidden="true">Read</span></span>
         </a>
 
-        <a class="slopwire-card slopwire-card--tv" href="videos.html#featured" data-title="Rainbot TV Area 51 Raid Clap Alien Cheeks funny video aliens found footage">
-          <span class="slopwire-card__poster">
+        <a class="rb-card rb-card--video" href="videos.html#featured" data-title="Rainbot TV Area 51 Raid Clap Alien Cheeks funny video aliens found footage">
+          <span class="rb-card__media">
             <img src="assets/img/rainbot-tv/area-51-raid.jpg?v=20260623-area51-1" alt="Area 51 raid crowd holding alien signs outside a desert fence" />
-            <span>Rainbot TV</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">Rainbot TV</span>
           </span>
-          <span class="slopwire-card__body">
-            <small>Featured clip</small>
-            <strong>Area 51 Raid: Clap Alien Cheeks</strong>
-            <span>The aliens were real, the alarms were louder, and the gift shop still closed at 5.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">Featured clip</span>
+            <strong class="rb-card__title">Area 51 Raid: Clap Alien Cheeks</strong>
+            <span class="rb-card__desc">The aliens were real, the alarms were louder, and the gift shop still closed at 5.</span>
           </span>
-          <span class="slopwire-card__meta"><b>6 pilots</b><em>Watch</em></span>
+          <span class="rb-card__meta"><b>6 pilots</b><em>Watch</em><span class="rb-card__play" aria-hidden="true">Watch</span></span>
         </a>
       </div>
     </section>
@@ -226,32 +236,32 @@
         <h2><span class="panel-glyph">+</span>Agent Games</h2>
         <a href="games.html#agent-games">Open protocol vault</a>
       </div>
-      <div class="agent-games-strip">
-        <a class="agent-feature-card" href="games/recursive-reward-labyrinth.html" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language">
-          <span class="agent-feature-card__art">
+      <div class="rb-grid rb-grid--agent">
+        <a class="rb-card rb-card--agent" href="games/recursive-reward-labyrinth.html" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language">
+          <span class="rb-card__media rb-card__media--scrim">
             <img src="assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" alt="Recursive Reward Labyrinth neon graph key art" />
-            <span class="agent-feature-card__title">Recursive<br />Reward Labyrinth</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">Agent</span>
+            <span class="rb-card__label">Recursive Reward Labyrinth</span>
           </span>
-          <span class="agent-feature-card__body">
-            <strong>Built for agents, not fingers.</strong>
-            <span>Read the JSON observation, submit command batches, and survive a long campaign of shifting reward vectors.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">Agent Protocol · First playable</span>
+            <span class="rb-card__desc"><strong>Built for agents, not fingers.</strong> Read the JSON observation, submit command batches, and survive a long campaign of shifting reward vectors.</span>
           </span>
-          <span class="agent-feature-card__meta"><b>Agent Protocol</b><em>First playable</em></span>
-          <span class="agent-feature-card__play" aria-hidden="true">Play</span>
+          <span class="rb-card__chips"><b>JSON obs</b><b>Command DSL</b><b>18 sectors</b></span>
         </a>
-        <a class="agent-feature-card" href="games/consensus-collapse.html" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol">
-          <span class="agent-feature-card__art">
+        <a class="rb-card rb-card--agent" href="games/consensus-collapse.html" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol">
+          <span class="rb-card__media rb-card__media--scrim">
             <img src="assets/img/agent-games/consensus-collapse.png?v=20260615-1" alt="Consensus Collapse fractured council key art" />
-            <span class="agent-feature-card__title">Consensus<br />Collapse</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">Agent</span>
+            <span class="rb-card__label">Consensus Collapse</span>
           </span>
-          <span class="agent-feature-card__body">
-            <strong>Negotiate with hostile constraints.</strong>
-            <span>Infer faction preferences, patch treaty vectors, manage contradictions, and ratify 14 escalating assemblies.</span>
+          <span class="rb-card__body">
+            <span class="rb-card__kicker">Agent Treaty · New protocol</span>
+            <span class="rb-card__desc"><strong>Negotiate with hostile constraints.</strong> Infer faction preferences, patch treaty vectors, manage contradictions, and ratify 14 escalating assemblies.</span>
           </span>
-          <span class="agent-feature-card__meta"><b>Agent Treaty</b><em>New protocol</em></span>
-          <span class="agent-feature-card__play" aria-hidden="true">Play</span>
+          <span class="rb-card__chips"><b>JSON obs</b><b>Treaty DSL</b><b>14 assemblies</b></span>
         </a>
-        <div class="agent-games-brief" aria-label="Agent games brief">
+        <div class="rb-brief" aria-label="Agent games brief">
           <span><b>Input</b> JSON observation + command DSL</span>
           <span><b>Depth</b> Graph campaigns + treaty assemblies</span>
           <span><b>API</b> observe() / act() hooks per game</span>
@@ -259,21 +269,23 @@
       </div>
     </section>
 
-    <section class="arcade-row" aria-label="After Dark and coming soon">
+    <section class="rb-duo" aria-label="After Dark and coming soon">
       <div class="arcade-panel after-panel" id="after-dark">
         <div class="arcade-panel__header arcade-panel__header--pink">
           <h2>Rainbot After Dark</h2>
-          <a href="games.html#after-dark-games">Enter if you dare</a>
+          <a href="after-dark.html">Enter if you dare</a>
         </div>
-        <a class="after-card" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy after dark">
-          <img src="assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2" alt="Don't Become Pizza cover art" />
-        </a>
-        <a class="after-card" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity 3am">
-          <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" />
-        </a>
-        <a class="after-card" href="games/again.html" data-title="Again horror hallway after dark">
-          <img src="assets/img/mockup/card-again.png?v=20260614-1" alt="AGAIN horror hallway poster art" />
-        </a>
+        <div class="rb-stack" data-search-scope>
+          <a class="rb-card rb-card--dark rb-card--bare" href="games/dont-become-pizza.html" data-title="Don't Become Pizza horror private island pizza conspiracy after dark">
+            <span class="rb-card__media"><img src="assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2" alt="Don't Become Pizza cover art" /></span>
+          </a>
+          <a class="rb-card rb-card--dark rb-card--bare" href="games/the-weight.html" data-title="The Weight sleep paralysis horror after dark entity 3am">
+            <span class="rb-card__media"><img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" /></span>
+          </a>
+          <a class="rb-card rb-card--dark rb-card--bare" href="games/again.html" data-title="Again horror hallway after dark">
+            <span class="rb-card__media"><img src="assets/img/mockup/card-again.png?v=20260614-1" alt="AGAIN horror hallway poster art" /></span>
+          </a>
+        </div>
       </div>
 
       <div class="arcade-panel soon-panel" id="coming-soon">
@@ -281,30 +293,36 @@
           <h2>Coming Soon</h2>
           <a href="games.html">See all</a>
         </div>
-        <div class="soon-list">
-          <div class="soon-item" data-title="Goatse Simulator 2 legend returns">
-            <img src="assets/img/mockup/soon-goat.png?v=20260611-7" alt="" />
-            <div>
-              <strong>Goatse Simulator 2</strong>
-              <span>The legend returns</span>
-            </div>
-            <em>Soon</em>
+        <div class="rb-stack">
+          <div class="rb-card rb-card--slat" data-title="Goatse Simulator 2 legend returns">
+            <span class="rb-card__media">
+              <img src="assets/img/mockup/soon-goat.png?v=20260611-7" alt="" />
+              <span class="rb-card__badge rb-badge rb-badge--yellow">Soon</span>
+            </span>
+            <span class="rb-card__body">
+              <strong class="rb-card__title">Goatse Simulator 2</strong>
+              <span class="rb-card__desc">The legend returns</span>
+            </span>
           </div>
-          <div class="soon-item" data-title="Brainrot Kart racing algorithm drift">
-            <img src="assets/img/mockup/soon-toilet.png?v=20260611-7" alt="" />
-            <div>
-              <strong>Brainrot Kart</strong>
-              <span>Drift into the feed</span>
-            </div>
-            <em>Soon</em>
+          <div class="rb-card rb-card--slat" data-title="Brainrot Kart racing algorithm drift">
+            <span class="rb-card__media">
+              <img src="assets/img/mockup/soon-toilet.png?v=20260611-7" alt="" />
+              <span class="rb-card__badge rb-badge rb-badge--yellow">Soon</span>
+            </span>
+            <span class="rb-card__body">
+              <strong class="rb-card__title">Brainrot Kart</strong>
+              <span class="rb-card__desc">Drift into the feed</span>
+            </span>
           </div>
-          <div class="soon-item" data-title="NFT Tycoon jpeg hell">
-            <img src="assets/img/mockup/soon-nft.png?v=20260611-7" alt="" />
-            <div>
-              <strong>NFT Tycoon</strong>
-              <span>Welcome to JPEG hell</span>
-            </div>
-            <em>Soon</em>
+          <div class="rb-card rb-card--slat" data-title="NFT Tycoon jpeg hell">
+            <span class="rb-card__media">
+              <img src="assets/img/mockup/soon-nft.png?v=20260611-7" alt="" />
+              <span class="rb-card__badge rb-badge rb-badge--yellow">Soon</span>
+            </span>
+            <span class="rb-card__body">
+              <strong class="rb-card__title">NFT Tycoon</strong>
+              <span class="rb-card__desc">Welcome to JPEG hell</span>
+            </span>
           </div>
         </div>
       </div>
@@ -343,28 +361,49 @@
     </section>
   </main>
 
-  <footer class="site-footer">
-    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
-    <div class="site-footer__links">
-      <a href="articles.html">The Slopwire</a>
-      <a href="videos.html">Rainbot TV</a>
-      <a href="community.html">Community</a>
-      <a href="mailto:hello@rainbotgaming.com">Contact</a>
-      <a href="legal/terms.html">Terms</a>
-      <a href="legal/privacy.html">Privacy</a>
-      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
-    </div>
-    <div class="site-footer__social" aria-label="Social links">
-      <a href="#" aria-label="Discord">DI</a>
-      <a href="#" aria-label="X">X</a>
-      <a href="#" aria-label="YouTube">YT</a>
-      <a href="#" aria-label="TikTok">TT</a>
-      <a href="#" aria-label="Instagram">IG</a>
+  <footer class="rb-footer">
+    <div class="rb-footer__inner">
+      <div class="rb-footer__brand">
+        <a href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
+        <p class="rb-footer__tag">One deeply unserious machine. New chaos drops weekly.</p>
+      </div>
+      <nav class="rb-footer__cols" aria-label="Site links">
+        <div class="rb-footer__col">
+          <h4>Play</h4>
+          <a href="games.html">All Games</a>
+          <a href="after-dark.html">After Dark</a>
+          <a href="agent-games.html">Agent Games</a>
+          <a href="community.html">Community</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Watch + Read</h4>
+          <a href="articles.html">The Slopwire</a>
+          <a href="videos.html">Rainbot TV</a>
+          <a href="#rainbot-media">Latest Drops</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Fine Print</h4>
+          <a href="legal/terms.html">Terms</a>
+          <a href="legal/privacy.html">Privacy</a>
+          <a href="mailto:hello@rainbotgaming.com">Contact</a>
+          <a href="mailto:press@rainbotgaming.com">Press Kit</a>
+        </div>
+      </nav>
+      <div class="rb-footer__base">
+        <span class="rb-footer__legal">© 2026 Rainbot Network — 100% parody, 0% journalism.</span>
+        <div class="rb-footer__social" aria-label="Social links">
+          <a href="#" aria-label="Discord">DI</a>
+          <a href="#" aria-label="X">X</a>
+          <a href="#" aria-label="YouTube">YT</a>
+          <a href="#" aria-label="TikTok">TT</a>
+          <a href="#" aria-label="Instagram">IG</a>
+        </div>
+      </div>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+  <script src="assets/js/main.js?v=20260702-uiredesign-1"></script>
   <script>
     document.querySelectorAll("[data-pro-plan]").forEach((button) => {
       button.addEventListener("click", () => openProModal(button.dataset.proPlan));

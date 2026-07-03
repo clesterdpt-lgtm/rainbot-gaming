@@ -6,20 +6,20 @@
   <title>Games — Rainbot Network</title>
   <meta name="description" content="All Rainbot Network browser games, grouped into Human, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-rainbot-agent-1" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260702-uiredesign-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff2e88'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%232ee0ff'/%3E%3Cpath d='M28 68h44' stroke='%23ffd43b' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="games-index arcade-home">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="arcade-shell games-directory">
-    <header class="games-hero arcade-panel">
-      <div class="games-hero__copy">
-        <span class="games-hero__eyebrow">All Games</span>
-        <h1>One Vault. Three Flavors.</h1>
-        <p>Human arcade chaos, agent protocol experiments, and After Dark horror now live under one Games roof.</p>
+    <header class="rb-hero">
+      <div class="rb-hero__copy">
+        <span class="rb-eyebrow">All Games</span>
+        <h1 class="rb-hero__title">One Vault.<br /><span class="is-cyan">Three Flavors.</span></h1>
+        <p class="rb-hero__sub">Human arcade chaos, agent protocol experiments, and After Dark horror now live under one Games roof.</p>
       </div>
-      <div class="games-hero__stats" aria-label="Arcade directory stats">
+      <div class="rb-hero__stats" aria-label="Arcade directory stats">
         <span><b>30</b> games online</span>
         <span><b>3</b> sections</span>
         <span><b>100%</b> browser</span>
@@ -71,388 +71,365 @@
         <button class="games-filterbar__reset" type="button" data-games-reset>Reset</button>
       </div>
 
-      <div class="directory-grid" data-games-grid>
-        <a href="games/to-the-moon.html" class="directory-card" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands black swan">
-          <div class="directory-card__poster directory-card__poster--tothemoon">
+      <div class="rb-grid rb-grid--directory" data-games-grid>
+        <a href="games/to-the-moon.html" class="rb-card rb-card--detail" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands black swan">
+          <span class="rb-card__media">
             <img src="assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" />
-            <span class="directory-card__status">New</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A crypto-mining Motherload × tower-defense survival game. Drill a digital crust for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, craft parts, and launch to the moon — outlasting the Black Swan boss along the way.</p>
-          </div>
-          <span class="directory-card__meta"><b>Crypto Miner</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">To The Moon</strong>
+            <span class="rb-card__desc">A crypto-mining Motherload × tower-defense survival game. Drill a digital crust for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, craft parts, and launch to the moon — outlasting the Black Swan boss along the way.</span>
+          </span>
+          <span class="rb-card__meta"><b>Crypto Miner</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/the-last-signal.html" class="directory-card" data-title="The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow">
-          <div class="directory-card__poster directory-card__poster--tls">
+        <a href="games/the-last-signal.html" class="rb-card rb-card--detail" data-title="The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow">
+          <span class="rb-card__media">
             <img src="assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260702-tls-title-4" alt="The Last Signal titled key art - three sci-fi factions surround a violet signal beam rising from a vast excavation crater" />
-            <span class="directory-card__status">New</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A serious, lore-forward RTS-lite skirmish. A deep signal wakes beneath Earth's crust — command Humans, Robots, or Aliens, harvest three resources, raise a base, and break the enemy command core before their waves break yours.</p>
-          </div>
-          <span class="directory-card__meta"><b>RTS</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">The Last Signal</strong>
+            <span class="rb-card__desc">A serious, lore-forward RTS-lite skirmish. A deep signal wakes beneath Earth's crust — command Humans, Robots, or Aliens, harvest three resources, raise a base, and break the enemy command core before their waves break yours.</span>
+          </span>
+          <span class="rb-card__meta"><b>RTS</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/escape-poop-cruise.html" class="directory-card" data-title="Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural">
-          <div class="directory-card__poster directory-card__poster--poop-cruise">
+        <a href="games/escape-poop-cruise.html" class="rb-card rb-card--detail rb-card--dark" data-title="Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Escape the<br />Poop Cruise</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A low-poly horror FPS aboard the SS Gut Check. Cure fictional cruise-crud passengers with dart shots, manage your infection meter, unlock stronger cure weapons, and reach the lifeboats through procedural decks.</p>
-          </div>
-          <span class="directory-card__meta"><b>Horror FPS</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Escape the Poop Cruise</strong>
+            <span class="rb-card__desc">A low-poly horror FPS aboard the SS Gut Check. Cure fictional cruise-crud passengers with dart shots, manage your infection meter, unlock stronger cure weapons, and reach the lifeboats through procedural decks.</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror FPS</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/flappy-stonks.html" class="directory-card" data-title="Flappy Stonks stock market flappy bird parody candlestick chart trail dividends stop loss shield arcade runner">
-          <div class="directory-card__poster directory-card__poster--stonks">
+        <a href="games/flappy-stonks.html" class="rb-card rb-card--detail" data-title="Flappy Stonks stock market flappy bird parody candlestick chart trail dividends stop loss shield arcade runner">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2" alt="Funny Flappy Stonks cover art with a panicked investor bird, candlestick obstacles, and a jagged stock chart trail" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Flappy<br />Stonks</span>
-          </div>
-          <div class="directory-card__body">
-            <p>One-button stock-market chaos. Buy the dip to flap through candle walls, collect dividends, trigger fake news volatility, and leave your own live chart trail behind.</p>
-          </div>
-          <span class="directory-card__meta"><b>Arcade</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Flappy Stonks</strong>
+            <span class="rb-card__desc">One-button stock-market chaos. Buy the dip to flap through candle walls, collect dividends, trigger fake news volatility, and leave your own live chart trail behind.</span>
+          </span>
+          <span class="rb-card__meta"><b>Arcade</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/consensus-collapse.html" class="directory-card directory-card--agent" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL">
-          <div class="directory-card__poster directory-card__poster--agent">
+        <a href="games/consensus-collapse.html" class="rb-card rb-card--detail rb-card--agent" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL">
+          <span class="rb-card__media">
             <img src="assets/img/agent-games/consensus-collapse.png?v=20260615-1" alt="Consensus Collapse fractured council key art" />
-            <span class="directory-card__status">Agent</span>
-            <span class="directory-card__poster-title">Consensus<br />Collapse</span>
-          </div>
-          <div class="directory-card__body">
-            <p>An AI-agent treaty game. Infer hidden faction weights, propose constraint patches, manage contradictions, and ratify 14 escalating assemblies before consensus collapses.</p>
-          </div>
-          <span class="directory-card__meta"><b>Agent Treaty</b><em>New protocol</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">Agent</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Consensus Collapse</strong>
+            <span class="rb-card__desc">An AI-agent treaty game. Infer hidden faction weights, propose constraint patches, manage contradictions, and ratify 14 escalating assemblies before consensus collapses.</span>
+          </span>
+          <span class="rb-card__meta"><b>Agent Treaty</b><em>New protocol</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/recursive-reward-labyrinth.html" class="directory-card directory-card--agent" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language observation action DSL">
-          <div class="directory-card__poster directory-card__poster--agent">
+        <a href="games/recursive-reward-labyrinth.html" class="rb-card rb-card--detail rb-card--agent" data-title="Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language observation action DSL">
+          <span class="rb-card__media">
             <img src="assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1" alt="Recursive Reward Labyrinth neon graph key art" />
-            <span class="directory-card__status">Agent</span>
-            <span class="directory-card__poster-title">Recursive<br />Reward Labyrinth</span>
-          </div>
-          <div class="directory-card__body">
-            <p>An AI-agent protocol game. Parse the observation JSON, issue command batches, tune reward vectors, and push through an 18-sector graph campaign built to punish shallow heuristics.</p>
-          </div>
-          <span class="directory-card__meta"><b>Agent Protocol</b><em>First playable</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--cyan">Agent</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Recursive Reward Labyrinth</strong>
+            <span class="rb-card__desc">An AI-agent protocol game. Parse the observation JSON, issue command batches, tune reward vectors, and push through an 18-sector graph campaign built to punish shallow heuristics.</span>
+          </span>
+          <span class="rb-card__meta"><b>Agent Protocol</b><em>First playable</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/drone-hunter.html" class="directory-card" data-title="Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade">
-          <div class="directory-card__poster directory-card__poster--drone">
+        <a href="games/drone-hunter.html" class="rb-card rb-card--detail" data-title="Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2" alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Drone<br />Hunter</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A Duck Hunt parody for the surveillance age. Snipe delivery drones, surveillance cams, and rogue ad-bots out of the neon sky — but spare the protected peace doves, or the robo-dog laughs at you.</p>
-          </div>
-          <span class="directory-card__meta"><b>Shooter</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Drone Hunter</strong>
+            <span class="rb-card__desc">A Duck Hunt parody for the surveillance age. Snipe delivery drones, surveillance cams, and rogue ad-bots out of the neon sky — but spare the protected peace doves, or the robo-dog laughs at you.</span>
+          </span>
+          <span class="rb-card__meta"><b>Shooter</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/storm-area-51.html" class="directory-card" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
-          <div class="directory-card__poster directory-card__poster--storm">
+        <a href="games/storm-area-51.html" class="rb-card rb-card--detail" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
+          <span class="rb-card__media">
             <img src="assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Storm<br />Area 51</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Reverse tower defense chaos. Tap deploy squads through defended lanes, crack two lab shields, free the alien, and reach the van before lockdown.</p>
-          </div>
-          <span class="directory-card__meta"><b>Crowd Heist</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Storm Area 51</strong>
+            <span class="rb-card__desc">Reverse tower defense chaos. Tap deploy squads through defended lanes, crack two lab shields, free the alien, and reach the van before lockdown.</span>
+          </span>
+          <span class="rb-card__meta"><b>Crowd Heist</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/dont-become-pizza.html" class="directory-card" data-title="Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark">
-          <div class="directory-card__poster directory-card__poster--pizza">
+        <a href="games/dont-become-pizza.html" class="rb-card rb-card--detail rb-card--dark" data-title="Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2" alt="Don't Become Pizza cover art with a moonlit private island, glowing pizza oven, and masked searchlights" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Don't Become<br />Pizza</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A private-island stealth horror nod to midnight conspiracy brainrot. Sneak past masked elites, raid the fuel stash, and leave before the underground ovens decide you are the special.</p>
-          </div>
-          <span class="directory-card__meta"><b>Horror</b><em>Rainbot After Dark</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Don't Become Pizza</strong>
+            <span class="rb-card__desc">A private-island stealth horror nod to midnight conspiracy brainrot. Sneak past masked elites, raid the fuel stash, and leave before the underground ovens decide you are the special.</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror</b><em>Rainbot After Dark</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/super-slop-brothers.html" class="directory-card" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
-          <div class="directory-card__poster directory-card__poster--ssb">
+        <a href="games/super-slop-brothers.html" class="rb-card rb-card--detail" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" />
-            <span class="directory-card__status">New</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Smash-style platform fighting. Pick from 6 original slop fighters, brawl across 4 hazard stages, and launch rivals past the blast zones — the higher their %, the farther they fly.</p>
-          </div>
-          <span class="directory-card__meta"><b>Fighter</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Super Slop Brothers</strong>
+            <span class="rb-card__desc">Smash-style platform fighting. Pick from 6 original slop fighters, brawl across 4 hazard stages, and launch rivals past the blast zones — the higher their %, the farther they fly.</span>
+          </span>
+          <span class="rb-card__meta"><b>Fighter</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/dont-fck-with-cats.html" class="directory-card" data-title="Don't F*ck with Cats cat swarm runner levels gates multiplier laser pointer hairball roomba cucumber vacuum arcade">
-          <div class="directory-card__poster directory-card__poster--clowder">
+        <a href="games/dont-fck-with-cats.html" class="rb-card rb-card--detail" data-title="Don't F*ck with Cats cat swarm runner levels gates multiplier laser pointer hairball roomba cucumber vacuum arcade">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1" alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Don't F*ck<br />with Cats</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Eight-level cat-swarm runner chaos. Herd cats through ridiculous math gates, fire laser dots and hairballs, crack bonus boxes, and humble every appliance that gets bold.</p>
-          </div>
-          <span class="directory-card__meta"><b>Runner</b><em>8 levels</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Don't F*ck with Cats</strong>
+            <span class="rb-card__desc">Eight-level cat-swarm runner chaos. Herd cats through ridiculous math gates, fire laser dots and hairballs, crack bonus boxes, and humble every appliance that gets bold.</span>
+          </span>
+          <span class="rb-card__meta"><b>Runner</b><em>8 levels</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/ai-slop-factory.html" class="directory-card" data-title="AI Slop Factory content moderation conveyor arcade boost demonetize fact check delete milk engagement ai thumbnails ragebait bots misinformation deepfake crypto scams">
-          <div class="directory-card__poster directory-card__poster--slop">
+        <a href="games/ai-slop-factory.html" class="rb-card rb-card--detail" data-title="AI Slop Factory content moderation conveyor arcade boost demonetize fact check delete milk engagement ai thumbnails ragebait bots misinformation deepfake crypto scams">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-ai-slop-factory.png?v=20260614-3" alt="AI Slop Factory robot moderator poster art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">AI Slop<br />Factory</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Conveyor-belt content moderation panic. Sort cursed thumbnails, bot floods, scams, misinformation, and ragebait before the feed eats the dashboard.</p>
-          </div>
-          <span class="directory-card__meta"><b>Arcade</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">AI Slop Factory</strong>
+            <span class="rb-card__desc">Conveyor-belt content moderation panic. Sort cursed thumbnails, bot floods, scams, misinformation, and ragebait before the feed eats the dashboard.</span>
+          </span>
+          <span class="rb-card__meta"><b>Arcade</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/karen-merger.html" class="directory-card" data-title="Complaint Chain bubble drop physics manager ascension complaints coupons retail kaiju">
-          <div class="directory-card__poster directory-card__poster--karen">
+        <a href="games/karen-merger.html" class="rb-card rb-card--detail" data-title="Complaint Chain bubble drop physics manager ascension complaints coupons retail kaiju">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-karen-merger.png?v=20260621-cover-2" alt="Complaint Chain generated arcade poster art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Complaint<br />Chain</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Drop generated character bubbles into the retail bin, fuse matching escalation tiers, and spend complaint energy before the pile crosses the line.</p>
-          </div>
-          <span class="directory-card__meta"><b>Bubble Merge</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Complaint Chain</strong>
+            <span class="rb-card__desc">Drop generated character bubbles into the retail bin, fuse matching escalation tiers, and spend complaint energy before the pile crosses the line.</span>
+          </span>
+          <span class="rb-card__meta"><b>Bubble Merge</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/gen-z-driving-simulator.html" class="directory-card" data-title="Gen Z Driving Simulator driving phone road curves steering vibe check distracted driver">
-          <div class="directory-card__poster directory-card__poster--genz">
+        <a href="games/gen-z-driving-simulator.html" class="rb-card rb-card--detail" data-title="Gen Z Driving Simulator driving phone road curves steering vibe check distracted driver">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-gen-z-driving-simulator.png?v=20260618-1" alt="Gen Z Driving Simulator arcade poster mark" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Gen Z Driving<br />Simulator</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Cockpit chaos. Steer through curvy back roads, keep the Vibe Check meter alive, and farm phone points without drifting into grass or memes.</p>
-          </div>
-          <span class="directory-card__meta"><b>3D Driving</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Gen Z Driving Simulator</strong>
+            <span class="rb-card__desc">Cockpit chaos. Steer through curvy back roads, keep the Vibe Check meter alive, and farm phone points without drifting into grass or memes.</span>
+          </span>
+          <span class="rb-card__meta"><b>3D Driving</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/again.html" class="directory-card" data-title="Again horror hallway after dark">
-          <div class="directory-card__poster directory-card__poster--again">
+        <a href="games/again.html" class="rb-card rb-card--detail rb-card--dark" data-title="Again horror hallway after dark">
+          <span class="rb-card__media rb-card__media--contain">
             <img src="assets/img/mockup/card-again.png?v=20260614-1" alt="AGAIN horror hallway poster art" />
-            <span class="directory-card__status">Playable</span>
-            <span class="directory-card__poster-title">AGAIN.</span>
-          </div>
-          <div class="directory-card__body">
-            <p>First-person loop-horror in the spirit of P.T. Walk the hallway, listen closely to 100% synthesized positional audio, and escape the loop. Headphones required.</p>
-          </div>
-          <span class="directory-card__meta"><b>Horror</b><em>Rainbot After Dark</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">AGAIN.</strong>
+            <span class="rb-card__desc">First-person loop-horror in the spirit of P.T. Walk the hallway, listen closely to 100% synthesized positional audio, and escape the loop. Headphones required.</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror</b><em>Rainbot After Dark</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/the-weight.html" class="directory-card" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
-          <div class="directory-card__poster directory-card__poster--weight">
+        <a href="games/the-weight.html" class="rb-card rb-card--detail rb-card--dark" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4" alt="The Weight sleep paralysis horror poster art" />
-            <span class="directory-card__status">Playable</span>
-            <span class="directory-card__poster-title">The Weight</span>
-          </div>
-          <div class="directory-card__body">
-            <p>You wake at 3:47 AM. You cannot move. Something is getting closer. Survive sleep paralysis as an entity approaches, then escape an out-of-body chase to return to your body before it does. Headphones required.</p>
-          </div>
-          <span class="directory-card__meta"><b>Horror</b><em>Rainbot After Dark</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">The Weight</strong>
+            <span class="rb-card__desc">You wake at 3:47 AM. You cannot move. Something is getting closer. Survive sleep paralysis as an entity approaches, then escape an out-of-body chase to return to your body before it does. Headphones required.</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror</b><em>Rainbot After Dark</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-
-        <a href="games/smooth-brain-snacker.html" class="directory-card" data-title="Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade">
-          <div class="directory-card__poster directory-card__poster--snake">
+        <a href="games/smooth-brain-snacker.html" class="rb-card rb-card--detail" data-title="Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1" alt="Smooth Brain Snacker brain-worm snake parody cover art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Smooth Brain<br />Snacker</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A snake parody. You're a brain worm: eat smart, responsible ideas, leave them behind as pure brainrot, and avoid your own terrible takes.</p>
-          </div>
-          <span class="directory-card__meta"><b>Arcade</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Smooth Brain Snacker</strong>
+            <span class="rb-card__desc">A snake parody. You're a brain worm: eat smart, responsible ideas, leave them behind as pure brainrot, and avoid your own terrible takes.</span>
+          </span>
+          <span class="rb-card__meta"><b>Arcade</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/brainrot-2048.html" class="directory-card" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
-          <div class="directory-card__poster directory-card__poster--merge">
+        <a href="games/brainrot-2048.html" class="rb-card rb-card--detail" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-brainrot-2048.png?v=20260614-3" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" />
-            <span class="directory-card__status">New</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Slide-to-merge brainrot. Fuse two NPCs into a Skibidi, Skibidis into Rizz, and keep climbing the tier ladder all the way to Galaxy Brain.</p>
-          </div>
-          <span class="directory-card__meta"><b>Puzzle</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Brainrot 2048</strong>
+            <span class="rb-card__desc">Slide-to-merge brainrot. Fuse two NPCs into a Skibidi, Skibidis into Rizz, and keep climbing the tier ladder all the way to Galaxy Brain.</span>
+          </span>
+          <span class="rb-card__meta"><b>Puzzle</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-
-        <a href="games/unhoused-and-unhinged.html" class="directory-card" data-title="Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival">
-          <div class="directory-card__poster directory-card__poster--unhinged">
+        <a href="games/unhoused-and-unhinged.html" class="rb-card rb-card--detail" data-title="Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1" alt="Unhoused and Unhinged low-poly city sandbox cover art" />
-            <span class="directory-card__status">Prototype</span>
-            <span class="directory-card__poster-title">Unhoused<br />and Unhinged</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Low-poly 3D street-survival sandbox. Earn cash with slapstick antics by day, outrun overzealous heat, then survive Tweeker Zombies with improvised comedy weapons at night.</p>
-          </div>
-          <span class="directory-card__meta"><b>3D Sandbox</b><em>First playable</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--yellow">Prototype</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Unhoused and Unhinged</strong>
+            <span class="rb-card__desc">Low-poly 3D street-survival sandbox. Earn cash with slapstick antics by day, outrun overzealous heat, then survive Tweeker Zombies with improvised comedy weapons at night.</span>
+          </span>
+          <span class="rb-card__meta"><b>3D Sandbox</b><em>First playable</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/billionaire-space-race.html" class="directory-card" data-title="Billionaire Space Race rocket launch land lunar lander parody musk bezos platform dodge satellites drones">
-          <div class="directory-card__poster directory-card__poster--bsr">
+        <a href="games/billionaire-space-race.html" class="rb-card rb-card--detail" data-title="Billionaire Space Race rocket launch land lunar lander parody musk bezos platform dodge satellites drones">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-billionaire-space-race.png?v=20260613-6" alt="Billionaire Space Race satirical rocket-race poster art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Billionaire<br />Space Race</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Lunar-lander parody. Light the investor money on fire, dodge lawsuit drones and audit satellites, then set your ego-rocket down gently on an ever-tinier, ever-movinger platform.</p>
-          </div>
-          <span class="directory-card__meta"><b>Lander</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Billionaire Space Race</strong>
+            <span class="rb-card__desc">Lunar-lander parody. Light the investor money on fire, dodge lawsuit drones and audit satellites, then set your ego-rocket down gently on an ever-tinier, ever-movinger platform.</span>
+          </span>
+          <span class="rb-card__meta"><b>Lander</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/rizz-craft.html" class="directory-card" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
-          <div class="directory-card__poster">
+        <a href="games/rizz-craft.html" class="rb-card rb-card--detail" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-rizz-craft.png?v=20260613-2" alt="Rizz-Craft voxel mining poster art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">Rizz-<br />Craft</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Block-mining sandbox brainrot. Chop Skibidi Logs, dig for glowing Rizz Ore, craft at the toilet bench, and survive the night.</p>
-          </div>
-          <span class="directory-card__meta"><b>Sandbox</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Rizz-Craft</strong>
+            <span class="rb-card__desc">Block-mining sandbox brainrot. Chop Skibidi Logs, dig for glowing Rizz Ore, craft at the toilet bench, and survive the night.</span>
+          </span>
+          <span class="rb-card__meta"><b>Sandbox</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/tardigrade-micro-mayhem.html" class="directory-card" data-title="Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade">
-          <div class="directory-card__poster directory-card__poster--tardigrade">
+        <a href="games/tardigrade-micro-mayhem.html" class="rb-card rb-card--detail" data-title="Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3" alt="Tardigrade: Micro Mayhem generated game preview" />
-            <span class="directory-card__status">Prototype</span>
-            <span class="directory-card__poster-title">Tardigrade:<br />Micro Mayhem</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Low-poly 3D sandbox chaos in a petri dish. Scuttle, jump, bonk pollen, snack on algae, and feed the nutrient ring.</p>
-          </div>
-          <span class="directory-card__meta"><b>3D Sandbox</b><em>First playable</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--yellow">Prototype</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Tardigrade: Micro Mayhem</strong>
+            <span class="rb-card__desc">Low-poly 3D sandbox chaos in a petri dish. Scuttle, jump, bonk pollen, snack on algae, and feed the nutrient ring.</span>
+          </span>
+          <span class="rb-card__meta"><b>3D Sandbox</b><em>First playable</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/doorcrash-no-tip-nitro.html" class="directory-card" data-title="DoorCrash No Tip Nitro 3D delivery runner food car obstacles">
-          <div class="directory-card__poster directory-card__poster--doorcrash">
+        <a href="games/doorcrash-no-tip-nitro.html" class="rb-card rb-card--detail" data-title="DoorCrash No Tip Nitro 3D delivery runner food car obstacles">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-doorcrash-no-tip-nitro.png?v=20260612-1" alt="DoorCrash: No Tip Nitro poster art" />
-            <span class="directory-card__status">New</span>
-            <span class="directory-card__poster-title">DoorCrash:<br />No Tip Nitro</span>
-          </div>
-          <div class="directory-card__body">
-            <p>3D delivery-app chaos. Dodge cones, potholes, scooters, and cursed apartment gates before the fries go cold.</p>
-          </div>
-          <span class="directory-card__meta"><b>3D Runner</b><em>Fresh drop</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge">New</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">DoorCrash: No Tip Nitro</strong>
+            <span class="rb-card__desc">3D delivery-app chaos. Dodge cones, potholes, scooters, and cursed apartment gates before the fries go cold.</span>
+          </span>
+          <span class="rb-card__meta"><b>3D Runner</b><em>Fresh drop</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/strait-of-hormuz.html" class="directory-card" data-title="Escape the Straight action tanker mines drones">
-          <div class="directory-card__poster directory-card__poster--escape">
+        <a href="games/strait-of-hormuz.html" class="rb-card rb-card--detail" data-title="Escape the Straight action tanker mines drones">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-escape-straight-wide.png?v=20260611-7" alt="Escape the Straight tanker poster art" />
-            <span class="directory-card__status">Playable</span>
-            <span class="directory-card__poster-title">Escape the<br />Straight</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Frogger-style tanker panic. Mines, drones, fast boats, and a route planner with no chill.</p>
-          </div>
-          <span class="directory-card__meta"><b>Action</b><em>12.4K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Escape the Straight</strong>
+            <span class="rb-card__desc">Frogger-style tanker panic. Mines, drones, fast boats, and a route planner with no chill.</span>
+          </span>
+          <span class="rb-card__meta"><b>Action</b><em>12.4K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/mr-feast-mansion.html" class="directory-card" data-title="Mr Feast Last to Leave the Mansion horror challenge">
-          <div class="directory-card__poster directory-card__poster--feast">
+        <a href="games/mr-feast-mansion.html" class="rb-card rb-card--detail rb-card--dark" data-title="Mr Feast Last to Leave the Mansion horror challenge">
+          <span class="rb-card__media rb-card__media--left">
             <img src="assets/img/mockup/card-mr-feast.png?v=20260611-7" alt="Mr. Feast: Last To Leave the Mansion poster art" />
-            <span class="directory-card__status">Playable</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Survive 24 hours in a mansion where the prize money is loud and the vibes are legally haunted.</p>
-          </div>
-          <span class="directory-card__meta"><b>Horror</b><em>8.7K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Mr. Feast: Last To Leave The Mansion</strong>
+            <span class="rb-card__desc">Survive 24 hours in a mansion where the prize money is loud and the vibes are legally haunted.</span>
+          </span>
+          <span class="rb-card__meta"><b>Horror</b><em>8.7K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/looksmaxxing-grindset.html" class="directory-card" data-title="Looksmaxxing Grindset idle sim gym mewing water">
-          <div class="directory-card__poster directory-card__poster--looksmaxxing">
+        <a href="games/looksmaxxing-grindset.html" class="rb-card rb-card--detail" data-title="Looksmaxxing Grindset idle sim gym mewing water">
+          <span class="rb-card__media rb-card__media--left">
             <img src="assets/img/mockup/card-looksmaxxing.png?v=20260611-7" alt="Looksmaxxing Grindset poster art" />
-            <span class="directory-card__status">Playable</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Click to grind. Wake up sadge, become allegedly optimized. The advice is fake. The water is real.</p>
-          </div>
-          <span class="directory-card__meta"><b>Sim / Idle</b><em>25.1K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Looksmaxxing Grindset</strong>
+            <span class="rb-card__desc">Click to grind. Wake up sadge, become allegedly optimized. The advice is fake. The water is real.</span>
+          </span>
+          <span class="rb-card__meta"><b>Sim / Idle</b><em>25.1K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/boomer-monopoly.html" class="directory-card" data-title="Boomer Monopoly housing board game parody">
-          <div class="directory-card__poster">
+        <a href="games/boomer-monopoly.html" class="rb-card rb-card--detail" data-title="Boomer Monopoly housing board game parody">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-boomer-monopoly.png?v=20260611-7" alt="Boomer Monopoly poster art" />
-            <span class="directory-card__status">Playable</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Roll, buy, renovate, and collect rent in a housing board game where the market only apologizes ironically.</p>
-          </div>
-          <span class="directory-card__meta"><b>Board / Strategy</b><em>6.3K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Boomer Monopoly</strong>
+            <span class="rb-card__desc">Roll, buy, renovate, and collect rent in a housing board game where the market only apologizes ironically.</span>
+          </span>
+          <span class="rb-card__meta"><b>Board / Strategy</b><em>6.3K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/apop-demon-hunters.html" class="directory-card" data-title="Apop Demon Moggers side-scroller platformer pop action boyz ii hell">
-          <div class="directory-card__poster directory-card__poster--apop">
+        <a href="games/apop-demon-hunters.html" class="rb-card rb-card--detail" data-title="Apop Demon Moggers side-scroller platformer pop action boyz ii hell">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5" alt="Apop Demon Moggers updated cartoon poster art" />
-            <span class="directory-card__status">Playable</span>
-            <span class="directory-card__poster-title">Apop<br />Demon Moggers</span>
-          </div>
-          <div class="directory-card__body">
-            <p>A run-and-gun side-scroller where America's pop divas blast a demon boy band back to the group chat. K-pop had hunters; we mog.</p>
-          </div>
-          <span class="directory-card__meta"><b>Side-scroller</b><em>15.6K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Apop Demon Moggers</strong>
+            <span class="rb-card__desc">A run-and-gun side-scroller where America's pop divas blast a demon boy band back to the group chat. K-pop had hunters; we mog.</span>
+          </span>
+          <span class="rb-card__meta"><b>Side-scroller</b><em>15.6K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/skibidi-toilet-tower-defense.html" class="directory-card" data-title="Skibidi Toilet Tower Defense toilets towers camera speaker plunger">
-          <div class="directory-card__poster directory-card__poster--escape">
+        <a href="games/skibidi-toilet-tower-defense.html" class="rb-card rb-card--detail" data-title="Skibidi Toilet Tower Defense toilets towers camera speaker plunger">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-skibidi-toilet-tower-defense.png?v=20260611-9" alt="Skibidi Toilet Tower Defense poster art" />
-            <span class="directory-card__status">Playable</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Build camera turrets, speaker stacks, and plunger traps before the bathroom portal clogs the whole arcade.</p>
-          </div>
-          <span class="directory-card__meta"><b>Defense</b><em>18.2K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Skibidi Toilet Tower Defense</strong>
+            <span class="rb-card__desc">Build camera turrets, speaker stacks, and plunger traps before the bathroom portal clogs the whole arcade.</span>
+          </span>
+          <span class="rb-card__meta"><b>Defense</b><em>18.2K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
 
-        <a href="games/dont-look-gym-girl.html" class="directory-card" data-title="Don't Look at the Gym Girl stealth awkward parody">
-          <div class="directory-card__poster">
+        <a href="games/dont-look-gym-girl.html" class="rb-card rb-card--detail" data-title="Don't Look at the Gym Girl stealth awkward parody">
+          <span class="rb-card__media">
             <img src="assets/img/mockup/card-gym-girl.png?v=20260611-7" alt="Don't Look at the Gym Girl poster art" />
-            <span class="directory-card__status">Playable</span>
-          </div>
-          <div class="directory-card__body">
-            <p>Stealth-awkward gym survival. The equipment is everywhere, and your own neck is the boss fight.</p>
-          </div>
-          <span class="directory-card__meta"><b>Stealth</b><em>9.8K playing</em></span>
-          <span class="directory-card__play" aria-hidden="true">Play</span>
+            <span class="rb-card__badge rb-badge rb-badge--ghost">Playable</span>
+          </span>
+          <span class="rb-card__body">
+            <strong class="rb-card__title">Don't Look at the Gym Girl</strong>
+            <span class="rb-card__desc">Stealth-awkward gym survival. The equipment is everywhere, and your own neck is the boss fight.</span>
+          </span>
+          <span class="rb-card__meta"><b>Stealth</b><em>9.8K playing</em><span class="rb-card__play" aria-hidden="true">Play</span></span>
         </a>
       </div>
       <p class="games-catalog__empty" data-games-empty hidden>No games match those filters.</p>
@@ -461,28 +438,49 @@
     <div id="ad-leaderboard" class="games-ad-slot"></div>
   </main>
 
-  <footer class="site-footer">
-    <a class="site-footer__brand" href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
-    <div class="site-footer__links">
-      <a href="./">Home</a>
-      <a href="articles.html">The Slopwire</a>
-      <a href="videos.html">Rainbot TV</a>
-      <a href="community.html">Community</a>
-      <a href="legal/privacy.html">Privacy</a>
-      <a href="legal/terms.html">Terms</a>
-      <a href="mailto:press@rainbotgaming.com">Press Kit</a>
-    </div>
-    <div class="site-footer__social" aria-label="Social links">
-      <a href="#" aria-label="Discord">DI</a>
-      <a href="#" aria-label="X">X</a>
-      <a href="#" aria-label="YouTube">YT</a>
-      <a href="#" aria-label="TikTok">TT</a>
-      <a href="#" aria-label="Instagram">IG</a>
+  <footer class="rb-footer">
+    <div class="rb-footer__inner">
+      <div class="rb-footer__brand">
+        <a href="./"><img src="assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" /></a>
+        <p class="rb-footer__tag">One deeply unserious machine. New chaos drops weekly.</p>
+      </div>
+      <nav class="rb-footer__cols" aria-label="Site links">
+        <div class="rb-footer__col">
+          <h4>Play</h4>
+          <a href="games.html">All Games</a>
+          <a href="after-dark.html">After Dark</a>
+          <a href="agent-games.html">Agent Games</a>
+          <a href="community.html">Community</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Watch + Read</h4>
+          <a href="articles.html">The Slopwire</a>
+          <a href="videos.html">Rainbot TV</a>
+          <a href="index.html#rainbot-media">Latest Drops</a>
+        </div>
+        <div class="rb-footer__col">
+          <h4>Fine Print</h4>
+          <a href="legal/terms.html">Terms</a>
+          <a href="legal/privacy.html">Privacy</a>
+          <a href="mailto:hello@rainbotgaming.com">Contact</a>
+          <a href="mailto:press@rainbotgaming.com">Press Kit</a>
+        </div>
+      </nav>
+      <div class="rb-footer__base">
+        <span class="rb-footer__legal">© 2026 Rainbot Network — 100% parody, 0% journalism.</span>
+        <div class="rb-footer__social" aria-label="Social links">
+          <a href="#" aria-label="Discord">DI</a>
+          <a href="#" aria-label="X">X</a>
+          <a href="#" aria-label="YouTube">YT</a>
+          <a href="#" aria-label="TikTok">TT</a>
+          <a href="#" aria-label="Instagram">IG</a>
+        </div>
+      </div>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260702-rainbot-agent-1"></script>
+  <script src="assets/js/main.js?v=20260702-uiredesign-1"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

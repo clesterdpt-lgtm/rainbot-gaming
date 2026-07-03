@@ -28,6 +28,7 @@
   const VISION = {
     worker: 360,
     combat: 430,
+    scout: 760,
     building: 520,
     hq: 650,
     claimedNode: 500,
@@ -248,7 +249,7 @@
      4. FACTIONS — all gameplay data + lore
      ================================================== */
   function U(o) { // unit def defaults
-    return Object.assign({ shield: 0, splash: 0, aggro: 0, worker: false, carry: 0, htime: 0, repair: 0, proj: "bullet" }, o);
+    return Object.assign({ shield: 0, splash: 0, aggro: 0, worker: false, scout: false, carry: 0, htime: 0, repair: 0, proj: "bullet" }, o);
   }
   function B(o) { // building def defaults
     return Object.assign({ trains: null, mult: null, dmg: 0, range: 0, rate: 1, proj: "bullet" }, o);
@@ -268,6 +269,8 @@
       units: {
         worker: U({ key: "worker", name: "Engineer", art: "h-worker", flavor: "Builds fast, patches faster. The Accord runs on coffee and weld seams.",
           cost: { m: 40 }, time: 7, hp: 50, speed: 80, r: 8, worker: true, carry: 10, htime: 2.6, repair: 16, dmg: 2, range: 16, rate: 0.9, proj: "melee" }),
+        scout: U({ key: "scout", name: "Pathfinder Team", art: "h-basic", flavor: "Light recon with long-range optics. It wins fights by not being found first.",
+          cost: { m: 35, e: 12 }, time: 8, hp: 42, speed: 138, r: 7, scout: true, dmg: 2, range: 95, rate: 0.85, aggro: 90 }),
         basic: U({ key: "basic", name: "Rifle Team", art: "h-basic", flavor: "Two soldiers, one job: hold the line until the line moves.",
           cost: { m: 45, e: 10 }, time: 8, hp: 70, speed: 78, r: 9, dmg: 5, range: 115, rate: 0.55, aggro: 150 }),
         ranged: U({ key: "ranged", name: "Railgun Rover", art: "h-ranged", flavor: "Light chassis, heavy argument. Strikes armor from a ridge away.",
@@ -277,7 +280,7 @@
       },
       buildings: {
         hq: B({ key: "hq", kind: "hq", name: "Command Shelter", art: "h-hq", flavor: "The Accord's forward brain. Lose it, and the Hollow is lost with it.",
-          cost: { m: 0 }, time: 1, hp: 1600, r: 46, trains: ["worker"], dmg: 8, range: 170, rate: 0.9 }),
+          cost: { m: 0 }, time: 1, hp: 1600, r: 46, trains: ["worker", "scout"], dmg: 8, range: 170, rate: 0.9 }),
         extractor: B({ key: "extractor", kind: "extractor", name: "Matter Rig", art: "h-ext", flavor: "Automated extraction rig. Runs on anything, complains about nothing.",
           cost: { m: 55 }, time: 12, hp: 340, r: 22, mult: { m: 1, e: 1, s: 1 } }),
         production: B({ key: "production", kind: "production", name: "Field Barracks", art: "h-prod", flavor: "Prefab walls, permanent resolve.",
@@ -300,6 +303,8 @@
       units: {
         worker: U({ key: "worker", name: "Fabricator", art: "r-worker", flavor: "It does not rest between tasks. There is no between tasks.",
           cost: { m: 45 }, time: 9, hp: 65, speed: 62, r: 9, worker: true, carry: 10, htime: 2.8, repair: 7, dmg: 2, range: 16, rate: 0.9, proj: "melee" }),
+        scout: U({ key: "scout", name: "Survey Needle", art: "r-worker", flavor: "A thin machine built to map risk before the network spends bodies.",
+          cost: { m: 40, e: 18 }, time: 9, hp: 58, speed: 128, r: 7, scout: true, dmg: 3, range: 70, rate: 0.75, proj: "arc", aggro: 80 }),
         basic: U({ key: "basic", name: "Cutter Drone", art: "r-basic", flavor: "Close-range shear drone. Efficient beyond argument.",
           cost: { m: 40, e: 25 }, time: 9, hp: 95, speed: 96, r: 9, dmg: 6, range: 30, rate: 0.5, proj: "melee", aggro: 145 }),
         ranged: U({ key: "ranged", name: "Arc Walker", art: "r-ranged", flavor: "Walks the grid's edge and carries the grid's anger.",
@@ -309,7 +314,7 @@
       },
       buildings: {
         hq: B({ key: "hq", kind: "hq", name: "Network Core", art: "r-hq", flavor: "The local mind. Sever it and the grid goes quiet.",
-          cost: { m: 0 }, time: 1, hp: 1750, r: 46, trains: ["worker"], dmg: 9, range: 165, rate: 1.0, proj: "arc" }),
+          cost: { m: 0 }, time: 1, hp: 1750, r: 46, trains: ["worker", "scout"], dmg: 9, range: 165, rate: 1.0, proj: "arc" }),
         extractor: B({ key: "extractor", kind: "extractor", name: "Extractor Array", art: "r-ext", flavor: "Consumption scheduled to the millisecond. The ground never noticed.",
           cost: { m: 65 }, time: 14, hp: 380, r: 22, mult: { m: 1.25, e: 1.25, s: 1.1 } }),
         production: B({ key: "production", kind: "production", name: "Assembly Node", art: "r-prod", flavor: "Where the Continuum multiplies.",
@@ -332,6 +337,8 @@
       units: {
         worker: U({ key: "worker", name: "Shaper", art: "a-worker", flavor: "It sings to matter, and matter remembers its old shapes.",
           cost: { m: 50 }, time: 10, hp: 55, shield: 25, speed: 58, r: 9, worker: true, carry: 14, htime: 3.0, repair: 8, dmg: 2, range: 16, rate: 0.9, proj: "melee" }),
+        scout: U({ key: "scout", name: "Veil Seer", art: "a-ranged", flavor: "It does not look through the dark. It remembers what the dark is hiding.",
+          cost: { m: 48, e: 22, s: 2 }, time: 10, hp: 42, shield: 34, speed: 132, r: 7, scout: true, dmg: 3, range: 100, rate: 0.95, proj: "psi", aggro: 90 }),
         basic: U({ key: "basic", name: "Needle Wraith", art: "a-basic", flavor: "A sliver of the old war, still sharp.",
           cost: { m: 55, e: 30 }, time: 11, hp: 60, shield: 40, speed: 100, r: 9, dmg: 5, range: 95, rate: 0.42, proj: "needle", aggro: 150 }),
         ranged: U({ key: "ranged", name: "Rift Seer", art: "a-ranged", flavor: "It watches from a half-step outside the world.",
@@ -341,7 +348,7 @@
       },
       buildings: {
         hq: B({ key: "hq", kind: "hq", name: "Signal Heart", art: "a-hq", flavor: "The Remnant's covenant with the buried voice.",
-          cost: { m: 0 }, time: 1, hp: 1700, r: 46, trains: ["worker"], dmg: 10, range: 175, rate: 1.1, proj: "psi" }),
+          cost: { m: 0 }, time: 1, hp: 1700, r: 46, trains: ["worker", "scout"], dmg: 10, range: 175, rate: 1.1, proj: "psi" }),
         extractor: B({ key: "extractor", kind: "extractor", name: "Root Harvester", art: "a-ext", flavor: "Roots older than the soil they drink.",
           cost: { m: 60 }, time: 15, hp: 350, r: 22, mult: { m: 1, e: 1, s: 1.3 } }),
         production: B({ key: "production", kind: "production", name: "Spawning Veil", art: "a-prod", flavor: "A membrane between here and the remembering place.",
@@ -442,7 +449,7 @@
       amount, rig: null, team: null,
       hp: 0, maxHp: NODE_CLAIM_HP[kind] || 150,
       claimTeam: null, claimProgress: 0,
-      lastHit: -99, seed: Math.random() * TAU,
+      lastHit: -99, alertT: -99, seed: Math.random() * TAU,
     });
   }
   function addCluster(kind, cx, cy, offsets, amount) {
@@ -621,7 +628,8 @@
     if (!pt || state.phase !== "playing" && state.phase !== "over") return;
     for (const u of state.units) {
       if (u.dead || u.team !== pt) continue;
-      state.vision.push({ x: u.x, y: u.y, r: u.def.worker ? VISION.worker : VISION.combat, kind: "unit" });
+      const r = u.def.scout ? VISION.scout : u.def.worker ? VISION.worker : VISION.combat;
+      state.vision.push({ x: u.x, y: u.y, r, kind: u.def.scout ? "scout" : "unit" });
     }
     for (const b of state.buildings) {
       if (b.dead || b.team !== pt) continue;
@@ -674,8 +682,21 @@
     n.claimTeam = null;
     n.claimProgress = 0;
     n.lastHit = state.time;
-    if (oldTeam === playerTeam()) log(`${resourceNodeName(n)} claim destroyed`);
+    if (oldTeam === playerTeam()) {
+      state.alarmT = state.time;
+      state.alarmPos = { x: n.x, y: n.y };
+      log(`${resourceNodeName(n)} claim lost`);
+      Sfx.alarm();
+    }
     else if (attackerTeam === playerTeam()) log(`Enemy ${resourceNodeName(n)} unclaimed`);
+    return true;
+  }
+  function raisePlayerAlarm(x, y, msg, cooldown = 9) {
+    if (state.time - state.alarmT <= cooldown) return false;
+    state.alarmT = state.time;
+    state.alarmPos = { x, y };
+    log(msg);
+    Sfx.alarm();
     return true;
   }
 
@@ -1066,6 +1087,10 @@
     if (isResourceNode(thing)) {
       if (!thing.team || thing.hp <= 0 || aTeam === thing.team) return;
       thing.lastHit = state.time;
+      if (thing.team === playerTeam() && state.time - thing.alertT > 8) {
+        thing.alertT = state.time;
+        raisePlayerAlarm(thing.x, thing.y, `${resourceNodeName(thing)} under attack`, 4);
+      }
       thing.hp -= dmg;
       if (thing.hp <= 0) {
         boomFx(thing.x, thing.y, thing.team.faction.color, thing.r + 8);
@@ -1093,10 +1118,7 @@
     // player under-attack alarm
     const pt = playerTeam();
     if (thing.team === pt && (thing.kind === "building" || (thing.def && thing.def.worker)) && state.time - state.alarmT > 9) {
-      state.alarmT = state.time;
-      state.alarmPos = { x: thing.x, y: thing.y };
-      log(`⚠ ${thing.def.name} under attack`);
-      Sfx.alarm();
+      raisePlayerAlarm(thing.x, thing.y, `⚠ ${thing.def.name} under attack`, 9);
     }
     if (thing.hp <= 0) kill(thing, aTeam);
   }
@@ -1330,8 +1352,10 @@
       waveIdx: 0,
       defenseCool: 0,
       workerTarget: 7,
+      scoutTarget: 2,
       onUnit(u) {
-        if (!u.def.worker) u.aiRole = "defend";
+        if (u.def.scout) u.aiRole = "scout";
+        else if (!u.def.worker) u.aiRole = "defend";
       },
       update(dt) {
         this.think -= dt;
@@ -1342,16 +1366,27 @@
         const hq = teamHQ(t);
         if (!hq) return;
         const workers = teamUnits(t).filter((u) => u.def.worker);
-        const army = teamMilitary(t);
+        const scouts = teamUnits(t).filter((u) => u.def.scout);
+        const army = teamMilitary(t).filter((u) => !u.def.scout);
 
         // --- economy: keep workers flowing + working
         if (workers.length < this.workerTarget && hq.queue.length === 0 && canAfford(t, t.faction.units.worker.cost)) {
           enqueueTrain(hq, "worker");
+        } else if (scouts.length < this.scoutTarget && hq.queue.length === 0 && canAfford(t, t.faction.units.scout.cost)) {
+          enqueueTrain(hq, "scout");
         }
         for (const w of workers) {
           if (w.state === "idle") {
             const n = findMatterNode(w);
             if (n) orderHarvest([w], n);
+          }
+        }
+        for (const s of scouts) {
+          if (s.state !== "idle") continue;
+          const n = this.scoutNode(t, s);
+          if (n) {
+            s.aiRole = "scout";
+            orderMove([s], n.x + rand(-90, 90), n.y + rand(-90, 90), false);
           }
         }
 
@@ -1421,6 +1456,22 @@
           this.workerTarget = Math.min(9, this.workerTarget + 1);
           if (t !== playerTeam()) { log("⚠ Seismic sensors: enemy force moving"); Sfx.alarm(); }
         }
+      },
+      scoutNode(t, scout) {
+        let best = null, bd = -Infinity;
+        for (const n of state.nodes) {
+          if (n.team === t || !nodeHasResources(n)) continue;
+          const spread = Math.min(
+            n.x,
+            n.y,
+            WORLD_W - n.x,
+            WORLD_H - n.y
+          );
+          const base = d2(scout.x, scout.y, n.x, n.y);
+          const score = base * 0.0001 + spread * 0.4 + (n.team ? -200 : 80) + Math.random() * 70;
+          if (score > bd) { bd = score; best = n; }
+        }
+        return best;
       },
       buildExtractor(t, hq, kind) {
         let best = null, bd = Infinity;
@@ -1960,6 +2011,7 @@
       let rows = `<div>${hpLine(o)}</div>`;
       if (o.kind === "unit" && o.def.dmg && !o.def.worker) rows += `<div>DMG ${o.def.dmg} · range ${o.def.range}</div>`;
       if (o.kind === "unit" && o.def.worker) rows += `<div>Carries ${o.def.carry} Matter · repairs ${o.def.repair}/s</div>`;
+      if (o.kind === "unit" && o.def.scout) rows += `<div>Recon vision ${VISION.scout}</div>`;
       if (o.kind === "building" && !o.built) rows += `<div>Constructing — ${Math.floor(o.progress * 100)}%</div>`;
       if (o.kind === "building" && o.built && o.def.kind === "extractor" && o.node) {
         const rk = NODE_RES[o.node.kind];
@@ -2446,7 +2498,7 @@
 
   function unitAtlasSize(u) {
     const k = u.def.key;
-    const mult = k === "heavy" ? 7.1 : k === "ranged" ? 7.3 : k === "worker" ? 7.2 : 7.2;
+    const mult = k === "heavy" ? 7.1 : k === "ranged" ? 7.3 : k === "worker" ? 7.2 : k === "scout" ? 6.4 : 7.2;
     return u.def.r * mult;
   }
 
@@ -2464,6 +2516,27 @@
     ctx.strokeStyle = "rgba(230,255,244,0.75)";
     ctx.lineWidth = 1.2;
     ctx.stroke();
+  }
+
+  function drawScoutBadge(r, color) {
+    const pulse = 0.45 + 0.35 * Math.sin(state.vt * 5);
+    ctx.save();
+    ctx.rotate(-state.vt * 0.8);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.76;
+    ctx.lineWidth = 1.35;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * (1.35 + pulse * 0.28), -0.2, 1.35);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.72, Math.PI + 0.3, Math.PI * 1.72);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, -r * 1.62, Math.max(2.2, r * 0.25), 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   /* ---------- unit art ---------- */
@@ -2494,6 +2567,7 @@
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
     if (drewAtlas) {
+      if (u.def.scout) drawScoutBadge(r, f.color2);
       if (u.carry > 0) drawCarryBadge(r);
       return;
     }

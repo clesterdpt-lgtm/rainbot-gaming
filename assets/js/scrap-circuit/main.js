@@ -254,6 +254,7 @@
 
   // ---------- three.js core ----------
   const ps1 = new SCRAP.Ps1Renderer(canvas, { height: 270, dither: 1 });
+  if (SCRAP.textures && SCRAP.textures.configureRenderer) SCRAP.textures.configureRenderer(ps1.renderer);
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 420);
   const hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 0.8);

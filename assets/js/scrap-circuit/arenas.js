@@ -136,13 +136,20 @@
   function stableOverlay(material) {
     material.depthWrite = false;
     material.polygonOffset = true;
-    material.polygonOffsetFactor = -2;
-    material.polygonOffsetUnits = -2;
+    material.polygonOffsetFactor = -4;
+    material.polygonOffsetUnits = -4;
     return material;
   }
 
   function flatOverlay(a, w, d, material, x, y, z, renderOrder = 2) {
     const m = mesh(a, new THREE.PlaneGeometry(w, d), material, x, y, z);
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = renderOrder;
+    return m;
+  }
+
+  function flatDisk(a, radius, material, x, y, z, renderOrder = 3, segments = 32) {
+    const m = mesh(a, new THREE.CircleGeometry(radius, segments), material, x, y, z);
     m.rotation.x = -Math.PI / 2;
     m.renderOrder = renderOrder;
     return m;
@@ -203,12 +210,24 @@
     const drum = T().mat("prop.barrel", { color: 0xc9452e });
 
     ground(a, grass);
-    // Ring road + cross streets (visual strips, flat).
-    [[0, 0, 78, 7], [0, 0, 7, 78]].forEach(([x, z, hw, hd]) => {
-      flatOverlay(a, hw * 2, hd * 2, flatRoad, x, 0.075, z, 2);
+    // Cross streets + central circle. The arms stop at the circle edge so no
+    // road meshes fight each other or the grass plane while the camera moves.
+    const roadRadius = 26;
+    const roadOuter = 78;
+    const roadWidth = 14;
+    const roadArmLen = roadOuter - roadRadius;
+    const roadArmCenter = roadRadius + roadArmLen / 2;
+    [
+      [0, -roadArmCenter, roadWidth, roadArmLen, roadWidth / 2, roadArmLen / 2],
+      [0, roadArmCenter, roadWidth, roadArmLen, roadWidth / 2, roadArmLen / 2],
+      [-roadArmCenter, 0, roadArmLen, roadWidth, roadArmLen / 2, roadWidth / 2],
+      [roadArmCenter, 0, roadArmLen, roadWidth, roadArmLen / 2, roadWidth / 2],
+    ].forEach(([x, z, w, d, hw, hd]) => {
+      flatOverlay(a, w, d, flatRoad, x, 0.095, z, 2);
       a.minimap.push({ x, z, hw, hd, color: "#4a4a52" });
     });
-    mesh(a, new THREE.CylinderGeometry(26, 26, 0.045, 24), flatRoad, 0, 0.09, 0).renderOrder = 3; // cul-de-sac circle
+    flatDisk(a, roadRadius, flatRoad, 0, 0.115, 0, 3, 36); // cul-de-sac circle
+    a.minimap.push({ x: 0, z: 0, hw: roadRadius, hd: roadRadius, color: "#4a4a52" });
 
     // Houses in the four quads; one has a drive-through garage shortcut,
     // one carries the roof ramp jump.

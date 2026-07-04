@@ -13,14 +13,15 @@
      entry from "planned" into "textures" + dropping the PNG is the
      whole retrofit step.
    - On boot, load() fetches the manifest and applies any texture that
-     resolves (NearestFilter — mip blur would break the PS1 look).
+     resolves. Textures stay chunky up close, but use mipmaps and
+     anisotropic minification so roads/water do not shimmer in motion.
      Anything missing keeps its flat placeholder, silently.
    ============================================================ */
 (() => {
   "use strict";
   const SCRAP = (window.SCRAP = window.SCRAP || {});
 
-  const TEXTURE_ASSET_VERSION = "20260704-ai-textures-2";
+  const TEXTURE_ASSET_VERSION = "20260704-texture-stability-1";
   const MANIFEST_URL = "../assets/textures/scrap-circuit/manifest.json";
   const TEXTURE_BASE_URL = "../assets/textures/scrap-circuit/";
   const registry = new Map(); // logical key -> [materials]
@@ -28,6 +29,7 @@
   const textureCache = new Map(); // logical key -> loaded texture
   const pendingLoads = new Map(); // logical key -> true while TextureLoader is in flight
   const loader = new THREE.TextureLoader();
+  let maxAnisotropy = 1;
 
   function mat(key, options = {}) {
     const material = new THREE.MeshLambertMaterial({
@@ -105,22 +107,37 @@
 
   function prepareTexture(texture) {
     texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
-    texture.generateMipmaps = false;
+    texture.minFilter = THREE.LinearMipmapLinearFilter || THREE.LinearFilter;
+    texture.generateMipmaps = true;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = maxAnisotropy;
     if (THREE.sRGBEncoding) texture.encoding = THREE.sRGBEncoding;
+    texture.needsUpdate = true;
   }
 
   function applyLoadedTexture(material, texture) {
     material.map = texture;
     material.color.set(0xffffff); // let the texture own the color
+    material.userData.ps1SnapEnabled = false;
     material.needsUpdate = true;
+  }
+
+  function configureRenderer(renderer) {
+    try {
+      const cap = renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy
+        ? renderer.capabilities.getMaxAnisotropy()
+        : 1;
+      maxAnisotropy = Math.max(1, Math.min(8, cap || 1));
+      textureCache.forEach((texture) => prepareTexture(texture));
+    } catch (_) {
+      maxAnisotropy = 1;
+    }
   }
 
   function versioned(url) {
     return `${url}${url.includes("?") ? "&" : "?"}v=${TEXTURE_ASSET_VERSION}`;
   }
 
-  SCRAP.textures = { mat, basicMat, load, registry, textureCache };
+  SCRAP.textures = { mat, basicMat, load, configureRenderer, registry, textureCache };
 })();

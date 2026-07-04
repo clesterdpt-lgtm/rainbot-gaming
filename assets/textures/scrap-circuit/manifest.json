@@ -1,5 +1,5 @@
 {
-  "_readme": "Scrap Circuit texture retrofit manifest. Keys under textures are loaded at boot and applied to the material registered under the same logical key (NearestFilter, flat-color fallback if the file is missing). These PNGs are AI-atlas-derived, cropped, tinted, pixelated, and quantized for chunky PS1-style vehicle and arena materials.",
+  "_readme": "Scrap Circuit texture retrofit manifest. Keys under textures are loaded at boot and applied to the material registered under the same logical key (mipmapped for stable motion, flat-color fallback if the file is missing). These PNGs are AI-atlas-derived, cropped, tinted, pixelated, and quantized for chunky PS1-style vehicle and arena materials.",
   "textures": {
     "vehicle.shared.tire": "vehicle/shared_tire.png",
     "vehicle.shared.hub": "vehicle/shared_hub.png",

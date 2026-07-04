@@ -18,26 +18,31 @@
 
   /* Vertex-snap strength: clip-space positions quantize onto a grid
      of GRID x GRID steps across the internal target. Slightly finer
-     than the pixel grid reads as charm instead of soup. */
+     than the pixel grid reads as charm instead of soup. Texture-mapped
+     materials can opt out because the snap turns busy asphalt/water maps
+     into visible shimmer while the camera follows the car. */
   const SNAP_UNIFORM = { value: new THREE.Vector2(160, 90) };
 
   function ps1ify(material) {
     if (material.userData.ps1ified) return material;
     material.userData.ps1ified = true;
     material.onBeforeCompile = (shader) => {
+      shader.uniforms.uPs1SnapEnabled = { value: material.userData.ps1SnapEnabled === false ? 0 : 1 };
       shader.uniforms.uPs1Snap = SNAP_UNIFORM;
       shader.vertexShader = shader.vertexShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform vec2 uPs1Snap;"
+          "#include <common>\nuniform vec2 uPs1Snap;\nuniform float uPs1SnapEnabled;"
         )
         .replace(
           "#include <project_vertex>",
           [
             "#include <project_vertex>",
             "// PS1 wobble: snap clip-space xy to a coarse grid.",
-            "vec2 psGrid = uPs1Snap;",
-            "gl_Position.xy = floor(gl_Position.xy / gl_Position.w * psGrid + 0.5) / psGrid * gl_Position.w;",
+            "if (uPs1SnapEnabled > 0.5) {",
+            "  vec2 psGrid = uPs1Snap;",
+            "  gl_Position.xy = floor(gl_Position.xy / gl_Position.w * psGrid + 0.5) / psGrid * gl_Position.w;",
+            "}",
           ].join("\n")
         );
     };

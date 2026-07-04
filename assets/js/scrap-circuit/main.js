@@ -141,7 +141,6 @@
     circuitPanel: $("circuit-panel"),
     vehName: $("veh-name"), vehArch: $("veh-archetype"), vehFlavor: $("veh-flavor"),
     vehSpecial: $("veh-special"), vehStats: $("veh-stats"),
-    vehPreviewLabel: $("veh-preview-label"),
     menuVehiclePreview: $("menu-vehicle-preview"),
     menuMapPreview: $("menu-map-preview"),
     menuMapName: $("menu-map-name"),
@@ -2066,6 +2065,143 @@
     ctx.fill();
     ctx.restore();
   }
+  function drawArenaPicture(ctx, w, h, id) {
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    const yGround = h * 0.42;
+    const rect = (x, y, rw, rh, color) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y, rw, rh);
+    };
+    const stripe = (x, y, rw, rh, color, alpha = 1) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      rect(x, y, rw, rh, color);
+      ctx.restore();
+    };
+    sky.addColorStop(0, id === "cemetery" ? "#101427" : id === "boardwalk" ? "#102947" : "#121827");
+    sky.addColorStop(1, id === "rooftop" ? "#222842" : "#293040");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
+    for (let i = 0; i < 10; i += 1) {
+      const sx = ((i * 47) % 97) / 100 * w;
+      const sy = (0.08 + ((i * 19) % 27) / 100) * h;
+      ctx.fillRect(sx, sy, Math.max(1, w * 0.012), Math.max(1, h * 0.018));
+    }
+    if (id === "suburb") {
+      rect(0, yGround, w, h - yGround, "#263f24");
+      rect(0, h * 0.63, w, h * 0.18, "#3b3e45");
+      rect(w * 0.42, yGround, w * 0.16, h - yGround, "#4b4d52");
+      rect(w * 0.08, h * 0.48, w * 0.18, h * 0.16, "#8a6f57");
+      rect(w * 0.7, h * 0.5, w * 0.18, h * 0.15, "#735d4c");
+      rect(w * 0.11, h * 0.43, w * 0.12, h * 0.05, "#9b3342");
+      rect(w * 0.73, h * 0.45, w * 0.12, h * 0.05, "#315f82");
+      rect(w * 0.69, h * 0.69, w * 0.17, h * 0.08, "#226a87");
+    } else if (id === "junkyard") {
+      rect(0, yGround, w, h - yGround, "#443827");
+      rect(w * 0.08, h * 0.52, w * 0.3, h * 0.12, "#8c5132");
+      rect(w * 0.12, h * 0.4, w * 0.26, h * 0.1, "#2f6072");
+      rect(w * 0.56, h * 0.45, w * 0.27, h * 0.12, "#854030");
+      rect(w * 0.63, h * 0.32, w * 0.11, h * 0.13, "#a3842b");
+      rect(w * 0.48, h * 0.62, w * 0.18, h * 0.08, "#57544b");
+      stripe(w * 0.05, h * 0.77, w * 0.85, h * 0.05, "#7f8288", 0.5);
+    } else if (id === "interchange") {
+      rect(0, yGround, w, h - yGround, "#353942");
+      rect(w * 0.08, h * 0.55, w * 0.84, h * 0.16, "#4a4a52");
+      rect(w * 0.43, h * 0.35, w * 0.14, h * 0.58, "#56565d");
+      stripe(0, h * 0.62, w, h * 0.02, "#d8d2c8", 0.55);
+      stripe(w * 0.49, h * 0.35, w * 0.02, h * 0.58, "#d8d2c8", 0.55);
+      rect(w * 0.68, h * 0.5, w * 0.18, h * 0.08, "#894a33");
+      rect(w * 0.2, h * 0.73, w * 0.04, h * 0.06, "#e8b52e");
+      rect(w * 0.3, h * 0.76, w * 0.04, h * 0.06, "#e8b52e");
+    } else if (id === "boardwalk") {
+      rect(0, yGround, w, h - yGround, "#264a6e");
+      rect(0, h * 0.51, w, h * 0.24, "#8a5b32");
+      for (let i = 0; i < 8; i += 1) stripe(0, h * (0.54 + i * 0.026), w, h * 0.006, "#c28c4c", 0.45);
+      ctx.strokeStyle = "#c98a2e";
+      ctx.lineWidth = Math.max(2, h * 0.035);
+      ctx.beginPath();
+      ctx.arc(w * 0.54, h * 0.5, w * 0.23, Math.PI, Math.PI * 1.94);
+      ctx.stroke();
+      rect(w * 0.12, h * 0.42, w * 0.18, h * 0.13, "#d33d58");
+      rect(w * 0.7, h * 0.44, w * 0.16, h * 0.12, "#2fa5c9");
+    } else if (id === "rooftop") {
+      rect(0, yGround, w, h - yGround, "#4e5866");
+      for (let i = 0; i < 7; i += 1) {
+        const bx = i * w * 0.16;
+        rect(bx, h * (0.18 + (i % 3) * 0.05), w * 0.11, h * 0.28, "#20293a");
+      }
+      rect(w * 0.08, h * 0.52, w * 0.34, h * 0.16, "#6e7a86");
+      rect(w * 0.55, h * 0.5, w * 0.32, h * 0.18, "#5b6674");
+      ctx.strokeStyle = "#e8b52e";
+      ctx.lineWidth = Math.max(2, h * 0.025);
+      ctx.beginPath();
+      ctx.arc(w * 0.72, h * 0.59, w * 0.08, 0, Math.PI * 2);
+      ctx.moveTo(w * 0.64, h * 0.59);
+      ctx.lineTo(w * 0.8, h * 0.59);
+      ctx.stroke();
+      rect(w * 0.2, h * 0.36, w * 0.24, h * 0.03, "#c98a2e");
+    } else {
+      rect(0, yGround, w, h - yGround, "#26352d");
+      ctx.fillStyle = "rgba(245,238,184,0.82)";
+      ctx.beginPath();
+      ctx.arc(w * 0.82, h * 0.18, h * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+      for (let i = 0; i < 10; i += 1) {
+        const gx = ((i * 29) % 91) / 100 * w;
+        const gy = h * (0.48 + ((i * 17) % 35) / 100);
+        rect(gx, gy, w * 0.035, h * 0.12, i % 2 ? "#5b5b62" : "#77777d");
+      }
+      stripe(0, h * 0.66, w, h * 0.08, "#1d2425", 0.5);
+    }
+    const haze = ctx.createLinearGradient(0, 0, 0, h);
+    haze.addColorStop(0, "rgba(255,255,255,0.05)");
+    haze.addColorStop(0.55, "rgba(0,0,0,0)");
+    haze.addColorStop(1, "rgba(0,0,0,0.42)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, w, h);
+  }
+  function drawTacticalMap(ctx, data, x, y, w, h) {
+    const bounds = data.bounds || { hw: 100, hd: 100 };
+    const pad = Math.max(6, Math.min(w, h) * 0.09);
+    const sx = (w - pad * 2) / Math.max(1, bounds.hw * 2);
+    const sz = (h - pad * 2) / Math.max(1, bounds.hd * 2);
+    const mapX = (px) => x + pad + (px + bounds.hw) * sx;
+    const mapZ = (pz) => y + pad + (pz + bounds.hd) * sz;
+    ctx.save();
+    ctx.fillStyle = "rgba(5,7,13,0.82)";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 86));
+    ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = "rgba(46,224,255,0.13)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 3; i += 1) {
+      const gx = x + pad + ((w - pad * 2) / 3) * i;
+      const gy = y + pad + ((h - pad * 2) / 3) * i;
+      ctx.beginPath();
+      ctx.moveTo(gx, y + pad);
+      ctx.lineTo(gx, y + h - pad);
+      ctx.moveTo(x + pad, gy);
+      ctx.lineTo(x + w - pad, gy);
+      ctx.stroke();
+    }
+    data.minimap.forEach((r) => {
+      ctx.fillStyle = r.color || "#6d7480";
+      ctx.globalAlpha = 0.72;
+      ctx.fillRect(mapX(r.x - r.hw), mapZ(r.z - r.hd), Math.max(1, r.hw * 2 * sx), Math.max(1, r.hd * 2 * sz));
+    });
+    ctx.globalAlpha = 1;
+    data.pickupSpots.forEach((p) => {
+      const r = Math.max(2, Math.min(w, h) * 0.025);
+      ctx.fillStyle = "#ffd23b";
+      ctx.fillRect(mapX(p.x) - r, mapZ(p.z) - r, r * 2, r * 2);
+    });
+    data.spawns.slice(0, 6).forEach((s) => {
+      drawSpawn(ctx, mapX(s.x), mapZ(s.z), s.h || 0, Math.max(4, Math.min(w, h) * 0.055));
+    });
+    ctx.restore();
+  }
   function drawMenuMapPreview() {
     if (!menuMapCtx || !el.menuMapPreview) return;
     const id = state.mode === "circuit" ? CIRCUIT_ORDER[0] : state.arenaId;
@@ -2079,54 +2215,15 @@
     const size = resizeMenuMapCanvas();
     const w = size.w, h = size.h;
     if (!w || !h) return;
-    const pad = Math.max(12, Math.min(w, h) * 0.08);
-    const bounds = data.bounds || { hw: 100, hd: 100 };
-    const sx = (w - pad * 2) / Math.max(1, bounds.hw * 2);
-    const sz = (h - pad * 2) / Math.max(1, bounds.hd * 2);
-    const mapW = bounds.hw * 2 * sx;
-    const mapH = bounds.hd * 2 * sz;
-    const ox = pad;
-    const oy = pad;
-    const mapX = (x) => ox + (x + bounds.hw) * sx;
-    const mapZ = (z) => oy + (z + bounds.hd) * sz;
-    menuMapCtx.fillStyle = "#05070d";
-    menuMapCtx.fillRect(0, 0, w, h);
-    menuMapCtx.strokeStyle = "rgba(46,224,255,0.12)";
-    menuMapCtx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 140));
-    for (let i = 0; i <= 4; i += 1) {
-      const x = ox + (mapW / 4) * i;
-      const y = oy + (mapH / 4) * i;
-      menuMapCtx.beginPath();
-      menuMapCtx.moveTo(x, oy);
-      menuMapCtx.lineTo(x, oy + mapH);
-      menuMapCtx.moveTo(ox, y);
-      menuMapCtx.lineTo(ox + mapW, y);
-      menuMapCtx.stroke();
-    }
-    menuMapCtx.fillStyle = "rgba(13,18,28,0.86)";
-    menuMapCtx.fillRect(ox, oy, mapW, mapH);
-    data.minimap.forEach((r) => {
-      menuMapCtx.fillStyle = r.color || "#6d7480";
-      menuMapCtx.globalAlpha = 0.72;
-      menuMapCtx.fillRect(mapX(r.x - r.hw), mapZ(r.z - r.hd), Math.max(1, r.hw * 2 * sx), Math.max(1, r.hd * 2 * sz));
-    });
-    menuMapCtx.globalAlpha = 1;
-    menuMapCtx.strokeStyle = "rgba(255,255,255,0.22)";
-    menuMapCtx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 110));
-    menuMapCtx.strokeRect(ox, oy, mapW, mapH);
-    data.pickupSpots.forEach((p) => {
-      const r = Math.max(2, Math.min(w, h) * 0.012);
-      menuMapCtx.fillStyle = "#ffd23b";
-      menuMapCtx.fillRect(mapX(p.x) - r, mapZ(p.z) - r, r * 2, r * 2);
-    });
-    data.spawns.slice(0, 6).forEach((s) => {
-      drawSpawn(menuMapCtx, mapX(s.x), mapZ(s.z), s.h || 0, Math.max(4, Math.min(w, h) * 0.026));
-    });
+    drawArenaPicture(menuMapCtx, w, h, data.id);
+    const insetPad = Math.max(8, Math.min(w, h) * 0.075);
+    const insetW = Math.min(w - insetPad * 2, Math.max(150, w * 0.52));
+    const insetH = Math.min(h - insetPad * 2, Math.max(58, h * 0.63));
+    drawTacticalMap(menuMapCtx, data, w - insetW - insetPad, h - insetH - insetPad, insetW, insetH);
   }
   function renderVehicleMenu() {
     const def = SCRAP.vehicles.list[state.vehicleIndex];
     if (el.vehName) el.vehName.textContent = def.name;
-    if (el.vehPreviewLabel) el.vehPreviewLabel.textContent = def.name;
     if (el.vehArch) el.vehArch.textContent = def.archetype;
     if (el.vehFlavor) el.vehFlavor.textContent = `“${def.flavor}”`;
     if (el.vehSpecial) el.vehSpecial.textContent = `SPECIAL: ${def.special.name} — ${def.special.desc}`;

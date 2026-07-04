@@ -449,15 +449,11 @@
     }
 
     .scrap-preview-card {
-      display: grid;
-      gap: 6px;
-      grid-template-rows: auto minmax(0, 1fr);
       min-height: clamp(210px, 39cqh, 320px);
       overflow: hidden;
       padding: 8px;
     }
 
-    .scrap-preview-label,
     .scrap-map-head,
     .scrap-map-legend {
       align-items: center;
@@ -467,7 +463,6 @@
       min-width: 0;
     }
 
-    .scrap-preview-label span,
     .scrap-map-legend span {
       color: rgba(234, 247, 255, 0.58);
       font-family: var(--font-mono);
@@ -476,7 +471,6 @@
       text-transform: uppercase;
     }
 
-    .scrap-preview-label b,
     .scrap-map-head strong {
       color: #ffd23b;
       font-family: var(--font-display);
@@ -488,6 +482,14 @@
       white-space: nowrap;
     }
 
+    .scrap-preview-stage {
+      border-radius: 6px;
+      height: 100%;
+      min-height: 164px;
+      overflow: hidden;
+      position: relative;
+    }
+
     .scrap-preview-canvas {
       background: #080b12;
       border: 1px solid rgba(46, 224, 255, 0.24);
@@ -495,8 +497,60 @@
       display: block;
       height: 100%;
       image-rendering: pixelated;
-      min-height: 164px;
       width: 100%;
+    }
+
+    .scrap-preview-meta {
+      background: linear-gradient(180deg, rgba(5, 8, 14, 0), rgba(5, 8, 14, 0.88) 16%, rgba(5, 8, 14, 0.96));
+      border: 1px solid rgba(46, 224, 255, 0.18);
+      border-width: 1px 0 0;
+      bottom: 0;
+      display: grid;
+      gap: 3px;
+      left: 0;
+      padding: 20px 10px 9px;
+      pointer-events: none;
+      position: absolute;
+      right: 0;
+      text-align: left;
+    }
+
+    .scrap-preview-kicker {
+      color: rgba(234, 247, 255, 0.58);
+      font-family: var(--font-mono);
+      font-size: clamp(7px, 0.95cqw, 9px);
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .scrap-preview-meta strong {
+      color: #ffd23b;
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(16px, 2.1cqw, 24px);
+      line-height: 1.02;
+      overflow-wrap: anywhere;
+      text-transform: uppercase;
+    }
+
+    .scrap-preview-meta em {
+      color: rgba(234, 247, 255, 0.84);
+      font-family: var(--font-mono);
+      font-size: clamp(8px, 1.05cqw, 10px);
+      font-style: normal;
+      line-height: 1.15;
+      text-transform: uppercase;
+    }
+
+    .scrap-preview-meta small {
+      color: #ff7eb6;
+      font-family: var(--font-mono);
+      font-size: clamp(8px, 1.05cqw, 10px);
+      font-weight: 800;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .scrap-choice-panel {
@@ -708,27 +762,17 @@
     .scrap-veh-card {
       display: grid;
       gap: 3px;
+      justify-items: center;
       min-width: 0;
       padding: 0 6px;
       text-align: center;
     }
 
-    .scrap-veh-card strong {
-      color: #ffd23b;
-      font-family: "Bungee", var(--font-display);
-      font-size: clamp(15px, 2.15cqw, 24px);
-      line-height: 1.05;
-      text-transform: uppercase;
-    }
-
-    .scrap-veh-card em {
-      color: rgba(234, 247, 255, 0.85);
+    .scrap-veh-control-label {
+      color: #2ee0ff;
       font-family: var(--font-mono);
-      font-size: clamp(8px, 1.15cqw, 11px);
-      font-style: normal;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      font-size: clamp(7px, 1cqw, 9px);
+      font-weight: 800;
       text-transform: uppercase;
     }
 
@@ -742,18 +786,6 @@
       white-space: nowrap;
     }
 
-    .scrap-veh-card small {
-      color: #c95eff;
-      font-family: var(--font-mono);
-      font-size: clamp(8px, 1.05cqw, 10px);
-      font-weight: 800;
-      line-height: 1.25;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-transform: uppercase;
-    }
-
     .scrap-veh-stats {
       color: rgba(234, 247, 255, 0.9);
       display: flex;
@@ -761,7 +793,7 @@
       font-family: var(--font-mono);
       font-size: clamp(8px, 1.1cqw, 10px);
       gap: 3px 10px;
-      justify-content: center;
+      justify-content: flex-start;
     }
 
     .scrap-veh-stats b {
@@ -794,7 +826,7 @@
       border: 1px solid rgba(255, 212, 59, 0.28);
       border-radius: 6px;
       display: block;
-      height: clamp(108px, 21cqh, 158px);
+      height: clamp(118px, 22cqh, 158px);
       image-rendering: pixelated;
       width: 100%;
     }
@@ -996,6 +1028,10 @@
         min-height: 190px;
       }
 
+      .scrap-preview-stage {
+        min-height: 145px;
+      }
+
       .scrap-preview-canvas {
         height: clamp(145px, 32cqh, 210px);
       }
@@ -1041,16 +1077,19 @@
         min-height: 132px;
       }
 
+      .scrap-preview-stage {
+        min-height: 92px;
+      }
+
       .scrap-preview-canvas {
         min-height: 92px;
       }
 
       .scrap-map-canvas {
-        height: 68px;
+        height: 76px;
       }
 
       .scrap-map-legend,
-      .scrap-preview-label span,
       .scrap-map-head span {
         display: none;
       }
@@ -1077,12 +1116,22 @@
         gap: 2px;
       }
 
-      .scrap-veh-card strong {
-        font-size: clamp(13px, 3.8cqw, 19px);
+      .scrap-preview-meta {
+        gap: 1px;
+        padding: 14px 7px 6px;
       }
 
-      .scrap-veh-card em,
-      .scrap-veh-card small,
+      .scrap-preview-kicker,
+      .scrap-preview-meta small,
+      .scrap-preview-meta em {
+        display: none;
+      }
+
+      .scrap-preview-meta strong {
+        font-size: clamp(13px, 3.6cqw, 18px);
+      }
+
+      .scrap-veh-control-label,
       .scrap-veh-stats,
       .scrap-cir-opt span {
         font-size: 8px;
@@ -1253,11 +1302,16 @@
             <div class="scrap-menu" id="menu-panel">
               <div class="scrap-menu-main">
                 <div class="scrap-preview-card">
-                  <div class="scrap-preview-label">
-                    <span>Vehicle preview</span>
-                    <b id="veh-preview-label">Mr. Drippy's Meltdown</b>
+                  <div class="scrap-preview-stage">
+                    <canvas class="scrap-preview-canvas" id="menu-vehicle-preview" width="640" height="400" aria-label="Selected vehicle preview"></canvas>
+                    <div class="scrap-preview-meta">
+                      <div class="scrap-preview-kicker">Vehicle preview</div>
+                      <strong id="veh-name">Mr. Drippy's Meltdown</strong>
+                      <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
+                      <small id="veh-special">SPECIAL: Brain Freeze</small>
+                      <div class="scrap-veh-stats" id="veh-stats"></div>
+                    </div>
                   </div>
-                  <canvas class="scrap-preview-canvas" id="menu-vehicle-preview" width="640" height="400" aria-label="Selected vehicle preview"></canvas>
                 </div>
 
                 <div class="scrap-choice-panel">
@@ -1265,11 +1319,8 @@
                   <div class="scrap-veh-row">
                     <button class="scrap-veh-btn" id="veh-prev" type="button" aria-label="Previous vehicle">◀</button>
                     <div class="scrap-veh-card">
-                      <strong id="veh-name">Mr. Drippy's Meltdown</strong>
-                      <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
+                      <span class="scrap-veh-control-label">Choose chassis</span>
                       <q id="veh-flavor">“The jingle is a warning.”</q>
-                      <small id="veh-special">SPECIAL: Brain Freeze</small>
-                      <div class="scrap-veh-stats" id="veh-stats"></div>
                     </div>
                     <button class="scrap-veh-btn" id="veh-next" type="button" aria-label="Next vehicle">▶</button>
                   </div>
@@ -1372,7 +1423,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260704-texture-stability-1"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260704-menu-preview-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260704-menu-art-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

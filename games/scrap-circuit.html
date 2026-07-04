@@ -586,6 +586,176 @@
       display: none;
     }
 
+    .scrap-summary {
+      display: grid;
+      gap: 8px;
+      margin: 0 auto 8px;
+      max-width: min(760px, 100%);
+      width: 100%;
+    }
+
+    .scrap-summary[hidden] {
+      display: none;
+    }
+
+    .scrap-summary__hero {
+      align-items: end;
+      background: rgba(8, 11, 16, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+      display: grid;
+      gap: 4px 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 10px 12px;
+    }
+
+    .scrap-summary__hero--win {
+      border-color: rgba(255, 212, 59, 0.45);
+    }
+
+    .scrap-summary__hero--loss {
+      border-color: rgba(255, 126, 182, 0.45);
+    }
+
+    .scrap-summary__eyebrow,
+    .scrap-summary__score,
+    .scrap-summary__stat span,
+    .scrap-summary__route-chip span,
+    .scrap-summary__note {
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+
+    .scrap-summary__eyebrow {
+      color: #2ee0ff;
+      font-size: clamp(8px, 1.05cqw, 10px);
+      font-weight: 800;
+      grid-column: 1 / -1;
+    }
+
+    .scrap-summary__result {
+      color: #ffd23b;
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(18px, 3.2cqw, 28px);
+      line-height: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    .scrap-summary__score {
+      color: rgba(234, 247, 255, 0.72);
+      font-size: clamp(8px, 1.05cqw, 10px);
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .scrap-summary__score b {
+      color: #75ff92;
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(16px, 2.5cqw, 23px);
+      line-height: 1.05;
+    }
+
+    .scrap-summary__grid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .scrap-summary__stat {
+      background: rgba(8, 11, 16, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 8px 9px;
+    }
+
+    .scrap-summary__stat--accent {
+      border-color: rgba(117, 255, 146, 0.38);
+    }
+
+    .scrap-summary__stat span {
+      color: rgba(234, 247, 255, 0.58);
+      font-size: clamp(7px, 0.95cqw, 9px);
+      font-weight: 800;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scrap-summary__stat b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: clamp(12px, 1.55cqw, 15px);
+      line-height: 1.05;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .scrap-summary__route {
+      display: grid;
+      gap: 5px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .scrap-summary__route-chip {
+      background: rgba(8, 11, 16, 0.66);
+      border: 1px solid rgba(46, 224, 255, 0.18);
+      border-radius: 8px;
+      min-width: 0;
+      padding: 6px 7px;
+    }
+
+    .scrap-summary__route-chip.is-win {
+      border-color: rgba(117, 255, 146, 0.42);
+    }
+
+    .scrap-summary__route-chip.is-loss {
+      border-color: rgba(255, 126, 182, 0.42);
+    }
+
+    .scrap-summary__route-chip strong {
+      color: #fff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(9px, 1.1cqw, 11px);
+      line-height: 1.05;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .scrap-summary__route-chip span {
+      color: rgba(234, 247, 255, 0.62);
+      display: block;
+      font-size: clamp(7px, 0.86cqw, 8px);
+      font-weight: 800;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .scrap-summary__note {
+      color: rgba(234, 247, 255, 0.66);
+      font-size: clamp(8px, 1cqw, 10px);
+      font-weight: 800;
+      line-height: 1.25;
+      margin: 0;
+      text-align: center;
+    }
+
     .scrap-cir-stats {
       align-items: center;
       color: rgba(234, 247, 255, 0.8);
@@ -1014,6 +1184,14 @@
       .scrap-arena-strip {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
+
+      .scrap-summary__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .scrap-summary__route {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
 
     @container sstage (max-height: 430px) {
@@ -1101,8 +1279,53 @@
 
       .scrap-veh-control-label,
       .scrap-veh-stats,
-      .scrap-cir-opt span {
+      .scrap-cir-opt span,
+      .scrap-summary__stat span {
         font-size: 8px;
+      }
+
+      .scrap-summary {
+        gap: 5px;
+        margin-bottom: 4px;
+        max-width: min(720px, 100%);
+      }
+
+      .scrap-summary__hero {
+        gap: 2px 8px;
+        padding: 7px 9px;
+      }
+
+      .scrap-summary__result {
+        font-size: clamp(15px, 3.5cqw, 21px);
+      }
+
+      .scrap-summary__score b {
+        font-size: clamp(13px, 2.5cqw, 18px);
+      }
+
+      .scrap-summary__grid {
+        gap: 4px;
+      }
+
+      .scrap-summary__stat {
+        gap: 2px;
+        padding: 5px 7px;
+      }
+
+      .scrap-summary__stat b {
+        font-size: clamp(10px, 1.55cqw, 13px);
+      }
+
+      .scrap-summary__route {
+        gap: 4px;
+      }
+
+      .scrap-summary__route-chip {
+        padding: 4px 5px;
+      }
+
+      .scrap-summary__note {
+        display: none;
       }
 
       .scrap-arena-strip {
@@ -1307,6 +1530,8 @@
               <div class="scrap-arena-strip" id="arena-row"></div>
             </div>
 
+            <div class="scrap-summary" id="summary-panel" hidden></div>
+
             <!-- Circuit intermission: The Adjuster's repair estimate (JS-built) -->
             <div class="scrap-circuit" id="circuit-panel" hidden></div>
 
@@ -1388,7 +1613,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260704-texture-stability-1"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260704-menu-art-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260704-summary-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

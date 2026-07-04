@@ -138,6 +138,7 @@
     btnPrimary: $("btn-primary"),
     menu: $("menu-panel"),
     modeRow: $("mode-row"),
+    summaryPanel: $("summary-panel"),
     circuitPanel: $("circuit-panel"),
     vehName: $("veh-name"), vehArch: $("veh-archetype"), vehFlavor: $("veh-flavor"),
     vehSpecial: $("veh-special"), vehStats: $("veh-stats"),
@@ -2364,6 +2365,7 @@
     if (el.overlay) el.overlay.classList.remove("overlay--show");
     if (el.menu) el.menu.hidden = true;
     if (el.circuitPanel) el.circuitPanel.hidden = true;
+    if (el.summaryPanel) el.summaryPanel.hidden = true;
     if (el.sponsor) el.sponsor.hidden = false;
     if (el.arenaName) {
       const prefix = state.mode === "circuit" ? `R${roundIndex + 1}/${CIRCUIT_ORDER.length} · ` : "";
@@ -2385,6 +2387,141 @@
     } else if (alive.length === 1 && alive[0] === state.player) {
       endMatch(true, 1);
     }
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[ch]));
+  }
+
+  function formatNumber(value) {
+    return Math.max(0, Math.round(Number(value) || 0)).toLocaleString();
+  }
+
+  function formatTime(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const min = Math.floor(total / 60);
+    const sec = String(total % 60).padStart(2, "0");
+    return `${min}:${sec}`;
+  }
+
+  function placeLabel(placement) {
+    const n = Math.max(1, Math.round(Number(placement) || 1));
+    const teen = n % 100 >= 11 && n % 100 <= 13;
+    const suffix = teen ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th");
+    return `${n}${suffix}`;
+  }
+
+  function currentVehicleName() {
+    const selected = SCRAP.vehicles.list[state.vehicleIndex];
+    return (state.player && state.player.def && state.player.def.name) || (selected && selected.name) || "Selected chassis";
+  }
+
+  function currentArenaName() {
+    const selected = SCRAP.arenas.list.find((a) => a.id === state.arenaId);
+    return (arena && arena.name) || (selected && selected.name) || "Unknown arena";
+  }
+
+  function currentHpLabel() {
+    const car = state.player;
+    if (!car) return "0/0";
+    return `${Math.max(0, Math.ceil(car.hp))}/${Math.max(1, Math.round(car.maxHp || 0))}`;
+  }
+
+  function summaryStat(label, value, accent = false) {
+    const mod = accent ? " scrap-summary__stat--accent" : "";
+    return `<div class="scrap-summary__stat${mod}"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+  }
+
+  function renderSummaryPanel(summary) {
+    if (!el.summaryPanel) return false;
+    const variant = summary.variant === "loss" ? "loss" : "win";
+    const stats = summary.stats.map((stat) => summaryStat(stat.label, stat.value, stat.accent)).join("");
+    const route = summary.route && summary.route.length
+      ? `<div class="scrap-summary__route">${summary.route.map((item) => {
+        const statusClass = item.won ? "is-win" : "is-loss";
+        return `<div class="scrap-summary__route-chip ${statusClass}"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.meta)}</span></div>`;
+      }).join("")}</div>`
+      : "";
+    const note = summary.note ? `<p class="scrap-summary__note">${escapeHtml(summary.note)}</p>` : "";
+
+    el.summaryPanel.innerHTML =
+      `<div class="scrap-summary__hero scrap-summary__hero--${variant}">` +
+        `<span class="scrap-summary__eyebrow">${escapeHtml(summary.eyebrow)}</span>` +
+        `<strong class="scrap-summary__result">${escapeHtml(summary.result)}</strong>` +
+        `<span class="scrap-summary__score">${escapeHtml(summary.scoreLabel)} <b>${escapeHtml(summary.scoreValue)}</b></span>` +
+      `</div>` +
+      `<div class="scrap-summary__grid">${stats}</div>` +
+      route +
+      note;
+    el.summaryPanel.hidden = false;
+    return true;
+  }
+
+  function renderEndSummary(summary) {
+    if (summary.kind === "circuit") {
+      const c = state.circuit || { round: 0, writeOffs: 0, results: [] };
+      const results = c.results || [];
+      const totalTime = results.reduce((sum, r) => sum + (Number(r.elapsed) || 0), 0);
+      const totalWrecks = results.reduce((sum, r) => sum + (Number(r.wrecks) || 0), 0);
+      const wins = results.filter((r) => r.won).length;
+      const best = api.getHighScore(CIRCUIT_SCORE_ID);
+      const roundCount = `${results.length}/${CIRCUIT_ORDER.length}`;
+      const roundNow = Math.min(CIRCUIT_ORDER.length, Math.max(1, (Number(c.round) || 0) + 1));
+      return renderSummaryPanel({
+        variant: summary.finished ? "win" : "loss",
+        eyebrow: summary.finished ? "Circuit complete" : "Circuit closed",
+        result: summary.finished ? "Circuit Champion" : `Ended Round ${roundNow}`,
+        scoreLabel: "Final salvage",
+        scoreValue: formatNumber(state.salvage),
+        stats: [
+          { label: "Salvage", value: formatNumber(state.salvage), accent: true },
+          { label: "Rounds", value: roundCount },
+          { label: "Wins", value: wins },
+          { label: "Wrecks", value: totalWrecks },
+          { label: "Write-offs", value: c.writeOffs || 0 },
+          { label: "Total Time", value: formatTime(totalTime) },
+          { label: "Vehicle", value: currentVehicleName() },
+          { label: "Best", value: summary.isHigh ? "New record" : formatNumber(best) },
+        ],
+        route: results.map((r, i) => ({
+          name: `R${i + 1} ${r.name || "Arena"}`,
+          meta: `${r.won ? "WIN" : "P" + r.placement} - ${formatTime(r.elapsed)} - ${r.wrecks || 0} wrecks`,
+          won: !!r.won,
+        })),
+        note: summary.isHigh
+          ? "New circuit record filed before The Adjuster could lose the paperwork."
+          : `Best circuit remains ${formatNumber(best)} Salvage.`,
+      });
+    }
+
+    const totalCars = state.cars.length || 6;
+    const best = api.getHighScore(GAME_ID);
+    return renderSummaryPanel({
+      variant: summary.won ? "win" : "loss",
+      eyebrow: summary.won ? "Claim approved-ish" : "Claim denied",
+      result: summary.won ? "Last Chassis Standing" : `Totaled - ${placeLabel(summary.placement)}`,
+      scoreLabel: "Salvage",
+      scoreValue: formatNumber(state.salvage),
+      stats: [
+        { label: "Salvage", value: formatNumber(state.salvage), accent: true },
+        { label: "Placement", value: `${placeLabel(summary.placement)} of ${totalCars}` },
+        { label: "Wrecks", value: state.wrecksByPlayer },
+        { label: "Lives", value: `${state.playerLives}/${STARTING_LIVES}` },
+        { label: "Chassis HP", value: currentHpLabel() },
+        { label: "Time", value: formatTime(state.time) },
+        { label: "Vehicle", value: currentVehicleName() },
+        { label: "Arena", value: currentArenaName() },
+      ],
+      note: summary.isHigh
+        ? "New high score logged in Salvage, which is legally not taxable advice."
+        : `High salvage remains ${formatNumber(best)}.`,
+    });
   }
 
   function endMatch(won, placement) {
@@ -2412,14 +2549,11 @@
           : "Your claim has been reviewed and aggressively denied.";
       }
       if (el.overlayScore) {
-        el.overlayScore.innerHTML =
-          `Salvage: <strong>${state.salvage.toLocaleString()}</strong> · Wrecks: <strong>${state.wrecksByPlayer}</strong> · ` +
-          (isHigh ? "<strong>NEW HIGH SCORE</strong>" : `High: <strong>${api.getHighScore(GAME_ID).toLocaleString()}</strong>`);
+        el.overlayScore.textContent = "";
       }
       if (el.circuitPanel) el.circuitPanel.hidden = true;
-      if (el.menu) el.menu.hidden = false;
-      renderModeRow();
-      applyModeToMenu();
+      if (el.menu) el.menu.hidden = true;
+      renderEndSummary({ kind: "single", won, placement, isHigh });
       setPrimary("start", "Run it back");
       if (el.overlay) el.overlay.classList.add("overlay--show");
     }, won ? 1400 : 1600);
@@ -2434,7 +2568,13 @@
     state.phase = "over";
     const c = state.circuit;
     addSalvage((CIRCUIT_PLACE_BONUS[placement] || 0) + (won ? 250 : 0));
-    c.results.push({ name: arena.name, placement, won });
+    c.results.push({
+      name: arena ? arena.name : "Arena",
+      placement,
+      won,
+      elapsed: state.time,
+      wrecks: state.wrecksByPlayer,
+    });
     c.hpCarry = won ? Math.max(1, Math.round(state.player.hp)) : 0;
     if (won) {
       announce("win", true);
@@ -2456,6 +2596,7 @@
     if (el.overlaySub) el.overlaySub.textContent = pick(won ? ESTIMATE_LINES : WRITEOFF_LINES);
     if (el.overlayScore) el.overlayScore.textContent = "";
     if (el.menu) el.menu.hidden = true;
+    if (el.summaryPanel) el.summaryPanel.hidden = true;
     if (el.circuitPanel) el.circuitPanel.hidden = false;
     renderIntermission(won ? "repair" : "writeoff");
     if (el.overlay) el.overlay.classList.add("overlay--show");
@@ -2577,16 +2718,11 @@
         : "Your circuit has been closed due to a total and extremely permanent loss.";
     }
     if (el.overlayScore) {
-      const rounds = c.results.map((r, i) => `R${i + 1} ${r.won ? "WIN" : "P" + r.placement}`).join(" · ");
-      el.overlayScore.innerHTML =
-        `${rounds || "No rounds finished"}<br />` +
-        `Write-offs: <strong>${c.writeOffs}</strong>` +
-        (finished ? ` · Finish bonus: <strong>+${CIRCUIT_FINISH_BONUS}</strong>` : "") +
-        `<br />Final salvage: <strong>${state.salvage.toLocaleString()}</strong> · ` +
-        (isHigh ? "<strong>NEW CIRCUIT RECORD</strong>" : `Best circuit: <strong>${api.getHighScore(CIRCUIT_SCORE_ID).toLocaleString()}</strong>`);
+      el.overlayScore.textContent = "";
     }
     if (el.circuitPanel) el.circuitPanel.hidden = true;
-    if (el.menu) el.menu.hidden = false;
+    if (el.menu) el.menu.hidden = true;
+    renderEndSummary({ kind: "circuit", finished, isHigh });
     renderVehicleMenu();
     renderModeRow();
     renderArenaRow();
@@ -2673,6 +2809,7 @@
     }
     if (el.menu) el.menu.hidden = false;
     if (el.circuitPanel) el.circuitPanel.hidden = true;
+    if (el.summaryPanel) el.summaryPanel.hidden = true;
     if (el.overlay) el.overlay.classList.add("overlay--show");
     renderVehicleMenu();
     renderModeRow();

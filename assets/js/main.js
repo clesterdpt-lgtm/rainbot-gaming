@@ -114,6 +114,7 @@ const RB_GAME_META = {
   "mr-feast-mansion": { title: "Mr. Feast: Deadline Mansion", scoreIds: ["mrfeast3d"] },
   "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
   "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
+  "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit", "scrap-circuit-full"] },
   "skibidi-toilet-tower-defense": {
     title: "Skibidi Toilet Tower Defense",
     scoreIds: [
@@ -133,6 +134,8 @@ const RB_GAME_META = {
 };
 
 const RB_SCORE_TITLE_OVERRIDES = {
+  "scrap-circuit": "Scrap Circuit: Single Match",
+  "scrap-circuit-full": "Scrap Circuit: Full Circuit",
   skibidi_toilet_tower_defense_bathroom: "Skibidi TD: Bathroom",
   skibidi_toilet_tower_defense_sewer: "Skibidi TD: Sewer",
   skibidi_toilet_tower_defense_rooftop: "Skibidi TD: Rooftop",
@@ -160,6 +163,7 @@ const RB_GAME_VISUALS = {
   "mr-feast-mansion": { image: "assets/img/mockup/card-mr-feast.png?v=20260611-7", kind: "Horror" },
   "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1", kind: "Agent Protocol" },
   "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.png?v=20260613-2", kind: "Sandbox" },
+  "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
   "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.png?v=20260611-9", kind: "Defense" },
   "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1", kind: "Arcade" },
   "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1", kind: "Crowd Heist" },

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" role="img" aria-label="Scrap Circuit: Last Chassis Standing poster art">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1030"/>
+      <stop offset="0.45" stop-color="#7a2c48"/>
+      <stop offset="0.78" stop-color="#c96b3a"/>
+      <stop offset="1" stop-color="#e8963e"/>
+    </linearGradient>
+    <linearGradient id="fog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c96b3a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#e8963e" stop-opacity="0.85"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="4" fill="none"/>
+      <rect y="3" width="4" height="1" fill="#000" opacity="0.18"/>
+    </pattern>
+  </defs>
+
+  <!-- dusk sky -->
+  <rect width="800" height="500" fill="url(#sky)"/>
+  <!-- low-poly sun -->
+  <polygon points="620,150 668,102 716,150 668,198" fill="#ffd23b" opacity="0.9"/>
+  <polygon points="620,150 668,124 716,150 668,176" fill="#ff8a3a" opacity="0.8"/>
+
+  <!-- distant suburb silhouettes -->
+  <g fill="#3a1c34">
+    <polygon points="0,300 60,300 60,262 30,240 0,262"/>
+    <polygon points="90,300 170,300 170,252 130,228 90,252"/>
+    <polygon points="700,300 800,300 800,250 750,226 700,250"/>
+    <rect x="210" y="240" width="14" height="60"/>
+    <rect x="580" y="248" width="12" height="52"/>
+  </g>
+
+  <!-- ground -->
+  <rect y="300" width="800" height="200" fill="#4a3040"/>
+  <polygon points="0,500 800,500 800,332 0,332" fill="#53414e"/>
+  <!-- road -->
+  <polygon points="260,500 540,500 470,332 330,332" fill="#3a3440"/>
+  <polygon points="393,500 407,500 402,332 398,332" fill="#e8b52e"/>
+
+  <!-- ICE CREAM TRUCK (left, chunky low-poly) -->
+  <g>
+    <rect x="70" y="320" width="150" height="96" fill="#efe6d4"/>
+    <rect x="70" y="352" width="150" height="18" fill="#ff7eb6"/>
+    <rect x="206" y="348" width="52" height="68" fill="#e2d6bf"/>
+    <rect x="216" y="356" width="34" height="24" fill="#8fd0e8"/>
+    <!-- tilted soft serve -->
+    <polygon points="128,322 168,322 148,258" fill="#d9a066" transform="rotate(9 148 300)"/>
+    <circle cx="141" cy="252" r="26" fill="#fff4fa" transform="rotate(9 148 300)"/>
+    <circle cx="137" cy="228" r="18" fill="#fff4fa" transform="rotate(9 148 300)"/>
+    <circle cx="164" cy="252" r="7" fill="#ff9ecb" transform="rotate(9 148 300)"/>
+    <circle cx="98" cy="416" r="24" fill="#1c1c22"/>
+    <circle cx="98" cy="416" r="11" fill="#8f8f96"/>
+    <circle cx="196" cy="416" r="24" fill="#1c1c22"/>
+    <circle cx="196" cy="416" r="11" fill="#8f8f96"/>
+    <circle cx="246" cy="418" r="20" fill="#1c1c22"/>
+    <circle cx="246" cy="418" r="9" fill="#8f8f96"/>
+  </g>
+
+  <!-- MONSTER TRUCK (right, jumping the fog) -->
+  <g transform="rotate(-8 620 350)">
+    <rect x="560" y="300" width="130" height="52" fill="#59a83b"/>
+    <rect x="560" y="336" width="130" height="12" fill="#ffd23b"/>
+    <rect x="586" y="272" width="76" height="34" fill="#9fd4e8"/>
+    <rect x="574" y="352" width="10" height="26" fill="#23232b"/>
+    <rect x="664" y="352" width="10" height="26" fill="#23232b"/>
+    <circle cx="580" cy="398" r="34" fill="#1c1c22"/>
+    <circle cx="580" cy="398" r="15" fill="#8f8f96"/>
+    <circle cx="672" cy="398" r="34" fill="#1c1c22"/>
+    <circle cx="672" cy="398" r="15" fill="#8f8f96"/>
+  </g>
+  <!-- explosion between them -->
+  <g>
+    <polygon points="400,368 418,330 428,362 462,346 442,382 478,392 436,400 448,432 412,408 396,440 390,402 352,412 380,384 348,364 388,372" fill="#ff8a3a"/>
+    <polygon points="400,376 412,350 420,372 442,362 428,386 452,392 424,398 432,418 408,402 398,422 394,398 372,404 390,386 370,372 394,378" fill="#ffd23b"/>
+  </g>
+
+  <!-- fog band -->
+  <rect y="290" width="800" height="120" fill="url(#fog)"/>
+
+  <!-- title block -->
+  <g text-anchor="middle" font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900">
+    <text x="402" y="92" font-size="64" fill="#0a0610" opacity="0.85" letter-spacing="2">SCRAP CIRCUIT</text>
+    <text x="396" y="86" font-size="64" fill="#ffd23b" letter-spacing="2">SCRAP CIRCUIT</text>
+    <text x="398" y="130" font-size="21" fill="#2ee0ff" letter-spacing="6">LAST CHASSIS STANDING</text>
+  </g>
+  <g text-anchor="middle" font-family="'Courier New',monospace" font-weight="700">
+    <text x="400" y="478" font-size="17" fill="#ffe9c9">CLAIM DENIED. DRIVE ANGRY.</text>
+  </g>
+
+  <!-- scanlines + vignette -->
+  <rect width="800" height="500" fill="url(#scan)"/>
+  <rect width="800" height="500" fill="none" stroke="#0a0610" stroke-width="10" opacity="0.6"/>
+</svg>

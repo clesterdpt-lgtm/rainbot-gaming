@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scrap Circuit: Last Chassis Standing — Rainbot Network</title>
+  <meta name="description" content="A PS1-era arena vehicular combat parody. Ten unhinged service vehicles, six destructible arenas, weapon pickups, signature specials, and one hostile insurance announcer." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260703-scrap-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M18 66l14-18h36l14 18z' fill='%23ff2e88'/%3E%3Ccircle cx='34' cy='70' r='9' fill='%232ee0ff'/%3E%3Ccircle cx='66' cy='70' r='9' fill='%232ee0ff'/%3E%3Cpath d='M30 44l8-14h24l8 14z' fill='%23f7d716'/%3E%3C/svg%3E" />
+  <style>
+    .scrap-page {
+      max-width: 1760px;
+    }
+
+    .scrap-page .game-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 330px);
+    }
+
+    .scrap-stage {
+      position: relative;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(255, 46, 136, 0.14), transparent 26%),
+        radial-gradient(circle at 84% 6%, rgba(247, 215, 22, 0.12), transparent 30%),
+        linear-gradient(180deg, rgba(10, 8, 20, 0.98), rgba(4, 3, 10, 0.99));
+      border-color: rgba(255, 46, 136, 0.34);
+    }
+
+    .canvas-wrap--scrap {
+      aspect-ratio: 16 / 9;
+      --game-max-width: 1536px;
+      background: #05060c;
+      border: 1px solid rgba(255, 46, 136, 0.36);
+      /* In-canvas HUD scales against the play area via container queries. */
+      container-type: size;
+      container-name: sstage;
+    }
+
+    .canvas-wrap--scrap.is-maxed {
+      border: 0;
+    }
+
+    .canvas-wrap--scrap.is-maxed #gameCanvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .canvas-wrap--scrap #gameCanvas {
+      background: #05060c;
+      border-color: rgba(46, 224, 255, 0.4);
+      touch-action: none;
+      /* THE pixel look: internal 480x270 target, hard-pixel upscale. */
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    /* CRT scanlines + vignette, same overlay trick as the other 3D pages. */
+    .canvas-wrap--scrap::after {
+      background:
+        repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+        radial-gradient(circle at 50% 44%, transparent 46%, rgba(0, 0, 0, 0.32) 100%);
+      content: "";
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      z-index: 5;
+    }
+
+    /* ===== In-canvas HUD ==================================================== */
+    .scrap-hud {
+      color: #f2f6ff;
+      font-family: "Press Start 2P", var(--font-mono);
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+      z-index: 6;
+    }
+
+    .scrap-panel {
+      background: linear-gradient(180deg, rgba(6, 8, 15, 0.72), rgba(6, 8, 15, 0.5));
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 4px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+    }
+
+    .scrap-topleft {
+      display: grid;
+      gap: clamp(5px, 1cqw, 9px);
+      left: 12px;
+      padding: clamp(6px, 1cqw, 10px);
+      position: absolute;
+      /* clears the floating site menu button in the stage corner */
+      top: 50px;
+      width: clamp(150px, 24cqw, 300px);
+    }
+
+    .scrap-hp {
+      align-items: center;
+      display: grid;
+      gap: clamp(4px, 0.8cqw, 8px);
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .scrap-hp__label {
+      color: #ff736d;
+      font-size: clamp(8px, 1.2cqw, 13px);
+    }
+
+    .scrap-hp__track {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(0, 0, 0, 0.5);
+      display: block;
+      height: clamp(9px, 1.5cqw, 15px);
+      overflow: hidden;
+    }
+
+    .scrap-hp__fill {
+      background: linear-gradient(90deg, #cc332f, #ff8a3a);
+      display: block;
+      height: 100%;
+      transition: width 90ms linear;
+      width: 100%;
+    }
+
+    .scrap-hp b {
+      font-size: clamp(8px, 1.2cqw, 13px);
+    }
+
+    .scrap-weapon {
+      color: #ffd23b;
+      display: flex;
+      font-size: clamp(7px, 1cqw, 11px);
+      gap: 8px;
+      justify-content: space-between;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .scrap-weapon b {
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .scrap-status {
+      color: #9fe8ff;
+      font-size: clamp(7px, 1cqw, 10px);
+      line-height: 1.5;
+      min-height: 1em;
+    }
+
+    /* Announcer bark, top-center */
+    .scrap-bark {
+      color: #fff;
+      font-size: clamp(8px, 1.4cqw, 15px);
+      left: 50%;
+      line-height: 1.5;
+      max-width: 64%;
+      padding: clamp(5px, 0.9cqw, 9px) clamp(8px, 1.4cqw, 14px);
+      position: absolute;
+      text-align: center;
+      top: 12px;
+      transform: translateX(-50%);
+    }
+
+    .scrap-bark.is-pop {
+      animation: scrap-bark-pop 380ms ease;
+    }
+
+    @keyframes scrap-bark-pop {
+      0% { transform: translateX(-50%) scale(0.7); }
+      55% { transform: translateX(-50%) scale(1.12); }
+      100% { transform: translateX(-50%) scale(1); }
+    }
+
+    /* Top-right cluster: score/alive/arena + minimap (clears the 38px fs btn) */
+    .scrap-topright {
+      display: grid;
+      gap: 6px;
+      justify-items: end;
+      position: absolute;
+      right: 14px;
+      top: 52px;
+    }
+
+    .scrap-scoreline {
+      align-items: center;
+      display: flex;
+      gap: clamp(6px, 1cqw, 12px);
+      padding: clamp(4px, 0.8cqw, 7px) clamp(7px, 1.2cqw, 11px);
+    }
+
+    .scrap-scoreline b {
+      color: #75ff92;
+      font-size: clamp(8px, 1.3cqw, 14px);
+    }
+
+    .scrap-scoreline span {
+      color: #ffd23b;
+      font-size: clamp(7px, 1cqw, 11px);
+    }
+
+    .scrap-minimap {
+      background: rgba(6, 8, 14, 0.9);
+      border: 3px solid rgba(0, 0, 0, 0.7);
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
+      height: clamp(80px, 13cqw, 150px);
+      image-rendering: pixelated;
+      width: clamp(80px, 13cqw, 150px);
+    }
+
+    .scrap-arena-name {
+      color: rgba(242, 246, 255, 0.8);
+      font-size: clamp(6px, 0.9cqw, 10px);
+      text-align: right;
+      text-transform: uppercase;
+    }
+
+    /* Bottom-left: special charge */
+    .scrap-special {
+      bottom: 12px;
+      display: grid;
+      gap: clamp(4px, 0.8cqw, 7px);
+      left: 12px;
+      padding: clamp(6px, 1cqw, 10px);
+      position: absolute;
+      width: clamp(170px, 26cqw, 330px);
+    }
+
+    .scrap-special__name {
+      color: #c95eff;
+      font-size: clamp(7px, 1.05cqw, 11px);
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .scrap-special__name.is-ready {
+      animation: scrap-ready-blink 0.7s steps(2, start) infinite;
+      color: #ffd23b;
+    }
+
+    @keyframes scrap-ready-blink {
+      50% { opacity: 0.45; }
+    }
+
+    .scrap-special__track {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(0, 0, 0, 0.5);
+      display: block;
+      height: clamp(9px, 1.4cqw, 14px);
+      overflow: hidden;
+    }
+
+    .scrap-special__fill {
+      background: linear-gradient(90deg, #6a2c9e, #c95eff);
+      display: block;
+      height: 100%;
+      transition: width 120ms linear;
+      width: 0%;
+    }
+
+    /* Sponsor drop button (bottom-right, tappable) */
+    .scrap-sponsor {
+      background: rgba(247, 215, 22, 0.16);
+      border: 1px solid rgba(247, 215, 22, 0.6);
+      border-radius: 4px;
+      bottom: 12px;
+      color: #f7d716;
+      cursor: pointer;
+      font-family: "Press Start 2P", var(--font-mono);
+      font-size: clamp(7px, 1cqw, 10px);
+      line-height: 1.5;
+      padding: clamp(6px, 1cqw, 10px) clamp(8px, 1.2cqw, 12px);
+      pointer-events: auto;
+      position: absolute;
+      right: 14px;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.9);
+      text-transform: uppercase;
+    }
+
+    .scrap-sponsor:hover {
+      background: rgba(247, 215, 22, 0.28);
+    }
+
+    .scrap-sponsor[hidden] {
+      display: none;
+    }
+
+    /* Countdown + flash */
+    .scrap-countdown {
+      color: #ffd23b;
+      font-size: clamp(28px, 9cqw, 90px);
+      left: 50%;
+      position: absolute;
+      text-shadow: 5px 5px 0 rgba(0, 0, 0, 0.85);
+      top: 38%;
+      transform: translate(-50%, -50%);
+    }
+
+    .scrap-countdown[hidden] {
+      display: none;
+    }
+
+    .scrap-flash {
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+      position: absolute;
+      transition: opacity 260ms ease;
+      z-index: 7;
+    }
+
+    /* ===== Menu (inside site overlay) ====================================== */
+    .scrap-page .overlay {
+      background: rgba(4, 6, 12, 0.62);
+      justify-content: flex-start;
+      overflow-y: auto;
+      padding-top: clamp(10px, 3cqh, 34px);
+      z-index: 8;
+    }
+
+    .scrap-page .overlay__title {
+      font-size: clamp(20px, 4.6cqw, 34px);
+      margin-bottom: 4px;
+    }
+
+    .scrap-page .overlay__sub {
+      font-size: clamp(10px, 1.6cqw, 14px);
+      margin-bottom: 8px;
+    }
+
+    .scrap-page .overlay__title {
+      font-family: "Bungee", var(--font-display);
+      text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.8), 0 0 24px rgba(255, 46, 136, 0.4);
+    }
+
+    .scrap-menu {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      margin: 0 auto 10px;
+      max-width: min(720px, 100%);
+      width: 100%;
+    }
+
+    .scrap-menu[hidden] {
+      display: none;
+    }
+
+    /* Mode select: Single Match vs Full Circuit */
+    .scrap-mode-strip {
+      display: grid;
+      gap: 7px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      width: 100%;
+    }
+
+    .scrap-mode-chip {
+      background: rgba(8, 11, 16, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 3px;
+      padding: 9px 11px;
+      text-align: left;
+    }
+
+    .scrap-mode-chip:hover {
+      border-color: rgba(46, 224, 255, 0.5);
+    }
+
+    .scrap-mode-chip.is-active {
+      border-color: #ff2e88;
+      box-shadow: 0 0 0 2px rgba(255, 46, 136, 0.28);
+    }
+
+    .scrap-mode-chip strong {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 13px;
+      line-height: 1.1;
+    }
+
+    .scrap-mode-chip span {
+      color: rgba(234, 247, 255, 0.62);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    /* Circuit intermission: the repair-estimate shop */
+    .scrap-circuit {
+      display: grid;
+      gap: 10px;
+      margin: 0 auto 12px;
+      max-width: min(640px, 100%);
+      width: 100%;
+    }
+
+    .scrap-circuit[hidden] {
+      display: none;
+    }
+
+    .scrap-cir-stats {
+      align-items: center;
+      color: rgba(234, 247, 255, 0.8);
+      display: flex;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      gap: 6px 14px;
+      justify-content: space-between;
+      text-transform: uppercase;
+    }
+
+    .scrap-cir-wallet b {
+      color: #75ff92;
+      font-family: var(--font-display);
+      font-size: 15px;
+    }
+
+    .scrap-cir-route {
+      color: rgba(234, 247, 255, 0.55);
+      letter-spacing: 1px;
+    }
+
+    .scrap-cir-hp {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .scrap-cir-hp span {
+      color: #ff8f8f;
+      font-family: var(--font-display);
+      font-size: 11px;
+    }
+
+    .scrap-cir-hp i {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(0, 0, 0, 0.5);
+      border-radius: 4px;
+      display: block;
+      height: 14px;
+      overflow: hidden;
+    }
+
+    .scrap-cir-hp i b {
+      background: linear-gradient(90deg, #cc332f, #ff8a3a);
+      display: block;
+      height: 100%;
+    }
+
+    .scrap-cir-hp em {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-style: normal;
+    }
+
+    .scrap-cir-opts {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .scrap-cir-opt {
+      background: rgba(8, 11, 16, 0.82);
+      border: 1px solid rgba(255, 212, 59, 0.4);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 4px;
+      padding: 10px 11px;
+      text-align: left;
+    }
+
+    .scrap-cir-opt:hover:not(:disabled) {
+      border-color: #ffd23b;
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.22);
+    }
+
+    .scrap-cir-opt:disabled {
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+      opacity: 0.5;
+    }
+
+    .scrap-cir-opt strong {
+      color: #ffd23b;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .scrap-cir-opt span {
+      color: rgba(234, 247, 255, 0.66);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.3;
+    }
+
+    .scrap-cir-opt small {
+      color: #75ff92;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .scrap-cir-broke {
+      color: #ff8f8f;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      grid-column: 1 / -1;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    .scrap-veh-row {
+      align-items: center;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      width: 100%;
+    }
+
+    .scrap-veh-btn {
+      background: rgba(8, 11, 16, 0.8);
+      border: 1px solid rgba(46, 224, 255, 0.4);
+      border-radius: 8px;
+      color: #2ee0ff;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: 22px;
+      min-height: 54px;
+      min-width: 54px;
+    }
+
+    .scrap-veh-btn:hover {
+      border-color: #2ee0ff;
+    }
+
+    .scrap-veh-card {
+      display: grid;
+      gap: 5px;
+      padding: 2px 10px 0;
+      text-align: center;
+    }
+
+    .scrap-veh-card strong {
+      color: #ffd23b;
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(17px, 2.4cqw, 26px);
+      line-height: 1.05;
+      text-transform: uppercase;
+    }
+
+    .scrap-veh-card em {
+      color: rgba(234, 247, 255, 0.85);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-style: normal;
+      text-transform: uppercase;
+    }
+
+    .scrap-veh-card q {
+      color: #ff7eb6;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      quotes: none;
+    }
+
+    .scrap-veh-card small {
+      color: #c95eff;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.5;
+      text-transform: uppercase;
+    }
+
+    .scrap-veh-stats {
+      color: rgba(234, 247, 255, 0.9);
+      display: flex;
+      flex-wrap: wrap;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      gap: 6px 16px;
+      justify-content: center;
+    }
+
+    .scrap-veh-stats b {
+      color: #2ee0ff;
+      letter-spacing: 1px;
+    }
+
+    .scrap-arena-strip {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      width: 100%;
+    }
+
+    .scrap-arena-chip {
+      background: rgba(8, 11, 16, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      flex: 1 0 116px;
+      gap: 3px;
+      min-width: 116px;
+      padding: 8px 9px;
+      text-align: left;
+    }
+
+    .scrap-arena-chip:hover {
+      border-color: rgba(46, 224, 255, 0.5);
+    }
+
+    .scrap-arena-chip.is-active {
+      border-color: #ffd23b;
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.28);
+    }
+
+    .scrap-arena-chip strong {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.1;
+    }
+
+    .scrap-arena-chip span {
+      color: rgba(234, 247, 255, 0.62);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    /* Side-panel bits */
+    .scrap-note {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      margin: 10px 0 0;
+    }
+
+    .scrap-note kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 4px;
+      color: var(--ink);
+      padding: 1px 5px;
+    }
+
+    .scrap-log {
+      display: grid;
+      gap: 7px;
+    }
+
+    .scrap-log__item {
+      background: rgba(5, 7, 13, 0.68);
+      border: 1px solid rgba(255, 212, 59, 0.2);
+      border-radius: 8px;
+      color: #ffd23b;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.35;
+      padding: 8px;
+      text-transform: uppercase;
+    }
+
+    .scrap-howto-list {
+      display: grid;
+      gap: 9px;
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+    }
+
+    .scrap-howto-list li {
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.45;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .scrap-howto-list li::before {
+      color: var(--accent-3);
+      content: "▸";
+      left: 0;
+      position: absolute;
+    }
+
+    .scrap-howto-list strong {
+      color: var(--accent-3);
+    }
+
+    /* Touch controls: hidden for desktop, shown on touch OR narrow screens. */
+    .rb-touch-layer--scrap { display: none; }
+
+    @media (hover: none) and (pointer: coarse) {
+      .rb-touch-layer--scrap { display: block; }
+    }
+
+    @media (max-width: 820px) {
+      .rb-touch-layer--scrap { display: block; }
+    }
+
+    .rb-touch-layer--scrap .rb-touch-zone {
+      width: min(46%, 250px);
+      height: min(64%, 300px);
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .rb-touch-layer--scrap .rb-touch-zone::after {
+      opacity: 0.5;
+    }
+
+    .rb-touch-layer--scrap .rb-touch-cluster--actions {
+      display: grid;
+      gap: 8px;
+    }
+
+    .rb-touch-layer--scrap .rb-touch-cluster--actions .rb-touch-btn {
+      font-size: 13px;
+      height: 54px;
+      min-width: 96px;
+      opacity: 0.96;
+    }
+
+    /* Hide the on-canvas driving buttons whenever a menu/intermission overlay
+       is up — they're inert there and would overlap the panel on phones. */
+    .canvas-wrap--scrap:has(.overlay.overlay--show) .rb-touch-layer--scrap {
+      display: none;
+    }
+
+    /* Compact HUD when the play area is narrow (phones / split layouts).
+       The minimap goes away (same call as Unhoused) so the right-side touch
+       buttons own that space; sponsor drop docks top-center under the bark. */
+    @container sstage (max-width: 600px) {
+      .scrap-minimap { display: none; }
+      .scrap-topleft { gap: 4px; padding: 5px 7px; top: 44px; width: clamp(118px, 34cqw, 168px); }
+      .scrap-bark { font-size: 8px; max-width: 52%; top: 8px; }
+      .scrap-topright { gap: 4px; top: 44px; }
+      .scrap-special { bottom: auto; top: 118px; padding: 5px 7px; width: clamp(118px, 34cqw, 168px); }
+      .scrap-sponsor {
+        bottom: auto;
+        font-size: 7px;
+        left: 50%;
+        right: auto;
+        top: 44px;
+        transform: translateX(-50%);
+      }
+      .scrap-countdown { top: 44%; }
+
+      /* Touch cluster hugs the bottom-right so it clears the score line. */
+      .rb-touch-layer--scrap .rb-touch-cluster--right {
+        top: auto;
+        bottom: 10px;
+        transform: none;
+      }
+      .rb-touch-layer--scrap .rb-touch-cluster--actions .rb-touch-btn {
+        height: 46px;
+        min-width: 74px;
+        font-size: 11px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .scrap-page .game-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .scrap-page .controls-row {
+        flex-direction: row;
+      }
+
+      .scrap-page .controls-row .btn {
+        flex: 1 1 0;
+        min-height: 42px;
+        width: auto;
+      }
+
+      .canvas-wrap--scrap {
+        aspect-ratio: 4 / 3;
+      }
+
+      .scrap-page .overlay {
+        padding: 12px;
+      }
+
+      .scrap-cir-opts {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page scrap-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Scrap Circuit: Last Chassis Standing</h1>
+        <div class="game-page__sub">PS1-era arena vehicular combat parody · 10 unhinged vehicles · 6 destructible arenas · claims will be denied</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage scrap-stage">
+        <div class="canvas-wrap canvas-wrap--scrap">
+          <canvas id="gameCanvas" width="960" height="540" tabindex="0"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="scrap-hud" aria-hidden="true">
+            <!-- Top-left: HP + weapon + status -->
+            <div class="scrap-topleft scrap-panel">
+              <div class="scrap-hp">
+                <span class="scrap-hp__label">HP</span>
+                <span class="scrap-hp__track"><span class="scrap-hp__fill" id="hud-hp-fill"></span></span>
+                <b id="hud-hp-text">100</b>
+              </div>
+              <div class="scrap-weapon"><b id="hud-weapon-name">RAM ONLY</b><span id="hud-weapon-ammo"></span></div>
+              <div class="scrap-status" id="hud-status"></div>
+            </div>
+
+            <!-- Top-center: The Adjuster -->
+            <div class="scrap-bark scrap-panel" id="hud-bark">📋 THE ADJUSTER IS WATCHING.</div>
+
+            <!-- Top-right: salvage + alive + minimap -->
+            <div class="scrap-topright">
+              <div class="scrap-scoreline scrap-panel">
+                <b id="hud-salvage">0</b>
+                <span id="hud-alive">6/6</span>
+              </div>
+              <canvas class="scrap-minimap" id="hud-minimap" width="128" height="128"></canvas>
+              <div class="scrap-arena-name" id="hud-arena">CUL-DE-SAC FLATS</div>
+            </div>
+
+            <!-- Bottom-left: special charge -->
+            <div class="scrap-special scrap-panel">
+              <span class="scrap-special__name" id="hud-special-name">SPECIAL</span>
+              <span class="scrap-special__track"><span class="scrap-special__fill" id="hud-special-fill"></span></span>
+            </div>
+
+            <!-- Sponsor drop (rewarded) -->
+            <button class="scrap-sponsor" id="hud-sponsor" type="button">📺 SPONSOR<br />DROP</button>
+
+            <!-- Countdown + damage flash -->
+            <div class="scrap-countdown" id="hud-countdown" hidden>3</div>
+            <div class="scrap-flash" id="hud-flash"></div>
+          </div>
+
+          <!-- Touch controls -->
+          <div class="rb-touch-layer rb-touch-layer--scrap" aria-label="Touch controls">
+            <div class="rb-touch-zone" id="touch-stick" aria-label="Drive"></div>
+            <div class="rb-touch-cluster rb-touch-cluster--right rb-touch-cluster--actions">
+              <button class="rb-touch-btn rb-touch-btn--primary" id="touch-fire" type="button" aria-label="Fire weapon">FIRE</button>
+              <button class="rb-touch-btn rb-touch-btn--accent" id="touch-special" type="button" aria-label="Special weapon">SPECIAL</button>
+              <button class="rb-touch-btn rb-touch-btn--yellow" id="touch-drift" type="button" aria-label="Handbrake drift">DRIFT</button>
+            </div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">SCRAP CIRCUIT</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Last Chassis Standing. Ten unhinged service vehicles, six arenas, one very hostile insurance adjuster.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+
+            <div class="scrap-menu" id="menu-panel">
+              <div class="scrap-mode-strip" id="mode-row"></div>
+              <div class="scrap-veh-row">
+                <button class="scrap-veh-btn" id="veh-prev" type="button" aria-label="Previous vehicle">◀</button>
+                <div class="scrap-veh-card">
+                  <strong id="veh-name">Mr. Drippy's Meltdown</strong>
+                  <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
+                  <q id="veh-flavor">“The jingle is a warning.”</q>
+                  <small id="veh-special">SPECIAL: Brain Freeze</small>
+                  <div class="scrap-veh-stats" id="veh-stats"></div>
+                </div>
+                <button class="scrap-veh-btn" id="veh-next" type="button" aria-label="Next vehicle">▶</button>
+              </div>
+              <div class="scrap-arena-strip" id="arena-row"></div>
+            </div>
+
+            <!-- Circuit intermission: The Adjuster's repair estimate (JS-built) -->
+            <div class="scrap-circuit" id="circuit-panel" hidden></div>
+
+            <button class="btn btn--primary" id="btn-primary">Start your engine</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Garage</button>
+          </div>
+          <p class="scrap-note">
+            <kbd>WASD</kbd> / arrows — drive<br />
+            <kbd>Shift</kbd> — handbrake drift<br />
+            <kbd>Space</kbd> / <kbd>click</kbd> — fire weapon<br />
+            <kbd>E</kbd> / <kbd>right-click</kbd> — special (when charged)<br />
+            <kbd>R</kbd> look back · <kbd>T</kbd> sponsor drop<br />
+            <kbd>P</kbd> pause · <kbd>⛶</kbd> max screen
+          </p>
+          <p class="scrap-note" style="margin-top:10px;">
+            On a phone: drag the <strong>left half</strong> like a stick to drive (up = gas, down = brake), tap <strong>FIRE / SPECIAL / DRIFT</strong> on the right.
+          </p>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">HOW TO PLAY</h3>
+          <ul class="scrap-howto-list">
+            <li><strong>Last chassis standing.</strong> Five AI rivals, one arena, no second place money.</li>
+            <li><strong>Grab pickups.</strong> Machine guns, homing missiles, freeze shots, mines, ricochet bombs, shields, turbo.</li>
+            <li><strong>Charge your special.</strong> Every vehicle has a signature move — it's the purple bar. Batteries charge it faster.</li>
+            <li><strong>Break the scenery.</strong> Fences, barrels, snack stands, and tombstones pay Salvage. Explosive barrels pay in shrapnel.</li>
+            <li><strong>Fear the arena.</strong> Car crushers, phantom freight, coaster trains, popping graves, and long falls are all "excluded perils."</li>
+          </ul>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">THE ADJUSTER SAYS</h3>
+          <div class="scrap-log" id="adjuster-log"></div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>PS1 notes</summary>
+          <ul>
+            <li>Rendered at a 270p internal target and upscaled with hard pixels, like a grey console in 1997.</li>
+            <li>Vertices snap to a coarse grid on purpose. The wobble is the point.</li>
+            <li>Fog is doing structural work. Each arena has its own flavor of "you can't see far, that's the vibe."</li>
+            <li>Chunky 64–128px texture tiles load from <code>assets/textures/scrap-circuit/</code>, with flat colors still available as a fallback.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            Parody / satire. All vehicles, arenas, characters, and the announcer are original inventions poking fun at demolition-derby games and late-capitalist service economies. Not affiliated with any real game, brand, or person. Cartoon demolition only — drivers walk away, claims do not.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260703-slopwire-merge-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js"></script>
+  <script src="../assets/js/scrap-circuit/ps1.js?v=20260703-circuit-2"></script>
+  <script src="../assets/js/scrap-circuit/textures.js?v=20260703-circuit-2"></script>
+  <script src="../assets/js/scrap-circuit/vehicles.js?v=20260703-circuit-2"></script>
+  <script src="../assets/js/scrap-circuit/arenas.js?v=20260703-circuit-2"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260703-circuit-2"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

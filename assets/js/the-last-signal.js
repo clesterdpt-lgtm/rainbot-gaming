@@ -63,6 +63,11 @@
     "r-worker": [0, 1], "r-basic": [1, 1], "r-ranged": [2, 1], "r-heavy": [3, 1],
     "a-worker": [0, 2], "a-basic": [1, 2], "a-ranged": [2, 2], "a-heavy": [3, 2],
   };
+  const UNIT_ATLAS_FACE_OFFSET = {
+    "h-heavy": Math.PI,
+    "r-heavy": Math.PI,
+    "a-heavy": Math.PI,
+  };
   const BUILDING_ATLAS = {
     "h-hq": [0, 0], "h-ext": [1, 0], "h-prod": [2, 0], "h-tur": [3, 0],
     "r-hq": [0, 1], "r-ext": [1, 1], "r-prod": [2, 1], "r-tur": [3, 1],
@@ -2563,6 +2568,8 @@
     const r = u.def.r;
     ctx.shadowColor = f.color;
     ctx.shadowBlur = u.def.key === "heavy" ? 16 : 12;
+    const atlasFaceOffset = UNIT_ATLAS_FACE_OFFSET[u.def.art] || 0;
+    if (atlasFaceOffset) ctx.rotate(atlasFaceOffset);
     const drewAtlas = drawAtlasCell(Art.units, UNIT_ATLAS, u.def.art, unitAtlasSize(u), 0, AtlasBounds.units);
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
@@ -2571,6 +2578,7 @@
       if (u.carry > 0) drawCarryBadge(r);
       return;
     }
+    if (atlasFaceOffset) ctx.rotate(-atlasFaceOffset);
     switch (u.def.art) {
       case "h-worker": {
         ctx.fillStyle = f.dark;

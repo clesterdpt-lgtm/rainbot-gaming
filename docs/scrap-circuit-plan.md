@@ -58,6 +58,17 @@ Target session: one arena match, 3–6 minutes. Rewarded-ad loop: one **Sponsor 
 Current implementation status:
 
 - Initial build (2026-07-03): all of the slice above implemented — six arenas with per-arena palettes/fog/hazards/ramps, ten vehicles with specials, nine pickup weapon types, four AI archetypes, PS1 renderer (480x270 internal target, vertex snap, Bayer dither, per-arena fog), container-query HUD, twin-stick touch, synth SFX + jingle stingers, The Adjuster bark feed, Sponsor Drop rewarded loop, Salvage high score, site cards + README row.
+- Circuit Mode (2026-07-03): added a full six-arena run alongside single-match. A mode picker (Single Match / Full Circuit) on the menu; the circuit runs the fixed arena order (suburb → junkyard → interchange → boardwalk → rooftop → cemetery) with **chassis HP carrying between rounds**. Between rounds The Adjuster's repair-estimate shop spends Salvage: Full Repair (3 Salvage/HP), Patch Job (+30 HP for 60), Premium Coverage (next-round 6s shield for 120). Losing a round shows a **write-off**: pay a growing fee (300 + 200 per prior write-off) to revive at 55% HP, or cash out and bank your Salvage. Bots escalate per round (+6% HP, +10% special rate). Completing all six pays a +750 finish bonus. Circuit runs post to a separate high score `scrap-circuit-full` (single matches stay on `scrap-circuit`). Repairs-cost-Salvage makes the economy satire the difficulty curve, answering the tournament-mode open question below.
+- Ramps, weapons & pickup clarity (2026-07-04): (1) **Fixed elevated-level access.** Cars got stuck climbing to higher decks — the interchange put guardrails on the *inner* straight edges where the infield ramps connect (walling them off), the suburb roof-ramp house's solid collider blocked its own roof, and a slow ground-follow lerp left the car sunk below ramp surfaces so it never reached deck height. Fixes: guardrails moved to outer/fall-off edges only; the roof-house is now visual body + side-wall colliders with open ramp ends; the car snaps to ground height instead of lerping; and `collideStatics` gained a crest tolerance (`c.top <= car.y + STEP`) so an elevated car mounts a deck while a ground-level car still bounces off tall walls. All six arenas' ramps drive-tested to full deck height. (2) **Machine-gun baseline.** Every vehicle now always has an infinite-ammo machine gun (`BASE_WEAPON`); pickups are upgrades (homing missile, freeze, fire, remote, mine, ricochet) with finite ammo that revert to the machine gun when spent. Bots share the baseline with a tighter engagement range so five of them don't hose the player. (3) **Readable pickups + HUD icon.** Each pickup is now a distinct low-poly 3D model on a glowing halo ring (rocket / ice crystal / flame / bomb / spiky mine / faceted orb / dome shield / boost chevrons / wrench / battery) instead of a colored cube, and the HUD shows a boxed emoji "picture" of the currently held weapon (🔫 baseline, highlighted when carrying an upgrade) with its ammo (∞ / xN). A toast names each pickup on grab.
+
+## Circuit Mode (economy = difficulty)
+
+The pitch: the game's late-capitalism satire *becomes* the challenge. You limp out of a hazard-heavy arena at 30 HP and The Adjuster hands you a repair estimate you may not be able to afford. Every choice — patch cheap and stay fragile, full-repair and go broke, or gamble on premium coverage — is a bet against the arenas still ahead.
+
+- **Flow:** `beginRound(arenaId, roundIndex)` is the shared entry for both modes. Single-match calls it once; circuit walks `CIRCUIT_ORDER`. HP carries via `circuit.hpCarry`; premium coverage cashes in as a spawn shield.
+- **Shop tuning:** `REPAIR_RATE=3`, `PATCH_HP=30`/`PATCH_COST=60`, `PREMIUM_COST=120`, `WRITEOFF_BASE=300`/`WRITEOFF_STEP=200`/`WRITEOFF_REVIVE=0.55`, `CIRCUIT_FINISH_BONUS=750`, per-round bot scale `+0.06` HP / `+0.10` special.
+- **Scoring:** each round pays placement + win bonus into a running Salvage total; the full-circuit total posts to `scrap-circuit-full`. Cashing out mid-run still banks what you've earned.
+- **Open follow-ups:** per-arena Salvage multipliers (risk/reward routing), a "no-repair purist" scoring bonus, and letting Sponsor Drop refresh once per round instead of once per match.
 
 ## Systems
 
@@ -217,7 +228,7 @@ HUD polish, touch controls, announcer, synth audio, dither pass, cards, README, 
 
 ## Open Questions
 
-- Tournament/ladder mode (fight all arenas in sequence with persistent damage) or stay single-match?
+- ~~Tournament/ladder mode (fight all arenas in sequence with persistent damage) or stay single-match?~~ **Done (2026-07-03): Circuit Mode** ships both — single-match and a six-arena run with carried damage and Salvage-funded repairs. See the Circuit Mode section above.
 - Should specials have alt-fire depth (hold to aim Asset Seizure) or stay one-button loud?
 - 2-player split-keyboard local mode later?
 - Do bots need per-vehicle personality lines beyond The Adjuster's barks?

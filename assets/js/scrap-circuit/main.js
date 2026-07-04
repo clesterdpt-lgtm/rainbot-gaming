@@ -34,25 +34,63 @@
   const BOT_SPECIAL_RATE = 7.5;
   const FALL_DAMAGE = 35;
 
+  // machinegun is the always-available baseline (infinite ammo); every other
+  // weapon is an upgrade you pick up with finite ammo and revert from when spent.
   const WEAPONS = {
-    machinegun: { name: "SCRAP SPITTER", ammo: 36, rate: 0.09, kind: "gun" },
-    missile: { name: "GRUDGE MISSILE", ammo: 3, rate: 0.55, kind: "missile" },
-    freeze: { name: "COLD CALL", ammo: 2, rate: 0.6, kind: "freeze" },
-    fire: { name: "TAILGATER (FIRE TRAIL)", ammo: 1, rate: 0.8, kind: "fire" },
-    remote: { name: "SEVERANCE PACKAGE", ammo: 2, rate: 0.4, kind: "remote" },
-    mine: { name: "POTHOLE MINE", ammo: 3, rate: 0.3, kind: "mine" },
-    ricochet: { name: "REBOUND CLAUSE", ammo: 2, rate: 0.5, kind: "ricochet" },
+    machinegun: { name: "SCRAP SPITTER", icon: "🔫", ammo: Infinity, rate: 0.11, kind: "gun", base: true },
+    missile: { name: "GRUDGE MISSILE", icon: "🚀", ammo: 4, rate: 0.55, kind: "missile" },
+    freeze: { name: "COLD CALL", icon: "❄️", ammo: 3, rate: 0.6, kind: "freeze" },
+    fire: { name: "TAILGATER", icon: "🔥", ammo: 1, rate: 0.8, kind: "fire" },
+    remote: { name: "SEVERANCE PKG", icon: "💣", ammo: 2, rate: 0.4, kind: "remote" },
+    mine: { name: "POTHOLE MINE", icon: "🧨", ammo: 4, rate: 0.3, kind: "mine" },
+    ricochet: { name: "REBOUND CLAUSE", icon: "🎱", ammo: 3, rate: 0.5, kind: "ricochet" },
   };
+  const BASE_WEAPON = "machinegun";
+  // Pickup weights — machinegun omitted (it's the baseline). Upgrades + support.
   const PICKUP_TABLE = [
-    ["machinegun", 16], ["missile", 15], ["freeze", 9], ["fire", 9],
-    ["remote", 9], ["mine", 12], ["ricochet", 9],
-    ["shield", 7], ["turbo", 7], ["wrench", 4], ["battery", 3],
+    ["missile", 16], ["freeze", 11], ["fire", 9],
+    ["remote", 9], ["mine", 12], ["ricochet", 10],
+    ["shield", 8], ["turbo", 8], ["wrench", 5], ["battery", 4],
   ];
+  const PICKUP_ICONS = {
+    missile: "🚀", freeze: "❄️", fire: "🔥", remote: "💣", mine: "🧨", ricochet: "🎱",
+    shield: "🛡️", turbo: "⚡", wrench: "🔧", battery: "🔋",
+  };
   const PICKUP_COLORS = {
     machinegun: 0xffd23b, missile: 0xff5e3b, freeze: 0x63d8ff, fire: 0xff8a2e,
     remote: 0xd23f6e, mine: 0xb0b6bd, ricochet: 0x9e63ff,
     shield: 0x63f2c8, turbo: 0x2ee0ff, wrench: 0x75ff92, battery: 0xf7d716,
   };
+
+  // ---------- circuit mode ----------
+  // All six arenas in sequence; HP carries over and repairs cost Salvage,
+  // which is also the score — the economy IS the difficulty curve.
+  const CIRCUIT_ORDER = ["suburb", "junkyard", "interchange", "boardwalk", "rooftop", "cemetery"];
+  const CIRCUIT_PLACE_BONUS = [0, 250, 150, 100, 60, 30, 0]; // by placement, no extra win bonus
+  const REPAIR_RATE = 3;            // salvage per HP of full repair
+  const PATCH_HP = 30;              // budget option
+  const PATCH_COST = 60;
+  const PREMIUM_COST = 120;         // start next round with a 6s shield
+  const WRITEOFF_BASE = 300;        // continue-after-wreck fee...
+  const WRITEOFF_STEP = 200;        // ...grows per prior write-off
+  const WRITEOFF_REVIVE = 0.55;     // revive at 55% max HP
+  const CIRCUIT_FINISH_BONUS = 750;
+  const CIRCUIT_SCORE_ID = "scrap-circuit-full";
+  const BOT_ROUND_HP_SCALE = 0.06;  // bots toughen each round
+  const BOT_ROUND_SPECIAL_SCALE = 0.1;
+
+  const ESTIMATE_LINES = [
+    "ESTIMATE: PAINFUL. LABOR NOT INCLUDED. NEITHER IS SYMPATHY.",
+    "YOUR RATE WENT UP FOR ASKING.",
+    "WE VALUE YOU AS A SOURCE OF PREMIUMS.",
+    "PARTS ARE OEM*. (*ORIGINALLY EQUIPPED ON MAILBOXES.)",
+    "THIS ESTIMATE EXPIRES WHILE YOU READ IT.",
+  ];
+  const WRITEOFF_LINES = [
+    "TOTAL LOSS. PAY THE WRITE-OFF OR WALK HOME.",
+    "YOUR CHASSIS HAS BEEN DEEMED 'A SITUATION.'",
+    "WE'D CALL IT A MIRACLE YOU'RE ALIVE, BUT MIRACLES AREN'T COVERED.",
+  ];
 
   // ---------- announcer: The Adjuster ----------
   const BARKS = {
@@ -79,7 +117,7 @@
   const el = {
     wrap: canvas.closest(".canvas-wrap"),
     hpFill: $("hud-hp-fill"), hpText: $("hud-hp-text"),
-    weaponName: $("hud-weapon-name"), weaponAmmo: $("hud-weapon-ammo"),
+    weaponIcon: $("hud-weapon-icon"), weaponName: $("hud-weapon-name"), weaponAmmo: $("hud-weapon-ammo"),
     specialFill: $("hud-special-fill"), specialName: $("hud-special-name"),
     salvage: $("hud-salvage"), alive: $("hud-alive"),
     bark: $("hud-bark"), arenaName: $("hud-arena"),
@@ -92,6 +130,8 @@
     overlaySub: $("overlay-sub"), overlayScore: $("overlay-score"),
     btnPrimary: $("btn-primary"),
     menu: $("menu-panel"),
+    modeRow: $("mode-row"),
+    circuitPanel: $("circuit-panel"),
     vehName: $("veh-name"), vehArch: $("veh-archetype"), vehFlavor: $("veh-flavor"),
     vehSpecial: $("veh-special"), vehStats: $("veh-stats"),
     vehPrev: $("veh-prev"), vehNext: $("veh-next"),
@@ -184,6 +224,8 @@
   // ---------- state ----------
   const state = {
     phase: "menu", // menu | countdown | running | over
+    mode: "single", // single | circuit
+    circuit: null,  // { round, writeOffs, premium, hpCarry, results[] }
     paused: false,
     time: 0,
     countdownT: 0,
@@ -350,7 +392,10 @@
     if (!arena) return;
     for (let i = 0; i < arena.colliders.length; i += 1) {
       const c = arena.colliders[i];
-      if (c.base >= car.y + 1.6 || c.top <= car.y + 0.25) continue;
+      // Crest tolerance (STEP): a car whose height is within a step of the
+      // collider top drives over it — so a car climbing a ramp mounts the deck
+      // it leads to, while a ground-level car still bounces off taller walls.
+      if (c.base >= car.y + 1.6 || c.top <= car.y + STEP) continue;
       const push = circleRectPush(car, car.def.stats.radius * 0.8, c);
       if (push) {
         car.x += push.x;
@@ -403,8 +448,9 @@
       vx: 0, vz: 0,
       wheelSpin: 0,
       hp: def.stats.hp, maxHp: def.stats.hp,
-      weapon: null, ammo: 0, fireCooldown: 0,
+      weapon: BASE_WEAPON, ammo: Infinity, fireCooldown: 0,
       special: isPlayer ? 30 : 20,
+      specialRate: isPlayer ? SPECIAL_RATE : BOT_SPECIAL_RATE,
       wrecked: false, wreckT: 0,
       frozen: 0, stunned: 0, burning: 0, burnTick: 0, slowed: 0,
       shield: 0, boost: 0,
@@ -548,8 +594,106 @@
     }
   }
 
-  // ---------- pickups ----------
-  const pickupGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+  // ---------- pickups (distinct 3D model per type) ----------
+  const pickupMatCache = {};
+  function pickupMat(color) {
+    if (!pickupMatCache[color]) {
+      const m = new THREE.MeshBasicMaterial({ color });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(m);
+      pickupMatCache[color] = m;
+    }
+    return pickupMatCache[color];
+  }
+  function pgeo(group, geo, color, x, y, z, rx = 0, ry = 0, rz = 0) {
+    const m = new THREE.Mesh(geo, pickupMat(color));
+    m.position.set(x, y, z);
+    m.rotation.set(rx, ry, rz);
+    group.add(m);
+    return m;
+  }
+  const PK_WHITE = 0xf4f8ff, PK_DARK = 0x14141c;
+  // Each pickup is a bold, unlit, instantly-readable little model on a glowing
+  // ring so you can tell freeze from fire from missile at a glance.
+  function makePickupModel(type) {
+    const g = new THREE.Group();
+    const col = PICKUP_COLORS[type];
+    // glowing halo ring under the model
+    pgeo(g, new THREE.TorusGeometry(1.0, 0.1, 5, 14), col, 0, -0.85, 0, Math.PI / 2, 0, 0);
+    const spin = new THREE.Group(); // model spins; ring stays level
+    g.add(spin);
+    g.userData.spin = spin;
+    switch (type) {
+      case "missile": { // homing rocket: body + nose + fins
+        pgeo(spin, new THREE.CylinderGeometry(0.3, 0.3, 1.1, 8), col, 0, 0, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.3, 0.55, 8), PK_WHITE, 0, 0.8, 0);
+        [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((a) =>
+          pgeo(spin, new THREE.BoxGeometry(0.09, 0.42, 0.42), PK_DARK, Math.cos(a) * 0.3, -0.5, Math.sin(a) * 0.3, 0, a, 0));
+        break;
+      }
+      case "freeze": { // ice crystal: stacked octahedra
+        pgeo(spin, new THREE.OctahedronGeometry(0.62), col, 0, 0.1, 0);
+        pgeo(spin, new THREE.OctahedronGeometry(0.3), PK_WHITE, 0, 0.7, 0);
+        [0, 2.1, 4.2].forEach((a) =>
+          pgeo(spin, new THREE.ConeGeometry(0.12, 0.6, 4), col, Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55, Math.PI / 2, a, 0));
+        break;
+      }
+      case "fire": { // flame: layered cones
+        pgeo(spin, new THREE.ConeGeometry(0.6, 1.3, 7), 0xd23b1a, 0, 0.1, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.4, 1.0, 7), col, 0, 0.25, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.2, 0.6, 6), 0xffe27a, 0, 0.4, 0);
+        break;
+      }
+      case "remote": { // detonator bomb: sphere + antenna
+        pgeo(spin, new THREE.SphereGeometry(0.6, 8, 6), col, 0, 0, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5), PK_DARK, 0, 0.7, 0);
+        pgeo(spin, new THREE.SphereGeometry(0.14, 6, 5), PK_WHITE, 0, 1.05, 0);
+        break;
+      }
+      case "mine": { // spiky sea-mine: sphere + spikes
+        pgeo(spin, new THREE.SphereGeometry(0.55, 8, 6), col, 0, 0, 0);
+        for (let i = 0; i < 8; i += 1) {
+          const a = (i / 8) * Math.PI * 2, up = (i % 2) ? 0.4 : -0.4;
+          pgeo(spin, new THREE.ConeGeometry(0.13, 0.4, 4), PK_DARK, Math.cos(a) * 0.55, up, Math.sin(a) * 0.55, Math.PI / 2, -a, 0);
+        }
+        break;
+      }
+      case "ricochet": { // faceted bouncing orb
+        pgeo(spin, new THREE.IcosahedronGeometry(0.62), col, 0, 0, 0);
+        pgeo(spin, new THREE.IcosahedronGeometry(0.3), PK_WHITE, 0.2, 0.3, 0.2);
+        break;
+      }
+      case "shield": { // dome shield
+        const dome = pgeo(spin, new THREE.SphereGeometry(0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), col, 0, -0.2, 0);
+        dome.material = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+        if (SCRAP.ps1ify) SCRAP.ps1ify(dome.material);
+        pgeo(spin, new THREE.BoxGeometry(0.9, 0.12, 0.9), col, 0, -0.2, 0);
+        pgeo(spin, new THREE.SphereGeometry(0.16, 6, 5), PK_WHITE, 0, 0.35, 0);
+        break;
+      }
+      case "turbo": { // boost: stacked chevrons
+        [-0.35, 0, 0.35].forEach((y, i) => {
+          pgeo(spin, new THREE.ConeGeometry(0.5 - i * 0.08, 0.4, 4), col, 0, y + 0.1, 0, 0, Math.PI / 4, 0);
+        });
+        break;
+      }
+      case "wrench": { // wrench: plus/tool cross
+        pgeo(spin, new THREE.BoxGeometry(0.28, 1.2, 0.28), col, 0, 0, 0);
+        pgeo(spin, new THREE.TorusGeometry(0.32, 0.12, 5, 8), col, 0, 0.6, 0, Math.PI / 2, 0, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.9, 0.24, 0.24), PK_DARK, 0, -0.2, 0);
+        break;
+      }
+      case "battery": { // battery cell
+        pgeo(spin, new THREE.CylinderGeometry(0.45, 0.45, 1.1, 10), col, 0, 0, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.2, 0.2, 0.2, 8), PK_WHITE, 0, 0.62, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.5, 0.18, 0.14), PK_DARK, 0, 0.15, 0.46);
+        break;
+      }
+      default:
+        pgeo(spin, new THREE.BoxGeometry(1, 1, 1), col, 0, 0, 0);
+        break;
+    }
+    return g;
+  }
   function rollPickupType() {
     const total = PICKUP_TABLE.reduce((s, [, w]) => s + w, 0);
     let roll = Math.random() * total;
@@ -557,18 +701,20 @@
       roll -= w;
       if (roll <= 0) return type;
     }
-    return "machinegun";
+    return PICKUP_TABLE[0][0];
+  }
+  function buildPickupMesh(p) {
+    if (p.mesh) scene.remove(p.mesh);
+    p.mesh = makePickupModel(p.type);
+    p.mesh.position.set(p.x, p.gy + 1.4, p.z);
+    scene.add(p.mesh);
   }
   function setupPickups() {
     state.pickups = arena.pickupSpots.map(({ x, z }) => {
-      const type = rollPickupType();
-      const material = new THREE.MeshBasicMaterial({ color: PICKUP_COLORS[type] });
-      if (SCRAP.ps1ify) SCRAP.ps1ify(material);
-      const mesh = new THREE.Mesh(pickupGeo, material);
       const gy = sampleGround(x, z, 99);
-      mesh.position.set(x, gy + 1.4, z);
-      scene.add(mesh);
-      return { x, z, type, mesh, active: true, timer: 0, gy };
+      const p = { x, z, type: rollPickupType(), mesh: null, active: true, timer: 0, gy };
+      buildPickupMesh(p);
+      return p;
     });
   }
   function updatePickups(dt) {
@@ -578,12 +724,11 @@
         if (p.timer <= 0) {
           p.active = true;
           p.type = rollPickupType();
-          p.mesh.material.color.set(PICKUP_COLORS[p.type]);
-          p.mesh.visible = true;
+          buildPickupMesh(p); // swap in the new type's model
         }
         return;
       }
-      p.mesh.rotation.y += dt * 2.4;
+      if (p.mesh.userData.spin) p.mesh.userData.spin.rotation.y += dt * 2.4;
       p.mesh.position.y = p.gy + 1.4 + Math.sin(state.time * 3 + p.x) * 0.25;
       state.cars.forEach((car) => {
         if (car.wrecked || !p.active) return;
@@ -609,14 +754,17 @@
         break;
       case "wrench":
         car.hp = Math.min(car.maxHp, car.hp + 30);
+        if (car.isPlayer) api.toast("🔧 Patched +30 HP");
         break;
       case "battery":
         car.special = Math.min(100, car.special + 35);
+        if (car.isPlayer) api.toast("🔋 Special charged");
         break;
       default:
         car.weapon = p.type;
         car.ammo = WEAPONS[p.type].ammo;
         car.remoteBomb = null;
+        if (car.isPlayer) api.toast(`${WEAPONS[p.type].icon} ${WEAPONS[p.type].name} x${WEAPONS[p.type].ammo}`);
         break;
     }
   }
@@ -729,15 +877,21 @@
       default:
         break;
     }
-    if (car.ammo <= 0) {
+    if (car.ammo <= 0 && !w.base) {
       if (w.kind === "fire") {
         // kept until the trail burns out (cleared in updateSpecialStates)
       } else if (w.kind === "remote") {
-        if (!car.remoteBomb) car.weapon = null;
+        if (!car.remoteBomb) revertToBase(car);
       } else {
-        car.weapon = null;
+        revertToBase(car);
       }
     }
+  }
+
+  // Spent upgrade -> fall back to the infinite baseline machine gun.
+  function revertToBase(car) {
+    car.weapon = BASE_WEAPON;
+    car.ammo = Infinity;
   }
 
   function dropMine(car, x, z, dmg, color, opts = {}) {
@@ -1158,7 +1312,7 @@
         car.fireTick = 0.16;
         dropFirePatch(car);
       }
-      if (car.fireTrail <= 0 && car.weapon === "fire") car.weapon = null;
+      if (car.fireTrail <= 0 && car.weapon === "fire") revertToBase(car);
     }
   }
 
@@ -1214,7 +1368,7 @@
     car.fx.ice.visible = car.frozen > 0;
     car.fx.shield.visible = car.shield > 0;
     if (car.fireCooldown > 0) car.fireCooldown -= dt;
-    car.special = Math.min(100, car.special + (car.isPlayer ? SPECIAL_RATE : BOT_SPECIAL_RATE) * dt);
+    car.special = Math.min(100, car.special + (car.specialRate || SPECIAL_RATE) * dt);
 
     const disabled = car.frozen > 0 || car.stunned > 0;
     const stats = car.def.stats;
@@ -1284,7 +1438,10 @@
         car.vy = 0;
       }
     } else {
-      car.y = car.y + (gy - car.y) * Math.min(1, dt * 14);
+      // Track the ground tightly when climbing/descending ramps. A slow lerp
+      // left the car sunk below the ramp surface, so it never reached deck
+      // height (and got walled by colliders whose top == deck height).
+      car.y = gy;
       car.vy = 0;
     }
     // fall zones (abyss) — exempt only if the surface the car is actually
@@ -1466,6 +1623,10 @@
           const bd = Math.hypot(target.x - car.remoteBomb.x, target.z - car.remoteBomb.z);
           car.wantFire = bd < 8;
         }
+      } else if (w.base) {
+        // baseline machine gun: shorter engagement range so 5 bots don't
+        // hose the player from across the arena
+        if (distToTarget < 34 && Math.abs(diff) < 0.32) car.wantFire = true;
       } else if (distToTarget < 52 && Math.abs(diff) < 0.4) {
         car.wantFire = true;
       }
@@ -1526,7 +1687,9 @@
     } else if (state.phase === "menu") {
       if (e.code === "ArrowLeft") cycleVehicle(-1);
       if (e.code === "ArrowRight") cycleVehicle(1);
-      if (e.code === "Enter") startMatch();
+      if (e.code === "Enter") startSelectedMode();
+    } else if (state.phase === "over") {
+      if (e.code === "Enter") firePrimary();
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -1631,11 +1794,18 @@
     if (!car) return;
     bar(el.hpFill, (car.hp / car.maxHp) * 100);
     if (el.hpText) el.hpText.textContent = Math.max(0, Math.ceil(car.hp));
-    if (el.weaponName) el.weaponName.textContent = car.weapon ? WEAPONS[car.weapon].name : "RAM ONLY";
+    const w = car.weapon ? WEAPONS[car.weapon] : null;
+    if (el.weaponIcon) {
+      el.weaponIcon.textContent = w ? w.icon : "";
+      el.weaponIcon.classList.toggle("is-upgrade", !!w && !w.base);
+    }
+    if (el.weaponName) el.weaponName.textContent = w ? w.name : "RAM ONLY";
     if (el.weaponAmmo) {
-      el.weaponAmmo.textContent = car.weapon
-        ? (car.weapon === "remote" && car.remoteBomb ? "DETONATE" : `x${car.ammo}`)
-        : "";
+      el.weaponAmmo.textContent = !w
+        ? ""
+        : w.base ? "∞"
+        : car.weapon === "remote" && car.remoteBomb ? "DET"
+        : `x${car.ammo}`;
     }
     bar(el.specialFill, car.special);
     if (el.specialName) {
@@ -1801,9 +1971,29 @@
   }
 
   function startMatch() {
+    // single-match entry
+    state.mode = "single";
+    state.circuit = null;
+    state.salvage = 0;
+    beginRound(state.arenaId, 0);
+  }
+
+  function startCircuit() {
+    state.mode = "circuit";
+    state.circuit = { round: 0, writeOffs: 0, premium: false, hpCarry: null, results: [] };
+    state.salvage = 0;
+    beginRound(CIRCUIT_ORDER[0], 0);
+  }
+
+  function startSelectedMode() {
+    if (state.mode === "circuit") startCircuit();
+    else startMatch();
+  }
+
+  function beginRound(arenaId, roundIndex) {
     sfx.unlock();
     clearWorld();
-    arena = SCRAP.arenas.build(state.arenaId);
+    arena = SCRAP.arenas.build(arenaId);
     scene.add(arena.group);
     scene.background = new THREE.Color(arena.sky);
     scene.fog = new THREE.Fog(arena.fog.color, arena.fog.near, arena.fog.far);
@@ -1828,12 +2018,29 @@
     for (let i = 0; i < 5; i += 1) {
       const bot = makeCar(others[i].id, false, spawns[(i + 1) % spawns.length]);
       bot.ai.archetype = ARCHETYPES[i % ARCHETYPES.length];
+      // circuit escalation: later rounds field tougher, special-happier bots
+      if (roundIndex > 0) {
+        const hpScale = 1 + BOT_ROUND_HP_SCALE * roundIndex;
+        bot.maxHp = Math.round(bot.maxHp * hpScale);
+        bot.hp = bot.maxHp;
+        bot.specialRate = BOT_SPECIAL_RATE * (1 + BOT_ROUND_SPECIAL_SCALE * roundIndex);
+      }
       state.cars.push(bot);
     }
     state.cars.forEach((car) => { car.y = sampleGround(car.x, car.z, 99); });
+    // circuit: chassis damage carries between rounds; premium coverage cashes in
+    if (state.mode === "circuit" && state.circuit) {
+      const c = state.circuit;
+      if (c.round > 0 && c.hpCarry != null) {
+        state.player.hp = Math.min(state.player.maxHp, Math.max(1, c.hpCarry));
+      }
+      if (c.premium) {
+        state.player.shield = 6;
+        c.premium = false;
+      }
+    }
     setupPickups();
 
-    state.salvage = 0;
     state.wrecksByPlayer = 0;
     state.firstBloodDone = false;
     state.sponsorUsed = false;
@@ -1844,8 +2051,12 @@
     state.paused = false;
     if (el.overlay) el.overlay.classList.remove("overlay--show");
     if (el.menu) el.menu.hidden = true;
+    if (el.circuitPanel) el.circuitPanel.hidden = true;
     if (el.sponsor) el.sponsor.hidden = false;
-    if (el.arenaName) el.arenaName.textContent = arena.name.toUpperCase();
+    if (el.arenaName) {
+      const prefix = state.mode === "circuit" ? `R${roundIndex + 1}/${CIRCUIT_ORDER.length} · ` : "";
+      el.arenaName.textContent = prefix + arena.name.toUpperCase();
+    }
     if (el.log) el.log.innerHTML = "";
     updateCamera(0, true);
   }
@@ -1861,6 +2072,10 @@
   }
 
   function endMatch(won, placement) {
+    if (state.mode === "circuit") {
+      endCircuitRound(won, placement);
+      return;
+    }
     state.phase = "over";
     const placeBonus = [0, 500, 300, 200, 120, 60, 0][placement] || 0;
     addSalvage(placeBonus);
@@ -1885,10 +2100,183 @@
           `Salvage: <strong>${state.salvage.toLocaleString()}</strong> · Wrecks: <strong>${state.wrecksByPlayer}</strong> · ` +
           (isHigh ? "<strong>NEW HIGH SCORE</strong>" : `High: <strong>${api.getHighScore(GAME_ID).toLocaleString()}</strong>`);
       }
-      if (el.btnPrimary) el.btnPrimary.textContent = "Run it back";
+      if (el.circuitPanel) el.circuitPanel.hidden = true;
       if (el.menu) el.menu.hidden = false;
+      renderModeRow();
+      applyModeToMenu();
+      setPrimary("start", "Run it back");
       if (el.overlay) el.overlay.classList.add("overlay--show");
     }, won ? 1400 : 1600);
+  }
+
+  // ---------- circuit mode flow ----------
+  function pick(lines) {
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+
+  function endCircuitRound(won, placement) {
+    state.phase = "over";
+    const c = state.circuit;
+    addSalvage((CIRCUIT_PLACE_BONUS[placement] || 0) + (won ? 250 : 0));
+    c.results.push({ name: arena.name, placement, won });
+    c.hpCarry = won ? Math.max(1, Math.round(state.player.hp)) : 0;
+    if (won) {
+      announce("win", true);
+      sfx.win();
+      flash("rgba(255,220,120,0.4)", 300);
+    } else {
+      sfx.lose();
+    }
+    const lastRound = c.round >= CIRCUIT_ORDER.length - 1;
+    setTimeout(() => {
+      if (lastRound) circuitComplete(won);
+      else showIntermission(won);
+    }, won ? 1400 : 1600);
+  }
+
+  function showIntermission(won) {
+    const c = state.circuit;
+    if (el.overlayTitle) el.overlayTitle.textContent = won ? `ROUND ${c.round + 1}/${CIRCUIT_ORDER.length} CLEARED` : "TOTAL LOSS";
+    if (el.overlaySub) el.overlaySub.textContent = pick(won ? ESTIMATE_LINES : WRITEOFF_LINES);
+    if (el.overlayScore) el.overlayScore.textContent = "";
+    if (el.menu) el.menu.hidden = true;
+    if (el.circuitPanel) el.circuitPanel.hidden = false;
+    renderIntermission(won ? "repair" : "writeoff");
+    if (el.overlay) el.overlay.classList.add("overlay--show");
+  }
+
+  function cirButton(label, sub, cost, enabled, onBuy) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "scrap-cir-opt";
+    btn.disabled = !enabled;
+    btn.innerHTML = `<strong>${label}</strong><span>${sub}</span><small>${cost > 0 ? `${cost} SALVAGE` : "FREE"}</small>`;
+    btn.addEventListener("click", onBuy);
+    return btn;
+  }
+
+  function renderIntermission(view) {
+    const c = state.circuit;
+    const panel = el.circuitPanel;
+    if (!panel) return;
+    const maxHp = state.player.maxHp;
+    const missing = Math.max(0, maxHp - c.hpCarry);
+    panel.innerHTML = "";
+
+    // header: wallet + route progress + chassis bar
+    const stats = document.createElement("div");
+    stats.className = "scrap-cir-stats";
+    const route = c.results.map((r, i) => `R${i + 1}:${r.won ? "WIN" : "P" + r.placement}`).join(" ");
+    stats.innerHTML =
+      `<span class="scrap-cir-wallet">SALVAGE <b>${state.salvage.toLocaleString()}</b></span>` +
+      `<span class="scrap-cir-route">${route}</span>`;
+    panel.appendChild(stats);
+
+    const hpRow = document.createElement("div");
+    hpRow.className = "scrap-cir-hp";
+    const pct = Math.round((c.hpCarry / maxHp) * 100);
+    hpRow.innerHTML = `<span>CHASSIS</span><i><b style="width:${pct}%"></b></i><em>${c.hpCarry}/${maxHp}</em>`;
+    panel.appendChild(hpRow);
+
+    const opts = document.createElement("div");
+    opts.className = "scrap-cir-opts";
+    panel.appendChild(opts);
+
+    if (view === "writeoff") {
+      const cost = WRITEOFF_BASE + WRITEOFF_STEP * c.writeOffs;
+      if (state.salvage >= cost) {
+        opts.appendChild(cirButton(
+          "PAY THE WRITE-OFF", "Un-total the chassis. Revive at 55% HP.", cost, true,
+          () => {
+            state.salvage -= cost;
+            c.writeOffs += 1;
+            c.hpCarry = Math.round(maxHp * WRITEOFF_REVIVE);
+            renderIntermission("repair");
+          }
+        ));
+        // ...or bank the salvage now and end the run on your own terms
+        setPrimary("end-circuit", "Cash out & retire");
+      } else {
+        const broke = document.createElement("p");
+        broke.className = "scrap-cir-broke";
+        broke.textContent = `The write-off costs ${cost} Salvage. You have ${state.salvage}. The Adjuster is already towing your chassis away.`;
+        opts.appendChild(broke);
+        setPrimary("end-circuit", "File final claim");
+      }
+      return;
+    }
+
+    // repair view
+    const fullCost = Math.ceil(missing * REPAIR_RATE);
+    opts.appendChild(cirButton(
+      "FULL REPAIR", `Restore all ${missing} missing HP.`, fullCost,
+      missing > 0 && state.salvage >= fullCost,
+      () => {
+        state.salvage -= fullCost;
+        c.hpCarry = maxHp;
+        renderIntermission("repair");
+      }
+    ));
+    opts.appendChild(cirButton(
+      "PATCH JOB", `Duct tape ${PATCH_HP} HP back on.`, PATCH_COST,
+      missing >= 5 && state.salvage >= PATCH_COST,
+      () => {
+        state.salvage -= PATCH_COST;
+        c.hpCarry = Math.min(maxHp, c.hpCarry + PATCH_HP);
+        renderIntermission("repair");
+      }
+    ));
+    opts.appendChild(cirButton(
+      c.premium ? "PREMIUM COVERAGE ✓" : "PREMIUM COVERAGE", "Start the next round with a 6s shield.", PREMIUM_COST,
+      !c.premium && state.salvage >= PREMIUM_COST,
+      () => {
+        state.salvage -= PREMIUM_COST;
+        c.premium = true;
+        renderIntermission("repair");
+      }
+    ));
+
+    const nextName = (SCRAP.arenas.list.find((a2) => a2.id === CIRCUIT_ORDER[c.round + 1]) || {}).name || "???";
+    setPrimary("next-round", `Next: ${nextName} →`);
+  }
+
+  function startNextRound() {
+    const c = state.circuit;
+    c.round += 1;
+    beginRound(CIRCUIT_ORDER[c.round], c.round);
+  }
+
+  function circuitComplete(finished) {
+    state.phase = "over";
+    const c = state.circuit;
+    if (finished) addSalvage(CIRCUIT_FINISH_BONUS);
+    const isHigh = api.recordScore(CIRCUIT_SCORE_ID, state.salvage);
+    if (finished) sfx.win();
+    if (el.overlayTitle) {
+      el.overlayTitle.textContent = finished ? "CIRCUIT CHAMPION" : `CIRCUIT OVER — ROUND ${c.round + 1}`;
+    }
+    if (el.overlaySub) {
+      el.overlaySub.textContent = finished
+        ? "Six arenas, one chassis. The Adjuster denies your championship claim but the salvage clears."
+        : "Your circuit has been closed due to a total and extremely permanent loss.";
+    }
+    if (el.overlayScore) {
+      const rounds = c.results.map((r, i) => `R${i + 1} ${r.won ? "WIN" : "P" + r.placement}`).join(" · ");
+      el.overlayScore.innerHTML =
+        `${rounds || "No rounds finished"}<br />` +
+        `Write-offs: <strong>${c.writeOffs}</strong>` +
+        (finished ? ` · Finish bonus: <strong>+${CIRCUIT_FINISH_BONUS}</strong>` : "") +
+        `<br />Final salvage: <strong>${state.salvage.toLocaleString()}</strong> · ` +
+        (isHigh ? "<strong>NEW CIRCUIT RECORD</strong>" : `Best circuit: <strong>${api.getHighScore(CIRCUIT_SCORE_ID).toLocaleString()}</strong>`);
+    }
+    if (el.circuitPanel) el.circuitPanel.hidden = true;
+    if (el.menu) el.menu.hidden = false;
+    renderVehicleMenu();
+    renderModeRow();
+    renderArenaRow();
+    applyModeToMenu();
+    setPrimary("start", finished ? "Run the circuit again" : "Back to the circuit");
+    if (el.overlay) el.overlay.classList.add("overlay--show");
   }
 
   function togglePause() {
@@ -1907,21 +2295,73 @@
     });
   }
 
+  // Primary button is a small dispatcher: label + intent set by whoever
+  // shows the overlay (menu / intermission / results).
+  function setPrimary(action, label) {
+    state.primaryAction = action;
+    if (!el.btnPrimary) return;
+    if (action === "none") {
+      el.btnPrimary.hidden = true;
+      return;
+    }
+    el.btnPrimary.hidden = false;
+    if (label) el.btnPrimary.textContent = label;
+  }
+  function firePrimary() {
+    switch (state.primaryAction) {
+      case "next-round": startNextRound(); break;
+      case "end-circuit": circuitComplete(false); break;
+      case "start": default: startSelectedMode(); break;
+    }
+  }
+  if (el.btnPrimary) el.btnPrimary.addEventListener("click", firePrimary);
+
+  function renderModeRow() {
+    if (!el.modeRow) return;
+    el.modeRow.innerHTML = "";
+    [
+      { id: "single", label: "Single Match", sub: "One arena. Pick your fight." },
+      { id: "circuit", label: "Full Circuit", sub: "All 6 arenas. Repairs cost Salvage." },
+    ].forEach((m) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "scrap-mode-chip" + (m.id === state.mode ? " is-active" : "");
+      btn.innerHTML = `<strong>${m.label}</strong><span>${m.sub}</span>`;
+      btn.addEventListener("click", () => {
+        state.mode = m.id;
+        renderModeRow();
+        applyModeToMenu();
+      });
+      el.modeRow.appendChild(btn);
+    });
+  }
+  function applyModeToMenu() {
+    // circuit runs the fixed six-arena order, so hide the arena picker
+    if (el.arenaRow) el.arenaRow.style.display = state.mode === "circuit" ? "none" : "";
+    setPrimary("start", state.mode === "circuit" ? "Enter the circuit" : "Start your engine");
+  }
+
   function showMenu() {
     state.phase = "menu";
+    state.circuit = null;
     if (el.overlayTitle) el.overlayTitle.textContent = "SCRAP CIRCUIT";
     if (el.overlaySub) el.overlaySub.textContent = "Last Chassis Standing. Ten unhinged service vehicles, six arenas, one very hostile insurance adjuster.";
     if (el.overlayScore) {
       const high = api.getHighScore(GAME_ID);
-      el.overlayScore.textContent = high ? `High salvage: ${high.toLocaleString()}` : "";
+      const circuitHigh = api.getHighScore(CIRCUIT_SCORE_ID);
+      const parts = [];
+      if (high) parts.push(`High salvage: ${high.toLocaleString()}`);
+      if (circuitHigh) parts.push(`Best circuit: ${circuitHigh.toLocaleString()}`);
+      el.overlayScore.textContent = parts.join(" · ");
     }
-    if (el.btnPrimary) el.btnPrimary.textContent = "Start your engine";
     if (el.menu) el.menu.hidden = false;
+    if (el.circuitPanel) el.circuitPanel.hidden = true;
     if (el.overlay) el.overlay.classList.add("overlay--show");
     renderVehicleMenu();
+    renderModeRow();
     renderArenaRow();
+    applyModeToMenu();
   }
-  if (el.btnPrimary) el.btnPrimary.addEventListener("click", startMatch);
 
   // ---------- fullscreen (site max-screen pattern) ----------
   function bindFullscreen() {
@@ -2019,29 +2459,55 @@
     }
 
     if (state.phase === "running" || state.phase === "over") {
-      readPlayerInput();
-      state.cars.forEach((car) => { if (!car.isPlayer) updateAI(car, dt); });
-      state.cars.forEach((car) => updateCar(car, dt));
-      collideCars(dt);
-      updatePickups(dt);
-      updateProjectiles(dt);
-      updateMines(dt);
-      updateFirePatches(dt);
-      updateSmokes(dt);
-      updateParticles(dt);
-      updateBooms(dt);
-      if (arena) arena.update(dt, { time: state.time, cars: state.cars, applyDamage, impulse, boom, announce });
-      updateCamera(dt);
-      updateHUD();
+      advanceSim(dt);
       const pl = state.player;
       sfx.engine(pl && !pl.wrecked ? Math.min(1, Math.hypot(pl.vx, pl.vz) / pl.def.stats.top) : 0, state.phase === "running");
     }
     ps1.render(scene, camera);
   }
 
+  function advanceSim(dt) {
+    readPlayerInput();
+    state.cars.forEach((car) => { if (!car.isPlayer) updateAI(car, dt); });
+    state.cars.forEach((car) => updateCar(car, dt));
+    collideCars(dt);
+    updatePickups(dt);
+    updateProjectiles(dt);
+    updateMines(dt);
+    updateFirePatches(dt);
+    updateSmokes(dt);
+    updateParticles(dt);
+    updateBooms(dt);
+    if (arena) arena.update(dt, { time: state.time, cars: state.cars, applyDamage, impulse, boom, announce });
+    updateCamera(dt);
+    updateHUD();
+  }
+
   // ---------- debug hooks ----------
   if (DEBUG) {
-    window.__scrapDebug = { state, sampleGround, get arena() { return arena; }, startMatch, endMatch };
+    window.__scrapDebug = {
+      state, sampleGround, get arena() { return arena; },
+      startMatch, startCircuit, startNextRound, circuitComplete, endMatch,
+      get player() { return state.player; },
+      makePickupModel, scene,
+      // deterministic sim stepper (rAF is paused when the tab is hidden)
+      step(n = 60, dt = 1 / 60) {
+        if (state.phase === "countdown") { state.phase = "running"; state.countdownT = 0; }
+        for (let i = 0; i < n; i += 1) { state.time += dt; advanceSim(dt); }
+      },
+      // drive the player: throttle -1..1, steer -1..1, for n steps
+      drive(throttle, steer, n = 60, dt = 1 / 60) {
+        const p = state.player;
+        for (let i = 0; i < n; i += 1) {
+          p.throttle = throttle; p.steer = steer;
+          state.time += dt;
+          state.cars.forEach((c) => updateCar(c, dt));
+          collideCars(dt);
+          if (arena) arena.update(dt, { time: state.time, cars: state.cars, applyDamage, impulse, boom, announce });
+        }
+        return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), heading: +p.heading.toFixed(2), speed: +Math.hypot(p.vx, p.vz).toFixed(2) };
+      },
+    };
   }
 
   // ---------- boot ----------

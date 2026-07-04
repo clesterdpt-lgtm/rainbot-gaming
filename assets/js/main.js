@@ -114,7 +114,7 @@ const RB_GAME_META = {
   "mr-feast-mansion": { title: "Mr. Feast: Deadline Mansion", scoreIds: ["mrfeast3d"] },
   "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
   "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
-  "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit"] },
+  "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit", "scrap-circuit-full"] },
   "skibidi-toilet-tower-defense": {
     title: "Skibidi Toilet Tower Defense",
     scoreIds: [
@@ -135,6 +135,8 @@ const RB_GAME_META = {
 };
 
 const RB_SCORE_TITLE_OVERRIDES = {
+  "scrap-circuit": "Scrap Circuit: Single Match",
+  "scrap-circuit-full": "Scrap Circuit: Full Circuit",
   skibidi_toilet_tower_defense_bathroom: "Skibidi TD: Bathroom",
   skibidi_toilet_tower_defense_sewer: "Skibidi TD: Sewer",
   skibidi_toilet_tower_defense_rooftop: "Skibidi TD: Rooftop",

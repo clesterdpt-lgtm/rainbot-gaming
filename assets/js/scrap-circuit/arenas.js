@@ -211,9 +211,14 @@
       block(a, 13, 4.6, 11, m, x, z, { map: "#8a6f57" });
       mesh(a, new THREE.ConeGeometry(9.4, 3.4, 4), roof, x, 6.3, z, Math.PI / 4);
     });
-    // Roof-ramp house: drive up and over.
-    block(a, 14, 5.2, 12, wallA, 0, -62, { map: "#8a6f57" });
+    // Roof-ramp house: drive up and over. Visual body only — colliders are
+    // just the two long side walls so the ramps on the ±z ends stay open
+    // (a full block collider would wall the car off from its own roof).
+    box(a, 14, 5.2, 12, wallA, 0, 2.6, -62);
+    a.minimap.push({ x: 0, z: -62, hw: 7, hd: 6, color: "#8a6f57" });
     a.heights.push({ type: "rect", x: 0, z: -62, hw: 7, hd: 6, y: 5.2 });
+    a.colliders.push({ x: -6.7, z: -62, hw: 0.4, hd: 6, base: 0, top: 5.2 });
+    a.colliders.push({ x: 6.7, z: -62, hw: 0.4, hd: 6, base: 0, top: 5.2 });
     ramp(a, 8, 14, 0, 5.2, "z", road, 0, -75);
     ramp(a, 8, 14, 5.2, 0, "z", road, 0, -49);
 
@@ -377,12 +382,16 @@
     ramp(a, 10, 20, 12, y1, "z", concrete, 0, (R - W / 2 - 20) + 10);  // down to south straight
 
     // Guardrails with deliberate gaps (fall off the edge!).
-    [-R - W / 2, -R + W / 2, R - W / 2, R + W / 2].forEach((zEdge, i) => {
+    // Guardrails ONLY on the outer (fall-off) edges of the ring straights —
+    // the inner edges are where the infield ramps connect, so railing them
+    // would wall the ramps off from the deck.
+    [-R - W / 2, R + W / 2].forEach((zEdge) => {
       [-30, 30].forEach((x) => rail(a, 34, 0.6, railM, x, zEdge, y1, 1));
     });
-    [-R - W / 2, -R + W / 2, R - W / 2, R + W / 2].forEach((xEdge) => {
+    [-R - W / 2, R + W / 2].forEach((xEdge) => {
       [-26, 26].forEach((z) => rail(a, 0.6, 30, railM, xEdge, z, y1, 1));
     });
+    // Overpass side rails (flank the y=6->12 ramps at x=0, don't block them).
     [-6.3, 6.3].forEach((x) => { rail(a, 0.6, 46, railM, x, -29, 12, 1); rail(a, 0.6, 46, railM, x, 29, 12, 1); });
 
     // Cone work zones + barrels at ground level.

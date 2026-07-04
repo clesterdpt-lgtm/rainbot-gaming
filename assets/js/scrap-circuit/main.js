@@ -33,6 +33,12 @@
   const SPECIAL_RATE = 5.5;    // charge per second
   const BOT_SPECIAL_RATE = 7.5;
   const FALL_DAMAGE = 35;
+  const STARTING_LIVES = 3;
+  const LIFE_RESPAWN_SHIELD = 2.5;
+  const RAM_DAMAGE_SCALE = 0.58;
+  const RAM_SELF_DAMAGE_SCALE = 0.25;
+  const RAM_TARGET_DAMAGE_MAX = 24;
+  const RAM_SELF_DAMAGE_MAX = 14;
 
   // machinegun is the always-available baseline (infinite ammo); every other
   // weapon is an upgrade you pick up with finite ammo and revert from when spent.
@@ -117,6 +123,7 @@
   const el = {
     wrap: canvas.closest(".canvas-wrap"),
     hpFill: $("hud-hp-fill"), hpText: $("hud-hp-text"),
+    lives: $("hud-lives"),
     weaponIcon: $("hud-weapon-icon"), weaponName: $("hud-weapon-name"), weaponAmmo: $("hud-weapon-ammo"),
     specialFill: $("hud-special-fill"), specialName: $("hud-special-name"),
     salvage: $("hud-salvage"), alive: $("hud-alive"),
@@ -240,6 +247,7 @@
     pickups: [],
     salvage: 0,
     wrecksByPlayer: 0,
+    playerLives: STARTING_LIVES,
     firstBloodDone: false,
     sponsorUsed: false,
     barkCooldown: 0,
@@ -529,6 +537,7 @@
       state.wrecksByPlayer += 1;
       if (state.wrecksByPlayer >= 2 && car.hp <= 0) announce("doublewreck");
     }
+    if (car.isPlayer) state.playerLives = Math.max(0, state.playerLives - 1);
     if (!state.firstBloodDone) {
       state.firstBloodDone = true;
       announce("firstblood", true);
@@ -1503,10 +1512,9 @@
     }
   }
 
-  function respawnCar(car) {
-    if (!arena || car.wrecked) return;
+  function safestSpawnFor(car) {
+    if (!arena) return null;
     let best = arena.spawns[0], bestD = -1;
-    // farthest spawn from enemies
     arena.spawns.forEach((s) => {
       let minD = 1e9;
       state.cars.forEach((other) => {
@@ -1515,12 +1523,46 @@
       });
       if (minD > bestD) { bestD = minD; best = s; }
     });
+    return best;
+  }
+
+  function respawnCar(car) {
+    if (!arena || car.wrecked) return;
+    const best = safestSpawnFor(car);
+    if (!best) return;
     car.x = best.x;
     car.z = best.z;
     car.heading = best.h;
     car.vx = 0; car.vz = 0; car.vy = 0;
     car.y = sampleGround(best.x, best.z, 99);
     burst(car.x, car.y + 1, car.z, 0x63f2c8, 12, 8);
+  }
+
+  function respawnPlayerLife() {
+    const car = state.player;
+    const best = safestSpawnFor(car);
+    if (!car || !best) return;
+    car.wrecked = false;
+    car.wreckT = 0;
+    car.hp = car.maxHp;
+    car.x = best.x;
+    car.z = best.z;
+    car.heading = best.h;
+    car.vx = 0; car.vz = 0; car.vy = 0;
+    car.y = sampleGround(best.x, best.z, 99);
+    car.frozen = 0; car.stunned = 0; car.burning = 0; car.burnTick = 0; car.slowed = 0;
+    car.shield = Math.max(car.shield, LIFE_RESPAWN_SHIELD);
+    car.boost = 0;
+    car.throttle = 0; car.steer = 0; car.drift = false; car.wantFire = false; car.wantPickupFire = false; car.wantSpecial = false;
+    car.fx.ice.visible = false;
+    car.fx.shield.visible = true;
+    car.mesh.rotation.set(0, car.heading, 0);
+    car.mesh.position.set(car.x, car.y, car.z);
+    burst(car.x, car.y + 1, car.z, 0x63f2c8, 18, 10);
+    flash("rgba(99,242,200,0.32)", 260);
+    api.toast(`LIFE USED — ${state.playerLives} LEFT`);
+    updateCamera(0, true);
+    updateHUD();
   }
 
   function collideCars(dt) {
@@ -1549,11 +1591,11 @@
           const last = a.ramTimers.get(key) || -9;
           if (state.time - last > RAM_COOLDOWN) {
             a.ramTimers.set(key, state.time);
-            const dmg = (rel - 5) * 1.1;
+            const dmg = (rel - 5) * RAM_DAMAGE_SCALE;
             // mass ratio rewards the heavier rammer, capped so a garbage
             // truck can't one-shot the bike
-            if (!b.wrecked) applyDamage(b, Math.min(42, dmg * (ma / mb)), { by: a, type: "ram" });
-            if (!a.wrecked) applyDamage(a, Math.min(30, dmg * 0.4 * (mb / ma)), { by: b, type: "ram" });
+            if (!b.wrecked) applyDamage(b, Math.min(RAM_TARGET_DAMAGE_MAX, dmg * (ma / mb)), { by: a, type: "ram" });
+            if (!a.wrecked) applyDamage(a, Math.min(RAM_SELF_DAMAGE_MAX, dmg * RAM_SELF_DAMAGE_SCALE * (mb / ma)), { by: b, type: "ram" });
             burst((a.x + b.x) / 2, a.y + 1.2, (a.z + b.z) / 2, 0xffd23b, 7, 6);
             sfx.hit();
           }
@@ -1819,6 +1861,7 @@
     if (!car) return;
     bar(el.hpFill, (car.hp / car.maxHp) * 100);
     if (el.hpText) el.hpText.textContent = Math.max(0, Math.ceil(car.hp));
+    if (el.lives) el.lives.textContent = String(state.playerLives);
     const w = car.weapon ? WEAPONS[car.weapon] : null;
     if (el.weaponIcon) {
       el.weaponIcon.textContent = w ? w.icon : "";
@@ -1949,7 +1992,7 @@
     if (el.vehStats) {
       el.vehStats.innerHTML = [
         `<span>SPEED <b>${statBar(def.stats.top, 40)}</b></span>`,
-        `<span>ARMOR <b>${statBar(def.stats.hp, 160)}</b></span>`,
+        `<span>ARMOR <b>${statBar(def.stats.hp, 200)}</b></span>`,
         `<span>GRIP&nbsp; <b>${statBar(def.stats.turn, 2.7)}</b></span>`,
       ].join("");
     }
@@ -2067,6 +2110,7 @@
     setupPickups();
 
     state.wrecksByPlayer = 0;
+    state.playerLives = STARTING_LIVES;
     state.firstBloodDone = false;
     state.sponsorUsed = false;
     state.time = 0;
@@ -2090,6 +2134,10 @@
     if (state.phase !== "running") return;
     const alive = state.cars.filter((c) => !c.wrecked);
     if (state.player.wrecked) {
+      if (state.playerLives > 0) {
+        respawnPlayerLife();
+        return;
+      }
       endMatch(false, alive.length + 1);
     } else if (alive.length === 1 && alive[0] === state.player) {
       endMatch(true, 1);
@@ -2514,7 +2562,7 @@
       state, sampleGround, get arena() { return arena; },
       startMatch, startCircuit, startNextRound, circuitComplete, endMatch,
       get player() { return state.player; },
-      makePickupModel, scene,
+      makePickupModel, scene, applyDamage, respawnPlayerLife, collideCars,
       // deterministic sim stepper (rAF is paused when the tab is hidden)
       step(n = 60, dt = 1 / 60) {
         if (state.phase === "countdown") { state.phase = "running"; state.countdownT = 0; }

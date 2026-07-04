@@ -149,6 +149,22 @@
       font-size: clamp(8px, 1.2cqw, 13px);
     }
 
+    .scrap-lives {
+      align-items: center;
+      color: #75ff92;
+      display: flex;
+      font-family: "Press Start 2P", var(--font-mono);
+      font-size: clamp(7px, 1cqw, 11px);
+      gap: 8px;
+      justify-content: space-between;
+      line-height: 1.2;
+    }
+
+    .scrap-lives b {
+      color: #fff;
+      font-size: clamp(10px, 1.5cqw, 15px);
+    }
+
     .scrap-weapon {
       align-items: center;
       color: #ffd23b;
@@ -1025,8 +1041,9 @@
               <div class="scrap-hp">
                 <span class="scrap-hp__label">HP</span>
                 <span class="scrap-hp__track"><span class="scrap-hp__fill" id="hud-hp-fill"></span></span>
-                <b id="hud-hp-text">100</b>
+                <b id="hud-hp-text">140</b>
               </div>
+              <div class="scrap-lives"><span>LIVES</span><b id="hud-lives">3</b></div>
               <div class="scrap-weapon">
                 <span class="scrap-weapon__icon" id="hud-weapon-icon">🔫</span>
                 <b id="hud-weapon-name">SCRAP SPITTER</b>
@@ -1127,7 +1144,7 @@
         <div class="game-side__panel">
           <h3 class="game-side__title">HOW TO PLAY</h3>
           <ul class="scrap-howto-list">
-            <li><strong>Last chassis standing.</strong> Five AI rivals, one arena, no second place money.</li>
+            <li><strong>Last chassis standing.</strong> You get three lives against five AI rivals.</li>
             <li><strong>Grab pickups.</strong> Machine guns, homing missiles, freeze shots, mines, ricochet bombs, shields, turbo.</li>
             <li><strong>Charge your special.</strong> Every vehicle has a signature move — it's the purple bar. Batteries charge it faster.</li>
             <li><strong>Break the scenery.</strong> Fences, barrels, snack stands, and tombstones pay Salvage. Explosive barrels pay in shrapnel.</li>
@@ -1174,9 +1191,9 @@
   <script src="../assets/vendor/three/three-r128.min.js"></script>
   <script src="../assets/js/scrap-circuit/ps1.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
-  <script src="../assets/js/scrap-circuit/vehicles.js?v=20260703-circuit-2"></script>
+  <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260704-texture-stability-1"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260704-texture-stability-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260704-lives-health-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

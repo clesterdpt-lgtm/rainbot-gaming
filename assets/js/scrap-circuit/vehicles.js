@@ -81,7 +81,7 @@
       archetype: "Soft-serve horror-show ice cream truck",
       flavor: "The jingle is a warning.",
       special: { id: "freeze_nova", name: "Brain Freeze", desc: "Frost nova freezes nearby rivals solid." },
-      stats: { hp: 110, accel: 16, top: 30, turn: 2.0, mass: 1.5, radius: 2.2 },
+      stats: { hp: 140, accel: 16, top: 30, turn: 2.0, mass: 1.5, radius: 2.2 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -118,7 +118,7 @@
       archetype: "Reaper-chic chopper, scythe sidecar",
       flavor: "Death waives nothing.",
       special: { id: "drain_beam", name: "Soul Garnishment", desc: "Life-drain beam steals HP from the nearest rival." },
-      stats: { hp: 80, accel: 24, top: 40, turn: 2.7, mass: 0.8, radius: 1.5 },
+      stats: { hp: 100, accel: 24, top: 40, turn: 2.7, mass: 0.8, radius: 1.5 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -153,7 +153,7 @@
       archetype: "Off-duty mall-cop cruiser gone rogue",
       flavor: "The food court closes when HE says it closes.",
       special: { id: "spike_burst", name: "Clearance Spikes", desc: "Fires a spike-strip barrage behind you." },
-      stats: { hp: 105, accel: 19, top: 34, turn: 2.3, mass: 1.2, radius: 1.9 },
+      stats: { hp: 130, accel: 19, top: 34, turn: 2.3, mass: 1.2, radius: 1.9 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -186,7 +186,7 @@
       archetype: "Oversized backyard monster truck",
       flavor: "HOA-certified natural disaster.",
       special: { id: "ground_slam", name: "Property Value Slam", desc: "Ground-pound that knocks back everything nearby." },
-      stats: { hp: 135, accel: 15, top: 28, turn: 1.9, mass: 2.2, radius: 2.4 },
+      stats: { hp: 170, accel: 15, top: 28, turn: 1.9, mass: 2.2, radius: 2.4 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -214,7 +214,7 @@
       archetype: "Funeral hearse, heavy-metal livery",
       flavor: "Ask about the family discount.",
       special: { id: "casket_bombs", name: "Pre-Paid Plots", desc: "Drops a trail of casket proximity bombs." },
-      stats: { hp: 115, accel: 17, top: 33, turn: 2.0, mass: 1.5, radius: 2.3 },
+      stats: { hp: 145, accel: 17, top: 33, turn: 2.0, mass: 1.5, radius: 2.3 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -241,7 +241,7 @@
       archetype: "Substitute-driver-from-hell school bus",
       flavor: "You WILL be marked present.",
       special: { id: "tractor_shock", name: "Mandatory Attendance", desc: "Tractor beam yanks a rival close, then a shock burst." },
-      stats: { hp: 150, accel: 13, top: 27, turn: 1.6, mass: 2.6, radius: 3.0 },
+      stats: { hp: 190, accel: 13, top: 27, turn: 1.6, mass: 2.6, radius: 3.0 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -268,7 +268,7 @@
       archetype: "Rating-obsessed rideshare sedan",
       flavor: "He tips himself.",
       special: { id: "surge_volley", name: "Surge Volley", desc: "Missile volley that costs a sliver of your own HP per shot." },
-      stats: { hp: 90, accel: 22, top: 38, turn: 2.5, mass: 1.0, radius: 1.8 },
+      stats: { hp: 115, accel: 22, top: 38, turn: 2.5, mass: 1.0, radius: 1.8 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -297,7 +297,7 @@
       archetype: "Boomer road-trip RV, full amenities",
       flavor: "Bought in '78 for a handshake.",
       special: { id: "mower_smoke", name: "Reverse Mortgage", desc: "Mower-blade sweep plus a smoke screen." },
-      stats: { hp: 140, accel: 13, top: 26, turn: 1.7, mass: 2.4, radius: 3.0 },
+      stats: { hp: 175, accel: 13, top: 26, turn: 1.7, mass: 2.4, radius: 3.0 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -328,7 +328,7 @@
       archetype: "Repo-man tow truck",
       flavor: "Your car called. It's his now.",
       special: { id: "chain_hook", name: "Asset Seizure", desc: "Chain hook yanks a target toward the nearest hazard." },
-      stats: { hp: 120, accel: 18, top: 31, turn: 2.1, mass: 1.8, radius: 2.3 },
+      stats: { hp: 150, accel: 18, top: 31, turn: 2.1, mass: 1.8, radius: 2.3 },
       build() {
         const g = beginBody();
         const s = shared();
@@ -360,7 +360,7 @@
       archetype: "Overflowing garbage truck",
       flavor: "Certified curbside menace.",
       special: { id: "junk_barrage", name: "Hot Takes", desc: "Compactor crush plus a barrage of thrown junk." },
-      stats: { hp: 160, accel: 12, top: 25, turn: 1.6, mass: 2.6, radius: 3.0 },
+      stats: { hp: 200, accel: 12, top: 25, turn: 1.6, mass: 2.6, radius: 3.0 },
       build() {
         const g = beginBody();
         const s = shared();

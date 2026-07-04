@@ -16,7 +16,7 @@
      ================================================== */
   const GAME_ID = "the-last-signal";
   const W = 1280, H = 720;               // canvas viewport
-  const WORLD_W = 5600, WORLD_H = 4000;  // world size
+  const WORLD_W = 4200, WORLD_H = 3000;  // world size
   const MM = { x: 14, y: H - 168, w: 244, h: 154 }; // minimap rect (canvas space)
   const BUILD_RADIUS = 320;              // max distance from a friendly building
   const CLAIM_TIME = 2.4;                // seconds to secure a resource node
@@ -45,6 +45,7 @@
     move: { label: "Move", color: "#74f7d4", shadow: "rgba(116,247,212,0.45)" },
     attack: { label: "Attack", color: "#ff5268", shadow: "rgba(255,82,104,0.48)" },
     attackMove: { label: "Attack move", color: "#ff9d5c", shadow: "rgba(255,157,92,0.44)" },
+    breach: { label: "Breach", color: "#e8c37a", shadow: "rgba(232,195,122,0.44)" },
     gather: { label: "Gather", color: "#5fd6a7", shadow: "rgba(95,214,167,0.45)" },
     claim: { label: "Claim", color: "#7df3ff", shadow: "rgba(125,243,255,0.45)" },
     repair: { label: "Repair", color: "#9fe8ff", shadow: "rgba(159,232,255,0.48)" },
@@ -62,11 +63,6 @@
     "h-worker": [0, 0], "h-basic": [1, 0], "h-ranged": [2, 0], "h-heavy": [3, 0],
     "r-worker": [0, 1], "r-basic": [1, 1], "r-ranged": [2, 1], "r-heavy": [3, 1],
     "a-worker": [0, 2], "a-basic": [1, 2], "a-ranged": [2, 2], "a-heavy": [3, 2],
-  };
-  const UNIT_ATLAS_FACE_OFFSET = {
-    "h-heavy": Math.PI,
-    "r-heavy": Math.PI,
-    "a-heavy": Math.PI,
   };
   const BUILDING_ATLAS = {
     "h-hq": [0, 0], "h-ext": [1, 0], "h-prod": [2, 0], "h-tur": [3, 0],
@@ -373,11 +369,13 @@
     paused: false,
     time: 0,             // sim clock
     vt: 0,               // visual clock (always runs)
-    teams: [],           // [0]=player, [1]=AI
+    teams: [],           // [0]=player, [1..3]=AI
     units: [],
     buildings: [],
     nodes: [],
-    obstacles: [],
+    obstacles: [],       // impassable mountain circles (collision + nav)
+    mountains: [],       // render groups of obstacle circles
+    rocks: [],           // destructible rock barriers
     projectiles: [],
     beams: [],
     particles: [],
@@ -395,19 +393,25 @@
     alarmT: -99,
     alarmPos: null,
     pick: null,          // faction id chosen on select screen
-    pendingEnemy: null,
+    pendingEnemies: null, // faction ids rolled for the AI teams
+    opts: { enemies: 1, difficulty: "normal", mapReveal: true }, // skirmish setup (persists between rounds)
+    setup: null,         // {difficulty, enemyCount} for the running match
     hint: "",
   };
   let nextId = 1;
 
   function playerTeam() { return state.teams[0] || null; }
-  function aiTeam() { return state.teams[1] || null; }
+  function enemyTeams() { return state.teams.filter((t) => t.idx !== 0 && !t.eliminated); }
+  function aiTeam() { return enemyTeams()[0] || null; }
 
-  function makeTeam(idx, factionId, isAI) {
+  function makeTeam(idx, factionId, isAI, diff) {
+    const bonus = isAI && diff ? diff.startBonus : { m: 0, e: 0 };
     return {
       idx, isAI,
       faction: FACTIONS[factionId],
-      res: { m: 150, e: 60, s: 0 },
+      res: { m: 150 + (bonus.m || 0), e: 60 + (bonus.e || 0), s: 0 },
+      income: isAI && diff ? diff.income : 1,
+      eliminated: false,
       ai: null,
       hqId: 0,
     };
@@ -416,24 +420,236 @@
   /* ==================================================
      6. WORLD / MAP
      ================================================== */
-  function mirror(p) { return { x: WORLD_W - p.x, y: WORLD_H - p.y }; }
-  function addMirroredCluster(kind, cx, cy, offsets, amount) {
-    addCluster(kind, cx, cy, offsets, amount);
-    const q = mirror({ x: cx, y: cy });
-    addCluster(kind, q.x, q.y, offsets, amount);
+  // 4-fold map symmetry: template points live in the bottom-left quadrant and
+  // are stamped into all four corners so up to 4 commanders start fair.
+  const SYM = [
+    (x, y) => ({ x, y }),                           // bottom-left (player)
+    (x, y) => ({ x: WORLD_W - x, y: WORLD_H - y }), // top-right
+    (x, y) => ({ x: WORLD_W - x, y }),              // bottom-right
+    (x, y) => ({ x, y: WORLD_H - y }),              // top-left
+  ];
+  function symPoints(x, y) {
+    const out = [];
+    for (const t of SYM) {
+      const p = t(x, y);
+      if (!out.some((q) => Math.abs(q.x - p.x) < 2 && Math.abs(q.y - p.y) < 2)) out.push(p);
+    }
+    return out;
   }
-  function addMirroredNode(kind, x, y, amount) {
-    addNode(kind, x, y, amount);
-    const q = mirror({ x, y });
-    addNode(kind, q.x, q.y, amount);
+  function addSymNode(kind, x, y, amount) {
+    symPoints(x, y).forEach((p) => addNode(kind, p.x, p.y, amount));
   }
-  function addRock(x, y, r) {
-    state.obstacles.push({ x, y, r, seed: Math.random() * 100 });
+  function addSymCluster(kind, cx, cy, offsets, amount) {
+    symPoints(cx, cy).forEach((p) => addCluster(kind, p.x, p.y, offsets, amount));
   }
-  function addMirroredRock(x, y, r) {
-    addRock(x, y, r);
-    const q = mirror({ x, y });
-    addRock(q.x, q.y, r);
+
+  function clearOfLandmarks(x, y, r, hqClear) {
+    for (const hq of HQ_POS) if (d2(x, y, hq.x, hq.y) < hqClear * hqClear) return false;
+    for (const n of state.nodes) {
+      const cl = n.r + r + 40;
+      if (d2(x, y, n.x, n.y) < cl * cl) return false;
+    }
+    return true;
+  }
+  // mountain range: a spine polyline filled with overlapping impassable circles
+  function addRange(spine, r) {
+    const circles = [];
+    const place = (x, y, rr) => {
+      if (x < 40 || y < 40 || x > WORLD_W - 40 || y > WORLD_H - 40) return;
+      if (!clearOfLandmarks(x, y, rr, 340)) return;
+      const c = { x, y, r: rr, seed: rand(0, TAU) };
+      circles.push(c);
+      state.obstacles.push(c);
+    };
+    if (spine.length === 1) {
+      place(spine[0][0], spine[0][1], r);
+    } else {
+      for (let s = 0; s < spine.length - 1; s++) {
+        const [x1, y1] = spine[s], [x2, y2] = spine[s + 1];
+        const steps = Math.max(1, Math.round(dist(x1, y1, x2, y2) / (r * 0.75)));
+        for (let i = s === 0 ? 0 : 1; i <= steps; i++) {
+          const t = i / steps;
+          const j = i === 0 || i === steps ? 0 : r * 0.2;
+          place(lerp(x1, x2, t) + rand(-j, j), lerp(y1, y2, t) + rand(-j, j), r * rand(0.82, 1.12));
+        }
+      }
+    }
+    if (circles.length) state.mountains.push({ circles });
+  }
+  function addSymRange(spine, r) {
+    const seen = [];
+    for (const T of SYM) {
+      const pts = spine.map(([x, y]) => { const p = T(x, y); return [p.x, p.y]; });
+      const a = pts[0], b = pts[pts.length - 1];
+      const near = (p, q) => Math.abs(p[0] - q[0]) < 3 && Math.abs(p[1] - q[1]) < 3;
+      if (seen.some(([sa, sb]) => (near(sa, a) && near(sb, b)) || (near(sa, b) && near(sb, a)))) continue;
+      seen.push([a, b]);
+      addRange(pts, r);
+    }
+  }
+  // destructible rock barrier — attack it to open the route
+  function addBoulder(x, y, r) {
+    if (!clearOfLandmarks(x, y, r, 320)) return;
+    const hp = Math.round(r * 9);
+    state.rocks.push({ id: nextId++, kind: "rock", x, y, r, hp, maxHp: hp, seed: rand(0, TAU), lastHit: -99, dead: false });
+  }
+  function addSymBoulder(x, y, r) {
+    symPoints(x, y).forEach((p) => addBoulder(p.x, p.y, r));
+  }
+
+  /* ---- navigation grid + A* over mountains and live rock barriers ---- */
+  const NAV_CELL = 40;
+  const NAV_COLS = Math.ceil(WORLD_W / NAV_CELL);
+  const NAV_ROWS = Math.ceil(WORLD_H / NAV_CELL);
+  const NAV_TOTAL = NAV_COLS * NAV_ROWS;
+  const navBlocked = new Uint8Array(NAV_TOTAL);
+  const navG = new Float64Array(NAV_TOTAL);
+  const navF = new Float64Array(NAV_TOTAL);
+  const navFrom = new Int32Array(NAV_TOTAL);
+  const navSeen = new Int32Array(NAV_TOTAL);
+  const navDone = new Int32Array(NAV_TOTAL);
+  const navHeap = [];
+  let navGen = 0;
+  let navQuota = 8; // A* budget per sim tick so big group orders stay smooth
+
+  function navCellX(x) { return clamp(Math.floor(x / NAV_CELL), 0, NAV_COLS - 1); }
+  function navCellY(y) { return clamp(Math.floor(y / NAV_CELL), 0, NAV_ROWS - 1); }
+
+  function buildNavGrid() {
+    navBlocked.fill(0);
+    const mark = (o) => {
+      const rr = o.r + 14;
+      const x0 = navCellX(o.x - rr), x1 = navCellX(o.x + rr);
+      const y0 = navCellY(o.y - rr), y1 = navCellY(o.y + rr);
+      for (let cy = y0; cy <= y1; cy++) {
+        for (let cx = x0; cx <= x1; cx++) {
+          const px = cx * NAV_CELL + NAV_CELL / 2, py = cy * NAV_CELL + NAV_CELL / 2;
+          if (d2(px, py, o.x, o.y) < rr * rr) navBlocked[cy * NAV_COLS + cx] = 1;
+        }
+      }
+    };
+    for (const o of state.obstacles) mark(o);
+    for (const rk of state.rocks) if (!rk.dead) mark(rk);
+  }
+
+  function navFreeCellNear(cx, cy) {
+    if (!navBlocked[cy * NAV_COLS + cx]) return { cx, cy };
+    for (let ring = 1; ring <= 7; ring++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= NAV_COLS || ny >= NAV_ROWS) continue;
+          if (!navBlocked[ny * NAV_COLS + nx]) return { cx: nx, cy: ny };
+        }
+      }
+    }
+    return null;
+  }
+
+  function navLineFree(x0, y0, x1, y1) {
+    const steps = Math.max(1, Math.ceil(dist(x0, y0, x1, y1) / (NAV_CELL * 0.5)));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (navBlocked[navCellY(lerp(y0, y1, t)) * NAV_COLS + navCellX(lerp(x0, x1, t))]) return false;
+    }
+    return true;
+  }
+
+  function heapPush(idx) {
+    navHeap.push(idx);
+    let i = navHeap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (navF[navHeap[p]] <= navF[navHeap[i]]) break;
+      const tmp = navHeap[p]; navHeap[p] = navHeap[i]; navHeap[i] = tmp;
+      i = p;
+    }
+  }
+  function heapPop() {
+    const top = navHeap[0];
+    const last = navHeap.pop();
+    if (navHeap.length) {
+      navHeap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1, r = l + 1;
+        let m = i;
+        if (l < navHeap.length && navF[navHeap[l]] < navF[navHeap[m]]) m = l;
+        if (r < navHeap.length && navF[navHeap[r]] < navF[navHeap[m]]) m = r;
+        if (m === i) break;
+        const tmp = navHeap[m]; navHeap[m] = navHeap[i]; navHeap[i] = tmp;
+        i = m;
+      }
+    }
+    return top;
+  }
+
+  function findPath(sx, sy, tx, ty) {
+    const sc = navFreeCellNear(navCellX(sx), navCellY(sy));
+    const tc = navFreeCellNear(navCellX(tx), navCellY(ty));
+    if (!sc || !tc) return null;
+    const startI = sc.cy * NAV_COLS + sc.cx;
+    const goalI = tc.cy * NAV_COLS + tc.cx;
+    if (startI === goalI) return [];
+    navGen++;
+    navHeap.length = 0;
+    navG[startI] = 0;
+    navF[startI] = 0;
+    navSeen[startI] = navGen;
+    navFrom[startI] = -1;
+    heapPush(startI);
+    const gx = tc.cx, gy = tc.cy;
+    let found = false, guard = 24000;
+    while (navHeap.length && guard-- > 0) {
+      const cur = heapPop();
+      if (navDone[cur] === navGen) continue;
+      navDone[cur] = navGen;
+      if (cur === goalI) { found = true; break; }
+      const cx = cur % NAV_COLS, cy = (cur / NAV_COLS) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= NAV_COLS || ny >= NAV_ROWS) continue;
+          const ni = ny * NAV_COLS + nx;
+          if (navBlocked[ni] || navDone[ni] === navGen) continue;
+          // no corner cutting through diagonal gaps
+          if (dx && dy && (navBlocked[cy * NAV_COLS + nx] || navBlocked[ny * NAV_COLS + cx])) continue;
+          const g = navG[cur] + (dx && dy ? 1.41421 : 1);
+          if (navSeen[ni] === navGen && g >= navG[ni]) continue;
+          navSeen[ni] = navGen;
+          navG[ni] = g;
+          navFrom[ni] = cur;
+          const hx = Math.abs(nx - gx), hy = Math.abs(ny - gy);
+          navF[ni] = g + Math.max(hx, hy) + 0.41421 * Math.min(hx, hy);
+          heapPush(ni);
+        }
+      }
+    }
+    if (!found) return null;
+    const pts = [];
+    let cur = goalI;
+    while (cur !== -1 && cur !== startI) {
+      pts.push({ x: (cur % NAV_COLS) * NAV_CELL + NAV_CELL / 2, y: ((cur / NAV_COLS) | 0) * NAV_CELL + NAV_CELL / 2 });
+      cur = navFrom[cur];
+    }
+    pts.reverse();
+    return pts;
+  }
+
+  function smoothPath(pts, sx, sy) {
+    if (!pts.length) return pts;
+    const out = [];
+    let cx = sx, cy = sy, i = 0;
+    while (i < pts.length) {
+      let j = pts.length - 1;
+      for (; j > i; j--) if (navLineFree(cx, cy, pts[j].x, pts[j].y)) break;
+      out.push(pts[j]);
+      cx = pts[j].x; cy = pts[j].y;
+      i = j + 1;
+    }
+    return out;
   }
   function scarPath() {
     return [
@@ -454,83 +670,61 @@
       amount, rig: null, team: null,
       hp: 0, maxHp: NODE_CLAIM_HP[kind] || 150,
       claimTeam: null, claimProgress: 0,
-      lastHit: -99, alertT: -99, seed: Math.random() * TAU,
+      lastHit: -99, seed: Math.random() * TAU,
     });
   }
   function addCluster(kind, cx, cy, offsets, amount) {
     offsets.forEach(([ox, oy]) => addNode(kind, cx + ox, cy + oy, amount));
   }
 
-  const HQ_POS = [{ x: 760, y: WORLD_H - 720 }, mirror({ x: 760, y: WORLD_H - 720 })];
+  const HQ_BASE = { x: 620, y: WORLD_H - 620 };
+  const HQ_POS = SYM.map((t) => t(HQ_BASE.x, HQ_BASE.y)); // [player BL, TR, BR, TL]
 
   function initWorld() {
     state.nodes = [];
     state.obstacles = [];
-    const richOffs = [[0, 0], [54, -30], [-48, 34], [42, 50], [-36, -54], [86, 18], [-82, -8], [108, -62], [-112, 58]];
-    const fieldOffs = [[0, 0], [64, -26], [-58, 42], [50, 60], [-44, -62], [92, 36]];
+    state.mountains = [];
+    state.rocks = [];
+    const richOffs = [[0, 0], [54, -30], [-48, 34], [42, 50], [-36, -54], [86, 18]];
+    const fieldOffs = [[0, 0], [64, -26], [-58, 42], [50, 60], [-44, -62]];
 
-    // matter fields: safe starts, flank routes, forward fields, and contested center deposits.
-    addMirroredCluster("matter", HQ_POS[0].x - 155, HQ_POS[0].y - 360, richOffs, 2200);
-    addMirroredCluster("matter", HQ_POS[0].x + 430, HQ_POS[0].y + 310, fieldOffs, 1700);
-    addMirroredCluster("matter", 1120, WORLD_H - 1440, fieldOffs, 1850);
-    addMirroredCluster("matter", 1650, WORLD_H - 2120, fieldOffs, 1750);
-    addMirroredCluster("matter", 980, 790, fieldOffs, 1650);
-    addMirroredCluster("matter", 1780, 650, fieldOffs.slice(0, 5), 1500);
-    addMirroredCluster("matter", CENTER.x - 970, CENTER.y + 620, fieldOffs, 1700);
-    addMirroredCluster("matter", CENTER.x - 350, CENTER.y - 760, fieldOffs.slice(0, 5), 1550);
-    addMirroredCluster("matter", CENTER.x - 1340, CENTER.y - 190, fieldOffs.slice(0, 5), 1500);
+    // matter fields (stamped into every corner): safe start, flank, forward, mid, center-side
+    addSymCluster("matter", HQ_BASE.x - 145, HQ_BASE.y - 330, richOffs, 1900);
+    addSymCluster("matter", HQ_BASE.x + 360, HQ_BASE.y + 270, fieldOffs, 1500);
+    addSymCluster("matter", 1120, WORLD_H - 1030, fieldOffs, 1750);
+    addSymCluster("matter", 1620, WORLD_H - 1400, fieldOffs.slice(0, 4), 1650);
+    addSymCluster("matter", 860, CENTER.y - 260, fieldOffs.slice(0, 4), 1450);
 
     // energy vents (infinite geothermal)
-    [
-      { x: HQ_POS[0].x + 300, y: HQ_POS[0].y + 285 },
-      { x: HQ_POS[0].x + 910, y: HQ_POS[0].y - 95 },
-      { x: 1380, y: WORLD_H - 1540 },
-      { x: 720, y: 980 },
-      { x: 1580, y: 860 },
-      { x: CENTER.x - 1110, y: CENTER.y + 790 },
-      { x: CENTER.x - 1160, y: CENTER.y - 540 },
-    ].forEach((p) => addMirroredNode("energy", p.x, p.y, Infinity));
+    addSymNode("energy", HQ_BASE.x + 245, HQ_BASE.y + 255, Infinity);
+    addSymNode("energy", HQ_BASE.x + 740, HQ_BASE.y - 70, Infinity);
+    addSymNode("energy", 620, CENTER.y - 350, Infinity);
 
-    // signal fractures: a broader contested fault line plus one safer side node per team
+    // signal fractures: contested center ring + forward node + mid ring
     addNode("signal", CENTER.x, CENTER.y, Infinity);
-    [
-      { x: CENTER.x - 260, y: CENTER.y + 160 },
-      { x: CENTER.x - 560, y: CENTER.y - 370 },
-      { x: CENTER.x - 240, y: CENTER.y + 650 },
-      { x: CENTER.x - 980, y: CENTER.y + 60 },
-      { x: HQ_POS[0].x + 720, y: HQ_POS[0].y - 860 },
-      { x: 1580, y: 920 },
-      { x: 940, y: 1290 },
-    ].forEach((p) => addMirroredNode("signal", p.x, p.y, Infinity));
+    addSymNode("signal", CENTER.x - 185, CENTER.y + 120, Infinity);
+    addSymNode("signal", HQ_BASE.x + 560, HQ_BASE.y - 700, Infinity);
+    addSymNode("signal", 1330, 1120, Infinity);
 
-    // rock formations (impassable-ish circles; units are pushed out)
-    [
-      [920, WORLD_H - 930, 68],
-      [1110, WORLD_H - 1080, 46],
-      [650, WORLD_H - 1280, 60],
-      [1400, WORLD_H - 1640, 64],
-      [1860, WORLD_H - 1960, 54],
-      [2360, WORLD_H - 1760, 46],
-      [CENTER.x - 900, CENTER.y + 240, 74],
-      [CENTER.x - 580, CENTER.y - 440, 54],
-      [CENTER.x - 250, CENTER.y + 820, 60],
-      [CENTER.x - 1320, CENTER.y - 520, 58],
-      [560, 560, 64],
-      [820, 1140, 48],
-      [1300, 560, 58],
-      [1900, 1070, 52],
-      [2380, 760, 44],
-    ].forEach(([x, y, r]) => addMirroredRock(x, y, r));
-    [
-      [CENTER.x, CENTER.y - 880, 66],
-      [CENTER.x, CENTER.y + 880, 66],
-      [CENTER.x - 370, CENTER.y + 20, 42],
-      [CENTER.x + 370, CENTER.y - 20, 42],
-      [320, 360, 48],
-      [WORLD_W - 320, WORLD_H - 360, 48],
-      [WORLD_W - 620, 520, 52],
-      [620, WORLD_H - 520, 52],
-    ].forEach(([x, y, r]) => addRock(x, y, r));
+    // mountain ranges — impassable, path around or find the pass
+    addSymRange([[1230, 2748], [1360, 2610], [1480, 2438]], 56); // corner shield NE of each HQ
+    addSymRange([[1720, 2150], [1960, 1900]], 54);               // mid approach ridge
+    addSymRange([[1560, 1180], [1730, 1065]], 52);               // center bastion
+    addSymRange([[235, 1785], [300, 1620]], 56);                 // coast band (west/east edges)
+    addSymRange([[1800, 2845], [1985, 2880]], 54);               // edge band (bottom/top)
+    addSymRange([[760, 1890]], 46);                              // lone peak
+    addSymRange([[2100, 2350]], 50);                             // lone peak on the south axis
+
+    // destructible rock barriers — breach them to open shortcuts
+    addSymBoulder(300, 1500, 34);  // inland pass plug (west/east mid-map)
+    addSymBoulder(150, 1500, 40);  // coast plug
+    addSymBoulder(60, 1500, 40);
+    addSymBoulder(2100, 2880, 40); // bottom/top center pass plug
+    addSymBoulder(2100, 2960, 38);
+    addSymBoulder(1445, 1985, 30); // forward-field cover rocks
+    addSymBoulder(1500, 2062, 26);
+
+    buildNavGrid();
     buildTerrain();
   }
 
@@ -544,7 +738,7 @@
       hp: def.hp, maxHp: def.hp,
       shield: def.shield, maxShield: def.shield,
       state: "idle", ox: x, oy: y, attackMove: false, rx: null, ry: null,
-      target: null, node: null, carry: 0, htimer: 0,
+      target: null, node: null, carry: 0, htimer: 0, nav: null,
       cool: 0, acqT: rand(0, 0.3), lastHit: -99, slowT: 0,
       bob: rand(0, TAU), dead: false,
     };
@@ -627,46 +821,6 @@
   function canUseNodeForExtractor(team, n) {
     return !!(n && nodeHasResources(n) && !n.rig && isNodeClaimedBy(n, team));
   }
-  function refreshVision() {
-    const pt = playerTeam();
-    state.vision = [];
-    if (!pt || state.phase !== "playing" && state.phase !== "over") return;
-    for (const u of state.units) {
-      if (u.dead || u.team !== pt) continue;
-      const r = u.def.scout ? VISION.scout : u.def.worker ? VISION.worker : VISION.combat;
-      state.vision.push({ x: u.x, y: u.y, r, kind: u.def.scout ? "scout" : "unit" });
-    }
-    for (const b of state.buildings) {
-      if (b.dead || b.team !== pt) continue;
-      state.vision.push({ x: b.x, y: b.y, r: b.def.kind === "hq" ? VISION.hq : VISION.building, kind: "building" });
-    }
-    for (const n of state.nodes) {
-      if (isNodeClaimedBy(n, pt)) {
-        state.vision.push({ x: n.x, y: n.y, r: VISION.claimedNode, kind: "node" });
-      } else if (n.claimTeam === pt && n.claimProgress > 0) {
-        state.vision.push({ x: n.x, y: n.y, r: VISION.claimingNode, kind: "claim" });
-      }
-    }
-  }
-  function isVisibleToPlayer(x, y, extra = 0) {
-    if (state.phase !== "playing" && state.phase !== "over") return true;
-    if (!playerTeam()) return true;
-    for (const s of state.vision) {
-      const rr = s.r + extra;
-      if (d2(x, y, s.x, s.y) <= rr * rr) return true;
-    }
-    return false;
-  }
-  function thingVisibleToPlayer(o) {
-    if (!o) return false;
-    if (o.team === playerTeam()) return true;
-    const r = o.kind === "unit" || o.kind === "building" ? o.def.r : o.r || 0;
-    return isVisibleToPlayer(o.x, o.y, r + 18);
-  }
-  function pruneHiddenSelection() {
-    const next = state.selection.filter((o) => !o.dead && thingVisibleToPlayer(o));
-    if (next.length !== state.selection.length) setSelection(next);
-  }
   function claimNode(n, team) {
     if (!n || !team) return false;
     n.team = team;
@@ -687,21 +841,8 @@
     n.claimTeam = null;
     n.claimProgress = 0;
     n.lastHit = state.time;
-    if (oldTeam === playerTeam()) {
-      state.alarmT = state.time;
-      state.alarmPos = { x: n.x, y: n.y };
-      log(`${resourceNodeName(n)} claim lost`);
-      Sfx.alarm();
-    }
+    if (oldTeam === playerTeam()) log(`${resourceNodeName(n)} claim destroyed`);
     else if (attackerTeam === playerTeam()) log(`Enemy ${resourceNodeName(n)} unclaimed`);
-    return true;
-  }
-  function raisePlayerAlarm(x, y, msg, cooldown = 9) {
-    if (state.time - state.alarmT <= cooldown) return false;
-    state.alarmT = state.time;
-    state.alarmPos = { x, y };
-    log(msg);
-    Sfx.alarm();
     return true;
   }
 
@@ -710,18 +851,19 @@
     let best = null, bd = Infinity;
     for (const u of state.units) {
       if (u.dead) continue;
-      if (!thingVisibleToPlayer(u)) continue;
       const dd = d2(wx, wy, u.x, u.y), rr = (u.def.r + 8) * (u.def.r + 8);
       if (dd < rr && dd < bd) { bd = dd; best = u; }
     }
     if (best) return best;
     for (const b of state.buildings) {
       if (b.dead) continue;
-      if (!thingVisibleToPlayer(b)) continue;
       if (d2(wx, wy, b.x, b.y) < b.def.r * b.def.r) return b;
     }
+    for (const rk of state.rocks) {
+      if (rk.dead) continue;
+      if (d2(wx, wy, rk.x, rk.y) < (rk.r + 6) * (rk.r + 6)) return rk;
+    }
     for (const n of state.nodes) {
-      if (!thingVisibleToPlayer(n)) continue;
       if (d2(wx, wy, n.x, n.y) < (n.r + 8) * (n.r + 8)) return n;
     }
     return null;
@@ -801,8 +943,8 @@
     const combat = units.filter((u) => !u.def.worker);
     const hit = thingAt(wx, wy);
     if (state.armed === "attack" && combat.length) {
-      if (hit && (hit.kind === "unit" || hit.kind === "building") && hit.team !== pt) {
-        return { type: "attack", x: hit.x, y: hit.y, target: hit };
+      if (hit && ((hit.kind === "unit" || hit.kind === "building") && hit.team !== pt || hit.kind === "rock")) {
+        return { type: hit.kind === "rock" ? "breach" : "attack", x: hit.x, y: hit.y, target: hit };
       }
       return { type: "attackMove", x: wx, y: wy };
     }
@@ -812,6 +954,9 @@
         return { type: "rally", x: wx, y: wy };
       }
       return null;
+    }
+    if (hit && hit.kind === "rock") {
+      return { type: "breach", x: hit.x, y: hit.y, target: hit };
     }
     if (hit && (hit.kind === "unit" || hit.kind === "building")) {
       if (hit.team !== pt) return { type: "attack", x: hit.x, y: hit.y, target: hit };
@@ -837,7 +982,7 @@
   /* ==================================================
      9. SIM — units
      ================================================== */
-  function moveUnit(u, tx, ty, dt) {
+  function moveStraight(u, tx, ty, dt) {
     const dx = tx - u.x, dy = ty - u.y;
     const d = Math.hypot(dx, dy);
     if (d < 3) return true;
@@ -847,6 +992,51 @@
     u.y += (dy / d) * step;
     u.face = Math.atan2(dy, dx);
     return d - step < 4;
+  }
+
+  function planPath(u, tx, ty) {
+    const nav = { tx, ty, path: null, i: 0, age: 0, stuckT: 0, px: u.x, py: u.y, pending: false, noPathT: 0 };
+    if (navLineFree(u.x, u.y, tx, ty)) return nav;      // straight shot — no search needed
+    if (navQuota <= 0) { nav.pending = true; return nav; } // out of budget this tick, retry shortly
+    navQuota--;
+    const raw = findPath(u.x, u.y, tx, ty);
+    if (raw) nav.path = smoothPath(raw, u.x, u.y);
+    else nav.noPathT = 3; // unreachable — don't burn A* on it for a while
+    return nav;
+  }
+
+  // path-aware movement: follows A* waypoints around mountains/rocks, replans
+  // when the goal drifts, and self-recovers when physically stuck.
+  function moveUnit(u, tx, ty, dt) {
+    let nav = u.nav;
+    if (nav) {
+      nav.age += dt;
+      if (nav.pending && nav.age > 0.15) nav = null;
+      else if (nav.noPathT <= 0 && nav.age > 0.45 && d2(nav.tx, nav.ty, tx, ty) > 70 * 70) nav = null;
+      else if (nav && nav.noPathT > 0) nav.noPathT -= dt;
+    }
+    if (!nav) nav = u.nav = planPath(u, tx, ty);
+
+    let wx = tx, wy = ty, onPath = false;
+    if (nav.path && nav.i < nav.path.length) {
+      let w = nav.path[nav.i];
+      if (d2(u.x, u.y, w.x, w.y) < 22 * 22) { nav.i++; w = nav.path[nav.i]; }
+      if (w) { wx = w.x; wy = w.y; onPath = true; }
+    }
+    const arrived = moveStraight(u, wx, wy, dt);
+
+    // stuck recovery: no real progress while trying to move → replan
+    if (d2(u.x, u.y, nav.px, nav.py) < 4) {
+      nav.stuckT += dt;
+      if (nav.stuckT > 0.85 && nav.noPathT <= 0) {
+        u.nav = planPath(u, tx, ty);
+        u.nav.stuckT = -rand(0, 0.35);
+      }
+    } else {
+      nav.stuckT = 0;
+      nav.px = u.x; nav.py = u.y;
+    }
+    return !onPath && arrived;
   }
 
   function afterTarget(u) {
@@ -888,7 +1078,7 @@
         const t = u.target;
         if (!t || t.dead) { afterTarget(u); break; }
         if (isResourceNode(t) && !isEnemyClaimedNode(t, u.team)) { afterTarget(u); break; }
-        const range = u.def.range + (t.def ? t.def.r : 10);
+        const range = u.def.range + (t.def ? t.def.r : t.r || 10);
         const d = dist(u.x, u.y, t.x, t.y);
         if (d > range) moveUnit(u, t.x, t.y, dt);
         else {
@@ -926,7 +1116,7 @@
         const hq = teamHQ(u.team);
         if (!hq) { u.state = "idle"; break; }
         if (dist(u.x, u.y, hq.x, hq.y) <= hq.def.r + u.def.r + 8) {
-          u.team.res.m += u.carry;
+          u.team.res.m += u.carry * (u.team.income || 1);
           u.carry = 0;
           if (!u.node || u.node.amount <= 0 || u.node.rig) u.node = findMatterNode(u);
           u.state = u.node ? "harvest" : "idle";
@@ -998,8 +1188,9 @@
         a.x -= dx * push; a.y -= dy * push;
         b.x += dx * push; b.y += dy * push;
       }
-      // static circles: obstacles + buildings
+      // static circles: obstacles + rock barriers + buildings
       for (const o of state.obstacles) pushOut(a, o.x, o.y, o.r);
+      for (const rk of state.rocks) if (!rk.dead) pushOut(a, rk.x, rk.y, rk.r);
       for (const b of state.buildings) if (!b.dead) pushOut(a, b.x, b.y, b.def.r * 0.9);
       a.x = clamp(a.x, 12, WORLD_W - 12);
       a.y = clamp(a.y, 12, WORLD_H - 12);
@@ -1076,6 +1267,10 @@
         if (b.dead || b.team === p.team) continue;
         if (d2(p.tx, p.ty, b.x, b.y) <= (p.splash + b.def.r * 0.6) * (p.splash + b.def.r * 0.6)) applyDamage(b, p.dmg, null, p.team);
       }
+      for (const rk of state.rocks) {
+        if (rk.dead) continue;
+        if (d2(p.tx, p.ty, rk.x, rk.y) <= (p.splash + rk.r * 0.5) * (p.splash + rk.r * 0.5)) applyDamage(rk, p.dmg, null, p.team);
+      }
       boomFx(p.tx, p.ty, p.color, p.splash);
       Sfx.boom(false);
     } else if (p.target && !p.target.dead) {
@@ -1089,13 +1284,22 @@
   function applyDamage(thing, dmg, attacker, attackerTeam) {
     if (thing.dead) return;
     const aTeam = attacker ? attacker.team : attackerTeam;
+    if (thing.kind === "rock") {
+      thing.lastHit = state.time;
+      thing.hp -= dmg;
+      spark(thing.x, thing.y, "#cdb489", 2);
+      if (thing.hp <= 0) {
+        thing.dead = true;
+        boomFx(thing.x, thing.y, "#cdb489", thing.r + 10);
+        Sfx.boom(true);
+        buildNavGrid();
+        log("Rockslide cleared — a new route is open");
+      }
+      return;
+    }
     if (isResourceNode(thing)) {
       if (!thing.team || thing.hp <= 0 || aTeam === thing.team) return;
       thing.lastHit = state.time;
-      if (thing.team === playerTeam() && state.time - thing.alertT > 8) {
-        thing.alertT = state.time;
-        raisePlayerAlarm(thing.x, thing.y, `${resourceNodeName(thing)} under attack`, 4);
-      }
       thing.hp -= dmg;
       if (thing.hp <= 0) {
         boomFx(thing.x, thing.y, thing.team.faction.color, thing.r + 8);
@@ -1123,7 +1327,10 @@
     // player under-attack alarm
     const pt = playerTeam();
     if (thing.team === pt && (thing.kind === "building" || (thing.def && thing.def.worker)) && state.time - state.alarmT > 9) {
-      raisePlayerAlarm(thing.x, thing.y, `⚠ ${thing.def.name} under attack`, 9);
+      state.alarmT = state.time;
+      state.alarmPos = { x: thing.x, y: thing.y };
+      log(`⚠ ${thing.def.name} under attack`);
+      Sfx.alarm();
     }
     if (thing.hp <= 0) kill(thing, aTeam);
   }
@@ -1149,10 +1356,42 @@
       else log(`Enemy ${thing.def.name} destroyed`);
       if (state.selection.includes(thing)) { state.selection = state.selection.filter((s) => s !== thing); state.selVersion++; }
       if (thing.def.kind === "hq" && state.phase === "playing") {
-        endGame(thing.team === pt ? aiTeam() : pt);
+        eliminateTeam(thing.team, attackerTeam);
       }
     }
     if (state.selection.includes(thing)) { state.selection = state.selection.filter((s) => s !== thing); state.selVersion++; }
+  }
+
+  // a commander whose HQ falls is out: forces collapse, claims release
+  function eliminateTeam(team, attackerTeam) {
+    if (team.eliminated) return;
+    team.eliminated = true;
+    for (const n of state.nodes) {
+      if (n.team === team) { n.team = null; n.hp = 0; n.rig = null; }
+      if (n.claimTeam === team) { n.claimTeam = null; n.claimProgress = 0; }
+    }
+    for (const u of state.units) {
+      if (u.team !== team || u.dead) continue;
+      u.dead = true;
+      boomFx(u.x, u.y, team.faction.color, 12);
+    }
+    for (const b of state.buildings) {
+      if (b.team !== team || b.dead) continue;
+      b.dead = true;
+      boomFx(b.x, b.y, team.faction.color, b.def.r);
+      state.decals.push({ x: b.x, y: b.y, r: b.def.r, ttl: 40 });
+    }
+    if (state.decals.length > 30) state.decals.splice(0, state.decals.length - 30);
+    state.selection = state.selection.filter((s) => !s.dead);
+    state.selVersion++;
+    const pt = playerTeam();
+    if (team === pt) {
+      endGame(attackerTeam && !attackerTeam.eliminated ? attackerTeam : enemyTeams()[0] || null);
+      return;
+    }
+    log(`☠ ${team.faction.name} eliminated`);
+    Sfx.boom(true);
+    if (!enemyTeams().length) endGame(pt);
   }
 
   /* ==================================================
@@ -1210,12 +1449,13 @@
     if (b.def.kind === "extractor" && b.node && isNodeClaimedBy(b.node, b.team)) {
       const kind = b.node.kind, rk = NODE_RES[kind];
       const rate = BASE_RATES[kind] * (b.def.mult ? b.def.mult[rk] : 1);
+      const inc = b.team.income || 1;
       if (b.node.amount === Infinity) {
-        b.team.res[rk] += rate * dt;
+        b.team.res[rk] += rate * inc * dt;
       } else if (b.node.amount > 0) {
         const take = Math.min(rate * dt, b.node.amount);
         b.node.amount -= take;
-        b.team.res[rk] += take;
+        b.team.res[rk] += take * inc;
         if (b.node.amount <= 0 && !b.dry) {
           b.dry = true;
           if (b.team === playerTeam()) log(`${b.def.name}: node depleted`);
@@ -1320,6 +1560,11 @@
       const rr = o.r + def.r + 4;
       if (d2(x, y, o.x, o.y) < rr * rr) return false;
     }
+    for (const rk of state.rocks) {
+      if (rk.dead) continue;
+      const rr = rk.r + def.r + 4;
+      if (d2(x, y, rk.x, rk.y) < rr * rr) return false;
+    }
     for (const b of state.buildings) {
       if (b.dead) continue;
       const rr = b.def.r + def.r + 10;
@@ -1349,36 +1594,75 @@
   /* ==================================================
      13. AI OPPONENT
      ================================================== */
-  function makeAI(team) {
+  // difficulty knobs: how fast the AI thinks, how wide it expands, how hard it
+  // scales its economy and waves, and its resource-income handicap/bonus.
+  const OPTS_STORE = "tls-skirmish-opts";
+
+  const AI_DIFFICULTY = {
+    easy: {
+      key: "easy", label: "Easy",
+      think: 1.15, income: 0.8, startBonus: { m: 0, e: 0 },
+      workerCap: 8, extractorCap: 4, prodCap: 1, turretCap: 2,
+      queueDepth: 1, waveBase: 4, waveGrow: 1, waveCap: 9, waveDelay: 34,
+      harass: false, playerBias: 1, scoreMult: 0.6,
+    },
+    normal: {
+      key: "normal", label: "Normal",
+      think: 0.8, income: 1, startBonus: { m: 60, e: 20 },
+      workerCap: 12, extractorCap: 7, prodCap: 2, turretCap: 4,
+      queueDepth: 2, waveBase: 5, waveGrow: 2, waveCap: 16, waveDelay: 26,
+      harass: true, playerBias: 1.2, scoreMult: 1,
+    },
+    hard: {
+      key: "hard", label: "Hard",
+      think: 0.55, income: 1.2, startBonus: { m: 140, e: 60 },
+      workerCap: 16, extractorCap: 10, prodCap: 3, turretCap: 6,
+      queueDepth: 3, waveBase: 6, waveGrow: 3, waveCap: 26, waveDelay: 20,
+      harass: true, playerBias: 1.6, scoreMult: 1.5,
+    },
+  };
+
+  function makeAI(team, diff) {
     const ai = {
       team,
-      think: 0,
-      waveGoal: 4,
+      diff,
+      think: rand(0, 0.5),
+      waveGoal: diff.waveBase,
       waveIdx: 0,
+      lastWave: 0,
+      wave: null, // staged push: {x, y, pushAt}
       defenseCool: 0,
-      workerTarget: 7,
-      scoutTarget: 2,
+      harassCool: 50,
+      expandCool: 8,
+      workerTarget: 6,
       onUnit(u) {
-        if (u.def.scout) u.aiRole = "scout";
-        else if (!u.def.worker) u.aiRole = "defend";
+        if (!u.def.worker) u.aiRole = "defend";
       },
       update(dt) {
         this.think -= dt;
         this.defenseCool -= dt;
+        this.harassCool -= dt;
+        this.expandCool -= dt;
         if (this.think > 0) return;
-        this.think = 0.8;
+        this.think = this.diff.think;
         const t = this.team;
+        if (t.eliminated) return;
         const hq = teamHQ(t);
         if (!hq) return;
         const workers = teamUnits(t).filter((u) => u.def.worker);
-        const scouts = teamUnits(t).filter((u) => u.def.scout);
-        const army = teamMilitary(t).filter((u) => !u.def.scout);
+        const army = teamMilitary(t);
+        const blds = teamBuildings(t);
 
-        // --- economy: keep workers flowing + working
-        if (workers.length < this.workerTarget && hq.queue.length === 0 && canAfford(t, t.faction.units.worker.cost)) {
+        // recycle stale roles so committed troops rejoin the muster pool
+        for (const u of army) {
+          if (u.aiRole === "harass" && u.state === "idle") u.aiRole = "defend";
+          if (u.aiRole === "wave" && u.state === "idle" && state.time - this.lastWave > 14) u.aiRole = "defend";
+        }
+
+        // --- economy: worker count scales with rigs + game time
+        this.workerTarget = Math.min(this.diff.workerCap, 6 + blds.filter((b) => b.def.kind === "extractor").length + Math.floor(state.time / 100));
+        if (workers.length < this.workerTarget && hq.queue.length < 2 && canAfford(t, t.faction.units.worker.cost)) {
           enqueueTrain(hq, "worker");
-        } else if (scouts.length < this.scoutTarget && hq.queue.length === 0 && canAfford(t, t.faction.units.scout.cost)) {
-          enqueueTrain(hq, "scout");
         }
         for (const w of workers) {
           if (w.state === "idle") {
@@ -1386,97 +1670,135 @@
             if (n) orderHarvest([w], n);
           }
         }
-        for (const s of scouts) {
-          if (s.state !== "idle") continue;
-          const n = this.scoutNode(t, s);
-          if (n) {
-            s.aiRole = "scout";
-            orderMove([s], n.x + rand(-90, 90), n.y + rand(-90, 90), false);
-          }
-        }
 
-        // --- structures
-        const extractors = teamBuildings(t).filter((b) => b.def.kind === "extractor");
-        const production = teamBuildings(t).find((b) => b.def.kind === "production");
-        const turrets = teamBuildings(t).filter((b) => b.def.kind === "turret");
-
+        // --- structures: expand extractors outward, layer defense, add production
+        const extractors = blds.filter((b) => b.def.kind === "extractor");
+        const prodsAll = blds.filter((b) => b.def.kind === "production");
+        const prods = prodsAll.filter((b) => b.built);
+        const turrets = blds.filter((b) => b.def.kind === "turret");
         const energyRigs = extractors.filter((b) => b.node && b.node.kind === "energy").length;
+        const signalRigs = extractors.filter((b) => b.node && b.node.kind === "signal").length;
+        const wantEnergy = Math.min(3, 1 + Math.floor(this.waveIdx / 2));
+        const wantSignal = Math.min(2, 1 + Math.floor(this.waveIdx / 3));
+
         if (energyRigs === 0) {
           this.buildExtractor(t, hq, "energy");
-        } else if (!production) {
+        } else if (!prodsAll.length) {
           this.buildNear(t, hq, "production");
-        } else if (production.built && extractors.length < 2 && t.res.m > 150) {
+        } else if (prods.length && signalRigs < wantSignal && t.res.m > 130) {
           this.buildExtractor(t, hq, "signal");
-        } else if (production.built && energyRigs < 2 && this.waveIdx >= 1 && t.res.m > 140) {
+        } else if (prods.length && energyRigs < wantEnergy && t.res.m > 140) {
           this.buildExtractor(t, hq, "energy");
-        } else if (production.built && turrets.length < 1 && this.waveIdx >= 1 && t.res.m > 130) {
-          this.buildTurret(t, hq);
-        } else if (production.built && extractors.length < 4 && this.waveIdx >= 2 && t.res.m > 220) {
-          this.buildExtractor(t, hq, "energy") || this.buildExtractor(t, hq, "matter");
-        } else if (production.built && turrets.length < 2 && this.waveIdx >= 3 && t.res.m > 180) {
-          this.buildTurret(t, hq);
+        } else if (prods.length && turrets.length < Math.min(this.diff.turretCap, 1 + this.waveIdx) && t.res.m > 160) {
+          this.buildTurret(t);
+        } else if (prods.length && extractors.length < this.diff.extractorCap && t.res.m > 200 && this.expandCool <= 0) {
+          this.expandCool = 12;
+          this.buildExtractor(t, hq, "matter") || this.buildExtractor(t, hq, "energy") || this.buildExtractor(t, hq, "signal");
+        }
+        // extra production lines are what let the AI field big late-game armies
+        if (prods.length && prodsAll.length < Math.min(this.diff.prodCap, 1 + Math.floor(this.waveIdx / 2)) && t.res.m > 260) {
+          this.buildNear(t, hq, "production");
         }
 
-        // --- training composition
-        if (production && production.built && production.queue.length < 2) {
-          const heavyDef = t.faction.units.heavy;
-          const heavies = army.filter((u) => u.def.key === "heavy").length;
-          if (t.res.s >= (heavyDef.cost.s || 0) && canAfford(t, heavyDef.cost) && this.waveIdx >= 1 && heavies < 1 + Math.floor(army.length / 6)) {
-            enqueueTrain(production, "heavy");
-          } else if (Math.random() < 0.4 && canAfford(t, t.faction.units.ranged.cost)) {
-            enqueueTrain(production, "ranged");
+        // --- training composition across every production line
+        const heavies = army.filter((u) => u.def.key === "heavy").length;
+        const heavyDef = t.faction.units.heavy;
+        const depth = Math.min(QUEUE_CAP, this.diff.queueDepth + (t.res.m > 400 ? 2 : 0));
+        for (const p of prods) {
+          if (p.queue.length >= depth) continue;
+          if (this.waveIdx >= 1 && heavies < 1 + Math.floor(army.length / 5) && canAfford(t, heavyDef.cost)) {
+            enqueueTrain(p, "heavy");
+          } else if (Math.random() < 0.45 && canAfford(t, t.faction.units.ranged.cost)) {
+            enqueueTrain(p, "ranged");
           } else if (canAfford(t, t.faction.units.basic.cost)) {
-            enqueueTrain(production, "basic");
+            enqueueTrain(p, "basic");
           }
         }
 
         // --- defense: respond to threats near structures
         if (this.defenseCool <= 0) {
           let threat = null;
-          for (const b of teamBuildings(t)) {
+          for (const b of blds) {
             const e = nearestEnemyThing(t, b.x, b.y, 340, true);
             if (e) { threat = e; break; }
           }
           if (threat) {
             this.defenseCool = 5;
-            const defenders = army.filter((u) => u.aiRole !== "wave" || dist(u.x, u.y, hq.x, hq.y) < 700);
+            const defenders = army.filter((u) => u.aiRole !== "wave" || dist(u.x, u.y, threat.x, threat.y) < 700);
             if (defenders.length) orderMove(defenders, threat.x, threat.y, true);
           }
         }
 
-        // --- offense: launch waves. Only troops not already committed count
-        // toward the next wave; a timer prevents stalling when the escalated
-        // goal outpaces the economy.
-        const sinceWave = state.time - (this.lastWave || 0);
-        const fresh = army.filter((u) => u.aiRole !== "wave");
-        if (sinceWave > 25 && (fresh.length >= this.waveGoal || (fresh.length >= 4 && sinceWave > 110))) {
-          const foe = state.teams.find((tt) => tt !== t);
-          const foeHQ = foe ? teamHQ(foe) : null;
-          const target = foeHQ || HQ_POS[foe ? foe.idx : 0];
-          army.forEach((u) => { u.aiRole = "wave"; });
-          orderMove(army, target.x, target.y, true);
-          this.waveIdx++;
-          this.lastWave = state.time;
-          this.waveGoal = Math.min(10, this.waveGoal + 2);
-          this.workerTarget = Math.min(9, this.workerTarget + 1);
-          if (t !== playerTeam()) { log("⚠ Seismic sensors: enemy force moving"); Sfx.alarm(); }
+        // --- harassment: small squads raid enemy expansions between waves
+        if (this.diff.harass && this.harassCool <= 0 && army.length >= 6) {
+          this.harassCool = this.diff.key === "hard" ? 42 : 65;
+          const target = this.pickHarassTarget();
+          const raiders = army.filter((u) => u.aiRole === "defend" && u.def.key !== "heavy").slice(0, 3);
+          if (target && raiders.length >= 2) {
+            raiders.forEach((u) => { u.aiRole = "harass"; });
+            orderMove(raiders, target.x, target.y, true);
+          }
+        }
+
+        // --- offense: muster fresh troops into escalating waves
+        const sinceWave = state.time - this.lastWave;
+        const fresh = army.filter((u) => u.aiRole !== "wave" && u.aiRole !== "harass");
+        if (sinceWave > this.diff.waveDelay && (fresh.length >= this.waveGoal || (fresh.length >= 4 && sinceWave > 105))) {
+          this.launchWave(fresh);
+        }
+        // staged push: gather at the staging point, then commit together
+        if (this.wave && state.time >= this.wave.pushAt) {
+          const squad = state.units.filter((u) => u.team === t && !u.dead && u.aiRole === "wave");
+          if (squad.length) orderMove(squad, this.wave.x, this.wave.y, true);
+          this.wave = null;
         }
       },
-      scoutNode(t, scout) {
-        let best = null, bd = -Infinity;
-        for (const n of state.nodes) {
-          if (n.team === t || !nodeHasResources(n)) continue;
-          const spread = Math.min(
-            n.x,
-            n.y,
-            WORLD_W - n.x,
-            WORLD_H - n.y
-          );
-          const base = d2(scout.x, scout.y, n.x, n.y);
-          const score = base * 0.0001 + spread * 0.4 + (n.team ? -200 : 80) + Math.random() * 70;
-          if (score > bd) { bd = score; best = n; }
+      launchWave(squad) {
+        const target = this.pickWaveTarget();
+        if (!target || !squad.length) return;
+        let cx = 0, cy = 0;
+        squad.forEach((u) => { u.aiRole = "wave"; cx += u.x; cy += u.y; });
+        cx /= squad.length; cy /= squad.length;
+        orderMove(squad, lerp(cx, target.x, 0.55), lerp(cy, target.y, 0.55), true);
+        this.wave = { x: target.x, y: target.y, pushAt: state.time + 9 };
+        this.waveIdx++;
+        this.lastWave = state.time;
+        this.waveGoal = Math.min(this.diff.waveCap, this.waveGoal + this.diff.waveGrow);
+        if (target.team === playerTeam()) { log("⚠ Seismic sensors: enemy force moving"); Sfx.alarm(); }
+      },
+      pickWaveTarget() {
+        const t = this.team;
+        const hq = teamHQ(t);
+        const foes = state.teams.filter((tt) => tt !== t && !tt.eliminated);
+        if (!foes.length || !hq) return null;
+        let best = null, bestW = -1;
+        for (const foe of foes) {
+          const fhq = teamHQ(foe);
+          const pos = fhq || HQ_POS[foe.idx];
+          let w = 1 / Math.max(1, dist(hq.x, hq.y, pos.x, pos.y));
+          if (foe === playerTeam()) w *= this.diff.playerBias;
+          w *= rand(0.7, 1.3);
+          if (w > bestW) { bestW = w; best = { x: pos.x, y: pos.y, team: foe }; }
+        }
+        // sometimes strike the economy instead of the throat
+        if (best && Math.random() < 0.35) {
+          const ext = state.buildings.filter((b) => !b.dead && b.team === best.team && b.def.kind === "extractor");
+          if (ext.length) { const e = pick(ext); return { x: e.x, y: e.y, team: best.team }; }
         }
         return best;
+      },
+      pickHarassTarget() {
+        const foes = state.teams.filter((tt) => tt !== this.team && !tt.eliminated);
+        if (!foes.length) return null;
+        const foe = pick(foes);
+        const fhq = teamHQ(foe);
+        const targets = [];
+        for (const b of state.buildings) if (!b.dead && b.team === foe && b.def.kind === "extractor") targets.push(b);
+        for (const n of state.nodes) if (n.team === foe && !n.rig) targets.push(n);
+        if (!targets.length) return fhq;
+        // hit the expansion farthest from their HQ — least defended
+        targets.sort((a, b) => (fhq ? d2(b.x, b.y, fhq.x, fhq.y) - d2(a.x, a.y, fhq.x, fhq.y) : 0));
+        return targets[0];
       },
       buildExtractor(t, hq, kind) {
         let best = null, bd = Infinity;
@@ -1497,7 +1819,14 @@
           const workers = teamUnits(t).filter((u) => u.def.worker);
           workers.sort((a, b) => d2(a.x, a.y, claim.x, claim.y) - d2(b.x, b.y, claim.x, claim.y));
           const worker = workers.find((u) => u.state !== "claim" || u.node !== claim) || workers[0];
-          if (worker) orderClaim([worker], claim);
+          if (worker) {
+            orderClaim([worker], claim);
+            // escort distant expansion claims so they actually survive
+            if (this.diff.harass && d2(hq.x, hq.y, claim.x, claim.y) > 800 * 800) {
+              const guards = teamMilitary(t).filter((u) => u.aiRole === "defend").slice(0, 2);
+              if (guards.length) orderMove(guards, claim.x, claim.y, true);
+            }
+          }
         }
         return null;
       },
@@ -1505,19 +1834,24 @@
         const def = t.faction.buildings[key];
         if (!canAfford(t, def.cost)) return null;
         for (let i = 0; i < 24; i++) {
-          const a = rand(0, TAU), d = rand(hq.def.r + def.r + 20, 220);
+          const a = rand(0, TAU), d = rand(hq.def.r + def.r + 20, 250);
           const x = hq.x + Math.cos(a) * d, y = hq.y + Math.sin(a) * d;
           if (canPlace(t, def, x, y, null)) return placeBuilding(t, key, x, y);
         }
         return null;
       },
-      buildTurret(t, hq) {
+      buildTurret(t) {
         const def = t.faction.buildings.turret;
         if (!canAfford(t, def.cost)) return null;
-        const toC = Math.atan2(CENTER.y - hq.y, CENTER.x - hq.x);
+        // anchor turrets across the base AND expansions so defense spreads out
+        const anchors = teamBuildings(t).filter((b) => b.built && b.def.kind !== "turret");
+        const hq = teamHQ(t);
+        const anchor = (Math.random() < 0.5 ? hq : pick(anchors)) || hq;
+        if (!anchor) return null;
+        const toC = Math.atan2(CENTER.y - anchor.y, CENTER.x - anchor.x);
         for (let i = 0; i < 20; i++) {
-          const a = toC + rand(-0.9, 0.9), d = rand(120, 230);
-          const x = hq.x + Math.cos(a) * d, y = hq.y + Math.sin(a) * d;
+          const a = toC + rand(-1.1, 1.1), d = rand(90, 230);
+          const x = anchor.x + Math.cos(a) * d, y = anchor.y + Math.sin(a) * d;
           if (canPlace(t, def, x, y, null)) return placeBuilding(t, "turret", x, y);
         }
         return null;
@@ -1527,11 +1861,91 @@
   }
 
   /* ==================================================
+     13b. VISION + SKIRMISH OPTIONS (fog when mapReveal is false)
+     ================================================== */
+  function fogActive() {
+    return !state.opts.mapReveal && (state.phase === "playing" || state.phase === "over");
+  }
+  function menuMapHidden() {
+    return (state.phase === "menu" || state.phase === "select") && !state.opts.mapReveal;
+  }
+  function refreshVision() {
+    const pt = playerTeam();
+    state.vision = [];
+    if (!fogActive() || !pt) return;
+    for (const u of state.units) {
+      if (u.dead || u.team !== pt) continue;
+      const r = u.def.scout ? VISION.scout : u.def.worker ? VISION.worker : VISION.combat;
+      state.vision.push({ x: u.x, y: u.y, r, kind: u.def.scout ? "scout" : "unit" });
+    }
+    for (const b of state.buildings) {
+      if (b.dead || b.team !== pt) continue;
+      state.vision.push({ x: b.x, y: b.y, r: b.def.kind === "hq" ? VISION.hq : VISION.building, kind: "building" });
+    }
+    for (const n of state.nodes) {
+      if (isNodeClaimedBy(n, pt)) {
+        state.vision.push({ x: n.x, y: n.y, r: VISION.claimedNode, kind: "node" });
+      } else if (n.claimTeam === pt && n.claimProgress > 0) {
+        state.vision.push({ x: n.x, y: n.y, r: VISION.claimingNode, kind: "claim" });
+      }
+    }
+  }
+  function isVisibleToPlayer(x, y, extra = 0) {
+    if (!fogActive()) return true;
+    if (!playerTeam()) return true;
+    for (const s of state.vision) {
+      const rr = s.r + extra;
+      if (d2(x, y, s.x, s.y) <= rr * rr) return true;
+    }
+    return false;
+  }
+  function thingVisibleToPlayer(o) {
+    if (!fogActive()) return true;
+    if (o.team === playerTeam()) return true;
+    const r = o.def ? o.def.r : (o.r || 12);
+    return isVisibleToPlayer(o.x, o.y, r + 18);
+  }
+
+  function loadPersistedOpts() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(OPTS_STORE) || "null");
+      if (!saved || typeof saved !== "object") return;
+      if (saved.enemies >= 1 && saved.enemies <= 3) state.opts.enemies = saved.enemies;
+      if (AI_DIFFICULTY[saved.difficulty]) state.opts.difficulty = saved.difficulty;
+      if (typeof saved.mapReveal === "boolean") state.opts.mapReveal = saved.mapReveal;
+    } catch (_) {}
+  }
+  function persistOpts() {
+    try { localStorage.setItem(OPTS_STORE, JSON.stringify(state.opts)); } catch (_) {}
+  }
+  function optSeg(opt, entries) {
+    return entries.map(([v, label]) =>
+      `<button type="button" data-v="${v}" class="${String(state.opts[opt]) === String(v) ? "is-on" : ""}">${label}</button>`).join("");
+  }
+  function bindOptSegs(root, onChange) {
+    root.querySelectorAll(".tls-seg").forEach((segEl) => {
+      segEl.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-v]");
+        if (!b) return;
+        Sfx.click();
+        const opt = segEl.dataset.opt;
+        state.opts[opt] = opt === "enemies" ? Number(b.dataset.v)
+          : opt === "mapReveal" ? b.dataset.v === "true"
+            : b.dataset.v;
+        segEl.querySelectorAll("button").forEach((x) => x.classList.toggle("is-on", x === b));
+        persistOpts();
+        if (onChange) onChange();
+      });
+    });
+  }
+
+  /* ==================================================
      14. MAIN UPDATE
      ================================================== */
   const keys = {};
   function update(dt) {
     state.time += dt;
+    navQuota = 8;
 
     // camera: keyboard + edge scroll
     let cx = 0, cy = 0;
@@ -1561,8 +1975,6 @@
     state.units = state.units.filter((u) => !u.dead);
     state.buildings = state.buildings.filter((b) => !b.dead);
 
-    refreshVision();
-    pruneHiddenSelection();
     updateGhost();
   }
 
@@ -1630,7 +2042,7 @@
   }
 
   function setSelection(arr) {
-    state.selection = arr.filter((o) => o && !o.dead && thingVisibleToPlayer(o));
+    state.selection = arr;
     state.selVersion++;
   }
 
@@ -1646,6 +2058,11 @@
     }
     if (!units.length) return;
     const hit = thingAt(wx, wy);
+    if (hit && hit.kind === "rock") {
+      orderAttack(units, hit);
+      addCommandFx("breach", hit.x, hit.y);
+      return;
+    }
     if (hit && (hit.kind === "unit" || hit.kind === "building")) {
       if (hit.team !== playerTeam()) {
         orderAttack(units, hit);
@@ -1742,9 +2159,9 @@
       const units = selUnits().filter((u) => !u.def.worker);
       if (units.length) {
         const hit = thingAt(mouse.wx, mouse.wy);
-        if (hit && (hit.kind === "unit" || hit.kind === "building") && hit.team !== playerTeam()) {
+        if (hit && ((hit.kind === "unit" || hit.kind === "building") && hit.team !== playerTeam() || hit.kind === "rock")) {
           orderAttack(units, hit);
-          addCommandFx("attack", hit.x, hit.y);
+          addCommandFx(hit.kind === "rock" ? "breach" : "attack", hit.x, hit.y);
         } else {
           orderMove(units, mouse.wx, mouse.wy, true);
           addCommandFx("attackMove", mouse.wx, mouse.wy);
@@ -1843,6 +2260,13 @@
   function tapCommand(wx, wy) {
     const hit = thingAt(wx, wy);
     const units = selUnits();
+    if (hit && hit.kind === "rock") {
+      if (units.length) {
+        orderAttack(units, hit);
+        addCommandFx("breach", hit.x, hit.y);
+      }
+      return;
+    }
     if (hit && (hit.kind === "unit" || hit.kind === "building") && hit.team === playerTeam()) {
       const workers = units.filter((u) => u.def.worker);
       if (workers.length && isFriendlyRepairTarget(hit)) {
@@ -2016,7 +2440,6 @@
       let rows = `<div>${hpLine(o)}</div>`;
       if (o.kind === "unit" && o.def.dmg && !o.def.worker) rows += `<div>DMG ${o.def.dmg} · range ${o.def.range}</div>`;
       if (o.kind === "unit" && o.def.worker) rows += `<div>Carries ${o.def.carry} Matter · repairs ${o.def.repair}/s</div>`;
-      if (o.kind === "unit" && o.def.scout) rows += `<div>Recon vision ${VISION.scout}</div>`;
       if (o.kind === "building" && !o.built) rows += `<div>Constructing — ${Math.floor(o.progress * 100)}%</div>`;
       if (o.kind === "building" && o.built && o.def.kind === "extractor" && o.node) {
         const rk = NODE_RES[o.node.kind];
@@ -2197,89 +2620,98 @@
         t.beginPath(); t.moveTo(v[0], v[1]); t.quadraticCurveTo(v[2], v[3], v[4], v[5]); t.stroke();
       });
     }
-    // rocks
-    for (const o of state.obstacles) {
-      const pts = [];
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * TAU + o.seed;
-        const rr = o.r * (0.82 + 0.22 * Math.sin(o.seed * 3 + i * 2.1));
-        pts.push([o.x + Math.cos(a) * rr, o.y + Math.sin(a) * rr]);
+    // mountains — painted into the ground so they blend with the battlefield art
+    const LX = -0.55, LY = -0.83; // light from the northwest
+    const rockPoly = (o, scale, ox = 0, oy = 0) => {
+      t.beginPath();
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * TAU + o.seed;
+        const rr = o.r * scale * (0.84 + 0.2 * Math.sin(o.seed * 3 + i * 2.3));
+        const px = o.x + ox + Math.cos(a) * rr, py = o.y + oy + Math.sin(a) * rr;
+        i ? t.lineTo(px, py) : t.moveTo(px, py);
       }
-      const rockPath = () => {
+      t.closePath();
+    };
+    for (const range of state.mountains) {
+      // scree skirt first so overlapping peaks merge into one massif
+      for (const o of range.circles) {
+        const grd = t.createRadialGradient(o.x, o.y, o.r * 0.4, o.x, o.y, o.r * 1.65);
+        grd.addColorStop(0, "rgba(7,9,16,0.5)");
+        grd.addColorStop(1, "rgba(7,9,16,0)");
+        t.fillStyle = grd;
+        t.beginPath(); t.arc(o.x, o.y, o.r * 1.65, 0, TAU); t.fill();
+      }
+    }
+    for (const range of state.mountains) {
+      // dark rock mass
+      for (const o of range.circles) {
+        t.fillStyle = "#151b29";
+        rockPoly(o, 1.04);
+        t.fill();
+        t.strokeStyle = "rgba(140,158,200,0.13)";
+        t.lineWidth = 2;
+        t.stroke();
+      }
+      // shaded SE face
+      for (const o of range.circles) {
+        t.fillStyle = "rgba(0,0,0,0.4)";
         t.beginPath();
-        pts.forEach(([px, py], i) => (i ? t.lineTo(px, py) : t.moveTo(px, py)));
-        t.closePath();
-      };
-      t.save();
-      t.shadowColor = "rgba(0,0,0,0.64)";
-      t.shadowBlur = 18;
-      t.shadowOffsetY = 10;
-      const rockGrd = t.createRadialGradient(o.x - o.r * 0.24, o.y - o.r * 0.34, 2, o.x, o.y, o.r * 1.35);
-      rockGrd.addColorStop(0, "#3a4158");
-      rockGrd.addColorStop(0.55, "#202635");
-      rockGrd.addColorStop(1, "#0d111c");
-      t.fillStyle = rockGrd;
-      rockPath(); t.fill();
-      t.restore();
-      t.strokeStyle = "rgba(255,214,91,0.42)";
-      t.lineWidth = 4;
-      rockPath(); t.stroke();
-      t.strokeStyle = "rgba(225,235,255,0.34)";
-      t.lineWidth = 1.6;
-      rockPath(); t.stroke();
-      t.fillStyle = "rgba(0,0,0,0.3)";
-      t.beginPath(); t.ellipse(o.x + 4, o.y + 6, o.r * 0.7, o.r * 0.4, 0.4, 0, TAU); t.fill();
-      t.strokeStyle = "rgba(205,220,255,0.26)";
-      t.lineWidth = 1.2;
-      for (let i = 0; i < 3; i++) {
-        const a = o.seed + i * 1.85;
+        t.ellipse(o.x - LX * o.r * 0.36, o.y - LY * o.r * 0.36, o.r * 0.7, o.r * 0.5, 0.5, 0, TAU);
+        t.fill();
+      }
+      // rising slopes toward each peak
+      for (const o of range.circles) {
+        t.fillStyle = "#242e42";
+        rockPoly(o, 0.64, LX * o.r * 0.1, LY * o.r * 0.14);
+        t.fill();
+        t.fillStyle = "#38455f";
+        rockPoly(o, 0.36, LX * o.r * 0.16, LY * o.r * 0.24);
+        t.fill();
+        // crevice lines running down from the peak
+        t.strokeStyle = "rgba(0,0,0,0.38)";
+        t.lineWidth = 1.6;
+        for (let i = 0; i < 3; i++) {
+          const a = o.seed + i * 2.2;
+          t.beginPath();
+          t.moveTo(o.x + LX * o.r * 0.16, o.y + LY * o.r * 0.24);
+          t.lineTo(o.x + Math.cos(a) * o.r * 0.92, o.y + Math.sin(a) * o.r * 0.92);
+          t.stroke();
+        }
+        // snow cap on the tallest peaks
+        if (o.r >= 50) {
+          t.fillStyle = "rgba(176,192,214,0.85)";
+          rockPoly(o, 0.18, LX * o.r * 0.18, LY * o.r * 0.28);
+          t.fill();
+        }
+      }
+      // crest line along the ridge spine
+      if (range.circles.length > 1) {
+        t.strokeStyle = "rgba(110,128,168,0.4)";
+        t.lineWidth = 2.4;
+        t.lineJoin = "round";
         t.beginPath();
-        t.moveTo(o.x + Math.cos(a) * o.r * 0.18, o.y + Math.sin(a) * o.r * 0.18);
-        t.lineTo(o.x + Math.cos(a + 0.55) * o.r * 0.64, o.y + Math.sin(a + 0.55) * o.r * 0.48);
+        range.circles.forEach((o, i) => {
+          const px = o.x + LX * o.r * 0.16, py = o.y + LY * o.r * 0.24;
+          i ? t.lineTo(px, py) : t.moveTo(px, py);
+        });
         t.stroke();
       }
     }
   }
 
-  function render() {
-    const cam = state.cam;
-    ctx.clearRect(0, 0, W, H);
-    refreshVision();
-    if (terrain) ctx.drawImage(terrain, cam.x, cam.y, W, H, 0, 0, W, H);
-
-    // signal pulse rings from the scar center
-    const pulse = (state.vt % 5) / 5;
-    ctx.strokeStyle = `rgba(176,108,255,${0.28 * (1 - pulse)})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(CENTER.x - cam.x, CENTER.y - cam.y, 30 + pulse * 420, 0, TAU);
-    ctx.stroke();
-
-    renderDecals(cam);
-    renderNodes(cam);
-    if (state.placing) renderUplinkRadii(cam);
-    renderSelectionRings(cam);
-    renderEntities(cam);
-    renderBeams(cam);
-    renderProjectiles(cam);
-    renderParticles(cam);
-    renderBarsAndRanges(cam);
-    renderFog(cam);
-    renderCommandFeedback(cam);
-    if (dragging && dragStart) {
-      ctx.strokeStyle = "rgba(140,240,180,0.9)";
-      ctx.lineWidth = 1.4;
-      ctx.setLineDash([5, 4]);
-      ctx.strokeRect(dragStart.x, dragStart.y, mouse.cx - dragStart.x, mouse.cy - dragStart.y);
-      ctx.setLineDash([]);
-    }
-    if (state.placing) renderGhost(cam);
-    renderVignette();
-    if (state.phase === "playing" || state.phase === "over") renderMinimap();
+  function renderMenuBackdrop() {
+    ctx.fillStyle = "#070610";
+    ctx.fillRect(0, 0, W, H);
+    const pulse = (state.vt % 6) / 6;
+    const grd = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, H * 0.72);
+    grd.addColorStop(0, `rgba(176,108,255,${0.16 * (1 - pulse)})`);
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
   }
 
   function renderFog(cam) {
-    if (state.phase !== "playing" && state.phase !== "over") return;
+    if (!fogActive()) return;
     if (!fogCanvas) {
       fogCanvas = document.createElement("canvas");
       fogCanvas.width = W;
@@ -2305,23 +2737,53 @@
     }
     fogCtx.globalCompositeOperation = "source-over";
     ctx.drawImage(fogCanvas, 0, 0);
+  }
 
-    ctx.save();
-    ctx.strokeStyle = "rgba(125,243,255,0.08)";
-    ctx.lineWidth = 1;
-    for (const s of state.vision) {
-      const x = s.x - cam.x, y = s.y - cam.y, r = s.r;
-      if (x < -r || y < -r || x > W + r || y > H + r) continue;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, TAU);
-      ctx.stroke();
+  function render() {
+    const cam = state.cam;
+    ctx.clearRect(0, 0, W, H);
+    refreshVision();
+    if (menuMapHidden()) {
+      renderMenuBackdrop();
+      renderVignette();
+      return;
     }
-    ctx.restore();
+    if (terrain) ctx.drawImage(terrain, cam.x, cam.y, W, H, 0, 0, W, H);
+
+    // signal pulse rings from the scar center
+    const pulse = (state.vt % 5) / 5;
+    ctx.strokeStyle = `rgba(176,108,255,${0.28 * (1 - pulse)})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(CENTER.x - cam.x, CENTER.y - cam.y, 30 + pulse * 420, 0, TAU);
+    ctx.stroke();
+
+    renderDecals(cam);
+    renderNodes(cam);
+    renderRocks(cam);
+    if (state.placing) renderUplinkRadii(cam);
+    renderSelectionRings(cam);
+    renderEntities(cam);
+    renderBeams(cam);
+    renderProjectiles(cam);
+    renderParticles(cam);
+    renderBarsAndRanges(cam);
+    renderCommandFeedback(cam);
+    if (dragging && dragStart) {
+      ctx.strokeStyle = "rgba(140,240,180,0.9)";
+      ctx.lineWidth = 1.4;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeRect(dragStart.x, dragStart.y, mouse.cx - dragStart.x, mouse.cy - dragStart.y);
+      ctx.setLineDash([]);
+    }
+    if (state.placing) renderGhost(cam);
+    renderFog(cam);
+    renderVignette();
+    if (state.phase === "playing" || state.phase === "over") renderMinimap();
   }
 
   function renderDecals(cam) {
     for (const d of state.decals) {
-      if (!isVisibleToPlayer(d.x, d.y, d.r)) continue;
       ctx.fillStyle = `rgba(6,6,10,${Math.min(0.55, d.ttl / 20)})`;
       ctx.beginPath();
       ctx.ellipse(d.x - cam.x, d.y - cam.y, d.r * 1.1, d.r * 0.8, 0, 0, TAU);
@@ -2331,12 +2793,14 @@
 
   function renderNodes(cam) {
     for (const n of state.nodes) {
-      if (!thingVisibleToPlayer(n)) continue;
+      if (!isVisibleToPlayer(n.x, n.y, n.r + 8)) continue;
       const x = n.x - cam.x, y = n.y - cam.y;
       if (x < -60 || y < -60 || x > W + 60 || y > H + 60) continue;
+      const dim = false;
       const c = NODE_COLORS[n.kind];
       const depleted = n.amount !== Infinity && n.amount <= 0;
-      const glow = depleted ? 0.05 : 0.16 + 0.07 * Math.sin(state.vt * 2 + n.seed);
+      const glow = dim ? 0.04 : depleted ? 0.05 : 0.16 + 0.07 * Math.sin(state.vt * 2 + n.seed);
+      if (dim) ctx.globalAlpha = 0.42;
       const grd = ctx.createRadialGradient(x, y, 2, x, y, n.r * 2.2);
       grd.addColorStop(0, c + Math.floor(glow * 255).toString(16).padStart(2, "0"));
       grd.addColorStop(1, "transparent");
@@ -2421,6 +2885,58 @@
           ctx.fillRect(x - w / 2, by, w * clamp(n.hp / n.maxHp, 0, 1), 4);
         }
       }
+      if (dim) ctx.globalAlpha = 1;
+    }
+  }
+
+  function renderRocks(cam) {
+    for (const rk of state.rocks) {
+      if (rk.dead) continue;
+      const x = rk.x - cam.x, y = rk.y - cam.y;
+      if (x < -80 || y < -80 || x > W + 80 || y > H + 80) continue;
+      const frac = clamp(rk.hp / rk.maxHp, 0, 1);
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath(); ctx.ellipse(x + 3, y + 5, rk.r * 1.05, rk.r * 0.72, 0, 0, TAU); ctx.fill();
+      // warm sand-toned boulder cluster — visually distinct from cold mountains
+      for (let i = 0; i < 4; i++) {
+        const a = rk.seed + i * 1.9;
+        const lx = x + Math.cos(a) * rk.r * 0.36;
+        const ly = y + Math.sin(a) * rk.r * 0.32;
+        const lr = rk.r * (0.52 + (i % 2) * 0.22);
+        ctx.fillStyle = i % 2 ? "#3e372a" : "#514734";
+        ctx.beginPath();
+        for (let k = 0; k < 7; k++) {
+          const b = (k / 7) * TAU + a;
+          const rr = lr * (0.8 + 0.24 * Math.sin(a * 2 + k * 2.1));
+          const px = lx + Math.cos(b) * rr, py = ly + Math.sin(b) * rr;
+          k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(226,199,143,0.3)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(x - rk.r * 0.18, y - rk.r * 0.22, rk.r * 0.55, Math.PI * 0.85, Math.PI * 1.7); ctx.stroke();
+      // cracks spread as it takes damage
+      if (frac < 0.98) {
+        ctx.strokeStyle = "rgba(8,6,3,0.85)";
+        ctx.lineWidth = 1.4;
+        const cracks = frac < 0.34 ? 4 : frac < 0.67 ? 2 : 1;
+        for (let i = 0; i < cracks; i++) {
+          const a = rk.seed * 2 + i * 2.1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + Math.cos(a) * rk.r * 0.7, y + Math.sin(a) * rk.r * 0.7);
+          ctx.lineTo(x + Math.cos(a + 0.5) * rk.r * 0.98, y + Math.sin(a + 0.5) * rk.r * 0.98);
+          ctx.stroke();
+        }
+      }
+      if (state.time - rk.lastHit < 3) {
+        const w = Math.max(26, rk.r * 1.6);
+        ctx.fillStyle = "rgba(6,8,14,0.82)";
+        ctx.fillRect(x - w / 2, y - rk.r - 12, w, 4);
+        ctx.fillStyle = "#e8c37a";
+        ctx.fillRect(x - w / 2, y - rk.r - 12, w * frac, 4);
+      }
     }
   }
 
@@ -2440,7 +2956,6 @@
   function renderSelectionRings(cam) {
     for (const o of state.selection) {
       if (o.dead) continue;
-      if (!thingVisibleToPlayer(o)) continue;
       const r = o.def.r + 5;
       ctx.strokeStyle = o.team === playerTeam() ? "rgba(140,240,180,0.85)" : "rgba(255,120,120,0.8)";
       ctx.lineWidth = 1.6;
@@ -2465,10 +2980,11 @@
 
   function renderEntities(cam) {
     const drawables = [];
-    for (const b of state.buildings) if (!b.dead && thingVisibleToPlayer(b)) drawables.push(b);
-    for (const u of state.units) if (!u.dead && thingVisibleToPlayer(u)) drawables.push(u);
+    for (const b of state.buildings) if (!b.dead) drawables.push(b);
+    for (const u of state.units) if (!u.dead) drawables.push(u);
     drawables.sort((a, b2) => a.y - b2.y);
     for (const o of drawables) {
+      if (!thingVisibleToPlayer(o)) continue;
       const x = o.x - cam.x, y = o.y - cam.y;
       const pad = o.kind === "building" ? o.def.r + 30 : 40;
       if (x < -pad || y < -pad || x > W + pad || y > H + pad) continue;
@@ -2503,7 +3019,7 @@
 
   function unitAtlasSize(u) {
     const k = u.def.key;
-    const mult = k === "heavy" ? 7.1 : k === "ranged" ? 7.3 : k === "worker" ? 7.2 : k === "scout" ? 6.4 : 7.2;
+    const mult = k === "heavy" ? 7.1 : k === "ranged" ? 7.3 : k === "worker" ? 7.2 : 7.2;
     return u.def.r * mult;
   }
 
@@ -2521,27 +3037,6 @@
     ctx.strokeStyle = "rgba(230,255,244,0.75)";
     ctx.lineWidth = 1.2;
     ctx.stroke();
-  }
-
-  function drawScoutBadge(r, color) {
-    const pulse = 0.45 + 0.35 * Math.sin(state.vt * 5);
-    ctx.save();
-    ctx.rotate(-state.vt * 0.8);
-    ctx.strokeStyle = color;
-    ctx.globalAlpha = 0.76;
-    ctx.lineWidth = 1.35;
-    ctx.beginPath();
-    ctx.arc(0, 0, r * (1.35 + pulse * 0.28), -0.2, 1.35);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, r * 1.72, Math.PI + 0.3, Math.PI * 1.72);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, -r * 1.62, Math.max(2.2, r * 0.25), 0, TAU);
-    ctx.fill();
-    ctx.restore();
   }
 
   /* ---------- unit art ---------- */
@@ -2568,17 +3063,13 @@
     const r = u.def.r;
     ctx.shadowColor = f.color;
     ctx.shadowBlur = u.def.key === "heavy" ? 16 : 12;
-    const atlasFaceOffset = UNIT_ATLAS_FACE_OFFSET[u.def.art] || 0;
-    if (atlasFaceOffset) ctx.rotate(atlasFaceOffset);
     const drewAtlas = drawAtlasCell(Art.units, UNIT_ATLAS, u.def.art, unitAtlasSize(u), 0, AtlasBounds.units);
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
     if (drewAtlas) {
-      if (u.def.scout) drawScoutBadge(r, f.color2);
       if (u.carry > 0) drawCarryBadge(r);
       return;
     }
-    if (atlasFaceOffset) ctx.rotate(-atlasFaceOffset);
     switch (u.def.art) {
       case "h-worker": {
         ctx.fillStyle = f.dark;
@@ -3060,7 +3551,6 @@
 
   function renderBeams(cam) {
     for (const b of state.beams) {
-      if (!isVisibleToPlayer(b.x1, b.y1, 24) && !isVisibleToPlayer(b.x2, b.y2, 24)) continue;
       const a = b.ttl / 0.14;
       ctx.lineWidth = 2.2;
       ctx.strokeStyle = b.color;
@@ -3088,7 +3578,6 @@
 
   function renderProjectiles(cam) {
     for (const p of state.projectiles) {
-      if (!isVisibleToPlayer(p.x, p.y, 24) && !isVisibleToPlayer(p.tx, p.ty, 24)) continue;
       const x = p.x - cam.x, y = p.y - cam.y;
       if (p.type === "rail") {
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy) || 1;
@@ -3109,7 +3598,6 @@
 
   function renderParticles(cam) {
     for (const p of state.particles) {
-      if (!isVisibleToPlayer(p.x, p.y, p.size || 10)) continue;
       const a = clamp(p.ttl / p.max, 0, 1);
       const x = p.x - cam.x, y = p.y - cam.y;
       if (p.type === "ring") {
@@ -3134,7 +3622,6 @@
     const showAll = state.selection.length > 0;
     for (const o of [...state.units, ...state.buildings]) {
       if (o.dead) continue;
-      if (!thingVisibleToPlayer(o)) continue;
       const sel = state.selection.includes(o);
       const hurt = o.hp < o.maxHp || (o.maxShield > 0 && o.shield < o.maxShield);
       const recent = state.time - o.lastHit < 3;
@@ -3254,7 +3741,7 @@
     ctx.arc(0, 0, 12, 0, TAU);
     ctx.fill();
 
-    if (type === "attack" || type === "attackMove") {
+    if (type === "attack" || type === "attackMove" || type === "breach") {
       ctx.strokeStyle = cfg.color;
       ctx.lineWidth = 2.4;
       ctx.beginPath();
@@ -3407,28 +3894,6 @@
     ctx.strokeStyle = "rgba(140,160,210,0.5)";
     ctx.lineWidth = 1;
     ctx.strokeRect(MM.x - 3, MM.y - 3, MM.w + 6, MM.h + 6);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(MM.x, MM.y, MM.w, MM.h);
-    ctx.clip();
-    ctx.fillStyle = "rgba(125,243,255,0.08)";
-    for (const s of state.vision) {
-      ctx.beginPath();
-      ctx.arc(MM.x + s.x * sx, MM.y + s.y * sy, Math.max(3, s.r * Math.max(sx, sy)), 0, TAU);
-      ctx.fill();
-    }
-    if (!state.vision.length) {
-      ctx.restore();
-      return;
-    }
-    if (state.vision.length) {
-      ctx.beginPath();
-      for (const s of state.vision) {
-        ctx.moveTo(MM.x + s.x * sx + Math.max(3, s.r * Math.max(sx, sy)), MM.y + s.y * sy);
-        ctx.arc(MM.x + s.x * sx, MM.y + s.y * sy, Math.max(3, s.r * Math.max(sx, sy)), 0, TAU);
-      }
-      ctx.clip();
-    }
     // scar hint
     ctx.strokeStyle = "rgba(176,108,255,0.5)";
     ctx.beginPath();
@@ -3437,8 +3902,20 @@
       i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
     });
     ctx.stroke();
+    // terrain: mountains + destructible rock barriers
+    ctx.fillStyle = "#2b3346";
+    for (const o of state.obstacles) {
+      const s = Math.max(2, o.r * sx * 2);
+      ctx.fillRect(MM.x + o.x * sx - s / 2, MM.y + o.y * sy - s / 2, s, s);
+    }
+    ctx.fillStyle = "#5a4e37";
+    for (const rk of state.rocks) {
+      if (rk.dead) continue;
+      const s = Math.max(2, rk.r * sx * 2);
+      ctx.fillRect(MM.x + rk.x * sx - s / 2, MM.y + rk.y * sy - s / 2, s, s);
+    }
     for (const n of state.nodes) {
-      if (!thingVisibleToPlayer(n)) continue;
+      if (!isVisibleToPlayer(n.x, n.y, n.r + 8)) continue;
       const nx = MM.x + n.x * sx, ny = MM.y + n.y * sy;
       ctx.fillStyle = n.amount !== Infinity && n.amount <= 0 ? "#2c3440" : NODE_COLORS[n.kind];
       ctx.fillRect(nx - 1.5, ny - 1.5, 3, 3);
@@ -3461,9 +3938,8 @@
       ctx.fillStyle = u.team.faction.color;
       ctx.fillRect(MM.x + u.x * sx - 1, MM.y + u.y * sy - 1, 2, 2);
     }
-    ctx.restore();
     // alarm ping
-    if (state.time - state.alarmT < 3 && state.alarmPos && isVisibleToPlayer(state.alarmPos.x, state.alarmPos.y, 80)) {
+    if (state.time - state.alarmT < 3 && state.alarmPos) {
       const t = (state.time - state.alarmT) % 1;
       ctx.strokeStyle = `rgba(255,80,80,${1 - t})`;
       ctx.lineWidth = 1.5;
@@ -3504,18 +3980,31 @@
         <h2 class="tls-boot__title">THE LAST SIGNAL</h2>
         <p class="tls-boot__body">Sixty-two hours ago, every deep array on Earth turned toward the same coordinates. Not the sky &mdash; the crust. Four kilometers beneath the excavation site they call <em>the Hollow</em>, something old finished counting. And began to speak.</p>
         <p class="tls-boot__body">Three powers now hold the excavation line. Each of them heard a different message. Each of them is certain.</p>
+        <div class="tls-opts">
+          <div class="tls-opt"><span class="tls-opt__label">MAP</span>
+            <div class="tls-seg" data-opt="mapReveal">${optSeg("mapReveal", [["true", "Full reveal"], ["false", "Fog of war"]])}</div>
+          </div>
+        </div>
         <button class="btn btn--primary" id="tls-begin">Answer the Signal</button>
-        <div class="tls-boot__foot">RTS-lite skirmish &middot; one map &middot; three factions</div>
+        <div class="tls-boot__foot">RTS-lite skirmish &middot; three factions &middot; 1&ndash;3 enemy commands &middot; 3 AI doctrines</div>
       </div>`;
     showOverlay(true);
+    bindOptSegs(screenEl);
     document.getElementById("tls-begin").addEventListener("click", () => { Sfx.click(); showSelect(); });
+  }
+
+  // enemy factions: the two rivals first (shuffled), a random third if needed
+  function rollEnemyFactions(playerFid, count) {
+    const shuffled = FACTION_IDS.filter((x) => x !== playerFid).sort(() => Math.random() - 0.5);
+    const list = [];
+    for (let i = 0; i < count; i++) list.push(i < 2 ? shuffled[i] : pick(FACTION_IDS));
+    return list;
   }
 
   function showSelect() {
     state.phase = "select";
     state.pick = null;
-    const others = (fid) => FACTION_IDS.filter((x) => x !== fid);
-    const roll = Math.random();
+    state.pendingEnemies = null;
     const cards = FACTION_IDS.map((fid) => {
       const f = FACTIONS[fid];
       return `
@@ -3534,6 +4023,17 @@
         <div class="tls-boot__tag">COMMAND ASSIGNMENT</div>
         <h2 class="tls-select__title">Choose your allegiance</h2>
         <div class="tls-fgrid">${cards}</div>
+        <div class="tls-opts">
+          <div class="tls-opt"><span class="tls-opt__label">OPPOSITION</span>
+            <div class="tls-seg" data-opt="enemies">${optSeg("enemies", [[1, "1 enemy"], [2, "2 enemies"], [3, "3 enemies"]])}</div>
+          </div>
+          <div class="tls-opt"><span class="tls-opt__label">ENEMY AI</span>
+            <div class="tls-seg" data-opt="difficulty">${optSeg("difficulty", [["easy", "Easy"], ["normal", "Normal"], ["hard", "Hard"]])}</div>
+          </div>
+          <div class="tls-opt"><span class="tls-opt__label">MAP</span>
+            <div class="tls-seg" data-opt="mapReveal">${optSeg("mapReveal", [["true", "Full reveal"], ["false", "Fog of war"]])}</div>
+          </div>
+        </div>
         <div class="tls-brief" id="tls-brief" hidden>
           <div class="tls-brief__text" id="tls-brief-text"></div>
           <button class="btn btn--primary" id="tls-deploy">Deploy to the Hollow</button>
@@ -3541,26 +4041,39 @@
         <button class="btn btn--ghost tls-backbtn" id="tls-back">Back</button>
       </div>`;
     showOverlay(true);
+
+    const refreshBrief = () => {
+      if (!state.pick) return;
+      state.pendingEnemies = rollEnemyFactions(state.pick, state.opts.enemies);
+      const names = state.pendingEnemies.map((fid) => `<b style="color:${FACTIONS[fid].color}">${FACTIONS[fid].name}</b>`).join(", ");
+      const diff = AI_DIFFICULTY[state.opts.difficulty] || AI_DIFFICULTY.normal;
+      document.getElementById("tls-brief-text").innerHTML =
+        `<strong>MISSION BRIEF &mdash; EXCAVATION SITE 9, &ldquo;THE HOLLOW&rdquo;</strong><br/>` +
+        `Mountain walls carve the Hollow into lanes &mdash; go around them, or blast the rockslides open. ` +
+        (state.opts.enemies > 1
+          ? `${state.opts.enemies} rival commands hold the far ridges: ${names}. Every commander fights for themselves.`
+          : `${names} forces hold the far ridge.`) +
+        ` Enemy doctrine: <b>${diff.label}</b>. ` +
+        (state.opts.mapReveal
+          ? "Full map intel — every ridge and fracture is visible from the start."
+          : "Fog of war — only your units and structures reveal the Hollow.") +
+        ` Raise your economy, control the Signal fractures, and destroy every enemy command structure.`;
+      document.getElementById("tls-brief").hidden = false;
+    };
+
     screenEl.querySelectorAll(".tls-fcard").forEach((c) => {
       c.addEventListener("click", () => {
         Sfx.click();
         state.pick = c.dataset.f;
-        const list = others(state.pick);
-        state.pendingEnemy = list[Math.floor(roll * list.length)];
         screenEl.querySelectorAll(".tls-fcard").forEach((x) => x.classList.toggle("is-picked", x === c));
-        const brief = document.getElementById("tls-brief");
-        const enemy = FACTIONS[state.pendingEnemy];
-        document.getElementById("tls-brief-text").innerHTML =
-          `<strong>MISSION BRIEF &mdash; EXCAVATION SITE 9, &ldquo;THE HOLLOW&rdquo;</strong><br/>` +
-          `The scar where the Signal runs closest to the surface. <b style="color:${enemy.color}">${enemy.name}</b> forces hold the far ridge. ` +
-          `Raise your economy, control the Signal fractures along the fault, and destroy their command structure before they destroy yours.`;
-        brief.hidden = false;
+        refreshBrief();
       });
     });
+    bindOptSegs(screenEl, refreshBrief);
     document.getElementById("tls-deploy").addEventListener("click", () => {
       if (!state.pick) return;
       Sfx.click();
-      startGame(state.pick, state.pendingEnemy);
+      startGame(state.pick, state.pendingEnemies || rollEnemyFactions(state.pick, state.opts.enemies), state.opts.difficulty);
     });
     document.getElementById("tls-back").addEventListener("click", () => { Sfx.click(); showMenu(); });
   }
@@ -3597,7 +4110,9 @@
     const f = pt.faction;
     let scoreLine = "";
     if (won) {
-      const score = Math.max(600, 15000 - Math.floor(state.time) * 15 + state.stats.kills * 25);
+      const diff = AI_DIFFICULTY[(state.setup && state.setup.difficulty) || "normal"];
+      const mult = diff.scoreMult * (1 + 0.4 * (((state.setup && state.setup.enemyCount) || 1) - 1));
+      const score = Math.max(600, Math.round((15000 - Math.floor(state.time) * 15 + state.stats.kills * 25) * mult));
       const high = api.recordScore(GAME_ID, score);
       state.best = Number(api.getHighScore(GAME_ID) || state.best || score);
       scoreLine = `<div class="tls-endstats">Score <strong>${score}</strong>${high ? " &middot; new personal best" : ""}</div>`;
@@ -3625,7 +4140,9 @@
   /* ==================================================
      21. GAME FLOW
      ================================================== */
-  function startGame(playerFid, enemyFid) {
+  function startGame(playerFid, enemyFids, diffKey) {
+    const diff = AI_DIFFICULTY[diffKey] || AI_DIFFICULTY.normal;
+    enemyFids = (Array.isArray(enemyFids) && enemyFids.length ? enemyFids : rollEnemyFactions(playerFid, 1)).slice(0, 3);
     // full reset
     state.units = [];
     state.buildings = [];
@@ -3644,14 +4161,18 @@
     state.stats = { kills: 0, losses: 0 };
     state.alarmT = -99;
     initWorld();
+    state.setup = { difficulty: diff.key, enemyCount: enemyFids.length, mapReveal: state.opts.mapReveal };
 
-    const pTeam = makeTeam(0, playerFid, false);
-    const aTeam = makeTeam(1, enemyFid, true);
-    state.teams = [pTeam, aTeam];
-    aTeam.ai = makeAI(aTeam);
+    const pTeam = makeTeam(0, playerFid, false, diff);
+    state.teams = [pTeam];
+    enemyFids.forEach((fid, i) => {
+      const et = makeTeam(i + 1, fid, true, diff);
+      et.ai = makeAI(et, diff);
+      state.teams.push(et);
+    });
 
-    state.teams.forEach((team, i) => {
-      const pos = HQ_POS[i];
+    state.teams.forEach((team) => {
+      const pos = HQ_POS[team.idx];
       const hq = makeBuilding(team, team.faction.buildings.hq, pos.x, pos.y, null, true);
       team.hqId = hq.id;
       const toC = Math.atan2(CENTER.y - pos.y, CENTER.x - pos.x);
@@ -3673,10 +4194,11 @@
 
     if (el.log) el.log.innerHTML = "";
     log("Uplink established. The Hollow is contested.");
+    if (!state.opts.mapReveal) log("Fog of war active — scout the ridges before you commit.");
     log("Claim resource nodes, rig vents, raise an army.");
     if (el.objective) {
-      const enemy = FACTIONS[enemyFid];
-      el.objective.innerHTML = `Destroy the <b style="color:${enemy.color}">${enemy.name}</b> command structure. Protect your own.`;
+      const names = enemyFids.map((fid) => `<b style="color:${FACTIONS[fid].color}">${FACTIONS[fid].name}</b>`).join(", ");
+      el.objective.innerHTML = `Destroy ${enemyFids.length > 1 ? "every enemy command structure" : "the enemy command structure"}: ${names}. Protect your own. Enemy AI: ${diff.label}.`;
     }
     const fchip = document.getElementById("tls-faction");
     if (fchip) {
@@ -3684,8 +4206,8 @@
       fchip.style.color = FACTIONS[playerFid].color;
     }
 
-    state.phase = "playing";
     refreshVision();
+    state.phase = "playing";
     showOverlay(false);
     renderActionsPanel();
     renderSelPanel();
@@ -3710,13 +4232,17 @@
   }
 
   initWorld();
+  loadPersistedOpts();
   state.best = Number(api.getHighScore(GAME_ID) || 0);
   showMenu();
   requestAnimationFrame(frame);
 
   window.__TLS = {
     get state() { return state; },
-    start: (f = "humans", e) => startGame(f, e || FACTION_IDS.filter((x) => x !== f)[Math.floor(Math.random() * 2)]),
+    start: (f = "humans", e, diffKey = "normal", count) => {
+      const enemies = Array.isArray(e) ? e : e ? [e] : rollEnemyFactions(f, count || 1);
+      startGame(f, enemies, diffKey);
+    },
     step(n = 60, dt = 1 / 60) {
       for (let i = 0; i < n; i++) {
         if (state.phase !== "playing" || state.paused) break;
@@ -3743,7 +4269,8 @@
     damage(id, amount = 9999, teamIdx = 1) {
       const target = state.units.find((u) => u.id === id)
         || state.buildings.find((b) => b.id === id)
-        || state.nodes.find((n) => n.id === id);
+        || state.nodes.find((n) => n.id === id)
+        || state.rocks.find((r) => r.id === id);
       const t = state.teams[teamIdx] || state.teams[0];
       if (target) applyDamage(target, amount, null, t);
       return target ? { id: target.id, hp: target.hp || 0, dead: !!target.dead, team: target.team && target.team.idx } : null;
@@ -3767,7 +4294,8 @@
     },
     visibleAt: (x, y, extra = 0) => isVisibleToPlayer(x, y, extra),
     vision: () => state.vision.map((s) => ({ x: s.x, y: s.y, r: s.r, kind: s.kind })),
-    aiForPlayer() { const t = playerTeam(); if (t && !t.ai) { t.ai = makeAI(t); t.isAI = true; } },
+    aiForPlayer(diffKey = "normal") { const t = playerTeam(); if (t && !t.ai) { t.ai = makeAI(t, AI_DIFFICULTY[diffKey] || AI_DIFFICULTY.normal); t.isAI = true; } },
+    findPath: (x0, y0, x1, y1) => findPath(x0, y0, x1, y1),
     win: () => endGame(playerTeam()),
     lose: () => endGame(aiTeam()),
     cam: state.cam,

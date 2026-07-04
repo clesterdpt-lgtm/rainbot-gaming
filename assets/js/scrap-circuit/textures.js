@@ -20,7 +20,9 @@
   "use strict";
   const SCRAP = (window.SCRAP = window.SCRAP || {});
 
+  const TEXTURE_ASSET_VERSION = "20260704-ai-textures-1";
   const MANIFEST_URL = "../assets/textures/scrap-circuit/manifest.json";
+  const TEXTURE_BASE_URL = "../assets/textures/scrap-circuit/";
   const registry = new Map(); // logical key -> [materials]
   const loader = new THREE.TextureLoader();
 
@@ -62,7 +64,7 @@
 
   function applyTexture(key, url) {
     loader.load(
-      url,
+      versioned(url),
       (texture) => {
         texture.magFilter = THREE.NearestFilter;
         texture.minFilter = THREE.NearestFilter;
@@ -82,18 +84,21 @@
   }
 
   function load() {
-    return fetch(MANIFEST_URL)
+    return fetch(versioned(MANIFEST_URL))
       .then((res) => (res.ok ? res.json() : null))
       .then((manifest) => {
         if (!manifest || !manifest.textures) return;
-        const base = MANIFEST_URL.replace(/manifest\.json$/, "");
         Object.entries(manifest.textures).forEach(([key, path]) => {
           if (typeof path === "string" && path && registry.has(key)) {
-            applyTexture(key, base + path);
+            applyTexture(key, TEXTURE_BASE_URL + path);
           }
         });
       })
       .catch(() => {});
+  }
+
+  function versioned(url) {
+    return `${url}${url.includes("?") ? "&" : "?"}v=${TEXTURE_ASSET_VERSION}`;
   }
 
   SCRAP.textures = { mat, basicMat, load, registry };

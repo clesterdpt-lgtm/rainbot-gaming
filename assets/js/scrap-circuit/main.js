@@ -1654,7 +1654,7 @@
       steer = touchMove.x;
     }
     car.throttle = Math.max(-1, Math.min(1, throttle));
-    car.steer = Math.max(-1, Math.min(1, -steer));
+    car.steer = Math.max(-1, Math.min(1, steer));
     car.drift = !!(keys.ShiftLeft || keys.ShiftRight || touchMove.drift);
     car.wantFire = !!(keys.Space || mouseHeld || touchFireHeld);
   }

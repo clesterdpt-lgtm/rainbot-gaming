@@ -149,6 +149,30 @@
     .tls-fcard__list--plus { color: var(--tls-green); }
     .tls-fcard__list--minus { color: #ff8d9b; }
 
+    /* skirmish setup: enemy count + AI difficulty */
+    .tls-opts { display: grid; gap: 10px; width: 100%; max-width: 720px; justify-items: center; }
+    .tls-opt { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+    .tls-opt__label { color: #8089a6; font-family: var(--font-mono); font-size: 10.5px; font-weight: 800; letter-spacing: 2px; }
+    .tls-seg { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .tls-seg button {
+      padding: 7px 14px;
+      border: 1px solid rgba(113, 132, 156, 0.44);
+      border-radius: 7px;
+      background: rgba(10, 9, 22, 0.9);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .tls-seg button:hover { border-color: var(--tls-violet); }
+    .tls-seg button.is-on {
+      border-color: var(--tls-green);
+      color: var(--tls-green);
+      box-shadow: inset 0 0 0 1px var(--tls-green), 0 0 12px rgba(125, 255, 154, 0.18);
+    }
+
     .tls-brief {
       display: grid;
       gap: 12px;
@@ -427,7 +451,9 @@
             <li>Buildings (except extractors) must be placed within uplink range of an existing structure. Extractors ignore uplink range, but must sit on a claimed, free node.</li>
             <li>Turrets unlock after your production structure stands. Heavy units cost Signal — no fracture, no titans.</li>
             <li>Each faction fights differently: Humans build cheap and repair fast, Robots self-repair near their grid and extract more, Aliens field expensive elites with regenerating shields.</li>
-            <li>Victory: destroy the enemy command structure. Defeat: lose your own. The enemy AI gathers, expands, and attacks in escalating waves — expect the first probe early.</li>
+            <li><strong>Skirmish setup:</strong> face 1, 2, or 3 enemy commands, pick their AI doctrine (Easy / Normal / Hard), and choose <strong>Full reveal</strong> or <strong>Fog of war</strong> on the main menu. With multiple enemies it's a free-for-all — rival commands fight each other too.</li>
+            <li><strong>Terrain:</strong> mountain ranges are impassable — units path around them through the passes. The smaller sand-colored rockslides can be attacked and destroyed to open new routes across the map.</li>
+            <li>Victory: destroy every enemy command structure. Defeat: lose your own. Enemy AIs gather, expand outward, raid your economy, and attack in escalating waves — expect the first probe early and bigger armies late.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             A work of serious science fiction. All factions, sites, and signals are fictional.
@@ -448,7 +474,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260702-rainbot-agent-1"></script>
-  <script src="../assets/js/the-last-signal.js?v=20260702-tls-claim-map-3"></script>
+  <script src="../assets/js/the-last-signal.js?v=20260704-tls-map-reveal-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

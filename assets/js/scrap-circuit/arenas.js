@@ -133,6 +133,21 @@
     return m;
   }
 
+  function stableOverlay(material) {
+    material.depthWrite = false;
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -2;
+    material.polygonOffsetUnits = -2;
+    return material;
+  }
+
+  function flatOverlay(a, w, d, material, x, y, z, renderOrder = 2) {
+    const m = mesh(a, new THREE.PlaneGeometry(w, d), material, x, y, z);
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = renderOrder;
+    return m;
+  }
+
   function tree(a, x, z, trunkMat, leafMat, s = 1) {
     mesh(a, new THREE.CylinderGeometry(0.22 * s, 0.3 * s, 1.6 * s, 5), trunkMat, x, 0.8 * s, z);
     mesh(a, new THREE.ConeGeometry(1.3 * s, 2.6 * s, 6), leafMat, x, 2.8 * s, z);
@@ -176,12 +191,13 @@
       bounds: { hw: 95, hd: 95 },
     });
     const road = T().mat("arena.suburb.road", { color: 0x4a4a52 });
+    const flatRoad = stableOverlay(T().mat("arena.suburb.road", { color: 0x4a4a52 }));
     const grass = T().mat("arena.suburb.grass", { color: 0x6d8f3f });
     const wallA = T().mat("arena.suburb.house_wall_a", { color: 0xd8c9a8 });
     const wallB = T().mat("arena.suburb.house_wall_b", { color: 0xb7cbd6 });
     const roof = T().mat("arena.suburb.roof", { color: 0x8a4632 });
     const fenceM = T().mat("prop.fence", { color: 0xe3ded1 });
-    const water = T().mat("arena.suburb.pool", { color: 0x3fa7c9 });
+    const water = stableOverlay(T().mat("arena.suburb.pool", { color: 0x3fa7c9 }));
     const trunk = T().mat("arena.shared.trunk", { color: 0x6b4a2e });
     const leaf = T().mat("arena.shared.leaf", { color: 0x4f7a33 });
     const drum = T().mat("prop.barrel", { color: 0xc9452e });
@@ -189,10 +205,10 @@
     ground(a, grass);
     // Ring road + cross streets (visual strips, flat).
     [[0, 0, 78, 7], [0, 0, 7, 78]].forEach(([x, z, hw, hd]) => {
-      mesh(a, new THREE.PlaneGeometry(hw * 2, hd * 2), road, x, 0.02, z).rotation.x = -Math.PI / 2;
+      flatOverlay(a, hw * 2, hd * 2, flatRoad, x, 0.075, z, 2);
       a.minimap.push({ x, z, hw, hd, color: "#4a4a52" });
     });
-    mesh(a, new THREE.CylinderGeometry(26, 26, 0.04, 24), road, 0, 0.02, 0); // cul-de-sac circle
+    mesh(a, new THREE.CylinderGeometry(26, 26, 0.045, 24), flatRoad, 0, 0.09, 0).renderOrder = 3; // cul-de-sac circle
 
     // Houses in the four quads; one has a drive-through garage shortcut,
     // one carries the roof ramp jump.
@@ -224,7 +240,7 @@
 
     // Backyard pools (slow + splash), picket fences, grills, trees.
     [[-34, 30, 9, 6], [38, -28, 8, 7]].forEach(([x, z, hw, hd]) => {
-      mesh(a, new THREE.PlaneGeometry(hw * 2, hd * 2), water, x, 0.06, z).rotation.x = -Math.PI / 2;
+      flatOverlay(a, hw * 2, hd * 2, water, x, 0.12, z, 4);
       a.slowZones.push({ x, z, hw, hd, factor: 0.55 });
       a.minimap.push({ x, z, hw, hd, color: "#3fa7c9" });
     });

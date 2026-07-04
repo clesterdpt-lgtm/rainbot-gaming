@@ -448,13 +448,13 @@
       vx: 0, vz: 0,
       wheelSpin: 0,
       hp: def.stats.hp, maxHp: def.stats.hp,
-      weapon: BASE_WEAPON, ammo: Infinity, fireCooldown: 0,
+      weapon: BASE_WEAPON, ammo: Infinity, fireCooldown: 0, gunCooldown: 0,
       special: isPlayer ? 30 : 20,
       specialRate: isPlayer ? SPECIAL_RATE : BOT_SPECIAL_RATE,
       wrecked: false, wreckT: 0,
       frozen: 0, stunned: 0, burning: 0, burnTick: 0, slowed: 0,
       shield: 0, boost: 0,
-      throttle: 0, steer: 0, drift: false, wantFire: false, wantSpecial: false,
+      throttle: 0, steer: 0, drift: false, wantFire: false, wantPickupFire: false, wantSpecial: false,
       ramTimers: new Map(),
       remoteBomb: null,
       fx: {},
@@ -814,9 +814,24 @@
     return best;
   }
 
+  function fireMachineGun(car) {
+    const w = WEAPONS[BASE_WEAPON];
+    if (car.gunCooldown > 0 || car.frozen > 0 || car.stunned > 0) return;
+    car.gunCooldown = w.rate;
+    const f = forward(car);
+    const px = car.x + f.x * (car.def.stats.radius + 1);
+    const pz = car.z + f.z * (car.def.stats.radius + 1);
+    const py = car.y + 1.3;
+    if (car.isPlayer) sfx.shot();
+    const spread = (Math.random() - 0.5) * 0.06;
+    const sx = Math.sin(car.heading + spread), sz = Math.cos(car.heading + spread);
+    spawnProjectile({ kind: "tracer", color: 0xffe08a, x: px, y: py, z: pz, vx: sx * 90 + car.vx, vz: sz * 90 + car.vz, ttl: 0.8, dmg: 4, owner: car });
+  }
+
   function fireWeapon(car) {
     if (!car.weapon || car.ammo <= 0 || car.fireCooldown > 0 || car.frozen > 0 || car.stunned > 0) return;
     const w = WEAPONS[car.weapon];
+    if (!w || (car.isPlayer && w.base)) return;
     car.fireCooldown = w.rate;
     const f = forward(car);
     const px = car.x + f.x * (car.def.stats.radius + 1);
@@ -1367,6 +1382,7 @@
     }
     car.fx.ice.visible = car.frozen > 0;
     car.fx.shield.visible = car.shield > 0;
+    if (car.gunCooldown > 0) car.gunCooldown -= dt;
     if (car.fireCooldown > 0) car.fireCooldown -= dt;
     car.special = Math.min(100, car.special + (car.specialRate || SPECIAL_RATE) * dt);
 
@@ -1460,7 +1476,14 @@
     collideStatics(car);
 
     // weapons + specials
-    if (!disabled && car.wantFire) fireWeapon(car);
+    if (!disabled && car.wantFire) {
+      if (car.isPlayer) fireMachineGun(car);
+      else fireWeapon(car);
+    }
+    if (car.isPlayer && car.wantPickupFire) {
+      if (!disabled) fireWeapon(car);
+      car.wantPickupFire = false;
+    }
     if (!disabled && car.wantSpecial) { fireSpecial(car); car.wantSpecial = false; }
     updateSpecialStates(car, dt);
 
@@ -1678,6 +1701,7 @@
     keys[e.code] = true;
     if (state.phase === "running") {
       if (e.code === "Space") { e.preventDefault(); }
+      if (e.code === "KeyF") { e.preventDefault(); if (state.player) state.player.wantPickupFire = true; }
       if (e.code === "KeyE") { if (state.player) state.player.wantSpecial = true; }
       if (e.code === "KeyT") sponsorDrop();
       if (e.code === "KeyR") state.lookBack = true;

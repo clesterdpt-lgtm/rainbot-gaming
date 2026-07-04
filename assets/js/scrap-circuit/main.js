@@ -1,0 +1,2056 @@
+/* ============================================================
+   SCRAP CIRCUIT: LAST CHASSIS STANDING — main runtime
+   ------------------------------------------------------------
+   Simulation, combat, AI, HUD, input, and match flow. Rendering
+   goes through SCRAP.Ps1Renderer (ps1.js); content comes from
+   SCRAP.vehicles / SCRAP.arenas; materials from SCRAP.textures.
+   URL params: ?arena=<id>&vehicle=<id>&autostart=1&debug=1
+   ============================================================ */
+(() => {
+  "use strict";
+  const SCRAP = window.SCRAP || {};
+  const canvas = document.getElementById("gameCanvas");
+  if (!canvas || !window.THREE || !SCRAP.Ps1Renderer) return;
+
+  const GAME_ID = "scrap-circuit";
+  const PARAMS = new URLSearchParams(location.search);
+  const DEBUG = PARAMS.get("debug") === "1";
+
+  const api = window.RB || {
+    toast: () => {},
+    recordScore: () => false,
+    getHighScore: () => 0,
+    showRewarded: () => Promise.resolve(true),
+    isAdFree: () => true,
+  };
+
+  // ---------- tuning ----------
+  const STEP = 1.3;            // ground step tolerance
+  const GRAV = 26;
+  const CAR_HEIGHT_EPS = 0.06;
+  const RAM_COOLDOWN = 0.45;
+  const PICKUP_RESPAWN = 12;
+  const SPECIAL_RATE = 5.5;    // charge per second
+  const BOT_SPECIAL_RATE = 7.5;
+  const FALL_DAMAGE = 35;
+
+  const WEAPONS = {
+    machinegun: { name: "SCRAP SPITTER", ammo: 36, rate: 0.09, kind: "gun" },
+    missile: { name: "GRUDGE MISSILE", ammo: 3, rate: 0.55, kind: "missile" },
+    freeze: { name: "COLD CALL", ammo: 2, rate: 0.6, kind: "freeze" },
+    fire: { name: "TAILGATER (FIRE TRAIL)", ammo: 1, rate: 0.8, kind: "fire" },
+    remote: { name: "SEVERANCE PACKAGE", ammo: 2, rate: 0.4, kind: "remote" },
+    mine: { name: "POTHOLE MINE", ammo: 3, rate: 0.3, kind: "mine" },
+    ricochet: { name: "REBOUND CLAUSE", ammo: 2, rate: 0.5, kind: "ricochet" },
+  };
+  const PICKUP_TABLE = [
+    ["machinegun", 16], ["missile", 15], ["freeze", 9], ["fire", 9],
+    ["remote", 9], ["mine", 12], ["ricochet", 9],
+    ["shield", 7], ["turbo", 7], ["wrench", 4], ["battery", 3],
+  ];
+  const PICKUP_COLORS = {
+    machinegun: 0xffd23b, missile: 0xff5e3b, freeze: 0x63d8ff, fire: 0xff8a2e,
+    remote: 0xd23f6e, mine: 0xb0b6bd, ricochet: 0x9e63ff,
+    shield: 0x63f2c8, turbo: 0x2ee0ff, wrench: 0x75ff92, battery: 0xf7d716,
+  };
+
+  // ---------- announcer: The Adjuster ----------
+  const BARKS = {
+    start: ["POLICIES ARE ACTIVE. DRIVE ANGRY!", "THE PREMIUMS ARE LIVE. GO!", "SIGN NOTHING. HIT EVERYTHING!"],
+    firstblood: ["FIRST CLAIM OF THE NIGHT!", "SOMEBODY'S RATE JUST TRIPLED!"],
+    wreck: ["TOTAL LOSS!", "CLAIM DENIED!", "THAT'S NOT COVERED!", "DEPRECIATED... TO ZERO!", "SALVAGE TITLE ISSUED!"],
+    playerwreck: ["YOUR POLICY HAS LAPSED.", "REJECTED. LIKE YOUR PAPERWORK."],
+    doublewreck: ["DOUBLE INDEMNITY!!"],
+    lowhp: ["YOUR DEDUCTIBLE IS SHOWING!", "PRE-EXISTING DAMAGE DETECTED!"],
+    special: ["ACT OF GOD! NOT COVERED!", "FILE THAT UNDER 'INCIDENT'!", "UNINSURABLE BEHAVIOR!"],
+    shield: ["FULL COVERAGE! TEMPORARILY!"],
+    turbo: ["PREMIUM ACCELERATION PACKAGE!"],
+    crusher: ["CRUSHED! READ THE FINE PRINT!"],
+    traffic: ["FREIGHT HAPPENS!"],
+    coaster: ["STRUCK BY FUN! NOT COVERED!"],
+    grave: ["PRE-NEED PLOT! OCCUPIED!"],
+    fall: ["GRAVITY IS AN EXCLUSION!"],
+    sponsor: ["A WORD FROM OUR SPONSOR. YOU'RE WELCOME."],
+    win: ["LAST CHASSIS STANDING! PREMIUMS ARE GOING UP ANYWAY!"],
+  };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    wrap: canvas.closest(".canvas-wrap"),
+    hpFill: $("hud-hp-fill"), hpText: $("hud-hp-text"),
+    weaponName: $("hud-weapon-name"), weaponAmmo: $("hud-weapon-ammo"),
+    specialFill: $("hud-special-fill"), specialName: $("hud-special-name"),
+    salvage: $("hud-salvage"), alive: $("hud-alive"),
+    bark: $("hud-bark"), arenaName: $("hud-arena"),
+    minimap: $("hud-minimap"),
+    sponsor: $("hud-sponsor"),
+    countdown: $("hud-countdown"),
+    statusChips: $("hud-status"),
+    flash: $("hud-flash"),
+    overlay: $("overlay"), overlayTitle: $("overlay-title"),
+    overlaySub: $("overlay-sub"), overlayScore: $("overlay-score"),
+    btnPrimary: $("btn-primary"),
+    menu: $("menu-panel"),
+    vehName: $("veh-name"), vehArch: $("veh-archetype"), vehFlavor: $("veh-flavor"),
+    vehSpecial: $("veh-special"), vehStats: $("veh-stats"),
+    vehPrev: $("veh-prev"), vehNext: $("veh-next"),
+    arenaRow: $("arena-row"),
+    log: $("adjuster-log"),
+    btnPause: $("btn-pause"), btnRestart: $("btn-restart"),
+  };
+  const miniCtx = el.minimap ? el.minimap.getContext("2d") : null;
+
+  // ---------- audio: 100% synthesized ----------
+  const sfx = (() => {
+    let ac = null, engineOsc = null, engineGain = null, master = null;
+    function ctx() {
+      if (!ac) {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        master = ac.createGain();
+        master.gain.value = 0.5;
+        master.connect(ac.destination);
+      }
+      if (ac.state === "suspended") ac.resume();
+      return ac;
+    }
+    function blip(freq, dur, type = "square", vol = 0.2, slide = 0) {
+      try {
+        const a = ctx();
+        const osc = a.createOscillator(), g = a.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, a.currentTime);
+        if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), a.currentTime + dur);
+        g.gain.setValueAtTime(vol, a.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+        osc.connect(g).connect(master);
+        osc.start();
+        osc.stop(a.currentTime + dur + 0.02);
+      } catch (_) {}
+    }
+    function noise(dur, vol = 0.3, low = false) {
+      try {
+        const a = ctx();
+        const len = Math.floor(a.sampleRate * dur);
+        const buf = a.createBuffer(1, len, a.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        const src = a.createBufferSource();
+        src.buffer = buf;
+        const g = a.createGain();
+        g.gain.value = vol;
+        const filter = a.createBiquadFilter();
+        filter.type = low ? "lowpass" : "highpass";
+        filter.frequency.value = low ? 380 : 900;
+        src.connect(filter).connect(g).connect(master);
+        src.start();
+      } catch (_) {}
+    }
+    return {
+      unlock() { try { ctx(); } catch (_) {} },
+      shot() { noise(0.08, 0.12); },
+      boom(big) {
+        noise(big ? 0.5 : 0.3, big ? 0.5 : 0.3, true);
+        blip(70, big ? 0.5 : 0.3, "sine", big ? 0.5 : 0.3, -40);
+      },
+      pickup() { blip(660, 0.12, "square", 0.16, 320); },
+      freeze() { blip(1200, 0.4, "sine", 0.2, -700); },
+      horn() { blip(220, 0.16, "square", 0.24, 60); setTimeout(() => blip(330, 0.22, "square", 0.22, 40), 90); },
+      hit() { noise(0.06, 0.16); blip(140, 0.08, "triangle", 0.2, -60); },
+      special() { blip(160, 0.5, "sawtooth", 0.28, 240); noise(0.35, 0.2, true); },
+      win() { [392, 494, 587, 784].forEach((f, i) => setTimeout(() => blip(f, 0.28, "square", 0.2), i * 140)); },
+      lose() { [330, 262, 196, 131].forEach((f, i) => setTimeout(() => blip(f, 0.3, "sawtooth", 0.18), i * 160)); },
+      engine(speedRatio, running) {
+        try {
+          const a = ctx();
+          if (!engineOsc) {
+            engineOsc = a.createOscillator();
+            engineOsc.type = "sawtooth";
+            engineGain = a.createGain();
+            engineGain.gain.value = 0;
+            const filt = a.createBiquadFilter();
+            filt.type = "lowpass";
+            filt.frequency.value = 420;
+            engineOsc.connect(filt).connect(engineGain).connect(master);
+            engineOsc.start();
+          }
+          engineOsc.frequency.setTargetAtTime(38 + speedRatio * 120, a.currentTime, 0.08);
+          engineGain.gain.setTargetAtTime(running ? 0.05 + speedRatio * 0.075 : 0, a.currentTime, 0.12);
+        } catch (_) {}
+      },
+    };
+  })();
+
+  // ---------- state ----------
+  const state = {
+    phase: "menu", // menu | countdown | running | over
+    paused: false,
+    time: 0,
+    countdownT: 0,
+    arenaId: PARAMS.get("arena") || "suburb",
+    vehicleIndex: 0,
+    cars: [],
+    player: null,
+    projectiles: [],
+    mines: [],
+    firePatches: [],
+    smokes: [],
+    pickups: [],
+    salvage: 0,
+    wrecksByPlayer: 0,
+    firstBloodDone: false,
+    sponsorUsed: false,
+    barkCooldown: 0,
+    shake: 0,
+    lookBack: false,
+  };
+  const vParam = PARAMS.get("vehicle");
+  if (vParam) {
+    const idx = SCRAP.vehicles.list.findIndex((v) => v.id === vParam);
+    if (idx >= 0) state.vehicleIndex = idx;
+  }
+
+  // ---------- three.js core ----------
+  const ps1 = new SCRAP.Ps1Renderer(canvas, { height: 270, dither: 1 });
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 420);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 0.8);
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  scene.add(hemi, sun);
+
+  // Menu preview stage
+  const previewScene = new THREE.Scene();
+  previewScene.background = new THREE.Color(0x0a0c14);
+  previewScene.fog = new THREE.Fog(0x0a0c14, 18, 46);
+  const pHemi = new THREE.HemisphereLight(0xbfd8ff, 0x2a2030, 1.0);
+  const pSun = new THREE.DirectionalLight(0xfff0d0, 0.9);
+  pSun.position.set(6, 10, 8);
+  previewScene.add(pHemi, pSun);
+  const podium = new THREE.Mesh(
+    new THREE.CylinderGeometry(5.5, 6.2, 0.8, 14),
+    SCRAP.textures ? SCRAP.textures.mat("ui.podium", { color: 0x2a3040 }) : new THREE.MeshLambertMaterial({ color: 0x2a3040 })
+  );
+  podium.position.y = -0.4;
+  previewScene.add(podium);
+  const previewCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.2, 100);
+  previewCam.position.set(0, 3.4, 11.5);
+  previewCam.lookAt(0, 1.6, 0);
+  let previewMesh = null;
+
+  let arena = null;
+
+  // ---------- FX ----------
+  const fxGroup = new THREE.Group();
+  scene.add(fxGroup);
+  const particlePool = [];
+  const PARTICLE_MAX = 140;
+  const particleGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
+  const particleMats = {};
+  function particleMat(color) {
+    if (!particleMats[color]) {
+      particleMats[color] = new THREE.MeshBasicMaterial({ color });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(particleMats[color]);
+    }
+    return particleMats[color];
+  }
+  function burst(x, y, z, color, count = 10, power = 8, up = 6) {
+    for (let i = 0; i < count; i += 1) {
+      let p = particlePool.find((q) => !q.alive);
+      if (!p) {
+        if (particlePool.length >= PARTICLE_MAX) break;
+        p = { mesh: new THREE.Mesh(particleGeo, particleMat(color)), alive: false };
+        fxGroup.add(p.mesh);
+        particlePool.push(p);
+      }
+      p.alive = true;
+      p.mesh.visible = true;
+      p.mesh.material = particleMat(color);
+      p.mesh.position.set(x, y, z);
+      const ang = Math.random() * Math.PI * 2;
+      const sp = (0.3 + Math.random() * 0.7) * power;
+      p.vx = Math.cos(ang) * sp;
+      p.vz = Math.sin(ang) * sp;
+      p.vy = Math.random() * up;
+      p.ttl = 0.5 + Math.random() * 0.6;
+      const s = 0.6 + Math.random() * 1.2;
+      p.mesh.scale.set(s, s, s);
+    }
+  }
+  function updateParticles(dt) {
+    particlePool.forEach((p) => {
+      if (!p.alive) return;
+      p.ttl -= dt;
+      if (p.ttl <= 0) { p.alive = false; p.mesh.visible = false; return; }
+      p.vy -= GRAV * 0.6 * dt;
+      p.mesh.position.x += p.vx * dt;
+      p.mesh.position.y = Math.max(0.1, p.mesh.position.y + p.vy * dt);
+      p.mesh.position.z += p.vz * dt;
+      p.mesh.rotation.x += dt * 7;
+      p.mesh.rotation.z += dt * 5;
+    });
+  }
+  function flash(color = "rgba(255,240,200,0.5)", ms = 90) {
+    if (!el.flash) return;
+    el.flash.style.background = color;
+    el.flash.style.opacity = "1";
+    setTimeout(() => { el.flash.style.opacity = "0"; }, ms);
+  }
+
+  // ---------- announcer ----------
+  function announce(key, force = false) {
+    const lines = BARKS[key];
+    if (!lines) return;
+    if (!force && state.barkCooldown > 0) return;
+    state.barkCooldown = 3.5;
+    const line = lines[Math.floor(Math.random() * lines.length)];
+    if (el.bark) {
+      el.bark.textContent = `📋 ${line}`;
+      el.bark.classList.remove("is-pop");
+      void el.bark.offsetWidth;
+      el.bark.classList.add("is-pop");
+    }
+    if (el.log) {
+      const item = document.createElement("div");
+      item.className = "scrap-log__item";
+      item.textContent = line;
+      el.log.prepend(item);
+      while (el.log.children.length > 6) el.log.removeChild(el.log.lastChild);
+    }
+    sfx.horn();
+  }
+
+  // ---------- ground / collision ----------
+  function sampleGround(x, z, carY) {
+    let best = 0;
+    if (!arena) return best;
+    const hs = arena.heights;
+    for (let i = 0; i < hs.length; i += 1) {
+      const h = hs[i];
+      if (Math.abs(x - h.x) > h.hw || Math.abs(z - h.z) > h.hd) continue;
+      let y;
+      if (h.type === "rect") y = h.y;
+      else if (h.axis === "z") y = h.y0 + ((z - (h.z - h.hd)) / (h.hd * 2)) * (h.y1 - h.y0);
+      else y = h.y0 + ((x - (h.x - h.hw)) / (h.hw * 2)) * (h.y1 - h.y0);
+      if (y <= carY + STEP && y > best) best = y;
+    }
+    return best;
+  }
+
+  function circleRectPush(car, r, box) {
+    // Returns push vector or null.
+    const dx = car.x - box.x, dz = car.z - box.z;
+    const px = box.hw + r - Math.abs(dx);
+    const pz = box.hd + r - Math.abs(dz);
+    if (px <= 0 || pz <= 0) return null;
+    if (px < pz) return { x: Math.sign(dx || 1) * px, z: 0 };
+    return { x: 0, z: Math.sign(dz || 1) * pz };
+  }
+
+  function collideStatics(car) {
+    if (!arena) return;
+    for (let i = 0; i < arena.colliders.length; i += 1) {
+      const c = arena.colliders[i];
+      if (c.base >= car.y + 1.6 || c.top <= car.y + 0.25) continue;
+      const push = circleRectPush(car, car.def.stats.radius * 0.8, c);
+      if (push) {
+        car.x += push.x;
+        car.z += push.z;
+        // kill velocity into the wall
+        if (push.x) car.vx *= 0.3;
+        if (push.z) car.vz *= 0.3;
+      }
+    }
+    // destructibles: soft collide + break on speed
+    for (let i = 0; i < arena.destructibles.length; i += 1) {
+      const d = arena.destructibles[i];
+      if (!d.alive) continue;
+      const push = circleRectPush(car, car.def.stats.radius * 0.7, d);
+      if (push) {
+        const speed = Math.hypot(car.vx, car.vz);
+        damageDestructible(d, Math.max(4, speed * 1.2), car);
+        car.x += push.x * 0.5;
+        car.z += push.z * 0.5;
+        car.vx *= 0.82;
+        car.vz *= 0.82;
+      }
+    }
+  }
+
+  function damageDestructible(d, dmg, byCar) {
+    if (!d.alive) return;
+    d.hp -= dmg;
+    if (d.hp <= 0) {
+      d.alive = false;
+      d.mesh.visible = false;
+      burst(d.x, 1.2, d.z, 0xb0a488, 10, 7);
+      sfx.hit();
+      if (d.explosive) boom(d.x, 0.8, d.z, 7, 30, byCar || null);
+      if (byCar && byCar.isPlayer) addSalvage(d.score);
+    }
+  }
+
+  // ---------- cars ----------
+  const iceGeo = new THREE.BoxGeometry(1, 1, 1);
+  function makeCar(defId, isPlayer, spawn) {
+    const def = SCRAP.vehicles.get(defId);
+    const mesh = SCRAP.vehicles.build(defId);
+    scene.add(mesh);
+    const car = {
+      def, isPlayer,
+      mesh,
+      x: spawn.x, z: spawn.z, y: 0, vy: 0,
+      heading: spawn.h,
+      vx: 0, vz: 0,
+      wheelSpin: 0,
+      hp: def.stats.hp, maxHp: def.stats.hp,
+      weapon: null, ammo: 0, fireCooldown: 0,
+      special: isPlayer ? 30 : 20,
+      wrecked: false, wreckT: 0,
+      frozen: 0, stunned: 0, burning: 0, burnTick: 0, slowed: 0,
+      shield: 0, boost: 0,
+      throttle: 0, steer: 0, drift: false, wantFire: false, wantSpecial: false,
+      ramTimers: new Map(),
+      remoteBomb: null,
+      fx: {},
+      ai: isPlayer ? null : { archetype: null, stuck: 0, reverseT: 0, retarget: 0, target: null, wander: Math.random() * Math.PI * 2 },
+      lastDamageBy: null,
+    };
+    // status meshes
+    const iceMat = new THREE.MeshLambertMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.55 });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(iceMat);
+    car.fx.ice = new THREE.Mesh(iceGeo, iceMat);
+    car.fx.ice.scale.set(def.stats.radius * 2.2, 4, def.stats.radius * 2.6);
+    car.fx.ice.position.y = 2;
+    car.fx.ice.visible = false;
+    mesh.add(car.fx.ice);
+    const shieldMat = new THREE.MeshBasicMaterial({ color: 0x63f2c8, transparent: true, opacity: 0.26, side: THREE.DoubleSide });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(shieldMat);
+    car.fx.shield = new THREE.Mesh(new THREE.SphereGeometry(def.stats.radius * 1.9, 10, 8), shieldMat);
+    car.fx.shield.position.y = 1.6;
+    car.fx.shield.visible = false;
+    mesh.add(car.fx.shield);
+    return car;
+  }
+
+  function forward(car) {
+    return { x: Math.sin(car.heading), z: Math.cos(car.heading) };
+  }
+
+  function applyDamage(car, dmg, opts = {}) {
+    if (car.wrecked || state.phase !== "running") return;
+    if (car.shield > 0 && !opts.pierce) {
+      burst(car.x, car.y + 1.6, car.z, 0x63f2c8, 5, 5);
+      return;
+    }
+    car.hp -= dmg;
+    car.lastDamageBy = opts.by || null;
+    if (opts.by && opts.by.isPlayer && !car.isPlayer) addSalvage(Math.round(dmg));
+    if (car.isPlayer) {
+      state.shake = Math.min(1.2, state.shake + dmg / 60);
+      if (car.hp > 0 && car.hp < car.maxHp * 0.28) announce("lowhp");
+    }
+    if (car.hp <= 0) wreck(car, opts);
+  }
+
+  function impulse(car, dx, dz, up = 0) {
+    const len = Math.hypot(dx, dz) || 1;
+    const power = Math.min(26, Math.hypot(dx, dz) * 2 + 6);
+    car.vx += (dx / len) * power;
+    car.vz += (dz / len) * power;
+    if (up) car.vy += up;
+  }
+
+  function wreck(car, opts = {}) {
+    if (car.wrecked) return;
+    car.wrecked = true;
+    car.wreckT = 0;
+    car.hp = 0;
+    car.frozen = 0;
+    car.fx.ice.visible = false;
+    car.fx.shield.visible = false;
+    burst(car.x, car.y + 1.4, car.z, 0xff8a2e, 22, 12, 9);
+    burst(car.x, car.y + 1.4, car.z, 0x3a3a44, 14, 6, 8);
+    boomVisual(car.x, car.y + 1, car.z, 4);
+    sfx.boom(true);
+    state.shake = Math.min(1.6, state.shake + 0.7);
+    // Cartoon totaled pose: flip the shell, pop the wheels.
+    car.mesh.rotation.z = Math.PI * (0.86 + Math.random() * 0.2);
+    car.mesh.position.y = car.y + 1.2;
+    const killer = opts.by;
+    if (killer && killer.isPlayer && !car.isPlayer) {
+      addSalvage(150);
+      state.wrecksByPlayer += 1;
+      if (state.wrecksByPlayer >= 2 && car.hp <= 0) announce("doublewreck");
+    }
+    if (!state.firstBloodDone) {
+      state.firstBloodDone = true;
+      announce("firstblood", true);
+    } else if (car.isPlayer) {
+      announce("playerwreck", true);
+    } else {
+      announce("wreck");
+    }
+    checkMatchEnd();
+  }
+
+  function addSalvage(points) {
+    state.salvage += Math.max(0, Math.round(points));
+  }
+
+  // ---------- explosions ----------
+  const boomMat = new THREE.MeshBasicMaterial({ color: 0xffc23b, transparent: true, opacity: 0.85 });
+  if (SCRAP.ps1ify) SCRAP.ps1ify(boomMat);
+  const boomGeo = new THREE.SphereGeometry(1, 9, 7);
+  const boomPool = [];
+  function boomVisual(x, y, z, r) {
+    let b = boomPool.find((q) => !q.alive);
+    if (!b) {
+      b = { mesh: new THREE.Mesh(boomGeo, boomMat.clone()), alive: false };
+      fxGroup.add(b.mesh);
+      boomPool.push(b);
+    }
+    b.alive = true;
+    b.t = 0;
+    b.r = r;
+    b.mesh.visible = true;
+    b.mesh.position.set(x, y, z);
+  }
+  function updateBooms(dt) {
+    boomPool.forEach((b) => {
+      if (!b.alive) return;
+      b.t += dt * 3.4;
+      if (b.t >= 1) { b.alive = false; b.mesh.visible = false; return; }
+      const s = 0.3 + b.t * b.r;
+      b.mesh.scale.set(s, s, s);
+      b.mesh.material.opacity = 0.85 * (1 - b.t);
+    });
+  }
+
+  function boom(x, y, z, radius, dmg, by) {
+    boomVisual(x, y, z, radius);
+    burst(x, y, z, 0xff8a2e, 12, 9, 8);
+    sfx.boom(radius > 7);
+    state.cars.forEach((car) => {
+      if (car.wrecked) return;
+      const dx = car.x - x, dz = car.z - z, dy = car.y - y;
+      const dist = Math.hypot(dx, dz);
+      if (dist < radius && Math.abs(dy) < 6) {
+        const fall = 1 - (dist / radius) * 0.6;
+        applyDamage(car, dmg * fall, { by, type: "boom" });
+        impulse(car, dx, dz, 5);
+      }
+    });
+    if (arena) {
+      arena.destructibles.forEach((d) => {
+        if (!d.alive) return;
+        if (Math.hypot(d.x - x, d.z - z) < radius + 1) damageDestructible(d, dmg, by);
+      });
+    }
+  }
+
+  // ---------- pickups ----------
+  const pickupGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+  function rollPickupType() {
+    const total = PICKUP_TABLE.reduce((s, [, w]) => s + w, 0);
+    let roll = Math.random() * total;
+    for (const [type, w] of PICKUP_TABLE) {
+      roll -= w;
+      if (roll <= 0) return type;
+    }
+    return "machinegun";
+  }
+  function setupPickups() {
+    state.pickups = arena.pickupSpots.map(({ x, z }) => {
+      const type = rollPickupType();
+      const material = new THREE.MeshBasicMaterial({ color: PICKUP_COLORS[type] });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+      const mesh = new THREE.Mesh(pickupGeo, material);
+      const gy = sampleGround(x, z, 99);
+      mesh.position.set(x, gy + 1.4, z);
+      scene.add(mesh);
+      return { x, z, type, mesh, active: true, timer: 0, gy };
+    });
+  }
+  function updatePickups(dt) {
+    state.pickups.forEach((p) => {
+      if (!p.active) {
+        p.timer -= dt;
+        if (p.timer <= 0) {
+          p.active = true;
+          p.type = rollPickupType();
+          p.mesh.material.color.set(PICKUP_COLORS[p.type]);
+          p.mesh.visible = true;
+        }
+        return;
+      }
+      p.mesh.rotation.y += dt * 2.4;
+      p.mesh.position.y = p.gy + 1.4 + Math.sin(state.time * 3 + p.x) * 0.25;
+      state.cars.forEach((car) => {
+        if (car.wrecked || !p.active) return;
+        if (Math.abs(car.y - p.gy) > 3) return;
+        const r = car.def.stats.radius + 1.4;
+        if ((car.x - p.x) ** 2 + (car.z - p.z) ** 2 < r * r) takePickup(car, p);
+      });
+    });
+  }
+  function takePickup(car, p) {
+    p.active = false;
+    p.timer = PICKUP_RESPAWN;
+    p.mesh.visible = false;
+    if (car.isPlayer) sfx.pickup();
+    switch (p.type) {
+      case "shield":
+        car.shield = 5;
+        if (car.isPlayer) announce("shield");
+        break;
+      case "turbo":
+        car.boost = 3.5;
+        if (car.isPlayer) announce("turbo");
+        break;
+      case "wrench":
+        car.hp = Math.min(car.maxHp, car.hp + 30);
+        break;
+      case "battery":
+        car.special = Math.min(100, car.special + 35);
+        break;
+      default:
+        car.weapon = p.type;
+        car.ammo = WEAPONS[p.type].ammo;
+        car.remoteBomb = null;
+        break;
+    }
+  }
+
+  // ---------- projectiles / mines / fire ----------
+  const projGeo = new THREE.BoxGeometry(0.35, 0.35, 1.1);
+  const missileGeo = new THREE.CylinderGeometry(0.22, 0.3, 1.4, 6);
+  const junkGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  function spawnProjectile(opts) {
+    const kind = opts.kind;
+    let geo = projGeo;
+    if (kind === "missile" || kind === "freeze" || kind === "surge") geo = missileGeo;
+    if (kind === "junk") geo = junkGeo;
+    const material = new THREE.MeshBasicMaterial({ color: opts.color });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+    const mesh = new THREE.Mesh(geo, material);
+    if (geo === missileGeo) mesh.rotation.x = Math.PI / 2;
+    scene.add(mesh);
+    state.projectiles.push({
+      kind, mesh,
+      x: opts.x, y: opts.y, z: opts.z,
+      vx: opts.vx, vy: opts.vy || 0, vz: opts.vz,
+      ttl: opts.ttl || 3,
+      dmg: opts.dmg, radius: opts.radius || 0,
+      owner: opts.owner, target: opts.target || null,
+      bounces: opts.bounces || 0,
+      gravity: !!opts.gravity,
+      turn: opts.turn || 0,
+    });
+  }
+
+  function nearestEnemy(car, maxDist, coneDot = -1) {
+    let best = null, bestD = maxDist;
+    const f = forward(car);
+    state.cars.forEach((other) => {
+      if (other === car || other.wrecked) return;
+      const dx = other.x - car.x, dz = other.z - car.z;
+      const d = Math.hypot(dx, dz);
+      if (d >= bestD) return;
+      if (coneDot > -1) {
+        const dot = (dx / (d || 1)) * f.x + (dz / (d || 1)) * f.z;
+        if (dot < coneDot) return;
+      }
+      best = other;
+      bestD = d;
+    });
+    return best;
+  }
+
+  function fireWeapon(car) {
+    if (!car.weapon || car.ammo <= 0 || car.fireCooldown > 0 || car.frozen > 0 || car.stunned > 0) return;
+    const w = WEAPONS[car.weapon];
+    car.fireCooldown = w.rate;
+    const f = forward(car);
+    const px = car.x + f.x * (car.def.stats.radius + 1);
+    const pz = car.z + f.z * (car.def.stats.radius + 1);
+    const py = car.y + 1.3;
+    if (car.isPlayer) sfx.shot();
+    switch (w.kind) {
+      case "gun": {
+        const spread = (Math.random() - 0.5) * 0.06;
+        const sx = Math.sin(car.heading + spread), sz = Math.cos(car.heading + spread);
+        spawnProjectile({ kind: "tracer", color: 0xffe08a, x: px, y: py, z: pz, vx: sx * 90 + car.vx, vz: sz * 90 + car.vz, ttl: 0.8, dmg: 4, owner: car });
+        car.ammo -= 1;
+        break;
+      }
+      case "missile":
+      case "freeze": {
+        const target = nearestEnemy(car, 70, 0.2);
+        spawnProjectile({
+          kind: w.kind, color: w.kind === "freeze" ? 0x63d8ff : 0xff5e3b,
+          x: px, y: py, z: pz, vx: f.x * 44, vz: f.z * 44,
+          ttl: 3.4, dmg: w.kind === "freeze" ? 8 : 22, radius: 6,
+          owner: car, target, turn: 2.6,
+        });
+        car.ammo -= 1;
+        break;
+      }
+      case "fire":
+        car.fireTrail = 4;
+        car.ammo -= 1;
+        break;
+      case "remote":
+        if (car.remoteBomb) {
+          boom(car.remoteBomb.x, car.remoteBomb.y, car.remoteBomb.z, 9, 35, car);
+          scene.remove(car.remoteBomb.mesh);
+          car.remoteBomb = null;
+          car.ammo -= 1;
+        } else {
+          const material = new THREE.MeshBasicMaterial({ color: 0xd23f6e });
+          if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+          const mesh = new THREE.Mesh(junkGeo, material);
+          mesh.position.set(car.x, car.y + 0.5, car.z);
+          scene.add(mesh);
+          car.remoteBomb = { x: car.x, y: car.y + 0.5, z: car.z, mesh };
+        }
+        break;
+      case "mine":
+        dropMine(car, car.x - f.x * (car.def.stats.radius + 1.6), car.z - f.z * (car.def.stats.radius + 1.6), 25, 0xb0b6bd);
+        car.ammo -= 1;
+        break;
+      case "ricochet":
+        spawnProjectile({
+          kind: "ricochet", color: 0x9e63ff,
+          x: px, y: py, z: pz, vx: f.x * 55, vz: f.z * 55,
+          ttl: 4, dmg: 26, radius: 6, owner: car, bounces: 5,
+        });
+        car.ammo -= 1;
+        break;
+      default:
+        break;
+    }
+    if (car.ammo <= 0) {
+      if (w.kind === "fire") {
+        // kept until the trail burns out (cleared in updateSpecialStates)
+      } else if (w.kind === "remote") {
+        if (!car.remoteBomb) car.weapon = null;
+      } else {
+        car.weapon = null;
+      }
+    }
+  }
+
+  function dropMine(car, x, z, dmg, color, opts = {}) {
+    const material = new THREE.MeshBasicMaterial({ color });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+    const mesh = new THREE.Mesh(opts.casket ? new THREE.BoxGeometry(1.2, 0.6, 2) : new THREE.CylinderGeometry(0.7, 0.9, 0.5, 7), material);
+    const gy = sampleGround(x, z, car.y + 1);
+    mesh.position.set(x, gy + 0.3, z);
+    scene.add(mesh);
+    state.mines.push({ x, z, y: gy, dmg, owner: car, mesh, armTime: 0.7, slow: !!opts.slow });
+  }
+
+  function updateMines(dt) {
+    for (let i = state.mines.length - 1; i >= 0; i -= 1) {
+      const m = state.mines[i];
+      if (m.armTime > 0) { m.armTime -= dt; continue; }
+      let hit = false;
+      state.cars.forEach((car) => {
+        if (hit || car.wrecked || car === m.owner) return;
+        if (Math.abs(car.y - m.y) > 2.5) return;
+        const r = car.def.stats.radius + 1.2;
+        if ((car.x - m.x) ** 2 + (car.z - m.z) ** 2 < r * r) {
+          hit = true;
+          if (m.slow) {
+            applyDamage(car, m.dmg, { by: m.owner, type: "spike" });
+            car.slowed = Math.max(car.slowed, 1.6);
+            burst(m.x, m.y + 0.5, m.z, 0xb0b6bd, 6, 5);
+            sfx.hit();
+          } else {
+            boom(m.x, m.y + 0.5, m.z, 6, m.dmg, m.owner);
+          }
+        }
+      });
+      if (hit) {
+        scene.remove(m.mesh);
+        state.mines.splice(i, 1);
+      }
+    }
+  }
+
+  function updateFirePatches(dt) {
+    for (let i = state.firePatches.length - 1; i >= 0; i -= 1) {
+      const f = state.firePatches[i];
+      f.ttl -= dt;
+      f.mesh.material.opacity = Math.min(0.8, f.ttl);
+      f.mesh.scale.setScalar(1 + Math.sin(state.time * 9 + i) * 0.15);
+      if (f.ttl <= 0) {
+        scene.remove(f.mesh);
+        state.firePatches.splice(i, 1);
+        continue;
+      }
+      state.cars.forEach((car) => {
+        if (car.wrecked || car === f.owner || Math.abs(car.y - f.y) > 2) return;
+        const r = car.def.stats.radius + 1.6;
+        if ((car.x - f.x) ** 2 + (car.z - f.z) ** 2 < r * r && car.burning <= 0) {
+          car.burning = 2;
+          car.burnBy = f.owner;
+          applyDamage(car, 4, { by: f.owner, type: "fire" });
+        }
+      });
+    }
+  }
+
+  const fireGeo = new THREE.ConeGeometry(1.4, 2, 6);
+  function dropFirePatch(car) {
+    const material = new THREE.MeshBasicMaterial({ color: 0xff8a2e, transparent: true, opacity: 0.8 });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+    const mesh = new THREE.Mesh(fireGeo, material);
+    mesh.position.set(car.x, car.y + 0.9, car.z);
+    scene.add(mesh);
+    state.firePatches.push({ x: car.x, y: car.y, z: car.z, ttl: 3, owner: car, mesh });
+  }
+
+  function updateProjectiles(dt) {
+    for (let i = state.projectiles.length - 1; i >= 0; i -= 1) {
+      const p = state.projectiles[i];
+      p.ttl -= dt;
+      if (p.ttl <= 0) { scene.remove(p.mesh); state.projectiles.splice(i, 1); continue; }
+      // homing
+      if (p.target && !p.target.wrecked && p.turn) {
+        const desired = Math.atan2(p.target.x - p.x, p.target.z - p.z);
+        const current = Math.atan2(p.vx, p.vz);
+        let diff = desired - current;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        const speed = Math.hypot(p.vx, p.vz);
+        const na = current + Math.max(-p.turn * dt, Math.min(p.turn * dt, diff));
+        p.vx = Math.sin(na) * speed;
+        p.vz = Math.cos(na) * speed;
+      }
+      if (p.gravity) p.vy -= GRAV * 0.8 * dt;
+      p.x += p.vx * dt;
+      p.y += (p.vy || 0) * dt;
+      p.z += p.vz * dt;
+      p.mesh.position.set(p.x, p.y, p.z);
+      p.mesh.lookAt(p.x + p.vx, p.y + (p.vy || 0), p.z + p.vz);
+      let dead = false;
+      // ground / bounds
+      const gy = sampleGround(p.x, p.z, p.y + 2);
+      if (p.y < gy + 0.2) {
+        if (p.kind === "junk") { boom(p.x, gy + 0.5, p.z, 4.5, p.dmg, p.owner); dead = true; }
+        else if (p.kind === "ricochet" && p.bounces > 0) { p.vy = Math.abs(p.vy || 4) * 0.6; p.y = gy + 0.25; p.bounces -= 1; }
+        else if (p.radius) { boom(p.x, gy + 0.5, p.z, p.radius, p.dmg, p.owner); dead = true; }
+        else dead = true;
+      }
+      if (!dead && arena && (Math.abs(p.x) > arena.bounds.hw || Math.abs(p.z) > arena.bounds.hd)) {
+        if (p.kind === "ricochet" && p.bounces > 0) {
+          if (Math.abs(p.x) > arena.bounds.hw) p.vx *= -1;
+          else p.vz *= -1;
+          p.bounces -= 1;
+          sfx.hit();
+        } else dead = true;
+      }
+      // static colliders
+      if (!dead && arena) {
+        for (let c = 0; c < arena.colliders.length; c += 1) {
+          const col = arena.colliders[c];
+          if (p.y < col.base || p.y > col.top) continue;
+          if (Math.abs(p.x - col.x) < col.hw && Math.abs(p.z - col.z) < col.hd) {
+            if (p.kind === "ricochet" && p.bounces > 0) {
+              const penX = col.hw - Math.abs(p.x - col.x);
+              const penZ = col.hd - Math.abs(p.z - col.z);
+              if (penX < penZ) p.vx *= -1; else p.vz *= -1;
+              p.bounces -= 1;
+              sfx.hit();
+            } else if (p.radius) {
+              boom(p.x, p.y, p.z, p.radius, p.dmg, p.owner);
+              dead = true;
+            } else dead = true;
+            break;
+          }
+        }
+      }
+      // cars
+      if (!dead) {
+        for (let c = 0; c < state.cars.length; c += 1) {
+          const car = state.cars[c];
+          if (car === p.owner || car.wrecked) continue;
+          const r = car.def.stats.radius + 0.6;
+          if (Math.abs(car.y + 1.2 - p.y) > 3) continue;
+          if ((car.x - p.x) ** 2 + (car.z - p.z) ** 2 < r * r) {
+            if (p.kind === "freeze") {
+              applyDamage(car, p.dmg, { by: p.owner, type: "freeze" });
+              car.frozen = Math.max(car.frozen, 2.6);
+              sfx.freeze();
+              burst(car.x, car.y + 2, car.z, 0x9fe8ff, 12, 6);
+            } else if (p.radius) {
+              boom(p.x, p.y, p.z, p.radius, p.dmg, p.owner);
+            } else {
+              applyDamage(car, p.dmg, { by: p.owner, type: "shot" });
+              burst(p.x, p.y, p.z, 0xffe08a, 3, 4);
+            }
+            dead = true;
+            break;
+          }
+        }
+      }
+      if (dead) {
+        scene.remove(p.mesh);
+        state.projectiles.splice(i, 1);
+      }
+    }
+  }
+
+  // ---------- specials ----------
+  function fireSpecial(car) {
+    if (car.special < 100 || car.wrecked || car.frozen > 0 || car.stunned > 0) return;
+    car.special = 0;
+    if (car.isPlayer) {
+      sfx.special();
+      flash("rgba(255,220,120,0.35)", 130);
+    }
+    announce("special");
+    const id = car.def.special.id;
+    const f = forward(car);
+    switch (id) {
+      case "freeze_nova": {
+        boomVisual(car.x, car.y + 1.5, car.z, 16);
+        burst(car.x, car.y + 1.5, car.z, 0x9fe8ff, 26, 14, 4);
+        sfx.freeze();
+        state.cars.forEach((other) => {
+          if (other === car || other.wrecked) return;
+          if (Math.hypot(other.x - car.x, other.z - car.z) < 18) {
+            applyDamage(other, 10, { by: car, type: "special" });
+            other.frozen = Math.max(other.frozen, 3);
+          }
+        });
+        break;
+      }
+      case "drain_beam": {
+        const target = nearestEnemy(car, 32);
+        if (target) car.drain = { target, t: 3 };
+        break;
+      }
+      case "spike_burst": {
+        for (let i = -3; i <= 3; i += 1) {
+          const a = car.heading + Math.PI + i * 0.22;
+          dropMine(car, car.x + Math.sin(a) * 4.5, car.z + Math.cos(a) * 4.5, 12, 0xb0b6bd, { slow: true });
+        }
+        break;
+      }
+      case "ground_slam":
+        car.vy = 9;
+        car.slamming = true;
+        break;
+      case "casket_bombs":
+        car.casketDrop = { t: 2.5, tick: 0 };
+        break;
+      case "tractor_shock": {
+        const target = nearestEnemy(car, 28);
+        if (target) car.tractor = { target, t: 1.0 };
+        break;
+      }
+      case "surge_volley":
+        car.volley = { t: 1.4, tick: 0, count: 0 };
+        break;
+      case "mower_smoke":
+        car.mower = 2.6;
+        car.smokeTick = 0;
+        break;
+      case "chain_hook": {
+        const target = nearestEnemy(car, 32, 0.1);
+        if (target) {
+          car.hook = { target, t: 0.8 };
+          applyDamage(target, 15, { by: car, type: "special" });
+        }
+        break;
+      }
+      case "junk_barrage": {
+        car.barrage = { t: 1.6, tick: 0 };
+        // compactor crush burst up front
+        state.cars.forEach((other) => {
+          if (other === car || other.wrecked) return;
+          const dx = other.x - car.x, dz = other.z - car.z;
+          const d = Math.hypot(dx, dz);
+          const dot = (dx / (d || 1)) * f.x + (dz / (d || 1)) * f.z;
+          if (d < 8 && dot > 0.4) {
+            applyDamage(other, 20, { by: car, type: "special" });
+            impulse(other, dx, dz, 6);
+          }
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const beamGeo = new THREE.BoxGeometry(0.4, 0.4, 1);
+  let beamMesh = null, hookMesh = null;
+  function ensureBeam() {
+    if (!beamMesh) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xc95eff });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+      beamMesh = new THREE.Mesh(beamGeo, material);
+      scene.add(beamMesh);
+    }
+    return beamMesh;
+  }
+  function ensureHook() {
+    if (!hookMesh) {
+      const material = new THREE.MeshBasicMaterial({ color: 0xc9cdd4 });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+      hookMesh = new THREE.Mesh(beamGeo, material);
+      scene.add(hookMesh);
+    }
+    return hookMesh;
+  }
+  function stretchBeam(mesh, ax, ay, az, bx, by, bz, thick) {
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const len = Math.hypot(dx, dy, dz) || 0.001;
+    mesh.position.set((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2);
+    mesh.scale.set(thick, thick, len);
+    mesh.lookAt(bx, by, bz);
+    mesh.visible = true;
+  }
+
+  function updateSpecialStates(car, dt) {
+    // drain beam
+    if (car.drain) {
+      const d = car.drain;
+      d.t -= dt;
+      const target = d.target;
+      if (d.t <= 0 || target.wrecked || Math.hypot(target.x - car.x, target.z - car.z) > 38) {
+        car.drain = null;
+        if (beamMesh) beamMesh.visible = false;
+      } else {
+        const steal = 13 * dt;
+        applyDamage(target, steal, { by: car, type: "drain", pierce: false });
+        car.hp = Math.min(car.maxHp, car.hp + steal * 0.8);
+        stretchBeam(ensureBeam(), car.x, car.y + 2, car.z, target.x, target.y + 1.5, target.z, 1);
+      }
+    }
+    // ground slam
+    if (car.slamming && car.y <= sampleGround(car.x, car.z, car.y) + 0.1 && car.vy <= 0) {
+      car.slamming = false;
+      boom(car.x, car.y + 0.5, car.z, 15, 25, car);
+      state.shake = Math.min(1.6, state.shake + 0.8);
+    }
+    // caskets
+    if (car.casketDrop) {
+      car.casketDrop.t -= dt;
+      car.casketDrop.tick -= dt;
+      if (car.casketDrop.tick <= 0) {
+        car.casketDrop.tick = 0.5;
+        const f = forward(car);
+        dropMine(car, car.x - f.x * (car.def.stats.radius + 2), car.z - f.z * (car.def.stats.radius + 2), 20, 0x7a4a2b, { casket: true });
+      }
+      if (car.casketDrop.t <= 0) car.casketDrop = null;
+    }
+    // tractor beam
+    if (car.tractor) {
+      const t = car.tractor;
+      t.t -= dt;
+      const target = t.target;
+      if (t.t <= 0 || target.wrecked) {
+        if (!target.wrecked) {
+          applyDamage(target, 25, { by: car, type: "shock" });
+          target.stunned = Math.max(target.stunned, 1.2);
+          burst(target.x, target.y + 1.8, target.z, 0xffe63b, 14, 7);
+        }
+        car.tractor = null;
+        if (beamMesh) beamMesh.visible = false;
+      } else {
+        const pull = 34 * dt;
+        const dx = car.x - target.x, dz = car.z - target.z;
+        const len = Math.hypot(dx, dz) || 1;
+        target.x += (dx / len) * pull;
+        target.z += (dz / len) * pull;
+        stretchBeam(ensureBeam(), car.x, car.y + 2.2, car.z, target.x, target.y + 1.5, target.z, 1.4);
+      }
+    }
+    // surge volley
+    if (car.volley) {
+      car.volley.t -= dt;
+      car.volley.tick -= dt;
+      if (car.volley.tick <= 0 && car.volley.count < 6) {
+        car.volley.tick = 0.22;
+        car.volley.count += 1;
+        car.hp = Math.max(1, car.hp - 2); // he pays for his own stars
+        const target = nearestEnemy(car, 80);
+        const a = car.heading + (Math.random() - 0.5) * 0.8;
+        spawnProjectile({
+          kind: "surge", color: 0xffd23b,
+          x: car.x, y: car.y + 2, z: car.z,
+          vx: Math.sin(a) * 40, vz: Math.cos(a) * 40, vy: 6,
+          ttl: 3, dmg: 14, radius: 5, owner: car, target, turn: 3.2, gravity: false,
+        });
+      }
+      if (car.volley.t <= 0) car.volley = null;
+    }
+    // mower + smoke
+    if (car.mower > 0) {
+      car.mower -= dt;
+      car.smokeTick -= dt;
+      if (car.smokeTick <= 0) {
+        car.smokeTick = 0.3;
+        const f = forward(car);
+        spawnSmoke(car.x - f.x * 4, car.y + 1.5, car.z - f.z * 4);
+      }
+      state.cars.forEach((other) => {
+        if (other === car || other.wrecked) return;
+        const d = Math.hypot(other.x - car.x, other.z - car.z);
+        if (d < car.def.stats.radius + 3 && (other.mowerHit || 0) <= state.time) {
+          other.mowerHit = state.time + 0.5;
+          applyDamage(other, 16, { by: car, type: "mower" });
+          impulse(other, other.x - car.x, other.z - car.z, 4);
+          burst(other.x, other.y + 1, other.z, 0x9be063, 8, 6);
+        }
+      });
+    }
+    // chain hook
+    if (car.hook) {
+      const h = car.hook;
+      h.t -= dt;
+      const target = h.target;
+      if (h.t <= 0 || target.wrecked) {
+        car.hook = null;
+        if (hookMesh) hookMesh.visible = false;
+      } else {
+        const pull = 46 * dt;
+        const dx = car.x - target.x, dz = car.z - target.z;
+        const len = Math.hypot(dx, dz) || 1;
+        target.x += (dx / len) * pull;
+        target.z += (dz / len) * pull;
+        target.vx += (dx / len) * 6 * dt;
+        target.vz += (dz / len) * 6 * dt;
+        stretchBeam(ensureHook(), car.x, car.y + 2, car.z, target.x, target.y + 1.4, target.z, 0.7);
+      }
+    }
+    // junk barrage
+    if (car.barrage) {
+      car.barrage.t -= dt;
+      car.barrage.tick -= dt;
+      if (car.barrage.tick <= 0) {
+        car.barrage.tick = 0.2;
+        const target = nearestEnemy(car, 60);
+        if (target) {
+          const dx = target.x - car.x, dz = target.z - car.z;
+          const d = Math.hypot(dx, dz) || 1;
+          spawnProjectile({
+            kind: "junk", color: 0x9a8a5a,
+            x: car.x, y: car.y + 3, z: car.z,
+            vx: (dx / d) * 26 + (Math.random() - 0.5) * 8,
+            vz: (dz / d) * 26 + (Math.random() - 0.5) * 8,
+            vy: 10 + Math.random() * 4,
+            ttl: 4, dmg: 10, owner: car, gravity: true,
+          });
+        }
+      }
+      if (car.barrage.t <= 0) car.barrage = null;
+    }
+    // fire trail weapon
+    if (car.fireTrail > 0) {
+      car.fireTrail -= dt;
+      car.fireTick = (car.fireTick || 0) - dt;
+      if (car.fireTick <= 0) {
+        car.fireTick = 0.16;
+        dropFirePatch(car);
+      }
+      if (car.fireTrail <= 0 && car.weapon === "fire") car.weapon = null;
+    }
+  }
+
+  const smokeGeo = new THREE.SphereGeometry(2.4, 7, 6);
+  function spawnSmoke(x, y, z) {
+    const material = new THREE.MeshBasicMaterial({ color: 0x555b60, transparent: true, opacity: 0.55 });
+    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
+    const mesh = new THREE.Mesh(smokeGeo, material);
+    mesh.position.set(x, y, z);
+    scene.add(mesh);
+    state.smokes.push({ x, z, mesh, ttl: 5 });
+  }
+  function updateSmokes(dt) {
+    for (let i = state.smokes.length - 1; i >= 0; i -= 1) {
+      const s = state.smokes[i];
+      s.ttl -= dt;
+      s.mesh.material.opacity = Math.min(0.55, s.ttl * 0.2);
+      s.mesh.scale.setScalar(1 + (5 - s.ttl) * 0.12);
+      if (s.ttl <= 0) {
+        scene.remove(s.mesh);
+        state.smokes.splice(i, 1);
+      }
+    }
+  }
+  function inSmoke(car) {
+    return state.smokes.some((s) => (car.x - s.x) ** 2 + (car.z - s.z) ** 2 < 26);
+  }
+
+  // ---------- driving ----------
+  function updateCar(car, dt) {
+    if (car.wrecked) {
+      car.wreckT += dt;
+      // wrecks can still be shoved around; keep the shell where the hulk is
+      car.mesh.position.set(car.x, car.y + 1.2, car.z);
+      if (Math.random() < dt * 3) burst(car.x, car.y + 1.6, car.z, 0x3a3a44, 2, 2, 5);
+      return;
+    }
+    // status timers
+    if (car.frozen > 0) car.frozen -= dt;
+    if (car.stunned > 0) car.stunned -= dt;
+    if (car.slowed > 0) car.slowed -= dt;
+    if (car.shield > 0) car.shield -= dt;
+    if (car.boost > 0) car.boost -= dt;
+    if (car.burning > 0) {
+      car.burning -= dt;
+      car.burnTick -= dt;
+      if (car.burnTick <= 0) {
+        car.burnTick = 0.5;
+        applyDamage(car, 2.5, { by: car.burnBy, type: "burn" });
+        burst(car.x, car.y + 1.6, car.z, 0xff8a2e, 3, 3, 5);
+      }
+    }
+    car.fx.ice.visible = car.frozen > 0;
+    car.fx.shield.visible = car.shield > 0;
+    if (car.fireCooldown > 0) car.fireCooldown -= dt;
+    car.special = Math.min(100, car.special + (car.isPlayer ? SPECIAL_RATE : BOT_SPECIAL_RATE) * dt);
+
+    const disabled = car.frozen > 0 || car.stunned > 0;
+    const stats = car.def.stats;
+    const f = forward(car);
+    const speedAlong = car.vx * f.x + car.vz * f.z;
+
+    // steering (speed-sensitive, reversed in reverse)
+    if (!disabled && Math.abs(speedAlong) > 0.6) {
+      const grip = Math.min(1, Math.abs(speedAlong) / 9);
+      const dir = speedAlong >= 0 ? 1 : -1;
+      car.heading += car.steer * stats.turn * grip * dt * dir;
+    }
+    // throttle
+    const topSpeed = stats.top * (car.boost > 0 ? 1.45 : 1) * (car.slowed > 0 ? 0.55 : 1);
+    const accel = stats.accel * (car.boost > 0 ? 1.6 : 1);
+    if (!disabled && car.throttle) {
+      const targetDir = car.throttle > 0 ? 1 : -1;
+      const cap = targetDir > 0 ? topSpeed : topSpeed * 0.45;
+      if (Math.abs(speedAlong) < cap || Math.sign(speedAlong) !== targetDir) {
+        car.vx += f.x * accel * car.throttle * dt;
+        car.vz += f.z * accel * car.throttle * dt;
+      }
+    }
+    // slow zone drag
+    let zoneFactor = 1;
+    if (arena) {
+      for (const zn of arena.slowZones) {
+        if (Math.abs(car.x - zn.x) < zn.hw && Math.abs(car.z - zn.z) < zn.hd && car.y < 1.5) {
+          zoneFactor = zn.factor;
+          break;
+        }
+      }
+    }
+    // friction: split velocity into forward/lateral
+    const f2 = forward(car);
+    const fwdV = car.vx * f2.x + car.vz * f2.z;
+    let latX = car.vx - f2.x * fwdV;
+    let latZ = car.vz - f2.z * fwdV;
+    const latDamp = Math.exp(-dt * (car.drift ? 1.8 : 6.5));
+    const fwdDamp = Math.exp(-dt * (car.throttle && !disabled ? 0.35 : 1.6));
+    latX *= latDamp;
+    latZ *= latDamp;
+    const newFwd = fwdV * fwdDamp * (zoneFactor < 1 ? Math.exp(-dt * (1 - zoneFactor) * 4) : 1);
+    car.vx = f2.x * newFwd + latX;
+    car.vz = f2.z * newFwd + latZ;
+
+    // integrate
+    car.x += car.vx * dt;
+    car.z += car.vz * dt;
+    // bounds clamp
+    if (arena) {
+      car.x = Math.max(-arena.bounds.hw + 1, Math.min(arena.bounds.hw - 1, car.x));
+      car.z = Math.max(-arena.bounds.hd + 1, Math.min(arena.bounds.hd - 1, car.z));
+    }
+    // vertical
+    const gy = sampleGround(car.x, car.z, car.y);
+    if (car.y > gy + CAR_HEIGHT_EPS) {
+      car.vy -= GRAV * dt;
+      car.y += car.vy * dt;
+      if (car.y <= gy) {
+        if (car.vy < -16) {
+          applyDamage(car, Math.min(30, (-car.vy - 16) * 2.2), { type: "impact" });
+          burst(car.x, gy + 0.4, car.z, 0x8a8d92, 8, 6);
+          if (car.isPlayer) state.shake = Math.min(1.4, state.shake + 0.5);
+        }
+        car.y = gy;
+        car.vy = 0;
+      }
+    } else {
+      car.y = car.y + (gy - car.y) * Math.min(1, dt * 14);
+      car.vy = 0;
+    }
+    // fall zones (abyss) — exempt only if the surface the car is actually
+    // on (its own step range) is real; a platform overhead doesn't count
+    if (arena && car.y < 2.2) {
+      for (const fz of arena.fallZones) {
+        if (Math.abs(car.x - fz.x) < fz.hw && Math.abs(car.z - fz.z) < fz.hd && sampleGround(car.x, car.z, car.y) < 0.5) {
+          applyDamage(car, FALL_DAMAGE, { type: "fall" });
+          if (car.isPlayer) announce("fall");
+          respawnCar(car);
+          break;
+        }
+      }
+    }
+
+    collideStatics(car);
+
+    // weapons + specials
+    if (!disabled && car.wantFire) fireWeapon(car);
+    if (!disabled && car.wantSpecial) { fireSpecial(car); car.wantSpecial = false; }
+    updateSpecialStates(car, dt);
+
+    // mesh sync
+    car.mesh.position.set(car.x, car.y, car.z);
+    car.mesh.rotation.set(0, car.heading, 0);
+    const speed = Math.hypot(car.vx, car.vz);
+    car.wheelSpin += (speedAlong >= 0 ? 1 : -1) * speed * dt * 1.6;
+    car.mesh.userData.wheels.forEach((w) => { w.rotation.x = car.wheelSpin; });
+    if (car.mesh.userData.spinner) car.mesh.userData.spinner.rotation.y += dt * 6;
+    if (car.mesh.userData.boom) car.mesh.userData.boom.rotation.x = 0.35 + Math.sin(state.time * 2) * 0.1;
+    // boost flames
+    if (car.boost > 0 && Math.random() < dt * 30) {
+      const b = forward(car);
+      burst(car.x - b.x * stats.radius, car.y + 0.7, car.z - b.z * stats.radius, 0x2ee0ff, 2, 3, 2);
+    }
+  }
+
+  function respawnCar(car) {
+    if (!arena || car.wrecked) return;
+    let best = arena.spawns[0], bestD = -1;
+    // farthest spawn from enemies
+    arena.spawns.forEach((s) => {
+      let minD = 1e9;
+      state.cars.forEach((other) => {
+        if (other === car || other.wrecked) return;
+        minD = Math.min(minD, Math.hypot(other.x - s.x, other.z - s.z));
+      });
+      if (minD > bestD) { bestD = minD; best = s; }
+    });
+    car.x = best.x;
+    car.z = best.z;
+    car.heading = best.h;
+    car.vx = 0; car.vz = 0; car.vy = 0;
+    car.y = sampleGround(best.x, best.z, 99);
+    burst(car.x, car.y + 1, car.z, 0x63f2c8, 12, 8);
+  }
+
+  function collideCars(dt) {
+    for (let i = 0; i < state.cars.length; i += 1) {
+      for (let j = i + 1; j < state.cars.length; j += 1) {
+        const a = state.cars[i], b = state.cars[j];
+        if (a.wrecked && b.wrecked) continue;
+        if (Math.abs(a.y - b.y) > 2.4) continue;
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const rr = a.def.stats.radius + b.def.stats.radius;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= rr * rr || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d, nz = dz / d;
+        const overlap = rr - d;
+        const ma = a.def.stats.mass, mb = b.def.stats.mass;
+        const total = ma + mb;
+        a.x -= nx * overlap * (mb / total);
+        a.z -= nz * overlap * (mb / total);
+        b.x += nx * overlap * (ma / total);
+        b.z += nz * overlap * (ma / total);
+        // relative speed along normal -> ram damage
+        const rel = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+        if (rel > 6) {
+          const key = i * 100 + j;
+          const last = a.ramTimers.get(key) || -9;
+          if (state.time - last > RAM_COOLDOWN) {
+            a.ramTimers.set(key, state.time);
+            const dmg = (rel - 5) * 1.1;
+            // mass ratio rewards the heavier rammer, capped so a garbage
+            // truck can't one-shot the bike
+            if (!b.wrecked) applyDamage(b, Math.min(42, dmg * (ma / mb)), { by: a, type: "ram" });
+            if (!a.wrecked) applyDamage(a, Math.min(30, dmg * 0.4 * (mb / ma)), { by: b, type: "ram" });
+            burst((a.x + b.x) / 2, a.y + 1.2, (a.z + b.z) / 2, 0xffd23b, 7, 6);
+            sfx.hit();
+          }
+        }
+        // momentum exchange
+        const impulseAmt = rel * 0.8;
+        if (rel > 0) {
+          a.vx -= nx * impulseAmt * (mb / total);
+          a.vz -= nz * impulseAmt * (mb / total);
+          b.vx += nx * impulseAmt * (ma / total);
+          b.vz += nz * impulseAmt * (ma / total);
+        }
+      }
+    }
+  }
+
+  // ---------- AI ----------
+  const ARCHETYPES = ["rammer", "camper", "hoarder", "coward"];
+  function updateAI(car, dt) {
+    const ai = car.ai;
+    if (!ai || car.wrecked) return;
+    ai.retarget -= dt;
+    if (ai.retarget <= 0 || !ai.target || ai.target.wrecked) {
+      ai.retarget = 1.2 + Math.random();
+      ai.target = nearestEnemy(car, 1e9);
+    }
+    const target = ai.target;
+    if (!target) { car.throttle = 0; return; }
+    if (inSmoke(car)) {
+      // blinded: wander
+      car.throttle = 0.5;
+      car.steer = Math.sin(state.time * 2 + ai.wander);
+      return;
+    }
+    let destX = target.x, destZ = target.z;
+    const distToTarget = Math.hypot(target.x - car.x, target.z - car.z);
+    const lowHp = car.hp < car.maxHp * 0.4;
+    let wantRange = 0;
+    if (ai.archetype === "camper") wantRange = 24;
+    if (ai.archetype === "coward") wantRange = lowHp ? 48 : 26;
+    if (ai.archetype === "hoarder" && (!car.weapon || car.ammo <= 0)) {
+      let bestP = null, bestD = 1e9;
+      state.pickups.forEach((p) => {
+        if (!p.active) return;
+        const d = Math.hypot(p.x - car.x, p.z - car.z);
+        if (d < bestD) { bestD = d; bestP = p; }
+      });
+      if (bestP) { destX = bestP.x; destZ = bestP.z; wantRange = 0; }
+    } else if (wantRange > 0 && distToTarget < wantRange) {
+      // back off / strafe around target
+      const away = Math.atan2(car.x - target.x, car.z - target.z) + 0.7;
+      destX = target.x + Math.sin(away) * (wantRange + 6);
+      destZ = target.z + Math.cos(away) * (wantRange + 6);
+    }
+    // steer toward dest
+    const desired = Math.atan2(destX - car.x, destZ - car.z);
+    let diff = desired - car.heading;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    car.steer = Math.max(-1, Math.min(1, diff * 2.2));
+    car.throttle = Math.abs(diff) > 2.2 ? 0.25 : 1;
+    car.drift = Math.abs(diff) > 1.4;
+
+    // edge probe when elevated: don't drive into the void
+    if (car.y > 3) {
+      const f = forward(car);
+      const px = car.x + f.x * 7, pz = car.z + f.z * 7;
+      const pg = sampleGround(px, pz, car.y);
+      if (pg < car.y - 3.5) {
+        car.throttle = -0.6;
+        car.steer = 1;
+      }
+    }
+    // stuck recovery
+    const speed = Math.hypot(car.vx, car.vz);
+    if (speed < 1.6 && car.throttle > 0.4) ai.stuck += dt;
+    else ai.stuck = Math.max(0, ai.stuck - dt * 2);
+    if (ai.stuck > 1.1) { ai.reverseT = 0.9; ai.stuck = 0; }
+    if (ai.reverseT > 0) {
+      ai.reverseT -= dt;
+      car.throttle = -1;
+      car.steer = -Math.sign(car.steer || 1);
+    }
+    // firing
+    car.wantFire = false;
+    if (car.weapon && car.ammo > 0) {
+      const w = WEAPONS[car.weapon];
+      if (w.kind === "mine" || w.kind === "remote" || w.kind === "fire") {
+        if (distToTarget < 16 && Math.random() < dt * 2) car.wantFire = true;
+        if (w.kind === "remote" && car.remoteBomb) {
+          const bd = Math.hypot(target.x - car.remoteBomb.x, target.z - car.remoteBomb.z);
+          car.wantFire = bd < 8;
+        }
+      } else if (distToTarget < 52 && Math.abs(diff) < 0.4) {
+        car.wantFire = true;
+      }
+    }
+    // special usage
+    if (car.special >= 100) {
+      const id = car.def.special.id;
+      const close = distToTarget < 14;
+      const mid = distToTarget < 30;
+      if (
+        ((id === "freeze_nova" || id === "ground_slam" || id === "mower_smoke" || id === "junk_barrage") && close) ||
+        ((id === "drain_beam" || id === "tractor_shock" || id === "chain_hook") && mid) ||
+        ((id === "surge_volley" || id === "spike_burst" || id === "casket_bombs") && Math.random() < dt * 0.6)
+      ) {
+        car.wantSpecial = true;
+      }
+    }
+  }
+
+  // ---------- camera ----------
+  const camPos = new THREE.Vector3();
+  function updateCamera(dt, snap = false) {
+    const car = state.player;
+    if (!car) return;
+    const back = state.lookBack ? -1 : 1;
+    const f = forward(car);
+    const dist = 10.5, height = 4.6;
+    const tx = car.x - f.x * dist * back;
+    const tz = car.z - f.z * dist * back;
+    const ty = car.y + height;
+    if (snap) camPos.set(tx, ty, tz);
+    else camPos.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 5.5));
+    // keep camera above the ground under it
+    const cg = sampleGround(camPos.x, camPos.z, camPos.y + 10);
+    const cy = Math.max(camPos.y, cg + 2.2);
+    let sx = 0, sy = 0;
+    if (state.shake > 0.01) {
+      sx = (Math.random() - 0.5) * state.shake * 0.7;
+      sy = (Math.random() - 0.5) * state.shake * 0.5;
+    }
+    camera.position.set(camPos.x + sx, cy + sy, camPos.z + sx);
+    camera.lookAt(car.x + f.x * 5 * back, car.y + 1.6, car.z + f.z * 5 * back);
+  }
+
+  // ---------- input ----------
+  const keys = {};
+  window.addEventListener("keydown", (e) => {
+    if (e.repeat) return;
+    keys[e.code] = true;
+    if (state.phase === "running") {
+      if (e.code === "Space") { e.preventDefault(); }
+      if (e.code === "KeyE") { if (state.player) state.player.wantSpecial = true; }
+      if (e.code === "KeyT") sponsorDrop();
+      if (e.code === "KeyR") state.lookBack = true;
+      if (e.code === "KeyP") togglePause();
+      // Escape exits max screen first (handled in bindFullscreen), then pauses.
+      if (e.code === "Escape" && !document.fullscreenElement && !(el.wrap && el.wrap.classList.contains("is-maxed"))) togglePause();
+    } else if (state.phase === "menu") {
+      if (e.code === "ArrowLeft") cycleVehicle(-1);
+      if (e.code === "ArrowRight") cycleVehicle(1);
+      if (e.code === "Enter") startMatch();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    keys[e.code] = false;
+    if (e.code === "KeyR") state.lookBack = false;
+  });
+  let mouseHeld = false;
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 0) mouseHeld = true;
+    if (e.button === 2 && state.phase === "running" && state.player) state.player.wantSpecial = true;
+  });
+  window.addEventListener("mouseup", (e) => {
+    if (e.button === 0) mouseHeld = false;
+  });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  const touchMove = { x: 0, z: 0 };
+  let touchFireHeld = false;
+  function bindTouch() {
+    const stick = $("touch-stick");
+    if (stick) {
+      let pointerId = null, origin = null;
+      const update = (event) => {
+        if (!origin) return;
+        const radius = Math.max(30, Math.min(stick.clientWidth, stick.clientHeight) * 0.4);
+        const dx = event.clientX - origin.x;
+        const dy = event.clientY - origin.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 8) { touchMove.x = 0; touchMove.z = 0; return; }
+        const scale = Math.min(1, dist / radius);
+        touchMove.x = (dx / dist) * scale;
+        touchMove.z = (dy / dist) * scale;
+      };
+      const release = () => {
+        pointerId = null;
+        origin = null;
+        touchMove.x = 0;
+        touchMove.z = 0;
+        stick.classList.remove("is-held");
+      };
+      stick.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        pointerId = event.pointerId;
+        origin = { x: event.clientX, y: event.clientY };
+        stick.classList.add("is-held");
+        if (stick.setPointerCapture) { try { stick.setPointerCapture(event.pointerId); } catch (_) {} }
+        update(event);
+      });
+      stick.addEventListener("pointermove", (event) => {
+        if (event.pointerId !== pointerId) return;
+        event.preventDefault();
+        update(event);
+      });
+      ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => {
+        stick.addEventListener(name, (event) => {
+          if (name !== "lostpointercapture" && event.pointerId !== pointerId) return;
+          release();
+        });
+      });
+      window.addEventListener("blur", release);
+    }
+    const hold = (id, onDown, onUp) => {
+      const btn = $(id);
+      if (!btn) return;
+      btn.addEventListener("pointerdown", (e) => { e.preventDefault(); onDown(); btn.classList.add("is-held"); });
+      ["pointerup", "pointercancel", "pointerleave"].forEach((name) => {
+        btn.addEventListener(name, () => { if (onUp) onUp(); btn.classList.remove("is-held"); });
+      });
+    };
+    hold("touch-fire", () => { touchFireHeld = true; if (state.player) state.player.wantFire = true; }, () => {
+      touchFireHeld = false;
+      if (state.player) state.player.wantFire = false;
+    });
+    hold("touch-special", () => { if (state.player) state.player.wantSpecial = true; });
+    hold("touch-drift", () => { touchMove.drift = true; }, () => { touchMove.drift = false; });
+  }
+
+  function readPlayerInput() {
+    const car = state.player;
+    if (!car || car.wrecked) return;
+    let throttle = 0, steer = 0;
+    if (keys.KeyW || keys.ArrowUp) throttle += 1;
+    if (keys.KeyS || keys.ArrowDown) throttle -= 1;
+    if (keys.KeyA || keys.ArrowLeft) steer -= 1;
+    if (keys.KeyD || keys.ArrowRight) steer += 1;
+    if (Math.abs(touchMove.x) > 0.05 || Math.abs(touchMove.z) > 0.05) {
+      throttle = -touchMove.z;
+      steer = touchMove.x;
+    }
+    car.throttle = Math.max(-1, Math.min(1, throttle));
+    car.steer = Math.max(-1, Math.min(1, steer));
+    car.drift = !!(keys.ShiftLeft || keys.ShiftRight || touchMove.drift);
+    car.wantFire = !!(keys.Space || mouseHeld || touchFireHeld);
+  }
+
+  // ---------- HUD ----------
+  function bar(elm, pct) {
+    if (elm) elm.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
+  }
+  function updateHUD() {
+    const car = state.player;
+    if (!car) return;
+    bar(el.hpFill, (car.hp / car.maxHp) * 100);
+    if (el.hpText) el.hpText.textContent = Math.max(0, Math.ceil(car.hp));
+    if (el.weaponName) el.weaponName.textContent = car.weapon ? WEAPONS[car.weapon].name : "RAM ONLY";
+    if (el.weaponAmmo) {
+      el.weaponAmmo.textContent = car.weapon
+        ? (car.weapon === "remote" && car.remoteBomb ? "DETONATE" : `x${car.ammo}`)
+        : "";
+    }
+    bar(el.specialFill, car.special);
+    if (el.specialName) {
+      el.specialName.textContent = car.def.special.name + (car.special >= 100 ? " — READY (E)" : "");
+      el.specialName.classList.toggle("is-ready", car.special >= 100);
+    }
+    if (el.salvage) el.salvage.textContent = state.salvage.toLocaleString();
+    const alive = state.cars.filter((c) => !c.wrecked).length;
+    if (el.alive) el.alive.textContent = `${alive}/6`;
+    if (el.statusChips) {
+      const chips = [];
+      if (car.frozen > 0) chips.push("🧊 FROZEN");
+      if (car.burning > 0) chips.push("🔥 BURNING");
+      if (car.shield > 0) chips.push(`🛡 ${car.shield.toFixed(0)}s`);
+      if (car.boost > 0) chips.push("⚡ TURBO");
+      if (car.stunned > 0) chips.push("💫 STUNNED");
+      el.statusChips.textContent = chips.join("  ");
+    }
+    drawMinimap();
+  }
+
+  function drawMinimap() {
+    if (!miniCtx || !arena) return;
+    const w = el.minimap.width, h = el.minimap.height;
+    miniCtx.fillStyle = "rgba(6,8,14,0.92)";
+    miniCtx.fillRect(0, 0, w, h);
+    const sx = w / (arena.bounds.hw * 2), sz = h / (arena.bounds.hd * 2);
+    const mapX = (x) => (x + arena.bounds.hw) * sx;
+    const mapZ = (z) => (z + arena.bounds.hd) * sz;
+    arena.minimap.forEach((r) => {
+      miniCtx.fillStyle = r.color;
+      miniCtx.globalAlpha = 0.55;
+      miniCtx.fillRect(mapX(r.x - r.hw), mapZ(r.z - r.hd), r.hw * 2 * sx, r.hd * 2 * sz);
+    });
+    miniCtx.globalAlpha = 1;
+    state.pickups.forEach((p) => {
+      if (!p.active) return;
+      miniCtx.fillStyle = "#f7d716";
+      miniCtx.fillRect(mapX(p.x) - 1, mapZ(p.z) - 1, 2, 2);
+    });
+    state.cars.forEach((car) => {
+      if (car.wrecked) {
+        miniCtx.fillStyle = "#555";
+        miniCtx.fillRect(mapX(car.x) - 1.5, mapZ(car.z) - 1.5, 3, 3);
+        return;
+      }
+      if (car.isPlayer) {
+        miniCtx.save();
+        miniCtx.translate(mapX(car.x), mapZ(car.z));
+        miniCtx.rotate(Math.atan2(Math.sin(car.heading), Math.cos(car.heading)) * -1 + Math.PI);
+        miniCtx.fillStyle = "#2ee0ff";
+        miniCtx.beginPath();
+        miniCtx.moveTo(0, -4.4);
+        miniCtx.lineTo(3, 3.4);
+        miniCtx.lineTo(-3, 3.4);
+        miniCtx.closePath();
+        miniCtx.fill();
+        miniCtx.restore();
+      } else {
+        miniCtx.fillStyle = "#ff4b6d";
+        miniCtx.beginPath();
+        miniCtx.arc(mapX(car.x), mapZ(car.z), 2.4, 0, Math.PI * 2);
+        miniCtx.fill();
+      }
+    });
+  }
+
+  // ---------- sponsor drop (rewarded ad loop) ----------
+  function sponsorDrop() {
+    if (state.phase !== "running" || state.sponsorUsed || !state.player || state.player.wrecked) return;
+    state.sponsorUsed = true;
+    if (el.sponsor) el.sponsor.hidden = true;
+    const grant = () => {
+      const car = state.player;
+      if (!car || car.wrecked) return;
+      car.shield = Math.max(car.shield, 6);
+      car.special = 100;
+      car.hp = Math.min(car.maxHp, car.hp + 25);
+      announce("sponsor", true);
+      flash("rgba(99,242,200,0.35)", 160);
+      api.toast("Sponsor Drop: shield + full special + repairs");
+    };
+    if (api.isAdFree && api.isAdFree()) {
+      grant();
+      return;
+    }
+    const wasPaused = state.paused;
+    state.paused = true;
+    api.showRewarded().then((ok) => {
+      state.paused = wasPaused;
+      if (ok) grant();
+      else {
+        state.sponsorUsed = false;
+        if (el.sponsor) el.sponsor.hidden = false;
+      }
+    });
+  }
+  if (el.sponsor) el.sponsor.addEventListener("click", sponsorDrop);
+
+  // ---------- menu ----------
+  function cycleVehicle(dir) {
+    const n = SCRAP.vehicles.list.length;
+    state.vehicleIndex = (state.vehicleIndex + dir + n) % n;
+    renderVehicleMenu();
+  }
+  function statBar(v, max) {
+    const n = Math.round((v / max) * 5);
+    return "▰".repeat(n) + "▱".repeat(5 - n);
+  }
+  function renderVehicleMenu() {
+    const def = SCRAP.vehicles.list[state.vehicleIndex];
+    if (el.vehName) el.vehName.textContent = def.name;
+    if (el.vehArch) el.vehArch.textContent = def.archetype;
+    if (el.vehFlavor) el.vehFlavor.textContent = `“${def.flavor}”`;
+    if (el.vehSpecial) el.vehSpecial.textContent = `SPECIAL: ${def.special.name} — ${def.special.desc}`;
+    if (el.vehStats) {
+      el.vehStats.innerHTML = [
+        `<span>SPEED <b>${statBar(def.stats.top, 40)}</b></span>`,
+        `<span>ARMOR <b>${statBar(def.stats.hp, 160)}</b></span>`,
+        `<span>GRIP&nbsp; <b>${statBar(def.stats.turn, 2.7)}</b></span>`,
+      ].join("");
+    }
+    if (previewMesh) previewScene.remove(previewMesh);
+    previewMesh = SCRAP.vehicles.build(def.id);
+    previewScene.add(previewMesh);
+  }
+  function renderArenaRow() {
+    if (!el.arenaRow) return;
+    el.arenaRow.innerHTML = "";
+    SCRAP.arenas.list.forEach((entry) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "scrap-arena-chip" + (entry.id === state.arenaId ? " is-active" : "");
+      btn.innerHTML = `<strong>${entry.name}</strong><span>${entry.tagline}</span>`;
+      btn.addEventListener("click", () => {
+        state.arenaId = entry.id;
+        renderArenaRow();
+      });
+      el.arenaRow.appendChild(btn);
+    });
+  }
+  if (el.vehPrev) el.vehPrev.addEventListener("click", () => cycleVehicle(-1));
+  if (el.vehNext) el.vehNext.addEventListener("click", () => cycleVehicle(1));
+
+  // ---------- match flow ----------
+  function clearWorld() {
+    if (arena) scene.remove(arena.group);
+    state.cars.forEach((c) => scene.remove(c.mesh));
+    state.projectiles.forEach((p) => scene.remove(p.mesh));
+    state.mines.forEach((m) => scene.remove(m.mesh));
+    state.firePatches.forEach((f) => scene.remove(f.mesh));
+    state.smokes.forEach((s) => scene.remove(s.mesh));
+    state.pickups.forEach((p) => scene.remove(p.mesh));
+    if (beamMesh) beamMesh.visible = false;
+    if (hookMesh) hookMesh.visible = false;
+    state.cars = [];
+    state.projectiles = [];
+    state.mines = [];
+    state.firePatches = [];
+    state.smokes = [];
+    state.pickups = [];
+    arena = null;
+  }
+
+  function startMatch() {
+    sfx.unlock();
+    clearWorld();
+    arena = SCRAP.arenas.build(state.arenaId);
+    scene.add(arena.group);
+    scene.background = new THREE.Color(arena.sky);
+    scene.fog = new THREE.Fog(arena.fog.color, arena.fog.near, arena.fog.far);
+    ps1.renderer.setClearColor(arena.sky, 1);
+    hemi.color.set(arena.hemi.sky);
+    hemi.groundColor.set(arena.hemi.ground);
+    hemi.intensity = arena.hemi.intensity;
+    sun.color.set(arena.sun.color);
+    sun.intensity = arena.sun.intensity;
+    sun.position.set(arena.sun.x, arena.sun.y, arena.sun.z);
+
+    // cars: player + 5 distinct bots
+    const playerDef = SCRAP.vehicles.list[state.vehicleIndex];
+    const others = SCRAP.vehicles.list.filter((v) => v.id !== playerDef.id);
+    for (let i = others.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [others[i], others[j]] = [others[j], others[i]];
+    }
+    const spawns = arena.spawns.slice();
+    state.player = makeCar(playerDef.id, true, spawns[0]);
+    state.cars = [state.player];
+    for (let i = 0; i < 5; i += 1) {
+      const bot = makeCar(others[i].id, false, spawns[(i + 1) % spawns.length]);
+      bot.ai.archetype = ARCHETYPES[i % ARCHETYPES.length];
+      state.cars.push(bot);
+    }
+    state.cars.forEach((car) => { car.y = sampleGround(car.x, car.z, 99); });
+    setupPickups();
+
+    state.salvage = 0;
+    state.wrecksByPlayer = 0;
+    state.firstBloodDone = false;
+    state.sponsorUsed = false;
+    state.time = 0;
+    state.shake = 0;
+    state.phase = "countdown";
+    state.countdownT = 3.4;
+    state.paused = false;
+    if (el.overlay) el.overlay.classList.remove("overlay--show");
+    if (el.menu) el.menu.hidden = true;
+    if (el.sponsor) el.sponsor.hidden = false;
+    if (el.arenaName) el.arenaName.textContent = arena.name.toUpperCase();
+    if (el.log) el.log.innerHTML = "";
+    updateCamera(0, true);
+  }
+
+  function checkMatchEnd() {
+    if (state.phase !== "running") return;
+    const alive = state.cars.filter((c) => !c.wrecked);
+    if (state.player.wrecked) {
+      endMatch(false, alive.length + 1);
+    } else if (alive.length === 1 && alive[0] === state.player) {
+      endMatch(true, 1);
+    }
+  }
+
+  function endMatch(won, placement) {
+    state.phase = "over";
+    const placeBonus = [0, 500, 300, 200, 120, 60, 0][placement] || 0;
+    addSalvage(placeBonus);
+    if (won) {
+      addSalvage(500);
+      announce("win", true);
+      sfx.win();
+      flash("rgba(255,220,120,0.4)", 300);
+    } else {
+      sfx.lose();
+    }
+    const isHigh = api.recordScore(GAME_ID, state.salvage);
+    setTimeout(() => {
+      if (el.overlayTitle) el.overlayTitle.textContent = won ? "LAST CHASSIS STANDING" : `TOTALED — P${placement}`;
+      if (el.overlaySub) {
+        el.overlaySub.textContent = won
+          ? "The Adjuster denies your victory claim, but the salvage is yours."
+          : "Your claim has been reviewed and aggressively denied.";
+      }
+      if (el.overlayScore) {
+        el.overlayScore.innerHTML =
+          `Salvage: <strong>${state.salvage.toLocaleString()}</strong> · Wrecks: <strong>${state.wrecksByPlayer}</strong> · ` +
+          (isHigh ? "<strong>NEW HIGH SCORE</strong>" : `High: <strong>${api.getHighScore(GAME_ID).toLocaleString()}</strong>`);
+      }
+      if (el.btnPrimary) el.btnPrimary.textContent = "Run it back";
+      if (el.menu) el.menu.hidden = false;
+      if (el.overlay) el.overlay.classList.add("overlay--show");
+    }, won ? 1400 : 1600);
+  }
+
+  function togglePause() {
+    if (state.phase !== "running") return;
+    state.paused = !state.paused;
+    if (el.btnPause) el.btnPause.textContent = state.paused ? "Resume" : "Pause";
+    api.toast(state.paused ? "Paused" : "Back to the derby");
+  }
+  if (el.btnPause) el.btnPause.addEventListener("click", togglePause);
+  if (el.btnRestart) {
+    el.btnRestart.addEventListener("click", () => {
+      state.phase = "menu";
+      state.paused = false;
+      clearWorld();
+      showMenu();
+    });
+  }
+
+  function showMenu() {
+    state.phase = "menu";
+    if (el.overlayTitle) el.overlayTitle.textContent = "SCRAP CIRCUIT";
+    if (el.overlaySub) el.overlaySub.textContent = "Last Chassis Standing. Ten unhinged service vehicles, six arenas, one very hostile insurance adjuster.";
+    if (el.overlayScore) {
+      const high = api.getHighScore(GAME_ID);
+      el.overlayScore.textContent = high ? `High salvage: ${high.toLocaleString()}` : "";
+    }
+    if (el.btnPrimary) el.btnPrimary.textContent = "Start your engine";
+    if (el.menu) el.menu.hidden = false;
+    if (el.overlay) el.overlay.classList.add("overlay--show");
+    renderVehicleMenu();
+    renderArenaRow();
+  }
+  if (el.btnPrimary) el.btnPrimary.addEventListener("click", startMatch);
+
+  // ---------- fullscreen (site max-screen pattern) ----------
+  function bindFullscreen() {
+    const fsBtn = $("btn-fullscreen");
+    const fsTarget = canvas.closest(".canvas-wrap") || canvas.parentElement;
+    if (!fsTarget) return;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const updateBtn = () => {
+      if (!fsBtn) return;
+      const on = isMaxed();
+      fsBtn.textContent = on ? "✕" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateBtn();
+      window.dispatchEvent(new Event("resize"));
+      resize();
+      if (on) canvas.focus({ preventScroll: true });
+    };
+    const toggle = () => {
+      const on = !isMaxed();
+      setMaxed(on);
+      if (on) {
+        const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+        if (req) { try { const r = req.call(fsTarget); if (r && r.catch) r.catch(() => {}); } catch (_) {} }
+      } else if (nativeFsEl()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) { try { exit.call(document); } catch (_) {} }
+      }
+    };
+    if (fsBtn) fsBtn.addEventListener("click", toggle);
+    const onNativeChange = () => { if (!nativeFsEl() && isMaxed()) setMaxed(false); };
+    document.addEventListener("fullscreenchange", onNativeChange);
+    document.addEventListener("webkitfullscreenchange", onNativeChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+    });
+    updateBtn();
+  }
+
+  // ---------- resize / loop ----------
+  function resize() {
+    const wrap = el.wrap;
+    if (!wrap) return;
+    const w = wrap.clientWidth || canvas.clientWidth || 960;
+    const h = wrap.clientHeight || canvas.clientHeight || 540;
+    const aspect = ps1.resize(w, h);
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+    previewCam.aspect = aspect;
+    previewCam.updateProjectionMatrix();
+  }
+
+  let lastT = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(1 / 30, (now - lastT) / 1000);
+    lastT = now;
+
+    if (state.phase === "menu" || (state.phase === "over" && el.overlay && el.overlay.classList.contains("overlay--show"))) {
+      if (previewMesh) previewMesh.rotation.y += dt * 0.7;
+      ps1.render(previewScene, previewCam);
+      sfx.engine(0, false);
+      return;
+    }
+    if (state.paused) {
+      ps1.render(scene, camera);
+      sfx.engine(0, false);
+      return;
+    }
+
+    state.time += dt;
+    if (state.barkCooldown > 0) state.barkCooldown -= dt;
+    state.shake = Math.max(0, state.shake - dt * 2.2);
+
+    if (state.phase === "countdown") {
+      state.countdownT -= dt;
+      const n = Math.min(3, Math.max(1, Math.ceil(state.countdownT)));
+      if (el.countdown) {
+        el.countdown.hidden = false;
+        el.countdown.textContent = state.countdownT > 0.4 ? String(n) : "SCRAP!";
+      }
+      if (state.countdownT <= 0) {
+        state.phase = "running";
+        if (el.countdown) el.countdown.hidden = true;
+        announce("start", true);
+      }
+      updateCamera(dt);
+      updateHUD();
+      ps1.render(scene, camera);
+      return;
+    }
+
+    if (state.phase === "running" || state.phase === "over") {
+      readPlayerInput();
+      state.cars.forEach((car) => { if (!car.isPlayer) updateAI(car, dt); });
+      state.cars.forEach((car) => updateCar(car, dt));
+      collideCars(dt);
+      updatePickups(dt);
+      updateProjectiles(dt);
+      updateMines(dt);
+      updateFirePatches(dt);
+      updateSmokes(dt);
+      updateParticles(dt);
+      updateBooms(dt);
+      if (arena) arena.update(dt, { time: state.time, cars: state.cars, applyDamage, impulse, boom, announce });
+      updateCamera(dt);
+      updateHUD();
+      const pl = state.player;
+      sfx.engine(pl && !pl.wrecked ? Math.min(1, Math.hypot(pl.vx, pl.vz) / pl.def.stats.top) : 0, state.phase === "running");
+    }
+    ps1.render(scene, camera);
+  }
+
+  // ---------- debug hooks ----------
+  if (DEBUG) {
+    window.__scrapDebug = { state, sampleGround, get arena() { return arena; }, startMatch, endMatch };
+  }
+
+  // ---------- boot ----------
+  bindTouch();
+  bindFullscreen();
+  if (SCRAP.textures) SCRAP.textures.load();
+  resize();
+  window.addEventListener("resize", resize);
+  showMenu();
+  if (PARAMS.get("autostart") === "1") startMatch();
+  requestAnimationFrame(loop);
+})();

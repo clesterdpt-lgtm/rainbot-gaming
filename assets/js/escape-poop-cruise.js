@@ -46,7 +46,9 @@
     status: $("hud-status"),
     vignette: $("crud-vignette"),
     mobileControls: $("mobile-controls"),
+    minimap: $("minimap"),
   };
+  const minimapCtx = el.minimap && el.minimap.getContext ? el.minimap.getContext("2d") : null;
 
   if (!window.THREE) {
     const ctx = canvas.getContext("2d");
@@ -77,15 +79,30 @@
   const SHOTGUN_COOLDOWN = 0.62;
   const DART_MAG_SIZE = 6;
   const DART_RELOAD_TIME = 1.18;
+  const DART_START_RESERVE = 36;
   const SHOTGUN_TUBE_SIZE = 3;
   const SHOTGUN_RELOAD_TIME = 1.55;
+  const MELEE_RANGE = 2.35;
+  const MELEE_DOSE = 1.3;
+  const MELEE_COOLDOWN = 0.55;
+  const BOMB_START_AMMO = 2;
+  const BOMB_MAX_AMMO = 9;
+  const BOMB_RADIUS = 3.4;
+  const BOMB_DOSE = 2.6;
+  const BOMB_COOLDOWN = 0.9;
+  const BOMB_THROW_RANGE = 9.5;
   const FRESH_VENT_HEAL_RATE = 4.6;
   const PROJECTILE_LIFE = 0.22;
   const WEAPON_LABELS = {
     dart: "Ivermectin Pistol",
     shotgun: "Silver Pumper",
+    melee: "Support Plunger",
+    bomb: "Stink Bomb",
   };
   const SHOTGUN_DISPLAY_NAME = "Colloidal Silver Pumper";
+  const MELEE_DISPLAY_NAME = "Emotional Support Plunger";
+  const BOMB_DISPLAY_NAME = "Probiotic Stink Bomb";
+  const BOSS_NAMES = ["Buffet Baron", "Norovirus Admiral", "Poop Deck Leviathan", "Cruise Director of Doom"];
   const FLOW_REFRESH = 0.36;
   const WALKABLE = new Set([0, 2, 3, 4]);
 
@@ -111,13 +128,22 @@
     statusTimer: 0,
     high: api.getHighScore(GAME_ID) || 0,
     sound: true,
-    weapon: "dart",
+    weapon: "melee",
+    bossName: null,
+    dartUnlocked: false,
     shotgunUnlocked: false,
+    bombUnlocked: false,
     dartAmmo: DART_MAG_SIZE,
+    dartReserve: DART_START_RESERVE,
     shotgunLoaded: 0,
     shotgunAmmo: 0,
+    bombAmmo: BOMB_START_AMMO,
     dartCooldown: 0,
     shotgunCooldown: 0,
+    meleeCooldown: 0,
+    meleeSwing: 0,
+    bombCooldown: 0,
+    ambientTimer: 3.5,
     reloadTimer: 0,
     reloadDuration: 0,
     reloadWeapon: null,
@@ -135,6 +161,9 @@
     beams: [],
     particles: [],
     slimeBolts: [],
+    props: [],
+    bombs: [],
+    discovered: null,
   };
 
   const player = {
@@ -181,6 +210,10 @@
     ceiling: new URL("ceiling-atlas-ai-v1.png", textureAssetBase).href,
     details: new URL("detail-decal-atlas-ai-v1.png", textureAssetBase).href,
     objects: new URL("object-atlas-ai-v1.png", textureAssetBase).href,
+    // Scatter-prop skins: drop a 4x4 atlas at this path (cells per PropTex
+    // below) and every prop re-skins automatically — no code changes needed.
+    // Until the file exists the props render with the flat fallback colours.
+    props: new URL("prop-atlas-ai-v1.png", textureAssetBase).href,
     infection: new URL("infection-hazard-atlas-ai-v1.png", textureAssetBase).href,
     exitDoor: new URL("exit-door-ai-v2.png", textureAssetBase).href,
   };
@@ -199,6 +232,21 @@
       { file: "footstep-1.mp3", volume: 0.18 },
       { file: "footstep-2.mp3", volume: 0.18 },
       { file: "footstep-3.mp3", volume: 0.18 },
+    ],
+    // NOISE ALCHEMY horror pack: "dread" drones rotate as the ambient bed
+    // while playing; "doom" hits are stingers for detections/bosses/deaths.
+    dread: [
+      { file: "dread-1.mp3", volume: 0.2 },
+      { file: "dread-2.mp3", volume: 0.2 },
+      { file: "dread-3.mp3", volume: 0.18 },
+      { file: "dread-4.mp3", volume: 0.18 },
+      { file: "dread-5.mp3", volume: 0.2 },
+      { file: "dread-6.mp3", volume: 0.2 },
+      { file: "dread-7.mp3", volume: 0.2 },
+    ],
+    doom: [
+      { file: "doom-1.mp3", volume: 0.5 },
+      { file: "doom-2.mp3", volume: 0.5 },
     ],
   };
   const audioStatus = {
@@ -578,6 +626,7 @@
 
   const textureLoadStatus = { pending: 0, loaded: 0, failed: 0, skipped: 0 };
   const textureReadyPromises = [];
+  const warnedTextureUrls = new Set();
 
   function trackTextureLoad(url, label, applyImage) {
     textureLoadStatus.pending += 1;
@@ -599,7 +648,12 @@
       image.onerror = () => {
         textureLoadStatus.failed += 1;
         textureLoadStatus.pending = Math.max(0, textureLoadStatus.pending - 1);
-        console.warn(`${label} failed to load: ${url}`);
+        // Optional atlases (e.g. the drop-in AI prop atlas) 404 by design
+        // until generated — warn once per URL instead of spamming.
+        if (!warnedTextureUrls.has(url)) {
+          warnedTextureUrls.add(url);
+          console.warn(`${label} failed to load (fallback art in use): ${url}`);
+        }
         resolve(null);
       };
     });
@@ -723,6 +777,284 @@
 
   const detailMats = makeGeneratedDetailMaterials(16, textureAssets.details);
   const objectMats = makeObjectMaterials(textureAssets.objects);
+
+  // ---- Scatter props (cruise clutter) ----
+  // Texture manifest for prop-atlas-ai-v1.png: a 4x4 grid where each cell
+  // skins one surface below. Generate the atlas with AI later, drop it in
+  // assets/img/escape-poop-cruise/, and loadAtlasIntoMaterials re-skins every
+  // prop; until then the fallback colours keep everything readable.
+  const PropTex = {
+    TRASH_CAN: 0,
+    TRASH_LID: 1,
+    DECK_CHAIR: 2,
+    LOUNGER: 3,
+    TABLE: 4,
+    PLANT_POT: 5,
+    PLANT_LEAVES: 6,
+    SUITCASE: 7,
+    LIFE_RING: 8,
+    BAR_STOOL: 9,
+    CART: 10,
+    BARREL: 11,
+    CRATE: 12,
+    TOWELS: 13,
+    UMBRELLA: 14,
+    METAL: 15,
+  };
+
+  function makePropMaterials(atlasUrl) {
+    const fallbacks = [
+      { color: 0x46545c, emissive: 0x060a0c }, // trash can
+      { color: 0x2b363c, emissive: 0x040606 }, // trash lid
+      { color: 0x8a6b3a, emissive: 0x0d0a05 }, // deck chair wood
+      { color: 0x2e6f8a, emissive: 0x06121a }, // lounger canvas
+      { color: 0x6b4a2a, emissive: 0x0a0704 }, // table top
+      { color: 0x7a4a30, emissive: 0x0b0704 }, // plant pot
+      { color: 0x2e6b2a, emissive: 0x061206 }, // plant leaves
+      { color: 0x8a2f4f, emissive: 0x12060b }, // suitcase
+      { color: 0xd8d0c2, emissive: 0x111008 }, // life ring
+      { color: 0x5a3a20, emissive: 0x080503 }, // bar stool
+      { color: 0x8d949b, emissive: 0x0b0d0f }, // service cart
+      { color: 0x6b3320, emissive: 0x0a0503 }, // barrel
+      { color: 0x7a5c33, emissive: 0x0b0805 }, // crate
+      { color: 0xcac4b2, emissive: 0x100f0a }, // towels
+      { color: 0xc7452e, emissive: 0x140604 }, // umbrella
+      { color: 0x77828b, emissive: 0x090b0d }, // metal frames/poles
+    ];
+    const materials = fallbacks.map((fallback) => new THREE.MeshLambertMaterial({
+      color: fallback.color,
+      emissive: fallback.emissive,
+      side: THREE.DoubleSide,
+    }));
+    if (atlasUrl) loadAtlasIntoMaterials(atlasUrl, materials, { grid: 4, size: 256, cropInset: 0.034 });
+    return materials;
+  }
+
+  const propMats = makePropMaterials(textureAssets.props);
+
+  // Shared prop geometry so 40+ props per deck don't allocate per-instance.
+  const propGeo = {
+    trashBody: new THREE.CylinderGeometry(0.3, 0.26, 0.78, 10),
+    trashLid: new THREE.CylinderGeometry(0.33, 0.33, 0.07, 10),
+    box: new THREE.BoxGeometry(1, 1, 1),
+    tableTop: new THREE.CylinderGeometry(0.55, 0.55, 0.06, 12),
+    pole: new THREE.CylinderGeometry(0.05, 0.07, 1, 8),
+    diskBase: new THREE.CylinderGeometry(0.3, 0.32, 0.05, 10),
+    pot: new THREE.CylinderGeometry(0.22, 0.3, 0.42, 10),
+    leaf: new THREE.SphereGeometry(0.24, 7, 6),
+    ring: new THREE.TorusGeometry(0.3, 0.09, 8, 14),
+    stoolSeat: new THREE.CylinderGeometry(0.24, 0.24, 0.07, 10),
+    wheel: new THREE.CylinderGeometry(0.09, 0.09, 0.05, 8),
+    barrel: new THREE.CylinderGeometry(0.32, 0.34, 0.85, 12),
+    barrelRing: new THREE.CylinderGeometry(0.35, 0.35, 0.04, 12),
+  };
+
+  function propBox(group, mat, x, y, z, sx, sy, sz, ry = 0, rx = 0, rz = 0) {
+    const mesh = new THREE.Mesh(propGeo.box, mat);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    mesh.rotation.set(rx, ry, rz);
+    group.add(mesh);
+    return mesh;
+  }
+
+  function propMesh(group, geom, mat, x, y, z, rx = 0, ry = 0, rz = 0, s = 1) {
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(rx, ry, rz);
+    mesh.scale.setScalar(s);
+    group.add(mesh);
+    return mesh;
+  }
+
+  // Each entry builds one clutter piece into `group` and returns its
+  // collision radius. Every visible surface pulls from propMats so the AI
+  // atlas can re-skin it without touching this code.
+  const PROP_BUILDERS = {
+    trash(group) {
+      propMesh(group, propGeo.trashBody, propMats[PropTex.TRASH_CAN], 0, 0.39, 0);
+      const lid = propMesh(group, propGeo.trashLid, propMats[PropTex.TRASH_LID], 0.07, 0.82, 0);
+      lid.rotation.z = 0.14;
+      return 0.44;
+    },
+    chair(group) {
+      const wood = propMats[PropTex.DECK_CHAIR];
+      const metal = propMats[PropTex.METAL];
+      propBox(group, wood, 0, 0.44, 0, 0.52, 0.06, 0.5);
+      propBox(group, wood, 0, 0.74, -0.26, 0.52, 0.62, 0.06, 0, -0.18);
+      propBox(group, metal, -0.22, 0.21, 0.2, 0.05, 0.42, 0.05);
+      propBox(group, metal, 0.22, 0.21, 0.2, 0.05, 0.42, 0.05);
+      propBox(group, metal, -0.22, 0.21, -0.2, 0.05, 0.42, 0.05);
+      propBox(group, metal, 0.22, 0.21, -0.2, 0.05, 0.42, 0.05);
+      return 0.46;
+    },
+    lounger(group) {
+      const canvas = propMats[PropTex.LOUNGER];
+      const metal = propMats[PropTex.METAL];
+      propBox(group, canvas, 0, 0.26, 0.18, 0.6, 0.11, 1.06);
+      propBox(group, canvas, 0, 0.5, -0.6, 0.6, 0.09, 0.62, 0, -0.72);
+      propBox(group, metal, -0.26, 0.1, 0.5, 0.05, 0.2, 0.05);
+      propBox(group, metal, 0.26, 0.1, 0.5, 0.05, 0.2, 0.05);
+      propBox(group, metal, -0.26, 0.1, -0.35, 0.05, 0.2, 0.05);
+      propBox(group, metal, 0.26, 0.1, -0.35, 0.05, 0.2, 0.05);
+      return 0.62;
+    },
+    table(group) {
+      propMesh(group, propGeo.tableTop, propMats[PropTex.TABLE], 0, 0.74, 0);
+      const pole = propMesh(group, propGeo.pole, propMats[PropTex.METAL], 0, 0.37, 0);
+      pole.scale.y = 0.72;
+      propMesh(group, propGeo.diskBase, propMats[PropTex.METAL], 0, 0.03, 0);
+      return 0.6;
+    },
+    plant(group) {
+      propMesh(group, propGeo.pot, propMats[PropTex.PLANT_POT], 0, 0.21, 0);
+      propMesh(group, propGeo.leaf, propMats[PropTex.PLANT_LEAVES], 0, 0.66, 0, 0, 0, 0, 1.15);
+      propMesh(group, propGeo.leaf, propMats[PropTex.PLANT_LEAVES], 0.14, 0.86, 0.05, 0, 0, 0, 0.85);
+      propMesh(group, propGeo.leaf, propMats[PropTex.PLANT_LEAVES], -0.13, 0.82, -0.08, 0, 0, 0, 0.72);
+      return 0.36;
+    },
+    suitcase(group) {
+      propBox(group, propMats[PropTex.SUITCASE], 0, 0.36, 0, 0.52, 0.72, 0.24);
+      propBox(group, propMats[PropTex.METAL], 0, 0.76, 0, 0.2, 0.06, 0.06);
+      return 0.4;
+    },
+    ring(group) {
+      const mesh = propMesh(group, propGeo.ring, propMats[PropTex.LIFE_RING], 0, 0.33, 0);
+      mesh.rotation.z = 0.18;
+      return 0.34;
+    },
+    stool(group) {
+      propMesh(group, propGeo.stoolSeat, propMats[PropTex.BAR_STOOL], 0, 0.6, 0);
+      const pole = propMesh(group, propGeo.pole, propMats[PropTex.METAL], 0, 0.3, 0);
+      pole.scale.y = 0.58;
+      propMesh(group, propGeo.diskBase, propMats[PropTex.METAL], 0, 0.03, 0, 0, 0, 0, 0.8);
+      return 0.3;
+    },
+    cart(group) {
+      const body = propMats[PropTex.CART];
+      const metal = propMats[PropTex.METAL];
+      propBox(group, body, 0, 0.52, 0, 0.68, 0.6, 1.02);
+      propBox(group, metal, 0, 0.92, 0.54, 0.6, 0.05, 0.06);
+      [-0.26, 0.26].forEach((x) => [-0.4, 0.4].forEach((z) => {
+        const wheel = propMesh(group, propGeo.wheel, metal, x, 0.1, z);
+        wheel.rotation.z = Math.PI / 2;
+      }));
+      return 0.64;
+    },
+    barrel(group) {
+      propMesh(group, propGeo.barrel, propMats[PropTex.BARREL], 0, 0.43, 0);
+      propMesh(group, propGeo.barrelRing, propMats[PropTex.METAL], 0, 0.2, 0);
+      propMesh(group, propGeo.barrelRing, propMats[PropTex.METAL], 0, 0.66, 0);
+      return 0.44;
+    },
+    crate(group) {
+      propBox(group, propMats[PropTex.CRATE], 0, 0.36, 0, 0.72, 0.72, 0.72);
+      propBox(group, propMats[PropTex.CRATE], 0.12, 0.86, 0.05, 0.4, 0.28, 0.4, 0.5);
+      return 0.52;
+    },
+    towels(group) {
+      const mat = propMats[PropTex.TOWELS];
+      propBox(group, mat, 0, 0.09, 0, 0.5, 0.18, 0.36);
+      propBox(group, mat, 0.03, 0.26, -0.02, 0.44, 0.16, 0.32, 0.2);
+      propBox(group, mat, -0.02, 0.4, 0.02, 0.36, 0.12, 0.28, -0.28);
+      return 0.32;
+    },
+    umbrella(group) {
+      const pole = propMesh(group, propGeo.pole, propMats[PropTex.METAL], 0, 0.85, 0);
+      pole.scale.y = 1.7;
+      const top = propMesh(group, propGeo.pot, propMats[PropTex.UMBRELLA], 0, 1.72, 0, Math.PI, 0, 0, 2.4);
+      top.scale.y = 0.9;
+      propMesh(group, propGeo.diskBase, propMats[PropTex.METAL], 0, 0.03, 0, 0, 0, 0, 1.2);
+      return 0.4;
+    },
+    vending(group) {
+      propBox(group, propMats[PropTex.CART], 0, 0.95, 0, 0.92, 1.9, 0.68);
+      propBox(group, propMats[PropTex.TOWELS], -0.08, 1.05, -0.36, 0.56, 1.3, 0.05);
+      propBox(group, propMats[PropTex.METAL], 0.3, 0.85, -0.36, 0.16, 0.9, 0.04);
+      propBox(group, propMats[PropTex.METAL], 0, 0.06, 0, 0.94, 0.12, 0.7);
+      return 0.72;
+    },
+    sofa(group) {
+      const cushion = propMats[PropTex.LOUNGER];
+      propBox(group, cushion, 0, 0.28, 0, 1.5, 0.42, 0.62);
+      propBox(group, cushion, 0, 0.62, -0.24, 1.5, 0.5, 0.18, 0, -0.1);
+      propBox(group, cushion, -0.72, 0.5, 0, 0.18, 0.5, 0.6);
+      propBox(group, cushion, 0.72, 0.5, 0, 0.18, 0.5, 0.6);
+      return 0.9;
+    },
+    buffet(group) {
+      propBox(group, propMats[PropTex.TOWELS], 0, 0.42, 0, 1.9, 0.8, 0.75);
+      propBox(group, propMats[PropTex.TABLE], 0, 0.85, 0, 2.0, 0.07, 0.85);
+      propBox(group, propMats[PropTex.METAL], -0.55, 0.94, 0, 0.5, 0.1, 0.34);
+      propBox(group, propMats[PropTex.METAL], 0.15, 0.93, 0.1, 0.4, 0.08, 0.3, 0.4);
+      propBox(group, propMats[PropTex.BARREL], 0.7, 0.99, -0.12, 0.22, 0.22, 0.22, 0.2);
+      return 1.05;
+    },
+    luggagePile(group) {
+      propBox(group, propMats[PropTex.SUITCASE], -0.15, 0.28, 0, 0.55, 0.56, 0.8, 0.12);
+      propBox(group, propMats[PropTex.CRATE], 0.32, 0.22, 0.1, 0.5, 0.44, 0.5, -0.4);
+      propBox(group, propMats[PropTex.SUITCASE], 0.08, 0.72, -0.05, 0.48, 0.32, 0.62, 0.5, 0, 0.06);
+      propBox(group, propMats[PropTex.METAL], -0.15, 0.6, 0, 0.1, 0.08, 0.82);
+      return 0.75;
+    },
+  };
+  const PROP_KINDS = Object.keys(PROP_BUILDERS);
+
+  // Rooms only (corridors stay clear so enemy pathing never bottlenecks),
+  // interiors only (never up against walls or doorways), deterministic per
+  // level seed via tileHash.
+  function scatterProps() {
+    state.props = [];
+    const map = state.map;
+    if (!map || !map.rooms) return;
+    map.rooms.forEach((room, roomIndex) => {
+      if (room.w < 4 || room.h < 4) return;
+      const target = clamp(Math.round(room.w * room.h * 0.2), 2, 8);
+      let placed = 0;
+      for (let attempt = 0; attempt < target * 4 && placed < target; attempt += 1) {
+        const salt = 700 + roomIndex * 37 + attempt * 13;
+        const gx = room.x + 1 + Math.floor(tileHash(room.x, room.y, salt) * (room.w - 2));
+        const gy = room.y + 1 + Math.floor(tileHash(room.x, room.y, salt + 1) * (room.h - 2));
+        if (tileAt(gx, gy, map) !== Tile.FLOOR) continue;
+        const startDist = Math.abs(gx - map.start.gx) + Math.abs(gy - map.start.gy);
+        const exitDist = Math.abs(gx - map.exit.gx) + Math.abs(gy - map.exit.gy);
+        if (startDist < 3 || exitDist < 2) continue;
+        const pos = tileToWorld(gx, gy, map);
+        const x = pos.x + tileRange(gx, gy, salt + 2, -0.9, 0.9);
+        const z = pos.z + tileRange(gx, gy, salt + 3, -0.9, 0.9);
+        if (state.props.some((p) => Math.hypot(p.x - x, p.z - z) < p.radius + 1.35)) continue;
+        const kind = PROP_KINDS[Math.floor(tileHash(gx, gy, salt + 4) * PROP_KINDS.length) % PROP_KINDS.length];
+        const group = new THREE.Group();
+        const radius = PROP_BUILDERS[kind](group);
+        group.position.set(x, 0, z);
+        group.rotation.y = tileRange(gx, gy, salt + 5, -Math.PI, Math.PI);
+        const scale = tileRange(gx, gy, salt + 6, 1.02, 1.38);
+        group.scale.setScalar(scale);
+        world.add(group);
+        state.props.push({ kind, x, z, radius: radius * scale });
+        placed += 1;
+      }
+    });
+  }
+
+  // Circle-vs-props check used by player + enemy movement. Only blocks moves
+  // that get CLOSER to an overlapped prop, so anything that spawns clipped
+  // can always walk itself free instead of being stuck forever.
+  function collidesWithProps(nx, nz, radius, curX, curZ) {
+    for (const prop of state.props) {
+      const minDist = radius + prop.radius;
+      const dx = nx - prop.x;
+      const dz = nz - prop.z;
+      if (Math.abs(dx) > minDist || Math.abs(dz) > minDist) continue;
+      const nextSq = dx * dx + dz * dz;
+      if (nextSq >= minDist * minDist) continue;
+      const curDx = curX - prop.x;
+      const curDz = curZ - prop.z;
+      if (curDx * curDx + curDz * curDz <= nextSq) continue;
+      return true;
+    }
+    return false;
+  }
 
   const ObjectTex = {
     EXIT_LOCKED: 0,
@@ -929,6 +1261,9 @@
       shotgunBody: { base: 0x544a58, deep: 0x15111a, accent: 0xff2e88, scratches: 86 },
       shotgunPump: { base: 0xdad2a1, deep: 0x4f4022, accent: 0xb7ff54, scratches: 60 },
       silverTube: { base: 0xcde9f5, deep: 0x37586b, accent: 0x2ee0ff, scratches: 46 },
+      plungerWood: { base: 0xa9814f, deep: 0x4a331c, accent: 0xd9b98a, scratches: 70 },
+      plungerRubber: { base: 0x8a2a26, deep: 0x2e0c0a, accent: 0xc75b52, scratches: 40 },
+      bombJar: { base: 0x9fd45a, deep: 0x2c4d16, accent: 0xe4ffb0, scratches: 30 },
     }[kind] || { base: 0x343b44, deep: 0x0c0f14, accent: 0x2ee0ff, scratches: 64 };
 
     const gradient = ctx.createLinearGradient(0, 0, size, size);
@@ -1001,8 +1336,12 @@
     shotgunBody: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x130812, map: makeWeaponTexture("shotgunBody", 0x5) }),
     shotgunPump: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x1f1808, map: makeWeaponTexture("shotgunPump", 0x6) }),
     silverTube: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x0e2630, map: makeWeaponTexture("silverTube", 0x7) }),
+    plungerWood: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x120b04, map: makeWeaponTexture("plungerWood", 0x8) }),
+    plungerRubber: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x1c0605, map: makeWeaponTexture("plungerRubber", 0x9) }),
+    bombJar: new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x16300a, map: makeWeaponTexture("bombJar", 0xa), transparent: true, opacity: 0.92 }),
     dartGlow: new THREE.MeshBasicMaterial({ color: 0x2ee0ff }),
     shotGlow: new THREE.MeshBasicMaterial({ color: 0xff2e88 }),
+    bombGlow: new THREE.MeshBasicMaterial({ color: 0xb7ff54 }),
     muzzle: new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: 0 }),
   };
 
@@ -1076,9 +1415,59 @@
     return { group: g, muzzle };
   }
 
+  function buildPlunger() {
+    // Held like a torch: fist around the handle low in frame, rubber cup at
+    // the TOP with its mouth tilted outward at the world, ready to boop.
+    const g = new THREE.Group();
+    const tilt = -0.42; // top leans away from the camera
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.021, 0.024, 0.42, 10), weaponMats.plungerWood);
+    handle.rotation.x = tilt;
+    handle.position.set(0, -0.02, -0.06);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), weaponMats.plungerWood);
+    knob.position.set(0, -0.21, 0.025);
+    // Cone widens toward the top so the wide mouth faces up-and-out.
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.03, 0.13, 12), weaponMats.plungerRubber);
+    cup.rotation.x = tilt;
+    cup.position.set(0, 0.175, -0.145);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.018, 8, 14), weaponMats.plungerRubber);
+    lip.rotation.x = tilt - Math.PI / 2;
+    lip.position.set(0, 0.235, -0.172);
+    // A tiny heart badge sells the "emotional support" part of the joke.
+    const heart = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), weaponMats.shotGlow);
+    heart.scale.set(1, 0.85, 0.6);
+    heart.position.set(0, -0.08, -0.055);
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), weaponMats.muzzle);
+    muzzle.position.set(0, 0.22, -0.17);
+    g.add(handle, knob, cup, lip, heart, muzzle);
+    return { group: g, muzzle };
+  }
+
+  function buildBombHand() {
+    const g = new THREE.Group();
+    const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.15, 12), weaponMats.bombJar);
+    jar.position.set(0, -0.02, -0.08);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.082, 0.03, 12), weaponMats.dark);
+    lid.position.set(0, 0.07, -0.08);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.081, 0.083, 0.045, 12), weaponMats.silverTube);
+    band.position.set(0, -0.02, -0.08);
+    // Live-culture glow leaking out of the lid seam.
+    const ooze = new THREE.Mesh(new THREE.SphereGeometry(0.028, 7, 5), weaponMats.bombGlow);
+    ooze.scale.set(1.4, 0.5, 1.1);
+    ooze.position.set(0.045, 0.058, -0.05);
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), weaponMats.muzzle);
+    muzzle.position.set(0, 0.05, -0.14);
+    g.add(jar, lid, band, ooze, muzzle);
+    // Held low and slightly away so the jar reads as palm-sized, not keg-sized.
+    g.position.set(0.05, -0.06, -0.16);
+    g.scale.setScalar(0.82);
+    return { group: g, muzzle };
+  }
+
   const dartGun = buildDartGun();
   const shotgun = buildShotgun();
-  weaponGroup.add(dartGun.group, shotgun.group);
+  const plunger = buildPlunger();
+  const bombHand = buildBombHand();
+  weaponGroup.add(dartGun.group, shotgun.group, plunger.group, bombHand.group);
 
   function triggerRecoil(kind) {
     state.recoil = kind === "shotgun" ? 1 : 0.55;
@@ -1088,11 +1477,17 @@
   function updateWeapon(dt) {
     weaponGroup.visible = state.mode === "playing";
     if (!weaponGroup.visible) return;
-    const isShotgun = state.weapon === "shotgun";
-    dartGun.group.visible = !isShotgun;
-    shotgun.group.visible = isShotgun;
+    dartGun.group.visible = state.weapon === "dart";
+    shotgun.group.visible = state.weapon === "shotgun";
+    plunger.group.visible = state.weapon === "melee";
+    bombHand.group.visible = state.weapon === "bomb" && state.bombCooldown < BOMB_COOLDOWN * 0.55;
     state.recoil = Math.max(0, state.recoil - dt * 6);
     state.muzzleFlash = Math.max(0, state.muzzleFlash - dt * 9);
+    state.meleeSwing = Math.max(0, state.meleeSwing - dt * 3.4);
+    // Plunger arcs down-and-across while the swing timer decays.
+    const swingT = state.meleeSwing;
+    plunger.group.rotation.set(-swingT * 1.35, swingT * 0.5, swingT * 0.4);
+    plunger.group.position.z = -swingT * 0.22;
     const t = performance.now() * 0.004;
     const moving = input.forward || input.back || input.left || input.right;
     const bob = Math.sin(t * 2) * (moving ? 0.012 : 0.004);
@@ -1822,6 +2217,10 @@
     // steeply down to act as "front legs". Rendered upside-down near the
     // ceiling — see the crawler branch in updateEnemies.
     crawler: { scale: 0.6, lean: 1.05, head: 1.4, armRaise: 1.15, swing: 1.9, gut: false, eye: 0xccff33, glow: 0x9dff2e },
+    // Deck boss: a hulking ex-captain gone full buffet. Scale is capped so the
+    // hat clears the 3.2m ceiling — the bulk comes from a forced-wide girth in
+    // createEnemyMesh plus red eyes and a heavy rim glow.
+    boss: { scale: 1.32, lean: 0.24, head: 1.06, armRaise: 0.55, swing: 0.4, gut: true, eye: 0xff3226, glow: 0xff5a1f },
   };
 
   // ---- Voxel enemy construction ----
@@ -1903,6 +2302,7 @@
     // Faded onesie palette — pants/shoe match the shirt so it reads as one
     // sleeper suit instead of separate clothing pieces.
     crawler: { skin: 0x9be066, shirt: 0xc9d6a0, pants: 0xc9d6a0, shoe: 0xb7c590 },
+    boss: { skin: 0x6fbf35, shirt: 0xf2f0e6, pants: 0x1c2430, shoe: 0x101010 },
   };
 
   const ENEMY_RESISTANCE = {
@@ -1911,6 +2311,7 @@
     sprinter: 1.35,
     crawler: 1.2,
     bloater: 3.45,
+    boss: 14,
   };
   const ENEMY_BASE_SPEED = {
     passenger: 1.6,
@@ -1918,6 +2319,7 @@
     sprinter: 2.9,
     crawler: 2.55,
     bloater: 0.84,
+    boss: 1.05,
   };
   const ENEMY_COLLISION_RADIUS = {
     passenger: 0.38,
@@ -1925,6 +2327,7 @@
     sprinter: 0.36,
     crawler: 0.34,
     bloater: 0.54,
+    boss: 0.82,
   };
   const ENEMY_HIT_RADIUS = {
     passenger: 0.62,
@@ -1932,6 +2335,7 @@
     sprinter: 0.6,
     crawler: 0.5,
     bloater: 0.95,
+    boss: 1.55,
   };
   const ENEMY_TOUCH_INFECTION = {
     passenger: 8.2,
@@ -1939,6 +2343,7 @@
     sprinter: 11.2,
     crawler: 4.5,
     bloater: 9.8,
+    boss: 17,
   };
   const ENEMY_PROXIMITY_MULTIPLIER = {
     passenger: 1,
@@ -1946,6 +2351,7 @@
     sprinter: 1.12,
     crawler: 0.4,
     bloater: 1.16,
+    boss: 1.5,
   };
   const ENEMY_CURE_SCORE = {
     passenger: 100,
@@ -1953,6 +2359,17 @@
     sprinter: 165,
     crawler: 160,
     bloater: 260,
+    boss: 1200,
+  };
+  // How far each type can SEE the player (line of sight required). Snifferized
+  // spawns override this with a huge no-LOS "smell" radius instead.
+  const ENEMY_SIGHT_RANGE = {
+    passenger: 10,
+    cougher: 10.5,
+    sprinter: 13,
+    crawler: 12,
+    bloater: 9.5,
+    boss: 999,
   };
 
   // Signed-distance of a rounded box (Inigo Quilez): negative inside. Used to
@@ -2147,9 +2564,10 @@
       emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
     });
     // Widened per-instance size + posture jitter so instances of the same
-    // type read as individuals, not clones.
-    const girth = 0.86 + Math.random() * 0.28;
-    const height = 0.88 + Math.random() * 0.22;
+    // type read as individuals, not clones. Bosses skip the height jitter
+    // (hat must clear the ceiling) and go wide instead.
+    const girth = type === "boss" ? 1.34 + Math.random() * 0.12 : 0.86 + Math.random() * 0.28;
+    const height = type === "boss" ? 1 : 0.88 + Math.random() * 0.22;
     const leanJitter = (Math.random() - 0.5) * 0.14;
 
     // Legs hang from the hips and stay planted; the upper body leans/bobs.
@@ -2233,8 +2651,20 @@
     armR.add(armRSkin, armRHealthy);
     upper.add(armL, armR);
 
-    // Occasional cruise hat, otherwise hair — crowd variety up top.
-    if (Math.random() < 0.4) {
+    // Occasional cruise hat, otherwise hair — crowd variety up top. Bosses
+    // always get the captain's hat: white crown, black brim, gold band.
+    if (type === "boss") {
+      const crownMat = new THREE.MeshLambertMaterial({ color: 0xf2f0e6, emissive: 0x0c0c0a });
+      const brimMat = new THREE.MeshLambertMaterial({ color: 0x14161a, emissive: 0x020203 });
+      const bandMat = new THREE.MeshLambertMaterial({ color: 0xd8ae4a, emissive: 0x1c1406 });
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.035, 12), brimMat);
+      brim.position.y = d.eyeY + 0.16;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.07, 12), bandMat);
+      band.position.y = d.eyeY + 0.21;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.19, 0.13, 12), crownMat);
+      crown.position.y = d.eyeY + 0.3;
+      headPivot.add(brim, band, crown);
+    } else if (Math.random() < 0.4) {
       const hatHex = HAT_COLORS[Math.floor(Math.random() * HAT_COLORS.length)];
       const hatMat = new THREE.MeshLambertMaterial({ color: hatHex, emissive: 0x070707 });
       const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 12), hatMat);
@@ -2272,10 +2702,88 @@
     return group;
   }
 
+  // Boss decks: every 5th deck from 10 on (10, 15, 20...). Tier scales the
+  // stats each time, and every 10 decks past the first boss another one joins
+  // the fight, so the curve keeps steepening instead of plateauing.
+  function isBossLevel(level) {
+    return level >= 10 && level % 5 === 0;
+  }
+
+  function bossTier(level) {
+    return Math.max(1, Math.floor((level - 5) / 5));
+  }
+
+  function bossCount(level) {
+    return Math.min(4, 1 + Math.floor((level - 10) / 10));
+  }
+
+  function bossNameFor(level) {
+    return BOSS_NAMES[Math.min(BOSS_NAMES.length - 1, bossTier(level) - 1)];
+  }
+
+  function makeEnemy(type, pos, rng, index) {
+    // Speed jitter is per-instance (seeded, so it's reproducible within a
+    // run) on top of the per-type/level formula, so a pack of the same type
+    // doesn't move in perfect lockstep.
+    const speedJitter = 0.88 + rng() * 0.28;
+    const levelSpeed = type === "bloater" || type === "boss"
+      ? Math.min(0.55, state.level * 0.035)
+      : Math.min(1.0, state.level * 0.06);
+    // A slice of the crowd are "sniffers": they smell you from across the
+    // deck (no line of sight needed) — the long-range detectors. Their eyes
+    // burn orange as the tell. Bosses always know where you are.
+    const sniffer = type !== "boss" && rng() < 0.16;
+    const enemy = {
+      id: `e${state.level}-${index}`,
+      type,
+      x: pos.x,
+      z: pos.z,
+      vx: 0,
+      vz: 0,
+      cured: false,
+      inoculation: 0,
+      resistance: ENEMY_RESISTANCE[type] || ENEMY_RESISTANCE.passenger,
+      speed: ((ENEMY_BASE_SPEED[type] || ENEMY_BASE_SPEED.passenger) + levelSpeed) * speedJitter,
+      radius: ENEMY_COLLISION_RADIUS[type] || ENEMY_COLLISION_RADIUS.passenger,
+      crawlY: WALL_H - 0.4,
+      alert: type === "boss",
+      sniffer,
+      sightRange: sniffer ? 24 + rng() * 8 : (ENEMY_SIGHT_RANGE[type] || 10) + Math.min(4, state.level * 0.25),
+      stuckT: 0,
+      sidestepUntil: 0,
+      spitTimer: type === "bloater" || type === "boss" ? 1 + rng() * 1.6 : 1.5 + rng() * 2,
+      coughTimer: 1 + rng() * 2,
+      stagger: 0,
+      walkPhase: rng() * Math.PI * 2,
+      coughAnim: 0,
+      lunge: 0,
+      lungeWindup: 0,
+      lungeTime: 0,
+      lungeCooldown: type === "sprinter" ? 0.9 + rng() * 1.4 : 0,
+      lungeVx: 0,
+      lungeVz: 0,
+      hitTimer: 0,
+      blink: rng() * 3,
+      healing: false,
+      healT: 0,
+      talkTimer: 0,
+      wanderTarget: null,
+      wanderTimer: rng() * 2,
+      mesh: createEnemyMesh(type),
+    };
+    if (sniffer && enemy.mesh.userData.parts) {
+      enemy.mesh.userData.parts.eyeMat.color.setHex(0xffb020);
+    }
+    enemy.mesh.position.set(enemy.x, type === "crawler" ? enemy.crawlY : 0, enemy.z);
+    enemyRoot.add(enemy.mesh);
+    state.enemies.push(enemy);
+    return enemy;
+  }
+
   function spawnEnemies() {
     const map = state.map;
     const rng = map.rng;
-    const count = clamp(4 + state.level * 2, 4, 24);
+    const count = clamp(4 + state.level * 2, 4, 30);
     const guaranteedBloaterIndex = state.level >= 4 ? Math.floor(rng() * count) : -1;
     const floors = map.floors.filter((tile) => {
       const startDistance = Math.abs(tile.gx - map.start.gx) + Math.abs(tile.gy - map.start.gy);
@@ -2293,50 +2801,29 @@
       if (state.level >= 4 && rng() < 0.14 + state.level * 0.006) type = "crawler";
       if (state.level >= 3 && rng() < 0.09 + state.level * 0.007) type = "bloater";
       if (i === guaranteedBloaterIndex) type = "bloater";
-      // Speed jitter is per-instance (seeded, so it's reproducible within a
-      // run) on top of the per-type/level formula, so a pack of the same type
-      // doesn't move in perfect lockstep.
-      const speedJitter = 0.88 + rng() * 0.28;
-      const levelSpeed = type === "bloater" ? Math.min(0.42, state.level * 0.035) : Math.min(0.7, state.level * 0.06);
-      const enemy = {
-        id: `e${state.level}-${i}`,
-        type,
-        x: pos.x,
-        z: pos.z,
-        vx: 0,
-        vz: 0,
-        cured: false,
-        inoculation: 0,
-        resistance: ENEMY_RESISTANCE[type] || ENEMY_RESISTANCE.passenger,
-        speed: ((ENEMY_BASE_SPEED[type] || ENEMY_BASE_SPEED.passenger) + levelSpeed) * speedJitter,
-        radius: ENEMY_COLLISION_RADIUS[type] || ENEMY_COLLISION_RADIUS.passenger,
-        crawlY: WALL_H - 0.4,
-        spitTimer: type === "bloater" ? 1 + rng() * 1.6 : 1.5 + rng() * 2,
-        coughTimer: 1 + rng() * 2,
-        stagger: 0,
-        walkPhase: rng() * Math.PI * 2,
-        coughAnim: 0,
-        lunge: 0,
-        lungeWindup: 0,
-        lungeTime: 0,
-        lungeCooldown: type === "sprinter" ? 0.9 + rng() * 1.4 : 0,
-        lungeVx: 0,
-        lungeVz: 0,
-        hitTimer: 0,
-        blink: rng() * 3,
-        healing: false,
-        healT: 0,
-        talkTimer: 0,
-        wanderTarget: null,
-        wanderTimer: 0,
-        mesh: createEnemyMesh(type),
-      };
-      enemy.mesh.position.set(enemy.x, type === "crawler" ? enemy.crawlY : 0, enemy.z);
-      enemyRoot.add(enemy.mesh);
-      state.enemies.push(enemy);
+      makeEnemy(type, pos, rng, i);
     }
 
     state.neededCures = Math.max(2, Math.ceil(state.enemies.length * 0.64));
+
+    if (isBossLevel(state.level)) {
+      const tier = bossTier(state.level);
+      // Bosses hold the far end of the deck, guarding the stairwell.
+      const lastRoom = map.rooms[map.rooms.length - 1];
+      for (let b = 0; b < bossCount(state.level); b += 1) {
+        let bgx = clamp(lastRoom.cx + (b % 2 === 0 ? -b : b), 1, map.w - 2);
+        let bgy = clamp(lastRoom.cy + Math.floor(b / 2), 1, map.h - 2);
+        if (!isWalkableTile(bgx, bgy, map)) { bgx = lastRoom.cx; bgy = lastRoom.cy; }
+        const pos = tileToWorld(bgx, bgy, map);
+        const boss = makeEnemy("boss", pos, rng, `boss-${b}`);
+        boss.resistance = 10 + tier * 4.5;
+        boss.speed = Math.min(1.75, (1.0 + tier * 0.09) * (0.94 + rng() * 0.12));
+        // Higher tiers bulk out sideways only — never taller than the ceiling.
+        const bulk = Math.min(1.18, 1 + (tier - 1) * 0.05);
+        boss.mesh.scale.x *= bulk;
+        boss.mesh.scale.z *= bulk;
+      }
+    }
   }
 
   function createPickupMesh(type) {
@@ -2373,6 +2860,74 @@
       return group;
     }
 
+    if (type === "pistol") {
+      // Oversized dart gun on a pedestal so the unlock reads from a distance.
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.8), weaponMats.metal);
+      body.position.set(0, 0.72, 0);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.62, 10), weaponMats.dark);
+      barrel.rotation.x = Math.PI / 2;
+      barrel.position.set(0, 0.76, -0.62);
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 12), weaponMats.dartGlow);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(0, 0.76, -0.9);
+      const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.4, 10), weaponMats.vial);
+      vial.rotation.z = Math.PI / 2;
+      vial.position.set(0, 0.5, 0.1);
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.42, 0.22), weaponMats.grip);
+      grip.position.set(0, 0.4, 0.28);
+      grip.rotation.x = 0.25;
+      group.add(body, barrel, ring, vial, grip);
+      group.scale.setScalar(0.9);
+      return group;
+    }
+
+    if (type === "bombkit") {
+      // Crate of glowing culture jars — the bomb unlock.
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.55), weaponMats.dark);
+      crate.position.y = 0.4;
+      group.add(crate);
+      for (let i = 0; i < 3; i += 1) {
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.26, 10), weaponMats.bombJar);
+        jar.position.set(-0.2 + i * 0.2, 0.66, (i % 2 === 0 ? 0.06 : -0.06));
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.04, 10), weaponMats.dark);
+        lid.position.set(jar.position.x, 0.8, jar.position.z);
+        group.add(jar, lid);
+      }
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), weaponMats.bombGlow);
+      glow.position.y = 0.92;
+      group.add(glow);
+      return group;
+    }
+
+    if (type === "darts") {
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.34, 0.4), weaponMats.metal);
+      crate.position.y = 0.5;
+      for (let i = 0; i < 3; i += 1) {
+        const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8), weaponMats.vial);
+        vial.rotation.z = Math.PI / 2;
+        vial.position.set(0, 0.73, -0.1 + i * 0.1);
+        group.add(vial);
+      }
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.05, 0.42), weaponMats.dartGlow);
+      glow.position.y = 0.35;
+      group.add(crate, glow);
+      return group;
+    }
+
+    if (type === "bombs") {
+      for (let i = 0; i < 2; i += 1) {
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.3, 10), weaponMats.bombJar);
+        jar.position.set(i === 0 ? -0.16 : 0.16, 0.5, i === 0 ? 0.05 : -0.06);
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.05, 10), weaponMats.dark);
+        lid.position.set(jar.position.x, 0.67, jar.position.z);
+        group.add(jar, lid);
+      }
+      const glow = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), weaponMats.bombGlow);
+      glow.position.y = 0.78;
+      group.add(glow);
+      return group;
+    }
+
     const mat = type === "shotgun" ? mats.shotgun : type === "fresh-air" ? mats.freshPickup : mats.pickup;
     const body = new THREE.Mesh(geoms.pickup, mat);
     body.position.y = 0.55;
@@ -2389,7 +2944,7 @@
     });
     state.pickups = [];
 
-    function pickNearSpawnTile() {
+    function pickNearSpawnTile(skip = 0) {
       const candidates = map.floors
         .filter((tile) => map.grid[tile.gy][tile.gx] === Tile.FLOOR)
         .map((tile) => ({
@@ -2398,7 +2953,8 @@
         }))
         .filter((item) => item.distance > 0)
         .sort((a, b) => a.distance - b.distance || a.tile.gy - b.tile.gy || a.tile.gx - b.tile.gx);
-      return candidates.length ? candidates[0].tile : map.start;
+      if (!candidates.length) return map.start;
+      return candidates[Math.min(skip, candidates.length - 1)].tile;
     }
 
     function addPickup(type, tile) {
@@ -2410,15 +2966,23 @@
       state.pickups.push(pickup);
     }
 
-    const count = clamp(3 + Math.floor(state.level * 0.75), 3, 9);
+    // Ammo drops only for gear the player can already (or will this deck) use.
+    const ammoOptions = ["fresh-air"];
+    if (state.level >= 2) ammoOptions.push("darts", "darts");
+    if (state.level >= 3) ammoOptions.push("shells", "shells");
+    if (state.level >= 4) ammoOptions.push("bombs");
+    const count = clamp(4 + Math.floor(state.level * 0.85), 4, 11);
     for (let i = 0; i < count && floors.length; i += 1) {
       const tile = floors.splice(Math.floor(rng() * floors.length), 1)[0];
-      const type = rng() < 0.45 ? "fresh-air" : "shells";
-      addPickup(type, tile);
+      addPickup(ammoOptions[Math.floor(rng() * ammoOptions.length)], tile);
     }
-    if (state.level >= 3 && !state.shotgunUnlocked) {
-      addPickup("shotgun", pickNearSpawnTile());
-    }
+
+    // Weapon progression: each new toy is staged near spawn on its deck (and
+    // keeps re-staging on later decks until the player actually grabs it).
+    let staged = 0;
+    if (state.level >= 2 && !state.dartUnlocked) addPickup("pistol", pickNearSpawnTile(staged++));
+    if (state.level >= 3 && !state.shotgunUnlocked) addPickup("shotgun", pickNearSpawnTile(staged++));
+    if (state.level >= 4 && !state.bombUnlocked) addPickup("bombkit", pickNearSpawnTile(staged++));
   }
 
   function loadLevel(level) {
@@ -2427,6 +2991,10 @@
     state.cures = 0;
     state.dartCooldown = 0;
     state.shotgunCooldown = 0;
+    state.meleeCooldown = 0;
+    state.meleeSwing = 0;
+    state.bombCooldown = 0;
+    state.ambientTimer = 2.5 + Math.random() * 3;
     state.reloadTimer = 0;
     state.reloadDuration = 0;
     state.reloadWeapon = null;
@@ -2435,6 +3003,7 @@
     state.beams = [];
     state.particles = [];
     state.slimeBolts = [];
+    state.bombs = [];
     state.stuckTimer = 0;
     state.flowTimer = 0;
     stepAudio.timer = 0;
@@ -2450,13 +3019,31 @@
     player.vz = 0;
 
     buildWorld();
+    scatterProps();
     spawnEnemies();
     spawnPickups();
     rebuildFlow();
-    if (state.level >= 3 && !state.shotgunUnlocked) {
-      setStatus(`Deck ${level}: ${SHOTGUN_DISPLAY_NAME} is staged near spawn. Grab it, cure ${state.neededCures} passengers, then find the stairwell door.`);
+    resetDiscovery();
+    state.bossName = isBossLevel(level) ? bossNameFor(level) : null;
+    if (isBossLevel(level)) {
+      const bosses = bossCount(level);
+      setStatus(
+        bosses > 1
+          ? `Deck ${level}: ${bosses}x ${state.bossName} guard the stairwell. Cure ${state.neededCures} passengers AND the bosses.`
+          : `Deck ${level}: the ${state.bossName} guards the stairwell. Cure ${state.neededCures} passengers AND the boss.`,
+        6
+      );
+      playSound("doom", { cooldown: 0.5, cooldownKey: "boss-intro", fallback: false, rate: 0.9, volume: 0.6 });
     } else {
-      setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then find the stairwell door.`);
+      const stagedGear = [];
+      if (level >= 2 && !state.dartUnlocked) stagedGear.push("Ivermectin Pistol");
+      if (level >= 3 && !state.shotgunUnlocked) stagedGear.push(SHOTGUN_DISPLAY_NAME);
+      if (level >= 4 && !state.bombUnlocked) stagedGear.push(`${BOMB_DISPLAY_NAME}s`);
+      if (stagedGear.length) {
+        setStatus(`Deck ${level}: ${stagedGear.join(" + ")} staged near spawn. Cure ${state.neededCures} passengers, then find the stairwell door.`, 4.5);
+      } else {
+        setStatus(`Deck ${level}: cure ${state.neededCures} passengers, then find the stairwell door.`);
+      }
     }
     updateExitDoor();
     updateHud();
@@ -2472,11 +3059,15 @@
     state.level = 1;
     state.totalShots = 0;
     state.totalHits = 0;
-    state.weapon = "dart";
+    state.weapon = "melee";
+    state.dartUnlocked = false;
     state.shotgunUnlocked = false;
+    state.bombUnlocked = false;
     state.dartAmmo = DART_MAG_SIZE;
+    state.dartReserve = DART_START_RESERVE;
     state.shotgunLoaded = 0;
     state.shotgunAmmo = 0;
+    state.bombAmmo = BOMB_START_AMMO;
     state.reloadTimer = 0;
     state.reloadDuration = 0;
     state.reloadWeapon = null;
@@ -2515,6 +3106,7 @@
     state.high = api.getHighScore(GAME_ID) || state.high;
     unlockPointer();
     playSound("gameover", { cooldown: 1, fallbackKind: "bad", volume: 0.58 });
+    playSound("doom", { cooldown: 1, cooldownKey: "gameover-doom", fallback: false, rate: 0.82, volume: 0.55 });
     showOverlay(
       "CRUISE CRUD MAXED",
       reason || "The infection meter hit the red zone. Roe Jogan did not make it to the stairwell.",
@@ -2544,7 +3136,9 @@
   function formatAmmo() {
     if (state.reloadTimer > 0) return `Reload ${Math.max(0.1, state.reloadTimer).toFixed(1)}s`;
     if (state.weapon === "shotgun") return `${state.shotgunLoaded}/${state.shotgunAmmo}`;
-    return `${state.dartAmmo}/${DART_MAG_SIZE}`;
+    if (state.weapon === "melee") return "∞";
+    if (state.weapon === "bomb") return `${state.bombAmmo}`;
+    return `${state.dartAmmo}/${state.dartReserve}`;
   }
 
   function updateHud() {
@@ -2563,9 +3157,17 @@
     }
   }
 
+  function bossesRemaining() {
+    return state.enemies.reduce((count, enemy) => count + (enemy.type === "boss" && !enemy.cured ? 1 : 0), 0);
+  }
+
+  function exitUnlocked() {
+    return state.cures >= state.neededCures && bossesRemaining() === 0;
+  }
+
   function updateExitDoor() {
     if (!exitDoor) return;
-    const open = state.cures >= state.neededCures;
+    const open = exitUnlocked();
     exitDoor.material = open ? exitDoor.userData.openMat : exitDoor.userData.lockedMat;
     if (exitDoor.userData.indicator) {
       exitDoor.userData.indicator.material = open ? mats.exitLightOpen : mats.exitLightLocked;
@@ -2591,36 +3193,71 @@
       setStatus("Find the stairwell door at the end of the deck.");
       return;
     }
-    if (state.cures >= state.neededCures) completeLevel();
+    if (exitUnlocked()) completeLevel();
     else {
       playSound("damage", { cooldown: 0.45, fallbackKind: "bad", volume: 0.28 });
-      setStatus(`Stairwell locked. Cure ${state.neededCures - state.cures} more.`);
+      const bosses = bossesRemaining();
+      setStatus(bosses > 0 && state.cures >= state.neededCures
+        ? `Stairwell locked. ${state.bossName || "The boss"} still stalks this deck.`
+        : `Stairwell locked. Cure ${state.neededCures - state.cures} more.`);
     }
   }
 
-  function switchWeapon() {
-    if (state.weapon === "shotgun") {
-      if (state.reloadTimer > 0) {
-        setStatus("Finish the reload first.");
-        return;
+  const WEAPON_READY_STATUS = {
+    dart: "Ivermectin Pistol ready.",
+    shotgun: `${SHOTGUN_DISPLAY_NAME} ready.`,
+    melee: `${MELEE_DISPLAY_NAME} ready. It believes in you.`,
+    bomb: `${BOMB_DISPLAY_NAME} in hand. Shake well before throwing.`,
+  };
+
+  // Arsenal order matches the 1-4 keys: plunger from the start, pistol staged
+  // on deck 2, pumper on deck 3, stink bombs on deck 4.
+  const WEAPON_ORDER = ["melee", "dart", "shotgun", "bomb"];
+
+  function isWeaponUnlocked(weapon) {
+    if (weapon === "dart") return state.dartUnlocked;
+    if (weapon === "shotgun") return state.shotgunUnlocked;
+    if (weapon === "bomb") return state.bombUnlocked;
+    return true; // the plunger is a lifestyle, not an unlock
+  }
+
+  const WEAPON_LOCKED_STATUS = {
+    dart: "Ivermectin Pistol not found yet. It's staged somewhere on deck 2.",
+    shotgun: `${SHOTGUN_DISPLAY_NAME} not found yet. It's staged somewhere on deck 3.`,
+    bomb: `${BOMB_DISPLAY_NAME}s not found yet. The jars appear on deck 4.`,
+  };
+
+  function setWeapon(weapon, options = {}) {
+    if (state.reloadTimer > 0) {
+      setStatus("Finish the reload first.");
+      return false;
+    }
+    if (!isWeaponUnlocked(weapon)) {
+      if (!options.silent) {
+        playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
+        setStatus(WEAPON_LOCKED_STATUS[weapon] || "Not found yet.");
       }
-      state.weapon = "dart";
+      return false;
+    }
+    if (state.weapon === weapon) return true;
+    state.weapon = weapon;
+    if (!options.silent) {
       playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.18 });
-      setStatus("Ivermectin Pistol ready.");
-      return;
+      setStatus(WEAPON_READY_STATUS[weapon] || WEAPON_READY_STATUS.melee);
     }
-    if (state.shotgunUnlocked) {
-      if (state.reloadTimer > 0) {
-        setStatus("Finish the reload first.");
-        return;
-      }
-      state.weapon = "shotgun";
-      playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.2 });
-      setStatus(`${SHOTGUN_DISPLAY_NAME} ready.`);
-    } else {
-      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
-      setStatus(`${SHOTGUN_DISPLAY_NAME} is still somewhere on the ship.`);
-    }
+    return true;
+  }
+
+  function cycleWeapon(direction = 1) {
+    const cycle = WEAPON_ORDER.filter(isWeaponUnlocked);
+    if (cycle.length < 2) return;
+    const index = cycle.indexOf(state.weapon);
+    const next = cycle[(index + direction + cycle.length) % cycle.length];
+    setWeapon(next);
+  }
+
+  function switchWeapon() {
+    cycleWeapon(1);
   }
 
   function lockPointer() {
@@ -2693,7 +3330,7 @@
       if (enemy.cured) continue;
       // Crawlers are hit where they're actually rendered (near the ceiling),
       // not at the usual standing-height centre.
-      const hitY = enemy.type === "crawler" ? enemy.crawlY : enemy.type === "bloater" ? 1.35 : 1.18;
+      const hitY = enemy.type === "crawler" ? enemy.crawlY : enemy.type === "boss" ? 1.7 : enemy.type === "bloater" ? 1.35 : 1.18;
       const center = new THREE.Vector3(enemy.x, hitY, enemy.z);
       const toEnemy = center.clone().sub(origin);
       const projected = toEnemy.dot(dir);
@@ -2975,20 +3612,25 @@
 
   function canReloadWeapon(weapon = state.weapon) {
     if (state.reloadTimer > 0) return false;
+    if (weapon === "melee" || weapon === "bomb") return false;
     if (weapon === "shotgun") {
       return state.shotgunUnlocked && state.shotgunLoaded < SHOTGUN_TUBE_SIZE && state.shotgunAmmo > 0;
     }
-    return state.dartAmmo < DART_MAG_SIZE;
+    return state.dartAmmo < DART_MAG_SIZE && state.dartReserve > 0;
   }
 
   function startReload(weapon = state.weapon, options = {}) {
     if (state.mode !== "playing" || state.reloadTimer > 0) return false;
     if (!canReloadWeapon(weapon)) {
       if (!options.silent) {
-        if (weapon === "shotgun") {
+        if (weapon === "melee") {
+          setStatus(`${MELEE_DISPLAY_NAME} never runs out. That is the point of it.`);
+        } else if (weapon === "bomb") {
+          setStatus(`${BOMB_DISPLAY_NAME}s are single-serve. Find more jars.`);
+        } else if (weapon === "shotgun") {
           setStatus(state.shotgunAmmo > 0 ? `${SHOTGUN_DISPLAY_NAME} is already topped off.` : `${SHOTGUN_DISPLAY_NAME} has no silver ampoules left.`);
         } else {
-          setStatus("Ivermectin Pistol is already loaded.");
+          setStatus(state.dartReserve > 0 ? "Ivermectin Pistol is already loaded." : "No ivermectin darts left. Scavenge for more.");
         }
       }
       return false;
@@ -3018,22 +3660,32 @@
       return;
     }
 
-    state.dartAmmo = DART_MAG_SIZE;
+    const take = Math.min(DART_MAG_SIZE - state.dartAmmo, state.dartReserve);
+    state.dartAmmo += take;
+    state.dartReserve -= take;
     playSound("pickup", { cooldown: 0.25, fallbackKind: "hit", volume: 0.24 });
-    setStatus("Ivermectin Pistol reloaded.", 1.25);
+    setStatus(state.dartReserve > 0
+      ? "Ivermectin Pistol reloaded."
+      : "Ivermectin Pistol reloaded. That was the last of the darts.", 1.25);
   }
 
   function cureEnemy(enemy, dose) {
-    const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : enemy.type === "bloater" ? 1.35 : 1.2;
+    const hitBaseY = enemy.type === "crawler" ? enemy.crawlY - 0.3 : enemy.type === "boss" ? 1.7 : enemy.type === "bloater" ? 1.35 : 1.2;
     enemy.inoculation += dose;
-    enemy.stagger = 0.22;
+    enemy.stagger = enemy.type === "boss" ? 0.12 : 0.22;
     enemy.lungeWindup = 0;
     enemy.lungeTime = 0;
+    setEnemyAlert(enemy, { stinger: false });
     state.totalHits += 1;
     addParticles(enemy.x, enemy.z, 0xb7ff54, 9, hitBaseY);
     if (enemy.inoculation < enemy.resistance) {
       playSound("hit", { cooldown: 0.06, fallbackKind: "hit" });
-      setStatus("Partial cure. Hit them again before they crowd you.");
+      if (enemy.type === "boss") {
+        const left = Math.max(0, Math.ceil(enemy.resistance - enemy.inoculation));
+        setStatus(`${state.bossName || "The boss"} shrugs it off. Roughly ${left} more doses.`);
+      } else {
+        setStatus("Partial cure. Hit them again before they crowd you.");
+      }
       return;
     }
     enemy.cured = true;
@@ -3048,13 +3700,22 @@
     state.cures += 1;
     const typeBonus = ENEMY_CURE_SCORE[enemy.type] || ENEMY_CURE_SCORE.passenger;
     state.score += typeBonus + state.level * 12;
-    setStatus(
-      enemy.type === "cougher" ? "Cougher cured. The air is less terrible."
-        : enemy.type === "bloater" ? "Bloater cured. That took a suspicious amount of serum."
-        : enemy.type === "crawler" ? "Crawler cured. It toddles off the ceiling."
-          : enemy.type === "sprinter" ? "Sprinter cured. Your ankles are safer."
-        : "Passenger cured."
-    );
+    if (enemy.type === "boss") {
+      playSound("doom", { cooldown: 0.5, cooldownKey: "boss-down", fallback: false, rate: 1.15, volume: 0.5 });
+      addParticles(enemy.x, enemy.z, 0xffd43b, 26, hitBaseY);
+      const left = bossesRemaining();
+      setStatus(left > 0
+        ? `${state.bossName || "Boss"} cured! ${left} more still stalking the deck.`
+        : `${state.bossName || "Boss"} cured! It asks for a comment card.`, 2.4);
+    } else {
+      setStatus(
+        enemy.type === "cougher" ? "Cougher cured. The air is less terrible."
+          : enemy.type === "bloater" ? "Bloater cured. That took a suspicious amount of serum."
+          : enemy.type === "crawler" ? "Crawler cured. It toddles off the ceiling."
+            : enemy.type === "sprinter" ? "Sprinter cured. Your ankles are safer."
+          : "Passenger cured."
+      );
+    }
     updateExitDoor();
   }
 
@@ -3065,6 +3726,11 @@
     }
     if (state.dartCooldown > 0) return;
     if (state.dartAmmo <= 0) {
+      if (state.dartReserve <= 0) {
+        playSound("damage", { cooldown: 0.4, fallbackKind: "bad", volume: 0.22 });
+        setStatus("Ivermectin is gone. The plunger never leaves you (press 3).");
+        return;
+      }
       startReload("dart");
       return;
     }
@@ -3073,6 +3739,7 @@
     state.totalShots += 1;
     triggerRecoil("dart");
     playSound("dart", { cooldown: 0.05, fallbackKind: "miss", volume: 0.3 });
+    alertEnemiesInRadius(player.x, player.z, 9);
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
     const hit = traceEnemy(dir, DART_RANGE, 0.06);
@@ -3112,6 +3779,7 @@
     state.totalShots += 1;
     triggerRecoil("shotgun");
     playSound("shotgun", { cooldown: SHOTGUN_COOLDOWN * 0.8, fallbackKind: "shotgun" });
+    alertEnemiesInRadius(player.x, player.z, 16);
 
     const base = new THREE.Vector3();
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
@@ -3138,9 +3806,147 @@
     }
   }
 
+  function fireMelee() {
+    if (state.meleeCooldown > 0) return;
+    state.meleeCooldown = MELEE_COOLDOWN;
+    state.meleeSwing = 1;
+    state.totalShots += 1;
+    playSound("dart", { cooldown: 0.1, cooldownKey: "melee-whoosh", fallbackKind: "miss", rate: 0.62, volume: 0.26 });
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    let landed = 0;
+    for (const enemy of state.enemies) {
+      if (enemy.cured) continue;
+      const dx = enemy.x - player.x;
+      const dz = enemy.z - player.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > MELEE_RANGE + (ENEMY_HIT_RADIUS[enemy.type] || 0.6) * 0.5) continue;
+      // Point-blank always connects — the cone only matters at arm's length,
+      // and direction-to-enemy is pure noise when they're standing inside you.
+      const dot = dist < 0.75 ? 1 : (dx / dist) * dir.x + (dz / dist) * dir.z;
+      if (dot < 0.42) continue;
+      landed += 1;
+      // Percussive wellness: the plunger shoves them back before it doses.
+      const push = enemy.type === "boss" ? 0.45 : 1.25;
+      moveEntity(enemy, (dx / (dist || 1)) * push, (dz / (dist || 1)) * push, enemy.radius || 0.4);
+      cureEnemy(enemy, MELEE_DOSE);
+      enemy.stagger = Math.max(enemy.stagger, 0.4);
+    }
+    alertEnemiesInRadius(player.x, player.z, 4.5);
+    if (landed > 0) {
+      playSound("hit", { cooldown: 0.08, fallbackKind: "hit", rate: 0.82, volume: 0.42 });
+    } else {
+      setStatus("The plunger whiffs. Emotionally, it still supports you.", 1.1);
+    }
+  }
+
+  function fireBomb() {
+    if (state.bombCooldown > 0) return;
+    if (!state.bombUnlocked) {
+      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
+      setStatus(WEAPON_LOCKED_STATUS.bomb);
+      return;
+    }
+    if (state.bombAmmo <= 0) {
+      playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
+      setStatus(`No ${BOMB_DISPLAY_NAME}s left. The gut flora supply ran dry.`);
+      return;
+    }
+    state.bombCooldown = BOMB_COOLDOWN;
+    state.bombAmmo -= 1;
+    state.totalShots += 1;
+    triggerRecoil("dart");
+    playSound("spit", { cooldown: 0.2, cooldownKey: "bomb-throw", fallback: false, rate: 1.3, volume: 0.34 });
+
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    const horiz = Math.hypot(dir.x, dir.z) || 0.0001;
+    const hx = dir.x / horiz;
+    const hz = dir.z / horiz;
+    // Land where the crosshair meets the floor: aim at someone's feet and the
+    // jar drops there. Level (or upward) aim lobs it out to max range.
+    let range = BOMB_THROW_RANGE;
+    if (dir.y < -0.04) {
+      range = clamp((EYE_Y / -dir.y) * horiz, 1.2, BOMB_THROW_RANGE);
+    }
+    // Walk the aim ray out to the first wall so the jar never lands inside one.
+    for (let d = 1; d < range; d += 0.4) {
+      const tile = worldToTile(player.x + hx * d, player.z + hz * d);
+      if (!isWalkableTile(tile.gx, tile.gy)) { range = Math.max(1.2, d - 0.5); break; }
+    }
+    const toX = player.x + hx * range;
+    const toZ = player.z + hz * range;
+
+    const jar = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.19, 10), weaponMats.bombJar);
+    const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 10), weaponMats.dark);
+    lid.position.y = 0.11;
+    jar.add(body, lid);
+    jar.position.set(player.x + dir.x * 0.5, EYE_Y - 0.2, player.z + dir.z * 0.5);
+    fxRoot.add(jar);
+    state.bombs.push({
+      mesh: jar,
+      fromX: jar.position.x,
+      fromY: jar.position.y,
+      fromZ: jar.position.z,
+      toX,
+      toZ,
+      t: 0,
+      travel: clamp(range / 11, 0.32, 0.95),
+    });
+  }
+
+  function explodeBomb(bomb) {
+    const { toX, toZ } = bomb;
+    playSound("shotgun", { cooldown: 0.15, cooldownKey: "bomb-boom", fallbackKind: "shotgun", rate: 0.6, volume: 0.55 });
+    playSound("cure", { cooldown: 0.15, cooldownKey: "bomb-cure", fallbackKind: "hit", volume: 0.4 });
+    addParticles(toX, toZ, 0xb7ff54, 22, 0.5);
+    addParticles(toX, toZ, 0x8aff2e, 14, 1.1);
+    spawnCurePuddle(toX, toZ);
+    let cured = 0;
+    for (const enemy of state.enemies) {
+      if (enemy.cured) continue;
+      const dist = Math.hypot(enemy.x - toX, enemy.z - toZ);
+      if (dist > BOMB_RADIUS) continue;
+      cureEnemy(enemy, BOMB_DOSE * (dist < BOMB_RADIUS * 0.5 ? 1 : 0.72));
+      cured += 1;
+    }
+    // Friendly bacteria also scrub nearby cough clouds out of the air.
+    state.clouds.forEach((cloud) => {
+      if (Math.hypot(cloud.x - toX, cloud.z - toZ) < BOMB_RADIUS + 1) cloud.life = Math.min(cloud.life, 0.3);
+    });
+    alertEnemiesInRadius(toX, toZ, 15);
+    setStatus(cured > 0
+      ? `Probiotic detonation. ${cured} gut biome${cured === 1 ? "" : "s"} forcibly rebalanced.`
+      : "Probiotic detonation. The hallway smells aggressively healthy.", 1.6);
+  }
+
+  function updateBombs(dt) {
+    for (let i = state.bombs.length - 1; i >= 0; i -= 1) {
+      const b = state.bombs[i];
+      b.t += dt;
+      const p = clamp(b.t / b.travel, 0, 1);
+      const arc = Math.sin(p * Math.PI) * 1.1;
+      b.mesh.position.set(
+        lerp(b.fromX, b.toX, p),
+        lerp(b.fromY, 0.12, p) + arc,
+        lerp(b.fromZ, b.toZ, p)
+      );
+      b.mesh.rotation.x += dt * 8;
+      b.mesh.rotation.z += dt * 5;
+      if (p >= 1) {
+        fxRoot.remove(b.mesh);
+        state.bombs.splice(i, 1);
+        explodeBomb(b);
+      }
+    }
+  }
+
   function fireWeapon() {
     if (state.mode !== "playing") return;
     if (state.weapon === "shotgun") fireShotgun();
+    else if (state.weapon === "melee") fireMelee();
+    else if (state.weapon === "bomb") fireBomb();
     else fireDart();
   }
 
@@ -3173,10 +3979,28 @@
     state.flow = dist;
   }
 
+  // LOS with body width: the centre ray plus two rays offset perpendicular
+  // by ~the mover's radius. Prevents the classic "I can see you through this
+  // diagonal gap my shoulders don't fit through" wall-humping.
+  function hasClearPath(ax, az, bx, bz, radius = 0.4) {
+    if (!hasLineOfSight(ax, az, bx, bz)) return false;
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.001) return true;
+    const px = (-dz / len) * radius;
+    const pz = (dx / len) * radius;
+    return hasLineOfSight(ax + px, az + pz, bx + px, bz + pz)
+      && hasLineOfSight(ax - px, az - pz, bx - px, bz - pz);
+  }
+
   function bestEnemyTarget(enemy) {
     const map = state.map;
     const tile = worldToTile(enemy.x, enemy.z, map);
-    if (hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) return { x: player.x, z: player.z };
+    // Straight-line pursuit only when the whole body fits down the line.
+    if (hasClearPath(enemy.x, enemy.z, player.x, player.z, (enemy.radius || 0.4) + 0.05)) {
+      return { x: player.x, z: player.z };
+    }
     const here = state.flow[tile.gy * map.w + tile.gx];
     let best = null;
     [
@@ -3191,15 +4015,72 @@
       const score = state.flow[gy * map.w + gx];
       if (score < here && (!best || score < best.score)) best = { gx, gy, score };
     });
-    if (!best) return { x: player.x, z: player.z };
+    // No flow progress and no clear line: report "no path" so the caller can
+    // mill around instead of grinding face-first into the nearest wall.
+    if (!best) return null;
     return tileToWorld(best.gx, best.gy, map);
+  }
+
+  function setEnemyAlert(enemy, options = {}) {
+    if (enemy.alert || enemy.cured) return;
+    enemy.alert = true;
+    enemy.coughAnim = 1;
+    enemy.wanderTarget = null;
+    if (options.stinger !== false) {
+      const dist = Math.hypot(player.x - enemy.x, player.z - enemy.z);
+      playSound("doom", {
+        cooldown: 6,
+        cooldownKey: "detect-stinger",
+        fallback: false,
+        rate: 0.96 + Math.random() * 0.1,
+        volume: clamp(0.44 - dist * 0.012, 0.16, 0.44),
+      });
+    }
+  }
+
+  // Loud actions (gunshots, detonations) wake everything nearby, walls or not.
+  function alertEnemiesInRadius(x, z, radius) {
+    for (const enemy of state.enemies) {
+      if (enemy.cured || enemy.alert) continue;
+      if (Math.hypot(enemy.x - x, enemy.z - z) <= radius) setEnemyAlert(enemy, { stinger: false });
+    }
+  }
+
+  // Undetected enemies drift between random walkable points at half speed.
+  function updateEnemyWander(enemy, dt) {
+    enemy.wanderTimer -= dt;
+    let needsTarget = !enemy.wanderTarget;
+    if (enemy.wanderTarget) {
+      const toTarget = Math.hypot(enemy.wanderTarget.x - enemy.x, enemy.wanderTarget.z - enemy.z);
+      if (toTarget < 0.4) needsTarget = true;
+    }
+    if (enemy.wanderTimer <= 0 || needsTarget) {
+      enemy.wanderTimer = 2.2 + Math.random() * 3.4;
+      enemy.wanderTarget = pickWanderTarget(enemy);
+    }
+    if (!enemy.wanderTarget) return false;
+    const dx = enemy.wanderTarget.x - enemy.x;
+    const dz = enemy.wanderTarget.z - enemy.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.12) return false;
+    const speed = enemy.speed * 0.42;
+    const beforeX = enemy.x;
+    const beforeZ = enemy.z;
+    moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, enemy.radius || 0.4);
+    if (Math.hypot(enemy.x - beforeX, enemy.z - beforeZ) < speed * dt * 0.3) {
+      // Bumped into something — try a different destination next frame.
+      enemy.wanderTarget = null;
+    }
+    enemy.faceX = enemy.x + dx;
+    enemy.faceZ = enemy.z + dz;
+    return true;
   }
 
   function moveEntity(entity, dx, dz, radius) {
     const nx = entity.x + dx;
     const nz = entity.z + dz;
-    if (isWalkableWorld(nx, entity.z, radius)) entity.x = nx;
-    if (isWalkableWorld(entity.x, nz, radius)) entity.z = nz;
+    if (isWalkableWorld(nx, entity.z, radius) && !collidesWithProps(nx, entity.z, radius * 0.9, entity.x, entity.z)) entity.x = nx;
+    if (isWalkableWorld(entity.x, nz, radius) && !collidesWithProps(entity.x, nz, radius * 0.9, entity.x, entity.z)) entity.z = nz;
   }
 
   function spawnCloud(x, z, radius = 1.8) {
@@ -3328,25 +4209,70 @@
       const dist = Math.hypot(dxp, dzp);
       closest = Math.min(closest, dist);
 
-      if (enemy.stagger <= 0) {
+      // ---- Detection ----
+      // Sniffers smell through walls; everyone else needs actual line of
+      // sight (or you brushing right past them) before they engage.
+      if (!enemy.alert) {
+        const seen = enemy.sniffer
+          ? dist < enemy.sightRange
+          : dist < enemy.sightRange && hasLineOfSight(enemy.x, enemy.z, player.x, player.z);
+        if (seen || dist < 2.4) setEnemyAlert(enemy);
+      }
+
+      let moving = false;
+      if (!enemy.alert) {
+        // ---- Wander state: shuffle the halls, oblivious ----
+        if (enemy.stagger <= 0) moving = updateEnemyWander(enemy, dt);
+      } else if (enemy.stagger <= 0) {
+        // ---- Alert state: hunt the player ----
         const lunging = updateSprinterLunge(enemy, dt, dist);
         if (!lunging) {
-          const target = bestEnemyTarget(enemy);
-          const dx = target.x - enemy.x;
-          const dz = target.z - enemy.z;
-          const len = Math.hypot(dx, dz) || 1;
-          const slowNearPlayer = enemy.type === "bloater" ? 0.58 : 0.72;
-          const speed = enemy.speed * (dist < 2.2 ? slowNearPlayer : 1);
-          moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, enemy.radius || ENEMY_COLLISION_RADIUS.passenger);
+          const now = performance.now() / 1000;
+          let target = now < enemy.sidestepUntil && enemy.wanderTarget ? enemy.wanderTarget : bestEnemyTarget(enemy);
+          if (!target) {
+            // No route to the player right now: mill around instead of
+            // grinding into a wall until the flow field catches up.
+            moving = updateEnemyWander(enemy, dt);
+          } else {
+            const dx = target.x - enemy.x;
+            const dz = target.z - enemy.z;
+            const len = Math.hypot(dx, dz) || 1;
+            const slowNearPlayer = enemy.type === "bloater" || enemy.type === "boss" ? 0.58 : 0.72;
+            const speed = enemy.speed * (dist < 2.2 ? slowNearPlayer : 1);
+            const beforeX = enemy.x;
+            const beforeZ = enemy.z;
+            moveEntity(enemy, (dx / len) * speed * dt, (dz / len) * speed * dt, enemy.radius || ENEMY_COLLISION_RADIUS.passenger);
+            moving = true;
+            enemy.faceX = player.x;
+            enemy.faceZ = player.z;
+            // Stuck watchdog: barely moving while trying to chase means a
+            // wall/prop/crowd pin — sidestep somewhere walkable for a beat.
+            const actual = Math.hypot(enemy.x - beforeX, enemy.z - beforeZ);
+            if (actual < speed * dt * 0.25) {
+              enemy.stuckT += dt;
+              if (enemy.stuckT > 0.55) {
+                enemy.stuckT = 0;
+                enemy.wanderTarget = pickWanderTarget(enemy);
+                enemy.sidestepUntil = now + 0.7;
+              }
+            } else {
+              enemy.stuckT = Math.max(0, enemy.stuckT - dt * 2);
+            }
+          }
+        } else {
+          moving = true;
+          enemy.faceX = player.x;
+          enemy.faceZ = player.z;
         }
       } else {
         enemy.lungeWindup = 0;
         enemy.lungeTime = 0;
       }
 
-      const touchRange = enemy.type === "bloater" ? 1.55 : 1.25;
+      const touchRange = enemy.type === "bloater" ? 1.55 : enemy.type === "boss" ? 2.1 : 1.25;
       if (dist < touchRange) {
         // Crawlers barely infect by touch — their threat is the ranged spit below.
+        setEnemyAlert(enemy, { stinger: false });
         state.infection += (ENEMY_TOUCH_INFECTION[enemy.type] || ENEMY_TOUCH_INFECTION.passenger) * dt;
         state.lurchTimer = Math.max(state.lurchTimer, 0.18);
         playSound("damage", { cooldown: 0.72, fallbackKind: "bad", volume: 0.28 });
@@ -3358,10 +4284,13 @@
           setStatus("Sprinter lunge clipped you.", 0.9);
         }
       } else if (dist < 6.5) {
-        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt * (ENEMY_PROXIMITY_MULTIPLIER[enemy.type] || 1);
+        // Oblivious wanderers leak far less ambient crud than active hunters,
+        // so sneaking past them is a real option.
+        const awareness = enemy.alert ? 1 : 0.35;
+        state.infection += (6.5 - dist) * (0.5 + state.level * 0.035) * dt * (ENEMY_PROXIMITY_MULTIPLIER[enemy.type] || 1) * awareness;
       }
 
-      if (enemy.type === "cougher") {
+      if (enemy.type === "cougher" && enemy.alert) {
         enemy.coughTimer -= dt;
         if (enemy.coughTimer <= 0 && dist < 12) {
           enemy.coughTimer = 2.4 + Math.random() * 2.4;
@@ -3371,7 +4300,7 @@
         }
       }
 
-      if (enemy.type === "crawler") {
+      if (enemy.type === "crawler" && enemy.alert) {
         enemy.spitTimer -= dt;
         if (enemy.spitTimer <= 0 && dist < 11 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
           enemy.spitTimer = 2.2 + Math.random() * 1.8;
@@ -3381,7 +4310,7 @@
         }
       }
 
-      if (enemy.type === "bloater") {
+      if (enemy.type === "bloater" && enemy.alert) {
         enemy.spitTimer -= dt;
         if (enemy.spitTimer <= 0 && dist < 12.5 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
           enemy.spitTimer = 3.3 + Math.random() * 1.8;
@@ -3401,23 +4330,79 @@
         }
       }
 
+      if (enemy.type === "boss") {
+        enemy.spitTimer -= dt;
+        if (enemy.spitTimer <= 0 && dist < 16 && hasLineOfSight(enemy.x, enemy.z, player.x, player.z)) {
+          enemy.spitTimer = 2.5 + Math.random() * 1.4;
+          enemy.coughAnim = 1;
+          playSound("spit", { cooldown: 0.3, fallback: false, volume: 0.5, rate: 0.7 });
+          // Triple volley: one dead-on, two flanking where you might dodge to.
+          for (let v = -1; v <= 1; v += 1) {
+            const px = -dzp / (dist || 1);
+            const pz = dxp / (dist || 1);
+            spawnSlimeBolt(enemy.x, 2.2, enemy.z, player.x + px * v * 1.7, EYE_Y, player.z + pz * v * 1.7, {
+              speed: 8,
+              scale: 1.9,
+              maxTravel: 1.6,
+              impactRadius: 2.0,
+              infection: 8,
+              stuckTime: v === 0 ? 2.2 : 0,
+              cloudRadius: 1.5,
+              particleCount: 18,
+              status: "Boss slime barrage! Keep moving.",
+            });
+          }
+        }
+      }
+
       if (enemy.type === "crawler") {
         // Rendered upside-down near the ceiling: same XZ pathing/collision as
         // every other enemy (the flow-field doesn't know about height), just
         // repositioned and flipped for the ceiling-crawl illusion.
+        const faceX = enemy.alert ? player.x : (enemy.faceX ?? player.x);
+        const faceZ = enemy.alert ? player.z : (enemy.faceZ ?? player.z);
         enemy.mesh.position.set(enemy.x, enemy.crawlY, enemy.z);
-        if (dist > 0.05) {
-          enemy.mesh.lookAt(player.x, enemy.crawlY, player.z);
+        if (Math.hypot(faceX - enemy.x, faceZ - enemy.z) > 0.05) {
+          enemy.mesh.lookAt(faceX, enemy.crawlY, faceZ);
           enemy.mesh.rotateZ(Math.PI);
         }
       } else {
         enemy.mesh.position.set(enemy.x, 0, enemy.z);
-        // Target the same height as the mesh's own pivot (ground level) so this
-        // only ever yaws the figure — targeting a raised point pitches the whole
-        // body backward as the horizontal distance shrinks (e.g. up close).
-        if (dist > 0.05) enemy.mesh.lookAt(player.x, 0, player.z);
+        // Face the player when hunting, the direction of travel when idly
+        // wandering. Target stays at pivot height so the figure only yaws.
+        const faceX = enemy.alert ? player.x : (enemy.faceX ?? player.x);
+        const faceZ = enemy.alert ? player.z : (enemy.faceZ ?? player.z);
+        if (Math.hypot(faceX - enemy.x, faceZ - enemy.z) > 0.05) enemy.mesh.lookAt(faceX, 0, faceZ);
       }
-      animateEnemy(enemy, dt, dist, enemy.stagger <= 0);
+      animateEnemy(enemy, dt, dist, moving && enemy.stagger <= 0);
+    }
+
+    // ---- Crowd separation ----
+    // Gentle pairwise push so packs fan out around corners and props instead
+    // of compressing into a single wall-grinding blob.
+    for (let i = 0; i < state.enemies.length; i += 1) {
+      const a = state.enemies[i];
+      if (a.cured || a.type === "crawler") continue;
+      for (let j = i + 1; j < state.enemies.length; j += 1) {
+        const b = state.enemies[j];
+        if (b.cured || b.type === "crawler") continue;
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+        const minDist = (a.radius || 0.4) + (b.radius || 0.4) + 0.08;
+        const d = Math.hypot(dx, dz);
+        if (d >= minDist || d < 0.001) continue;
+        const push = (minDist - d) * 0.5;
+        const ux = dx / d;
+        const uz = dz / d;
+        if (isWalkableWorld(a.x - ux * push, a.z - uz * push, a.radius || 0.4)) {
+          a.x -= ux * push;
+          a.z -= uz * push;
+        }
+        if (isWalkableWorld(b.x + ux * push, b.z + uz * push, b.radius || 0.4)) {
+          b.x += ux * push;
+          b.z += uz * push;
+        }
+      }
     }
 
     return closest;
@@ -3479,7 +4464,9 @@
       const dist = 1.5 + Math.random() * 4;
       const x = enemy.x + Math.cos(angle) * dist;
       const z = enemy.z + Math.sin(angle) * dist;
-      if (isWalkableWorld(x, z, 0.34)) return { x, z };
+      if (!isWalkableWorld(x, z, 0.34)) continue;
+      if (state.props.some((p) => Math.hypot(p.x - x, p.z - z) < p.radius + 0.4)) continue;
+      return { x, z };
     }
     return null;
   }
@@ -3693,10 +4680,31 @@
         state.weapon = "shotgun";
         playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.5 });
         setStatus(`${SHOTGUN_DISPLAY_NAME} acquired. Press R to reload when empty.`);
+      } else if (pickup.type === "pistol") {
+        state.dartUnlocked = true;
+        state.dartAmmo = DART_MAG_SIZE;
+        state.dartReserve += 18;
+        state.weapon = "dart";
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.5 });
+        setStatus("Ivermectin Pistol acquired. Press R to reload, 1 for the trusty plunger.");
+      } else if (pickup.type === "bombkit") {
+        state.bombUnlocked = true;
+        state.bombAmmo = Math.min(BOMB_MAX_AMMO, state.bombAmmo + 2);
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.5 });
+        setStatus(`${BOMB_DISPLAY_NAME}s unlocked. Press 4 (or G to quick-throw).`);
       } else if (pickup.type === "shells") {
         state.shotgunAmmo += 6;
         playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.42 });
         setStatus("Silver ampoules recovered. Press R to reload.");
+      } else if (pickup.type === "darts") {
+        state.dartReserve += 12;
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.42 });
+        setStatus("Ivermectin darts restocked (+12).");
+      } else if (pickup.type === "bombs") {
+        const gained = Math.min(2, BOMB_MAX_AMMO - state.bombAmmo);
+        state.bombAmmo = Math.min(BOMB_MAX_AMMO, state.bombAmmo + 2);
+        playSound("pickup", { cooldown: 0.2, fallbackKind: "hit", volume: 0.42 });
+        setStatus(gained > 0 ? `${BOMB_DISPLAY_NAME}s acquired (+${gained}).` : "Bomb bag full. The yogurt stays behind.");
       } else {
         state.infection = Math.max(0, state.infection - 24);
         playSound("cure", { cooldown: 0.25, fallbackKind: "hit", volume: 0.32 });
@@ -3748,8 +4756,8 @@
     const dz = mz * speed * dt;
     const nx = player.x + dx;
     const nz = player.z + dz;
-    if (isWalkableWorld(nx, player.z)) player.x = nx;
-    if (isWalkableWorld(player.x, nz)) player.z = nz;
+    if (isWalkableWorld(nx, player.z) && !collidesWithProps(nx, player.z, PLAYER_RADIUS * 0.85, player.x, player.z)) player.x = nx;
+    if (isWalkableWorld(player.x, nz) && !collidesWithProps(player.x, nz, PLAYER_RADIUS * 0.85, player.x, player.z)) player.z = nz;
     updateFootstepAudio(dt, len > 0 && Math.hypot(player.x - prevX, player.z - prevZ) > 0.002);
 
     const bob = Math.sin(performance.now() * 0.006) * (len > 0 ? 0.025 : 0.006);
@@ -3766,8 +4774,10 @@
     const exitPos = tileToWorld(state.map.exit.gx, state.map.exit.gy, state.map);
     const exitDist = Math.hypot(player.x - exitPos.x, player.z - exitPos.z);
     if (exitDist < 1.6) {
-      if (state.cures >= state.neededCures) {
+      if (exitUnlocked()) {
         completeLevel();
+      } else if (bossesRemaining() > 0 && state.cures >= state.neededCures) {
+        setStatus(`Lifeboat locked. ${state.bossName || "The boss"} must be cured first.`, 1);
       } else {
         setStatus(`Lifeboat locked. Cure ${state.neededCures - state.cures} more passenger${state.neededCures - state.cures === 1 ? "" : "s"}.`, 1);
       }
@@ -3777,6 +4787,8 @@
   function updateTimers(dt) {
     state.dartCooldown = Math.max(0, state.dartCooldown - dt);
     state.shotgunCooldown = Math.max(0, state.shotgunCooldown - dt);
+    state.meleeCooldown = Math.max(0, state.meleeCooldown - dt);
+    state.bombCooldown = Math.max(0, state.bombCooldown - dt);
     if (state.reloadTimer > 0) {
       state.reloadTimer = Math.max(0, state.reloadTimer - dt);
       if (state.reloadTimer <= 0) finishReload();
@@ -3790,9 +4802,115 @@
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
       if (state.statusTimer <= 0 && el.status) {
-        el.status.textContent = state.cures >= state.neededCures ? "Find the stairwell door." : "Cure passengers, reload, and keep your distance.";
+        el.status.textContent = exitUnlocked()
+          ? "Find the stairwell door."
+          : bossesRemaining() > 0 && state.cures >= state.neededCures
+            ? `Cure the ${state.bossName || "boss"} to unlock the stairwell.`
+            : "Cure passengers, reload, and keep your distance.";
       }
     }
+  }
+
+  // ---- Discovery minimap ----
+  // Fog-of-war: tiles within a few metres of the player get flagged as
+  // discovered and stay on the map. The stairwell exit gets a pulsing marker
+  // once (and only once) the player has actually laid eyes on it.
+  const MINIMAP_REVEAL_TILES = 4;
+  let minimapDrawTimer = 0;
+
+  function resetDiscovery() {
+    state.discovered = state.map ? new Uint8Array(state.map.w * state.map.h) : null;
+    minimapDrawTimer = 0;
+  }
+
+  function revealAroundPlayer() {
+    const map = state.map;
+    if (!map || !state.discovered) return;
+    const t = worldToTile(player.x, player.z, map);
+    for (let dy = -MINIMAP_REVEAL_TILES; dy <= MINIMAP_REVEAL_TILES; dy += 1) {
+      for (let dx = -MINIMAP_REVEAL_TILES; dx <= MINIMAP_REVEAL_TILES; dx += 1) {
+        if (dx * dx + dy * dy > MINIMAP_REVEAL_TILES * MINIMAP_REVEAL_TILES + 2) continue;
+        const gx = t.gx + dx;
+        const gy = t.gy + dy;
+        if (!inBounds(gx, gy, map)) continue;
+        state.discovered[gy * map.w + gx] = 1;
+      }
+    }
+  }
+
+  function drawMinimap() {
+    if (!minimapCtx || !state.map || !state.discovered) return;
+    const map = state.map;
+    const ctx = minimapCtx;
+    const size = el.minimap.width;
+    ctx.clearRect(0, 0, size, size);
+    const s = (size - 10) / Math.max(map.w, map.h);
+    const ox = (size - map.w * s) / 2;
+    const oy = (size - map.h * s) / 2;
+    for (let gy = 0; gy < map.h; gy += 1) {
+      for (let gx = 0; gx < map.w; gx += 1) {
+        if (!state.discovered[gy * map.w + gx]) continue;
+        const tile = map.grid[gy][gx];
+        ctx.fillStyle = tile === Tile.WALL ? "rgba(82, 104, 128, 0.8)"
+          : tile === Tile.HAZARD ? "rgba(166, 136, 34, 0.85)"
+          : tile === Tile.FRESH ? "rgba(40, 158, 186, 0.85)"
+          : tile === Tile.EXIT ? "#68ff72"
+          : "rgba(14, 32, 46, 0.85)";
+        ctx.fillRect(ox + gx * s, oy + gy * s, s + 0.5, s + 0.5);
+      }
+    }
+
+    if (state.discovered[map.exit.gy * map.w + map.exit.gx]) {
+      const pulse = 0.55 + Math.sin(performance.now() * 0.006) * 0.35;
+      ctx.strokeStyle = `rgba(104, 255, 114, ${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ox + map.exit.gx * s - 2.5, oy + map.exit.gy * s - 2.5, s + 5, s + 5);
+    }
+
+    // Player arrow: canvas up = -gy, forward in world is (-sin yaw, -cos yaw),
+    // so the arrow simply rotates by -yaw.
+    const px = ox + (player.x / TILE + map.w / 2) * s;
+    const py = oy + (player.z / TILE + map.h / 2) * s;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(-player.yaw);
+    ctx.fillStyle = "#2ee0ff";
+    ctx.strokeStyle = "rgba(2, 5, 10, 0.85)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.lineTo(3.6, 4);
+    ctx.lineTo(-3.6, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function updateMinimap(dt) {
+    if (!minimapCtx) return;
+    revealAroundPlayer();
+    minimapDrawTimer -= dt;
+    if (minimapDrawTimer > 0) return;
+    minimapDrawTimer = 0.12;
+    drawMinimap();
+  }
+
+  // Rotating NOISE ALCHEMY dread bed: a random low drone every dozen-ish
+  // seconds, pitched slightly differently each time so the deck never sounds
+  // like a loop. Creeps a little louder/denser as the infection climbs.
+  function updateAmbience(dt) {
+    state.ambientTimer -= dt;
+    if (state.ambientTimer > 0) return;
+    const dreadVolume = 0.13 + Math.random() * 0.07 + (state.infection / 100) * 0.1;
+    playSound("dread", {
+      cooldown: 7,
+      cooldownKey: "dread-bed",
+      fallback: false,
+      rate: 0.92 + Math.random() * 0.14,
+      volume: clamp(dreadVolume, 0, 0.32),
+    });
+    state.ambientTimer = 10 + Math.random() * 9 - Math.min(5, state.level * 0.3);
   }
 
   function update(dt) {
@@ -3809,10 +4927,13 @@
     updateEnemies(dt);
     updateClouds(dt);
     updateSlimeBolts(dt);
+    updateBombs(dt);
     updateSpeeches(dt);
     updatePickups(dt);
     updateFx(dt);
     updateInfection(dt);
+    updateAmbience(dt);
+    updateMinimap(dt);
     state.score += dt * (state.level * 2);
     updateHud();
   }
@@ -3947,11 +5068,13 @@
       const sprintButton = el.mobileControls.querySelector("[data-mobile-action='sprint']");
       const switchButton = el.mobileControls.querySelector("[data-mobile-action='switch']");
       const reloadButton = el.mobileControls.querySelector("[data-mobile-action='reload']");
+      const bombButton = el.mobileControls.querySelector("[data-mobile-action='bomb']");
       const useButton = el.mobileControls.querySelector("[data-mobile-action='use']");
       if (fireButton) bindTapButton(fireButton, fireWeapon);
       if (sprintButton) bindHoldButton(sprintButton, () => { input.sprint = true; }, () => { input.sprint = false; });
       if (switchButton) bindTapButton(switchButton, switchWeapon);
       if (reloadButton) bindTapButton(reloadButton, () => startReload(state.weapon));
+      if (bombButton) bindTapButton(bombButton, () => { if (state.mode === "playing") fireBomb(); });
       if (useButton) bindTapButton(useButton, tryUseExit);
     }
 
@@ -4024,11 +5147,12 @@
       if (key === "a" || key === "arrowleft") input.left = true;
       if (key === "d" || key === "arrowright") input.right = true;
       if (key === "shift") input.sprint = true;
-      if (key === "1") {
-        if (state.reloadTimer > 0) setStatus("Finish the reload first.");
-        else state.weapon = "dart";
-      }
-      if (key === "2") switchWeapon();
+      if (key === "1") setWeapon("melee");
+      if (key === "2") setWeapon("dart");
+      if (key === "3") setWeapon("shotgun");
+      if (key === "4") setWeapon("bomb");
+      if (key === "q") switchWeapon();
+      if (key === "g" && state.mode === "playing") fireBomb();
       if (key === "r" && state.mode === "playing") {
         event.preventDefault();
         startReload(state.weapon);
@@ -4051,6 +5175,20 @@
       if (!isPointerLocked() || state.mode !== "playing") return;
       applyLookDelta(event.movementX, event.movementY);
     });
+
+    // Scroll wheel cycles the arsenal (throttled so a single trackpad flick
+    // doesn't spin through every weapon at once).
+    let lastWheelSwitch = 0;
+    document.addEventListener("wheel", (event) => {
+      if (state.mode !== "playing") return;
+      const overGame = isPointerLocked() || (event.target && canvasWrap && canvasWrap.contains(event.target));
+      if (!overGame) return;
+      if (event.cancelable) event.preventDefault();
+      const now = performance.now();
+      if (now - lastWheelSwitch < 180 || Math.abs(event.deltaY) < 4) return;
+      lastWheelSwitch = now;
+      cycleWeapon(event.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
 
     document.addEventListener("mousedown", (event) => {
       if (event.button !== 0) return;
@@ -4150,6 +5288,7 @@
   function bootGame() {
     state.map = generateMap(1);
     buildWorld();
+    scatterProps();
     spawnEnemies();
     spawnPickups();
     const start = tileToWorld(state.map.start.gx, state.map.start.gy, state.map);
@@ -4200,15 +5339,37 @@
     getAmmoStatus() {
       return {
         weapon: state.weapon,
+        unlocked: WEAPON_ORDER.filter(isWeaponUnlocked),
         dartAmmo: state.dartAmmo,
         dartMagSize: DART_MAG_SIZE,
+        dartReserve: state.dartReserve,
         shotgunLoaded: state.shotgunLoaded,
         shotgunTubeSize: SHOTGUN_TUBE_SIZE,
         shotgunReserve: state.shotgunAmmo,
+        bombAmmo: state.bombAmmo,
         reloadTimer: state.reloadTimer,
         reloadWeapon: state.reloadWeapon,
       };
     },
+    getWorldStatus() {
+      return {
+        level: state.level,
+        props: state.props.length,
+        propKinds: state.props.reduce((acc, p) => { acc[p.kind] = (acc[p.kind] || 0) + 1; return acc; }, {}),
+        enemies: state.enemies.length,
+        alert: state.enemies.filter((e) => !e.cured && e.alert).length,
+        wandering: state.enemies.filter((e) => !e.cured && !e.alert).length,
+        sniffers: state.enemies.filter((e) => e.sniffer).length,
+        bosses: state.enemies.filter((e) => e.type === "boss").length,
+        bossesRemaining: bossesRemaining(),
+        bossName: state.bossName,
+        neededCures: state.neededCures,
+        exitUnlocked: exitUnlocked(),
+      };
+    },
+    setWeapon,
+    fireBomb,
+    fireMelee,
     setInfection(value) {
       state.infection = clamp(Number(value) || 0, 0, 100);
       updateHud();

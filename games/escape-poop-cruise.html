@@ -171,6 +171,24 @@
       white-space: nowrap;
     }
 
+    .poop-minimap {
+      background: rgba(2, 5, 10, 0.72);
+      border: 1px solid rgba(46, 224, 255, 0.32);
+      border-radius: 9px;
+      bottom: clamp(9px, 1.4cqw, 18px);
+      display: none;
+      height: auto;
+      aspect-ratio: 1;
+      position: absolute;
+      right: clamp(8px, 1.6cqw, 18px);
+      width: clamp(104px, 17cqw, 188px);
+      z-index: 6;
+    }
+
+    .canvas-wrap--poop-cruise.is-playing .poop-minimap {
+      display: block;
+    }
+
     .poop-reticle {
       height: clamp(24px, 4.1cqw, 42px);
       left: 50%;
@@ -381,6 +399,15 @@
         top: 52px;
       }
 
+      /* Mobile: the bottom-right corner belongs to the touch buttons, so the
+         minimap tucks under the fullscreen toggle instead. */
+      .canvas-wrap--poop-cruise.is-playing .poop-minimap {
+        bottom: auto;
+        right: 10px;
+        top: 96px;
+        width: 86px;
+      }
+
       .canvas-wrap--poop-cruise.is-playing .poop-chip {
         min-width: 66px;
         padding: 5px 7px;
@@ -428,7 +455,7 @@
             <div class="poop-hud__top">
               <div class="poop-chip"><span>Deck</span><strong id="hud-deck">1</strong></div>
               <div class="poop-chip"><span>Cured</span><strong id="hud-cures">0/0</strong></div>
-              <div class="poop-chip"><span>Weapon</span><strong id="hud-weapon">Ivermectin Pistol</strong></div>
+              <div class="poop-chip"><span>Weapon</span><strong id="hud-weapon">Support Plunger</strong></div>
               <div class="poop-chip"><span>Ammo</span><strong id="hud-ammo">Ready</strong></div>
               <div class="poop-chip"><span>Score</span><strong id="hud-score">0</strong></div>
               <div class="poop-chip"><span>High</span><strong id="hud-high">0</strong></div>
@@ -445,6 +472,8 @@
             </div>
 
             <div class="poop-status" id="hud-status">Click start, then click the canvas for mouse look.</div>
+
+            <canvas class="poop-minimap" id="minimap" width="188" height="188" aria-label="Deck minimap"></canvas>
           </div>
 
           <div class="poop-mobile-controls" id="mobile-controls" aria-label="Mobile game controls">
@@ -459,6 +488,7 @@
               <button class="poop-touch-btn" type="button" data-mobile-action="sprint">Run</button>
               <button class="poop-touch-btn" type="button" data-mobile-action="switch">Swap</button>
               <button class="poop-touch-btn" type="button" data-mobile-action="reload">Reload</button>
+              <button class="poop-touch-btn" type="button" data-mobile-action="bomb">Bomb</button>
               <button class="poop-touch-btn poop-touch-btn--yellow" type="button" data-mobile-action="use">Use</button>
             </div>
           </div>
@@ -490,9 +520,10 @@
             <button class="btn btn--yellow" id="btn-lock" type="button">Mouse look</button>
           </div>
           <p class="poop-side-note">
-            <kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> IVM shot ·
-            <kbd>Shift</kbd> sprint · <kbd>R</kbd> reload · <kbd>1</kbd>/<kbd>2</kbd> switch weapons ·
-            <kbd>E</kbd> use stairwell door.
+            <kbd>WASD</kbd> move · <kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire ·
+            <kbd>Shift</kbd> sprint · <kbd>R</kbd> reload ·
+            <kbd>1</kbd> plunger · <kbd>2</kbd> pistol · <kbd>3</kbd> pumper · <kbd>4</kbd> stink bomb ·
+            <kbd>Scroll</kbd>/<kbd>Q</kbd> cycle weapons · <kbd>G</kbd> quick-throw bomb · <kbd>E</kbd> use stairwell door.
           </p>
         </div>
 
@@ -513,8 +544,13 @@
           <ul>
             <li><strong style="color:var(--ink);">Cure enough infected passengers</strong> to unlock the stairwell door on each procedural deck.</li>
             <li><strong style="color:var(--ink);">Keep distance.</strong> The infection meter fills near infected passengers, cough clouds, and contaminated buffet zones.</li>
+            <li><strong style="color:var(--ink);">Stay quiet, stay unseen.</strong> Most passengers wander until they spot you — but orange-eyed sniffers smell you from across the deck, and gunfire wakes everyone nearby.</li>
             <li><strong style="color:var(--ink);">Watch the new threats.</strong> Sprinters can lunge, and slow bloaters can tank shots while lobbing green slime that pins your feet.</li>
             <li><strong style="color:var(--ink);">Recover in clean air.</strong> Balcony tiles and open porthole areas drain infection faster.</li>
+            <li><strong style="color:var(--ink);">Earn your arsenal.</strong> You start with only the Emotional Support Plunger (key 1). The Ivermectin Pistol is staged on deck 2, the Colloidal Silver Pumper on deck 3, and Probiotic Stink Bombs on deck 4 — grab each near the deck's spawn.</li>
+            <li><strong style="color:var(--ink);">Manage your ammo.</strong> Darts and silver ampoules run out — only the plunger swings forever. Stink Bombs (key 4, G to quick-throw) cure whole crowds at once.</li>
+            <li><strong style="color:var(--ink);">Read the minimap.</strong> The bottom-right map fills in as you explore; the stairwell exit gets a pulsing green marker once you've found it.</li>
+            <li><strong style="color:var(--ink);">Boss decks.</strong> From deck 10, every 5th deck a captain-hatted horror guards the stairwell. Cure it (many, many doses) or the door stays locked — and they get meaner, then multiply.</li>
             <li><strong style="color:var(--ink);">Start with the Ivermectin Pistol.</strong> Later decks add the Colloidal Silver Pumper pickup for close-range panic curing.</li>
             <li><strong style="color:var(--ink);">Escape scores big.</strong> Leaderboard score rewards cured passengers, accuracy, deck reached, and fast stairwell exits.</li>
           </ul>
@@ -539,7 +575,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260703-slopwire-merge-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/escape-poop-cruise.js?v=20260702-shotgun-spawn-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260704-minimap-progression-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

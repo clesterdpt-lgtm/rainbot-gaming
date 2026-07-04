@@ -501,56 +501,24 @@
     }
 
     .scrap-preview-meta {
-      background: linear-gradient(180deg, rgba(5, 8, 14, 0), rgba(5, 8, 14, 0.88) 16%, rgba(5, 8, 14, 0.96));
-      border: 1px solid rgba(46, 224, 255, 0.18);
-      border-width: 1px 0 0;
-      bottom: 0;
-      display: grid;
-      gap: 3px;
+      bottom: auto;
       left: 0;
-      padding: 20px 10px 9px;
+      padding: 8px 10px 0;
       pointer-events: none;
       position: absolute;
       right: 0;
-      text-align: left;
-    }
-
-    .scrap-preview-kicker {
-      color: rgba(234, 247, 255, 0.58);
-      font-family: var(--font-mono);
-      font-size: clamp(7px, 0.95cqw, 9px);
-      font-weight: 800;
-      text-transform: uppercase;
+      text-align: center;
+      top: 0;
     }
 
     .scrap-preview-meta strong {
       color: #ffd23b;
       font-family: "Bungee", var(--font-display);
-      font-size: clamp(16px, 2.1cqw, 24px);
+      font-size: clamp(17px, 2.25cqw, 25px);
       line-height: 1.02;
       overflow-wrap: anywhere;
+      text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.92), 0 0 14px rgba(0, 0, 0, 0.82);
       text-transform: uppercase;
-    }
-
-    .scrap-preview-meta em {
-      color: rgba(234, 247, 255, 0.84);
-      font-family: var(--font-mono);
-      font-size: clamp(8px, 1.05cqw, 10px);
-      font-style: normal;
-      line-height: 1.15;
-      text-transform: uppercase;
-    }
-
-    .scrap-preview-meta small {
-      color: #ff7eb6;
-      font-family: var(--font-mono);
-      font-size: clamp(8px, 1.05cqw, 10px);
-      font-weight: 800;
-      line-height: 1.2;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-transform: uppercase;
-      white-space: nowrap;
     }
 
     .scrap-choice-panel {
@@ -787,13 +755,20 @@
     }
 
     .scrap-veh-stats {
+      bottom: 9px;
       color: rgba(234, 247, 255, 0.9);
       display: flex;
       flex-wrap: wrap;
       font-family: var(--font-mono);
       font-size: clamp(8px, 1.1cqw, 10px);
       gap: 3px 10px;
-      justify-content: flex-start;
+      justify-content: center;
+      left: 10px;
+      pointer-events: none;
+      position: absolute;
+      right: 10px;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.95), 0 0 9px rgba(0, 0, 0, 0.9);
+      z-index: 2;
     }
 
     .scrap-veh-stats b {
@@ -1117,14 +1092,7 @@
       }
 
       .scrap-preview-meta {
-        gap: 1px;
-        padding: 14px 7px 6px;
-      }
-
-      .scrap-preview-kicker,
-      .scrap-preview-meta small,
-      .scrap-preview-meta em {
-        display: none;
+        padding: 6px 7px 0;
       }
 
       .scrap-preview-meta strong {
@@ -1305,12 +1273,9 @@
                   <div class="scrap-preview-stage">
                     <canvas class="scrap-preview-canvas" id="menu-vehicle-preview" width="640" height="400" aria-label="Selected vehicle preview"></canvas>
                     <div class="scrap-preview-meta">
-                      <div class="scrap-preview-kicker">Vehicle preview</div>
                       <strong id="veh-name">Mr. Drippy's Meltdown</strong>
-                      <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
-                      <small id="veh-special">SPECIAL: Brain Freeze</small>
-                      <div class="scrap-veh-stats" id="veh-stats"></div>
                     </div>
+                    <div class="scrap-veh-stats" id="veh-stats"></div>
                   </div>
                 </div>
 

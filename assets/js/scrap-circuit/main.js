@@ -141,12 +141,18 @@
     circuitPanel: $("circuit-panel"),
     vehName: $("veh-name"), vehArch: $("veh-archetype"), vehFlavor: $("veh-flavor"),
     vehSpecial: $("veh-special"), vehStats: $("veh-stats"),
+    vehPreviewLabel: $("veh-preview-label"),
+    menuVehiclePreview: $("menu-vehicle-preview"),
+    menuMapPreview: $("menu-map-preview"),
+    menuMapName: $("menu-map-name"),
+    menuMapTag: $("menu-map-tag"),
     vehPrev: $("veh-prev"), vehNext: $("veh-next"),
     arenaRow: $("arena-row"),
     log: $("adjuster-log"),
     btnPause: $("btn-pause"), btnRestart: $("btn-restart"),
   };
   const miniCtx = el.minimap ? el.minimap.getContext("2d") : null;
+  const menuMapCtx = el.menuMapPreview ? el.menuMapPreview.getContext("2d") : null;
 
   // ---------- audio: 100% synthesized ----------
   const sfx = (() => {
@@ -286,6 +292,25 @@
   const previewCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.2, 100);
   previewCam.position.set(0, 3.4, 11.5);
   previewCam.lookAt(0, 1.6, 0);
+  const menuPreviewCam = new THREE.PerspectiveCamera(45, 16 / 10, 0.2, 100);
+  menuPreviewCam.position.set(0, 3.0, 9.1);
+  menuPreviewCam.lookAt(0, 1.35, 0);
+  let menuPreviewRenderer = null;
+  if (el.menuVehiclePreview) {
+    try {
+      menuPreviewRenderer = new THREE.WebGLRenderer({
+        canvas: el.menuVehiclePreview,
+        antialias: false,
+        alpha: false,
+        powerPreference: "high-performance",
+      });
+      menuPreviewRenderer.setClearColor(0x080b12, 1);
+      menuPreviewRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      if (SCRAP.textures && SCRAP.textures.configureRenderer) SCRAP.textures.configureRenderer(menuPreviewRenderer);
+    } catch (_) {
+      menuPreviewRenderer = null;
+    }
+  }
   let previewMesh = null;
 
   let arena = null;
@@ -1983,9 +2008,125 @@
     const n = Math.round((v / max) * 5);
     return "▰".repeat(n) + "▱".repeat(5 - n);
   }
+  function resizeMenuVehiclePreview() {
+    if (!menuPreviewRenderer || !el.menuVehiclePreview) return;
+    const rect = el.menuVehiclePreview.getBoundingClientRect();
+    const w = Math.max(1, Math.round(rect.width || 360));
+    const h = Math.max(1, Math.round(rect.height || 220));
+    menuPreviewRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    menuPreviewRenderer.setSize(w, h, false);
+    menuPreviewCam.aspect = w / h;
+    menuPreviewCam.updateProjectionMatrix();
+  }
+  function renderMenuVehiclePreview() {
+    if (!menuPreviewRenderer || !previewMesh) return;
+    if (!el.menu || el.menu.hidden) return;
+    resizeMenuVehiclePreview();
+    menuPreviewRenderer.render(previewScene, menuPreviewCam);
+  }
+  function resizeMenuMapCanvas() {
+    if (!el.menuMapPreview) return { w: 0, h: 0 };
+    const rect = el.menuMapPreview.getBoundingClientRect();
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round((rect.width || 480) * ratio));
+    const h = Math.max(1, Math.round((rect.height || 260) * ratio));
+    if (el.menuMapPreview.width !== w) el.menuMapPreview.width = w;
+    if (el.menuMapPreview.height !== h) el.menuMapPreview.height = h;
+    return { w, h };
+  }
+  const arenaPreviewCache = new Map();
+  function getArenaPreview(id) {
+    if (arenaPreviewCache.has(id)) return arenaPreviewCache.get(id);
+    const entry = (SCRAP.arenas.list || []).find((item) => item.id === id) || (SCRAP.arenas.list || [])[0] || {};
+    let built = null;
+    try { built = SCRAP.arenas.build(id); } catch (_) {}
+    const source = built || entry;
+    const data = {
+      id: source.id || entry.id || id,
+      name: source.name || entry.name || "Unknown Arena",
+      tagline: source.tagline || entry.tagline || "",
+      bounds: source.bounds || { hw: 100, hd: 100 },
+      minimap: (source.minimap || []).map((r) => ({ x: r.x, z: r.z, hw: r.hw, hd: r.hd, color: r.color })),
+      pickupSpots: (source.pickupSpots || []).map((p) => ({ x: p.x, z: p.z })),
+      spawns: (source.spawns || []).map((s) => ({ x: s.x, z: s.z, h: s.h || 0 })),
+    };
+    arenaPreviewCache.set(id, data);
+    return data;
+  }
+  function drawSpawn(ctx, x, y, angle, size) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-angle);
+    ctx.fillStyle = "#2ee0ff";
+    ctx.beginPath();
+    ctx.moveTo(0, -size);
+    ctx.lineTo(size * 0.72, size * 0.78);
+    ctx.lineTo(-size * 0.72, size * 0.78);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  function drawMenuMapPreview() {
+    if (!menuMapCtx || !el.menuMapPreview) return;
+    const id = state.mode === "circuit" ? CIRCUIT_ORDER[0] : state.arenaId;
+    const data = getArenaPreview(id);
+    if (el.menuMapName) el.menuMapName.textContent = state.mode === "circuit" ? "Circuit opener: " + data.name : data.name;
+    if (el.menuMapTag) {
+      el.menuMapTag.textContent = state.mode === "circuit"
+        ? `${CIRCUIT_ORDER.length} arenas queued.`
+        : data.tagline;
+    }
+    const size = resizeMenuMapCanvas();
+    const w = size.w, h = size.h;
+    if (!w || !h) return;
+    const pad = Math.max(12, Math.min(w, h) * 0.08);
+    const bounds = data.bounds || { hw: 100, hd: 100 };
+    const sx = (w - pad * 2) / Math.max(1, bounds.hw * 2);
+    const sz = (h - pad * 2) / Math.max(1, bounds.hd * 2);
+    const mapW = bounds.hw * 2 * sx;
+    const mapH = bounds.hd * 2 * sz;
+    const ox = pad;
+    const oy = pad;
+    const mapX = (x) => ox + (x + bounds.hw) * sx;
+    const mapZ = (z) => oy + (z + bounds.hd) * sz;
+    menuMapCtx.fillStyle = "#05070d";
+    menuMapCtx.fillRect(0, 0, w, h);
+    menuMapCtx.strokeStyle = "rgba(46,224,255,0.12)";
+    menuMapCtx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 140));
+    for (let i = 0; i <= 4; i += 1) {
+      const x = ox + (mapW / 4) * i;
+      const y = oy + (mapH / 4) * i;
+      menuMapCtx.beginPath();
+      menuMapCtx.moveTo(x, oy);
+      menuMapCtx.lineTo(x, oy + mapH);
+      menuMapCtx.moveTo(ox, y);
+      menuMapCtx.lineTo(ox + mapW, y);
+      menuMapCtx.stroke();
+    }
+    menuMapCtx.fillStyle = "rgba(13,18,28,0.86)";
+    menuMapCtx.fillRect(ox, oy, mapW, mapH);
+    data.minimap.forEach((r) => {
+      menuMapCtx.fillStyle = r.color || "#6d7480";
+      menuMapCtx.globalAlpha = 0.72;
+      menuMapCtx.fillRect(mapX(r.x - r.hw), mapZ(r.z - r.hd), Math.max(1, r.hw * 2 * sx), Math.max(1, r.hd * 2 * sz));
+    });
+    menuMapCtx.globalAlpha = 1;
+    menuMapCtx.strokeStyle = "rgba(255,255,255,0.22)";
+    menuMapCtx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 110));
+    menuMapCtx.strokeRect(ox, oy, mapW, mapH);
+    data.pickupSpots.forEach((p) => {
+      const r = Math.max(2, Math.min(w, h) * 0.012);
+      menuMapCtx.fillStyle = "#ffd23b";
+      menuMapCtx.fillRect(mapX(p.x) - r, mapZ(p.z) - r, r * 2, r * 2);
+    });
+    data.spawns.slice(0, 6).forEach((s) => {
+      drawSpawn(menuMapCtx, mapX(s.x), mapZ(s.z), s.h || 0, Math.max(4, Math.min(w, h) * 0.026));
+    });
+  }
   function renderVehicleMenu() {
     const def = SCRAP.vehicles.list[state.vehicleIndex];
     if (el.vehName) el.vehName.textContent = def.name;
+    if (el.vehPreviewLabel) el.vehPreviewLabel.textContent = def.name;
     if (el.vehArch) el.vehArch.textContent = def.archetype;
     if (el.vehFlavor) el.vehFlavor.textContent = `“${def.flavor}”`;
     if (el.vehSpecial) el.vehSpecial.textContent = `SPECIAL: ${def.special.name} — ${def.special.desc}`;
@@ -1998,7 +2139,10 @@
     }
     if (previewMesh) previewScene.remove(previewMesh);
     previewMesh = SCRAP.vehicles.build(def.id);
+    previewMesh.position.set(0, 0.08, 0);
+    previewMesh.rotation.set(0, -0.35, 0);
     previewScene.add(previewMesh);
+    renderMenuVehiclePreview();
   }
   function renderArenaRow() {
     if (!el.arenaRow) return;
@@ -2011,9 +2155,11 @@
       btn.addEventListener("click", () => {
         state.arenaId = entry.id;
         renderArenaRow();
+        drawMenuMapPreview();
       });
       el.arenaRow.appendChild(btn);
     });
+    drawMenuMapPreview();
   }
   if (el.vehPrev) el.vehPrev.addEventListener("click", () => cycleVehicle(-1));
   if (el.vehNext) el.vehNext.addEventListener("click", () => cycleVehicle(1));
@@ -2412,6 +2558,7 @@
     // circuit runs the fixed six-arena order, so hide the arena picker
     if (el.arenaRow) el.arenaRow.style.display = state.mode === "circuit" ? "none" : "";
     setPrimary("start", state.mode === "circuit" ? "Enter the circuit" : "Start your engine");
+    drawMenuMapPreview();
   }
 
   function showMenu() {
@@ -2489,6 +2636,8 @@
     camera.updateProjectionMatrix();
     previewCam.aspect = aspect;
     previewCam.updateProjectionMatrix();
+    resizeMenuVehiclePreview();
+    drawMenuMapPreview();
   }
 
   let lastT = performance.now();
@@ -2499,6 +2648,7 @@
 
     if (state.phase === "menu" || (state.phase === "over" && el.overlay && el.overlay.classList.contains("overlay--show"))) {
       if (previewMesh) previewMesh.rotation.y += dt * 0.7;
+      renderMenuVehiclePreview();
       ps1.render(previewScene, previewCam);
       sfx.engine(0, false);
       return;

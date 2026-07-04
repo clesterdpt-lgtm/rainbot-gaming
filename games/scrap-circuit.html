@@ -420,14 +420,90 @@
     .scrap-menu {
       display: grid;
       gap: clamp(5px, 1cqh, 8px);
-      justify-items: center;
+      justify-items: stretch;
       margin: 0 auto;
-      max-width: min(680px, 100%);
+      max-width: min(980px, 100%);
       width: 100%;
     }
 
     .scrap-menu[hidden] {
       display: none;
+    }
+
+    .scrap-menu-main {
+      align-items: stretch;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(300px, 1.05fr) minmax(310px, 0.95fr);
+      width: 100%;
+    }
+
+    .scrap-preview-card,
+    .scrap-choice-panel,
+    .scrap-map-card {
+      background: rgba(8, 11, 16, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+      min-width: 0;
+    }
+
+    .scrap-preview-card {
+      display: grid;
+      gap: 6px;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: clamp(210px, 39cqh, 320px);
+      overflow: hidden;
+      padding: 8px;
+    }
+
+    .scrap-preview-label,
+    .scrap-map-head,
+    .scrap-map-legend {
+      align-items: center;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      min-width: 0;
+    }
+
+    .scrap-preview-label span,
+    .scrap-map-legend span {
+      color: rgba(234, 247, 255, 0.58);
+      font-family: var(--font-mono);
+      font-size: clamp(7px, 0.95cqw, 9px);
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .scrap-preview-label b,
+    .scrap-map-head strong {
+      color: #ffd23b;
+      font-family: var(--font-display);
+      font-size: clamp(10px, 1.35cqw, 13px);
+      line-height: 1.1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .scrap-preview-canvas {
+      background: #080b12;
+      border: 1px solid rgba(46, 224, 255, 0.24);
+      border-radius: 6px;
+      display: block;
+      height: 100%;
+      image-rendering: pixelated;
+      min-height: 164px;
+      width: 100%;
+    }
+
+    .scrap-choice-panel {
+      align-content: start;
+      display: grid;
+      gap: 7px;
+      padding: 8px;
     }
 
     /* Mode select: Single Match vs Full Circuit */
@@ -693,6 +769,44 @@
       letter-spacing: 1px;
     }
 
+    .scrap-map-card {
+      display: grid;
+      gap: 6px;
+      padding: 7px;
+    }
+
+    .scrap-map-head {
+      align-items: start;
+    }
+
+    .scrap-map-head span {
+      color: rgba(234, 247, 255, 0.62);
+      font-family: var(--font-mono);
+      font-size: clamp(7px, 0.92cqw, 9px);
+      line-height: 1.18;
+      max-width: 54%;
+      text-align: right;
+      text-transform: uppercase;
+    }
+
+    .scrap-map-canvas {
+      background: #06080e;
+      border: 1px solid rgba(255, 212, 59, 0.28);
+      border-radius: 6px;
+      display: block;
+      height: clamp(108px, 21cqh, 158px);
+      image-rendering: pixelated;
+      width: 100%;
+    }
+
+    .scrap-map-legend {
+      justify-content: start;
+    }
+
+    .scrap-map-legend span {
+      color: rgba(234, 247, 255, 0.68);
+    }
+
     .scrap-arena-strip {
       display: grid;
       gap: 6px;
@@ -874,6 +988,18 @@
     }
 
     @container sstage (max-width: 760px) {
+      .scrap-menu-main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .scrap-preview-card {
+        min-height: 190px;
+      }
+
+      .scrap-preview-canvas {
+        height: clamp(145px, 32cqh, 210px);
+      }
+
       .scrap-arena-strip {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
@@ -898,7 +1024,35 @@
 
       .scrap-menu {
         gap: 4px;
-        max-width: min(620px, 100%);
+        max-width: min(900px, 100%);
+      }
+
+      .scrap-menu-main {
+        gap: 5px;
+      }
+
+      .scrap-preview-card,
+      .scrap-choice-panel,
+      .scrap-map-card {
+        padding: 5px;
+      }
+
+      .scrap-preview-card {
+        min-height: 132px;
+      }
+
+      .scrap-preview-canvas {
+        min-height: 92px;
+      }
+
+      .scrap-map-canvas {
+        height: 68px;
+      }
+
+      .scrap-map-legend,
+      .scrap-preview-label span,
+      .scrap-map-head span {
+        display: none;
       }
 
       .scrap-mode-chip {
@@ -1097,17 +1251,42 @@
             <div class="overlay__score" id="overlay-score"></div>
 
             <div class="scrap-menu" id="menu-panel">
-              <div class="scrap-mode-strip" id="mode-row"></div>
-              <div class="scrap-veh-row">
-                <button class="scrap-veh-btn" id="veh-prev" type="button" aria-label="Previous vehicle">◀</button>
-                <div class="scrap-veh-card">
-                  <strong id="veh-name">Mr. Drippy's Meltdown</strong>
-                  <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
-                  <q id="veh-flavor">“The jingle is a warning.”</q>
-                  <small id="veh-special">SPECIAL: Brain Freeze</small>
-                  <div class="scrap-veh-stats" id="veh-stats"></div>
+              <div class="scrap-menu-main">
+                <div class="scrap-preview-card">
+                  <div class="scrap-preview-label">
+                    <span>Vehicle preview</span>
+                    <b id="veh-preview-label">Mr. Drippy's Meltdown</b>
+                  </div>
+                  <canvas class="scrap-preview-canvas" id="menu-vehicle-preview" width="640" height="400" aria-label="Selected vehicle preview"></canvas>
                 </div>
-                <button class="scrap-veh-btn" id="veh-next" type="button" aria-label="Next vehicle">▶</button>
+
+                <div class="scrap-choice-panel">
+                  <div class="scrap-mode-strip" id="mode-row"></div>
+                  <div class="scrap-veh-row">
+                    <button class="scrap-veh-btn" id="veh-prev" type="button" aria-label="Previous vehicle">◀</button>
+                    <div class="scrap-veh-card">
+                      <strong id="veh-name">Mr. Drippy's Meltdown</strong>
+                      <em id="veh-archetype">Soft-serve horror-show ice cream truck</em>
+                      <q id="veh-flavor">“The jingle is a warning.”</q>
+                      <small id="veh-special">SPECIAL: Brain Freeze</small>
+                      <div class="scrap-veh-stats" id="veh-stats"></div>
+                    </div>
+                    <button class="scrap-veh-btn" id="veh-next" type="button" aria-label="Next vehicle">▶</button>
+                  </div>
+
+                  <div class="scrap-map-card">
+                    <div class="scrap-map-head">
+                      <strong id="menu-map-name">Cul-de-Sac Flats</strong>
+                      <span id="menu-map-tag">Every lawn is a liability.</span>
+                    </div>
+                    <canvas class="scrap-map-canvas" id="menu-map-preview" width="480" height="260" aria-label="Selected arena map preview"></canvas>
+                    <div class="scrap-map-legend" aria-hidden="true">
+                      <span>Grey: routes</span>
+                      <span>Yellow: pickups</span>
+                      <span>Cyan: starts</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div class="scrap-arena-strip" id="arena-row"></div>
             </div>
@@ -1193,7 +1372,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260704-texture-stability-1"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260704-lives-health-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260704-menu-preview-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

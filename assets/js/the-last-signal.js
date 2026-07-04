@@ -1867,7 +1867,7 @@
     return !state.opts.mapReveal && (state.phase === "playing" || state.phase === "over");
   }
   function menuMapHidden() {
-    return (state.phase === "menu" || state.phase === "select") && !state.opts.mapReveal;
+    return state.phase === "select" && !state.opts.mapReveal;
   }
   function refreshVision() {
     const pt = playerTeam();
@@ -3980,16 +3980,10 @@
         <h2 class="tls-boot__title">THE LAST SIGNAL</h2>
         <p class="tls-boot__body">Sixty-two hours ago, every deep array on Earth turned toward the same coordinates. Not the sky &mdash; the crust. Four kilometers beneath the excavation site they call <em>the Hollow</em>, something old finished counting. And began to speak.</p>
         <p class="tls-boot__body">Three powers now hold the excavation line. Each of them heard a different message. Each of them is certain.</p>
-        <div class="tls-opts">
-          <div class="tls-opt"><span class="tls-opt__label">MAP</span>
-            <div class="tls-seg" data-opt="mapReveal">${optSeg("mapReveal", [["true", "Full reveal"], ["false", "Fog of war"]])}</div>
-          </div>
-        </div>
         <button class="btn btn--primary" id="tls-begin">Answer the Signal</button>
         <div class="tls-boot__foot">RTS-lite skirmish &middot; three factions &middot; 1&ndash;3 enemy commands &middot; 3 AI doctrines</div>
       </div>`;
     showOverlay(true);
-    bindOptSegs(screenEl);
     document.getElementById("tls-begin").addEventListener("click", () => { Sfx.click(); showSelect(); });
   }
 

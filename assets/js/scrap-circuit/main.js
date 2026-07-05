@@ -412,6 +412,21 @@
     return best;
   }
 
+  // Lowest elevated deck/roof above refY at (x,z). Used to duck the chase cam
+  // under overpasses instead of snapping up onto the surface overhead.
+  function sampleOverhead(x, z, refY) {
+    let minY = Infinity;
+    if (!arena) return minY;
+    const hs = arena.heights;
+    for (let i = 0; i < hs.length; i += 1) {
+      const h = hs[i];
+      if (h.type !== "rect") continue;
+      if (Math.abs(x - h.x) > h.hw || Math.abs(z - h.z) > h.hd) continue;
+      if (h.y > refY + 1.8) minY = Math.min(minY, h.y);
+    }
+    return minY;
+  }
+
   function circleRectPush(car, r, box) {
     // Returns push vector or null.
     const dx = car.x - box.x, dz = car.z - box.z;
@@ -1777,9 +1792,13 @@
     const ty = car.y + height;
     if (snap) camPos.set(tx, ty, tz);
     else camPos.lerp(new THREE.Vector3(tx, ty, tz), Math.min(1, dt * 5.5));
-    // keep camera above the ground under it
-    const cg = sampleGround(camPos.x, camPos.z, camPos.y + 10);
-    const cy = Math.max(camPos.y, cg + 2.2);
+    // Sample ground in the player's elevation band so overhead decks (Mixing
+    // Bowl overpass, etc.) don't yank the chase cam above the car.
+    const cg = sampleGround(camPos.x, camPos.z, car.y + STEP);
+    let cy = Math.max(camPos.y, cg + 2.2);
+    const overhead = sampleOverhead(camPos.x, camPos.z, car.y);
+    if (overhead < Infinity) cy = Math.min(cy, overhead - 1.5);
+    cy = Math.max(cy, car.y + 1.5);
     let sx = 0, sy = 0;
     if (state.shake > 0.01) {
       sx = (Math.random() - 0.5) * state.shake * 0.7;

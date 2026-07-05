@@ -492,7 +492,7 @@ function initGamesCatalog() {
       id: "human-games",
       eyebrow: "Human",
       title: "Human Games",
-      deck: "Finger-operated arcade chaos, meme sims, runners, fighters, puzzles, and browser weirdness.",
+      deck: "Arcade chaos, meme sims, online multiplayer, After Dark horror, and every other finger-operated browser weirdness that is not an agent protocol.",
     },
     {
       key: "multiplayer",
@@ -531,21 +531,31 @@ function initGamesCatalog() {
     "games/rizz-craft.html",
     "games/the-last-signal.html",
   ]);
-  const sectionForCard = (card) => {
+  const isAgentCard = (card) => {
+    const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
+    return card.classList.contains("directory-card--agent")
+      || href.includes("recursive-reward-labyrinth")
+      || href.includes("consensus-collapse")
+      || href.includes("incident-commander");
+  };
+  const filterTagsForCard = (card) => {
     const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
     const text = normalize(`${card.dataset.title || ""} ${card.textContent || ""}`);
-    if (gamesSectionKeys.has(card.dataset.gameSection)) return card.dataset.gameSection;
-    if (multiplayerGameHrefs.has(href) || text.includes("online co-op") || text.includes("online multiplayer") || text.includes("online derby") || text.includes("online brawl")) {
-      return "multiplayer";
-    }
-    if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse") || href.includes("incident-commander")) {
-      return "agent";
+    const tags = new Set();
+    if (multiplayerGameHrefs.has(href)
+      || text.includes("online co-op")
+      || text.includes("online multiplayer")
+      || text.includes("online skirmish")
+      || text.includes("online derby")
+      || text.includes("online brawl")) {
+      tags.add("multiplayer");
     }
     if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {
-      return "after-dark";
+      tags.add("after-dark");
     }
-    return "human";
+    return tags;
   };
+  const sectionForCard = (card) => (isAgentCard(card) ? "agent" : "human");
   const organizeCatalogSections = () => {
     const existingSections = Array.from(grid.children)
       .filter((child) => child.matches && child.matches("[data-games-section]"))
@@ -589,7 +599,9 @@ function initGamesCatalog() {
     const sectionLookup = new Map(sections.map((section) => [section.key, section]));
     directCards.forEach((card) => {
       const sectionKey = sectionForCard(card);
+      const filterTags = filterTagsForCard(card);
       card.dataset.gameSection = sectionKey;
+      card.dataset.gameFilterTags = Array.from(filterTags).join(" ");
       (sectionLookup.get(sectionKey)?.grid || grid).append(card);
     });
     grid.append(fragment);
@@ -642,11 +654,15 @@ function initGamesCatalog() {
       return 0;
     })();
 
+    const filterTags = new Set((card.dataset.gameFilterTags || "").split(" ").filter(Boolean));
+    if (!filterTags.size) filterTagsForCard(card).forEach((tag) => filterTags.add(tag));
+
     return {
       card,
       order,
       title: title || `Game ${order + 1}`,
       sectionKey: card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card),
+      filterTags,
       category,
       categoryKey: categoryKey(category),
       detail,
@@ -716,7 +732,11 @@ function initGamesCatalog() {
     let visible = 0;
     const sectionVisible = new Map(sectionEls.map((section) => [section.key, 0]));
     cards.forEach((item) => {
-      const sectionMatch = state.section === "all" || item.sectionKey === state.section;
+      const sectionMatch = state.section === "all"
+        || (state.section === "human" && item.sectionKey === "human")
+        || (state.section === "agent" && item.sectionKey === "agent")
+        || (state.section === "multiplayer" && item.filterTags.has("multiplayer"))
+        || (state.section === "after-dark" && item.filterTags.has("after-dark"));
       const categoryMatch = state.category === "all" || item.categoryKey === state.category;
       const searchMatch = !state.search || item.searchText.includes(state.search);
       const show = sectionMatch && categoryMatch && searchMatch;

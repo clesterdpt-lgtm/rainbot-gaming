@@ -529,6 +529,7 @@ function initGamesCatalog() {
     "games/scrap-circuit.html",
     "games/super-slop-brothers.html",
     "games/rizz-craft.html",
+    "games/the-last-signal.html",
   ]);
   const sectionForCard = (card) => {
     const href = (card.getAttribute("href") || "").replace(/^\.\//, "");

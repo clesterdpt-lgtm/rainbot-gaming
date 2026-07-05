@@ -480,6 +480,7 @@ function initGamesCatalog() {
   const categorySelect = catalog.querySelector("[data-games-category]");
   const sortSelect = catalog.querySelector("[data-games-sort]");
   const resetButton = catalog.querySelector("[data-games-reset]");
+  const modeButtons = Array.from(catalog.querySelectorAll("[data-games-section-filter]"));
   const countEl = catalog.querySelector("[data-games-count]");
   const emptyEl = catalog.querySelector("[data-games-empty]");
   if (!grid || !categorySelect || !sortSelect) return;
@@ -492,6 +493,13 @@ function initGamesCatalog() {
       eyebrow: "Human",
       title: "Human Games",
       deck: "Finger-operated arcade chaos, meme sims, runners, fighters, puzzles, and browser weirdness.",
+    },
+    {
+      key: "multiplayer",
+      id: "multiplayer-games",
+      eyebrow: "Multiplayer",
+      title: "Multiplayer Games",
+      deck: "Room-code online brawls, co-op worlds, and derbies built for friends to jump into together.",
     },
     {
       key: "agent",
@@ -508,6 +516,8 @@ function initGamesCatalog() {
       deck: "The cursed horror line: headphones, bad rooms, late-night decisions, and exits that feel optional.",
     },
   ];
+  const gamesSectionKeys = new Set(gamesSections.map((section) => section.key));
+  const sectionConfigByKey = new Map(gamesSections.map((section) => [section.key, section]));
   const afterDarkGameHrefs = new Set([
     "games/escape-poop-cruise.html",
     "games/dont-become-pizza.html",
@@ -515,9 +525,18 @@ function initGamesCatalog() {
     "games/the-weight.html",
     "games/mr-feast-mansion.html",
   ]);
+  const multiplayerGameHrefs = new Set([
+    "games/scrap-circuit.html",
+    "games/super-slop-brothers.html",
+    "games/rizz-craft.html",
+  ]);
   const sectionForCard = (card) => {
     const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
     const text = normalize(`${card.dataset.title || ""} ${card.textContent || ""}`);
+    if (gamesSectionKeys.has(card.dataset.gameSection)) return card.dataset.gameSection;
+    if (multiplayerGameHrefs.has(href) || text.includes("online co-op") || text.includes("online multiplayer") || text.includes("online derby") || text.includes("online brawl")) {
+      return "multiplayer";
+    }
     if (card.classList.contains("directory-card--agent") || href.includes("recursive-reward-labyrinth") || href.includes("consensus-collapse") || href.includes("incident-commander")) {
       return "agent";
     }
@@ -577,6 +596,18 @@ function initGamesCatalog() {
   };
   const sectionEls = organizeCatalogSections();
   const sectionGrids = new Map(sectionEls.map((section) => [section.key, section.grid]));
+  const sectionKeyFromHash = () => {
+    const hash = decodeURIComponent(location.hash || "").replace(/^#/, "");
+    const match = gamesSections.find((section) => section.id === hash);
+    return match ? match.key : "all";
+  };
+  const syncSectionHash = (key) => {
+    if (!history.replaceState) return;
+    const url = new URL(location.href);
+    const section = sectionConfigByKey.get(key);
+    url.hash = section ? section.id : "";
+    history.replaceState(null, "", url);
+  };
   const categoryKey = (value) => normalize(value).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const parsePopularity = (value) => {
     const match = normalize(value).match(/([\d.]+)\s*k\s+playing/);
@@ -639,9 +670,18 @@ function initGamesCatalog() {
     });
 
   const state = {
+    section: sectionKeyFromHash(),
     category: "all",
     sort: "featured",
     search: normalize(new URLSearchParams(location.search).get("q") || ""),
+  };
+
+  const syncModeButtons = () => {
+    modeButtons.forEach((button) => {
+      const isActive = state.section === button.dataset.gamesSectionFilter;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
   };
 
   const sortCards = () => {
@@ -675,9 +715,10 @@ function initGamesCatalog() {
     let visible = 0;
     const sectionVisible = new Map(sectionEls.map((section) => [section.key, 0]));
     cards.forEach((item) => {
+      const sectionMatch = state.section === "all" || item.sectionKey === state.section;
       const categoryMatch = state.category === "all" || item.categoryKey === state.category;
       const searchMatch = !state.search || item.searchText.includes(state.search);
-      const show = categoryMatch && searchMatch;
+      const show = sectionMatch && categoryMatch && searchMatch;
       item.card.toggleAttribute("hidden", !show);
       if (show) {
         visible += 1;
@@ -697,6 +738,7 @@ function initGamesCatalog() {
         : `${visible} of ${cards.length} games`;
     }
     if (emptyEl) emptyEl.hidden = visible !== 0;
+    syncModeButtons();
   };
 
   window.RBGamesCatalog = {
@@ -707,7 +749,13 @@ function initGamesCatalog() {
       state.search = normalize(query);
       applyFilters();
     },
+    setSection(sectionKey, syncHash = false) {
+      state.section = gamesSectionKeys.has(sectionKey) ? sectionKey : "all";
+      if (syncHash) syncSectionHash(state.section);
+      applyFilters();
+    },
     reset() {
+      state.section = "all";
       categorySelect.value = "all";
       sortSelect.value = "featured";
       state.search = "";
@@ -716,12 +764,21 @@ function initGamesCatalog() {
       if (history.replaceState) {
         const url = new URL(location.href);
         url.searchParams.delete("q");
+        url.hash = "";
         history.replaceState(null, "", url);
       }
       applyFilters();
     },
   };
 
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      window.RBGamesCatalog.setSection(button.dataset.gamesSectionFilter);
+    });
+  });
+  window.addEventListener("hashchange", () => {
+    window.RBGamesCatalog.setSection(sectionKeyFromHash(), false);
+  });
   categorySelect.addEventListener("change", applyFilters);
   sortSelect.addEventListener("change", applyFilters);
   if (resetButton) resetButton.addEventListener("click", () => window.RBGamesCatalog.reset());

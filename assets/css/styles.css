@@ -4413,12 +4413,14 @@ body.arcade-home::before {
 
 .games-modebar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   padding: 0 8px 14px;
 }
 
-.games-modebar a {
+.games-modebar button {
+  appearance: none;
+  -webkit-appearance: none;
   position: relative;
   display: grid;
   gap: 4px;
@@ -4429,11 +4431,14 @@ body.arcade-home::before {
     linear-gradient(135deg, rgba(35, 223, 242, 0.1), transparent 44%),
     rgba(3, 6, 11, 0.96);
   color: var(--arcade-white);
+  cursor: pointer;
+  font: inherit;
   padding: 14px 16px;
+  text-align: left;
   text-decoration: none;
 }
 
-.games-modebar a::after {
+.games-modebar button::after {
   content: "";
   position: absolute;
   right: 14px;
@@ -4446,10 +4451,27 @@ body.arcade-home::before {
   transform: translateY(-50%);
 }
 
-.games-modebar a:hover {
+.games-modebar button:hover,
+.games-modebar button.is-active,
+.games-modebar button[aria-pressed="true"] {
   border-color: var(--arcade-cyan);
   box-shadow: 0 0 22px rgba(35, 223, 242, 0.18);
   text-decoration: none;
+}
+
+.games-modebar button.is-active,
+.games-modebar button[aria-pressed="true"] {
+  background:
+    linear-gradient(135deg, rgba(247, 217, 36, 0.16), transparent 48%),
+    linear-gradient(180deg, rgba(35, 223, 242, 0.14), rgba(255, 20, 144, 0.08)),
+    rgba(3, 6, 11, 0.98);
+  border-color: rgba(247, 217, 36, 0.72);
+  box-shadow: inset 0 -3px 0 rgba(247, 217, 36, 0.7), 0 0 24px rgba(35, 223, 242, 0.2);
+}
+
+.games-modebar button:focus-visible {
+  outline: 2px solid var(--arcade-cyan);
+  outline-offset: 2px;
 }
 
 .games-modebar b,
@@ -4657,6 +4679,14 @@ body.arcade-home::before {
     radial-gradient(circle at 86% 18%, rgba(35, 223, 242, 0.18), transparent 30%),
     linear-gradient(90deg, rgba(35, 223, 242, 0.12), transparent 42%),
     rgba(2, 5, 10, 0.98);
+}
+
+.games-section--multiplayer .games-section__header {
+  border-color: rgba(247, 217, 36, 0.56);
+  background:
+    radial-gradient(circle at 86% 18%, rgba(247, 217, 36, 0.24), transparent 30%),
+    linear-gradient(90deg, rgba(35, 223, 242, 0.14), transparent 42%),
+    rgba(6, 8, 8, 0.98);
 }
 
 .games-section--after-dark .games-section__header {

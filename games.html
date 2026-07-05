@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Games — Rainbot Network</title>
-  <meta name="description" content="All Rainbot Network browser games, grouped into Human, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
+  <meta name="description" content="All Rainbot Network browser games, grouped into Human, Multiplayer, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260703-slopwire-merge-1" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260705-multiplayer-catalog-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="games-index arcade-home">
@@ -16,12 +16,12 @@
     <header class="games-hero arcade-panel">
       <div class="games-hero__copy">
         <span class="games-hero__eyebrow">All Games</span>
-        <h1>One Vault. Three Flavors.</h1>
-        <p>Human arcade chaos, agent protocol experiments, and After Dark horror now live under one Games roof.</p>
+        <h1>One Vault. Four Flavors.</h1>
+        <p>Human arcade chaos, online multiplayer, agent protocol experiments, and After Dark horror now live under one Games roof.</p>
       </div>
       <div class="games-hero__stats" aria-label="Arcade directory stats">
-        <span><b>31</b> games online</span>
-        <span><b>3</b> sections</span>
+        <span><b>32</b> games online</span>
+        <span><b>4</b> sections</span>
         <span><b>100%</b> browser</span>
       </div>
     </header>
@@ -33,18 +33,22 @@
       </div>
 
       <nav class="games-modebar" aria-label="Game sections">
-        <a href="#human-games">
+        <button type="button" data-games-section-filter="human" aria-pressed="false">
           <b>Human</b>
           <span>Arcade chaos</span>
-        </a>
-        <a href="#agent-games">
+        </button>
+        <button type="button" data-games-section-filter="multiplayer" aria-pressed="false">
+          <b>Multiplayer</b>
+          <span>Online rooms</span>
+        </button>
+        <button type="button" data-games-section-filter="agent" aria-pressed="false">
           <b>Agent</b>
           <span>Protocol runs</span>
-        </a>
-        <a href="#after-dark-games">
+        </button>
+        <button type="button" data-games-section-filter="after-dark" aria-pressed="false">
           <b>After Dark</b>
           <span>Horror vault</span>
-        </a>
+        </button>
       </nav>
 
       <div class="games-filterbar" aria-label="Game filters">
@@ -72,15 +76,15 @@
       </div>
 
       <div class="directory-grid" data-games-grid>
-        <a href="games/scrap-circuit.html" class="directory-card" data-title="Scrap Circuit Last Chassis Standing PS1 retro 3D arena vehicular combat demolition derby cars ice cream truck monster truck hearse school bus tow truck garbage truck weapons pickups specials insurance adjuster low poly fog dither">
+        <a href="games/scrap-circuit.html" class="directory-card" data-game-section="multiplayer" data-title="Scrap Circuit Last Chassis Standing PS1 retro 3D arena vehicular combat demolition derby cars ice cream truck monster truck hearse school bus tow truck garbage truck weapons pickups specials insurance adjuster low poly fog dither online multiplayer room codes online derby">
           <div class="directory-card__poster directory-card__poster--scrap">
             <img src="assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1" alt="Scrap Circuit: Last Chassis Standing poster art - low-poly ice cream truck and monster tow rig colliding in a junkyard arena under a chunky retro title" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
-            <p>A PS1-era arena vehicular combat parody. Ten unhinged service vehicles — soft-serve horror truck, reaper chopper, repo tow rig — battle through six destructible arenas with weapon pickups, signature specials, and an insurance-adjuster announcer denying every claim.</p>
+            <p>A PS1-era arena vehicular combat parody. Ten unhinged service vehicles battle through six destructible arenas with weapon pickups, signature specials, room-code online derbies, and an insurance-adjuster announcer denying every claim.</p>
           </div>
-          <span class="directory-card__meta"><b>Retro Car Combat</b><em>Fresh drop</em></span>
+          <span class="directory-card__meta"><b>Retro Car Combat</b><em>Online derby</em></span>
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
 
@@ -212,15 +216,15 @@
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a href="games/super-slop-brothers.html" class="directory-card" data-title="Super Slop Brothers platform fighter smash bros parody local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards">
+        <a href="games/super-slop-brothers.html" class="directory-card" data-game-section="multiplayer" data-title="Super Slop Brothers platform fighter smash bros parody online multiplayer local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards online brawl room codes">
           <div class="directory-card__poster directory-card__poster--ssb">
             <img src="assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
-            <p>Smash-style platform fighting. Pick from 6 original slop fighters, brawl across 4 hazard stages, and launch rivals past the blast zones — the higher their %, the farther they fly.</p>
+            <p>Smash-style platform fighting. Pick from 6 original slop fighters, open an online brawl or local match, and launch rivals past the blast zones — the higher their %, the farther they fly.</p>
           </div>
-          <span class="directory-card__meta"><b>Fighter</b><em>Fresh drop</em></span>
+          <span class="directory-card__meta"><b>Fighter</b><em>Online brawl</em></span>
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
 
@@ -355,16 +359,16 @@
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
 
-        <a href="games/rizz-craft.html" class="directory-card" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz">
+        <a href="games/rizz-craft.html" class="directory-card" data-game-section="multiplayer" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz online multiplayer co-op coop room codes">
           <div class="directory-card__poster">
             <img src="assets/img/mockup/card-rizz-craft.png?v=20260613-2" alt="Rizz-Craft voxel mining poster art" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Rizz-<br />Craft</span>
           </div>
           <div class="directory-card__body">
-            <p>Block-mining sandbox brainrot. Chop Skibidi Logs, dig for glowing Rizz Ore, craft at the toilet bench, and survive the night.</p>
+            <p>Block-mining sandbox brainrot. Chop Skibidi Logs, dig for glowing Rizz Ore, craft at the toilet bench, survive the night, or open an online co-op world with room codes.</p>
           </div>
-          <span class="directory-card__meta"><b>Sandbox</b><em>Fresh drop</em></span>
+          <span class="directory-card__meta"><b>Sandbox</b><em>Online co-op</em></span>
           <span class="directory-card__play" aria-hidden="true">Play</span>
         </a>
 
@@ -506,7 +510,7 @@
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260703-slopwire-merge-1"></script>
+  <script src="assets/js/main.js?v=20260705-multiplayer-catalog-1"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

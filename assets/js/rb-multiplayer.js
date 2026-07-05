@@ -95,9 +95,13 @@ const RBNet = (() => {
       this.hostId = me.id;
       this.rtt = null;
       this.closed = false;
+      this.visibility = "private";
+      this.maxPlayers = 8;
       this._handlers = new Map();
       this._pingTimer = null;
       this._lastPingSent = 0;
+      this._dir = null;      // directory channel while advertising a public room
+      this._openDir = null;  // factory injected by RBNet (captures the client)
     }
 
     get isHost() {
@@ -157,6 +161,7 @@ const RBNet = (() => {
       } catch (err) {
         console.warn("[RBNet] presence update failed", err);
       }
+      this._refreshDir();
     }
 
     _syncPresence() {
@@ -173,12 +178,46 @@ const RBNet = (() => {
       const newHost = this.players.length ? this.players[0].id : this.id;
       const hostChanged = newHost !== this.hostId;
       this.hostId = newHost;
+      // adopt the room's visibility from the current host's meta (survives migration)
+      const host = this.players[0];
+      if (host && host.vis) this.visibility = host.vis === "pub" ? "public" : "private";
       this._emit("players", this.players);
       const nowIds = new Set(this.players.map((p) => p.id));
       prevIds.forEach((pid) => {
         if (!nowIds.has(pid) && pid !== this.id) this._emit("peerleave", pid);
       });
       if (hostChanged) this._emit("host", this.hostId);
+      this._refreshDir();
+    }
+
+    // Public rooms advertise themselves on a per-game directory channel so
+    // Quick Match can find them. Only the current host keeps the listing.
+    async _refreshDir() {
+      if (this.closed || this.visibility !== "public") return;
+      const locked = !!(this.players[0] && this.players[0].locked);
+      if (!this.isHost || locked || this.players.length >= this.maxPlayers) {
+        if (this._dir) {
+          const dir = this._dir;
+          this._dir = null;
+          try { dir.untrack(); } catch (_) {}
+          try { dir.unsubscribe(); } catch (_) {}
+        }
+        return;
+      }
+      if (!this._dir && this._openDir) {
+        try {
+          this._dir = await this._openDir(this.code);
+        } catch (_) {
+          this._dir = null;
+          return;
+        }
+        if (!this._dir) return;
+      }
+      if (this._dir) {
+        try {
+          await this._dir.track({ code: this.code, n: this.players.length, max: this.maxPlayers, at: Date.now() });
+        } catch (_) {}
+      }
     }
 
     _startPingLoop() {
@@ -209,6 +248,11 @@ const RBNet = (() => {
       if (this.closed) return;
       this.closed = true;
       if (this._pingTimer) clearInterval(this._pingTimer);
+      if (this._dir) {
+        try { this._dir.untrack(); } catch (_) {}
+        try { this._dir.unsubscribe(); } catch (_) {}
+        this._dir = null;
+      }
       try {
         this.channel.unsubscribe();
       } catch (_) {}
@@ -272,12 +316,85 @@ const RBNet = (() => {
     });
   }
 
-  async function createRoom({ game, name, meta = {} }) {
+  // One directory channel per game holds a presence entry per open PUBLIC room
+  // (tracked by that room's host, keyed by room code). Scanners subscribe
+  // without tracking, read the state, and leave — invisible and serverless.
+  function dirTopic(game) {
+    return `rbmp-dir:${game}`;
+  }
+
+  function subscribeChannel(channel, timeoutMs = 8000) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) { settled = true; reject(new Error("Connection timed out.")); }
+      }, timeoutMs);
+      channel.subscribe((status) => {
+        if (settled) return;
+        if (status === "SUBSCRIBED") {
+          settled = true;
+          clearTimeout(timer);
+          resolve(channel);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error("Could not reach the lobby directory."));
+        }
+      });
+    });
+  }
+
+  function attachDirFactory(room, client, game) {
+    room._openDir = async (code) => {
+      const dir = client.channel(dirTopic(game), { config: { presence: { key: code } } });
+      await subscribeChannel(dir);
+      return dir;
+    };
+  }
+
+  // Read the public-room listings for a game. Returns [{code, n, max, at}].
+  async function listPublicRooms(game) {
+    const client = await getClient();
+    const scan = client.channel(dirTopic(game), { config: { presence: { key: "scan-" + makeId() } } });
+    try {
+      let sawSync = false;
+      scan.on("presence", { event: "sync" }, () => { sawSync = true; });
+      await subscribeChannel(scan, 6000);
+      await new Promise((resolve) => {
+        const started = Date.now();
+        const poll = setInterval(() => {
+          if (sawSync || Date.now() - started > 1400) {
+            clearInterval(poll);
+            setTimeout(resolve, 150);
+          }
+        }, 60);
+      });
+      const state = scan.presenceState();
+      const rooms = [];
+      Object.keys(state).forEach((key) => {
+        const metas = state[key];
+        const m = metas && metas[metas.length - 1];
+        if (m && m.code && m.n < m.max) rooms.push({ code: m.code, n: m.n, max: m.max, at: m.at || 0 });
+      });
+      return rooms;
+    } finally {
+      try { scan.unsubscribe(); } catch (_) {}
+    }
+  }
+
+  async function createRoom({ game, name, meta = {}, visibility = "private", maxPlayers = 8 }) {
     const client = await getClient();
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = makeCode();
-      const me = { id: makeId(), name, joinedAt: Date.now(), ready: false, ...meta };
+      const me = {
+        id: makeId(), name, joinedAt: Date.now(), ready: false,
+        vis: visibility === "public" ? "pub" : "priv",
+        ...meta,
+      };
       const room = await openChannel(client, `rbmp:${game}:${code}`, me);
+      room.visibility = visibility;
+      room.maxPlayers = maxPlayers;
+      attachDirFactory(room, client, game);
       await waitForPresence(room, 700);
       const others = room.players.filter((p) => p.id !== me.id);
       if (others.length) {
@@ -297,6 +414,8 @@ const RBNet = (() => {
     if (!/^[A-Z2-9]{4}$/.test(clean)) throw new Error("Room codes are 4 letters.");
     const me = { id: makeId(), name, joinedAt: Date.now(), ready: false, ...meta };
     const room = await openChannel(client, `rbmp:${game}:${clean}`, me);
+    room.maxPlayers = maxPlayers;
+    attachDirFactory(room, client, game);
     await room.setMeta({});
     await waitForPresence(room, 1500);
     const others = room.players.filter((p) => p.id !== me.id);
@@ -316,7 +435,41 @@ const RBNet = (() => {
     return room;
   }
 
-  return { available, createRoom, joinRoom, randomName, getSavedName, saveName };
+  // Quick Match: join a random open public room; if none exist, become one.
+  // onStatus(text) lets the UI narrate the search.
+  async function quickJoin({ game, name, meta = {}, maxPlayers = 8, onStatus }) {
+    const say = (t) => { if (onStatus) onStatus(t); };
+    for (let round = 0; round < 2; round++) {
+      say("Searching for a public lobby…");
+      let rooms = [];
+      try {
+        rooms = await listPublicRooms(game);
+      } catch (_) {
+        rooms = [];
+      }
+      // shuffle so simultaneous seekers spread across rooms
+      for (let i = rooms.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [rooms[i], rooms[j]] = [rooms[j], rooms[i]];
+      }
+      for (const entry of rooms.slice(0, 4)) {
+        say(`Joining lobby ${entry.code}…`);
+        try {
+          return await joinRoom({ game, code: entry.code, name, maxPlayers, meta });
+        } catch (_) {
+          // full / started / vanished — try the next listing
+        }
+      }
+      if (round === 0) {
+        // brief random backoff so two empty-directory seekers don't both host
+        await new Promise((r) => setTimeout(r, 250 + Math.random() * 650));
+      }
+    }
+    say("No open lobbies — hosting a public one…");
+    return createRoom({ game, name, meta, visibility: "public", maxPlayers });
+  }
+
+  return { available, createRoom, joinRoom, quickJoin, listPublicRooms, randomName, getSavedName, saveName };
 })();
 
 /* ---------------------------------------------------------------------------
@@ -430,7 +583,7 @@ const RBNetUI = (() => {
       }
       panel.innerHTML = "";
       panel.appendChild(el("h2", "rbmp-title", opts.title || "ONLINE MULTIPLAYER"));
-      panel.appendChild(el("p", "rbmp-sub", "Host a room and share the 4-letter code, or enter a friend's code."));
+      panel.appendChild(el("p", "rbmp-sub", "Jump into a public lobby, or host a private room and share the 4-letter code."));
       const closeBtn = el("button", "rbmp-close", "✕");
       closeBtn.onclick = bail;
       panel.appendChild(closeBtn);
@@ -446,7 +599,14 @@ const RBNetUI = (() => {
       nameInput.value = RBNet.getSavedName() || RBNet.randomName();
       panel.appendChild(nameInput);
 
-      panel.appendChild(el("label", "rbmp-label", "ROOM CODE (TO JOIN)"));
+      const quickRow = el("div", "rbmp-row");
+      const quickBtn = el("button", "rbmp-btn", "⚡ QUICK MATCH");
+      quickBtn.title = "Join a random public lobby — or open one if none exist";
+      quickRow.appendChild(quickBtn);
+      panel.appendChild(quickRow);
+      panel.appendChild(el("div", "rbmp-hint", "Public: joins any open lobby, or opens one for randoms to find."));
+
+      panel.appendChild(el("label", "rbmp-label", "PRIVATE — ROOM CODE"));
       const codeInput = el("input", "rbmp-input rbmp-input--code");
       codeInput.maxLength = 4;
       codeInput.placeholder = "····";
@@ -455,8 +615,8 @@ const RBNetUI = (() => {
       panel.appendChild(codeInput);
 
       const row = el("div", "rbmp-row");
-      const hostBtn = el("button", "rbmp-btn", "HOST GAME");
-      const joinBtn = el("button", "rbmp-btn rbmp-btn--ghost", "JOIN GAME");
+      const hostBtn = el("button", "rbmp-btn rbmp-btn--ghost", "HOST PRIVATE");
+      const joinBtn = el("button", "rbmp-btn rbmp-btn--ghost", "JOIN CODE");
       row.appendChild(hostBtn);
       row.appendChild(joinBtn);
       panel.appendChild(row);
@@ -474,22 +634,25 @@ const RBNetUI = (() => {
 
       async function go(kind) {
         clearErr();
-        hostBtn.disabled = joinBtn.disabled = true;
-        status.textContent = kind === "host" ? "Opening room…" : "Joining room…";
+        quickBtn.disabled = hostBtn.disabled = joinBtn.disabled = true;
+        status.textContent = kind === "quick" ? "Searching for a public lobby…" : kind === "host" ? "Opening room…" : "Joining room…";
         try {
-          const base = { game: opts.game, name: myName(), meta: opts.meta || {} };
-          state.room = kind === "host"
-            ? await RBNet.createRoom(base)
-            : await RBNet.joinRoom({ ...base, code: codeInput.value, maxPlayers: opts.maxPlayers || 8 });
+          const base = { game: opts.game, name: myName(), meta: opts.meta || {}, maxPlayers: opts.maxPlayers || 8 };
+          state.room = kind === "quick"
+            ? await RBNet.quickJoin({ ...base, onStatus: (t) => { status.textContent = t; } })
+            : kind === "host"
+              ? await RBNet.createRoom({ ...base, visibility: "private" })
+              : await RBNet.joinRoom({ ...base, code: codeInput.value });
           renderLobby();
           if (opts.onLobby) opts.onLobby(state.room);
         } catch (err) {
           showErr(err.message || "Something went wrong.");
-          hostBtn.disabled = joinBtn.disabled = false;
+          quickBtn.disabled = hostBtn.disabled = joinBtn.disabled = false;
           status.textContent = "";
         }
       }
 
+      quickBtn.onclick = () => go("quick");
       hostBtn.onclick = () => go("host");
       joinBtn.onclick = () => go("join");
       codeInput.addEventListener("keydown", (e) => {
@@ -522,7 +685,8 @@ const RBNetUI = (() => {
       };
       codeBox.appendChild(copyBtn);
       panel.appendChild(codeBox);
-      panel.appendChild(el("div", "rbmp-hint", "Friends: open this game → ONLINE → enter the code."));
+      const visBadge = el("div", "rbmp-hint", "");
+      panel.appendChild(visBadge);
 
       const list = el("ul", "rbmp-list");
       panel.appendChild(list);
@@ -549,6 +713,9 @@ const RBNetUI = (() => {
 
       function repaint() {
         const players = room.players;
+        visBadge.innerHTML = room.visibility === "public"
+          ? "🌐 <b>PUBLIC LOBBY</b> — random players can join. Friends can also use the code."
+          : "🔒 <b>PRIVATE ROOM</b> — friends: open this game → ONLINE → enter the code.";
         list.innerHTML = "";
         players.forEach((p) => {
           const li = el("li", "rbmp-player" + (p.ready || p.id === room.hostId ? " is-ready" : "") + (p.id === room.id ? " rbmp-player--me" : ""));

@@ -1314,11 +1314,19 @@
         Sfx.boom(true);
         buildNavGrid();
         log("Rockslide cleared — a new route is open");
+        // online: rocks are per-client world state — replicate the breach
+        if (netTLS.active) netTLS.send("rockdead", { x: Math.round(thing.x), y: Math.round(thing.y) });
       }
       return;
     }
     if (isResourceNode(thing)) {
       if (!thing.team || thing.hp <= 0 || aTeam === thing.team) return;
+      // online: a rival's node claim is their authority — forward the damage
+      if (netTLS.active && thing.team.isRemote) {
+        thing.lastHit = state.time;
+        netTLS.queueNodeHit(thing, dmg);
+        return;
+      }
       thing.lastHit = state.time;
       thing.hp -= dmg;
       if (thing.hp <= 0) {
@@ -1327,10 +1335,10 @@
       }
       return;
     }
-    // online: units/buildings owned by the remote peer are puppets here — I'm
-    // not authoritative for their HP, so forward the hit instead of applying it.
+    // online: units/buildings owned by a remote peer are puppets here — I'm
+    // not authoritative for their HP, so queue the hit for the owner instead.
     if (netTLS.active && thing.team && thing.team.isRemote) {
-      netTLS.sendHit(thing.id - NET_ID_OFFSET, dmg);
+      netTLS.queueHit(thing.team, thing, dmg);
       return;
     }
     thing.lastHit = state.time;
@@ -4071,7 +4079,7 @@
           <div class="tls-brief__text" id="tls-brief-text"></div>
           <div class="tls-btnrow">
             <button class="btn btn--primary" id="tls-deploy">Deploy to the Hollow</button>
-            <button class="btn btn--ghost" id="tls-deploy-online">🌐 Online 1v1</button>
+            <button class="btn btn--ghost" id="tls-deploy-online">🌐 Online skirmish (2-4)</button>
           </div>
         </div>
         <button class="btn btn--ghost tls-backbtn" id="tls-back">Back</button>
@@ -4144,26 +4152,38 @@
   }
 
   /* ==================================================
-     ONLINE 1V1 (RBNet over Supabase Realtime)
+     ONLINE SKIRMISH 2-4P (RBNet over Supabase Realtime)
      ================================================== */
   // Model: each client fully simulates ONLY its own team (state.teams[0] here,
-  // always). The opponent's team (state.teams[1], flagged isRemote) exists as
-  // real entries in state.units/state.buildings — reusing makeUnit/makeBuilding
-  // so rendering, fog-of-war and targeting all just work — but their
-  // position/hp are puppets driven by periodic snapshots, never local physics.
+  // always). Every rival commander is a remote team (flagged isRemote) whose
+  // units/buildings exist as real entries in state.units/state.buildings —
+  // reusing makeUnit/makeBuilding so rendering, fog-of-war and targeting all
+  // just work — but their position/hp are puppets driven by periodic
+  // snapshots, never local physics. Puppet ids live in per-player namespaces:
+  // trueId + NET_ID_OFFSET * (lobbySlot + 1), so up to 4 overlapping per-client
+  // id counters can share the world without collisions.
   // Combat is victim-authoritative: my applyDamage() drops hits on puppets and
-  // forwards them as `hit` events so the owner applies real damage on their
-  // side; the resulting hp/death flows back to me via snapshot/`death` events.
-  // Neutral world objects (resource nodes) are synced by periodic full-state
-  // broadcast — whichever side's real workers/units touch a node is naturally
-  // authoritative for that change on their own client already.
+  // queues them (batched, 10Hz, sent only to the owner) so the owner applies
+  // real damage on their side; hp/death flows back via snapshot/`death`.
+  // Resource nodes use a claims-list protocol: each client broadcasts the set
+  // of nodes ITS team holds at 1Hz; receivers reconcile only that team's
+  // claims, so every claim has exactly one authority. Damage to a remote
+  // team's node claim is likewise forwarded to its owner. Destroyed rock
+  // barriers replicate by position so navigation stays consistent.
   const netTLS = {
     active: false,
     room: null,
-    gone: false,
-    puppetsById: new Map(), // (ownerId + NET_ID_OFFSET) -> unit/building
+    puppetsById: new Map(),  // namespaced id -> unit/building
+    teamByPeer: new Map(),   // peerId -> remote team
+    hitQueues: new Map(),    // peerId -> Map(trueId -> dmg)
+    nodeHitQueues: new Map(),// peerId -> Map(nodeIdx -> dmg)
     snapAcc: 0,
     nodeAcc: 0,
+    hitAcc: 0,
+
+    offsetFor(team) {
+      return NET_ID_OFFSET * ((team.physIdx || 0) + 1);
+    },
 
     openLobby() {
       if (!state.pick) return;
@@ -4173,10 +4193,10 @@
       }
       RBNetUI.open({
         game: GAME_ID,
-        title: "THE LAST SIGNAL — ONLINE 1V1",
+        title: "THE LAST SIGNAL — ONLINE SKIRMISH",
         accent: FACTIONS[state.pick].color,
         minPlayers: 2,
-        maxPlayers: 2,
+        maxPlayers: 4,
         meta: { faction: state.pick, fname: FACTIONS[state.pick].short },
         playerTag: (p) => p.fname || "",
         getStartPayload: () => ({}),
@@ -4189,24 +4209,29 @@
       netTLS.shutdown();
       netTLS.room = room;
       netTLS.active = true;
-      netTLS.gone = false;
       netTLS.puppetsById = new Map();
+      netTLS.teamByPeer = new Map();
+      netTLS.hitQueues = new Map();
+      netTLS.nodeHitQueues = new Map();
       netTLS.snapAcc = 0;
       netTLS.nodeAcc = 0;
+      netTLS.hitAcc = 0;
       const me = players.find((p) => p.id === room.id);
-      const peer = players.find((p) => p.id !== room.id);
       const myFid = me && FACTIONS[me.faction] ? me.faction : "humans";
-      const peerFid = peer && FACTIONS[peer.faction] ? peer.faction : (myFid === "humans" ? "robots" : "humans");
-      room.on("roster", (d) => netTLS.onRoster(d));
-      room.on("spawn", (d) => netTLS.onSpawn(d));
-      room.on("snapshot", (d) => netTLS.onSnapshot(d));
-      room.on("nodes", (d) => netTLS.onNodes(d));
-      room.on("hit", (d) => netTLS.onHit(d));
-      room.on("death", (d) => netTLS.onDeath(d));
-      room.on("elim", () => netTLS.onElim());
-      room.on("peerleave", () => netTLS.onPeerGone("Your rival disconnected."));
-      room.on("closed", () => netTLS.onPeerGone("Connection lost."));
-      startOnlineGame(myFid, peerFid, mySlot, (payload.seed >>> 0) || 1);
+      const rivals = players
+        .map((p, i) => ({ id: p.id, slot: i, fid: FACTIONS[p.faction] ? p.faction : "robots" }))
+        .filter((p) => p.id !== room.id);
+      room.on("roster", (d, from) => netTLS.onRoster(d, from));
+      room.on("spawn", (d, from) => netTLS.onSpawn(d, from));
+      room.on("snapshot", (d, from) => netTLS.onSnapshot(d, from));
+      room.on("nodes", (d, from) => netTLS.onNodes(d, from));
+      room.on("hits", (d, from) => netTLS.onHits(d, from));
+      room.on("death", (d, from) => netTLS.onDeath(d, from));
+      room.on("elim", (d, from) => netTLS.onElim(from));
+      room.on("rockdead", (d) => netTLS.onRockDead(d));
+      room.on("peerleave", (pid) => netTLS.onPeerGone(pid));
+      room.on("closed", () => netTLS.onClosed());
+      startOnlineGame(myFid, rivals, mySlot, (payload.seed >>> 0) || 1);
       const pTeam = state.teams[0];
       netTLS.send("roster", {
         units: teamUnits(pTeam).map((u) => ({ id: u.id, key: u.def.key, x: Math.round(u.x), y: Math.round(u.y) })),
@@ -4219,82 +4244,116 @@
       netTLS.room = null;
       netTLS.active = false;
       netTLS.puppetsById.clear();
+      netTLS.teamByPeer.clear();
+      netTLS.hitQueues.clear();
+      netTLS.nodeHitQueues.clear();
     },
 
     send(type, data) {
       if (netTLS.active && netTLS.room) netTLS.room.send(type, data);
     },
 
-    sendHit(trueId, dmg) {
-      netTLS.send("hit", { id: trueId, dmg: Math.round(dmg * 10) / 10 });
+    // batched, owner-routed combat damage
+    queueHit(team, thing, dmg) {
+      if (!team.peerId) return;
+      let q = netTLS.hitQueues.get(team.peerId);
+      if (!q) { q = new Map(); netTLS.hitQueues.set(team.peerId, q); }
+      const trueId = thing.id - netTLS.offsetFor(team);
+      q.set(trueId, (q.get(trueId) || 0) + dmg);
+    },
+    queueNodeHit(node, dmg) {
+      const team = node.team;
+      if (!team || !team.peerId) return;
+      const idx = state.nodes.indexOf(node);
+      if (idx < 0) return;
+      let q = netTLS.nodeHitQueues.get(team.peerId);
+      if (!q) { q = new Map(); netTLS.nodeHitQueues.set(team.peerId, q); }
+      q.set(idx, (q.get(idx) || 0) + dmg);
     },
 
-    spawnPuppetUnit(key, id, x, y) {
-      const remote = state.teams[1];
-      const def = remote && remote.faction.units[key];
-      if (!remote || !def) return null;
-      const u = makeUnit(remote, def, x, y);
-      u.id = id + NET_ID_OFFSET;
+    spawnPuppetUnit(team, key, id, x, y) {
+      const def = team && team.faction.units[key];
+      if (!def) return null;
+      const u = makeUnit(team, def, x, y);
+      u.id = id + netTLS.offsetFor(team);
       netTLS.puppetsById.set(u.id, u);
       return u;
     },
-    spawnPuppetBuilding(key, id, x, y) {
-      const remote = state.teams[1];
-      const def = remote && remote.faction.buildings[key];
-      if (!remote || !def) return null;
-      const b = makeBuilding(remote, def, x, y, null, true);
-      b.id = id + NET_ID_OFFSET;
+    spawnPuppetBuilding(team, key, id, x, y) {
+      const def = team && team.faction.buildings[key];
+      if (!def) return null;
+      const b = makeBuilding(team, def, x, y, null, true);
+      b.id = id + netTLS.offsetFor(team);
       netTLS.puppetsById.set(b.id, b);
-      if (def.kind === "hq") remote.hqId = b.id;
+      if (def.kind === "hq") team.hqId = b.id;
       return b;
     },
 
-    onRoster(d) {
-      if (!d) return;
-      (d.units || []).forEach((u) => netTLS.spawnPuppetUnit(u.key, u.id, u.x, u.y));
-      (d.buildings || []).forEach((b) => netTLS.spawnPuppetBuilding(b.key, b.id, b.x, b.y));
+    onRoster(d, from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (!d || !team) return;
+      (d.units || []).forEach((u) => netTLS.spawnPuppetUnit(team, u.key, u.id, u.x, u.y));
+      (d.buildings || []).forEach((b) => netTLS.spawnPuppetBuilding(team, b.key, b.id, b.x, b.y));
     },
 
-    onSpawn(d) {
-      if (!d) return;
-      if (d.kind === "building") netTLS.spawnPuppetBuilding(d.key, d.id, d.x, d.y);
-      else netTLS.spawnPuppetUnit(d.key, d.id, d.x, d.y);
+    onSpawn(d, from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (!d || !team) return;
+      if (d.kind === "building") netTLS.spawnPuppetBuilding(team, d.key, d.id, d.x, d.y);
+      else netTLS.spawnPuppetUnit(team, d.key, d.id, d.x, d.y);
     },
 
-    onSnapshot(d) {
-      if (!d) return;
+    onSnapshot(d, from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (!d || !team) return;
+      const off = netTLS.offsetFor(team);
       (d.u || []).forEach(([id, x, y, hp, shield]) => {
-        const u = netTLS.puppetsById.get(id + NET_ID_OFFSET);
+        const u = netTLS.puppetsById.get(id + off);
         if (!u || u.dead) return;
         u._nx = x; u._ny = y;
         u.hp = hp; u.shield = shield || 0;
       });
       (d.b || []).forEach(([id, x, y, hp]) => {
-        const b = netTLS.puppetsById.get(id + NET_ID_OFFSET);
+        const b = netTLS.puppetsById.get(id + off);
         if (!b || b.dead) return;
         b.x = x; b.y = y; b.hp = hp;
       });
     },
 
-    onNodes(d) {
-      if (!d || !d.n) return;
-      d.n.forEach(([idx, tag, hp]) => {
-        const n = state.nodes[idx];
-        if (!n) return;
-        n.team = tag === -1 ? null : state.teams[1 - tag];
-        n.hp = hp;
+    // sender's full claims list: reconcile ONLY that team's node ownership
+    onNodes(d, from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (!d || !team || !Array.isArray(d.c)) return;
+      const listed = new Map(d.c);
+      state.nodes.forEach((n, idx) => {
+        if (listed.has(idx)) {
+          n.team = team;
+          n.hp = listed.get(idx);
+          if (n.claimTeam === team) { n.claimTeam = null; n.claimProgress = 0; }
+        } else if (n.team === team) {
+          n.team = null;
+          n.hp = 0;
+        }
       });
     },
 
-    onHit(d) {
+    onHits(d, from) {
+      const attacker = netTLS.teamByPeer.get(from);
       if (!d) return;
-      const target = state.units.find((u) => u.id === d.id) || state.buildings.find((b) => b.id === d.id);
-      if (target) applyDamage(target, d.dmg, null, state.teams[1]);
+      (d.l || []).forEach(([id, dmg]) => {
+        const target = state.units.find((u) => u.id === id) || state.buildings.find((b) => b.id === id);
+        if (target && target.team === state.teams[0]) applyDamage(target, dmg, null, attacker || null);
+      });
+      (d.n || []).forEach(([idx, dmg]) => {
+        const n = state.nodes[idx];
+        if (n && n.team === state.teams[0]) applyDamage(n, dmg, null, attacker || null);
+      });
     },
 
-    onDeath(d) {
-      if (!d) return;
-      const thing = netTLS.puppetsById.get(d.id + NET_ID_OFFSET);
+    onDeath(d, from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (!d || !team) return;
+      const thing = netTLS.puppetsById.get(d.id + netTLS.offsetFor(team));
       if (thing) netTLS.puppetDie(thing);
     },
 
@@ -4306,23 +4365,48 @@
       if (state.selection.includes(thing)) { state.selection = state.selection.filter((s) => s !== thing); state.selVersion++; }
     },
 
-    onElim() {
-      const remote = state.teams[1];
-      if (!remote || remote.eliminated) return;
-      remote.eliminated = true;
-      for (const u of state.units) if (u.team === remote) u.dead = true;
-      for (const b of state.buildings) if (b.team === remote) b.dead = true;
-      log(`☠ ${remote.faction.name} eliminated`);
-      Sfx.boom(true);
-      const pt = playerTeam();
-      if (!enemyTeams().length) endGame(pt);
+    onElim(from) {
+      const team = netTLS.teamByPeer.get(from);
+      if (team && !team.eliminated) eliminateTeam(team, null);
     },
 
-    onPeerGone(msg) {
-      if (netTLS.gone || !netTLS.active) return;
-      netTLS.gone = true;
-      log(msg);
-      if (state.phase === "playing") netTLS.onElim();
+    onRockDead(d) {
+      if (!d) return;
+      let best = null, bd = 36;
+      for (const rk of state.rocks) {
+        if (rk.dead) continue;
+        const dd = d2(d.x, d.y, rk.x, rk.y);
+        if (dd < bd) { bd = dd; best = rk; }
+      }
+      if (best) {
+        best.dead = true;
+        best.hp = 0;
+        boomFx(best.x, best.y, "#cdb489", best.r + 10);
+        buildNavGrid();
+        log("Rockslide cleared — a new route is open");
+      }
+    },
+
+    onPeerGone(pid) {
+      if (!netTLS.active) return;
+      const team = netTLS.teamByPeer.get(pid);
+      if (team && !team.eliminated) {
+        log(`${team.faction.name} command uplink lost`);
+        if (state.phase === "playing") eliminateTeam(team, null);
+      }
+      netTLS.teamByPeer.delete(pid);
+      netTLS.hitQueues.delete(pid);
+      netTLS.nodeHitQueues.delete(pid);
+    },
+
+    onClosed() {
+      if (!netTLS.active) return;
+      log("Connection lost.");
+      if (state.phase === "playing") {
+        for (const team of state.teams) {
+          if (team.isRemote && !team.eliminated) eliminateTeam(team, null);
+        }
+      }
     },
 
     tick(dt) {
@@ -4335,6 +4419,26 @@
       }
       netTLS.snapAcc += dt;
       netTLS.nodeAcc += dt;
+      netTLS.hitAcc += dt;
+      if (netTLS.hitAcc >= 0.1) {
+        netTLS.hitAcc = 0;
+        netTLS.hitQueues.forEach((q, pid) => {
+          if (!q.size && !(netTLS.nodeHitQueues.get(pid) || { size: 0 }).size) return;
+          const nq = netTLS.nodeHitQueues.get(pid);
+          const msg = { l: [...q.entries()].map(([id, dmg]) => [id, Math.round(dmg * 10) / 10]) };
+          if (nq && nq.size) {
+            msg.n = [...nq.entries()].map(([idx, dmg]) => [idx, Math.round(dmg * 10) / 10]);
+            nq.clear();
+          }
+          q.clear();
+          if (netTLS.room) netTLS.room.sendTo(pid, "hits", msg);
+        });
+        netTLS.nodeHitQueues.forEach((nq, pid) => {
+          if (!nq.size) return;
+          if (netTLS.room) netTLS.room.sendTo(pid, "hits", { n: [...nq.entries()].map(([idx, dmg]) => [idx, Math.round(dmg * 10) / 10]) });
+          nq.clear();
+        });
+      }
       if (netTLS.snapAcc >= 0.12) {
         netTLS.snapAcc = 0;
         const pTeam = state.teams[0];
@@ -4345,17 +4449,16 @@
       }
       if (netTLS.nodeAcc >= 1) {
         netTLS.nodeAcc = 0;
-        netTLS.send("nodes", {
-          n: state.nodes.map((node, idx) => {
-            const tag = node.team === state.teams[0] ? 0 : node.team === state.teams[1] ? 1 : -1;
-            return [idx, tag, Math.round(node.hp)];
-          }),
+        const claims = [];
+        state.nodes.forEach((node, idx) => {
+          if (node.team === state.teams[0]) claims.push([idx, Math.round(node.hp)]);
         });
+        netTLS.send("nodes", { c: claims });
       }
     },
   };
 
-  function startOnlineGame(myFid, peerFid, mySlot, seed) {
+  function startOnlineGame(myFid, rivals, mySlot, seed) {
     state.units = [];
     state.buildings = [];
     state.projectiles = [];
@@ -4373,19 +4476,24 @@
     state.stats = { kills: 0, losses: 0 };
     state.alarmT = -99;
 
-    // shared seed so both clients see the same terrain/mountains/rocks
+    // shared seed so every client sees the same terrain/mountains/rocks
     const origRandom = Math.random;
     Math.random = mulberry32(seed);
     try { initWorld(); } finally { Math.random = origRandom; }
 
-    state.setup = { difficulty: "normal", enemyCount: 1, mapReveal: state.opts.mapReveal, online: true };
+    state.setup = { difficulty: "normal", enemyCount: rivals.length, mapReveal: state.opts.mapReveal, online: true };
 
     const pTeam = makeTeam(0, myFid, false, null);
-    const rTeam = makeTeam(1, peerFid, false, null);
-    rTeam.isRemote = true;
     pTeam.physIdx = mySlot;
-    rTeam.physIdx = 1 - mySlot;
-    state.teams = [pTeam, rTeam];
+    state.teams = [pTeam];
+    rivals.forEach((r, i) => {
+      const rTeam = makeTeam(i + 1, r.fid, false, null);
+      rTeam.isRemote = true;
+      rTeam.physIdx = r.slot;   // lobby slot -> HQ corner + puppet id namespace
+      rTeam.peerId = r.id;
+      state.teams.push(rTeam);
+      netTLS.teamByPeer.set(r.id, rTeam);
+    });
 
     const myPos = HQ_POS[pTeam.physIdx];
     const myHq = makeBuilding(pTeam, pTeam.faction.buildings.hq, myPos.x, myPos.y, null, true);
@@ -4408,9 +4516,10 @@
 
     if (el.log) el.log.innerHTML = "";
     log("Uplink established. The Hollow is contested.");
-    log(`Online 1v1 vs ${FACTIONS[peerFid].name}${netTLS.room ? " — room " + netTLS.room.code : ""}`);
+    const rivalNames = rivals.map((r) => `<b style="color:${FACTIONS[r.fid].color}">${FACTIONS[r.fid].name}</b>`).join(", ");
+    log(`Online skirmish vs ${rivals.map((r) => FACTIONS[r.fid].name).join(", ")}${netTLS.room ? " — room " + netTLS.room.code : ""}`);
     if (el.objective) {
-      el.objective.innerHTML = `Destroy the enemy command structure: <b style="color:${FACTIONS[peerFid].color}">${FACTIONS[peerFid].name}</b>. Protect your own. Opponent: human commander.`;
+      el.objective.innerHTML = `Destroy ${rivals.length > 1 ? "every rival command structure" : "the enemy command structure"}: ${rivalNames}. Protect your own. ${rivals.length > 1 ? "All rivals are human commanders." : "Opponent: human commander."}`;
     }
     const fchip = document.getElementById("tls-faction");
     if (fchip) {

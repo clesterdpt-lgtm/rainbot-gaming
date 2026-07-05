@@ -518,6 +518,10 @@
 
   function applyDamage(car, dmg, opts = {}) {
     if (car.wrecked || state.phase !== "running") return;
+    // Online: every client is the only authority on its own car's HP. Damage
+    // my sim computes against a remote puppet is dropped — the same hazard
+    // exists in the owner's sim and hurts them there.
+    if (car.remote) return;
     if (car.shield > 0 && !opts.pierce) {
       burst(car.x, car.y + 1.6, car.z, 0x63f2c8, 5, 5);
       return;
@@ -533,6 +537,7 @@
   }
 
   function impulse(car, dx, dz, up = 0) {
+    if (car.remote) return; // knockback on puppets is the owner's business
     const len = Math.hypot(dx, dz) || 1;
     const power = Math.min(26, Math.hypot(dx, dz) * 2 + 6);
     car.vx += (dx / len) * power;
@@ -542,6 +547,7 @@
 
   function wreck(car, opts = {}) {
     if (car.wrecked) return;
+    if (car.remote && !opts.net) return; // puppets only wreck via their owner's snapshot
     car.wrecked = true;
     car.wreckT = 0;
     car.hp = 0;
@@ -562,7 +568,13 @@
       state.wrecksByPlayer += 1;
       if (state.wrecksByPlayer >= 2 && car.hp <= 0) announce("doublewreck");
     }
-    if (car.isPlayer) state.playerLives = Math.max(0, state.playerLives - 1);
+    if (car.isPlayer) {
+      state.playerLives = Math.max(0, state.playerLives - 1);
+      if (net.active) {
+        const by = opts.by && opts.by.remote ? opts.by.remote : null;
+        net.send("wrecked", { by });
+      }
+    }
     if (!state.firstBloodDone) {
       state.firstBloodDone = true;
       announce("firstblood", true);
@@ -729,9 +741,17 @@
     }
     return g;
   }
-  function rollPickupType() {
+  function rollPickupType(p) {
     const total = PICKUP_TABLE.reduce((s, [, w]) => s + w, 0);
-    let roll = Math.random() * total;
+    // Online: pickup types must match on every client, so the roll is a pure
+    // function of (shared seed, pad index, respawn count) instead of Math.random.
+    let roll;
+    if (net.active && p) {
+      p.rolls = (p.rolls || 0) + 1;
+      roll = net.rand(p.idx * 2654435761 + p.rolls * 97531) * total;
+    } else {
+      roll = Math.random() * total;
+    }
     for (const [type, w] of PICKUP_TABLE) {
       roll -= w;
       if (roll <= 0) return type;
@@ -745,9 +765,10 @@
     scene.add(p.mesh);
   }
   function setupPickups() {
-    state.pickups = arena.pickupSpots.map(({ x, z }) => {
+    state.pickups = arena.pickupSpots.map(({ x, z }, idx) => {
       const gy = sampleGround(x, z, 99);
-      const p = { x, z, type: rollPickupType(), mesh: null, active: true, timer: 0, gy };
+      const p = { x, z, idx, rolls: 0, type: null, mesh: null, active: true, timer: 0, gy };
+      p.type = rollPickupType(p);
       buildPickupMesh(p);
       return p;
     });
@@ -758,7 +779,7 @@
         p.timer -= dt;
         if (p.timer <= 0) {
           p.active = true;
-          p.type = rollPickupType();
+          p.type = rollPickupType(p);
           buildPickupMesh(p); // swap in the new type's model
         }
         return;
@@ -767,16 +788,18 @@
       p.mesh.position.y = p.gy + 1.4 + Math.sin(state.time * 3 + p.x) * 0.25;
       state.cars.forEach((car) => {
         if (car.wrecked || !p.active) return;
+        if (car.remote) return; // online: each client only grabs with its own car
         if (Math.abs(car.y - p.gy) > 3) return;
         const r = car.def.stats.radius + 1.4;
         if ((car.x - p.x) ** 2 + (car.z - p.z) ** 2 < r * r) takePickup(car, p);
       });
     });
   }
-  function takePickup(car, p) {
+  function takePickup(car, p, fromNet) {
     p.active = false;
     p.timer = PICKUP_RESPAWN;
     p.mesh.visible = false;
+    if (net.active && !fromNet && car === state.player) net.send("ptake", { i: p.idx, ty: p.type });
     if (car.isPlayer) sfx.pickup();
     switch (p.type) {
       case "shield":
@@ -868,6 +891,7 @@
     const w = WEAPONS[car.weapon];
     if (!w || (car.isPlayer && w.base)) return;
     car.fireCooldown = w.rate;
+    if (net.active && car === state.player) net.send("act", { k: "weapon", w: car.weapon });
     const f = forward(car);
     const px = car.x + f.x * (car.def.stats.radius + 1);
     const pz = car.z + f.z * (car.def.stats.radius + 1);
@@ -961,6 +985,7 @@
       let hit = false;
       state.cars.forEach((car) => {
         if (hit || car.wrecked || car === m.owner) return;
+        if (car.remote) return; // online: mines only trigger on the local car; owner reports it
         if (Math.abs(car.y - m.y) > 2.5) return;
         const r = car.def.stats.radius + 1.2;
         if ((car.x - m.x) ** 2 + (car.z - m.z) ** 2 < r * r) {
@@ -976,6 +1001,7 @@
         }
       });
       if (hit) {
+        if (net.active) net.send("mineboom", { x: m.x, z: m.z });
         scene.remove(m.mesh);
         state.mines.splice(i, 1);
       }
@@ -1110,6 +1136,7 @@
   function fireSpecial(car) {
     if (car.special < 100 || car.wrecked || car.frozen > 0 || car.stunned > 0) return;
     car.special = 0;
+    if (net.active && car === state.player) net.send("act", { k: "special" });
     if (car.isPlayer) {
       sfx.special();
       flash("rgba(255,220,120,0.35)", 130);
@@ -2298,11 +2325,12 @@
   }
 
   function startSelectedMode() {
-    if (state.mode === "circuit") startCircuit();
+    if (state.mode === "online") net.openLobby();
+    else if (state.mode === "circuit") startCircuit();
     else startMatch();
   }
 
-  function beginRound(arenaId, roundIndex) {
+  function beginRound(arenaId, roundIndex, onlineRoster) {
     sfx.unlock();
     clearWorld();
     arena = SCRAP.arenas.build(arenaId);
@@ -2317,27 +2345,45 @@
     sun.intensity = arena.sun.intensity;
     sun.position.set(arena.sun.x, arena.sun.y, arena.sun.z);
 
-    // cars: player + 5 distinct bots
-    const playerDef = SCRAP.vehicles.list[state.vehicleIndex];
-    const others = SCRAP.vehicles.list.filter((v) => v.id !== playerDef.id);
-    for (let i = others.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [others[i], others[j]] = [others[j], others[i]];
-    }
     const spawns = arena.spawns.slice();
-    state.player = makeCar(playerDef.id, true, spawns[0]);
-    state.cars = [state.player];
-    for (let i = 0; i < 5; i += 1) {
-      const bot = makeCar(others[i].id, false, spawns[(i + 1) % spawns.length]);
-      bot.ai.archetype = ARCHETYPES[i % ARCHETYPES.length];
-      // circuit escalation: later rounds field tougher, special-happier bots
-      if (roundIndex > 0) {
-        const hpScale = 1 + BOT_ROUND_HP_SCALE * roundIndex;
-        bot.maxHp = Math.round(bot.maxHp * hpScale);
-        bot.hp = bot.maxHp;
-        bot.specialRate = BOT_SPECIAL_RATE * (1 + BOT_ROUND_SPECIAL_SCALE * roundIndex);
+    if (onlineRoster) {
+      // online: one car per lobby player, spawn order = lobby order, no bots
+      state.cars = [];
+      net.carsById.clear();
+      onlineRoster.forEach((r, i) => {
+        const isMe = r.id === net.myId;
+        const car = makeCar(r.vehicle, isMe, spawns[i % spawns.length]);
+        if (isMe) {
+          state.player = car;
+        } else {
+          car.remote = r.id;
+          car.ai = null;
+        }
+        net.carsById.set(r.id, car);
+        state.cars.push(car);
+      });
+    } else {
+      // cars: player + 5 distinct bots
+      const playerDef = SCRAP.vehicles.list[state.vehicleIndex];
+      const others = SCRAP.vehicles.list.filter((v) => v.id !== playerDef.id);
+      for (let i = others.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [others[i], others[j]] = [others[j], others[i]];
       }
-      state.cars.push(bot);
+      state.player = makeCar(playerDef.id, true, spawns[0]);
+      state.cars = [state.player];
+      for (let i = 0; i < 5; i += 1) {
+        const bot = makeCar(others[i].id, false, spawns[(i + 1) % spawns.length]);
+        bot.ai.archetype = ARCHETYPES[i % ARCHETYPES.length];
+        // circuit escalation: later rounds field tougher, special-happier bots
+        if (roundIndex > 0) {
+          const hpScale = 1 + BOT_ROUND_HP_SCALE * roundIndex;
+          bot.maxHp = Math.round(bot.maxHp * hpScale);
+          bot.hp = bot.maxHp;
+          bot.specialRate = BOT_SPECIAL_RATE * (1 + BOT_ROUND_SPECIAL_SCALE * roundIndex);
+        }
+        state.cars.push(bot);
+      }
     }
     state.cars.forEach((car) => { car.y = sampleGround(car.x, car.z, 99); });
     // circuit: chassis damage carries between rounds; premium coverage cashes in
@@ -2368,7 +2414,8 @@
     if (el.summaryPanel) el.summaryPanel.hidden = true;
     if (el.sponsor) el.sponsor.hidden = false;
     if (el.arenaName) {
-      const prefix = state.mode === "circuit" ? `R${roundIndex + 1}/${CIRCUIT_ORDER.length} · ` : "";
+      let prefix = state.mode === "circuit" ? `R${roundIndex + 1}/${CIRCUIT_ORDER.length} · ` : "";
+      if (onlineRoster && net.room) prefix = `⚡${net.room.code} · `;
       el.arenaName.textContent = prefix + arena.name.toUpperCase();
     }
     if (el.log) el.log.innerHTML = "";
@@ -2377,6 +2424,10 @@
 
   function checkMatchEnd() {
     if (state.phase !== "running") return;
+    if (net.active) {
+      net.checkEnd();
+      return;
+    }
     const alive = state.cars.filter((c) => !c.wrecked);
     if (state.player.wrecked) {
       if (state.playerLives > 0) {
@@ -2733,6 +2784,10 @@
 
   function togglePause() {
     if (state.phase !== "running") return;
+    if (net.active) {
+      api.toast("No pausing in an online derby.");
+      return;
+    }
     state.paused = !state.paused;
     if (el.btnPause) el.btnPause.textContent = state.paused ? "Resume" : "Pause";
     api.toast(state.paused ? "Paused" : "Back to the derby");
@@ -2740,6 +2795,7 @@
   if (el.btnPause) el.btnPause.addEventListener("click", togglePause);
   if (el.btnRestart) {
     el.btnRestart.addEventListener("click", () => {
+      net.reset();
       state.phase = "menu";
       state.paused = false;
       clearWorld();
@@ -2763,6 +2819,7 @@
     switch (state.primaryAction) {
       case "next-round": startNextRound(); break;
       case "end-circuit": circuitComplete(false); break;
+      case "menu": showMenu(); break;
       case "start": default: startSelectedMode(); break;
     }
   }
@@ -2774,6 +2831,7 @@
     [
       { id: "single", label: "Single Match", sub: "One arena. Pick your fight." },
       { id: "circuit", label: "Full Circuit", sub: "All 6 arenas. Repairs cost Salvage." },
+      { id: "online", label: "Online Derby", sub: "Room codes. Wreck your friends." },
     ].forEach((m) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -2790,11 +2848,13 @@
   function applyModeToMenu() {
     // circuit runs the fixed six-arena order, so hide the arena picker
     if (el.arenaRow) el.arenaRow.style.display = state.mode === "circuit" ? "none" : "";
-    setPrimary("start", state.mode === "circuit" ? "Enter the circuit" : "Start your engine");
+    if (state.mode === "online") setPrimary("start", "Open online lobby");
+    else setPrimary("start", state.mode === "circuit" ? "Enter the circuit" : "Start your engine");
     drawMenuMapPreview();
   }
 
   function showMenu() {
+    net.reset();
     state.phase = "menu";
     state.circuit = null;
     if (el.overlayTitle) el.overlayTitle.textContent = "SCRAP CIRCUIT";
@@ -2925,8 +2985,9 @@
 
   function advanceSim(dt) {
     readPlayerInput();
-    state.cars.forEach((car) => { if (!car.isPlayer) updateAI(car, dt); });
-    state.cars.forEach((car) => updateCar(car, dt));
+    state.cars.forEach((car) => { if (!car.isPlayer && !car.remote) updateAI(car, dt); });
+    state.cars.forEach((car) => { if (car.remote) net.updatePuppet(car, dt); else updateCar(car, dt); });
+    if (net.active) net.tick(dt);
     collideCars(dt);
     updatePickups(dt);
     updateProjectiles(dt);
@@ -2940,10 +3001,340 @@
     updateHUD();
   }
 
+  // ---------- online derby (RBNet) ----------
+  // Serverless p2p model over Supabase Realtime:
+  //  - each client simulates ONLY its own car; remote cars are interpolated puppets
+  //  - damage is victim-authoritative: applyDamage/impulse/wreck drop anything
+  //    aimed at a puppet, and every client reports its own HP via snapshots
+  //  - discrete actions (pickup weapons, specials, pickups, mine hits) replicate
+  //    as events and replay against the puppet; the machine gun rides a snapshot flag
+  //  - pickup types come from a seeded roll, so no host authority is needed at all
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function r3(v) { return Math.round(v * 1000) / 1000; }
+
+  const net = {
+    active: false,
+    room: null,
+    myId: null,
+    seed: 1,
+    roster: [],
+    carsById: new Map(),
+    out: new Set(),
+    myOut: false,
+    ended: false,
+    sendAcc: 0,
+
+    rand(n) {
+      let t = (net.seed ^ n) >>> 0;
+      t += 0x6d2b79f5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    },
+
+    reset() {
+      if (net.room) { try { net.room.leave(); } catch (_) {} }
+      net.room = null;
+      net.active = false;
+      net.ended = false;
+      net.myOut = false;
+      net.out = new Set();
+      net.carsById.clear();
+      net.roster = [];
+      net.sendAcc = 0;
+    },
+
+    openLobby() {
+      if (!window.RBNetUI || !window.RBNet || !RBNet.available()) {
+        api.toast("Online play isn't available right now.");
+        return;
+      }
+      const def = SCRAP.vehicles.list[state.vehicleIndex];
+      RBNetUI.open({
+        game: GAME_ID,
+        title: "SCRAP CIRCUIT — ONLINE DERBY",
+        accent: "#ffd23b",
+        minPlayers: 2,
+        maxPlayers: 6,
+        meta: { vehicle: def.id, vname: def.name },
+        playerTag: (p) => p.vname || "",
+        getStartPayload: () => ({ arena: state.arenaId }),
+        onStart: ({ room, players, payload }) => net.start(room, players, payload),
+        onClose: () => {},
+      });
+    },
+
+    start(room, players, payload) {
+      net.reset();
+      net.room = room;
+      net.myId = room.id;
+      net.seed = (payload.seed >>> 0) || 1;
+      net.roster = players.map((p) => ({
+        id: p.id,
+        name: p.name || "SCRAPPER",
+        vehicle: SCRAP.vehicles.get(p.vehicle) ? p.vehicle : SCRAP.vehicles.list[0].id,
+      }));
+      net.active = true;
+      state.mode = "online";
+      if (payload.arena) state.arenaId = payload.arena;
+      room.on("state", (d, from) => net.onSnap(from, d));
+      room.on("act", (d, from) => net.onAct(from, d));
+      room.on("ptake", (d, from) => net.onPtake(d, from));
+      room.on("mineboom", (d) => net.onMineBoom(d));
+      room.on("wrecked", (d, from) => net.onWrecked(from, d));
+      room.on("peerleave", (pid) => net.onLeave(pid));
+      room.on("closed", () => net.onClosed());
+      beginRound(state.arenaId, 0, net.roster);
+    },
+
+    send(type, data) {
+      if (net.active && net.room) net.room.send(type, data);
+    },
+
+    tick(dt) {
+      if (!net.active || !net.room) return;
+      net.sendAcc += dt;
+      if (net.sendAcc >= 1 / 12) {
+        net.sendAcc = 0;
+        net.pushSnap();
+        net.checkEnd();
+      }
+    },
+
+    pushSnap() {
+      const p = state.player;
+      if (!p || !net.room) return;
+      const disabled = p.frozen > 0 || p.stunned > 0;
+      net.send("state", {
+        x: r2(p.x), y: r2(p.y), z: r2(p.z), h: r3(p.heading),
+        vx: r2(p.vx), vz: r2(p.vz),
+        hp: Math.round(p.hp), mh: p.maxHp,
+        sp: r2(Math.max(0, p.shield)), fz: r2(Math.max(0, p.frozen)),
+        bn: r2(Math.max(0, p.burning)), bo: r2(Math.max(0, p.boost)),
+        st: r2(Math.max(0, p.stunned)),
+        wp: p.weapon,
+        fi: p.wantFire && !disabled && !p.wrecked ? 1 : 0,
+        w: p.wrecked ? 1 : 0,
+        o: net.myOut ? 1 : 0,
+      });
+    },
+
+    onSnap(from, d) {
+      const car = net.carsById.get(from);
+      if (!car || !d) return;
+      car.netSnap = { x: d.x, y: d.y, z: d.z, h: d.h, vx: d.vx || 0, vz: d.vz || 0 };
+      car.hp = d.hp;
+      if (d.mh) car.maxHp = d.mh;
+      car.shield = d.sp || 0;
+      car.frozen = d.fz || 0;
+      car.burning = d.bn || 0;
+      car.boost = d.bo || 0;
+      car.stunned = d.st || 0;
+      car.netFi = !!d.fi;
+      if (d.wp && car.weapon !== d.wp) {
+        car.weapon = d.wp;
+        car.ammo = d.wp === BASE_WEAPON ? Infinity : Math.max(1, WEAPONS[d.wp] ? WEAPONS[d.wp].ammo : 1);
+      }
+      if (d.o && !net.out.has(from)) {
+        net.out.add(from);
+        net.checkEnd();
+      }
+      if (d.w && !car.wrecked) wreck(car, { net: true });
+      else if (!d.w && car.wrecked) net.reviveCar(car, d);
+    },
+
+    reviveCar(car, d) {
+      car.wrecked = false;
+      car.wreckT = 0;
+      car.x = d.x; car.z = d.z; car.y = d.y;
+      car.heading = d.h;
+      car.vx = 0; car.vz = 0; car.vy = 0;
+      car.frozen = 0; car.stunned = 0; car.burning = 0;
+      car.mesh.rotation.set(0, car.heading, 0);
+      car.mesh.position.set(car.x, car.y, car.z);
+      burst(car.x, car.y + 1, car.z, 0x63f2c8, 12, 8);
+    },
+
+    onAct(from, d) {
+      const car = net.carsById.get(from);
+      if (!car || car.wrecked || !d) return;
+      if (d.k === "weapon") {
+        car.weapon = WEAPONS[d.w] ? d.w : BASE_WEAPON;
+        if (car.ammo !== Infinity && !(car.ammo >= 1)) car.ammo = WEAPONS[car.weapon].ammo || 1;
+        car.fireCooldown = 0;
+        fireWeapon(car);
+      } else if (d.k === "special") {
+        car.special = 100;
+        fireSpecial(car);
+      }
+    },
+
+    onPtake(d, from) {
+      if (!d) return;
+      const p = state.pickups[d.i];
+      if (!p) return;
+      if (d.ty) p.type = d.ty;
+      const car = net.carsById.get(from) || state.player;
+      takePickup(car, p, true);
+    },
+
+    onMineBoom(d) {
+      if (!d) return;
+      let best = null, bestD = 16;
+      state.mines.forEach((m) => {
+        const dd = (m.x - d.x) ** 2 + (m.z - d.z) ** 2;
+        if (dd < bestD) { bestD = dd; best = m; }
+      });
+      if (best) {
+        boomVisual(best.x, best.y + 0.5, best.z, 6);
+        sfx.hit();
+        scene.remove(best.mesh);
+        state.mines.splice(state.mines.indexOf(best), 1);
+      }
+    },
+
+    onWrecked(from, d) {
+      if (d && d.by === net.myId) {
+        addSalvage(150);
+        state.wrecksByPlayer += 1;
+      }
+    },
+
+    onLeave(pid) {
+      if (!net.active) return;
+      const fresh = !net.out.has(pid);
+      net.out.add(pid);
+      if (fresh) {
+        const r = net.roster.find((x) => x.id === pid);
+        api.toast(`${r ? r.name : "A rival"} rage-quit the derby.`);
+      }
+      const car = net.carsById.get(pid);
+      if (car && !car.wrecked) wreck(car, { net: true });
+      net.checkEnd();
+    },
+
+    onClosed() {
+      if (!net.active || net.ended) return;
+      api.toast("Connection lost.");
+      net.finish(false, 0);
+    },
+
+    aliveOpponents() {
+      return net.roster.filter((r) => r.id !== net.myId && !net.out.has(r.id));
+    },
+
+    checkEnd() {
+      if (!net.active || net.ended || state.phase !== "running") return;
+      const p = state.player;
+      if (p.wrecked && !net.myOut) {
+        if (state.playerLives > 0) {
+          respawnPlayerLife();
+          net.pushSnap();
+          return;
+        }
+        net.myOut = true;
+        net.pushSnap();
+        net.finish(false, net.aliveOpponents().length + 1);
+        return;
+      }
+      if (!net.myOut && net.roster.length > 1 && net.aliveOpponents().length === 0) {
+        net.finish(true, 1);
+      }
+    },
+
+    finish(won, placement) {
+      net.ended = true;
+      net.myOut = net.myOut || !won;
+      state.phase = "over";
+      const code = net.room ? net.room.code : "";
+      if (won) {
+        announce("win", true);
+        sfx.win();
+        flash("rgba(255,220,120,0.4)", 300);
+      } else {
+        sfx.lose();
+      }
+      // let the final snapshot land before we hang up
+      setTimeout(() => {
+        if (net.room) { try { net.room.leave(); } catch (_) {} net.room = null; }
+        net.active = false;
+      }, 1200);
+      setTimeout(() => {
+        if (el.overlayTitle) {
+          el.overlayTitle.textContent = won
+            ? "LAST CHASSIS ONLINE"
+            : placement > 0 ? `TOTALED — P${placement}` : "CONNECTION LOST";
+        }
+        if (el.overlaySub) {
+          el.overlaySub.textContent = won
+            ? `Room ${code} has been liquidated. You keep the paperwork.`
+            : placement > 0
+              ? "Your online claim was denied with prejudice."
+              : "The insurance servers have ghosted you.";
+        }
+        if (el.overlayScore) el.overlayScore.textContent = "";
+        if (el.menu) el.menu.hidden = true;
+        if (el.circuitPanel) el.circuitPanel.hidden = true;
+        if (el.summaryPanel) el.summaryPanel.hidden = true;
+        setPrimary("menu", "Back to the garage");
+        if (el.overlay) el.overlay.classList.add("overlay--show");
+      }, won ? 1400 : 1600);
+    },
+
+    updatePuppet(car, dt) {
+      if (car.wrecked) {
+        car.wreckT += dt;
+        car.mesh.position.set(car.x, car.y + 1.2, car.z);
+        if (Math.random() < dt * 3) burst(car.x, car.y + 1.6, car.z, 0x3a3a44, 2, 2, 5);
+        return;
+      }
+      if (car.frozen > 0) car.frozen -= dt;
+      if (car.stunned > 0) car.stunned -= dt;
+      if (car.slowed > 0) car.slowed -= dt;
+      if (car.shield > 0) car.shield -= dt;
+      if (car.boost > 0) car.boost -= dt;
+      if (car.burning > 0) car.burning -= dt;
+      if (car.gunCooldown > 0) car.gunCooldown -= dt;
+      if (car.fireCooldown > 0) car.fireCooldown -= dt;
+      const s = car.netSnap;
+      if (s) {
+        // dead-reckon the last snapshot forward, then chase it
+        s.x += s.vx * dt;
+        s.z += s.vz * dt;
+        const dx = s.x - car.x, dz = s.z - car.z;
+        if (dx * dx + dz * dz > 900) {
+          car.x = s.x; car.z = s.z; car.y = s.y;
+        } else {
+          const k = Math.min(1, dt * 9);
+          car.x += dx * k;
+          car.z += dz * k;
+          car.y += (s.y - car.y) * k;
+        }
+        let dh = s.h - car.heading;
+        while (dh > Math.PI) dh -= Math.PI * 2;
+        while (dh < -Math.PI) dh += Math.PI * 2;
+        car.heading += dh * Math.min(1, dt * 10);
+        car.vx = s.vx;
+        car.vz = s.vz;
+      }
+      if (car.netFi && car.frozen <= 0 && car.stunned <= 0) fireMachineGun(car);
+      updateSpecialStates(car, dt);
+      car.fx.ice.visible = car.frozen > 0;
+      car.fx.shield.visible = car.shield > 0;
+      car.mesh.position.set(car.x, car.y, car.z);
+      car.mesh.rotation.set(0, car.heading, 0);
+      const speed = Math.hypot(car.vx, car.vz);
+      car.wheelSpin += speed * dt * 1.6;
+      car.mesh.userData.wheels.forEach((w) => { w.rotation.x = car.wheelSpin; });
+      if (car.mesh.userData.spinner) car.mesh.userData.spinner.rotation.y += dt * 6;
+      if (car.burning > 0 && Math.random() < dt * 2) burst(car.x, car.y + 1.6, car.z, 0xff8a2e, 3, 3, 5);
+    },
+  };
+
   // ---------- debug hooks ----------
   if (DEBUG) {
     window.__scrapDebug = {
-      state, sampleGround, get arena() { return arena; },
+      state, net, sampleGround, get arena() { return arena; },
       startMatch, startCircuit, startNextRound, circuitComplete, endMatch,
       get player() { return state.player; },
       makePickupModel, scene, applyDamage, respawnPlayerLife, collideCars,

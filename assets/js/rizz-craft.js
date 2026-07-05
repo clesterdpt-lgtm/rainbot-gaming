@@ -1412,6 +1412,10 @@
     };
   }
   function createWorldFromPanel() {
+    if (netRizz.active) {
+      netRizz.shutdown();
+      api.toast("Left the co-op session.");
+    }
     const fields = readWorldCreateFields();
     createWorld(fields.name, fields.seed);
   }
@@ -1472,6 +1476,171 @@
     }
     return ok;
   }
+  // ============================================================
+  //  ONLINE CO-OP (RBNet over Supabase Realtime)
+  // ============================================================
+  // Model: everyone generates the SAME fresh world from a shared seed, then
+  // player block edits (setBlock track=true) broadcast and replay on every
+  // client. Remote players render as blocky avatars with name tags. The host's
+  // day/night clock is authoritative. Mobs stay client-local (each player
+  // fights their own Skibidi wave); chests/furnaces are per-player for now.
+  // Everyone keeps a local, saveable copy of the co-op world.
+  const netRizz = {
+    active: false,
+    room: null,
+    applying: false,
+    peers: new Map(),
+    sendAcc: 0,
+
+    openLobby() {
+      if (!window.RBNetUI || !window.RBNet || !RBNet.available()) {
+        api.toast("Online play isn't available right now.", "bad");
+        return;
+      }
+      RBNetUI.open({
+        game: GAME_ID,
+        title: "RIZZ-CRAFT — ONLINE CO-OP",
+        accent: "#7cfc6b",
+        minPlayers: 2,
+        maxPlayers: 4,
+        getStartPayload: () => ({ seed: randomSeed() }),
+        onStart: ({ room, players, payload }) => netRizz.begin(room, players, payload),
+        onClose: () => {},
+      });
+    },
+
+    begin(room, players, payload) {
+      netRizz.shutdown(false);
+      netRizz.room = room;
+      netRizz.active = true;
+      room.on("blk", (d) => netRizz.onBlk(d));
+      room.on("pos", (d, from) => netRizz.onPos(d, from));
+      room.on("peerleave", (pid) => netRizz.dropPeer(pid, true));
+      room.on("closed", () => {
+        if (!netRizz.active) return;
+        api.toast("Connection lost — world is now solo.", "bad");
+        netRizz.shutdown(false);
+      });
+      createWorld(`Co-op ${room.code}`, String((payload.seed >>> 0) || randomSeed()));
+    },
+
+    shutdown(leaveQuietly = true) {
+      netRizz.peers.forEach((peer) => scene.remove(peer.mesh));
+      netRizz.peers.clear();
+      if (netRizz.room) {
+        try { netRizz.room.leave(); } catch (e) {}
+      }
+      netRizz.room = null;
+      netRizz.active = false;
+    },
+
+    sendEdit(x, y, z, code) {
+      if (netRizz.room) netRizz.room.send("blk", { x, y, z, c: code });
+    },
+
+    onBlk(d) {
+      if (!d || !inWorld(d.x, d.y, d.z)) return;
+      netRizz.applying = true;
+      try {
+        setBlock(d.x, d.y, d.z, d.c, true, true);
+        flowLiquidsNear(d.x, d.y, d.z);
+      } finally {
+        netRizz.applying = false;
+      }
+    },
+
+    tick(dt) {
+      if (!netRizz.active || !netRizz.room) return;
+      netRizz.sendAcc += dt;
+      if (netRizz.sendAcc >= 0.1 && state.started) {
+        netRizz.sendAcc = 0;
+        const p = state.player;
+        const msg = {
+          x: Math.round(p.x * 100) / 100,
+          y: Math.round(p.y * 100) / 100,
+          z: Math.round(p.z * 100) / 100,
+          yaw: Math.round(p.yaw * 100) / 100,
+        };
+        if (netRizz.room.isHost) {
+          msg.t = Math.round(state.time * 10000) / 10000;
+          msg.d = state.day;
+        }
+        netRizz.room.send("pos", msg);
+      }
+      netRizz.peers.forEach((peer) => {
+        const t = peer.target;
+        if (!t) return;
+        const k = Math.min(1, dt * 10);
+        peer.mesh.position.x += (t.x - peer.mesh.position.x) * k;
+        peer.mesh.position.y += (t.y - peer.mesh.position.y) * k;
+        peer.mesh.position.z += (t.z - peer.mesh.position.z) * k;
+        let dy = t.yaw - peer.mesh.rotation.y;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        peer.mesh.rotation.y += dy * k;
+      });
+    },
+
+    onPos(d, from) {
+      if (!d) return;
+      let peer = netRizz.peers.get(from);
+      if (!peer) {
+        const who = netRizz.room ? netRizz.room.player(from) : null;
+        peer = { mesh: netRizz.makeAvatar(netRizz.peers.size, who && who.name), target: null };
+        peer.mesh.position.set(d.x, d.y, d.z);
+        scene.add(peer.mesh);
+        netRizz.peers.set(from, peer);
+      }
+      peer.target = { x: d.x, y: d.y, z: d.z, yaw: d.yaw || 0 };
+      // host clock is authoritative for guests
+      if (netRizz.room && !netRizz.room.isHost && typeof d.t === "number") {
+        if (Math.abs(state.time - d.t) > 0.02) state.time = d.t;
+        if (d.d && d.d !== state.day) state.day = d.d;
+      }
+    },
+
+    dropPeer(pid, announce) {
+      const peer = netRizz.peers.get(pid);
+      if (peer) {
+        scene.remove(peer.mesh);
+        netRizz.peers.delete(pid);
+      }
+      if (announce && netRizz.active) {
+        const who = netRizz.room ? netRizz.room.player(pid) : null;
+        api.toast(`${who && who.name ? who.name : "A builder"} left the world.`, "bad");
+      }
+    },
+
+    makeAvatar(idx, name) {
+      const colors = [0xff5aa9, 0x27e6ff, 0xffd23b, 0x9e63ff];
+      const c = colors[idx % colors.length];
+      const g = new THREE.Group();
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.62, 0.28), new THREE.MeshLambertMaterial({ color: 0x2b3352 }));
+      legs.position.y = 0.31;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.32), new THREE.MeshLambertMaterial({ color: c }));
+      body.position.y = 0.98;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.46), new THREE.MeshLambertMaterial({ color: 0xe8b98a }));
+      head.position.y = 1.57;
+      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), new THREE.MeshLambertMaterial({ color: c }));
+      brim.position.y = 1.82;
+      g.add(legs, body, head, brim);
+      const cv = document.createElement("canvas");
+      cv.width = 256; cv.height = 64;
+      const cx2 = cv.getContext("2d");
+      cx2.fillStyle = "rgba(0,0,0,0.45)";
+      cx2.fillRect(0, 8, 256, 48);
+      cx2.font = "bold 32px sans-serif";
+      cx2.textAlign = "center";
+      cx2.fillStyle = "#ffffff";
+      cx2.fillText(String(name || "Player").slice(0, 14), 128, 42);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+      sprite.scale.set(1.7, 0.42, 1);
+      sprite.position.y = 2.25;
+      g.add(sprite);
+      return g;
+    },
+  };
+
   function renderWorldPanel() {
     if (!worldPanel) return;
     const worlds = readWorldIndex();
@@ -1494,10 +1663,13 @@
       <label class="world-field">World name<input id="world-name-input" maxlength="28" value="${escapeWorldHtml(nextWorldName)}" autocomplete="off" /></label>
       <label class="world-field">Seed<input id="world-seed-input" placeholder="random" autocomplete="off" /></label>
       <button class="btn btn--primary" type="button" id="world-create-btn">Create</button>
+      <button class="btn btn--secondary" type="button" id="world-online-btn">🌐 Online co-op</button>
     </div>
     <div class="world-list">${cards || `<div class="world-empty">No saved worlds yet.</div>`}</div>`;
     const createButton = document.getElementById("world-create-btn");
     if (createButton) createButton.addEventListener("click", createWorldFromPanel);
+    const onlineButton = document.getElementById("world-online-btn");
+    if (onlineButton) onlineButton.addEventListener("click", () => netRizz.openLobby());
     worldPanel.querySelectorAll("#world-name-input, #world-seed-input").forEach((input) => {
       input.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
@@ -1576,6 +1748,10 @@
   }
   async function loadWorld(id) {
     if (worldLoadingActive) return;
+    if (netRizz.active) {
+      netRizz.shutdown();
+      api.toast("Left the co-op session.");
+    }
     const world = readWorldIndex().find((item) => item.id === id);
     const saved = readWorldSave(id);
     if (!world || !saved) {
@@ -1744,6 +1920,8 @@
       const key = `${x},${y},${z}`;
       if (state.baseWorld[i] === code) state.edits.delete(key);
       else state.edits.set(key, code);
+      // co-op: replicate player-originated edits (remote replays set `applying`)
+      if (netRizz.active && !netRizz.applying) netRizz.sendEdit(x, y, z, code);
     }
     updateSurfaceColumn(x, z);
     const lit = lightingAffected(prev, code);
@@ -7349,6 +7527,7 @@
     updateFriendlies(dt);
     updateFish(dt);
     updateFx(dt);
+    netRizz.tick(dt);
     if (state.started && !state.paused && !state.crafting && !state.bagOpen) {
       updateTime(dt);
       updateEffects(dt);
@@ -7756,6 +7935,7 @@
   window.addEventListener("resize", resizeRenderer);
   window.__RIZZ = {
     state,
+    netRizz,
     DEF,
     BIOMES,
     RECIPES,

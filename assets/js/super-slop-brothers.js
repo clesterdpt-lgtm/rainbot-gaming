@@ -1735,7 +1735,16 @@
     }
   }
 
-  function applyHit(attackerSlot, target, hit) {
+  function applyHit(attackerSlot, target, hit, fromNet) {
+    if (netSlop.active && !fromNet) {
+      const atkF = attackerSlot >= 0 ? state.fighters.find((o) => o.slot === attackerSlot) : null;
+      // the remote player's hits on us arrive as authoritative events
+      if (atkF && atkF.netRemote) return;
+      // stage hazards only hurt the local fighter; the owner's sim runs theirs
+      if (target.netRemote && !atkF) return;
+      // our hit on the remote fighter: predict locally + tell the owner
+      if (target.netRemote && atkF) netSlop.send("hit", { a: attackerSlot, h: hit });
+    }
     if (target.invuln > 0 && !hit.forceThrow) return;
     if (tryTraitArmor(target, hit)) return;
     const attacker = attackerSlot >= 0 ? state.fighters.find((o) => o.slot === attackerSlot) : null;
@@ -1785,6 +1794,7 @@
     const b = getStage().blast;
     for (const f of state.fighters) {
       if (f.hidden || f.respawnTimer > 0) continue;
+      if (netSlop.active && f.netRemote) continue; // owner reports their own KOs
       const c = fighterCenter(f);
       if (c.x < b.left || c.x > b.right || c.y < b.top || (f.y) > b.bottom) {
         koFighter(f);
@@ -1805,8 +1815,9 @@
     const killer = state.fighters.find((o) => o.slot === f.lastHitBy);
     if (killer && killer !== f && state.time - f.lastHitTime < 4) {
       killer.kos++;
-      if (!killer.isCpu) { state.p1Kos++; }
+      if (!killer.isCpu && !killer.netRemote) { state.p1Kos++; }
     }
+    if (netSlop.active && !f.netRemote && !f.isCpu) netSlop.send("ko", { st: f.stocks });
     releaseGrab(f);
     if (f.grabbedBy) { f.grabbedBy.grabbing = null; f.grabbedBy = null; }
 
@@ -1913,12 +1924,13 @@
     updateCamera(dt);
 
     readHuman();
+    if (netSlop.active) netSlop.tick(dt);
     updateMovingPlatforms(dt);
 
     // assign controls
     for (const f of state.fighters) {
       if (f.hidden) continue;
-      f.control = f.isCpu ? cpuControl(f, dt) : human;
+      f.control = f.isCpu ? cpuControl(f, dt) : f.netRemote ? netSlop.remoteControl(f) : human;
     }
 
     for (const f of state.fighters) updateFighter(f, dt);
@@ -2527,12 +2539,224 @@
     if (hudStage) hudStage.textContent = getStage().short;
     const rivalCount = state.screen === "fight" ? state.fighters.length - 1 : settings.rivals;
     if (hudMode) {
-      if (state.arcade && state.arcade.active) hudMode.textContent = "Arcade " + (state.arcade.round + 1) + "/" + state.arcade.rounds.length;
+      if (netSlop.active) hudMode.textContent = "ONLINE" + (netSlop.room ? " " + netSlop.room.code : "");
+      else if (state.arcade && state.arcade.active) hudMode.textContent = "Arcade " + (state.arcade.round + 1) + "/" + state.arcade.rounds.length;
       else hudMode.textContent = settings.mode === "arcade" && state.screen === "menu" ? "Arcade" : rivalCount + " CPU";
     }
     if (hudKos) hudKos.textContent = state.p1Kos;
     if (hudHigh) hudHigh.textContent = state.best;
   }
+
+  // ============================================================
+  //  ONLINE 1V1  (RBNet over Supabase Realtime)
+  // ============================================================
+  // Model: both clients run the FULL simulation for both fighters. The remote
+  // fighter is driven by replicated inputs (held state @20Hz + accumulated
+  // button edges so taps can't fall between packets). Authority rules:
+  //  - your own %/stocks/KOs = your client (owner snapshots @5Hz correct drift)
+  //  - hits FROM the remote fighter arrive only as events from their client
+  //  - hits you land on the remote fighter apply instantly (prediction) AND
+  //    are sent as events the owner applies authoritatively
+  //  - stage hazards only hurt the local fighter in each sim
+  const netSlop = {
+    active: false,
+    room: null,
+    mySlot: 0,
+    leftAlone: false,
+    matchOptions: null,
+    held: { x: 0, up: false, down: false, jh: false, at: false, sp: false, sh: false, gr: false, sx: 0, sy: 0 },
+    edges: {},
+    pendingEdges: {},
+    sendAcc: 0,
+    snapAcc: 0,
+
+    isHost() { return this.room && this.room.isHost; },
+
+    reset() {
+      if (this.room) { try { this.room.leave(); } catch (e) {} }
+      this.room = null;
+      this.active = false;
+      this.leftAlone = false;
+      this.matchOptions = null;
+      this.pendingEdges = {};
+      this.edges = {};
+      this.sendAcc = 0;
+      this.snapAcc = 0;
+    },
+
+    send(type, data) {
+      if (this.active && this.room) this.room.send(type, data);
+    },
+
+    localFighter() { return state.fighters.find((f) => !f.isCpu && !f.netRemote); },
+    remoteFighter() { return state.fighters.find((f) => f.netRemote); },
+
+    openLobby() {
+      if (!window.RBNetUI || !window.RBNet || !RBNet.available()) {
+        api.toast("Online play isn't available right now.");
+        return;
+      }
+      const me = FIGHTER_BY_ID[settings.p1] || FIGHTERS[0];
+      RBNetUI.open({
+        game: GAME_ID,
+        title: "SUPER SLOP BROTHERS — ONLINE 1V1",
+        accent: "#ff5aa9",
+        minPlayers: 2,
+        maxPlayers: 2,
+        meta: { fighter: me.id, fname: me.name },
+        playerTag: (p) => p.fname || "",
+        getStartPayload: () => ({ stage: settings.stage, stocks: settings.stocks }),
+        onStart: ({ room, players, slot, payload }) => netSlop.begin(room, players, slot, payload),
+        onClose: () => {},
+      });
+    },
+
+    begin(room, players, slot, payload) {
+      this.reset();
+      this.room = room;
+      this.mySlot = slot;
+      this.active = true;
+      room.on("in", (d) => this.onInput(d));
+      room.on("hit", (d) => this.onHit(d));
+      room.on("ko", (d) => this.onKo(d));
+      room.on("rematch", () => { if (this.matchOptions) startMatch(this.matchOptions); });
+      room.on("peerleave", () => this.onGone("Your rival disconnected."));
+      room.on("closed", () => this.onGone("Connection lost."));
+      const ids = players.map((p) => (FIGHTER_BY_ID[p.fighter] ? p.fighter : "rainbot"));
+      this.matchOptions = {
+        ids,
+        stage: payload.stage,
+        title: "ONLINE 1V1",
+        online: { mySlot: slot },
+        onlineStocks: payload.stocks || 3,
+      };
+      startMatch(this.matchOptions);
+    },
+
+    rematch() {
+      if (!this.active || !this.matchOptions) return;
+      if (this.leftAlone || (this.room && this.room.players.length < 2)) {
+        api.toast("Nobody left to fight — host a new room.");
+        return;
+      }
+      this.send("rematch", {});
+      startMatch(this.matchOptions);
+    },
+
+    onGone(msg) {
+      if (!this.active || this.leftAlone) return;
+      this.leftAlone = true;
+      api.toast(msg);
+      if (state.screen === "fight") {
+        const remote = this.remoteFighter();
+        if (remote) {
+          remote.stocks = 0;
+          remote.hidden = true;
+          remote.state = "dead";
+        }
+        checkMatchEnd();
+      }
+    },
+
+    // ---- sending -------------------------------------------------------
+    tick(dt) {
+      if (!this.active || !this.room || state.screen !== "fight") return;
+      ["pAttack", "pSpecial", "pJump", "pShield", "pGrab"].forEach((k) => {
+        if (human[k]) this.pendingEdges[k] = 1;
+      });
+      this.sendAcc += dt;
+      this.snapAcc += dt;
+      if (this.sendAcc < 0.05) return;
+      this.sendAcc = 0;
+      const msg = {
+        c: {
+          x: human.x, up: human.up, down: human.down,
+          jh: human.jumpHeld, at: human.attack, sp: human.special,
+          sh: human.shield, gr: human.grab, sx: human.smashX, sy: human.smashY,
+        },
+        e: this.pendingEdges,
+      };
+      this.pendingEdges = {};
+      const me = this.localFighter();
+      if (me && this.snapAcc >= 0.2) {
+        this.snapAcc = 0;
+        msg.s = {
+          x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10,
+          vx: Math.round(me.vx), vy: Math.round(me.vy),
+          dmg: Math.round(me.damage * 10) / 10,
+          fa: me.facing, sh: Math.round(me.shieldHealth * 100) / 100,
+          rt: Math.round(me.respawnTimer * 100) / 100,
+        };
+      }
+      this.send("in", msg);
+    },
+
+    // ---- receiving -------------------------------------------------------
+    onInput(d) {
+      if (!d) return;
+      if (d.c) this.held = d.c;
+      if (d.e) Object.keys(d.e).forEach((k) => { this.edges[k] = 1; });
+      if (d.s) this.correct(d.s);
+    },
+
+    correct(s) {
+      const f = this.remoteFighter();
+      if (!f || f.hidden) return;
+      f.damage = s.dmg;
+      if (s.fa) f.facing = s.fa;
+      if (typeof s.sh === "number") f.shieldHealth = s.sh;
+      const err = Math.hypot(f.x - s.x, f.y - s.y);
+      const respawnMismatch = (s.rt > 0) !== (f.respawnTimer > 0);
+      if (err > 150 || respawnMismatch) {
+        f.x = s.x; f.y = s.y; f.vx = s.vx; f.vy = s.vy;
+        f.respawnTimer = Math.max(0, s.rt);
+      } else if (err > 14) {
+        f.x += (s.x - f.x) * 0.35;
+        f.y += (s.y - f.y) * 0.35;
+        f.vx = s.vx; f.vy = s.vy;
+      }
+    },
+
+    // Drives the remote fighter's control object, same contract as cpuControl.
+    remoteControl(f) {
+      const c = f.control;
+      Object.assign(f.prevControl, c);
+      const h = this.held, e = this.edges;
+      c.x = h.x || 0;
+      c.up = !!h.up; c.down = !!h.down;
+      c.jumpHeld = !!h.jh;
+      c.jump = !!h.jh || !!e.pJump;
+      c.attack = !!h.at || !!e.pAttack;
+      c.special = !!h.sp || !!e.pSpecial;
+      c.shield = !!h.sh || !!e.pShield;
+      c.grab = !!h.gr || !!e.pGrab;
+      c.smashX = h.sx || 0;
+      c.smashY = h.sy || 0;
+      c.pAttack = !!e.pAttack;
+      c.pSpecial = !!e.pSpecial;
+      c.pJump = !!e.pJump;
+      c.pShield = !!e.pShield;
+      c.pGrab = !!e.pGrab;
+      this.edges = {};
+      return c;
+    },
+
+    onHit(d) {
+      if (!d || !d.h) return;
+      const me = this.localFighter();
+      if (!me || me.hidden) return;
+      applyHit(d.a, me, d.h, true);
+    },
+
+    onKo(d) {
+      const f = this.remoteFighter();
+      if (!f || !d) return;
+      if (f.stocks > d.st) {
+        f.stocks = d.st + 1;
+        koFighter(f);
+      }
+    },
+  };
 
   // ============================================================
   //  GAME FLOW  (menu / start / results)
@@ -2546,6 +2770,7 @@
   ];
 
   function showMenu() {
+    netSlop.reset();
     clearHumanInput();
     state.screen = "menu";
     state.paused = false;
@@ -2578,7 +2803,8 @@
   }
 
   function startSelectedMode() {
-    if (settings.mode === "arcade") startArcadeRun();
+    if (settings.mode === "online") netSlop.openLobby();
+    else if (settings.mode === "arcade") startArcadeRun();
     else startMatch();
   }
 
@@ -2681,14 +2907,18 @@
     const modeBtns = [
       { id: "versus", title: "Quick Fight", sub: settings.rivals + " CPU battle" },
       { id: "arcade", title: "Arcade Run", sub: "5 fights + boss" },
+      { id: "online", title: "Online 1v1", sub: "Room code duel" },
     ].map((m) => `
       <button class="ssb-mode-card${settings.mode === m.id ? " is-sel" : ""}" data-mode="${m.id}" type="button">
         <span>${m.title}</span>
         <small>${m.sub}</small>
       </button>`).join("");
     const isArcade = settings.mode === "arcade";
-    const modeLine = isArcade ? "Arcade ladder · 5 fights · boss finale" : `Fighter select · ${settings.rivals} rival${settings.rivals === 1 ? "" : "s"} · ${settings.stocks} stock`;
-    const controlsLine = isArcade
+    const isOnline = settings.mode === "online";
+    const modeLine = isOnline
+      ? `Online 1v1 · host picks the stage · ${settings.stocks} stock`
+      : isArcade ? "Arcade ladder · 5 fights · boss finale" : `Fighter select · ${settings.rivals} rival${settings.rivals === 1 ? "" : "s"} · ${settings.stocks} stock`;
+    const controlsLine = isArcade || isOnline
       ? `<div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>`
       : `<div><span class="ssb-select__title">Rivals</span><div class="ssb-chips">${rivalBtns}</div></div>
          <div><span class="ssb-select__title">Stocks</span><div class="ssb-chips">${stockBtns}</div></div>
@@ -2742,7 +2972,7 @@
             <b>${selected.name}</b> on <b>${selectedStage.short}</b> · ${isArcade ? "5-round Arcade Run" : settings.rivals + " CPU · " + settings.stocks + " stock · " + AI_LEVELS[settings.difficulty].label}<br>
             <span class="ssb-controls-hint__tip">A/D move · W/Space jump · J attack · K special · L shield · I grab · flick + J for smash</span>
           </p>
-          <button class="btn btn--primary ssb-start" id="ssb-start" type="button">${isArcade ? "START ARCADE" : "START MATCH"}</button>
+          <button class="btn btn--primary ssb-start" id="ssb-start" type="button">${isOnline ? "OPEN ONLINE LOBBY" : isArcade ? "START ARCADE" : "START MATCH"}</button>
         </div>
       </div>`;
 
@@ -2789,7 +3019,13 @@
       for (let i = 0; i < settings.rivals; i++) ids.push(pool[i % pool.length]);
     }
 
-    state.fighters = ids.map((id, i) => makeFighter(id, i, i !== 0));
+    state.fighters = ids.map((id, i) => makeFighter(id, i, options.online ? false : i !== 0));
+    if (options.online) {
+      state.fighters.forEach((f, i) => {
+        if (i !== options.online.mySlot) f.netRemote = true;
+        if (options.onlineStocks) f.stocks = options.onlineStocks;
+      });
+    }
     if (options.humanStocks) state.fighters[0].stocks = options.humanStocks;
     if (options.cpuStocks) {
       state.fighters.forEach((f) => { if (f.isCpu) f.stocks = options.cpuStocks; });
@@ -2914,8 +3150,8 @@
       return;
     }
     state.screen = "results";
-    const human = state.fighters.find((f) => !f.isCpu);
-    const won = winner && !winner.isCpu;
+    const human = state.fighters.find((f) => !f.isCpu && !f.netRemote);
+    const won = winner && !winner.isCpu && !winner.netRemote;
     const bonus = won ? 200 : 0;
     const score = state.p1Kos * 100 + bonus + (human ? human.kos * 25 : 0);
     const prevBest = api.getHighScore(GAME_ID) || 0;
@@ -2931,7 +3167,7 @@
 
     const rows = state.fighters.slice().sort((a, b) => b.stocks - a.stocks || b.kos - a.kos).map((f) => `
       <div class="ssb-result-row${f === winner ? " is-win" : ""}">
-        <span class="ssb-result-row__who"><span style="font-size:20px">${f.glyph}</span> ${f.name}${f.isCpu ? "" : " (you)"}</span>
+        <span class="ssb-result-row__who"><span style="font-size:20px">${f.glyph}</span> ${f.name}${f.isCpu || f.netRemote ? "" : " (you)"}</span>
         <span class="ssb-result-row__stat">${f.kos} KO${f.kos === 1 ? "" : "s"}</span>
         <span class="ssb-result-row__stat">${Math.max(0, f.stocks)} left</span>
       </div>`).join("");
@@ -2945,7 +3181,16 @@
           <button class="btn btn--ghost" id="ssb-tomenu" type="button">Change setup</button>
         </div>
       </div>`;
-    document.getElementById("ssb-rematch").addEventListener("click", startMatch);
+    const rematchBtn = document.getElementById("ssb-rematch");
+    if (netSlop.active) {
+      rematchBtn.addEventListener("click", () => netSlop.rematch());
+      if (netSlop.leftAlone) {
+        rematchBtn.disabled = true;
+        rematchBtn.textContent = "Rival left";
+      }
+    } else {
+      rematchBtn.addEventListener("click", () => startMatch());
+    }
     document.getElementById("ssb-tomenu").addEventListener("click", showMenu);
     if (isBest && score > 0) setTimeout(() => api.toast("🏆 New high score!", "good"), 250);
     refreshMeta();
@@ -2953,6 +3198,10 @@
 
   function togglePause() {
     if (state.screen !== "fight") return;
+    if (netSlop.active) {
+      api.toast("No pausing online!");
+      return;
+    }
     state.paused = !state.paused;
     if (btnPause) btnPause.textContent = state.paused ? "Resume" : "Pause";
   }
@@ -3024,7 +3273,7 @@
   //  DEBUG HOOK
   // ============================================================
   window.__SLOP = {
-    state, settings, FIGHTERS, STAGES,
+    state, settings, netSlop, FIGHTERS, STAGES,
     start: startMatch, menu: showMenu, results: endMatch,
     arcade: startArcadeRun,
     setStage(id) { settings.stage = id; },

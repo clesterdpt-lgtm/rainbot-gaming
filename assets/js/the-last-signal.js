@@ -361,6 +361,20 @@
   };
   const FACTION_IDS = ["humans", "robots", "aliens"];
 
+  // Online 1v1: puppet (remote team) unit/building ids are offset well clear of
+  // any realistic local nextId range so they can share state.units/state.buildings
+  // with real objects without ever colliding.
+  const NET_ID_OFFSET = 1e9;
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
   /* ==================================================
      5. GAME STATE
      ================================================== */
@@ -1175,9 +1189,12 @@
     for (let i = 0; i < us.length; i++) {
       const a = us[i];
       if (a.dead) continue;
+      const aRemote = netTLS.active && a.team.isRemote;
       for (let j = i + 1; j < us.length; j++) {
         const b = us[j];
         if (b.dead) continue;
+        const bRemote = netTLS.active && b.team.isRemote;
+        if (aRemote && bRemote) continue; // both puppets: their owner resolves this
         const rr = a.def.r + b.def.r;
         let dx = b.x - a.x, dy = b.y - a.y;
         if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue;
@@ -1185,13 +1202,16 @@
         if (dd >= rr * rr || dd === 0) continue;
         const d = Math.sqrt(dd), push = (rr - d) / 2;
         dx /= d; dy /= d;
-        a.x -= dx * push; a.y -= dy * push;
-        b.x += dx * push; b.y += dy * push;
+        // a puppet's position is owned by its real client; only nudge it here
+        // if it's not remote, so local physics never fights the network snapshot.
+        if (!aRemote) { a.x -= dx * push; a.y -= dy * push; }
+        if (!bRemote) { b.x += dx * push; b.y += dy * push; }
       }
+      if (aRemote) continue;
       // static circles: obstacles + rock barriers + buildings
       for (const o of state.obstacles) pushOut(a, o.x, o.y, o.r);
       for (const rk of state.rocks) if (!rk.dead) pushOut(a, rk.x, rk.y, rk.r);
-      for (const b of state.buildings) if (!b.dead) pushOut(a, b.x, b.y, b.def.r * 0.9);
+      for (const bldg of state.buildings) if (!bldg.dead) pushOut(a, bldg.x, bldg.y, bldg.def.r * 0.9);
       a.x = clamp(a.x, 12, WORLD_W - 12);
       a.y = clamp(a.y, 12, WORLD_H - 12);
     }
@@ -1307,6 +1327,12 @@
       }
       return;
     }
+    // online: units/buildings owned by the remote peer are puppets here — I'm
+    // not authoritative for their HP, so forward the hit instead of applying it.
+    if (netTLS.active && thing.team && thing.team.isRemote) {
+      netTLS.sendHit(thing.id - NET_ID_OFFSET, dmg);
+      return;
+    }
     thing.lastHit = state.time;
     if (thing.shield > 0) {
       const absorbed = Math.min(thing.shield, dmg);
@@ -1337,6 +1363,7 @@
 
   function kill(thing, attackerTeam) {
     thing.dead = true;
+    if (netTLS.active && thing.team === state.teams[0]) netTLS.send("death", { id: thing.id });
     const pt = playerTeam();
     if (thing.kind === "unit") {
       boomFx(thing.x, thing.y, thing.team.faction.color, 14);
@@ -1386,6 +1413,7 @@
     state.selVersion++;
     const pt = playerTeam();
     if (team === pt) {
+      if (netTLS.active) netTLS.send("elim", {});
       endGame(attackerTeam && !attackerTeam.eliminated ? attackerTeam : enemyTeams()[0] || null);
       return;
     }
@@ -1430,6 +1458,9 @@
     if (def.worker && b.team.isAI === false) { /* leave to player */ }
     if (b.team === playerTeam()) Sfx.trainDone();
     if (b.team.isAI && b.team.ai) b.team.ai.onUnit(u);
+    if (netTLS.active && b.team === state.teams[0]) {
+      netTLS.send("spawn", { kind: "unit", id: u.id, key: def.key, x: Math.round(u.x), y: Math.round(u.y) });
+    }
     return u;
   }
 
@@ -1502,6 +1533,7 @@
 
   function updateRegen(dt) {
     for (const team of state.teams) {
+      if (netTLS.active && team.isRemote) continue; // owner's client regenerates their own team
       const f = team.faction;
       if (f.gridRepair) {
         // robots: self-repair near a friendly structure ("the grid")
@@ -1588,6 +1620,9 @@
     pay(team, def.cost);
     const b = makeBuilding(team, def, x, y, node, false);
     if (team === playerTeam()) Sfx.place();
+    if (netTLS.active && team === state.teams[0]) {
+      netTLS.send("spawn", { kind: "building", id: b.id, key: def.key, x: Math.round(b.x), y: Math.round(b.y) });
+    }
     return b;
   }
 
@@ -1964,13 +1999,16 @@
       state.cam.y = clamp(state.cam.y + cy * EDGE_SCROLL * dt, 0, WORLD_H - H);
     }
 
-    for (const u of state.units) if (!u.dead) updateUnit(u, dt);
+    // online: the remote team's units/buildings are puppets driven by network
+    // snapshots — skip local behavior sim for them entirely.
+    for (const u of state.units) if (!u.dead && !(netTLS.active && u.team.isRemote)) updateUnit(u, dt);
     resolveCollisions();
-    for (const b of state.buildings) if (!b.dead) updateBuilding(b, dt);
+    for (const b of state.buildings) if (!b.dead && !(netTLS.active && b.team.isRemote)) updateBuilding(b, dt);
     updateProjectiles(dt);
     updateRegen(dt);
     for (const team of state.teams) if (team.ai) team.ai.update(dt);
     updateParticles(dt);
+    netTLS.tick(dt);
 
     state.units = state.units.filter((u) => !u.dead);
     state.buildings = state.buildings.filter((b) => !b.dead);
@@ -3972,6 +4010,7 @@
   }
 
   function showMenu() {
+    netTLS.shutdown();
     state.phase = "menu";
     setSelection([]);
     screenEl.innerHTML = `
@@ -4030,7 +4069,10 @@
         </div>
         <div class="tls-brief" id="tls-brief" hidden>
           <div class="tls-brief__text" id="tls-brief-text"></div>
-          <button class="btn btn--primary" id="tls-deploy">Deploy to the Hollow</button>
+          <div class="tls-btnrow">
+            <button class="btn btn--primary" id="tls-deploy">Deploy to the Hollow</button>
+            <button class="btn btn--ghost" id="tls-deploy-online">🌐 Online 1v1</button>
+          </div>
         </div>
         <button class="btn btn--ghost tls-backbtn" id="tls-back">Back</button>
       </div>`;
@@ -4069,6 +4111,11 @@
       Sfx.click();
       startGame(state.pick, state.pendingEnemies || rollEnemyFactions(state.pick, state.opts.enemies), state.opts.difficulty);
     });
+    document.getElementById("tls-deploy-online").addEventListener("click", () => {
+      if (!state.pick) return;
+      Sfx.click();
+      netTLS.openLobby();
+    });
     document.getElementById("tls-back").addEventListener("click", () => { Sfx.click(); showMenu(); });
   }
 
@@ -4090,13 +4137,298 @@
 
   function togglePause() {
     if (state.phase !== "playing") return;
+    if (netTLS.active) { log("No pausing in an online match."); return; }
     state.paused = !state.paused;
     if (state.paused) showPause();
     else showOverlay(false);
   }
 
+  /* ==================================================
+     ONLINE 1V1 (RBNet over Supabase Realtime)
+     ================================================== */
+  // Model: each client fully simulates ONLY its own team (state.teams[0] here,
+  // always). The opponent's team (state.teams[1], flagged isRemote) exists as
+  // real entries in state.units/state.buildings — reusing makeUnit/makeBuilding
+  // so rendering, fog-of-war and targeting all just work — but their
+  // position/hp are puppets driven by periodic snapshots, never local physics.
+  // Combat is victim-authoritative: my applyDamage() drops hits on puppets and
+  // forwards them as `hit` events so the owner applies real damage on their
+  // side; the resulting hp/death flows back to me via snapshot/`death` events.
+  // Neutral world objects (resource nodes) are synced by periodic full-state
+  // broadcast — whichever side's real workers/units touch a node is naturally
+  // authoritative for that change on their own client already.
+  const netTLS = {
+    active: false,
+    room: null,
+    gone: false,
+    puppetsById: new Map(), // (ownerId + NET_ID_OFFSET) -> unit/building
+    snapAcc: 0,
+    nodeAcc: 0,
+
+    openLobby() {
+      if (!state.pick) return;
+      if (!window.RBNetUI || !window.RBNet || !RBNet.available()) {
+        log("Online play isn't available right now.");
+        return;
+      }
+      RBNetUI.open({
+        game: GAME_ID,
+        title: "THE LAST SIGNAL — ONLINE 1V1",
+        accent: FACTIONS[state.pick].color,
+        minPlayers: 2,
+        maxPlayers: 2,
+        meta: { faction: state.pick, fname: FACTIONS[state.pick].short },
+        playerTag: (p) => p.fname || "",
+        getStartPayload: () => ({}),
+        onStart: ({ room, players, slot, payload }) => netTLS.begin(room, players, slot, payload),
+        onClose: () => {},
+      });
+    },
+
+    begin(room, players, mySlot, payload) {
+      netTLS.shutdown();
+      netTLS.room = room;
+      netTLS.active = true;
+      netTLS.gone = false;
+      netTLS.puppetsById = new Map();
+      netTLS.snapAcc = 0;
+      netTLS.nodeAcc = 0;
+      const me = players.find((p) => p.id === room.id);
+      const peer = players.find((p) => p.id !== room.id);
+      const myFid = me && FACTIONS[me.faction] ? me.faction : "humans";
+      const peerFid = peer && FACTIONS[peer.faction] ? peer.faction : (myFid === "humans" ? "robots" : "humans");
+      room.on("roster", (d) => netTLS.onRoster(d));
+      room.on("spawn", (d) => netTLS.onSpawn(d));
+      room.on("snapshot", (d) => netTLS.onSnapshot(d));
+      room.on("nodes", (d) => netTLS.onNodes(d));
+      room.on("hit", (d) => netTLS.onHit(d));
+      room.on("death", (d) => netTLS.onDeath(d));
+      room.on("elim", () => netTLS.onElim());
+      room.on("peerleave", () => netTLS.onPeerGone("Your rival disconnected."));
+      room.on("closed", () => netTLS.onPeerGone("Connection lost."));
+      startOnlineGame(myFid, peerFid, mySlot, (payload.seed >>> 0) || 1);
+      const pTeam = state.teams[0];
+      netTLS.send("roster", {
+        units: teamUnits(pTeam).map((u) => ({ id: u.id, key: u.def.key, x: Math.round(u.x), y: Math.round(u.y) })),
+        buildings: teamBuildings(pTeam).map((b) => ({ id: b.id, key: b.def.key, x: Math.round(b.x), y: Math.round(b.y) })),
+      });
+    },
+
+    shutdown() {
+      if (netTLS.room) { try { netTLS.room.leave(); } catch (e) {} }
+      netTLS.room = null;
+      netTLS.active = false;
+      netTLS.puppetsById.clear();
+    },
+
+    send(type, data) {
+      if (netTLS.active && netTLS.room) netTLS.room.send(type, data);
+    },
+
+    sendHit(trueId, dmg) {
+      netTLS.send("hit", { id: trueId, dmg: Math.round(dmg * 10) / 10 });
+    },
+
+    spawnPuppetUnit(key, id, x, y) {
+      const remote = state.teams[1];
+      const def = remote && remote.faction.units[key];
+      if (!remote || !def) return null;
+      const u = makeUnit(remote, def, x, y);
+      u.id = id + NET_ID_OFFSET;
+      netTLS.puppetsById.set(u.id, u);
+      return u;
+    },
+    spawnPuppetBuilding(key, id, x, y) {
+      const remote = state.teams[1];
+      const def = remote && remote.faction.buildings[key];
+      if (!remote || !def) return null;
+      const b = makeBuilding(remote, def, x, y, null, true);
+      b.id = id + NET_ID_OFFSET;
+      netTLS.puppetsById.set(b.id, b);
+      if (def.kind === "hq") remote.hqId = b.id;
+      return b;
+    },
+
+    onRoster(d) {
+      if (!d) return;
+      (d.units || []).forEach((u) => netTLS.spawnPuppetUnit(u.key, u.id, u.x, u.y));
+      (d.buildings || []).forEach((b) => netTLS.spawnPuppetBuilding(b.key, b.id, b.x, b.y));
+    },
+
+    onSpawn(d) {
+      if (!d) return;
+      if (d.kind === "building") netTLS.spawnPuppetBuilding(d.key, d.id, d.x, d.y);
+      else netTLS.spawnPuppetUnit(d.key, d.id, d.x, d.y);
+    },
+
+    onSnapshot(d) {
+      if (!d) return;
+      (d.u || []).forEach(([id, x, y, hp, shield]) => {
+        const u = netTLS.puppetsById.get(id + NET_ID_OFFSET);
+        if (!u || u.dead) return;
+        u._nx = x; u._ny = y;
+        u.hp = hp; u.shield = shield || 0;
+      });
+      (d.b || []).forEach(([id, x, y, hp]) => {
+        const b = netTLS.puppetsById.get(id + NET_ID_OFFSET);
+        if (!b || b.dead) return;
+        b.x = x; b.y = y; b.hp = hp;
+      });
+    },
+
+    onNodes(d) {
+      if (!d || !d.n) return;
+      d.n.forEach(([idx, tag, hp]) => {
+        const n = state.nodes[idx];
+        if (!n) return;
+        n.team = tag === -1 ? null : state.teams[1 - tag];
+        n.hp = hp;
+      });
+    },
+
+    onHit(d) {
+      if (!d) return;
+      const target = state.units.find((u) => u.id === d.id) || state.buildings.find((b) => b.id === d.id);
+      if (target) applyDamage(target, d.dmg, null, state.teams[1]);
+    },
+
+    onDeath(d) {
+      if (!d) return;
+      const thing = netTLS.puppetsById.get(d.id + NET_ID_OFFSET);
+      if (thing) netTLS.puppetDie(thing);
+    },
+
+    puppetDie(thing) {
+      if (thing.dead) return;
+      thing.dead = true;
+      boomFx(thing.x, thing.y, thing.team.faction.color, (thing.def.r || 12) * (thing.kind === "unit" ? 1 : 1.4));
+      Sfx.boom(thing.kind !== "unit");
+      if (state.selection.includes(thing)) { state.selection = state.selection.filter((s) => s !== thing); state.selVersion++; }
+    },
+
+    onElim() {
+      const remote = state.teams[1];
+      if (!remote || remote.eliminated) return;
+      remote.eliminated = true;
+      for (const u of state.units) if (u.team === remote) u.dead = true;
+      for (const b of state.buildings) if (b.team === remote) b.dead = true;
+      log(`☠ ${remote.faction.name} eliminated`);
+      Sfx.boom(true);
+      const pt = playerTeam();
+      if (!enemyTeams().length) endGame(pt);
+    },
+
+    onPeerGone(msg) {
+      if (netTLS.gone || !netTLS.active) return;
+      netTLS.gone = true;
+      log(msg);
+      if (state.phase === "playing") netTLS.onElim();
+    },
+
+    tick(dt) {
+      if (!netTLS.active || state.phase !== "playing") return;
+      for (const thing of netTLS.puppetsById.values()) {
+        if (thing.dead || thing.kind !== "unit" || thing._nx == null) continue;
+        const k = Math.min(1, dt * 10);
+        thing.x += (thing._nx - thing.x) * k;
+        thing.y += (thing._ny - thing.y) * k;
+      }
+      netTLS.snapAcc += dt;
+      netTLS.nodeAcc += dt;
+      if (netTLS.snapAcc >= 0.12) {
+        netTLS.snapAcc = 0;
+        const pTeam = state.teams[0];
+        netTLS.send("snapshot", {
+          u: teamUnits(pTeam).map((x) => [x.id, Math.round(x.x), Math.round(x.y), Math.round(x.hp), Math.round(x.shield || 0)]),
+          b: teamBuildings(pTeam).map((x) => [x.id, Math.round(x.x), Math.round(x.y), Math.round(x.hp)]),
+        });
+      }
+      if (netTLS.nodeAcc >= 1) {
+        netTLS.nodeAcc = 0;
+        netTLS.send("nodes", {
+          n: state.nodes.map((node, idx) => {
+            const tag = node.team === state.teams[0] ? 0 : node.team === state.teams[1] ? 1 : -1;
+            return [idx, tag, Math.round(node.hp)];
+          }),
+        });
+      }
+    },
+  };
+
+  function startOnlineGame(myFid, peerFid, mySlot, seed) {
+    state.units = [];
+    state.buildings = [];
+    state.projectiles = [];
+    state.beams = [];
+    state.particles = [];
+    state.commandFx = [];
+    state.decals = [];
+    state.selection = [];
+    state.selVersion++;
+    state.placing = null;
+    state.armed = null;
+    state.time = 0;
+    state.paused = false;
+    state.result = null;
+    state.stats = { kills: 0, losses: 0 };
+    state.alarmT = -99;
+
+    // shared seed so both clients see the same terrain/mountains/rocks
+    const origRandom = Math.random;
+    Math.random = mulberry32(seed);
+    try { initWorld(); } finally { Math.random = origRandom; }
+
+    state.setup = { difficulty: "normal", enemyCount: 1, mapReveal: state.opts.mapReveal, online: true };
+
+    const pTeam = makeTeam(0, myFid, false, null);
+    const rTeam = makeTeam(1, peerFid, false, null);
+    rTeam.isRemote = true;
+    pTeam.physIdx = mySlot;
+    rTeam.physIdx = 1 - mySlot;
+    state.teams = [pTeam, rTeam];
+
+    const myPos = HQ_POS[pTeam.physIdx];
+    const myHq = makeBuilding(pTeam, pTeam.faction.buildings.hq, myPos.x, myPos.y, null, true);
+    pTeam.hqId = myHq.id;
+    const toC = Math.atan2(CENTER.y - myPos.y, CENTER.x - myPos.x);
+    for (let k = 0; k < 3; k++) {
+      const a = toC + (k - 1) * 0.7;
+      const u = makeUnit(pTeam, pTeam.faction.units.worker, myPos.x + Math.cos(a) * 78, myPos.y + Math.sin(a) * 78);
+      const n = findMatterNode(u);
+      if (n) orderHarvest([u], n);
+    }
+    for (let k = 0; k < 2; k++) {
+      const a = toC + (k === 0 ? -0.25 : 0.25);
+      makeUnit(pTeam, pTeam.faction.units.basic, myPos.x + Math.cos(a) * 110, myPos.y + Math.sin(a) * 110);
+    }
+
+    state.cam.x = clamp(myHq.x - W / 2, 0, WORLD_W - W);
+    state.cam.y = clamp(myHq.y - H / 2, 0, WORLD_H - H);
+    state.best = Number(api.getHighScore(GAME_ID) || 0);
+
+    if (el.log) el.log.innerHTML = "";
+    log("Uplink established. The Hollow is contested.");
+    log(`Online 1v1 vs ${FACTIONS[peerFid].name}${netTLS.room ? " — room " + netTLS.room.code : ""}`);
+    if (el.objective) {
+      el.objective.innerHTML = `Destroy the enemy command structure: <b style="color:${FACTIONS[peerFid].color}">${FACTIONS[peerFid].name}</b>. Protect your own. Opponent: human commander.`;
+    }
+    const fchip = document.getElementById("tls-faction");
+    if (fchip) {
+      fchip.textContent = FACTIONS[myFid].short;
+      fchip.style.color = FACTIONS[myFid].color;
+    }
+
+    refreshVision();
+    state.phase = "playing";
+    showOverlay(false);
+    renderActionsPanel();
+    renderSelPanel();
+    canvas.focus();
+  }
+
   function endGame(winnerTeam) {
     if (state.phase !== "playing") return;
+    if (netTLS.active) netTLS.shutdown();
     state.phase = "over";
     state.result = { winner: winnerTeam };
     const pt = playerTeam();
@@ -4233,6 +4565,8 @@
 
   window.__TLS = {
     get state() { return state; },
+    netTLS,
+    startOnlineGame,
     start: (f = "humans", e, diffKey = "normal", count) => {
       const enemies = Array.isArray(e) ? e : e ? [e] : rollEnemyFactions(f, count || 1);
       startGame(f, enemies, diffKey);

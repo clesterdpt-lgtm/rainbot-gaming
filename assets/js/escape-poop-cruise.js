@@ -44,6 +44,9 @@
     infection: $("hud-infection"),
     infectionFill: $("infection-fill"),
     status: $("hud-status"),
+    centerReload: $("hud-reload"),
+    centerReloadTime: $("hud-reload-time"),
+    centerLowAmmo: $("hud-low-ammo"),
     vignette: $("crud-vignette"),
     mobileControls: $("mobile-controls"),
     minimap: $("minimap"),
@@ -126,6 +129,9 @@
     totalHits: 0,
     deckStart: 0,
     statusTimer: 0,
+    lowAmmoFlashTimer: 0,
+    lowAmmoCooldown: 0,
+    lastAmmoSig: "",
     high: api.getHighScore(GAME_ID) || 0,
     sound: true,
     weapon: "melee",
@@ -3007,6 +3013,9 @@
     state.stuckTimer = 0;
     state.flowTimer = 0;
     stepAudio.timer = 0;
+    state.lowAmmoFlashTimer = 0;
+    state.lowAmmoCooldown = 0;
+    state.lastAmmoSig = ammoSignature();
     state.deckStart = performance.now();
     state.map = generateMap(level);
 
@@ -3128,9 +3137,97 @@
     if (el.overlay) el.overlay.classList.remove("overlay--show");
   }
 
+  function hideStatus() {
+    if (!el.status) return;
+    el.status.textContent = "";
+    el.status.classList.remove("is-visible");
+    state.statusTimer = 0;
+  }
+
   function setStatus(message, seconds = 3.2) {
-    if (el.status) el.status.textContent = message;
+    if (!message) {
+      hideStatus();
+      return;
+    }
+    if (el.status) {
+      el.status.textContent = message;
+      el.status.classList.add("is-visible");
+    }
     state.statusTimer = seconds;
+  }
+
+  function ammoSignature() {
+    return [
+      state.weapon,
+      state.dartAmmo,
+      state.dartReserve,
+      state.shotgunLoaded,
+      state.shotgunAmmo,
+      state.bombAmmo,
+    ].join(":");
+  }
+
+  function isLowAmmo(weapon = state.weapon) {
+    if (weapon === "dart") {
+      if (state.dartAmmo > 0) return state.dartAmmo <= 2;
+      return state.dartReserve > 0 && state.dartReserve <= 8;
+    }
+    if (weapon === "shotgun") {
+      if (state.shotgunLoaded > 0) return state.shotgunLoaded <= 1;
+      return state.shotgunAmmo > 0 && state.shotgunAmmo <= 2;
+    }
+    if (weapon === "bomb") return state.bombAmmo > 0 && state.bombAmmo <= 1;
+    return false;
+  }
+
+  function lowAmmoMessage(weapon = state.weapon) {
+    if (weapon === "dart") {
+      return state.dartAmmo > 0 ? "Low ammo" : "Mag empty — reload";
+    }
+    if (weapon === "shotgun") {
+      return state.shotgunLoaded > 0 ? "Low ammo" : "Tube empty — reload";
+    }
+    if (weapon === "bomb") return "Last bomb";
+    return "Low ammo";
+  }
+
+  function flashLowAmmoWarning() {
+    if (state.mode !== "playing" || !isLowAmmo()) return;
+    if (state.lowAmmoCooldown > 0 || state.lowAmmoFlashTimer > 0) return;
+    state.lowAmmoFlashTimer = 1.35;
+    state.lowAmmoCooldown = 8;
+    if (el.centerLowAmmo) {
+      el.centerLowAmmo.textContent = lowAmmoMessage();
+      el.centerLowAmmo.hidden = false;
+    }
+  }
+
+  function updateCenterAlerts(dt = 0) {
+    if (el.centerReload) {
+      const reloading = state.mode === "playing" && state.reloadTimer > 0;
+      el.centerReload.hidden = !reloading;
+      if (reloading && el.centerReloadTime) {
+        el.centerReloadTime.textContent = `${Math.max(0.1, state.reloadTimer).toFixed(1)}s`;
+      }
+    }
+
+    if (state.lowAmmoFlashTimer > 0) {
+      state.lowAmmoFlashTimer = Math.max(0, state.lowAmmoFlashTimer - dt);
+      if (state.lowAmmoFlashTimer <= 0 && el.centerLowAmmo) el.centerLowAmmo.hidden = true;
+    }
+    if (state.lowAmmoCooldown > 0) state.lowAmmoCooldown = Math.max(0, state.lowAmmoCooldown - dt);
+
+    if (state.mode === "playing") {
+      const sig = ammoSignature();
+      if (sig !== state.lastAmmoSig) {
+        state.lastAmmoSig = sig;
+        if (isLowAmmo()) flashLowAmmoWarning();
+      }
+    } else if (el.centerLowAmmo) {
+      el.centerLowAmmo.hidden = true;
+      state.lowAmmoFlashTimer = 0;
+      state.lastAmmoSig = "";
+    }
   }
 
   function formatAmmo() {
@@ -3141,8 +3238,9 @@
     return `${state.dartAmmo}/${state.dartReserve}`;
   }
 
-  function updateHud() {
+  function updateHud(dt = 0) {
     syncPlayStateClass();
+    updateCenterAlerts(dt);
     if (el.deck) el.deck.textContent = String(state.level);
     if (el.cures) el.cures.textContent = `${state.cures}/${state.neededCures}`;
     if (el.weapon) el.weapon.textContent = WEAPON_LABELS[state.weapon] || WEAPON_LABELS.dart;
@@ -3640,7 +3738,6 @@
     state.reloadDuration = weapon === "shotgun" ? SHOTGUN_RELOAD_TIME : DART_RELOAD_TIME;
     state.reloadTimer = state.reloadDuration;
     playSound("pickup", { cooldown: 0.25, fallbackKind: "hit", volume: weapon === "shotgun" ? 0.28 : 0.2 });
-    setStatus(weapon === "shotgun" ? `Reloading ${SHOTGUN_DISPLAY_NAME}.` : "Reloading Ivermectin Pistol.");
     return true;
   }
 
@@ -3720,10 +3817,7 @@
   }
 
   function fireDart() {
-    if (state.reloadTimer > 0) {
-      setStatus("Reloading. Keep moving.");
-      return;
-    }
+    if (state.reloadTimer > 0) return;
     if (state.dartCooldown > 0) return;
     if (state.dartAmmo <= 0) {
       if (state.dartReserve <= 0) {
@@ -3754,10 +3848,7 @@
   }
 
   function fireShotgun() {
-    if (state.reloadTimer > 0) {
-      setStatus("Reloading. Keep moving.");
-      return;
-    }
+    if (state.reloadTimer > 0) return;
     if (!state.shotgunUnlocked) {
       playSound("damage", { cooldown: 0.35, fallbackKind: "bad", volume: 0.22 });
       setStatus(`Find the ${SHOTGUN_DISPLAY_NAME} pickup first.`);
@@ -4801,13 +4892,7 @@
     }
     if (state.statusTimer > 0) {
       state.statusTimer -= dt;
-      if (state.statusTimer <= 0 && el.status) {
-        el.status.textContent = exitUnlocked()
-          ? "Find the stairwell door."
-          : bossesRemaining() > 0 && state.cures >= state.neededCures
-            ? `Cure the ${state.bossName || "boss"} to unlock the stairwell.`
-            : "Cure passengers, reload, and keep your distance.";
-      }
+      if (state.statusTimer <= 0) hideStatus();
     }
   }
 
@@ -4919,7 +5004,7 @@
       updateWeapon(dt);
       updateSpeeches(dt);
       updateFx(dt);
-      updateHud();
+      updateHud(dt);
       return;
     }
     movePlayer(dt);
@@ -4935,7 +5020,7 @@
     updateAmbience(dt);
     updateMinimap(dt);
     state.score += dt * (state.level * 2);
-    updateHud();
+    updateHud(dt);
   }
 
   function renderLoop(now) {
@@ -5297,7 +5382,7 @@
     camera.position.set(player.x, EYE_Y, player.z);
     updateExitDoor();
     updateHud();
-    if (el.status) el.status.textContent = "Click start, then click the canvas for mouse look.";
+    setStatus("Click start, then click the canvas for mouse look.", 0);
     bindControls();
     bindMobileControls();
     bindButtons();
@@ -5308,7 +5393,7 @@
   }
 
   async function init() {
-    if (el.status) el.status.textContent = "Loading cruise textures...";
+    setStatus("Loading cruise textures...", 0);
     await waitForTextureLoads();
     bootGame();
   }

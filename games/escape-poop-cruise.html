@@ -163,12 +163,97 @@
       font-weight: 900;
       left: 50%;
       max-width: min(430px, calc(100% - 94px));
+      opacity: 0;
       overflow: hidden;
       padding: 8px 12px;
+      pointer-events: none;
       position: absolute;
       text-overflow: ellipsis;
       transform: translateX(-50%);
+      transition: opacity 180ms ease;
       white-space: nowrap;
+    }
+
+    .poop-status.is-visible {
+      opacity: 1;
+    }
+
+    .poop-center-hud {
+      align-items: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      justify-content: center;
+      left: 50%;
+      pointer-events: none;
+      position: absolute;
+      top: 54%;
+      transform: translate(-50%, -50%);
+      width: min(92%, 420px);
+      z-index: 7;
+    }
+
+    .poop-center-hud__reload,
+    .poop-center-hud__low-ammo {
+      animation: poop-center-pop 220ms ease;
+      border-radius: 12px;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.42);
+      font-family: var(--font-display);
+      letter-spacing: 0.04em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .poop-center-hud__reload {
+      background: rgba(2, 5, 10, 0.82);
+      border: 1px solid rgba(46, 224, 255, 0.42);
+      color: #fff;
+      display: grid;
+      gap: 4px;
+      min-width: clamp(148px, 24cqw, 220px);
+      padding: clamp(10px, 1.8cqw, 16px) clamp(14px, 2.4cqw, 22px);
+    }
+
+    .poop-center-hud__reload span {
+      display: block;
+      line-height: 1;
+    }
+
+    .poop-center-hud__reload-label {
+      color: #2ee0ff;
+      font-size: clamp(16px, 2.8cqw, 26px);
+    }
+
+    .poop-center-hud__reload-time {
+      color: rgba(247, 251, 255, 0.78);
+      font-family: var(--font-mono);
+      font-size: clamp(11px, 1.5cqw, 14px);
+      font-weight: 800;
+    }
+
+    .poop-center-hud__low-ammo {
+      background: rgba(42, 8, 12, 0.86);
+      border: 1px solid rgba(255, 46, 136, 0.52);
+      color: #ffd43b;
+      font-size: clamp(14px, 2.4cqw, 22px);
+      padding: clamp(8px, 1.4cqw, 12px) clamp(14px, 2.2cqw, 20px);
+    }
+
+    .poop-center-hud__low-ammo[hidden],
+    .poop-center-hud__reload[hidden] {
+      display: none !important;
+    }
+
+    @keyframes poop-center-pop {
+      from {
+        opacity: 0;
+        transform: scale(0.94) translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
     }
 
     .poop-minimap {
@@ -463,6 +548,14 @@
 
             <div class="poop-reticle" aria-hidden="true"></div>
 
+            <div class="poop-center-hud" aria-live="polite">
+              <div class="poop-center-hud__reload" id="hud-reload" hidden>
+                <span class="poop-center-hud__reload-label">Reloading</span>
+                <span class="poop-center-hud__reload-time" id="hud-reload-time"></span>
+              </div>
+              <div class="poop-center-hud__low-ammo" id="hud-low-ammo" hidden>Low ammo</div>
+            </div>
+
             <div class="poop-meter">
               <div class="poop-meter__row">
                 <span>Infection meter</span>
@@ -575,7 +668,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260703-slopwire-merge-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/escape-poop-cruise.js?v=20260704-minimap-progression-1"></script>
+  <script src="../assets/js/escape-poop-cruise.js?v=20260704-hud-alerts-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

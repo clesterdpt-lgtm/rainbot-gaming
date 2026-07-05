@@ -3444,6 +3444,7 @@ function initGameEscapeMenu() {
     document.querySelector(".game-stage") ||
     document.querySelector("main");
   if (!playSurface) return;
+  playSurface.classList.add("rb-escape-host");
 
   const menuButton = document.createElement("button");
   menuButton.type = "button";
@@ -3458,7 +3459,7 @@ function initGameEscapeMenu() {
   backdrop.id = "rb-escape-menu";
   backdrop.hidden = true;
   backdrop.setAttribute("role", "dialog");
-  backdrop.setAttribute("aria-modal", "true");
+  backdrop.setAttribute("aria-modal", "false");
   backdrop.setAttribute("aria-labelledby", "rb-escape-menu-title");
   backdrop.innerHTML = `
     <div class="rb-escape-menu__panel">

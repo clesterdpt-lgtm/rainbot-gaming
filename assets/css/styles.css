@@ -1414,6 +1414,10 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 .fs-btn:hover { background: rgba(0, 0, 0, 0.72); }
 .fs-btn:active { transform: scale(0.92); }
 
+.rb-escape-host {
+  position: relative;
+}
+
 .rb-escape-btn {
   align-items: center;
   background: rgba(0, 0, 0, 0.52);
@@ -1449,7 +1453,7 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   inset: 0;
   justify-content: center;
   padding: 18px;
-  position: fixed;
+  position: absolute;
   z-index: 10050;
 }
 .rb-escape-menu[hidden] { display: none; }
@@ -1460,9 +1464,9 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56);
-  max-width: calc(100dvw - 28px);
+  max-width: 100%;
   padding: 22px;
-  width: 360px;
+  width: min(360px, 100%);
 }
 .rb-escape-menu__eyebrow {
   color: var(--accent-2);
@@ -1528,9 +1532,6 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
 }
 
 body.rb-game-maxed {
-  overflow: hidden;
-}
-body.rb-escape-menu-open {
   overflow: hidden;
 }
 

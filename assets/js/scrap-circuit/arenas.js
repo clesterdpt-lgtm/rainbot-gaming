@@ -595,7 +595,7 @@
       fog: { color: 0x4e6a70, near: 26, far: 115 },
       hemi: { sky: 0x9ab8bc, ground: 0x22303a, intensity: 0.75 },
       sun: { color: 0xbfe8e0, intensity: 0.6, x: 20, y: 100, z: 20 },
-      bounds: { hw: 92, hd: 92 },
+      bounds: { hw: 98, hd: 98 },
     });
     const gravel = T().mat("arena.rooftop.gravel", { color: 0x5d6167 });
     const tower = T().mat("arena.rooftop.tower", { color: 0x39424e });
@@ -607,46 +607,61 @@
     // The "ground" here is the abyss — a dark street plane far below.
     ground(a, tower, -18);
     // Roof slabs (the playfield): a low tier (y=6) and a high tier (y=11).
-    // Layout graph: center <-> west/east/N-high via bridges, west <-> SW,
-    // center <-> E-high via the freight elevator, E-high <-> SE via ramp.
+    // Layout graph: center <-> west/east via bridges, center <-> N-high via a
+    // sliding north span, west <-> SW, center <-> E-high via freight elevator,
+    // E-high <-> SE via ramp. Roofs are ~15% larger than the original layout.
     const roofs = [
-      [0, 0, 34, 30, 6],      // center
-      [-60, -20, 24, 34, 6],  // west
-      [58, -34, 26, 24, 6],   // east
-      [52, 40, 30, 26, 6],    // southeast
-      [-48, 52, 28, 22, 6],   // southwest
-      [-4, -58, 26, 20, 11],  // north high tier
-      [44, 6, 18, 14, 11],    // east high tier
+      [0, 0, 39, 35, 6],       // center
+      [-60, -20, 28, 39, 6],   // west
+      [58, -34, 30, 28, 6],   // east
+      [52, 40, 35, 30, 6],     // southeast
+      [-48, 52, 32, 26, 6],   // southwest
+      [-4, -60, 30, 24, 11],  // north high tier
+      [44, 6, 21, 17, 11],    // east high tier
     ];
     roofs.forEach(([x, z, w, d, y]) => {
       deck(a, w, d, y, gravel, x, z, y); // thick slab reads as a building
       a.minimap.push({ x, z, hw: w / 2, hd: d / 2, color: y > 6 ? "#6e7a86" : "#4e5866" });
     });
     // Everything that isn't a surface is the abyss.
-    a.fallZones.push({ x: 0, z: 0, hw: 92, hd: 92 });
+    a.fallZones.push({ x: 0, z: 0, hw: 98, hd: 98 });
 
     // Helipads (visual targets on the roofs).
-    [[0, 8, 6], [52, 44, 6], [-60, -30, 6], [-4, -58, 11], [44, 6, 11]].forEach(([x, z, y]) => {
+    [[0, 8, 6], [52, 44, 6], [-60, -30, 6], [-4, -60, 11], [44, 6, 11]].forEach(([x, z, y]) => {
       mesh(a, new THREE.CylinderGeometry(5.5, 5.5, 0.2, 12), heli, x, y + 0.12, z);
       mesh(a, new THREE.BoxGeometry(4.4, 0.22, 0.9), glow, x, y + 0.28, z);
     });
 
-    // Crane bridges connecting roofs (narrow drivable beams, ends overlap
-    // their roofs so there are no seam gaps).
+    // Fixed crane bridges (narrow drivable beams; ends overlap their roofs).
     const bridges = [
-      [-32, -12, 32, 6],  // center <-> west
-      [31, -16, 30, 6],   // center <-> east
-      [-2, -31, 8, 34],   // center <-> north approach
-      [-54, 19, 6, 46],   // west <-> southwest
+      [-32, -12, 36, 7],  // center <-> west
+      [33, -16, 34, 7],   // center <-> east
+      [-54, 19, 8, 52],   // west <-> southwest
     ];
     bridges.forEach(([x, z, w, d]) => {
       deck(a, w, d, 6, craneM, x, z, 1.2);
       a.minimap.push({ x, z, hw: w / 2, hd: d / 2, color: "#c98a2e" });
     });
+
+    // SLIDING NORTH SPAN: sweeps east/west so the north-high tier is reachable
+    // from center even when the fixed bridge mouth and ramp lip don't line up.
+    const northBridge = {
+      rect: { type: "rect", x: -2, z: -33, hw: 5, hd: 19, y: 6 },
+      mesh: null,
+      baseX: -2,
+      slideAmp: 13,
+      slideHz: 0.34,
+      t: 0.42,
+    };
+    a.heights.push(northBridge.rect);
+    northBridge.mesh = box(a, 10, 1.2, 38, craneM, northBridge.baseX, 5.4, -33);
+    a.minimap.push({ x: northBridge.baseX, z: -33, hw: 5, hd: 19, color: "#c98a2e" });
+
     // Ramps to the high tier (overlap the low surface; height sampling
     // takes the tallest surface within step range, so the climb is smooth).
-    ramp(a, 7, 14, 11, 6, "z", craneM, -4, -41); // N-high edge (z=-48) down to north bridge
-    ramp(a, 7, 14, 11, 6, "z", craneM, 48, 20);  // E-high edge (z=13) down to SE roof (z=27)
+    ramp(a, 8, 16, 11, 6, "z", craneM, -4, -43); // N-high edge down to north span
+    ramp(a, 8, 16, 11, 6, "z", craneM, 50, 22); // E-high edge down to SE roof
+
     // Crane towers as landmarks rising from the street far below.
     [[-30, -30], [24, 24]].forEach(([x, z]) => {
       mesh(a, new THREE.BoxGeometry(2.4, 30, 2.4), craneM, x, -3, z);
@@ -656,11 +671,11 @@
 
     // FREIGHT ELEVATOR: platform sliding between the center roof (y=6)
     // and the east high tier (y=11); its ends touch both roofs.
-    const elevRect = { type: "rect", x: 26, z: 6, hw: 9, hd: 5, y: 6 };
+    const elevRect = { type: "rect", x: 26, z: 6, hw: 10, hd: 6, y: 6 };
     a.heights.push(elevRect);
-    const elevMesh = box(a, 18, 1.0, 10, craneM, 26, 5.5, 6);
+    const elevMesh = box(a, 20, 1.0, 12, craneM, 26, 5.5, 6);
     mesh(a, new THREE.BoxGeometry(0.8, 14, 0.8), tower, 26, 4, 11.6);
-    a.minimap.push({ x: 26, z: 6, hw: 9, hd: 5, color: "#c98a2e" });
+    a.minimap.push({ x: 26, z: 6, hw: 10, hd: 6, color: "#c98a2e" });
     let elevT = 0;
     a.update = (dt) => {
       elevT += dt;
@@ -668,10 +683,15 @@
       const y = 6 + phase * 5;
       elevRect.y = y;
       elevMesh.position.y = y - 0.5;
+
+      northBridge.t += dt;
+      const slideX = northBridge.baseX + Math.sin(northBridge.t * Math.PI * 2 * northBridge.slideHz) * northBridge.slideAmp;
+      northBridge.rect.x = slideX;
+      if (northBridge.mesh) northBridge.mesh.position.x = slideX;
     };
 
     // AC units and antennas as roof clutter.
-    [[-10, 10, 6], [12, -8, 6], [-66, -6, 6], [50, -40, 6], [44, 52, 6], [-54, 58, 6], [4, -62, 11]].forEach(([x, z, y]) => {
+    [[-10, 10, 6], [12, -8, 6], [-66, -6, 6], [50, -40, 6], [44, 52, 6], [-54, 58, 6], [4, -64, 11]].forEach(([x, z, y]) => {
       const m = box(a, 3, 2, 3, acM, x, y + 1, z);
       destructible(a, m, x, z, 1.7, 1.7, 10, { score: 15 });
     });
@@ -683,9 +703,9 @@
     // Spawns on the roofs (not a circle — roofs only).
     a.spawns = [
       { x: 0, z: 8, h: Math.PI }, { x: -60, z: -20, h: 1.2 }, { x: 58, z: -34, h: 2.4 },
-      { x: 52, z: 40, h: -1.4 }, { x: -48, z: 52, h: -0.5 }, { x: -4, z: -58, h: 3.0 },
+      { x: 52, z: 40, h: -1.4 }, { x: -48, z: 52, h: -0.5 }, { x: -4, z: -60, h: 3.0 },
     ];
-    scatterPickups(a, [[0, -8], [-60, -8], [58, -30], [52, 32], [-48, 46], [-4, -52], [44, 6], [-32, -12], [-54, 19], [26, 6]]);
+    scatterPickups(a, [[0, -8], [-60, -8], [58, -30], [52, 32], [-48, 46], [-4, -54], [44, 6], [-32, -12], [-54, 19], [26, 6]]);
     return a;
   }
 

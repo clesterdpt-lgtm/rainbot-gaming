@@ -2734,7 +2734,8 @@ body.arcade-home::before {
 }
 
 .nav__links {
-  justify-content: center;
+  display: flex;
+  justify-content: flex-start;
   gap: clamp(14px, 2vw, 34px);
   min-width: 0;
 }

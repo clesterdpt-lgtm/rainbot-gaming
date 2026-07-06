@@ -332,9 +332,6 @@ function renderNav(state = RB.state) {
   const proBadge = state.isPro
     ? `<span class="nav__pro-state">PRO ACTIVE</span>`
     : "";
-  const syncBadge = backendState.user
-    ? `<span class="nav__pro-state nav__pro-state--sync">SYNC ON</span>`
-    : "";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
   const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/") || path.endsWith("/videos.html") || path.includes("/videos/");
@@ -374,11 +371,10 @@ function renderNav(state = RB.state) {
     </form>
     <div class="nav__actions">
       ${proBadge}
-      ${syncBadge}
       ${
         state.isPro
           ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-          : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro</a>`
+          : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Go Pro</a>`
       }
       <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
     </div>

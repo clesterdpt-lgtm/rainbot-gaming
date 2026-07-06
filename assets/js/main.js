@@ -558,6 +558,13 @@ function bindSearch(root) {
   let currentResults = [];
   let activeIndex = -1;
 
+  const focusSearchInput = () => {
+    window.setTimeout(() => {
+      if (!form.classList.contains("is-open")) return;
+      input.focus({ preventScroll: true });
+    }, 0);
+  };
+
   const setSearchOpen = (open) => {
     form.classList.toggle("is-open", open);
     if (toggle) {
@@ -565,7 +572,7 @@ function bindSearch(root) {
       toggle.setAttribute("aria-label", open ? "Close search" : "Open search");
     }
     if (open) {
-      requestAnimationFrame(() => input.focus({ preventScroll: true }));
+      focusSearchInput();
     } else {
       input.blur();
       hideResults();
@@ -667,11 +674,24 @@ function bindSearch(root) {
     renderResults(querySearchIndex(query));
   };
 
+  toggle?.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+
   toggle?.addEventListener("click", (event) => {
     event.preventDefault();
     const open = !form.classList.contains("is-open");
     setSearchOpen(open);
-    if (open) runSearch();
+    if (open) {
+      focusSearchInput();
+      runSearch();
+    }
+  });
+
+  form.addEventListener("click", (event) => {
+    if (!form.classList.contains("is-open")) return;
+    if (event.target === toggle) return;
+    focusSearchInput();
   });
 
   if (!rbSearchDocBound) {

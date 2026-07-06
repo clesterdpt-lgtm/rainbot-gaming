@@ -73,6 +73,11 @@ body::before {
   justify-content: space-between;
   gap: 16px;
 }
+
+.nav:has(.nav__search.is-open),
+.nav:has(.nav__search-results:not([hidden])) {
+  z-index: 10120;
+}
 .nav__brand {
   font-family: var(--font-display);
   font-size: 20px;
@@ -2710,6 +2715,11 @@ body.arcade-home::before {
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 
+.nav:has(.nav__search.is-open),
+.nav:has(.nav__search-results:not([hidden])) {
+  z-index: 10120;
+}
+
 #nav-slot {
   width: 100%;
   max-width: none;
@@ -2772,7 +2782,7 @@ body.arcade-home::before {
   justify-self: end;
   position: relative;
   width: 42px;
-  z-index: 40;
+  z-index: 2;
 }
 
 .nav__search-wrap:has(.nav__search.is-open) {
@@ -2854,7 +2864,7 @@ body.arcade-home::before {
   position: absolute;
   right: 0;
   top: 100%;
-  z-index: 50;
+  z-index: 12;
 }
 
 .nav__search-result {

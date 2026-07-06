@@ -1282,7 +1282,8 @@
       text-transform: uppercase;
     }
 
-    .uh-minimap {
+    .uh-minimap,
+    .uh-minimap-btn {
       aspect-ratio: 1;
       background:
         radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 46%),
@@ -1291,9 +1292,28 @@
       border: 4px solid rgba(0, 0, 0, 0.7);
       border-radius: 50%;
       box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 24px rgba(0, 0, 0, 0.6);
+      cursor: pointer;
       overflow: hidden;
+      padding: 0;
       position: relative;
+      touch-action: manipulation;
       width: clamp(74px, 12cqw, 130px);
+    }
+
+    .uh-minimap-btn:hover {
+      box-shadow: 0 0 0 2px rgba(46, 224, 255, 0.45), inset 0 0 24px rgba(0, 0, 0, 0.6);
+    }
+
+    .uh-minimap-btn::after {
+      color: rgba(216, 251, 255, 0.82);
+      content: "MAP";
+      font-family: var(--font-display);
+      font-size: 9px;
+      left: 50%;
+      letter-spacing: 0.08em;
+      position: absolute;
+      top: 8px;
+      transform: translateX(-50%);
     }
 
     .uh-mini-dot {
@@ -1329,7 +1349,7 @@
     /* Objective banner (bottom-center, above the hotbar). */
     .uh-objective {
       position: absolute;
-      bottom: clamp(74px, 13cqw, 116px);
+      bottom: clamp(118px, 18cqw, 150px);
       left: 50%;
       transform: translateX(-50%);
       align-items: center;
@@ -1626,6 +1646,113 @@
       text-transform: uppercase;
     }
 
+    /* City map overlay (pauses while open). */
+    .uh-map {
+      align-items: center;
+      background: rgba(3, 6, 12, 0.82);
+      backdrop-filter: blur(3px);
+      display: flex;
+      inset: 0;
+      justify-content: center;
+      padding: 14px;
+      position: absolute;
+      z-index: 10;
+    }
+
+    .uh-map[hidden] {
+      display: none;
+    }
+
+    .uh-map__panel {
+      background: linear-gradient(180deg, rgba(10, 14, 22, 0.98), rgba(6, 8, 14, 0.98));
+      border: 1px solid rgba(46, 224, 255, 0.34);
+      border-radius: 12px;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+      display: grid;
+      gap: 10px;
+      max-height: 100%;
+      max-width: min(100%, 560px);
+      overflow-y: auto;
+      padding: clamp(12px, 2cqw, 16px);
+      width: 100%;
+    }
+
+    .uh-map__head {
+      align-items: start;
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    .uh-map__head strong {
+      color: #2ee0ff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(14px, 2cqw, 18px);
+      text-transform: uppercase;
+    }
+
+    .uh-map__head span {
+      color: rgba(234, 247, 255, 0.72);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+
+    .uh-map__canvas-wrap {
+      background: #05070d;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #map-canvas {
+      display: block;
+      height: auto;
+      width: 100%;
+    }
+
+    .uh-map__legend {
+      display: grid;
+      gap: 7px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .uh-map__legend li {
+      align-items: start;
+      color: rgba(234, 247, 255, 0.78);
+      display: grid;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      gap: 2px 8px;
+      grid-template-columns: auto 1fr;
+      line-height: 1.35;
+    }
+
+    .uh-map__legend b {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 11px;
+    }
+
+    .uh-map__legend i {
+      color: #ffd43b;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .uh-map__swatch {
+      border-radius: 50%;
+      display: inline-block;
+      height: 10px;
+      margin-top: 3px;
+      width: 10px;
+    }
+
     .unhinged-howto-list {
       display: grid;
       gap: 9px;
@@ -1654,16 +1781,22 @@
       color: var(--accent-3);
     }
 
-    /* Touch controls: hidden for desktop mouse, shown on touch OR narrow screens
-       (pointer:coarse alone mis-detects in some browsers and emulators). */
-    .rb-touch-layer--unhinged { display: none; }
-
-    @media (hover: none) and (pointer: coarse) {
-      .rb-touch-layer--unhinged { display: block; }
+    /* Action buttons stay on-canvas in minimized view; touch stick only on touch/narrow. */
+    .canvas-wrap--unhinged .rb-touch-layer--unhinged {
+      display: block;
+      pointer-events: none;
     }
 
-    @media (max-width: 820px) {
-      .rb-touch-layer--unhinged { display: block; }
+    .canvas-wrap--unhinged .rb-touch-layer--unhinged .rb-touch-zone {
+      display: none;
+      pointer-events: none;
+    }
+
+    @media (hover: none) and (pointer: coarse), (max-width: 820px) {
+      .canvas-wrap--unhinged .rb-touch-layer--unhinged .rb-touch-zone {
+        display: block;
+        pointer-events: auto;
+      }
     }
 
     /* Invisible floating thumb-stick on the left half. */
@@ -1678,17 +1811,26 @@
       opacity: 0.5;
     }
 
-    /* On-canvas touch action buttons (bottom-right cluster: ACT / ATTACK / BAG). */
+    /* On-canvas action buttons (bottom-right: ACT / ATTACK / BAG / MAP). */
     .rb-touch-layer--unhinged .rb-touch-cluster--actions {
       display: grid;
       gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      min-width: 196px;
     }
 
     .rb-touch-layer--unhinged .rb-touch-cluster--actions .rb-touch-btn {
-      font-size: 13px;
-      height: 54px;
-      min-width: 94px;
+      font-size: 12px;
+      height: 50px;
+      min-width: 88px;
       opacity: 0.96;
+      pointer-events: auto;
+    }
+
+    .rb-touch-btn--map {
+      background: rgba(46, 224, 255, 0.16);
+      border-color: rgba(46, 224, 255, 0.45);
+      color: #d8fbff;
     }
 
     /* Reflow the HUD when the play area is narrow (phones / narrow windows).
@@ -2127,7 +2269,9 @@
             <!-- Top-right: clock + phase + minimap dot -->
             <div class="uh-topright">
               <div class="uh-clock unhinged-hud-panel"><b id="hud-clock">8:00 AM</b><span class="uh-phase-pill" id="hud-phase-pill">Day 1</span></div>
-              <div class="uh-minimap"><span class="uh-mini-dot" id="hud-mini-player"></span></div>
+              <button class="uh-minimap-btn" id="btn-map" type="button" aria-label="Open city map">
+                <span class="uh-mini-dot" id="hud-mini-player"></span>
+              </button>
               <div class="uh-district unhinged-hud-panel" id="hud-district-name">Open Block</div>
             </div>
 
@@ -2139,6 +2283,23 @@
 
             <!-- Bottom-center hotbar (slots 1-4, filled from JS) -->
             <div class="uh-hotbar" id="hud-hotbar"></div>
+          </div>
+
+          <!-- City map overlay -->
+          <div class="uh-map" id="map-overlay" hidden>
+            <div class="uh-map__panel">
+              <div class="uh-map__head">
+                <div>
+                  <strong>City Map</strong>
+                  <span id="map-hint">Game paused while the map is open.</span>
+                </div>
+                <button class="btn btn--ghost" id="map-close" type="button">Close</button>
+              </div>
+              <div class="uh-map__canvas-wrap">
+                <canvas id="map-canvas" width="520" height="392" aria-label="City map"></canvas>
+              </div>
+              <ul class="uh-map__legend" id="map-legend"></ul>
+            </div>
           </div>
 
           <!-- Bag / loadout overlay -->
@@ -2164,6 +2325,7 @@
               <button class="rb-touch-btn rb-touch-btn--accent" id="touch-act" type="button" aria-label="Perform for tips">ACT</button>
               <button class="rb-touch-btn rb-touch-btn--primary" id="touch-attack" type="button" aria-label="Attack">ATTACK</button>
               <button class="rb-touch-btn rb-touch-btn--yellow" id="touch-bag" type="button" aria-label="Open bag">BAG</button>
+              <button class="rb-touch-btn rb-touch-btn--map" id="touch-map" type="button" aria-label="Open city map">MAP</button>
             </div>
           </div>
 
@@ -2201,7 +2363,7 @@
             <kbd>WASD</kbd> / arrows move<br />
             <kbd>E</kbd> or <kbd>Space</kbd> — <strong>ACT</strong> (perform)<br />
             <kbd>F</kbd> / <kbd>click</kbd> — <strong>ATTACK</strong> (auto-aims)<br />
-            <kbd>B</kbd> open bag · tap item then slot (or drag to a slot)<br />
+            <kbd>B</kbd> bag · <kbd>M</kbd> city map (pauses) · tap item then slot<br />
             <kbd>1</kbd>–<kbd>4</kbd> switch equipped item<br />
             <kbd>Esc</kbd> pause · <kbd>⛶</kbd> (top-right) max screen
           </p>
@@ -2215,6 +2377,7 @@
           <ul class="unhinged-howto-list">
             <li><strong>Earn by day.</strong> Stand near people and tap <strong>ACT</strong> to perform for tips.</li>
             <li><strong>Collect &amp; equip props.</strong> Grab cones, a boombox, a plunger and more, open the <strong>BAG</strong>, tap an item, then tap the slot (1-4) where you want it. The equipped item changes what ACT and ATTACK do (a cone earns tips as a hat, or throws as a weapon).</li>
+            <li><strong>Study the block.</strong> Tap <strong>MAP</strong> or the round minimap (or press <strong>M</strong>) to open the city map — the game pauses while you check districts, landmarks, and your current objective.</li>
             <li><strong>Shop the Pawn Cart.</strong> Bring cash to the <strong>Pawn Cart</strong> at the kiosk and tap <strong>ACT</strong> to buy gear — a long-reach <strong>Mop Spear</strong>, a zombie-confusing <strong>Rubber Chicken</strong>, then restock cones and peels.</li>
             <li><strong>Mind your stars.</strong> Aggressive moves near regular folks raise your <strong>wanted level</strong> faster when more NPCs see it. Hit 2 stars and the cops chase — lie low or rest at camp to cool down.</li>
             <li><strong>Survive the night.</strong> Tweeker Zombies swarm in — including <strong>Goo Spitters</strong> that lob slowing slime from range. Tap <strong>ATTACK</strong> to clear the wave, then dawn resets the block. Last 3 nights to win.</li>
@@ -2259,7 +2422,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260705-escape-scope-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260706-bag-slots-1"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260706-map-actions-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -71,6 +71,10 @@
     bagGrid: document.getElementById("bag-grid"),
     bagSlotPicker: document.getElementById("bag-slot-picker"),
     bagHint: document.getElementById("bag-hint"),
+    mapOverlay: document.getElementById("map-overlay"),
+    mapCanvas: document.getElementById("map-canvas"),
+    mapLegend: document.getElementById("map-legend"),
+    mapHint: document.getElementById("map-hint"),
     cityLog: document.getElementById("city-log"),
   };
 
@@ -439,6 +443,27 @@
     policeStation: { x: -40, z: -6.5 },
   };
 
+  const MAP_LANDMARKS = [
+    { id: "camp", name: "Camp Row", x: points.camp.x, z: points.camp.z, kind: "safe", blurb: "Lie low and recover." },
+    { id: "kiosk", name: "Pawn Cart", x: points.kiosk.x, z: points.kiosk.z, kind: "shop", blurb: "Buy weapons and restocks by day." },
+    { id: "park", name: "Busk Park", x: points.park.x, z: points.park.z, kind: "earn", blurb: "Big crowds, higher tips and heat." },
+    { id: "busk", name: "Crosswalk Circus", x: points.busk.x, z: points.busk.z, kind: "earn", blurb: "Stunt bits and sidewalk tips." },
+    { id: "alley", name: "Tweeker Alley", x: points.alley.x, z: points.alley.z, kind: "danger", blurb: "Night zombie pressure zone." },
+    { id: "fountain", name: "Fountain Plaza", x: points.fountain.x, z: points.fountain.z, kind: "loot", blurb: "Snacks and pickups." },
+    { id: "cache", name: "Pawn Alley", x: points.cache.x, z: points.cache.z, kind: "loot", blurb: "Scrap, props, and finds." },
+    { id: "police", name: "Police Station", x: points.policeStation.x, z: points.policeStation.z, kind: "danger", blurb: "Heat magnet — avoid when wanted." },
+  ];
+
+  const MAP_KIND_COLORS = {
+    safe: "#75ff92",
+    shop: "#c77dff",
+    earn: "#ffd43b",
+    danger: "#ff6c6c",
+    loot: "#2ee0ff",
+    objective: "#ff9d5c",
+    you: "#2ee0ff",
+  };
+
   const FAVORS = [
     {
       id: "busk-park-crowd",
@@ -616,6 +641,7 @@
     bagOpen: false,
     bagPickItem: null,
     bagSlotPrimed: false,
+    mapOpen: false,
     inventory: {
       cone: 5,
       peel: 2,
@@ -3096,6 +3122,7 @@
       state.cooldowns[key] = 0;
     });
     toggleBag(false);
+    toggleMap(false);
     if (els.overlay) {
       els.overlay.classList.toggle("overlay--show", !autoStart);
     }
@@ -3848,6 +3875,146 @@
     }
   }
 
+  function worldToMap(x, z, width, height) {
+    return {
+      mx: ((x + WORLD.width / 2) / WORLD.width) * width,
+      my: ((z + WORLD.height / 2) / WORLD.height) * height,
+    };
+  }
+
+  function mapObjectiveText() {
+    const favorText = state.phase === "day" ? favorProgressText() : "";
+    if (favorText) return favorText;
+    if (state.phase === "day") {
+      return `Earn $${Math.min(20, Math.floor(state.tasks.buskCash))}/20 before dusk`;
+    }
+    return `Survive — ${Math.max(0, state.waveTarget - state.waveKills)} zombies left`;
+  }
+
+  function renderMapLegend(objectiveLabel) {
+    const host = els.mapLegend;
+    if (!host) return;
+    const favor = activeFavor();
+    const rows = [
+      `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.you}"></span><div><b>You</b> Cyan arrow — current position.</div></li>`,
+      `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.objective}"></span><div><b>Objective</b> <i>${safeText(objectiveLabel)}</i></div></li>`,
+    ];
+    if (favor) {
+      rows.push(
+        `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.objective}"></span><div><b>District favor</b> ${safeText(favor.name)} — ${safeText(favor.intro)}</div></li>`
+      );
+    }
+    MAP_LANDMARKS.forEach((landmark) => {
+      rows.push(
+        `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS[landmark.kind] || "#fff"}"></span><div><b>${safeText(landmark.name)}</b> ${safeText(landmark.blurb)}</div></li>`
+      );
+    });
+    host.innerHTML = rows.join("");
+  }
+
+  function renderMap() {
+    const canvas = els.mapCanvas;
+    if (!canvas) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#0a1018";
+    ctx.fillRect(0, 0, width, height);
+
+    districts.forEach((district) => {
+      const x0 = district.x - district.w / 2;
+      const z0 = district.z - district.h / 2;
+      const p0 = worldToMap(x0, z0, width, height);
+      const p1 = worldToMap(x0 + district.w, z0 + district.h, width, height);
+      ctx.fillStyle = `#${district.color.toString(16).padStart(6, "0")}55`;
+      ctx.fillRect(p0.mx, p0.my, p1.mx - p0.mx, p1.my - p0.my);
+      ctx.strokeStyle = `#${district.color.toString(16).padStart(6, "0")}aa`;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p0.mx, p0.my, p1.mx - p0.mx, p1.my - p0.my);
+      const label = worldToMap(district.x, district.z, width, height);
+      ctx.fillStyle = "rgba(255,255,255,0.82)";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(district.name, label.mx, label.my + 3);
+    });
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 3;
+    ROAD_X.forEach((roadX) => {
+      const p0 = worldToMap(roadX, -WORLD.height / 2, width, height);
+      const p1 = worldToMap(roadX, WORLD.height / 2, width, height);
+      ctx.beginPath();
+      ctx.moveTo(p0.mx, p0.my);
+      ctx.lineTo(p1.mx, p1.my);
+      ctx.stroke();
+    });
+    ROAD_Z.forEach((roadZ) => {
+      const p0 = worldToMap(-WORLD.width / 2, roadZ, width, height);
+      const p1 = worldToMap(WORLD.width / 2, roadZ, width, height);
+      ctx.beginPath();
+      ctx.moveTo(p0.mx, p0.my);
+      ctx.lineTo(p1.mx, p1.my);
+      ctx.stroke();
+    });
+
+    MAP_LANDMARKS.forEach((landmark) => {
+      const p = worldToMap(landmark.x, landmark.z, width, height);
+      const color = MAP_KIND_COLORS[landmark.kind] || "#fff";
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(p.mx, p.my, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    const objective = objectivePoint();
+    if (objective) {
+      const p = worldToMap(objective.x, objective.z, width, height);
+      ctx.strokeStyle = MAP_KIND_COLORS.objective;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.mx, p.my, 10, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(p.mx, p.my - 14);
+      ctx.lineTo(p.mx, p.my + 14);
+      ctx.moveTo(p.mx - 14, p.my);
+      ctx.lineTo(p.mx + 14, p.my);
+      ctx.stroke();
+    }
+
+    const you = worldToMap(player.x, player.z, width, height);
+    ctx.fillStyle = MAP_KIND_COLORS.you;
+    ctx.beginPath();
+    ctx.moveTo(you.mx, you.my - 8);
+    ctx.lineTo(you.mx + 6, you.my + 6);
+    ctx.lineTo(you.mx - 6, you.my + 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#031018";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    const objectiveLabel = mapObjectiveText();
+    ui.setText(els.mapHint, `Game paused — ${objectiveLabel}`);
+    renderMapLegend(objectiveLabel);
+  }
+
+  function toggleMap(open) {
+    if (!state.running || state.ended) return;
+    state.mapOpen = open === undefined ? !state.mapOpen : open;
+    if (els.mapOverlay) els.mapOverlay.hidden = !state.mapOpen;
+    if (state.mapOpen) {
+      if (state.bagOpen) toggleBag(false);
+      renderMap();
+    }
+  }
+
   function isWalkable(x, z, radius) {
     return isStaticWalkable(x, z, radius) && !vehicleBlocksPoint(x, z, radius);
   }
@@ -4153,9 +4320,10 @@
       return;
     }
 
-    if (!state.running || state.paused || state.ended) {
+    if (!state.running || state.paused || state.mapOpen || state.ended) {
       updateCamera(dt);
       animateIdle(dt);
+      if (state.mapOpen) renderMap();
       return;
     }
 
@@ -5422,7 +5590,7 @@
   }
 
   function act() {
-    if (!state.running || state.paused || state.cooldowns.act > 0) {
+    if (!state.running || state.paused || state.mapOpen || state.cooldowns.act > 0) {
       return;
     }
     if (state.drivingCar) return;
@@ -5464,7 +5632,7 @@
   // ATTACK button: dispatches on the active item's attack type. Aggression near
   // regular people spikes wanted harder as more witnesses panic.
   function attack() {
-    if (!state.running || state.paused || state.cooldowns.attack > 0) {
+    if (!state.running || state.paused || state.mapOpen || state.cooldowns.attack > 0) {
       return;
     }
     if (state.drivingCar) {
@@ -5758,11 +5926,19 @@
       if (wrap && wrap.classList.contains("is-maxed")) {
         return; // let the max-screen handler exit; don't also pause
       }
+      if (state.mapOpen) {
+        toggleMap(false);
+        return;
+      }
       if (state.bagOpen) {
         toggleBag(false);
         return;
       }
       setPaused(!state.paused);
+      return;
+    }
+    if (state.mapOpen) {
+      if (key === "m") toggleMap(false);
       return;
     }
     if (!state.running && key !== "tab" && key !== "b") {
@@ -5787,6 +5963,7 @@
       else selectSlot(3, state.bagOpen);
     }
     if (key === "b" || key === "tab") toggleBag();
+    if (key === "m") toggleMap();
     if (key === "p") setPaused(!state.paused);
   }
 
@@ -5836,10 +6013,13 @@
     });
     document.getElementById("bag-close")?.addEventListener("click", () => toggleBag(false));
     document.getElementById("btn-bag")?.addEventListener("click", () => toggleBag());
+    document.getElementById("map-close")?.addEventListener("click", () => toggleMap(false));
+    document.getElementById("btn-map")?.addEventListener("click", () => toggleMap());
 
     bindActionTouch("touch-act", act);
     bindActionTouch("touch-attack", attack);
     bindActionTouch("touch-bag", () => toggleBag());
+    bindActionTouch("touch-map", () => toggleMap());
     bindTouchStick();
     bindFullscreen();
     if (saveSlot) {

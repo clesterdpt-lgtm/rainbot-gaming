@@ -10,24 +10,34 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M14 70h72v12H14z' fill='%23ffd43b'/%3E%3Cpath d='M26 64c2-24 46-24 48 0' fill='%23ff2e88'/%3E%3Ccircle cx='38' cy='40' r='8' fill='%232ee0ff'/%3E%3Ccircle cx='62' cy='40' r='8' fill='%232ee0ff'/%3E%3C/svg%3E" />
   <style>
     .unhinged-page {
+      --game-shell-gap: 6px;
       --game-viewport-reserve: clamp(108px, 12dvh, 152px);
       --game-side-width: clamp(268px, 20vw, 310px);
       max-width: min(100%, 1880px);
       width: min(100%, 1880px);
       min-height: calc(100dvh - 118px);
+      padding-right: clamp(8px, 1vw, 12px);
     }
 
     .unhinged-page .game-layout {
       grid-template-columns: minmax(0, 1fr) minmax(260px, var(--game-side-width));
       align-items: stretch;
       flex: 1;
+      gap: var(--game-shell-gap);
       min-height: calc(100dvh - 168px);
     }
 
     .unhinged-page .unhinged-stage {
       align-items: stretch;
       flex: 1;
+      gap: 0;
       min-height: 0;
+      padding: 6px 2px 6px 6px;
+    }
+
+    .unhinged-page .game-side {
+      margin: 0;
+      padding-left: 0;
     }
 
     .unhinged-stage {
@@ -58,7 +68,9 @@
       flex: 1 1 auto;
       max-height: calc(100dvh - var(--game-viewport-reserve));
       min-height: 0;
-      width: min(100%, var(--game-fit-width, 100%));
+      /* Always span the stage column so there's no gutter before the sidebar. */
+      width: 100%;
+      max-width: 100%;
       /* The in-canvas HUD scales against the play area (not the viewport),
          so it never overlaps regardless of layout, window, or max screen. */
       container-type: size;

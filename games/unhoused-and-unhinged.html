@@ -10,11 +10,24 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M14 70h72v12H14z' fill='%23ffd43b'/%3E%3Cpath d='M26 64c2-24 46-24 48 0' fill='%23ff2e88'/%3E%3Ccircle cx='38' cy='40' r='8' fill='%232ee0ff'/%3E%3Ccircle cx='62' cy='40' r='8' fill='%232ee0ff'/%3E%3C/svg%3E" />
   <style>
     .unhinged-page {
-      max-width: 1760px;
+      --game-viewport-reserve: clamp(108px, 12dvh, 152px);
+      --game-side-width: clamp(268px, 20vw, 310px);
+      max-width: min(100%, 1880px);
+      width: min(100%, 1880px);
+      min-height: calc(100dvh - 118px);
     }
 
     .unhinged-page .game-layout {
-      grid-template-columns: minmax(0, 1fr) minmax(300px, 330px);
+      grid-template-columns: minmax(0, 1fr) minmax(260px, var(--game-side-width));
+      align-items: stretch;
+      flex: 1;
+      min-height: calc(100dvh - 168px);
+    }
+
+    .unhinged-page .unhinged-stage {
+      align-items: stretch;
+      flex: 1;
+      min-height: 0;
     }
 
     .unhinged-stage {
@@ -34,29 +47,48 @@
     }
 
     .canvas-wrap--unhinged {
+      --game-aspect: 1.6;
+      --game-aspect-ratio: 16 / 9;
+      --game-max-width: 9999px;
+      --game-fit-max-height: calc(100dvh - var(--game-viewport-reserve));
+      align-self: stretch;
       aspect-ratio: 16 / 9;
-      --game-max-width: 1536px;
       background: #05070d;
       border: 1px solid rgba(255, 46, 136, 0.36);
+      flex: 1 1 auto;
+      max-height: calc(100dvh - var(--game-viewport-reserve));
+      min-height: 0;
+      width: min(100%, var(--game-fit-width, 100%));
       /* The in-canvas HUD scales against the play area (not the viewport),
          so it never overlaps regardless of layout, window, or max screen. */
       container-type: size;
       container-name: ustage;
     }
 
-    /* Max screen: fill the wrap (orthographic camera adapts to any aspect). */
-    .canvas-wrap--unhinged.is-maxed {
+    /* Max screen: fill the monitor (orthographic camera adapts to any aspect). */
+    .unhinged-page .canvas-wrap--unhinged.is-maxed,
+    .unhinged-page .canvas-wrap--unhinged:fullscreen,
+    .unhinged-page .canvas-wrap--unhinged:-webkit-full-screen {
+      --game-fit-width: 100dvw;
+      --game-fit-max-height: 100dvh;
+      aspect-ratio: auto !important;
       border: 0;
+      height: 100dvh !important;
+      max-height: none !important;
+      max-width: none !important;
+      width: 100dvw !important;
     }
 
-    .canvas-wrap--unhinged.is-maxed #gameCanvas {
-      width: 100%;
-      height: 100%;
-      max-width: none;
-      max-height: none;
-      aspect-ratio: auto;
+    .unhinged-page .canvas-wrap--unhinged.is-maxed #gameCanvas,
+    .unhinged-page .canvas-wrap--unhinged:fullscreen #gameCanvas,
+    .unhinged-page .canvas-wrap--unhinged:-webkit-full-screen #gameCanvas {
+      aspect-ratio: auto !important;
       border: 0;
       border-radius: 0;
+      height: 100% !important;
+      max-height: none !important;
+      max-width: none !important;
+      width: 100% !important;
     }
 
     .canvas-wrap--unhinged::after {

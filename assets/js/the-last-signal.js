@@ -2410,14 +2410,55 @@
   if (btn.dockX) btn.dockX.addEventListener("click", () => { Sfx.click(); setSelection([]); state.armed = null; state.placing = null; syncCommandButtons(); renderActionsPanel(); });
   [btn.pause, btn.dockPause].forEach((b) => b && b.addEventListener("click", () => { Sfx.click(); togglePause(); }));
 
-  if (btn.fullscreen) {
-    btn.fullscreen.addEventListener("click", () => {
-      const wrap = canvas.closest(".canvas-wrap");
-      const isMaxed = wrap.classList.toggle("is-maxed");
-      document.body.classList.toggle("rb-game-maxed", isMaxed);
-      canvas.focus({ preventScroll: true });
-    });
+  function bindFullscreen() {
+    const fsBtn = btn.fullscreen;
+    const fsTarget = canvas.closest(".canvas-wrap");
+    if (!fsBtn || !fsTarget) return;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed");
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const syncFit = () => {
+      window.dispatchEvent(new Event("resize"));
+    };
+    const updateBtn = () => {
+      const on = isMaxed() || nativeFsEl() === fsTarget;
+      fsBtn.textContent = on ? "✕" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit max screen" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateBtn();
+      syncFit();
+      if (on) canvas.focus({ preventScroll: true });
+    };
+    const toggle = () => {
+      const on = !isMaxed();
+      setMaxed(on);
+      try {
+        if (on) {
+          const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+          if (req) {
+            const result = req.call(fsTarget);
+            if (result && typeof result.catch === "function") result.catch(() => {});
+          }
+        } else if (nativeFsEl()) {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen;
+          if (exit) exit.call(document);
+        }
+      } catch (error) { /* pseudo fullscreen still works */ }
+    };
+    fsBtn.addEventListener("click", toggle);
+    const onNativeChange = () => {
+      if (!nativeFsEl() && isMaxed()) setMaxed(false);
+      else updateBtn();
+      syncFit();
+    };
+    document.addEventListener("fullscreenchange", onNativeChange);
+    document.addEventListener("webkitfullscreenchange", onNativeChange);
+    updateBtn();
   }
+  bindFullscreen();
 
   /* ==================================================
      18. HUD / SELECTION PANEL / ACTIONS

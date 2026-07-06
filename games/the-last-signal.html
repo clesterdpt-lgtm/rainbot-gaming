@@ -47,6 +47,41 @@
       background: #070610;
     }
 
+    .tls-page .canvas-wrap.is-maxed,
+    .tls-page .canvas-wrap:fullscreen,
+    .tls-page .canvas-wrap:-webkit-full-screen {
+      --game-fit-width: 100dvw;
+      --game-fit-max-height: 100dvh;
+      width: 100dvw !important;
+      height: 100dvh !important;
+      max-width: none !important;
+      max-height: none !important;
+      aspect-ratio: auto !important;
+      border-radius: 0;
+    }
+
+    .tls-page .canvas-wrap.is-maxed #gameCanvas,
+    .tls-page .canvas-wrap:fullscreen #gameCanvas,
+    .tls-page .canvas-wrap:-webkit-full-screen #gameCanvas {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      aspect-ratio: auto !important;
+      border-radius: 0;
+    }
+
+    body.rb-game-maxed.tls-page .game-stage > .hud {
+      left: 50%;
+      max-width: min(96vw, 1240px);
+      pointer-events: none;
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      transform: translateX(-50%);
+      width: calc(100% - 24px);
+      z-index: 10000;
+    }
+
     .tls-page #gameCanvas {
       border-color: rgba(176, 108, 255, 0.32);
       border-radius: 8px;
@@ -476,7 +511,7 @@
   <script src="../assets/js/main.js?v=20260705-escape-scope-1"></script>
   <script src="../assets/js/supabase-config.js?v=20260704-online-1"></script>
   <script src="../assets/js/rb-multiplayer.js?v=20260705-mp-2"></script>
-  <script src="../assets/js/the-last-signal.js?v=20260705-mp-2"></script>
+  <script src="../assets/js/the-last-signal.js?v=20260705-fullscreen-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

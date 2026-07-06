@@ -176,6 +176,148 @@ const RB_GAME_VISUALS = {
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
 };
 
+const RB_SLOPWIRE_ARTICLES = [
+  { href: "articles/smart-toaster-giving-life-advice.html", label: "Smart Toaster Starts Giving Life Advice After Firmware Update", search: "Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire slopwire toaster breakfast firmware therapy" },
+  { href: "articles/group-chat-declares-state-of-emergency.html", label: "Group Chat Declares State Of Emergency After Someone Replies \"K\"", search: "Group Chat Declares State Of Emergency After Someone Replies K fake news satire slopwire texting friends social panic" },
+  { href: "articles/couch-holding-remote-hostage.html", label: "Couch Confirms It Has Been Holding Remote Hostage Since March", search: "Couch Confirms It Has Been Holding Remote Hostage Since March fake news satire slopwire living room tv remote" },
+  { href: "articles/fitness-tracker-existential-steps.html", label: "Fitness Tracker Congratulates Man For 10,000 Existential Steps", search: "Fitness Tracker Congratulates Man For 10000 Existential Steps fake news satire slopwire wellness watch pacing" },
+  { href: "articles/city-pothole-becomes-historic-landmark.html", label: "City Pothole Becomes Historic Landmark After Surviving Three Mayors", search: "City Pothole Becomes Historic Landmark After Surviving Three Mayors fake news satire slopwire local government street pothole" },
+  { href: "articles/local-man-shadowbanned-by-own-fridge.html", label: "Local Man Announces He Has Been Shadowbanned By Own Refrigerator", search: "Local Man Announces He Has Been Shadowbanned By Own Refrigerator fake news satire slopwire fridge algorithm leftovers" },
+  { href: "articles/study-finds-brain-entered-airplane-mode.html", label: "Study Finds Man's Brain Entered Airplane Mode During Staff Meeting", search: "Study Finds Man's Brain Entered Airplane Mode During Staff Meeting fake news satire slopwire office productivity" },
+  { href: "articles/family-printer-saw-god.html", label: "Family Printer Claims It Saw God During Paper Jam", search: "Family Printer Claims It Saw God During Paper Jam fake news satire slopwire printer tech support" },
+  { href: "articles/toddlers-open-labor-negotiations.html", label: "Toddlers Open Labor Negotiations After Parents Offer Blueberries", search: "Toddlers Open Labor Negotiations After Parents Offer Blueberries fake news satire slopwire family snacks" },
+];
+
+const RB_GAME_SEARCH_TEXT = {
+  "scrap-circuit": "Scrap Circuit Last Chassis Standing PS1 retro 3D arena vehicular combat demolition derby cars ice cream truck monster truck hearse school bus tow truck garbage truck weapons pickups specials insurance adjuster low poly fog dither online multiplayer room codes online derby",
+  "to-the-moon": "To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands black swan",
+  "the-last-signal": "The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow online multiplayer online skirmish room codes",
+  "escape-poop-cruise": "Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural",
+  "flappy-stonks": "Flappy Stonks stock market flappy bird parody candlestick chart trail dividends stop loss shield arcade runner",
+  "incident-commander": "Incident Commander agent games ai benchmark incident response security operations logs hosts services root cause protocol observation action DSL",
+  "consensus-collapse": "Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL",
+  "recursive-reward-labyrinth": "Recursive Reward Labyrinth agent games ai benchmark json protocol graph planning reward vector command language observation action DSL",
+  "drone-hunter": "Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade",
+  "storm-area-51": "Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base",
+  "dont-become-pizza": "Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark",
+  "super-slop-brothers": "Super Slop Brothers platform fighter smash bros parody online multiplayer local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards online brawl room codes",
+  "dont-fck-with-cats": "Don't F*ck with Cats cat swarm runner levels gates multiplier laser pointer hairball roomba cucumber vacuum arcade",
+  "ai-slop-factory": "AI Slop Factory content moderation conveyor arcade boost demonetize fact check delete milk engagement ai thumbnails ragebait bots misinformation deepfake crypto scams",
+  "karen-merger": "Complaint Chain bubble drop physics manager ascension complaints coupons retail kaiju",
+  "gen-z-driving-simulator": "Gen Z Driving Simulator driving phone road curves steering vibe check distracted driver",
+  "again": "Again horror hallway after dark",
+  "the-weight": "The Weight sleep paralysis horror after dark entity bedroom 3am wake body",
+  "smooth-brain-snacker": "Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade",
+  "brainrot-2048": "Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain",
+  "unhoused-and-unhinged": "Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival",
+  "billionaire-space-race": "Billionaire Space Race rocket launch land lunar lander parody musk bezos platform dodge satellites drones",
+  "rizz-craft": "Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz online multiplayer co-op coop room codes",
+  "tardigrade-micro-mayhem": "Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade",
+  "doorcrash-no-tip-nitro": "DoorCrash No Tip Nitro 3D delivery runner food car obstacles",
+  "strait-of-hormuz": "Escape the Straight action tanker mines drones",
+  "mr-feast-mansion": "Mr Feast Last to Leave the Mansion horror challenge",
+  "looksmaxxing-grindset": "Looksmaxxing Grindset idle sim gym mewing water",
+  "boomer-monopoly": "Boomer Monopoly housing board game parody",
+  "apop-demon-hunters": "Apop Demon Moggers side-scroller platformer pop action boyz ii hell",
+  "skibidi-toilet-tower-defense": "Skibidi Toilet Tower Defense toilets towers camera speaker plunger",
+  "dont-look-gym-girl": "Don't Look at the Gym Girl stealth awkward parody",
+};
+
+const RB_SEARCH_SECTIONS = [
+  { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
+  { href: "articles.html", label: "The Slopwire", search: "slopwire fake news satire headlines articles feed", type: "page" },
+  { href: "videos.html", label: "Slopwire Clips", search: "slopwire clips video parody reels short form", type: "video" },
+  { href: "videos.html#featured", label: "Area 51 Raid: Clap Alien Cheeks", search: "Area 51 Raid Clap Alien Cheeks slopwire clip funny video aliens found footage", type: "video" },
+  { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
+  { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
+  { href: "agent-games.html", label: "Agent Games", search: "agent games ai benchmark protocol dsl observation action", type: "page" },
+];
+
+let rbSearchIndexCache = null;
+let rbSearchDocBound = false;
+
+function normalizeSearchText(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function gameSearchLabel(slug, searchText) {
+  const meta = RB_GAME_META[slug];
+  if (meta && meta.title) return meta.title;
+  return searchText.split(/\s+(?:PS1|RTS|FPS|low poly|horror|agent|3D|idle|online)/i)[0].trim();
+}
+
+function getSearchIndex() {
+  if (rbSearchIndexCache) return rbSearchIndexCache;
+  const items = [];
+  Object.entries(RB_GAME_SEARCH_TEXT).forEach(([slug, search]) => {
+    const visuals = RB_GAME_VISUALS[slug];
+    items.push({
+      href: `games/${slug}.html`,
+      label: gameSearchLabel(slug, search),
+      search: normalizeSearchText(search),
+      type: "game",
+      kind: visuals?.kind || "Game",
+    });
+  });
+  RB_SLOPWIRE_ARTICLES.forEach((article) => {
+    items.push({
+      href: article.href,
+      label: article.label,
+      search: normalizeSearchText(article.search),
+      type: "article",
+    });
+  });
+  RB_SEARCH_SECTIONS.forEach((section) => {
+    items.push({
+      href: section.href,
+      label: section.label,
+      search: normalizeSearchText(section.search),
+      type: section.type,
+    });
+  });
+  rbSearchIndexCache = items;
+  return items;
+}
+
+function searchTypeLabel(type) {
+  if (type === "game") return "Game";
+  if (type === "article") return "Article";
+  if (type === "video") return "Clip";
+  return "Page";
+}
+
+function scoreSearchItem(item, query, tokens) {
+  const label = normalizeSearchText(item.label);
+  let score = 0;
+  if (label === query) score += 120;
+  else if (label.startsWith(query)) score += 90;
+  else if (label.includes(query)) score += 70;
+  if (item.search === query) score += 60;
+  else if (item.search.startsWith(query)) score += 45;
+  else if (item.search.includes(query)) score += 30;
+  const tokenHits = tokens.filter((token) => label.includes(token) || item.search.includes(token)).length;
+  if (tokenHits === tokens.length) score += 35 + tokenHits * 6;
+  else if (tokenHits > 0) score += tokenHits * 12;
+  return score;
+}
+
+function querySearchIndex(query, limit = 8) {
+  const normalized = normalizeSearchText(query);
+  if (!normalized) return [];
+  const tokens = normalized.split(" ").filter(Boolean);
+  return getSearchIndex()
+    .map((item) => ({ item, score: scoreSearchItem(item, normalized, tokens) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
+    .slice(0, limit)
+    .map((entry) => entry.item);
+}
+
+function resolveSearchHref(href) {
+  if (/^https?:\/\//i.test(href)) return href;
+  return `${RB_BASE}${href.replace(/^\.\//, "")}`;
+}
+
 const RB_DAILY_CHALLENGES = [
   {
     slug: "brainrot-2048",
@@ -359,16 +501,19 @@ function renderNav(state = RB.state) {
       <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
     </div>
-    <form class="nav__search" role="search">
-      <label class="sr-only" for="rb-search">Search Rainbot</label>
-      <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
-      <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
-        <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-          <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
-          <line x1="14.4" y1="14.4" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
-        </svg>
-      </button>
-    </form>
+    <div class="nav__search-wrap">
+      <form class="nav__search" role="search">
+        <label class="sr-only" for="rb-search">Search Rainbot</label>
+        <input id="rb-search" type="search" placeholder="Search games, articles..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
+        <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
+          <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+            <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+            <line x1="14.4" y1="14.4" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+          </svg>
+        </button>
+      </form>
+      <div class="nav__search-results" id="rb-search-results" hidden role="listbox" aria-label="Search results"></div>
+    </div>
     <div class="nav__actions">
       ${proBadge}
       ${
@@ -403,11 +548,15 @@ function renderNav(state = RB.state) {
 }
 
 function bindSearch(root) {
+  const wrap = root.querySelector(".nav__search-wrap");
   const form = root.querySelector(".nav__search");
   const input = root.querySelector("#rb-search");
   const toggle = root.querySelector("#rb-search-toggle");
+  const results = root.querySelector("#rb-search-results");
   if (!form || !input) return;
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
+  let currentResults = [];
+  let activeIndex = -1;
 
   const setSearchOpen = (open) => {
     form.classList.toggle("is-open", open);
@@ -419,26 +568,86 @@ function bindSearch(root) {
       requestAnimationFrame(() => input.focus({ preventScroll: true }));
     } else {
       input.blur();
+      hideResults();
     }
   };
 
-  toggle?.addEventListener("click", (event) => {
-    event.preventDefault();
-    setSearchOpen(!form.classList.contains("is-open"));
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!form.classList.contains("is-open")) return;
-    if (!form.contains(event.target)) setSearchOpen(false);
-  });
-
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setSearchOpen(false);
-      toggle?.focus();
+  const hideResults = () => {
+    currentResults = [];
+    activeIndex = -1;
+    if (results) {
+      results.hidden = true;
+      results.innerHTML = "";
     }
-  });
+    input.removeAttribute("aria-activedescendant");
+  };
+
+  const updateActiveResult = () => {
+    if (!results) return;
+    results.querySelectorAll(".nav__search-result").forEach((button, index) => {
+      const isActive = index === activeIndex;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+      if (isActive) input.setAttribute("aria-activedescendant", button.id);
+    });
+  };
+
+  const navigateToResult = (item) => {
+    if (!item) return;
+    location.href = resolveSearchHref(item.href);
+  };
+
+  const renderResults = (matches) => {
+    currentResults = matches;
+    activeIndex = matches.length ? 0 : -1;
+    if (!results) return;
+    if (!matches.length) {
+      hideResults();
+      return;
+    }
+    results.hidden = false;
+    results.innerHTML = matches.map((item, index) => `
+      <button
+        type="button"
+        class="nav__search-result${index === activeIndex ? " is-active" : ""}"
+        id="rb-search-result-${index}"
+        role="option"
+        data-search-index="${index}"
+        aria-selected="${index === activeIndex ? "true" : "false"}"
+      >
+        <span class="nav__search-result-type">${searchTypeLabel(item.type)}</span>
+        <span class="nav__search-result-label">${escapeHtml(item.label)}</span>
+        ${item.kind ? `<span class="nav__search-result-meta">${escapeHtml(item.kind)}</span>` : ""}
+      </button>
+    `).join("");
+    results.querySelectorAll("[data-search-index]").forEach((button) => {
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", () => {
+        navigateToResult(currentResults[Number(button.dataset.searchIndex)]);
+      });
+    });
+    if (activeIndex >= 0) input.setAttribute("aria-activedescendant", `rb-search-result-${activeIndex}`);
+  };
+
+  const applyLocalFilters = (query) => {
+    if (window.RBGamesCatalog) {
+      window.RBGamesCatalog.setSearch(query);
+      return;
+    }
+    if (!searchable.length) return;
+    searchable.forEach((item) => {
+      const text = normalizeSearchText(item.dataset.title || "");
+      item.toggleAttribute("hidden", query !== "" && !text.includes(query));
+    });
+  };
+
+  const syncGamesQueryUrl = (query) => {
+    if (!window.RBGamesCatalog || !history.replaceState) return;
+    const url = new URL(location.href);
+    if (query) url.searchParams.set("q", query);
+    else url.searchParams.delete("q");
+    history.replaceState(null, "", url);
+  };
 
   const fallbackSearchPage = () => {
     const path = location.pathname;
@@ -447,62 +656,106 @@ function bindSearch(root) {
     return "games.html";
   };
 
-  const syncGamesQueryUrl = (query) => {
-    if (!window.RBGamesCatalog || !history.replaceState) return;
-    const url = new URL(location.href);
-    if (query) {
-      url.searchParams.set("q", query);
-    } else {
-      url.searchParams.delete("q");
-    }
-    history.replaceState(null, "", url);
-  };
-
-  const applySearch = () => {
-    const query = input.value.trim().toLowerCase();
-    if (window.RBGamesCatalog) {
-      window.RBGamesCatalog.setSearch(query);
+  const runSearch = () => {
+    const query = input.value.trim();
+    const normalized = normalizeSearchText(query);
+    applyLocalFilters(normalized);
+    if (!normalized) {
+      hideResults();
       return;
     }
-    if (!searchable.length) return;
-    searchable.forEach((item) => {
-      const text = item.dataset.title.toLowerCase();
-      item.toggleAttribute("hidden", query !== "" && !text.includes(query));
-    });
+    renderResults(querySearchIndex(query));
   };
+
+  toggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    const open = !form.classList.contains("is-open");
+    setSearchOpen(open);
+    if (open) runSearch();
+  });
+
+  if (!rbSearchDocBound) {
+    rbSearchDocBound = true;
+    document.addEventListener("click", (event) => {
+      document.querySelectorAll(".nav__search-wrap").forEach((searchWrap) => {
+        if (searchWrap.contains(event.target)) return;
+        const searchForm = searchWrap.querySelector(".nav__search");
+        const searchResults = searchWrap.querySelector(".nav__search-results");
+        const searchToggle = searchWrap.querySelector(".nav__search-toggle");
+        const searchInput = searchWrap.querySelector("#rb-search");
+        if (searchResults) searchResults.hidden = true;
+        if (!searchForm?.classList.contains("is-open")) return;
+        searchForm.classList.remove("is-open");
+        searchToggle?.setAttribute("aria-expanded", "false");
+        searchToggle?.setAttribute("aria-label", "Open search");
+        searchInput?.blur();
+      });
+    });
+  }
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSearchOpen(false);
+      toggle?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown" && currentResults.length) {
+      event.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, currentResults.length - 1);
+      updateActiveResult();
+      return;
+    }
+    if (event.key === "ArrowUp" && currentResults.length) {
+      event.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+      updateActiveResult();
+      return;
+    }
+    if (event.key === "Enter" && currentResults.length) {
+      event.preventDefault();
+      navigateToResult(currentResults[activeIndex >= 0 ? activeIndex : 0]);
+    }
+  });
 
   if (window.RBGamesCatalog) {
     const initialQuery = window.RBGamesCatalog.getSearch();
     if (initialQuery) {
       input.value = initialQuery;
       setSearchOpen(true);
+      runSearch();
     }
   } else {
     const initialQuery = new URLSearchParams(location.search).get("q") || "";
     if (initialQuery) {
       input.value = initialQuery;
       setSearchOpen(true);
-      requestAnimationFrame(applySearch);
+      requestAnimationFrame(runSearch);
     }
   }
 
-  input.addEventListener("input", applySearch);
+  input.addEventListener("input", runSearch);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    const query = input.value.trim();
+    if (currentResults.length) {
+      navigateToResult(currentResults[activeIndex >= 0 ? activeIndex : 0]);
+      return;
+    }
     if (window.RBGamesCatalog) {
-      applySearch();
-      syncGamesQueryUrl(input.value.trim());
+      runSearch();
+      syncGamesQueryUrl(query);
       const target = document.querySelector("[data-search-scope]");
       if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (searchable.length) {
-      applySearch();
+      runSearch();
       const target = document.querySelector("[data-search-scope]");
       if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    const q = encodeURIComponent(input.value.trim());
+    const q = encodeURIComponent(query);
     const fallbackPage = fallbackSearchPage();
     location.href = q ? `${RB_BASE}${fallbackPage}?q=${q}` : `${RB_BASE}${fallbackPage}`;
   });

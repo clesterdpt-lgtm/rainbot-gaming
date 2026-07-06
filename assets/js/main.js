@@ -557,22 +557,25 @@ function bindSearch(root) {
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
   let currentResults = [];
   let activeIndex = -1;
+  let searchOpenBeforePointer = false;
 
   const focusSearchInput = () => {
-    window.setTimeout(() => {
+    if (!form.classList.contains("is-open")) return;
+    input.focus({ preventScroll: true });
+    requestAnimationFrame(() => {
       if (!form.classList.contains("is-open")) return;
       input.focus({ preventScroll: true });
-    }, 0);
+    });
   };
 
-  const setSearchOpen = (open) => {
+  const setSearchOpen = (open, { focus = open } = {}) => {
     form.classList.toggle("is-open", open);
     if (toggle) {
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
       toggle.setAttribute("aria-label", open ? "Close search" : "Open search");
     }
     if (open) {
-      focusSearchInput();
+      if (focus) focusSearchInput();
     } else {
       input.blur();
       hideResults();
@@ -674,24 +677,37 @@ function bindSearch(root) {
     renderResults(querySearchIndex(query));
   };
 
-  toggle?.addEventListener("mousedown", (event) => {
-    event.preventDefault();
-  });
+  const openAndFocusSearch = ({ runQuery = false } = {}) => {
+    setSearchOpen(true);
+    if (runQuery) runSearch();
+  };
+
+  wrap?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (event.target.closest(".nav__search-results [data-search-index]")) return;
+
+    event.stopPropagation();
+    searchOpenBeforePointer = form.classList.contains("is-open");
+
+    if (!searchOpenBeforePointer) {
+      event.preventDefault();
+      openAndFocusSearch();
+      return;
+    }
+
+    if (event.target === input || (form.contains(event.target) && !toggle?.contains(event.target))) {
+      focusSearchInput();
+    }
+  }, true);
 
   toggle?.addEventListener("click", (event) => {
     event.preventDefault();
-    const open = !form.classList.contains("is-open");
-    setSearchOpen(open);
-    if (open) {
-      focusSearchInput();
-      runSearch();
+    event.stopPropagation();
+    if (searchOpenBeforePointer) {
+      setSearchOpen(false);
+      return;
     }
-  });
-
-  form.addEventListener("click", (event) => {
-    if (!form.classList.contains("is-open")) return;
-    if (event.target === toggle) return;
-    focusSearchInput();
+    openAndFocusSearch({ runQuery: true });
   });
 
   if (!rbSearchDocBound) {

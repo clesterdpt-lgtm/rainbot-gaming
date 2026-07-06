@@ -2781,6 +2781,7 @@ body.arcade-home::before {
 .nav__search-wrap {
   justify-self: end;
   position: relative;
+  touch-action: manipulation;
   width: 42px;
   z-index: 2;
 }
@@ -2800,7 +2801,6 @@ body.arcade-home::before {
   border: 1px solid rgba(151, 171, 194, 0.42);
   border-radius: 4px;
   overflow: hidden;
-  transition: width 180ms ease, grid-template-columns 180ms ease;
 }
 
 .nav__search.is-open {

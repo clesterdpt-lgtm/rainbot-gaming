@@ -224,6 +224,7 @@ const RB_GAME_SEARCH_TEXT = {
 };
 
 const RB_SEARCH_SECTIONS = [
+  { href: "search.html", label: "Search Rainbot", search: "search find games articles clips pages slopwire vault directory", type: "page" },
   { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
   { href: "articles.html", label: "The Slopwire", search: "slopwire fake news satire headlines articles feed", type: "page" },
   { href: "videos.html", label: "Slopwire Clips", search: "slopwire clips video parody reels short form", type: "video" },
@@ -231,6 +232,14 @@ const RB_SEARCH_SECTIONS = [
   { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
   { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
   { href: "agent-games.html", label: "Agent Games", search: "agent games ai benchmark protocol dsl observation action", type: "page" },
+];
+
+const RB_SEARCH_TYPE_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "game", label: "Games" },
+  { key: "article", label: "Articles" },
+  { key: "video", label: "Clips" },
+  { key: "page", label: "Pages" },
 ];
 
 let rbSearchIndexCache = null;
@@ -301,21 +310,75 @@ function scoreSearchItem(item, query, tokens) {
   return score;
 }
 
-function querySearchIndex(query, limit = 8) {
+function isSearchPageRoute() {
+  const path = location.pathname;
+  return path.endsWith("/search.html") || path.endsWith("/search");
+}
+
+function searchSite(query, options = {}) {
   const normalized = normalizeSearchText(query);
   if (!normalized) return [];
   const tokens = normalized.split(" ").filter(Boolean);
-  return getSearchIndex()
+  const type = options.type || "all";
+  const sort = options.sort || "relevance";
+  const limit = Number.isFinite(options.limit) ? options.limit : Infinity;
+  const ranked = getSearchIndex()
     .map((item) => ({ item, score: scoreSearchItem(item, normalized, tokens) }))
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
-    .slice(0, limit)
-    .map((entry) => entry.item);
+    .filter((entry) => type === "all" || entry.item.type === type)
+    .sort((a, b) => {
+      if (sort === "az") return a.item.label.localeCompare(b.item.label);
+      return b.score - a.score || a.item.label.localeCompare(b.item.label);
+    });
+  const sliced = limit === Infinity ? ranked : ranked.slice(0, limit);
+  return sliced.map((entry) => ({ ...entry.item, score: entry.score }));
+}
+
+function querySearchIndex(query, limit = 8) {
+  return searchSite(query, { limit });
+}
+
+function buildSearchSnippet(item, query) {
+  const text = item.search || normalizeSearchText(item.label);
+  const tokens = normalizeSearchText(query).split(" ").filter(Boolean);
+  const token = tokens.find((part) => text.includes(part)) || "";
+  if (!token) return "";
+  const index = text.indexOf(token);
+  const start = Math.max(0, index - 42);
+  const end = Math.min(text.length, index + token.length + 72);
+  let snippet = text.slice(start, end).trim();
+  if (start > 0) snippet = `…${snippet}`;
+  if (end < text.length) snippet = `${snippet}…`;
+  return snippet;
+}
+
+function highlightSearchSnippet(snippet, query) {
+  const safe = escapeHtml(snippet);
+  const tokens = normalizeSearchText(query).split(" ").filter(Boolean).sort((a, b) => b.length - a.length);
+  if (!tokens.length) return safe;
+  const pattern = new RegExp(`(${tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  return safe.replace(pattern, "<mark>$1</mark>");
+}
+
+function buildSearchPageUrl(query, options = {}) {
+  const url = new URL(`${RB_BASE}search.html`, location.href);
+  const normalized = String(query || "").trim();
+  if (normalized) url.searchParams.set("q", normalized);
+  else url.searchParams.delete("q");
+  if (options.type && options.type !== "all") url.searchParams.set("type", options.type);
+  else url.searchParams.delete("type");
+  if (options.sort && options.sort !== "relevance") url.searchParams.set("sort", options.sort);
+  else url.searchParams.delete("sort");
+  return `${url.pathname}${url.search}`;
 }
 
 function resolveSearchHref(href) {
   if (/^https?:\/\//i.test(href)) return href;
   return `${RB_BASE}${href.replace(/^\.\//, "")}`;
+}
+
+function navigateToSearchPage(query, options = {}) {
+  location.href = buildSearchPageUrl(query, options);
 }
 
 const RB_DAILY_CHALLENGES = [
@@ -616,7 +679,9 @@ function bindSearch(root) {
       return;
     }
     results.hidden = false;
-    results.innerHTML = matches.map((item, index) => `
+    const query = input.value.trim();
+    const totalCount = searchSite(query).length;
+    results.innerHTML = `${matches.map((item, index) => `
       <button
         type="button"
         class="nav__search-result${index === activeIndex ? " is-active" : ""}"
@@ -629,7 +694,7 @@ function bindSearch(root) {
         <span class="nav__search-result-label">${escapeHtml(item.label)}</span>
         ${item.kind ? `<span class="nav__search-result-meta">${escapeHtml(item.kind)}</span>` : ""}
       </button>
-    `).join("");
+    `).join("")}<a class="nav__search-viewall" href="${buildSearchPageUrl(query)}">View all ${totalCount} result${totalCount === 1 ? "" : "s"}</a>`;
     results.querySelectorAll("[data-search-index]").forEach((button) => {
       button.addEventListener("mousedown", (event) => event.preventDefault());
       button.addEventListener("click", () => {
@@ -659,17 +724,13 @@ function bindSearch(root) {
     history.replaceState(null, "", url);
   };
 
-  const fallbackSearchPage = () => {
-    const path = location.pathname;
-    if (path.endsWith("/articles.html") || path.includes("/articles/")) return "articles.html";
-    if (path.endsWith("/videos.html") || path.includes("/videos/")) return "videos.html";
-    return "games.html";
-  };
-
   const runSearch = () => {
     const query = input.value.trim();
     const normalized = normalizeSearchText(query);
     applyLocalFilters(normalized);
+    if (isSearchPageRoute() && window.RBSearchPage) {
+      window.RBSearchPage.applyFromNav(query, { syncNav: false });
+    }
     if (!normalized) {
       hideResults();
       return;
@@ -748,9 +809,16 @@ function bindSearch(root) {
       updateActiveResult();
       return;
     }
-    if (event.key === "Enter" && currentResults.length) {
+    if (event.key === "Enter") {
+      const query = input.value.trim();
+      if (!query) return;
       event.preventDefault();
-      navigateToResult(currentResults[activeIndex >= 0 ? activeIndex : 0]);
+      if (isSearchPageRoute()) {
+        window.RBSearchPage?.applyFromNav(query);
+        setSearchOpen(false);
+        return;
+      }
+      navigateToSearchPage(query);
     }
   });
 
@@ -765,8 +833,10 @@ function bindSearch(root) {
     const initialQuery = new URLSearchParams(location.search).get("q") || "";
     if (initialQuery) {
       input.value = initialQuery;
-      setSearchOpen(true);
-      requestAnimationFrame(runSearch);
+      if (!isSearchPageRoute()) {
+        setSearchOpen(true);
+        requestAnimationFrame(runSearch);
+      }
     }
   }
 
@@ -774,27 +844,190 @@ function bindSearch(root) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const query = input.value.trim();
-    if (currentResults.length) {
-      navigateToResult(currentResults[activeIndex >= 0 ? activeIndex : 0]);
+    if (!query) return;
+    if (isSearchPageRoute()) {
+      window.RBSearchPage?.applyFromNav(query);
+      setSearchOpen(false);
       return;
     }
-    if (window.RBGamesCatalog) {
-      runSearch();
-      syncGamesQueryUrl(query);
-      const target = document.querySelector("[data-search-scope]");
-      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (searchable.length) {
-      runSearch();
-      const target = document.querySelector("[data-search-scope]");
-      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    const q = encodeURIComponent(query);
-    const fallbackPage = fallbackSearchPage();
-    location.href = q ? `${RB_BASE}${fallbackPage}?q=${q}` : `${RB_BASE}${fallbackPage}`;
+    navigateToSearchPage(query);
   });
+}
+
+function initSearchPage() {
+  const page = document.querySelector("[data-search-page]");
+  if (!page) return;
+
+  const form = page.querySelector("[data-search-page-form]");
+  const input = page.querySelector("[data-search-page-input]");
+  const resultsEl = page.querySelector("[data-search-page-results]");
+  const countEl = page.querySelector("[data-search-page-count]");
+  const emptyEl = page.querySelector("[data-search-page-empty]");
+  const browseEl = page.querySelector("[data-search-page-browse]");
+  const sortSelect = page.querySelector("[data-search-page-sort]");
+  const typeButtons = Array.from(page.querySelectorAll("[data-search-type-filter]"));
+  if (!form || !input || !resultsEl) return;
+
+  const readStateFromUrl = () => {
+    const params = new URLSearchParams(location.search);
+    const type = params.get("type") || "all";
+    const sort = params.get("sort") || "relevance";
+    return {
+      query: params.get("q") || "",
+      type: RB_SEARCH_TYPE_FILTERS.some((filter) => filter.key === type) ? type : "all",
+      sort: sort === "az" ? "az" : "relevance",
+    };
+  };
+
+  const state = readStateFromUrl();
+
+  const syncTypeButtons = () => {
+    typeButtons.forEach((button) => {
+      const active = state.type === button.dataset.searchTypeFilter;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  };
+
+  const syncUrl = (replace = true) => {
+    if (!history.replaceState) return;
+    const url = new URL(location.href);
+    const normalized = state.query.trim();
+    if (normalized) url.searchParams.set("q", normalized);
+    else url.searchParams.delete("q");
+    if (state.type !== "all") url.searchParams.set("type", state.type);
+    else url.searchParams.delete("type");
+    if (state.sort !== "relevance") url.searchParams.set("sort", state.sort);
+    else url.searchParams.delete("sort");
+    const next = `${url.pathname}${url.search}`;
+    if (replace) history.replaceState(null, "", next);
+    else location.assign(next);
+  };
+
+  const renderResultCard = (item) => {
+    const snippet = buildSearchSnippet(item, state.query);
+    const href = resolveSearchHref(item.href);
+    return `
+      <a class="search-result-card" href="${escapeHtml(href)}">
+        <span class="search-result-card__type">${searchTypeLabel(item.type)}</span>
+        <strong class="search-result-card__title">${escapeHtml(item.label)}</strong>
+        ${item.kind ? `<span class="search-result-card__meta">${escapeHtml(item.kind)}</span>` : ""}
+        ${snippet ? `<p class="search-result-card__snippet">${highlightSearchSnippet(snippet, state.query)}</p>` : ""}
+      </a>
+    `;
+  };
+
+  const renderBrowse = () => {
+    if (!browseEl) return;
+    const groups = [
+      { key: "game", label: "Games", limit: 8 },
+      { key: "article", label: "Articles", limit: 6 },
+      { key: "video", label: "Clips", limit: 4 },
+      { key: "page", label: "Pages", limit: 6 },
+    ];
+    browseEl.hidden = false;
+    browseEl.innerHTML = groups.map((group) => {
+      const items = getSearchIndex()
+        .filter((item) => item.type === group.key)
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .slice(0, group.limit);
+      if (!items.length) return "";
+      return `
+        <section class="search-browse-group">
+          <div class="search-browse-group__header">
+            <h3>${group.label}</h3>
+            <a href="${buildSearchPageUrl("", { type: group.key })}">Browse all</a>
+          </div>
+          <div class="search-results-grid search-results-grid--compact">
+            ${items.map((item) => renderResultCard({ ...item, score: 0 })).join("")}
+          </div>
+        </section>
+      `;
+    }).join("");
+  };
+
+  const renderResults = () => {
+    const normalized = state.query.trim();
+    input.value = normalized;
+    if (sortSelect) sortSelect.value = state.sort;
+    syncTypeButtons();
+
+    const navSearch = document.getElementById("rb-search");
+    if (navSearch && navSearch.value !== normalized) navSearch.value = normalized;
+
+    if (!normalized) {
+      if (state.type !== "all") {
+        if (browseEl) browseEl.hidden = true;
+        const matches = getSearchIndex()
+          .filter((item) => item.type === state.type)
+          .sort((a, b) => a.label.localeCompare(b.label));
+        if (countEl) {
+          countEl.textContent = `${matches.length} ${searchTypeLabel(state.type).toLowerCase()}${matches.length === 1 ? "" : "s"} in the vault`;
+        }
+        if (emptyEl) emptyEl.hidden = matches.length !== 0;
+        resultsEl.innerHTML = matches.length
+          ? `<div class="search-results-grid">${matches.map((item) => renderResultCard({ ...item, score: 0 })).join("")}</div>`
+          : "";
+      } else {
+        resultsEl.innerHTML = "";
+        if (emptyEl) emptyEl.hidden = true;
+        if (countEl) countEl.textContent = "Search the vault";
+        renderBrowse();
+      }
+      syncUrl();
+      return;
+    }
+
+    if (browseEl) browseEl.hidden = true;
+    const matches = searchSite(normalized, { type: state.type, sort: state.sort });
+    if (countEl) {
+      countEl.textContent = matches.length
+        ? `${matches.length} result${matches.length === 1 ? "" : "s"} for “${normalized}”`
+        : `No results for “${normalized}”`;
+    }
+    if (emptyEl) emptyEl.hidden = matches.length !== 0;
+    resultsEl.innerHTML = matches.length
+      ? `<div class="search-results-grid">${matches.map((item) => renderResultCard(item)).join("")}</div>`
+      : "";
+    syncUrl();
+  };
+
+  const applyFromNav = (query, { syncNav = true } = {}) => {
+    state.query = String(query || "").trim();
+    if (syncNav) {
+      const navSearch = document.getElementById("rb-search");
+      if (navSearch) navSearch.value = state.query;
+    }
+    renderResults();
+    page.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  typeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.type = button.dataset.searchTypeFilter || "all";
+      renderResults();
+    });
+  });
+
+  if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+      state.sort = sortSelect.value === "az" ? "az" : "relevance";
+      renderResults();
+    });
+  }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.query = input.value.trim();
+    renderResults();
+  });
+
+  window.RBSearchPage = {
+    applyFromNav,
+    render: renderResults,
+  };
+
+  renderResults();
 }
 
 function initGamesCatalog() {
@@ -4321,6 +4554,7 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   RBSfx.init();
+  initSearchPage();
   initGamesCatalog();
   initStandaloneGameShell();
   initGameEscapeMenu();

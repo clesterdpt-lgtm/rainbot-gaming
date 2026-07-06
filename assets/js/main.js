@@ -111,7 +111,6 @@ const RB_GAME_META = {
   "gen-z-driving-simulator": { title: "Gen Z Driving Simulator", scoreIds: ["gen-z-driving-simulator"] },
   "karen-merger": { title: "Complaint Chain", scoreIds: ["karen-merger"] },
   "looksmaxxing-grindset": { title: "Looksmaxxing Grindset", scoreIds: ["looksmax"] },
-  "mr-feast-mansion": { title: "Mr. Feast: Deadline Mansion", scoreIds: ["mrfeast3d"] },
   "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
   "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
   "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit", "scrap-circuit-full"] },
@@ -366,7 +365,12 @@ function renderNav(state = RB.state) {
     <form class="nav__search" role="search">
       <label class="sr-only" for="rb-search">Search Rainbot</label>
       <input id="rb-search" type="search" placeholder="Search..." autocomplete="off" />
-      <button type="submit" aria-label="Search">Search</button>
+      <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
+        <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+          <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+          <line x1="14.4" y1="14.4" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+        </svg>
+      </button>
     </form>
     <div class="nav__actions">
       ${proBadge}
@@ -405,8 +409,40 @@ function renderNav(state = RB.state) {
 function bindSearch(root) {
   const form = root.querySelector(".nav__search");
   const input = root.querySelector("#rb-search");
+  const toggle = root.querySelector("#rb-search-toggle");
   if (!form || !input) return;
   const searchable = Array.from(document.querySelectorAll("[data-title]"));
+
+  const setSearchOpen = (open) => {
+    form.classList.toggle("is-open", open);
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Close search" : "Open search");
+    }
+    if (open) {
+      requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    } else {
+      input.blur();
+    }
+  };
+
+  toggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    setSearchOpen(!form.classList.contains("is-open"));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!form.classList.contains("is-open")) return;
+    if (!form.contains(event.target)) setSearchOpen(false);
+  });
+
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSearchOpen(false);
+      toggle?.focus();
+    }
+  });
 
   const fallbackSearchPage = () => {
     const path = location.pathname;
@@ -441,11 +477,15 @@ function bindSearch(root) {
 
   if (window.RBGamesCatalog) {
     const initialQuery = window.RBGamesCatalog.getSearch();
-    if (initialQuery) input.value = initialQuery;
+    if (initialQuery) {
+      input.value = initialQuery;
+      setSearchOpen(true);
+    }
   } else {
     const initialQuery = new URLSearchParams(location.search).get("q") || "";
     if (initialQuery) {
       input.value = initialQuery;
+      setSearchOpen(true);
       requestAnimationFrame(applySearch);
     }
   }
@@ -3431,6 +3471,260 @@ const RBGameSaves = (() => {
 
 window.RBGameSaves = RBGameSaves;
 
+const RBSfx = (() => {
+  const STORAGE_KEY = "rainbot_sfx_muted";
+  const ROOT = `${RB_BASE}assets/Sounds/_shared/`;
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  const manifest = {
+    back: "ui/back.ogg",
+    click: "ui/click.ogg",
+    close: "ui/close.ogg",
+    confirm: "ui/confirm.ogg",
+    drop: "ui/drop.ogg",
+    error: "ui/error.ogg",
+    glitch: "ui/glitch.ogg",
+    maximize: "ui/maximize.ogg",
+    minimize: "ui/minimize.ogg",
+    open: "ui/open.ogg",
+    question: "ui/question.ogg",
+    select: "ui/select.ogg",
+    switch: "ui/switch.ogg",
+    toggle: "ui/toggle.ogg",
+    footstepConcrete: "impact/footstep-concrete.ogg",
+    footstepGrass: "impact/footstep-grass.ogg",
+    footstepWood: "impact/footstep-wood.ogg",
+    glass: "impact/glass.ogg",
+    impact: "impact/light.ogg",
+    metal: "impact/metal.ogg",
+    mining: "impact/mining.ogg",
+    punch: "impact/punch.ogg",
+    softHeavy: "impact/soft-heavy.ogg",
+    wood: "impact/wood.ogg",
+    doorClose: "sci-fi/door-close.ogg",
+    doorOpen: "sci-fi/door-open.ogg",
+    explosion: "sci-fi/explosion.ogg",
+    forceField: "sci-fi/force-field.ogg",
+    laserLarge: "sci-fi/laser-large.ogg",
+    laserRetro: "sci-fi/laser-retro.ogg",
+    laserSmall: "sci-fi/laser-small.ogg",
+    lowExplosion: "sci-fi/low-explosion.ogg",
+    metalImpact: "sci-fi/metal-impact.ogg",
+  };
+  const aliases = {
+    alarm: "question",
+    attack: "punch",
+    button: "click",
+    cancel: "back",
+    damage: "softHeavy",
+    denied: "error",
+    door: "doorOpen",
+    fail: "error",
+    fire: "laserSmall",
+    hit: "punch",
+    hover: "select",
+    jump: "switch",
+    laser: "laserSmall",
+    lose: "lowExplosion",
+    menu: "open",
+    pickup: "confirm",
+    reward: "confirm",
+    shoot: "laserSmall",
+    success: "confirm",
+    tap: "click",
+    ui: "click",
+    win: "confirm",
+  };
+  const gamePointerSounds = {
+    "ai-slop-factory": "glitch",
+    "apop-demon-hunters": "punch",
+    "billionaire-space-race": "laserRetro",
+    "boomer-monopoly": "drop",
+    "consensus-collapse": "question",
+    "dont-become-pizza": "doorOpen",
+    "dont-fck-with-cats": "switch",
+    "dont-look-gym-girl": "footstepConcrete",
+    "doorcrash-no-tip-nitro": "metal",
+    "gen-z-driving-simulator": "metal",
+    "incident-commander": "glitch",
+    "looksmaxxing-grindset": "confirm",
+    "recursive-reward-labyrinth": "glitch",
+    "rizz-craft": "mining",
+    "scrap-circuit": "metalImpact",
+    "skibidi-toilet-tower-defense": "laserRetro",
+    "storm-area-51": "laserSmall",
+    "tardigrade-micro-mayhem": "footstepGrass",
+    "the-last-signal": "laserSmall",
+    "to-the-moon": "laserRetro",
+    "unhoused-and-unhinged": "footstepConcrete",
+  };
+  const buffers = new Map();
+  const loadPromises = new Map();
+  const lastPlayed = new Map();
+  let ctx = null;
+  let master = null;
+  let initialized = false;
+  let muted = false;
+
+  function readMuted() {
+    try {
+      return localStorage.getItem(STORAGE_KEY) === "true";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function writeMuted(value) {
+    try {
+      localStorage.setItem(STORAGE_KEY, value ? "true" : "false");
+    } catch (error) {}
+  }
+
+  function resolveName(name) {
+    const key = String(name || "click").trim();
+    return manifest[key] ? key : aliases[key] || "click";
+  }
+
+  function ensureContext() {
+    if (!AudioContextCtor) return null;
+    if (!ctx) {
+      ctx = new AudioContextCtor();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.72;
+      master.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended" && typeof ctx.resume === "function") {
+      ctx.resume().catch(() => {});
+    }
+    return ctx;
+  }
+
+  async function loadBuffer(name) {
+    const id = resolveName(name);
+    if (buffers.has(id)) return buffers.get(id);
+    if (loadPromises.has(id)) return loadPromises.get(id);
+
+    const audioCtx = ensureContext();
+    if (!audioCtx || !window.fetch) return null;
+
+    const promise = fetch(ROOT + manifest[id])
+      .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(response.statusText))))
+      .then((data) => audioCtx.decodeAudioData(data))
+      .then((buffer) => {
+        buffers.set(id, buffer);
+        return buffer;
+      })
+      .catch((error) => {
+        console.warn("[Rainbot SFX] Could not load sound", id, error);
+        return null;
+      })
+      .finally(() => {
+        loadPromises.delete(id);
+      });
+    loadPromises.set(id, promise);
+    return promise;
+  }
+
+  function play(name = "click", options = {}) {
+    if (muted && !options.force) return Promise.resolve(false);
+    const id = resolveName(name);
+    const now = performance.now();
+    const throttleMs = Number(options.throttleMs || 60);
+    if (!options.force && now - (lastPlayed.get(id) || 0) < throttleMs) return Promise.resolve(false);
+    lastPlayed.set(id, now);
+
+    const audioCtx = ensureContext();
+    if (!audioCtx || !master) return Promise.resolve(false);
+
+    return loadBuffer(id).then((buffer) => {
+      if (!buffer || (muted && !options.force)) return false;
+      const source = audioCtx.createBufferSource();
+      const gain = audioCtx.createGain();
+      const volume = Math.max(0, Math.min(1.5, Number(options.volume || 0.42)));
+      source.buffer = buffer;
+      source.playbackRate.value = Math.max(0.5, Math.min(2, Number(options.rate || 1)));
+      gain.gain.value = volume;
+      source.connect(gain);
+      gain.connect(master);
+      source.start(0);
+      source.addEventListener("ended", () => {
+        try {
+          source.disconnect();
+          gain.disconnect();
+        } catch (error) {}
+      }, { once: true });
+      return true;
+    });
+  }
+
+  function setMuted(value) {
+    muted = Boolean(value);
+    writeMuted(muted);
+    if (master) master.gain.setTargetAtTime(muted ? 0 : 0.72, ctx.currentTime, 0.02);
+    document.dispatchEvent(new CustomEvent("rainbot:sfx-muted", { detail: { muted } }));
+    return muted;
+  }
+
+  function toggleMuted() {
+    return setMuted(!muted);
+  }
+
+  function buttonSoundFor(element) {
+    if (!element) return "click";
+    const text = `${element.getAttribute("aria-label") || ""} ${element.textContent || ""}`.toLowerCase();
+    if (element.matches("[aria-expanded='true'], [aria-pressed]") || text.includes("sound") || text.includes("mute")) return "toggle";
+    if (text.includes("max") || text.includes("full")) return "maximize";
+    if (text.includes("min") || text.includes("exit max")) return "minimize";
+    if (text.includes("resume") || text.includes("continue") || text.includes("play")) return "confirm";
+    if (text.includes("restart") || text.includes("reset") || text.includes("new")) return "switch";
+    if (text.includes("close") || text.includes("cancel")) return "close";
+    if (text.includes("back") || text.includes("all games")) return "back";
+    return element.tagName === "A" ? "select" : "click";
+  }
+
+  function handleClick(event) {
+    const target = event.target.closest("button, a, [role='button'], input[type='button'], input[type='submit']");
+    if (!target || target.disabled || target.closest(".rb-escape-menu, .rb-escape-btn")) return;
+    play(buttonSoundFor(target), { volume: 0.32, throttleMs: 80 });
+  }
+
+  function handleGamePointer(event) {
+    const target = event.target;
+    if (!target || target.closest("button, a, input, textarea, select, [role='button'], [contenteditable='true']")) return;
+    const surface = target.closest("canvas, .merge-board, .rb-standalone-surface, .game-stage");
+    if (!surface || !location.pathname.includes("/games/")) return;
+    const sound = gamePointerSounds[currentGameSlug()];
+    if (!sound) return;
+    play(sound, { volume: 0.22, throttleMs: 140 });
+  }
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    muted = readMuted();
+    document.addEventListener("pointerdown", () => ensureContext(), { once: true, passive: true });
+    document.addEventListener("click", handleClick);
+    document.addEventListener("pointerdown", handleGamePointer, { passive: true });
+    document.addEventListener("rainbot:sfx", (event) => {
+      const detail = event.detail;
+      if (typeof detail === "string") play(detail);
+      else if (detail && typeof detail === "object") play(detail.name, detail);
+    });
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY) setMuted(event.newValue === "true");
+    });
+  }
+
+  return {
+    init,
+    play,
+    isMuted: () => muted,
+    setMuted,
+    toggleMuted,
+  };
+})();
+
+window.RBSfx = RBSfx;
+
 function initGameEscapeMenu() {
   const isGamePage = location.pathname.includes("/games/") && document.querySelector(".game-stage");
   if (!isGamePage || document.getElementById("rb-escape-menu")) return;
@@ -3470,6 +3764,7 @@ function initGameEscapeMenu() {
         <button class="btn btn--primary" type="button" data-rb-escape-action="resume">Resume</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="restart">Restart</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="exit-max">Exit max screen</button>
+        <button class="btn btn--secondary" type="button" data-rb-escape-action="sound" aria-pressed="true">Sound on</button>
         <button class="btn btn--ghost" type="button" data-rb-escape-action="games">All games</button>
       </div>
     </div>
@@ -3479,6 +3774,7 @@ function initGameEscapeMenu() {
   const resumeButton = backdrop.querySelector('[data-rb-escape-action="resume"]');
   const restartButton = backdrop.querySelector('[data-rb-escape-action="restart"]');
   const exitMaxButton = backdrop.querySelector('[data-rb-escape-action="exit-max"]');
+  const soundButton = backdrop.querySelector('[data-rb-escape-action="sound"]');
 
   const findPauseButton = () => (
     document.getElementById("btn-pause") ||
@@ -3514,6 +3810,11 @@ function initGameEscapeMenu() {
   const refreshActions = () => {
     if (restartButton) restartButton.hidden = !findRestartButton();
     if (exitMaxButton) exitMaxButton.hidden = !isMaxed();
+    if (soundButton && window.RBSfx) {
+      const muted = window.RBSfx.isMuted();
+      soundButton.textContent = muted ? "Sound off" : "Sound on";
+      soundButton.setAttribute("aria-pressed", muted ? "false" : "true");
+    }
   };
   const pauseGameIfPossible = () => {
     if (pageLooksPaused()) return false;
@@ -3545,6 +3846,7 @@ function initGameEscapeMenu() {
     if (resume) resumeGameIfPossible();
     backdrop.hidden = true;
     document.body.classList.remove("rb-escape-menu-open");
+    if (window.RBSfx) window.RBSfx.play("close", { volume: 0.26, throttleMs: 120 });
     if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus({ preventScroll: true });
     lastFocus = null;
     pausedByMenu = false;
@@ -3555,6 +3857,7 @@ function initGameEscapeMenu() {
     refreshActions();
     backdrop.hidden = false;
     document.body.classList.add("rb-escape-menu-open");
+    if (window.RBSfx) window.RBSfx.play("open", { volume: 0.28, throttleMs: 120 });
     if (resumeButton) resumeButton.focus({ preventScroll: true });
   };
 
@@ -3575,6 +3878,11 @@ function initGameEscapeMenu() {
       exitMaxScreen();
       refreshActions();
       window.setTimeout(refreshActions, 100);
+    }
+    if (action === "sound" && window.RBSfx) {
+      const muted = window.RBSfx.toggleMuted();
+      refreshActions();
+      if (!muted) window.RBSfx.play("confirm", { force: true, volume: 0.28 });
     }
     if (action === "games") {
       window.location.href = `${RB_BASE}games.html`;
@@ -3727,6 +4035,7 @@ function fitGameCanvases() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  RBSfx.init();
   initGamesCatalog();
   initStandaloneGameShell();
   initGameEscapeMenu();

@@ -2769,58 +2769,67 @@ body.arcade-home::before {
 
 .nav__search {
   display: grid;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: 0 minmax(42px, auto);
+  align-items: center;
+  justify-self: end;
+  width: 42px;
   min-width: 0;
   height: 42px;
   background: #05070d;
   border: 1px solid rgba(151, 171, 194, 0.42);
   border-radius: 4px;
   overflow: hidden;
+  transition: width 180ms ease, grid-template-columns 180ms ease;
+}
+
+.nav__search.is-open {
+  grid-template-columns: minmax(0, 1fr) 42px;
+  width: min(290px, 100%);
 }
 
 .nav__search input {
   min-width: 0;
+  width: 100%;
   border: 0;
   background: transparent;
   color: var(--arcade-white);
   font: 500 15px/1 var(--font-body);
-  padding: 0 14px;
+  padding: 0;
+  opacity: 0;
   outline: none;
+  pointer-events: none;
+  transition: opacity 140ms ease, padding 140ms ease;
+}
+
+.nav__search.is-open input {
+  opacity: 1;
+  padding: 0 14px;
+  pointer-events: auto;
 }
 
 .nav__search input::placeholder {
   color: #9aa4b4;
 }
 
-.nav__search button {
-  border: 0;
-  border-left: 1px solid rgba(151, 171, 194, 0.2);
+.nav__search-toggle {
+  align-items: center;
   background: transparent;
+  border: 0;
   color: var(--arcade-white);
   cursor: pointer;
-  font-size: 0;
+  display: inline-flex;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
 }
 
-.nav__search button::before {
-  content: "";
-  display: block;
-  width: 14px;
-  height: 14px;
-  margin: 0 auto;
-  border: 3px solid currentColor;
-  border-radius: 50%;
-  transform: translate(-1px, -1px);
+.nav__search.is-open .nav__search-toggle {
+  border-left: 1px solid rgba(151, 171, 194, 0.2);
 }
 
-.nav__search button::after {
-  content: "";
+.nav__search-icon {
   display: block;
-  width: 10px;
-  height: 3px;
-  margin: -2px auto 0;
-  background: currentColor;
-  transform: rotate(45deg) translate(8px, -2px);
-  transform-origin: center;
+  flex: 0 0 auto;
 }
 
 .nav__actions {
@@ -2905,6 +2914,10 @@ body.arcade-home::before {
     display: grid;
     grid-area: search;
     justify-self: center;
+    width: 42px;
+  }
+
+  .nav__search.is-open {
     width: min(100%, 620px);
   }
 
@@ -5543,7 +5556,12 @@ body.arcade-home::before {
   }
 
   .nav__search {
-    display: none;
+    justify-self: end;
+    width: 42px;
+  }
+
+  .nav__search.is-open {
+    width: min(280px, 42vw);
   }
 
   .portal-hero {

@@ -3,713 +3,188 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mr. Feast: Deadline Mansion — Rainbot Network</title>
-  <meta name="description" content="A 3D horror parody game show. Sneak through the Deadline Mansion, sabotage the challenge cameras, and survive Mr. Feast's final segment." />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260705-escape-scope-1" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23080705'/%3E%3Ccircle cx='50' cy='43' r='27' fill='%23f0c336'/%3E%3Cpath d='M25 77h50l-9-25H34z' fill='%238b1818'/%3E%3Cpath d='M36 42h28v7H36z' fill='%23040302'/%3E%3Cpath d='M35 58q15 13 30 0' fill='none' stroke='%23040302' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <title>Mr. Feast: The Deadline House — Rainbot Network</title>
+  <meta name="description" content="Explore a fresh procedural 3D spooky house prototype with a basement, main floor, second floor, aligned stairs, storm lighting, and environmental interactions." />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260706-nav-search-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23070810'/%3E%3Cpath d='M20 52 50 26 80 52v30H20z' fill='%231d2740'/%3E%3Crect x='44' y='60' width='12' height='22' fill='%23f0c336'/%3E%3Crect x='30' y='58' width='9' height='9' fill='%23f0c336'/%3E%3Crect x='61' y='58' width='9' height='9' fill='%23f0c336'/%3E%3C/svg%3E" />
   <style>
-    .mrfeast-page {
-      max-width: 1720px;
-    }
+    .house-page { max-width: 1500px; }
 
-    .mrfeast-stage {
-      background:
-        radial-gradient(circle at 50% 8%, rgba(240, 195, 54, 0.12), transparent 26%),
-        linear-gradient(180deg, rgba(14, 10, 8, 0.98), rgba(4, 5, 6, 0.99));
-      border-color: rgba(139, 24, 24, 0.72);
+    .house-stage {
+      background: linear-gradient(180deg, rgba(10, 12, 20, 0.98), rgba(4, 5, 8, 0.99));
+      border-color: rgba(60, 78, 120, 0.5);
       position: relative;
-      scroll-margin-top: 92px;
     }
 
-    .mrfeast-stage .hud {
-      background: rgba(5, 5, 6, 0.88);
-      border-color: rgba(240, 195, 54, 0.24);
-      box-shadow: 0 0 24px rgba(139, 24, 24, 0.18);
-    }
-
-    .canvas-wrap--mrfeast-3d {
-      aspect-ratio: 16 / 9;
+    .canvas-wrap--house {
+      --game-aspect: 1.7778;
+      --game-aspect-ratio: 16 / 9;
       --game-max-width: 1280px;
-      background: #050505;
-      border: 1px solid rgba(240, 195, 54, 0.22);
+      background: #05060a;
+      border: 1px solid rgba(60, 78, 120, 0.35);
     }
 
-    .canvas-wrap--mrfeast-3d #gameCanvas {
-      background: #050505;
-      border-color: rgba(139, 24, 24, 0.72);
-    }
+    .canvas-wrap--house #gameCanvas { background: #05060a; }
+    .canvas-wrap--house #gameCanvas.mouse-look-locked { cursor: none; }
 
-    .canvas-wrap--mrfeast-3d #gameCanvas.mouse-look-locked {
-      cursor: none;
-    }
-
-    .mrfeast-mouse-look-locked,
-    .mrfeast-mouse-look-locked * {
-      cursor: none !important;
-    }
-
-    .feast-objective {
+    .house-hud {
       position: absolute;
-      top: 12px;
-      left: 12px;
+      top: 12px; left: 12px;
       z-index: 4;
-      width: min(320px, calc(100% - 24px));
+      display: flex; gap: 8px; align-items: center;
       pointer-events: none;
     }
-
-    .feast-objective__chip {
-      background: rgba(6, 5, 4, 0.72);
-      border: 1px solid rgba(240, 195, 54, 0.34);
+    .house-chip {
+      background: rgba(8, 10, 18, 0.72);
+      border: 1px solid rgba(120, 150, 210, 0.34);
       border-radius: 8px;
-      box-shadow: 0 0 22px rgba(240, 195, 54, 0.08);
-      color: #fff6d0;
-      display: grid;
-      gap: 2px;
+      color: #cfe0ff;
       font-family: var(--font-mono);
-      padding: 9px 11px;
+      font-size: 12px; font-weight: 800;
+      letter-spacing: 1px;
+      padding: 8px 12px;
       text-transform: uppercase;
     }
 
-    .feast-objective__label {
-      color: rgba(255, 246, 208, 0.64);
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 1.6px;
-    }
-
-    .feast-objective__text {
-      color: #f0c336;
-      font-size: 12px;
-      font-weight: 900;
-      line-height: 1.3;
-    }
-
-    .feast-status {
+    .interact-prompt {
       position: absolute;
-      top: 12px;
-      right: 12px;
-      z-index: 4;
-      display: grid;
-      gap: 6px;
-      width: min(245px, calc(100% - 24px));
-      pointer-events: none;
-    }
-
-    .feast-status__bar {
-      background: rgba(6, 5, 4, 0.66);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
-      height: 10px;
-      overflow: hidden;
-    }
-
-    .feast-status__bar span {
-      display: block;
-      height: 100%;
-      width: 50%;
-      background: #f0c336;
-      border-radius: inherit;
-      box-shadow: 0 0 14px currentColor;
-      transition: width 100ms linear, background-color 100ms linear;
-    }
-
-    .feast-status__row {
-      display: grid;
-      grid-template-columns: 66px minmax(0, 1fr) 42px;
-      gap: 7px;
-      align-items: center;
-      color: rgba(255, 255, 255, 0.72);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      text-transform: uppercase;
-    }
-
-    .feast-route,
-    .feast-danger {
-      position: absolute;
-      bottom: 16px;
-      z-index: 5;
-      pointer-events: none;
-      font-family: var(--font-mono);
-      text-transform: uppercase;
-    }
-
-    .feast-route {
-      left: 12px;
-      align-items: center;
-      background: rgba(6, 5, 4, 0.72);
-      border: 1px solid rgba(240, 195, 54, 0.34);
-      border-radius: 999px;
-      color: #fff6d0;
-      display: inline-flex;
-      gap: 8px;
-      min-height: 32px;
-      max-width: min(360px, calc(100% - 24px));
-      padding: 7px 11px;
-    }
-
-    .feast-route__arrow {
-      color: #f0c336;
-      display: inline-grid;
-      flex: 0 0 18px;
-      font-size: 16px;
-      font-weight: 900;
-      line-height: 1;
-      place-items: center;
-      transform-origin: 50% 50%;
-      transition: transform 90ms linear;
-    }
-
-    .feast-route__text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: 10px;
-      font-weight: 800;
-      letter-spacing: 0.6px;
-    }
-
-    .feast-route--final {
-      border-color: rgba(107, 255, 125, 0.5);
-      box-shadow: 0 0 18px rgba(107, 255, 125, 0.12);
-    }
-
-    .feast-route--detour {
-      border-color: rgba(255, 77, 77, 0.58);
-      box-shadow: 0 0 18px rgba(255, 77, 77, 0.14);
-    }
-
-    .feast-danger {
-      right: 12px;
-      background: rgba(6, 5, 4, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
-      color: rgba(255, 255, 255, 0.72);
-      display: inline-flex;
-      font-size: 10px;
-      font-weight: 900;
-      letter-spacing: 0.8px;
-      min-height: 32px;
-      align-items: center;
-      justify-content: center;
-      padding: 7px 11px;
-    }
-
-    .feast-danger--search {
-      border-color: rgba(240, 195, 54, 0.5);
-      color: #f0c336;
-    }
-
-    .feast-danger--hidden {
-      border-color: rgba(107, 255, 125, 0.52);
-      color: #d8ffe0;
-      box-shadow: 0 0 18px rgba(107, 255, 125, 0.12);
-    }
-
-    .feast-danger--chase,
-    .feast-danger--final,
-    .feast-danger--camera {
-      border-color: rgba(255, 77, 77, 0.68);
-      color: #ffd9d9;
-      box-shadow: 0 0 18px rgba(255, 77, 77, 0.14);
-    }
-
-    .feast-stealth {
-      position: absolute;
-      top: 90px;
-      left: 12px;
-      z-index: 5;
-      min-height: 30px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 999px;
-      background: rgba(6, 5, 4, 0.68);
-      color: rgba(255, 255, 255, 0.74);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 900;
-      letter-spacing: 0.8px;
-      padding: 6px 10px;
-      pointer-events: none;
-      text-transform: uppercase;
-    }
-
-    .feast-stealth--hidden {
-      border-color: rgba(107, 255, 125, 0.52);
-      color: #d8ffe0;
-      box-shadow: 0 0 18px rgba(107, 255, 125, 0.12);
-    }
-
-    .feast-stealth--search {
-      border-color: rgba(240, 195, 54, 0.52);
-      color: #f0c336;
-    }
-
-    .feast-stealth--spotted {
-      border-color: rgba(255, 77, 77, 0.72);
-      color: #ffd9d9;
-      box-shadow: 0 0 18px rgba(255, 77, 77, 0.16);
-    }
-
-    .feast-prompt,
-    .feast-alert {
-      position: absolute;
-      left: 50%;
-      z-index: 5;
+      left: 50%; bottom: 54px;
       transform: translateX(-50%);
+      z-index: 5;
       pointer-events: none;
-      text-align: center;
-    }
-
-    .feast-prompt {
-      bottom: 18px;
-      min-width: min(420px, calc(100% - 32px));
       opacity: 0;
-      transition: opacity 140ms ease, transform 140ms ease;
+      transition: opacity 120ms ease;
     }
-
-    .feast-prompt--show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(-2px);
-    }
-
-    .feast-prompt__inner,
-    .feast-alert__inner {
-      background: rgba(6, 5, 4, 0.72);
-      border: 1px solid rgba(240, 195, 54, 0.34);
+    .interact-prompt--show { opacity: 1; }
+    .interact-prompt__inner {
+      background: rgba(8, 10, 18, 0.82);
+      border: 1px solid rgba(160, 190, 250, 0.5);
       border-radius: 999px;
-      color: #fff6d0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+      color: #eaf1ff;
       font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.7px;
-      max-width: 100%;
-      min-height: 34px;
-      padding: 8px 13px;
+      font-size: 12px; font-weight: 800;
+      letter-spacing: 0.6px;
+      padding: 9px 16px;
       text-transform: uppercase;
+      box-shadow: 0 0 20px rgba(90, 130, 210, 0.18);
     }
 
-    .feast-alert {
-      top: 54px;
-      width: min(520px, calc(100% - 32px));
-      opacity: 0;
-      transition: opacity 180ms ease, transform 180ms ease;
-    }
-
-    .feast-alert--show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(3px);
-    }
-
-    .feast-alert__inner {
-      border-color: rgba(139, 24, 24, 0.72);
-      color: #ffd9d9;
-      white-space: normal;
-    }
-
-    .feast-vignette,
-    .feast-jumpscare {
+    .house-reticle {
       position: absolute;
-      inset: 0;
-      z-index: 3;
-      border-radius: 10px;
+      left: 50%; top: 50%;
+      width: 5px; height: 5px;
+      margin: -2.5px 0 0 -2.5px;
+      z-index: 4;
+      border-radius: 50%;
+      background: rgba(220, 230, 255, 0.6);
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
       pointer-events: none;
     }
 
-    .feast-vignette {
-      background:
-        radial-gradient(circle at 50% 54%, transparent 36%, rgba(0, 0, 0, 0.34) 72%, rgba(0, 0, 0, 0.86) 100%),
-        linear-gradient(180deg, rgba(139, 24, 24, 0.08), rgba(0, 0, 0, 0));
-      opacity: 0.78;
-    }
-
-    .feast-jumpscare {
-      background:
-        repeating-linear-gradient(0deg, transparent 0 4px, rgba(255, 255, 255, 0.04) 4px 5px),
-        radial-gradient(circle at 50% 45%, rgba(240, 195, 54, 0.26), rgba(139, 24, 24, 0.36) 32%, rgba(0, 0, 0, 0) 62%);
-      mix-blend-mode: screen;
-      opacity: 0;
-      transition: opacity 80ms linear;
-    }
-
-    .feast-touch-move {
-      position: absolute;
-      left: 0;
-      bottom: 0;
-      z-index: 6;
-      display: none;
-      width: 46%;
-      height: 66%;
-      touch-action: none;
+    .house-vignette {
+      position: absolute; inset: 0;
+      z-index: 3; border-radius: 10px;
       pointer-events: none;
+      background: radial-gradient(circle at 50% 52%, transparent 44%, rgba(0, 0, 0, 0.5) 82%, rgba(0, 0, 0, 0.9) 100%);
     }
 
-    .feast-touch-actions {
+    .house-touch-move {
+      position: absolute; left: 0; bottom: 0;
+      z-index: 6; display: none;
+      width: 46%; height: 62%;
+      touch-action: none; pointer-events: none;
+    }
+    .house-touch-actions {
       position: absolute;
       right: max(10px, env(safe-area-inset-right));
       bottom: max(10px, env(safe-area-inset-bottom));
-      z-index: 7;
-      display: none;
-      grid-template-columns: repeat(3, auto);
-      gap: 8px;
-      pointer-events: none;
+      z-index: 7; display: none;
+      grid-template-columns: repeat(2, auto);
+      gap: 8px; pointer-events: none;
     }
-
-    .feast-touch-actions .btn {
-      background: rgba(5, 5, 6, 0.34);
-      border-color: rgba(240, 195, 54, 0.18);
+    .house-touch-actions .btn {
+      background: rgba(8, 10, 18, 0.4);
+      border-color: rgba(120, 150, 210, 0.28);
       border-radius: 999px;
-      box-shadow: 0 0 16px rgba(0, 0, 0, 0.24);
-      color: rgba(255, 246, 208, 0.74);
+      color: rgba(220, 230, 255, 0.82);
       font-family: var(--font-mono);
-      font-size: 10px;
-      min-height: 38px;
-      min-width: 48px;
-      padding: 8px 10px;
-      pointer-events: auto;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-      touch-action: none;
+      font-size: 11px; min-height: 44px; min-width: 56px;
+      padding: 8px 12px; pointer-events: auto; touch-action: none;
+    }
+    .house-touch-actions .btn:active,
+    .house-touch-actions .btn.is-held {
+      background: rgba(120, 150, 210, 0.32);
+      color: #fff;
     }
 
-    .feast-touch-actions .btn:active,
-    .feast-touch-actions .btn.is-held {
-      background: rgba(240, 195, 54, 0.28);
-      border-color: rgba(240, 195, 54, 0.45);
-      color: #fff6d0;
-    }
-
-    .feast-side-note,
-    .feast-log,
-    .feast-objectives {
+    .house-side-note {
       color: var(--ink-dim);
       font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.5;
-      margin: 10px 0 0;
+      font-size: 12px; line-height: 1.55; margin: 10px 0 0;
     }
-
-    .feast-side-note kbd {
+    .house-side-note kbd {
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 4px;
-      color: var(--ink);
-      padding: 1px 5px;
+      border-radius: 4px; color: var(--ink); padding: 1px 5px;
     }
-
-    .feast-settings {
-      display: grid;
-      gap: 8px;
-      margin: 12px 0 0;
-    }
-
-    .feast-setting {
-      align-items: center;
-      color: rgba(255, 255, 255, 0.74);
-      display: grid;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      gap: 8px;
-      grid-template-columns: 74px minmax(0, 1fr) 44px;
+    .house-settings { display: grid; gap: 8px; margin: 12px 0 0; }
+    .house-setting {
+      align-items: center; color: rgba(220, 230, 255, 0.74);
+      display: grid; font-family: var(--font-mono); font-size: 11px;
+      gap: 8px; grid-template-columns: 74px minmax(0, 1fr) 44px;
       text-transform: uppercase;
     }
-
-    .feast-setting input[type="range"] {
-      accent-color: #f0c336;
-      width: 100%;
-    }
-
-    .feast-setting--check {
-      display: inline-flex;
-      gap: 8px;
-      width: fit-content;
-    }
-
-    .feast-setting--check input {
-      accent-color: #f0c336;
-    }
-
-    .feast-objectives {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-    }
-
-    .feast-objectives__item {
-      align-items: center;
-      background: rgba(0, 0, 0, 0.24);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 7px;
-      display: flex;
-      gap: 8px;
-      min-height: 30px;
-      padding: 6px 8px;
-    }
-
-    .feast-objectives__item span:first-child {
-      color: #f0c336;
-      flex: 0 0 auto;
-      font-weight: 900;
-    }
-
-    .feast-objectives__item--done {
-      color: rgba(255, 255, 255, 0.38);
-      text-decoration: line-through;
-    }
-
-    .feast-objectives__item--current {
-      border-color: rgba(240, 195, 54, 0.5);
-      box-shadow: 0 0 14px rgba(240, 195, 54, 0.08);
-    }
-
-    .feast-objectives__item--story {
-      background: rgba(139, 24, 24, 0.2);
-      border-color: rgba(255, 77, 77, 0.42);
-    }
-
-    .feast-log {
-      background: rgba(0, 0, 0, 0.22);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      display: grid;
-      gap: 7px;
-      max-height: 148px;
-      overflow: hidden;
-      padding: 9px;
-    }
-
-    .feast-log__line {
-      color: rgba(255, 255, 255, 0.66);
-    }
-
-    .feast-log__line strong {
-      color: #f0c336;
-      font-weight: 900;
-    }
-
-    .mrfeast-mobile-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .mrfeast-mobile-grid .btn {
-      min-height: 46px;
-      padding-left: 8px;
-      padding-right: 8px;
-    }
-
-    .mrfeast-page .controls-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .mrfeast-page .controls-row .btn {
-      min-height: 42px;
-      width: auto;
-    }
+    .house-setting input[type="range"] { accent-color: #6f9bff; width: 100%; }
+    .house-setting--check { display: inline-flex; gap: 8px; width: fit-content; grid-template-columns: none; }
+    .house-setting--check input { accent-color: #6f9bff; }
 
     @media (max-width: 900px) {
-      .feast-objective,
-      .feast-status {
-        left: 8px;
-        right: auto;
-        width: min(220px, calc(100% - 16px));
-      }
-
-      .feast-status {
-        display: none;
-      }
-
-      .feast-status__row {
-        grid-template-columns: 58px minmax(0, 1fr) 36px;
-      }
-
-      .feast-objective__chip {
-        padding: 6px 8px;
-      }
-
-      .feast-objective__label {
-        font-size: 8px;
-      }
-
-      .feast-objective__text {
-        font-size: 10px;
-      }
-
-      .feast-stealth {
-        top: 72px;
-        left: 8px;
-        min-height: 27px;
-        padding: 5px 8px;
-        font-size: 9px;
-      }
-
-      .feast-alert {
-        top: 92px;
-        bottom: auto;
-      }
-
-      .feast-route {
-        bottom: 42px;
-        left: 8px;
-        max-width: min(220px, calc(100% - 16px));
-        min-height: 27px;
-        padding: 5px 8px;
-      }
-
-      .feast-route__text,
-      .feast-danger {
-        font-size: 9px;
-      }
-
-      .feast-danger {
-        right: 8px;
-        bottom: 42px;
-        min-height: 27px;
-        padding: 5px 8px;
-      }
-
-      .feast-prompt {
-        bottom: 8px;
-      }
-
-      .feast-prompt__inner,
-      .feast-alert__inner {
-        font-size: 9px;
-        min-height: 27px;
-        padding: 6px 9px;
-      }
-
-      .feast-touch-move,
-      .feast-touch-actions {
-        display: grid;
-      }
-
-      .feast-touch-move {
-        pointer-events: auto;
-      }
-
-      .mrfeast-page .game-side .mobile-controls {
-        display: none;
-      }
-    }
-
-    @media (max-width: 520px) {
-      .feast-touch-actions {
-        gap: 6px;
-        right: max(8px, env(safe-area-inset-right));
-        bottom: max(8px, env(safe-area-inset-bottom));
-      }
-
-      .feast-touch-actions .btn {
-        font-size: 9px;
-        min-height: 34px;
-        min-width: 42px;
-        padding: 7px 8px;
-      }
-
-      .feast-route,
-      .feast-danger {
-        bottom: 50px;
-      }
-
-      .feast-prompt {
-        bottom: 86px;
-      }
-
-      .feast-alert {
-        top: 62px;
-        right: 8px;
-        left: auto;
-        width: min(270px, calc(100% - 104px));
-        transform: none;
-        text-align: right;
-      }
-
-      .feast-alert--show {
-        transform: none;
-      }
-
-      .canvas-wrap.feast-has-prompt .feast-alert {
-        opacity: 0;
-      }
+      .house-touch-move, .house-touch-actions { display: grid; }
+      .house-touch-move { pointer-events: auto; }
+      .house-page .game-side .mobile-controls { display: none; }
     }
   </style>
 </head>
 <body>
   <nav class="nav"><div id="nav-slot"></div></nav>
 
-  <main class="game-page mrfeast-page">
+  <main class="game-page house-page">
     <div class="game-page__header">
       <div>
-        <h1 class="game-page__title">Mr. Feast: Deadline Mansion</h1>
-        <div class="game-page__sub">3D horror parody · Sabotage the challenge · Escape before the final segment</div>
+        <h1 class="game-page__title">Mr. Feast: The Deadline House</h1>
+        <div class="game-page__sub">Fresh 3D spooky house prototype · Basement · Main floor · Second floor</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
     </div>
 
     <div class="game-layout">
-      <div class="game-stage mrfeast-stage">
-        <div class="hud">
-          <div class="hud__item"><span class="hud__label">TASKS</span><span class="hud__value" id="hud-tasks">0/6</span></div>
-          <div class="hud__item"><span class="hud__label">VIEWERS</span><span class="hud__value" id="hud-viewers">0</span></div>
-          <div class="hud__item"><span class="hud__label">NERVE</span><span class="hud__value" id="hud-nerve">100%</span></div>
-          <div class="hud__item"><span class="hud__label">CAST</span><span class="hud__value" id="hud-contestants">10</span></div>
-          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
-        </div>
+      <div class="game-stage house-stage">
+        <div class="canvas-wrap canvas-wrap--house">
+          <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Mr. Feast Deadline House 3D prototype"></canvas>
 
-        <div class="canvas-wrap canvas-wrap--mrfeast-3d">
-          <canvas id="gameCanvas" width="960" height="540" tabindex="0"></canvas>
+          <div class="house-hud"><span class="house-chip" id="hud-location">Entryway</span></div>
+          <div class="house-reticle" aria-hidden="true"></div>
+          <div class="house-vignette" aria-hidden="true"></div>
 
-          <div class="feast-objective" aria-live="polite">
-            <div class="feast-objective__chip">
-              <span class="feast-objective__label">Current segment</span>
-              <span class="feast-objective__text" id="objective-text">Find the first sabotage point</span>
-            </div>
+          <div class="interact-prompt" id="interact-prompt">
+            <div class="interact-prompt__inner" id="interact-text">Open</div>
           </div>
 
-          <div class="feast-status" aria-hidden="true">
-            <div class="feast-status__row">
-              <span>Nerve</span><div class="feast-status__bar"><span id="meter-nerve"></span></div><span id="meter-nerve-text">100</span>
-            </div>
-            <div class="feast-status__row">
-              <span>Stamina</span><div class="feast-status__bar"><span id="meter-stamina"></span></div><span id="meter-stamina-text">100</span>
-            </div>
-            <div class="feast-status__row">
-              <span>Signal</span><div class="feast-status__bar"><span id="meter-signal"></span></div><span id="meter-signal-text">0</span>
-            </div>
-          </div>
-
-          <div class="feast-route" id="feast-route" aria-hidden="true">
-            <span class="feast-route__arrow" id="route-arrow">▲</span>
-            <span class="feast-route__text" id="route-text">Next target</span>
-          </div>
-          <div class="feast-danger" id="feast-danger" aria-hidden="true">Signal quiet</div>
-          <div class="feast-stealth" id="feast-stealth" aria-hidden="true">Visible</div>
-          <div class="feast-alert" id="feast-alert"><div class="feast-alert__inner" id="feast-alert-text">LIVE FEED INTERRUPTED</div></div>
-          <div class="feast-prompt" id="feast-prompt"><div class="feast-prompt__inner" id="feast-prompt-text">Hold E</div></div>
-          <div class="feast-vignette" id="feast-vignette"></div>
-          <div class="feast-jumpscare" id="feast-jumpscare"></div>
-          <div class="feast-touch-move" id="touch-move-zone" aria-hidden="true"></div>
-          <div class="feast-touch-actions" aria-label="Mobile actions">
+          <div class="house-touch-move" id="touch-move-zone" aria-hidden="true"></div>
+          <div class="house-touch-actions" aria-label="Mobile actions">
             <button class="btn" data-hold-action="sprint" type="button">Run</button>
             <button class="btn" data-hold-action="interact" type="button">Use</button>
-            <button class="btn" id="btn-recenter-touch" type="button">Aim</button>
           </div>
 
           <div class="overlay overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">MR. FEAST</h2>
+            <h2 class="overlay__title" id="overlay-title">THE DEADLINE HOUSE</h2>
             <p class="overlay__sub" id="overlay-sub">
-              Ten contestants entered the Deadline Mansion. The contracts are missing pages, the cameras keep smiling, and the host has started calling the exits "optional."
+              Nobody's home. The power still works, mostly. Wander the basement, the main floor, and the bedrooms upstairs while the storm keeps knocking.
               <br><br>
-              Sabotage six show systems, hide when Mr. Feast is searching, and break line of sight if he starts chasing.
+              Click to look around · <strong>WASD</strong> to move · <strong>Shift</strong> to run · <strong>E</strong> to open doors, cabinets, the fridge, and light switches.
             </p>
-            <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Enter the mansion</button>
+            <button class="btn btn--primary" id="btn-primary">Enter the house</button>
           </div>
         </div>
       </div>
@@ -717,62 +192,52 @@
       <aside class="game-side">
         <div class="game-side__panel">
           <h3 class="game-side__title">CONTROLS</h3>
-          <div class="controls-row">
-            <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
-            <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
-          </div>
-          <p class="feast-side-note">
-            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click game to lock mouse<br>
-            <kbd>Esc</kbd> release mouse · <kbd>Shift</kbd> sprint · hold <kbd>F</kbd> use/hide
+          <p class="house-side-note">
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · click game to look<br>
+            <kbd>Esc</kbd> release mouse · <kbd>Shift</kbd> run · <kbd>E</kbd> interact
           </p>
-          <div class="feast-settings" aria-label="Look settings">
-            <label class="feast-setting" for="look-sensitivity">
+          <div class="house-settings" aria-label="Look settings">
+            <label class="house-setting" for="look-sensitivity">
               <span>Look</span>
-              <input id="look-sensitivity" type="range" min="60" max="160" step="5" value="100" />
+              <input id="look-sensitivity" type="range" min="50" max="200" step="5" value="100" />
               <span id="look-sensitivity-text">100%</span>
             </label>
-            <label class="feast-setting feast-setting--check" for="invert-y">
+            <label class="house-setting house-setting--check" for="invert-y">
               <input id="invert-y" type="checkbox" />
               <span>Invert Y</span>
             </label>
           </div>
           <div class="mobile-controls" aria-label="Mobile controls">
-            <div class="mobile-controls__grid mrfeast-mobile-grid">
+            <div class="mobile-controls__grid" style="grid-template-columns:repeat(3,minmax(0,1fr));">
               <button class="btn btn--secondary" data-hold-action="turnLeft" type="button">Turn</button>
               <button class="btn btn--primary" data-hold-action="forward" type="button">Forward</button>
               <button class="btn btn--secondary" data-hold-action="turnRight" type="button">Turn</button>
               <button class="btn btn--secondary" data-hold-action="left" type="button">Left</button>
               <button class="btn btn--secondary" data-hold-action="back" type="button">Back</button>
               <button class="btn btn--secondary" data-hold-action="right" type="button">Right</button>
-              <button class="btn btn--yellow" data-hold-action="sprint" type="button">Sprint</button>
-              <button class="btn btn--primary" data-hold-action="interact" type="button">Hold F</button>
+              <button class="btn btn--yellow" data-hold-action="sprint" type="button">Run</button>
+              <button class="btn btn--primary" data-hold-action="interact" type="button">Use (E)</button>
               <button class="btn btn--ghost" id="btn-recenter" type="button">Recenter</button>
             </div>
           </div>
         </div>
 
         <div class="game-side__panel">
-          <h3 class="game-side__title">RUN LOG</h3>
-          <div class="feast-log" id="event-log"></div>
-        </div>
-
-        <div class="game-side__panel">
-          <h3 class="game-side__title">SABOTAGE LIST</h3>
-          <div class="feast-objectives" id="objective-list"></div>
-        </div>
-
-        <div class="game-side__panel">
-          <h3 class="game-side__title">POWER-UPS</h3>
-          <div class="powerups" id="powerups"></div>
+          <h3 class="game-side__title">THE HOUSE</h3>
+          <p class="house-side-note">
+            <strong>Basement</strong> — unfinished, dark. Pull the string for the bulb.<br>
+            <strong>Main floor</strong> — living room, dining room, kitchen (open the fridge), and a bathroom.<br>
+            <strong>Upstairs</strong> — three bedrooms and a full bath. Doors, cabinets, the fridge, and light switches are interactive.
+          </p>
         </div>
 
         <div id="ad-leaderboard"></div>
         <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
 
         <details class="game-side__howto">
-          <summary>About this parody</summary>
+          <summary>About</summary>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
-            Mr. Feast is a fictional parody character riffing on oversized internet challenge-show tropes. This game is not affiliated with any real person, brand, production company, platform, or mansion.
+            A fictional spooky house sandbox — an atmospheric 3D environment with no scores and no chase. Not affiliated with any real person, brand, or location.
           </p>
         </details>
       </aside>
@@ -790,11 +255,17 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260705-escape-scope-1"></script>
-  <script src="../assets/js/mr-feast.js?v=20260616-house-refresh"></script>
+  <script src="../assets/js/main.js?v=20260706-nav-search-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js?v=20260613-1"></script>
+  <script src="../assets/js/mr-feast-house.js?v=20260705-house-redo-2"></script>
   <script>
-    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
-    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+    if (window.renderAdSlot) {
+      renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+      renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+    }
+    var ls = document.getElementById("look-sensitivity");
+    var lst = document.getElementById("look-sensitivity-text");
+    if (ls && lst) ls.addEventListener("input", function () { lst.textContent = ls.value + "%"; });
   </script>
 </body>
 </html>

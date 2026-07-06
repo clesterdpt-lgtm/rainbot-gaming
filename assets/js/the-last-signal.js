@@ -23,6 +23,7 @@
   const UNIT_CAP = 60;                   // per-team command bandwidth
   const QUEUE_CAP = 5;
   const EDGE_SCROLL = 820;               // px/s
+  const ZOOM_MIN = 0.55, ZOOM_MAX = 2.2, ZOOM_STEP = 0.1;
   const CENTER = { x: WORLD_W / 2, y: WORLD_H / 2 };
   const TAU = Math.PI * 2;
   const VISION = {
@@ -400,7 +401,8 @@
     selVersion: 0,
     placing: null,       // {def, x, y, node, valid}
     armed: null,         // 'attack' | null (command armed from a button)
-    cam: { x: 320, y: 280 },
+    cam: { x: 320, y: 280, zoom: 1 },
+    hover: null,
     result: null,        // {winnerTeam, }
     stats: { kills: 0, losses: 0 },
     best: 0,
@@ -2003,8 +2005,9 @@
       if (mouse.cy > H - 24) cy += 1;
     }
     if (cx || cy) {
-      state.cam.x = clamp(state.cam.x + cx * EDGE_SCROLL * dt, 0, WORLD_W - W);
-      state.cam.y = clamp(state.cam.y + cy * EDGE_SCROLL * dt, 0, WORLD_H - H);
+      const vw = viewW(), vh = viewH();
+      state.cam.x = clamp(state.cam.x + cx * EDGE_SCROLL * dt, 0, WORLD_W - vw);
+      state.cam.y = clamp(state.cam.y + cy * EDGE_SCROLL * dt, 0, WORLD_H - vh);
     }
 
     // online: the remote team's units/buildings are puppets driven by network
@@ -2068,6 +2071,28 @@
   let dragStart = null, dragging = false, mmDrag = false;
   let touchPan = null, touchMoved = false, touchT0 = 0;
 
+  function camZoom() { return state.cam.zoom || 1; }
+  function viewW() { return W / camZoom(); }
+  function viewH() { return H / camZoom(); }
+  function clampCam() {
+    const vw = viewW(), vh = viewH();
+    state.cam.x = clamp(state.cam.x, 0, Math.max(0, WORLD_W - vw));
+    state.cam.y = clamp(state.cam.y, 0, Math.max(0, WORLD_H - vh));
+  }
+  function setZoom(newZoom, anchorCx, anchorCy) {
+    const oldZ = camZoom();
+    const z = clamp(newZoom, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(z - oldZ) < 0.001) return;
+    const acx = anchorCx != null ? anchorCx : W / 2;
+    const acy = anchorCy != null ? anchorCy : H / 2;
+    const wx = state.cam.x + acx / oldZ;
+    const wy = state.cam.y + acy / oldZ;
+    state.cam.zoom = z;
+    state.cam.x = wx - acx / z;
+    state.cam.y = wy - acy / z;
+    clampCam();
+  }
+
   function toCanvas(ev) {
     const r = canvas.getBoundingClientRect();
     return { x: (ev.clientX - r.left) * (W / r.width), y: (ev.clientY - r.top) * (H / r.height) };
@@ -2076,20 +2101,49 @@
     const p = toCanvas(ev);
     if (ev.pointerType) mouse.touch = ev.pointerType === "touch";
     mouse.cx = p.x; mouse.cy = p.y;
-    mouse.wx = clamp(p.x + state.cam.x, 0, WORLD_W);
-    mouse.wy = clamp(p.y + state.cam.y, 0, WORLD_H);
+    const z = camZoom();
+    mouse.wx = clamp(state.cam.x + p.x / z, 0, WORLD_W);
+    mouse.wy = clamp(state.cam.y + p.y / z, 0, WORLD_H);
     mouse.inside = p.x >= 0 && p.y >= 0 && p.x <= W && p.y <= H;
+    updateHover();
+  }
+  function isSelectableTarget(o) {
+    if (!o || o.dead) return false;
+    if (o.kind === "unit" || o.kind === "building") return thingVisibleToPlayer(o);
+    if (o.kind === "rock") return isVisibleToPlayer(o.x, o.y, o.r + 12);
+    if (state.nodes.includes(o)) return isVisibleToPlayer(o.x, o.y, o.r + 8);
+    return false;
+  }
+  function updateHover() {
+    if (
+      state.phase !== "playing" ||
+      state.paused ||
+      !mouse.inside ||
+      mouse.touch ||
+      dragging ||
+      mmDrag ||
+      touchPan ||
+      state.placing ||
+      inMinimap({ x: mouse.cx, y: mouse.cy })
+    ) {
+      state.hover = null;
+      return;
+    }
+    const hit = thingAt(mouse.wx, mouse.wy);
+    state.hover = isSelectableTarget(hit) && !state.selection.includes(hit) ? hit : null;
   }
   function inMinimap(p) { return p.x >= MM.x && p.x <= MM.x + MM.w && p.y >= MM.y && p.y <= MM.y + MM.h; }
   function camFromMinimap(p) {
     const fx = (p.x - MM.x) / MM.w, fy = (p.y - MM.y) / MM.h;
-    state.cam.x = clamp(fx * WORLD_W - W / 2, 0, WORLD_W - W);
-    state.cam.y = clamp(fy * WORLD_H - H / 2, 0, WORLD_H - H);
+    const vw = viewW(), vh = viewH();
+    state.cam.x = clamp(fx * WORLD_W - vw / 2, 0, WORLD_W - vw);
+    state.cam.y = clamp(fy * WORLD_H - vh / 2, 0, WORLD_H - vh);
   }
 
   function setSelection(arr) {
     state.selection = arr;
     state.selVersion++;
+    if (state.hover && arr.includes(state.hover)) state.hover = null;
   }
 
   function smartCommand(wx, wy) {
@@ -2230,8 +2284,9 @@
       const dy = (ev.clientY - touchPan.sy) * (H / r.height);
       if (Math.abs(dx) + Math.abs(dy) > 14) touchMoved = true;
       if (touchMoved) {
-        state.cam.x = clamp(touchPan.camX - dx, 0, WORLD_W - W);
-        state.cam.y = clamp(touchPan.camY - dy, 0, WORLD_H - H);
+        const z = camZoom(), vw = viewW(), vh = viewH();
+        state.cam.x = clamp(touchPan.camX - dx / z, 0, WORLD_W - vw);
+        state.cam.y = clamp(touchPan.camY - dy / z, 0, WORLD_H - vh);
       }
       return;
     }
@@ -2282,10 +2337,11 @@
     if (ev.button !== 0) return;
     if (!dragStart) return;
     if (dragging) {
-      const x1 = Math.min(dragStart.x, mouse.cx) + state.cam.x;
-      const y1 = Math.min(dragStart.y, mouse.cy) + state.cam.y;
-      const x2 = Math.max(dragStart.x, mouse.cx) + state.cam.x;
-      const y2 = Math.max(dragStart.y, mouse.cy) + state.cam.y;
+      const z = camZoom();
+      const x1 = Math.min(dragStart.x, mouse.cx) / z + state.cam.x;
+      const y1 = Math.min(dragStart.y, mouse.cy) / z + state.cam.y;
+      const x2 = Math.max(dragStart.x, mouse.cx) / z + state.cam.x;
+      const y2 = Math.max(dragStart.y, mouse.cy) / z + state.cam.y;
       const pt = playerTeam();
       const picked = state.units.filter((u) => !u.dead && u.team === pt && u.x >= x1 && u.x <= x2 && u.y >= y1 && u.y <= y2);
       // prefer military if the box has both
@@ -2301,7 +2357,14 @@
   }
   canvas.addEventListener("pointerup", finishPointer);
   canvas.addEventListener("pointercancel", () => { dragStart = null; dragging = false; mmDrag = false; touchPan = null; });
-  canvas.addEventListener("pointerleave", () => { mouse.inside = false; });
+  canvas.addEventListener("pointerleave", () => { mouse.inside = false; state.hover = null; });
+  canvas.addEventListener("wheel", (ev) => {
+    if (state.phase !== "playing" || state.paused) return;
+    ev.preventDefault();
+    const delta = ev.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+    setZoom(camZoom() + delta, mouse.cx, mouse.cy);
+    trackMouse(ev);
+  }, { passive: false });
 
   function tapCommand(wx, wy) {
     const hit = thingAt(wx, wy);
@@ -2376,6 +2439,8 @@
     if (state.phase !== "playing" || state.paused) return;
     if (k === "t") armAttack();
     if (k === "h") { const u = selUnits(); if (u.length) orderStop(u); }
+    if (k === "=" || k === "+") { setZoom(camZoom() + ZOOM_STEP, mouse.cx, mouse.cy); e.preventDefault(); }
+    if (k === "-" || k === "_") { setZoom(camZoom() - ZOOM_STEP, mouse.cx, mouse.cy); e.preventDefault(); }
   });
   window.addEventListener("keyup", (e) => {
     keys[e.key] = false;
@@ -2805,13 +2870,14 @@
       fogCanvas.height = H;
       fogCtx = fogCanvas.getContext("2d");
     }
+    const z = camZoom();
     fogCtx.clearRect(0, 0, W, H);
     fogCtx.globalCompositeOperation = "source-over";
     fogCtx.fillStyle = "rgb(1,2,8)";
     fogCtx.fillRect(0, 0, W, H);
     fogCtx.globalCompositeOperation = "destination-out";
     for (const s of state.vision) {
-      const x = s.x - cam.x, y = s.y - cam.y, r = s.r;
+      const x = (s.x - cam.x) * z, y = (s.y - cam.y) * z, r = s.r * z;
       if (x < -r || y < -r || x > W + r || y > H + r) continue;
       const grd = fogCtx.createRadialGradient(x, y, Math.max(12, r * 0.46), x, y, r);
       grd.addColorStop(0, "rgba(0,0,0,1)");
@@ -2826,8 +2892,61 @@
     ctx.drawImage(fogCanvas, 0, 0);
   }
 
+  function hoverRingColor(o) {
+    const pt = playerTeam();
+    if (o.kind === "unit" || o.kind === "building") {
+      return o.team === pt ? "rgba(180,255,220,0.92)" : "rgba(255,100,110,0.9)";
+    }
+    if (o.kind === "rock") return "rgba(232,195,122,0.88)";
+    if (state.nodes.includes(o)) return NODE_COLORS[o.kind] || "rgba(125,243,255,0.9)";
+    return "rgba(200,220,255,0.85)";
+  }
+
+  function renderHoverHighlight(cam) {
+    const h = state.hover;
+    if (!h || h.dead) return;
+    const pulse = 0.5 + 0.5 * Math.sin(state.vt * 6);
+    const x = h.x - cam.x, y = h.y - cam.y;
+    const color = hoverRingColor(h);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2 + pulse * 0.6;
+    ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    if (h.kind === "unit" || h.kind === "building") {
+      const r = h.def.r + 7 + pulse * 3;
+      const yOff = h.kind === "building" ? h.def.r * 0.35 : r * 0.55;
+      ctx.ellipse(x, y + yOff, r, r * 0.55, 0, 0, TAU);
+    } else if (h.kind === "rock") {
+      const r = h.r + 8 + pulse * 4;
+      ctx.ellipse(x, y, r, r * 0.72, 0, 0, TAU);
+    } else {
+      const r = h.r + 12 + pulse * 4;
+      ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.14 + pulse * 0.08;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    if (h.kind === "unit" || h.kind === "building") {
+      const r = h.def.r + 7 + pulse * 3;
+      const yOff = h.kind === "building" ? h.def.r * 0.35 : r * 0.55;
+      ctx.ellipse(x, y + yOff, r, r * 0.55, 0, 0, TAU);
+    } else if (h.kind === "rock") {
+      const r = h.r + 8 + pulse * 4;
+      ctx.ellipse(x, y, r, r * 0.72, 0, 0, TAU);
+    } else {
+      const r = h.r + 12 + pulse * 4;
+      ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   function render() {
     const cam = state.cam;
+    const z = camZoom();
+    const vw = viewW(), vh = viewH();
     ctx.clearRect(0, 0, W, H);
     refreshVision();
     if (menuMapHidden()) {
@@ -2835,7 +2954,11 @@
       renderVignette();
       return;
     }
-    if (terrain) ctx.drawImage(terrain, cam.x, cam.y, W, H, 0, 0, W, H);
+
+    ctx.save();
+    ctx.scale(z, z);
+
+    if (terrain) ctx.drawImage(terrain, cam.x, cam.y, vw, vh, 0, 0, vw, vh);
 
     // signal pulse rings from the scar center
     const pulse = (state.vt % 5) / 5;
@@ -2850,12 +2973,16 @@
     renderRocks(cam);
     if (state.placing) renderUplinkRadii(cam);
     renderSelectionRings(cam);
+    renderHoverHighlight(cam);
     renderEntities(cam);
     renderBeams(cam);
     renderProjectiles(cam);
     renderParticles(cam);
     renderBarsAndRanges(cam);
     renderCommandFeedback(cam);
+    if (state.placing) renderGhost(cam);
+    ctx.restore();
+
     if (dragging && dragStart) {
       ctx.strokeStyle = "rgba(140,240,180,0.9)";
       ctx.lineWidth = 1.4;
@@ -2863,7 +2990,6 @@
       ctx.strokeRect(dragStart.x, dragStart.y, mouse.cx - dragStart.x, mouse.cy - dragStart.y);
       ctx.setLineDash([]);
     }
-    if (state.placing) renderGhost(cam);
     renderFog(cam);
     renderVignette();
     if (state.phase === "playing" || state.phase === "over") renderMinimap();
@@ -2882,7 +3008,7 @@
     for (const n of state.nodes) {
       if (!isVisibleToPlayer(n.x, n.y, n.r + 8)) continue;
       const x = n.x - cam.x, y = n.y - cam.y;
-      if (x < -60 || y < -60 || x > W + 60 || y > H + 60) continue;
+      if (x < -60 || y < -60 || x > viewW() + 60 || y > viewH() + 60) continue;
       const dim = false;
       const c = NODE_COLORS[n.kind];
       const depleted = n.amount !== Infinity && n.amount <= 0;
@@ -2980,7 +3106,7 @@
     for (const rk of state.rocks) {
       if (rk.dead) continue;
       const x = rk.x - cam.x, y = rk.y - cam.y;
-      if (x < -80 || y < -80 || x > W + 80 || y > H + 80) continue;
+      if (x < -80 || y < -80 || x > viewW() + 80 || y > viewH() + 80) continue;
       const frac = clamp(rk.hp / rk.maxHp, 0, 1);
       ctx.fillStyle = "rgba(0,0,0,0.35)";
       ctx.beginPath(); ctx.ellipse(x + 3, y + 5, rk.r * 1.05, rk.r * 0.72, 0, 0, TAU); ctx.fill();
@@ -3074,7 +3200,7 @@
       if (!thingVisibleToPlayer(o)) continue;
       const x = o.x - cam.x, y = o.y - cam.y;
       const pad = o.kind === "building" ? o.def.r + 30 : 40;
-      if (x < -pad || y < -pad || x > W + pad || y > H + pad) continue;
+      if (x < -pad || y < -pad || x > viewW() + pad || y > viewH() + pad) continue;
       ctx.save();
       ctx.translate(x, y);
       if (o.kind === "building") drawBuilding(o);
@@ -3808,8 +3934,10 @@
     const alpha = opts.alpha == null ? 1 : opts.alpha;
     const scale = opts.scale || 1;
     const pulse = opts.pulse || 0;
-    const sx = clamp(x, 24, W - 24);
-    const sy = clamp(y, 28, H - 28);
+    const margin = 24 / camZoom();
+    const marginY = 28 / camZoom();
+    const sx = clamp(x, margin, viewW() - margin);
+    const sy = clamp(y, marginY, viewH() - marginY);
     ctx.save();
     ctx.translate(sx, sy);
     ctx.scale(scale, scale);
@@ -3952,8 +4080,9 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const w = Math.ceil(ctx.measureText(text).width) + 16;
-    const bx = clamp(x - w / 2, 8, W - w - 8);
-    const by = clamp(y - 34, 8, H - 26);
+    const pad = 8 / camZoom();
+    const bx = clamp(x - w / 2, pad, viewW() - w - pad);
+    const by = clamp(y - 34, pad, viewH() - 26 / camZoom());
     ctx.fillStyle = "rgba(5,8,15,0.82)";
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
@@ -4037,7 +4166,7 @@
     // camera rect
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(MM.x + state.cam.x * sx, MM.y + state.cam.y * sy, W * sx, H * sy);
+    ctx.strokeRect(MM.x + state.cam.x * sx, MM.y + state.cam.y * sy, viewW() * sx, viewH() * sy);
   }
 
   /* ==================================================
@@ -4551,8 +4680,9 @@
       makeUnit(pTeam, pTeam.faction.units.basic, myPos.x + Math.cos(a) * 110, myPos.y + Math.sin(a) * 110);
     }
 
-    state.cam.x = clamp(myHq.x - W / 2, 0, WORLD_W - W);
-    state.cam.y = clamp(myHq.y - H / 2, 0, WORLD_H - H);
+    state.cam.zoom = 1;
+    state.cam.x = clamp(myHq.x - viewW() / 2, 0, WORLD_W - viewW());
+    state.cam.y = clamp(myHq.y - viewH() / 2, 0, WORLD_H - viewH());
     state.best = Number(api.getHighScore(GAME_ID) || 0);
 
     if (el.log) el.log.innerHTML = "";
@@ -4664,8 +4794,9 @@
       }
     });
 
-    state.cam.x = clamp(HQ_POS[0].x - W / 2, 0, WORLD_W - W);
-    state.cam.y = clamp(HQ_POS[0].y - H / 2, 0, WORLD_H - H);
+    state.cam.zoom = 1;
+    state.cam.x = clamp(HQ_POS[0].x - viewW() / 2, 0, WORLD_W - viewW());
+    state.cam.y = clamp(HQ_POS[0].y - viewH() / 2, 0, WORLD_H - viewH());
     state.best = Number(api.getHighScore(GAME_ID) || 0);
 
     if (el.log) el.log.innerHTML = "";

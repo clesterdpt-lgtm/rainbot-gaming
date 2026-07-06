@@ -2167,13 +2167,14 @@
       if (!pointNearRoad(x, z, 1.2) && canPlaceDetail(x, z, 2.0, 1.2)) addTree(x, z);
     });
 
+    // Camp tents stay on the dirt lot west of the -106 avenue — never on asphalt.
     [
       [-123, 64],
-      [-115, 73],
-      [-122, 77],
-      [-112, 61],
-      [-109, 70],
-    ].forEach(([x, z], index) => addTent(x, z, index));
+      [-120, 67],
+      [-124, 71],
+      [-117, 65],
+      [-121, 73],
+    ].forEach(([x, z], index) => placeCampTent(x, z, index));
 
     [
       [-74, -58], [-96, -55], [-52, -24], [56, -28], [71, -10], [109, -73],
@@ -2210,6 +2211,17 @@
     const mesh = addCone(staticGroup, 3, 2.4, x, 0, z, mat(`tent-${index}`, color), 4);
     mesh.rotation.y = Math.PI / 4;
     blockerRects.push({ minX: x - 2.2, maxX: x + 2.2, minZ: z - 2.2, maxZ: z + 2.2, pad: 0.25 });
+  }
+
+  function placeCampTent(x, z, index) {
+    const offsets = [
+      [0, 0], [-2, 0], [2, 0], [0, 2], [0, -2], [-3, 1], [1, 2], [-2, -2], [2, -1], [-1, 3],
+    ];
+    for (const [ox, oz] of offsets) {
+      if (placeDetail(x + ox, z + oz, 2.2, () => addTent(x + ox, z + oz, index), 1.2)) {
+        return;
+      }
+    }
   }
 
   function addTrashSet(x, z) {

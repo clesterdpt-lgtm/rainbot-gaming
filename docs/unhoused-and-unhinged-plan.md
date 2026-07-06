@@ -89,7 +89,8 @@ Current implementation status:
 - A real rendered gameplay card exists at `assets/img/mockup/card-unhoused-and-unhinged.png`.
 - Implemented in the fresh top-down baseline: compact board-style city grid, readable districts, orthographic follow camera, top-down WASD/arrows movement, daytime antics, cash/heat/energy/health/needs HUD, pickups for food/water/cash/scrap, district prompts, camp recovery, pawn supply buys, moving cars, civilians, cops with chase/arrest pressure, night Tweeker Zombie waves, plunger melee, cone throws, banana-peel traps, stunt burst, objective arrow, minimap player marker, score/high score, pause/restart, mobile movement buttons, and `?debug=1` fast timer mode.
 - Controls + presentation pass (2026-06-14): mouse aim with left/right-click combat, left-hand keyboard cluster (F/Q/C, legacy J/K/L kept), a max-screen button, on-canvas touch action buttons, and a container-query HUD that scales to the play area without overlap at any size.
-- Still rough: AI balance, building variety, better pedestrian reactions, richer sound/feedback, more interesting cop escape routes, stronger night enemy variety, and deeper long-run progression.
+- Night variety + shop pass (2026-07-06): added the Goo Spitter — a ranged night enemy that kites to a preferred distance and lobs slowing goo arcs (goo hits deal damage and cut player move speed to ~55% for ~2s); it joins waves from cycle 2 onward via `rollZombieKind`. Wired up a working Pawn Cart shop at the kiosk (`points.kiosk`): ACT near the visible cart buys the first unowned weapon then restocks consumables — Mop Spear ($14, long-reach stun-poke melee), Rubber Chicken ($9, now actually confuses zombies so they stagger away instead of attacking), then Cones/Peels restocks up to cap. A floating `[E] item — $price` prompt shows in range by day; a "need $X" nudge fires when short on cash; sold-out falls through to normal performing. Debug helpers `zombieCounts`/`spawnSpitterNear` added to `window.__UNHINGED`.
+- Still rough: AI balance, building variety, better pedestrian reactions, richer sound/feedback, more interesting cop escape routes, remaining night enemy types (Big Wobble tank, Alley Boss), the other buyable weapons (Mop upgrades, Fire Extinguisher, Shopping Cart), and deeper long-run progression.
 
 ## Systems
 
@@ -178,8 +179,8 @@ Mobile / touch (current):
 
 - Plunger: default melee, short range, high slapstick value.
 - Traffic Cone: thrown stun.
-- Mop Spear: buyable longer reach with a brief stun poke.
-- Rubber Chicken: buyable low-damage tool that confuses enemies and earns small hype.
+- Mop Spear: buyable longer reach with a brief stun poke. Implemented — buy at the Pawn Cart for $14 (range 6.6, 0.55s stun).
+- Rubber Chicken: buyable low-damage tool that confuses enemies and earns small hype. Implemented — buy at the Pawn Cart for $9; a hit now confuses zombies for ~3s so they stagger away.
 - Trash Can Lid: block and bash.
 - Sock Full of Quarters: charge swing.
 - Shopping Cart: charge vehicle and storage upgrade.
@@ -187,9 +188,9 @@ Mobile / touch (current):
 
 ### Enemies
 
-- Tweeker Shambler: slow basic night enemy.
-- Tweeker Runner: fast, low health, short dash threat.
-- Goo Spitter: ranged goo arc that slows the player on hit.
+- Tweeker Shambler: slow basic night enemy. Implemented.
+- Tweeker Runner: fast, low health, short dash threat. Implemented.
+- Goo Spitter: ranged goo arc that slows the player on hit. Implemented — kites to ~15 units, spits every ~2.2–3.2s, joins waves from cycle 2.
 - Big Wobble: tank enemy with slow knockdown attack.
 - Alley Boss: mini-boss after later cycles.
 
@@ -198,7 +199,7 @@ Mobile / touch (current):
 - Pedestrians: tip, film, ignore, panic, or complain.
 - Influencer: boosts attention but raises heat.
 - Hot Dog Vendor: sells food and gossip.
-- Pawn Kiosk: sells weapons/upgrades.
+- Pawn Kiosk: sells weapons/upgrades. Implemented as the Pawn Cart at `points.kiosk` — ACT nearby by day to buy the Mop Spear, Rubber Chicken, and cone/peel restocks.
 - Outreach Worker: safe-zone upgrades and wholesome recovery items.
 - Cop: pursuit, warning, chase, arrest pressure.
 - Security Guard: smaller local heat response near stores.

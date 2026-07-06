@@ -183,6 +183,7 @@
     copRed: mat("copRed", 0xff3131),
     zombie: mat("zombie", 0x8aff6a),
     zombieDark: mat("zombieDark", 0x425d40),
+    zombieSpit: mat("zombieSpit", 0xc7e04a),
     haze: mat("haze", 0x6dff83, 0.5, 0),
     yellow: mat("yellow", 0xf3c447),
     orange: mat("orange", 0xe77732),
@@ -202,6 +203,7 @@
     peel: mat("peel", 0xf5d431),
     cone: mat("cone", 0xff6d28),
     plunger: mat("plunger", 0x863333),
+    mopHead: mat("mopHead", 0xe8e2c8),
     safe: mat("safe", 0x65d77b),
   };
 
@@ -563,8 +565,25 @@
       earn: { cash: [2.2, 3.8], cool: 0.6, wanted: 2.2, label: "comedy bit" },
       attack: { kind: "melee", dmg: 1.0, range: 3.8, cool: 0.4, confuse: true, label: "squeak" },
     },
+    mop: {
+      id: "mop", name: "Mop Spear", short: "Mop",
+      earn: { cash: [1.6, 2.8], cool: 0.55, wanted: 1.2, label: "mop twirl" },
+      attack: { kind: "melee", dmg: 2.2, range: 6.6, cool: 0.52, stun: 0.55, label: "mop poke" },
+    },
   };
   const STARTER_HOTBAR = ["fists", "cone", "plunger", "peel"];
+  // Pawn Cart stock at the kiosk. Weapons are one-time unlocks; restocks refill
+  // consumables up to their cap. The cart offers the first unowned weapon, then
+  // falls back to restocks, so ACT near the kiosk always has a sensible buy.
+  const SHOP_RADIUS = 7.5;
+  const SHOP_STOCK = [
+    { id: "mop", price: 14, kind: "weapon", label: "Mop Spear" },
+    { id: "chicken", price: 9, kind: "weapon", label: "Rubber Chicken" },
+    { id: "cone", price: 3, kind: "restock", qty: 3, label: "Cones x3" },
+    { id: "peel", price: 3, kind: "restock", qty: 2, label: "Peels x2" },
+  ];
+  let kioskPromptSprite = null;
+  let kioskPromptText = "";
   let cameraTarget = new THREE.Vector3(0, 0, 0);
   let labelCounter = 0;
   let arrestTimeout = null;
@@ -585,6 +604,7 @@
     arrest: 0,
     health: 100,
     maxHealth: 100,
+    slow: 0,
     score: 0,
     high: Number(localStorage.getItem(SAVE_KEY) || 0),
     bag: {},
@@ -640,6 +660,7 @@
   const cars = [];
   const pickups = [];
   const projectiles = [];
+  const gooBlobs = [];
   const peels = [];
   const floaters = [];
   const pulses = [];
@@ -1933,6 +1954,22 @@
       return;
     }
 
+    if (itemId === "mop") {
+      const pole = makeMesh(new THREE.CylinderGeometry(0.09, 0.09, 3.1, 8), materials.pole, 0, 1.0, -1.2, false, false);
+      pole.rotation.x = Math.PI / 2;
+      const head = makeMesh(new THREE.CylinderGeometry(0.26, 0.34, 0.6, 10), materials.mopHead, 0, 1.0, -2.6, false, false);
+      head.rotation.x = Math.PI / 2;
+      group.add(pole, head, makeGroundArc(0.8, 2.4, Math.PI * 0.42, Math.PI * 0.58, 0xe8e2c8, 0.5));
+      addActionFX(group, 0.44, (mesh, t) => {
+        faceFXGroup(mesh);
+        const reach = Math.sin(t * Math.PI) * 1.6;
+        const p = playerForwardPoint(1.0 + reach);
+        mesh.position.set(p.x, 0, p.z);
+        setFXOpacity(mesh, 1 - t);
+      });
+      return;
+    }
+
     if (itemId === "chicken") {
       const chicken = makeChickenPropFX(1.0);
       chicken.position.set(0, 1.35, -0.55);
@@ -2603,10 +2640,15 @@
     }
 
     if (kind === "zombie") {
-      head.material = materials.zombie;
+      const spitter = options.variant === "spitter";
+      head.material = spitter ? materials.zombieSpit : materials.zombie;
+      if (spitter) {
+        body.material = materials.zombieSpit;
+      }
+      const glowColor = spitter ? 0xe9ff4a : 0x8aff6a;
       const glow = makeMesh(
         new THREE.TorusGeometry(0.85, 0.05, 6, 20),
-        new THREE.MeshBasicMaterial({ color: 0x8aff6a, transparent: true, opacity: 0.55 }),
+        new THREE.MeshBasicMaterial({ color: glowColor, transparent: true, opacity: 0.55 }),
         0,
         0.12,
         0,
@@ -2615,6 +2657,21 @@
       );
       glow.rotation.x = Math.PI / 2;
       group.add(glow);
+      if (spitter) {
+        // A drippy spout on the head telegraphs the ranged goo attacker.
+        const spout = makeMesh(new THREE.ConeGeometry(0.26, 0.6, 8), materials.zombieSpit, 0, 2.1, -0.5, true, false);
+        spout.rotation.x = -Math.PI / 2.3;
+        const gob = makeMesh(
+          new THREE.SphereGeometry(0.2, 8, 6),
+          new THREE.MeshBasicMaterial({ color: 0xd9ff5a, transparent: true, opacity: 0.85 }),
+          0,
+          2.02,
+          -0.85,
+          false,
+          false
+        );
+        group.add(spout, gob);
+      }
     }
 
     actorGroup.add(group);
@@ -2664,6 +2721,11 @@
       group.add(makeMesh(new THREE.SphereGeometry(0.34, 10, 8), materials.yellow, 0, 0.5, 0, true, false));
       group.add(makeMesh(new THREE.BoxGeometry(0.16, 0.16, 0.4), materials.yellow, 0, 0.5, 0.32, true, false));
       ringColor = 0xffd83a;
+    } else if (type === "mop") {
+      const pole = addCylinder(group, 0.1, 1.5, 0, 0.75, 0, materials.pole, 8);
+      pole.rotation.z = 0.32;
+      group.add(makeMesh(new THREE.CylinderGeometry(0.26, 0.34, 0.5, 10), materials.mopHead, 0.24, 0.28, 0, true, false));
+      ringColor = 0xe8e2c8;
     } else {
       addCylinder(group, 0.42, 0.45, 0, 0, 0, materials.scrap, 8);
       ringColor = 0xd7dde2;
@@ -2789,15 +2851,55 @@
     cars.length = 0;
     pickups.length = 0;
     projectiles.length = 0;
+    gooBlobs.length = 0;
     peels.length = 0;
     floaters.length = 0;
     pulses.length = 0;
     actionFX.length = 0;
     state.drivingCar = null;
+    state.slow = 0;
     hijackPromptSprite = null;
+    kioskPromptSprite = null;
+    kioskPromptText = "";
     if (player.mesh) {
       player.mesh.visible = true;
     }
+  }
+
+  // A little wheeled Pawn Cart landmark at the kiosk so the shop reads at a
+  // glance. Purely decorative — buying is handled by ACT proximity, not collision.
+  function buildPawnCart() {
+    const group = new THREE.Group();
+    group.position.set(points.kiosk.x, 0, points.kiosk.z);
+    const body = makeMesh(new THREE.BoxGeometry(3.2, 1.4, 1.9), materials.purpleWall || materials.plunger, 0, 0.95, 0, true, false);
+    const counter = makeMesh(new THREE.BoxGeometry(3.4, 0.24, 2.1), materials.cardboard, 0, 1.72, 0, true, false);
+    group.add(body, counter);
+    // Striped awning.
+    [-1.0, 0, 1.0].forEach((sx, i) => {
+      const stripe = makeMesh(new THREE.BoxGeometry(1.05, 0.14, 2.2), i % 2 ? materials.red : materials.white, sx, 2.7, 0, true, false);
+      stripe.rotation.x = -0.32;
+      group.add(stripe);
+    });
+    group.add(makeMesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), materials.pole, -1.5, 2.2, -0.9, true, false));
+    group.add(makeMesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), materials.pole, 1.5, 2.2, -0.9, true, false));
+    // Wheels.
+    [-1.3, 1.3].forEach((wx) => {
+      const wheel = makeMesh(new THREE.CylinderGeometry(0.5, 0.5, 0.24, 12), materials.black, wx, 0.5, 1.0, true, false);
+      wheel.rotation.z = Math.PI / 2;
+      group.add(wheel);
+    });
+    // Wares on the counter so it looks stocked.
+    addCone(group, 0.34, 0.7, -1.0, 1.9, 0, materials.cone, 8);
+    group.add(makeMesh(new THREE.SphereGeometry(0.26, 8, 6), materials.yellow, 0.9, 2.05, 0, true, false));
+    const sign = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeTextTexture("PAWN CART", "#ffd1ff", "rgba(40,20,44,0.9)"),
+      transparent: true,
+      depthWrite: false,
+    }));
+    sign.scale.set(5.4, 1.35, 1);
+    sign.position.set(0, 3.7, 0);
+    group.add(sign);
+    actorGroup.add(group);
   }
 
   function spawnActors() {
@@ -2806,6 +2908,7 @@
     player.facing.x = 0;
     player.facing.z = -1;
     player.mesh = makeActor("player", player.x, player.z, { color: materials.player });
+    buildPawnCart();
 
     const audienceAnchors = [
       points.busk,
@@ -3991,12 +4094,14 @@
     updateCars(dt);
     updatePickups(dt);
     updateProjectiles(dt);
+    updateGoo(dt);
     updatePeels(dt);
     updateZombies(dt);
     updateFX(dt);
     updateCamera(dt);
     updateHUD();
     updateHijackPrompt();
+    updateKioskPrompt();
 
     if (state._god) state.health = state.maxHealth;
     if (state.health <= 0) {
@@ -4091,28 +4196,46 @@
     const count = Math.min(15, state.waveTarget + 3);
     for (let i = 0; i < count; i += 1) {
       const spawn = randomEdgePoint(1.1);
-      spawnZombie(spawn.x + rand(-2.5, 2.5), spawn.z + rand(-2.5, 2.5), i % 5 === 0 ? "runner" : "shambler");
+      spawnZombie(spawn.x + rand(-2.5, 2.5), spawn.z + rand(-2.5, 2.5), rollZombieKind());
     }
   }
 
   function spawnZombie(x, z, kind = "shambler") {
-    const mesh = makeActor("zombie", x, z, {
-      color: kind === "runner" ? materials.zombie : materials.zombieDark,
-    });
+    const color = kind === "runner"
+      ? materials.zombie
+      : kind === "spitter"
+        ? materials.zombieSpit
+        : materials.zombieDark;
+    const mesh = makeActor("zombie", x, z, { color, variant: kind });
     const zombie = {
       kind,
       x,
       z,
       radius: kind === "runner" ? 0.82 : 1.0,
       mesh,
-      health: kind === "runner" ? 2 : 3,
-      speed: kind === "runner" ? rand(6.4, 7.5) : rand(3.8, 5.1),
+      health: kind === "runner" ? 2 : kind === "spitter" ? 3 : 3,
+      speed: kind === "runner"
+        ? rand(6.4, 7.5)
+        : kind === "spitter"
+          ? rand(2.6, 3.4)
+          : rand(3.8, 5.1),
       attack: 0,
       stun: 0,
+      confused: 0,
+      spitCd: kind === "spitter" ? rand(1.2, 2.6) : 0,
       wobble: rand(0, Math.PI * 2),
     };
     zombies.push(zombie);
     return zombie;
+  }
+
+  // Wave composition by cycle: runners appear throughout; Goo Spitters join from
+  // cycle 2 onward to force the player to close distance or dodge arcs.
+  function rollZombieKind() {
+    const r = Math.random();
+    if (state.cycle >= 2 && r < 0.2) return "spitter";
+    if (r < (state.cycle >= 2 ? 0.4 : 0.2)) return "runner";
+    return "shambler";
   }
 
   function updatePlayerDriving(dt) {
@@ -4297,12 +4420,16 @@
     ix += mobileMove.x;
     iz += mobileMove.z;
 
+    // Goo Spitter slime slows the player down for a couple of seconds.
+    state.slow = Math.max(0, state.slow - dt);
+    const effSpeed = player.speed * (state.slow > 0 ? 0.55 : 1);
+
     const mag = len2(ix, iz);
     const moving = mag > 0.01;
     if (moving) {
       ix /= mag;
       iz /= mag;
-      moveCircle(player, ix * player.speed * dt, iz * player.speed * dt);
+      moveCircle(player, ix * effSpeed * dt, iz * effSpeed * dt);
       player.facing.x = ix;
       player.facing.z = iz;
     }
@@ -4886,7 +5013,7 @@
     }
     if (zombies.length < state.waveTarget + 2 && Math.random() < dt * 0.18 * state.cycle) {
       const side = randomEdgePoint(1.1);
-      spawnZombie(side.x, side.z, Math.random() < 0.18 ? "runner" : "shambler");
+      spawnZombie(side.x, side.z, rollZombieKind());
     }
 
     zombies.forEach((zombie) => {
@@ -4900,11 +5027,27 @@
         return;
       }
 
+      // Chicken-confused zombies stagger away from the player, dazed and harmless.
+      zombie.confused = Math.max(0, zombie.confused - dt);
+
       let dx = player.x - zombie.x;
       let dz = player.z - zombie.z;
       const mag = len2(dx, dz) || 1;
       dx /= mag;
       dz /= mag;
+
+      if (zombie.confused > 0) {
+        const wander = Math.sin(zombie.wobble * 1.6) * 0.6;
+        moveCircle(zombie, (-dx + dz * wander) * zombie.speed * 0.55 * dt, (-dz - dx * wander) * zombie.speed * 0.55 * dt);
+        zombie.mesh.rotation.y += dt * 6;
+        return; // no attacks while confused
+      }
+
+      if (zombie.kind === "spitter") {
+        updateSpitter(zombie, dx, dz, mag, dt);
+        return;
+      }
+
       const drift = Math.sin(zombie.wobble * 0.7) * 0.25;
       moveCircle(zombie, (dx + dz * drift) * zombie.speed * dt, (dz - dx * drift) * zombie.speed * dt);
       zombie.mesh.rotation.y = Math.atan2(dx, dz);
@@ -4929,6 +5072,87 @@
         }
       }
     });
+  }
+
+  // Goo Spitter: keeps its distance and lobs slowing goo arcs. It closes only
+  // when too far, retreats when crowded, and bites weakly if cornered.
+  function updateSpitter(zombie, dx, dz, dist, dt) {
+    const preferred = 15;
+    if (dist > preferred + 3) {
+      moveCircle(zombie, dx * zombie.speed * dt, dz * zombie.speed * dt);
+    } else if (dist < preferred - 3) {
+      moveCircle(zombie, -dx * zombie.speed * 0.9 * dt, -dz * zombie.speed * 0.9 * dt);
+    } else {
+      const strafe = Math.sin(zombie.wobble * 0.9);
+      moveCircle(zombie, -dz * zombie.speed * 0.5 * strafe * dt, dx * zombie.speed * 0.5 * strafe * dt);
+    }
+    zombie.mesh.rotation.y = Math.atan2(dx, dz);
+
+    zombie.spitCd -= dt;
+    if (zombie.spitCd <= 0 && dist < 27) {
+      zombie.spitCd = rand(2.2, 3.2);
+      spawnGoo(zombie, dx, dz);
+    }
+
+    // Weak bite if the player closes the gap.
+    if (!state.drivingCar && dist < 2.1 && zombie.attack <= 0) {
+      zombie.attack = 1.1;
+      state.health = clamp(state.health - 5, 0, state.maxHealth);
+      addPulse(player.x, player.z, 0xc7e04a, 2.4, 0.35);
+    }
+  }
+
+  function spawnGoo(zombie, dx, dz) {
+    const group = new THREE.Group();
+    group.add(makeMesh(
+      new THREE.SphereGeometry(0.42, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xc7e04a, transparent: true, opacity: 0.9 }),
+      0, 0, 0, false, false
+    ));
+    group.add(makeMesh(
+      new THREE.SphereGeometry(0.2, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xe9ff6a, transparent: true, opacity: 0.7 }),
+      0, 0, 0.32, false, false
+    ));
+    group.position.set(zombie.x + dx * 1.2, 1.3, zombie.z + dz * 1.2);
+    actorGroup.add(group);
+    const speed = 17;
+    gooBlobs.push({
+      x: group.position.x,
+      z: group.position.z,
+      vx: dx * speed,
+      vz: dz * speed,
+      life: 2.4,
+      mesh: group,
+    });
+    addPulse(zombie.x, zombie.z, 0xd9ff5a, 2.2, 0.25);
+  }
+
+  function updateGoo(dt) {
+    for (let i = gooBlobs.length - 1; i >= 0; i -= 1) {
+      const goo = gooBlobs[i];
+      goo.life -= dt;
+      goo.x += goo.vx * dt;
+      goo.z += goo.vz * dt;
+      goo.mesh.position.x = goo.x;
+      goo.mesh.position.z = goo.z;
+      goo.mesh.rotation.y += dt * 6;
+      if (distSq(goo, player) < 2.4) {
+        state.health = clamp(state.health - 6, 0, state.maxHealth);
+        state.slow = Math.min(3.2, state.slow + 2.2);
+        addFloater("slimed! slowed", player.x, player.z, "#d9ff5a");
+        addPulse(player.x, player.z, 0xc7e04a, 3.2, 0.4);
+        removeGoo(i);
+      } else if (goo.life <= 0 || !isWalkable(goo.x, goo.z, 0.4)) {
+        addPulse(goo.x, goo.z, 0xaad24a, 2.0, 0.25);
+        removeGoo(i);
+      }
+    }
+  }
+
+  function removeGoo(index) {
+    const [goo] = gooBlobs.splice(index, 1);
+    if (goo) actorGroup.remove(goo.mesh);
   }
 
   function updateFX(dt) {
@@ -5046,11 +5270,86 @@
 
   // ACT button: earn tips with the active item's bit only when NPCs are close
   // enough to watch. Bigger watching crowds pay better.
+  // What the Pawn Cart is currently selling: the first unowned weapon, then any
+  // consumable that isn't at cap. Returns null when there's nothing left to buy.
+  function currentKioskOffer() {
+    for (const stock of SHOP_STOCK) {
+      if (stock.kind === "weapon" && !ownsItem(stock.id)) return stock;
+    }
+    for (const stock of SHOP_STOCK) {
+      if (stock.kind === "restock") {
+        const item = ITEMS[stock.id];
+        const cur = state.inventory[item.count] || 0;
+        if (cur < (item.cap || 9)) return stock;
+      }
+    }
+    return null;
+  }
+
+  function nearKiosk() {
+    return distSq(player, points.kiosk) <= SHOP_RADIUS * SHOP_RADIUS;
+  }
+
+  // ACT near the Pawn Cart buys instead of performing. Returns true when the
+  // interaction was handled (bought, or blocked on cash) so ACT stops there.
+  function tryKioskPurchase() {
+    if (state.phase !== "day" || state.drivingCar || !nearKiosk()) return false;
+    const offer = currentKioskOffer();
+    if (!offer) return false; // sold out — let ACT perform normally
+    state.cooldowns.act = 0.5;
+    if (state.cash < offer.price) {
+      addFloater(`Need $${offer.price} — ${offer.label}`, player.x, player.z, "#ffb3a7");
+      addPulse(player.x, player.z, 0xffb3a7, 3.0, 0.3);
+      return true;
+    }
+    state.cash -= offer.price;
+    if (offer.kind === "weapon") {
+      addToBag(offer.id, ITEMS[offer.id].refill || 1);
+      logLine(`Bought the ${offer.label} at the Pawn Cart for $${offer.price}.`);
+      addFloater(`Bought ${offer.label}!`, player.x, player.z, "#ffe07a");
+    } else {
+      addToBag(offer.id, offer.qty);
+      logLine(`Restocked ${offer.label} for $${offer.price}.`);
+      addFloater(`+${offer.label}`, player.x, player.z, "#ffe07a");
+    }
+    addPulse(player.x, player.z, 0xffd43b, 5.0, 0.5);
+    refreshHotbar();
+    if (state.bagOpen) renderBag();
+    return true;
+  }
+
+  // Floating price tag over the cart, shown only when you're in range by day.
+  function updateKioskPrompt() {
+    const active = state.running && !state.paused && !state.ended && state.phase === "day"
+      && !state.drivingCar && distSq(player, points.kiosk) <= 15 * 15;
+    if (!active) {
+      if (kioskPromptSprite) kioskPromptSprite.visible = false;
+      return;
+    }
+    const offer = currentKioskOffer();
+    const text = offer ? `[E] ${offer.label} — $${offer.price}` : "Pawn Cart — sold out";
+    if (!kioskPromptSprite) {
+      kioskPromptSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: makeTextTexture(text, "#ffe07a", "rgba(18,18,18,0.82)"), transparent: true, depthWrite: false })
+      );
+      kioskPromptSprite.scale.set(7, 1.75, 1);
+      fxGroup.add(kioskPromptSprite);
+      kioskPromptText = text;
+    } else if (text !== kioskPromptText) {
+      kioskPromptSprite.material.map = makeTextTexture(text, "#ffe07a", "rgba(18,18,18,0.82)");
+      kioskPromptSprite.material.needsUpdate = true;
+      kioskPromptText = text;
+    }
+    kioskPromptSprite.position.set(points.kiosk.x, 4.4, points.kiosk.z - 1.0);
+    kioskPromptSprite.visible = true;
+  }
+
   function act() {
     if (!state.running || state.paused || state.cooldowns.act > 0) {
       return;
     }
     if (state.drivingCar) return;
+    if (tryKioskPurchase()) return;
     const item = activeItem();
     const earn = item.earn || ITEMS.fists.earn;
     state.cooldowns.act = earn.cool || 0.5;
@@ -5120,6 +5419,10 @@
       if (distSq(zombie, player) <= reach * reach) {
         damageZombie(zombie, a.dmg || 1.2, zombie.x - player.x, zombie.z - player.z);
         if (a.stun) zombie.stun = Math.max(zombie.stun, a.stun);
+        if (a.confuse && zombie.health > 0) {
+          zombie.confused = Math.max(zombie.confused || 0, 3.0);
+          addFloater("confused!", zombie.x, zombie.z, "#ffe07a");
+        }
         hits += 1;
       }
     });
@@ -5772,6 +6075,16 @@
           projectiles: projectiles.length,
           peels: peels.length,
         }),
+        zombieCounts: () => zombies.reduce((acc, z) => {
+          acc[z.kind] = (acc[z.kind] || 0) + 1;
+          acc.confused = (acc.confused || 0) + (z.confused > 0 ? 1 : 0);
+          return acc;
+        }, { total: zombies.length, goo: gooBlobs.length }),
+        spawnSpitterNear: (dist = 12) => {
+          const z = spawnZombie(player.x + dist, player.z, "spitter");
+          z.spitCd = 0.2;
+          return { x: z.x, z: z.z, kind: z.kind };
+        },
         placeAudience: (count = 6, radius = 7) => {
           const total = clamp(Math.floor(Number(count) || 0), 0, civilians.length);
           for (let i = 0; i < total; i += 1) {

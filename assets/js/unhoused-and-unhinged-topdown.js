@@ -69,7 +69,8 @@
     hotbarSlots: null,
     bagOverlay: document.getElementById("bag-overlay"),
     bagGrid: document.getElementById("bag-grid"),
-    bagActiveSlot: document.getElementById("bag-active-slot"),
+    bagSlotPicker: document.getElementById("bag-slot-picker"),
+    bagHint: document.getElementById("bag-hint"),
     cityLog: document.getElementById("city-log"),
   };
 
@@ -613,6 +614,8 @@
     actStreak: 0,
     actStreakTime: 0,
     bagOpen: false,
+    bagPickItem: null,
+    bagSlotPrimed: false,
     inventory: {
       cone: 5,
       peel: 2,
@@ -3328,9 +3331,10 @@
     return isNew;
   }
 
-  function selectSlot(index) {
+  function selectSlot(index, fromBag) {
     if (index < 0 || index >= state.hotbar.length) return;
     state.activeSlot = index;
+    if (fromBag) state.bagSlotPrimed = true;
     refreshHotbar();
     if (state.bagOpen) renderBag();
   }
@@ -3343,7 +3347,41 @@
     if (existing !== -1 && existing !== slot) state.hotbar[existing] = state.hotbar[slot];
     state.hotbar[slot] = id;
     state.activeSlot = slot;
+    state.bagPickItem = null;
+    state.bagSlotPrimed = true;
     refreshHotbar();
+    if (state.bagOpen) renderBag();
+  }
+
+  function bagHintText() {
+    if (state.bagPickItem) {
+      const item = ITEMS[state.bagPickItem];
+      return item
+        ? `Tap a slot below to equip <b>${safeText(item.short)}</b>.`
+        : "Tap an item, then tap a slot.";
+    }
+    if (state.bagSlotPrimed) {
+      return `Tap an item to equip it to <b>Slot ${state.activeSlot + 1}</b>.`;
+    }
+    return "Tap an item, then tap a slot — or pick a slot first.";
+  }
+
+  function handleBagSlotPick(index) {
+    if (state.bagPickItem) {
+      equipToSlot(state.bagPickItem, index);
+      return;
+    }
+    selectSlot(index, true);
+  }
+
+  function handleBagItemPick(id) {
+    if (!ITEMS[id] || !ownsItem(id)) return;
+    if (state.bagSlotPrimed) {
+      equipToSlot(id, state.activeSlot);
+      return;
+    }
+    state.bagPickItem = state.bagPickItem === id ? null : id;
+    renderBag();
   }
 
   // ---- Audience / wanted ----------------------------------------------------
@@ -3738,9 +3776,34 @@
     return parts.join(" · ");
   }
 
+  function renderBagSlotPicker() {
+    const host = els.bagSlotPicker;
+    if (!host) return;
+    host.innerHTML = "";
+    state.hotbar.forEach((id, index) => {
+      const item = id ? ITEMS[id] : null;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className =
+        "uh-bag__slot" +
+        (index === state.activeSlot && state.bagSlotPrimed ? " is-target" : "") +
+        (!item ? " is-empty" : "");
+      button.dataset.bagSlot = String(index);
+      button.setAttribute("aria-label", `Action bar slot ${index + 1}`);
+      button.innerHTML =
+        `<span class="uh-bag__slot-key">${index + 1}</span>` +
+        `<span class="uh-bag__slot-name">${item ? safeText(item.short) : "Empty"}</span>` +
+        (index === state.activeSlot && state.bagSlotPrimed
+          ? `<span class="uh-bag__slot-tag">Equip here</span>`
+          : "");
+      host.appendChild(button);
+    });
+  }
+
   function renderBag() {
     const grid = els.bagGrid;
     if (!grid) return;
+    renderBagSlotPicker();
     grid.innerHTML = "";
     Object.keys(ITEMS)
       .filter((id) => state.bag[id])
@@ -3751,24 +3814,38 @@
         button.type = "button";
         button.className =
           "uh-bag__item" +
-          (slot === state.activeSlot ? " is-active" : "") +
+          (state.bagPickItem === id ? " is-picked" : "") +
           (slot !== -1 ? " is-equipped" : "");
         button.dataset.item = id;
+        button.draggable = true;
         const count = item.count ? ` ×${state.inventory[item.count] || 0}` : "";
-        const where = slot !== -1 ? `Slot ${slot + 1}` : "In bag";
+        const where = slot !== -1 ? `On bar: Slot ${slot + 1}` : "Not on bar";
         button.innerHTML =
           `<strong>${safeText(item.name)}</strong>` +
           `<span>${safeText(itemSummary(item))}</span>` +
           `<small>${where}${count}</small>`;
+        button.addEventListener("dragstart", (event) => {
+          state.bagPickItem = id;
+          event.dataTransfer.setData("text/plain", id);
+          event.dataTransfer.effectAllowed = "move";
+          renderBag();
+        });
+        button.addEventListener("dragend", () => {
+          if (state.bagPickItem === id && !state.bagSlotPrimed) renderBag();
+        });
         grid.appendChild(button);
       });
-    ui.setText(els.bagActiveSlot, String(state.activeSlot + 1));
+    ui.setHtml(els.bagHint, bagHintText());
   }
 
   function toggleBag(open) {
     state.bagOpen = open === undefined ? !state.bagOpen : open;
     if (els.bagOverlay) els.bagOverlay.hidden = !state.bagOpen;
-    if (state.bagOpen) renderBag();
+    if (state.bagOpen) {
+      state.bagPickItem = null;
+      state.bagSlotPrimed = false;
+      renderBag();
+    }
   }
 
   function isWalkable(x, z, radius) {
@@ -5232,7 +5309,7 @@
       const nameText = qty > 1 ? `${item.short}s` : item.short;
       
       if (isNew) {
-        logLine(`Found ${item.name}! Open the Bag (B) to equip it to slots 1-4.`);
+        logLine(`Found ${item.name}! Open the Bag (B), tap the item, then tap a slot.`);
         addFloater(`${qtyText}${nameText}!`, pickup.x, pickup.z, "#ffe07a");
       } else {
         addFloater(`${qtyText}${nameText}`, pickup.x, pickup.z, "#dde6ef");
@@ -5693,10 +5770,22 @@
     }
     if (key === "e" || key === " ") act();
     if (key === "f" || key === "j") attack();
-    if (key === "1") selectSlot(0);
-    if (key === "2") selectSlot(1);
-    if (key === "3") selectSlot(2);
-    if (key === "4") selectSlot(3);
+    if (key === "1") {
+      if (state.bagOpen && state.bagPickItem) equipToSlot(state.bagPickItem, 0);
+      else selectSlot(0, state.bagOpen);
+    }
+    if (key === "2") {
+      if (state.bagOpen && state.bagPickItem) equipToSlot(state.bagPickItem, 1);
+      else selectSlot(1, state.bagOpen);
+    }
+    if (key === "3") {
+      if (state.bagOpen && state.bagPickItem) equipToSlot(state.bagPickItem, 2);
+      else selectSlot(2, state.bagOpen);
+    }
+    if (key === "4") {
+      if (state.bagOpen && state.bagPickItem) equipToSlot(state.bagPickItem, 3);
+      else selectSlot(3, state.bagOpen);
+    }
     if (key === "b" || key === "tab") toggleBag();
     if (key === "p") setPaused(!state.paused);
   }
@@ -5723,17 +5812,27 @@
     els.hotbar?.addEventListener("click", (event) => {
       const slot = event.target.closest("[data-slot]");
       if (slot) {
-        selectSlot(Number(slot.dataset.slot));
+        selectSlot(Number(slot.dataset.slot), state.bagOpen);
         canvas.focus({ preventScroll: true });
       }
     });
-    // Bag: tap an item to equip it into the active slot.
+    els.bagSlotPicker?.addEventListener("click", (event) => {
+      const slot = event.target.closest("[data-bag-slot]");
+      if (slot) handleBagSlotPick(Number(slot.dataset.bagSlot));
+    });
+    els.bagSlotPicker?.addEventListener("dragover", (event) => {
+      if (event.target.closest("[data-bag-slot]")) event.preventDefault();
+    });
+    els.bagSlotPicker?.addEventListener("drop", (event) => {
+      const slot = event.target.closest("[data-bag-slot]");
+      if (!slot) return;
+      event.preventDefault();
+      const id = event.dataTransfer.getData("text/plain") || state.bagPickItem;
+      if (id) equipToSlot(id, Number(slot.dataset.bagSlot));
+    });
     els.bagGrid?.addEventListener("click", (event) => {
       const item = event.target.closest("[data-item]");
-      if (item) {
-        equipToSlot(item.dataset.item, state.activeSlot);
-        renderBag();
-      }
+      if (item) handleBagItemPick(item.dataset.item);
     });
     document.getElementById("bag-close")?.addEventListener("click", () => toggleBag(false));
     document.getElementById("btn-bag")?.addEventListener("click", () => toggleBag());

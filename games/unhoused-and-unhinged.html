@@ -1282,17 +1282,14 @@
       text-transform: uppercase;
     }
 
-    .uh-minimap,
     .uh-minimap-btn {
       aspect-ratio: 1;
-      background:
-        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 46%),
-        repeating-linear-gradient(34deg, transparent 0 14px, rgba(255, 255, 255, 0.14) 14px 18px),
-        repeating-linear-gradient(121deg, rgba(26, 31, 36, 0.92) 0 16px, rgba(78, 84, 88, 0.9) 16px 22px);
+      background: #0a1018;
       border: 4px solid rgba(0, 0, 0, 0.7);
       border-radius: 50%;
-      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 24px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.14), inset 0 0 18px rgba(0, 0, 0, 0.45);
       cursor: pointer;
+      display: block;
       overflow: hidden;
       padding: 0;
       position: relative;
@@ -1301,32 +1298,29 @@
     }
 
     .uh-minimap-btn:hover {
-      box-shadow: 0 0 0 2px rgba(46, 224, 255, 0.45), inset 0 0 24px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 0 0 2px rgba(46, 224, 255, 0.45), inset 0 0 18px rgba(0, 0, 0, 0.45);
     }
 
     .uh-minimap-btn::after {
-      color: rgba(216, 251, 255, 0.82);
+      color: rgba(216, 251, 255, 0.92);
       content: "MAP";
       font-family: var(--font-display);
       font-size: 9px;
       left: 50%;
       letter-spacing: 0.08em;
+      pointer-events: none;
       position: absolute;
-      top: 8px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+      top: 7px;
       transform: translateX(-50%);
+      z-index: 2;
     }
 
-    .uh-mini-dot {
-      background: #2ee0ff;
+    .uh-minimap__canvas {
       border-radius: 50%;
-      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 8px #2ee0ff;
-      clip-path: polygon(50% 0, 100% 100%, 50% 75%, 0 100%);
-      height: 16px;
-      left: 50%;
-      position: absolute;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 14px;
+      display: block;
+      height: 100%;
+      width: 100%;
     }
 
     .uh-district {
@@ -1836,7 +1830,7 @@
     /* Reflow the HUD when the play area is narrow (phones / narrow windows).
        Placed after the base rules so these compact overrides win on source order. */
     @container ustage (max-width: 600px) {
-      .uh-minimap { display: none; }
+      .uh-minimap-btn { display: none; }
 
       /* Shrink the three top panels so they sit side by side without touching. */
       .uh-topleft { width: clamp(88px, 27cqw, 132px); padding: 6px 8px; gap: 5px; }
@@ -2270,7 +2264,7 @@
             <div class="uh-topright">
               <div class="uh-clock unhinged-hud-panel"><b id="hud-clock">8:00 AM</b><span class="uh-phase-pill" id="hud-phase-pill">Day 1</span></div>
               <button class="uh-minimap-btn" id="btn-map" type="button" aria-label="Open city map">
-                <span class="uh-mini-dot" id="hud-mini-player"></span>
+                <canvas class="uh-minimap__canvas" id="mini-map-canvas" width="132" height="100" aria-hidden="true"></canvas>
               </button>
               <div class="uh-district unhinged-hud-panel" id="hud-district-name">Open Block</div>
             </div>
@@ -2422,7 +2416,7 @@
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260705-escape-scope-1"></script>
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260706-map-actions-1"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260706-minimap-sync-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

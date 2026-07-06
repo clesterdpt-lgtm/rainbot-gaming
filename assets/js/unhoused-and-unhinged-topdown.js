@@ -63,7 +63,7 @@
     phasePill: document.getElementById("hud-phase-pill"),
     objectiveText: document.getElementById("hud-objective-text"),
     objectiveArrow: document.getElementById("hud-objective-arrow"),
-    miniPlayer: document.getElementById("hud-mini-player"),
+    miniMapCanvas: document.getElementById("mini-map-canvas"),
     districtName: document.getElementById("hud-district-name"),
     hotbar: document.getElementById("hud-hotbar"),
     hotbarSlots: null,
@@ -3912,14 +3912,12 @@
     host.innerHTML = rows.join("");
   }
 
-  function renderMap() {
-    const canvas = els.mapCanvas;
-    if (!canvas) return;
-    const width = canvas.width;
-    const height = canvas.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  function districtColorHex(color, suffix = "") {
+    return `#${color.toString(16).padStart(6, "0")}${suffix}`;
+  }
 
+  function drawCityMap(ctx, width, height, opts = {}) {
+    const mini = !!opts.mini;
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#0a1018";
     ctx.fillRect(0, 0, width, height);
@@ -3929,20 +3927,22 @@
       const z0 = district.z - district.h / 2;
       const p0 = worldToMap(x0, z0, width, height);
       const p1 = worldToMap(x0 + district.w, z0 + district.h, width, height);
-      ctx.fillStyle = `#${district.color.toString(16).padStart(6, "0")}55`;
+      ctx.fillStyle = districtColorHex(district.color, mini ? "66" : "55");
       ctx.fillRect(p0.mx, p0.my, p1.mx - p0.mx, p1.my - p0.my);
-      ctx.strokeStyle = `#${district.color.toString(16).padStart(6, "0")}aa`;
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = districtColorHex(district.color, mini ? "99" : "aa");
+      ctx.lineWidth = mini ? 0.6 : 1;
       ctx.strokeRect(p0.mx, p0.my, p1.mx - p0.mx, p1.my - p0.my);
-      const label = worldToMap(district.x, district.z, width, height);
-      ctx.fillStyle = "rgba(255,255,255,0.82)";
-      ctx.font = "10px 'JetBrains Mono', monospace";
-      ctx.textAlign = "center";
-      ctx.fillText(district.name, label.mx, label.my + 3);
+      if (!mini) {
+        const label = worldToMap(district.x, district.z, width, height);
+        ctx.fillStyle = "rgba(255,255,255,0.82)";
+        ctx.font = "10px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(district.name, label.mx, label.my + 3);
+      }
     });
 
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = mini ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)";
+    ctx.lineWidth = mini ? 1 : 3;
     ROAD_X.forEach((roadX) => {
       const p0 = worldToMap(roadX, -WORLD.height / 2, width, height);
       const p1 = worldToMap(roadX, WORLD.height / 2, width, height);
@@ -3963,43 +3963,66 @@
     MAP_LANDMARKS.forEach((landmark) => {
       const p = worldToMap(landmark.x, landmark.z, width, height);
       const color = MAP_KIND_COLORS[landmark.kind] || "#fff";
+      const r = mini ? 2.2 : 5;
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(p.mx, p.my, 5, 0, Math.PI * 2);
+      ctx.arc(p.mx, p.my, r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = "rgba(0,0,0,0.75)";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      if (!mini) {
+        ctx.strokeStyle = "rgba(0,0,0,0.75)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
     });
 
     const objective = objectivePoint();
     if (objective) {
       const p = worldToMap(objective.x, objective.z, width, height);
       ctx.strokeStyle = MAP_KIND_COLORS.objective;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = mini ? 1.2 : 2;
+      const ring = mini ? 4.5 : 10;
+      const arm = mini ? 5.5 : 14;
       ctx.beginPath();
-      ctx.arc(p.mx, p.my, 10, 0, Math.PI * 2);
+      ctx.arc(p.mx, p.my, ring, 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(p.mx, p.my - 14);
-      ctx.lineTo(p.mx, p.my + 14);
-      ctx.moveTo(p.mx - 14, p.my);
-      ctx.lineTo(p.mx + 14, p.my);
+      ctx.moveTo(p.mx, p.my - arm);
+      ctx.lineTo(p.mx, p.my + arm);
+      ctx.moveTo(p.mx - arm, p.my);
+      ctx.lineTo(p.mx + arm, p.my);
       ctx.stroke();
     }
 
     const you = worldToMap(player.x, player.z, width, height);
     ctx.fillStyle = MAP_KIND_COLORS.you;
+    const tip = mini ? 4 : 8;
+    const wing = mini ? 3 : 6;
+    const base = mini ? 3 : 6;
     ctx.beginPath();
-    ctx.moveTo(you.mx, you.my - 8);
-    ctx.lineTo(you.mx + 6, you.my + 6);
-    ctx.lineTo(you.mx - 6, you.my + 6);
+    ctx.moveTo(you.mx, you.my - tip);
+    ctx.lineTo(you.mx + wing, you.my + base);
+    ctx.lineTo(you.mx - wing, you.my + base);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = "#031018";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = mini ? 0.8 : 1.5;
     ctx.stroke();
+  }
 
+  function renderMinimap() {
+    const canvas = els.miniMapCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    drawCityMap(ctx, canvas.width, canvas.height, { mini: true });
+  }
+
+  function renderMap() {
+    const canvas = els.mapCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    drawCityMap(ctx, canvas.width, canvas.height, { mini: false });
     const objectiveLabel = mapObjectiveText();
     ui.setText(els.mapHint, `Game paused — ${objectiveLabel}`);
     renderMapLegend(objectiveLabel);
@@ -5843,12 +5866,7 @@
       els.objectiveArrow.style.transform = `rotate(${angle}rad)`;
     }
 
-    if (els.miniPlayer) {
-      const left = ((player.x + WORLD.width / 2) / WORLD.width) * 100;
-      const top = ((player.z + WORLD.height / 2) / WORLD.height) * 100;
-      els.miniPlayer.style.left = `${clamp(left, 4, 96)}%`;
-      els.miniPlayer.style.top = `${clamp(top, 4, 96)}%`;
-    }
+    renderMinimap();
 
     refreshHotbar();
   }

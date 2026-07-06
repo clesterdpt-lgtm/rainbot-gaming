@@ -1525,7 +1525,7 @@
     },
 
     shutdown(leaveQuietly = true) {
-      netRizz.peers.forEach((peer) => scene.remove(peer.mesh));
+      netRizz.peers.forEach((peer) => { scene.remove(peer.mesh); disposeMesh(peer.mesh); });
       netRizz.peers.clear();
       if (netRizz.room) {
         try { netRizz.room.leave(); } catch (e) {}
@@ -1555,11 +1555,17 @@
       if (netRizz.sendAcc >= 0.1 && state.started) {
         netRizz.sendAcc = 0;
         const p = state.player;
+        const slot = selectedSlot();
         const msg = {
           x: Math.round(p.x * 100) / 100,
           y: Math.round(p.y * 100) / 100,
           z: Math.round(p.z * 100) / 100,
           yaw: Math.round(p.yaw * 100) / 100,
+          pi: Math.round(p.pitch * 100) / 100,   // head/arm aim
+          it: slot ? slot.code : 0,               // equipped item code
+          mn: state.mining ? 1 : 0,               // mid-mine (continuous chop)
+          sw: state.swingTimer > 0 ? Math.round(state.swingTimer * 100) / 100 : 0,
+          sk: state.swingKind === "attack" ? 1 : 0,
         };
         if (netRizz.room.isHost) {
           msg.t = Math.round(state.time * 10000) / 10000;
@@ -1569,15 +1575,17 @@
       }
       netRizz.peers.forEach((peer) => {
         const t = peer.target;
-        if (!t) return;
-        const k = Math.min(1, dt * 10);
-        peer.mesh.position.x += (t.x - peer.mesh.position.x) * k;
-        peer.mesh.position.y += (t.y - peer.mesh.position.y) * k;
-        peer.mesh.position.z += (t.z - peer.mesh.position.z) * k;
-        let dy = t.yaw - peer.mesh.rotation.y;
-        while (dy > Math.PI) dy -= Math.PI * 2;
-        while (dy < -Math.PI) dy += Math.PI * 2;
-        peer.mesh.rotation.y += dy * k;
+        if (t) {
+          const k = Math.min(1, dt * 10);
+          peer.mesh.position.x += (t.x - peer.mesh.position.x) * k;
+          peer.mesh.position.y += (t.y - peer.mesh.position.y) * k;
+          peer.mesh.position.z += (t.z - peer.mesh.position.z) * k;
+          let dy = t.yaw - peer.mesh.rotation.y;
+          while (dy > Math.PI) dy -= Math.PI * 2;
+          while (dy < -Math.PI) dy += Math.PI * 2;
+          peer.mesh.rotation.y += dy * k;
+        }
+        netRizz.animatePeer(peer, dt);
       });
     },
 
@@ -1586,12 +1594,34 @@
       let peer = netRizz.peers.get(from);
       if (!peer) {
         const who = netRizz.room ? netRizz.room.player(from) : null;
-        peer = { mesh: netRizz.makeAvatar(netRizz.peers.size, who && who.name), target: null };
+        peer = {
+          mesh: netRizz.makeAvatar(netRizz.peers.size, who && who.name),
+          target: null,
+          item: -1,
+          aimPitch: 0,
+          mining: false,
+          swingTimer: 0,
+          swingKind: "gather",
+          walkPhase: 0,
+          actPhase: 0,
+        };
         peer.mesh.position.set(d.x, d.y, d.z);
+        peer.prevX = d.x;
+        peer.prevZ = d.z;
         scene.add(peer.mesh);
         netRizz.peers.set(from, peer);
       }
       peer.target = { x: d.x, y: d.y, z: d.z, yaw: d.yaw || 0 };
+      peer.aimPitch = d.pi || 0;
+      peer.mining = !!d.mn;
+      peer.swingKind = d.sk ? "attack" : "gather";
+      // adopt the sender's live swing timer so a fresh swing re-arms the arm
+      if (typeof d.sw === "number" && d.sw > 0) peer.swingTimer = d.sw;
+      const item = d.it || 0;
+      if (item !== peer.item) {
+        peer.item = item;
+        netRizz.setPeerEquipment(peer);
+      }
       // host clock is authoritative for guests
       if (netRizz.room && !netRizz.room.isHost && typeof d.t === "number") {
         if (Math.abs(state.time - d.t) > 0.02) state.time = d.t;
@@ -1603,6 +1633,7 @@
       const peer = netRizz.peers.get(pid);
       if (peer) {
         scene.remove(peer.mesh);
+        disposeMesh(peer.mesh);
         netRizz.peers.delete(pid);
       }
       if (announce && netRizz.active) {
@@ -1611,19 +1642,67 @@
       }
     },
 
+    // Articulated blocky builder: separate head / torso / arms / legs pivots so
+    // the avatar can walk, chop, swing and aim. Parts are stashed on
+    // g.userData.parts for animatePeer(); the right hand holds live equipment.
     makeAvatar(idx, name) {
-      const colors = [0xff5aa9, 0x27e6ff, 0xffd23b, 0x9e63ff];
-      const c = colors[idx % colors.length];
+      const shirtCols = [0xff5aa9, 0x27e6ff, 0xffd23b, 0x9e63ff];
+      const shirt = shirtCols[idx % shirtCols.length];
+      const cap = shadeInt(shirt, 0.72);
+      const skin = 0xe8b98a;
+      const pants = 0x2b3352;
+      const shoes = 0x1a1e2e;
+      const mat = (color) => {
+        const m = new THREE.MeshLambertMaterial({ color });
+        m.userData.disposeWithMesh = true;
+        return m;
+      };
+      const box = (w, h, dp, color, px, py, pz) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), mat(color));
+        mesh.position.set(px, py, pz);
+        return mesh;
+      };
       const g = new THREE.Group();
-      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.62, 0.28), new THREE.MeshLambertMaterial({ color: 0x2b3352 }));
-      legs.position.y = 0.31;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.72, 0.32), new THREE.MeshLambertMaterial({ color: c }));
-      body.position.y = 0.98;
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.46), new THREE.MeshLambertMaterial({ color: 0xe8b98a }));
-      head.position.y = 1.57;
-      const brim = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), new THREE.MeshLambertMaterial({ color: c }));
-      brim.position.y = 1.82;
-      g.add(legs, body, head, brim);
+
+      // --- legs pivot at the hips (children of the root so bobbing spares them)
+      const legL = new THREE.Group(); legL.position.set(-0.13, 0.82, 0);
+      const legR = new THREE.Group(); legR.position.set(0.13, 0.82, 0);
+      [legL, legR].forEach((leg) => {
+        leg.add(box(0.24, 0.8, 0.26, pants, 0, -0.4, 0));
+        leg.add(box(0.27, 0.16, 0.32, shoes, 0, -0.76, -0.03));
+      });
+      g.add(legL, legR);
+
+      // --- everything above the hips lives in `body` so it can bob/lean
+      const body = new THREE.Group();
+      body.add(box(0.6, 0.72, 0.34, shirt, 0, 1.18, 0));       // torso
+      body.add(box(0.62, 0.14, 0.36, shadeInt(shirt, 0.7), 0, 0.9, 0)); // belt
+      body.add(box(0.18, 0.12, 0.18, skin, 0, 1.58, 0));       // neck
+
+      const armL = new THREE.Group(); armL.position.set(-0.4, 1.48, 0);
+      const armR = new THREE.Group(); armR.position.set(0.4, 1.48, 0);
+      [armL, armR].forEach((arm) => {
+        arm.add(box(0.2, 0.54, 0.24, shirt, 0, -0.27, 0));     // sleeve
+        arm.add(box(0.2, 0.2, 0.24, skin, 0, -0.62, 0));       // forearm/hand
+      });
+      // right hand holds the equipment; anchor lets us pose the tool once
+      const hand = new THREE.Group();
+      hand.position.set(0, -0.72, 0.02);
+      armR.add(hand);
+      body.add(armL, armR);
+
+      // --- head pivots at the neck so it can aim up/down
+      const head = new THREE.Group();
+      head.position.set(0, 1.62, 0);
+      head.add(box(0.5, 0.5, 0.5, skin, 0, 0.25, 0));                    // skull
+      head.add(box(0.09, 0.09, 0.06, 0x20242e, -0.11, 0.27, -0.26));     // eyes
+      head.add(box(0.09, 0.09, 0.06, 0x20242e, 0.11, 0.27, -0.26));
+      head.add(box(0.54, 0.16, 0.54, cap, 0, 0.54, 0));                   // cap
+      head.add(box(0.54, 0.08, 0.26, cap, 0, 0.47, -0.34));               // brim
+      body.add(head);
+      g.add(body);
+
+      // --- floating name tag
       const cv = document.createElement("canvas");
       cv.width = 256; cv.height = 64;
       const cx2 = cv.getContext("2d");
@@ -1633,11 +1712,130 @@
       cx2.textAlign = "center";
       cx2.fillStyle = "#ffffff";
       cx2.fillText(String(name || "Player").slice(0, 14), 128, 42);
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false }));
+      const nameMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false });
+      nameMat.userData.disposeWithMesh = true;
+      const sprite = new THREE.Sprite(nameMat);
       sprite.scale.set(1.7, 0.42, 1);
-      sprite.position.y = 2.25;
+      sprite.position.y = 2.45;
       g.add(sprite);
+
+      g.userData.parts = { body, head, armL, armR, legL, legR, hand };
+      // scale to sit close to the local player's ~1.75u height (feet stay planted)
+      g.scale.setScalar(0.88);
       return g;
+    },
+
+    // Swap the model held in a peer's right hand to match their selected slot.
+    setPeerEquipment(peer) {
+      const parts = peer.mesh && peer.mesh.userData.parts;
+      if (!parts) return;
+      disposeGroup(parts.hand);
+      parts.hand.rotation.set(0, 0, 0);
+      if (peer.item) netRizz.buildEquipment(parts.hand, peer.item);
+    },
+
+    // Build a compact tool/block into `hand` (grip near origin, length down -Y so
+    // it reads as "held" at rest and swings forward when the arm lifts).
+    buildEquipment(hand, code) {
+      const d = DEF[code];
+      if (!d) return;
+      const mat = (color) => {
+        const m = new THREE.MeshLambertMaterial({ color });
+        m.userData.disposeWithMesh = true;
+        return m;
+      };
+      const flame = (color) => {
+        const m = new THREE.MeshBasicMaterial({ color });
+        m.userData.disposeWithMesh = true;
+        return m;
+      };
+      const box = (w, h, dp, material, px, py, pz, rot) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), material);
+        mesh.position.set(px, py, pz);
+        if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+        hand.add(mesh);
+        return mesh;
+      };
+      const wood = "#7c4e29";
+      const tool = d.tool;
+      const col = d.color || "#c9ccd6";
+      if (tool && tool.type === "pick") {
+        box(0.06, 0.66, 0.06, mat(wood), 0, -0.22, 0);
+        box(0.5, 0.08, 0.09, mat(col), 0, 0.08, 0);
+        box(0.1, 0.14, 0.09, mat(shadeHex(col, 0.7)), 0.24, 0.02, 0, [0, 0, -0.5]);
+        box(0.1, 0.14, 0.09, mat(shadeHex(col, 0.7)), -0.24, 0.02, 0, [0, 0, 0.5]);
+      } else if (tool && tool.type === "axe") {
+        box(0.06, 0.66, 0.06, mat(wood), 0, -0.22, 0);
+        box(0.24, 0.28, 0.08, mat(col), 0.16, 0.08, 0);
+        box(0.1, 0.2, 0.08, mat(shadeHex(col, 0.72)), 0.02, 0.06, 0);
+      } else if (tool && tool.type === "sword") {
+        box(0.08, 0.62, 0.05, mat(col), 0, 0.06, 0);
+        box(0.03, 0.58, 0.06, mat(shadeHex(col, 1.35)), -0.015, 0.06, 0.005);
+        box(0.3, 0.08, 0.09, mat("#caa24a"), 0, -0.26, 0);
+        box(0.07, 0.22, 0.07, mat("#5a3218"), 0, -0.42, 0);
+        box(0.11, 0.09, 0.11, mat("#caa24a"), 0, -0.56, 0);
+      } else if (tool && tool.type === "hoe") {
+        box(0.06, 0.66, 0.06, mat(wood), 0, -0.22, 0);
+        box(0.26, 0.09, 0.08, mat(col), 0.13, 0.1, 0);
+      } else if (code === TORCH) {
+        box(0.08, 0.5, 0.08, mat("#8a572d"), 0, -0.12, 0);
+        box(0.16, 0.14, 0.16, flame("#ff6a1a"), 0, 0.18, 0);
+        box(0.12, 0.14, 0.12, flame("#ffd75a"), 0, 0.28, 0);
+        box(0.07, 0.08, 0.07, flame("#fff4b0"), 0, 0.38, 0);
+      } else if (d.kind === "block") {
+        box(0.36, 0.36, 0.36, mat(col), 0, -0.06, 0, [0.2, 0.42, -0.18]);
+      } else if (code === STICK) {
+        box(0.06, 0.5, 0.06, mat(col), 0, -0.14, 0);
+      } else {
+        box(0.26, 0.26, 0.26, mat(col), 0, -0.06, 0, [0.4, 0.25, -0.18]);
+        box(0.32, 0.08, 0.32, mat("#ffffff"), 0, -0.06, 0, [0.4, 0.25, -0.18]);
+      }
+      // rest pose: tool cants slightly forward out of the fist
+      hand.rotation.set(0.3, 0, 0);
+    },
+
+    // Per-frame skeletal animation: walk cycle from ground speed, plus mining /
+    // swing / aim driven by the broadcast action state.
+    animatePeer(peer, dt) {
+      const parts = peer.mesh && peer.mesh.userData.parts;
+      if (!parts) return;
+
+      // planar speed from how far the interpolated mesh moved this frame
+      const px = peer.mesh.position.x;
+      const pz = peer.mesh.position.z;
+      const spd = Math.hypot(px - (peer.prevX || px), pz - (peer.prevZ || pz)) / Math.max(dt, 1e-4);
+      peer.prevX = px;
+      peer.prevZ = pz;
+      const moveAmt = clamp(spd / 3.5, 0, 1);
+      peer.walkPhase = (peer.walkPhase || 0) + spd * dt * 3.4 + dt * 0.6;
+      const step = Math.sin(peer.walkPhase) * 0.55 * moveAmt;
+
+      parts.legL.rotation.x = step;
+      parts.legR.rotation.x = -step;
+      parts.armL.rotation.x = -step * 0.8;
+      let armR = step * 0.8;
+
+      // mining = continuous chop; a swing timer = one wind-up-and-strike arc
+      let action = 0;
+      if (peer.mining) {
+        peer.actPhase = (peer.actPhase || 0) + dt * 12;
+        action = 0.6 + ((Math.sin(peer.actPhase) + 1) * 0.5) * 1.15;
+      } else if ((peer.swingTimer || 0) > 0) {
+        const dur = peer.swingKind === "attack" ? HELD_SWING_SECONDS : HELD_GATHER_SECONDS;
+        const t = clamp(1 - peer.swingTimer / dur, 0, 1);
+        action = 0.5 + Math.sin(t * Math.PI) * 1.5;
+      }
+      peer.swingTimer = Math.max(0, (peer.swingTimer || 0) - dt);
+      if (action > 0) armR = action;
+      parts.armR.rotation.x = armR;
+
+      // head + upper body aim; bob rides the walk cycle (or a gentle idle)
+      parts.head.rotation.x = clamp(-(peer.aimPitch || 0) * 0.6, -0.6, 0.6);
+      const bob = moveAmt > 0.05
+        ? Math.abs(Math.sin(peer.walkPhase)) * 0.06 * moveAmt
+        : Math.sin(performance.now() * 0.0018) * 0.015;
+      parts.body.position.y = bob;
+      parts.body.rotation.z = -step * 0.05;
     },
   };
 
@@ -6617,6 +6815,11 @@
     const c = hexToRgb(hex);
     const v = (x) => Math.round(clamp(x * f, 0, 1) * 255);
     return `rgb(${v(c[0])},${v(c[1])},${v(c[2])})`;
+  }
+  // Lighten/darken a 0xRRGGBB integer colour, returned as an integer.
+  function shadeInt(hex, f) {
+    const v = (x) => Math.round(clamp((x / 255) * f, 0, 1) * 255);
+    return (v((hex >> 16) & 255) << 16) | (v((hex >> 8) & 255) << 8) | v(hex & 255);
   }
   function buildHeldPick(color) {
     const handleMat = heldMaterial("#7c4e29");

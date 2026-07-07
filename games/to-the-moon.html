@@ -465,7 +465,8 @@
   const rand=(a,b)=>a+Math.random()*(b-a);
   const randInt=(a,b)=>Math.floor(rand(a,b+1));
   const choice=a=>a[(Math.random()*a.length)|0];
-  function hash(x,y){ let h=(x*374761393+y*668265263)>>>0; h=(h^(h>>13))*1274126177>>>0; return (h>>>0)/4294967296; }
+  let worldSeed=0x9e3779b9;   // re-rolled every genWorld → each run is a different world
+  function hash(x,y){ let h=(x*374761393+y*668265263+worldSeed)>>>0; h=(h^(h>>13))*1274126177>>>0; return (h>>>0)/4294967296; }
   const mod=(n,m)=>((n%m)+m)%m;
 
   // ---------------- DOM ----------------
@@ -506,6 +507,7 @@
   function biomeAt(r){ if(r<GROUND) return -1; for(let i=0;i<BIOMES.length;i++) if(r<=BIOMES[i].to) return i; return 2; }
 
   function genWorld(){
+    worldSeed=(Math.random()*4294967295)>>>0;
     tiles=new Uint8Array(COLS*ROWS);
     lavaLvl=new Uint8Array(COLS*ROWS); lavaActive=new Set(); lavaAccum=0;
     for(let r=0;r<ROWS;r++){
@@ -1152,7 +1154,7 @@
       case T.DIRT1: b=[26,42,66]; break;    // Cache Layer — blue data block
       case T.DIRT2: b=[42,30,66]; break;    // The Mempool — violet data block
       case T.DIRT3: b=[58,24,36]; break;    // Mainnet Core — red data block
-      case T.BEDROCK: b=[44,50,72]; break;  // immutable / encrypted block
+      case T.BEDROCK: b=[92,100,120]; break;  // immutable / encrypted block — bright steel so it reads "un-drillable"
       case T.IRON: b=[60,52,32]; break;     // coin-bearing blocks (coin drawn on top)
       case T.COPPER: b=[64,42,26]; break;
       case T.PLASMA: b=[28,54,38]; break;
@@ -1202,7 +1204,7 @@
         const tt=tiles[idx(mod(pc+dx,COLS),r)]; if(tt===T.EMPTY) continue;
         let col;
         if(tt===T.LAVA) col="#ff5a2a";
-        else if(tt===T.BEDROCK) col="#3a3f55";
+        else if(tt===T.BEDROCK) col="#9aa3b8";
         else if(ORE_OF[tt]) col=oreColor(ORE_OF[tt]);
         else col = r<=BIOMES[0].to?"#5a4636":(r<=BIOMES[1].to?"#37452a":"#4a2622");
         mmCtx.fillStyle=col; mmCtx.fillRect((dx+MR)*cell,(dy+MR)*cell,Math.ceil(cell),Math.ceil(cell));
@@ -1295,6 +1297,17 @@
     const s1=hash(c*2+7,r*2+3), s2=hash(c*5+1,r*3+9);
     ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(x+2+s1*(TILE-8), y+4+s2*(TILE-10), 4,4);
     ctx.fillStyle="rgba(90,210,255,0.10)"; ctx.fillRect(x+2+s2*(TILE-6), y+3+s1*(TILE-8), 3,3);   // cyan data bit
+    // encrypted block plate: dark hazard hatching + rivets — unmistakably un-drillable
+    if(tt===T.BEDROCK){
+      ctx.strokeStyle="rgba(8,10,18,0.6)"; ctx.lineWidth=5; ctx.beginPath();
+      ctx.moveTo(x,y+TILE*0.72); ctx.lineTo(x+TILE*0.72,y);
+      ctx.moveTo(x+TILE*0.28,y+TILE); ctx.lineTo(x+TILE,y+TILE*0.28);
+      ctx.stroke();
+      ctx.strokeStyle="rgba(8,10,18,0.5)"; ctx.lineWidth=2; ctx.strokeRect(x+1,y+1,TILE-2,TILE-2);
+      ctx.fillStyle="#cdd6e8";
+      ctx.fillRect(x+4,y+4,4,4); ctx.fillRect(x+TILE-8,y+4,4,4);
+      ctx.fillRect(x+4,y+TILE-8,4,4); ctx.fillRect(x+TILE-8,y+TILE-8,4,4);
+    }
     // lit/shaded rims on exposed faces — makes tunnels read clearly
     if(isEmpty(tileAt(c,r-1))){ ctx.fillStyle="rgba(255,255,255,0.20)"; ctx.fillRect(x,y,TILE,3); }
     if(isEmpty(tileAt(c,r+1))){ ctx.fillStyle="rgba(0,0,0,0.34)"; ctx.fillRect(x,y+TILE-3,TILE,3); }

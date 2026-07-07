@@ -4110,10 +4110,18 @@ const RBSfx = (() => {
       master.gain.value = muted ? 0 : 0.72;
       master.connect(ctx.destination);
     }
-    if (ctx.state === "suspended" && typeof ctx.resume === "function") {
-      ctx.resume().catch(() => {});
-    }
     return ctx;
+  }
+
+  async function ensureContextReady() {
+    const audioCtx = ensureContext();
+    if (!audioCtx) return null;
+    if (audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+      try {
+        await audioCtx.resume();
+      } catch (error) {}
+    }
+    return audioCtx;
   }
 
   async function loadBuffer(name) {
@@ -4150,27 +4158,30 @@ const RBSfx = (() => {
     if (!options.force && now - (lastPlayed.get(id) || 0) < throttleMs) return Promise.resolve(false);
     lastPlayed.set(id, now);
 
-    const audioCtx = ensureContext();
-    if (!audioCtx || !master) return Promise.resolve(false);
-
-    return loadBuffer(id).then((buffer) => {
-      if (!buffer || (muted && !options.force)) return false;
-      const source = audioCtx.createBufferSource();
-      const gain = audioCtx.createGain();
-      const volume = Math.max(0, Math.min(1.5, Number(options.volume || 0.42)));
-      source.buffer = buffer;
-      source.playbackRate.value = Math.max(0.5, Math.min(2, Number(options.rate || 1)));
-      gain.gain.value = volume;
-      source.connect(gain);
-      gain.connect(master);
-      source.start(0);
-      source.addEventListener("ended", () => {
-        try {
-          source.disconnect();
-          gain.disconnect();
-        } catch (error) {}
-      }, { once: true });
-      return true;
+    return ensureContextReady().then((audioCtx) => {
+      if (!audioCtx || !master) return false;
+      return loadBuffer(id).then((buffer) => {
+        if (!buffer || (muted && !options.force)) return false;
+        if (audioCtx.state === "suspended" && typeof audioCtx.resume === "function") {
+          audioCtx.resume().catch(() => {});
+        }
+        const source = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        const volume = Math.max(0, Math.min(1.5, Number(options.volume || 0.42)));
+        source.buffer = buffer;
+        source.playbackRate.value = Math.max(0.5, Math.min(2, Number(options.rate || 1)));
+        gain.gain.value = volume;
+        source.connect(gain);
+        gain.connect(master);
+        source.start(0);
+        source.addEventListener("ended", () => {
+          try {
+            source.disconnect();
+            gain.disconnect();
+          } catch (error) {}
+        }, { once: true });
+        return true;
+      });
     });
   }
 
@@ -4215,11 +4226,17 @@ const RBSfx = (() => {
     play(sound, { volume: 0.22, throttleMs: 140 });
   }
 
+  function unlock() {
+    return ensureContextReady();
+  }
+
   function init() {
     if (initialized) return;
     initialized = true;
     muted = readMuted();
-    document.addEventListener("pointerdown", () => ensureContext(), { once: true, passive: true });
+    const primeAudio = () => { ensureContextReady().catch(() => {}); };
+    document.addEventListener("pointerdown", primeAudio, { passive: true });
+    document.addEventListener("keydown", primeAudio, { passive: true });
     document.addEventListener("click", handleClick);
     document.addEventListener("pointerdown", handleGamePointer, { passive: true });
     document.addEventListener("rainbot:sfx", (event) => {
@@ -4235,6 +4252,7 @@ const RBSfx = (() => {
   return {
     init,
     play,
+    unlock,
     isMuted: () => muted,
     setMuted,
     toggleMuted,

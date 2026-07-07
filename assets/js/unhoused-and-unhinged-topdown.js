@@ -719,6 +719,18 @@
     lose: { name: "lowExplosion", volume: 0.38, rate: 0.78, throttleMs: 1000 },
   };
   const sfxLast = Object.create(null);
+  let sfxPrimed = false;
+
+  function primeSfx() {
+    const sfx = window.RBSfx;
+    if (!sfx) return;
+    if (typeof sfx.unlock === "function") {
+      sfx.unlock().catch(() => {});
+    }
+    if (sfxPrimed || typeof sfx.play !== "function") return;
+    sfxPrimed = true;
+    sfx.play("confirm", { force: true, volume: 0.34, throttleMs: 0 });
+  }
 
   function playSfx(key, options = {}) {
     const spec = SFX[key];
@@ -726,18 +738,21 @@
     if (!spec || !sfx || typeof sfx.play !== "function") {
       return;
     }
+    primeSfx();
     const now = window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
     const throttleMs = Number(options.throttleMs != null ? options.throttleMs : spec.throttleMs || 100);
     if (!options.force && now - (sfxLast[key] || 0) < throttleMs) {
       return;
     }
     sfxLast[key] = now;
-    const { name, ...baseOptions } = spec;
+    const { name, throttleMs: specThrottle, ...baseOptions } = spec;
     sfx.play(name, { ...baseOptions, ...options, throttleMs });
   }
 
   function actSfxKey(itemId) {
-    const key = `act${String(itemId || "fists").replace(/(^|-)([a-z])/g, (_, __, char) => char.toUpperCase())}`;
+    const slug = String(itemId || "fists");
+    const camel = slug.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+    const key = `act${camel.charAt(0).toUpperCase()}${camel.slice(1)}`;
     return SFX[key] ? key : "actFists";
   }
 
@@ -3221,6 +3236,7 @@
   }
 
   function startGame() {
+    primeSfx();
     if (saveSlot && !state.running) saveSlot.clear();
     if (state.ended) {
       playSfx("start", { force: true });
@@ -6058,6 +6074,7 @@
   }
 
   function onKeyDown(event) {
+    primeSfx();
     if (state.arrestTransition) {
       event.preventDefault();
       return;
@@ -6639,6 +6656,7 @@
     // Mouse users get one-tap combat with auto-aim — left-click anywhere on the
     // canvas attacks the nearest enemy. No cursor aiming required.
     canvas.addEventListener("pointerdown", (event) => {
+      primeSfx();
       if (event.pointerType !== "mouse") return;
       canvas.focus({ preventScroll: true });
       if (!state.running && !state.ended) {

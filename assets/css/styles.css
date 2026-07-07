@@ -5149,15 +5149,12 @@ body.arcade-home::before {
   object-position: center;
 }
 
-/* Apop Demon Moggers art is a wide banner — match its native frame, not 16:9. */
-.directory-card__poster--apop {
-  aspect-ratio: 1116 / 488;
-}
-
+/* Apop art is a wide banner — crop/zoom to fill the standard 16:9 poster. */
 .directory-card__poster--apop img,
 .poster-card--apop img {
   object-fit: cover;
   object-position: center;
+  background: #02050a;
 }
 
 .directory-card__poster--again img {

@@ -5157,6 +5157,14 @@ body.arcade-home::before {
   background: #02050a;
 }
 
+/* Rizz-Craft poster is slightly taller than 16:9 — zoom to fill width. */
+.directory-card__poster--rizzcraft img,
+.poster-card--rizzcraft img {
+  object-fit: cover;
+  object-position: center;
+  background: #02050a;
+}
+
 .directory-card__poster--again img {
   object-position: left center;
 }

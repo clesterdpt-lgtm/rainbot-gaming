@@ -4533,8 +4533,7 @@ body.arcade-home::before {
   object-position: center;
 }
 
-.poster-card--stonks::before,
-.directory-card__poster--stonks::before {
+.poster-card--stonks::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;
@@ -4545,8 +4544,7 @@ body.arcade-home::before {
   pointer-events: none;
 }
 
-.poster-card--slop::before,
-.directory-card__poster--slop::before {
+.poster-card--slop::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;
@@ -4557,22 +4555,13 @@ body.arcade-home::before {
   pointer-events: none;
 }
 
-.directory-card__poster--again::before,
 .poster-card--weight::before,
-.directory-card__poster--weight::before,
 .poster-card--doorcrash::before,
-.directory-card__poster--doorcrash::before,
 .poster-card--tardigrade::before,
-.directory-card__poster--tardigrade::before,
 .poster-card--pizza::before,
-.directory-card__poster--pizza::before,
 .poster-card--unhinged::before,
-.directory-card__poster--unhinged::before,
 .poster-card--apop::before,
-.directory-card__poster--apop::before,
-.poster-card--bsr::before,
-.directory-card__poster--bsr::before,
-.directory-card__poster--genz::before {
+.poster-card--bsr::before {
   content: "";
   position: absolute;
   inset: 0 0 34px;
@@ -4581,6 +4570,42 @@ body.arcade-home::before {
     linear-gradient(90deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0.28) 52%, transparent),
     linear-gradient(180deg, transparent 48%, rgba(0, 0, 0, 0.42));
   pointer-events: none;
+}
+
+/* Directory cards use a dedicated 16:9 poster — shade the full frame, not a meta strip. */
+.directory-card__poster--stonks::before,
+.directory-card__poster--slop::before,
+.directory-card__poster--again::before,
+.directory-card__poster--weight::before,
+.directory-card__poster--doorcrash::before,
+.directory-card__poster--tardigrade::before,
+.directory-card__poster--pizza::before,
+.directory-card__poster--unhinged::before,
+.directory-card__poster--apop::before,
+.directory-card__poster--bsr::before,
+.directory-card__poster--genz::before,
+.directory-card__poster--clowder::before,
+.directory-card__poster--karen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.86), rgba(0, 0, 0, 0.28) 52%, transparent),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, transparent 34%, rgba(0, 0, 0, 0.36) 100%);
+  pointer-events: none;
+}
+
+.directory-card__poster--slop::before {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.22) 54%, transparent),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, transparent 34%, rgba(0, 0, 0, 0.4) 100%);
+}
+
+.directory-card__poster--stonks::before {
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.18) 58%, transparent),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, transparent 34%, rgba(0, 0, 0, 0.36) 100%);
 }
 
 /* Billionaire Space Race — generated image poster fallback */
@@ -5146,7 +5171,7 @@ body.arcade-home::before {
   inset: 0;
   background:
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 5px),
-    linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.34));
+    linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 32%, rgba(0, 0, 0, 0.28) 100%);
   pointer-events: none;
 }
 
@@ -6531,6 +6556,12 @@ body.arcade-home::before {
 .poster-card--clowder img,
 .directory-card__poster--clowder img,
 .clowder-page .game-side__poster {
+  object-fit: cover;
+  object-position: center;
+}
+
+.poster-card--karen img,
+.directory-card__poster--karen img {
   object-fit: cover;
   object-position: center;
 }

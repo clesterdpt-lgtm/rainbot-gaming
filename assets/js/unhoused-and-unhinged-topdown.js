@@ -671,6 +671,75 @@
   };
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create(GAME_ID, { version: 1 });
   let saveMenu = null;
+  const SFX = {
+    start: { name: "open", volume: 0.34, throttleMs: 220 },
+    resume: { name: "confirm", volume: 0.28, throttleMs: 180 },
+    pause: { name: "close", volume: 0.24, throttleMs: 180 },
+    ui: { name: "click", volume: 0.22, throttleMs: 90 },
+    select: { name: "select", volume: 0.22, throttleMs: 80 },
+    equip: { name: "toggle", volume: 0.26, throttleMs: 90 },
+    bagOpen: { name: "open", volume: 0.25, throttleMs: 140 },
+    bagClose: { name: "close", volume: 0.22, throttleMs: 140 },
+    mapOpen: { name: "question", volume: 0.23, throttleMs: 180 },
+    mapClose: { name: "close", volume: 0.2, throttleMs: 180 },
+    actMiss: { name: "question", volume: 0.2, throttleMs: 260 },
+    actFists: { name: "click", volume: 0.22, rate: 1.18, throttleMs: 110 },
+    actCone: { name: "drop", volume: 0.26, rate: 1.06, throttleMs: 110 },
+    actPlunger: { name: "softHeavy", volume: 0.24, rate: 1.18, throttleMs: 120 },
+    actPeel: { name: "switch", volume: 0.23, rate: 1.12, throttleMs: 120 },
+    actBoombox: { name: "forceField", volume: 0.18, rate: 1.25, throttleMs: 180 },
+    actSign: { name: "wood", volume: 0.25, throttleMs: 120 },
+    actChicken: { name: "switch", volume: 0.25, rate: 1.35, throttleMs: 120 },
+    actMop: { name: "wood", volume: 0.24, rate: 0.94, throttleMs: 120 },
+    empty: { name: "error", volume: 0.22, throttleMs: 240 },
+    meleeHit: { name: "punch", volume: 0.28, throttleMs: 80 },
+    meleeMiss: { name: "softHeavy", volume: 0.18, rate: 1.34, throttleMs: 120 },
+    throw: { name: "drop", volume: 0.3, rate: 1.2, throttleMs: 140 },
+    trap: { name: "drop", volume: 0.25, rate: 0.86, throttleMs: 140 },
+    slip: { name: "switch", volume: 0.24, rate: 1.28, throttleMs: 220 },
+    pickup: { name: "confirm", volume: 0.24, throttleMs: 120 },
+    itemPickup: { name: "open", volume: 0.28, rate: 1.14, throttleMs: 120 },
+    snack: { name: "confirm", volume: 0.2, rate: 1.25, throttleMs: 120 },
+    shopBuy: { name: "confirm", volume: 0.3, rate: 1.08, throttleMs: 160 },
+    carEnter: { name: "doorOpen", volume: 0.3, throttleMs: 220 },
+    carExit: { name: "doorClose", volume: 0.26, throttleMs: 220 },
+    carCrash: { name: "metal", volume: 0.34, throttleMs: 180 },
+    explosion: { name: "explosion", volume: 0.48, throttleMs: 320 },
+    playerHurt: { name: "softHeavy", volume: 0.3, rate: 0.86, throttleMs: 420 },
+    zombieHit: { name: "punch", volume: 0.22, rate: 0.78, throttleMs: 90 },
+    zombieClear: { name: "confirm", volume: 0.2, rate: 1.35, throttleMs: 160 },
+    spit: { name: "laserSmall", volume: 0.2, rate: 0.75, throttleMs: 700 },
+    goo: { name: "glitch", volume: 0.24, rate: 1.1, throttleMs: 480 },
+    wanted: { name: "error", volume: 0.2, throttleMs: 1200 },
+    arrest: { name: "lowExplosion", volume: 0.35, throttleMs: 800 },
+    night: { name: "glitch", volume: 0.26, rate: 0.7, throttleMs: 1000 },
+    dawn: { name: "confirm", volume: 0.3, rate: 0.82, throttleMs: 1000 },
+    favor: { name: "confirm", volume: 0.3, rate: 1.22, throttleMs: 300 },
+    win: { name: "confirm", volume: 0.42, rate: 0.75, throttleMs: 1000 },
+    lose: { name: "lowExplosion", volume: 0.38, rate: 0.78, throttleMs: 1000 },
+  };
+  const sfxLast = Object.create(null);
+
+  function playSfx(key, options = {}) {
+    const spec = SFX[key];
+    const sfx = window.RBSfx;
+    if (!spec || !sfx || typeof sfx.play !== "function") {
+      return;
+    }
+    const now = window.performance && typeof window.performance.now === "function" ? window.performance.now() : Date.now();
+    const throttleMs = Number(options.throttleMs != null ? options.throttleMs : spec.throttleMs || 100);
+    if (!options.force && now - (sfxLast[key] || 0) < throttleMs) {
+      return;
+    }
+    sfxLast[key] = now;
+    const { name, ...baseOptions } = spec;
+    sfx.play(name, { ...baseOptions, ...options, throttleMs });
+  }
+
+  function actSfxKey(itemId) {
+    const key = `act${String(itemId || "fists").replace(/(^|-)([a-z])/g, (_, __, char) => char.toUpperCase())}`;
+    return SFX[key] ? key : "actFists";
+  }
 
   const player = {
     x: points.start.x,
@@ -1486,6 +1555,7 @@
   function explodeVehicle(car) {
     addPulse(car.x, car.z, 0xff4f00, 7.8, 0.62);
     addPulse(car.x, car.z, 0xffcc00, 4.8, 0.48);
+    playSfx("explosion", { force: true });
     
     for (let i = 0; i < 16; i++) {
       const angle = Math.random() * Math.PI * 2;
@@ -3153,6 +3223,7 @@
   function startGame() {
     if (saveSlot && !state.running) saveSlot.clear();
     if (state.ended) {
+      playSfx("start", { force: true });
       resetGame(true);
       return;
     }
@@ -3163,6 +3234,7 @@
       els.overlay.classList.remove("overlay--show");
     }
     canvas.focus({ preventScroll: true });
+    playSfx("start");
     logLine("Run started. Find an audience before the Tweeker Zombies roll in.");
   }
 
@@ -3174,6 +3246,7 @@
     if (els.overlay) {
       els.overlay.classList.toggle("overlay--show", state.paused);
     }
+    playSfx(state.paused ? "pause" : "resume");
     ui.setText(els.overlayTitle, "PAUSED");
     ui.setText(els.overlaySub, "Top-down run is paused.");
     ui.setText(els.primary, "Resume");
@@ -3193,6 +3266,7 @@
     ui.setText(els.overlaySub, sub);
     ui.setText(els.overlayScore, `Score ${state.score} | Best ${state.high} | Cash $${state.cash.toFixed(2)}`);
     ui.setText(els.primary, "Restart run");
+    playSfx(title === "BLOCK LEGEND" ? "win" : "lose", { force: true });
   }
 
   function arrestPlayer() {
@@ -3201,6 +3275,7 @@
     }
     state.arrestTransition = true;
     logLine("BUSTED! The police are processing your arrest...");
+    playSfx("arrest", { force: true });
 
     if (state.drivingCar) {
       exitVehicle();
@@ -3242,6 +3317,7 @@
       logLine("Bailed out! The police confiscated all your cash.");
       addPulse(player.x, player.z, 0xff1a1a, 6.0, 0.6);
       addFloater("Bailed out! -$ cash", player.x, player.z, "#ff1a1a");
+      playSfx("resume", { force: true });
     }, 5000);
   }
 
@@ -3327,6 +3403,7 @@
     logLine(`Favor complete: ${favor.reward}`);
     addFloater("Favor complete!", player.x, player.z, "#ffd43b");
     addPulse(player.x, player.z, 0xffd43b, 6.2, 0.7);
+    playSfx("favor");
   }
 
   function progressFavor(kind, amount = 1, context = {}) {
@@ -3376,6 +3453,7 @@
     if (fromBag) state.bagSlotPrimed = true;
     refreshHotbar();
     if (state.bagOpen) renderBag();
+    playSfx("select");
   }
 
   function equipToSlot(id, slot) {
@@ -3390,6 +3468,7 @@
     state.bagSlotPrimed = true;
     refreshHotbar();
     if (state.bagOpen) renderBag();
+    playSfx("equip");
   }
 
   function bagHintText() {
@@ -3421,6 +3500,7 @@
     }
     state.bagPickItem = state.bagPickItem === id ? null : id;
     renderBag();
+    playSfx("select");
   }
 
   // ---- Audience / wanted ----------------------------------------------------
@@ -3514,6 +3594,7 @@
   }
 
   function addWanted(amount) {
+    const starsBefore = starLevel();
     if (amount > 0) {
       const copNearby = cops.some((cop) => distSq(cop, player) < 22 * 22);
       const policeCarNearby = cars.some(
@@ -3529,6 +3610,9 @@
       }
     }
     state.wanted = clamp(state.wanted + amount, 0, 100);
+    if (amount > 0 && starLevel() > starsBefore) {
+      playSfx("wanted");
+    }
   }
 
   function copsChasing() {
@@ -3570,6 +3654,7 @@
     addFloater("HIJACKED!", car.x, car.z, "#ffbf00");
     logLine("Vehicle hijacked! WASD/Arrows to drive, F to exit.");
     addWanted(10);
+    playSfx("carEnter");
   }
 
   function exitVehicle() {
@@ -3605,6 +3690,7 @@
     
     state.drivingCar = null;
     logLine("Exited vehicle.");
+    playSfx("carExit");
   }
 
   function nearestLaneForPosition(x, z) {
@@ -3722,6 +3808,7 @@
         damageZombie(zombie, dmg, knockX, knockZ);
         addFloater("crunch", zombie.x, zombie.z, "#a0ffa0");
         addPulse(zombie.x, zombie.z, 0x8aff6a, 3.0, 0.3);
+        playSfx("carCrash", { volume: 0.28, throttleMs: 220 });
       }
     });
 
@@ -3738,6 +3825,7 @@
         if (civilian.mesh) {
           civilian.mesh.position.set(civilian.x, 0, civilian.z);
         }
+        playSfx("carCrash", { volume: 0.26, throttleMs: 220 });
       }
     });
 
@@ -3753,6 +3841,7 @@
         if (cop.mesh) {
           cop.mesh.position.set(cop.x, 0, cop.z);
         }
+        playSfx("carCrash", { volume: 0.3, throttleMs: 220 });
       }
     });
   }
@@ -3878,12 +3967,16 @@
   }
 
   function toggleBag(open) {
+    const wasOpen = state.bagOpen;
     state.bagOpen = open === undefined ? !state.bagOpen : open;
     if (els.bagOverlay) els.bagOverlay.hidden = !state.bagOpen;
     if (state.bagOpen) {
       state.bagPickItem = null;
       state.bagSlotPrimed = false;
       renderBag();
+    }
+    if (state.bagOpen !== wasOpen) {
+      playSfx(state.bagOpen ? "bagOpen" : "bagClose");
     }
   }
 
@@ -4042,11 +4135,15 @@
 
   function toggleMap(open) {
     if (!state.running || state.ended) return;
+    const wasOpen = state.mapOpen;
     state.mapOpen = open === undefined ? !state.mapOpen : open;
     if (els.mapOverlay) els.mapOverlay.hidden = !state.mapOpen;
     if (state.mapOpen) {
       if (state.bagOpen) toggleBag(false);
       renderMap();
+    }
+    if (state.mapOpen !== wasOpen) {
+      playSfx(state.mapOpen ? "mapOpen" : "mapClose");
     }
   }
 
@@ -4415,6 +4512,7 @@
     spawnNightWave();
     logLine("Tweeker Zombies rolling in. Bonk clean, keep moving.");
     addPulse(player.x, player.z, 0x6dff83, 8, 1.25);
+    playSfx("night", { force: true });
   }
 
   function beginDay() {
@@ -4429,6 +4527,7 @@
     spawnDayPickups();
     logLine(`Dawn cycle ${state.cycle}. The block resets, mostly.`);
     startFavorForCycle();
+    playSfx("dawn", { force: true });
     if (state.cycle > 3) {
       endGame("BLOCK LEGEND", "Three cycles survived. This is the new top-down baseline.");
     }
@@ -4649,6 +4748,7 @@
       }
       addWanted(2.5);
       addPulse(car.x, car.z, 0xffcc33, 4.0, 0.3);
+      playSfx("carCrash");
     } else if (hitObstacle && !movedX && !movedZ) {
       const dmg = Math.min(35, Math.abs(car.speed) * 1.5);
       car.health = Math.max(0, car.health - dmg);
@@ -4660,6 +4760,7 @@
         addFloater(`CAR HEALTH: ${Math.round(car.health)}%`, car.x, car.z, "#ff9999");
       }
       addPulse(car.x, car.z, 0xff5555, 3.2, 0.25);
+      playSfx("carCrash", { volume: 0.26 });
     }
 
     car.mesh.position.set(car.x, 0, car.z);
@@ -4964,6 +5065,7 @@
         moveCircle(player, Math.sign(dx || 1) * 2.5, Math.sign(dz || 1) * 2.5);
         addFloater(car.waitReason ? "move!" : "watch it!", player.x, player.z, "#ffd45c");
         addPulse(player.x, player.z, 0xffd45c, 3.5, 0.45);
+        playSfx(Math.abs(car.currentSpeed) > 2 ? "carCrash" : "playerHurt", { volume: 0.24, throttleMs: 450 });
       }
     });
     resolveVehicleOverlaps();
@@ -5138,6 +5240,7 @@
           addFloater(`CAR HEALTH: ${Math.round(state.drivingCar.health)}%`, player.x, player.z, "#ff9999");
         }
         car.speed = -car.speed * 0.5;
+        playSfx("carCrash", { volume: 0.34, throttleMs: 260 });
       } else {
         const dmg = Math.min(35, Math.abs(car.speed) * 1.5);
         car.health = Math.max(0, car.health - dmg);
@@ -5156,6 +5259,7 @@
       const knockZ = -Math.sin(car.angle) * 3;
       moveCircle(player, knockX, knockZ);
       addFloater("WATCH OUT!", player.x, player.z, "#ff3333");
+      playSfx("playerHurt", { throttleMs: 500 });
     }
   }
 
@@ -5241,11 +5345,13 @@
         copHit.stun = 1.2;
         addWanted(4);
         addFloater("cone check", copHit.x, copHit.z, "#9ed4ff");
+        playSfx("meleeHit", { volume: 0.24 });
         removeProjectile(i);
       } else if (civHit) {
         setCivilianPanic(civHit, 3);
         const witnessReaction = alertCivilianWitnesses(AGGRESSION_RADIUS, 9, civHit, 3);
         addFloater(`panic x${Math.max(1, witnessReaction.witnesses.length)} +wanted`, civHit.x, civHit.z, "#ff7a6c");
+        playSfx("meleeHit", { volume: 0.22 });
         removeProjectile(i);
       } else if (projectile.life <= 0 || !isWalkable(projectile.x, projectile.z, 0.5)) {
         removeProjectile(i);
@@ -5275,6 +5381,7 @@
           cop.slip = 1.8;
           addWanted(-5);
           addFloater("slip!", cop.x, cop.z, "#ffe56f");
+          playSfx("slip");
         }
       });
       zombies.forEach((zombie) => {
@@ -5282,6 +5389,7 @@
           zombie.stun = 1.2;
           damageZombie(zombie, 1, zombie.x - peel.x, zombie.z - peel.z);
           addFloater("peel!", zombie.x, zombie.z, "#f7ff8d");
+          playSfx("slip");
         }
       });
     }
@@ -5346,9 +5454,11 @@
           state.drivingCar.health = Math.max(0, state.drivingCar.health - dmg);
           addFloater(`CAR HEALTH: ${Math.round(state.drivingCar.health)}%`, state.drivingCar.x, state.drivingCar.z, "#ff5555");
           addPulse(state.drivingCar.x, state.drivingCar.z, 0xff5555, 3.0, 0.3);
+          playSfx("carCrash", { volume: 0.26, throttleMs: 350 });
         } else {
           state.health = clamp(state.health - (zombie.kind === "runner" ? 6 : 9), 0, state.maxHealth);
           addPulse(player.x, player.z, 0x90ff76, 2.6, 0.4);
+          playSfx("playerHurt");
         }
       }
     });
@@ -5379,6 +5489,7 @@
       zombie.attack = 1.1;
       state.health = clamp(state.health - 5, 0, state.maxHealth);
       addPulse(player.x, player.z, 0xc7e04a, 2.4, 0.35);
+      playSfx("playerHurt");
     }
   }
 
@@ -5406,6 +5517,7 @@
       mesh: group,
     });
     addPulse(zombie.x, zombie.z, 0xd9ff5a, 2.2, 0.25);
+    playSfx("spit");
   }
 
   function updateGoo(dt) {
@@ -5422,6 +5534,7 @@
         state.slow = Math.min(3.2, state.slow + 2.2);
         addFloater("slimed! slowed", player.x, player.z, "#d9ff5a");
         addPulse(player.x, player.z, 0xc7e04a, 3.2, 0.4);
+        playSfx("goo");
         removeGoo(i);
       } else if (goo.life <= 0 || !isWalkable(goo.x, goo.z, 0.4)) {
         addPulse(goo.x, goo.z, 0xaad24a, 2.0, 0.25);
@@ -5495,18 +5608,22 @@
       state.cash += 1.50;
       addFloater("+$1.50 Cash", pickup.x, pickup.z, "#75ff92");
       logLine("Picked up $1.50 cash.");
+      playSfx("pickup");
     } else if (pickup.type === "snack") {
       state.health = clamp(state.health + 16, 0, state.maxHealth);
       addFloater("+16 HP (Snack)", pickup.x, pickup.z, "#ffd080");
       logLine("Collected snack. Restored 16 HP.");
+      playSfx("snack");
     } else if (pickup.type === "scrap") {
       state.cash += 2.50;
       addFloater("+$2.50 Scrap", pickup.x, pickup.z, "#aab0b4");
       logLine("Scrap collected. Sold automatically for $2.50.");
+      playSfx("pickup", { rate: 0.92 });
     } else if (ITEMS[pickup.type]) {
       const item = ITEMS[pickup.type];
       const qty = item.refill || 1;
       const isNew = addToBag(pickup.type, qty);
+      playSfx(isNew ? "itemPickup" : "pickup");
       
       const qtyText = qty > 1 ? `+${qty} ` : "+";
       const nameText = qty > 1 ? `${item.short}s` : item.short;
@@ -5580,6 +5697,7 @@
     if (state.cash < offer.price) {
       addFloater(`Need $${offer.price} — ${offer.label}`, player.x, player.z, "#ffb3a7");
       addPulse(player.x, player.z, 0xffb3a7, 3.0, 0.3);
+      playSfx("empty");
       return true;
     }
     state.cash -= offer.price;
@@ -5593,6 +5711,7 @@
       addFloater(`+${offer.label}`, player.x, player.z, "#ffe07a");
     }
     addPulse(player.x, player.z, 0xffd43b, 5.0, 0.5);
+    playSfx("shopBuy");
     refreshHotbar();
     if (state.bagOpen) renderBag();
     return true;
@@ -5641,6 +5760,7 @@
       spawnActFX(item.id, 0, true);
       addFloater("need audience", player.x, player.z, "#dde6ef");
       addPulse(player.x, player.z, 0xdde6ef, 2.8, 0.28);
+      playSfx("actMiss");
       return;
     }
     const crowd = Math.min(audience.length, 12);
@@ -5661,6 +5781,7 @@
     spawnActFX(item.id, audience.length, false);
     addFloater(`+$${gain.toFixed(0)} ${earn.label || ""} x${audience.length}`.trim(), player.x, player.z, "#73ff91");
     addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 7.2 : 4.8 + crowd * 0.28, 0.55);
+    playSfx(actSfxKey(item.id));
     progressFavor("act", 1, { audienceCount: audience.length, itemId: item.id, gain });
   }
 
@@ -5734,11 +5855,13 @@
       addFloater(hits ? a.label || "bonk!" : "swing", player.x, player.z, hits ? "#f5ff9d" : "#d4d7dd");
     }
     addPulse(player.x + player.facing.x * 1.8, player.z + player.facing.z * 1.8, 0xffffff, 3.2, 0.25);
+    playSfx(hits || hitCivilian ? "meleeHit" : "meleeMiss");
   }
 
   function throwItem(item, a) {
     if (item.count && (state.inventory[item.count] || 0) <= 0) {
       addFloater(`no ${item.short.toLowerCase()}s`, player.x, player.z, "#ffb3a7");
+      playSfx("empty");
       return;
     }
     state.cooldowns.attack = a.cool || 0.6;
@@ -5767,11 +5890,13 @@
       witnessReaction.witnesses.length ? "#ffb36f" : "#ffb878"
     );
     refreshHotbar();
+    playSfx("throw");
   }
 
   function dropTrap(item, a) {
     if (item.count && (state.inventory[item.count] || 0) <= 0) {
       addFloater(`no ${item.short.toLowerCase()}s`, player.x, player.z, "#ffb3a7");
+      playSfx("empty");
       return;
     }
     state.cooldowns.attack = a.cool || 0.45;
@@ -5792,6 +5917,7 @@
     );
     progressFavor("trap", 1, { itemId: item.id, x, z });
     refreshHotbar();
+    playSfx("trap");
   }
 
   function damageZombie(zombie, amount, kx = 0, kz = 0) {
@@ -5799,6 +5925,7 @@
     const mag = len2(kx, kz) || 1;
     moveCircle(zombie, (kx / mag) * 1.7, (kz / mag) * 1.7);
     addPulse(zombie.x, zombie.z, 0x8aff6a, 2.1, 0.25);
+    playSfx("zombieHit");
     if (zombie.health <= 0) {
       const index = zombies.indexOf(zombie);
       if (index !== -1) {
@@ -5807,6 +5934,7 @@
       actorGroup.remove(zombie.mesh);
       state.waveKills += 1;
       addFloater("+tweeker clear", zombie.x, zombie.z, "#adff94");
+      playSfx("zombieClear");
       if (state.phase === "night" && state.waveKills >= state.waveTarget) {
         beginDay();
       }
@@ -6006,6 +6134,7 @@
       if (state.paused) {
         state.paused = false;
         els.overlay?.classList.remove("overlay--show");
+        playSfx("resume");
         return;
       }
       startGame();
@@ -6013,6 +6142,7 @@
     els.pause?.addEventListener("click", () => setPaused(!state.paused));
     els.restart?.addEventListener("click", () => {
       if (saveSlot) saveSlot.clear();
+      playSfx("start", { force: true });
       resetGame(true);
     });
     // Hotbar slot selection (works for click and tap).
@@ -6150,6 +6280,7 @@
     els.overlay?.classList.remove("overlay--show");
     canvas.focus({ preventScroll: true });
     logLine("Saved block restored.");
+    playSfx("resume", { force: true });
   }
 
   // On-canvas touch action buttons (shown on touch devices and in max screen).

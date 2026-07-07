@@ -3991,7 +3991,7 @@ window.RBGameSaves = RBGameSaves;
 
 const RBSfx = (() => {
   const STORAGE_KEY = "rainbot_sfx_muted";
-  const ROOT = `${RB_BASE}assets/Sounds/_shared/`;
+  const ROOT = `${RB_BASE}assets/Sounds/shared/`;
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   const manifest = {
     back: "ui/back.ogg",

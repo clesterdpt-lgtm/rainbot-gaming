@@ -234,6 +234,111 @@
     };
   })();
 
+  // ---------- soundtrack ----------
+  const music = (() => {
+    const ROOT = "../assets/Sounds/scrap-circuit/";
+    const TRACKS = [
+      { title: "Tin Foil Moon", file: "tin-foil-moon.mp3" },
+      { title: "Inheritance to Crypto", file: "inheritance-to-crypto.mp3" },
+      { title: "Chrome Heart Override", file: "chrome-heart-override.mp3" },
+      { title: "Swipe Again", file: "swipe-again.mp3" },
+      { title: "Basement Boss Fight", file: "basement-boss-fight.mp3" },
+      { title: "Scroll Fever", file: "scroll-fever.mp3" },
+    ];
+    const player = typeof Audio === "function" ? new Audio() : null;
+    let active = false;
+    let paused = false;
+    let currentIndex = 0;
+    let errorSkips = 0;
+    let muted = Boolean(window.RBSfx && window.RBSfx.isMuted && window.RBSfx.isMuted());
+
+    if (player) {
+      player.preload = "auto";
+      player.volume = 0.34;
+      player.loop = false;
+      player.muted = muted;
+    }
+
+    function wrapIndex(index) {
+      return ((index % TRACKS.length) + TRACKS.length) % TRACKS.length;
+    }
+
+    function trackIndexFor(arenaId, roundIndex) {
+      const arenaIndex = CIRCUIT_ORDER.indexOf(arenaId);
+      if (arenaIndex >= 0) return arenaIndex % TRACKS.length;
+      return wrapIndex(Number(roundIndex) || 0);
+    }
+
+    function playCurrent() {
+      if (!player || !active || paused || muted || !TRACKS.length) return;
+      const result = player.play();
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    }
+
+    function load(index) {
+      if (!player || !TRACKS.length) return;
+      currentIndex = wrapIndex(index);
+      player.src = ROOT + TRACKS[currentIndex].file;
+      try { player.currentTime = 0; } catch (_) {}
+      player.load();
+      playCurrent();
+    }
+
+    function next(resetErrors = true) {
+      if (resetErrors) errorSkips = 0;
+      load(currentIndex + 1);
+    }
+
+    if (player) {
+      player.addEventListener("ended", () => {
+        if (!active || paused) return;
+        next();
+      });
+      player.addEventListener("error", () => {
+        errorSkips += 1;
+        if (!active || paused || TRACKS.length < 2 || errorSkips >= TRACKS.length) return;
+        next(false);
+      });
+      document.addEventListener("rainbot:sfx-muted", (event) => {
+        muted = Boolean(event.detail && event.detail.muted);
+        player.muted = muted;
+        if (muted) player.pause();
+        else playCurrent();
+      });
+      document.addEventListener("pointerdown", playCurrent, { passive: true });
+      document.addEventListener("keydown", playCurrent, { passive: true });
+    }
+
+    return {
+      startForRound(arenaId, roundIndex) {
+        active = true;
+        paused = false;
+        errorSkips = 0;
+        muted = Boolean(window.RBSfx && window.RBSfx.isMuted && window.RBSfx.isMuted());
+        if (player) player.muted = muted;
+        load(trackIndexFor(arenaId, roundIndex));
+      },
+      pause() {
+        paused = true;
+        if (player) player.pause();
+      },
+      resume() {
+        paused = false;
+        playCurrent();
+      },
+      stop() {
+        active = false;
+        paused = false;
+        if (!player) return;
+        player.pause();
+        try { player.currentTime = 0; } catch (_) {}
+      },
+      next,
+      tracks: TRACKS,
+      get currentTrack() { return TRACKS[currentIndex] || null; },
+    };
+  })();
+
   // ---------- state ----------
   const state = {
     phase: "menu", // menu | countdown | running | over
@@ -2310,6 +2415,7 @@
 
   // ---------- match flow ----------
   function clearWorld() {
+    music.stop();
     if (arena) scene.remove(arena.group);
     state.cars.forEach((c) => scene.remove(c.mesh));
     state.projectiles.forEach((p) => scene.remove(p.mesh));
@@ -2352,6 +2458,7 @@
   function beginRound(arenaId, roundIndex, onlineRoster) {
     sfx.unlock();
     clearWorld();
+    music.startForRound(arenaId, roundIndex);
     arena = SCRAP.arenas.build(arenaId);
     scene.add(arena.group);
     scene.background = new THREE.Color(arena.sky);
@@ -2599,6 +2706,7 @@
       endCircuitRound(won, placement);
       return;
     }
+    music.stop();
     state.phase = "over";
     const placeBonus = [0, 500, 300, 200, 120, 60, 0][placement] || 0;
     addSalvage(placeBonus);
@@ -2636,6 +2744,7 @@
 
   function endCircuitRound(won, placement) {
     state.phase = "over";
+    music.stop();
     const c = state.circuit;
     addSalvage((CIRCUIT_PLACE_BONUS[placement] || 0) + (won ? 250 : 0));
     c.results.push({
@@ -2775,6 +2884,7 @@
 
   function circuitComplete(finished) {
     state.phase = "over";
+    music.stop();
     const c = state.circuit;
     if (finished) addSalvage(CIRCUIT_FINISH_BONUS);
     const isHigh = api.recordScore(CIRCUIT_SCORE_ID, state.salvage);
@@ -2808,6 +2918,8 @@
       return;
     }
     state.paused = !state.paused;
+    if (state.paused) music.pause();
+    else music.resume();
     if (el.btnPause) el.btnPause.textContent = state.paused ? "Resume" : "Pause";
     api.toast(state.paused ? "Paused" : "Back to the derby");
   }
@@ -2873,6 +2985,7 @@
   }
 
   function showMenu() {
+    music.stop();
     net.reset();
     state.phase = "menu";
     state.circuit = null;
@@ -3265,6 +3378,7 @@
       net.ended = true;
       net.myOut = net.myOut || !won;
       state.phase = "over";
+      music.stop();
       const code = net.room ? net.room.code : "";
       if (won) {
         announce("win", true);
@@ -3354,6 +3468,7 @@
   if (DEBUG) {
     window.__scrapDebug = {
       state, net, sampleGround, get arena() { return arena; },
+      music,
       startMatch, startCircuit, startNextRound, circuitComplete, endMatch,
       get player() { return state.player; },
       makePickupModel, scene, applyDamage, respawnPlayerLife, collideCars,

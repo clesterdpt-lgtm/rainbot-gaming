@@ -380,49 +380,66 @@
     }
 
     /* ===== Menu (inside site overlay) ====================================== */
+    /* Fill the stage; shrink previews so Start stays visible when minimized. */
     .scrap-page .overlay {
+      align-items: stretch;
       background: rgba(4, 6, 12, 0.62);
-      gap: clamp(4px, 1cqh, 8px);
+      gap: clamp(3px, 0.9cqh, 8px);
+      height: 100%;
       justify-content: flex-start;
+      max-height: 100%;
+      min-height: 0;
       overflow: hidden;
-      padding: clamp(7px, 1.9cqh, 18px) clamp(10px, 2.2cqw, 22px);
+      padding: clamp(6px, 1.5cqh, 14px) clamp(8px, 1.8cqw, 18px);
       z-index: 8;
     }
 
     .scrap-page .overlay__title {
+      flex-shrink: 0;
       font-family: "Bungee", var(--font-display);
-      font-size: clamp(18px, 4.1cqw, 32px);
+      font-size: clamp(16px, 3.6cqw, 28px);
       line-height: 0.96;
-      margin: 0;
+      margin: 0 auto;
       text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.8), 0 0 24px rgba(255, 46, 136, 0.4);
     }
 
     .scrap-page .overlay__sub {
-      font-size: clamp(9px, 1.3cqw, 12px);
+      flex-shrink: 0;
+      font-size: clamp(9px, 1.2cqw, 12px);
       line-height: 1.25;
-      margin: 0;
+      margin: 0 auto;
       max-width: min(620px, 92%);
     }
 
     .scrap-page .overlay__score {
+      flex-shrink: 0;
       font-size: clamp(8px, 1.1cqw, 11px);
       line-height: 1.2;
-      margin: 0;
+      margin: 0 auto;
       min-height: 0;
     }
 
     .scrap-page .overlay > .btn {
+      align-self: center;
+      flex-shrink: 0;
       font-size: clamp(11px, 1.35cqw, 14px);
-      min-height: clamp(32px, 6cqh, 42px);
-      padding: 7px 18px;
+      margin-top: 2px;
+      min-height: clamp(30px, 5.5cqh, 40px);
+      padding: 6px 16px;
+      z-index: 2;
     }
 
     .scrap-menu {
       display: grid;
-      gap: clamp(6px, 1.1cqh, 10px);
+      flex: 1 1 auto;
+      gap: clamp(4px, 0.9cqh, 8px);
       justify-items: stretch;
       margin: 0 auto;
       max-width: min(1040px, 100%);
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       width: 100%;
     }
 
@@ -448,8 +465,9 @@
     .scrap-menu-main {
       align-items: stretch;
       display: grid;
-      gap: 10px;
+      gap: clamp(6px, 1cqw, 10px);
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      min-height: 0;
       width: 100%;
     }
 
@@ -460,27 +478,23 @@
       border-radius: 10px;
       box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
       display: grid;
-      gap: 6px;
+      gap: 5px;
       grid-template-rows: auto minmax(0, 1fr) auto;
+      min-height: 0;
       min-width: 0;
-      padding: 8px;
-    }
-
-    .scrap-preview-card {
-      min-height: clamp(220px, 40cqh, 340px);
-    }
-
-    .scrap-map-card {
-      min-height: clamp(220px, 40cqh, 340px);
+      padding: 6px;
     }
 
     .scrap-preview-stage,
     .scrap-map-stage {
+      aspect-ratio: 16 / 10;
       border-radius: 8px;
-      height: 100%;
-      min-height: clamp(150px, 28cqh, 240px);
+      height: auto;
+      max-height: min(210px, 32cqh);
+      min-height: 0;
       overflow: hidden;
       position: relative;
+      width: 100%;
     }
 
     .scrap-preview-canvas,
@@ -490,6 +504,9 @@
       border-radius: 8px;
       display: block;
       height: 100%;
+      left: 0;
+      position: absolute;
+      top: 0;
       width: 100%;
     }
 
@@ -1220,24 +1237,47 @@
       }
     }
 
+    /* Typical minimized desktop stage (~500px tall) — compact before it clips */
+    @container sstage (max-height: 560px) {
+      .scrap-page .overlay__title {
+        font-size: clamp(15px, 3.2cqw, 22px);
+      }
+
+      .scrap-page .overlay__sub {
+        display: none;
+      }
+
+      .scrap-preview-stage,
+      .scrap-map-stage {
+        max-height: min(160px, 28cqh);
+      }
+
+      .scrap-mode-chip {
+        min-height: 36px;
+        padding: 5px 8px;
+      }
+
+      .scrap-mode-chip span {
+        display: none;
+      }
+
+      .scrap-arena-chip img {
+        max-height: 36px;
+      }
+
+      .scrap-veh-flavor {
+        display: none;
+      }
+    }
+
     @container sstage (max-width: 760px) {
       .scrap-menu-main {
         grid-template-columns: minmax(0, 1fr);
       }
 
-      .scrap-preview-card,
-      .scrap-map-card {
-        min-height: 0;
-      }
-
       .scrap-preview-stage,
       .scrap-map-stage {
-        min-height: 150px;
-      }
-
-      .scrap-preview-canvas,
-      .scrap-map-canvas {
-        height: clamp(150px, 30cqh, 220px);
+        max-height: min(180px, 26cqh);
       }
 
       .scrap-arena-strip {
@@ -1287,13 +1327,7 @@
 
       .scrap-preview-stage,
       .scrap-map-stage {
-        min-height: 100px;
-      }
-
-      .scrap-preview-canvas,
-      .scrap-map-canvas {
-        height: 100px;
-        min-height: 100px;
+        max-height: min(96px, 22cqh);
       }
 
       .scrap-mode-chip {

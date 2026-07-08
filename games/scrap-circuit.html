@@ -380,40 +380,36 @@
     }
 
     /* ===== Menu (inside site overlay) ====================================== */
-    /* Fill the stage; shrink previews so Start stays visible when minimized. */
+    /* Previews fill remaining stage height; chrome stays compact so Start fits. */
     .scrap-page .overlay {
       align-items: stretch;
-      background: rgba(4, 6, 12, 0.62);
-      gap: clamp(3px, 0.9cqh, 8px);
+      background: rgba(4, 6, 12, 0.94);
+      gap: clamp(3px, 0.7cqh, 6px);
       height: 100%;
       justify-content: flex-start;
       max-height: 100%;
       min-height: 0;
       overflow: hidden;
-      padding: clamp(6px, 1.5cqh, 14px) clamp(8px, 1.8cqw, 18px);
+      padding: clamp(5px, 1.2cqh, 12px) clamp(8px, 1.6cqw, 16px);
       z-index: 8;
     }
 
     .scrap-page .overlay__title {
       flex-shrink: 0;
       font-family: "Bungee", var(--font-display);
-      font-size: clamp(16px, 3.6cqw, 28px);
+      font-size: clamp(15px, 3.2cqw, 24px);
       line-height: 0.96;
       margin: 0 auto;
       text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.8), 0 0 24px rgba(255, 46, 136, 0.4);
     }
 
     .scrap-page .overlay__sub {
-      flex-shrink: 0;
-      font-size: clamp(9px, 1.2cqw, 12px);
-      line-height: 1.25;
-      margin: 0 auto;
-      max-width: min(620px, 92%);
+      display: none; /* free vertical room for larger previews */
     }
 
     .scrap-page .overlay__score {
       flex-shrink: 0;
-      font-size: clamp(8px, 1.1cqw, 11px);
+      font-size: clamp(8px, 1.05cqw, 10px);
       line-height: 1.2;
       margin: 0 auto;
       min-height: 0;
@@ -424,7 +420,7 @@
       flex-shrink: 0;
       font-size: clamp(11px, 1.35cqw, 14px);
       margin-top: 2px;
-      min-height: clamp(30px, 5.5cqh, 40px);
+      min-height: clamp(30px, 5cqh, 38px);
       padding: 6px 16px;
       z-index: 2;
     }
@@ -432,14 +428,13 @@
     .scrap-menu {
       display: grid;
       flex: 1 1 auto;
-      gap: clamp(4px, 0.9cqh, 8px);
+      gap: clamp(4px, 0.8cqh, 7px);
+      grid-template-rows: auto minmax(0, 1fr);
       justify-items: stretch;
       margin: 0 auto;
-      max-width: min(1040px, 100%);
+      max-width: min(1200px, 100%);
       min-height: 0;
-      overflow-x: hidden;
-      overflow-y: auto;
-      overscroll-behavior: contain;
+      overflow: hidden;
       width: 100%;
     }
 
@@ -449,7 +444,8 @@
 
     .scrap-menu-section {
       display: grid;
-      gap: 5px;
+      flex-shrink: 0;
+      gap: 4px;
       min-width: 0;
     }
 
@@ -467,19 +463,21 @@
       display: grid;
       gap: clamp(6px, 1cqw, 10px);
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      height: 100%;
       min-height: 0;
       width: 100%;
     }
 
     .scrap-preview-card,
     .scrap-map-card {
-      background: rgba(8, 11, 16, 0.88);
+      background: rgba(8, 11, 16, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 10px;
       box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
       display: grid;
       gap: 5px;
       grid-template-rows: auto minmax(0, 1fr) auto;
+      height: 100%;
       min-height: 0;
       min-width: 0;
       padding: 6px;
@@ -487,12 +485,10 @@
 
     .scrap-preview-stage,
     .scrap-map-stage {
-      aspect-ratio: 16 / 10;
       border-radius: 8px;
-      /* Fixed box — never let canvas bitmap attrs or chip reflows change height */
-      flex: 0 0 auto;
-      height: auto;
-      max-height: min(210px, 32cqh);
+      /* Fill remaining card height so previews use the stage */
+      height: 100%;
+      max-height: none;
       min-height: 0;
       overflow: hidden;
       position: relative;
@@ -1044,8 +1040,9 @@
     .scrap-arena-strip {
       display: grid;
       flex: 0 0 auto;
-      gap: 5px;
+      gap: 4px;
       grid-template-columns: repeat(6, minmax(0, 1fr));
+      min-height: 0;
       width: 100%;
     }
 
@@ -1257,24 +1254,19 @@
       }
     }
 
-    /* Typical minimized desktop stage (~500px tall) — compact before it clips */
+    /* Typical minimized desktop stage (~500px tall) — still large previews, no clip */
     @container sstage (max-height: 560px) {
       .scrap-page .overlay__title {
-        font-size: clamp(15px, 3.2cqw, 22px);
+        font-size: clamp(14px, 3cqw, 20px);
       }
 
-      .scrap-page .overlay__sub {
+      .scrap-page .overlay__score {
         display: none;
       }
 
-      .scrap-preview-stage,
-      .scrap-map-stage {
-        max-height: min(160px, 28cqh);
-      }
-
       .scrap-mode-chip {
-        min-height: 36px;
-        padding: 5px 8px;
+        min-height: 32px;
+        padding: 4px 7px;
       }
 
       .scrap-mode-chip span {
@@ -1282,26 +1274,32 @@
       }
 
       .scrap-arena-chip img {
-        max-height: 36px;
+        max-height: 32px;
       }
 
       .scrap-veh-flavor {
         display: none;
       }
+
+      .scrap-menu-label {
+        font-size: 8px;
+      }
     }
 
-    @container sstage (max-width: 760px) {
+    /* Only stack previews when the stage is truly phone-narrow */
+    @container sstage (max-width: 520px) {
       .scrap-menu-main {
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
       }
 
-      .scrap-preview-stage,
-      .scrap-map-stage {
-        max-height: min(180px, 26cqh);
+      .scrap-arena-chip img {
+        max-height: 28px;
       }
 
-      .scrap-arena-strip {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+      .scrap-arena-chip strong {
+        font-size: 7px;
+        padding: 2px 3px 3px;
       }
 
       .scrap-summary__grid {
@@ -1347,7 +1345,7 @@
 
       .scrap-preview-stage,
       .scrap-map-stage {
-        max-height: min(96px, 22cqh);
+        min-height: 0;
       }
 
       .scrap-mode-chip {
@@ -1442,12 +1440,11 @@
       }
 
       .scrap-arena-strip {
-        gap: 4px;
+        gap: 3px;
       }
 
-      .scrap-arena-chip {
-        min-height: 28px;
-        padding: 4px 5px;
+      .scrap-arena-chip img {
+        max-height: 26px;
       }
 
       .scrap-page .overlay > .btn {
@@ -1740,7 +1737,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260705-fog-exchange-2"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260708-menu-stretch-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260708-preview-size-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

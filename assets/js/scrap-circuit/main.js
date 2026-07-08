@@ -3604,7 +3604,12 @@
     if (state.phase === "menu" || (state.phase === "over" && el.overlay && el.overlay.classList.contains("overlay--show"))) {
       if (previewMesh) previewMesh.rotation.y += dt * 0.7;
       renderMenuVehiclePreview();
-      ps1.render(previewScene, previewCam);
+      // Solid dark main canvas — no rotating vehicle behind the menu overlay
+      if (ps1 && ps1.renderer) {
+        ps1.renderer.setClearColor(0x05060c, 1);
+        ps1.renderer.setRenderTarget(null);
+        ps1.renderer.clear();
+      }
       sfx.engine(0, false);
       return;
     }

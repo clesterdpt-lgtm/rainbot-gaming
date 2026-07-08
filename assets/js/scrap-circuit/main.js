@@ -158,18 +158,50 @@
   const menuMapCtx = el.menuMapPreview ? el.menuMapPreview.getContext("2d") : null;
 
   // ---------- audio: 100% synthesized ----------
+  const AUDIO_STORAGE = {
+    music: "scrap-circuit-music-vol",
+    sfx: "scrap-circuit-sfx-vol",
+  };
+  const DEFAULT_MUSIC_VOL = 0.34;
+  const DEFAULT_SFX_VOL = 0.5;
+  function clamp01(value) {
+    return Math.max(0, Math.min(1, Number(value) || 0));
+  }
+  function readStoredVol(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw == null) return fallback;
+      return clamp01(parseFloat(raw));
+    } catch (_) {
+      return fallback;
+    }
+  }
+  function writeStoredVol(key, value) {
+    try { localStorage.setItem(key, String(clamp01(value))); } catch (_) {}
+  }
+
   const sfx = (() => {
     let ac = null, engineOsc = null, engineGain = null, master = null;
+    let volume = readStoredVol(AUDIO_STORAGE.sfx, DEFAULT_SFX_VOL);
+    let globalMuted = Boolean(window.RBSfx && window.RBSfx.isMuted && window.RBSfx.isMuted());
+    function applyVolume() {
+      if (!master || !ac) return;
+      master.gain.setTargetAtTime(globalMuted ? 0 : volume, ac.currentTime, 0.02);
+    }
     function ctx() {
       if (!ac) {
         ac = new (window.AudioContext || window.webkitAudioContext)();
         master = ac.createGain();
-        master.gain.value = 0.5;
         master.connect(ac.destination);
+        applyVolume();
       }
       if (ac.state === "suspended") ac.resume();
       return ac;
     }
+    document.addEventListener("rainbot:sfx-muted", (event) => {
+      globalMuted = Boolean(event.detail && event.detail.muted);
+      applyVolume();
+    });
     function blip(freq, dur, type = "square", vol = 0.2, slide = 0) {
       try {
         const a = ctx();
@@ -204,6 +236,12 @@
     }
     return {
       unlock() { try { ctx(); } catch (_) {} },
+      getVolume() { return volume; },
+      setVolume(value) {
+        volume = clamp01(value);
+        writeStoredVol(AUDIO_STORAGE.sfx, volume);
+        applyVolume();
+      },
       shot() { noise(0.08, 0.12); },
       boom(big) {
         noise(big ? 0.5 : 0.3, big ? 0.5 : 0.3, true);
@@ -254,10 +292,11 @@
     let currentIndex = 0;
     let errorSkips = 0;
     let muted = Boolean(window.RBSfx && window.RBSfx.isMuted && window.RBSfx.isMuted());
+    let volume = readStoredVol(AUDIO_STORAGE.music, DEFAULT_MUSIC_VOL);
 
     if (player) {
       player.preload = "auto";
-      player.volume = 0.34;
+      player.volume = volume;
       player.loop = false;
       player.muted = muted;
     }
@@ -313,6 +352,12 @@
     }
 
     return {
+      getVolume() { return volume; },
+      setVolume(value) {
+        volume = clamp01(value);
+        writeStoredVol(AUDIO_STORAGE.music, volume);
+        if (player) player.volume = volume;
+      },
       startForRound(arenaId, roundIndex) {
         active = true;
         paused = false;
@@ -3032,6 +3077,25 @@
     if (el.btnPause) el.btnPause.textContent = state.paused ? "Resume" : "Pause";
     api.toast(state.paused ? "Paused" : "Back to the derby");
   }
+  function bindVolumeSlider(sliderId, readoutId, getVolume, setVolume) {
+    const slider = $(sliderId);
+    const readout = $(readoutId);
+    if (!slider) return;
+    const sync = (value) => {
+      const vol = clamp01(value);
+      slider.value = String(vol);
+      if (readout) readout.textContent = `${Math.round(vol * 100)}%`;
+    };
+    sync(getVolume());
+    slider.addEventListener("input", () => {
+      const vol = clamp01(parseFloat(slider.value));
+      setVolume(vol);
+      sync(vol);
+    });
+  }
+  bindVolumeSlider("vol-music", "vol-music-readout", () => music.getVolume(), (v) => music.setVolume(v));
+  bindVolumeSlider("vol-sfx", "vol-sfx-readout", () => sfx.getVolume(), (v) => sfx.setVolume(v));
+
   if (el.btnPause) el.btnPause.addEventListener("click", togglePause);
   if (el.btnRestart) {
     el.btnRestart.addEventListener("click", () => {

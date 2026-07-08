@@ -1031,6 +1031,29 @@
     }
 
     /* Side-panel bits */
+    .scrap-audio-vols {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .scrap-vol-row {
+      align-items: center;
+      color: var(--ink-dim);
+      display: grid;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      gap: 6px 8px;
+      grid-template-columns: 42px 1fr 34px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .scrap-vol-row input[type="range"] {
+      accent-color: #ff2e88;
+      width: 100%;
+    }
+
     .scrap-note {
       color: var(--ink-dim);
       font-family: var(--font-mono);
@@ -1547,6 +1570,18 @@
             <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Garage</button>
           </div>
+          <div class="scrap-audio-vols" aria-label="Audio volume">
+            <label class="scrap-vol-row" for="vol-music">
+              <span>Music</span>
+              <input type="range" id="vol-music" min="0" max="1" step="0.01" value="0.34" />
+              <span id="vol-music-readout">34%</span>
+            </label>
+            <label class="scrap-vol-row" for="vol-sfx">
+              <span>SFX</span>
+              <input type="range" id="vol-sfx" min="0" max="1" step="0.01" value="0.5" />
+              <span id="vol-sfx-readout">50%</span>
+            </label>
+          </div>
           <p class="scrap-note">
             <kbd>WASD</kbd> / arrows — drive<br />
             <kbd>Shift</kbd> — handbrake drift<br />
@@ -1615,7 +1650,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260705-fog-exchange-2"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260708-ai-health-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260708-audio-vol-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

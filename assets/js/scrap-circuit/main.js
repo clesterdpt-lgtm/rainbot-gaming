@@ -472,7 +472,7 @@
   const fxGroup = new THREE.Group();
   scene.add(fxGroup);
   const particlePool = [];
-  const PARTICLE_MAX = 140;
+  const PARTICLE_MAX = 220;
   const particleGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
   const particleMats = {};
   function particleMat(color) {
@@ -482,7 +482,11 @@
     }
     return particleMats[color];
   }
-  function burst(x, y, z, color, count = 10, power = 8, up = 6) {
+  // opts: { gravity, ttl, size, drag, noFloor }
+  function burst(x, y, z, color, count = 10, power = 8, up = 6, opts = {}) {
+    const grav = opts.gravity == null ? GRAV * 0.6 : opts.gravity;
+    const baseTtl = opts.ttl == null ? 0.55 : opts.ttl;
+    const size = opts.size == null ? 1 : opts.size;
     for (let i = 0; i < count; i += 1) {
       let p = particlePool.find((q) => !q.alive);
       if (!p) {
@@ -500,22 +504,45 @@
       p.vx = Math.cos(ang) * sp;
       p.vz = Math.sin(ang) * sp;
       p.vy = Math.random() * up;
-      p.ttl = 0.5 + Math.random() * 0.6;
-      const s = 0.6 + Math.random() * 1.2;
+      p.ttl = baseTtl * (0.7 + Math.random() * 0.6);
+      p.maxTtl = p.ttl;
+      p.grav = grav;
+      p.drag = opts.drag || 0;
+      p.noFloor = !!opts.noFloor;
+      const s = (0.55 + Math.random() * 1.1) * size;
+      p.baseScale = s;
       p.mesh.scale.set(s, s, s);
     }
+  }
+  function trailPuff(x, y, z, color, size = 0.45) {
+    burst(x, y, z, color, 1, 1.2, 0.8, { gravity: 0.4, ttl: 0.28, size, drag: 1.8, noFloor: true });
+  }
+  function muzzleFlash(x, y, z, color, power = 7) {
+    burst(x, y, z, color, 5, power, 3, { gravity: 2, ttl: 0.18, size: 0.55 });
+    burst(x, y, z, 0xfff2c0, 2, power * 0.5, 1.5, { gravity: 1, ttl: 0.12, size: 0.35 });
   }
   function updateParticles(dt) {
     particlePool.forEach((p) => {
       if (!p.alive) return;
       p.ttl -= dt;
       if (p.ttl <= 0) { p.alive = false; p.mesh.visible = false; return; }
-      p.vy -= GRAV * 0.6 * dt;
+      if (p.drag) {
+        const d = Math.max(0, 1 - p.drag * dt);
+        p.vx *= d; p.vz *= d; p.vy *= d;
+      }
+      p.vy -= (p.grav == null ? GRAV * 0.6 : p.grav) * dt;
       p.mesh.position.x += p.vx * dt;
-      p.mesh.position.y = Math.max(0.1, p.mesh.position.y + p.vy * dt);
+      const ny = p.mesh.position.y + p.vy * dt;
+      p.mesh.position.y = p.noFloor ? ny : Math.max(0.1, ny);
       p.mesh.position.z += p.vz * dt;
       p.mesh.rotation.x += dt * 7;
       p.mesh.rotation.z += dt * 5;
+      // shrink out so trails read as smoke wisps
+      if (p.maxTtl > 0 && p.baseScale) {
+        const k = Math.max(0.12, p.ttl / p.maxTtl);
+        const s = p.baseScale * k;
+        p.mesh.scale.set(s, s, s);
+      }
     });
   }
   function flash(color = "rgba(255,240,200,0.5)", ms = 90) {
@@ -766,11 +793,18 @@
   const boomMat = new THREE.MeshBasicMaterial({ color: 0xffc23b, transparent: true, opacity: 0.85 });
   if (SCRAP.ps1ify) SCRAP.ps1ify(boomMat);
   const boomGeo = new THREE.SphereGeometry(1, 9, 7);
+  const boomRingGeo = new THREE.TorusGeometry(1, 0.12, 5, 16);
   const boomPool = [];
-  function boomVisual(x, y, z, r) {
+  function boomVisual(x, y, z, r, color = 0xffc23b) {
     let b = boomPool.find((q) => !q.alive);
     if (!b) {
-      b = { mesh: new THREE.Mesh(boomGeo, boomMat.clone()), alive: false };
+      const shell = new THREE.Mesh(boomGeo, boomMat.clone());
+      const ring = new THREE.Mesh(boomRingGeo, boomMat.clone());
+      ring.rotation.x = Math.PI / 2;
+      const g = new THREE.Group();
+      g.add(shell);
+      g.add(ring);
+      b = { mesh: g, shell, ring, alive: false };
       fxGroup.add(b.mesh);
       boomPool.push(b);
     }
@@ -779,6 +813,10 @@
     b.r = r;
     b.mesh.visible = true;
     b.mesh.position.set(x, y, z);
+    b.shell.material.color.setHex(color);
+    b.ring.material.color.setHex(color);
+    b.shell.material.opacity = 0.85;
+    b.ring.material.opacity = 0.7;
   }
   function updateBooms(dt) {
     boomPool.forEach((b) => {
@@ -786,14 +824,20 @@
       b.t += dt * 3.4;
       if (b.t >= 1) { b.alive = false; b.mesh.visible = false; return; }
       const s = 0.3 + b.t * b.r;
-      b.mesh.scale.set(s, s, s);
-      b.mesh.material.opacity = 0.85 * (1 - b.t);
+      b.shell.scale.set(s, s, s);
+      const rs = s * 1.15;
+      b.ring.scale.set(rs, rs, rs);
+      b.shell.material.opacity = 0.85 * (1 - b.t);
+      b.ring.material.opacity = 0.7 * (1 - b.t);
     });
   }
 
-  function boom(x, y, z, radius, dmg, by) {
-    boomVisual(x, y, z, radius);
-    burst(x, y, z, 0xff8a2e, 12, 9, 8);
+  // color: optional boom palette so freeze / ricochet / remote don't all look orange
+  function boom(x, y, z, radius, dmg, by, color) {
+    const c = color == null ? 0xff8a2e : color;
+    boomVisual(x, y, z, radius, c);
+    burst(x, y, z, c, 14, 9, 8);
+    if (c !== 0xff8a2e) burst(x, y + 0.4, z, 0xfff0c8, 5, 5, 5, { ttl: 0.35, size: 0.7 });
     sfx.boom(radius > 7);
     state.cars.forEach((car) => {
       if (car.wrecked) return;
@@ -815,96 +859,156 @@
 
   // ---------- pickups (distinct 3D model per type) ----------
   const pickupMatCache = {};
-  function pickupMat(color) {
-    if (!pickupMatCache[color]) {
-      const m = new THREE.MeshBasicMaterial({ color });
+  function pickupMat(color, opts = {}) {
+    const key = `${color}|${opts.opacity == null ? 1 : opts.opacity}|${opts.side || 0}`;
+    if (!pickupMatCache[key]) {
+      const m = new THREE.MeshBasicMaterial({
+        color,
+        transparent: opts.opacity != null && opts.opacity < 1,
+        opacity: opts.opacity == null ? 1 : opts.opacity,
+        side: opts.side || THREE.FrontSide,
+        depthWrite: opts.opacity == null || opts.opacity >= 1,
+      });
       if (SCRAP.ps1ify) SCRAP.ps1ify(m);
-      pickupMatCache[color] = m;
+      pickupMatCache[key] = m;
     }
-    return pickupMatCache[color];
+    return pickupMatCache[key];
   }
-  function pgeo(group, geo, color, x, y, z, rx = 0, ry = 0, rz = 0) {
-    const m = new THREE.Mesh(geo, pickupMat(color));
+  function pgeo(group, geo, color, x, y, z, rx = 0, ry = 0, rz = 0, matOpts) {
+    const m = new THREE.Mesh(geo, pickupMat(color, matOpts || {}));
     m.position.set(x, y, z);
     m.rotation.set(rx, ry, rz);
     group.add(m);
     return m;
   }
-  const PK_WHITE = 0xf4f8ff, PK_DARK = 0x14141c;
-  // Each pickup is a bold, unlit, instantly-readable little model on a glowing
-  // ring so you can tell freeze from fire from missile at a glance.
+  const PK_WHITE = 0xf4f8ff, PK_DARK = 0x14141c, PK_METAL = 0x6a7080, PK_GOLD = 0xffd23b;
+  // Bold silhouette-first pad models: type-colored halo, light pillar, unique body.
+  // Readable at a glance even at PS1 resolution and arena fog distances.
   function makePickupModel(type) {
     const g = new THREE.Group();
-    const col = PICKUP_COLORS[type];
-    // glowing halo ring under the model
-    pgeo(g, new THREE.TorusGeometry(1.0, 0.1, 5, 14), col, 0, -0.85, 0, Math.PI / 2, 0, 0);
-    const spin = new THREE.Group(); // model spins; ring stays level
+    const col = PICKUP_COLORS[type] || PK_GOLD;
+    // double halo + disc pedestal (stays level; icon spins above)
+    pgeo(g, new THREE.CylinderGeometry(1.15, 1.15, 0.08, 12), col, 0, -0.92, 0, 0, 0, 0, { opacity: 0.35 });
+    pgeo(g, new THREE.TorusGeometry(1.05, 0.11, 5, 16), col, 0, -0.86, 0, Math.PI / 2, 0, 0);
+    pgeo(g, new THREE.TorusGeometry(0.72, 0.05, 4, 12), PK_WHITE, 0, -0.84, 0, Math.PI / 2, 0, 0, { opacity: 0.55 });
+    // soft light pillar so pads pop on dark asphalt
+    pgeo(g, new THREE.CylinderGeometry(0.06, 0.22, 2.4, 6), col, 0, 0.25, 0, 0, 0, 0, { opacity: 0.28 });
+    const spin = new THREE.Group();
     g.add(spin);
     g.userData.spin = spin;
+    g.userData.pulse = [];
+    const markPulse = (mesh) => { g.userData.pulse.push(mesh); return mesh; };
+
     switch (type) {
-      case "missile": { // homing rocket: body + nose + fins
-        pgeo(spin, new THREE.CylinderGeometry(0.3, 0.3, 1.1, 8), col, 0, 0, 0);
-        pgeo(spin, new THREE.ConeGeometry(0.3, 0.55, 8), PK_WHITE, 0, 0.8, 0);
-        [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((a) =>
-          pgeo(spin, new THREE.BoxGeometry(0.09, 0.42, 0.42), PK_DARK, Math.cos(a) * 0.3, -0.5, Math.sin(a) * 0.3, 0, a, 0));
-        break;
-      }
-      case "freeze": { // ice crystal: stacked octahedra
-        pgeo(spin, new THREE.OctahedronGeometry(0.62), col, 0, 0.1, 0);
-        pgeo(spin, new THREE.OctahedronGeometry(0.3), PK_WHITE, 0, 0.7, 0);
-        [0, 2.1, 4.2].forEach((a) =>
-          pgeo(spin, new THREE.ConeGeometry(0.12, 0.6, 4), col, Math.cos(a) * 0.55, 0, Math.sin(a) * 0.55, Math.PI / 2, a, 0));
-        break;
-      }
-      case "fire": { // flame: layered cones
-        pgeo(spin, new THREE.ConeGeometry(0.6, 1.3, 7), 0xd23b1a, 0, 0.1, 0);
-        pgeo(spin, new THREE.ConeGeometry(0.4, 1.0, 7), col, 0, 0.25, 0);
-        pgeo(spin, new THREE.ConeGeometry(0.2, 0.6, 6), 0xffe27a, 0, 0.4, 0);
-        break;
-      }
-      case "remote": { // detonator bomb: sphere + antenna
-        pgeo(spin, new THREE.SphereGeometry(0.6, 8, 6), col, 0, 0, 0);
-        pgeo(spin, new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5), PK_DARK, 0, 0.7, 0);
-        pgeo(spin, new THREE.SphereGeometry(0.14, 6, 5), PK_WHITE, 0, 1.05, 0);
-        break;
-      }
-      case "mine": { // spiky sea-mine: sphere + spikes
-        pgeo(spin, new THREE.SphereGeometry(0.55, 8, 6), col, 0, 0, 0);
-        for (let i = 0; i < 8; i += 1) {
-          const a = (i / 8) * Math.PI * 2, up = (i % 2) ? 0.4 : -0.4;
-          pgeo(spin, new THREE.ConeGeometry(0.13, 0.4, 4), PK_DARK, Math.cos(a) * 0.55, up, Math.sin(a) * 0.55, Math.PI / 2, -a, 0);
-        }
-        break;
-      }
-      case "ricochet": { // faceted bouncing orb
-        pgeo(spin, new THREE.IcosahedronGeometry(0.62), col, 0, 0, 0);
-        pgeo(spin, new THREE.IcosahedronGeometry(0.3), PK_WHITE, 0.2, 0.3, 0.2);
-        break;
-      }
-      case "shield": { // dome shield
-        const dome = pgeo(spin, new THREE.SphereGeometry(0.7, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), col, 0, -0.2, 0);
-        dome.material = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-        if (SCRAP.ps1ify) SCRAP.ps1ify(dome.material);
-        pgeo(spin, new THREE.BoxGeometry(0.9, 0.12, 0.9), col, 0, -0.2, 0);
-        pgeo(spin, new THREE.SphereGeometry(0.16, 6, 5), PK_WHITE, 0, 0.35, 0);
-        break;
-      }
-      case "turbo": { // boost: stacked chevrons
-        [-0.35, 0, 0.35].forEach((y, i) => {
-          pgeo(spin, new THREE.ConeGeometry(0.5 - i * 0.08, 0.4, 4), col, 0, y + 0.1, 0, 0, Math.PI / 4, 0);
+      case "missile": { // upright warhead rocket with band + fins + exhaust
+        pgeo(spin, new THREE.CylinderGeometry(0.28, 0.34, 1.25, 8), col, 0, 0.05, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.3, 0.3, 0.22, 8), PK_WHITE, 0, 0.15, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.34, 0.62, 8), PK_GOLD, 0, 0.95, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.18, 0.28, 0.28, 7), PK_DARK, 0, -0.72, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.16, 0.38, 6), 0xff6a20, 0, -1.0, 0);
+        [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((a) => {
+          pgeo(spin, new THREE.BoxGeometry(0.08, 0.5, 0.48), PK_DARK,
+            Math.cos(a) * 0.32, -0.45, Math.sin(a) * 0.32, 0, a, 0);
         });
         break;
       }
-      case "wrench": { // wrench: plus/tool cross
-        pgeo(spin, new THREE.BoxGeometry(0.28, 1.2, 0.28), col, 0, 0, 0);
-        pgeo(spin, new THREE.TorusGeometry(0.32, 0.12, 5, 8), col, 0, 0.6, 0, Math.PI / 2, 0, 0);
-        pgeo(spin, new THREE.BoxGeometry(0.9, 0.24, 0.24), PK_DARK, 0, -0.2, 0);
+      case "freeze": { // ice shard cluster — big crystal + radial spikes
+        markPulse(pgeo(spin, new THREE.OctahedronGeometry(0.72), col, 0, 0.15, 0));
+        pgeo(spin, new THREE.OctahedronGeometry(0.36), PK_WHITE, 0, 0.15, 0);
+        pgeo(spin, new THREE.OctahedronGeometry(0.28), PK_WHITE, 0, 0.85, 0);
+        for (let i = 0; i < 6; i += 1) {
+          const a = (i / 6) * Math.PI * 2;
+          pgeo(spin, new THREE.ConeGeometry(0.14, 0.85, 5), col,
+            Math.cos(a) * 0.48, 0.05, Math.sin(a) * 0.48, Math.PI / 2, -a, 0.25);
+        }
+        pgeo(spin, new THREE.BoxGeometry(1.1, 0.08, 0.08), PK_WHITE, 0, 0.15, 0, 0, 0, Math.PI / 4);
+        pgeo(spin, new THREE.BoxGeometry(0.08, 0.08, 1.1), PK_WHITE, 0, 0.15, 0, 0, 0, Math.PI / 4);
         break;
       }
-      case "battery": { // battery cell
-        pgeo(spin, new THREE.CylinderGeometry(0.45, 0.45, 1.1, 10), col, 0, 0, 0);
-        pgeo(spin, new THREE.CylinderGeometry(0.2, 0.2, 0.2, 8), PK_WHITE, 0, 0.62, 0);
-        pgeo(spin, new THREE.BoxGeometry(0.5, 0.18, 0.14), PK_DARK, 0, 0.15, 0.46);
+      case "fire": { // brazer base + layered flame stack
+        pgeo(spin, new THREE.CylinderGeometry(0.55, 0.7, 0.28, 8), PK_DARK, 0, -0.45, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.48, 0.48, 0.12, 8), 0xff3b1a, 0, -0.28, 0);
+        const f1 = markPulse(pgeo(spin, new THREE.ConeGeometry(0.58, 1.35, 7), 0xc42810, 0, 0.25, 0));
+        const f2 = markPulse(pgeo(spin, new THREE.ConeGeometry(0.4, 1.1, 7), col, 0, 0.4, 0));
+        markPulse(pgeo(spin, new THREE.ConeGeometry(0.2, 0.7, 6), 0xffe27a, 0, 0.55, 0));
+        f1.userData.flamePhase = 0;
+        f2.userData.flamePhase = 1.7;
+        // ember orbs
+        pgeo(spin, new THREE.SphereGeometry(0.1, 5, 4), 0xffe27a, 0.35, 0.9, 0.1);
+        pgeo(spin, new THREE.SphereGeometry(0.08, 5, 4), 0xff8a2e, -0.3, 1.05, -0.15);
+        break;
+      }
+      case "remote": { // cartoon bomb: dark body, hazard band, fuse, blink light
+        pgeo(spin, new THREE.SphereGeometry(0.62, 10, 8), 0x2a1a28, 0, 0, 0);
+        pgeo(spin, new THREE.SphereGeometry(0.64, 10, 8), col, 0, 0, 0, 0, 0, 0, { opacity: 0.35 });
+        pgeo(spin, new THREE.TorusGeometry(0.5, 0.1, 5, 12), col, 0, 0.05, 0, Math.PI / 2, 0, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.06, 0.06, 0.55, 5), PK_METAL, 0.18, 0.75, 0, 0, 0, 0.35);
+        const blink = markPulse(pgeo(spin, new THREE.SphereGeometry(0.16, 6, 5), 0xff4466, 0.28, 1.05, 0));
+        blink.userData.blink = true;
+        pgeo(spin, new THREE.BoxGeometry(0.35, 0.12, 0.12), PK_GOLD, 0, -0.1, 0.55);
+        break;
+      }
+      case "mine": { // naval mine — fat body, long spikes, arming light
+        pgeo(spin, new THREE.SphereGeometry(0.58, 10, 8), 0x5a6068, 0, 0, 0);
+        pgeo(spin, new THREE.SphereGeometry(0.6, 10, 8), col, 0, 0, 0, 0, 0, 0, { opacity: 0.4 });
+        for (let i = 0; i < 10; i += 1) {
+          const a = (i / 10) * Math.PI * 2;
+          const elev = (i % 2 === 0) ? 0.35 : -0.25;
+          pgeo(spin, new THREE.ConeGeometry(0.12, 0.55, 5), PK_DARK,
+            Math.cos(a) * 0.52, elev, Math.sin(a) * 0.52, Math.PI / 2, -a, elev > 0 ? -0.3 : 0.3);
+        }
+        pgeo(spin, new THREE.ConeGeometry(0.12, 0.5, 5), PK_DARK, 0, 0.75, 0);
+        pgeo(spin, new THREE.ConeGeometry(0.12, 0.45, 5), PK_DARK, 0, -0.7, 0, Math.PI, 0, 0);
+        markPulse(pgeo(spin, new THREE.SphereGeometry(0.14, 6, 5), 0xff3344, 0, 0.55, 0));
+        break;
+      }
+      case "ricochet": { // purple 8-ball with stripe + highlight facet
+        pgeo(spin, new THREE.IcosahedronGeometry(0.7, 0), col, 0, 0.05, 0);
+        pgeo(spin, new THREE.TorusGeometry(0.52, 0.12, 5, 12), PK_WHITE, 0, 0.05, 0, Math.PI / 2, 0, 0);
+        pgeo(spin, new THREE.SphereGeometry(0.28, 8, 6), PK_WHITE, 0, 0.35, 0.35);
+        pgeo(spin, new THREE.SphereGeometry(0.14, 6, 5), PK_DARK, 0, 0.4, 0.42);
+        pgeo(spin, new THREE.BoxGeometry(0.18, 0.18, 0.05), col, 0, 0.42, 0.5);
+        break;
+      }
+      case "shield": { // energy dome + cross + core
+        const dome = pgeo(spin, new THREE.SphereGeometry(0.78, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2),
+          col, 0, -0.15, 0, 0, 0, 0, { opacity: 0.5, side: THREE.DoubleSide });
+        markPulse(dome);
+        pgeo(spin, new THREE.TorusGeometry(0.72, 0.06, 5, 14), PK_WHITE, 0, -0.15, 0, Math.PI / 2, 0, 0);
+        pgeo(spin, new THREE.BoxGeometry(1.0, 0.1, 0.1), col, 0, 0.25, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.1, 0.1, 1.0), col, 0, 0.25, 0);
+        markPulse(pgeo(spin, new THREE.SphereGeometry(0.2, 7, 6), PK_WHITE, 0, 0.35, 0));
+        pgeo(spin, new THREE.CylinderGeometry(0.55, 0.65, 0.12, 10), col, 0, -0.22, 0, 0, 0, 0, { opacity: 0.7 });
+        break;
+      }
+      case "turbo": { // triple chevron bolt + speed streaks
+        [-0.4, 0, 0.4].forEach((y, i) => {
+          const c = i === 2 ? PK_WHITE : col;
+          pgeo(spin, new THREE.ConeGeometry(0.52 - i * 0.07, 0.42, 4), c, 0, y + 0.15, 0, 0, Math.PI / 4, 0);
+        });
+        pgeo(spin, new THREE.BoxGeometry(0.12, 0.9, 0.12), PK_GOLD, 0, 0.05, 0);
+        [-0.55, 0.55].forEach((x) => {
+          pgeo(spin, new THREE.BoxGeometry(0.08, 0.08, 0.7), col, x, -0.15, 0.1, 0.4, 0, 0, { opacity: 0.75 });
+        });
+        break;
+      }
+      case "wrench": { // open-end wrench silhouette
+        pgeo(spin, new THREE.BoxGeometry(0.26, 1.35, 0.22), col, 0, 0, 0);
+        pgeo(spin, new THREE.TorusGeometry(0.34, 0.13, 5, 10), col, 0, 0.72, 0, Math.PI / 2, 0, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.22, 0.22, 0.18), PK_DARK, 0, 0.72, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.85, 0.28, 0.22), col, 0.15, -0.55, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.22, 0.35, 0.22), col, 0.45, -0.7, 0);
+        pgeo(spin, new THREE.CylinderGeometry(0.08, 0.08, 0.2, 6), PK_METAL, 0, 0.2, 0.16);
+        break;
+      }
+      case "battery": { // cell with terminals + charge bolt
+        pgeo(spin, new THREE.BoxGeometry(0.85, 1.15, 0.55), col, 0, 0, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.9, 0.18, 0.6), PK_DARK, 0, 0.1, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.22, 0.22, 0.22), PK_GOLD, -0.2, 0.7, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.22, 0.22, 0.22), PK_GOLD, 0.2, 0.7, 0);
+        pgeo(spin, new THREE.BoxGeometry(0.12, 0.45, 0.08), PK_WHITE, 0, -0.15, 0.3);
+        pgeo(spin, new THREE.BoxGeometry(0.28, 0.12, 0.08), PK_WHITE, 0, 0.0, 0.3);
+        markPulse(pgeo(spin, new THREE.BoxGeometry(0.5, 0.14, 0.08), 0xfff06a, 0, -0.35, 0.3));
         break;
       }
       default:
@@ -956,8 +1060,33 @@
         }
         return;
       }
-      if (p.mesh.userData.spin) p.mesh.userData.spin.rotation.y += dt * 2.4;
-      p.mesh.position.y = p.gy + 1.4 + Math.sin(state.time * 3 + p.x) * 0.25;
+      const spin = p.mesh.userData.spin;
+      if (spin) {
+        // fire/turbo spin faster so they feel "hot"; freeze slower + bobble
+        const rate = p.type === "fire" || p.type === "turbo" ? 3.6
+          : p.type === "freeze" ? 1.4
+          : p.type === "ricochet" ? 4.2
+          : 2.2;
+        spin.rotation.y += dt * rate;
+        if (p.type === "freeze") spin.rotation.z = Math.sin(state.time * 2.2 + p.x) * 0.12;
+        if (p.type === "ricochet") spin.rotation.x = Math.sin(state.time * 3 + p.z) * 0.2;
+      }
+      p.mesh.position.y = p.gy + 1.45 + Math.sin(state.time * 3 + p.x) * 0.28;
+      // pulse marked parts (bomb blink, flame/core scale) — scale only so
+      // shared materials aren't mutated across pads
+      const pulse = p.mesh.userData.pulse;
+      if (pulse && pulse.length) {
+        const t = state.time;
+        pulse.forEach((mesh, i) => {
+          if (!mesh) return;
+          if (mesh.userData.blink) {
+            mesh.visible = (Math.floor(t * 6 + p.x) % 2) === 0;
+          } else {
+            const s = 1 + Math.sin(t * 5 + i * 1.3 + p.x) * 0.1;
+            mesh.scale.setScalar(s);
+          }
+        });
+      }
       state.cars.forEach((car) => {
         if (car.wrecked || !p.active) return;
         if (car.remote) return; // online: each client only grabs with its own car
@@ -973,6 +1102,7 @@
     p.mesh.visible = false;
     if (net.active && !fromNet && car === state.player) net.send("ptake", { i: p.idx, ty: p.type });
     if (car.isPlayer) sfx.pickup();
+    burst(p.x, p.gy + 1.5, p.z, PICKUP_COLORS[p.type] || 0xffd23b, 12, 7, 6, { ttl: 0.4, size: 0.65 });
     switch (p.type) {
       case "shield":
         car.shield = 5;
@@ -1000,19 +1130,99 @@
   }
 
   // ---------- projectiles / mines / fire ----------
-  const projGeo = new THREE.BoxGeometry(0.35, 0.35, 1.1);
-  const missileGeo = new THREE.CylinderGeometry(0.22, 0.3, 1.4, 6);
+  const projGeo = new THREE.BoxGeometry(0.22, 0.22, 1.35);
   const junkGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+  const PROJ_TRAIL = {
+    tracer: { color: 0xffe08a, every: 0.05, size: 0.3 },
+    missile: { color: 0xff6a2a, every: 0.03, size: 0.55 },
+    freeze: { color: 0xb8f0ff, every: 0.035, size: 0.5 },
+    ricochet: { color: 0xc89bff, every: 0.04, size: 0.55 },
+    surge: { color: 0xffe08a, every: 0.04, size: 0.4 },
+    junk: { color: 0x9a8a5a, every: 0.06, size: 0.45 },
+  };
+  const BOOM_COLOR = {
+    missile: 0xff5e3b, freeze: 0x63d8ff, ricochet: 0x9e63ff,
+    remote: 0xd23f6e, mine: 0xffcc55, junk: 0xc4a86a, surge: 0xffe08a,
+  };
+  function makeProjectileMesh(kind, color) {
+    const g = new THREE.Group();
+    const bodyMat = pickupMat(color);
+    const dark = pickupMat(PK_DARK);
+    const white = pickupMat(PK_WHITE);
+    if (kind === "tracer") {
+      const core = new THREE.Mesh(projGeo, bodyMat);
+      g.add(core);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.35, 5), white);
+      tip.rotation.x = Math.PI / 2;
+      tip.position.z = 0.75;
+      g.add(tip);
+    } else if (kind === "missile" || kind === "surge") {
+      // rocket along +Z (lookAt aligns -Z forward in three... mesh.lookAt handles orientation)
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.5, 7), bodyMat);
+      body.rotation.x = Math.PI / 2;
+      g.add(body);
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.55, 7), white);
+      nose.rotation.x = Math.PI / 2;
+      nose.position.z = 1.0;
+      g.add(nose);
+      const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 0.25, 6), dark);
+      nozzle.rotation.x = Math.PI / 2;
+      nozzle.position.z = -0.85;
+      g.add(nozzle);
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.45, 5), pickupMat(0xffaa33));
+      flame.rotation.x = -Math.PI / 2;
+      flame.position.z = -1.2;
+      g.add(flame);
+      g.userData.flame = flame;
+      [0, Math.PI / 2, Math.PI, Math.PI * 1.5].forEach((a) => {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.35), dark);
+        fin.position.set(Math.cos(a) * 0.24, Math.sin(a) * 0.24, -0.55);
+        fin.rotation.z = a;
+        g.add(fin);
+      });
+    } else if (kind === "freeze") {
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.38), bodyMat);
+      g.add(core);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 5), white);
+      tip.rotation.x = Math.PI / 2;
+      tip.position.z = 0.55;
+      g.add(tip);
+      for (let i = 0; i < 4; i += 1) {
+        const a = (i / 4) * Math.PI * 2;
+        const shard = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.55, 4), bodyMat);
+        shard.position.set(Math.cos(a) * 0.28, Math.sin(a) * 0.28, -0.15);
+        shard.rotation.z = a;
+        shard.rotation.x = Math.PI / 2;
+        g.add(shard);
+      }
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 0.5, 5), white);
+      tail.rotation.x = Math.PI / 2;
+      tail.position.z = -0.55;
+      g.add(tail);
+    } else if (kind === "ricochet") {
+      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.48, 0), bodyMat);
+      g.add(ball);
+      const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.08, 4, 10), white);
+      stripe.rotation.x = Math.PI / 2;
+      g.add(stripe);
+      const hl = new THREE.Mesh(new THREE.SphereGeometry(0.16, 5, 4), white);
+      hl.position.set(0.18, 0.22, 0.18);
+      g.add(hl);
+      g.userData.spinBall = ball;
+    } else if (kind === "junk") {
+      g.add(new THREE.Mesh(junkGeo, bodyMat));
+      g.add(new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), dark));
+      g.children[1].position.set(0.25, 0.25, 0.1);
+    } else {
+      g.add(new THREE.Mesh(projGeo, bodyMat));
+    }
+    return g;
+  }
   function spawnProjectile(opts) {
     const kind = opts.kind;
-    let geo = projGeo;
-    if (kind === "missile" || kind === "freeze" || kind === "surge") geo = missileGeo;
-    if (kind === "junk") geo = junkGeo;
-    const material = new THREE.MeshBasicMaterial({ color: opts.color });
-    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
-    const mesh = new THREE.Mesh(geo, material);
-    if (geo === missileGeo) mesh.rotation.x = Math.PI / 2;
+    const mesh = makeProjectileMesh(kind, opts.color);
     scene.add(mesh);
+    const boomColor = opts.boomColor != null ? opts.boomColor : (BOOM_COLOR[kind] || opts.color);
     state.projectiles.push({
       kind, mesh,
       x: opts.x, y: opts.y, z: opts.z,
@@ -1023,6 +1233,8 @@
       bounces: opts.bounces || 0,
       gravity: !!opts.gravity,
       turn: opts.turn || 0,
+      boomColor,
+      trailTick: 0,
     });
   }
 
@@ -1053,6 +1265,7 @@
     const pz = car.z + f.z * (car.def.stats.radius + 1);
     const py = car.y + 1.3;
     if (car.isPlayer) sfx.shot();
+    muzzleFlash(px, py, pz, 0xffe08a, 5);
     const spread = (Math.random() - 0.5) * 0.06;
     const sx = Math.sin(car.heading + spread), sz = Math.cos(car.heading + spread);
     spawnProjectile({ kind: "tracer", color: 0xffe08a, x: px, y: py, z: pz, vx: sx * 90 + car.vx, vz: sz * 90 + car.vz, ttl: 0.8, dmg: 4, owner: car });
@@ -1071,6 +1284,7 @@
     if (car.isPlayer) sfx.shot();
     switch (w.kind) {
       case "gun": {
+        muzzleFlash(px, py, pz, 0xffe08a, 5);
         const spread = (Math.random() - 0.5) * 0.06;
         const sx = Math.sin(car.heading + spread), sz = Math.cos(car.heading + spread);
         spawnProjectile({ kind: "tracer", color: 0xffe08a, x: px, y: py, z: pz, vx: sx * 90 + car.vx, vz: sz * 90 + car.vz, ttl: 0.8, dmg: 4, owner: car });
@@ -1079,12 +1293,15 @@
       }
       case "missile":
       case "freeze": {
+        const isFreeze = w.kind === "freeze";
+        muzzleFlash(px, py, pz, isFreeze ? 0x63d8ff : 0xff5e3b, 9);
         const target = nearestEnemy(car, 70, 0.2);
         spawnProjectile({
-          kind: w.kind, color: w.kind === "freeze" ? 0x63d8ff : 0xff5e3b,
+          kind: w.kind, color: isFreeze ? 0x63d8ff : 0xff5e3b,
           x: px, y: py, z: pz, vx: f.x * 44, vz: f.z * 44,
-          ttl: 3.4, dmg: w.kind === "freeze" ? 8 : 22, radius: 6,
+          ttl: 3.4, dmg: isFreeze ? 8 : 22, radius: 6,
           owner: car, target, turn: 2.6,
+          boomColor: isFreeze ? BOOM_COLOR.freeze : BOOM_COLOR.missile,
         });
         car.ammo -= 1;
         break;
@@ -1092,20 +1309,21 @@
       case "fire":
         car.fireTrail = 4;
         car.ammo -= 1;
+        muzzleFlash(car.x - f.x * 1.2, car.y + 0.8, car.z - f.z * 1.2, 0xff6a20, 8);
+        burst(car.x - f.x, car.y + 1, car.z - f.z, 0xff8a2e, 10, 6, 5, { ttl: 0.4, size: 0.7 });
         break;
       case "remote":
         if (car.remoteBomb) {
-          boom(car.remoteBomb.x, car.remoteBomb.y, car.remoteBomb.z, 9, 35, car);
+          boom(car.remoteBomb.x, car.remoteBomb.y, car.remoteBomb.z, 9, 35, car, BOOM_COLOR.remote);
+          burst(car.remoteBomb.x, car.remoteBomb.y + 1, car.remoteBomb.z, 0xff88aa, 18, 12, 10);
           scene.remove(car.remoteBomb.mesh);
           car.remoteBomb = null;
           car.ammo -= 1;
         } else {
-          const material = new THREE.MeshBasicMaterial({ color: 0xd23f6e });
-          if (SCRAP.ps1ify) SCRAP.ps1ify(material);
-          const mesh = new THREE.Mesh(junkGeo, material);
-          mesh.position.set(car.x, car.y + 0.5, car.z);
+          const mesh = makeRemoteBombMesh();
+          mesh.position.set(car.x, car.y + 0.55, car.z);
           scene.add(mesh);
-          car.remoteBomb = { x: car.x, y: car.y + 0.5, z: car.z, mesh };
+          car.remoteBomb = { x: car.x, y: car.y + 0.55, z: car.z, mesh, blink: 0 };
         }
         break;
       case "mine":
@@ -1113,10 +1331,12 @@
         car.ammo -= 1;
         break;
       case "ricochet":
+        muzzleFlash(px, py, pz, 0x9e63ff, 8);
         spawnProjectile({
           kind: "ricochet", color: 0x9e63ff,
           x: px, y: py, z: pz, vx: f.x * 55, vz: f.z * 55,
           ttl: 4, dmg: 26, radius: 6, owner: car, bounces: 5,
+          boomColor: BOOM_COLOR.ricochet,
         });
         car.ammo -= 1;
         break;
@@ -1140,12 +1360,41 @@
     car.ammo = Infinity;
   }
 
+  function makeRemoteBombMesh() {
+    const g = new THREE.Group();
+    pgeo(g, new THREE.SphereGeometry(0.55, 10, 8), 0x2a1420, 0, 0, 0);
+    pgeo(g, new THREE.SphereGeometry(0.58, 10, 8), 0xd23f6e, 0, 0, 0, 0, 0, 0, { opacity: 0.4 });
+    pgeo(g, new THREE.TorusGeometry(0.42, 0.09, 5, 12), 0xd23f6e, 0, 0.05, 0, Math.PI / 2, 0, 0);
+    pgeo(g, new THREE.CylinderGeometry(0.05, 0.05, 0.45, 5), PK_METAL, 0.12, 0.65, 0, 0, 0, 0.3);
+    const blink = pgeo(g, new THREE.SphereGeometry(0.14, 6, 5), 0xff4466, 0.2, 0.9, 0);
+    g.userData.blink = blink;
+    return g;
+  }
+  function makeMineMesh(color, opts = {}) {
+    if (opts.casket) {
+      const g = new THREE.Group();
+      pgeo(g, new THREE.BoxGeometry(1.2, 0.55, 2.0), color, 0, 0, 0);
+      pgeo(g, new THREE.BoxGeometry(1.05, 0.12, 1.85), PK_DARK, 0, 0.28, 0);
+      pgeo(g, new THREE.BoxGeometry(0.2, 0.15, 0.35), 0xffcc55, 0, 0.35, 0.7);
+      return g;
+    }
+    const g = new THREE.Group();
+    pgeo(g, new THREE.SphereGeometry(0.55, 9, 7), 0x4a5058, 0, 0.15, 0);
+    pgeo(g, new THREE.SphereGeometry(0.57, 9, 7), color, 0, 0.15, 0, 0, 0, 0, { opacity: 0.45 });
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2;
+      const elev = (i % 2) ? 0.35 : -0.05;
+      pgeo(g, new THREE.ConeGeometry(0.11, 0.42, 4), PK_DARK,
+        Math.cos(a) * 0.5, elev + 0.15, Math.sin(a) * 0.5, Math.PI / 2, -a, 0);
+    }
+    const light = pgeo(g, new THREE.SphereGeometry(0.12, 5, 4), 0xff3344, 0, 0.7, 0);
+    g.userData.blink = light;
+    return g;
+  }
   function dropMine(car, x, z, dmg, color, opts = {}) {
-    const material = new THREE.MeshBasicMaterial({ color });
-    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
-    const mesh = new THREE.Mesh(opts.casket ? new THREE.BoxGeometry(1.2, 0.6, 2) : new THREE.CylinderGeometry(0.7, 0.9, 0.5, 7), material);
+    const mesh = makeMineMesh(color, opts);
     const gy = sampleGround(x, z, car.y + 1);
-    mesh.position.set(x, gy + 0.3, z);
+    mesh.position.set(x, gy + 0.35, z);
     scene.add(mesh);
     state.mines.push({ x, z, y: gy, dmg, owner: car, mesh, armTime: 0.7, slow: !!opts.slow });
   }
@@ -1153,7 +1402,17 @@
   function updateMines(dt) {
     for (let i = state.mines.length - 1; i >= 0; i -= 1) {
       const m = state.mines[i];
-      if (m.armTime > 0) { m.armTime -= dt; continue; }
+      // arming: slow pulse; armed: rapid red blink
+      if (m.mesh.userData.blink) {
+        const rate = m.armTime > 0 ? 3 : 8;
+        m.mesh.userData.blink.visible = (Math.floor(state.time * rate) % 2) === 0;
+      }
+      if (m.armTime > 0) {
+        m.armTime -= dt;
+        m.mesh.scale.setScalar(0.85 + (1 - Math.max(0, m.armTime) / 0.7) * 0.15);
+        continue;
+      }
+      m.mesh.scale.setScalar(1 + Math.sin(state.time * 10) * 0.04);
       let hit = false;
       state.cars.forEach((car) => {
         if (hit || car.wrecked || car === m.owner) return;
@@ -1165,10 +1424,10 @@
           if (m.slow) {
             applyDamage(car, m.dmg, { by: m.owner, type: "spike" });
             car.slowed = Math.max(car.slowed, 1.6);
-            burst(m.x, m.y + 0.5, m.z, 0xb0b6bd, 6, 5);
+            burst(m.x, m.y + 0.5, m.z, 0xb0b6bd, 8, 6);
             sfx.hit();
           } else {
-            boom(m.x, m.y + 0.5, m.z, 6, m.dmg, m.owner);
+            boom(m.x, m.y + 0.5, m.z, 6, m.dmg, m.owner, BOOM_COLOR.mine);
           }
         }
       });
@@ -1184,8 +1443,23 @@
     for (let i = state.firePatches.length - 1; i >= 0; i -= 1) {
       const f = state.firePatches[i];
       f.ttl -= dt;
-      f.mesh.material.opacity = Math.min(0.8, f.ttl);
-      f.mesh.scale.setScalar(1 + Math.sin(state.time * 9 + i) * 0.15);
+      const life = Math.max(0, Math.min(1, f.ttl / 3));
+      f.mesh.scale.setScalar((0.7 + life * 0.4) * (1 + Math.sin(state.time * 11 + i) * 0.12));
+      f.mesh.rotation.y += dt * 2.5;
+      // flicker child cones independently
+      f.mesh.children.forEach((ch, ci) => {
+        if (ch.material && ch.material.transparent) {
+          ch.material.opacity = (0.45 + life * 0.4) * (0.75 + Math.sin(state.time * 14 + ci * 2) * 0.25);
+        }
+        ch.scale.y = 0.85 + Math.sin(state.time * 13 + ci) * 0.2;
+      });
+      // ember sparks
+      f.emberTick = (f.emberTick || 0) - dt;
+      if (f.emberTick <= 0 && life > 0.2) {
+        f.emberTick = 0.12;
+        trailPuff(f.x + (Math.random() - 0.5) * 1.2, f.y + 1.2 + Math.random(), f.z + (Math.random() - 0.5) * 1.2,
+          Math.random() > 0.5 ? 0xff8a2e : 0xffe27a, 0.35);
+      }
       if (f.ttl <= 0) {
         scene.remove(f.mesh);
         state.firePatches.splice(i, 1);
@@ -1203,14 +1477,63 @@
     }
   }
 
-  const fireGeo = new THREE.ConeGeometry(1.4, 2, 6);
   function dropFirePatch(car) {
-    const material = new THREE.MeshBasicMaterial({ color: 0xff8a2e, transparent: true, opacity: 0.8 });
-    if (SCRAP.ps1ify) SCRAP.ps1ify(material);
-    const mesh = new THREE.Mesh(fireGeo, material);
-    mesh.position.set(car.x, car.y + 0.9, car.z);
-    scene.add(mesh);
-    state.firePatches.push({ x: car.x, y: car.y, z: car.z, ttl: 3, owner: car, mesh });
+    const g = new THREE.Group();
+    const mk = (geo, color, y, op) => {
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: op });
+      if (SCRAP.ps1ify) SCRAP.ps1ify(mat);
+      const m = new THREE.Mesh(geo, mat);
+      m.position.y = y;
+      g.add(m);
+      return m;
+    };
+    mk(new THREE.CylinderGeometry(1.1, 1.3, 0.15, 8), 0x3a1810, 0.05, 0.55);
+    mk(new THREE.ConeGeometry(1.15, 1.9, 7), 0xc42810, 0.95, 0.75);
+    mk(new THREE.ConeGeometry(0.75, 1.55, 7), 0xff6a20, 1.15, 0.8);
+    mk(new THREE.ConeGeometry(0.35, 1.0, 6), 0xffe27a, 1.35, 0.85);
+    g.position.set(car.x, car.y + 0.15, car.z);
+    scene.add(g);
+    state.firePatches.push({ x: car.x, y: car.y, z: car.z, ttl: 3, owner: car, mesh: g, emberTick: 0 });
+  }
+
+  function freezeHitVisual(x, y, z) {
+    // ice ring + crystal (shell comes from boomVisual/boom so we don't double up)
+    burst(x, y, z, 0x9fe8ff, 16, 8, 6, { gravity: 3, ttl: 0.7, size: 0.7 });
+    burst(x, y + 0.5, z, 0xf0fbff, 8, 4, 4, { gravity: 1, ttl: 0.5, size: 0.45 });
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(1.4, 0.18, 5, 12),
+      new THREE.MeshBasicMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.85 })
+    );
+    if (SCRAP.ps1ify) SCRAP.ps1ify(ring.material);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(x, y + 0.6, z);
+    fxGroup.add(ring);
+    const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), pickupMat(0x63d8ff));
+    crystal.position.set(x, y + 1.2, z);
+    fxGroup.add(crystal);
+    freezeFxList.push({ ring, crystal, t: 0 });
+  }
+  const freezeFxList = [];
+  function updateFreezeFx(dt) {
+    for (let i = freezeFxList.length - 1; i >= 0; i -= 1) {
+      const fx = freezeFxList[i];
+      fx.t += dt * 2.2;
+      if (fx.t >= 1) {
+        fxGroup.remove(fx.ring);
+        fxGroup.remove(fx.crystal);
+        fx.ring.geometry.dispose();
+        fx.ring.material.dispose();
+        fx.crystal.geometry.dispose();
+        freezeFxList.splice(i, 1);
+        continue;
+      }
+      const s = 0.6 + fx.t * 2.2;
+      fx.ring.scale.set(s, s, s);
+      fx.ring.material.opacity = 0.85 * (1 - fx.t);
+      fx.crystal.rotation.y += dt * 4;
+      fx.crystal.position.y += dt * 1.5;
+      fx.crystal.scale.setScalar(1 - fx.t * 0.6);
+    }
   }
 
   function updateProjectiles(dt) {
@@ -1235,14 +1558,42 @@
       p.y += (p.vy || 0) * dt;
       p.z += p.vz * dt;
       p.mesh.position.set(p.x, p.y, p.z);
-      p.mesh.lookAt(p.x + p.vx, p.y + (p.vy || 0), p.z + p.vz);
+      if (p.kind === "ricochet") {
+        // tumble the faceted ball; don't lock lookAt
+        p.mesh.rotation.x += dt * 9;
+        p.mesh.rotation.y += dt * 7;
+      } else {
+        p.mesh.lookAt(p.x + p.vx, p.y + (p.vy || 0), p.z + p.vz);
+      }
+      // exhaust / ice / purple trails
+      const trail = PROJ_TRAIL[p.kind];
+      if (trail) {
+        p.trailTick = (p.trailTick || 0) - dt;
+        if (p.trailTick <= 0) {
+          p.trailTick = trail.every;
+          const back = Math.hypot(p.vx, p.vz) || 1;
+          trailPuff(p.x - (p.vx / back) * 0.6, p.y, p.z - (p.vz / back) * 0.6, trail.color, trail.size);
+        }
+      }
+      if (p.mesh.userData.flame) {
+        const fl = p.mesh.userData.flame;
+        fl.scale.setScalar(0.75 + Math.sin(state.time * 30 + i) * 0.35);
+      }
       let dead = false;
+      const detonate = (x, y, z, r) => {
+        if (p.kind === "freeze") freezeHitVisual(x, y, z);
+        boom(x, y, z, r, p.dmg, p.owner, p.boomColor || BOOM_COLOR[p.kind] || 0xff8a2e);
+      };
       // ground / bounds
       const gy = sampleGround(p.x, p.z, p.y + 2);
       if (p.y < gy + 0.2) {
-        if (p.kind === "junk") { boom(p.x, gy + 0.5, p.z, 4.5, p.dmg, p.owner); dead = true; }
-        else if (p.kind === "ricochet" && p.bounces > 0) { p.vy = Math.abs(p.vy || 4) * 0.6; p.y = gy + 0.25; p.bounces -= 1; }
-        else if (p.radius) { boom(p.x, gy + 0.5, p.z, p.radius, p.dmg, p.owner); dead = true; }
+        if (p.kind === "junk") { boom(p.x, gy + 0.5, p.z, 4.5, p.dmg, p.owner, BOOM_COLOR.junk); dead = true; }
+        else if (p.kind === "ricochet" && p.bounces > 0) {
+          p.vy = Math.abs(p.vy || 4) * 0.6; p.y = gy + 0.25; p.bounces -= 1;
+          burst(p.x, gy + 0.4, p.z, 0xc89bff, 6, 5, 4, { ttl: 0.3, size: 0.5 });
+          sfx.hit();
+        }
+        else if (p.radius) { detonate(p.x, gy + 0.5, p.z, p.radius); dead = true; }
         else dead = true;
       }
       if (!dead && arena && (Math.abs(p.x) > arena.bounds.hw || Math.abs(p.z) > arena.bounds.hd)) {
@@ -1250,6 +1601,7 @@
           if (Math.abs(p.x) > arena.bounds.hw) p.vx *= -1;
           else p.vz *= -1;
           p.bounces -= 1;
+          burst(p.x, p.y, p.z, 0xc89bff, 5, 4, 3, { ttl: 0.25, size: 0.45 });
           sfx.hit();
         } else dead = true;
       }
@@ -1264,9 +1616,10 @@
               const penZ = col.hd - Math.abs(p.z - col.z);
               if (penX < penZ) p.vx *= -1; else p.vz *= -1;
               p.bounces -= 1;
+              burst(p.x, p.y, p.z, 0xc89bff, 5, 4, 3, { ttl: 0.25, size: 0.45 });
               sfx.hit();
             } else if (p.radius) {
-              boom(p.x, p.y, p.z, p.radius, p.dmg, p.owner);
+              detonate(p.x, p.y, p.z, p.radius);
               dead = true;
             } else dead = true;
             break;
@@ -1285,12 +1638,13 @@
               applyDamage(car, p.dmg, { by: p.owner, type: "freeze" });
               car.frozen = Math.max(car.frozen, 2.6);
               sfx.freeze();
-              burst(car.x, car.y + 2, car.z, 0x9fe8ff, 12, 6);
+              freezeHitVisual(car.x, car.y + 1.5, car.z);
+              boomVisual(car.x, car.y + 1.5, car.z, 4.5, BOOM_COLOR.freeze);
             } else if (p.radius) {
-              boom(p.x, p.y, p.z, p.radius, p.dmg, p.owner);
+              boom(p.x, p.y, p.z, p.radius, p.dmg, p.owner, p.boomColor);
             } else {
               applyDamage(car, p.dmg, { by: p.owner, type: "shot" });
-              burst(p.x, p.y, p.z, 0xffe08a, 3, 4);
+              burst(p.x, p.y, p.z, 0xffe08a, 4, 5, 3, { ttl: 0.25, size: 0.45 });
             }
             dead = true;
             break;
@@ -3301,6 +3655,16 @@
     updateSmokes(dt);
     updateParticles(dt);
     updateBooms(dt);
+    updateFreezeFx(dt);
+    // remote bomb blink / idle spin
+    state.cars.forEach((car) => {
+      const rb = car.remoteBomb;
+      if (!rb || !rb.mesh) return;
+      rb.mesh.rotation.y += dt * 1.5;
+      if (rb.mesh.userData.blink) {
+        rb.mesh.userData.blink.visible = (Math.floor(state.time * 7) % 2) === 0;
+      }
+    });
     if (arena) arena.update(dt, { time: state.time, cars: state.cars, applyDamage, impulse, boom, announce });
     updateCamera(dt);
     updateHUD();
@@ -3491,7 +3855,8 @@
         if (dd < bestD) { bestD = dd; best = m; }
       });
       if (best) {
-        boomVisual(best.x, best.y + 0.5, best.z, 6);
+        boomVisual(best.x, best.y + 0.5, best.z, 6, BOOM_COLOR.mine);
+        burst(best.x, best.y + 0.5, best.z, BOOM_COLOR.mine, 10, 7, 6);
         sfx.hit();
         scene.remove(best.mesh);
         state.mines.splice(state.mines.indexOf(best), 1);

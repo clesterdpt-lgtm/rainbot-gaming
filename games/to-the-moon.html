@@ -238,6 +238,7 @@
   <div class="hud" id="hud-actions">
     <button class="hbtn" id="btn-build">⛏ Build <span class="k">[B]</span></button>
     <button class="hbtn" id="btn-ship" disabled>🚀 Rocket <span class="k">[E]</span></button>
+    <button class="hbtn danger" id="btn-bridge" hidden>🌉 Bridge <span class="k">[X]</span></button>
     <button class="hbtn" id="btn-sound">🔊</button>
     <button class="hbtn" id="btn-pause">❚❚</button>
   </div>
@@ -570,6 +571,7 @@
       shake:0, ambient:0, launchT:0,
       minedOre:0, kills:0, elapsed:0, undergroundSpawnT:2,
       nightSpawnT:0, nightToSpawn:0, nightSpawned:0, bossT:-1,
+      pump:null, pumpT:rand(12,45), crashT:-1, finalDefense:false, strandedT:0,
       flash:0,
     };
     rover.x=(CFG.SHIP_COL-3)*TILE; rover.y=GROUND*TILE-rover.h-0.5;
@@ -600,6 +602,7 @@
         else if(state==="menu") closeShip(); else if(G&&G.build.open && k==="escape") toggleBuild();
       }
       else if(k==="m"){ toggleSound(); }
+      else if(k==="x"){ emergencyBridge(); }
     }
     if(used) e.preventDefault();
     initAudio();
@@ -777,7 +780,7 @@
     if(!canAfford(p.cost)){ SFX.err(); return; }
     pay(p.cost); G.parts[key]=true; SFX.craft(); toast(`${p.name} installed!`,"good");
     refreshShipMenu(); refreshBuildList(); syncBank();
-    if(Object.values(G.parts).every(Boolean)) startLaunch();
+    if(Object.values(G.parts).every(Boolean)) startFinalDefense();
   }
 
   // ---------------- Phase / day-night ----------------
@@ -789,6 +792,8 @@
       G.nightToSpawn = 7 + n*4;     // total enemies this night
       G.nightSpawned=0; G.nightSpawnT=0.6;
       G.bossT = (n%3===0) ? 6 : -1; // Black Swan boss every 3rd bear market
+      G.pump=null;                             // pumps end when the bear arrives
+      G.crashT = n>=2 ? rand(10,35) : -1;      // flash crash from bear #2 on
       bigMessage("BEAR MARKET", "bear #"+n+" · FUD incoming", "var(--red)");
       toast("Defenses online — HODL through the dip","warn");
     }else{
@@ -796,17 +801,36 @@
       // dawn: surviving surface enemies flee/despawn, underground burrowers gone
       for(const e of enemies) puff(e.x,e.y,"#3a2030",6);
       enemies.length=0;
+      G.pumpT=rand(10,45); G.crashT=-1;
       bigMessage("BULL MARKET", "day "+G.day+" · stack & build", "var(--green)");
     }
   }
   function updatePhase(dt){
     G.t-=dt;
     if(G.t<=0){
+      if(G.finalDefense){                      // survived the launch defense → liftoff
+        for(const e of enemies) puff(e.x,e.y,"#3a2030",6);
+        enemies.length=0;
+        startLaunch(); return;
+      }
       if(G.phase==="day"){ setPhase("night"); G.t=CFG.NIGHT; }
       else { G.day++; setPhase("day"); G.t=CFG.DAY; }
     }
     // 5-second night warning
     if(G.phase==="day" && G.t<=5 && G.t+dt>5){ toast("⚠ Bear market in 5s — surface & defend!","bad"); SFX.err(); }
+    // ---- market events ----
+    if(G.phase==="day" && !G.finalDefense){
+      if(G.pump){ G.pump.t-=dt; if(G.pump.t<=0){ toast(`$${oreShort(G.pump.coin)} pump is over`); G.pump=null; } }
+      else { G.pumpT-=dt;
+        if(G.pumpT<=0){
+          const coin=choice(["iron","copper","plasma","darkmatter"]);
+          G.pump={coin,t:20}; G.pumpT=rand(30,70); SFX.craft(); G.flash=Math.max(G.flash,0.18);
+          bigMessage("$"+oreShort(coin)+" IS PUMPING","×2 mined for 20s","var(--green)");
+          toast(`🔥 $${oreShort(coin)} pumping — mine it now!`,"good");
+        } }
+    } else if(G.phase==="night" && G.crashT>0){
+      G.crashT-=dt; if(G.crashT<=0) flashCrash();
+    }
     // ambient darkness target — day surface is fully lit; it darkens with depth & at night
     let amb=0;
     const belowSurface = rover.y > GROUND*TILE - 6;
@@ -943,6 +967,19 @@
       if(rover.hull<rover.maxHull && G.phase==="day"){ rover.hull=Math.min(rover.maxHull,rover.hull+10*dt); }
     }
 
+    // stranded check: no gas + underground = softlock → offer the emergency bridge
+    const stranded = G.fuel<1 && rover.y>GROUND*TILE && !dockedNearShip();
+    if(stranded){
+      G.strandedT+=dt;
+      if(G.strandedT>1.2 && $("btn-bridge").hidden){
+        $("btn-bridge").hidden=false;
+        flashHint("Out of gas! Emergency bridge home — coins lost [X]"); SFX.err();
+      }
+    } else {
+      G.strandedT=0;
+      if(!$("btn-bridge").hidden) $("btn-bridge").hidden=true;
+    }
+
     // contact damage from surface/burrower enemies
     for(const e of enemies){
       if(Math.abs(wrapDX(e.x,rover.x+rover.w/2))<(e.w/2+rover.w/2) && Math.abs((e.y)-(rover.y+rover.h/2))<(e.h/2+rover.h/2)){
@@ -956,8 +993,9 @@
     const ore=ORE_OF[tt];
     if(ore){
       if(G.cargoTotal>=G.cargoCap){ flashHint("Wallet full — cash out at the rocket"); return; } // leave coin in place
-      G.cargo[ore]++; G.cargoTotal++; G.minedOre++; SFX.ore();
-      addFloater(c*TILE+TILE/2, r*TILE, "+"+oreShort(ore), oreColor(ore));
+      const gain=Math.min((G.pump&&G.pump.coin===ore)?2:1, G.cargoCap-G.cargoTotal);  // pumping coins mine ×2
+      G.cargo[ore]+=gain; G.cargoTotal+=gain; G.minedOre+=gain; SFX.ore();
+      addFloater(c*TILE+TILE/2, r*TILE, "+"+(gain>1?gain+" ":"")+oreShort(ore), oreColor(ore));
     } else SFX.hit();
     setTile(c,r,T.EMPTY); lavaLvl[idx(mod(c,COLS),r)]=0;
     activateLavaAround(c,r);                      // breaching dirt lets nearby lava flow in
@@ -1047,6 +1085,9 @@
   function updateStructures(dt){
     for(const b of builds){
       const s=STRUCTS[b.type];
+      if(b.offline>0){ b.offline-=dt;   // flash-crashed: sparks, no function
+        if(Math.random()<0.12) addParticle(b.x+rand(-10,10),b.y+rand(-12,4),rand(-30,30),rand(-50,-10),0.3,"#ff5c5c",2);
+        continue; }
       if(b.type==="turret"){
         b.cd-=dt; if(b.fire>0) b.fire-=dt;
         if(b.cd<=0){
@@ -1425,6 +1466,10 @@
         ctx.fillRect(x-3,y-3,6,2); ctx.fillRect(x-1,y-5,2,6);
       }
       ctx.restore();
+      // flash-crashed: dim + flashing warning glyph
+      if(b.offline>0){ ctx.fillStyle="rgba(6,8,14,0.55)"; ctx.fillRect(x-TILE/2+2,y-TILE/2,TILE-4,TILE);
+        if(Math.sin(performance.now()/90)>0){ ctx.fillStyle="#ff5c5c"; ctx.font="bold 15px monospace";
+          ctx.textAlign="center"; ctx.fillText("!",x,y+5); ctx.textAlign="left"; } }
       // hp bar if damaged
       if(b.hp<b.maxHp){ const bw=TILE-8; ctx.fillStyle="rgba(0,0,0,.5)"; ctx.fillRect(x-bw/2,y-TILE/2-6,bw,3);
         ctx.fillStyle=b.hp/b.maxHp>0.4?"#6bff7d":"#ff5c5c"; ctx.fillRect(x-bw/2,y-TILE/2-6,bw*(b.hp/b.maxHp),3); }
@@ -1642,11 +1687,13 @@
     $("phase-clock").textContent=mm+":"+(ss<10?"0":"")+ss;
     $("phase-day").textContent="DAY "+G.day;
     const pn=$("phase-name");
-    if(G.phase==="day"){ pn.textContent="BULL MARKET"; pn.className="day"; $("phase-sub").textContent="Mine · refuel · build"; }
+    if(G.finalDefense){ pn.textContent="FINAL DEFENSE"; pn.className="night"; $("phase-sub").textContent=`LAUNCH IN ${Math.ceil(Math.max(0,G.t))}s · HODL`; }
+    else if(G.phase==="day"){ pn.textContent="BULL MARKET"; pn.className="day";
+      $("phase-sub").textContent=G.pump?`🔥 $${oreShort(G.pump.coin)} ×2 · ${Math.ceil(G.pump.t)}s`:"Mine · refuel · build"; }
     else { pn.textContent="BEAR MARKET"; pn.className="night"; $("phase-sub").textContent=`Swarm ${enemies.filter(e=>!e.burrow).length} · HODL`; }
-    const total=G.phase==="day"?CFG.DAY:CFG.NIGHT;
+    const total=G.finalDefense?60:(G.phase==="day"?CFG.DAY:CFG.NIGHT);
     const bar=$("phase-bar").firstElementChild; bar.style.width=(G.t/total*100)+"%";
-    bar.style.background=G.phase==="day"?"var(--green)":"var(--red)";
+    bar.style.background=G.finalDefense?"var(--yellow)":(G.phase==="day"?"var(--green)":"var(--red)");
     // bars
     setBar("b-fuel","v-fuel",G.fuel,G.maxFuel,Math.round(G.fuel), G.fuel/G.maxFuel<0.2?"var(--red)":"var(--yellow)");
     setBar("b-cargo","v-cargo",G.cargoTotal,G.cargoCap,G.cargoTotal+"/"+G.cargoCap, G.cargoTotal>=G.cargoCap?"var(--red)":"var(--cyan)");
@@ -1677,6 +1724,41 @@
     el.style.opacity="1"; G.flash=0.25; setTimeout(()=>el.style.opacity="0",1700); }
 
   // ---------------- End states ----------------
+  function startFinalDefense(){
+    // all 3 parts built → the rocket fuels for 60s while the biggest swarm of the run attacks
+    if(G.finalDefense||state==="launch"||state==="win") return;
+    closeShip(); G.finalDefense=true;
+    const n=Math.max(G.nightCount,1);
+    G.phase="night"; G.t=60;
+    G.nightToSpawn=18+n*5; G.nightSpawned=0; G.nightSpawnT=0.5;
+    G.bossT=20;                                 // a Black Swan crashes the launch party
+    G.pump=null; G.crashT=rand(15,40);
+    SFX.night(); G.flash=Math.max(G.flash,0.3); G.shake=Math.max(G.shake,8);
+    bigMessage("FINAL DEFENSE","survive 60s — the rocket is fueling","var(--yellow)");
+    toast("🚀 Rocket fueling — HODL the line!","warn");
+  }
+  function flashCrash(){
+    G.crashT=-1;
+    const targets=builds.filter(b=>b.type!=="wall" && !(b.offline>0));
+    if(!targets.length) return;
+    const b=choice(targets); b.offline=8;
+    puff(b.x,b.y-8,"#ff5c5c",14); SFX.err(); G.shake=Math.max(G.shake,5);
+    bigMessage("FLASH CRASH","a defense went offline!","var(--red)");
+    toast(`⚡ ${STRUCTS[b.type].name} offline for 8s!`,"bad");
+  }
+  function emergencyBridge(){
+    // stranded rescue: teleport home, lose everything in the wallet
+    if(state!=="play"||!G) return;
+    if(!(G.fuel<1 && rover.y>GROUND*TILE && !dockedNearShip())) return;
+    const lost=G.cargoTotal;
+    for(const k in G.cargo) G.cargo[k]=0; G.cargoTotal=0;
+    puff(rover.x+rover.w/2,rover.y+rover.h/2,"#2ee0ff",20);
+    rover.x=wrapX(SHIP.left-TILE); rover.y=GROUND*TILE-rover.h-0.5;   // lands in dock range → auto-refuels
+    rover.vx=rover.vy=0; rover.drillTarget=null; rover.drillT=0;
+    puff(rover.x+rover.w/2,rover.y+rover.h/2,"#2ee0ff",20);
+    G.flash=Math.max(G.flash,0.25); G.strandedT=0; $("btn-bridge").hidden=true; SFX.craft();
+    toast(lost>0?`Bridged back to L1 — ${lost} coins lost to fees 💸`:"Bridged back to L1 💸","warn");
+  }
   function startLaunch(){ if(state==="launch"||state==="win") return; closeShip(); state="launch"; G.launchT=0; SFX.craft();
     bigMessage("TO THE MOON","🚀 wagmi","var(--green)"); }
   function endGame(won,msg){
@@ -1753,6 +1835,7 @@
   $("btn-pause").addEventListener("click",()=>{ state==="pause"?resumeGame():doPause(); });
   $("btn-resume").addEventListener("click",resumeGame);
   $("btn-sound").addEventListener("click",toggleSound);
+  $("btn-bridge").addEventListener("click",emergencyBridge);
   $("boot-best").textContent=bestLine(loadBest());   // show best run on the title screen
 
   // ---------------- Boot ----------------
@@ -1772,7 +1855,7 @@
   // debug hook
   function __step(dt){ if(state!=="play") return; dt=dt||1/60;
     updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt); updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); }
-  window.__MOON={ get G(){return G;}, get state(){return state;}, rover, enemies, builds, projectiles, scraps, particles, SHIP, CFG, T, get tiles(){return tiles;}, get lavaActive(){return lavaActive;}, mineTile, startGame, step:__step, render };
+  window.__MOON={ get G(){return G;}, get state(){return state;}, rover, enemies, builds, projectiles, scraps, particles, SHIP, CFG, T, get tiles(){return tiles;}, get lavaActive(){return lavaActive;}, mineTile, startGame, step:__step, render, emergencyBridge, startFinalDefense, flashCrash };
 })();
 </script>
 <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>

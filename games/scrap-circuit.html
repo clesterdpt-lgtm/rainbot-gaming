@@ -67,6 +67,49 @@
       border-radius: 0;
     }
 
+    /* Maximized menu: center a compact panel — don't stretch previews full-screen */
+    .canvas-wrap--scrap.is-maxed .overlay {
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: clamp(16px, 3vh, 28px) clamp(16px, 3vw, 32px);
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-menu {
+      flex: 0 1 auto;
+      gap: 8px;
+      grid-template-rows: auto auto;
+      max-height: min(720px, 78vh);
+      max-width: min(1080px, 94%);
+      overflow: auto;
+      width: min(1080px, 94%);
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-menu-main {
+      height: auto;
+      min-height: 0;
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-preview-card,
+    .canvas-wrap--scrap.is-maxed .scrap-map-card {
+      height: auto;
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-preview-stage {
+      max-height: min(260px, 30vh);
+      width: 100%;
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-map-stage {
+      max-height: min(220px, 26vh);
+      width: 100%;
+    }
+
+    .canvas-wrap--scrap.is-maxed .scrap-page .overlay > .btn,
+    .canvas-wrap--scrap.is-maxed .overlay > .btn {
+      margin-top: 4px;
+    }
+
     .canvas-wrap--scrap #gameCanvas {
       background: #05060c;
       border-color: rgba(46, 224, 255, 0.4);
@@ -1757,7 +1800,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260705-fog-exchange-2"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260708-veh-wide-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260708-max-center-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

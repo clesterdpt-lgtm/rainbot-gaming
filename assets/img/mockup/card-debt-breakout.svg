@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="'Arial Black', 'Impact', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a1120"/>
+      <stop offset="1" stop-color="#05070d"/>
+    </linearGradient>
+    <radialGradient id="glowR" cx="0.2" cy="0" r="0.9">
+      <stop offset="0" stop-color="#ff4f68" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ff4f68" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowC" cx="0.85" cy="0.1" r="0.9">
+      <stop offset="0" stop-color="#2ee0ff" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#2ee0ff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="coin" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff2b0"/>
+      <stop offset="0.55" stop-color="#ffd43b"/>
+      <stop offset="1" stop-color="#e0a800"/>
+    </radialGradient>
+    <linearGradient id="pad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8affb0"/>
+      <stop offset="1" stop-color="#37c96a"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <rect width="640" height="360" fill="url(#glowR)"/>
+  <rect width="640" height="360" fill="url(#glowC)"/>
+
+  <!-- faint dashboard grid -->
+  <g stroke="#2ee0ff" stroke-opacity="0.08" stroke-width="1">
+    <path d="M0 40H640M0 85H640M0 130H640M0 175H640M0 220H640M0 265H640M0 310H640"/>
+    <path d="M40 0V360M120 0V360M200 0V360M280 0V360M360 0V360M440 0V360M520 0V360M600 0V360"/>
+  </g>
+
+  <!-- brick wall (itemized bills) -->
+  <g font-weight="900" font-size="10" text-anchor="middle">
+    <!-- row A -->
+    <g>
+      <rect x="40" y="30" width="74" height="26" rx="5" fill="#ff4f68"/><rect x="43" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.2"/><text x="77" y="49" fill="#fff">$1,800</text>
+      <rect x="122" y="30" width="74" height="26" rx="5" fill="#b06cff"/><rect x="125" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.2"/><text x="159" y="49" fill="#fff">$29</text>
+      <rect x="204" y="30" width="74" height="26" rx="5" fill="#2ee0ff"/><rect x="207" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.25"/><text x="241" y="49" fill="#06222a">$2,500</text>
+      <rect x="286" y="30" width="74" height="26" rx="5" fill="#ffd43b"/><rect x="289" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.3"/><text x="323" y="49" fill="#3a2c00">$200</text>
+      <rect x="368" y="30" width="74" height="26" rx="5" fill="#b6ff3b"/><rect x="371" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.3"/><text x="405" y="49" fill="#16300a">$140</text>
+      <rect x="450" y="30" width="74" height="26" rx="5" fill="#ff9f45"/><rect x="453" y="33" width="68" height="4" rx="2" fill="#ffffff" fill-opacity="0.25"/><text x="487" y="49" fill="#331700">$96</text>
+      <rect x="532" y="30" width="68" height="26" rx="5" fill="#eef2ff"/><rect x="535" y="33" width="62" height="4" rx="2" fill="#ffffff" fill-opacity="0.4"/><text x="566" y="49" fill="#10131c">$420</text>
+    </g>
+    <!-- row B -->
+    <g>
+      <rect x="40" y="62" width="74" height="26" rx="5" fill="#b06cff"/><text x="77" y="81" fill="#fff">$29</text>
+      <rect x="122" y="62" width="74" height="26" rx="5" fill="#eef2ff"/><text x="159" y="81" fill="#10131c">$420</text>
+      <rect x="204" y="62" width="74" height="26" rx="5" fill="#ff9f45"/><text x="241" y="81" fill="#331700">$96</text>
+      <rect x="286" y="62" width="74" height="26" rx="5" fill="#2ee0ff"/><text x="323" y="81" fill="#06222a">$2,500</text>
+      <rect x="368" y="62" width="74" height="26" rx="5" fill="#ffd43b"/><text x="405" y="81" fill="#3a2c00">$200</text>
+      <rect x="450" y="62" width="74" height="26" rx="5" fill="#b6ff3b"/><text x="487" y="81" fill="#16300a">$140</text>
+      <rect x="532" y="62" width="68" height="26" rx="5" fill="#b06cff"/><text x="566" y="81" fill="#fff">$29</text>
+    </g>
+    <!-- row C -->
+    <g>
+      <rect x="40" y="94" width="74" height="26" rx="5" fill="#2ee0ff"/><text x="77" y="113" fill="#06222a">$2,500</text>
+      <rect x="122" y="94" width="74" height="26" rx="5" fill="#ffd43b"/><text x="159" y="113" fill="#3a2c00">$200</text>
+      <rect x="204" y="94" width="74" height="26" rx="5" fill="#5b6472"/><text x="241" y="113" fill="#cfd6e2">LOCKED</text>
+      <rect x="286" y="94" width="74" height="26" rx="5" fill="#b6ff3b"/><text x="323" y="113" fill="#16300a">$140</text>
+      <rect x="368" y="94" width="74" height="26" rx="5" fill="#ff9f45"/><text x="405" y="113" fill="#331700">$96</text>
+      <rect x="450" y="94" width="74" height="26" rx="5" fill="#eef2ff"/><text x="487" y="113" fill="#10131c">$420</text>
+      <rect x="532" y="94" width="68" height="26" rx="5" fill="#ff4f68"/><text x="566" y="113" fill="#fff">$1,800</text>
+    </g>
+  </g>
+
+  <!-- falling refund gift -->
+  <g>
+    <rect x="486" y="150" width="52" height="22" rx="5" fill="#58ff8a"/>
+    <path d="M512 150l-6-4v8zM512 150l6-4v8z" fill="#0a1a10"/>
+    <text x="512" y="166" fill="#0a1a10" font-weight="900" font-size="10" text-anchor="middle">+$500</text>
+    <g fill="#58ff8a"><circle cx="474" cy="146" r="1.6"/><circle cx="544" cy="180" r="1.6"/><circle cx="466" cy="168" r="1.2"/></g>
+  </g>
+
+  <!-- payment coin + trail -->
+  <g>
+    <circle cx="196" cy="150" r="3" fill="#ffd43b" fill-opacity="0.25"/>
+    <circle cx="210" cy="163" r="4" fill="#ffd43b" fill-opacity="0.4"/>
+    <circle cx="226" cy="176" r="12" fill="url(#coin)" stroke="#7a5b00" stroke-width="1.5"/>
+    <text x="226" y="181" fill="#3a2c00" font-weight="900" font-size="14" text-anchor="middle">$</text>
+  </g>
+
+  <!-- paycheck paddle -->
+  <g>
+    <rect x="250" y="196" width="150" height="15" rx="7" fill="url(#pad)"/>
+    <rect x="255" y="199" width="140" height="4" rx="2" fill="#ffffff" fill-opacity="0.3"/>
+    <text x="325" y="207" fill="#0a1a10" font-weight="900" font-size="9" text-anchor="middle" letter-spacing="1">PAYCHECK</text>
+  </g>
+
+  <!-- title -->
+  <g text-anchor="middle">
+    <text x="322" y="266" font-size="50" font-weight="900" fill="#ff2e88" fill-opacity="0.55">DEBT BREAKOUT</text>
+    <text x="318" y="266" font-size="50" font-weight="900" fill="#2ee0ff" fill-opacity="0.5">DEBT BREAKOUT</text>
+    <text x="320" y="264" font-size="50" font-weight="900" fill="#fbfaf4">DEBT BREAKOUT</text>
+    <text x="320" y="294" font-size="15" font-weight="800" fill="#ffd43b" letter-spacing="2" font-family="'JetBrains Mono', monospace, sans-serif">SMASH THE BILL &#183; SURVIVE THE STATEMENT</text>
+  </g>
+
+  <!-- parody tag -->
+  <text x="320" y="332" font-size="10" font-weight="700" fill="#aeb5c7" text-anchor="middle" font-family="'JetBrains Mono', monospace, sans-serif">A Rainbot personal-finance parody &#183; not financial advice</text>
+</svg>

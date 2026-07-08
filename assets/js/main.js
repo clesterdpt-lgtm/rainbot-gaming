@@ -100,6 +100,7 @@ const RB_GAME_META = {
   "boomer-monopoly": { title: "Boomer Monopoly", scoreIds: ["boomer_monopoly"] },
   "brainrot-2048": { title: "Brainrot 2048", scoreIds: ["brainrot2048"] },
   "consensus-collapse": { title: "Consensus Collapse", scoreIds: ["consensus-collapse"] },
+  "debt-breakout": { title: "Debt Breakout", scoreIds: ["debt-breakout"] },
   "incident-commander": { title: "Incident Commander", scoreIds: ["incident-commander"] },
   "dont-become-pizza": { title: "Don't Become Pizza", scoreIds: ["dont-become-pizza"] },
   "dont-fck-with-cats": { title: "Don't F*ck with Cats", scoreIds: ["dont-fck-with-cats"] },
@@ -149,6 +150,7 @@ const RB_GAME_VISUALS = {
   "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.png?v=20260611-7", kind: "Board" },
   "brainrot-2048": { image: "assets/img/mockup/card-brainrot-2048.png?v=20260614-3", kind: "Puzzle" },
   "consensus-collapse": { image: "assets/img/agent-games/consensus-collapse.png?v=20260615-1", kind: "Agent Treaty" },
+  "debt-breakout": { image: "assets/img/mockup/card-debt-breakout.svg?v=20260708-debt-breakout-1", kind: "Brick Buster" },
   "incident-commander": { image: "assets/img/agent-games/incident-commander-cover.jpg?v=20260703-2", kind: "Agent Ops" },
   "dont-become-pizza": { image: "assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2", kind: "Horror" },
   "dont-fck-with-cats": { image: "assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1", kind: "Runner" },
@@ -189,6 +191,7 @@ const RB_SLOPWIRE_ARTICLES = [
 ];
 
 const RB_GAME_SEARCH_TEXT = {
+  "debt-breakout": "Debt Breakout breakout arkanoid parody bills rent subscription copay medical student loan crypto loss utilities buy now pay later BNPL zombie sub annual renewal refund inflation interest paddle paycheck payment coin brick buster satire personal finance debt statement",
   "scrap-circuit": "Scrap Circuit Last Chassis Standing PS1 retro 3D arena vehicular combat demolition derby cars ice cream truck monster truck hearse school bus tow truck garbage truck weapons pickups specials insurance adjuster low poly fog dither online multiplayer room codes online derby",
   "to-the-moon": "To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands black swan",
   "the-last-signal": "The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow online multiplayer online skirmish room codes",
@@ -4127,6 +4130,7 @@ const RBSfx = (() => {
     "billionaire-space-race": "laserRetro",
     "boomer-monopoly": "drop",
     "consensus-collapse": "question",
+    "debt-breakout": "drop",
     "dont-become-pizza": "doorOpen",
     "dont-fck-with-cats": "switch",
     "dont-look-gym-girl": "footstepConcrete",

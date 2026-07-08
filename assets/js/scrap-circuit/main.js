@@ -2678,9 +2678,12 @@
   }
   function resizeMenuVehiclePreview() {
     if (!menuPreviewRenderer || !el.menuVehiclePreview) return;
-    const rect = el.menuVehiclePreview.getBoundingClientRect();
-    const w = Math.max(1, Math.round(rect.width || 360));
-    const h = Math.max(1, Math.round(rect.height || 220));
+    // Size from the stage parent so canvas bitmap attrs never drive layout.
+    const stage = el.menuVehiclePreview.parentElement || el.menuVehiclePreview;
+    const rect = stage.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return;
+    const w = Math.max(1, Math.round(rect.width));
+    const h = Math.max(1, Math.round(rect.height));
     menuPreviewRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     menuPreviewRenderer.setSize(w, h, false);
     menuPreviewCam.aspect = w / h;
@@ -2694,10 +2697,14 @@
   }
   function resizeMenuMapCanvas() {
     if (!el.menuMapPreview) return { w: 0, h: 0 };
-    const rect = el.menuMapPreview.getBoundingClientRect();
+    // Always measure the fixed stage box — never the canvas itself, and never
+    // fall back to a tall default (that made the preview look "stretched").
+    const stage = el.menuMapPreview.parentElement || el.menuMapPreview;
+    const rect = stage.getBoundingClientRect();
+    if (rect.width < 2 || rect.height < 2) return { w: 0, h: 0 };
     const ratio = Math.min(2, window.devicePixelRatio || 1);
-    const w = Math.max(1, Math.round((rect.width || 480) * ratio));
-    const h = Math.max(1, Math.round((rect.height || 260) * ratio));
+    const w = Math.max(1, Math.round(rect.width * ratio));
+    const h = Math.max(1, Math.round(rect.height * ratio));
     if (el.menuMapPreview.width !== w) el.menuMapPreview.width = w;
     if (el.menuMapPreview.height !== h) el.menuMapPreview.height = h;
     return { w, h };
@@ -2885,23 +2892,30 @@
   };
   function renderArenaRow() {
     if (!el.arenaRow) return;
-    el.arenaRow.innerHTML = "";
-    SCRAP.arenas.list.forEach((entry) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.dataset.arena = entry.id;
-      btn.className = "scrap-arena-chip" + (entry.id === state.arenaId ? " is-active" : "");
-      btn.title = `${entry.name} — ${entry.tagline}`;
-      const short = ARENA_SHORT[entry.id] || entry.name;
-      btn.innerHTML =
-        `<img src="${ARENA_ART_BASE}arena-${entry.id}-thumb.png" alt="" width="160" height="90" loading="lazy" draggable="false" />` +
-        `<strong>${short}</strong>`;
-      btn.addEventListener("click", () => {
-        state.arenaId = entry.id;
-        renderArenaRow();
-        drawMenuMapPreview();
+    // Build chips once — rebuilding on every click reflowed images and
+    // briefly zeroed the map stage, which made the preview stretch.
+    if (!el.arenaRow.childElementCount) {
+      SCRAP.arenas.list.forEach((entry) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.dataset.arena = entry.id;
+        btn.title = `${entry.name} — ${entry.tagline}`;
+        const short = ARENA_SHORT[entry.id] || entry.name;
+        btn.innerHTML =
+          `<img src="${ARENA_ART_BASE}arena-${entry.id}-thumb.png" alt="" width="160" height="90" loading="eager" draggable="false" />` +
+          `<strong>${short}</strong>`;
+        btn.addEventListener("click", () => {
+          if (state.arenaId === entry.id) return;
+          state.arenaId = entry.id;
+          renderArenaRow();
+        });
+        el.arenaRow.appendChild(btn);
       });
-      el.arenaRow.appendChild(btn);
+    }
+    el.arenaRow.querySelectorAll(".scrap-arena-chip, button[data-arena]").forEach((btn) => {
+      const id = btn.dataset.arena;
+      btn.className = "scrap-arena-chip" + (id === state.arenaId ? " is-active" : "");
+      btn.setAttribute("aria-pressed", id === state.arenaId ? "true" : "false");
     });
     drawMenuMapPreview();
   }

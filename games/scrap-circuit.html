@@ -489,12 +489,15 @@
     .scrap-map-stage {
       aspect-ratio: 16 / 10;
       border-radius: 8px;
+      /* Fixed box — never let canvas bitmap attrs or chip reflows change height */
+      flex: 0 0 auto;
       height: auto;
       max-height: min(210px, 32cqh);
       min-height: 0;
       overflow: hidden;
       position: relative;
       width: 100%;
+      contain: layout;
     }
 
     .scrap-preview-canvas,
@@ -502,12 +505,16 @@
       background: #080b12;
       border: 1px solid rgba(46, 224, 255, 0.22);
       border-radius: 8px;
+      bottom: 0;
       display: block;
-      height: 100%;
+      height: 100% !important;
       left: 0;
+      max-height: 100%;
+      max-width: 100%;
       position: absolute;
+      right: 0;
       top: 0;
-      width: 100%;
+      width: 100% !important;
     }
 
     .scrap-preview-canvas {
@@ -556,8 +563,11 @@
       font-family: "Bungee", var(--font-display);
       font-size: clamp(13px, 1.7cqw, 18px);
       line-height: 1.1;
+      overflow: hidden;
+      text-overflow: ellipsis;
       text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.92);
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .scrap-map-overlay span {
@@ -568,8 +578,11 @@
       font-weight: 800;
       line-height: 1.25;
       margin-top: 3px;
+      overflow: hidden;
+      text-overflow: ellipsis;
       text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .scrap-map-legend {
@@ -1030,6 +1043,7 @@
 
     .scrap-arena-strip {
       display: grid;
+      flex: 0 0 auto;
       gap: 5px;
       grid-template-columns: repeat(6, minmax(0, 1fr));
       width: 100%;
@@ -1055,13 +1069,16 @@
 
     .scrap-arena-chip.is-active {
       border-color: #ffd23b;
-      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.3);
+      /* outline doesn't affect layout (box-shadow rings were expanding the strip) */
+      outline: 2px solid rgba(255, 212, 59, 0.85);
+      outline-offset: -2px;
     }
 
     .scrap-arena-chip img {
       aspect-ratio: 16 / 9;
       display: block;
       height: auto;
+      max-height: 48px;
       object-fit: cover;
       width: 100%;
     }
@@ -1072,8 +1089,11 @@
       font-family: var(--font-display);
       font-size: clamp(8px, 1.05cqw, 10px);
       line-height: 1.15;
+      overflow: hidden;
       padding: 4px 5px 5px;
+      text-overflow: ellipsis;
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .scrap-arena-chip span {
@@ -1720,7 +1740,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260705-fog-exchange-2"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260708-menu-art-1"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260708-menu-stretch-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -554,41 +554,56 @@ function renderNav(state = RB.state) {
   const localProfileLabel = localName && localName !== "Rainbot Player" ? localName : "Profile";
   const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : escapeHtml(localProfileLabel);
 
-  slot.innerHTML = `
-    <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network - free browser arcade">
-      <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
-    </a>
-    <div class="nav__links">
+  const navLinksMarkup = `
       <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
       <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
       <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
+  `;
+
+  slot.innerHTML = `
+    <a href="${RB_BASE}" class="nav__brand" title="Rainbot Network - free browser arcade">
+      <img src="${RB_BASE}assets/img/mockup/rainbot-network-logo.png?v=20260622-network-font-1" alt="Rainbot Network" />
+    </a>
+    <nav class="nav__links" aria-label="Site sections">
+      ${navLinksMarkup}
+    </nav>
+    <button type="button" class="nav__menu-toggle" id="rb-nav-menu-toggle" aria-expanded="false" aria-controls="rb-nav-drawer" aria-label="Open site menu">
+      <span class="nav__menu-toggle-bar" aria-hidden="true"></span>
+      <span class="nav__menu-toggle-bar" aria-hidden="true"></span>
+      <span class="nav__menu-toggle-bar" aria-hidden="true"></span>
+    </button>
+    <div class="nav__cluster">
+      <div class="nav__search-wrap">
+        <form class="nav__search" role="search">
+          <label class="sr-only" for="rb-search">Search Rainbot</label>
+          <input id="rb-search" type="search" placeholder="Search games, articles..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
+          <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
+            <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+              <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
+              <line x1="14.4" y1="14.4" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
+            </svg>
+          </button>
+        </form>
+        <div class="nav__search-results" id="rb-search-results" hidden role="listbox" aria-label="Search results"></div>
+      </div>
+      <div class="nav__actions">
+        ${proBadge}
+        ${
+          state.isPro
+            ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
+            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Go Pro</a>`
+        }
+        <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
+      </div>
     </div>
-    <div class="nav__search-wrap">
-      <form class="nav__search" role="search">
-        <label class="sr-only" for="rb-search">Search Rainbot</label>
-        <input id="rb-search" type="search" placeholder="Search games, articles..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
-        <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
-          <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
-            <line x1="14.4" y1="14.4" x2="20" y2="20" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line>
-          </svg>
-        </button>
-      </form>
-      <div class="nav__search-results" id="rb-search-results" hidden role="listbox" aria-label="Search results"></div>
-    </div>
-    <div class="nav__actions">
-      ${proBadge}
-      ${
-        state.isPro
-          ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-          : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Go Pro</a>`
-      }
-      <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
-    </div>
+    <nav class="nav__drawer" id="rb-nav-drawer" aria-label="Site sections" hidden>
+      ${navLinksMarkup}
+    </nav>
   `;
 
   bindSearch(slot);
+  bindNavMenu(slot);
 
   const goPro = document.getElementById("rb-go-pro");
   if (goPro) goPro.addEventListener("click", (e) => {
@@ -608,6 +623,60 @@ function renderNav(state = RB.state) {
     e.preventDefault();
     openProfileModal();
   });
+}
+
+let rbNavMenuDocBound = false;
+
+function bindNavMenu(root) {
+  const toggle = root.querySelector("#rb-nav-menu-toggle");
+  const drawer = root.querySelector("#rb-nav-drawer");
+  if (!toggle || !drawer) return;
+
+  const setDrawerOpen = (open) => {
+    drawer.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", open ? "Close site menu" : "Open site menu");
+    toggle.classList.toggle("is-open", open);
+    document.body.classList.toggle("rb-nav-drawer-open", open);
+  };
+
+  toggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDrawerOpen(drawer.hidden);
+  });
+
+  drawer.querySelectorAll("a").forEach((link) => {
+    link.addEventListener("click", () => setDrawerOpen(false));
+  });
+
+  if (!rbNavMenuDocBound) {
+    rbNavMenuDocBound = true;
+    const closeNavDrawer = () => {
+      const openDrawer = document.getElementById("rb-nav-drawer");
+      const openToggle = document.getElementById("rb-nav-menu-toggle");
+      if (!openDrawer || openDrawer.hidden) return;
+      openDrawer.hidden = true;
+      openToggle?.setAttribute("aria-expanded", "false");
+      openToggle?.setAttribute("aria-label", "Open site menu");
+      openToggle?.classList.remove("is-open");
+      document.body.classList.remove("rb-nav-drawer-open");
+    };
+    document.addEventListener("click", (event) => {
+      const openDrawer = document.getElementById("rb-nav-drawer");
+      const openToggle = document.getElementById("rb-nav-menu-toggle");
+      if (!openDrawer || openDrawer.hidden) return;
+      if (openDrawer.contains(event.target) || openToggle?.contains(event.target)) return;
+      closeNavDrawer();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      const openDrawer = document.getElementById("rb-nav-drawer");
+      if (!openDrawer || openDrawer.hidden) return;
+      closeNavDrawer();
+      document.getElementById("rb-nav-menu-toggle")?.focus();
+    });
+  }
 }
 
 function bindSearch(root) {

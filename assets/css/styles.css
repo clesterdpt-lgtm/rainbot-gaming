@@ -2731,16 +2731,19 @@ body.arcade-home::before {
 }
 
 #nav-slot {
+  position: relative;
   width: 100%;
   max-width: none;
   margin: 0;
   display: grid;
-  grid-template-columns: 310px minmax(460px, 1fr) minmax(210px, 290px) auto;
+  grid-template-columns: minmax(180px, 280px) minmax(0, 1fr) auto;
+  grid-template-areas: "brand links cluster";
   align-items: center;
   gap: 14px;
 }
 
 .nav__brand {
+  grid-area: brand;
   align-items: center;
   display: flex;
   height: 82px;
@@ -2754,6 +2757,7 @@ body.arcade-home::before {
 }
 
 .nav__links {
+  grid-area: links;
   display: flex;
   justify-content: flex-start;
   gap: clamp(14px, 2vw, 34px);
@@ -2788,12 +2792,92 @@ body.arcade-home::before {
   box-shadow: 0 0 10px rgba(255, 20, 144, 0.95);
 }
 
-.nav__search-wrap {
+.nav__cluster {
+  grid-area: cluster;
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
   justify-self: end;
+  min-width: 0;
+}
+
+.nav__menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(151, 171, 194, 0.42);
+  border-radius: 4px;
+  background: #05070d;
+  color: var(--arcade-white);
+  cursor: pointer;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nav__menu-toggle-bar {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.nav__menu-toggle.is-open .nav__menu-toggle-bar:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.nav__menu-toggle.is-open .nav__menu-toggle-bar:nth-child(2) {
+  opacity: 0;
+}
+
+.nav__menu-toggle.is-open .nav__menu-toggle-bar:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+.nav__drawer {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 14px;
+  background: rgba(3, 5, 10, 0.98);
+  border-top: 1px solid rgba(64, 79, 99, 0.9);
+}
+
+.nav__drawer:not([hidden]) {
+  display: flex;
+}
+
+.nav__drawer a {
+  color: var(--arcade-white);
+  font-family: var(--arcade-font);
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 10px 12px;
+  text-decoration: none;
+  text-transform: uppercase;
+  border: 1px solid rgba(151, 171, 194, 0.22);
+  border-radius: 4px;
+  background: rgba(5, 7, 13, 0.84);
+}
+
+.nav__drawer a:hover,
+.nav__drawer a.is-active {
+  border-color: var(--arcade-pink);
+  color: var(--arcade-pink);
+  text-decoration: none;
+}
+
+.nav__search-wrap {
   position: relative;
   touch-action: manipulation;
   width: 42px;
   z-index: 2;
+  flex-shrink: 0;
 }
 
 .nav__search-wrap:has(.nav__search.is-open) {
@@ -3258,26 +3342,7 @@ body.arcade-home::before {
 }
 
 @media (max-width: 1600px) and (min-width: 1341px) {
-  .nav {
-    min-height: 124px;
-    padding-block: 8px 12px;
-  }
-
-  #nav-slot {
-    grid-template-areas:
-      "brand links actions"
-      "search search search";
-    grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) auto;
-    row-gap: 8px;
-  }
-
-  .nav__brand {
-    grid-area: brand;
-    height: 62px;
-  }
-
   .nav__links {
-    grid-area: links;
     flex-wrap: wrap;
     gap: 8px clamp(12px, 1.45vw, 22px);
     line-height: 1.25;
@@ -3287,19 +3352,8 @@ body.arcade-home::before {
     bottom: -8px;
   }
 
-  .nav__search-wrap {
-    display: block;
-    grid-area: search;
-    justify-self: center;
-    width: 42px;
-  }
-
-  .nav__search-wrap:has(.nav__search.is-open) {
-    width: min(100%, 620px);
-  }
-
-  .nav__actions {
-    grid-area: actions;
+  .nav__cluster .nav__search-wrap:has(.nav__search.is-open) {
+    width: min(280px, 34vw);
   }
 }
 
@@ -5972,16 +6026,11 @@ body.arcade-home::before {
 
 @media (max-width: 1340px) {
   #nav-slot {
-    grid-template-columns: 250px minmax(360px, 1fr) auto;
+    grid-template-columns: minmax(160px, 230px) minmax(0, 1fr) auto;
   }
 
-  .nav__search-wrap {
-    justify-self: end;
-    width: 42px;
-  }
-
-  .nav__search-wrap:has(.nav__search.is-open) {
-    width: min(280px, 42vw);
+  .nav__cluster .nav__search-wrap:has(.nav__search.is-open) {
+    width: min(240px, 42vw);
   }
 
   .portal-hero {
@@ -6032,7 +6081,11 @@ body.arcade-home::before {
   }
 
   #nav-slot {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "brand cluster menu"
+      "drawer drawer drawer";
+    row-gap: 0;
   }
 
   .nav__brand {
@@ -6045,6 +6098,19 @@ body.arcade-home::before {
 
   .nav__links {
     display: none;
+  }
+
+  .nav__menu-toggle {
+    grid-area: menu;
+    display: inline-flex;
+  }
+
+  .nav__drawer {
+    grid-area: drawer;
+  }
+
+  .nav__cluster .nav__search-wrap:has(.nav__search.is-open) {
+    width: min(220px, 46vw);
   }
 
   .nav__cta {

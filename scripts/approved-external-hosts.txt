@@ -9,6 +9,7 @@ clesterdpt-lgtm.github.io
 fonts.googleapis.com
 fonts.gstatic.com
 github.com
+kenney.nl
 pagead2.googlesyndication.com
 qzvrrpzmalskayushbrv.supabase.co
 unpkg.com

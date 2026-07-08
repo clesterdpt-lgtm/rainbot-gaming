@@ -2702,6 +2702,25 @@
     if (el.menuMapPreview.height !== h) el.menuMapPreview.height = h;
     return { w, h };
   }
+  const ARENA_ART_BASE = "../assets/img/scrap-circuit/";
+  const ARENA_ART_IDS = ["suburb", "junkyard", "interchange", "boardwalk", "rooftop", "cemetery"];
+  const arenaArtImages = Object.create(null);
+  function preloadArenaArt() {
+    ARENA_ART_IDS.forEach((id) => {
+      if (arenaArtImages[id]) return;
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        arenaArtImages[id] = img;
+        if (!el.menu || el.menu.hidden) return;
+        drawMenuMapPreview();
+        // refresh chip thumbs if they failed to inline
+        const chip = el.arenaRow && el.arenaRow.querySelector(`[data-arena="${id}"] img`);
+        if (chip && !chip.complete) chip.src = `${ARENA_ART_BASE}arena-${id}-thumb.png`;
+      };
+      img.src = `${ARENA_ART_BASE}arena-${id}.jpg`;
+    });
+  }
   const arenaPreviewCache = new Map();
   function getArenaPreview(id) {
     if (arenaPreviewCache.has(id)) return arenaPreviewCache.get(id);
@@ -2735,97 +2754,42 @@
     ctx.restore();
   }
   function drawArenaPicture(ctx, w, h, id) {
+    const img = arenaArtImages[id];
+    if (img && img.complete && img.naturalWidth > 0) {
+      // cover-crop the AI plate so it always fills the preview
+      const ir = img.naturalWidth / img.naturalHeight;
+      const cr = w / Math.max(1, h);
+      let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+      if (ir > cr) {
+        sw = img.naturalHeight * cr;
+        sx = (img.naturalWidth - sw) / 2;
+      } else {
+        sh = img.naturalWidth / cr;
+        sy = (img.naturalHeight - sh) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+      const haze = ctx.createLinearGradient(0, 0, 0, h);
+      haze.addColorStop(0, "rgba(5,7,13,0.18)");
+      haze.addColorStop(0.45, "rgba(0,0,0,0)");
+      haze.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, w, h);
+      return;
+    }
+    // procedural fallback while art loads (or if a plate is missing)
     const sky = ctx.createLinearGradient(0, 0, 0, h);
     const yGround = h * 0.42;
     const rect = (x, y, rw, rh, color) => {
       ctx.fillStyle = color;
       ctx.fillRect(x, y, rw, rh);
     };
-    const stripe = (x, y, rw, rh, color, alpha = 1) => {
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      rect(x, y, rw, rh, color);
-      ctx.restore();
-    };
     sky.addColorStop(0, id === "cemetery" ? "#101427" : id === "boardwalk" ? "#102947" : "#121827");
     sky.addColorStop(1, id === "rooftop" ? "#222842" : "#293040");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    for (let i = 0; i < 10; i += 1) {
-      const sx = ((i * 47) % 97) / 100 * w;
-      const sy = (0.08 + ((i * 19) % 27) / 100) * h;
-      ctx.fillRect(sx, sy, Math.max(1, w * 0.012), Math.max(1, h * 0.018));
-    }
-    if (id === "suburb") {
-      rect(0, yGround, w, h - yGround, "#263f24");
-      rect(0, h * 0.63, w, h * 0.18, "#3b3e45");
-      rect(w * 0.42, yGround, w * 0.16, h - yGround, "#4b4d52");
-      rect(w * 0.08, h * 0.48, w * 0.18, h * 0.16, "#8a6f57");
-      rect(w * 0.7, h * 0.5, w * 0.18, h * 0.15, "#735d4c");
-      rect(w * 0.11, h * 0.43, w * 0.12, h * 0.05, "#9b3342");
-      rect(w * 0.73, h * 0.45, w * 0.12, h * 0.05, "#315f82");
-      rect(w * 0.69, h * 0.69, w * 0.17, h * 0.08, "#226a87");
-    } else if (id === "junkyard") {
-      rect(0, yGround, w, h - yGround, "#443827");
-      rect(w * 0.08, h * 0.52, w * 0.3, h * 0.12, "#8c5132");
-      rect(w * 0.12, h * 0.4, w * 0.26, h * 0.1, "#2f6072");
-      rect(w * 0.56, h * 0.45, w * 0.27, h * 0.12, "#854030");
-      rect(w * 0.63, h * 0.32, w * 0.11, h * 0.13, "#a3842b");
-      rect(w * 0.48, h * 0.62, w * 0.18, h * 0.08, "#57544b");
-      stripe(w * 0.05, h * 0.77, w * 0.85, h * 0.05, "#7f8288", 0.5);
-    } else if (id === "interchange") {
-      rect(0, yGround, w, h - yGround, "#353942");
-      rect(w * 0.08, h * 0.55, w * 0.84, h * 0.16, "#4a4a52");
-      rect(w * 0.43, h * 0.35, w * 0.14, h * 0.58, "#56565d");
-      stripe(0, h * 0.62, w, h * 0.02, "#d8d2c8", 0.55);
-      stripe(w * 0.49, h * 0.35, w * 0.02, h * 0.58, "#d8d2c8", 0.55);
-      rect(w * 0.68, h * 0.5, w * 0.18, h * 0.08, "#894a33");
-      rect(w * 0.2, h * 0.73, w * 0.04, h * 0.06, "#e8b52e");
-      rect(w * 0.3, h * 0.76, w * 0.04, h * 0.06, "#e8b52e");
-    } else if (id === "boardwalk") {
-      rect(0, yGround, w, h - yGround, "#264a6e");
-      rect(0, h * 0.51, w, h * 0.24, "#8a5b32");
-      for (let i = 0; i < 8; i += 1) stripe(0, h * (0.54 + i * 0.026), w, h * 0.006, "#c28c4c", 0.45);
-      ctx.strokeStyle = "#c98a2e";
-      ctx.lineWidth = Math.max(2, h * 0.035);
-      ctx.beginPath();
-      ctx.arc(w * 0.54, h * 0.5, w * 0.23, Math.PI, Math.PI * 1.94);
-      ctx.stroke();
-      rect(w * 0.12, h * 0.42, w * 0.18, h * 0.13, "#d33d58");
-      rect(w * 0.7, h * 0.44, w * 0.16, h * 0.12, "#2fa5c9");
-    } else if (id === "rooftop") {
-      rect(0, yGround, w, h - yGround, "#4e5866");
-      for (let i = 0; i < 7; i += 1) {
-        const bx = i * w * 0.16;
-        rect(bx, h * (0.18 + (i % 3) * 0.05), w * 0.11, h * 0.28, "#20293a");
-      }
-      rect(w * 0.08, h * 0.52, w * 0.34, h * 0.16, "#6e7a86");
-      rect(w * 0.55, h * 0.5, w * 0.32, h * 0.18, "#5b6674");
-      ctx.strokeStyle = "#e8b52e";
-      ctx.lineWidth = Math.max(2, h * 0.025);
-      ctx.beginPath();
-      ctx.arc(w * 0.72, h * 0.59, w * 0.08, 0, Math.PI * 2);
-      ctx.moveTo(w * 0.64, h * 0.59);
-      ctx.lineTo(w * 0.8, h * 0.59);
-      ctx.stroke();
-      rect(w * 0.2, h * 0.36, w * 0.24, h * 0.03, "#c98a2e");
-    } else {
-      rect(0, yGround, w, h - yGround, "#26352d");
-      ctx.fillStyle = "rgba(245,238,184,0.82)";
-      ctx.beginPath();
-      ctx.arc(w * 0.82, h * 0.18, h * 0.11, 0, Math.PI * 2);
-      ctx.fill();
-      for (let i = 0; i < 10; i += 1) {
-        const gx = ((i * 29) % 91) / 100 * w;
-        const gy = h * (0.48 + ((i * 17) % 35) / 100);
-        rect(gx, gy, w * 0.035, h * 0.12, i % 2 ? "#5b5b62" : "#77777d");
-      }
-      stripe(0, h * 0.66, w, h * 0.08, "#1d2425", 0.5);
-    }
+    rect(0, yGround, w, h - yGround, id === "suburb" ? "#263f24" : id === "junkyard" ? "#443827" : "#353942");
     const haze = ctx.createLinearGradient(0, 0, 0, h);
     haze.addColorStop(0, "rgba(255,255,255,0.05)");
-    haze.addColorStop(0.55, "rgba(0,0,0,0)");
     haze.addColorStop(1, "rgba(0,0,0,0.42)");
     ctx.fillStyle = haze;
     ctx.fillRect(0, 0, w, h);
@@ -2885,9 +2849,10 @@
     const w = size.w, h = size.h;
     if (!w || !h) return;
     drawArenaPicture(menuMapCtx, w, h, data.id);
-    const insetPad = Math.max(8, Math.min(w, h) * 0.075);
-    const insetW = Math.min(w - insetPad * 2, Math.max(150, w * 0.52));
-    const insetH = Math.min(h - insetPad * 2, Math.max(58, h * 0.63));
+    // tactical inset — bottom-right, slightly smaller so the art plate stays the hero
+    const insetPad = Math.max(8, Math.min(w, h) * 0.05);
+    const insetW = Math.min(w - insetPad * 2, Math.max(120, w * 0.38));
+    const insetH = Math.min(h - insetPad * 2, Math.max(70, h * 0.42));
     drawTacticalMap(menuMapCtx, data, w - insetW - insetPad, h - insetH - insetPad, insetW, insetH);
   }
   function renderVehicleMenu() {
@@ -2910,14 +2875,27 @@
     previewScene.add(previewMesh);
     renderMenuVehiclePreview();
   }
+  const ARENA_SHORT = {
+    suburb: "Cul-de-Sac",
+    junkyard: "Crush Depot",
+    interchange: "Mixing Bowl",
+    boardwalk: "Pier Pressure",
+    rooftop: "Fog Exchange",
+    cemetery: "Plot Twist",
+  };
   function renderArenaRow() {
     if (!el.arenaRow) return;
     el.arenaRow.innerHTML = "";
     SCRAP.arenas.list.forEach((entry) => {
       const btn = document.createElement("button");
       btn.type = "button";
+      btn.dataset.arena = entry.id;
       btn.className = "scrap-arena-chip" + (entry.id === state.arenaId ? " is-active" : "");
-      btn.innerHTML = `<strong>${entry.name}</strong><span>${entry.tagline}</span>`;
+      btn.title = `${entry.name} — ${entry.tagline}`;
+      const short = ARENA_SHORT[entry.id] || entry.name;
+      btn.innerHTML =
+        `<img src="${ARENA_ART_BASE}arena-${entry.id}-thumb.png" alt="" width="160" height="90" loading="lazy" draggable="false" />` +
+        `<strong>${short}</strong>`;
       btn.addEventListener("click", () => {
         state.arenaId = entry.id;
         renderArenaRow();
@@ -3525,6 +3503,7 @@
     net.reset();
     state.phase = "menu";
     state.circuit = null;
+    preloadArenaArt();
     if (el.overlayTitle) el.overlayTitle.textContent = "SCRAP CIRCUIT";
     if (el.overlaySub) el.overlaySub.textContent = "Last Chassis Standing. Ten unhinged service vehicles, six arenas, one very hostile insurance adjuster.";
     if (el.overlayScore) {

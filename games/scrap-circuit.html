@@ -419,10 +419,10 @@
 
     .scrap-menu {
       display: grid;
-      gap: clamp(5px, 1cqh, 8px);
+      gap: clamp(6px, 1.1cqh, 10px);
       justify-items: stretch;
       margin: 0 auto;
-      max-width: min(980px, 100%);
+      max-width: min(1040px, 100%);
       width: 100%;
     }
 
@@ -430,78 +430,78 @@
       display: none;
     }
 
+    .scrap-menu-section {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .scrap-menu-label {
+      color: rgba(46, 224, 255, 0.85);
+      font-family: var(--font-mono);
+      font-size: clamp(8px, 1.05cqw, 10px);
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
     .scrap-menu-main {
       align-items: stretch;
       display: grid;
-      gap: 8px;
-      grid-template-columns: minmax(300px, 1.05fr) minmax(310px, 0.95fr);
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       width: 100%;
     }
 
     .scrap-preview-card,
-    .scrap-choice-panel,
     .scrap-map-card {
-      background: rgba(8, 11, 16, 0.84);
+      background: rgba(8, 11, 16, 0.88);
       border: 1px solid rgba(255, 255, 255, 0.14);
-      border-radius: 8px;
+      border-radius: 10px;
       box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.35);
+      display: grid;
+      gap: 6px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
       min-width: 0;
-    }
-
-    .scrap-preview-card {
-      min-height: clamp(210px, 39cqh, 320px);
-      overflow: hidden;
       padding: 8px;
     }
 
-    .scrap-map-head,
-    .scrap-map-legend {
-      align-items: center;
-      display: flex;
-      gap: 8px;
-      justify-content: space-between;
-      min-width: 0;
+    .scrap-preview-card {
+      min-height: clamp(220px, 40cqh, 340px);
     }
 
-    .scrap-map-legend span {
-      color: rgba(234, 247, 255, 0.58);
-      font-family: var(--font-mono);
-      font-size: clamp(7px, 0.95cqw, 9px);
-      font-weight: 800;
-      text-transform: uppercase;
+    .scrap-map-card {
+      min-height: clamp(220px, 40cqh, 340px);
     }
 
-    .scrap-map-head strong {
-      color: #ffd23b;
-      font-family: var(--font-display);
-      font-size: clamp(10px, 1.35cqw, 13px);
-      line-height: 1.1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
-    .scrap-preview-stage {
-      border-radius: 6px;
+    .scrap-preview-stage,
+    .scrap-map-stage {
+      border-radius: 8px;
       height: 100%;
-      min-height: 164px;
+      min-height: clamp(150px, 28cqh, 240px);
       overflow: hidden;
       position: relative;
     }
 
-    .scrap-preview-canvas {
+    .scrap-preview-canvas,
+    .scrap-map-canvas {
       background: #080b12;
-      border: 1px solid rgba(46, 224, 255, 0.24);
-      border-radius: 6px;
+      border: 1px solid rgba(46, 224, 255, 0.22);
+      border-radius: 8px;
       display: block;
       height: 100%;
-      image-rendering: pixelated;
       width: 100%;
     }
 
+    .scrap-preview-canvas {
+      image-rendering: pixelated;
+    }
+
+    .scrap-map-canvas {
+      object-fit: cover;
+    }
+
     .scrap-preview-meta {
-      bottom: auto;
       left: 0;
       padding: 8px 10px 0;
       pointer-events: none;
@@ -509,24 +509,85 @@
       right: 0;
       text-align: center;
       top: 0;
+      z-index: 2;
     }
 
     .scrap-preview-meta strong {
       color: #ffd23b;
       font-family: "Bungee", var(--font-display);
-      font-size: clamp(17px, 2.25cqw, 25px);
-      line-height: 1.02;
+      font-size: clamp(15px, 2cqw, 22px);
+      line-height: 1.05;
       overflow-wrap: anywhere;
       text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.92), 0 0 14px rgba(0, 0, 0, 0.82);
       text-transform: uppercase;
     }
 
-    .scrap-choice-panel {
-      align-content: start;
-      display: grid;
-      gap: 7px;
-      padding: 8px;
+    .scrap-map-overlay {
+      background: linear-gradient(180deg, rgba(5, 7, 13, 0.82) 0%, rgba(5, 7, 13, 0.2) 70%, transparent 100%);
+      left: 0;
+      padding: 8px 10px 18px;
+      pointer-events: none;
+      position: absolute;
+      right: 0;
+      top: 0;
+      z-index: 2;
     }
+
+    .scrap-map-overlay strong {
+      color: #ffd23b;
+      display: block;
+      font-family: "Bungee", var(--font-display);
+      font-size: clamp(13px, 1.7cqw, 18px);
+      line-height: 1.1;
+      text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.92);
+      text-transform: uppercase;
+    }
+
+    .scrap-map-overlay span {
+      color: rgba(234, 247, 255, 0.78);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: clamp(8px, 1cqw, 10px);
+      font-weight: 800;
+      line-height: 1.25;
+      margin-top: 3px;
+      text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+      text-transform: uppercase;
+    }
+
+    .scrap-map-legend {
+      align-items: center;
+      background: rgba(5, 7, 13, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 999px;
+      bottom: 8px;
+      display: flex;
+      gap: 5px 8px;
+      left: 8px;
+      padding: 3px 8px;
+      pointer-events: none;
+      position: absolute;
+      z-index: 2;
+    }
+
+    .scrap-map-legend span {
+      color: rgba(234, 247, 255, 0.72);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .scrap-map-legend__dot {
+      border-radius: 2px;
+      display: inline-block;
+      height: 7px;
+      width: 7px;
+    }
+
+    .scrap-map-legend__dot--route { background: #6d7480; }
+    .scrap-map-legend__dot--pick { background: #ffd23b; }
+    .scrap-map-legend__dot--spawn { background: #2ee0ff; }
 
     /* Mode select: Single Match vs Full Circuit */
     .scrap-mode-strip {
@@ -913,30 +974,17 @@
       outline-offset: 2px;
     }
 
-    .scrap-veh-card {
-      display: grid;
-      gap: 3px;
-      justify-items: center;
-      min-width: 0;
-      padding: 2px 6px 0;
-      text-align: center;
-      width: 100%;
-    }
-
-    .scrap-veh-control-label {
-      color: #2ee0ff;
-      font-family: var(--font-mono);
-      font-size: clamp(7px, 1cqw, 9px);
-      font-weight: 800;
-      text-transform: uppercase;
-    }
-
-    .scrap-veh-card q {
+    .scrap-veh-flavor {
       color: #ff7eb6;
+      display: block;
       font-family: var(--font-mono);
-      font-size: clamp(8px, 1.1cqw, 11px);
+      font-size: clamp(8px, 1.05cqw, 11px);
+      line-height: 1.3;
+      margin: 0;
+      min-width: 0;
       overflow: hidden;
       quotes: none;
+      text-align: center;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -963,88 +1011,56 @@
       letter-spacing: 1px;
     }
 
-    .scrap-map-card {
-      display: grid;
-      gap: 6px;
-      padding: 7px;
-    }
-
-    .scrap-map-head {
-      align-items: start;
-    }
-
-    .scrap-map-head span {
-      color: rgba(234, 247, 255, 0.62);
-      font-family: var(--font-mono);
-      font-size: clamp(7px, 0.92cqw, 9px);
-      line-height: 1.18;
-      max-width: 54%;
-      text-align: right;
-      text-transform: uppercase;
-    }
-
-    .scrap-map-canvas {
-      background: #06080e;
-      border: 1px solid rgba(255, 212, 59, 0.28);
-      border-radius: 6px;
-      display: block;
-      height: clamp(118px, 22cqh, 158px);
-      image-rendering: pixelated;
-      width: 100%;
-    }
-
-    .scrap-map-legend {
-      justify-content: start;
-    }
-
-    .scrap-map-legend span {
-      color: rgba(234, 247, 255, 0.68);
-    }
-
     .scrap-arena-strip {
       display: grid;
-      gap: 6px;
+      gap: 5px;
       grid-template-columns: repeat(6, minmax(0, 1fr));
-      overflow: visible;
-      padding-bottom: 0;
       width: 100%;
     }
 
     .scrap-arena-chip {
-      background: rgba(8, 11, 16, 0.82);
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(5, 8, 14, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 8px;
       color: var(--ink);
       cursor: pointer;
       display: grid;
-      gap: 2px;
+      gap: 0;
       min-width: 0;
-      padding: 6px 7px;
+      overflow: hidden;
+      padding: 0;
       text-align: left;
     }
 
     .scrap-arena-chip:hover {
-      border-color: rgba(46, 224, 255, 0.5);
+      border-color: rgba(46, 224, 255, 0.55);
     }
 
     .scrap-arena-chip.is-active {
       border-color: #ffd23b;
-      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.28);
+      box-shadow: 0 0 0 2px rgba(255, 212, 59, 0.3);
+    }
+
+    .scrap-arena-chip img {
+      aspect-ratio: 16 / 9;
+      display: block;
+      height: auto;
+      object-fit: cover;
+      width: 100%;
     }
 
     .scrap-arena-chip strong {
       color: #fff;
+      display: block;
       font-family: var(--font-display);
-      font-size: clamp(9px, 1.2cqw, 11px);
-      line-height: 1.1;
+      font-size: clamp(8px, 1.05cqw, 10px);
+      line-height: 1.15;
+      padding: 4px 5px 5px;
+      text-transform: uppercase;
     }
 
     .scrap-arena-chip span {
-      color: rgba(234, 247, 255, 0.62);
-      font-family: var(--font-mono);
-      font-size: clamp(7px, 0.88cqw, 8px);
-      line-height: 1.15;
-      text-transform: uppercase;
+      display: none;
     }
 
     /* Side-panel bits */
@@ -1209,16 +1225,19 @@
         grid-template-columns: minmax(0, 1fr);
       }
 
-      .scrap-preview-card {
-        min-height: 190px;
+      .scrap-preview-card,
+      .scrap-map-card {
+        min-height: 0;
       }
 
-      .scrap-preview-stage {
-        min-height: 145px;
+      .scrap-preview-stage,
+      .scrap-map-stage {
+        min-height: 150px;
       }
 
-      .scrap-preview-canvas {
-        height: clamp(145px, 32cqh, 210px);
+      .scrap-preview-canvas,
+      .scrap-map-canvas {
+        height: clamp(150px, 30cqh, 220px);
       }
 
       .scrap-arena-strip {
@@ -1246,8 +1265,8 @@
 
       .scrap-page .overlay__sub,
       .scrap-page .overlay__score,
-      .scrap-veh-card q,
-      .scrap-arena-chip span {
+      .scrap-veh-flavor,
+      .scrap-map-legend {
         display: none;
       }
 
@@ -1261,30 +1280,20 @@
       }
 
       .scrap-preview-card,
-      .scrap-choice-panel,
       .scrap-map-card {
+        gap: 4px;
         padding: 5px;
       }
 
-      .scrap-preview-card {
-        min-height: 132px;
+      .scrap-preview-stage,
+      .scrap-map-stage {
+        min-height: 100px;
       }
 
-      .scrap-preview-stage {
-        min-height: 92px;
-      }
-
-      .scrap-preview-canvas {
-        min-height: 92px;
-      }
-
+      .scrap-preview-canvas,
       .scrap-map-canvas {
-        height: 76px;
-      }
-
-      .scrap-map-legend,
-      .scrap-map-head span {
-        display: none;
+        height: 100px;
+        min-height: 100px;
       }
 
       .scrap-mode-chip {
@@ -1310,23 +1319,28 @@
         right: 5px;
       }
 
-      .scrap-veh-card {
-        gap: 2px;
-      }
-
       .scrap-preview-meta {
         padding: 6px 7px 0;
       }
 
-      .scrap-preview-meta strong {
-        font-size: clamp(13px, 3.6cqw, 18px);
+      .scrap-preview-meta strong,
+      .scrap-map-overlay strong {
+        font-size: clamp(12px, 3.2cqw, 16px);
       }
 
-      .scrap-veh-control-label,
+      .scrap-map-overlay span {
+        display: none;
+      }
+
       .scrap-veh-stats,
       .scrap-cir-opt span,
       .scrap-summary__stat span {
         font-size: 8px;
+      }
+
+      .scrap-arena-chip strong {
+        font-size: 8px;
+        padding: 3px 4px 4px;
       }
 
       .scrap-summary {
@@ -1536,8 +1550,14 @@
             <div class="overlay__score" id="overlay-score"></div>
 
             <div class="scrap-menu" id="menu-panel">
+              <div class="scrap-menu-section">
+                <span class="scrap-menu-label">1 · Mode</span>
+                <div class="scrap-mode-strip" id="mode-row"></div>
+              </div>
+
               <div class="scrap-menu-main">
-                <div class="scrap-preview-card">
+                <section class="scrap-preview-card" aria-label="Vehicle select">
+                  <span class="scrap-menu-label">2 · Chassis</span>
                   <div class="scrap-preview-stage">
                     <canvas class="scrap-preview-canvas" id="menu-vehicle-preview" width="640" height="400" aria-label="Selected vehicle preview"></canvas>
                     <div class="scrap-preview-meta">
@@ -1547,30 +1567,26 @@
                     <button class="scrap-veh-btn scrap-veh-btn--prev" id="veh-prev" type="button" aria-label="Previous vehicle">◀</button>
                     <button class="scrap-veh-btn scrap-veh-btn--next" id="veh-next" type="button" aria-label="Next vehicle">▶</button>
                   </div>
-                </div>
+                  <q class="scrap-veh-flavor" id="veh-flavor">“The jingle is a warning.”</q>
+                </section>
 
-                <div class="scrap-choice-panel">
-                  <div class="scrap-mode-strip" id="mode-row"></div>
-                  <div class="scrap-veh-card">
-                    <span class="scrap-veh-control-label">Choose chassis</span>
-                    <q id="veh-flavor">“The jingle is a warning.”</q>
-                  </div>
-
-                  <div class="scrap-map-card">
-                    <div class="scrap-map-head">
+                <section class="scrap-map-card" aria-label="Arena select">
+                  <span class="scrap-menu-label">3 · Arena</span>
+                  <div class="scrap-map-stage">
+                    <canvas class="scrap-map-canvas" id="menu-map-preview" width="640" height="360" aria-label="Selected arena preview"></canvas>
+                    <div class="scrap-map-overlay">
                       <strong id="menu-map-name">Cul-de-Sac Flats</strong>
                       <span id="menu-map-tag">Every lawn is a liability.</span>
                     </div>
-                    <canvas class="scrap-map-canvas" id="menu-map-preview" width="480" height="260" aria-label="Selected arena map preview"></canvas>
                     <div class="scrap-map-legend" aria-hidden="true">
-                      <span>Grey: routes</span>
-                      <span>Yellow: pickups</span>
-                      <span>Cyan: starts</span>
+                      <span class="scrap-map-legend__dot scrap-map-legend__dot--route"></span><span>Routes</span>
+                      <span class="scrap-map-legend__dot scrap-map-legend__dot--pick"></span><span>Pickups</span>
+                      <span class="scrap-map-legend__dot scrap-map-legend__dot--spawn"></span><span>Starts</span>
                     </div>
                   </div>
-                </div>
+                  <div class="scrap-arena-strip" id="arena-row"></div>
+                </section>
               </div>
-              <div class="scrap-arena-strip" id="arena-row"></div>
             </div>
 
             <div class="scrap-summary" id="summary-panel" hidden></div>
@@ -1670,7 +1686,7 @@
   <script src="../assets/js/scrap-circuit/textures.js?v=20260704-texture-stability-1"></script>
   <script src="../assets/js/scrap-circuit/vehicles.js?v=20260704-lives-health-1"></script>
   <script src="../assets/js/scrap-circuit/arenas.js?v=20260705-fog-exchange-2"></script>
-  <script src="../assets/js/scrap-circuit/main.js?v=20260708-pickup-vfx-2"></script>
+  <script src="../assets/js/scrap-circuit/main.js?v=20260708-menu-art-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

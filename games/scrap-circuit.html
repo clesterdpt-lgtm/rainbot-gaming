@@ -464,12 +464,14 @@
       gap: clamp(6px, 1cqw, 10px);
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       height: 100%;
+      justify-items: stretch;
       min-height: 0;
       width: 100%;
     }
 
     .scrap-preview-card,
     .scrap-map-card {
+      /* reset global `section { margin:0 auto; padding:80px; max-width:1200px }` */
       background: rgba(8, 11, 16, 0.92);
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 10px;
@@ -478,9 +480,13 @@
       gap: 5px;
       grid-template-rows: auto minmax(0, 1fr) auto;
       height: 100%;
+      justify-self: stretch;
+      margin: 0;
+      max-width: none;
       min-height: 0;
       min-width: 0;
       padding: 6px;
+      width: 100%;
     }
 
     .scrap-preview-stage,

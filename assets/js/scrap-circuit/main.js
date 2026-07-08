@@ -445,9 +445,10 @@
   const previewCam = new THREE.PerspectiveCamera(50, 16 / 9, 0.2, 100);
   previewCam.position.set(0, 3.4, 11.5);
   previewCam.lookAt(0, 1.6, 0);
-  const menuPreviewCam = new THREE.PerspectiveCamera(45, 16 / 10, 0.2, 100);
-  menuPreviewCam.position.set(0, 3.0, 9.1);
-  menuPreviewCam.lookAt(0, 1.35, 0);
+  // Wider FOV + pull-back so the chassis fills a landscape frame, not a tall strip
+  const menuPreviewCam = new THREE.PerspectiveCamera(42, 16 / 9, 0.2, 100);
+  menuPreviewCam.position.set(0, 2.55, 10.4);
+  menuPreviewCam.lookAt(0, 1.15, 0);
   let menuPreviewRenderer = null;
   if (el.menuVehiclePreview) {
     try {

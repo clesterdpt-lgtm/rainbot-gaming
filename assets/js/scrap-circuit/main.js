@@ -32,6 +32,9 @@
   const PICKUP_RESPAWN = 12;
   const SPECIAL_RATE = 5.5;    // charge per second
   const BOT_SPECIAL_RATE = 7.5;
+  const HEALTH_SCALE = 1.4;     // longer matches without rewriting every roster stat
+  const WRENCH_REPAIR = Math.round(30 * HEALTH_SCALE);
+  const SPONSOR_REPAIR = Math.round(25 * HEALTH_SCALE);
   const FALL_DAMAGE = 35;
   const STARTING_LIVES = 3;
   const LIFE_RESPAWN_SHIELD = 2.5;
@@ -590,10 +593,14 @@
 
   // ---------- cars ----------
   const iceGeo = new THREE.BoxGeometry(1, 1, 1);
+  function scaledMaxHp(def) {
+    return Math.max(1, Math.round((def && def.stats ? def.stats.hp : 1) * HEALTH_SCALE));
+  }
   function makeCar(defId, isPlayer, spawn) {
     const def = SCRAP.vehicles.get(defId);
     const mesh = SCRAP.vehicles.build(defId);
     scene.add(mesh);
+    const maxHp = scaledMaxHp(def);
     const car = {
       def, isPlayer,
       mesh,
@@ -601,7 +608,7 @@
       heading: spawn.h,
       vx: 0, vz: 0,
       wheelSpin: 0,
-      hp: def.stats.hp, maxHp: def.stats.hp,
+      hp: maxHp, maxHp,
       weapon: BASE_WEAPON, ammo: Infinity, fireCooldown: 0, gunCooldown: 0,
       special: isPlayer ? 30 : 20,
       specialRate: isPlayer ? SPECIAL_RATE : BOT_SPECIAL_RATE,
@@ -931,8 +938,8 @@
         if (car.isPlayer) announce("turbo");
         break;
       case "wrench":
-        car.hp = Math.min(car.maxHp, car.hp + 30);
-        if (car.isPlayer) api.toast("🔧 Patched +30 HP");
+        car.hp = Math.min(car.maxHp, car.hp + WRENCH_REPAIR);
+        if (car.isPlayer) api.toast(`🔧 Patched +${WRENCH_REPAIR} HP`);
         break;
       case "battery":
         car.special = Math.min(100, car.special + 35);
@@ -1786,6 +1793,107 @@
 
   // ---------- AI ----------
   const ARCHETYPES = ["rammer", "camper", "hoarder", "coward"];
+  const ROOFTOP_SAFE_GROUND = 3.0;
+  const ROOFTOP_AI_WAYPOINTS = [
+    { x: 0, z: 0 }, { x: -18, z: -10 }, { x: 18, z: -12 }, { x: 0, z: -26 },
+    { x: -32, z: -12 }, { x: -60, z: -20 }, { x: -54, z: 19 }, { x: -48, z: 52 },
+    { x: 33, z: -16 }, { x: 58, z: -34 }, { x: 26, z: 6 }, { x: 44, z: 6 },
+    { x: 50, z: 23 }, { x: 52, z: 40 }, { x: -4, z: -44 }, { x: -4, z: -60 },
+  ];
+
+  function elevatedGroundAt(x, z) {
+    return arena ? sampleGround(x, z, 99) : 0;
+  }
+
+  function hasElevatedPath(ax, az, bx, bz, step = 4.5) {
+    if (!arena) return true;
+    const dist = Math.hypot(bx - ax, bz - az);
+    const samples = Math.max(2, Math.ceil(dist / step));
+    for (let i = 0; i <= samples; i += 1) {
+      const t = i / samples;
+      const x = ax + (bx - ax) * t;
+      const z = az + (bz - az) * t;
+      if (elevatedGroundAt(x, z) < ROOFTOP_SAFE_GROUND) return false;
+    }
+    return true;
+  }
+
+  function nearestRooftopWaypoint(x, z) {
+    let best = ROOFTOP_AI_WAYPOINTS[0];
+    let bestD = Infinity;
+    ROOFTOP_AI_WAYPOINTS.forEach((wp) => {
+      const d = Math.hypot(wp.x - x, wp.z - z);
+      if (d < bestD) { bestD = d; best = wp; }
+    });
+    return best;
+  }
+
+  function routeRooftopDestination(car, destX, destZ, ai) {
+    if (!arena || arena.id !== "rooftop") return { x: destX, z: destZ };
+    let goalX = destX, goalZ = destZ;
+    if (elevatedGroundAt(goalX, goalZ) < ROOFTOP_SAFE_GROUND) {
+      const safeGoal = nearestRooftopWaypoint(goalX, goalZ);
+      goalX = safeGoal.x;
+      goalZ = safeGoal.z;
+    }
+    if (hasElevatedPath(car.x, car.z, goalX, goalZ)) {
+      ai.roofWp = null;
+      return { x: goalX, z: goalZ };
+    }
+    if (ai.roofWp && Math.hypot(ai.roofWp.x - car.x, ai.roofWp.z - car.z) > 7 && hasElevatedPath(car.x, car.z, ai.roofWp.x, ai.roofWp.z)) {
+      return ai.roofWp;
+    }
+
+    let best = null;
+    let bestScore = Infinity;
+    ROOFTOP_AI_WAYPOINTS.forEach((wp) => {
+      const from = Math.hypot(wp.x - car.x, wp.z - car.z);
+      if (from < 5 || !hasElevatedPath(car.x, car.z, wp.x, wp.z)) return;
+      const toGoal = Math.hypot(wp.x - goalX, wp.z - goalZ);
+      const onward = hasElevatedPath(wp.x, wp.z, goalX, goalZ) ? toGoal * 0.65 : toGoal + 28;
+      const score = from * 0.45 + onward;
+      if (score < bestScore) { bestScore = score; best = wp; }
+    });
+    if (best) {
+      ai.roofWp = best;
+      return best;
+    }
+    ai.roofWp = null;
+    return { x: goalX, z: goalZ };
+  }
+
+  function applyElevatedEdgeAvoidance(car, ai) {
+    if (!arena || car.y < 3) return false;
+    const here = sampleGround(car.x, car.z, car.y + STEP);
+    if (here < ROOFTOP_SAFE_GROUND) return false;
+    const speed = Math.hypot(car.vx, car.vz);
+    const distances = arena.id === "rooftop" ? [8, 14, Math.max(20, speed * 1.25)] : [7];
+    const safeAt = (offset, dist) => {
+      const a = car.heading + offset;
+      const x = car.x + Math.sin(a) * dist;
+      const z = car.z + Math.cos(a) * dist;
+      return sampleGround(x, z, car.y + STEP) >= here - 2.4;
+    };
+    if (distances.every((dist) => safeAt(0, dist))) return false;
+
+    const scoreOffset = (offset) => distances.reduce((sum, dist) => sum + (safeAt(offset, dist) ? 1 : 0), 0);
+    const leftScore = scoreOffset(-0.75) + scoreOffset(-1.25) * 0.5;
+    const rightScore = scoreOffset(0.75) + scoreOffset(1.25) * 0.5;
+    if (leftScore > 0 || rightScore > 0) {
+      car.steer = rightScore >= leftScore ? 1 : -1;
+      car.throttle = arena.id === "rooftop" && speed > 7 ? -0.45 : Math.min(car.throttle, arena.id === "rooftop" ? 0.18 : 0.25);
+      car.drift = false;
+      if (ai) ai.stuck = 0;
+      return true;
+    }
+
+    car.throttle = -0.65;
+    car.steer = Math.sign(car.steer || 1);
+    car.drift = false;
+    if (ai) ai.reverseT = Math.max(ai.reverseT || 0, 0.35);
+    return true;
+  }
+
   function updateAI(car, dt) {
     const ai = car.ai;
     if (!ai || car.wrecked) return;
@@ -1822,6 +1930,10 @@
       destX = target.x + Math.sin(away) * (wantRange + 6);
       destZ = target.z + Math.cos(away) * (wantRange + 6);
     }
+    const routed = routeRooftopDestination(car, destX, destZ, ai);
+    destX = routed.x;
+    destZ = routed.z;
+
     // steer toward dest
     const desired = Math.atan2(destX - car.x, destZ - car.z);
     let diff = desired - car.heading;
@@ -1830,17 +1942,14 @@
     car.steer = Math.max(-1, Math.min(1, diff * 2.2));
     car.throttle = Math.abs(diff) > 2.2 ? 0.25 : 1;
     car.drift = Math.abs(diff) > 1.4;
-
-    // edge probe when elevated: don't drive into the void
-    if (car.y > 3) {
-      const f = forward(car);
-      const px = car.x + f.x * 7, pz = car.z + f.z * 7;
-      const pg = sampleGround(px, pz, car.y);
-      if (pg < car.y - 3.5) {
-        car.throttle = -0.6;
-        car.steer = 1;
-      }
+    if (arena && arena.id === "rooftop") {
+      const routeDistance = Math.hypot(destX - car.x, destZ - car.z);
+      car.throttle = Math.min(car.throttle, routeDistance < 14 ? 0.48 : 0.78);
+      car.drift = false;
     }
+
+    // edge probes when elevated: don't drive into the void
+    applyElevatedEdgeAvoidance(car, ai);
     // stuck recovery
     const speed = Math.hypot(car.vx, car.vz);
     if (speed < 1.6 && car.throttle > 0.4) ai.stuck += dt;
@@ -2127,7 +2236,7 @@
       if (!car || car.wrecked) return;
       car.shield = Math.max(car.shield, 6);
       car.special = 100;
-      car.hp = Math.min(car.maxHp, car.hp + 25);
+      car.hp = Math.min(car.maxHp, car.hp + SPONSOR_REPAIR);
       announce("sponsor", true);
       flash("rgba(99,242,200,0.35)", 160);
       api.toast("Sponsor Drop: shield + full special + repairs");

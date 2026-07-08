@@ -883,20 +883,26 @@
   }
   const PK_WHITE = 0xf4f8ff, PK_DARK = 0x14141c, PK_METAL = 0x6a7080, PK_GOLD = 0xffd23b;
   // Bold silhouette-first pad models: type-colored halo, light pillar, unique body.
-  // Readable at a glance even at PS1 resolution and arena fog distances.
+  // Oversized for PS1 480x270 — small detail dies in the dither/fog; big shapes survive.
+  const PICKUP_SCALE = 1.65;
   function makePickupModel(type) {
     const g = new THREE.Group();
     const col = PICKUP_COLORS[type] || PK_GOLD;
-    // double halo + disc pedestal (stays level; icon spins above)
-    pgeo(g, new THREE.CylinderGeometry(1.15, 1.15, 0.08, 12), col, 0, -0.92, 0, 0, 0, 0, { opacity: 0.35 });
-    pgeo(g, new THREE.TorusGeometry(1.05, 0.11, 5, 16), col, 0, -0.86, 0, Math.PI / 2, 0, 0);
-    pgeo(g, new THREE.TorusGeometry(0.72, 0.05, 4, 12), PK_WHITE, 0, -0.84, 0, Math.PI / 2, 0, 0, { opacity: 0.55 });
-    // soft light pillar so pads pop on dark asphalt
-    pgeo(g, new THREE.CylinderGeometry(0.06, 0.22, 2.4, 6), col, 0, 0.25, 0, 0, 0, 0, { opacity: 0.28 });
+    // thick bright pad so you can spot it from across the arena
+    pgeo(g, new THREE.CylinderGeometry(1.35, 1.5, 0.2, 12), col, 0, -0.95, 0, 0, 0, 0, { opacity: 0.65 });
+    pgeo(g, new THREE.CylinderGeometry(1.05, 1.05, 0.08, 12), PK_WHITE, 0, -0.84, 0, 0, 0, 0, { opacity: 0.4 });
+    pgeo(g, new THREE.TorusGeometry(1.3, 0.2, 6, 16), col, 0, -0.82, 0, Math.PI / 2, 0, 0);
+    pgeo(g, new THREE.TorusGeometry(0.85, 0.08, 4, 12), PK_WHITE, 0, -0.78, 0, Math.PI / 2, 0, 0);
+    // tall beacon column + top light (reads as a "pickup" even in fog)
+    pgeo(g, new THREE.CylinderGeometry(0.14, 0.38, 3.0, 6), col, 0, 0.55, 0, 0, 0, 0, { opacity: 0.5 });
+    pgeo(g, new THREE.CylinderGeometry(0.05, 0.05, 3.0, 5), PK_WHITE, 0, 0.55, 0, 0, 0, 0, { opacity: 0.55 });
+    const beacon = pgeo(g, new THREE.SphereGeometry(0.28, 7, 6), col, 0, 2.15, 0);
     const spin = new THREE.Group();
     g.add(spin);
     g.userData.spin = spin;
-    g.userData.pulse = [];
+    g.userData.pulse = [beacon];
+    g.userData.beacon = beacon;
+    g.scale.setScalar(PICKUP_SCALE);
     const markPulse = (mesh) => { g.userData.pulse.push(mesh); return mesh; };
 
     switch (type) {
@@ -1037,7 +1043,7 @@
   function buildPickupMesh(p) {
     if (p.mesh) scene.remove(p.mesh);
     p.mesh = makePickupModel(p.type);
-    p.mesh.position.set(p.x, p.gy + 1.4, p.z);
+    p.mesh.position.set(p.x, p.gy + 1.85, p.z);
     scene.add(p.mesh);
   }
   function setupPickups() {
@@ -1071,7 +1077,10 @@
         if (p.type === "freeze") spin.rotation.z = Math.sin(state.time * 2.2 + p.x) * 0.12;
         if (p.type === "ricochet") spin.rotation.x = Math.sin(state.time * 3 + p.z) * 0.2;
       }
-      p.mesh.position.y = p.gy + 1.45 + Math.sin(state.time * 3 + p.x) * 0.28;
+      p.mesh.position.y = p.gy + 1.85 + Math.sin(state.time * 3 + p.x) * 0.35;
+      // whole pad breathes so it pops against static scenery
+      const breathe = PICKUP_SCALE * (1 + Math.sin(state.time * 3.2 + p.x) * 0.07);
+      p.mesh.scale.setScalar(breathe);
       // pulse marked parts (bomb blink, flame/core scale) — scale only so
       // shared materials aren't mutated across pads
       const pulse = p.mesh.userData.pulse;
@@ -1082,7 +1091,7 @@
           if (mesh.userData.blink) {
             mesh.visible = (Math.floor(t * 6 + p.x) % 2) === 0;
           } else {
-            const s = 1 + Math.sin(t * 5 + i * 1.3 + p.x) * 0.1;
+            const s = 1 + Math.sin(t * 5 + i * 1.3 + p.x) * 0.18;
             mesh.scale.setScalar(s);
           }
         });

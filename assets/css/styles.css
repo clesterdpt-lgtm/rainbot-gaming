@@ -1494,6 +1494,71 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   line-height: 1.45;
   margin: 0 0 18px;
 }
+.rb-escape-menu__panel--extras {
+  width: min(420px, 100%);
+}
+.rb-escape-menu__extras {
+  margin: 0 0 16px;
+}
+.rb-escape-menu__extras[hidden] {
+  display: none;
+}
+.rb-escape-levels {
+  display: grid;
+  gap: 8px;
+}
+.rb-escape-levels__label {
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.rb-escape-levels__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rb-escape-levels__btn {
+  min-width: 72px;
+  min-height: 42px;
+  display: inline-grid;
+  gap: 2px;
+  align-content: center;
+  justify-items: center;
+  border: 1px solid rgba(107, 255, 125, 0.34);
+  border-radius: 10px;
+  background: rgba(3, 14, 18, 0.82);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 12px;
+  line-height: 1.05;
+  padding: 7px 9px;
+}
+.rb-escape-levels__btn small {
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.rb-escape-levels__btn:hover:not(:disabled) {
+  border-color: rgba(107, 255, 125, 0.72);
+  background: rgba(8, 34, 40, 0.95);
+}
+.rb-escape-levels__btn.is-current {
+  border-color: rgba(255, 212, 59, 0.78);
+  background: rgba(42, 34, 8, 0.9);
+}
+.rb-escape-levels__btn:disabled {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(247, 251, 255, 0.34);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
 .rb-escape-menu__actions {
   display: grid;
   gap: 10px;

@@ -5124,6 +5124,7 @@
         selectUnlockedStage(button.dataset.stage);
       });
     }
+    registerEscapeLevelSelect();
     if (saveSlot) {
       saveMenu = saveSlot.attachButtons({
         primary: el.primary,
@@ -5850,7 +5851,15 @@
   function selectUnlockedStage(stageNumber) {
     const target = Math.floor(Number(stageNumber) || 0);
     if (!LEVEL_CONFIGS[target] || !isStageUnlocked(target)) return;
-    if (!state.running || state.gameOver) return;
+    if (!state.ready) return;
+
+    // From the title / game-over screen, start a run on the chosen unlocked stage.
+    if (!state.running || state.gameOver) {
+      startGame();
+      if (target !== state.stage) transitionToStage(target);
+      if (canvas) canvas.focus();
+      return;
+    }
 
     if (state.stage === target) {
       if (state.paused) togglePause();
@@ -5870,6 +5879,44 @@
       state.lastTime = performance.now();
     }
     if (canvas) canvas.focus();
+  }
+
+  function registerEscapeLevelSelect() {
+    window.RBGameEscape = window.RBGameEscape || {};
+    window.RBGameEscape.renderExtras = (container, api) => {
+      if (!container) return;
+      const stages = Object.keys(LEVEL_CONFIGS)
+        .map((key) => Number(key))
+        .filter((stage) => Number.isFinite(stage) && stage > 0)
+        .sort((a, b) => a - b);
+      const section = document.createElement("div");
+      section.className = "rb-escape-levels";
+      const label = document.createElement("div");
+      label.className = "rb-escape-levels__label";
+      label.textContent = "Select unlocked level";
+      const grid = document.createElement("div");
+      grid.className = "rb-escape-levels__grid";
+      stages.forEach((stage) => {
+        const config = LEVEL_CONFIGS[stage];
+        const unlocked = isStageUnlocked(stage);
+        const current = state.running && !state.gameOver && state.stage === stage;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `rb-escape-levels__btn${current ? " is-current" : ""}`;
+        button.disabled = !unlocked;
+        button.setAttribute("aria-current", current ? "true" : "false");
+        button.title = unlocked ? `Play ${config.name}` : `${config.name} locked`;
+        button.innerHTML = `<span>Lv ${stage}</span><small>${unlocked ? (config.shortName || config.name) : "Locked"}</small>`;
+        button.addEventListener("click", () => {
+          selectUnlockedStage(stage);
+          if (api && typeof api.close === "function") api.close({ resume: false });
+        });
+        grid.appendChild(button);
+      });
+      section.appendChild(label);
+      section.appendChild(grid);
+      container.appendChild(section);
+    };
   }
 
   function anchorGameViewport() {
@@ -7364,5 +7411,7 @@
     unlockStage,
     selectUnlockedStage,
   };
+  // Register before Three finishes booting so Esc menu can show levels early.
+  registerEscapeLevelSelect();
   loadThree();
 })();

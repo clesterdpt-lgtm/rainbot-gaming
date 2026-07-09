@@ -4124,30 +4124,6 @@ const RBSfx = (() => {
     ui: "click",
     win: "confirm",
   };
-  const gamePointerSounds = {
-    "ai-slop-factory": "glitch",
-    "apop-demon-hunters": "punch",
-    "billionaire-space-race": "laserRetro",
-    "boomer-monopoly": "drop",
-    "consensus-collapse": "question",
-    "debt-breakout": "drop",
-    "dont-become-pizza": "doorOpen",
-    "dont-fck-with-cats": "switch",
-    "dont-look-gym-girl": "footstepConcrete",
-    "doorcrash-no-tip-nitro": "metal",
-    "gen-z-driving-simulator": "metal",
-    "incident-commander": "glitch",
-    "looksmaxxing-grindset": "confirm",
-    "recursive-reward-labyrinth": "glitch",
-    "rizz-craft": "mining",
-    "scrap-circuit": "metalImpact",
-    "skibidi-toilet-tower-defense": "laserRetro",
-    "storm-area-51": "laserSmall",
-    "tardigrade-micro-mayhem": "footstepGrass",
-    "the-last-signal": "laserSmall",
-    "to-the-moon": "laserRetro",
-    "unhoused-and-unhinged": "footstepConcrete",
-  };
   const buffers = new Map();
   const loadPromises = new Map();
   const lastPlayed = new Map();
@@ -4270,35 +4246,6 @@ const RBSfx = (() => {
     return setMuted(!muted);
   }
 
-  function buttonSoundFor(element) {
-    if (!element) return "click";
-    const text = `${element.getAttribute("aria-label") || ""} ${element.textContent || ""}`.toLowerCase();
-    if (element.matches("[aria-expanded='true'], [aria-pressed]") || text.includes("sound") || text.includes("mute")) return "toggle";
-    if (text.includes("max") || text.includes("full")) return "maximize";
-    if (text.includes("min") || text.includes("exit max")) return "minimize";
-    if (text.includes("resume") || text.includes("continue") || text.includes("play")) return "confirm";
-    if (text.includes("restart") || text.includes("reset") || text.includes("new")) return "switch";
-    if (text.includes("close") || text.includes("cancel")) return "close";
-    if (text.includes("back") || text.includes("all games")) return "back";
-    return element.tagName === "A" ? "select" : "click";
-  }
-
-  function handleClick(event) {
-    const target = event.target.closest("button, a, [role='button'], input[type='button'], input[type='submit']");
-    if (!target || target.disabled || target.closest(".rb-escape-menu, .rb-escape-btn")) return;
-    play(buttonSoundFor(target), { volume: 0.32, throttleMs: 80 });
-  }
-
-  function handleGamePointer(event) {
-    const target = event.target;
-    if (!target || target.closest("button, a, input, textarea, select, [role='button'], [contenteditable='true']")) return;
-    const surface = target.closest("canvas, .merge-board, .rb-standalone-surface, .game-stage");
-    if (!surface || !location.pathname.includes("/games/")) return;
-    const sound = gamePointerSounds[currentGameSlug()];
-    if (!sound) return;
-    play(sound, { volume: 0.22, throttleMs: 140 });
-  }
-
   function unlock() {
     return ensureContextReady();
   }
@@ -4307,11 +4254,11 @@ const RBSfx = (() => {
     if (initialized) return;
     initialized = true;
     muted = readMuted();
+    // No automatic click/nav SFX — site chrome is silent. Games play their own
+    // audio (or call RBSfx.play / dispatch rainbot:sfx when they need shared clips).
     const primeAudio = () => { ensureContextReady().catch(() => {}); };
     document.addEventListener("pointerdown", primeAudio, { passive: true });
     document.addEventListener("keydown", primeAudio, { passive: true });
-    document.addEventListener("click", handleClick);
-    document.addEventListener("pointerdown", handleGamePointer, { passive: true });
     document.addEventListener("rainbot:sfx", (event) => {
       const detail = event.detail;
       if (typeof detail === "string") play(detail);
@@ -4455,7 +4402,6 @@ function initGameEscapeMenu() {
     if (resume) resumeGameIfPossible();
     backdrop.hidden = true;
     document.body.classList.remove("rb-escape-menu-open");
-    if (window.RBSfx) window.RBSfx.play("close", { volume: 0.26, throttleMs: 120 });
     if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus({ preventScroll: true });
     lastFocus = null;
     pausedByMenu = false;
@@ -4466,7 +4412,6 @@ function initGameEscapeMenu() {
     refreshActions();
     backdrop.hidden = false;
     document.body.classList.add("rb-escape-menu-open");
-    if (window.RBSfx) window.RBSfx.play("open", { volume: 0.28, throttleMs: 120 });
     if (resumeButton) resumeButton.focus({ preventScroll: true });
   };
 
@@ -4489,9 +4434,8 @@ function initGameEscapeMenu() {
       window.setTimeout(refreshActions, 100);
     }
     if (action === "sound" && window.RBSfx) {
-      const muted = window.RBSfx.toggleMuted();
+      window.RBSfx.toggleMuted();
       refreshActions();
-      if (!muted) window.RBSfx.play("confirm", { force: true, volume: 0.28 });
     }
     if (action === "games") {
       window.location.href = `${RB_BASE}games.html`;

@@ -4316,6 +4316,7 @@ function initGameEscapeMenu() {
       <div class="rb-escape-menu__eyebrow">Game Menu</div>
       <h2 class="rb-escape-menu__title" id="rb-escape-menu-title">Paused</h2>
       <p class="rb-escape-menu__body">Take a beat, then jump back in.</p>
+      <div class="rb-escape-menu__extras" id="rb-escape-extras" hidden></div>
       <div class="rb-escape-menu__actions">
         <button class="btn btn--primary" type="button" data-rb-escape-action="resume">Resume</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="restart">Restart</button>
@@ -4331,6 +4332,7 @@ function initGameEscapeMenu() {
   const restartButton = backdrop.querySelector('[data-rb-escape-action="restart"]');
   const exitMaxButton = backdrop.querySelector('[data-rb-escape-action="exit-max"]');
   const soundButton = backdrop.querySelector('[data-rb-escape-action="sound"]');
+  const extrasRoot = backdrop.querySelector("#rb-escape-extras");
 
   const findPauseButton = () => (
     document.getElementById("btn-pause") ||
@@ -4372,6 +4374,26 @@ function initGameEscapeMenu() {
       soundButton.setAttribute("aria-pressed", muted ? "false" : "true");
     }
   };
+  const refreshExtras = () => {
+    if (!extrasRoot) return;
+    extrasRoot.innerHTML = "";
+    extrasRoot.hidden = true;
+    const panel = backdrop.querySelector(".rb-escape-menu__panel");
+    if (panel) panel.classList.remove("rb-escape-menu__panel--extras");
+    const render = window.RBGameEscape && window.RBGameEscape.renderExtras;
+    if (typeof render !== "function") return;
+    try {
+      render(extrasRoot, {
+        close: (options) => closeMenu(options || {}),
+        resume: () => closeMenu({ resume: true }),
+      });
+    } catch (error) {
+      console.warn("[Rainbot] Escape menu extras failed", error);
+    }
+    const hasExtras = extrasRoot.childElementCount > 0;
+    extrasRoot.hidden = !hasExtras;
+    if (panel) panel.classList.toggle("rb-escape-menu__panel--extras", hasExtras);
+  };
   const pauseGameIfPossible = () => {
     if (pageLooksPaused()) return false;
     const pauseButton = findPauseButton();
@@ -4410,6 +4432,7 @@ function initGameEscapeMenu() {
     lastFocus = document.activeElement;
     pausedByMenu = pauseGameIfPossible();
     refreshActions();
+    refreshExtras();
     backdrop.hidden = false;
     document.body.classList.add("rb-escape-menu-open");
     if (resumeButton) resumeButton.focus({ preventScroll: true });

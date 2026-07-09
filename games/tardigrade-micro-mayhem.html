@@ -28,10 +28,28 @@
 
     .canvas-wrap--micro {
       aspect-ratio: 960 / 620;
-      --game-max-width: 1260px;
+      --game-aspect: 1.5484;
+      --game-aspect-ratio: 960 / 620;
+      /* Desktop should use most of the stage; mobile fit still clamps via main.js */
+      --game-max-width: 1520px;
       background: #18b8ec;
       border: 1px solid rgba(255, 255, 255, 0.34);
       box-shadow: 0 22px 54px rgba(3, 68, 84, 0.28);
+    }
+
+    .canvas-wrap--micro.is-maxed,
+    .canvas-wrap--micro:fullscreen,
+    .canvas-wrap--micro:-webkit-full-screen {
+      background: #02070d;
+    }
+
+    .canvas-wrap--micro.is-maxed #gameCanvas,
+    .canvas-wrap--micro:fullscreen #gameCanvas,
+    .canvas-wrap--micro:-webkit-full-screen #gameCanvas {
+      width: min(100dvw, calc(100dvh * var(--game-aspect, 1.5484)));
+      height: min(100dvh, calc(100dvw / var(--game-aspect, 1.5484)));
+      max-width: 100dvw;
+      max-height: 100dvh;
     }
 
     .canvas-wrap--micro,
@@ -1087,8 +1105,12 @@
       z-index: 18;
     }
 
-    body.micro-embedded-active .micro-touch-controls {
-      display: flex;
+    /* Only real touch/coarse pointers — never force mobile sticks on desktop. */
+    @media (hover: none) and (pointer: coarse) {
+      body.micro-embedded-active .micro-touch-controls,
+      body.micro-play-active .micro-touch-controls {
+        display: flex;
+      }
     }
 
     .micro-touch-stick {
@@ -1552,10 +1574,6 @@
         transform: none;
       }
 
-      body.micro-play-active .micro-touch-controls {
-        display: flex;
-      }
-
       .micro-store__grid {
         grid-template-columns: 1fr;
       }
@@ -1570,12 +1588,6 @@
       }
     }
 
-    @media (hover: none) and (pointer: coarse) {
-      body.micro-play-active .micro-touch-controls {
-        display: flex;
-      }
-    }
-
     @media (max-height: 480px) and (orientation: landscape) {
       body.micro-play-active .micro-chip,
       body.micro-play-active .micro-prompt,
@@ -1585,10 +1597,7 @@
         display: none;
       }
 
-      body.micro-play-active .micro-touch-controls {
-        display: flex;
-        padding: 0 max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
-      }
+      /* touch sticks only on coarse pointers (see base rule) */
 
       .micro-touch-stick {
         width: 112px;
@@ -1851,11 +1860,7 @@
         height: 88px;
       }
 
-      body.micro-play-active .micro-touch-controls {
-        display: flex;
-        gap: 10px;
-        padding: 0 max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-      }
+      /* touch sticks only on coarse pointers (see base rule) */
 
       .micro-touch-stick {
         width: min(34vw, 126px);
@@ -2138,8 +2143,9 @@
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
         </div>
 
-        <div class="canvas-wrap canvas-wrap--micro">
-          <canvas id="gameCanvas" width="960" height="620" tabindex="0"></canvas>
+        <div class="canvas-wrap canvas-wrap--micro" id="micro-stage">
+          <canvas id="gameCanvas" width="960" height="620" tabindex="0" aria-label="Tardigrade Micro Mayhem playfield"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
           <div class="micro-arcade-hud" aria-live="polite">
             <div class="micro-arcade-title">TARDIGRADE SIMULATOR <span>0.1.0 - alpha</span></div>
             <div class="micro-missions">
@@ -2332,7 +2338,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260709-quiet-ui-1"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260627-ui-motion-1"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260709-desktop-max-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

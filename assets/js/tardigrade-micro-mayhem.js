@@ -4716,6 +4716,61 @@
     bindTap(el.jump, jump);
     bindTap(el.dash, dash);
     bindHold(el.curl, () => setCurlSource("touch", true), () => setCurlSource("touch", false));
+    bindFullscreen();
+  }
+
+  function bindFullscreen() {
+    const fsTarget = document.getElementById("micro-stage") || canvas.parentElement;
+    const fsBtn = document.getElementById("btn-fullscreen");
+    if (!fsTarget || !fsBtn || fsBtn.dataset.bound === "true") return;
+    fsBtn.dataset.bound = "true";
+
+    const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+    const isMaxed = () => fsTarget.classList.contains("is-maxed") || nativeFsEl() === fsTarget;
+    const updateButton = () => {
+      const on = isMaxed();
+      fsBtn.textContent = on ? "Min" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Minimize game" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Minimize game" : "Max screen");
+    };
+    const setMaxed = (on) => {
+      fsTarget.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
+      updateButton();
+      requestAnimationFrame(resize);
+    };
+    const toggleFullscreen = () => {
+      const on = !fsTarget.classList.contains("is-maxed");
+      setMaxed(on);
+      try {
+        if (on) {
+          const req = fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen;
+          const result = req && req.call(fsTarget);
+          if (result && typeof result.catch === "function") result.catch(() => {});
+        } else if (nativeFsEl()) {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen;
+          const result = exit && exit.call(document);
+          if (result && typeof result.catch === "function") result.catch(() => {});
+        }
+      } catch (_) {}
+    };
+
+    fsBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleFullscreen();
+    });
+    const onNativeChange = () => {
+      if (!nativeFsEl() && fsTarget.classList.contains("is-maxed")) setMaxed(false);
+      else updateButton();
+      requestAnimationFrame(resize);
+    };
+    document.addEventListener("fullscreenchange", onNativeChange);
+    document.addEventListener("webkitfullscreenchange", onNativeChange);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isMaxed() && !nativeFsEl()) setMaxed(false);
+    });
+    updateButton();
   }
 
   function requestMouseLook() {
@@ -6170,10 +6225,10 @@
   }
 
   function isTouchLayout() {
-    return !!(window.matchMedia && (
-      window.matchMedia("(hover: none) and (pointer: coarse)").matches ||
-      window.matchMedia("(max-width: 900px)").matches
-    ));
+    // Prefer real touch/coarse pointers. Narrow desktop windows are not mobile.
+    if (window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches) return true;
+    if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) return true;
+    return false;
   }
 
   function updateGoalText() {

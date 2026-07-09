@@ -174,20 +174,27 @@
     .world-card__actions { display: flex; gap: 6px; }
     .world-empty { color: var(--ink-dim); font: 800 11px var(--font-mono); text-align: center; padding: 8px; }
     .world-loading {
-      display: inline-grid; grid-template-columns: 20px auto; align-items: center; gap: 10px;
-      margin: 2px auto 14px; padding: 9px 13px; border: 1px solid rgba(255,212,59,0.36);
-      border-radius: 8px; background: rgba(7,9,18,0.86); color: var(--ink);
-      font: 900 11px var(--font-mono); text-transform: uppercase;
-      box-shadow: 0 10px 28px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.1);
+      display: inline-grid; grid-template-columns: 22px auto; align-items: center; gap: 12px;
+      margin: 2px auto 14px; padding: 12px 16px; border: 1px solid rgba(255,212,59,0.42);
+      border-radius: 10px; background: rgba(7,9,18,0.92); color: var(--ink);
+      font: 900 12px var(--font-mono); text-transform: uppercase;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.1);
     }
     .world-loading[hidden] { display: none; }
     .world-loading__spinner {
-      width: 18px; height: 18px; border-radius: 50%;
+      width: 20px; height: 20px; border-radius: 50%;
       border: 3px solid rgba(255,255,255,0.2); border-top-color: var(--accent-3);
       animation: world-spin 720ms linear infinite;
     }
-    .canvas-wrap--rizzcraft .overlay.is-loading .world-panel { opacity: 0.45; pointer-events: none; }
-    .canvas-wrap--rizzcraft .overlay.is-loading #btn-primary { opacity: 0.65; cursor: progress; }
+    .world-loading__text { letter-spacing: 0.04em; }
+    .canvas-wrap--rizzcraft .overlay.is-loading .world-panel { opacity: 0.35; pointer-events: none; }
+    .canvas-wrap--rizzcraft .overlay.is-loading #btn-primary { opacity: 0.55; cursor: progress; pointer-events: none; }
+    .canvas-wrap--rizzcraft .overlay.is-booting .world-panel,
+    .canvas-wrap--rizzcraft .overlay.is-booting #btn-primary { display: none; }
+    .canvas-wrap--rizzcraft .overlay.is-booting .world-loading {
+      display: inline-grid;
+      margin: 18px auto 8px;
+    }
     @keyframes world-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) {
       .world-loading__spinner { animation: none; border-top-color: rgba(255,255,255,0.2); box-shadow: inset 0 0 0 4px var(--accent-3); }
@@ -239,20 +246,18 @@
             <div class="craft-list" id="craft-list"></div>
           </div>
 
-          <div class="overlay overlay--show" id="overlay">
+          <div class="overlay overlay--show is-loading is-booting" id="overlay">
             <h2 class="overlay__title" id="overlay-title">⛏️ RIZZ-CRAFT</h2>
             <p class="overlay__sub" id="overlay-sub">
-              You spawned in a full 3D Ohio voxel world. Chop Skibidi Logs, mine Ohio Stone, and dig for Rizz and Sigma Ore.
-              <br><br>
-              Build a Crafting Toilet, light Rizz Torches, and <strong>survive the night</strong> when the Skibidi Toilets come.
+              Booting the voxel engine… this can take a few seconds on first load.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
-            <div class="world-loading" id="world-loading" hidden role="status" aria-live="polite" aria-busy="false">
+            <div class="world-loading" id="world-loading" role="status" aria-live="polite" aria-busy="true">
               <span class="world-loading__spinner" aria-hidden="true"></span>
-              <span class="world-loading__text" id="world-loading-text">Loading world...</span>
+              <span class="world-loading__text" id="world-loading-text">Loading Rizz-Craft…</span>
             </div>
             <div class="world-panel" id="world-panel"></div>
-            <button class="btn btn--primary" id="btn-primary">Spawn in</button>
+            <button class="btn btn--primary" id="btn-primary" disabled>Loading…</button>
           </div>
         </div>
       </div>
@@ -332,8 +337,8 @@
   <script src="../assets/js/main.js?v=20260709-quiet-ui-1"></script>
   <script src="../assets/js/supabase-config.js?v=20260704-online-1"></script>
   <script src="../assets/js/rb-multiplayer.js?v=20260709-mp-3"></script>
-  <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1"></script>
-  <script src="../assets/js/rizz-craft.js?v=20260709-mp-lobby-1"></script>
+  <script src="../assets/vendor/three/three-r128.min.js?v=20260623-world-1" defer></script>
+  <script src="../assets/js/rizz-craft.js?v=20260709-loading-1" defer></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

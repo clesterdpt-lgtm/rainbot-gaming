@@ -1885,10 +1885,15 @@
   function setWorldOverlay() {
     if (!overlay) return;
     setWorldLoading(false);
+    overlay.classList.remove("is-booting");
     document.getElementById("overlay-title").textContent = "RIZZ-CRAFT WORLDS";
-    document.getElementById("overlay-sub").innerHTML = "Choose a saved world or enter a seed to generate a new one.";
+    document.getElementById("overlay-sub").innerHTML = "Choose a saved world or enter a seed to generate a new one. World gen can take a few seconds — you'll see a loading indicator.";
     document.getElementById("overlay-score").innerHTML = "";
-    document.getElementById("btn-primary").textContent = state.started ? "Resume" : "Random World";
+    const primary = document.getElementById("btn-primary");
+    if (primary) {
+      primary.disabled = false;
+      primary.textContent = state.started ? "Resume" : "Random World";
+    }
     overlay.classList.add("overlay--show");
     renderWorldPanel();
   }
@@ -1910,26 +1915,43 @@
   }
   function setWorldLoading(on, message = "Loading world...") {
     worldLoadingActive = !!on;
-    if (overlay) overlay.classList.toggle("is-loading", worldLoadingActive);
+    if (overlay) {
+      overlay.classList.toggle("is-loading", worldLoadingActive);
+      if (!worldLoadingActive) overlay.classList.remove("is-booting");
+    }
     if (worldLoading) {
       worldLoading.hidden = !worldLoadingActive;
       worldLoading.setAttribute("aria-busy", worldLoadingActive ? "true" : "false");
     }
     if (worldLoadingText) worldLoadingText.textContent = message;
     const primary = document.getElementById("btn-primary");
-    if (primary) primary.disabled = worldLoadingActive;
+    if (primary) {
+      primary.disabled = worldLoadingActive;
+      if (!worldLoadingActive && !state.started) primary.textContent = "Random World";
+      if (worldLoadingActive && primary.textContent === "Random World") primary.textContent = "Loading…";
+    }
   }
+  // Double-rAF + short timeout so the loading spinner actually paints before
+  // the main thread goes into heavy world generation.
   function waitForWorldLoadingPaint() {
-    return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 16);
+        });
+      });
+    });
   }
   async function createWorld(nameValue = "", seedValue = "") {
     if (worldLoadingActive) return;
     const seed = seedFromInput(seedValue);
     const name = cleanWorldName(nameValue);
     const id = worldId(seed);
-    setWorldLoading(true, `Generating ${name}...`);
+    setWorldLoading(true, `Generating ${name}…`);
     await waitForWorldLoadingPaint();
     try {
+      setWorldLoading(true, "Carving hills, caves & toilets…");
+      await waitForWorldLoadingPaint();
       currentWorldId = id;
       currentWorldName = name;
       currentWorldSeed = seed >>> 0;
@@ -1937,6 +1959,8 @@
       currentWorldId = id;
       currentWorldName = name;
       currentWorldSeed = seed >>> 0;
+      setWorldLoading(true, "Spawning in…");
+      await waitForWorldLoadingPaint();
       startGame();
       saveCurrentWorld();
       api.toast(`Created ${name}`, "good");
@@ -1957,9 +1981,11 @@
       renderWorldPanel();
       return;
     }
-    setWorldLoading(true, `Loading ${world.name || "World"}...`);
+    setWorldLoading(true, `Loading ${world.name || "World"}…`);
     await waitForWorldLoadingPaint();
     try {
+      setWorldLoading(true, "Restoring blocks & inventory…");
+      await waitForWorldLoadingPaint();
       const savedName = (saved.data && saved.data.worldName) || (saved.meta && saved.meta.name) || world.name || "World";
       currentWorldId = world.id;
       currentWorldName = cleanWorldName(savedName);
@@ -1978,12 +2004,14 @@
     deleteWorldSave(id);
     writeWorldIndex(readWorldIndex().filter((item) => item.id !== id));
     if (currentWorldId === id) {
+      // Don't regenerate a full world just for the menu — that's a multi-second freeze.
       currentWorldId = "";
       currentWorldName = "";
       currentWorldSeed = 0;
       state.started = false;
       state.paused = false;
-      initGame();
+      state.crafting = false;
+      state.bagOpen = false;
     }
     renderWorldPanel();
   }
@@ -8125,17 +8153,43 @@
     return selectInventoryCode(code);
   }
 
-  initGame();
-  migrateLegacyWorld();
-  bindInput();
-  bindButtons();
-  updateModeButtons();
-  resizeRenderer();
-  raf = requestAnimationFrame(loop);
-  setWorldOverlay();
-  worldAutosaveTimer = setInterval(() => {
-    if (state.started && !state.paused) saveCurrentWorld();
-  }, 2500);
+  // Boot without generating a full world up front (that used to freeze the page
+  // with no feedback). Show the world picker first; create/load show their own loader.
+  async function boot() {
+    setWorldLoading(true, "Loading Rizz-Craft…");
+    if (overlay) {
+      overlay.classList.add("overlay--show", "is-loading", "is-booting");
+      const title = document.getElementById("overlay-title");
+      const sub = document.getElementById("overlay-sub");
+      if (title) title.textContent = "⛏️ RIZZ-CRAFT";
+      if (sub) sub.textContent = "Booting the voxel engine… this can take a few seconds on first load.";
+    }
+    await waitForWorldLoadingPaint();
+    setWorldLoading(true, "Wiring controls…");
+    await waitForWorldLoadingPaint();
+    migrateLegacyWorld();
+    bindInput();
+    bindButtons();
+    updateModeButtons();
+    resizeRenderer();
+    if (!raf) raf = requestAnimationFrame(loop);
+    setWorldLoading(true, "Opening world select…");
+    await waitForWorldLoadingPaint();
+    setWorldOverlay();
+    worldAutosaveTimer = setInterval(() => {
+      if (state.started && !state.paused) saveCurrentWorld();
+    }, 2500);
+  }
+  boot().catch((err) => {
+    console.error("[Rizz-Craft] boot failed", err);
+    setWorldLoading(false);
+    if (overlay) {
+      overlay.classList.remove("is-booting");
+      const sub = document.getElementById("overlay-sub");
+      if (sub) sub.textContent = "Something went wrong while loading. Refresh the page to try again.";
+    }
+  });
+
   window.addEventListener("beforeunload", () => {
     if (state.started) saveCurrentWorld();
     if (worldAutosaveTimer) clearInterval(worldAutosaveTimer);

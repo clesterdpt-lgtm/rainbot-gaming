@@ -410,8 +410,7 @@
       heavy: () => { tone(120, 0.16, "sawtooth", 0.18, 70); },
       spray: () => noise(0.14, 0.12),
       glitch: () => { tone(660, 0.08, "square", 0.12, 110); noise(0.06, 0.12); },
-      select: () => tone(560, 0.08, "square", 0.1, 720),
-      start: () => { tone(440, 0.1, "square", 0.12, 660); setTimeout(() => tone(660, 0.14, "square", 0.12, 880), 90); },
+      // select/start intentionally omitted — menu UI is silent
       dodge: () => tone(240, 0.1, "sine", 0.08, 360),
       bounce: () => tone(330, 0.16, "sine", 0.14, 760),
     };
@@ -3024,12 +3023,13 @@
         </div>
       </div>`;
 
-    overlayBody.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { settings.mode = b.dataset.mode; Sound.play("select"); renderSelect(); }));
-    overlayBody.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => { settings.p1 = b.dataset.char; Sound.play("select"); renderSelect(); }));
-    overlayBody.querySelectorAll("[data-stage]").forEach((b) => b.addEventListener("click", () => { settings.stage = b.dataset.stage; Sound.play("select"); renderSelect(); }));
-    overlayBody.querySelectorAll("[data-rivals]").forEach((b) => b.addEventListener("click", () => { settings.rivals = +b.dataset.rivals; Sound.play("select"); renderSelect(); }));
-    overlayBody.querySelectorAll("[data-stocks]").forEach((b) => b.addEventListener("click", () => { settings.stocks = +b.dataset.stocks; Sound.play("select"); renderSelect(); }));
-    overlayBody.querySelectorAll("[data-diff]").forEach((b) => b.addEventListener("click", () => { settings.difficulty = b.dataset.diff; Sound.play("select"); renderSelect(); }));
+    // Menu/select clicks stay silent — gameplay SFX only (hits, jumps, KOs…).
+    overlayBody.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => { settings.mode = b.dataset.mode; renderSelect(); }));
+    overlayBody.querySelectorAll("[data-char]").forEach((b) => b.addEventListener("click", () => { settings.p1 = b.dataset.char; renderSelect(); }));
+    overlayBody.querySelectorAll("[data-stage]").forEach((b) => b.addEventListener("click", () => { settings.stage = b.dataset.stage; renderSelect(); }));
+    overlayBody.querySelectorAll("[data-rivals]").forEach((b) => b.addEventListener("click", () => { settings.rivals = +b.dataset.rivals; renderSelect(); }));
+    overlayBody.querySelectorAll("[data-stocks]").forEach((b) => b.addEventListener("click", () => { settings.stocks = +b.dataset.stocks; renderSelect(); }));
+    overlayBody.querySelectorAll("[data-diff]").forEach((b) => b.addEventListener("click", () => { settings.difficulty = b.dataset.diff; renderSelect(); }));
     const startBtn = document.getElementById("ssb-start");
     if (startBtn) startBtn.addEventListener("click", startSelectedMode);
     refreshMeta();
@@ -3037,8 +3037,7 @@
 
   function startMatch(options = {}) {
     clearHumanInput();
-    Sound.resume();
-    Sound.play("start");
+    Sound.resume(); // unlock audio for in-match SFX; no menu start jingle
     state.screen = "fight";
     state.paused = false;
     state.matchStage = options.stage || null;

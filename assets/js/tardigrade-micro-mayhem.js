@@ -586,6 +586,7 @@
   ];
 
   const STORE_STORAGE_KEY = `${GAME_ID}:micro-store-v1`;
+  const PROGRESS_STORAGE_KEY = `${GAME_ID}:micro-progress-v1`;
   const STARTER_STORE_GEL = 900;
   const STORE_ITEMS = [
     { id: "skin-classic", name: "Classic Squish", slot: "skin", cost: 0, icon: "CL", ownedDefault: true, description: "Original tan water-bear softness." },
@@ -642,6 +643,49 @@
     } catch (error) {
       return defaults;
     }
+  }
+
+  function maxConfiguredStage() {
+    return Math.max(...Object.keys(LEVEL_CONFIGS).map((key) => Number(key) || 1));
+  }
+
+  function loadHighestUnlockedStage() {
+    try {
+      const raw = window.localStorage && window.localStorage.getItem(PROGRESS_STORAGE_KEY);
+      if (!raw) return 1;
+      const saved = JSON.parse(raw);
+      const stage = Math.floor(Number(saved && saved.highestUnlockedStage) || 1);
+      return Math.max(1, Math.min(maxConfiguredStage(), stage));
+    } catch (error) {
+      return 1;
+    }
+  }
+
+  function saveHighestUnlockedStage() {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify({
+        highestUnlockedStage: state.highestUnlockedStage,
+      }));
+    } catch (error) {}
+  }
+
+  function isStageUnlocked(stageNumber) {
+    return Number(stageNumber) >= 1 && Number(stageNumber) <= state.highestUnlockedStage;
+  }
+
+  function unlockStage(stageNumber, announce = false) {
+    const target = Math.floor(Number(stageNumber) || 1);
+    if (!LEVEL_CONFIGS[target]) return false;
+    if (target <= state.highestUnlockedStage) return false;
+    state.highestUnlockedStage = Math.min(maxConfiguredStage(), target);
+    saveHighestUnlockedStage();
+    if (announce) {
+      const config = LEVEL_CONFIGS[target];
+      showPrompt(`${config.name} unlocked for the pause menu level select.`, 4.2);
+    }
+    renderPauseLevelSelect();
+    return true;
   }
 
   const $ = (id) => document.getElementById(id);
@@ -721,6 +765,8 @@
     stageReadyTitle: $("stage-ready-title"),
     stageReadyText: $("stage-ready-text"),
     advance: $("btn-advance-stage"),
+    levelSelect: $("pause-level-select"),
+    levelSelectButtons: $("pause-level-buttons"),
     missionAlgae: $("mission-algae"),
     missionBacteria: $("mission-bacteria"),
     missionWater: $("mission-water"),
@@ -765,6 +811,7 @@
     tipTimer: 0,
     hydrate: 100,
     stage: 1,
+    highestUnlockedStage: loadHighestUnlockedStage(),
     level: 1,
     xp: 0,
     goalIndex: 0,
@@ -1548,6 +1595,14 @@
       creatureFin: mat(0xf8fbff, { roughness: 0.36, transparent: true, opacity: 0.66, depthWrite: false }),
       cameraBody: mat(0x1d2533, { roughness: 0.45, metalness: 0.18, emissive: 0x0a1018, emissiveIntensity: 0.18 }),
       cameraLens: mat(0x53ead1, { roughness: 0.22, metalness: 0.08, emissive: 0x0a5d55, emissiveIntensity: 0.85 }),
+      lavaRock: mat(0x1b141c, { roughness: 0.94, metalness: 0.02, emissive: 0x090407, emissiveIntensity: 0.25 }),
+      lavaGlow: mat(0xff6a2a, { roughness: 0.5, emissive: 0xff3c00, emissiveIntensity: 1.35 }),
+      lavaCrust: mat(0x3a2a30, { roughness: 0.9, emissive: 0x852c0c, emissiveIntensity: 0.3 }),
+      fleshWall: mat(0xc23d6f, { roughness: 0.46, emissive: 0x4d0f2a, emissiveIntensity: 0.42 }),
+      fleshDeep: mat(0x7c1f45, { roughness: 0.52, emissive: 0x350a1e, emissiveIntensity: 0.38 }),
+      villi: mat(0xff8fb4, { roughness: 0.5, emissive: 0x6b1436, emissiveIntensity: 0.5 }),
+      stationHull: mat(0x2e3947, { roughness: 0.5, metalness: 0.3, emissive: 0x0c141f, emissiveIntensity: 0.3 }),
+      stationWindow: mat(0xbfeaff, { roughness: 0.24, metalness: 0.05, emissive: 0x35b9c9, emissiveIntensity: 0.85 }),
     };
   }
 
@@ -1704,8 +1759,10 @@
     const scene = world.scene;
     scene.background = makeSkyTexture();
 
-    scene.add(new THREE.HemisphereLight(0xd8fcff, 0x245f20, 0.78));
-    scene.add(new THREE.AmbientLight(0x73eaff, 0.08));
+    const hemi = new THREE.HemisphereLight(0xd8fcff, 0x245f20, 0.78);
+    scene.add(hemi);
+    const ambient = new THREE.AmbientLight(0x73eaff, 0.08);
+    scene.add(ambient);
 
     const key = new THREE.DirectionalLight(0xffe1a0, 1.05);
     key.position.set(-28, 46, 20);
@@ -1727,9 +1784,11 @@
     cool.position.set(-30, 14, 24);
     scene.add(cool);
 
-    const gardenFill = new THREE.PointLight(0xa5ff4f, 0.62, 70);
-    gardenFill.position.set(-10, 9, 12);
-    scene.add(gardenFill);
+    const fill = new THREE.PointLight(0xa5ff4f, 0.62, 70);
+    fill.position.set(-10, 9, 12);
+    scene.add(fill);
+
+    world.lights = { hemi, ambient, key, rim, cool, fill };
 
     buildDish();
     world.tardigrade = makeTardigrade();
@@ -1803,37 +1862,115 @@
     }
   }
 
+  // Each stage gets a full mood: fog colour + density tuned so the horizon fades
+  // into that world's own atmosphere, a retinted six-light rig, tone-mapping
+  // exposure, and a ground-material finish (wet gut, brushed deck, rough rock).
+  const STAGE_ATMOSPHERE = {
+    petri: {
+      clear: 0xf2f9fc, fog: 0xf0f8fb, fogDensity: 0.00082, exposure: 0.74,
+      terrain: { roughness: 0.86, metalness: 0.02 },
+      hemi: { sky: 0xffffff, ground: 0xd9e9dc, intensity: 0.95 },
+      ambient: { color: 0xe8f4ff, intensity: 0.16 },
+      key: { color: 0xfff3d2, intensity: 1.12, position: [-14, 58, 12] },
+      rim: { color: 0xa9e9ff, intensity: 0.55, distance: 120, position: [40, 22, -36] },
+      cool: { color: 0xcfeeff, intensity: 0.5, distance: 110, position: [-42, 20, 30] },
+      fill: { color: 0xd9ffe2, intensity: 0.3, distance: 90, position: [-8, 12, 14] },
+    },
+    aquarium: {
+      clear: 0x0d6584, fog: 0x2695b4, fogDensity: 0.0019, exposure: 0.66,
+      terrain: { roughness: 0.9, metalness: 0.01 },
+      hemi: { sky: 0xa8dcff, ground: 0x1d5426, intensity: 0.74 },
+      ambient: { color: 0x2f7fae, intensity: 0.14 },
+      key: { color: 0xffe9ae, intensity: 1.18, position: [-30, 52, 20] },
+      rim: { color: 0x58c8ff, intensity: 0.9, distance: 150, position: [70, 26, -60] },
+      cool: { color: 0x37e0c0, intensity: 0.85, distance: 150, position: [-80, 22, 60] },
+      fill: { color: 0xa5ff4f, intensity: 0.5, distance: 110, position: [-12, 10, 14] },
+    },
+    stomach: {
+      clear: 0x30091b, fog: 0x6b1d3c, fogDensity: 0.002, exposure: 0.64,
+      terrain: { roughness: 0.48, metalness: 0.03 },
+      hemi: { sky: 0xff97ae, ground: 0x3c0c22, intensity: 0.52 },
+      ambient: { color: 0x711d3c, intensity: 0.3 },
+      key: { color: 0xffb98d, intensity: 0.66, position: [-22, 44, 26] },
+      rim: { color: 0xff6f9c, intensity: 1.35, distance: 180, position: [90, 24, 78] },
+      cool: { color: 0x53ead1, intensity: 0.7, distance: 160, position: [-104, 20, -100] },
+      fill: { color: 0xffb34d, intensity: 0.9, distance: 150, position: [88, 16, -88] },
+    },
+    lava: {
+      clear: 0x0d0509, fog: 0x22101a, fogDensity: 0.002, exposure: 0.68,
+      terrain: { roughness: 0.94, metalness: 0.02 },
+      hemi: { sky: 0x5a3038, ground: 0x120a0c, intensity: 0.36 },
+      ambient: { color: 0x39160f, intensity: 0.32 },
+      key: { color: 0xffc9a0, intensity: 0.42, position: [-20, 52, 16] },
+      rim: { color: 0xff5a2f, intensity: 2.0, distance: 200, position: [mapCoord(48), 15, mapCoord(28)] },
+      cool: { color: 0xd883ff, intensity: 0.9, distance: 160, position: [mapCoord(52), 18, mapCoord(-54)] },
+      fill: { color: 0xff9a45, intensity: 0.95, distance: 140, position: [mapCoord(-8), 12, mapCoord(-20)] },
+    },
+    station: {
+      clear: 0x04070f, fog: 0x0a1424, fogDensity: 0.0012, exposure: 0.68,
+      terrain: { roughness: 0.55, metalness: 0.16 },
+      hemi: { sky: 0xbfd8ff, ground: 0x0a111c, intensity: 0.44 },
+      ambient: { color: 0x21324c, intensity: 0.2 },
+      key: { color: 0xf4f8ff, intensity: 0.85, position: [26, 54, -18] },
+      rim: { color: 0x53ead1, intensity: 0.95, distance: 170, position: [mapCoord(-50), 20, mapCoord(43)] },
+      cool: { color: 0x8c6bff, intensity: 0.95, distance: 170, position: [mapCoord(50), 20, mapCoord(-48)] },
+      fill: { color: 0xffd43b, intensity: 0.5, distance: 130, position: [mapCoord(-48), 14, mapCoord(-46)] },
+    },
+  };
+
+  const STAGE_SKY_MAKERS = {
+    petri: () => makePetriSkyTexture(),
+    aquarium: () => makeAquariumSkyTexture(),
+    stomach: () => makeStomachSkyTexture(),
+    lava: () => makeLavaSkyTexture(),
+    station: () => makeStationSkyTexture(),
+  };
+
   function applyStageAtmosphere() {
     const THREE = window.THREE;
     const id = levelConfig().id;
     updateWorldBaseForStage(id);
-    if (id === "petri") {
-      world.renderer.setClearColor(0xeaf7ff, 1);
-      world.scene.fog = new THREE.FogExp2(0xeaf7ff, 0.0009);
-      world.scene.background = makePetriSkyTexture();
-      return;
-    }
-    if (id === "stomach") {
-      world.renderer.setClearColor(0x3a0d2a, 1);
-      world.scene.fog = new THREE.FogExp2(0x5a1b36, 0.0011);
-      world.scene.background = makeStomachSkyTexture();
-      return;
-    }
-    if (id === "lava") {
-      world.renderer.setClearColor(0x170b10, 1);
-      world.scene.fog = new THREE.FogExp2(0x3a1a18, 0.00092);
-      world.scene.background = makeLavaSkyTexture();
-      return;
-    }
-    if (id === "station") {
-      world.renderer.setClearColor(0x050914, 1);
-      world.scene.fog = new THREE.FogExp2(0x091427, 0.00058);
-      world.scene.background = makeStationSkyTexture();
-      return;
-    }
-    world.renderer.setClearColor(0xd7b88f, 1);
-    world.scene.fog = new THREE.FogExp2(0x9bd7df, 0.00072);
-    world.scene.background = makeLivingRoomSkyTexture();
+    const mood = STAGE_ATMOSPHERE[id] || STAGE_ATMOSPHERE.aquarium;
+    world.renderer.setClearColor(mood.clear, 1);
+    world.scene.fog = new THREE.FogExp2(mood.fog, mood.fogDensity);
+    world.scene.background = (STAGE_SKY_MAKERS[id] || STAGE_SKY_MAKERS.aquarium)();
+    if (THREE.ACESFilmicToneMapping) world.renderer.toneMappingExposure = mood.exposure;
+    world.materials.terrain.roughness = mood.terrain.roughness;
+    world.materials.terrain.metalness = mood.terrain.metalness;
+    applyStageLighting(mood);
+  }
+
+  function applyStageLighting(mood) {
+    const lights = world.lights;
+    if (!lights) return;
+    lights.hemi.color.set(mood.hemi.sky);
+    lights.hemi.groundColor.set(mood.hemi.ground);
+    lights.hemi.intensity = mood.hemi.intensity;
+    lights.ambient.color.set(mood.ambient.color);
+    lights.ambient.intensity = mood.ambient.intensity;
+    lights.key.color.set(mood.key.color);
+    lights.key.intensity = mood.key.intensity;
+    lights.key.position.set(...mood.key.position);
+    ["rim", "cool", "fill"].forEach((name) => {
+      const conf = mood[name];
+      const light = lights[name];
+      light.color.set(conf.color);
+      light.intensity = conf.intensity;
+      light.distance = conf.distance;
+      light.position.set(...conf.position);
+    });
+  }
+
+  // Slow-pulsing accent light dropped into the stage scenery; it is cleaned up
+  // with the rest of the stage and shimmers via the atmosphere update loop.
+  function addStageGlowLight(color, intensity, distance, x, y, z) {
+    const THREE = window.THREE;
+    const glow = new THREE.PointLight(color, intensity, distance);
+    glow.position.set(x, y, z);
+    glow.userData.baseIntensity = intensity;
+    glow.userData.phase = rand(0, Math.PI * 2);
+    addStageScenery(glow, "atmosphere");
+    return glow;
   }
 
   function updateWorldBaseForStage(id) {
@@ -1841,9 +1978,9 @@
     const baseMaterials = {
       petri: world.materials.labCounter,
       aquarium: world.materials.dishDark,
-      stomach: world.materials.zoneStomachPurple,
-      lava: world.materials.cliff,
-      station: world.materials.cameraBody,
+      stomach: world.materials.fleshDeep,
+      lava: world.materials.lavaRock,
+      station: world.materials.stationHull,
     };
     world.petri.material = baseMaterials[id] || world.materials.dishDark;
   }
@@ -1926,177 +2063,368 @@
     return texture;
   }
 
-  function makePetriSkyTexture() {
+  function skyCanvas(width = 512, height = 512) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    return { canvas, ctx: canvas.getContext("2d") };
+  }
+
+  function finishSky(canvas) {
     const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 96;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
-    gradient.addColorStop(0, "#f8fbff");
-    gradient.addColorStop(0.42, "#e6f4ff");
-    gradient.addColorStop(1, "#d4edf6");
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makePetriSkyTexture() {
+    const { canvas, ctx } = skyCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#fdfeff");
+    gradient.addColorStop(0.45, "#e9f4fb");
+    gradient.addColorStop(0.72, "#d5e9f2");
+    gradient.addColorStop(1, "#c3dce8");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-    for (let i = 0; i < 5; i++) {
-      const x = 6 + i * 21;
-      const beam = ctx.createLinearGradient(x, 0, x + 12, sky.height);
-      beam.addColorStop(0, "rgba(255,255,255,0.58)");
-      beam.addColorStop(0.5, "rgba(210,236,255,0.18)");
+    ctx.fillRect(0, 0, w, h);
+
+    // The microscope lamp: a huge soft ring of light hanging over the dish.
+    const lamp = ctx.createRadialGradient(w * 0.5, h * 0.3, 10, w * 0.5, h * 0.3, w * 0.52);
+    lamp.addColorStop(0, "rgba(255,255,255,0.95)");
+    lamp.addColorStop(0.4, "rgba(240,250,255,0.5)");
+    lamp.addColorStop(1, "rgba(240,250,255,0)");
+    ctx.fillStyle = lamp;
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = "rgba(160,195,215,0.5)";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.arc(w * 0.5, h * 0.3, w * 0.36, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(180,215,235,0.28)";
+    ctx.lineWidth = 16;
+    ctx.beginPath();
+    ctx.arc(w * 0.5, h * 0.3, w * 0.42, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Blurry lab bench line and glassware silhouettes on the horizon.
+    ctx.fillStyle = "rgba(122,156,178,0.2)";
+    ctx.fillRect(0, h * 0.66, w, h * 0.012);
+    [
+      [0.08, 0.1, 0.055], [0.2, 0.16, 0.04], [0.33, 0.08, 0.03],
+      [0.62, 0.13, 0.05], [0.76, 0.09, 0.035], [0.9, 0.15, 0.045],
+    ].forEach(([gx, gh, gw]) => {
+      ctx.fillStyle = "rgba(126,164,188,0.16)";
+      ctx.fillRect(w * gx, h * (0.66 - gh), w * gw, h * gh);
+      ctx.fillStyle = "rgba(126,164,188,0.1)";
+      ctx.fillRect(w * (gx - 0.008), h * (0.66 - gh - 0.012), w * (gw + 0.016), h * 0.014);
+    });
+
+    // Dust motes caught in the lamp.
+    for (let i = 0; i < 90; i++) {
+      const size = Math.random() * 2.4 + 0.5;
+      ctx.fillStyle = i % 5 === 0 ? "rgba(255,255,255,0.75)" : "rgba(150,180,196,0.25)";
+      ctx.beginPath();
+      ctx.arc(Math.random() * w, Math.random() * h * 0.72, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    return finishSky(canvas);
+  }
+
+  function makeAquariumSkyTexture() {
+    const { canvas, ctx } = skyCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#063a5e");
+    gradient.addColorStop(0.3, "#0d6f96");
+    gradient.addColorStop(0.62, "#2fb3cd");
+    gradient.addColorStop(0.85, "#6fdede");
+    gradient.addColorStop(1, "#9deee4");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Water-surface shimmer high overhead.
+    ctx.strokeStyle = "rgba(215,250,255,0.3)";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 7; i++) {
+      const y = h * (0.04 + i * 0.022);
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 14) {
+        const wy = y + Math.sin(x * 0.05 + i * 1.9) * 4;
+        if (x === 0) ctx.moveTo(x, wy);
+        else ctx.lineTo(x, wy);
+      }
+      ctx.stroke();
+    }
+
+    // God rays slanting down through the tank.
+    for (let i = 0; i < 6; i++) {
+      const x = w * (0.06 + i * 0.17);
+      const beam = ctx.createLinearGradient(x, 0, x + 60, h);
+      beam.addColorStop(0, "rgba(255,255,225,0.42)");
+      beam.addColorStop(0.55, "rgba(200,255,245,0.12)");
       beam.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = beam;
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x + 10, 0);
-      ctx.lineTo(x + 2, sky.height);
-      ctx.lineTo(x - 16, sky.height);
+      ctx.lineTo(x + 46, 0);
+      ctx.lineTo(x + 110, h);
+      ctx.lineTo(x - 40, h);
       ctx.closePath();
       ctx.fill();
     }
-    ctx.strokeStyle = "rgba(126,160,178,0.08)";
-    ctx.lineWidth = 1;
-    for (let y = 22; y < sky.height; y += 34) {
+
+    // The living-room lamp glowing warmly beyond the glass.
+    const lamp = ctx.createRadialGradient(w * 0.82, h * 0.5, 6, w * 0.82, h * 0.5, w * 0.2);
+    lamp.addColorStop(0, "rgba(255,205,130,0.4)");
+    lamp.addColorStop(1, "rgba(255,205,130,0)");
+    ctx.fillStyle = lamp;
+    ctx.fillRect(0, 0, w, h);
+
+    // Distant plant silhouettes along the gravel line.
+    ctx.fillStyle = "rgba(6,64,52,0.55)";
+    for (let i = 0; i < 16; i++) {
+      const x = (i / 16) * w + Math.sin(i * 3.7) * 12;
+      const frond = h * (0.1 + Math.abs(Math.sin(i * 2.1)) * 0.16);
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(sky.width, y + Math.sin(y) * 2);
-      ctx.stroke();
-    }
-    for (let i = 0; i < 64; i++) {
-      const size = Math.random() * 1.6 + 0.25;
-      ctx.fillStyle = i % 6 === 0 ? "rgba(255,255,255,0.62)" : "rgba(142,170,180,0.22)";
-      ctx.beginPath();
-      ctx.arc(Math.random() * sky.width, Math.random() * sky.height * 0.74, size, 0, Math.PI * 2);
+      ctx.moveTo(x, h);
+      ctx.quadraticCurveTo(x - 14 - (i % 3) * 8, h - frond * 0.6, x + Math.sin(i) * 16, h - frond);
+      ctx.quadraticCurveTo(x + 16, h - frond * 0.5, x + 10, h);
+      ctx.closePath();
       ctx.fill();
     }
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
-  }
 
-  function makeLivingRoomSkyTexture() {
-    const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 128;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const wall = ctx.createLinearGradient(0, 0, 0, sky.height);
-    wall.addColorStop(0, "#d9c39f");
-    wall.addColorStop(0.52, "#c9a77b");
-    wall.addColorStop(0.53, "#8a5a33");
-    wall.addColorStop(1, "#6f4527");
-    ctx.fillStyle = wall;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-
-    ctx.fillStyle = "rgba(255,245,220,0.12)";
-    for (let y = 24; y < sky.height * 0.5; y += 34) {
-      ctx.fillRect(0, y, sky.width, 2);
+    // Bubbles on their way up.
+    for (let i = 0; i < 70; i++) {
+      const size = Math.random() * 2.6 + 0.5;
+      ctx.fillStyle = i % 4 === 0 ? "rgba(255,255,255,0.55)" : "rgba(196,246,255,0.3)";
+      ctx.beginPath();
+      ctx.arc(Math.random() * w, Math.random() * h, size, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fillStyle = "rgba(88,55,30,0.38)";
-    ctx.fillRect(0, Math.floor(sky.height * 0.52), sky.width, 5);
-
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
+    return finishSky(canvas);
   }
 
   function makeStomachSkyTexture() {
-    const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 128;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
-    gradient.addColorStop(0, "#5a1837");
-    gradient.addColorStop(0.48, "#8b2e54");
-    gradient.addColorStop(1, "#3d1030");
+    const { canvas, ctx } = skyCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#2b0618");
+    gradient.addColorStop(0.4, "#701e44");
+    gradient.addColorStop(0.72, "#9c3258");
+    gradient.addColorStop(1, "#7c2547");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-    for (let y = 18; y < sky.height; y += 24) {
-      ctx.strokeStyle = "rgba(255,171,118,0.18)";
-      ctx.lineWidth = 3;
+    ctx.fillRect(0, 0, w, h);
+
+    // Bioluminescent enzyme haze.
+    const haze = ctx.createRadialGradient(w * 0.3, h * 0.55, 10, w * 0.3, h * 0.55, w * 0.4);
+    haze.addColorStop(0, "rgba(83,234,209,0.16)");
+    haze.addColorStop(1, "rgba(83,234,209,0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, w, h);
+
+    // Three parallax layers of stomach folds arching over the horizon.
+    [
+      { y: 0.52, color: "rgba(46,8,26,0.85)", amp: 0.08, lobes: 5 },
+      { y: 0.62, color: "rgba(84,18,48,0.8)", amp: 0.07, lobes: 6 },
+      { y: 0.74, color: "rgba(129,42,78,0.75)", amp: 0.055, lobes: 7 },
+    ].forEach((layer, index) => {
+      ctx.fillStyle = layer.color;
       ctx.beginPath();
-      for (let x = 0; x <= sky.width; x += 8) {
-        const waveY = y + Math.sin(x * 0.22 + y * 0.11) * 4;
-        if (x === 0) ctx.moveTo(x, waveY);
-        else ctx.lineTo(x, waveY);
+      ctx.moveTo(0, h);
+      for (let x = 0; x <= w; x += 4) {
+        const t = x / w;
+        const y = h * (layer.y + Math.sin(t * Math.PI * layer.lobes + index * 1.7) * layer.amp
+          + Math.sin(t * Math.PI * 2.2 + index) * layer.amp * 0.5);
+        ctx.lineTo(x, y);
       }
-      ctx.stroke();
+      ctx.lineTo(w, h);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Wet highlight tracing the top of the nearest fold.
+    ctx.strokeStyle = "rgba(255,157,181,0.3)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 4) {
+      const t = x / w;
+      const y = h * (0.52 + Math.sin(t * Math.PI * 5) * 0.08 + Math.sin(t * Math.PI * 2.2) * 0.04) - 2;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     }
-    for (let i = 0; i < 80; i++) {
-      ctx.fillStyle = i % 4 ? "rgba(255,179,77,0.2)" : "rgba(178,255,95,0.28)";
+    ctx.stroke();
+
+    // Drifting spores and food motes.
+    for (let i = 0; i < 90; i++) {
+      ctx.fillStyle = i % 4 ? "rgba(255,179,77,0.3)" : "rgba(178,255,95,0.36)";
       ctx.beginPath();
-      ctx.arc(Math.random() * sky.width, Math.random() * sky.height, Math.random() * 1.8 + 0.4, 0, Math.PI * 2);
+      ctx.arc(Math.random() * w, Math.random() * h, Math.random() * 2.2 + 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
+    return finishSky(canvas);
   }
 
   function makeLavaSkyTexture() {
-    const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 128;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
-    gradient.addColorStop(0, "#120810");
-    gradient.addColorStop(0.45, "#2a1620");
-    gradient.addColorStop(1, "#5c160f");
+    const { canvas, ctx } = skyCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#030204");
+    gradient.addColorStop(0.5, "#150a10");
+    gradient.addColorStop(0.78, "#3c1208");
+    gradient.addColorStop(1, "#a33208");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-    for (let i = 0; i < 9; i++) {
-      const x = 6 + i * 15;
-      const glow = ctx.createLinearGradient(x, sky.height, x + 12, 0);
-      glow.addColorStop(0, "rgba(255,74,33,0.48)");
-      glow.addColorStop(0.5, "rgba(255,212,59,0.16)");
-      glow.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    // The magma sea glowing behind the rock line.
+    const glow = ctx.createRadialGradient(w * 0.5, h * 0.98, 20, w * 0.5, h * 0.98, w * 0.72);
+    glow.addColorStop(0, "rgba(255,150,40,0.9)");
+    glow.addColorStop(0.45, "rgba(255,90,47,0.42)");
+    glow.addColorStop(1, "rgba(255,90,47,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    // Jagged basalt skyline in near-black.
+    const peaks = [0.66, 0.5, 0.72, 0.42, 0.6, 0.47, 0.7, 0.52, 0.64, 0.44, 0.68];
+    const step = w / (peaks.length - 1);
+    ctx.fillStyle = "#0a0508";
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    peaks.forEach((peak, i) => {
+      ctx.lineTo(i * step, h * peak + Math.sin(i * 7.3) * 8);
+      ctx.lineTo(i * step + step * 0.5, h * (peak + 0.13));
+    });
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
+
+    // Molten cracks snake up the silhouette.
+    ctx.strokeStyle = "rgba(255,120,40,0.8)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const cx = w * (0.06 + i * 0.12);
       ctx.beginPath();
-      ctx.moveTo(x, sky.height);
-      ctx.lineTo(x + 18, sky.height);
-      ctx.lineTo(x + 9, 0);
-      ctx.lineTo(x - 8, 0);
-      ctx.closePath();
+      ctx.moveTo(cx, h * 0.98);
+      ctx.lineTo(cx + 8, h * 0.88);
+      ctx.lineTo(cx - 4, h * 0.8);
+      ctx.lineTo(cx + 6, h * (0.7 + Math.sin(i) * 0.05));
+      ctx.stroke();
+    }
+
+    // Rising embers.
+    for (let i = 0; i < 130; i++) {
+      const bright = i % 6 === 0;
+      ctx.fillStyle = bright
+        ? "rgba(255,220,150,0.9)"
+        : `rgba(255,${Math.floor(90 + Math.random() * 90)},40,${(0.25 + Math.random() * 0.4).toFixed(2)})`;
+      const size = bright ? Math.random() * 2.4 + 1 : Math.random() * 1.8 + 0.4;
+      ctx.beginPath();
+      ctx.arc(Math.random() * w, Math.random() * h, size, 0, Math.PI * 2);
       ctx.fill();
     }
-    for (let i = 0; i < 120; i++) {
-      ctx.fillStyle = i % 5 ? "rgba(255,179,77,0.26)" : "rgba(248,251,255,0.22)";
-      ctx.fillRect(Math.random() * sky.width, Math.random() * sky.height, Math.random() * 2 + 0.5, Math.random() * 2 + 0.5);
-    }
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
+    return finishSky(canvas);
   }
 
   function makeStationSkyTexture() {
-    const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 128;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
-    gradient.addColorStop(0, "#060914");
-    gradient.addColorStop(0.54, "#111c31");
-    gradient.addColorStop(1, "#283747");
+    const { canvas, ctx } = skyCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, "#010208");
+    gradient.addColorStop(0.6, "#071224");
+    gradient.addColorStop(1, "#122338");
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-    for (let i = 0; i < 120; i++) {
-      const alpha = Math.random() * 0.5 + 0.24;
-      ctx.fillStyle = `rgba(248,251,255,${alpha})`;
-      ctx.fillRect(Math.random() * sky.width, Math.random() * sky.height * 0.62, 1, 1);
+    ctx.fillRect(0, 0, w, h);
+
+    // A violet nebula smear.
+    const nebula = ctx.createRadialGradient(w * 0.24, h * 0.3, 8, w * 0.24, h * 0.3, w * 0.3);
+    nebula.addColorStop(0, "rgba(140,107,255,0.16)");
+    nebula.addColorStop(1, "rgba(140,107,255,0)");
+    ctx.fillStyle = nebula;
+    ctx.fillRect(0, 0, w, h);
+
+    // Stars, a few with cross glints.
+    for (let i = 0; i < 260; i++) {
+      const alpha = Math.random() * 0.7 + 0.2;
+      const size = Math.random() < 0.06 ? 2 : 1;
+      ctx.fillStyle = `rgba(248,251,255,${alpha.toFixed(2)})`;
+      ctx.fillRect(Math.random() * w, Math.random() * h * 0.8, size, size);
     }
-    ctx.fillStyle = "rgba(83,234,209,0.16)";
-    for (let y = 142; y < sky.height; y += 24) {
-      ctx.fillRect(0, y, sky.width, 2);
+    ctx.strokeStyle = "rgba(248,251,255,0.6)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const sx = Math.random() * w;
+      const sy = Math.random() * h * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(sx - 5, sy);
+      ctx.lineTo(sx + 5, sy);
+      ctx.moveTo(sx, sy - 5);
+      ctx.lineTo(sx, sy + 5);
+      ctx.stroke();
     }
-    ctx.fillStyle = "rgba(248,251,255,0.32)";
+
+    // Earth hanging outside the observation window.
+    const ex = w * 0.72;
+    const ey = h * 0.34;
+    const er = w * 0.13;
+    const atmosphere = ctx.createRadialGradient(ex, ey, er * 0.8, ex, ey, er * 1.3);
+    atmosphere.addColorStop(0, "rgba(120,200,255,0.5)");
+    atmosphere.addColorStop(1, "rgba(120,200,255,0)");
+    ctx.fillStyle = atmosphere;
     ctx.beginPath();
-    ctx.arc(92, 58, 13, 0, Math.PI * 2);
+    ctx.arc(ex, ey, er * 1.3, 0, Math.PI * 2);
     ctx.fill();
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
+    const earth = ctx.createRadialGradient(ex - er * 0.4, ey - er * 0.4, er * 0.1, ex, ey, er);
+    earth.addColorStop(0, "#7fd4ff");
+    earth.addColorStop(0.55, "#1e6fc4");
+    earth.addColorStop(1, "#0a2c66");
+    ctx.fillStyle = earth;
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "rgba(64,170,90,0.75)";
+    [[-0.35, -0.2, 0.34], [0.15, 0.28, 0.3], [0.3, -0.35, 0.22]].forEach(([ox, oy, s]) => {
+      ctx.beginPath();
+      ctx.ellipse(ex + er * ox, ey + er * oy, er * s, er * s * 0.62, ox * 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    for (let i = 0; i < 9; i++) {
+      ctx.beginPath();
+      ctx.ellipse(ex + rand(-er, er) * 0.9, ey + rand(-er, er) * 0.9, er * rand(0.14, 0.34), er * rand(0.05, 0.1), rand(0, Math.PI), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const shade = ctx.createLinearGradient(ex - er, ey, ex + er, ey);
+    shade.addColorStop(0, "rgba(2,6,18,0)");
+    shade.addColorStop(0.72, "rgba(2,6,18,0)");
+    shade.addColorStop(1, "rgba(2,6,18,0.85)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(ex - er, ey - er, er * 2, er * 2);
+    ctx.restore();
+
+    // Station hull truss along the bottom with lit windows.
+    ctx.fillStyle = "#1a2634";
+    ctx.fillRect(0, h * 0.84, w, h * 0.16);
+    ctx.fillStyle = "#243447";
+    ctx.fillRect(0, h * 0.84, w, h * 0.02);
+    ctx.fillStyle = "rgba(83,234,209,0.25)";
+    for (let i = 0; i < 15; i++) {
+      const wx = w * (0.03 + i * 0.066);
+      ctx.fillRect(wx - 2, h * 0.88, w * 0.028 + 4, h * 0.032);
+    }
+    for (let i = 0; i < 15; i++) {
+      const wx = w * (0.03 + i * 0.066);
+      ctx.fillStyle = i % 4 === 0 ? "rgba(255,212,59,0.85)" : "rgba(83,234,209,0.8)";
+      ctx.fillRect(wx, h * 0.885, w * 0.028, h * 0.02);
+    }
+    return finishSky(canvas);
   }
 
   function buildDish() {
@@ -2184,6 +2512,8 @@
     const shade = makeBackdropCylinder(lampX, 132, -half - 60, 36, 54, 46, world.materials.lampShade, 24);
     shade.scale.z = 0.72;
     makeBackdropBox(lampX, 158, -half - 60, 88, 8, 88, world.materials.lampShade);
+    // The lamp actually casts warm light through the glass into the tank.
+    addStageGlowLight(0xffc46b, 1.3, 300, lampX, 128, -half - 56);
 
     makeBackdropBox(42, 18, half + 146, 128, 18, 58, world.materials.furnitureWood, 0.15);
     const shelfX = -half - 86;
@@ -2194,45 +2524,148 @@
   }
 
   function makeStomachBackdrop() {
+    const THREE = window.THREE;
     const radius = playableRadius();
-    makeBackdropBox(0, -1.85, 0, radius * 2.55, 0.6, radius * 2.55, world.materials.zoneStomachPink);
-    makeBackdropBox(0, 82, -radius - 82, radius * 2.3, 164, 8, world.materials.zoneStomachPink);
-    makeBackdropBox(-radius - 82, 82, 0, 8, 164, radius * 2.3, world.materials.zoneStomachPurple);
-    makeBackdropBox(radius + 82, 82, 0, 8, 164, radius * 2.3, world.materials.zoneStomachGold);
-    for (let i = 0; i < 9; i++) {
-      const x = -radius * 0.92 + i * (radius * 0.23);
-      const fold = makeBackdropCylinder(x, 58 + (i % 3) * 8, -radius - 70, 6, 11, 118, i % 2 ? world.materials.zoneStomachGold : world.materials.zoneStomachPink, 10);
-      fold.rotation.z = 0.18 + Math.sin(i) * 0.12;
+    makeBackdropBox(0, -1.85, 0, radius * 2.55, 0.6, radius * 2.55, world.materials.fleshDeep);
+
+    // The stomach lining wraps the whole chamber, seen from inside.
+    const wallMaterial = world.materials.fleshWall.clone();
+    wallMaterial.side = THREE.BackSide;
+    const wall = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius + 72, radius + 46, 214, 48, 1, true),
+      wallMaterial
+    );
+    wall.position.y = 68;
+    addStageScenery(wall);
+
+    // Rugae: fat rounded ridges hugging the wall all the way around.
+    for (let i = 0; i < 16; i++) {
+      const angle = (i / 16) * Math.PI * 2 + rand(-0.05, 0.05);
+      const d = radius + rand(22, 44);
+      const fold = makeBackdropCylinder(
+        Math.cos(angle) * d, rand(30, 62), Math.sin(angle) * d,
+        rand(6, 11), rand(13, 21), rand(105, 165),
+        i % 4 === 3 ? world.materials.zoneStomachGold : world.materials.fleshWall, 10
+      );
+      fold.rotation.z = Math.sin(angle) * 0.14;
+      fold.rotation.x = Math.cos(angle) * 0.1;
     }
+
+    // Villi tendrils dangle into view around the rim.
+    for (let i = 0; i < 20; i++) {
+      const angle = rand(0, Math.PI * 2);
+      const d = radius + rand(4, 30);
+      const length = rand(14, 34);
+      const top = rand(58, 92);
+      const villus = makeBackdropCylinder(
+        Math.cos(angle) * d, top - length / 2, Math.sin(angle) * d,
+        1.2, 2.8, length, world.materials.villi, 6
+      );
+      villus.rotation.x = rand(-0.14, 0.14);
+      villus.rotation.z = rand(-0.14, 0.14);
+      const tip = makeBackdropCylinder(
+        Math.cos(angle) * d, top - length - 1.2, Math.sin(angle) * d,
+        1.9, 1.4, 2.8, world.materials.villi, 6
+      );
+      tip.rotation.x = villus.rotation.x;
+    }
+
+    // Warm biolight pooling in the chamber.
+    addStageGlowLight(0xff7aa8, 1.15, 160, mapCoord(-46), 24, mapCoord(32));
+    addStageGlowLight(0x53ead1, 0.8, 130, mapCoord(-52), 18, mapCoord(-50));
   }
 
   function makeLavaBackdrop() {
+    const THREE = window.THREE;
     const radius = playableRadius();
-    makeBackdropBox(0, -2.0, 0, radius * 2.62, 0.6, radius * 2.62, world.materials.zoneLavaBasalt);
-    makeBackdropBox(0, 92, -radius - 88, radius * 2.4, 184, 10, world.materials.cliff);
-    makeBackdropBox(-radius - 90, 84, 0, 10, 168, radius * 2.4, world.materials.cliff);
-    makeBackdropBox(radius + 90, 84, 0, 10, 168, radius * 2.4, world.materials.cliff);
-    for (let i = 0; i < 10; i++) {
-      const x = -radius * 0.9 + i * radius * 0.2;
-      const spire = makeBackdropCylinder(x, 42 + (i % 4) * 12, -radius - 72, 9, 17, 82 + (i % 3) * 18, i % 2 ? world.materials.zoneLavaCrystal : world.materials.zoneLavaBasalt, 6);
-      spire.rotation.z = Math.sin(i * 1.7) * 0.16;
+    makeBackdropBox(0, -2.0, 0, radius * 2.62, 0.6, radius * 2.62, world.materials.lavaRock);
+
+    // The cavern wall wraps the whole arena in dark rock, seen from inside.
+    const wallMaterial = world.materials.lavaRock.clone();
+    wallMaterial.side = THREE.BackSide;
+    const wall = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius + 78, radius + 50, 230, 40, 1, true),
+      wallMaterial
+    );
+    wall.position.y = 76;
+    addStageScenery(wall);
+
+    // Jagged obsidian teeth ring the rim, back-lit by the magma sea.
+    for (let i = 0; i < 24; i++) {
+      const angle = (i / 24) * Math.PI * 2 + rand(-0.06, 0.06);
+      const d = radius + rand(16, 42);
+      const height = rand(48, 128);
+      const spire = makeBackdropCylinder(
+        Math.cos(angle) * d, height * 0.34, Math.sin(angle) * d,
+        rand(1.6, 4.6), rand(9, 19), height,
+        i % 5 === 4 ? world.materials.lavaCrust : world.materials.lavaRock, 5
+      );
+      spire.rotation.z = Math.sin(angle * 3.1) * 0.18;
     }
+
+    // Lavafalls pour down the cavern wall in glowing seams.
+    [0.35, 1.42, 2.6, 3.9, 5.1].forEach((angle, index) => {
+      const d = radius + 44;
+      makeBackdropBox(
+        Math.cos(angle) * d, 62, Math.sin(angle) * d,
+        4.5 + index * 1.5, 140, 3,
+        world.materials.lavaGlow, -angle + Math.PI / 2
+      );
+      const pool = makeBackdropCylinder(Math.cos(angle) * (d - 12), -0.4, Math.sin(angle) * (d - 12), 10 + index * 2, 12 + index * 2, 1.1, world.materials.lavaGlow, 10);
+      pool.scale.z = 0.62;
+    });
+
+    // Stalactites loom out of the darkness overhead.
+    for (let i = 0; i < 14; i++) {
+      const angle = rand(0, Math.PI * 2);
+      const d = radius * rand(0.5, 1.04);
+      const length = rand(20, 48);
+      const spike = new THREE.Mesh(
+        new THREE.ConeGeometry(rand(2.2, 5), length, 5),
+        i % 4 === 3 ? world.materials.lavaCrust : world.materials.lavaRock
+      );
+      spike.position.set(Math.cos(angle) * d, 146 - length / 2, Math.sin(angle) * d);
+      spike.rotation.x = Math.PI;
+      addStageScenery(spike);
+    }
+
+    // Pulsing ember light wells over the river and the caldera.
+    addStageGlowLight(0xff5a2f, 1.6, 130, mapCoord(48), 10, mapCoord(32));
+    addStageGlowLight(0xff7a26, 1.2, 110, mapCoord(-10), 8, mapCoord(-18));
+    addStageGlowLight(0xd883ff, 0.9, 110, mapCoord(52), 14, mapCoord(-54));
   }
 
   function makeStationBackdrop() {
     const half = playableHalfSize();
-    makeBackdropBox(0, -1.9, 0, half * 3.2, 0.55, half * 3.2, world.materials.zoneStationWhite);
+    makeBackdropBox(0, -1.9, 0, half * 3.2, 0.55, half * 3.2, world.materials.stationHull);
     makeBackdropBox(0, 98, -half - 86, half * 2.75, 196, 8, world.materials.cameraBody);
     makeBackdropBox(-half - 88, 98, 0, 8, 196, half * 2.75, world.materials.cameraBody);
     makeBackdropBox(half + 88, 98, 0, 8, 196, half * 2.75, world.materials.cameraBody);
+
+    // Observation windows glow with starlight along the far wall.
     for (let i = 0; i < 5; i++) {
       const x = -half * 0.68 + i * half * 0.34;
-      makeBackdropBox(x, 94, -half - 80, 44, 32, 5, world.materials.labGlass);
-      makeBackdropBox(x, 94, -half - 76, 50, 4, 6, world.materials.labMetal);
-      makeBackdropBox(x, 76, -half - 76, 50, 4, 6, world.materials.labMetal);
+      makeBackdropBox(x, 96, -half - 80, 46, 40, 5, world.materials.stationWindow);
+      makeBackdropBox(x, 74, -half - 76, 54, 5, 7, world.materials.labMetal);
+      makeBackdropBox(x, 118, -half - 76, 54, 5, 7, world.materials.labMetal);
+      makeBackdropBox(x + 26, 96, -half - 76, 5, 46, 7, world.materials.labMetal);
     }
+
+    // Structural ribs and running lights on the side hulls.
+    for (let i = 0; i < 6; i++) {
+      const p = -half * 0.8 + i * half * 0.32;
+      makeBackdropBox(-half - 84, 98, p, 6, 196, 10, world.materials.labMetal);
+      makeBackdropBox(half + 84, 98, p, 6, 196, 10, world.materials.labMetal);
+      makeBackdropBox(-half - 82, 40 + (i % 3) * 44, p + half * 0.16, 4, 6, 18, world.materials.stationWindow);
+      makeBackdropBox(half + 82, 62 + (i % 3) * 38, p - half * 0.16, 4, 6, 18, world.materials.stationWindow);
+    }
+
     makeBackdropBox(-half - 70, 34, 76, 72, 26, 92, world.materials.labMetal, 0.12);
     makeBackdropBox(half + 70, 42, -68, 82, 34, 74, world.materials.toolpod, -0.18);
+
+    // Cold running-light pools across the deck.
+    addStageGlowLight(0x53ead1, 0.9, 140, mapCoord(-50), 18, mapCoord(43));
+    addStageGlowLight(0x8c6bff, 0.85, 140, mapCoord(50), 18, mapCoord(-48));
   }
 
   function makeStomachDetails() {
@@ -2265,7 +2698,7 @@
       [mapCoord(-42), mapCoord(-50), scenicRadius(10), 0.36, 0.68, world.materials.zoneLavaSteam],
     ].forEach(([x, z, radius, scaleZ, rotation, material]) => makeMaterialPatch(x, z, radius, scaleZ, rotation, material));
     [
-      [mapCoord(-56), mapCoord(40), scenicRadius(9.6), 13, [world.materials.cliff, world.materials.zoneLavaBasalt, world.materials.ashCrystal]],
+      [mapCoord(-56), mapCoord(40), scenicRadius(9.6), 13, [world.materials.lavaRock, world.materials.lavaCrust, world.materials.ashCrystal]],
       [mapCoord(54), mapCoord(-54), scenicRadius(10.6), 16, [world.materials.ashCrystal, world.materials.crystal, world.materials.zoneLavaCrystal]],
       [mapCoord(50), mapCoord(28), scenicRadius(8.8), 12, [world.materials.magmaBubble, world.materials.coralOrange, world.materials.zoneLavaRiver]],
     ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
@@ -2662,51 +3095,59 @@
     let color;
 
     if (config.id === "petri") {
-      color = new THREE.Color(elevation > 1.4 ? 0xf9de9b : 0xecc77b);
-      if (elevation < -0.5) color.lerp(new THREE.Color(0xdcae6d), 0.5);
+      color = new THREE.Color(elevation > 1.4 ? 0xfbe3a4 : 0xeac578);
+      if (elevation < -0.5) color.lerp(new THREE.Color(0xd6a35e), 0.55);
       LEVEL_CONFIGS[1].zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.08), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.26);
+      });
+      color.lerp(new THREE.Color(0xfff3c8), smoothstep(LEVEL_ONE_RADIUS * 0.78, LEVEL_ONE_RADIUS, distance) * 0.3);
+    } else if (config.id === "stomach") {
+      color = new THREE.Color(elevation > 3.2 ? 0xd66d92 : 0x93264f);
+      if (elevation < -1.4) color.set(0x54123f);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.32);
+      });
+      color.lerp(new THREE.Color(0xff9d6b), smoothstep(config.radius * 0.72, config.radius, distance) * 0.24);
+    } else if (config.id === "lava") {
+      // Typical ground is near-black cooled rock; the deep channels are molten.
+      color = new THREE.Color(elevation > 3.6 ? 0x4e4756 : 0x231d26);
+      if (elevation < -1.6) color.set(0xff7a26);
+      // The deepest cuts burn white-hot.
+      color.lerp(new THREE.Color(0xffd43b), clamp((-elevation - 2.6) * 0.55, 0, 0.55));
+      // Thin ember veins fracture the crust wherever a slow noise field crosses zero.
+      if (elevation > -1.2) {
+        const vein = Math.abs(fbm(noiseField(TERRAIN_PARAMS.lava.seed + 61), x * 0.05, z * 0.05, 2, 2, 0.5));
+        if (vein < 0.09) color.lerp(new THREE.Color(0xff5a2f), (1 - vein / 0.09) * 0.55);
+      }
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.04), 0, 1);
         if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.18);
       });
-      color.lerp(new THREE.Color(0xffefbd), smoothstep(LEVEL_ONE_RADIUS * 0.78, LEVEL_ONE_RADIUS, distance) * 0.28);
-    } else if (config.id === "stomach") {
-      color = new THREE.Color(elevation > 3.2 ? 0xb34a75 : 0x7e274b);
-      if (elevation < -1.4) color.set(0x4e1b43);
+    } else if (config.id === "station") {
+      // Alternating deck plates with recessed dark service channels.
+      const plate = (Math.floor(x / 14) + Math.floor(z / 14)) % 2 === 0 ? 0x7e8b9d : 0x69758a;
+      color = new THREE.Color(elevation > 2.0 ? 0xa2b1c4 : plate);
+      if (elevation < -0.8) color.set(0x3c4654);
+      config.zones.forEach((zone) => {
+        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
+        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.24);
+      });
+      const seam = (Math.abs(Math.sin(x * 0.19)) < 0.035 || Math.abs(Math.sin(z * 0.19)) < 0.035) ? 0.5 : 0;
+      if (seam) color.lerp(new THREE.Color(0x53ead1), seam);
+    } else {
+      // Aquarium / default: sunlit weedy gravel with a sandy riverbed channel.
+      color = new THREE.Color(elevation > 3.0 ? 0x8fdc2f : 0x4fb31d);
+      if (elevation < -0.6) color.set(0xd9c07c);
       config.zones.forEach((zone) => {
         const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
         if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.26);
       });
-      color.lerp(new THREE.Color(0xffb34d), smoothstep(config.radius * 0.72, config.radius, distance) * 0.18);
-    } else if (config.id === "lava") {
-      // Typical ground is dark cooled rock; the deepest channels glow with magma.
-      color = new THREE.Color(elevation > 3.6 ? 0x5c5662 : 0x2d2630);
-      if (elevation < -1.6) color.set(0xb32719);
-      config.zones.forEach((zone) => {
-        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.04), 0, 1);
-        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.24);
-      });
-      color.lerp(new THREE.Color(0xff5a2f), clamp(-elevation, 0, 3) * 0.1);
-    } else if (config.id === "station") {
-      color = new THREE.Color(elevation > 2.0 ? 0xaeb8c6 : 0x657080);
-      if (elevation < -0.8) color.set(0x44505f);
-      config.zones.forEach((zone) => {
-        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
-        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.2);
-      });
-      const seam = (Math.abs(Math.sin(x * 0.19)) < 0.035 || Math.abs(Math.sin(z * 0.19)) < 0.035) ? 0.12 : 0;
-      if (seam) color.lerp(new THREE.Color(0xf8fbff), seam);
-    } else {
-      // Aquarium / default: sunlit weedy gravel, lighter on the high mounds.
-      color = new THREE.Color(elevation > 3.0 ? 0x82d22a : 0x55b61f);
-      if (elevation < -0.6) color.set(0x31a65a);
-      config.zones.forEach((zone) => {
-        const influence = clamp(1 - Math.hypot(x - zone.x, z - zone.z) / (zone.radius * 1.05), 0, 1);
-        if (influence > 0) color.lerp(new THREE.Color(zone.color), influence * 0.22);
-      });
       const edge = config.shape === "square"
         ? Math.max(Math.abs(x), Math.abs(z)) / playableHalfSize()
         : distance / WORLD_RADIUS;
-      if (edge > 0.82) color.lerp(new THREE.Color(0x257f31), (edge - 0.82) / 0.18 * 0.6);
+      if (edge > 0.82) color.lerp(new THREE.Color(0x1e6b2a), (edge - 0.82) / 0.18 * 0.6);
     }
 
     // Slope shading (every level): sample neighbouring heights to gauge steepness,
@@ -2893,7 +3334,7 @@
       makePebblePatch(pos.x, pos.z, rand(0.75, 1.55));
     }
     [
-      [mapCoord(-64), mapCoord(48), scenicRadius(8.0), 13, [world.materials.cliff, world.materials.ashCrystal, world.materials.zoneLavaBasalt]],
+      [mapCoord(-64), mapCoord(48), scenicRadius(8.0), 13, [world.materials.lavaRock, world.materials.ashCrystal, world.materials.lavaCrust]],
       [mapCoord(62), mapCoord(-60), scenicRadius(10.0), 17, [world.materials.ashCrystal, world.materials.crystal, world.materials.zoneLavaCrystal]],
       [mapCoord(55), mapCoord(26), scenicRadius(7.8), 12, [world.materials.magmaBubble, world.materials.zoneLavaRiver, world.materials.coralOrange]],
     ].forEach(([x, z, radius, count, materials]) => makeTubeCluster(x, z, radius, count, materials));
@@ -3372,7 +3813,7 @@
           const height = rand(1.6, 6.2);
           const core = new THREE.Mesh(
             new THREE.ConeGeometry(rand(0.34, 0.86), height, 6),
-            pick([world.materials.cliff, world.materials.ashCrystal, world.materials.zoneLavaBasalt, world.materials.zoneLavaCrystal])
+            pick([world.materials.lavaCrust, world.materials.ashCrystal, world.materials.lavaRock, world.materials.zoneLavaCrystal])
           );
           core.position.y = height / 2;
           core.castShadow = true;
@@ -4676,6 +5117,13 @@
     });
     el.pause.addEventListener("click", togglePause);
     el.restart.addEventListener("click", startGame);
+    if (el.levelSelectButtons) {
+      el.levelSelectButtons.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-stage]");
+        if (!button || button.disabled) return;
+        selectUnlockedStage(button.dataset.stage);
+      });
+    }
     if (saveSlot) {
       saveMenu = saveSlot.attachButtons({
         primary: el.primary,
@@ -5000,8 +5448,9 @@
     const data = saved && saved.data;
     if (!state.ready || !data) return;
     resetGame(false);
-    const maxStage = Math.max(...Object.keys(LEVEL_CONFIGS).map((key) => Number(key) || 1));
+    const maxStage = maxConfiguredStage();
     const stage = Math.max(1, Math.min(maxStage, Number(data.stage) || 1));
+    unlockStage(stage);
     if (stage !== state.stage) transitionToStage(stage);
     Object.assign(state, {
       running: true,
@@ -5284,6 +5733,7 @@
 
   function transitionToStage(stageNumber) {
     if (state.stage === stageNumber || !LEVEL_CONFIGS[stageNumber]) return;
+    unlockStage(stageNumber);
     state.stage = stageNumber;
     applyLevelConfig(stageNumber);
     clearProps();
@@ -5361,11 +5811,65 @@
     syncPlayMode();
     if (state.paused) {
       showOverlay("SPECIMEN PAUSED", "The tardigrade is briefly no longer anyone's problem.", "Resume");
+      setPauseLevelSelectVisible(true);
     } else {
       hideOverlay();
       anchorGameViewport();
       state.lastTime = performance.now();
     }
+  }
+
+  function setPauseLevelSelectVisible(visible) {
+    if (!el.levelSelect) return;
+    el.levelSelect.classList.toggle("is-visible", !!visible);
+    el.levelSelect.setAttribute("aria-hidden", visible ? "false" : "true");
+    if (visible) renderPauseLevelSelect();
+  }
+
+  function renderPauseLevelSelect() {
+    if (!el.levelSelectButtons) return;
+    const stages = Object.keys(LEVEL_CONFIGS)
+      .map((key) => Number(key))
+      .filter((stage) => Number.isFinite(stage) && stage > 0)
+      .sort((a, b) => a - b);
+    el.levelSelectButtons.innerHTML = stages.map((stage) => {
+      const config = LEVEL_CONFIGS[stage];
+      const unlocked = isStageUnlocked(stage);
+      const current = state.stage === stage;
+      const label = config.shortName || config.name || `Level ${stage}`;
+      const status = !unlocked ? "Locked" : current ? "Current" : "Play";
+      return `
+        <button class="micro-level-btn${current ? " is-current" : ""}" type="button" data-stage="${stage}" ${unlocked ? "" : "disabled"} aria-current="${current ? "true" : "false"}" title="${unlocked ? `Play ${config.name}` : `${config.name} locked`}">
+          <span>Lv ${stage}</span>
+          <small>${unlocked ? label : "Locked"} · ${status}</small>
+        </button>
+      `;
+    }).join("");
+  }
+
+  function selectUnlockedStage(stageNumber) {
+    const target = Math.floor(Number(stageNumber) || 0);
+    if (!LEVEL_CONFIGS[target] || !isStageUnlocked(target)) return;
+    if (!state.running || state.gameOver) return;
+
+    if (state.stage === target) {
+      if (state.paused) togglePause();
+      return;
+    }
+
+    state.stageAdvanceAvailable = false;
+    state.pendingStage = 0;
+    unlockStage(target);
+    transitionToStage(target);
+    if (state.paused) {
+      state.paused = false;
+      if (el.pause) el.pause.textContent = "Pause";
+      hideOverlay();
+      syncPlayMode();
+      anchorGameViewport();
+      state.lastTime = performance.now();
+    }
+    if (canvas) canvas.focus();
   }
 
   function anchorGameViewport() {
@@ -6126,6 +6630,7 @@
     const config = levelConfig();
     state.stageAdvanceAvailable = true;
     state.pendingStage = nextStage;
+    unlockStage(nextStage);
     state.researchCameraUnlocked = true;
     resetVirtualControls();
     updateGoalText();
@@ -6349,6 +6854,10 @@
     world.atmosphere.forEach((item, index) => {
       const phase = item.userData.phase || 0;
       const pulse = 0.5 + Math.sin(state.clock * 0.85 + phase) * 0.5;
+      if (item.isLight && typeof item.userData.baseIntensity === "number") {
+        item.intensity = item.userData.baseIntensity * (0.72 + pulse * 0.55);
+        return;
+      }
       if (item.material && item.material.transparent) {
         item.material.opacity = (item.userData.baseOpacity || 0.16) * (0.55 + pulse * 0.7);
       }
@@ -6750,11 +7259,14 @@
     el.primary.textContent = buttonText;
     el.overlay.classList.toggle("overlay--report", !!scoreHtml);
     el.overlay.classList.add("overlay--show");
+    // Level select is pause-only; other overlays (title / game over) hide it.
+    if (!(state.running && state.paused && !state.gameOver)) setPauseLevelSelectVisible(false);
   }
 
   function hideOverlay() {
     el.overlay.classList.remove("overlay--show");
     el.overlay.classList.remove("overlay--report");
+    setPauseLevelSelectVisible(false);
   }
 
   function endGame(title, reason) {
@@ -6849,6 +7361,8 @@
     forceCurrentStageCompletion,
     acceptStageAdvance,
     transitionToStage,
+    unlockStage,
+    selectUnlockedStage,
   };
   loadThree();
 })();

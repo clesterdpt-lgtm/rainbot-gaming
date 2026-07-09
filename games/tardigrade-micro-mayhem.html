@@ -112,6 +112,88 @@
       margin-bottom: 12px;
     }
 
+    .micro-level-select {
+      display: none;
+      width: min(560px, 100%);
+      margin: 0 auto 14px;
+      gap: 8px;
+      justify-items: center;
+    }
+
+    .micro-level-select.is-visible {
+      display: grid;
+    }
+
+    .micro-level-select__label {
+      color: rgba(247, 251, 255, 0.72);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .micro-level-select__grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .micro-level-btn {
+      min-width: 92px;
+      min-height: 44px;
+      display: inline-grid;
+      gap: 2px;
+      align-content: center;
+      justify-items: center;
+      border: 1px solid rgba(107, 255, 125, 0.34);
+      border-radius: 10px;
+      background: rgba(3, 14, 18, 0.82);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+      color: #f7fbff;
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: 12px;
+      line-height: 1.05;
+      padding: 8px 10px;
+      transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    }
+
+    .micro-level-btn small {
+      color: rgba(247, 251, 255, 0.62);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .micro-level-btn:hover:not(:disabled) {
+      border-color: rgba(107, 255, 125, 0.72);
+      background: rgba(8, 34, 40, 0.95);
+      transform: translateY(-1px);
+    }
+
+    .micro-level-btn.is-current {
+      border-color: rgba(255, 212, 59, 0.78);
+      background: rgba(42, 34, 8, 0.9);
+      box-shadow: 0 0 18px rgba(255, 212, 59, 0.22);
+    }
+
+    .micro-level-btn:disabled {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(8, 10, 14, 0.55);
+      color: rgba(247, 251, 255, 0.34);
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
+
+    .micro-level-btn:disabled small {
+      color: rgba(247, 251, 255, 0.28);
+    }
+
     .micro-chip,
     .micro-status-strip,
     .micro-wallet-chip,
@@ -2282,6 +2364,10 @@
               bash bacteria, eat algae, push chunks into the nutrient ring, and become the least supervised organism in the dish.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
+            <div class="micro-level-select" id="pause-level-select" aria-hidden="true">
+              <span class="micro-level-select__label">Select unlocked level</span>
+              <div class="micro-level-select__grid" id="pause-level-buttons" role="group" aria-label="Unlocked levels"></div>
+            </div>
             <button class="btn btn--primary" id="btn-primary">Enter the dish</button>
           </div>
         </div>
@@ -2365,7 +2451,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260709-micro-fill-1"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260709-no-rapier-label-1"></script>
+  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260709-pause-levels-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

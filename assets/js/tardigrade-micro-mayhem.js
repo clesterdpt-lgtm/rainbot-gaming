@@ -6631,7 +6631,6 @@
     if (el.arcadeXpText) el.arcadeXpText.textContent = `${Math.floor(state.xp).toLocaleString()} / ${xpTarget().toLocaleString()}`;
     syncStoreUi();
     updateMissionHUD();
-    updatePhysicsStatus();
 
     el.meterHydrate.style.width = percent(state.hydrate);
     el.meterHydrate.style.background = state.hydrate < 28 ? "var(--bad)" : "#53ead1";

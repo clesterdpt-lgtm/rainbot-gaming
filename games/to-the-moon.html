@@ -944,13 +944,29 @@
         if(!rover.drillTarget||rover.drillTarget.c!==target.c||rover.drillTarget.r!==target.r){ rover.drillTarget=target; rover.drillT=0; }
         const need=HARDNESS[tt]||1;
         rover.drillT+=G.drillSpd*dt; rover.drillAnim+=dt*16;
+        // drill-assist: while digging down, slide onto the dig column so the rover
+        // drops into its own hole instead of straddling the edge and getting stuck
+        if(target.side==="d"){
+          const ax=target.c*TILE+TILE/2-rover.w/2, d=wrapDX(ax,rover.x);
+          rover.x=wrapX(rover.x+clamp(d,-100*dt,100*dt)); rover.vx*=Math.pow(0.001,dt);
+        }
         // dig sparks at the rover's working edge (rover-relative → correct across the wrap seam)
         const ex=target.side==="d"?rover.x+rover.w/2:target.side==="r"?rover.x+rover.w:rover.x;
         const ey=target.side==="d"?rover.y+rover.h:rover.y+rover.h/2;
         if(Math.random()<0.6) addParticle(ex+rand(-7,7),ey+rand(-7,7),rand(-50,50),rand(-50,10),0.3,tileColor(tt,target.c,target.r),rand(2,3.5));
         if(rover.drillT>=need){ mineTile(target.c,target.r,tt); rover.drillTarget=null; rover.drillT=0; }
       }
-    } else { rover.drillTarget=null; rover.drillT=0; }
+    } else {
+      rover.drillTarget=null; rover.drillT=0;
+      // fall-assist: pressing down over an already-open hole slides the rover into it
+      if(keys.down && rover.onGround){
+        const hr=Math.floor((rover.y+rover.h+1)/TILE);
+        if(hr>=GROUND && tileAt(midCol,hr)===T.EMPTY){
+          const ax=mod(midCol,COLS)*TILE+TILE/2-rover.w/2, d=wrapDX(ax,rover.x);
+          rover.x=wrapX(rover.x+clamp(d,-140*dt,140*dt));
+        }
+      }
+    }
 
     // ---- hazards: lava ----
     const cc=Math.floor((rover.x+rover.w/2)/TILE), cr=Math.floor((rover.y+rover.h/2)/TILE);

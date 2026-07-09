@@ -700,7 +700,7 @@
     arcadeLevel: $("arcade-level"),
     arcadeXp: $("arcade-xp"),
     arcadeXpText: $("arcade-xp-text"),
-    arcadePhysics: $("arcade-physics"),
+
     playMeterHydrate: $("play-meter-hydrate"),
     playMeterHydrateText: $("play-meter-hydrate-text"),
     playMeterDash: $("play-meter-dash"),
@@ -1590,17 +1590,10 @@
       world.physics.world = physicsWorld;
       world.physics.ready = true;
       buildPhysicsBoundary();
-      updatePhysicsStatus();
     } catch (error) {
-      console.warn("Rapier physics unavailable; using fallback prop motion.", error);
+      console.warn("Physics unavailable; using fallback prop motion.", error);
       world.physics.failed = true;
-      updatePhysicsStatus();
     }
-  }
-
-  function updatePhysicsStatus() {
-    if (!el.arcadePhysics) return;
-    el.arcadePhysics.textContent = world.physics.ready ? "Rapier physics" : "Fallback physics";
   }
 
   function clearPhysicsBoundary() {

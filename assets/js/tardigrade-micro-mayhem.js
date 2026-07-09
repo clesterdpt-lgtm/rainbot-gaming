@@ -76,6 +76,7 @@
         { id: "rotifer-smear", type: "rotifer", centerX: -24, centerZ: 18, radiusX: 18, radiusZ: 9, speed: 0.24, hover: 1.9, phase: 0.1 },
         { id: "ciliate-loop", type: "ciliate", centerX: 24, centerZ: -5, radiusX: 28, radiusZ: 13, speed: 0.2, hover: 3.2, phase: 1.4 },
         { id: "waterbearling-petri", type: "waterbearling", centerX: -34, centerZ: -22, radiusX: 12, radiusZ: 8, speed: 0.28, hover: 1.0, phase: 3.0 },
+        { id: "germfluencer", type: "germfluencer", centerX: 12, centerZ: 30, radiusX: 16, radiusZ: 9, speed: 0.2, hover: 1.5, phase: 2.0 },
       ],
       starterProps: [
         ["algae", { x: -2.4, z: 4.4 }],
@@ -166,6 +167,7 @@
         { id: "spore-ray", type: "sporeRay", centerX: mapCoord(0), centerZ: mapCoord(50), radiusX: mapRadius(38), radiusZ: mapRadius(16), speed: 0.16, hover: 8.2, phase: 5.2 },
         { id: "nano-shoal-west", type: "sporeRay", centerX: mapCoord(-72), centerZ: mapCoord(-8), radiusX: mapRadius(18), radiusZ: mapRadius(36), speed: 0.21, hover: 7.6, phase: 2.1 },
         { id: "ciliate-filter", type: "ciliate", centerX: mapCoord(76), centerZ: mapCoord(-22), radiusX: mapRadius(12), radiusZ: mapRadius(34), speed: 0.28, hover: 5.4, phase: 0.8 },
+        { id: "lost-duck", type: "duck", centerX: mapCoord(58), centerZ: mapCoord(36), radiusX: mapRadius(18), radiusZ: mapRadius(11), speed: 0.13, hover: 1.2, phase: 0.8 },
       ],
       starterProps: [
         ["algae", { x: -2.4, z: 4.4 }],
@@ -214,6 +216,7 @@
         { id: "enzyme-eel", type: "gutWorm", centerX: mapCoord(36), centerZ: mapCoord(-30), radiusX: mapRadius(34), radiusZ: mapRadius(16), speed: 0.18, hover: 5.8, phase: 1.7 },
         { id: "crumb-rotifer", type: "rotifer", centerX: mapCoord(49), centerZ: mapCoord(-52), radiusX: mapRadius(15), radiusZ: mapRadius(11), speed: 0.26, hover: 2.5, phase: 3.1 },
         { id: "junior-waterbear-gut", type: "waterbearling", centerX: mapCoord(-44), centerZ: mapCoord(-54), radiusX: mapRadius(14), radiusZ: mapRadius(10), speed: 0.29, hover: 1.2, phase: 5.0 },
+        { id: "anxious-crouton", type: "crouton", centerX: mapCoord(48), centerZ: mapCoord(-44), radiusX: mapRadius(13), radiusZ: mapRadius(9), speed: 0.19, hover: 1.1, phase: 1.4 },
       ],
       starterProps: [
         ["foodbit", { x: -3.5, z: 5.5 }],
@@ -260,6 +263,7 @@
         { id: "ember-ray", type: "emberSkimmer", centerX: mapCoord(38), centerZ: mapCoord(22), radiusX: mapRadius(24), radiusZ: mapRadius(14), speed: 0.21, hover: 8.4, phase: 0.6 },
         { id: "ash-ciliate", type: "ciliate", centerX: mapCoord(-30), centerZ: mapCoord(-45), radiusX: mapRadius(26), radiusZ: mapRadius(12), speed: 0.25, hover: 4.8, phase: 2.2 },
         { id: "basalt-rotifer", type: "rotifer", centerX: mapCoord(-54), centerZ: mapCoord(34), radiusX: mapRadius(18), radiusZ: mapRadius(11), speed: 0.23, hover: 2.6, phase: 3.4 },
+        { id: "lava-surfer", type: "lavaSurfer", centerX: mapCoord(44), centerZ: mapCoord(28), radiusX: mapRadius(22), radiusZ: mapRadius(11), speed: 0.4, hover: 1.8, phase: 0.3 },
       ],
       starterProps: [
         ["ashCrystal", { x: -4, z: 6 }],
@@ -303,6 +307,7 @@
         { id: "cleanroom-drone", type: "labDrone", centerX: mapCoord(0), centerZ: mapCoord(45), radiusX: mapRadius(42), radiusZ: mapRadius(13), speed: 0.18, hover: 11.2, phase: 1.0 },
         { id: "lab-ciliate", type: "ciliate", centerX: mapCoord(-52), centerZ: mapCoord(-36), radiusX: mapRadius(19), radiusZ: mapRadius(12), speed: 0.28, hover: 5.8, phase: 2.8 },
         { id: "orbital-waterbearling", type: "waterbearling", centerX: mapCoord(42), centerZ: mapCoord(-44), radiusX: mapRadius(16), radiusZ: mapRadius(11), speed: 0.3, hover: 1.4, phase: 4.6 },
+        { id: "haunted-roomba", type: "roomba", centerX: mapCoord(0), centerZ: mapCoord(-4), radiusX: mapRadius(30), radiusZ: mapRadius(24), speed: 0.27, hover: 0.55, phase: 2.6 },
       ],
       starterProps: [
         ["dataChip", { x: -5, z: 5 }],
@@ -836,6 +841,7 @@
     landmarksFound: new Set(),
     qaToyIndex: 0,
     qaLandmarkIndex: 0,
+    discoTimer: 0,
     desiccationActive: false,
     curlHeld: false,
     reducedMotion: window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
@@ -893,6 +899,8 @@
     landmarks: [],
     cosmeticRoot: null,
     stageRoot: null,
+    skyDome: null,
+    funnySigns: [],
     ring: null,
     ringCore: null,
     guide: null,
@@ -1603,6 +1611,13 @@
       villi: mat(0xff8fb4, { roughness: 0.5, emissive: 0x6b1436, emissiveIntensity: 0.5 }),
       stationHull: mat(0x2e3947, { roughness: 0.5, metalness: 0.3, emissive: 0x0c141f, emissiveIntensity: 0.3 }),
       stationWindow: mat(0xbfeaff, { roughness: 0.24, metalness: 0.05, emissive: 0x35b9c9, emissiveIntensity: 0.85 }),
+      banana: mat(0xffe14d, { roughness: 0.6, emissive: 0x5c4a00, emissiveIntensity: 0.35 }),
+      bananaBruise: mat(0x8a6b2c, { roughness: 0.8 }),
+      discoBall: mat(0xe8f2fb, { roughness: 0.22, metalness: 0.5, emissive: 0x8fa8c8, emissiveIntensity: 0.5 }),
+      duckBody: mat(0xffdf42, { roughness: 0.55, emissive: 0x5c4a00, emissiveIntensity: 0.3 }),
+      duckBeak: mat(0xff8c2a, { roughness: 0.5, emissive: 0x6b2600, emissiveIntensity: 0.35 }),
+      toast: mat(0xe8c78a, { roughness: 0.85, emissive: 0x4a3410, emissiveIntensity: 0.2 }),
+      toastCrust: mat(0x9c6b32, { roughness: 0.9 }),
     };
   }
 
@@ -1757,7 +1772,18 @@
   function buildScene() {
     const THREE = window.THREE;
     const scene = world.scene;
-    scene.background = makeSkyTexture();
+
+    // World-anchored sky dome. Painting the backdrop onto a huge inverted sphere
+    // (instead of scene.background, which is screen-space) means the scenery pans
+    // naturally as the camera turns instead of following it around.
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(Math.max(430, WORLD_RADIUS * 2.1), 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.62),
+      new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false })
+    );
+    skyDome.renderOrder = -100;
+    skyDome.frustumCulled = false;
+    scene.add(skyDome);
+    world.skyDome = skyDome;
 
     const hemi = new THREE.HemisphereLight(0xd8fcff, 0x245f20, 0.78);
     scene.add(hemi);
@@ -1824,6 +1850,7 @@
     world.boundary = null;
     world.drift.length = 0;
     world.atmosphere.length = 0;
+    world.funnySigns.length = 0;
   }
 
   function rebuildStageScenery() {
@@ -1835,6 +1862,7 @@
     world.scene.add(world.stageRoot);
     makeRollingTerrain();
     makePlayableBoundary();
+    makeFunnySigns();
 
     if (levelConfig().id === "petri") {
       makeLabBackdrop();
@@ -1933,7 +1961,13 @@
     const mood = STAGE_ATMOSPHERE[id] || STAGE_ATMOSPHERE.aquarium;
     world.renderer.setClearColor(mood.clear, 1);
     world.scene.fog = new THREE.FogExp2(mood.fog, mood.fogDensity);
-    world.scene.background = (STAGE_SKY_MAKERS[id] || STAGE_SKY_MAKERS.aquarium)();
+    world.scene.background = null;
+    if (world.skyDome) {
+      const oldMap = world.skyDome.material.map;
+      world.skyDome.material.map = (STAGE_SKY_MAKERS[id] || STAGE_SKY_MAKERS.aquarium)();
+      world.skyDome.material.needsUpdate = true;
+      if (oldMap) oldMap.dispose();
+    }
     if (THREE.ACESFilmicToneMapping) world.renderer.toneMappingExposure = mood.exposure;
     world.materials.terrain.roughness = mood.terrain.roughness;
     world.materials.terrain.metalness = mood.terrain.metalness;
@@ -2008,62 +2042,7 @@
     world.scene.add(world.ring);
   }
 
-  function makeSkyTexture() {
-    const THREE = window.THREE;
-    const sky = document.createElement("canvas");
-    sky.width = 96;
-    sky.height = 256;
-    const ctx = sky.getContext("2d");
-    const gradient = ctx.createLinearGradient(0, 0, 0, sky.height);
-    gradient.addColorStop(0, "#0069a9");
-    gradient.addColorStop(0.34, "#0baee0");
-    gradient.addColorStop(0.72, "#48d8f7");
-    gradient.addColorStop(1, "#b7fbff");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, sky.width, sky.height);
-    const reefGradient = ctx.createLinearGradient(0, sky.height * 0.45, 0, sky.height);
-    reefGradient.addColorStop(0, "rgba(0,70,104,0)");
-    reefGradient.addColorStop(0.62, "rgba(5,91,110,0.32)");
-    reefGradient.addColorStop(1, "rgba(3,78,62,0.46)");
-    ctx.fillStyle = reefGradient;
-    ctx.beginPath();
-    ctx.moveTo(0, sky.height);
-    for (let i = 0; i <= 14; i++) {
-      const x = (i / 14) * sky.width;
-      const y = sky.height * (0.58 + Math.sin(i * 1.37) * 0.06 + (i % 3) * 0.025);
-      ctx.lineTo(x, y);
-    }
-    ctx.lineTo(sky.width, sky.height);
-    ctx.closePath();
-    ctx.fill();
-    for (let i = 0; i < 7; i++) {
-      const x = 4 + i * 15;
-      const shaft = ctx.createLinearGradient(x, 0, x + 16, sky.height);
-      shaft.addColorStop(0, "rgba(255,255,220,0.35)");
-      shaft.addColorStop(0.58, "rgba(190,255,246,0.11)");
-      shaft.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = shaft;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x + 13, 0);
-      ctx.lineTo(x + 2, sky.height);
-      ctx.lineTo(x - 18, sky.height);
-      ctx.closePath();
-      ctx.fill();
-    }
-    for (let i = 0; i < 150; i++) {
-      const size = Math.random() * 2.1 + 0.35;
-      ctx.fillStyle = i % 5 === 0 ? "rgba(255,255,255,0.62)" : "rgba(198,252,255,0.38)";
-      ctx.beginPath();
-      ctx.arc(Math.random() * sky.width, Math.random() * sky.height * 0.82, size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    const texture = new THREE.CanvasTexture(sky);
-    texture.encoding = THREE.sRGBEncoding;
-    return texture;
-  }
-
-  function skyCanvas(width = 512, height = 512) {
+  function skyCanvas(width = 1024, height = 512) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -2109,15 +2088,15 @@
 
     // Blurry lab bench line and glassware silhouettes on the horizon.
     ctx.fillStyle = "rgba(122,156,178,0.2)";
-    ctx.fillRect(0, h * 0.66, w, h * 0.012);
+    ctx.fillRect(0, h * 0.76, w, h * 0.012);
     [
       [0.08, 0.1, 0.055], [0.2, 0.16, 0.04], [0.33, 0.08, 0.03],
       [0.62, 0.13, 0.05], [0.76, 0.09, 0.035], [0.9, 0.15, 0.045],
     ].forEach(([gx, gh, gw]) => {
       ctx.fillStyle = "rgba(126,164,188,0.16)";
-      ctx.fillRect(w * gx, h * (0.66 - gh), w * gw, h * gh);
+      ctx.fillRect(w * gx, h * (0.76 - gh), w * gw, h * gh);
       ctx.fillStyle = "rgba(126,164,188,0.1)";
-      ctx.fillRect(w * (gx - 0.008), h * (0.66 - gh - 0.012), w * (gw + 0.016), h * 0.014);
+      ctx.fillRect(w * (gx - 0.008), h * (0.76 - gh - 0.012), w * (gw + 0.016), h * 0.014);
     });
 
     // Dust motes caught in the lamp.
@@ -2176,7 +2155,7 @@
     }
 
     // The living-room lamp glowing warmly beyond the glass.
-    const lamp = ctx.createRadialGradient(w * 0.82, h * 0.5, 6, w * 0.82, h * 0.5, w * 0.2);
+    const lamp = ctx.createRadialGradient(w * 0.82, h * 0.62, 6, w * 0.82, h * 0.62, w * 0.2);
     lamp.addColorStop(0, "rgba(255,205,130,0.4)");
     lamp.addColorStop(1, "rgba(255,205,130,0)");
     ctx.fillStyle = lamp;
@@ -2227,9 +2206,9 @@
 
     // Three parallax layers of stomach folds arching over the horizon.
     [
-      { y: 0.52, color: "rgba(46,8,26,0.85)", amp: 0.08, lobes: 5 },
-      { y: 0.62, color: "rgba(84,18,48,0.8)", amp: 0.07, lobes: 6 },
-      { y: 0.74, color: "rgba(129,42,78,0.75)", amp: 0.055, lobes: 7 },
+      { y: 0.62, color: "rgba(46,8,26,0.85)", amp: 0.08, lobes: 5 },
+      { y: 0.7, color: "rgba(84,18,48,0.8)", amp: 0.07, lobes: 6 },
+      { y: 0.78, color: "rgba(129,42,78,0.75)", amp: 0.055, lobes: 7 },
     ].forEach((layer, index) => {
       ctx.fillStyle = layer.color;
       ctx.beginPath();
@@ -2251,7 +2230,7 @@
     ctx.beginPath();
     for (let x = 0; x <= w; x += 4) {
       const t = x / w;
-      const y = h * (0.52 + Math.sin(t * Math.PI * 5) * 0.08 + Math.sin(t * Math.PI * 2.2) * 0.04) - 2;
+      const y = h * (0.62 + Math.sin(t * Math.PI * 5) * 0.08 + Math.sin(t * Math.PI * 2.2) * 0.04) - 2;
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
@@ -2411,18 +2390,18 @@
 
     // Station hull truss along the bottom with lit windows.
     ctx.fillStyle = "#1a2634";
-    ctx.fillRect(0, h * 0.84, w, h * 0.16);
+    ctx.fillRect(0, h * 0.78, w, h * 0.22);
     ctx.fillStyle = "#243447";
-    ctx.fillRect(0, h * 0.84, w, h * 0.02);
+    ctx.fillRect(0, h * 0.78, w, h * 0.02);
     ctx.fillStyle = "rgba(83,234,209,0.25)";
     for (let i = 0; i < 15; i++) {
       const wx = w * (0.03 + i * 0.066);
-      ctx.fillRect(wx - 2, h * 0.88, w * 0.028 + 4, h * 0.032);
+      ctx.fillRect(wx - 2, h * 0.82, w * 0.028 + 4, h * 0.032);
     }
     for (let i = 0; i < 15; i++) {
       const wx = w * (0.03 + i * 0.066);
       ctx.fillStyle = i % 4 === 0 ? "rgba(255,212,59,0.85)" : "rgba(83,234,209,0.8)";
-      ctx.fillRect(wx, h * 0.885, w * 0.028, h * 0.02);
+      ctx.fillRect(wx, h * 0.825, w * 0.028, h * 0.02);
     }
     return finishSky(canvas);
   }
@@ -2742,6 +2721,104 @@
     }
     makeCurrentRibbon(mapCoord(-28), mapCoord(-28), 42, 8, -0.2);
     makeCurrentRibbon(mapCoord(36), mapCoord(8), 54, 7, 0.44);
+  }
+
+  // Tiny lab signage scattered around each level. Reading one the first time
+  // scores chaos, because inspecting signs is technically research.
+  const STAGE_SIGNS = {
+    petri: [
+      { x: 16, z: 12, yaw: 0.5, text: "AGAR: DO NOT LICK" },
+      { x: -34, z: 30, yaw: -0.6, text: "YOU ARE BEING OBSERVED :)" },
+      { x: 44, z: -20, yaw: 2.6, text: "LOST: ONE FLAGELLUM. REWARD." },
+    ],
+    aquarium: [
+      { x: mapCoord(20), z: mapCoord(14), yaw: 0.4, text: "NO DIVING. YOU ARE 0.5MM TALL." },
+      { x: mapCoord(-56), z: mapCoord(40), yaw: 1.2, text: "DO NOT TAP THE GLASS (FROM INSIDE)" },
+      { x: mapCoord(50), z: mapCoord(-58), yaw: -2.2, text: "GRAVEL IS NOT FOOD. MOSTLY." },
+    ],
+    stomach: [
+      { x: mapCoord(-40), z: mapCoord(28), yaw: 0.8, text: "WELCOME TO RAT. POPULATION: YOU" },
+      { x: mapCoord(36), z: mapCoord(38), yaw: -0.5, text: "ACID LEVELS TODAY: RUDE" },
+      { x: mapCoord(44), z: mapCoord(-40), yaw: 2.4, text: "EXIT --> (EVENTUALLY)" },
+    ],
+    lava: [
+      { x: mapCoord(-28), z: mapCoord(18), yaw: 0.7, text: "CAUTION: FLOOR IS LAVA. NOT A GAME." },
+      { x: mapCoord(40), z: mapCoord(-16), yaw: -1.9, text: "EMBER RIVER SWIM TEAM: CANCELLED" },
+      { x: mapCoord(-48), z: mapCoord(-44), yaw: 1.8, text: "HOT SPRING SPA. 5 STARS. TOO HOT." },
+    ],
+    station: [
+      { x: mapCoord(-18), z: mapCoord(20), yaw: 0.3, text: "IN CASE OF VACUUM: PANIC ADORABLY" },
+      { x: mapCoord(38), z: mapCoord(30), yaw: -0.8, text: "DAY 847 WITHOUT A GRAVITY INCIDENT" },
+      { x: mapCoord(-42), z: mapCoord(-38), yaw: 2.1, text: "DO NOT FEED THE SPECIMEN. IT BONKS." },
+    ],
+  };
+
+  function makeFunnySigns() {
+    (STAGE_SIGNS[levelConfig().id] || []).forEach((sign) => makeFunnySign(sign));
+  }
+
+  function makeFunnySign(sign) {
+    const THREE = window.THREE;
+    const group = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 2.5, 6), world.materials.labMetal);
+    post.position.y = 1.25;
+    post.castShadow = true;
+    group.add(post);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#f2e8cf";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#2a3340";
+    ctx.lineWidth = 16;
+    ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+    ctx.fillStyle = "#222d3a";
+    ctx.textAlign = "center";
+    ctx.font = "700 44px 'Trebuchet MS', sans-serif";
+    const lines = wrapCanvasText(ctx, sign.text, 420, 3);
+    const startY = canvas.height / 2 - (lines.length - 1) * 26 + 14;
+    lines.forEach((line, index) => {
+      ctx.fillText(line, canvas.width / 2, startY + index * 52);
+    });
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.encoding = THREE.sRGBEncoding;
+
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.9, 0.1), world.materials.cameraBody);
+    backing.position.set(0, 2.6, 0.07);
+    group.add(backing);
+    const board = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.4, 1.7),
+      new THREE.MeshBasicMaterial({ map: texture })
+    );
+    board.position.set(0, 2.6, 0);
+    board.rotation.y = Math.PI;
+    group.add(board);
+
+    group.position.set(sign.x, terrainVisualYAt(sign.x, sign.z), sign.z);
+    group.rotation.y = sign.yaw;
+    group.scale.setScalar(1.35);
+    group.userData = { x: sign.x, z: sign.z, text: sign.text, found: false };
+    addStageScenery(group);
+    world.funnySigns.push(group);
+    return group;
+  }
+
+  function updateFunnySigns() {
+    const player = state.player;
+    world.funnySigns.forEach((sign) => {
+      const data = sign.userData;
+      if (data.found) return;
+      if (Math.hypot(player.x - data.x, player.z - data.z) > 7.5) return;
+      data.found = true;
+      const comboInfo = extendCombo("sign", 1, 3.5);
+      const score = scoreWithCombo(140);
+      addChaos(score, "Lab signage inspected");
+      showCallout("SIGN READ!", `+${score.toLocaleString()} vital lab literature${comboTag(comboInfo)}`);
+      showPrompt(`The sign says: "${data.text}"`);
+      playTone("bonk", 0.8);
+    });
   }
 
   function makePlayableBoundary() {
@@ -4150,12 +4227,173 @@
     return mount;
   }
 
+  // What the locals have to say when the tardigrade wanders past.
+  const CREATURE_CHATTER = {
+    rotifer: [
+      "My mouth is a spinning wheel and I've made peace with it.",
+      "Spin to win, baby.",
+      "You look chewy. Compliment.",
+      "I filter-feed. It's a lifestyle.",
+    ],
+    ciliate: [
+      "I row with 4,000 tiny oars. Jealous?",
+      "No thoughts. Only cilia.",
+      "You call it pond scum. I call it a gated community.",
+    ],
+    waterbearling: [
+      "Big sib!! Teach me to bonk!!",
+      "When I grow up I want eight legs. Wait.",
+      "I ate a rock today. No regrets.",
+    ],
+    sporeRay: [
+      "I'm basically a stealth bomber made of pollen.",
+      "Shhh. I'm gliding.",
+      "Achoo. That was me. Sorry about your allergies.",
+    ],
+    gutWorm: [
+      "Welcome to the gut. Tips appreciated.",
+      "The mucus rapids are lovely this time of year.",
+      "You're not food, right? Blink twice.",
+    ],
+    emberSkimmer: [
+      "Hot lap! LITERALLY!",
+      "My personal best is 900 degrees.",
+      "The lava is fine once you stop having a body.",
+    ],
+    labDrone: [
+      "SCANNING... RESULT: ADORABLE.",
+      "This was not in my job description.",
+      "I have logged 4,000 crimes. All yours.",
+    ],
+    duck: [
+      "Quack. That's it. That's the statement.",
+      "I am inexplicably here. Nobody questions the duck.",
+      "Have you seen my bathtub? It's been YEARS.",
+      "The fish respect me. I think.",
+    ],
+    crouton: [
+      "I regret being bread.",
+      "Is this... digestion?? Be honest.",
+      "Tell my loaf I love her.",
+      "It's warm and I hate it here.",
+    ],
+    lavaSurfer: [
+      "COWABUNGA, DAMP BEAN!",
+      "The floor is lava. Always has been.",
+      "Shred the mantle, brah.",
+      "This is fine. I am fine. Everything is fine.",
+    ],
+    roomba: [
+      "DIRT DETECTED: IT'S YOU.",
+      "Please stop riding me. Please.",
+      "I have seen things. Mostly crumbs.",
+      "ERROR: JANITOR IS A TARDIGRADE.",
+    ],
+    germfluencer: [
+      "Like and subscribe, bestie.",
+      "Ugh, paparazzi. Anyway, pose with me.",
+      "This dish used to be a NICE neighborhood.",
+      "You are SO going viral. Medically.",
+    ],
+  };
+  const CREATURE_STARTLES = [
+    "AAAAH!",
+    "RUDE!!",
+    "I'M TELLING THE SCIENTISTS!",
+    "MY ORGANELLES!",
+    "WHY.",
+    "NOT AGAIN!",
+    "I JUST CLEANED THAT!",
+  ];
+
+  function wrapCanvasText(ctx, text, maxWidth, maxLines = 2) {
+    const words = text.split(" ");
+    const lines = [];
+    let line = "";
+    words.forEach((word) => {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    });
+    if (line) lines.push(line);
+    return lines.slice(0, maxLines);
+  }
+
+  function makeSpeechBubble() {
+    const THREE = window.THREE;
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.encoding = THREE.sRGBEncoding;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+    }));
+    sprite.visible = false;
+    sprite.userData.canvas = canvas;
+    sprite.userData.texture = texture;
+    return sprite;
+  }
+
+  function drawSpeechBubble(sprite, text) {
+    const canvas = sprite.userData.canvas;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = "700 32px 'Trebuchet MS', 'Comic Sans MS', sans-serif";
+    const lines = wrapCanvasText(ctx, text, 430);
+    const bubbleHeight = 26 + lines.length * 38;
+    const top = canvas.height - bubbleHeight - 16;
+    ctx.fillStyle = "rgba(255,255,255,0.94)";
+    ctx.strokeStyle = "rgba(18,26,38,0.92)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(14, top, canvas.width - 28, bubbleHeight, 18);
+    else ctx.rect(14, top, canvas.width - 28, bubbleHeight);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2 - 13, top + bubbleHeight - 3);
+    ctx.lineTo(canvas.width / 2 + 13, top + bubbleHeight - 3);
+    ctx.lineTo(canvas.width / 2, canvas.height - 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#141c28";
+    ctx.textAlign = "center";
+    lines.forEach((entry, index) => {
+      ctx.fillText(entry, canvas.width / 2, top + 40 + index * 38);
+    });
+    sprite.userData.texture.needsUpdate = true;
+  }
+
+  function sayCreatureLine(creature, line, duration = 3.6) {
+    const data = creature.userData;
+    if (!data.bubble) {
+      const bubble = makeSpeechBubble();
+      const baseScale = data.baseScale || 1.2;
+      bubble.scale.set(8.8 / baseScale, 2.2 / baseScale, 1);
+      bubble.position.set(0, 1.7 / baseScale + 1.35, 0);
+      creature.add(bubble);
+      data.bubble = bubble;
+    }
+    drawSpeechBubble(data.bubble, line);
+    data.bubble.visible = true;
+    data.bubbleTimer = duration;
+  }
+
   function buildRoamingCreatures() {
     world.creatures = CREATURE_ROUTES.map((route) => {
       const creature = makeRoamingCreature(route);
       creature.userData.angle = route.phase || 0;
       creature.userData.baseScale = creatureBaseScale(route.type);
       creature.userData.bonkCooldown = 0;
+      creature.userData.chatterCooldown = rand(2, 10);
       const start = creatureRoutePosition(creature.userData, 0);
       creature.position.set(start.x, start.y, start.z);
       creature.userData.prevX = start.x;
@@ -4264,6 +4502,117 @@
       fin.rotation.x = Math.PI / 2;
       fin.userData.kind = "fin";
       group.add(fin);
+    } else if (route.type === "duck") {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), world.materials.duckBody);
+      body.scale.set(1.05, 0.82, 1.25);
+      body.castShadow = true;
+      group.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.58, 10, 8), world.materials.duckBody);
+      head.position.set(0, 0.95, -0.85);
+      group.add(head);
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 8), world.materials.duckBeak);
+      beak.position.set(0, 0.88, -1.42);
+      beak.rotation.x = -Math.PI / 2;
+      group.add(beak);
+      [-0.24, 0.24].forEach((x) => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 7, 6), world.materials.eye);
+        eye.position.set(x, 1.12, -1.28);
+        group.add(eye);
+      });
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 6), world.materials.duckBody);
+      tail.position.set(0, 0.42, 1.2);
+      tail.rotation.x = -Math.PI / 3.2;
+      group.add(tail);
+    } else if (route.type === "crouton") {
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.5), world.materials.toast);
+      body.castShadow = true;
+      group.add(body);
+      const crust = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.3, 1.62), world.materials.toastCrust);
+      crust.position.y = 0.44;
+      group.add(crust);
+      [-0.36, 0.36].forEach((x) => {
+        const white = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), world.materials.white);
+        white.position.set(x, 0.22, -0.78);
+        group.add(white);
+        const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 5), world.materials.eye);
+        pupil.position.set(x, 0.24, -0.94);
+        pupil.userData.kind = "googly";
+        pupil.userData.baseX = x;
+        group.add(pupil);
+      });
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.09, 0.1), world.materials.toastCrust);
+      brow.position.set(0, 0.52, -0.78);
+      brow.rotation.z = 0.18;
+      group.add(brow);
+    } else if (route.type === "lavaSurfer") {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 2.3), world.materials.lavaCrust);
+      board.position.y = -0.3;
+      group.add(board);
+      const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.52, 0), world.materials.lavaRock);
+      body.position.y = 0.28;
+      body.castShadow = true;
+      group.add(body);
+      [-0.14, 0.14].forEach((x) => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 5), world.materials.zoneLavaSteam);
+        eye.position.set(x, 0.42, -0.42);
+        group.add(eye);
+      });
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 5), world.materials.lavaGlow);
+      flame.position.y = 0.86;
+      flame.userData.kind = "tail";
+      group.add(flame);
+      [-1, 1].forEach((side) => {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.7, 5), world.materials.lavaRock);
+        arm.position.set(side * 0.42, 0.36, 0);
+        arm.rotation.z = side * (Math.PI / 2.3);
+        group.add(arm);
+      });
+    } else if (route.type === "roomba") {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.0, 0.34, 18), world.materials.labMetal);
+      body.castShadow = true;
+      group.add(body);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.46, 0.16, 12), world.materials.cameraBody);
+      top.position.y = 0.24;
+      group.add(top);
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), world.materials.cameraLens);
+      lens.position.set(0, 0.3, -0.34);
+      group.add(lens);
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 5), world.materials.labMetal);
+      antenna.position.set(0.3, 0.6, 0.2);
+      group.add(antenna);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.09, 7, 5), world.materials.storeRed);
+      beacon.position.set(0.3, 1.05, 0.2);
+      group.add(beacon);
+      [-0.7, 0.7].forEach((x) => {
+        const brush = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.1, 8), world.materials.zoneStationGold);
+        brush.position.set(x, -0.16, -0.5);
+        brush.userData.kind = "rotor";
+        group.add(brush);
+      });
+    } else if (route.type === "germfluencer") {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 9), world.materials.coralPink);
+      body.castShadow = true;
+      group.add(body);
+      const shades = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.28, 0.18), world.materials.cameraBody);
+      shades.position.set(0, 0.3, -0.82);
+      group.add(shades);
+      const lips = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.09, 6, 12), world.materials.storeHotPink);
+      lips.position.set(0, -0.12, -0.92);
+      group.add(lips);
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.5, 5), world.materials.labMetal);
+      stick.position.set(0.85, 0.5, -0.5);
+      stick.rotation.z = -0.7;
+      stick.rotation.x = -0.4;
+      group.add(stick);
+      const phone = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.06), world.materials.dataChip);
+      phone.position.set(1.35, 1.05, -0.85);
+      group.add(phone);
+      for (let i = 0; i < 5; i++) {
+        const sparkle = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), world.materials.storeGold);
+        const angle = (i / 5) * Math.PI * 2;
+        sparkle.position.set(Math.cos(angle) * 1.2, 0.6 + Math.sin(angle * 2) * 0.2, Math.sin(angle) * 1.2);
+        group.add(sparkle);
+      }
     } else {
       const body = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 7), world.materials.creatureB);
       body.scale.set(0.72, 0.46, 2.05);
@@ -4294,6 +4643,11 @@
     if (type === "rotifer") return 1.65;
     if (type === "ciliate") return 1.5;
     if (type === "waterbearling") return 1.35;
+    if (type === "duck") return 1.7;
+    if (type === "crouton") return 1.45;
+    if (type === "lavaSurfer") return 1.5;
+    if (type === "roomba") return 1.6;
+    if (type === "germfluencer") return 1.5;
     return 1.25;
   }
 
@@ -4331,18 +4685,38 @@
         if (child.userData.kind === "tail") child.rotation.z = Math.sin(state.clock * 5 + data.phase) * 0.32;
         if (child.userData.kind === "rotor") child.rotation.z += dt * 8.5;
         if (child.userData.kind === "gutSegment") child.position.x = Math.sin(state.clock * 3.5 + child.userData.phase) * 0.12;
+        if (child.userData.kind === "googly") {
+          child.position.x = child.userData.baseX + Math.sin(state.clock * 6.5 + child.userData.baseX * 9) * 0.045;
+          child.position.y = 0.24 + Math.cos(state.clock * 5.2) * 0.03;
+        }
       });
       data.prevX = next.x;
       data.prevZ = next.z;
       const baseScale = data.baseScale || creatureBaseScale(data.type);
       creature.scale.lerp(new THREE.Vector3(baseScale, baseScale, baseScale), Math.min(1, dt * 4));
 
-      if (!active || data.bonkCooldown > 0) return;
+      data.chatterCooldown = Math.max(0, (data.chatterCooldown ?? rand(2, 9)) - dt);
+      if (data.bubble && data.bubbleTimer !== undefined) {
+        data.bubbleTimer -= dt;
+        if (data.bubbleTimer <= 0) data.bubble.visible = false;
+      }
+
       const distance = Math.hypot(creature.position.x - player.x, creature.position.z - player.z);
+      if (active && distance < 11 && data.chatterCooldown <= 0) {
+        const lines = CREATURE_CHATTER[data.type];
+        if (lines && lines.length) {
+          sayCreatureLine(creature, pick(lines));
+          data.chatterCooldown = rand(9, 17);
+        }
+      }
+
+      if (!active || data.bonkCooldown > 0) return;
       const playerSpeed = Math.hypot(player.vx, player.vz);
       if (distance < 3.2 && playerSpeed > 8) {
         data.bonkCooldown = 2.5;
         creature.scale.setScalar(baseScale * 1.22);
+        sayCreatureLine(creature, pick(CREATURE_STARTLES), 2.4);
+        data.chatterCooldown = Math.max(data.chatterCooldown, 5);
         const comboInfo = extendCombo("creature", 1, 3.2);
         const score = scoreWithCombo(210);
         addChaos(score, "Roaming microbe startled");
@@ -4514,6 +4888,10 @@
     fillers.forEach(([type, count, margin]) => {
       for (let i = 0; i < levelPopulationCount(count); i++) addProp(type, randomPlayablePoint(margin));
     });
+
+    // The absurdity budget: banana peels to slip on and one hidden disco ball.
+    for (let i = 0; i < levelPopulationCount(3); i++) addProp("banana", randomPlayablePoint(10));
+    addProp("disco", randomPlayablePoint(24));
   }
 
   function addProp(type, point) {
@@ -4537,6 +4915,8 @@
       ashCrystal: { radius: 1.08, y: 1.02, score: 220, mass: 1.65, material: world.materials.ashCrystal, restitution: 0.5 },
       dataChip: { radius: 0.98, y: 0.82, score: 260, collect: true, mass: 0.2, material: world.materials.dataChip, damping: 4.1 },
       toolpod: { radius: 1.26, y: 1.04, score: 240, mass: 1.4, material: world.materials.toolpod, collider: "cuboid", restitution: 0.68, friction: 0.5 },
+      banana: { radius: 1.35, y: 0.5, score: 340, mass: 0.45, material: world.materials.banana, restitution: 0.55, friction: 0.3 },
+      disco: { radius: 1.5, y: 3.4, score: 420, mass: 2.0, material: world.materials.discoBall, restitution: 0.4 },
     }[type];
 
     let mesh;
@@ -4649,6 +5029,25 @@
       const tip = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), world.materials.labMetal);
       tip.position.x = 1.05;
       group.add(tip);
+    } else if (type === "banana") {
+      mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.22, 7), world.materials.bananaBruise);
+      for (let i = 0; i < 4; i++) {
+        const peel = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.7, 5), config.material);
+        const angle = (i / 4) * Math.PI * 2 + 0.4;
+        peel.position.set(Math.cos(angle) * 0.85, 0.32, Math.sin(angle) * 0.85);
+        peel.rotation.z = Math.cos(angle) * 1.85;
+        peel.rotation.x = -Math.sin(angle) * 1.85;
+        peel.castShadow = true;
+        group.add(peel);
+      }
+    } else if (type === "disco") {
+      mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(config.radius, 1), config.material);
+      const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 5), world.materials.labMetal);
+      hook.position.y = 1.9;
+      group.add(hook);
+      const glint = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 0), world.materials.white);
+      glint.position.set(0.7, 0.7, 0.4);
+      group.add(glint);
     } else {
       mesh = new THREE.Mesh(new THREE.OctahedronGeometry(config.radius, 0), config.material);
       mesh.scale.y = 1.35;
@@ -4679,7 +5078,12 @@
       baseHeight: config.y,
       baseY,
     };
-    attachPhysicsBody(group, config);
+    if (type === "disco") {
+      // The disco ball hangs in place and just spins, waiting to be discovered.
+      group.userData.spin.set(0, 2.2, 0);
+    } else {
+      attachPhysicsBody(group, config);
+    }
     world.scene.add(group);
     world.props.push(group);
   }
@@ -5662,6 +6066,7 @@
       promptTimer: run ? 5 : 8,
       dashCooldown: 0,
       dashPulse: 0,
+      discoTimer: 0,
       maxCombo: 0,
       goalsCleared: 0,
       stageChaos: 0,
@@ -5785,6 +6190,7 @@
     state.stageResearchScans = 0;
     state.stageAdvanceAvailable = false;
     state.pendingStage = 0;
+    state.discoTimer = 0;
     state.researchCameraUnlocked = state.researchCameraUnlocked || stageNumber >= 3;
     state.qaToyIndex = 0;
     state.qaLandmarkIndex = 0;
@@ -5979,6 +6385,7 @@
     updateInputMovement(dt);
     updateTraversalToys(dt, true);
     updateHiddenLandmarks(dt, true);
+    updateFunnySigns();
     updateCreatures(dt, true);
     updateProps(dt);
     updateZoneAwareness(dt);
@@ -6139,6 +6546,14 @@
         }
         const nx = separation > 0.001 ? dx / separation : Math.cos(state.clock);
         const nz = separation > 0.001 ? dz / separation : Math.sin(state.clock);
+        if (data.type === "banana" && data.hitCooldown <= 0) {
+          triggerBananaSlip(prop, data, playerSpeed);
+          continue;
+        }
+        if (data.type === "disco" && data.hitCooldown <= 0) {
+          triggerDiscoParty(prop, data);
+          continue;
+        }
         const impact = Math.max(5, playerSpeed * (state.dashPulse > 0 ? 2.35 : 1.1));
         if (handleSolidHit(prop, i, nx, nz, impact, playerSpeed)) continue;
         player.vx -= nx * 1.8;
@@ -6164,6 +6579,63 @@
 
     updateDrift(dt);
     updateEffects(dt);
+  }
+
+  // Step on a banana peel and physics takes the wheel.
+  function triggerBananaSlip(prop, data, playerSpeed) {
+    const player = state.player;
+    data.hitCooldown = 2.4;
+    const speed = Math.max(24, playerSpeed * 2.2);
+    const heading = playerSpeed > 1.2
+      ? { x: player.vx / playerSpeed, z: player.vz / playerSpeed }
+      : { x: -Math.sin(state.camera.targetYaw), z: -Math.cos(state.camera.targetYaw) };
+    player.vx = heading.x * speed;
+    player.vz = heading.z * speed;
+    player.vy = Math.max(player.vy, 6.5);
+    player.grounded = false;
+    player.wobble = 1.35;
+    if (world.physics.ready && data.body) {
+      data.body.applyImpulse({ x: -heading.x * 26, y: 0, z: -heading.z * 26 }, true);
+      data.body.applyTorqueImpulse({ x: 0, y: 9, z: 0 }, true);
+    } else {
+      data.velocity.set(-heading.x * 22, 0, -heading.z * 22);
+    }
+    const comboInfo = extendCombo("banana", 2, 4);
+    const score = scoreWithCombo(data.score);
+    addChaos(score, "Banana peel incident");
+    showCallout("BANANA'D!", `+${score.toLocaleString()} physics-assisted slip${comboTag(comboInfo)}`);
+    showPrompt("A banana peel. In a sterile lab. Nobody is asking the right questions.");
+    playTone("bonk", 1.5);
+  }
+
+  // Bump the hidden disco ball and the whole biome briefly becomes a rave.
+  function triggerDiscoParty(prop, data) {
+    data.hitCooldown = 8;
+    state.discoTimer = 7;
+    const comboInfo = extendCombo("disco", 2, 4.5);
+    const score = scoreWithCombo(data.score);
+    addChaos(score, "Disco ball activated");
+    showCallout("MICRO RAVE!", `+${score.toLocaleString()} unlicensed lab party${comboTag(comboInfo)}`);
+    showPrompt("The research notes now just say 'why is there a disco ball'.");
+    spawnRewardBurst({ x: prop.position.x, y: prop.position.y, z: prop.position.z }, world.materials.storeHotPink, 6, 1.4);
+    spawnRewardBurst({ x: prop.position.x, y: prop.position.y, z: prop.position.z }, world.materials.cameraLens, 6, 1.2);
+    playTone("level", 1.5);
+  }
+
+  // While the rave lasts, the accent lights cycle the full microbe-safe rainbow.
+  function updateDisco(dt) {
+    if (state.discoTimer <= 0 || !world.lights) return;
+    state.discoTimer = Math.max(0, state.discoTimer - dt);
+    const hue = (state.clock * 0.55) % 1;
+    world.lights.rim.color.setHSL(hue, 0.95, 0.58);
+    world.lights.cool.color.setHSL((hue + 0.33) % 1, 0.95, 0.58);
+    world.lights.fill.color.setHSL((hue + 0.66) % 1, 0.95, 0.58);
+    world.lights.rim.intensity = 1.7 + Math.sin(state.clock * 10) * 0.6;
+    world.lights.cool.intensity = 1.7 + Math.sin(state.clock * 10 + 2.1) * 0.6;
+    world.lights.fill.intensity = 1.5 + Math.sin(state.clock * 10 + 4.2) * 0.6;
+    if (state.discoTimer <= 0) {
+      applyStageLighting(STAGE_ATMOSPHERE[levelConfig().id] || STAGE_ATMOSPHERE.aquarium);
+    }
   }
 
   function updateTraversalToys(dt, active) {
@@ -6932,6 +7404,7 @@
     updateGuideBeacon(dt);
     updateTargetMarker();
     updateAtmosphere(dt);
+    updateDisco(dt);
     if (world.boundary && levelConfig().shape !== "square") world.boundary.rotation.z += dt * 0.035;
     world.renderer.render(world.scene, world.camera);
   }

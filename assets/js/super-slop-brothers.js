@@ -606,7 +606,16 @@
 
   // Capture on document so A/D keep working after focus moves to pause/menu buttons.
   // Repeat keydown events re-affirm held keys if the browser drops a keyup.
+  // Skip when typing in lobby / form fields so room codes can use WASD etc.
+  function isTypingField(t) {
+    if (!t || t === document.body || t === document.documentElement) return false;
+    const tag = (t.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (t.isContentEditable) return true;
+    return !!(t.closest && t.closest("input, textarea, select, [contenteditable='true'], .rbmp-overlay"));
+  }
   document.addEventListener("keydown", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     const action = actionFromCode(e.code);
     if (!action) return;
     if (action === "pause") {
@@ -621,6 +630,7 @@
   }, true);
 
   document.addEventListener("keyup", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     const action = actionFromCode(e.code);
     if (!action || action === "pause") return;
     keysDown.delete(e.code);

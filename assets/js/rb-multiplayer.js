@@ -478,13 +478,18 @@ const RBNet = (() => {
 const RBNetUI = (() => {
   let styleInjected = false;
   let active = null;
+  let keyGuardBound = false;
+  let hostWatchBound = false;
 
   function injectStyles() {
     if (styleInjected) return;
     styleInjected = true;
     const css = `
-.rbmp-overlay{position:fixed;inset:0;z-index:99990;display:flex;align-items:center;justify-content:center;background:rgba(4,6,14,.88);backdrop-filter:blur(4px);font-family:'Bungee',Impact,'Arial Black',sans-serif;color:#f4f7ff;}
-.rbmp-panel{position:relative;width:min(480px,92vw);max-height:88vh;overflow:auto;background:linear-gradient(160deg,#101529,#0a0d1c);border:2px solid var(--rbmp-accent,#27e6ff);border-radius:18px;box-shadow:0 0 34px rgba(39,230,255,.28),0 18px 50px rgba(0,0,0,.6);padding:22px 22px 20px;}
+.rbmp-overlay{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(4,6,14,.88);backdrop-filter:blur(4px);font-family:'Bungee',Impact,'Arial Black',sans-serif;color:#f4f7ff;pointer-events:auto;}
+/* When hosted inside a maxed/fullscreen game surface, fill that surface (native
+   fullscreen only paints descendants of the fullscreen element). */
+.rbmp-overlay.rbmp-overlay--hosted{position:absolute;inset:0;width:100%;height:100%;}
+.rbmp-panel{position:relative;width:min(480px,92vw);max-height:88vh;overflow:auto;background:linear-gradient(160deg,#101529,#0a0d1c);border:2px solid var(--rbmp-accent,#27e6ff);border-radius:18px;box-shadow:0 0 34px rgba(39,230,255,.28),0 18px 50px rgba(0,0,0,.6);padding:22px 22px 20px;z-index:1;}
 .rbmp-title{font-size:19px;letter-spacing:.06em;margin:0 0 2px;color:var(--rbmp-accent,#27e6ff);text-shadow:0 0 14px rgba(39,230,255,.5);}
 .rbmp-sub{font-family:'Trebuchet MS',system-ui,sans-serif;font-size:12px;opacity:.72;margin:0 0 16px;letter-spacing:.03em;}
 .rbmp-close{position:absolute;top:10px;right:12px;background:none;border:none;color:#8b93ad;font:700 18px/1 system-ui;cursor:pointer;padding:6px;}
@@ -515,7 +520,7 @@ const RBNetUI = (() => {
 .rbmp-error{background:rgba(255,47,109,.12);border:1px solid rgba(255,47,109,.55);color:#ff9dbd;border-radius:10px;font-family:'Trebuchet MS',system-ui,sans-serif;font-size:12.5px;font-weight:700;padding:9px 12px;margin-top:12px;display:none;}
 .rbmp-error.is-on{display:block;}
 .rbmp-status{font-family:'Trebuchet MS',system-ui,sans-serif;font-size:12px;opacity:.7;text-align:center;margin-top:10px;min-height:16px;}
-.rbmp-count{position:fixed;inset:0;z-index:99991;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.rbmp-count{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;pointer-events:none;}
 .rbmp-count b{font-family:'Bungee',Impact,sans-serif;font-size:120px;color:var(--rbmp-accent,#27e6ff);text-shadow:0 0 40px rgba(39,230,255,.8);animation:rbmpPop .9s ease-out;}
 @keyframes rbmpPop{0%{transform:scale(1.7);opacity:0}22%{transform:scale(1);opacity:1}80%{opacity:1}100%{opacity:0}}
 .rbmp-settings{margin-top:12px;}
@@ -534,6 +539,119 @@ const RBNetUI = (() => {
     return node;
   }
 
+  function nativeFullscreenEl() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  // Native fullscreen only paints descendants of the fullscreen element, so the
+  // lobby must mount inside .canvas-wrap when maxed/fullscreen — not on <body>.
+  function getOverlayHost() {
+    const fs = nativeFullscreenEl();
+    if (fs && fs.nodeType === 1) return fs;
+    const maxed = document.querySelector(".canvas-wrap.is-maxed, .is-maxed");
+    if (maxed) return maxed;
+    return document.body;
+  }
+
+  function mountOverlay(overlay) {
+    const host = getOverlayHost();
+    const hosted = host !== document.body;
+    overlay.classList.toggle("rbmp-overlay--hosted", hosted);
+    // Maxed canvas-wrap uses overflow:hidden; temporarily open it so the panel
+    // is never clipped while the lobby is up.
+    if (active) {
+      if (active.hostOverflowUnlock && active.hostOverflowUnlock !== host) {
+        active.hostOverflowUnlock.style.overflow = active.hostOverflowPrev || "";
+        active.hostOverflowUnlock = null;
+        active.hostOverflowPrev = "";
+      }
+      if (hosted && host.style) {
+        if (active.hostOverflowUnlock !== host) {
+          active.hostOverflowPrev = host.style.overflow;
+          host.style.overflow = "visible";
+          active.hostOverflowUnlock = host;
+        }
+      }
+    }
+    if (overlay.parentNode !== host) host.appendChild(overlay);
+    return host;
+  }
+
+  function isLobbyEditable(target) {
+    if (!active || !active.overlay || !target || target === document || target === window) return false;
+    const node = target.nodeType === 1 ? target : target.parentElement;
+    if (!node || !active.overlay.contains(node)) return false;
+    if (node.isContentEditable) return true;
+    const tag = (node.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    // Some browsers report the event target as the overlay while focus is in an input.
+    const ae = document.activeElement;
+    if (ae && active.overlay.contains(ae)) {
+      const at = (ae.tagName || "").toUpperCase();
+      if (at === "INPUT" || at === "TEXTAREA" || at === "SELECT" || ae.isContentEditable) return true;
+    }
+    return false;
+  }
+
+  // While the lobby is open, treat any key activity focused in the overlay as
+  // "UI typing" so games that listen on window/document don't also react.
+  // (Capture-phase game handlers must skip inputs themselves — see isTypingField
+  // in Super Slop / Scrap Circuit / TLS / Rizz-Craft. This bubble-phase guard
+  // covers the rest without blocking the input's own key handlers.)
+  function onKeyGuard(e) {
+    if (!active || !active.overlay) return;
+    if (isLobbyEditable(e.target) || isLobbyEditable(document.activeElement)) {
+      e.stopPropagation();
+    }
+  }
+
+  function bindKeyGuard() {
+    if (keyGuardBound) return;
+    keyGuardBound = true;
+    // Bubble phase only: capture-phase stop would prevent the input from
+    // receiving Enter/handlers. Games with capture listeners skip via isTypingField.
+    window.addEventListener("keydown", onKeyGuard, false);
+    window.addEventListener("keyup", onKeyGuard, false);
+    window.addEventListener("keypress", onKeyGuard, false);
+  }
+
+  function unbindKeyGuard() {
+    if (!keyGuardBound) return;
+    keyGuardBound = false;
+    window.removeEventListener("keydown", onKeyGuard, false);
+    window.removeEventListener("keyup", onKeyGuard, false);
+    window.removeEventListener("keypress", onKeyGuard, false);
+  }
+
+  function onHostWatch() {
+    if (!active || !active.overlay) return;
+    mountOverlay(active.overlay);
+  }
+
+  function bindHostWatch() {
+    if (hostWatchBound) return;
+    hostWatchBound = true;
+    document.addEventListener("fullscreenchange", onHostWatch);
+    document.addEventListener("webkitfullscreenchange", onHostWatch);
+  }
+
+  function unbindHostWatch() {
+    if (!hostWatchBound) return;
+    hostWatchBound = false;
+    document.removeEventListener("fullscreenchange", onHostWatch);
+    document.removeEventListener("webkitfullscreenchange", onHostWatch);
+  }
+
+  // Keep game control keys from eating room-code / name field input.
+  function wireTextField(input) {
+    if (!input) return;
+    const stop = (e) => e.stopPropagation();
+    input.addEventListener("keydown", stop);
+    input.addEventListener("keyup", stop);
+    input.addEventListener("keypress", stop);
+    input.addEventListener("input", stop);
+  }
+
   function open(opts) {
     injectStyles();
     close();
@@ -544,15 +662,21 @@ const RBNetUI = (() => {
       started: false,
       overlay: null,
       unsubs: [],
+      hostOverflowUnlock: null,
+      hostOverflowPrev: "",
     };
     active = state;
 
     const overlay = el("div", "rbmp-overlay");
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
     overlay.style.setProperty("--rbmp-accent", opts.accent || "#27e6ff");
     const panel = el("div", "rbmp-panel");
     overlay.appendChild(panel);
     state.overlay = overlay;
-    document.body.appendChild(overlay);
+    mountOverlay(overlay);
+    bindKeyGuard();
+    bindHostWatch();
 
     const errBox = el("div", "rbmp-error");
     const showErr = (msg) => {
@@ -595,8 +719,11 @@ const RBNetUI = (() => {
 
       panel.appendChild(el("label", "rbmp-label", "YOUR NAME"));
       const nameInput = el("input", "rbmp-input");
+      nameInput.type = "text";
+      nameInput.autocomplete = "nickname";
       nameInput.maxLength = 18;
       nameInput.value = RBNet.getSavedName() || RBNet.randomName();
+      wireTextField(nameInput);
       panel.appendChild(nameInput);
 
       const quickRow = el("div", "rbmp-row");
@@ -608,10 +735,14 @@ const RBNetUI = (() => {
 
       panel.appendChild(el("label", "rbmp-label", "PRIVATE — ROOM CODE"));
       const codeInput = el("input", "rbmp-input rbmp-input--code");
+      codeInput.type = "text";
+      codeInput.inputMode = "text";
+      codeInput.autocomplete = "off";
       codeInput.maxLength = 4;
       codeInput.placeholder = "····";
       codeInput.autocapitalize = "characters";
       codeInput.spellcheck = false;
+      wireTextField(codeInput);
       panel.appendChild(codeInput);
 
       const row = el("div", "rbmp-row");
@@ -661,6 +792,10 @@ const RBNetUI = (() => {
       codeInput.addEventListener("input", () => {
         codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
       });
+      // Prefer focusing the code field so join typing works immediately.
+      setTimeout(() => {
+        try { codeInput.focus({ preventScroll: true }); } catch (_) { try { codeInput.focus(); } catch (__) {} }
+      }, 0);
     }
 
     /* ---------------------------- screen 2: lobby --------------------------- */
@@ -815,10 +950,19 @@ const RBNetUI = (() => {
   }
 
   function close() {
-    if (active && active.overlay && active.overlay.parentNode) {
-      active.overlay.parentNode.removeChild(active.overlay);
+    if (active) {
+      if (active.hostOverflowUnlock) {
+        active.hostOverflowUnlock.style.overflow = active.hostOverflowPrev || "";
+        active.hostOverflowUnlock = null;
+        active.hostOverflowPrev = "";
+      }
+      if (active.overlay && active.overlay.parentNode) {
+        active.overlay.parentNode.removeChild(active.overlay);
+      }
     }
     active = null;
+    unbindKeyGuard();
+    unbindHostWatch();
   }
 
   return { open, close };

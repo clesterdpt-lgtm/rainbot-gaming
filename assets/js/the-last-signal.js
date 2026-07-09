@@ -2424,7 +2424,15 @@
     addCommandFx("move", wx, wy);
   }
 
+  function isTypingField(t) {
+    if (!t || t === document.body || t === document.documentElement) return false;
+    const tag = (t.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (t.isContentEditable) return true;
+    return !!(t.closest && t.closest("input, textarea, select, [contenteditable='true'], .rbmp-overlay"));
+  }
   window.addEventListener("keydown", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     const k = e.key.toLowerCase();
     if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)) { keys[e.key] = true; e.preventDefault(); return; }
     if (["w", "a", "s", "d"].includes(k) && state.phase === "playing") { keys[k] = true; return; }
@@ -2443,6 +2451,7 @@
     if (k === "-" || k === "_") { setZoom(camZoom() - ZOOM_STEP, mouse.cx, mouse.cy); e.preventDefault(); }
   });
   window.addEventListener("keyup", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     keys[e.key] = false;
     keys[e.key.toLowerCase()] = false;
   });

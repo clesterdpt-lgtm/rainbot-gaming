@@ -7768,8 +7768,14 @@
     }, true);
     window.addEventListener("keydown", (event) => {
       primeAudio();
-      const tag = event.target && event.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const typing = (t) => {
+        if (!t) return false;
+        const tag = (t.tagName || "").toUpperCase();
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+        if (t.isContentEditable) return true;
+        return !!(t.closest && t.closest("input, textarea, select, [contenteditable='true'], .rbmp-overlay"));
+      };
+      if (typing(event.target) || typing(document.activeElement)) return;
       const key = event.key.toLowerCase();
       const movementHandled = setKeyboardMove(key, true);
       if (key === " " || key === "spacebar") {

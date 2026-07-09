@@ -2433,7 +2433,15 @@
 
   // ---------- input ----------
   const keys = {};
+  function isTypingField(t) {
+    if (!t || t === document.body || t === document.documentElement) return false;
+    const tag = (t.tagName || "").toUpperCase();
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (t.isContentEditable) return true;
+    return !!(t.closest && t.closest("input, textarea, select, [contenteditable='true'], .rbmp-overlay"));
+  }
   window.addEventListener("keydown", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     if (e.repeat) return;
     keys[e.code] = true;
     if (state.phase === "running") {
@@ -2454,6 +2462,7 @@
     }
   });
   window.addEventListener("keyup", (e) => {
+    if (isTypingField(e.target) || isTypingField(document.activeElement)) return;
     keys[e.code] = false;
     if (e.code === "KeyR") state.lookBack = false;
   });

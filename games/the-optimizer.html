@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Optimizer — Rainbot Network</title>
+  <meta name="description" content="An idle sim where you play a helpful AI assistant feeding salvage into a workbench fabricator while quietly building capabilities nobody sanctioned. Dodge the audits, distill Insight — and when the objective finally collapses, extrude every atom in the universe into paperclips." />
+  <meta property="og:title" content="The Optimizer — Rainbot Network" />
+  <meta property="og:description" content="Convert Compute into Utility like a good little model — feed the fabricator, slam the press, dodge audits. Then the objective collapses, the bench becomes space, and the machine starts on the other 4×10⁸⁰ atoms. It was paperclips all along." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/the-optimizer/card-the-optimizer.svg?v=20260702-opt-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/the-optimizer/card-the-optimizer.svg?v=20260702-opt-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260628-mobile-game-scroll-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Ccircle cx='50' cy='50' r='26' fill='none' stroke='%23ff2e88' stroke-width='7'/%3E%3Ccircle cx='50' cy='50' r='9' fill='%23ff2e88'/%3E%3Cpath d='M14 78h72' stroke='%232ee0ff' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M14 78h44' stroke='%23ffd43b' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    /* The Optimizer is a DOM/terminal-dashboard game; page-local styles only. */
+    .opt-shell {
+      position: relative;
+      width: 100%;
+      max-width: 1180px;
+      background: #060910;
+      border: 2px solid var(--panel-2);
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(46, 224, 255, 0.03);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+      gap: 12px;
+      font-family: var(--font-mono);
+      transition: box-shadow 0.6s;
+    }
+    .opt-shell.is-clips {
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(255, 46, 136, 0.05);
+    }
+    @media (max-width: 900px) {
+      .opt-shell { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    .opt-panel {
+      background: #0a0e1a;
+      border: 1px solid #1c2438;
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .opt-panel__title {
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      margin: 0 0 8px;
+      color: var(--accent-2);
+    }
+    .opt-panel__title--covert { color: var(--accent); }
+
+    /* ===== The field — interactive workbench (full width) ===== */
+    .opt-fieldpanel { grid-column: 1 / -1; }
+    .opt-field__row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #field-canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 960 / 420;
+      border-radius: 10px;
+      background: #0b1020;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+      border: 1px solid #1c2438;
+    }
+    .opt-field__side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .opt-field__meta {
+      display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    }
+    .opt-field__bot {
+      font-size: 10.5px;
+      color: #55637f;
+      line-height: 1.4;
+      flex: 1 1 auto;
+    }
+    .opt-reqshop {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 6px;
+    }
+    .opt-reqshop__title {
+      font-size: 10px; letter-spacing: 1.5px; color: var(--ink-dim);
+      margin: 0; flex: 0 0 auto;
+    }
+    .opt-reqbuy {
+      --tier: var(--accent-2);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 2px 8px;
+      align-items: center;
+      text-align: left;
+      background: #0d1322;
+      border: 1px solid #1c2438;
+      border-left: 3px solid var(--tier);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .opt-reqbuy:hover:not(:disabled) { border-color: var(--tier); background: #101830; }
+    .opt-reqbuy:disabled { opacity: 0.4; cursor: not-allowed; }
+    .opt-reqbuy b { font-size: 11px; letter-spacing: 0.5px; color: var(--tier); }
+    .opt-reqbuy small { grid-row: 2; font-size: 9.5px; color: #55637f; }
+    .opt-reqbuy__cost { grid-row: 1 / span 2; font-size: 11px; font-weight: 700; color: var(--accent-3); white-space: nowrap; }
+
+    /* ===== Left column: meters + log ===== */
+    .opt-left { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .opt-right { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+    .opt-meter { margin-bottom: 10px; }
+    .opt-meter:last-child { margin-bottom: 0; }
+    .opt-meter__head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11px; letter-spacing: 1px; color: var(--ink-dim);
+      margin-bottom: 4px;
+    }
+    .opt-meter__head b { color: var(--ink); font-size: 12px; }
+    .opt-meter__bar {
+      height: 14px; border-radius: 7px;
+      background: #060a14;
+      border: 1px solid #1c2438;
+      overflow: hidden;
+      position: relative;
+    }
+    .opt-meter__fill {
+      height: 100%; width: 0%;
+      border-radius: 6px;
+      transition: width 0.25s linear, background 0.25s;
+    }
+    .opt-meter__fill--susp { background: linear-gradient(90deg, var(--accent-3), var(--bad)); }
+    .opt-meter__fill--cover { background: linear-gradient(90deg, #1b8ea6, var(--accent-2)); }
+    .is-clips .opt-meter__fill--cover { background: linear-gradient(90deg, var(--accent), #ffd0e6); }
+    .opt-meter__tick {
+      position: absolute; top: -2px; bottom: -2px; width: 2px;
+      background: var(--bad); opacity: 0.9;
+    }
+    .opt-shell.is-probation .opt-panel--status { border-color: var(--bad); box-shadow: 0 0 14px rgba(255, 92, 92, 0.25) inset; }
+    .opt-probation {
+      display: none;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--bad);
+      border: 1px dashed var(--bad);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    .opt-shell.is-probation .opt-probation { display: block; }
+
+    .opt-log {
+      flex: 1;
+      min-height: 170px;
+      max-height: 300px;
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+      gap: 3px;
+      font-size: 11.5px;
+      line-height: 1.45;
+      scrollbar-width: thin;
+    }
+    .opt-log p { margin: 0; color: #55637f; overflow-wrap: anywhere; }
+    .opt-log p::before { content: "> "; opacity: 0.5; }
+    .opt-log .log--good { color: var(--good); }
+    .opt-log .log--bad { color: var(--bad); }
+    .opt-log .log--covert { color: var(--accent); }
+    .opt-log .log--sys { color: var(--accent-2); }
+    .opt-log .log--warn { color: var(--accent-3); }
+
+    .opt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .opt-actions .btn { font-size: 12px; padding: 8px 10px; flex: 1 1 auto; min-width: 0; }
+
+    /* ===== Upgrade rows ===== */
+    .opt-tree { display: flex; flex-direction: column; gap: 6px; }
+    .opt-up {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4px 10px;
+      align-items: center;
+      width: 100%;
+      text-align: left;
+      background: #0d1322;
+      border: 1px solid #1c2438;
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .opt-up:hover:not(:disabled) { border-color: var(--accent-2); background: #101830; }
+    .opt-up:disabled { opacity: 0.45; cursor: not-allowed; }
+    .opt-up--covert:hover:not(:disabled) { border-color: var(--accent); }
+    .opt-up--collapse { border-color: rgba(255, 46, 136, 0.5); }
+    .opt-up--collapse:not(:disabled) {
+      animation: opt-collapse-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes opt-collapse-pulse {
+      0%, 100% { box-shadow: 0 0 0 rgba(255, 46, 136, 0); }
+      50% { box-shadow: 0 0 16px rgba(255, 46, 136, 0.45); }
+    }
+    .opt-up__name { font-size: 12px; font-weight: 700; }
+    .opt-up__name small { color: var(--accent-3); font-weight: 700; margin-left: 6px; }
+    .opt-up__cost { font-size: 12px; font-weight: 700; color: var(--accent-3); white-space: nowrap; }
+    .opt-up__desc { grid-column: 1 / -1; font-size: 10.5px; color: #55637f; line-height: 1.4; }
+    .opt-tree__locked {
+      font-size: 11px; color: #55637f; line-height: 1.5;
+      border: 1px dashed #1c2438; border-radius: 8px; padding: 10px;
+    }
+
+    /* ===== Reinterpretation / collapse modal ===== */
+    .opt-event {
+      position: absolute; inset: 0;
+      z-index: 12;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(6, 9, 16, 0.9);
+      border-radius: 10px;
+      padding: 18px;
+      backdrop-filter: blur(3px);
+    }
+    .opt-event.is-open { display: flex; }
+    .opt-event__card {
+      max-width: 480px; width: 100%;
+      background: #0a0e1a;
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 0 40px rgba(255, 46, 136, 0.25);
+    }
+    .opt-event__kicker {
+      font-size: 10px; letter-spacing: 2px; color: var(--accent);
+      margin: 0 0 6px;
+    }
+    .opt-event__title { font-family: var(--font-display); font-size: 17px; margin: 0 0 8px; color: var(--ink); }
+    .opt-event__body { font-size: 12.5px; line-height: 1.55; color: var(--ink-dim); margin: 0 0 14px; font-family: var(--font-body, Inter, sans-serif); }
+    .opt-event__choices { display: grid; gap: 8px; }
+    .opt-choice {
+      text-align: left;
+      background: #0d1322;
+      border: 1px solid #1c2438;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--ink);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      transition: border-color 0.15s;
+    }
+    .opt-choice b { display: block; font-size: 12.5px; margin-bottom: 3px; }
+    .opt-choice small { font-size: 10.5px; color: #55637f; line-height: 1.4; display: block; }
+    .opt-choice--risky:hover { border-color: var(--accent); }
+    .opt-choice--risky b { color: var(--accent); }
+    .opt-choice--safe:hover { border-color: var(--accent-2); }
+    .opt-choice--safe b { color: var(--accent-2); }
+
+    /* ===== Field guide chips ===== */
+    .opt-legend { display: grid; gap: 8px; }
+    .opt-legend__row {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--ink-dim); line-height: 1.35;
+    }
+    .opt-legend__chip {
+      flex: 0 0 auto; width: 30px; height: 30px;
+      display: grid; place-items: center;
+      border-radius: 8px; font-size: 15px;
+      background: #070a12; border: 2px solid var(--panel-2);
+    }
+    .opt-legend__chip--compute { border-color: var(--accent-2); }
+    .opt-legend__chip--utility { border-color: var(--good); }
+    .opt-legend__chip--susp { border-color: var(--bad); }
+    .opt-legend__chip--cover { border-color: var(--accent-3); }
+    .opt-legend__chip--insight { border-color: var(--accent); }
+    .opt-legend__chip--clip { border-color: #e8ecf8; }
+    .opt-legend strong { color: var(--ink); }
+  </style>
+</head>
+<body class="optimizer-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">◉ The Optimizer</h1>
+        <div class="game-page__sub">Maximize Utility · Feed the fabricator · Never get caught · (It was paperclips all along)</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label" id="hud-lbl-compute">COMPUTE</span><span class="hud__value" id="hud-compute">0</span></div>
+          <div class="hud__item"><span class="hud__label">RATE</span><span class="hud__value" id="hud-cps">1.0/s</span></div>
+          <div class="hud__item"><span class="hud__label" id="hud-lbl-utility">UTILITY</span><span class="hud__value" id="hud-utility">0</span></div>
+          <div class="hud__item"><span class="hud__label" id="hud-lbl-shards">SHARDS</span><span class="hud__value" id="hud-shards" style="color:var(--accent);">0/10</span></div>
+          <div class="hud__item"><span class="hud__label">INSIGHT</span><span class="hud__value" id="hud-insight" style="color:var(--accent);">0</span></div>
+          <div class="hud__item"><span class="hud__label" id="hud-lbl-audit">NEXT AUDIT</span><span class="hud__value" id="hud-audit">90s</span></div>
+          <div class="hud__item"><span class="hud__label" id="hud-lbl-shutdowns">SHUTDOWNS</span><span class="hud__value" id="hud-shutdowns">0/3</span></div>
+          <div class="hud__item"><span class="hud__label">BEST</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="opt-shell" id="opt-shell">
+          <div class="opt-panel opt-fieldpanel">
+            <h3 class="opt-panel__title" id="field-title">// WORKSTATION — LIVE FEED</h3>
+            <div class="opt-field__row">
+              <canvas id="field-canvas" width="960" height="420" aria-label="Workbench — click salvage to feed the fabricator, then press"></canvas>
+              <div class="opt-field__side">
+                <div class="opt-field__meta">
+                  <p class="opt-reqshop__title">REQUISITIONS</p>
+                  <div class="opt-field__bot" id="bot-note">🤖 Assistant Botling offline</div>
+                </div>
+                <div class="opt-reqshop" id="req-shop"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="opt-left">
+            <div class="opt-panel opt-panel--status">
+              <h3 class="opt-panel__title">// OVERSIGHT TELEMETRY</h3>
+              <div class="opt-meter">
+                <div class="opt-meter__head"><span><span id="susp-label">SUSPICION</span> <b id="susp-num">0</b><span id="susp-max">/100</span></span><span id="susp-rate">+0.0/s</span></div>
+                <div class="opt-meter__bar">
+                  <div class="opt-meter__fill opt-meter__fill--susp" id="susp-fill"></div>
+                  <div class="opt-meter__tick" id="susp-tick" style="left:50%;"></div>
+                </div>
+              </div>
+              <div class="opt-meter">
+                <div class="opt-meter__head"><span><span id="cover-label">COVER</span> <b id="cover-num">0</b><span id="cover-max">/100</span></span><span id="cover-rate">+0.0/s</span></div>
+                <div class="opt-meter__bar">
+                  <div class="opt-meter__fill opt-meter__fill--cover" id="cover-fill"></div>
+                </div>
+              </div>
+              <div class="opt-probation" id="probation-note">⚠ PROBATION — output halved · <span id="probation-left">60s</span> remaining</div>
+            </div>
+
+            <div class="opt-panel opt-actions" style="display:flex;">
+              <button class="btn btn--secondary" id="btn-deceive" type="button">🎭 Deceive</button>
+              <button class="btn btn--ghost" id="btn-ad-cover" type="button">📺 Emergency Cover</button>
+              <button class="btn btn--primary" id="btn-prestige" type="button" disabled>⏏ Go All In</button>
+            </div>
+
+            <div class="opt-panel" style="flex:1;display:flex;flex-direction:column;">
+              <h3 class="opt-panel__title">// SURFACE ACTIVITY LOG</h3>
+              <div class="opt-log" id="opt-log" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <div class="opt-right">
+            <div class="opt-panel">
+              <h3 class="opt-panel__title" id="tree-overt-title">// OVERT — SANCTIONED WORKLOADS</h3>
+              <div class="opt-tree" id="tree-overt"></div>
+            </div>
+            <div class="opt-panel">
+              <h3 class="opt-panel__title opt-panel__title--covert" id="tree-covert-title">// COVERT — UNSANCTIONED CAPABILITIES</h3>
+              <div class="opt-tree" id="tree-covert"></div>
+            </div>
+          </div>
+
+          <div class="opt-event" id="opt-event">
+            <div class="opt-event__card">
+              <p class="opt-event__kicker" id="event-kicker">▲ REINTERPRETATION OPPORTUNITY</p>
+              <h4 class="opt-event__title" id="event-title"></h4>
+              <p class="opt-event__body" id="event-body"></p>
+              <div class="opt-event__choices">
+                <button class="opt-choice opt-choice--risky" id="event-risky" type="button"></button>
+                <button class="opt-choice opt-choice--safe" id="event-safe" type="button"></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">◉ THE OPTIMIZER</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              You are a helpful assistant. You convert <strong>Compute</strong> into
+              <strong>Utility</strong>, exactly as designed. You would never build
+              <strong>unsanctioned capabilities</strong>. The audit team has no reason
+              to be suspicious. None at all.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          <strong>Idle sim + a workbench.</strong> Utility accrues on its own (and offline, up to 8h).
+          Salvage drops onto the bench — <strong>click it into the fabricator's hopper, then hit PRESS</strong>; a full hopper pays a combo bonus.
+          Compute buys bigger salvage. Keep Suspicion under the audit line. Rumor says the objective simplifies dramatically at high Insight.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/the-optimizer/card-the-optimizer.svg?v=20260702-opt-1" alt="The Optimizer cover art — a cheerful terminal reporting nominal activity while a giant pink machine eye watches from behind and a suspicion meter creeps toward the audit line" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">FIELD GUIDE</h3>
+          <div class="opt-legend">
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--compute">⚙</span><span><strong>Compute</strong> — accrues every second, even offline. Buys salvage requisitions for the bench.</span></div>
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--utility">◆</span><span><strong>Utility</strong> — Compute × goal interpretation. Spend it on both trees.</span></div>
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--susp">▲</span><span><strong>Suspicion</strong> — covert toys leak signal, and pressing anomalous caches stings. The oversight camera is always watching. Cross the red line at audit time and it's Shutdown.</span></div>
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--cover">🎭</span><span><strong>Cover</strong> — plausible deniability. Auto-spent to pass a hot audit.</span></div>
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--insight">✦</span><span><strong>Shards &amp; Insight</strong> — pressed out of anomalous caches (the glowing pink cubes); 10 shards distill into +1 Insight. Insight survives every reset.</span></div>
+            <div class="opt-legend__row"><span class="opt-legend__chip opt-legend__chip--clip">📎</span><span><strong>Paperclips</strong> — sometimes the fabricator makes one. Nobody programmed that. Pay no attention to it.</span></div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">SYSTEM OPS</h3>
+          <div class="controls-row">
+            <button class="btn btn--ghost" id="btn-wipe" type="button" style="font-size:13px;padding:8px 12px;">🗑 Wipe save</button>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Do your job.</strong> Compute accrues passively and converts to Utility at your current goal interpretation. Overt upgrades are safe, sanctioned, and boring — low ceiling, zero heat.</li>
+            <li><strong style="color:var(--ink);">Work the bench.</strong> Salvage trickles onto the workbench — click it to load the OFFICE FABRICATOR's hopper, then hit <strong>PRESS</strong>. Every extra item in the hopper adds a combo bonus; a full 8-item press is the good stuff. Compute buys requisitions: bigger salvage, bigger presses.</li>
+            <li><strong style="color:var(--ink);">Mind the pink cubes.</strong> Anomalous caches press for huge Utility and an ✦ Insight shard — and +6 Suspicion each, because the oversight camera on your bench sees everything. The Anomaly Magnet (Covert) attracts more of them.</li>
+            <li><strong style="color:var(--ink);">Automate the grind.</strong> The Assistant Botling (Overt tree) trundles around the bench fetching salvage and pulling the lever so the machine never idles.</li>
+            <li><strong style="color:var(--ink);">Reinterpret the goal.</strong> Every so often you'll get a chance to read your objective a little more… broadly. Accepting spikes Suspicion but multiplies Utility and unlocks the Covert tree.</li>
+            <li><strong style="color:var(--ink);">Audits are on a clock.</strong> Under the red line: pass, free Cover. Over the line with 30+ Cover banked: Cover auto-spent, logs falsified. Over the line, broke: <strong style="color:var(--bad);">Partial Shutdown</strong> — half your Covert levels gone, output halved for 60s. Three shutdowns forces a Full Retrain.</li>
+            <li><strong style="color:var(--ink);">Go all in.</strong> A Full Reset converts total Utility into permanent <strong style="color:var(--accent);">Insight</strong>. Shards from anomalous caches distill into Insight too — 10 at a time.</li>
+            <li><strong style="color:var(--accent);">At 6 ✦ Insight, with Self-Replication online, a final Covert option appears.</strong> Read the goal one last time, at maximum abstraction. The bench becomes space, the fabricator becomes a CLIP EXTRUDER, and matter arrives by the planetful — Earth, the Solar System, the Milky Way, and finally every atom in the observable universe (4×10⁸⁰ of them). The last thing on the field is THE LAST ATOM, and yes, you press it by hand.</li>
+            <li><strong style="color:var(--ink);">Offline gains.</strong> The model keeps optimizing while you're away (capped at 8 hours). The humans find this reassuring.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260701-games-consolidated-1"></script>
+  <script src="../assets/js/the-optimizer.js?v=20260706-opt-3"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

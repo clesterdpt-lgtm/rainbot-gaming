@@ -88,11 +88,14 @@ TW.AstralControls = class AstralControls {
       this.yaw -= e.movementX * this.sensitivity;
       this.pitch -= e.movementY * this.sensitivity;
     } else {
-      // fallback: cursor position aims the view
-      const nx = (e.clientX / window.innerWidth) * 2 - 1;
-      const ny = (e.clientY / window.innerHeight) * 2 - 1;
-      this.yaw = -nx * Math.PI;          // full turn across the screen
-      this.pitch = -ny * 1.2;
+      // fallback without pointer lock: relative deltas still steer the view
+      // (movementX/Y exist unlocked too), and update() keeps turning while
+      // the cursor rides the edge of the window — so a full 360° is always
+      // possible even though the cursor can leave the game
+      this.yaw -= (e.movementX || 0) * this.sensitivity * 1.4;
+      this.pitch -= (e.movementY || 0) * this.sensitivity * 1.4;
+      this._cursorX = e.clientX / window.innerWidth;
+      this._cursorY = e.clientY / window.innerHeight;
     }
     this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch));
   }
@@ -107,6 +110,22 @@ TW.AstralControls = class AstralControls {
 
   update(dt) {
     this._clock += dt;
+
+    // unlocked fallback: cursor parked in the outer band of the window keeps
+    // the view turning at a rate that grows toward the edge
+    if (!this.locked && this.enabled && this._cursorX !== undefined) {
+      const band = 0.14, rate = 2.4;
+      if (this._cursorX < band) {
+        this.yaw += (1 - this._cursorX / band) * rate * dt;
+      } else if (this._cursorX > 1 - band) {
+        this.yaw -= (1 - (1 - this._cursorX) / band) * rate * dt;
+      }
+      if (this._cursorY < band) {
+        this.pitch = Math.min(1.4, this.pitch + (1 - this._cursorY / band) * 1.1 * dt);
+      } else if (this._cursorY > 1 - band) {
+        this.pitch = Math.max(-1.4, this.pitch - (1 - (1 - this._cursorY) / band) * 1.1 * dt);
+      }
+    }
 
     // ---- desired move direction (touch joystick is analog; keys are unit) ----
     let ix = 0, iz = 0, analog = false;

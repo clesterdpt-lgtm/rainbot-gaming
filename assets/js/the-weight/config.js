@@ -7,7 +7,7 @@
 window.TW = window.TW || {};
 TW.CONFIG = {
   // ---- Renderer ----
-  exposure: 1.0,            // ACES tone-mapping exposure (dark but readable)
+  exposure: 1.14,           // ACES tone-mapping exposure (dark but readable)
   pixelRatioCap: 2,
   shadows: true,
 

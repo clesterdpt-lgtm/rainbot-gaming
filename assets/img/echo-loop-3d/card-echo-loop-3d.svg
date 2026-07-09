@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'Segoe UI',Arial,Helvetica,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f"/>
+      <stop offset="0.6" stop-color="#0a0c1e"/>
+      <stop offset="1" stop-color="#10081c"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ee0ff"/>
+      <stop offset="0.55" stop-color="#ff2e88"/>
+      <stop offset="1" stop-color="#ffd43b"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f" stop-opacity="0"/>
+      <stop offset="1" stop-color="#04060f" stop-opacity="0.94"/>
+    </linearGradient>
+    <linearGradient id="floorglow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2ee0ff" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#2ee0ff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <g id="fig3d">
+      <rect x="-16" y="-96" width="32" height="26" rx="7"/>
+      <rect x="-20" y="-68" width="40" height="44" rx="9"/>
+      <rect x="-16" y="-22" width="12" height="22" rx="4"/>
+      <rect x="4" y="-22" width="12" height="22" rx="4"/>
+      <line x1="0" y1="-96" x2="0" y2="-108" stroke-width="4"/>
+      <circle cx="0" cy="-112" r="5"/>
+    </g>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#bg)"/>
+
+  <!-- first-person corridor: one-point perspective toward the portal -->
+  <g stroke="#2ee0ff" stroke-opacity="0.28" stroke-width="2.5" fill="none">
+    <!-- floor grid converging -->
+    <path d="M0 800 L780 380 M150 800 L790 385 M330 800 L800 390 M540 800 L812 395 M760 800 L824 400"/>
+    <path d="M1200 800 L860 380 M1080 800 L852 385 M940 800 L844 390"/>
+    <path d="M0 630 L1200 630 M0 700 L1200 700" stroke-opacity="0.1"/>
+    <!-- ceiling lines -->
+    <path d="M0 0 L780 330 M300 0 L795 335 M600 0 L810 340 M1200 0 L862 330 M900 0 L848 335" stroke-opacity="0.14"/>
+    <!-- wall verticals receding -->
+    <path d="M120 0 L120 800 M1080 0 L1080 800" stroke-opacity="0.1"/>
+    <path d="M330 90 L330 715 M910 95 L910 710" stroke-opacity="0.16"/>
+    <path d="M540 210 L540 640 M760 215 L760 635" stroke-opacity="0.2"/>
+  </g>
+  <rect x="0" y="380" width="1200" height="120" fill="url(#floorglow)"/>
+
+  <!-- pink door frame mid-corridor, sliding open -->
+  <g filter="url(#glow)">
+    <rect x="505" y="235" width="14" height="390" fill="#ff2e88" opacity="0.85"/>
+    <rect x="781" y="238" width="14" height="384" fill="#ff2e88" opacity="0.85"/>
+    <rect x="505" y="228" width="290" height="12" fill="#ff2e88" opacity="0.6"/>
+  </g>
+
+  <!-- echo staircase receding toward the portal -->
+  <g stroke="#2ee0ff">
+    <use href="#fig3d" transform="translate(430,620) scale(1.15)" fill="#2ee0ff" opacity="0.3"/>
+    <use href="#fig3d" transform="translate(555,545) scale(0.9)" fill="#2ee0ff" opacity="0.4"/>
+    <use href="#fig3d" transform="translate(650,485) scale(0.7)" fill="#2ee0ff" opacity="0.5"/>
+  </g>
+  <!-- scanlines on nearest echo -->
+  <g stroke="#04060f" stroke-width="4" opacity="0.5">
+    <path d="M402 505 h56 M402 525 h56 M402 545 h56 M402 565 h56 M402 585 h56 M402 605 h56"/>
+  </g>
+
+  <!-- golden portal at the vanishing point -->
+  <g filter="url(#glow)">
+    <ellipse cx="822" cy="470" rx="46" ry="80" fill="none" stroke="#ffd43b" stroke-width="8" stroke-dasharray="30 18"/>
+    <ellipse cx="822" cy="470" rx="26" ry="52" fill="#ffd43b" opacity="0.25"/>
+  </g>
+
+  <!-- first-person hands: hot pink, bottom corners -->
+  <g fill="#ff2e88" filter="url(#glow)">
+    <path d="M60 800 q10 -90 70 -110 q60 -18 88 30 q18 34 6 80 z"/>
+    <path d="M1140 800 q-10 -90 -70 -110 q-60 -18 -88 30 q-18 34 -6 80 z"/>
+  </g>
+  <!-- crosshair -->
+  <g stroke="#2ee0ff" stroke-width="4" opacity="0.9" filter="url(#glow)">
+    <path d="M600 390 v-26 M600 442 v-26 M562 416 h26 M638 416 h26"/>
+  </g>
+
+  <!-- title -->
+  <rect x="0" y="520" width="1200" height="280" fill="url(#fade)"/>
+  <text x="600" y="688" text-anchor="middle" font-size="104" font-weight="900" letter-spacing="4" fill="url(#title)" filter="url(#glow)">ECHO LOOP 3D</text>
+  <text x="600" y="742" text-anchor="middle" font-size="28" font-weight="600" letter-spacing="9" fill="#b6b3c9">STEP INSIDE THE LOOP</text>
+
+  <!-- corner tag -->
+  <g font-weight="800">
+    <rect x="36" y="36" width="300" height="52" rx="10" fill="#2ee0ff"/>
+    <text x="186" y="72" text-anchor="middle" font-size="26" fill="#04060f" letter-spacing="2">FIRST-PERSON PUZZLER</text>
+  </g>
+</svg>

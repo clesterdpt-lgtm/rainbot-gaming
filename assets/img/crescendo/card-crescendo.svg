@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-label="Crescendo cover art">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04050c"/>
+      <stop offset="0.55" stop-color="#080a18"/>
+      <stop offset="1" stop-color="#0d0a1e"/>
+    </linearGradient>
+    <radialGradient id="condGlow" cx="0.5" cy="0.32" r="0.55">
+      <stop offset="0" stop-color="#ff2e88" stop-opacity="0.34"/>
+      <stop offset="0.6" stop-color="#ff2e88" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ff2e88" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="noteGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#2ee0ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2ee0ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="trail" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ee0ff" stop-opacity="0"/>
+      <stop offset="0.7" stop-color="#2ee0ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="eq" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#2ee0ff"/>
+      <stop offset="1" stop-color="#ff2e88"/>
+    </linearGradient>
+    <filter id="blur6"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="blur2"><feGaussianBlur stdDeviation="2"/></filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <g stroke="#2ee0ff" stroke-opacity="0.06" stroke-width="1.5">
+    <path d="M0 120H1200M0 240H1200M0 360H1200M0 480H1200M0 600H1200M0 720H1200"/>
+    <path d="M120 0V800M280 0V800M440 0V800M600 0V800M760 0V800M920 0V800M1080 0V800"/>
+  </g>
+  <!-- stars -->
+  <g fill="#dbe9ff">
+    <circle cx="90" cy="80" r="2" opacity="0.7"/><circle cx="220" cy="150" r="1.5" opacity="0.5"/>
+    <circle cx="350" cy="60" r="2" opacity="0.6"/><circle cx="520" cy="110" r="1.5" opacity="0.4"/>
+    <circle cx="940" cy="70" r="2" opacity="0.7"/><circle cx="1080" cy="140" r="1.5" opacity="0.5"/>
+    <circle cx="1150" cy="60" r="2" opacity="0.6"/><circle cx="700 " cy="50" r="1.5" opacity="0.5"/>
+    <circle cx="160" cy="330" r="1.5" opacity="0.4"/><circle cx="1040" cy="320" r="1.5" opacity="0.4"/>
+  </g>
+
+  <!-- The Conductor: towering silhouette with glowing eyes and baton -->
+  <rect width="1200" height="800" fill="url(#condGlow)"/>
+  <g transform="translate(600,150)">
+    <g filter="blur2">
+      <path d="M0 -110 C70 -110 120 -40 120 60 C120 170 80 260 0 330 C-80 260 -120 170 -120 60 C-120 -40 -70 -110 0 -110 Z"
+            fill="#070812" stroke="#ff2e88" stroke-opacity="0.55" stroke-width="3"/>
+      <path d="M0 -110 C40 -160 90 -170 130 -150 C110 -120 80 -105 55 -100 Z" fill="#070812" stroke="#ff2e88" stroke-opacity="0.35" stroke-width="2"/>
+      <path d="M0 -110 C-40 -160 -90 -170 -130 -150 C-110 -120 -80 -105 -55 -100 Z" fill="#070812" stroke="#ff2e88" stroke-opacity="0.35" stroke-width="2"/>
+    </g>
+    <!-- eyes -->
+    <circle cx="-28" cy="-20" r="9" fill="#ff2e88"/>
+    <circle cx="28" cy="-20" r="9" fill="#ff2e88"/>
+    <circle cx="-28" cy="-20" r="18" fill="#ff2e88" opacity="0.25" filter="url(#blur6)"/>
+    <circle cx="28" cy="-20" r="18" fill="#ff2e88" opacity="0.25" filter="url(#blur6)"/>
+    <!-- baton arm -->
+    <path d="M95 40 L215 -60" stroke="#f4f7ff" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="215" cy="-60" r="10" fill="#f4f7ff"/>
+    <circle cx="215" cy="-60" r="24" fill="#ffffff" opacity="0.3" filter="url(#blur6)"/>
+  </g>
+
+  <!-- bullet rings -->
+  <g fill="#ff2e88">
+    <g opacity="0.9">
+      <circle cx="600" cy="560" r="7"/><circle cx="530" cy="548" r="7"/><circle cx="670" cy="548" r="7"/>
+      <circle cx="470" cy="515" r="7"/><circle cx="730" cy="515" r="7"/>
+      <circle cx="430" cy="465" r="7"/><circle cx="770" cy="465" r="7"/>
+      <circle cx="415" cy="405" r="7"/><circle cx="785" cy="405" r="7"/>
+    </g>
+    <g opacity="0.55">
+      <circle cx="600" cy="640" r="6"/><circle cx="500" cy="622" r="6"/><circle cx="700" cy="622" r="6"/>
+      <circle cx="415" cy="575" r="6"/><circle cx="785" cy="575" r="6"/>
+      <circle cx="360" cy="505" r="6"/><circle cx="840" cy="505" r="6"/>
+    </g>
+  </g>
+
+  <!-- the Last Note: comet with trail -->
+  <g>
+    <path d="M300 700 Q450 660 545 585 L575 555" stroke="url(#trail)" stroke-width="26" stroke-linecap="round" fill="none" opacity="0.8" filter="url(#blur2)"/>
+    <circle cx="585" cy="545" r="90" fill="url(#noteGlow)"/>
+    <g transform="translate(585,545) rotate(40)">
+      <path d="M0 -26 L17 12 L0 24 L-17 12 Z" fill="#f4f7ff"/>
+    </g>
+  </g>
+
+  <!-- perfect shockwave ring -->
+  <circle cx="585" cy="545" r="150" fill="none" stroke="#2ee0ff" stroke-width="4" stroke-opacity="0.5"/>
+  <circle cx="585" cy="545" r="185" fill="none" stroke="#2ee0ff" stroke-width="2" stroke-opacity="0.22"/>
+
+  <!-- equalizer bars -->
+  <g fill="url(#eq)" opacity="0.85">
+    <rect x="40"  y="712" width="26" height="48" rx="4"/>
+    <rect x="76"  y="688" width="26" height="72" rx="4"/>
+    <rect x="112" y="700" width="26" height="60" rx="4"/>
+    <rect x="148" y="664" width="26" height="96" rx="4"/>
+    <rect x="184" y="692" width="26" height="68" rx="4"/>
+    <rect x="220" y="676" width="26" height="84" rx="4"/>
+    <rect x="954" y="676" width="26" height="84" rx="4"/>
+    <rect x="990" y="692" width="26" height="68" rx="4"/>
+    <rect x="1026" y="660" width="26" height="100" rx="4"/>
+    <rect x="1062" y="700" width="26" height="60" rx="4"/>
+    <rect x="1098" y="684" width="26" height="76" rx="4"/>
+    <rect x="1134" y="708" width="26" height="52" rx="4"/>
+  </g>
+
+  <!-- title -->
+  <g text-anchor="middle" font-family="'Bungee','Arial Black','Segoe UI',sans-serif">
+    <text x="600" y="726" font-size="92" fill="#0a0d18" stroke="#2ee0ff" stroke-width="10" stroke-opacity="0.25" font-weight="900" letter-spacing="6">CRESCENDO</text>
+    <text x="600" y="726" font-size="92" fill="#f4f7ff" font-weight="900" letter-spacing="6">CRESCENDO</text>
+    <text x="600" y="766" font-size="24" fill="#ffd43b" font-family="'JetBrains Mono',monospace" font-weight="700" letter-spacing="8">A REQUIEM IN FOUR MOVEMENTS</text>
+  </g>
+
+  <!-- corner glyphs -->
+  <text x="36" y="64" font-size="44" fill="#2ee0ff" opacity="0.8" font-family="serif">𝄞</text>
+  <text x="1130" y="64" font-size="40" fill="#ff2e88" opacity="0.7" font-family="serif">𝄢</text>
+</svg>

@@ -34,7 +34,7 @@
       -webkit-tap-highlight-color: transparent;
       touch-action: none;
     }
-    body.playing { cursor: none; }
+    body.playing.locked { cursor: none; }
 
     /* Three.js stage — hosts both Phase 1 (bedroom) and Phase 2 (astral) */
     #stage { position: fixed; inset: 0; }
@@ -244,7 +244,7 @@
   <div id="fx-sub"></div>
   <div id="fx-title"></div>
   <div id="fx-hint-paralysis">you cannot move &nbsp;·&nbsp; mouse — look (barely)</div>
-  <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; get back to your body</div>
+  <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; gather the shards of your soul, then get back to your body</div>
   <div id="obe-hud"><div id="obe-objective"></div></div>
 
   <!-- Touch / mobile controls (inert on desktop) -->
@@ -352,16 +352,16 @@ Something is at the foot of the bed.</p>
   </footer>
 
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/the-weight/config.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/audio.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/controls.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/bedroom.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/fx.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/touch.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/post.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/astral.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/astral-controls.js?v=20260617n"></script>
-  <script src="../assets/js/the-weight/main.js?v=20260706-search-page-1"></script>
+  <script src="../assets/js/the-weight/config.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/audio.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/controls.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/bedroom.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/fx.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/touch.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/post.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/astral.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/astral-controls.js?v=20260708e"></script>
+  <script src="../assets/js/the-weight/main.js?v=20260708e"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260709-quiet-ui-1"></script>
   <script>

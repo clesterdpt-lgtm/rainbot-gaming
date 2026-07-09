@@ -335,6 +335,202 @@ TW.AudioEngine = class AudioEngine {
     o.start(t); o.stop(t + 0.2); scuff.start(t); scuff.stop(t + 0.1);
   }
 
+  // rapid dry ticks crossing overhead, left to right — nails on the ceiling
+  skitter() {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const at = t0 + 0.1 + i * 0.13 + Math.random() * 0.04;
+      const src = this.ctx.createBufferSource();
+      src.buffer = this._noise(0.03);
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 2600;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.045 + Math.random() * 0.02, at);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.045);
+      const pan = -0.8 + (i / (n - 1)) * 1.6;      // travels across the room
+      src.connect(hp).connect(g).connect(this._panNode(pan));
+      src.start(at); src.stop(at + 0.06);
+    }
+  }
+
+  // a breathy half-word right at the ear — noise pushed through moving formants
+  whisperWord(pan = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const out = this._panNode(pan);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(1.0);
+    const f1 = this.ctx.createBiquadFilter();
+    f1.type = 'bandpass'; f1.Q.value = 7;
+    f1.frequency.setValueAtTime(320, t);
+    f1.frequency.linearRampToValueAtTime(720, t + 0.35);
+    f1.frequency.linearRampToValueAtTime(420, t + 0.9);
+    const f2 = this.ctx.createBiquadFilter();
+    f2.type = 'bandpass'; f2.Q.value = 7;
+    f2.frequency.setValueAtTime(1700, t);
+    f2.frequency.linearRampToValueAtTime(950, t + 0.45);
+    f2.frequency.linearRampToValueAtTime(1400, t + 0.9);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.055, t + 0.18);
+    g.gain.setValueAtTime(0.055, t + 0.55);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
+    src.connect(f1).connect(g);
+    src.connect(f2).connect(g);
+    g.connect(out);
+    src.start(t); src.stop(t + 1.0);
+  }
+
+  // ---- night wind for the astral outdoors ------------------------------
+  startWind() {
+    if (!this.ctx || this._wind) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(3); src.loop = true;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 340; lp.Q.value = 0.4;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(0.045, this.ctx.currentTime, 2);
+    const lfo = this.ctx.createOscillator();
+    const lfoG = this.ctx.createGain();
+    lfo.frequency.value = 0.09; lfoG.gain.value = 160;
+    lfo.connect(lfoG).connect(lp.frequency);
+    src.connect(lp).connect(g).connect(this.master);
+    src.start(); lfo.start();
+    this._wind = { src, lfo, g };
+  }
+  stopWind() {
+    if (!this._wind) return;
+    const w = this._wind; this._wind = null;
+    w.g.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.6);
+    setTimeout(() => { try { w.src.stop(); w.lfo.stop(); } catch (e) {} }, 2500);
+  }
+
+  // a soft two-note bell — a shard of the soul returns
+  fragmentChime() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [[660, 0], [990, 0.14], [1320, 0.14]].forEach(([f, dl]) => {
+      const o = this.ctx.createOscillator();
+      o.type = 'sine'; o.frequency.value = f;
+      const g = this.ctx.createGain();
+      const at = t + dl;
+      const amp = f > 1000 ? 0.035 : 0.09;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(amp, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 1.3);
+      o.connect(g).connect(this.master);
+      o.start(at); o.stop(at + 1.35);
+    });
+  }
+
+  /** small helper: a panned output node routed into the master bus */
+  _panNode(pan = 0) {
+    if (this.ctx.createStereoPanner) {
+      const p = this.ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      p.connect(this.master);
+      return p;
+    }
+    return this.master;
+  }
+
+  // muffled footsteps out in the hallway (phase 1 anomaly)
+  hallSteps(count = 4, pan = -0.3) {
+    if (!this.ctx) return;
+    const t0 = this.ctx.currentTime;
+    for (let i = 0; i < count; i++) {
+      const at = t0 + 0.15 + i * 0.42;
+      const o = this.ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(74, at);
+      o.frequency.exponentialRampToValueAtTime(34, at + 0.14);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.07 + Math.random() * 0.02, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.24);
+      o.connect(g).connect(this._panNode(pan));
+      o.start(at); o.stop(at + 0.3);
+    }
+  }
+
+  // heavy door slam (phase 2 — a doorway seals itself behind you)
+  slam(pan = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const out = this._panNode(pan);
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(85, t);
+    o.frequency.exponentialRampToValueAtTime(26, t + 0.22);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(g).connect(out);
+    o.start(t); o.stop(t + 0.55);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(0.16);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 900;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.3, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    src.connect(lp).connect(ng).connect(out);
+    src.start(t); src.stop(t + 0.18);
+  }
+
+  // the hunter beating on a sealed door
+  pound(pan = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const out = this._panNode(pan);
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.16);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.connect(g).connect(out);
+    o.start(t); o.stop(t + 0.32);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(0.08);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 700;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.12, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    src.connect(lp).connect(ng).connect(out);
+    src.start(t); src.stop(t + 0.1);
+  }
+
+  // splintering crash — the sealed door gives way
+  crash(pan = 0) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const out = this._panNode(pan);
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._noise(0.55);
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 500;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    src.connect(hp).connect(g).connect(out);
+    src.start(t); src.stop(t + 0.57);
+    const o = this.ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(60, t);
+    o.frequency.exponentialRampToValueAtTime(24, t + 0.3);
+    const og = this.ctx.createGain();
+    og.gain.setValueAtTime(0.4, t);
+    og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    o.connect(og).connect(out);
+    o.start(t); o.stop(t + 0.52);
+  }
+
   // ascending release — you make it back to your body
   wakeChord() {
     if (!this.ctx) return;

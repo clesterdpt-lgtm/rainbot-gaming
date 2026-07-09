@@ -12,6 +12,113 @@
 window.TW = window.TW || {};
 const THREE = window.THREE;
 
+// =====================================================================
+// The wraith — the shared entity model for both phases, matching the
+// cover art: a gaunt, hunched shadow with an elongated skull, slanted
+// amber eyes, tendrils streaming off the head and shoulders, long arms
+// ending in talons, and a lower body that dissolves into ragged tatters.
+// Front of the model is +z. Returns { model, eyeGlow }.
+// =====================================================================
+TW.buildWraith = function () {
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x060709, roughness: 1, metalness: 0 });
+
+  // hunched spine + shoulder mass rising out of the robe
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.8, 10), skin);
+  torso.position.set(0, 1.4, 0.04);
+  torso.rotation.x = 0.3;
+  const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin);
+  shoulders.scale.set(1.5, 0.75, 1.0);
+  shoulders.position.set(0, 1.78, 0.13);
+  g.add(torso, shoulders);
+
+  // elongated skull jutting forward over the hunch, tapering to a snout
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 12), skin);
+  head.scale.set(0.85, 1.0, 1.55);
+  head.position.set(0, 1.96, 0.22);
+  const snout = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.24, 8), skin);
+  snout.rotation.x = Math.PI / 2;
+  snout.position.set(0, 1.92, 0.42);
+  g.add(head, snout);
+
+  // slanted, burning amber eyes
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd45a, fog: false });
+  const eyeGeo = new THREE.SphereGeometry(0.03, 8, 8);
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.scale.set(1.7, 0.55, 0.7);
+  eyeL.position.set(-0.06, 1.99, 0.33);
+  eyeL.rotation.z = 0.45;
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeR.scale.set(1.7, 0.55, 0.7);
+  eyeR.position.set(0.06, 1.99, 0.33);
+  eyeR.rotation.z = -0.45;
+  const eyeGlow = new THREE.PointLight(0xffb030, 0.5, 2.5, 2);
+  eyeGlow.position.set(0, 1.96, 0.35);
+  g.add(eyeL, eyeR, eyeGlow);
+
+  // long tendrils of shadow streaming up and back off the skull / shoulders
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const len = 0.4 + Math.random() * 0.38;
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.022 + Math.random() * 0.018, len, 5), skin);
+    const fromShoulder = i % 3 === 0;
+    t.position.set(
+      Math.cos(a) * (fromShoulder ? 0.18 : 0.09),
+      (fromShoulder ? 1.76 : 2.0) + Math.random() * 0.1,
+      (fromShoulder ? 0.06 : 0.12) - 0.14,
+    );
+    t.rotation.x = -(0.7 + Math.random() * 0.9);
+    t.rotation.z = -Math.cos(a) * (0.4 + Math.random() * 0.7);
+    g.add(t);
+  }
+
+  // long arms as jointed chains hanging from the shoulders, ending in talons
+  const mkArm = (s) => {
+    const arm = new THREE.Group();
+    arm.position.set(s * 0.21, 1.76, 0.12);        // shoulder joint
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.032, 0.6, 7), skin);
+    upper.position.y = -0.3;
+    arm.add(upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.58;
+    arm.add(elbow);
+    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, 0.56, 7), skin);
+    fore.position.y = -0.28;
+    elbow.add(fore);
+    for (let i = -1; i <= 1; i++) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.28, 5), skin);
+      claw.position.set(i * 0.035, -0.66, 0.03);
+      claw.rotation.set(Math.PI - 0.28, 0, i * 0.24);
+      elbow.add(claw);
+    }
+    arm.rotation.set(-0.3, 0, s * 0.14);    // hang forward, slightly out
+    elbow.rotation.x = -0.4;                // bent further forward at the elbow
+    return arm;
+  };
+  g.add(mkArm(-1), mkArm(1));
+
+  // the lower body is a tattered robe, ragged strips hanging off the hem,
+  // with only thin shins showing beneath
+  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.3, 0.85, 9, 1, true), skin);
+  robe.position.y = 0.62;
+  g.add(robe);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const strip = new THREE.Mesh(new THREE.ConeGeometry(0.055 + Math.random() * 0.03, 0.35 + Math.random() * 0.25, 4), skin);
+    strip.position.set(Math.cos(a) * 0.26, 0.16, Math.sin(a) * 0.23);
+    strip.rotation.set(Math.PI + (Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2);
+    g.add(strip);
+  }
+  [-1, 1].forEach((s) => {
+    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.42, 7), skin);
+    shin.position.set(s * 0.09, 0.2, -0.02);
+    g.add(shin);
+  });
+
+  g.scale.setScalar(0.95);
+  return { model: g, eyeGlow };
+};
+
 TW.BedroomScene = class BedroomScene {
   constructor(cfg) {
     this.cfg = cfg;
@@ -64,11 +171,17 @@ TW.BedroomScene = class BedroomScene {
   // ------------------------------------------------------------------
   _buildLighting() {
     // soft night fill so nothing is pure black, with a cool sky / dark floor
-    const hemi = new THREE.HemisphereLight(0x222d44, 0x04050a, 0.42);
+    const hemi = new THREE.HemisphereLight(0x28344e, 0x05060c, 0.62);
     this.scene.add(hemi);
 
+    // cool fill washing the far wall, so the door / wardrobe / chair corners
+    // (where the anomalies live) stay readable in the gloom
+    const farFill = new THREE.PointLight(0x33405c, 0.55, 8, 2);
+    farFill.position.set(0, 2.3, -2.2);
+    this.scene.add(farFill);
+
     // moonlight shaft through the left window — the key light, casts shadows
-    const moon = new THREE.SpotLight(0x8298dd, 3.9, 16, 0.54, 0.6, 1.05);
+    const moon = new THREE.SpotLight(0x8298dd, 4.3, 16, 0.6, 0.55, 1.05);
     moon.position.set(-5.0, 2.35, -0.5);
     moon.target.position.set(0.7, 0.25, 1.2);
     if (this.cfg.shadows) {
@@ -93,6 +206,7 @@ TW.BedroomScene = class BedroomScene {
     const hall = new THREE.PointLight(0x3a2c16, 0.5, 2.0, 2.0);
     hall.position.set(-0.7, 0.06, -this.room.d / 2 + 0.25);
     this.scene.add(hall);
+    this._hallLight = hall;
   }
 
   _buildRoom() {
@@ -178,6 +292,19 @@ TW.BedroomScene = class BedroomScene {
     drape.receiveShadow = true;
     blanket.add(drape);
 
+    // your own arm resting on top of the covers (visible when you glance
+    // down — it rises and falls with the breath along with the blanket)
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.5, 8), this._mat(0x3f4757, 0.9));
+    sleeve.rotation.set(Math.PI / 2 - 0.15, 0, -0.12);
+    sleeve.position.set(0.3, 0.66, cz - 0.05);
+    sleeve.castShadow = true;
+    blanket.add(sleeve);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), this._mat(0x565c6c, 0.85));
+    hand.scale.set(0.9, 0.55, 1.25);
+    hand.position.set(0.33, 0.66, cz - 0.32);
+    hand.castShadow = true;
+    blanket.add(hand);
+
     this.scene.add(blanket);
     this.blanket = blanket;
     this._blanketBaseY = blanket.position.y;
@@ -224,6 +351,7 @@ TW.BedroomScene = class BedroomScene {
     pane.rotation.y = Math.PI / 2;
     pane.position.set(wx + 0.005, wy, wz);
     this.scene.add(pane);
+    this._pane = pane;
 
     // frame + muntins — all lie flat in the wall's Y-Z plane (no rotation;
     // x is the shallow depth, y is height, z runs along the wall)
@@ -283,6 +411,7 @@ TW.BedroomScene = class BedroomScene {
     glow.position.set(dx, 0.02, dz + 0.05);
     glow.rotation.x = -Math.PI / 2.05;
     this.scene.add(glow);
+    this._doorGlow = glow;
   }
 
   _buildFurniture() {
@@ -317,9 +446,23 @@ TW.BedroomScene = class BedroomScene {
     pile.scale.set(0.8, 1.25, 0.7);
     pile.position.set(0, 0.78, -0.05); pile.castShadow = true;
     chair.add(pile);
+    this._chairPile = pile;
     chair.position.set(-w / 2 + 0.5, 0, -d / 2 + 0.55);
     chair.rotation.y = 0.5;
     this.scene.add(chair);
+    this._chair = chair;
+
+    // a pair of pale eyes waiting inside the wardrobe (hidden until sprung)
+    const wEyeMat = new THREE.MeshBasicMaterial({ color: 0xcfe8ff, fog: false });
+    const wEyeGeo = new THREE.SphereGeometry(0.02, 8, 8);
+    const wEyes = new THREE.Group();
+    const weL = new THREE.Mesh(wEyeGeo, wEyeMat); weL.position.set(-0.05, 0, 0);
+    const weR = new THREE.Mesh(wEyeGeo, wEyeMat); weR.position.set(0.05, 0, 0);
+    wEyes.add(weL, weR);
+    wEyes.position.set(wbX - 0.08, 1.52, wbZ + 0.36);
+    wEyes.visible = false;
+    this.scene.add(wEyes);
+    this._wardrobeEyes = wEyes;
 
     // framed picture on the right wall
     this._box(0.02, 0.5, 0.38, this._mat(0x080a0e, 0.5), w / 2 - 0.02, 1.6, 0.4);
@@ -330,41 +473,17 @@ TW.BedroomScene = class BedroomScene {
   // the player); an inner group tilts forward when it leans over the bed.
   _buildEntity() {
     const outer = new THREE.Group();
-    const inner = new THREE.Group();
+    const built = TW.buildWraith();
+    const inner = built.model;
     outer.add(inner);
-
-    const skin = new THREE.MeshStandardMaterial({ color: 0x050609, roughness: 1, metalness: 0 });
-
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.12, 0.98, 10), skin);
-    torso.position.y = 1.16;
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.16, 8), skin);
-    neck.position.y = 1.62;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 16, 14), skin);
-    head.position.y = 1.74; head.scale.set(0.9, 1.12, 0.92);
-
-    const armGeo = new THREE.CylinderGeometry(0.045, 0.03, 1.0, 8);
-    const armL = new THREE.Mesh(armGeo, skin); armL.position.set(-0.22, 1.16, 0.02); armL.rotation.z = 0.13;
-    const armR = new THREE.Mesh(armGeo, skin); armR.position.set(0.22, 1.16, 0.02); armR.rotation.z = -0.13;
-    const legGeo = new THREE.CylinderGeometry(0.06, 0.045, 0.9, 8);
-    const legL = new THREE.Mesh(legGeo, skin); legL.position.set(-0.09, 0.45, 0);
-    const legR = new THREE.Mesh(legGeo, skin); legR.position.set(0.09, 0.45, 0);
-
-    // glowing eyes — always readable, even in the dark
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2418, fog: false });
-    const eyeGeo = new THREE.SphereGeometry(0.024, 8, 8);
-    const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(-0.052, 1.76, 0.12);
-    const eyeR = new THREE.Mesh(eyeGeo, eyeMat); eyeR.position.set(0.052, 1.76, 0.12);
-    const eyeGlow = new THREE.PointLight(0xff1810, 0, 1.5, 2);
-    eyeGlow.position.set(0, 1.74, 0.2);
-
-    inner.add(torso, neck, head, armL, armR, legL, legR, eyeL, eyeR, eyeGlow);
     inner.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    built.eyeGlow.intensity = 0;   // fades in with setEntityProgress
 
     outer.visible = false;
     this.scene.add(outer);
     this.entity = outer;
     this._entityInner = inner;
-    this._eyeGlow = eyeGlow;
+    this._eyeGlow = built.eyeGlow;
 
     this._eStart = new THREE.Vector3(-0.55, 0, -1.75);
     this._eSide = new THREE.Vector3(0.86, 0, 0.72);
@@ -373,6 +492,7 @@ TW.BedroomScene = class BedroomScene {
 
   /** progress 0 (far, by the door) .. 1 (looming over the bed) */
   setEntityProgress(p) {
+    this._entityP = p;
     const e = this.entity; if (!e) return;
     e.visible = p > 0.001;
     if (!e.visible) return;
@@ -411,6 +531,30 @@ TW.BedroomScene = class BedroomScene {
   /** flicker the moonlight for `dur` seconds */
   flicker(dur = 0.5) { this._flickerUntil = this._t + dur; }
 
+  /** a shadow crosses the hallway light under the door — someone walking past */
+  shadowFeet(dur = 2.2) { this._feetDur = dur; this._feetUntil = this._t + dur; }
+
+  /** the pile of clothes on the chair is no longer there */
+  hidePile() { if (this._chairPile) this._chairPile.visible = false; }
+
+  /** the chair has moved closer to the bed, and now faces it */
+  moveChairCloser() {
+    const c = this._chair; if (!c) return;
+    c.position.x += 0.26;
+    c.position.z += 0.52;
+    const bed = new THREE.Vector3(0, 0, 1.15);
+    c.rotation.y = Math.atan2(bed.x - c.position.x, bed.z - c.position.z);
+  }
+
+  /** the wardrobe hangs open and something inside is watching */
+  showWardrobeEyes() {
+    this.setWardrobe(0.85);
+    if (this._wardrobeEyes) this._wardrobeEyes.visible = true;
+  }
+
+  /** the moonlight dies for `dur` seconds — near-total dark */
+  moonOut(dur = 3.5) { this._moonOutUntil = this._t + dur; }
+
   // ------------------------------------------------------------------
   /** open amount 0 (shut) .. 1 (wide) for the bedroom door */
   setDoor(open) {
@@ -428,12 +572,33 @@ TW.BedroomScene = class BedroomScene {
   update(dt, breathPhase = 0.5) {
     this._t += dt;
 
-    // blinking colon on the clock (once per second)
+    // blinking colon on the clock (once per second); as the entity closes in
+    // the display corrupts — wrong times, dead segments, stuttering glow
     this._colonTimer += dt;
     if (this._colonTimer >= 0.5) {
       this._colonTimer = 0;
       this._colonOn = !this._colonOn;
-      this._clock.draw(this._colonOn);
+      let glitch = null;
+      const p = this._entityP || 0;
+      if (p > 0.4 && Math.random() < 0.18 + p * 0.4) {
+        const pool = ['3:48', '3:74', '7:43', '8:88', '0:00', '   7', '3:4 ', ':347'];
+        glitch = pool[(Math.random() * pool.length) | 0];
+      }
+      this._clock.draw(this._colonOn, glitch);
+      if (this._clockGlow) this._clockGlow.intensity = glitch ? 0.25 + Math.random() * 1.3 : 1.0;
+    }
+
+    // a shadow crossing the light that leaks under the door (two dips = feet)
+    if (this._feetUntil && this._t < this._feetUntil) {
+      const k = 1 - (this._feetUntil - this._t) / this._feetDur;
+      const dip = (c) => Math.exp(-Math.pow((k - c) / 0.09, 2));
+      const shade = 1 - 0.85 * Math.min(1, dip(0.32) + dip(0.62));
+      if (this._doorGlow) this._doorGlow.material.opacity = 0.5 * shade;
+      if (this._hallLight) this._hallLight.intensity = 0.5 * shade;
+    } else if (this._feetUntil) {
+      this._feetUntil = 0;
+      if (this._doorGlow) this._doorGlow.material.opacity = 0.5;
+      if (this._hallLight) this._hallLight.intensity = 0.5;
     }
 
     // blanket rises and falls with the breath
@@ -441,12 +606,22 @@ TW.BedroomScene = class BedroomScene {
       this.blanket.position.y = this._blanketBaseY + (breathPhase - 0.5) * 0.018;
     }
 
-    // moonlight breathes very faintly (passing clouds), or stutters mid-anomaly
+    // moonlight breathes very faintly (passing clouds), stutters mid-anomaly,
+    // or dies entirely while the moon is "out"
     if (this.moon) {
-      this._moonFlicker = this._t < this._flickerUntil
-        ? 0.12 + Math.random() * 0.95
-        : 1;
-      this.moon.intensity = (3.9 + Math.sin(this._t * 0.7) * 0.2) * this._moonFlicker;
+      const out = this._t < (this._moonOutUntil || 0);
+      if (out !== this._moonWasOut) {
+        this._moonWasOut = out;
+        if (this._pane) this._pane.material.color.setHex(out ? 0x141c2c : 0x465d90);
+      }
+      if (out) {
+        this.moon.intensity = 0.05;
+      } else {
+        this._moonFlicker = this._t < this._flickerUntil
+          ? 0.12 + Math.random() * 0.95
+          : 1;
+        this.moon.intensity = (4.3 + Math.sin(this._t * 0.7) * 0.2) * this._moonFlicker;
+      }
     }
   }
 
@@ -471,7 +646,7 @@ function makeClockTexture() {
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
 
-  function draw(colonOn) {
+  function draw(colonOn, glitch) {
     ctx.clearRect(0, 0, 256, 96);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, 256, 96);
@@ -479,10 +654,11 @@ function makeClockTexture() {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.shadowColor = '#ff2a14';
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = '#ff3320';
-    const time = colonOn ? '3:47' : '3 47';
-    ctx.fillText(time, 128, 50);
+    ctx.shadowBlur = glitch ? 30 : 22;
+    ctx.fillStyle = glitch ? '#ff4530' : '#ff3320';
+    const time = glitch || (colonOn ? '3:47' : '3 47');
+    const jx = glitch ? (Math.random() - 0.5) * 10 : 0;
+    ctx.fillText(time, 128 + jx, 50);
     texture.needsUpdate = true;
   }
 

@@ -87,10 +87,20 @@ class Game {
     document.getElementById('btn-again').addEventListener('click', () => location.reload());
 
     // pointer lock can be unavailable (some browsers / embedded views) — fall
-    // back to absolute-position look so the game is always playable
+    // back to relative-motion look so the game is always playable
     document.addEventListener('pointerlockerror', () => {
       this._fallback = true;
       if (this.fx) this.fx.subtitle('move the mouse to look around', 4500);
+    });
+
+    // any click on the game during play re-grabs the pointer lock, so a lost
+    // or never-acquired lock (and its escaping cursor) is one click from fixed
+    this.renderer.domElement.addEventListener('pointerdown', () => {
+      if ((this.state === 'paralysis' || this.state === 'astral') &&
+          !document.pointerLockElement &&
+          this.activeControls && !(this.touch && this.touch.enabled)) {
+        this.activeControls.requestLock();
+      }
     });
 
     document.addEventListener('keydown', (e) => {
@@ -106,7 +116,7 @@ class Game {
       // (handled by _onLockChange); this covers the fallback / unlocked case.
       if (e.key !== 'Escape' && e.code !== 'Escape') return;
       if (document.pointerLockElement) return;
-      if (this.state === 'paralysis') this._pause();
+      if (this.state === 'paralysis' || this.state === 'astral') this._pause();
       else if (this.state === 'paused') this._resume();
     });
 
@@ -160,6 +170,7 @@ class Game {
     this.controls.requestLock();
 
     this.state = 'paralysis';
+    this._stats = { t0: performance.now(), blinks: 0, pullAt: 0, chase0: 0 };
     this._setupParalysis();
 
     // Audio initialises in the background; it must never block game start.
@@ -188,19 +199,52 @@ class Game {
       creepLook: 0.011,                    // crawls while you look away (eyes open)
       creepBlind: 0.06,                    // crawls faster while your eyes are shut
       lurchManual: 0.055, lurchAuto: 0.095, // discrete jump on each blink
+      blinkQueue: [],                      // scares that spring while the eyes are shut
     };
-    // anomalies escalate, then the entity arrives
+    // anomalies escalate, then the entity arrives; timings jitter a little
+    // from run to run so a replay never plays out beat-for-beat the same
+    const J = () => (Math.random() - 0.5) * 2;
+    const onBlink = (fn) => this._para.blinkQueue.push(fn);
     this._anomalies = [
-      { t: 6,  fn: () => { this.audio.creak(); this.bedroom.setDoor(0.17); } },
-      { t: 13, fn: () => { this.audio.creak(); this.bedroom.setWardrobe(0.32); } },
-      { t: 20, fn: () => { this.audio.tinnitus(7000, 4); this.bedroom.flicker(0.6); } },
-      { t: 27, fn: () => { this.audio.knock(); this.bedroom.setDoor(0.4); this.fx.subtitle('the door was closed', 3200); } },
-      { t: 34, fn: () => { this.bedroom.flicker(0.5); this.audio.knock(); } },
-      { t: 39, fn: () => { this._activateEntity(); this.fx.subtitle('there is someone in the room', 4000); } },
+      { t: 6 + J(),  fn: () => { this.audio.creak(); this.bedroom.setDoor(0.17); } },
+      { t: 12 + J(), fn: () => { this.audio.hallSteps(4, -0.35); this.bedroom.shadowFeet(2.2); this.fx.subtitle('something passed the door', 3200); } },
+      { t: 18 + J(), fn: () => { this.audio.creak(); this.bedroom.setWardrobe(0.32); } },
+      { t: 24 + J(), fn: () => { this.audio.tinnitus(7000, 4); this.bedroom.flicker(0.6); } },
+      { t: 29 + J(), fn: () => { this.audio.knock(); this.bedroom.setDoor(0.4); this.fx.subtitle('the door was closed', 3200); } },
+      { t: 34 + J(), fn: () => onBlink(() => {
+        this.bedroom.hidePile();
+        setTimeout(() => this.fx.subtitle('the clothes on the chair are gone', 3000), 800);
+      }) },
+      { t: 40 + J(), fn: () => { this.audio.skitter(); this.fx.subtitle('something is crossing the ceiling', 3200); } },
+      { t: 46 + J(), fn: () => {
+        this.bedroom.moonOut(3.5);
+        this.audio.whisperWord(-0.5);
+        this.fx.subtitle('the moon went out', 3000);
+      } },
+      { t: 52 + J(), fn: () => onBlink(() => {
+        this.bedroom.moveChairCloser();
+        this.audio.creak();
+        setTimeout(() => this.fx.subtitle('the chair is closer now', 3000), 800);
+      }) },
+      { t: 58 + J(), fn: () => { this.audio.whisperWord(0.4); this.fx.subtitle('it said your name', 3200); } },
+      { t: 63 + J(), fn: () => {
+        this.bedroom.setDoor(0);
+        this.audio.slam(-0.3);
+        this.bedroom.flicker(0.35);
+        this.fx.subtitle('the door slammed itself', 3200);
+      } },
+      { t: 68 + J(), fn: () => onBlink(() => {
+        this.bedroom.showWardrobeEyes();
+        this.audio.creak();
+        setTimeout(() => this.fx.subtitle('the wardrobe is watching', 3200), 800);
+      }) },
+      { t: 73, fn: () => { this._activateEntity(); this.fx.subtitle('there is someone in the room', 4000); } },
     ];
   }
 
   _onLockChange(locked) {
+    // the cursor only hides while the lock is really held (body.playing.locked)
+    document.body.classList.toggle('locked', locked);
     if (locked && this.state === 'paused') this._resume();
     else if (!locked && (this.state === 'paralysis' || this.state === 'astral')) this._pause();
   }
@@ -264,6 +308,11 @@ class Game {
       const half = p.blinkDur / 2;
       p.blink = p.blinkT < half ? p.blinkT / half : 1 - (p.blinkT - half) / half;
       p.blink = Math.max(0, Math.min(1, p.blink));
+      // things happen while the eyes are shut (at most one scare per blink)
+      if (p.blinkT >= half && !p.blinkSprung && p.blinkQueue.length) {
+        p.blinkSprung = true;
+        p.blinkQueue.shift()();
+      }
       if (p.blinkT >= p.blinkDur) { p.blinking = false; p.blink = 0; }
     } else {
       p.blinkPressure += dt / p.maxOpen;
@@ -315,9 +364,10 @@ class Game {
   _doBlink(forced) {
     const p = this._para;
     if (p.blinking) return;
-    p.blinking = true; p.blinkT = 0;
+    p.blinking = true; p.blinkT = 0; p.blinkSprung = false;
     p.blinkDur = forced ? 0.6 : 0.3;
     p.blinkPressure = 0;
+    if (this._stats) this._stats.blinks++;
     // each blink lets the entity lurch closer
     if (p.entityActive && !p.lunged) {
       p.entityProgress = Math.min(1, p.entityProgress + (forced ? p.lurchAuto : p.lurchManual));
@@ -364,6 +414,7 @@ class Game {
   }
 
   _triggerPull() {
+    if (this._stats) this._stats.pullAt = performance.now();
     this.audio.shatter();
     this.fx.flashWhite(150);
     this.fx.showTitle('YOU LEAVE YOUR BODY');
@@ -405,11 +456,18 @@ class Game {
     this._huntT = 0;
     this._astralProx = 0;
     this._stepTimer = 0;
+    this._rage = 0;
+    this._slams = [];
+    this._stunT = 0;
+    this._rejectT = 0;
+    this._prevPz = undefined;
+    if (this._stats) this._stats.chase0 = performance.now();
 
-    // audio: ambient drone continues; breath turns to panic, the hunt resumes
+    // audio: ambient drone continues; breath turns to panic, wind and the hunt
     this.audio.setBreathRate(3.8);
     this.audio.startWhispers();
     this.audio.startHeartbeat(72);
+    this.audio.startWind();
 
     this._phase = 'astral';
     this.state = 'astral';
@@ -449,15 +507,114 @@ class Game {
       this._stepTimer = 0.62 - prox * 0.34;
     }
 
+    this._updateFragments(pp, ep);
     this._updateObjective(pp);
+    this._updateDoorSlams(dt, pp, ep);
 
-    // win: reach your body — lose: it catches you
+    // the player's soul-light follows them; the shared shard light sits on
+    // the nearest uncollected shard
+    if (a.soulLight) a.soulLight.position.set(pp.x, 2.1, pp.z);
+    if (a.fragLight) {
+      let near = null, nd = Infinity;
+      for (const f of a.fragments) {
+        if (f.taken) continue;
+        const d = Math.hypot(pp.x - f.x, pp.z - f.z);
+        if (d < nd) { nd = d; near = f; }
+      }
+      if (near) { a.fragLight.position.set(near.x, 1.6, near.z); a.fragLight.intensity = 1.1; }
+      else a.fragLight.intensity = 0;
+    }
+
+    // win: reach your body with your soul whole — lose: it catches you
     const bp = a.bodyPosition;
-    if (Math.hypot(pp.x - bp.x, pp.z - bp.z) < 1.5) return this._escaped();
-    if (dist < 0.95) return this._caught();
+    const bodyDist = Math.hypot(pp.x - bp.x, pp.z - bp.z);
+    if (bodyDist < 1.5) {
+      if (a.fragmentsCollected >= a.fragmentTotal) return this._escaped();
+      // the body will not take an incomplete soul
+      this._rejectT -= dt;
+      if (this._rejectT <= 0) {
+        this._rejectT = 3;
+        const missing = a.fragmentTotal - a.fragmentsCollected;
+        this.fx.subtitle('your body rejects you — ' + missing + (missing === 1 ? ' shard' : ' shards') + ' of your soul still missing', 2700);
+        this.audio.knock();
+      }
+    }
+    if (dist < 0.95) return this._caught(bodyDist);
+  }
+
+  // touching a shard restores it — and the release shoves the hunter back
+  _updateFragments(pp, ep) {
+    const a = this.astral;
+    for (let i = 0; i < a.fragments.length; i++) {
+      const f = a.fragments[i];
+      if (f.taken || Math.hypot(pp.x - f.x, pp.z - f.z) > 1.5) continue;
+      a.collectFragment(i);
+      this.audio.fragmentChime();
+      const got = a.fragmentsCollected, tot = a.fragmentTotal;
+      if (got === tot) {
+        this.fx.subtitle('you are whole — get back to your body', 3600);
+      } else {
+        this.fx.subtitle('a piece of you returns · ' + got + ' of ' + tot, 2600);
+      }
+      // shockwave: if the hunter is close, it is hurled back and stunned
+      const dx = ep.x - pp.x, dz = ep.z - pp.z, dd = Math.hypot(dx, dz) || 1;
+      if (dd < 16) {
+        const push = new THREE.Vector3(ep.x + (dx / dd) * 9, 0, ep.z + (dz / dd) * 9);
+        this.astral.resolve(push, 0.4);
+        this.astral.setEntity(push.x, push.z, Math.atan2(pp.x - push.x, pp.z - push.z));
+        this._stunT = 1.3;
+        this.audio.stinger();
+      }
+    }
+  }
+
+  // doorways slam shut behind you; the hunter pounds them apart and comes
+  // through angrier — each slam buys distance at the price of speed
+  _updateDoorSlams(dt, pp, ep) {
+    const a = this.astral;
+    const prevZ = this._prevPz === undefined ? pp.z : this._prevPz;
+    this._prevPz = pp.z;
+
+    const gates = [99.5, 3.6, -4.4, -11.4];
+    for (let i = 0; i < gates.length; i++) {
+      const z = gates[i];
+      if (pp.z < z && prevZ >= z && ep.z > z + 0.6 && a.sealDoor(i)) {
+        const c = a.doorCenter(i);
+        this.audio.slam(this._astralPanFor(c));
+        this._slams.push({ i, started: false, t: 0, pounds: 0 });
+        if (!this._slammedOnce) {
+          this._slammedOnce = true;
+          this.fx.subtitle('the door slams shut behind you', 3000);
+        }
+      }
+    }
+
+    for (let k = this._slams.length - 1; k >= 0; k--) {
+      const s = this._slams[k];
+      const c = a.doorCenter(s.i);
+      if (!s.started) {
+        // the pounding starts only once the hunter reaches the sealed door
+        if (Math.hypot(ep.x - c.x, ep.z - c.z) < 2.6) s.started = true;
+        else continue;
+      }
+      s.t += dt;
+      const due = [0.35, 0.95, 1.55];
+      while (s.pounds < due.length && s.t >= due[s.pounds]) {
+        s.pounds++;
+        this.audio.pound(this._astralPanFor(c));
+      }
+      if (s.t >= 2.1) {
+        a.breakDoor(s.i);
+        this.audio.crash(this._astralPanFor(c));
+        this._rage += 0.35;
+        this._slams.splice(k, 1);
+      }
+    }
   }
 
   _huntEntity(dt) {
+    // a shard's shockwave leaves it reeling for a moment
+    if (this._stunT > 0) { this._stunT -= dt; return; }
     const a = this.astral, ep = a.entityPos, pp = this.astralControls.position;
     this._huntT += dt;
     const distP = Math.hypot(pp.x - ep.x, pp.z - ep.z);
@@ -465,7 +622,7 @@ class Game {
     const grace = Math.min(this._huntT / 2.5, 1);
     // base + slow ramp + rubber-band: it surges when you pull away and eases
     // off up close, so a long chase stays on your heels without being unfair
-    const speed = (2.8 + Math.min(this._huntT * 0.018, 1.0) + Math.min(distP * 0.05, 1.9)) * grace;
+    const speed = (2.8 + Math.min(this._huntT * 0.018, 1.0) + Math.min(distP * 0.05, 1.9) + (this._rage || 0)) * grace;
     // steer toward the next doorway on the route (open chase outdoors)
     const tgt = a.entityTarget(ep.x, ep.z, pp.x, pp.z);
     const dx = tgt.x - ep.x, dz = tgt.z - ep.z;
@@ -485,14 +642,37 @@ class Game {
 
   _updateObjective(pp) {
     if (!this._objEl) return;
+    const a = this.astral;
     const z = pp.z;
     let msg;
-    if (z > 55) msg = 'run';
+    if (z > 150) msg = 'run';
+    else if (z > 118) msg = 'through the trees';
+    else if (z > 100) msg = 'through the graveyard';
+    else if (z > 86) msg = 'cross the creek';
     else if (z > 16) msg = 'follow the road home';
     else if (z > 4.2) msg = 'get to your house';
     else if (z > -11) msg = 'find your bedroom';
-    else msg = 'reach your body';
+    else msg = a.fragmentsCollected >= a.fragmentTotal ? 'reach your body' : 'your soul is not whole';
+    const soul = a.fragmentsCollected >= a.fragmentTotal
+      ? 'soul whole'
+      : 'soul ' + a.fragmentsCollected + '/' + a.fragmentTotal;
+    msg = msg + '  ·  ' + soul;
     if (msg !== this._objMsg) { this._objMsg = msg; this._objEl.textContent = msg; }
+  }
+
+  _fmt(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  _runStats() {
+    const st = this._stats || {};
+    const now = performance.now();
+    return {
+      blinks: st.blinks || 0,
+      paraMs: (st.pullAt || now) - (st.t0 || now),
+      chaseMs: st.chase0 ? now - st.chase0 : 0,
+    };
   }
 
   _escaped() {
@@ -505,12 +685,24 @@ class Game {
     this.audio.wakeChord();
     this.audio.setBreathRate(5.6);
     this.fx.flashWhite(220);
+    const r = this._runStats();
+    let best = null;
+    try {
+      const prev = parseInt(localStorage.getItem('tw_best_escape_v1'), 10);
+      if (!isNaN(prev)) best = prev;
+      if (best === null || r.chaseMs < best) {
+        localStorage.setItem('tw_best_escape_v1', String(Math.round(r.chaseMs)));
+      }
+    } catch (e) {}
+    const isBest = best === null || r.chaseMs < best;
+    const stats = 'endured the room ' + this._fmt(r.paraMs) + ' · ' + r.blinks + ' blinks · soul made whole · escaped in ' +
+      this._fmt(r.chaseMs) + (isBest ? ' · new best' : ' · best ' + this._fmt(best));
     this._showEnd('✶', 'YOU WAKE UP',
       '3:47 AM. The room is still.\nYou are back inside your own skin — for now.',
-      'rainbot after dark · no. 002', 'sleep is DLC');
+      stats, 'sleep is DLC');
   }
 
-  _caught() {
+  _caught(bodyDist) {
     if (this.state === 'end') return;
     this.state = 'end';
     this.astralControls.enabled = false;
@@ -521,9 +713,13 @@ class Game {
     this.fx.flashWhite(60);
     this.fx.fadeTo(1, 500);
     setTimeout(() => this.fx.fadeTo(0, 900), 700);
+    const r = this._runStats();
+    const shards = this.astral ? this.astral.fragmentsCollected + '/' + this.astral.fragmentTotal + ' shards · ' : '';
+    const stats = 'endured the room ' + this._fmt(r.paraMs) + ' · ' + r.blinks +
+      ' blinks · ' + shards + 'caught ' + Math.round(bodyDist || 0) + ' m from your body';
     this._showEnd('☓', 'IT HAS YOU',
       'You never made it back.\nThe body in the bed does not wake.',
-      'rainbot after dark · no. 002', 'try to wake again');
+      stats, 'try to wake again');
   }
 
   _showEnd(icon, title, sub, stats, warn) {
@@ -531,6 +727,7 @@ class Game {
     this._setTouchButtons(false, false);
     if (this.touch) this.touch.reset();
     this.audio.stopBreathing();
+    this.audio.stopWind();
     this.audio.stopDrone(2);
     document.getElementById('end-icon').textContent = icon;
     document.getElementById('end-title').textContent = title;

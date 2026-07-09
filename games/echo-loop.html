@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echo Loop — Rainbot Network</title>
+  <meta name="description" content="A time-loop echo puzzler. Rewind the room and co-op with translucent echoes of your past runs — stand on them, let them hold doors, let them push crates. A few past selves, one puzzle." />
+  <meta property="og:title" content="Echo Loop — Rainbot Network" />
+  <meta property="og:description" content="Close the loop and your last run replays as a ghostly echo, forever. Stack your past selves into staircases, bridges, trampolines and doorstops across 15 paradox rooms." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/echo-loop/card-echo-loop.svg?v=20260702-echo-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/echo-loop/card-echo-loop.svg?v=20260702-echo-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260628-mobile-game-scroll-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%232ee0ff' stroke-width='6'/%3E%3Cpath d='M50 12v18M50 70v18M12 50h18M70 50h18' stroke='%23ff2e88' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='5' fill='%23ffd43b'/%3E%3C/svg%3E" />
+  <style>
+    /* Echo Loop is a canvas game; only page-local bits live here. */
+    .echo-page .canvas-wrap { background: #080810; }
+
+    /* Legend chips in the side panel */
+    .echo-legend { display: grid; gap: 8px; }
+    .echo-legend__row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      line-height: 1.3;
+    }
+    .echo-legend__chip {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 15px;
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+    }
+    .echo-legend__chip--live { border-color: var(--accent); }
+    .echo-legend__chip--echo { border-color: var(--accent-2); opacity: 0.75; }
+    .echo-legend__chip--crate { border-color: var(--accent-3); }
+    .echo-legend__chip--bad { border-color: var(--bad); }
+    .echo-legend strong { color: var(--ink); }
+
+    /* Touch controls: only on coarse-pointer devices */
+    .el-touch { display: none; }
+    @media (hover: none) and (pointer: coarse), (max-width: 820px) {
+      .el-touch {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 10px;
+        margin-top: 10px;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .el-touch__cluster { display: flex; gap: 8px; }
+      .el-touch button {
+        min-width: 56px;
+        min-height: 52px;
+        border-radius: 12px;
+        border: 2px solid var(--panel-2);
+        background: #10131f;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        font-weight: 700;
+        touch-action: none;
+      }
+      .el-touch button:active { background: #232a44; border-color: var(--accent-2, #2ee0ff); }
+      .el-touch .t-loop { border-color: var(--accent, #ff2e88); }
+      .el-touch .t-retry { border-color: var(--accent-3, #ffd43b); }
+    }
+  </style>
+</head>
+<body class="echo-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">⭯ Echo Loop</h1>
+        <div class="game-page__sub">Rewind the room · Co-op with your past selves · Close the loop</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">LEVEL</span><span class="hud__value" id="hud-level">1/15</span></div>
+          <div class="hud__item"><span class="hud__label">LOOP TIME</span><span class="hud__value" id="hud-time" style="font-family:var(--font-mono);">30.0s</span></div>
+          <div class="hud__item"><span class="hud__label">LOOPS</span><span class="hud__value" id="hud-loops" style="font-family:var(--font-mono);">1/2</span></div>
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">BEST</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-900-600" style="--game-aspect:1.5; --game-aspect-ratio:3 / 2;">
+          <canvas id="gameCanvas" width="900" height="600" tabindex="0" aria-label="Echo Loop playfield"></canvas>
+
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">⭯ ECHO LOOP</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Press <strong>R</strong> to close a loop: the room rewinds and a translucent
+              <strong>echo</strong> replays your last run forever. Stand on your echoes,
+              make them hold doors, let them push crates. A few past selves, one puzzle.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Start looping</button>
+          </div>
+        </div>
+
+        <div class="el-touch" aria-hidden="true">
+          <div class="el-touch__cluster">
+            <button id="el-touch-left" type="button">◀</button>
+            <button id="el-touch-right" type="button">▶</button>
+          </div>
+          <div class="el-touch__cluster">
+            <button id="el-touch-retry" class="t-retry" type="button">RETRY</button>
+            <button id="el-touch-loop" class="t-loop" type="button">⭯ LOOP</button>
+            <button id="el-touch-jump" type="button">JUMP</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          <strong>Move</strong> with <kbd>A</kbd>/<kbd>D</kbd> or arrows, <kbd>Space</kbd> jumps.
+          <kbd>R</kbd> closes the loop (records an echo), <kbd>Z</kbd> retries the current loop, <kbd>U</kbd> undoes an echo, <kbd>P</kbd> pauses.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/echo-loop/card-echo-loop.svg?v=20260702-echo-1" alt="Echo Loop cover art — a hot-pink runner leaping across a staircase of translucent cyan echoes toward a golden portal" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">LOOP CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--primary" id="btn-loop" type="button" style="font-size:13px;padding:8px 12px;">⭯ Close loop (R)</button>
+            <button class="btn btn--secondary" id="btn-retry" type="button" style="font-size:13px;padding:8px 12px;">Retry loop (Z)</button>
+          </div>
+          <div class="controls-row" style="margin-top:8px;">
+            <button class="btn btn--ghost" id="btn-undo" type="button" style="font-size:13px;padding:8px 12px;">⎌ Undo echo</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart level</button>
+          </div>
+          <div class="controls-row" style="margin-top:8px;">
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">FIELD GUIDE</h3>
+          <div class="echo-legend">
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--live">🧍</span><span><strong>You (live)</strong> — hot pink, being recorded. Always.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">👻</span><span><strong>Echo</strong> — cyan ghost of a past run. Stand on it. Ride it. It replays exactly, every loop.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">📦</span><span><strong>Crate</strong> — pushable, presses plates. Rewinds each loop, but your echo re-pushes it.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">▬</span><span><strong>Plate &amp; door</strong> — matching numbers. Door stays open only while the plate is held.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">⏱</span><span><strong>Timed gate</strong> — yellow bars on the loop's own schedule. Open only during its window, every loop. Waiting is a move.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">┄</span><span><strong>One-way deck</strong> — jump up through it, land on top of it.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">▲</span><span><strong>Spikes</strong> — a paradox. Loop rewinds, echoes survive.</span></div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Everything you do is recorded.</strong> Press <kbd>R</kbd> to close the loop: the room rewinds — crates, doors, you — and your last run replays as a translucent echo, on repeat, forever.</li>
+            <li><strong style="color:var(--ink);">Echoes are solid (on top).</strong> Land on an echo's head and stand there. Stack echoes into a staircase, or park them over a pit as stepping stones.</li>
+            <li><strong style="color:var(--ink);">Echoes do chores.</strong> An echo standing on a pressure plate holds its door open. An echo that pushed a crate re-pushes it every loop, at the same moment.</li>
+            <li><strong style="color:var(--ink);">Loop budget.</strong> Each room caps how many simultaneous selves you get (2–5). Fewer loops and faster clears score more. <kbd>Z</kbd> retries the current run without spending a slot.</li>
+            <li><strong style="color:var(--ink);">The timer is the loop.</strong> When it hits zero the room rewinds and your uncommitted run is lost — close the loop before then if you want to keep it.</li>
+            <li><strong style="color:var(--ink);">Chrono Shards.</strong> Each level cleared earns a shard: one free echo undo. Out of shards? A quick ad mints a new one (Pro loopers undo free).</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260701-games-consolidated-1"></script>
+  <script src="../assets/js/echo-loop.js?v=20260706-echo-8"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crescendo — Rainbot Network</title>
+  <meta name="description" content="A vertical-scrolling rhythm shmup with a fully live-synthesized soundtrack. The Conductor silenced the world — you are the Last Note. Tap on the beat to crescendo your weapon up the power ladder, Raiden-style, through the four movements of a requiem." />
+  <meta property="og:title" content="Crescendo — Rainbot Network" />
+  <meta property="og:description" content="Raiden with rhythm: the music is generated live, enemies attack on the beat, and tapping ON the beat powers your weapon from a lone peashooter to TUTTI FORTISSIMO. Miss the beat and the orchestra falls quiet." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/crescendo/card-crescendo.svg?v=20260702-cres-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/crescendo/card-crescendo.svg?v=20260702-cres-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260628-mobile-game-scroll-1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 72 Q35 20 50 50 T80 28' fill='none' stroke='%232ee0ff' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='80' cy='28' r='9' fill='%23ff2e88'/%3E%3C/svg%3E" />
+  <style>
+    /* Crescendo is a canvas game; only page-local bits live here. */
+    .cres-page .canvas-wrap { background: #05060d; }
+
+    .cres-legend { display: grid; gap: 8px; }
+    .cres-legend__row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      line-height: 1.3;
+    }
+    .cres-legend__chip {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      font-size: 15px;
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+    }
+    .cres-legend__chip--you { border-color: var(--accent-2); }
+    .cres-legend__chip--beat { border-color: var(--accent-3); }
+    .cres-legend__chip--muted { border-color: var(--accent); }
+    .cres-legend__chip--boss { border-color: var(--bad); }
+    .cres-legend strong { color: var(--ink); }
+
+    /* Touch dash button: only on coarse-pointer devices */
+    .cres-touch { display: none; }
+    @media (hover: none) and (pointer: coarse), (max-width: 820px) {
+      .cres-touch {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .cres-touch__hint {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-dim);
+      }
+      .cres-touch button {
+        min-width: 96px;
+        min-height: 56px;
+        border-radius: 14px;
+        border: 2px solid var(--accent-2, #2ee0ff);
+        background: #10131f;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 700;
+        touch-action: none;
+      }
+      .cres-touch button:active { background: #232a44; }
+    }
+  </style>
+</head>
+<body class="cres-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">𝄞 Crescendo</h1>
+        <div class="game-page__sub">A requiem in four movements · Tap on the beat · Your weapon is the orchestra</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">MOVEMENT</span><span class="hud__value" id="hud-move">I/IV</span></div>
+          <div class="hud__item"><span class="hud__label">TIME</span><span class="hud__value" id="hud-time" style="font-family:var(--font-mono);">0:00</span></div>
+          <div class="hud__item"><span class="hud__label">WEAPON</span><span class="hud__value" id="hud-weapon" style="font-family:var(--font-mono);">SOLO</span></div>
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">BEST</span><span class="hud__value" id="hud-best">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-500-640" style="--game-aspect:0.78125; --game-aspect-ratio:25 / 32;">
+          <canvas id="gameCanvas" width="500" height="640" tabindex="0" aria-label="Crescendo playfield"></canvas>
+
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">𝄞 CRESCENDO</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              The Conductor raised his baton and the world went silent. You are the
+              <strong>Last Note</strong>, flying up the sheet music. Move with <strong>WASD</strong> —
+              firing is automatic. Tap <strong>Space</strong> (or click) <em>on the beat</em> to
+              crescendo your weapon up the power ladder; go quiet or miss the beat and the
+              orchestra thins out. Headphones on. Play loud.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Begin the requiem</button>
+            <button class="btn btn--secondary" id="btn-encore" style="display:none;margin-top:10px;">🎬 Encore</button>
+          </div>
+        </div>
+
+        <div class="cres-touch" aria-hidden="true">
+          <span class="cres-touch__hint">Drag anywhere to move</span>
+          <button id="cr-touch-bomb" type="button" style="border-color:var(--accent-3,#ffd43b);">𝄐 FERMATA</button>
+          <button id="cr-touch-tap" type="button">♪ TAP</button>
+        </div>
+
+        <p class="merge-hint">
+          <strong>Move</strong> with <kbd>WASD</kbd>/arrows — firing is automatic ·
+          tap <kbd>Space</kbd> or <kbd>click</kbd> <strong>on the beat</strong> (watch the metronome bar at the bottom)
+          to power up your weapon; off-beat taps and silence make it decay ·
+          <kbd>B</kbd>/<kbd>Shift</kbd> drops a Fermata bomb · <kbd>P</kbd> pauses.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/crescendo/card-crescendo.svg?v=20260702-cres-1" alt="Crescendo cover art — a white comet-note trailing cyan light through rings of pink bullets, beneath the towering silhouette of The Conductor" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONDUCTING</h3>
+          <div class="controls-row">
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause (P)</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart run</button>
+          </div>
+          <div class="controls-row" style="margin-top:8px;">
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">FIELD GUIDE</h3>
+          <div class="cres-legend">
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▲</span><span><strong>The Last Note</strong> — your ship. Auto-fires straight up; the white dot is your true hitbox.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">◇</span><span><strong>Metronome bar</strong> — bottom center. Ticks converge on the beat; tap when they meet to crescendo.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▮</span><span><strong>Groove meter</strong> — left edge, SOLO up to TUTTI FORTISSIMO. It drains while you're quiet; keep tapping on beat.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--muted">⬡</span><span><strong>The Muted</strong> — silenced squadrons. They only fire on the beat; hear the rhythm, read the bullets.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">𝄐</span><span><strong>Fermata</strong> — a screen-clearing bomb, earned with an 8-tap perfect streak. Spend it with <kbd>B</kbd>.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--boss">♛</span><span><strong>Section leaders</strong> — a boss ends each movement. Silence all four and the world sings again.</span></div>
+          </div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">The soundtrack is the game.</strong> Every drum, bassline and arp is synthesized live, and it grows a layer each movement. Enemies fire on the beat — if you can hear it, you can dodge it.</li>
+            <li><strong style="color:var(--ink);">Tap on the beat to power up.</strong> Each on-beat tap climbs the weapon ladder: SOLO → DUET → TRIO … all the way to <em>TUTTI FORTISSIMO</em> (seven-way spread, homing missiles, piercing center beam). Off-beat taps knock you down a rung.</li>
+            <li><strong style="color:var(--ink);">Silence is decay.</strong> The groove meter drains a level every few seconds you don't tap. Great players play the game like a metronome — dodge with one hand, keep time with the other.</li>
+            <li><strong style="color:var(--ink);">Fermata bombs.</strong> An 8-tap perfect streak banks a Fermata (max 2): a screen-clearing hold that erases every bullet, Raiden-style.</li>
+            <li><strong style="color:var(--ink);">Keep the combo singing.</strong> Kills raise your multiplier up to ×5. Taking a hit resets it and drops two weapon levels — the score chase is a no-hit chase.</li>
+            <li><strong style="color:var(--ink);">Four movements, four bosses.</strong> The Timpanist, the First Chair, the Metronome… and Him. Each movement is faster, higher, louder.</li>
+            <li><strong style="color:var(--ink);">Encore.</strong> Fall once and a quick ad revives you with full health (Pro members take their encore free).</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260701-games-consolidated-1"></script>
+  <script src="../assets/js/crescendo.js?v=20260708-cres-4"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

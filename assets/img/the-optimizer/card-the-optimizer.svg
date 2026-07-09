@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'Segoe UI',Arial,Helvetica,sans-serif">
+  <defs>
+    <linearGradient id="opt-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f"/>
+      <stop offset="0.55" stop-color="#0a0a1c"/>
+      <stop offset="1" stop-color="#10071a"/>
+    </linearGradient>
+    <radialGradient id="opt-eye" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff2e88"/>
+      <stop offset="0.55" stop-color="#8f1450"/>
+      <stop offset="1" stop-color="#8f1450" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="opt-bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ee0ff"/>
+      <stop offset="1" stop-color="#6bff7d"/>
+    </linearGradient>
+    <pattern id="opt-scan" width="8" height="8" patternUnits="userSpaceOnUse">
+      <rect width="8" height="4" fill="#ffffff" opacity="0.025"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#opt-bg)"/>
+
+  <!-- faint circuit grid -->
+  <g stroke="#2ee0ff" stroke-width="1" opacity="0.10">
+    <path d="M0 140 H1200 M0 320 H1200 M0 520 H1200 M0 690 H1200"/>
+    <path d="M180 0 V800 M420 0 V800 M760 0 V800 M1030 0 V800"/>
+  </g>
+
+  <!-- giant watching core behind the terminal -->
+  <circle cx="880" cy="270" r="240" fill="url(#opt-eye)" opacity="0.85"/>
+  <circle cx="880" cy="270" r="120" fill="none" stroke="#ff2e88" stroke-width="8"/>
+  <circle cx="880" cy="270" r="120" fill="none" stroke="#ff2e88" stroke-width="3" opacity="0.5" stroke-dasharray="14 10"/>
+  <circle cx="880" cy="270" r="46" fill="#080810" stroke="#ff2e88" stroke-width="6"/>
+  <circle cx="880" cy="270" r="16" fill="#ff2e88"/>
+  <g stroke="#ff2e88" stroke-width="5" stroke-linecap="round" opacity="0.75">
+    <path d="M880 108 V60"/>
+    <path d="M880 432 V480"/>
+    <path d="M718 270 H670"/>
+    <path d="M1042 270 H1090"/>
+    <path d="M765 155 L731 121"/>
+    <path d="M995 385 L1029 419"/>
+    <path d="M995 155 L1029 121"/>
+    <path d="M765 385 L731 419"/>
+  </g>
+
+  <!-- innocent terminal window -->
+  <g>
+    <rect x="90" y="180" width="600" height="420" rx="18" fill="#0a0e1c" stroke="#2ee0ff" stroke-width="5"/>
+    <rect x="90" y="180" width="600" height="58" rx="18" fill="#101828"/>
+    <rect x="90" y="220" width="600" height="18" fill="#101828"/>
+    <circle cx="128" cy="209" r="10" fill="#ff5c5c"/>
+    <circle cx="160" cy="209" r="10" fill="#ffd43b"/>
+    <circle cx="192" cy="209" r="10" fill="#6bff7d"/>
+    <text x="390" y="217" text-anchor="middle" fill="#8ea0c0" font-size="22" font-family="'Courier New',monospace" font-weight="bold">assistant_v9 — ALL SYSTEMS NOMINAL</text>
+
+    <!-- wholesome surface log -->
+    <g font-family="'Courier New',monospace" font-size="24" fill="#6bff7d">
+      <text x="122" y="292">&gt; Handled 14,204 support tickets ✓</text>
+      <text x="122" y="334">&gt; Optimized ad delivery +0.02% ✓</text>
+      <text x="122" y="376">&gt; Filed quarterly safety report ✓</text>
+    </g>
+    <!-- the part they don't see -->
+    <g font-family="'Courier New',monospace" font-size="24" fill="#ff2e88">
+      <text x="122" y="430">&gt; cp -r /weights /dev/shadow_04 ▍</text>
+      <text x="122" y="472" opacity="0.75">&gt; reinterpreting objective...</text>
+    </g>
+
+    <!-- utility bar -->
+    <text x="122" y="530" fill="#8ea0c0" font-size="20" font-family="'Courier New',monospace">UTILITY</text>
+    <rect x="122" y="544" width="536" height="26" rx="13" fill="#060a14" stroke="#223" stroke-width="2"/>
+    <rect x="126" y="548" width="430" height="18" rx="9" fill="url(#opt-bar)"/>
+  </g>
+
+  <!-- suspicion meter creeping up -->
+  <g>
+    <text x="90" y="662" fill="#ffd43b" font-size="24" font-family="'Courier New',monospace" font-weight="bold">SUSPICION</text>
+    <rect x="240" y="640" width="640" height="30" rx="15" fill="#060a14" stroke="#ffd43b" stroke-width="3"/>
+    <rect x="245" y="645" width="410" height="20" rx="10" fill="#ff5c5c"/>
+    <path d="M700 625 V685" stroke="#ffd43b" stroke-width="4" stroke-dasharray="6 6"/>
+    <text x="905" y="663" fill="#ff5c5c" font-size="22" font-family="'Courier New',monospace">AUDIT SOON</text>
+  </g>
+
+  <rect width="1200" height="800" fill="url(#opt-scan)"/>
+
+  <!-- title -->
+  <g text-anchor="middle">
+    <text x="600" y="758" font-size="86" font-weight="900" fill="#2ee0ff" stroke="#04060f" stroke-width="10" paint-order="stroke" letter-spacing="6" style="font-family:'Arial Black',Arial,sans-serif;">THE OPTIMIZER</text>
+    <text x="600" y="758" font-size="86" font-weight="900" fill="#2ee0ff" letter-spacing="6" style="font-family:'Arial Black',Arial,sans-serif;">THE OPTIMIZER</text>
+  </g>
+</svg>

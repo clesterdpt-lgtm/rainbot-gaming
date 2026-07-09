@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" font-family="'Segoe UI',Arial,Helvetica,sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f"/>
+      <stop offset="0.55" stop-color="#0a0a1c"/>
+      <stop offset="1" stop-color="#120a1e"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2ee0ff"/>
+      <stop offset="0.55" stop-color="#ff2e88"/>
+      <stop offset="1" stop-color="#ffd43b"/>
+    </linearGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04060f" stop-opacity="0"/>
+      <stop offset="1" stop-color="#04060f" stop-opacity="0.92"/>
+    </linearGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0 H0 V60" fill="none" stroke="#2ee0ff" stroke-opacity="0.07" stroke-width="1.5"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <g id="figure">
+      <rect x="-14" y="-92" width="28" height="24" rx="6"/>
+      <rect x="-17" y="-66" width="34" height="42" rx="8"/>
+      <rect x="-14" y="-22" width="10" height="22" rx="4"/>
+      <rect x="4" y="-22" width="10" height="22" rx="4"/>
+      <line x1="0" y1="-92" x2="0" y2="-104" stroke-width="4"/>
+      <circle cx="0" cy="-108" r="5"/>
+    </g>
+  </defs>
+
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <rect width="1200" height="800" fill="url(#grid)"/>
+
+  <!-- big loop sigil behind the scene -->
+  <g fill="none" stroke="#2ee0ff" stroke-opacity="0.22" filter="url(#glow)">
+    <circle cx="600" cy="360" r="270" stroke-width="10" stroke-dasharray="70 34"/>
+    <path d="M840 230 l40 -12 -14 42 z" fill="#2ee0ff" fill-opacity="0.22" stroke="none"/>
+  </g>
+
+  <!-- floor -->
+  <rect x="0" y="620" width="1200" height="180" fill="#0d1022"/>
+  <rect x="0" y="620" width="1200" height="6" fill="#2ee0ff" opacity="0.4"/>
+
+  <!-- crevasse gap -->
+  <rect x="480" y="626" width="260" height="174" fill="#04060f"/>
+  <g fill="#ff4f68" opacity="0.8">
+    <path d="M500 800 l16 -34 16 34 z"/><path d="M540 800 l16 -34 16 34 z"/><path d="M580 800 l16 -34 16 34 z"/>
+    <path d="M620 800 l16 -34 16 34 z"/><path d="M660 800 l16 -34 16 34 z"/><path d="M700 800 l16 -34 16 34 z"/>
+  </g>
+
+  <!-- echo staircase: three translucent cyan past selves -->
+  <g stroke="#2ee0ff">
+    <use href="#figure" transform="translate(330,620)" fill="#2ee0ff" opacity="0.34"/>
+    <use href="#figure" transform="translate(430,560) " fill="#2ee0ff" opacity="0.42"/>
+    <use href="#figure" transform="translate(530,500)" fill="#2ee0ff" opacity="0.5"/>
+  </g>
+  <!-- scanlines over echoes -->
+  <g stroke="#04060f" stroke-width="3" opacity="0.5">
+    <path d="M310 540 h44 M310 556 h44 M310 572 h44 M310 588 h44 M310 604 h44"/>
+    <path d="M410 480 h44 M410 496 h44 M410 512 h44 M410 528 h44 M410 544 h44"/>
+    <path d="M510 420 h44 M510 436 h44 M510 452 h44 M510 468 h44 M510 484 h44"/>
+  </g>
+
+  <!-- live player: hot pink, leaping off the top echo -->
+  <g filter="url(#glow)">
+    <use href="#figure" transform="translate(660,420) rotate(14)" fill="#ff2e88" stroke="#ff2e88"/>
+  </g>
+  <!-- motion trail -->
+  <g fill="#ff2e88">
+    <circle cx="596" cy="452" r="7" opacity="0.5"/>
+    <circle cx="562" cy="478" r="6" opacity="0.35"/>
+    <circle cx="532" cy="506" r="5" opacity="0.2"/>
+  </g>
+
+  <!-- golden exit portal -->
+  <g filter="url(#glow)">
+    <ellipse cx="920" cy="520" rx="52" ry="92" fill="none" stroke="#ffd43b" stroke-width="9" stroke-dasharray="34 20"/>
+    <ellipse cx="920" cy="520" rx="30" ry="60" fill="#ffd43b" opacity="0.22"/>
+  </g>
+
+  <!-- pressure plate + beam, small vignette on the right ledge -->
+  <rect x="760" y="606" width="70" height="14" rx="4" fill="#2ee0ff" opacity="0.8"/>
+  <rect x="788" y="300" width="8" height="306" fill="#2ee0ff" opacity="0.12"/>
+
+  <!-- title -->
+  <rect x="0" y="520" width="1200" height="280" fill="url(#fade)"/>
+  <text x="600" y="700" text-anchor="middle" font-size="118" font-weight="900" letter-spacing="6" fill="url(#title)" filter="url(#glow)">ECHO LOOP</text>
+  <text x="600" y="752" text-anchor="middle" font-size="30" font-weight="600" letter-spacing="10" fill="#b6b3c9">CO-OP WITH YOUR PAST SELVES</text>
+
+  <!-- corner tag -->
+  <g font-weight="800">
+    <rect x="36" y="36" width="230" height="52" rx="10" fill="#ff2e88"/>
+    <text x="151" y="72" text-anchor="middle" font-size="26" fill="#fbfaf4" letter-spacing="2">TIME PUZZLER</text>
+  </g>
+</svg>

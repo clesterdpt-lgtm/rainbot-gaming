@@ -11672,6 +11672,35 @@ body.arcade-home::before {
   object-fit: cover;
   object-position: center;
 }
+
+/* Echo Loop key art fills both card layouts. */
+.poster-card--echoloop img,
+.directory-card__poster--echoloop img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Echo Loop 3D key art fills both card layouts. */
+.poster-card--echoloop3d img,
+.directory-card__poster--echoloop3d img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* The Optimizer key art fills both card layouts. */
+.poster-card--optimizer img,
+.directory-card__poster--optimizer img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Crescendo key art fills both card layouts. */
+.poster-card--crescendo img,
+.directory-card__poster--crescendo img {
+  object-fit: cover;
+  object-position: center;
+}
+
 /* ===== Incident Commander agent protocol ===== */
 .incident-page {
   max-width: 1820px;

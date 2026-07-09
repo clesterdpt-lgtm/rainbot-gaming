@@ -11738,31 +11738,31 @@ body.arcade-home::before {
   object-position: center;
 }
 
-/* Echo Loop key art fills both card layouts. */
+/* Echo Loop key art keeps its full title inside the fixed poster frame. */
 .poster-card--echoloop img,
 .directory-card__poster--echoloop img {
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
-/* Echo Loop 3D key art fills both card layouts. */
+/* Echo Loop 3D key art keeps its full title inside the fixed poster frame. */
 .poster-card--echoloop3d img,
 .directory-card__poster--echoloop3d img {
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
-/* The Optimizer key art fills both card layouts. */
+/* The Optimizer key art keeps its full title inside the fixed poster frame. */
 .poster-card--optimizer img,
 .directory-card__poster--optimizer img {
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
-/* Crescendo key art fills both card layouts. */
+/* Crescendo key art keeps its full title inside the fixed poster frame. */
 .poster-card--crescendo img,
 .directory-card__poster--crescendo img {
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 

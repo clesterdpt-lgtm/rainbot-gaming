@@ -4539,6 +4539,19 @@ function fitGameCanvases() {
     const stage = target.closest(".game-stage");
     if (!stage) return;
 
+    // Games that should hug the side column (no height-bound letterbox gap).
+    if (target.getAttribute("data-fit") === "fill") {
+      const stageStyle = window.getComputedStyle(stage);
+      const stagePaddingX =
+        (parseFloat(stageStyle.paddingLeft) || 0) +
+        (parseFloat(stageStyle.paddingRight) || 0);
+      const availableWidth = Math.max(0, stage.clientWidth - stagePaddingX);
+      if (availableWidth > 0) {
+        target.style.setProperty("--game-fit-width", `${Math.floor(availableWidth)}px`);
+      }
+      return;
+    }
+
     const targetStyle = window.getComputedStyle(target);
     const naturalWidth = canvas
       ? Number(canvas.getAttribute("width")) || canvas.width || target.clientWidth

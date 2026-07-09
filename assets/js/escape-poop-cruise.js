@@ -2561,15 +2561,17 @@
     const skinTint = 0.92 + Math.random() * 0.14;
     const skinMat = voxelMat.clone();
     skinMat.color.setRGB(skinTint, 0.94 + Math.random() * 0.12, skinTint);
-    // Keep depthWrite ON while infected so glowing eyes are occluded by the
-    // back of the head (depthWrite:false made eyes show through the skull).
-    skinMat.transparent = true;
+    // Infected skin stays OPAQUE so it renders in the solid pass and fully
+    // occludes additive eye glow through the back of the skull. Transparency
+    // is only enabled during the cure crossfade (see updateCuredEnemy).
+    skinMat.transparent = false;
+    skinMat.opacity = 1;
     skinMat.depthWrite = true;
     // Healthy overlay shares the same geometry but ignores baked vertex colour,
     // so it renders as a flat normal skin tone. Crossfades in as skinMat fades out.
     const healthyMat = new THREE.MeshLambertMaterial({
       color: HEALTHY_SKIN_TONES[Math.floor(Math.random() * HEALTHY_SKIN_TONES.length)],
-      emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: true,
+      emissive: 0x0a0703, transparent: true, opacity: 0, depthWrite: false,
     });
     // Widened per-instance size + posture jitter so instances of the same
     // type read as individuals, not clones. Bosses skip the height jitter
@@ -2609,7 +2611,7 @@
     headPivot.add(headRim);
 
     // Glowing eyes use a per-enemy material so each can pulse, blink and fade.
-    // depthTest stays on so the head (depthWrite:true) hides eyes from behind.
+    // depthTest stays on so the opaque head hides eyes from behind.
     const eyeMat = new THREE.MeshBasicMaterial({
       color: look.eye,
       transparent: true,
@@ -2617,20 +2619,32 @@
       depthTest: true,
       depthWrite: false,
     });
-    // Sit the eyes in the dark sockets (not floating outside the skull).
-    const eyeZ = Math.max(0.04, d.eyeZ - 0.055);
+    // Seat eyes inside the skull (not floating past the face surface). Large
+    // scaled enemies (bloater/boss) amplify any outward offset, so sit deep.
+    const eyeZ = Math.max(0.03, d.eyeZ - 0.1);
     const eyeL = new THREE.Mesh(eyeVoxGeo, eyeMat);
     eyeL.position.set(-d.eyeX, d.eyeY, eyeZ);
+    eyeL.scale.set(0.92, 0.92, 0.7);
     const eyeR = new THREE.Mesh(eyeVoxGeo, eyeMat);
     eyeR.position.set(d.eyeX, d.eyeY, eyeZ);
-    // Dark socket plugs write depth so additive glow can't bleed through the
-    // back of the head even during transparent cure crossfades.
+    eyeR.scale.set(0.92, 0.92, 0.7);
+    // Depth-only skull plate behind both eyes: writes depth with no color so
+    // additive glow cannot show through the back of the head from any angle
+    // (transparent head shells / rim light still can't leak past this).
+    const eyeOccluderMat = new THREE.MeshBasicMaterial({
+      colorWrite: false,
+      depthWrite: true,
+      depthTest: true,
+    });
+    const eyeOccluder = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.26), eyeOccluderMat);
+    eyeOccluder.position.set(0, d.eyeY, eyeZ - 0.14);
+    // Visible dark socket cups (cosmetic) in front of the occluder.
     const socketMat = new THREE.MeshBasicMaterial({ color: 0x050805, depthWrite: true });
-    const socketGeo = new THREE.BoxGeometry(0.15, 0.13, 0.06);
+    const socketGeo = new THREE.BoxGeometry(0.15, 0.13, 0.05);
     const socketL = new THREE.Mesh(socketGeo, socketMat);
-    socketL.position.set(-d.eyeX, d.eyeY, eyeZ - 0.035);
+    socketL.position.set(-d.eyeX, d.eyeY, eyeZ - 0.03);
     const socketR = new THREE.Mesh(socketGeo, socketMat);
-    socketR.position.set(d.eyeX, d.eyeY, eyeZ - 0.035);
+    socketR.position.set(d.eyeX, d.eyeY, eyeZ - 0.03);
     // Normal (non-glowing) eyes crossfade in as the infected glow fades out,
     // so cured passengers end up with calm eyes instead of a blank face.
     const normalEyeMat = new THREE.MeshLambertMaterial({
@@ -2639,17 +2653,17 @@
     });
     const eyeLNormal = new THREE.Mesh(eyeVoxGeo, normalEyeMat);
     eyeLNormal.position.copy(eyeL.position);
-    eyeLNormal.position.z += 0.01;
-    eyeLNormal.scale.setScalar(0.82);
+    eyeLNormal.position.z += 0.008;
+    eyeLNormal.scale.set(0.75, 0.75, 0.55);
     eyeLNormal.renderOrder = 2;
     const eyeRNormal = new THREE.Mesh(eyeVoxGeo, normalEyeMat);
     eyeRNormal.position.copy(eyeR.position);
-    eyeRNormal.position.z += 0.01;
-    eyeRNormal.scale.setScalar(0.82);
+    eyeRNormal.position.z += 0.008;
+    eyeRNormal.scale.set(0.75, 0.75, 0.55);
     eyeRNormal.renderOrder = 2;
     const maw = new THREE.Mesh(mawVoxGeo, mats.maw);
     maw.position.set(0, d.mawY, d.mawZ);
-    headPivot.add(socketL, socketR, eyeL, eyeR, eyeLNormal, eyeRNormal, maw);
+    headPivot.add(eyeOccluder, socketL, socketR, eyeL, eyeR, eyeLNormal, eyeRNormal, maw);
     upper.add(headPivot);
 
     const armBase = 0.2 + look.armRaise;
@@ -4557,8 +4571,38 @@
     if (enemy.blink <= 0) enemy.blink = 2.4 + Math.random() * 3;
     const blinkClose = enemy.blink < 0.12 ? 1 - Math.abs(enemy.blink - 0.06) / 0.06 : 0;
     const pulse = 0.78 + Math.sin(performance.now() * 0.005 + enemy.walkPhase * 2) * 0.22;
-    parts.eyeMat.opacity = Math.max(0, (pulse + lunge * 0.4) * (1 - blinkClose));
+    // Face-camera factor: eyes (and only eyes) fade out when viewing the back
+    // of the head so glow can never read on the skull from behind — especially
+    // noticeable on large scaled enemies (bloater / boss).
+    // Non-camera Object3D.lookAt faces +Z toward the target.
+    const faceCam = eyeFaceCameraFactor(enemy);
+    parts.eyeMat.opacity = Math.max(0, (pulse + lunge * 0.4) * (1 - blinkClose) * faceCam);
+    if (parts.normalEyeMat.opacity > 0.01) {
+      parts.normalEyeMat.opacity = Math.min(parts.normalEyeMat.opacity, faceCam);
+    }
     parts.rimMat.opacity = (enemy.stagger > 0 ? 0.42 : enemy.type === "cougher" ? 0.28 : 0.2) + lunge * 0.15;
+  }
+
+  // 1 when the face points at the camera, 0 when the camera is behind the head.
+  function eyeFaceCameraFactor(enemy) {
+    const mesh = enemy.mesh;
+    if (!mesh) return 1;
+    // Ceiling crawlers are rotated upside-down; depth occluder is enough for them.
+    if (enemy.type === "crawler") return 1;
+    // Non-camera Object3D.lookAt faces local +Z at the target. Rotate (0,0,1)
+    // by the mesh quaternion to get world facing on XZ.
+    const q = mesh.quaternion;
+    const fx = 2 * (q.x * q.z + q.w * q.y);
+    const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+    let tx = camera.position.x - enemy.x;
+    let tz = camera.position.z - enemy.z;
+    const len = Math.hypot(tx, tz) || 1;
+    tx /= len;
+    tz /= len;
+    const fl = Math.hypot(fx, fz) || 1;
+    const dot = (fx / fl) * tx + (fz / fl) * tz;
+    // Soft falloff around the silhouette edge so eyes don't pop.
+    return clamp((dot - 0.08) / 0.42, 0, 1);
   }
 
   const HEAL_DURATION = 0.9;
@@ -4588,14 +4632,17 @@
     if (enemy.healing) {
       enemy.healT = Math.min(1, enemy.healT + dt / HEAL_DURATION);
       const t = enemy.healT;
+      // Enable transparency only while crossfading infected → healthy skin.
+      parts.skinMat.transparent = true;
       parts.skinMat.opacity = 1 - t;
       parts.healthyMat.opacity = t;
       // Prefer depth writes on the dominant skin layer so eyes stay occluded.
       parts.skinMat.depthWrite = t < 0.55;
       parts.healthyMat.depthWrite = t >= 0.45;
       parts.rimMat.opacity = Math.max(0, parts.rimMat.opacity - dt * 1.8);
-      parts.eyeMat.opacity = Math.max(0, parts.eyeMat.opacity - dt * 1.6);
-      parts.normalEyeMat.opacity = Math.min(1, parts.normalEyeMat.opacity + dt * 1.6);
+      const faceCam = eyeFaceCameraFactor(enemy);
+      parts.eyeMat.opacity = Math.max(0, parts.eyeMat.opacity - dt * 1.6) * faceCam;
+      parts.normalEyeMat.opacity = Math.min(1, t) * faceCam;
       parts.armL.rotation.x = lerp(parts.armL.rotation.x, 0.08, dt * 3);
       parts.armR.rotation.x = lerp(parts.armR.rotation.x, 0.08, dt * 3);
       parts.upper.rotation.x = lerp(parts.upper.rotation.x, 0.02, dt * 3);
@@ -4604,11 +4651,14 @@
         parts.skinMat.opacity = 0;
         parts.skinMat.depthWrite = false;
         parts.healthyMat.opacity = 1;
+        parts.healthyMat.transparent = false;
         parts.healthyMat.depthWrite = true;
         parts.rimMat.opacity = 0;
         parts.eyeMat.opacity = 0;
-        parts.normalEyeMat.opacity = 1;
+        parts.normalEyeMat.opacity = faceCam;
       }
+    } else if (parts.normalEyeMat.opacity > 0.01) {
+      parts.normalEyeMat.opacity = eyeFaceCameraFactor(enemy);
     }
 
     if (enemy.talkTimer > 0) {

@@ -603,7 +603,7 @@ function renderNav(state = RB.state) {
         ${
           state.isPro
             ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Go Pro</a>`
+            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro Preview</a>`
         }
         <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
       </div>
@@ -611,7 +611,7 @@ function renderNav(state = RB.state) {
     <nav class="nav__drawer" id="rb-nav-drawer" aria-label="Site sections" hidden>
       ${navLinksMarkup}
       <div class="nav__drawer-actions">
-        <a href="#" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Go Pro"}</a>
+        <a href="#" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Pro Preview"}</a>
         <a href="#" id="rb-drawer-profile">${authLabel}</a>
       </div>
     </nav>
@@ -1484,40 +1484,37 @@ function initGamesCatalog() {
 
 function openProModal(defaultPlan = "monthly") {
   if (document.getElementById("rb-pro-modal")) return;
+  const returnFocus = document.activeElement;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-pro-modal";
   backdrop.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal__title">Go Ad-Free</div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rb-pro-preview-title">
+      <div class="modal__title" id="rb-pro-preview-title">Rainbot Pro Preview</div>
       <div class="modal__body">
-        Skip every ad, unlock Pro-only drops, and keep Rainbot building weirder browser games.
+        Pro is still in the lab. The plan is an ad-free arcade, early access, and supporter perks—but checkout is not live yet.
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;">
-        <button class="btn btn--primary" data-plan="monthly">Monthly / $4.99</button>
-        <button class="btn btn--secondary" data-plan="yearly">Yearly / $49.99</button>
+      <div class="modal__actions">
+        <a class="btn btn--primary" id="rb-pro-updates" href="mailto:hello@rainbotgaming.com?subject=Rainbot%20Pro%20launch%20updates">Get launch updates</a>
+        <button class="btn btn--ghost" id="rb-close-pro" type="button">Maybe later</button>
       </div>
-      <button class="btn btn--ghost" id="rb-close-pro" style="font-size:14px;padding:8px 14px;">Maybe later</button>
     </div>
   `;
   document.body.appendChild(backdrop);
-  const preferred = backdrop.querySelector(`[data-plan="${defaultPlan}"]`);
-  if (preferred) preferred.focus();
-  backdrop.querySelectorAll("[data-plan]").forEach((b) => {
-    b.addEventListener("click", async () => {
-      b.disabled = true;
-      b.innerHTML = '<span class="spinner"></span>';
-      const ok = await RB.startCheckout(b.dataset.plan);
-      if (ok) {
-        RB.toast("🎉 Welcome to Pro!", "good");
-        backdrop.remove();
-      } else {
-        b.disabled = false;
-        b.textContent = b.dataset.plan === "yearly" ? "Yearly / $49.99" : "Monthly / $4.99";
-      }
-    });
+  const closePreview = () => {
+    backdrop.remove();
+    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+  };
+  backdrop.querySelector("#rb-pro-updates")?.focus();
+  backdrop.querySelector("#rb-close-pro").addEventListener("click", closePreview);
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) closePreview();
   });
-  backdrop.querySelector("#rb-close-pro").addEventListener("click", () => backdrop.remove());
+  backdrop.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    closePreview();
+  });
 }
 
 function setModalStatus(root, message, kind = "") {

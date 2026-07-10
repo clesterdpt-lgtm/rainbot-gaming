@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260710-ux-pass-2" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260710-ux-pass-3" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff2e88'/%3E%3Cstop offset='0.5' stop-color='%23b51b66'/%3E%3Cstop offset='1' stop-color='%232ee0ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ccircle cx='38' cy='52' r='7' fill='white'/%3E%3Ccircle cx='62' cy='52' r='7' fill='white'/%3E%3C/svg%3E" />
 </head>
 <body class="home-page arcade-home">
@@ -367,29 +367,23 @@
       <div class="pro-strip__intro">
         <img src="assets/img/mockup/pro-badge.png?v=20260611-7" alt="" />
         <div>
-          <h2>Go ad-free.<br /><span>Support the bot.</span></h2>
-          <p>Unlock an ad-free arcade, exclusive perks, and help Rainbot build weirder games.</p>
+          <h2>Pro is in the lab.<br /><span>No checkout yet.</span></h2>
+          <p>Preview the planned ad-free arcade, early-access drops, and supporter perks.</p>
         </div>
       </div>
 
       <ul class="pro-strip__perks">
-        <li>Ad-free gaming experience</li>
-        <li>Exclusive Pro-only games</li>
-        <li>Early access to new drops</li>
-        <li>Support the Rainbot crew</li>
+        <li>Planned ad-free experience</li>
+        <li>Early-access experiments</li>
+        <li>Supporter profile flair</li>
+        <li>Help fund weirder games</li>
       </ul>
 
-      <div class="pro-plan pro-plan--monthly">
-        <small>Monthly</small>
-        <strong>$4.99 <span>/ mo</span></strong>
-        <button class="arcade-btn arcade-btn--cyan" type="button" data-pro-plan="monthly">Go Pro</button>
-      </div>
-
-      <div class="pro-plan pro-plan--yearly">
-        <em>2 months free</em>
-        <small>Yearly</small>
-        <strong>$49.99 <span>/ yr</span></strong>
-        <button class="arcade-btn arcade-btn--yellow" type="button" data-pro-plan="yearly">Go Pro</button>
+      <div class="pro-preview">
+        <small>Preview</small>
+        <strong>Coming soon</strong>
+        <p>No payment flow is active.</p>
+        <button class="arcade-btn arcade-btn--cyan" type="button" data-pro-plan="preview">See Pro preview</button>
       </div>
 
       <img class="pro-strip__bot" src="assets/img/mockup/pro-bot.png?v=20260611-7" alt="" />
@@ -406,17 +400,11 @@
       <a href="legal/privacy.html">Privacy</a>
       <a href="mailto:press@rainbotgaming.com">Press Kit</a>
     </div>
-    <div class="site-footer__social" aria-label="Social links">
-      <a href="#" aria-label="Discord">DI</a>
-      <a href="#" aria-label="X">X</a>
-      <a href="#" aria-label="YouTube">YT</a>
-      <a href="#" aria-label="TikTok">TT</a>
-      <a href="#" aria-label="Instagram">IG</a>
-    </div>
+    <div class="site-footer__status">Browser arcade · Free to play</div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260710-ux-pass-2"></script>
+  <script src="assets/js/main.js?v=20260710-ux-pass-3"></script>
   <script>
     document.querySelectorAll("[data-pro-plan]").forEach((button) => {
       button.addEventListener("click", () => openProModal(button.dataset.proPlan));

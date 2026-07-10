@@ -407,6 +407,290 @@
     document.documentElement.dataset.unhousedTextures = generatedTextureStatus.status;
   }
 
+  // Character and prop art uses transparent sprite atlases instead of the
+  // repeating opaque texture path above. Each atlas is sliced once into small
+  // CanvasTextures so actors share GPU frames without cloning a full atlas for
+  // every pedestrian. The procedural meshes remain underneath until both the
+  // relevant frame and its material are ready.
+  const GENERATED_SPRITE_VERSION = "20260709-ai-sprites-3";
+  const GENERATED_SPRITE_COLUMNS = 4;
+  const GENERATED_SPRITE_ROWS = 4;
+  const GENERATED_SPRITE_MASTER_SIZE = 1254;
+  // The generations are visually arranged as a 4x4 atlas, but a few tall hats,
+  // handles, and creature silhouettes extend across the mathematical quarter
+  // lines. Curated alpha bounds keep those pixels intact and prevent a sliver of
+  // one frame appearing in its neighbor.
+  const GENERATED_SPRITE_BOUNDS = {
+    npc: [
+      [84, 42, 264, 302], [390, 42, 558, 302], [686, 32, 846, 302], [986, 46, 1158, 304],
+      [102, 336, 248, 606], [388, 342, 558, 610], [696, 334, 840, 608], [994, 346, 1150, 608],
+      [102, 640, 250, 904], [386, 642, 558, 906], [686, 642, 850, 906], [984, 646, 1160, 906],
+      [80, 928, 262, 1214], [376, 930, 564, 1214], [672, 938, 862, 1216], [960, 942, 1182, 1210],
+    ],
+    object: [
+      [76, 42, 270, 292], [360, 66, 594, 274], [690, 48, 864, 284], [952, 66, 1188, 278],
+      [50, 364, 302, 572], [380, 330, 564, 582], [716, 326, 826, 592], [1008, 334, 1128, 592],
+      [72, 610, 284, 870], [350, 656, 594, 848], [670, 620, 868, 862], [936, 666, 1202, 846],
+      [80, 910, 236, 1176], [352, 946, 588, 1176], [672, 896, 846, 1196], [964, 900, 1154, 1194],
+    ],
+  };
+  const generatedSpriteStatus = {
+    status: "idle",
+    loaded: [],
+    failed: [],
+  };
+  const generatedSpriteFrames = {
+    npc: null,
+    object: null,
+  };
+  const generatedSpriteMaterialCache = {
+    npc: new Map(),
+    object: new Map(),
+  };
+  const dynamicGeneratedSprites = [];
+  const generatedShadowGeometry = new THREE.CircleGeometry(0.72, 16);
+  const generatedShadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x10151a,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+  });
+  let generatedSpriteNightTint = null;
+
+  const NPC_FRAME_INDEX = {
+    player: [0],
+    civilian: [1, 2, 3, 4, 5, 6, 7, 8],
+    cop: [9, 10],
+    shambler: [11, 12],
+    runner: [13, 14],
+    spitter: [15],
+  };
+
+  const OBJECT_FRAME_INDEX = {
+    snack: 0,
+    scrap: 1,
+    cone: 2,
+    peel: 3,
+    boombox: 4,
+    sign: 5,
+    chicken: 6,
+    plunger: 7,
+    mop: 8,
+    cash: 9,
+    trashBag: 10,
+    cardboard: 11,
+    hydrant: 12,
+    bikeRack: 13,
+    newsBox: 14,
+    vending: 15,
+  };
+  const PICKUP_SPRITE_SCALE = {
+    cash: 2.15,
+    snack: 2.2,
+    scrap: 2.35,
+    cone: 2.1,
+    peel: 2.2,
+    boombox: 2.45,
+    sign: 2.45,
+    chicken: 2.3,
+    plunger: 2.45,
+    mop: 2.65,
+  };
+
+  function generatedFrameChoice(indices) {
+    return indices[Math.floor(Math.random() * indices.length)];
+  }
+
+  function generatedActorFrame(kind, options = {}) {
+    if (kind === "zombie") {
+      return generatedFrameChoice(NPC_FRAME_INDEX[options.variant] || NPC_FRAME_INDEX.shambler);
+    }
+    return generatedFrameChoice(NPC_FRAME_INDEX[kind] || NPC_FRAME_INDEX.civilian);
+  }
+
+  function wrapProceduralFallback(group) {
+    if (group.generatedFallbackVisual) return group.generatedFallbackVisual;
+    const fallback = new THREE.Group();
+    fallback.name = "procedural-fallback";
+    group.children.slice().forEach((child) => fallback.add(child));
+    group.add(fallback);
+    group.generatedFallbackVisual = fallback;
+    return fallback;
+  }
+
+  function sliceGeneratedSpriteAtlas(image, atlasName) {
+    const frames = [];
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const frameSize = 256;
+
+    for (let row = 0; row < GENERATED_SPRITE_ROWS; row += 1) {
+      for (let column = 0; column < GENERATED_SPRITE_COLUMNS; column += 1) {
+        const frameIndex = row * GENERATED_SPRITE_COLUMNS + column;
+        const bounds = GENERATED_SPRITE_BOUNDS[atlasName][frameIndex];
+        const sourceScaleX = sourceWidth / GENERATED_SPRITE_MASTER_SIZE;
+        const sourceScaleY = sourceHeight / GENERATED_SPRITE_MASTER_SIZE;
+        const sourcePadding = 7;
+        const sourceX = Math.max(0, (bounds[0] - sourcePadding) * sourceScaleX);
+        const sourceY = Math.max(0, (bounds[1] - sourcePadding) * sourceScaleY);
+        const cropWidth = Math.min(sourceWidth - sourceX, (bounds[2] - bounds[0] + sourcePadding * 2) * sourceScaleX);
+        const cropHeight = Math.min(sourceHeight - sourceY, (bounds[3] - bounds[1] + sourcePadding * 2) * sourceScaleY);
+        const destinationLimit = frameSize * 0.88;
+        const destinationScale = Math.min(destinationLimit / cropWidth, destinationLimit / cropHeight);
+        const destinationWidth = cropWidth * destinationScale;
+        const destinationHeight = cropHeight * destinationScale;
+        const canvasFrame = document.createElement("canvas");
+        canvasFrame.width = frameSize;
+        canvasFrame.height = frameSize;
+        const context = canvasFrame.getContext("2d", { alpha: true });
+        context.clearRect(0, 0, frameSize, frameSize);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        context.drawImage(
+          image,
+          sourceX,
+          sourceY,
+          cropWidth,
+          cropHeight,
+          (frameSize - destinationWidth) / 2,
+          (frameSize - destinationHeight) / 2,
+          destinationWidth,
+          destinationHeight
+        );
+        const texture = new THREE.CanvasTexture(canvasFrame);
+        texture.name = `${atlasName}-${frameIndex}`;
+        texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        if (THREE.sRGBEncoding) texture.encoding = THREE.sRGBEncoding;
+        texture.needsUpdate = true;
+        frames.push(texture);
+      }
+    }
+    return frames;
+  }
+
+  function loadGeneratedSpriteAtlas(filename, atlasName) {
+    return new Promise((resolve) => {
+      new THREE.ImageLoader().load(
+        `${GENERATED_TEXTURE_ROOT}/${filename}?v=${GENERATED_SPRITE_VERSION}`,
+        (image) => {
+          generatedSpriteStatus.loaded.push(filename);
+          resolve(sliceGeneratedSpriteAtlas(image, atlasName));
+        },
+        undefined,
+        () => {
+          generatedSpriteStatus.failed.push(filename);
+          resolve(null);
+        }
+      );
+    });
+  }
+
+  function generatedSpriteMaterial(atlas, frame) {
+    const frames = generatedSpriteFrames[atlas];
+    if (!frames || !frames[frame]) return null;
+    const key = `${frame}`;
+    const cache = generatedSpriteMaterialCache[atlas];
+    if (!cache.has(key)) {
+      const material = new THREE.SpriteMaterial({
+        map: frames[frame],
+        color: state && state.phase === "night" ? 0xa9bdd0 : 0xffffff,
+        transparent: true,
+        alphaTest: 0.16,
+        depthTest: true,
+        depthWrite: true,
+        // These are upright near-nadir cutouts, not flat directional frames.
+        // Keeping them screen-upright avoids pedestrians and tall props reading
+        // as fallen over when their gameplay root turns or spins.
+        rotation: 0,
+        fog: true,
+      });
+      cache.set(key, material);
+    }
+    return cache.get(key);
+  }
+
+  function attachGeneratedSprite(group) {
+    const config = group.userData.generatedSpriteConfig;
+    if (!config || group.generatedSpriteVisual) return Boolean(group.generatedSpriteVisual);
+    const material = generatedSpriteMaterial(config.atlas, config.frame);
+    if (!material) return false;
+
+    const sprite = new THREE.Sprite(material);
+    sprite.name = `generated-${config.atlas}-${config.frame}`;
+    sprite.position.set(config.offsetX || 0, config.offsetY == null ? 1.05 : config.offsetY, config.offsetZ || 0);
+    sprite.scale.set(config.scaleX || config.scale || 2.8, config.scaleY || config.scale || 2.8, 1);
+    sprite.renderOrder = config.renderOrder || 3;
+    sprite.userData.generatedSprite = true;
+    group.add(sprite);
+    group.generatedSpriteVisual = sprite;
+
+    if (group.generatedFallbackVisual) group.generatedFallbackVisual.visible = false;
+    if (config.shadow) {
+      const shadow = new THREE.Mesh(generatedShadowGeometry, generatedShadowMaterial);
+      shadow.name = "generated-contact-shadow";
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.y = 0.035;
+      shadow.scale.setScalar(config.shadowScale || 1);
+      shadow.renderOrder = 1;
+      group.add(shadow);
+      group.generatedSpriteShadow = shadow;
+    }
+    if (config.dynamic) {
+      dynamicGeneratedSprites.push({ group, sprite });
+    }
+    return true;
+  }
+
+  function tagGeneratedSprite(group, config) {
+    group.userData.generatedSpriteConfig = config;
+    attachGeneratedSprite(group);
+  }
+
+  function upgradeGeneratedSprites() {
+    actorGroup.traverse((object) => {
+      if (object.userData && object.userData.generatedSpriteConfig) attachGeneratedSprite(object);
+    });
+    staticGroup.traverse((object) => {
+      if (object.userData && object.userData.generatedSpriteConfig) attachGeneratedSprite(object);
+    });
+  }
+
+  function syncGeneratedSprites() {
+    const nightTint = state.phase === "night" ? 0xa9bdd0 : 0xffffff;
+    if (generatedSpriteNightTint !== nightTint) {
+      generatedSpriteNightTint = nightTint;
+      Object.values(generatedSpriteMaterialCache).forEach((cache) => {
+        cache.forEach((material) => material.color.setHex(nightTint));
+      });
+    }
+
+    for (let index = dynamicGeneratedSprites.length - 1; index >= 0; index -= 1) {
+      const entry = dynamicGeneratedSprites[index];
+      if (!entry.group.parent || !entry.sprite.parent) {
+        dynamicGeneratedSprites.splice(index, 1);
+      }
+    }
+  }
+
+  async function loadGeneratedSpriteAtlases() {
+    generatedSpriteStatus.status = "loading";
+    document.documentElement.dataset.unhousedSprites = "loading";
+    const [npcFrames, objectFrames] = await Promise.all([
+      loadGeneratedSpriteAtlas("npc-atlas-v1-ai.png", "npc"),
+      loadGeneratedSpriteAtlas("object-atlas-v1-ai.png", "object"),
+    ]);
+    generatedSpriteFrames.npc = npcFrames;
+    generatedSpriteFrames.object = objectFrames;
+    generatedSpriteStatus.status = generatedSpriteStatus.failed.length
+      ? (generatedSpriteStatus.loaded.length ? "partial" : "fallback")
+      : "ready";
+    document.documentElement.dataset.unhousedSprites = generatedSpriteStatus.status;
+    upgradeGeneratedSprites();
+  }
+
   const blockerRects = [];
   const staticMeshes = [];
   function buildTrafficLanes() {
@@ -2577,6 +2861,19 @@
     group.add(makeMesh(new THREE.BoxGeometry(0.9, 0.85, 0.7), boxMat, 0, 0.42, 0, true, true));
     group.add(makeMesh(new THREE.BoxGeometry(0.72, 0.34, 0.05), materials.white, 0, 0.53, -0.38, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.92, 0.12, 0.75), materials.black, 0, 0.93, 0, true, false));
+    // Keep alternating red procedural boxes for neighborhood variety; the blue
+    // boxes use the richer generated silhouette when its atlas is available.
+    if (variant % 2) {
+      wrapProceduralFallback(group);
+      tagGeneratedSprite(group, {
+        atlas: "object",
+        frame: OBJECT_FRAME_INDEX.newsBox,
+        scale: 2.05,
+        offsetY: 0.82,
+        shadow: false,
+        renderOrder: 3,
+      });
+    }
     staticGroup.add(group);
   }
 
@@ -2597,6 +2894,16 @@
     group.add(makeMesh(new THREE.BoxGeometry(1.5, 0.22, 1.0), materials.cardboard, 0, 0.16, 0, true, true));
     group.add(makeMesh(new THREE.BoxGeometry(1.05, 0.22, 0.85), materials.cardboard, 0.12, 0.4, -0.06, true, true));
     group.add(makeMesh(new THREE.BoxGeometry(0.7, 0.22, 0.55), materials.cardboard, -0.16, 0.64, 0.06, true, true));
+    wrapProceduralFallback(group);
+    tagGeneratedSprite(group, {
+      atlas: "object",
+      frame: OBJECT_FRAME_INDEX.cardboard,
+      scaleX: 2.45,
+      scaleY: 2.1,
+      offsetY: 0.65,
+      shadow: false,
+      renderOrder: 3,
+    });
     staticGroup.add(group);
   }
 
@@ -2619,6 +2926,15 @@
     group.add(makeMesh(new THREE.CylinderGeometry(0.22, 0.26, 0.65, 10), materials.red, 0, 0.34, 0, true, true));
     group.add(makeMesh(new THREE.CylinderGeometry(0.18, 0.18, 0.22, 10), materials.yellow, 0, 0.78, 0, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.7, 0.16, 0.16), materials.red, 0, 0.55, 0, true, false));
+    wrapProceduralFallback(group);
+    tagGeneratedSprite(group, {
+      atlas: "object",
+      frame: OBJECT_FRAME_INDEX.hydrant,
+      scale: 1.85,
+      offsetY: 0.7,
+      shadow: false,
+      renderOrder: 3,
+    });
     staticGroup.add(group);
   }
 
@@ -2642,6 +2958,16 @@
     group.add(makeMesh(new THREE.BoxGeometry(0.68, 0.92, 0.05), materials.glass, -0.12, 1.18, -0.39, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.22, 0.48, 0.05), materials.black, 0.42, 1.1, -0.4, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.72, 0.24, 0.05), materials.yellow, -0.1, 1.78, -0.4, true, false));
+    wrapProceduralFallback(group);
+    tagGeneratedSprite(group, {
+      atlas: "object",
+      frame: OBJECT_FRAME_INDEX.vending,
+      scaleX: 2.35,
+      scaleY: 2.55,
+      offsetY: 1.05,
+      shadow: false,
+      renderOrder: 3,
+    });
     staticGroup.add(group);
   }
 
@@ -2654,6 +2980,16 @@
       hoop.scale.z = 0.45;
       hoop.rotation.x = Math.PI / 2;
       group.add(hoop);
+    });
+    wrapProceduralFallback(group);
+    tagGeneratedSprite(group, {
+      atlas: "object",
+      frame: OBJECT_FRAME_INDEX.bikeRack,
+      scaleX: 2.55,
+      scaleY: 2.2,
+      offsetY: 0.72,
+      shadow: false,
+      renderOrder: 3,
     });
     staticGroup.add(group);
   }
@@ -2779,6 +3115,9 @@
   function makeActor(kind, x, z, options = {}) {
     const group = new THREE.Group();
     group.position.set(x, 0, z);
+    group.userData.actorKind = kind;
+    group.userData.actorVariant = options.variant || kind;
+    let persistentGroundAccent = null;
 
     const baseColor = options.color || materials.civilian;
     const body = addCylinder(group, 0.72, 1.5, 0, 0, 0, baseColor, 10);
@@ -2988,6 +3327,7 @@
       );
       glow.rotation.x = Math.PI / 2;
       group.add(glow);
+      persistentGroundAccent = glow;
       if (spitter) {
         // A drippy spout on the head telegraphs the ranged goo attacker.
         const spout = makeMesh(new THREE.ConeGeometry(0.26, 0.6, 8), materials.zombieSpit, 0, 2.1, -0.5, true, false);
@@ -3004,6 +3344,22 @@
         group.add(spout, gob);
       }
     }
+
+    wrapProceduralFallback(group);
+    // Preserve the enemy-type ring outside the fallback so ranged and melee
+    // threats keep their gameplay telegraph when the generated art is active.
+    if (persistentGroundAccent) group.add(persistentGroundAccent);
+    const actorScale = kind === "zombie" ? 3.15 : kind === "cop" ? 2.95 : kind === "player" ? 3.05 : 2.75;
+    tagGeneratedSprite(group, {
+      atlas: "npc",
+      frame: generatedActorFrame(kind, options),
+      scale: actorScale,
+      offsetY: 1.08,
+      dynamic: true,
+      shadow: true,
+      shadowScale: kind === "zombie" ? 1.05 : 0.86,
+      renderOrder: kind === "player" ? 5 : 4,
+    });
 
     actorGroup.add(group);
     return group;
@@ -3061,6 +3417,7 @@
       addCylinder(group, 0.42, 0.45, 0, 0, 0, materials.scrap, 8);
       ringColor = 0xd7dde2;
     }
+    wrapProceduralFallback(group);
     const ring = makeMesh(
       new THREE.RingGeometry(0.8, 1.05, 20),
       new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.65, side: THREE.DoubleSide }),
@@ -3084,6 +3441,19 @@
       false
     );
     group.add(indicator);
+
+    const generatedFrame = OBJECT_FRAME_INDEX[type];
+    if (Number.isInteger(generatedFrame)) {
+      tagGeneratedSprite(group, {
+        atlas: "object",
+        frame: generatedFrame,
+        scale: PICKUP_SPRITE_SCALE[type] || 2.3,
+        offsetY: 0.95,
+        dynamic: true,
+        shadow: false,
+        renderOrder: 5,
+      });
+    }
 
     actorGroup.add(group);
     const pickup = { type, x, z, mesh: group, indicator, active: true, spin: rand(0, Math.PI * 2) };
@@ -3174,6 +3544,7 @@
   }
 
   function resetDynamic() {
+    dynamicGeneratedSprites.length = 0;
     actorGroup.clear();
     fxGroup.clear();
     civilians.length = 0;
@@ -6268,6 +6639,7 @@
   }
 
   function render() {
+    syncGeneratedSprites();
     renderer.render(scene, camera);
   }
 
@@ -6723,6 +7095,12 @@
           status: generatedTextureStatus.status,
           loaded: generatedTextureStatus.loaded.slice(),
           failed: generatedTextureStatus.failed.slice(),
+          sprites: {
+            status: generatedSpriteStatus.status,
+            loaded: generatedSpriteStatus.loaded.slice(),
+            failed: generatedSpriteStatus.failed.slice(),
+            activeDynamic: dynamicGeneratedSprites.length,
+          },
         }),
         start: () => startGame(),
         act: () => {
@@ -6852,6 +7230,7 @@
   function init() {
     buildWorld();
     loadGeneratedTextures();
+    loadGeneratedSpriteAtlases();
     resetGame(false);
     installDebugHooks();
     resize();

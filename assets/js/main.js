@@ -610,6 +610,10 @@ function renderNav(state = RB.state) {
     </div>
     <nav class="nav__drawer" id="rb-nav-drawer" aria-label="Site sections" hidden>
       ${navLinksMarkup}
+      <div class="nav__drawer-actions">
+        <a href="#" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Go Pro"}</a>
+        <a href="#" id="rb-drawer-profile">${authLabel}</a>
+      </div>
     </nav>
   `;
 
@@ -631,6 +635,20 @@ function renderNav(state = RB.state) {
   });
   const login = document.getElementById("rb-login");
   if (login) login.addEventListener("click", (e) => {
+    e.preventDefault();
+    openProfileModal();
+  });
+  const drawerPro = document.getElementById("rb-drawer-pro");
+  if (drawerPro) drawerPro.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (state.isPro) {
+      manage?.click();
+      return;
+    }
+    openProModal();
+  });
+  const drawerProfile = document.getElementById("rb-drawer-profile");
+  if (drawerProfile) drawerProfile.addEventListener("click", (e) => {
     e.preventDefault();
     openProfileModal();
   });
@@ -1117,9 +1135,11 @@ function initGamesCatalog() {
   const grid = catalog.querySelector("[data-games-grid]");
   const categorySelect = catalog.querySelector("[data-games-category]");
   const sortSelect = catalog.querySelector("[data-games-sort]");
+  const searchInput = catalog.querySelector("[data-games-search]");
   const resetButton = catalog.querySelector("[data-games-reset]");
   const modeButtons = Array.from(catalog.querySelectorAll("[data-games-section-filter]"));
   const countEl = catalog.querySelector("[data-games-count]");
+  const totalEl = document.querySelector("[data-games-total]");
   const emptyEl = catalog.querySelector("[data-games-empty]");
   if (!grid || !categorySelect || !sortSelect) return;
 
@@ -1269,12 +1289,22 @@ function initGamesCatalog() {
     const category = card.querySelector(".directory-card__meta b")?.textContent.trim() || "Other";
     const detail = card.querySelector(".directory-card__meta em")?.textContent.trim() || "";
     const status = card.querySelector(".directory-card__status")?.textContent.trim() || "";
+    const href = (card.getAttribute("href") || "").replace(/^\.\//, "");
+    const slug = href.split("/").pop()?.replace(/\.html$/, "") || "";
     const title = (
+      RB_GAME_META[slug]?.title ||
       card.querySelector(".directory-card__poster-title")?.textContent ||
       card.dataset.title ||
-      card.getAttribute("href") ||
+      href ||
       ""
     ).replace(/\s+/g, " ").trim();
+    const body = card.querySelector(".directory-card__body");
+    if (body && !body.querySelector(".directory-card__title")) {
+      const heading = document.createElement("strong");
+      heading.className = "directory-card__title";
+      heading.textContent = title || `Game ${order + 1}`;
+      body.prepend(heading);
+    }
     const searchText = normalize([
       card.dataset.title,
       card.textContent,
@@ -1310,6 +1340,7 @@ function initGamesCatalog() {
     };
   });
   if (!cards.length) return;
+  if (totalEl) totalEl.textContent = String(cards.length);
 
   const categoryLabels = new Map();
   cards.forEach((item) => {
@@ -1330,6 +1361,7 @@ function initGamesCatalog() {
     sort: "featured",
     search: normalize(new URLSearchParams(location.search).get("q") || ""),
   };
+  if (searchInput) searchInput.value = state.search;
 
   const syncModeButtons = () => {
     modeButtons.forEach((button) => {
@@ -1420,6 +1452,7 @@ function initGamesCatalog() {
       state.search = "";
       const navSearch = document.getElementById("rb-search");
       if (navSearch) navSearch.value = "";
+      if (searchInput) searchInput.value = "";
       if (history.replaceState) {
         const url = new URL(location.href);
         url.searchParams.delete("q");
@@ -1440,6 +1473,10 @@ function initGamesCatalog() {
   });
   categorySelect.addEventListener("change", applyFilters);
   sortSelect.addEventListener("change", applyFilters);
+  if (searchInput) searchInput.addEventListener("input", () => {
+    state.search = normalize(searchInput.value);
+    applyFilters();
+  });
   if (resetButton) resetButton.addEventListener("click", () => window.RBGamesCatalog.reset());
 
   applyFilters();
@@ -2824,6 +2861,7 @@ function renderHomeRecentPanel() {
   const backendState = getBackendState();
   const signedIn = Boolean(backendState.user);
   const entries = recentHomeGameEntries(3);
+  root.classList.toggle("is-empty", entries.length === 0);
   if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Sign in";
 
   if (entries.length) {

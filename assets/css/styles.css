@@ -12319,16 +12319,103 @@ body.arcade-home::before {
 /* Final cascade: keep the site-wide UX pass above legacy responsive rules. */
 .home-page .arcade-shell { display: flex; flex-direction: column; }
 .home-page .portal-hero { order: 1; }
-.home-page .home-recent-panel { order: 2; }
-.home-page .latest-release-panel { order: 3; }
-.home-page .featured-panel { order: 4; }
-.home-page .home-progress-panel { order: 5; }
-.home-page .home-media-panel { order: 6; }
-.home-page .home-community-panel { order: 7; }
-.home-page .agent-games-panel { order: 8; }
-.home-page .arcade-row { order: 9; }
-.home-page .pro-strip { order: 10; }
+.home-page .home-discovery { order: 2; }
+.home-page .home-recent-panel { order: 3; }
+.home-page .latest-release-panel { order: 4; }
+.home-page .featured-panel { order: 5; }
+.home-page .home-progress-panel { order: 6; }
+.home-page .home-media-panel { order: 7; }
+.home-page .home-community-panel { order: 8; }
+.home-page .agent-games-panel { order: 9; }
+.home-page .arcade-row { order: 10; }
+.home-page .pro-strip { order: 11; }
 .home-page .featured-panel .poster-card:nth-child(n + 7) { display: none; }
+
+.home-discovery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.home-discovery__item {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  overflow: hidden;
+  border: 1px solid rgba(113, 132, 156, 0.42);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(35, 223, 242, 0.08), transparent 52%),
+    rgba(4, 7, 13, 0.9);
+  color: var(--arcade-white);
+  padding: 15px 16px;
+  text-decoration: none;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.home-discovery__item::after {
+  content: ">";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  color: var(--arcade-yellow);
+  font: 900 15px var(--arcade-font);
+  transform: translateY(-50%);
+}
+
+.home-discovery__item:hover,
+.home-discovery__item:focus-visible {
+  border-color: var(--arcade-cyan);
+  background:
+    linear-gradient(135deg, rgba(35, 223, 242, 0.15), transparent 58%),
+    rgba(5, 9, 17, 0.98);
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+
+.home-discovery__item small,
+.home-discovery__item span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.home-discovery__item small { color: #8ca0b5; }
+.home-discovery__item span { color: var(--arcade-cyan); }
+.home-discovery__item strong {
+  max-width: calc(100% - 26px);
+  font-family: var(--arcade-font);
+  font-size: clamp(13px, 1.35vw, 17px);
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.home-discovery__item--multi span { color: var(--arcade-yellow); }
+.home-discovery__item--agent span { color: #8bffde; }
+.home-discovery__item--dark span { color: #ff708f; }
+
+.home-page .home-progress-panel,
+.home-page .home-community-panel,
+.home-page .home-media-panel,
+.home-page .agent-games-panel {
+  border-color: rgba(113, 132, 156, 0.34);
+  background: rgba(4, 7, 13, 0.82);
+  box-shadow: none;
+}
+
+.home-page .arcade-panel__header {
+  min-height: 44px;
+}
+
+.slopwire-card__body > span,
+.agent-feature-card__body > span,
+.home-community-row p {
+  font-family: var(--font-sans);
+  line-height: 1.48;
+  text-transform: none;
+}
 
 .nav__drawer-actions {
   display: grid;
@@ -12435,6 +12522,12 @@ body.arcade-home::before {
   .games-section__header p { display: none; }
 }
 
+@media (min-width: 980px) {
+  .home-page .poster-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .nav__actions .nav__cta--pro,
   .nav__pro-state { display: none; }
@@ -12449,6 +12542,20 @@ body.arcade-home::before {
   .portal-hero { padding: 18px 18px 20px; }
   .portal-hero__media { margin-inline: -18px; width: calc(100% + 36px); }
   .portal-hero__media img { max-height: 190px; }
+  .home-discovery {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+  .home-discovery::-webkit-scrollbar { display: none; }
+  .home-discovery__item {
+    flex: 0 0 156px;
+    min-height: 82px;
+    padding: 13px 14px;
+  }
+  .home-discovery__item strong { font-size: 13px; }
   .home-page .featured-panel .poster-card:nth-child(n + 5) { display: none; }
   .home-recent-panel.is-empty .home-recent-empty { gap: 10px; padding: 14px; }
   .home-recent-panel.is-empty .home-recent-empty em { display: none; }

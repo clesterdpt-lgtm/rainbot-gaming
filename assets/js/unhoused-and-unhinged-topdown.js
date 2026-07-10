@@ -153,12 +153,17 @@
   const materials = {
     asphalt: mat("asphalt", 0x2b3b46),
     asphaltDark: mat("asphaltDark", 0x2b3b46),
+    roadVertical: mat("roadVertical", 0x2b3b46),
+    roadHorizontal: mat("roadHorizontal", 0x2b3b46),
     lane: mat("lane", 0xf1cf59),
     curb: mat("curb", 0xb5b9aa),
     crosswalk: mat("crosswalk", 0x75868d),
     concrete: mat("concrete", 0x7e9aa1),
     concreteLight: mat("concreteLight", 0x848d92),
+    groundConcrete: mat("groundConcrete", 0xaab3b2),
     sidewalk: mat("sidewalk", 0x9ea8a6),
+    sidewalkVertical: mat("sidewalkVertical", 0x9ea8a6),
+    sidewalkHorizontal: mat("sidewalkHorizontal", 0x9ea8a6),
     sidewalkWarm: mat("sidewalkWarm", 0x9f8569),
     sidewalkCool: mat("sidewalkCool", 0x6da4b4),
     sidewalkRose: mat("sidewalkRose", 0xae718f),
@@ -171,10 +176,18 @@
     tanWall: mat("tanWall", 0xc6804e),
     blueWall: mat("blueWall", 0x2e78a5),
     purpleWall: mat("purpleWall", 0x8351a1),
-    roof: mat("roof", 0x353247),
-    roofWarm: mat("roofWarm", 0x724553),
-    roofCool: mat("roofCool", 0x2d5b78),
-    roofGold: mat("roofGold", 0x8a6432),
+    roof: mat("roof", 0x353247, 0.98),
+    roofWarm: mat("roofWarm", 0x724553, 0.98),
+    roofCool: mat("roofCool", 0x2d5b78, 0.72),
+    roofGold: mat("roofGold", 0x8a6432, 0.86),
+    roofEdge: mat("roofEdge", 0x2c2a38),
+    roofWarmEdge: mat("roofWarmEdge", 0x5a3944),
+    roofCoolEdge: mat("roofCoolEdge", 0x315f6a),
+    roofGoldEdge: mat("roofGoldEdge", 0x6c563d),
+    pitchedRoofRough: mat("pitchedRoofRough", 0x756b80, 0.96),
+    pitchedRoofMaintained: mat("pitchedRoofMaintained", 0xba9b82, 0.9),
+    pitchedRoofUpscale: mat("pitchedRoofUpscale", 0x94babe, 0.82),
+    canopyRoof: mat("canopyRoof", 0x4d7c91, 0.8),
     glass: mat("glass", 0x76d4e0, 0.45, 0.05),
     player: mat("player", 0x315f36),
     playerHead: mat("playerHead", 0xc28f65),
@@ -211,6 +224,188 @@
     mopHead: mat("mopHead", 0xe8e2c8),
     safe: mat("safe", 0x65d77b),
   };
+
+  const GENERATED_TEXTURE_ROOT = "../assets/textures/unhoused/generated";
+  const GENERATED_TEXTURE_VERSION = "20260709-ai-textures-4";
+  const generatedTextureStatus = {
+    status: "idle",
+    loaded: [],
+    failed: [],
+  };
+
+  function loadGeneratedTexture(filename) {
+    return new Promise((resolve) => {
+      new THREE.TextureLoader().load(
+        `${GENERATED_TEXTURE_ROOT}/${filename}?v=${GENERATED_TEXTURE_VERSION}`,
+        (texture) => {
+          texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+          texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          texture.minFilter = THREE.LinearMipMapLinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          if (THREE.sRGBEncoding) {
+            texture.encoding = THREE.sRGBEncoding;
+          }
+          generatedTextureStatus.loaded.push(filename);
+          resolve(texture);
+        },
+        undefined,
+        () => {
+          generatedTextureStatus.failed.push(filename);
+          resolve(null);
+        }
+      );
+    });
+  }
+
+  function applyGeneratedTexture(material, source, tint = 0xffffff) {
+    if (!material || !source) return;
+    material.map = source;
+    material.color.setHex(tint);
+    material.needsUpdate = true;
+  }
+
+  function generatedUvSeed(x, z, salt = 0) {
+    const value = Math.sin(x * 12.9898 + z * 78.233 + salt * 19.19) * 43758.5453;
+    return value - Math.floor(value);
+  }
+
+  function transformGeneratedUvs(geometry, scaleU, scaleV, offsetU = 0, offsetV = 0, quarterTurns = 0) {
+    const uv = geometry && geometry.attributes && geometry.attributes.uv;
+    if (!uv) return;
+    const turns = ((quarterTurns % 4) + 4) % 4;
+    for (let index = 0; index < uv.count; index += 1) {
+      // Establish equal world-space texel density before rotating. Rotating
+      // first swaps a rectangular roof's axes and visibly squashes the map.
+      let u = (uv.getX(index) - 0.5) * scaleU;
+      let v = (uv.getY(index) - 0.5) * scaleV;
+      for (let turn = 0; turn < turns; turn += 1) {
+        const nextU = -v;
+        v = u;
+        u = nextU;
+      }
+      uv.setXY(index, u + 0.5 + offsetU, v + 0.5 + offsetV);
+    }
+    uv.needsUpdate = true;
+  }
+
+  function isGeneratedRoofMaterial(material) {
+    return material === materials.roof
+      || material === materials.roofWarm
+      || material === materials.roofCool
+      || material === materials.roofGold;
+  }
+
+  function prepareRoofUvs(geometry, w, d, x, z) {
+    const tileWorldSize = 12;
+    // Repeats below one are intentional: narrow roofs crop the texture instead
+    // of forcing a full square image into a shallow strip.
+    const scaleU = w / tileWorldSize;
+    const scaleV = d / tileWorldSize;
+    const offsetU = generatedUvSeed(x, z, 1) * 1.8;
+    const offsetV = generatedUvSeed(x, z, 2) * 1.8;
+    const quarterTurns = Math.floor(generatedUvSeed(x, z, 3) * 4);
+    transformGeneratedUvs(geometry, scaleU, scaleV, offsetU, offsetV, quarterTurns);
+  }
+
+  function roofFasciaMaterial(material) {
+    if (material === materials.roofWarm) return materials.roofWarmEdge;
+    if (material === materials.roofCool) return materials.roofCoolEdge;
+    if (material === materials.roofGold) return materials.roofGoldEdge;
+    return materials.roofEdge;
+  }
+
+  function pitchedRoofMaterial(material) {
+    if (material === materials.roofCool) return materials.pitchedRoofUpscale;
+    if (material === materials.roofGold) return materials.pitchedRoofMaintained;
+    return materials.pitchedRoofRough;
+  }
+
+  function makePyramidRoofGeometry(w, d, height, tileWorldSize = 5.5) {
+    const geometry = new THREE.BufferGeometry();
+    const positions = [];
+    const uvs = [];
+    const apex = [0, height, 0];
+
+    function addFace(a, b) {
+      const edgeLength = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      const midX = (a[0] + b[0]) * 0.5;
+      const midZ = (a[2] + b[2]) * 0.5;
+      const slopeLength = Math.hypot(apex[0] - midX, height, apex[2] - midZ);
+      const repeatU = edgeLength / tileWorldSize;
+      const repeatV = slopeLength / tileWorldSize;
+      positions.push(...a, ...b, ...apex);
+      uvs.push(0, 0, repeatU, 0, repeatU * 0.5, repeatV);
+    }
+
+    // Winding keeps all four face normals pointed up and away from the center.
+    addFace([w / 2, 0, -d / 2], [-w / 2, 0, -d / 2]);
+    addFace([-w / 2, 0, d / 2], [w / 2, 0, d / 2]);
+    addFace([w / 2, 0, d / 2], [w / 2, 0, -d / 2]);
+    addFace([-w / 2, 0, -d / 2], [-w / 2, 0, d / 2]);
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  function prepareFlatGeneratedUvs(geometry, material, w, d, x, z) {
+    let tileSize = 0;
+    if (material === materials.roadVertical || material === materials.roadHorizontal) {
+      tileSize = 5.5;
+    } else if (material === materials.sidewalkVertical || material === materials.sidewalkHorizontal) {
+      tileSize = 5.5;
+    } else if (material === materials.groundConcrete) {
+      tileSize = 64;
+    }
+    if (!tileSize) return;
+    transformGeneratedUvs(
+      geometry,
+      Math.max(1, w / tileSize),
+      Math.max(1, d / tileSize),
+      generatedUvSeed(x, z, 4),
+      generatedUvSeed(x, z, 5)
+    );
+  }
+
+  async function loadGeneratedTextures() {
+    generatedTextureStatus.status = "loading";
+    document.documentElement.dataset.unhousedTextures = "loading";
+
+    const [asphalt, concrete, rooftopRough, rooftopMaintained, rooftopUpscale, pitchedShingles] = await Promise.all([
+      loadGeneratedTexture("asphalt-ai.jpg"),
+      loadGeneratedTexture("concrete-ai.jpg"),
+      loadGeneratedTexture("rooftop-rough-v2-ai.jpg"),
+      loadGeneratedTexture("rooftop-maintained-v2-ai.jpg"),
+      loadGeneratedTexture("rooftop-upscale-v2-ai.jpg"),
+      loadGeneratedTexture("pitched-shingles-v2-ai.jpg"),
+    ]);
+
+    applyGeneratedTexture(materials.roadVertical, asphalt);
+    applyGeneratedTexture(materials.roadHorizontal, asphalt);
+
+    applyGeneratedTexture(materials.groundConcrete, concrete);
+    applyGeneratedTexture(materials.sidewalkVertical, concrete);
+    applyGeneratedTexture(materials.sidewalkHorizontal, concrete);
+
+    // The existing roof families double as stable quality tiers: rough roofs
+    // stay dark and patched, gold roofs are maintained, and cool roofs get the
+    // cleanest finish. That keeps visual status consistent between runs.
+    applyGeneratedTexture(materials.roof, rooftopRough);
+    applyGeneratedTexture(materials.roofWarm, rooftopRough, 0xffeef5);
+    applyGeneratedTexture(materials.roofGold, rooftopMaintained, 0xfff7e8);
+    applyGeneratedTexture(materials.roofCool, rooftopUpscale, 0xdbe7e5);
+
+    applyGeneratedTexture(materials.pitchedRoofRough, pitchedShingles, 0x9b92aa);
+    applyGeneratedTexture(materials.pitchedRoofMaintained, pitchedShingles, 0xd1ad92);
+    applyGeneratedTexture(materials.pitchedRoofUpscale, pitchedShingles, 0xa8d1d4);
+
+    generatedTextureStatus.status = generatedTextureStatus.failed.length
+      ? (generatedTextureStatus.loaded.length ? "partial" : "fallback")
+      : "ready";
+    document.documentElement.dataset.unhousedTextures = generatedTextureStatus.status;
+  }
 
   const blockerRects = [];
   const staticMeshes = [];
@@ -789,7 +984,16 @@
   }
 
   function addBox(parent, w, h, d, x, y, z, material, blocker = false) {
-    const mesh = makeMesh(new THREE.BoxGeometry(w, h, d), material, x, y + h / 2, z);
+    const geometry = new THREE.BoxGeometry(w, h, d);
+    let meshMaterial = material;
+    if (isGeneratedRoofMaterial(material)) {
+      prepareRoofUvs(geometry, w, d, x, z);
+      const fascia = roofFasciaMaterial(material);
+      // BoxGeometry material index 2 is the upward face in Three.js r128.
+      // Keep the generated art on top and the shallow fascia solid-colored.
+      meshMaterial = [fascia, fascia, material, fascia, fascia, fascia];
+    }
+    const mesh = makeMesh(geometry, meshMaterial, x, y + h / 2, z);
     parent.add(mesh);
     staticMeshes.push(mesh);
     if (blocker) {
@@ -805,7 +1009,9 @@
   }
 
   function addFlat(parent, w, d, x, z, material, y = 0.012) {
-    const mesh = makeMesh(new THREE.BoxGeometry(w, 0.04, d), material, x, y, z, false, true);
+    const geometry = new THREE.BoxGeometry(w, 0.04, d);
+    prepareFlatGeneratedUvs(geometry, material, w, d, x, z);
+    const mesh = makeMesh(geometry, material, x, y, z, false, true);
     parent.add(mesh);
     return mesh;
   }
@@ -1012,12 +1218,12 @@
 
   function addSidewalkGrid() {
     ROAD_X.forEach((x) => {
-      addFlat(staticGroup, SIDEWALK_WIDTH, WORLD.height, x - ROAD_HALF - SIDEWALK_HALF - 0.42, 0, materials.sidewalk, 0.055);
-      addFlat(staticGroup, SIDEWALK_WIDTH, WORLD.height, x + ROAD_HALF + SIDEWALK_HALF + 0.42, 0, materials.sidewalk, 0.055);
+      addFlat(staticGroup, SIDEWALK_WIDTH, WORLD.height, x - ROAD_HALF - SIDEWALK_HALF - 0.42, 0, materials.sidewalkVertical, 0.055);
+      addFlat(staticGroup, SIDEWALK_WIDTH, WORLD.height, x + ROAD_HALF + SIDEWALK_HALF + 0.42, 0, materials.sidewalkVertical, 0.055);
     });
     ROAD_Z.forEach((z) => {
-      addFlat(staticGroup, WORLD.width, SIDEWALK_WIDTH, 0, z - ROAD_HALF - SIDEWALK_HALF - 0.42, materials.sidewalk, 0.056);
-      addFlat(staticGroup, WORLD.width, SIDEWALK_WIDTH, 0, z + ROAD_HALF + SIDEWALK_HALF + 0.42, materials.sidewalk, 0.056);
+      addFlat(staticGroup, WORLD.width, SIDEWALK_WIDTH, 0, z - ROAD_HALF - SIDEWALK_HALF - 0.42, materials.sidewalkHorizontal, 0.056);
+      addFlat(staticGroup, WORLD.width, SIDEWALK_WIDTH, 0, z + ROAD_HALF + SIDEWALK_HALF + 0.42, materials.sidewalkHorizontal, 0.056);
     });
   }
 
@@ -1078,12 +1284,12 @@
 
   function addRoadGrid() {
     ROAD_X.forEach((x) => {
-      addFlat(staticGroup, ROAD_WIDTH, WORLD.height, x, 0, materials.asphalt, 0.08);
+      addFlat(staticGroup, ROAD_WIDTH, WORLD.height, x, 0, materials.roadVertical, 0.08);
       addVerticalSegments(x - ROAD_HALF - 0.2, 0.32, materials.curb, 0.16);
       addVerticalSegments(x + ROAD_HALF + 0.2, 0.32, materials.curb, 0.16);
     });
     ROAD_Z.forEach((z) => {
-      addFlat(staticGroup, WORLD.width, ROAD_WIDTH, 0, z, materials.asphaltDark, 0.09);
+      addFlat(staticGroup, WORLD.width, ROAD_WIDTH, 0, z, materials.roadHorizontal, 0.09);
       addHorizontalSegments(z - ROAD_HALF - 0.2, 0.32, materials.curb, 0.16);
       addHorizontalSegments(z + ROAD_HALF + 0.2, 0.32, materials.curb, 0.16);
     });
@@ -1194,12 +1400,11 @@
       addBox(staticGroup, 0.45, hBase, 0.45, x - w / 2, 0, z + d / 2, accentMat, false);
       addBox(staticGroup, 0.45, hBase, 0.45, x + w / 2, 0, z + d / 2, accentMat, false);
 
-      // Pitch Roof (Cone with 4 sides, scaled to fit building footprint)
+      // Pitched roof with planar per-face UVs. The old non-uniformly scaled
+      // ConeGeometry warped flat-roof membrane art into a tunnel pattern.
       const pyrH = Math.min(w, d) * 0.42;
-      const pyrGeom = new THREE.ConeGeometry(0.7071, pyrH, 4);
-      pyrGeom.rotateY(Math.PI / 4);
-      const pyr = makeMesh(pyrGeom, roof, x, hBase + pyrH / 2, z);
-      pyr.scale.set(w, 1, d);
+      const pyrGeom = makePyramidRoofGeometry(w, d, pyrH);
+      const pyr = makeMesh(pyrGeom, pitchedRoofMaterial(roof), x, hBase, z);
       staticGroup.add(pyr);
 
       // Windows
@@ -2183,7 +2388,7 @@
     staticMeshes.length = 0;
     labelCounter = 0;
 
-    addFlat(staticGroup, WORLD.width, WORLD.height, 0, 0, materials.concreteLight, 0);
+    addFlat(staticGroup, WORLD.width, WORLD.height, 0, 0, materials.groundConcrete, 0);
 
     addSidewalkGrid();
     addRoadGrid();
@@ -2421,7 +2626,7 @@
     const group = new THREE.Group();
     group.position.set(x, 0, z);
     group.rotation.y = rotation;
-    group.add(makeMesh(new THREE.BoxGeometry(3.4, 0.18, 0.95), materials.roofCool, 0, 2.35, 0, true, false));
+    group.add(makeMesh(new THREE.BoxGeometry(3.4, 0.18, 0.95), materials.canopyRoof, 0, 2.35, 0, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), materials.pole, -1.45, 1.1, -0.35, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), materials.pole, 1.45, 1.1, -0.35, true, false));
     group.add(makeMesh(new THREE.BoxGeometry(2.8, 0.22, 0.62), mat("busStopSeat", 0x735538), 0, 0.74, 0.18, true, true));
@@ -6514,6 +6719,11 @@
         state,
         player,
         civilians,
+        assets: () => ({
+          status: generatedTextureStatus.status,
+          loaded: generatedTextureStatus.loaded.slice(),
+          failed: generatedTextureStatus.failed.slice(),
+        }),
         start: () => startGame(),
         act: () => {
           act();
@@ -6641,6 +6851,7 @@
 
   function init() {
     buildWorld();
+    loadGeneratedTextures();
     resetGame(false);
     installDebugHooks();
     resize();

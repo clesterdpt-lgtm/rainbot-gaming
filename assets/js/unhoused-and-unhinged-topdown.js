@@ -614,7 +614,7 @@
 
   function attachGeneratedSprite(group) {
     const config = group.userData.generatedSpriteConfig;
-    if (!config || group.generatedSpriteVisual) return Boolean(group.generatedSpriteVisual);
+    if (!config || group.userData.actorModelReady || group.generatedSpriteVisual) return Boolean(group.generatedSpriteVisual);
     const material = generatedSpriteMaterial(config.atlas, config.frame);
     if (!material) return false;
 
@@ -689,6 +689,365 @@
       : "ready";
     document.documentElement.dataset.unhousedSprites = generatedSpriteStatus.status;
     upgradeGeneratedSprites();
+  }
+
+  // Free 3D model layer. Kenney's Blocky Characters use animated rigid parts
+  // (not skinned meshes), but SkeletonUtils.clone keeps the path safe if a
+  // future model introduces a skeleton. Sprites and procedural geometry stay
+  // visible until the matching GLB and its external texture are both ready.
+  const FREE_MODEL_ROOT = "../assets/models/unhoused";
+  const FREE_MODEL_VERSION = "20260710-kenney-models-2";
+  const FREE_MODEL_MANIFEST = {
+    "character-a": { path: "characters/character-a.glb", type: "character" },
+    "character-b": { path: "characters/character-b.glb", type: "character" },
+    "character-c": { path: "characters/character-c.glb", type: "character" },
+    "character-e": { path: "characters/character-e.glb", type: "character" },
+    "character-f": { path: "characters/character-f.glb", type: "character" },
+    "character-i": { path: "characters/character-i.glb", type: "character" },
+    "character-j": { path: "characters/character-j.glb", type: "character" },
+    "character-k": { path: "characters/character-k.glb", type: "character" },
+    "character-l": { path: "characters/character-l.glb", type: "character" },
+    "character-n": { path: "characters/character-n.glb", type: "character" },
+    "character-o": { path: "characters/character-o.glb", type: "character" },
+    "character-p": { path: "characters/character-p.glb", type: "character" },
+    "character-q": { path: "characters/character-q.glb", type: "character" },
+    "tree-default": { path: "trees/tree_default.glb", type: "tree", targetHeight: 7.1 },
+    "tree-fall": { path: "trees/tree_default_fall.glb", type: "tree", targetHeight: 7.0 },
+    "tree-oak": { path: "trees/tree_oak.glb", type: "tree", targetHeight: 6.4 },
+    "tree-small": { path: "trees/tree_small.glb", type: "tree", targetHeight: 5.5 },
+    "tree-tall": { path: "trees/tree_tall.glb", type: "tree", targetHeight: 7.7 },
+    "tree-thin": { path: "trees/tree_thin.glb", type: "tree", targetHeight: 7.3 },
+  };
+  const FREE_CIVILIAN_MODEL_KEYS = [
+    "character-b", "character-c", "character-e", "character-f",
+    "character-i", "character-k", "character-p", "character-q",
+  ];
+  const FREE_TREE_MODEL_KEYS = [
+    "tree-default", "tree-small", "tree-tall", "tree-oak", "tree-thin", "tree-fall",
+  ];
+  const freeModelTemplates = new Map();
+  const freeModelMaterials = new Set();
+  const freeActorModelInstances = [];
+  const freeModelDiagnostics = {};
+  const freeModelStatus = {
+    status: "idle",
+    loaded: [],
+    failed: [],
+    treeInstances: 0,
+    treeVariants: {},
+  };
+  const freeModelLoader = typeof THREE.GLTFLoader === "function" ? new THREE.GLTFLoader() : null;
+  let freeModelNightTint = null;
+
+  function freeActorModelConfig(kind, options = {}) {
+    let key = "character-a";
+    if (kind === "civilian") key = generatedFrameChoice(FREE_CIVILIAN_MODEL_KEYS);
+    if (kind === "cop") key = "character-j";
+    if (kind === "zombie") {
+      key = options.variant === "runner"
+        ? "character-o"
+        : options.variant === "spitter"
+          ? "character-n"
+          : "character-l";
+    }
+    return {
+      key,
+      targetHeight: kind === "player" ? 3.35 : kind === "cop" ? 3.2 : kind === "zombie" ? 3.35 : 3.05,
+      headingOffset: Math.PI,
+      castShadow: kind !== "civilian",
+      shadowScale: kind === "zombie" ? 1.05 : 0.86,
+    };
+  }
+
+  function freeTreeModelConfig(x, z) {
+    const keyIndex = Math.min(
+      FREE_TREE_MODEL_KEYS.length - 1,
+      Math.floor(generatedUvSeed(x, z, 31) * FREE_TREE_MODEL_KEYS.length)
+    );
+    const key = FREE_TREE_MODEL_KEYS[keyIndex];
+    const manifest = FREE_MODEL_MANIFEST[key];
+    return {
+      key,
+      targetHeight: manifest.targetHeight * (0.88 + generatedUvSeed(x, z, 32) * 0.3),
+      widthScale: 0.9 + generatedUvSeed(x, z, 33) * 0.22,
+      rotation: generatedUvSeed(x, z, 34) * Math.PI * 2,
+    };
+  }
+
+  function registerFreeModelMaterial(material) {
+    if (!material || !material.color) return;
+    if (!material._unhousedBaseColor) material._unhousedBaseColor = material.color.clone();
+    if (material.map && THREE.sRGBEncoding) {
+      material.map.encoding = THREE.sRGBEncoding;
+      material.map.needsUpdate = true;
+    }
+    freeModelMaterials.add(material);
+    // A model may finish loading after the phase tint was already cached.
+    // Force the next render to tint this newly registered shared material too.
+    freeModelNightTint = null;
+  }
+
+  function prepareFreeModelTemplate(key, gltf) {
+    gltf.scene.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = false;
+      object.receiveShadow = false;
+      const meshMaterials = Array.isArray(object.material) ? object.material : [object.material];
+      meshMaterials.forEach(registerFreeModelMaterial);
+    });
+    gltf.scene.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(gltf.scene);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    freeModelDiagnostics[key] = {
+      clips: gltf.animations.map((clip) => clip.name),
+      size: [size.x, size.y, size.z].map((value) => Number(value.toFixed(3))),
+      center: [center.x, center.y, center.z].map((value) => Number(value.toFixed(3))),
+    };
+    return { gltf, bounds: bounds.clone(), size, center };
+  }
+
+  function loadFreeModelTemplate(key) {
+    const manifest = FREE_MODEL_MANIFEST[key];
+    return new Promise((resolve) => {
+      freeModelLoader.load(
+        `${FREE_MODEL_ROOT}/${manifest.path}?v=${FREE_MODEL_VERSION}`,
+        (gltf) => {
+          freeModelTemplates.set(key, prepareFreeModelTemplate(key, gltf));
+          freeModelStatus.loaded.push(key);
+          upgradeFreeModels();
+          resolve(true);
+        },
+        undefined,
+        () => {
+          freeModelStatus.failed.push(key);
+          resolve(false);
+        }
+      );
+    });
+  }
+
+  function cloneFreeModelScene(template, animated = false) {
+    if (animated && THREE.SkeletonUtils && typeof THREE.SkeletonUtils.clone === "function") {
+      return THREE.SkeletonUtils.clone(template.gltf.scene);
+    }
+    return template.gltf.scene.clone(true);
+  }
+
+  function fitFreeModelToHeight(model, template, targetHeight, widthScale = 1) {
+    const height = Math.max(0.001, template.size.y);
+    const uniformScale = targetHeight / height;
+    model.scale.set(uniformScale * widthScale, uniformScale, uniformScale * widthScale);
+    model.position.set(
+      -template.center.x * uniformScale * widthScale,
+      -template.bounds.min.y * uniformScale,
+      -template.center.z * uniformScale * widthScale
+    );
+    model.updateMatrixWorld(true);
+  }
+
+  function syncFreeModelTint() {
+    const tintHex = state.phase === "night" ? 0x9fb2c3 : 0xffffff;
+    if (freeModelNightTint === tintHex) return;
+    freeModelNightTint = tintHex;
+    const tint = new THREE.Color(tintHex);
+    freeModelMaterials.forEach((material) => {
+      material.color.copy(material._unhousedBaseColor).multiply(tint);
+      material.needsUpdate = true;
+    });
+  }
+
+  function ensureFreeActorShadow(group, scale = 0.9) {
+    if (group.generatedSpriteShadow) return;
+    const shadow = new THREE.Mesh(generatedShadowGeometry, generatedShadowMaterial);
+    shadow.name = "free-model-contact-shadow";
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.035;
+    shadow.scale.setScalar(scale);
+    shadow.renderOrder = 1;
+    group.add(shadow);
+    group.generatedSpriteShadow = shadow;
+  }
+
+  function actionForFreeActor(record, name) {
+    return record.actions[name]
+      || (name === "sprint" ? record.actions.walk : null)
+      || record.actions.idle
+      || null;
+  }
+
+  function setActorModelMotion(group, name, speed = 0) {
+    if (!group) return;
+    group.userData.freeModelMotion = { name, speed };
+    const record = group.freeActorModelRecord;
+    if (!record) return;
+    const nextAction = actionForFreeActor(record, name);
+    if (!nextAction) return;
+
+    const timeScale = name === "walk"
+      ? clamp(speed / 2.5, 0.68, 1.65)
+      : name === "sprint"
+        ? clamp(speed / 5.8, 0.72, 1.6)
+        : 1;
+    nextAction.setEffectiveTimeScale(timeScale);
+    if (record.currentAction === nextAction) return;
+    if (record.currentAction) record.currentAction.fadeOut(0.14);
+    nextAction.reset().setEffectiveWeight(1).fadeIn(0.14).play();
+    record.currentAction = nextAction;
+  }
+
+  function attachFreeActorModel(group) {
+    const config = group.userData.freeActorModelConfig;
+    if (!config || group.userData.actorModelReady) return Boolean(group.userData.actorModelReady);
+    const template = freeModelTemplates.get(config.key);
+    if (!template) return false;
+
+    const model = cloneFreeModelScene(template, true);
+    model.name = `${config.key}-instance`;
+    fitFreeModelToHeight(model, template, config.targetHeight);
+    model.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = config.castShadow;
+      object.receiveShadow = false;
+    });
+
+    const visualPivot = new THREE.Group();
+    visualPivot.name = `${config.key}-turn-pivot`;
+    visualPivot.rotation.y = config.headingOffset;
+    visualPivot.add(model);
+    group.add(visualPivot);
+
+    const mixer = template.gltf.animations.length ? new THREE.AnimationMixer(model) : null;
+    const actions = {};
+    if (mixer) {
+      ["idle", "walk", "sprint"].forEach((clipName) => {
+        const clip = THREE.AnimationClip.findByName(template.gltf.animations, clipName);
+        if (clip) actions[clipName] = mixer.clipAction(clip);
+      });
+    }
+    const record = {
+      group,
+      model,
+      visualPivot,
+      mixer,
+      actions,
+      currentAction: null,
+      headingOffset: config.headingOffset,
+      visualYaw: group.rotation.y,
+    };
+    group.freeActorModelRecord = record;
+    group.freeModelVisual = visualPivot;
+    group.userData.actorModelReady = true;
+    freeActorModelInstances.push(record);
+
+    if (group.generatedSpriteVisual) group.generatedSpriteVisual.visible = false;
+    if (group.generatedFallbackVisual) group.generatedFallbackVisual.visible = false;
+    ensureFreeActorShadow(group, config.shadowScale);
+    const pendingMotion = group.userData.freeModelMotion || { name: "idle", speed: 0 };
+    setActorModelMotion(group, pendingMotion.name, pendingMotion.speed);
+    return true;
+  }
+
+  function tagFreeActorModel(group, config) {
+    group.userData.freeActorModelConfig = config;
+    attachFreeActorModel(group);
+  }
+
+  function attachFreeTreeModel(group) {
+    const config = group.userData.freeTreeModelConfig;
+    if (!config || group.userData.treeModelReady) return Boolean(group.userData.treeModelReady);
+    const template = freeModelTemplates.get(config.key);
+    if (!template) return false;
+
+    const model = cloneFreeModelScene(template, false);
+    model.name = `${config.key}-instance`;
+    fitFreeModelToHeight(model, template, config.targetHeight, config.widthScale);
+    model.traverse((object) => {
+      if (!object.isMesh) return;
+      object.castShadow = true;
+      object.receiveShadow = false;
+    });
+    const visualPivot = new THREE.Group();
+    visualPivot.name = `${config.key}-pivot`;
+    visualPivot.rotation.y = config.rotation;
+    visualPivot.add(model);
+    group.add(visualPivot);
+    group.freeTreeModelVisual = visualPivot;
+    group.userData.treeModelReady = true;
+    if (group.generatedFallbackVisual) group.generatedFallbackVisual.visible = false;
+    freeModelStatus.treeInstances += 1;
+    freeModelStatus.treeVariants[config.key] = (freeModelStatus.treeVariants[config.key] || 0) + 1;
+    return true;
+  }
+
+  function tagFreeTreeModel(group, config) {
+    group.userData.freeTreeModelConfig = config;
+    attachFreeTreeModel(group);
+  }
+
+  function upgradeFreeModels() {
+    actorGroup.traverse((object) => {
+      if (object.userData && object.userData.freeActorModelConfig) attachFreeActorModel(object);
+    });
+    staticGroup.traverse((object) => {
+      if (object.userData && object.userData.freeTreeModelConfig) attachFreeTreeModel(object);
+    });
+  }
+
+  function disposeFreeActorRecord(record) {
+    if (record.mixer) {
+      record.mixer.stopAllAction();
+      record.mixer.uncacheRoot(record.model);
+    }
+    if (record.group) record.group.freeActorModelRecord = null;
+  }
+
+  function clearFreeActorModelInstances() {
+    freeActorModelInstances.forEach(disposeFreeActorRecord);
+    freeActorModelInstances.length = 0;
+  }
+
+  function updateFreeActorModels(dt) {
+    const animate = state.running && !state.paused && !state.mapOpen && !state.ended;
+    const turnBlend = 1 - Math.exp(-11 * dt);
+    for (let index = freeActorModelInstances.length - 1; index >= 0; index -= 1) {
+      const record = freeActorModelInstances[index];
+      if (!record.group.parent || !record.visualPivot.parent) {
+        disposeFreeActorRecord(record);
+        freeActorModelInstances.splice(index, 1);
+        continue;
+      }
+      const desiredYaw = record.group.rotation.y;
+      const yawDelta = Math.atan2(
+        Math.sin(desiredYaw - record.visualYaw),
+        Math.cos(desiredYaw - record.visualYaw)
+      );
+      record.visualYaw += yawDelta * turnBlend;
+      const localYaw = Math.atan2(
+        Math.sin(record.visualYaw - desiredYaw),
+        Math.cos(record.visualYaw - desiredYaw)
+      );
+      record.visualPivot.rotation.y = record.headingOffset + localYaw;
+      if (animate && record.group.visible && record.mixer) record.mixer.update(dt);
+    }
+  }
+
+  async function loadFreeModelAssets() {
+    const keys = Object.keys(FREE_MODEL_MANIFEST);
+    freeModelStatus.status = "loading";
+    document.documentElement.dataset.unhousedModels = "loading";
+    if (!freeModelLoader) {
+      freeModelStatus.failed = keys.slice();
+      freeModelStatus.status = "fallback";
+      document.documentElement.dataset.unhousedModels = "fallback";
+      return;
+    }
+    await Promise.all(keys.map(loadFreeModelTemplate));
+    freeModelStatus.status = freeModelStatus.failed.length
+      ? (freeModelStatus.loaded.length ? "partial" : "fallback")
+      : "ready";
+    document.documentElement.dataset.unhousedModels = freeModelStatus.status;
+    upgradeFreeModels();
   }
 
   const blockerRects = [];
@@ -2774,10 +3133,15 @@
   }
 
   function addTree(x, z) {
-    addCylinder(staticGroup, 0.45, 2.5, x, 0, z, mat("treeTrunk", 0x6d4427), 7);
-    const crown = makeMesh(new THREE.IcosahedronGeometry(2.4, 0), materials.parkDark, x, 3.4, z, true, false);
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+    addCylinder(group, 0.45, 2.5, 0, 0, 0, mat("treeTrunk", 0x6d4427), 7);
+    const crown = makeMesh(new THREE.IcosahedronGeometry(2.4, 0), materials.parkDark, 0, 3.4, 0, true, false);
     crown.scale.y = 1.25;
-    staticGroup.add(crown);
+    group.add(crown);
+    wrapProceduralFallback(group);
+    tagFreeTreeModel(group, freeTreeModelConfig(x, z));
+    staticGroup.add(group);
   }
 
   function addTent(x, z, index) {
@@ -3360,6 +3724,7 @@
       shadowScale: kind === "zombie" ? 1.05 : 0.86,
       renderOrder: kind === "player" ? 5 : 4,
     });
+    tagFreeActorModel(group, freeActorModelConfig(kind, options));
 
     actorGroup.add(group);
     return group;
@@ -3544,6 +3909,7 @@
   }
 
   function resetDynamic() {
+    clearFreeActorModelInstances();
     dynamicGeneratedSprites.length = 0;
     actorGroup.clear();
     fxGroup.clear();
@@ -5381,6 +5747,7 @@
 
   function updatePlayer(dt) {
     if (state.drivingCar) {
+      setActorModelMotion(player.mesh, "idle", 0);
       updatePlayerDriving(dt);
       return;
     }
@@ -5409,6 +5776,7 @@
     if (player.mesh) {
       player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
     }
+    setActorModelMotion(player.mesh, moving ? (effSpeed >= 5.2 ? "sprint" : "walk") : "idle", moving ? effSpeed : 0);
 
     // "Acting too much" window: each ACT bumps the streak; it cools off here.
     if (state.actStreakTime > 0) {
@@ -5478,6 +5846,7 @@
         civilian.mesh.rotation.y = Math.atan2(dx, dz);
       }
       civilian.mesh.position.y = civilian.watching > 0 ? Math.sin(state.phaseTime * 10 + civilian.emojiBob) * 0.05 : 0;
+      setActorModelMotion(civilian.mesh, speed <= 0.05 ? "idle" : speed >= 3.35 ? "sprint" : "walk", speed);
 
       const d = Math.sqrt(distSq(civilian, player));
       if (d < 4.5 && state.phase === "day" && activeItem().id === "boombox" && civilian.tipped <= 0) {
@@ -5493,6 +5862,7 @@
       cop.stun = Math.max(0, cop.stun - dt);
       cop.slip = Math.max(0, cop.slip - dt);
       if (cop.stun > 0 || cop.slip > 0) {
+        setActorModelMotion(cop.mesh, "idle", 0);
         cop.mesh.rotation.y += dt * 8;
         return;
       }
@@ -5529,6 +5899,7 @@
         moveCircle(cop, dx * speed * dt, dz * speed * dt);
         cop.mesh.rotation.y = Math.atan2(dx, dz);
       }
+      setActorModelMotion(cop.mesh, mag > 0.2 ? (speed >= 5 ? "sprint" : "walk") : "idle", mag > 0.2 ? speed : 0);
 
       const d = Math.sqrt(distSq(cop, player));
       const isTouchingCar = state.drivingCar && playerCarHit(cop, state.drivingCar);
@@ -6003,6 +6374,7 @@
       zombie.mesh.position.y = Math.sin(zombie.wobble) * 0.12;
 
       if (zombie.stun > 0) {
+        setActorModelMotion(zombie.mesh, "idle", 0);
         zombie.mesh.rotation.y += dt * 5;
         return;
       }
@@ -6019,11 +6391,13 @@
       if (zombie.confused > 0) {
         const wander = Math.sin(zombie.wobble * 1.6) * 0.6;
         moveCircle(zombie, (-dx + dz * wander) * zombie.speed * 0.55 * dt, (-dz - dx * wander) * zombie.speed * 0.55 * dt);
+        setActorModelMotion(zombie.mesh, "walk", zombie.speed * 0.55);
         zombie.mesh.rotation.y += dt * 6;
         return; // no attacks while confused
       }
 
       if (zombie.kind === "spitter") {
+        setActorModelMotion(zombie.mesh, "walk", zombie.speed);
         updateSpitter(zombie, dx, dz, mag, dt);
         return;
       }
@@ -6031,6 +6405,7 @@
       const drift = Math.sin(zombie.wobble * 0.7) * 0.25;
       moveCircle(zombie, (dx + dz * drift) * zombie.speed * dt, (dz - dx * drift) * zombie.speed * dt);
       zombie.mesh.rotation.y = Math.atan2(dx, dz);
+      setActorModelMotion(zombie.mesh, zombie.kind === "runner" ? "sprint" : "walk", zombie.speed);
 
       let isTouchingPlayer = false;
       if (state.drivingCar) {
@@ -6540,7 +6915,9 @@
     const viewHalfH = Math.max(1, (camera.top - camera.bottom) / 2);
     const x = clamp(cameraTarget.x, -WORLD.width / 2 + viewHalfW, WORLD.width / 2 - viewHalfW);
     const z = clamp(cameraTarget.z, -WORLD.height / 2 + viewHalfH, WORLD.height / 2 - viewHalfH);
-    camera.position.set(x, 76, z + 9);
+    // A modestly oblique orthographic view keeps the top-down readability but
+    // exposes each character's front/back silhouette, so turning is visible.
+    camera.position.set(x, 66, z + 24);
     camera.lookAt(x, 0, z);
   }
 
@@ -6640,6 +7017,7 @@
 
   function render() {
     syncGeneratedSprites();
+    syncFreeModelTint();
     renderer.render(scene, camera);
   }
 
@@ -6647,6 +7025,7 @@
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, clock.getDelta());
     update(dt);
+    updateFreeActorModels(dt);
     render();
   }
 
@@ -7101,6 +7480,15 @@
             failed: generatedSpriteStatus.failed.slice(),
             activeDynamic: dynamicGeneratedSprites.length,
           },
+          models: {
+            status: freeModelStatus.status,
+            loaded: freeModelStatus.loaded.slice(),
+            failed: freeModelStatus.failed.slice(),
+            activeActors: freeActorModelInstances.length,
+            treeInstances: freeModelStatus.treeInstances,
+            treeVariants: { ...freeModelStatus.treeVariants },
+            diagnostics: freeModelDiagnostics,
+          },
         }),
         start: () => startGame(),
         act: () => {
@@ -7229,6 +7617,7 @@
 
   function init() {
     buildWorld();
+    loadFreeModelAssets();
     loadGeneratedTextures();
     loadGeneratedSpriteAtlases();
     resetGame(false);

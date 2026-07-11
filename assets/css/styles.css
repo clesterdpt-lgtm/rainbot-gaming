@@ -5268,11 +5268,11 @@ body.arcade-home::before {
   object-position: center;
 }
 
-/* Big Baby Bum art is a portrait render; crop it into the shared 16:9 card frame. */
+/* Big Baby Bum uses a dedicated 16:9 crop so the art fills the shared card frame cleanly. */
 .poster-card--bbb img,
 .directory-card__poster--bbb img {
   object-fit: cover;
-  object-position: center 48%;
+  object-position: center;
   filter: saturate(1.06) contrast(1.03);
 }
 

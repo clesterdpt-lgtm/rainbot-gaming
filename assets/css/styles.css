@@ -5268,6 +5268,14 @@ body.arcade-home::before {
   object-position: center;
 }
 
+/* Big Baby Bum art is a portrait render; crop it into the shared 16:9 card frame. */
+.poster-card--bbb img,
+.directory-card__poster--bbb img {
+  object-fit: cover;
+  object-position: center 48%;
+  filter: saturate(1.06) contrast(1.03);
+}
+
 /* Apop art is a wide banner — crop/zoom to fill the standard 16:9 poster. */
 .directory-card__poster--apop img,
 .poster-card--apop img {

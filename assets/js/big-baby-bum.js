@@ -25,6 +25,8 @@
   const EAT_RATIO = 0.7;      // can eat obj if obj.s <= size * EAT_RATIO
   const GROWTH_K = 0.22;      // area-based growth factor (small = long game)
   const PUKE_SLOW = 2.5;      // seconds of queasy slow-down after a bad snack
+  const PUKE_MIN_RATIO = 0.12; // hazards below this fraction of your size are squashed harmlessly
+  const FENCE_FREE = 1.1 / 0.7; // ≈1.57 m — fence becomes edible, yard unseals
   const WIN_SIZE = 30;        // meters — TOWN EATER
   const ROUND_START = 0.55;   // roundness ramps from here...
   const ROUND_FULL = 1.35;    // ...to full sphere here (rolls at ~1 m)
@@ -283,6 +285,25 @@
         noise({ t: 0.5, v: 0.22, f: 500, q: 0.5, slide: -380, delay: 0.08 });
         noise({ t: 0.25, v: 0.18, f: 180, q: 0.8, delay: 0.34 });
       },
+      fart() {
+        [110, 90, 74].forEach((f, i) => tone({ f, t: 0.13, type: "sawtooth", v: 0.2, slide: -36, delay: i * 0.09 }));
+        noise({ t: 0.38, v: 0.18, f: 220, q: 0.7, slide: -130 });
+      },
+      bark() {
+        noise({ t: 0.08, v: 0.26, f: 620, q: 1.4, slide: -260 });
+        tone({ f: 210, t: 0.09, type: "square", v: 0.2, slide: -90 });
+      },
+      siren() {
+        tone({ f: 660, t: 0.26, type: "triangle", v: 0.13 });
+        tone({ f: 495, t: 0.26, type: "triangle", v: 0.13, delay: 0.28 });
+      },
+      boom(v) {
+        noise({ t: 0.5, v: 0.28 * (v || 1), f: 150, q: 0.5, slide: -90 });
+        tone({ f: 70, t: 0.5, type: "sine", v: 0.24 * (v || 1), slide: -30 });
+      },
+      gassed() {
+        tone({ f: 280, t: 0.32, type: "triangle", v: 0.13, slide: 140 });
+      },
       giggle() {
         [660, 880, 740].forEach((f, i) => tone({ f, t: 0.1, type: "sine", v: 0.12, slide: 90, delay: i * 0.085 }));
       },
@@ -430,6 +451,13 @@
     g.fillRect(s * 0.45, s * 0.7, s * 0.1, s * 0.1);
   });
   const hazardMat = new T.MeshBasicMaterial({ map: hazardTex, transparent: true, side: T.DoubleSide, depthWrite: false });
+  const gasMat = new T.MeshLambertMaterial({ color: 0x8fdc4f, transparent: true, opacity: 0.42, depthWrite: false });
+  const shellMat = new T.MeshLambertMaterial({ color: 0x2c3226 });
+  // Red flash for enemy hits (green stays for puke).
+  const hitFlash = document.createElement("div");
+  hitFlash.className = "bbb-puke-flash";
+  hitFlash.style.background = "radial-gradient(ellipse at center, transparent 40%, rgba(224,64,64,0.55) 100%)";
+  pukeFlash.parentElement.appendChild(hitFlash);
 
   // Baby face states, as textures on a plane in front of the head.
   function faceTex(state) {
@@ -980,6 +1008,147 @@
     };
   }
 
+  function bSock() {
+    return () => {
+      const g = new T.Group();
+      const w = mat(0xd9d9e8);
+      g.add(mesh(GEO.box, w, 0.3, 0.2, 0.62, 0, 0.1, 0.06));   // foot
+      g.add(mesh(GEO.box, w, 0.3, 0.34, 0.26, 0, 0.24, -0.22)); // ankle
+      g.add(mesh(GEO.box, mat(0x9aa2b5), 0.32, 0.21, 0.12, 0, 0.105, 0.32)); // toe stripe
+      return g;
+    };
+  }
+  function bDiaper() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.sphLo, mat(0xe8e4da), 0.5, 0.34, 0.44, 0, 0.3, 0));
+      g.add(mesh(GEO.box, mat(0xffd43b), 0.16, 0.1, 0.05, -0.4, 0.42, 0.3));
+      g.add(mesh(GEO.box, mat(0xffd43b), 0.16, 0.1, 0.05, 0.4, 0.42, 0.3));
+      g.add(mesh(GEO.sphLo, mat(0x8a5a34), 0.1, 0.07, 0.1, 0.05, 0.6, -0.05)); // do not ask
+      return g;
+    };
+  }
+  function bLitterBox() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(0x9aa2b5), 1.0, 0.32, 0.7, 0, 0.16, 0));
+      g.add(mesh(GEO.box, mat(0xe8d9b0), 0.9, 0.08, 0.6, 0, 0.32, 0));
+      g.add(mesh(GEO.sphLo, mat(0x8a5a34), 0.12, 0.09, 0.12, 0.18, 0.4, 0.08)); // the surprise
+      return g;
+    };
+  }
+  function bSproutCrate() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(0x8a6a3a), 1.0, 0.5, 0.8, 0, 0.25, 0));
+      const sp = mat(0x4f8f3a);
+      g.add(mesh(GEO.sphLo, sp, 0.16, 0.16, 0.16, -0.25, 0.58, 0.1));
+      g.add(mesh(GEO.sphLo, sp, 0.16, 0.16, 0.16, 0.15, 0.58, -0.15));
+      g.add(mesh(GEO.sphLo, sp, 0.16, 0.16, 0.16, 0.25, 0.58, 0.18));
+      return g;
+    };
+  }
+  function bCheese() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.cyl, mat(0xc9d17a), 0.5, 0.36, 0.5, 0, 0.18, 0));
+      const mold = mat(0x5a7ab5);
+      g.add(mesh(GEO.sphLo, mold, 0.07, 0.05, 0.07, -0.2, 0.37, 0.12));
+      g.add(mesh(GEO.sphLo, mold, 0.05, 0.04, 0.05, 0.15, 0.37, -0.2));
+      g.add(mesh(GEO.sphLo, mold, 0.06, 0.05, 0.06, 0.3, 0.2, 0.35));
+      g.add(mesh(GEO.box, mat(0xc9d17a), 0.3, 0.22, 0.22, 0.62, 0.11, 0.2)); // the wedge someone regretted
+      return g;
+    };
+  }
+  function bSandbox() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(0x8a6a3a), 1.0, 0.25, 1.0, 0, 0.125, 0));
+      g.add(mesh(GEO.box, mat(0xf3c34e), 0.86, 0.1, 0.86, 0, 0.24, 0));
+      g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.1, 0.14, 0.1, 0.22, 0.36, -0.15)); // bucket
+      return g;
+    };
+  }
+  function bVat() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.cyl, mat(0x7a8f3a), 0.5, 0.7, 0.5, 0, 0.35, 0));
+      g.add(mesh(GEO.cyl, mat(0x565a66), 0.53, 0.06, 0.53, 0, 0.72, 0));
+      g.add(mesh(GEO.cyl, mat(0x9fdb4f), 0.44, 0.05, 0.44, 0, 0.76, 0)); // the goo
+      const pipe = mesh(GEO.cyl, mat(0x565a66), 0.05, 0.6, 0.05, 0.52, 0.4, 0);
+      g.add(pipe);
+      return g;
+    };
+  }
+  function bSewage() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.cyl, mat(0x6b7a2f), 0.5, 0.55, 0.5, 0, 0.275, 0));
+      g.add(mesh(GEO.cyl, mat(0x9fdb4f), 0.44, 0.04, 0.44, 0, 0.57, 0));
+      g.add(mesh(GEO.cyl, mat(0x6b7a2f), 0.2, 0.4, 0.2, 0.62, 0.2, 0.2));
+      g.add(mesh(GEO.cyl, mat(0x6b7a2f), 0.2, 0.4, 0.2, -0.6, 0.2, -0.22));
+      const pipe = mesh(GEO.cyl, mat(0x565a66), 0.05, 0.5, 0.05, 0.3, 0.5, 0.1);
+      pipe.rotation.z = Math.PI / 2;
+      g.add(pipe);
+      return g;
+    };
+  }
+  // Vehicles (forward = +Z like bCar).
+  function bTruck(boxC, cabC) {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(boxC), 0.5, 0.52, 0.6, 0, 0.42, -0.16));
+      g.add(mesh(GEO.box, mat(cabC), 0.44, 0.3, 0.28, 0, 0.28, 0.32));
+      g.add(mesh(GEO.box, mat(0xbfe9ff), 0.4, 0.14, 0.02, 0, 0.36, 0.46));
+      const wm = mat(0x22242c);
+      for (const wz of [0.3, -0.3]) {
+        const w = mesh(GEO.cyl, wm, 0.11, 0.48, 0.11, 0, 0.11, wz);
+        w.rotation.z = Math.PI / 2;
+        g.add(w);
+      }
+      const lm = mat(0xfff3b0);
+      g.add(mesh(GEO.sphLo, lm, 0.05, 0.05, 0.04, -0.15, 0.2, 0.46));
+      g.add(mesh(GEO.sphLo, lm, 0.05, 0.05, 0.04, 0.15, 0.2, 0.46));
+      return g;
+    };
+  }
+  function bTanker(c) {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(0x9aa2b5), 0.44, 0.3, 0.28, 0, 0.28, 0.34));
+      g.add(mesh(GEO.box, mat(0xbfe9ff), 0.4, 0.14, 0.02, 0, 0.36, 0.48));
+      const tank = mesh(GEO.cyl, mat(c), 0.24, 0.62, 0.24, 0, 0.42, -0.14);
+      tank.rotation.x = Math.PI / 2;
+      g.add(tank);
+      g.add(mesh(GEO.cyl, mat(0x9fdb4f), 0.1, 0.06, 0.1, 0, 0.68, -0.14)); // sloshing hatch
+      const wm = mat(0x22242c);
+      for (const wz of [0.3, -0.3]) {
+        const w = mesh(GEO.cyl, wm, 0.11, 0.48, 0.11, 0, 0.11, wz);
+        w.rotation.z = Math.PI / 2;
+        g.add(w);
+      }
+      return g;
+    };
+  }
+  function bBus() {
+    return () => {
+      const g = new T.Group();
+      g.add(mesh(GEO.box, mat(0xffd43b), 0.42, 0.42, 1.0, 0, 0.34, 0));
+      g.add(mesh(GEO.box, mat(0xbfe9ff), 0.44, 0.13, 0.84, 0, 0.44, 0));
+      g.add(mesh(GEO.box, mat(0x22242c), 0.445, 0.05, 0.9, 0, 0.24, 0));
+      const wm = mat(0x22242c);
+      for (const wz of [0.32, -0.32]) {
+        const w = mesh(GEO.cyl, wm, 0.11, 0.46, 0.11, 0, 0.11, wz);
+        w.rotation.z = Math.PI / 2;
+        g.add(w);
+      }
+      const lm = mat(0xfff3b0);
+      g.add(mesh(GEO.sphLo, lm, 0.05, 0.05, 0.04, -0.13, 0.24, 0.5));
+      g.add(mesh(GEO.sphLo, lm, 0.05, 0.05, 0.04, 0.13, 0.24, 0.5));
+      return g;
+    };
+  }
+
   // ---------- Dynamic templates (respawn around the baby, never saved) ----
   // surface: grass | walk | road. w = spawn weight within its size band.
   const DYN_TPLS = [
@@ -996,7 +1165,7 @@
     { e: "🏎️", n: "Hot Wheels", s: 0.14, w: 2, surface: "walk", build: bCar(0xffd43b, 1) },
     { e: "🧃", n: "Juice Box", s: 0.16, w: 2, surface: "grass", build: bJuiceBox(0x35c76a) },
     { e: "🥪", n: "Half A Sandwich", s: 0.18, w: 1, surface: "walk", build: bSandwich() },
-    { e: "🧦", n: "Sock (Clean-ish)", s: 0.17, w: 1, surface: "grass", build: bBox(0xd9d9e8, 0.4, 0.3, 1.0) },
+    { e: "🧦", n: "Sock (Clean-ish)", s: 0.17, w: 1, surface: "grass", build: bSock() },
     { e: "🥦", n: "Broccoli Floret", s: 0.12, w: 1.2, surface: "grass", puke: true, build: bBroccoli() },
     { e: "🧼", n: "Bar of Soap", s: 0.14, w: 0.6, surface: "walk", puke: true, build: bSoap() },
     { e: "🦆", n: "Rubber Ducky", s: 0.24, w: 2, surface: "grass", build: bCritter(0xffd43b, 0xffd43b, 0.5, true) },
@@ -1006,8 +1175,8 @@
     { e: "🏈", n: "Football", s: 0.3, w: 1, surface: "grass", build: bFootball(0x8a4b2d) },
     { e: "🪴", n: "Fern-ando the House Plant", s: 0.32, w: 1, surface: "grass", build: bTree(0x3f9c46, 0.4, true) },
     { e: "🤖", n: "Escaped Roomba", s: 0.4, w: 0.7, surface: "walk", mover: true, spd: 0.9, build: bRoomba() },
-    { e: "🚼", n: "Dirty Diaper (Occupied)", s: 0.26, w: 1, surface: "grass", puke: true, build: bSphere(0xe8e4da, 0.5) },
-    { e: "🐱", n: "Litter Box Surprise", s: 0.4, w: 0.6, surface: "grass", puke: true, build: bBox(0x9aa2b5, 1.0, 0.35, 0.7) },
+    { e: "🚼", n: "Dirty Diaper (Occupied)", s: 0.26, w: 1, surface: "grass", puke: true, build: bDiaper() },
+    { e: "🐱", n: "Litter Box Surprise", s: 0.4, w: 0.6, surface: "grass", puke: true, build: bLitterBox() },
     // critters & people
     { e: "🐕", n: "Beans the Chihuahua", s: 0.5, w: 1, surface: "grass", mover: true, spd: 2.4, flees: true, build: bCritter(0xc98f5e, 0xc98f5e, 0.5, false, true) },
     { e: "🐈", n: "Chairman Meow", s: 0.55, w: 1, surface: "grass", mover: true, spd: 2.2, flees: true, build: bCritter(0x8a6bff, 0x8a6bff, 0.5, false, true) },
@@ -1018,24 +1187,24 @@
     { e: "🚲", n: "Tricycle of Destiny", s: 0.7, w: 1, surface: "walk", build: bTrike(0xd93f3f) },
     { e: "🧰", n: "Dad's Toolbox", s: 0.55, w: 0.7, surface: "grass", build: bToolbox(0xd93f3f) },
     { e: "🥬", n: "Kale Smoothie (Large)", s: 0.55, w: 0.7, surface: "walk", puke: true, build: bKale() },
-    { e: "🫑", n: "Brussels Sprout Crate", s: 0.7, w: 0.5, surface: "grass", puke: true, build: bBox(0x4f8f3a, 1.0, 0.6, 0.8) },
+    { e: "🫑", n: "Brussels Sprout Crate", s: 0.7, w: 0.5, surface: "grass", puke: true, build: bSproutCrate() },
     { e: "🚧", n: "Street Candy (Cone)", s: 1.05, w: 1.5, surface: "road", build: () => { const g = new T.Group(); g.add(mesh(GEO.cone, mat(0xff7a2e), 0.4, 1.0, 0.4, 0, 0.5, 0)); g.add(mesh(GEO.cyl, mat(0xffffff), 0.28, 0.08, 0.28, 0, 0.55, 0)); return g; } },
     { e: "🗑️", n: "Trash Can (Regular)", s: 1.2, w: 1.5, surface: "walk", build: bTrashCan(0x6a7284) },
     { e: "🛒", n: "Feral Shopping Cart", s: 1.5, w: 1, surface: "walk", build: bCart() },
     { e: "🏃", n: "Jogger Kevin (5K PB)", s: 1.7, w: 1.2, surface: "walk", mover: true, spd: 3.4, flees: true, build: bPerson(0x2ee0ff, 1) },
     { e: "👵", n: "Grandma Doris (Deceptively Fast)", s: 1.6, w: 1, surface: "walk", mover: true, spd: 2.6, flees: true, build: bPerson(0xb06cff, 1) },
     { e: "🧑‍🚒", n: "Mailman (Has Seen Things)", s: 1.7, w: 0.8, surface: "walk", mover: true, spd: 2.8, flees: true, build: bPerson(0xd9d9e8, 1) },
-    { e: "🧀", n: "Blue Cheese Wheel", s: 1.0, w: 0.5, surface: "walk", puke: true, build: bCyl(0xc9d17a, 0.5, 0.4) },
+    { e: "🧀", n: "Blue Cheese Wheel", s: 1.0, w: 0.5, surface: "walk", puke: true, build: bCheese() },
     { e: "🌭", n: "Hot Dog Cart (Unattended)", s: 2.2, w: 0.6, surface: "walk", build: () => { const g = new T.Group(); g.add(mesh(GEO.box, mat(0xe8e4da), 0.9, 0.6, 0.5, 0, 0.5, 0)); g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.35, 0.1, 0.35, 0, 0.9, 0)); g.add(mesh(GEO.cyl, mat(0x9aa2b5), 0.03, 0.6, 0.03, 0.2, 1.2, 0)); g.add(mesh(GEO.cone, mat(0xd93f3f), 0.5, 0.22, 0.5, 0.2, 1.55, 0)); return g; } },
     // traffic (drives: spawns on a road lane and actually drives it)
     { e: "🚗", n: "Sedan (Running Errands)", s: 2.4, w: 2, surface: "road", drives: true, spd: 8, build: bCar(0xd93f3f, 1) },
     { e: "🚐", n: "Minivan of Destiny", s: 2.8, w: 1.5, surface: "road", drives: true, spd: 7, build: bCar(0x4f8fd9, 1) },
     { e: "⛳", n: "HOA Patrol Golf Cart", s: 2.3, w: 0.7, surface: "road", drives: true, spd: 4, build: bCar(0xe8e4da, 1) },
-    { e: "📦", n: "Mail Truck (Full of Secrets)", s: 3.2, w: 1, surface: "road", drives: true, spd: 6, build: bCar(0xe8e4da, 1) },
-    { e: "🌮", n: "Food Truck 'Taco Tuesdaze'", s: 4.2, w: 0.6, surface: "road", drives: true, spd: 5, build: bCar(0xffd43b, 1) },
-    { e: "🚌", n: "School Bus (Empty, Phew)", s: 6.2, w: 0.7, surface: "road", drives: true, spd: 7, build: bCar(0xffd43b, 1) },
-    { e: "🚛", n: "Garbage Truck (Full)", s: 5.8, w: 0.7, surface: "road", drives: true, spd: 5, puke: true, build: bCar(0x3f7a44, 1) },
-    { e: "🛢️", n: "Sewage Tanker (Sloshing)", s: 6.3, w: 0.5, surface: "road", drives: true, spd: 5, puke: true, build: bCar(0x8a7a3a, 1) },
+    { e: "📦", n: "Mail Truck (Full of Secrets)", s: 3.2, w: 1, surface: "road", drives: true, spd: 6, build: bTruck(0xe8e4da, 0x4f8fd9) },
+    { e: "🌮", n: "Food Truck 'Taco Tuesdaze'", s: 4.2, w: 0.6, surface: "road", drives: true, spd: 5, build: bTruck(0xffd43b, 0xd93f3f) },
+    { e: "🚌", n: "School Bus (Empty, Phew)", s: 6.2, w: 0.7, surface: "road", drives: true, spd: 7, build: bBus() },
+    { e: "🚛", n: "Garbage Truck (Full)", s: 5.8, w: 0.7, surface: "road", drives: true, spd: 5, puke: true, build: bTruck(0x3f7a44, 0x565a66) },
+    { e: "🛢️", n: "Sewage Tanker (Sloshing)", s: 6.3, w: 0.5, surface: "road", drives: true, spd: 5, puke: true, build: bTanker(0x8a7a3a) },
   ];
 
   // ---------- Permanent templates (the constant city; eaten stays eaten) ----
@@ -1052,9 +1221,9 @@
     garden: { e: "🌻", n: "Flower Bed (Bee Drama)", s: 1.6, build: () => { const g = new T.Group(); g.add(mesh(GEO.box, mat(0x6b4a2a), 1.0, 0.2, 0.55, 0, 0.1, 0)); g.add(mesh(GEO.sphLo, mat(0xffd43b), 0.2, 0.2, 0.2, -0.25, 0.35, 0)); g.add(mesh(GEO.sphLo, mat(0xff7eb6), 0.18, 0.18, 0.18, 0.1, 0.32, 0.05)); g.add(mesh(GEO.sphLo, mat(0xb06cff), 0.16, 0.16, 0.16, 0.3, 0.3, -0.05)); return g; } },
     gnome: { e: "🧙", n: "Gnorman (Do Not Trust)", s: 0.42, build: bGnome() },
     flamingo: { e: "🦩", n: "Lawn Flamingo", s: 0.6, build: bFlamingo() },
-    grill: { e: "🔥", n: "Dad's Sacred Grill", s: 1.2, build: () => { const g = new T.Group(); g.add(mesh(GEO.sphLo, mat(0x30364a), 0.55, 0.4, 0.55, 0, 0.75, 0)); g.add(mesh(GEO.cyl, mat(0x22242c), 0.05, 0.7, 0.05, 0, 0.35, 0)); return g; } },
+    grill: { e: "🔥", n: "Dad's Sacred Grill", s: 1.2, build: () => { const g = new T.Group(); g.add(mesh(GEO.sphLo, mat(0x30364a), 0.55, 0.4, 0.55, 0, 0.75, 0)); g.add(mesh(GEO.box, mat(0x9aa2b5), 0.24, 0.05, 0.06, 0, 1.02, 0)); for (const la of [0.5, 2.6, 4.7]) { const leg = mesh(GEO.cyl, mat(0x22242c), 0.04, 0.72, 0.04, Math.sin(la) * 0.26, 0.36, Math.cos(la) * 0.26); leg.rotation.z = Math.sin(la) * 0.18; leg.rotation.x = -Math.cos(la) * 0.18; g.add(leg); } g.add(mesh(GEO.box, mat(0x9aa2b5), 0.38, 0.04, 0.3, 0.6, 0.72, 0)); return g; } },
     doghouse: { e: "🛖", n: "Beans' Crib (Doghouse)", s: 1.5, build: bBuilding(0, 1, 0.7, 0.9, 0xd93f3f, false) },
-    sandbox: { e: "🏖️", n: "Sandbox (Beach at Home)", s: 1.4, build: bBox(0xf3c34e, 1.0, 0.25, 1.0) },
+    sandbox: { e: "🏖️", n: "Sandbox (Beach at Home)", s: 1.4, build: bSandbox() },
     pool: { e: "🏊", n: "Kiddie Pool (Shark Included)", s: 1.9, build: bKiddiePool() },
     trampoline: { e: "🤸", n: "Trampoline (Liability)", s: 2.6, build: bTrampolinePro() },
     swing: { e: "🎠", n: "Swing Set (Haunted?)", s: 2.9, build: () => { const g = new T.Group(); g.add(mesh(GEO.box, mat(0xd93f3f), 1.0, 0.08, 0.08, 0, 0.8, 0)); g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.05, 0.85, 0.05, -0.5, 0.42, 0)); g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.05, 0.85, 0.05, 0.5, 0.42, 0)); g.add(mesh(GEO.box, mat(0xffd43b), 0.25, 0.05, 0.12, 0, 0.3, 0)); return g; } },
@@ -1068,7 +1237,7 @@
     pine: { e: "🌲", n: "Pine Tree (Pointy)", s: 5.5, build: bTree(0x2f7a4f, 0.5, false) },
     statue: { e: "🗿", n: "Statue of Mayor Bumsworth", s: 5.0, build: bStatue() },
     billboard: { e: "🪧", n: "Billboard: 'NAPS. ASK YOUR BABY.'", s: 6.0, build: () => { const g = new T.Group(); g.add(mesh(GEO.box, mat(0xe8e4da), 1.0, 0.5, 0.06, 0, 0.7, 0)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.5, 0.05, 0, 0.25, 0)); return g; } },
-    rv: { e: "🏕️", n: "Uncle's RV (Home Since 2019)", s: 5.5, build: bCar(0xe8e4da, 1) },
+    rv: { e: "🏕️", n: "Uncle's RV (Home Since 2019)", s: 5.5, build: bTruck(0xe8e4da, 0xc46a4f) },
     tinyHouse: { e: "🏚️", n: "Influencer's Tiny House", s: 6.4, building: true, build: bBuilding(3, 0.8, 0.9, 0.7, 0x30364a, false) },
     garage: { e: "🏠", n: "Garage (No Cars, All Boxes)", s: 7.2, building: true, build: bBuilding(1, 1, 0.65, 0.8, 0x6a7284, true) },
     bungalow: { e: "🏡", n: "Bungalow (Good Bones)", s: 8.0, building: true, build: bBuilding(0, 1, 0.75, 0.9, 0x8f4a3a, false) },
@@ -1076,7 +1245,7 @@
     cornerStore: { e: "🏪", n: "Corner Store (Open 25/7)", s: 9.5, building: true, build: bBuilding(2, 1, 0.7, 0.9, 0x2ee0ff, true) },
     tacoPalace: { e: "🌯", n: "Taco Palace (Est. Tuesday)", s: 10.0, building: true, build: bBuilding(4, 1, 0.7, 0.9, 0xffd43b, true) },
     gasStation: { e: "⛽", n: "Gas Station (Sushi Also)", s: 10.5, building: true, build: bBuilding(3, 1, 0.55, 0.9, 0xd93f3f, true) },
-    waterVat: { e: "☣️", n: "Water Treatment Vat", s: 9.0, puke: true, build: bCyl(0x7a8f3a, 0.5, 0.8) },
+    waterVat: { e: "☣️", n: "Water Treatment Vat", s: 9.0, puke: true, build: bVat() },
     warehouse: { e: "🏭", n: "Warehouse (Definitely Not Haunted)", s: 12, building: true, build: bBuilding(3, 1, 0.55, 0.95, 0x6a7284, true) },
     duplex: { e: "🏘️", n: "Duplex (Shared Mail Drama)", s: 10.5, building: true, build: bBuilding(1, 1.1, 0.7, 0.85, 0x8f4a3a, false) },
     mcmansion: { e: "🏰", n: "McMansion (3 Garages, 0 Books)", s: 13, building: true, build: bBuilding(1, 1, 0.8, 0.9, 0x8f4a3a, false) },
@@ -1084,7 +1253,7 @@
     grocery: { e: "🏬", n: "Grocery Store (Samples!)", s: 16, building: true, build: bBuilding(4, 1, 0.55, 0.95, 0x2e6b8f, true) },
     hoa: { e: "🏢", n: "HOA Headquarters (Finally)", s: 15, building: true, build: bBuilding(2, 0.9, 1, 0.9, 0x22242c, true) },
     church: { e: "⛪", n: "Church of the Sacred Snack", s: 16.5, building: true, build: bBuilding(0, 0.8, 1, 1, 0x6a7284, false) },
-    sewagePlant: { e: "☢️", n: "Sewage Plant (The Big One)", s: 15, puke: true, build: bCyl(0x6b7a2f, 0.55, 0.7) },
+    sewagePlant: { e: "☢️", n: "Sewage Plant (The Big One)", s: 15, puke: true, build: bSewage() },
     apartment: { e: "🏨", n: "Apartment Block (Thin Walls)", s: 18, building: true, build: bBuilding(2, 0.75, 1, 0.75, 0x9aa2b5, true) },
     waterTower: { e: "🗼", n: "Water Tower (Town Juice Box)", s: 20, building: true, build: () => { const g = new T.Group(); g.add(mesh(GEO.sphLo, mat(0x9fdcff), 0.4, 0.32, 0.4, 0, 0.75, 0)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, 0.22, 0.3, 0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, -0.22, 0.3, 0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, 0.22, 0.3, -0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, -0.22, 0.3, -0.22)); return g; } },
     office: { e: "🏦", n: "Office Block (Synergy Inside)", s: 24, building: true, build: bBuilding(2, 0.7, 1, 0.7, 0x30364a, true) },
@@ -1109,6 +1278,9 @@
   let slowTimer = 0;
   let sickTimer = 0;
   let pukeImmune = 0;
+  let hitImmune = 0;   // grace period after an enemy hit
+  let gasEmitT = 0;    // fart gas trail emitter
+  let gasPuffT = 0;
   let shake = 0;
   let playSeconds = 0;
   let biggestNom = null;
@@ -1301,11 +1473,12 @@
     addObj(Object.assign(makeObj(PERM.home, 0, -22, 1, false, rng), { yaw: Math.PI }));
     keepouts.push({ x: 0, z: -22, r: 6 });
     const fenceT = PERM.fence;
-    for (let x = YARD.x0; x <= YARD.x1; x += 2.2) {
+    // Segments every 1.0 m so pickets visually connect — no gaps hiding the wall.
+    for (let x = YARD.x0; x <= YARD.x1; x += 1.0) {
       addObj(Object.assign(makeObj(fenceT, x, YARD.z0, 1, false, rng), { yaw: 0 }));
-      if (Math.abs(x) > 3.4) addObj(Object.assign(makeObj(fenceT, x, YARD.z1, 1, false, rng), { yaw: 0 }));
+      addObj(Object.assign(makeObj(fenceT, x, YARD.z1, 1, false, rng), { yaw: 0 })); // sealed: no gate until you can EAT your way out
     }
-    for (let z = YARD.z0 + 2.2; z <= YARD.z1 - 1; z += 2.2) {
+    for (let z = YARD.z0 + 1.0; z <= YARD.z1 - 1; z += 1.0) {
       addObj(Object.assign(makeObj(fenceT, YARD.x0, z, 1, false, rng), { yaw: Math.PI / 2 }));
       addObj(Object.assign(makeObj(fenceT, YARD.x1, z, 1, false, rng), { yaw: Math.PI / 2 }));
     }
@@ -1489,9 +1662,13 @@
     for (const o of objects) if (o.dyn && o.driveAxis && !o.dead) n++;
     return n;
   }
+  function yardSealed() {
+    return baby.size < FENCE_FREE && baby.x > YARD.x0 && baby.x < YARD.x1 && baby.z > YARD.z0 && baby.z < YARD.z1;
+  }
   function pickDynTpl(size) {
     const sMin = size * 0.035;
     const sMax = size * 2.4;
+    const sealed = yardSealed();
     // Don't waste spawn budget on sidewalk/road items when no road is in
     // range (e.g. a tiny baby deep in the backyard).
     const spawnR = spawnRadius();
@@ -1503,7 +1680,7 @@
     const pool = [];
     for (const t of DYN_TPLS) {
       if (t.s < sMin || t.s > sMax) continue;
-      if (!roadNear && (t.surface === "road" || t.surface === "walk")) continue;
+      if ((sealed || !roadNear) && (t.surface === "road" || t.surface === "walk")) continue;
       // Prefer things in the eatable band.
       const w = t.w * (t.s <= size * EAT_RATIO ? 1.5 : 0.6);
       pool.push([t, w]);
@@ -1575,9 +1752,15 @@
       const a = !anywhere && moving && tries < 6
         ? baby.heading + (Math.random() - 0.5) * (Math.PI / 1.4)
         : Math.random() * Math.PI * 2;
-      const r = anywhere ? Math.sqrt(Math.random()) * spawnR : lerp(spawnR * 0.4, spawnR * 0.95, Math.random());
+      // sqrt() keeps the spread area-uniform; the 0.15 floor means the disc
+      // right around an idle baby refills too instead of going permanently bare.
+      const r = anywhere ? Math.sqrt(Math.random()) * spawnR : lerp(spawnR * 0.15, spawnR * 0.95, Math.sqrt(Math.random()));
       x = baby.x + Math.cos(a) * r;
       z = baby.z + Math.sin(a) * r;
+      // Never inside the mouth: spawning within eat reach hands out free noms.
+      if (Math.hypot(x - baby.x, z - baby.z) < baby.size * 0.6 + tpl.s) continue;
+      // While the yard is sealed, every snack must land INSIDE the fence.
+      if (yardSealed() && (x < YARD.x0 + 0.6 || x > YARD.x1 - 0.6 || z < YARD.z0 + 0.6 || z > YARD.z1 - 0.6)) continue;
       if (!anywhere && tries < 5 && tpl.s > r * 0.02) {
         // Things big enough to SEE popping in prefer to spawn outside the
         // camera's forward wedge. Crumb-sized stuff is subpixel at spawn
@@ -1637,6 +1820,352 @@
       const keep = o.driveAxis ? keepCar : keepFood;
       if (dx * dx + dz * dz > keep * keep) removeObj(o);
       else if (o.driveAxis && (Math.abs(o.x) > CITY_EDGE + 6 || Math.abs(o.z) > CITY_EDGE + 6)) removeObj(o);
+    }
+  }
+
+  // ---------- Hunters (they want the baby smaller) ----------
+  // Each tier is always bigger than the baby while it hunts; outgrow it and
+  // the next tier takes over. Tanks hunt forever but become edible at ~12.9 m.
+  function bAngryDog() {
+    const g = new T.Group();
+    const fur = mat(0x4a3826);
+    g.add(mesh(GEO.sphLo, fur, 0.5, 0.42, 0.66, 0, 0.45, 0));
+    g.add(mesh(GEO.sphLo, fur, 0.3, 0.28, 0.3, 0, 0.62, 0.6));
+    g.add(mesh(GEO.box, fur, 0.16, 0.13, 0.22, 0, 0.55, 0.85));
+    g.add(mesh(GEO.cone, fur, 0.09, 0.2, 0.09, -0.15, 0.86, 0.55));
+    g.add(mesh(GEO.cone, fur, 0.09, 0.2, 0.09, 0.15, 0.86, 0.55));
+    const eye = mat(0xd93f3f);
+    g.add(mesh(GEO.sphLo, eye, 0.045, 0.045, 0.045, -0.11, 0.7, 0.83));
+    g.add(mesh(GEO.sphLo, eye, 0.045, 0.045, 0.045, 0.11, 0.7, 0.83));
+    const collar = mesh(GEO.torus, mat(0xd93f3f), 0.2, 0.2, 0.2, 0, 0.58, 0.42);
+    collar.rotation.x = Math.PI / 2 - 0.4;
+    g.add(collar);
+    for (const lp of [[-0.3, 0.35], [0.3, 0.35], [-0.3, -0.35], [0.3, -0.35]]) {
+      g.add(mesh(GEO.cyl, fur, 0.09, 0.4, 0.09, lp[0], 0.2, lp[1]));
+    }
+    const tail = mesh(GEO.cone, fur, 0.08, 0.34, 0.08, 0, 0.68, -0.7);
+    tail.rotation.x = -0.7;
+    g.add(tail);
+    return g;
+  }
+  function bAngryAdult() {
+    const g = new T.Group();
+    const pants = mat(0x3a4a6b);
+    const shirt = mat(0xd93f3f);
+    g.add(mesh(GEO.cyl, pants, 0.1, 0.36, 0.1, -0.1, 0.18, 0));
+    g.add(mesh(GEO.cyl, pants, 0.1, 0.36, 0.1, 0.1, 0.18, 0));
+    g.add(mesh(GEO.cyl, shirt, 0.3, 0.56, 0.3, 0, 0.62, 0));
+    const a1 = mesh(GEO.cyl, shirt, 0.07, 0.44, 0.07, -0.34, 0.92, 0);
+    a1.rotation.z = 2.5;
+    const a2 = mesh(GEO.cyl, shirt, 0.07, 0.44, 0.07, 0.34, 0.92, 0);
+    a2.rotation.z = -2.5;
+    g.add(a1, a2);
+    g.add(mesh(GEO.sphLo, mat(0xffd9b8), 0.09, 0.09, 0.09, -0.5, 1.08, 0));
+    g.add(mesh(GEO.sphLo, mat(0xffd9b8), 0.09, 0.09, 0.09, 0.5, 1.08, 0));
+    g.add(mesh(GEO.sphLo, mat(0xffd9b8), 0.22, 0.24, 0.22, 0, 1.08, 0));
+    const brow = mat(0x5b3b22);
+    g.add(mesh(GEO.box, brow, 0.1, 0.03, 0.02, -0.08, 1.16, 0.2));
+    g.add(mesh(GEO.box, brow, 0.1, 0.03, 0.02, 0.08, 1.16, 0.2));
+    return g;
+  }
+  function bPolice() {
+    const g = bCar(0xf2f2f2, 1)();
+    g.add(mesh(GEO.box, mat(0x22242c), 0.47, 0.1, 0.34, 0, 0.2, 0.02));
+    const bar = mesh(GEO.box, mat(0x30364a), 0.3, 0.05, 0.1, 0, 0.56, -0.05);
+    g.add(bar);
+    const rl = mesh(GEO.box, new T.MeshBasicMaterial({ color: 0xff3b3b }), 0.12, 0.07, 0.09, -0.08, 0.62, -0.05);
+    const bl = mesh(GEO.box, new T.MeshBasicMaterial({ color: 0x3b8cff }), 0.12, 0.07, 0.09, 0.08, 0.62, -0.05);
+    g.add(rl, bl);
+    g.userData.lights = [rl, bl];
+    return g;
+  }
+  function bTank() {
+    const g = new T.Group();
+    const olive = mat(0x5a6b3a);
+    const dark = mat(0x2c3226);
+    g.add(mesh(GEO.box, olive, 0.56, 0.2, 0.9, 0, 0.28, 0));
+    g.add(mesh(GEO.box, dark, 0.16, 0.18, 1.0, -0.34, 0.12, 0));
+    g.add(mesh(GEO.box, dark, 0.16, 0.18, 1.0, 0.34, 0.12, 0));
+    const turret = new T.Group();
+    turret.position.set(0, 0.46, -0.05);
+    turret.add(mesh(GEO.cyl, olive, 0.2, 0.14, 0.2, 0, 0, 0));
+    const barrel = mesh(GEO.cyl, dark, 0.045, 0.62, 0.045, 0, 0.02, 0.36);
+    barrel.rotation.x = Math.PI / 2;
+    turret.add(barrel);
+    g.add(turret);
+    g.userData.turret = turret;
+    return g;
+  }
+  const ENEMY_TPLS = [
+    { key: "dog", e: "🐕‍🦺", n: "Guard Dog (Radicalized)", s: 2.6, min: 0, max: 2.4, count: 1, spd: 3.0, aggro: 14, sfx: "bark", build: bAngryDog, hits: ["BAD DOG!", "THE DOG OBJECTS", "MAILMAN'S REVENGE"] },
+    { key: "adult", e: "🧔", n: "Angry Dad (You Ate The Grill)", s: 3.4, min: 2.4, max: 4.5, count: 2, spd: 4.0, aggro: 16, sfx: "bark", build: bAngryAdult, hits: ["GROUNDED!", "NO DESSERT!", "1-STAR PARENTING"] },
+    { key: "police", e: "🚓", n: "Police Cruiser (Baby Division)", s: 6, min: 4.5, max: 9, count: 2, spd: 6.0, aggro: 26, sfx: "siren", build: bPolice, hits: ["CITED!", "RESISTING A NAP", "BABY, PULL OVER"] },
+    { key: "tank", e: "🪖", n: "HOA Tank (Final Notice)", s: 9, min: 9, max: 1e9, count: 2, spd: 5.0, aggro: 34, sfx: "boom", build: bTank, shells: true, hits: ["SHELLED!", "ARTICLE 7 VIOLATION", "LAWN ENFORCEMENT"] },
+  ];
+  let enemies = [];
+  let shells = [];
+  let gasClouds = [];
+  const enemyAnnounced = new Set();
+
+  function currentEnemyTpl() {
+    if (yardSealed()) return null; // the yard is a safe nursery
+    for (const t of ENEMY_TPLS) if (baby.size >= t.min && baby.size < t.max) return t;
+    return null;
+  }
+  function spawnEnemy(tpl, nearDist) {
+    const actR = activationRadius();
+    for (let tries = 0; tries < 10; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = nearDist || lerp(actR * 0.45, actR * 0.8, Math.random());
+      const x = clamp(baby.x + Math.cos(a) * d, -CITY_BOUND + 10, CITY_BOUND - 10);
+      const z = clamp(baby.z + Math.sin(a) * d, -CITY_BOUND + 10, CITY_BOUND - 10);
+      if (x > YARD.x0 - 3 && x < YARD.x1 + 3 && z > YARD.z0 - 3 && z < YARD.z1 + 3) continue;
+      if (blockedByPermanent(tpl, x, z)) continue;
+      const g = tpl.build();
+      g.scale.setScalar(tpl.s);
+      g.position.set(x, 0, z);
+      scene.add(g);
+      const e = {
+        tpl, x, z, s: tpl.s, g,
+        mvx: 0, mvz: 0, state: "patrol", stun: 0, reCd: 0, fireCd: 2,
+        wanderT: 0, retireT: 6, gassedShown: false, sirenT: 0,
+        lights: g.userData.lights || null, turret: g.userData.turret || null,
+      };
+      enemies.push(e);
+      if (!enemyAnnounced.has(tpl.key)) {
+        enemyAnnounced.add(tpl.key);
+        showBanner(tpl.e, "INCOMING", tpl.n.toUpperCase());
+        if (tpl.sfx === "siren") AudioKit.siren();
+        else if (tpl.sfx === "boom") AudioKit.boom(0.8);
+        else AudioKit.bark();
+      }
+      return e;
+    }
+    return null;
+  }
+  function enemyTick() {
+    if (phase !== "play") return;
+    const tpl = currentEnemyTpl();
+    for (const e of enemies) if ((!tpl || e.tpl !== tpl) && e.state !== "retire") e.state = "retire";
+    if (tpl) {
+      let have = 0;
+      for (const e of enemies) if (e.tpl === tpl) have++;
+      if (have < tpl.count) spawnEnemy(tpl);
+    }
+  }
+  function removeEnemy(i, keepMesh) {
+    const e = enemies[i];
+    if (!keepMesh && e.g) scene.remove(e.g);
+    enemies.splice(i, 1);
+  }
+  function hitBaby(srcX, srcZ, tpl) {
+    hitImmune = 2.0;
+    const old = baby.size;
+    baby.size = Math.max(START_SIZE * 0.8, baby.size * 0.96);
+    const dx = baby.x - srcX;
+    const dz = baby.z - srcZ;
+    const d = Math.hypot(dx, dz) || 1;
+    const kb = (1.5 + baby.size * 1.05) * 1.6;
+    baby.vx += (dx / d) * kb;
+    baby.vz += (dz / d) * kb;
+    shake = 0.7;
+    AudioKit.bonk();
+    if (tpl.sfx === "bark") AudioKit.bark();
+    hitFlash.classList.add("is-on");
+    setTimeout(() => hitFlash.classList.remove("is-on"), 600);
+    addFloater(baby.x, baby.size * 1.1, baby.z, tpl.hits[(Math.random() * tpl.hits.length) | 0], "#ff6b6b", true);
+    addFloater(baby.x, baby.size * 0.7, baby.z, `-${fmtSize(old - baby.size)} of baby`, "#ff6b6b", false);
+    setLog(`${tpl.n} got you. Fart gas is a legal defense.`);
+    refreshMenuList();
+  }
+  function fireShell(e) {
+    const dx = baby.x - e.x;
+    const dz = baby.z - e.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    const spd = 8;
+    const lead = dist / spd * 0.7;
+    const tx = baby.x + baby.vx * lead;
+    const tz = baby.z + baby.vz * lead;
+    const ddx = tx - e.x;
+    const ddz = tz - e.z;
+    const dd = Math.hypot(ddx, ddz) || 1;
+    const m = new T.Mesh(GEO.sphLo, shellMat);
+    m.scale.setScalar(0.5);
+    scene.add(m);
+    shells.push({ x: e.x, z: e.z, vx: (ddx / dd) * spd, vz: (ddz / dd) * spd, t: 0, ft: dd / spd, m, tpl: e.tpl });
+    AudioKit.boom(0.55);
+    spawnBurst(poolM, e.x, e.s * 0.6, e.z, 4, 0x9aa2b5, 0.8, 0.6);
+  }
+  function updateShells(dt) {
+    for (let i = shells.length - 1; i >= 0; i--) {
+      const sh = shells[i];
+      sh.t += dt;
+      sh.x += sh.vx * dt;
+      sh.z += sh.vz * dt;
+      const k = sh.t / sh.ft;
+      sh.m.position.set(sh.x, Math.max(0.3, 3 * 4 * k * (1 - k)), sh.z);
+      if (k >= 1) {
+        spawnBurst(poolL, sh.x, 0.5, sh.z, 12, 0xff8c42, 2.2, 1.4);
+        AudioKit.boom(1);
+        if (hitImmune <= 0 && Math.hypot(baby.x - sh.x, baby.z - sh.z) < baby.size * 0.5 + 2.4) {
+          hitBaby(sh.x, sh.z, sh.tpl);
+        }
+        scene.remove(sh.m);
+        shells.splice(i, 1);
+      }
+    }
+  }
+  function updateGas(dt) {
+    if (gasEmitT > 0) {
+      gasEmitT -= dt;
+      gasPuffT -= dt;
+      if (gasPuffT <= 0) {
+        gasPuffT = 0.13;
+        const gx = baby.x - Math.sin(baby.heading) * baby.size * 0.45;
+        const gz = baby.z - Math.cos(baby.heading) * baby.size * 0.45;
+        const r = baby.size * 0.55 + 0.5;
+        const m = new T.Mesh(GEO.sphLo, gasMat);
+        m.scale.setScalar(0.1);
+        m.position.set(gx, r * 0.45, gz);
+        scene.add(m);
+        gasClouds.push({ x: gx, z: gz, r, t: 0, life: 4.5, m });
+        if (gasClouds.length > 16) {
+          scene.remove(gasClouds[0].m);
+          gasClouds.shift();
+        }
+      }
+    }
+    for (let i = gasClouds.length - 1; i >= 0; i--) {
+      const c = gasClouds[i];
+      c.t += dt;
+      if (c.t >= c.life) {
+        scene.remove(c.m);
+        gasClouds.splice(i, 1);
+        continue;
+      }
+      const k = c.t < 0.35 ? c.t / 0.35 : Math.max(0.12, 1 - Math.max(0, c.t - 3.2) / 1.3);
+      c.m.scale.setScalar(c.r * k);
+      c.m.position.y = c.r * 0.42 + c.t * 0.12;
+    }
+  }
+  function updateEnemies(dt, now) {
+    const thr = eatThreshold();
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      const dx = baby.x - e.x;
+      const dz = baby.z - e.z;
+      const d = Math.hypot(dx, dz) || 1;
+      // Fart gas: pursuers that touch a cloud are stunned dizzy.
+      if (e.stun <= 0) {
+        for (const c of gasClouds) {
+          if (Math.hypot(e.x - c.x, e.z - c.z) < c.r + e.s * 0.35) {
+            e.stun = 5;
+            if (!e.gassedShown) {
+              e.gassedShown = true;
+              addFloater(e.x, e.s, e.z, "GASSED!", "#8fdc4f", true);
+            }
+            AudioKit.gassed();
+            break;
+          }
+        }
+      }
+      if (e.stun > 0) {
+        e.stun -= dt;
+        e.mvx = 0;
+        e.mvz = 0;
+        if (e.g) {
+          e.g.rotation.y += dt * 5; // dizzy spin
+          e.g.position.set(e.x, Math.abs(Math.sin(now * 0.02)) * e.s * 0.04, e.z);
+        }
+        continue;
+      }
+      if (e.state === "retire") {
+        e.mvx = (-dx / d) * e.tpl.spd * 0.6;
+        e.mvz = (-dz / d) * e.tpl.spd * 0.6;
+        e.retireT -= dt;
+        if (d > 70 || e.retireT <= 0) {
+          removeEnemy(i);
+          continue;
+        }
+      } else {
+        e.reCd = Math.max(0, (e.reCd || 0) - dt);
+        if (e.state !== "chase" && d < e.tpl.aggro && e.reCd <= 0) {
+          e.state = "chase";
+          if (e.tpl.sfx === "bark") AudioKit.bark();
+        } else if (e.state === "chase" && d > e.tpl.aggro * 2.2) {
+          e.state = "patrol";
+          e.reCd = 8; // give the baby real downtime after a getaway
+          addFloater(e.x, e.s, e.z, "LOST IT", "#b6b3c9", false);
+        }
+        if (e.state === "chase") {
+          const hold = e.tpl.shells && d < 18; // tanks bombard from range
+          e.mvx = hold ? 0 : (dx / d) * e.tpl.spd;
+          e.mvz = hold ? 0 : (dz / d) * e.tpl.spd;
+          if (e.tpl.sfx === "siren") {
+            e.sirenT -= dt;
+            if (e.sirenT <= 0 && d < 45) {
+              e.sirenT = 1.2;
+              AudioKit.siren();
+            }
+          }
+          if (e.tpl.shells) {
+            e.fireCd -= dt;
+            if (e.fireCd <= 0 && d < 38) {
+              e.fireCd = 2.6;
+              fireShell(e);
+            }
+          }
+        } else {
+          e.wanderT -= dt;
+          if (e.wanderT <= 0) {
+            e.wanderT = 1 + Math.random() * 2.5;
+            const a = Math.random() * Math.PI * 2;
+            const go = Math.random() < 0.7 ? 1 : 0;
+            e.mvx = Math.cos(a) * e.tpl.spd * 0.35 * go;
+            e.mvz = Math.sin(a) * e.tpl.spd * 0.35 * go;
+          }
+        }
+      }
+      e.x += e.mvx * dt;
+      e.z += e.mvz * dt;
+      e.x = clamp(e.x, -CITY_BOUND + 8, CITY_BOUND - 8);
+      e.z = clamp(e.z, -CITY_BOUND + 8, CITY_BOUND - 8);
+      // Don't ghost through buildings.
+      forNear(e.x, e.z, e.s + 10, (o) => {
+        if (o.dyn || o.dead || o.s < 3) return;
+        const ex = e.x - o.x;
+        const ez = e.z - o.z;
+        const minD = e.s * 0.3 + o.s * 0.33;
+        const dd = Math.hypot(ex, ez);
+        if (dd > 0.001 && dd < minD) {
+          e.x = o.x + (ex / dd) * minD;
+          e.z = o.z + (ez / dd) * minD;
+        }
+      });
+      // Contact: eat it if you finally can, otherwise it bites.
+      const contactR = e.s * 0.38 + baby.size * 0.4;
+      if (d < contactR) {
+        if (e.s <= thr) {
+          const pseudo = { id: -3, tpl: { e: e.tpl.e, n: e.tpl.n }, s: e.s, x: e.x, z: e.z, dead: false, dyn: true, g: e.g, stink: null, cell: undefined };
+          removeEnemy(i, true); // eat() tweens the mesh into the mouth
+          eat(pseudo);
+          score += Math.round(e.s * e.s * 12); // revenge bonus
+          addFloater(baby.x, baby.size * 1.2, baby.z, "REVENGE!", "#ffd43b", true);
+          continue;
+        }
+        if (hitImmune <= 0) hitBaby(e.x, e.z, e.tpl);
+      }
+      // Mesh sync.
+      if (e.g) {
+        e.g.position.set(e.x, 0, e.z);
+        if (Math.abs(e.mvx) + Math.abs(e.mvz) > 0.01) e.g.rotation.y = Math.atan2(e.mvx, e.mvz);
+        if (e.lights) {
+          const on = Math.floor(now / 220) % 2 === 0;
+          e.lights[0].visible = on;
+          e.lights[1].visible = !on;
+        }
+        if (e.turret) e.turret.rotation.y = Math.atan2(dx, dz) - e.g.rotation.y;
+      }
     }
   }
 
@@ -1979,7 +2508,7 @@
       noms = 0;
       playSeconds = 0;
       wipeSave();
-      setLog("Baby deployed to the backyard. Snacks beware.");
+      setLog("Baby deployed. The fence is a wall until you can eat it.");
     }
     combo = 0;
     comboTimer = 0;
@@ -1988,6 +2517,15 @@
     slowTimer = 0;
     sickTimer = 0;
     pukeImmune = 0;
+    hitImmune = 0;
+    gasEmitT = 0;
+    for (const e of enemies) if (e.g) scene.remove(e.g);
+    enemies = [];
+    for (const sh of shells) scene.remove(sh.m);
+    shells = [];
+    for (const c of gasClouds) scene.remove(c.m);
+    gasClouds = [];
+    enemyAnnounced.clear();
     shake = 0;
     saveTimer = 0;
     spawnTimer = 0;
@@ -2171,7 +2709,16 @@
     }
   }
 
+  // Beneath your notice: hazards far smaller than you get flattened, no penalty.
+  function squash(o) {
+    killObject(o);
+    spawnBurst(poolFor(o.s), o.x, o.s * 0.5, o.z, 5, 0x6ede3e, o.s + 0.1, 0.4);
+  }
   function puke(o) {
+    if (o.s < baby.size * PUKE_MIN_RATIO) {
+      squash(o);
+      return;
+    }
     if (pukeImmune > 0) return; // already mid-regret; the object is left alone
     killObject(o);
     const oldSize = baby.size;
@@ -2198,14 +2745,17 @@
     refreshMenuList(); // shrinking can re-lock menu items
   }
 
-  function tryBurp() {
+  function tryFart() {
     if (phase !== "play" || burpCooldown > 0) return;
     burpCooldown = BURP_COOLDOWN;
     burpTimer = BURP_DURATION;
-    AudioKit.burp();
-    spawnBurst(poolFor(baby.size), baby.x, baby.size * 0.6, baby.z, 10, 0xbfe9ff, baby.size * 0.8, baby.size * 0.5);
-    addFloater(baby.x, baby.size * 1.05, baby.z, "TURBO BURP!", "#6bff7d", true);
+    gasEmitT = BURP_DURATION + 1.1; // the trail lingers past the boost
+    gasPuffT = 0;
+    AudioKit.fart();
+    spawnBurst(poolFor(baby.size), baby.x, baby.size * 0.6, baby.z, 10, 0x8fdc4f, baby.size * 0.8, baby.size * 0.5);
+    addFloater(baby.x, baby.size * 1.05, baby.z, "TURBO FART!", "#8fdc4f", true);
   }
+  const tryBurp = tryFart; // old name kept for wiring/debug compat
 
   // ---------- Input ----------
   const keys = new Set();
@@ -2333,6 +2883,20 @@
     baby.x = clamp(baby.x, -bound, bound);
     baby.z = clamp(baby.z, -bound, bound);
 
+    // The backyard fence is a solid wall until the baby can eat it (~1.57 m).
+    if (size < FENCE_FREE && baby.x > YARD.x0 - 0.8 && baby.x < YARD.x1 + 0.8 && baby.z > YARD.z0 - 0.8 && baby.z < YARD.z1 + 0.8) {
+      const fm = size * 0.35 + 0.2;
+      const cx = clamp(baby.x, YARD.x0 + fm, YARD.x1 - fm);
+      const cz = clamp(baby.z, YARD.z0 + fm, YARD.z1 - fm);
+      if ((cx !== baby.x || cz !== baby.z) && bonkCooldown <= 0 && spd > maxSpd * 0.45) {
+        bonkCooldown = 1.6;
+        AudioKit.bonk();
+        addFloater(baby.x, size * 0.9, baby.z, `FENCE SAYS NO. GROW TO ${fmtSize(FENCE_FREE)}.`, "#b6b3c9", false);
+      }
+      baby.x = cx;
+      baby.z = cz;
+    }
+
     if (spd > maxSpd * 0.1) {
       baby.heading = Math.atan2(baby.vx, baby.vz);
       baby.crawl += dt * clamp(spd / Math.max(size, 0.2), 1.5, 8) * 1.4;
@@ -2341,12 +2905,13 @@
     slowTimer = Math.max(0, slowTimer - dt);
     sickTimer = Math.max(0, sickTimer - dt);
     pukeImmune = Math.max(0, pukeImmune - dt);
+    hitImmune = Math.max(0, hitImmune - dt);
     burpTimer = Math.max(0, burpTimer - dt);
     burpCooldown = Math.max(0, burpCooldown - dt);
     bonkCooldown = Math.max(0, bonkCooldown - dt);
     if (btnBurp) {
       btnBurp.disabled = burpCooldown > 0;
-      btnBurp.textContent = burpCooldown > 0 ? `💨 ${Math.ceil(burpCooldown)}s` : "💨 BURP";
+      btnBurp.textContent = burpCooldown > 0 ? `💨 ${Math.ceil(burpCooldown)}s` : "💨 FART";
     }
     if (comboTimer > 0) {
       comboTimer -= dt;
@@ -2387,6 +2952,7 @@
       spawnTimer = 0.9;
       despawnSweep();
       spawnTick(false);
+      enemyTick();
     }
 
     // --- movers, traffic & stink anim (active objects only) ---
@@ -2451,8 +3017,13 @@
       if (o.stink) {
         const ws = o.wispScale || 0.5;
         const face = camYaw - o.yaw; // billboard inside a yawed parent
+        // No crying wolf: hazards you'd merely squash lose their warnings.
+        const harmless = o.s < size * PUKE_MIN_RATIO;
+        if (o.warnSign) o.warnSign.visible = !harmless;
+        if (o.warnRing) o.warnRing.visible = !harmless;
         for (let i = 0; i < o.stink.length; i++) {
           const w = o.stink[i];
+          w.visible = !harmless;
           const ph2 = now * 0.0012 + i * 2.2 + o.bob;
           w.position.y = (0.75 + ((ph2 % 1.4) / 1.4) * 0.7) * ws;
           w.rotation.y = face;
@@ -2496,10 +3067,8 @@
         const reach = size * 0.5 + o.s * 0.45;
         if (d2 < reach * reach) {
           if (o.tpl.puke) {
-            if (o.s < size * 0.03) {
-              // Beneath a giant's notice: squashed, no penalty, no snack.
-              killObject(o);
-              spawnBurst(poolFor(o.s), o.x, o.s * 0.5, o.z, 5, 0x6ede3e, o.s + 0.1, 0.4);
+            if (o.s < size * PUKE_MIN_RATIO) {
+              squash(o); // too small to matter at this scale
             } else if (pukeImmune <= 0) {
               puke(o);
             }
@@ -2530,6 +3099,11 @@
         }
       }
     });
+
+    // --- hunters, shells, stink gas ---
+    updateEnemies(dt, now);
+    updateShells(dt);
+    updateGas(dt);
 
     // --- camera ---
     if (spd > maxSpd * 0.15) {
@@ -2723,6 +3297,10 @@
         noms,
         combo,
         slowed: slowTimer > 0,
+        hitImmune: hitImmune > 0,
+        enemies: enemies.length,
+        shells: shells.length,
+        gas: gasClouds.length,
         permanents: permCount,
         permanentsLeft: objects.filter((o) => !o.dyn && !o.dead).length,
         dynamics: dynCount,
@@ -2751,10 +3329,19 @@
         spawnTick(true);
       }
     },
-    pukeNow() {
-      if (baby) puke({ id: -2, dead: false, dyn: true, tpl: { e: "🥦", n: "Debug Broccoli", puke: true }, s: 0.1, x: baby.x, z: baby.z, g: null, cell: cellKey(9999, 9999) });
+    pukeNow(sz) {
+      if (baby) puke({ id: -2, dead: false, dyn: true, tpl: { e: "🥦", n: "Debug Broccoli", puke: true }, s: typeof sz === "number" ? sz : baby.size * 0.5, x: baby.x, z: baby.z, g: null, cell: cellKey(9999, 9999) });
     },
     burp: tryBurp,
+    fart: tryFart,
+    enemies() {
+      return enemies;
+    },
+    spawnEnemy(key, dist) {
+      const tpl = ENEMY_TPLS.find((t) => t.key === key);
+      if (tpl && baby) return spawnEnemy(tpl, dist || 10);
+      return null;
+    },
     win() {
       if (baby && phase === "play") {
         baby.size = WIN_SIZE;

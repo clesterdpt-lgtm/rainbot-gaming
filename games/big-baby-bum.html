@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Big Baby Bum — Rainbot Network</title>
+  <meta name="description" content="A 3D katamari snack odyssey set in one persistent city. Start in a backyard, eat everything smaller than you, grow round, start rolling, dodge traffic, and keep going until entire buildings fit in your mouth. Avoid the broccoli." />
+  <meta property="og:title" content="Big Baby Bum — Rainbot Network" />
+  <meta property="og:description" content="Crawl. Eat. Grow round. Roll. Consume the city, block by block. Do NOT eat the broccoli." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-big-baby-bum-ai-v1.png?v=20260710-bbb-cover-1" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-big-baby-bum-ai-v1.png?v=20260710-bbb-cover-1" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260710-bbb3d-3" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23fdeef2'/%3E%3Ccircle cx='50' cy='44' r='26' fill='%23ffd9b8'/%3E%3Ccircle cx='41' cy='39' r='4' fill='%23221a14'/%3E%3Ccircle cx='59' cy='39' r='4' fill='%23221a14'/%3E%3Cellipse cx='50' cy='55' rx='9' ry='7' fill='%238c2f39'/%3E%3Crect x='44' y='49' width='5' height='5' fill='%23fff'/%3E%3Crect x='51' y='49' width='5' height='5' fill='%23fff'/%3E%3Cpath d='M30 78q20 14 40 0v10q-20 10-40 0z' fill='%23fff'/%3E%3Cpath d='M50 12q8-6 10 2' stroke='%23c98f5e' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    /* Overlay stat lines */
+    .score-line {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 3px 0;
+    }
+    .score-line b {
+      color: var(--ink);
+      font-weight: 800;
+    }
+    .score-line--new {
+      justify-content: center;
+      color: var(--accent-3);
+      font-weight: 900;
+      padding-top: 8px;
+    }
+    .overlay .btn + .btn {
+      margin-top: 10px;
+    }
+
+    /* ON THE MENU panel */
+    .bbb-menu {
+      background: #070a12;
+      border: 2px solid var(--panel-2);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .bbb-menu__label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      margin-bottom: 6px;
+    }
+    .bbb-menu__list {
+      font-size: 24px;
+      line-height: 1.45;
+      letter-spacing: 4px;
+      min-height: 34px;
+      word-break: break-all;
+    }
+
+    /* Next unlock progress */
+    .bbb-unlock {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .bbb-unlock__track {
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .bbb-unlock__fill {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent-2), var(--accent-3));
+      transition: width 160ms linear;
+    }
+    .bbb-unlock__label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .bbb-note {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px 12px;
+      margin-top: 12px;
+    }
+    .bbb-note b {
+      color: var(--accent-3);
+    }
+
+    /* Floating text layer over the 3D canvas */
+    .bbb-float-layer {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 8;
+    }
+    .bbb-float {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.4px;
+      white-space: nowrap;
+      text-shadow: 0 2px 0 rgba(5, 7, 13, 0.9), 0 0 8px rgba(5, 7, 13, 0.6);
+      transition: opacity 120ms linear;
+      will-change: top, left, opacity;
+    }
+    .bbb-float--big {
+      font-family: var(--font-display);
+      font-size: 17px;
+    }
+
+    /* Center banner (unlocks / phase changes) */
+    .bbb-banner {
+      position: absolute;
+      left: 50%;
+      top: 14%;
+      z-index: 9;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      transform: translateX(-50%);
+      background: rgba(8, 8, 16, 0.84);
+      border: 2px solid var(--accent-3);
+      border-radius: 12px;
+      padding: 10px 18px;
+      pointer-events: none;
+      max-width: min(480px, calc(100% - 24px));
+    }
+    .bbb-banner.is-show {
+      display: flex;
+      animation: bbbBannerIn 180ms ease-out;
+    }
+    @keyframes bbbBannerIn {
+      from { transform: translateX(-50%) translateY(-14px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    .bbb-banner__emoji { font-size: 34px; line-height: 1; }
+    .bbb-banner__text { display: grid; gap: 2px; min-width: 0; }
+    .bbb-banner__text small {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: var(--accent-3);
+      text-transform: uppercase;
+    }
+    .bbb-banner__text b {
+      font-family: var(--font-display);
+      font-size: 18px;
+      line-height: 1.05;
+      color: var(--ink);
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Puke flash vignette */
+    .bbb-puke-flash {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 40%, rgba(94, 176, 60, 0.55) 100%);
+      transition: opacity 300ms ease;
+    }
+    .bbb-puke-flash.is-on { opacity: 1; }
+
+    /* Touch burp button — coarse pointers only */
+    .bbb-burp-btn {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 12;
+      display: none;
+      min-width: 92px;
+      min-height: 56px;
+      border-radius: 999px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bbb-burp-btn:disabled {
+      opacity: 0.55;
+      filter: grayscale(0.6);
+    }
+    @media (hover: none) and (pointer: coarse) {
+      .bbb-burp-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">Big Baby Bum</h1>
+        <div class="game-page__sub">3D katamari snack odyssey — crawl, eat, grow round, roll, and keep going until buildings are finger food</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">SIZE</span><span class="hud__value" id="hud-size">35 cm</span></div>
+          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">CRUMB GOBLIN</span></div>
+          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">NOMS</span><span class="hud__value" id="hud-noms">0</span></div>
+          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--ar-800-520">
+          <canvas id="gameCanvas" width="960" height="624" tabindex="0" aria-label="Big Baby Bum 3D playfield"></canvas>
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+          <button class="btn btn--yellow bbb-burp-btn" id="btn-burp" type="button" aria-label="Turbo burp">💨 BURP</button>
+          <div class="bbb-puke-flash" id="puke-flash"></div>
+          <div class="bbb-float-layer" id="float-layer"></div>
+          <div class="bbb-banner" id="bbb-banner" aria-live="polite">
+            <span class="bbb-banner__emoji" id="banner-emoji">🍼</span>
+            <span class="bbb-banner__text">
+              <small id="banner-small">NEW ON THE MENU</small>
+              <b id="banner-big">SOGGY CHEERIO</b>
+            </span>
+          </div>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">👶 BIG BABY BUM</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              A baby wakes up in a backyard on the edge of a whole city. Eat everything
+              smaller than you. Grow rounder until you become a ball and ROLL — through
+              yards, streets, traffic, and eventually entire buildings. Do not eat the
+              broccoli. Puking makes you shrink.
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">New adventure</button>
+            <button class="btn btn--secondary" id="btn-continue" type="button" style="display:none;">Continue (auto-saved)</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">BABY MONITOR</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+
+          <div class="bbb-menu" style="margin-top:12px;" aria-live="polite">
+            <div class="bbb-menu__label">Currently on the menu</div>
+            <div class="bbb-menu__list" id="menu-list">🥣</div>
+          </div>
+
+          <div class="bbb-unlock" aria-live="polite">
+            <div class="bbb-unlock__label">Next unlock</div>
+            <span class="bbb-unlock__track"><span class="bbb-unlock__fill" id="unlock-fill"></span></span>
+            <div class="bbb-unlock__label" id="unlock-label">🧃 Juice Box</div>
+          </div>
+
+          <div class="bbb-note" id="bbb-log">Baby monitor online. The backyard is quiet. Too quiet.</div>
+          <div class="bbb-note">⚠️ Green stink lines = <b>puke food</b>. Eating it shrinks you. Progress auto-saves every few seconds.</div>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>Controls</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Move</strong> with WASD or arrow keys (camera-relative) — or hold the mouse / your finger on the ground where you want to go.</li>
+            <li><strong style="color:var(--ink);">Space</strong> (or the 💨 button) fires a Turbo Burp: speed burst + vacuums nearby snacks toward your mouth.</li>
+            <li><strong style="color:var(--ink);">P</strong> pauses. <strong style="color:var(--ink);">M</strong> mutes.</li>
+            <li>Avoid anything with green stink lines (broccoli, dirty diapers, porta-potties, garbage trucks…) — puking shrinks you and slows you down for a moment.</li>
+            <li>Around 1 m the baby goes full sphere and starts rolling with real momentum. Plan your braking distance near hazards — including moving traffic.</li>
+            <li>The city never changes: buildings and trees you eat stay eaten in your save, while snacks, toys, people, and cars keep respawning.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260710-bbb3d-3"></script>
+  <script src="../assets/js/main.js?v=20260710-bbb3d-3"></script>
+  <script src="../assets/vendor/three/three-r128.min.js"></script>
+  <script src="../assets/js/big-baby-bum.js?v=20260710-bbb3d-3"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

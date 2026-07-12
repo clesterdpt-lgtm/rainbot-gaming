@@ -512,20 +512,23 @@ check("30 rain occlusion", /setRainExposure\(exposure\)/.test(mansionAudio) && /
 check("30 rain diagnostics", /rainDiagnostics/.test(mansionAudio) && /rain: audioSystem \? audioSystem\.rainDiagnostics\(\) : null/.test(diagnostics) && /rainApertures: rainApertures\.length/.test(diagnostics), "rain audio state is not observable in QA diagnostics");
 
 // 31. Runtime smoothness. Static decorative meshes merge into a handful of
-// draw calls per material and culling class; enclosure lights occupy stable
-// shader slots so no interaction can mint a novel light-count layout; every
-// reachable layout is drawn once during boot so the driver builds its real
-// pipelines behind the loading veil; and the cross-floor fade retires the
-// expensive both-floors union in under a second.
+// draw calls per material and culling class; indoor main-floor and grounds
+// lighting use separate stable shader layouts; enclosure lights occupy stable
+// slots so no interaction can mint a novel count; every reachable layout is
+// drawn once during boot; and the cross-floor fade retires unions promptly.
 check("31 merged static decor", /function mergeStaticDecor\(\)/.test(mansion) && /buildMansion\(\);\s*\n\s*mergeStaticDecor\(\);\s*\n\s*registerExteriorDetailCulling\(\)/.test(mansion), "static decor is not merged between mansion build and culling registration");
 check("31 merged static decor", /const skip = new Set\(\[\.\.\.occluderMeshes, \.\.\.interactableMeshes\]\)/.test(mansion) && /for \(const object of \[\.\.\.scene\.children\]\)/.test(mansion) && /object\.userData\.interaction\) continue/.test(mansion), "the decor merge can swallow occluders, interactive meshes, or animated subtrees");
 check("31 merged static decor", /exteriorCullingClass/.test(mansion) && /mergedDecor: state\.mergedDecor/.test(diagnostics), "merged decor loses its exterior-culling class or QA observability");
 check("31 stable light layouts", /const preclassified = object\.userData\.exteriorCullingClass/.test(mansion), "culling registration ignores pre-classified merged meshes");
 check("31 fade budget", /LIGHT_FADE_OUT_RATE = 1\.35/.test(mansion), "the cross-floor fade union lingers longer than the frame budget allows");
+check("31 split indoor and grounds lighting", /function getLightRenderContext\(/.test(mansion) && /outdoorRoomNames\.has\(roomLabel\) \? "grounds" : "main-interior"/.test(mansion), "main-floor lighting does not distinguish the indoor mansion from the grounds");
+check("31 split indoor and grounds lighting", /function circuitRendersInContext\(/.test(mansion) && /renderContext === "grounds"\) return isExteriorCircuit/.test(mansion) && /return !isExteriorCircuit && rendersOnFloor/.test(mansion), "exterior emitters can still occupy the indoor main-floor shader layout");
+check("31 split indoor and grounds lighting", /\{ floors: \["MAIN LEVEL"\], context: "main-interior" \}/.test(mansion) && /\{ floors: \["MAIN LEVEL"\], context: "grounds" \}/.test(mansion), "indoor main-floor and grounds shader layouts are not both prewarmed");
+check("31 raw frame diagnostics", /const rawDt = clock\.getDelta\(\)/.test(mansion) && /state\.frameTime = rawDt \* 1000/.test(mansion) && /fpsElapsed \+= rawDt/.test(mansion), "FPS diagnostics still hide slow frames behind the simulation delta clamp");
 
 check("20 shadow sampler fallback", /supportsFullRoomShadowSet\s*=\s*renderer\.capabilities\.maxTextures\s*>=\s*16/.test(mansion) && /maxTextureUnits/.test(diagnostics) && /activeSceneShadowLights/.test(diagnostics), "low-sampler contexts have no bounded-cone fallback or total-scene shadow diagnostics");
 check("20 stable light rendering", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion), "proximity-selected portal circuits can still make manually switched lights pop while crossing the yard threshold");
-check("20 stable light rendering", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.test(lightRendering) && /manual-circuits-floor-stable/.test(lightRendering), "main-floor and exterior circuits do not use one stable floor-context render policy");
+check("20 stable light rendering", /circuitRendersInContext\(circuit, floors, renderContext\)/.test(lightRendering) && /manual-circuits-context-stable/.test(lightRendering), "authored light contexts do not use the stable split render policy");
 check("20 movement-stable light rendering", !/lightWithinStableResidency|lightResidencyPosition|residencyPadding|residencyHysteresis/.test(mansion) && !/physics\.playerPosition\(\)/.test(lightRendering), "player position can still hide real light energy while a circuit remains on");
 check("20 movement-stable light rendering", /nextVisible\s*=\s*rendersInContext\s*&&\s*rendersOnLevel/.test(lightRendering) && /circuit\.on && enclosureOpen/.test(lightRendering), "normal circuit lights are not kept stable for the complete authored floor context with enclosure-gated energy");
 check("20 auxiliary interior lighting", /for \(const light of auxiliaryInteriorLights\)/.test(lightRendering) && /interactionVisible/.test(lightRendering) && /light\.visible = true/.test(lightRendering), "door-operated cabinet lights no longer hold permanent layout-stable shader slots");
@@ -644,7 +647,7 @@ check("24 closet switch independence", !/lightCircuit\.(?:setState|toggle)\(|lig
 check("24 closet diagnostics", /walkInClosets\s*:/.test(diagnostics) && /interiorVisible/.test(diagnostics) && /lightOn/.test(diagnostics), "diagnostics do not expose each walk-in closet's door, interior-render, and manual light state");
 
 check("24 stable render policy", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion) && !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "proximity-based portal or owner-room light gating remains");
-check("24 stable render policy", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.test(lightRendering) && /manual-circuits-floor-stable/.test(lightRendering), "main-floor and exterior lights do not share a stable floor-context render policy");
+check("24 stable render policy", /renderContext === "grounds"\) return isExteriorCircuit/.test(mansion) && /return !isExteriorCircuit && rendersOnFloor/.test(mansion), "indoor main-floor and grounds lights are not isolated into stable contexts");
 check("24 fixture mesh stability", /keepForFacade[\s\S]*?sconce[\s\S]*?chandelier[\s\S]*?bulb/.test(exteriorCulling), "lit fixture meshes can still disappear when the player walks away from the facade");
 
 const sconceBuilder = section("addWallSconce(x, y, z", "addFixtureSupportFill", lightCircuitClass);
@@ -674,7 +677,7 @@ check("28 response glow is decorative", !/new THREE\.(?:SpotLight|PointLight)/.t
 check("28 cross-floor fade", /if \(floorContextChanged\) syncLightRendering\("fade"\)/.test(updateLocation), "floor-context changes no longer request a faded light handover");
 check("28 cross-floor fade", /transition === "fade" && !state\.qa/.test(lightRendering) && /updateLightTransitions\(dt\)/.test(mansion) && /LIGHT_FADE_OUT_RATE/.test(mansion), "cross-floor fades are missing or QA captures are no longer deterministic snaps");
 check("28 stairwell continuity", count(lightingBuild, /\["MAIN LEVEL", "SECOND FLOOR"\]/g) >= 6 && count(lightingBuild, /\["SECOND FLOOR", "MAIN LEVEL"\]/g) >= 3 && /upperLanding\.addLevel\("MAIN LEVEL"\)/.test(lightingBuild) && /\["MAIN LEVEL", "BASEMENT"\]/.test(lightingBuild), "fixtures in the open stair volumes can still hand over mid-climb");
-check("28 shader layout prewarm", /prewarmLightingPrograms\(\)/.test(mansion) && /renderer\.compile\(scene, camera\)/.test(lightRendering) && /renderer\.render\(scene, camera\)/.test(lightRendering) && /\["MAIN LEVEL", "SECOND FLOOR"\]/.test(lightRendering) && /\["MAIN LEVEL", "BASEMENT"\]/.test(lightRendering), "floor-union shader layouts are not prewarmed with real rendered frames during boot");
+check("28 shader layout prewarm", /prewarmLightingPrograms\(\)/.test(mansion) && /renderer\.compile\(scene, camera\)/.test(lightRendering) && /renderer\.render\(scene, camera\)/.test(lightRendering) && /context: "grounds"/.test(lightRendering) && /\["MAIN LEVEL", "SECOND FLOOR"\]/.test(lightRendering) && /\["MAIN LEVEL", "BASEMENT"\]/.test(lightRendering), "render-context and floor-union shader layouts are not prewarmed with real frames during boot");
 check("28 switch-stable light loop", /light\.visible = placed \|\| data\.renderFactor > 0\.004/.test(mansion), "a wall switch can restructure the shader light loop instead of only zeroing intensity");
 
 const hasPracticalFill = (owner, minIntensity, minDistance) => methodCalls(owner, "addPracticalLight", lightingBuild)
@@ -693,7 +696,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-mobile-render-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-indoor-light-perf-2", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

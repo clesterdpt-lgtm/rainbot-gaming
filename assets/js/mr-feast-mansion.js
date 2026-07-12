@@ -426,7 +426,7 @@
   let facadeVisibilityKey = "all";
   let exteriorDistanceFromHouse = 0;
   let exteriorNearHouse = true;
-  let lightRenderPolicy = "manual-circuits-floor-stable:main-level";
+  let lightRenderPolicy = "manual-circuits-context-stable:main-interior";
   const yardState = {
     perimeterClosed: false,
     perimeterSegments: null,
@@ -4914,6 +4914,7 @@
   }
 
   function updateLocation() {
+    const previousLightContext = getLightRenderContext();
     const p = physics.playerPosition();
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
     let match = null;
@@ -4943,11 +4944,15 @@
     }
     updateExteriorDetailCulling();
     if (audioSystem) audioSystem.setRainExposure(computeRainExposure());
-    // Room labels never influence light state. Refresh only when the authored
-    // floor context actually changes; switches, doors, and cabinets request
-    // their own explicit snap refreshes at interaction time. Floor-context
-    // refreshes fade so the handover is never readable as a switch flipping.
+    const lightContextChanged = previousLightContext !== getLightRenderContext();
+    // Interior room labels never influence light state. The only room-level
+    // boundary is the mansion shell itself: the grounds own a separate,
+    // prewarmed light layout so their sixteen real emitters do not inflate
+    // every indoor main-floor fragment shader. Floor handovers still fade;
+    // the shell boundary snaps because its walls already occlude the retiring
+    // light set and avoiding a 48-light crossfade prevents a doorway hitch.
     if (floorContextChanged) syncLightRendering("fade");
+    else if (lightContextChanged) syncLightRendering();
   }
 
   function findInteraction() {
@@ -5059,18 +5064,33 @@
     if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
   }
 
+  function getLightRenderContext(floorLabel = state.currentFloor, roomLabel = state.currentRoom) {
+    if (floorLabel === "MAIN LEVEL") {
+      return outdoorRoomNames.has(roomLabel) ? "grounds" : "main-interior";
+    }
+    return floorLabel.toLowerCase().replaceAll(" ", "-");
+  }
+
+  function circuitRendersInContext(circuit, floors, renderContext) {
+    const rendersOnFloor = [...floors].some((floor) => circuit.levels.has(floor));
+    const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
+    if (!floors.has("MAIN LEVEL")) return rendersOnFloor;
+    if (renderContext === "grounds") return isExteriorCircuit;
+    return !isExteriorCircuit && rendersOnFloor;
+  }
+
   function syncLightRendering(transition) {
     const fade = transition === "fade" && !state.qa;
-    lightRenderPolicy = `manual-circuits-floor-stable:${state.currentFloor.toLowerCase().replaceAll(" ", "-")}`;
+    const floors = new Set([state.currentFloor]);
+    const renderContext = getLightRenderContext();
+    lightRenderPolicy = `manual-circuits-context-stable:${renderContext}`;
     let shadowTopologyChanged = false;
     for (const circuit of circuits) {
       const rendersOnFloor = circuit.levels.has(state.currentFloor);
-      const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
-      // Main-floor and grounds circuits share one stable render context. No
-      // player-position or room-name decision can retire an enabled fixture.
-      const rendersInContext = state.currentFloor === "MAIN LEVEL"
-        ? isExteriorCircuit || rendersOnFloor
-        : rendersOnFloor;
+      // Indoor main-floor, grounds, upper, and basement layouts are each
+      // stable while the player moves inside that authored context. In
+      // particular, exterior emitters never occupy indoor shader slots.
+      const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
       for (const light of circuit.lights) {
         const lightLevels = light.userData.levels;
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
@@ -5109,10 +5129,10 @@
 
   function prewarmLightingPrograms() {
     // Forward-renderer programs are keyed by the visible light counts, so the
-    // first frame of every floor context — and of every mid-fade union of two
+    // first frame of every render context — and of every mid-fade union of two
     // adjacent contexts — would otherwise pause on shader compilation right
     // as the player crosses a stair. Placement ignores enclosures (see
-    // syncLightRendering), so these five layouts are the complete set the
+    // syncLightRendering), so these layouts are the complete set the
     // whole session can ever render. renderer.compile alone is not enough:
     // drivers defer real pipeline builds until first draw, so each layout
     // also renders one actual frame behind the loading veil.
@@ -5121,20 +5141,20 @@
     // down they lose it at fade start. Each stair union therefore exists in
     // two variants, and both are drawn here.
     const layouts = [
-      { floors: ["MAIN LEVEL"] },
-      { floors: ["SECOND FLOOR"] },
-      { floors: ["BASEMENT"] },
-      { floors: ["MAIN LEVEL", "SECOND FLOOR"] },
-      { floors: ["MAIN LEVEL", "SECOND FLOOR"], enclosureFloors: ["MAIN LEVEL"] },
-      { floors: ["MAIN LEVEL", "BASEMENT"] },
+      { floors: ["MAIN LEVEL"], context: "main-interior" },
+      { floors: ["MAIN LEVEL"], context: "grounds" },
+      { floors: ["SECOND FLOOR"], context: "second-floor" },
+      { floors: ["BASEMENT"], context: "basement" },
+      { floors: ["MAIN LEVEL", "SECOND FLOOR"], context: "main-interior" },
+      { floors: ["MAIN LEVEL", "SECOND FLOOR"], context: "main-interior", enclosureFloors: ["MAIN LEVEL"] },
+      { floors: ["MAIN LEVEL", "BASEMENT"], context: "main-interior" },
     ];
     for (const layout of layouts) {
       const floors = new Set(layout.floors);
       const enclosureFloors = new Set(layout.enclosureFloors || layout.floors);
       for (const circuit of circuits) {
         const rendersOnFloor = layout.floors.some((floor) => circuit.levels.has(floor));
-        const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
-        const rendersInContext = floors.has("MAIN LEVEL") ? isExteriorCircuit || rendersOnFloor : rendersOnFloor;
+        const rendersInContext = circuitRendersInContext(circuit, floors, layout.context);
         for (const light of circuit.lights) {
           const lightLevels = light.userData.levels;
           const placementFloors = light.userData.requiresOpenCabinet ? enclosureFloors : floors;
@@ -5195,10 +5215,11 @@
 
   function animate() {
     requestAnimationFrame(animate);
-    const dt = Math.min(clock.getDelta(), 0.075);
-    state.frameTime = dt * 1000;
+    const rawDt = clock.getDelta();
+    const dt = Math.min(rawDt, 0.075);
+    state.frameTime = rawDt * 1000;
     fpsFrames += 1;
-    fpsElapsed += dt;
+    fpsElapsed += rawDt;
     if (fpsElapsed >= 0.5) {
       state.fps = fpsFrames / fpsElapsed;
       if (state.started && !state.qa && state.renderQuality === "high") {
@@ -5333,8 +5354,15 @@
         activePointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isPointLight).length, 0),
         activeFixtureEmitters: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.userData.visibleFixtureEmitter).length, 0),
         activeLightPools: circuits.reduce((total, circuit) => total + (circuit.on ? circuit.glowMaterials.length : 0), 0),
-        renderMode: "manual-circuits-floor-stable-real-emitters",
+        renderMode: "manual-circuits-context-stable-real-emitters",
         renderPolicy: lightRenderPolicy,
+        renderContext: getLightRenderContext(),
+        shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0),
+        shaderAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible).length,
+        shaderSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length,
+        shaderPointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length,
         crossFloorFade: {
           fadingLights: fadingLights.size,
           fadingBulbs: fadingBulbs.size,

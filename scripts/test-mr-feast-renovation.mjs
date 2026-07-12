@@ -314,6 +314,16 @@ check("14 painting/service-stair separation", !/kind:\s*"(?:arch|door|open)"/.te
 check("15 basement stair walls", !basementPartitions.includes('name: "basement-service-shaft"'), "basement service-shaft divider wall still exists");
 check("15 basement stair walls", !serviceStair.includes('name: "service-stair-west-wall"') && !serviceStair.includes('name: "service-stair-east-wall"'), "parallel service-stair side walls still exist");
 check("15 basement stair walls", !/\[3\.1,\s*6\.2,\s*9\.3,\s*12\.4\][^\n]*addBookshelf/.test(basementFurnishings), "three archive bookcase backs still read as walls beside the stair");
+const archiveFurnishings = section("// Archive", "// Laundry & linen", basementFurnishings);
+check("15 archive shelving", /const archiveCenterX\s*=\s*8\.15/.test(archiveFurnishings), "archive furnishings are not centered on the room axis");
+check("15 archive shelving", /const archiveSideXs\s*=\s*\[1\.82,\s*14\.48\]/.test(archiveFurnishings), "archive side bookcases are not mirrored east-to-west");
+check("15 archive shelving", /const archiveSideZs\s*=\s*\[4\.75,\s*9\.65\]/.test(archiveFurnishings), "archive side bookcases do not symmetrically bracket the doorway");
+check("15 archive shelving", /archiveSideXs\.forEach[\s\S]*archiveSideZs\.forEach[\s\S]*addBookshelf\([^;]*2\.2,\s*2\.65\)/.test(archiveFurnishings), "archive is missing its four mirrored side-wall bookcases");
+check("15 archive shelving", /\[archiveCenterX - 3\.65,\s*archiveCenterX \+ 3\.65\][\s\S]*addBookshelf\(x,\s*11\.55[^;]*2\.5,\s*2\.65\)/.test(archiveFurnishings), "archive is missing its mirrored north-wall bookcases");
+check("15 archive circulation", !/addBookshelf\(3\.1,\s*7\.4[^;]*4\.6/.test(archiveFurnishings), "old cross-room archive bookcase still blocks the central aisle");
+check("15 archive circulation", /name:\s*"archive specimen drawers",\s*x:\s*archiveCenterX,\s*z:\s*11\.55[^;]*rotationY:\s*Math\.PI/.test(archiveFurnishings), "archive specimen cabinet is not centered on the far wall and facing the aisle");
+check("15 archive circulation", /archiveDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive doorway lacks a physical traversal QA route");
+check("15 archive circulation", /archiveCenterAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks) && /archiveCrossAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive center and cross aisles lack physical traversal QA routes");
 check("16 service-stair light", !/serviceUpper\.addFixture\(/.test(lightingBuild), "floating upper service-stair fixture still exists");
 check("16 service-stair light", /serviceLower\.addFixture\(12\.55,\s*2\.[34]/.test(lightingBuild), "service-stair fixture is not attached at the basement ceiling over the bottom landing");
 check("17 main-stair lights", !/upperLanding\.addFixture\(/.test(lightingBuild), "small upper-landing chandelier still hangs above the main stair");
@@ -749,7 +759,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-hedge-foliage-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-archive-layout-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

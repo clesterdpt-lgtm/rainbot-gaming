@@ -278,8 +278,8 @@
 
     wineCellarA: [-2.3, FLOOR.BASEMENT, 4.2, 2.2],
     wineCellarB: [-12.0, FLOOR.BASEMENT, 10.4, -0.9],
-    archiveA: [2.2, FLOOR.BASEMENT, 4.1, -Math.PI / 2],
-    archiveB: [14.0, FLOOR.BASEMENT, 10.6, Math.PI / 2],
+    archiveA: [3.0, FLOOR.BASEMENT, 4.1, -Math.PI / 2],
+    archiveB: [13.2, FLOOR.BASEMENT, 10.3, Math.PI / 2],
     basementCorridorA: [0, FLOOR.BASEMENT, 10.8, 0],
     basementCorridorB: [0, FLOOR.BASEMENT, -2.5, Math.PI],
     laundryA: [-2.3, FLOOR.BASEMENT, -2.3, 2.0],
@@ -3353,9 +3353,26 @@
     addTable(-8.0, 7.4, 2.6, 1.05, FLOOR.BASEMENT, 0, M.darkWood);
     new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2 });
 
-    addBookshelf(3.1, 7.4, FLOOR.BASEMENT, Math.PI / 2, 4.6, 2.65);
-    new Cabinet({ name: "archive specimen drawers", x: 2.0, z: 10.7, floorY: FLOOR.BASEMENT, width: 2.0, height: 1.45, rotationY: Math.PI / 2 });
+    // Archive — three mirrored pairs line the perimeter instead of forming a
+    // freestanding wall through the room. The west pair brackets the 1m door
+    // with 0.85m of clear space at both jambs (well over the 0.32m player
+    // radius), while the full-width center and cross aisles remain empty.
+    const archiveCenterX = 8.15;
+    const archiveSideXs = [1.82, 14.48];
+    const archiveSideZs = [4.75, 9.65];
+    archiveSideXs.forEach((x, sideIndex) => archiveSideZs.forEach((z, rowIndex) => {
+      const shelf = addBookshelf(x, z, FLOOR.BASEMENT, sideIndex === 0 ? -Math.PI / 2 : Math.PI / 2, 2.2, 2.65);
+      shelf.name = `archive-bookcase-${sideIndex === 0 ? "west" : "east"}-${rowIndex === 0 ? "south" : "north"}`;
+    }));
+    for (const [index, x] of [archiveCenterX - 3.65, archiveCenterX + 3.65].entries()) {
+      const shelf = addBookshelf(x, 11.55, FLOOR.BASEMENT, 0, 2.5, 2.65);
+      shelf.name = `archive-bookcase-north-${index === 0 ? "west" : "east"}`;
+    }
+    // The former northwest-corner cabinet now anchors the far wall on the
+    // room centerline, facing the open aisle instead of pinching circulation.
+    new Cabinet({ name: "archive specimen drawers", x: archiveCenterX, z: 11.55, floorY: FLOOR.BASEMENT, width: 2.0, height: 1.45, rotationY: Math.PI });
 
+    // Laundry & linen
     new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2 });
     addTable(-8.0, -0.1, 2.6, 1.15, FLOOR.BASEMENT, 0, M.darkWood);
     new Cabinet({ name: "pantry cupboard", x: 2.1, z: 1.8, floorY: FLOOR.BASEMENT, width: 1.7, height: 2.25, rotationY: Math.PI / 2 });
@@ -5812,6 +5829,9 @@
         basement: [0, FLOOR.BASEMENT, -2.0, Math.PI],
         wine: [-3.0, FLOOR.BASEMENT, 7.2, Math.PI / 2],
         archive: [4.65, FLOOR.BASEMENT, 5.0, Math.PI],
+        archiveDoorOutside: [0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
+        archiveSouthAisle: [8.15, FLOOR.BASEMENT, 4.0, Math.PI],
+        archiveWestAisle: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
         laundry: [-8.0, FLOOR.BASEMENT, 0, Math.PI / 2],
         pantry: [6.0, FLOOR.BASEMENT, 0, -Math.PI / 2],
         boiler: [-8.0, FLOOR.BASEMENT, -5.3, 0],
@@ -6150,6 +6170,22 @@
         openRearTraversal: {
           start: "openDiningCross",
           actions: [{ yaw: -Math.PI / 2, seconds: 5.8 }],
+        },
+        archiveDoorEntry: {
+          start: "archiveDoorOutside",
+          actions: [{ yaw: -Math.PI / 2, seconds: 1.8 }],
+          openDoors: true,
+          expected: { grounded: true, room: "ARCHIVE", minX: 2.7, maxX: 4.25, minZ: 6.75, maxZ: 7.65 },
+        },
+        archiveCenterAisle: {
+          start: "archiveSouthAisle",
+          actions: [{ yaw: Math.PI, seconds: 3.0 }],
+          expected: { grounded: true, room: "ARCHIVE", minX: 7.75, maxX: 8.55, minZ: 9.9, maxZ: 10.85 },
+        },
+        archiveCrossAisle: {
+          start: "archiveWestAisle",
+          actions: [{ yaw: -Math.PI / 2, seconds: 4.4 }],
+          expected: { grounded: true, room: "ARCHIVE", minX: 12.1, maxX: 13.2, minZ: 6.75, maxZ: 7.65 },
         },
         serviceDown: {
           start: "serviceTop",

@@ -5118,13 +5118,20 @@ body.arcade-home::before {
 
 .directory-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 420px));
+  justify-content: center;
   gap: 12px;
   padding: 0 8px 8px;
 }
 
 .games-section-stack {
   gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+
+.games-section__grid {
+  padding-inline: 0;
 }
 
 .games-section {
@@ -6135,7 +6142,7 @@ body.arcade-home::before {
   }
 
   .directory-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 420px));
   }
 
   .pro-strip {
@@ -6424,7 +6431,7 @@ body.arcade-home::before {
   }
 
   .directory-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 420px));
   }
 
   .games-modebar {
@@ -12684,7 +12691,8 @@ body.arcade-home::before {
 }
 
 .directory-card:hover .directory-card__body,
-.directory-card:focus-visible .directory-card__body {
+.directory-card:focus-visible .directory-card__body,
+.directory-card:focus-within .directory-card__body {
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -12724,10 +12732,20 @@ body.arcade-home::before {
   -webkit-line-clamp: 2;
 }
 
-.directory-card__category {
+.directory-card__badges {
   align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 160ms ease, margin 160ms ease, opacity 160ms ease;
+}
+
+.directory-card__category {
   display: inline-flex;
-  margin-top: 7px;
   border: 1px solid rgba(35, 223, 242, 0.72);
   background: rgba(3, 8, 14, 0.86);
   color: var(--arcade-cyan);
@@ -12740,8 +12758,66 @@ body.arcade-home::before {
   text-transform: uppercase;
 }
 
+.directory-card__category--multiplayer {
+  border-color: rgba(247, 217, 36, 0.78);
+  color: var(--arcade-yellow);
+}
+
+.directory-card__activity {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.directory-card__favorite,
+.directory-card__playtime {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(3, 6, 11, 0.92);
+  color: #eaf2fb;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 7px 8px;
+  white-space: nowrap;
+}
+
+.directory-card__favorite {
+  cursor: pointer;
+}
+
+.directory-card__favorite:hover,
+.directory-card__favorite:focus-visible,
+.directory-card__favorite.is-favorite {
+  border-color: var(--arcade-pink);
+  color: #ff7dbc;
+  outline: none;
+}
+
+.directory-card:hover .directory-card__badges,
+.directory-card:focus-visible .directory-card__badges,
+.directory-card:focus-within .directory-card__badges {
+  max-height: 28px;
+  margin-top: 7px;
+  opacity: 1;
+}
+
+.directory-card:hover .directory-card__activity,
+.directory-card:focus-visible .directory-card__activity,
+.directory-card:focus-within .directory-card__activity {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .directory-card:hover .directory-card__body p,
-.directory-card:focus-visible .directory-card__body p {
+.directory-card:focus-visible .directory-card__body p,
+.directory-card:focus-within .directory-card__body p {
   display: block;
   max-height: none;
   margin-top: 10px;
@@ -12770,6 +12846,13 @@ body.arcade-home::before {
     margin-top: 0;
     opacity: 0;
     transform: translateY(8px);
+  }
+
+  .directory-card:hover .directory-card__badges,
+  .directory-card:hover .directory-card__activity {
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
   }
 }
 

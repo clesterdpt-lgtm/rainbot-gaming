@@ -1130,6 +1130,89 @@ function initSearchPage() {
   renderResults();
 }
 
+const RBGameActivity = (() => {
+  const STORAGE_KEY = "rainbot_game_activity:v1";
+  let activeSlug = "";
+  let activeSince = 0;
+
+  const read = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      return {
+        favorites: Array.isArray(saved?.favorites) ? saved.favorites : [],
+        games: saved?.games && typeof saved.games === "object" ? saved.games : {},
+      };
+    } catch (error) {
+      return { favorites: [], games: {} };
+    }
+  };
+
+  const write = (activity) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(activity));
+    } catch (error) {}
+  };
+
+  const flushActiveTime = () => {
+    if (!activeSlug || !activeSince) return;
+    const elapsed = Math.max(0, Math.round((Date.now() - activeSince) / 1000));
+    activeSince = 0;
+    if (!elapsed) return;
+    const activity = read();
+    const game = activity.games[activeSlug] || {};
+    activity.games[activeSlug] = {
+      ...game,
+      seconds: Math.max(0, Number(game.seconds) || 0) + elapsed,
+      lastPlayedAt: new Date().toISOString(),
+    };
+    write(activity);
+  };
+
+  const startActiveTime = () => {
+    if (activeSlug && !document.hidden && !activeSince) activeSince = Date.now();
+  };
+
+  const init = () => {
+    const match = location.pathname.match(/\/games\/([^/]+)\.html$/i);
+    const slug = match?.[1] || "";
+    if (!slug || !RB_GAME_META[slug]) return;
+    activeSlug = slug;
+    startActiveTime();
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) flushActiveTime();
+      else startActiveTime();
+    });
+    window.addEventListener("pagehide", flushActiveTime);
+    window.setInterval(() => {
+      flushActiveTime();
+      startActiveTime();
+    }, 15000);
+  };
+
+  const isFavorite = (slug) => read().favorites.includes(slug);
+  const toggleFavorite = (slug) => {
+    const activity = read();
+    const favorites = new Set(activity.favorites);
+    if (favorites.has(slug)) favorites.delete(slug);
+    else favorites.add(slug);
+    activity.favorites = Array.from(favorites);
+    write(activity);
+    return favorites.has(slug);
+  };
+  const secondsFor = (slug) => Math.max(0, Number(read().games[slug]?.seconds) || 0);
+
+  return { init, isFavorite, toggleFavorite, secondsFor };
+})();
+
+function formatGamePlayTime(seconds) {
+  const totalMinutes = Math.floor(Math.max(0, seconds) / 60);
+  if (totalMinutes < 1) return "Not played yet";
+  if (totalMinutes < 60) return `${totalMinutes}m played`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h${minutes ? ` ${minutes}m` : ""} played`;
+}
+
 function initGamesCatalog() {
   const catalog = document.querySelector("[data-games-catalog]");
   if (!catalog) return;
@@ -1307,11 +1390,14 @@ function initGamesCatalog() {
       heading.textContent = title || `Game ${order + 1}`;
       body.prepend(heading);
     }
-    if (body && !body.querySelector(".directory-card__category")) {
+    if (body && !body.querySelector(".directory-card__badges")) {
+      const badges = document.createElement("span");
+      badges.className = "directory-card__badges";
       const categoryBadge = document.createElement("span");
       categoryBadge.className = "directory-card__category";
       categoryBadge.textContent = category;
-      body.querySelector(".directory-card__title")?.after(categoryBadge);
+      badges.append(categoryBadge);
+      body.querySelector(".directory-card__title")?.after(badges);
     }
     const searchText = normalize([
       card.dataset.title,
@@ -1332,6 +1418,42 @@ function initGamesCatalog() {
 
     const filterTags = new Set((card.dataset.gameFilterTags || "").split(" ").filter(Boolean));
     if (!filterTags.size) filterTagsForCard(card).forEach((tag) => filterTags.add(tag));
+    const badges = body?.querySelector(".directory-card__badges");
+    if (badges && filterTags.has("multiplayer") && !badges.querySelector(".directory-card__category--multiplayer")) {
+      const multiplayerBadge = document.createElement("span");
+      multiplayerBadge.className = "directory-card__category directory-card__category--multiplayer";
+      multiplayerBadge.textContent = "Multiplayer";
+      badges.append(multiplayerBadge);
+    }
+    if (body && !body.querySelector(".directory-card__activity")) {
+      const activity = document.createElement("span");
+      activity.className = "directory-card__activity";
+      const favorite = document.createElement("span");
+      favorite.className = "directory-card__favorite";
+      favorite.setAttribute("role", "button");
+      favorite.setAttribute("tabindex", "0");
+      const syncFavorite = (isFavorite = RBGameActivity.isFavorite(slug)) => {
+        favorite.classList.toggle("is-favorite", isFavorite);
+        favorite.setAttribute("aria-pressed", String(isFavorite));
+        favorite.setAttribute("aria-label", `${isFavorite ? "Remove" : "Add"} ${title} ${isFavorite ? "from" : "to"} favorites`);
+        favorite.textContent = isFavorite ? "♥ Favorite" : "♡ Favorite";
+      };
+      const toggleFavorite = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        syncFavorite(RBGameActivity.toggleFavorite(slug));
+      };
+      favorite.addEventListener("click", toggleFavorite);
+      favorite.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") toggleFavorite(event);
+      });
+      syncFavorite();
+      const playTime = document.createElement("span");
+      playTime.className = "directory-card__playtime";
+      playTime.textContent = `◷ ${formatGamePlayTime(RBGameActivity.secondsFor(slug))}`;
+      activity.append(favorite, playTime);
+      body.append(activity);
+    }
 
     return {
       card,
@@ -4676,6 +4798,7 @@ function fitGameCanvases() {
 
 document.addEventListener("DOMContentLoaded", () => {
   RBSfx.init();
+  RBGameActivity.init();
   initSearchPage();
   initGamesCatalog();
   initStandaloneGameShell();

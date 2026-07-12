@@ -6831,9 +6831,12 @@ body.arcade-home::before {
   z-index: 2;
   color: var(--arcade-white);
   font-family: var(--arcade-font);
-  font-size: clamp(22px, 2.8vw, 36px);
+  /* Capped at 22px: Press Start 2P renders "RECURSIVE" (the longest single
+     word) at ~218px, which is the 82% cap of the 280px-min art column. Larger
+     sizes clipped the word mid-glyph inside the art's overflow:hidden box. */
+  font-size: clamp(20px, 2.8vw, 22px);
   line-height: 0.98;
-  max-width: 78%;
+  max-width: 82%;
   text-shadow: 3px 0 0 rgba(255, 20, 144, 0.42), -2px 0 0 rgba(35, 223, 242, 0.34), 0 3px 0 #000;
   text-transform: uppercase;
 }

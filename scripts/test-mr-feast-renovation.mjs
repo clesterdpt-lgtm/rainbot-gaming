@@ -138,6 +138,8 @@ const exteriorWalls = section("function buildExteriorWalls()", "function buildMa
 const serviceStair = section("function buildServiceStaircase()", "function addRug(");
 const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
 const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
+const wallSegmentBuilder = section("function wallSegment(", "function addWindow(");
+const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
 const lightRendering = section("function syncLightRendering(", "function updatePlayer(");
@@ -168,6 +170,15 @@ const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartit
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
 const eastRearSpine = namedWallRun("upper-east-rear-spine", upperPartitions);
 const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
+
+// 29. Crown and base trim belong to the authored wall run, not to the solid
+// wall fragments left after doors and windows are cut out. Each eligible run
+// therefore gets one uninterrupted trim pass before its openings are built.
+check("29 continuous wall trim", /function addContinuousWallTrim\(/.test(wallSegmentBuilder), "missing full-length wall-trim helper");
+check("29 continuous wall trim", !/baseboard|crown/.test(section("function wallSegment(", "function addContinuousWallTrim(")), "solid wall fragments still own trim and will leave gaps at openings");
+check("29 continuous wall trim", /addContinuousWallTrim\(axis, fixed, start, end, floorY, height, material, name\);/.test(wallRunBuilder), "buildWallRun does not create trim across its full authored span");
+check("29 continuous wall trim", wallRunBuilder.indexOf("addContinuousWallTrim(") < wallRunBuilder.indexOf("const sorted = openings"), "trim must be built independently before openings split the wall");
+check("29 continuous wall trim", count(wallSegmentBuilder, /baseboard-[ab]/g) === 4 && count(wallSegmentBuilder, /crown-[ab]/g) === 4, "continuous trim helper must cover both faces of x- and z-axis wall runs");
 
 // 1. The rear upper-floor opening needs a complete visual guard and matching
 // invisible collision, kept in a dedicated helper so both parts stay aligned.
@@ -771,7 +782,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-maze-portals-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-continuous-trim-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

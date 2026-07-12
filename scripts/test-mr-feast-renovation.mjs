@@ -157,15 +157,16 @@ const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
 const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
 const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
 const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
-const upperGalleryPortraits = section("for (const portrait of [", "]) addWallPortrait", upperFurnishings);
+const upperGalleryPortraits = upperFurnishings;
 const musicRoomFurnishings = section("// Music room", "// Painting room", mainFurnishings);
 const paintingRoomFurnishings = section("// Painting room", "// Dining room", mainFurnishings);
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
-const westRearFrontWall = namedWallRun("upper-west-rear-front-wall", upperPartitions);
 const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
 const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
+const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
+const eastRearSpine = namedWallRun("upper-east-rear-spine", upperPartitions);
 const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
 
 // 1. The rear upper-floor opening needs a complete visual guard and matching
@@ -614,27 +615,25 @@ check("24 sealed painting-room stair walls", mainEastFrontSpine.length > 0 && !/
 check("24 sealed painting-room stair walls", serviceShaftWall.length > 0 && /openings:\s*\[\s*\]/s.test(serviceShaftWall) && !/kind:\s*"(?:arch|door|open)"/.test(serviceShaftWall), "painting room still opens through its east wall into the service stair");
 
 for (const [label, pattern] of [
-  ["west rear", /\[-15,\s*-5,\s*-12,\s*-3\.2,\s*"WEST REAR SUITE"\]/],
-  ["primary", /\[-5,\s*5,\s*-12,\s*-3\.2,\s*"PRIMARY SUITE"\]/],
+  ["primary", /\[-15,\s*-5,\s*-12,\s*-3\.2,\s*"PRIMARY SUITE"\]/],
+  ["rear lounge", /\[-5,\s*5,\s*-12,\s*-3\.2,\s*"REAR LOUNGE"\]/],
   ["east rear", /\[5,\s*15,\s*-12,\s*-3\.2,\s*"EAST REAR SUITE"\]/],
 ]) {
-  check("24 enlarged rear suites", pattern.test(roomZones), `${label} suite zone does not absorb the removed bedroom corridor through z=-3.2`);
+  check("24 rear lounge zoning", pattern.test(roomZones), `${label} does not own the intended upper-rear zone`);
 }
-check("24 enlarged rear suites", !upperPartitions.includes('name: "upper-bedroom-corridor"'), "old z=-4.9 bedroom-corridor wall remains");
-for (const [label, wall, doorCenter] of [
-  ["west rear", westRearFrontWall, -9.7],
-  ["primary", primaryFrontWall, -4.15],
-  ["east rear", eastRearFrontWall, 9.7],
-]) {
-  const centerPattern = new RegExp(`center:\\s*${String(doorCenter).replace(".", "\\.")}\\b`);
-  check("24 enlarged rear suites", wall.length > 0 && /axis:\s*"x"/.test(wall) && /fixed:\s*-3\.2\b/.test(wall) && centerPattern.test(wall), `${label} suite lacks its aligned z=-3.2 front wall and doorway`);
-}
+check("24 rear lounge naming", !lightingMap.includes('"WEST REAR SUITE"') && !roomZones.includes('"WEST REAR SUITE"') && !/west rear suite lights/.test(lightingBuild), "the former west-rear naming remains after its promotion to Primary Suite");
+check("24 rear lounge naming", /"PRIMARY SUITE"\s*:\s*\["primary suite lights",\s*"primary walk-in closet light"\]/.test(lightingMap) && /"REAR LOUNGE"\s*:\s*\["rear lounge lights"\]/.test(lightingMap), "Primary Suite or Rear Lounge is not mapped to its renamed lighting");
+check("24 open rear lounge", !/fixed:\s*-3\.2,\s*start:\s*-5,\s*end:\s*5/.test(upperPartitions), "a wall still closes the rear lounge off from the stair landing");
+check("24 private rear suites", /openings:\s*\[\s*\]/s.test(primaryFrontWall) && /openings:\s*\[\s*\]/s.test(eastRearFrontWall), "the two rear suites still use their former front-room doors instead of lounge doors");
+check("24 lounge suite doors", /center:\s*-6\.4[^\n]*primary suite lounge door/.test(westRearSpine) && /center:\s*-6\.4[^\n]*east rear suite lounge door/.test(eastRearSpine), "both rear suites do not have direct doors into the lounge");
+check("24 lounge picture windows", /const rearLoungeWindows\s*=\s*\[[\s\S]*?center:\s*-2\.3,\s*width:\s*3\.7,\s*bottom:\s*0\.38,\s*top:\s*2\.92[\s\S]*?center:\s*2\.3,\s*width:\s*3\.7,\s*bottom:\s*0\.38,\s*top:\s*2\.92/.test(exteriorWalls), "rear lounge does not have the two enlarged backyard picture windows");
+check("24 rear lounge furnishings", /addRug\(0,\s*-8\.35[\s\S]*?addSofa\(0,\s*-6\.45[\s\S]*?addTable\(0,\s*-8\.25/.test(upperFurnishings) && !/addBed\(0\.3,\s*-10\.1/.test(upperFurnishings), "rear lounge is not furnished as an open sitting area or still contains the former bed");
 
 const upperPortraitCount = count(upperGalleryPortraits, /artId:\s*"[^"]+"/g);
-const portraitsUseNewWall = count(upperGalleryPortraits, /fixed:\s*-3\.2/g) === 6
-  || /addWallPortrait\(\{[^;]*fixed:\s*-3\.2\b/s.test(upperFurnishings);
-check("24 upper-suite paintings", upperPortraitCount === 6 && portraitsUseNewWall && !/fixed:\s*-4\.9\b/.test(upperFurnishings), "six upper paintings were not moved from the deleted corridor wall to the new suite walls");
-for (const circuitName of ["west rear suite lights", "primary suite lights", "east rear suite lights"]) {
+const portraitsUseNewWall = /addWallPortrait\(\{\s*axis:\s*"x",\s*fixed:\s*-3\.2/.test(upperGalleryPortraits)
+  && count(upperGalleryPortraits, /addWallPortrait\(\{\s*axis:\s*"z"/g) === 2;
+check("24 upper-suite paintings", upperPortraitCount === 6 && portraitsUseNewWall && !/fixed:\s*-4\.9\b/.test(upperFurnishings), "six upper paintings were not redistributed across the private-suite and lounge walls");
+for (const circuitName of ["primary suite lights", "rear lounge lights", "east rear suite lights"]) {
   check("24 upper-suite paintings", count(upperGalleryPortraits, new RegExp(`circuitName:\\s*"${circuitName}"`, "g")) === 2, `${circuitName} does not own exactly two upper-suite portraits`);
 }
 check("24 upper-suite paintings", !/bedroom corridor lights/.test(upperGalleryPortraits), "upper paintings still depend on the removed corridor circuit");
@@ -694,17 +693,17 @@ check("24 brighter switch-owned fills", hasPracticalFill("foyer", 20, 5.2) && /f
 check("24 brighter switch-owned fills", hasPracticalFill("stair", 26, 6.2) && /stair\.addSwitch\(/.test(lightingBuild), "grand stair lacks a brighter switch-owned fill");
 check("24 brighter switch-owned fills", hasPracticalFill("upperLanding", 22, 5.2) && /upperLanding\.addSwitch\(/.test(lightingBuild), "upper landing lacks a brighter switch-owned fill");
 check("24 brighter switch-owned fills", hasPracticalFill("westFront", 18, 5.0) && hasPracticalFill("eastFront", 18, 5.0) && /westFront\.addSwitch\(/.test(lightingBuild) && /eastFront\.addSwitch\(/.test(lightingBuild), "front suites lack balanced switch-owned fill lights");
-for (const view of ["paintingRoomWestWall", "paintingRoomEastWall", "westRearSuiteDoor", "primarySuiteDoor", "eastRearSuiteDoor"]) {
+for (const view of ["paintingRoomWestWall", "paintingRoomEastWall", "rearLoungeEntry", "primarySuiteLoungeDoor", "eastRearSuiteLoungeDoor"]) {
   check("24 renovation QA views", mansion.includes(`${view}:`), `missing renovation inspection view ${view}`);
 }
-for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRearSuiteEntry", "primarySuiteEntry", "eastRearSuiteEntry"]) {
+for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoungeEntry", "primarySuiteLoungeEntry", "eastRearSuiteLoungeEntry"]) {
   check("24 renovation QA routes", qaHooks.includes(`${route}:`), `missing physical renovation route ${route}`);
 }
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-entry-lamps-5", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-rear-lounge-6", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

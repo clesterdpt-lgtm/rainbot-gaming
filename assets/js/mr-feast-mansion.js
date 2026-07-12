@@ -83,8 +83,8 @@
     "EAST FRONT SUITE": ["east front suite lights", "east front walk-in closet light"],
     "UPPER LANDING": ["upper landing lights"],
     "READING ROOM": ["reading room lights"],
-    "WEST REAR SUITE": ["west rear suite lights", "west rear walk-in closet light"],
     "PRIMARY SUITE": ["primary suite lights", "primary walk-in closet light"],
+    "REAR LOUNGE": ["rear lounge lights"],
     "EAST REAR SUITE": ["east rear suite lights", "east rear walk-in closet light"],
     "WINE CELLAR": ["wine cellar lights"],
     "ARCHIVE": ["archive lights"],
@@ -222,33 +222,31 @@
     upperRearRailB: [-4.2, FLOOR.UPPER, -1.8, -Math.PI / 2],
     readingRoomA: [6.0, FLOOR.UPPER, -2.3, -2.23],
     readingRoomB: [13.0, FLOOR.UPPER, 2.5, 1.01],
-    westRearSuiteC: [-13.2, FLOOR.UPPER, -3.75, -Math.PI / 2],
-    primarySuiteC: [0, FLOOR.UPPER, -3.75, 0],
+    primarySuiteC: [-13.2, FLOOR.UPPER, -3.75, -Math.PI / 2],
+    rearLoungeC: [0, FLOOR.UPPER, -3.75, 0],
     eastRearSuiteC: [13.2, FLOOR.UPPER, -3.75, Math.PI / 2],
     upperArtHouseDreams: [-12.5, FLOOR.UPPER, -5.0, Math.PI],
-    upperArtBanquet: [-3, FLOOR.UPPER, -5.0, Math.PI],
-    upperArtOrchard: [3, FLOOR.UPPER, -5.0, Math.PI],
+    upperArtBanquet: [-3.7, FLOOR.UPPER, -9.2, Math.PI / 2],
+    upperArtOrchard: [3.7, FLOOR.UPPER, -9.2, -Math.PI / 2],
     upperArtLastApplause: [7.2, FLOOR.UPPER, -5.0, Math.PI],
-    westRearSuiteA: [-10.8, FLOOR.UPPER, -6.2, -0.91],
-    westRearSuiteB: [-6.3, FLOOR.UPPER, -10.6, 2.13],
-    primarySuiteA: [-3.4, FLOOR.UPPER, -5.75, -0.93],
-    primarySuiteB: [3.35, FLOOR.UPPER, -10.8, 2.21],
+    primarySuiteA: [-10.8, FLOOR.UPPER, -6.2, -0.91],
+    primarySuiteB: [-6.3, FLOOR.UPPER, -10.6, 2.13],
+    rearLoungeA: [-3.4, FLOOR.UPPER, -5.75, -0.93],
+    rearLoungeB: [3.35, FLOOR.UPPER, -10.8, 2.21],
     eastRearSuiteA: [10.8, FLOOR.UPPER, -6.2, 0.91],
     eastRearSuiteB: [6.3, FLOOR.UPPER, -10.6, -2.13],
     westFrontClosetRoom: [-12.8, FLOOR.UPPER, 5.8, 0],
     westFrontClosetInside: [-12.8, FLOOR.UPPER, 4.0, Math.PI],
     eastFrontClosetRoom: [12.8, FLOOR.UPPER, 5.8, 0],
     eastFrontClosetInside: [12.8, FLOOR.UPPER, 4.0, Math.PI],
-    westRearClosetRoom: [-12.8, FLOOR.UPPER, -7.55, Math.PI],
-    westRearClosetInside: [-12.8, FLOOR.UPPER, -5.7, 0],
-    primaryClosetRoom: [3.2, FLOOR.UPPER, -7.55, Math.PI],
-    primaryClosetInside: [3.2, FLOOR.UPPER, -5.7, 0],
+    primaryClosetRoom: [-12.8, FLOOR.UPPER, -7.55, Math.PI],
+    primaryClosetInside: [-12.8, FLOOR.UPPER, -5.7, 0],
     eastRearClosetRoom: [12.8, FLOOR.UPPER, -7.55, Math.PI],
     eastRearClosetInside: [12.8, FLOOR.UPPER, -5.7, 0],
     powderRoomDoor: [-13.2, FLOOR.MAIN, -4.05, Math.PI],
-    westRearSuiteDoor: [-9.7, FLOOR.UPPER, -2.15, Math.PI],
-    primarySuiteDoor: [-4.15, FLOOR.UPPER, -2.15, 0],
-    eastRearSuiteDoor: [9.7, FLOOR.UPPER, -2.15, 0],
+    rearLoungeEntry: [-4.15, FLOOR.UPPER, -2.15, 0],
+    primarySuiteLoungeDoor: [-4.05, FLOOR.UPPER, -6.4, Math.PI / 2],
+    eastRearSuiteLoungeDoor: [4.05, FLOOR.UPPER, -6.4, -Math.PI / 2],
 
     wineCellarA: [-2.3, FLOOR.BASEMENT, 4.2, 2.2],
     wineCellarB: [-12.0, FLOOR.BASEMENT, 10.4, -0.9],
@@ -3027,8 +3025,8 @@
       [5, 15, 3.2, 12, "EAST FRONT SUITE"],
       [-5, 5, -3.2, 3.2, "UPPER LANDING"],
       [5, 15, -3.2, 3.2, "READING ROOM"],
-      [-15, -5, -12, -3.2, "WEST REAR SUITE"],
-      [-5, 5, -12, -3.2, "PRIMARY SUITE"],
+      [-15, -5, -12, -3.2, "PRIMARY SUITE"],
+      [-5, 5, -12, -3.2, "REAR LOUNGE"],
       [5, 15, -12, -3.2, "EAST REAR SUITE"],
     ];
     upperZones.forEach((r) => addRoomZone(upperMin, 9, r[0], r[1], r[2], r[3], "SECOND FLOOR", r[4]));
@@ -3112,7 +3110,15 @@
       { kind: "window", center: 0, width: 3.2, bottom: 0.35, top: 2.85 },
       ...upperWindows([5.9, 8.2, 11.5]),
     ] });
-    buildWallRun({ axis: "x", fixed: -12, start: -15, end: 15, floorY: FLOOR.UPPER, exterior: true, name: "upper-rear-wall", openings: upperWindows([-12.2, -9.3, -6.4, -3.3, 0, 3.3, 6.4, 9.4, 12.2]) });
+    const rearLoungeWindows = [
+      { kind: "window", center: -2.3, width: 3.7, bottom: 0.38, top: 2.92 },
+      { kind: "window", center: 2.3, width: 3.7, bottom: 0.38, top: 2.92 },
+    ];
+    buildWallRun({ axis: "x", fixed: -12, start: -15, end: 15, floorY: FLOOR.UPPER, exterior: true, name: "upper-rear-wall", openings: [
+      ...upperWindows([-12.2, -9.3, -6.4]),
+      ...rearLoungeWindows,
+      ...upperWindows([6.4, 9.4, 12.2]),
+    ] });
     buildWallRun({ axis: "z", fixed: -15, start: -12, end: 12, floorY: FLOOR.UPPER, exterior: true, name: "upper-west-wall", openings: upperWindows([-9.4, -6.7, 0, 6.4, 9.4]) });
     buildWallRun({ axis: "z", fixed: 15, start: -12, end: 12, floorY: FLOOR.UPPER, exterior: true, name: "upper-east-wall", openings: upperWindows([-9.4, -6.7, 0, 6.4, 9.4]) });
 
@@ -3174,25 +3180,19 @@
 
   function buildUpperPartitions() {
     buildWallRun({ axis: "z", fixed: -5, start: -12, end: 3.15, floorY: FLOOR.UPPER, name: "upper-west-rear-spine", openings: [
+      { kind: "door", center: -6.4, width: 1.24, label: "primary suite lounge door", direction: 1 },
       { kind: "door", center: 0, width: 1.08, label: "upper grand bathroom door", direction: -1 },
     ] });
     buildWallRun({ axis: "z", fixed: -5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-west-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.12, label: "west front suite door", direction: 1 }] });
     buildWallRun({ axis: "z", fixed: 5, start: -12, end: 3.15, floorY: FLOOR.UPPER, name: "upper-east-rear-spine", openings: [
+      { kind: "door", center: -6.4, width: 1.24, label: "east rear suite lounge door", direction: -1 },
       { kind: "door", center: 0, width: 1.08, label: "reading room door", direction: 1 },
     ] });
     buildWallRun({ axis: "z", fixed: 5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-east-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.12, label: "east front suite door", direction: -1 }] });
-    // The obsolete cross-house bedroom corridor has been absorbed into the
-    // three rear suites. One aligned wall plane now gives each enlarged room
-    // its own properly trimmed entrance.
-    buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-west-rear-front-wall", openings: [
-      { kind: "door", center: -9.7, width: 1.08, label: "west rear suite door", direction: -1 },
-    ] });
-    buildWallRun({ axis: "x", fixed: -3.2, start: -5, end: 5, floorY: FLOOR.UPPER, name: "upper-primary-front-wall", openings: [
-      { kind: "door", center: -4.15, width: 1.36, label: "primary suite door", direction: -1 },
-    ] });
-    buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 15, floorY: FLOOR.UPPER, name: "upper-east-rear-front-wall", openings: [
-      { kind: "door", center: 9.7, width: 1.08, label: "east rear suite door", direction: -1 },
-    ] });
+    // The center rear room is now an open lounge flowing around the stair
+    // guard. The side bedrooms stay private and open directly into the lounge.
+    buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-primary-front-wall", openings: [] });
+    buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 15, floorY: FLOOR.UPPER, name: "upper-east-rear-front-wall", openings: [] });
     buildWallRun({ axis: "x", fixed: 3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-west-front-divider", openings: [{ kind: "door", center: -9.7, width: 0.95, label: "west dressing room", direction: 1 }] });
     buildWallRun({ axis: "x", fixed: 3.2, start: 5, end: 15, floorY: FLOOR.UPPER, name: "upper-east-front-divider", openings: [{ kind: "door", center: 9.7, width: 0.95, label: "east dressing room", direction: -1 }] });
   }
@@ -3296,20 +3296,23 @@
     addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug);
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
-    new Cabinet({ name: "west rear walk-in closet", x: -12.8, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
-    addBed(0.3, -10.1, FLOOR.UPPER, Math.PI, 2.45, true);
+    new Cabinet({ name: "primary walk-in closet", x: -12.8, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
+    addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.greenRug, 0);
+    addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.velvet);
+    addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
+    addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
+    addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addFireplace(-4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
-    new Cabinet({ name: "primary walk-in closet", x: 3.2, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "east rear walk-in closet", x: 12.8, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
     for (const portrait of [
-      { x: -12.5, artId: "house-dreams-back", circuitName: "west rear suite lights" },
-      { x: -7.2, artId: "audit-of-souls", circuitName: "west rear suite lights" },
-      { x: -3, artId: "banquet-forgot-guests", circuitName: "primary suite lights" },
-      { x: 3, artId: "orchard-porcelain-teeth", circuitName: "primary suite lights" },
+      { x: -12.5, artId: "house-dreams-back", circuitName: "primary suite lights" },
+      { x: -7.2, artId: "audit-of-souls", circuitName: "primary suite lights" },
       { x: 7.2, artId: "last-applause", circuitName: "east rear suite lights" },
       { x: 12.5, artId: "generosity-engine", circuitName: "east rear suite lights" },
     ]) addWallPortrait({ axis: "x", fixed: -3.2, center: portrait.x, floorY: FLOOR.UPPER, centerY: 1.72, side: -1, width: 0.85, height: 1.24, color: 0x27252d, artId: portrait.artId, circuitName: portrait.circuitName });
+    addWallPortrait({ axis: "z", fixed: -5, center: -9.2, floorY: FLOOR.UPPER, centerY: 1.72, side: 1, width: 0.85, height: 1.24, color: 0x27252d, artId: "banquet-forgot-guests", circuitName: "rear lounge lights" });
+    addWallPortrait({ axis: "z", fixed: 5, center: -9.2, floorY: FLOOR.UPPER, centerY: 1.72, side: -1, width: 0.85, height: 1.24, color: 0x27252d, artId: "orchard-porcelain-teeth", circuitName: "rear lounge lights" });
   }
 
   function furnishBasement() {
@@ -3449,23 +3452,22 @@
     upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 22, 6.5, ["SECOND FLOOR", "MAIN LEVEL"], { contained: false });
     upperLanding.addSwitch(4.839, FLOOR.UPPER + 1.15, 2.4, -Math.PI / 2);
 
-    const westRear = new LightCircuit("west rear suite lights", FLOOR.UPPER, 0xffb66f, true);
-    westRear.addFixture(-9.6, -8.2, "small");
-    westRear.addFixtureSupportFill(-9.6, -8.2, 34, 5.9, 0.82);
-    westRear.addWallSconce(-8.35, FLOOR.UPPER + 1.9, -3.361, Math.PI, 27, 5.0, ["SECOND FLOOR"], -8.35, FLOOR.UPPER + 0.65, -6.1);
-    westRear.addSwitch(-5.161, FLOOR.UPPER + 1.15, -6.7, -Math.PI / 2);
-
     const primary = new LightCircuit("primary suite lights", FLOOR.UPPER, 0xffb66f, true);
-    primary.addFixture(0, -8.2, "small");
-    primary.addFixtureSupportFill(0, -8.2, 36, 6.0, 0.82);
-    primary.addWallSconce(0.9, FLOOR.UPPER + 1.9, -3.361, Math.PI, 28, 5.2, ["SECOND FLOOR"], 0.9, FLOOR.UPPER + 0.65, -6.15);
-    primary.addSwitch(-3.35, FLOOR.UPPER + 1.15, -3.361, Math.PI);
+    primary.addFixture(-9.6, -8.2, "small");
+    primary.addFixtureSupportFill(-9.6, -8.2, 34, 5.9, 0.82);
+    primary.addWallSconce(-8.35, FLOOR.UPPER + 1.9, -3.361, Math.PI, 27, 5.0, ["SECOND FLOOR"], -8.35, FLOOR.UPPER + 0.65, -6.1);
+    primary.addSwitch(-5.161, FLOOR.UPPER + 1.15, -5.2, -Math.PI / 2);
+
+    const rearLounge = new LightCircuit("rear lounge lights", FLOOR.UPPER, 0xffb66f, true);
+    rearLounge.addFixture(0, -8.2, "small");
+    rearLounge.addFixtureSupportFill(0, -8.2, 36, 6.0, 0.82);
+    rearLounge.addSwitch(-4.839, FLOOR.UPPER + 1.15, -4.3, Math.PI / 2);
 
     const eastRear = new LightCircuit("east rear suite lights", FLOOR.UPPER, 0xffb66f, true);
     eastRear.addFixture(9.6, -8.2, "small");
     eastRear.addFixtureSupportFill(9.6, -8.2, 34, 5.9, 0.82);
     eastRear.addWallSconce(8.35, FLOOR.UPPER + 1.9, -3.361, Math.PI, 27, 5.0, ["SECOND FLOOR"], 8.35, FLOOR.UPPER + 0.65, -6.1);
-    eastRear.addSwitch(5.161, FLOOR.UPPER + 1.15, -6.7, Math.PI / 2);
+    eastRear.addSwitch(5.161, FLOOR.UPPER + 1.15, -5.2, Math.PI / 2);
 
     const serviceUpper = new LightCircuit("service stair upper light", FLOOR.MAIN, 0xffb06a, true);
     serviceUpper.addLevel("BASEMENT");
@@ -5609,8 +5611,8 @@
         eastSuite: [7, FLOOR.UPPER, 7, -Math.PI / 2],
         upperGrandBathroom: [-9.5, FLOOR.UPPER, 0, Math.PI / 2],
         readingRoom: [9.5, FLOOR.UPPER, 0, -Math.PI / 2],
-        westRearSuite: [-9.5, FLOOR.UPPER, -8.2, 0],
-        primary: [0, FLOOR.UPPER, -6.0, 0],
+        primary: [-9.5, FLOOR.UPPER, -8.2, 0],
+        rearLounge: [0, FLOOR.UPPER, -6.0, 0],
         eastRearSuite: [9.5, FLOOR.UPPER, -8.2, 0],
         basement: [0, FLOOR.BASEMENT, -2.0, Math.PI],
         wine: [-3.0, FLOOR.BASEMENT, 7.2, Math.PI / 2],
@@ -5913,23 +5915,22 @@
           actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
           expected: { inBounds: true, grounded: true, room: "PAINTING ROOM", minX: 9.75, maxX: 10.08 },
         },
-        westRearSuiteEntry: {
-          start: "westRearSuiteDoor",
-          actions: [{ yaw: 0, seconds: 1.4 }],
-          openDoors: true,
-          expected: { inBounds: true, grounded: true, room: "WEST REAR SUITE", maxZ: -3.55 },
+        rearLoungeEntry: {
+          start: "rearLoungeEntry",
+          actions: [{ yaw: 0, seconds: 1.5 }],
+          expected: { inBounds: true, grounded: true, room: "REAR LOUNGE", maxZ: -3.55 },
         },
-        primarySuiteEntry: {
-          start: "primarySuiteDoor",
-          actions: [{ yaw: 0, seconds: 1.4 }],
+        primarySuiteLoungeEntry: {
+          start: "primarySuiteLoungeDoor",
+          actions: [{ yaw: Math.PI / 2, seconds: 1.4 }],
           openDoors: true,
-          expected: { inBounds: true, grounded: true, room: "PRIMARY SUITE", maxZ: -3.25 },
+          expected: { inBounds: true, grounded: true, room: "PRIMARY SUITE", maxX: -5.35 },
         },
-        eastRearSuiteEntry: {
-          start: "eastRearSuiteDoor",
-          actions: [{ yaw: 0, seconds: 1.4 }],
+        eastRearSuiteLoungeEntry: {
+          start: "eastRearSuiteLoungeDoor",
+          actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
           openDoors: true,
-          expected: { inBounds: true, grounded: true, room: "EAST REAR SUITE", maxZ: -3.55 },
+          expected: { inBounds: true, grounded: true, room: "EAST REAR SUITE", minX: 5.35 },
         },
         stairToBallroom: {
           start: "behindStair",

@@ -5124,7 +5124,7 @@ body.arcade-home::before {
   padding: 0 8px 8px;
 }
 
-.games-section-stack {
+.directory-grid.games-section-stack {
   gap: 14px;
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
@@ -5132,6 +5132,15 @@ body.arcade-home::before {
 
 .games-section__grid {
   padding-inline: 0;
+}
+
+/* Card grid inside each games.html section. A fixed max track (420px) makes
+   auto-fill undercount columns at laptop widths (1223px inner fits only 2x420),
+   so cards flex with 1fr to fill 3-up from ~1000px while staying single-column
+   on mobile via the min(100%, ...) floor. Specificity beats the shared
+   .directory-grid media-query rules without touching homepage grids. */
+.directory-grid.games-section__grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
 }
 
 .games-section {

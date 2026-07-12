@@ -4796,7 +4796,21 @@ function fitGameCanvases() {
   });
 }
 
+function initSkipLink() {
+  const main = document.querySelector("main");
+  if (!main) return;
+  if (!main.id) main.id = "main-content";
+  if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+  if (document.querySelector(".skip-link")) return;
+  const link = document.createElement("a");
+  link.className = "skip-link";
+  link.href = `#${main.id}`;
+  link.textContent = "Skip to content";
+  document.body.insertAdjacentElement("afterbegin", link);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  initSkipLink();
   RBSfx.init();
   RBGameActivity.init();
   initSearchPage();

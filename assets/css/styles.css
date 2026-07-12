@@ -40,6 +40,33 @@ a:hover { text-decoration: underline; }
 
 img { max-width: 100%; display: block; }
 
+/* ===== Skip to content (keyboard a11y) ===== */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 2px solid var(--accent-2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-160%);
+  transition: transform 0.16s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  text-decoration: none;
+}
+
 /* ===== Animated background grid ===== */
 body::before {
   content: "";
@@ -7335,7 +7362,7 @@ body.arcade-home::before {
 
 .slopwire-card__body small {
   color: var(--arcade-cyan);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
 }
 
@@ -7372,7 +7399,7 @@ body.arcade-home::before {
   gap: 16px;
   min-width: 0;
   padding: 0 10px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .slopwire-card__meta b,
@@ -9604,7 +9631,7 @@ body.arcade-home::before {
   color: var(--arcade-cyan);
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1.35;
   margin-bottom: 5px;
@@ -9772,7 +9799,7 @@ body.arcade-home::before {
 .rb-leaderboard-empty {
   color: var(--arcade-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1.45;
 }

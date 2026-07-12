@@ -1958,22 +1958,46 @@
     return mesh;
   }
 
-  function addContinuousWallTrim(axis, fixed, start, end, floorY, height, material, name) {
-    const length = end - start;
-    if (length <= 0.04 || floorY < FLOOR.MAIN || material === M.limestone) return;
-    const center = (start + end) / 2;
-    const trimLength = Math.max(0.05, length - 0.02);
-    if (axis === "x") {
-      box({ name: `${name}-baseboard-a`, w: trimLength, h: 0.18, d: 0.055, x: center, y: floorY + 0.09, z: fixed + 0.165, material: M.trim, cast: false });
-      box({ name: `${name}-baseboard-b`, w: trimLength, h: 0.18, d: 0.055, x: center, y: floorY + 0.09, z: fixed - 0.165, material: M.trim, cast: false });
-      box({ name: `${name}-crown-a`, w: trimLength, h: 0.16, d: 0.075, x: center, y: floorY + height - 0.08, z: fixed + 0.17, material: M.trim, cast: false });
-      box({ name: `${name}-crown-b`, w: trimLength, h: 0.16, d: 0.075, x: center, y: floorY + height - 0.08, z: fixed - 0.17, material: M.trim, cast: false });
-    } else {
-      box({ name: `${name}-baseboard-a`, w: 0.055, h: 0.18, d: trimLength, x: fixed + 0.165, y: floorY + 0.09, z: center, material: M.trim, cast: false });
-      box({ name: `${name}-baseboard-b`, w: 0.055, h: 0.18, d: trimLength, x: fixed - 0.165, y: floorY + 0.09, z: center, material: M.trim, cast: false });
-      box({ name: `${name}-crown-a`, w: 0.075, h: 0.16, d: trimLength, x: fixed + 0.17, y: floorY + height - 0.08, z: center, material: M.trim, cast: false });
-      box({ name: `${name}-crown-b`, w: 0.075, h: 0.16, d: trimLength, x: fixed - 0.17, y: floorY + height - 0.08, z: center, material: M.trim, cast: false });
+  function wallTrimSpans(start, end, openings) {
+    const passages = openings
+      .filter((opening) => opening.kind !== "window")
+      .map((opening) => ({
+        left: Math.max(start, opening.center - opening.width / 2),
+        right: Math.min(end, opening.center + opening.width / 2),
+      }))
+      .filter((opening) => opening.right > start && opening.left < end)
+      .sort((a, b) => a.left - b.left);
+    const spans = [];
+    let cursor = start;
+    for (const passage of passages) {
+      if (passage.left - cursor > 0.04) spans.push([cursor, passage.left]);
+      cursor = Math.max(cursor, passage.right);
     }
+    if (end - cursor > 0.04) spans.push([cursor, end]);
+    return spans;
+  }
+
+  function addWallTrimSpan(axis, fixed, start, end, y, height, depth, faceOffset, name) {
+    const insetStart = start + 0.01;
+    const insetEnd = end - 0.01;
+    const length = insetEnd - insetStart;
+    if (length <= 0.04) return;
+    const center = (insetStart + insetEnd) / 2;
+    if (axis === "x") {
+      box({ name: `${name}-a`, w: length, h: height, d: depth, x: center, y, z: fixed + faceOffset, material: M.trim, cast: false });
+      box({ name: `${name}-b`, w: length, h: height, d: depth, x: center, y, z: fixed - faceOffset, material: M.trim, cast: false });
+    } else {
+      box({ name: `${name}-a`, w: depth, h: height, d: length, x: fixed + faceOffset, y, z: center, material: M.trim, cast: false });
+      box({ name: `${name}-b`, w: depth, h: height, d: length, x: fixed - faceOffset, y, z: center, material: M.trim, cast: false });
+    }
+  }
+
+  function addContinuousWallTrim(axis, fixed, start, end, floorY, height, material, openings, name) {
+    if (end - start <= 0.04 || floorY < FLOOR.MAIN || material === M.limestone) return;
+    addWallTrimSpan(axis, fixed, start, end, floorY + height - 0.08, 0.16, 0.075, 0.17, `${name}-crown`);
+    wallTrimSpans(start, end, openings).forEach((span, index) => {
+      addWallTrimSpan(axis, fixed, span[0], span[1], floorY + 0.09, 0.18, 0.055, 0.165, `${name}-baseboard-${index}`);
+    });
   }
 
   function addWindow(axis, fixed, center, floorY, opening, exterior) {
@@ -2033,7 +2057,7 @@
       material = floorY === FLOOR.BASEMENT ? M.limestone : M.wallpaper,
       openings = [], name = "wall", exterior = false,
     } = options;
-    addContinuousWallTrim(axis, fixed, start, end, floorY, height, material, name);
+    addContinuousWallTrim(axis, fixed, start, end, floorY, height, material, openings, name);
     const sorted = openings.slice().sort((a, b) => a.center - b.center);
     let cursor = start;
     for (let i = 0; i < sorted.length; i += 1) {
@@ -3015,12 +3039,16 @@
   }
 
   function addFoyerPanelwork() {
+    const lowerRailY = FLOOR.MAIN + 0.34;
+    const upperRailY = FLOOR.MAIN + 1.52;
+    const panelCenterY = (lowerRailY + upperRailY) / 2;
+    const panelHeight = upperRailY - lowerRailY;
     for (const side of [-1, 1]) {
       const x = side * 4.81;
       for (const z of [4.1, 5.6, 9.0, 10.5]) {
-        box({ name: "foyer-wainscot-panel", w: 0.035, h: 1.08, d: 1.1, x, y: FLOOR.MAIN + 0.67, z, material: M.blackWood, cast: false });
-        for (const zz of [z - 0.57, z + 0.57]) box({ name: "foyer-panel-vertical", w: 0.055, h: 1.45, d: 0.045, x: x - side * 0.035, y: FLOOR.MAIN + 0.76, z: zz, material: M.brass, cast: false });
-        for (const yy of [0.04, 1.47]) box({ name: "foyer-panel-horizontal", w: 0.055, h: 0.045, d: 1.18, x: x - side * 0.035, y: FLOOR.MAIN + yy, z, material: M.brass, cast: false });
+        box({ name: "foyer-wainscot-panel", w: 0.035, h: panelHeight - 0.16, d: 1.1, x, y: panelCenterY, z, material: M.blackWood, cast: false });
+        for (const zz of [z - 0.57, z + 0.57]) box({ name: "foyer-panel-vertical", w: 0.055, h: panelHeight, d: 0.045, x: x - side * 0.035, y: panelCenterY, z: zz, material: M.brass, cast: false });
+        for (const y of [lowerRailY, upperRailY]) box({ name: "foyer-panel-horizontal", w: 0.055, h: 0.045, d: 1.18, x: x - side * 0.035, y, z, material: M.brass, cast: false });
       }
     }
     addBust(-3.85, 5.0, FLOOR.MAIN, Math.PI / 2);

@@ -139,6 +139,7 @@ const serviceStair = section("function buildServiceStaircase()", "function addRu
 const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
 const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
 const wallSegmentBuilder = section("function wallSegment(", "function addWindow(");
+const wallTrimSpanBuilder = section("function wallTrimSpans(", "function addContinuousWallTrim(");
 const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
@@ -162,6 +163,7 @@ const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFu
 const upperGalleryPortraits = upperFurnishings;
 const musicRoomFurnishings = section("// Music room", "// Painting room", mainFurnishings);
 const paintingRoomFurnishings = section("// Painting room", "// Dining room", mainFurnishings);
+const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSlabsAndCeilings()");
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
@@ -171,14 +173,40 @@ const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
 const eastRearSpine = namedWallRun("upper-east-rear-spine", upperPartitions);
 const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
 
-// 29. Crown and base trim belong to the authored wall run, not to the solid
-// wall fragments left after doors and windows are cut out. Each eligible run
-// therefore gets one uninterrupted trim pass before its openings are built.
-check("29 continuous wall trim", /function addContinuousWallTrim\(/.test(wallSegmentBuilder), "missing full-length wall-trim helper");
-check("29 continuous wall trim", !/baseboard|crown/.test(section("function wallSegment(", "function addContinuousWallTrim(")), "solid wall fragments still own trim and will leave gaps at openings");
-check("29 continuous wall trim", /addContinuousWallTrim\(axis, fixed, start, end, floorY, height, material, name\);/.test(wallRunBuilder), "buildWallRun does not create trim across its full authored span");
-check("29 continuous wall trim", wallRunBuilder.indexOf("addContinuousWallTrim(") < wallRunBuilder.indexOf("const sorted = openings"), "trim must be built independently before openings split the wall");
-check("29 continuous wall trim", count(wallSegmentBuilder, /baseboard-[ab]/g) === 4 && count(wallSegmentBuilder, /crown-[ab]/g) === 4, "continuous trim helper must cover both faces of x- and z-axis wall runs");
+// 29. Crown trim remains continuous over the entire authored wall run, while
+// baseboards continue below windows but stop at doors, arches, and open
+// walkways so every traversable threshold stays visually and physically clear.
+let wallTrimSpanProbe = null;
+try {
+  const spansFor = new Function(`${wallTrimSpanBuilder}\nreturn wallTrimSpans;`)();
+  wallTrimSpanProbe = {
+    windowOnly: spansFor(-10, 10, [{ kind: "window", center: 0, width: 6 }]),
+    passages: spansFor(-10, 10, [
+      { kind: "window", center: -7, width: 2 },
+      { kind: "door", center: -3, width: 2 },
+      { kind: "arch", center: 2, width: 2 },
+      { kind: "open", center: 7, width: 2 },
+    ]),
+  };
+} catch (_) {
+  wallTrimSpanProbe = null;
+}
+check("29 threshold-safe wall trim", /function wallTrimSpans\(/.test(wallSegmentBuilder), "missing passage-aware baseboard span helper");
+check("29 threshold-safe wall trim", JSON.stringify(wallTrimSpanProbe?.windowOnly) === JSON.stringify([[-10, 10]]), "windows must not interrupt the baseboard");
+check("29 threshold-safe wall trim", JSON.stringify(wallTrimSpanProbe?.passages) === JSON.stringify([[-10, -4], [-2, 1], [3, 6], [8, 10]]), "doors, arches, and open walkways must cut the baseboard span");
+check("29 threshold-safe wall trim", !/baseboard|crown/.test(section("function wallSegment(", "function wallTrimSpans(")), "solid wall fragments still own trim instead of the authored wall run");
+check("29 threshold-safe wall trim", /wallTrimSpans\(start, end, openings\)/.test(wallSegmentBuilder), "baseboards do not use the passage-aware spans");
+check("29 threshold-safe wall trim", /addContinuousWallTrim\(axis, fixed, start, end, floorY, height, material, openings, name\);/.test(wallRunBuilder), "buildWallRun does not pass its openings to the trim builder");
+check("29 threshold-safe wall trim", wallRunBuilder.indexOf("addContinuousWallTrim(") >= 0 && wallRunBuilder.indexOf("addContinuousWallTrim(") < wallRunBuilder.indexOf("const sorted = openings"), "trim must be authored before openings split the wall geometry");
+check("29 threshold-safe wall trim", /addWallTrimSpan\([^;]+start, end,[^;]+crown/s.test(wallSegmentBuilder), "crown trim no longer spans the full authored wall run");
+
+const foyerLowerRail = Number(foyerPanelwork.match(/const lowerRailY\s*=\s*FLOOR\.MAIN\s*\+\s*([\d.]+)/)?.[1]);
+const foyerUpperRail = Number(foyerPanelwork.match(/const upperRailY\s*=\s*FLOOR\.MAIN\s*\+\s*([\d.]+)/)?.[1]);
+check("30 aligned foyer panelwork", foyerLowerRail >= 0.28 && foyerLowerRail <= 0.45, "foyer panelwork lower rail must sit clearly above the baseboard");
+check("30 aligned foyer panelwork", foyerUpperRail >= 1.42 && foyerUpperRail <= 1.65, "foyer panelwork upper rail is outside the intended lower-wall datum");
+check("30 aligned foyer panelwork", foyerUpperRail - foyerLowerRail >= 1.0, "foyer panel frames are vertically cramped after raising the lower rail");
+check("30 aligned foyer panelwork", /const panelCenterY\s*=\s*\(lowerRailY \+ upperRailY\) \/ 2/.test(foyerPanelwork) && /const panelHeight\s*=\s*upperRailY - lowerRailY/.test(foyerPanelwork), "foyer panel frame center and height are not derived from shared rail datums");
+check("30 aligned foyer panelwork", /h:\s*panelHeight[^;]+y:\s*panelCenterY/.test(foyerPanelwork) && /for \(const y of \[lowerRailY, upperRailY\]\)/.test(foyerPanelwork), "foyer vertical and horizontal trim pieces do not align to the same frame edges");
 
 // 1. The rear upper-floor opening needs a complete visual guard and matching
 // invisible collision, kept in a dedicated helper so both parts stay aligned.
@@ -782,7 +810,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-continuous-trim-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-threshold-trim-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

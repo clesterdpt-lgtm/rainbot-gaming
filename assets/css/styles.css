@@ -7208,7 +7208,7 @@ body.arcade-home::before {
 }
 
 .home-media-grid .slopwire-card__body strong {
-  font-size: clamp(20px, 2vw, 29px);
+  font-size: clamp(17px, 1.6vw, 19px);
 }
 
 .slopwire-grid {
@@ -7342,14 +7342,17 @@ body.arcade-home::before {
 .slopwire-card__body strong {
   color: var(--arcade-white);
   font-family: var(--arcade-font);
-  font-size: clamp(23px, 2.6vw, 40px);
-  line-height: 1.02;
+  /* Press Start 2P is a blocky pixel face; long satirical headlines in a ~320px
+     column stacked one word per line and became unreadable at the old 33-40px.
+     Capped so the lead headline reads in a few scannable lines. */
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.1;
   text-transform: uppercase;
   text-shadow: 3px 0 0 rgba(255, 20, 144, 0.28), -2px 0 0 rgba(35, 223, 242, 0.18);
 }
 
 .slopwire-card:not(.slopwire-card--lead) .slopwire-card__body strong {
-  font-size: 23px;
+  font-size: 18px;
 }
 
 .slopwire-card__body span {

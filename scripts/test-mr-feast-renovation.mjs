@@ -436,6 +436,12 @@ check("19 hedge maze", mazeRows.join("").split("#").length - 1 >= 150, "long maz
 check("33 aligned east-lawn walkway", /east-lawn-house-walkway[^;]*w:\s*2\.5[^;]*d:\s*31\.05[^;]*x:\s*17\.35[^;]*z:\s*0\.775/.test(yardBuild), "east-lawn walkway does not terminate on the front carriage centerline");
 check("33 aligned east-lawn walkway", /east-lawn-front-yard-connector[^;]*w:\s*5\.1[^;]*d:\s*2\.4[^;]*x:\s*16\.05[^;]*z:\s*16\.3/.test(yardBuild), "east-lawn/front-yard connector is not aligned with the front carriage path");
 check("32 north maze access", /maze-north-access-spur/.test(yardBuild), "north maze entrance has no legible paved spur from the east-lawn walkway");
+const mazePortalBuilder = section("function addMazeEntrancePortal", "function buildHedgeMaze", yardBuild);
+check("35 matching maze portals", /const HEDGE_MAZE_PORTALS\s*=/.test(mazeLayout) && /id:\s*"rear"[^\n]*row:\s*19[^\n]*col:\s*0/.test(mazeLayout) && /id:\s*"north"[^\n]*row:\s*5[^\n]*col:\s*0/.test(mazeLayout), "rear and north maze portals do not share authored grid definitions");
+check("35 matching maze portals", /function addMazeEntrancePortal\(/.test(yardBuild) && /for \(const portal of HEDGE_MAZE_PORTALS\)/.test(yardBuild) && /addMazeEntrancePortal\(portal/.test(yardBuild), "both maze openings are not built through the same portal helper");
+for (const component of ["entrance-urn", "entrance-topiary", "entrance-arch-post", "entrance-arch", "entrance-crest"]) {
+  check("35 matching maze portals", mazePortalBuilder.includes(component), `shared maze portal is missing ${component}`);
+}
 check("19 hedge maze", /hedge-maze-walls/.test(yardBuild) && /physics\.addFixedBox\(/.test(yardBuild), "maze hedges lack aligned visible and physical walls");
 check("19 hedge maze", /addBoxInstanceBatch\("hedge-maze-walls"/.test(yardBuild) && /addOutdoorInstanceBatch\("hedge-maze-clipped-foliage"/.test(yardBuild), "expanded hedge geometry is no longer kept in two instanced draw batches");
 check("34 natural hedge silhouette", /function makeClippedHedgeGeometry\(\)/.test(yardBuild) && /new THREE\.BoxGeometry\(1,\s*1,\s*1,\s*2,\s*3,\s*2\)/.test(yardBuild) && /position\.setXYZ\(/.test(yardBuild), "maze hedges lack a continuous top-chamfered foliage shell");
@@ -597,11 +603,17 @@ check("33 maze corner lamps", count(cornerLampBlock, /role:\s*"corner"/g) === 4 
 check("33 maze corner lamps", !/role:\s*"exit"/.test(yardBuild) && !/mazeExitCell/.test(yardBuild), "former south-exit lamps still exist");
 check("20 maze lamp sources", /role:\s*"entrance"/.test(yardBuild) && /role:\s*"center"/.test(yardBuild) && /role:\s*"wayfinding"/.test(yardBuild) && /role:\s*"corner"/.test(yardBuild), "maze sources do not identify entrance, wayfinding, center, and corner fixtures");
 check("20 maze lamp sources", /contained:\s*true,[\s\S]*?castsLight:\s*true/.test(section("mazeWayfindingCells\.map", "}\),", yardBuild)), "maze fixtures do not use bounded downward light cones");
-check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild) && /renderedLightSources:\s*renderedMazeSources/.test(yardBuild), "diagnostics do not enumerate the thirteen actual rendered maze lights");
+check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild) && /renderedLightSources:\s*renderedMazeSources/.test(yardBuild), "diagnostics do not enumerate the seventeen actual rendered maze lights");
 check("32 maze lamp aiming", /Number\.isFinite\(settings\.targetX\)/.test(yardBuild) && /circuit\.addAimedSpotLight\(/.test(yardBuild) && count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /targetRow:/g) === 7, "maze lamps do not retain authored targets across all seven interior route sections");
 check("32 maze lamp coverage", /settings\.downward[\s\S]*?circuit\.addContainedSpotLight\(/.test(yardBuild) && /downward:\s*true/.test(section("mazeWayfindingCells\.map", "}\),", yardBuild)), "interior maze lamps do not cast overlapping broad downward pools");
-check("32 maze lamp visibility", /height:\s*3\.15,\s*intensity:\s*48/.test(yardBuild) && /source\.role === "center" \? 4\.35 : 3\.75/.test(yardBuild) && /source\.role === "center" \? 210 : 135/.test(yardBuild), "maze lamps are not uniformly taller and brighter while retaining a darker center-weighted hierarchy");
-check("33 maze corner lamp match", /height:\s*4\.35,[\s\S]*?intensity:\s*210,[\s\S]*?distance:\s*11\.4,[\s\S]*?angle:\s*1\.02,[\s\S]*?downward:\s*true/.test(section("mazeCornerCells\.map", "}\),", yardBuild)), "corner lamps do not match the center lamp height, brightness, reach, and cone");
+const mazeEntranceLampBlock = section("const mazeEntranceLampSources", "const mazeOuterPathCells", yardBuild);
+check("35 matching entrance lamps", /for \(const portal of HEDGE_MAZE_PORTALS\)/.test(mazeEntranceLampBlock) && /for \(const offsetZ of \[-1\.3, 1\.3\]\)/.test(mazeEntranceLampBlock), "both portals do not receive the same paired lamp layout");
+check("35 brighter entrance lamps", /height:\s*3\.75,[\s\S]*?intensity:\s*300,[\s\S]*?distance:\s*12\.8,[\s\S]*?angle:\s*1\.08,[\s\S]*?downward:\s*true/.test(mazeEntranceLampBlock), "maze entrance lamps are not using the brighter broad-pool profile");
+const outerPathLampBlock = section("const mazeOuterPathCells", "const mazeLampSources", yardBuild);
+check("35 outer-path lighting", count(outerPathLampBlock, /role:\s*"outer-path"/g) === 2 && /row:\s*11,\s*col:\s*0/.test(outerPathLampBlock) && /row:\s*15,\s*col:\s*0/.test(outerPathLampBlock), "west outer pathway lacks two evenly spaced real lamp sources");
+check("35 outer-path lighting", /height:\s*3\.75,[\s\S]*?intensity:\s*285,[\s\S]*?distance:\s*12\.5,[\s\S]*?angle:\s*1\.08/.test(outerPathLampBlock), "outer-path lamps are too weak or narrow to bridge the entrance pools");
+check("35 brighter maze lights", /source\.role === "center" \? 4\.35 : 3\.75/.test(yardBuild) && /source\.role === "center" \? 420 : 300/.test(yardBuild) && /source\.role === "center" \? 13\.2 : 12\.6/.test(yardBuild), "interior maze lamps did not receive the brighter center/wayfinding hierarchy");
+check("33 maze corner lamp match", /height:\s*4\.35,[\s\S]*?intensity:\s*420,[\s\S]*?distance:\s*13\.2,[\s\S]*?angle:\s*1\.1,[\s\S]*?downward:\s*true/.test(section("mazeCornerCells\.map", "}\),", yardBuild)), "corner lamps do not match the center lamp height, brightness, reach, and cone");
 check("20 maze light budget", count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /castsShadow:\s*true/g) === 1, "only the tall center maze lamp may spend a shadow map");
 check("20 maze light occlusion", /hedge-maze-walls[\s\S]*?true,\s*true\)/.test(yardBuild), "maze hedge walls do not cast shadows from the authored lamps");
 check("20 maze light occlusion", !/addPracticalLight\(25,\s*2\.(?:05|15),\s*-2(?:5|31)/.test(yardBuild), "source-less hidden PointLights remain in the hedge maze");
@@ -759,7 +771,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-painting-door-sconce-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-maze-portals-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

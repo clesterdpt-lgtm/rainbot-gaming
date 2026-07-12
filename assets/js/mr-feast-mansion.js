@@ -191,6 +191,10 @@
     centerX: 26.5,
     centerZ: -9.25,
   });
+  const HEDGE_MAZE_PORTALS = Object.freeze([
+    Object.freeze({ id: "rear", row: 19, col: 0 }),
+    Object.freeze({ id: "north", row: 5, col: 0 }),
+  ]);
 
   // Curated inspection points: two unobstructed, compositionally different
   // views for every named room/zone. QA uses these both as visual coverage and
@@ -4050,6 +4054,22 @@
     return clipped;
   }
 
+  function addMazeEntrancePortal(portal, size, groundY) {
+    const center = mazeCellCenter(portal.row, portal.col);
+    const facadeX = center.x - size * 0.76;
+    const prefix = `hedge-maze-${portal.id}`;
+    for (const z of [center.z - 1.35, center.z + 1.35]) {
+      cylinder({ name: `${prefix}-entrance-urn`, radius: 0.38, radiusTop: 0.3, radiusBottom: 0.46, height: 0.82, segments: 18, x: facadeX, y: groundY + 0.39, z, material: M.marble });
+      sphere({ name: `${prefix}-entrance-topiary`, radius: 0.68, x: facadeX, y: groundY + 1.38, z, material: M.hedge });
+      physics.addFixedBox(facadeX, groundY + 0.75, z, 0.88, 1.5, 0.88, 0);
+    }
+    const archNorthZ = center.z - 0.82;
+    const archSouthZ = center.z + 0.82;
+    for (const z of [archNorthZ, archSouthZ]) cylinder({ name: `${prefix}-entrance-arch-post`, radius: 0.055, height: 2.55, segments: 10, x: facadeX + 0.05, y: groundY + 1.28, z, material: M.brass });
+    addBeamBetween(`${prefix}-entrance-arch`, [facadeX + 0.05, groundY + 2.52, archNorthZ], [facadeX + 0.05, groundY + 2.52, archSouthZ], 0.065, M.brass);
+    sphere({ name: `${prefix}-entrance-crest`, radius: 0.16, x: facadeX + 0.05, y: groundY + 2.72, z: center.z, material: M.brass });
+  }
+
   function buildHedgeMaze() {
     const rows = HEDGE_MAZE_LAYOUT.rows;
     const columns = rows[0].length;
@@ -4078,20 +4098,7 @@
     });
     addBoxInstanceBatch("hedge-maze-walls", M.hedgeDark, walls, true, true);
     addOutdoorInstanceBatch("hedge-maze-clipped-foliage", "clippedHedgeFoliage", makeClippedHedgeGeometry, M.hedge, foliageShells, false, true);
-    const entranceRow = rows.findIndex((row) => row.includes("S"));
-    const entranceColumn = rows[entranceRow].indexOf("S");
-    const entranceCenter = mazeCellCenter(entranceRow, entranceColumn);
-    const entranceFacadeX = entranceCenter.x - size * 0.76;
-    for (const z of [entranceCenter.z - 1.35, entranceCenter.z + 1.35]) {
-      cylinder({ name: "hedge-maze-entrance-urn", radius: 0.38, radiusTop: 0.3, radiusBottom: 0.46, height: 0.82, segments: 18, x: entranceFacadeX, y: groundY + 0.39, z, material: M.marble });
-      sphere({ name: "hedge-maze-entrance-topiary", radius: 0.68, x: entranceFacadeX, y: groundY + 1.38, z, material: M.hedge });
-      physics.addFixedBox(entranceFacadeX, groundY + 0.75, z, 0.88, 1.5, 0.88, 0);
-    }
-    const archNorthZ = entranceCenter.z - 0.82;
-    const archSouthZ = entranceCenter.z + 0.82;
-    for (const z of [archNorthZ, archSouthZ]) cylinder({ name: "hedge-maze-entrance-arch-post", radius: 0.055, height: 2.55, segments: 10, x: entranceFacadeX + 0.05, y: groundY + 1.28, z, material: M.brass });
-    addBeamBetween("hedge-maze-entrance-arch", [entranceFacadeX + 0.05, groundY + 2.52, archNorthZ], [entranceFacadeX + 0.05, groundY + 2.52, archSouthZ], 0.065, M.brass);
-    sphere({ name: "hedge-maze-entrance-crest", radius: 0.16, x: entranceFacadeX + 0.05, y: groundY + 2.72, z: entranceCenter.z, material: M.brass });
+    for (const portal of HEDGE_MAZE_PORTALS) addMazeEntrancePortal(portal, size, groundY);
     const solution = solveHedgeMaze();
     const entranceCell = solution[0] || { row: 0, col: 4 };
     const southGoalCell = solution[solution.length - 1] || { row: rows.length - 2, col: 5 };
@@ -4263,8 +4270,44 @@
     addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
-    const mazeEntranceRow = HEDGE_MAZE_LAYOUT.rows.findIndex((row) => row.includes("S"));
-    const mazeEntranceCell = mazeCellCenter(mazeEntranceRow, HEDGE_MAZE_LAYOUT.rows[mazeEntranceRow].indexOf("S"));
+    const mazeEntranceLampSources = [];
+    for (const portal of HEDGE_MAZE_PORTALS) {
+      const center = mazeCellCenter(portal.row, portal.col);
+      for (const offsetZ of [-1.3, 1.3]) mazeEntranceLampSources.push({
+        x: center.x - 1.0,
+        z: center.z + offsetZ,
+        height: 3.75,
+        intensity: 300,
+        distance: 12.8,
+        angle: 1.08,
+        downward: true,
+        contained: true,
+        castsLight: true,
+        castsShadow: false,
+        role: "entrance",
+        name: `maze-${portal.id}-entrance-lamp-${offsetZ < 0 ? "north" : "south"}`,
+      });
+    }
+    const mazeOuterPathCells = [
+      { row: 11, col: 0, role: "outer-path", name: "maze-outer-path-lamp-north" },
+      { row: 15, col: 0, role: "outer-path", name: "maze-outer-path-lamp-south" },
+    ].map((source) => {
+      const center = mazeCellCenter(source.row, source.col);
+      return {
+        x: center.x,
+        z: center.z,
+        height: 3.75,
+        intensity: 285,
+        distance: 12.5,
+        angle: 1.08,
+        downward: true,
+        contained: true,
+        castsLight: true,
+        castsShadow: false,
+        role: source.role,
+        name: source.name,
+      };
+    });
     const mazeCornerCells = [
       { row: 0, col: 0, role: "corner", name: "maze-north-west-corner-lamp" },
       { row: 0, col: 8, role: "corner", name: "maze-north-east-corner-lamp" },
@@ -4281,8 +4324,8 @@
       { row: 27, col: 6, targetRow: 27, targetCol: 5, role: "wayfinding" },
     ];
     const mazeLampSources = [
-      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z - 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z + 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      ...mazeEntranceLampSources,
+      ...mazeOuterPathCells,
       ...mazeWayfindingCells.map((source) => {
         const center = mazeCellCenter(source.row, source.col);
         const target = mazeCellCenter(source.targetRow, source.targetCol);
@@ -4292,9 +4335,9 @@
           targetX: target.x,
           targetZ: target.z,
           height: source.role === "center" ? 4.35 : 3.75,
-          intensity: source.role === "center" ? 210 : 135,
-          distance: source.role === "center" ? 11.4 : 10.8,
-          angle: source.role === "center" ? 1.02 : 0.98,
+          intensity: source.role === "center" ? 420 : 300,
+          distance: source.role === "center" ? 13.2 : 12.6,
+          angle: source.role === "center" ? 1.1 : 1.05,
           downward: true,
           contained: true,
           castsLight: true,
@@ -4309,9 +4352,9 @@
           x: center.x,
           z: center.z,
           height: 4.35,
-          intensity: 210,
-          distance: 11.4,
-          angle: 1.02,
+          intensity: 420,
+          distance: 13.2,
+          angle: 1.1,
           downward: true,
           contained: true,
           castsLight: true,

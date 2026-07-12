@@ -3194,6 +3194,9 @@
       { kind: "door", center: 7.3, width: 1.85, label: "library door", direction: -1 },
     ] });
     buildWallRun({ axis: "z", fixed: 5, start: -4.9, end: 12, floorY: FLOOR.MAIN, name: "main-east-front-spine", openings: [
+      // Direct stair-hall entry to the painting room, mirroring the main hall
+      // bathroom door opposite it on the west front spine.
+      { kind: "door", center: 0, width: 1.35, label: "stair painting door", direction: -1 },
       { kind: "door", center: 7.3, width: 1.85, label: "music room door", direction: 1 },
     ] });
     buildWallRun({ axis: "x", fixed: 3.2, start: -15, end: -5, floorY: FLOOR.MAIN, name: "main-library-divider", openings: [{ kind: "door", center: -9.7, width: 1.38, label: "library bathroom door", direction: 1 }] });
@@ -3413,7 +3416,9 @@
     // they can never participate in a floor handover.
     for (const side of [-1, 1]) {
       const wallX = side * 4.839;
-      stair.addWallSconce(wallX, FLOOR.MAIN + 2.18, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
+      // Mount at the same height as the rear pair below so all four stair-hall
+      // sconces read as one level line along each wall.
+      stair.addWallSconce(wallX, FLOOR.MAIN + 2.0, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
     }
     // A hidden omnidirectional bounce mid-void keeps the dark-oak stair, the
     // landing edge above, and the surrounding walls readable without adding

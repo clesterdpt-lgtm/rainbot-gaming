@@ -662,7 +662,7 @@ check("24 room naming", !lightingMap.includes('"BEDROOM CORRIDOR"') && !roomZone
 check("24 room naming", /"MUSIC ROOM"\s*:\s*\[\s*"music room lights"\s*\]/.test(lightingMap) && roomZones.includes('"MUSIC ROOM"') && /new LightCircuit\(\s*"music room lights"/.test(lightingBuild) && /music\.addSwitch\(/.test(lightingBuild), "renamed MUSIC ROOM is not fully mapped to a manually controlled circuit");
 check("24 room naming", /"PAINTING ROOM"\s*:\s*\[\s*"painting room lights"\s*\]/.test(lightingMap) && roomZones.includes('"PAINTING ROOM"') && /new LightCircuit\(\s*"painting room lights"/.test(lightingBuild) && /painting\.addSwitch\(/.test(lightingBuild), "PAINTING ROOM is not fully mapped to a manually controlled circuit");
 
-check("24 sealed painting-room stair walls", mainEastFrontSpine.length > 0 && !/center:\s*0\b/.test(mainEastFrontSpine) && /center:\s*7\.3\b/.test(mainEastFrontSpine), "former west painting-room opening into the grand stair remains, or the music-room doorway was lost");
+check("24 painting-room stair door", mainEastFrontSpine.length > 0 && /center:\s*0,\s*width:\s*1\.35,\s*label:\s*"stair painting door"/.test(mainEastFrontSpine) && /center:\s*7\.3\b/.test(mainEastFrontSpine), "painting room lost its direct grand-stair door, or the music-room doorway was lost");
 check("24 sealed painting-room stair walls", serviceShaftWall.length > 0 && /openings:\s*\[\s*\]/s.test(serviceShaftWall) && !/kind:\s*"(?:arch|door|open)"/.test(serviceShaftWall), "painting room still opens through its east wall into the service stair");
 
 for (const [label, pattern] of [
@@ -759,7 +759,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-archive-layout-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-painting-door-sconce-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

@@ -5525,7 +5525,7 @@ body.arcade-home::before {
   background-color: #030303;
   background-image:
     linear-gradient(90deg, rgba(1, 3, 5, 0.96) 0%, rgba(1, 3, 5, 0.72) 42%, rgba(1, 3, 5, 0.12) 100%),
-    url("../img/after-dark/rainbot-after-dark-hero.png?v=20260616-1");
+    url("../img/after-dark/rainbot-after-dark-hero.jpg?v=20260712-jpg");
   background-position:
     center,
     center 54%;
@@ -5777,7 +5777,7 @@ body.arcade-home::before {
     padding: 26px 18px;
     background-image:
       linear-gradient(180deg, rgba(1, 3, 5, 0.98) 0%, rgba(1, 3, 5, 0.82) 42%, rgba(1, 3, 5, 0.18) 100%),
-      url("../img/after-dark/rainbot-after-dark-hero.png?v=20260616-1");
+      url("../img/after-dark/rainbot-after-dark-hero.jpg?v=20260712-jpg");
     background-position:
       center,
       60% bottom;
@@ -6956,7 +6956,7 @@ body.arcade-home::before {
   background-color: #02050a;
   background-image:
     linear-gradient(90deg, rgba(2, 5, 10, 0.94) 0%, rgba(2, 5, 10, 0.74) 42%, rgba(2, 5, 10, 0.18) 100%),
-    url("../img/agent-games/rainbot-bot-homies.png?v=20260616-1");
+    url("../img/agent-games/rainbot-bot-homies.jpg?v=20260712-jpg");
   background-position:
     center,
     center 58%;

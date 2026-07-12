@@ -137,7 +137,7 @@ const rearGuard = section("function buildRearUpperWalkwayGuard()", "function bui
 const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
-const lightRendering = section("function syncLightRendering()", "function updatePlayer(");
+const lightRendering = section("function syncLightRendering(", "function updatePlayer(");
 const lightingBuild = section("function buildLighting()", "function registerRoomZones()");
 const yardLayout = section("const YARD_LAYOUT", "const HEDGE_MAZE_LAYOUT");
 const mazeLayout = section("const HEDGE_MAZE_LAYOUT", "const QA_ROOM_VIEWS");
@@ -436,8 +436,8 @@ check("20 room-local lighting", /this\.addContainedSpotLight\(/.test(section("ad
 check("20 room-local lighting", /sharedWallShadow\s*=\s*\/\^\(\?:music room\|painting room\)/.test(lightCircuitClass) && /castsRoomShadow\s*=\s*style\s*===\s*"atrium"\s*\|\|\s*\(style\s*===\s*"grand"\s*&&\s*supportsFullRoomShadowSet\)\s*\|\|\s*\(sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\)/.test(lightCircuitClass), "large fixtures or capable-context music/painting rooms lack sampler-gated shadow coverage");
 check("20 room-local lighting", /shadow\.mapSize\.set\(256, 256\)/.test(lightCircuitClass) && /shadow\.bias/.test(lightCircuitClass) && /shadow\.normalBias/.test(lightCircuitClass), "contained shadow lights exceed the local map budget or omit bias tuning");
 check("20 room-local lighting", /settings\.contained == null[\s\S]*?this\.name !== "estate exterior lights"/.test(lightCircuitClass), "interior practical lights do not default to bounded downward cones");
-check("20 room-local lighting", /corridor:\s*\{[\s\S]*?intensity:\s*135,[\s\S]*?distance:\s*5\.6,[\s\S]*?angle:\s*0\.5/.test(lightCircuitClass), "narrow corridors do not use the brighter contained cone profile");
-check("20 fixture-scaled light reach", /atrium:\s*\{\s*intensity:\s*250,\s*distance:\s*10\.2,\s*angle:\s*0\.72/.test(lightCircuitClass) && /grand:\s*\{[\s\S]*?intensity:\s*165,[\s\S]*?distance:\s*8\.4,[\s\S]*?angle:\s*0\.92/.test(lightCircuitClass) && /small:\s*\{\s*intensity:\s*130,\s*distance:\s*5\.6,\s*angle:\s*1\.02/.test(lightCircuitClass), "fixture reach no longer scales from atrium to formal chandelier to compact ceiling light");
+check("20 room-local lighting", /corridor:\s*\{[\s\S]*?intensity:\s*155,[\s\S]*?distance:\s*8\.6,[\s\S]*?angle:\s*0\.5/.test(lightCircuitClass), "narrow corridors do not use the brighter contained cone profile");
+check("20 fixture-scaled light reach", /atrium:\s*\{\s*intensity:\s*300,\s*distance:\s*14\.5,\s*angle:\s*0\.72/.test(lightCircuitClass) && /grand:\s*\{[\s\S]*?intensity:\s*205,[\s\S]*?distance:\s*12\.5,[\s\S]*?angle:\s*1\.04/.test(lightCircuitClass) && /small:\s*\{\s*intensity:\s*165,\s*distance:\s*9\.2,\s*angle:\s*1\.02/.test(lightCircuitClass), "fixture reach no longer scales from atrium to formal chandelier to compact ceiling light");
 check("20 fixture-scaled light reach", /fixtureStyle\s*=\s*style/.test(lightCircuitClass) && /authoredReach\s*=\s*containedDistance/.test(lightCircuitClass) && /light\.penumbra\s*=\s*profile\.penumbra/.test(lightCircuitClass), "runtime light diagnostics do not retain fixture scale and soft-falloff metadata");
 check("20 fixture-scaled light reach", /containedDistance\s*=\s*profile\.distance/.test(lightCircuitClass) && /containedAngle\s*=\s*sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\s*\?\s*Math\.max\(profile\.angle,\s*0\.92\)\s*:\s*profile\.angle/.test(lightCircuitClass), "a special-case small fixture can exceed the grand chandelier footprint");
 
@@ -596,10 +596,28 @@ const sconceBuilder = section("addWallSconce(x, y, z", "addFixtureSupportFill", 
 const aimedSpotBuilder = section("addAimedSpotLight(x, y, z", "addWallSconce", lightCircuitClass);
 check("24 architectural wall sconces", /wall-sconce-cup/.test(sconceBuilder) && /wall-sconce-frosted-shade/.test(sconceBuilder) && /wall-sconce-bulb/.test(sconceBuilder), "wall sconces still read as exposed glowing orbs instead of complete fixtures");
 check("25 stable-light performance budget", count(sconceBuilder, /addAimedSpotLight\(/g) === 1 && !/wall-wash/.test(sconceBuilder), "each wall sconce still allocates more than one real emitter");
-check("27 aimed sconce containment", /targetDistance\s*=\s*Math\.hypot\(/.test(aimedSpotBuilder) && /boundedDistance\s*=\s*Math\.min\(distance,\s*targetDistance\s*\+\s*0\.65\)/.test(aimedSpotBuilder) && /new THREE\.SpotLight\([^;]*boundedDistance/.test(aimedSpotBuilder) && /shadow\.camera\.far\s*=\s*boundedDistance/.test(aimedSpotBuilder), "a wall sconce cone can continue beyond its authored in-room target");
+check("27 aimed sconce containment", /targetDistance\s*=\s*Math\.hypot\(/.test(aimedSpotBuilder) && /boundedDistance\s*=\s*Math\.min\(distance,\s*targetDistance\s*\+\s*1\.35\)/.test(aimedSpotBuilder) && /new THREE\.SpotLight\([^;]*boundedDistance/.test(aimedSpotBuilder) && /shadow\.camera\.far\s*=\s*boundedDistance/.test(aimedSpotBuilder), "a wall sconce cone can continue beyond its authored in-room target");
 check("25 stable-light performance budget", /mobile\s*\?\s*1(?:\.0)?\s*:\s*1\.25/.test(resizeSystem) && /pixelRatio:\s*Number\(renderer\.getPixelRatio\(\)\.toFixed\(2\)\)/.test(diagnostics), "renderer does not cap Retina pixel workload or expose the active DPR");
 check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /state\.fps\s*<\s*40/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction");
 check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,[^\n;]*lanterns\);/.test(yardBuild), "one or more visibly glowing estate lanterns still lacks a real light source");
+
+// 28. Lighting realism and cross-floor continuity. Every fixture paints the
+// response a physical source would throw onto its own ceiling, wall, and the
+// surrounding air (decorative surfaces only — never extra emitters), and a
+// floor-context change hands fixtures over through a slow fade so lights can
+// never read as switching on approach or off on departure. Fixtures hanging
+// in the open stair volumes render on both adjacent floor contexts, and every
+// reachable light-count layout is compiled during boot so the fade itself
+// cannot hitch on shader compilation.
+const responseGlowBuilder = section("addCeilingResponseGlow(x, y, z", "addContainedSpotLight(", lightCircuitClass);
+check("28 fixture response glow", /addCeilingResponseGlow/.test(responseGlowBuilder) && /addSourceHalo/.test(responseGlowBuilder) && /this\.addCeilingResponseGlow\(/.test(lightCircuitClass) && /this\.addSourceHalo\(/.test(lightCircuitClass), "ceiling fixtures no longer paint a ceiling response and source halo around their real emitters");
+check("28 fixture response glow", /wall-sconce-updraft-glow/.test(sconceBuilder) && /this\.addSourceHalo\(/.test(sconceBuilder), "wall sconces no longer paint an updraft wash and scattered halo");
+check("28 response glow is decorative", !/new THREE\.(?:SpotLight|PointLight)/.test(responseGlowBuilder) && /AdditiveBlending/.test(responseGlowBuilder) && /glowMaterials\.push/.test(responseGlowBuilder), "response glows must stay switch-owned painted surfaces, never extra emitters");
+check("28 cross-floor fade", /if \(floorContextChanged\) syncLightRendering\("fade"\)/.test(updateLocation), "floor-context changes no longer request a faded light handover");
+check("28 cross-floor fade", /transition === "fade" && !state\.qa/.test(lightRendering) && /updateLightTransitions\(dt\)/.test(mansion) && /LIGHT_FADE_OUT_RATE/.test(mansion), "cross-floor fades are missing or QA captures are no longer deterministic snaps");
+check("28 stairwell continuity", count(lightingBuild, /\["MAIN LEVEL", "SECOND FLOOR"\]/g) >= 6 && count(lightingBuild, /\["SECOND FLOOR", "MAIN LEVEL"\]/g) >= 3 && /upperLanding\.addLevel\("MAIN LEVEL"\)/.test(lightingBuild) && /\["MAIN LEVEL", "BASEMENT"\]/.test(lightingBuild), "fixtures in the open stair volumes can still hand over mid-climb");
+check("28 shader layout prewarm", /prewarmLightingPrograms\(\)/.test(mansion) && /renderer\.compile\(scene, camera\)/.test(lightRendering) && /\["MAIN LEVEL", "SECOND FLOOR"\]/.test(lightRendering) && /\["MAIN LEVEL", "BASEMENT"\]/.test(lightRendering), "floor-union shader layouts are not prewarmed during boot");
+check("28 switch-stable light loop", /light\.visible = placed \|\| data\.renderFactor > 0\.004/.test(mansion), "a wall switch can restructure the shader light loop instead of only zeroing intensity");
 
 const hasPracticalFill = (owner, minIntensity, minDistance) => methodCalls(owner, "addPracticalLight", lightingBuild)
   .some((call) => call.values[3] >= minIntensity && call.values[4] >= minDistance);
@@ -617,7 +635,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260711-sconce-containment-pass-79", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260711-lighting-realism-pass-80", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

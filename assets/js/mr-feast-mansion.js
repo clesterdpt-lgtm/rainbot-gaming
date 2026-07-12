@@ -401,6 +401,8 @@
   const lightningMaterials = [];
   const yardWaterSystems = [];
   const auxiliaryInteriorLights = [];
+  const fadingLights = new Set();
+  const fadingBulbs = new Set();
   const portraitTextures = new Map();
   const portraitPlacements = [];
   const interiorDetailMeshes = [];
@@ -633,7 +635,7 @@
       roseRed: new THREE.MeshStandardMaterial({ color: 0x641b2a, roughness: 0.78 }),
       roseIvory: new THREE.MeshStandardMaterial({ color: 0xb9aa91, roughness: 0.78 }),
       roseMauve: new THREE.MeshStandardMaterial({ color: 0x63405f, roughness: 0.8 }),
-      lampGlow: new THREE.MeshStandardMaterial({ color: 0xffd8a4, emissive: 0xff9f45, emissiveIntensity: 0.88, roughness: 0.24 }),
+      lampGlow: new THREE.MeshStandardMaterial({ color: 0xffd8a4, emissive: 0xff9f45, emissiveIntensity: 1.0, roughness: 0.24 }),
     };
   }
 
@@ -1434,36 +1436,41 @@
       const profiles = {
         // Reach scales with the visible fixture: the two-storey chandeliers
         // carry furthest, formal chandeliers follow, and compact ceiling/wall
-        // practicals remain local. Intensity stays restrained; wider, softer
-        // falloff reveals silhouettes without lifting the mansion's exposure.
+        // practicals remain local. Cutoff distances sit well past each room's
+        // far wall so falloff is carried by inverse-square decay instead of
+        // the renderer's terminal cutoff window: surfaces near a fixture stay
+        // bright while far corners dim gradually rather than going black.
         atrium: {
-          intensity: 250,
-          distance: 10.2,
+          intensity: 300,
+          distance: 14.5,
           angle: 0.72,
           penumbra: 0.56,
         },
         grand: {
-          intensity: 165,
-          distance: 8.4,
-          angle: 0.92,
+          intensity: 205,
+          distance: 12.5,
+          // 1.04 rad lets the formal rooms' lower wall band and furniture
+          // catch the cone edge (source ~2.67m up, walls ~3.8m out); the
+          // upper walls stay dark so the rooms keep their gloom.
+          angle: 1.04,
           penumbra: 0.54,
         },
         small: {
-          intensity: 130,
-          distance: 5.6,
+          intensity: 165,
+          distance: 9.2,
           angle: 1.02,
           penumbra: 0.62,
         },
         bathroom: {
-          intensity: 105,
-          distance: 4.8,
+          intensity: 125,
+          distance: 7.4,
           angle: 0.78,
           penumbra: 0.6,
         },
-        basement: { intensity: 155, distance: 6.4, angle: 0.96, penumbra: 0.58 },
+        basement: { intensity: 180, distance: 9.2, angle: 0.96, penumbra: 0.58 },
         corridor: {
-          intensity: 135,
-          distance: 5.6,
+          intensity: 155,
+          distance: 8.6,
           angle: 0.5,
           penumbra: 0.58,
         },
@@ -1476,7 +1483,7 @@
         box({ name: `${this.name}-cage`, w: 0.42, h: 0.12, d: 0.42, x, y: ceilingY - 0.12, z, material: M.iron, cast: false });
         cylinder({ name: `${this.name}-wire`, radius: 0.012, height: 0.32, x, y: ceilingY + 0.02, z, material: M.iron, cast: false });
       } else {
-        const bulbEmissive = isGrand ? 1.0 : 0.82;
+        const bulbEmissive = isGrand ? 1.3 : 1.1;
         cylinder({ name: `${this.name}-chain`, radius: 0.018, height: isGrand ? 1.15 : 0.62, x, y: ceilingY - (isGrand ? 0.52 : 0.26), z, material: M.brass, cast: false });
         const ringY = ceilingY - (isGrand ? 1.05 : 0.58);
         const ring = new THREE.Mesh(new THREE.TorusGeometry(isGrand ? 0.72 : 0.42, 0.035, 8, 30), M.brass);
@@ -1496,13 +1503,22 @@
           bulb.userData.levels = new Set(this.levels);
           this.bulbs.push(bulb);
         }
+        this.addSourceHalo(x, ringY + 0.13, z, isGrand ? 1.9 : 1.15, isGrand ? 0.24 : 0.2);
       }
       if (style === "basement") {
-        const bulb = sphere({ name: `${this.name}-bulb`, radius: 0.1, x, y: ceilingY - 0.28, z, material: new THREE.MeshStandardMaterial({ color: 0xffd6a0, emissive: 0xff9b42, emissiveIntensity: this.on ? 0.7 : 0 }), cast: false });
-        bulb.userData.onEmissiveIntensity = 0.7;
+        const bulb = sphere({ name: `${this.name}-bulb`, radius: 0.1, x, y: ceilingY - 0.28, z, material: new THREE.MeshStandardMaterial({ color: 0xffd6a0, emissive: 0xff9b42, emissiveIntensity: this.on ? 0.9 : 0 }), cast: false });
+        bulb.userData.onEmissiveIntensity = 0.9;
         bulb.userData.levels = new Set(this.levels);
         this.bulbs.push(bulb);
+        this.addSourceHalo(x, ceilingY - 0.28, z, 0.85, 0.2);
       }
+      const ceilingGlowRadius = style === "atrium" ? 2.4
+        : style === "grand" ? 1.9
+          : style === "basement" ? 0.95
+            : style === "bathroom" ? 1.1
+              : style === "corridor" ? 1.15
+                : 1.35;
+      this.addCeilingResponseGlow(x, ceilingY - 0.02, z, ceilingGlowRadius, isGrand ? 0.27 : 0.22);
       // Every visible fixture owns one downward real-light cone. Larger
       // chandeliers carry their former fill brightness in that primary cone,
       // avoiding redundant point-light cube shadows while retaining reach.
@@ -1538,6 +1554,55 @@
       return light;
     }
 
+    // The response glows below are decorative surfaces, never emitters: every
+    // lumen still comes from the real fixture cones. They restore the light a
+    // physical fixture would throw onto its own ceiling, wall, and the dusty
+    // air around it, so the visible fixture reads as the source of the room's
+    // light instead of a glowing orb floating in the dark.
+    addCeilingResponseGlow(x, y, z, radius, opacity) {
+      const material = new THREE.MeshBasicMaterial({
+        map: M.lightGlowMap,
+        color: 0xffb877,
+        transparent: true,
+        opacity: this.on ? opacity : 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      material.userData.onOpacity = opacity;
+      material.userData.offOpacity = 0;
+      this.glowMaterials.push(material);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 26), material);
+      disc.name = `${this.name}-ceiling-response-glow`;
+      disc.position.set(x, y, z);
+      disc.rotation.x = Math.PI / 2;
+      disc.renderOrder = 3;
+      disc.castShadow = false;
+      disc.receiveShadow = false;
+      scene.add(disc);
+      return disc;
+    }
+
+    addSourceHalo(x, y, z, scale, opacity) {
+      const material = new THREE.SpriteMaterial({
+        map: M.lightGlowMap,
+        color: 0xffc890,
+        transparent: true,
+        opacity: this.on ? opacity : 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      material.userData.onOpacity = opacity;
+      material.userData.offOpacity = 0;
+      this.glowMaterials.push(material);
+      const halo = new THREE.Sprite(material);
+      halo.name = `${this.name}-source-halo`;
+      halo.position.set(x, y, z);
+      halo.scale.set(scale, scale, 1);
+      halo.renderOrder = 4;
+      scene.add(halo);
+      return halo;
+    }
+
     addContainedSpotLight(x, y, z, intensity, distance, angle, levels, targetY, castsShadow) {
       const light = new THREE.SpotLight(this.color, this.on ? intensity : 0, distance, angle || 0.82, 0.58, 2);
       light.name = `${this.name}-contained-spotlight`;
@@ -1566,7 +1631,11 @@
 
     addAimedSpotLight(x, y, z, targetX, targetY, targetZ, intensity, distance, angle, levels, castsShadow, role) {
       const targetDistance = Math.hypot(targetX - x, targetY - y, targetZ - z);
-      const boundedDistance = Math.min(distance, targetDistance + 0.65);
+      // The margin keeps each cone inside its own room, but it also feeds the
+      // renderer's terminal cutoff window: too tight and the pool at the aim
+      // point is strangled to a faint smudge. 1.35m keeps containment (rooms
+      // are 9m+ across) while the aim point receives roughly double the light.
+      const boundedDistance = Math.min(distance, targetDistance + 1.35);
       const light = new THREE.SpotLight(this.color, this.on ? intensity : 0, boundedDistance, angle || 0.58, 0.64, 2);
       light.name = `${this.name}-${role || "aimed"}-spotlight`;
       light.position.set(x, y, z);
@@ -1575,7 +1644,7 @@
       light.userData.roomBounded = true;
       light.userData.fixtureRole = role || "aimed";
       light.userData.authoredReach = boundedDistance;
-      light.userData.containmentMargin = 0.65;
+      light.userData.containmentMargin = 1.35;
       if (levels) light.userData.levels = new Set(levels);
       const target = new THREE.Object3D();
       target.name = `${light.name}-target`;
@@ -1616,11 +1685,34 @@
       shadeRim.rotation.x = Math.PI / 2;
       shadeRim.castShadow = false;
       scene.add(shadeRim);
-      const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffd8a6, emissive: 0xffa34f, emissiveIntensity: this.on ? 0.82 : 0 });
+      const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffd8a6, emissive: 0xffa34f, emissiveIntensity: this.on ? 1.05 : 0 });
       const bulb = sphere({ name: `${this.name}-wall-sconce-bulb`, radius: 0.045, x: fixtureX, y: y + 0.19, z: fixtureZ, material: bulbMaterial, cast: false });
-      bulb.userData.onEmissiveIntensity = 0.82;
+      bulb.userData.onEmissiveIntensity = 1.05;
       bulb.userData.levels = new Set(levels || this.levels);
       this.bulbs.push(bulb);
+      // A sconce's open frosted cup throws most of its light up the wall it
+      // hangs on; the real cone is aimed into the room, so paint that updraft
+      // on the wall plane and wrap the shade in a faint scattered halo.
+      const updraftMaterial = new THREE.MeshBasicMaterial({
+        map: M.lightGlowMap,
+        color: 0xffbe82,
+        transparent: true,
+        opacity: this.on ? 0.13 : 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      updraftMaterial.userData.onOpacity = 0.13;
+      updraftMaterial.userData.offOpacity = 0;
+      this.glowMaterials.push(updraftMaterial);
+      const updraft = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.45), updraftMaterial);
+      updraft.name = `${this.name}-wall-sconce-updraft-glow`;
+      updraft.position.set(x + normalX * 0.05, y + 0.88, z + normalZ * 0.05);
+      updraft.rotation.y = rotationY;
+      updraft.renderOrder = 3;
+      updraft.castShadow = false;
+      updraft.receiveShadow = false;
+      scene.add(updraft);
+      this.addSourceHalo(fixtureX, y + 0.27, fixtureZ, 0.55, 0.2);
       const roomLight = this.addAimedSpotLight(
         x + normalX * 0.36,
         y + 0.18,
@@ -1731,14 +1823,9 @@
       const next = Boolean(on);
       if (this.on === next) return;
       this.on = next;
-      for (const light of this.lights) {
-        const enclosure = light.userData.requiresOpenCabinet;
-        light.intensity = this.on && (!enclosure || enclosure.open || enclosure.angle > 0.025) ? light.userData.baseIntensity : 0;
-      }
-      for (const bulb of this.bulbs) {
-        const enclosure = bulb.userData.requiresOpenCabinet;
-        bulb.material.emissiveIntensity = this.on && (!enclosure || enclosure.open || enclosure.angle > 0.025) ? (bulb.userData.onEmissiveIntensity || 1.4) : 0;
-      }
+      // Light and bulb output is owned entirely by syncLightRendering so the
+      // switch state, floor context, and enclosure gating can never disagree.
+      // Silent callers batch several circuits and request one sync themselves.
       for (const material of this.glowMaterials) {
         const color = this.on ? material.userData.onColor : material.userData.offColor;
         if (color != null && material.color) material.color.setHex(color);
@@ -3170,8 +3257,11 @@
     foyer.addLevel("MAIN LEVEL");
     foyer.addFixture(0, 7.7, "atrium");
     foyer.addPracticalLight(0, FLOOR.UPPER + 1.9, 7.7, 20, 8.8, ["MAIN LEVEL", "SECOND FLOOR"], { contained: true, angle: 0.82, targetY: FLOOR.MAIN + 0.4 });
+    // The foyer is a double-height volume overlooked by the balcony: its
+    // sconces are visible from both floors, so they render on both floor
+    // contexts and never hand over during a stair transition.
     for (const side of [-1, 1]) for (const z of [5.35, 8.9]) {
-      foyer.addWallSconce(side * 4.81, FLOOR.MAIN + 2.23, z, -side * Math.PI / 2, 24, 5.6, ["MAIN LEVEL"], side * 0.6, FLOOR.MAIN + 0.75, z);
+      foyer.addWallSconce(side * 4.81, FLOOR.MAIN + 2.23, z, -side * Math.PI / 2, 24, 5.6, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.6, FLOOR.MAIN + 0.75, z);
     }
     foyer.addSwitch(-1.75, 1.15, 11.839, Math.PI);
     foyer.addSwitch(-4.839, FLOOR.UPPER + 1.15, 5.45, Math.PI / 2);
@@ -3180,9 +3270,12 @@
     const stair = new LightCircuit("grand stair lights", FLOOR.UPPER, 0xffb65d, true);
     stair.addLevel("MAIN LEVEL");
     stair.addFixture(0, -0.1, "atrium");
+    // Everything hanging in the open stair volume stays lit on both floor
+    // contexts: the player looks straight at these fixtures mid-climb, so
+    // they can never participate in a floor handover.
     for (const side of [-1, 1]) {
       const wallX = side * 4.839;
-      stair.addWallSconce(wallX, FLOOR.MAIN + 2.18, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
+      stair.addWallSconce(wallX, FLOOR.MAIN + 2.18, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
     }
     // A hidden bounce light keeps the dark-oak stair readable without adding
     // another low-hanging fixture to the circulation path.
@@ -3191,8 +3284,8 @@
     // warm return light that would come from the paired wall sconces. It is
     // owned by this circuit, so it never changes without the stair switch.
     stair.addPracticalLight(0, FLOOR.MAIN + 1.45, -0.45, 24, 5.0, ["MAIN LEVEL"], { contained: true, angle: 0.76 });
-    stair.addWallSconce(-4.839, FLOOR.MAIN + 2.0, -1.8, Math.PI / 2, 38, 5.7, ["MAIN LEVEL"], -0.45, FLOOR.MAIN + 0.85, -1.05);
-    stair.addWallSconce(4.839, FLOOR.MAIN + 2.0, -1.8, -Math.PI / 2, 38, 5.7, ["MAIN LEVEL"], 0.45, FLOOR.MAIN + 0.85, -1.05);
+    stair.addWallSconce(-4.839, FLOOR.MAIN + 2.0, -1.8, Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], -0.45, FLOOR.MAIN + 0.85, -1.05);
+    stair.addWallSconce(4.839, FLOOR.MAIN + 2.0, -1.8, -Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], 0.45, FLOOR.MAIN + 0.85, -1.05);
     stair.addSwitch(-4.839, 1.15, 2.45, Math.PI / 2);
 
     const library = new LightCircuit("library lights", FLOOR.MAIN, 0xffb56b, true);
@@ -3260,10 +3353,13 @@
     readingRoom.addWallSconce(14.839, FLOOR.UPPER + 1.9, 0, -Math.PI / 2, 28, 5.4, ["SECOND FLOOR"], 10.2, FLOOR.UPPER + 1.0, 0);
     readingRoom.addSwitch(5.161, FLOOR.UPPER + 1.15, 1.15, Math.PI / 2);
 
+    // The landing overlooks the open stair void, so its lights are readable
+    // from the main hall below and stay rendered on both floor contexts.
     const upperLanding = new LightCircuit("upper landing lights", FLOOR.UPPER, 0xffb86c, true);
-    upperLanding.addWallSconce(-4.839, FLOOR.UPPER + 1.95, -1.15, Math.PI / 2, 44, 5.8, ["SECOND FLOOR"], -0.5, FLOOR.UPPER + 0.72, -1.45);
-    upperLanding.addWallSconce(4.839, FLOOR.UPPER + 1.95, -1.15, -Math.PI / 2, 44, 5.8, ["SECOND FLOOR"], 0.5, FLOOR.UPPER + 0.72, -1.45);
-    upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 38, 6.0, ["SECOND FLOOR"], { contained: true, angle: 0.78 });
+    upperLanding.addLevel("MAIN LEVEL");
+    upperLanding.addWallSconce(-4.839, FLOOR.UPPER + 1.95, -1.15, Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], -0.5, FLOOR.UPPER + 0.72, -1.45);
+    upperLanding.addWallSconce(4.839, FLOOR.UPPER + 1.95, -1.15, -Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], 0.5, FLOOR.UPPER + 0.72, -1.45);
+    upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 38, 6.0, ["SECOND FLOOR", "MAIN LEVEL"], { contained: true, angle: 0.78 });
     upperLanding.addSwitch(4.839, FLOOR.UPPER + 1.15, 2.4, -Math.PI / 2);
 
     const westRear = new LightCircuit("west rear suite lights", FLOOR.UPPER, 0xffb66f, true);
@@ -3286,7 +3382,8 @@
 
     const serviceUpper = new LightCircuit("service stair upper light", FLOOR.MAIN, 0xffb06a, true);
     serviceUpper.addLevel("BASEMENT");
-    serviceUpper.addPracticalLight(12.55, FLOOR.MAIN + 3.3, -2.25, 10, 4.8, ["MAIN LEVEL"], { contained: true, angle: 0.32 });
+    // Visible up the open service-stair shaft from the basement flight.
+    serviceUpper.addPracticalLight(12.55, FLOOR.MAIN + 3.3, -2.25, 10, 4.8, ["MAIN LEVEL", "BASEMENT"], { contained: true, angle: 0.32 });
     serviceUpper.addSwitch(10.561, FLOOR.MAIN + 1.15, -1.25, Math.PI / 2);
 
     const serviceLower = new LightCircuit("service stair lower light", FLOOR.BASEMENT, 0xff9f51, true);
@@ -3870,7 +3967,7 @@
         YARD_LAYOUT.groundY + height + 0.11,
         z,
         settings.intensity || 24,
-        settings.distance || 5.2,
+        settings.distance || 6.6,
         ["MAIN LEVEL"],
         {
           contained: Boolean(settings.contained || settings.castsShadow),
@@ -3912,7 +4009,7 @@
     const bulbMesh = addOutdoorInstanceBatch("estate-lantern-bulbs", "estateLanternBulb", () => new THREE.SphereGeometry(1, 12, 8), M.lampGlow, bulbs, false, false);
     addOutdoorInstanceBatch("estate-lantern-caps", "estateLanternCap", () => new THREE.ConeGeometry(1, 1, 10), M.iron, caps, true, true);
     if (bulbMesh) {
-      M.lampGlow.userData.onEmissiveIntensity = 0.88;
+      M.lampGlow.userData.onEmissiveIntensity = 1.0;
       M.lampGlow.userData.offEmissiveIntensity = 0;
       circuit.glowMaterials.push(M.lampGlow);
     }
@@ -3923,16 +4020,16 @@
     const lanterns = [];
     addEstateLantern(estateExteriorLights, -4.5, 32.15, lanterns, true);
     addEstateLantern(estateExteriorLights, 4.5, 32.15, lanterns, true);
-    addEstateLantern(estateExteriorLights, -18.0, 3.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 5.2, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 5.2, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 5.2, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 5.2, angle: 0.78 });
+    addEstateLantern(estateExteriorLights, -18.0, 3.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
+    addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
+    addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
+    addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     const mazeLampSources = [
-      { x: 23.35, z: -16.95, height: 2.65, intensity: 18, distance: 4.2, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: 26.65, z: -16.95, height: 2.65, intensity: 18, distance: 4.2, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: 25, z: -25, height: 3.65, intensity: 190, distance: 5.6, angle: 0.7, contained: true, castsLight: true, castsShadow: true, role: "center", name: "maze-center-tall-lamp" },
-      { x: 22.7, z: -32.0, height: 2.65, intensity: 18, distance: 4.2, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
-      { x: 27.3, z: -32.0, height: 2.65, intensity: 18, distance: 4.2, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: 23.35, z: -16.95, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: 26.65, z: -16.95, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: 25, z: -25, height: 3.65, intensity: 190, distance: 7.2, angle: 0.7, contained: true, castsLight: true, castsShadow: true, role: "center", name: "maze-center-tall-lamp" },
+      { x: 22.7, z: -32.0, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: 27.3, z: -32.0, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
@@ -4528,8 +4625,9 @@
     updateExteriorDetailCulling();
     // Room labels never influence light state. Refresh only when the authored
     // floor context actually changes; switches, doors, and cabinets request
-    // their own explicit refreshes at interaction time.
-    if (floorContextChanged) syncLightRendering();
+    // their own explicit snap refreshes at interaction time. Floor-context
+    // refreshes fade so the handover is never readable as a switch flipping.
+    if (floorContextChanged) syncLightRendering("fade");
   }
 
   function findInteraction() {
@@ -4568,7 +4666,78 @@
     if (dom.promptText) dom.promptText.textContent = state.currentInteraction.getLabel();
   }
 
-  function syncLightRendering() {
+  // Cross-floor light continuity: an authored floor-context change retires
+  // and introduces fixtures through a slow, eye-adjustment fade instead of a
+  // hard toggle, so climbing a stair never reads as lights reacting to the
+  // player. Physical switches, cabinets, and QA stay instant ("snap"): a
+  // flipped switch must feel electrical and QA captures stay deterministic.
+  const LIGHT_FADE_IN_RATE = 1.6;
+  const LIGHT_FADE_OUT_RATE = 0.95;
+
+  function applyLightRenderState(light, placed, energized, snap) {
+    const data = light.userData;
+    if (data.renderFactor == null) data.renderFactor = light.intensity > 0 ? 1 : 0;
+    data.renderPlaced = placed;
+    data.renderTarget = placed && energized ? 1 : 0;
+    if (snap || data.renderFactor === data.renderTarget) {
+      data.renderFactor = data.renderTarget;
+      fadingLights.delete(light);
+    } else {
+      fadingLights.add(light);
+    }
+    const wasVisible = light.visible;
+    // A placed fixture stays in the render set even while switched off so a
+    // wall switch never restructures the shader light loop; a retired fixture
+    // leaves the set only once its fade has fully settled.
+    light.visible = placed || data.renderFactor > 0.004;
+    light.intensity = data.baseIntensity * data.renderFactor;
+    return light.visible !== wasVisible && Boolean(light.castShadow);
+  }
+
+  function applyBulbRenderState(bulb, lit, snap) {
+    const data = bulb.userData;
+    if (data.renderFactor == null) data.renderFactor = bulb.material.emissiveIntensity > 0 ? 1 : 0;
+    data.renderTarget = lit ? 1 : 0;
+    if (snap || data.renderFactor === data.renderTarget) {
+      data.renderFactor = data.renderTarget;
+      fadingBulbs.delete(bulb);
+    } else {
+      fadingBulbs.add(bulb);
+    }
+    bulb.material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+  }
+
+  function stepRenderFactor(data, dt) {
+    const rate = data.renderTarget > data.renderFactor ? LIGHT_FADE_IN_RATE : LIGHT_FADE_OUT_RATE;
+    data.renderFactor = data.renderTarget > data.renderFactor
+      ? Math.min(data.renderTarget, data.renderFactor + rate * dt)
+      : Math.max(data.renderTarget, data.renderFactor - rate * dt);
+    return data.renderFactor === data.renderTarget;
+  }
+
+  function updateLightTransitions(dt) {
+    if (!fadingLights.size && !fadingBulbs.size) return;
+    let shadowTopologyChanged = false;
+    for (const light of fadingLights) {
+      const data = light.userData;
+      const settled = stepRenderFactor(data, dt);
+      const wasVisible = light.visible;
+      light.visible = data.renderPlaced || data.renderFactor > 0.004;
+      light.intensity = data.baseIntensity * data.renderFactor;
+      if (light.visible !== wasVisible && light.castShadow) shadowTopologyChanged = true;
+      if (settled) fadingLights.delete(light);
+    }
+    for (const bulb of fadingBulbs) {
+      const data = bulb.userData;
+      const settled = stepRenderFactor(data, dt);
+      bulb.material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+      if (settled) fadingBulbs.delete(bulb);
+    }
+    if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
+  }
+
+  function syncLightRendering(transition) {
+    const fade = transition === "fade" && !state.qa;
     lightRenderPolicy = `manual-circuits-floor-stable:${state.currentFloor.toLowerCase().replaceAll(" ", "-")}`;
     let shadowTopologyChanged = false;
     for (const circuit of circuits) {
@@ -4585,17 +4754,14 @@
         const enclosure = light.userData.requiresOpenCabinet;
         const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
         const nextVisible = rendersInContext && rendersOnLevel && enclosureOpen;
-        if (light.castShadow && light.visible !== nextVisible) shadowTopologyChanged = true;
-        light.visible = nextVisible;
-        light.intensity = nextVisible && circuit.on ? light.userData.baseIntensity : 0;
+        if (applyLightRenderState(light, nextVisible, circuit.on, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
         const enclosure = bulb.userData.requiresOpenCabinet;
         const bulbLevels = bulb.userData.levels;
         const bulbRendersOnLevel = !bulbLevels || bulbLevels.has(state.currentFloor);
-        bulb.material.emissiveIntensity = circuit.on && rendersInContext && bulbRendersOnLevel && (!enclosure || enclosure.open || enclosure.angle > 0.025)
-          ? (bulb.userData.onEmissiveIntensity || 1.4)
-          : 0;
+        const lit = circuit.on && rendersInContext && bulbRendersOnLevel && (!enclosure || enclosure.open || enclosure.angle > 0.025);
+        applyBulbRenderState(bulb, lit, !fade);
       }
     }
     const allCircuitsOff = circuits.length > 0 && circuits.every((circuit) => !circuit.on);
@@ -4610,6 +4776,38 @@
     // closet or floor-local chandelier therefore requests exactly one refresh
     // rather than silently using an uninitialized map.
     if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
+  }
+
+  function prewarmLightingPrograms() {
+    // Forward-renderer programs are keyed by the visible light counts, so the
+    // first frame of every floor context — and of every mid-fade union of two
+    // adjacent contexts — would otherwise pause on shader compilation right
+    // as the player crosses a stair. Compile each reachable layout once while
+    // the loading veil is still up.
+    const layouts = [
+      ["SECOND FLOOR"],
+      ["BASEMENT"],
+      ["MAIN LEVEL", "SECOND FLOOR"],
+      ["MAIN LEVEL", "BASEMENT"],
+    ];
+    for (const layout of layouts) {
+      const floors = new Set(layout);
+      for (const circuit of circuits) {
+        const rendersOnFloor = layout.some((floor) => circuit.levels.has(floor));
+        const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
+        const rendersInContext = floors.has("MAIN LEVEL") ? isExteriorCircuit || rendersOnFloor : rendersOnFloor;
+        for (const light of circuit.lights) {
+          const lightLevels = light.userData.levels;
+          const rendersOnLevel = lightLevels ? layout.some((floor) => lightLevels.has(floor)) : rendersOnFloor;
+          const enclosure = light.userData.requiresOpenCabinet;
+          const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
+          light.visible = rendersInContext && rendersOnLevel && enclosureOpen;
+        }
+      }
+      renderer.compile(scene, camera);
+    }
+    // Restore the true floor-context state the prewarm layouts scrambled.
+    syncLightRendering();
   }
 
   function updatePlayer(fixedDt) {
@@ -4675,6 +4873,7 @@
 
     for (const object of animatedObjects) object.update(dt);
     for (const system of yardWaterSystems) system.update(dt);
+    updateLightTransitions(dt);
     if (rainSystem) rainSystem.update(dt);
     if (stormSystem) stormSystem.update(dt);
 
@@ -4790,6 +4989,12 @@
         activeLightPools: circuits.reduce((total, circuit) => total + (circuit.on ? circuit.glowMaterials.length : 0), 0),
         renderMode: "manual-circuits-floor-stable-real-emitters",
         renderPolicy: lightRenderPolicy,
+        crossFloorFade: {
+          fadingLights: fadingLights.size,
+          fadingBulbs: fadingBulbs.size,
+          fadeInRate: LIGHT_FADE_IN_RATE,
+          fadeOutRate: LIGHT_FADE_OUT_RATE,
+        },
         pixelRatio: Number(renderer.getPixelRatio().toFixed(2)),
         activeFloor: state.currentFloor,
         hemisphereIntensity: NIGHT_LIGHTING.hemisphereIntensity,
@@ -4902,6 +5107,20 @@
       }));
     };
     window.MrFeastFresh.triggerLightning = () => stormSystem && stormSystem.trigger();
+    window.MrFeastFresh.advanceLightFade = (seconds) => {
+      // Deterministic stepper for the cross-floor light fade so QA can drive
+      // and observe transitions even when the tab's animation frames are
+      // throttled (headless captures, hidden panes).
+      updateLocation();
+      updateLightTransitions(Math.max(0, Number(seconds) || 0));
+      const lighting = getDiagnostics().lighting;
+      return {
+        floor: lighting.activeFloor,
+        fadingLights: lighting.crossFloorFade.fadingLights,
+        fadingBulbs: lighting.crossFloorFade.fadingBulbs,
+        activeLocalLights: lighting.activeLocalLights,
+      };
+    };
     window.MrFeastFresh.inspectYard = () => getYardDiagnostics(physics.playerPosition());
     window.MrFeastFresh.qaViewNames = Object.keys(QA_ROOM_VIEWS);
     window.MrFeastFresh.teleport = (location) => {
@@ -5412,6 +5631,8 @@
       installDiagnostics();
       updateLocation();
       syncLightRendering();
+      setLoading("Warming the lamps", 92);
+      prewarmLightingPrograms();
       state.ready = true;
       state.loadFailed = false;
       state.failureAction = null;

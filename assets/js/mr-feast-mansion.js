@@ -59,6 +59,7 @@
   }
 
   const FLOOR = Object.freeze({ BASEMENT: -3.8, MAIN: 0, UPPER: 4.5 });
+  const MOBILE_RENDER_WIDTH = 720;
   const WALL_HEIGHT = 4.15;
   const UPPER_HEIGHT = 3.3;
   const NIGHT_LIGHTING = Object.freeze({
@@ -105,6 +106,11 @@
     "EAST LAWN": ["estate exterior lights"],
     "WEST LAWN": ["estate exterior lights"],
   });
+  const MOBILE_UPPER_PREWARM_ROOMS = Object.freeze([
+    "UPPER GRAND BATHROOM", "WEST FRONT SUITE", "FOYER BALCONY",
+    "EAST FRONT SUITE", "UPPER LANDING", "READING ROOM",
+    "PRIMARY SUITE", "REAR LOUNGE", "EAST REAR SUITE",
+  ]);
   const PORTRAIT_ARTWORKS = Object.freeze({
     "patron-empty-plates": Object.freeze({ title: "The Patron of Empty Plates", file: "portraits/portrait-patron-empty-plates-v1-ai.jpg" }),
     "generosity-engine": Object.freeze({ title: "The Generosity Engine", file: "portraits/portrait-generosity-engine-v1-ai.jpg" }),
@@ -349,6 +355,7 @@
     frameTime: 0,
     fps: 0,
     renderQuality: "high",
+    mobileRenderProfile: false,
     qa: new URLSearchParams(location.search).has("qa"),
   };
 
@@ -4708,7 +4715,9 @@
     const rect = dom.stage.getBoundingClientRect();
     const width = Math.max(1, Math.floor(rect.width));
     const height = Math.max(1, Math.floor(rect.height));
-    const mobile = width < 720;
+    const mobile = width < MOBILE_RENDER_WIDTH;
+    const mobileProfileChanged = state.mobileRenderProfile !== mobile;
+    state.mobileRenderProfile = mobile;
     // A Retina DPR of 1.6 made the stable full-floor light set shade roughly
     // 64% more pixels than 1.25. Keep the CSS canvas crisp while bounding the
     // fragment-light workload on laptops and mobile GPUs.
@@ -4727,6 +4736,10 @@
       : 70;
     camera.fov = clamp(portraitExpansion, 70, 96);
     camera.updateProjectionMatrix();
+    // Rotating a phone can cross the render-profile boundary without changing
+    // floors. Re-apply the bounded light layout once the scene is ready so a
+    // landscape-to-portrait resize cannot retain the desktop shader budget.
+    if (mobileProfileChanged && state.ready) syncLightRendering();
   }
 
   function requestPointerLock() {
@@ -5065,7 +5078,8 @@
       if (dom.floor) dom.floor.textContent = match.floorLabel;
       floorContextChanged = true;
     }
-    if (match.roomLabel !== state.currentRoom) {
+    const roomChanged = match.roomLabel !== state.currentRoom;
+    if (roomChanged) {
       state.currentRoom = match.roomLabel;
       if (dom.room) dom.room.textContent = match.roomLabel;
       if (state.qaRoute && state.qaRoute.status === "running" && !state.qaRoute.visitedRooms.includes(match.roomLabel)) {
@@ -5081,8 +5095,13 @@
     // every indoor main-floor fragment shader. Floor handovers still fade;
     // the shell boundary snaps because its walls already occlude the retiring
     // light set and avoiding a 48-light crossfade prevents a doorway hitch.
-    if (floorContextChanged) syncLightRendering("fade");
+    // Mobile GPUs cannot afford the temporary union of every main- and
+    // upper-floor emitter. The walls already hide the handover on the stairs,
+    // so phones switch directly to the bounded floor layout while desktop
+    // keeps the authored cross-floor fade.
+    if (floorContextChanged) syncLightRendering(state.mobileRenderProfile ? undefined : "fade");
     else if (lightContextChanged) syncLightRendering();
+    else if (roomChanged && state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR") syncLightRendering();
   }
 
   function findInteraction() {
@@ -5209,10 +5228,26 @@
     return !isExteriorCircuit && rendersOnFloor;
   }
 
+  function mobileUpperCircuitNames(roomLabel) {
+    const names = new Set(ROOM_LIGHTING[roomLabel] || ["upper landing lights"]);
+    // These open central zones see into the stair void. Keep the adjacent
+    // authored sources so the balcony cannot pop dark at a room-zone seam.
+    if (roomLabel === "FOYER BALCONY") {
+      names.add("upper landing lights");
+      names.add("grand stair lights");
+    } else if (roomLabel === "UPPER LANDING" || roomLabel === "LANDING") {
+      names.add("grand stair lights");
+    }
+    return names;
+  }
+
   function syncLightRendering(transition) {
     const fade = transition === "fade" && !state.qa;
     const floors = new Set([state.currentFloor]);
     const renderContext = getLightRenderContext();
+    const mobileUpperCircuits = state.mobileRenderProfile && floors.has("SECOND FLOOR")
+      ? mobileUpperCircuitNames(state.currentRoom)
+      : null;
     lightRenderPolicy = `manual-circuits-context-stable:${renderContext}`;
     let shadowTopologyChanged = false;
     for (const circuit of circuits) {
@@ -5221,6 +5256,18 @@
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
+      const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
+      const mobileCircuitIncluded = !mobileUpperBudget || mobileUpperCircuits.has(circuit.name);
+      // On phones, keep one real emitter per upper-floor circuit. Fixtures,
+      // bulbs, halos, and painted light response remain visible; only redundant
+      // support/sconce shader lights are retired. Prefer the primary ceiling
+      // fixture, then another visible fixture emitter, then the sole circuit
+      // light (walk-in closets).
+      const mobileCircuitLight = mobileUpperBudget
+        ? circuit.lights.find((light) => light.userData.fixtureRole === "primary")
+          || circuit.lights.find((light) => light.userData.visibleFixtureEmitter)
+          || circuit.lights[0]
+        : null;
       for (const light of circuit.lights) {
         const lightLevels = light.userData.levels;
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
@@ -5230,7 +5277,7 @@
         // slot whenever its floor context renders, so opening a cabinet can
         // never mint a novel light-count layout and stall on a mid-game
         // shader compile. The enclosure only gates whether it is energized.
-        const nextVisible = rendersInContext && rendersOnLevel;
+        const nextVisible = rendersInContext && rendersOnLevel && mobileCircuitIncluded && (!mobileUpperBudget || light === mobileCircuitLight);
         if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
@@ -5279,19 +5326,39 @@
       { floors: ["MAIN LEVEL", "SECOND FLOOR"], context: "main-interior", enclosureFloors: ["MAIN LEVEL"] },
       { floors: ["MAIN LEVEL", "BASEMENT"], context: "main-interior" },
     ];
-    for (const layout of layouts) {
+    // Phones switch floors without a light fade, so compiling multi-floor
+    // union shaders only burns startup time and risks exceeding mobile driver
+    // limits. Desktop still prewarms every authored transition layout.
+    const activeLayouts = state.mobileRenderProfile
+      ? layouts.filter((layout) => layout.floors.length === 1).flatMap((layout) => (
+        layout.floors[0] === "SECOND FLOOR"
+          ? MOBILE_UPPER_PREWARM_ROOMS.map((room) => ({ ...layout, room }))
+          : [layout]
+      ))
+      : layouts;
+    for (const layout of activeLayouts) {
       const floors = new Set(layout.floors);
       const enclosureFloors = new Set(layout.enclosureFloors || layout.floors);
+      const mobileUpperCircuits = state.mobileRenderProfile && floors.has("SECOND FLOOR")
+        ? mobileUpperCircuitNames(layout.room)
+        : null;
       for (const circuit of circuits) {
         const rendersOnFloor = layout.floors.some((floor) => circuit.levels.has(floor));
         const rendersInContext = circuitRendersInContext(circuit, floors, layout.context);
+        const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
+        const mobileCircuitIncluded = !mobileUpperBudget || mobileUpperCircuits.has(circuit.name);
+        const mobileCircuitLight = mobileUpperBudget
+          ? circuit.lights.find((light) => light.userData.fixtureRole === "primary")
+            || circuit.lights.find((light) => light.userData.visibleFixtureEmitter)
+            || circuit.lights[0]
+          : null;
         for (const light of circuit.lights) {
           const lightLevels = light.userData.levels;
           const placementFloors = light.userData.requiresOpenCabinet ? enclosureFloors : floors;
           const rendersOnLevel = lightLevels
             ? [...placementFloors].some((floor) => lightLevels.has(floor))
             : rendersOnFloor;
-          light.visible = rendersInContext && rendersOnLevel;
+          light.visible = rendersInContext && rendersOnLevel && mobileCircuitIncluded && (!mobileUpperBudget || light === mobileCircuitLight);
         }
       }
       renderer.compile(scene, camera);
@@ -5487,6 +5554,8 @@
         renderMode: "manual-circuits-context-stable-real-emitters",
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
+        mobileRenderProfile: state.mobileRenderProfile,
+        mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? 1 : null,
         shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0),
         shaderAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible).length,
         shaderSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)

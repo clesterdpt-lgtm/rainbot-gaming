@@ -131,6 +131,8 @@ const ballroomFurnishings = section("// Ballroom", "// Kitchen", mainFurnishings
 const kitchenFurnishings = section("// Kitchen", "// Foyer and gallery detail", mainFurnishings);
 const basementFurnishings = section("function furnishBasement()", "function buildLighting()");
 const slabs = section("function buildSlabsAndCeilings()", "function buildExteriorWalls()");
+const grandStairConfig = section("const GRAND_STAIR", "const YARD_LAYOUT");
+const grandStair = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
 const exteriorWalls = section("function buildExteriorWalls()", "function buildMainPartitions()");
 const serviceStair = section("function buildServiceStaircase()", "function addRug(");
 const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
@@ -274,6 +276,20 @@ check("11 service-stair sightline", ["front", "rear", "west", "east"].every((sid
 
 // 12. The deliberately split main slab must be closed beneath the grand stair.
 check("12 floor under grand stair", /floorSlab\(\s*["']main-floor-under-grand-stair["']/.test(slabs), "walkable/collidable floor slab under the grand staircase is missing");
+
+// The first grand-stair landing sits over the only direct foyer-to-ballroom
+// circulation lanes. Its finished fascia must clear the player comfortably,
+// and both flights must calculate independently so they still meet the raised
+// landing and the fixed upper-floor datum without gaps or overshoot.
+const grandMidLandingRise = Number(grandStairConfig.match(/MID_LANDING_RISE:\s*([\d.]+)/)?.[1]);
+const grandLowerStepCount = Number(grandStairConfig.match(/LOWER_STEP_COUNT:\s*(\d+)/)?.[1]);
+const grandUpperStepCount = Number(grandStairConfig.match(/UPPER_STEP_COUNT:\s*(\d+)/)?.[1]);
+const grandLandingFasciaUnderside = grandMidLandingRise - 0.245;
+check("12 grand-stair head clearance", near(grandMidLandingRise, 2.5, 0.001) && grandLandingFasciaUnderside >= 2.25, "grand mid-landing does not preserve at least 2.25m of finished foyer-to-ballroom clearance");
+check("12 grand-stair flight cadence", grandLowerStepCount === 14 && grandUpperStepCount === 12, "raised grand stair no longer uses the balanced 14-step lower and 12-step upper flights");
+check("12 grand-stair flight alignment", /const lowerRise\s*=\s*\(midY - FLOOR\.MAIN\) \/ lowerCount/.test(grandStair) && /const upperRise\s*=\s*\(FLOOR\.UPPER - midY\) \/ upperCount/.test(grandStair), "grand stair flights do not calculate independently from the shared landing datum");
+check("12 grand-stair collision alignment", /addInvisibleRamp\(0, lowerCenterZ, FLOOR\.MAIN, midY, lowerRampRun/.test(grandStair) && /addInvisibleRamp\(side \* branchCenter, branchCenterZ, midY, FLOOR\.UPPER, branchRun/.test(grandStair), "grand stair collision ramps do not meet the raised landing and upper floor");
+check("12 grand-stair QA anchors", /upperFlight:\s*\[-2\.65, FLOOR\.MAIN \+ GRAND_STAIR\.MID_LANDING_RISE/.test(qaHooks) && /midlandingSplit:\s*\[0, FLOOR\.MAIN \+ GRAND_STAIR\.MID_LANDING_RISE/.test(qaHooks), "grand stair QA views are no longer tied to the raised landing datum");
 
 // Prior lighting requirements remain part of the renovation contract: every
 // circuit starts on, room entry never mutates a circuit, closets have a real
@@ -635,7 +651,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260711-lighting-realism-pass-80", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260711-grand-stair-clearance-pass-81", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

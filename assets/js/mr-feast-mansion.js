@@ -125,6 +125,15 @@
     interactionRange: 2.35,
   });
 
+  // Keep the raised mid-landing and both flights on one authored datum. The
+  // landing is deliberately above the halfway point so the foyer-to-ballroom
+  // route has a generous finished head clearance beneath its fascia.
+  const GRAND_STAIR = Object.freeze({
+    MID_LANDING_RISE: 2.5,
+    LOWER_STEP_COUNT: 14,
+    UPPER_STEP_COUNT: 12,
+  });
+
   const YARD_LAYOUT = Object.freeze({
     groundY: -0.205,
     bounds: Object.freeze({ minX: -34, maxX: 34, minZ: -34, maxZ: 34 }),
@@ -2128,47 +2137,50 @@
   }
 
   function buildGrandStaircase() {
-    const count = 13;
     const run = 4.1;
-    const halfRise = 2.25;
-    const tread = run / count;
-    const rise = halfRise / count;
+    const lowerCount = GRAND_STAIR.LOWER_STEP_COUNT;
+    const upperCount = GRAND_STAIR.UPPER_STEP_COUNT;
+    const midY = FLOOR.MAIN + GRAND_STAIR.MID_LANDING_RISE;
+    const lowerRise = (midY - FLOOR.MAIN) / lowerCount;
+    const upperRise = (FLOOR.UPPER - midY) / upperCount;
+    const lowerTread = run / lowerCount;
+    const upperTread = run / upperCount;
     const lowerWidth = 2.38;
     const lowerRailX = 1.24;
-    const lowerCenterZ = 0.92;
     const lowerStartZ = 2.8;
     const lowerEndZ = -0.98;
+    const lowerRampRun = lowerStartZ - lowerEndZ;
+    const lowerCenterZ = (lowerStartZ + lowerEndZ) / 2;
     const stairBatches = { risers: [], nosings: [], runners: [], balusters: [] };
 
     // Thin stone treads, dark oak risers, a fitted runner, and visible
     // stringers replace the former stack of full-height marble boxes.
-    for (let i = 0; i < count; i += 1) {
-      const topY = FLOOR.MAIN + rise * (i + 1);
-      const z = lowerStartZ - tread * (i + 0.5);
-      addGrandStairStep({ name: `grand-lower-step-${i}`, x: 0, z, width: lowerWidth, depth: tread + 0.025, topY, rise, directionZ: -1, runnerWidth: 1.06, batches: stairBatches });
+    for (let i = 0; i < lowerCount; i += 1) {
+      const topY = FLOOR.MAIN + lowerRise * (i + 1);
+      const z = lowerStartZ - lowerTread * (i + 0.5);
+      addGrandStairStep({ name: `grand-lower-step-${i}`, x: 0, z, width: lowerWidth, depth: lowerTread + 0.025, topY, rise: lowerRise, directionZ: -1, runnerWidth: 1.06, batches: stairBatches });
       for (const x of [-lowerRailX, lowerRailX]) {
         stairBatches.balusters.push({ x, y: topY + 0.43, z });
       }
     }
     for (const x of [-1.02, 1.02]) {
-      addBoxBeamBetween("grand-lower-stringer", [x, FLOOR.MAIN + 0.08, lowerStartZ], [x, FLOOR.MAIN + halfRise + 0.08, lowerEndZ], 0.15, 0.25, M.blackWood);
+      addBoxBeamBetween("grand-lower-stringer", [x, FLOOR.MAIN + 0.08, lowerStartZ], [x, midY + 0.08, lowerEndZ], 0.15, 0.25, M.blackWood);
     }
     // A finished oak soffit hides the raw sawtooth silhouette when the flight
     // is viewed from the surrounding hall.  The offset edge battens make the
     // underside read as fitted millwork without changing the walkable ramp.
-    addBoxBeamBetween("grand-lower-soffit", [0, FLOOR.MAIN - 0.055, lowerStartZ], [0, FLOOR.MAIN + halfRise - 0.155, lowerEndZ], lowerWidth - 0.2, 0.11, M.darkWood);
+    addBoxBeamBetween("grand-lower-soffit", [0, FLOOR.MAIN - 0.055, lowerStartZ], [0, midY - 0.155, lowerEndZ], lowerWidth - 0.2, 0.11, M.darkWood);
     for (const x of [-0.94, 0.94]) {
-      addBoxBeamBetween("grand-lower-soffit-batten", [x, FLOOR.MAIN - 0.105, lowerStartZ], [x, FLOOR.MAIN + halfRise - 0.205, lowerEndZ], 0.055, 0.055, M.brass);
+      addBoxBeamBetween("grand-lower-soffit-batten", [x, FLOOR.MAIN - 0.105, lowerStartZ], [x, midY - 0.205, lowerEndZ], 0.055, 0.055, M.brass);
     }
-    addInvisibleRamp(0, lowerCenterZ, FLOOR.MAIN, FLOOR.MAIN + halfRise, 3.78, lowerWidth - 0.16, -1);
+    addInvisibleRamp(0, lowerCenterZ, FLOOR.MAIN, midY, lowerRampRun, lowerWidth - 0.16, -1);
     for (const x of [-lowerRailX, lowerRailX]) {
-      addBeamBetween("grand-lower-handrail", [x, FLOOR.MAIN + 0.97, lowerStartZ], [x, FLOOR.MAIN + halfRise + 0.97, lowerEndZ], 0.035, M.darkWood);
-      addSlopedRailGuard(x, lowerCenterZ, FLOOR.MAIN, FLOOR.MAIN + halfRise, 3.78, -1, "grand-lower-guard");
+      addBeamBetween("grand-lower-handrail", [x, FLOOR.MAIN + 0.97, lowerStartZ], [x, midY + 0.97, lowerEndZ], 0.035, M.darkWood);
+      addSlopedRailGuard(x, lowerCenterZ, FLOOR.MAIN, midY, lowerRampRun, -1, "grand-lower-guard");
       addStairNewel("grand-lower-bottom", x, lowerStartZ, FLOOR.MAIN, 0.98);
-      addStairNewel("grand-lower-top", x, lowerEndZ, FLOOR.MAIN + halfRise, 0.98);
+      addStairNewel("grand-lower-top", x, lowerEndZ, midY, 0.98);
     }
 
-    const midY = FLOOR.MAIN + halfRise;
     const midWidth = 6.7;
     const midDepth = 1.3;
     const midCenterZ = -1.625;
@@ -2192,31 +2204,33 @@
     const branchWidth = 1.7;
     const branchInner = 1.61;
     const branchOuter = 3.35;
-    const branchCenterZ = 1.06;
+    const branchEndZ = 3.1;
+    const branchRun = branchEndZ - lowerEndZ;
+    const branchCenterZ = (lowerEndZ + branchEndZ) / 2;
     for (const side of [-1, 1]) {
-      for (let i = 0; i < count; i += 1) {
-        const topY = midY + rise * (i + 1);
-        const z = lowerEndZ + tread * (i + 0.5);
-        addGrandStairStep({ name: `grand-upper-${side}-step-${i}`, x: side * branchCenter, z, width: branchWidth, depth: tread + 0.025, topY, rise, directionZ: 1, runnerWidth: 0.8, batches: stairBatches });
+      for (let i = 0; i < upperCount; i += 1) {
+        const topY = midY + upperRise * (i + 1);
+        const z = lowerEndZ + upperTread * (i + 0.5);
+        addGrandStairStep({ name: `grand-upper-${side}-step-${i}`, x: side * branchCenter, z, width: branchWidth, depth: upperTread + 0.025, topY, rise: upperRise, directionZ: 1, runnerWidth: 0.8, batches: stairBatches });
         for (const x of [side * branchInner, side * branchOuter]) {
           stairBatches.balusters.push({ x, y: topY + 0.43, z });
         }
       }
       for (const x of [side * (branchCenter - 0.68), side * (branchCenter + 0.68)]) {
-        addBoxBeamBetween(`grand-upper-stringer-${side}`, [x, midY + 0.08, lowerEndZ], [x, FLOOR.UPPER + 0.08, 3.1], 0.14, 0.23, M.blackWood);
+        addBoxBeamBetween(`grand-upper-stringer-${side}`, [x, midY + 0.08, lowerEndZ], [x, FLOOR.UPPER + 0.08, branchEndZ], 0.14, 0.23, M.blackWood);
       }
-      addBoxBeamBetween(`grand-upper-soffit-${side}`, [side * branchCenter, midY - 0.055, lowerEndZ], [side * branchCenter, FLOOR.UPPER - 0.155, 3.1], branchWidth - 0.18, 0.11, M.darkWood);
+      addBoxBeamBetween(`grand-upper-soffit-${side}`, [side * branchCenter, midY - 0.055, lowerEndZ], [side * branchCenter, FLOOR.UPPER - 0.155, branchEndZ], branchWidth - 0.18, 0.11, M.darkWood);
       for (const offset of [-0.65, 0.65]) {
-        addBoxBeamBetween(`grand-upper-soffit-batten-${side}`, [side * branchCenter + offset, midY - 0.105, lowerEndZ], [side * branchCenter + offset, FLOOR.UPPER - 0.205, 3.1], 0.05, 0.055, M.brass);
+        addBoxBeamBetween(`grand-upper-soffit-batten-${side}`, [side * branchCenter + offset, midY - 0.105, lowerEndZ], [side * branchCenter + offset, FLOOR.UPPER - 0.205, branchEndZ], 0.05, 0.055, M.brass);
       }
       for (const x of [side * branchInner, side * branchOuter]) {
-        addBeamBetween(`grand-upper-handrail-${side}`, [x, midY + 0.97, lowerEndZ], [x, FLOOR.UPPER + 0.97, 3.1], 0.035, M.darkWood);
-        addSlopedRailGuard(x, branchCenterZ, midY, FLOOR.UPPER, 4.08, 1, `grand-upper-guard-${side}`);
+        addBeamBetween(`grand-upper-handrail-${side}`, [x, midY + 0.97, lowerEndZ], [x, FLOOR.UPPER + 0.97, branchEndZ], 0.035, M.darkWood);
+        addSlopedRailGuard(x, branchCenterZ, midY, FLOOR.UPPER, branchRun, 1, `grand-upper-guard-${side}`);
         addStairNewel(`grand-upper-bottom-${side}`, x, lowerEndZ, midY, 0.98);
-        addStairNewel(`grand-upper-top-${side}`, x, 3.1, FLOOR.UPPER, 0.98);
+        addStairNewel(`grand-upper-top-${side}`, x, branchEndZ, FLOOR.UPPER, 0.98);
       }
       addBeamBetween(`grand-mid-transition-rail-${side}`, [side * lowerRailX, midY + 0.97, lowerEndZ], [side * branchInner, midY + 0.97, lowerEndZ], 0.035, M.darkWood);
-      addInvisibleRamp(side * branchCenter, branchCenterZ, midY, FLOOR.UPPER, 4.08, branchWidth - 0.12, 1);
+      addInvisibleRamp(side * branchCenter, branchCenterZ, midY, FLOOR.UPPER, branchRun, branchWidth - 0.12, 1);
     }
 
     addBoxInstanceBatch("grand-stair-risers", M.blackWood, stairBatches.risers, true, true);
@@ -5159,7 +5173,7 @@
         cabinetTest: [6.0, FLOOR.MAIN, -10.0, Math.PI],
         refrigeratorTest: [8.0, FLOOR.MAIN, -9.95, 0],
         stairBottom: [0, FLOOR.MAIN, 3.75, 0],
-        upperFlight: [-2.65, FLOOR.MAIN + 2.25, -0.72, Math.PI],
+        upperFlight: [-2.65, FLOOR.MAIN + GRAND_STAIR.MID_LANDING_RISE, -0.72, Math.PI],
         foyerWestDoor: [-3.82, FLOOR.MAIN, 7.3, Math.PI / 2],
         libraryDoorInside: [-6.18, FLOOR.MAIN, 7.3, -Math.PI / 2],
         foyerEastDoor: [3.82, FLOOR.MAIN, 7.3, -Math.PI / 2],
@@ -5167,7 +5181,7 @@
         libraryStudyDoor: [-9.7, FLOOR.MAIN, 4.45, 0],
         musicPaintingDoor: [8.2, FLOOR.MAIN, 4.45, 0],
         stairWide: [0, FLOOR.MAIN, 4.25, 0],
-        midlandingSplit: [0, FLOOR.MAIN + 2.25, -1.55, Math.PI],
+        midlandingSplit: [0, FLOOR.MAIN + GRAND_STAIR.MID_LANDING_RISE, -1.55, Math.PI],
         westTopExit: [-4.25, FLOOR.UPPER, 3.55, -Math.PI / 2],
         eastTopExit: [4.25, FLOOR.UPPER, 3.55, Math.PI / 2],
         westRampTop: [-2.65, FLOOR.UPPER, 3.55, 0],

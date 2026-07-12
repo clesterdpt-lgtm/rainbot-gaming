@@ -10,7 +10,7 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | --- | --- | --- |
 | ✅ Live | **AI Slop Factory** | Conveyor-belt content moderation panic. Sort cursed AI thumbnails, bot floods, scams, misinformation, and ragebait before the feed overloads. `/games/ai-slop-factory.html` |
 | ✅ Live | **Escape the Strait of Hormuz** | Frogger-style. You're a VLCC oil tanker. `/games/strait-of-hormuz.html` |
-| ✅ Live | **Mr. Feast: Last To Leave the Mansion** | Survival parody. Survive 24 hours, win $1M. `/games/mr-feast-mansion.html` |
+| ✅ Live | **Mr Feast's Mansion** | First-person architectural exploration through a furnished three-floor estate in a lightning storm. `/games/mr-feast-mansion.html` |
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
 | ✅ Live | **DoorCrash: No Tip Nitro** | 3D food-delivery lane runner. Keep the fries hot, dodge city chaos, and survive the no-tip economy. `/games/doorcrash-no-tip-nitro.html` |
 | ✅ Live | **Apop Demon Moggers** | 2D side-scroller. America's pop divas run-and-gun a demon boy band off the charts. Final boss: Lucifer Lipsync of Boyz II Hell. `/games/apop-demon-hunters.html` |
@@ -24,7 +24,9 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 
 ## 🚀 Run it locally
 
-The whole site is static. Any one of these works:
+For **Mr Feast's Mansion on macOS**, double-click `Open Mr Feast Mansion.command` in this folder. It starts a loopback-only server and opens the mansion automatically.
+
+To serve the whole static site manually, either of these works:
 
 ```bash
 # Python (no install)
@@ -32,11 +34,11 @@ python3 -m http.server 8000
 
 # Node
 npx http-server -p 8000
-
-# Or open index.html directly in your browser
 ```
 
 Then open <http://localhost:8000>.
+
+Do not open the mansion HTML with a `file://` address. Its local physics module requires the web server above.
 
 ## 📁 Project layout
 

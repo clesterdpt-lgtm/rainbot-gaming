@@ -62,7 +62,7 @@
   const WALL_HEIGHT = 4.15;
   const UPPER_HEIGHT = 3.3;
   const NIGHT_LIGHTING = Object.freeze({
-    hemisphereIntensity: 0.06,
+    hemisphereIntensity: 0.085,
     moonIntensity: 0.28,
     exposure: 0.76,
   });
@@ -412,6 +412,11 @@
   const auxiliaryInteriorLights = [];
   const fadingLights = new Set();
   const fadingBulbs = new Set();
+  // Every opening in the mansion shell the storm can be heard through:
+  // exterior windows (fixed glass attenuation) plus the exterior doors,
+  // whose openness follows the actual door swing.
+  const rainApertures = [];
+  const exteriorRainDoors = [];
   const portraitTextures = new Map();
   const portraitPlacements = [];
   const interiorDetailMeshes = [];
@@ -878,6 +883,16 @@
       if (axis === "x") this.root.position.set(center + hingeSide * width / 2, floorY, fixed);
       else this.root.position.set(fixed, floorY, center + hingeSide * width / 2);
       scene.add(this.root);
+      // Exterior doors are rain apertures: the storm pours through an open
+      // leaf, and still bleeds around a closed one far more than through wall.
+      if (/(?:front door|terrace door|kitchen service door)/i.test(name)) {
+        this.rainAperture = {
+          x: axis === "x" ? center : fixed,
+          y: floorY + height / 2,
+          z: axis === "x" ? fixed : center,
+        };
+        exteriorRainDoors.push(this);
+      }
 
       const panelOffset = -hingeSide * width / 2;
 
@@ -1445,40 +1460,45 @@
       const profiles = {
         // Reach scales with the visible fixture: the two-storey chandeliers
         // carry furthest, formal chandeliers follow, and compact ceiling/wall
-        // practicals remain local. Cutoff distances sit well past each room's
-        // far wall so falloff is carried by inverse-square decay instead of
-        // the renderer's terminal cutoff window: surfaces near a fixture stay
-        // bright while far corners dim gradually rather than going black.
+        // practicals remain local. `distance` orders the fixture scale and
+        // bounds the cone styles; `radius` is the omnidirectional clamp for
+        // room fixtures — generous enough to wash the room's own walls and
+        // ceiling in 360 degrees, but the terminal falloff window still dies
+        // just past a shared wall so neighbours read at most an under-door
+        // glow. Omni intensities are calibrated against captured luminance
+        // targets (~1.5x the cone-era screens): an omni's near field covers
+        // the whole room, so its candela sit far below the old cone values —
+        // raising them floodlights the mansion within a few dozen candela.
         atrium: {
-          intensity: 300,
+          intensity: 380,
           distance: 14.5,
-          angle: 0.72,
-          penumbra: 0.56,
+          angle: 0.85,
+          penumbra: 0.62,
         },
         grand: {
-          intensity: 205,
+          intensity: 95,
           distance: 12.5,
-          // 1.04 rad lets the formal rooms' lower wall band and furniture
-          // catch the cone edge (source ~2.67m up, walls ~3.8m out); the
-          // upper walls stay dark so the rooms keep their gloom.
           angle: 1.04,
           penumbra: 0.54,
+          radius: 6.8,
         },
         small: {
-          intensity: 165,
+          intensity: 48,
           distance: 9.2,
           angle: 1.02,
           penumbra: 0.62,
+          radius: 6.2,
         },
         bathroom: {
-          intensity: 125,
+          intensity: 34,
           distance: 7.4,
           angle: 0.78,
           penumbra: 0.6,
+          radius: 4.2,
         },
-        basement: { intensity: 180, distance: 9.2, angle: 0.96, penumbra: 0.58 },
+        basement: { intensity: 46, distance: 9.2, angle: 0.96, penumbra: 0.58, radius: 6.4 },
         corridor: {
-          intensity: 155,
+          intensity: 225,
           distance: 8.6,
           angle: 0.5,
           penumbra: 0.58,
@@ -1521,45 +1541,64 @@
         this.bulbs.push(bulb);
         this.addSourceHalo(x, ceilingY - 0.28, z, 0.85, 0.2);
       }
-      const ceilingGlowRadius = style === "atrium" ? 2.4
-        : style === "grand" ? 1.9
-          : style === "basement" ? 0.95
-            : style === "bathroom" ? 1.1
-              : style === "corridor" ? 1.15
-                : 1.35;
-      this.addCeilingResponseGlow(x, ceilingY - 0.02, z, ceilingGlowRadius, isGrand ? 0.27 : 0.22);
-      // Every visible fixture owns one downward real-light cone. Larger
-      // chandeliers carry their former fill brightness in that primary cone,
-      // avoiding redundant point-light cube shadows while retaining reach.
-      const targetY = style === "atrium" ? FLOOR.MAIN + 0.04 : this.floorY + 0.04;
-      const sharedWallShadow = /^(?:music room|painting room) lights$/i.test(this.name);
-      const castsRoomShadow = style === "atrium"
-        || (style === "grand" && supportsFullRoomShadowSet)
-        || (sharedWallShadow && supportsFullRoomShadowSet);
-      const containedDistance = profile.distance;
-      // Music and painting keep a shadowed, slightly wider cone because one
-      // fixture serves each broad room, but its footprint still remains below
-      // a formal chandelier's reach.
-      const containedAngle = sharedWallShadow && supportsFullRoomShadowSet ? Math.max(profile.angle, 0.92) : profile.angle;
+      // Every visible fixture owns exactly one real emitter. Room fixtures
+      // are omnidirectional like the physical bulbs they model — a bounded
+      // PointLight clamped to the room's own radius, so walls, ceiling, and
+      // trim receive light in 360 degrees instead of a downward cone. Their
+      // real ceiling wash also replaces the painted response glow those
+      // fixtures used to need. Only the two-storey atrium chandeliers keep a
+      // shadowed downward cone: a naked omni would flood both storeys of the
+      // open void and erase the balustrade shadow play, so they retain the
+      // painted ceiling response instead.
       const sourceY = ceilingY - (isGrand ? 1.1 : 0.65);
-      const light = this.addContainedSpotLight(
-        x,
-        sourceY,
-        z,
-        profile.intensity,
-        containedDistance,
-        containedAngle,
-        Array.from(this.levels),
-        targetY,
-        castsRoomShadow,
-      );
-      light.name = `${this.name}-room-bounded-spotlight`;
+      let light;
+      if (style === "atrium") {
+        this.addCeilingResponseGlow(x, ceilingY - 0.02, z, 2.4, 0.27);
+        const targetY = FLOOR.MAIN + 0.04;
+        const containedDistance = profile.distance;
+        light = this.addContainedSpotLight(
+          x,
+          sourceY,
+          z,
+          profile.intensity,
+          containedDistance,
+          profile.angle,
+          Array.from(this.levels),
+          targetY,
+          true,
+        );
+        light.name = `${this.name}-room-bounded-spotlight`;
+        light.userData.authoredReach = containedDistance;
+        light.penumbra = profile.penumbra;
+      } else if (style === "corridor") {
+        // Corridors are too narrow for an omni source — walls a metre from
+        // the fixture would read floodlit at any useful intensity — so they
+        // keep the authored tight downward cone and their moody pools.
+        light = this.addContainedSpotLight(
+          x,
+          sourceY,
+          z,
+          profile.intensity,
+          profile.distance,
+          profile.angle,
+          Array.from(this.levels),
+          this.floorY + 0.04,
+          false,
+        );
+        light.name = `${this.name}-room-bounded-spotlight`;
+        light.userData.authoredReach = profile.distance;
+        light.penumbra = profile.penumbra;
+      } else {
+        // The omni source sits a hand's width below the visible bulbs: the
+        // ceiling above still catches a hot amber pool instead of a blown
+        // white disc, and the room reads lit by the fixture, not the slab.
+        const omniY = ceilingY - (isGrand ? 1.35 : 1.0);
+        light = this.addRoomOmniLight(x, omniY, z, profile.intensity, profile.radius, Array.from(this.levels));
+      }
       light.userData.roomBounded = true;
       light.userData.fixtureStyle = style;
       light.userData.fixtureRole = "primary";
       light.userData.visibleFixtureEmitter = true;
-      light.userData.authoredReach = containedDistance;
-      light.penumbra = profile.penumbra;
       return light;
     }
 
@@ -1610,6 +1649,25 @@
       halo.renderOrder = 4;
       scene.add(halo);
       return halo;
+    }
+
+    addRoomOmniLight(x, y, z, intensity, radius, levels) {
+      // A room fixture's single real emitter. Omnidirectional like the bulbs
+      // it models, with the cutoff radius authored per room scale: the room's
+      // own walls and ceiling catch light from every angle, while the
+      // terminal falloff window extinguishes it shortly past a shared wall,
+      // so an enclosed neighbour reads at most a faint under-door glow.
+      const light = new THREE.PointLight(this.color, this.on ? intensity : 0, radius, 2);
+      light.name = `${this.name}-room-bounded-omnilight`;
+      light.position.set(x, y, z);
+      light.userData.baseIntensity = intensity;
+      light.userData.contained = true;
+      light.userData.roomBounded = true;
+      light.userData.authoredReach = radius;
+      if (levels) light.userData.levels = new Set(levels);
+      scene.add(light);
+      this.lights.push(light);
+      return light;
     }
 
     addContainedSpotLight(x, y, z, intensity, distance, angle, levels, targetY, castsShadow) {
@@ -1722,6 +1780,9 @@
       updraft.receiveShadow = false;
       scene.add(updraft);
       this.addSourceHalo(fixtureX, y + 0.27, fixtureZ, 0.55, 0.2);
+      // Sconces stay aimed cones (a shaded sconce genuinely throws forward),
+      // but at 1.5x their authored intensity so their pools hold their own
+      // against the omnidirectional room fixtures.
       const roomLight = this.addAimedSpotLight(
         x + normalX * 0.36,
         y + 0.18,
@@ -1729,7 +1790,7 @@
         targetX,
         targetY,
         targetZ,
-        intensity,
+        intensity * 1.5,
         distance,
         0.62,
         levels,
@@ -1777,7 +1838,7 @@
           Boolean(settings.castsShadow),
         );
       }
-      const boundedDistance = this.name === "estate exterior lights" ? distance : Math.min(distance, 4.8);
+      const boundedDistance = this.name === "estate exterior lights" ? distance : Math.min(distance, 7.8);
       const light = new THREE.PointLight(this.color, this.on ? intensity : 0, boundedDistance, 2);
       light.name = `${this.name}-practical-light`;
       light.position.set(x, y, z);
@@ -1879,6 +1940,15 @@
   function addWindow(axis, fixed, center, floorY, opening, exterior) {
     const bottom = opening.bottom == null ? 0.82 : opening.bottom;
     const top = opening.top == null ? 3.05 : opening.top;
+    if (exterior) {
+      rainApertures.push({
+        x: axis === "x" ? center : fixed,
+        y: floorY + (bottom + top) / 2,
+        z: axis === "x" ? fixed : center,
+        // Single-pane storm-lashed glass: clearly audible, far from open air.
+        openness: 0.6,
+      });
+    }
     const width = opening.width;
     const middleY = floorY + (bottom + top) / 2;
     const windowH = top - bottom;
@@ -3270,7 +3340,10 @@
     const foyer = new LightCircuit("foyer chandelier", FLOOR.UPPER, 0xffc47a, true);
     foyer.addLevel("MAIN LEVEL");
     foyer.addFixture(0, 7.7, "atrium");
-    foyer.addPracticalLight(0, FLOOR.UPPER + 1.9, 7.7, 20, 8.8, ["MAIN LEVEL", "SECOND FLOOR"], { contained: true, angle: 0.82, targetY: FLOOR.MAIN + 0.4 });
+    // An omnidirectional fill floating at chandelier height carries light to
+    // the balcony rail, the upper walls, and the void — the double-height
+    // volume reads lit in every direction, not just in a downward shaft.
+    foyer.addPracticalLight(0, FLOOR.UPPER + 1.9, 7.7, 20, 7.8, ["MAIN LEVEL", "SECOND FLOOR"], { contained: false });
     // The foyer is a double-height volume overlooked by the balcony: its
     // sconces are visible from both floors, so they render on both floor
     // contexts and never hand over during a stair transition.
@@ -3291,9 +3364,10 @@
       const wallX = side * 4.839;
       stair.addWallSconce(wallX, FLOOR.MAIN + 2.18, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
     }
-    // A hidden bounce light keeps the dark-oak stair readable without adding
+    // A hidden omnidirectional bounce mid-void keeps the dark-oak stair, the
+    // landing edge above, and the surrounding walls readable without adding
     // another low-hanging fixture to the circulation path.
-    stair.addPracticalLight(0, FLOOR.MAIN + 3.35, -0.35, 48, 6.8, ["MAIN LEVEL", "SECOND FLOOR"], { contained: true, angle: 0.72 });
+    stair.addPracticalLight(0, FLOOR.MAIN + 4.1, -0.35, 26, 7.2, ["MAIN LEVEL", "SECOND FLOOR"], { contained: false });
     // A restrained under-landing fill gives the finished timber soffits the
     // warm return light that would come from the paired wall sconces. It is
     // owned by this circuit, so it never changes without the stair switch.
@@ -3373,7 +3447,7 @@
     upperLanding.addLevel("MAIN LEVEL");
     upperLanding.addWallSconce(-4.839, FLOOR.UPPER + 1.95, -1.15, Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], -0.5, FLOOR.UPPER + 0.72, -1.45);
     upperLanding.addWallSconce(4.839, FLOOR.UPPER + 1.95, -1.15, -Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], 0.5, FLOOR.UPPER + 0.72, -1.45);
-    upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 38, 6.0, ["SECOND FLOOR", "MAIN LEVEL"], { contained: true, angle: 0.78 });
+    upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 22, 6.5, ["SECOND FLOOR", "MAIN LEVEL"], { contained: false });
     upperLanding.addSwitch(4.839, FLOOR.UPPER + 1.15, 2.4, -Math.PI / 2);
 
     const westRear = new LightCircuit("west rear suite lights", FLOOR.UPPER, 0xffb66f, true);
@@ -4256,7 +4330,7 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.ctx = AudioContext ? new AudioContext() : null;
       this.master = null;
-      this.rainSource = null;
+      this.rain = null;
       this.waterLoops = new Map();
       if (!this.ctx) return;
       this.master = this.ctx.createGain();
@@ -4287,20 +4361,114 @@
     }
 
     makeRain() {
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.makeNoiseBuffer(4);
-      source.loop = true;
-      const high = this.ctx.createBiquadFilter();
-      high.type = "highpass";
-      high.frequency.value = 520;
-      const low = this.ctx.createBiquadFilter();
-      low.type = "lowpass";
-      low.frequency.value = 6200;
+      // Rain bus: exposure gain (how much shell opening is nearby) into a
+      // muffle lowpass (walls and glass swallow the hiss first) into master.
+      // The bed itself is a real CC0 rain recording; a shaped procedural wash
+      // covers the frames before it decodes and any context where the asset
+      // cannot be fetched, so the storm never falls silent.
       const gain = this.ctx.createGain();
-      gain.gain.value = 0.19;
-      source.connect(high).connect(low).connect(gain).connect(this.master);
-      source.start();
-      this.rainSource = source;
+      gain.gain.value = 0.0001;
+      const muffle = this.ctx.createBiquadFilter();
+      muffle.type = "lowpass";
+      muffle.frequency.value = 8200;
+      gain.connect(muffle).connect(this.master);
+      this.rain = { gain, muffle, source: null, mode: "pending", level: 0.5, exposure: 1 };
+      this.startProceduralRain();
+      void this.loadRecordedRain();
+    }
+
+    startProceduralRain() {
+      if (!this.rain || this.rain.mode === "recorded") return;
+      // Fallback wash shaped like rain rather than radio static: a dark
+      // brown-noise body with a separate droplet-band hiss, instead of one
+      // wideband noise loop.
+      const body = this.ctx.createBufferSource();
+      body.buffer = this.makeNoiseBuffer(4);
+      body.loop = true;
+      const bodyHigh = this.ctx.createBiquadFilter();
+      bodyHigh.type = "highpass";
+      bodyHigh.frequency.value = 220;
+      const bodyLow = this.ctx.createBiquadFilter();
+      bodyLow.type = "lowpass";
+      bodyLow.frequency.value = 1500;
+      const bodyGain = this.ctx.createGain();
+      bodyGain.gain.value = 0.42;
+      body.connect(bodyHigh).connect(bodyLow).connect(bodyGain).connect(this.rain.gain);
+      const hiss = this.ctx.createBufferSource();
+      hiss.buffer = this.makeNoiseBuffer(2.3);
+      hiss.loop = true;
+      const hissBand = this.ctx.createBiquadFilter();
+      hissBand.type = "bandpass";
+      hissBand.frequency.value = 4300;
+      hissBand.Q.value = 0.65;
+      const hissGain = this.ctx.createGain();
+      hissGain.gain.value = 0.12;
+      hiss.connect(hissBand).connect(hissGain).connect(this.rain.gain);
+      body.start();
+      hiss.start();
+      this.rain.mode = "procedural";
+      this.rain.level = 0.5;
+      this.rain.source = {
+        stop: () => {
+          try { body.stop(); } catch (_) { /* Already stopped. */ }
+          try { hiss.stop(); } catch (_) { /* Already stopped. */ }
+        },
+      };
+    }
+
+    async loadRecordedRain() {
+      if (!this.ctx || !SCRIPT_URL) return;
+      try {
+        const url = new URL("../Sounds/shared/ambience/rain-heavy-loop.mp3", SCRIPT_URL).href;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`rain loop http ${response.status}`);
+        const encoded = await response.arrayBuffer();
+        const buffer = await new Promise((resolve, reject) => {
+          const result = this.ctx.decodeAudioData(encoded, resolve, reject);
+          if (result && typeof result.then === "function") result.then(resolve, reject);
+        });
+        if (!this.rain) return;
+        if (this.rain.source) this.rain.source.stop();
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = true;
+        // Trim the MP3 encoder padding out of the loop points so the 26s
+        // seam stays buried in the rain texture instead of clicking.
+        source.loopStart = 0.06;
+        source.loopEnd = Math.max(1, buffer.duration - 0.06);
+        source.connect(this.rain.gain);
+        source.start();
+        this.rain.source = source;
+        this.rain.mode = "recorded";
+        this.rain.level = 0.9;
+        this.setRainExposure(this.rain.exposure);
+      } catch (_) {
+        // Offline or file:// context: the procedural wash keeps storming.
+      }
+    }
+
+    setRainExposure(exposure) {
+      if (!this.ctx || !this.rain) return;
+      const clamped = clamp(Number(exposure) || 0, 0, 1);
+      this.rain.exposure = clamped;
+      const now = this.ctx.currentTime;
+      // Perceptual staging: even the deepest interior keeps a faint wash of
+      // rain on the roof, and the muffle filter opens with exposure so
+      // stepping outside reads as walls falling away, not a volume knob.
+      const gainTarget = this.rain.level * (0.05 + 0.95 * Math.pow(clamped, 1.35));
+      const cutoffTarget = 420 + 7800 * Math.pow(clamped, 1.6);
+      this.rain.gain.gain.setTargetAtTime(gainTarget, now, 0.24);
+      this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, 0.24);
+    }
+
+    rainDiagnostics() {
+      if (!this.rain) return { mode: "unavailable", exposure: 0 };
+      return {
+        mode: this.rain.mode,
+        exposure: Number(this.rain.exposure.toFixed(3)),
+        gain: Number(this.rain.gain.gain.value.toFixed(4)),
+        muffleHz: Math.round(this.rain.muffle.frequency.value),
+      };
     }
 
     setEnabled(enabled) {
@@ -4608,6 +4776,30 @@
     document.addEventListener("fullscreenchange", resize);
   }
 
+  function computeRainExposure() {
+    // How much of the storm reaches the player's ears. Outdoors is full
+    // exposure; indoors the strongest nearby shell opening wins — an open
+    // exterior door is open air, a window is loud but glassed, and away from
+    // the shell only a faint roof wash remains (fainter still underground).
+    if (outdoorRoomNames.has(state.currentRoom)) return 1;
+    const p = physics.playerPosition();
+    let strongest = state.currentFloor === "BASEMENT" ? 0.05
+      : state.currentFloor === "SECOND FLOOR" ? 0.16
+        : 0.12;
+    const consider = (x, y, z, openness) => {
+      const distance = Math.hypot(p.x - x, p.y - y, p.z - z);
+      const falloff = clamp(1 - (distance - 1.1) / 6.4, 0, 1);
+      const contribution = openness * falloff;
+      if (contribution > strongest) strongest = contribution;
+    };
+    for (const aperture of rainApertures) consider(aperture.x, aperture.y, aperture.z, aperture.openness);
+    for (const door of exteriorRainDoors) {
+      const swing = clamp(door.angle / 1.2, 0, 1);
+      consider(door.rainAperture.x, door.rainAperture.y, door.rainAperture.z, 0.26 + 0.74 * swing);
+    }
+    return clamp(strongest, 0, 1);
+  }
+
   function updateLocation() {
     const p = physics.playerPosition();
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
@@ -4637,6 +4829,7 @@
       }
     }
     updateExteriorDetailCulling();
+    if (audioSystem) audioSystem.setRainExposure(computeRainExposure());
     // Room labels never influence light state. Refresh only when the authored
     // floor context actually changes; switches, doors, and cabinets request
     // their own explicit snap refreshes at interaction time. Floor-context
@@ -4989,6 +5182,9 @@
         activeWaterLoops: audioSystem && audioSystem.waterLoops
           ? Array.from(audioSystem.waterLoops.entries()).filter(([, entry]) => entry.active).map(([name]) => name)
           : [],
+        rain: audioSystem ? audioSystem.rainDiagnostics() : null,
+        rainApertures: rainApertures.length,
+        exteriorRainDoors: exteriorRainDoors.length,
       },
       lighting: {
         allOff: circuits.every((circuit) => !circuit.on),
@@ -5121,6 +5317,22 @@
       }));
     };
     window.MrFeastFresh.triggerLightning = () => stormSystem && stormSystem.trigger();
+    window.MrFeastFresh.scaleOmniForQA = (factor) => {
+      // Calibration-only: uniformly scales the omni room fixtures so QA can
+      // sweep brightness against luminance targets without rebuilding. Any
+      // light sync (switch, floor change) restores authored intensities.
+      if (!state.qa) return null;
+      let scaled = 0;
+      for (const circuit of circuits) {
+        for (const light of circuit.lights) {
+          if (light.isPointLight && light.visible && light.userData.baseIntensity) {
+            light.intensity = light.userData.baseIntensity * factor;
+            scaled += 1;
+          }
+        }
+      }
+      return scaled;
+    };
     window.MrFeastFresh.advanceLightFade = (seconds) => {
       // Deterministic stepper for the cross-floor light fade so QA can drive
       // and observe transitions even when the tab's animation frames are

@@ -1,0 +1,7 @@
+Asset: rain-heavy-loop.mp3 (originally "2.mp3" from "Rain MP3.zip")
+Source: https://opengameart.org/content/rain-loopable
+Author: Ylmir
+License: CC0 (public domain) — https://creativecommons.org/publicdomain/zero/1.0/
+Downloaded: 2026-07-12
+Notes: One of four loopable rain recordings (heaviest variant, ~26s, 192kbps
+MP3). Used as the mansion storm rain bed in games/mr-feast-mansion.html.

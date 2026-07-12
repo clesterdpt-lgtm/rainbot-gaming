@@ -87,6 +87,7 @@ function fixtureProfile(style) {
     distance: value("distance"),
     angle: value("angle"),
     penumbra: value("penumbra"),
+    radius: value("radius"),
     pointFillIntensity: value("pointFillIntensity"),
     pointFillDistance: value("pointFillDistance"),
     pointFillHeight: value("pointFillHeight"),
@@ -449,13 +450,13 @@ check("20 exterior re-entry routes", /visitedRooms/.test(qaHooks) && /circuitSta
 
 check("20 room-local lighting", /addContainedSpotLight\(/.test(lightCircuitClass) && /new THREE\.SpotLight\(/.test(lightCircuitClass), "interior fixtures are not using bounded downward spotlights");
 check("20 room-local lighting", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addPracticalLight(", lightCircuitClass)), "ceiling fixtures still use wall-penetrating point lights");
-check("20 room-local lighting", /sharedWallShadow\s*=\s*\/\^\(\?:music room\|painting room\)/.test(lightCircuitClass) && /castsRoomShadow\s*=\s*style\s*===\s*"atrium"\s*\|\|\s*\(style\s*===\s*"grand"\s*&&\s*supportsFullRoomShadowSet\)\s*\|\|\s*\(sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\)/.test(lightCircuitClass), "large fixtures or capable-context music/painting rooms lack sampler-gated shadow coverage");
+check("20 room-local lighting", /if \(style === "atrium"\) \{[\s\S]*?this\.addContainedSpotLight\([\s\S]*?\btrue,\s*\n\s*\);/.test(section("addFixture(x, z, style", "addRoomOmniLight(x, y, z", lightCircuitClass)) && !/sharedWallShadow/.test(lightCircuitClass), "the atrium cone lost its shadow map, or retired per-room shadow special cases have returned");
 check("20 room-local lighting", /shadow\.mapSize\.set\(256, 256\)/.test(lightCircuitClass) && /shadow\.bias/.test(lightCircuitClass) && /shadow\.normalBias/.test(lightCircuitClass), "contained shadow lights exceed the local map budget or omit bias tuning");
 check("20 room-local lighting", /settings\.contained == null[\s\S]*?this\.name !== "estate exterior lights"/.test(lightCircuitClass), "interior practical lights do not default to bounded downward cones");
-check("20 room-local lighting", /corridor:\s*\{[\s\S]*?intensity:\s*155,[\s\S]*?distance:\s*8\.6,[\s\S]*?angle:\s*0\.5/.test(lightCircuitClass), "narrow corridors do not use the brighter contained cone profile");
-check("20 fixture-scaled light reach", /atrium:\s*\{\s*intensity:\s*300,\s*distance:\s*14\.5,\s*angle:\s*0\.72/.test(lightCircuitClass) && /grand:\s*\{[\s\S]*?intensity:\s*205,[\s\S]*?distance:\s*12\.5,[\s\S]*?angle:\s*1\.04/.test(lightCircuitClass) && /small:\s*\{\s*intensity:\s*165,\s*distance:\s*9\.2,\s*angle:\s*1\.02/.test(lightCircuitClass), "fixture reach no longer scales from atrium to formal chandelier to compact ceiling light");
+check("20 room-local lighting", /corridor:\s*\{[\s\S]*?intensity:\s*225,[\s\S]*?distance:\s*8\.6,[\s\S]*?angle:\s*0\.5/.test(lightCircuitClass), "narrow corridors do not use the brighter contained cone profile");
+check("20 fixture-scaled light reach", /atrium:\s*\{\s*intensity:\s*380,\s*distance:\s*14\.5,\s*angle:\s*0\.85/.test(lightCircuitClass) && /grand:\s*\{[\s\S]*?intensity:\s*95,[\s\S]*?distance:\s*12\.5,[\s\S]*?angle:\s*1\.04/.test(lightCircuitClass) && /small:\s*\{\s*intensity:\s*48,\s*distance:\s*9\.2,\s*angle:\s*1\.02/.test(lightCircuitClass), "fixture reach no longer scales from atrium to formal chandelier to compact ceiling light");
 check("20 fixture-scaled light reach", /fixtureStyle\s*=\s*style/.test(lightCircuitClass) && /authoredReach\s*=\s*containedDistance/.test(lightCircuitClass) && /light\.penumbra\s*=\s*profile\.penumbra/.test(lightCircuitClass), "runtime light diagnostics do not retain fixture scale and soft-falloff metadata");
-check("20 fixture-scaled light reach", /containedDistance\s*=\s*profile\.distance/.test(lightCircuitClass) && /containedAngle\s*=\s*sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\s*\?\s*Math\.max\(profile\.angle,\s*0\.92\)\s*:\s*profile\.angle/.test(lightCircuitClass), "a special-case small fixture can exceed the grand chandelier footprint");
+check("20 fixture-scaled light reach", /containedDistance\s*=\s*profile\.distance/.test(lightCircuitClass) && /this\.addRoomOmniLight\(x, omniY, z, profile\.intensity, profile\.radius/.test(lightCircuitClass), "room fixtures no longer emit from an authored radius-bounded omni source");
 
 // 22. A lit room must be legible beyond a single bright pool. Large formal
 // Chandeliers need a primary cone plus one restrained distributed-bulb fill.
@@ -465,25 +466,51 @@ const grandProfile = fixtureProfile("grand");
 const smallProfile = fixtureProfile("small");
 const bathroomProfile = fixtureProfile("bathroom");
 const corridorProfile = fixtureProfile("corridor");
-const grandFloorDiameter = 2 * Math.tan(grandProfile.angle) * ((3.72 - 1.1) - 0.04);
-const smallFloorDiameter = 2 * Math.tan(smallProfile.angle) * ((3.72 - 0.65) - 0.04);
-const upperSmallFloorDiameter = 2 * Math.tan(smallProfile.angle) * ((3.05 - 0.65) - 0.04);
-check("22 lit-room chandelier coverage", grandProfile.intensity >= 90 && grandProfile.distance >= 5.6 && grandProfile.penumbra <= 0.62, "grand chandelier still lacks useful direct intensity, reach, or core width");
-check("22 lit-room chandelier coverage", grandFloorDiameter >= 6.5, `grand chandelier floor cone is only ${grandFloorDiameter.toFixed(2)}m across`);
-check("22 lit-room compact coverage", smallProfile.intensity >= 120 && smallProfile.distance >= 5.3 && smallProfile.penumbra <= 0.68, "compact room fixture remains too dim or feathered to reveal nearby furniture");
-check("22 lit-room compact coverage", upperSmallFloorDiameter >= 7.4, `upper compact fixture coverage is not broad enough (${upperSmallFloorDiameter.toFixed(2)}m upper)`);
+check("22 lit-room chandelier coverage", grandProfile.intensity >= 85 && grandProfile.distance >= 5.6 && grandProfile.penumbra <= 0.62, "grand chandelier still lacks useful direct intensity, reach, or core width");
+check("22 lit-room chandelier coverage", grandProfile.radius >= 6.4 && grandProfile.radius <= 7.4, `grand chandelier omni radius (${grandProfile.radius}m) no longer washes the formal room without spilling far beyond it`);
+check("22 lit-room compact coverage", smallProfile.intensity >= 40 && smallProfile.distance >= 5.3 && smallProfile.penumbra <= 0.68, "compact room fixture remains too dim or feathered to reveal nearby furniture");
+check("22 lit-room compact coverage", smallProfile.radius >= 5.8 && smallProfile.radius <= 6.8, `compact fixture omni radius (${smallProfile.radius}m) no longer covers its room wall to wall`);
 check("25 stable-light performance budget", [smallProfile, bathroomProfile, corridorProfile, grandProfile].every((profile) => !Number.isFinite(profile.pointFillIntensity)), "a ceiling fixture still creates a redundant second emitter");
-check("22 chandelier primary reach", grandProfile.intensity >= 150 && grandProfile.distance >= 7.5 && grandProfile.distance < fixtureProfile("atrium").distance, "grand chandelier primary emitter does not carry the former fill brightness and reach");
+check("22 chandelier primary reach", grandProfile.intensity >= 85 && grandProfile.radius >= 6.4 && grandProfile.distance < fixtureProfile("atrium").distance, "grand chandelier primary emitter does not carry the former fill brightness and reach");
 check("25 stable-light performance budget", !/addChandelierPointFill/.test(lightCircuitClass) && !/fixtureRole\s*=\s*"chandelier-fill"/.test(lightCircuitClass), "chandeliers still allocate a redundant cube-shadow point light");
 check("22 chandelier ceiling realism", /ring\.castShadow\s*=\s*style\s*===\s*"atrium"/.test(lightCircuitClass), "single-floor chandelier ring still projects an oversized ceiling shadow from its point fill");
 check("22 full blackout auxiliary lights", /allCircuitsOff\s*=\s*circuits\.length\s*>\s*0\s*&&\s*circuits\.every\(\(circuit\)\s*=>\s*!circuit\.on\)/.test(lightRendering) && /light\.visible\s*=\s*!allCircuitsOff\s*&&\s*rendersOnLevel\s*&&\s*interactionVisible/.test(lightRendering), "open cabinet or refrigerator lamps can survive a full circuit blackout");
 check("22 basement corridor coverage", corridorProfile.intensity >= 110 && corridorProfile.distance >= 4.6 && corridorProfile.angle >= 0.45 && corridorProfile.penumbra <= 0.65, "basement corridor direct cones remain too narrow or weak");
 check("22 basement corridor coverage", /for \(const z of \[-0\.6,\s*4\.45,\s*9\.5\]\) basementHall\.addFixture\(0,\s*z,\s*"corridor"\)/.test(lightingBuild), "the long basement corridor does not have three evenly spaced controlled fixtures");
 const basementProfile = fixtureProfile("basement");
-check("22 basement room readability", basementProfile.intensity >= 145 && basementProfile.distance >= 6.0 && basementProfile.angle >= 0.92 && basementProfile.penumbra <= 0.62, "basement room fixtures remain too weak, short, or narrow for readable creepy illumination");
+check("22 basement room readability", basementProfile.intensity >= 40 && basementProfile.radius >= 6.0 && basementProfile.angle >= 0.92 && basementProfile.penumbra <= 0.62, "basement room fixtures remain too weak, short, or narrow for readable creepy illumination");
 check("22 every fixture emits real light", !/addFixture\(x, z, style, castsLight/.test(lightCircuitClass) && !/switch-owned-light-pool/.test(lightCircuitClass), "some visible ceiling fixtures still substitute a painted glow pool for real light emission");
 check("22 every fixture emits real light", !/\.addFixture\([^\n;]*,\s*(?:false|x ===|z ===)/.test(lightingBuild), "one or more authored basement fixtures are still configured as a non-emitting prop");
 check("22 fixture scale ordering", fixtureProfile("atrium").distance > grandProfile.distance && grandProfile.distance > smallProfile.distance && grandProfile.intensity > smallProfile.intensity, "fixture size no longer correlates with primary intensity and reach");
+
+// 29. Omnidirectional room light. A physical chandelier or bulb radiates in
+// every direction: each room fixture is a single bounded PointLight whose
+// authored radius washes the room's own walls and ceiling but extinguishes
+// shortly past a shared wall (near-wall bathrooms use a tighter clamp).
+// Sconce pools scale up to keep parity, and the double-height foyer, stair,
+// and landing volumes carry omnidirectional fills instead of downward cones.
+check("29 omni fixtures", /addRoomOmniLight\(x, y, z, intensity, radius, levels\)/.test(lightCircuitClass) && /new THREE\.PointLight\(this\.color, this\.on \? intensity : 0, radius, 2\)/.test(lightCircuitClass) && /authoredReach = radius/.test(lightCircuitClass), "room fixtures are not single bounded omnidirectional emitters");
+check("29 omni containment", bathroomProfile.radius <= 5.0 && [grandProfile, smallProfile, basementProfile].every((profile) => profile.radius >= 6.0 && profile.radius <= 7.0), "an omni fixture radius is unauthored or reaches deep into neighbouring rooms");
+check("29 omni containment", !Number.isFinite(fixtureProfile("atrium").radius) && !Number.isFinite(corridorProfile.radius), "the atrium chandelier and narrow corridors must stay cones: an omni floods the void or the metre-wide corridor walls");
+check("29 sconce parity", /intensity \* 1\.5/.test(section("addWallSconce(x, y, z", "addFixtureSupportFill", lightCircuitClass)), "sconce pools no longer keep up with omnidirectional room fixtures");
+check("29 volume fills", /foyer\.addPracticalLight\(0, FLOOR\.UPPER \+ 1\.9, 7\.7, 20, 7\.8[^;\n]*contained: false/.test(lightingBuild) && /stair\.addPracticalLight\(0, FLOOR\.MAIN \+ 4\.1, -0\.35, 26, 7\.2[^;\n]*contained: false/.test(lightingBuild) && /upperLanding\.addPracticalLight\(0, FLOOR\.UPPER \+ 2\.72, -2\.15, 22, 6\.5[^;\n]*contained: false/.test(lightingBuild), "the foyer, stair, or landing volume lost its omnidirectional fill");
+check("29 volume fills", /Math\.min\(distance, 7\.8\)/.test(lightCircuitClass), "interior omnidirectional practicals are no longer clamped to a room-scale bound");
+
+// 30. Storm rain audio. The rain bed is a real CC0 recording (with license
+// provenance) behind an exposure model: outdoors is full volume, a nearby
+// window or open exterior door is loud, and the interior tails off to a
+// muffled roof wash — driven by both gain and a lowpass so walls read as
+// walls. A shaped procedural fallback keeps the storm audible when the
+// recording cannot be fetched.
+const mansionAudio = section("class MansionAudio", "function updateAudioButton");
+check("30 recorded rain bed", fs.existsSync(path.join(root, "assets/Sounds/shared/ambience/rain-heavy-loop.mp3")) && fs.existsSync(path.join(root, "assets/Sounds/shared/licenses/rain-loopable-license.txt")), "the CC0 rain recording or its license provenance file is missing");
+check("30 recorded rain bed", /Sounds\/shared\/ambience\/rain-heavy-loop\.mp3/.test(mansionAudio) && /source\.loopStart\s*=\s*0\.06/.test(mansionAudio) && /source\.loop = true/.test(mansionAudio), "the rain bed does not loop the recorded asset with encoder-padding trim");
+check("30 rain fallback", /startProceduralRain/.test(mansionAudio) && /bandpass/.test(mansionAudio) && !/high\.frequency\.value = 520/.test(mansionAudio), "the offline rain fallback is missing or regressed to the old wideband static loop");
+check("30 rain exposure model", /function computeRainExposure\(\)/.test(mansion) && /if \(outdoorRoomNames\.has\(state\.currentRoom\)\) return 1/.test(mansion) && /openness: 0\.6/.test(mansion) && /0\.26 \+ 0\.74 \* swing/.test(mansion), "rain exposure no longer models outdoors, glassed windows, and door swing");
+check("30 rain exposure model", /audioSystem\.setRainExposure\(computeRainExposure\(\)\)/.test(updateLocation), "player movement no longer drives rain exposure");
+check("30 rain occlusion", /setRainExposure\(exposure\)/.test(mansionAudio) && /muffle\.frequency\.setTargetAtTime/.test(mansionAudio) && /gain\.gain\.setTargetAtTime/.test(mansionAudio), "rain exposure does not drive both loudness and a muffle filter smoothly");
+check("30 rain diagnostics", /rainDiagnostics/.test(mansionAudio) && /rain: audioSystem \? audioSystem\.rainDiagnostics\(\) : null/.test(diagnostics) && /rainApertures: rainApertures\.length/.test(diagnostics), "rain audio state is not observable in QA diagnostics");
+
 check("20 shadow sampler fallback", /supportsFullRoomShadowSet\s*=\s*renderer\.capabilities\.maxTextures\s*>=\s*16/.test(mansion) && /maxTextureUnits/.test(diagnostics) && /activeSceneShadowLights/.test(diagnostics), "low-sampler contexts have no bounded-cone fallback or total-scene shadow diagnostics");
 check("20 stable light rendering", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion), "proximity-selected portal circuits can still make manually switched lights pop while crossing the yard threshold");
 check("20 stable light rendering", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.test(lightRendering) && /manual-circuits-floor-stable/.test(lightRendering), "main-floor and exterior circuits do not use one stable floor-context render policy");
@@ -625,7 +652,7 @@ check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,
 // in the open stair volumes render on both adjacent floor contexts, and every
 // reachable light-count layout is compiled during boot so the fade itself
 // cannot hitch on shader compilation.
-const responseGlowBuilder = section("addCeilingResponseGlow(x, y, z", "addContainedSpotLight(", lightCircuitClass);
+const responseGlowBuilder = section("addCeilingResponseGlow(x, y, z", "addRoomOmniLight(x, y, z", lightCircuitClass);
 check("28 fixture response glow", /addCeilingResponseGlow/.test(responseGlowBuilder) && /addSourceHalo/.test(responseGlowBuilder) && /this\.addCeilingResponseGlow\(/.test(lightCircuitClass) && /this\.addSourceHalo\(/.test(lightCircuitClass), "ceiling fixtures no longer paint a ceiling response and source halo around their real emitters");
 check("28 fixture response glow", /wall-sconce-updraft-glow/.test(sconceBuilder) && /this\.addSourceHalo\(/.test(sconceBuilder), "wall sconces no longer paint an updraft wash and scattered halo");
 check("28 response glow is decorative", !/new THREE\.(?:SpotLight|PointLight)/.test(responseGlowBuilder) && /AdditiveBlending/.test(responseGlowBuilder) && /glowMaterials\.push/.test(responseGlowBuilder), "response glows must stay switch-owned painted surfaces, never extra emitters");
@@ -651,7 +678,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260711-grand-stair-clearance-pass-81", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-rain-audio-pass-83", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

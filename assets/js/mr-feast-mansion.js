@@ -1565,14 +1565,17 @@
     }
 
     addAimedSpotLight(x, y, z, targetX, targetY, targetZ, intensity, distance, angle, levels, castsShadow, role) {
-      const light = new THREE.SpotLight(this.color, this.on ? intensity : 0, distance, angle || 0.58, 0.64, 2);
+      const targetDistance = Math.hypot(targetX - x, targetY - y, targetZ - z);
+      const boundedDistance = Math.min(distance, targetDistance + 0.65);
+      const light = new THREE.SpotLight(this.color, this.on ? intensity : 0, boundedDistance, angle || 0.58, 0.64, 2);
       light.name = `${this.name}-${role || "aimed"}-spotlight`;
       light.position.set(x, y, z);
       light.userData.baseIntensity = intensity;
       light.userData.contained = true;
       light.userData.roomBounded = true;
       light.userData.fixtureRole = role || "aimed";
-      light.userData.authoredReach = distance;
+      light.userData.authoredReach = boundedDistance;
+      light.userData.containmentMargin = 0.65;
       if (levels) light.userData.levels = new Set(levels);
       const target = new THREE.Object3D();
       target.name = `${light.name}-target`;
@@ -1583,7 +1586,7 @@
         light.castShadow = true;
         light.shadow.mapSize.set(128, 128);
         light.shadow.camera.near = 0.12;
-        light.shadow.camera.far = distance;
+        light.shadow.camera.far = boundedDistance;
         light.shadow.bias = -0.00035;
         light.shadow.normalBias = 0.03;
       }

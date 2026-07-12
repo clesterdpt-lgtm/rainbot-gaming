@@ -593,8 +593,10 @@ check("24 stable render policy", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.tes
 check("24 fixture mesh stability", /keepForFacade[\s\S]*?sconce[\s\S]*?chandelier[\s\S]*?bulb/.test(exteriorCulling), "lit fixture meshes can still disappear when the player walks away from the facade");
 
 const sconceBuilder = section("addWallSconce(x, y, z", "addFixtureSupportFill", lightCircuitClass);
+const aimedSpotBuilder = section("addAimedSpotLight(x, y, z", "addWallSconce", lightCircuitClass);
 check("24 architectural wall sconces", /wall-sconce-cup/.test(sconceBuilder) && /wall-sconce-frosted-shade/.test(sconceBuilder) && /wall-sconce-bulb/.test(sconceBuilder), "wall sconces still read as exposed glowing orbs instead of complete fixtures");
 check("25 stable-light performance budget", count(sconceBuilder, /addAimedSpotLight\(/g) === 1 && !/wall-wash/.test(sconceBuilder), "each wall sconce still allocates more than one real emitter");
+check("27 aimed sconce containment", /targetDistance\s*=\s*Math\.hypot\(/.test(aimedSpotBuilder) && /boundedDistance\s*=\s*Math\.min\(distance,\s*targetDistance\s*\+\s*0\.65\)/.test(aimedSpotBuilder) && /new THREE\.SpotLight\([^;]*boundedDistance/.test(aimedSpotBuilder) && /shadow\.camera\.far\s*=\s*boundedDistance/.test(aimedSpotBuilder), "a wall sconce cone can continue beyond its authored in-room target");
 check("25 stable-light performance budget", /mobile\s*\?\s*1(?:\.0)?\s*:\s*1\.25/.test(resizeSystem) && /pixelRatio:\s*Number\(renderer\.getPixelRatio\(\)\.toFixed\(2\)\)/.test(diagnostics), "renderer does not cap Retina pixel workload or expose the active DPR");
 check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /state\.fps\s*<\s*40/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction");
 check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,[^\n;]*lanterns\);/.test(yardBuild), "one or more visibly glowing estate lanterns still lacks a real light source");
@@ -615,7 +617,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260711-page-boot-watchdog-pass-78", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260711-sconce-containment-pass-79", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

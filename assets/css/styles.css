@@ -40,6 +40,33 @@ a:hover { text-decoration: underline; }
 
 img { max-width: 100%; display: block; }
 
+/* ===== Skip to content (keyboard a11y) ===== */
+.skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 2px solid var(--accent-2);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-soft);
+  transform: translateY(-160%);
+  transition: transform 0.16s ease;
+}
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  text-decoration: none;
+}
+
 /* ===== Animated background grid ===== */
 body::before {
   content: "";
@@ -5124,7 +5151,7 @@ body.arcade-home::before {
   padding: 0 8px 8px;
 }
 
-.games-section-stack {
+.directory-grid.games-section-stack {
   gap: 14px;
   grid-template-columns: minmax(0, 1fr);
   width: 100%;
@@ -5132,6 +5159,15 @@ body.arcade-home::before {
 
 .games-section__grid {
   padding-inline: 0;
+}
+
+/* Card grid inside each games.html section. A fixed max track (420px) makes
+   auto-fill undercount columns at laptop widths (1223px inner fits only 2x420),
+   so cards flex with 1fr to fill 3-up from ~1000px while staying single-column
+   on mobile via the min(100%, ...) floor. Specificity beats the shared
+   .directory-grid media-query rules without touching homepage grids. */
+.directory-grid.games-section__grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
 }
 
 .games-section {
@@ -5516,7 +5552,7 @@ body.arcade-home::before {
   background-color: #030303;
   background-image:
     linear-gradient(90deg, rgba(1, 3, 5, 0.96) 0%, rgba(1, 3, 5, 0.72) 42%, rgba(1, 3, 5, 0.12) 100%),
-    url("../img/after-dark/rainbot-after-dark-hero.png?v=20260616-1");
+    url("../img/after-dark/rainbot-after-dark-hero.jpg?v=20260712-jpg");
   background-position:
     center,
     center 54%;
@@ -5768,7 +5804,7 @@ body.arcade-home::before {
     padding: 26px 18px;
     background-image:
       linear-gradient(180deg, rgba(1, 3, 5, 0.98) 0%, rgba(1, 3, 5, 0.82) 42%, rgba(1, 3, 5, 0.18) 100%),
-      url("../img/after-dark/rainbot-after-dark-hero.png?v=20260616-1");
+      url("../img/after-dark/rainbot-after-dark-hero.jpg?v=20260712-jpg");
     background-position:
       center,
       60% bottom;
@@ -6822,9 +6858,12 @@ body.arcade-home::before {
   z-index: 2;
   color: var(--arcade-white);
   font-family: var(--arcade-font);
-  font-size: clamp(22px, 2.8vw, 36px);
+  /* Capped at 22px: Press Start 2P renders "RECURSIVE" (the longest single
+     word) at ~218px, which is the 82% cap of the 280px-min art column. Larger
+     sizes clipped the word mid-glyph inside the art's overflow:hidden box. */
+  font-size: clamp(20px, 2.8vw, 22px);
   line-height: 0.98;
-  max-width: 78%;
+  max-width: 82%;
   text-shadow: 3px 0 0 rgba(255, 20, 144, 0.42), -2px 0 0 rgba(35, 223, 242, 0.34), 0 3px 0 #000;
   text-transform: uppercase;
 }
@@ -6944,7 +6983,7 @@ body.arcade-home::before {
   background-color: #02050a;
   background-image:
     linear-gradient(90deg, rgba(2, 5, 10, 0.94) 0%, rgba(2, 5, 10, 0.74) 42%, rgba(2, 5, 10, 0.18) 100%),
-    url("../img/agent-games/rainbot-bot-homies.png?v=20260616-1");
+    url("../img/agent-games/rainbot-bot-homies.jpg?v=20260712-jpg");
   background-position:
     center,
     center 58%;
@@ -7196,7 +7235,7 @@ body.arcade-home::before {
 }
 
 .home-media-grid .slopwire-card__body strong {
-  font-size: clamp(20px, 2vw, 29px);
+  font-size: clamp(17px, 1.6vw, 19px);
 }
 
 .slopwire-grid {
@@ -7323,21 +7362,24 @@ body.arcade-home::before {
 
 .slopwire-card__body small {
   color: var(--arcade-cyan);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
 }
 
 .slopwire-card__body strong {
   color: var(--arcade-white);
   font-family: var(--arcade-font);
-  font-size: clamp(23px, 2.6vw, 40px);
-  line-height: 1.02;
+  /* Press Start 2P is a blocky pixel face; long satirical headlines in a ~320px
+     column stacked one word per line and became unreadable at the old 33-40px.
+     Capped so the lead headline reads in a few scannable lines. */
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.1;
   text-transform: uppercase;
   text-shadow: 3px 0 0 rgba(255, 20, 144, 0.28), -2px 0 0 rgba(35, 223, 242, 0.18);
 }
 
 .slopwire-card:not(.slopwire-card--lead) .slopwire-card__body strong {
-  font-size: 23px;
+  font-size: 18px;
 }
 
 .slopwire-card__body span {
@@ -7357,7 +7399,7 @@ body.arcade-home::before {
   gap: 16px;
   min-width: 0;
   padding: 0 10px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .slopwire-card__meta b,
@@ -9589,7 +9631,7 @@ body.arcade-home::before {
   color: var(--arcade-cyan);
   display: block;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
   line-height: 1.35;
   margin-bottom: 5px;
@@ -9757,7 +9799,7 @@ body.arcade-home::before {
 .rb-leaderboard-empty {
   color: var(--arcade-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1.45;
 }
@@ -12349,6 +12391,14 @@ body.arcade-home::before {
 .home-page .arcade-row { order: 10; }
 .home-page .pro-strip { order: 11; }
 .home-page .featured-panel .poster-card:nth-child(n + 7) { display: none; }
+
+/* Signed-out first visit has no recent games, so the panel rendered a "No
+   recent games yet" empty state whose Sign in CTA duplicates the nav Profile
+   button. Hide the whole panel when empty (main.js toggles .is-empty) so Latest
+   Release leads the page; it reappears once a run is recorded. The flex column
+   reflows with no gap. The progress panel already sits at order 6 (after
+   Featured, order 5), so no demotion is needed there. */
+.home-page .home-recent-panel.is-empty { display: none; }
 
 .home-discovery {
   display: grid;

@@ -148,44 +148,44 @@ const RB_SCORE_TITLE_OVERRIDES = {
 };
 
 const RB_GAME_VISUALS = {
-  "again": { image: "assets/img/mockup/card-again.png?v=20260614-1", kind: "Horror" },
-  "ai-slop-factory": { image: "assets/img/mockup/card-ai-slop-factory.png?v=20260614-3", kind: "Arcade" },
-  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.png?v=20260613-5", kind: "Side-scroller" },
-  "big-baby-bum": { image: "assets/img/mockup/card-big-baby-bum-ai-v4.png?v=20260711-bbb-cover-4", kind: "3D Katamari", alt: "Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" },
-  "billionaire-space-race": { image: "assets/img/mockup/card-billionaire-space-race.png?v=20260613-6", kind: "Lander" },
-  "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.png?v=20260611-7", kind: "Board" },
-  "brainrot-2048": { image: "assets/img/mockup/card-brainrot-2048.png?v=20260614-3", kind: "Puzzle" },
-  "consensus-collapse": { image: "assets/img/agent-games/consensus-collapse.png?v=20260615-1", kind: "Agent Treaty" },
-  "crescendo": { image: "assets/img/crescendo/card-crescendo-ai-v1.png?v=20260709-cres-ai-4", kind: "Rhythm Shmup", alt: "Crescendo cover art with a white musical-note spaceship flying through pink beat projectiles beneath The Conductor" },
-  "debt-breakout": { image: "assets/img/mockup/card-debt-breakout.png?v=20260708-debt-breakout-2", kind: "Brick Buster" },
-  "echo-loop": { image: "assets/img/echo-loop/card-echo-loop-ai-v1.png?v=20260709-echo-ai-4", kind: "Time Puzzler", alt: "Echo Loop cover art with a hot-pink runner crossing translucent cyan echoes toward a golden portal" },
-  "echo-loop-3d": { image: "assets/img/echo-loop-3d/card-echo-loop-3d-ai-v1.png?v=20260709-echo3d-ai-4", kind: "FPS Puzzler", alt: "Echo Loop 3D cover art showing a first-person neon corridor filled with cyan echoes and a golden portal" },
-  "incident-commander": { image: "assets/img/agent-games/incident-commander-cover.jpg?v=20260703-2", kind: "Agent Ops" },
-  "dont-become-pizza": { image: "assets/img/mockup/card-dont-become-pizza.png?v=20260621-pizza-2", kind: "Horror" },
-  "dont-fck-with-cats": { image: "assets/img/mockup/card-dont-fck-with-cats.png?v=20260623-cats-1", kind: "Runner" },
-  "dont-look-gym-girl": { image: "assets/img/mockup/card-gym-girl.png?v=20260611-7", kind: "Stealth" },
-  "doorcrash-no-tip-nitro": { image: "assets/img/mockup/card-doorcrash-no-tip-nitro.png?v=20260612-1", kind: "3D Runner" },
-  "drone-hunter": { image: "assets/img/mockup/card-drone-hunter.png?v=20260623-drone-2", kind: "Shooter" },
-  "escape-poop-cruise": { image: "assets/img/mockup/card-escape-poop-cruise-v2.png?v=20260628-2", kind: "Horror FPS" },
-  "flappy-stonks": { image: "assets/img/mockup/card-flappy-stonks-funny.png?v=20260626-2", kind: "Arcade" },
-  "gen-z-driving-simulator": { image: "assets/img/mockup/card-gen-z-driving-simulator.png?v=20260618-1", kind: "3D Driving" },
-  "karen-merger": { image: "assets/img/mockup/card-karen-merger.png?v=20260621-cover-2", kind: "Bubble Merge" },
+  "again": { image: "assets/img/mockup/card-again.jpg?v=20260712-jpg", kind: "Horror" },
+  "ai-slop-factory": { image: "assets/img/mockup/card-ai-slop-factory.jpg?v=20260712-jpg", kind: "Arcade" },
+  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg", kind: "Side-scroller" },
+  "big-baby-bum": { image: "assets/img/mockup/card-big-baby-bum-ai-v4.jpg?v=20260712-jpg", kind: "3D Katamari", alt: "Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" },
+  "billionaire-space-race": { image: "assets/img/mockup/card-billionaire-space-race.jpg?v=20260712-jpg", kind: "Lander" },
+  "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.jpg?v=20260712-jpg", kind: "Board" },
+  "brainrot-2048": { image: "assets/img/mockup/card-brainrot-2048.jpg?v=20260712-jpg", kind: "Puzzle" },
+  "consensus-collapse": { image: "assets/img/agent-games/consensus-collapse.jpg?v=20260712-jpg", kind: "Agent Treaty" },
+  "crescendo": { image: "assets/img/crescendo/card-crescendo-ai-v1.jpg?v=20260712-jpg", kind: "Rhythm Shmup", alt: "Crescendo cover art with a white musical-note spaceship flying through pink beat projectiles beneath The Conductor" },
+  "debt-breakout": { image: "assets/img/mockup/card-debt-breakout.jpg?v=20260712-jpg", kind: "Brick Buster" },
+  "echo-loop": { image: "assets/img/echo-loop/card-echo-loop-ai-v1.jpg?v=20260712-jpg", kind: "Time Puzzler", alt: "Echo Loop cover art with a hot-pink runner crossing translucent cyan echoes toward a golden portal" },
+  "echo-loop-3d": { image: "assets/img/echo-loop-3d/card-echo-loop-3d-ai-v1.jpg?v=20260712-jpg", kind: "FPS Puzzler", alt: "Echo Loop 3D cover art showing a first-person neon corridor filled with cyan echoes and a golden portal" },
+  "incident-commander": { image: "assets/img/agent-games/incident-commander-cover.jpg?v=20260712-jpg", kind: "Agent Ops" },
+  "dont-become-pizza": { image: "assets/img/mockup/card-dont-become-pizza.jpg?v=20260712-jpg", kind: "Horror" },
+  "dont-fck-with-cats": { image: "assets/img/mockup/card-dont-fck-with-cats.jpg?v=20260712-jpg", kind: "Runner" },
+  "dont-look-gym-girl": { image: "assets/img/mockup/card-gym-girl.jpg?v=20260712-jpg", kind: "Stealth" },
+  "doorcrash-no-tip-nitro": { image: "assets/img/mockup/card-doorcrash-no-tip-nitro.jpg?v=20260712-jpg", kind: "3D Runner" },
+  "drone-hunter": { image: "assets/img/mockup/card-drone-hunter.jpg?v=20260712-jpg", kind: "Shooter" },
+  "escape-poop-cruise": { image: "assets/img/mockup/card-escape-poop-cruise-v2.jpg?v=20260712-jpg", kind: "Horror FPS" },
+  "flappy-stonks": { image: "assets/img/mockup/card-flappy-stonks-funny.jpg?v=20260712-jpg", kind: "Arcade" },
+  "gen-z-driving-simulator": { image: "assets/img/mockup/card-gen-z-driving-simulator.jpg?v=20260712-jpg", kind: "3D Driving" },
+  "karen-merger": { image: "assets/img/mockup/card-karen-merger.jpg?v=20260712-jpg", kind: "Bubble Merge" },
   "looksmaxxing-grindset": { image: "assets/img/mockup/card-looksmaxxing.png?v=20260611-7", kind: "Sim / Idle" },
   "mr-feast-mansion": { image: "assets/img/mockup/card-mr-feast.png?v=20260611-7", kind: "Horror" },
-  "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.png?v=20260615-1", kind: "Agent Protocol" },
-  "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.png?v=20260613-2", kind: "Sandbox" },
+  "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.jpg?v=20260712-jpg", kind: "Agent Protocol" },
+  "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg", kind: "Sandbox" },
   "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
-  "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.png?v=20260611-9", kind: "Defense" },
-  "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.png?v=20260614-1", kind: "Arcade" },
-  "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.png?v=20260622-1", kind: "Crowd Heist" },
+  "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.jpg?v=20260712-jpg", kind: "Defense" },
+  "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg", kind: "Arcade" },
+  "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg", kind: "Crowd Heist" },
   "strait-of-hormuz": { image: "assets/img/mockup/card-escape-straight-wide.png?v=20260611-7", kind: "Action" },
-  "super-slop-brothers": { image: "assets/img/mockup/card-super-slop-brothers.png?v=20260623-ssb-2", kind: "Fighter" },
-  "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.png?v=20260613-3", kind: "3D Sandbox" },
-  "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260702-tls-title-4", kind: "RTS" },
-  "the-optimizer": { image: "assets/img/the-optimizer/card-the-optimizer-ai-v1.png?v=20260709-opt-ai-4", kind: "Idle Sim", alt: "The Optimizer cover art with a mint terminal and fabricator watched by a giant pink machine eye" },
-  "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.png?v=20260617-weight-wide-4", kind: "Horror" },
-  "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1", kind: "Survival" },
-  "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.png?v=20260614-cover-1", kind: "3D Sandbox" },
+  "super-slop-brothers": { image: "assets/img/mockup/card-super-slop-brothers.jpg?v=20260712-jpg", kind: "Fighter" },
+  "tardigrade-micro-mayhem": { image: "assets/img/mockup/card-tardigrade-micro-mayhem.jpg?v=20260712-jpg", kind: "3D Sandbox" },
+  "the-last-signal": { image: "assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260712-jpg", kind: "RTS" },
+  "the-optimizer": { image: "assets/img/the-optimizer/card-the-optimizer-ai-v1.jpg?v=20260712-jpg", kind: "Idle Sim", alt: "The Optimizer cover art with a mint terminal and fabricator watched by a giant pink machine eye" },
+  "the-weight": { image: "assets/img/mockup/card-the-weight-wide-v2.jpg?v=20260712-jpg", kind: "Horror" },
+  "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg", kind: "Survival" },
+  "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.jpg?v=20260712-jpg", kind: "3D Sandbox" },
 };
 
 const RB_SLOPWIRE_ARTICLES = [
@@ -4796,7 +4796,21 @@ function fitGameCanvases() {
   });
 }
 
+function initSkipLink() {
+  const main = document.querySelector("main");
+  if (!main) return;
+  if (!main.id) main.id = "main-content";
+  if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+  if (document.querySelector(".skip-link")) return;
+  const link = document.createElement("a");
+  link.className = "skip-link";
+  link.href = `#${main.id}`;
+  link.textContent = "Skip to content";
+  document.body.insertAdjacentElement("afterbegin", link);
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  initSkipLink();
   RBSfx.init();
   RBGameActivity.init();
   initSearchPage();

@@ -1307,6 +1307,12 @@ function initGamesCatalog() {
       heading.textContent = title || `Game ${order + 1}`;
       body.prepend(heading);
     }
+    if (body && !body.querySelector(".directory-card__category")) {
+      const categoryBadge = document.createElement("span");
+      categoryBadge.className = "directory-card__category";
+      categoryBadge.textContent = category;
+      body.querySelector(".directory-card__title")?.after(categoryBadge);
+    }
     const searchText = normalize([
       card.dataset.title,
       card.textContent,

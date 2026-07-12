@@ -5131,6 +5131,10 @@ body.arcade-home::before {
   display: grid;
   grid-column: 1 / -1;
   gap: 12px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
   min-width: 0;
   scroll-margin-top: 96px;
 }
@@ -12673,14 +12677,20 @@ body.arcade-home::before {
   display: block;
   padding: 42px 15px 14px;
   background: linear-gradient(180deg, transparent 0%, rgba(2, 5, 10, 0.9) 38%, rgba(2, 5, 10, 0.98) 100%);
-  opacity: 0;
-  transform: translateY(12px);
+  opacity: 1;
+  transform: translateY(0);
   transition: opacity 160ms ease, transform 160ms ease;
   pointer-events: none;
 }
 
 .directory-card:hover .directory-card__body,
 .directory-card:focus-visible .directory-card__body {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(2, 5, 10, 0.3) 0%, rgba(2, 5, 10, 0.9) 42%, rgba(2, 5, 10, 0.99) 100%);
   opacity: 1;
   transform: translateY(0);
 }
@@ -12695,6 +12705,50 @@ body.arcade-home::before {
   text-shadow: 0 2px 8px #000;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: max-height 160ms ease, opacity 160ms ease, transform 160ms ease;
+}
+
+.directory-card__title {
+  color: var(--arcade-white);
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--arcade-font);
+  font-size: clamp(16px, 1.65vw, 24px);
+  line-height: 1.12;
+  text-shadow: 3px 0 0 rgba(255, 20, 144, 0.48), -2px 0 0 rgba(35, 223, 242, 0.4), 0 3px 8px #000;
+  text-transform: uppercase;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.directory-card__category {
+  align-self: flex-start;
+  display: inline-flex;
+  margin-top: 7px;
+  border: 1px solid rgba(35, 223, 242, 0.72);
+  background: rgba(3, 8, 14, 0.86);
+  color: var(--arcade-cyan);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.55px;
+  line-height: 1;
+  padding: 5px 7px;
+  text-transform: uppercase;
+}
+
+.directory-card:hover .directory-card__body p,
+.directory-card:focus-visible .directory-card__body p {
+  display: block;
+  max-height: none;
+  margin-top: 10px;
+  opacity: 1;
+  overflow: visible;
+  transform: translateY(0);
+  -webkit-line-clamp: unset;
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -12703,8 +12757,19 @@ body.arcade-home::before {
   }
 
   .directory-card:hover .directory-card__body {
+    inset: auto 0 0;
+    display: block;
+    padding: 42px 15px 14px;
+    background: linear-gradient(180deg, transparent 0%, rgba(2, 5, 10, 0.9) 38%, rgba(2, 5, 10, 0.98) 100%);
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .directory-card:hover .directory-card__body p {
+    max-height: 0;
+    margin-top: 0;
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(8px);
   }
 }
 

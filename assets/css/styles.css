@@ -12365,6 +12365,14 @@ body.arcade-home::before {
 .home-page .pro-strip { order: 11; }
 .home-page .featured-panel .poster-card:nth-child(n + 7) { display: none; }
 
+/* Signed-out first visit has no recent games, so the panel rendered a "No
+   recent games yet" empty state whose Sign in CTA duplicates the nav Profile
+   button. Hide the whole panel when empty (main.js toggles .is-empty) so Latest
+   Release leads the page; it reappears once a run is recorded. The flex column
+   reflows with no gap. The progress panel already sits at order 6 (after
+   Featured, order 5), so no demotion is needed there. */
+.home-page .home-recent-panel.is-empty { display: none; }
+
 .home-discovery {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

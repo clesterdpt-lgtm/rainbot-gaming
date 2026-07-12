@@ -4615,12 +4615,111 @@
     if (audioSystem) void audioSystem.unlock().catch(() => {});
   }
 
+  function mergeStaticDecor() {
+    // Roughly 1,400 tiny decorative meshes — wall trim, door casings, window
+    // frames, sills, and fixture brass — each cost one draw call while never
+    // casting shadows, moving, or taking interactions. Baking them into one
+    // merged mesh per material and culling class removes about half of the
+    // scene's draw calls. Colliders, occluders, interactive meshes, animated
+    // subtrees (only direct scene children merge), and per-circuit emissive
+    // bulbs are deliberately excluded.
+    const mergeablePatterns = [
+      /-baseboard-[ab]$/,
+      /-crown-[ab]$/,
+      /door-(?:casing-face|casing-header|jamb|lintel-trim)$/,
+      /window-(?:mullion|frame)$/,
+      /stone-window-sill$/,
+    ];
+    // Fixture brass stays visible from the grounds (it hangs beside lit
+    // bulbs), so it merges into never-culled groups instead of interior ones.
+    const fixtureBrassPatterns = [
+      /(?:lights?|chandelier)-(?:arm|chain)$/,
+      /wall-sconce-(?:backplate|arm|socket|cup|shade-rim)$/,
+    ];
+    const skip = new Set([...occluderMeshes, ...interactableMeshes]);
+    const classify = (point) => {
+      if (Math.abs(point.z - 12) < 0.72 && Math.abs(point.x) < 15.8) return "facade:front";
+      if (Math.abs(point.z + 12) < 0.72 && Math.abs(point.x) < 15.8) return "facade:rear";
+      if (Math.abs(point.x + 15) < 0.72 && Math.abs(point.z) < 12.8) return "facade:west";
+      if (Math.abs(point.x - 15) < 0.72 && Math.abs(point.z) < 12.8) return "facade:east";
+      if (Math.abs(point.x) > 15.25 || Math.abs(point.z) > 12.25) return "always";
+      return "interior";
+    };
+    scene.updateMatrixWorld(true);
+    const groups = new Map();
+    const position = new THREE.Vector3();
+    for (const object of [...scene.children]) {
+      if (!object.isMesh || skip.has(object) || object.userData.interaction) continue;
+      const name = object.name || "";
+      const isTrim = mergeablePatterns.some((pattern) => pattern.test(name));
+      const isBrass = !isTrim && fixtureBrassPatterns.some((pattern) => pattern.test(name));
+      if (!isTrim && !isBrass) continue;
+      object.getWorldPosition(position);
+      const cullClass = isBrass ? "always" : classify(position);
+      const key = `${object.material.uuid}|${cullClass}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = { material: object.material, cullClass, geometries: [], count: 0 };
+        groups.set(key, group);
+      }
+      const geometry = object.geometry.index ? object.geometry.toNonIndexed() : object.geometry.clone();
+      geometry.applyMatrix4(object.matrixWorld);
+      group.geometries.push(geometry);
+      group.count += 1;
+      scene.remove(object);
+    }
+    let mergedMeshes = 0;
+    let mergedSources = 0;
+    for (const group of groups.values()) {
+      if (!group.geometries.length) continue;
+      let vertexCount = 0;
+      for (const geometry of group.geometries) vertexCount += geometry.attributes.position.count;
+      const merged = new THREE.BufferGeometry();
+      for (const attributeName of ["position", "normal", "uv"]) {
+        const itemSize = attributeName === "uv" ? 2 : 3;
+        const array = new Float32Array(vertexCount * itemSize);
+        let offset = 0;
+        for (const geometry of group.geometries) {
+          const attribute = geometry.attributes[attributeName];
+          if (attribute) array.set(attribute.array, offset);
+          offset += geometry.attributes.position.count * itemSize;
+        }
+        merged.setAttribute(attributeName, new THREE.BufferAttribute(array, itemSize));
+      }
+      for (const geometry of group.geometries) geometry.dispose();
+      const mesh = new THREE.Mesh(merged, group.material);
+      mesh.name = `merged-static-decor-${group.cullClass.replace(":", "-")}-${mergedMeshes}`;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      mesh.userData.exteriorCullingClass = group.cullClass;
+      mesh.userData.mergedSourceCount = group.count;
+      scene.add(mesh);
+      mergedMeshes += 1;
+      mergedSources += group.count;
+    }
+    state.mergedDecor = { meshes: mergedMeshes, sources: mergedSources };
+  }
+
   function registerExteriorDetailCulling() {
     const keepForFacade = /(?:upper-ceiling|basement-damp-course|portico|rain-soaked-grounds|estate-|driveway-|wet-cobblestone|front-carriage|rear-terrace|garden-|formal-garden|pool-|hedge-maze|locked-driveway|maze-approach|sconce|chandelier|bulb|light-fixture|frosted-shade)/i;
     const position = new THREE.Vector3();
     scene.updateMatrixWorld(true);
     scene.traverse((object) => {
       if (!object.isMesh) return;
+      const preclassified = object.userData.exteriorCullingClass;
+      if (preclassified) {
+        // Merged decor already carries its culling class from its sources.
+        if (preclassified === "interior") {
+          object.userData.preExteriorVisibility = object.visible;
+          interiorDetailMeshes.push(object);
+        } else if (preclassified.startsWith("facade:")) {
+          object.userData.preExteriorVisibility = object.visible;
+          object.userData.facadeSide = preclassified.slice(7);
+          facadeSideMeshes.push(object);
+        }
+        return;
+      }
       object.getWorldPosition(position);
       let side = null;
       if (Math.abs(position.z - 12) < 0.72 && Math.abs(position.x) < 15.8) side = "front";
@@ -4879,7 +4978,10 @@
   // player. Physical switches, cabinets, and QA stay instant ("snap"): a
   // flipped switch must feel electrical and QA captures stay deterministic.
   const LIGHT_FADE_IN_RATE = 1.6;
-  const LIGHT_FADE_OUT_RATE = 0.95;
+  // Fade-out is quick enough to keep the both-floors light union — the most
+  // expensive frames the renderer ever draws — under three quarters of a
+  // second, while still reading as a fade rather than a switch.
+  const LIGHT_FADE_OUT_RATE = 1.35;
 
   function applyLightRenderState(light, placed, energized, snap) {
     const data = light.userData;
@@ -4960,8 +5062,12 @@
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
         const enclosure = light.userData.requiresOpenCabinet;
         const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
-        const nextVisible = rendersInContext && rendersOnLevel && enclosureOpen;
-        if (applyLightRenderState(light, nextVisible, circuit.on, !fade)) shadowTopologyChanged = true;
+        // Placement ignores enclosures: a closet light occupies its shader
+        // slot whenever its floor context renders, so opening a cabinet can
+        // never mint a novel light-count layout and stall on a mid-game
+        // shader compile. The enclosure only gates whether it is energized.
+        const nextVisible = rendersInContext && rendersOnLevel;
+        if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
         const enclosure = bulb.userData.requiresOpenCabinet;
@@ -4973,11 +5079,13 @@
     }
     const allCircuitsOff = circuits.length > 0 && circuits.every((circuit) => !circuit.on);
     for (const light of auxiliaryInteriorLights) {
-      const levels = light.userData.levels;
-      const rendersOnLevel = !levels || levels.has(state.currentFloor);
       const interactionVisible = Boolean(light.userData.interactionVisible);
-      light.visible = !allCircuitsOff && rendersOnLevel && interactionVisible;
-      light.intensity = light.visible ? light.userData.baseIntensity : 0;
+      // The two cabinet lamps hold one permanent shader slot each on every
+      // floor context, so no layout the session renders is ever novel; the
+      // door interaction and the blackout state only gate the energy, and an
+      // open cabinet lamp still cannot survive a full circuit blackout.
+      light.visible = true;
+      light.intensity = light.visible && !allCircuitsOff && interactionVisible ? light.userData.baseIntensity : 0;
     }
     // Shadow caching is static between interactions. A newly visible upper
     // closet or floor-local chandelier therefore requests exactly one refresh
@@ -4989,32 +5097,46 @@
     // Forward-renderer programs are keyed by the visible light counts, so the
     // first frame of every floor context — and of every mid-fade union of two
     // adjacent contexts — would otherwise pause on shader compilation right
-    // as the player crosses a stair. Compile each reachable layout once while
-    // the loading veil is still up.
+    // as the player crosses a stair. Placement ignores enclosures (see
+    // syncLightRendering), so these five layouts are the complete set the
+    // whole session can ever render. renderer.compile alone is not enough:
+    // drivers defer real pipeline builds until first draw, so each layout
+    // also renders one actual frame behind the loading veil.
+    // Enclosure-gated lights (walk-in closets) hold slots only while their
+    // own floor renders: fading up they gain the slot at fade start, fading
+    // down they lose it at fade start. Each stair union therefore exists in
+    // two variants, and both are drawn here.
     const layouts = [
-      ["SECOND FLOOR"],
-      ["BASEMENT"],
-      ["MAIN LEVEL", "SECOND FLOOR"],
-      ["MAIN LEVEL", "BASEMENT"],
+      { floors: ["MAIN LEVEL"] },
+      { floors: ["SECOND FLOOR"] },
+      { floors: ["BASEMENT"] },
+      { floors: ["MAIN LEVEL", "SECOND FLOOR"] },
+      { floors: ["MAIN LEVEL", "SECOND FLOOR"], enclosureFloors: ["MAIN LEVEL"] },
+      { floors: ["MAIN LEVEL", "BASEMENT"] },
     ];
     for (const layout of layouts) {
-      const floors = new Set(layout);
+      const floors = new Set(layout.floors);
+      const enclosureFloors = new Set(layout.enclosureFloors || layout.floors);
       for (const circuit of circuits) {
-        const rendersOnFloor = layout.some((floor) => circuit.levels.has(floor));
+        const rendersOnFloor = layout.floors.some((floor) => circuit.levels.has(floor));
         const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
         const rendersInContext = floors.has("MAIN LEVEL") ? isExteriorCircuit || rendersOnFloor : rendersOnFloor;
         for (const light of circuit.lights) {
           const lightLevels = light.userData.levels;
-          const rendersOnLevel = lightLevels ? layout.some((floor) => lightLevels.has(floor)) : rendersOnFloor;
-          const enclosure = light.userData.requiresOpenCabinet;
-          const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
-          light.visible = rendersInContext && rendersOnLevel && enclosureOpen;
+          const placementFloors = light.userData.requiresOpenCabinet ? enclosureFloors : floors;
+          const rendersOnLevel = lightLevels
+            ? [...placementFloors].some((floor) => lightLevels.has(floor))
+            : rendersOnFloor;
+          light.visible = rendersInContext && rendersOnLevel;
         }
       }
       renderer.compile(scene, camera);
+      renderer.shadowMap.needsUpdate = true;
+      renderer.render(scene, camera);
     }
     // Restore the true floor-context state the prewarm layouts scrambled.
     syncLightRendering();
+    renderer.shadowMap.needsUpdate = true;
   }
 
   function updatePlayer(fixedDt) {
@@ -5221,6 +5343,7 @@
         facadeVisibilityKey,
         exteriorDistanceFromHouse: Number(exteriorDistanceFromHouse.toFixed(2)),
         exteriorNearHouse: Boolean(exteriorNearHouse),
+        mergedDecor: state.mergedDecor || null,
       },
       circuits: circuits.map((c) => ({
         name: c.name,
@@ -5317,6 +5440,26 @@
       }));
     };
     window.MrFeastFresh.triggerLightning = () => stormSystem && stormSystem.trigger();
+    window.MrFeastFresh.lightLayout = () => {
+      // The renderer keys shader programs on exactly these counts; QA uses
+      // this to prove no interaction or transition can mint a novel layout.
+      const layout = { directional: 0, spot: 0, point: 0, hemisphere: 0, directionalShadow: 0, spotShadow: 0, pointShadow: 0 };
+      scene.traverse((object) => {
+        if (!object.isLight || !object.visible) return;
+        if (object.isHemisphereLight) layout.hemisphere += 1;
+        else if (object.isDirectionalLight) {
+          layout.directional += 1;
+          if (object.castShadow) layout.directionalShadow += 1;
+        } else if (object.isSpotLight) {
+          layout.spot += 1;
+          if (object.castShadow) layout.spotShadow += 1;
+        } else if (object.isPointLight) {
+          layout.point += 1;
+          if (object.castShadow) layout.pointShadow += 1;
+        }
+      });
+      return layout;
+    };
     window.MrFeastFresh.scaleOmniForQA = (factor) => {
       // Calibration-only: uniformly scales the omni room fixtures so QA can
       // sweep brightness against luminance targets without rebuilding. Any
@@ -5847,6 +5990,7 @@
       scene.add(moon);
 
       buildMansion();
+      mergeStaticDecor();
       registerExteriorDetailCulling();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();

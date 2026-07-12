@@ -3226,6 +3226,10 @@
   }
 
   function buildMainPartitions() {
+    // Shield the tall pantry from the ballroom with a short rear-anchored
+    // partition. Its free end sits about five feet beyond the cabinet while
+    // leaving an eleven-foot uncased passage into the kitchen.
+    buildWallRun({ axis: "z", fixed: 5, start: -12, end: -8.2, floorY: FLOOR.MAIN, name: "main-kitchen-ballroom-partial-wall", openings: [] });
     buildWallRun({ axis: "z", fixed: -5, start: -4.9, end: 12, floorY: FLOOR.MAIN, name: "main-west-front-spine", openings: [
       { kind: "door", center: 0, width: 1.35, label: "main hall bathroom door", direction: 1 },
       { kind: "door", center: 7.3, width: 1.85, label: "library door", direction: -1 },

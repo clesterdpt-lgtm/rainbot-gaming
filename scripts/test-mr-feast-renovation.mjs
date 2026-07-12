@@ -167,6 +167,7 @@ const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSl
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
+const kitchenBallroomPartialWall = namedWallRun("main-kitchen-ballroom-partial-wall", mainPartitions);
 const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
 const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
@@ -285,13 +286,23 @@ for (const x of [-12, -10.45, -8.95, -7.4]) {
 check("8 dining-chair orientation", near(diningAt(-12.7, -8.4)?.values[3], -Math.PI / 2), "west head chair must face east toward the table");
 check("8 dining-chair orientation", near(diningAt(-6.7, -8.4)?.values[3], Math.PI / 2), "east head chair must face west toward the table");
 
-// 9. Rear dining/ballroom/kitchen partitions and their hinged doors must be
-// gone; the follow-up pass also opens the service stair directly to the kitchen.
+// 9. Rear dining/ballroom/kitchen hinged doors stay gone. The kitchen now has
+// a short rear-anchored partition shielding the pantry, but it ends far enough
+// forward to preserve a generous uncased opening into the ballroom.
 for (const label of ["dining room door", "kitchen door", "dining gallery door", "ballroom gallery door", "kitchen gallery door"]) {
   check("9 open-concept rear", !mainPartitions.includes(`label: "${label}"`), `interior ${label} still exists`);
 }
 check("9 open-concept rear", /axis:\s*"z",\s*fixed:\s*-5,\s*start:\s*-4\.9,\s*end:\s*12[^;]*name:\s*"main-west-(?:front-)?spine"/s.test(mainPartitions), "west spine still divides the dining room from the ballroom");
 check("9 open-concept rear", /axis:\s*"z",\s*fixed:\s*5,\s*start:\s*-4\.9,\s*end:\s*12[^;]*name:\s*"main-east-(?:front-)?spine"/s.test(mainPartitions), "east spine still divides the kitchen from the ballroom");
+check("9 kitchen-ballroom partial wall", kitchenBallroomPartialWall.length > 0, "missing short partition between the kitchen pantry and ballroom");
+check("9 kitchen-ballroom partial wall", /axis:\s*"z",\s*fixed:\s*5,\s*start:\s*-12,\s*end:\s*-8\.2/.test(kitchenBallroomPartialWall), "kitchen partition must run from the rear wall to five feet past the pantry");
+check("9 kitchen-ballroom partial wall", /openings:\s*\[\s*\]/s.test(kitchenBallroomPartialWall) && !/kind:\s*"(?:door|arch|open)"/.test(kitchenBallroomPartialWall), "kitchen-ballroom partition must end freely without a door or framed opening");
+const kitchenPartitionEnd = Number(kitchenBallroomPartialWall.match(/end:\s*(-?[\d.]+)/)?.[1]);
+const kitchenBallroomOpeningWidth = -4.9 - kitchenPartitionEnd;
+const pantryFrontEdge = -10.55 + 1.65 / 2;
+const partitionPastPantry = kitchenPartitionEnd - pantryFrontEdge;
+check("9 kitchen-ballroom partial wall", kitchenBallroomOpeningWidth >= 3.0, "kitchen-ballroom opening is narrower than three metres");
+check("9 kitchen-ballroom partial wall", partitionPastPantry >= 1.2 && partitionPastPantry <= 1.8, "partition does not extend a few feet past the pantry cabinet");
 check("9 open-concept rear", !mainPartitions.includes('name: "main-rear-service-enclosure"'), "service-stair enclosure still divides the kitchen from the stair landing");
 check("9 open-concept rear", /name:\s*"main-stair-gallery"[^;]*kind:\s*"arch"/s.test(mainPartitions), "grand stair does not retain an open arch directly toward the ballroom");
 
@@ -810,7 +821,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-threshold-trim-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-kitchen-partition-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

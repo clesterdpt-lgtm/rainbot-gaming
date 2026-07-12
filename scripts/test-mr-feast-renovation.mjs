@@ -389,7 +389,6 @@ if (mazeRows.length) {
   const seen = new Set(queue);
   while (queue.length) {
     const index = queue.shift();
-    if (index === exit) break;
     const row = Math.floor(index / width);
     const col = index % width;
     for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
@@ -403,11 +402,29 @@ if (mazeRows.length) {
     }
   }
   check("19 hedge maze", exit >= 0 && seen.has(exit), "hedge maze entrance has no walkable route to its exit");
+  const openCells = Array.from(cells, (cell, index) => cell === "#" ? null : index).filter((index) => index != null);
+  const openDegree = (index) => {
+    const row = Math.floor(index / width);
+    const col = index % width;
+    return [[-1, 0], [1, 0], [0, -1], [0, 1]].filter(([dr, dc]) => {
+      const nextRow = row + dr;
+      const nextCol = col + dc;
+      return nextRow >= 0 && nextRow < mazeRows.length && nextCol >= 0 && nextCol < width && mazeRows[nextRow][nextCol] !== "#";
+    }).length;
+  };
+  const junctions = openCells.filter((index) => openDegree(index) >= 3);
+  const edgeCount = openCells.reduce((total, index) => total + openDegree(index), 0) / 2;
+  const routeChoices = edgeCount - openCells.length + 1;
+  const northOpenCells = openCells.filter((index) => Math.floor(index / width) < Math.floor(mazeRows.length / 2));
+  check("32 hedge maze choices", junctions.length >= 18 && routeChoices >= 8, `maze offers only ${junctions.length} junction cells and ${routeChoices} alternate loops`);
+  check("32 north maze access", mazeRows[5][0] === "." && northOpenCells.every((index) => seen.has(index)), "north maze lacks a visible west-side entrance or contains unreachable passages");
 }
 check("19 hedge maze", /cellSize\s*:\s*1\.[4-9]/.test(mazeLayout), "maze corridors are not comfortably wider than the player capsule");
 check("19 hedge maze", /cellSize:\s*1\.5/.test(mazeLayout) && /centerX:\s*26\.5/.test(mazeLayout) && /centerZ:\s*-9\.25/.test(mazeLayout), "long maze no longer spans the authored rear-to-front east-lawn footprint");
 check("19 hedge maze", mazeRows.join("").split("#").length - 1 >= 150, "long maze lacks enough hedge mass to fill the east lawn");
 check("19 hedge maze", /east-lawn-house-walkway/.test(yardBuild) && /w:\s*2\.5[\s\S]*?x:\s*17\.35/.test(yardBuild), "maze does not preserve the requested walkway between the house and west hedge edge");
+check("32 east-lawn path connection", /east-lawn-front-yard-connector/.test(yardBuild) && /w:\s*5\.2[\s\S]*?d:\s*2\.4[\s\S]*?x:\s*15\.9[\s\S]*?z:\s*15\.5/.test(yardBuild), "east-lawn walkway still stops short of the front carriage path");
+check("32 north maze access", /maze-north-access-spur/.test(yardBuild), "north maze entrance has no legible paved spur from the east-lawn walkway");
 check("19 hedge maze", /hedge-maze-walls/.test(yardBuild) && /physics\.addFixedBox\(/.test(yardBuild), "maze hedges lack aligned visible and physical walls");
 check("19 hedge maze", /addBoxInstanceBatch\("hedge-maze-walls"/.test(yardBuild) && /addOutdoorInstanceBatch\("hedge-maze-leaf-clumps"/.test(yardBuild), "expanded hedge geometry is no longer kept in two instanced draw batches");
 
@@ -420,10 +437,10 @@ check("19 exterior lighting", !/addPracticalLight\(0,\s*2\.45,\s*-14\.2/.test(ya
 
 check("19 yard diagnostics", /yard\s*:\s*getYardDiagnostics\(/.test(diagnostics), "render_game_to_text diagnostics do not include yard state");
 check("19 yard diagnostics", /gate:\s*\{/.test(yardBuild) && /maze:\s*\{/.test(yardBuild) && /featureCounts:\s*\{/.test(yardBuild), "yard diagnostics omit gate, maze, or feature counts");
-for (const view of ["yardGateA", "yardGateInteract", "yardGardenA", "yardGardenB", "yardPoolA", "yardPoolB", "yardMazeA", "yardMazeB", "yardMazeEntranceCell", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenApproach", "yardExteriorSwitch"]) {
+for (const view of ["yardGateA", "yardGateInteract", "yardGardenA", "yardGardenB", "yardPoolA", "yardPoolB", "yardMazeA", "yardMazeB", "yardMazeEntranceCell", "yardMazeNorthEntrance", "yardEastFrontConnector", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenApproach", "yardExteriorSwitch"]) {
   check("19 yard QA views", mansion.includes(`${view}:`), `missing QA view ${view}`);
 }
-for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut", "serviceDoorOut"]) {
+for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardMazeNorthAccess", "yardEastFrontConnection", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut", "serviceDoorOut"]) {
   check("19 yard QA routes", qaHooks.includes(`${route}:`) || qaHooks.includes(`case \"${route}\"`), `missing physical QA route ${route}`);
 }
 check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 3 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
@@ -553,11 +570,16 @@ check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.
 check("20 real fixture emission", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addContainedSpotLight(x, y", lightCircuitClass)), "visible fixtures are not backed by real contained lights");
 check("20 maze lamp sources", /maze-center-tall-lamp/.test(yardBuild), "hedge maze has no visible tall center lamp");
 check("20 maze lamp sources", /mazeLampSources/.test(yardBuild) && /mazeWayfindingCells/.test(yardBuild) && count(section("const mazeLampSources", "for (const source", yardBuild), /castsLight:\s*true/g) === 5, "maze boundary or mapped wayfinding lamps are missing real light sources");
-check("20 maze lamp sources", count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /role:\s*"wayfinding"/g) === 4 && count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /role:\s*"center"/g) === 1, "maze lacks five evenly distributed interior wayfinding fixtures");
+check("32 maze lamp coverage", count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /role:\s*"wayfinding"/g) === 6 && count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /role:\s*"center"/g) === 1, "maze lacks seven evenly distributed interior wayfinding fixtures");
+const mazeFixtureCells = Array.from(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild).matchAll(/\{ row:\s*(\d+),\s*col:\s*(\d+),\s*targetRow:\s*(\d+),\s*targetCol:\s*(\d+)/g), (match) => match.slice(1).map(Number));
+check("32 maze lamp clearance", mazeFixtureCells.length === 7 && mazeFixtureCells.every(([row, col, targetRow, targetCol]) => mazeRows[row]?.[col] === "#" && mazeRows[targetRow]?.[targetCol] !== "#"), "one or more interior lamp posts still occupy a walkable maze cell");
+check("32 maze lamp clearance", !/lampRow|lampColumn/.test(section("function solveHedgeMaze", "function buildMazeRouteActions", yardBuild)), "maze solver still needs a special-case detour around path-blocking lamp furniture");
 check("20 maze lamp sources", /role:\s*"entrance"/.test(yardBuild) && /role:\s*"center"/.test(yardBuild) && /role:\s*"wayfinding"/.test(yardBuild) && /role:\s*"exit"/.test(yardBuild), "maze sources do not identify entrance, wayfinding, center, and exit fixtures");
 check("20 maze lamp sources", count(section("const mazeLampSources", "for (const source", yardBuild), /contained:\s*true/g) === 5 && /contained:\s*true,[\s\S]*?castsLight:\s*true/.test(section("mazeWayfindingCells\.map", "}\),", yardBuild)), "maze fixtures do not use bounded downward light cones");
-check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild) && /renderedLightSources:\s*renderedMazeSources/.test(yardBuild), "diagnostics do not enumerate the nine actual rendered maze lights");
-check("20 maze lamp aiming", /Number\.isFinite\(settings\.targetX\)/.test(yardBuild) && /circuit\.addAimedSpotLight\(/.test(yardBuild) && count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /targetRow:/g) === 5, "maze lamps do not aim their bounded cones into all five interior route sections");
+check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild) && /renderedLightSources:\s*renderedMazeSources/.test(yardBuild), "diagnostics do not enumerate the eleven actual rendered maze lights");
+check("32 maze lamp aiming", /Number\.isFinite\(settings\.targetX\)/.test(yardBuild) && /circuit\.addAimedSpotLight\(/.test(yardBuild) && count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /targetRow:/g) === 7, "maze lamps do not retain authored targets across all seven interior route sections");
+check("32 maze lamp coverage", /settings\.downward[\s\S]*?circuit\.addContainedSpotLight\(/.test(yardBuild) && /downward:\s*true/.test(section("mazeWayfindingCells\.map", "}\),", yardBuild)), "interior maze lamps do not cast overlapping broad downward pools");
+check("32 maze lamp visibility", /height:\s*3\.15,\s*intensity:\s*48/.test(yardBuild) && /source\.role === "center" \? 4\.35 : 3\.75/.test(yardBuild) && /source\.role === "center" \? 210 : 135/.test(yardBuild), "maze lamps are not uniformly taller and brighter while retaining a darker center-weighted hierarchy");
 check("20 maze light budget", count(section("const mazeWayfindingCells", "const mazeLampSources", yardBuild), /castsShadow:\s*true/g) === 1, "only the tall center maze lamp may spend a shadow map");
 check("20 maze light occlusion", /hedge-maze-walls[\s\S]*?true,\s*true\)/.test(yardBuild), "maze hedge walls do not cast shadows from the authored lamps");
 check("20 maze light occlusion", !/addPracticalLight\(25,\s*2\.(?:05|15),\s*-2(?:5|31)/.test(yardBuild), "source-less hidden PointLights remain in the hedge maze");
@@ -715,7 +737,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-mobile-upper-lighting-2", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-maze-visibility-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

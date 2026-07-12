@@ -156,17 +156,17 @@
     rows: Object.freeze([
       "#########",
       "#.#.....#",
-      "#.#.###.#",
       "#...#...#",
-      "#.###.#.#",
-      "#...#.#.#",
+      "#...#...#",
+      "#..##.#.#",
+      "....#.#.#",
       "#.###.#.#",
       "#.#...#.#",
       "###.###.#",
       "#...#.#.#",
       "#.###.#.#",
       "#.#...#.#",
-      "#.#.#.#.#",
+      "#.#...#.#",
       "#.#.#.#.#",
       "#.#.#.#.#",
       "#.#.#.#.#",
@@ -176,9 +176,9 @@
       "S.#.#.#.#",
       "#####.#.#",
       "#.....#.#",
-      "#.#.###.#",
+      "#...###.#",
       "#.#.#...#",
-      "#.#.#.###",
+      "#.#.#..##",
       "#.#.#...#",
       "#.#.###.#",
       "#.#...#.#",
@@ -317,6 +317,8 @@
     yardMazeA: [18.45, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2, -0.08],
     yardMazeB: [19.15, YARD_LAYOUT.groundY, 14.2, -2.42, -0.09],
     yardMazeEntranceCell: [20.5, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2],
+    yardMazeNorthEntrance: [18.45, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
+    yardEastFrontConnector: [16.8, YARD_LAYOUT.groundY, 13.2, Math.PI, -0.08],
     yardMazeExit: [28, YARD_LAYOUT.groundY, -31.75, 0],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, -15.2, Math.PI],
@@ -3731,6 +3733,13 @@
     box({ name: "formal-garden-entry-path", w: 2.1, h: 0.04, d: 12.4, x: -25, y, z: -9.0, material: M.wetPavers, cast: false });
     box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: -15.25, material: M.wetPavers, cast: false });
     box({ name: "east-lawn-house-walkway", w: 2.5, h: 0.04, d: 29.5, x: 17.35, y, z: 0, material: M.wetPavers, cast: false });
+    // Bridge the longitudinal east-lawn walk into the front carriage turn.
+    // The overlap on both ends avoids a dark grass seam that previously made
+    // the two authored paths look (and feel) disconnected.
+    box({ name: "east-lawn-front-yard-connector", w: 5.2, h: 0.044, d: 2.4, x: 15.9, y, z: 15.5, material: M.wetPavers, cast: false });
+    // A second, clearly paved entrance opens the previously remote north half
+    // directly onto the house-side promenade.
+    box({ name: "maze-north-access-spur", w: 2.9, h: 0.044, d: 1.6, x: 19.95, y, z: 5.75, material: M.wetPavers, cast: false });
   }
 
   function addGardenBench(x, z, rotationY) {
@@ -3942,8 +3951,6 @@
   function solveHedgeMaze() {
     const rows = HEDGE_MAZE_LAYOUT.rows;
     const width = rows[0].length;
-    const lampRow = Math.floor(rows.length / 2);
-    const lampColumn = Math.floor(width / 2);
     let start = -1;
     let exit = -1;
     rows.forEach((row, rowIndex) => {
@@ -3963,10 +3970,6 @@
         const nr = row + dr;
         const nc = col + dc;
         if (nr < 0 || nr >= rows.length || nc < 0 || nc >= width || rows[nr][nc] === "#") continue;
-        // The tall center lamp is physical maze furniture. Keep route solving
-        // in the surrounding plaza cells so nobody is asked to walk through
-        // its pedestal.
-        if (nr === lampRow && nc === lampColumn) continue;
         const next = nr * width + nc;
         if (previous.has(next)) continue;
         previous.set(next, index);
@@ -4098,8 +4101,23 @@
     if (settings.castsLight) {
       const sourceY = YARD_LAYOUT.groundY + height + 0.11;
       const aimed = Number.isFinite(settings.targetX) && Number.isFinite(settings.targetZ);
-      const sourceLight = aimed
-        ? circuit.addAimedSpotLight(
+      let sourceLight;
+      if (settings.downward) {
+        sourceLight = circuit.addContainedSpotLight(
+          x,
+          sourceY,
+          z,
+          settings.intensity || 24,
+          settings.distance || 6.6,
+          settings.angle || 0.82,
+          ["MAIN LEVEL"],
+          YARD_LAYOUT.groundY + 0.02,
+          Boolean(settings.castsShadow),
+        );
+        sourceLight.name = `${settings.name || settings.role || "estate-lantern"}-downward-spotlight`;
+        sourceLight.userData.fixtureRole = settings.role || "estate-lantern";
+      } else if (aimed) {
+        sourceLight = circuit.addAimedSpotLight(
           x,
           sourceY,
           z,
@@ -4112,8 +4130,9 @@
           ["MAIN LEVEL"],
           Boolean(settings.castsShadow),
           settings.role || "estate-lantern",
-        )
-        : circuit.addPracticalLight(
+        );
+      } else {
+        sourceLight = circuit.addPracticalLight(
           x,
           sourceY,
           z,
@@ -4127,6 +4146,7 @@
             castsShadow: Boolean(settings.castsShadow),
           },
         );
+      }
       if (settings.role) {
         sourceLight.userData.mazeSource = {
           x,
@@ -4198,15 +4218,17 @@
     const mazeEntranceCell = mazeCellCenter(mazeEntranceRow, HEDGE_MAZE_LAYOUT.rows[mazeEntranceRow].indexOf("S"));
     const mazeExitCell = mazeCellCenter(HEDGE_MAZE_LAYOUT.rows.length - 1, HEDGE_MAZE_LAYOUT.rows[HEDGE_MAZE_LAYOUT.rows.length - 1].indexOf("E"));
     const mazeWayfindingCells = [
-      { row: 3, col: 2, targetRow: 3, targetCol: 5, role: "wayfinding" },
-      { row: 9, col: 5, targetRow: 9, targetCol: 7, role: "wayfinding" },
-      { row: 15, col: 3, targetRow: 15, targetCol: 1, role: "center", name: "maze-center-tall-lamp", castsShadow: true },
-      { row: 21, col: 4, targetRow: 21, targetCol: 7, role: "wayfinding" },
-      { row: 27, col: 4, targetRow: 27, targetCol: 7, role: "wayfinding" },
+      { row: 3, col: 4, targetRow: 3, targetCol: 3, role: "wayfinding" },
+      { row: 7, col: 6, targetRow: 7, targetCol: 5, role: "wayfinding" },
+      { row: 11, col: 6, targetRow: 11, targetCol: 5, role: "wayfinding" },
+      { row: 15, col: 4, targetRow: 15, targetCol: 3, role: "center", name: "maze-center-tall-lamp", castsShadow: true },
+      { row: 19, col: 4, targetRow: 19, targetCol: 3, role: "wayfinding" },
+      { row: 23, col: 4, targetRow: 23, targetCol: 5, role: "wayfinding" },
+      { row: 27, col: 6, targetRow: 27, targetCol: 5, role: "wayfinding" },
     ];
     const mazeLampSources = [
-      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z - 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 2.65, intensity: 34, distance: 6.8, angle: 0.58, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z + 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 2.65, intensity: 34, distance: 6.8, angle: 0.58, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z - 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: mazeEntranceCell.x - 1.0, z: mazeEntranceCell.z + 1.3, targetX: mazeEntranceCell.x + 1.25, targetZ: mazeEntranceCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
       ...mazeWayfindingCells.map((source) => {
         const center = mazeCellCenter(source.row, source.col);
         const target = mazeCellCenter(source.targetRow, source.targetCol);
@@ -4215,10 +4237,11 @@
           z: center.z,
           targetX: target.x,
           targetZ: target.z,
-          height: source.role === "center" ? 3.65 : 3.2,
-          intensity: source.role === "center" ? 155 : 72,
-          distance: source.role === "center" ? 10.5 : 9.6,
-          angle: source.role === "center" ? 0.78 : 0.72,
+          height: source.role === "center" ? 4.35 : 3.75,
+          intensity: source.role === "center" ? 210 : 135,
+          distance: source.role === "center" ? 11.4 : 10.8,
+          angle: source.role === "center" ? 1.02 : 0.98,
+          downward: true,
           contained: true,
           castsLight: true,
           castsShadow: Boolean(source.castsShadow),
@@ -4226,8 +4249,8 @@
           name: source.name || `maze-wayfinding-lamp-${source.row}`,
         };
       }),
-      { x: mazeExitCell.x - 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 2.65, intensity: 34, distance: 6.8, angle: 0.58, contained: true, castsLight: true, castsShadow: false, role: "exit" },
-      { x: mazeExitCell.x + 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 2.65, intensity: 34, distance: 6.8, angle: 0.58, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: mazeExitCell.x - 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: mazeExitCell.x + 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "exit" },
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
@@ -5886,6 +5909,16 @@
           actions: buildMazeRouteActions(),
           startDelayMs: 1400,
           expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", near: { x: 28, z: -31.75, radius: 0.9 } },
+        },
+        yardMazeNorthAccess: {
+          start: "yardMazeNorthEntrance",
+          actions: [{ yaw: -Math.PI / 2, seconds: 1.7 }],
+          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", minX: 21.7, maxX: 22.5, minZ: 5.35, maxZ: 6.15 },
+        },
+        yardEastFrontConnection: {
+          start: "yardEastFrontConnector",
+          actions: [{ yaw: Math.PI, seconds: 1.7 }],
+          expected: { inBounds: true, grounded: true, room: "FRONT DRIVE", minZ: 16.45, maxZ: 17.35 },
         },
         frontDoorOut: {
           start: "frontDoor",

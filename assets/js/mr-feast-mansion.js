@@ -151,7 +151,8 @@
 
   // A long, narrow maze follows the whole east lawn from the rear grounds to
   // the front facade. # cells are clipped hedges, while S/E and dots are
-  // walkable. Its west edge leaves a broad house-side promenade.
+  // walkable. E is an internal traversal goal rather than a boundary opening.
+  // Its west edge leaves a broad house-side promenade.
   const HEDGE_MAZE_LAYOUT = Object.freeze({
     rows: Object.freeze([
       "#########",
@@ -183,8 +184,8 @@
       "#.#.###.#",
       "#.#...#.#",
       "#.###.#.#",
-      "#...#...#",
-      "#####E###",
+      "#...#E..#",
+      "#########",
     ]),
     cellSize: 1.5,
     centerX: 26.5,
@@ -319,7 +320,8 @@
     yardMazeEntranceCell: [20.5, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2],
     yardMazeNorthEntrance: [18.45, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
     yardEastFrontConnector: [16.8, YARD_LAYOUT.groundY, 13.2, Math.PI, -0.08],
-    yardMazeExit: [28, YARD_LAYOUT.groundY, -31.75, 0],
+    yardMazeSouthGoal: [28, YARD_LAYOUT.groundY, -30.25, 0],
+    yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, -15.2, Math.PI],
     yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, -15.2, Math.PI / 2],
@@ -461,7 +463,7 @@
     perimeterSegments: null,
     perimeterUncoveredIntervals: [],
     gate: { locked: true, open: false, colliderEnabled: true, deniedAttempts: 0 },
-    maze: { rows: 0, columns: 0, entrance: null, exit: null, shortestPathLength: 0 },
+    maze: { rows: 0, columns: 0, entrance: null, southGoal: null, shortestPathLength: 0 },
     featureCounts: {
       perimeterHedgeRuns: 0,
       gardenBeds: 0,
@@ -3555,7 +3557,7 @@
 
   function buildEstateYard() {
     yardState.gate = { locked: true, open: false, colliderEnabled: true, deniedAttempts: 0 };
-    yardState.maze = { rows: 0, columns: 0, entrance: null, exit: null, shortestPathLength: 0 };
+    yardState.maze = { rows: 0, columns: 0, entrance: null, southGoal: null, shortestPathLength: 0 };
     yardState.featureCounts = {
       perimeterHedgeRuns: 0,
       gardenBeds: 0,
@@ -3732,11 +3734,11 @@
     box({ name: "garden-approach-path", w: 25, h: 0.04, d: 1.9, x: -12.5, y, z: -15.2, material: M.wetPavers, cast: false });
     box({ name: "formal-garden-entry-path", w: 2.1, h: 0.04, d: 12.4, x: -25, y, z: -9.0, material: M.wetPavers, cast: false });
     box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: -15.25, material: M.wetPavers, cast: false });
-    box({ name: "east-lawn-house-walkway", w: 2.5, h: 0.04, d: 29.5, x: 17.35, y, z: 0, material: M.wetPavers, cast: false });
-    // Bridge the longitudinal east-lawn walk into the front carriage turn.
-    // The overlap on both ends avoids a dark grass seam that previously made
-    // the two authored paths look (and feel) disconnected.
-    box({ name: "east-lawn-front-yard-connector", w: 5.2, h: 0.044, d: 2.4, x: 15.9, y, z: 15.5, material: M.wetPavers, cast: false });
+    // Keep the south end at the rear approach while extending the north end to
+    // the front carriage centerline. The connector shares that exact centerline
+    // so the two slabs read as one clean right-angle junction.
+    box({ name: "east-lawn-house-walkway", w: 2.5, h: 0.04, d: 31.05, x: 17.35, y, z: 0.775, material: M.wetPavers, cast: false });
+    box({ name: "east-lawn-front-yard-connector", w: 5.1, h: 0.044, d: 2.4, x: 16.05, y, z: 16.3, material: M.wetPavers, cast: false });
     // A second, clearly paved entrance opens the previously remote north half
     // directly onto the house-side promenade.
     box({ name: "maze-north-access-spur", w: 2.9, h: 0.044, d: 1.6, x: 19.95, y, z: 5.75, material: M.wetPavers, cast: false });
@@ -3952,18 +3954,18 @@
     const rows = HEDGE_MAZE_LAYOUT.rows;
     const width = rows[0].length;
     let start = -1;
-    let exit = -1;
+    let goal = -1;
     rows.forEach((row, rowIndex) => {
       const s = row.indexOf("S");
       const e = row.indexOf("E");
       if (s >= 0) start = rowIndex * width + s;
-      if (e >= 0) exit = rowIndex * width + e;
+      if (e >= 0) goal = rowIndex * width + e;
     });
     const queue = start >= 0 ? [start] : [];
     const previous = new Map([[start, null]]);
     while (queue.length) {
       const index = queue.shift();
-      if (index === exit) break;
+      if (index === goal) break;
       const row = Math.floor(index / width);
       const col = index % width;
       for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
@@ -3976,9 +3978,9 @@
         queue.push(next);
       }
     }
-    if (!previous.has(exit)) return [];
+    if (!previous.has(goal)) return [];
     const path = [];
-    for (let cursor = exit; cursor != null; cursor = previous.get(cursor)) path.push({ row: Math.floor(cursor / width), col: cursor % width });
+    for (let cursor = goal; cursor != null; cursor = previous.get(cursor)) path.push({ row: Math.floor(cursor / width), col: cursor % width });
     return path.reverse();
   }
 
@@ -4002,6 +4004,30 @@
     return actions;
   }
 
+  function makeClippedHedgeGeometry() {
+    // Keep the vertical faces flat so neighbouring instances join into one
+    // uninterrupted clipped wall. Only the upper quarter eases inward, with a
+    // tiny uneven crown that catches lantern light without reading as spheres.
+    const clipped = new THREE.BoxGeometry(1, 1, 1, 2, 3, 2);
+    const position = clipped.attributes.position;
+    for (let index = 0; index < position.count; index += 1) {
+      let x = position.getX(index);
+      let y = position.getY(index);
+      let z = position.getZ(index);
+      const crown = Math.max(0, Math.min(1, (y - 0.2) / 0.3));
+      const topInset = 1 - crown * 0.006;
+      x *= topInset;
+      z *= topInset;
+      if (y > 0.49) y += (Math.sin(x * 9.7 + z * 5.3) + Math.cos(z * 8.1 - x * 4.7)) * 0.004;
+      position.setXYZ(index, x, y, z);
+    }
+    position.needsUpdate = true;
+    clipped.computeVertexNormals();
+    clipped.clearGroups();
+    if (clipped.index) clipped.addGroup(0, clipped.index.count, 0);
+    return clipped;
+  }
+
   function buildHedgeMaze() {
     const rows = HEDGE_MAZE_LAYOUT.rows;
     const columns = rows[0].length;
@@ -4009,26 +4035,27 @@
     const groundY = YARD_LAYOUT.groundY;
     box({ name: "hedge-maze-paths", w: columns * size + 1.5, h: 0.04, d: rows.length * size + 1.5, x: HEDGE_MAZE_LAYOUT.centerX, y: groundY + 0.02, z: HEDGE_MAZE_LAYOUT.centerZ, material: M.gardenSoil, cast: false });
     const walls = [];
-    const clumps = [];
+    const foliageShells = [];
     rows.forEach((row, rowIndex) => {
       Array.from(row).forEach((cell, colIndex) => {
         if (cell !== "#") return;
         const center = mazeCellCenter(rowIndex, colIndex);
-        walls.push({ x: center.x, y: groundY + 1.08, z: center.z, w: size * 1.035, h: 2.16, d: size * 1.035 });
-        physics.addFixedBox(center.x, groundY + 1.12, center.z, size, 2.28, size, 0);
-        for (const ox of [-0.38, 0.38]) for (const oz of [-0.38, 0.38]) clumps.push({
-          x: center.x + ox, y: groundY + 2.05, z: center.z + oz,
-          sx: 0.38, sy: 0.34, sz: 0.38, ry: yardJitter(rowIndex + ox, colIndex + oz),
+        const clippedHeight = 2.12 + yardJitter(rowIndex * 17, colIndex * 29) * 0.07;
+        walls.push({ x: center.x, y: groundY + clippedHeight / 2, z: center.z, w: size * 1.01, h: clippedHeight - 0.04, d: size * 1.01 });
+        foliageShells.push({
+          x: center.x,
+          y: groundY + clippedHeight / 2,
+          z: center.z,
+          sx: size * 1.002,
+          sy: clippedHeight,
+          sz: size * 1.002,
+          ry: (rowIndex + colIndex) % 2 ? Math.PI / 2 : 0,
         });
-        for (const side of [-1, 1]) for (const level of [0.58, 1.38]) {
-          const offset = level < 1 ? -0.31 : 0.31;
-          clumps.push({ x: center.x + side * size * 0.48, y: groundY + level, z: center.z + offset, sx: 0.27, sy: 0.37, sz: 0.4, ry: 0 });
-          clumps.push({ x: center.x + offset, y: groundY + level, z: center.z + side * size * 0.48, sx: 0.4, sy: 0.37, sz: 0.27, ry: 0 });
-        }
+        physics.addFixedBox(center.x, groundY + 1.12, center.z, size, 2.28, size, 0);
       });
     });
     addBoxInstanceBatch("hedge-maze-walls", M.hedgeDark, walls, true, true);
-    addOutdoorInstanceBatch("hedge-maze-leaf-clumps", "yardHedgeClump", () => new THREE.IcosahedronGeometry(1, 1), M.hedge, clumps, false, true);
+    addOutdoorInstanceBatch("hedge-maze-clipped-foliage", "clippedHedgeFoliage", makeClippedHedgeGeometry, M.hedge, foliageShells, false, true);
     const entranceRow = rows.findIndex((row) => row.includes("S"));
     const entranceColumn = rows[entranceRow].indexOf("S");
     const entranceCenter = mazeCellCenter(entranceRow, entranceColumn);
@@ -4045,12 +4072,12 @@
     sphere({ name: "hedge-maze-entrance-crest", radius: 0.16, x: entranceFacadeX + 0.05, y: groundY + 2.72, z: entranceCenter.z, material: M.brass });
     const solution = solveHedgeMaze();
     const entranceCell = solution[0] || { row: 0, col: 4 };
-    const exitCell = solution[solution.length - 1] || { row: rows.length - 1, col: 4 };
+    const southGoalCell = solution[solution.length - 1] || { row: rows.length - 2, col: 5 };
     yardState.maze = {
       rows: rows.length,
       columns,
       entrance: mazeCellCenter(entranceCell.row, entranceCell.col),
-      exit: mazeCellCenter(exitCell.row, exitCell.col),
+      southGoal: mazeCellCenter(southGoalCell.row, southGoalCell.col),
       shortestPathLength: solution.length,
     };
     yardState.featureCounts.mazeHedges = walls.length;
@@ -4216,7 +4243,12 @@
     addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     const mazeEntranceRow = HEDGE_MAZE_LAYOUT.rows.findIndex((row) => row.includes("S"));
     const mazeEntranceCell = mazeCellCenter(mazeEntranceRow, HEDGE_MAZE_LAYOUT.rows[mazeEntranceRow].indexOf("S"));
-    const mazeExitCell = mazeCellCenter(HEDGE_MAZE_LAYOUT.rows.length - 1, HEDGE_MAZE_LAYOUT.rows[HEDGE_MAZE_LAYOUT.rows.length - 1].indexOf("E"));
+    const mazeCornerCells = [
+      { row: 0, col: 0, role: "corner", name: "maze-north-west-corner-lamp" },
+      { row: 0, col: 8, role: "corner", name: "maze-north-east-corner-lamp" },
+      { row: 30, col: 0, role: "corner", name: "maze-south-west-corner-lamp" },
+      { row: 30, col: 8, role: "corner", name: "maze-south-east-corner-lamp" },
+    ];
     const mazeWayfindingCells = [
       { row: 3, col: 4, targetRow: 3, targetCol: 3, role: "wayfinding" },
       { row: 7, col: 6, targetRow: 7, targetCol: 5, role: "wayfinding" },
@@ -4249,8 +4281,23 @@
           name: source.name || `maze-wayfinding-lamp-${source.row}`,
         };
       }),
-      { x: mazeExitCell.x - 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "exit" },
-      { x: mazeExitCell.x + 1.3, z: mazeExitCell.z - 1.0, targetX: mazeExitCell.x, targetZ: mazeExitCell.z, height: 3.15, intensity: 48, distance: 7.8, angle: 0.62, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      ...mazeCornerCells.map((source) => {
+        const center = mazeCellCenter(source.row, source.col);
+        return {
+          x: center.x,
+          z: center.z,
+          height: 4.35,
+          intensity: 210,
+          distance: 11.4,
+          angle: 1.02,
+          downward: true,
+          contained: true,
+          castsLight: true,
+          castsShadow: false,
+          role: source.role,
+          name: source.name,
+        };
+      }),
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
@@ -5908,7 +5955,12 @@
           start: "yardMazeEntranceCell",
           actions: buildMazeRouteActions(),
           startDelayMs: 1400,
-          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", near: { x: 28, z: -31.75, radius: 0.9 } },
+          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", near: { x: 28, z: -30.25, radius: 0.9 } },
+        },
+        yardMazeSouthWallBlock: {
+          start: "yardMazeSouthGoal",
+          actions: [{ yaw: 0, seconds: 2.0 }],
+          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", minZ: -30.95, maxZ: -30.45 },
         },
         yardMazeNorthAccess: {
           start: "yardMazeNorthEntrance",

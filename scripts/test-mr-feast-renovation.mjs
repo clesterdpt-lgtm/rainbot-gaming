@@ -236,6 +236,7 @@ check("7 ballroom marble", mansion.includes('textureUrl("antique-marble-ai.jpg")
 
 // 8. Every dining chair faces the table center.
 const diningChairs = parsedCalls("addChair", section("// Dining room", "// Ballroom", mainFurnishings));
+check("dining room wall clearance", !/addWallPortrait|artId:\s*"feast-of-merit"/.test(section("// Dining room", "// Ballroom", mainFurnishings)), "the dining-room portrait still overlaps the window composition");
 const diningAt = (x, z) => diningChairs.find((call) => near(call.values[0], x, 0.08) && near(call.values[1], z, 0.08));
 for (const x of [-12, -10.45, -8.95, -7.4]) {
   check("8 dining-chair orientation", near(diningAt(x, -7.25)?.values[3], 0), `north dining chair at x=${x} must face south toward the table`);
@@ -348,6 +349,7 @@ check("19 locked driveway gate", /addInteractionTarget\(/.test(yardBuild), "driv
 check("19 formal garden", /function buildFormalGarden\(/.test(yardBuild), "formal garden factory is missing");
 check("19 formal garden", /const beds\s*=\s*\[[\s\S]*?\{ x:[\s\S]*?\{ x:[\s\S]*?\{ x:[\s\S]*?\{ x:/.test(yardBuild) && /yardState\.featureCounts\.gardenBeds\s*=\s*beds\.length/.test(yardBuild), "formal garden needs four data-driven named parterre beds");
 check("19 formal garden", /garden-fountain-basin/.test(yardBuild) && /formal-garden-path/.test(yardBuild), "formal garden lacks its focal fountain or connected paths");
+check("19 formal garden", /garden-fountain-crown-lantern-bulb/.test(yardBuild) && /garden-fountain-crown-lantern-light/.test(yardBuild) && /visibleFixtureEmitter\s*=\s*true/.test(yardBuild), "fountain glow is not tied to a visible crown-lantern source");
 check("19 formal garden", /garden-rose-(?:blooms|stems)/.test(yardBuild), "formal garden lacks batched planted detail");
 
 check("19 swimming pool", /function buildEstatePool\(/.test(yardBuild), "pool factory is missing");
@@ -408,6 +410,8 @@ check("19 exterior lighting", lightingMap.includes('"FRONT DRIVE"') && lightingM
 check("19 exterior lighting", /new LightCircuit\("estate exterior lights"[^;]*true\)/.test(yardBuild), "estate exterior light circuit is missing or does not start on");
 check("19 exterior lighting", /estateExteriorLights\.addSwitch\(/.test(yardBuild) && count(yardBuild, /addEstateLantern\(/g) >= 6, "yard lacks a physical switch or sufficient practical lanterns");
 check("19 exterior lighting", /physics\.addFixedBox\(x, YARD_LAYOUT\.groundY \+ height \/ 2, z, 0\.22, height, 0\.22/.test(yardBuild), "exterior lantern posts have no height-matched physical proxy");
+check("19 exterior lighting", /function addRearFacadeWallLantern\(/.test(yardBuild) && count(yardBuild, /addRearFacadeWallLantern\(estateExteriorLights/g) === 2, "rear entrance does not have exactly two visible wall lanterns");
+check("19 exterior lighting", !/addPracticalLight\(0,\s*2\.45,\s*-14\.2/.test(yardBuild), "source-less rear entrance spotlight remains");
 
 check("19 yard diagnostics", /yard\s*:\s*getYardDiagnostics\(/.test(diagnostics), "render_game_to_text diagnostics do not include yard state");
 check("19 yard diagnostics", /gate:\s*\{/.test(yardBuild) && /maze:\s*\{/.test(yardBuild) && /featureCounts:\s*\{/.test(yardBuild), "yard diagnostics omit gate, maze, or feature counts");
@@ -435,8 +439,12 @@ check("20 continuous exterior facade", count(exteriorWalls, /w:\s*30\.34,\s*h:\s
 check("20 exterior re-entry rendering", /distanceFromHouse/.test(exteriorCulling) && /nearHouse/.test(exteriorCulling), "exterior culling does not restore the interior before a player reaches the house");
 check("20 exterior re-entry diagnostics", /interiorDetailsHidden:\s*Boolean\(interiorDetailsHidden\)/.test(diagnostics), "diagnostics cannot prove whether the interior render set is restored");
 check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && /kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 1, "rear doorways do not share the authored sill-to-floor ramp bridge");
+check("20 outer entry ramps", /front-portico-outer-entry-ramp/.test(exteriorBuild) && /ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 2, "front and rear slab edges do not both have visible walkable approach ramps");
 for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip", "serviceDoorRoundTrip"]) {
   check("20 exterior re-entry routes", qaHooks.includes(`${route}:`), `missing exterior round-trip route ${route}`);
+}
+for (const route of ["frontStepReentry", "rearStepReentry"]) {
+  check("20 outer entry routes", qaHooks.includes(`${route}:`), `missing outer-step re-entry route ${route}`);
 }
 for (const [route, nextRoute, finalRoom, outdoorRoom] of [
   ["frontDoorRoundTrip", "terraceDoorRoundTrip", "FRONT FOYER", "FRONT DRIVE"],
@@ -533,7 +541,7 @@ check("20 movement-stable light rendering", !/lightWithinStableResidency|lightRe
 check("20 movement-stable light rendering", /nextVisible\s*=\s*rendersInContext\s*&&\s*rendersOnLevel/.test(lightRendering) && /circuit\.on && enclosureOpen/.test(lightRendering), "normal circuit lights are not kept stable for the complete authored floor context with enclosure-gated energy");
 check("20 auxiliary interior lighting", /for \(const light of auxiliaryInteriorLights\)/.test(lightRendering) && /interactionVisible/.test(lightRendering) && /light\.visible = true/.test(lightRendering), "door-operated cabinet lights no longer hold permanent layout-stable shader slots");
 check("20 stable light rendering", !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "room-name proximity gating can still hide a lit closet or room light while the player moves");
-check("20 exterior light containment", /addPracticalLight\(0,\s*3\.15,\s*14\.5,[\s\S]*?angle:\s*0\.48/.test(yardBuild) && /addPracticalLight\(0,\s*2\.45,\s*-14\.2,[\s\S]*?angle:\s*0\.5/.test(yardBuild), "front or rear facade fill can project through the mansion shell");
+check("20 exterior light containment", /addPracticalLight\(0,\s*3\.15,\s*14\.5,[\s\S]*?angle:\s*0\.48/.test(yardBuild) && /addRearFacadeWallLantern\([\s\S]*?addWallSconce\([\s\S]*?-14\.15/.test(yardBuild), "front or rear facade fixtures can project through the mansion shell");
 check("20 manual light state", !/\.setState\(|\.toggle\(/.test(updateLocation + exteriorCulling + lightRendering), "room or exterior transitions mutate a light circuit without a switch interaction");
 check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.test(stormSystem) && /this\.light\.intensity\s*=\s*outdoors\s*\?\s*lightning \* 11\s*:\s*0/.test(stormSystem), "the unshadowed lightning key can still pass through interior walls");
 check("20 real fixture emission", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addContainedSpotLight(x, y", lightCircuitClass)), "visible fixtures are not backed by real contained lights");
@@ -565,7 +573,7 @@ const expectedPortraitFiles = [
 ];
 const newPortraitIds = ["banquet-forgot-guests", "last-applause", "orchard-porcelain-teeth", "house-dreams-back"];
 check("21 generated portrait collection", count(portraitManifest, /file:\s*"portraits\/portrait-[^"]+-v1-ai\.jpg"/g) === 10, "portrait manifest does not expose ten immutable generated artwork files");
-check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 14, "all fourteen mansion picture frames are not assigned a stable generated art ID");
+check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 13, "all thirteen remaining mansion picture frames are not assigned a stable generated art ID");
 for (const artId of newPortraitIds) {
   check("23 non-host painting collection", portraitManifest.includes(`"${artId}"`) && portraitFurnishings.includes(`artId: "${artId}"`), `${artId} is not registered and placed in the mansion`);
 }
@@ -578,7 +586,7 @@ for (const view of ["mainGalleryLastApplause", "upperArtHouseDreams", "upperArtB
 check("21 generated portrait loader", /function loadArtworkTexture/.test(mansion) && /ClampToEdgeWrapping/.test(portraitBuilder) && /THREE\.sRGBEncoding/.test(portraitBuilder) && !/RepeatWrapping/.test(portraitBuilder), "artwork textures are not loaded as clamped sRGB paintings");
 check("21 generated portrait loader", /portrait-art-\$\{artId\}/.test(portraitBuilder) && /if \(!artTexture\)/.test(portraitBuilder), "generated art lacks stable scene names or procedural fallback gating");
 check("21 generated portrait diptych", /repeatX:\s*0\.5,\s*offsetX:\s*0/.test(portraitFurnishings) && /repeatX:\s*0\.5,\s*offsetX:\s*0\.5/.test(portraitFurnishings), "ballroom diptych halves are not mapped to complementary frames");
-check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 14 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
+check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 13 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
 check("23 painting readability", /onEmissiveIntensity\s*=\s*0\.48/.test(portraitBuilder) && /offEmissiveIntensity\s*=\s*0/.test(portraitBuilder) && /circuit\.on\s*\?\s*0\.48\s*:\s*0/.test(portraitBuilder), "lit paintings are not gently readable while preserving a true zero-emissive lights-off state");
 for (const filename of expectedPortraitFiles) {
   const fullPath = path.join(root, "assets/textures/mr-feast/generated/portraits", filename);
@@ -696,7 +704,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-indoor-light-perf-2", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-entry-lamps-5", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

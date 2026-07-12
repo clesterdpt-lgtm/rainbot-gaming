@@ -887,6 +887,7 @@
   let chunkCenterKey = "";
   let decorCenterKey = "";
   let mobSpawnSerial = 0;
+  let mobIdSerial = 0;
   let sunDisk = null;
   let moonDisk = null;
   let activeWaterHead = 0;
@@ -1491,6 +1492,7 @@
     applying: false,
     peers: new Map(),
     sendAcc: 0,
+    mobSendAcc: 0,
 
     openLobby() {
       if (!window.RBNetUI || !window.RBNet || !RBNet.available()) {
@@ -1516,6 +1518,16 @@
       room.on("blk", (d) => netRizz.onBlk(d));
       room.on("pos", (d, from) => netRizz.onPos(d, from));
       room.on("peerleave", (pid) => netRizz.dropPeer(pid, true));
+      // Shared mob roster: host sims + broadcasts, guests render puppets and
+      // forward attacks/take hits back. See simAuthoritative()/updateMobs().
+      room.on("msnap", (d) => netRizz.onMobSnap(d));
+      room.on("mdie", (d) => netRizz.onMobDie(d));
+      room.on("matk", (d) => netRizz.onMobAttack(d));
+      room.on("mloot", (d) => netRizz.onMobLoot(d));
+      room.on("hitm", (d, from) => netRizz.onHitMob(d, from));
+      room.on("sumboss", (d) => { if (netRizz.room.isHost && d && typeof d.x === "number") summonBossAt(d.x, d.z, d.yaw || 0); });
+      // Chest/furnace contents: symmetric broadcast-and-mirror, see broadcastChest/broadcastFurnace.
+      room.on("cont", (d) => netRizz.onCont(d));
       room.on("closed", () => {
         if (!netRizz.active) return;
         api.toast("Connection lost — world is now solo.", "bad");
@@ -1549,6 +1561,109 @@
       }
     },
 
+    // Host-only: a guest asked us to apply their attack against a mob it
+    // doesn't own. We stay the source of truth for hp/knockback/kill credit.
+    onHitMob(d, from) {
+      if (!netRizz.room || !netRizz.room.isHost || !d) return;
+      const mob = state.mobs.find((m) => m.id === d.id);
+      if (!mob) return;
+      mob.lastHitBy = from;
+      damageMob(mob, d.dmg);
+      if (d.fire) applyTorchBurn(mob, 0.82);
+    },
+
+    // Guest-only: the host decided a mob hit US.
+    onMobAttack(d) {
+      if (d && typeof d.d === "number") hurtPlayer(d.d);
+    },
+
+    // The killer-of-record gets the score/counters/items — not whoever's
+    // machine happened to run the simulation.
+    onMobLoot(d) {
+      if (!d) return;
+      addScore(d.score || 0);
+      if (d.boss) state.counters.bossKills++; else state.counters.mobKills++;
+      (d.items || []).forEach(([code, n]) => giveItem(code, n));
+      api.toast(d.boss ? "The Skibidi Titan falls! Loot secured." : "Loot secured.", "good");
+    },
+
+    // Guest-only: host removed a mob (death). Play the same fx locally.
+    onMobDie(d) {
+      if (!d) return;
+      const idx = state.mobs.findIndex((m) => m.id === d.i);
+      if (idx < 0) return;
+      const mob = state.mobs[idx];
+      spawnBurst(mob.x, mob.y + 0.6, mob.z, cachedRgb("#9be870"), 5, 1.8);
+      removeMob(mob);
+      state.mobs.splice(idx, 1);
+    },
+
+    // Someone (any player, not just host) deposited/withdrew/loaded/took, or
+    // the host's furnace sim ticked — mirror their resulting container state.
+    onCont(d) {
+      if (!d) return;
+      if (d.kind === "c") state.chests[d.k] = d.slots;
+      else if (d.kind === "f") state.furnaces[d.k] = d.f;
+      if (state.openChest === d.k || state.openFurnace === d.k) { bagRenderKey = null; updateHud(); }
+    },
+
+    // Guest-only: periodic full roster snapshot from the host. Lazily spawns
+    // puppet mobs on first sight and reconciles anything that fell off the
+    // list (should normally arrive via onMobDie, this is just a safety net).
+    onMobSnap(d) {
+      if (!d || !d.m || (netRizz.room && netRizz.room.isHost)) return;
+      const seen = new Set();
+      d.m.forEach((s) => {
+        seen.add(s.i);
+        let mob = state.mobs.find((m) => m.id === s.i);
+        if (!mob) {
+          mob = {
+            id: s.i, type: s.t, x: s.x, y: s.y, z: s.z, tx: s.x, ty: s.y, tz: s.z,
+            hp: s.h, maxHp: (MOB[s.t] && MOB[s.t].hp) || s.h,
+            mode: s.mo ? "hunt" : "wander", turn: 0,
+            hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0,
+            mesh: createMobMesh(s.t),
+          };
+          mob.mesh.position.set(mob.x, mob.y, mob.z);
+          mobGroup.add(mob.mesh);
+          state.mobs.push(mob);
+        }
+        mob.tx = s.x; mob.ty = s.y; mob.tz = s.z; mob.hp = s.h;
+        if (s.hh) mob.hurtTimer = MOB_HURT_SECONDS;
+        if (s.ha) mob.attackTimer = MOB_ATTACK_SECONDS;
+        mob.mode = s.mo ? "hunt" : "wander";
+      });
+      for (let i = state.mobs.length - 1; i >= 0; i--) {
+        if (!seen.has(state.mobs[i].id)) { removeMob(state.mobs[i]); state.mobs.splice(i, 1); }
+      }
+    },
+
+    // Guest-only: cosmetic per-frame lerp toward the host's last snapshot.
+    // No AI, no damage, no hp<=0 handling — the host owns all of that.
+    updateMobPuppets(dt) {
+      const now = performance.now();
+      for (let i = 0; i < state.mobs.length; i++) {
+        const mob = state.mobs[i];
+        const k = Math.min(1, dt * 10);
+        const dx = mob.tx - mob.x;
+        const dz = mob.tz - mob.z;
+        mob.x += dx * k;
+        mob.y += (mob.ty - mob.y) * k;
+        mob.z += dz * k;
+        if (mob.hurtTimer > 0) mob.hurtTimer -= dt;
+        if (mob.attackTimer > 0) mob.attackTimer -= dt;
+        const attackPulse = mob.attackTimer > 0 ? Math.sin((1 - mob.attackTimer / MOB_ATTACK_SECONDS) * Math.PI) : 0;
+        const hurtPulse = mob.hurtTimer > 0 ? Math.sin((1 - mob.hurtTimer / MOB_HURT_SECONDS) * Math.PI) : 0;
+        const bob = Math.sin(now / 160 + i) * 0.04;
+        if (Math.hypot(dx, dz) > 0.01) mob.turn = Math.atan2(dx, dz);
+        mob.mesh.position.set(mob.x, mob.y + bob + hurtPulse * 0.12, mob.z);
+        mob.mesh.rotation.y = (mob.turn || 0) + Math.PI;
+        mob.mesh.rotation.x = -attackPulse * 0.22 + hurtPulse * 0.08;
+        mob.mesh.scale.set(1 + hurtPulse * 0.16, 1 - attackPulse * 0.08 + hurtPulse * 0.08, 1 + hurtPulse * 0.16);
+        applyMobFlash(mob, hurtPulse, attackPulse);
+      }
+    },
+
     tick(dt) {
       if (!netRizz.active || !netRizz.room) return;
       netRizz.sendAcc += dt;
@@ -1572,6 +1687,21 @@
           msg.d = state.day;
         }
         netRizz.room.send("pos", msg);
+      }
+      if (netRizz.room.isHost && state.started) {
+        netRizz.mobSendAcc += dt;
+        if (netRizz.mobSendAcc >= 0.12) {
+          netRizz.mobSendAcc = 0;
+          // Always send, even when empty — e.g. dawn wipes the horde without
+          // per-mob "mdie" events, and guests reconcile via the seen-set diff.
+          netRizz.room.send("msnap", {
+            m: state.mobs.map((m) => ({
+              i: m.id, t: m.type,
+              x: Math.round(m.x * 100) / 100, y: Math.round(m.y * 100) / 100, z: Math.round(m.z * 100) / 100,
+              h: Math.round(m.hp), hh: m.hurtTimer > 0 ? 1 : 0, ha: m.attackTimer > 0 ? 1 : 0, mo: m.mode === "hunt" ? 1 : 0,
+            })),
+          });
+        }
       }
       netRizz.peers.forEach((peer) => {
         const t = peer.target;
@@ -5115,6 +5245,7 @@
     if (!slot) return;
     const left = addToSlotArray(chestSlots(state.openChest), slot.code, slot.n);
     if (left <= 0) list[idx] = null; else slot.n = left;
+    broadcastChest(state.openChest);
     bagRenderKey = null; updateHud();
   }
   // Move a whole stack from the open chest back into the player's inventory.
@@ -5127,6 +5258,7 @@
     if (!state.edits.has(state.openChest)) state.counters.looted++;
     giveItem(slot.code, slot.n);
     slots[idx] = null;
+    broadcastChest(state.openChest);
     bagRenderKey = null; updateHud();
   }
   // Generic "add as many as fit into this slot array" used by chest deposits.
@@ -5135,11 +5267,27 @@
     for (let i = 0; i < slots.length && n > 0; i++) { if (!slots[i]) { const a = Math.min(n, cap); slots[i] = { code, n: a }; n -= a; } }
     return n;
   }
-  // Drop a broken chest's contents at its position so nothing is lost.
+  // Coop: any player who touches a chest/furnace broadcasts its new contents
+  // so everyone's local mirror (state.chests/state.furnaces) stays in sync —
+  // symmetric last-write-wins, not host-arbitrated (see simAuthoritative()
+  // for the one thing that DOES need a single owner: ambient furnace ticks).
+  function broadcastChest(key) {
+    if (netRizz.active && netRizz.room) netRizz.room.send("cont", { k: key, kind: "c", slots: state.chests[key] });
+  }
+  function broadcastFurnace(key) {
+    if (netRizz.active && netRizz.room) netRizz.room.send("cont", { k: key, kind: "f", f: state.furnaces[key] });
+  }
+  // Drop a broken chest's contents at its position so nothing is lost. Only
+  // the player who actually broke it grants themself the loot — everyone
+  // else applies the same block removal as a replay (netRizz.applying) and
+  // would otherwise each hand out a free duplicate copy.
   function spillChest(x, y, z) {
     const key = chestKey(x, y, z);
     const slots = state.chests[key];
-    if (slots) { for (const s of slots) if (s) giveItem(s.code, s.n); delete state.chests[key]; }
+    if (slots) {
+      if (!netRizz.applying) for (const s of slots) if (s) giveItem(s.code, s.n);
+      delete state.chests[key];
+    }
     if (state.openChest === key) closeChest();
   }
   function sleepInBed(x, y, z) {
@@ -5148,8 +5296,11 @@
     if (isNight()) {
       state.time = 0.0;            // jump to dawn
       state.spawnTimer = SPAWN_GRACE;
-      state.mobs.slice().forEach(removeMob);
-      state.mobs = [];
+      // In coop the mob roster belongs to the host, not whichever player slept.
+      if (!netRizz.active) {
+        state.mobs.slice().forEach(removeMob);
+        state.mobs = [];
+      }
       state.player.hp = clamp(state.player.hp + 6, 0, MAX_HP);
       api.toast("You slept. Good morning! Respawn point set.", "good");
     } else {
@@ -5211,6 +5362,7 @@
     const add = Math.min(slot.n, cap - f[dest].n);
     f[dest].n += add; slot.n -= add;
     if (slot.n <= 0) list[idx] = null;
+    broadcastFurnace(state.openFurnace);
     bagRenderKey = null; updateHud();
   }
   function takeFurnace(which) {
@@ -5219,26 +5371,38 @@
     if (!f[which]) return;
     giveItem(f[which].code, f[which].n);
     f[which] = null;
+    broadcastFurnace(state.openFurnace);
     bagRenderKey = null; updateHud();
   }
+  // See spillChest for why this is guarded by !netRizz.applying.
   function spillFurnace(x, y, z) {
     const key = chestKey(x, y, z);
     const f = state.furnaces[key];
-    if (f) { ["input", "fuel", "output"].forEach((s) => { if (f[s]) giveItem(f[s].code, f[s].n); }); delete state.furnaces[key]; }
+    if (f) {
+      if (!netRizz.applying) ["input", "fuel", "output"].forEach((s) => { if (f[s]) giveItem(f[s].code, f[s].n); });
+      delete state.furnaces[key];
+    }
     if (state.openFurnace === key) closeFurnace();
   }
   function updateFurnaces(dt) {
-    let openChanged = false;
+    // Ambient cook/burn ticks are the one furnace behavior that needs a
+    // single simulator — otherwise every player in coop independently burns
+    // through the same fuel/input. Deposits/withdrawals stay symmetric
+    // (see broadcastFurnace) since those are discrete player actions, not
+    // an ongoing simulation.
+    if (!simAuthoritative()) return;
     for (const key in state.furnaces) {
       const f = state.furnaces[key];
       const recipe = f.input ? SMELTING[f.input.code] : null;
       const roomForOut = recipe && (!f.output || (f.output.code === recipe.out && f.output.n < maxStack(recipe.out)));
+      let changed = false;
       if (f.burn > 0) f.burn = Math.max(0, f.burn - dt);
       // Ignite a fresh fuel only when there is something to smelt.
       if (f.burn <= 0 && recipe && roomForOut && f.fuel && FUELS[f.fuel.code]) {
         f.burnMax = FUELS[f.fuel.code];
         f.burn = f.burnMax;
         f.fuel.n -= 1; if (f.fuel.n <= 0) f.fuel = null;
+        changed = true;
       }
       if (f.burn > 0 && recipe && roomForOut) {
         f.cook += dt;
@@ -5247,32 +5411,49 @@
           f.input.n -= 1; if (f.input.n <= 0) f.input = null;
           if (f.output) f.output.n += 1; else f.output = { code: recipe.out, n: 1 };
           state.counters.smelts++;
+          changed = true;
         }
-        openChanged = true;
+        if (state.openFurnace === key) bagRenderKey = null;
       } else if (f.cook > 0) {
         f.cook = Math.max(0, f.cook - dt * 2);
-        openChanged = true;
+        // Fuel ran out mid-cook with nothing left to reignite — that's a
+        // real endpoint guests need to hear about, not just per-frame decay.
+        if (f.cook === 0) changed = true;
+        if (state.openFurnace === key) bagRenderKey = null;
       }
+      if (changed) broadcastFurnace(key);
     }
-    if (openChanged && state.openFurnace) bagRenderKey = null;
   }
 
   // --- Crop farming ------------------------------------------------------------
   function updateCrops(dt) {
+    // Ambient growth ticks: only the sim-authoritative client rolls, else N
+    // players in coop each roll their own chance and crops grow N times as
+    // fast. Everyone still sees it via the normal setBlock/"blk" replication.
+    if (!simAuthoritative()) return;
     state.cropTick += dt;
     if (state.cropTick < 1.8) return;
     state.cropTick = 0;
-    const px = Math.floor(state.player.x), pz = Math.floor(state.player.z), R = 30;
+    const R = 30;
     const growChance = isNight() ? 0.12 : 0.28;
-    const z0 = Math.max(1, pz - R), z1 = Math.min(WORLD_Z - 2, pz + R);
-    const x0 = Math.max(1, px - R), x1 = Math.min(WORLD_X - 2, px + R);
+    const centers = [state.player];
+    if (netRizz.active) netRizz.peers.forEach((peer) => centers.push(peer.mesh.position));
+    const seen = new Set();
     let grew = false;
-    for (let z = z0; z <= z1; z++) {
-      for (let x = x0; x <= x1; x++) {
-        const fy = state.surface[surfaceIndex(x, z)];
-        const c = getBlock(x, fy + 1, z);
-        if ((c !== CROP_1 && c !== CROP_2) || getBlock(x, fy, z) !== FARMLAND) continue;
-        if (Math.random() < growChance) { setBlock(x, fy + 1, z, c === CROP_1 ? CROP_2 : CROP_3, true, false); grew = true; }
+    for (const center of centers) {
+      const px = Math.floor(center.x), pz = Math.floor(center.z);
+      const z0 = Math.max(1, pz - R), z1 = Math.min(WORLD_Z - 2, pz + R);
+      const x0 = Math.max(1, px - R), x1 = Math.min(WORLD_X - 2, px + R);
+      for (let z = z0; z <= z1; z++) {
+        for (let x = x0; x <= x1; x++) {
+          const key = x * WORLD_Z + z;
+          if (seen.has(key)) continue; // don't re-roll a plot two players both cover
+          seen.add(key);
+          const fy = state.surface[surfaceIndex(x, z)];
+          const c = getBlock(x, fy + 1, z);
+          if ((c !== CROP_1 && c !== CROP_2) || getBlock(x, fy, z) !== FARMLAND) continue;
+          if (Math.random() < growChance) { setBlock(x, fy + 1, z, c === CROP_1 ? CROP_2 : CROP_3, true, false); grew = true; }
+        }
       }
     }
     if (grew) decorDirty = true;
@@ -5361,8 +5542,11 @@
     if (p.hp <= 0) {
       playSfx("death", { volume: 1.1 });
       api.toast("You got flushed. Respawning...", "bad");
-      state.mobs.forEach((m) => removeMob(m));
-      state.mobs = [];
+      // In coop the mob roster belongs to the host, not whichever player died.
+      if (!netRizz.active) {
+        state.mobs.forEach((m) => removeMob(m));
+        state.mobs = [];
+      }
       p.hp = MAX_HP;
       state.time = 0.18;
       spawnPlayer();
@@ -5416,6 +5600,12 @@
   function friendlyName(type) {
     return getFriendlyConfig(type).name || "friendly";
   }
+  // In solo play (or if we're the host) this client runs the shared ambient
+  // simulation — mob AI, crop growth, furnace cook ticks. Guests just render
+  // what the host broadcasts; only the host may originate that state.
+  function simAuthoritative() {
+    return !netRizz.active || (netRizz.room && netRizz.room.isHost);
+  }
   function spawnMob() {
     if (state.mobs.length >= Math.min(8 + state.day * 3, 28)) return false;
     const p = state.player;
@@ -5444,6 +5634,7 @@
       const type = chooseMobType(x, z, serial + tries);
       const turn = hash2(x + tries, z - tries) * Math.PI * 2;
       const mob = {
+        id: ++mobIdSerial,
         type,
         x: x + 0.5,
         y,
@@ -5461,6 +5652,7 @@
         knockTimer: 0,
         knockX: 0,
         knockZ: 0,
+        lastHitBy: null,
         mesh: createMobMesh(type),
       };
       mob.mesh.position.set(mob.x, mob.y, mob.z);
@@ -5878,13 +6070,31 @@
   }
   function updateMobs(dt) {
     const p = state.player;
+    // Host of a coop session: mobs can hunt/attack ANY player, not just us.
+    // Pick whichever player (self or a peer) is closest & currently visible;
+    // falls back to nearest-known-position while a mob is in memory-chase.
+    const online = netRizz.active && netRizz.room && netRizz.room.isHost;
     for (let i = state.mobs.length - 1; i >= 0; i--) {
       const mob = state.mobs[i];
       const cfg = MOB[mob.type] || MOB.toilet;
-      const dx = p.x - mob.x;
-      const dz = p.z - mob.z;
-      const dist = Math.hypot(dx, dz) || 1;
-      const seesPlayer = canMobSeePlayer(mob, cfg, dist);
+      let tx = p.x, ty = p.y, tz = p.z, targetPeer = null;
+      let dist = Math.hypot(p.x - mob.x, p.z - mob.z) || 1;
+      let seesPlayer = canMobSeeTarget(mob, cfg, dist, tx, ty, tz);
+      if (online) {
+        netRizz.peers.forEach((peer, pid) => {
+          const pt = peer.mesh.position;
+          const pd = Math.hypot(pt.x - mob.x, pt.z - mob.z) || 1;
+          const pSees = canMobSeeTarget(mob, cfg, pd, pt.x, pt.y, pt.z);
+          if (pSees && (!seesPlayer || pd < dist)) {
+            tx = pt.x; ty = pt.y; tz = pt.z; targetPeer = pid; dist = pd; seesPlayer = true;
+          } else if (!seesPlayer && !pSees && pd < dist) {
+            tx = pt.x; ty = pt.y; tz = pt.z; targetPeer = pid; dist = pd;
+          }
+        });
+      }
+      mob.huntPeer = targetPeer;
+      const dx = tx - mob.x;
+      const dz = tz - mob.z;
       if (seesPlayer) {
         mob.mode = "hunt";
         mob.alertTimer = cfg.memory;
@@ -5921,9 +6131,10 @@
       mob.mesh.scale.set(1 + hurtPulse * 0.16, 1 - attackPulse * 0.08 + hurtPulse * 0.08, 1 + hurtPulse * 0.16);
       applyMobFlash(mob, hurtPulse, attackPulse);
       if (mob.hitCd > 0) mob.hitCd -= dt;
-      if (mob.mode === "hunt" && dist < cfg.attackRange && Math.abs((p.y + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
+      if (mob.mode === "hunt" && dist < cfg.attackRange && Math.abs((ty + 0.5) - mob.y) < 1.8 && mob.hitCd <= 0) {
         mob.attackTimer = MOB_ATTACK_SECONDS;
-        hurtPlayer(cfg.damage);
+        if (mob.huntPeer) netRizz.room.sendTo(mob.huntPeer, "matk", { d: cfg.damage });
+        else hurtPlayer(cfg.damage);
         mob.hitCd = 1.25;
       }
       if (!cfg.boss && !isNight() && skyVisible(Math.floor(mob.x), Math.floor(mob.y), Math.floor(mob.z))) {
@@ -5931,29 +6142,36 @@
       }
       updateBurningEntity(mob, dt, 0.82);
       if (mob.hp <= 0) {
-        addScore(cfg.score);
-        if (cfg.boss) state.counters.bossKills++; else state.counters.mobKills++;
         playSfx("mobDown", { pitch: cfg.boss ? 0.6 : mob.type === "warden" ? 0.8 : 1 });
-        dropMobLoot(mob);
+        // Loot/score credit goes to whoever actually landed the killing blow,
+        // not to the host just because the host runs the simulation.
+        if (mob.lastHitBy && online) {
+          netRizz.room.sendTo(mob.lastHitBy, "mloot", { score: cfg.score, boss: !!cfg.boss, items: computeMobLoot(mob) });
+        } else {
+          addScore(cfg.score);
+          if (cfg.boss) state.counters.bossKills++; else state.counters.mobKills++;
+          grantMobLoot(mob);
+        }
         if (cfg.boss) {
           api.toast("The Skibidi Titan falls! Loot secured.", "good");
           spawnBurst(mob.x, mob.y + 1.4, mob.z, cachedRgb("#ffd75a"), 40, 4.2);
         }
+        if (online) netRizz.room.send("mdie", { i: mob.id });
         removeMob(mob);
         state.mobs.splice(i, 1);
       }
     }
   }
-  function canMobSeePlayer(mob, cfg, dist) {
-    if (!isNight() || dist > cfg.sight || Math.abs((state.player.y + EYE_HEIGHT * 0.65) - (mob.y + 0.75)) > 5) return false;
+  function canMobSeeTarget(mob, cfg, dist, tx, ty, tz) {
+    if (!isNight() || dist > cfg.sight || Math.abs((ty + EYE_HEIGHT * 0.65) - (mob.y + 0.75)) > 5) return false;
     if (dist > 4 && mob.mode !== "hunt") {
       const facingX = Math.sin(mob.turn || 0);
       const facingZ = Math.cos(mob.turn || 0);
-      const toPlayerX = (state.player.x - mob.x) / dist;
-      const toPlayerZ = (state.player.z - mob.z) / dist;
+      const toPlayerX = (tx - mob.x) / dist;
+      const toPlayerZ = (tz - mob.z) / dist;
       if (facingX * toPlayerX + facingZ * toPlayerZ < -0.18) return false;
     }
-    return clearMobSight(mob.x, mob.y + 0.82, mob.z, state.player.x, state.player.y + EYE_HEIGHT * 0.72, state.player.z);
+    return clearMobSight(mob.x, mob.y + 0.82, mob.z, tx, ty + EYE_HEIGHT * 0.72, tz);
   }
   function clearMobSight(x0, y0, z0, x1, y1, z1) {
     const dx = x1 - x0;
@@ -6028,31 +6246,38 @@
     mobGroup.remove(mob.mesh);
     disposeMesh(mob.mesh);
   }
-  function dropMobLoot(mob) {
+  function computeMobLoot(mob) {
     const table = MOB_LOOT[mob.type];
-    if (!table) return;
+    if (!table) return [];
     const seed = Math.floor((mob.x * 53 + mob.z * 131 + performance.now() * 0.03));
+    const items = [];
     table.forEach(([code, chance, min, max], k) => {
       if (hash2(seed + k * 17, seed - k * 31) > chance) return;
       const n = min + Math.floor(hash2(seed + k * 7, mob.z + k) * (max - min + 1));
-      if (n > 0) giveItem(code, n);
+      if (n > 0) items.push([code, n]);
     });
+    return items;
+  }
+  function grantMobLoot(mob) {
+    computeMobLoot(mob).forEach(([code, n]) => giveItem(code, n));
     spawnBurst(mob.x, mob.y + 0.6, mob.z, cachedRgb("#9be870"), 5, 1.8);
   }
   function bossActive() { return state.mobs.some((m) => MOB[m.type] && MOB[m.type].boss); }
-  function summonBoss() {
-    if (bossActive()) { api.toast("A Titan already stalks the land", "bad"); return false; }
-    const p = state.player;
-    // place it a short distance in front of the player on solid ground
-    const yaw = p.yaw;
-    let bx = Math.round(p.x - Math.sin(yaw) * 7);
-    let bz = Math.round(p.z - Math.cos(yaw) * 7);
+  // Actually creates the boss mob. In coop only the host may call this
+  // (it's the one adding to the authoritative roster); guests route through
+  // summonBoss() -> a "sumboss" request instead.
+  function summonBossAt(px, pz, yaw) {
+    if (bossActive()) return false;
+    // place it a short distance in front of the summoner on solid ground
+    let bx = Math.round(px - Math.sin(yaw) * 7);
+    let bz = Math.round(pz - Math.cos(yaw) * 7);
     bx = clamp(bx, 3, WORLD_X - 4); bz = clamp(bz, 3, WORLD_Z - 4);
     const by = state.surface[surfaceIndex(bx, bz)] + 1;
     const mob = {
+      id: ++mobIdSerial,
       type: "titan", x: bx + 0.5, y: by, z: bz + 0.5, hp: MOB.titan.hp, maxHp: MOB.titan.hp,
-      mode: "hunt", turn: yaw + Math.PI, alertTimer: 99, wanderTimer: 0, targetX: p.x, targetZ: p.z,
-      hitCd: 0, hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0, mesh: createMobMesh("titan"),
+      mode: "hunt", turn: yaw + Math.PI, alertTimer: 99, wanderTimer: 0, targetX: px, targetZ: pz,
+      hitCd: 0, hurtTimer: 0, attackTimer: 0, knockTimer: 0, knockX: 0, knockZ: 0, lastHitBy: null, mesh: createMobMesh("titan"),
     };
     mob.mesh.position.set(mob.x, mob.y, mob.z);
     mobGroup.add(mob.mesh);
@@ -6061,6 +6286,17 @@
     playSfx("nightfall");
     spawnBurst(mob.x, mob.y + 1.5, mob.z, cachedRgb("#8a4fd6"), 30, 3.6);
     return true;
+  }
+  function summonBoss() {
+    if (bossActive()) { api.toast("A Titan already stalks the land", "bad"); return false; }
+    const p = state.player;
+    if (!simAuthoritative()) {
+      // Ask the host to spawn it near us — we don't own the mob roster.
+      netRizz.room.sendTo(netRizz.room.hostId, "sumboss", { x: p.x, z: p.z, yaw: p.yaw });
+      api.toast("Summoning the Titan...", "");
+      return true;
+    }
+    return summonBossAt(p.x, p.z, p.yaw);
   }
   function applyFriendlyFlash(friendly, hurtPulse) {
     if (!friendly.mesh) return;
@@ -6398,7 +6634,14 @@
       damageCaveCreature(hit.target, damage);
       if (fireHit) applyTorchBurn(hit.target, 0.55);
       api.toast(`Hit ${caveCreatureName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
+    } else if (netRizz.active && netRizz.room && !netRizz.room.isHost) {
+      // We don't own the mob roster — ask the host to apply the hit. Our
+      // local mob object is just a puppet and gets corrected by the next
+      // "msnap"/"mdie", so don't mutate it here.
+      netRizz.room.sendTo(netRizz.room.hostId, "hitm", { id: hit.target.id, dmg: damage, fire: fireHit });
+      api.toast(`Hit ${mobDisplayName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
     } else {
+      hit.target.lastHitBy = null;
       damageMob(hit.target, damage);
       if (fireHit) applyTorchBurn(hit.target, 0.82);
       api.toast(`Hit ${mobDisplayName(hit.type)} -${damage}${fireHit ? " fire" : ""}`, "");
@@ -6604,13 +6847,17 @@
       playSfx("daybreak", { volume: 0.9 });
       api.toast(`Survived the night. Day ${state.day}`, "good");
       // Dawn clears the night horde, but a summoned boss fights on into the day.
-      state.mobs.slice().forEach((m) => { if (!(MOB[m.type] && MOB[m.type].boss)) removeMob(m); });
-      state.mobs = state.mobs.filter((m) => MOB[m.type] && MOB[m.type].boss);
+      // Only the mob-authoritative client (solo player or coop host) owns the
+      // shared roster — guests get the wipe via the next "msnap"/"mdie".
+      if (simAuthoritative()) {
+        state.mobs.slice().forEach((m) => { if (!(MOB[m.type] && MOB[m.type].boss)) removeMob(m); });
+        state.mobs = state.mobs.filter((m) => MOB[m.type] && MOB[m.type].boss);
+      }
     }
     const nightNow = isNight();
     if (nightNow && !wasNight) playSfx("nightfall", { volume: 0.85 });
     wasNight = nightNow;
-    if (isNight() && state.started && !state.paused && !state.crafting) {
+    if (isNight() && state.started && !state.paused && !state.crafting && simAuthoritative()) {
       state.spawnTimer -= dt;
       if (state.spawnTimer <= 0) {
         const spawned = spawnMob();
@@ -7764,7 +8011,7 @@
       updateEffects(dt);
       updatePlayer(dt);
       updateVisibleChunks();
-      updateMobs(dt);
+      if (simAuthoritative()) updateMobs(dt); else netRizz.updateMobPuppets(dt);
       updateCaveCreatures(dt);
       updateTarget();
       updateMining(dt);

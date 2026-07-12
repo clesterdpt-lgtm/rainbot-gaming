@@ -191,7 +191,6 @@
     mainGalleryLastApplause: [10.1, FLOOR.MAIN, -5.2, Math.PI],
     diningA: [-13.7, FLOOR.MAIN, -10.7, -2.1],
     diningB: [-6.2, FLOOR.MAIN, -10.7, 2.15],
-    diningPortrait: [-12.0, FLOOR.MAIN, -8.4, Math.PI / 2],
     ballroomA: [0, FLOOR.MAIN, -5.8, 0],
     ballroomB: [0, FLOOR.MAIN, -10.7, Math.PI],
     ballroomPortraits: [0, FLOOR.MAIN, -8.7, 0],
@@ -306,6 +305,8 @@
     yardFacadeFront: [8.0, YARD_LAYOUT.groundY, 17.0, 0, -0.24],
     yardFrontReentry: [0, YARD_LAYOUT.groundY, 13.55, 0, -0.08],
     yardRearReentry: [0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
+    yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
+    yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardServiceReentry: [13.0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -29.65, Math.PI, -0.1],
   });
@@ -3254,8 +3255,6 @@
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0 });
-    addWallPortrait({ axis: "z", fixed: -15, center: -8.4, floorY: FLOOR.MAIN, centerY: 2.25, side: 1, width: 1.45, height: 1.85, color: 0x3c2721, artId: "feast-of-merit", circuitName: "dining room lights" });
-
     // Ballroom — open marble dance floor, with no furniture in circulation.
     for (const portrait of [
       { x: -1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0 }, circuitName: "ballroom lights" },
@@ -3771,6 +3770,19 @@
     cylinder({ name: "garden-fountain-upper-bowl", radius: 0.8, radiusTop: 0.65, radiusBottom: 0.28, height: 0.26, segments: 30, x: -25, y: groundY + 1.42, z: 10, material: M.marble });
     sphere({ name: "garden-fountain-faceless-figure", radius: 0.24, x: -25, y: groundY + 1.94, z: 10, material: M.porcelain });
     roundedBox({ name: "garden-fountain-carved-torso", w: 0.42, h: 0.68, d: 0.28, radius: 0.08, x: -25, y: groundY + 1.63, z: 10, material: M.porcelain });
+    // A crown lantern makes the fountain's nighttime glow physically legible:
+    // the bulb below is also the exact origin of its practical PointLight.
+    cylinder({ name: "garden-fountain-crown-lantern-post", radius: 0.045, height: 0.34, segments: 10, x: -25, y: groundY + 2.20, z: 10, material: M.brass, cast: false });
+    cylinder({ name: "garden-fountain-crown-lantern-base", radius: 0.16, radiusTop: 0.11, radiusBottom: 0.18, height: 0.10, segments: 16, x: -25, y: groundY + 2.36, z: 10, material: M.brass, cast: false });
+    const fountainLanternShade = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.11, 0.34, 18, 1, true), M.frostedShade);
+    fountainLanternShade.name = "garden-fountain-crown-lantern-frosted-glass";
+    fountainLanternShade.position.set(-25, groundY + 2.52, 10);
+    fountainLanternShade.castShadow = false;
+    fountainLanternShade.receiveShadow = false;
+    scene.add(fountainLanternShade);
+    sphere({ name: "garden-fountain-crown-lantern-bulb", radius: 0.075, x: -25, y: groundY + 2.52, z: 10, material: M.lampGlow, cast: false });
+    cylinder({ name: "garden-fountain-crown-lantern-cap", radius: 0.19, radiusTop: 0.05, radiusBottom: 0.19, height: 0.16, segments: 16, x: -25, y: groundY + 2.75, z: 10, material: M.brass, cast: false });
+    sphere({ name: "garden-fountain-crown-lantern-finial", radius: 0.055, x: -25, y: groundY + 2.87, z: 10, material: M.brass, cast: false });
     const jetPositions = [];
     for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
       const x1 = -25 + Math.cos(a) * 0.28;
@@ -4103,6 +4115,25 @@
     }
   }
 
+  function addRearFacadeWallLantern(circuit, x, side) {
+    const light = circuit.addWallSconce(
+      x,
+      2.12,
+      -12.19,
+      Math.PI,
+      34,
+      6.2,
+      ["MAIN LEVEL"],
+      x * 0.42,
+      YARD_LAYOUT.groundY + 0.04,
+      -14.15,
+    );
+    light.name = `rear-facade-${side}-lantern-spotlight`;
+    light.userData.fixtureRole = "rear-facade-lantern";
+    yardState.featureCounts.exteriorLamps += 1;
+    return light;
+  }
+
   function buildEstateLighting() {
     const estateExteriorLights = new LightCircuit("estate exterior lights", FLOOR.MAIN, 0xffb56b, true);
     const lanterns = [];
@@ -4122,10 +4153,12 @@
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
     estateExteriorLights.addPracticalLight(0, 3.15, 14.5, 72, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.48, targetY: YARD_LAYOUT.groundY, castsShadow: false });
-    estateExteriorLights.addPracticalLight(-25, 1.9, 10, 64, 11.5, ["MAIN LEVEL"]);
-    estateExteriorLights.addPracticalLight(-25, 2.8, 8.6, 34, 5.5, ["MAIN LEVEL"]);
+    const fountainLight = estateExteriorLights.addPracticalLight(-25, YARD_LAYOUT.groundY + 2.52, 10, 58, 10.5, ["MAIN LEVEL"]);
+    fountainLight.name = "garden-fountain-crown-lantern-light";
+    fountainLight.userData.visibleFixtureEmitter = true;
     estateExteriorLights.addPracticalLight(-9, -0.05, -25.5, 48, 10.5, ["MAIN LEVEL"]);
-    estateExteriorLights.addPracticalLight(0, 2.45, -14.2, 58, 7.0, ["MAIN LEVEL"], { contained: true, angle: 0.5, targetY: YARD_LAYOUT.groundY, castsShadow: false });
+    addRearFacadeWallLantern(estateExteriorLights, -2.05, "west");
+    addRearFacadeWallLantern(estateExteriorLights, 2.05, "east");
     estateExteriorLights.addSwitch(1.72, FLOOR.MAIN + 1.15, 12.19, 0);
     estateExteriorLights.addSwitch(2.05, FLOOR.MAIN + 1.15, -12.19, Math.PI);
     yardState.circuit = estateExteriorLights;
@@ -4168,6 +4201,28 @@
     };
   }
 
+  function addExteriorEntryRamp(name, x, z, width, run, directionZ) {
+    const lowY = YARD_LAYOUT.groundY;
+    const highY = FLOOR.MAIN;
+    const rise = highY - lowY;
+    const angle = Math.atan2(rise, run);
+    const ramp = box({
+      name,
+      w: width,
+      h: 0.06,
+      d: Math.hypot(run, rise),
+      x,
+      y: (lowY + highY) / 2 - 0.035,
+      z,
+      material: M.limestone,
+      cast: false,
+      receive: true,
+    });
+    ramp.rotation.x = -directionZ * angle;
+    physics.addFixedRamp(x, z, lowY, highY, run, width, directionZ);
+    return ramp;
+  }
+
   function buildExteriorScene() {
     // Keep storm ground outside the foundation footprint. A former single
     // 92m slab passed through the house just below the main floor, visually
@@ -4195,11 +4250,13 @@
       { name: "kitchen-service-threshold", x: 13, width: 0.96, ramp: true },
     ];
     box({ name: "ballroom-raised-terrace-landing", w: 2.46, h: 0.2, d: 3.3, x: 0, y: -0.1, z: -13.65, material: M.limestone, cast: false, receive: true });
+    addExteriorEntryRamp("ballroom-rear-outer-entry-ramp", 0, -16.1, 2.46, 1.6, 1);
     for (const threshold of rearThresholds) {
       box({ name: threshold.name, w: threshold.width, h: 0.2, d: 1.0, x: threshold.x, y: -0.1, z: -12.15, material: M.limestone, cast: false, receive: true });
       if (threshold.ramp) physics.addFixedRamp(threshold.x, -12.15, YARD_LAYOUT.groundY, FLOOR.MAIN, 1.0, threshold.width, 1);
     }
     box({ name: "front-portico-floor", w: 6.6, h: 0.2, d: 3.4, x: 0, y: -0.1, z: 13.2, material: M.limestone, collider: false });
+    addExteriorEntryRamp("front-portico-outer-entry-ramp", 0, 15.7, 2.6, 1.6, -1);
     // Extend the matching flat collision plane beneath the foyer. Keeping its
     // leading vertical face away from the threshold prevents the character
     // controller from catching on a coplanar slab seam at z=11.5.
@@ -5726,6 +5783,12 @@
           openExteriorDoors: true,
           expected: { inBounds: true, grounded: true, room: "FRONT FOYER", minZ: 9.5, maxZ: 10.6, interiorRendered: true, nearExteriorRendered: true, visitedRooms: ["FRONT DRIVE", "FRONT FOYER"] },
         },
+        frontStepReentry: {
+          start: "yardFrontOuterStep",
+          actions: [{ yaw: 0, seconds: 2.7 }],
+          openExteriorDoors: true,
+          expected: { inBounds: true, grounded: true, room: "FRONT FOYER", minZ: 9.4, maxZ: 10.6, interiorRendered: true, nearExteriorRendered: true },
+        },
         terraceDoorRoundTrip: {
           start: "yardTerraceDoorInside",
           actions: [{ yaw: 0, seconds: 1.75 }, { yaw: Math.PI, seconds: 1.75 }],
@@ -5734,6 +5797,12 @@
           // inward depending on the fixed-step phase; the room and render-set
           // assertions are the authoritative re-entry checks.
           expected: { inBounds: true, grounded: true, room: "BALLROOM", minZ: -10.8, maxZ: -9.65, interiorRendered: true, nearExteriorRendered: true, visitedRooms: ["REAR LAWN", "BALLROOM"] },
+        },
+        rearStepReentry: {
+          start: "yardRearOuterStep",
+          actions: [{ yaw: Math.PI, seconds: 2.7 }],
+          openExteriorDoors: true,
+          expected: { inBounds: true, grounded: true, room: "BALLROOM", minZ: -10.8, maxZ: -9.4, interiorRendered: true, nearExteriorRendered: true },
         },
         serviceDoorRoundTrip: {
           start: "yardServiceDoorInside",

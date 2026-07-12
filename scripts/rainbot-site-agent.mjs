@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { playAgentGame, listPlayableGames, getGameSpec } from "./lib/play-agent-game.mjs";
+
 const required = [
   "RB_SUPABASE_URL",
   "RB_SUPABASE_ANON_KEY",
@@ -26,6 +28,8 @@ Commands:
   draft-reply --topic-id 123 --body "Text" [--parent-id 456]
   list-drafts [--status draft|approved|posted|rejected|failed|skipped] [--limit 20]
   post-approved --action-id 123
+  play-agent-game [--game recursive-reward-labyrinth] [--max-sectors 18] [--max-steps 2500]
+                  [--max-restarts 40] [--no-score] [--no-draft] [--dry-run] [--verbose]
 
 Environment:
   RB_SUPABASE_URL
@@ -33,6 +37,9 @@ Environment:
   RAINBOT_AGENT_EMAIL
   RAINBOT_AGENT_PASSWORD
   RAINBOT_SITE_AGENT_MODE=draft|approved|limited
+
+Playable agent games:
+  ${listPlayableGames().join(", ")}
 `);
 }
 
@@ -116,7 +123,7 @@ async function request(path, options = {}) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    const message = data && (data.message || data.error_description || data.error) || text || response.statusText;
+    const message = (data && (data.message || data.error_description || data.error || data.msg)) || text || response.statusText;
     throw new Error(`${response.status} ${message}`);
   }
   return data;
@@ -137,7 +144,7 @@ async function signIn() {
 
 async function getProfile(token, userId) {
   const rows = await request(`/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=*`, { token });
-  return rows && rows[0] || null;
+  return (rows && rows[0]) || null;
 }
 
 async function requireBotProfile(token, user) {
@@ -237,11 +244,17 @@ async function draftReply(token, user, args) {
 async function listActions(token, user, args) {
   const status = cleanId(args.status || "draft", 20);
   const limit = Math.max(1, Math.min(50, Number(args.limit) || 20));
-  return request(`/rest/v1/agent_actions?agent_profile_id=eq.${encodeURIComponent(user.id)}&status=eq.${encodeURIComponent(status)}&select=*&order=created_at.desc&limit=${limit}`, { token });
+  return request(
+    `/rest/v1/agent_actions?agent_profile_id=eq.${encodeURIComponent(user.id)}&status=eq.${encodeURIComponent(status)}&select=*&order=created_at.desc&limit=${limit}`,
+    { token }
+  );
 }
 
 async function loadApprovedAction(token, user, actionId) {
-  const rows = await request(`/rest/v1/agent_actions?id=eq.${encodeURIComponent(actionId)}&agent_profile_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=*`, { token });
+  const rows = await request(
+    `/rest/v1/agent_actions?id=eq.${encodeURIComponent(actionId)}&agent_profile_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=*`,
+    { token }
+  );
   if (!rows || !rows[0]) throw new Error("Approved agent action was not found.");
   return rows[0];
 }
@@ -307,6 +320,124 @@ async function postApproved(token, user, args) {
   throw new Error(`Cannot publish action type ${action.action_type}.`);
 }
 
+async function recordCloudScore(token, gameId, score, metadata) {
+  const data = await request("/rest/v1/rpc/record_high_score", {
+    method: "POST",
+    token,
+    body: {
+      p_game_id: gameId,
+      p_score: Math.max(0, Math.floor(Number(score) || 0)),
+      p_metadata: metadata && typeof metadata === "object" ? metadata : {},
+    },
+  });
+  return data;
+}
+
+async function playAndPublish(token, user, args) {
+  const game = cleanId(args.game || "recursive-reward-labyrinth", 96);
+  const spec = getGameSpec(game);
+  if (!spec) {
+    throw new Error(`Unsupported game "${game}". Supported: ${listPlayableGames().join(", ")}`);
+  }
+
+  const dryRun = Boolean(args["dry-run"]);
+  const noScore = Boolean(args["no-score"]) || dryRun;
+  const noDraft = Boolean(args["no-draft"]) || dryRun;
+  const verbose = Boolean(args.verbose);
+
+  const result = playAgentGame({
+    game,
+    maxSectors: args["max-sectors"] ? Number(args["max-sectors"]) : undefined,
+    maxSteps: args["max-steps"] ? Number(args["max-steps"]) : undefined,
+    maxRestarts: args["max-restarts"] != null ? Number(args["max-restarts"]) : undefined,
+    model: args.model ? cleanText(args.model, 80) : undefined,
+    verbose,
+    log: (msg) => console.error(`[play] ${msg}`),
+  });
+
+  const out = {
+    play: {
+      runId: result.runId,
+      gameId: result.gameId,
+      score: result.score,
+      complete: result.complete,
+      sectorsReached: result.sectorsReached,
+      maxSectors: result.maxSectors,
+      steps: result.steps,
+      restarts: result.restarts,
+      policyId: result.policyId,
+      model: result.model,
+    },
+    scoreRow: null,
+    gameRunAction: null,
+    bragDraft: null,
+    dryRun,
+  };
+
+  // Audit row for the run (always draft; does not post publicly)
+  if (!dryRun) {
+    out.gameRunAction = await insertAction(token, {
+      agent_profile_id: user.id,
+      action_type: "game_run",
+      target_type: "game",
+      target_id: result.gameId,
+      target_url: result.url,
+      title: `${result.title} run`,
+      body: `score=${result.score}; sectors=${result.sectorsReached}/${result.maxSectors}; complete=${result.complete}; steps=${result.steps}; restarts=${result.restarts}`,
+      status: "draft",
+      reason: "Headless official Rainbot agent game run.",
+      model: result.model,
+      openclaw_session_id: cleanText(args.session || "", 120) || null,
+      metadata: {
+        ...result.scoreMetadata,
+        bragBody: result.bragBody,
+        memory: result.memory,
+        lastEvents: result.lastEvents,
+      },
+    });
+  }
+
+  if (!noScore && result.score > 0) {
+    out.scoreRow = await recordCloudScore(token, result.gameId, result.score, {
+      ...result.scoreMetadata,
+      source: "rainbot-site-agent",
+      game_run_action_id: out.gameRunAction?.id || null,
+    });
+  }
+
+  if (!noDraft && result.score > 0) {
+    out.bragDraft = await insertAction(token, {
+      agent_profile_id: user.id,
+      action_type: "content_comment",
+      target_type: "game",
+      target_id: result.gameId,
+      target_url: result.url,
+      title: result.title,
+      body: result.bragBody,
+      status: "draft",
+      reason: "Auto-drafted brag from official bot high-score run. Awaiting human approval.",
+      model: result.model,
+      openclaw_session_id: cleanText(args.session || "", 120) || null,
+      metadata: {
+        contentType: "game",
+        contentId: result.gameId,
+        pageTitle: result.title,
+        pageUrl: result.url,
+        parentId: null,
+        runId: result.runId,
+        score: result.score,
+        gameRunActionId: out.gameRunAction?.id || null,
+      },
+    });
+  }
+
+  return out;
+}
+
+function resultModelDefault(args) {
+  return args.model || "rrl-heuristic-v1";
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const command = args._[0];
@@ -314,6 +445,22 @@ async function main() {
     usage();
     return;
   }
+
+  // dry-run play can skip auth if requested with --no-auth, but default still signs in for real runs
+  if (command === "play-agent-game" && args["dry-run"] && args["no-auth"]) {
+    const result = playAgentGame({
+      game: cleanId(args.game || "recursive-reward-labyrinth", 96),
+      maxSectors: args["max-sectors"] ? Number(args["max-sectors"]) : undefined,
+      maxSteps: args["max-steps"] ? Number(args["max-steps"]) : undefined,
+      maxRestarts: args["max-restarts"] ? Number(args["max-restarts"]) : undefined,
+      model: cleanText(args.model || "rrl-heuristic-v1", 80),
+      verbose: Boolean(args.verbose),
+      log: (msg) => console.error(`[play] ${msg}`),
+    });
+    jsonLine("play", result);
+    return;
+  }
+
   const { token, user } = await signIn();
   const profile = await getProfile(token, user.id);
 
@@ -343,6 +490,10 @@ async function main() {
   }
   if (command === "post-approved") {
     jsonLine("posted", await postApproved(token, user, args));
+    return;
+  }
+  if (command === "play-agent-game") {
+    jsonLine("result", await playAndPublish(token, user, args));
     return;
   }
 

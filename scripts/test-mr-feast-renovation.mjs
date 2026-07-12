@@ -377,10 +377,10 @@ check("19 fall recovery", /fallRecoveriesAtStart\s*=\s*physics\.fallRecoveries/.
 
 check("19 hedge maze", mazeLayout.length > 0 && /function buildHedgeMaze\(/.test(yardBuild), "grid-driven hedge maze is missing");
 const mazeRows = Array.from(mazeLayout.matchAll(/["']([#SE.]{5,})["']/g), (match) => match[1]);
-check("19 hedge maze", mazeRows.length >= 5 && mazeRows.length <= 11, "maze must contain 5-11 authored rows");
+check("19 hedge maze", mazeRows.length === 11, "expanded east-lawn maze must contain exactly 11 authored rows");
 if (mazeRows.length) {
   const width = mazeRows[0].length;
-  check("19 hedge maze", mazeRows.every((row) => row.length === width) && width >= 5 && width <= 11, "maze rows are not rectangular or appropriately small");
+  check("19 hedge maze", mazeRows.every((row) => row.length === width) && width === 11, "expanded maze is not a rectangular 11x11 layout");
   const cells = mazeRows.join("");
   check("19 hedge maze", (cells.match(/S/g) || []).length === 1 && (cells.match(/E/g) || []).length === 1, "maze needs exactly one entrance and one exit");
   const start = cells.indexOf("S");
@@ -405,7 +405,10 @@ if (mazeRows.length) {
   check("19 hedge maze", exit >= 0 && seen.has(exit), "hedge maze entrance has no walkable route to its exit");
 }
 check("19 hedge maze", /cellSize\s*:\s*1\.[4-9]/.test(mazeLayout), "maze corridors are not comfortably wider than the player capsule");
+check("19 hedge maze", /cellSize:\s*1\.5/.test(mazeLayout) && /centerX:\s*25/.test(mazeLayout) && /centerZ:\s*-24\.2/.test(mazeLayout), "expanded maze no longer fills the authored east-lawn footprint");
+check("19 hedge maze", mazeRows.join("").split("#").length - 1 >= 65, "expanded maze lacks enough hedge mass to cover most of the east lawn");
 check("19 hedge maze", /hedge-maze-walls/.test(yardBuild) && /physics\.addFixedBox\(/.test(yardBuild), "maze hedges lack aligned visible and physical walls");
+check("19 hedge maze", /addBoxInstanceBatch\("hedge-maze-walls"/.test(yardBuild) && /addOutdoorInstanceBatch\("hedge-maze-leaf-clumps"/.test(yardBuild), "expanded hedge geometry is no longer kept in two instanced draw batches");
 
 check("19 exterior lighting", lightingMap.includes('"FRONT DRIVE"') && lightingMap.includes('"FORMAL GARDEN"') && lightingMap.includes('"POOL TERRACE"') && lightingMap.includes('"HEDGE MAZE"'), "yard zones are not mapped to controlled exterior lighting");
 check("19 exterior lighting", /new LightCircuit\("estate exterior lights"[^;]*true\)/.test(yardBuild), "estate exterior light circuit is missing or does not start on");
@@ -424,6 +427,7 @@ for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "y
 }
 check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 3 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
 check("19 yard QA routes", /route\.expected/.test(qaHooks) && /route expectation not met/.test(qaHooks), "QA routes report complete without checking their expected endpoint");
+check("19 yard QA routes", /dataset\.qaRouteStatus\s*=\s*state\.qaRoute\.status/.test(qaHooks) && /dataset\.qaRouteX\s*=\s*p\.x\.toFixed\(2\)/.test(qaHooks) && /dataset\.qaRouteZ\s*=\s*p\.z\.toFixed\(2\)/.test(qaHooks), "QA routes do not expose their final status and endpoint for browser verification");
 check("19 yard QA routes", /yardPoolNorthGuard:[\s\S]*?yaw:\s*-Math\.PI\s*\/\s*2[\s\S]*?seconds:\s*1\.25/.test(qaHooks), "north pool-deck support route still steps over the coping into the pool");
 
 check("19 locked driveway gate copy", !/The gates are open/i.test(page), "intro copy contradicts the locked driveway gate");
@@ -555,7 +559,8 @@ check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild
 check("20 maze light budget", count(section("const mazeLampSources", "for (const source", yardBuild), /castsShadow:\s*true/g) === 1, "only the tall center maze lamp may spend a shadow map");
 check("20 maze light occlusion", /hedge-maze-walls[\s\S]*?true,\s*true\)/.test(yardBuild), "maze hedge walls do not cast shadows from the authored lamps");
 check("20 maze light occlusion", !/addPracticalLight\(25,\s*2\.(?:05|15),\s*-2(?:5|31)/.test(yardBuild), "source-less hidden PointLights remain in the hedge maze");
-check("20 maze route cold-start", /if \(actions\.length\) actions\[0\]\.seconds \+= 1\.0/.test(mansion), "maze QA route has no cold-shadow compile cushion before its blocked first turn");
+check("20 maze route cold-start", /yardMazeSolution:[\s\S]*?startDelayMs:\s*1400/.test(qaHooks) && /route\.startDelayMs == null/.test(qaHooks), "maze QA route does not wait for cold outdoor shader compilation before movement");
+check("20 maze route timing", /HEDGE_MAZE_LAYOUT\.cellSize \/ PLAYER\.speed\) \* 1\.06/.test(mansion), "expanded maze route lacks the measured fixed-step allowance needed to center its turns");
 
 // 21. The mansion's cryptic art collection must be real generated textures,
 // assigned deterministically to every existing frame, with the old primitive
@@ -703,7 +708,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-rear-lounge-6", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-east-maze-11", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

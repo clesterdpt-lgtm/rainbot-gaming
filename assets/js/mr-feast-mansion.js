@@ -141,27 +141,29 @@
     gate: Object.freeze({ centerX: 0, centerZ: 33.72, width: 6.8 }),
     garden: Object.freeze({ centerX: -25, centerZ: 10, width: 15, depth: 25 }),
     pool: Object.freeze({ centerX: -9, centerZ: -25.5, width: 10.4, depth: 11.8 }),
-    maze: Object.freeze({ centerX: 25, centerZ: -25 }),
+    maze: Object.freeze({ centerX: 25, centerZ: -24.2 }),
   });
 
-  // A compact authored maze: # cells are clipped hedges, while S/E and dots
-  // are walkable. Keeping the layout as data lets both the builder and QA use
-  // the same guaranteed-solvable route.
+  // An estate-scale maze fills most of the east lawn: # cells are clipped
+  // hedges, while S/E and dots are walkable. The authored 11x11 data remains
+  // the single source for rendering, collision, lighting, and QA traversal.
   const HEDGE_MAZE_LAYOUT = Object.freeze({
     rows: Object.freeze([
-      "####S####",
-      "#.......#",
-      "#.##..#.#",
-      "#.....#.#",
-      "###...#.#",
-      "#.......#",
-      "#.##.##.#",
-      "#.......#",
-      "####E####",
+      "#####S#####",
+      "#...#.....#",
+      "#.#.#.###.#",
+      "#.#...#...#",
+      "#.#####.#.#",
+      "#.#.....#.#",
+      "#.#.###.#.#",
+      "#...#...#.#",
+      "###.#.###.#",
+      "#.........#",
+      "#####E#####",
     ]),
-    cellSize: 1.55,
+    cellSize: 1.5,
     centerX: 25,
-    centerZ: -25,
+    centerZ: -24.2,
   });
 
   // Curated inspection points: two unobstructed, compositionally different
@@ -287,10 +289,10 @@
     // This deliberately stays outside the coping; pool entry has its own route.
     yardPoolNorthGuard: [-16, YARD_LAYOUT.groundY, -18.85, -Math.PI / 2, -0.08],
     yardPoolEastEntry: [-1, YARD_LAYOUT.groundY, -25.0, Math.PI / 2, -0.08],
-    yardMazeA: [25, YARD_LAYOUT.groundY, -15.6, 0, -0.08],
-    yardMazeB: [16.6, YARD_LAYOUT.groundY, -16.2, -0.79, -0.09],
-    yardMazeEntranceCell: [25, YARD_LAYOUT.groundY, -18.8, 0],
-    yardMazeExit: [25, YARD_LAYOUT.groundY, -31.2, 0],
+    yardMazeA: [25, YARD_LAYOUT.groundY, -14.9, 0, -0.08],
+    yardMazeB: [16.35, YARD_LAYOUT.groundY, -15.4, -0.79, -0.09],
+    yardMazeEntranceCell: [25, YARD_LAYOUT.groundY, -16.7, 0],
+    yardMazeExit: [25, YARD_LAYOUT.groundY, -31.7, 0],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, -15.2, Math.PI],
     yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, -15.2, Math.PI / 2],
@@ -306,7 +308,7 @@
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardServiceReentry: [13.0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
-    yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -29.65, Math.PI, -0.1],
+    yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -25.7, Math.PI, -0.1],
   });
 
   const state = {
@@ -3960,16 +3962,14 @@
       const dr = current.row - previous.row;
       const dc = current.col - previous.col;
       const yaw = dr > 0 ? 0 : dr < 0 ? Math.PI : dc > 0 ? -Math.PI / 2 : Math.PI / 2;
-      const seconds = (HEDGE_MAZE_LAYOUT.cellSize / PLAYER.speed) * 0.975;
+      // Browser-timed QA loses a few fixed steps at each timeout boundary.
+      // A small measured allowance lands each turn inside its destination cell;
+      // terminal hedges absorb any remainder before the next corridor leg.
+      const seconds = (HEDGE_MAZE_LAYOUT.cellSize / PLAYER.speed) * 1.06;
       const last = actions[actions.length - 1];
       if (last && Math.abs(last.yaw - yaw) < 0.001) last.seconds += seconds;
       else actions.push({ yaw, seconds });
     }
-    // The first outdoor shadow compile can consume part of the first timed QA
-    // leg on a cold browser. That leg terminates safely against the center
-    // lamp's blocked cell, so a one-second wall-clock cushion makes the route
-    // deterministic without changing the playable maze or its final exit leg.
-    if (actions.length) actions[0].seconds += 1.0;
     return actions;
   }
 
@@ -4000,14 +4000,19 @@
     });
     addBoxInstanceBatch("hedge-maze-walls", M.hedgeDark, walls, true, true);
     addOutdoorInstanceBatch("hedge-maze-leaf-clumps", "yardHedgeClump", () => new THREE.IcosahedronGeometry(1, 1), M.hedge, clumps, false, true);
-    for (const x of [22.9, 27.1]) {
-      cylinder({ name: "hedge-maze-entrance-urn", radius: 0.38, radiusTop: 0.3, radiusBottom: 0.46, height: 0.82, segments: 18, x, y: groundY + 0.39, z: -17.55, material: M.marble });
-      sphere({ name: "hedge-maze-entrance-topiary", radius: 0.68, x, y: groundY + 1.38, z: -17.55, material: M.hedge });
-      physics.addFixedBox(x, groundY + 0.75, -17.55, 0.88, 1.5, 0.88, 0);
+    const entranceColumn = rows[0].indexOf("S");
+    const entranceCenter = mazeCellCenter(0, entranceColumn);
+    const entranceFacadeZ = entranceCenter.z + size * 0.76;
+    for (const x of [entranceCenter.x - 1.35, entranceCenter.x + 1.35]) {
+      cylinder({ name: "hedge-maze-entrance-urn", radius: 0.38, radiusTop: 0.3, radiusBottom: 0.46, height: 0.82, segments: 18, x, y: groundY + 0.39, z: entranceFacadeZ, material: M.marble });
+      sphere({ name: "hedge-maze-entrance-topiary", radius: 0.68, x, y: groundY + 1.38, z: entranceFacadeZ, material: M.hedge });
+      physics.addFixedBox(x, groundY + 0.75, entranceFacadeZ, 0.88, 1.5, 0.88, 0);
     }
-    for (const x of [23.85, 26.15]) cylinder({ name: "hedge-maze-entrance-arch-post", radius: 0.055, height: 2.55, segments: 10, x, y: groundY + 1.28, z: -17.62, material: M.brass });
-    addBeamBetween("hedge-maze-entrance-arch", [23.85, groundY + 2.52, -17.62], [26.15, groundY + 2.52, -17.62], 0.065, M.brass);
-    sphere({ name: "hedge-maze-entrance-crest", radius: 0.16, x: 25, y: groundY + 2.72, z: -17.62, material: M.brass });
+    const archWestX = entranceCenter.x - 0.82;
+    const archEastX = entranceCenter.x + 0.82;
+    for (const x of [archWestX, archEastX]) cylinder({ name: "hedge-maze-entrance-arch-post", radius: 0.055, height: 2.55, segments: 10, x, y: groundY + 1.28, z: entranceFacadeZ - 0.05, material: M.brass });
+    addBeamBetween("hedge-maze-entrance-arch", [archWestX, groundY + 2.52, entranceFacadeZ - 0.05], [archEastX, groundY + 2.52, entranceFacadeZ - 0.05], 0.065, M.brass);
+    sphere({ name: "hedge-maze-entrance-crest", radius: 0.16, x: entranceCenter.x, y: groundY + 2.72, z: entranceFacadeZ - 0.05, material: M.brass });
     const solution = solveHedgeMaze();
     const entranceCell = solution[0] || { row: 0, col: 4 };
     const exitCell = solution[solution.length - 1] || { row: rows.length - 1, col: 4 };
@@ -4145,12 +4150,15 @@
     addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
     addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
+    const mazeEntranceCell = mazeCellCenter(0, HEDGE_MAZE_LAYOUT.rows[0].indexOf("S"));
+    const mazeExitCell = mazeCellCenter(HEDGE_MAZE_LAYOUT.rows.length - 1, HEDGE_MAZE_LAYOUT.rows[HEDGE_MAZE_LAYOUT.rows.length - 1].indexOf("E"));
+    const mazeCenterCell = mazeCellCenter(Math.floor(HEDGE_MAZE_LAYOUT.rows.length / 2), Math.floor(HEDGE_MAZE_LAYOUT.rows[0].length / 2));
     const mazeLampSources = [
-      { x: 23.35, z: -16.95, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: 26.65, z: -16.95, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
-      { x: 25, z: -25, height: 3.65, intensity: 190, distance: 7.2, angle: 0.7, contained: true, castsLight: true, castsShadow: true, role: "center", name: "maze-center-tall-lamp" },
-      { x: 22.7, z: -32.0, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
-      { x: 27.3, z: -32.0, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: mazeEntranceCell.x - 1.3, z: mazeEntranceCell.z + 1.15, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: mazeEntranceCell.x + 1.3, z: mazeEntranceCell.z + 1.15, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "entrance" },
+      { x: mazeCenterCell.x, z: mazeCenterCell.z, height: 3.65, intensity: 190, distance: 7.2, angle: 0.7, contained: true, castsLight: true, castsShadow: true, role: "center", name: "maze-center-tall-lamp" },
+      { x: mazeExitCell.x - 1.3, z: mazeExitCell.z - 1.05, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
+      { x: mazeExitCell.x + 1.3, z: mazeExitCell.z - 1.05, height: 2.65, intensity: 18, distance: 5.0, angle: 0.46, contained: true, castsLight: true, castsShadow: false, role: "exit" },
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
@@ -5759,7 +5767,8 @@
         yardMazeSolution: {
           start: "yardMazeEntranceCell",
           actions: buildMazeRouteActions(),
-          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", near: { x: 25, z: -31.2, radius: 0.85 } },
+          startDelayMs: 1400,
+          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", near: { x: 25, z: -31.7, radius: 0.85 } },
         },
         frontDoorOut: {
           start: "frontDoor",
@@ -5978,10 +5987,18 @@
         circuitStatesUnchanged: true,
         checkpoints: [],
       };
+      if (dom.room) {
+        dom.room.dataset.qaRouteName = name;
+        dom.room.dataset.qaRouteStatus = "running";
+        delete dom.room.dataset.qaRouteX;
+        delete dom.room.dataset.qaRouteZ;
+      }
       // Door animation refreshes the two cached interior shadow maps. Let the
       // leaves reach their parked state before timed movement so a cold shader
       // compile cannot shorten the first leg of a QA route.
-      let atMs = route.openDoors || route.openExteriorDoors ? 2000 : 100;
+      let atMs = route.startDelayMs == null
+        ? (route.openDoors || route.openExteriorDoors ? 2000 : 100)
+        : route.startDelayMs;
       route.actions.forEach((action, index) => {
         setTimeout(() => {
           updateLocation();
@@ -6055,6 +6072,12 @@
             : !circuitStatesUnchanged
               ? "light circuit changed without switch interaction"
               : "route expectation not met";
+        }
+        if (dom.room) {
+          dom.room.dataset.qaRouteName = name;
+          dom.room.dataset.qaRouteStatus = state.qaRoute.status;
+          dom.room.dataset.qaRouteX = p.x.toFixed(2);
+          dom.room.dataset.qaRouteZ = p.z.toFixed(2);
         }
       }, atMs);
       return state.qaRoute;

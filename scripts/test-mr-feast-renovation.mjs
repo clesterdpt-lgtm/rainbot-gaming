@@ -1,0 +1,678 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(scriptDir, "..");
+const mansionPath = path.join(root, "assets/js/mr-feast-mansion.js");
+const pagePath = path.join(root, "games/mr-feast-mansion.html");
+const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
+const mansion = fs.readFileSync(mansionPath, "utf8");
+const page = fs.readFileSync(pagePath, "utf8");
+const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
+
+const failures = [];
+
+function check(requirement, condition, detail) {
+  let passed = false;
+  try {
+    passed = typeof condition === "function" ? Boolean(condition()) : Boolean(condition);
+  } catch (error) {
+    detail = `${detail} (${error.message})`;
+  }
+  if (!passed) failures.push({ requirement, detail });
+}
+
+function section(startMarker, endMarker, text = mansion) {
+  const start = text.indexOf(startMarker);
+  if (start < 0) return "";
+  const end = endMarker ? text.indexOf(endMarker, start + startMarker.length) : text.length;
+  return text.slice(start, end < 0 ? text.length : end);
+}
+
+function count(text, pattern) {
+  return Array.from(text.matchAll(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`))).length;
+}
+
+function sourceCalls(name, text = mansion) {
+  const calls = [];
+  const pattern = new RegExp(`\\b${name}\\(([^\\n;]*)\\);`, "g");
+  for (const match of text.matchAll(pattern)) {
+    calls.push({ raw: match[0], args: match[1].split(",").map((arg) => arg.trim()) });
+  }
+  return calls;
+}
+
+function numeric(expression) {
+  const normalized = expression.replaceAll("Math.PI", String(Math.PI));
+  if (!/^[\d.eE+\-*/()\s]+$/.test(normalized)) return Number.NaN;
+  // The expression has been reduced to numeric literals and arithmetic only.
+  return Function(`"use strict"; return (${normalized});`)();
+}
+
+function near(value, expected, epsilon = 0.06) {
+  return Number.isFinite(value) && Math.abs(value - expected) <= epsilon;
+}
+
+function jpegDimensions(bytes) {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 8 < bytes.length) {
+    if (bytes[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = bytes[offset + 1];
+    if (marker === 0xd9 || marker === 0xda) break;
+    if (marker === 0x00 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      offset += 2;
+      continue;
+    }
+    const segmentLength = bytes.readUInt16BE(offset + 2);
+    const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
+    if (isStartOfFrame && offset + 8 < bytes.length) {
+      return { width: bytes.readUInt16BE(offset + 7), height: bytes.readUInt16BE(offset + 5) };
+    }
+    if (segmentLength < 2) break;
+    offset += 2 + segmentLength;
+  }
+  return null;
+}
+
+function fixtureProfile(style) {
+  const body = lightCircuitClass.match(new RegExp(`${style}:\\s*\\{([^}]+)\\}`))?.[1] || "";
+  const value = (key) => Number(body.match(new RegExp(`${key}:\\s*([\\d.]+)`))?.[1]);
+  return {
+    intensity: value("intensity"),
+    distance: value("distance"),
+    angle: value("angle"),
+    penumbra: value("penumbra"),
+    pointFillIntensity: value("pointFillIntensity"),
+    pointFillDistance: value("pointFillDistance"),
+    pointFillHeight: value("pointFillHeight"),
+  };
+}
+
+function parsedCalls(name, text = mansion) {
+  return sourceCalls(name, text).map((call) => ({
+    ...call,
+    values: call.args.map(numeric),
+  }));
+}
+
+function methodCalls(owner, method, text = mansion) {
+  const calls = [];
+  const pattern = new RegExp(`\\b${owner}\\.${method}\\(([^\\n;]*)\\);`, "g");
+  for (const match of text.matchAll(pattern)) {
+    const args = match[1].split(",").map((arg) => arg.trim());
+    calls.push({ raw: match[0], args, values: args.map(numeric) });
+  }
+  return calls;
+}
+
+function namedWallRun(name, text = mansion) {
+  const marker = `name: "${name}"`;
+  const nameIndex = text.indexOf(marker);
+  if (nameIndex < 0) return "";
+  const start = text.lastIndexOf("buildWallRun(", nameIndex);
+  const next = text.indexOf("buildWallRun(", nameIndex + marker.length);
+  if (start < 0) return "";
+  return text.slice(start, next < 0 ? text.length : next);
+}
+
+const lightingMap = section("const ROOM_LIGHTING", "const PLAYER");
+const roomZones = section("function registerRoomZones()", "function buildMansion()");
+const mainPartitions = section("function buildMainPartitions()", "function buildUpperPartitions()");
+const upperPartitions = section("function buildUpperPartitions()", "function buildBasementPartitions()");
+const basementPartitions = section("function buildBasementPartitions()", "function furnishMainFloor()");
+const upperFurnishings = section("function furnishUpperFloor()", "function furnishBasement()");
+const mainFurnishings = section("function furnishMainFloor()", "function furnishUpperFloor()");
+const ballroomFurnishings = section("// Ballroom", "// Kitchen", mainFurnishings);
+const kitchenFurnishings = section("// Kitchen", "// Foyer and gallery detail", mainFurnishings);
+const basementFurnishings = section("function furnishBasement()", "function buildLighting()");
+const slabs = section("function buildSlabsAndCeilings()", "function buildExteriorWalls()");
+const exteriorWalls = section("function buildExteriorWalls()", "function buildMainPartitions()");
+const serviceStair = section("function buildServiceStaircase()", "function addRug(");
+const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
+const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
+const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
+const updateLocation = section("function updateLocation()", "function findInteraction()");
+const lightRendering = section("function syncLightRendering()", "function updatePlayer(");
+const lightingBuild = section("function buildLighting()", "function registerRoomZones()");
+const yardLayout = section("const YARD_LAYOUT", "const HEDGE_MAZE_LAYOUT");
+const mazeLayout = section("const HEDGE_MAZE_LAYOUT", "const QA_ROOM_VIEWS");
+const yardBuild = section("function buildEstateYard()", "function buildExteriorScene()");
+const exteriorBuild = section("function buildExteriorScene()", "function buildMansion()");
+const diagnostics = section("function getDiagnostics()", "function teleport(");
+const qaHooks = section("function installDiagnostics()", "async function init()");
+const physicsClass = section("class PhysicsWorld", "window.MrFeastFresh");
+const playerUpdate = section("function updatePlayer", "function syncCamera");
+const exteriorCulling = section("function registerExteriorDetailCulling()", "function setMoveIntent(");
+const stormSystem = section("class StormSystem", "class MansionAudio");
+const resizeSystem = section("function resize()", "function requestPointerLock()");
+const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
+const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
+const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
+const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
+const upperGalleryPortraits = section("for (const portrait of [", "]) addWallPortrait", upperFurnishings);
+const musicRoomFurnishings = section("// Music room", "// Painting room", mainFurnishings);
+const paintingRoomFurnishings = section("// Painting room", "// Dining room", mainFurnishings);
+const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
+const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
+const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
+const westRearFrontWall = namedWallRun("upper-west-rear-front-wall", upperPartitions);
+const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
+const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
+const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
+
+// 1. The rear upper-floor opening needs a complete visual guard and matching
+// invisible collision, kept in a dedicated helper so both parts stay aligned.
+check("1 rear upper walkway railing", rearGuard.length > 0, "missing buildRearUpperWalkwayGuard() helper");
+check(
+  "1 rear upper walkway railing",
+  ["upper-rear-landing-guard", "upper-rear-west-guard", "upper-rear-east-guard"].every((name) => rearGuard.includes(name)),
+  "rear landing and both side guard runs must have stable scene names",
+);
+check("1 rear upper walkway railing", /addBalusterInstanceBatch\(/.test(rearGuard) && count(rearGuard, /guard-rail/g) >= 3, "rear walkway needs one instanced baluster batch and three connected top rails");
+check("1 rear upper walkway railing", count(rearGuard, /physics\.addFixedBox\(/g) >= 3, "each rear railing run needs a matching physics guard");
+check("1 rear upper walkway railing", /\bbuildRearUpperWalkwayGuard\(\);/.test(mansion), "rear walkway guard helper is not invoked during mansion construction");
+
+// 2 and 6. Both converted rooms must be full bathrooms and every water source
+// must be explicitly interactive (never proximity-activated).
+check("2 upper grand bathroom", lightingMap.includes('"UPPER GRAND BATHROOM"'), "UPPER GRAND BATHROOM is missing from ROOM_LIGHTING");
+check("2 upper grand bathroom", roomZones.includes('"UPPER GRAND BATHROOM"'), "Portrait Lounge room zone was not converted to UPPER GRAND BATHROOM");
+check("2 upper grand bathroom", !roomZones.includes('"PORTRAIT LOUNGE"') && !lightingMap.includes('"PORTRAIT LOUNGE"'), "legacy PORTRAIT LOUNGE mapping still exists");
+check("2 upper grand bathroom", !upperPartitions.includes('name: "upper-bath-east-wall"') && !upperPartitions.includes('name: "upper-bath-north-wall"'), "old upper-bath divider walls still split the large bathroom");
+check("6 main hall bathroom", lightingMap.includes('"MAIN HALL BATHROOM"'), "MAIN HALL BATHROOM is missing from ROOM_LIGHTING");
+check("6 main hall bathroom", roomZones.includes('"MAIN HALL BATHROOM"'), "Study room zone was not converted to MAIN HALL BATHROOM");
+check("6 main hall bathroom", !roomZones.includes('"STUDY"') && !lightingMap.includes('"STUDY"'), "legacy STUDY mapping still exists");
+check("6 main hall bathroom naming", !/label:\s*"[^"]*study/i.test(mainPartitions), "converted bathroom still exposes a study door prompt");
+check("6 main hall bathroom naming", !/\bstudy\b/i.test(section('<dl class="mansion-floors">', "</dl>", page)), "floor description still advertises the removed study");
+check("2/6 bathroom fixtures", mansion.includes("function furnishMainHallBathroom(") && mansion.includes("function furnishUpperGrandBathroom("), "dedicated furnishing functions are required for both full bathrooms");
+const mainBath = section("function furnishMainHallBathroom(", "function furnishUpperGrandBathroom(");
+const upperBath = section("function furnishUpperGrandBathroom(", "function addBookshelf(");
+for (const [label, text] of [["main hall", mainBath], ["upper grand", upperBath]]) {
+  check(`2/6 ${label} bathroom fixtures`, /addToilet\(/.test(text), `${label} bathroom has no toilet`);
+  check(`2/6 ${label} bathroom fixtures`, /addBathtub\(/.test(text), `${label} bathroom has no bathtub`);
+  check(`2/6 ${label} bathroom plumbing`, /new WaterFixture\(/.test(text), `${label} bathroom has no interactive water fixture`);
+}
+check("2/6 working water", mansion.includes("class WaterFixture"), "interactive WaterFixture class is missing");
+const waterClass = section("class WaterFixture", "class LightCircuit");
+check("2/6 working water", /addInteractionTarget\(/.test(waterClass) && /Turn on|Turn off/.test(waterClass), "water must change only through an explicit interaction target");
+check("2/6 working water", /water-stream|waterStream|streamMesh/.test(waterClass), "WaterFixture has no visible running-water stream");
+check("2/6 working water", /setWater\(/.test(mansion), "MansionAudio has no continuous water-audio control");
+
+// 3. Validate the geometry relationship, not merely a comment: the east-front
+// desk is close to the west wall, with its chair east of it and facing west.
+const upperTables = parsedCalls("addTable", upperFurnishings).filter((call) => call.args[4] === "FLOOR.UPPER");
+const eastDesk = upperTables.find((call) => call.values[0] > 5 && call.values[0] < 7.5 && call.values[1] > 8 && call.values[1] < 11);
+const upperChairs = parsedCalls("addChair", upperFurnishings).filter((call) => call.args[2] === "FLOOR.UPPER");
+const eastDeskChair = eastDesk && upperChairs.find((call) => call.values[0] > 5 && call.values[0] < 8 && call.values[1] > 8 && call.values[1] < 11);
+check("3 east-front desk placement", eastDesk && eastDesk.values[0] <= 6.1, "east-front desk is not set against the west wall");
+check(
+  "3 east-front chair orientation",
+  eastDesk && eastDeskChair
+    && eastDeskChair.values[0] > eastDesk.values[0] + 0.35
+    && Math.abs(eastDeskChair.values[1] - eastDesk.values[1]) <= 0.3
+    && near(eastDeskChair.values[3], Math.PI / 2),
+  "east-front chair must sit east of the desk, share its z position, and face west",
+);
+
+// 4 and 5. Sofas use local -z as their facing direction.
+const readingSofa = parsedCalls("addSofa", upperFurnishings).find((call) => call.args[2] === "FLOOR.UPPER" && call.values[0] > 5 && Math.abs(call.values[1]) < 3.2);
+check("4 reading-room sofa", readingSofa && near(readingSofa.values[3], -Math.PI / 2), "reading-room sofa does not face the east-wall bookshelves");
+const librarySofa = parsedCalls("addSofa", mainFurnishings).find((call) => call.args[2] === "FLOOR.MAIN" && call.values[0] < -5 && call.values[1] > 3.2);
+check("5 library sofa", librarySofa && near(Math.abs(librarySofa.values[3]), Math.PI), "library sofa does not face the front windows at z=12");
+
+// 7. The ballroom has a named thin marble insert using the existing generated
+// antique-marble texture and no lounge seating or green rug remains.
+check("7 ballroom seating", !/addSofa\(/.test(ballroomFurnishings), "ballroom couches were not removed");
+check("7 ballroom marble", /name:\s*["']ballroom-(?:ai-)?marble-floor["'][^;]*material:\s*M\.marble/s.test(slabs), "named ballroom AI-marble floor insert is missing");
+check("7 ballroom marble", !/addRug\(\s*0\s*,\s*-8\.2[^;]*M\.greenRug/.test(slabs), "legacy green ballroom rug still exists");
+check("7 ballroom marble", mansion.includes('textureUrl("antique-marble-ai.jpg")'), "ballroom marble must retain the generated antique-marble texture source");
+
+// 8. Every dining chair faces the table center.
+const diningChairs = parsedCalls("addChair", section("// Dining room", "// Ballroom", mainFurnishings));
+const diningAt = (x, z) => diningChairs.find((call) => near(call.values[0], x, 0.08) && near(call.values[1], z, 0.08));
+for (const x of [-12, -10.45, -8.95, -7.4]) {
+  check("8 dining-chair orientation", near(diningAt(x, -7.25)?.values[3], 0), `north dining chair at x=${x} must face south toward the table`);
+  check("8 dining-chair orientation", near(Math.abs(diningAt(x, -9.55)?.values[3]), Math.PI), `south dining chair at x=${x} must face north toward the table`);
+}
+check("8 dining-chair orientation", near(diningAt(-12.7, -8.4)?.values[3], -Math.PI / 2), "west head chair must face east toward the table");
+check("8 dining-chair orientation", near(diningAt(-6.7, -8.4)?.values[3], Math.PI / 2), "east head chair must face west toward the table");
+
+// 9. Rear dining/ballroom/kitchen partitions and their hinged doors must be
+// gone; the follow-up pass also opens the service stair directly to the kitchen.
+for (const label of ["dining room door", "kitchen door", "dining gallery door", "ballroom gallery door", "kitchen gallery door"]) {
+  check("9 open-concept rear", !mainPartitions.includes(`label: "${label}"`), `interior ${label} still exists`);
+}
+check("9 open-concept rear", /axis:\s*"z",\s*fixed:\s*-5,\s*start:\s*-4\.9,\s*end:\s*12[^;]*name:\s*"main-west-(?:front-)?spine"/s.test(mainPartitions), "west spine still divides the dining room from the ballroom");
+check("9 open-concept rear", /axis:\s*"z",\s*fixed:\s*5,\s*start:\s*-4\.9,\s*end:\s*12[^;]*name:\s*"main-east-(?:front-)?spine"/s.test(mainPartitions), "east spine still divides the kitchen from the ballroom");
+check("9 open-concept rear", !mainPartitions.includes('name: "main-rear-service-enclosure"'), "service-stair enclosure still divides the kitchen from the stair landing");
+check("9 open-concept rear", /name:\s*"main-stair-gallery"[^;]*kind:\s*"arch"/s.test(mainPartitions), "grand stair does not retain an open arch directly toward the ballroom");
+
+// 10. Kitchen storage must be recognizable, interactable, and visibly stocked.
+check("10 kitchen refrigerator", mansion.includes("class Refrigerator"), "interactive Refrigerator class is missing");
+check("10 kitchen refrigerator", /new Refrigerator\s*\(/.test(kitchenFurnishings), "kitchen has no refrigerator instance");
+check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']food["']/.test(kitchenFurnishings), "pantry/fridge is not marked for food stock");
+check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']dishes["']/.test(kitchenFurnishings), "china cabinet is not marked for dish stock");
+check("10 stocked kitchen", /addStocked(?:Storage)?Contents|addStorageStock/.test(mansion), "shared stocked-storage builder is missing");
+check("10 stocked kitchen", /foodItems/.test(mansion) && /dishItems/.test(mansion) && /refrigerators/.test(mansion), "stock and refrigerator counts are absent from diagnostics");
+
+// 11. The service stair runs from +z in the basement to -z on the main floor,
+// exactly across the 5.4 m opening, with architectural treads and sloped rails.
+check("11 service-stair orientation", /(?:bottom|lower)Z\s*=\s*2\.7\b/.test(serviceStair) && /(?:top|upper)Z\s*=\s*-2\.7\b/.test(serviceStair), "service-stair endpoint constants are not aligned to z=+2.7 and z=-2.7");
+check("11 service-stair alignment", /(?:const|let)\s+run\s*=\s*5\.4\b/.test(serviceStair), "service-stair run is not aligned to the 5.4 m slab opening");
+check("11 service-stair finish", /service-(?:stair-)?tread/.test(serviceStair) && /service-(?:stair-)?riser/.test(serviceStair), "service stair lacks separate thin treads and risers");
+check("11 service-stair finish", !/stairStep\(/.test(serviceStair), "service stair still uses full-height stacked stairStep boxes");
+check("11 service-stair rails", /service-stair-handrail/.test(serviceStair) && /service-stair-guard/.test(serviceStair), "service stair lacks aligned sloped handrails and physics guards");
+check("11 service-stair rails", !serviceStair.includes('"service-main-rail"'), "old floating horizontal service-main-rail still exists");
+check("11 service-stair separation", serviceShaftWall.length > 0 && /openings:\s*\[\s*\]/s.test(serviceShaftWall), "main-floor service stair is not separated from the painting room by a solid wall");
+check("11 service-stair doors", !basementPartitions.includes('name: "basement-service-shaft"'), "basement service-stair still has a redundant divider wall");
+check("11 service-stair sightline", !/name:\s*"rain-soaked-grounds"\s*,\s*w:\s*92[^;]*d:\s*92/.test(mansion), "a single outdoor ground slab still passes visually through the mansion");
+check("11 service-stair sightline", ["front", "rear", "west", "east"].every((side) => mansion.includes(`rain-soaked-grounds-${side}`)), "exterior ground must be cut into four slabs around the foundation footprint");
+
+// 12. The deliberately split main slab must be closed beneath the grand stair.
+check("12 floor under grand stair", /floorSlab\(\s*["']main-floor-under-grand-stair["']/.test(slabs), "walkable/collidable floor slab under the grand staircase is missing");
+
+// Prior lighting requirements remain part of the renovation contract: every
+// circuit starts on, room entry never mutates a circuit, closets have a real
+// contained light, and the global lights-out control reaches every circuit.
+check("lighting default state", /this\.on\s*=\s*initiallyOn\s*!==\s*false/.test(lightCircuitClass), "LightCircuit no longer defaults to on");
+check("lighting default state", !/new LightCircuit\([^;\n]*,\s*false\s*\)/.test(mansion), "one or more mansion circuits start off");
+check("lighting switch-only state", !/\.toggle\s*\(|\.setState\s*\(|\.on\s*=/.test(updateLocation), "entering a room or floor changes a circuit state");
+check("lighting switch-only state", !/circuit\.on\s*=/.test(lightRendering), "render synchronization mutates the remembered switch state");
+check("lighting switch-only state", /activate:\s*\(\)\s*=>\s*this\.toggle\(\)/.test(lightCircuitClass), "physical light controls are not wired to the circuit toggle");
+check("lighting closet coverage", /new THREE\.SpotLight\(0xffb873/.test(cabinetClass) && /requiresOpenCabinet/.test(cabinetClass) && /lightCircuit\.lights\.push\(/.test(cabinetClass), "walk-in closets lack a door-gated, circuit-controlled contained spotlight");
+check("25 closet shadow budget", /closetLight\.castShadow\s*=\s*supportsFullRoomShadowSet/.test(cabinetClass), "walk-in closet lights still allocate cube-map or low-sampler shadows");
+check("lighting full blackout", /turnOffAllLights[\s\S]*for \(const circuit of circuits\) circuit\.setState\(false, true\)/.test(mansion), "global lights-out does not disable every circuit");
+
+// Follow-up architectural cleanup: the service stair remains open to the
+// kitchen and basement, but the former painting-room portals are now sealed.
+check("13 kitchen/service-stair opening", !mainPartitions.includes('name: "main-rear-service-enclosure"'), "wall between the kitchen and service-stair landing still exists");
+check("14 painting/service-stair separation", /openings:\s*\[\s*\]/s.test(serviceShaftWall), "east painting-room wall still has an opening into the service stair");
+check("14 painting/service-stair separation", !/kind:\s*"(?:arch|door|open)"/.test(serviceShaftWall), "an arch or hinged opening remains between the painting room and service stair");
+check("15 basement stair walls", !basementPartitions.includes('name: "basement-service-shaft"'), "basement service-shaft divider wall still exists");
+check("15 basement stair walls", !serviceStair.includes('name: "service-stair-west-wall"') && !serviceStair.includes('name: "service-stair-east-wall"'), "parallel service-stair side walls still exist");
+check("15 basement stair walls", !/\[3\.1,\s*6\.2,\s*9\.3,\s*12\.4\][^\n]*addBookshelf/.test(basementFurnishings), "three archive bookcase backs still read as walls beside the stair");
+check("16 service-stair light", !/serviceUpper\.addFixture\(/.test(lightingBuild), "floating upper service-stair fixture still exists");
+check("16 service-stair light", /serviceLower\.addFixture\(12\.55,\s*2\.[34]/.test(lightingBuild), "service-stair fixture is not attached at the basement ceiling over the bottom landing");
+check("17 main-stair lights", !/upperLanding\.addFixture\(/.test(lightingBuild), "small upper-landing chandelier still hangs above the main stair");
+check("17 main-stair lights", !/\[-9\.7,\s*0,\s*9\.7\][^\n]*bedroomCorridor\.addFixture/.test(lightingBuild), "second small center chandelier still hangs above the main stair");
+check("18 attached faucets", /faucet-deck-collar/.test(mansion) && /water-valve-mount/.test(waterClass), "sink and tub controls lack visible mounting hardware");
+check("18 attached shower", /shower-wall-backplate/.test(mansion) && /shower-arm/.test(mansion), "shower head lacks a wall backplate and connecting arm");
+
+// 19. The estate yard is a contained, fully authored level rather than an
+// unbounded plane. Its driveway, garden, pool, maze, interactions, lighting,
+// diagnostics, and physical walkthroughs are all part of the acceptance
+// contract because each is visible and reachable from a mansion exterior door.
+check("19 estate yard layout", yardLayout.length > 0, "YARD_LAYOUT is missing");
+check("19 estate yard layout", /bounds\s*:\s*Object\.freeze\(/.test(yardLayout) && /driveway\s*:\s*Object\.freeze\(/.test(yardLayout), "estate bounds and driveway alignment are not centralized");
+check("19 estate yard build", yardBuild.length > 0 && /\bbuildEstateYard\(\);/.test(exteriorBuild), "buildEstateYard() is missing or not invoked by buildExteriorScene()");
+
+for (const name of [
+  "estate-perimeter-hedge-north-west",
+  "estate-perimeter-hedge-north-east",
+  "estate-perimeter-hedge-south",
+  "estate-perimeter-hedge-west",
+  "estate-perimeter-hedge-east",
+]) {
+  check("19 contained hedge perimeter", yardBuild.includes(name), `missing visible perimeter run ${name}`);
+}
+check("19 contained hedge perimeter", count(yardBuild, /physics\.addFixedBox\(/g) >= 6, "yard perimeter/features lack independent Rapier collision proxies");
+check("19 contained hedge perimeter", /function derivePerimeterCoverage\(/.test(yardBuild) && /perimeterClosed\s*=\s*gaps\.length\s*===\s*0/.test(yardBuild), "yard perimeter closure is asserted instead of derived from built hedge and gate intervals");
+check("19 contained hedge perimeter", /perimeterUncoveredIntervals\.map/.test(yardBuild), "yard diagnostics do not report derived perimeter coverage gaps");
+
+check("19 locked driveway gate", /function addLockedDrivewayGate\(/.test(yardBuild), "locked driveway gate factory is missing");
+check("19 locked driveway gate", /locked driveway gate/i.test(yardBuild) && /deniedAttempts\s*\+=\s*1/.test(yardBuild), "gate interaction does not report and count denied attempts");
+check("19 locked driveway gate", /locked:\s*true/.test(yardBuild) && /colliderEnabled:\s*true/.test(yardBuild), "gate state is not permanently locked and collidable");
+check("19 locked driveway gate", /addInteractionTarget\(/.test(yardBuild), "driveway gate has no interaction target");
+
+check("19 formal garden", /function buildFormalGarden\(/.test(yardBuild), "formal garden factory is missing");
+check("19 formal garden", /const beds\s*=\s*\[[\s\S]*?\{ x:[\s\S]*?\{ x:[\s\S]*?\{ x:[\s\S]*?\{ x:/.test(yardBuild) && /yardState\.featureCounts\.gardenBeds\s*=\s*beds\.length/.test(yardBuild), "formal garden needs four data-driven named parterre beds");
+check("19 formal garden", /garden-fountain-basin/.test(yardBuild) && /formal-garden-path/.test(yardBuild), "formal garden lacks its focal fountain or connected paths");
+check("19 formal garden", /garden-rose-(?:blooms|stems)/.test(yardBuild), "formal garden lacks batched planted detail");
+
+check("19 swimming pool", /function buildEstatePool\(/.test(yardBuild), "pool factory is missing");
+for (const name of ["estate-pool-water", "estate-pool-bottom", "estate-pool-coping", "estate-pool-step", "pool-terrace-pavers"]) {
+  check("19 swimming pool", yardBuild.includes(name), `pool component ${name} is missing`);
+}
+check("19 swimming pool", ["north", "south", "west-middle", "east-middle"].every((part) => exteriorBuild.includes(`rain-soaked-grounds-rear-${part}`)), "rear ground/collider is not carved around the pool cavity");
+check("19 swimming pool", !/rain-soaked-grounds-rear["']\s*,\s*w:\s*92[^;]*d:\s*36/.test(exteriorBuild), "legacy solid rear collider still runs beneath the pool");
+check("19 swimming pool", /physics\.addFixedRamp\(pool\.centerX/.test(yardBuild), "pool entry stairs lack a continuous Rapier walking surface");
+for (const support of [
+  "pool-north-terrace-support-left",
+  "pool-north-terrace-support-right",
+  "pool-west-terrace-support",
+  "pool-east-terrace-support",
+  "pool-south-terrace-support",
+]) {
+  check("19 swimming pool", yardBuild.includes(support), `pool deck support ${support} is missing`);
+}
+check("19 swimming pool", /for \(const support of poolDeckSupports\) physics\.addFixedBox/.test(yardBuild), "visual pool pavers are not backed by physical deck supports");
+check("19 fall recovery", /updateSafety\(\)/.test(physicsClass) && /fallRecoveries\s*\+=\s*1/.test(physicsClass), "physics has no last-safe-position recovery for an unexpected yard fall");
+check("19 fall recovery", count(playerUpdate, /physics\.updateSafety\(\)/g) >= 2, "fall safety is not called after both fixed-step paths");
+check("19 fall recovery", /fallRecoveries:\s*physics\.fallRecoveries/.test(diagnostics), "fall recovery count is absent from diagnostics");
+check("19 fall recovery", /fallRecoveriesAtStart\s*=\s*physics\.fallRecoveries/.test(qaHooks) && /fallRecoveryDelta\s*===\s*0/.test(qaHooks), "yard circulation routes can pass after a hidden fall recovery");
+
+check("19 hedge maze", mazeLayout.length > 0 && /function buildHedgeMaze\(/.test(yardBuild), "grid-driven hedge maze is missing");
+const mazeRows = Array.from(mazeLayout.matchAll(/["']([#SE.]{5,})["']/g), (match) => match[1]);
+check("19 hedge maze", mazeRows.length >= 5 && mazeRows.length <= 11, "maze must contain 5-11 authored rows");
+if (mazeRows.length) {
+  const width = mazeRows[0].length;
+  check("19 hedge maze", mazeRows.every((row) => row.length === width) && width >= 5 && width <= 11, "maze rows are not rectangular or appropriately small");
+  const cells = mazeRows.join("");
+  check("19 hedge maze", (cells.match(/S/g) || []).length === 1 && (cells.match(/E/g) || []).length === 1, "maze needs exactly one entrance and one exit");
+  const start = cells.indexOf("S");
+  const exit = cells.indexOf("E");
+  const queue = start >= 0 ? [start] : [];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const index = queue.shift();
+    if (index === exit) break;
+    const row = Math.floor(index / width);
+    const col = index % width;
+    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nextRow = row + dr;
+      const nextCol = col + dc;
+      if (nextRow < 0 || nextRow >= mazeRows.length || nextCol < 0 || nextCol >= width) continue;
+      const next = nextRow * width + nextCol;
+      if (mazeRows[nextRow][nextCol] === "#" || seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  check("19 hedge maze", exit >= 0 && seen.has(exit), "hedge maze entrance has no walkable route to its exit");
+}
+check("19 hedge maze", /cellSize\s*:\s*1\.[4-9]/.test(mazeLayout), "maze corridors are not comfortably wider than the player capsule");
+check("19 hedge maze", /hedge-maze-walls/.test(yardBuild) && /physics\.addFixedBox\(/.test(yardBuild), "maze hedges lack aligned visible and physical walls");
+
+check("19 exterior lighting", lightingMap.includes('"FRONT DRIVE"') && lightingMap.includes('"FORMAL GARDEN"') && lightingMap.includes('"POOL TERRACE"') && lightingMap.includes('"HEDGE MAZE"'), "yard zones are not mapped to controlled exterior lighting");
+check("19 exterior lighting", /new LightCircuit\("estate exterior lights"[^;]*true\)/.test(yardBuild), "estate exterior light circuit is missing or does not start on");
+check("19 exterior lighting", /estateExteriorLights\.addSwitch\(/.test(yardBuild) && count(yardBuild, /addEstateLantern\(/g) >= 6, "yard lacks a physical switch or sufficient practical lanterns");
+check("19 exterior lighting", /physics\.addFixedBox\(x, YARD_LAYOUT\.groundY \+ height \/ 2, z, 0\.22, height, 0\.22/.test(yardBuild), "exterior lantern posts have no height-matched physical proxy");
+
+check("19 yard diagnostics", /yard\s*:\s*getYardDiagnostics\(/.test(diagnostics), "render_game_to_text diagnostics do not include yard state");
+check("19 yard diagnostics", /gate:\s*\{/.test(yardBuild) && /maze:\s*\{/.test(yardBuild) && /featureCounts:\s*\{/.test(yardBuild), "yard diagnostics omit gate, maze, or feature counts");
+for (const view of ["yardGateA", "yardGateInteract", "yardGardenA", "yardGardenB", "yardPoolA", "yardPoolB", "yardMazeA", "yardMazeB", "yardMazeEntranceCell", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenApproach", "yardExteriorSwitch"]) {
+  check("19 yard QA views", mansion.includes(`${view}:`), `missing QA view ${view}`);
+}
+for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut", "serviceDoorOut"]) {
+  check("19 yard QA routes", qaHooks.includes(`${route}:`) || qaHooks.includes(`case \"${route}\"`), `missing physical QA route ${route}`);
+}
+check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 3 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
+check("19 yard QA routes", /route\.expected/.test(qaHooks) && /route expectation not met/.test(qaHooks), "QA routes report complete without checking their expected endpoint");
+check("19 yard QA routes", /yardPoolNorthGuard:[\s\S]*?yaw:\s*-Math\.PI\s*\/\s*2[\s\S]*?seconds:\s*1\.25/.test(qaHooks), "north pool-deck support route still steps over the coping into the pool");
+
+check("19 locked driveway gate copy", !/The gates are open/i.test(page), "intro copy contradicts the locked driveway gate");
+
+// 20. Exterior traversal and lighting containment. Approaching an exterior
+// door must restore the real interior before the capsule reaches the threshold,
+// and fixtures must illuminate authored, visible sources instead of hidden
+// floor-wide PointLights that pass through walls.
+for (const side of ["front", "rear", "west", "east"]) {
+  check("20 continuous exterior facade", exteriorWalls.includes(`facade-interstory-infill-${side}`), `missing ${side} interstory facade infill`);
+}
+check("20 continuous exterior facade", /const interstoryHeight\s*=\s*FLOOR\.UPPER\s*-\s*\(FLOOR\.MAIN \+ WALL_HEIGHT\) \+ 0\.08/.test(exteriorWalls), "interstory infill no longer overlaps both authored floor elevations");
+check("20 continuous exterior facade", count(exteriorWalls, /w:\s*30\.34,\s*h:\s*interstoryHeight/g) === 2 && count(exteriorWalls, /h:\s*interstoryHeight,\s*d:\s*24\.34/g) === 2, "facade infill does not span both full-width and full-depth elevations");
+check("20 exterior re-entry rendering", /distanceFromHouse/.test(exteriorCulling) && /nearHouse/.test(exteriorCulling), "exterior culling does not restore the interior before a player reaches the house");
+check("20 exterior re-entry diagnostics", /interiorDetailsHidden:\s*Boolean\(interiorDetailsHidden\)/.test(diagnostics), "diagnostics cannot prove whether the interior render set is restored");
+check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && /kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 1, "rear doorways do not share the authored sill-to-floor ramp bridge");
+for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip", "serviceDoorRoundTrip"]) {
+  check("20 exterior re-entry routes", qaHooks.includes(`${route}:`), `missing exterior round-trip route ${route}`);
+}
+for (const [route, nextRoute, finalRoom, outdoorRoom] of [
+  ["frontDoorRoundTrip", "terraceDoorRoundTrip", "FRONT FOYER", "FRONT DRIVE"],
+  ["terraceDoorRoundTrip", "serviceDoorRoundTrip", "BALLROOM", "REAR LAWN"],
+  ["serviceDoorRoundTrip", "yardPoolWalk", "KITCHEN", "REAR LAWN"],
+]) {
+  const routeBlock = section(`${route}: {`, `${nextRoute}:`, qaHooks);
+  check("20 exterior re-entry routes", routeBlock.includes(`room: "${finalRoom}"`) && routeBlock.includes(`"${outdoorRoom}"`) && /interiorRendered:\s*true/.test(routeBlock) && /nearExteriorRendered:\s*true/.test(routeBlock), `${route} does not assert its outdoor visit, near-threshold render set, and final interior room`);
+}
+check("20 exterior re-entry routes", /visitedRooms/.test(qaHooks) && /circuitStatesUnchanged/.test(qaHooks) && /fallRecoveryDelta/.test(qaHooks) && /visibleInteriorMeshes/.test(qaHooks), "round-trip routes do not prove room visitation, near-threshold interior visibility, manual light state, and fall safety");
+
+check("20 room-local lighting", /addContainedSpotLight\(/.test(lightCircuitClass) && /new THREE\.SpotLight\(/.test(lightCircuitClass), "interior fixtures are not using bounded downward spotlights");
+check("20 room-local lighting", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addPracticalLight(", lightCircuitClass)), "ceiling fixtures still use wall-penetrating point lights");
+check("20 room-local lighting", /sharedWallShadow\s*=\s*\/\^\(\?:music room\|painting room\)/.test(lightCircuitClass) && /castsRoomShadow\s*=\s*style\s*===\s*"atrium"\s*\|\|\s*\(style\s*===\s*"grand"\s*&&\s*supportsFullRoomShadowSet\)\s*\|\|\s*\(sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\)/.test(lightCircuitClass), "large fixtures or capable-context music/painting rooms lack sampler-gated shadow coverage");
+check("20 room-local lighting", /shadow\.mapSize\.set\(256, 256\)/.test(lightCircuitClass) && /shadow\.bias/.test(lightCircuitClass) && /shadow\.normalBias/.test(lightCircuitClass), "contained shadow lights exceed the local map budget or omit bias tuning");
+check("20 room-local lighting", /settings\.contained == null[\s\S]*?this\.name !== "estate exterior lights"/.test(lightCircuitClass), "interior practical lights do not default to bounded downward cones");
+check("20 room-local lighting", /corridor:\s*\{[\s\S]*?intensity:\s*135,[\s\S]*?distance:\s*5\.6,[\s\S]*?angle:\s*0\.5/.test(lightCircuitClass), "narrow corridors do not use the brighter contained cone profile");
+check("20 fixture-scaled light reach", /atrium:\s*\{\s*intensity:\s*250,\s*distance:\s*10\.2,\s*angle:\s*0\.72/.test(lightCircuitClass) && /grand:\s*\{[\s\S]*?intensity:\s*165,[\s\S]*?distance:\s*8\.4,[\s\S]*?angle:\s*0\.92/.test(lightCircuitClass) && /small:\s*\{\s*intensity:\s*130,\s*distance:\s*5\.6,\s*angle:\s*1\.02/.test(lightCircuitClass), "fixture reach no longer scales from atrium to formal chandelier to compact ceiling light");
+check("20 fixture-scaled light reach", /fixtureStyle\s*=\s*style/.test(lightCircuitClass) && /authoredReach\s*=\s*containedDistance/.test(lightCircuitClass) && /light\.penumbra\s*=\s*profile\.penumbra/.test(lightCircuitClass), "runtime light diagnostics do not retain fixture scale and soft-falloff metadata");
+check("20 fixture-scaled light reach", /containedDistance\s*=\s*profile\.distance/.test(lightCircuitClass) && /containedAngle\s*=\s*sharedWallShadow\s*&&\s*supportsFullRoomShadowSet\s*\?\s*Math\.max\(profile\.angle,\s*0\.92\)\s*:\s*profile\.angle/.test(lightCircuitClass), "a special-case small fixture can exceed the grand chandelier footprint");
+
+// 22. A lit room must be legible beyond a single bright pool. Large formal
+// Chandeliers need a primary cone plus one restrained distributed-bulb fill.
+// Compact fixtures remain single-emitter sources so stable full-floor lighting
+// does not multiply the forward-renderer light loop for every pixel.
+const grandProfile = fixtureProfile("grand");
+const smallProfile = fixtureProfile("small");
+const bathroomProfile = fixtureProfile("bathroom");
+const corridorProfile = fixtureProfile("corridor");
+const grandFloorDiameter = 2 * Math.tan(grandProfile.angle) * ((3.72 - 1.1) - 0.04);
+const smallFloorDiameter = 2 * Math.tan(smallProfile.angle) * ((3.72 - 0.65) - 0.04);
+const upperSmallFloorDiameter = 2 * Math.tan(smallProfile.angle) * ((3.05 - 0.65) - 0.04);
+check("22 lit-room chandelier coverage", grandProfile.intensity >= 90 && grandProfile.distance >= 5.6 && grandProfile.penumbra <= 0.62, "grand chandelier still lacks useful direct intensity, reach, or core width");
+check("22 lit-room chandelier coverage", grandFloorDiameter >= 6.5, `grand chandelier floor cone is only ${grandFloorDiameter.toFixed(2)}m across`);
+check("22 lit-room compact coverage", smallProfile.intensity >= 120 && smallProfile.distance >= 5.3 && smallProfile.penumbra <= 0.68, "compact room fixture remains too dim or feathered to reveal nearby furniture");
+check("22 lit-room compact coverage", upperSmallFloorDiameter >= 7.4, `upper compact fixture coverage is not broad enough (${upperSmallFloorDiameter.toFixed(2)}m upper)`);
+check("25 stable-light performance budget", [smallProfile, bathroomProfile, corridorProfile, grandProfile].every((profile) => !Number.isFinite(profile.pointFillIntensity)), "a ceiling fixture still creates a redundant second emitter");
+check("22 chandelier primary reach", grandProfile.intensity >= 150 && grandProfile.distance >= 7.5 && grandProfile.distance < fixtureProfile("atrium").distance, "grand chandelier primary emitter does not carry the former fill brightness and reach");
+check("25 stable-light performance budget", !/addChandelierPointFill/.test(lightCircuitClass) && !/fixtureRole\s*=\s*"chandelier-fill"/.test(lightCircuitClass), "chandeliers still allocate a redundant cube-shadow point light");
+check("22 chandelier ceiling realism", /ring\.castShadow\s*=\s*style\s*===\s*"atrium"/.test(lightCircuitClass), "single-floor chandelier ring still projects an oversized ceiling shadow from its point fill");
+check("22 full blackout auxiliary lights", /allCircuitsOff\s*=\s*circuits\.length\s*>\s*0\s*&&\s*circuits\.every\(\(circuit\)\s*=>\s*!circuit\.on\)/.test(lightRendering) && /light\.visible\s*=\s*!allCircuitsOff\s*&&\s*rendersOnLevel\s*&&\s*interactionVisible/.test(lightRendering), "open cabinet or refrigerator lamps can survive a full circuit blackout");
+check("22 basement corridor coverage", corridorProfile.intensity >= 110 && corridorProfile.distance >= 4.6 && corridorProfile.angle >= 0.45 && corridorProfile.penumbra <= 0.65, "basement corridor direct cones remain too narrow or weak");
+check("22 basement corridor coverage", /for \(const z of \[-0\.6,\s*4\.45,\s*9\.5\]\) basementHall\.addFixture\(0,\s*z,\s*"corridor"\)/.test(lightingBuild), "the long basement corridor does not have three evenly spaced controlled fixtures");
+const basementProfile = fixtureProfile("basement");
+check("22 basement room readability", basementProfile.intensity >= 145 && basementProfile.distance >= 6.0 && basementProfile.angle >= 0.92 && basementProfile.penumbra <= 0.62, "basement room fixtures remain too weak, short, or narrow for readable creepy illumination");
+check("22 every fixture emits real light", !/addFixture\(x, z, style, castsLight/.test(lightCircuitClass) && !/switch-owned-light-pool/.test(lightCircuitClass), "some visible ceiling fixtures still substitute a painted glow pool for real light emission");
+check("22 every fixture emits real light", !/\.addFixture\([^\n;]*,\s*(?:false|x ===|z ===)/.test(lightingBuild), "one or more authored basement fixtures are still configured as a non-emitting prop");
+check("22 fixture scale ordering", fixtureProfile("atrium").distance > grandProfile.distance && grandProfile.distance > smallProfile.distance && grandProfile.intensity > smallProfile.intensity, "fixture size no longer correlates with primary intensity and reach");
+check("20 shadow sampler fallback", /supportsFullRoomShadowSet\s*=\s*renderer\.capabilities\.maxTextures\s*>=\s*16/.test(mansion) && /maxTextureUnits/.test(diagnostics) && /activeSceneShadowLights/.test(diagnostics), "low-sampler contexts have no bounded-cone fallback or total-scene shadow diagnostics");
+check("20 stable light rendering", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion), "proximity-selected portal circuits can still make manually switched lights pop while crossing the yard threshold");
+check("20 stable light rendering", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.test(lightRendering) && /manual-circuits-floor-stable/.test(lightRendering), "main-floor and exterior circuits do not use one stable floor-context render policy");
+check("20 movement-stable light rendering", !/lightWithinStableResidency|lightResidencyPosition|residencyPadding|residencyHysteresis/.test(mansion) && !/physics\.playerPosition\(\)/.test(lightRendering), "player position can still hide real light energy while a circuit remains on");
+check("20 movement-stable light rendering", /nextVisible\s*=\s*rendersInContext\s*&&\s*rendersOnLevel\s*&&\s*enclosureOpen/.test(lightRendering), "normal circuit lights are not kept stable for the complete authored floor context");
+check("20 auxiliary interior lighting", /for \(const light of auxiliaryInteriorLights\)/.test(lightRendering) && /interactionVisible/.test(lightRendering) && /rendersOnLevel/.test(lightRendering) && /light\.visible\s*=\s*!allCircuitsOff\s*&&\s*rendersOnLevel\s*&&\s*interactionVisible/.test(lightRendering), "door-operated cabinet lights are not bounded only by blackout, floor, and interaction state");
+check("20 stable light rendering", !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "room-name proximity gating can still hide a lit closet or room light while the player moves");
+check("20 exterior light containment", /addPracticalLight\(0,\s*3\.15,\s*14\.5,[\s\S]*?angle:\s*0\.48/.test(yardBuild) && /addPracticalLight\(0,\s*2\.45,\s*-14\.2,[\s\S]*?angle:\s*0\.5/.test(yardBuild), "front or rear facade fill can project through the mansion shell");
+check("20 manual light state", !/\.setState\(|\.toggle\(/.test(updateLocation + exteriorCulling + lightRendering), "room or exterior transitions mutate a light circuit without a switch interaction");
+check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.test(stormSystem) && /this\.light\.intensity\s*=\s*outdoors\s*\?\s*lightning \* 11\s*:\s*0/.test(stormSystem), "the unshadowed lightning key can still pass through interior walls");
+check("20 real fixture emission", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addContainedSpotLight(x, y", lightCircuitClass)), "visible fixtures are not backed by real contained lights");
+check("20 maze lamp sources", /maze-center-tall-lamp/.test(yardBuild), "hedge maze has no visible tall center lamp");
+check("20 maze lamp sources", /mazeLampSources/.test(yardBuild) && count(section("const mazeLampSources", "for (const source", yardBuild), /castsLight:\s*true/g) === 5, "maze must have exactly five authored entrance, center, and exit light sources");
+check("20 maze lamp sources", /role:\s*"entrance"/.test(yardBuild) && /role:\s*"center"/.test(yardBuild) && /role:\s*"exit"/.test(yardBuild), "maze sources do not identify their physical entrance, center, and exit fixtures");
+check("20 maze lamp sources", count(section("const mazeLampSources", "for (const source", yardBuild), /contained:\s*true/g) === 5, "each maze fixture must use a bounded downward light cone");
+check("20 maze lamp sources", count(section("const mazeLampSources", "for (const source", yardBuild), /angle:\s*0\.46/g) === 4, "maze boundary lamps can still project through adjacent hedge cells");
+check("20 maze lamp sources", /sourceLight\.userData\.mazeSource/.test(yardBuild) && /renderedLightSources:\s*renderedMazeSources/.test(yardBuild), "diagnostics do not enumerate the five actual rendered maze lights");
+check("20 maze light budget", count(section("const mazeLampSources", "for (const source", yardBuild), /castsShadow:\s*true/g) === 1, "only the tall center maze lamp may spend a shadow map");
+check("20 maze light occlusion", /hedge-maze-walls[\s\S]*?true,\s*true\)/.test(yardBuild), "maze hedge walls do not cast shadows from the authored lamps");
+check("20 maze light occlusion", !/addPracticalLight\(25,\s*2\.(?:05|15),\s*-2(?:5|31)/.test(yardBuild), "source-less hidden PointLights remain in the hedge maze");
+check("20 maze route cold-start", /if \(actions\.length\) actions\[0\]\.seconds \+= 1\.0/.test(mansion), "maze QA route has no cold-shadow compile cushion before its blocked first turn");
+
+// 21. The mansion's cryptic art collection must be real generated textures,
+// assigned deterministically to every existing frame, with the old primitive
+// ancestor preserved only as a resilient missing-file fallback.
+const expectedPortraitFiles = [
+  "portrait-patron-empty-plates-v1-ai.jpg",
+  "portrait-generosity-engine-v1-ai.jpg",
+  "portrait-infinite-giveaway-diptych-v1-ai.jpg",
+  "portrait-feast-of-merit-v1-ai.jpg",
+  "portrait-garden-good-deeds-v1-ai.jpg",
+  "portrait-audit-of-souls-v1-ai.jpg",
+  "portrait-banquet-forgot-guests-v1-ai.jpg",
+  "portrait-last-applause-v1-ai.jpg",
+  "portrait-orchard-porcelain-teeth-v1-ai.jpg",
+  "portrait-house-dreams-back-v1-ai.jpg",
+];
+const newPortraitIds = ["banquet-forgot-guests", "last-applause", "orchard-porcelain-teeth", "house-dreams-back"];
+check("21 generated portrait collection", count(portraitManifest, /file:\s*"portraits\/portrait-[^"]+-v1-ai\.jpg"/g) === 10, "portrait manifest does not expose ten immutable generated artwork files");
+check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 14, "all fourteen mansion picture frames are not assigned a stable generated art ID");
+for (const artId of newPortraitIds) {
+  check("23 non-host painting collection", portraitManifest.includes(`"${artId}"`) && portraitFurnishings.includes(`artId: "${artId}"`), `${artId} is not registered and placed in the mansion`);
+}
+check("23 non-host painting collection", newPortraitIds.every((artId) => upperGalleryPortraits.includes(`artId: "${artId}"`)), "all four new non-host paintings are not visible in the upper gallery");
+check("23 non-host painting collection", !/artId:\s*"(?:patron-empty-plates|feast-of-merit)"/.test(upperGalleryPortraits), "the upper gallery still repeats a Mr. Feast or host-centered portrait");
+check("23 non-host painting collection", mainGalleryPortraits.includes('artId: "last-applause"') && !mainGalleryPortraits.includes('artId: "patron-empty-plates"'), "the main gallery still repeats the drawing-room Mr. Feast portrait");
+for (const view of ["mainGalleryLastApplause", "upperArtHouseDreams", "upperArtBanquet", "upperArtOrchard", "upperArtLastApplause"]) {
+  check("23 painting QA views", mansion.includes(`${view}:`), `missing head-on painting inspection view ${view}`);
+}
+check("21 generated portrait loader", /function loadArtworkTexture/.test(mansion) && /ClampToEdgeWrapping/.test(portraitBuilder) && /THREE\.sRGBEncoding/.test(portraitBuilder) && !/RepeatWrapping/.test(portraitBuilder), "artwork textures are not loaded as clamped sRGB paintings");
+check("21 generated portrait loader", /portrait-art-\$\{artId\}/.test(portraitBuilder) && /if \(!artTexture\)/.test(portraitBuilder), "generated art lacks stable scene names or procedural fallback gating");
+check("21 generated portrait diptych", /repeatX:\s*0\.5,\s*offsetX:\s*0/.test(portraitFurnishings) && /repeatX:\s*0\.5,\s*offsetX:\s*0\.5/.test(portraitFurnishings), "ballroom diptych halves are not mapped to complementary frames");
+check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 14 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
+check("23 painting readability", /onEmissiveIntensity\s*=\s*0\.48/.test(portraitBuilder) && /offEmissiveIntensity\s*=\s*0/.test(portraitBuilder) && /circuit\.on\s*\?\s*0\.48\s*:\s*0/.test(portraitBuilder), "lit paintings are not gently readable while preserving a true zero-emissive lights-off state");
+for (const filename of expectedPortraitFiles) {
+  const fullPath = path.join(root, "assets/textures/mr-feast/generated/portraits", filename);
+  check("21 generated portrait assets", fs.existsSync(fullPath), `missing generated portrait ${filename}`);
+  if (fs.existsSync(fullPath)) {
+    const bytes = fs.readFileSync(fullPath);
+    check("21 generated portrait assets", bytes[0] === 0xff && bytes[1] === 0xd8, `${filename} is not a JPEG runtime texture`);
+    check("21 generated portrait assets", bytes.length <= 550 * 1024, `${filename} exceeds the 550 KB portrait texture budget`);
+    if (newPortraitIds.some((artId) => filename.includes(artId))) {
+      const dimensions = jpegDimensions(bytes);
+      check("23 non-host painting assets", dimensions?.width === 768 && dimensions?.height === 1152, `${filename} must be a 768x1152 portrait texture`);
+    }
+  }
+}
+
+// 24. The July layout/lighting pass removes two misleading transitional
+// spaces, makes every renamed room internally consistent, and keeps manually
+// switched light state visually stable while crossing room and yard zones.
+check("24 room naming", !lightingMap.includes('"DRAWING ROOM"') && !roomZones.includes('"DRAWING ROOM"') && !/new LightCircuit\(\s*"drawing room lights"/.test(lightingBuild), "legacy DRAWING ROOM mapping, zone, or circuit remains");
+check("24 room naming", !lightingMap.includes('"BEDROOM CORRIDOR"') && !roomZones.includes('"BEDROOM CORRIDOR"') && !/new LightCircuit\(\s*"bedroom corridor lights"/.test(lightingBuild), "legacy BEDROOM CORRIDOR mapping, zone, or circuit remains");
+check("24 room naming", /"MUSIC ROOM"\s*:\s*\[\s*"music room lights"\s*\]/.test(lightingMap) && roomZones.includes('"MUSIC ROOM"') && /new LightCircuit\(\s*"music room lights"/.test(lightingBuild) && /music\.addSwitch\(/.test(lightingBuild), "renamed MUSIC ROOM is not fully mapped to a manually controlled circuit");
+check("24 room naming", /"PAINTING ROOM"\s*:\s*\[\s*"painting room lights"\s*\]/.test(lightingMap) && roomZones.includes('"PAINTING ROOM"') && /new LightCircuit\(\s*"painting room lights"/.test(lightingBuild) && /painting\.addSwitch\(/.test(lightingBuild), "PAINTING ROOM is not fully mapped to a manually controlled circuit");
+
+check("24 sealed painting-room stair walls", mainEastFrontSpine.length > 0 && !/center:\s*0\b/.test(mainEastFrontSpine) && /center:\s*7\.3\b/.test(mainEastFrontSpine), "former west painting-room opening into the grand stair remains, or the music-room doorway was lost");
+check("24 sealed painting-room stair walls", serviceShaftWall.length > 0 && /openings:\s*\[\s*\]/s.test(serviceShaftWall) && !/kind:\s*"(?:arch|door|open)"/.test(serviceShaftWall), "painting room still opens through its east wall into the service stair");
+
+for (const [label, pattern] of [
+  ["west rear", /\[-15,\s*-5,\s*-12,\s*-3\.2,\s*"WEST REAR SUITE"\]/],
+  ["primary", /\[-5,\s*5,\s*-12,\s*-3\.2,\s*"PRIMARY SUITE"\]/],
+  ["east rear", /\[5,\s*15,\s*-12,\s*-3\.2,\s*"EAST REAR SUITE"\]/],
+]) {
+  check("24 enlarged rear suites", pattern.test(roomZones), `${label} suite zone does not absorb the removed bedroom corridor through z=-3.2`);
+}
+check("24 enlarged rear suites", !upperPartitions.includes('name: "upper-bedroom-corridor"'), "old z=-4.9 bedroom-corridor wall remains");
+for (const [label, wall, doorCenter] of [
+  ["west rear", westRearFrontWall, -9.7],
+  ["primary", primaryFrontWall, -4.15],
+  ["east rear", eastRearFrontWall, 9.7],
+]) {
+  const centerPattern = new RegExp(`center:\\s*${String(doorCenter).replace(".", "\\.")}\\b`);
+  check("24 enlarged rear suites", wall.length > 0 && /axis:\s*"x"/.test(wall) && /fixed:\s*-3\.2\b/.test(wall) && centerPattern.test(wall), `${label} suite lacks its aligned z=-3.2 front wall and doorway`);
+}
+
+const upperPortraitCount = count(upperGalleryPortraits, /artId:\s*"[^"]+"/g);
+const portraitsUseNewWall = count(upperGalleryPortraits, /fixed:\s*-3\.2/g) === 6
+  || /addWallPortrait\(\{[^;]*fixed:\s*-3\.2\b/s.test(upperFurnishings);
+check("24 upper-suite paintings", upperPortraitCount === 6 && portraitsUseNewWall && !/fixed:\s*-4\.9\b/.test(upperFurnishings), "six upper paintings were not moved from the deleted corridor wall to the new suite walls");
+for (const circuitName of ["west rear suite lights", "primary suite lights", "east rear suite lights"]) {
+  check("24 upper-suite paintings", count(upperGalleryPortraits, new RegExp(`circuitName:\\s*"${circuitName}"`, "g")) === 2, `${circuitName} does not own exactly two upper-suite portraits`);
+}
+check("24 upper-suite paintings", !/bedroom corridor lights/.test(upperGalleryPortraits), "upper paintings still depend on the removed corridor circuit");
+
+check("24 painting room furnishings", /\baddPaintingStudio\(/.test(paintingRoomFurnishings), "Painting Room does not invoke a dedicated studio furnishing builder");
+for (const stableName of ["painting-room-easel", "painting-room-chair", "painting-room-palette", "painting-room-brush", "painting-room-paint"]) {
+  check("24 painting room furnishings", mansion.includes(stableName), `Painting Room is missing stable scene object ${stableName}`);
+}
+check("24 painting room furnishings", !/\badd(?:Piano|Sofa)\(/.test(paintingRoomFurnishings), "Painting Room still contains its former piano or sofa");
+check("24 music room furnishings", /\baddPiano\(/.test(musicRoomFurnishings) && /\baddSofa\(/.test(musicRoomFurnishings), "Music Room does not retain both its piano and couch");
+check("24 music room furnishings", /musicPiano/i.test(musicRoomFurnishings) && /musicSofa/i.test(musicRoomFurnishings) && /(?:faceTargetYaw|yawToward|Math\.atan2)\s*\(/.test(musicRoomFurnishings), "Music Room couch lacks an explicit face-target relationship to the piano");
+
+check("24 closet interior materials", /const closetInterior\s*=\s*new THREE\.MeshStandardMaterial\(/.test(cabinetClass) && !/const closetInterior\s*=\s*new THREE\.MeshBasicMaterial\(/.test(cabinetClass), "walk-in closet liners still ignore real scene lighting");
+check("24 closet interior materials", !/lightCircuit\.glowMaterials\.push\(closetInterior\)/.test(cabinetClass), "closet liner is still a circuit-tinted glow surface");
+check("24 closet manual control", /pull-hitbox/.test(cabinetClass) && /addControlTarget\([^;]*pull[^;]*hitbox/i.test(cabinetClass), "closet pull chain lacks a generous explicit interaction hitbox");
+check("24 closet closed-door gate", /walkInInteriorMeshes/.test(cabinetClass) && /walkInInteriorMeshes\.visible\s*=\s*this\.open\s*\|\|\s*this\.angle\s*>\s*0\.025/.test(cabinetClass), "walk-in closet interior visuals do not remain through the closing animation and hide once the doors seal");
+check("24 closet switch independence", !/lightCircuit\.(?:setState|toggle)\(|lightCircuit\.on\s*=/.test(cabinetSetOpen), "opening or closing a closet mutates its manually controlled light circuit");
+check("24 closet diagnostics", /walkInClosets\s*:/.test(diagnostics) && /interiorVisible/.test(diagnostics) && /lightOn/.test(diagnostics), "diagnostics do not expose each walk-in closet's door, interior-render, and manual light state");
+
+check("24 stable render policy", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion) && !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "proximity-based portal or owner-room light gating remains");
+check("24 stable render policy", /isExteriorCircuit\s*\|\|\s*rendersOnFloor/.test(lightRendering) && /manual-circuits-floor-stable/.test(lightRendering), "main-floor and exterior lights do not share a stable floor-context render policy");
+check("24 fixture mesh stability", /keepForFacade[\s\S]*?sconce[\s\S]*?chandelier[\s\S]*?bulb/.test(exteriorCulling), "lit fixture meshes can still disappear when the player walks away from the facade");
+
+const sconceBuilder = section("addWallSconce(x, y, z", "addFixtureSupportFill", lightCircuitClass);
+check("24 architectural wall sconces", /wall-sconce-cup/.test(sconceBuilder) && /wall-sconce-frosted-shade/.test(sconceBuilder) && /wall-sconce-bulb/.test(sconceBuilder), "wall sconces still read as exposed glowing orbs instead of complete fixtures");
+check("25 stable-light performance budget", count(sconceBuilder, /addAimedSpotLight\(/g) === 1 && !/wall-wash/.test(sconceBuilder), "each wall sconce still allocates more than one real emitter");
+check("25 stable-light performance budget", /mobile\s*\?\s*1(?:\.0)?\s*:\s*1\.25/.test(resizeSystem) && /pixelRatio:\s*Number\(renderer\.getPixelRatio\(\)\.toFixed\(2\)\)/.test(diagnostics), "renderer does not cap Retina pixel workload or expose the active DPR");
+check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /state\.fps\s*<\s*40/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction");
+check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,[^\n;]*lanterns\);/.test(yardBuild), "one or more visibly glowing estate lanterns still lacks a real light source");
+
+const hasPracticalFill = (owner, minIntensity, minDistance) => methodCalls(owner, "addPracticalLight", lightingBuild)
+  .some((call) => call.values[3] >= minIntensity && call.values[4] >= minDistance);
+check("24 brighter switch-owned fills", hasPracticalFill("foyer", 20, 5.2) && /foyer\.addSwitch\(/.test(lightingBuild), "front foyer lacks a brighter switch-owned fill");
+check("24 brighter switch-owned fills", hasPracticalFill("stair", 26, 6.2) && /stair\.addSwitch\(/.test(lightingBuild), "grand stair lacks a brighter switch-owned fill");
+check("24 brighter switch-owned fills", hasPracticalFill("upperLanding", 22, 5.2) && /upperLanding\.addSwitch\(/.test(lightingBuild), "upper landing lacks a brighter switch-owned fill");
+check("24 brighter switch-owned fills", hasPracticalFill("westFront", 18, 5.0) && hasPracticalFill("eastFront", 18, 5.0) && /westFront\.addSwitch\(/.test(lightingBuild) && /eastFront\.addSwitch\(/.test(lightingBuild), "front suites lack balanced switch-owned fill lights");
+for (const view of ["paintingRoomWestWall", "paintingRoomEastWall", "westRearSuiteDoor", "primarySuiteDoor", "eastRearSuiteDoor"]) {
+  check("24 renovation QA views", mansion.includes(`${view}:`), `missing renovation inspection view ${view}`);
+}
+for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRearSuiteEntry", "primarySuiteEntry", "eastRearSuiteEntry"]) {
+  check("24 renovation QA routes", qaHooks.includes(`${route}:`), `missing physical renovation route ${route}`);
+}
+
+// The page must request a new asset URL or browsers can keep the pre-renovation
+// script despite all source fixes.
+const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
+check("cache key", cacheKey === "20260711-page-boot-watchdog-pass-78", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
+check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
+check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");
+check("26 runtime boot handshake", /const boot\s*=\s*window\.__MR_FEAST_BOOT__/.test(mansion) && /boot\?\.settle\(\)/.test(mansion) && /boot\?\.ready\(\)/.test(mansion), "the runtime does not cancel the independent page watchdog on failure and success");
+let pageBootProbe = null;
+try {
+  const bootSource = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+    .map((match) => match[1])
+    .find((source) => source.includes("window.__MR_FEAST_BOOT__"));
+  const attributes = {};
+  const stage = { setAttribute: (name, value) => { attributes[`stage:${name}`] = value; } };
+  const loading = { hidden: true, textContent: "", setAttribute: (name, value) => { attributes[`loading:${name}`] = value; } };
+  const enter = { disabled: true, textContent: "", dataset: {}, onclick: null, removeAttribute: (name) => { attributes[`enter:${name}`] = "removed"; } };
+  const introLead = { textContent: "" };
+  const elements = { "mansion-stage": stage, "mansion-loading": loading, "mansion-enter": enter };
+  let timeoutCallback = null;
+  let reloaded = false;
+  const locationProbe = { protocol: "http:", href: "", reload: () => { reloaded = true; } };
+  const windowProbe = { setTimeout: (callback) => { timeoutCallback = callback; return 1; } };
+  const documentProbe = {
+    getElementById: (id) => elements[id] || null,
+    querySelector: (selector) => selector === ".mansion-intro__lead" ? introLead : null,
+  };
+  new Function("window", "document", "location", "clearTimeout", bootSource)(windowProbe, documentProbe, locationProbe, () => {});
+  timeoutCallback();
+  enter.onclick();
+  pageBootProbe = {
+    status: windowProbe.__MR_FEAST_BOOT__.status,
+    stageReady: attributes["stage:aria-busy"] === "false",
+    alert: attributes["loading:role"] === "alert",
+    loadingVisible: loading.hidden === false,
+    retryEnabled: enter.disabled === false && enter.textContent === "Retry loading" && reloaded,
+  };
+} catch (_) {
+  pageBootProbe = null;
+}
+check("26 executable page watchdog", pageBootProbe && Object.values(pageBootProbe).every(Boolean), "page-owned timeout does not execute into a visible retry state");
+
+// Local testing must not depend on an agent-owned server process that vanishes
+// between sessions. The Finder-friendly launcher owns a loopback-only server,
+// waits for this exact game page, and then opens the playable URL.
+check("local launcher", fs.existsSync(localLauncherPath), "missing one-click Open Mr Feast Mansion.command launcher");
+check("local launcher", /^#!\/bin\/zsh/m.test(localLauncher), "local launcher is not a macOS double-clickable zsh command");
+check("local launcher", /--bind\s+127\.0\.0\.1/.test(localLauncher), "local launcher must bind only to the local machine");
+check("local launcher", /games\/mr-feast-mansion\.html/.test(localLauncher) && /Mr Feast's Mansion/.test(localLauncher), "local launcher does not validate and open the mansion page");
+check("local launcher", /\.mr-feast-local-server\.pid/.test(localLauncher), "local launcher does not retain a reusable local-server pid");
+check("local launcher", /Keep this window open/.test(localLauncher) && /wait\s+"\$\{SERVER_PID\}"/.test(localLauncher), "local launcher does not keep ownership of its server process while the game is open");
+check("local launcher guidance", /Open Mr Feast Mansion\.command/.test(localBootstrap), "direct-file fallback does not name the one-click launcher");
+check("local launcher guidance", /launcher will open the correct page automatically/i.test(localBootstrap), "direct-file fallback does not explain that the launcher opens the playable page");
+check("local launcher guidance", /Server running\? Open game/.test(localBootstrap), "direct-file fallback still presents a misleading server-start action");
+
+if (failures.length) {
+  console.error(`Mr. Feast renovation regression: ${failures.length} unmet invariant${failures.length === 1 ? "" : "s"}`);
+  failures.forEach((failure, index) => {
+    console.error(`${String(index + 1).padStart(2, "0")}. [${failure.requirement}] ${failure.detail}`);
+  });
+  process.exitCode = 1;
+} else {
+  console.log("Mr. Feast renovation regression: all renovation invariants passed");
+}

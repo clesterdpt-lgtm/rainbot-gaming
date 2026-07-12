@@ -653,6 +653,9 @@ check("24 architectural wall sconces", /wall-sconce-cup/.test(sconceBuilder) && 
 check("25 stable-light performance budget", count(sconceBuilder, /addAimedSpotLight\(/g) === 1 && !/wall-wash/.test(sconceBuilder), "each wall sconce still allocates more than one real emitter");
 check("27 aimed sconce containment", /targetDistance\s*=\s*Math\.hypot\(/.test(aimedSpotBuilder) && /boundedDistance\s*=\s*Math\.min\(distance,\s*targetDistance\s*\+\s*1\.35\)/.test(aimedSpotBuilder) && /new THREE\.SpotLight\([^;]*boundedDistance/.test(aimedSpotBuilder) && /shadow\.camera\.far\s*=\s*boundedDistance/.test(aimedSpotBuilder), "a wall sconce cone can continue beyond its authored in-room target");
 check("25 stable-light performance budget", /mobile\s*\?\s*1(?:\.0)?\s*:\s*1\.25/.test(resizeSystem) && /pixelRatio:\s*Number\(renderer\.getPixelRatio\(\)\.toFixed\(2\)\)/.test(diagnostics), "renderer does not cap Retina pixel workload or expose the active DPR");
+check("26 mobile portrait composition", /camera\.fov\s*=\s*clamp\(portraitExpansion,\s*70,\s*96\)/.test(resizeSystem), "portrait canvases need an expanded, capped field of view so rooms are not cropped to a narrow desktop slice");
+check("26 responsive render target", /new ResizeObserver\(\(\)\s*=>\s*resize\(\)\)/.test(mansion) && /visualViewport\.addEventListener\("resize",\s*resize\)/.test(mansion), "canvas sizing must follow stage and visual viewport changes on mobile");
+check("26 explicit mobile stage height", /#mansion-stage\s*\{\s*height:\s*clamp\(520px,\s*72dvh,\s*700px\);\s*min-height:\s*0;/s.test(page), "phone layout needs a definite stage height for reliable canvas measurement");
 check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /state\.fps\s*<\s*40/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction");
 check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,[^\n;]*lanterns\);/.test(yardBuild), "one or more visibly glowing estate lanterns still lacks a real light source");
 
@@ -690,7 +693,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "westRear
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-perf-pass-84", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-mobile-render-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

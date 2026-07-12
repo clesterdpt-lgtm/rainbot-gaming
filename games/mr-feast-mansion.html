@@ -684,7 +684,12 @@
       .mansion-page .game-page__title { font-size: 2.55rem; }
       .mansion-page .game-page__sub { max-width: 34ch; font-size: 0.6rem; line-height: 1.5; }
       .mansion-layout { gap: 0; }
-      #mansion-stage { min-height: min(72dvh, 700px); border-inline: 0; border-radius: 0; }
+      #mansion-stage {
+        height: clamp(520px, 72dvh, 700px);
+        min-height: 0;
+        border-inline: 0;
+        border-radius: 0;
+      }
       .mansion-location { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); max-width: 48%; }
       #mansion-room { font-size: 1.2rem; }
       .mansion-tools { top: max(9px, env(safe-area-inset-top)); right: max(9px, env(safe-area-inset-right)); }
@@ -718,7 +723,7 @@
     }
 
     @media (max-height: 600px) and (orientation: landscape) {
-      #mansion-stage { min-height: calc(100dvh - 12px); }
+      #mansion-stage { height: calc(100dvh - 12px); min-height: 0; }
       .mansion-intro__panel { padding: 18px 24px; }
       .mansion-intro__title { font-size: 2.65rem; }
       .mansion-intro__lead { margin-top: 12px; }
@@ -908,6 +913,6 @@
   <script src="../assets/vendor/three/three-r128.min.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260709-quiet-ui-1"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260712-perf-pass-84" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260712-mobile-render-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

@@ -4588,6 +4588,14 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
+    // Preserve more of the desktop composition on tall phone canvases. A
+    // fixed 70-degree vertical FOV falls to roughly 36 degrees horizontally
+    // at 390x844, making rooms look partially missing. Widen portrait views
+    // without pushing into an extreme fisheye projection.
+    const portraitExpansion = camera.aspect < 1
+      ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(70 / 2)) / Math.max(camera.aspect, 0.5)))
+      : 70;
+    camera.fov = clamp(portraitExpansion, 70, 96);
     camera.updateProjectionMatrix();
   }
 
@@ -4872,6 +4880,12 @@
     dom.canvas.addEventListener("pointerup", endTouchLook);
     dom.canvas.addEventListener("pointercancel", endTouchLook);
     window.addEventListener("resize", resize);
+    window.addEventListener("orientationchange", () => requestAnimationFrame(resize));
+    if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
+    if (window.ResizeObserver) {
+      const stageResizeObserver = new ResizeObserver(() => resize());
+      stageResizeObserver.observe(dom.stage);
+    }
     document.addEventListener("fullscreenchange", resize);
   }
 

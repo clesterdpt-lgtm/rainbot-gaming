@@ -111,6 +111,7 @@
   const MOBILE_UPPER_AMBIENT_CIRCUITS = new Set([
     "foyer chandelier", "grand stair lights", "upper landing lights",
   ]);
+  const MOBILE_CIRCUIT_INTENSITY_SCALE = 2;
   const MOBILE_UPPER_AMBIENT_SCALE = 2.2;
   const PORTRAIT_ARTWORKS = Object.freeze({
     "patron-empty-plates": Object.freeze({ title: "The Patron of Empty Plates", file: "portraits/portrait-patron-empty-plates-v1-ai.jpg" }),
@@ -197,6 +198,11 @@
     Object.freeze({ id: "rear", row: 19, col: 0 }),
     Object.freeze({ id: "north", row: 5, col: 0 }),
   ]);
+
+  const startupStartedAt = performance.now();
+  const startupStageWidth = Math.max(1, Math.floor(dom.stage.getBoundingClientRect().width || window.innerWidth || MOBILE_RENDER_WIDTH));
+  const startupCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  const startupSafeGpuProfile = startupStageWidth < MOBILE_RENDER_WIDTH || (startupCoarsePointer && window.innerWidth < 1180);
 
   // Curated inspection points: two unobstructed, compositionally different
   // views for every named room/zone. QA uses these both as visual coverage and
@@ -369,7 +375,10 @@
     frameTime: 0,
     fps: 0,
     renderQuality: "high",
-    mobileRenderProfile: false,
+    mobileRenderProfile: startupStageWidth < MOBILE_RENDER_WIDTH,
+    startupPhase: "Creating renderer",
+    startupReadyMs: null,
+    contextLost: false,
     qa: new URLSearchParams(location.search).has("qa"),
   };
 
@@ -398,10 +407,10 @@
   try {
     renderer = new THREE.WebGLRenderer({
       canvas: dom.canvas,
-      antialias: true,
+      antialias: !startupSafeGpuProfile,
       alpha: false,
       preserveDrawingBuffer: state.qa,
-      powerPreference: "high-performance",
+      powerPreference: startupSafeGpuProfile ? "default" : "high-performance",
     });
   } catch (error) {
     console.error("The Hollow Estate could not create a WebGL renderer", error);
@@ -425,17 +434,26 @@
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = NIGHT_LIGHTING.exposure;
   renderer.physicallyCorrectLights = true;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !startupSafeGpuProfile;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // The estate is static between interactions. Cache the expensive moon
   // shadow map and request a refresh only while a door or cabinet is moving.
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   renderer.setClearColor(0x05070d, 1);
+  const rendererContextAttributes = renderer.getContext().getContextAttributes() || {};
   // WebGL1 guarantees only eight fragment samplers. Keep the two optional
   // shared-wall shadow maps for modern contexts, but fall back to their tight
   // bounded cones when material maps and the moon would exceed that floor.
-  const supportsFullRoomShadowSet = renderer.capabilities.maxTextures >= 16;
+  const supportsFullRoomShadowSet = renderer.shadowMap.enabled && renderer.capabilities.maxTextures >= 16;
+
+  dom.canvas.addEventListener("webglcontextlost", (event) => {
+    event.preventDefault();
+    state.contextLost = true;
+    state.ready = false;
+    clearTimeout(initWatchdog);
+    showLoadFailure("The mansion ran out of graphics memory. Retry loading in safe mode.");
+  });
 
   const clock = new THREE.Clock();
   const raycaster = new THREE.Raycaster();
@@ -497,6 +515,7 @@
   const ease = (current, target, speed, dt) => lerp(current, target, 1 - Math.exp(-speed * dt));
 
   function setLoading(message, percent) {
+    state.startupPhase = message;
     if (!dom.loading) return;
     dom.loading.textContent = percent == null ? message : `${message} ${Math.round(percent)}%`;
     dom.loading.dataset.progress = percent == null ? "" : String(percent);
@@ -5564,15 +5583,15 @@
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
-      const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
-      // On phones, keep one real emitter per upper-floor circuit. Fixtures,
+      const mobileCircuitBudget = state.mobileRenderProfile;
+      const mobileUpperBudget = mobileCircuitBudget && floors.has("SECOND FLOOR");
+      // On phones, keep one real emitter per circuit on every floor. Fixtures,
       // bulbs, halos, and painted light response remain visible; only redundant
-      // support/sconce shader lights are retired. Prefer the primary ceiling
-      // fixture, then another visible fixture emitter, then the sole circuit
-      // light (walk-in closets).
-      const mobileCircuitLight = mobileUpperBudget
+      // support/sconce shader lights are retired. This keeps the first foyer
+      // shader small enough for mobile browsers to compile without stalling.
+      const mobileCircuitLight = mobileCircuitBudget
         ? (MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
-          ? circuit.lights.find((light) => light.isPointLight && (!light.userData.levels || light.userData.levels.has("SECOND FLOOR")))
+          ? circuit.lights.find((light) => light.isPointLight && (!light.userData.levels || light.userData.levels.has(state.currentFloor)))
           : null)
           || circuit.lights.find((light) => light.userData.fixtureRole === "primary")
           || circuit.lights.find((light) => light.userData.visibleFixtureEmitter)
@@ -5583,16 +5602,16 @@
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
         const enclosure = light.userData.requiresOpenCabinet;
         const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
-        light.userData.renderIntensityScale = mobileUpperBudget
-          && light === mobileCircuitLight
-          && MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
-          ? MOBILE_UPPER_AMBIENT_SCALE
+        light.userData.renderIntensityScale = mobileCircuitBudget && light === mobileCircuitLight
+          ? (mobileUpperBudget && MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
+            ? MOBILE_UPPER_AMBIENT_SCALE
+            : MOBILE_CIRCUIT_INTENSITY_SCALE)
           : 1;
         // Placement ignores enclosures: a closet light occupies its shader
         // slot whenever its floor context renders, so opening a cabinet can
         // never mint a novel light-count layout and stall on a mid-game
         // shader compile. The enclosure only gates whether it is energized.
-        const nextVisible = rendersInContext && rendersOnLevel && (!mobileUpperBudget || light === mobileCircuitLight);
+        const nextVisible = rendersInContext && rendersOnLevel && (!mobileCircuitBudget || light === mobileCircuitLight);
         if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
@@ -5617,67 +5636,6 @@
     // closet or floor-local chandelier therefore requests exactly one refresh
     // rather than silently using an uninitialized map.
     if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
-  }
-
-  function prewarmLightingPrograms() {
-    // Forward-renderer programs are keyed by the visible light counts, so the
-    // first frame of every render context — and of every mid-fade union of two
-    // adjacent contexts — would otherwise pause on shader compilation right
-    // as the player crosses a stair. Placement ignores enclosures (see
-    // syncLightRendering), so these layouts are the complete set the
-    // whole session can ever render. renderer.compile alone is not enough:
-    // drivers defer real pipeline builds until first draw, so each layout
-    // also renders one actual frame behind the loading veil.
-    // Enclosure-gated lights (walk-in closets) hold slots only while their
-    // own floor renders: fading up they gain the slot at fade start, fading
-    // down they lose it at fade start. Each stair union therefore exists in
-    // two variants, and both are drawn here.
-    const layouts = [
-      { floors: ["MAIN LEVEL"], context: "main-interior" },
-      { floors: ["MAIN LEVEL"], context: "grounds" },
-      { floors: ["SECOND FLOOR"], context: "second-floor" },
-      { floors: ["BASEMENT"], context: "basement" },
-      { floors: ["MAIN LEVEL", "SECOND FLOOR"], context: "main-interior" },
-      { floors: ["MAIN LEVEL", "SECOND FLOOR"], context: "main-interior", enclosureFloors: ["MAIN LEVEL"] },
-      { floors: ["MAIN LEVEL", "BASEMENT"], context: "main-interior" },
-    ];
-    // Phones switch floors without a light fade, so compiling multi-floor
-    // union shaders only burns startup time and risks exceeding mobile driver
-    // limits. Desktop still prewarms every authored transition layout.
-    const activeLayouts = state.mobileRenderProfile
-      ? layouts.filter((layout) => layout.floors.length === 1)
-      : layouts;
-    for (const layout of activeLayouts) {
-      const floors = new Set(layout.floors);
-      const enclosureFloors = new Set(layout.enclosureFloors || layout.floors);
-      for (const circuit of circuits) {
-        const rendersOnFloor = layout.floors.some((floor) => circuit.levels.has(floor));
-        const rendersInContext = circuitRendersInContext(circuit, floors, layout.context);
-        const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
-        const mobileCircuitLight = mobileUpperBudget
-          ? (MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
-            ? circuit.lights.find((light) => light.isPointLight && (!light.userData.levels || light.userData.levels.has("SECOND FLOOR")))
-            : null)
-            || circuit.lights.find((light) => light.userData.fixtureRole === "primary")
-            || circuit.lights.find((light) => light.userData.visibleFixtureEmitter)
-            || circuit.lights[0]
-          : null;
-        for (const light of circuit.lights) {
-          const lightLevels = light.userData.levels;
-          const placementFloors = light.userData.requiresOpenCabinet ? enclosureFloors : floors;
-          const rendersOnLevel = lightLevels
-            ? [...placementFloors].some((floor) => lightLevels.has(floor))
-            : rendersOnFloor;
-          light.visible = rendersInContext && rendersOnLevel && (!mobileUpperBudget || light === mobileCircuitLight);
-        }
-      }
-      renderer.compile(scene, camera);
-      renderer.shadowMap.needsUpdate = true;
-      renderer.render(scene, camera);
-    }
-    // Restore the true floor-context state the prewarm layouts scrambled.
-    syncLightRendering();
-    renderer.shadowMap.needsUpdate = true;
   }
 
   function updatePlayer(fixedDt) {
@@ -5735,6 +5693,7 @@
 
   function animate(frameNow = performance.now()) {
     requestAnimationFrame(animate);
+    if (state.contextLost) return;
     // Browsers normally suspend rAF in background tabs, but explicitly
     // draining the clock here prevents a giant catch-up step on engines that
     // still deliver a final callback while the document is hidden.
@@ -5812,6 +5771,10 @@
     return {
       ready: state.ready,
       started: state.started,
+      startupPhase: state.startupPhase,
+      startupReadyMs: state.startupReadyMs == null ? null : Number(state.startupReadyMs.toFixed(1)),
+      startupSafeGpuProfile: startupSafeGpuProfile,
+      contextLost: state.contextLost,
       floor: state.currentFloor,
       room: state.currentRoom,
       player: {
@@ -5880,8 +5843,8 @@
         allOn: circuits.every((circuit) => circuit.on),
         activeLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0).length, 0),
         activeAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible && light.intensity > 0).length,
-        activeShadowLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0),
-        activeSceneShadowLights: 1 + circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0),
+        activeShadowLights: renderer.shadowMap.enabled ? circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0) : 0,
+        activeSceneShadowLights: renderer.shadowMap.enabled ? 1 + circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0) : 0,
         activeSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isSpotLight).length, 0),
         activePointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isPointLight).length, 0),
         activeFixtureEmitters: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.userData.visibleFixtureEmitter).length, 0),
@@ -5890,6 +5853,7 @@
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
         mobileRenderProfile: state.mobileRenderProfile,
+        mobileLightBudgetPerCircuit: state.mobileRenderProfile ? 1 : null,
         mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? 1 : null,
         mobileUpperStableLighting: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR",
         mobileUpperAmbientScale: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? MOBILE_UPPER_AMBIENT_SCALE : 1,
@@ -5947,6 +5911,8 @@
         renderQuality: state.renderQuality,
         frameSchedule: getFrameSchedule(),
         targetFps: getTargetFrameInterval() > 0 ? Math.round(1000 / getTargetFrameInterval()) : null,
+        antialias: Boolean(rendererContextAttributes.antialias),
+        shadowsEnabled: renderer.shadowMap.enabled,
       },
     };
   }
@@ -6628,7 +6594,7 @@
       scene.add(hemi);
       const moon = new THREE.DirectionalLight(0x8fb7dc, NIGHT_LIGHTING.moonIntensity);
       moon.position.set(-20, 28, 18);
-      moon.castShadow = true;
+      moon.castShadow = renderer.shadowMap.enabled;
       moon.shadow.mapSize.set(1024, 1024);
       moon.shadow.camera.left = -25;
       moon.shadow.camera.right = 25;
@@ -6651,9 +6617,10 @@
       installDiagnostics();
       updateLocation();
       syncLightRendering();
-      setLoading("Warming the lamps", 92);
-      prewarmLightingPrograms();
+      setLoading("Preparing the first frame", 96);
       state.ready = true;
+      state.startupPhase = "Ready";
+      state.startupReadyMs = performance.now() - startupStartedAt;
       state.loadFailed = false;
       state.failureAction = null;
       clearTimeout(initWatchdog);
@@ -6727,7 +6694,9 @@
         dom.enter.textContent = "Cross the threshold";
       }
       setLoading("Ready", 100);
-      animate();
+      // Give the browser one complete paint with the loading veil removed and
+      // the entry button enabled before the first Three.js shader compilation.
+      requestAnimationFrame(() => requestAnimationFrame(animate));
     } catch (error) {
       console.error("The Hollow Estate failed to initialize", error);
       clearTimeout(initWatchdog);

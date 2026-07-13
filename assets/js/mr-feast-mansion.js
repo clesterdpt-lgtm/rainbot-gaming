@@ -60,6 +60,8 @@
 
   const FLOOR = Object.freeze({ BASEMENT: -3.8, MAIN: 0, UPPER: 4.5 });
   const MOBILE_RENDER_WIDTH = 720;
+  const PRE_ENTRY_FRAME_INTERVAL_MS = 250;
+  const BALANCED_FRAME_INTERVAL_MS = 1000 / 30;
   const WALL_HEIGHT = 4.15;
   const UPPER_HEIGHT = 3.3;
   const NIGHT_LIGHTING = Object.freeze({
@@ -5072,6 +5074,13 @@
   function startExploration() {
     if (!state.ready || state.started) return;
     state.started = true;
+    // Do not let the deliberately low-rate intro preview pollute the live FPS
+    // sample or deliver a large accumulated simulation step on entry.
+    clock.getDelta();
+    lastAnimationFrameAt = performance.now();
+    fpsFrames = 0;
+    fpsElapsed = 0;
+    lowFpsSeconds = 0;
     if (dom.intro) dom.intro.hidden = true;
     if (dom.enter) {
       dom.enter.disabled = true;
@@ -5710,9 +5719,33 @@
   let fpsFrames = 0;
   let fpsElapsed = 0;
   let lowFpsSeconds = 0;
+  let lastAnimationFrameAt = 0;
 
-  function animate() {
+  function getTargetFrameInterval() {
+    if (!state.started && !state.qa) return PRE_ENTRY_FRAME_INTERVAL_MS;
+    if (state.mobileRenderProfile || state.renderQuality === "reduced") return BALANCED_FRAME_INTERVAL_MS;
+    return 0;
+  }
+
+  function getFrameSchedule() {
+    if (!state.started && !state.qa) return "idle-preview";
+    if (state.mobileRenderProfile || state.renderQuality === "reduced") return "balanced-30fps";
+    return "full-refresh";
+  }
+
+  function animate(frameNow = performance.now()) {
     requestAnimationFrame(animate);
+    // Browsers normally suspend rAF in background tabs, but explicitly
+    // draining the clock here prevents a giant catch-up step on engines that
+    // still deliver a final callback while the document is hidden.
+    if (document.hidden) {
+      clock.getDelta();
+      lastAnimationFrameAt = frameNow;
+      return;
+    }
+    const targetFrameInterval = getTargetFrameInterval();
+    if (targetFrameInterval > 0 && frameNow - lastAnimationFrameAt < targetFrameInterval - 1) return;
+    lastAnimationFrameAt = frameNow;
     const rawDt = clock.getDelta();
     const dt = Math.min(rawDt, 0.075);
     state.frameTime = rawDt * 1000;
@@ -5721,7 +5754,8 @@
     if (fpsElapsed >= 0.5) {
       state.fps = fpsFrames / fpsElapsed;
       if (state.started && !state.qa && state.renderQuality === "high") {
-        lowFpsSeconds = state.fps < 40
+        const lowFpsThreshold = state.mobileRenderProfile ? 24 : 40;
+        lowFpsSeconds = state.fps < lowFpsThreshold
           ? lowFpsSeconds + fpsElapsed
           : Math.max(0, lowFpsSeconds - fpsElapsed * 0.5);
         if (lowFpsSeconds >= 2.5) {
@@ -5911,6 +5945,8 @@
         textures: info.memory.textures,
         pixelRatio: renderer.getPixelRatio(),
         renderQuality: state.renderQuality,
+        frameSchedule: getFrameSchedule(),
+        targetFps: getTargetFrameInterval() > 0 ? Math.round(1000 / getTargetFrameInterval()) : null,
       },
     };
   }

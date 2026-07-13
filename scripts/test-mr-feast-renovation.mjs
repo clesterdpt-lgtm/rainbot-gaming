@@ -156,6 +156,7 @@ const diagnostics = section("function getDiagnostics()", "function teleport(");
 const qaHooks = section("function installDiagnostics()", "async function init()");
 const physicsClass = section("class PhysicsWorld", "window.MrFeastFresh");
 const playerUpdate = section("function updatePlayer", "function syncCamera");
+const animationLoop = section("function getTargetFrameInterval()", "function getDiagnostics(");
 const exteriorCulling = section("function registerExteriorDetailCulling()", "function setMoveIntent(");
 const stormSystem = section("class StormSystem", "class MansionAudio");
 const resizeSystem = section("function resize()", "function requestPointerLock()");
@@ -648,6 +649,10 @@ check("31 split indoor and grounds lighting", /function getLightRenderContext\(/
 check("31 split indoor and grounds lighting", /function circuitRendersInContext\(/.test(mansion) && /renderContext === "grounds"\) return isExteriorCircuit/.test(mansion) && /return !isExteriorCircuit && rendersOnFloor/.test(mansion), "exterior emitters can still occupy the indoor main-floor shader layout");
 check("31 split indoor and grounds lighting", /\{ floors: \["MAIN LEVEL"\], context: "main-interior" \}/.test(mansion) && /\{ floors: \["MAIN LEVEL"\], context: "grounds" \}/.test(mansion), "indoor main-floor and grounds shader layouts are not both prewarmed");
 check("31 raw frame diagnostics", /const rawDt = clock\.getDelta\(\)/.test(mansion) && /state\.frameTime = rawDt \* 1000/.test(mansion) && /fpsElapsed \+= rawDt/.test(mansion), "FPS diagnostics still hide slow frames behind the simulation delta clamp");
+check("31 inactive preview budget", /const PRE_ENTRY_FRAME_INTERVAL_MS = 250/.test(mansion) && /!state\.started && !state\.qa/.test(animationLoop) && /frameNow - lastAnimationFrameAt < targetFrameInterval/.test(animationLoop), "the unopened mansion still renders at full refresh and can monopolize the surrounding website");
+check("31 balanced frame budget", /const BALANCED_FRAME_INTERVAL_MS = 1000 \/ 30/.test(mansion) && /state\.mobileRenderProfile \|\| state\.renderQuality === "reduced"/.test(animationLoop), "mobile and reduced-quality sessions do not cap the expensive render loop at 30 FPS");
+check("31 hidden tab pause", /document\.hidden/.test(animationLoop) && /clock\.getDelta\(\)/.test(animationLoop) && /return;/.test(animationLoop), "the mansion keeps updating and rendering while its tab is hidden");
+check("31 render schedule diagnostics", /frameSchedule:/.test(diagnostics) && /targetFps:/.test(diagnostics), "QA cannot observe whether the runtime is idle-throttled, balanced, or full-refresh");
 
 check("20 shadow sampler fallback", /supportsFullRoomShadowSet\s*=\s*renderer\.capabilities\.maxTextures\s*>=\s*16/.test(mansion) && /maxTextureUnits/.test(diagnostics) && /activeSceneShadowLights/.test(diagnostics), "low-sampler contexts have no bounded-cone fallback or total-scene shadow diagnostics");
 check("20 stable light rendering", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion), "proximity-selected portal circuits can still make manually switched lights pop while crossing the yard threshold");
@@ -809,7 +814,7 @@ check("26 mobile stable upper lighting", /MOBILE_UPPER_AMBIENT_CIRCUITS\.has\(ci
 check("26 mobile stair brightness", /MOBILE_UPPER_AMBIENT_SCALE = 2\.2/.test(mansion) && /renderIntensityScale/.test(lightRendering) && /mobileUpperAmbientScale/.test(diagnostics), "mobile stair, foyer, and landing fills are not boosted enough to keep the top flight readable");
 check("26 no automatic room lighting", !/mobileUpperCircuitNames/.test(mansion) && !/roomChanged && state\.mobileRenderProfile/.test(updateLocation), "crossing an upstairs room boundary can still visibly switch mobile lights on or off");
 check("26 explicit mobile stage height", /#mansion-stage\s*\{\s*height:\s*clamp\(520px,\s*72dvh,\s*700px\);\s*min-height:\s*0;/s.test(page), "phone layout needs a definite stage height for reliable canvas measurement");
-check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /state\.fps\s*<\s*40/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction");
+check("25 adaptive performance floor", /renderQuality:\s*"high"/.test(mansion) && /lowFpsSeconds/.test(mansion) && /lowFpsThreshold\s*=\s*state\.mobileRenderProfile\s*\?\s*24\s*:\s*40/.test(mansion) && /state\.fps\s*<\s*lowFpsThreshold/.test(mansion) && /state\.renderQuality\s*=\s*"reduced"/.test(mansion) && /renderQuality:\s*state\.renderQuality/.test(diagnostics), "sustained low FPS cannot trigger a one-way DPR safety reduction without treating the intentional mobile 30 FPS cap as a failure");
 check("24 every estate lantern emits", !/addEstateLantern\(estateExteriorLights,[^\n;]*lanterns\);/.test(yardBuild), "one or more visibly glowing estate lanterns still lacks a real light source");
 
 // 28. Lighting realism and cross-floor continuity. Every fixture paints the
@@ -846,7 +851,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-rear-lounge-exotic-rug-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-runtime-responsive-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

@@ -1918,7 +1918,11 @@
       scene.add(group);
       if (style === "basement") {
         box({ name: `${this.name}-cage`, w: 0.42, h: 0.12, d: 0.42, x, y: ceilingY - 0.12, z, material: M.iron, cast: false });
-        cylinder({ name: `${this.name}-wire`, radius: 0.012, height: 0.32, x, y: ceilingY + 0.02, z, material: M.iron, cast: false });
+        // Hang the wire entirely below the basement ceiling plane. Centering
+        // it above that plane left its top 10cm poking through the main floor
+        // as repeated black pegs in the library, foyer, dining room, and halls.
+        const wireHeight = 0.32;
+        cylinder({ name: `${this.name}-wire`, radius: 0.012, height: wireHeight, x, y: ceilingY - wireHeight / 2, z, material: M.iron, cast: false });
       } else {
         const bulbEmissive = isGrand ? 1.3 : 1.1;
         cylinder({ name: `${this.name}-chain`, radius: 0.018, height: isGrand ? 1.15 : 0.62, x, y: ceilingY - (isGrand ? 0.52 : 0.26), z, material: M.brass, cast: false });
@@ -4239,8 +4243,11 @@
     const painting = new LightCircuit("painting room lights", FLOOR.MAIN, 0xffa95e, true);
     painting.addFixture(8.2, 0, "small");
     painting.addFixtureSupportFill(8.2, 0, 32, 5.6, 0.78);
-    painting.addSwitch(7.45, 1.15, 3.039, 0);
-    painting.addSwitch(7.45, 1.15, -3.039, Math.PI);
+    // Keep both two-way controls on the painting-room face of their walls and
+    // clear of the door casings. Their previous normals pointed out of the
+    // room, while the south control crowded the gallery doorway.
+    painting.addSwitch(7.25, 1.15, 3.039, Math.PI);
+    painting.addSwitch(7.25, 1.15, -3.039, 0);
 
     const dining = new LightCircuit("dining room lights", FLOOR.MAIN, 0xffa968, true);
     dining.addFixture(-9.7, -8.4, "grand");

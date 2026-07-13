@@ -733,6 +733,162 @@
     return texture;
   }
 
+  function makeFoyerRugTexture(size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const center = size / 2;
+
+    // The foyer gets a ceremonial companion to the lounge textile: the same
+    // garnet, teal, and antique-gold family, but with a more formal axial
+    // medallion that reads clearly from the front-door sightline.
+    const field = ctx.createRadialGradient(center, center, size * 0.03, center, center, size * 0.72);
+    field.addColorStop(0, "#7a313b");
+    field.addColorStop(0.5, "#4c1724");
+    field.addColorStop(1, "#1b0710");
+    ctx.fillStyle = field;
+    ctx.fillRect(0, 0, size, size);
+
+    const gold = ctx.createLinearGradient(0, size, size, 0);
+    gold.addColorStop(0, "#76501f");
+    gold.addColorStop(0.48, "#e5c378");
+    gold.addColorStop(1, "#8d6427");
+    for (const [inset, width, color] of [
+      [7, 12, "#120509"],
+      [18, 5, gold],
+      [29, 13, "#123e42"],
+      [43, 4, gold],
+      [53, 3, "#dac88e"],
+      [62, 2, "#7d5b2b"],
+    ]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
+    }
+
+    const drawDiamond = (x, y, radius, fill, stroke) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius);
+      ctx.lineTo(x + radius, y);
+      ctx.lineTo(x, y + radius);
+      ctx.lineTo(x - radius, y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(1, radius * 0.13);
+      ctx.stroke();
+    };
+
+    // Alternating lozenges make the teal border feel hand-knotted instead of
+    // like a set of perfectly clean digital stripes.
+    for (let p = 76; p <= size - 76; p += 38) {
+      const offset = ((p - 76) / 38) % 2 === 0 ? 0 : 4;
+      drawDiamond(p, 35 + offset, 9, "#d8b76a", "#4e2419");
+      drawDiamond(p, size - 35 - offset, 9, "#d8b76a", "#4e2419");
+      drawDiamond(35 + offset, p, 9, "#d8b76a", "#4e2419");
+      drawDiamond(size - 35 - offset, p, 9, "#d8b76a", "#4e2419");
+    }
+
+    const drawPetal = (x, y, radiusX, radiusY, rotation, fill, stroke) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.moveTo(0, -radiusY);
+      ctx.bezierCurveTo(radiusX, -radiusY * 0.58, radiusX, radiusY * 0.58, 0, radiusY);
+      ctx.bezierCurveTo(-radiusX, radiusY * 0.58, -radiusX, -radiusY * 0.58, 0, -radiusY);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    const drawRosette = (x, y, radius, rotation = 0) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.82, 0, Math.PI * 2);
+      ctx.fillStyle = "#123f43";
+      ctx.fill();
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = Math.max(3, radius * 0.055);
+      ctx.stroke();
+      for (let i = 0; i < 12; i += 1) {
+        const angle = (i / 12) * Math.PI * 2;
+        drawPetal(
+          Math.cos(angle) * radius * 0.36,
+          Math.sin(angle) * radius * 0.36,
+          radius * 0.15,
+          radius * 0.42,
+          angle + Math.PI / 2,
+          i % 2 ? "#b8893e" : "#d9bd78",
+          "#54202b",
+        );
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = "#6e2633";
+      ctx.fill();
+      ctx.strokeStyle = "#ead39a";
+      ctx.lineWidth = Math.max(2, radius * 0.035);
+      ctx.stroke();
+      drawDiamond(0, 0, radius * 0.12, "#e3c77e", "#3d1822");
+      ctx.restore();
+    };
+
+    // A large compass rosette anchors the double-height foyer, while the two
+    // smaller palmettes extend the ornament toward the doors and grand stair.
+    drawRosette(center, center, size * 0.205, Math.PI / 12);
+    drawRosette(center, size * 0.205, size * 0.075, 0);
+    drawRosette(center, size * 0.795, size * 0.075, Math.PI / 6);
+
+    for (const [x, y, sx, sy] of [
+      [94, 94, 1, 1],
+      [size - 94, 94, -1, 1],
+      [94, size - 94, 1, -1],
+      [size - 94, size - 94, -1, -1],
+    ]) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(sx, sy);
+      ctx.strokeStyle = "#c69d4e";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(0, 28);
+      ctx.bezierCurveTo(5, 3, 19, -17, 37, -28);
+      ctx.stroke();
+      drawPetal(13, 3, 8, 17, 0.68, "#1a5553", "#d2ad5f");
+      drawPetal(29, -17, 7, 15, 0.95, "#6d2733", "#d2ad5f");
+      ctx.restore();
+    }
+
+    // Fine warp and weft variation keeps the ornament tactile under the
+    // chandelier without adding geometry or another draw call.
+    ctx.globalAlpha = 0.11;
+    for (let p = 2; p < size; p += 4) {
+      ctx.strokeStyle = p % 12 === 0 ? "#f2dfb0" : "#110508";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p + Math.sin(p * 0.19) * 1.5);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function loadTexture(url, repeatX, repeatY, encoding) {
     return new Promise((resolve) => {
       new THREE.TextureLoader().load(
@@ -790,6 +946,7 @@
     const soilMap = makeNoiseTexture(128, [[45, 31, 23], [56, 38, 25], [34, 28, 24], [62, 44, 28]], 9241);
     const paverMap = makeNoiseTexture(128, [[78, 82, 78], [91, 91, 84], [63, 68, 65], [105, 101, 91]], 4771);
     const exoticRugMap = makeExoticRugTexture(512);
+    const foyerRugMap = makeFoyerRugTexture(512);
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -831,6 +988,7 @@
       redRug: new THREE.MeshStandardMaterial({ color: 0x290b12, roughness: 0.9 }),
       greenRug: new THREE.MeshStandardMaterial({ color: 0x172f2b, roughness: 0.92 }),
       exoticRug: new THREE.MeshStandardMaterial({ map: exoticRugMap, roughness: 0.88, metalness: 0, bumpMap: exoticRugMap, bumpScale: 0.012 }),
+      foyerRug: new THREE.MeshStandardMaterial({ map: foyerRugMap, roughness: 0.88, metalness: 0, bumpMap: foyerRugMap, bumpScale: 0.012 }),
       darkFloor: new THREE.MeshStandardMaterial({ map: stoneMap, color: 0x4a504e, roughness: 0.96, bumpMap: stoneMap, bumpScale: 0.045 }),
       lightGlowMap: makeRadialGlowTexture(128),
       soot: new THREE.MeshStandardMaterial({ color: 0x08090a, roughness: 1 }),
@@ -3486,7 +3644,7 @@
     box({ name: "upper-ceiling", w: 30, h: 0.22, d: 24, x: 0, y: FLOOR.UPPER + UPPER_HEIGHT + 0.11, z: 0, material: M.ceiling, cast: false, receive: true });
     box({ name: "basement-damp-course", w: 30.8, h: 0.24, d: 24.8, x: 0, y: FLOOR.BASEMENT - 0.3, z: 0, material: M.limestone, cast: false });
 
-    addRug(0, 8.0, 4.4, 5.2, FLOOR.MAIN, M.redRug, 0);
+    addRug(0, 8.0, 4.4, 5.2, FLOOR.MAIN, M.foyerRug, 0);
     addRug(-9.5, 7.6, 6.4, 4.8, FLOOR.MAIN, M.greenRug, 0);
     addRug(9.4, 7.7, 6.2, 4.6, FLOOR.MAIN, M.redRug, 0);
     addRug(-9.7, -8.4, 7.2, 3.8, FLOOR.MAIN, M.redRug, 0);

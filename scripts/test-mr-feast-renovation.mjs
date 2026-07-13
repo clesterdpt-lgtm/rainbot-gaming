@@ -168,6 +168,7 @@ const resizeSystem = section("function resize()", "function requestPointerLock()
 const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
 const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
 const exoticRugTextureBuilder = section("function makeExoticRugTexture", "function loadTexture");
+const foyerRugTextureBuilder = section("function makeFoyerRugTexture", "function loadTexture");
 const materialFactory = section("async function createMaterials()", "class PhysicsWorld");
 const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
 const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
@@ -802,6 +803,9 @@ check("24 rear lounge rug overlap", !/addRug\(0,\s*-8\.1,\s*4\.1,\s*4\.6,\s*FLOO
 check("24 rear lounge rug overlap", count(`${slabs}\n${upperFurnishings}`, /addRug\(0,\s*-8\.(?:1|35)/g) === 1, "rear lounge must have exactly one rug surface");
 check("24 exotic lounge rug", /createLinearGradient|createRadialGradient/.test(exoticRugTextureBuilder) && /medallion|arabesque|ornament/.test(exoticRugTextureBuilder), "exotic lounge rug lacks a layered woven ornamental pattern");
 check("24 exotic lounge rug", /const exoticRugMap\s*=\s*makeExoticRugTexture\(512\)/.test(materialFactory) && /exoticRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*exoticRugMap/.test(materialFactory), "exotic lounge rug material is missing or does not use the procedural textile map");
+check("32 ornate foyer rug", /createLinearGradient|createRadialGradient/.test(foyerRugTextureBuilder) && /rosette|palmette|medallion|ornament/.test(foyerRugTextureBuilder), "foyer rug lacks a layered ceremonial textile pattern");
+check("32 ornate foyer rug", /const foyerRugMap\s*=\s*makeFoyerRugTexture\(512\)/.test(materialFactory) && /foyerRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*foyerRugMap/.test(materialFactory), "foyer rug material is missing or does not use its procedural textile map");
+check("32 ornate foyer rug", /addRug\(0,\s*8\.0,\s*4\.4,\s*5\.2,\s*FLOOR\.MAIN,\s*M\.foyerRug,\s*0\)/.test(slabs), "main foyer still uses a flat rug material instead of the ornate foyer carpet");
 
 const upperPortraitCount = count(upperGalleryPortraits, /artId:\s*"[^"]+"/g);
 const portraitsUseNewWall = /addWallPortrait\(\{\s*axis:\s*"x",\s*fixed:\s*-3\.2/.test(upperGalleryPortraits)
@@ -886,7 +890,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-connected-foyer-chandelier-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-connected-foyer-chandelier-ornate-carpet-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

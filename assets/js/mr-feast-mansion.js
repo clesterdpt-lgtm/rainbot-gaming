@@ -309,7 +309,7 @@
     rearLoungeC: [0, FLOOR.UPPER, -3.75, 0],
     eastRearSuiteC: [13.2, FLOOR.UPPER, -3.75, Math.PI / 2],
     upperArtHouseDreams: [-12.5, FLOOR.UPPER, -5.0, Math.PI],
-    upperArtBanquet: [-3.7, FLOOR.UPPER, -9.2, Math.PI / 2],
+    upperArtBanquet: [-2.0, FLOOR.UPPER, -9.4, Math.PI / 2],
     upperArtOrchard: [3.7, FLOOR.UPPER, -9.2, -Math.PI / 2],
     upperArtLastApplause: [7.2, FLOOR.UPPER, -5.0, Math.PI],
     primarySuiteA: [-10.8, FLOOR.UPPER, -6.2, -0.91],
@@ -333,8 +333,10 @@
 
     wineCellarA: [-2.3, FLOOR.BASEMENT, 4.2, 2.2],
     wineCellarB: [-12.0, FLOOR.BASEMENT, 10.4, -0.9],
-    archiveA: [3.0, FLOOR.BASEMENT, 4.1, -Math.PI / 2],
-    archiveB: [13.2, FLOOR.BASEMENT, 10.3, Math.PI / 2],
+    archiveA: [4.9, FLOOR.BASEMENT, 4.0, Math.PI],
+    archiveB: [13.3, FLOOR.BASEMENT, 7.2, Math.PI / 2],
+    archiveRows: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
+    archiveSkull: [9.0, FLOOR.BASEMENT, 9.4, Math.PI / 2],
     basementCorridorA: [0, FLOOR.BASEMENT, 10.8, 0],
     basementCorridorB: [0, FLOOR.BASEMENT, -2.5, Math.PI],
     laundryA: [-2.3, FLOOR.BASEMENT, -2.3, 2.0],
@@ -2804,6 +2806,7 @@
 
   function buildGrandStaircase() {
     const run = 4.1;
+    const grandRailHeight = 0.97;
     const lowerCount = GRAND_STAIR.LOWER_STEP_COUNT;
     const upperCount = GRAND_STAIR.UPPER_STEP_COUNT;
     const midY = FLOOR.MAIN + GRAND_STAIR.MID_LANDING_RISE;
@@ -2826,7 +2829,7 @@
       const z = lowerStartZ - lowerTread * (i + 0.5);
       addGrandStairStep({ name: `grand-lower-step-${i}`, x: 0, z, width: lowerWidth, depth: lowerTread + 0.025, topY, rise: lowerRise, directionZ: -1, runnerWidth: 1.06, batches: stairBatches });
       for (const x of [-lowerRailX, lowerRailX]) {
-        stairBatches.balusters.push({ x, y: topY + 0.43, z });
+        stairBatches.balusters.push({ x, y: topY + grandRailHeight / 2, z });
       }
     }
     for (const x of [-1.02, 1.02]) {
@@ -2879,7 +2882,7 @@
         const z = lowerEndZ + upperTread * (i + 0.5);
         addGrandStairStep({ name: `grand-upper-${side}-step-${i}`, x: side * branchCenter, z, width: branchWidth, depth: upperTread + 0.025, topY, rise: upperRise, directionZ: 1, runnerWidth: 0.8, batches: stairBatches });
         for (const x of [side * branchInner, side * branchOuter]) {
-          stairBatches.balusters.push({ x, y: topY + 0.43, z });
+          stairBatches.balusters.push({ x, y: topY + grandRailHeight / 2, z });
         }
       }
       for (const x of [side * (branchCenter - 0.68), side * (branchCenter + 0.68)]) {
@@ -2902,7 +2905,7 @@
     addBoxInstanceBatch("grand-stair-risers", M.blackWood, stairBatches.risers, true, true);
     addBoxInstanceBatch("grand-stair-nosings", M.darkWood, stairBatches.nosings, true, true);
     addBoxInstanceBatch("grand-stair-runner", M.redRug, stairBatches.runners, false, true);
-    addBalusterInstanceBatch("grand-stair-balusters", stairBatches.balusters);
+    addBalusterInstanceBatch("grand-stair-balusters", stairBatches.balusters, grandRailHeight);
 
     // A trimmed cross-landing completes the split flights and meets the upper
     // balcony at one continuous datum.
@@ -3295,6 +3298,123 @@
     const cw = Math.abs(Math.cos(rotationY || 0)) * w + Math.abs(Math.sin(rotationY || 0)) * 0.52;
     const cd = Math.abs(Math.sin(rotationY || 0)) * w + Math.abs(Math.cos(rotationY || 0)) * 0.52;
     physics.addFixedBox(x, floorY + h / 2, z, cw, h, cd, 0);
+    return group;
+  }
+
+  function addArchiveCurio(parent, name, kind, shelfY, faceZ) {
+    const curio = new THREE.Group();
+    curio.name = `${name}-${kind}`;
+    curio.position.set(0, shelfY, faceZ);
+    parent.add(curio);
+
+    if (kind === "skull") {
+      const cranium = sphere({ name: "archive-curio-skull-cranium", radius: 0.18, y: 0.28, z: 0.005, material: M.porcelain, parent: curio });
+      cranium.scale.set(0.92, 1.08, 0.82);
+      for (const x of [-0.062, 0.062]) {
+        const socket = sphere({ name: "archive-curio-skull-eye-socket", radius: 0.052, x, y: 0.29, z: 0.132, material: M.soot, parent: curio, cast: false });
+        socket.scale.set(1, 0.82, 0.45);
+      }
+      const nose = sphere({ name: "archive-curio-skull-nose-cavity", radius: 0.036, y: 0.22, z: 0.151, material: M.soot, parent: curio, cast: false });
+      nose.scale.set(0.7, 1.05, 0.42);
+      roundedBox({ name: "archive-curio-skull-jaw", w: 0.22, h: 0.12, d: 0.13, radius: 0.035, y: 0.105, z: 0.035, material: M.porcelain, parent: curio });
+      for (const x of [-0.066, -0.022, 0.022, 0.066]) {
+        box({ name: "archive-curio-skull-tooth", w: 0.031, h: 0.06, d: 0.018, x, y: 0.115, z: 0.108, material: M.canvasLinen, parent: curio, cast: false });
+      }
+    } else if (kind === "specimen-jar") {
+      cylinder({ name: "archive-curio-specimen-jar-glass", radius: 0.14, height: 0.38, segments: 18, y: 0.21, material: M.glass, parent: curio, cast: false });
+      sphere({ name: "archive-curio-specimen-jar-object", radius: 0.075, y: 0.2, material: M.porcelain, parent: curio, cast: false });
+      cylinder({ name: "archive-curio-specimen-jar-lid", radius: 0.15, height: 0.055, segments: 18, y: 0.425, material: M.brass, parent: curio, cast: false });
+    } else if (kind === "reel-to-reel") {
+      box({ name: "archive-curio-reel-to-reel-deck", w: 0.48, h: 0.34, d: 0.12, y: 0.19, material: M.blackWood, parent: curio, cast: false });
+      for (const x of [-0.135, 0.135]) {
+        cylinder({ name: "archive-curio-reel-to-reel-spool", radius: 0.11, height: 0.03, segments: 20, x, y: 0.23, z: 0.075, rotationX: Math.PI / 2, material: M.brass, parent: curio, cast: false });
+        cylinder({ name: "archive-curio-reel-to-reel-hub", radius: 0.035, height: 0.038, segments: 14, x, y: 0.23, z: 0.094, rotationX: Math.PI / 2, material: M.iron, parent: curio, cast: false });
+      }
+    } else {
+      roundedBox({ name: "archive-curio-sealed-ledger", w: 0.5, h: 0.11, d: 0.34, radius: 0.025, y: 0.075, material: M.leather, parent: curio, cast: false });
+      box({ name: "archive-curio-sealed-ledger-clasp", w: 0.08, h: 0.125, d: 0.36, y: 0.082, material: M.brass, parent: curio, cast: false });
+    }
+  }
+
+  function addArchiveShelfBank({ name, x, z, floorY, rotationY = 0, width = 2.3, height = 3.05, depth = 0.72, seed = 0, curio = null }) {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(x, floorY, z);
+    group.rotation.y = rotationY;
+    group.userData = { freestanding: true, doubleSided: true, contents: ["documents", "books", "tapes"], curio };
+    scene.add(group);
+
+    const shelfYs = Array.from({ length: 5 }, (_, index) => 0.12 + index * (height - 0.24) / 4);
+    for (const sideX of [-1, 1]) {
+      box({ name: `${name}-upright`, w: 0.13, h: height, d: depth, x: sideX * (width / 2 - 0.065), y: height / 2, material: M.blackWood, parent: group });
+      box({ name: `${name}-brass-foot`, w: 0.19, h: 0.08, d: depth + 0.08, x: sideX * (width / 2 - 0.065), y: 0.04, material: M.brass, parent: group, cast: false });
+    }
+    shelfYs.forEach((y, index) => {
+      box({ name: `${name}-shelf-${index + 1}`, w: width, h: 0.085, d: depth, y, material: M.darkWood, parent: group });
+    });
+    box({ name: `${name}-top-rail`, w: width + 0.08, h: 0.12, d: depth + 0.06, y: height - 0.04, material: M.blackWood, parent: group });
+
+    const bookBatches = M.bookPalette.map(() => []);
+    const documentMaterials = [M.canvasLinen, M.agedTrim, M.leather];
+    const documentBatches = documentMaterials.map(() => []);
+    const documentLabels = [];
+    const tapeMaterials = [M.iron, M.copper, M.blackWood];
+    const tapeBatches = tapeMaterials.map(() => []);
+    const contentWidth = width - 0.32;
+    for (const [faceIndex, face] of [-1, 1].entries()) {
+      for (let shelfIndex = 0; shelfIndex < 4; shelfIndex += 1) {
+        if (curio && face === 1 && shelfIndex === 2) continue;
+        const shelfTop = shelfYs[shelfIndex] + 0.045;
+        const kind = (seed + shelfIndex + faceIndex) % 3;
+        if (kind === 0) {
+          const count = Math.max(8, Math.floor(contentWidth / 0.15));
+          for (let i = 0; i < count; i += 1) {
+            const bookHeight = 0.39 + ((i + seed + shelfIndex) % 4) * 0.035;
+            bookBatches[(i + shelfIndex + seed) % bookBatches.length].push({
+              x: -contentWidth / 2 + (i + 0.5) * contentWidth / count,
+              y: shelfTop + bookHeight / 2,
+              z: face * 0.225,
+              sx: 0.105 + (i % 3) * 0.012,
+              sy: bookHeight,
+              sz: 0.245,
+              rz: (i % 7 === 0 ? face * 0.045 : 0),
+            });
+          }
+        } else if (kind === 1) {
+          const count = Math.max(5, Math.floor(contentWidth / 0.3));
+          for (let i = 0; i < count; i += 1) {
+            const boxWidth = contentWidth / count - 0.035;
+            const documentHeight = 0.42 + ((i + seed) % 2) * 0.055;
+            const entryX = -contentWidth / 2 + (i + 0.5) * contentWidth / count;
+            documentBatches[(i + shelfIndex + seed) % documentBatches.length].push({ x: entryX, y: shelfTop + documentHeight / 2, z: face * 0.225, sx: boxWidth, sy: documentHeight, sz: 0.22 });
+            documentLabels.push({ x: entryX, y: shelfTop + documentHeight * 0.58, z: face * 0.339, sx: Math.min(0.095, boxWidth * 0.55), sy: 0.075, sz: 0.012 });
+          }
+        } else {
+          const count = Math.max(7, Math.floor(contentWidth / 0.19));
+          for (let i = 0; i < count; i += 1) {
+            const tapeHeight = 0.31 + ((i + shelfIndex) % 3) * 0.025;
+            tapeBatches[(i + seed) % tapeBatches.length].push({
+              x: -contentWidth / 2 + (i + 0.5) * contentWidth / count,
+              y: shelfTop + tapeHeight / 2,
+              z: face * 0.245,
+              sx: contentWidth / count - 0.035,
+              sy: tapeHeight,
+              sz: 0.17,
+            });
+          }
+        }
+      }
+    }
+
+    bookBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-books-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.bookPalette[index], transforms));
+    documentBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-documents-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), documentMaterials[index], transforms));
+    addLocalInstanceBatch(`${name}-archive-document-labels`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.brass, documentLabels);
+    tapeBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-tapes-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), tapeMaterials[index], transforms));
+
+    if (curio) addArchiveCurio(group, name, curio, shelfYs[2] + 0.045, 0.255);
+    const worldWidth = Math.abs(Math.cos(rotationY)) * width + Math.abs(Math.sin(rotationY)) * depth;
+    const worldDepth = Math.abs(Math.sin(rotationY)) * width + Math.abs(Math.cos(rotationY)) * depth;
+    physics.addFixedBox(x, floorY + height / 2, z, worldWidth, height, worldDepth, 0);
     return group;
   }
 
@@ -4135,7 +4255,7 @@
       { x: 7.2, artId: "last-applause", circuitName: "east rear suite lights" },
       { x: 12.5, artId: "generosity-engine", circuitName: "east rear suite lights" },
     ]) addWallPortrait({ axis: "x", fixed: -3.2, center: portrait.x, floorY: FLOOR.UPPER, centerY: 1.72, side: -1, width: 0.85, height: 1.24, color: 0x27252d, artId: portrait.artId, circuitName: portrait.circuitName });
-    addWallPortrait({ axis: "z", fixed: -5, center: -9.2, floorY: FLOOR.UPPER, centerY: 1.72, side: 1, width: 0.85, height: 1.24, color: 0x27252d, artId: "banquet-forgot-guests", circuitName: "rear lounge lights" });
+    addWallPortrait({ axis: "z", fixed: -5, center: -8.25, floorY: FLOOR.UPPER, centerY: 1.72, side: 1, width: 0.85, height: 1.24, color: 0x27252d, artId: "banquet-forgot-guests", circuitName: "rear lounge lights" });
     addWallPortrait({ axis: "z", fixed: 5, center: -9.2, floorY: FLOOR.UPPER, centerY: 1.72, side: -1, width: 0.85, height: 1.24, color: 0x27252d, artId: "orchard-porcelain-teeth", circuitName: "rear lounge lights" });
   }
 
@@ -4145,24 +4265,35 @@
     addTable(-8.0, 7.4, 2.6, 1.05, FLOOR.BASEMENT, 0, M.darkWood);
     new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2 });
 
-    // Archive — three mirrored pairs line the perimeter instead of forming a
-    // freestanding wall through the room. The west pair brackets the 1m door
-    // with 0.85m of clear space at both jambs (well over the 0.32m player
-    // radius), while the full-width center and cross aisles remain empty.
-    const archiveCenterX = 8.15;
-    const archiveSideXs = [1.82, 14.48];
-    const archiveSideZs = [4.75, 9.65];
-    archiveSideXs.forEach((x, sideIndex) => archiveSideZs.forEach((z, rowIndex) => {
-      const shelf = addBookshelf(x, z, FLOOR.BASEMENT, sideIndex === 0 ? -Math.PI / 2 : Math.PI / 2, 2.2, 2.65);
-      shelf.name = `archive-bookcase-${sideIndex === 0 ? "west" : "east"}-${rowIndex === 0 ? "south" : "north"}`;
+    // Archive — the perimeter is intentionally bare. Three double-sided rows
+    // stand well clear of every wall and split at the doorway datum, leaving
+    // a continuous cross-aisle plus access around every shelf face and end.
+    const archiveRowXs = [3.4, 7.3, 11.2];
+    const archiveShelfBanks = [
+      { id: "south", z: 5.25, width: 2.1 },
+      { id: "north", z: 9.4, width: 2.6 },
+    ];
+    const archiveCurios = new Map([
+      ["1-north", "sealed-ledger"],
+      ["2-north", "skull"],
+      ["3-south", "reel-to-reel"],
+      ["3-north", "specimen-jar"],
+    ]);
+    archiveRowXs.forEach((x, rowIndex) => archiveShelfBanks.forEach((bank, bankIndex) => {
+      const rowNumber = rowIndex + 1;
+      addArchiveShelfBank({
+        name: `archive-row-${rowNumber}-${bank.id}`,
+        x,
+        z: bank.z,
+        floorY: FLOOR.BASEMENT,
+        rotationY: Math.PI / 2,
+        width: bank.width,
+        height: 3.05,
+        depth: 0.72,
+        seed: rowIndex * 2 + bankIndex,
+        curio: archiveCurios.get(`${rowNumber}-${bank.id}`) || null,
+      });
     }));
-    for (const [index, x] of [archiveCenterX - 3.65, archiveCenterX + 3.65].entries()) {
-      const shelf = addBookshelf(x, 11.55, FLOOR.BASEMENT, 0, 2.5, 2.65);
-      shelf.name = `archive-bookcase-north-${index === 0 ? "west" : "east"}`;
-    }
-    // The former northwest-corner cabinet now anchors the far wall on the
-    // room centerline, facing the open aisle instead of pinching circulation.
-    new Cabinet({ name: "archive specimen drawers", x: archiveCenterX, z: 11.55, floorY: FLOOR.BASEMENT, width: 2.0, height: 1.45, rotationY: Math.PI });
 
     // Laundry & linen
     new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2 });
@@ -4224,13 +4355,13 @@
     const library = new LightCircuit("library lights", FLOOR.MAIN, 0xffb56b, true);
     library.addFixture(-10, 7.7, "small");
     library.addFixtureSupportFill(-10, 7.7, 42, 6.2, 0.82);
-    library.addWallSconce(-14.839, FLOOR.MAIN + 2.0, 7.7, Math.PI / 2, 32, 5.8, ["MAIN LEVEL"], -10.1, FLOOR.MAIN + 1.05, 7.7);
+    library.addWallSconce(-14.839, FLOOR.MAIN + 2.0, 6.35, Math.PI / 2, 32, 5.8, ["MAIN LEVEL"], -10.1, FLOOR.MAIN + 1.05, 6.35);
     library.addSwitch(-5.161, 1.15, 5.85, -Math.PI / 2);
 
     const music = new LightCircuit("music room lights", FLOOR.MAIN, 0xffb56b, true);
     music.addFixture(10, 7.7, "small");
     music.addFixtureSupportFill(10, 7.7, 42, 6.2, 0.82);
-    music.addWallSconce(14.839, FLOOR.MAIN + 2.0, 8.15, -Math.PI / 2, 34, 5.8, ["MAIN LEVEL"], 10.1, FLOOR.MAIN + 1.05, 7.7);
+    music.addWallSconce(14.839, FLOOR.MAIN + 2.0, 10.75, -Math.PI / 2, 34, 5.8, ["MAIN LEVEL"], 10.1, FLOOR.MAIN + 1.05, 9.6);
     music.addSwitch(5.161, 1.15, 5.85, Math.PI / 2);
 
     const mainHallBathroom = new LightCircuit("main hall bathroom lights", FLOOR.MAIN, 0xffc982, true);
@@ -6847,7 +6978,7 @@
         eastRearSuite: [9.5, FLOOR.UPPER, -8.2, 0],
         basement: [0, FLOOR.BASEMENT, -2.0, Math.PI],
         wine: [-3.0, FLOOR.BASEMENT, 7.2, Math.PI / 2],
-        archive: [4.65, FLOOR.BASEMENT, 5.0, Math.PI],
+        archive: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
         archiveDoorOutside: [0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
         archiveSouthAisle: [8.15, FLOOR.BASEMENT, 4.0, Math.PI],
         archiveWestAisle: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],

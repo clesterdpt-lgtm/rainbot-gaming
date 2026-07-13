@@ -419,15 +419,26 @@ check("15 basement stair walls", !basementPartitions.includes('name: "basement-s
 check("15 basement stair walls", !serviceStair.includes('name: "service-stair-west-wall"') && !serviceStair.includes('name: "service-stair-east-wall"'), "parallel service-stair side walls still exist");
 check("15 basement stair walls", !/\[3\.1,\s*6\.2,\s*9\.3,\s*12\.4\][^\n]*addBookshelf/.test(basementFurnishings), "three archive bookcase backs still read as walls beside the stair");
 const archiveFurnishings = section("// Archive", "// Laundry & linen", basementFurnishings);
-check("15 archive shelving", /const archiveCenterX\s*=\s*8\.15/.test(archiveFurnishings), "archive furnishings are not centered on the room axis");
-check("15 archive shelving", /const archiveSideXs\s*=\s*\[1\.82,\s*14\.48\]/.test(archiveFurnishings), "archive side bookcases are not mirrored east-to-west");
-check("15 archive shelving", /const archiveSideZs\s*=\s*\[4\.75,\s*9\.65\]/.test(archiveFurnishings), "archive side bookcases do not symmetrically bracket the doorway");
-check("15 archive shelving", /archiveSideXs\.forEach[\s\S]*archiveSideZs\.forEach[\s\S]*addBookshelf\([^;]*2\.2,\s*2\.65\)/.test(archiveFurnishings), "archive is missing its four mirrored side-wall bookcases");
-check("15 archive shelving", /\[archiveCenterX - 3\.65,\s*archiveCenterX \+ 3\.65\][\s\S]*addBookshelf\(x,\s*11\.55[^;]*2\.5,\s*2\.65\)/.test(archiveFurnishings), "archive is missing its mirrored north-wall bookcases");
-check("15 archive circulation", !/addBookshelf\(3\.1,\s*7\.4[^;]*4\.6/.test(archiveFurnishings), "old cross-room archive bookcase still blocks the central aisle");
-check("15 archive circulation", /name:\s*"archive specimen drawers",\s*x:\s*archiveCenterX,\s*z:\s*11\.55[^;]*rotationY:\s*Math\.PI/.test(archiveFurnishings), "archive specimen cabinet is not centered on the far wall and facing the aisle");
+const archiveShelfBuilder = section("function addArchiveCurio", "function addFireplace");
+const archiveRowXs = (archiveFurnishings.match(/const archiveRowXs\s*=\s*\[([^\]]+)\]/)?.[1] || "").split(",").map(Number);
+const archiveShelfDepth = Number(archiveFurnishings.match(/depth:\s*([\d.]+)/)?.[1]);
+const archiveSouthBank = archiveFurnishings.match(/\{ id: "south", z: ([\d.]+), width: ([\d.]+) \}/)?.slice(1).map(Number) || [];
+const archiveNorthBank = archiveFurnishings.match(/\{ id: "north", z: ([\d.]+), width: ([\d.]+) \}/)?.slice(1).map(Number) || [];
+check("15 freestanding archive rows", !/addBookshelf\(|new Cabinet\(/.test(archiveFurnishings), "archive still places a bookcase or cabinet against a perimeter wall");
+check("15 freestanding archive rows", archiveRowXs.length === 3 && archiveRowXs.every((x, index) => near(x, [3.4, 7.3, 11.2][index], 0.001)), "archive does not have three aligned freestanding shelf rows");
+check("15 freestanding archive rows", /archiveRowXs\.forEach[\s\S]*archiveShelfBanks\.forEach[\s\S]*addArchiveShelfBank\(\{/.test(archiveFurnishings) && /height:\s*3\.05/.test(archiveFurnishings) && near(archiveShelfDepth, 0.72, 0.001), "archive rows are not six tall freestanding shelf banks");
+check("15 archive wall and end clearance", near(archiveSouthBank[0], 5.25, 0.001) && near(archiveSouthBank[1], 2.1, 0.001) && near(archiveNorthBank[0], 9.4, 0.001) && near(archiveNorthBank[1], 2.6, 0.001), "archive shelf-bank dimensions no longer preserve the perimeter and doorway-aligned cross aisle");
+check("15 archive wall and end clearance", archiveSouthBank[0] - archiveSouthBank[1] / 2 - 3.2 >= 1 && 11.86 - (archiveNorthBank[0] + archiveNorthBank[1] / 2) >= 1 && archiveNorthBank[0] - archiveNorthBank[1] / 2 - (archiveSouthBank[0] + archiveSouthBank[1] / 2) >= 1.7, "archive shelves leave less than one metre around an end or pinch the central cross aisle");
+check("15 double-sided archive stock", /doubleSided:\s*true/.test(archiveShelfBuilder) && /for \(const \[faceIndex, face\] of \[-1, 1\]\.entries\(\)\)/.test(archiveShelfBuilder), "archive shelf stock is not accessible and visible from both sides");
+for (const category of ["archive-books", "archive-documents", "archive-tapes"]) {
+  check("15 mixed archive stock", archiveShelfBuilder.includes(category), `archive shelving is missing ${category.replace("archive-", "")}`);
+}
+for (const curio of ["skull", "sealed-ledger", "reel-to-reel", "specimen-jar"]) {
+  check("15 archive curios", archiveFurnishings.includes(`"${curio}"`) && archiveShelfBuilder.includes(curio), `archive is missing its ${curio} curio`);
+}
 check("15 archive circulation", /archiveDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive doorway lacks a physical traversal QA route");
 check("15 archive circulation", /archiveCenterAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks) && /archiveCrossAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive center and cross aisles lack physical traversal QA routes");
+check("15 archive QA views", /archiveRows:/.test(qaRoomViews) && /archiveSkull:/.test(qaRoomViews), "archive rows or skull lack a dedicated visual inspection view");
 check("16 shared service-stair lights", /"SERVICE STAIR"\s*:\s*\["service stair lights"\]/.test(lightingMap), "service stair room does not map to one shared lighting circuit");
 check("16 shared service-stair lights", !/service stair (?:upper|lower) light/.test(lightingMap) && !/const service(?:Upper|Lower)\s*=/.test(lightingBuild), "legacy independent service-stair circuits still exist");
 check("16 shared service-stair lights", serviceStairLighting.length > 0 && /serviceStair\.addLevel\("BASEMENT"\)/.test(serviceStairLighting), "shared service-stair circuit does not span the main and basement floors");
@@ -977,8 +988,13 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
+const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
+check("29 connected grand stair balusters", /const grandRailHeight = 0\.97;/.test(grandStairBuild) && count(grandStairBuild, /topY \+ grandRailHeight \/ 2/g) === 2 && /addBalusterInstanceBatch\("grand-stair-balusters", stairBatches\.balusters, grandRailHeight\)/.test(grandStairBuild), "grand-stair balusters must extend from each tread to the sloped handrail");
+check("29 lounge artwork clearance", /upperArtBanquet: \[-2\.0, FLOOR\.UPPER, -9\.4, Math\.PI \/ 2\]/.test(mansion) && /center: -8\.25[^\n]+artId: "banquet-forgot-guests"/.test(mansion), "rear-lounge banquet painting still intersects the fireplace mantle or its QA view is stale");
+check("29 library sconce clearance", /library\.addWallSconce\(-14\.839, FLOOR\.MAIN \+ 2\.0, 6\.35,[^\n]+FLOOR\.MAIN \+ 1\.05, 6\.35\);/.test(mansion), "library wall sconce still overlaps the center bookcase");
+check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-painting-switch-basement-wire-fix-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-freestanding-archive-rows-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

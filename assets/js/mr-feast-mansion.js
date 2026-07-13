@@ -577,6 +577,113 @@
     return texture;
   }
 
+  function makeExoticRugTexture(size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const center = size / 2;
+
+    // A dark garnet field keeps the lounge grounded while the restrained
+    // turquoise and antique-gold ornament reads like an imported textile.
+    const field = ctx.createRadialGradient(center, center, size * 0.04, center, center, size * 0.72);
+    field.addColorStop(0, "#762b32");
+    field.addColorStop(0.48, "#4b151f");
+    field.addColorStop(1, "#210911");
+    ctx.fillStyle = field;
+    ctx.fillRect(0, 0, size, size);
+
+    const gold = ctx.createLinearGradient(0, 0, size, size);
+    gold.addColorStop(0, "#8d672a");
+    gold.addColorStop(0.5, "#e0ba67");
+    gold.addColorStop(1, "#72501d");
+    for (const [inset, width, color] of [
+      [8, 14, "#16070b"],
+      [20, 5, gold],
+      [31, 12, "#174b49"],
+      [46, 4, gold],
+      [56, 3, "#c9b77d"],
+    ]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
+    }
+
+    const drawDiamond = (x, y, radius, fill, stroke) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius);
+      ctx.lineTo(x + radius, y);
+      ctx.lineTo(x, y + radius);
+      ctx.lineTo(x - radius, y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(1, radius * 0.14);
+      ctx.stroke();
+    };
+    for (let p = 76; p <= size - 76; p += 42) {
+      drawDiamond(p, 32, 10, "#d6b466", "#432014");
+      drawDiamond(p, size - 32, 10, "#d6b466", "#432014");
+      drawDiamond(32, p, 10, "#d6b466", "#432014");
+      drawDiamond(size - 32, p, 10, "#d6b466", "#432014");
+    }
+
+    const drawMedallion = (x, y, radius, rotation = 0) => {
+      // Alternating long and short points form an eight-lobed arabesque.
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      for (let i = 0; i < 32; i += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * i) / 32;
+        const r = i % 4 === 0 ? radius : i % 2 === 0 ? radius * 0.68 : radius * 0.42;
+        const px = Math.cos(angle) * r;
+        const py = Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#1d6661";
+      ctx.fill();
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = Math.max(2, radius * 0.08);
+      ctx.stroke();
+      drawDiamond(0, 0, radius * 0.32, "#d8bd7a", "#54212a");
+      ctx.restore();
+    };
+
+    drawMedallion(center, center, size * 0.2, Math.PI / 8);
+    for (const [x, y] of [[126, 126], [size - 126, 126], [126, size - 126], [size - 126, size - 126]]) {
+      drawMedallion(x, y, size * 0.07, Math.PI / 8);
+    }
+    for (let y = 104; y <= size - 104; y += 76) {
+      for (let x = 104; x <= size - 104; x += 76) {
+        if (Math.hypot(x - center, y - center) > size * 0.22) drawDiamond(x, y, 9, "#c8a75d", "#245b56");
+      }
+    }
+
+    // Fine irregular warp lines soften the procedural geometry and give the
+    // surface a woven finish under the lounge's warm ceiling light.
+    ctx.globalAlpha = 0.12;
+    for (let p = 2; p < size; p += 4) {
+      ctx.strokeStyle = p % 12 === 0 ? "#f0d9a0" : "#120508";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p + Math.sin(p * 0.17) * 1.4);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function loadTexture(url, repeatX, repeatY, encoding) {
     return new Promise((resolve) => {
       new THREE.TextureLoader().load(
@@ -633,6 +740,7 @@
     const leafMap = makeNoiseTexture(128, [[17, 42, 31], [23, 55, 39], [11, 33, 26], [31, 64, 42]], 1887);
     const soilMap = makeNoiseTexture(128, [[45, 31, 23], [56, 38, 25], [34, 28, 24], [62, 44, 28]], 9241);
     const paverMap = makeNoiseTexture(128, [[78, 82, 78], [91, 91, 84], [63, 68, 65], [105, 101, 91]], 4771);
+    const exoticRugMap = makeExoticRugTexture(512);
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -673,6 +781,7 @@
       dishBlue: new THREE.MeshPhysicalMaterial({ color: 0x73899e, roughness: 0.24, clearcoat: 0.55 }),
       redRug: new THREE.MeshStandardMaterial({ color: 0x290b12, roughness: 0.9 }),
       greenRug: new THREE.MeshStandardMaterial({ color: 0x172f2b, roughness: 0.92 }),
+      exoticRug: new THREE.MeshStandardMaterial({ map: exoticRugMap, roughness: 0.88, metalness: 0, bumpMap: exoticRugMap, bumpScale: 0.012 }),
       darkFloor: new THREE.MeshStandardMaterial({ map: stoneMap, color: 0x4a504e, roughness: 0.96, bumpMap: stoneMap, bumpScale: 0.045 }),
       lightGlowMap: makeRadialGlowTexture(128),
       soot: new THREE.MeshStandardMaterial({ color: 0x08090a, roughness: 1 }),
@@ -3182,7 +3291,6 @@
     box({ name: "ballroom-ai-marble-floor", w: 9.6, h: 0.035, d: 6.7, x: 0, y: FLOOR.MAIN + 0.018, z: -8.45, material: M.marble, cast: false, receive: true });
     for (const x of [-4.76, 4.76]) box({ name: "ballroom-marble-brass-inlay", w: 0.035, h: 0.018, d: 6.5, x, y: FLOOR.MAIN + 0.043, z: -8.45, material: M.brass, cast: false });
     for (const z of [-11.71, -5.19]) box({ name: "ballroom-marble-brass-inlay", w: 9.5, h: 0.018, d: 0.035, x: 0, y: FLOOR.MAIN + 0.043, z, material: M.brass, cast: false });
-    addRug(0, -8.1, 4.1, 4.6, FLOOR.UPPER, M.redRug, 0);
   }
 
   function buildExteriorWalls() {
@@ -3413,7 +3521,7 @@
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
-    addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.greenRug, 0);
+    addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.exoticRug, 0);
     addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.velvet);
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);

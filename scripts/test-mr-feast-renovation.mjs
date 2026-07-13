@@ -161,6 +161,8 @@ const stormSystem = section("class StormSystem", "class MansionAudio");
 const resizeSystem = section("function resize()", "function requestPointerLock()");
 const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
 const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
+const exoticRugTextureBuilder = section("function makeExoticRugTexture", "function loadTexture");
+const materialFactory = section("async function createMaterials()", "class PhysicsWorld");
 const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
 const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
 const upperGalleryPortraits = upperFurnishings;
@@ -759,7 +761,11 @@ check("24 open rear lounge", !/fixed:\s*-3\.2,\s*start:\s*-5,\s*end:\s*5/.test(u
 check("24 private rear suites", /label:\s*"primary bathroom door"/.test(primaryFrontWall) && /openings:\s*\[\s*\]/s.test(eastRearFrontWall), "primary suite lost its en-suite bathroom door, or the east rear suite front wall is no longer sealed");
 check("24 lounge suite doors", /center:\s*-6\.4[^\n]*primary suite lounge door/.test(westRearSpine) && /center:\s*-6\.4[^\n]*east rear suite lounge door/.test(eastRearSpine), "both rear suites do not have direct doors into the lounge");
 check("24 lounge picture windows", /const rearLoungeWindows\s*=\s*\[[\s\S]*?center:\s*-2\.3,\s*width:\s*3\.7,\s*bottom:\s*0\.38,\s*top:\s*2\.92[\s\S]*?center:\s*2\.3,\s*width:\s*3\.7,\s*bottom:\s*0\.38,\s*top:\s*2\.92/.test(exteriorWalls), "rear lounge does not have the two enlarged backyard picture windows");
-check("24 rear lounge furnishings", /addRug\(0,\s*-8\.35[\s\S]*?addSofa\(0,\s*-6\.45[\s\S]*?addTable\(0,\s*-8\.25/.test(upperFurnishings) && !/addBed\(0\.3,\s*-10\.1/.test(upperFurnishings), "rear lounge is not furnished as an open sitting area or still contains the former bed");
+check("24 rear lounge furnishings", /addRug\(0,\s*-8\.35[^;]*M\.exoticRug[\s\S]*?addSofa\(0,\s*-6\.45[\s\S]*?addTable\(0,\s*-8\.25/.test(upperFurnishings) && !/addBed\(0\.3,\s*-10\.1/.test(upperFurnishings), "rear lounge is not furnished with its exotic rug and open sitting area, or still contains the former bed");
+check("24 rear lounge rug overlap", !/addRug\(0,\s*-8\.1,\s*4\.1,\s*4\.6,\s*FLOOR\.UPPER/.test(slabs), "legacy red lounge rug still overlaps the furnished rug and causes z-fighting");
+check("24 rear lounge rug overlap", count(`${slabs}\n${upperFurnishings}`, /addRug\(0,\s*-8\.(?:1|35)/g) === 1, "rear lounge must have exactly one rug surface");
+check("24 exotic lounge rug", /createLinearGradient|createRadialGradient/.test(exoticRugTextureBuilder) && /medallion|arabesque|ornament/.test(exoticRugTextureBuilder), "exotic lounge rug lacks a layered woven ornamental pattern");
+check("24 exotic lounge rug", /const exoticRugMap\s*=\s*makeExoticRugTexture\(512\)/.test(materialFactory) && /exoticRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*exoticRugMap/.test(materialFactory), "exotic lounge rug material is missing or does not use the procedural textile map");
 
 const upperPortraitCount = count(upperGalleryPortraits, /artId:\s*"[^"]+"/g);
 const portraitsUseNewWall = /addWallPortrait\(\{\s*axis:\s*"x",\s*fixed:\s*-3\.2/.test(upperGalleryPortraits)
@@ -840,7 +846,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-bathroom-switch-fix-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-rear-lounge-exotic-rug-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

@@ -111,6 +111,12 @@
   const MOBILE_UPPER_AMBIENT_CIRCUITS = new Set([
     "foyer chandelier", "grand stair lights", "upper landing lights",
   ]);
+  // Keep one compact light-program shape on every device. The previous
+  // desktop path submitted every light on the active floor (up to 39 lights
+  // around the open stair), which made the double-height foyer dramatically
+  // slower than closed rooms and still minted a new shader at floor changes.
+  // Bulbs, halos, and painted response glows remain fully authored; only the
+  // redundant real-time emitters are bounded.
   const MOBILE_SHADER_SPOT_BUDGET = 6;
   const MOBILE_SHADER_POINT_BUDGET = 11;
   const MOBILE_CIRCUIT_INTENSITY_SCALE = 2;
@@ -5439,14 +5445,11 @@
     // Interior room labels never influence light state. The only room-level
     // boundary is the mansion shell itself: the grounds own a separate,
     // prewarmed light layout so their sixteen real emitters do not inflate
-    // every indoor main-floor fragment shader. Floor handovers still fade;
-    // the shell boundary snaps because its walls already occlude the retiring
-    // light set and avoiding a 48-light crossfade prevents a doorway hitch.
-    // Mobile GPUs cannot afford the temporary union of every main- and
-    // upper-floor emitter. The walls already hide the handover on the stairs,
-    // so phones switch directly to the bounded floor layout while desktop
-    // keeps the authored cross-floor fade.
-    if (floorContextChanged) syncLightRendering(state.mobileRenderProfile ? undefined : "fade");
+    // every indoor main-floor fragment shader. Floor and shell handovers snap:
+    // the walls hide the retiring set, while a fade would briefly place both
+    // floors in the shader and recreate the exact staircase slowdown this
+    // compact fixed layout is designed to avoid.
+    if (floorContextChanged) syncLightRendering();
     else if (lightContextChanged) syncLightRendering();
   }
 
@@ -5586,13 +5589,14 @@
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
-      const mobileCircuitBudget = state.mobileRenderProfile;
-      const mobileUpperBudget = mobileCircuitBudget && floors.has("SECOND FLOOR");
-      // On phones, keep one real emitter per circuit on every floor. Fixtures,
-      // bulbs, halos, and painted light response remain visible; only redundant
-      // support/sconce shader lights are retired. This keeps the first foyer
-      // shader small enough for mobile browsers to compile without stalling.
-      const mobileCircuitLight = mobileCircuitBudget
+      const boundedCircuitBudget = true;
+      const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
+      // Keep one real emitter per circuit on every floor. Fixtures, bulbs,
+      // halos, and painted light response remain visible; redundant support
+      // and sconce shader lights are retired. Applying the same bounded layout
+      // on desktop prevents the open grand stair from carrying roughly twice
+      // the shader cost of the rest of the mansion.
+      const boundedCircuitLight = boundedCircuitBudget
         ? (MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
           ? circuit.lights.find((light) => light.isPointLight && (!light.userData.levels || light.userData.levels.has(state.currentFloor)))
           : null)
@@ -5601,11 +5605,21 @@
           || circuit.lights[0]
         : null;
       for (const light of circuit.lights) {
+        // The fixed light profile keeps the moon as the single structural
+        // shadow source. Floor-local spot shadows changed the shader's shadow
+        // count from 0 to 4 at the upper stair, producing a multi-second first
+        // frame hitch even after the normal light counts were stabilized.
+        // Painted fixture response and the cached moon shadow preserve depth
+        // without that floor-dependent program shape.
+        if (boundedCircuitBudget && light.castShadow) {
+          light.userData.authoredCastShadow = true;
+          light.castShadow = false;
+        }
         const lightLevels = light.userData.levels;
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
         const enclosure = light.userData.requiresOpenCabinet;
         const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
-        light.userData.renderIntensityScale = mobileCircuitBudget && light === mobileCircuitLight
+        light.userData.renderIntensityScale = state.mobileRenderProfile && light === boundedCircuitLight
           ? (mobileUpperBudget && MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
             ? MOBILE_UPPER_AMBIENT_SCALE
             : MOBILE_CIRCUIT_INTENSITY_SCALE)
@@ -5614,7 +5628,7 @@
         // slot whenever its floor context renders, so opening a cabinet can
         // never mint a novel light-count layout and stall on a mid-game
         // shader compile. The enclosure only gates whether it is energized.
-        const nextVisible = rendersInContext && rendersOnLevel && (!mobileCircuitBudget || light === mobileCircuitLight);
+        const nextVisible = rendersInContext && rendersOnLevel && (!boundedCircuitBudget || light === boundedCircuitLight);
         if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
@@ -5666,10 +5680,8 @@
   }
 
   function syncMobileShaderPadding() {
-    if (!state.mobileRenderProfile) {
-      for (const light of [...mobileShaderPaddingLights.spots, ...mobileShaderPaddingLights.points]) light.visible = false;
-      return;
-    }
+    // Padding is shared by desktop and mobile so room/floor changes retain the
+    // exact same shader program instead of compiling at the staircase.
     ensureMobileShaderPadding();
     const visibleSpotLights = circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
       + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length;
@@ -5906,6 +5918,7 @@
         mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? 1 : null,
         mobileUpperStableLighting: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR",
         mobileUpperAmbientScale: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? MOBILE_UPPER_AMBIENT_SCALE : 1,
+        boundedLightProfile: true,
         shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0)
           + mobileShaderPaddingLights.spots.filter((light) => light.visible).length
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
@@ -5918,8 +5931,8 @@
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderPaddingLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
-        shaderSpotBudget: state.mobileRenderProfile ? MOBILE_SHADER_SPOT_BUDGET : null,
-        shaderPointBudget: state.mobileRenderProfile ? MOBILE_SHADER_POINT_BUDGET : null,
+        shaderSpotBudget: MOBILE_SHADER_SPOT_BUDGET,
+        shaderPointBudget: MOBILE_SHADER_POINT_BUDGET,
         crossFloorFade: {
           fadingLights: fadingLights.size,
           fadingBulbs: fadingBulbs.size,

@@ -181,6 +181,11 @@ const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions)
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
 const kitchenServiceStairWall = namedWallRun("main-kitchen-service-stair-wall", mainPartitions);
 const kitchenBallroomPartialWall = namedWallRun("main-kitchen-ballroom-partial-wall", mainPartitions);
+const mainRearWall = namedWallRun("main-rear-wall", exteriorWalls);
+const mainEastWall = namedWallRun("main-east-wall", exteriorWalls);
+const kitchenRangeBuilder = section("function addKitchenRange(", "function addKitchenBaseCabinet(");
+const kitchenBuilder = section("function addKitchenBaseCabinet(", "function addWineRack(");
+const kitchenLighting = section('const kitchen = new LightCircuit("kitchen lights"', "const powderRoom", lightingBuild);
 const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
 const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
@@ -312,19 +317,48 @@ check("9 kitchen-ballroom partial wall", /axis:\s*"z",\s*fixed:\s*5,\s*start:\s*
 check("9 kitchen-ballroom partial wall", /openings:\s*\[\s*\]/s.test(kitchenBallroomPartialWall) && !/kind:\s*"(?:door|arch|open)"/.test(kitchenBallroomPartialWall), "kitchen-ballroom partition must end freely without a door or framed opening");
 const kitchenPartitionEnd = Number(kitchenBallroomPartialWall.match(/end:\s*(-?[\d.]+)/)?.[1]);
 const kitchenBallroomOpeningWidth = -4.9 - kitchenPartitionEnd;
-const pantryFrontEdge = -10.55 + 1.65 / 2;
-const partitionPastPantry = kitchenPartitionEnd - pantryFrontEdge;
+const innerCounterEnd = Number(kitchenBuilder.match(/innerCounterEnd:\s*(-?[\d.]+)/)?.[1]);
+const partitionPastCabinet = kitchenPartitionEnd - innerCounterEnd;
 check("9 kitchen-ballroom partial wall", kitchenBallroomOpeningWidth >= 3.0, "kitchen-ballroom opening is narrower than three metres");
-check("9 kitchen-ballroom partial wall", partitionPastPantry >= 1.2 && partitionPastPantry <= 1.8, "partition does not extend a few feet past the pantry cabinet");
+check("9 kitchen-ballroom partial wall", partitionPastCabinet >= 1.2 && partitionPastCabinet <= 1.8, "partition does not extend a few feet past the inner counter cabinets");
 check("9 open-concept rear", /name:\s*"main-stair-gallery"[^;]*kind:\s*"arch"/s.test(mainPartitions), "grand stair does not retain an open arch directly toward the ballroom");
 
-// 10. Kitchen storage must be recognizable, interactable, and visibly stocked.
+// 10. The remodeled kitchen is one aligned U-shaped system: integrated base
+// cabinets, real appliances, a working sink, counter-height windows, and two
+// visible pendants backed by one shader-budget-neutral room light.
+check("10 kitchen remodel", /\baddRemodeledKitchen\(\);/.test(kitchenFurnishings), "main-floor furnishings do not invoke the dedicated kitchen remodel");
+check("10 kitchen remodel", !/addTable\(|addChair\(/.test(kitchenFurnishings), "the old oversized kitchen table or chairs still occupy the work aisle");
+for (const name of ["kitchen-countertop-inner", "kitchen-countertop-rear", "kitchen-countertop-east"]) {
+  check("10 kitchen countertops", kitchenBuilder.includes(name), `missing aligned countertop run ${name}`);
+}
+check("10 kitchen base cabinets", /const cabinetHeight\s*=\s*0\.88/.test(kitchenBuilder) && count(kitchenBuilder, /addKitchenBaseCabinet\(\{/g) >= 7, "counter runs do not share at least seven integrated 0.88m base cabinets");
+check("10 kitchen base cabinets", /function kitchenShelfHeights\(/.test(cabinetClass) && /height\s*<\s*1\.2/.test(cabinetClass), "short base cabinets still collapse multiple shelves onto one height");
+check("10 kitchen base cabinets", /openAngle:\s*88/.test(kitchenBuilder) && /this\.openAngle\s*=\s*openAngle/.test(cabinetClass), "base-cabinet leaves do not use the intersection-safe opening angle");
 check("10 kitchen refrigerator", mansion.includes("class Refrigerator"), "interactive Refrigerator class is missing");
-check("10 kitchen refrigerator", /new Refrigerator\s*\(/.test(kitchenFurnishings), "kitchen has no refrigerator instance");
-check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']food["']/.test(kitchenFurnishings), "pantry/fridge is not marked for food stock");
-check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']dishes["']/.test(kitchenFurnishings), "china cabinet is not marked for dish stock");
+check("10 kitchen refrigerator", count(kitchenBuilder, /new Refrigerator\s*\(/g) === 1, "kitchen must contain exactly one integrated refrigerator");
+check("10 kitchen oven", count(kitchenBuilder, /addKitchenRange\s*\(/g) === 1 && /kitchen-oven-door/.test(kitchenRangeBuilder), "kitchen lacks one recognizable oven/range");
+check("10 kitchen sink", /kitchen-sink-basin/.test(kitchenBuilder) && /kitchen-sink-faucet-(?:deck-collar|riser|spout)/.test(kitchenBuilder), "kitchen sink basin and connected faucet are incomplete");
+check("10 kitchen sink", /new WaterFixture\(\{\s*name:\s*"kitchen sink",\s*kind:\s*"sink"/s.test(kitchenBuilder), "kitchen sink is not connected to the water interaction system");
+check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']food["']/.test(kitchenBuilder), "kitchen has no stocked food base cabinet");
+check("10 stocked kitchen", /stock(?:Type|Kind):\s*["']dishes["']/.test(kitchenBuilder), "kitchen has no stocked dish base cabinet");
 check("10 stocked kitchen", /addStocked(?:Storage)?Contents|addStorageStock/.test(mansion), "shared stocked-storage builder is missing");
 check("10 stocked kitchen", /foodItems/.test(mansion) && /dishItems/.test(mansion) && /refrigerators/.test(mansion), "stock and refrigerator counts are absent from diagnostics");
+check("10 kitchen lighting", /addKitchenLightingFixtures\(kitchen\)/.test(kitchenLighting) && !/kitchen\.addFixture\(/.test(kitchenLighting), "kitchen circuit does not use the budget-safe paired pendant builder");
+check("10 kitchen lighting", /\[7\.9,\s*12\.1\]/.test(kitchenBuilder) && /kitchen-pendant-\$\{index \+ 1\}-bulb/.test(kitchenBuilder) && count(kitchenBuilder, /addRoomOmniLight\(/g) === 1, "two visible pendants must share exactly one bounded real light");
+check("10 kitchen lighting", /fixtureRole\s*=\s*"primary"/.test(kitchenBuilder) && /visibleFixtureEmitter\s*=\s*true/.test(kitchenBuilder), "shared kitchen emitter is not retained as the circuit's primary visible source");
+const kitchenWindowProfile = exteriorWalls.match(/const kitchenWindows\s*=\s*\(centers\)[^\n]*bottom:\s*([\d.]+),\s*top:\s*([\d.]+)/);
+const kitchenWindowBottom = Number(kitchenWindowProfile?.[1]);
+const kitchenWindowTop = Number(kitchenWindowProfile?.[2]);
+check("10 kitchen windows", kitchenWindowBottom >= 1.18 && kitchenWindowTop - kitchenWindowBottom <= 1.65, "kitchen windows are not short counter-height openings");
+check("10 kitchen windows", /kitchenWindows\(\[6\.4,\s*9\.4,\s*12\.4\]\)/.test(mainRearWall), "rear kitchen wall lacks three aligned counter windows including the former door bay");
+check("10 kitchen windows", /kitchenWindows\(\[-9\.4,\s*-6\.7\]\)/.test(mainEastWall), "east kitchen wall lacks two aligned counter windows");
+check("10 sealed kitchen exterior", !mainRearWall.includes("kitchen service door") && !mansion.includes("kitchen-service-threshold"), "retired kitchen exterior door or threshold still exists");
+for (const retired of ["yardServiceDoorInside", "yardServiceReentry", "serviceDoorOut:", "serviceDoorRoundTrip:"]) {
+  check("10 sealed kitchen exterior", !qaHooks.includes(retired) && !qaRoomViews.includes(retired), `retired kitchen exterior QA target remains: ${retired}`);
+}
+for (const view of ["kitchenBallroomReveal", "kitchenInnerCounter", "kitchenSinkInteract", "kitchenRange", "kitchenRefrigerator", "kitchenExteriorWindows"]) {
+  check("10 kitchen QA views", qaRoomViews.includes(`${view}:`), `missing kitchen QA view ${view}`);
+}
 
 // 11. The service stair runs from +z in the basement to -z on the main floor,
 // exactly across the 5.4 m opening, with architectural treads and sloped rails.
@@ -548,10 +582,10 @@ check("19 yard diagnostics", /gate:\s*\{/.test(yardBuild) && /maze:\s*\{/.test(y
 for (const view of ["yardGateA", "yardGateInteract", "yardGardenA", "yardGardenB", "yardPoolA", "yardPoolB", "yardMazeA", "yardMazeB", "yardMazeEntranceCell", "yardMazeNorthEntrance", "yardMazeSouthWallExterior", "yardEastFrontConnector", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenApproach", "yardExteriorSwitch"]) {
   check("19 yard QA views", mansion.includes(`${view}:`), `missing QA view ${view}`);
 }
-for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardMazeSouthWallBlock", "yardMazeNorthAccess", "yardEastFrontConnection", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut", "serviceDoorOut"]) {
+for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardMazeSouthWallBlock", "yardMazeNorthAccess", "yardEastFrontConnection", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut"]) {
   check("19 yard QA routes", qaHooks.includes(`${route}:`) || qaHooks.includes(`case \"${route}\"`), `missing physical QA route ${route}`);
 }
-check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 3 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
+check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 2 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
 check("19 yard QA routes", /route\.expected/.test(qaHooks) && /route expectation not met/.test(qaHooks), "QA routes report complete without checking their expected endpoint");
 check("19 yard QA routes", /dataset\.qaRouteStatus\s*=\s*state\.qaRoute\.status/.test(qaHooks) && /dataset\.qaRouteX\s*=\s*p\.x\.toFixed\(2\)/.test(qaHooks) && /dataset\.qaRouteZ\s*=\s*p\.z\.toFixed\(2\)/.test(qaHooks), "QA routes do not expose their final status and endpoint for browser verification");
 check("19 yard QA routes", /yardPoolNorthGuard:[\s\S]*?yaw:\s*-Math\.PI\s*\/\s*2[\s\S]*?seconds:\s*1\.25/.test(qaHooks), "north pool-deck support route still steps over the coping into the pool");
@@ -569,9 +603,9 @@ check("20 continuous exterior facade", /const interstoryHeight\s*=\s*FLOOR\.UPPE
 check("20 continuous exterior facade", count(exteriorWalls, /w:\s*30\.34,\s*h:\s*interstoryHeight/g) === 2 && count(exteriorWalls, /h:\s*interstoryHeight,\s*d:\s*24\.34/g) === 2, "facade infill does not span both full-width and full-depth elevations");
 check("20 exterior re-entry rendering", /distanceFromHouse/.test(exteriorCulling) && /nearHouse/.test(exteriorCulling), "exterior culling does not restore the interior before a player reaches the house");
 check("20 exterior re-entry diagnostics", /interiorDetailsHidden:\s*Boolean\(interiorDetailsHidden\)/.test(diagnostics), "diagnostics cannot prove whether the interior render set is restored");
-check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && /kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 1, "rear doorways do not share the authored sill-to-floor ramp bridge");
+check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && !/kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 0, "sealed kitchen wall still owns an exterior threshold or ramp");
 check("20 outer entry ramps", /front-portico-outer-entry-ramp/.test(exteriorBuild) && /ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 2, "front and rear slab edges do not both have visible walkable approach ramps");
-for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip", "serviceDoorRoundTrip"]) {
+for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip"]) {
   check("20 exterior re-entry routes", qaHooks.includes(`${route}:`), `missing exterior round-trip route ${route}`);
 }
 for (const route of ["frontStepReentry", "rearStepReentry"]) {
@@ -579,8 +613,7 @@ for (const route of ["frontStepReentry", "rearStepReentry"]) {
 }
 for (const [route, nextRoute, finalRoom, outdoorRoom] of [
   ["frontDoorRoundTrip", "terraceDoorRoundTrip", "FRONT FOYER", "FRONT DRIVE"],
-  ["terraceDoorRoundTrip", "serviceDoorRoundTrip", "BALLROOM", "REAR LAWN"],
-  ["serviceDoorRoundTrip", "yardPoolWalk", "KITCHEN", "REAR LAWN"],
+  ["terraceDoorRoundTrip", "yardPoolWalk", "BALLROOM", "REAR LAWN"],
 ]) {
   const routeBlock = section(`${route}: {`, `${nextRoute}:`, qaHooks);
   check("20 exterior re-entry routes", routeBlock.includes(`room: "${finalRoom}"`) && routeBlock.includes(`"${outdoorRoom}"`) && /interiorRendered:\s*true/.test(routeBlock) && /nearExteriorRendered:\s*true/.test(routeBlock), `${route} does not assert its outdoor visit, near-threshold render set, and final interior room`);
@@ -890,7 +923,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-connected-foyer-chandelier-ornate-carpet-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-kitchen-remodel-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

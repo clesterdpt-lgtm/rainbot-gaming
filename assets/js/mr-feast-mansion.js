@@ -261,11 +261,13 @@
     openRearFromStair: [0, FLOOR.MAIN, -2.35, 0],
     openRearToDining: [0, FLOOR.MAIN, -6.0, Math.PI / 2],
     openRearToKitchen: [0, FLOOR.MAIN, -6.0, -Math.PI / 2],
-    kitchenA: [6.25, FLOOR.MAIN, -6.0, -0.94],
-    kitchenB: [13.0, FLOOR.MAIN, -10.6, 2.13],
-    kitchenFridge: [8.0, FLOOR.MAIN, -9.65, 0],
-    kitchenPantry: [7.0, FLOOR.MAIN, -10.55, Math.PI / 2],
-    kitchenDishHutch: [12.45, FLOOR.MAIN, -10.35, -Math.PI / 2],
+    kitchenBallroomReveal: [0, FLOOR.MAIN, -6.0, -Math.PI / 2, -0.06],
+    kitchenOverview: [6.45, FLOOR.MAIN, -6.0, -0.83, -0.1],
+    kitchenInnerCounter: [7.15, FLOOR.MAIN, -9.9, Math.PI / 2, -0.18],
+    kitchenSinkInteract: [9.65, FLOOR.MAIN, -9.95, 0, -0.3],
+    kitchenRange: [11.45, FLOOR.MAIN, -8.3, -Math.PI / 2, -0.16],
+    kitchenRefrigerator: [10.8, FLOOR.MAIN, -6.6, -2.1, -0.12],
+    kitchenExteriorWindows: [18.2, YARD_LAYOUT.groundY, -8.0, Math.PI / 2, -0.08],
     kitchenServiceStairDoor: [12.55, FLOOR.MAIN, -5.75, Math.PI],
     serviceStairTopLight: [14.0, FLOOR.MAIN, -1.2, 0.95, 0.6],
     serviceStairTopSwitch: [14.0, FLOOR.MAIN, -2.2, 0.32, -0.52],
@@ -371,14 +373,12 @@
     yardBoundaryWest: [-31.15, YARD_LAYOUT.groundY, 0, Math.PI / 2],
     yardBoundaryEast: [31.15, YARD_LAYOUT.groundY, 0, -Math.PI / 2],
     yardTerraceDoorInside: [-0.62, FLOOR.MAIN, -10.35, 0],
-    yardServiceDoorInside: [13, FLOOR.MAIN, -10.35, 0],
     yardFacadeFront: [8.0, YARD_LAYOUT.groundY, 17.0, 0, -0.24],
     frontPorticoChandelier: [0, YARD_LAYOUT.groundY, 16.45, 0, 0.42],
     yardFrontReentry: [0, YARD_LAYOUT.groundY, 13.55, 0, -0.08],
     yardRearReentry: [0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
-    yardServiceReentry: [13.0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
   });
 
@@ -491,6 +491,7 @@
   const waterFixtures = [];
   const stockedStorages = [];
   const refrigerators = [];
+  const kitchenTaskBulbs = [];
   const roomZones = [];
   const lightningMaterials = [];
   const yardWaterSystems = [];
@@ -1241,7 +1242,7 @@
       scene.add(this.root);
       // Exterior doors are rain apertures: the storm pours through an open
       // leaf, and still bleeds around a closed one far more than through wall.
-      if (/(?:front door|terrace door|kitchen service door)/i.test(name)) {
+      if (/(?:front door|terrace door)/i.test(name)) {
         this.rainAperture = {
           x: axis === "x" ? center : fixed,
           y: floorY + height / 2,
@@ -1371,7 +1372,7 @@
       const {
         name, x, y, z, width = 1.8, height = 1.9, depth = 0.52,
         rotationY = 0, material = M.darkWood, floorY = y, walkIn = false,
-        stockKind = null,
+        stockKind = null, openAngle = 102,
       } = options;
       this.name = name;
       this.walkIn = walkIn;
@@ -1381,6 +1382,7 @@
       this.depth = depth;
       this.floorY = floorY;
       this.rotationY = rotationY;
+      this.openAngle = openAngle;
       this.itemCount = 0;
       this.open = false;
       this.angle = 0;
@@ -1485,7 +1487,7 @@
         pullHitbox.visible = false;
         this.lightCircuit.addControlTarget(pullHitbox, `pull chain for ${name}`);
       } else {
-        for (const sy of [0.52, 1.02, 1.5].map((v) => Math.min(v, height - 0.18))) {
+        for (const sy of kitchenShelfHeights(height)) {
           box({ name: `${name}-shelf`, w: width * 0.9, h: 0.055, d: depth * 0.78, x: 0, y: sy, z: -depth * 0.04, material, parent: this.root, cast: false });
         }
         if (stockKind) {
@@ -1551,7 +1553,7 @@
     setOpen(open, silent) {
       const nextOpen = Boolean(open);
       this.open = nextOpen;
-      this.target = this.open ? THREE.MathUtils.degToRad(102) : 0;
+      this.target = this.open ? THREE.MathUtils.degToRad(this.openAngle) : 0;
       // Closing a walk-in from the inside is allowed; the doors just swing shut
       // around you. The threshold only re-seals when nobody is standing in it,
       // so the player is never shoved or trapped and can always step back out.
@@ -1599,6 +1601,15 @@
     }
   }
 
+  function kitchenShelfHeights(height) {
+    // Under-counter cabinets need two deliberately separated shelves. Clamping
+    // the tall-cabinet elevations used to collapse the upper two shelves onto
+    // the same plane, which made open base cabinets flicker and their stock
+    // intersect. Tall storage keeps the established three-shelf rhythm.
+    if (height < 1.2) return [height * 0.34, height * 0.67];
+    return [0.52, 1.02, 1.5].map((value) => Math.min(value, height - 0.18));
+  }
+
   function addLocalInstanceBatch(name, parent, geometryName, geometryFactory, material, transforms) {
     if (!transforms.length) return null;
     const mesh = new THREE.InstancedMesh(geometry(geometryName, geometryFactory), material, transforms.length);
@@ -1620,7 +1631,7 @@
   }
 
   function addStockedStorageContents(parent, name, kind, width, height, depth) {
-    const shelfYs = [0.52, 1.02, 1.5].map((v) => Math.min(v, height - 0.18));
+    const shelfYs = kitchenShelfHeights(height);
     const boxes = [];
     const tins = [];
     const bottles = [];
@@ -3346,19 +3357,173 @@
 
   function addKitchenRange(x, z, floorY, rotationY) {
     const group = new THREE.Group();
+    group.name = "kitchen-oven-range";
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
-    box({ name: "range-body", w: 1.45, h: 0.92, d: 0.72, x: 0, y: 0.46, z: 0, material: M.iron, parent: group });
-    box({ name: "range-door", w: 1.12, h: 0.5, d: 0.055, x: 0, y: 0.43, z: -0.39, material: M.blackWood, parent: group });
-    for (const sx of [-0.45, -0.15, 0.15, 0.45]) cylinder({ name: "range-knob", radius: 0.055, height: 0.08, segments: 12, x: sx, y: 0.79, z: -0.42, rotationX: Math.PI / 2, material: M.brass, parent: group });
+    box({ name: "kitchen-range-body", w: 1.45, h: 0.88, d: 0.72, x: 0, y: 0.44, z: 0, material: M.enamel, parent: group });
+    box({ name: "kitchen-range-cooktop", w: 1.48, h: 0.07, d: 0.75, x: 0, y: 0.915, z: 0, material: M.iron, parent: group });
+    box({ name: "kitchen-oven-door", w: 1.14, h: 0.52, d: 0.065, x: 0, y: 0.42, z: -0.395, material: M.iron, parent: group });
+    box({ name: "kitchen-oven-window", w: 0.88, h: 0.31, d: 0.018, x: 0, y: 0.43, z: -0.435, material: M.glass, parent: group, cast: false });
+    cylinder({ name: "kitchen-oven-handle", radius: 0.027, height: 0.92, x: 0, y: 0.7, z: -0.465, rotationZ: Math.PI / 2, material: M.brass, parent: group, cast: false });
+    for (const sx of [-0.45, -0.15, 0.15, 0.45]) cylinder({ name: "kitchen-range-knob", radius: 0.055, height: 0.08, segments: 12, x: sx, y: 0.8, z: -0.44, rotationX: Math.PI / 2, material: M.brass, parent: group });
     for (const sx of [-0.4, 0.4]) for (const sz of [-0.2, 0.2]) {
       const burner = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.025, 7, 18), M.iron);
-      burner.position.set(sx, 0.94, sz);
+      burner.name = "kitchen-range-burner";
+      burner.position.set(sx, 0.965, sz);
       burner.rotation.x = Math.PI / 2;
       group.add(burner);
     }
-    physics.addFixedBox(x, floorY + 0.48, z, 1.45, 0.96, 0.75, rotationY || 0);
+    // The hood, flue, and splash panel form one connected vertical composition
+    // between the shorter east-wall windows.
+    box({ name: "kitchen-range-backsplash", w: 1.62, h: 0.74, d: 0.045, x: 0, y: 1.35, z: 0.37, material: M.marble, parent: group, cast: false, receive: true });
+    box({ name: "kitchen-range-hood-canopy", w: 1.68, h: 0.2, d: 0.64, x: 0, y: 1.82, z: 0.08, material: M.iron, parent: group });
+    box({ name: "kitchen-range-hood-flue", w: 0.62, h: 1.48, d: 0.3, x: 0, y: 2.56, z: 0.24, material: M.iron, parent: group });
+    for (const sx of [-0.42, 0.42]) {
+      const taskMaterial = new THREE.MeshStandardMaterial({ color: 0xffe1ae, emissive: 0xffa957, emissiveIntensity: 1.15, roughness: 0.28 });
+      const taskBulb = box({ name: "kitchen-range-hood-task-light", w: 0.34, h: 0.028, d: 0.16, x: sx, y: 1.705, z: -0.08, material: taskMaterial, parent: group, cast: false, receive: false });
+      taskBulb.userData.onEmissiveIntensity = 1.15;
+      kitchenTaskBulbs.push(taskBulb);
+    }
+    physics.addFixedBox(x, floorY + 0.46, z, 1.45, 0.92, 0.75, rotationY || 0);
+    return group;
+  }
+
+  function addKitchenBaseCabinet(options) {
+    const cabinet = new Cabinet({
+      ...options,
+      material: M.darkWood,
+      depth: options.depth || 0.68,
+      openAngle: 88,
+    });
+    const depth = options.depth || 0.68;
+    const height = options.height;
+    box({ name: `${options.name}-integrated-toe-kick`, w: options.width * 0.9, h: 0.085, d: 0.04, x: 0, y: 0.075, z: depth / 2 + 0.022, material: M.brass, parent: cabinet.root, cast: false });
+    box({ name: `${options.name}-counter-shadow-line`, w: options.width * 0.94, h: 0.035, d: 0.035, x: 0, y: height - 0.035, z: depth / 2 + 0.025, material: M.blackWood, parent: cabinet.root, cast: false });
+    return cabinet;
+  }
+
+  const KITCHEN_LAYOUT = Object.freeze({
+    counterCenterY: 0.93,
+    counterTop: 0.98,
+    counterThickness: 0.1,
+    counterDepth: 0.78,
+    innerCounterEnd: -9.7,
+    sinkX: 9.65,
+    sinkZ: -11.43,
+    rangeX: 14.48,
+    rangeZ: -8.35,
+    refrigeratorX: 14.43,
+    refrigeratorZ: -4.04,
+  });
+
+  function addKitchenLightingFixtures(circuit) {
+    const ceilingY = FLOOR.MAIN + 3.72;
+    const pendantZ = -7.8;
+    for (const [index, x] of [7.9, 12.1].entries()) {
+      cylinder({ name: `kitchen-pendant-${index + 1}-canopy`, radius: 0.18, radiusTop: 0.13, radiusBottom: 0.2, height: 0.11, segments: 20, x, y: ceilingY - 0.08, z: pendantZ, material: M.brass, cast: false });
+      cylinder({ name: `kitchen-pendant-${index + 1}-chain`, radius: 0.014, height: 0.67, segments: 10, x, y: ceilingY - 0.43, z: pendantZ, material: M.brass, cast: false });
+      const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.34, 0.3, 24, 1, true), M.frostedShade);
+      shade.name = `kitchen-pendant-${index + 1}-shade`;
+      shade.position.set(x, ceilingY - 0.82, pendantZ);
+      shade.castShadow = false;
+      scene.add(shade);
+      const shadeRim = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.018, 7, 28), M.brass);
+      shadeRim.name = `kitchen-pendant-${index + 1}-shade-rim`;
+      shadeRim.position.set(x, ceilingY - 0.97, pendantZ);
+      shadeRim.rotation.x = Math.PI / 2;
+      shadeRim.castShadow = false;
+      scene.add(shadeRim);
+      const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffe1ad, emissive: 0xffa34f, emissiveIntensity: circuit.on ? 1.3 : 0, roughness: 0.25 });
+      const bulb = sphere({ name: `kitchen-pendant-${index + 1}-bulb`, radius: 0.085, x, y: ceilingY - 0.91, z: pendantZ, material: bulbMaterial, cast: false });
+      bulb.userData.onEmissiveIntensity = 1.3;
+      bulb.userData.levels = new Set(circuit.levels);
+      circuit.bulbs.push(bulb);
+      circuit.addCeilingResponseGlow(x, ceilingY - 0.01, pendantZ, 1.35, 0.16);
+      circuit.addSourceHalo(x, ceilingY - 0.91, pendantZ, 0.92, 0.18);
+    }
+    for (const bulb of kitchenTaskBulbs) {
+      bulb.userData.levels = new Set(circuit.levels);
+      circuit.bulbs.push(bulb);
+    }
+    // Both pendants share one stronger bounded emitter. This adds visible
+    // lighting and brighter counter coverage without increasing the mansion's
+    // fixed eleven-PointLight shader layout.
+    const light = circuit.addRoomOmniLight(10, FLOOR.MAIN + 2.72, pendantZ, 76, 7.3, ["MAIN LEVEL"]);
+    light.name = "kitchen-pendant-pair-room-bounded-omnilight";
+    light.userData.fixtureStyle = "paired-pendants";
+    light.userData.fixtureRole = "primary";
+    light.userData.visibleFixtureEmitter = true;
+    return light;
+  }
+
+  function addRemodeledKitchen() {
+    const cabinetHeight = 0.88;
+    const { counterCenterY, counterThickness, counterDepth, sinkX, sinkZ } = KITCHEN_LAYOUT;
+
+    // Interactive dark-oak bases share one datum under every work surface.
+    addKitchenBaseCabinet({ name: "kitchen inner food cabinet", x: 5.52, z: -10.35, floorY: FLOOR.MAIN, width: 1.25, height: cabinetHeight, rotationY: Math.PI / 2, stockKind: "food" });
+    addKitchenBaseCabinet({ name: "kitchen rear west cabinet", x: 6.55, z: -11.43, floorY: FLOOR.MAIN, width: 1.2, height: cabinetHeight, rotationY: 0 });
+    addKitchenBaseCabinet({ name: "kitchen rear prep cabinet", x: 7.77, z: -11.43, floorY: FLOOR.MAIN, width: 1.18, height: cabinetHeight, rotationY: 0 });
+    addKitchenBaseCabinet({ name: "kitchen sink base cabinet", x: sinkX, z: sinkZ, floorY: FLOOR.MAIN, width: 1.7, height: cabinetHeight, rotationY: 0 });
+    addKitchenBaseCabinet({ name: "kitchen rear drawer cabinet", x: 11.35, z: -11.43, floorY: FLOOR.MAIN, width: 1.65, height: cabinetHeight, rotationY: 0 });
+    addKitchenBaseCabinet({ name: "kitchen rear dish cabinet", x: 13.1, z: -11.43, floorY: FLOOR.MAIN, width: 1.8, height: cabinetHeight, rotationY: 0, stockKind: "dishes" });
+    addKitchenBaseCabinet({ name: "kitchen east rear cabinet", x: 14.48, z: -10.05, floorY: FLOOR.MAIN, width: 1.85, height: cabinetHeight, rotationY: -Math.PI / 2 });
+    addKitchenBaseCabinet({ name: "kitchen east forward cabinet", x: 14.48, z: -6.42, floorY: FLOOR.MAIN, width: 2.1, height: cabinetHeight, rotationY: -Math.PI / 2 });
+
+    // Butt the three counter runs at their corners. The rear slab is split at
+    // the sink and the east slab at the range, eliminating coplanar overlap.
+    const innerCounter = new THREE.Group();
+    innerCounter.name = "kitchen-countertop-inner";
+    scene.add(innerCounter);
+    box({ name: "kitchen-countertop-inner-slab", w: counterDepth, h: counterThickness, d: 1.3, x: 5.53, y: FLOOR.MAIN + counterCenterY, z: -10.35, material: M.marble, parent: innerCounter, cast: false, receive: true });
+
+    const rearCounter = new THREE.Group();
+    rearCounter.name = "kitchen-countertop-rear";
+    scene.add(rearCounter);
+    box({ name: "kitchen-countertop-rear-west-slab", w: 2.9, h: counterThickness, d: counterDepth, x: 7.35, y: FLOOR.MAIN + counterCenterY, z: sinkZ, material: M.marble, parent: rearCounter, cast: false, receive: true });
+    box({ name: "kitchen-countertop-rear-east-slab", w: 3.55, h: counterThickness, d: counterDepth, x: 12.275, y: FLOOR.MAIN + counterCenterY, z: sinkZ, material: M.marble, parent: rearCounter, cast: false, receive: true });
+    box({ name: "kitchen-countertop-rear-back-bridge", w: 8.15, h: 0.035, d: 0.13, x: 9.975, y: FLOOR.MAIN + KITCHEN_LAYOUT.counterTop + 0.017, z: -11.755, material: M.marble, parent: rearCounter, cast: false, receive: true });
+
+    const eastCounter = new THREE.Group();
+    eastCounter.name = "kitchen-countertop-east";
+    scene.add(eastCounter);
+    box({ name: "kitchen-countertop-east-rear-slab", w: counterDepth, h: counterThickness, d: 1.9, x: 14.47, y: FLOOR.MAIN + counterCenterY, z: -10.05, material: M.marble, parent: eastCounter, cast: false, receive: true });
+    box({ name: "kitchen-countertop-east-forward-slab", w: counterDepth, h: counterThickness, d: 2.2, x: 14.47, y: FLOOR.MAIN + counterCenterY, z: -6.4, material: M.marble, parent: eastCounter, cast: false, receive: true });
+
+    // Low marble backsplashes terminate below every shortened window, with a
+    // fine brass line tying all three elevations together.
+    box({ name: "kitchen-rear-marble-backsplash", w: 8.2, h: 0.22, d: 0.045, x: 10, y: FLOOR.MAIN + 1.09, z: -11.805, material: M.marble, cast: false, receive: true });
+    box({ name: "kitchen-inner-marble-backsplash", w: 0.045, h: 0.22, d: 1.3, x: 5.185, y: FLOOR.MAIN + 1.09, z: -10.35, material: M.marble, cast: false, receive: true });
+    box({ name: "kitchen-east-marble-backsplash-rear", w: 0.045, h: 0.22, d: 1.9, x: 14.815, y: FLOOR.MAIN + 1.09, z: -10.05, material: M.marble, cast: false, receive: true });
+    box({ name: "kitchen-east-marble-backsplash-forward", w: 0.045, h: 0.22, d: 2.2, x: 14.815, y: FLOOR.MAIN + 1.09, z: -6.4, material: M.marble, cast: false, receive: true });
+    box({ name: "kitchen-rear-backsplash-brass-cap", w: 8.2, h: 0.025, d: 0.055, x: 10, y: FLOOR.MAIN + 1.205, z: -11.8, material: M.brass, cast: false });
+    box({ name: "kitchen-inner-backsplash-brass-cap", w: 0.055, h: 0.025, d: 1.3, x: 5.19, y: FLOOR.MAIN + 1.205, z: -10.35, material: M.brass, cast: false });
+    box({ name: "kitchen-east-backsplash-brass-cap-rear", w: 0.055, h: 0.025, d: 1.9, x: 14.81, y: FLOOR.MAIN + 1.205, z: -10.05, material: M.brass, cast: false });
+    box({ name: "kitchen-east-backsplash-brass-cap-forward", w: 0.055, h: 0.025, d: 2.2, x: 14.81, y: FLOOR.MAIN + 1.205, z: -6.4, material: M.brass, cast: false });
+
+    // A porcelain sink fills the deliberate stone opening; the shared outlet
+    // coordinates make the animated stream land inside the dark basin well.
+    roundedBox({ name: "kitchen-sink-brass-rim", w: 1.62, h: 0.65, d: 0.11, radius: 0.11, x: sinkX, y: FLOOR.MAIN + 0.94, z: sinkZ, rotationX: -Math.PI / 2, material: M.brass, cast: false });
+    roundedBox({ name: "kitchen-sink-basin", w: 1.52, h: 0.58, d: 0.095, radius: 0.1, x: sinkX, y: FLOOR.MAIN + 0.945, z: sinkZ, rotationX: -Math.PI / 2, material: M.porcelain, cast: false });
+    roundedBox({ name: "kitchen-sink-basin-well", w: 1.22, h: 0.38, d: 0.024, radius: 0.08, x: sinkX, y: FLOOR.MAIN + 1.004, z: sinkZ + 0.025, rotationX: -Math.PI / 2, material: M.soot, cast: false });
+    cylinder({ name: "kitchen-sink-drain", radius: 0.052, height: 0.012, segments: 18, x: sinkX, y: FLOOR.MAIN + 1.019, z: sinkZ + 0.04, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-faucet-deck-collar", radius: 0.078, height: 0.035, segments: 18, x: sinkX, y: FLOOR.MAIN + 1.005, z: -11.69, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-faucet-riser", radius: 0.03, height: 0.3, segments: 16, x: sinkX, y: FLOOR.MAIN + 1.17, z: -11.69, material: M.brass, cast: false });
+    sphere({ name: "kitchen-sink-faucet-elbow", radius: 0.05, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.69, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-faucet-spout", radius: 0.026, height: 0.38, segments: 14, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.5, rotationX: Math.PI / 2, material: M.brass, cast: false });
+    new WaterFixture({ name: "kitchen sink", kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.3, z: -11.31, drop: 0.28, handleOffset: { x: 0.27, y: 0.02, z: -0.32 } });
+
+    const sinkTaskMaterial = new THREE.MeshStandardMaterial({ color: 0xffdfaa, emissive: 0xffa04a, emissiveIntensity: 1.05, roughness: 0.3 });
+    const sinkTaskBulb = box({ name: "kitchen-sink-task-light", w: 0.92, h: 0.055, d: 0.1, x: sinkX, y: FLOOR.MAIN + 2.82, z: -11.75, material: sinkTaskMaterial, cast: false, receive: false });
+    sinkTaskBulb.userData.onEmissiveIntensity = 1.05;
+    kitchenTaskBulbs.push(sinkTaskBulb);
+    cylinder({ name: "kitchen-sink-task-light-arm", radius: 0.018, height: 0.22, x: sinkX, y: FLOOR.MAIN + 2.88, z: -11.79, rotationX: Math.PI / 2, material: M.brass, cast: false });
+
+    addKitchenRange(KITCHEN_LAYOUT.rangeX, KITCHEN_LAYOUT.rangeZ, FLOOR.MAIN, Math.PI / 2);
+    new Refrigerator({ name: "kitchen refrigerator", x: KITCHEN_LAYOUT.refrigeratorX, z: KITCHEN_LAYOUT.refrigeratorZ, floorY: FLOOR.MAIN, width: 1.25, height: 2.25, depth: 0.82, rotationY: -Math.PI / 2 });
+    box({ name: "kitchen-refrigerator-surround-top", w: 0.9, h: 0.11, d: 1.42, x: KITCHEN_LAYOUT.refrigeratorX, y: FLOOR.MAIN + 2.3, z: KITCHEN_LAYOUT.refrigeratorZ, material: M.darkWood, cast: false });
+    for (const side of [-1, 1]) box({ name: "kitchen-refrigerator-surround-gable", w: 0.9, h: 2.3, d: 0.075, x: KITCHEN_LAYOUT.refrigeratorX, y: FLOOR.MAIN + 1.15, z: KITCHEN_LAYOUT.refrigeratorZ + side * 0.69, material: M.darkWood, cast: true });
   }
 
   function addWineRack(x, z, floorY, rotationY, width) {
@@ -3657,6 +3822,7 @@
 
   function buildExteriorWalls() {
     const mainWindows = (centers) => centers.map((center) => ({ kind: "window", center, width: 1.4, bottom: 0.8, top: 3.12 }));
+    const kitchenWindows = (centers) => centers.map((center) => ({ kind: "window", center, width: 1.65, bottom: 1.28, top: 2.62 }));
     const upperWindows = (centers) => centers.map((center) => ({ kind: "window", center, width: 1.3, bottom: 0.72, top: 2.66 }));
 
     buildWallRun({ axis: "x", fixed: 12, start: -15, end: 15, floorY: FLOOR.MAIN, exterior: true, name: "main-front-wall", openings: [
@@ -3669,11 +3835,14 @@
       ...mainWindows([-12.2, -9.3, -6.4, -3.3]),
       { kind: "door", center: -0.66, width: 1.32, height: 2.86, label: "left terrace door", direction: 1, hingeSide: -1 },
       { kind: "door", center: 0.66, width: 1.32, height: 2.86, label: "right terrace door", direction: -1, hingeSide: 1 },
-      ...mainWindows([3.3, 6.4, 9.4]),
-      { kind: "door", center: 13, width: 1.05, height: 2.4, label: "kitchen service door", direction: 1 },
+      ...mainWindows([3.3]),
+      ...kitchenWindows([6.4, 9.4, 12.4]),
     ] });
     buildWallRun({ axis: "z", fixed: -15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-west-wall", openings: mainWindows([-9.4, -6.7, 0, 6.4, 9.4]) });
-    buildWallRun({ axis: "z", fixed: 15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-east-wall", openings: mainWindows([-9.4, -6.7, 0, 6.4, 9.4]) });
+    buildWallRun({ axis: "z", fixed: 15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-east-wall", openings: [
+      ...kitchenWindows([-9.4, -6.7]),
+      ...mainWindows([0, 6.4, 9.4]),
+    ] });
 
     buildWallRun({ axis: "x", fixed: 12, start: -15, end: 15, floorY: FLOOR.UPPER, exterior: true, name: "upper-front-wall", openings: [
       ...upperWindows([-11.5, -8.2, -5.9]),
@@ -3848,13 +4017,7 @@
     ]) addWallPortrait({ axis: "x", fixed: -12, center: portrait.x, floorY: FLOOR.MAIN, centerY: 2.25, side: 1, width: 0.55, height: 1.05, color: 0x24262d, artId: portrait.artId, crop: portrait.crop, circuitName: portrait.circuitName });
 
     // Kitchen
-    addTable(9.45, -8.35, 3.55, 1.34, FLOOR.MAIN, 0, M.marble);
-    addKitchenRange(14.28, -8.4, FLOOR.MAIN, Math.PI / 2);
-    new Cabinet({ name: "kitchen pantry cabinet", x: 5.45, z: -10.55, floorY: FLOOR.MAIN, width: 1.65, height: 2.35, rotationY: Math.PI / 2, stockKind: "food" });
-    new Refrigerator({ name: "kitchen refrigerator", x: 8.0, z: -11.48, floorY: FLOOR.MAIN, width: 1.25, height: 2.25, depth: 0.82, rotationY: 0 });
-    new Cabinet({ name: "kitchen sink cabinet", x: 11.0, z: -11.5, floorY: FLOOR.MAIN, width: 2.05, height: 1.0, rotationY: 0 });
-    new Cabinet({ name: "kitchen dish hutch", x: 14.35, z: -10.35, floorY: FLOOR.MAIN, width: 1.7, height: 2.1, depth: 0.5, rotationY: -Math.PI / 2, stockKind: "dishes" });
-    for (const x of [8.1, 9.45, 10.8]) addChair(x, -7.25, FLOOR.MAIN, 0, M.darkWood);
+    addRemodeledKitchen();
 
     // Foyer and gallery detail
     for (const x of [-3.9, 3.9]) addTable(x, 9.3, 1.2, 0.55, FLOOR.MAIN, Math.PI / 2, M.marble);
@@ -4017,7 +4180,7 @@
     ballroom.addSwitch(-4.839, 1.15, -4.2, Math.PI / 2);
 
     const kitchen = new LightCircuit("kitchen lights", FLOOR.MAIN, 0xffd29a, true);
-    kitchen.addFixture(9.5, -8.2, "small");
+    addKitchenLightingFixtures(kitchen);
     kitchen.addSwitch(5.161, 1.15, -4.2, Math.PI / 2);
 
     const powderRoom = new LightCircuit("powder room lights", FLOOR.MAIN, 0xffc982, true);
@@ -5026,19 +5189,16 @@
       box({ name, w, h: 0.35, d, x, y: -0.38, z, material: groundsMaterial, collider: false, cast: false, receive: true });
       physics.addFixedBox(x, -0.38, z, w, 0.35, d, 0);
     }
-    // Rear grade sits 0.205m below the finished main floor. A visual sill and
-    // matching shallow Rapier ramp bridge that rise at both usable rear doors;
-    // without it the capsule could walk down to the terrace but hit the slab's
-    // vertical edge when trying to come home.
+    // Rear grade sits 0.205m below the finished main floor. The ballroom is now
+    // the sole rear exit, so the former kitchen sill and ramp disappear with
+    // the sealed service-door bay.
     const rearThresholds = [
       { name: "ballroom-rear-threshold", x: 0, width: 2.46, ramp: false },
-      { name: "kitchen-service-threshold", x: 13, width: 0.96, ramp: true },
     ];
     box({ name: "ballroom-raised-terrace-landing", w: 2.46, h: 0.2, d: 3.3, x: 0, y: -0.1, z: -13.65, material: M.limestone, cast: false, receive: true });
     addExteriorEntryRamp("ballroom-rear-outer-entry-ramp", 0, -16.1, 2.46, 1.6, 1);
     for (const threshold of rearThresholds) {
       box({ name: threshold.name, w: threshold.width, h: 0.2, d: 1.0, x: threshold.x, y: -0.1, z: -12.15, material: M.limestone, cast: false, receive: true });
-      if (threshold.ramp) physics.addFixedRamp(threshold.x, -12.15, YARD_LAYOUT.groundY, FLOOR.MAIN, 1.0, threshold.width, 1);
     }
     box({ name: "front-portico-floor", w: 6.6, h: 0.2, d: 3.4, x: 0, y: -0.1, z: 13.2, material: M.limestone, collider: false });
     addExteriorEntryRamp("front-portico-outer-entry-ramp", 0, 15.7, 2.6, 1.6, -1);
@@ -6320,7 +6480,7 @@
         doorsOpen: animatedObjects.filter((object) => object instanceof HingedDoor && object.open).length,
         doorsTotal: animatedObjects.filter((object) => object instanceof HingedDoor).length,
         exteriorDoors: animatedObjects
-          .filter((object) => object instanceof HingedDoor && /(?:front door|terrace door|kitchen service door)/i.test(object.name))
+          .filter((object) => object instanceof HingedDoor && /(?:front door|terrace door)/i.test(object.name))
           .map((door) => ({ name: door.name, open: door.open, angle: Number(door.angle.toFixed(3)), colliderEnabled: door.collider.isEnabled() })),
         cabinetsOpen: animatedObjects.filter((object) => object instanceof Cabinet && object.open).length,
         cabinetsTotal: animatedObjects.filter((object) => object instanceof Cabinet).length,
@@ -6619,8 +6779,8 @@
         storm: [13.0, FLOOR.MAIN, 5.0, Math.PI],
         frontDoor: [-0.55, FLOOR.MAIN, 10.05, Math.PI],
         librarySwitch: [-6.25, FLOOR.MAIN, 5.85, -Math.PI / 2, -0.28],
-        cabinetTest: [6.0, FLOOR.MAIN, -10.0, Math.PI],
-        refrigeratorTest: [8.0, FLOOR.MAIN, -9.95, 0],
+        cabinetTest: [7.3, FLOOR.MAIN, -10.0, Math.PI, -0.18],
+        refrigeratorTest: [10.8, FLOOR.MAIN, -6.6, -2.1, -0.12],
         stairBottom: [0, FLOOR.MAIN, 3.75, 0],
         upperFlight: [-2.65, FLOOR.MAIN + GRAND_STAIR.MID_LANDING_RISE, -0.72, Math.PI],
         foyerWestDoor: [-3.82, FLOOR.MAIN, 7.3, Math.PI / 2],
@@ -6689,7 +6849,7 @@
       return animatedObjects.filter((object) => object instanceof HingedDoor && object.open).length;
     };
     window.MrFeastFresh.openExteriorDoors = () => {
-      const exteriorDoor = /(?:front door|terrace door|kitchen service door)/i;
+      const exteriorDoor = /(?:front door|terrace door)/i;
       for (const object of animatedObjects) {
         if (object instanceof HingedDoor && exteriorDoor.test(object.name) && !object.locked) object.setOpen(true);
       }
@@ -6782,12 +6942,6 @@
           openDoors: true,
           expected: { inBounds: true, grounded: true, room: "REAR LAWN", maxZ: -12.4 },
         },
-        serviceDoorOut: {
-          start: "yardServiceDoorInside",
-          actions: [{ yaw: 0, seconds: 1.75 }],
-          openDoors: true,
-          expected: { inBounds: true, grounded: true, room: "REAR LAWN", maxZ: -12.4 },
-        },
         frontDoorRoundTrip: {
           start: "frontDoor",
           actions: [{ yaw: Math.PI, seconds: 1.75 }, { yaw: 0, seconds: 1.75 }],
@@ -6814,12 +6968,6 @@
           actions: [{ yaw: Math.PI, seconds: 2.7 }],
           openExteriorDoors: true,
           expected: { inBounds: true, grounded: true, room: "BALLROOM", minZ: -10.8, maxZ: -9.4, interiorRendered: true, nearExteriorRendered: true },
-        },
-        serviceDoorRoundTrip: {
-          start: "yardServiceDoorInside",
-          actions: [{ yaw: 0, seconds: 1.75 }, { yaw: Math.PI, seconds: 1.75 }],
-          openExteriorDoors: true,
-          expected: { inBounds: true, grounded: true, room: "KITCHEN", minZ: -10.8, maxZ: -9.8, interiorRendered: true, nearExteriorRendered: true, visitedRooms: ["REAR LAWN", "KITCHEN"] },
         },
         yardPoolWalk: {
           start: "yardRearCirculationA",
@@ -6969,13 +7117,13 @@
           start: "kitchenServiceStairDoor",
           actions: [{ yaw: Math.PI, seconds: 1.9 }],
           openDoors: true,
-          expected: { grounded: true, room: "SERVICE STAIR", minZ: -2.5, maxZ: -1.6, visitedRooms: ["KITCHEN", "SERVICE STAIR"] },
+          expected: { grounded: true, room: "SERVICE STAIR", minZ: -2.5, maxZ: -1.5, visitedRooms: ["KITCHEN", "SERVICE STAIR"] },
         },
         serviceDown: {
           start: "serviceTop",
           actions: [{ yaw: Math.PI, seconds: 3.6 }],
           openDoors: true,
-          expected: { grounded: true, room: "ARCHIVE", minZ: 3.8, maxZ: 4.8, visitedRooms: ["SERVICE STAIR", "ARCHIVE"] },
+          expected: { grounded: true, room: "ARCHIVE", minZ: 3.8, maxZ: 4.95, visitedRooms: ["SERVICE STAIR", "ARCHIVE"] },
         },
         serviceUp: {
           start: "serviceBottom",

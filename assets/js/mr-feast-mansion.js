@@ -69,6 +69,15 @@
     moonIntensity: 0.28,
     exposure: 0.76,
   });
+  // These are uniform-only lifts on lights the scene already owns. They do
+  // not add a shader light, a shadow map, or a draw call; they simply keep the
+  // large open foyer and rain-darkened grounds readable while the compact
+  // local-light program remains fixed.
+  const OPEN_VOLUME_HEMISPHERE_INTENSITY = 0.18;
+  const GROUNDS_HEMISPHERE_INTENSITY = 0.34;
+  const GROUNDS_MOON_INTENSITY = 0.52;
+  const GROUNDS_EXPOSURE = 0.94;
+  const CONTEXT_LIGHTING_RESPONSE = 4.5;
   const ROOM_LIGHTING = Object.freeze({
     "POWDER ROOM": ["powder room lights"],
     "LIBRARY": ["library lights"],
@@ -108,9 +117,13 @@
     "EAST LAWN": ["estate exterior lights"],
     "WEST LAWN": ["estate exterior lights"],
   });
-  const MOBILE_UPPER_AMBIENT_CIRCUITS = new Set([
+  const OPEN_VOLUME_BUDGET_CIRCUITS = Object.freeze([
     "foyer chandelier", "grand stair lights", "upper landing lights",
   ]);
+  const OPEN_VOLUME_LIGHT_ROOMS = new Set([
+    "FRONT FOYER", "GRAND STAIR HALL", "FOYER BALCONY", "UPPER LANDING",
+  ]);
+  const MOBILE_UPPER_AMBIENT_CIRCUITS = new Set(OPEN_VOLUME_BUDGET_CIRCUITS);
   // Keep one compact light-program shape on every device. The previous
   // desktop path submitted every light on the active floor (up to 39 lights
   // around the open stair), which made the double-height foyer dramatically
@@ -119,6 +132,8 @@
   // redundant real-time emitters are bounded.
   const MOBILE_SHADER_SPOT_BUDGET = 6;
   const MOBILE_SHADER_POINT_BUDGET = 11;
+  const GROUND_BUDGETED_SPOT_LIGHTS = 6;
+  const GROUND_BUDGETED_POINT_LIGHTS = 4;
   const MOBILE_CIRCUIT_INTENSITY_SCALE = 2;
   const MOBILE_UPPER_AMBIENT_SCALE = 2.2;
   const PORTRAIT_ARTWORKS = Object.freeze({
@@ -481,6 +496,8 @@
   const mobileShaderPaddingLights = { spots: [], points: [] };
   const fadingLights = new Set();
   const fadingBulbs = new Set();
+  let hemisphereLight = null;
+  let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
   // exterior windows (fixed glass attenuation) plus the exterior doors,
   // whose openness follows the actual door swing.
@@ -4366,11 +4383,11 @@
     const settings = typeof options === "object" ? options : { castsLight: Boolean(options) };
     const height = settings.height || 2.16;
     const name = settings.name || "estate-lantern";
+    let sourceLight = null;
     lanterns.push({ x, z, height, name });
     if (settings.castsLight) {
       const sourceY = YARD_LAYOUT.groundY + height + 0.11;
       const aimed = Number.isFinite(settings.targetX) && Number.isFinite(settings.targetZ);
-      let sourceLight;
       if (settings.downward) {
         sourceLight = circuit.addContainedSpotLight(
           x,
@@ -4424,6 +4441,7 @@
           fixture: settings.name || `maze-${settings.role}-lamp`,
         };
       }
+      if (Number.isFinite(settings.budgetPriority)) sourceLight.userData.exteriorBudgetPriority = settings.budgetPriority;
     }
     if (settings.name) {
       cylinder({ name: `${name}-pedestal`, radius: 0.23, radiusTop: 0.16, radiusBottom: 0.29, height: 0.38, segments: 14, x, y: YARD_LAYOUT.groundY + 0.19, z, material: M.iron });
@@ -4436,6 +4454,7 @@
     }
     physics.addFixedBox(x, YARD_LAYOUT.groundY + height / 2, z, 0.22, height, 0.22, 0);
     yardState.featureCounts.exteriorLamps += 1;
+    return sourceLight;
   }
 
   function finalizeEstateLanterns(circuit, lanterns) {
@@ -4455,7 +4474,7 @@
     }
   }
 
-  function addRearFacadeWallLantern(circuit, x, side) {
+  function addRearFacadeWallLantern(circuit, x, side, budgetPriority) {
     const light = circuit.addWallSconce(
       x,
       2.12,
@@ -4470,6 +4489,27 @@
     );
     light.name = `rear-facade-${side}-lantern-spotlight`;
     light.userData.fixtureRole = "rear-facade-lantern";
+    light.userData.exteriorBudgetPriority = budgetPriority;
+    yardState.featureCounts.exteriorLamps += 1;
+    return light;
+  }
+
+  function addFrontFacadeWallLantern(circuit, x, side, budgetPriority) {
+    const light = circuit.addWallSconce(
+      x,
+      2.12,
+      12.19,
+      0,
+      58,
+      7.5,
+      ["MAIN LEVEL"],
+      x * 0.72,
+      YARD_LAYOUT.groundY + 0.04,
+      15.4,
+    );
+    light.name = `front-facade-${side}-lantern-spotlight`;
+    light.userData.fixtureRole = "front-facade-lantern";
+    light.userData.exteriorBudgetPriority = budgetPriority;
     yardState.featureCounts.exteriorLamps += 1;
     return light;
   }
@@ -4479,10 +4519,10 @@
     const lanterns = [];
     addEstateLantern(estateExteriorLights, -4.5, 32.15, lanterns, true);
     addEstateLantern(estateExteriorLights, 4.5, 32.15, lanterns, true);
-    addEstateLantern(estateExteriorLights, -18.0, 3.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
-    addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78 });
+    addEstateLantern(estateExteriorLights, -18.0, 3.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 12 });
+    addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 20 });
+    addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 21 });
+    addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 13 });
     const mazeEntranceLampSources = [];
     for (const portal of HEDGE_MAZE_PORTALS) {
       const center = mazeCellCenter(portal.row, portal.col);
@@ -4557,6 +4597,7 @@
           castsShadow: Boolean(source.castsShadow),
           role: source.role,
           name: source.name || `maze-wayfinding-lamp-${source.row}`,
+          budgetPriority: source.role === "center" ? 5 : 50,
         };
       }),
       ...mazeCornerCells.map((source) => {
@@ -4579,13 +4620,18 @@
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
-    estateExteriorLights.addPracticalLight(0, 3.15, 14.5, 72, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.48, targetY: YARD_LAYOUT.groundY, castsShadow: false });
+    const frontPorticoLight = estateExteriorLights.addPracticalLight(0, 3.15, 14.5, 72, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.48, targetY: YARD_LAYOUT.groundY, castsShadow: false });
+    frontPorticoLight.name = "front-portico-downlight";
+    frontPorticoLight.userData.fixtureRole = "primary";
+    frontPorticoLight.userData.exteriorBudgetPriority = 4;
     const fountainLight = estateExteriorLights.addPracticalLight(-25, YARD_LAYOUT.groundY + 2.52, 10, 58, 10.5, ["MAIN LEVEL"]);
     fountainLight.name = "garden-fountain-crown-lantern-light";
     fountainLight.userData.visibleFixtureEmitter = true;
     estateExteriorLights.addPracticalLight(-9, -0.05, -25.5, 48, 10.5, ["MAIN LEVEL"]);
-    addRearFacadeWallLantern(estateExteriorLights, -2.05, "west");
-    addRearFacadeWallLantern(estateExteriorLights, 2.05, "east");
+    addFrontFacadeWallLantern(estateExteriorLights, -7.15, "west", 0);
+    addFrontFacadeWallLantern(estateExteriorLights, 7.15, "east", 1);
+    addRearFacadeWallLantern(estateExteriorLights, -2.05, "west", 2);
+    addRearFacadeWallLantern(estateExteriorLights, 2.05, "east", 3);
     estateExteriorLights.addSwitch(1.72, FLOOR.MAIN + 1.15, 12.19, 0);
     estateExteriorLights.addSwitch(2.05, FLOOR.MAIN + 1.15, -12.19, Math.PI);
     yardState.circuit = estateExteriorLights;
@@ -4804,7 +4850,8 @@
       // restrained exposure/fog pulse reads through the windows without a
       // directional light passing through every wall and closed door.
       this.light.intensity = outdoors ? lightning * 11 : 0;
-      renderer.toneMappingExposure = NIGHT_LIGHTING.exposure + lightning * (outdoors ? 0.72 : 0.12);
+      const baseExposure = outdoors ? GROUNDS_EXPOSURE : NIGHT_LIGHTING.exposure;
+      renderer.toneMappingExposure = baseExposure + lightning * (outdoors ? 0.72 : 0.12);
       scene.fog.color.setRGB(0.031 + lightning * 0.16, 0.043 + lightning * 0.19, 0.07 + lightning * 0.24);
     }
   }
@@ -5444,8 +5491,8 @@
     const lightContextChanged = previousLightContext !== getLightRenderContext();
     // Interior room labels never influence light state. The only room-level
     // boundary is the mansion shell itself: the grounds own a separate,
-    // prewarmed light layout so their sixteen real emitters do not inflate
-    // every indoor main-floor fragment shader. Floor and shell handovers snap:
+    // fixed-budget selection so exterior emitters do not inflate every indoor
+    // main-floor fragment shader. Floor and shell handovers snap:
     // the walls hide the retiring set, while a fade would briefly place both
     // floors in the shader and recreate the exact staircase slowdown this
     // compact fixed layout is designed to avoid.
@@ -5577,33 +5624,135 @@
     return !isExteriorCircuit && rendersOnFloor;
   }
 
+  function getContextLightingTargets() {
+    const renderContext = getLightRenderContext();
+    const openVolume = OPEN_VOLUME_LIGHT_ROOMS.has(state.currentRoom);
+    return {
+      hemisphere: renderContext === "grounds"
+        ? GROUNDS_HEMISPHERE_INTENSITY
+        : openVolume ? OPEN_VOLUME_HEMISPHERE_INTENSITY : NIGHT_LIGHTING.hemisphereIntensity,
+      moon: renderContext === "grounds" ? GROUNDS_MOON_INTENSITY : NIGHT_LIGHTING.moonIntensity,
+    };
+  }
+
+  function updateContextLighting(dt) {
+    if (!hemisphereLight || !moonLight) return;
+    const targets = getContextLightingTargets();
+    const blend = 1 - Math.exp(-CONTEXT_LIGHTING_RESPONSE * dt);
+    hemisphereLight.intensity += (targets.hemisphere - hemisphereLight.intensity) * blend;
+    moonLight.intensity += (targets.moon - moonLight.intensity) * blend;
+  }
+
+  function selectBudgetedCircuitLights(floors, renderContext) {
+    const selectedLights = new Set();
+    // Cabinet spots are useful indoors, but on the grounds they would reserve
+    // two shader entries while contributing no energy. Padding still restores
+    // the exact 6/11 program shape after exterior emitters are selected.
+    const auxiliarySpotReserve = renderContext === "grounds"
+      ? 0
+      : auxiliaryInteriorLights.filter((light) => light.isSpotLight).length;
+    const spotLimit = Math.max(0, MOBILE_SHADER_SPOT_BUDGET - auxiliarySpotReserve);
+    const pointLimit = MOBILE_SHADER_POINT_BUDGET;
+    let selectedSpots = 0;
+    let selectedPoints = 0;
+
+    const rendersOnLevel = (light) => !light.userData.levels || light.userData.levels.has(state.currentFloor);
+    const enclosureAvailable = (light) => {
+      const enclosure = light.userData.requiresOpenCabinet;
+      return !enclosure || enclosure.open || enclosure.angle > 0.025;
+    };
+    const trySelect = (light, customSpotLimit = spotLimit, customPointLimit = pointLimit) => {
+      if (!light || selectedLights.has(light) || !rendersOnLevel(light) || !enclosureAvailable(light)) return false;
+      if (light.isSpotLight) {
+        if (selectedSpots >= customSpotLimit) return false;
+        selectedSpots += 1;
+      } else if (light.isPointLight) {
+        if (selectedPoints >= customPointLimit) return false;
+        selectedPoints += 1;
+      } else {
+        return false;
+      }
+      selectedLights.add(light);
+      return true;
+    };
+
+    const renderedCircuits = circuits.filter((circuit) => circuitRendersInContext(circuit, floors, renderContext));
+    if (renderContext === "grounds") {
+      const exteriorCircuit = yardState.circuit || renderedCircuits.find((circuit) => circuit.name === "estate exterior lights");
+      const candidates = exteriorCircuit
+        ? exteriorCircuit.lights.filter(rendersOnLevel).sort((a, b) => (
+          (a.userData.exteriorBudgetPriority ?? 100) - (b.userData.exteriorBudgetPriority ?? 100)
+        ))
+        : [];
+      const groundsSpotLimit = Math.min(spotLimit, GROUND_BUDGETED_SPOT_LIGHTS);
+      const groundsPointLimit = Math.min(pointLimit, GROUND_BUDGETED_POINT_LIGHTS);
+      for (const light of candidates) trySelect(light, groundsSpotLimit, groundsPointLimit);
+      return selectedLights;
+    }
+
+    // First preserve one representative from every switch-owned circuit so
+    // closed rooms do not lose their authored light. Open-volume circuits use
+    // their broad point fill for this representative, matching the previous
+    // stable budget's coverage.
+    for (const circuit of renderedCircuits) {
+      const eligible = circuit.lights.filter((light) => rendersOnLevel(light) && enclosureAvailable(light));
+      const preferred = (MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
+        ? eligible.find((light) => light.isPointLight)
+        : null)
+        || eligible.find((light) => light.userData.fixtureRole === "primary")
+        || eligible.find((light) => light.userData.visibleFixtureEmitter)
+        || eligible[0];
+      if (trySelect(preferred)) continue;
+      trySelect(eligible.find((light) => (
+        (light.isSpotLight && selectedSpots < spotLimit)
+        || (light.isPointLight && selectedPoints < pointLimit)
+      )));
+    }
+
+    // Fill the already-paid empty spot slots round-robin across the foyer,
+    // grand stair, and upper landing. This restores their downward cones
+    // instead of merely making one broad point fill brighter.
+    const openVolumeQueues = [];
+    for (const circuitName of OPEN_VOLUME_BUDGET_CIRCUITS) {
+      const circuit = renderedCircuits.find((candidate) => candidate.name === circuitName);
+      if (circuit) openVolumeQueues.push(circuit.lights.filter((light) => rendersOnLevel(light) && enclosureAvailable(light) && !selectedLights.has(light)));
+    }
+    let filledOpenVolumeSlot = true;
+    while (filledOpenVolumeSlot && (selectedSpots < spotLimit || selectedPoints < pointLimit)) {
+      filledOpenVolumeSlot = false;
+      for (const queue of openVolumeQueues) {
+        while (queue.length) {
+          const light = queue.shift();
+          if (!trySelect(light)) continue;
+          filledOpenVolumeSlot = true;
+          break;
+        }
+      }
+    }
+
+    // If a future fixture edit leaves another paid slot empty, use a real
+    // stable emitter before falling back to a zero-energy padding light.
+    for (const circuit of renderedCircuits) {
+      for (const light of circuit.lights) trySelect(light);
+    }
+    return selectedLights;
+  }
+
   function syncLightRendering(transition) {
     const fade = transition === "fade" && !state.qa;
     const floors = new Set([state.currentFloor]);
     const renderContext = getLightRenderContext();
+    const budgetedLights = selectBudgetedCircuitLights(floors, renderContext);
     lightRenderPolicy = `manual-circuits-context-stable:${renderContext}`;
     let shadowTopologyChanged = false;
+    const boundedCircuitBudget = true;
     for (const circuit of circuits) {
       const rendersOnFloor = circuit.levels.has(state.currentFloor);
       // Indoor main-floor, grounds, upper, and basement layouts are each
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
-      const boundedCircuitBudget = true;
       const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
-      // Keep one real emitter per circuit on every floor. Fixtures, bulbs,
-      // halos, and painted light response remain visible; redundant support
-      // and sconce shader lights are retired. Applying the same bounded layout
-      // on desktop prevents the open grand stair from carrying roughly twice
-      // the shader cost of the rest of the mansion.
-      const boundedCircuitLight = boundedCircuitBudget
-        ? (MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
-          ? circuit.lights.find((light) => light.isPointLight && (!light.userData.levels || light.userData.levels.has(state.currentFloor)))
-          : null)
-          || circuit.lights.find((light) => light.userData.fixtureRole === "primary")
-          || circuit.lights.find((light) => light.userData.visibleFixtureEmitter)
-          || circuit.lights[0]
-        : null;
       for (const light of circuit.lights) {
         // The fixed light profile keeps the moon as the single structural
         // shadow source. Floor-local spot shadows changed the shader's shadow
@@ -5619,16 +5768,15 @@
         const rendersOnLevel = lightLevels ? lightLevels.has(state.currentFloor) : rendersOnFloor;
         const enclosure = light.userData.requiresOpenCabinet;
         const enclosureOpen = !enclosure || enclosure.open || enclosure.angle > 0.025;
-        light.userData.renderIntensityScale = state.mobileRenderProfile && light === boundedCircuitLight
+        light.userData.renderIntensityScale = state.mobileRenderProfile && budgetedLights.has(light)
           ? (mobileUpperBudget && MOBILE_UPPER_AMBIENT_CIRCUITS.has(circuit.name)
             ? MOBILE_UPPER_AMBIENT_SCALE
             : MOBILE_CIRCUIT_INTENSITY_SCALE)
           : 1;
-        // Placement ignores enclosures: a closet light occupies its shader
-        // slot whenever its floor context renders, so opening a cabinet can
-        // never mint a novel light-count layout and stall on a mid-game
-        // shader compile. The enclosure only gates whether it is energized.
-        const nextVisible = rendersInContext && rendersOnLevel && (!boundedCircuitBudget || light === boundedCircuitLight);
+        // Padding holds the shader type count when a closet is closed. Opening
+        // it can replace one zero-energy spot with the real lamp without
+        // minting a new program; the enclosure still gates its energy.
+        const nextVisible = rendersInContext && rendersOnLevel && budgetedLights.has(light);
         if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
@@ -5642,11 +5790,10 @@
     const allCircuitsOff = circuits.length > 0 && circuits.every((circuit) => !circuit.on);
     for (const light of auxiliaryInteriorLights) {
       const interactionVisible = Boolean(light.userData.interactionVisible);
-      // The two cabinet lamps hold one permanent shader slot each on every
-      // floor context, so no layout the session renders is ever novel; the
-      // door interaction and the blackout state only gate the energy, and an
-      // open cabinet lamp still cannot survive a full circuit blackout.
-      light.visible = true;
+      // The two cabinet lamps hold stable indoor shader slots. Grounds reuse
+      // those spots for authored exterior pools, while padding keeps the type
+      // counts identical; the door and blackout state only gate the energy.
+      light.visible = renderContext !== "grounds";
       light.intensity = light.visible && !allCircuitsOff && interactionVisible ? light.userData.baseIntensity : 0;
     }
     syncMobileShaderPadding();
@@ -5807,6 +5954,7 @@
       updateLocation();
       interactionTimer = 0.08;
     }
+    updateContextLighting(dt);
     // The diagnostics object is available on demand through the QA API. Do
     // not stringify its large room/circuit/yard payload into a hidden DOM node
     // twice per second during normal play; those allocations caused periodic
@@ -5827,6 +5975,7 @@
       .filter(([, names]) => !names.some((name) => circuitByName.has(name) && circuitByName.get(name).controls > 0))
       .map(([room]) => room);
     const mappedCircuitNames = new Set(Object.values(ROOM_LIGHTING).flat());
+    const contextLightingTargets = getContextLightingTargets();
     const foodItems = stockedStorages
       .filter((storage) => storage.stockKind === "food" || storage.stockKind === "refrigerator")
       .reduce((total, storage) => total + storage.itemCount, 0);
@@ -5918,8 +6067,10 @@
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
         mobileRenderProfile: state.mobileRenderProfile,
-        mobileLightBudgetPerCircuit: state.mobileRenderProfile ? 1 : null,
-        mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? 1 : null,
+        mobileLightBudgetPerCircuit: null,
+        mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR"
+          ? { spots: MOBILE_SHADER_SPOT_BUDGET, points: MOBILE_SHADER_POINT_BUDGET }
+          : null,
         mobileUpperStableLighting: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR",
         mobileUpperAmbientScale: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? MOBILE_UPPER_AMBIENT_SCALE : 1,
         boundedLightProfile: true,
@@ -5935,6 +6086,12 @@
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderPaddingLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
+        shaderRealSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length,
+        shaderRealPointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length,
+        shaderPaddingSpotLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length,
+        shaderPaddingPointLights: mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderSpotBudget: MOBILE_SHADER_SPOT_BUDGET,
         shaderPointBudget: MOBILE_SHADER_POINT_BUDGET,
         crossFloorFade: {
@@ -5945,8 +6102,10 @@
         },
         pixelRatio: Number(renderer.getPixelRatio().toFixed(2)),
         activeFloor: state.currentFloor,
-        hemisphereIntensity: NIGHT_LIGHTING.hemisphereIntensity,
-        moonIntensity: NIGHT_LIGHTING.moonIntensity,
+        hemisphereIntensity: hemisphereLight ? Number(hemisphereLight.intensity.toFixed(3)) : NIGHT_LIGHTING.hemisphereIntensity,
+        hemisphereTarget: contextLightingTargets.hemisphere,
+        moonIntensity: moonLight ? Number(moonLight.intensity.toFixed(3)) : NIGHT_LIGHTING.moonIntensity,
+        moonTarget: contextLightingTargets.moon,
         exposure: Number(renderer.toneMappingExposure.toFixed(3)),
         maxTextureUnits: renderer.capabilities.maxTextures,
         fullRoomShadowSet: supportsFullRoomShadowSet,
@@ -6664,20 +6823,20 @@
       M = await createMaterials();
 
       setLoading("Raising the walls", 28);
-      const hemi = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);
-      scene.add(hemi);
-      const moon = new THREE.DirectionalLight(0x8fb7dc, NIGHT_LIGHTING.moonIntensity);
-      moon.position.set(-20, 28, 18);
-      moon.castShadow = renderer.shadowMap.enabled;
-      moon.shadow.mapSize.set(1024, 1024);
-      moon.shadow.camera.left = -25;
-      moon.shadow.camera.right = 25;
-      moon.shadow.camera.top = 25;
-      moon.shadow.camera.bottom = -25;
-      moon.shadow.camera.near = 1;
-      moon.shadow.camera.far = 70;
-      moon.shadow.bias = -0.00035;
-      scene.add(moon);
+      hemisphereLight = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);
+      scene.add(hemisphereLight);
+      moonLight = new THREE.DirectionalLight(0x8fb7dc, NIGHT_LIGHTING.moonIntensity);
+      moonLight.position.set(-20, 28, 18);
+      moonLight.castShadow = renderer.shadowMap.enabled;
+      moonLight.shadow.mapSize.set(1024, 1024);
+      moonLight.shadow.camera.left = -25;
+      moonLight.shadow.camera.right = 25;
+      moonLight.shadow.camera.top = 25;
+      moonLight.shadow.camera.bottom = -25;
+      moonLight.shadow.camera.near = 1;
+      moonLight.shadow.camera.far = 70;
+      moonLight.shadow.bias = -0.00035;
+      scene.add(moonLight);
 
       buildMansion();
       mergeStaticDecor();

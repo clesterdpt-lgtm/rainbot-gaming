@@ -175,6 +175,8 @@ const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFu
 const upperGalleryPortraits = upperFurnishings;
 const musicRoomFurnishings = section("// Music room", "// Painting room", mainFurnishings);
 const paintingRoomFurnishings = section("// Painting room", "// Dining room", mainFurnishings);
+const paintingStudioBuilder = section("function addPaintingStudio(", "function addKitchenRange(");
+const boxBuilder = section("function box(", "function cylinder(");
 const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSlabsAndCeilings()");
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
@@ -776,9 +778,24 @@ const expectedPortraitFiles = [
   "portrait-orchard-porcelain-teeth-v1-ai.jpg",
   "portrait-house-dreams-back-v1-ai.jpg",
 ];
+const expectedPaintingFiles = [
+  "painting-work-in-progress-dreaming-v1-ai.jpg",
+  "painting-choir-floorboards-v1-ai.jpg",
+  "painting-polite-eclipse-v1-ai.jpg",
+  "painting-five-doors-v1-ai.jpg",
+  "painting-garden-knees-v1-ai.jpg",
+  "painting-moths-guests-v1-ai.jpg",
+  "painting-arrived-early-v1-ai.jpg",
+];
+const expectedArtworkFiles = [
+  ...expectedPortraitFiles.map((filename) => `portraits/${filename}`),
+  ...expectedPaintingFiles.map((filename) => `paintings/${filename}`),
+];
 const newPortraitIds = ["banquet-forgot-guests", "last-applause", "orchard-porcelain-teeth", "house-dreams-back"];
-check("21 generated portrait collection", count(portraitManifest, /file:\s*"portraits\/portrait-[^"]+-v1-ai\.jpg"/g) === 10, "portrait manifest does not expose ten immutable generated artwork files");
-check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 13, "all thirteen remaining mansion picture frames are not assigned a stable generated art ID");
+const paintingRoomWallArtIds = ["choir-floorboards", "polite-eclipse", "five-doors", "garden-knees", "moths-guests", "arrived-early"];
+const paintingRoomArtworkIds = ["work-in-progress-dreaming", ...paintingRoomWallArtIds];
+check("21 generated portrait collection", count(portraitManifest, /file:\s*"(?:portraits\/portrait|paintings\/painting)-[^"]+-v1-ai\.jpg"/g) === 17, "artwork manifest does not expose all seventeen immutable generated artwork files");
+check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 19, "all nineteen mansion picture frames are not assigned a stable generated art ID");
 for (const artId of newPortraitIds) {
   check("23 non-host painting collection", portraitManifest.includes(`"${artId}"`) && portraitFurnishings.includes(`artId: "${artId}"`), `${artId} is not registered and placed in the mansion`);
 }
@@ -791,18 +808,24 @@ for (const view of ["mainGalleryLastApplause", "upperArtHouseDreams", "upperArtB
 check("21 generated portrait loader", /function loadArtworkTexture/.test(mansion) && /ClampToEdgeWrapping/.test(portraitBuilder) && /THREE\.sRGBEncoding/.test(portraitBuilder) && !/RepeatWrapping/.test(portraitBuilder), "artwork textures are not loaded as clamped sRGB paintings");
 check("21 generated portrait loader", /portrait-art-\$\{artId\}/.test(portraitBuilder) && /if \(!artTexture\)/.test(portraitBuilder), "generated art lacks stable scene names or procedural fallback gating");
 check("21 generated portrait diptych", /repeatX:\s*0\.5,\s*offsetX:\s*0/.test(portraitFurnishings) && /repeatX:\s*0\.5,\s*offsetX:\s*0\.5/.test(portraitFurnishings), "ballroom diptych halves are not mapped to complementary frames");
-check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 13 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
+check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) === 19 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
 check("23 painting readability", /onEmissiveIntensity\s*=\s*0\.48/.test(portraitBuilder) && /offEmissiveIntensity\s*=\s*0/.test(portraitBuilder) && /circuit\.on\s*\?\s*0\.48\s*:\s*0/.test(portraitBuilder), "lit paintings are not gently readable while preserving a true zero-emissive lights-off state");
-for (const filename of expectedPortraitFiles) {
-  const fullPath = path.join(root, "assets/textures/mr-feast/generated/portraits", filename);
-  check("21 generated portrait assets", fs.existsSync(fullPath), `missing generated portrait ${filename}`);
+for (const relativeFile of expectedArtworkFiles) {
+  const fullPath = path.join(root, "assets/textures/mr-feast/generated", relativeFile);
+  const filename = path.basename(relativeFile);
+  check("21 generated portrait assets", fs.existsSync(fullPath), `missing generated artwork ${relativeFile}`);
   if (fs.existsSync(fullPath)) {
     const bytes = fs.readFileSync(fullPath);
-    check("21 generated portrait assets", bytes[0] === 0xff && bytes[1] === 0xd8, `${filename} is not a JPEG runtime texture`);
-    check("21 generated portrait assets", bytes.length <= 550 * 1024, `${filename} exceeds the 550 KB portrait texture budget`);
+    check("21 generated portrait assets", bytes[0] === 0xff && bytes[1] === 0xd8, `${relativeFile} is not a JPEG runtime texture`);
+    check("21 generated portrait assets", bytes.length <= 550 * 1024, `${relativeFile} exceeds the 550 KB artwork texture budget`);
     if (newPortraitIds.some((artId) => filename.includes(artId))) {
       const dimensions = jpegDimensions(bytes);
       check("23 non-host painting assets", dimensions?.width === 768 && dimensions?.height === 1152, `${filename} must be a 768x1152 portrait texture`);
+    }
+    if (expectedPaintingFiles.includes(filename)) {
+      const dimensions = jpegDimensions(bytes);
+      const landscape = filename === "painting-five-doors-v1-ai.jpg";
+      check("33 painting-room generated art", dimensions?.width === (landscape ? 1152 : 768) && dimensions?.height === (landscape ? 768 : 1152), `${filename} has the wrong authored dimensions`);
     }
   }
 }
@@ -854,6 +877,35 @@ for (const stableName of ["painting-room-easel", "painting-room-chair", "paintin
   check("24 painting room furnishings", mansion.includes(stableName), `Painting Room is missing stable scene object ${stableName}`);
 }
 check("24 painting room furnishings", !/\badd(?:Piano|Sofa)\(/.test(paintingRoomFurnishings), "Painting Room still contains its former piano or sofa");
+
+// 33. The Painting Room becomes a believable working atelier. The easel is a
+// connected, tilted A/H-frame; its unfinished canvas and six-wall collection
+// use real generated art; and the three-door circulation aisle stays open.
+for (const artId of paintingRoomArtworkIds) {
+  check("33 painting-room generated art", portraitManifest.includes(`"${artId}"`), `Painting Room artwork ${artId} is missing from the immutable manifest`);
+}
+check("33 easel rotation support", /rotationX\s*=\s*0/.test(boxBuilder) && /rotationZ\s*=\s*0/.test(boxBuilder) && /mesh\.rotation\.set\(rotationX,\s*rotationY,\s*rotationZ\)/.test(boxBuilder), "box geometry still ignores the easel's X/Z support angles");
+for (const stableName of [
+  "painting-room-easel-front-leg", "painting-room-easel-rear-leg", "painting-room-easel-mast",
+  "painting-room-easel-tray", "painting-room-easel-upper-clamp", "painting-room-easel-canvas-back",
+  "painting-room-easel-stretcher-horizontal", "painting-room-easel-stretcher-vertical", "painting-room-easel-art",
+]) {
+  check("33 connected realistic easel", paintingStudioBuilder.includes(stableName), `realistic easel is missing ${stableName}`);
+}
+check("33 connected realistic easel", /canvasMount\.rotation\.x\s*=\s*-0\.07/.test(paintingStudioBuilder) && /z:\s*0\.04[0-9]/.test(paintingStudioBuilder), "canvas assembly is not gently tilted with a non-z-fighting artwork face");
+check("33 connected realistic easel", /painting-room-easel-rear-leg[\s\S]*?z:\s*-0\.32[\s\S]*?rotationX:\s*0\.32/.test(paintingStudioBuilder), "rear kickstand is not behind and angled away from the painted face");
+check("33 unfinished easel canvas", /const artId\s*=\s*"work-in-progress-dreaming"/.test(paintingStudioBuilder) && /painting-room-unfinished-linen/.test(paintingStudioBuilder) && !/painting-room-canvas-paint-daub/.test(paintingStudioBuilder), "easel does not use the generated unfinished artwork with restrained dimensional paint detail");
+for (const artId of paintingRoomWallArtIds) {
+  check("33 painting-room wall collection", paintingRoomFurnishings.includes(`artId: "${artId}"`), `Painting Room does not hang ${artId}`);
+}
+check("33 painting-room wall collection", count(paintingRoomFurnishings, /artId:\s*"(?:choir-floorboards|polite-eclipse|five-doors|garden-knees|moths-guests|arrived-early)"/g) === 6 && count(paintingRoomFurnishings, /circuitName:\s*"painting room lights"/g) === 6 && count(paintingRoomFurnishings, /addWallPortrait\(/g) === 1, "Painting Room must hang exactly six switch-owned wall artworks");
+check("33 painting-room clear aisle", /const chairX\s*=\s*x\s*-\s*0\.35/.test(paintingStudioBuilder) && /const chairZ\s*=\s*z\s*-\s*1\.25/.test(paintingStudioBuilder) && /addChair\(chairX,\s*chairZ[\s\S]*?faceTargetYaw/.test(paintingStudioBuilder) && /addTable\(x\s*\+\s*0\.2,\s*z\s*-\s*2\.85/.test(paintingStudioBuilder), "chair or paint cart remains in the three-door circulation aisle");
+for (const view of ["paintingRoomOverview", "paintingRoomEaselFront", "paintingRoomEaselRear", "paintingRoomWestArt", "paintingRoomEastArt", "paintingRoomNorthArt", "paintingRoomSouthArt"]) {
+  check("33 painting-room QA views", mansion.includes(`${view}:`), `missing Painting Room inspection view ${view}`);
+}
+for (const route of ["paintingSouthToMusic", "paintingWestEntry", "paintingEaselCollision"]) {
+  check("33 painting-room QA routes", qaHooks.includes(`${route}:`), `missing Painting Room physical QA route ${route}`);
+}
 check("24 music room furnishings", /\baddPiano\(/.test(musicRoomFurnishings) && /\baddSofa\(/.test(musicRoomFurnishings), "Music Room does not retain both its piano and couch");
 check("24 music room furnishings", /musicPiano/i.test(musicRoomFurnishings) && /musicSofa/i.test(musicRoomFurnishings) && /(?:faceTargetYaw|yawToward|Math\.atan2)\s*\(/.test(musicRoomFurnishings), "Music Room couch lacks an explicit face-target relationship to the piano");
 
@@ -923,7 +975,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-kitchen-remodel-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-painting-room-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

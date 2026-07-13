@@ -147,6 +147,13 @@
     "last-applause": Object.freeze({ title: "The Last Applause", file: "portraits/portrait-last-applause-v1-ai.jpg" }),
     "orchard-porcelain-teeth": Object.freeze({ title: "The Orchard of Porcelain Teeth", file: "portraits/portrait-orchard-porcelain-teeth-v1-ai.jpg" }),
     "house-dreams-back": Object.freeze({ title: "The House That Dreams Back", file: "portraits/portrait-house-dreams-back-v1-ai.jpg" }),
+    "work-in-progress-dreaming": Object.freeze({ title: "The Prompt Is Still Dreaming", file: "paintings/painting-work-in-progress-dreaming-v1-ai.jpg" }),
+    "choir-floorboards": Object.freeze({ title: "The Choir Beneath the Floorboards", file: "paintings/painting-choir-floorboards-v1-ai.jpg" }),
+    "polite-eclipse": Object.freeze({ title: "A Very Polite Eclipse", file: "paintings/painting-polite-eclipse-v1-ai.jpg" }),
+    "five-doors": Object.freeze({ title: "Five Doors, No Hallway", file: "paintings/painting-five-doors-v1-ai.jpg" }),
+    "garden-knees": Object.freeze({ title: "The Garden Has Too Many Knees", file: "paintings/painting-garden-knees-v1-ai.jpg" }),
+    "moths-guests": Object.freeze({ title: "Moths Wearing the Guests", file: "paintings/painting-moths-guests-v1-ai.jpg" }),
+    "arrived-early": Object.freeze({ title: "The Portrait That Arrived Early", file: "paintings/painting-arrived-early-v1-ai.jpg" }),
   });
   const PLAYER = Object.freeze({
     radius: 0.32,
@@ -250,6 +257,13 @@
     paintingRoomB: [9.8, FLOOR.MAIN, 2.45, 0.8],
     paintingRoomWestWall: [6.05, FLOOR.MAIN, 0, Math.PI / 2],
     paintingRoomEastWall: [9.25, FLOOR.MAIN, 0, -Math.PI / 2],
+    paintingRoomOverview: [6.0, FLOOR.MAIN, -2.35, -2.44, -0.08],
+    paintingRoomEaselFront: [7.15, FLOOR.MAIN, -1.65, -2.48, -0.06],
+    paintingRoomEaselRear: [9.75, FLOOR.MAIN, 2.5, 0.28, -0.08],
+    paintingRoomWestArt: [8.35, FLOOR.MAIN, 0, Math.PI / 2, 0],
+    paintingRoomEastArt: [6.75, FLOOR.MAIN, -0.5, -Math.PI / 2, 0],
+    paintingRoomNorthArt: [6.2, FLOOR.MAIN, 0.6, Math.PI, 0],
+    paintingRoomSouthArt: [6.2, FLOOR.MAIN, -0.6, 0, 0],
     rearGalleryA: [-13.2, FLOOR.MAIN, -4.05, -Math.PI / 2],
     rearGalleryB: [13.2, FLOOR.MAIN, -4.05, Math.PI / 2],
     mainGalleryLastApplause: [10.1, FLOOR.MAIN, -5.2, Math.PI],
@@ -966,6 +980,7 @@
       marble: new THREE.MeshPhysicalMaterial({ map: marbleMap, color: 0x7a766f, roughness: 0.38, metalness: 0, clearcoat: 0.16, clearcoatRoughness: 0.42, bumpMap: marbleMap, bumpScale: 0.012 }),
       stairMarble: new THREE.MeshPhysicalMaterial({ map: marbleMap, color: 0x56514b, roughness: 0.5, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.55, bumpMap: marbleMap, bumpScale: 0.0035 }),
       plaster: new THREE.MeshStandardMaterial({ color: 0xaaa49a, roughness: 0.92 }),
+      canvasLinen: new THREE.MeshStandardMaterial({ color: 0xb9a483, roughness: 0.98, metalness: 0, emissive: 0x2a1d12, emissiveIntensity: 0.14 }),
       ceiling: new THREE.MeshStandardMaterial({ color: 0x8f8a80, roughness: 0.98 }),
       trim: new THREE.MeshStandardMaterial({ color: 0xb5aa91, roughness: 0.52 }),
       agedTrim: new THREE.MeshStandardMaterial({ color: 0x716d61, roughness: 0.7 }),
@@ -1123,14 +1138,14 @@
   function box(options) {
     const {
       name = "box", w = 1, h = 1, d = 1, x = 0, y = 0, z = 0,
-      material = M.plaster, rotationY = 0, collider = false,
+      material = M.plaster, rotationX = 0, rotationY = 0, rotationZ = 0, collider = false,
       cast = true, receive = true, parent = scene, occluder = false,
     } = options || {};
     const mesh = new THREE.Mesh(geometry("unitBox", () => new THREE.BoxGeometry(1, 1, 1)), material);
     mesh.name = name;
     mesh.position.set(x, y, z);
     mesh.scale.set(w, h, d);
-    mesh.rotation.y = rotationY;
+    mesh.rotation.set(rotationX, rotationY, rotationZ);
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
     parent.add(mesh);
@@ -3321,27 +3336,62 @@
     const easel = new THREE.Group();
     easel.name = "painting-room-easel";
     easel.position.set(x, floorY, z);
-    easel.rotation.y = -Math.PI / 2;
+    const easelYaw = -2.85;
+    easel.rotation.y = easelYaw;
     scene.add(easel);
-    for (const side of [-1, 1]) {
-      box({ name: "painting-room-easel-leg", w: 0.075, h: 1.72, d: 0.075, x: side * 0.3, y: 0.86, z: 0, rotationZ: side * 0.13, material: M.darkWood, parent: easel });
-    }
-    box({ name: "painting-room-easel-rear-leg", w: 0.07, h: 1.5, d: 0.07, x: 0, y: 0.73, z: 0.42, rotationX: -0.28, material: M.darkWood, parent: easel });
-    box({ name: "painting-room-easel-crossbar", w: 0.82, h: 0.1, d: 0.12, x: 0, y: 0.78, z: -0.04, material: M.darkWood, parent: easel });
-    box({ name: "painting-room-easel-canvas", w: 0.92, h: 1.18, d: 0.065, x: 0, y: 1.36, z: -0.01, material: M.porcelain, parent: easel });
-    for (const dab of [
-      [-0.25, 1.55, 0.035, M.velvet],
-      [0.19, 1.18, 0.037, M.greenRug],
-      [0.05, 1.62, 0.039, M.roseMauve],
-      [-0.12, 1.08, 0.041, M.terracotta],
-    ]) sphere({ name: "painting-room-canvas-paint-daub", radius: 0.085, x: dab[0], y: dab[1], z: dab[2], material: dab[3], parent: easel, cast: false });
-    physics.addFixedBox(x, floorY + 0.85, z, 0.82, 1.7, 0.48, -Math.PI / 2);
 
-    const chair = addChair(x - 1.18, z, floorY, -Math.PI / 2, M.darkWood);
+    // A connected A/H-frame: the front legs converge into a central mast,
+    // while the rear kickstand opens behind the painted face (local -Z).
+    for (const side of [-1, 1]) {
+      box({ name: "painting-room-easel-front-leg", w: 0.075, h: 1.78, d: 0.075, x: side * 0.32, y: 0.89, z: 0, rotationZ: side * 0.13, material: M.darkWood, parent: easel });
+      box({ name: "painting-room-easel-front-foot", w: 0.19, h: 0.06, d: 0.28, x: side * 0.41, y: 0.03, z: 0.06, material: M.darkWood, parent: easel });
+    }
+    box({ name: "painting-room-easel-mast", w: 0.085, h: 2.18, d: 0.085, x: 0, y: 1.09, z: -0.05, material: M.darkWood, parent: easel });
+    box({ name: "painting-room-easel-rear-leg", w: 0.075, h: 1.83, d: 0.075, x: 0, y: 0.87, z: -0.32, rotationX: 0.32, material: M.darkWood, parent: easel });
+    cylinder({ name: "painting-room-easel-hinge", radius: 0.052, height: 0.74, segments: 12, x: 0, y: 1.74, z: -0.04, rotationZ: Math.PI / 2, material: M.brass, parent: easel });
+    box({ name: "painting-room-easel-lower-crossbar", w: 0.82, h: 0.085, d: 0.09, x: 0, y: 0.55, z: -0.015, material: M.darkWood, parent: easel });
+    box({ name: "painting-room-easel-tray", w: 1.08, h: 0.08, d: 0.25, x: 0, y: 0.75, z: 0.055, material: M.darkWood, parent: easel });
+    box({ name: "painting-room-easel-tray-lip", w: 1.08, h: 0.09, d: 0.045, x: 0, y: 0.81, z: 0.16, material: M.darkWood, parent: easel });
+    box({ name: "painting-room-easel-upper-clamp", w: 0.36, h: 0.13, d: 0.16, x: 0, y: 2.02, z: 0.015, material: M.darkWood, parent: easel });
+    cylinder({ name: "painting-room-easel-clamp-screw", radius: 0.038, height: 0.13, segments: 12, x: 0.25, y: 2.02, z: 0.015, rotationZ: Math.PI / 2, material: M.brass, parent: easel, cast: false });
+
+    const canvasMount = new THREE.Group();
+    canvasMount.name = "painting-room-easel-canvas-mount";
+    canvasMount.position.set(0, 1.385, 0.015);
+    canvasMount.rotation.x = -0.07;
+    easel.add(canvasMount);
+    box({ name: "painting-room-unfinished-linen", w: 0.96, h: 1.2, d: 0.055, x: 0, y: 0, z: 0, material: M.canvasLinen, parent: canvasMount });
+    box({ name: "painting-room-easel-canvas-back", w: 0.9, h: 1.14, d: 0.018, x: 0, y: 0, z: -0.036, material: M.canvasLinen, parent: canvasMount, cast: false });
+    for (const yOffset of [-0.42, 0.42]) {
+      box({ name: "painting-room-easel-stretcher-horizontal", w: 0.78, h: 0.052, d: 0.055, x: 0, y: yOffset, z: -0.068, material: M.darkWood, parent: canvasMount });
+    }
+    box({ name: "painting-room-easel-stretcher-vertical", w: 0.052, h: 0.96, d: 0.055, x: 0, y: 0, z: -0.068, material: M.darkWood, parent: canvasMount });
+    for (const side of [-1, 1]) {
+      box({ name: "painting-room-easel-rear-brace", w: 0.045, h: 0.74, d: 0.045, x: side * 0.22, y: 0, z: -0.101, rotationZ: side * 0.55, material: M.darkWood, parent: canvasMount });
+    }
+
+    const artId = "work-in-progress-dreaming";
+    const { artTexture, artwork, material: artMaterial } = createArtworkMaterial(artId, 0.9 / 1.14, null, "painting room lights", 0x9f896a);
+    const artPanel = box({ name: "painting-room-easel-art", w: 0.9, h: 1.14, d: 0.008, x: 0, y: 0, z: 0.043, material: artMaterial, parent: canvasMount, cast: false });
+    artPanel.userData.artId = artId;
+    artPanel.userData.title = artwork ? artwork.title : "Unfinished canvas";
+    artPanel.userData.generatedArtwork = Boolean(artTexture);
+    for (const stroke of [
+      [-0.32, 0.3, 0.18, 0.022, -0.22, M.terracotta],
+      [0.27, -0.32, 0.24, 0.018, 0.16, M.velvet],
+      [0.23, 0.43, 0.15, 0.02, -0.34, M.greenRug],
+    ]) {
+      box({ name: "painting-room-easel-wet-paint", w: stroke[2], h: stroke[3], d: 0.009, x: stroke[0], y: stroke[1], z: 0.054, rotationZ: stroke[4], material: stroke[5], parent: canvasMount, cast: false });
+    }
+    physics.addFixedBox(x, floorY + 0.9, z, 0.92, 1.8, 0.9, easelYaw);
+
+    const chairX = x - 0.35;
+    const chairZ = z - 1.25;
+    const chair = addChair(chairX, chairZ, floorY, faceTargetYaw(chairX, chairZ, x, z), M.darkWood);
     chair.name = "painting-room-chair";
     chair.userData.faces = "painting-room-easel";
 
-    const cart = addTable(x + 0.15, z - 2.05, 1.02, 0.48, floorY, 0, M.darkWood);
+    const cart = addTable(x + 0.2, z - 2.85, 1.02, 0.48, floorY, 0, M.darkWood);
     cart.name = "painting-room-paint-cart";
     for (const [index, cx] of [-0.3, -0.08, 0.15, 0.34].entries()) {
       cylinder({ name: "painting-room-paint-pot", radius: 0.07, radiusTop: 0.065, radiusBottom: 0.075, height: 0.16, segments: 12, x: cx, y: 0.94, z: 0, material: [M.velvet, M.greenRug, M.terracotta, M.roseMauve][index], parent: cart, cast: false });
@@ -3604,6 +3654,28 @@
     return texture;
   }
 
+  function createArtworkMaterial(artId, frameAspect, crop, circuitName, fallbackColor) {
+    const artTexture = makeArtworkTexture(portraitTextures.get(artId), frameAspect, crop);
+    const artwork = PORTRAIT_ARTWORKS[artId];
+    const material = new THREE.MeshStandardMaterial({
+      map: artTexture,
+      color: artTexture ? 0xffffff : fallbackColor || 0x2f262c,
+      roughness: 0.84,
+      metalness: 0,
+      emissive: artTexture ? 0xffffff : 0x000000,
+      emissiveMap: artTexture,
+      emissiveIntensity: 0,
+    });
+    portraitPlacements.push({
+      artId: artId || null,
+      title: artwork ? artwork.title : "Unnamed ancestor",
+      loaded: Boolean(artTexture),
+      material,
+      circuitName,
+    });
+    return { artTexture, artwork, material };
+  }
+
   function addPortrait(x, y, z, rotationY, width, height, color, artId, crop, circuitName) {
     const group = new THREE.Group();
     group.name = `portrait-${artId || "procedural-fallback"}`;
@@ -3614,23 +3686,12 @@
     box({ name: "portrait-frame-top", w: width + rail * 2, h: rail, d: 0.09, x: 0, y: height / 2 + rail / 2, z: 0, material: M.brass, parent: group, cast: false });
     box({ name: "portrait-frame-bottom", w: width + rail * 2, h: rail, d: 0.09, x: 0, y: -height / 2 - rail / 2, z: 0, material: M.brass, parent: group, cast: false });
     for (const side of [-1, 1]) box({ name: "portrait-frame-side", w: rail, h: height, d: 0.09, x: side * (width / 2 + rail / 2), y: 0, z: 0, material: M.brass, parent: group, cast: false });
-    const artTexture = makeArtworkTexture(portraitTextures.get(artId), width / height, crop);
-    const artwork = PORTRAIT_ARTWORKS[artId];
-    const artMat = new THREE.MeshStandardMaterial({
-      map: artTexture,
-      color: artTexture ? 0xffffff : color || 0x2f262c,
-      roughness: 0.84,
-      metalness: 0,
-      emissive: artTexture ? 0xffffff : 0x000000,
-      emissiveMap: artTexture,
-      emissiveIntensity: 0,
-    });
+    const { artTexture, artwork, material: artMat } = createArtworkMaterial(artId, width / height, crop, circuitName, color);
     const artPanelName = artId ? `portrait-art-${artId}` : "portrait-art-fallback";
     const artPanel = box({ name: artPanelName, w: width, h: height, d: 0.035, x: 0, y: 0, z: 0.035, material: artMat, parent: group, cast: false });
     artPanel.userData.artId = artId || null;
     artPanel.userData.title = artwork ? artwork.title : "Unnamed ancestor";
     artPanel.userData.generatedArtwork = Boolean(artTexture);
-    portraitPlacements.push({ artId: artId || null, title: artPanel.userData.title, loaded: Boolean(artTexture), material: artMat, circuitName });
     if (!artTexture) {
       sphere({ name: "portrait-face-shadow", radius: Math.min(width, height) * 0.16, widthSegments: 12, heightSegments: 8, x: 0, y: height * 0.12, z: 0.065, material: M.soot, parent: group, cast: false });
       box({ name: "portrait-silhouette", w: width * 0.45, h: height * 0.42, d: 0.02, x: 0, y: -height * 0.22, z: 0.066, material: M.blackWood, parent: group, cast: false });
@@ -3996,6 +4057,16 @@
 
     // Painting room; all three door approaches keep a broad clear aisle.
     addPaintingStudio(9.35, 1.15, FLOOR.MAIN);
+    for (const artwork of [
+      { axis: "z", fixed: 10.4, center: -1.7, centerY: 2.35, side: -1, width: 1.35, height: 0.9, artId: "five-doors", circuitName: "painting room lights" },
+      { axis: "z", fixed: 10.4, center: 0.1, centerY: 2.55, side: -1, width: 0.65, height: 0.95, artId: "arrived-early", circuitName: "painting room lights" },
+      { axis: "z", fixed: 5, center: -1.9, centerY: 2.2, side: 1, width: 1.0, height: 1.35, artId: "moths-guests", circuitName: "painting room lights" },
+      { axis: "z", fixed: 5, center: 1.9, centerY: 2.15, side: 1, width: 0.95, height: 1.25, artId: "polite-eclipse", circuitName: "painting room lights" },
+      { axis: "x", fixed: 3.2, center: 6.15, centerY: 2.2, side: -1, width: 1.0, height: 1.3, artId: "garden-knees", circuitName: "painting room lights" },
+      { axis: "x", fixed: -3.2, center: 6.15, centerY: 2.2, side: 1, width: 1.0, height: 1.3, artId: "choir-floorboards", circuitName: "painting room lights" },
+    ]) {
+      addWallPortrait({ ...artwork, floorY: FLOOR.MAIN, color: 0x242127 });
+    }
 
     // Dining room
     addTable(-9.7, -8.4, 5.6, 1.5, FLOOR.MAIN, 0, M.darkWood);
@@ -6751,6 +6822,9 @@
         music: [10.0, FLOOR.MAIN, 7.7, -Math.PI / 2],
         mainHallBathroom: [-10.0, FLOOR.MAIN, 0, Math.PI / 2],
         painting: [8.2, FLOOR.MAIN, 0, -Math.PI / 2],
+        paintingSouthAisle: [8.2, FLOOR.MAIN, -2.45, Math.PI],
+        paintingWestDoorOutside: [4.2, FLOOR.MAIN, 0, -Math.PI / 2],
+        paintingEaselApproach: [8.0, FLOOR.MAIN, 1.15, -Math.PI / 2],
         dining: [-9.7, FLOOR.MAIN, -8.4, 0],
         kitchen: [6.3, FLOOR.MAIN, -6.1, -0.8],
         ballroom: [0, FLOOR.MAIN, -6.0, 0],
@@ -7071,6 +7145,23 @@
           start: "paintingRoomEastWall",
           actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
           expected: { inBounds: true, grounded: true, room: "PAINTING ROOM", minX: 9.75, maxX: 10.08 },
+        },
+        paintingSouthToMusic: {
+          start: "paintingSouthAisle",
+          actions: [{ yaw: Math.PI, seconds: 3.2 }],
+          openDoors: true,
+          expected: { inBounds: true, grounded: true, room: "MUSIC ROOM", minZ: 3.5, maxZ: 4.9, visitedRooms: ["PAINTING ROOM", "MUSIC ROOM"] },
+        },
+        paintingWestEntry: {
+          start: "paintingWestDoorOutside",
+          actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
+          openDoors: true,
+          expected: { inBounds: true, grounded: true, room: "PAINTING ROOM", minX: 6.3, maxX: 7.6, visitedRooms: ["GRAND STAIR HALL", "PAINTING ROOM"] },
+        },
+        paintingEaselCollision: {
+          start: "paintingEaselApproach",
+          actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
+          expected: { inBounds: true, grounded: true, room: "PAINTING ROOM", minX: 8.5, maxX: 8.95 },
         },
         rearLoungeEntry: {
           start: "rearLoungeEntry",

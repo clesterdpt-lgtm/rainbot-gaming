@@ -29,3 +29,19 @@ These ten original paintings were generated on 2026-07-11 with the built-in Open
 | `generated/portraits/portrait-house-dreams-back-v1-ai.jpg` | *The House That Dreams Back* — upper gallery | Recursive impossible corridor, upward rain from closed umbrellas, watchful carpet motifs, and a brass snail towing an unlit chandelier through the dreaming house. |
 
 The game loads these through a clamp-wrapped sRGB portrait manifest. If a portrait file is unavailable, its frame falls back to the original procedural shadow-ancestor silhouette instead of delaying or breaking the mansion.
+
+## Painting Room atelier collection
+
+These seven original paintings were generated on 2026-07-13 with the built-in OpenAI image-generation workflow for the Painting Room remodel. The set uses a cohesive late-Victorian surreal oil style and stays eerie without graphic violence. Runtime copies are JPEG-compressed at quality 76: six portrait works at 768×1152 and one landscape work at 1152×768.
+
+| Runtime asset | In-world title and final generation brief |
+| --- | --- |
+| `generated/paintings/painting-work-in-progress-dreaming-v1-ai.jpg` | *The Prompt Is Still Dreaming* — a half-resolved aristocratic figure, wrong-facing shadow, exposed linen, charcoal construction, umber wash, and selectively finished oxblood/viridian passages. |
+| `generated/paintings/painting-choir-floorboards-v1-ai.jpg` | *The Choir Beneath the Floorboards* — empty high-backed chairs gathered like a candlelit choir while faint faces appear between broken floorboards. |
+| `generated/paintings/painting-polite-eclipse-v1-ai.jpg` | *A Very Polite Eclipse* — an aristocratic figure bows to a black sun while an independent elongated shadow bows back. |
+| `generated/paintings/painting-five-doors-v1-ai.jpg` | *Five Doors, No Hallway* — five ornate mansion doors stand unsupported in a moonlit field, each opening onto a different dark interior. |
+| `generated/paintings/painting-garden-knees-v1-ai.jpg` | *The Garden Has Too Many Knees* — jointed topiary forms quietly kneel toward an empty stone chair in a walled moonlit garden. |
+| `generated/paintings/painting-moths-guests-v1-ai.jpg` | *Moths Wearing the Guests* — empty formal garments assembled from pale moths sit before untouched silverware at a candlelit banquet. |
+| `generated/paintings/painting-arrived-early-v1-ai.jpg` | *The Portrait That Arrived Early* — an empty velvet chair waits before a curtain already carrying the shadow of its absent sitter. |
+
+Every prompt requested edge-to-edge art with no external frame, text, signature, watermark, gore, violence, real people, or modern objects. The wall collection and unfinished easel canvas share the existing clamped sRGB loader and Painting Room light circuit.

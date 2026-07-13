@@ -139,6 +139,7 @@ const serviceStair = section("function buildServiceStaircase()", "function addRu
 const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
 const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
 const fixtureBuilder = section("addFixture(x, z, style", "// The response glows below", lightCircuitClass);
+const signatureChandelierBuilders = section("function addFoyerGrandChandelier", "function wallSegment(");
 const wallSegmentBuilder = section("function wallSegment(", "function addWindow(");
 const wallTrimSpanBuilder = section("function wallTrimSpans(", "function addContinuousWallTrim(");
 const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
@@ -404,6 +405,15 @@ for (const view of ["kitchenServiceStairDoor", "serviceStairTopLight", "serviceS
 check("16 service-stair door route", /kitchenServiceStairDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?visitedRooms:\s*\["KITCHEN",\s*"SERVICE STAIR"\]/.test(qaHooks), "new basement stair door lacks a physical kitchen-to-landing traversal route");
 check("17 main-stair lights", !/upperLanding\.addFixture\(/.test(lightingBuild), "small upper-landing chandelier still hangs above the main stair");
 check("17 main-stair lights", !/\[-9\.7,\s*0,\s*9\.7\][^\n]*bedroomCorridor\.addFixture/.test(lightingBuild), "second small center chandelier still hangs above the main stair");
+check("17 signature foyer chandelier", /addFoyerGrandChandelier\(foyer,\s*0,\s*7\.7\)/.test(lightingBuild) && !/foyer\.addFixture\(0,\s*7\.7,\s*"atrium"\)/.test(lightingBuild), "generic foyer ring was not replaced by the signature grand chandelier");
+check("17 signature foyer chandelier", /foyer-grand-chandelier-crown/.test(signatureChandelierBuilders) && /\{\s*radius:\s*1\.05,\s*y:\s*ceilingY - 1\.28,\s*bulbs:\s*8\s*\}/.test(signatureChandelierBuilders) && /\{\s*radius:\s*1\.62,\s*y:\s*ceilingY - 2\.08,\s*bulbs:\s*12\s*\}/.test(signatureChandelierBuilders), "foyer chandelier does not have the requested twenty-light two-tier silhouette");
+check("17 signature foyer chandelier", /foyer-grand-chandelier-crystal-drop/.test(signatureChandelierBuilders) && /foyer-grand-chandelier-central-finial/.test(signatureChandelierBuilders), "foyer chandelier lacks its crystal drops or central finial");
+check("17 connected foyer chandelier", /foyer-grand-chandelier-tier-inner-hub/.test(signatureChandelierBuilders) && /const innerHubRadius\s*=\s*tier\.radius \* 0\.35/.test(signatureChandelierBuilders), "foyer chandelier scroll arms do not terminate on a solid inner hub");
+check("17 connected foyer chandelier", /foyer-grand-chandelier-tier-bridge/.test(signatureChandelierBuilders), "foyer chandelier tiers are not visibly tied together");
+check("17 connected foyer chandelier", /foyer-grand-chandelier-crystal-hanger/.test(signatureChandelierBuilders), "foyer chandelier crystal drops are still floating below their ring");
+check("17 signature front chandelier", /addFrontPorticoChandelier\(estateExteriorLights\)/.test(yardBuild) && !/front-portico-downlight/.test(yardBuild), "front entrance still uses a source-less downlight instead of the portico chandelier");
+check("17 signature front chandelier", /front-portico-chandelier-rain-glass/.test(signatureChandelierBuilders) && /front-portico-chandelier-cage-rib/.test(signatureChandelierBuilders) && /front-portico-chandelier-lower-rib/.test(signatureChandelierBuilders), "front portico chandelier lacks its weathered cage or rain-glass body");
+check("17 signature front chandelier", /front-portico-chandelier-spotlight/.test(signatureChandelierBuilders) && /exteriorBudgetPriority\s*=\s*4/.test(signatureChandelierBuilders), "front portico chandelier is not connected to the controlled exterior light budget");
 check("18 attached faucets", /faucet-deck-collar/.test(mansion) && /water-valve-mount/.test(waterClass), "sink and tub controls lack visible mounting hardware");
 check("18 attached shower", /shower-wall-backplate/.test(mansion) && /shower-arm/.test(mansion), "shower head lacks a wall backplate and connecting arm");
 
@@ -682,7 +692,7 @@ check("20 movement-stable light rendering", !/lightWithinStableResidency|lightRe
 check("20 movement-stable light rendering", /nextVisible\s*=\s*rendersInContext\s*&&\s*rendersOnLevel/.test(lightRendering) && /circuit\.on && enclosureOpen/.test(lightRendering), "normal circuit lights are not kept stable for the complete authored floor context with enclosure-gated energy");
 check("20 auxiliary interior lighting", /for \(const light of auxiliaryInteriorLights\)/.test(lightRendering) && /interactionVisible/.test(lightRendering) && /light\.visible = renderContext !== "grounds"/.test(lightRendering), "door-operated cabinet lights are not stable indoors or still displace useful grounds emitters");
 check("20 stable light rendering", !/ownerRoom|rendersInOwnerRoom/.test(lightRendering), "room-name proximity gating can still hide a lit closet or room light while the player moves");
-check("20 exterior light containment", /addPracticalLight\(0,\s*3\.15,\s*14\.5,[\s\S]*?angle:\s*0\.48/.test(yardBuild) && /addRearFacadeWallLantern\([\s\S]*?addWallSconce\([\s\S]*?-14\.15/.test(yardBuild), "front or rear facade fixtures can project through the mansion shell");
+check("20 exterior light containment", /addPracticalLight\(0,\s*3\.05,\s*13\.35,[\s\S]*?contained:\s*true,[\s\S]*?angle:\s*0\.62/.test(signatureChandelierBuilders) && /addRearFacadeWallLantern\([\s\S]*?addWallSconce\([\s\S]*?-14\.15/.test(yardBuild), "front or rear facade fixtures can project through the mansion shell");
 check("20 manual light state", !/\.setState\(|\.toggle\(/.test(updateLocation + exteriorCulling + lightRendering), "room or exterior transitions mutate a light circuit without a switch interaction");
 check("20 lightning containment", /outdoorRoomNames\.has\(state\.currentRoom\)/.test(stormSystem) && /this\.light\.intensity\s*=\s*outdoors\s*\?\s*lightning \* 11\s*:\s*0/.test(stormSystem), "the unshadowed lightning key can still pass through interior walls");
 check("20 real fixture emission", /this\.addContainedSpotLight\(/.test(section("addFixture(x, z, style", "addContainedSpotLight(x, y", lightCircuitClass)), "visible fixtures are not backed by real contained lights");
@@ -866,6 +876,9 @@ check("24 brighter switch-owned fills", hasPracticalFill("westFront", 18, 5.0) &
 for (const view of ["paintingRoomWestWall", "paintingRoomEastWall", "rearLoungeEntry", "primarySuiteLoungeDoor", "eastRearSuiteLoungeDoor"]) {
   check("24 renovation QA views", mansion.includes(`${view}:`), `missing renovation inspection view ${view}`);
 }
+for (const view of ["foyerGrandChandelier", "frontPorticoChandelier"]) {
+  check("24 signature chandelier QA views", mansion.includes(`${view}:`), `missing inspection view ${view}`);
+}
 for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoungeEntry", "primarySuiteLoungeEntry", "eastRearSuiteLoungeEntry"]) {
   check("24 renovation QA routes", qaHooks.includes(`${route}:`), `missing physical renovation route ${route}`);
 }
@@ -873,7 +886,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-lighting-balance-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-connected-foyer-chandelier-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

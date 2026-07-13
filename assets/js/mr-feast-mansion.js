@@ -235,6 +235,7 @@
     libraryB: [-11.5, FLOOR.MAIN, 10.6, -0.72],
     foyerA: [0, FLOOR.MAIN, 10.4, 0],
     foyerB: [-2.7, FLOOR.MAIN, 4.6, -2.47],
+    foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
     musicRoomB: [11.5, FLOOR.MAIN, 10.6, 0.72],
     musicRoomPortrait: [12.0, FLOOR.MAIN, 7.8, -Math.PI / 2],
@@ -372,6 +373,7 @@
     yardTerraceDoorInside: [-0.62, FLOOR.MAIN, -10.35, 0],
     yardServiceDoorInside: [13, FLOOR.MAIN, -10.35, 0],
     yardFacadeFront: [8.0, YARD_LAYOUT.groundY, 17.0, 0, -0.24],
+    frontPorticoChandelier: [0, YARD_LAYOUT.groundY, 16.45, 0, 0.42],
     yardFrontReentry: [0, YARD_LAYOUT.groundY, 13.55, 0, -0.08],
     yardRearReentry: [0, YARD_LAYOUT.groundY, -13.55, Math.PI, -0.08],
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
@@ -2135,6 +2137,161 @@
     }
   }
 
+  function addFoyerGrandChandelier(circuit, x, z) {
+    const ceilingY = FLOOR.UPPER + 3.05;
+    const canopyY = ceilingY - 0.12;
+    cylinder({ name: "foyer-grand-chandelier-canopy", radius: 0.34, radiusTop: 0.22, radiusBottom: 0.38, height: 0.18, segments: 24, x, y: canopyY, z, material: M.brass, cast: false });
+    const crown = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.055, 10, 36), M.brass);
+    crown.name = "foyer-grand-chandelier-crown";
+    crown.position.set(x, ceilingY - 0.38, z);
+    crown.rotation.x = Math.PI / 2;
+    crown.castShadow = true;
+    scene.add(crown);
+    cylinder({ name: "foyer-grand-chandelier-central-stem", radius: 0.045, height: 2.48, segments: 14, x, y: ceilingY - 1.38, z, material: M.brass, cast: false });
+
+    const tiers = [
+      { radius: 1.05, y: ceilingY - 1.28, bulbs: 8 },
+      { radius: 1.62, y: ceilingY - 2.08, bulbs: 12 },
+    ];
+    const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffe0ad, emissive: 0xffa84f, emissiveIntensity: circuit.on ? 1.35 : 0, roughness: 0.24 });
+    tiers.forEach((tier, tierIndex) => {
+      const innerHubRadius = tier.radius * 0.35;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(tier.radius, tierIndex === 0 ? 0.045 : 0.06, 9, 48), M.brass);
+      ring.name = `foyer-grand-chandelier-tier-${tierIndex + 1}`;
+      ring.position.set(x, tier.y, z);
+      ring.rotation.x = Math.PI / 2;
+      ring.castShadow = tierIndex === 1;
+      scene.add(ring);
+      const innerHub = new THREE.Mesh(new THREE.TorusGeometry(innerHubRadius, tierIndex === 0 ? 0.036 : 0.044, 8, 32), M.brass);
+      innerHub.name = "foyer-grand-chandelier-tier-inner-hub";
+      innerHub.position.set(x, tier.y - 0.04, z);
+      innerHub.rotation.x = Math.PI / 2;
+      innerHub.castShadow = false;
+      scene.add(innerHub);
+      cylinder({ name: "foyer-grand-chandelier-tier-collar", radius: tierIndex === 0 ? 0.12 : 0.15, height: 0.13, segments: 18, x, y: tier.y - 0.04, z, material: M.brass, cast: false });
+      for (let i = 0; i < tier.bulbs; i += 1) {
+        const angle = (i / tier.bulbs) * Math.PI * 2 + (tierIndex ? Math.PI / tier.bulbs : 0);
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const cupX = x + cos * tier.radius;
+        const cupZ = z + sin * tier.radius;
+        addBeamBetween("foyer-grand-chandelier-scroll-arm", [x + cos * innerHubRadius, tier.y - 0.04, z + sin * innerHubRadius], [cupX, tier.y + 0.02, cupZ], 0.024, M.brass);
+        cylinder({ name: "foyer-grand-chandelier-candle-cup", radius: tierIndex ? 0.105 : 0.09, radiusTop: tierIndex ? 0.11 : 0.095, radiusBottom: 0.055, height: 0.11, segments: 16, x: cupX, y: tier.y + 0.06, z: cupZ, material: M.brass, cast: false });
+        cylinder({ name: "foyer-grand-chandelier-candle", radius: 0.04, height: 0.2, segments: 12, x: cupX, y: tier.y + 0.19, z: cupZ, material: M.porcelain, cast: false });
+        const bulb = sphere({ name: "foyer-grand-chandelier-bulb", radius: tierIndex ? 0.085 : 0.075, x: cupX, y: tier.y + 0.34, z: cupZ, material: bulbMaterial, cast: false });
+        bulb.userData.onEmissiveIntensity = 1.35;
+        bulb.userData.levels = new Set(circuit.levels);
+        circuit.bulbs.push(bulb);
+        if (tierIndex === 1) {
+          const dropX = x + cos * tier.radius * 0.84;
+          const dropZ = z + sin * tier.radius * 0.84;
+          addBeamBetween("foyer-grand-chandelier-crystal-hanger", [dropX, tier.y - 0.015, dropZ], [dropX, tier.y - 0.11, dropZ], 0.009, M.brass);
+          cylinder({ name: "foyer-grand-chandelier-crystal-drop", radiusTop: 0.012, radiusBottom: 0.075, height: 0.26, segments: 10, x: dropX, y: tier.y - 0.24, z: dropZ, material: M.frostedShade, cast: false });
+        }
+      }
+    });
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      addBeamBetween(
+        "foyer-grand-chandelier-tier-bridge",
+        [x + Math.cos(angle) * tiers[0].radius * 0.35, tiers[0].y - 0.05, z + Math.sin(angle) * tiers[0].radius * 0.35],
+        [x + Math.cos(angle) * tiers[1].radius * 0.35, tiers[1].y + 0.05, z + Math.sin(angle) * tiers[1].radius * 0.35],
+        0.014,
+        M.brass,
+      );
+    }
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      addBeamBetween(
+        "foyer-grand-chandelier-suspension-chain",
+        [x + Math.cos(angle) * 0.34, ceilingY - 0.38, z + Math.sin(angle) * 0.34],
+        [x + Math.cos(angle) * tiers[0].radius, tiers[0].y, z + Math.sin(angle) * tiers[0].radius],
+        0.018,
+        M.brass,
+      );
+    }
+    sphere({ name: "foyer-grand-chandelier-central-crystal", radius: 0.19, x, y: ceilingY - 2.35, z, material: M.frostedShade, cast: false });
+    cylinder({ name: "foyer-grand-chandelier-central-finial", radiusTop: 0.018, radiusBottom: 0.11, height: 0.38, segments: 12, x, y: ceilingY - 2.65, z, material: M.brass, cast: false });
+    circuit.addCeilingResponseGlow(x, ceilingY - 0.02, z, 3.0, 0.3);
+    circuit.addSourceHalo(x, tiers[1].y + 0.2, z, 3.1, 0.27);
+    const light = circuit.addContainedSpotLight(
+      x,
+      tiers[1].y - 0.05,
+      z,
+      380,
+      14.5,
+      0.85,
+      Array.from(circuit.levels),
+      FLOOR.MAIN + 0.04,
+      true,
+    );
+    light.name = `${circuit.name}-room-bounded-spotlight`;
+    light.userData.authoredReach = 14.5;
+    light.penumbra = 0.62;
+    light.userData.roomBounded = true;
+    light.userData.fixtureStyle = "signature-atrium";
+    light.userData.fixtureRole = "primary";
+    light.userData.visibleFixtureEmitter = true;
+    return light;
+  }
+
+  function addFrontPorticoChandelier(circuit) {
+    const x = 0;
+    const z = 13.35;
+    const canopyY = 3.82;
+    const crownY = 3.38;
+    const ringY = 2.88;
+    cylinder({ name: "front-portico-chandelier-canopy", radius: 0.25, radiusTop: 0.17, radiusBottom: 0.29, height: 0.15, segments: 18, x, y: canopyY, z, material: M.iron, cast: false });
+    cylinder({ name: "front-portico-chandelier-chain", radius: 0.025, height: 0.48, segments: 10, x, y: 3.57, z, material: M.iron, cast: false });
+    const crown = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.045, 8, 28), M.brass);
+    crown.name = "front-portico-chandelier-crown";
+    crown.position.set(x, crownY, z);
+    crown.rotation.x = Math.PI / 2;
+    crown.castShadow = false;
+    scene.add(crown);
+    const cageRing = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.035, 8, 36), M.iron);
+    cageRing.name = "front-portico-chandelier-cage-ring";
+    cageRing.position.set(x, ringY, z);
+    cageRing.rotation.x = Math.PI / 2;
+    cageRing.castShadow = true;
+    scene.add(cageRing);
+    const rainGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.58, 0.74, 6, 1, true), M.frostedShade);
+    rainGlass.name = "front-portico-chandelier-rain-glass";
+    rainGlass.position.set(x, 3.02, z);
+    rainGlass.rotation.y = Math.PI / 6;
+    rainGlass.castShadow = false;
+    rainGlass.receiveShadow = false;
+    scene.add(rainGlass);
+    const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffd7a0, emissive: 0xff9d42, emissiveIntensity: circuit.on ? 1.2 : 0, roughness: 0.3 });
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (i / 6) * Math.PI * 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const outerX = x + cos * 0.68;
+      const outerZ = z + sin * 0.68;
+      addBeamBetween("front-portico-chandelier-cage-rib", [x + cos * 0.3, crownY, z + sin * 0.3], [outerX, ringY, outerZ], 0.022, M.iron);
+      addBeamBetween("front-portico-chandelier-lower-rib", [outerX, ringY, outerZ], [x + cos * 0.16, 2.52, z + sin * 0.16], 0.022, M.iron);
+      const candleX = x + cos * 0.47;
+      const candleZ = z + sin * 0.47;
+      cylinder({ name: "front-portico-chandelier-candle-cup", radius: 0.085, radiusTop: 0.09, radiusBottom: 0.05, height: 0.1, segments: 14, x: candleX, y: ringY + 0.05, z: candleZ, material: M.brass, cast: false });
+      cylinder({ name: "front-portico-chandelier-candle", radius: 0.035, height: 0.17, segments: 10, x: candleX, y: ringY + 0.17, z: candleZ, material: M.porcelain, cast: false });
+      const bulb = sphere({ name: "front-portico-chandelier-bulb", radius: 0.065, x: candleX, y: ringY + 0.3, z: candleZ, material: bulbMaterial, cast: false });
+      bulb.userData.onEmissiveIntensity = 1.2;
+      bulb.userData.levels = new Set(["MAIN LEVEL"]);
+      circuit.bulbs.push(bulb);
+    }
+    sphere({ name: "front-portico-chandelier-bottom-orb", radius: 0.11, x, y: 2.49, z, material: M.brass, cast: false });
+    cylinder({ name: "front-portico-chandelier-finial", radiusTop: 0.01, radiusBottom: 0.08, height: 0.24, segments: 10, x, y: 2.31, z, material: M.iron, cast: false });
+    circuit.addSourceHalo(x, 3.14, z, 1.55, 0.24);
+    const light = circuit.addPracticalLight(0, 3.05, 13.35, 76, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.62, targetY: YARD_LAYOUT.groundY, castsShadow: false });
+    light.name = "front-portico-chandelier-spotlight";
+    light.userData.fixtureRole = "front-portico-chandelier";
+    light.userData.visibleFixtureEmitter = true;
+    light.userData.exteriorBudgetPriority = 4;
+    yardState.featureCounts.exteriorLamps += 1;
+    return light;
+  }
+
   function wallSegment(axis, fixed, start, end, floorY, height, material, name) {
     const length = end - start;
     if (length <= 0.04) return null;
@@ -3629,7 +3786,7 @@
   function buildLighting() {
     const foyer = new LightCircuit("foyer chandelier", FLOOR.UPPER, 0xffc47a, true);
     foyer.addLevel("MAIN LEVEL");
-    foyer.addFixture(0, 7.7, "atrium");
+    addFoyerGrandChandelier(foyer, 0, 7.7);
     // An omnidirectional fill floating at chandelier height carries light to
     // the balcony rail, the upper walls, and the void — the double-height
     // volume reads lit in every direction, not just in a downward shaft.
@@ -4620,10 +4777,7 @@
     ];
     for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
     finalizeEstateLanterns(estateExteriorLights, lanterns);
-    const frontPorticoLight = estateExteriorLights.addPracticalLight(0, 3.15, 14.5, 72, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.48, targetY: YARD_LAYOUT.groundY, castsShadow: false });
-    frontPorticoLight.name = "front-portico-downlight";
-    frontPorticoLight.userData.fixtureRole = "primary";
-    frontPorticoLight.userData.exteriorBudgetPriority = 4;
+    addFrontPorticoChandelier(estateExteriorLights);
     const fountainLight = estateExteriorLights.addPracticalLight(-25, YARD_LAYOUT.groundY + 2.52, 10, 58, 10.5, ["MAIN LEVEL"]);
     fountainLight.name = "garden-fountain-crown-lantern-light";
     fountainLight.userData.visibleFixtureEmitter = true;

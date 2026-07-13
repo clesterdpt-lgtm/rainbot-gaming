@@ -111,6 +111,8 @@
   const MOBILE_UPPER_AMBIENT_CIRCUITS = new Set([
     "foyer chandelier", "grand stair lights", "upper landing lights",
   ]);
+  const MOBILE_SHADER_SPOT_BUDGET = 6;
+  const MOBILE_SHADER_POINT_BUDGET = 11;
   const MOBILE_CIRCUIT_INTENSITY_SCALE = 2;
   const MOBILE_UPPER_AMBIENT_SCALE = 2.2;
   const PORTRAIT_ARTWORKS = Object.freeze({
@@ -470,6 +472,7 @@
   const lightningMaterials = [];
   const yardWaterSystems = [];
   const auxiliaryInteriorLights = [];
+  const mobileShaderPaddingLights = { spots: [], points: [] };
   const fadingLights = new Set();
   const fadingBulbs = new Set();
   // Every opening in the mansion shell the storm can be heard through:
@@ -5632,10 +5635,56 @@
       light.visible = true;
       light.intensity = light.visible && !allCircuitsOff && interactionVisible ? light.userData.baseIntensity : 0;
     }
+    syncMobileShaderPadding();
     // Shadow caching is static between interactions. A newly visible upper
     // closet or floor-local chandelier therefore requests exactly one refresh
     // rather than silently using an uninitialized map.
     if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
+  }
+
+  function ensureMobileShaderPadding() {
+    if (mobileShaderPaddingLights.spots.length || mobileShaderPaddingLights.points.length) return;
+    for (let i = 0; i < MOBILE_SHADER_SPOT_BUDGET; i += 1) {
+      const light = new THREE.SpotLight(0x000000, 0, 0, Math.PI / 3, 0, 2);
+      light.name = `mobile-shader-padding-spot-${i + 1}`;
+      light.position.set(0, -100, 0);
+      light.target.position.set(0, -101, 0);
+      light.castShadow = false;
+      light.visible = false;
+      scene.add(light, light.target);
+      mobileShaderPaddingLights.spots.push(light);
+    }
+    for (let i = 0; i < MOBILE_SHADER_POINT_BUDGET; i += 1) {
+      const light = new THREE.PointLight(0x000000, 0, 0, 2);
+      light.name = `mobile-shader-padding-point-${i + 1}`;
+      light.position.set(0, -100, 0);
+      light.castShadow = false;
+      light.visible = false;
+      scene.add(light);
+      mobileShaderPaddingLights.points.push(light);
+    }
+  }
+
+  function syncMobileShaderPadding() {
+    if (!state.mobileRenderProfile) {
+      for (const light of [...mobileShaderPaddingLights.spots, ...mobileShaderPaddingLights.points]) light.visible = false;
+      return;
+    }
+    ensureMobileShaderPadding();
+    const visibleSpotLights = circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
+      + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length;
+    const visiblePointLights = circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
+      + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length;
+    const requiredSpots = Math.max(0, MOBILE_SHADER_SPOT_BUDGET - visibleSpotLights);
+    const requiredPoints = Math.max(0, MOBILE_SHADER_POINT_BUDGET - visiblePointLights);
+    mobileShaderPaddingLights.spots.forEach((light, index) => {
+      light.visible = index < requiredSpots;
+      light.intensity = 0;
+    });
+    mobileShaderPaddingLights.points.forEach((light, index) => {
+      light.visible = index < requiredPoints;
+      light.intensity = 0;
+    });
   }
 
   function updatePlayer(fixedDt) {
@@ -5857,12 +5906,20 @@
         mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? 1 : null,
         mobileUpperStableLighting: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR",
         mobileUpperAmbientScale: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? MOBILE_UPPER_AMBIENT_SCALE : 1,
-        shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0),
+        shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0)
+          + mobileShaderPaddingLights.spots.filter((light) => light.visible).length
+          + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible).length,
         shaderSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
-          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length,
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length
+          + mobileShaderPaddingLights.spots.filter((light) => light.visible).length,
         shaderPointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
-          + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length,
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length
+          + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
+        shaderPaddingLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length
+          + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
+        shaderSpotBudget: state.mobileRenderProfile ? MOBILE_SHADER_SPOT_BUDGET : null,
+        shaderPointBudget: state.mobileRenderProfile ? MOBILE_SHADER_POINT_BUDGET : null,
         crossFloorFade: {
           fadingLights: fadingLights.size,
           fadingBulbs: fadingBulbs.size,

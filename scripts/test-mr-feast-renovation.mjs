@@ -145,6 +145,7 @@ const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
 const lightRendering = section("function syncLightRendering(", "function updatePlayer(");
+const mobileShaderPadding = section("function ensureMobileShaderPadding()", "function updatePlayer(");
 const lightingBuild = section("function buildLighting()", "function registerRoomZones()");
 const serviceStairLighting = section('const serviceStair = new LightCircuit("service stair lights"', "const basementHall", lightingBuild);
 const yardLayout = section("const YARD_LAYOUT", "const HEDGE_MAZE_LAYOUT");
@@ -652,6 +653,10 @@ check("31 startup shader safety", !/function prewarmLightingPrograms\(\)/.test(m
 check("31 mobile startup GPU budget", /startupSafeGpuProfile/.test(mansion) && /antialias:\s*!startupSafeGpuProfile/.test(mansion) && /renderer\.shadowMap\.enabled\s*=\s*!startupSafeGpuProfile/.test(mansion) && /moon\.castShadow\s*=\s*renderer\.shadowMap\.enabled/.test(initSequence), "phone startup still allocates desktop antialias and shadow buffers");
 check("31 WebGL context-loss recovery", /webglcontextlost/.test(mansion) && /event\.preventDefault\(\)/.test(mansion) && /showLoadFailure\("The mansion ran out of graphics memory/.test(mansion) && /if \(state\.contextLost\) return/.test(animationLoop) && /rendererContextAttributes/.test(diagnostics), "a WebGL memory loss does not stop rendering cleanly or can leave the loading screen stuck without an actionable retry");
 check("31 startup diagnostics", /startupPhase:/.test(diagnostics) && /startupReadyMs:/.test(diagnostics) && /startupSafeGpuProfile:/.test(diagnostics), "startup phase, time, and safe-GPU selection are not visible to runtime QA");
+check("31 mobile constant shader budget", /MOBILE_SHADER_SPOT_BUDGET = 6/.test(mansion) && /MOBILE_SHADER_POINT_BUDGET = 11/.test(mansion), "mobile floors do not share a fixed spot/point shader shape");
+check("31 mobile shader padding lights", /new THREE\.SpotLight\(0x000000,\s*0,\s*0/.test(mobileShaderPadding) && /new THREE\.PointLight\(0x000000,\s*0,\s*0/.test(mobileShaderPadding) && /castShadow = false/.test(mobileShaderPadding), "zero-energy mobile padding lights are not available to stabilize the shader program");
+check("31 mobile shader padding sync", /function syncMobileShaderPadding\(\)/.test(mobileShaderPadding) && /MOBILE_SHADER_SPOT_BUDGET - visibleSpotLights/.test(mobileShaderPadding) && /MOBILE_SHADER_POINT_BUDGET - visiblePointLights/.test(mobileShaderPadding) && /syncMobileShaderPadding\(\)/.test(lightRendering), "mobile floor handoff does not pad spot and point slots to constant counts");
+check("31 mobile shader padding diagnostics", /shaderPaddingLights:/.test(diagnostics) && /shaderSpotBudget:/.test(diagnostics) && /shaderPointBudget:/.test(diagnostics), "QA cannot observe the constant mobile shader padding budget");
 check("31 raw frame diagnostics", /const rawDt = clock\.getDelta\(\)/.test(mansion) && /state\.frameTime = rawDt \* 1000/.test(mansion) && /fpsElapsed \+= rawDt/.test(mansion), "FPS diagnostics still hide slow frames behind the simulation delta clamp");
 check("31 inactive preview budget", /const PRE_ENTRY_FRAME_INTERVAL_MS = 250/.test(mansion) && /!state\.started && !state\.qa/.test(animationLoop) && /frameNow - lastAnimationFrameAt < targetFrameInterval/.test(animationLoop), "the unopened mansion still renders at full refresh and can monopolize the surrounding website");
 check("31 balanced frame budget", /const BALANCED_FRAME_INTERVAL_MS = 1000 \/ 30/.test(mansion) && /state\.mobileRenderProfile \|\| state\.renderQuality === "reduced"/.test(animationLoop), "mobile and reduced-quality sessions do not cap the expensive render loop at 30 FPS");
@@ -837,7 +842,7 @@ check("28 response glow is decorative", !/new THREE\.(?:SpotLight|PointLight)/.t
 check("28 cross-floor fade", /if \(floorContextChanged\) syncLightRendering\(state\.mobileRenderProfile \? undefined : "fade"\)/.test(updateLocation), "desktop floor-context changes no longer request a faded light handover or mobile no longer snaps to its bounded layout");
 check("28 cross-floor fade", /transition === "fade" && !state\.qa/.test(lightRendering) && /updateLightTransitions\(dt\)/.test(mansion) && /LIGHT_FADE_OUT_RATE/.test(mansion), "cross-floor fades are missing or QA captures are no longer deterministic snaps");
 check("28 stairwell continuity", count(lightingBuild, /\["MAIN LEVEL", "SECOND FLOOR"\]/g) >= 6 && count(lightingBuild, /\["SECOND FLOOR", "MAIN LEVEL"\]/g) >= 3 && /upperLanding\.addLevel\("MAIN LEVEL"\)/.test(lightingBuild) && /serviceStair\.addLevel\("BASEMENT"\)/.test(lightingBuild), "fixtures in the open stair volumes can still hand over mid-climb");
-check("28 shader compilation is on demand", !/renderer\.compile\(scene, camera\)/.test(lightRendering) && /state\.ready\s*=\s*true[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*requestAnimationFrame\(animate\)\)/.test(initSequence), "startup does not yield a browser paint before the first visible shader compiles on demand");
+check("28 shader compilation is on demand", !/renderer\.compile\(scene, camera\)/.test(lightRendering) && /state\.ready\s*=\s*true[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*requestAnimationFrame\(animate\)\)/.test(initSequence), "startup does not yield a browser paint before the one stable mobile shader compiles on demand");
 check("28 switch-stable light loop", /light\.visible = placed \|\| data\.renderFactor > 0\.004/.test(mansion), "a wall switch can restructure the shader light loop instead of only zeroing intensity");
 
 const hasPracticalFill = (owner, minIntensity, minDistance) => methodCalls(owner, "addPracticalLight", lightingBuild)
@@ -856,7 +861,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-startup-safe-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-floor-transition-stable-lights-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

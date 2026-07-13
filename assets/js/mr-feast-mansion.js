@@ -92,7 +92,7 @@
     "BASEMENT CORRIDOR": ["basement corridor lights"],
     "LAUNDRY & LINEN": ["laundry lights"],
     "PANTRY": ["pantry store lights"],
-    "SERVICE STAIR": ["service stair upper light", "service stair lower light"],
+    "SERVICE STAIR": ["service stair lights"],
     "REAR CROSS-CORRIDOR": ["rear service corridor lights"],
     "BOILER ROOM": ["boiler room lights"],
     "WORKSHOP": ["workshop lights"],
@@ -234,6 +234,9 @@
     kitchenFridge: [8.0, FLOOR.MAIN, -9.65, 0],
     kitchenPantry: [7.0, FLOOR.MAIN, -10.55, Math.PI / 2],
     kitchenDishHutch: [12.45, FLOOR.MAIN, -10.35, -Math.PI / 2],
+    kitchenServiceStairDoor: [12.55, FLOOR.MAIN, -5.75, Math.PI],
+    serviceStairTopLight: [14.0, FLOOR.MAIN, -1.2, 0.95, 0.6],
+    serviceStairTopSwitch: [14.0, FLOOR.MAIN, -2.2, 0.32, -0.52],
 
     westFrontSuiteA: [-6.4, FLOOR.UPPER, 4.7, 2.31],
     westFrontSuiteB: [-13.0, FLOOR.UPPER, 10.6, -0.86],
@@ -293,6 +296,8 @@
     serviceStairA: [12.55, FLOOR.BASEMENT, 2.72, 0, 0.24],
     serviceStairB: [12.55, FLOOR.MAIN, -3.05, Math.PI, -0.45],
     serviceStairTopOblique: [10.95, FLOOR.MAIN, -2.05, -2.55, -0.5],
+    serviceStairBottomLight: [12.55, FLOOR.BASEMENT, 2.9, Math.PI, 0.5],
+    serviceStairBottomSwitch: [13.1, FLOOR.BASEMENT, 3.6, -0.87, -0.27],
     rearCrossCorridorA: [-13.2, FLOOR.BASEMENT, -4.05, -Math.PI / 2],
     rearCrossCorridorB: [13.2, FLOOR.BASEMENT, -4.05, Math.PI / 2],
     boilerRoomA: [-13.5, FLOOR.BASEMENT, -5.8, -0.9],
@@ -1514,8 +1519,9 @@
       circuits.push(this);
     }
 
-    addFixture(x, z, style) {
-      const ceilingY = this.floorY + (this.floorY === FLOOR.UPPER ? 3.05 : 3.72);
+    addFixture(x, z, style, floorYOverride) {
+      const fixtureFloorY = floorYOverride == null ? this.floorY : floorYOverride;
+      const ceilingY = fixtureFloorY + (fixtureFloorY === FLOOR.UPPER ? 3.05 : 3.72);
       const isGrand = style === "grand" || style === "atrium";
       const profiles = {
         // Reach scales with the visible fixture: the two-storey chandeliers
@@ -1642,7 +1648,7 @@
           profile.distance,
           profile.angle,
           Array.from(this.levels),
-          this.floorY + 0.04,
+          fixtureFloorY + 0.04,
           false,
         );
         light.name = `${this.name}-room-bounded-spotlight`;
@@ -3274,6 +3280,11 @@
     ] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -5, end: 5, floorY: FLOOR.MAIN, name: "main-stair-gallery", openings: [{ kind: "arch", center: 0, width: 5.6, height: 3.1 }] });
     buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 11.3, floorY: FLOOR.MAIN, name: "main-painting-gallery", openings: [{ kind: "door", center: 8.2, width: 1.15, label: "painting gallery door", direction: 1 }] });
+    // Close the kitchen off from the basement stair while keeping the landing
+    // safe: the leaf swings south into the kitchen, never over the flight.
+    buildWallRun({ axis: "x", fixed: -3.2, start: 11.3, end: 15, floorY: FLOOR.MAIN, name: "main-kitchen-service-stair-wall", openings: [
+      { kind: "door", center: 12.55, width: 1.35, label: "basement stair door", direction: 1, hingeSide: -1 },
+    ] });
     buildWallRun({ axis: "z", fixed: 10.4, start: -3.2, end: 3.2, floorY: FLOOR.MAIN, name: "main-service-shaft-wall", openings: [] });
     buildWallRun({ axis: "z", fixed: -11.5, start: -3.2, end: 1.6, floorY: FLOOR.MAIN, name: "main-bath-east-wall", openings: [] });
     buildWallRun({ axis: "x", fixed: 1.6, start: -15, end: -11.5, floorY: FLOOR.MAIN, name: "main-bath-north-wall", openings: [] });
@@ -3593,16 +3604,14 @@
     eastRear.addWallSconce(8.35, FLOOR.UPPER + 1.9, -3.361, Math.PI, 27, 5.0, ["SECOND FLOOR"], 8.35, FLOOR.UPPER + 0.65, -6.1);
     eastRear.addSwitch(5.161, FLOOR.UPPER + 1.15, -5.2, Math.PI / 2);
 
-    const serviceUpper = new LightCircuit("service stair upper light", FLOOR.MAIN, 0xffb06a, true);
-    serviceUpper.addLevel("BASEMENT");
-    // Visible up the open service-stair shaft from the basement flight.
-    serviceUpper.addPracticalLight(12.55, FLOOR.MAIN + 3.3, -2.25, 10, 4.8, ["MAIN LEVEL", "BASEMENT"], { contained: true, angle: 0.32 });
-    serviceUpper.addSwitch(10.561, FLOOR.MAIN + 1.15, -1.25, Math.PI / 2);
-
-    const serviceLower = new LightCircuit("service stair lower light", FLOOR.BASEMENT, 0xff9f51, true);
-    serviceLower.addLevel("MAIN LEVEL");
-    serviceLower.addFixture(12.55, 2.4, "corridor");
-    serviceLower.addSwitch(14.839, FLOOR.BASEMENT + 1.15, 2.4, -Math.PI / 2);
+    // One two-way circuit owns both visible stair fixtures. Either physical
+    // switch therefore changes the top and bottom lights together.
+    const serviceStair = new LightCircuit("service stair lights", FLOOR.MAIN, 0xffa75a, true);
+    serviceStair.addLevel("BASEMENT");
+    serviceStair.addFixture(12.55, -2.25, "corridor", FLOOR.MAIN);
+    serviceStair.addFixture(12.55, 4.4, "corridor", FLOOR.BASEMENT);
+    serviceStair.addSwitch(13.72, FLOOR.MAIN + 1.15, -3.039, 0);
+    serviceStair.addSwitch(14.839, FLOOR.BASEMENT + 1.15, 2.4, -Math.PI / 2);
 
     const basementHall = new LightCircuit("basement corridor lights", FLOOR.BASEMENT, 0xffa254, true);
     for (const z of [-0.6, 4.45, 9.5]) basementHall.addFixture(0, z, "corridor");
@@ -6301,13 +6310,23 @@
           actions: [{ yaw: -Math.PI / 2, seconds: 4.4 }],
           expected: { grounded: true, room: "ARCHIVE", minX: 12.1, maxX: 13.2, minZ: 6.75, maxZ: 7.65 },
         },
+        kitchenServiceStairDoorEntry: {
+          start: "kitchenServiceStairDoor",
+          actions: [{ yaw: Math.PI, seconds: 1.9 }],
+          openDoors: true,
+          expected: { grounded: true, room: "SERVICE STAIR", minZ: -2.5, maxZ: -1.6, visitedRooms: ["KITCHEN", "SERVICE STAIR"] },
+        },
         serviceDown: {
           start: "serviceTop",
-          actions: [{ yaw: Math.PI, seconds: 3.4 }],
+          actions: [{ yaw: Math.PI, seconds: 3.6 }],
+          openDoors: true,
+          expected: { grounded: true, room: "ARCHIVE", minZ: 3.8, maxZ: 4.8, visitedRooms: ["SERVICE STAIR", "ARCHIVE"] },
         },
         serviceUp: {
           start: "serviceBottom",
-          actions: [{ yaw: 0, seconds: 4.2 }],
+          actions: [{ yaw: 0, seconds: 5.7 }],
+          openDoors: true,
+          expected: { grounded: true, room: "KITCHEN", minZ: -7.0, maxZ: -5.7, visitedRooms: ["SERVICE STAIR", "KITCHEN"] },
         },
       };
       const route = routes[name];

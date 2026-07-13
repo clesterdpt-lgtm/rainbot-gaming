@@ -138,6 +138,7 @@ const exteriorWalls = section("function buildExteriorWalls()", "function buildMa
 const serviceStair = section("function buildServiceStaircase()", "function addRug(");
 const rearGuard = section("function buildRearUpperWalkwayGuard()", "function buildServiceStaircase()");
 const lightCircuitClass = section("class LightCircuit", "function wallSegment(");
+const fixtureBuilder = section("addFixture(x, z, style", "// The response glows below", lightCircuitClass);
 const wallSegmentBuilder = section("function wallSegment(", "function addWindow(");
 const wallTrimSpanBuilder = section("function wallTrimSpans(", "function addContinuousWallTrim(");
 const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
@@ -145,8 +146,10 @@ const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(")
 const updateLocation = section("function updateLocation()", "function findInteraction()");
 const lightRendering = section("function syncLightRendering(", "function updatePlayer(");
 const lightingBuild = section("function buildLighting()", "function registerRoomZones()");
+const serviceStairLighting = section('const serviceStair = new LightCircuit("service stair lights"', "const basementHall", lightingBuild);
 const yardLayout = section("const YARD_LAYOUT", "const HEDGE_MAZE_LAYOUT");
 const mazeLayout = section("const HEDGE_MAZE_LAYOUT", "const QA_ROOM_VIEWS");
+const qaRoomViews = section("const QA_ROOM_VIEWS", "const state");
 const yardBuild = section("function buildEstateYard()", "function buildExteriorScene()");
 const exteriorBuild = section("function buildExteriorScene()", "function buildMansion()");
 const diagnostics = section("function getDiagnostics()", "function teleport(");
@@ -167,6 +170,7 @@ const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSl
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
+const kitchenServiceStairWall = namedWallRun("main-kitchen-service-stair-wall", mainPartitions);
 const kitchenBallroomPartialWall = namedWallRun("main-kitchen-ballroom-partial-wall", mainPartitions);
 const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
 const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
@@ -303,7 +307,6 @@ const pantryFrontEdge = -10.55 + 1.65 / 2;
 const partitionPastPantry = kitchenPartitionEnd - pantryFrontEdge;
 check("9 kitchen-ballroom partial wall", kitchenBallroomOpeningWidth >= 3.0, "kitchen-ballroom opening is narrower than three metres");
 check("9 kitchen-ballroom partial wall", partitionPastPantry >= 1.2 && partitionPastPantry <= 1.8, "partition does not extend a few feet past the pantry cabinet");
-check("9 open-concept rear", !mainPartitions.includes('name: "main-rear-service-enclosure"'), "service-stair enclosure still divides the kitchen from the stair landing");
 check("9 open-concept rear", /name:\s*"main-stair-gallery"[^;]*kind:\s*"arch"/s.test(mainPartitions), "grand stair does not retain an open arch directly toward the ballroom");
 
 // 10. Kitchen storage must be recognizable, interactable, and visibly stocked.
@@ -323,6 +326,9 @@ check("11 service-stair finish", !/stairStep\(/.test(serviceStair), "service sta
 check("11 service-stair rails", /service-stair-handrail/.test(serviceStair) && /service-stair-guard/.test(serviceStair), "service stair lacks aligned sloped handrails and physics guards");
 check("11 service-stair rails", !serviceStair.includes('"service-main-rail"'), "old floating horizontal service-main-rail still exists");
 check("11 service-stair separation", serviceShaftWall.length > 0 && /openings:\s*\[\s*\]/s.test(serviceShaftWall), "main-floor service stair is not separated from the painting room by a solid wall");
+check("11 kitchen/service-stair door", kitchenServiceStairWall.length > 0, "missing wall between the kitchen and basement stair landing");
+check("11 kitchen/service-stair door", /axis:\s*"x",\s*fixed:\s*-3\.2,\s*start:\s*11\.3,\s*end:\s*15/.test(kitchenServiceStairWall), "kitchen/service-stair wall does not close the remaining boundary gap");
+check("11 kitchen/service-stair door", /kind:\s*"door",\s*center:\s*12\.55,\s*width:\s*1\.35,\s*label:\s*"basement stair door",\s*direction:\s*1,\s*hingeSide:\s*-1/.test(kitchenServiceStairWall), "basement stair door is missing, misaligned, or swings toward the flight");
 check("11 service-stair doors", !basementPartitions.includes('name: "basement-service-shaft"'), "basement service-stair still has a redundant divider wall");
 check("11 service-stair sightline", !/name:\s*"rain-soaked-grounds"\s*,\s*w:\s*92[^;]*d:\s*92/.test(mansion), "a single outdoor ground slab still passes visually through the mansion");
 check("11 service-stair sightline", ["front", "rear", "west", "east"].every((side) => mansion.includes(`rain-soaked-grounds-${side}`)), "exterior ground must be cut into four slabs around the foundation footprint");
@@ -356,9 +362,9 @@ check("lighting closet coverage", /new THREE\.SpotLight\(0xffb873/.test(cabinetC
 check("25 closet shadow budget", /closetLight\.castShadow\s*=\s*supportsFullRoomShadowSet/.test(cabinetClass), "walk-in closet lights still allocate cube-map or low-sampler shadows");
 check("lighting full blackout", /turnOffAllLights[\s\S]*for \(const circuit of circuits\) circuit\.setState\(false, true\)/.test(mansion), "global lights-out does not disable every circuit");
 
-// Follow-up architectural cleanup: the service stair remains open to the
-// kitchen and basement, but the former painting-room portals are now sealed.
-check("13 kitchen/service-stair opening", !mainPartitions.includes('name: "main-rear-service-enclosure"'), "wall between the kitchen and service-stair landing still exists");
+// The main landing is enclosed from the kitchen by a hinged door while the
+// former painting-room portals remain sealed.
+check("13 kitchen/service-stair enclosure", kitchenServiceStairWall.length > 0 && /basement stair door/.test(kitchenServiceStairWall), "kitchen and service stair are not separated by the requested door");
 check("14 painting/service-stair separation", /openings:\s*\[\s*\]/s.test(serviceShaftWall), "east painting-room wall still has an opening into the service stair");
 check("14 painting/service-stair separation", !/kind:\s*"(?:arch|door|open)"/.test(serviceShaftWall), "an arch or hinged opening remains between the painting room and service stair");
 check("15 basement stair walls", !basementPartitions.includes('name: "basement-service-shaft"'), "basement service-shaft divider wall still exists");
@@ -374,8 +380,21 @@ check("15 archive circulation", !/addBookshelf\(3\.1,\s*7\.4[^;]*4\.6/.test(arch
 check("15 archive circulation", /name:\s*"archive specimen drawers",\s*x:\s*archiveCenterX,\s*z:\s*11\.55[^;]*rotationY:\s*Math\.PI/.test(archiveFurnishings), "archive specimen cabinet is not centered on the far wall and facing the aisle");
 check("15 archive circulation", /archiveDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive doorway lacks a physical traversal QA route");
 check("15 archive circulation", /archiveCenterAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks) && /archiveCrossAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive center and cross aisles lack physical traversal QA routes");
-check("16 service-stair light", !/serviceUpper\.addFixture\(/.test(lightingBuild), "floating upper service-stair fixture still exists");
-check("16 service-stair light", /serviceLower\.addFixture\(12\.55,\s*2\.[34]/.test(lightingBuild), "service-stair fixture is not attached at the basement ceiling over the bottom landing");
+check("16 shared service-stair lights", /"SERVICE STAIR"\s*:\s*\["service stair lights"\]/.test(lightingMap), "service stair room does not map to one shared lighting circuit");
+check("16 shared service-stair lights", !/service stair (?:upper|lower) light/.test(lightingMap) && !/const service(?:Upper|Lower)\s*=/.test(lightingBuild), "legacy independent service-stair circuits still exist");
+check("16 shared service-stair lights", serviceStairLighting.length > 0 && /serviceStair\.addLevel\("BASEMENT"\)/.test(serviceStairLighting), "shared service-stair circuit does not span the main and basement floors");
+check("16 shared service-stair lights", count(serviceStairLighting, /serviceStair\.addFixture\(/g) === 2, "shared service-stair circuit must own exactly two visible fixtures");
+check("16 shared service-stair lights", /serviceStair\.addFixture\(12\.55,\s*-2\.25,\s*"corridor",\s*FLOOR\.MAIN\)/.test(serviceStairLighting), "visible overhead light is not positioned at the top of the stairs");
+check("16 shared service-stair lights", /serviceStair\.addFixture\(12\.55,\s*4\.4,\s*"corridor",\s*FLOOR\.BASEMENT\)/.test(serviceStairLighting), "lower stair light is not a few steps beyond the bottom landing");
+check("16 shared service-stair lights", /serviceStair\.addSwitch\(13\.72,\s*FLOOR\.MAIN \+ 1\.15,\s*-3\.039,\s*0\)/.test(serviceStairLighting), "top switch is not mounted beside the new stair wall");
+check("16 shared service-stair lights", /serviceStair\.addSwitch\(14\.839,\s*FLOOR\.BASEMENT \+ 1\.15,\s*2\.4,\s*-Math\.PI \/ 2\)/.test(serviceStairLighting), "bottom switch is missing from the shared circuit");
+check("16 shared service-stair lights", count(serviceStairLighting, /serviceStair\.addSwitch\(/g) === 2, "both stair switches must control the same two-light circuit");
+check("16 floor-aware fixture builder", /const fixtureFloorY\s*=\s*floorYOverride == null \? this\.floorY : floorYOverride/.test(fixtureBuilder) && /const ceilingY\s*=\s*fixtureFloorY \+/.test(fixtureBuilder), "fixture builder cannot place shared-circuit lights on two floors");
+check("16 floor-aware fixture builder", /Array\.from\(this\.levels\),\s*fixtureFloorY \+ 0\.04/.test(fixtureBuilder), "corridor light target still uses the circuit's original floor instead of the fixture floor");
+for (const view of ["kitchenServiceStairDoor", "serviceStairTopLight", "serviceStairTopSwitch", "serviceStairBottomLight", "serviceStairBottomSwitch"]) {
+  check("16 service-stair QA views", qaRoomViews.includes(`${view}:`), `missing service-stair inspection view ${view}`);
+}
+check("16 service-stair door route", /kitchenServiceStairDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?visitedRooms:\s*\["KITCHEN",\s*"SERVICE STAIR"\]/.test(qaHooks), "new basement stair door lacks a physical kitchen-to-landing traversal route");
 check("17 main-stair lights", !/upperLanding\.addFixture\(/.test(lightingBuild), "small upper-landing chandelier still hangs above the main stair");
 check("17 main-stair lights", !/\[-9\.7,\s*0,\s*9\.7\][^\n]*bedroomCorridor\.addFixture/.test(lightingBuild), "second small center chandelier still hangs above the main stair");
 check("18 attached faucets", /faucet-deck-collar/.test(mansion) && /water-valve-mount/.test(waterClass), "sink and tub controls lack visible mounting hardware");
@@ -821,7 +840,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-suite-closets-doors-2", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-service-stair-door-lights-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

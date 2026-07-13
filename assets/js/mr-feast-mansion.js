@@ -3570,7 +3570,7 @@
     upperGrandBathroom.addFixture(-8.8, 0, "bathroom");
     upperGrandBathroom.addPracticalLight(-13.0, FLOOR.UPPER + 2.45, 1.9, 11, 4.6, ["SECOND FLOOR"], { contained: true, angle: 0.34 });
     upperGrandBathroom.addSwitch(-5.161, FLOOR.UPPER + 1.15, 1.0, -Math.PI / 2);
-    upperGrandBathroom.addSwitch(-10.7, FLOOR.UPPER + 1.15, -3.039, Math.PI);
+    upperGrandBathroom.addSwitch(-9.9, FLOOR.UPPER + 1.15, -3.039, 0);
     upperGrandBathroom.addSwitch(-8.7, FLOOR.UPPER + 1.15, 3.039, 0);
 
     const readingRoom = new LightCircuit("reading room lights", FLOOR.UPPER, 0xffb975, true);

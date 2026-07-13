@@ -169,6 +169,7 @@ const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
 const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
 const exoticRugTextureBuilder = section("function makeExoticRugTexture", "function loadTexture");
 const foyerRugTextureBuilder = section("function makeFoyerRugTexture", "function loadTexture");
+const salonRugTextureBuilder = section("function makeSalonRugTexture", "function loadTexture");
 const materialFactory = section("async function createMaterials()", "class PhysicsWorld");
 const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
 const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
@@ -876,6 +877,10 @@ check("24 exotic lounge rug", /const exoticRugMap\s*=\s*makeExoticRugTexture\(51
 check("32 ornate foyer rug", /createLinearGradient|createRadialGradient/.test(foyerRugTextureBuilder) && /rosette|palmette|medallion|ornament/.test(foyerRugTextureBuilder), "foyer rug lacks a layered ceremonial textile pattern");
 check("32 ornate foyer rug", /const foyerRugMap\s*=\s*makeFoyerRugTexture\(512\)/.test(materialFactory) && /foyerRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*foyerRugMap/.test(materialFactory), "foyer rug material is missing or does not use its procedural textile map");
 check("32 ornate foyer rug", /addRug\(0,\s*8\.0,\s*4\.4,\s*5\.2,\s*FLOOR\.MAIN,\s*M\.foyerRug,\s*0\)/.test(slabs), "main foyer still uses a flat rug material instead of the ornate foyer carpet");
+check("34 patterned salon rugs", /createLinearGradient|createRadialGradient/.test(salonRugTextureBuilder) && /medallion|ornament|botanical/.test(salonRugTextureBuilder), "library and music-room carpets lack a layered ornamental textile pattern");
+check("34 patterned salon rugs", /const libraryRugMap\s*=\s*makeSalonRugTexture\(512,\s*"library"\)/.test(materialFactory) && /const musicRugMap\s*=\s*makeSalonRugTexture\(512,\s*"music"\)/.test(materialFactory), "library and music-room procedural carpet maps are missing");
+check("34 patterned salon rugs", /libraryRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*libraryRugMap/.test(materialFactory) && /musicRug:\s*new THREE\.MeshStandardMaterial\(\{\s*map:\s*musicRugMap/.test(materialFactory), "library or music-room patterned carpet material is missing");
+check("34 patterned salon rugs", /addRug\(-9\.5,\s*7\.6,\s*6\.4,\s*4\.8,\s*FLOOR\.MAIN,\s*M\.libraryRug,\s*0\)/.test(slabs) && /addRug\(9\.4,\s*7\.7,\s*6\.2,\s*4\.6,\s*FLOOR\.MAIN,\s*M\.musicRug,\s*0\)/.test(slabs), "library or music room still uses a flat-color carpet");
 
 const upperPortraitCount = count(upperGalleryPortraits, /artId:\s*"[^"]+"/g);
 const portraitsUseNewWall = /addWallPortrait\(\{\s*axis:\s*"x",\s*fixed:\s*-3\.2/.test(upperGalleryPortraits)
@@ -991,10 +996,10 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
 check("29 connected grand stair balusters", /const grandRailHeight = 0\.97;/.test(grandStairBuild) && count(grandStairBuild, /topY \+ grandRailHeight \/ 2/g) === 2 && /addBalusterInstanceBatch\("grand-stair-balusters", stairBatches\.balusters, grandRailHeight\)/.test(grandStairBuild), "grand-stair balusters must extend from each tread to the sloped handrail");
 check("29 lounge artwork clearance", /upperArtBanquet: \[-2\.0, FLOOR\.UPPER, -9\.4, Math\.PI \/ 2\]/.test(mansion) && /center: -8\.25[^\n]+artId: "banquet-forgot-guests"/.test(mansion), "rear-lounge banquet painting still intersects the fireplace mantle or its QA view is stale");
-check("29 library sconce clearance", /library\.addWallSconce\(-14\.839, FLOOR\.MAIN \+ 2\.0, 6\.35,[^\n]+FLOOR\.MAIN \+ 1\.05, 6\.35\);/.test(mansion), "library wall sconce still overlaps the center bookcase");
+check("34 library sconce clearance", /library\.addWallSconce\(-7\.05, FLOOR\.MAIN \+ 2\.0, 3\.361, 0, 32, 5\.8,[^\n]+-9\.45, FLOOR\.MAIN \+ 1\.05, 7\.55\);/.test(mansion), "library wall sconce is not mounted on the clear south-wall panel");
 check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-freestanding-archive-rows-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-library-sconce-patterned-rugs-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

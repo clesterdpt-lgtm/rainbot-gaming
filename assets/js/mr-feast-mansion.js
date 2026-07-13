@@ -906,6 +906,162 @@
     return texture;
   }
 
+  function makeSalonRugTexture(size, room) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const center = size / 2;
+    const library = room === "library";
+    const palette = library
+      ? { center: "#315a49", mid: "#17372f", edge: "#081b18", accent: "#6d2830", darkAccent: "#321218", jewel: "#244f55", gold: "#d2b16b", pale: "#ead59d" }
+      : { center: "#6a2f3b", mid: "#401823", edge: "#180810", accent: "#203d55", darkAccent: "#0c202d", jewel: "#355d62", gold: "#d7b66d", pale: "#edd8a4" };
+
+    // These companion carpets borrow the foyer and lounge's antique-gold
+    // borders and dense central ornament, then shift the field color to suit
+    // each room: scholarly green for the library and claret for the music room.
+    const field = ctx.createRadialGradient(center, center, size * 0.03, center, center, size * 0.72);
+    field.addColorStop(0, palette.center);
+    field.addColorStop(0.54, palette.mid);
+    field.addColorStop(1, palette.edge);
+    ctx.fillStyle = field;
+    ctx.fillRect(0, 0, size, size);
+
+    const gold = ctx.createLinearGradient(0, size, size, 0);
+    gold.addColorStop(0, "#76501f");
+    gold.addColorStop(0.5, palette.pale);
+    gold.addColorStop(1, "#8d6427");
+    for (const [inset, width, color] of [
+      [7, 12, palette.edge],
+      [19, 5, gold],
+      [30, 13, palette.accent],
+      [44, 4, gold],
+      [54, 3, palette.pale],
+      [63, 2, palette.darkAccent],
+    ]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
+    }
+
+    const drawDiamond = (x, y, radius, fill, stroke) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius);
+      ctx.lineTo(x + radius, y);
+      ctx.lineTo(x, y + radius);
+      ctx.lineTo(x - radius, y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = Math.max(1.5, radius * 0.14);
+      ctx.stroke();
+    };
+
+    for (let p = 78; p <= size - 78; p += 40) {
+      drawDiamond(p, 36, 9, palette.gold, palette.darkAccent);
+      drawDiamond(p, size - 36, 9, palette.gold, palette.darkAccent);
+      drawDiamond(36, p, 9, palette.gold, palette.darkAccent);
+      drawDiamond(size - 36, p, 9, palette.gold, palette.darkAccent);
+    }
+
+    const drawLeaf = (x, y, length, width, rotation, fill) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.moveTo(0, -length);
+      ctx.bezierCurveTo(width, -length * 0.55, width, length * 0.56, 0, length);
+      ctx.bezierCurveTo(-width, length * 0.56, -width, -length * 0.55, 0, -length);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.strokeStyle = palette.gold;
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    // A sixteen-petal medallion reads clearly under furniture while the four
+    // smaller corner ornaments keep the large carpet from feeling empty.
+    const drawMedallion = (x, y, radius, rotation = 0) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
+      ctx.fillStyle = palette.darkAccent;
+      ctx.fill();
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = Math.max(3, radius * 0.06);
+      ctx.stroke();
+      for (let i = 0; i < 16; i += 1) {
+        const angle = (i / 16) * Math.PI * 2;
+        drawLeaf(
+          Math.cos(angle) * radius * 0.33,
+          Math.sin(angle) * radius * 0.33,
+          radius * (i % 2 ? 0.35 : 0.44),
+          radius * 0.12,
+          angle + Math.PI / 2,
+          i % 2 ? palette.jewel : palette.gold,
+        );
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = palette.center;
+      ctx.fill();
+      ctx.strokeStyle = palette.pale;
+      ctx.lineWidth = Math.max(2, radius * 0.04);
+      ctx.stroke();
+      drawDiamond(0, 0, radius * 0.11, palette.pale, palette.darkAccent);
+      ctx.restore();
+    };
+
+    drawMedallion(center, center, size * 0.19, library ? Math.PI / 16 : 0);
+    for (const [x, y, rotation] of [
+      [116, 116, Math.PI / 4],
+      [size - 116, 116, -Math.PI / 4],
+      [116, size - 116, -Math.PI / 4],
+      [size - 116, size - 116, Math.PI / 4],
+    ]) drawMedallion(x, y, size * 0.055, rotation);
+
+    // Scrolling vines make the music-room version feel lyrical; the library
+    // uses the same curves as quieter botanical bookplate ornament.
+    ctx.strokeStyle = palette.gold;
+    ctx.lineWidth = 3.5;
+    ctx.globalAlpha = 0.84;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(center, center + side * size * 0.21);
+      ctx.bezierCurveTo(center - 70, center + side * size * 0.27, center - 112, center + side * size * 0.18, center - 132, center + side * size * 0.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(center, center + side * size * 0.21);
+      ctx.bezierCurveTo(center + 70, center + side * size * 0.27, center + 112, center + side * size * 0.18, center + 132, center + side * size * 0.1);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Fine warp lines temper the crisp canvas shapes into a woven surface.
+    ctx.globalAlpha = 0.11;
+    for (let p = 2; p < size; p += 4) {
+      ctx.strokeStyle = p % 12 === 0 ? palette.pale : "#080405";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p + Math.sin(p * 0.18) * 1.4);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function loadTexture(url, repeatX, repeatY, encoding) {
     return new Promise((resolve) => {
       new THREE.TextureLoader().load(
@@ -964,6 +1120,8 @@
     const paverMap = makeNoiseTexture(128, [[78, 82, 78], [91, 91, 84], [63, 68, 65], [105, 101, 91]], 4771);
     const exoticRugMap = makeExoticRugTexture(512);
     const foyerRugMap = makeFoyerRugTexture(512);
+    const libraryRugMap = makeSalonRugTexture(512, "library");
+    const musicRugMap = makeSalonRugTexture(512, "music");
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -1007,6 +1165,8 @@
       greenRug: new THREE.MeshStandardMaterial({ color: 0x172f2b, roughness: 0.92 }),
       exoticRug: new THREE.MeshStandardMaterial({ map: exoticRugMap, roughness: 0.88, metalness: 0, bumpMap: exoticRugMap, bumpScale: 0.012 }),
       foyerRug: new THREE.MeshStandardMaterial({ map: foyerRugMap, roughness: 0.88, metalness: 0, bumpMap: foyerRugMap, bumpScale: 0.012 }),
+      libraryRug: new THREE.MeshStandardMaterial({ map: libraryRugMap, roughness: 0.9, metalness: 0, bumpMap: libraryRugMap, bumpScale: 0.012 }),
+      musicRug: new THREE.MeshStandardMaterial({ map: musicRugMap, roughness: 0.9, metalness: 0, bumpMap: musicRugMap, bumpScale: 0.012 }),
       darkFloor: new THREE.MeshStandardMaterial({ map: stoneMap, color: 0x4a504e, roughness: 0.96, bumpMap: stoneMap, bumpScale: 0.045 }),
       lightGlowMap: makeRadialGlowTexture(128),
       soot: new THREE.MeshStandardMaterial({ color: 0x08090a, roughness: 1 }),
@@ -3995,8 +4155,8 @@
     box({ name: "basement-damp-course", w: 30.8, h: 0.24, d: 24.8, x: 0, y: FLOOR.BASEMENT - 0.3, z: 0, material: M.limestone, cast: false });
 
     addRug(0, 8.0, 4.4, 5.2, FLOOR.MAIN, M.foyerRug, 0);
-    addRug(-9.5, 7.6, 6.4, 4.8, FLOOR.MAIN, M.greenRug, 0);
-    addRug(9.4, 7.7, 6.2, 4.6, FLOOR.MAIN, M.redRug, 0);
+    addRug(-9.5, 7.6, 6.4, 4.8, FLOOR.MAIN, M.libraryRug, 0);
+    addRug(9.4, 7.7, 6.2, 4.6, FLOOR.MAIN, M.musicRug, 0);
     addRug(-9.7, -8.4, 7.2, 3.8, FLOOR.MAIN, M.redRug, 0);
     // A thin, non-colliding ballroom finish reuses the estate's generated
     // antique-marble texture while the oak slab remains the physics surface.
@@ -4355,7 +4515,9 @@
     const library = new LightCircuit("library lights", FLOOR.MAIN, 0xffb56b, true);
     library.addFixture(-10, 7.7, "small");
     library.addFixtureSupportFill(-10, 7.7, 42, 6.2, 0.82);
-    library.addWallSconce(-14.839, FLOOR.MAIN + 2.0, 6.35, Math.PI / 2, 32, 5.8, ["MAIN LEVEL"], -10.1, FLOOR.MAIN + 1.05, 6.35);
+    // The west wall is all bookcases and window bays. Mount this sconce on the
+    // clear south-wall panel between the bathroom door and the east wall.
+    library.addWallSconce(-7.05, FLOOR.MAIN + 2.0, 3.361, 0, 32, 5.8, ["MAIN LEVEL"], -9.45, FLOOR.MAIN + 1.05, 7.55);
     library.addSwitch(-5.161, 1.15, 5.85, -Math.PI / 2);
 
     const music = new LightCircuit("music room lights", FLOOR.MAIN, 0xffb56b, true);

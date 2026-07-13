@@ -271,10 +271,10 @@
     westFrontClosetInside: [-12.8, FLOOR.UPPER, 4.0, Math.PI],
     eastFrontClosetRoom: [12.8, FLOOR.UPPER, 5.8, 0],
     eastFrontClosetInside: [12.8, FLOOR.UPPER, 4.0, Math.PI],
-    primaryClosetRoom: [-12.8, FLOOR.UPPER, -7.55, Math.PI],
-    primaryClosetInside: [-12.8, FLOOR.UPPER, -5.7, 0],
-    eastRearClosetRoom: [12.8, FLOOR.UPPER, -7.55, Math.PI],
-    eastRearClosetInside: [12.8, FLOOR.UPPER, -5.7, 0],
+    primaryClosetRoom: [-7.8, FLOOR.UPPER, -9.2, -Math.PI / 2],
+    primaryClosetInside: [-6.3, FLOOR.UPPER, -9.2, -Math.PI / 2],
+    eastRearClosetRoom: [7.8, FLOOR.UPPER, -9.2, Math.PI / 2],
+    eastRearClosetInside: [6.3, FLOOR.UPPER, -9.2, Math.PI / 2],
     powderRoomDoor: [-13.2, FLOOR.MAIN, -4.05, Math.PI],
     rearLoungeEntry: [-4.15, FLOOR.UPPER, -2.15, 0],
     primarySuiteLoungeDoor: [-4.05, FLOOR.UPPER, -6.4, Math.PI / 2],
@@ -976,11 +976,35 @@
 
     toggle() {
       if (this.locked) return;
-      const p = physics.playerPosition();
-      const hinge = this.root.position;
-      if (this.open && Math.hypot(p.x - hinge.x, p.z - hinge.z) < 1.18) return;
+      // Only refuse to close when the player is genuinely inside the arc the
+      // leaf must sweep — standing beside or behind the door no longer blocks it.
+      if (this.open && this.playerInSwingPath()) return;
       this.setOpen(!this.open);
       if (audioSystem) audioSystem.door(this.open);
+    }
+
+    playerInSwingPath() {
+      const p = physics.playerPosition();
+      const hinge = this.root.position;
+      const dx = p.x - hinge.x;
+      const dz = p.z - hinge.z;
+      const dist = Math.hypot(dx, dz);
+      // Past the leaf tip (plus the player's body radius) the closing door can
+      // never reach the player, so it may always shut from there.
+      if (dist > this.width + 0.34) return false;
+      if (dist < 0.05) return true;
+      // Closed leaf points along the wall from the hinge; the open leaf is that
+      // vector turned by the door's current angle. The player blocks the swing
+      // only while sitting between those two directions.
+      const closed = this.axis === "x" ? { x: -this.hingeSide, z: 0 } : { x: 0, z: -this.hingeSide };
+      const cos = Math.cos(this.angle);
+      const sin = Math.sin(this.angle);
+      const open = { x: closed.x * cos + closed.z * sin, z: -closed.x * sin + closed.z * cos };
+      const crossCO = closed.x * open.z - closed.z * open.x;
+      const arc = Math.sign(crossCO) || 1;
+      const crossCP = closed.x * dz - closed.z * dx;
+      const crossPO = dx * open.z - dz * open.x;
+      return Math.sign(crossCP) === arc && Math.sign(crossPO) === arc;
     }
 
     setOpen(open) {
@@ -1205,12 +1229,13 @@
 
     setOpen(open, silent) {
       const nextOpen = Boolean(open);
-      // Never trap a player who is standing in a walk-in. They can step out,
-      // then close the leaves normally from the room side.
-      if (!nextOpen && this.walkIn && this.isPlayerInside()) return;
       this.open = nextOpen;
       this.target = this.open ? THREE.MathUtils.degToRad(102) : 0;
-      if (this.thresholdCollider) this.thresholdCollider.setEnabled(!this.open);
+      // Closing a walk-in from the inside is allowed; the doors just swing shut
+      // around you. The threshold only re-seals when nobody is standing in it,
+      // so the player is never shoved or trapped and can always step back out.
+      const sealThreshold = !this.open && !(this.walkIn && this.isPlayerInside());
+      if (this.thresholdCollider) this.thresholdCollider.setEnabled(sealThreshold);
       if (this.walkInInteriorMeshes && this.open) this.walkInInteriorMeshes.visible = true;
       if (this.interiorLight) {
         this.interiorLight.userData.interactionVisible = this.open;
@@ -3267,7 +3292,11 @@
     buildWallRun({ axis: "z", fixed: 5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-east-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.12, label: "east front suite door", direction: -1 }] });
     // The center rear room is now an open lounge flowing around the stair
     // guard. The side bedrooms stay private and open directly into the lounge.
-    buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-primary-front-wall", openings: [] });
+    buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-primary-front-wall", openings: [
+      // En-suite access into the upper grand bathroom, set between the primary
+      // portraits and the bathroom vanity so it clears both; swings into the suite.
+      { kind: "door", center: -10.85, width: 1.0, label: "primary bathroom door", direction: 1 },
+    ] });
     buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 15, floorY: FLOOR.UPPER, name: "upper-east-rear-front-wall", openings: [] });
     buildWallRun({ axis: "x", fixed: 3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-west-front-divider", openings: [{ kind: "door", center: -9.7, width: 0.95, label: "west dressing room", direction: 1 }] });
     buildWallRun({ axis: "x", fixed: 3.2, start: 5, end: 15, floorY: FLOOR.UPPER, name: "upper-east-front-divider", openings: [{ kind: "door", center: 9.7, width: 0.95, label: "east dressing room", direction: -1 }] });
@@ -3372,7 +3401,7 @@
     addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug);
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
-    new Cabinet({ name: "primary walk-in closet", x: -12.8, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
+    new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
     addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.greenRug, 0);
     addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.velvet);
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
@@ -3380,7 +3409,7 @@
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addFireplace(-4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
-    new Cabinet({ name: "east rear walk-in closet", x: 12.8, z: -5.68, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI, walkIn: true });
+    new Cabinet({ name: "east rear walk-in closet", x: 6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI / 2, walkIn: true });
     for (const portrait of [
       { x: -12.5, artId: "house-dreams-back", circuitName: "primary suite lights" },
       { x: -7.2, artId: "audit-of-souls", circuitName: "primary suite lights" },

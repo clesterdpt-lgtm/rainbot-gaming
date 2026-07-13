@@ -5807,7 +5807,11 @@
       updateLocation();
       interactionTimer = 0.08;
     }
-    if (diagnosticsTimer <= 0 && dom.debug) {
+    // The diagnostics object is available on demand through the QA API. Do
+    // not stringify its large room/circuit/yard payload into a hidden DOM node
+    // twice per second during normal play; those allocations caused periodic
+    // garbage-collection hitches that were most noticeable in the grand stair.
+    if (diagnosticsTimer <= 0 && dom.debug && !dom.debug.hidden) {
       dom.debug.textContent = JSON.stringify(getDiagnostics(), null, 2);
       diagnosticsTimer = 0.5;
     }

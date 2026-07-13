@@ -663,6 +663,7 @@ check("31 inactive preview budget", /const PRE_ENTRY_FRAME_INTERVAL_MS = 250/.te
 check("31 balanced frame budget", /const BALANCED_FRAME_INTERVAL_MS = 1000 \/ 30/.test(mansion) && /state\.mobileRenderProfile \|\| state\.renderQuality === "reduced"/.test(animationLoop), "mobile and reduced-quality sessions do not cap the expensive render loop at 30 FPS");
 check("31 hidden tab pause", /document\.hidden/.test(animationLoop) && /clock\.getDelta\(\)/.test(animationLoop) && /return;/.test(animationLoop), "the mansion keeps updating and rendering while its tab is hidden");
 check("31 render schedule diagnostics", /frameSchedule:/.test(diagnostics) && /targetFps:/.test(diagnostics), "QA cannot observe whether the runtime is idle-throttled, balanced, or full-refresh");
+check("31 hidden diagnostics budget", /dom\.debug\s*&&\s*!dom\.debug\.hidden/.test(animationLoop), "normal play still serializes the full diagnostic payload into a hidden DOM node every half second");
 
 check("20 shadow sampler fallback", /supportsFullRoomShadowSet\s*=\s*renderer\.shadowMap\.enabled\s*&&\s*renderer\.capabilities\.maxTextures\s*>=\s*16/.test(mansion) && /maxTextureUnits/.test(diagnostics) && /activeSceneShadowLights/.test(diagnostics), "low-sampler or safe-GPU contexts have no bounded-cone fallback or total-scene shadow diagnostics");
 check("20 stable light rendering", !/portalCircuitNames|getExteriorPortalCircuitNames/.test(mansion), "proximity-selected portal circuits can still make manually switched lights pop while crossing the yard threshold");
@@ -862,7 +863,7 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260712-staircase-light-budget-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260712-staircase-render-budget-2", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

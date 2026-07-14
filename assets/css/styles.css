@@ -12868,14 +12868,13 @@ body.arcade-home::before {
 .directory-card:hover .directory-card__body p,
 .directory-card:focus-visible .directory-card__body p,
 .directory-card:focus-within .directory-card__body p {
-  display: -webkit-box;
-  max-height: calc(1.4em * 3);
+  display: block;
+  max-height: none;
   margin-top: 10px;
   opacity: 1;
-  overflow: hidden;
+  overflow: visible;
   transform: translateY(0);
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: unset;
 }
 
 @media (hover: none), (pointer: coarse) {

@@ -816,114 +816,159 @@
     const ctx = canvas.getContext("2d");
     const center = size / 2;
 
-    // The foyer gets a ceremonial companion to the lounge textile: the same
-    // garnet, teal, and antique-gold family, but with a more formal axial
-    // medallion that reads clearly from the front-door sightline.
+    // The front-door sightline lands on an eccentric mourning carpet: bruised
+    // oxblood sinks toward a nearly black center while tarnished gold, bone,
+    // and sickly teal ornament suggest a ceremonial textile with a bad history.
     const field = ctx.createRadialGradient(center, center, size * 0.03, center, center, size * 0.72);
-    field.addColorStop(0, "#7a313b");
-    field.addColorStop(0.5, "#4c1724");
-    field.addColorStop(1, "#1b0710");
+    field.addColorStop(0, "#321020");
+    field.addColorStop(0.38, "#1d0915");
+    field.addColorStop(0.72, "#11070f");
+    field.addColorStop(1, "#050307");
     ctx.fillStyle = field;
     ctx.fillRect(0, 0, size, size);
 
     const gold = ctx.createLinearGradient(0, size, size, 0);
-    gold.addColorStop(0, "#76501f");
-    gold.addColorStop(0.48, "#e5c378");
-    gold.addColorStop(1, "#8d6427");
+    gold.addColorStop(0, "#4d351c");
+    gold.addColorStop(0.46, "#b58b4b");
+    gold.addColorStop(0.62, "#d0b16d");
+    gold.addColorStop(1, "#5b3b20");
     for (const [inset, width, color] of [
-      [7, 12, "#120509"],
-      [18, 5, gold],
-      [29, 13, "#123e42"],
-      [43, 4, gold],
-      [53, 3, "#dac88e"],
-      [62, 2, "#7d5b2b"],
+      [7, 13, "#020204"],
+      [19, 5, gold],
+      [31, 12, "#351333"],
+      [44, 4, "#aa8144"],
+      [54, 7, "#0a2f31"],
+      [64, 2, "#c9b783"],
+      [71, 4, "#34101c"],
     ]) {
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
       ctx.strokeRect(inset, inset, size - inset * 2, size - inset * 2);
     }
 
-    const drawDiamond = (x, y, radius, fill, stroke) => {
+    const drawInwardTooth = (x, y, rotation, long) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
       ctx.beginPath();
-      ctx.moveTo(x, y - radius);
-      ctx.lineTo(x + radius, y);
-      ctx.lineTo(x, y + radius);
-      ctx.lineTo(x - radius, y);
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(0, long ? 19 : 13);
+      ctx.lineTo(7, 0);
       ctx.closePath();
-      ctx.fillStyle = fill;
+      ctx.fillStyle = long ? "#c5ad72" : "#6a2330";
       ctx.fill();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = Math.max(1, radius * 0.13);
+      ctx.strokeStyle = "#171014";
+      ctx.lineWidth = 2;
       ctx.stroke();
+      ctx.restore();
     };
 
-    // Alternating lozenges make the teal border feel hand-knotted instead of
-    // like a set of perfectly clean digital stripes.
-    for (let p = 76; p <= size - 76; p += 38) {
-      const offset = ((p - 76) / 38) % 2 === 0 ? 0 : 4;
-      drawDiamond(p, 35 + offset, 9, "#d8b76a", "#4e2419");
-      drawDiamond(p, size - 35 - offset, 9, "#d8b76a", "#4e2419");
-      drawDiamond(35 + offset, p, 9, "#d8b76a", "#4e2419");
-      drawDiamond(size - 35 - offset, p, 9, "#d8b76a", "#4e2419");
+    // Uneven inward-pointing teeth break the old polite symmetry and give the
+    // border the silhouette of a ceremonial trap closing around the field.
+    for (let p = 82, index = 0; p <= size - 82; p += 34, index += 1) {
+      const long = index % 3 === 1;
+      drawInwardTooth(p, 38, 0, long);
+      drawInwardTooth(size - p, size - 38, Math.PI, long);
+      drawInwardTooth(38, size - p, Math.PI / 2, !long);
+      drawInwardTooth(size - 38, p, -Math.PI / 2, !long);
     }
 
-    const drawPetal = (x, y, radiusX, radiusY, rotation, fill, stroke) => {
+    const drawEye = (x, y, width, height, rotation, irisColor = "#164f4c") => {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(rotation);
       ctx.beginPath();
-      ctx.moveTo(0, -radiusY);
-      ctx.bezierCurveTo(radiusX, -radiusY * 0.58, radiusX, radiusY * 0.58, 0, radiusY);
-      ctx.bezierCurveTo(-radiusX, radiusY * 0.58, -radiusX, -radiusY * 0.58, 0, -radiusY);
+      ctx.moveTo(-width / 2, 0);
+      ctx.quadraticCurveTo(0, -height, width / 2, 0);
+      ctx.quadraticCurveTo(0, height, -width / 2, 0);
       ctx.closePath();
-      ctx.fillStyle = fill;
+      ctx.fillStyle = "#b9aa82";
       ctx.fill();
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = "#75502b";
+      ctx.lineWidth = Math.max(2, width * 0.045);
       ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, height * 0.62, height * 0.78, 0, 0, Math.PI * 2);
+      ctx.fillStyle = irisColor;
+      ctx.fill();
+      ctx.strokeStyle = "#09070a";
+      ctx.lineWidth = Math.max(1.5, width * 0.025);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, height * 0.12, height * 0.58, 0, 0, Math.PI * 2);
+      ctx.fillStyle = "#030204";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-height * 0.18, -height * 0.2, Math.max(1.5, height * 0.08), 0, Math.PI * 2);
+      ctx.fillStyle = "#ddd1a6";
+      ctx.fill();
       ctx.restore();
     };
 
-    const drawRosette = (x, y, radius, rotation = 0) => {
+    const drawEclipsedMedallion = (x, y, radius) => {
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate(rotation);
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.82, 0, Math.PI * 2);
-      ctx.fillStyle = "#123f43";
-      ctx.fill();
-      ctx.strokeStyle = gold;
-      ctx.lineWidth = Math.max(3, radius * 0.055);
-      ctx.stroke();
-      for (let i = 0; i < 12; i += 1) {
-        const angle = (i / 12) * Math.PI * 2;
-        drawPetal(
-          Math.cos(angle) * radius * 0.36,
-          Math.sin(angle) * radius * 0.36,
-          radius * 0.15,
-          radius * 0.42,
-          angle + Math.PI / 2,
-          i % 2 ? "#b8893e" : "#d9bd78",
-          "#54202b",
-        );
+      // Seventeen rays refuse perfect bilateral symmetry; alternating dried
+      // blood and bone makes the black center feel like an eclipsed eye.
+      for (let i = 0; i < 17; i += 1) {
+        const angle = -Math.PI / 2 + (i / 17) * Math.PI * 2;
+        const outer = radius * (i % 4 === 0 ? 1.18 : i % 2 ? 0.96 : 1.08);
+        const inner = radius * 0.62;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle - 0.055) * inner, Math.sin(angle - 0.055) * inner);
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.lineTo(Math.cos(angle + 0.055) * inner, Math.sin(angle + 0.055) * inner);
+        ctx.closePath();
+        ctx.fillStyle = i % 3 === 0 ? "#cab77e" : "#5e1c2b";
+        ctx.fill();
       }
       ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
-      ctx.fillStyle = "#6e2633";
+      ctx.arc(0, 0, radius * 0.69, 0, Math.PI * 2);
+      ctx.fillStyle = "#0b3335";
       ctx.fill();
-      ctx.strokeStyle = "#ead39a";
-      ctx.lineWidth = Math.max(2, radius * 0.035);
+      ctx.strokeStyle = gold;
+      ctx.lineWidth = Math.max(4, radius * 0.06);
       ctx.stroke();
-      drawDiamond(0, 0, radius * 0.12, "#e3c77e", "#3d1822");
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.52, 0, Math.PI * 2);
+      ctx.fillStyle = "#020204";
+      ctx.fill();
+      ctx.strokeStyle = "#4c1734";
+      ctx.lineWidth = Math.max(3, radius * 0.05);
+      ctx.stroke();
       ctx.restore();
+      // Keep the dominant eye exactly on the medallion and rug centerline;
+      // the odd ray count and satellite eyes provide the intended asymmetry.
+      drawEye(x, y, radius * 0.92, radius * 0.34, 0, "#235c54");
     };
 
-    // A large compass rosette anchors the double-height foyer, while the two
-    // smaller palmettes extend the ornament toward the doors and grand stair.
-    drawRosette(center, center, size * 0.205, Math.PI / 12);
-    drawRosette(center, size * 0.205, size * 0.075, 0);
-    drawRosette(center, size * 0.795, size * 0.075, Math.PI / 6);
+    // Broken orbital rings and seven watchful satellites make the central
+    // eclipsed-eye medallion feel stranger the longer the player looks at it.
+    ctx.save();
+    ctx.translate(center, center);
+    ctx.strokeStyle = "#8b6737";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([34, 13, 8, 18]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.305, size * 0.235, -0.14, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    drawEclipsedMedallion(center, center, size * 0.19);
+    for (let i = 0; i < 7; i += 1) {
+      const angle = -Math.PI / 2 + (i / 7) * Math.PI * 2 + 0.12;
+      drawEye(
+        center + Math.cos(angle) * size * 0.305,
+        center + Math.sin(angle) * size * 0.235,
+        size * 0.067,
+        size * 0.022,
+        angle + Math.PI / 2,
+        i % 2 ? "#4b1c3f" : "#154844",
+      );
+    }
 
+    // Mirrored thorn filigree grows inward from each corner, but the last curl
+    // is deliberately missing from one quadrant to keep the pattern uncanny.
     for (const [x, y, sx, sy] of [
       [94, 94, 1, 1],
       [size - 94, 94, -1, 1],
@@ -933,26 +978,49 @@
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(sx, sy);
-      ctx.strokeStyle = "#c69d4e";
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#9d7841";
+      ctx.lineWidth = 4.5;
       ctx.beginPath();
-      ctx.moveTo(0, 28);
-      ctx.bezierCurveTo(5, 3, 19, -17, 37, -28);
+      ctx.moveTo(-7, 34);
+      ctx.bezierCurveTo(2, 5, 26, -13, 48, -36);
+      ctx.bezierCurveTo(61, -49, 57, -63, 44, -68);
       ctx.stroke();
-      drawPetal(13, 3, 8, 17, 0.68, "#1a5553", "#d2ad5f");
-      drawPetal(29, -17, 7, 15, 0.95, "#6d2733", "#d2ad5f");
+      for (const [tx, ty, rotation] of [[11, 2, 0.7], [29, -18, 0.9], [46, -39, 1.2]]) {
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.rotate(rotation);
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.lineTo(7, 9);
+        ctx.lineTo(-5, 5);
+        ctx.closePath();
+        ctx.fillStyle = ty === -18 ? "#56202d" : "#103e3d";
+        ctx.fill();
+        ctx.strokeStyle = "#b18b50";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.restore();
     }
 
-    // Fine warp and weft variation keeps the ornament tactile under the
-    // chandelier without adding geometry or another draw call.
-    ctx.globalAlpha = 0.11;
+    // A hairline vertical fracture points from the front doors into the pupil.
+    ctx.strokeStyle = "rgba(198,171,111,0.38)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(center + 3, 76);
+    ctx.bezierCurveTo(center - 9, 145, center + 8, 191, center + 4, center - 45);
+    ctx.stroke();
+
+    // Fine warp and weft keeps all the ominous geometry tactile under the
+    // chandelier without adding geometry, lights, or another draw call.
+    ctx.globalAlpha = 0.1;
     for (let p = 2; p < size; p += 4) {
-      ctx.strokeStyle = p % 12 === 0 ? "#f2dfb0" : "#110508";
+      ctx.strokeStyle = p % 16 === 0 ? "#b9a572" : "#030205";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, p);
-      ctx.lineTo(size, p + Math.sin(p * 0.19) * 1.5);
+      ctx.lineTo(size, p + Math.sin(p * 0.19) * 1.7);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;

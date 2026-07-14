@@ -216,8 +216,8 @@
       "#.#.#.#.#",
       "#.#.#.#.#",
       "#.#.#.#.#",
-      "#.#.#.#.#",
       "S.#.#.#.#",
+      "#.#.#.#.#",
       "#####.#.#",
       "#.....#.#",
       "#...###.#",
@@ -235,9 +235,11 @@
     centerZ: -9.25,
   });
   const HEDGE_MAZE_PORTALS = Object.freeze([
-    Object.freeze({ id: "rear", row: 19, col: 0 }),
+    Object.freeze({ id: "rear", row: 18, col: 0 }),
     Object.freeze({ id: "north", row: 5, col: 0 }),
   ]);
+  const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
+  const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
   // Six evenly distributed pools replace the facade spots only while the
   // player is in the maze or on its west approach. This preserves the exact
   // fixed shader-light count that the frame-rate pass established.
@@ -403,16 +405,16 @@
     // This deliberately stays outside the coping; pool entry has its own route.
     yardPoolNorthGuard: [-16, YARD_LAYOUT.groundY, -18.85, -Math.PI / 2, -0.08],
     yardPoolEastEntry: [-1, YARD_LAYOUT.groundY, -25.0, Math.PI / 2, -0.08],
-    yardMazeA: [18.45, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2, -0.08],
+    yardMazeA: [18.45, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, -Math.PI / 2, -0.08],
     yardMazeB: [19.15, YARD_LAYOUT.groundY, 14.2, -2.42, -0.09],
-    yardMazeEntranceCell: [20.5, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2],
+    yardMazeEntranceCell: [HEDGE_MAZE_REAR_ENTRANCE.x, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, -Math.PI / 2],
     yardMazeNorthEntrance: [18.45, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
     yardMazeNorthEntranceCell: [20.5, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
     yardEastFrontConnector: [16.8, YARD_LAYOUT.groundY, 13.2, Math.PI, -0.08],
     yardMazeSouthGoal: [28, YARD_LAYOUT.groundY, -30.25, 0],
     yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
-    yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, -15.2, Math.PI],
+    yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, Math.PI],
     yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, -15.2, Math.PI / 2],
     yardExteriorSwitch: [1.72, YARD_LAYOUT.groundY, 13.65, 0, -0.26],
     yardBoundarySouth: [10.0, YARD_LAYOUT.groundY, -31.15, 0],
@@ -2567,21 +2569,28 @@
       this.controls += 1;
     }
 
+    setGlowRenderState(lit) {
+      const renderLit = Boolean(lit);
+      for (const material of this.glowMaterials) {
+        const color = renderLit ? material.userData.onColor : material.userData.offColor;
+        if (color != null && material.color) material.color.setHex(color);
+        if (material.userData.onOpacity != null) material.opacity = renderLit ? material.userData.onOpacity : material.userData.offOpacity;
+        if (material.userData.onEmissiveIntensity != null) {
+          material.emissiveIntensity = renderLit ? material.userData.onEmissiveIntensity : (material.userData.offEmissiveIntensity || 0);
+        }
+        material.userData.renderLit = renderLit;
+      }
+    }
+
     setState(on, silent) {
       const next = Boolean(on);
       if (this.on === next) return;
       this.on = next;
-      // Light and bulb output is owned entirely by syncLightRendering so the
-      // switch state, floor context, and enclosure gating can never disagree.
+      // Light, bulb, and decorative-glow output is owned by the same switch.
+      // syncLightRendering adds floor/shell context so exterior halos remain
+      // dark indoors and energize only after the player crosses outside.
       // Silent callers batch several circuits and request one sync themselves.
-      for (const material of this.glowMaterials) {
-        const color = this.on ? material.userData.onColor : material.userData.offColor;
-        if (color != null && material.color) material.color.setHex(color);
-        if (material.userData.onOpacity != null) material.opacity = this.on ? material.userData.onOpacity : material.userData.offOpacity;
-        if (material.userData.onEmissiveIntensity != null) {
-          material.emissiveIntensity = this.on ? material.userData.onEmissiveIntensity : (material.userData.offEmissiveIntensity || 0);
-        }
-      }
+      this.setGlowRenderState(this.on);
       if (!silent && audioSystem) audioSystem.light(this.on);
       if (!silent) syncLightRendering();
     }
@@ -2716,7 +2725,7 @@
     rainGlass.castShadow = false;
     rainGlass.receiveShadow = false;
     scene.add(rainGlass);
-    const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffd7a0, emissive: 0xff9d42, emissiveIntensity: circuit.on ? 1.2 : 0, roughness: 0.3 });
+    const bulbMaterial = new THREE.MeshStandardMaterial({ color: 0xffd7a0, emissive: 0xff9d42, emissiveIntensity: circuit.on ? 0.85 : 0, roughness: 0.3 });
     for (let i = 0; i < 6; i += 1) {
       const angle = (i / 6) * Math.PI * 2;
       const cos = Math.cos(angle);
@@ -2730,14 +2739,14 @@
       cylinder({ name: "front-portico-chandelier-candle-cup", radius: 0.085, radiusTop: 0.09, radiusBottom: 0.05, height: 0.1, segments: 14, x: candleX, y: ringY + 0.05, z: candleZ, material: M.brass, cast: false });
       cylinder({ name: "front-portico-chandelier-candle", radius: 0.035, height: 0.17, segments: 10, x: candleX, y: ringY + 0.17, z: candleZ, material: M.porcelain, cast: false });
       const bulb = sphere({ name: "front-portico-chandelier-bulb", radius: 0.065, x: candleX, y: ringY + 0.3, z: candleZ, material: bulbMaterial, cast: false });
-      bulb.userData.onEmissiveIntensity = 1.2;
+      bulb.userData.onEmissiveIntensity = 0.85;
       bulb.userData.levels = new Set(["MAIN LEVEL"]);
       circuit.bulbs.push(bulb);
     }
     sphere({ name: "front-portico-chandelier-bottom-orb", radius: 0.11, x, y: 2.49, z, material: M.brass, cast: false });
     cylinder({ name: "front-portico-chandelier-finial", radiusTop: 0.01, radiusBottom: 0.08, height: 0.24, segments: 10, x, y: 2.31, z, material: M.iron, cast: false });
-    circuit.addSourceHalo(x, 3.14, z, 1.55, 0.24);
-    const light = circuit.addPracticalLight(0, 3.05, 13.35, 76, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.62, targetY: YARD_LAYOUT.groundY, castsShadow: false });
+    circuit.addSourceHalo(x, 3.14, z, 1.55, 0.16);
+    const light = circuit.addPracticalLight(0, 3.05, 13.35, 52, 7.5, ["MAIN LEVEL"], { contained: true, angle: 0.62, targetY: YARD_LAYOUT.groundY, castsShadow: false });
     light.name = "front-portico-chandelier-spotlight";
     light.userData.fixtureRole = "front-portico-chandelier";
     light.userData.visibleFixtureEmitter = true;
@@ -5172,7 +5181,7 @@
     box({ name: "rear-terrace-pavers", w: 29, h: 0.04, d: 3.4, x: 0, y, z: -14.0, material: M.wetPavers, cast: false });
     box({ name: "garden-approach-path", w: 25, h: 0.04, d: 1.9, x: -12.5, y, z: -15.2, material: M.wetPavers, cast: false });
     box({ name: "formal-garden-entry-path", w: 2.1, h: 0.04, d: 12.4, x: -25, y, z: -9.0, material: M.wetPavers, cast: false });
-    box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: -15.25, material: M.wetPavers, cast: false });
+    box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: HEDGE_MAZE_REAR_ENTRANCE.z, material: M.wetPavers, cast: false });
     // Keep the south end at the rear approach while extending the north end to
     // the front carriage centerline. The connector shares that exact centerline
     // so the two slabs read as one clean right-angle junction.
@@ -5684,7 +5693,7 @@
       2.12,
       12.19,
       0,
-      58,
+      40,
       7.5,
       ["MAIN LEVEL"],
       x * 0.72,
@@ -6999,6 +7008,7 @@
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
+      circuit.setGlowRenderState(circuit.on && rendersInContext);
       const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
       for (const light of circuit.lights) {
         // The fixed light profile keeps the moon as the single structural
@@ -7325,7 +7335,7 @@
         activeSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isSpotLight).length, 0),
         activePointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isPointLight).length, 0),
         activeFixtureEmitters: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.userData.visibleFixtureEmitter).length, 0),
-        activeLightPools: circuits.reduce((total, circuit) => total + (circuit.on ? circuit.glowMaterials.length : 0), 0),
+        activeLightPools: circuits.reduce((total, circuit) => total + circuit.glowMaterials.filter((material) => material.userData.renderLit).length, 0),
         renderMode: "manual-circuits-context-stable-real-emitters",
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
@@ -7392,7 +7402,7 @@
         lights: c.lights.length,
         activeLights: c.lights.filter((light) => light.visible && light.intensity > 0).length,
         lightPools: c.glowMaterials.length,
-        activeLightPools: c.on ? c.glowMaterials.length : 0,
+        activeLightPools: c.glowMaterials.filter((material) => material.userData.renderLit).length,
       })),
       storm: { rainDrops: rainSystem ? rainSystem.count : 0, lightning: stormSystem ? Number(stormSystem.flash.toFixed(2)) : 0, reducedFlash: state.reducedFlash },
       yard: getYardDiagnostics(p),
@@ -7804,6 +7814,7 @@
         yardMazeApproach: {
           start: "yardRearCirculationB",
           actions: [{ yaw: -Math.PI / 2, seconds: 5.0 }, { yaw: 0, seconds: 1.5 }],
+          expected: { inBounds: true, grounded: true, room: "HEDGE MAZE", minX: 21.8, maxX: 22.8, minZ: -16.2, maxZ: -15.1, visitedRooms: ["REAR LAWN", "HEDGE MAZE"] },
         },
         rearWest: {
           start: "rearBypassWest",

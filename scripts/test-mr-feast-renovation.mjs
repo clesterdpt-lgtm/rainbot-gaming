@@ -621,15 +621,17 @@ if (mazeRows.length) {
   const northOpenCells = openCells.filter((index) => Math.floor(index / width) < Math.floor(mazeRows.length / 2));
   check("32 hedge maze choices", junctions.length >= 18 && routeChoices >= 8, `maze offers only ${junctions.length} junction cells and ${routeChoices} alternate loops`);
   check("32 north maze access", mazeRows[5][0] === "." && northOpenCells.every((index) => seen.has(index)), "north maze lacks a visible west-side entrance or contains unreachable passages");
+  check("36 rear maze alignment", mazeRows[18][0] === "S" && mazeRows[19][0] === "#", "rear maze opening is not shifted onto the terrace centerline row");
 }
 check("19 hedge maze", /cellSize\s*:\s*1\.[4-9]/.test(mazeLayout), "maze corridors are not comfortably wider than the player capsule");
 check("19 hedge maze", /cellSize:\s*1\.5/.test(mazeLayout) && /centerX:\s*26\.5/.test(mazeLayout) && /centerZ:\s*-9\.25/.test(mazeLayout), "long maze no longer spans the authored rear-to-front east-lawn footprint");
 check("19 hedge maze", mazeRows.join("").split("#").length - 1 >= 150, "long maze lacks enough hedge mass to fill the east lawn");
 check("33 aligned east-lawn walkway", /east-lawn-house-walkway[^;]*w:\s*2\.5[^;]*d:\s*31\.05[^;]*x:\s*17\.35[^;]*z:\s*0\.775/.test(yardBuild), "east-lawn walkway does not terminate on the front carriage centerline");
 check("33 aligned east-lawn walkway", /east-lawn-front-yard-connector[^;]*w:\s*5\.1[^;]*d:\s*2\.4[^;]*x:\s*16\.05[^;]*z:\s*16\.3/.test(yardBuild), "east-lawn/front-yard connector is not aligned with the front carriage path");
+check("36 rear maze alignment", /const HEDGE_MAZE_REAR_ENTRANCE\s*=\s*Object\.freeze\(mazeCellCenter\(HEDGE_MAZE_REAR_PORTAL\.row, HEDGE_MAZE_REAR_PORTAL\.col\)\)/.test(mazeLayout) && /maze-approach-path[^;]*z:\s*HEDGE_MAZE_REAR_ENTRANCE\.z/.test(yardBuild), "rear maze path does not derive its centerline from the shifted portal");
 check("32 north maze access", /maze-north-access-spur/.test(yardBuild), "north maze entrance has no legible paved spur from the east-lawn walkway");
 const mazePortalBuilder = section("function addMazeEntrancePortal", "function buildHedgeMaze", yardBuild);
-check("35 matching maze portals", /const HEDGE_MAZE_PORTALS\s*=/.test(mazeLayout) && /id:\s*"rear"[^\n]*row:\s*19[^\n]*col:\s*0/.test(mazeLayout) && /id:\s*"north"[^\n]*row:\s*5[^\n]*col:\s*0/.test(mazeLayout), "rear and north maze portals do not share authored grid definitions");
+check("35 matching maze portals", /const HEDGE_MAZE_PORTALS\s*=/.test(mazeLayout) && /id:\s*"rear"[^\n]*row:\s*18[^\n]*col:\s*0/.test(mazeLayout) && /id:\s*"north"[^\n]*row:\s*5[^\n]*col:\s*0/.test(mazeLayout), "rear and north maze portals do not share authored grid definitions");
 check("35 matching maze portals", /function addMazeEntrancePortal\(/.test(yardBuild) && /for \(const portal of HEDGE_MAZE_PORTALS\)/.test(yardBuild) && /addMazeEntrancePortal\(portal/.test(yardBuild), "both maze openings are not built through the same portal helper");
 for (const component of ["entrance-urn", "entrance-topiary", "entrance-arch-post", "entrance-arch", "entrance-crest"]) {
   check("35 matching maze portals", mazePortalBuilder.includes(component), `shared maze portal is missing ${component}`);
@@ -653,11 +655,12 @@ check("19 yard diagnostics", /gate:\s*\{/.test(yardBuild) && /maze:\s*\{/.test(y
 for (const view of ["yardGateA", "yardGateInteract", "yardGardenA", "yardGardenB", "yardPoolA", "yardPoolB", "yardMazeA", "yardMazeB", "yardMazeEntranceCell", "yardMazeNorthEntrance", "yardMazeNorthEntranceCell", "yardMazeSouthWallExterior", "yardEastFrontConnector", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenApproach", "yardExteriorSwitch"]) {
   check("19 yard QA views", mansion.includes(`${view}:`), `missing QA view ${view}`);
 }
-for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardMazeSouthWallBlock", "yardMazeNorthAccess", "yardEastFrontConnection", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut"]) {
+for (const route of ["yardGateBlock", "yardGateWestSeam", "yardGateEastSeam", "yardBoundarySouth", "yardBoundaryWest", "yardBoundaryEast", "yardMazeSolution", "yardMazeApproach", "yardMazeSouthWallBlock", "yardMazeNorthAccess", "yardEastFrontConnection", "yardPoolNorthGuard", "yardPoolEastEntry", "yardGardenWalk", "frontDoorOut", "terraceDoorOut"]) {
   check("19 yard QA routes", qaHooks.includes(`${route}:`) || qaHooks.includes(`case \"${route}\"`), `missing physical QA route ${route}`);
 }
 check("19 yard QA routes", count(qaHooks, /openDoors:\s*true/g) >= 2 && /if \(route\.openDoors\)/.test(qaHooks), "exterior-door routes do not open their own doors");
 check("19 yard QA routes", /route\.expected/.test(qaHooks) && /route expectation not met/.test(qaHooks), "QA routes report complete without checking their expected endpoint");
+check("36 aligned maze approach route", /yardMazeApproach:[\s\S]*?expected:\s*\{[^}]*room:\s*"HEDGE MAZE"[^}]*visitedRooms:\s*\["REAR LAWN",\s*"HEDGE MAZE"\]/.test(qaHooks), "rear approach QA does not prove the shifted entrance is physically traversable");
 check("19 yard QA routes", /dataset\.qaRouteStatus\s*=\s*state\.qaRoute\.status/.test(qaHooks) && /dataset\.qaRouteX\s*=\s*p\.x\.toFixed\(2\)/.test(qaHooks) && /dataset\.qaRouteZ\s*=\s*p\.z\.toFixed\(2\)/.test(qaHooks), "QA routes do not expose their final status and endpoint for browser verification");
 check("19 yard QA routes", /yardPoolNorthGuard:[\s\S]*?yaw:\s*-Math\.PI\s*\/\s*2[\s\S]*?seconds:\s*1\.25/.test(qaHooks), "north pool-deck support route still steps over the coping into the pool");
 
@@ -779,6 +782,10 @@ check("31 global shader padding diagnostics", /boundedLightProfile:\s*true/.test
 check("34 useful fixed light slots", /function selectBudgetedCircuitLights\(floors, renderContext\)/.test(mansion) && /MOBILE_SHADER_SPOT_BUDGET - auxiliarySpotReserve/.test(budgetedLightSelection) && /MOBILE_SHADER_POINT_BUDGET/.test(budgetedLightSelection) && /selectedLights\.add\(light\)/.test(budgetedLightSelection), "real emitters do not explicitly fill the already-paid fixed spot and point shader slots");
 check("34 grounds light coverage", /renderContext === "grounds"/.test(budgetedLightSelection) && /exteriorBudgetPriority/.test(budgetedLightSelection) && /budgetPriority:\s*[0-5]/.test(yardBuild), "the grounds budget is not distributed across curated facade, garden, pool, and maze emitters");
 check("34 front facade lighting", /function addFrontFacadeWallLantern\(/.test(yardBuild) && count(yardBuild, /addFrontFacadeWallLantern\(/g) === 3 && /front-facade-\$\{side\}-lantern-spotlight/.test(yardBuild), "the front facade has no fixed-budget wall lantern pools, leaving the outdoor entry elevation black");
+const frontFacadeLanternBuilder = section("function addFrontFacadeWallLantern", "function buildEstateLighting", yardBuild);
+check("36 softer entry lighting", /addWallSconce\(\s*x,\s*2\.12,\s*12\.19,\s*0,\s*40,\s*7\.5/.test(frontFacadeLanternBuilder) && /addPracticalLight\(0,\s*3\.05,\s*13\.35,\s*52,\s*7\.5/.test(signatureChandelierBuilders) && /onEmissiveIntensity = 0\.85/.test(signatureChandelierBuilders), "front sconces or portico chandelier do not use the softer entrance profile");
+check("36 exterior glow handoff", /setGlowRenderState\(lit\)/.test(lightCircuitClass) && /material\.userData\.renderLit = renderLit/.test(lightCircuitClass) && /circuit\.setGlowRenderState\(circuit\.on && rendersInContext\)/.test(lightRendering), "decorative entrance glows do not follow the switched indoor-to-grounds handoff");
+check("36 glow diagnostics", /activeLightPools:\s*circuits\.reduce[\s\S]*?material\.userData\.renderLit/.test(diagnostics) && /activeLightPools:\s*c\.glowMaterials\.filter\(\(material\) => material\.userData\.renderLit\)/.test(diagnostics), "QA cannot observe context-gated light pools");
 check("34 open-volume light coverage", /OPEN_VOLUME_BUDGET_CIRCUITS/.test(mansion) && /for \(const circuitName of OPEN_VOLUME_BUDGET_CIRCUITS\)/.test(budgetedLightSelection), "unused main-floor shader slots are not reassigned to the foyer, grand stair, and upper landing");
 check("34 energized slot preference", /const enclosureAvailable = \(light\)/.test(budgetedLightSelection) && /!enclosure \|\| enclosure\.open \|\| enclosure\.angle > 0\.025/.test(budgetedLightSelection) && /filter\(\(light\) => rendersOnLevel\(light\) && enclosureAvailable\(light\)\)/.test(budgetedLightSelection), "closed closet emitters can consume every useful upper-floor spot slot while zero-energy padding already stabilizes the shader type count");
 check("34 grounds auxiliary slots", /light\.visible = renderContext !== "grounds"/.test(lightRendering), "inactive indoor cabinet lamps still displace useful exterior spotlights on the grounds");
@@ -1060,7 +1067,7 @@ check("29 lounge artwork clearance", /upperArtBanquet: \[-2\.0, FLOOR\.UPPER, -9
 check("34 library sconce clearance", /library\.addWallSconce\(-7\.05, FLOOR\.MAIN \+ 2\.0, 3\.361, 0, 32, 5\.8,[^\n]+-9\.45, FLOOR\.MAIN \+ 1\.05, 7\.55\);/.test(mansion), "library wall sconce is not mounted on the clear south-wall panel");
 check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-maze-lighting-performance-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-entry-light-maze-alignment-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

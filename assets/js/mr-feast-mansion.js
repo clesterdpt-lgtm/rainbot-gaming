@@ -26,6 +26,7 @@
     prompt: $("mansion-prompt"),
     promptKey: $("mansion-prompt-key"),
     promptText: $("mansion-prompt-text"),
+    hiddenStatus: $("mansion-hidden"),
     crosshair: $("mansion-crosshair"),
     audio: $("mansion-audio"),
     fullscreen: $("mansion-fullscreen"),
@@ -85,7 +86,7 @@
   const MAZE_EXPOSURE = 1.0;
   const CONTEXT_LIGHTING_RESPONSE = 4.5;
   const ROOM_LIGHTING = Object.freeze({
-    "POWDER ROOM": ["powder room lights"],
+    "COAT CLOSET": ["coat closet lights"],
     "LIBRARY": ["library lights"],
     "FRONT FOYER": ["foyer chandelier"],
     "MUSIC ROOM": ["music room lights"],
@@ -172,6 +173,12 @@
   const FOOD_STORAGE_KINDS = new Set([
     "food", "refrigerator", "pantry-staples", "preserves", "dry-goods", "baking", "tinned-goods",
   ]);
+  const COAT_CLOSET = Object.freeze({
+    bounds: Object.freeze({ minX: -15, maxX: -11.5, minZ: -3.2, maxZ: 1.6 }),
+    center: Object.freeze({ x: -13.25, z: -0.8 }),
+    hidePosition: Object.freeze({ x: -14.36, z: 0.28, yaw: -Math.PI / 2 }),
+    exitPosition: Object.freeze({ x: -13.2, z: -1.58, yaw: 0 }),
+  });
 
   // Keep the raised mid-landing and both flights on one authored datum. The
   // landing is deliberately above the halfway point so the foyer-to-ballroom
@@ -275,9 +282,10 @@
     mainHallBathroomB: [-10.2, FLOOR.MAIN, 2.35, -0.72],
     mainHallBathroomShower: [-11.9, FLOOR.MAIN, 1.8, 2.1],
     mainHallToiletInteract: [-9.55, FLOOR.MAIN, 0.25, Math.PI / 2, -0.62],
-    powderRoomA: [-13.2, FLOOR.MAIN, -2.45, Math.PI],
-    powderRoomB: [-14.25, FLOOR.MAIN, -1.55, -2.3],
-    powderRoomToiletInteract: [-13.15, FLOOR.MAIN, -0.4, Math.PI, -0.52],
+    coatClosetDoor: [-13.2, FLOOR.MAIN, -4.05, Math.PI],
+    coatClosetA: [-13.2, FLOOR.MAIN, -2.42, Math.PI],
+    coatClosetB: [-12.1, FLOOR.MAIN, -0.65, Math.PI / 2],
+    coatClosetHide: [-13.2, FLOOR.MAIN, -0.15, Math.PI / 2],
     stairHallA: [-4.25, FLOOR.MAIN, 2.4, -1.06],
     stairHallB: [4.25, FLOOR.MAIN, -2.5, 2.1],
     paintingRoomA: [6.0, FLOOR.MAIN, -2.35, -2.44],
@@ -355,7 +363,6 @@
     primaryClosetInside: [-6.3, FLOOR.UPPER, -9.2, -Math.PI / 2],
     eastRearClosetRoom: [7.8, FLOOR.UPPER, -9.2, Math.PI / 2],
     eastRearClosetInside: [6.3, FLOOR.UPPER, -9.2, Math.PI / 2],
-    powderRoomDoor: [-13.2, FLOOR.MAIN, -4.05, Math.PI],
     rearLoungeEntry: [-4.15, FLOOR.UPPER, -2.15, 0],
     primarySuiteLoungeDoor: [-4.05, FLOOR.UPPER, -6.4, Math.PI / 2],
     eastRearSuiteLoungeDoor: [4.05, FLOOR.UPPER, -6.4, -Math.PI / 2],
@@ -444,6 +451,8 @@
     currentRoom: "FRONT FOYER",
     mazeLightingContext: false,
     currentInteraction: null,
+    isHidden: false,
+    activeHideSpot: null,
     lastMove: { dx: 0, dz: 0 },
     qaRoute: null,
     frameTime: 0,
@@ -543,6 +552,7 @@
   const stockedStorages = [];
   const refrigerators = [];
   const kitchenTaskBulbs = [];
+  const hidingSpots = [];
   const roomZones = [];
   const lightningMaterials = [];
   const yardWaterSystems = [];
@@ -1914,6 +1924,53 @@
     }
   }
 
+  class HidingSpot {
+    constructor(options) {
+      const { name, targets, floorY, hidePosition, exitPosition } = options;
+      this.name = name;
+      this.floorY = floorY;
+      this.hidePosition = hidePosition;
+      this.exitPosition = exitPosition;
+      this.interaction = {
+        type: "hide",
+        getLabel: () => state.activeHideSpot === this ? `Leave ${name}` : `Hide in ${name}`,
+        activate: () => state.activeHideSpot === this ? this.exit() : this.enter(),
+      };
+      for (const target of targets) addInteractionTarget(target, this.interaction);
+      hidingSpots.push(this);
+    }
+
+    enter() {
+      if (state.activeHideSpot) return;
+      state.activeHideSpot = this;
+      state.isHidden = true;
+      input.forward = false;
+      input.back = false;
+      input.left = false;
+      input.right = false;
+      teleport(this.hidePosition.x, this.floorY, this.hidePosition.z, this.hidePosition.yaw, 0);
+      if (dom.stage) dom.stage.classList.add("is-hiding");
+      if (dom.hiddenStatus) {
+        dom.hiddenStatus.hidden = false;
+        dom.hiddenStatus.textContent = "Hidden among the coats";
+      }
+      state.currentInteraction = this.interaction;
+      updateInteractionPrompt();
+    }
+
+    exit() {
+      if (state.activeHideSpot !== this) return;
+      state.activeHideSpot = null;
+      state.isHidden = false;
+      teleport(this.exitPosition.x, this.floorY, this.exitPosition.z, this.exitPosition.yaw, 0);
+      if (dom.stage) dom.stage.classList.remove("is-hiding");
+      if (dom.hiddenStatus) dom.hiddenStatus.hidden = true;
+      state.currentInteraction = null;
+      updateLocation();
+      updateInteractionPrompt();
+    }
+  }
+
   function kitchenShelfHeights(height) {
     // Under-counter cabinets need two deliberately separated shelves. Clamping
     // the tall-cabinet elevations used to collapse the upper two shelves onto
@@ -2239,6 +2296,13 @@
           angle: 0.78,
           penumbra: 0.6,
           radius: 4.2,
+        },
+        closet: {
+          intensity: 31,
+          distance: 6.8,
+          angle: 0.76,
+          penumbra: 0.64,
+          radius: 3.8,
         },
         basement: { intensity: 46, distance: 9.2, angle: 0.96, penumbra: 0.58, radius: 6.4 },
         corridor: {
@@ -3611,6 +3675,127 @@
     box({ name: `${label}-north-chair-rail`, w: 3.12, h: 0.055, d: 0.07, x: -13.25, y: floorY + 1.23, z: 1.38, material: M.brass, cast: false });
   }
 
+  function addHangingCoat(name, x, z, frontDirection, material, length = 1.08, angle = 0) {
+    const shoulderY = 2.15;
+    const coat = new THREE.Group();
+    coat.name = `${name}-perpendicular-hanger-group`;
+    coat.position.set(x, FLOOR.MAIN, z);
+    // The closet rods run north/south. Each hanger and garment spans east/west
+    // across the rod, then receives a small yaw so the row feels naturally
+    // jostled rather than laid flat along the rail.
+    coat.rotation.y = angle;
+    scene.add(coat);
+    for (const shoulderSide of [-1, 1]) {
+      cylinder({
+        name: `${name}-hanger-shoulder`,
+        radius: 0.012,
+        height: 0.32,
+        x: shoulderSide * 0.13,
+        y: shoulderY + 0.015,
+        z: 0,
+        rotationZ: shoulderSide * 1.01,
+        material: M.brass,
+        parent: coat,
+        cast: false,
+      });
+    }
+    cylinder({ name: `${name}-hanger-crossbar`, radius: 0.01, height: 0.48, x: 0, y: shoulderY - 0.12, z: 0, rotationZ: Math.PI / 2, material: M.brass, parent: coat, cast: false });
+    cylinder({ name: `${name}-hanger-hook`, radius: 0.011, height: 0.18, x: 0, y: shoulderY + 0.2, z: 0, material: M.brass, parent: coat, cast: false });
+    const coatX = frontDirection * 0.065;
+    const body = roundedBox({
+      name: `${name}-hanging-garment`,
+      // Five-and-a-half centimetres keeps a coat softly dimensional without
+      // reading like a padded slab when the row is viewed down the rod.
+      w: 0.54, h: length, d: 0.055, radius: 0.032,
+      x: coatX, y: shoulderY - length / 2 - 0.05, z: 0,
+      material, parent: coat, cast: false,
+    });
+    for (const sleeveSide of [-1, 1]) {
+      roundedBox({
+        name: `${name}-sleeve`,
+        w: 0.15, h: length * 0.72, d: 0.05, radius: 0.026,
+        x: coatX + sleeveSide * 0.29 + frontDirection * 0.015,
+        y: shoulderY - length * 0.43,
+        z: 0,
+        rotationZ: sleeveSide * 0.055,
+        material, parent: coat, cast: false,
+      });
+    }
+    box({ name: `${name}-collar`, w: 0.2, h: 0.13, d: 0.055, x: coatX + frontDirection * 0.02, y: shoulderY - 0.08, z: 0, material: M.darkWood, parent: coat, cast: false });
+    return body;
+  }
+
+  function furnishCoatCloset() {
+    const floorY = FLOOR.MAIN;
+    const westRackX = -14.56;
+    const eastRackX = -11.94;
+    const rackCenterZ = -0.62;
+    const rackLength = 3.72;
+    const clearAisle = { minX: -13.72, maxX: -12.68, minZ: -2.82, maxZ: 0.62 };
+
+    // The former washroom is already a generous 14.6m2. Warm oak, a long
+    // runner, and perimeter storage turn the whole footprint into one closet
+    // while this named center aisle stays free from colliders and door swing.
+    plane({ name: "coat-closet-floor-runner", w: clearAisle.maxX - clearAisle.minX, h: clearAisle.maxZ - clearAisle.minZ, x: COAT_CLOSET.center.x, y: floorY + 0.026, z: (clearAisle.minZ + clearAisle.maxZ) / 2, material: M.greenRug });
+    for (const x of [westRackX, eastRackX]) {
+      box({ name: "coat-closet-upper-shelf", w: 0.58, h: 0.075, d: rackLength, x, y: floorY + 2.48, z: rackCenterZ, material: M.darkWood, cast: true });
+      box({ name: "coat-closet-shoe-shelf", w: 0.54, h: 0.065, d: rackLength, x, y: floorY + 0.28, z: rackCenterZ, material: M.darkWood, cast: false });
+      cylinder({ name: "coat-closet-hanging-rail", radius: 0.026, height: rackLength, x, y: floorY + 2.27, z: rackCenterZ, rotationX: Math.PI / 2, material: M.brass, cast: false });
+      for (const supportZ of [-2.42, 1.18]) {
+        cylinder({ name: "coat-closet-rail-support", radius: 0.018, height: 0.25, x, y: floorY + 2.39, z: supportZ, material: M.brass, cast: false });
+      }
+    }
+
+    const coatMaterials = [M.velvet, M.fabric, M.leather, M.redRug, M.greenRug];
+    const hangingAngles = [-0.11, -0.055, 0.035, 0.09, -0.075, 0.055, 0.115, -0.025];
+    const westCoatPositions = Array.from({ length: 16 }, (_, index) => -2.38 + index * (3.36 / 15));
+    const eastCoatPositions = Array.from({ length: 15 }, (_, index) => -2.34 + index * (3.28 / 14));
+    const westCoats = [];
+    westCoatPositions.forEach((z, index) => {
+      westCoats.push(addHangingCoat(`coat-closet-west-coat-${index + 1}`, westRackX, z, 1, coatMaterials[index % coatMaterials.length], 1.0 + (index % 4) * 0.1, hangingAngles[index % hangingAngles.length]));
+    });
+    eastCoatPositions.forEach((z, index) => {
+      addHangingCoat(`coat-closet-east-coat-${index + 1}`, eastRackX, z, -1, coatMaterials[(index + 2) % coatMaterials.length], 0.98 + (index % 3) * 0.12, -hangingAngles[(index + 2) % hangingAngles.length]);
+    });
+    const garmentBag = roundedBox({ name: "coat-closet-hanging-garment-bag", w: 0.55, h: 1.45, d: 0.05, radius: 0.026, x: eastRackX - 0.08, y: floorY + 1.35, z: 1.04, rotationY: -0.075, material: M.fabric, cast: false });
+    cylinder({ name: "coat-closet-garment-bag-hook", radius: 0.012, height: 0.22, x: eastRackX, y: floorY + 2.35, z: 1.0, material: M.brass, cast: false });
+
+    // Stock every storage tier so the closet reads as used rather than as an
+    // empty wardrobe shell: hat boxes, luggage, folded scarves, and shoes.
+    for (const [index, z] of [-2.2, -1.15, -0.1, 0.92].entries()) {
+      cylinder({ name: "coat-closet-hat-box", radius: 0.2 + (index % 2) * 0.035, height: 0.2, segments: 18, x: westRackX, y: floorY + 2.62, z, material: index % 2 ? M.fabric : M.velvet, cast: false });
+      roundedBox({ name: "coat-closet-folded-scarf", w: 0.38, h: 0.12, d: 0.42, radius: 0.025, x: eastRackX, y: floorY + 2.58, z, material: index % 2 ? M.greenRug : M.redRug, cast: false });
+    }
+    for (const [sideIndex, x] of [westRackX + 0.08, eastRackX - 0.08].entries()) {
+      for (const [index, z] of [-2.15, -1.25, -0.35, 0.55].entries()) {
+        for (const pairSide of [-1, 1]) roundedBox({ name: "coat-closet-shoe", w: 0.3, h: 0.14, d: 0.16, radius: 0.035, x: x + (sideIndex ? -0.04 : 0.04), y: floorY + 0.39, z: z + pairSide * 0.12, material: index % 2 ? M.leather : M.blackWood, cast: false });
+      }
+    }
+
+    // The north wall holds the larger objects and a useful dressing bench.
+    box({ name: "coat-closet-north-storage-back", w: 3.08, h: 2.72, d: 0.08, x: COAT_CLOSET.center.x, y: floorY + 1.36, z: 1.42, material: M.blackWood, cast: true });
+    for (const y of [0.55, 1.35, 2.35]) box({ name: "coat-closet-north-storage-shelf", w: 3.02, h: 0.075, d: 0.48, x: COAT_CLOSET.center.x, y: floorY + y, z: 1.2, material: M.darkWood, cast: true });
+    for (const x of [-14.25, -13.25, -12.25]) box({ name: "coat-closet-north-cubby-divider", w: 0.06, h: 2.4, d: 0.47, x, y: floorY + 1.52, z: 1.2, material: M.darkWood, cast: true });
+    roundedBox({ name: "coat-closet-luggage-large", w: 0.78, h: 0.55, d: 0.38, radius: 0.055, x: -13.76, y: floorY + 0.88, z: 1.14, material: M.leather, cast: true });
+    roundedBox({ name: "coat-closet-luggage-small", w: 0.62, h: 0.42, d: 0.36, radius: 0.05, x: -12.7, y: floorY + 0.82, z: 1.14, material: M.velvet, cast: true });
+    for (const x of [-13.76, -12.7]) cylinder({ name: "coat-closet-luggage-handle", radius: 0.025, height: 0.32, x, y: floorY + 1.25, z: 1.14, rotationZ: Math.PI / 2, material: M.brass, cast: false });
+    box({ name: "coat-closet-dressing-bench", w: 1.22, h: 0.42, d: 0.5, x: -13.25, y: floorY + 0.21, z: 0.89, material: M.darkWood, collider: true, cast: true });
+    roundedBox({ name: "coat-closet-bench-cushion", w: 1.12, h: 0.14, d: 0.45, radius: 0.04, x: -13.25, y: floorY + 0.49, z: 0.89, material: M.velvet, cast: false });
+    cylinder({ name: "coat-closet-umbrella-stand", radius: 0.21, radiusTop: 0.19, radiusBottom: 0.23, height: 0.58, segments: 18, x: -12.02, y: floorY + 0.29, z: 0.78, material: M.brass, cast: true });
+    for (const [index, offset] of [-0.12, 0, 0.12].entries()) {
+      cylinder({ name: "coat-closet-umbrella", radius: 0.022, height: 1.22 + index * 0.08, x: -12.02 + offset, y: floorY + 0.86, z: 0.78 + (index - 1) * 0.05, rotationZ: (index - 1) * 0.06, material: index === 1 ? M.darkWood : M.iron, cast: false });
+      sphere({ name: "coat-closet-umbrella-handle", radius: 0.06, x: -12.02 + offset + (index - 1) * 0.04, y: floorY + 1.5 + index * 0.04, z: 0.78 + (index - 1) * 0.05, material: M.darkWood, cast: false });
+    }
+
+    new HidingSpot({
+      name: "coat closet",
+      targets: [westCoats[8], westCoats[9], westCoats[10], westCoats[11], garmentBag],
+      floorY,
+      hidePosition: COAT_CLOSET.hidePosition,
+      exitPosition: COAT_CLOSET.exitPosition,
+    });
+  }
+
   function addTowelRail(x, y, z, rotationY, floorY) {
     const nx = Math.sin(rotationY);
     const nz = Math.cos(rotationY);
@@ -3621,29 +3806,6 @@
     cylinder({ name: "bath-towel-rail", radius: 0.025, height: 0.72, x: 0, y: 0, z: 0.08, rotationZ: Math.PI / 2, material: M.brass, parent: rail, cast: false });
     roundedBox({ name: "folded-bath-towel", w: 0.55, h: 0.58, d: 0.045, radius: 0.025, x: 0, y: -0.27, z: 0.11, material: M.fabric, parent: rail, cast: false });
     return { nx, nz };
-  }
-
-  function furnishBathrooms() {
-    const floorY = FLOOR.MAIN;
-    const label = "powder-room";
-    addBathroomTilework(floorY, label);
-    new Cabinet({ name: `${label} vanity`, x: -11.9, z: -0.15, floorY, width: 1.25, height: 0.82, depth: 0.55, rotationY: -Math.PI / 2, material: M.darkWood });
-    cylinder({ name: `${label}-basin`, radius: 0.35, radiusTop: 0.37, radiusBottom: 0.27, height: 0.13, segments: 24, x: -12.2, y: floorY + 0.89, z: -0.15, material: M.porcelain });
-    const basinRim = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.035, 8, 28), M.porcelain);
-    basinRim.name = `${label}-basin-rim`;
-    basinRim.rotation.x = Math.PI / 2;
-    basinRim.position.set(-12.2, floorY + 0.965, -0.15);
-    basinRim.castShadow = true;
-    scene.add(basinRim);
-    cylinder({ name: `${label}-basin-drain`, radius: 0.055, height: 0.012, segments: 16, x: -12.2, y: floorY + 0.967, z: -0.15, material: M.brass, cast: false });
-    cylinder({ name: `${label}-faucet-deck-collar`, radius: 0.075, height: 0.035, segments: 18, x: -12.05, y: floorY + 0.84, z: 0.08, material: M.brass, cast: false });
-    cylinder({ name: `${label}-faucet-riser`, radius: 0.028, height: 0.4, x: -12.05, y: floorY + 1.02, z: 0.08, material: M.brass, cast: false });
-    sphere({ name: `${label}-faucet-elbow`, radius: 0.045, x: -12.05, y: floorY + 1.21, z: 0.08, material: M.brass, cast: false });
-    cylinder({ name: `${label}-faucet-spout`, radius: 0.024, height: 0.3, x: -12.05, y: floorY + 1.21, z: -0.07, rotationX: Math.PI / 2, material: M.brass, cast: false });
-    new WaterFixture({ name: "powder room sink", kind: "sink", x: -12.05, y: floorY + 1.2, z: -0.2, drop: 0.2 });
-    addWallMirror("z", -11.5, -0.15, floorY, 2.0, -1, 0.95, 1.18);
-    addToilet("powder room toilet", -13.35, 1.0, floorY, 0);
-    addTowelRail(-14.25, 1.3, 1.39, Math.PI, FLOOR.MAIN);
   }
 
   function addDoubleVanityBase(label, x, z, floorY, width) {
@@ -4476,7 +4638,7 @@
     addRoomZone(mainMin, mainMax, -33.5, 33.5, -33.5, -12.01, "MAIN LEVEL", "REAR LAWN");
     addRoomZone(mainMin, mainMax, -33.5, -15.01, -12, 33.5, "MAIN LEVEL", "WEST LAWN");
     addRoomZone(mainMin, mainMax, 15.01, 33.5, -12, 33.5, "MAIN LEVEL", "EAST LAWN");
-    addRoomZone(mainMin, mainMax, -15, -11.5, -3.2, 1.6, "MAIN LEVEL", "POWDER ROOM");
+    addRoomZone(mainMin, mainMax, COAT_CLOSET.bounds.minX, COAT_CLOSET.bounds.maxX, COAT_CLOSET.bounds.minZ, COAT_CLOSET.bounds.maxZ, "MAIN LEVEL", "COAT CLOSET");
     addRoomZone(mainMin, mainMax, 10.4, 15, -3.2, 3.2, "MAIN LEVEL", "SERVICE STAIR");
     const wingZones = [
       [-15, -5, 3.2, 12, "LIBRARY"],
@@ -4574,7 +4736,7 @@
       ...mainWindows([3.3]),
       ...kitchenWindows([6.4, 9.4, 12.4]),
     ] });
-    buildWallRun({ axis: "z", fixed: -15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-west-wall", openings: mainWindows([-9.4, -6.7, 0, 6.4, 9.4]) });
+    buildWallRun({ axis: "z", fixed: -15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-west-wall", openings: mainWindows([-9.4, -6.7, 6.4, 9.4]) });
     buildWallRun({ axis: "z", fixed: 15, start: -12, end: 12, floorY: FLOOR.MAIN, exterior: true, name: "main-east-wall", openings: [
       ...kitchenWindows([-9.4, -6.7]),
       ...mainWindows([0, 6.4, 9.4]),
@@ -4650,7 +4812,7 @@
     buildWallRun({ axis: "x", fixed: 3.2, start: -5, end: 5, floorY: FLOOR.MAIN, name: "main-foyer-arch", openings: [{ kind: "arch", center: 0, width: 7.2, height: 3.18 }] });
     buildWallRun({ axis: "x", fixed: 3.2, start: 5, end: 15, floorY: FLOOR.MAIN, name: "main-music-painting-divider", openings: [{ kind: "door", center: 8.2, width: 1.38, label: "music painting door", direction: -1 }] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.MAIN, name: "main-bath-gallery", openings: [
-      { kind: "door", center: -13.2, width: 1.05, label: "powder room door", direction: -1, hingeSide: -1 },
+      { kind: "door", center: -13.2, width: 1.05, label: "coat closet door", direction: 1, hingeSide: -1 },
       { kind: "door", center: -9.7, width: 1.15, label: "bathroom gallery door", direction: -1 },
     ] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -5, end: 5, floorY: FLOOR.MAIN, name: "main-stair-gallery", openings: [{ kind: "arch", center: 0, width: 5.6, height: 3.1 }] });
@@ -4968,9 +5130,9 @@
     addKitchenLightingFixtures(kitchen);
     kitchen.addSwitch(5.161, 1.15, -4.2, Math.PI / 2);
 
-    const powderRoom = new LightCircuit("powder room lights", FLOOR.MAIN, 0xffc982, true);
-    powderRoom.addFixture(-13.25, -0.75, "bathroom");
-    powderRoom.addSwitch(-11.661, 1.15, -2.55, -Math.PI / 2);
+    const coatCloset = new LightCircuit("coat closet lights", FLOOR.MAIN, 0xffb66f, true);
+    coatCloset.addFixture(COAT_CLOSET.center.x, COAT_CLOSET.center.z, "closet");
+    coatCloset.addSwitch(-11.661, 1.15, -2.55, -Math.PI / 2);
 
     const westFront = new LightCircuit("west front suite lights", FLOOR.UPPER, 0xffb66f, true);
     westFront.addFixture(-9.6, 7.6, "small");
@@ -6018,7 +6180,7 @@
     buildServiceStaircase();
     furnishMainFloor();
     furnishUpperFloor();
-    furnishBathrooms();
+    furnishCoatCloset();
     furnishMainHallBathroom();
     furnishUpperGrandBathroom();
     furnishBasement();
@@ -6808,6 +6970,7 @@
   }
 
   function findInteraction() {
+    if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
     if (!hits.length) return null;
@@ -7181,6 +7344,15 @@
       physics.updateSafety();
       return;
     }
+    if (state.isHidden) {
+      // Looking remains available, but keyboard and touch movement cannot
+      // walk the capsule out while the AI-facing state still says hidden.
+      physics.movePlayer(0, 0);
+      physics.step();
+      physics.updateSafety();
+      state.lastMove = { dx: 0, dz: 0 };
+      return;
+    }
     let forward = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
     let strafe = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const length = Math.hypot(forward, strafe);
@@ -7319,6 +7491,13 @@
       contextLost: state.contextLost,
       floor: state.currentFloor,
       room: state.currentRoom,
+      hidden: state.isHidden,
+      hiding: {
+        active: state.isHidden,
+        spot: state.activeHideSpot ? state.activeHideSpot.name : null,
+        movementLocked: state.isHidden,
+        availableSpots: hidingSpots.map((spot) => spot.name),
+      },
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -7327,6 +7506,7 @@
         yaw: Number(state.yaw.toFixed(3)),
         pitch: Number(state.pitch.toFixed(3)),
         grounded: Boolean(physics && physics.grounded),
+        hidden: state.isHidden,
       },
       lastMove: { dx: Number(state.lastMove.dx.toFixed(4)), dz: Number(state.lastMove.dz.toFixed(4)) },
       qaRoute: state.qaRoute,
@@ -7351,6 +7531,7 @@
             lightIntensity: Number((closet.lightCircuit?.lights[0]?.intensity || 0).toFixed(2)),
             thresholdColliderEnabled: Boolean(closet.thresholdCollider && closet.thresholdCollider.isEnabled && closet.thresholdCollider.isEnabled()),
           })),
+        hidingSpots: hidingSpots.map((spot) => ({ name: spot.name, active: state.activeHideSpot === spot })),
         waterFixturesTotal: waterFixtures.length,
         waterRunning: waterFixtures.filter((fixture) => fixture.on).map((fixture) => fixture.name),
         toiletsTotal: toilets.length,
@@ -7512,6 +7693,7 @@
     };
     window.render_game_to_text = () => JSON.stringify(getDiagnostics());
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
+    window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
     window.MrFeastFresh.inspectScene = (prefix = "") => {
       const meshes = [];
       const bounds = new THREE.Box3();
@@ -7623,6 +7805,7 @@
         library: [-10.0, FLOOR.MAIN, 7.7, Math.PI / 2],
         music: [10.0, FLOOR.MAIN, 7.7, -Math.PI / 2],
         mainHallBathroom: [-10.0, FLOOR.MAIN, 0, Math.PI / 2],
+        coatCloset: [COAT_CLOSET.center.x, FLOOR.MAIN, -2.1, Math.PI],
         painting: [8.2, FLOOR.MAIN, 0, -Math.PI / 2],
         paintingSouthAisle: [8.2, FLOOR.MAIN, -2.45, Math.PI],
         paintingWestDoorOutside: [4.2, FLOOR.MAIN, 0, -Math.PI / 2],
@@ -8004,6 +8187,12 @@
           actions: [{ yaw: -Math.PI / 2, seconds: 1.8 }],
           openDoors: true,
           expected: { grounded: true, room: "ARCHIVE", minX: 2.7, maxX: 4.25, minZ: 6.75, maxZ: 7.65 },
+        },
+        coatClosetDoorEntry: {
+          start: "coatClosetDoor",
+          actions: [{ yaw: Math.PI, seconds: 1.3 }],
+          openDoors: true,
+          expected: { grounded: true, room: "COAT CLOSET", minX: -13.55, maxX: -12.85, minZ: -1.65, maxZ: -0.75, visitedRooms: ["DINING ROOM", "COAT CLOSET"] },
         },
         archiveCenterAisle: {
           start: "archiveSouthAisle",

@@ -133,6 +133,7 @@ const kitchenFurnishings = section("// Kitchen", "// Foyer and gallery detail", 
 const basementFurnishings = section("function furnishBasement()", "function buildLighting()");
 const slabs = section("function buildSlabsAndCeilings()", "function buildExteriorWalls()");
 const grandStairConfig = section("const GRAND_STAIR", "const YARD_LAYOUT");
+const coatClosetConfig = section("const COAT_CLOSET", "const GRAND_STAIR");
 const grandStair = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
 const exteriorWalls = section("function buildExteriorWalls()", "function buildMainPartitions()");
 const serviceStair = section("function buildServiceStaircase()", "function addRug(");
@@ -144,10 +145,13 @@ const wallSegmentBuilder = section("function wallSegment(", "function addWindow(
 const wallTrimSpanBuilder = section("function wallTrimSpans(", "function addContinuousWallTrim(");
 const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
+const hidingSpotClass = section("class HidingSpot", "function addLocalInstanceBatch(");
+const coatClosetFurnishings = section("function addHangingCoat(", "function addTowelRail(");
 const stockedStorageBuilder = section("function addStockedStorageContents", "class Refrigerator");
 const toiletClass = section("class FlushableToilet", "function addToilet");
 const fireplaceClass = section("class Fireplace", "function addFireplace");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
+const interactionLookup = section("function findInteraction()", "function inspectInteractionRay()");
 const contextLighting = section("function getContextLightingTargets(", "function selectBudgetedCircuitLights(");
 const budgetedLightSelection = section("function selectBudgetedCircuitLights(", "function syncLightRendering(");
 const lightRendering = section("function syncLightRendering(", "function updatePlayer(");
@@ -190,10 +194,11 @@ const kitchenServiceStairWall = namedWallRun("main-kitchen-service-stair-wall", 
 const pantryFurnishings = section("// Pantry storage", "addBoiler", basementFurnishings);
 const kitchenBallroomPartialWall = namedWallRun("main-kitchen-ballroom-partial-wall", mainPartitions);
 const mainRearWall = namedWallRun("main-rear-wall", exteriorWalls);
+const mainWestExteriorWall = namedWallRun("main-west-wall", exteriorWalls);
 const mainEastWall = namedWallRun("main-east-wall", exteriorWalls);
 const kitchenRangeBuilder = section("function addKitchenRange(", "function addKitchenBaseCabinet(");
 const kitchenBuilder = section("function addKitchenBaseCabinet(", "function addWineRack(");
-const kitchenLighting = section('const kitchen = new LightCircuit("kitchen lights"', "const powderRoom", lightingBuild);
+const kitchenLighting = section('const kitchen = new LightCircuit("kitchen lights"', "const coatCloset", lightingBuild);
 const primaryFrontWall = namedWallRun("upper-primary-front-wall", upperPartitions);
 const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartitions);
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
@@ -271,14 +276,53 @@ const waterClass = section("class WaterFixture", "class LightCircuit");
 check("2/6 working water", /addInteractionTarget\(/.test(waterClass) && /Turn on|Turn off/.test(waterClass), "water must change only through an explicit interaction target");
 check("2/6 working water", /water-stream|waterStream|streamMesh/.test(waterClass), "WaterFixture has no visible running-water stream");
 check("2/6 working water", /setWater\(/.test(mansion), "MansionAudio has no continuous water-audio control");
+
+// The dining-room washroom is now a full room-sized coat closet. It must read
+// as stocked storage, retain a clear aisle, and provide a real hide/exit state
+// that future pursuer AI can consume through render_game_to_text().
+check("coat closet naming", lightingMap.includes('"COAT CLOSET": ["coat closet lights"]'), "COAT CLOSET is missing from ROOM_LIGHTING");
+check("coat closet naming", roomZones.includes('"COAT CLOSET"'), "dining-side room zone was not renamed COAT CLOSET");
+check("coat closet naming", !/POWDER ROOM|powder-room|powder room/i.test(`${mansion}\n${page}`), "legacy powder-room naming or fixtures remain");
+check("coat closet bounds", /minX:\s*-15[^}]*maxX:\s*-11\.5[^}]*minZ:\s*-3\.2[^}]*maxZ:\s*1\.6/s.test(coatClosetConfig), "coat closet no longer retains the large 3.5m by 4.8m authored footprint");
+check("coat closet dining door", /center:\s*-13\.2,\s*width:\s*1\.05,\s*label:\s*"coat closet door",\s*direction:\s*1/.test(mainPartitions), "dining-side coat closet door is missing or swings into the closet aisle");
+check("coat closet solid exterior", /mainWindows\(\[-9\.4,\s*-6\.7,\s*6\.4,\s*9\.4\]\)/.test(mainWestExteriorWall), "old bathroom window remains open behind the hanging coats");
+check("coat closet page copy", /furnished coat closet with a hiding place/i.test(page) && /Coat closet<small>Hide<\/small>/i.test(page), "page does not advertise the furnished hiding closet");
+check("coat closet furnishing hook", /function furnishCoatCloset\(\)/.test(mansion) && /\bfurnishCoatCloset\(\);/.test(mansion), "dedicated coat closet furnishing function is missing or not invoked");
+check("coat closet plumbing removal", !/WaterFixture|addToilet|addBathroomTilework|vanity|basin|faucet|towel/i.test(coatClosetFurnishings), "bathroom plumbing remains in the coat closet furnishing pass");
+for (const [feature, pattern] of [
+  ["rails", /coat-closet-hanging-rail/],
+  ["hangers", /hanger-shoulder|hanger-crossbar/],
+  ["coats", /hanging-garment/],
+  ["shelves", /coat-closet-(?:upper|shoe|north-storage)-shelf/],
+  ["hat boxes", /coat-closet-hat-box/],
+  ["shoes", /coat-closet-shoe/],
+  ["luggage", /coat-closet-luggage/],
+  ["umbrellas", /coat-closet-umbrella/],
+  ["bench", /coat-closet-dressing-bench/],
+]) check(`coat closet ${feature}`, pattern.test(coatClosetFurnishings), `coat closet is missing visible ${feature}`);
+check("coat closet stocked density", /westCoatPositions\s*=\s*Array\.from\(\{\s*length:\s*16\s*\}/.test(coatClosetFurnishings) && /eastCoatPositions\s*=\s*Array\.from\(\{\s*length:\s*15\s*\}/.test(coatClosetFurnishings), "closet does not densely populate both hanging banks with at least thirty-one garments");
+check("coat closet garment orientation", /perpendicular-hanger-group/.test(coatClosetFurnishings) && /coat\.rotation\.y\s*=\s*angle/.test(coatClosetFurnishings) && /w:\s*0\.54,\s*h:\s*length,\s*d:\s*0\.055/.test(coatClosetFurnishings), "hanging clothes are not broadside-perpendicular to the north/south closet rods");
+check("coat closet realistic fabric depth", /w:\s*0\.54,\s*h:\s*length,\s*d:\s*0\.055/.test(coatClosetFurnishings) && /w:\s*0\.15,\s*h:\s*length \* 0\.72,\s*d:\s*0\.05/.test(coatClosetFurnishings) && /hanging-garment-bag[^\n]*d:\s*0\.05/.test(coatClosetFurnishings), "coat bodies, sleeves, or garment bag have become implausibly thick again");
+check("coat closet garment angle", /const hangingAngles\s*=\s*\[-0\.11,\s*-0\.055,\s*0\.035,\s*0\.09,\s*-0\.075,\s*0\.055,\s*0\.115,\s*-0\.025\]/.test(coatClosetFurnishings), "hanging clothes lost their subtle varied yaw angles");
+check("coat closet clear aisle", /const clearAisle\s*=\s*\{\s*minX:\s*-13\.72,\s*maxX:\s*-12\.68,\s*minZ:\s*-2\.82,\s*maxZ:\s*0\.62\s*\}/.test(coatClosetFurnishings), "player-sized center aisle is no longer explicitly preserved");
+check("coat closet hiding spot", /new HidingSpot\(\{[\s\S]*?name:\s*"coat closet"[\s\S]*?targets:\s*\[westCoats\[8\],\s*westCoats\[9\],\s*westCoats\[10\],\s*westCoats\[11\],\s*garmentBag\]/.test(coatClosetFurnishings), "hiding interaction is not attached to visible hanging garments");
+check("functional hiding state", /state\.isHidden\s*=\s*true/.test(hidingSpotClass) && /state\.isHidden\s*=\s*false/.test(hidingSpotClass), "entering and leaving do not set a stable hidden gameplay state");
+check("functional hiding exit", /getLabel:[^\n]*Leave/.test(hidingSpotClass) && /activate:[^\n]*this\.exit/.test(hidingSpotClass), "second keyboard or touch interaction cannot always leave the hiding spot");
+check("hidden movement lock", /if \(state\.isHidden\)[\s\S]*?physics\.movePlayer\(0, 0\);[\s\S]*?return;/.test(playerUpdate), "movement can carry the player away while hidden");
+check("hidden interaction lock", /if \(state\.activeHideSpot\) return state\.activeHideSpot\.interaction;/.test(interactionLookup), "prompt refresh can lose the leave-hiding interaction");
+check("hidden HUD", /id="mansion-hidden"[^>]*hidden/.test(page) && /#mansion-stage\.is-hiding::after/.test(page) && /dom\.hiddenStatus\.hidden\s*=\s*(?:false|true)/.test(hidingSpotClass), "hiding state lacks persistent player feedback");
+check("hidden diagnostics", /hiding:\s*\{[\s\S]*?active:\s*state\.isHidden[\s\S]*?spot:\s*state\.activeHideSpot[\s\S]*?movementLocked:\s*state\.isHidden/.test(diagnostics) && /isPlayerHidden/.test(qaHooks), "render_game_to_text does not expose the hiding contract for future AI");
+check("coat closet QA views", ["coatClosetDoor", "coatClosetA", "coatClosetB", "coatClosetHide"].every((name) => qaRoomViews.includes(`${name}:`)), "coat closet lacks doorway, interior, and hide-interaction QA views");
+check("coat closet physical route", /coatClosetDoorEntry:[\s\S]*?start:\s*"coatClosetDoor"[\s\S]*?openDoors:\s*true[\s\S]*?room:\s*"COAT CLOSET"[\s\S]*?visitedRooms:\s*\["DINING ROOM",\s*"COAT CLOSET"\]/.test(qaHooks), "dining-to-closet traversal is not covered by a physical QA route");
+
 check("35 flushable toilets", toiletClass.length > 0 && /type:\s*"toilet"/.test(toiletClass) && /Flush \$\{name\}/.test(toiletClass), "toilets do not expose an explicit flush interaction");
 check("35 flushable toilets", /toilets\.push\(this\)/.test(toiletClass) && /animatedObjects\.push\(this\)/.test(toiletClass) && /if \(this\.flushing\) return false/.test(toiletClass), "toilet state is not registered or repeat flushing is unguarded");
 check("35 flush animation", /bowl-water/.test(toiletClass) && /flush-swirl/.test(toiletClass) && /this\.flushTime \/ this\.flushDuration/.test(toiletClass) && /lerp\(1, 0\.22/.test(toiletClass), "toilet water does not visibly drain, swirl, and refill over a finite cycle");
 check("35 flush animation", /flush-handle-mount/.test(toiletClass) && /flush-handle-knob/.test(toiletClass) && /x:\s*-0\.205/.test(toiletClass) && /handlePivot\.rotation\.z/.test(toiletClass) && /audioSystem\.toiletFlush/.test(toiletClass) && /TOILET_FLUSH_DURATION\s*=\s*2\.7/.test(mansion), "toilet flush lacks a visibly offset lever, finite timing, or its flush sound hook");
 check("35 visible bowl water", /seat\.position\.set\(0,\s*0\.704/.test(toiletClass) && /this\.waterFullY\s*=\s*0\.692/.test(toiletClass) && /this\.swirl\.position\.set\(0,\s*0\.713/.test(toiletClass) && /color:\s*0x67bfe2/.test(toiletClass) && /color:\s*0xb9efff/.test(toiletClass) && /blending:\s*THREE\.AdditiveBlending/.test(toiletClass), "toilet water or bright swirl is still buried in or visually indistinct from the porcelain bowl");
 check("35 flush handle placement", /handlePivot\.position\.set\(0\.2,\s*0\.77,\s*0\.15\)/.test(toiletClass) && /x:\s*0\.2,\s*y:\s*0\.77,\s*z:\s*0\.15/.test(toiletClass), "toilet handle or its interaction hitbox is not mounted on the room-facing cistern surface");
-check("35 flushable toilets", count(mansion, /addToilet\("(?:powder room toilet|main hall bathroom toilet|upper grand bathroom toilet)"/g) === 3, "all three bathrooms must use uniquely named flushable toilets");
-for (const view of ["powderRoomToiletInteract", "mainHallToiletInteract", "upperGrandToiletInteract"]) {
+check("35 flushable toilets", count(mansion, /addToilet\("(?:main hall bathroom toilet|upper grand bathroom toilet)"/g) === 2, "both remaining bathrooms must use uniquely named flushable toilets");
+for (const view of ["mainHallToiletInteract", "upperGrandToiletInteract"]) {
   check("35 toilet QA views", qaRoomViews.includes(`${view}:`), `missing interaction view ${view}`);
 }
 check("35 toilet diagnostics", /toiletsTotal:\s*toilets\.length/.test(diagnostics) && /flushCount:\s*toilet\.flushCount/.test(diagnostics) && /MrFeastFresh\.flushToilet/.test(qaHooks), "flush state is not observable and controllable through QA diagnostics");
@@ -1070,7 +1114,7 @@ check("34 library sconce clearance", /library\.addWallSconce\(-7\.05, FLOOR\.MAI
 check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", cacheKey === "20260713-door-lintel-gap-fix-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260714-thin-dense-coats-3", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

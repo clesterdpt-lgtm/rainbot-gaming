@@ -162,6 +162,10 @@
     speed: 2.2,
     interactionRange: 2.35,
   });
+  const TOILET_FLUSH_DURATION = 2.7;
+  const FOOD_STORAGE_KINDS = new Set([
+    "food", "refrigerator", "pantry-staples", "preserves", "dry-goods", "baking", "tinned-goods",
+  ]);
 
   // Keep the raised mid-landing and both flights on one authored datum. The
   // landing is deliberately above the halfway point so the foyer-to-ballroom
@@ -240,17 +244,21 @@
   const QA_ROOM_VIEWS = Object.freeze({
     libraryA: [-6.4, FLOOR.MAIN, 5.0, 2.25],
     libraryB: [-11.5, FLOOR.MAIN, 10.6, -0.72],
+    libraryFireplace: [-7.45, FLOOR.MAIN, 10.25, -Math.PI / 2, -0.52],
     foyerA: [0, FLOOR.MAIN, 10.4, 0],
     foyerB: [-2.7, FLOOR.MAIN, 4.6, -2.47],
     foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
     musicRoomB: [11.5, FLOOR.MAIN, 10.6, 0.72],
     musicRoomPortrait: [12.0, FLOOR.MAIN, 7.8, -Math.PI / 2],
+    musicRoomFireplace: [7.45, FLOOR.MAIN, 10.25, Math.PI / 2, -0.52],
     mainHallBathroomA: [-6.5, FLOOR.MAIN, -2.15, 2.2],
     mainHallBathroomB: [-10.2, FLOOR.MAIN, 2.35, -0.72],
     mainHallBathroomShower: [-11.9, FLOOR.MAIN, 1.8, 2.1],
+    mainHallToiletInteract: [-9.55, FLOOR.MAIN, 0.25, Math.PI / 2, -0.62],
     powderRoomA: [-13.2, FLOOR.MAIN, -2.45, Math.PI],
     powderRoomB: [-14.25, FLOOR.MAIN, -1.55, -2.3],
+    powderRoomToiletInteract: [-13.15, FLOOR.MAIN, -0.4, Math.PI, -0.52],
     stairHallA: [-4.25, FLOOR.MAIN, 2.4, -1.06],
     stairHallB: [4.25, FLOOR.MAIN, -2.5, 2.1],
     paintingRoomA: [6.0, FLOOR.MAIN, -2.35, -2.44],
@@ -298,6 +306,7 @@
     upperGrandBathroomD: [-12.3, FLOOR.UPPER, -1.35, 2.2],
     upperGrandBathroomShower: [-12.0, FLOOR.UPPER, 0.2, 2.42],
     upperGrandSinkInteract: [-8.76, FLOOR.UPPER, -1.25, -0.18, -0.47],
+    upperGrandToiletInteract: [-12.65, FLOOR.UPPER, 0.2, Math.PI / 2, -0.61],
     upperLandingA: [-4.25, FLOOR.UPPER, -2.4, -2.08],
     upperLandingB: [4.25, FLOOR.UPPER, -2.4, 2.08],
     upperPortraits: [0, FLOOR.UPPER, -2.35, 0],
@@ -316,6 +325,7 @@
     primarySuiteB: [-6.3, FLOOR.UPPER, -10.6, 2.13],
     rearLoungeA: [-3.4, FLOOR.UPPER, -5.75, -0.93],
     rearLoungeB: [3.35, FLOOR.UPPER, -10.8, 2.21],
+    rearLoungeFireplace: [-2.4, FLOOR.UPPER, -10.55, Math.PI / 2, -0.48],
     eastRearSuiteA: [10.8, FLOOR.UPPER, -6.2, 0.91],
     eastRearSuiteB: [6.3, FLOOR.UPPER, -10.6, -2.13],
     westFrontClosetRoom: [-12.8, FLOOR.UPPER, 5.8, 0],
@@ -343,6 +353,8 @@
     laundryB: [-13.2, FLOOR.BASEMENT, 2.3, -1.15],
     pantryA: [2.3, FLOOR.BASEMENT, -2.3, -2.12],
     pantryB: [9.2, FLOOR.BASEMENT, 2.2, 0.93],
+    pantryStorageNorth: [3.0, FLOOR.BASEMENT, -1.6, Math.PI, -0.08],
+    pantryStorageSouth: [9.2, FLOOR.BASEMENT, 2.2, 0.93, -0.08],
     serviceStairA: [12.55, FLOOR.BASEMENT, 2.72, 0, 0.24],
     serviceStairB: [12.55, FLOOR.MAIN, -3.05, Math.PI, -0.45],
     serviceStairTopOblique: [10.95, FLOOR.MAIN, -2.05, -2.55, -0.5],
@@ -505,6 +517,8 @@
   const animatedObjects = [];
   const circuits = [];
   const waterFixtures = [];
+  const toilets = [];
+  const fireplaces = [];
   const stockedStorages = [];
   const refrigerators = [];
   const kitchenTaskBulbs = [];
@@ -640,6 +654,31 @@
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearMipMapLinearFilter;
+    return texture;
+  }
+
+  function makeFireFlameTexture(size) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const center = size / 2;
+    const flame = ctx.createRadialGradient(center, size * 0.72, size * 0.03, center, size * 0.62, size * 0.48);
+    flame.addColorStop(0, "rgba(255,255,230,1)");
+    flame.addColorStop(0.2, "rgba(255,214,92,0.98)");
+    flame.addColorStop(0.52, "rgba(255,91,16,0.9)");
+    flame.addColorStop(1, "rgba(110,8,0,0)");
+    ctx.fillStyle = flame;
+    ctx.beginPath();
+    ctx.moveTo(center, size * 0.04);
+    ctx.bezierCurveTo(size * 0.77, size * 0.34, size * 0.86, size * 0.67, center, size * 0.96);
+    ctx.bezierCurveTo(size * 0.14, size * 0.68, size * 0.26, size * 0.34, center, size * 0.04);
+    ctx.closePath();
+    ctx.fill();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.encoding = THREE.sRGBEncoding;
     return texture;
   }
 
@@ -1122,6 +1161,7 @@
     const foyerRugMap = makeFoyerRugTexture(512);
     const libraryRugMap = makeSalonRugTexture(512, "library");
     const musicRugMap = makeSalonRugTexture(512, "music");
+    const fireFlameMap = makeFireFlameTexture(128);
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -1160,6 +1200,10 @@
       foodTin: new THREE.MeshStandardMaterial({ color: 0x9d8b6b, metalness: 0.42, roughness: 0.38 }),
       foodBottle: new THREE.MeshPhysicalMaterial({ color: 0x315b46, roughness: 0.28, metalness: 0.05, transparent: true, opacity: 0.84 }),
       produce: new THREE.MeshStandardMaterial({ color: 0x6d793b, roughness: 0.86 }),
+      fireOuter: new THREE.SpriteMaterial({ map: fireFlameMap, color: 0xff6a18, transparent: true, opacity: 0.86, depthWrite: false, blending: THREE.AdditiveBlending }),
+      fireInner: new THREE.SpriteMaterial({ map: fireFlameMap, color: 0xffe08a, transparent: true, opacity: 0.92, depthWrite: false, blending: THREE.AdditiveBlending }),
+      fireGlow: new THREE.MeshBasicMaterial({ map: makeRadialGlowTexture(128), color: 0xff5a12, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      fireEmber: new THREE.MeshBasicMaterial({ color: 0xff3b0a, transparent: true, opacity: 0.78, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
       dishBlue: new THREE.MeshPhysicalMaterial({ color: 0x73899e, roughness: 0.24, clearcoat: 0.55 }),
       redRug: new THREE.MeshStandardMaterial({ color: 0x290b12, roughness: 0.9 }),
       greenRug: new THREE.MeshStandardMaterial({ color: 0x172f2b, roughness: 0.92 }),
@@ -1549,7 +1593,7 @@
       const {
         name, x, y, z, width = 1.8, height = 1.9, depth = 0.52,
         rotationY = 0, material = M.darkWood, floorY = y, walkIn = false,
-        stockKind = null, openAngle = 102,
+        stockKind = null, openAngle = 102, interiorLight = true,
       } = options;
       this.name = name;
       this.walkIn = walkIn;
@@ -1560,6 +1604,7 @@
       this.floorY = floorY;
       this.rotationY = rotationY;
       this.openAngle = openAngle;
+      this.hasInteriorLight = Boolean(interiorLight);
       this.itemCount = 0;
       this.open = false;
       this.angle = 0;
@@ -1672,22 +1717,24 @@
           this.itemCount = stock.count;
           this.stockMeshes = stock.meshes;
           for (const mesh of this.stockMeshes) mesh.visible = false;
-          this.interiorLight = new THREE.SpotLight(0xffc98a, 0, 1.65, 0.5, 0.68, 2);
-          this.interiorLight.name = `${name}-door-operated-interior-light`;
-          this.interiorLight.position.set(0, height * 0.72, depth * 0.08);
-          const interiorLightTarget = new THREE.Object3D();
-          interiorLightTarget.name = `${name}-door-operated-light-target`;
-          interiorLightTarget.position.set(0, height * 0.44, depth * 0.72);
-          this.root.add(interiorLightTarget);
-          this.interiorLight.target = interiorLightTarget;
-          this.interiorLight.userData.baseIntensity = 11;
-          this.interiorLight.userData.interactionVisible = false;
-          this.interiorLight.userData.levels = new Set([floorY === FLOOR.UPPER ? "SECOND FLOOR" : floorY === FLOOR.BASEMENT ? "BASEMENT" : "MAIN LEVEL"]);
-          this.interiorLight.userData.roomBounded = true;
-          this.interiorLight.castShadow = false;
-          this.interiorLight.visible = false;
-          this.root.add(this.interiorLight);
-          auxiliaryInteriorLights.push(this.interiorLight);
+          if (this.hasInteriorLight) {
+            this.interiorLight = new THREE.SpotLight(0xffc98a, 0, 1.65, 0.5, 0.68, 2);
+            this.interiorLight.name = `${name}-door-operated-interior-light`;
+            this.interiorLight.position.set(0, height * 0.72, depth * 0.08);
+            const interiorLightTarget = new THREE.Object3D();
+            interiorLightTarget.name = `${name}-door-operated-light-target`;
+            interiorLightTarget.position.set(0, height * 0.44, depth * 0.72);
+            this.root.add(interiorLightTarget);
+            this.interiorLight.target = interiorLightTarget;
+            this.interiorLight.userData.baseIntensity = 11;
+            this.interiorLight.userData.interactionVisible = false;
+            this.interiorLight.userData.levels = new Set([floorY === FLOOR.UPPER ? "SECOND FLOOR" : floorY === FLOOR.BASEMENT ? "BASEMENT" : "MAIN LEVEL"]);
+            this.interiorLight.userData.roomBounded = true;
+            this.interiorLight.castShadow = false;
+            this.interiorLight.visible = false;
+            this.root.add(this.interiorLight);
+            auxiliaryInteriorLights.push(this.interiorLight);
+          }
           stockedStorages.push(this);
         }
       }
@@ -1742,7 +1789,7 @@
       }
       if (this.walkIn) syncLightRendering();
       else if (this.interiorLight) syncLightRendering();
-      if (this.stockMeshes) for (const mesh of this.stockMeshes) mesh.visible = this.open;
+      if (this.stockMeshes) for (const mesh of this.stockMeshes) mesh.visible = this.open && !interiorDetailsHidden;
       if (!silent && audioSystem) audioSystem.cabinet(this.open);
     }
 
@@ -1813,10 +1860,14 @@
     const tins = [];
     const bottles = [];
     const produce = [];
+    const sacks = [];
+    const jars = [];
+    const jarLids = [];
     const plates = [];
     const cups = [];
     const usable = width * 0.78;
     const z = Math.min(depth * 0.06, 0.08);
+    const positionX = (index, count) => -usable / 2 + 0.13 + index * (usable - 0.26) / Math.max(1, count - 1);
     if (kind === "dishes") {
       shelfYs.forEach((shelfY, shelfIndex) => {
         for (let i = 0; i < 4; i += 1) {
@@ -1826,11 +1877,42 @@
           cups.push({ x: usable * 0.16 + i * 0.19, y: shelfY + 0.14, z: z - 0.02, sx: 0.085, sy: 0.15, sz: 0.085 });
         }
       });
+    } else if (kind === "preserves") {
+      shelfYs.forEach((shelfY, shelfIndex) => {
+        const count = 6;
+        for (let i = 0; i < count; i += 1) {
+          const x = positionX(i, count);
+          const jarHeight = 0.22 + ((i + shelfIndex) % 2) * 0.045;
+          jars.push({ x, y: shelfY + jarHeight / 2 + 0.035, z, sx: 0.075, sy: jarHeight, sz: 0.075 });
+          jarLids.push({ x, y: shelfY + jarHeight + 0.045, z, sx: 0.082, sy: 0.025, sz: 0.082 });
+        }
+      });
+    } else if (kind === "tinned-goods") {
+      shelfYs.forEach((shelfY, shelfIndex) => {
+        const count = 7;
+        for (let i = 0; i < count; i += 1) {
+          const x = positionX(i, count);
+          if ((i + shelfIndex) % 4 === 0) boxes.push({ x, y: shelfY + 0.17, z, sx: 0.17, sy: 0.32, sz: 0.15 });
+          else tins.push({ x, y: shelfY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
+        }
+      });
+    } else if (["pantry-staples", "dry-goods", "baking"].includes(kind)) {
+      shelfYs.forEach((shelfY, shelfIndex) => {
+        const count = 6;
+        for (let i = 0; i < count; i += 1) {
+          const x = positionX(i, count);
+          const selector = (i + shelfIndex * 2 + (kind === "baking" ? 1 : 0)) % 4;
+          if (selector === 0) boxes.push({ x, y: shelfY + 0.18, z, sx: 0.18, sy: 0.34, sz: 0.16 });
+          else if (selector === 1) sacks.push({ x, y: shelfY + 0.14, z, sx: 0.14, sy: 0.17, sz: 0.09, rz: (i % 2 ? 1 : -1) * 0.04 });
+          else if (selector === 2) tins.push({ x, y: shelfY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
+          else bottles.push({ x, y: shelfY + 0.17, z, sx: 0.07, sy: 0.32, sz: 0.07 });
+        }
+      });
     } else {
       shelfYs.forEach((shelfY, shelfIndex) => {
         const count = kind === "refrigerator" ? 5 : 6;
         for (let i = 0; i < count; i += 1) {
-          const x = -usable / 2 + 0.13 + i * (usable - 0.26) / Math.max(1, count - 1);
+          const x = positionX(i, count);
           const selector = (i + shelfIndex * 2) % 4;
           if (selector === 0) boxes.push({ x, y: shelfY + 0.18, z, sx: 0.18, sy: 0.34, sz: 0.16 });
           else if (selector === 1) tins.push({ x, y: shelfY + 0.13, z, sx: 0.09, sy: 0.24, sz: 0.09 });
@@ -1844,10 +1926,13 @@
       addLocalInstanceBatch(`${name}-stocked-tins`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodTin, tins),
       addLocalInstanceBatch(`${name}-stocked-bottles`, parent, "unitBottle", () => new THREE.CylinderGeometry(0.62, 1, 1, 12), M.foodBottle, bottles),
       addLocalInstanceBatch(`${name}-stocked-produce`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.produce, produce),
+      addLocalInstanceBatch(`${name}-pantry-flour-sacks`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.canvasLinen, sacks),
+      addLocalInstanceBatch(`${name}-pantry-preserve-jars`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodBottle, jars),
+      addLocalInstanceBatch(`${name}-pantry-jar-lids`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodTin, jarLids),
       addLocalInstanceBatch(`${name}-stacked-plates`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.dishBlue, plates),
       addLocalInstanceBatch(`${name}-cups`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.porcelain, cups),
     ].filter(Boolean);
-    return { count: boxes.length + tins.length + bottles.length + produce.length + plates.length + cups.length, meshes };
+    return { count: boxes.length + tins.length + bottles.length + produce.length + sacks.length + jars.length + plates.length + cups.length, meshes };
   }
 
   class Refrigerator {
@@ -1902,7 +1987,7 @@
     setOpen(open, silent) {
       this.open = Boolean(open);
       this.target = this.open ? -THREE.MathUtils.degToRad(104) : 0;
-      for (const mesh of this.stockMeshes) mesh.visible = this.open;
+      for (const mesh of this.stockMeshes) mesh.visible = this.open && !interiorDetailsHidden;
       if (!silent && audioSystem) audioSystem.cabinet(this.open);
     }
 
@@ -3259,28 +3344,143 @@
     return group;
   }
 
-  function addToilet(x, z, floorY, rotationY) {
-    const group = new THREE.Group();
-    group.position.set(x, floorY, z);
-    group.rotation.y = rotationY || 0;
-    scene.add(group);
-    roundedBox({ name: "porcelain-toilet-base", w: 0.46, h: 0.36, d: 0.68, radius: 0.13, x: 0, y: 0.22, z: -0.06, material: M.porcelain, parent: group });
-    const bowl = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 14), M.porcelain);
-    bowl.name = "porcelain-toilet-bowl";
-    bowl.scale.set(0.33, 0.2, 0.43);
-    bowl.position.set(0, 0.48, -0.1);
-    bowl.castShadow = true;
-    group.add(bowl);
-    const seat = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.034, 8, 28), M.agedTrim);
-    seat.name = "raised-toilet-seat";
-    seat.scale.set(1, 1.28, 1);
-    seat.rotation.x = Math.PI / 2;
-    seat.position.set(0, 0.62, -0.12);
-    group.add(seat);
-    roundedBox({ name: "porcelain-cistern", w: 0.58, h: 0.68, d: 0.25, radius: 0.06, x: 0, y: 0.67, z: 0.31, material: M.porcelain, parent: group });
-    sphere({ name: "cistern-handle", radius: 0.045, x: 0.2, y: 0.77, z: 0.46, material: M.brass, parent: group, cast: false });
-    physics.addFixedBox(x, floorY + 0.55, z, 0.68, 1.1, 0.92, rotationY || 0);
-    return group;
+  class FlushableToilet {
+    constructor(options) {
+      const { name, x, z, floorY, rotationY = 0 } = options;
+      this.name = name;
+      this.flushing = false;
+      this.flushTime = 0;
+      this.flushDuration = TOILET_FLUSH_DURATION;
+      this.flushCount = 0;
+      this.phase = Math.random() * Math.PI * 2;
+      this.root = new THREE.Group();
+      this.root.name = name;
+      this.root.position.set(x, floorY, z);
+      this.root.rotation.y = rotationY;
+      scene.add(this.root);
+
+      roundedBox({ name: `${name}-porcelain-base`, w: 0.46, h: 0.36, d: 0.68, radius: 0.13, x: 0, y: 0.22, z: -0.06, material: M.porcelain, parent: this.root });
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 14), M.porcelain);
+      bowl.name = `${name}-porcelain-bowl`;
+      bowl.scale.set(0.33, 0.2, 0.43);
+      bowl.position.set(0, 0.48, -0.1);
+      bowl.castShadow = true;
+      this.root.add(bowl);
+      const seat = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.034, 8, 28), M.agedTrim);
+      seat.name = `${name}-toilet-seat`;
+      seat.scale.set(1, 1.28, 1);
+      seat.rotation.x = Math.PI / 2;
+      seat.position.set(0, 0.704, -0.12);
+      this.root.add(seat);
+      roundedBox({ name: `${name}-porcelain-cistern`, w: 0.58, h: 0.68, d: 0.25, radius: 0.06, x: 0, y: 0.67, z: 0.31, material: M.porcelain, parent: this.root });
+
+      this.waterMaterial = new THREE.MeshBasicMaterial({
+        color: 0x67bfe2,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      this.water = new THREE.Mesh(new THREE.CircleGeometry(0.205, 28), this.waterMaterial);
+      this.water.name = `${name}-bowl-water`;
+      this.water.rotation.x = -Math.PI / 2;
+      this.water.scale.set(1, 1.32, 1);
+      this.waterFullY = 0.692;
+      this.water.position.set(0, this.waterFullY, -0.12);
+      this.water.castShadow = false;
+      this.water.renderOrder = 3;
+      this.root.add(this.water);
+
+      this.swirlMaterial = new THREE.MeshBasicMaterial({
+        color: 0xb9efff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      this.swirl = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.012, 6, 28), this.swirlMaterial);
+      this.swirl.name = `${name}-flush-swirl`;
+      this.swirl.rotation.x = Math.PI / 2;
+      this.swirl.position.set(0, 0.713, -0.12);
+      this.swirl.visible = false;
+      this.swirl.renderOrder = 4;
+      this.root.add(this.swirl);
+
+      this.handlePivot = new THREE.Group();
+      this.handlePivot.name = `${name}-flush-handle-pivot`;
+      // The bowl faces local -z, so the usable face of the cistern is its
+      // low-z surface. Keeping the control just proud of that face makes the
+      // brass handle visible and raycastable from inside every bathroom.
+      this.handlePivot.position.set(0.2, 0.77, 0.15);
+      this.root.add(this.handlePivot);
+      cylinder({ name: `${name}-flush-handle-mount`, radius: 0.047, height: 0.07, segments: 14, x: 0, y: 0, z: 0, rotationX: Math.PI / 2, material: M.brass, parent: this.handlePivot, cast: false });
+      const handle = roundedBox({ name: `${name}-flush-handle`, w: 0.2, h: 0.055, d: 0.055, radius: 0.02, x: -0.1, y: 0, z: -0.04, material: M.brass, parent: this.handlePivot, cast: false });
+      const handleKnob = sphere({ name: `${name}-flush-handle-knob`, radius: 0.045, x: -0.205, y: 0, z: -0.04, material: M.brass, parent: this.handlePivot, cast: false });
+      const interaction = {
+        type: "toilet",
+        getLabel: () => this.flushing ? `${name} is flushing` : `Flush ${name}`,
+        activate: () => this.flush(),
+      };
+      addInteractionTarget(handle, interaction);
+      addInteractionTarget(handleKnob, interaction);
+      const hitbox = box({
+        name: `${name}-flush-hitbox`, w: 0.36, h: 0.36, d: 0.34,
+        x: 0.2, y: 0.77, z: 0.15, parent: this.root,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        cast: false, receive: false,
+      });
+      hitbox.visible = false;
+      addInteractionTarget(hitbox, interaction);
+
+      physics.addFixedBox(x, floorY + 0.55, z, 0.68, 1.1, 0.92, rotationY);
+      toilets.push(this);
+      animatedObjects.push(this);
+    }
+
+    flush() {
+      if (this.flushing) return false;
+      this.flushing = true;
+      this.flushTime = 0;
+      this.flushCount += 1;
+      this.swirl.visible = true;
+      if (audioSystem) audioSystem.toiletFlush(this.name);
+      return true;
+    }
+
+    update(dt) {
+      if (!this.flushing) return;
+      this.flushTime = Math.min(this.flushDuration, this.flushTime + dt);
+      const progress = this.flushTime / this.flushDuration;
+      const drainEnd = 0.31;
+      const level = progress < drainEnd
+        ? lerp(1, 0.22, progress / drainEnd)
+        : lerp(0.22, 1, clamp((progress - drainEnd) / (1 - drainEnd), 0, 1));
+      const handlePress = progress < 0.08
+        ? progress / 0.08
+        : progress < 0.2 ? 1 - (progress - 0.08) / 0.12 : 0;
+      this.handlePivot.rotation.z = -handlePress * 0.72;
+      this.water.position.y = this.waterFullY - (1 - level) * 0.075;
+      this.water.scale.set(0.82 + level * 0.18, (0.82 + level * 0.18) * 1.32, 1);
+      this.waterMaterial.opacity = 0.2 + level * 0.3;
+      const swirlStrength = Math.sin(Math.PI * progress);
+      this.swirl.rotation.z = this.phase + this.flushTime * 9.5;
+      this.swirl.scale.setScalar(0.55 + swirlStrength * 0.85);
+      this.swirlMaterial.opacity = swirlStrength * 0.46;
+      if (this.flushTime >= this.flushDuration) {
+        this.flushing = false;
+        this.flushTime = 0;
+        this.handlePivot.rotation.z = 0;
+        this.water.position.y = this.waterFullY;
+        this.water.scale.set(1, 1.32, 1);
+        this.waterMaterial.opacity = 0.5;
+        this.swirl.visible = false;
+        this.swirlMaterial.opacity = 0;
+      }
+    }
+  }
+
+  function addToilet(name, x, z, floorY, rotationY) {
+    return new FlushableToilet({ name, x, z, floorY, rotationY }).root;
   }
 
   function addBathtub(x, z, floorY, rotationY) {
@@ -3343,7 +3543,7 @@
     cylinder({ name: `${label}-faucet-spout`, radius: 0.024, height: 0.3, x: -12.05, y: floorY + 1.21, z: -0.07, rotationX: Math.PI / 2, material: M.brass, cast: false });
     new WaterFixture({ name: "powder room sink", kind: "sink", x: -12.05, y: floorY + 1.2, z: -0.2, drop: 0.2 });
     addWallMirror("z", -11.5, -0.15, floorY, 2.0, -1, 0.95, 1.18);
-    addToilet(-13.35, 1.0, floorY, 0);
+    addToilet("powder room toilet", -13.35, 1.0, floorY, 0);
     addTowelRail(-14.25, 1.3, 1.39, Math.PI, FLOOR.MAIN);
   }
 
@@ -3386,7 +3586,7 @@
     for (const [index, sinkX] of sinkXs.entries()) {
       new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.17, z: -2.51, drop: 0.21 });
     }
-    const toilet = addToilet(-10.65, 0.05, FLOOR.MAIN, -Math.PI / 2);
+    const toilet = addToilet("main hall bathroom toilet", -10.65, 0.05, FLOOR.MAIN, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.MAIN, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
@@ -3402,7 +3602,7 @@
     for (const [index, sinkX] of sinkXs.entries()) {
       new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.17, z: -2.51, drop: 0.21 });
     }
-    const toilet = addToilet(-13.8, 0.0, FLOOR.UPPER, -Math.PI / 2);
+    const toilet = addToilet("upper grand bathroom toilet", -13.8, 0.0, FLOOR.UPPER, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.UPPER, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
@@ -3578,18 +3778,110 @@
     return group;
   }
 
-  function addFireplace(x, z, floorY, rotationY) {
-    const group = new THREE.Group();
-    group.position.set(x, floorY, z);
-    group.rotation.y = rotationY || 0;
-    scene.add(group);
-    box({ name: "fireplace-hearth", w: 2.3, h: 0.16, d: 0.74, x: 0, y: 0.08, z: -0.16, material: M.marble, parent: group });
-    box({ name: "fireplace-surround", w: 2.05, h: 2.28, d: 0.38, x: 0, y: 1.15, z: 0.06, material: M.marble, parent: group });
-    box({ name: "fireplace-opening", w: 1.18, h: 1.28, d: 0.41, x: 0, y: 0.72, z: -0.17, material: M.soot, parent: group, cast: false });
-    box({ name: "fireplace-mantle", w: 2.55, h: 0.22, d: 0.63, x: 0, y: 2.19, z: -0.04, material: M.marble, parent: group });
-    for (const sx of [-0.82, 0.82]) cylinder({ name: "mantle-column", radius: 0.15, radiusTop: 0.13, radiusBottom: 0.18, height: 1.8, segments: 14, x: sx, y: 1.05, z: -0.18, material: M.marble, parent: group });
-    for (const lx of [-0.33, 0, 0.33]) cylinder({ name: "cold-hearth-log", radius: 0.075, height: 0.72, segments: 8, x: lx, y: 0.22, z: -0.38, rotationZ: Math.PI / 2, material: M.blackWood, parent: group, cast: false });
-    physics.addFixedBox(x, floorY + 1.1, z, 2.55, 2.2, 0.75, rotationY || 0);
+  class Fireplace {
+    constructor(options) {
+      const { name, x, z, floorY, rotationY = 0 } = options;
+      this.name = name;
+      this.on = true;
+      this.level = 1;
+      this.phase = Math.random() * Math.PI * 2;
+      this.floorLabel = floorY === FLOOR.UPPER ? "SECOND FLOOR" : floorY === FLOOR.BASEMENT ? "BASEMENT" : "MAIN LEVEL";
+      this.root = new THREE.Group();
+      this.root.name = name;
+      this.root.position.set(x, floorY, z);
+      this.root.rotation.y = rotationY;
+      scene.add(this.root);
+
+      box({ name: `${name}-hearth`, w: 2.3, h: 0.16, d: 0.74, x: 0, y: 0.08, z: -0.16, material: M.marble, parent: this.root });
+      box({ name: `${name}-surround`, w: 2.05, h: 2.28, d: 0.38, x: 0, y: 1.15, z: 0.06, material: M.marble, parent: this.root });
+      const opening = box({ name: `${name}-opening`, w: 1.18, h: 1.28, d: 0.41, x: 0, y: 0.72, z: -0.17, material: M.soot, parent: this.root, cast: false });
+      box({ name: `${name}-mantle`, w: 2.55, h: 0.22, d: 0.63, x: 0, y: 2.19, z: -0.04, material: M.marble, parent: this.root });
+      for (const sx of [-0.82, 0.82]) cylinder({ name: `${name}-mantle-column`, radius: 0.15, radiusTop: 0.13, radiusBottom: 0.18, height: 1.8, segments: 14, x: sx, y: 1.05, z: -0.18, material: M.marble, parent: this.root });
+      for (const lx of [-0.33, 0, 0.33]) cylinder({ name: `${name}-hearth-log`, radius: 0.075, height: 0.72, segments: 8, x: lx, y: 0.22, z: -0.38, rotationZ: Math.PI / 2, material: M.blackWood, parent: this.root, cast: false });
+
+      this.glowMaterial = M.fireGlow.clone();
+      this.glow = plane({ name: `${name}-fire-glow`, w: 1.02, h: 1.05, x: 0, y: 0.66, z: -0.395, rotationX: 0, material: this.glowMaterial, parent: this.root });
+      this.glow.userData.fireplaceEffect = true;
+      this.emberMaterial = M.fireEmber.clone();
+      this.embers = new THREE.Mesh(new THREE.CircleGeometry(0.45, 24), this.emberMaterial);
+      this.embers.name = `${name}-ember-bed`;
+      this.embers.rotation.x = -Math.PI / 2;
+      this.embers.scale.set(1, 0.48, 1);
+      this.embers.position.set(0, 0.185, -0.39);
+      this.embers.castShadow = false;
+      this.embers.userData.fireplaceEffect = true;
+      this.root.add(this.embers);
+
+      const flameDefinitions = [
+        { x: -0.36, y: 0.48, w: 0.34, h: 0.64, phase: 0.2, inner: false },
+        { x: -0.14, y: 0.59, w: 0.4, h: 0.88, phase: 1.7, inner: true },
+        { x: 0.12, y: 0.55, w: 0.38, h: 0.78, phase: 3.1, inner: false },
+        { x: 0.35, y: 0.47, w: 0.31, h: 0.61, phase: 4.4, inner: true },
+      ];
+      this.flames = flameDefinitions.map((definition, index) => {
+        const material = (definition.inner ? M.fireInner : M.fireOuter).clone();
+        const sprite = new THREE.Sprite(material);
+        sprite.name = `${name}-animated-flame-${index + 1}`;
+        sprite.position.set(definition.x, definition.y, -0.43 - index * 0.003);
+        sprite.scale.set(definition.w, definition.h, 1);
+        sprite.userData.fireplaceEffect = true;
+        this.root.add(sprite);
+        return { sprite, material, ...definition };
+      });
+
+      const interaction = {
+        type: "fireplace",
+        getLabel: () => `${this.on ? "Extinguish" : "Light"} ${name}`,
+        activate: () => this.setOn(!this.on),
+      };
+      addInteractionTarget(opening, interaction);
+      const hitbox = box({
+        name: `${name}-fire-interaction-hitbox`, w: 1.16, h: 1.24, d: 0.24,
+        x: 0, y: 0.72, z: -0.46, parent: this.root,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        cast: false, receive: false,
+      });
+      hitbox.visible = false;
+      addInteractionTarget(hitbox, interaction);
+
+      physics.addFixedBox(x, floorY + 1.1, z, 2.55, 2.2, 0.75, rotationY);
+      fireplaces.push(this);
+      animatedObjects.push(this);
+    }
+
+    setOn(on, silent) {
+      this.on = Boolean(on);
+      if (!silent && audioSystem) audioSystem.fireplace(this.on);
+      return this.on;
+    }
+
+    update(dt) {
+      this.phase += dt;
+      this.level = ease(this.level, this.on ? 1 : 0, this.on ? 5.8 : 7.5, dt);
+      const renderEffects = state.currentFloor === this.floorLabel && !interiorDetailsHidden && this.level > 0.012;
+      const motion = state.reducedFlash ? 0.25 : 1;
+      for (const flame of this.flames) {
+        const wave = Math.sin(this.phase * 7.4 + flame.phase);
+        const flutter = Math.sin(this.phase * 12.1 + flame.phase * 1.7);
+        flame.sprite.visible = renderEffects;
+        flame.sprite.position.y = flame.y + (wave * 0.028 + flutter * 0.012) * motion;
+        flame.sprite.scale.set(
+          flame.w * (0.92 + wave * 0.08 * motion) * this.level,
+          flame.h * (0.88 + flutter * 0.12 * motion) * this.level,
+          1,
+        );
+        flame.material.opacity = this.level * (flame.inner ? 0.88 : 0.72) * (0.9 + wave * 0.1 * motion);
+      }
+      this.glow.visible = renderEffects;
+      this.embers.visible = renderEffects;
+      this.glowMaterial.opacity = this.level * (0.28 + Math.sin(this.phase * 5.1) * 0.045 * motion);
+      this.emberMaterial.opacity = this.level * (0.66 + Math.sin(this.phase * 8.2) * 0.12 * motion);
+      this.embers.scale.x = 0.94 + Math.sin(this.phase * 4.6) * 0.04 * motion;
+    }
+  }
+
+  function addFireplace(name, x, z, floorY, rotationY) {
+    return new Fireplace({ name, x, z, floorY, rotationY });
   }
 
   function addPiano(x, z, floorY, rotationY) {
@@ -4321,14 +4613,14 @@
     addFoyerPanelwork();
     // Library
     for (const z of [4.8, 7.9, 10.95]) addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85);
-    addFireplace(-5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
+    addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
     addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.greenRug);
     addTable(-10.5, 5.2, 2.25, 1.05, FLOOR.MAIN, 0, M.darkWood);
     addChair(-10.5, 6.15, FLOOR.MAIN, 0, M.darkWood);
     new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0 });
 
     // Music room — the sofa is deliberately aimed at the grand piano.
-    addFireplace(5.35, 10.25, FLOOR.MAIN, -Math.PI / 2);
+    addFireplace("music room fireplace", 5.35, 10.25, FLOOR.MAIN, -Math.PI / 2);
     const musicPiano = { x: 11.2, z: 5.4 };
     const musicSofa = { x: 7.4, z: 9.2 };
     const musicRoomSofa = addSofa(musicSofa.x, musicSofa.z, FLOOR.MAIN, faceTargetYaw(musicSofa.x, musicSofa.z, musicPiano.x, musicPiano.z), 2.5, M.velvet);
@@ -4406,7 +4698,7 @@
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
-    addFireplace(-4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
+    addFireplace("rear lounge fireplace", -4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "east rear walk-in closet", x: 6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI / 2, walkIn: true });
     for (const portrait of [
@@ -4458,8 +4750,31 @@
     // Laundry & linen
     new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2 });
     addTable(-8.0, -0.1, 2.6, 1.15, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "pantry cupboard", x: 2.1, z: 1.8, floorY: FLOOR.BASEMENT, width: 1.7, height: 2.25, rotationY: Math.PI / 2 });
-    new Cabinet({ name: "preserves cabinet", x: 6.2, z: 2.65, floorY: FLOOR.BASEMENT, width: 1.8, height: 2.15, rotationY: Math.PI, material: M.darkWood });
+
+    // Pantry storage — five semantic cupboards line the solid walls while the
+    // doorway, archive opening, service-stair approach, and broad center aisle
+    // stay clear. Pantry stock uses the room ceiling fixture instead of adding
+    // five door-operated spots to the estate's fixed shader-light budget.
+    new Cabinet({ name: "pantry cupboard", x: 2.1, z: 1.8, floorY: FLOOR.BASEMENT, width: 1.7, height: 2.25, rotationY: Math.PI / 2, stockKind: "pantry-staples", interiorLight: false });
+    new Cabinet({ name: "preserves cabinet", x: 6.2, z: 2.65, floorY: FLOOR.BASEMENT, width: 1.8, height: 2.15, rotationY: Math.PI, material: M.darkWood, stockKind: "preserves", interiorLight: false });
+    for (const pantryCabinet of [
+      { name: "pantry dry-goods cabinet", x: 4.0, stockKind: "dry-goods" },
+      { name: "pantry baking cabinet", x: 6.15, stockKind: "baking" },
+      { name: "pantry tinned-goods cabinet", x: 8.3, stockKind: "tinned-goods" },
+    ]) {
+      new Cabinet({
+        ...pantryCabinet,
+        z: -2.72,
+        floorY: FLOOR.BASEMENT,
+        width: 1.8,
+        height: 2.25,
+        depth: 0.56,
+        rotationY: 0,
+        openAngle: 88,
+        material: M.darkWood,
+        interiorLight: false,
+      });
+    }
 
     addBoiler(-10.2, -8.6, FLOOR.BASEMENT);
     addBoiler(-7.8, -8.8, FLOOR.BASEMENT);
@@ -5879,6 +6194,34 @@
       this.ping(on ? 820 : 510, 0.06, 0.028, "square");
     }
 
+    fireplace(on) {
+      this.ping(on ? 145 : 82, on ? 0.24 : 0.32, 0.034, on ? "triangle" : "sawtooth");
+      setTimeout(() => this.ping(on ? 520 : 190, 0.07, 0.018, "triangle"), on ? 70 : 120);
+    }
+
+    toiletFlush() {
+      if (!this.ctx || !this.master || !state.audioEnabled) return;
+      const now = this.ctx.currentTime;
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.makeNoiseBuffer(2.6);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = 110;
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.setValueAtTime(3400, now);
+      low.frequency.exponentialRampToValueAtTime(420, now + 2.45);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.075, now + 0.08);
+      gain.gain.setValueAtTime(0.06, now + 0.72);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+      source.connect(high).connect(low).connect(gain).connect(this.master);
+      source.start(now);
+      source.stop(now + 2.55);
+      this.ping(58, 1.35, 0.035, "sine");
+    }
+
     setWater(name, on, kind) {
       if (!this.ctx || !this.master) return;
       const now = this.ctx.currentTime;
@@ -6102,6 +6445,7 @@
     scene.updateMatrixWorld(true);
     scene.traverse((object) => {
       if (!object.isMesh) return;
+      if (object.userData.fireplaceEffect) return;
       const preclassified = object.userData.exteriorCullingClass;
       if (preclassified) {
         // Merged decor already carries its culling class from its sources.
@@ -6168,6 +6512,14 @@
     }
     for (const mesh of facadeSideMeshes) {
       mesh.visible = visibleSides.has(mesh.userData.facadeSide) && mesh.userData.preExteriorVisibility !== false;
+    }
+    // Cabinet stock is interaction-owned: most contents are intentionally
+    // hidden when this registry captures boot visibility. Restore the live
+    // door state after exterior culling instead of the stale boot snapshot so
+    // an open pantry remains stocked after a trip out to the grounds.
+    for (const storage of stockedStorages) {
+      if (!storage.stockMeshes) continue;
+      for (const mesh of storage.stockMeshes) mesh.visible = !shouldHide && Boolean(storage.open);
     }
     renderer.shadowMap.needsUpdate = true;
   }
@@ -6820,7 +7172,7 @@
     const mappedCircuitNames = new Set(Object.values(ROOM_LIGHTING).flat());
     const contextLightingTargets = getContextLightingTargets();
     const foodItems = stockedStorages
-      .filter((storage) => storage.stockKind === "food" || storage.stockKind === "refrigerator")
+      .filter((storage) => FOOD_STORAGE_KINDS.has(storage.stockKind))
       .reduce((total, storage) => total + storage.itemCount, 0);
     const dishItems = stockedStorages
       .filter((storage) => storage.stockKind === "dishes")
@@ -6868,6 +7220,21 @@
           })),
         waterFixturesTotal: waterFixtures.length,
         waterRunning: waterFixtures.filter((fixture) => fixture.on).map((fixture) => fixture.name),
+        toiletsTotal: toilets.length,
+        toilets: toilets.map((toilet) => ({
+          name: toilet.name,
+          flushing: Boolean(toilet.flushing),
+          flushTime: Number(toilet.flushTime.toFixed(2)),
+          flushCount: toilet.flushCount,
+        })),
+        fireplacesTotal: fireplaces.length,
+        fireplaces: fireplaces.map((fireplace) => ({
+          name: fireplace.name,
+          on: Boolean(fireplace.on),
+          floor: fireplace.floorLabel,
+          effectsVisible: fireplace.flames.some((flame) => flame.sprite.visible),
+          flameCount: fireplace.flames.length,
+        })),
         refrigerators: refrigerators.length,
         refrigeratorOpen: refrigerators.some((refrigerator) => refrigerator.open),
         foodItems,
@@ -6877,6 +7244,7 @@
           kind: storage.stockKind,
           itemCount: storage.itemCount,
           open: Boolean(storage.open),
+          interiorLight: Boolean(storage.interiorLight),
         })),
       },
       artwork: {
@@ -7208,6 +7576,14 @@
       const fixture = waterFixtures.find((candidate) => candidate.name.toLowerCase().includes(String(name).toLowerCase()));
       if (fixture) fixture.setOn(Boolean(on));
       return fixture ? fixture.on : null;
+    };
+    window.MrFeastFresh.flushToilet = (name) => {
+      const toilet = toilets.find((candidate) => candidate.name.toLowerCase().includes(String(name).toLowerCase()));
+      return toilet ? toilet.flush() : null;
+    };
+    window.MrFeastFresh.setFireplace = (name, on) => {
+      const fireplace = fireplaces.find((candidate) => candidate.name.toLowerCase().includes(String(name).toLowerCase()));
+      return fireplace ? fireplace.setOn(Boolean(on)) : null;
     };
     window.MrFeastFresh.turnOffAllWater = () => {
       for (const fixture of waterFixtures) fixture.setOn(false, true);
@@ -7718,6 +8094,8 @@
         if (qaParams.has("openCabinets")) window.MrFeastFresh.openCabinets();
         if (qaParams.has("openRefrigerator")) window.MrFeastFresh.openRefrigerator();
         if (qaParams.has("water")) window.MrFeastFresh.setWater(qaParams.get("water"), true);
+        if (qaParams.has("flush")) window.MrFeastFresh.flushToilet(qaParams.get("flush"));
+        if (qaParams.has("fireplaceOff")) window.MrFeastFresh.setFireplace(qaParams.get("fireplaceOff"), false);
         if (qaParams.has("openDoors")) window.MrFeastFresh.openDoors();
         if (qaParams.has("openExteriorDoors")) window.MrFeastFresh.openExteriorDoors();
         if (qaParams.has("allLights")) window.MrFeastFresh.turnOnAllLights();

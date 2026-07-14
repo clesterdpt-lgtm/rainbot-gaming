@@ -144,6 +144,9 @@ const wallSegmentBuilder = section("function wallSegment(", "function addWindow(
 const wallTrimSpanBuilder = section("function wallTrimSpans(", "function addContinuousWallTrim(");
 const wallRunBuilder = section("function buildWallRun(", "function floorSlab(");
 const cabinetClass = section("class Cabinet", "function addLocalInstanceBatch(");
+const stockedStorageBuilder = section("function addStockedStorageContents", "class Refrigerator");
+const toiletClass = section("class FlushableToilet", "function addToilet");
+const fireplaceClass = section("class Fireplace", "function addFireplace");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
 const contextLighting = section("function getContextLightingTargets(", "function selectBudgetedCircuitLights(");
 const budgetedLightSelection = section("function selectBudgetedCircuitLights(", "function syncLightRendering(");
@@ -170,6 +173,7 @@ const portraitBuilder = section("function loadArtworkTexture", "function addBeam
 const exoticRugTextureBuilder = section("function makeExoticRugTexture", "function loadTexture");
 const foyerRugTextureBuilder = section("function makeFoyerRugTexture", "function loadTexture");
 const salonRugTextureBuilder = section("function makeSalonRugTexture", "function loadTexture");
+const fireTextureBuilder = section("function makeFireFlameTexture", "function makeExoticRugTexture");
 const materialFactory = section("async function createMaterials()", "class PhysicsWorld");
 const portraitFurnishings = `${mainFurnishings}\n${upperFurnishings}`;
 const mainGalleryPortraits = section("// Foyer and gallery detail", null, mainFurnishings);
@@ -183,6 +187,7 @@ const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
 const serviceShaftWall = namedWallRun("main-service-shaft-wall", mainPartitions);
 const kitchenServiceStairWall = namedWallRun("main-kitchen-service-stair-wall", mainPartitions);
+const pantryFurnishings = section("// Pantry storage", "addBoiler", basementFurnishings);
 const kitchenBallroomPartialWall = namedWallRun("main-kitchen-ballroom-partial-wall", mainPartitions);
 const mainRearWall = namedWallRun("main-rear-wall", exteriorWalls);
 const mainEastWall = namedWallRun("main-east-wall", exteriorWalls);
@@ -266,6 +271,17 @@ const waterClass = section("class WaterFixture", "class LightCircuit");
 check("2/6 working water", /addInteractionTarget\(/.test(waterClass) && /Turn on|Turn off/.test(waterClass), "water must change only through an explicit interaction target");
 check("2/6 working water", /water-stream|waterStream|streamMesh/.test(waterClass), "WaterFixture has no visible running-water stream");
 check("2/6 working water", /setWater\(/.test(mansion), "MansionAudio has no continuous water-audio control");
+check("35 flushable toilets", toiletClass.length > 0 && /type:\s*"toilet"/.test(toiletClass) && /Flush \$\{name\}/.test(toiletClass), "toilets do not expose an explicit flush interaction");
+check("35 flushable toilets", /toilets\.push\(this\)/.test(toiletClass) && /animatedObjects\.push\(this\)/.test(toiletClass) && /if \(this\.flushing\) return false/.test(toiletClass), "toilet state is not registered or repeat flushing is unguarded");
+check("35 flush animation", /bowl-water/.test(toiletClass) && /flush-swirl/.test(toiletClass) && /this\.flushTime \/ this\.flushDuration/.test(toiletClass) && /lerp\(1, 0\.22/.test(toiletClass), "toilet water does not visibly drain, swirl, and refill over a finite cycle");
+check("35 flush animation", /flush-handle-mount/.test(toiletClass) && /flush-handle-knob/.test(toiletClass) && /x:\s*-0\.205/.test(toiletClass) && /handlePivot\.rotation\.z/.test(toiletClass) && /audioSystem\.toiletFlush/.test(toiletClass) && /TOILET_FLUSH_DURATION\s*=\s*2\.7/.test(mansion), "toilet flush lacks a visibly offset lever, finite timing, or its flush sound hook");
+check("35 visible bowl water", /seat\.position\.set\(0,\s*0\.704/.test(toiletClass) && /this\.waterFullY\s*=\s*0\.692/.test(toiletClass) && /this\.swirl\.position\.set\(0,\s*0\.713/.test(toiletClass) && /color:\s*0x67bfe2/.test(toiletClass) && /color:\s*0xb9efff/.test(toiletClass) && /blending:\s*THREE\.AdditiveBlending/.test(toiletClass), "toilet water or bright swirl is still buried in or visually indistinct from the porcelain bowl");
+check("35 flush handle placement", /handlePivot\.position\.set\(0\.2,\s*0\.77,\s*0\.15\)/.test(toiletClass) && /x:\s*0\.2,\s*y:\s*0\.77,\s*z:\s*0\.15/.test(toiletClass), "toilet handle or its interaction hitbox is not mounted on the room-facing cistern surface");
+check("35 flushable toilets", count(mansion, /addToilet\("(?:powder room toilet|main hall bathroom toilet|upper grand bathroom toilet)"/g) === 3, "all three bathrooms must use uniquely named flushable toilets");
+for (const view of ["powderRoomToiletInteract", "mainHallToiletInteract", "upperGrandToiletInteract"]) {
+  check("35 toilet QA views", qaRoomViews.includes(`${view}:`), `missing interaction view ${view}`);
+}
+check("35 toilet diagnostics", /toiletsTotal:\s*toilets\.length/.test(diagnostics) && /flushCount:\s*toilet\.flushCount/.test(diagnostics) && /MrFeastFresh\.flushToilet/.test(qaHooks), "flush state is not observable and controllable through QA diagnostics");
 
 // 3. Validate the geometry relationship, not merely a comment: the east-front
 // desk is close to the west wall, with its chair east of it and facing west.
@@ -440,6 +456,44 @@ for (const curio of ["skull", "sealed-ledger", "reel-to-reel", "specimen-jar"]) 
 check("15 archive circulation", /archiveDoorEntry:[\s\S]*?openDoors:\s*true[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive doorway lacks a physical traversal QA route");
 check("15 archive circulation", /archiveCenterAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks) && /archiveCrossAisle:[\s\S]*?room:\s*"ARCHIVE"/.test(qaHooks), "archive center and cross aisles lack physical traversal QA routes");
 check("15 archive QA views", /archiveRows:/.test(qaRoomViews) && /archiveSkull:/.test(qaRoomViews), "archive rows or skull lack a dedicated visual inspection view");
+
+// 35. Pantry storage is a deliberate five-cabinet system: the two original
+// cabinets have role-specific stock, three new south-wall cabinets add dry,
+// baking, and tinned goods, and all five reuse the room light so opening them
+// cannot expand the fixed shader layout.
+check("35 stocked pantry", /name:\s*"pantry cupboard"[^;]+stockKind:\s*"pantry-staples"[^;]+interiorLight:\s*false/.test(pantryFurnishings), "the original pantry cupboard lacks pantry-staple stock or still creates an auxiliary light");
+check("35 stocked pantry", /name:\s*"preserves cabinet"[^;]+stockKind:\s*"preserves"[^;]+interiorLight:\s*false/.test(pantryFurnishings), "the preserves cabinet lacks jar stock or still creates an auxiliary light");
+for (const [name, x, kind] of [
+  ["pantry dry-goods cabinet", "4.0", "dry-goods"],
+  ["pantry baking cabinet", "6.15", "baking"],
+  ["pantry tinned-goods cabinet", "8.3", "tinned-goods"],
+]) {
+  check("35 stocked pantry", pantryFurnishings.includes(`{ name: "${name}", x: ${x}, stockKind: "${kind}" }`), `pantry is missing its ${kind} cabinet`);
+}
+check("35 pantry circulation", /z:\s*-2\.72[\s\S]*?width:\s*1\.8[\s\S]*?height:\s*2\.25[\s\S]*?depth:\s*0\.56[\s\S]*?rotationY:\s*0[\s\S]*?openAngle:\s*88/.test(pantryFurnishings), "south pantry cabinet run no longer preserves the center aisle and safe door swing");
+check("35 pantry light budget", count(pantryFurnishings, /interiorLight:\s*false/g) === 3 && /interiorLight\s*=\s*true/.test(cabinetClass) && /this\.hasInteriorLight\s*=\s*Boolean\(interiorLight\)/.test(cabinetClass) && /if \(this\.hasInteriorLight\)/.test(cabinetClass), "pantry cabinets can still mint door-operated spotlights or the cabinet opt-out is missing");
+for (const batch of ["pantry-flour-sacks", "pantry-preserve-jars", "pantry-jar-lids"]) {
+  check("35 semantic pantry stock", stockedStorageBuilder.includes(batch), `pantry stock builder is missing ${batch}`);
+}
+check("35 semantic pantry stock", /kind === "preserves"/.test(stockedStorageBuilder) && /kind === "tinned-goods"/.test(stockedStorageBuilder) && /\["pantry-staples", "dry-goods", "baking"\]\.includes\(kind\)/.test(stockedStorageBuilder), "pantry cabinets do not receive role-specific contents");
+check("35 pantry diagnostics", /FOOD_STORAGE_KINDS\.has\(storage\.stockKind\)/.test(diagnostics) && /interiorLight:\s*Boolean\(storage\.interiorLight\)/.test(diagnostics), "pantry item totals or auxiliary-light state are absent from diagnostics");
+check("35 pantry culling roundtrip", /for \(const storage of stockedStorages\)[\s\S]*?mesh\.visible = !shouldHide && Boolean\(storage\.open\)/.test(exteriorCulling) && count(mansion, /mesh\.visible = this\.open && !interiorDetailsHidden/g) === 2, "open pantry or refrigerator stock can disappear after an exterior-culling roundtrip");
+check("35 pantry QA views", /pantryStorageNorth:/.test(qaRoomViews) && /pantryStorageSouth:/.test(qaRoomViews), "pantry cabinet banks lack dedicated visual inspection views");
+
+// 35. Fireplaces use additive procedural sprites and an ember bed rather than
+// real scene lights, preserving the shader budget. Each hearth starts lit,
+// animates only on its floor, and exposes a reversible interaction.
+check("35 animated fireplaces", /createRadialGradient/.test(fireTextureBuilder) && /bezierCurveTo/.test(fireTextureBuilder) && /new THREE\.CanvasTexture/.test(fireTextureBuilder), "procedural flame texture is missing its tapered alpha shape");
+check("35 animated fireplaces", /fireOuter:\s*new THREE\.SpriteMaterial/.test(materialFactory) && /fireInner:\s*new THREE\.SpriteMaterial/.test(materialFactory) && /fireGlow:\s*new THREE\.MeshBasicMaterial/.test(materialFactory) && /fireEmber:\s*new THREE\.MeshBasicMaterial/.test(materialFactory) && count(materialFactory, /blending:\s*THREE\.AdditiveBlending/g) >= 4, "fire materials lack layered additive flames, glow, or embers");
+check("35 functional fireplaces", /type:\s*"fireplace"/.test(fireplaceClass) && /\$\{this\.on \? "Extinguish" : "Light"\}/.test(fireplaceClass) && /activate:\s*\(\) => this\.setOn\(!this\.on\)/.test(fireplaceClass), "fireplaces do not expose a reversible light/extinguish interaction");
+check("35 functional fireplaces", /fireplaces\.push\(this\)/.test(fireplaceClass) && /animatedObjects\.push\(this\)/.test(fireplaceClass) && /state\.currentFloor === this\.floorLabel/.test(fireplaceClass) && /!interiorDetailsHidden/.test(fireplaceClass), "fireplace animation is not registered or floor-aware");
+check("35 fireplace shader budget", !/new THREE\.(?:PointLight|SpotLight)/.test(fireplaceClass) && /object\.userData\.fireplaceEffect/.test(exteriorCulling), "fireplace effects create real lights or are not protected from generic culling");
+check("35 functional fireplaces", count(mansion, /addFireplace\("(?:library fireplace|music room fireplace|rear lounge fireplace)"/g) === 3, "all three mansion fireplaces must use uniquely named functional hearths");
+check("35 fireplace diagnostics", /fireplacesTotal:\s*fireplaces\.length/.test(diagnostics) && /flameCount:\s*fireplace\.flames\.length/.test(diagnostics) && /MrFeastFresh\.setFireplace/.test(qaHooks), "fireplace state is not observable and controllable through QA diagnostics");
+for (const view of ["libraryFireplace", "musicRoomFireplace", "rearLoungeFireplace"]) {
+  check("35 fireplace QA views", qaRoomViews.includes(`${view}:`), `missing fireplace inspection view ${view}`);
+}
+
 check("16 shared service-stair lights", /"SERVICE STAIR"\s*:\s*\["service stair lights"\]/.test(lightingMap), "service stair room does not map to one shared lighting circuit");
 check("16 shared service-stair lights", !/service stair (?:upper|lower) light/.test(lightingMap) && !/const service(?:Upper|Lower)\s*=/.test(lightingBuild), "legacy independent service-stair circuits still exist");
 check("16 shared service-stair lights", serviceStairLighting.length > 0 && /serviceStair\.addLevel\("BASEMENT"\)/.test(serviceStairLighting), "shared service-stair circuit does not span the main and basement floors");
@@ -699,6 +753,8 @@ check("30 rain exposure model", /function computeRainExposure\(\)/.test(mansion)
 check("30 rain exposure model", /audioSystem\.setRainExposure\(computeRainExposure\(\)\)/.test(updateLocation), "player movement no longer drives rain exposure");
 check("30 rain occlusion", /setRainExposure\(exposure\)/.test(mansionAudio) && /muffle\.frequency\.setTargetAtTime/.test(mansionAudio) && /gain\.gain\.setTargetAtTime/.test(mansionAudio), "rain exposure does not drive both loudness and a muffle filter smoothly");
 check("30 rain diagnostics", /rainDiagnostics/.test(mansionAudio) && /rain: audioSystem \? audioSystem\.rainDiagnostics\(\) : null/.test(diagnostics) && /rainApertures: rainApertures\.length/.test(diagnostics), "rain audio state is not observable in QA diagnostics");
+check("35 toilet audio", /toiletFlush\(\)/.test(mansionAudio) && /high\.type\s*=\s*"highpass"/.test(mansionAudio) && /low\.type\s*=\s*"lowpass"/.test(mansionAudio) && /source\.stop\(now \+ 2\.55\)/.test(mansionAudio), "toilet flush lacks a finite filtered rush sound");
+check("35 fireplace audio", /fireplace\(on\)/.test(mansionAudio) && /this\.ping\(on \? 145 : 82/.test(mansionAudio), "fireplace toggles lack a short light/extinguish sound cue");
 
 // 31. Runtime smoothness. Static decorative meshes merge into a handful of
 // draw calls per material and culling class; indoor main-floor and grounds
@@ -999,7 +1055,7 @@ check("29 lounge artwork clearance", /upperArtBanquet: \[-2\.0, FLOOR\.UPPER, -9
 check("34 library sconce clearance", /library\.addWallSconce\(-7\.05, FLOOR\.MAIN \+ 2\.0, 3\.361, 0, 32, 5\.8,[^\n]+-9\.45, FLOOR\.MAIN \+ 1\.05, 7\.55\);/.test(mansion), "library wall sconce is not mounted on the clear south-wall panel");
 check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-check("cache key", cacheKey === "20260713-library-sconce-patterned-rugs-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260713-functional-fireplaces-toilets-pantry-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

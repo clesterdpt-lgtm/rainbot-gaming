@@ -272,6 +272,7 @@
     libraryB: [-11.5, FLOOR.MAIN, 10.6, -0.72],
     libraryFireplace: [-7.45, FLOOR.MAIN, 10.25, -Math.PI / 2, -0.52],
     foyerA: [0, FLOOR.MAIN, 10.4, 0],
+    frontThresholdSeam: [0, FLOOR.MAIN, 10.25, Math.PI, -0.58],
     foyerB: [-2.7, FLOOR.MAIN, 4.6, -2.47],
     foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
@@ -331,6 +332,7 @@
     upperGrandBathroomB: [-10.6, FLOOR.UPPER, 2.55, -0.69],
     upperGrandBathroomC: [-13.2, FLOOR.UPPER, -2.45, Math.PI],
     upperGrandBathroomD: [-12.3, FLOOR.UPPER, -1.35, 2.2],
+    upperGrandNorthSwitch: [-8.7, FLOOR.UPPER, 1.55, Math.PI, -0.24],
     upperGrandBathroomShower: [-12.0, FLOOR.UPPER, 0.2, 2.42],
     upperGrandSinkInteract: [-8.76, FLOOR.UPPER, -1.25, -0.18, -0.47],
     upperGrandToiletInteract: [-12.65, FLOOR.UPPER, 0.2, Math.PI / 2, -0.61],
@@ -341,6 +343,7 @@
     upperRearRailB: [-4.2, FLOOR.UPPER, -1.8, -Math.PI / 2],
     readingRoomA: [6.0, FLOOR.UPPER, -2.3, -2.23],
     readingRoomB: [13.0, FLOOR.UPPER, 2.5, 1.01],
+    readingRoomSconce: [10.0, FLOOR.UPPER, 1.55, 0, -0.2],
     primarySuiteC: [-13.2, FLOOR.UPPER, -3.75, -Math.PI / 2],
     rearLoungeC: [0, FLOOR.UPPER, -3.75, 0],
     eastRearSuiteC: [13.2, FLOOR.UPPER, -3.75, Math.PI / 2],
@@ -5151,11 +5154,15 @@
     upperGrandBathroom.addPracticalLight(-13.0, FLOOR.UPPER + 2.45, 1.9, 11, 4.6, ["SECOND FLOOR"], { contained: true, angle: 0.34 });
     upperGrandBathroom.addSwitch(-5.161, FLOOR.UPPER + 1.15, 1.0, -Math.PI / 2);
     upperGrandBathroom.addSwitch(-9.9, FLOOR.UPPER + 1.15, -3.039, 0);
-    upperGrandBathroom.addSwitch(-8.7, FLOOR.UPPER + 1.15, 3.039, 0);
+    // The north-wall control faces south into the bathroom rather than
+    // presenting its back plate through the wall toward the front suite.
+    upperGrandBathroom.addSwitch(-8.7, FLOOR.UPPER + 1.15, 3.039, Math.PI);
 
     const readingRoom = new LightCircuit("reading room lights", FLOOR.UPPER, 0xffb975, true);
     readingRoom.addFixture(9, 0, "small");
-    readingRoom.addWallSconce(14.839, FLOOR.UPPER + 1.9, 0, -Math.PI / 2, 28, 5.4, ["SECOND FLOOR"], 10.2, FLOOR.UPPER + 1.0, 0);
+    // The east wall is a window bay flanked by full-height bookcases. Mount
+    // this lamp on the clear south-wall panel so every part reads as a fixture.
+    readingRoom.addWallSconce(10.0, FLOOR.UPPER + 1.9, -3.039, 0, 28, 5.4, ["SECOND FLOOR"], 9.0, FLOOR.UPPER + 1.0, 0);
     readingRoom.addSwitch(5.161, FLOOR.UPPER + 1.15, 1.15, Math.PI / 2);
 
     // The landing overlooks the open stair void, so its lights are readable
@@ -6154,7 +6161,10 @@
     for (const threshold of rearThresholds) {
       box({ name: threshold.name, w: threshold.width, h: 0.2, d: 1.0, x: threshold.x, y: -0.1, z: -12.15, material: M.limestone, cast: false, receive: true });
     }
-    box({ name: "front-portico-floor", w: 6.6, h: 0.2, d: 3.4, x: 0, y: -0.1, z: 13.2, material: M.limestone, collider: false });
+    // Meet the foyer oak at the front-wall datum (z=12) without extending a
+    // coplanar stone face beneath it. The previous half-meter overlap caused
+    // visible z-fighting between the two floor textures at the open doors.
+    box({ name: "front-portico-floor", w: 6.6, h: 0.2, d: 2.9, x: 0, y: -0.1, z: 13.45, material: M.limestone, collider: false });
     addExteriorEntryRamp("front-portico-outer-entry-ramp", 0, 15.7, 2.6, 1.6, -1);
     // Extend the matching flat collision plane beneath the foyer. Keeping its
     // leading vertical face away from the threshold prevents the character

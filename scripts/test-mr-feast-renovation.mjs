@@ -1112,9 +1112,12 @@ check("29 connected grand stair balusters", /const grandRailHeight = 0\.97;/.tes
 check("29 lounge artwork clearance", /upperArtBanquet: \[-2\.0, FLOOR\.UPPER, -9\.4, Math\.PI \/ 2\]/.test(mansion) && /center: -8\.25[^\n]+artId: "banquet-forgot-guests"/.test(mansion), "rear-lounge banquet painting still intersects the fireplace mantle or its QA view is stale");
 check("34 library sconce clearance", /library\.addWallSconce\(-7\.05, FLOOR\.MAIN \+ 2\.0, 3\.361, 0, 32, 5\.8,[^\n]+-9\.45, FLOOR\.MAIN \+ 1\.05, 7\.55\);/.test(mansion), "library wall sconce is not mounted on the clear south-wall panel");
 check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.MAIN \+ 2\.0, 10\.75,[^\n]+FLOOR\.MAIN \+ 1\.05, 9\.6\);/.test(mansion), "music-room wall sconce still overlaps its portrait");
+check("38 reading-room sconce clearance", /readingRoom\.addWallSconce\(10\.0, FLOOR\.UPPER \+ 1\.9, -3\.039, 0, 28, 5\.4,[^\n]+9\.0, FLOOR\.UPPER \+ 1\.0, 0\);/.test(mansion), "reading-room wall sconce still overlaps the east-wall window or bookcases");
+check("38 upper bathroom switch orientation", /upperGrandBathroom\.addSwitch\(-8\.7, FLOOR\.UPPER \+ 1\.15, 3\.039, Math\.PI\);/.test(mansion), "upper bathroom north-wall switch still faces through the wall");
+check("39 front threshold material seam", /front-portico-floor", w: 6\.6, h: 0\.2, d: 2\.9, x: 0, y: -0\.1, z: 13\.45/.test(mansion), "front portico stone still overlaps the foyer hardwood at the door threshold");
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", cacheKey === "20260714-thin-dense-coats-3", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260714-upper-fixtures-threshold-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

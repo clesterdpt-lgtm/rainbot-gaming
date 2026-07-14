@@ -2966,7 +2966,10 @@
         if (opening.kind !== "arch" && opening.kind !== "open") {
           new HingedDoor({
             name: opening.label || "door", axis, fixed, center: opening.center,
-            width: opening.width - 0.12, height: doorH - 0.08, floorY,
+            // Match the leaf to the lintel underside. The old 8 cm reduction
+            // exposed a bright strip above every closed door; 2 cm preserves
+            // swing clearance without leaving a visible gap.
+            width: opening.width - 0.12, height: doorH - 0.02, floorY,
             direction: opening.direction || 1,
             hingeSide: opening.hingeSide == null ? -1 : opening.hingeSide,
             material: opening.material || M.darkWood,

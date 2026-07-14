@@ -77,6 +77,12 @@
   const GROUNDS_HEMISPHERE_INTENSITY = 0.34;
   const GROUNDS_MOON_INTENSITY = 0.52;
   const GROUNDS_EXPOSURE = 0.94;
+  // The hedge walls absorb most of the ordinary grounds fill. Reuse the
+  // existing hemisphere, moon, and exposure uniforms for a restrained maze
+  // lift instead of adding another real-time light or shadow map.
+  const MAZE_HEMISPHERE_INTENSITY = 0.41;
+  const MAZE_MOON_INTENSITY = 0.60;
+  const MAZE_EXPOSURE = 1.0;
   const CONTEXT_LIGHTING_RESPONSE = 4.5;
   const ROOM_LIGHTING = Object.freeze({
     "POWDER ROOM": ["powder room lights"],
@@ -231,6 +237,17 @@
   const HEDGE_MAZE_PORTALS = Object.freeze([
     Object.freeze({ id: "rear", row: 19, col: 0 }),
     Object.freeze({ id: "north", row: 5, col: 0 }),
+  ]);
+  // Six evenly distributed pools replace the facade spots only while the
+  // player is in the maze or on its west approach. This preserves the exact
+  // fixed shader-light count that the frame-rate pass established.
+  const MAZE_LIGHT_BUDGET_FIXTURES = Object.freeze([
+    "maze-north-entrance-lamp-north",
+    "maze-wayfinding-lamp-11",
+    "maze-center-tall-lamp",
+    "maze-rear-entrance-lamp-north",
+    "maze-wayfinding-lamp-23",
+    "maze-wayfinding-lamp-27",
   ]);
 
   const startupStartedAt = performance.now();
@@ -390,6 +407,7 @@
     yardMazeB: [19.15, YARD_LAYOUT.groundY, 14.2, -2.42, -0.09],
     yardMazeEntranceCell: [20.5, YARD_LAYOUT.groundY, -15.25, -Math.PI / 2],
     yardMazeNorthEntrance: [18.45, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
+    yardMazeNorthEntranceCell: [20.5, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2],
     yardEastFrontConnector: [16.8, YARD_LAYOUT.groundY, 13.2, Math.PI, -0.08],
     yardMazeSouthGoal: [28, YARD_LAYOUT.groundY, -30.25, 0],
     yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
@@ -422,6 +440,7 @@
     pitch: 0,
     currentFloor: "MAIN LEVEL",
     currentRoom: "FRONT FOYER",
+    mazeLightingContext: false,
     currentInteraction: null,
     lastMove: { dx: 0, dz: 0 },
     qaRoute: null,
@@ -5606,6 +5625,7 @@
         };
       }
       if (Number.isFinite(settings.budgetPriority)) sourceLight.userData.exteriorBudgetPriority = settings.budgetPriority;
+      if (Number.isFinite(settings.mazeBudgetPriority)) sourceLight.userData.mazeBudgetPriority = settings.mazeBudgetPriority;
     }
     if (settings.name) {
       cylinder({ name: `${name}-pedestal`, radius: 0.23, radiusTop: 0.16, radiusBottom: 0.29, height: 0.38, segments: 14, x, y: YARD_LAYOUT.groundY + 0.19, z, material: M.iron });
@@ -5782,7 +5802,13 @@
         };
       }),
     ];
-    for (const source of mazeLampSources) addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, source);
+    for (const source of mazeLampSources) {
+      const mazeBudgetPriority = MAZE_LIGHT_BUDGET_FIXTURES.indexOf(source.name);
+      addEstateLantern(estateExteriorLights, source.x, source.z, lanterns, {
+        ...source,
+        mazeBudgetPriority: mazeBudgetPriority >= 0 ? mazeBudgetPriority : null,
+      });
+    }
     finalizeEstateLanterns(estateExteriorLights, lanterns);
     addFrontPorticoChandelier(estateExteriorLights);
     const fountainLight = estateExteriorLights.addPracticalLight(-25, YARD_LAYOUT.groundY + 2.52, 10, 58, 10.5, ["MAIN LEVEL"]);
@@ -6008,7 +6034,9 @@
       // restrained exposure/fog pulse reads through the windows without a
       // directional light passing through every wall and closed door.
       this.light.intensity = outdoors ? lightning * 11 : 0;
-      const baseExposure = outdoors ? GROUNDS_EXPOSURE : NIGHT_LIGHTING.exposure;
+      const baseExposure = state.mazeLightingContext
+        ? MAZE_EXPOSURE
+        : outdoors ? GROUNDS_EXPOSURE : NIGHT_LIGHTING.exposure;
       renderer.toneMappingExposure = baseExposure + lightning * (outdoors ? 0.72 : 0.12);
       scene.fog.color.setRGB(0.031 + lightning * 0.16, 0.043 + lightning * 0.19, 0.07 + lightning * 0.24);
     }
@@ -6654,6 +6682,7 @@
 
   function updateLocation() {
     const previousLightContext = getLightRenderContext();
+    const previousMazeLightingContext = state.mazeLightingContext;
     const p = physics.playerPosition();
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
     let match = null;
@@ -6681,9 +6710,11 @@
         state.qaRoute.visitedRooms.push(match.roomLabel);
       }
     }
+    state.mazeLightingContext = isMazeLightingContext(state.currentRoom, p);
     updateExteriorDetailCulling();
     if (audioSystem) audioSystem.setRainExposure(computeRainExposure());
     const lightContextChanged = previousLightContext !== getLightRenderContext();
+    const mazeLightingContextChanged = previousMazeLightingContext !== state.mazeLightingContext;
     // Interior room labels never influence light state. The only room-level
     // boundary is the mansion shell itself: the grounds own a separate,
     // fixed-budget selection so exterior emitters do not inflate every indoor
@@ -6693,6 +6724,7 @@
     // compact fixed layout is designed to avoid.
     if (floorContextChanged) syncLightRendering();
     else if (lightContextChanged) syncLightRendering();
+    else if (mazeLightingContextChanged) syncLightRendering();
   }
 
   function findInteraction() {
@@ -6811,6 +6843,17 @@
     return floorLabel.toLowerCase().replaceAll(" ", "-");
   }
 
+  function isMazeLightingContext(roomLabel = state.currentRoom, position = null) {
+    if (roomLabel === "HEDGE MAZE") return true;
+    if ((roomLabel !== "EAST LAWN" && roomLabel !== "REAR LAWN") || !position) return false;
+    const halfWidth = HEDGE_MAZE_LAYOUT.rows[0].length * HEDGE_MAZE_LAYOUT.cellSize / 2;
+    const halfDepth = HEDGE_MAZE_LAYOUT.rows.length * HEDGE_MAZE_LAYOUT.cellSize / 2;
+    return position.x >= HEDGE_MAZE_LAYOUT.centerX - halfWidth - HEDGE_MAZE_LAYOUT.cellSize * 2
+      && position.x <= HEDGE_MAZE_LAYOUT.centerX + halfWidth + HEDGE_MAZE_LAYOUT.cellSize
+      && position.z >= HEDGE_MAZE_LAYOUT.centerZ - halfDepth - HEDGE_MAZE_LAYOUT.cellSize
+      && position.z <= HEDGE_MAZE_LAYOUT.centerZ + halfDepth + HEDGE_MAZE_LAYOUT.cellSize;
+  }
+
   function circuitRendersInContext(circuit, floors, renderContext) {
     const rendersOnFloor = [...floors].some((floor) => circuit.levels.has(floor));
     const isExteriorCircuit = circuit === yardState.circuit || circuit.name === "estate exterior lights";
@@ -6822,11 +6865,14 @@
   function getContextLightingTargets() {
     const renderContext = getLightRenderContext();
     const openVolume = OPEN_VOLUME_LIGHT_ROOMS.has(state.currentRoom);
+    const mazeContext = state.mazeLightingContext;
     return {
       hemisphere: renderContext === "grounds"
-        ? GROUNDS_HEMISPHERE_INTENSITY
+        ? mazeContext ? MAZE_HEMISPHERE_INTENSITY : GROUNDS_HEMISPHERE_INTENSITY
         : openVolume ? OPEN_VOLUME_HEMISPHERE_INTENSITY : NIGHT_LIGHTING.hemisphereIntensity,
-      moon: renderContext === "grounds" ? GROUNDS_MOON_INTENSITY : NIGHT_LIGHTING.moonIntensity,
+      moon: renderContext === "grounds"
+        ? mazeContext ? MAZE_MOON_INTENSITY : GROUNDS_MOON_INTENSITY
+        : NIGHT_LIGHTING.moonIntensity,
     };
   }
 
@@ -6881,6 +6927,12 @@
         : [];
       const groundsSpotLimit = Math.min(spotLimit, GROUND_BUDGETED_SPOT_LIGHTS);
       const groundsPointLimit = Math.min(pointLimit, GROUND_BUDGETED_POINT_LIGHTS);
+      if (state.mazeLightingContext) {
+        const mazeCandidates = candidates
+          .filter((light) => Number.isFinite(light.userData.mazeBudgetPriority))
+          .sort((a, b) => a.userData.mazeBudgetPriority - b.userData.mazeBudgetPriority);
+        for (const light of mazeCandidates) trySelect(light, groundsSpotLimit, groundsPointLimit);
+      }
       for (const light of candidates) trySelect(light, groundsSpotLimit, groundsPointLimit);
       return selectedLights;
     }
@@ -7277,6 +7329,7 @@
         renderMode: "manual-circuits-context-stable-real-emitters",
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
+        mazeLightingContext: state.mazeLightingContext,
         mobileRenderProfile: state.mobileRenderProfile,
         mobileLightBudgetPerCircuit: null,
         mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR"

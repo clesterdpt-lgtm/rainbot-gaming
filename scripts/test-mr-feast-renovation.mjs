@@ -149,6 +149,7 @@ const hidingSpotClass = section("class HidingSpot", "function addLocalInstanceBa
 const coatClosetFurnishings = section("function addHangingCoat(", "function addTowelRail(");
 const stockedStorageBuilder = section("function addStockedStorageContents", "class Refrigerator");
 const toiletClass = section("class FlushableToilet", "function addToilet");
+const vanityBuilder = section("function addDoubleVanityBase", "function addWalkInShower");
 const fireplaceClass = section("class Fireplace", "function addFireplace");
 const updateLocation = section("function updateLocation()", "function findInteraction()");
 const interactionLookup = section("function findInteraction()", "function inspectInteractionRay()");
@@ -319,7 +320,11 @@ check("35 flushable toilets", toiletClass.length > 0 && /type:\s*"toilet"/.test(
 check("35 flushable toilets", /toilets\.push\(this\)/.test(toiletClass) && /animatedObjects\.push\(this\)/.test(toiletClass) && /if \(this\.flushing\) return false/.test(toiletClass), "toilet state is not registered or repeat flushing is unguarded");
 check("35 flush animation", /bowl-water/.test(toiletClass) && /flush-swirl/.test(toiletClass) && /this\.flushTime \/ this\.flushDuration/.test(toiletClass) && /lerp\(1, 0\.22/.test(toiletClass), "toilet water does not visibly drain, swirl, and refill over a finite cycle");
 check("35 flush animation", /flush-handle-mount/.test(toiletClass) && /flush-handle-knob/.test(toiletClass) && /x:\s*-0\.205/.test(toiletClass) && /handlePivot\.rotation\.z/.test(toiletClass) && /audioSystem\.toiletFlush/.test(toiletClass) && /TOILET_FLUSH_DURATION\s*=\s*2\.7/.test(mansion), "toilet flush lacks a visibly offset lever, finite timing, or its flush sound hook");
-check("35 visible bowl water", /seat\.position\.set\(0,\s*0\.704/.test(toiletClass) && /this\.waterFullY\s*=\s*0\.692/.test(toiletClass) && /this\.swirl\.position\.set\(0,\s*0\.713/.test(toiletClass) && /color:\s*0x67bfe2/.test(toiletClass) && /color:\s*0xb9efff/.test(toiletClass) && /blending:\s*THREE\.AdditiveBlending/.test(toiletClass), "toilet water or bright swirl is still buried in or visually indistinct from the porcelain bowl");
+const toiletSeatY = Number(toiletClass.match(/seat\.position\.set\(0,\s*([\d.]+)/)?.[1]);
+const toiletWaterY = Number(toiletClass.match(/this\.waterFullY\s*=\s*([\d.]+)/)?.[1]);
+const toiletSwirlY = Number(toiletClass.match(/this\.swirl\.position\.set\(0,\s*([\d.]+)/)?.[1]);
+check("40 recognizable hollow toilets", /toiletBowlShell/.test(toiletClass) && /new THREE\.LatheGeometry/.test(toiletClass) && /hollow-porcelain-bowl/.test(toiletClass) && /bowl-drain/.test(toiletClass), "toilet bowl is still a sealed sphere instead of a hollow shared shell");
+check("40 recessed toilet water", Number.isFinite(toiletSeatY) && Number.isFinite(toiletWaterY) && Number.isFinite(toiletSwirlY) && toiletSeatY - toiletWaterY >= 0.1 && toiletSwirlY > toiletWaterY && toiletSwirlY < toiletSeatY && /blending:\s*THREE\.AdditiveBlending/.test(toiletClass), "toilet water and swirl are not visibly recessed below the seat");
 check("35 flush handle placement", /handlePivot\.position\.set\(0\.2,\s*0\.77,\s*0\.15\)/.test(toiletClass) && /x:\s*0\.2,\s*y:\s*0\.77,\s*z:\s*0\.15/.test(toiletClass), "toilet handle or its interaction hitbox is not mounted on the room-facing cistern surface");
 check("35 flushable toilets", count(mansion, /addToilet\("(?:main hall bathroom toilet|upper grand bathroom toilet)"/g) === 2, "both remaining bathrooms must use uniquely named flushable toilets");
 for (const view of ["mainHallToiletInteract", "upperGrandToiletInteract"]) {
@@ -565,7 +570,11 @@ check("17 signature front chandelier", /addFrontPorticoChandelier\(estateExterio
 check("17 signature front chandelier", /front-portico-chandelier-rain-glass/.test(signatureChandelierBuilders) && /front-portico-chandelier-cage-rib/.test(signatureChandelierBuilders) && /front-portico-chandelier-lower-rib/.test(signatureChandelierBuilders), "front portico chandelier lacks its weathered cage or rain-glass body");
 check("17 signature front chandelier", /front-portico-chandelier-spotlight/.test(signatureChandelierBuilders) && /exteriorBudgetPriority\s*=\s*4/.test(signatureChandelierBuilders), "front portico chandelier is not connected to the controlled exterior light budget");
 check("18 attached faucets", /faucet-deck-collar/.test(mansion) && /water-valve-mount/.test(waterClass), "sink and tub controls lack visible mounting hardware");
+check("40 hollow vanity basins", /vanity-marble-countertop/.test(vanityBuilder) && /bathroomVesselBasinShell/.test(vanityBuilder) && /new THREE\.LatheGeometry/.test(vanityBuilder) && /new THREE\.Vector2\(0, 0\.025\)/.test(vanityBuilder) && /hollow-porcelain-basin/.test(vanityBuilder) && /bathroomVesselBasinFloor/.test(vanityBuilder) && /porcelain-basin-floor/.test(vanityBuilder) && /basin-drain/.test(vanityBuilder), "bathroom sinks are still capped pucks or have an open floor around the drain");
+check("40 coherent bathroom faucets", /faucet-nozzle/.test(vanityBuilder) && /kind === "sink" \? 0\.2/.test(waterClass) && /water-valve-collar`, radius: 0\.052, height: 0\.025/.test(waterClass) && /water-valve-mount`, radius: 0\.018, height: 0\.13/.test(waterClass) && /kind === "shower" \? 0\.065 : 0\.038/.test(waterClass), "bathroom faucets do not use compact, deck-mounted sink controls");
 check("18 attached shower", /shower-wall-backplate/.test(mansion) && /shower-arm/.test(mansion), "shower head lacks a wall backplate and connecting arm");
+check("40 visible shower downlights", /addShowerDownlight\(label, x, z\)/.test(lightCircuitClass) && count(lightingBuild, /\.addShowerDownlight\(/g) === 2 && /shower-downlight-diffuser/.test(lightCircuitClass) && /ceilingY - 0\.16,\s*z,\s*48,[\s\S]*?0\.58,/.test(lightCircuitClass), "both showers need visible circuit-bound ceiling downlights with a useful pool of light");
+check("40 selected shower downlights", /fixtureRole\s*=\s*"shower-downlight"/.test(lightCircuitClass) && budgetedLightSelection.indexOf('fixtureRole === "shower-downlight"') > -1 && budgetedLightSelection.indexOf('fixtureRole === "shower-downlight"') < budgetedLightSelection.indexOf("const openVolumeQueues"), "shower spots are still dropped before optional open-volume lights fill the fixed shader budget");
 
 // 19. The estate yard is a contained, fully authored level rather than an
 // unbounded plane. Its driveway, garden, pool, maze, interactions, lighting,
@@ -1115,9 +1124,13 @@ check("29 music-room sconce clearance", /music\.addWallSconce\(14\.839, FLOOR\.M
 check("38 reading-room sconce clearance", /readingRoom\.addWallSconce\(10\.0, FLOOR\.UPPER \+ 1\.9, -3\.039, 0, 28, 5\.4,[^\n]+9\.0, FLOOR\.UPPER \+ 1\.0, 0\);/.test(mansion), "reading-room wall sconce still overlaps the east-wall window or bookcases");
 check("38 upper bathroom switch orientation", /upperGrandBathroom\.addSwitch\(-8\.7, FLOOR\.UPPER \+ 1\.15, 3\.039, Math\.PI\);/.test(mansion), "upper bathroom north-wall switch still faces through the wall");
 check("39 front threshold material seam", /front-portico-floor", w: 6\.6, h: 0\.2, d: 2\.9, x: 0, y: -0\.1, z: 13\.45/.test(mansion), "front portico stone still overlaps the foyer hardwood at the door threshold");
+check("40 main bathroom switch orientation", /mainHallBathroom\.addSwitch\(-8\.75, 1\.15, -3\.039, 0\);/.test(mansion) && /mainHallBathroom\.addSwitch\(-8\.5, 1\.15, 3\.039, Math\.PI\);/.test(mansion), "main bathroom doorway switches are not mounted on the bathroom-facing sides of their walls");
+for (const view of ["mainHallBathroomShowerLight", "upperGrandBathroomShowerLight", "mainHallSinkInteract", "mainHallBathroomSouthSwitch", "mainHallBathroomNorthSwitch"]) {
+  check("40 bathroom fixture QA views", qaRoomViews.includes(`${view}:`), `missing bathroom inspection view ${view}`);
+}
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", cacheKey === "20260714-upper-fixtures-threshold-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260714-bathroom-fixture-renovation-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

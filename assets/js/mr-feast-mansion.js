@@ -282,7 +282,11 @@
     mainHallBathroomA: [-6.5, FLOOR.MAIN, -2.15, 2.2],
     mainHallBathroomB: [-10.2, FLOOR.MAIN, 2.35, -0.72],
     mainHallBathroomShower: [-11.9, FLOOR.MAIN, 1.8, 2.1],
+    mainHallBathroomShowerLight: [-11.9, FLOOR.MAIN, 1.8, 2.1, 0.65],
+    mainHallSinkInteract: [-7.89, FLOOR.MAIN, -1.25, -0.18, -0.47],
     mainHallToiletInteract: [-9.55, FLOOR.MAIN, 0.25, Math.PI / 2, -0.62],
+    mainHallBathroomSouthSwitch: [-8.75, FLOOR.MAIN, -2.0, 0, -0.28],
+    mainHallBathroomNorthSwitch: [-8.5, FLOOR.MAIN, 2.0, Math.PI, -0.28],
     coatClosetDoor: [-13.2, FLOOR.MAIN, -4.05, Math.PI],
     coatClosetA: [-13.2, FLOOR.MAIN, -2.42, Math.PI],
     coatClosetB: [-12.1, FLOOR.MAIN, -0.65, Math.PI / 2],
@@ -334,6 +338,7 @@
     upperGrandBathroomD: [-12.3, FLOOR.UPPER, -1.35, 2.2],
     upperGrandNorthSwitch: [-8.7, FLOOR.UPPER, 1.55, Math.PI, -0.24],
     upperGrandBathroomShower: [-12.0, FLOOR.UPPER, 0.2, 2.42],
+    upperGrandBathroomShowerLight: [-11.9, FLOOR.UPPER, 1.8, 2.1, 0.65],
     upperGrandSinkInteract: [-8.76, FLOOR.UPPER, -1.25, -0.18, -0.47],
     upperGrandToiletInteract: [-12.65, FLOOR.UPPER, 0.2, Math.PI / 2, -0.61],
     upperLandingA: [-4.25, FLOOR.UPPER, -2.4, -2.08],
@@ -2190,18 +2195,25 @@
       this.ripple.visible = false;
       this.root.add(this.ripple);
 
-      const handleX = handleOffset?.x ?? 0.23;
-      const handleY = handleOffset?.y ?? (kind === "shower" ? -1.02 : 0.07);
-      const handleZ = handleOffset?.z ?? 0.04;
+      const handleX = handleOffset?.x ?? (kind === "sink" ? 0.2 : kind === "tub" ? 0.3 : 0.23);
+      const handleY = handleOffset?.y ?? (kind === "shower" ? -1.02 : kind === "sink" ? -0.08 : -0.05);
+      const handleZ = handleOffset?.z ?? (kind === "sink" ? -0.3 : 0);
+      let handleTargetX = handleX;
+      let handleTargetY = handleY;
+      let handleTargetZ = handleZ;
       if (kind === "shower") {
         cylinder({ name: `${name}-water-valve-mount`, radius: 0.11, height: 0.035, segments: 18, x: handleX, y: handleY, z: handleZ + 0.2, rotationX: Math.PI / 2, material: M.brass, parent: this.root, cast: false });
         cylinder({ name: `${name}-valve-stem`, radius: 0.024, height: 0.2, x: handleX, y: handleY, z: handleZ + 0.1, rotationX: Math.PI / 2, material: M.brass, parent: this.root, cast: false });
       } else {
-        cylinder({ name: `${name}-water-valve-mount`, radius: 0.04, height: 0.42, x: handleX, y: handleY - 0.21, z: handleZ, material: M.brass, parent: this.root, cast: false });
-        cylinder({ name: `${name}-water-valve-collar`, radius: 0.085, height: 0.035, segments: 18, x: handleX, y: handleY - 0.41, z: handleZ, material: M.brass, parent: this.root, cast: false });
-        cylinder({ name: `${name}-valve-stem`, radius: 0.022, height: 0.23, x: handleX / 2, y: handleY, z: handleZ, rotationZ: Math.PI / 2, material: M.brass, parent: this.root, cast: false });
+        // Sink and tub valves sit on their decks as compact cross handles.
+        // The former 42cm pedestal made each control taller than its faucet.
+        cylinder({ name: `${name}-water-valve-collar`, radius: 0.052, height: 0.025, segments: 18, x: handleX, y: handleY - 0.09, z: handleZ, material: M.brass, parent: this.root, cast: false });
+        cylinder({ name: `${name}-water-valve-mount`, radius: 0.018, height: 0.13, x: handleX, y: handleY - 0.025, z: handleZ, material: M.brass, parent: this.root, cast: false });
+        cylinder({ name: `${name}-valve-stem`, radius: 0.015, height: 0.15, x: handleX, y: handleY + 0.045, z: handleZ, rotationZ: Math.PI / 2, material: M.brass, parent: this.root, cast: false });
+        handleTargetX += 0.075;
+        handleTargetY += 0.045;
       }
-      const handle = sphere({ name: `${name}-water-handle`, radius: 0.065, x: handleX, y: handleY, z: handleZ, material: M.brass, parent: this.root, cast: false });
+      const handle = sphere({ name: `${name}-water-handle`, radius: kind === "shower" ? 0.065 : 0.038, x: handleTargetX, y: handleTargetY, z: handleTargetZ, material: M.brass, parent: this.root, cast: false });
       const interaction = {
         type: "water",
         getLabel: () => `${this.on ? "Turn off" : "Turn on"} ${name}`,
@@ -2209,8 +2221,8 @@
       };
       addInteractionTarget(handle, interaction);
       const hitbox = box({
-        name: `${name}-water-hitbox`, w: 0.38, h: 0.38, d: 0.32,
-        x: handleX, y: handleY, z: handleZ, parent: this.root,
+        name: `${name}-water-hitbox`, w: kind === "shower" ? 0.38 : 0.3, h: kind === "shower" ? 0.38 : 0.28, d: kind === "shower" ? 0.32 : 0.28,
+        x: handleTargetX, y: handleTargetY, z: handleTargetZ, parent: this.root,
         material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
         cast: false, receive: false,
       });
@@ -2632,6 +2644,40 @@
       light.name = `${this.name}-fixture-support-fill`;
       light.userData.fixtureRole = "fixture-support";
       light.userData.authoredReach = distance;
+      return light;
+    }
+
+    addShowerDownlight(label, x, z) {
+      const ceilingY = this.floorY + (this.floorY === FLOOR.UPPER ? 3.05 : 3.72);
+      cylinder({ name: `${label}-shower-downlight-trim`, radius: 0.2, height: 0.055, segments: 24, x, y: ceilingY - 0.035, z, material: M.brass, cast: false });
+      const diffuserMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffe1b8,
+        emissive: 0xffae62,
+        emissiveIntensity: this.on ? 0.85 : 0,
+        roughness: 0.68,
+      });
+      diffuserMaterial.userData.onEmissiveIntensity = 0.85;
+      diffuserMaterial.userData.offEmissiveIntensity = 0;
+      this.glowMaterials.push(diffuserMaterial);
+      const diffuser = cylinder({ name: `${label}-shower-downlight-diffuser`, radius: 0.15, height: 0.028, segments: 24, x, y: ceilingY - 0.072, z, material: diffuserMaterial, cast: false });
+      diffuser.userData.onEmissiveIntensity = 0.85;
+      diffuser.userData.levels = new Set(this.levels);
+      this.bulbs.push(diffuser);
+      this.addSourceHalo(x, ceilingY - 0.1, z, 0.62, 0.16);
+      const light = this.addContainedSpotLight(
+        x,
+        ceilingY - 0.16,
+        z,
+        48,
+        this.floorY === FLOOR.UPPER ? 3.5 : 4.2,
+        0.58,
+        Array.from(this.levels),
+        this.floorY + 0.04,
+        false,
+      );
+      light.name = `${label}-shower-downlight-spotlight`;
+      light.userData.fixtureRole = "shower-downlight";
+      light.userData.visibleFixtureEmitter = true;
       return light;
     }
 
@@ -3525,20 +3571,32 @@
       this.root.rotation.y = rotationY;
       scene.add(this.root);
 
-      roundedBox({ name: `${name}-porcelain-base`, w: 0.46, h: 0.36, d: 0.68, radius: 0.13, x: 0, y: 0.22, z: -0.06, material: M.porcelain, parent: this.root });
-      const bowl = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 14), M.porcelain);
-      bowl.name = `${name}-porcelain-bowl`;
-      bowl.scale.set(0.33, 0.2, 0.43);
-      bowl.position.set(0, 0.48, -0.1);
+      roundedBox({ name: `${name}-porcelain-pedestal`, w: 0.4, h: 0.36, d: 0.58, radius: 0.12, x: 0, y: 0.2, z: -0.04, material: M.porcelain, parent: this.root });
+      // A continuous outer-lip-inner profile gives the toilet a genuinely
+      // hollow bowl without CSG. Both toilets share this low-cost shell.
+      const bowl = new THREE.Mesh(geometry("toiletBowlShell", () => new THREE.LatheGeometry([
+        new THREE.Vector2(0.13, 0.02),
+        new THREE.Vector2(0.25, 0.08),
+        new THREE.Vector2(0.32, 0.2),
+        new THREE.Vector2(0.34, 0.31),
+        new THREE.Vector2(0.31, 0.35),
+        new THREE.Vector2(0.245, 0.34),
+        new THREE.Vector2(0.18, 0.27),
+        new THREE.Vector2(0.11, 0.12),
+      ], 28)), M.porcelain);
+      bowl.name = `${name}-hollow-porcelain-bowl`;
+      bowl.scale.set(1, 1, 1.28);
+      bowl.position.set(0, 0.37, -0.12);
       bowl.castShadow = true;
       this.root.add(bowl);
-      const seat = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.034, 8, 28), M.agedTrim);
+      const seat = new THREE.Mesh(geometry("toiletSeatRing", () => new THREE.TorusGeometry(0.245, 0.03, 8, 30)), M.porcelain);
       seat.name = `${name}-toilet-seat`;
       seat.scale.set(1, 1.28, 1);
       seat.rotation.x = Math.PI / 2;
-      seat.position.set(0, 0.704, -0.12);
+      seat.position.set(0, 0.735, -0.12);
       this.root.add(seat);
       roundedBox({ name: `${name}-porcelain-cistern`, w: 0.58, h: 0.68, d: 0.25, radius: 0.06, x: 0, y: 0.67, z: 0.31, material: M.porcelain, parent: this.root });
+      cylinder({ name: `${name}-bowl-drain`, radius: 0.05, height: 0.012, segments: 16, x: 0, y: 0.535, z: -0.12, material: M.brass, parent: this.root, cast: false });
 
       this.waterMaterial = new THREE.MeshBasicMaterial({
         color: 0x67bfe2,
@@ -3547,11 +3605,11 @@
         depthWrite: false,
         side: THREE.DoubleSide,
       });
-      this.water = new THREE.Mesh(new THREE.CircleGeometry(0.205, 28), this.waterMaterial);
+      this.water = new THREE.Mesh(geometry("toiletBowlWater", () => new THREE.CircleGeometry(0.17, 28)), this.waterMaterial);
       this.water.name = `${name}-bowl-water`;
       this.water.rotation.x = -Math.PI / 2;
-      this.water.scale.set(1, 1.32, 1);
-      this.waterFullY = 0.692;
+      this.water.scale.set(1, 1.25, 1);
+      this.waterFullY = 0.565;
       this.water.position.set(0, this.waterFullY, -0.12);
       this.water.castShadow = false;
       this.water.renderOrder = 3;
@@ -3564,10 +3622,11 @@
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       });
-      this.swirl = new THREE.Mesh(new THREE.TorusGeometry(0.135, 0.012, 6, 28), this.swirlMaterial);
+      this.swirl = new THREE.Mesh(geometry("toiletFlushSwirl", () => new THREE.TorusGeometry(0.105, 0.011, 6, 28)), this.swirlMaterial);
       this.swirl.name = `${name}-flush-swirl`;
       this.swirl.rotation.x = Math.PI / 2;
-      this.swirl.position.set(0, 0.713, -0.12);
+      this.swirl.position.set(0, 0.578, -0.12);
+      this.swirl.scale.set(1, 1.25, 1);
       this.swirl.visible = false;
       this.swirl.renderOrder = 4;
       this.root.add(this.swirl);
@@ -3626,18 +3685,19 @@
         : progress < 0.2 ? 1 - (progress - 0.08) / 0.12 : 0;
       this.handlePivot.rotation.z = -handlePress * 0.72;
       this.water.position.y = this.waterFullY - (1 - level) * 0.075;
-      this.water.scale.set(0.82 + level * 0.18, (0.82 + level * 0.18) * 1.32, 1);
+      this.water.scale.set(0.82 + level * 0.18, (0.82 + level * 0.18) * 1.25, 1);
       this.waterMaterial.opacity = 0.2 + level * 0.3;
       const swirlStrength = Math.sin(Math.PI * progress);
       this.swirl.rotation.z = this.phase + this.flushTime * 9.5;
-      this.swirl.scale.setScalar(0.55 + swirlStrength * 0.85);
+      const swirlScale = 0.55 + swirlStrength * 0.85;
+      this.swirl.scale.set(swirlScale, swirlScale * 1.25, swirlScale);
       this.swirlMaterial.opacity = swirlStrength * 0.46;
       if (this.flushTime >= this.flushDuration) {
         this.flushing = false;
         this.flushTime = 0;
         this.handlePivot.rotation.z = 0;
         this.water.position.y = this.waterFullY;
-        this.water.scale.set(1, 1.32, 1);
+        this.water.scale.set(1, 1.25, 1);
         this.waterMaterial.opacity = 0.5;
         this.swirl.visible = false;
         this.swirlMaterial.opacity = 0;
@@ -3660,9 +3720,10 @@
     plane({ name: "still-bath-water", w: 0.54, h: 1.56, x: 0, y: 0.48, z: 0, rotationX: -Math.PI / 2, material: M.glass, parent: group });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) sphere({ name: "brass-clawfoot", radius: 0.08, x: sx * 0.27, y: 0.08, z: sz * 0.68, material: M.brass, parent: group });
     cylinder({ name: "bath-faucet-deck-collar", radius: 0.09, height: 0.04, segments: 18, x: 0.25, y: 0.64, z: 0.66, material: M.brass, parent: group, cast: false });
-    cylinder({ name: "bath-faucet-riser", radius: 0.035, height: 0.65, x: 0.25, y: 0.66, z: 0.66, material: M.brass, parent: group, cast: false });
+    cylinder({ name: "bath-faucet-riser", radius: 0.035, height: 0.3, x: 0.25, y: 0.79, z: 0.66, material: M.brass, parent: group, cast: false });
     sphere({ name: "bath-faucet-elbow", radius: 0.055, x: 0.25, y: 0.94, z: 0.66, material: M.brass, parent: group, cast: false });
     cylinder({ name: "bath-faucet-spout", radius: 0.03, height: 0.32, x: 0.11, y: 0.94, z: 0.66, rotationZ: Math.PI / 2, material: M.brass, parent: group, cast: false });
+    cylinder({ name: "bath-faucet-nozzle", radius: 0.034, height: 0.12, x: -0.05, y: 0.88, z: 0.66, material: M.brass, parent: group, cast: false });
     physics.addFixedBox(x, floorY + 0.34, z, 0.86, 0.68, 2.0, rotationY || 0);
     return group;
   }
@@ -3814,18 +3875,38 @@
   function addDoubleVanityBase(label, x, z, floorY, width) {
     const vanity = new Cabinet({ name: `${label} double vanity`, x, z, floorY, width, height: 0.84, depth: 0.58, rotationY: 0, material: M.darkWood });
     vanity.root.traverse((object) => { if (object.isMesh) object.castShadow = false; });
+    roundedBox({ name: `${label}-vanity-marble-countertop`, w: width + 0.12, h: 0.07, d: 0.68, radius: 0.035, x, y: floorY + 0.875, z, material: M.marble, cast: false });
     const sinkXs = [x - width * 0.23, x + width * 0.23];
     for (const sinkX of sinkXs) {
-      cylinder({ name: `${label}-porcelain-basin`, radius: 0.3, radiusTop: 0.32, radiusBottom: 0.24, height: 0.12, segments: 22, x: sinkX, y: floorY + 0.9, z: z + 0.02, material: M.porcelain, cast: false });
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.03, 8, 26), M.porcelain);
-      rim.name = `${label}-basin-rim`;
-      rim.rotation.x = Math.PI / 2;
-      rim.position.set(sinkX, floorY + 0.97, z + 0.02);
-      scene.add(rim);
-      cylinder({ name: `${label}-faucet-deck-collar`, radius: 0.072, height: 0.035, segments: 18, x: sinkX, y: floorY + 0.855, z: z - 0.18, material: M.brass, cast: false });
-      cylinder({ name: `${label}-faucet-riser`, radius: 0.024, height: 0.36, x: sinkX, y: floorY + 1.02, z: z - 0.18, material: M.brass, cast: false });
-      sphere({ name: `${label}-faucet-elbow`, radius: 0.044, x: sinkX, y: floorY + 1.19, z: z - 0.18, material: M.brass, cast: false });
-      cylinder({ name: `${label}-faucet-spout`, radius: 0.022, height: 0.28, x: sinkX, y: floorY + 1.18, z: z - 0.05, rotationX: Math.PI / 2, material: M.brass, cast: false });
+      const basin = new THREE.Mesh(geometry("bathroomVesselBasinShell", () => new THREE.LatheGeometry([
+        new THREE.Vector2(0.17, 0),
+        new THREE.Vector2(0.27, 0.03),
+        new THREE.Vector2(0.32, 0.1),
+        new THREE.Vector2(0.33, 0.13),
+        new THREE.Vector2(0.28, 0.14),
+        new THREE.Vector2(0.22, 0.1),
+        new THREE.Vector2(0.11, 0.025),
+        new THREE.Vector2(0, 0.025),
+      ], 28)), M.porcelain);
+      basin.name = `${label}-hollow-porcelain-basin`;
+      basin.scale.set(1, 1, 0.8);
+      basin.position.set(sinkX, floorY + 0.89, z + 0.03);
+      basin.castShadow = false;
+      basin.receiveShadow = true;
+      scene.add(basin);
+      const basinFloor = new THREE.Mesh(geometry("bathroomVesselBasinFloor", () => new THREE.CylinderGeometry(0.115, 0.115, 0.012, 24)), M.porcelain);
+      basinFloor.name = `${label}-porcelain-basin-floor`;
+      basinFloor.scale.z = 0.8;
+      basinFloor.position.set(sinkX, floorY + 0.92, z + 0.03);
+      basinFloor.castShadow = false;
+      basinFloor.receiveShadow = false;
+      scene.add(basinFloor);
+      cylinder({ name: `${label}-basin-drain`, radius: 0.045, height: 0.008, segments: 16, x: sinkX, y: floorY + 0.93, z: z + 0.03, material: M.brass, cast: false, receive: false });
+      cylinder({ name: `${label}-faucet-deck-collar`, radius: 0.06, height: 0.035, segments: 18, x: sinkX, y: floorY + 0.935, z: z - 0.18, material: M.brass, cast: false });
+      cylinder({ name: `${label}-faucet-riser`, radius: 0.024, height: 0.29, x: sinkX, y: floorY + 1.08, z: z - 0.18, material: M.brass, cast: false });
+      sphere({ name: `${label}-faucet-elbow`, radius: 0.042, x: sinkX, y: floorY + 1.225, z: z - 0.18, material: M.brass, cast: false });
+      cylinder({ name: `${label}-faucet-spout`, radius: 0.021, height: 0.32, x: sinkX, y: floorY + 1.225, z: z - 0.03, rotationX: Math.PI / 2, material: M.brass, cast: false });
+      cylinder({ name: `${label}-faucet-nozzle`, radius: 0.026, height: 0.12, x: sinkX, y: floorY + 1.165, z: z + 0.13, material: M.brass, cast: false });
       addWallMirror("x", -3.2, sinkX, floorY, 2.0, 1, 0.92, 1.18);
     }
     return sinkXs;
@@ -3848,13 +3929,13 @@
     box({ name: "main-hall-bathroom-north-annex-floor", w: 3.35, h: 0.045, d: 1.5, x: -13.25, y: FLOOR.MAIN + 0.024, z: 2.38, material: M.marble, cast: false, receive: true });
     const sinkXs = addDoubleVanityBase("main hall bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55);
     for (const [index, sinkX] of sinkXs.entries()) {
-      new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.17, z: -2.51, drop: 0.21 });
+      new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.105, z: -2.52, drop: 0.165 });
     }
     const toilet = addToilet("main hall bathroom toilet", -10.65, 0.05, FLOOR.MAIN, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.MAIN, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
-    new WaterFixture({ name: "main hall bathtub tap", kind: "tub", x: 0.1, y: 0.94, z: 0.66, drop: 0.38, parent: tub });
+    new WaterFixture({ name: "main hall bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub });
     const shower = addWalkInShower("main-hall-bathroom", -13.55, 2.28, FLOOR.MAIN);
     new WaterFixture({ name: "main hall shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.MAIN);
@@ -3864,13 +3945,13 @@
     box({ name: "upper-grand-bathroom-marble-floor", w: 9.7, h: 0.045, d: 6.15, x: -10, y: FLOOR.UPPER + 0.024, z: 0, material: M.marble, cast: false, receive: true });
     const sinkXs = addDoubleVanityBase("upper grand bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65);
     for (const [index, sinkX] of sinkXs.entries()) {
-      new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.17, z: -2.51, drop: 0.21 });
+      new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.105, z: -2.52, drop: 0.165 });
     }
     const toilet = addToilet("upper grand bathroom toilet", -13.8, 0.0, FLOOR.UPPER, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.UPPER, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
-    new WaterFixture({ name: "upper grand bathtub tap", kind: "tub", x: 0.1, y: 0.94, z: 0.66, drop: 0.38, parent: tub });
+    new WaterFixture({ name: "upper grand bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub });
     const shower = addWalkInShower("upper-grand-bathroom", -13.55, 2.28, FLOOR.UPPER);
     new WaterFixture({ name: "upper grand shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.UPPER);
@@ -5107,10 +5188,12 @@
 
     const mainHallBathroom = new LightCircuit("main hall bathroom lights", FLOOR.MAIN, 0xffc982, true);
     mainHallBathroom.addFixture(-8.4, 0, "bathroom");
-    mainHallBathroom.addPracticalLight(-12.9, FLOOR.MAIN + 2.55, 2.25, 12, 4.8, ["MAIN LEVEL"], { contained: true, angle: 0.34 });
+    mainHallBathroom.addShowerDownlight("main-hall-bathroom", -13.55, 2.28);
     mainHallBathroom.addSwitch(-5.161, 1.15, 1.15, -Math.PI / 2);
-    mainHallBathroom.addSwitch(-8.1, 1.15, -3.039, Math.PI);
-    mainHallBathroom.addSwitch(-8.7, 1.15, 3.039, 0);
+    // Keep both doorway controls on the bathroom faces of their walls and
+    // clear of the vanity and door casing.
+    mainHallBathroom.addSwitch(-8.75, 1.15, -3.039, 0);
+    mainHallBathroom.addSwitch(-8.5, 1.15, 3.039, Math.PI);
 
     const painting = new LightCircuit("painting room lights", FLOOR.MAIN, 0xffa95e, true);
     painting.addFixture(8.2, 0, "small");
@@ -5151,7 +5234,7 @@
 
     const upperGrandBathroom = new LightCircuit("upper grand bathroom lights", FLOOR.UPPER, 0xffc982, true);
     upperGrandBathroom.addFixture(-8.8, 0, "bathroom");
-    upperGrandBathroom.addPracticalLight(-13.0, FLOOR.UPPER + 2.45, 1.9, 11, 4.6, ["SECOND FLOOR"], { contained: true, angle: 0.34 });
+    upperGrandBathroom.addShowerDownlight("upper-grand-bathroom", -13.55, 2.28);
     upperGrandBathroom.addSwitch(-5.161, FLOOR.UPPER + 1.15, 1.0, -Math.PI / 2);
     upperGrandBathroom.addSwitch(-9.9, FLOOR.UPPER + 1.15, -3.039, 0);
     // The north-wall control faces south into the bathroom rather than
@@ -7207,6 +7290,13 @@
         (light.isSpotLight && selectedSpots < spotLimit)
         || (light.isPointLight && selectedPoints < pointLimit)
       )));
+    }
+
+    // Bathroom ceiling fixtures keep their central room omni, then claim one
+    // already-paid spot slot for the shower. This displaces only an optional
+    // open-volume extra and leaves the fixed 6-spot/11-point shader intact.
+    for (const circuit of renderedCircuits) {
+      trySelect(circuit.lights.find((light) => light.userData.fixtureRole === "shower-downlight"));
     }
 
     // Fill the already-paid empty spot slots round-robin across the foyer,

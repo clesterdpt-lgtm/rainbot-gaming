@@ -98,7 +98,7 @@ async function run() {
     assert(state.inventory?.items?.length === 0, "fresh inventory should be empty");
     assert(state.journal?.entries?.length === 0, "fresh journal should be empty");
     assert(state.contestant13.world.shovelScale <= 0.56, "garden shovel should be reduced to a short concealed spade");
-    assert(state.contestant13.world.shovelPosition.x > -23.53 && state.contestant13.world.shovelPosition.x < -18.07 && state.contestant13.world.shovelPosition.z > -0.45 && state.contestant13.world.shovelPosition.z < 7.85, "shovel should sit inside the southeast rose bed");
+    assert(state.contestant13.world.shovelPosition.x > -23.53 && state.contestant13.world.shovelPosition.x < -18.07 && state.contestant13.world.shovelPosition.z > -12.65 && state.contestant13.world.shovelPosition.z < -4.35, "shovel should sit inside the shifted southeast rose bed");
     assert(state.contestant13.world.digSiteCell.row === 19 && state.contestant13.world.digSiteCell.col === 3 && state.contestant13.world.digSiteCell.pathStepsFromRear >= 82, "cache should occupy the maze's maximum-depth dead end");
 
     await page.waitForFunction(() => {

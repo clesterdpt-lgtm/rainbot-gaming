@@ -40,8 +40,10 @@ Turn the finished mansion into a small playable investigation-and-sabotage loop.
 - [x] The objective and inventory HUD remain readable on desktop and 390×844 touch layouts, and the touch interaction control can collect the shovel. — test: `scripts/test-mr-feast-contestant-13.mjs::mobile HUD and touch pickup`
 - [x] The mansion boots without new browser errors and its existing renovation regression remains green. — test: `node scripts/test-mr-feast-renovation.mjs`
 - [x] Discovery tuning keeps the reduced shovel inside a rose bed but reliably interactable, moves the cache 82 cells into the maze, makes the XIII mark subdued, and leaves only an unmarked hole after excavation. — tests: `scripts/test-mr-feast-renovation.mjs::42 Contestant 13 discovery tuning` and `scripts/test-mr-feast-contestant-13.mjs::world discovery state`
+- [x] The west-lawn front approach, formal-garden cross, and rear approach render as one continuous non-overlapping paved surface, while both approach lamps remain on grass-side offsets outside the player route. — tests: `scripts/test-mr-feast-renovation.mjs::45 garden walkway and lamp placement` and the `yardGardenFrontWalk` / `yardGardenWalk` browser routes
 - [ ] The hidden shovel and subdued cache remain discoverable without feeling highlighted or unfair during an ordinary no-teleport playthrough. — verified by user playtest
 - [ ] Story objects, clue readability, discovery pacing, and sabotage feedback feel clear and ominous. — verified by user playtest
+- [ ] The revised front and rear garden approaches read as intentional estate circulation, with neither lamp crowding the paving. — verified by user playtest
 
 ## Exit condition
 

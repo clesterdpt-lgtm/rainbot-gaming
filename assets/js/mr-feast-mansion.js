@@ -539,6 +539,17 @@
     maze: Object.freeze({ centerX: 26.5, centerZ: -9.25 }),
   });
 
+  const GARDEN_WALKWAY_LAYOUT = Object.freeze({
+    frontCarriageWestEdgeX: -13.5,
+    rearTerraceWestEdgeX: -14.5,
+    crossHalfWidth: 7.3,
+    surfaceOffsetY: 0.045,
+    lamps: Object.freeze({
+      front: Object.freeze({ x: -19.0, z: 18.65 }),
+      rear: Object.freeze({ x: -19.5, z: -16.35 }),
+    }),
+  });
+
   // A long, narrow maze follows the whole east lawn from the rear grounds to
   // the front facade. # cells are clipped hedges, while S/E and dots are
   // walkable. E is an internal traversal goal rather than a boundary opening.
@@ -7101,22 +7112,64 @@
     yardState.perimeterClosed = gaps.length === 0 && yardState.gate.locked && yardState.gate.colliderEnabled;
   }
 
+  function addGardenWalkwayNetwork() {
+    const garden = YARD_LAYOUT.garden;
+    const layout = GARDEN_WALKWAY_LAYOUT;
+    const halfWidth = garden.pathWidth / 2;
+    const westEdgeX = garden.centerX - halfWidth;
+    const eastEdgeX = garden.centerX + halfWidth;
+    const crossWestX = garden.centerX - layout.crossHalfWidth;
+    const crossEastX = garden.centerX + layout.crossHalfWidth;
+    const crossSouthZ = garden.centerZ - halfWidth;
+    const crossNorthZ = garden.centerZ + halfWidth;
+    const rearSouthZ = garden.rearJunctionZ - halfWidth;
+    const rearNorthZ = garden.rearJunctionZ + halfWidth;
+    const frontSouthZ = garden.frontJunctionZ - halfWidth;
+    const frontNorthZ = garden.frontJunctionZ + halfWidth;
+    const outline = [
+      [westEdgeX, rearSouthZ],
+      [layout.rearTerraceWestEdgeX, rearSouthZ],
+      [layout.rearTerraceWestEdgeX, rearNorthZ],
+      [eastEdgeX, rearNorthZ],
+      [eastEdgeX, crossSouthZ],
+      [crossEastX, crossSouthZ],
+      [crossEastX, crossNorthZ],
+      [eastEdgeX, crossNorthZ],
+      [eastEdgeX, frontSouthZ],
+      [layout.frontCarriageWestEdgeX, frontSouthZ],
+      [layout.frontCarriageWestEdgeX, frontNorthZ],
+      [westEdgeX, frontNorthZ],
+      [westEdgeX, crossNorthZ],
+      [crossWestX, crossNorthZ],
+      [crossWestX, crossSouthZ],
+      [westEdgeX, crossSouthZ],
+    ];
+    const shape = new THREE.Shape();
+    outline.forEach(([x, z], index) => {
+      if (index === 0) shape.moveTo(x, -z);
+      else shape.lineTo(x, -z);
+    });
+    shape.closePath();
+    const geometry = new THREE.ShapeGeometry(shape);
+    geometry.rotateX(-Math.PI / 2);
+    const walkway = new THREE.Mesh(geometry, M.wetPavers);
+    walkway.name = "west-lawn-garden-walkway-network";
+    walkway.position.y = YARD_LAYOUT.groundY + layout.surfaceOffsetY;
+    walkway.castShadow = false;
+    walkway.receiveShadow = true;
+    walkway.userData.sections = ["front garden approach", "formal garden cross", "rear garden approach"];
+    scene.add(walkway);
+  }
+
   function buildDrivewayAndEstatePaths() {
     const y = YARD_LAYOUT.groundY + 0.022;
-    const garden = YARD_LAYOUT.garden;
-    const gardenFrontEndZ = garden.centerZ + garden.depth / 2;
-    const frontApproachCenterZ = (gardenFrontEndZ + garden.frontJunctionZ) / 2;
-    const frontApproachDepth = garden.frontJunctionZ - gardenFrontEndZ + 0.4;
     box({ name: "wet-cobblestone-driveway", w: YARD_LAYOUT.driveway.width, h: 0.044, d: 19.2, x: 0, y, z: 24.4, material: M.wetPavers, cast: false });
     for (const x of [-3.14, 3.14]) box({ name: "driveway-limestone-edging", w: 0.2, h: 0.09, d: 19.2, x, y: y + 0.035, z: 24.4, material: M.limestone, cast: false });
     box({ name: "front-carriage-turn", w: 27, h: 0.04, d: 2.4, x: 0, y, z: 16.3, material: M.wetPavers, cast: false });
     box({ name: "rear-terrace-pavers", w: 29, h: 0.04, d: 3.4, x: 0, y, z: -14.0, material: M.wetPavers, cast: false });
-    // The front route is a deliberate L: carriage turn to west-lawn spur, then
-    // straight back to the garden. The rear connector terminates on the exact
-    // terrace and garden-spine centerline, with small slab overlaps at seams.
-    box({ name: "west-lawn-front-garden-connector", w: 12.0, h: 0.044, d: garden.pathWidth, x: -19.25, y, z: garden.frontJunctionZ, material: M.wetPavers, cast: false });
-    box({ name: "formal-garden-front-approach", w: garden.pathWidth, h: 0.044, d: frontApproachDepth, x: garden.centerX, y, z: frontApproachCenterZ, material: M.wetPavers, cast: false });
-    box({ name: "garden-approach-path", w: 11.0, h: 0.044, d: garden.pathWidth, x: -19.75, y, z: garden.rearJunctionZ, material: M.wetPavers, cast: false });
+    // One orthogonal polygon replaces overlapping boxes at every garden turn.
+    // Its branches terminate precisely at the carriage and terrace slab edges.
+    addGardenWalkwayNetwork();
     box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: HEDGE_MAZE_REAR_ENTRANCE.z, material: M.wetPavers, cast: false });
     // Keep the south end at the rear approach while extending the north end to
     // the front carriage centerline. The connector shares that exact centerline
@@ -7144,12 +7197,9 @@
 
   function buildFormalGarden() {
     const groundY = YARD_LAYOUT.groundY;
-    const y = groundY + 0.024;
     const garden = YARD_LAYOUT.garden;
     const gardenX = garden.centerX;
     const gardenZ = garden.centerZ;
-    box({ name: "formal-garden-path-long", w: garden.pathWidth, h: 0.048, d: garden.depth, x: gardenX, y, z: gardenZ, material: M.wetPavers, cast: false });
-    box({ name: "formal-garden-path-cross", w: 14.6, h: 0.048, d: garden.pathWidth, x: gardenX, y, z: gardenZ, material: M.wetPavers, cast: false });
     const beds = [
       { x: gardenX - 4.2, z: gardenZ - 6.3 }, { x: gardenX + 4.2, z: gardenZ - 6.3 },
       { x: gardenX - 4.2, z: gardenZ + 6.3 }, { x: gardenX + 4.2, z: gardenZ + 6.3 },
@@ -7651,8 +7701,10 @@
     const lanterns = [];
     addEstateLantern(estateExteriorLights, -4.5, 32.15, lanterns, true);
     addEstateLantern(estateExteriorLights, 4.5, 32.15, lanterns, true);
-    addEstateLantern(estateExteriorLights, -18.0, 3.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 12 });
-    addEstateLantern(estateExteriorLights, -18.0, 17.0, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 20 });
+    const rearGardenLamp = GARDEN_WALKWAY_LAYOUT.lamps.rear;
+    const frontGardenLamp = GARDEN_WALKWAY_LAYOUT.lamps.front;
+    addEstateLantern(estateExteriorLights, rearGardenLamp.x, rearGardenLamp.z, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 12 });
+    addEstateLantern(estateExteriorLights, frontGardenLamp.x, frontGardenLamp.z, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 20 });
     addEstateLantern(estateExteriorLights, -1.8, -20.2, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 21 });
     addEstateLantern(estateExteriorLights, -1.8, -30.8, lanterns, { castsLight: true, contained: true, intensity: 26, distance: 6.6, angle: 0.78, budgetPriority: 13 });
     const mazeEntranceLampSources = [];

@@ -513,7 +513,7 @@
       "contestant-13-tape": "Tape reel",
     }),
     world: Object.freeze({
-      shovel: Object.freeze({ x: -22.35, z: 6.70, yOffset: 0.16, scale: 0.56 }),
+      shovel: Object.freeze({ x: -22.35, z: -5.50, yOffset: 0.16, scale: 0.56 }),
       digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
     }),
   });
@@ -532,7 +532,9 @@
     bounds: Object.freeze({ minX: -34, maxX: 34, minZ: -34, maxZ: 34 }),
     driveway: Object.freeze({ centerX: 0, width: 6.6, minZ: 14.8, maxZ: 34 }),
     gate: Object.freeze({ centerX: 0, centerZ: 33.72, width: 6.8 }),
-    garden: Object.freeze({ centerX: -25, centerZ: 10, width: 15, depth: 25 }),
+    // Pull the garden behind the facade while keeping its rear axis exactly on
+    // the terrace centerline. A separate west-lawn approach reaches the front.
+    garden: Object.freeze({ centerX: -25, centerZ: -2.2, width: 15, depth: 23.6, pathWidth: 2.1, frontJunctionZ: 16.3, rearJunctionZ: -14.0 }),
     pool: Object.freeze({ centerX: -9, centerZ: -25.5, width: 10.4, depth: 11.8 }),
     maze: Object.freeze({ centerX: 26.5, centerZ: -9.25 }),
   });
@@ -750,8 +752,11 @@
     yardGateInteract: [0, YARD_LAYOUT.groundY, 31.2, Math.PI],
     yardGateWestSeam: [-3.52, YARD_LAYOUT.groundY, 31.2, Math.PI],
     yardGateEastSeam: [3.52, YARD_LAYOUT.groundY, 31.2, Math.PI],
-    yardGardenA: [-18.2, YARD_LAYOUT.groundY, 10.0, Math.PI / 2, -0.13],
-    yardGardenB: [-31.7, YARD_LAYOUT.groundY, 10.0, -Math.PI / 2, -0.13],
+    yardGardenA: [-18.2, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.centerZ, Math.PI / 2, -0.13],
+    yardGardenB: [-31.7, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.centerZ, -Math.PI / 2, -0.13],
+    yardGardenFrontJunction: [-15.2, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.frontJunctionZ, Math.PI / 2, -0.08],
+    yardGardenFrontApproach: [YARD_LAYOUT.garden.centerX, YARD_LAYOUT.groundY, 15.15, 0, -0.18],
+    yardGardenRearJunction: [-15.2, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.rearJunctionZ, Math.PI / 2, -0.08],
     yardPoolA: [-1.8, YARD_LAYOUT.groundY, -21.8, 1.13, -0.08],
     yardPoolB: [-16.2, YARD_LAYOUT.groundY, -30.4, -2.11, -0.06],
     yardPoolSteps: [-9, YARD_LAYOUT.groundY, -18.25, 0, -0.14],
@@ -770,7 +775,7 @@
     yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, Math.PI],
-    yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, -15.2, Math.PI / 2],
+    yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.rearJunctionZ, Math.PI / 2],
     yardExteriorSwitch: [1.72, YARD_LAYOUT.groundY, 13.65, 0, -0.26],
     yardBoundarySouth: [10.0, YARD_LAYOUT.groundY, -31.15, 0],
     yardBoundaryWest: [-31.15, YARD_LAYOUT.groundY, 0, Math.PI / 2],
@@ -784,7 +789,7 @@
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
     contestant13LibraryNote: [-10.5, FLOOR.MAIN, 6.35, 0, -0.5],
-    contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, 8.15, 0, -0.75],
+    contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
     contestant13DigSite: [25, YARD_LAYOUT.groundY, -13.90, 0, -0.93],
     contestant13ArchiveCage: [13.15, FLOOR.BASEMENT, 5.25, Math.PI / 2, -0.14],
     contestant13WorkshopRelay: [-2.5, FLOOR.BASEMENT, -10.0, 0, -0.12],
@@ -6146,7 +6151,7 @@
     const basementMax = -0.45;
     // Exterior zones stay on the main-level render rig so crossing a threshold
     // never toggles a circuit or makes the mansion/grounds lights pop on.
-    addRoomZone(mainMin, mainMax, -33.5, -17.3, -2.8, 23.0, "MAIN LEVEL", "FORMAL GARDEN");
+    addRoomZone(mainMin, mainMax, -33.5, -17.3, YARD_LAYOUT.garden.centerZ - YARD_LAYOUT.garden.depth / 2 - 0.2, YARD_LAYOUT.garden.centerZ + YARD_LAYOUT.garden.depth / 2 + 0.2, "MAIN LEVEL", "FORMAL GARDEN");
     addRoomZone(-2.2, mainMax, -17.0, -1.2, -33.5, -17.8, "MAIN LEVEL", "POOL TERRACE");
     addRoomZone(mainMin, mainMax, 19.5, 33.5, -33.5, 14.35, "MAIN LEVEL", "HEDGE MAZE");
     addRoomZone(mainMin, mainMax, -17.2, 17.2, 12.01, 33.5, "MAIN LEVEL", "FRONT DRIVE");
@@ -6582,10 +6587,11 @@
   }
 
   function addContestantThirteenGardenShovel() {
+    const shovelLayout = CONTESTANT_13.world.shovel;
     const group = new THREE.Group();
     group.name = "contestant-13-garden-shovel";
-    group.position.set(-22.35, YARD_LAYOUT.groundY + 0.16, 6.70);
-    group.scale.setScalar(0.56);
+    group.position.set(shovelLayout.x, YARD_LAYOUT.groundY + shovelLayout.yOffset, shovelLayout.z);
+    group.scale.setScalar(shovelLayout.scale);
     group.rotation.x = 0.08;
     group.rotation.y = 0.24;
     group.rotation.z = -1.42;
@@ -7097,12 +7103,20 @@
 
   function buildDrivewayAndEstatePaths() {
     const y = YARD_LAYOUT.groundY + 0.022;
+    const garden = YARD_LAYOUT.garden;
+    const gardenFrontEndZ = garden.centerZ + garden.depth / 2;
+    const frontApproachCenterZ = (gardenFrontEndZ + garden.frontJunctionZ) / 2;
+    const frontApproachDepth = garden.frontJunctionZ - gardenFrontEndZ + 0.4;
     box({ name: "wet-cobblestone-driveway", w: YARD_LAYOUT.driveway.width, h: 0.044, d: 19.2, x: 0, y, z: 24.4, material: M.wetPavers, cast: false });
     for (const x of [-3.14, 3.14]) box({ name: "driveway-limestone-edging", w: 0.2, h: 0.09, d: 19.2, x, y: y + 0.035, z: 24.4, material: M.limestone, cast: false });
     box({ name: "front-carriage-turn", w: 27, h: 0.04, d: 2.4, x: 0, y, z: 16.3, material: M.wetPavers, cast: false });
     box({ name: "rear-terrace-pavers", w: 29, h: 0.04, d: 3.4, x: 0, y, z: -14.0, material: M.wetPavers, cast: false });
-    box({ name: "garden-approach-path", w: 25, h: 0.04, d: 1.9, x: -12.5, y, z: -15.2, material: M.wetPavers, cast: false });
-    box({ name: "formal-garden-entry-path", w: 2.1, h: 0.04, d: 12.4, x: -25, y, z: -9.0, material: M.wetPavers, cast: false });
+    // The front route is a deliberate L: carriage turn to west-lawn spur, then
+    // straight back to the garden. The rear connector terminates on the exact
+    // terrace and garden-spine centerline, with small slab overlaps at seams.
+    box({ name: "west-lawn-front-garden-connector", w: 12.0, h: 0.044, d: garden.pathWidth, x: -19.25, y, z: garden.frontJunctionZ, material: M.wetPavers, cast: false });
+    box({ name: "formal-garden-front-approach", w: garden.pathWidth, h: 0.044, d: frontApproachDepth, x: garden.centerX, y, z: frontApproachCenterZ, material: M.wetPavers, cast: false });
+    box({ name: "garden-approach-path", w: 11.0, h: 0.044, d: garden.pathWidth, x: -19.75, y, z: garden.rearJunctionZ, material: M.wetPavers, cast: false });
     box({ name: "maze-approach-path", w: 10.4, h: 0.04, d: 1.9, x: 15.0, y, z: HEDGE_MAZE_REAR_ENTRANCE.z, material: M.wetPavers, cast: false });
     // Keep the south end at the rear approach while extending the north end to
     // the front carriage centerline. The connector shares that exact centerline
@@ -7131,11 +7145,14 @@
   function buildFormalGarden() {
     const groundY = YARD_LAYOUT.groundY;
     const y = groundY + 0.024;
-    box({ name: "formal-garden-path-long", w: 2.1, h: 0.048, d: 25.6, x: -25, y, z: 10, material: M.wetPavers, cast: false });
-    box({ name: "formal-garden-path-cross", w: 14.6, h: 0.048, d: 2.1, x: -25, y, z: 10, material: M.wetPavers, cast: false });
+    const garden = YARD_LAYOUT.garden;
+    const gardenX = garden.centerX;
+    const gardenZ = garden.centerZ;
+    box({ name: "formal-garden-path-long", w: garden.pathWidth, h: 0.048, d: garden.depth, x: gardenX, y, z: gardenZ, material: M.wetPavers, cast: false });
+    box({ name: "formal-garden-path-cross", w: 14.6, h: 0.048, d: garden.pathWidth, x: gardenX, y, z: gardenZ, material: M.wetPavers, cast: false });
     const beds = [
-      { x: -29.2, z: 3.7 }, { x: -20.8, z: 3.7 },
-      { x: -29.2, z: 16.3 }, { x: -20.8, z: 16.3 },
+      { x: gardenX - 4.2, z: gardenZ - 6.3 }, { x: gardenX + 4.2, z: gardenZ - 6.3 },
+      { x: gardenX - 4.2, z: gardenZ + 6.3 }, { x: gardenX + 4.2, z: gardenZ + 6.3 },
     ];
     const stems = [];
     const leaves = [];
@@ -7165,41 +7182,41 @@
     addOutdoorInstanceBatch("garden-rose-blooms-ivory", "gardenRoseBloom", () => new THREE.IcosahedronGeometry(1, 1), M.roseIvory, blooms[1], false, true);
     addOutdoorInstanceBatch("garden-rose-blooms-mauve", "gardenRoseBloom", () => new THREE.IcosahedronGeometry(1, 1), M.roseMauve, blooms[2], false, true);
 
-    cylinder({ name: "garden-fountain-basin", radius: 1.72, height: 0.38, segments: 40, x: -25, y: groundY + 0.17, z: 10, material: M.limestone });
+    cylinder({ name: "garden-fountain-basin", radius: 1.72, height: 0.38, segments: 40, x: gardenX, y: groundY + 0.17, z: gardenZ, material: M.limestone });
     const basinRim = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.18, 10, 40), M.marble);
     basinRim.name = "garden-fountain-carved-rim";
-    basinRim.position.set(-25, groundY + 0.38, 10);
+    basinRim.position.set(gardenX, groundY + 0.38, gardenZ);
     basinRim.rotation.x = Math.PI / 2;
     basinRim.castShadow = true;
     scene.add(basinRim);
     const fountainWater = new THREE.Mesh(new THREE.CircleGeometry(1.37, 40), new THREE.MeshPhysicalMaterial({ color: 0x547f8d, transparent: true, opacity: 0.72, roughness: 0.08, clearcoat: 0.55, depthWrite: false }));
     fountainWater.name = "garden-fountain-water";
-    fountainWater.position.set(-25, groundY + 0.39, 10);
+    fountainWater.position.set(gardenX, groundY + 0.39, gardenZ);
     fountainWater.rotation.x = -Math.PI / 2;
     scene.add(fountainWater);
-    cylinder({ name: "garden-fountain-pedestal", radius: 0.34, radiusTop: 0.23, radiusBottom: 0.42, height: 1.45, segments: 20, x: -25, y: groundY + 0.83, z: 10, material: M.marble });
-    cylinder({ name: "garden-fountain-upper-bowl", radius: 0.8, radiusTop: 0.65, radiusBottom: 0.28, height: 0.26, segments: 30, x: -25, y: groundY + 1.42, z: 10, material: M.marble });
-    sphere({ name: "garden-fountain-faceless-figure", radius: 0.24, x: -25, y: groundY + 1.94, z: 10, material: M.porcelain });
-    roundedBox({ name: "garden-fountain-carved-torso", w: 0.42, h: 0.68, d: 0.28, radius: 0.08, x: -25, y: groundY + 1.63, z: 10, material: M.porcelain });
+    cylinder({ name: "garden-fountain-pedestal", radius: 0.34, radiusTop: 0.23, radiusBottom: 0.42, height: 1.45, segments: 20, x: gardenX, y: groundY + 0.83, z: gardenZ, material: M.marble });
+    cylinder({ name: "garden-fountain-upper-bowl", radius: 0.8, radiusTop: 0.65, radiusBottom: 0.28, height: 0.26, segments: 30, x: gardenX, y: groundY + 1.42, z: gardenZ, material: M.marble });
+    sphere({ name: "garden-fountain-faceless-figure", radius: 0.24, x: gardenX, y: groundY + 1.94, z: gardenZ, material: M.porcelain });
+    roundedBox({ name: "garden-fountain-carved-torso", w: 0.42, h: 0.68, d: 0.28, radius: 0.08, x: gardenX, y: groundY + 1.63, z: gardenZ, material: M.porcelain });
     // A crown lantern makes the fountain's nighttime glow physically legible:
     // the bulb below is also the exact origin of its practical PointLight.
-    cylinder({ name: "garden-fountain-crown-lantern-post", radius: 0.045, height: 0.34, segments: 10, x: -25, y: groundY + 2.20, z: 10, material: M.brass, cast: false });
-    cylinder({ name: "garden-fountain-crown-lantern-base", radius: 0.16, radiusTop: 0.11, radiusBottom: 0.18, height: 0.10, segments: 16, x: -25, y: groundY + 2.36, z: 10, material: M.brass, cast: false });
+    cylinder({ name: "garden-fountain-crown-lantern-post", radius: 0.045, height: 0.34, segments: 10, x: gardenX, y: groundY + 2.20, z: gardenZ, material: M.brass, cast: false });
+    cylinder({ name: "garden-fountain-crown-lantern-base", radius: 0.16, radiusTop: 0.11, radiusBottom: 0.18, height: 0.10, segments: 16, x: gardenX, y: groundY + 2.36, z: gardenZ, material: M.brass, cast: false });
     const fountainLanternShade = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.11, 0.34, 18, 1, true), M.frostedShade);
     fountainLanternShade.name = "garden-fountain-crown-lantern-frosted-glass";
-    fountainLanternShade.position.set(-25, groundY + 2.52, 10);
+    fountainLanternShade.position.set(gardenX, groundY + 2.52, gardenZ);
     fountainLanternShade.castShadow = false;
     fountainLanternShade.receiveShadow = false;
     scene.add(fountainLanternShade);
-    sphere({ name: "garden-fountain-crown-lantern-bulb", radius: 0.075, x: -25, y: groundY + 2.52, z: 10, material: M.lampGlow, cast: false });
-    cylinder({ name: "garden-fountain-crown-lantern-cap", radius: 0.19, radiusTop: 0.05, radiusBottom: 0.19, height: 0.16, segments: 16, x: -25, y: groundY + 2.75, z: 10, material: M.brass, cast: false });
-    sphere({ name: "garden-fountain-crown-lantern-finial", radius: 0.055, x: -25, y: groundY + 2.87, z: 10, material: M.brass, cast: false });
+    sphere({ name: "garden-fountain-crown-lantern-bulb", radius: 0.075, x: gardenX, y: groundY + 2.52, z: gardenZ, material: M.lampGlow, cast: false });
+    cylinder({ name: "garden-fountain-crown-lantern-cap", radius: 0.19, radiusTop: 0.05, radiusBottom: 0.19, height: 0.16, segments: 16, x: gardenX, y: groundY + 2.75, z: gardenZ, material: M.brass, cast: false });
+    sphere({ name: "garden-fountain-crown-lantern-finial", radius: 0.055, x: gardenX, y: groundY + 2.87, z: gardenZ, material: M.brass, cast: false });
     const jetPositions = [];
     for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
-      const x1 = -25 + Math.cos(a) * 0.28;
-      const z1 = 10 + Math.sin(a) * 0.28;
-      const x2 = -25 + Math.cos(a) * 0.85;
-      const z2 = 10 + Math.sin(a) * 0.85;
+      const x1 = gardenX + Math.cos(a) * 0.28;
+      const z1 = gardenZ + Math.sin(a) * 0.28;
+      const x2 = gardenX + Math.cos(a) * 0.85;
+      const z2 = gardenZ + Math.sin(a) * 0.85;
       jetPositions.push(x1, groundY + 1.48, z1, x2, groundY + 0.55, z2);
     }
     const jetGeometry = new THREE.BufferGeometry();
@@ -7207,9 +7224,9 @@
     const jets = new THREE.LineSegments(jetGeometry, new THREE.LineBasicMaterial({ color: 0xa7d9e8, transparent: true, opacity: 0.66 }));
     jets.name = "garden-fountain-water-jets";
     scene.add(jets);
-    physics.addFixedBox(-25, groundY + 0.72, 10, 3.5, 1.45, 3.5, 0);
-    addGardenBench(-31.5, 4.2, -Math.PI / 2);
-    addGardenBench(-31.5, 15.8, -Math.PI / 2);
+    physics.addFixedBox(gardenX, groundY + 0.72, gardenZ, 3.5, 1.45, 3.5, 0);
+    addGardenBench(gardenX - 6.5, gardenZ - 5.8, -Math.PI / 2);
+    addGardenBench(gardenX - 6.5, gardenZ + 5.8, -Math.PI / 2);
     yardState.featureCounts.gardenBeds = beds.length;
     yardState.featureCounts.gardenPlants = stems.length;
   }
@@ -7742,7 +7759,7 @@
     }
     finalizeEstateLanterns(estateExteriorLights, lanterns);
     addFrontPorticoChandelier(estateExteriorLights);
-    const fountainLight = estateExteriorLights.addPracticalLight(-25, YARD_LAYOUT.groundY + 2.52, 10, 58, 10.5, ["MAIN LEVEL"]);
+    const fountainLight = estateExteriorLights.addPracticalLight(YARD_LAYOUT.garden.centerX, YARD_LAYOUT.groundY + 2.52, YARD_LAYOUT.garden.centerZ, 58, 10.5, ["MAIN LEVEL"]);
     fountainLight.name = "garden-fountain-crown-lantern-light";
     fountainLight.userData.visibleFixtureEmitter = true;
     estateExteriorLights.addPracticalLight(-9, -0.05, -25.5, 48, 10.5, ["MAIN LEVEL"]);
@@ -9838,8 +9855,13 @@
         },
         yardGardenWalk: {
           start: "yardGardenApproach",
-          actions: [{ yaw: Math.PI / 2, seconds: 3.7 }, { yaw: Math.PI, seconds: 5.7 }],
-          expected: { inBounds: true, grounded: true, room: "FORMAL GARDEN" },
+          actions: [{ yaw: Math.PI / 2, seconds: 3.7 }, { yaw: Math.PI, seconds: 2.2 }],
+          expected: { inBounds: true, grounded: true, room: "FORMAL GARDEN", visitedRooms: ["REAR LAWN", "FORMAL GARDEN"] },
+        },
+        yardGardenFrontWalk: {
+          start: "yardGardenFrontJunction",
+          actions: [{ yaw: Math.PI / 2, seconds: 4.4 }, { yaw: 0, seconds: 3.2 }],
+          expected: { inBounds: true, grounded: true, room: "FORMAL GARDEN", visitedRooms: ["FRONT DRIVE", "WEST LAWN", "FORMAL GARDEN"] },
         },
         yardMazeApproach: {
           start: "yardRearCirculationB",

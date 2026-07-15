@@ -317,29 +317,90 @@
   })();
 
   // ---------- Three.js scene ----------
-  const renderer = new T.WebGLRenderer({ canvas, antialias: true });
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.65));
   renderer.setSize(W, H, false);
-  const SKY = 0x9fdcff;
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.02;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+  const SKY = 0x9fd8f2;
   renderer.setClearColor(SKY);
   const scene = new T.Scene();
-  scene.fog = new T.Fog(SKY, 30, 90);
+  scene.background = new T.Color(SKY);
+  scene.fog = new T.Fog(SKY, 52, 175);
   const camera = new T.PerspectiveCamera(60, W / H, 0.05, 1600);
 
-  // Flat, cheerful cartoon lighting: strong hemisphere, gentle sun so no
-  // face ever goes near-black regardless of camera direction.
-  scene.add(new T.HemisphereLight(0xdff2ff, 0x7fb573, 1.05));
-  const sun = new T.DirectionalLight(0xfff3d6, 0.45);
-  sun.position.set(50, 120, -60);
+  // Warm animation-film lighting: a readable sky/ground fill, a soft key,
+  // and a cool rim. Only the hero and large nearby anchors cast shadows.
+  scene.add(new T.HemisphereLight(0xeaf8ff, 0x527c4c, 0.94));
+  scene.add(new T.AmbientLight(0xffeee0, 0.22));
+  const sun = new T.DirectionalLight(0xffddb0, 1.15);
+  sun.position.set(42, 68, 28);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -38;
+  sun.shadow.camera.right = 38;
+  sun.shadow.camera.top = 38;
+  sun.shadow.camera.bottom = -38;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = 150;
+  sun.shadow.bias = -0.0008;
   scene.add(sun);
+  const rim = new T.DirectionalLight(0xa9dfff, 0.3);
+  rim.position.set(-35, 24, -45);
+  scene.add(rim);
+
+  function makeGableRoofGeometry() {
+    const geo = new T.BufferGeometry();
+    geo.setAttribute(
+      "position",
+      new T.Float32BufferAttribute(
+        [
+          -0.5, 0, -0.5, 0.5, 0, -0.5, 0, 0.5, -0.5,
+          -0.5, 0, 0.5, 0.5, 0, 0.5, 0, 0.5, 0.5,
+        ],
+        3
+      )
+    );
+    geo.setIndex([
+      0, 1, 2,
+      3, 5, 4,
+      0, 2, 5, 0, 5, 3,
+      1, 4, 5, 1, 5, 2,
+      0, 3, 4, 0, 4, 1,
+    ]);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  function makePicketGeometry() {
+    const shape = new T.Shape();
+    shape.moveTo(-0.5, 0);
+    shape.lineTo(0.5, 0);
+    shape.lineTo(0.5, 0.72);
+    shape.lineTo(0, 1);
+    shape.lineTo(-0.5, 0.72);
+    shape.closePath();
+    const geo = new T.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false });
+    geo.translate(0, 0, -0.09);
+    return geo;
+  }
 
   // ---------- Shared geometry & materials ----------
   const GEO = {
     box: new T.BoxGeometry(1, 1, 1),
-    sph: new T.SphereGeometry(1, 12, 9),
+    sph: new T.SphereGeometry(1, 18, 13),
     sphLo: new T.SphereGeometry(1, 8, 6),
     cyl: new T.CylinderGeometry(1, 1, 1, 10),
     cone: new T.ConeGeometry(1, 1, 9),
     torus: new T.TorusGeometry(1, 0.28, 8, 14),
+    torusThin: new T.TorusGeometry(1, 0.11, 7, 18),
+    dodec: new T.DodecahedronGeometry(1, 0),
+    oct: new T.OctahedronGeometry(1, 1),
+    roof: makeGableRoofGeometry(),
+    picket: makePicketGeometry(),
     plane: new T.PlaneGeometry(1, 1),
     circle: new T.CircleGeometry(1, 22),
   };
@@ -347,7 +408,12 @@
   function mat(color, opts) {
     const key = color + JSON.stringify(opts || {});
     if (!MATS.has(key)) {
-      MATS.set(key, new T.MeshLambertMaterial(Object.assign({ color }, opts || {})));
+      MATS.set(
+        key,
+        new T.MeshStandardMaterial(
+          Object.assign({ color, roughness: 0.72, metalness: 0.015 }, opts || {})
+        )
+      );
     }
     return MATS.get(key);
   }
@@ -360,20 +426,82 @@
     return m;
   }
 
+  const instanceDummy = new T.Object3D();
+  function instanced(geo, material, transforms, name) {
+    const batch = new T.InstancedMesh(geo, material, transforms.length);
+    batch.name = name || "detail_batch";
+    for (let i = 0; i < transforms.length; i++) {
+      const t = transforms[i];
+      instanceDummy.position.fromArray(t.p || [0, 0, 0]);
+      instanceDummy.rotation.set(...(t.r || [0, 0, 0]));
+      instanceDummy.scale.fromArray(t.s || [1, 1, 1]);
+      instanceDummy.updateMatrix();
+      batch.setMatrixAt(i, instanceDummy.matrix);
+    }
+    batch.instanceMatrix.needsUpdate = true;
+    return batch;
+  }
+
   // ---------- Canvas textures ----------
   function makeTex(size, draw, repeatX, repeatY) {
     const c = document.createElement("canvas");
     c.width = c.height = size;
     draw(c.getContext("2d"), size);
     const tex = new T.CanvasTexture(c);
+    tex.encoding = T.sRGBEncoding;
     if (repeatX) {
       tex.wrapS = tex.wrapT = T.RepeatWrapping;
       tex.repeat.set(repeatX, repeatY || repeatX);
     }
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
     return tex;
   }
 
-  const grassTex = makeTex(256, (g, s) => {
+  const skyTex = makeTex(512, (g, s) => {
+    const sky = g.createLinearGradient(0, 0, 0, s);
+    sky.addColorStop(0, "#61b7ec");
+    sky.addColorStop(0.52, "#a8def4");
+    sky.addColorStop(0.82, "#f7d9b0");
+    sky.addColorStop(1, "#d8e6b7");
+    g.fillStyle = sky;
+    g.fillRect(0, 0, s, s);
+    g.fillStyle = "rgba(255,255,255,0.64)";
+    for (const cloud of [
+      [68, 108, 54], [208, 72, 42], [358, 122, 64], [470, 78, 38],
+    ]) {
+      const [x, y, r] = cloud;
+      g.beginPath();
+      g.ellipse(x, y, r, r * 0.24, 0, 0, Math.PI * 2);
+      g.ellipse(x - r * 0.24, y - r * 0.1, r * 0.34, r * 0.26, 0, 0, Math.PI * 2);
+      g.ellipse(x + r * 0.2, y - r * 0.12, r * 0.42, r * 0.31, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+  });
+  skyTex.name = "bbb_storybook_sky";
+  scene.background = skyTex;
+
+  function loadGeneratedTexture(name, url, fallback, repeatX, repeatY) {
+    const tex = new T.TextureLoader().load(
+      url,
+      () => {
+        tex.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        tex.image = fallback.image;
+        tex.needsUpdate = true;
+      }
+    );
+    tex.name = name;
+    tex.userData = { role: "generated-game-texture", source: url };
+    tex.encoding = T.sRGBEncoding;
+    tex.wrapS = tex.wrapT = T.MirroredRepeatWrapping;
+    tex.repeat.set(repeatX || 1, repeatY || repeatX || 1);
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return tex;
+  }
+
+  const fallbackGrassTex = makeTex(256, (g, s) => {
     g.fillStyle = "#6db85f";
     g.fillRect(0, 0, s, s);
     for (let i = 0; i < 900; i++) {
@@ -384,7 +512,15 @@
     }
   }, 130);
 
-  const ginghamTex = makeTex(256, (g, s) => {
+  const grassTex = loadGeneratedTexture(
+    "bbb_generated_clover_grass",
+    "../assets/textures/big-baby-bum/grass-clover-generated-v2.png",
+    fallbackGrassTex,
+    220,
+    220
+  );
+
+  const fallbackGinghamTex = makeTex(256, (g, s) => {
     g.fillStyle = "#f6ead2";
     g.fillRect(0, 0, s, s);
     g.fillStyle = "rgba(226,87,76,0.6)";
@@ -393,9 +529,41 @@
       for (let j = 0; j < 8; j++) if ((i + j) % 2) g.fillRect(i * c, j * c, c, c);
   }, 4);
 
+  const ginghamTex = loadGeneratedTexture(
+    "bbb_generated_picnic_gingham",
+    "../assets/textures/big-baby-bum/gingham-generated-v2.png",
+    fallbackGinghamTex,
+    3,
+    2
+  );
+
+  const fallbackWoodTex = makeTex(128, (g, s) => {
+    g.fillStyle = "#a96632";
+    g.fillRect(0, 0, s, s);
+    g.strokeStyle = "rgba(76,39,18,0.25)";
+    g.lineWidth = 3;
+    for (let x = 0; x < s; x += 24) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x + 4, s);
+      g.stroke();
+    }
+  }, 2);
+
+  const woodTex = loadGeneratedTexture(
+    "bbb_generated_cedar",
+    "../assets/textures/big-baby-bum/cedar-generated-v1.png",
+    fallbackWoodTex,
+    2,
+    2
+  );
+  const woodMat = new T.MeshStandardMaterial({ map: woodTex, bumpMap: woodTex, bumpScale: 0.055, color: 0xfff1dd, roughness: 0.86, metalness: 0 });
+  woodMat.name = "bbb_cedar_wood";
+  woodMat.userData.role = "generated-wood";
+
   // Road strip: concrete sidewalks at the edges, asphalt center, dashed line.
   // Dash runs along the texture's V axis; strips repeat along their length.
-  const roadTex = makeTex(128, (g, s) => {
+  const fallbackRoadTex = makeTex(128, (g, s) => {
     g.fillStyle = "#b9bcc4";
     g.fillRect(0, 0, s, s); // sidewalk
     g.fillStyle = "#565a66";
@@ -405,7 +573,53 @@
     g.fillStyle = "rgba(0,0,0,0.12)";
     for (let i = 0; i < 40; i++) g.fillRect(Math.random() * s, Math.random() * s, 3, 3);
   });
-  roadTex.wrapS = roadTex.wrapT = T.RepeatWrapping;
+  const roadTex = (() => {
+    const s = 512;
+    const c = document.createElement("canvas");
+    c.width = c.height = s;
+    const g = c.getContext("2d");
+    function paint(img) {
+      if (img) g.drawImage(img, 0, 0, s, s);
+      else {
+        g.fillStyle = "#50545d";
+        g.fillRect(0, 0, s, s);
+      }
+      const sidewalk = g.createLinearGradient(0, 0, s, 0);
+      sidewalk.addColorStop(0, "#c9c5b8");
+      sidewalk.addColorStop(0.12, "#e3dfd0");
+      sidewalk.addColorStop(0.15, "#a9a89f");
+      sidewalk.addColorStop(0.151, "rgba(0,0,0,0)");
+      sidewalk.addColorStop(0.849, "rgba(0,0,0,0)");
+      sidewalk.addColorStop(0.85, "#a9a89f");
+      sidewalk.addColorStop(0.88, "#e3dfd0");
+      sidewalk.addColorStop(1, "#c9c5b8");
+      g.fillStyle = sidewalk;
+      g.fillRect(0, 0, s, s);
+      g.fillStyle = "#f5c84c";
+      g.fillRect(s * 0.49, s * 0.08, s * 0.02, s * 0.5);
+      g.fillStyle = "rgba(255,255,255,0.28)";
+      g.fillRect(s * 0.16, 0, 2, s);
+      g.fillRect(s * 0.84, 0, 2, s);
+    }
+    paint(null);
+    const tex = new T.CanvasTexture(c);
+    tex.name = "bbb_generated_asphalt_hybrid";
+    tex.userData = { role: "generated-game-texture", source: "../assets/textures/big-baby-bum/asphalt-generated-v1.png" };
+    tex.encoding = T.sRGBEncoding;
+    tex.wrapS = tex.wrapT = T.RepeatWrapping;
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    const img = new Image();
+    img.onload = () => {
+      paint(img);
+      tex.needsUpdate = true;
+    };
+    img.onerror = () => {
+      tex.image = fallbackRoadTex.image;
+      tex.needsUpdate = true;
+    };
+    img.src = "../assets/textures/big-baby-bum/asphalt-generated-v1.png";
+    return tex;
+  })();
 
   const windowTexes = [0x9a5b41, 0xd9c8a8, 0x7f8fa6, 0xc46a4f, 0x8aa17c].map((wall) =>
     makeTex(128, (g, s) => {
@@ -418,6 +632,15 @@
         }
     }, 1)
   );
+  windowTexes.forEach((tex, i) => {
+    tex.name = `bbb_facade_${i}`;
+  });
+  const buildingWallMats = windowTexes.map((map, i) => {
+    const material = new T.MeshStandardMaterial({ map, roughness: i < 2 ? 0.86 : 0.7, metalness: 0.01 });
+    material.name = `bbb_shared_facade_${i}`;
+    material.userData.role = "shared-building-facade";
+    return material;
+  });
 
   const stinkTex = makeTex(64, (g, s) => {
     g.clearRect(0, 0, s, s);
@@ -451,8 +674,8 @@
     g.fillRect(s * 0.45, s * 0.7, s * 0.1, s * 0.1);
   });
   const hazardMat = new T.MeshBasicMaterial({ map: hazardTex, transparent: true, side: T.DoubleSide, depthWrite: false });
-  const gasMat = new T.MeshLambertMaterial({ color: 0x8fdc4f, transparent: true, opacity: 0.42, depthWrite: false });
-  const shellMat = new T.MeshLambertMaterial({ color: 0x2c3226 });
+  const gasMat = new T.MeshStandardMaterial({ color: 0x8fdc4f, emissive: 0x244d19, roughness: 0.55, transparent: true, opacity: 0.42, depthWrite: false });
+  const shellMat = new T.MeshStandardMaterial({ color: 0x2c3226, roughness: 0.7, metalness: 0.25 });
   // Red flash for enemy hits (green stays for puke).
   const hitFlash = document.createElement("div");
   hitFlash.className = "bbb-puke-flash";
@@ -539,23 +762,30 @@
   scene.add(dressing);
   function buildDressing() {
     const span = CITY_BOUND * 2 + 80;
-    const ground = new T.Mesh(new T.PlaneGeometry(span, span), new T.MeshLambertMaterial({ map: grassTex }));
+    const groundMaterial = new T.MeshStandardMaterial({ map: grassTex, bumpMap: grassTex, bumpScale: 0.025, color: 0xcadbb8, roughness: 0.96, metalness: 0 });
+    groundMaterial.name = "bbb_clover_ground";
+    const ground = new T.Mesh(new T.PlaneGeometry(span, span), groundMaterial);
     ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
     dressing.add(ground);
 
     // Picnic blanket at spawn (home backyard).
-    const blanket = new T.Mesh(new T.PlaneGeometry(4.4, 3.4), new T.MeshLambertMaterial({ map: ginghamTex }));
+    const blanketMaterial = new T.MeshStandardMaterial({ map: ginghamTex, bumpMap: ginghamTex, bumpScale: 0.012, color: 0xf5e8dc, roughness: 0.82, metalness: 0 });
+    blanketMaterial.name = "bbb_picnic_gingham";
+    const blanket = new T.Mesh(new T.PlaneGeometry(4.4, 3.4), blanketMaterial);
     blanket.rotation.x = -Math.PI / 2;
     blanket.rotation.z = 0.12;
     blanket.position.set(-5, 0.03, 1);
+    blanket.receiveShadow = true;
     dressing.add(blanket);
 
     // Street grid: north-south roads (x = ±(30+60k)) and east-west roads.
     const len = CITY_BOUND * 2 + 12;
+    const roadMaterial = new T.MeshStandardMaterial({ map: roadTex, bumpMap: roadTex, bumpScale: 0.018, color: 0xe8e8e2, roughness: 0.93, metalness: 0 });
+    roadMaterial.name = "bbb_generated_asphalt_road";
     function roadStrip(width, alongZ, linePos, y) {
-      const m = new T.MeshLambertMaterial({ map: roadTex });
       const geo = new T.PlaneGeometry(width, len);
-      const r = new T.Mesh(geo, m);
+      const r = new T.Mesh(geo, roadMaterial);
       r.rotation.x = -Math.PI / 2;
       if (alongZ) {
         r.position.set(linePos, y, 0);
@@ -563,6 +793,7 @@
         r.rotation.z = Math.PI / 2;
         r.position.set(0, y, linePos);
       }
+      r.receiveShadow = true;
       dressing.add(r);
     }
     // Shared repeating texture: many strips reuse one material fine because
@@ -625,34 +856,80 @@
   function bCritter(bodyC, headC, r, tall, fancy) {
     return () => {
       const g = new T.Group();
-      g.add(mesh(GEO.sphLo, mat(bodyC), r, r * 0.8, r * 1.25, 0, r * 0.8, 0));
+      g.name = "bbb_critter_v2";
+      const fur = mat(bodyC, { roughness: 0.9, flatShading: true });
+      const head = mat(headC, { roughness: 0.88, flatShading: true });
+      g.add(mesh(GEO.dodec, fur, r, r * 0.78, r * 1.22, 0, r * 0.78, 0));
       const hy = r * (tall ? 1.5 : 1.2);
-      g.add(mesh(GEO.sphLo, mat(headC), r * 0.6, r * 0.6, r * 0.6, 0, hy, r * 1.1));
-      g.add(mesh(GEO.cone, mat(bodyC), r * 0.25, r * 0.5, r * 0.25, 0, r * 0.9, -r * 1.3));
-      if (fancy) {
-        g.add(mesh(GEO.cone, mat(bodyC), r * 0.14, r * 0.3, r * 0.14, -r * 0.28, hy + r * 0.5, r * 1.05));
-        g.add(mesh(GEO.cone, mat(bodyC), r * 0.14, r * 0.3, r * 0.14, r * 0.28, hy + r * 0.5, r * 1.05));
-        for (const lp of [[-0.5, 0.55], [0.5, 0.55], [-0.5, -0.45], [0.5, -0.45]]) {
-          g.add(mesh(GEO.cyl, mat(bodyC), r * 0.12, r * 0.5, r * 0.12, r * lp[0], r * 0.25, r * lp[1]));
-        }
+      g.add(mesh(GEO.dodec, head, r * 0.6, r * 0.58, r * 0.62, 0, hy, r * 1.03));
+      const tail = mesh(GEO.cone, fur, r * 0.22, r * 0.55, r * 0.22, 0, r * 0.95, -r * 1.25);
+      tail.rotation.x = -0.7;
+      g.add(tail);
+      if (tall) {
+        const beak = mesh(GEO.cone, mat(0xf39a32, { roughness: 0.78 }), r * 0.18, r * 0.42, r * 0.15, 0, hy - r * 0.05, r * 1.62);
+        beak.rotation.x = Math.PI / 2;
+        g.add(beak);
       }
+      if (fancy) {
+        g.add(
+          instanced(
+            GEO.cone,
+            fur,
+            [-1, 1].map((side) => ({
+              p: [side * r * 0.28, hy + r * 0.48, r * 1.02],
+              r: [0.18, 0, side * -0.14],
+              s: [r * 0.15, r * 0.34, r * 0.13],
+            })),
+            "critter_ears"
+          )
+        );
+        g.add(
+          instanced(
+            GEO.cyl,
+            fur,
+            [[-0.5, 0.55], [0.5, 0.55], [-0.5, -0.45], [0.5, -0.45]].map((lp) => ({
+              p: [r * lp[0], r * 0.24, r * lp[1]],
+              s: [r * 0.12, r * 0.48, r * 0.12],
+            })),
+            "critter_legs"
+          )
+        );
+      }
+      g.userData.modelVersion = 2;
       return g;
     };
   }
   function bPerson(shirtC, r) {
     return () => {
       const g = new T.Group();
+      g.name = "bbb_person_v2";
       const pants = mat(0x3a4a6b);
-      g.add(mesh(GEO.cyl, pants, r * 0.1, r * 0.36, r * 0.1, -r * 0.1, r * 0.18, 0));
-      g.add(mesh(GEO.cyl, pants, r * 0.1, r * 0.36, r * 0.1, r * 0.1, r * 0.18, 0));
-      g.add(mesh(GEO.cyl, mat(shirtC), r * 0.3, r * 0.56, r * 0.3, 0, r * 0.62, 0));
-      const a1 = mesh(GEO.cyl, mat(shirtC), r * 0.07, r * 0.42, r * 0.07, -r * 0.34, r * 0.66, 0);
-      a1.rotation.z = 0.4;
-      const a2 = mesh(GEO.cyl, mat(shirtC), r * 0.07, r * 0.42, r * 0.07, r * 0.34, r * 0.66, 0);
-      a2.rotation.z = -0.4;
-      g.add(a1, a2);
-      g.add(mesh(GEO.sphLo, mat(0xffd9b8), r * 0.22, r * 0.24, r * 0.22, 0, r * 1.08, 0));
-      g.add(mesh(GEO.cyl, mat(0x30364a), r * 0.3, r * 0.09, r * 0.3, 0, r * 1.25, 0));
+      const shirt = mat(shirtC, { roughness: 0.86 });
+      const skin = mat(0xffd9b8, { roughness: 0.9 });
+      g.add(
+        instanced(
+          GEO.cyl,
+          pants,
+          [-1, 1].map((side) => ({ p: [side * r * 0.11, r * 0.18, 0], s: [r * 0.1, r * 0.36, r * 0.1] })),
+          "person_legs"
+        )
+      );
+      g.add(mesh(GEO.dodec, shirt, r * 0.31, r * 0.34, r * 0.24, 0, r * 0.65, 0));
+      g.add(
+        instanced(
+          GEO.cyl,
+          shirt,
+          [-1, 1].map((side) => ({
+            p: [side * r * 0.35, r * 0.69, 0],
+            r: [0, 0, side * -0.42],
+            s: [r * 0.075, r * 0.44, r * 0.075],
+          })),
+          "person_arms"
+        )
+      );
+      g.add(mesh(GEO.dodec, skin, r * 0.22, r * 0.24, r * 0.22, 0, r * 1.08, 0));
+      g.add(mesh(GEO.cyl, mat(0x30364a, { roughness: 0.88 }), r * 0.29, r * 0.09, r * 0.29, 0, r * 1.26, 0));
+      g.userData.modelVersion = 2;
       return g;
     };
   }
@@ -661,47 +938,99 @@
     // direction of travel (cars used to drive sideways).
     return () => {
       const g = new T.Group();
-      g.add(mesh(GEO.box, mat(bodyC), len * 0.46, len * 0.26, len, 0, len * 0.22, 0));
-      g.add(mesh(GEO.box, mat(0xbfe9ff), len * 0.4, len * 0.2, len * 0.5, 0, len * 0.44, -len * 0.05));
-      const wm = mat(0x22242c);
-      for (const wz of [len * 0.3, -len * 0.3]) {
-        const w = mesh(GEO.cyl, wm, len * 0.11, len * 0.48, len * 0.11, 0, len * 0.11, wz);
-        w.rotation.z = Math.PI / 2;
-        g.add(w);
-      }
-      const lm = mat(0xfff3b0);
-      g.add(mesh(GEO.sphLo, lm, len * 0.05, len * 0.05, len * 0.04, -len * 0.15, len * 0.26, len * 0.5));
-      g.add(mesh(GEO.sphLo, lm, len * 0.05, len * 0.05, len * 0.04, len * 0.15, len * 0.26, len * 0.5));
+      g.name = "bbb_vehicle_v2";
+      const paint = mat(bodyC, { roughness: 0.42, metalness: 0.12 });
+      const glass = mat(0x9ddcf4, { roughness: 0.16, metalness: 0.08 });
+      g.add(mesh(GEO.box, paint, len * 0.48, len * 0.2, len * 0.9, 0, len * 0.22, -len * 0.02));
+      g.add(mesh(GEO.box, paint, len * 0.44, len * 0.12, len * 0.32, 0, len * 0.36, len * 0.31));
+      g.add(mesh(GEO.dodec, glass, len * 0.36, len * 0.2, len * 0.34, 0, len * 0.44, -len * 0.12));
+      const wheelTransforms = [];
+      for (const x of [-len * 0.27, len * 0.27])
+        for (const z of [-len * 0.29, len * 0.29])
+          wheelTransforms.push({ p: [x, len * 0.13, z], r: [0, 0, Math.PI / 2], s: [len * 0.12, len * 0.09, len * 0.12] });
+      g.add(instanced(GEO.cyl, mat(0x20242d, { roughness: 0.95 }), wheelTransforms, "vehicle_wheels"));
+      g.add(
+        instanced(
+          GEO.sphLo,
+          mat(0xffed9a, { roughness: 0.35, emissive: 0x4c3500, emissiveIntensity: 0.35 }),
+          [-1, 1].map((side) => ({ p: [side * len * 0.16, len * 0.28, len * 0.49], s: [len * 0.05, len * 0.045, len * 0.035] })),
+          "vehicle_headlights"
+        )
+      );
+      g.userData.modelVersion = 2;
       return g;
     };
   }
   function bTree(leafC, trunkH, blob) {
     return () => {
       const g = new T.Group();
-      g.add(mesh(GEO.cyl, mat(0x7a4a2b), 0.12, trunkH, 0.12, 0, trunkH / 2, 0));
+      g.name = blob ? "bbb_broadleaf_tree_v2" : "bbb_pine_tree_v2";
+      g.add(mesh(GEO.cyl, woodMat, 0.12, trunkH, 0.12, 0, trunkH / 2, 0));
+      const foliage = mat(leafC, { roughness: 0.94, flatShading: true });
       if (blob) {
-        g.add(mesh(GEO.sphLo, mat(leafC), 0.55, 0.5, 0.55, 0, trunkH + 0.3, 0));
-        g.add(mesh(GEO.sphLo, mat(leafC), 0.4, 0.36, 0.4, 0.3, trunkH + 0.12, 0.1));
+        g.add(
+          instanced(
+            GEO.dodec,
+            foliage,
+            [
+              { p: [-0.22, trunkH + 0.3, 0], s: [0.5, 0.46, 0.48] },
+              { p: [0.24, trunkH + 0.28, 0.08], s: [0.45, 0.42, 0.44] },
+              { p: [0.02, trunkH + 0.62, -0.04], s: [0.46, 0.44, 0.45] },
+            ],
+            "tree_canopy_clusters"
+          )
+        );
       } else {
-        g.add(mesh(GEO.cone, mat(leafC), 0.5, 0.9, 0.5, 0, trunkH + 0.35, 0));
-        g.add(mesh(GEO.cone, mat(leafC), 0.38, 0.7, 0.38, 0, trunkH + 0.75, 0));
+        g.add(
+          instanced(
+            GEO.cone,
+            foliage,
+            [
+              { p: [0, trunkH + 0.3, 0], s: [0.56, 0.86, 0.56] },
+              { p: [0, trunkH + 0.72, 0], s: [0.43, 0.72, 0.43] },
+              { p: [0, trunkH + 1.06, 0], s: [0.3, 0.55, 0.3] },
+            ],
+            "pine_canopy_tiers"
+          )
+        );
       }
+      g.userData.modelVersion = 2;
       return g;
     };
   }
-  function bBuilding(wallIdx, w, h, d, roofC, flat) {
+  function bBuilding(wallIdx, w, h, d, roofC, flat, style) {
     return () => {
       const g = new T.Group();
-      const wallMat = new T.MeshLambertMaterial({ map: windowTexes[wallIdx % windowTexes.length] });
+      const kind = style || (flat ? (h > 0.78 ? "tower" : "storefront") : "suburban");
+      g.name = `bbb_building_${kind}_v2`;
+      const wallMat = buildingWallMats[wallIdx % buildingWallMats.length];
       g.add(mesh(GEO.box, wallMat, w, h, d, 0, h / 2, 0));
       if (flat) {
-        g.add(mesh(GEO.box, mat(roofC), w * 1.04, h * 0.08, d * 1.04, 0, h + h * 0.04, 0));
+        g.add(mesh(GEO.box, mat(roofC, { roughness: 0.64, metalness: 0.04 }), w * 1.06, h * 0.09, d * 1.06, 0, h + h * 0.045, 0));
       } else {
-        const roof = mesh(GEO.cone, mat(roofC), w * 0.78, h * 0.5, d * 0.78, 0, h + h * 0.24, 0);
-        roof.rotation.y = Math.PI / 4;
-        g.add(roof);
+        g.add(mesh(GEO.roof, mat(roofC, { roughness: 0.76 }), w * 1.12, h * 0.68, d * 1.12, 0, h, 0));
       }
-      g.add(mesh(GEO.box, mat(0x5b3b22), w * 0.16, h * 0.3, 0.05, 0, h * 0.15, d / 2 + 0.03));
+      g.add(mesh(GEO.box, woodMat, w * 0.16, h * 0.32, 0.05, 0, h * 0.16, d / 2 + 0.03));
+      if (kind === "storefront") {
+        g.add(mesh(GEO.box, mat(roofC, { roughness: 0.52 }), w * 0.72, h * 0.1, d * 0.18, 0, h * 0.68, d / 2 + d * 0.09));
+      } else if (kind === "industrial") {
+        g.add(
+          instanced(
+            GEO.cyl,
+            mat(0x6f7880, { roughness: 0.42, metalness: 0.45 }),
+            [-0.22, 0.22].map((x) => ({ p: [x * w, h + h * 0.13, 0], s: [w * 0.07, h * 0.2, w * 0.07] })),
+            "building_rooftop_vents"
+          )
+        );
+      } else if (kind === "civic") {
+        g.add(mesh(GEO.cone, mat(0xe8e0c9, { roughness: 0.7 }), w * 0.12, h * 0.48, w * 0.12, 0, h * 1.28, 0));
+      } else if (kind === "tower") {
+        g.add(mesh(GEO.box, mat(0x65727e, { roughness: 0.55, metalness: 0.12 }), w * 0.38, h * 0.16, d * 0.38, 0, h + h * 0.13, 0));
+      } else {
+        g.add(mesh(GEO.box, mat(0xffeed0, { roughness: 0.8 }), w * 0.46, h * 0.07, d * 0.2, 0, h * 0.36, d / 2 + d * 0.1));
+      }
+      g.userData.modelVersion = 2;
+      g.userData.buildingStyle = kind;
       return g;
     };
   }
@@ -978,13 +1307,24 @@
   function bFencePicket() {
     return () => {
       const g = new T.Group();
-      const w = mat(0xe8e4da);
-      for (const px of [-0.36, 0, 0.36]) {
-        g.add(mesh(GEO.box, w, 0.16, 0.75, 0.05, px, 0.375, 0));
-        g.add(mesh(GEO.cone, w, 0.09, 0.12, 0.04, px, 0.8, 0));
-      }
-      g.add(mesh(GEO.box, w, 1.05, 0.08, 0.04, 0, 0.28, 0.04));
-      g.add(mesh(GEO.box, w, 1.05, 0.08, 0.04, 0, 0.58, 0.04));
+      g.name = "bbb_cedar_fence_v2";
+      g.add(
+        instanced(
+          GEO.picket,
+          woodMat,
+          [-0.36, 0, 0.36].map((x) => ({ p: [x, 0, 0], s: [0.18, 0.82, 0.32] })),
+          "fence_pickets"
+        )
+      );
+      g.add(
+        instanced(
+          GEO.box,
+          woodMat,
+          [0.28, 0.58].map((y) => ({ p: [0, y, 0.035], s: [1.05, 0.075, 0.055] })),
+          "fence_rails"
+        )
+      );
+      g.userData.modelVersion = 2;
       return g;
     };
   }
@@ -1222,17 +1562,17 @@
     gnome: { e: "🧙", n: "Gnorman (Do Not Trust)", s: 0.42, build: bGnome() },
     flamingo: { e: "🦩", n: "Lawn Flamingo", s: 0.6, build: bFlamingo() },
     grill: { e: "🔥", n: "Dad's Sacred Grill", s: 1.2, build: () => { const g = new T.Group(); g.add(mesh(GEO.sphLo, mat(0x30364a), 0.55, 0.4, 0.55, 0, 0.75, 0)); g.add(mesh(GEO.box, mat(0x9aa2b5), 0.24, 0.05, 0.06, 0, 1.02, 0)); for (const la of [0.5, 2.6, 4.7]) { const leg = mesh(GEO.cyl, mat(0x22242c), 0.04, 0.72, 0.04, Math.sin(la) * 0.26, 0.36, Math.cos(la) * 0.26); leg.rotation.z = Math.sin(la) * 0.18; leg.rotation.x = -Math.cos(la) * 0.18; g.add(leg); } g.add(mesh(GEO.box, mat(0x9aa2b5), 0.38, 0.04, 0.3, 0.6, 0.72, 0)); return g; } },
-    doghouse: { e: "🛖", n: "Beans' Crib (Doghouse)", s: 1.5, build: bBuilding(0, 1, 0.7, 0.9, 0xd93f3f, false) },
+    doghouse: { e: "🛖", n: "Beans' Crib (Doghouse)", s: 1.5, build: bBuilding(0, 1, 0.7, 0.9, 0xd93f3f, false, "suburban") },
     sandbox: { e: "🏖️", n: "Sandbox (Beach at Home)", s: 1.4, build: bSandbox() },
     pool: { e: "🏊", n: "Kiddie Pool (Shark Included)", s: 1.9, build: bKiddiePool() },
     trampoline: { e: "🤸", n: "Trampoline (Liability)", s: 2.6, build: bTrampolinePro() },
     swing: { e: "🎠", n: "Swing Set (Haunted?)", s: 2.9, build: () => { const g = new T.Group(); g.add(mesh(GEO.box, mat(0xd93f3f), 1.0, 0.08, 0.08, 0, 0.8, 0)); g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.05, 0.85, 0.05, -0.5, 0.42, 0)); g.add(mesh(GEO.cyl, mat(0xd93f3f), 0.05, 0.85, 0.05, 0.5, 0.42, 0)); g.add(mesh(GEO.box, mat(0xffd43b), 0.25, 0.05, 0.12, 0, 0.3, 0)); return g; } },
     cow: { e: "🐄", n: "Decorative Cow (Why)", s: 2.5, build: bCritter(0xe8e4da, 0xe8e4da, 0.5, false, true) },
-    busStop: { e: "🚏", n: "Bus Stop (One Guy Waiting)", s: 2.6, build: bBuilding(2, 1, 0.8, 0.4, 0x2ee0ff, true) },
+    busStop: { e: "🚏", n: "Bus Stop (One Guy Waiting)", s: 2.6, build: bBuilding(2, 1, 0.8, 0.4, 0x2ee0ff, true, "storefront") },
     fountain: { e: "⛲", n: "Fountain of Loose Change", s: 3.3, build: () => { const g = new T.Group(); g.add(mesh(GEO.cyl, mat(0x9aa2b5), 0.55, 0.25, 0.55, 0, 0.12, 0)); g.add(mesh(GEO.cyl, mat(0x2ee0ff), 0.4, 0.3, 0.4, 0, 0.3, 0)); g.add(mesh(GEO.cyl, mat(0x9aa2b5), 0.1, 0.5, 0.1, 0, 0.5, 0)); return g; } },
     shed: { e: "🛠️", n: "Tool Shed of Mystery", s: 3.4, build: bBuilding(1, 0.9, 0.8, 0.8, 0x6a7284, false) },
     dumpster: { e: "♻️", n: "Dumpster (Enchanted)", s: 2.4, puke: true, build: bDumpsterPro(0x3f7a44) },
-    portaPotty: { e: "🚽", n: "Porta-Potty (DO NOT)", s: 1.6, puke: true, build: bBuilding(2, 0.7, 1, 0.7, 0x2e6b8f, true) },
+    portaPotty: { e: "🚽", n: "Porta-Potty (DO NOT)", s: 1.6, puke: true, build: bBuilding(2, 0.7, 1, 0.7, 0x2e6b8f, true, "utility") },
     oak: { e: "🌳", n: "Oak Tree (Wise)", s: 4.5, build: bTree(0x3f9c46, 0.55, true) },
     pine: { e: "🌲", n: "Pine Tree (Pointy)", s: 5.5, build: bTree(0x2f7a4f, 0.5, false) },
     statue: { e: "🗿", n: "Statue of Mayor Bumsworth", s: 5.0, build: bStatue() },
@@ -1242,22 +1582,22 @@
     garage: { e: "🏠", n: "Garage (No Cars, All Boxes)", s: 7.2, building: true, build: bBuilding(1, 1, 0.65, 0.8, 0x6a7284, true) },
     bungalow: { e: "🏡", n: "Bungalow (Good Bones)", s: 8.0, building: true, build: bBuilding(0, 1, 0.75, 0.9, 0x8f4a3a, false) },
     home: { e: "🏡", n: "YOUR House (Sorry, Mom)", s: 9, building: true, build: bBuilding(0, 1, 0.8, 0.9, 0xd93f3f, false) },
-    cornerStore: { e: "🏪", n: "Corner Store (Open 25/7)", s: 9.5, building: true, build: bBuilding(2, 1, 0.7, 0.9, 0x2ee0ff, true) },
-    tacoPalace: { e: "🌯", n: "Taco Palace (Est. Tuesday)", s: 10.0, building: true, build: bBuilding(4, 1, 0.7, 0.9, 0xffd43b, true) },
-    gasStation: { e: "⛽", n: "Gas Station (Sushi Also)", s: 10.5, building: true, build: bBuilding(3, 1, 0.55, 0.9, 0xd93f3f, true) },
+    cornerStore: { e: "🏪", n: "Corner Store (Open 25/7)", s: 9.5, building: true, build: bBuilding(2, 1, 0.7, 0.9, 0x2ee0ff, true, "storefront") },
+    tacoPalace: { e: "🌯", n: "Taco Palace (Est. Tuesday)", s: 10.0, building: true, build: bBuilding(4, 1, 0.7, 0.9, 0xffd43b, true, "storefront") },
+    gasStation: { e: "⛽", n: "Gas Station (Sushi Also)", s: 10.5, building: true, build: bBuilding(3, 1, 0.55, 0.9, 0xd93f3f, true, "storefront") },
     waterVat: { e: "☣️", n: "Water Treatment Vat", s: 9.0, puke: true, build: bVat() },
-    warehouse: { e: "🏭", n: "Warehouse (Definitely Not Haunted)", s: 12, building: true, build: bBuilding(3, 1, 0.55, 0.95, 0x6a7284, true) },
+    warehouse: { e: "🏭", n: "Warehouse (Definitely Not Haunted)", s: 12, building: true, build: bBuilding(3, 1, 0.55, 0.95, 0x6a7284, true, "industrial") },
     duplex: { e: "🏘️", n: "Duplex (Shared Mail Drama)", s: 10.5, building: true, build: bBuilding(1, 1.1, 0.7, 0.85, 0x8f4a3a, false) },
     mcmansion: { e: "🏰", n: "McMansion (3 Garages, 0 Books)", s: 13, building: true, build: bBuilding(1, 1, 0.8, 0.9, 0x8f4a3a, false) },
-    gym: { e: "🏋️", n: "Gym (Ironically)", s: 14, building: true, build: bBuilding(2, 1, 0.6, 0.9, 0x30364a, true) },
-    grocery: { e: "🏬", n: "Grocery Store (Samples!)", s: 16, building: true, build: bBuilding(4, 1, 0.55, 0.95, 0x2e6b8f, true) },
-    hoa: { e: "🏢", n: "HOA Headquarters (Finally)", s: 15, building: true, build: bBuilding(2, 0.9, 1, 0.9, 0x22242c, true) },
-    church: { e: "⛪", n: "Church of the Sacred Snack", s: 16.5, building: true, build: bBuilding(0, 0.8, 1, 1, 0x6a7284, false) },
+    gym: { e: "🏋️", n: "Gym (Ironically)", s: 14, building: true, build: bBuilding(2, 1, 0.6, 0.9, 0x30364a, true, "industrial") },
+    grocery: { e: "🏬", n: "Grocery Store (Samples!)", s: 16, building: true, build: bBuilding(4, 1, 0.55, 0.95, 0x2e6b8f, true, "storefront") },
+    hoa: { e: "🏢", n: "HOA Headquarters (Finally)", s: 15, building: true, build: bBuilding(2, 0.9, 1, 0.9, 0x22242c, true, "tower") },
+    church: { e: "⛪", n: "Church of the Sacred Snack", s: 16.5, building: true, build: bBuilding(0, 0.8, 1, 1, 0x6a7284, false, "civic") },
     sewagePlant: { e: "☢️", n: "Sewage Plant (The Big One)", s: 15, puke: true, build: bSewage() },
-    apartment: { e: "🏨", n: "Apartment Block (Thin Walls)", s: 18, building: true, build: bBuilding(2, 0.75, 1, 0.75, 0x9aa2b5, true) },
+    apartment: { e: "🏨", n: "Apartment Block (Thin Walls)", s: 18, building: true, build: bBuilding(2, 0.75, 1, 0.75, 0x9aa2b5, true, "tower") },
     waterTower: { e: "🗼", n: "Water Tower (Town Juice Box)", s: 20, building: true, build: () => { const g = new T.Group(); g.add(mesh(GEO.sphLo, mat(0x9fdcff), 0.4, 0.32, 0.4, 0, 0.75, 0)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, 0.22, 0.3, 0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, -0.22, 0.3, 0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, 0.22, 0.3, -0.22)); g.add(mesh(GEO.cyl, mat(0x6a7284), 0.05, 0.6, 0.05, -0.22, 0.3, -0.22)); return g; } },
-    office: { e: "🏦", n: "Office Block (Synergy Inside)", s: 24, building: true, build: bBuilding(2, 0.7, 1, 0.7, 0x30364a, true) },
-    mall: { e: "🛍️", n: "The Mall (Dying Since 2009)", s: 26, building: true, build: bBuilding(4, 1, 0.5, 0.95, 0xb06cff, true) },
+    office: { e: "🏦", n: "Office Block (Synergy Inside)", s: 24, building: true, build: bBuilding(2, 0.7, 1, 0.7, 0x30364a, true, "tower") },
+    mall: { e: "🛍️", n: "The Mall (Dying Since 2009)", s: 26, building: true, build: bBuilding(4, 1, 0.5, 0.95, 0xb06cff, true, "storefront") },
   };
   const PERM_LIST = Object.values(PERM);
   const ALL_TPLS = DYN_TPLS.concat(PERM_LIST);
@@ -2175,6 +2515,14 @@
     g.scale.setScalar(o.s);
     g.position.set(o.x, 0, o.z);
     g.rotation.y = o.yaw;
+    const anchorShadow = !o.dyn && o.s >= 4 && o.s <= 15 && Math.hypot(o.x - baby.x, o.z - baby.z) < 24;
+    if (anchorShadow) {
+      g.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+      });
+    }
     if (o.tpl.puke) {
       // Warning markers get a world-size floor so a 12 cm broccoli's stink
       // is as loud as a dumpster's — hazards must read at every scale.
@@ -2243,34 +2591,103 @@
 
   // ---------- The baby ----------
   const babyG = new T.Group();
+  babyG.name = "bbb_hero_baby_v2";
+  babyG.userData.modelVersion = 2;
   const roller = new T.Group();
+  roller.name = "baby_morph_rig";
   babyG.add(roller);
   scene.add(babyG);
-  const shadow = new T.Mesh(GEO.circle, new T.MeshBasicMaterial({ color: 0x1c3a20, transparent: true, opacity: 0.35, depthWrite: false }));
+  const shadowTex = makeTex(128, (g, s) => {
+    const fade = g.createRadialGradient(s / 2, s / 2, s * 0.08, s / 2, s / 2, s * 0.5);
+    fade.addColorStop(0, "rgba(18,42,23,0.68)");
+    fade.addColorStop(0.55, "rgba(18,42,23,0.34)");
+    fade.addColorStop(1, "rgba(18,42,23,0)");
+    g.fillStyle = fade;
+    g.fillRect(0, 0, s, s);
+  });
+  shadowTex.name = "bbb_soft_contact_shadow";
+  const shadow = new T.Mesh(GEO.circle, new T.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.78, depthWrite: false }));
+  shadow.name = "baby_contact_shadow";
   shadow.rotation.x = -Math.PI / 2;
   scene.add(shadow);
 
   const SKIN = 0xffd9b8;
   const parts = {};
   function buildBaby() {
-    parts.body = mesh(GEO.sph, mat(0x7ac9ff), 1, 1, 1, 0, 0, 0);
-    parts.head = mesh(GEO.sph, mat(SKIN), 1, 1, 1, 0, 0, 0);
+    const skin = mat(SKIN, { roughness: 0.72 });
+    const romper = mat(0x55a9e6, { roughness: 0.76 });
+    const diaper = mat(0xf4fbff, { roughness: 0.94 });
+    parts.body = mesh(GEO.sph, romper, 1, 1, 1, 0, 0, 0);
+    parts.body.name = "baby_romper_body";
+    const bibMat = new T.MeshStandardMaterial({ map: ginghamTex, bumpMap: ginghamTex, bumpScale: 0.012, color: 0xfff0df, roughness: 0.86, metalness: 0, side: T.DoubleSide });
+    bibMat.name = "baby_generated_gingham_bib";
+    const bib = new T.Mesh(GEO.circle, bibMat);
+    bib.name = "baby_bib";
+    bib.position.set(0, 0.22, 0.985);
+    bib.scale.set(0.38, 0.36, 0.38);
+    parts.body.add(bib);
+    parts.body.add(
+      instanced(
+        GEO.box,
+        mat(0xe7f5ff, { roughness: 0.88 }),
+        [-1, 1].map((side) => ({ p: [side * 0.42, 0.48, 0.73], r: [0, 0, side * -0.18], s: [0.13, 0.45, 0.08] })),
+        "baby_romper_straps"
+      )
+    );
+
+    parts.head = mesh(GEO.sph, skin, 1, 1, 1, 0, 0, 0);
+    parts.head.name = "baby_head";
     parts.face = new T.Mesh(GEO.plane, faceMat);
-    parts.face.position.set(0, 0.02, 0.99);
-    parts.face.scale.setScalar(1.5);
+    parts.face.name = "baby_expression_decal";
+    parts.face.position.set(0, -0.02, 0.995);
+    parts.face.scale.setScalar(1.28);
     parts.head.add(parts.face);
-    const curl = mesh(GEO.torus, mat(0xc98f5e), 0.22, 0.22, 0.22, 0, 0.95, 0.1);
-    curl.rotation.x = 0.6;
+    parts.head.add(
+      instanced(
+        GEO.dodec,
+        skin,
+        [-1, 1].map((side) => ({ p: [side * 0.93, -0.02, 0.02], s: [0.24, 0.34, 0.16] })),
+        "baby_ears"
+      )
+    );
+    parts.head.add(mesh(GEO.dodec, mat(0xf2b48f, { roughness: 0.8 }), 0.1, 0.08, 0.1, 0, -0.08, 1.01));
+    const curl = mesh(GEO.torusThin, mat(0xb77745, { roughness: 0.72 }), 0.3, 0.3, 0.3, 0.02, 0.98, 0.08);
+    curl.name = "baby_hair_curl";
+    curl.rotation.x = 0.62;
+    curl.rotation.z = -0.42;
     parts.head.add(curl);
-    parts.diaperBack = mesh(GEO.sph, mat(0xffffff), 1, 1, 1, 0, 0, 0);
-    parts.band = mesh(GEO.cyl, mat(0xffffff), 1, 1, 1, 0, 0, 0);
+
+    parts.diaperBack = mesh(GEO.sph, diaper, 1, 1, 1, 0, 0, 0);
+    parts.diaperBack.name = "baby_diaper_back";
+    const backPatch = new T.Mesh(GEO.circle, bibMat);
+    backPatch.name = "baby_generated_gingham_back_patch";
+    backPatch.position.set(0, 0.08, -0.995);
+    backPatch.rotation.y = Math.PI;
+    backPatch.scale.setScalar(0.34);
+    parts.diaperBack.add(backPatch);
+    parts.band = mesh(GEO.cyl, diaper, 1, 1, 1, 0, 0, 0);
+    parts.band.name = "baby_diaper_waist";
+    parts.band.add(
+      instanced(
+        GEO.box,
+        mat(0xbfdff1, { roughness: 0.82 }),
+        [-1, 1].map((side) => ({ p: [side * 0.86, 0.08, 0.04], s: [0.22, 0.3, 0.08] })),
+        "baby_diaper_tabs"
+      )
+    );
     parts.limbs = [];
     for (let i = 0; i < 4; i++) {
-      const l = mesh(GEO.sphLo, mat(SKIN), 1, 1, 1, 0, 0, 0);
+      const l = new T.Group();
+      l.name = i < 2 ? `baby_arm_${i}` : `baby_leg_${i - 2}`;
+      l.add(mesh(GEO.dodec, skin, 0.92, 0.72, 1.12, 0, 0, 0));
+      l.add(mesh(GEO.sph, skin, 0.58, 0.46, 0.7, 0, -0.06, 0.74));
       parts.limbs.push(l);
       roller.add(l);
     }
     roller.add(parts.body, parts.head, parts.diaperBack, parts.band);
+    babyG.traverse((child) => {
+      if (child.isMesh && child !== parts.face && child !== bib) child.castShadow = true;
+    });
   }
   buildBaby();
 
@@ -2279,9 +2696,9 @@
     roller.position.y = lerp(0.42, 0.5, r) + bob * (1 - r) * 0.03;
 
     parts.body.position.set(0, lerp(-0.04, 0, r), lerp(-0.06, 0, r));
-    parts.body.scale.set(lerp(0.34, 0.5, r), lerp(0.27, 0.5, r), lerp(0.4, 0.5, r));
-    parts.head.position.set(0, lerp(0.16, 0.26, r), lerp(0.34, 0.3, r));
-    parts.head.scale.setScalar(lerp(0.24, 0.17, r));
+    parts.body.scale.set(lerp(0.36, 0.5, r), lerp(0.29, 0.5, r), lerp(0.42, 0.5, r));
+    parts.head.position.set(0, lerp(0.17, 0.26, r), lerp(0.35, 0.3, r));
+    parts.head.scale.setScalar(lerp(0.27, 0.18, r));
     parts.diaperBack.position.set(0, lerp(-0.06, -0.1, r), lerp(-0.3, -0.28, r));
     parts.diaperBack.scale.set(lerp(0.27, 0.3, r), lerp(0.2, 0.26, r), lerp(0.23, 0.28, r));
     parts.band.position.set(0, 0, 0);
@@ -2296,7 +2713,7 @@
       const l = parts.limbs[i];
       const w = Math.sin(baby.crawl * Math.PI * 2 + (i % 2 ? Math.PI : 0) + (i > 1 ? Math.PI / 2 : 0)) * wiggle * (1 - r);
       l.position.set(lerp(lp[i][0], lp[i][0] * 1.5, r), lerp(lp[i][1], lp[i][1] * 1.55, r), lerp(lp[i][2], lp[i][2] * 1.5, r) + w * 0.12 * (1 - r));
-      l.scale.setScalar(lerp(0.11, 0.07, r));
+      l.scale.setScalar(lerp(0.105, 0.065, r));
     }
   }
 
@@ -3113,11 +3530,11 @@
       while (dy < -Math.PI) dy += Math.PI * 2;
       camYaw += dy * (1 - Math.pow(0.35, dt));
     }
-    let targetDist = size * 3.1 + 2.2;
+    let targetDist = size * 2.62 + 1.35;
     // Don't park the camera inside a building: shrink the boom until the
     // view line clears anything tall between the baby and the camera.
     {
-      const camH = size * 1.9 + 1.2;
+      const camH = size * 1.72 + 1.02;
       const dirX = Math.sin(camYaw);
       const dirZ = Math.cos(camYaw);
       const midX = baby.x + dirX * targetDist * 0.5;
@@ -3139,7 +3556,7 @@
     }
     // Snap in quickly when blocked; relax back out slowly.
     camDist = lerp(camDist, targetDist, 1 - Math.pow(targetDist < camDist ? 0.0001 : 0.02, dt));
-    const camH = size * 1.9 + 1.2;
+    const camH = size * 1.72 + 1.02;
     const shk = shake > 0.01 ? shake : 0;
     camera.position.set(
       baby.x + Math.sin(camYaw) * camDist + (Math.random() - 0.5) * shk,
@@ -3148,8 +3565,8 @@
     );
     camera.lookAt(baby.x, size * 0.55, baby.z);
     shake = Math.max(0, shake - dt * 1.8);
-    scene.fog.near = camDist * 2.2;
-    scene.fog.far = clamp(camDist * 13, 70, 1400);
+    scene.fog.near = Math.max(7.5, camDist * 2.45);
+    scene.fog.far = clamp(camDist * 12, 68, 1400);
 
     updatePools(dt);
     updateEatTweens(dt);
@@ -3306,6 +3723,10 @@
         dynamics: dynCount,
         active: activeObjs.size,
         drawCalls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        geometries: renderer.info.memory.geometries,
+        textures: renderer.info.memory.textures,
+        heroModel: babyG.userData.modelVersion,
         hasSave: !!loadSave(),
       };
     },
@@ -3350,7 +3771,7 @@
     },
     save: saveGame,
     wipe: wipeSave,
-    three: { scene, camera, renderer },
+    three: { scene, camera, renderer, hero: babyG },
     objects() {
       return objects;
     },
@@ -3361,6 +3782,12 @@
       for (let i = 0; i < steps; i++) if (phase === "play") update(d);
       renderer.render(scene, camera);
       return this.state;
+    },
+  };
+  window.__THREE_GAME_DIAGNOSTICS__ = {
+    renderer: renderer.info,
+    get state() {
+      return window.__BBB.state;
     },
   };
 

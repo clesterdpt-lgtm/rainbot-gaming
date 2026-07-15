@@ -77,6 +77,9 @@
 
   // ---------- DOM ----------
   const canvas = document.getElementById("gameCanvas");
+  const gameStage = document.querySelector(".game-stage");
+  const canvasWrap = canvas.closest(".canvas-wrap");
+  const btnFullscreen = document.getElementById("btn-fullscreen");
   const overlayEl = document.getElementById("overlay");
   const overlayTitle = document.getElementById("overlay-title");
   const overlaySub = document.getElementById("overlay-sub");
@@ -420,6 +423,78 @@
   scene.background = new T.Color(SKY);
   scene.fog = new T.Fog(SKY, 52, 175);
   const camera = new T.PerspectiveCamera(60, W / H, 0.05, 1600);
+
+  function resizeRendererToSurface() {
+    const width = Math.max(1, Math.round(canvas.clientWidth || W));
+    const height = Math.max(1, Math.round(canvas.clientHeight || H));
+    const mobile = window.matchMedia("(max-width: 900px), (pointer: coarse)").matches;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.5);
+    if (renderer.getPixelRatio() !== pixelRatio) renderer.setPixelRatio(pixelRatio);
+    const drawingSize = renderer.getSize(new T.Vector2());
+    if (Math.round(drawingSize.x) !== width || Math.round(drawingSize.y) !== height) {
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    }
+  }
+
+  function bindMobileMaximize() {
+    if (!gameStage || !canvasWrap || !btnFullscreen || btnFullscreen.dataset.bbbMaxBound === "true") return;
+    btnFullscreen.dataset.bbbMaxBound = "true";
+    const nativeFullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+    const setMaxed = (active) => {
+      gameStage.classList.toggle("is-maxed", active);
+      document.body.classList.toggle("rb-game-maxed", active);
+      btnFullscreen.textContent = active ? "×" : "⛶";
+      btnFullscreen.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
+      btnFullscreen.title = active ? "Exit max screen" : "Max screen";
+      requestAnimationFrame(() => {
+        resizeRendererToSurface();
+        canvas.focus({ preventScroll: true });
+      });
+    };
+
+    btnFullscreen.addEventListener("click", () => {
+      const active = gameStage.classList.contains("is-maxed");
+      if (active) {
+        setMaxed(false);
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (nativeFullscreenElement() && exit) {
+          try {
+            const result = exit.call(document);
+            if (result?.catch) result.catch(() => {});
+          } catch (_) {}
+        }
+        return;
+      }
+
+      setMaxed(true);
+      const request = gameStage.requestFullscreen || gameStage.webkitRequestFullscreen;
+      if (request) {
+        try {
+          const result = request.call(gameStage);
+          // Native fullscreen is optional on mobile Safari; pseudo-fullscreen
+          // remains active when the request is rejected.
+          if (result?.catch) result.catch(() => {});
+        } catch (_) {}
+      }
+    });
+
+    const syncNativeFullscreen = () => {
+      if (!nativeFullscreenElement() && document.body.classList.contains("rb-game-maxed")) setMaxed(false);
+      else resizeRendererToSurface();
+    };
+    document.addEventListener("fullscreenchange", syncNativeFullscreen);
+    document.addEventListener("webkitfullscreenchange", syncNativeFullscreen);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && gameStage.classList.contains("is-maxed") && !nativeFullscreenElement()) setMaxed(false);
+    });
+  }
+
+  bindMobileMaximize();
+  if (window.ResizeObserver && canvasWrap) new ResizeObserver(resizeRendererToSurface).observe(canvasWrap);
+  window.addEventListener("resize", resizeRendererToSurface, { passive: true });
+  requestAnimationFrame(resizeRendererToSurface);
 
   // Warm animation-film lighting: a readable sky/ground fill, a soft key,
   // and a cool rim. Only the hero and large nearby anchors cast shadows.

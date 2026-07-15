@@ -286,6 +286,9 @@
       opacity: 0.55;
       filter: grayscale(0.6);
     }
+    .canvas-wrap:has(.overlay--show) .bbb-burp-btn {
+      display: none !important;
+    }
     @media (hover: none) and (pointer: coarse) {
       .bbb-burp-btn {
         display: inline-flex;
@@ -302,7 +305,7 @@
         display: none;
       }
       .game-stage .hud {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: 0.9fr 1.65fr 0.75fr 0.7fr 0.75fr;
         padding: 6px 4px;
         border-radius: 14px 14px 8px 8px;
       }
@@ -321,7 +324,45 @@
         letter-spacing: 0.7px;
       }
       .game-stage .hud__value {
-        font-size: 10px;
+        font-size: clamp(8px, 2.55vw, 10px);
+      }
+      .game-stage .canvas-wrap .overlay {
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 48px 12px 10px;
+      }
+      .game-stage .canvas-wrap .overlay__title {
+        font-size: clamp(18px, 5.2vw, 22px);
+        line-height: 1;
+        margin: 0;
+      }
+      .game-stage .canvas-wrap .overlay__sub {
+        display: -webkit-box;
+        overflow: hidden;
+        max-width: 96%;
+        margin: 0;
+        font-size: clamp(10px, 3vw, 12px);
+        line-height: 1.32;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+      }
+      .game-stage .canvas-wrap .overlay__score {
+        margin: 0;
+        font-size: 11px;
+      }
+      .game-stage .canvas-wrap .overlay .btn {
+        width: 100%;
+        min-height: 44px;
+        padding: 8px 12px;
+      }
+      .game-stage .fs-btn,
+      .game-stage .rb-escape-btn {
+        width: 44px;
+        height: 44px;
+      }
+      .game-stage .bbb-burp-btn {
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
       }
       .game-side__panel .controls-row {
         display: grid;
@@ -339,6 +380,58 @@
       .bbb-menu__list {
         font-size: 21px;
       }
+    }
+
+    /* Big Baby Bum maximizes the whole playable stage so the live HUD is not
+       stranded outside native fullscreen. The renderer follows this surface. */
+    .game-stage.is-maxed {
+      position: fixed !important;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      width: 100dvw !important;
+      height: 100dvh !important;
+      max-width: none !important;
+      max-height: none !important;
+      padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+      gap: 6px;
+      overflow: hidden;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: #050914 !important;
+      box-shadow: none !important;
+    }
+    .game-stage.is-maxed .hud {
+      z-index: 2;
+      width: 100%;
+      border-radius: 10px;
+    }
+    .game-stage.is-maxed .canvas-wrap {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 10px;
+    }
+    .game-stage.is-maxed #gameCanvas {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+      border: 0;
+      border-radius: 10px;
+    }
+    .game-stage.is-maxed .fs-btn {
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+    }
+    .game-stage.is-maxed .rb-escape-btn {
+      top: max(8px, env(safe-area-inset-top));
+      left: max(8px, env(safe-area-inset-left));
     }
   </style>
 </head>
@@ -381,10 +474,7 @@
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">Big Baby Bum</h2>
             <p class="overlay__sub" id="overlay-sub">
-              A baby wakes up in a fenced backyard on the edge of a whole city — and the fence only opens one way: eat it. Eat everything
-              smaller than you. Grow rounder until you become a ball and ROLL — through
-              yards, streets, traffic, and eventually entire buildings. Do not eat the
-              broccoli. Puking makes you shrink.
+              Eat everything smaller than you, grow into a rolling wrecking ball, and munch your way from the backyard to the city. Avoid green stink food — puking makes you shrink.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">New adventure</button>
@@ -449,7 +539,7 @@
   <script src="../assets/js/ads.js?v=20260711-bbb3d-5"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/big-baby-bum.js?v=20260715-bbb-baby-voice-v4"></script>
+  <script src="../assets/js/big-baby-bum.js?v=20260715-bbb-mobile-max-v5"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -82,7 +82,7 @@ check("performance batching", /new T\.InstancedMesh/.test(gameSource) && /fence_
 check("renderer art direction", /ACESFilmicToneMapping/.test(gameSource) && /PCFSoftShadowMap/.test(gameSource) && /bbb_storybook_sky/.test(gameSource), "premium lighting, shadows, or sky setup is missing");
 check("expanded attacker roster", /ENEMY_MAX_ACTIVE\s*=\s*4/.test(gameSource) && /function activeEnemyTpls/.test(gameSource), "mixed attacker roster or cap is missing");
 check("sampled baby voice hooks", gameSource.includes("GIGGLE_CLIPS") && gameSource.includes("SQUEAL_CLIPS") && gameSource.includes("BELLY_LAUGH_CLIPS") && gameSource.includes("baby-laugh-giggle-pixabay-119650.mp3"), "sampled baby voice variants are not wired into AudioKit");
-check("visual cache token", pageSource.includes("20260715-bbb-baby-voice-v4"), "page does not reference the current visual-pass cache token");
+check("visual cache token", pageSource.includes("20260715-bbb-mobile-max-v5"), "page does not reference the current visual-pass cache token");
 
 const mime = {
   ".css": "text/css; charset=utf-8",
@@ -415,6 +415,14 @@ try {
   watchPage(mobile, "mobile", issues);
   await mobile.goto(target, { waitUntil: "domcontentloaded" });
   await mobile.waitForFunction(() => window.__BBB?.state && window.__BBB?.three?.renderer, null, { timeout: 15_000 });
+  const mobileStartLayout = await mobile.evaluate(() => {
+    const rect = (selector) => {
+      const bounds = document.querySelector(selector)?.getBoundingClientRect();
+      return bounds ? { x: bounds.x, y: bounds.y, right: bounds.right, bottom: bounds.bottom, width: bounds.width, height: bounds.height } : null;
+    };
+    return { canvas: rect(".canvas-wrap"), title: rect("#overlay-title"), start: rect("#btn-primary"), max: rect("#btn-fullscreen") };
+  });
+  check("mobile start overlay", mobileStartLayout.title?.y >= mobileStartLayout.canvas?.y && mobileStartLayout.start?.bottom <= mobileStartLayout.canvas?.bottom && mobileStartLayout.max?.width >= 44 && mobileStartLayout.max?.height >= 44, `mobile start UI clips or has tiny controls: ${JSON.stringify(mobileStartLayout)}`);
   await mobile.getByRole("button", { name: /new adventure/i }).click();
   await mobile.waitForFunction(() => window.__BBB?.state?.phase === "play", null, { timeout: 5_000 });
   await mobile.waitForTimeout(3_500);
@@ -436,6 +444,30 @@ try {
   check("mobile canvas", mobileLayout.canvas?.width >= 350 && mobileLayout.canvas?.width <= 390 && mobileLayout.canvas?.height >= 220, `mobile canvas bounds are ${JSON.stringify(mobileLayout.canvas)}`);
   check("mobile controls", [mobileLayout.pause, mobileLayout.restart, mobileLayout.sound].every((button) => button && button.height >= 44 && button.width < 120), `mobile controls are not compact 44px targets: ${JSON.stringify(mobileLayout)}`);
   check("mobile performance", mobileLayout.state.drawCalls > 0 && mobileLayout.state.drawCalls < 950, `mobile render uses ${mobileLayout.state.drawCalls} draw calls`);
+  await mobile.getByRole("button", { name: "Max screen" }).click();
+  await mobile.waitForTimeout(350);
+  const mobileMaxLayout = await mobile.evaluate(() => {
+    const rect = (selector) => {
+      const bounds = document.querySelector(selector)?.getBoundingClientRect();
+      return bounds ? { x: bounds.x, y: bounds.y, right: bounds.right, bottom: bounds.bottom, width: bounds.width, height: bounds.height } : null;
+    };
+    return {
+      bodyMaxed: document.body.classList.contains("rb-game-maxed"),
+      stageMaxed: document.querySelector(".game-stage")?.classList.contains("is-maxed"),
+      stage: rect(".game-stage"),
+      hud: rect(".hud"),
+      canvas: rect("#gameCanvas"),
+      exitLabel: document.querySelector("#btn-fullscreen")?.getAttribute("aria-label"),
+      cameraAspect: window.__BBB.three.camera.aspect,
+    };
+  });
+  results.mobileMax = mobileMaxLayout;
+  check("mobile maximize state", mobileMaxLayout.bodyMaxed && mobileMaxLayout.stageMaxed && mobileMaxLayout.exitLabel === "Exit max screen", `mobile max state is ${JSON.stringify(mobileMaxLayout)}`);
+  check("mobile maximize bounds", mobileMaxLayout.stage?.width >= 389 && mobileMaxLayout.stage?.height >= 843 && mobileMaxLayout.hud?.bottom <= mobileMaxLayout.canvas?.y && mobileMaxLayout.canvas?.height > 700, `mobile max layout is ${JSON.stringify(mobileMaxLayout)}`);
+  check("mobile renderer aspect", Math.abs(mobileMaxLayout.cameraAspect - mobileMaxLayout.canvas.width / mobileMaxLayout.canvas.height) < 0.02, `camera/canvas aspect mismatch: ${JSON.stringify(mobileMaxLayout)}`);
+  await mobile.screenshot({ path: path.join(outputDir, "final-mobile-max-390x844.png") });
+  await mobile.getByRole("button", { name: "Exit max screen" }).click();
+  await mobile.waitForFunction(() => !document.body.classList.contains("rb-game-maxed"));
   await mobile.screenshot({ path: path.join(outputDir, "final-mobile-390x844.png"), fullPage: true });
   await mobileContext.close();
 

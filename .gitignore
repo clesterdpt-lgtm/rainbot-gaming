@@ -25,3 +25,15 @@ supabase/.temp/
 # Dependency/build caches
 node_modules/
 .cache/
+
+# Mr. Feast source downloads and editable DCC files (runtime GLBs stay tracked)
+assets/models/mr-feast/source/
+assets/models/mr-feast/mr-feast-rigged.glb
+assets/models/mr-feast/mr-feast-idle.glb
+assets/models/mr-feast/mr-feast-walk.glb
+assets/models/mr-feast/mr-feast-alert.glb
+assets/models/mr-feast/mr-feast-run.glb
+assets/models/mr-feast/*.meta.json
+assets/models/mr-feast/*.submission.json
+assets/models/mr-feast/processed/mr-feast-master.glb
+assets/models/mr-feast/processed/mr-feast-working.blend*

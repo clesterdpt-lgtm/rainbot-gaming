@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-07-15T12:50:02.413348+00:00",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/mr-feast-rigged.glb",
+  "rigged": true,
+  "normalizationStrategy": "baked-scene-roots",
+  "normalizationScale": 0.9999997876097352,
+  "targetHeightMeters": 1.92,
+  "targetTriangles": 65000,
+  "textureMaxSize": 1024,
+  "preNormalizationBounds": {
+    "min": [
+      -0.4620330035686493,
+      -0.2310011386871338,
+      -9.307687065529535e-08
+    ],
+    "max": [
+      0.46203336119651794,
+      0.23100104928016663,
+      1.9200003147125244
+    ]
+  },
+  "master": {
+    "file": "mr-feast-master.glb",
+    "triangles": 100053,
+    "boundsMin": [
+      -0.4620330333709717,
+      -0.23100103437900543,
+      0.0
+    ],
+    "boundsMax": [
+      0.46203306317329407,
+      0.23100103437900543,
+      1.9199998378753662
+    ]
+  },
+  "game": {
+    "file": "mr-feast-game-rigged.glb",
+    "triangles": 65000,
+    "boundsMin": [
+      -0.4620330333709717,
+      -0.23100103437900543,
+      0.0
+    ],
+    "boundsMax": [
+      0.46203306317329407,
+      0.23100103437900543,
+      1.9200150966644287
+    ]
+  },
+  "resizedImages": [
+    {
+      "name": "texture_0",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "warnings": []
+}

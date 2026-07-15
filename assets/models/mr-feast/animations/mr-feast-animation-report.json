@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-07-15T12:43:34.119Z",
+  "format": "animation-only-glb",
+  "totalBytes": 194124,
+  "clips": [
+    {
+      "name": "idle",
+      "source": "mr-feast-idle.glb",
+      "file": "mr-feast-idle.glb",
+      "bytes": 66432,
+      "firstKeySeconds": 0.03333333507180214,
+      "lastKeySeconds": 4.0333333015441895,
+      "durationSeconds": 4.0333333015441895,
+      "nodes": 25,
+      "meshes": 0,
+      "skins": 0,
+      "materials": 0,
+      "textures": 0,
+      "animations": 1,
+      "channels": 72
+    },
+    {
+      "name": "walk",
+      "source": "mr-feast-walk.glb",
+      "file": "mr-feast-walk.glb",
+      "bytes": 32544,
+      "firstKeySeconds": 0.03333333507180214,
+      "lastKeySeconds": 1.0666667222976685,
+      "durationSeconds": 1.0666667222976685,
+      "nodes": 25,
+      "meshes": 0,
+      "skins": 0,
+      "materials": 0,
+      "textures": 0,
+      "animations": 1,
+      "channels": 72
+    },
+    {
+      "name": "alert",
+      "source": "mr-feast-alert.glb",
+      "file": "mr-feast-alert.glb",
+      "bytes": 67384,
+      "firstKeySeconds": 0.03333333507180214,
+      "lastKeySeconds": 4.0333333015441895,
+      "durationSeconds": 4.0333333015441895,
+      "nodes": 25,
+      "meshes": 0,
+      "skins": 0,
+      "materials": 0,
+      "textures": 0,
+      "animations": 1,
+      "channels": 72
+    },
+    {
+      "name": "run",
+      "source": "mr-feast-run.glb",
+      "file": "mr-feast-run.glb",
+      "bytes": 27764,
+      "firstKeySeconds": 0.03333333507180214,
+      "lastKeySeconds": 0.6666666865348816,
+      "durationSeconds": 0.6666666865348816,
+      "nodes": 25,
+      "meshes": 0,
+      "skins": 0,
+      "materials": 0,
+      "textures": 0,
+      "animations": 1,
+      "channels": 72
+    }
+  ]
+}

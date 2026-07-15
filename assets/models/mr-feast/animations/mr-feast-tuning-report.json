@@ -1,0 +1,112 @@
+{
+  "generatedAt": "2026-07-15T13:53:56.150Z",
+  "format": "animation-only-glb",
+  "policy": "no-scale; hips-translation-only; restrained-idle-and-stalk",
+  "baseHips": [
+    0.06089772284030914,
+    110.44508361816406,
+    0.5512389540672302
+  ],
+  "clips": [
+    {
+      "name": "idle",
+      "profile": "idle",
+      "source": "mr-feast-idle.glb",
+      "file": "mr-feast-idle-tuned.glb",
+      "bytes": 63856,
+      "durationSeconds": 4,
+      "hipsWeights": [
+        0.03,
+        0.08,
+        0.03
+      ],
+      "channelsBefore": {
+        "rotation": 24,
+        "translation": 24,
+        "scale": 24,
+        "other": 0
+      },
+      "channelsAfter": {
+        "rotation": 24,
+        "translation": 1,
+        "scale": 0,
+        "other": 0
+      }
+    },
+    {
+      "name": "stalk",
+      "profile": "stalk",
+      "source": "mr-feast-walk.glb",
+      "file": "mr-feast-stalk-tuned.glb",
+      "bytes": 29996,
+      "durationSeconds": 1.033333420753479,
+      "hipsWeights": [
+        0.08,
+        0.3,
+        0.08
+      ],
+      "channelsBefore": {
+        "rotation": 24,
+        "translation": 24,
+        "scale": 24,
+        "other": 0
+      },
+      "channelsAfter": {
+        "rotation": 24,
+        "translation": 1,
+        "scale": 0,
+        "other": 0
+      }
+    },
+    {
+      "name": "alert",
+      "profile": "preserve",
+      "source": "mr-feast-alert.glb",
+      "file": "mr-feast-alert-clean.glb",
+      "bytes": 64804,
+      "durationSeconds": 4,
+      "hipsWeights": [
+        0.1,
+        0.22,
+        0.1
+      ],
+      "channelsBefore": {
+        "rotation": 24,
+        "translation": 24,
+        "scale": 24,
+        "other": 0
+      },
+      "channelsAfter": {
+        "rotation": 24,
+        "translation": 1,
+        "scale": 0,
+        "other": 0
+      }
+    },
+    {
+      "name": "run",
+      "profile": "preserve",
+      "source": "mr-feast-run.glb",
+      "file": "mr-feast-run-clean.glb",
+      "bytes": 25220,
+      "durationSeconds": 0.6333333253860474,
+      "hipsWeights": [
+        0.18,
+        0.45,
+        0.18
+      ],
+      "channelsBefore": {
+        "rotation": 24,
+        "translation": 24,
+        "scale": 24,
+        "other": 0
+      },
+      "channelsAfter": {
+        "rotation": 24,
+        "translation": 1,
+        "scale": 0,
+        "other": 0
+      }
+    }
+  ]
+}

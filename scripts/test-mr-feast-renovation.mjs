@@ -7,9 +7,14 @@ const root = path.resolve(scriptDir, "..");
 const mansionPath = path.join(root, "assets/js/mr-feast-mansion.js");
 const pagePath = path.join(root, "games/mr-feast-mansion.html");
 const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
+const mrFeastAssetRoot = path.join(root, "assets/models/mr-feast");
+const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest.json");
+const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
 const mansion = fs.readFileSync(mansionPath, "utf8");
 const page = fs.readFileSync(pagePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
+const mrFeastManifest = JSON.parse(fs.readFileSync(mrFeastManifestPath, "utf8"));
+const mrFeastTuningReport = JSON.parse(fs.readFileSync(mrFeastTuningReportPath, "utf8"));
 
 const failures = [];
 
@@ -75,6 +80,24 @@ function jpegDimensions(bytes) {
     }
     if (segmentLength < 2) break;
     offset += 2 + segmentLength;
+  }
+  return null;
+}
+
+function glbJson(filePath) {
+  const bytes = fs.readFileSync(filePath);
+  if (bytes.subarray(0, 4).toString("ascii") !== "glTF" || bytes.readUInt32LE(4) !== 2) return null;
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const chunkLength = bytes.readUInt32LE(offset);
+    const chunkType = bytes.readUInt32LE(offset + 4);
+    const chunkStart = offset + 8;
+    const chunkEnd = chunkStart + chunkLength;
+    if (chunkEnd > bytes.length) return null;
+    if (chunkType === 0x4e4f534a) {
+      return JSON.parse(bytes.subarray(chunkStart, chunkEnd).toString("utf8").replaceAll("\0", "").trim());
+    }
+    offset = chunkEnd;
   }
   return null;
 }
@@ -205,6 +228,14 @@ const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartit
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
 const eastRearSpine = namedWallRun("upper-east-rear-spine", upperPartitions);
 const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
+const contestant13Config = section("const CONTESTANT_13", "const GRAND_STAIR");
+const contestant13Quest = section("class ContestantThirteenQuest", "function kitchenShelfHeights");
+const contestant13Build = section("function buildContestantThirteenQuest", "function buildLighting()");
+const contestant13ShovelBuild = section("function addContestantThirteenGardenShovel", "function addContestantThirteenDigSite");
+const contestant13DigSiteBuild = section("function addContestantThirteenDigSite", "function addContestantThirteenArchiveCage");
+const mrFeastPatrolRoute = section("const MR_FEAST_PATROL_ROUTE", "const MR_FEAST_NPC");
+const mrFeastNpcConfig = section("const MR_FEAST_NPC", "const TOILET_FLUSH_DURATION");
+const mrFeastWanderer = section("class MrFeastWanderer", "window.MrFeastFresh");
 
 // 29. Crown trim remains continuous over the entire authored wall run, while
 // baseboards continue below windows but stop at doors, arches, and open
@@ -1114,6 +1145,98 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
   check("24 renovation QA routes", qaHooks.includes(`${route}:`), `missing physical renovation route ${route}`);
 }
 
+// 41. The first real gameplay slice connects distant authored rooms through
+// ordinary interactions. Rewards are idempotent, early interactions remain
+// gated, and sabotage changes story state without mutating the light budget.
+check("41 Contestant 13 configuration", /objectives:\s*Object\.freeze/.test(contestant13Config) && /transcript:/.test(contestant13Config), "Contestant 13 objectives and recording transcript are not centralized");
+check("41 Contestant 13 interaction registry", /this\.interactions\s*=\s*new Map\(\)/.test(contestant13Quest) && /addInteractionTarget\(/.test(contestant13Quest), "story objects do not share the mansion interaction contract");
+check("41 Contestant 13 idempotency", /if \(this\.story\.noteRead\)/.test(contestant13Quest) && /if \(this\.story\.shovelTaken\)/.test(contestant13Quest) && /if \(this\.story\.digSiteExcavated \|\| this\.story\.digging\)/.test(contestant13Quest), "repeat clue, pickup, or dig interactions can duplicate progression rewards");
+check("41 Contestant 13 dig gate", /if \(!this\.story\.noteRead\)/.test(contestant13Quest) && /if \(!this\.hasItem\("garden-shovel"\)\)/.test(contestant13Quest) && /archive-key-a3/.test(contestant13Quest), "digging can grant the A-3 key without the clue or shovel");
+check("41 Contestant 13 Archive gate", /if \(!this\.hasItem\("archive-key-a3"\)\)/.test(contestant13Quest) && /archiveCageUnlocked\s*=\s*true/.test(contestant13Quest), "evidence cage does not require and consume the A-3 progression gate");
+check("41 Contestant 13 recording gate", /if \(!this\.story\.archiveCageUnlocked \|\| !this\.story\.tapeFound\)/.test(contestant13Quest) && /recordingPlayed\s*=\s*true/.test(contestant13Quest), "Contestant 13's recording can play before the cage and tape are available");
+check("41 Contestant 13 sabotage gate", /if \(!this\.story\.recordingPlayed\)/.test(contestant13Quest) && /relaySabotaged\s*=\s*true/.test(contestant13Quest) && /threatEscalated\s*=\s*true/.test(contestant13Quest), "camera relay sabotage lacks recording knowledge or a persistent threat consequence");
+for (const helper of ["addContestantThirteenLibraryNote", "addContestantThirteenGardenShovel", "addContestantThirteenDigSite", "addContestantThirteenArchiveCage", "addContestantThirteenCameraRelay"]) {
+  check("41 Contestant 13 physical story", contestant13Build.includes(`${helper}(`), `missing story furnishing helper ${helper}`);
+}
+for (const objectName of ["contestant-13-library-rulebook", "contestant-13-garden-shovel", "contestant-13-dig-site", "contestant-13-archive-cage", "contestant-13-camera-relay"]) {
+  check("41 Contestant 13 physical story", mansion.includes(objectName), `missing stable scene name ${objectName}`);
+}
+check("41 Contestant 13 physical state", /recorderIndicatorActive:/.test(contestant13Quest) && /relayOnlineBulbVisible:/.test(contestant13Quest) && /relayAlarmBulbVisible:/.test(contestant13Quest) && /archiveCageOpen:\s*state\.contestant13\.archiveCageUnlocked/.test(contestant13Quest) && /preExteriorVisibility\s*=\s*false/.test(contestant13Quest) && /preExteriorVisibility\s*=\s*true/.test(contestant13Quest), "diagnostics or exterior-culling state do not preserve recorder, cage, and relay visuals");
+check("41 Contestant 13 warning pulse", /warningPulse/.test(mansion) && /relayAlarmMaterial\.emissiveIntensity/.test(mansion), "sabotage warning lamp does not visibly pulse");
+check("41 Contestant 13 diagnostics", /inventory:\s*contestant13Quest\?\.getInventoryDiagnostics/.test(diagnostics) && /journal:\s*contestant13Quest\?\.getJournalDiagnostics/.test(diagnostics) && /contestant13:\s*contestant13Quest\?\.getDiagnostics/.test(diagnostics), "objective, inventory, journal, and story state are missing from render_game_to_text");
+for (const view of ["contestant13LibraryNote", "contestant13GardenShovel", "contestant13DigSite", "contestant13ArchiveCage", "contestant13WorkshopRelay"]) {
+  check("41 Contestant 13 QA views", qaRoomViews.includes(`${view}:`), `missing Contestant 13 QA view ${view}`);
+}
+check("41 Contestant 13 accessible UI", /id="mansion-casefile"/.test(page) && /id="mansion-objective"/.test(page) && /id="mansion-inventory"/.test(page) && /id="mansion-journal"[^>]+role="dialog"[^>]+aria-modal="true"/.test(page) && /aria-live="polite"/.test(page) && /journalReturnFocus/.test(contestant13Quest), "page lacks accessible objective, inventory, discovery, or modal journal feedback");
+check("41 Contestant 13 page copy", !/There are no objectives/i.test(page) && /Contestant 13/i.test(page) && /Sabotage/i.test(page), "page still describes the mansion as an objective-free architectural demo");
+
+// 42. Discovery tuning makes the physical clues less obvious without making
+// them unreliable: the shovel sits low inside a rose row, the cache is at the
+// maze's maximum-depth dead end, and excavation removes every authored mark.
+check("42 Contestant 13 rose-hidden shovel", /group\.position\.set\(-22\.35,\s*YARD_LAYOUT\.groundY \+ 0\.16,\s*6\.70\)/.test(contestant13ShovelBuild) && /group\.scale\.setScalar\(0\.56\)/.test(contestant13ShovelBuild) && /group\.rotation\.z\s*=\s*-1\.42/.test(contestant13ShovelBuild), "shovel is not reduced and placed low inside the southeast rose bed");
+check("42 Contestant 13 shovel target", /contestant-13-garden-shovel-hitbox/.test(contestant13ShovelBuild) && /hitbox\.visible\s*=\s*false/.test(contestant13ShovelBuild) && /\[hitbox\]/.test(contestant13ShovelBuild), "hidden shovel lacks a dedicated forgiving interaction target");
+check("42 Contestant 13 deeper cache", /const goal\s*=\s*mazeCellCenter\(19, 3\)/.test(contestant13DigSiteBuild) && /pathStepsFromRear:\s*82/.test(contestant13Config), "cache is not at the maze's deepest reachable dead end");
+check("42 Contestant 13 subtle mark", /contestant-13-dig-site-marker/.test(contestant13DigSiteBuild) && /w:\s*0\.025[^;]+h:\s*0\.012[^;]+d:\s*0\.18/.test(contestant13DigSiteBuild) && /material:\s*M\.darkFloor/.test(contestant13DigSiteBuild), "XIII marker remains too large, bright, or raised");
+check("42 Contestant 13 clean hole", /digMound\.visible\s*=\s*false/.test(contestant13Quest) && /digMarker\.visible\s*=\s*false/.test(contestant13Quest) && /digHole\.visible\s*=\s*true/.test(contestant13Quest) && /contestant-13-dig-site-open-hole[^;]+height:\s*0\.02[^;]+y:\s*0\.045/.test(contestant13DigSiteBuild) && /Inspect empty hole/.test(contestant13DigSiteBuild), "excavation does not remove the mound and XIII mark while preserving a visible inspectable hole above the maze path surface");
+check("42 Contestant 13 discovery diagnostics", /shovelScale:/.test(contestant13Quest) && /pathStepsFromRear:/.test(contestant13Quest) && /digMoundVisible:/.test(contestant13Quest) && /digMarkerVisible:/.test(contestant13Quest) && /digHoleVisible:/.test(contestant13Quest), "runtime diagnostics do not expose the tuned clue geometry and post-dig state");
+check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*8\.15,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[25,\s*YARD_LAYOUT\.groundY,\s*-13\.90,\s*0,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deeper cache");
+
+// 43. Mr. Feast is an optional, animated test layer. He follows a safe
+// authored main-floor loop, never blocks mansion boot, and exposes enough
+// deterministic state to prove locomotion without adding pursuit gameplay.
+const threeIndex = page.indexOf("three-r128.min.js");
+const gltfLoaderIndex = page.indexOf("GLTFLoader-r128.js");
+const skeletonUtilsIndex = page.indexOf("SkeletonUtils-r128.js");
+const mansionRuntimeIndex = page.indexOf("mr-feast-mansion.js?v=");
+check("43 Mr Feast loaders", threeIndex >= 0 && threeIndex < gltfLoaderIndex && gltfLoaderIndex < skeletonUtilsIndex && skeletonUtilsIndex < mansionRuntimeIndex, "Three, GLTFLoader, and SkeletonUtils are not loaded in dependency order before the mansion runtime");
+const expectedMrFeastAssets = [
+  mrFeastManifest.model,
+  mrFeastManifest.animations?.idle?.file,
+  mrFeastManifest.animations?.stalk?.file,
+  mrFeastManifest.animations?.alert?.file,
+  mrFeastManifest.animations?.run?.file,
+];
+check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.68 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, tuned stalk rate, or motion assets");
+for (const asset of expectedMrFeastAssets) {
+  const assetPath = path.join(mrFeastAssetRoot, asset);
+  check("43 Mr Feast runtime assets", fs.existsSync(assetPath), `missing runtime character asset ${asset}`);
+  check("43 Mr Feast runtime assets", () => fs.readFileSync(assetPath).subarray(0, 4).toString("ascii") === "glTF", `${asset} is not a binary glTF file`);
+}
+for (const asset of expectedMrFeastAssets.slice(1)) {
+  const json = glbJson(path.join(mrFeastAssetRoot, asset));
+  const animation = json?.animations?.[0];
+  const channels = animation?.channels || [];
+  const paths = channels.map((channel) => channel.target?.path);
+  const translatedNodes = channels
+    .filter((channel) => channel.target?.path === "translation")
+    .map((channel) => json.nodes?.[channel.target.node]?.name);
+  check("43 Mr Feast stable motion assets", Boolean(json) && (json.meshes?.length || 0) === 0 && (json.skins?.length || 0) === 0, `${asset} is not a mesh-free animation GLB`);
+  check("43 Mr Feast stable motion assets", paths.filter((value) => value === "rotation").length === 24 && paths.filter((value) => value === "translation").length === 1 && !paths.includes("scale") && translatedNodes[0] === "Hips", `${asset} can still scale bones or change limb lengths`);
+}
+check("43 Mr Feast tuning report", mrFeastTuningReport.policy === "no-scale; hips-translation-only; restrained-idle-and-stalk" && mrFeastTuningReport.clips?.length === 4 && mrFeastTuningReport.clips.every((clip) => clip.channelsAfter?.scale === 0 && clip.channelsAfter?.translation === 1), "motion tuning report does not prove the scale and translation cleanup");
+const mrFeastPatrolIds = [...mrFeastPatrolRoute.matchAll(/mrFeastPatrolPoint\("([^"]+)"/g)].map((match) => match[1]);
+check("43 Mr Feast whole-home route", mrFeastPatrolIds.length >= 220 && new Set(mrFeastPatrolIds).size === mrFeastPatrolIds.length && /speed:\s*0\.62/.test(mrFeastNpcConfig) && /arrivalRadius:\s*0\.06/.test(mrFeastNpcConfig), "whole-home patrol is too short, contains duplicate waypoint IDs, or lost the restrained walk speed");
+check("43 Mr Feast floor coverage", /FLOOR\.MAIN/.test(mrFeastPatrolRoute) && /FLOOR\.UPPER/.test(mrFeastPatrolRoute) && /FLOOR\.BASEMENT/.test(mrFeastPatrolRoute) && /"UPPER GRAND BATHROOM"/.test(mrFeastPatrolRoute) && /"REAR LOUNGE"/.test(mrFeastPatrolRoute) && /"WINE CELLAR"/.test(mrFeastPatrolRoute) && /"BULK STORAGE"/.test(mrFeastPatrolRoute), "patrol does not cover all three interior levels and their major rooms");
+check("43 Mr Feast stair geometry", /"grand-lower-bottom", 0, FLOOR\.MAIN, 2\.8/.test(mrFeastPatrolRoute) && /"grand-lower-top", 0, 2\.5, -0\.98/.test(mrFeastPatrolRoute) && /"grand-mid-west", -2\.48, 2\.5, -1\.55/.test(mrFeastPatrolRoute) && /"grand-west-top", -2\.48, FLOOR\.UPPER, 3\.1/.test(mrFeastPatrolRoute) && /"grand-east-top", 2\.48, FLOOR\.UPPER, 3\.1/.test(mrFeastPatrolRoute) && /"service-main-top", 12\.55, FLOOR\.MAIN, -2\.7/.test(mrFeastPatrolRoute) && /"service-basement-bottom", 12\.55, FLOOR\.BASEMENT, 2\.7/.test(mrFeastPatrolRoute), "patrol stair endpoints or rail-clearing mid-landing turn are missing");
+check("43 Mr Feast door route", /doorOpenDistance:\s*1\.8/.test(mrFeastNpcConfig) && /doorWaitDistance:\s*0\.88/.test(mrFeastNpcConfig) && /doorCloseDistance:\s*2\.5/.test(mrFeastNpcConfig) && /basement stair door/.test(mrFeastPatrolRoute) && /archive door/.test(mrFeastPatrolRoute), "patrol does not author door approaches for the service stair and basement");
+check("43 Mr Feast doorway clearance", count(basementPartitions, /width:\s*1\.35/g) >= 8 && count(upperPartitions, /width:\s*1\.35/g) >= 6 && /width: 1\.35[^\n]+bathroom gallery door/.test(mainPartitions) && /width: 1\.35[^\n]+painting gallery door/.test(mainPartitions), "route doors remain narrower than the fitted character");
+check("43 Mr Feast animation", /THREE\.SkeletonUtils\.clone/.test(mrFeastWanderer) && /new THREE\.AnimationMixer/.test(mrFeastWanderer) && /fadeToAction\("idle"/.test(mrFeastWanderer) && /fadeToAction\("stalk"/.test(mrFeastWanderer), "rigged clone, mixer, or idle/stalk cross-fades are missing");
+check("43 Mr Feast animation hardening", /sanitizeAnimationClip/.test(mrFeastWanderer) && /propertyName === "scale"/.test(mrFeastWanderer) && /propertyName === "position" && !targetsHips/.test(mrFeastWanderer), "runtime does not defensively reject scale and limb-translation tracks");
+check("43 Mr Feast eye-level fit", /heightMeters:\s*2\.01/.test(mrFeastNpcConfig) && /MR_FEAST_NPC\.heightMeters \|\| Number\(manifest\.heightMeters\)/.test(mrFeastWanderer), "runtime cannot keep Mr. Feast at the authored 2.01m eye-level fit");
+check("43 Mr Feast cornering", /facingAlignment\s*</.test(mrFeastWanderer) && /Math\.atan2\(Math\.sin\(nextYaw\), Math\.cos\(nextYaw\)\)/.test(mrFeastWanderer), "sharp turns can still produce visible strafing or unbounded long-session yaw");
+check("43 Mr Feast 3D navigation", /const distance = Math\.hypot\(dx, dy, dz\)/.test(mrFeastWanderer) && /const horizontalDistance = Math\.hypot\(dx, dz\)/.test(mrFeastWanderer) && /this\.root\.position\.y \+= dy \/ distance \* step/.test(mrFeastWanderer) && !/this\.root\.position\.y = FLOOR\.MAIN/.test(mrFeastWanderer), "wanderer cannot continuously interpolate elevation while keeping yaw horizontal");
+check("43 Mr Feast door behavior", /prepareRouteDoor\(target, distance\)/.test(mrFeastWanderer) && /door\.setOpen\(true\)/.test(mrFeastWanderer) && /closeClearedRouteDoors/.test(mrFeastWanderer) && /door\.playerInSwingPath\(\)/.test(mrFeastWanderer), "wanderer does not open, wait for, and safely close route doors");
+check("43 Mr Feast contact shadow", /mr-feast-contact-shadow/.test(mrFeastWanderer) && /new THREE\.CircleGeometry\(1, 24\)/.test(mrFeastWanderer) && /depthWrite:\s*false/.test(mrFeastWanderer), "the moving character lacks a cheap floor contact shadow");
+check("43 Mr Feast stair shadow", /this\.onStairs = target\?\.segmentKind === "stairs"/.test(mrFeastWanderer) && /this\.contactShadow\.visible = !this\.onStairs && !interiorDetailsHidden/.test(mrFeastWanderer), "flat contact shadow can still cut through staircase treads");
+check("43 Mr Feast lifecycle", /mrFeastNpc\s*=\s*new MrFeastWanderer\(\)/.test(initSequence) && /void mrFeastNpc\.load\(\)/.test(initSequence) && /animatedObjects\.push\(this\)/.test(mrFeastWanderer), "Mr. Feast is not constructed non-blockingly and registered with the update loop");
+check("43 Mr Feast start gate", /if \(!state\.started \|\| !this\.wanderingEnabled\)/.test(mrFeastWanderer), "Mr. Feast can start patrolling before the player enters the mansion");
+check("43 Mr Feast nonfatal load", /catch \(error\)/.test(mrFeastWanderer) && /this\.loadStatus\s*=\s*"error"/.test(mrFeastWanderer) && /this\.root\.visible\s*=\s*false/.test(mrFeastWanderer), "character asset failure does not settle into an isolated error state");
+check("43 Mr Feast moving shadows", /object\.castShadow\s*=\s*false/.test(mrFeastWanderer) && /object\.receiveShadow\s*=\s*true/.test(mrFeastWanderer), "moving character is incompatible with the mansion's cached shadow policy");
+check("43 Mr Feast culling", /interiorDetailMeshes\.push\(object\)/.test(mrFeastWanderer) && /object\.visible\s*=\s*!interiorDetailsHidden/.test(mrFeastWanderer), "asynchronously loaded meshes do not join exterior detail culling");
+check("43 Mr Feast diagnostics", /mrFeast:\s*mrFeastNpc\?\.getDiagnostics/.test(diagnostics) && /resetMrFeastWandererForQA/.test(qaHooks) && /setMrFeastPoseForQA/.test(qaHooks) && /transitionMrFeastForQA/.test(qaHooks) && /advanceMrFeastAnimationForQA/.test(qaHooks) && /setMrFeastRouteSegmentForQA/.test(qaHooks) && /runMrFeastWholeHomeRouteForQA/.test(qaHooks) && /visitedRouteFloors/.test(mrFeastWanderer) && /visitedRouteDoors/.test(mrFeastWanderer) && /routeDoorOpenEvents/.test(mrFeastWanderer) && /routeSummary:/.test(mrFeastWanderer) && /liveBones/.test(mrFeastWanderer) && /animationTracks:/.test(mrFeastWanderer) && /castShadowMeshes:/.test(mrFeastWanderer), "wanderer diagnostics or deterministic whole-home QA controls are missing");
+check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
+check("43 Mr Feast visual-only slice", !/physics\.|addInteractionTarget\(|attack|pursuit|lineOfSight/i.test(mrFeastWanderer), "test wanderer adds collision, interaction, or pursuit behavior before that gameplay is designed");
+
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
@@ -1130,7 +1253,7 @@ for (const view of ["mainHallBathroomShowerLight", "upperGrandBathroomShowerLigh
 }
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", cacheKey === "20260714-bathroom-fixture-renovation-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", cacheKey === "20260715-mr-feast-whole-home-patrol-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

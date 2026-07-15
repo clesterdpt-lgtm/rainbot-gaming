@@ -27,6 +27,20 @@
     promptKey: $("mansion-prompt-key"),
     promptText: $("mansion-prompt-text"),
     hiddenStatus: $("mansion-hidden"),
+    caseFile: $("mansion-casefile"),
+    objective: $("mansion-objective"),
+    storyProgress: $("mansion-story-progress"),
+    inventory: $("mansion-inventory"),
+    journalButton: $("mansion-journal-button"),
+    journal: $("mansion-journal"),
+    journalClose: $("mansion-journal-close"),
+    journalEntries: $("mansion-journal-entries"),
+    discovery: $("mansion-discovery"),
+    discoveryTitle: $("mansion-discovery-title"),
+    discoveryBody: $("mansion-discovery-body"),
+    action: $("mansion-action"),
+    actionText: $("mansion-action-text"),
+    actionFill: $("mansion-action-fill"),
     crosshair: $("mansion-crosshair"),
     audio: $("mansion-audio"),
     fullscreen: $("mansion-fullscreen"),
@@ -169,6 +183,279 @@
     speed: 2.2,
     interactionRange: 2.35,
   });
+  const MR_FEAST_LEVEL = Object.freeze({
+    BASEMENT: "BASEMENT",
+    MAIN: "MAIN LEVEL",
+    UPPER: "SECOND FLOOR",
+    STAIR: "BETWEEN LEVELS",
+  });
+
+  function mrFeastPatrolPoint(id, x, y, z, level, zone, options = {}) {
+    return Object.freeze({
+      id,
+      x,
+      y,
+      z,
+      level,
+      zone,
+      pause: Math.max(0, Number(options.pause) || 0),
+      segmentKind: options.segmentKind || "room",
+      door: options.door || null,
+    });
+  }
+
+  // One continuous interior circuit reaches every major mansion room. Tiny
+  // walk-in wardrobes remain outside the visual-only patrol because their
+  // openings are narrower than the character's full fitted bounds. Door and
+  // stair control points keep the route centered on the authored clearances.
+  const MR_FEAST_PATROL_ROUTE = Object.freeze([
+    mrFeastPatrolPoint("main-ballroom-south", 0, FLOOR.MAIN, -9.8, MR_FEAST_LEVEL.MAIN, "BALLROOM", { pause: 1.2 }),
+    mrFeastPatrolPoint("main-ballroom-west", -3.2, FLOOR.MAIN, -9.2, MR_FEAST_LEVEL.MAIN, "BALLROOM"),
+    mrFeastPatrolPoint("main-dining-east", -5.8, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "DINING ROOM"),
+    mrFeastPatrolPoint("main-dining-south", -5.8, FLOOR.MAIN, -10.7, MR_FEAST_LEVEL.MAIN, "DINING ROOM"),
+    mrFeastPatrolPoint("main-dining-west", -13.2, FLOOR.MAIN, -10.7, MR_FEAST_LEVEL.MAIN, "DINING ROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("main-dining-north", -13.2, FLOOR.MAIN, -4.05, MR_FEAST_LEVEL.MAIN, "DINING ROOM"),
+    mrFeastPatrolPoint("main-bath-gallery-approach", -9.7, FLOOR.MAIN, -3.85, MR_FEAST_LEVEL.MAIN, "DINING ROOM"),
+    mrFeastPatrolPoint("main-bath-gallery-door", -9.7, FLOOR.MAIN, -3.2, MR_FEAST_LEVEL.MAIN, "MAIN HALL BATHROOM", { segmentKind: "door", door: "bathroom gallery door" }),
+    mrFeastPatrolPoint("main-bath-south", -9.7, FLOOR.MAIN, -2.55, MR_FEAST_LEVEL.MAIN, "MAIN HALL BATHROOM"),
+    mrFeastPatrolPoint("main-bath-center", -8.8, FLOOR.MAIN, -1.2, MR_FEAST_LEVEL.MAIN, "MAIN HALL BATHROOM"),
+    mrFeastPatrolPoint("main-bath-north", -8.8, FLOOR.MAIN, 1.3, MR_FEAST_LEVEL.MAIN, "MAIN HALL BATHROOM", { pause: 0.7 }),
+    mrFeastPatrolPoint("main-library-bath-approach", -9.7, FLOOR.MAIN, 2.55, MR_FEAST_LEVEL.MAIN, "MAIN HALL BATHROOM"),
+    mrFeastPatrolPoint("main-library-bath-door", -9.7, FLOOR.MAIN, 3.2, MR_FEAST_LEVEL.MAIN, "LIBRARY", { segmentKind: "door", door: "library bathroom door" }),
+    mrFeastPatrolPoint("main-library-south", -9.7, FLOOR.MAIN, 3.85, MR_FEAST_LEVEL.MAIN, "LIBRARY"),
+    mrFeastPatrolPoint("main-library-west", -12.6, FLOOR.MAIN, 4.3, MR_FEAST_LEVEL.MAIN, "LIBRARY"),
+    mrFeastPatrolPoint("main-library-northwest", -12.6, FLOOR.MAIN, 9.8, MR_FEAST_LEVEL.MAIN, "LIBRARY"),
+    mrFeastPatrolPoint("main-library-north", -10, FLOOR.MAIN, 10.7, MR_FEAST_LEVEL.MAIN, "LIBRARY", { pause: 1 }),
+    mrFeastPatrolPoint("main-library-east", -6.7, FLOOR.MAIN, 10.6, MR_FEAST_LEVEL.MAIN, "LIBRARY"),
+    mrFeastPatrolPoint("main-library-door-inside", -6.2, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "LIBRARY"),
+    mrFeastPatrolPoint("main-library-door", -5, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "FRONT FOYER", { segmentKind: "door", door: "library door" }),
+    mrFeastPatrolPoint("main-foyer-west", -4.3, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "FRONT FOYER"),
+    mrFeastPatrolPoint("main-foyer-northwest", -2.5, FLOOR.MAIN, 9.8, MR_FEAST_LEVEL.MAIN, "FRONT FOYER"),
+    mrFeastPatrolPoint("main-foyer-center", 0, FLOOR.MAIN, 10.2, MR_FEAST_LEVEL.MAIN, "FRONT FOYER", { pause: 1.2 }),
+    mrFeastPatrolPoint("main-foyer-northeast", 2.5, FLOOR.MAIN, 9.8, MR_FEAST_LEVEL.MAIN, "FRONT FOYER"),
+    mrFeastPatrolPoint("main-music-door-outside", 4.3, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "FRONT FOYER"),
+    mrFeastPatrolPoint("main-music-door", 5, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM", { segmentKind: "door", door: "music room door" }),
+    mrFeastPatrolPoint("main-music-entry", 5.8, FLOOR.MAIN, 7.3, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-music-southwest", 6.5, FLOOR.MAIN, 5, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-music-south", 8.2, FLOOR.MAIN, 4, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-music-southeast", 13.2, FLOOR.MAIN, 4, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-music-northeast", 13.2, FLOOR.MAIN, 9.8, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-music-north", 11.7, FLOOR.MAIN, 10.7, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("main-music-return", 13.2, FLOOR.MAIN, 4, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-painting-door-north", 8.2, FLOOR.MAIN, 3.85, MR_FEAST_LEVEL.MAIN, "MUSIC ROOM"),
+    mrFeastPatrolPoint("main-painting-door", 8.2, FLOOR.MAIN, 3.2, MR_FEAST_LEVEL.MAIN, "PAINTING ROOM", { segmentKind: "door", door: "music painting door" }),
+    mrFeastPatrolPoint("main-painting-north", 8.2, FLOOR.MAIN, 2.55, MR_FEAST_LEVEL.MAIN, "PAINTING ROOM"),
+    mrFeastPatrolPoint("main-painting-west-north", 6.2, FLOOR.MAIN, 2.3, MR_FEAST_LEVEL.MAIN, "PAINTING ROOM"),
+    mrFeastPatrolPoint("main-painting-west-south", 6.2, FLOOR.MAIN, -2.3, MR_FEAST_LEVEL.MAIN, "PAINTING ROOM", { pause: 0.6 }),
+    mrFeastPatrolPoint("main-painting-south", 8.2, FLOOR.MAIN, -2.55, MR_FEAST_LEVEL.MAIN, "PAINTING ROOM"),
+    mrFeastPatrolPoint("main-gallery-door", 8.2, FLOOR.MAIN, -3.2, MR_FEAST_LEVEL.MAIN, "KITCHEN", { segmentKind: "door", door: "painting gallery door" }),
+    mrFeastPatrolPoint("main-kitchen-north", 8.2, FLOOR.MAIN, -3.85, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-west", 8.2, FLOOR.MAIN, -5.8, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-center", 10, FLOOR.MAIN, -7.8, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-south", 12.6, FLOOR.MAIN, -9.8, MR_FEAST_LEVEL.MAIN, "KITCHEN", { pause: 1 }),
+    mrFeastPatrolPoint("main-kitchen-east", 12.8, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-exit", 6, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-rear-east", 4.2, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "BALLROOM"),
+    mrFeastPatrolPoint("main-stair-south", 3.2, FLOOR.MAIN, -5.6, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("main-stair-east", 2.05, FLOOR.MAIN, -4.35, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("main-stair-north", 2.05, FLOOR.MAIN, 4.15, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("main-stair-center", 0, FLOOR.MAIN, 4.15, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("grand-lower-bottom", 0, FLOOR.MAIN, 2.8, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("grand-lower-25", 0, 0.625, 1.855, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-50", 0, 1.25, 0.91, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-75", 0, 1.875, -0.035, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-top", 0, 2.5, -0.98, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-mid-depth", 0, 2.5, -1.55, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-mid-west", -2.48, 2.5, -1.55, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-west-foot", -2.48, 2.5, -0.98, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-west-25", -2.48, 3, 0.04, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-west-50", -2.48, 3.5, 1.06, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-west-75", -2.48, 4, 2.08, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-west-top", -2.48, FLOOR.UPPER, 3.1, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("upper-west-top-landing", -2.48, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("upper-landing-west", -4.2, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-bath-approach", -4.2, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-bath-door", -5, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER GRAND BATHROOM", { segmentKind: "door", door: "upper grand bathroom door" }),
+    mrFeastPatrolPoint("upper-bath-entry", -5.8, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER GRAND BATHROOM"),
+    mrFeastPatrolPoint("upper-bath-center", -8.7, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER GRAND BATHROOM"),
+    mrFeastPatrolPoint("upper-bath-north", -10.8, FLOOR.UPPER, 1.2, MR_FEAST_LEVEL.UPPER, "UPPER GRAND BATHROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("upper-bath-return", -8.7, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER GRAND BATHROOM"),
+    mrFeastPatrolPoint("upper-bath-door-out", -5, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING", { segmentKind: "door", door: "upper grand bathroom door" }),
+    mrFeastPatrolPoint("upper-landing-west-return", -4.2, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-rear-west-approach", -4.15, FLOOR.UPPER, -2.15, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-lounge-west-entry", -4.15, FLOOR.UPPER, -3.75, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-primary-door-outside", -4.2, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-primary-door", -5, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "PRIMARY SUITE", { segmentKind: "door", door: "primary suite lounge door" }),
+    mrFeastPatrolPoint("upper-primary-entry", -5.8, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "PRIMARY SUITE"),
+    mrFeastPatrolPoint("upper-primary-center", -8, FLOOR.UPPER, -6, MR_FEAST_LEVEL.UPPER, "PRIMARY SUITE"),
+    mrFeastPatrolPoint("upper-primary-west", -12, FLOOR.UPPER, -5.5, MR_FEAST_LEVEL.UPPER, "PRIMARY SUITE", { pause: 0.8 }),
+    mrFeastPatrolPoint("upper-primary-return", -8, FLOOR.UPPER, -6, MR_FEAST_LEVEL.UPPER, "PRIMARY SUITE"),
+    mrFeastPatrolPoint("upper-primary-door-out", -5, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE", { segmentKind: "door", door: "primary suite lounge door" }),
+    mrFeastPatrolPoint("upper-lounge-west", -4.2, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-lounge-northwest", -3.5, FLOOR.UPPER, -7.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-lounge-southwest", -3.5, FLOOR.UPPER, -10.8, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-lounge-south", 0, FLOOR.UPPER, -10.8, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE", { pause: 1 }),
+    mrFeastPatrolPoint("upper-lounge-southeast", 3.5, FLOOR.UPPER, -10.8, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-lounge-northeast", 3.5, FLOOR.UPPER, -7.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-east-rear-door-outside", 4.2, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-east-rear-door", 5, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "EAST REAR SUITE", { segmentKind: "door", door: "east rear suite lounge door" }),
+    mrFeastPatrolPoint("upper-east-rear-entry", 5.8, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "EAST REAR SUITE"),
+    mrFeastPatrolPoint("upper-east-rear-center", 8, FLOOR.UPPER, -6, MR_FEAST_LEVEL.UPPER, "EAST REAR SUITE"),
+    mrFeastPatrolPoint("upper-east-rear-east", 12, FLOOR.UPPER, -5.5, MR_FEAST_LEVEL.UPPER, "EAST REAR SUITE", { pause: 0.8 }),
+    mrFeastPatrolPoint("upper-east-rear-return", 8, FLOOR.UPPER, -6, MR_FEAST_LEVEL.UPPER, "EAST REAR SUITE"),
+    mrFeastPatrolPoint("upper-east-rear-door-out", 5, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE", { segmentKind: "door", door: "east rear suite lounge door" }),
+    mrFeastPatrolPoint("upper-lounge-east", 4.2, FLOOR.UPPER, -6.4, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-rear-east-guard", 4.15, FLOOR.UPPER, -3.75, MR_FEAST_LEVEL.UPPER, "REAR LOUNGE"),
+    mrFeastPatrolPoint("upper-landing-east-rear", 4.15, FLOOR.UPPER, -2.15, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-reading-outside", 4.2, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-reading-door", 5, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "READING ROOM", { segmentKind: "door", door: "reading room door" }),
+    mrFeastPatrolPoint("upper-reading-entry", 5.8, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "READING ROOM"),
+    mrFeastPatrolPoint("upper-reading-northwest", 7, FLOOR.UPPER, 2.2, MR_FEAST_LEVEL.UPPER, "READING ROOM"),
+    mrFeastPatrolPoint("upper-reading-northeast", 12.5, FLOOR.UPPER, 2.2, MR_FEAST_LEVEL.UPPER, "READING ROOM", { pause: 0.7 }),
+    mrFeastPatrolPoint("upper-reading-southeast", 12.5, FLOOR.UPPER, -2.2, MR_FEAST_LEVEL.UPPER, "READING ROOM"),
+    mrFeastPatrolPoint("upper-reading-southwest", 7, FLOOR.UPPER, -2.2, MR_FEAST_LEVEL.UPPER, "READING ROOM"),
+    mrFeastPatrolPoint("upper-reading-door-out", 5, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING", { segmentKind: "door", door: "reading room door" }),
+    mrFeastPatrolPoint("upper-landing-east", 4.2, FLOOR.UPPER, 0, MR_FEAST_LEVEL.UPPER, "UPPER LANDING"),
+    mrFeastPatrolPoint("upper-east-balcony", 4.2, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-east-front-door-outside", 4.2, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-east-front-door", 5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE", { segmentKind: "door", door: "east front suite door" }),
+    mrFeastPatrolPoint("upper-east-front-entry", 5.8, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-east-front-inner", 7, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-east-front-center", 9.5, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE", { pause: 0.8 }),
+    mrFeastPatrolPoint("upper-east-front-return", 7, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-east-front-door-out", 5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "door", door: "east front suite door" }),
+    mrFeastPatrolPoint("upper-east-rail", 4.2, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-front-crosswalk", 0, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { pause: 1.3 }),
+    mrFeastPatrolPoint("upper-west-rail", -4.2, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-west-front-door-outside", -4.2, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-west-front-door", -5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE", { segmentKind: "door", door: "west front suite door" }),
+    mrFeastPatrolPoint("upper-west-front-entry", -5.8, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-west-front-inner", -7, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-west-front-center", -9.5, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE", { pause: 0.8 }),
+    mrFeastPatrolPoint("upper-west-front-return", -7, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE"),
+    mrFeastPatrolPoint("upper-west-front-door-out", -5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "door", door: "west front suite door" }),
+    mrFeastPatrolPoint("upper-west-balcony-return", -4.2, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-top-center", 0, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-east-top-landing", 2.48, FLOOR.UPPER, 3.75, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-east-top", 2.48, FLOOR.UPPER, 3.1, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-east-75", 2.48, 4, 2.08, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-east-50", 2.48, 3.5, 1.06, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-east-25", 2.48, 3, 0.04, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-east-foot", 2.48, 2.5, -0.98, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-mid-east", 2.48, 2.5, -1.55, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-mid-center-return", 0, 2.5, -1.55, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-lower-top-return", 0, 2.5, -0.98, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "landing" }),
+    mrFeastPatrolPoint("grand-lower-return-75", 0, 1.875, -0.035, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-return-50", 0, 1.25, 0.91, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-return-25", 0, 0.625, 1.855, MR_FEAST_LEVEL.STAIR, "GRAND STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("grand-lower-bottom-return", 0, FLOOR.MAIN, 2.8, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("main-service-return-east", 2.05, FLOOR.MAIN, 4.15, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("main-service-return-south", 2.05, FLOOR.MAIN, -4.35, MR_FEAST_LEVEL.MAIN, "GRAND STAIR HALL"),
+    mrFeastPatrolPoint("main-service-kitchen-entry", 3.2, FLOOR.MAIN, -5.6, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-service-kitchen-west", 6.2, FLOOR.MAIN, -5.8, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-service-kitchen-east", 10.8, FLOOR.MAIN, -5.8, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-service-kitchen-doorline", 12.55, FLOOR.MAIN, -5.4, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-service-door-approach", 12.55, FLOOR.MAIN, -3.85, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-service-door", 12.55, FLOOR.MAIN, -3.2, MR_FEAST_LEVEL.MAIN, "SERVICE STAIR", { segmentKind: "door", door: "basement stair door" }),
+    mrFeastPatrolPoint("service-main-top", 12.55, FLOOR.MAIN, -2.7, MR_FEAST_LEVEL.MAIN, "SERVICE STAIR"),
+    mrFeastPatrolPoint("service-down-25", 12.55, -0.95, -1.35, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-down-50", 12.55, -1.9, 0, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-down-75", 12.55, -2.85, 1.35, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-basement-bottom", 12.55, FLOOR.BASEMENT, 2.7, MR_FEAST_LEVEL.BASEMENT, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("basement-archive-stair-exit", 12.55, FLOOR.BASEMENT, 3.8, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE"),
+    mrFeastPatrolPoint("basement-archive-east-cross", 12.55, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE"),
+    mrFeastPatrolPoint("basement-archive-inner", 2.4, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE", { pause: 0.7 }),
+    mrFeastPatrolPoint("basement-archive-door", 1.3, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR", { segmentKind: "door", door: "archive door" }),
+    mrFeastPatrolPoint("basement-corridor-north", 0, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-wine-door", -1.3, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR", { segmentKind: "door", door: "wine cellar door" }),
+    mrFeastPatrolPoint("basement-wine-entry", -2.4, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR"),
+    mrFeastPatrolPoint("basement-wine-mid", -4.2, FLOOR.BASEMENT, 5.2, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR"),
+    mrFeastPatrolPoint("basement-wine-west", -12.5, FLOOR.BASEMENT, 5.2, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR"),
+    mrFeastPatrolPoint("basement-wine-north", -12.5, FLOOR.BASEMENT, 10.3, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR", { pause: 0.8 }),
+    mrFeastPatrolPoint("basement-wine-return", -4.2, FLOOR.BASEMENT, 5.2, MR_FEAST_LEVEL.BASEMENT, "WINE CELLAR"),
+    mrFeastPatrolPoint("basement-wine-door-out", -1.3, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR", { segmentKind: "door", door: "wine cellar door" }),
+    mrFeastPatrolPoint("basement-corridor-midnorth", 0, FLOOR.BASEMENT, 2.4, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-corridor-laundry", 0, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-laundry-door", -1.3, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "LAUNDRY & LINEN", { segmentKind: "door", door: "laundry door" }),
+    mrFeastPatrolPoint("basement-laundry-entry", -2.4, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "LAUNDRY & LINEN"),
+    mrFeastPatrolPoint("basement-laundry-north", -2.4, FLOOR.BASEMENT, 2.1, MR_FEAST_LEVEL.BASEMENT, "LAUNDRY & LINEN"),
+    mrFeastPatrolPoint("basement-laundry-west", -12.5, FLOOR.BASEMENT, 2.1, MR_FEAST_LEVEL.BASEMENT, "LAUNDRY & LINEN", { pause: 0.7 }),
+    mrFeastPatrolPoint("basement-laundry-return", -2.4, FLOOR.BASEMENT, 2.1, MR_FEAST_LEVEL.BASEMENT, "LAUNDRY & LINEN"),
+    mrFeastPatrolPoint("basement-laundry-door-out", -1.3, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR", { segmentKind: "door", door: "laundry door" }),
+    mrFeastPatrolPoint("basement-pantry-door", 1.3, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "PANTRY", { segmentKind: "door", door: "pantry door" }),
+    mrFeastPatrolPoint("basement-pantry-entry", 2.4, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "PANTRY"),
+    mrFeastPatrolPoint("basement-pantry-east", 9.2, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "PANTRY"),
+    mrFeastPatrolPoint("basement-pantry-north", 9.2, FLOOR.BASEMENT, 1.5, MR_FEAST_LEVEL.BASEMENT, "PANTRY", { pause: 0.7 }),
+    mrFeastPatrolPoint("basement-pantry-return", 2.4, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "PANTRY"),
+    mrFeastPatrolPoint("basement-pantry-door-out", 1.3, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR", { segmentKind: "door", door: "pantry door" }),
+    mrFeastPatrolPoint("basement-corridor-rear-arch", 0, FLOOR.BASEMENT, -3.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-rear-cross-center", 0, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-boiler-corridor", -10.2, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-boiler-door", -10.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM", { segmentKind: "door", door: "boiler room door" }),
+    mrFeastPatrolPoint("basement-boiler-entry", -10.2, FLOOR.BASEMENT, -5.8, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM"),
+    mrFeastPatrolPoint("basement-boiler-west", -12.8, FLOOR.BASEMENT, -5.8, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM"),
+    mrFeastPatrolPoint("basement-boiler-south", -13.2, FLOOR.BASEMENT, -10.3, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("basement-boiler-return", -12.8, FLOOR.BASEMENT, -5.8, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM"),
+    mrFeastPatrolPoint("basement-boiler-door-out", -10.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "boiler room door" }),
+    mrFeastPatrolPoint("basement-workshop-corridor", -2.3, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-workshop-door", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP", { segmentKind: "door", door: "workshop door" }),
+    mrFeastPatrolPoint("basement-workshop-entry", -2.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
+    mrFeastPatrolPoint("basement-workshop-east", 0.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
+    mrFeastPatrolPoint("basement-workshop-south", 0.3, FLOOR.BASEMENT, -10.5, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP", { pause: 0.8 }),
+    mrFeastPatrolPoint("basement-workshop-return", 0.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
+    mrFeastPatrolPoint("basement-workshop-door-out", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "workshop door" }),
+    mrFeastPatrolPoint("basement-cold-corridor", 4.5, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-cold-door", 4.5, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM", { segmentKind: "door", door: "cold room door" }),
+    mrFeastPatrolPoint("basement-cold-entry", 4.5, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
+    mrFeastPatrolPoint("basement-cold-west", 2.2, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
+    mrFeastPatrolPoint("basement-cold-southwest", 2.2, FLOOR.BASEMENT, -10.4, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
+    mrFeastPatrolPoint("basement-cold-southeast", 6.7, FLOOR.BASEMENT, -10.4, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("basement-cold-return", 2.2, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
+    mrFeastPatrolPoint("basement-cold-door-out", 4.5, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "cold room door" }),
+    mrFeastPatrolPoint("basement-bulk-corridor", 11.2, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-bulk-door", 11.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { segmentKind: "door", door: "bulk storage door" }),
+    mrFeastPatrolPoint("basement-bulk-front", 11.2, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { pause: 0.7 }),
+    mrFeastPatrolPoint("basement-bulk-door-out", 11.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "bulk storage door" }),
+    mrFeastPatrolPoint("basement-rear-cross-return", 0, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-corridor-return", 0, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-corridor-north-return", 0, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
+    mrFeastPatrolPoint("basement-archive-door-return", 1.3, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE", { segmentKind: "door", door: "archive door" }),
+    mrFeastPatrolPoint("basement-archive-west-return", 2.4, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE"),
+    mrFeastPatrolPoint("basement-archive-east-return", 12.55, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE"),
+    mrFeastPatrolPoint("basement-service-approach", 12.55, FLOOR.BASEMENT, 3.8, MR_FEAST_LEVEL.BASEMENT, "ARCHIVE"),
+    mrFeastPatrolPoint("service-basement-bottom-return", 12.55, FLOOR.BASEMENT, 2.7, MR_FEAST_LEVEL.BASEMENT, "SERVICE STAIR"),
+    mrFeastPatrolPoint("service-up-25", 12.55, -2.85, 1.35, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-up-50", 12.55, -1.9, 0, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-up-75", 12.55, -0.95, -1.35, MR_FEAST_LEVEL.STAIR, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("service-main-top-return", 12.55, FLOOR.MAIN, -2.7, MR_FEAST_LEVEL.MAIN, "SERVICE STAIR", { segmentKind: "stairs" }),
+    mrFeastPatrolPoint("main-service-door-return", 12.55, FLOOR.MAIN, -3.2, MR_FEAST_LEVEL.MAIN, "KITCHEN", { segmentKind: "door", door: "basement stair door" }),
+    mrFeastPatrolPoint("main-service-exit", 12.55, FLOOR.MAIN, -3.85, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-service-return", 12.55, FLOOR.MAIN, -5.4, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-east-return", 10.8, FLOOR.MAIN, -5.8, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-kitchen-west-return", 6.2, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "KITCHEN"),
+    mrFeastPatrolPoint("main-ballroom-east-return", 4.2, FLOOR.MAIN, -6, MR_FEAST_LEVEL.MAIN, "BALLROOM"),
+    mrFeastPatrolPoint("main-ballroom-north-return", 3.2, FLOOR.MAIN, -5.6, MR_FEAST_LEVEL.MAIN, "BALLROOM"),
+    mrFeastPatrolPoint("main-ballroom-east-south", 3.2, FLOOR.MAIN, -9.2, MR_FEAST_LEVEL.MAIN, "BALLROOM"),
+  ]);
+
+  const MR_FEAST_NPC = Object.freeze({
+    manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
+    assetVersion: "20260715-mr-feast-whole-home-patrol-1",
+    heightMeters: 2.01,
+    speed: 0.62,
+    turnSpeed: 4,
+    arrivalRadius: 0.06,
+    fadeSeconds: 0.24,
+    doorOpenDistance: 1.8,
+    doorWaitDistance: 0.88,
+    doorCloseDistance: 2.5,
+    waypoints: MR_FEAST_PATROL_ROUTE,
+  });
+  const MR_FEAST_ROUTE_DISTANCE_METERS = MR_FEAST_PATROL_ROUTE.reduce((total, target, index) => {
+    const source = MR_FEAST_PATROL_ROUTE[(index - 1 + MR_FEAST_PATROL_ROUTE.length) % MR_FEAST_PATROL_ROUTE.length];
+    return total + Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
+  }, 0);
+  const MR_FEAST_ROUTE_PAUSE_SECONDS = MR_FEAST_PATROL_ROUTE.reduce((total, point) => total + point.pause, 0);
   const TOILET_FLUSH_DURATION = 2.7;
   const FOOD_STORAGE_KINDS = new Set([
     "food", "refrigerator", "pantry-staples", "preserves", "dry-goods", "baking", "tinned-goods",
@@ -178,6 +465,57 @@
     center: Object.freeze({ x: -13.25, z: -0.8 }),
     hidePosition: Object.freeze({ x: -14.36, z: 0.28, yaw: -Math.PI / 2 }),
     exitPosition: Object.freeze({ x: -13.2, z: -1.58, yaw: 0 }),
+  });
+
+  const CONTESTANT_13 = Object.freeze({
+    title: "Contestant 13",
+    objectives: Object.freeze({
+      note: "Search the Library for something a previous contestant left behind.",
+      shovel: "The note points to a faceless figure among the roses.",
+      maze: "Carry the concealed shovel into the hedge maze. Look for XIII in stone.",
+      archive: "Use the brass A-3 key on the evidence cage in the basement Archive.",
+      recording: "Load Contestant 13's recovered tape into the caged recorder.",
+      relay: "Find the Workshop relay and sever the unlabeled patron feed.",
+      complete: "The patron feed is blind. Signal loss has been noticed—leave the Workshop.",
+    }),
+    transcript: "If you found the garden copy, they missed one. The brass-tagged cameras are theatre. The patrons watch through the unlabelled black bank in the Workshop relay. Sever that whole bundle and their private feed goes blind.",
+    journal: Object.freeze({
+      note: Object.freeze({
+        id: "contestant-13-note",
+        title: "A note inside the rulebook",
+        body: "The angel has no face. Follow the dead roses. I buried what they couldn't edit out. — 13",
+      }),
+      shovel: Object.freeze({
+        id: "faceless-fountain-shovel",
+        title: "The faceless fountain",
+        body: "A short groundskeeper's shovel was woven beneath the rose stems east of the faceless fountain. XIII is carved into its wet handle.",
+      }),
+      cache: Object.freeze({
+        id: "maze-cache-a3",
+        title: "The buried cache",
+        body: "Beneath a faint XIII scratched into the soil: an A-3 Archive key, Contestant 13's badge, and a sealed tape reel.",
+      }),
+      transcript: Object.freeze({
+        id: "patron-feed-transcript",
+        title: "Recovered recording",
+        body: "The public cameras preserve the recruitment show. A separate unlabeled feed carries the real broadcast to the patrons through the Workshop relay.",
+      }),
+      sabotage: Object.freeze({
+        id: "patron-feed-severed",
+        title: "Signal lost",
+        body: "The private feed is dead. The relay's warning lamp confirms that someone—or something—will come to inspect it.",
+      }),
+    }),
+    itemLabels: Object.freeze({
+      "garden-shovel": "Garden shovel",
+      "archive-key-a3": "A-3 key",
+      "contestant-13-badge": "Badge 13",
+      "contestant-13-tape": "Tape reel",
+    }),
+    world: Object.freeze({
+      shovel: Object.freeze({ x: -22.35, z: 6.70, yOffset: 0.16, scale: 0.56 }),
+      digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
+    }),
   });
 
   // Keep the raised mid-landing and both flights on one authored datum. The
@@ -312,6 +650,8 @@
     ballroomA: [0, FLOOR.MAIN, -5.8, 0],
     ballroomB: [0, FLOOR.MAIN, -10.7, Math.PI],
     ballroomPortraits: [0, FLOOR.MAIN, -8.7, 0],
+    mrFeastShowcase: [0, FLOOR.MAIN, -1.4, 0, -0.08],
+    mrFeastSideProfile: [-3.2, FLOOR.MAIN, -9.0, -Math.PI / 2, 0],
     openRearFromStair: [0, FLOOR.MAIN, -2.35, 0],
     openRearToDining: [0, FLOOR.MAIN, -6.0, Math.PI / 2],
     openRearToKitchen: [0, FLOOR.MAIN, -6.0, -Math.PI / 2],
@@ -443,6 +783,11 @@
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
+    contestant13LibraryNote: [-10.5, FLOOR.MAIN, 6.35, 0, -0.5],
+    contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, 8.15, 0, -0.75],
+    contestant13DigSite: [25, YARD_LAYOUT.groundY, -13.90, 0, -0.93],
+    contestant13ArchiveCage: [13.15, FLOOR.BASEMENT, 5.25, Math.PI / 2, -0.14],
+    contestant13WorkshopRelay: [-2.5, FLOOR.BASEMENT, -10.0, 0, -0.12],
   });
 
   const state = {
@@ -461,6 +806,23 @@
     currentInteraction: null,
     isHidden: false,
     activeHideSpot: null,
+    journalOpen: false,
+    contestant13: {
+      noteRead: false,
+      shovelTaken: false,
+      digSiteExcavated: false,
+      archiveKeyFound: false,
+      badgeFound: false,
+      tapeFound: false,
+      archiveCageUnlocked: false,
+      recordingPlayed: false,
+      relaySabotaged: false,
+      threatEscalated: false,
+      digging: false,
+      actionInProgress: null,
+      inventory: [],
+      journalEntries: [],
+    },
     lastMove: { dx: 0, dz: 0 },
     qaRoute: null,
     frameTime: 0,
@@ -568,6 +930,24 @@
   const mobileShaderPaddingLights = { spots: [], points: [] };
   const fadingLights = new Set();
   const fadingBulbs = new Set();
+  const contestant13Scene = {
+    libraryNote: null,
+    shovel: null,
+    digMound: null,
+    digMarker: null,
+    digHole: null,
+    archiveRecorderRoot: null,
+    archiveRecorderDeck: null,
+    archiveRecorderIndicator: null,
+    archiveRecorderIndicatorMaterial: null,
+    archiveCageDoor: null,
+    relayBlackCables: null,
+    relayOnlineBulb: null,
+    relayAlarmBulb: null,
+    relayAlarmMaterial: null,
+  };
+  let contestant13Quest = null;
+  let mrFeastNpc = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -1437,6 +1817,670 @@
     }
   }
 
+  class MrFeastWanderer {
+    constructor() {
+      this.root = new THREE.Group();
+      this.root.name = "mr-feast-wanderer";
+      this.root.position.set(
+        MR_FEAST_NPC.waypoints[0].x,
+        MR_FEAST_NPC.waypoints[0].y,
+        MR_FEAST_NPC.waypoints[0].z,
+      );
+      this.waypointIndex = 1;
+      this.pauseRemaining = MR_FEAST_NPC.waypoints[0].pause;
+      this.wanderingEnabled = true;
+      this.moving = false;
+      this.loadStatus = "idle";
+      this.loadingProgress = 0;
+      this.error = null;
+      this.model = null;
+      this.meshes = [];
+      this.contactShadow = null;
+      this.bonesByName = new Map();
+      this.hipsBone = null;
+      this.headFrontBone = null;
+      this.headEndBone = null;
+      this.bindHipsScale = null;
+      this.animationTrackDiagnostics = {};
+      this.qaAnimationFrozen = false;
+      this.mixer = null;
+      this.actions = {};
+      this.activeAction = null;
+      this.currentAnimation = null;
+      this.manifest = null;
+      this.modelSize = new THREE.Vector3();
+      this.skinnedMeshes = 0;
+      this.bones = 0;
+      this.distanceTravelled = 0;
+      this.completedRouteLoops = 0;
+      this.routeSegmentsTraversed = 0;
+      this.currentRouteZone = MR_FEAST_NPC.waypoints[0].zone;
+      this.currentRouteLevel = MR_FEAST_NPC.waypoints[0].level;
+      this.visitedRouteZones = new Set([this.currentRouteZone]);
+      this.visitedRouteFloors = new Set([this.currentRouteLevel]);
+      this.visitedRouteDoors = new Set();
+      this.routeDoorOpenEvents = 0;
+      this.routeDoorCache = new Map();
+      this.autoOpenedDoors = new Set();
+      this.waitingForDoor = null;
+      this.onStairs = false;
+      this.qaLastWholeHomeRun = null;
+      this.lastDt = 1 / 60;
+      this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
+      scene.add(this.root);
+      animatedObjects.push(this);
+    }
+
+    assetUrl(relativePath, manifestUrl) {
+      const url = new URL(relativePath, manifestUrl);
+      url.searchParams.set("v", MR_FEAST_NPC.assetVersion);
+      return url.href;
+    }
+
+    loadGltf(loader, url, trackProgress = false) {
+      return new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          resolve,
+          trackProgress ? (event) => {
+            if (!event.total) return;
+            this.loadingProgress = clamp(event.loaded / event.total, 0, 1);
+          } : undefined,
+          (error) => reject(new Error(error?.message || `Could not load ${url}`)),
+        );
+      });
+    }
+
+    sanitizeAnimationClip(sourceClip, semanticName) {
+      if (!sourceClip) return null;
+      const tracks = [];
+      let removedScaleTracks = 0;
+      let removedTranslationTracks = 0;
+      for (const sourceTrack of sourceClip.tracks) {
+        const splitAt = sourceTrack.name.lastIndexOf(".");
+        const targetName = splitAt >= 0 ? sourceTrack.name.slice(0, splitAt) : sourceTrack.name;
+        const propertyName = splitAt >= 0 ? sourceTrack.name.slice(splitAt + 1) : "";
+        const targetsHips = targetName === "Hips"
+          || targetName.endsWith("/Hips")
+          || targetName.endsWith("[Hips]");
+        if (propertyName === "scale") {
+          removedScaleTracks += 1;
+          continue;
+        }
+        if (propertyName === "position" && !targetsHips) {
+          removedTranslationTracks += 1;
+          continue;
+        }
+        tracks.push(sourceTrack.clone());
+      }
+      const clip = new THREE.AnimationClip(semanticName, sourceClip.duration, tracks);
+      this.animationTrackDiagnostics[semanticName] = {
+        sourceTracks: sourceClip.tracks.length,
+        runtimeTracks: tracks.length,
+        removedScaleTracks,
+        removedTranslationTracks,
+        scaleTracks: tracks.filter((track) => track.name.endsWith(".scale")).length,
+        translationTracks: tracks.filter((track) => track.name.endsWith(".position")).length,
+      };
+      return clip;
+    }
+
+    async load() {
+      if (this.loadStatus === "loading" || this.loadStatus === "ready") return;
+      this.loadStatus = "loading";
+      this.error = null;
+      document.documentElement.dataset.mrFeastNpc = "loading";
+      try {
+        if (typeof THREE.GLTFLoader !== "function") throw new Error("THREE.GLTFLoader is unavailable");
+        if (!THREE.SkeletonUtils || typeof THREE.SkeletonUtils.clone !== "function") {
+          throw new Error("THREE.SkeletonUtils.clone is unavailable");
+        }
+
+        const manifestUrl = new URL(MR_FEAST_NPC.manifestPath, SCRIPT_URL);
+        manifestUrl.searchParams.set("v", MR_FEAST_NPC.assetVersion);
+        const response = await fetch(manifestUrl.href, { cache: state.qa ? "no-store" : "default" });
+        if (!response.ok) throw new Error(`Character manifest returned HTTP ${response.status}`);
+        const manifest = await response.json();
+        if (!manifest?.model || !manifest?.animations?.idle || !manifest?.animations?.stalk) {
+          throw new Error("Character manifest is missing the base, idle, or stalk asset");
+        }
+        this.manifest = manifest;
+
+        const loader = new THREE.GLTFLoader();
+        const basePromise = this.loadGltf(loader, this.assetUrl(manifest.model, manifestUrl), true);
+        const motionEntries = Object.entries(manifest.animations);
+        const motionPromises = motionEntries.map(async ([name, spec]) => ({
+          name,
+          spec,
+          gltf: await this.loadGltf(loader, this.assetUrl(spec.file, manifestUrl)),
+        }));
+        const [base, motionResults] = await Promise.all([
+          basePromise,
+          Promise.allSettled(motionPromises),
+        ]);
+
+        const model = THREE.SkeletonUtils.clone(base.scene);
+        model.name = "mr-feast-character-model";
+        model.updateMatrixWorld(true);
+        const bounds = new THREE.Box3().setFromObject(model);
+        const initialSize = bounds.getSize(new THREE.Vector3());
+        // Runtime art direction owns the final in-world fit. The manifest also
+        // records it, but cannot silently override a later eye-line adjustment.
+        const targetHeight = MR_FEAST_NPC.heightMeters || Number(manifest.heightMeters);
+        if (!Number.isFinite(initialSize.y) || initialSize.y <= 0) throw new Error("Character has invalid bounds");
+        const fitScale = targetHeight / initialSize.y;
+        model.scale.multiplyScalar(fitScale);
+        model.updateMatrixWorld(true);
+        bounds.setFromObject(model);
+        const center = bounds.getCenter(new THREE.Vector3());
+        model.position.x -= center.x;
+        model.position.y -= bounds.min.y;
+        model.position.z -= center.z;
+        model.updateMatrixWorld(true);
+        bounds.setFromObject(model);
+        bounds.getSize(this.modelSize);
+
+        model.traverse((object) => {
+          if (object.isSkinnedMesh) this.skinnedMeshes += 1;
+          if (object.isBone) {
+            this.bones += 1;
+            this.bonesByName.set(object.name, object);
+          }
+          if (!object.isMesh) return;
+          // Shadow maps are cached in this mansion. A moving caster would
+          // leave a frozen ghost unless every animation frame rebuilt them.
+          object.castShadow = false;
+          object.receiveShadow = true;
+          object.userData.preExteriorVisibility = true;
+          object.visible = !interiorDetailsHidden;
+          this.meshes.push(object);
+          interiorDetailMeshes.push(object);
+        });
+
+        this.model = model;
+        this.root.add(model);
+        this.hipsBone = this.bonesByName.get("Hips") || null;
+        this.headFrontBone = this.bonesByName.get("headfront") || null;
+        this.headEndBone = this.bonesByName.get("head_end") || null;
+        this.bindHipsScale = this.hipsBone ? this.hipsBone.scale.clone() : null;
+        this.contactShadow = new THREE.Mesh(
+          new THREE.CircleGeometry(1, 24),
+          new THREE.MeshBasicMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0.24,
+            depthWrite: false,
+            toneMapped: false,
+          }),
+        );
+        this.contactShadow.name = "mr-feast-contact-shadow";
+        this.contactShadow.rotation.x = -Math.PI / 2;
+        this.contactShadow.position.y = 0.012;
+        this.contactShadow.scale.set(0.46, 0.31, 1);
+        this.contactShadow.castShadow = false;
+        this.contactShadow.receiveShadow = false;
+        this.contactShadow.renderOrder = 2;
+        this.contactShadow.userData.preExteriorVisibility = true;
+        this.contactShadow.visible = !interiorDetailsHidden;
+        this.root.add(this.contactShadow);
+        this.meshes.push(this.contactShadow);
+        interiorDetailMeshes.push(this.contactShadow);
+        this.mixer = new THREE.AnimationMixer(model);
+        for (const result of motionResults) {
+          if (result.status !== "fulfilled") continue;
+          const { name, spec, gltf } = result.value;
+          const clip = this.sanitizeAnimationClip(gltf.animations?.[0], name);
+          if (!clip) continue;
+          const action = this.mixer.clipAction(clip);
+          action.enabled = true;
+          action.clampWhenFinished = !spec.loop;
+          action.setLoop(spec.loop ? THREE.LoopRepeat : THREE.LoopOnce, spec.loop ? Infinity : 1);
+          action.setEffectiveTimeScale(Number(spec.playbackRate) || 1);
+          this.actions[name] = action;
+        }
+        if (!this.actions.idle || !this.actions.stalk) {
+          throw new Error("Idle or stalk animation did not load");
+        }
+
+        this.loadStatus = "ready";
+        this.loadingProgress = 1;
+        document.documentElement.dataset.mrFeastNpc = "ready";
+        this.fadeToAction("idle", 0, true);
+        console.info(
+          `[MrFeast] loaded ${this.modelSize.x.toFixed(2)} × ${this.modelSize.y.toFixed(2)} × ${this.modelSize.z.toFixed(2)}m; `
+          + `${this.skinnedMeshes} skinned mesh; ${this.bones} bones; clips ${Object.keys(this.actions).join(", ")}`,
+        );
+      } catch (error) {
+        this.loadStatus = "error";
+        this.error = String(error?.message || error);
+        this.root.visible = false;
+        document.documentElement.dataset.mrFeastNpc = "error";
+        console.error("Mr. Feast character could not be loaded", error);
+      }
+    }
+
+    fadeToAction(name, duration = MR_FEAST_NPC.fadeSeconds, force = false) {
+      const nextAction = this.actions[name] || this.actions.idle;
+      if (!nextAction) return;
+      const spec = this.manifest?.animations?.[name] || this.manifest?.animations?.idle;
+      nextAction.setEffectiveTimeScale(Number(spec?.playbackRate) || 1);
+      if (!force && this.activeAction === nextAction) return;
+      if (this.activeAction) {
+        if (duration > 0) this.activeAction.fadeOut(duration);
+        else this.activeAction.stop();
+      }
+      nextAction.reset().setEffectiveWeight(1);
+      if (duration > 0) nextAction.fadeIn(duration);
+      nextAction.play();
+      this.activeAction = nextAction;
+      this.currentAnimation = name in this.actions ? name : "idle";
+    }
+
+    routeDoor(name) {
+      if (!name) return null;
+      if (this.routeDoorCache.has(name)) return this.routeDoorCache.get(name);
+      const door = animatedObjects.find((object) => object instanceof HingedDoor && object.name === name) || null;
+      if (door) this.routeDoorCache.set(name, door);
+      return door;
+    }
+
+    setSegmentPresentation(target) {
+      this.onStairs = target?.segmentKind === "stairs";
+      if (!this.contactShadow) return;
+      this.contactShadow.userData.preExteriorVisibility = !this.onStairs;
+      this.contactShadow.visible = !this.onStairs && !interiorDetailsHidden;
+    }
+
+    prepareRouteDoor(target, distance) {
+      this.waitingForDoor = null;
+      if (!target?.door) return false;
+      const door = this.routeDoor(target.door);
+      if (!door || door.locked) return false;
+      if (distance <= MR_FEAST_NPC.doorOpenDistance && !door.open) {
+        door.setOpen(true);
+        this.autoOpenedDoors.add(door);
+        this.visitedRouteDoors.add(door.name);
+        this.routeDoorOpenEvents += 1;
+      }
+      const swingRemaining = Math.abs(door.target - door.angle);
+      if (distance <= MR_FEAST_NPC.doorWaitDistance && swingRemaining > 0.12) {
+        this.waitingForDoor = door.name;
+        return true;
+      }
+      return false;
+    }
+
+    closeClearedRouteDoors(target) {
+      for (const door of [...this.autoOpenedDoors]) {
+        if (!door.open) {
+          this.autoOpenedDoors.delete(door);
+          continue;
+        }
+        if (target?.door === door.name) continue;
+        const distance = Math.hypot(
+          this.root.position.x - door.root.position.x,
+          this.root.position.z - door.root.position.z,
+        );
+        if (distance <= MR_FEAST_NPC.doorCloseDistance || door.playerInSwingPath()) continue;
+        door.setOpen(false);
+        this.autoOpenedDoors.delete(door);
+      }
+    }
+
+    floorAtCurrentHeight() {
+      const y = this.root.position.y;
+      if (Math.abs(y - FLOOR.MAIN) < 0.08) return MR_FEAST_LEVEL.MAIN;
+      if (Math.abs(y - FLOOR.UPPER) < 0.08) return MR_FEAST_LEVEL.UPPER;
+      if (Math.abs(y - FLOOR.BASEMENT) < 0.08) return MR_FEAST_LEVEL.BASEMENT;
+      return MR_FEAST_LEVEL.STAIR;
+    }
+
+    arriveAtWaypoint(target) {
+      this.root.position.set(target.x, target.y, target.z);
+      this.currentRouteZone = target.zone;
+      this.currentRouteLevel = target.level;
+      this.visitedRouteZones.add(target.zone);
+      if (target.level !== MR_FEAST_LEVEL.STAIR) this.visitedRouteFloors.add(target.level);
+      this.routeSegmentsTraversed += 1;
+      const nextIndex = (this.waypointIndex + 1) % MR_FEAST_NPC.waypoints.length;
+      if (nextIndex === 0) this.completedRouteLoops += 1;
+      this.waypointIndex = nextIndex;
+      this.pauseRemaining = target.pause || 0;
+      this.setSegmentPresentation(MR_FEAST_NPC.waypoints[this.waypointIndex]);
+    }
+
+    faceTarget(target, snap = false) {
+      if (!target) return;
+      const horizontalDistance = Math.hypot(target.x - this.root.position.x, target.z - this.root.position.z);
+      if (horizontalDistance < 0.0001) return;
+      const desiredYaw = Math.atan2(target.x - this.root.position.x, target.z - this.root.position.z);
+      if (snap) {
+        this.root.rotation.y = desiredYaw;
+        return;
+      }
+      const yawDelta = Math.atan2(
+        Math.sin(desiredYaw - this.root.rotation.y),
+        Math.cos(desiredYaw - this.root.rotation.y),
+      );
+      const nextYaw = this.root.rotation.y + clamp(
+        yawDelta,
+        -MR_FEAST_NPC.turnSpeed * this.lastDt,
+        MR_FEAST_NPC.turnSpeed * this.lastDt,
+      );
+      // Keep the Euler bounded so an hours-long looping playtest cannot lose
+      // turning precision after accumulating many complete patrol rotations.
+      this.root.rotation.y = Math.atan2(Math.sin(nextYaw), Math.cos(nextYaw));
+    }
+
+    update(dt) {
+      if (this.loadStatus !== "ready") return;
+      this.lastDt = Math.max(0, Number(dt) || 0);
+      this.moving = false;
+      if (state.qa && this.qaAnimationFrozen) return;
+      if (!state.started || !this.wanderingEnabled) {
+        this.fadeToAction("idle");
+        this.mixer.update(this.lastDt);
+        return;
+      }
+
+      if (this.pauseRemaining > 0) {
+        this.pauseRemaining = Math.max(0, this.pauseRemaining - this.lastDt);
+        this.fadeToAction("idle");
+        this.closeClearedRouteDoors(MR_FEAST_NPC.waypoints[this.waypointIndex]);
+        this.mixer.update(this.lastDt);
+        return;
+      }
+
+      const target = MR_FEAST_NPC.waypoints[this.waypointIndex];
+      const dx = target.x - this.root.position.x;
+      const dy = target.y - this.root.position.y;
+      const dz = target.z - this.root.position.z;
+      const horizontalDistance = Math.hypot(dx, dz);
+      const distance = Math.hypot(dx, dy, dz);
+      this.setSegmentPresentation(target);
+      if (distance <= MR_FEAST_NPC.arrivalRadius) {
+        this.arriveAtWaypoint(target);
+        if (this.pauseRemaining > 0) this.fadeToAction("idle");
+        else this.fadeToAction("stalk");
+        this.closeClearedRouteDoors(MR_FEAST_NPC.waypoints[this.waypointIndex]);
+        this.mixer.update(this.lastDt);
+        return;
+      }
+
+      this.faceTarget(target);
+      const facingAlignment = horizontalDistance > 0.0001
+        ? (
+          Math.sin(this.root.rotation.y) * dx
+          + Math.cos(this.root.rotation.y) * dz
+        ) / horizontalDistance
+        : 1;
+      const waitingForDoor = this.prepareRouteDoor(target, distance);
+      if (waitingForDoor || facingAlignment < 0.92) {
+        // Pause translation for a fraction of a second at sharp corners so
+        // the character pivots deliberately instead of skating sideways.
+        this.fadeToAction("idle");
+        this.mixer.update(this.lastDt);
+        return;
+      }
+      const step = Math.min(distance, MR_FEAST_NPC.speed * this.lastDt);
+      this.root.position.x += dx / distance * step;
+      this.root.position.y += dy / distance * step;
+      this.root.position.z += dz / distance * step;
+      this.distanceTravelled += step;
+      this.moving = step > 0;
+      this.closeClearedRouteDoors(target);
+      this.fadeToAction("stalk");
+      this.mixer.update(this.lastDt);
+    }
+
+    resetForQA() {
+      if (!state.qa) return this.getDiagnostics();
+      const start = MR_FEAST_NPC.waypoints[0];
+      for (const door of this.autoOpenedDoors) door.setOpen(false);
+      this.autoOpenedDoors.clear();
+      this.root.position.set(start.x, start.y, start.z);
+      this.waypointIndex = 1;
+      this.pauseRemaining = 0;
+      this.distanceTravelled = 0;
+      this.completedRouteLoops = 0;
+      this.routeSegmentsTraversed = 0;
+      this.currentRouteZone = start.zone;
+      this.currentRouteLevel = start.level;
+      this.visitedRouteZones = new Set([start.zone]);
+      this.visitedRouteFloors = new Set([start.level]);
+      this.visitedRouteDoors = new Set();
+      this.routeDoorOpenEvents = 0;
+      this.waitingForDoor = null;
+      this.onStairs = false;
+      this.qaLastWholeHomeRun = null;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      this.moving = this.loadStatus === "ready";
+      this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
+      this.setSegmentPresentation(MR_FEAST_NPC.waypoints[this.waypointIndex]);
+      if (this.mixer) this.mixer.setTime(0);
+      if (this.loadStatus === "ready") this.fadeToAction("stalk", 0, true);
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    setPoseForQA(options = {}) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      const actionName = options.action in this.actions ? options.action : "idle";
+      const action = this.actions[actionName];
+      const duration = Math.max(0.0001, action.getClip().duration || 0.0001);
+      const requestedTime = Number(options.time) || 0;
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      this.root.position.set(
+        Number.isFinite(Number(options.x)) ? Number(options.x) : 0,
+        Number.isFinite(Number(options.y)) ? Number(options.y) : FLOOR.MAIN,
+        Number.isFinite(Number(options.z)) ? Number(options.z) : -9,
+      );
+      this.root.rotation.y = Number.isFinite(Number(options.yaw)) ? Number(options.yaw) : 0;
+      this.mixer.stopAllAction();
+      this.activeAction = null;
+      this.currentAnimation = null;
+      this.fadeToAction(actionName, 0, true);
+      this.activeAction.time = ((requestedTime % duration) + duration) % duration;
+      this.mixer.update(0);
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    transitionForQA(actionName, duration = MR_FEAST_NPC.fadeSeconds) {
+      if (!state.qa || this.loadStatus !== "ready" || !(actionName in this.actions)) return this.getDiagnostics();
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      this.fadeToAction(actionName, Math.max(0, Number(duration) || 0));
+      return this.getDiagnostics();
+    }
+
+    advanceAnimationForQA(seconds) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      this.mixer.update(Math.max(0, Number(seconds) || 0));
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    setRouteSegmentForQA(targetId, progress = 0.5, animationTime = 0.258) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      const targetIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === targetId);
+      if (targetIndex < 0) return { ...this.getDiagnostics(), qaError: `Unknown route target ${targetId}` };
+      const target = MR_FEAST_NPC.waypoints[targetIndex];
+      const source = MR_FEAST_NPC.waypoints[(targetIndex - 1 + MR_FEAST_NPC.waypoints.length) % MR_FEAST_NPC.waypoints.length];
+      const amount = clamp(Number(progress) || 0, 0, 1);
+      const x = THREE.MathUtils.lerp(source.x, target.x, amount);
+      const y = THREE.MathUtils.lerp(source.y, target.y, amount);
+      const z = THREE.MathUtils.lerp(source.z, target.z, amount);
+      const yaw = Math.atan2(target.x - source.x, target.z - source.z);
+      this.setPoseForQA({ action: "stalk", time: animationTime, x, y, z, yaw });
+      this.waypointIndex = targetIndex;
+      this.currentRouteZone = amount >= 1 ? target.zone : source.zone;
+      this.currentRouteLevel = amount >= 1 ? target.level : source.level;
+      this.setSegmentPresentation(target);
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    runWholeHomeRouteForQA(maxSeconds = 1800) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      this.resetForQA();
+      state.started = true;
+      this.pauseRemaining = 0;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(maxSeconds) || 1800, 1, 2400);
+      let simulatedSeconds = 0;
+      while (this.completedRouteLoops < 1 && simulatedSeconds < limit) {
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor) object.update(fixedStep);
+        }
+        this.update(fixedStep);
+        simulatedSeconds += fixedStep;
+      }
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      this.root.updateMatrixWorld(true);
+      this.qaLastWholeHomeRun = {
+        completed: this.completedRouteLoops >= 1,
+        simulatedSeconds: Number(simulatedSeconds.toFixed(2)),
+        loops: this.completedRouteLoops,
+        floors: [...this.visitedRouteFloors],
+        zones: [...this.visitedRouteZones],
+        segments: this.routeSegmentsTraversed,
+        doors: [...this.visitedRouteDoors],
+        doorOpenEvents: this.routeDoorOpenEvents,
+      };
+      return this.getDiagnostics();
+    }
+
+    getLiveBoneMetrics() {
+      if (!this.model) return null;
+      this.root.updateMatrixWorld(true);
+      const rootPosition = this.root.getWorldPosition(new THREE.Vector3());
+      const positionOf = (bone) => bone ? bone.getWorldPosition(new THREE.Vector3()) : null;
+      const eyePosition = positionOf(this.headFrontBone);
+      const headTopPosition = positionOf(this.headEndBone);
+      const leftUpLegPosition = positionOf(this.bonesByName.get("LeftUpLeg"));
+      const leftLegPosition = positionOf(this.bonesByName.get("LeftLeg"));
+      const hipsWorldScale = this.hipsBone ? this.hipsBone.getWorldScale(new THREE.Vector3()) : null;
+      return {
+        cameraY: Number(camera.position.y.toFixed(4)),
+        eyeHeight: eyePosition ? Number((eyePosition.y - rootPosition.y).toFixed(4)) : null,
+        eyeWorldY: eyePosition ? Number(eyePosition.y.toFixed(4)) : null,
+        eyeLineError: eyePosition ? Number(Math.abs(camera.position.y - eyePosition.y).toFixed(4)) : null,
+        headTopHeight: headTopPosition ? Number((headTopPosition.y - rootPosition.y).toFixed(4)) : null,
+        hipsScale: this.hipsBone ? {
+          x: Number(this.hipsBone.scale.x.toFixed(6)),
+          y: Number(this.hipsBone.scale.y.toFixed(6)),
+          z: Number(this.hipsBone.scale.z.toFixed(6)),
+        } : null,
+        hipsWorldScale: hipsWorldScale ? {
+          x: Number(hipsWorldScale.x.toFixed(6)),
+          y: Number(hipsWorldScale.y.toFixed(6)),
+          z: Number(hipsWorldScale.z.toFixed(6)),
+        } : null,
+        leftThighLength: leftUpLegPosition && leftLegPosition
+          ? Number(leftUpLegPosition.distanceTo(leftLegPosition).toFixed(5))
+          : null,
+      };
+    }
+
+    getDiagnostics() {
+      const liveBones = this.getLiveBoneMetrics();
+      const target = MR_FEAST_NPC.waypoints[this.waypointIndex] || null;
+      const targetDx = target ? target.x - this.root.position.x : 0;
+      const targetDy = target ? target.y - this.root.position.y : 0;
+      const targetDz = target ? target.z - this.root.position.z : 0;
+      const targetHorizontalDistance = Math.hypot(targetDx, targetDz);
+      const targetDistance = Math.hypot(targetDx, targetDy, targetDz);
+      const facingDot = targetHorizontalDistance > 0.0001
+        ? (Math.sin(this.root.rotation.y) * targetDx + Math.cos(this.root.rotation.y) * targetDz) / targetHorizontalDistance
+        : 1;
+      const status = this.loadStatus === "ready"
+        ? (this.waitingForDoor ? "waiting-for-door" : this.moving ? "wandering" : "idle")
+        : this.loadStatus;
+      const routeFloors = [...new Set(MR_FEAST_NPC.waypoints.map((point) => point.level).filter((level) => level !== MR_FEAST_LEVEL.STAIR))];
+      const routeZones = [...new Set(MR_FEAST_NPC.waypoints.map((point) => point.zone))];
+      return {
+        status,
+        loaded: this.loadStatus === "ready",
+        loadStatus: this.loadStatus,
+        loadingProgress: Number(this.loadingProgress.toFixed(3)),
+        modelVisible: Boolean(this.model && this.root.visible && this.meshes.some((mesh) => mesh.visible)),
+        error: this.error,
+        position: {
+          x: Number(this.root.position.x.toFixed(3)),
+          y: Number(this.root.position.y.toFixed(3)),
+          z: Number(this.root.position.z.toFixed(3)),
+        },
+        target: target ? {
+          id: target.id,
+          x: target.x,
+          y: target.y,
+          z: target.z,
+          level: target.level,
+          zone: target.zone,
+          segmentKind: target.segmentKind,
+          door: target.door,
+          distance: Number(targetDistance.toFixed(3)),
+        } : null,
+        yaw: Number(this.root.rotation.y.toFixed(3)),
+        facingDot: Number(facingDot.toFixed(3)),
+        waypointIndex: this.waypointIndex,
+        waypointCount: MR_FEAST_NPC.waypoints.length,
+        currentFloor: this.floorAtCurrentHeight(),
+        currentRoom: this.currentRouteZone,
+        routeZone: target?.zone || this.currentRouteZone,
+        routeLevel: target?.level || this.currentRouteLevel,
+        onStairs: this.onStairs,
+        waitingForDoor: this.waitingForDoor,
+        autoOpenedDoors: [...this.autoOpenedDoors].map((door) => door.name),
+        completedRouteLoops: this.completedRouteLoops,
+        routeSegmentsTraversed: this.routeSegmentsTraversed,
+        visitedRouteFloors: [...this.visitedRouteFloors],
+        visitedRouteZones: [...this.visitedRouteZones],
+        visitedRouteDoors: [...this.visitedRouteDoors],
+        routeDoorOpenEvents: this.routeDoorOpenEvents,
+        routeSummary: {
+          distanceMeters: Number(MR_FEAST_ROUTE_DISTANCE_METERS.toFixed(2)),
+          estimatedSeconds: Number((MR_FEAST_ROUTE_DISTANCE_METERS / MR_FEAST_NPC.speed + MR_FEAST_ROUTE_PAUSE_SECONDS).toFixed(1)),
+          floors: routeFloors,
+          zones: routeZones,
+          doors: new Set(MR_FEAST_NPC.waypoints.map((point) => point.door).filter(Boolean)).size,
+        },
+        moving: this.moving,
+        distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
+        currentAnimation: this.currentAnimation,
+        mixerTime: Number((this.mixer?.time || 0).toFixed(3)),
+        clipsLoaded: Object.keys(this.actions),
+        clipDurations: Object.fromEntries(
+          Object.entries(this.actions).map(([name, action]) => [name, Number(action.getClip().duration.toFixed(3))]),
+        ),
+        animationTracks: this.animationTrackDiagnostics,
+        skinnedMeshes: this.skinnedMeshes,
+        bones: this.bones,
+        modelHeight: Number(this.modelSize.y.toFixed(3)),
+        modelScale: this.model ? Number(this.model.scale.x.toFixed(6)) : null,
+        bindHipsScale: this.bindHipsScale ? {
+          x: Number(this.bindHipsScale.x.toFixed(6)),
+          y: Number(this.bindHipsScale.y.toFixed(6)),
+          z: Number(this.bindHipsScale.z.toFixed(6)),
+        } : null,
+        liveBones,
+        qaAnimationFrozen: this.qaAnimationFrozen,
+        qaLastWholeHomeRun: this.qaLastWholeHomeRun,
+        contactShadowVisible: Boolean(this.contactShadow?.visible),
+        castShadowMeshes: this.meshes.filter((mesh) => mesh.castShadow).length,
+      };
+    }
+  }
+
   window.MrFeastFresh = window.MrFeastFresh || {};
   window.MrFeastFresh.state = state;
 
@@ -1545,6 +2589,13 @@
     mesh.userData.interaction = interaction;
     interactableMeshes.push(mesh);
     return mesh;
+  }
+
+  function removeInteractionTarget(mesh) {
+    if (!mesh) return;
+    const index = interactableMeshes.indexOf(mesh);
+    if (index >= 0) interactableMeshes.splice(index, 1);
+    if (mesh.userData) delete mesh.userData.interaction;
   }
 
   class HingedDoor {
@@ -1976,6 +3027,379 @@
       state.currentInteraction = null;
       updateLocation();
       updateInteractionPrompt();
+    }
+  }
+
+  class ContestantThirteenQuest {
+    constructor() {
+      this.story = state.contestant13;
+      this.interactions = new Map();
+      this.discoveryTimer = null;
+      this.actionTimer = null;
+      this.journalReturnFocus = null;
+    }
+
+    registerInteraction(id, targets, getLabel, activate) {
+      const interaction = { type: "story", id, getLabel, activate };
+      this.interactions.set(id, interaction);
+      for (const target of targets.filter(Boolean)) addInteractionTarget(target, interaction);
+      return interaction;
+    }
+
+    unregisterTree(root) {
+      if (!root) return;
+      root.traverse((object) => removeInteractionTarget(object));
+    }
+
+    hasItem(id) {
+      return this.story.inventory.includes(id);
+    }
+
+    addItem(id) {
+      if (this.hasItem(id)) return false;
+      this.story.inventory.push(id);
+      return true;
+    }
+
+    addJournalEntry(entry) {
+      if (!entry || this.story.journalEntries.some((candidate) => candidate.id === entry.id)) return false;
+      this.story.journalEntries.push({ id: entry.id, title: entry.title, body: entry.body });
+      return true;
+    }
+
+    getPhase() {
+      if (this.story.relaySabotaged) return "complete";
+      if (!this.story.noteRead) return "find-note";
+      if (this.story.recordingPlayed) return "sabotage-relay";
+      if (this.story.archiveCageUnlocked) return "play-recording";
+      if (this.story.archiveKeyFound) return "unlock-archive";
+      if (this.story.shovelTaken) return "dig-maze";
+      return "find-shovel";
+    }
+
+    getObjective() {
+      const phase = this.getPhase();
+      if (phase === "complete") return CONTESTANT_13.objectives.complete;
+      if (phase === "sabotage-relay") return CONTESTANT_13.objectives.relay;
+      if (phase === "play-recording") return CONTESTANT_13.objectives.recording;
+      if (phase === "unlock-archive") return CONTESTANT_13.objectives.archive;
+      if (phase === "dig-maze") return CONTESTANT_13.objectives.maze;
+      if (phase === "find-shovel") return CONTESTANT_13.objectives.shovel;
+      return CONTESTANT_13.objectives.note;
+    }
+
+    updateUI() {
+      if (dom.caseFile) dom.caseFile.hidden = !state.started;
+      if (dom.objective) dom.objective.textContent = this.getObjective();
+      if (dom.storyProgress) {
+        const completed = [
+          this.story.noteRead,
+          this.story.shovelTaken,
+          this.story.digSiteExcavated,
+          this.story.archiveCageUnlocked,
+          this.story.recordingPlayed,
+          this.story.relaySabotaged,
+        ].filter(Boolean).length;
+        dom.storyProgress.textContent = `Trail ${completed}/6`;
+      }
+      if (dom.inventory) {
+        dom.inventory.replaceChildren();
+        if (!this.story.inventory.length) {
+          const empty = document.createElement("span");
+          empty.className = "mansion-inventory__empty";
+          empty.textContent = "Nothing carried";
+          dom.inventory.appendChild(empty);
+        } else {
+          for (const id of this.story.inventory) {
+            const item = document.createElement("span");
+            item.className = "mansion-inventory__item";
+            item.dataset.item = id;
+            item.textContent = CONTESTANT_13.itemLabels[id] || id;
+            dom.inventory.appendChild(item);
+          }
+        }
+      }
+      if (dom.journalEntries) {
+        dom.journalEntries.replaceChildren();
+        if (!this.story.journalEntries.length) {
+          const empty = document.createElement("li");
+          empty.className = "mansion-journal__empty";
+          empty.textContent = "No entries yet. Search the mansion.";
+          dom.journalEntries.appendChild(empty);
+        } else {
+          for (const entry of this.story.journalEntries) {
+            const item = document.createElement("li");
+            item.className = "mansion-journal__entry";
+            item.dataset.entry = entry.id;
+            const title = document.createElement("strong");
+            title.textContent = entry.title;
+            const body = document.createElement("span");
+            body.textContent = entry.body;
+            item.append(title, body);
+            dom.journalEntries.appendChild(item);
+          }
+        }
+      }
+      if (dom.journalButton) dom.journalButton.setAttribute("aria-expanded", String(state.journalOpen));
+    }
+
+    showDiscovery(title, body, durationMs = 7600) {
+      if (!dom.discovery) return;
+      clearTimeout(this.discoveryTimer);
+      if (dom.discoveryTitle) dom.discoveryTitle.textContent = title;
+      if (dom.discoveryBody) dom.discoveryBody.textContent = body;
+      dom.discovery.hidden = false;
+      this.discoveryTimer = setTimeout(() => {
+        if (dom.discovery) dom.discovery.hidden = true;
+      }, durationMs);
+    }
+
+    setJournalOpen(open) {
+      const nextOpen = Boolean(open);
+      if (nextOpen === state.journalOpen) return;
+      if (nextOpen) this.journalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.journalButton;
+      state.journalOpen = nextOpen;
+      input.forward = input.back = input.left = input.right = false;
+      if (state.journalOpen && document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      if (dom.journal) dom.journal.hidden = !state.journalOpen;
+      if (dom.stage && dom.journal) {
+        for (const child of dom.stage.children) {
+          if (child !== dom.journal) child.inert = state.journalOpen;
+        }
+      }
+      this.updateUI();
+      if (state.journalOpen) {
+        requestAnimationFrame(() => dom.journalClose?.focus({ preventScroll: true }));
+      } else {
+        const returnTarget = this.journalReturnFocus && this.journalReturnFocus.isConnected ? this.journalReturnFocus : dom.canvas;
+        this.journalReturnFocus = null;
+        returnTarget?.focus({ preventScroll: true });
+      }
+    }
+
+    toggleJournal() {
+      this.setJournalOpen(!state.journalOpen);
+    }
+
+    runTimedAction(id, label, durationMs, complete) {
+      if (this.story.actionInProgress) return false;
+      this.story.actionInProgress = { id, label, durationMs, startedAt: performance.now() };
+      input.forward = input.back = input.left = input.right = false;
+      if (dom.action) {
+        dom.action.hidden = false;
+        dom.action.classList.remove("is-running");
+        dom.action.style.setProperty("--story-action-duration", `${durationMs}ms`);
+        if (dom.actionText) dom.actionText.textContent = label;
+        if (dom.actionFill) {
+          dom.actionFill.style.animation = "none";
+          void dom.actionFill.offsetWidth;
+          dom.actionFill.style.animation = "";
+        }
+        dom.action.classList.add("is-running");
+      }
+      clearTimeout(this.actionTimer);
+      this.actionTimer = setTimeout(() => {
+        if (!this.story.actionInProgress || this.story.actionInProgress.id !== id) return;
+        this.story.actionInProgress = null;
+        if (dom.action) {
+          dom.action.classList.remove("is-running");
+          dom.action.hidden = true;
+        }
+        complete();
+        this.updateUI();
+        updateInteractionPrompt();
+      }, durationMs);
+      return true;
+    }
+
+    readNote() {
+      if (this.story.noteRead) {
+        this.showDiscovery(CONTESTANT_13.journal.note.title, CONTESTANT_13.journal.note.body);
+        return;
+      }
+      this.story.noteRead = true;
+      this.addJournalEntry(CONTESTANT_13.journal.note);
+      this.showDiscovery("Message from Contestant 13", CONTESTANT_13.journal.note.body);
+      if (audioSystem) audioSystem.ping(392, 0.42, 0.06, "sine");
+      this.updateUI();
+    }
+
+    takeShovel() {
+      if (this.story.shovelTaken) return;
+      this.story.shovelTaken = true;
+      this.addItem("garden-shovel");
+      this.addJournalEntry(CONTESTANT_13.journal.shovel);
+      if (contestant13Scene.shovel) {
+        this.unregisterTree(contestant13Scene.shovel);
+        contestant13Scene.shovel.visible = false;
+      }
+      this.showDiscovery("Concealed garden shovel", "XIII is cut into the handle. The maze is the only ground soft enough to hide something quickly.");
+      if (audioSystem) audioSystem.ping(145, 0.25, 0.08, "triangle");
+      this.updateUI();
+    }
+
+    digSite() {
+      if (this.story.digSiteExcavated || this.story.digging) {
+        if (this.story.digSiteExcavated) this.showDiscovery(CONTESTANT_13.journal.cache.title, CONTESTANT_13.journal.cache.body);
+        return;
+      }
+      if (!this.story.noteRead) {
+        this.showDiscovery("XIII in stone", "The mark is deliberate, but without Contestant 13's message you do not know what was buried here. Search the Library.");
+        return;
+      }
+      if (!this.hasItem("garden-shovel")) {
+        this.showDiscovery("Disturbed earth", "The soil beneath XIII has been packed back by hand. You need something strong enough to dig.");
+        return;
+      }
+      this.story.digging = true;
+      const started = this.runTimedAction("contestant-13-dig", "Digging beneath the faint mark", 1800, () => {
+        this.story.digging = false;
+        this.story.digSiteExcavated = true;
+        this.story.archiveKeyFound = true;
+        this.story.badgeFound = true;
+        this.story.tapeFound = true;
+        this.addItem("archive-key-a3");
+        this.addItem("contestant-13-badge");
+        this.addItem("contestant-13-tape");
+        this.addJournalEntry(CONTESTANT_13.journal.cache);
+        if (contestant13Scene.digMound) contestant13Scene.digMound.visible = false;
+        if (contestant13Scene.digMarker) contestant13Scene.digMarker.visible = false;
+        if (contestant13Scene.digHole) contestant13Scene.digHole.visible = true;
+        this.showDiscovery("Buried cache A-3", "A brass Archive key, Badge 13, and a wax-sealed tape reel emerge from the rain-black soil.");
+        if (audioSystem) {
+          audioSystem.ping(118, 0.34, 0.08, "triangle");
+          audioSystem.ping(236, 0.4, 0.05, "sine");
+        }
+      });
+      if (!started) this.story.digging = false;
+    }
+
+    unlockArchiveCage() {
+      if (this.story.archiveCageUnlocked) return;
+      if (!this.hasItem("archive-key-a3")) {
+        this.showDiscovery("Evidence cage A-3", "The brass lock is stamped with the same A-3 mark as an Archive key.");
+        return;
+      }
+      this.story.archiveCageUnlocked = true;
+      if (contestant13Scene.archiveCageDoor) contestant13Scene.archiveCageDoor.rotation.y = -1.25;
+      this.showDiscovery("Evidence cage unlocked", "The buried reel fits the recorder inside. A typed routing card mentions two separate camera feeds.");
+      if (audioSystem) audioSystem.ping(310, 0.24, 0.07, "square");
+      this.updateUI();
+    }
+
+    playRecording() {
+      if (!this.story.archiveCageUnlocked || !this.story.tapeFound) {
+        this.showDiscovery("Silent recorder", "The cage is locked and its tape spindle is empty.");
+        return;
+      }
+      if (!this.story.recordingPlayed) {
+        this.story.recordingPlayed = true;
+        this.addJournalEntry(CONTESTANT_13.journal.transcript);
+      }
+      if (contestant13Scene.archiveRecorderIndicator && contestant13Scene.archiveRecorderIndicatorMaterial) {
+        contestant13Scene.archiveRecorderIndicator.userData.active = true;
+        contestant13Scene.archiveRecorderIndicatorMaterial.color.setHex(0xd2ad5c);
+        contestant13Scene.archiveRecorderIndicatorMaterial.emissive.setHex(0xff9d32);
+        contestant13Scene.archiveRecorderIndicatorMaterial.emissiveIntensity = 2.2;
+      }
+      this.showDiscovery("Contestant 13 — recovered recording", `“${CONTESTANT_13.transcript}”`, 13000);
+      if (audioSystem) {
+        audioSystem.ping(92, 0.8, 0.035, "sawtooth");
+        audioSystem.ping(184, 0.5, 0.025, "sine");
+      }
+      this.updateUI();
+    }
+
+    sabotageRelay() {
+      if (this.story.relaySabotaged) {
+        this.showDiscovery("Private feed offline", "The unlabeled cable bank is dead. A red warning lamp is still calling attention to the loss.");
+        return;
+      }
+      if (!this.story.recordingPlayed) {
+        this.showDiscovery("Two camera networks", "Brass tags identify the public feed. The second cable bank is unlabelled. Guessing here could wake every alarm in the house.");
+        return;
+      }
+      this.runTimedAction("contestant-13-relay", "Severing the patron camera feed", 2400, () => {
+        this.story.relaySabotaged = true;
+        this.story.threatEscalated = true;
+        if (contestant13Scene.relayBlackCables) {
+          contestant13Scene.relayBlackCables.visible = false;
+          contestant13Scene.relayBlackCables.traverse((object) => {
+            if (object.isMesh) object.userData.preExteriorVisibility = false;
+          });
+        }
+        if (contestant13Scene.relayOnlineBulb) {
+          contestant13Scene.relayOnlineBulb.visible = false;
+          contestant13Scene.relayOnlineBulb.userData.preExteriorVisibility = false;
+        }
+        if (contestant13Scene.relayAlarmBulb) {
+          contestant13Scene.relayAlarmBulb.visible = true;
+          contestant13Scene.relayAlarmBulb.userData.preExteriorVisibility = true;
+        }
+        this.addJournalEntry(CONTESTANT_13.journal.sabotage);
+        this.showDiscovery("Patron signal lost", "The hidden feed collapses into static. A warning lamp begins to pulse: the house knows the patrons are blind.", 11000);
+        if (audioSystem) {
+          audioSystem.ping(74, 0.7, 0.09, "sawtooth");
+          audioSystem.ping(520, 0.18, 0.08, "square");
+        }
+      });
+    }
+
+    getInventoryDiagnostics() {
+      return {
+        items: this.story.inventory.slice(),
+        bulkyItem: this.hasItem("garden-shovel") ? "garden-shovel" : null,
+      };
+    }
+
+    getJournalDiagnostics() {
+      return {
+        entries: this.story.journalEntries.map((entry) => entry.id),
+        currentObjective: this.getObjective(),
+        open: state.journalOpen,
+      };
+    }
+
+    getDiagnostics() {
+      return {
+        noteRead: this.story.noteRead,
+        shovelTaken: this.story.shovelTaken,
+        digSiteExcavated: this.story.digSiteExcavated,
+        archiveKeyFound: this.story.archiveKeyFound,
+        badgeFound: this.story.badgeFound,
+        tapeFound: this.story.tapeFound,
+        archiveCageUnlocked: this.story.archiveCageUnlocked,
+        recordingPlayed: this.story.recordingPlayed,
+        relaySabotaged: this.story.relaySabotaged,
+        threatEscalated: this.story.threatEscalated,
+        actionInProgress: this.story.actionInProgress ? { ...this.story.actionInProgress } : null,
+        phase: this.getPhase(),
+        completed: this.story.relaySabotaged,
+        world: {
+          shovelVisible: Boolean(contestant13Scene.shovel && contestant13Scene.shovel.visible),
+          shovelScale: contestant13Scene.shovel?.scale.x ?? CONTESTANT_13.world.shovel.scale,
+          shovelPosition: {
+            x: contestant13Scene.shovel?.position.x ?? CONTESTANT_13.world.shovel.x,
+            z: contestant13Scene.shovel?.position.z ?? CONTESTANT_13.world.shovel.z,
+          },
+          digSiteOpen: this.story.digSiteExcavated,
+          digSiteCell: {
+            row: CONTESTANT_13.world.digSite.row,
+            col: CONTESTANT_13.world.digSite.col,
+            pathStepsFromRear: CONTESTANT_13.world.digSite.pathStepsFromRear,
+            pathStepsFromNorth: CONTESTANT_13.world.digSite.pathStepsFromNorth,
+          },
+          digMoundVisible: Boolean(contestant13Scene.digMound?.visible),
+          digMarkerVisible: Boolean(contestant13Scene.digMarker?.visible),
+          digHoleVisible: Boolean(contestant13Scene.digHole?.visible),
+          archiveCageOpen: state.contestant13.archiveCageUnlocked,
+          recorderIndicatorActive: Boolean(contestant13Scene.archiveRecorderIndicator?.userData.active),
+          relayOnline: !state.contestant13.relaySabotaged,
+          relayOnlineBulbVisible: Boolean(contestant13Scene.relayOnlineBulb?.visible),
+          relayAlarmBulbVisible: Boolean(contestant13Scene.relayAlarmBulb?.visible),
+          relayAlarmPulsing: Boolean(state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial),
+        },
+      };
     }
   }
 
@@ -4030,7 +5454,14 @@
       sphere({ name: "archive-curio-specimen-jar-object", radius: 0.075, y: 0.2, material: M.porcelain, parent: curio, cast: false });
       cylinder({ name: "archive-curio-specimen-jar-lid", radius: 0.15, height: 0.055, segments: 18, y: 0.425, material: M.brass, parent: curio, cast: false });
     } else if (kind === "reel-to-reel") {
-      box({ name: "archive-curio-reel-to-reel-deck", w: 0.48, h: 0.34, d: 0.12, y: 0.19, material: M.blackWood, parent: curio, cast: false });
+      const deck = box({ name: "archive-curio-reel-to-reel-deck", w: 0.48, h: 0.34, d: 0.12, y: 0.19, material: M.blackWood, parent: curio, cast: false });
+      const indicatorMaterial = new THREE.MeshStandardMaterial({ color: 0x352d20, emissive: 0x160c04, emissiveIntensity: 0.15, metalness: 0.3, roughness: 0.46 });
+      const indicator = sphere({ name: "archive-curio-reel-to-reel-played-indicator", radius: 0.035, x: 0.19, y: 0.09, z: 0.075, material: indicatorMaterial, parent: curio, cast: false });
+      indicator.userData.active = false;
+      contestant13Scene.archiveRecorderRoot = curio;
+      contestant13Scene.archiveRecorderDeck = deck;
+      contestant13Scene.archiveRecorderIndicator = indicator;
+      contestant13Scene.archiveRecorderIndicatorMaterial = indicatorMaterial;
       for (const x of [-0.135, 0.135]) {
         cylinder({ name: "archive-curio-reel-to-reel-spool", radius: 0.11, height: 0.03, segments: 20, x, y: 0.23, z: 0.075, rotationX: Math.PI / 2, material: M.brass, parent: curio, cast: false });
         cylinder({ name: "archive-curio-reel-to-reel-hub", radius: 0.035, height: 0.038, segments: 14, x, y: 0.23, z: 0.094, rotationX: Math.PI / 2, material: M.iron, parent: curio, cast: false });
@@ -4897,10 +6328,10 @@
     buildWallRun({ axis: "x", fixed: 3.2, start: 5, end: 15, floorY: FLOOR.MAIN, name: "main-music-painting-divider", openings: [{ kind: "door", center: 8.2, width: 1.38, label: "music painting door", direction: -1 }] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.MAIN, name: "main-bath-gallery", openings: [
       { kind: "door", center: -13.2, width: 1.05, label: "coat closet door", direction: 1, hingeSide: -1 },
-      { kind: "door", center: -9.7, width: 1.15, label: "bathroom gallery door", direction: -1 },
+      { kind: "door", center: -9.7, width: 1.35, label: "bathroom gallery door", direction: -1 },
     ] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -5, end: 5, floorY: FLOOR.MAIN, name: "main-stair-gallery", openings: [{ kind: "arch", center: 0, width: 5.6, height: 3.1 }] });
-    buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 11.3, floorY: FLOOR.MAIN, name: "main-painting-gallery", openings: [{ kind: "door", center: 8.2, width: 1.15, label: "painting gallery door", direction: 1 }] });
+    buildWallRun({ axis: "x", fixed: -3.2, start: 5, end: 11.3, floorY: FLOOR.MAIN, name: "main-painting-gallery", openings: [{ kind: "door", center: 8.2, width: 1.35, label: "painting gallery door", direction: 1 }] });
     // Close the kitchen off from the basement stair while keeping the landing
     // safe: the leaf swings south into the kitchen, never over the flight.
     buildWallRun({ axis: "x", fixed: -3.2, start: 11.3, end: 15, floorY: FLOOR.MAIN, name: "main-kitchen-service-stair-wall", openings: [
@@ -4913,15 +6344,15 @@
 
   function buildUpperPartitions() {
     buildWallRun({ axis: "z", fixed: -5, start: -12, end: 3.15, floorY: FLOOR.UPPER, name: "upper-west-rear-spine", openings: [
-      { kind: "door", center: -6.4, width: 1.24, label: "primary suite lounge door", direction: 1 },
-      { kind: "door", center: 0, width: 1.08, label: "upper grand bathroom door", direction: -1 },
+      { kind: "door", center: -6.4, width: 1.35, label: "primary suite lounge door", direction: 1 },
+      { kind: "door", center: 0, width: 1.35, label: "upper grand bathroom door", direction: -1 },
     ] });
-    buildWallRun({ axis: "z", fixed: -5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-west-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.12, label: "west front suite door", direction: 1 }] });
+    buildWallRun({ axis: "z", fixed: -5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-west-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.35, label: "west front suite door", direction: 1 }] });
     buildWallRun({ axis: "z", fixed: 5, start: -12, end: 3.15, floorY: FLOOR.UPPER, name: "upper-east-rear-spine", openings: [
-      { kind: "door", center: -6.4, width: 1.24, label: "east rear suite lounge door", direction: -1 },
-      { kind: "door", center: 0, width: 1.08, label: "reading room door", direction: 1 },
+      { kind: "door", center: -6.4, width: 1.35, label: "east rear suite lounge door", direction: -1 },
+      { kind: "door", center: 0, width: 1.35, label: "reading room door", direction: 1 },
     ] });
-    buildWallRun({ axis: "z", fixed: 5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-east-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.12, label: "east front suite door", direction: -1 }] });
+    buildWallRun({ axis: "z", fixed: 5, start: 3.35, end: 12, floorY: FLOOR.UPPER, name: "upper-east-front-spine", openings: [{ kind: "door", center: 7.3, width: 1.35, label: "east front suite door", direction: -1 }] });
     // The center rear room is now an open lounge flowing around the stair
     // guard. The side bedrooms stay private and open directly into the lounge.
     buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: -5, floorY: FLOOR.UPPER, name: "upper-primary-front-wall", openings: [
@@ -4936,19 +6367,19 @@
 
   function buildBasementPartitions() {
     buildWallRun({ axis: "z", fixed: -1.3, start: -3.2, end: 12, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-west-corridor-wall", openings: [
-      { kind: "door", center: 0, width: 1.0, label: "laundry door", direction: 1 },
-      { kind: "door", center: 7.2, width: 1.0, label: "wine cellar door", direction: -1 },
+      { kind: "door", center: 0, width: 1.35, label: "laundry door", direction: 1 },
+      { kind: "door", center: 7.2, width: 1.35, label: "wine cellar door", direction: -1 },
     ] });
     buildWallRun({ axis: "z", fixed: 1.3, start: -3.2, end: 12, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-east-corridor-wall", openings: [
-      { kind: "door", center: 0, width: 1.0, label: "pantry door", direction: -1 },
-      { kind: "door", center: 7.2, width: 1.0, label: "archive door", direction: 1 },
+      { kind: "door", center: 0, width: 1.35, label: "pantry door", direction: -1 },
+      { kind: "door", center: 7.2, width: 1.35, label: "archive door", direction: 1 },
     ] });
     buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: 11.3, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-cross-corridor-front", openings: [{ kind: "arch", center: 0, width: 2.2, height: 2.8 }] });
     buildWallRun({ axis: "x", fixed: -4.9, start: -15, end: 15, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-rear-rooms", openings: [
-      { kind: "door", center: -10.2, width: 0.95, label: "boiler room door", direction: 1 },
-      { kind: "door", center: -2.3, width: 0.95, label: "workshop door", direction: -1 },
-      { kind: "door", center: 4.5, width: 0.95, label: "cold room door", direction: 1 },
-      { kind: "door", center: 11.2, width: 0.95, label: "bulk storage door", direction: -1 },
+      { kind: "door", center: -10.2, width: 1.35, label: "boiler room door", direction: 1 },
+      { kind: "door", center: -2.3, width: 1.35, label: "workshop door", direction: -1 },
+      { kind: "door", center: 4.5, width: 1.35, label: "cold room door", direction: 1 },
+      { kind: "door", center: 11.2, width: 1.35, label: "bulk storage door", direction: -1 },
     ] });
     buildWallRun({ axis: "z", fixed: -6, start: -12, end: -4.9, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-boiler-divider", openings: [] });
     buildWallRun({ axis: "z", fixed: 7.6, start: -12, end: -4.9, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-storage-divider", openings: [] });
@@ -5128,6 +6559,174 @@
     addTable(-2.5, -8.2, 3.1, 1.25, FLOOR.BASEMENT, 0, M.darkWood);
     new Cabinet({ name: "workshop tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2 });
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
+  }
+
+  function addContestantThirteenLibraryNote() {
+    const group = new THREE.Group();
+    group.name = "contestant-13-library-rulebook";
+    group.position.set(-10.5, FLOOR.MAIN + 0.87, 5.2);
+    group.rotation.y = -0.12;
+    scene.add(group);
+    box({ name: "contestant-13-library-rulebook-bottom-cover", w: 0.62, h: 0.035, d: 0.82, y: 0.018, material: M.leather, parent: group, cast: false });
+    box({ name: "contestant-13-library-rulebook-pages", w: 0.56, h: 0.07, d: 0.75, y: 0.066, material: M.canvasLinen, parent: group, cast: false });
+    const cover = box({ name: "contestant-13-library-rulebook-cover", w: 0.62, h: 0.035, d: 0.82, y: 0.12, material: M.leather, parent: group, cast: false });
+    box({ name: "contestant-13-library-rulebook-brass-13", w: 0.18, h: 0.018, d: 0.28, y: 0.145, z: 0.04, material: M.brass, parent: group, cast: false });
+    const note = plane({ name: "contestant-13-library-hidden-note", w: 0.45, h: 0.63, y: 0.146, z: -0.02, rotationX: -Math.PI / 2, rotationZ: 0.06, material: M.canvasLinen, parent: group });
+    contestant13Scene.libraryNote = group;
+    contestant13Quest.registerInteraction(
+      "library-note",
+      [cover, note],
+      () => state.contestant13.noteRead ? "Reread Contestant 13's note" : "Examine Contestant 13's rulebook",
+      () => contestant13Quest.readNote(),
+    );
+  }
+
+  function addContestantThirteenGardenShovel() {
+    const group = new THREE.Group();
+    group.name = "contestant-13-garden-shovel";
+    group.position.set(-22.35, YARD_LAYOUT.groundY + 0.16, 6.70);
+    group.scale.setScalar(0.56);
+    group.rotation.x = 0.08;
+    group.rotation.y = 0.24;
+    group.rotation.z = -1.42;
+    scene.add(group);
+    cylinder({ name: "contestant-13-garden-shovel-shaft", radius: 0.035, height: 1.45, segments: 10, y: 0.79, material: M.darkWood, parent: group });
+    roundedBox({ name: "contestant-13-garden-shovel-blade", w: 0.34, h: 0.42, d: 0.075, radius: 0.055, y: 0.08, material: M.iron, parent: group });
+    box({ name: "contestant-13-garden-shovel-tread", w: 0.42, h: 0.055, d: 0.11, y: 0.31, material: M.iron, parent: group, cast: false });
+    const grip = new THREE.Group();
+    grip.position.y = 1.55;
+    group.add(grip);
+    cylinder({ name: "contestant-13-garden-shovel-grip-left", radius: 0.03, height: 0.32, segments: 9, x: -0.13, rotationZ: -0.75, material: M.darkWood, parent: grip });
+    cylinder({ name: "contestant-13-garden-shovel-grip-right", radius: 0.03, height: 0.32, segments: 9, x: 0.13, rotationZ: 0.75, material: M.darkWood, parent: grip });
+    box({ name: "contestant-13-garden-shovel-xiii-mark", w: 0.1, h: 0.015, d: 0.045, x: 0.038, y: 1.05, z: 0.04, material: M.brass, parent: group, cast: false });
+    const hitMaterial = new THREE.MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      colorWrite: false,
+    });
+    const hitbox = box({ name: "contestant-13-garden-shovel-hitbox", w: 0.7, h: 1.85, d: 0.7, y: 0.82, material: hitMaterial, parent: group, cast: false, receive: false });
+    hitbox.visible = false;
+    contestant13Scene.shovel = group;
+    contestant13Quest.registerInteraction(
+      "garden-shovel",
+      [hitbox],
+      () => "Take concealed garden shovel",
+      () => contestant13Quest.takeShovel(),
+    );
+  }
+
+  function addContestantThirteenDigSite() {
+    const goal = mazeCellCenter(19, 3);
+    const group = new THREE.Group();
+    group.name = "contestant-13-dig-site";
+    group.position.set(goal.x, YARD_LAYOUT.groundY, goal.z);
+    scene.add(group);
+    const mound = cylinder({ name: "contestant-13-dig-site-disturbed-earth", radius: 0.46, radiusTop: 0.42, radiusBottom: 0.48, height: 0.055, segments: 24, y: 0.03, material: M.gardenSoil, parent: group, cast: false });
+    const hole = cylinder({ name: "contestant-13-dig-site-open-hole", radius: 0.43, height: 0.02, segments: 24, y: 0.045, material: M.soot, parent: group, cast: false });
+    hole.visible = false;
+    const marker = new THREE.Group();
+    marker.name = "contestant-13-dig-site-marker";
+    group.add(marker);
+    const markStrokes = [
+      [-0.22, 0, 0.72], [-0.22, 0, -0.72],
+      [0, 0, 0], [0.12, 0, 0], [0.24, 0, 0],
+    ];
+    markStrokes.forEach(([x, z, rotationY], index) => {
+      roundedBox({ name: `contestant-13-dig-site-mark-${index + 1}`, w: 0.025, h: 0.012, d: 0.18, radius: 0.006, x, y: 0.058, z, rotationY, material: M.darkFloor, parent: marker, cast: false });
+    });
+    contestant13Scene.digMound = mound;
+    contestant13Scene.digMarker = marker;
+    contestant13Scene.digHole = hole;
+    contestant13Quest.registerInteraction(
+      "maze-dig-site",
+      [mound, hole],
+      () => {
+        if (state.contestant13.digSiteExcavated) return "Inspect empty hole";
+        if (state.contestant13.digging) return "Digging beneath the faint mark…";
+        return contestant13Quest.hasItem("garden-shovel") ? "Dig beneath the faint XIII mark" : "Faintly disturbed earth — need a shovel";
+      },
+      () => contestant13Quest.digSite(),
+    );
+  }
+
+  function addContestantThirteenArchiveCage() {
+    const recorderRoot = contestant13Scene.archiveRecorderRoot;
+    const recorderDeck = contestant13Scene.archiveRecorderDeck;
+    if (!recorderRoot || !recorderDeck) return;
+    const cage = new THREE.Group();
+    cage.name = "contestant-13-archive-cage";
+    recorderRoot.add(cage);
+    const cageBrass = new THREE.MeshStandardMaterial({ color: 0xd0aa5d, emissive: 0x5c3510, emissiveIntensity: 0.72, metalness: 0.78, roughness: 0.3 });
+    roundedBox({ name: "contestant-13-archive-cage-contrast-back", w: 0.72, h: 0.62, d: 0.035, radius: 0.025, y: 0.27, z: -0.08, material: M.leather, parent: cage, cast: false });
+    const door = new THREE.Group();
+    door.name = "contestant-13-archive-cage-door";
+    door.position.set(-0.34, 0, 0.18);
+    cage.add(door);
+    for (const x of [0.04, 0.18, 0.32, 0.46, 0.6]) {
+      box({ name: "contestant-13-archive-cage-vertical-bar", w: 0.04, h: 0.55, d: 0.035, x, y: 0.25, material: cageBrass, parent: door, cast: false });
+    }
+    for (const y of [0, 0.5]) box({ name: "contestant-13-archive-cage-horizontal-bar", w: 0.66, h: 0.04, d: 0.035, x: 0.32, y, material: cageBrass, parent: door, cast: false });
+    const latch = box({ name: "contestant-13-archive-cage-a3-lock", w: 0.15, h: 0.18, d: 0.08, x: 0.66, y: 0.24, z: 0.015, material: M.iron, parent: door, cast: false });
+    box({ name: "contestant-13-archive-cage-routing-card", w: 0.4, h: 0.23, d: 0.025, x: 0, y: 0.05, z: 0.11, material: M.canvasLinen, parent: cage, cast: false });
+    box({ name: "contestant-13-archive-cage-a3-placard", w: 0.28, h: 0.11, d: 0.025, x: 0, y: 0.57, z: 0.12, material: M.canvasLinen, parent: cage, cast: false });
+    for (const x of [-0.075, 0, 0.075]) box({ name: "contestant-13-archive-cage-a3-placard-mark", w: 0.025, h: 0.065, d: 0.012, x, y: 0.57, z: 0.139, material: cageBrass, parent: cage, cast: false });
+    contestant13Scene.archiveCageDoor = door;
+    contestant13Quest.registerInteraction(
+      "archive-cage",
+      [latch, recorderDeck],
+      () => {
+        if (!state.contestant13.archiveCageUnlocked) return contestant13Quest.hasItem("archive-key-a3") ? "Unlock evidence cage A-3" : "Evidence cage A-3 — locked";
+        return state.contestant13.recordingPlayed ? "Replay Contestant 13's recording" : "Play Contestant 13's recording";
+      },
+      () => state.contestant13.archiveCageUnlocked ? contestant13Quest.playRecording() : contestant13Quest.unlockArchiveCage(),
+    );
+  }
+
+  function addContestantThirteenCameraRelay() {
+    const group = new THREE.Group();
+    group.name = "contestant-13-camera-relay";
+    group.position.set(-2.5, FLOOR.BASEMENT, -11.76);
+    scene.add(group);
+    const panel = box({ name: "contestant-13-camera-relay-panel", w: 1.34, h: 1.18, d: 0.16, y: 1.55, material: M.iron, parent: group, cast: true });
+    box({ name: "contestant-13-camera-relay-inner-board", w: 1.12, h: 0.94, d: 0.045, y: 1.55, z: 0.105, material: M.blackWood, parent: group, cast: false });
+    box({ name: "contestant-13-camera-relay-public-label", w: 0.42, h: 0.1, d: 0.025, x: -0.31, y: 1.97, z: 0.14, material: M.brass, parent: group, cast: false });
+    const publicCables = new THREE.Group();
+    publicCables.name = "contestant-13-camera-relay-public-cables";
+    group.add(publicCables);
+    for (const x of [-0.46, -0.31, -0.16]) cylinder({ name: "contestant-13-camera-relay-public-cable", radius: 0.025, height: 0.62, segments: 8, x, y: 1.48, z: 0.15, material: M.copper, parent: publicCables, cast: false });
+    const privateCables = new THREE.Group();
+    privateCables.name = "contestant-13-camera-relay-private-cables";
+    group.add(privateCables);
+    for (const x of [0.16, 0.31, 0.46]) cylinder({ name: "contestant-13-camera-relay-unlabelled-cable", radius: 0.027, height: 0.62, segments: 8, x, y: 1.48, z: 0.15, material: M.soot, parent: privateCables, cast: false });
+    const onlineMaterial = new THREE.MeshStandardMaterial({ color: 0x6aa56c, emissive: 0x3e8e47, emissiveIntensity: 1.4, roughness: 0.38 });
+    const alarmMaterial = new THREE.MeshStandardMaterial({ color: 0x8b211d, emissive: 0xff2c20, emissiveIntensity: 2.4, roughness: 0.32 });
+    const onlineBulb = sphere({ name: "contestant-13-camera-relay-online-bulb", radius: 0.055, x: -0.48, y: 2.0, z: 0.17, material: onlineMaterial, parent: group, cast: false });
+    const alarmBulb = sphere({ name: "contestant-13-camera-relay-alarm-bulb", radius: 0.065, x: 0.48, y: 2.0, z: 0.17, material: alarmMaterial, parent: group, cast: false });
+    alarmBulb.visible = false;
+    contestant13Scene.relayBlackCables = privateCables;
+    contestant13Scene.relayOnlineBulb = onlineBulb;
+    contestant13Scene.relayAlarmBulb = alarmBulb;
+    contestant13Scene.relayAlarmMaterial = alarmMaterial;
+    contestant13Quest.registerInteraction(
+      "workshop-relay",
+      [panel, ...privateCables.children],
+      () => {
+        if (state.contestant13.relaySabotaged) return "Private camera feed is dead";
+        return state.contestant13.recordingPlayed ? "Sabotage the patron camera relay" : "Inspect camera relay";
+      },
+      () => contestant13Quest.sabotageRelay(),
+    );
+  }
+
+  function buildContestantThirteenQuest() {
+    contestant13Quest = new ContestantThirteenQuest();
+    addContestantThirteenLibraryNote();
+    addContestantThirteenGardenShovel();
+    addContestantThirteenDigSite();
+    addContestantThirteenArchiveCage();
+    addContestantThirteenCameraRelay();
+    contestant13Quest.updateUI();
   }
 
   function buildLighting() {
@@ -6277,6 +7876,7 @@
     furnishMainHallBathroom();
     furnishUpperGrandBathroom();
     furnishBasement();
+    buildContestantThirteenQuest();
     buildLighting();
     registerRoomZones();
   }
@@ -6711,6 +8311,7 @@
       dom.enter.setAttribute("aria-disabled", "true");
     }
     if (dom.canvas) dom.canvas.focus({ preventScroll: true });
+    if (contestant13Quest) contestant13Quest.updateUI();
     // Pointer lock must be requested during the trusted click. Audio is optional and must not delay entry.
     requestPointerLock();
     if (audioSystem) void audioSystem.unlock().catch(() => {});
@@ -6895,6 +8496,7 @@
   }
 
   function activateCurrentInteraction() {
+    if (state.journalOpen || state.contestant13.actionInProgress) return;
     if (!state.currentInteraction) return;
     state.currentInteraction.activate();
     updateInteractionPrompt();
@@ -6902,6 +8504,27 @@
 
   function bindInput() {
     window.addEventListener("keydown", (event) => {
+      if (event.code === "Tab" && state.journalOpen && dom.journal) {
+        const focusable = Array.from(dom.journal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
+        if (focusable.length) {
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (focusable.length === 1 || (!event.shiftKey && document.activeElement === last) || (event.shiftKey && document.activeElement === first)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+          }
+        }
+        return;
+      }
+      if (event.code === "KeyJ" && !event.repeat && contestant13Quest) {
+        event.preventDefault();
+        contestant13Quest.toggleJournal();
+        return;
+      }
+      if (event.code === "Escape" && state.journalOpen && contestant13Quest) {
+        contestant13Quest.setJournalOpen(false);
+        return;
+      }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
         event.preventDefault();
         setMoveIntent(event.code, true);
@@ -6923,6 +8546,7 @@
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
+      if (state.journalOpen) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
     });
@@ -6937,6 +8561,11 @@
         if (!document.fullscreenElement) await dom.stage.requestFullscreen();
         else await document.exitFullscreen();
       } catch (_) { /* Fullscreen is optional. */ }
+    });
+    if (dom.journalButton) dom.journalButton.addEventListener("click", () => contestant13Quest && contestant13Quest.toggleJournal());
+    if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
+    if (dom.journal) dom.journal.addEventListener("click", (event) => {
+      if (event.target === dom.journal && contestant13Quest) contestant13Quest.setJournalOpen(false);
     });
 
     const touchBindings = [
@@ -7063,6 +8692,7 @@
   }
 
   function findInteraction() {
+    if (state.journalOpen || state.contestant13.actionInProgress) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
@@ -7078,12 +8708,21 @@
 
   function inspectInteractionRay() {
     if (!state.qa) return null;
+    const selected = findInteraction();
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
     const blockers = raycaster.intersectObjects(occluderMeshes, false);
+    let interactionObject = hits[0]?.object || null;
+    while (interactionObject && !interactionObject.userData.interaction) interactionObject = interactionObject.parent;
     return {
-      hit: hits[0] ? { name: hits[0].object.name, distance: Number(hits[0].distance.toFixed(2)) } : null,
+      hit: hits[0] ? {
+        name: hits[0].object.name,
+        distance: Number(hits[0].distance.toFixed(2)),
+        interactionId: interactionObject?.userData?.interaction?.id || interactionObject?.userData?.interaction?.type || null,
+      } : null,
       blocker: blockers[0] ? { name: blockers[0].object.name, distance: Number(blockers[0].distance.toFixed(2)) } : null,
+      stateBlocked: state.journalOpen ? "journal-open" : state.contestant13.actionInProgress ? "story-action" : null,
+      selectableId: selected?.id || selected?.type || null,
     };
   }
 
@@ -7453,6 +9092,13 @@
       state.lastMove = { dx: 0, dz: 0 };
       return;
     }
+    if (state.journalOpen || state.contestant13.actionInProgress) {
+      physics.movePlayer(0, 0);
+      physics.step();
+      physics.updateSafety();
+      state.lastMove = { dx: 0, dz: 0 };
+      return;
+    }
     let forward = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
     let strafe = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const length = Math.hypot(forward, strafe);
@@ -7539,6 +9185,10 @@
     updateLightTransitions(dt);
     if (rainSystem) rainSystem.update(dt);
     if (stormSystem) stormSystem.update(dt);
+    if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
+      const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
+      contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
+    }
 
     accumulator += dt;
     while (accumulator >= 1 / 60) {
@@ -7598,6 +9248,10 @@
         movementLocked: state.isHidden,
         availableSpots: hidingSpots.map((spot) => spot.name),
       },
+      inventory: contestant13Quest?.getInventoryDiagnostics() || { items: [], bulkyItem: null },
+      journal: contestant13Quest?.getJournalDiagnostics() || { entries: [], currentObjective: null, open: false },
+      contestant13: contestant13Quest?.getDiagnostics() || null,
+      mrFeast: mrFeastNpc?.getDiagnostics() || null,
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -7784,6 +9438,10 @@
     state.yaw = yaw == null ? Math.PI : yaw;
     state.pitch = pitch == null ? 0 : pitch;
     syncCamera();
+    // QA views and hide-spot transitions may query the look ray before the
+    // next render. Keep the camera world matrix in step with the teleport so
+    // interaction prompts do not depend on a cold shader-compilation frame.
+    camera.updateMatrixWorld(true);
   }
 
   function installDiagnostics() {
@@ -7792,7 +9450,23 @@
       get state() { return getDiagnostics(); },
     };
     window.render_game_to_text = () => JSON.stringify(getDiagnostics());
+    window.advanceTime = (ms) => new Promise((resolve) => {
+      const startedAt = performance.now();
+      const step = () => {
+        if (performance.now() - startedAt >= Math.max(0, Number(ms) || 0)) resolve();
+        else requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
+    window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
+    window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
+    window.MrFeastFresh.resetMrFeastWandererForQA = () => mrFeastNpc ? mrFeastNpc.resetForQA() : null;
+    window.MrFeastFresh.setMrFeastPoseForQA = (options) => mrFeastNpc ? mrFeastNpc.setPoseForQA(options) : null;
+    window.MrFeastFresh.transitionMrFeastForQA = (actionName, duration) => mrFeastNpc ? mrFeastNpc.transitionForQA(actionName, duration) : null;
+    window.MrFeastFresh.advanceMrFeastAnimationForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceAnimationForQA(seconds) : null;
+    window.MrFeastFresh.setMrFeastRouteSegmentForQA = (targetId, progress, animationTime) => mrFeastNpc ? mrFeastNpc.setRouteSegmentForQA(targetId, progress, animationTime) : null;
+    window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
     window.MrFeastFresh.inspectScene = (prefix = "") => {
       const meshes = [];
@@ -7971,6 +9645,8 @@
       const d = destinations[location];
       if (!d) return { error: `Unknown QA destination: ${location}` };
       teleport(d[0], d[1], d[2], d[3], d[4]);
+      updateLocation();
+      updateInteractionPrompt();
       return getDiagnostics();
     };
     window.MrFeastFresh.toggleCircuit = (name) => {
@@ -8492,6 +10168,10 @@
       buildMansion();
       mergeStaticDecor();
       registerExteriorDetailCulling();
+      mrFeastNpc = new MrFeastWanderer();
+      // The character is an optional test layer: it loads after the mansion is
+      // usable and a failed GLB never blocks exploration or the boot watchdog.
+      void mrFeastNpc.load();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();
       stormSystem = new StormSystem();
@@ -8548,6 +10228,7 @@
         if (qaParams.has("autostart")) {
           state.started = true;
           if (dom.intro) dom.intro.hidden = true;
+          if (contestant13Quest) contestant13Quest.updateUI();
         }
         const walkSeconds = Math.max(0, Math.min(12, Number(qaParams.get("walk")) || 0));
         const walkDelayMs = Math.max(100, Number(qaParams.get("walkDelay")) || 350);

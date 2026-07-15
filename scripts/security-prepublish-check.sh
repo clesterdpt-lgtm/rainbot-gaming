@@ -58,6 +58,7 @@ else
   trap 'rm -f "$tmp_hosts" "$tmp_approved"' EXIT
 
   git grep -hIEo "https://[^\"' <>)]+" -- . "${site_scan_pathspecs[@]}" 2>/dev/null |
+    sed 's/`$//' |
     sed -E 's#https://([^/?#]+).*#\1#' |
     sed '/^$/d' |
     sort -u > "$tmp_hosts" || true

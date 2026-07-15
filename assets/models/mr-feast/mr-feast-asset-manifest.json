@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "characterId": "mr-feast",
+  "model": "processed/mr-feast-game-rigged.glb",
+  "heightMeters": 2.01,
+  "sourceHeightMeters": 1.92,
+  "forwardAxis": "+Z",
+  "animations": {
+    "idle": {
+      "file": "animations/mr-feast-idle-tuned.glb",
+      "loop": true,
+      "playbackRate": 1
+    },
+    "stalk": {
+      "file": "animations/mr-feast-stalk-tuned.glb",
+      "loop": true,
+      "playbackRate": 0.68
+    },
+    "alert": {
+      "file": "animations/mr-feast-alert-clean.glb",
+      "loop": false,
+      "playbackRate": 1
+    },
+    "run": {
+      "file": "animations/mr-feast-run-clean.glb",
+      "loop": true,
+      "playbackRate": 1
+    }
+  },
+  "qa": {
+    "triangles": 65000,
+    "maxTextureSize": 1024,
+    "skinnedMeshes": 1,
+    "bones": 24,
+    "sourceBoundsMeters": [0.9241, 1.92, 0.462],
+    "runtimeBoundsMeters": [0.9674, 2.01, 0.4837],
+    "animationPolicy": "no-scale; hips-translation-only; restrained-idle-and-stalk",
+    "validatedWith": "Three.js r128"
+  }
+}

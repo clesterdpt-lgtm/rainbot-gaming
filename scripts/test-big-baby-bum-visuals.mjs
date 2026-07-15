@@ -8,9 +8,13 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "..");
 const gamePath = path.join(root, "assets/js/big-baby-bum.js");
 const pagePath = path.join(root, "games/big-baby-bum.html");
+const babyVoicePath = path.join(root, "assets/Sounds/big-baby-bum/baby-laugh-giggle-pixabay-119650.mp3");
+const babyVoiceLicensePath = path.join(root, "assets/Sounds/big-baby-bum/LICENSE.md");
 const outputDir = path.join(root, "output/playwright/big-baby-bum-visual-pass");
 const gameSource = fs.readFileSync(gamePath, "utf8");
 const pageSource = fs.readFileSync(pagePath, "utf8");
+const babyVoiceBytes = fs.existsSync(babyVoicePath) ? fs.readFileSync(babyVoicePath) : Buffer.alloc(0);
+const babyVoiceLicense = fs.existsSync(babyVoiceLicensePath) ? fs.readFileSync(babyVoiceLicensePath, "utf8") : "";
 const failures = [];
 const results = {};
 
@@ -50,6 +54,8 @@ for (const relativePath of generatedAssets) {
   check("generated texture budget", bytes.length <= 700 * 1024, `${relativePath} exceeds the 700 KiB per-texture budget`);
 }
 check("generated texture bundle budget", totalTextureBytes <= 2.25 * 1024 * 1024, `generated texture bundle is ${(totalTextureBytes / 1024 / 1024).toFixed(2)} MiB`);
+check("baby voice MP3", babyVoiceBytes.length > 100 * 1024 && babyVoiceBytes.length < 700 * 1024 && babyVoiceBytes[0] === 0xff && (babyVoiceBytes[1] & 0xe0) === 0xe0, `baby voice asset is missing, malformed, or outside its size budget (${babyVoiceBytes.length} bytes)`);
+check("baby voice provenance", babyVoiceLicense.includes("jodywhiteley") && babyVoiceLicense.includes("pixabay.com/sound-effects/people-baby-laugh-giggle-119650") && babyVoiceLicense.includes("Pixabay Content License"), "baby voice license/source metadata is incomplete");
 
 for (const marker of [
   "bbb_hero_baby_v2",
@@ -75,7 +81,8 @@ check("baby bib removed", !gameSource.includes("baby_bib") && !gameSource.includ
 check("performance batching", /new T\.InstancedMesh/.test(gameSource) && /fence_pickets/.test(gameSource) && /vehicle_wheels/.test(gameSource), "repeated model details are not instanced");
 check("renderer art direction", /ACESFilmicToneMapping/.test(gameSource) && /PCFSoftShadowMap/.test(gameSource) && /bbb_storybook_sky/.test(gameSource), "premium lighting, shadows, or sky setup is missing");
 check("expanded attacker roster", /ENEMY_MAX_ACTIVE\s*=\s*4/.test(gameSource) && /function activeEnemyTpls/.test(gameSource), "mixed attacker roster or cap is missing");
-check("visual cache token", pageSource.includes("20260714-bbb-roads-roofs-enemies-v3"), "page does not reference the current visual-pass cache token");
+check("sampled baby voice hooks", gameSource.includes("GIGGLE_CLIPS") && gameSource.includes("SQUEAL_CLIPS") && gameSource.includes("BELLY_LAUGH_CLIPS") && gameSource.includes("baby-laugh-giggle-pixabay-119650.mp3"), "sampled baby voice variants are not wired into AudioKit");
+check("visual cache token", pageSource.includes("20260715-bbb-baby-voice-v4"), "page does not reference the current visual-pass cache token");
 
 const mime = {
   ".css": "text/css; charset=utf-8",
@@ -83,6 +90,7 @@ const mime = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
+  ".mp3": "audio/mpeg",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -153,6 +161,7 @@ try {
     });
     return found.size >= 4 && [...found.values()].every((image) => image?.width === 512 && image?.height === 512);
   }, null, { timeout: 10_000 });
+  await page.waitForFunction(() => window.__BBB?.state?.babyVoiceReady, null, { timeout: 10_000 });
 
   const initial = await page.evaluate(() => {
     const textureNames = new Set();
@@ -226,7 +235,15 @@ try {
   check("road depth ownership", initial.roadYs.length === 32 && initial.roadYs.every((y) => Math.abs(y - initial.roadYs[0]) < 1e-6) && initial.intersectionCount === 256 && initial.intersectionOffset <= -4, `road planes/caps are not deterministic: ${JSON.stringify({ ys: initial.roadYs, count: initial.intersectionCount, offset: initial.intersectionOffset })}`);
   check("gable roof faces", initial.roofTriangles.length > 0 && initial.roofTriangles.every((triangle) => !triangle.allBase && triangle.normalY >= -1e-6) && initial.roofTriangles.some((triangle) => triangle.normalY > 0.2) && initial.roofTriangles.some((triangle) => triangle.normalZ > 0.5) && initial.roofTriangles.some((triangle) => triangle.normalZ < -0.5), `gable normals/caps are invalid: ${JSON.stringify(initial.roofTriangles)}`);
   check("attacker roster models", initial.enemyRoster.length === 9 && ["goose", "babysitter", "mower", "drone", "dozer"].every((key) => initial.enemyRoster.some((enemy) => enemy.key === key)), `attacker roster is ${JSON.stringify(initial.enemyRoster)}`);
+  check("sampled baby voice decoded", initial.babyVoiceReady && initial.babyVoicePlays === 0, `baby voice state is ${JSON.stringify({ ready: initial.babyVoiceReady, plays: initial.babyVoicePlays })}`);
   check("desktop performance", initial.drawCalls > 0 && initial.drawCalls < 950 && initial.triangles < 60_000, `initial render cost is ${initial.drawCalls} calls / ${initial.triangles} triangles`);
+
+  const audioProbe = await page.evaluate(() => {
+    const before = window.__BBB.state.babyVoicePlays;
+    const after = window.__BBB.audioPreview("giggle");
+    return { before, after: after.babyVoicePlays };
+  });
+  check("sampled baby voice playback", audioProbe.after === audioProbe.before + 1, `sampled voice did not schedule: ${JSON.stringify(audioProbe)}`);
 
   const beforeMove = await page.evaluate(() => ({ x: window.__BBB.state.x, z: window.__BBB.state.z }));
   await page.locator("#gameCanvas").focus();

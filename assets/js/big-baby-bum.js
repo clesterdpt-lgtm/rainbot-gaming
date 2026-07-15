@@ -167,13 +167,35 @@
     );
   }
 
-  // ---------- Audio (all synthesized) ----------
+  // ---------- Audio (procedural kit + a licensed baby-voice sample) ----------
   const AudioKit = (() => {
+    const BABY_VOICE_URL = "../assets/Sounds/big-baby-bum/baby-laugh-giggle-pixabay-119650.mp3";
+    const GIGGLE_CLIPS = [
+      { offset: 1.08, duration: 1.34 },
+      { offset: 3.98, duration: 1.04 },
+      { offset: 7.5, duration: 1.2 },
+      { offset: 9.98, duration: 1.16 },
+      { offset: 15.17, duration: 1.4 },
+    ];
+    const SQUEAL_CLIPS = [
+      { offset: 2.95, duration: 0.35 },
+      { offset: 6.28, duration: 0.58 },
+      { offset: 14.3, duration: 0.36 },
+      { offset: 17.08, duration: 0.38 },
+    ];
+    const BELLY_LAUGH_CLIPS = [
+      { offset: 11.7, duration: 2.16 },
+      { offset: 15.17, duration: 1.42 },
+    ];
     let ac = null;
     let master = null;
     let musicGain = null;
     let musicTimer = null;
     let musicStep = 0;
+    let babyVoiceBuffer = null;
+    let babyVoiceLoad = null;
+    let babyVoicePlays = 0;
+    let lastBabyVoiceAt = -99;
     let enabled = localStorage.getItem(LS_SOUND) !== "off";
 
     function ensure() {
@@ -191,6 +213,53 @@
     }
     function resume() {
       if (ensure() && ac.state === "suspended") ac.resume();
+    }
+    function loadBabyVoice() {
+      if (babyVoiceBuffer) return Promise.resolve(babyVoiceBuffer);
+      if (babyVoiceLoad) return babyVoiceLoad;
+      if (!ensure()) return Promise.resolve(null);
+      babyVoiceLoad = fetch(BABY_VOICE_URL)
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.arrayBuffer();
+        })
+        .then((bytes) => ac.decodeAudioData(bytes))
+        .then((buffer) => {
+          babyVoiceBuffer = buffer;
+          return buffer;
+        })
+        .catch((error) => {
+          console.warn("[Big Baby Bum audio] Baby voice sample unavailable; using synth fallback.", error);
+          babyVoiceLoad = null;
+          return null;
+        });
+      return babyVoiceLoad;
+    }
+    function playBabyVoice(clips, { volume = 0.2, rate = 1, cooldown = 0.75 } = {}) {
+      if (!enabled || !ensure()) return false;
+      if (!babyVoiceBuffer) {
+        loadBabyVoice();
+        return false;
+      }
+      const now = ac.currentTime;
+      if (now - lastBabyVoiceAt < cooldown) return false;
+      const clip = clips[(Math.random() * clips.length) | 0];
+      const playbackRate = clamp(rate + (Math.random() - 0.5) * 0.08, 0.78, 1.42);
+      const outputDuration = clip.duration / playbackRate;
+      const source = ac.createBufferSource();
+      const voiceGain = ac.createGain();
+      source.buffer = babyVoiceBuffer;
+      source.playbackRate.value = playbackRate;
+      voiceGain.gain.setValueAtTime(0.0001, now);
+      voiceGain.gain.exponentialRampToValueAtTime(volume, now + 0.025);
+      voiceGain.gain.setValueAtTime(volume, now + Math.max(0.04, outputDuration - 0.08));
+      voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + outputDuration);
+      source.connect(voiceGain).connect(master);
+      source.start(now, clip.offset, clip.duration);
+      source.stop(now + outputDuration + 0.04);
+      lastBabyVoiceAt = now;
+      babyVoicePlays++;
+      return true;
     }
     function tone({ f = 440, t = 0.12, type = "sine", v = 0.2, slide = 0, delay = 0, dest = null }) {
       if (!enabled || !ensure()) return;
@@ -255,10 +324,12 @@
       },
       unlock() {
         resume();
+        if (enabled) loadBabyVoice();
       },
       startMusic() {
         if (!enabled || !ensure()) return;
         resume();
+        loadBabyVoice();
         if (!musicTimer) musicTimer = setInterval(musicTick, 326);
       },
       stopMusic() {
@@ -305,13 +376,31 @@
         tone({ f: 280, t: 0.32, type: "triangle", v: 0.13, slide: 140 });
       },
       giggle() {
-        [660, 880, 740].forEach((f, i) => tone({ f, t: 0.1, type: "sine", v: 0.12, slide: 90, delay: i * 0.085 }));
+        if (!playBabyVoice(GIGGLE_CLIPS, { volume: 0.18, rate: 1.04, cooldown: 0.7 }) && !babyVoiceBuffer)
+          [660, 880, 740].forEach((f, i) => tone({ f, t: 0.1, type: "sine", v: 0.12, slide: 90, delay: i * 0.085 }));
+      },
+      squeal() {
+        if (!playBabyVoice(SQUEAL_CLIPS, { volume: 0.16, rate: 1.26, cooldown: 1.5 }) && !babyVoiceBuffer)
+          tone({ f: 620, t: 0.18, type: "triangle", v: 0.12, slide: 240 });
+      },
+      bellyLaugh() {
+        if (!playBabyVoice(BELLY_LAUGH_CLIPS, { volume: 0.2, rate: 0.94, cooldown: 0.5 }) && !babyVoiceBuffer)
+          [520, 690, 610, 820].forEach((f, i) => tone({ f, t: 0.12, type: "sine", v: 0.11, slide: 80, delay: i * 0.11 }));
       },
       fanfare() {
         [523, 659, 784, 1047].forEach((f, i) => tone({ f, t: 0.16, type: "triangle", v: 0.16, delay: i * 0.08 }));
       },
       bigFanfare() {
         [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone({ f, t: 0.22, type: "triangle", v: 0.16, delay: i * 0.1 }));
+      },
+      get babyVoiceReady() {
+        return !!babyVoiceBuffer;
+      },
+      get babyVoicePlays() {
+        return babyVoicePlays;
+      },
+      get babyVoiceUrl() {
+        return BABY_VOICE_URL;
       },
     };
   })();
@@ -2528,6 +2617,7 @@
     baby.vz += (dz / d) * kb;
     shake = 0.7;
     AudioKit.bonk();
+    AudioKit.squeal();
     if (tpl.sfx === "bark") AudioKit.bark();
     hitFlash.classList.add("is-on");
     setTimeout(() => hitFlash.classList.remove("is-on"), 600);
@@ -3205,6 +3295,7 @@
     phase = "over";
     AudioKit.stopMusic();
     AudioKit.bigFanfare();
+    AudioKit.bellyLaugh();
     const isHigh = score > high;
     if (isHigh) {
       high = score;
@@ -3940,6 +4031,8 @@
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures,
         heroModel: babyG.userData.modelVersion,
+        babyVoiceReady: AudioKit.babyVoiceReady,
+        babyVoicePlays: AudioKit.babyVoicePlays,
         hasSave: !!loadSave(),
       };
     },
@@ -3968,6 +4061,12 @@
     },
     burp: tryBurp,
     fart: tryFart,
+    audioPreview(kind) {
+      if (kind === "squeal") AudioKit.squeal();
+      else if (kind === "bellyLaugh") AudioKit.bellyLaugh();
+      else AudioKit.giggle();
+      return this.state;
+    },
     enemies() {
       return enemies;
     },

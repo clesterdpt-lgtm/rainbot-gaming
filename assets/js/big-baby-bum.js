@@ -365,14 +365,19 @@
       )
     );
     geo.setIndex([
-      0, 1, 2,
-      3, 5, 4,
-      0, 2, 5, 0, 5, 3,
-      1, 4, 5, 1, 5, 2,
-      0, 3, 4, 0, 4, 1,
+      // Exterior faces only. The old roof was wound inside-out and included
+      // a bottom cap exactly on the building top, so faces vanished and
+      // shimmered as the camera moved.
+      0, 2, 1,
+      3, 4, 5,
+      0, 5, 2, 0, 3, 5,
+      1, 5, 4, 1, 2, 5,
     ]);
-    geo.computeVertexNormals();
-    return geo;
+    const hardEdged = geo.toNonIndexed();
+    geo.dispose();
+    hardEdged.computeVertexNormals();
+    hardEdged.name = "bbb_gable_roof_geometry_v3";
+    return hardEdged;
   }
 
   function makePicketGeometry() {
@@ -573,12 +578,15 @@
     g.fillStyle = "rgba(0,0,0,0.12)";
     for (let i = 0; i < 40; i++) g.fillRect(Math.random() * s, Math.random() * s, 3, 3);
   });
-  const roadTex = (() => {
+  const roadTextures = (() => {
     const s = 512;
     const c = document.createElement("canvas");
     c.width = c.height = s;
     const g = c.getContext("2d");
-    function paint(img) {
+    const intersectionCanvas = document.createElement("canvas");
+    intersectionCanvas.width = intersectionCanvas.height = s;
+    const intersectionG = intersectionCanvas.getContext("2d");
+    function paintRoad(img) {
       if (img) g.drawImage(img, 0, 0, s, s);
       else {
         g.fillStyle = "#50545d";
@@ -601,25 +609,47 @@
       g.fillRect(s * 0.16, 0, 2, s);
       g.fillRect(s * 0.84, 0, 2, s);
     }
-    paint(null);
-    const tex = new T.CanvasTexture(c);
-    tex.name = "bbb_generated_asphalt_hybrid";
-    tex.userData = { role: "generated-game-texture", source: "../assets/textures/big-baby-bum/asphalt-generated-v1.png" };
-    tex.encoding = T.sRGBEncoding;
-    tex.wrapS = tex.wrapT = T.RepeatWrapping;
-    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    function paintIntersection(img) {
+      intersectionG.clearRect(0, 0, s, s);
+      if (img) intersectionG.drawImage(img, 0, 0, s, s);
+      else {
+        intersectionG.fillStyle = "#50545d";
+        intersectionG.fillRect(0, 0, s, s);
+        intersectionG.fillStyle = "rgba(255,255,255,0.035)";
+        for (let y = 6; y < s; y += 23) intersectionG.fillRect(0, y, s, 2);
+      }
+    }
+    paintRoad(null);
+    paintIntersection(null);
+    const road = new T.CanvasTexture(c);
+    road.name = "bbb_generated_asphalt_hybrid";
+    road.userData = { role: "generated-game-texture", source: "../assets/textures/big-baby-bum/asphalt-generated-v1.png" };
+    const intersection = new T.CanvasTexture(intersectionCanvas);
+    intersection.name = "bbb_generated_asphalt_intersection";
+    intersection.userData = { role: "generated-game-texture", source: "../assets/textures/big-baby-bum/asphalt-generated-v1.png" };
+    for (const tex of [road, intersection]) {
+      tex.encoding = T.sRGBEncoding;
+      tex.wrapS = tex.wrapT = T.RepeatWrapping;
+      tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    }
     const img = new Image();
     img.onload = () => {
-      paint(img);
-      tex.needsUpdate = true;
+      paintRoad(img);
+      paintIntersection(img);
+      road.needsUpdate = true;
+      intersection.needsUpdate = true;
     };
     img.onerror = () => {
-      tex.image = fallbackRoadTex.image;
-      tex.needsUpdate = true;
+      g.clearRect(0, 0, s, s);
+      g.drawImage(fallbackRoadTex.image, 0, 0, s, s);
+      road.needsUpdate = true;
+      intersection.needsUpdate = true;
     };
     img.src = "../assets/textures/big-baby-bum/asphalt-generated-v1.png";
-    return tex;
+    return { road, intersection };
   })();
+  const roadTex = roadTextures.road;
+  const roadIntersectionTex = roadTextures.intersection;
 
   const windowTexes = [0x9a5b41, 0xd9c8a8, 0x7f8fa6, 0xc46a4f, 0x8aa17c].map((wall) =>
     makeTex(128, (g, s) => {
@@ -780,36 +810,71 @@
     dressing.add(blanket);
 
     // Street grid: north-south roads (x = ±(30+60k)) and east-west roads.
+    // The strips deliberately share one elevation; asphalt-only intersection
+    // caps own the crossing pixels so rotated curbs can never overlap or fight.
     const len = CITY_BOUND * 2 + 12;
-    const roadMaterial = new T.MeshStandardMaterial({ map: roadTex, bumpMap: roadTex, bumpScale: 0.018, color: 0xe8e8e2, roughness: 0.93, metalness: 0 });
+    const roadMaterial = new T.MeshStandardMaterial({
+      map: roadTex,
+      color: 0xe8e8e2,
+      roughness: 0.93,
+      metalness: 0,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
     roadMaterial.name = "bbb_generated_asphalt_road";
-    function roadStrip(width, alongZ, linePos, y) {
+    function roadStrip(width, alongZ, linePos) {
       const geo = new T.PlaneGeometry(width, len);
       const r = new T.Mesh(geo, roadMaterial);
+      r.name = `bbb_road_${alongZ ? "ns" : "ew"}_${linePos}`;
       r.rotation.x = -Math.PI / 2;
       if (alongZ) {
-        r.position.set(linePos, y, 0);
+        r.position.set(linePos, 0.016, 0);
       } else {
         r.rotation.z = Math.PI / 2;
-        r.position.set(0, y, linePos);
+        r.position.set(0, 0.016, linePos);
       }
+      r.renderOrder = 1;
       r.receiveShadow = true;
       dressing.add(r);
     }
     // Shared repeating texture: many strips reuse one material fine because
     // repeat is set on the texture (length/128px feel).
     roadTex.repeat.set(1, 42);
+    const roadX = [];
+    const roadZ = [];
     for (let k = 0; k < CITY_LINES; k++) {
       const line = 30 + k * BLOCK;
-      roadStrip(ROAD_HALF * 2, true, line, 0.012);
-      roadStrip(ROAD_HALF * 2, true, -line, 0.012);
-      if (line !== Math.abs(AVE_Z)) {
-        roadStrip(ROAD_HALF * 2, false, line, 0.02);
-        roadStrip(ROAD_HALF * 2, false, -line, 0.02);
-      }
+      roadX.push(line, -line);
+      roadZ.push({ z: line, width: ROAD_HALF * 2 });
+      roadZ.push({ z: -line, width: -line === AVE_Z ? AVE_HALF * 2 : ROAD_HALF * 2 });
     }
-    // Main Street: the widened avenue at z = AVE_Z.
-    roadStrip(AVE_HALF * 2, false, AVE_Z, 0.028);
+    for (const x of roadX) roadStrip(ROAD_HALF * 2, true, x);
+    for (const line of roadZ) roadStrip(line.width, false, line.z);
+
+    const intersectionMaterial = new T.MeshStandardMaterial({
+      map: roadIntersectionTex,
+      color: 0xe8e8e2,
+      roughness: 0.96,
+      metalness: 0,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
+    });
+    intersectionMaterial.name = "bbb_generated_asphalt_intersections";
+    const intersectionTransforms = [];
+    for (const x of roadX)
+      for (const line of roadZ)
+        intersectionTransforms.push({
+          p: [x, 0.02, line.z],
+          r: [-Math.PI / 2, 0, 0],
+          s: [ROAD_HALF * 2, line.width, 1],
+        });
+    const intersections = instanced(GEO.plane, intersectionMaterial, intersectionTransforms, "bbb_road_intersections_v3");
+    intersections.renderOrder = 2;
+    intersections.receiveShadow = true;
+    intersections.userData.crossingCount = intersectionTransforms.length;
+    dressing.add(intersections);
 
     // Hedge wall around the city.
     const hm = mat(0x2e6b34);
@@ -1004,11 +1069,22 @@
       const kind = style || (flat ? (h > 0.78 ? "tower" : "storefront") : "suburban");
       g.name = `bbb_building_${kind}_v2`;
       const wallMat = buildingWallMats[wallIdx % buildingWallMats.length];
-      g.add(mesh(GEO.box, wallMat, w, h, d, 0, h / 2, 0));
+      const walls = mesh(GEO.box, wallMat, w, h, d, 0, h / 2, 0);
+      walls.name = `bbb_building_walls_${kind}`;
+      walls.userData.wallTop = h;
+      g.add(walls);
+      const roofGap = 0.006;
       if (flat) {
-        g.add(mesh(GEO.box, mat(roofC, { roughness: 0.64, metalness: 0.04 }), w * 1.06, h * 0.09, d * 1.06, 0, h + h * 0.045, 0));
+        const roofH = h * 0.09;
+        const roof = mesh(GEO.box, mat(roofC, { roughness: 0.64, metalness: 0.04 }), w * 1.06, roofH, d * 1.06, 0, h + roofGap + roofH / 2, 0);
+        roof.name = "bbb_roof_flat_v3";
+        roof.userData.baseAboveWall = roofGap;
+        g.add(roof);
       } else {
-        g.add(mesh(GEO.roof, mat(roofC, { roughness: 0.76 }), w * 1.12, h * 0.68, d * 1.12, 0, h, 0));
+        const roof = mesh(GEO.roof, mat(roofC, { roughness: 0.76, flatShading: true }), w * 1.12, h * 0.68, d * 1.12, 0, h + roofGap, 0);
+        roof.name = "bbb_roof_gable_v3";
+        roof.userData.baseAboveWall = roofGap;
+        g.add(roof);
       }
       g.add(mesh(GEO.box, woodMat, w * 0.16, h * 0.32, 0.05, 0, h * 0.16, d / 2 + 0.03));
       if (kind === "storefront") {
@@ -2164,10 +2240,11 @@
   }
 
   // ---------- Hunters (they want the baby smaller) ----------
-  // Each tier is always bigger than the baby while it hunts; outgrow it and
-  // the next tier takes over. Tanks hunt forever but become edible at ~12.9 m.
+  // Overlapping size bands create mixed packs. Every active hunter is still
+  // too big to eat; crossing its max band turns it into a revenge snack.
   function bAngryDog() {
     const g = new T.Group();
+    g.name = "bbb_enemy_guard_dog_v2";
     const fur = mat(0x4a3826);
     g.add(mesh(GEO.sphLo, fur, 0.5, 0.42, 0.66, 0, 0.45, 0));
     g.add(mesh(GEO.sphLo, fur, 0.3, 0.28, 0.3, 0, 0.62, 0.6));
@@ -2190,6 +2267,7 @@
   }
   function bAngryAdult() {
     const g = new T.Group();
+    g.name = "bbb_enemy_angry_dad_v2";
     const pants = mat(0x3a4a6b);
     const shirt = mat(0xd93f3f);
     g.add(mesh(GEO.cyl, pants, 0.1, 0.36, 0.1, -0.1, 0.18, 0));
@@ -2210,6 +2288,7 @@
   }
   function bPolice() {
     const g = bCar(0xf2f2f2, 1)();
+    g.name = "bbb_enemy_police_cruiser_v2";
     g.add(mesh(GEO.box, mat(0x22242c), 0.47, 0.1, 0.34, 0, 0.2, 0.02));
     const bar = mesh(GEO.box, mat(0x30364a), 0.3, 0.05, 0.1, 0, 0.56, -0.05);
     g.add(bar);
@@ -2221,6 +2300,7 @@
   }
   function bTank() {
     const g = new T.Group();
+    g.name = "bbb_enemy_hoa_tank_v2";
     const olive = mat(0x5a6b3a);
     const dark = mat(0x2c3226);
     g.add(mesh(GEO.box, olive, 0.56, 0.2, 0.9, 0, 0.28, 0));
@@ -2236,27 +2316,156 @@
     g.userData.turret = turret;
     return g;
   }
+  function bAngryGoose() {
+    const g = new T.Group();
+    g.name = "bbb_enemy_territorial_goose_v1";
+    const feather = mat(0xf3f1e8, { roughness: 0.92 });
+    const wing = mat(0xc9c8c2, { roughness: 0.94 });
+    const orange = mat(0xf28c28, { roughness: 0.8 });
+    g.add(mesh(GEO.sphLo, feather, 0.42, 0.34, 0.58, 0, 0.48, -0.08));
+    const neck = mesh(GEO.cyl, feather, 0.11, 0.62, 0.11, 0, 0.82, 0.3);
+    neck.rotation.x = -0.2;
+    g.add(neck);
+    g.add(mesh(GEO.sphLo, feather, 0.22, 0.2, 0.22, 0, 1.12, 0.42));
+    const beak = mesh(GEO.cone, orange, 0.1, 0.3, 0.1, 0, 1.08, 0.67);
+    beak.rotation.x = Math.PI / 2;
+    g.add(beak);
+    g.add(
+      instanced(
+        GEO.dodec,
+        wing,
+        [-1, 1].map((side) => ({ p: [side * 0.36, 0.52, -0.08], r: [0, 0, side * 0.22], s: [0.15, 0.28, 0.46] })),
+        "goose_wings"
+      )
+    );
+    g.add(
+      instanced(
+        GEO.cyl,
+        orange,
+        [-1, 1].map((side) => ({ p: [side * 0.14, 0.16, 0], s: [0.035, 0.32, 0.035] })),
+        "goose_legs"
+      )
+    );
+    const angryEye = mat(0xc62828, { emissive: 0x3a0505, emissiveIntensity: 0.3 });
+    g.add(mesh(GEO.sphLo, angryEye, 0.035, 0.035, 0.035, -0.11, 1.15, 0.6));
+    g.add(mesh(GEO.sphLo, angryEye, 0.035, 0.035, 0.035, 0.11, 1.15, 0.6));
+    return g;
+  }
+  function bBabysitter() {
+    const g = bAngryAdult();
+    g.name = "bbb_enemy_furious_babysitter_v1";
+    const apron = mat(0xffd15c, { roughness: 0.86 });
+    g.add(mesh(GEO.box, apron, 0.46, 0.52, 0.08, 0, 0.64, 0.29));
+    g.add(mesh(GEO.box, mat(0xeff8ff, { roughness: 0.72 }), 0.15, 0.3, 0.12, 0.48, 0.84, 0.18));
+    g.add(mesh(GEO.cone, mat(0xff7eb6, { roughness: 0.72 }), 0.09, 0.13, 0.09, 0.48, 1.03, 0.18));
+    g.add(mesh(GEO.box, mat(0x32384a, { roughness: 0.74 }), 0.34, 0.42, 0.05, -0.47, 0.85, 0.16));
+    return g;
+  }
+  function bRunawayMower() {
+    const g = new T.Group();
+    g.name = "bbb_enemy_runaway_mower_v1";
+    const deck = mat(0xd94a3d, { roughness: 0.56, metalness: 0.12 });
+    const engine = mat(0x30343c, { roughness: 0.5, metalness: 0.28 });
+    g.add(mesh(GEO.box, deck, 0.72, 0.18, 0.86, 0, 0.2, 0.1));
+    g.add(mesh(GEO.cyl, engine, 0.28, 0.3, 0.28, 0, 0.38, 0.05));
+    g.add(
+      instanced(
+        GEO.cyl,
+        mat(0x1d2026, { roughness: 0.96 }),
+        [-1, 1].flatMap((side) => [-0.24, 0.36].map((z) => ({ p: [side * 0.42, 0.16, z], r: [0, 0, Math.PI / 2], s: [0.16, 0.1, 0.16] }))),
+        "mower_wheels"
+      )
+    );
+    const handle = mesh(GEO.torusThin, mat(0x555d68, { roughness: 0.48, metalness: 0.35 }), 0.56, 0.74, 0.36, 0, 0.75, -0.42);
+    handle.rotation.x = -0.45;
+    g.add(handle);
+    const eye = mat(0xff3d3d, { emissive: 0x6e0909, emissiveIntensity: 0.8 });
+    g.add(mesh(GEO.sphLo, eye, 0.06, 0.05, 0.04, -0.19, 0.34, 0.55));
+    g.add(mesh(GEO.sphLo, eye, 0.06, 0.05, 0.04, 0.19, 0.34, 0.55));
+    return g;
+  }
+  function bDiaperDrone() {
+    const g = new T.Group();
+    g.name = "bbb_enemy_diaper_drone_v1";
+    const shell = mat(0xe8edf5, { roughness: 0.38, metalness: 0.24 });
+    const dark = mat(0x30364a, { roughness: 0.5, metalness: 0.34 });
+    g.add(mesh(GEO.dodec, shell, 0.38, 0.22, 0.38, 0, 0.72, 0));
+    g.add(
+      instanced(
+        GEO.box,
+        dark,
+        [Math.PI / 4, -Math.PI / 4].map((ry) => ({ p: [0, 0.72, 0], r: [0, ry, 0], s: [1.2, 0.07, 0.09] })),
+        "drone_arms"
+      )
+    );
+    const rotorPoints = [[-0.48, -0.48], [0.48, -0.48], [-0.48, 0.48], [0.48, 0.48]];
+    g.add(
+      instanced(
+        GEO.cyl,
+        dark,
+        rotorPoints.map(([x, z]) => ({ p: [x, 0.78, z], s: [0.25, 0.035, 0.25] })),
+        "drone_rotors"
+      )
+    );
+    g.add(mesh(GEO.sphLo, mat(0xff3d3d, { emissive: 0x7a0808, emissiveIntensity: 1 }), 0.08, 0.07, 0.05, 0, 0.7, 0.38));
+    g.add(mesh(GEO.box, mat(0xbfdff1, { roughness: 0.82 }), 0.5, 0.18, 0.4, 0, 0.48, -0.02));
+    return g;
+  }
+  function bDemolitionDozer() {
+    const g = new T.Group();
+    g.name = "bbb_enemy_demolition_dozer_v1";
+    const yellow = mat(0xe7a928, { roughness: 0.5, metalness: 0.16 });
+    const track = mat(0x282b2f, { roughness: 0.9, metalness: 0.18 });
+    g.add(mesh(GEO.box, yellow, 0.72, 0.4, 0.9, 0, 0.45, -0.08));
+    g.add(mesh(GEO.box, mat(0x94cde4, { roughness: 0.22, metalness: 0.1 }), 0.58, 0.34, 0.42, 0, 0.78, -0.18));
+    g.add(
+      instanced(
+        GEO.box,
+        track,
+        [-1, 1].map((side) => ({ p: [side * 0.48, 0.22, 0], s: [0.22, 0.34, 1.08] })),
+        "dozer_tracks"
+      )
+    );
+    const blade = mesh(GEO.box, yellow, 1.2, 0.5, 0.12, 0, 0.34, 0.62);
+    blade.rotation.x = -0.18;
+    g.add(blade);
+    g.add(mesh(GEO.cyl, track, 0.06, 0.52, 0.06, -0.36, 0.38, 0.34));
+    g.add(mesh(GEO.cyl, track, 0.06, 0.52, 0.06, 0.36, 0.38, 0.34));
+    const beacon = mesh(GEO.cyl, mat(0xff7d2d, { emissive: 0x5a1900, emissiveIntensity: 0.75 }), 0.08, 0.12, 0.08, 0, 1.02, -0.2);
+    g.add(beacon);
+    return g;
+  }
   const ENEMY_TPLS = [
-    { key: "dog", e: "🐕‍🦺", n: "Guard Dog (Radicalized)", s: 2.6, min: 0, max: 2.4, count: 1, spd: 3.0, aggro: 14, sfx: "bark", build: bAngryDog, hits: ["BAD DOG!", "THE DOG OBJECTS", "MAILMAN'S REVENGE"] },
-    { key: "adult", e: "🧔", n: "Angry Dad (You Ate The Grill)", s: 3.4, min: 2.4, max: 4.5, count: 2, spd: 4.0, aggro: 16, sfx: "bark", build: bAngryAdult, hits: ["GROUNDED!", "NO DESSERT!", "1-STAR PARENTING"] },
-    { key: "police", e: "🚓", n: "Police Cruiser (Baby Division)", s: 6, min: 4.5, max: 9, count: 2, spd: 6.0, aggro: 26, sfx: "siren", build: bPolice, hits: ["CITED!", "RESISTING A NAP", "BABY, PULL OVER"] },
-    { key: "tank", e: "🪖", n: "HOA Tank (Final Notice)", s: 9, min: 9, max: 1e9, count: 2, spd: 5.0, aggro: 34, sfx: "boom", build: bTank, shells: true, hits: ["SHELLED!", "ARTICLE 7 VIOLATION", "LAWN ENFORCEMENT"] },
+    { key: "dog", e: "🐕‍🦺", n: "Guard Dog (Radicalized)", s: 2.6, min: FENCE_FREE, max: 3.75, count: 1, spd: 3.8, aggro: 18, sfx: "bark", build: bAngryDog, hits: ["BAD DOG!", "THE DOG OBJECTS", "MAILMAN'S REVENGE"] },
+    { key: "goose", e: "🪿", n: "Territorial Goose (No Crumbs)", s: 2.2, min: FENCE_FREE, max: 3.2, count: 1, spd: 4.8, aggro: 19, sfx: "bark", build: bAngryGoose, hits: ["HONKED!", "GOOSE CHOSE VIOLENCE", "NO CRUMBS FOR YOU"] },
+    { key: "adult", e: "🧔", n: "Angry Dad (You Ate The Grill)", s: 3.4, min: 2.4, max: 4.9, count: 1, spd: 4.8, aggro: 22, sfx: "bark", build: bAngryAdult, hits: ["GROUNDED!", "NO DESSERT!", "1-STAR PARENTING"] },
+    { key: "babysitter", e: "🍼", n: "Furious Babysitter (Overtime)", s: 4.2, min: 2.8, max: 6.1, count: 1, spd: 5.6, aggro: 24, sfx: "bark", build: bBabysitter, hits: ["TIME OUT!", "NAP ENFORCED!", "THAT IS NOT A SNACK"] },
+    { key: "mower", e: "🏎️", n: "Runaway Lawn Mower", s: 5.5, min: 3.8, max: 7.9, count: 1, spd: 7.2, aggro: 28, sfx: "boom", build: bRunawayMower, hits: ["MOWED!", "GRASS REVENGE", "WATCH THE CLIPPINGS"] },
+    { key: "police", e: "🚓", n: "Police Cruiser (Baby Division)", s: 6, min: 4.5, max: 8.6, count: 1, spd: 7.4, aggro: 31, sfx: "siren", build: bPolice, hits: ["CITED!", "RESISTING A NAP", "BABY, PULL OVER"] },
+    { key: "drone", e: "🚁", n: "Diaper Drone (Air Support)", s: 8.5, min: 6.2, max: 12.2, count: 1, spd: 9.5, aggro: 40, sfx: "siren", build: bDiaperDrone, shells: true, shellSpd: 13, shellScale: 0.34, fireEvery: 1.8, fireRange: 46, holdRange: 23, hits: ["AIR TAGGED!", "DIAPER DRONE STRIKE", "NAP FROM ABOVE"] },
+    { key: "tank", e: "🪖", n: "HOA Tank (Final Notice)", s: 9, min: 9, max: 13, count: 1, spd: 7.5, aggro: 42, sfx: "boom", build: bTank, shells: true, shellSpd: 10, shellScale: 0.5, fireEvery: 2.5, fireRange: 44, holdRange: 20, hits: ["SHELLED!", "ARTICLE 7 VIOLATION", "LAWN ENFORCEMENT"] },
+    { key: "dozer", e: "🚜", n: "Demolition Dozer (Bedtime Crew)", s: 22, min: 13, max: 1e9, count: 2, spd: 10.5, aggro: 55, sfx: "boom", build: bDemolitionDozer, hits: ["BULLDOZED!", "PERMIT DENIED", "BEDTIME MEANS BEDTIME"] },
   ];
+  const ENEMY_MAX_ACTIVE = 4;
   let enemies = [];
   let shells = [];
   let gasClouds = [];
+  let enemySpawnCursor = 0;
+  let enemyHitsTaken = 0;
+  let enemyShotsFired = 0;
   const enemyAnnounced = new Set();
 
-  function currentEnemyTpl() {
-    if (yardSealed()) return null; // the yard is a safe nursery
-    for (const t of ENEMY_TPLS) if (baby.size >= t.min && baby.size < t.max) return t;
-    return null;
+  function activeEnemyTpls() {
+    if (yardSealed()) return []; // the yard is a safe nursery
+    return ENEMY_TPLS.filter((t) => baby.size >= t.min && baby.size < t.max);
   }
   function spawnEnemy(tpl, nearDist) {
     const actR = activationRadius();
+    const spawnNear = Math.max(tpl.s * 1.45 + 3, Math.min(actR * 0.28, tpl.aggro * 0.62));
+    const spawnFar = Math.max(spawnNear + 3, Math.min(actR * 0.62, tpl.aggro * 0.92));
     for (let tries = 0; tries < 10; tries++) {
       const a = Math.random() * Math.PI * 2;
-      const d = nearDist || lerp(actR * 0.45, actR * 0.8, Math.random());
+      const d = typeof nearDist === "number" ? nearDist : lerp(spawnNear, spawnFar, Math.random());
       const x = clamp(baby.x + Math.cos(a) * d, -CITY_BOUND + 10, CITY_BOUND - 10);
       const z = clamp(baby.z + Math.sin(a) * d, -CITY_BOUND + 10, CITY_BOUND - 10);
       if (x > YARD.x0 - 3 && x < YARD.x1 + 3 && z > YARD.z0 - 3 && z < YARD.z1 + 3) continue;
@@ -2267,7 +2476,7 @@
       scene.add(g);
       const e = {
         tpl, x, z, s: tpl.s, g,
-        mvx: 0, mvz: 0, state: "patrol", stun: 0, reCd: 0, fireCd: 2,
+        mvx: 0, mvz: 0, state: "patrol", stun: 0, reCd: 0, fireCd: Math.min(1.5, tpl.fireEvery || 2),
         wanderT: 0, retireT: 6, gassedShown: false, sirenT: 0,
         lights: g.userData.lights || null, turret: g.userData.turret || null,
       };
@@ -2285,12 +2494,20 @@
   }
   function enemyTick() {
     if (phase !== "play") return;
-    const tpl = currentEnemyTpl();
-    for (const e of enemies) if ((!tpl || e.tpl !== tpl) && e.state !== "retire") e.state = "retire";
-    if (tpl) {
-      let have = 0;
-      for (const e of enemies) if (e.tpl === tpl) have++;
-      if (have < tpl.count) spawnEnemy(tpl);
+    const roster = activeEnemyTpls();
+    const allowed = new Set(roster.map((tpl) => tpl.key));
+    for (const e of enemies) if (!allowed.has(e.tpl.key) && e.state !== "retire") e.state = "retire";
+    const active = enemies.filter((e) => e.state !== "retire");
+    if (!roster.length || active.length >= ENEMY_MAX_ACTIVE) return;
+    const start = enemySpawnCursor % roster.length;
+    for (let offset = 0; offset < roster.length; offset++) {
+      const tpl = roster[(start + offset) % roster.length];
+      const have = active.filter((e) => e.tpl === tpl).length;
+      if (have >= tpl.count) continue;
+      if (spawnEnemy(tpl)) {
+        enemySpawnCursor = (start + offset + 1) % roster.length;
+        break; // one clear INCOMING banner per replenishment tick
+      }
     }
   }
   function removeEnemy(i, keepMesh) {
@@ -2300,6 +2517,7 @@
   }
   function hitBaby(srcX, srcZ, tpl) {
     hitImmune = 2.0;
+    enemyHitsTaken++;
     const old = baby.size;
     baby.size = Math.max(START_SIZE * 0.8, baby.size * 0.96);
     const dx = baby.x - srcX;
@@ -2322,7 +2540,7 @@
     const dx = baby.x - e.x;
     const dz = baby.z - e.z;
     const dist = Math.hypot(dx, dz) || 1;
-    const spd = 8;
+    const spd = e.tpl.shellSpd || 8;
     const lead = dist / spd * 0.7;
     const tx = baby.x + baby.vx * lead;
     const tz = baby.z + baby.vz * lead;
@@ -2330,9 +2548,11 @@
     const ddz = tz - e.z;
     const dd = Math.hypot(ddx, ddz) || 1;
     const m = new T.Mesh(GEO.sphLo, shellMat);
-    m.scale.setScalar(0.5);
+    m.name = `bbb_enemy_projectile_${e.tpl.key}`;
+    m.scale.setScalar(e.tpl.shellScale || 0.5);
     scene.add(m);
     shells.push({ x: e.x, z: e.z, vx: (ddx / dd) * spd, vz: (ddz / dd) * spd, t: 0, ft: dd / spd, m, tpl: e.tpl });
+    enemyShotsFired++;
     AudioKit.boom(0.55);
     spawnBurst(poolM, e.x, e.s * 0.6, e.z, 4, 0x9aa2b5, 0.8, 0.6);
   }
@@ -2438,7 +2658,7 @@
           addFloater(e.x, e.s, e.z, "LOST IT", "#b6b3c9", false);
         }
         if (e.state === "chase") {
-          const hold = e.tpl.shells && d < 18; // tanks bombard from range
+          const hold = e.tpl.shells && d < (e.tpl.holdRange || 18); // ranged hunters bombard from outside bite range
           e.mvx = hold ? 0 : (dx / d) * e.tpl.spd;
           e.mvz = hold ? 0 : (dz / d) * e.tpl.spd;
           if (e.tpl.sfx === "siren") {
@@ -2450,8 +2670,8 @@
           }
           if (e.tpl.shells) {
             e.fireCd -= dt;
-            if (e.fireCd <= 0 && d < 38) {
-              e.fireCd = 2.6;
+            if (e.fireCd <= 0 && d < (e.tpl.fireRange || 38)) {
+              e.fireCd = e.tpl.fireEvery || 2.6;
               fireShell(e);
             }
           }
@@ -2619,13 +2839,6 @@
     const diaper = mat(0xf4fbff, { roughness: 0.94 });
     parts.body = mesh(GEO.sph, romper, 1, 1, 1, 0, 0, 0);
     parts.body.name = "baby_romper_body";
-    const bibMat = new T.MeshStandardMaterial({ map: ginghamTex, bumpMap: ginghamTex, bumpScale: 0.012, color: 0xfff0df, roughness: 0.86, metalness: 0, side: T.DoubleSide });
-    bibMat.name = "baby_generated_gingham_bib";
-    const bib = new T.Mesh(GEO.circle, bibMat);
-    bib.name = "baby_bib";
-    bib.position.set(0, 0.22, 0.985);
-    bib.scale.set(0.38, 0.36, 0.38);
-    parts.body.add(bib);
     parts.body.add(
       instanced(
         GEO.box,
@@ -2659,12 +2872,6 @@
 
     parts.diaperBack = mesh(GEO.sph, diaper, 1, 1, 1, 0, 0, 0);
     parts.diaperBack.name = "baby_diaper_back";
-    const backPatch = new T.Mesh(GEO.circle, bibMat);
-    backPatch.name = "baby_generated_gingham_back_patch";
-    backPatch.position.set(0, 0.08, -0.995);
-    backPatch.rotation.y = Math.PI;
-    backPatch.scale.setScalar(0.34);
-    parts.diaperBack.add(backPatch);
     parts.band = mesh(GEO.cyl, diaper, 1, 1, 1, 0, 0, 0);
     parts.band.name = "baby_diaper_waist";
     parts.band.add(
@@ -2686,7 +2893,7 @@
     }
     roller.add(parts.body, parts.head, parts.diaperBack, parts.band);
     babyG.traverse((child) => {
-      if (child.isMesh && child !== parts.face && child !== bib) child.castShadow = true;
+      if (child.isMesh && child !== parts.face) child.castShadow = true;
     });
   }
   buildBaby();
@@ -2942,6 +3149,9 @@
     shells = [];
     for (const c of gasClouds) scene.remove(c.m);
     gasClouds = [];
+    enemySpawnCursor = 0;
+    enemyHitsTaken = 0;
+    enemyShotsFired = 0;
     enemyAnnounced.clear();
     shake = 0;
     saveTimer = 0;
@@ -3716,6 +3926,9 @@
         slowed: slowTimer > 0,
         hitImmune: hitImmune > 0,
         enemies: enemies.length,
+        activeEnemies: enemies.filter((enemy) => enemy.state !== "retire").length,
+        enemyHitsTaken,
+        enemyShotsFired,
         shells: shells.length,
         gas: gasClouds.length,
         permanents: permCount,
@@ -3757,6 +3970,29 @@
     fart: tryFart,
     enemies() {
       return enemies;
+    },
+    enemyRoster() {
+      return ENEMY_TPLS.map((tpl) => ({
+        key: tpl.key,
+        name: tpl.n,
+        size: tpl.s,
+        min: tpl.min,
+        max: tpl.max,
+        count: tpl.count,
+        speed: tpl.spd,
+        aggro: tpl.aggro,
+        ranged: !!tpl.shells,
+      }));
+    },
+    enemyStatus() {
+      return enemies.map((enemy) => ({
+        key: enemy.tpl.key,
+        state: enemy.state,
+        x: enemy.x,
+        z: enemy.z,
+        distance: Math.hypot(enemy.x - baby.x, enemy.z - baby.z),
+        stunned: enemy.stun > 0,
+      }));
     },
     spawnEnemy(key, dist) {
       const tpl = ENEMY_TPLS.find((t) => t.key === key);

@@ -238,20 +238,25 @@
     network: "public-show",
     checkInterval: 0.1,
     detectionHalfAngle: THREE.MathUtils.degToRad(18),
-    exposureSeconds: 1.35,
+    warningSeconds: 2.4,
+    trackingGraceSeconds: 2,
+    exposureSeconds: 4.4,
     exposureDecayPerSecond: 1.4,
+    acquisitionDecayPerSecond: 1.4,
     alarmCooldownSeconds: 1.25,
     endpointPauseSeconds: 0.58,
     scanMinimumSeconds: 10.5,
     scanMaximumSeconds: 14.5,
     warningPulseCount: 3,
     warningPulseDutyCycle: 0.52,
-    trackingThreshold: 0.72,
+    trackingThreshold: 2.4 / 4.4,
     trackingTurnSpeed: THREE.MathUtils.degToRad(72),
     scanningLightColor: 0x42ff78,
     warningLightColor: 0xff2d21,
-    statusLightScale: 0.072,
-    alertLightScale: 0.09,
+    statusLightScale: 0.045,
+    alertLightScale: 0.06,
+    statusHaloScale: 0.08,
+    alertHaloScale: 0.105,
     responseSpeed: 1.08,
     searchSeconds: 6.5,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
@@ -583,7 +588,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-camera-warning-tracking-2",
+    assetVersion: "20260716-camera-visibility-tracking-3",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -4282,6 +4287,7 @@
         baseYaw: placement.yaw,
         yaw: placement.yaw + placement.sweep * placement.initialSweep,
         frozen: false,
+        acquisition: 0,
         trackingPlayer: false,
         indicator: "scanning-green",
         warningPulseIndex: 0,
@@ -4319,16 +4325,40 @@
       const mountMaterial = new THREE.MeshStandardMaterial({ color: 0x4b4032, metalness: 0.78, roughness: 0.3 });
       const housingMaterial = new THREE.MeshStandardMaterial({ color: 0xc1ad82, metalness: 0.72, roughness: 0.34 });
       const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x090b10, metalness: 0.2, roughness: 0.16 });
+      // Three r128 only carries InstancedMesh.instanceColor into the fragment
+      // shader when vertex colors are enabled too. Give both fixture spheres a
+      // white vertex-color baseline so the per-camera tint is not multiplied
+      // by the missing attribute's black default.
+      const instanceTintedSphere = (key, widthSegments, heightSegments) => geometry(key, () => {
+        const sphere = new THREE.SphereGeometry(1, widthSegments, heightSegments);
+        const colors = new Float32Array(sphere.getAttribute("position").count * 3);
+        colors.fill(1);
+        sphere.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        return sphere;
+      });
       const statusMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
+      const statusHaloMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.42,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
       this.mounts = new THREE.InstancedMesh(geometry("securityCameraMount", () => new THREE.BoxGeometry(1, 1, 1)), mountMaterial, count);
       this.mounts.name = "security-camera-mounts";
       this.housings = new THREE.InstancedMesh(geometry("securityCameraHousing", () => new THREE.BoxGeometry(1, 1, 1)), housingMaterial, count);
       this.housings.name = "security-camera-housings";
       this.lenses = new THREE.InstancedMesh(geometry("securityCameraLens", () => new THREE.CylinderGeometry(1, 1, 1, 12)), lensMaterial, count);
       this.lenses.name = "security-camera-lenses";
-      this.statusLights = new THREE.InstancedMesh(geometry("securityCameraStatus", () => new THREE.SphereGeometry(1, 10, 7)), statusMaterial, count);
+      this.statusLights = new THREE.InstancedMesh(instanceTintedSphere("securityCameraStatus", 10, 7), statusMaterial, count);
       this.statusLights.name = "security-camera-status-lights";
-      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusLights]) {
+      this.statusHalos = new THREE.InstancedMesh(instanceTintedSphere("securityCameraStatusHalo", 12, 8), statusHaloMaterial, count);
+      this.statusHalos.name = "security-camera-status-halos";
+      this.statusHalos.renderOrder = 8;
+      this.statusLights.renderOrder = 9;
+      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusHalos, this.statusLights]) {
         mesh.castShadow = false;
         mesh.receiveShadow = false;
         mesh.frustumCulled = false;
@@ -4336,8 +4366,12 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.root.add(mesh);
       }
-      for (let index = 0; index < count; index += 1) this.statusLights.setColorAt(index, new THREE.Color(CAMERA_SECURITY.scanningLightColor));
+      for (let index = 0; index < count; index += 1) {
+        this.statusLights.setColorAt(index, new THREE.Color(CAMERA_SECURITY.scanningLightColor));
+        this.statusHalos.setColorAt(index, new THREE.Color(CAMERA_SECURITY.scanningLightColor));
+      }
       if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
+      if (this.statusHalos.instanceColor) this.statusHalos.instanceColor.needsUpdate = true;
     }
 
     setInstance(mesh, index, position, quaternion, scale) {
@@ -4356,19 +4390,17 @@
     }
 
     statusIndicator(cameraState) {
-      const disposition = this.cameraDisposition(cameraState);
       const isActive = state.security.activeCameraId === cameraState.id
         && cameraState.playerInCone
-        && cameraState.hasLineOfSight
-        && !disposition.permitted;
+        && cameraState.hasLineOfSight;
       if (state.security.lastAlarm?.cameraId === cameraState.id && state.security.alarmLatchCameraId === cameraState.id) {
         return { name: "alarm-red", color: CAMERA_SECURITY.warningLightColor, pulse: CAMERA_SECURITY.warningPulseCount };
       }
-      if (isActive && (cameraState.trackingPlayer || state.security.exposure >= CAMERA_SECURITY.trackingThreshold)) {
+      if (isActive && (cameraState.trackingPlayer || cameraState.acquisition >= 1)) {
         return { name: "tracking-red", color: CAMERA_SECURITY.warningLightColor, pulse: CAMERA_SECURITY.warningPulseCount };
       }
-      if (isActive && state.security.exposure > 0) {
-        const progress = clamp(state.security.exposure / CAMERA_SECURITY.trackingThreshold, 0, 0.9999);
+      if (isActive && cameraState.acquisition > 0) {
+        const progress = clamp(cameraState.acquisition, 0, 0.9999);
         const pulsePosition = progress * CAMERA_SECURITY.warningPulseCount;
         const pulse = Math.min(CAMERA_SECURITY.warningPulseCount, Math.floor(pulsePosition) + 1);
         const red = pulsePosition - Math.floor(pulsePosition) < CAMERA_SECURITY.warningPulseDutyCycle;
@@ -4386,6 +4418,7 @@
       const bodyScale = new THREE.Vector3(0.34, 0.2, 0.44);
       const lensScale = new THREE.Vector3(0.075, 0.12, 0.075);
       const statusScale = new THREE.Vector3(CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale);
+      const haloScale = new THREE.Vector3(CAMERA_SECURITY.statusHaloScale, CAMERA_SECURITY.statusHaloScale, CAMERA_SECURITY.statusHaloScale);
       for (let index = 0; index < this.cameras.length; index += 1) {
         const cameraState = this.cameras[index];
         const mountPosition = new THREE.Vector3(cameraState.x, cameraState.y, cameraState.z);
@@ -4396,24 +4429,29 @@
         cameraState.forward.set(0, 0, -1).applyEuler(this.euler).normalize();
         const bodyPosition = mountPosition.clone().add(new THREE.Vector3(0, -0.17, 0)).addScaledVector(cameraState.forward, 0.08);
         cameraState.lensOrigin.copy(bodyPosition).addScaledVector(cameraState.forward, 0.27);
-        // Put the indicator on the camera's front shoulder so the lens cannot
-        // hide it when the player looks up from below.
-        const statusPosition = bodyPosition.clone().add(this.offset.set(0.13, 0.08, -0.23).applyQuaternion(bodyQuaternion));
+        // Keep the indicator just beyond the housing's front-right corner.
+        // The former inset position was fully hidden by the lens/body from a
+        // normal player eye line even though its internal color state changed.
+        const statusPosition = bodyPosition.clone().add(this.offset.set(0.2, 0.055, -0.34).applyQuaternion(bodyQuaternion));
         lensQuaternion.setFromUnitVectors(upAxis, cameraState.forward);
         this.setInstance(this.mounts, index, mountPosition, mountQuaternion, mountScale);
         this.setInstance(this.housings, index, bodyPosition, bodyQuaternion, bodyScale);
         this.setInstance(this.lenses, index, cameraState.lensOrigin, lensQuaternion, lensScale);
         const indicator = this.statusIndicator(cameraState);
         const indicatorScale = indicator.name.endsWith("red") ? CAMERA_SECURITY.alertLightScale / CAMERA_SECURITY.statusLightScale : 1;
+        const haloIndicatorScale = indicator.name.endsWith("red") ? CAMERA_SECURITY.alertHaloScale / CAMERA_SECURITY.statusHaloScale : 1;
+        this.setInstance(this.statusHalos, index, statusPosition, bodyQuaternion, haloScale.clone().multiplyScalar(haloIndicatorScale));
         this.setInstance(this.statusLights, index, statusPosition, bodyQuaternion, statusScale.clone().multiplyScalar(indicatorScale));
         cameraState.indicator = indicator.name;
         cameraState.warningPulseIndex = indicator.pulse;
         cameraState.lightColor = indicator.color;
         this.instanceColor.setHex(indicator.color);
         this.statusLights.setColorAt(index, this.instanceColor);
+        this.statusHalos.setColorAt(index, this.instanceColor);
       }
-      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusHalos, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
       if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
+      if (this.statusHalos.instanceColor) this.statusHalos.instanceColor.needsUpdate = true;
     }
 
     updateScan(cameraState, dt) {
@@ -4487,7 +4525,7 @@
     isSightBlocker(hit) {
       const object = hit.object;
       if (!object || !object.visible || object.userData.securitySightTransparent) return false;
-      if (object === this.mounts || object === this.housings || object === this.lenses || object === this.statusLights) return false;
+      if (object === this.mounts || object === this.housings || object === this.lenses || object === this.statusLights || object === this.statusHalos) return false;
       const name = String(object.name || "").toLowerCase();
       if (/security-camera|rain|lightning|water-surface|flame|smoke|glow|bulb|interaction|contact-shadow/.test(name)) return false;
       const materials = Array.isArray(object.material) ? object.material : [object.material];
@@ -4530,13 +4568,26 @@
       const playerPosition = physics?.playerPosition();
       if (!playerPosition) return;
       this.playerEye.set(camera.position.x, camera.position.y, camera.position.z);
+      const previousActiveCamera = this.cameraById.get(state.security.activeCameraId);
+      const lockedCamera = previousActiveCamera?.acquisition >= 1 ? previousActiveCamera : null;
       for (const cameraState of this.cameras) {
         cameraState.playerInCone = false;
         cameraState.hasLineOfSight = false;
         cameraState.blocker = null;
         cameraState.trackingPlayer = false;
       }
+      if (
+        lockedCamera
+        && lockedCamera.room === state.currentRoom
+        && this.isCameraRelevant(lockedCamera, playerPosition)
+      ) {
+        // Lead the next cone check with the previous lock. Without this, a
+        // player stepping sideways could leave the narrow acquisition cone
+        // before the camera had a chance to visibly turn and follow.
+        this.trackCameraTowardPlayer(lockedCamera, this.playerEye, dt);
+      }
       if (state.isHidden) {
+        for (const cameraState of this.cameras) cameraState.acquisition = 0;
         state.security.observed = false;
         state.security.permitted = false;
         state.security.activeCameraId = null;
@@ -4553,26 +4604,44 @@
         .filter((inspection) => inspection.visible)
         .sort((a, b) => Number(a.permitted) - Number(b.permitted) || b.facingDot - a.facingDot || a.distance - b.distance);
       const selected = visible[0] || null;
+      for (const cameraState of this.cameras) {
+        if (cameraState !== selected?.cameraState) {
+          cameraState.acquisition = Math.max(
+            0,
+            cameraState.acquisition - CAMERA_SECURITY.acquisitionDecayPerSecond * dt,
+          );
+        }
+      }
       state.security.observed = Boolean(selected);
       state.security.permitted = Boolean(selected?.permitted);
       state.security.activeCameraId = selected?.cameraState.id || null;
       state.security.occludedBy = selected ? null : inspections.find((inspection) => inspection.cameraState.blocker)?.cameraState.blocker || null;
-      if (!selected || selected.permitted) {
+      if (!selected) {
         state.security.alarmLatchCameraId = null;
         state.security.exposure = Math.max(0, state.security.exposure - CAMERA_SECURITY.exposureDecayPerSecond * dt);
-        if (selected?.permitted) state.security.exposure = 0;
+        return;
+      }
+      const visibility = clamp(state.movement.stealthVisibilityMultiplier, 0.1, 1);
+      selected.cameraState.acquisition = clamp(
+        selected.cameraState.acquisition + dt / CAMERA_SECURITY.warningSeconds * visibility,
+        0,
+        1,
+      );
+      if (selected.cameraState.acquisition >= 1) {
+        this.trackCameraTowardPlayer(selected.cameraState, this.playerEye, dt);
+      }
+      if (selected.permitted) {
+        state.security.alarmLatchCameraId = null;
+        state.security.exposure = 0;
         return;
       }
       if (selected.reason === "observed-sabotage") {
+        selected.cameraState.acquisition = 1;
         state.security.exposure = 1;
         this.raiseAlarm(selected.cameraState, selected.reason);
         return;
       }
-      const visibility = clamp(state.movement.stealthVisibilityMultiplier, 0.1, 1);
       state.security.exposure = clamp(state.security.exposure + dt / CAMERA_SECURITY.exposureSeconds * visibility, 0, 1);
-      if (state.security.exposure >= CAMERA_SECURITY.trackingThreshold) {
-        this.trackCameraTowardPlayer(selected.cameraState, this.playerEye, dt);
-      }
       if (state.security.exposure >= 1) this.raiseAlarm(selected.cameraState, selected.reason);
     }
 
@@ -4711,6 +4780,7 @@
         scanDirection: cameraState.scanDirection,
         paused: cameraState.pauseRemaining > 0,
         frozen: cameraState.frozen,
+        acquisition: Number(cameraState.acquisition.toFixed(4)),
         trackingPlayer: cameraState.trackingPlayer,
         indicator: cameraState.indicator,
         warningPulseIndex: cameraState.warningPulseIndex,
@@ -4756,6 +4826,9 @@
         tuning: {
           checkInterval: CAMERA_SECURITY.checkInterval,
           exposureSeconds: CAMERA_SECURITY.exposureSeconds,
+          warningSeconds: CAMERA_SECURITY.warningSeconds,
+          trackingGraceSeconds: CAMERA_SECURITY.trackingGraceSeconds,
+          acquisitionDecayPerSecond: CAMERA_SECURITY.acquisitionDecayPerSecond,
           detectionHalfAngle: Number(CAMERA_SECURITY.detectionHalfAngle.toFixed(4)),
           scanMinimumSeconds: CAMERA_SECURITY.scanMinimumSeconds,
           scanMaximumSeconds: CAMERA_SECURITY.scanMaximumSeconds,
@@ -4797,6 +4870,7 @@
         cameraState.playerInCone = false;
         cameraState.hasLineOfSight = false;
         cameraState.blocker = null;
+        cameraState.acquisition = 0;
         cameraState.trackingPlayer = false;
       }
       this.syncPolicy();

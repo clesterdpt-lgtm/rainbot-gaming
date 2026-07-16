@@ -4,6 +4,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.MR_FEAST_CAMERA_TEST_PORT || (47000 + (process.pid % 14000)));
@@ -50,6 +51,31 @@ async function advanceSecurity(page, seconds) {
   return page.evaluate((duration) => window.MrFeastFresh.advanceCameraSecurityForQA(duration), seconds);
 }
 
+async function countFixtureIndicatorPixels(page, label) {
+  const screenshot = await page.locator("#mansion-stage").screenshot();
+  await sharp(screenshot).png().toFile(path.join(artifactDir, `camera-indicator-${label}.png`));
+  const metadata = await sharp(screenshot).metadata();
+  const width = metadata.width || 1;
+  const height = metadata.height || 1;
+  const region = {
+    left: Math.floor(width * 0.38),
+    top: Math.floor(height * 0.06),
+    width: Math.max(1, Math.floor(width * 0.24)),
+    height: Math.max(1, Math.floor(height * 0.3)),
+  };
+  const { data, info } = await sharp(screenshot).extract(region).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let green = 0;
+  let red = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const r = data[index];
+    const g = data[index + 1];
+    const b = data[index + 2];
+    if (g > 145 && g > r * 1.08 && g > b * 1.02) green += 1;
+    if (r > 160 && r > g * 1.2 && r > b * 1.08) red += 1;
+  }
+  return { green, red, region };
+}
+
 async function run() {
   let server = null;
   let browser = null;
@@ -91,6 +117,7 @@ async function run() {
     assert(mainCamera && basementCamera, `QA camera anchors are missing; qa=${JSON.stringify(state.security.qa)}`);
     assert(state.security.tuning.scanMinimumSeconds >= 10 && state.security.tuning.scanMaximumSeconds > state.security.tuning.scanMinimumSeconds, `camera one-way sweeps should be deliberately slow; tuning=${JSON.stringify(state.security.tuning)}`);
     assert(state.security.tuning.warningPulseCount === 3 && state.security.tuning.trackingThreshold > 0.5 && state.security.tuning.trackingThreshold < 1, `camera warning/tracking tuning should provide three pulses before alarm; tuning=${JSON.stringify(state.security.tuning)}`);
+    assert(state.security.tuning.warningSeconds >= 2 && state.security.tuning.trackingGraceSeconds >= 1.5 && state.security.tuning.exposureSeconds >= state.security.tuning.warningSeconds + state.security.tuning.trackingGraceSeconds, `warning and solid-red tracking phases need readable real-time durations; tuning=${JSON.stringify(state.security.tuning)}`);
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
     assert(indoorMounts.every((entry) => entry.mount === "wall-center" && entry.wallCentered), `every indoor camera should be centered on one wall rather than tucked into a corner; offenders=${JSON.stringify(indoorMounts.filter((entry) => entry.mount !== "wall-center" || !entry.wallCentered))}`);
@@ -129,11 +156,28 @@ async function run() {
     await page.waitForTimeout(120);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-yard-gate-desktop.png") });
 
+    await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0, occluded: true });
+    await advanceSecurity(page, 0.2);
+    state = await diagnostics(page);
+    assert(!state.security.observed, `steady green fixture check needs a clear non-detection state; security=${JSON.stringify(state.security)}`);
+    const greenIndicatorPixels = await countFixtureIndicatorPixels(page, "green-desktop");
+    assert(greenIndicatorPixels.green >= 24, `steady green fixture LED should be visibly readable in the rendered camera housing; pixels=${JSON.stringify(greenIndicatorPixels)}`);
+
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0 });
-    await advanceSecurity(page, 2);
+    await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
+    await advanceSecurity(page, state.security.tuning.warningSeconds + 0.2);
     state = await diagnostics(page);
     assert(state.security.observed && state.security.permitted, `ordinary show-space filming should be visible but permitted; security=${JSON.stringify(state.security)}`);
     assert(state.security.exposure === 0 && state.security.alarm.count === 0, "permitted filming must not build suspicion or raise an alarm");
+    const permittedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
+    assert(permittedCamera.trackingPlayer && permittedCamera.indicator === "tracking-red", `a permitted show camera should still visibly acquire and follow its filmed subject without alarming; camera=${JSON.stringify(permittedCamera)}`);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-permitted-tracking-desktop.png") });
+    const permittedYawBefore = permittedCamera.yaw;
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: -1.5 }), mainCamera);
+    await advanceSecurity(page, 0.6);
+    const permittedTrackedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
+    state = await diagnostics(page);
+    assert(permittedTrackedCamera.trackingPlayer && Math.abs(permittedTrackedCamera.yaw - permittedYawBefore) > 0.08 && state.security.alarm.count === 0, `permitted camera should follow room movement without raising an alarm; before=${permittedYawBefore} after=${JSON.stringify(permittedTrackedCamera)}`);
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
     await advanceSecurity(page, 0.25);
     state = await diagnostics(page);
@@ -166,9 +210,10 @@ async function run() {
 
     await page.evaluate((id) => window.MrFeastFresh.setCameraSweepForQA(id, 0), mainCamera);
     await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4 }), mainCamera);
+    await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
     const warningProbe = await page.evaluate((id) => {
       const samples = [];
-      for (let step = 0; step < 14; step += 1) {
+      for (let step = 0; step < 60; step += 1) {
         const security = window.MrFeastFresh.advanceCameraSecurityForQA(0.08);
         const camera = security.cameras.details.find((entry) => entry.id === id);
         samples.push({
@@ -178,24 +223,49 @@ async function run() {
           exposure: security.exposure,
           alarms: security.alarm.count,
         });
+        if (camera.indicator === "tracking-red") break;
       }
       return samples;
     }, mainCamera);
     const warnedPulses = new Set(warningProbe.filter((sample) => sample.indicator === "warning-red").map((sample) => sample.pulse));
     assert(warningProbe[0]?.indicator === "warning-red" || warningProbe.some((sample) => sample.indicator === "warning-green"), `hostile acquisition should visibly pulse between red and green; warning=${JSON.stringify(warningProbe)}`);
     assert(warnedPulses.size === 3, `camera should give exactly three visible red warning pulses before solid lock; warning=${JSON.stringify(warningProbe)}`);
+    await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
+    await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
+    for (let step = 0; step < 12; step += 1) {
+      const indicator = await page.evaluate((id) => {
+        const security = window.MrFeastFresh.advanceCameraSecurityForQA(0.1);
+        return security.cameras.details.find((entry) => entry.id === id).indicator;
+      }, mainCamera);
+      if (indicator === "warning-red") break;
+    }
+    const redIndicatorPixels = await countFixtureIndicatorPixels(page, "warning-red-desktop");
+    assert(redIndicatorPixels.red >= 24, `warning-red fixture LED should be visibly readable before lock-on; pixels=${JSON.stringify(redIndicatorPixels)}`);
+    await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
+    await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
+    let trackingElapsed = 0;
+    let trackingState = null;
+    while (trackingElapsed < 6) {
+      trackingState = await advanceSecurity(page, 0.1);
+      trackingElapsed += 0.1;
+      const cameraState = trackingState.cameras.details.find((entry) => entry.id === mainCamera);
+      if (cameraState.indicator === "tracking-red") break;
+    }
+    assert(trackingElapsed >= 2 && trackingState?.alarm.count === 0, `warning pulses should leave an observable pre-alarm interval before tracking; elapsed=${trackingElapsed} security=${JSON.stringify(trackingState)}`);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-solid-red-tracking-desktop.png") });
     const trackingSample = warningProbe.find((sample) => sample.indicator === "tracking-red");
-    assert(trackingSample?.tracking && trackingSample.alarms === 0, `solid red tracking should begin before the alarm so the player still has time to escape; warning=${JSON.stringify(warningProbe)}`);
+    assert(trackingSample?.tracking || trackingState?.cameras.details.find((entry) => entry.id === mainCamera)?.trackingPlayer, `solid red tracking should begin before the alarm so the player still has time to escape; warning=${JSON.stringify(warningProbe)}`);
     const trackingYawBefore = (await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id).yaw, mainCamera));
-    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1 }), mainCamera);
-    await advanceSecurity(page, 0.12);
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.5 }), mainCamera);
+    await advanceSecurity(page, 0.6);
     const trackedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
-    assert(trackedCamera.trackingPlayer && trackedCamera.indicator === "tracking-red" && Math.abs(trackedCamera.yaw - trackingYawBefore) > 0.03, `solid-red camera should follow player movement within its room; before=${trackingYawBefore} after=${JSON.stringify(trackedCamera)}`);
+    state = await diagnostics(page);
+    assert(trackedCamera.trackingPlayer && trackedCamera.indicator === "tracking-red" && Math.abs(trackedCamera.yaw - trackingYawBefore) > 0.08 && state.security.alarm.count === 0, `solid-red camera should visibly follow player movement during a pre-alarm grace window; before=${trackingYawBefore} after=${JSON.stringify(trackedCamera)} alarm=${JSON.stringify(state.security.alarm)}`);
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.55);
     state = await diagnostics(page);
     assert(state.security.observed && state.security.exposure > 0 && state.security.exposure < 1, `facing-toward exposure should build through a grace period; security=${JSON.stringify(state.security)}`);
-    await advanceSecurity(page, 1.5);
+    await advanceSecurity(page, 5);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1 && state.security.mode === "lockdown", `sustained hostile exposure should raise one alarm; security=${JSON.stringify(state.security)}`);
     await advanceSecurity(page, 3);
@@ -231,7 +301,7 @@ async function run() {
     assert(state.security.alarm.count === 1 && state.security.alarm.last?.reason === "observed-sabotage", `tagged sabotage in permitted view should alarm immediately; alarm=${JSON.stringify(state.security.alarm)}`);
 
     await configureCameraScenario(page, { cameraId: basementCamera, mode: "restricted", sweep: 0 });
-    await advanceSecurity(page, 1.8);
+    await advanceSecurity(page, 5.4);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1 && state.security.alarm.last?.reason === "restricted-trespass", `unlocked-basement camera exposure should be trespassing; security=${JSON.stringify(state.security)}`);
 
@@ -255,7 +325,7 @@ async function run() {
     state = await diagnostics(page);
     assert(!state.security.observed && state.security.exposure === 0 && state.security.alarm.count === 0, `an occluder should fully interrupt camera sight; security=${JSON.stringify(state.security)}`);
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, false), mainCamera);
-    await advanceSecurity(page, 1.8);
+    await advanceSecurity(page, 5);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1, "clearing the same sightline should restore detection");
 
@@ -282,7 +352,7 @@ async function run() {
     assert(response.teleports === 0 && response.distanceTravelled > 0, `Mr. Feast must navigate rather than teleport; response=${JSON.stringify(response)}`);
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
-    await advanceSecurity(page, 0.45);
+    await advanceSecurity(page, 0.35);
     state = await diagnostics(page);
     assert(await page.locator("#mansion-security").isVisible(), "suspicion HUD should appear during hostile observation");
     assert(Number(await page.locator("#mansion-security").getAttribute("aria-valuenow")) > 0, "suspicion HUD meter should mirror exposure");

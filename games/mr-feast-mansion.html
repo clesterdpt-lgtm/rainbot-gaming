@@ -330,6 +330,84 @@
       background: linear-gradient(90deg, #6e2e29, #a94a3f);
     }
 
+    #mansion-security {
+      position: absolute;
+      left: 50%;
+      bottom: max(64px, calc(env(safe-area-inset-bottom) + 54px));
+      z-index: 7;
+      display: grid;
+      width: min(230px, calc(100% - 36px));
+      gap: 5px;
+      padding: 8px 10px 9px;
+      border: 1px solid rgba(205, 177, 124, 0.28);
+      border-radius: 3px;
+      color: #d8cdbb;
+      background: rgba(7, 8, 10, 0.82);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.44);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+
+    #mansion-security[hidden] { display: none; }
+
+    .mansion-security__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    #mansion-security-mode { color: #d9c38f; }
+    #mansion-security-value { color: #9d968b; font-variant-numeric: tabular-nums; }
+
+    .mansion-security__track {
+      height: 5px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    #mansion-security-fill {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #6e825b, #c9b368);
+      transform-origin: left center;
+      transition: width 80ms linear, background 140ms ease;
+    }
+
+    #mansion-security-status {
+      overflow: hidden;
+      color: #aaa397;
+      font-family: var(--mansion-serif);
+      font-size: 0.72rem;
+      line-height: 1.05;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-security[data-state="hostile"] {
+      border-color: rgba(207, 152, 73, 0.52);
+    }
+
+    #mansion-security[data-state="hostile"] #mansion-security-fill {
+      background: linear-gradient(90deg, #a56c30, #e0b35b);
+    }
+
+    #mansion-security[data-state="alarm"] {
+      border-color: rgba(220, 72, 55, 0.72);
+      box-shadow: 0 0 0 1px rgba(150, 32, 23, 0.3), 0 8px 28px rgba(86, 9, 6, 0.58);
+    }
+
+    #mansion-security[data-state="alarm"] #mansion-security-fill {
+      background: linear-gradient(90deg, #8b2019, #ef4f3f);
+    }
+
     .mansion-tools {
       position: absolute;
       top: max(14px, env(safe-area-inset-top));
@@ -1229,6 +1307,9 @@
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
       #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
+      #mansion-security { bottom: max(160px, calc(env(safe-area-inset-bottom) + 146px)); width: 184px; }
+      #mansion-security:not([hidden]) ~ #mansion-discovery { bottom: max(230px, calc(env(safe-area-inset-bottom) + 214px)); }
+      #mansion-security:not([hidden]) ~ #mansion-action { bottom: max(218px, calc(env(safe-area-inset-bottom) + 202px)); }
       #mansion-journal { place-items: start stretch; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
       .mansion-journal__panel { width: 100%; max-height: 100%; padding: 24px 16px 28px; }
       .mansion-journal__title { margin: 6px 46px 18px 0; font-size: 2.35rem; }
@@ -1324,6 +1405,12 @@
         <div id="mansion-energy" role="meter" aria-label="Sprint energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
           <div class="mansion-energy__head"><span id="mansion-energy-mode">Energy</span><span id="mansion-energy-value">100</span></div>
           <div class="mansion-energy__track" aria-hidden="true"><div id="mansion-energy-fill"></div></div>
+        </div>
+
+        <div id="mansion-security" role="meter" aria-label="Camera suspicion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-state="permitted" hidden>
+          <div class="mansion-security__head"><span id="mansion-security-mode">Public cameras</span><span id="mansion-security-value">0</span></div>
+          <div class="mansion-security__track" aria-hidden="true"><div id="mansion-security-fill"></div></div>
+          <span id="mansion-security-status">Filming permitted</span>
         </div>
 
         <div class="mansion-tools" aria-label="View controls">
@@ -1531,6 +1618,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260716-inventory-notepad-5" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260716-camera-security-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

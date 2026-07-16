@@ -242,6 +242,9 @@ const contestant13DigSiteBuild = section("function addContestantThirteenDigSite"
 const mrFeastPatrolRoute = section("const MR_FEAST_PATROL_ROUTE", "const MR_FEAST_NPC");
 const mrFeastNpcConfig = section("const MR_FEAST_NPC", "const TOILET_FLUSH_DURATION");
 const mrFeastWanderer = section("class MrFeastWanderer", "window.MrFeastFresh");
+const cameraSecurityConfig = section("const CAMERA_SECURITY_MODE", "const MR_FEAST_LEVEL");
+const cameraSecuritySystem = section("class CameraSecuritySystem", "function addLocalInstanceBatch");
+const patronFeedSecurityHandler = section("handlePatronFeedSabotage()", "beginIllegalAction(id)", cameraSecuritySystem);
 
 // 29. Crown trim remains continuous over the entire authored wall run, while
 // baseboards continue below windows but stop at doors, arches, and open
@@ -1283,7 +1286,31 @@ check("43 Mr Feast moving shadows", /object\.castShadow\s*=\s*false/.test(mrFeas
 check("43 Mr Feast culling", /interiorDetailMeshes\.push\(object\)/.test(mrFeastWanderer) && /object\.visible\s*=\s*!interiorDetailsHidden/.test(mrFeastWanderer), "asynchronously loaded meshes do not join exterior detail culling");
 check("43 Mr Feast diagnostics", /mrFeast:\s*mrFeastNpc\?\.getDiagnostics/.test(diagnostics) && /resetMrFeastWandererForQA/.test(qaHooks) && /setMrFeastPoseForQA/.test(qaHooks) && /transitionMrFeastForQA/.test(qaHooks) && /advanceMrFeastAnimationForQA/.test(qaHooks) && /setMrFeastRouteSegmentForQA/.test(qaHooks) && /runMrFeastWholeHomeRouteForQA/.test(qaHooks) && /visitedRouteFloors/.test(mrFeastWanderer) && /visitedRouteDoors/.test(mrFeastWanderer) && /routeDoorOpenEvents/.test(mrFeastWanderer) && /routeSummary:/.test(mrFeastWanderer) && /liveBones/.test(mrFeastWanderer) && /animationTracks:/.test(mrFeastWanderer) && /castShadowMeshes:/.test(mrFeastWanderer), "wanderer diagnostics or deterministic whole-home QA controls are missing");
 check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
-check("43 Mr Feast visual-only slice", !/physics\.|addInteractionTarget\(|attack|pursuit|lineOfSight/i.test(mrFeastWanderer), "test wanderer adds collision, interaction, or pursuit behavior before that gameplay is designed");
+check("51 Mr Feast bounded camera response", !/attack|capture|damage|gameOver|failureState/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack, capture, damage, or a failure state");
+
+// 51. Physical public-show cameras create a performance-safe stealth layer.
+// They scan through one data-driven system, preserve intentional blind spots,
+// and escalate only through the documented policy and investigation states.
+const securityPlacementMatches = [...cameraSecurityConfig.matchAll(/securityCameraPlacement\("([^"]+)",\s*"([^"]+)"/g)];
+const securityPlacementIds = securityPlacementMatches.map((match) => match[1]);
+const securityPlacementZones = securityPlacementMatches.map((match) => match[2]);
+check("51 camera surveillance source invariants", /SHOW:\s*"show"/.test(cameraSecurityConfig) && /RESTRICTED:\s*"restricted"/.test(cameraSecurityConfig) && /LOCKDOWN:\s*"lockdown"/.test(cameraSecurityConfig) && /CAMERA_POLICY_TRANSITIONS/.test(cameraSecurityConfig), "camera policy is not an explicit show/restricted/lockdown transition table");
+check("51 camera surveillance source invariants", securityPlacementMatches.length >= 28 && new Set(securityPlacementIds).size === securityPlacementIds.length, `camera placement table needs at least 28 unique units; found ${securityPlacementMatches.length}`);
+for (const zone of ["FRONT FOYER", "BALLROOM", "WORKSHOP", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
+  check("51 camera surveillance source invariants", securityPlacementZones.includes(zone), `camera placement table does not cover ${zone}`);
+}
+for (const zone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET"]) {
+  check("51 camera surveillance source invariants", !securityPlacementZones.includes(zone) && cameraSecurityConfig.includes(`"${zone}"`), `${zone} is not preserved as an explicit camera-free zone`);
+}
+check("51 camera surveillance source invariants", /new THREE\.InstancedMesh/.test(cameraSecuritySystem) && /security-camera-housings/.test(cameraSecuritySystem) && /security-camera-lenses/.test(cameraSecuritySystem), "camera bodies do not use shared instanced presentation meshes");
+check("51 camera surveillance source invariants", !/new THREE\.(?:PerspectiveCamera|SpotLight|PointLight|DirectionalLight)/.test(cameraSecuritySystem) && !/castShadow\s*=\s*true/.test(cameraSecuritySystem), "surveillance units add a render camera, shader light, or shadow caster");
+check("51 camera surveillance detection", /new THREE\.Raycaster/.test(cameraSecuritySystem) && /dot\(/.test(cameraSecuritySystem) && /stealthVisibilityMultiplier/.test(cameraSecuritySystem) && /state\.isHidden/.test(cameraSecuritySystem), "camera detection lacks cone/range, line-of-sight, crouch visibility, or hiding contracts");
+check("51 camera surveillance detection", /intersectObjects\(occluderMeshes, false\)/.test(cameraSecuritySystem) && /occluderMeshes\.push\(this\.panel\)/.test(hingedDoorClass) && /occluderMeshes\.push\(hedgeMazeWalls\)/.test(mansion), "camera LOS does not use the explicit wall, live-door, and hedge blocker registry");
+check("51 camera surveillance detection", /illegalAction/.test(cameraSecuritySystem) && /observed-sabotage/.test(cameraSecuritySystem) && /restricted-trespass/.test(cameraSecuritySystem) && /lockdown-sighting/.test(cameraSecuritySystem), "camera policy does not distinguish observed sabotage, restricted trespass, and lockdown sightings");
+check("51 camera surveillance detection", !/raiseAlarm\(/.test(patronFeedSecurityHandler) && /patronFeedSabotaged/.test(patronFeedSecurityHandler), "blind patron-feed sabotage should start lockdown without summoning Mr. Feast until a camera actually sees the player");
+check("51 camera surveillance response", /MR_FEAST_RESPONSE_STATE/.test(mrFeastWanderer) && /respondToCameraAlarm/.test(mrFeastWanderer) && /updateSecurityResponse/.test(mrFeastWanderer) && /responding/.test(mrFeastWanderer) && /searching/.test(mrFeastWanderer) && /returning/.test(mrFeastWanderer), "Mr. Feast lacks the bounded patrol/responding/searching/returning alarm lifecycle");
+check("51 camera surveillance diagnostics", /security:\s*cameraSecurity\?\.getDiagnostics/.test(diagnostics) && /resetCameraSecurityForQA/.test(qaHooks) && /setCameraSweepForQA/.test(qaHooks) && /advanceCameraSecurityForQA/.test(qaHooks) && /runMrFeastCameraResponseForQA/.test(qaHooks), "camera diagnostics or deterministic QA controls are missing");
+check("51 camera surveillance HUD", /id="mansion-security"/.test(page) && /id="mansion-security-fill"/.test(page) && /id="mansion-security-status"/.test(page) && /\.mansion-security__track/.test(page), "camera suspicion/alarm feedback is missing from the mansion HUD");
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.

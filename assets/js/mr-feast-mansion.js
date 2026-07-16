@@ -46,6 +46,11 @@
     energyMode: $("mansion-energy-mode"),
     energyValue: $("mansion-energy-value"),
     energyFill: $("mansion-energy-fill"),
+    security: $("mansion-security"),
+    securityMode: $("mansion-security-mode"),
+    securityValue: $("mansion-security-value"),
+    securityFill: $("mansion-security-fill"),
+    securityStatus: $("mansion-security-status"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
     menuMaximize: $("mansion-menu-maximize"),
@@ -86,6 +91,7 @@
   }
 
   const FLOOR = Object.freeze({ BASEMENT: -3.8, MAIN: 0, UPPER: 4.5 });
+  const ESTATE_GROUND_Y = -0.205;
   const MOBILE_RENDER_WIDTH = 720;
   const PRE_ENTRY_FRAME_INTERVAL_MS = 250;
   const BALANCED_FRAME_INTERVAL_MS = 1000 / 30;
@@ -206,8 +212,112 @@
     crouchNoiseMultiplier: 0.32,
     interactionRange: 2.35,
   });
+  const CAMERA_SECURITY_MODE = Object.freeze({
+    SHOW: "show",
+    RESTRICTED: "restricted",
+    LOCKDOWN: "lockdown",
+  });
+  const CAMERA_POLICY_TRANSITIONS = Object.freeze({
+    [CAMERA_SECURITY_MODE.SHOW]: Object.freeze({ basementUnlocked: CAMERA_SECURITY_MODE.RESTRICTED, alarm: CAMERA_SECURITY_MODE.LOCKDOWN, patronFeedSabotaged: CAMERA_SECURITY_MODE.LOCKDOWN }),
+    [CAMERA_SECURITY_MODE.RESTRICTED]: Object.freeze({ alarm: CAMERA_SECURITY_MODE.LOCKDOWN, patronFeedSabotaged: CAMERA_SECURITY_MODE.LOCKDOWN }),
+    [CAMERA_SECURITY_MODE.LOCKDOWN]: Object.freeze({}),
+  });
+  const MR_FEAST_RESPONSE_STATE = Object.freeze({
+    PATROL: "patrol",
+    RESPONDING: "responding",
+    SEARCHING: "searching",
+    RETURNING: "returning",
+  });
+  const MR_FEAST_RESPONSE_TRANSITIONS = Object.freeze({
+    [MR_FEAST_RESPONSE_STATE.PATROL]: Object.freeze({ alarm: MR_FEAST_RESPONSE_STATE.RESPONDING }),
+    [MR_FEAST_RESPONSE_STATE.RESPONDING]: Object.freeze({ arrived: MR_FEAST_RESPONSE_STATE.SEARCHING, alarm: MR_FEAST_RESPONSE_STATE.RESPONDING }),
+    [MR_FEAST_RESPONSE_STATE.SEARCHING]: Object.freeze({ expired: MR_FEAST_RESPONSE_STATE.RETURNING, alarm: MR_FEAST_RESPONSE_STATE.RESPONDING }),
+    [MR_FEAST_RESPONSE_STATE.RETURNING]: Object.freeze({ rejoined: MR_FEAST_RESPONSE_STATE.PATROL, alarm: MR_FEAST_RESPONSE_STATE.RESPONDING }),
+  });
+  const CAMERA_SECURITY = Object.freeze({
+    network: "public-show",
+    checkInterval: 0.1,
+    detectionHalfAngle: THREE.MathUtils.degToRad(18),
+    exposureSeconds: 1.35,
+    exposureDecayPerSecond: 1.4,
+    alarmCooldownSeconds: 1.25,
+    endpointPauseSeconds: 0.58,
+    scanMinimumSeconds: 5.8,
+    scanMaximumSeconds: 8.2,
+    responseSpeed: 1.08,
+    searchSeconds: 6.5,
+    searchHalfAngle: THREE.MathUtils.degToRad(52),
+    searchSweepSeconds: 3.2,
+    exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "DEEP HEDGE MAZE"]),
+    requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "WORKSHOP", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
+  });
+
+  function securityCameraPlacement(id, room, x, y, z, yawDegrees, sweepDegrees, range, options = {}) {
+    const seed = Array.from(id).reduce((total, character) => total + character.charCodeAt(0), 0);
+    const periodRange = CAMERA_SECURITY.scanMaximumSeconds - CAMERA_SECURITY.scanMinimumSeconds;
+    return Object.freeze({
+      id,
+      room,
+      x,
+      y,
+      z,
+      yaw: THREE.MathUtils.degToRad(yawDegrees),
+      sweep: THREE.MathUtils.degToRad(sweepDegrees),
+      range,
+      floorY: Number.isFinite(options.floorY) ? options.floorY : FLOOR.MAIN,
+      pitch: THREE.MathUtils.degToRad(options.pitchDegrees == null ? -14 : options.pitchDegrees),
+      outdoors: Boolean(options.outdoors),
+      restricted: Boolean(options.restricted),
+      responseNodeId: options.responseNodeId || null,
+      scanSeconds: CAMERA_SECURITY.scanMinimumSeconds + (seed % 17) / 16 * periodRange,
+      initialSweep: ((seed % 101) / 100) * 2 - 1,
+      initialDirection: seed % 2 ? 1 : -1,
+    });
+  }
+
+  const SECURITY_CAMERA_PLACEMENTS = Object.freeze([
+    securityCameraPlacement("cam-main-library", "LIBRARY", -5.35, 3.45, 3.55, 135, 38, 11.8),
+    securityCameraPlacement("cam-main-foyer", "FRONT FOYER", 0, 3.55, 11.58, 0, 48, 7.9),
+    securityCameraPlacement("cam-main-music", "MUSIC ROOM", 5.35, 3.45, 3.55, -135, 38, 11.8),
+    securityCameraPlacement("cam-main-stair", "GRAND STAIR HALL", 0, 3.55, -2.8, 180, 42, 5.7),
+    securityCameraPlacement("cam-main-painting", "PAINTING ROOM", 14.62, 3.45, 2.82, 45, 38, 10.2),
+    securityCameraPlacement("cam-main-dining", "DINING ROOM", -5.42, 3.45, -3.55, 45, 38, 11.5),
+    securityCameraPlacement("cam-main-ballroom", "BALLROOM", 0, 3.45, -11.58, 180, 45, 8.0),
+    securityCameraPlacement("cam-main-kitchen", "KITCHEN", 5.42, 3.45, -3.55, -45, 38, 11.5),
+
+    securityCameraPlacement("cam-upper-west-front", "WEST FRONT SUITE", -5.35, 7.25, 3.55, 135, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-balcony", "FOYER BALCONY", 0, 7.5, 11.35, 0, 48, 7.7, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-front", "EAST FRONT SUITE", 5.35, 7.25, 3.55, -135, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-landing", "UPPER LANDING", 0, 7.25, -2.82, 180, 42, 5.7, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-reading", "READING ROOM", 5.35, 7.25, -2.82, -135, 38, 10.2, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-primary", "PRIMARY SUITE", -14.62, 7.25, -3.55, -45, 38, 11.4, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-lounge", "REAR LOUNGE", 0, 7.35, -3.55, 0, 45, 8.0, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-rear", "EAST REAR SUITE", 14.62, 7.25, -3.55, 45, 38, 11.4, { floorY: FLOOR.UPPER }),
+
+    securityCameraPlacement("cam-basement-wine", "WINE CELLAR", -1.65, -0.62, 3.55, 135, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-archive", "ARCHIVE", 1.65, -0.55, 3.55, -135, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-corridor", "BASEMENT CORRIDOR", 0, -0.62, 11.6, 0, 58, 14.3, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -1.65, -0.62, 2.85, 45, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-pantry", "PANTRY", 10.05, -0.62, 2.85, 45, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, 3.15, -2.72, 180, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
+    securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, -0.62, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -6.35, -0.62, -5.25, 45, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workshop", "WORKSHOP", 0.95, -0.62, -5.25, 45, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-cold", "COLD ROOM", 7.25, -0.62, -5.25, 45, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 14.65, -0.62, -5.25, 45, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+
+    securityCameraPlacement("cam-yard-gate", "FRONT DRIVE", 3.9, 2.75, 33.12, 29, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-gate" }),
+    securityCameraPlacement("cam-yard-portico", "FRONT DRIVE", 3.35, 3.1, 14.55, 153, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-portico" }),
+    securityCameraPlacement("cam-yard-rear-terrace", "REAR LAWN", 0, 3.3, -12.25, 0, 55, 7.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-rear-terrace" }),
+    securityCameraPlacement("cam-yard-pool", "POOL TERRACE", -16.2, 2.7, -18.55, -46, 34, 10.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-pool" }),
+    securityCameraPlacement("cam-yard-garden-front", "FORMAL GARDEN", -19.0, 2.82, 18.65, 42, 34, 8.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-garden-front" }),
+    securityCameraPlacement("cam-yard-garden-rear", "FORMAL GARDEN", -19.5, 2.82, -16.35, 141, 34, 8.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-garden-rear" }),
+    securityCameraPlacement("cam-yard-maze-north", "HEDGE MAZE", 19.5, 3.0, 4.45, -113, 42, 5.5, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-maze-north" }),
+    securityCameraPlacement("cam-yard-maze-rear", "HEDGE MAZE", 19.5, 3.0, -15.05, -113, 42, 5.5, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-maze-rear" }),
+  ]);
   const MR_FEAST_LEVEL = Object.freeze({
     BASEMENT: "BASEMENT",
+    GROUNDS: "GROUNDS",
     MAIN: "MAIN LEVEL",
     UPPER: "SECOND FLOOR",
     STAIR: "BETWEEN LEVELS",
@@ -463,7 +573,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-inventory-notepad-5",
+    assetVersion: "20260716-camera-security-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -474,6 +584,55 @@
     doorCloseDistance: 2.5,
     waypoints: MR_FEAST_PATROL_ROUTE,
   });
+  function mrFeastResponseNode(id, x, y, z, zone, options = {}) {
+    return Object.freeze({
+      id,
+      x,
+      y,
+      z,
+      zone,
+      level: options.level || MR_FEAST_LEVEL.GROUNDS,
+      segmentKind: options.segmentKind || "grounds",
+    });
+  }
+  const MR_FEAST_RESPONSE_OUTDOOR_NODES = Object.freeze([
+    mrFeastResponseNode("response-front-inside", 0.62, FLOOR.MAIN, 10.55, "FRONT FOYER", { level: MR_FEAST_LEVEL.MAIN, segmentKind: "room" }),
+    mrFeastResponseNode("response-front-threshold", 0.62, FLOOR.MAIN, 12.2, "FRONT DRIVE", { segmentKind: "door" }),
+    mrFeastResponseNode("response-yard-portico", 0.62, ESTATE_GROUND_Y, 14.55, "FRONT DRIVE", { segmentKind: "ramp" }),
+    mrFeastResponseNode("response-front-mid", 0, ESTATE_GROUND_Y, 23.5, "FRONT DRIVE"),
+    mrFeastResponseNode("response-yard-gate", 3.9, ESTATE_GROUND_Y, 29.5, "FRONT DRIVE"),
+    mrFeastResponseNode("response-front-west-junction", -15.2, ESTATE_GROUND_Y, 15.15, "WEST LAWN"),
+    mrFeastResponseNode("response-garden-front", -19, ESTATE_GROUND_Y, 18.65, "FORMAL GARDEN"),
+    mrFeastResponseNode("response-front-east-junction", 16.8, ESTATE_GROUND_Y, 13.2, "EAST LAWN"),
+    mrFeastResponseNode("response-maze-north", 19.5, ESTATE_GROUND_Y, 4.45, "HEDGE MAZE"),
+    mrFeastResponseNode("response-rear-inside", 0.66, FLOOR.MAIN, -10.55, "BALLROOM", { level: MR_FEAST_LEVEL.MAIN, segmentKind: "room" }),
+    mrFeastResponseNode("response-rear-threshold", 0.66, FLOOR.MAIN, -12.2, "REAR LAWN", { segmentKind: "door" }),
+    mrFeastResponseNode("response-rear-terrace", 0.66, ESTATE_GROUND_Y, -15.6, "REAR LAWN", { segmentKind: "ramp" }),
+    mrFeastResponseNode("response-rear-west-junction", -17, ESTATE_GROUND_Y, -13.9, "WEST LAWN"),
+    mrFeastResponseNode("response-yard-pool", -16.2, ESTATE_GROUND_Y, -18.55, "POOL TERRACE"),
+    mrFeastResponseNode("response-garden-rear", -19.5, ESTATE_GROUND_Y, -16.35, "FORMAL GARDEN"),
+    mrFeastResponseNode("response-rear-east-junction", 14, ESTATE_GROUND_Y, -13.9, "REAR LAWN"),
+    mrFeastResponseNode("response-maze-rear", 19.5, ESTATE_GROUND_Y, -15.05, "HEDGE MAZE"),
+  ]);
+  const MR_FEAST_RESPONSE_OUTDOOR_EDGES = Object.freeze([
+    Object.freeze(["main-foyer-center", "response-front-inside", null]),
+    Object.freeze(["response-front-inside", "response-front-threshold", "right front door"]),
+    Object.freeze(["response-front-threshold", "response-yard-portico", null]),
+    Object.freeze(["response-yard-portico", "response-front-mid", null]),
+    Object.freeze(["response-front-mid", "response-yard-gate", null]),
+    Object.freeze(["response-yard-portico", "response-front-west-junction", null]),
+    Object.freeze(["response-front-west-junction", "response-garden-front", null]),
+    Object.freeze(["response-yard-portico", "response-front-east-junction", null]),
+    Object.freeze(["response-front-east-junction", "response-maze-north", null]),
+    Object.freeze(["main-ballroom-south", "response-rear-inside", null]),
+    Object.freeze(["response-rear-inside", "response-rear-threshold", "right terrace door"]),
+    Object.freeze(["response-rear-threshold", "response-rear-terrace", null]),
+    Object.freeze(["response-rear-terrace", "response-rear-west-junction", null]),
+    Object.freeze(["response-rear-west-junction", "response-yard-pool", null]),
+    Object.freeze(["response-rear-west-junction", "response-garden-rear", null]),
+    Object.freeze(["response-rear-terrace", "response-rear-east-junction", null]),
+    Object.freeze(["response-rear-east-junction", "response-maze-rear", null]),
+  ]);
   const MR_FEAST_ROUTE_DISTANCE_METERS = MR_FEAST_PATROL_ROUTE.reduce((total, target, index) => {
     const source = MR_FEAST_PATROL_ROUTE[(index - 1 + MR_FEAST_PATROL_ROUTE.length) % MR_FEAST_PATROL_ROUTE.length];
     return total + Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
@@ -585,7 +744,7 @@
   });
 
   const YARD_LAYOUT = Object.freeze({
-    groundY: -0.205,
+    groundY: ESTATE_GROUND_Y,
     bounds: Object.freeze({ minX: -34, maxX: 34, minZ: -34, maxZ: 34 }),
     driveway: Object.freeze({ centerX: 0, width: 6.6, minZ: 14.8, maxZ: 34 }),
     gate: Object.freeze({ centerX: 0, centerZ: 33.72, width: 6.8 }),
@@ -898,6 +1057,20 @@
       stealthVisibilityMultiplier: 1,
       stealthNoiseMultiplier: 1,
     },
+    security: {
+      mode: CAMERA_SECURITY_MODE.SHOW,
+      policyOverride: null,
+      exposure: 0,
+      observed: false,
+      permitted: true,
+      illegalAction: null,
+      activeCameraId: null,
+      occludedBy: null,
+      alarmCount: 0,
+      lastAlarm: null,
+      alarmCooldown: 0,
+      alarmLatchCameraId: null,
+    },
     contestant13: {
       bookRead: false,
       shovelTaken: false,
@@ -1045,6 +1218,7 @@
   };
   let contestant13Quest = null;
   let mrFeastNpc = null;
+  let cameraSecurity = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -1916,6 +2090,8 @@
 
   class MrFeastWanderer {
     constructor() {
+      // Camera alarms temporarily divert the authored route through the
+      // bounded patrol -> responding -> searching -> returning lifecycle.
       this.root = new THREE.Group();
       this.root.name = "mr-feast-wanderer";
       this.root.position.set(
@@ -1962,6 +2138,20 @@
       this.waitingForDoor = null;
       this.onStairs = false;
       this.qaLastWholeHomeRun = null;
+      this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      this.responseGraph = this.buildResponseGraph();
+      this.responsePath = [];
+      this.responseCurrentNodeId = MR_FEAST_NPC.waypoints[0].id;
+      this.responseResume = null;
+      this.activeCameraAlarm = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.searchBaseYaw = 0;
+      this.responseDistance = 0;
+      this.responseTeleports = 0;
+      this.responseBlockedReason = null;
+      this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
+      this.qaLastCameraResponse = null;
       this.lastDt = 1 / 60;
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
       scene.add(this.root);
@@ -2181,8 +2371,270 @@
       return door;
     }
 
+    buildResponseGraph() {
+      const nodes = new Map();
+      const edges = new Map();
+      const addNode = (node) => {
+        nodes.set(node.id, node);
+        if (!edges.has(node.id)) edges.set(node.id, []);
+      };
+      const connect = (fromId, toId, door = null, cost = null) => {
+        const from = nodes.get(fromId);
+        const to = nodes.get(toId);
+        if (!from || !to) return;
+        const distance = cost == null ? Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) : cost;
+        edges.get(fromId).push({ to: toId, cost: Math.max(0.001, distance), door });
+        edges.get(toId).push({ to: fromId, cost: Math.max(0.001, distance), door });
+      };
+      MR_FEAST_NPC.waypoints.forEach((point, routeIndex) => addNode({ ...point, routeIndex }));
+      MR_FEAST_RESPONSE_OUTDOOR_NODES.forEach(addNode);
+      for (let index = 0; index < MR_FEAST_NPC.waypoints.length; index += 1) {
+        const from = MR_FEAST_NPC.waypoints[index];
+        const to = MR_FEAST_NPC.waypoints[(index + 1) % MR_FEAST_NPC.waypoints.length];
+        connect(from.id, to.id, from.door || to.door || null);
+      }
+      const coordinateBuckets = new Map();
+      for (const point of MR_FEAST_NPC.waypoints) {
+        const key = `${point.x.toFixed(3)}:${point.y.toFixed(3)}:${point.z.toFixed(3)}`;
+        if (!coordinateBuckets.has(key)) coordinateBuckets.set(key, []);
+        coordinateBuckets.get(key).push(point.id);
+      }
+      for (const ids of coordinateBuckets.values()) {
+        for (let index = 1; index < ids.length; index += 1) connect(ids[0], ids[index], null, 0.001);
+      }
+      for (const [fromId, toId, door] of MR_FEAST_RESPONSE_OUTDOOR_EDGES) connect(fromId, toId, door);
+      return { nodes, edges };
+    }
+
+    responseDoorAvailable(name) {
+      if (!name) return true;
+      const door = this.routeDoor(name);
+      return Boolean(door && !door.locked);
+    }
+
+    findResponsePath(startId, targetId) {
+      if (!this.responseGraph.nodes.has(startId) || !this.responseGraph.nodes.has(targetId)) return [];
+      if (startId === targetId) return [];
+      const distances = new Map([[startId, 0]]);
+      const previous = new Map();
+      const unvisited = new Set(this.responseGraph.nodes.keys());
+      while (unvisited.size) {
+        let current = null;
+        let currentDistance = Infinity;
+        for (const id of unvisited) {
+          const distance = distances.get(id) ?? Infinity;
+          if (distance < currentDistance) {
+            current = id;
+            currentDistance = distance;
+          }
+        }
+        if (current == null || currentDistance === Infinity) break;
+        unvisited.delete(current);
+        if (current === targetId) break;
+        for (const edge of this.responseGraph.edges.get(current) || []) {
+          if (!unvisited.has(edge.to) || !this.responseDoorAvailable(edge.door)) continue;
+          const nextDistance = currentDistance + edge.cost;
+          if (nextDistance >= (distances.get(edge.to) ?? Infinity)) continue;
+          distances.set(edge.to, nextDistance);
+          previous.set(edge.to, { from: current, door: edge.door });
+        }
+      }
+      if (!previous.has(targetId)) return [];
+      const reversed = [];
+      for (let cursor = targetId; cursor !== startId;) {
+        const step = previous.get(cursor);
+        if (!step) return [];
+        reversed.push({ node: this.responseGraph.nodes.get(cursor), door: step.door });
+        cursor = step.from;
+      }
+      return reversed.reverse();
+    }
+
+    nearestResponseStartId() {
+      if (this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL && this.responseCurrentNodeId && this.responseGraph.nodes.has(this.responseCurrentNodeId)) {
+        const next = this.responsePath[0]?.node;
+        if (!next) return this.responseCurrentNodeId;
+        const current = this.responseGraph.nodes.get(this.responseCurrentNodeId);
+        const currentDistance = Math.hypot(current.x - this.root.position.x, current.y - this.root.position.y, current.z - this.root.position.z);
+        const nextDistance = Math.hypot(next.x - this.root.position.x, next.y - this.root.position.y, next.z - this.root.position.z);
+        return nextDistance < currentDistance ? next.id : current.id;
+      }
+      const targetIndex = this.waypointIndex;
+      const previousIndex = (targetIndex - 1 + MR_FEAST_NPC.waypoints.length) % MR_FEAST_NPC.waypoints.length;
+      const candidates = [MR_FEAST_NPC.waypoints[previousIndex], MR_FEAST_NPC.waypoints[targetIndex]];
+      return candidates.reduce((nearest, point) => {
+        const distance = Math.hypot(point.x - this.root.position.x, point.y - this.root.position.y, point.z - this.root.position.z);
+        return !nearest || distance < nearest.distance ? { id: point.id, distance } : nearest;
+      }, null).id;
+    }
+
+    nearestResponseTargetId(position) {
+      return [...this.responseGraph.nodes.values()].reduce((nearest, node) => {
+        const distance = Math.hypot(node.x - position.x, node.y - position.y, node.z - position.z);
+        return !nearest || distance < nearest.distance ? { id: node.id, distance } : nearest;
+      }, null)?.id || null;
+    }
+
+    transitionSecurityResponse(eventName) {
+      const next = MR_FEAST_RESPONSE_TRANSITIONS[this.behaviorState]?.[eventName];
+      if (!next) {
+        console.warn(`Mr Feast ignored invalid ${this.behaviorState} -> ${eventName} security transition`);
+        return this.behaviorState;
+      }
+      this.behaviorState = next;
+      if (this.responseStateTrace[this.responseStateTrace.length - 1] !== next) this.responseStateTrace.push(next);
+      return next;
+    }
+
+    respondToCameraAlarm(alarm) {
+      if (!alarm) return this.getDiagnostics();
+      const startId = this.nearestResponseStartId();
+      if (!this.responseResume) {
+        const resumeNode = this.responseGraph.nodes.get(startId);
+        this.responseResume = {
+          nodeId: startId,
+          routeIndex: Number.isInteger(resumeNode?.routeIndex) ? resumeNode.routeIndex : this.waypointIndex,
+          pauseRemaining: this.pauseRemaining,
+        };
+      }
+      const targetId = this.responseGraph.nodes.has(alarm.responseNodeId)
+        ? alarm.responseNodeId
+        : this.nearestResponseTargetId(alarm.responsePosition || alarm.lastSeen);
+      const path = targetId ? this.findResponsePath(startId, targetId) : [];
+      this.activeCameraAlarm = { ...alarm, targetNodeId: targetId };
+      this.responseCurrentNodeId = startId;
+      this.responsePath = path;
+      this.responseBlockedReason = targetId && (path.length || targetId === startId) ? null : "no unlocked response route";
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL) this.transitionSecurityResponse("alarm");
+      else this.transitionSecurityResponse("alarm");
+      this.pauseRemaining = 0;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      // Even when Mr. Feast is already at the nearest response node, preserve
+      // one observable responding state. The next simulation step begins the
+      // local search, keeping alarm dispatch and arrival as distinct events.
+      return this.getDiagnostics();
+    }
+
+    beginSecuritySearch() {
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
+      this.searchRemaining = CAMERA_SECURITY.searchSeconds;
+      this.searchElapsed = 0;
+      this.searchBaseYaw = this.root.rotation.y;
+      this.moving = false;
+      this.fadeToAction("idle");
+    }
+
+    beginSecurityReturn() {
+      if (!this.responseResume) {
+        this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+        return;
+      }
+      this.transitionSecurityResponse("expired");
+      const startId = this.responseCurrentNodeId;
+      this.responsePath = this.findResponsePath(startId, this.responseResume.nodeId);
+      if (!this.responsePath.length && startId === this.responseResume.nodeId) this.finishSecurityReturn();
+    }
+
+    finishSecurityReturn() {
+      const resumeNode = this.responseGraph.nodes.get(this.responseResume?.nodeId);
+      const resumeIndex = Number.isInteger(resumeNode?.routeIndex) ? resumeNode.routeIndex : this.responseResume?.routeIndex;
+      if (Number.isInteger(resumeIndex)) this.waypointIndex = (resumeIndex + 1) % MR_FEAST_NPC.waypoints.length;
+      this.pauseRemaining = Math.max(0, Number(this.responseResume?.pauseRemaining) || 0);
+      if (resumeNode) {
+        this.currentRouteZone = resumeNode.zone;
+        this.currentRouteLevel = resumeNode.level;
+      }
+      this.transitionSecurityResponse("rejoined");
+      this.responsePath = [];
+      this.activeCameraAlarm = null;
+      this.responseResume = null;
+      this.responseBlockedReason = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.moving = false;
+      this.fadeToAction("stalk");
+    }
+
+    syncResponseVisibility() {
+      if (!this.model) return;
+      const responseOutdoors = this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL && this.currentRouteLevel === MR_FEAST_LEVEL.GROUNDS;
+      const visible = !interiorDetailsHidden || responseOutdoors;
+      for (const mesh of this.meshes) mesh.visible = visible;
+      if (this.contactShadow) this.contactShadow.visible = visible && !this.onStairs;
+      this.root.visible = visible;
+    }
+
+    updateSecurityPath(dt) {
+      const pathStep = this.responsePath[0];
+      if (!pathStep) {
+        if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
+        else if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING) this.finishSecurityReturn();
+        return;
+      }
+      const target = { ...pathStep.node, door: pathStep.door || pathStep.node.door || null };
+      const dx = target.x - this.root.position.x;
+      const dy = target.y - this.root.position.y;
+      const dz = target.z - this.root.position.z;
+      const horizontalDistance = Math.hypot(dx, dz);
+      const distance = Math.hypot(dx, dy, dz);
+      this.setSegmentPresentation(target);
+      if (distance <= MR_FEAST_NPC.arrivalRadius) {
+        this.root.position.set(target.x, target.y, target.z);
+        this.responseCurrentNodeId = target.id;
+        this.currentRouteZone = target.zone;
+        this.currentRouteLevel = target.level;
+        this.responsePath.shift();
+        this.closeClearedRouteDoors(this.responsePath[0]?.node || null);
+        if (!this.responsePath.length) {
+          if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
+          else this.finishSecurityReturn();
+        }
+        this.mixer.update(dt);
+        return;
+      }
+      this.faceTarget(target);
+      const facingAlignment = horizontalDistance > 0.0001
+        ? (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontalDistance
+        : 1;
+      const waitingForDoor = this.prepareRouteDoor(target, distance);
+      if (waitingForDoor || facingAlignment < 0.92) {
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.mixer.update(dt);
+        return;
+      }
+      const step = Math.min(distance, CAMERA_SECURITY.responseSpeed * dt);
+      this.root.position.x += dx / distance * step;
+      this.root.position.y += dy / distance * step;
+      this.root.position.z += dz / distance * step;
+      this.responseDistance += step;
+      this.moving = step > 0;
+      this.closeClearedRouteDoors(target);
+      this.fadeToAction("stalk");
+      this.mixer.update(dt);
+    }
+
+    updateSecurityResponse(dt) {
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING) {
+        this.searchRemaining = Math.max(0, this.searchRemaining - dt);
+        this.searchElapsed += dt;
+        this.root.rotation.y = this.searchBaseYaw
+          + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2) * CAMERA_SECURITY.searchHalfAngle;
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.closeClearedRouteDoors(null);
+        this.mixer.update(dt);
+        if (this.searchRemaining <= 0) this.beginSecurityReturn();
+      } else {
+        this.updateSecurityPath(dt);
+      }
+      this.syncResponseVisibility();
+    }
+
     setSegmentPresentation(target) {
       this.onStairs = target?.segmentKind === "stairs";
+      if (target?.segmentKind === "ramp") this.onStairs = true;
       if (!this.contactShadow) return;
       this.contactShadow.userData.preExteriorVisibility = !this.onStairs;
       this.contactShadow.visible = !this.onStairs && !interiorDetailsHidden;
@@ -2297,6 +2749,11 @@
         return;
       }
 
+      if (this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL) {
+        this.updateSecurityResponse(this.lastDt);
+        return;
+      }
+
       if (this.pauseRemaining > 0) {
         this.pauseRemaining = Math.max(0, this.pauseRemaining - this.lastDt);
         this.fadeToAction("idle");
@@ -2367,6 +2824,19 @@
       this.waitingForDoor = null;
       this.onStairs = false;
       this.qaLastWholeHomeRun = null;
+      this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      this.responsePath = [];
+      this.responseCurrentNodeId = start.id;
+      this.responseResume = null;
+      this.activeCameraAlarm = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.searchBaseYaw = 0;
+      this.responseDistance = 0;
+      this.responseTeleports = 0;
+      this.responseBlockedReason = null;
+      this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
+      this.qaLastCameraResponse = null;
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
       this.moving = this.loadStatus === "ready";
@@ -2487,6 +2957,52 @@
       return this.getDiagnostics();
     }
 
+    runCameraResponseForQA(maxSeconds = 180) {
+      if (!state.qa || this.loadStatus !== "ready") {
+        return {
+          completed: false,
+          simulatedSeconds: 0,
+          states: [...this.responseStateTrace],
+          teleports: this.responseTeleports,
+          distanceTravelled: Number(this.responseDistance.toFixed(3)),
+          error: "Mr Feast camera response is not ready",
+        };
+      }
+      const alarm = this.activeCameraAlarm ? { ...this.activeCameraAlarm } : null;
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(maxSeconds) || 180, 1, 600);
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let simulatedSeconds = 0;
+      while (this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL && simulatedSeconds < limit) {
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor) object.update(fixedStep);
+        }
+        this.update(fixedStep);
+        simulatedSeconds += fixedStep;
+      }
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      this.root.updateMatrixWorld(true);
+      this.qaLastCameraResponse = {
+        completed: this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL,
+        simulatedSeconds: Number(simulatedSeconds.toFixed(2)),
+        states: [...this.responseStateTrace],
+        teleports: this.responseTeleports,
+        distanceTravelled: Number(this.responseDistance.toFixed(3)),
+        alarm: alarm ? {
+          cameraId: alarm.cameraId,
+          room: alarm.room,
+          reason: alarm.reason,
+          targetNodeId: alarm.targetNodeId,
+        } : null,
+        blockedReason: this.responseBlockedReason,
+      };
+      return this.qaLastCameraResponse;
+    }
+
     getLiveBoneMetrics() {
       if (!this.model) return null;
       this.root.updateMatrixWorld(true);
@@ -2581,6 +3097,23 @@
           floors: routeFloors,
           zones: routeZones,
           doors: new Set(MR_FEAST_NPC.waypoints.map((point) => point.door).filter(Boolean)).size,
+        },
+        security: {
+          state: this.behaviorState,
+          activeAlarm: this.activeCameraAlarm ? {
+            cameraId: this.activeCameraAlarm.cameraId,
+            room: this.activeCameraAlarm.room,
+            reason: this.activeCameraAlarm.reason,
+            targetNodeId: this.activeCameraAlarm.targetNodeId,
+          } : null,
+          pathRemaining: this.responsePath.length,
+          currentNodeId: this.responseCurrentNodeId,
+          searchRemaining: Number(this.searchRemaining.toFixed(3)),
+          distanceTravelled: Number(this.responseDistance.toFixed(3)),
+          teleports: this.responseTeleports,
+          blockedReason: this.responseBlockedReason,
+          states: [...this.responseStateTrace],
+          qaLastResponse: this.qaLastCameraResponse,
         },
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
@@ -2771,6 +3304,10 @@
         z: axis === "x" ? 0 : panelOffset,
         material, parent: this.root, cast: true, receive: true,
       });
+      // Door leaves are kinematic rather than static box colliders, so they
+      // must join the visual LOS registry explicitly. Camera raycasts then
+      // respect the live hinged pose without touching unrelated scene sprites.
+      occluderMeshes.push(this.panel);
 
       // Every door is finished on both faces so it still reads as a real door
       // after the player walks through it. The previous build only decorated
@@ -3361,9 +3898,10 @@
       this.setJournalOpen(!state.journalOpen);
     }
 
-    runTimedAction(id, label, durationMs, complete) {
+    runTimedAction(id, label, durationMs, complete, options = {}) {
       if (this.story.actionInProgress) return false;
-      this.story.actionInProgress = { id, label, durationMs, startedAt: performance.now() };
+      this.story.actionInProgress = { id, label, durationMs, startedAt: performance.now(), illegalWhileObserved: Boolean(options.illegalWhileObserved) };
+      if (options.illegalWhileObserved) cameraSecurity?.beginIllegalAction(id);
       input.forward = input.back = input.left = input.right = false;
       if (dom.action) {
         dom.action.hidden = false;
@@ -3385,6 +3923,7 @@
           dom.action.classList.remove("is-running");
           dom.action.hidden = true;
         }
+        if (options.illegalWhileObserved) cameraSecurity?.endIllegalAction(id);
         complete();
         this.updateUI();
         updateInteractionPrompt();
@@ -3548,12 +4087,13 @@
           contestant13Scene.relayAlarmBulb.userData.preExteriorVisibility = true;
         }
         this.addJournalEntry(CONTESTANT_13.journal.sabotage);
+        cameraSecurity?.handlePatronFeedSabotage();
         this.showDiscovery("Patron signal lost", "The hidden feed collapses into static. A warning lamp begins to pulse: the house knows the patrons are blind.", 11000);
         if (audioSystem) {
           audioSystem.ping(74, 0.7, 0.09, "sawtooth");
           audioSystem.ping(520, 0.18, 0.08, "square");
         }
-      });
+      }, { illegalWhileObserved: true });
     }
 
     getQuestSnapshot() {
@@ -3582,6 +4122,7 @@
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
       this.story.digging = false;
       this.story.actionInProgress = null;
+      cameraSecurity?.endIllegalAction();
       const allowedItems = new Set(Object.keys(CONTESTANT_13.itemLabels));
       this.story.inventory = Array.from(new Set(Array.isArray(snapshot.inventory) ? snapshot.inventory.filter((id) => allowedItems.has(id)) : []));
       const allowedEntries = new Map(Object.values(CONTESTANT_13.journal).map((entry) => [entry.id, entry]));
@@ -3716,6 +4257,566 @@
           relayAlarmPulsing: Boolean(state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial),
         },
       };
+    }
+  }
+
+  class CameraSecuritySystem {
+    constructor() {
+      this.root = new THREE.Group();
+      this.root.name = "security-camera-network";
+      this.cameras = SECURITY_CAMERA_PLACEMENTS.map((placement) => ({
+        ...placement,
+        sweepNormalized: placement.initialSweep,
+        scanDirection: placement.initialDirection,
+        pauseRemaining: 0,
+        yaw: placement.yaw + placement.sweep * placement.initialSweep,
+        frozen: false,
+        playerInCone: false,
+        hasLineOfSight: false,
+        blocker: null,
+        status: "permitted",
+        qaOccluded: null,
+        lensOrigin: new THREE.Vector3(),
+        forward: new THREE.Vector3(),
+      }));
+      this.cameraById = new Map(this.cameras.map((cameraState) => [cameraState.id, cameraState]));
+      this.detectionAccumulator = 0;
+      this.qaManual = false;
+      this.qaSoloCameraId = null;
+      this.lastIllegalAction = null;
+      this.raycaster = new THREE.Raycaster();
+      this.raycaster.near = 0.08;
+      this.dummy = new THREE.Object3D();
+      this.euler = new THREE.Euler(0, 0, 0, "YXZ");
+      this.offset = new THREE.Vector3();
+      this.toPlayer = new THREE.Vector3();
+      this.playerEye = new THREE.Vector3();
+      this.instanceColor = new THREE.Color();
+      this.buildPresentation();
+      scene.add(this.root);
+      this.syncPolicy();
+      this.updatePresentation();
+      this.updateHud();
+    }
+
+    buildPresentation() {
+      const count = this.cameras.length;
+      const mountMaterial = new THREE.MeshStandardMaterial({ color: 0x4b4032, metalness: 0.78, roughness: 0.3 });
+      const housingMaterial = new THREE.MeshStandardMaterial({ color: 0xc1ad82, metalness: 0.72, roughness: 0.34 });
+      const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x090b10, metalness: 0.2, roughness: 0.16 });
+      const statusMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, toneMapped: false });
+      this.mounts = new THREE.InstancedMesh(geometry("securityCameraMount", () => new THREE.BoxGeometry(1, 1, 1)), mountMaterial, count);
+      this.mounts.name = "security-camera-mounts";
+      this.housings = new THREE.InstancedMesh(geometry("securityCameraHousing", () => new THREE.BoxGeometry(1, 1, 1)), housingMaterial, count);
+      this.housings.name = "security-camera-housings";
+      this.lenses = new THREE.InstancedMesh(geometry("securityCameraLens", () => new THREE.CylinderGeometry(1, 1, 1, 12)), lensMaterial, count);
+      this.lenses.name = "security-camera-lenses";
+      this.statusLights = new THREE.InstancedMesh(geometry("securityCameraStatus", () => new THREE.SphereGeometry(1, 10, 7)), statusMaterial, count);
+      this.statusLights.name = "security-camera-status-lights";
+      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusLights]) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.frustumCulled = false;
+        mesh.userData.securitySightTransparent = true;
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.root.add(mesh);
+      }
+      for (let index = 0; index < count; index += 1) this.statusLights.setColorAt(index, new THREE.Color(0x79b078));
+      if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
+    }
+
+    setInstance(mesh, index, position, quaternion, scale) {
+      this.dummy.position.copy(position);
+      this.dummy.quaternion.copy(quaternion);
+      this.dummy.scale.copy(scale);
+      this.dummy.updateMatrix();
+      mesh.setMatrixAt(index, this.dummy.matrix);
+    }
+
+    cameraDisposition(cameraState) {
+      if (state.security.illegalAction) return { permitted: false, reason: "observed-sabotage" };
+      if (state.security.mode === CAMERA_SECURITY_MODE.LOCKDOWN) return { permitted: false, reason: "lockdown-sighting" };
+      if (state.security.mode === CAMERA_SECURITY_MODE.RESTRICTED && cameraState.restricted) return { permitted: false, reason: "restricted-trespass" };
+      return { permitted: true, reason: "show-filming" };
+    }
+
+    statusColor(cameraState) {
+      const disposition = this.cameraDisposition(cameraState);
+      if (state.security.lastAlarm?.cameraId === cameraState.id && this.isAlarmResponseActive()) return 0xf44737;
+      if (!disposition.permitted && cameraState.playerInCone && cameraState.hasLineOfSight) return 0xe7a440;
+      if (!disposition.permitted) return 0xc74836;
+      return 0x79b078;
+    }
+
+    updatePresentation() {
+      const mountQuaternion = new THREE.Quaternion();
+      const bodyQuaternion = new THREE.Quaternion();
+      const lensQuaternion = new THREE.Quaternion();
+      const upAxis = new THREE.Vector3(0, 1, 0);
+      const mountScale = new THREE.Vector3(0.18, 0.18, 0.18);
+      const bodyScale = new THREE.Vector3(0.34, 0.2, 0.44);
+      const lensScale = new THREE.Vector3(0.075, 0.12, 0.075);
+      const statusScale = new THREE.Vector3(0.055, 0.055, 0.055);
+      for (let index = 0; index < this.cameras.length; index += 1) {
+        const cameraState = this.cameras[index];
+        const mountPosition = new THREE.Vector3(cameraState.x, cameraState.y, cameraState.z);
+        this.euler.set(0, cameraState.yaw, 0);
+        mountQuaternion.setFromEuler(this.euler);
+        this.euler.set(cameraState.pitch, cameraState.yaw, 0);
+        bodyQuaternion.setFromEuler(this.euler);
+        cameraState.forward.set(0, 0, -1).applyEuler(this.euler).normalize();
+        const bodyPosition = mountPosition.clone().add(new THREE.Vector3(0, -0.17, 0)).addScaledVector(cameraState.forward, 0.08);
+        cameraState.lensOrigin.copy(bodyPosition).addScaledVector(cameraState.forward, 0.27);
+        const statusPosition = bodyPosition.clone().add(this.offset.set(0, 0.125, -0.02).applyQuaternion(bodyQuaternion));
+        lensQuaternion.setFromUnitVectors(upAxis, cameraState.forward);
+        this.setInstance(this.mounts, index, mountPosition, mountQuaternion, mountScale);
+        this.setInstance(this.housings, index, bodyPosition, bodyQuaternion, bodyScale);
+        this.setInstance(this.lenses, index, cameraState.lensOrigin, lensQuaternion, lensScale);
+        this.setInstance(this.statusLights, index, statusPosition, bodyQuaternion, statusScale);
+        this.instanceColor.setHex(this.statusColor(cameraState));
+        this.statusLights.setColorAt(index, this.instanceColor);
+      }
+      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
+      if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
+    }
+
+    updateScan(cameraState, dt) {
+      if (cameraState.frozen) return;
+      if (cameraState.pauseRemaining > 0) {
+        cameraState.pauseRemaining = Math.max(0, cameraState.pauseRemaining - dt);
+        return;
+      }
+      cameraState.sweepNormalized += cameraState.scanDirection * (4 * dt / cameraState.scanSeconds);
+      if (cameraState.sweepNormalized >= 1 || cameraState.sweepNormalized <= -1) {
+        cameraState.sweepNormalized = clamp(cameraState.sweepNormalized, -1, 1);
+        cameraState.scanDirection *= -1;
+        cameraState.pauseRemaining = CAMERA_SECURITY.endpointPauseSeconds;
+      }
+      cameraState.yaw = cameraState.yaw - cameraState.sweep * cameraState.initialSweep + cameraState.sweep * cameraState.sweepNormalized;
+      cameraState.initialSweep = cameraState.sweepNormalized;
+    }
+
+    transitionPolicy(eventName) {
+      const current = state.security.mode;
+      const next = CAMERA_POLICY_TRANSITIONS[current]?.[eventName];
+      if (!next) {
+        if (current !== CAMERA_SECURITY_MODE.LOCKDOWN && eventName !== "noop") console.warn(`Camera security ignored invalid ${current} -> ${eventName} transition`);
+        return current;
+      }
+      state.security.mode = next;
+      return next;
+    }
+
+    syncPolicy() {
+      if (state.security.policyOverride && Object.values(CAMERA_SECURITY_MODE).includes(state.security.policyOverride)) {
+        state.security.mode = state.security.policyOverride;
+        return state.security.mode;
+      }
+      if (state.security.alarmCount > 0) this.transitionPolicy("alarm");
+      else if (state.contestant13.relaySabotaged || state.contestant13.threatEscalated) this.transitionPolicy("patronFeedSabotaged");
+      else if (state.contestant13.basementUnlocked && state.security.mode === CAMERA_SECURITY_MODE.SHOW) this.transitionPolicy("basementUnlocked");
+      return state.security.mode;
+    }
+
+    isCameraRelevant(cameraState, playerPosition) {
+      if (this.qaSoloCameraId && cameraState.id !== this.qaSoloCameraId) return false;
+      // Do not create an artificial safe seam at an open exterior door. The
+      // floor broad phase remains cheap, while range/cone/LOS decide whether
+      // an indoor camera can really see out or a yard camera can see inside.
+      const feetY = playerPosition.y - (PLAYER.halfHeight + PLAYER.radius);
+      if (cameraState.room !== "SERVICE STAIR" && Math.abs(feetY - cameraState.floorY) > 1.25) return false;
+      return true;
+    }
+
+    isSightBlocker(hit) {
+      const object = hit.object;
+      if (!object || !object.visible || object.userData.securitySightTransparent) return false;
+      if (object === this.mounts || object === this.housings || object === this.lenses || object === this.statusLights) return false;
+      const name = String(object.name || "").toLowerCase();
+      if (/security-camera|rain|lightning|water-surface|flame|smoke|glow|bulb|interaction|contact-shadow/.test(name)) return false;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (materials.some((material) => material && material.transparent && material.opacity < 0.35)) return false;
+      return hit.distance > 0.12;
+    }
+
+    lineOfSight(cameraState, playerEye, direction, distance) {
+      if (state.qa && typeof cameraState.qaOccluded === "boolean") {
+        cameraState.blocker = cameraState.qaOccluded ? "qa-blocker" : null;
+        return !cameraState.qaOccluded;
+      }
+      const origin = cameraState.lensOrigin.clone().addScaledVector(cameraState.forward, 0.09);
+      this.raycaster.set(origin, direction);
+      this.raycaster.far = Math.max(0.1, distance - 0.22);
+      const blocker = this.raycaster.intersectObjects(occluderMeshes, false).find((hit) => this.isSightBlocker(hit));
+      cameraState.blocker = blocker?.object?.name || null;
+      return !blocker;
+    }
+
+    inspectCamera(cameraState, playerEye) {
+      cameraState.playerInCone = false;
+      cameraState.hasLineOfSight = false;
+      cameraState.blocker = null;
+      this.toPlayer.copy(playerEye).sub(cameraState.lensOrigin);
+      const distance = this.toPlayer.length();
+      if (distance <= 0.05 || distance > cameraState.range) return null;
+      this.toPlayer.multiplyScalar(1 / distance);
+      const facingDot = cameraState.forward.dot(this.toPlayer);
+      if (facingDot < Math.cos(CAMERA_SECURITY.detectionHalfAngle)) return null;
+      cameraState.playerInCone = true;
+      cameraState.hasLineOfSight = this.lineOfSight(cameraState, playerEye, this.toPlayer, distance);
+      if (!cameraState.hasLineOfSight) return { cameraState, distance, facingDot, visible: false };
+      return { cameraState, distance, facingDot, visible: true, ...this.cameraDisposition(cameraState) };
+    }
+
+    evaluatePlayer(dt) {
+      const playerPosition = physics?.playerPosition();
+      if (!playerPosition) return;
+      this.playerEye.set(camera.position.x, camera.position.y, camera.position.z);
+      for (const cameraState of this.cameras) {
+        cameraState.playerInCone = false;
+        cameraState.hasLineOfSight = false;
+        cameraState.blocker = null;
+      }
+      if (state.isHidden) {
+        state.security.observed = false;
+        state.security.permitted = false;
+        state.security.activeCameraId = null;
+        state.security.occludedBy = null;
+        state.security.exposure = 0;
+        state.security.alarmLatchCameraId = null;
+        return;
+      }
+      const inspections = this.cameras
+        .filter((cameraState) => this.isCameraRelevant(cameraState, playerPosition))
+        .map((cameraState) => this.inspectCamera(cameraState, this.playerEye))
+        .filter(Boolean);
+      const visible = inspections
+        .filter((inspection) => inspection.visible)
+        .sort((a, b) => Number(a.permitted) - Number(b.permitted) || b.facingDot - a.facingDot || a.distance - b.distance);
+      const selected = visible[0] || null;
+      state.security.observed = Boolean(selected);
+      state.security.permitted = Boolean(selected?.permitted);
+      state.security.activeCameraId = selected?.cameraState.id || null;
+      state.security.occludedBy = selected ? null : inspections.find((inspection) => inspection.cameraState.blocker)?.cameraState.blocker || null;
+      if (!selected || selected.permitted) {
+        state.security.alarmLatchCameraId = null;
+        state.security.exposure = Math.max(0, state.security.exposure - CAMERA_SECURITY.exposureDecayPerSecond * dt);
+        if (selected?.permitted) state.security.exposure = 0;
+        return;
+      }
+      if (selected.reason === "observed-sabotage") {
+        state.security.exposure = 1;
+        this.raiseAlarm(selected.cameraState, selected.reason);
+        return;
+      }
+      const visibility = clamp(state.movement.stealthVisibilityMultiplier, 0.1, 1);
+      state.security.exposure = clamp(state.security.exposure + dt / CAMERA_SECURITY.exposureSeconds * visibility, 0, 1);
+      if (state.security.exposure >= 1) this.raiseAlarm(selected.cameraState, selected.reason);
+    }
+
+    responseAnchor(cameraState, lastSeen) {
+      if (cameraState.responseNodeId) return { id: cameraState.responseNodeId, x: lastSeen.x, y: cameraState.floorY, z: lastSeen.z };
+      const sameZone = MR_FEAST_NPC.waypoints.filter((point) => point.zone === cameraState.room);
+      const candidates = sameZone.length ? sameZone : MR_FEAST_NPC.waypoints;
+      const point = candidates.reduce((nearest, candidate) => {
+        const distance = Math.hypot(candidate.x - lastSeen.x, candidate.y - lastSeen.y, candidate.z - lastSeen.z);
+        return !nearest || distance < nearest.distance ? { point: candidate, distance } : nearest;
+      }, null)?.point;
+      return point ? { id: point.id, x: lastSeen.x, y: point.y, z: lastSeen.z } : null;
+    }
+
+    raiseAlarm(cameraState, reason = "lockdown-sighting", options = {}) {
+      if (!cameraState || (!options.force && (
+        state.security.alarmCooldown > 0
+        || state.security.alarmLatchCameraId === cameraState.id
+      ))) return false;
+      const p = physics?.playerPosition() || { x: cameraState.x, y: cameraState.floorY, z: cameraState.z };
+      const lastSeen = {
+        x: Number(p.x.toFixed(3)),
+        y: Number((p.y - (PLAYER.halfHeight + PLAYER.radius)).toFixed(3)),
+        z: Number(p.z.toFixed(3)),
+      };
+      const response = this.responseAnchor(cameraState, lastSeen);
+      state.security.alarmCount += 1;
+      state.security.lastAlarm = {
+        count: state.security.alarmCount,
+        cameraId: cameraState.id,
+        room: cameraState.room,
+        reason,
+        lastSeen,
+        responseNodeId: response?.id || null,
+        responsePosition: response ? { x: response.x, y: response.y, z: response.z } : null,
+      };
+      state.security.alarmCooldown = CAMERA_SECURITY.alarmCooldownSeconds;
+      state.security.alarmLatchCameraId = cameraState.id;
+      state.security.exposure = 1;
+      state.security.activeCameraId = cameraState.id;
+      this.transitionPolicy("alarm");
+      if (audioSystem) {
+        audioSystem.ping(740, 0.18, 0.07, "square");
+        audioSystem.ping(370, 0.34, 0.08, "sawtooth");
+      }
+      mrFeastNpc?.respondToCameraAlarm(state.security.lastAlarm);
+      this.updatePresentation();
+      this.updateHud();
+      return true;
+    }
+
+    handlePatronFeedSabotage() {
+      this.syncPolicy();
+      if (state.security.mode !== CAMERA_SECURITY_MODE.LOCKDOWN) this.transitionPolicy("patronFeedSabotaged");
+      // Cutting the feed while the Workshop camera faces away is a valid
+      // stealth success. It starts global lockdown, but Mr. Feast is summoned
+      // only by an actual camera sighting (including one during the action).
+      this.updatePresentation();
+      this.updateHud();
+    }
+
+    beginIllegalAction(id) {
+      state.security.illegalAction = id || "sabotage";
+      this.lastIllegalAction = state.security.illegalAction;
+      this.updateHud();
+    }
+
+    endIllegalAction(id = null) {
+      if (!id || state.security.illegalAction === id) state.security.illegalAction = null;
+      this.updateHud();
+    }
+
+    isAlarmResponseActive() {
+      return Boolean(mrFeastNpc && mrFeastNpc.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL);
+    }
+
+    updateHud() {
+      if (!dom.security) return;
+      const exposurePercent = Math.round(clamp(state.security.exposure, 0, 1) * 100);
+      const alarmActive = this.isAlarmResponseActive();
+      const hostileObservation = state.security.observed && !state.security.permitted;
+      const showHud = state.started && !state.isHidden && (
+        state.security.observed
+        || state.security.mode !== CAMERA_SECURITY_MODE.SHOW
+        || alarmActive
+      );
+      dom.security.hidden = !showHud;
+      dom.security.setAttribute("aria-valuenow", String(exposurePercent));
+      dom.security.dataset.state = alarmActive ? "alarm" : hostileObservation ? "hostile" : "permitted";
+      if (dom.securityFill) dom.securityFill.style.width = `${exposurePercent}%`;
+      if (dom.securityValue) dom.securityValue.textContent = String(exposurePercent);
+      if (dom.securityMode) {
+        dom.securityMode.textContent = alarmActive
+          ? "Alarm"
+          : state.security.mode === CAMERA_SECURITY_MODE.LOCKDOWN
+            ? "Lockdown"
+            : state.security.mode === CAMERA_SECURITY_MODE.RESTRICTED ? "Restricted" : "Public cameras";
+      }
+      if (dom.securityStatus) {
+        dom.securityStatus.textContent = alarmActive
+          ? "Mr Feast is responding"
+          : hostileObservation
+            ? "Camera acquiring you"
+            : state.security.observed ? "Filming permitted" : state.security.mode === CAMERA_SECURITY_MODE.LOCKDOWN
+              ? "Avoid every camera" : "Basement cameras are hostile";
+      }
+    }
+
+    update(dt, force = false) {
+      const safeDt = Math.max(0, Number(dt) || 0);
+      if (this.qaManual && !force) return;
+      this.syncPolicy();
+      state.security.alarmCooldown = Math.max(0, state.security.alarmCooldown - safeDt);
+      for (const cameraState of this.cameras) this.updateScan(cameraState, safeDt);
+      this.updatePresentation();
+      this.detectionAccumulator += safeDt;
+      while (this.detectionAccumulator >= CAMERA_SECURITY.checkInterval) {
+        this.evaluatePlayer(CAMERA_SECURITY.checkInterval);
+        this.detectionAccumulator -= CAMERA_SECURITY.checkInterval;
+      }
+      this.updateHud();
+    }
+
+    cameraDiagnostics(cameraState) {
+      return {
+        id: cameraState.id,
+        room: cameraState.room,
+        outdoors: cameraState.outdoors,
+        restricted: cameraState.restricted,
+        yaw: Number(cameraState.yaw.toFixed(4)),
+        baseYaw: Number(cameraState.yaw - cameraState.sweep * cameraState.sweepNormalized),
+        sweepNormalized: Number(cameraState.sweepNormalized.toFixed(4)),
+        scanDirection: cameraState.scanDirection,
+        paused: cameraState.pauseRemaining > 0,
+        frozen: cameraState.frozen,
+        playerInCone: cameraState.playerInCone,
+        hasLineOfSight: cameraState.hasLineOfSight,
+        blocker: cameraState.blocker,
+        disposition: this.cameraDisposition(cameraState),
+      };
+    }
+
+    getDiagnostics(detailed = false) {
+      const coveredZones = [...new Set(this.cameras.map((cameraState) => cameraState.room))];
+      const details = detailed ? this.cameras.map((cameraState) => this.cameraDiagnostics(cameraState)) : undefined;
+      return {
+        mode: state.security.mode,
+        policyOverride: state.security.policyOverride,
+        network: CAMERA_SECURITY.network,
+        publicCamerasOnline: true,
+        patronFeedOnline: !state.contestant13.relaySabotaged,
+        observed: state.security.observed,
+        permitted: state.security.permitted,
+        exposure: Number(state.security.exposure.toFixed(4)),
+        exposurePercent: Number((state.security.exposure * 100).toFixed(1)),
+        illegalAction: state.security.illegalAction,
+        activeCameraId: state.security.activeCameraId,
+        occludedBy: state.security.occludedBy,
+        alarm: {
+          active: this.isAlarmResponseActive(),
+          count: state.security.alarmCount,
+          latchedCameraId: state.security.alarmLatchCameraId,
+          last: state.security.lastAlarm ? { ...state.security.lastAlarm } : null,
+        },
+        cameras: {
+          total: this.cameras.length,
+          indoors: this.cameras.filter((cameraState) => !cameraState.outdoors).length,
+          outdoors: this.cameras.filter((cameraState) => cameraState.outdoors).length,
+          scanning: this.cameras.filter((cameraState) => !cameraState.frozen).length,
+          coveredZones,
+          exemptZones: CAMERA_SECURITY.exemptZones.slice(),
+          details,
+        },
+        tuning: {
+          checkInterval: CAMERA_SECURITY.checkInterval,
+          exposureSeconds: CAMERA_SECURITY.exposureSeconds,
+          detectionHalfAngle: Number(CAMERA_SECURITY.detectionHalfAngle.toFixed(4)),
+        },
+        qa: {
+          manual: this.qaManual,
+          soloCameraId: this.qaSoloCameraId,
+          mainCameraId: "cam-main-foyer",
+          basementCameraId: "cam-basement-workshop",
+        },
+      };
+    }
+
+    resetForQA(mode = null) {
+      if (!state.qa) return this.getDiagnostics(true);
+      this.qaManual = true;
+      this.qaSoloCameraId = null;
+      this.detectionAccumulator = 0;
+      state.security.policyOverride = Object.values(CAMERA_SECURITY_MODE).includes(mode) ? mode : null;
+      state.security.mode = state.security.policyOverride || CAMERA_SECURITY_MODE.SHOW;
+      state.security.exposure = 0;
+      state.security.observed = false;
+      state.security.permitted = true;
+      state.security.illegalAction = null;
+      state.security.activeCameraId = null;
+      state.security.occludedBy = null;
+      state.security.alarmCount = 0;
+      state.security.lastAlarm = null;
+      state.security.alarmCooldown = 0;
+      state.security.alarmLatchCameraId = null;
+      state.isHidden = false;
+      state.activeHideSpot = null;
+      for (const cameraState of this.cameras) {
+        cameraState.frozen = false;
+        cameraState.qaOccluded = null;
+        cameraState.playerInCone = false;
+        cameraState.hasLineOfSight = false;
+        cameraState.blocker = null;
+      }
+      this.syncPolicy();
+      this.updatePresentation();
+      this.updateHud();
+      return this.getDiagnostics(true);
+    }
+
+    setPolicyForQA(mode) {
+      if (!state.qa || !Object.values(CAMERA_SECURITY_MODE).includes(mode)) return this.getDiagnostics(true);
+      state.security.policyOverride = mode;
+      state.security.mode = mode;
+      this.updatePresentation();
+      this.updateHud();
+      return this.getDiagnostics(true);
+    }
+
+    setSoloForQA(cameraId) {
+      if (!state.qa || (cameraId && !this.cameraById.has(cameraId))) return this.getDiagnostics(true);
+      this.qaSoloCameraId = cameraId || null;
+      return this.getDiagnostics(true);
+    }
+
+    setSweepForQA(cameraId, normalized) {
+      if (!state.qa) return this.getDiagnostics(true);
+      const cameraState = this.cameraById.get(cameraId);
+      if (!cameraState) return this.getDiagnostics(true);
+      cameraState.sweepNormalized = clamp(Number(normalized) || 0, -1, 1);
+      cameraState.yaw = cameraState.yaw - cameraState.sweep * cameraState.initialSweep + cameraState.sweep * cameraState.sweepNormalized;
+      cameraState.initialSweep = cameraState.sweepNormalized;
+      cameraState.frozen = true;
+      cameraState.pauseRemaining = 0;
+      this.updatePresentation();
+      return this.cameraDiagnostics(cameraState);
+    }
+
+    setOccludedForQA(cameraId, occluded) {
+      if (!state.qa) return this.getDiagnostics(true);
+      const cameraState = this.cameraById.get(cameraId);
+      if (cameraState) cameraState.qaOccluded = occluded == null ? null : Boolean(occluded);
+      return cameraState ? this.cameraDiagnostics(cameraState) : this.getDiagnostics(true);
+    }
+
+    placePlayerInLaneForQA(cameraId, options = {}) {
+      if (!state.qa || !physics) return this.getDiagnostics(true);
+      const cameraState = this.cameraById.get(cameraId);
+      if (!cameraState) return this.getDiagnostics(true);
+      const distance = clamp(Number(options.distance) || 4, 1.5, Math.max(1.5, cameraState.range - 0.5));
+      this.euler.set(cameraState.pitch, cameraState.yaw - cameraState.sweep * cameraState.sweepNormalized, 0);
+      const centerDirection = new THREE.Vector3(0, 0, -1).applyEuler(this.euler);
+      centerDirection.y = 0;
+      centerDirection.normalize();
+      const lateral = clamp(Number(options.lateral) || 0, -cameraState.range * 0.5, cameraState.range * 0.5);
+      const x = cameraState.x + centerDirection.x * distance - centerDirection.z * lateral;
+      const z = cameraState.z + centerDirection.z * distance + centerDirection.x * lateral;
+      const playerYaw = Number.isFinite(Number(options.yaw)) ? Number(options.yaw) : cameraState.yaw + Math.PI;
+      teleport(x, cameraState.floorY, z, playerYaw, 0);
+      updateLocation();
+      return this.getDiagnostics(true);
+    }
+
+    setHiddenForQA(hidden) {
+      if (!state.qa) return this.getDiagnostics(true);
+      state.isHidden = Boolean(hidden);
+      state.activeHideSpot = state.isHidden ? { name: "QA camera hide" } : null;
+      if (state.isHidden) {
+        state.security.observed = false;
+        state.security.exposure = 0;
+      }
+      this.updateHud();
+      return this.getDiagnostics(true);
+    }
+
+    setStoryStateForQA(snapshot = {}) {
+      if (!state.qa) return this.getDiagnostics(true);
+      if (snapshot.basementUnlocked != null) state.contestant13.basementUnlocked = Boolean(snapshot.basementUnlocked);
+      if (snapshot.relaySabotaged != null) {
+        state.contestant13.relaySabotaged = Boolean(snapshot.relaySabotaged);
+        state.contestant13.threatEscalated = Boolean(snapshot.relaySabotaged);
+      }
+      state.security.policyOverride = null;
+      if (state.contestant13.relaySabotaged) state.security.mode = CAMERA_SECURITY_MODE.RESTRICTED;
+      else state.security.mode = CAMERA_SECURITY_MODE.SHOW;
+      this.syncPolicy();
+      this.updatePresentation();
+      this.updateHud();
+      return this.getDiagnostics(true);
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return this.getDiagnostics(true);
+      this.qaManual = true;
+      const steps = Math.min(7200, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
+      for (let step = 0; step < steps; step += 1) this.update(1 / 60, true);
+      return this.getDiagnostics(true);
     }
   }
 
@@ -7849,7 +8950,8 @@
         physics.addFixedBox(center.x, groundY + 1.12, center.z, size, 2.28, size, 0);
       });
     });
-    addBoxInstanceBatch("hedge-maze-walls", M.hedgeDark, walls, true, true);
+    const hedgeMazeWalls = addBoxInstanceBatch("hedge-maze-walls", M.hedgeDark, walls, true, true);
+    if (hedgeMazeWalls) occluderMeshes.push(hedgeMazeWalls);
     addOutdoorInstanceBatch("hedge-maze-clipped-foliage", "clippedHedgeFoliage", makeClippedHedgeGeometry, M.hedge, foliageShells, false, true);
     for (const portal of HEDGE_MAZE_PORTALS) addMazeEntrancePortal(portal, size, groundY);
     const solution = solveHedgeMaze();
@@ -9801,6 +10903,7 @@
 
     if (!state.menuOpen) {
       for (const object of animatedObjects) object.update(dt);
+      if (cameraSecurity) cameraSecurity.update(dt);
       for (const system of yardWaterSystems) system.update(dt);
       updateLightTransitions(dt);
       if (rainSystem) rainSystem.update(dt);
@@ -9888,6 +10991,7 @@
       journal: contestant13Quest?.getJournalDiagnostics() || { entries: [], currentObjective: null, open: false },
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
+      security: cameraSecurity?.getDiagnostics() || null,
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -10133,12 +11237,35 @@
     window.MrFeastFresh.setDevModeForQA = (enabled) => state.qa && contestant13Quest ? contestant13Quest.setDevMode(Boolean(enabled)) : null;
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
+    window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
+    window.MrFeastFresh.resetCameraSecurityForQA = (mode) => cameraSecurity ? cameraSecurity.resetForQA(mode) : null;
+    window.MrFeastFresh.setCameraPolicyForQA = (mode) => cameraSecurity ? cameraSecurity.setPolicyForQA(mode) : null;
+    window.MrFeastFresh.setCameraSoloForQA = (cameraId) => cameraSecurity ? cameraSecurity.setSoloForQA(cameraId) : null;
+    window.MrFeastFresh.setCameraSweepForQA = (cameraId, normalized) => cameraSecurity ? cameraSecurity.setSweepForQA(cameraId, normalized) : null;
+    window.MrFeastFresh.setCameraOccludedForQA = (cameraId, occluded) => cameraSecurity ? cameraSecurity.setOccludedForQA(cameraId, occluded) : null;
+    window.MrFeastFresh.placePlayerInCameraLaneForQA = (cameraId, options) => cameraSecurity ? cameraSecurity.placePlayerInLaneForQA(cameraId, options) : null;
+    window.MrFeastFresh.setCameraPlayerHiddenForQA = (hidden) => cameraSecurity ? cameraSecurity.setHiddenForQA(hidden) : null;
+    window.MrFeastFresh.setCameraIllegalActionForQA = (id) => {
+      if (!cameraSecurity) return null;
+      if (id) cameraSecurity.beginIllegalAction(id);
+      else cameraSecurity.endIllegalAction();
+      return cameraSecurity.getDiagnostics(true);
+    };
+    window.MrFeastFresh.setCameraStoryStateForQA = (snapshot) => cameraSecurity ? cameraSecurity.setStoryStateForQA(snapshot) : null;
+    window.MrFeastFresh.advanceCameraSecurityForQA = (seconds) => cameraSecurity ? cameraSecurity.advanceForQA(seconds) : null;
+    window.MrFeastFresh.triggerCameraAlarmForQA = (cameraId, reason) => {
+      const cameraState = cameraSecurity?.cameraById.get(cameraId);
+      if (!state.qa || !cameraState) return null;
+      cameraSecurity.raiseAlarm(cameraState, reason || "qa-alarm", { force: true });
+      return cameraSecurity.getDiagnostics(true);
+    };
     window.MrFeastFresh.resetMrFeastWandererForQA = () => mrFeastNpc ? mrFeastNpc.resetForQA() : null;
     window.MrFeastFresh.setMrFeastPoseForQA = (options) => mrFeastNpc ? mrFeastNpc.setPoseForQA(options) : null;
     window.MrFeastFresh.transitionMrFeastForQA = (actionName, duration) => mrFeastNpc ? mrFeastNpc.transitionForQA(actionName, duration) : null;
     window.MrFeastFresh.advanceMrFeastAnimationForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceAnimationForQA(seconds) : null;
     window.MrFeastFresh.setMrFeastRouteSegmentForQA = (targetId, progress, animationTime) => mrFeastNpc ? mrFeastNpc.setRouteSegmentForQA(targetId, progress, animationTime) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
+    window.MrFeastFresh.runMrFeastCameraResponseForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runCameraResponseForQA(maxSeconds) : null;
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
     window.MrFeastFresh.inspectScene = (prefix = "") => {
       const meshes = [];
@@ -10851,6 +11978,7 @@
       buildMansion();
       mergeStaticDecor();
       registerExteriorDetailCulling();
+      cameraSecurity = new CameraSecuritySystem();
       mrFeastNpc = new MrFeastWanderer();
       // The character is an optional test layer: it loads after the mansion is
       // usable and a failed GLB never blocks exploration or the boot watchdog.

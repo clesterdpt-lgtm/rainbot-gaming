@@ -463,7 +463,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-player-systems-1",
+    assetVersion: "20260716-music-room-layout-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -663,6 +663,7 @@
     foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
     musicRoomB: [11.5, FLOOR.MAIN, 10.6, 0.72],
+    musicTableWestClearance: [8.05, FLOOR.MAIN, 6.15, Math.PI],
     musicRoomPortrait: [12.0, FLOOR.MAIN, 7.8, -Math.PI / 2],
     musicRoomFireplace: [7.45, FLOOR.MAIN, 10.25, Math.PI / 2, -0.52],
     mainHallBathroomA: [-6.5, FLOOR.MAIN, -2.15, 2.2],
@@ -5183,9 +5184,7 @@
       cylinder({ name: "turned-table-leg", radius: 0.075, radiusTop: 0.052, radiusBottom: 0.095, height: 0.73, segments: 12, x: sx * (width / 2 - 0.18), y: 0.365, z: sz * (depth / 2 - 0.16), material: material || M.darkWood, parent: group });
       sphere({ name: "table-leg-knee", radius: 0.095, x: sx * (width / 2 - 0.18), y: 0.55, z: sz * (depth / 2 - 0.16), material: material || M.darkWood, parent: group });
     }
-    const cw = Math.abs(Math.cos(rotationY || 0)) * width + Math.abs(Math.sin(rotationY || 0)) * depth;
-    const cd = Math.abs(Math.sin(rotationY || 0)) * width + Math.abs(Math.cos(rotationY || 0)) * depth;
-    physics.addFixedBox(x, floorY + 0.42, z, cw, 0.84, cd, 0);
+    physics.addFixedBox(x, floorY + 0.42, z, width, 0.84, depth, rotationY || 0);
     return group;
   }
 
@@ -6702,7 +6701,7 @@
 
     // Music room — the sofa is deliberately aimed at the grand piano.
     addFireplace("music room fireplace", 5.35, 10.25, FLOOR.MAIN, -Math.PI / 2);
-    const musicPiano = { x: 11.2, z: 5.4 };
+    const musicPiano = { x: 11.2, z: 5.85 };
     const musicSofa = { x: 7.4, z: 9.2 };
     const musicRoomSofa = addSofa(musicSofa.x, musicSofa.z, FLOOR.MAIN, faceTargetYaw(musicSofa.x, musicSofa.z, musicPiano.x, musicPiano.z), 2.5, M.velvet);
     musicRoomSofa.name = "music-room-piano-facing-sofa";
@@ -10576,6 +10575,12 @@
           start: "paintingEaselApproach",
           actions: [{ yaw: -Math.PI / 2, seconds: 1.4 }],
           expected: { inBounds: true, grounded: true, room: "PAINTING ROOM", minX: 8.5, maxX: 8.95 },
+        },
+        musicTableWestClearance: {
+          start: "musicTableWestClearance",
+          actions: [{ yaw: Math.PI, seconds: 2.0 }],
+          startDelayMs: 1800,
+          expected: { inBounds: true, grounded: true, room: "MUSIC ROOM", minZ: 7.0, maxZ: 7.8 },
         },
         rearLoungeEntry: {
           start: "rearLoungeEntry",

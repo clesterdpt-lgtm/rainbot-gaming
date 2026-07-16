@@ -16,6 +16,7 @@
 - `I` opens a combined carried-object and clue dossier (`J` remains an alias), while `Escape` opens a true pause menu with Resume, Maximize, Save, Load, and reversible Dev Mode controls.
 - Explicit saves preserve the player transform and Contestant 13 state through `RBGameSaves`. Dev Mode grants every current item/clue and testing gate without completing sabotage, cannot be saved, and restores the exact pre-dev snapshot when disabled.
 - The west-lawn garden paving remains one continuous `ShapeGeometry` network, with both approach lamps offset onto the grass beyond the walking line.
+- The Music Room grand piano now sits `0.45m` farther north from the south wall, and rotated tables use their true oriented footprint instead of an oversized axis-aligned collision box.
 - Mr. Feast skips the basement patrol branch until the story door is unlocked; full-route QA temporarily releases and restores that lock without advancing story state.
 - Whole-home patrol: 624.95m through 227 waypoints, all 30 major room/stair zones, and 21 route doors across the main, upper, and basement levels.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, perception, pursuit, attack, or failure state.
@@ -35,11 +36,12 @@ Mobile sprint/crouch buttons remain deferred; Milestone 35 adds the desktop keyb
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
 - Browser captures — `output/playwright/mr-feast-basement-key-trail/library-shelf-book-subtle-desktop.png` now visibly confirms the clean gap and correctly ordered `XIII`; `basement-door-locked-desktop.png`, `basement-door-unlocked-desktop.png`, and `library-shelf-book-mobile.png` cover the adjacent states
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, inventory dossier, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
+- `musicTableWestClearance` QA route — advances beyond `z=7.0` beside the Music Room table, grounded with zero fall recoveries, unchanged light circuits, and zero console errors
 - Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays
 
 ## Next action
 
-User playtests sprint drain/recharge and crouch speed/eye-height feel, then checks the `I` dossier and `Escape` save/Dev Mode workflow. The Library shelf-book discovery remains a separate Milestone 34 playtest.
+User checks the Music Room piano spacing and walks around the center table, then playtests sprint drain/recharge and crouch speed/eye-height feel before checking the `I` dossier and `Escape` save/Dev Mode workflow. The Library shelf-book discovery remains a separate Milestone 34 playtest.
 
 ## Working conventions
 

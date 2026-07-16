@@ -140,6 +140,9 @@
     #mansion-stage:fullscreen,
     #mansion-stage:-webkit-full-screen,
     #mansion-stage.is-maxed {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
       width: 100dvw;
       height: 100dvh;
       min-height: 100dvh;
@@ -273,6 +276,59 @@
     }
 
     .mansion-inventory__empty { color: #746f67; }
+
+    #mansion-energy {
+      position: absolute;
+      left: max(18px, env(safe-area-inset-left));
+      bottom: max(64px, calc(env(safe-area-inset-bottom) + 54px));
+      z-index: 7;
+      width: min(210px, calc(100% - 36px));
+      padding: 8px 10px 9px;
+      border: 1px solid rgba(225, 198, 147, 0.24);
+      border-radius: 3px;
+      color: #d9ccb7;
+      background: rgba(7, 8, 10, 0.76);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+
+    #mansion-energy[hidden] { display: none; }
+
+    .mansion-energy__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 5px;
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    #mansion-energy-mode { color: var(--mansion-brass-bright); }
+    #mansion-energy-value { color: #999083; font-variant-numeric: tabular-nums; }
+
+    .mansion-energy__track {
+      height: 5px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    #mansion-energy-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #81623a, #e0bf7e);
+      transform-origin: left center;
+      transition: width 90ms linear, background 160ms ease;
+    }
+
+    #mansion-energy.is-exhausted #mansion-energy-fill {
+      background: linear-gradient(90deg, #6e2e29, #a94a3f);
+    }
 
     .mansion-tools {
       position: absolute;
@@ -521,7 +577,8 @@
 
     #mansion-discovery[hidden],
     #mansion-action[hidden],
-    #mansion-journal[hidden] { display: none; }
+    #mansion-journal[hidden],
+    #mansion-menu[hidden] { display: none; }
 
     #mansion-discovery-title {
       display: block;
@@ -586,7 +643,7 @@
 
     .mansion-journal__panel {
       position: relative;
-      width: min(620px, 100%);
+      width: min(780px, 100%);
       max-height: min(720px, 90dvh);
       overflow: auto;
       padding: clamp(24px, 5vw, 42px);
@@ -621,6 +678,22 @@
       right: 18px;
     }
 
+    .mansion-journal__grid {
+      display: grid;
+      grid-template-columns: minmax(170px, 0.7fr) minmax(0, 1.6fr);
+      gap: clamp(22px, 4vw, 38px);
+    }
+
+    .mansion-journal__section-title {
+      margin: 0 0 12px;
+      color: var(--mansion-brass-bright);
+      font-size: 0.56rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    #mansion-inventory-dialog-items,
     #mansion-journal-entries {
       display: grid;
       gap: 17px;
@@ -628,6 +701,8 @@
       padding: 0;
       list-style: none;
     }
+
+    #mansion-inventory-dialog-items { align-content: start; }
 
     .mansion-journal__entry {
       padding-left: 13px;
@@ -656,6 +731,93 @@
       font-size: 1rem;
       font-style: italic;
     }
+
+    #mansion-menu {
+      position: absolute;
+      inset: 0;
+      z-index: 21;
+      display: grid;
+      place-items: center;
+      overflow: auto;
+      padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      background: rgba(2, 3, 4, 0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .mansion-menu__panel {
+      width: min(520px, 100%);
+      padding: clamp(26px, 5vw, 42px);
+      border: 1px solid rgba(226, 199, 151, 0.34);
+      border-radius: 4px;
+      background: linear-gradient(150deg, rgba(35, 29, 23, 0.98), rgba(9, 10, 12, 0.98));
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+    }
+
+    .mansion-menu__eyebrow {
+      margin: 0;
+      color: var(--mansion-brass-bright);
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+
+    .mansion-menu__title {
+      margin: 7px 0 10px;
+      color: #f0e7d6;
+      font-family: var(--mansion-serif);
+      font-size: clamp(2.5rem, 7vw, 4.25rem);
+      font-weight: 600;
+      line-height: 0.9;
+    }
+
+    .mansion-menu__copy,
+    #mansion-menu-status {
+      color: #aaa093;
+      font-size: 0.72rem;
+      line-height: 1.5;
+    }
+
+    #mansion-menu-status {
+      min-height: 1.5em;
+      margin: 12px 0;
+      color: #d5bd90;
+    }
+
+    .mansion-menu__actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .mansion-menu__button {
+      min-height: 44px;
+      padding: 10px 13px;
+      border: 1px solid rgba(226, 199, 151, 0.3);
+      border-radius: 3px;
+      color: #e7ddcd;
+      background: rgba(255, 255, 255, 0.035);
+      cursor: pointer;
+      font: 700 0.64rem/1.2 var(--mansion-sans);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .mansion-menu__button:hover,
+    .mansion-menu__button:focus-visible {
+      border-color: var(--mansion-brass-bright);
+      color: var(--mansion-brass-bright);
+      outline: none;
+      background: rgba(224, 191, 126, 0.08);
+    }
+
+    .mansion-menu__button--primary {
+      color: #17120d;
+      background: linear-gradient(180deg, #dec28a, #ad8950);
+    }
+
+    .mansion-menu__button[disabled] { cursor: not-allowed; opacity: 0.42; }
+    #mansion-menu-dev[aria-pressed="true"] { border-color: #b96455; color: #f0b3a8; background: rgba(124, 44, 34, 0.18); }
 
     #mansion-prompt {
       position: absolute;
@@ -957,6 +1119,9 @@
       #mansion-objective { font-size: 0.87rem; }
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
+      #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
+      .mansion-journal__grid { grid-template-columns: 1fr; }
+      .mansion-menu__actions { grid-template-columns: 1fr; }
       .mansion-tools { top: max(9px, env(safe-area-inset-top)); right: max(9px, env(safe-area-inset-right)); }
       .mansion-tool { width: 44px; height: 44px; }
       #mansion-loading { top: 66px; max-width: calc(100% - 30px); font-size: 0.57rem; }
@@ -1036,8 +1201,13 @@
           <div id="mansion-inventory" aria-label="Carried items"><span class="mansion-inventory__empty">Nothing carried</span></div>
         </section>
 
+        <div id="mansion-energy" role="meter" aria-label="Sprint energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
+          <div class="mansion-energy__head"><span id="mansion-energy-mode">Energy</span><span id="mansion-energy-value">100</span></div>
+          <div class="mansion-energy__track" aria-hidden="true"><div id="mansion-energy-fill"></div></div>
+        </div>
+
         <div class="mansion-tools" aria-label="View controls">
-          <button id="mansion-journal-button" class="mansion-tool" type="button" aria-label="Open Contestant 13 journal" aria-expanded="false" title="Journal (J)">13</button>
+          <button id="mansion-journal-button" class="mansion-tool" type="button" aria-label="Open inventory and clues" aria-expanded="false" title="Inventory &amp; Clues (I)">I</button>
           <button id="mansion-audio" class="mansion-tool" type="button" aria-label="Mute storm audio" aria-pressed="true" title="Mute storm audio">♪</button>
           <button id="mansion-fullscreen" class="mansion-tool" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">⛶</button>
         </div>
@@ -1051,10 +1221,12 @@
             <p class="mansion-intro__lead">A previous contestant left a trail somewhere inside the estate. Follow it, recover what the show buried, and make the first cut.</p>
             <div class="mansion-controls" aria-label="Controls">
               <span><kbd>WASD</kbd> move</span>
+              <span><kbd>Shift</kbd> sprint</span>
+              <span><kbd>C</kbd> crouch</span>
               <span><kbd>Mouse</kbd> look</span>
               <span><kbd>E</kbd> interact</span>
-              <span><kbd>J</kbd> journal</span>
-              <span><kbd>Esc</kbd> release pointer</span>
+              <span><kbd>I</kbd> inventory</span>
+              <span><kbd>Esc</kbd> menu</span>
             </div>
             <button id="mansion-enter" type="button" disabled aria-disabled="true">Preparing the threshold…</button>
             <p class="mansion-intro__note">Headphones recommended. This experience contains lightning flashes and storm audio.</p>
@@ -1080,10 +1252,35 @@
 
         <section id="mansion-journal" role="dialog" aria-modal="true" aria-labelledby="mansion-journal-title" hidden>
           <div class="mansion-journal__panel">
-            <button id="mansion-journal-close" class="mansion-tool" type="button" aria-label="Close journal">×</button>
-            <p class="mansion-journal__eyebrow">Recovered evidence</p>
-            <h2 class="mansion-journal__title" id="mansion-journal-title">Contestant 13</h2>
-            <ol id="mansion-journal-entries"><li class="mansion-journal__empty">No entries yet. Search the mansion.</li></ol>
+            <button id="mansion-journal-close" class="mansion-tool" type="button" aria-label="Close inventory and clues">×</button>
+            <p class="mansion-journal__eyebrow">Contestant dossier</p>
+            <h2 class="mansion-journal__title" id="mansion-journal-title">Inventory &amp; Clues</h2>
+            <div class="mansion-journal__grid">
+              <section aria-labelledby="mansion-inventory-dialog-title">
+                <h3 class="mansion-journal__section-title" id="mansion-inventory-dialog-title">Carried objects</h3>
+                <ul id="mansion-inventory-dialog-items" aria-label="Carried objects"><li class="mansion-journal__empty">Nothing carried.</li></ul>
+              </section>
+              <section aria-labelledby="mansion-clues-title">
+                <h3 class="mansion-journal__section-title" id="mansion-clues-title">Recovered clues</h3>
+                <ol id="mansion-journal-entries"><li class="mansion-journal__empty">No clues yet. Search the mansion.</li></ol>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section id="mansion-menu" role="dialog" aria-modal="true" aria-labelledby="mansion-menu-title" hidden>
+          <div class="mansion-menu__panel">
+            <p class="mansion-menu__eyebrow">Mansion menu</p>
+            <h2 class="mansion-menu__title" id="mansion-menu-title">Paused</h2>
+            <p class="mansion-menu__copy">Resume the investigation, preserve your progress, or enable testing shortcuts.</p>
+            <p id="mansion-menu-status" role="status" aria-live="polite">Progress is not autosaved.</p>
+            <div class="mansion-menu__actions">
+              <button id="mansion-menu-resume" class="mansion-menu__button mansion-menu__button--primary" type="button">Resume</button>
+              <button id="mansion-menu-maximize" class="mansion-menu__button" type="button">Maximize</button>
+              <button id="mansion-menu-save" class="mansion-menu__button" type="button">Save game</button>
+              <button id="mansion-menu-load" class="mansion-menu__button" type="button" disabled>Load save</button>
+              <button id="mansion-menu-dev" class="mansion-menu__button" type="button" aria-pressed="false">Dev mode: Off</button>
+            </div>
           </div>
         </section>
 
@@ -1212,6 +1409,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260715-basement-key-trail-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260716-player-systems-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

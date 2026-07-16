@@ -31,6 +31,7 @@
     objective: $("mansion-objective"),
     storyProgress: $("mansion-story-progress"),
     inventory: $("mansion-inventory"),
+    inventoryDialogItems: $("mansion-inventory-dialog-items"),
     journalButton: $("mansion-journal-button"),
     journal: $("mansion-journal"),
     journalClose: $("mansion-journal-close"),
@@ -41,6 +42,17 @@
     action: $("mansion-action"),
     actionText: $("mansion-action-text"),
     actionFill: $("mansion-action-fill"),
+    energy: $("mansion-energy"),
+    energyMode: $("mansion-energy-mode"),
+    energyValue: $("mansion-energy-value"),
+    energyFill: $("mansion-energy-fill"),
+    menu: $("mansion-menu"),
+    menuResume: $("mansion-menu-resume"),
+    menuMaximize: $("mansion-menu-maximize"),
+    menuSave: $("mansion-menu-save"),
+    menuLoad: $("mansion-menu-load"),
+    menuDev: $("mansion-menu-dev"),
+    menuStatus: $("mansion-menu-status"),
     crosshair: $("mansion-crosshair"),
     audio: $("mansion-audio"),
     fullscreen: $("mansion-fullscreen"),
@@ -180,7 +192,18 @@
     radius: 0.32,
     halfHeight: 0.59,
     eye: 1.67,
-    speed: 2.2,
+    crouchEye: 1.16,
+    walkSpeed: 2.2,
+    sprintSpeed: 3.75,
+    crouchSpeed: 1.25,
+    energyMax: 100,
+    energyDrainPerSecond: 29,
+    energyRechargePerSecond: 22,
+    energyRechargeDelay: 0.75,
+    energyResumeThreshold: 12,
+    crouchTransitionSpeed: 7.5,
+    crouchVisibilityMultiplier: 0.5,
+    crouchNoiseMultiplier: 0.32,
     interactionRange: 2.35,
   });
   const MR_FEAST_LEVEL = Object.freeze({
@@ -440,7 +463,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260715-basement-key-trail-1",
+    assetVersion: "20260716-player-systems-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -836,6 +859,22 @@
     isHidden: false,
     activeHideSpot: null,
     journalOpen: false,
+    menuOpen: false,
+    maximized: false,
+    devMode: false,
+    devModeSnapshot: null,
+    movement: {
+      crouched: false,
+      sprinting: false,
+      exhausted: false,
+      energy: PLAYER.energyMax,
+      rechargeDelay: 0,
+      eyeHeight: PLAYER.eye,
+      mode: "idle",
+      speed: 0,
+      stealthVisibilityMultiplier: 1,
+      stealthNoiseMultiplier: 1,
+    },
     contestant13: {
       bookRead: false,
       shovelTaken: false,
@@ -873,10 +912,13 @@
     back: false,
     left: false,
     right: false,
+    sprint: false,
     touchLookId: null,
     touchLookX: 0,
     touchLookY: 0,
   };
+
+  const mansionSaveSlot = window.RBGameSaves?.create("mr-feast-mansion", { version: 1 }) || null;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05070d);
@@ -3125,6 +3167,13 @@
       root.traverse((object) => removeInteractionTarget(object));
     }
 
+    registerTree(root, interaction) {
+      if (!root || !interaction) return;
+      root.traverse((object) => {
+        if (object.isMesh) addInteractionTarget(object, interaction);
+      });
+    }
+
     hasItem(id) {
       return this.story.inventory.includes(id);
     }
@@ -3196,12 +3245,33 @@
           }
         }
       }
+      if (dom.inventoryDialogItems) {
+        dom.inventoryDialogItems.replaceChildren();
+        if (!this.story.inventory.length) {
+          const empty = document.createElement("li");
+          empty.className = "mansion-journal__empty";
+          empty.textContent = "Nothing carried.";
+          dom.inventoryDialogItems.appendChild(empty);
+        } else {
+          for (const id of this.story.inventory) {
+            const item = document.createElement("li");
+            item.className = "mansion-journal__entry";
+            item.dataset.item = id;
+            const title = document.createElement("strong");
+            title.textContent = CONTESTANT_13.itemLabels[id] || id;
+            const detail = document.createElement("span");
+            detail.textContent = id === "garden-shovel" ? "Bulky tool" : "Quest object";
+            item.append(title, detail);
+            dom.inventoryDialogItems.appendChild(item);
+          }
+        }
+      }
       if (dom.journalEntries) {
         dom.journalEntries.replaceChildren();
         if (!this.story.journalEntries.length) {
           const empty = document.createElement("li");
           empty.className = "mansion-journal__empty";
-          empty.textContent = "No entries yet. Search the mansion.";
+          empty.textContent = "No clues yet. Search the mansion.";
           dom.journalEntries.appendChild(empty);
         } else {
           for (const entry of this.story.journalEntries) {
@@ -3234,9 +3304,10 @@
     setJournalOpen(open) {
       const nextOpen = Boolean(open);
       if (nextOpen === state.journalOpen) return;
+      if (nextOpen && state.menuOpen) setMenuOpen(false);
       if (nextOpen) this.journalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.journalButton;
       state.journalOpen = nextOpen;
-      input.forward = input.back = input.left = input.right = false;
+      clearMovementInput();
       if (state.journalOpen && document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
       if (dom.journal) dom.journal.hidden = !state.journalOpen;
       if (dom.stage && dom.journal) {
@@ -3451,6 +3522,104 @@
           audioSystem.ping(520, 0.18, 0.08, "square");
         }
       });
+    }
+
+    getQuestSnapshot() {
+      return {
+        bookRead: Boolean(this.story.bookRead),
+        shovelTaken: Boolean(this.story.shovelTaken),
+        digSiteExcavated: Boolean(this.story.digSiteExcavated),
+        basementKeyFound: Boolean(this.story.basementKeyFound),
+        basementUnlocked: Boolean(this.story.basementUnlocked),
+        badgeFound: Boolean(this.story.badgeFound),
+        tapeFound: Boolean(this.story.tapeFound),
+        archiveCageUnlocked: Boolean(this.story.archiveCageUnlocked),
+        recordingPlayed: Boolean(this.story.recordingPlayed),
+        relaySabotaged: Boolean(this.story.relaySabotaged),
+        threatEscalated: Boolean(this.story.threatEscalated),
+        inventory: this.story.inventory.slice(),
+        journalEntries: this.story.journalEntries.map((entry) => ({ ...entry })),
+      };
+    }
+
+    restoreQuestSnapshot(snapshot = {}) {
+      const booleanFields = [
+        "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "basementUnlocked",
+        "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
+      ];
+      for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
+      this.story.digging = false;
+      this.story.actionInProgress = null;
+      const allowedItems = new Set(Object.keys(CONTESTANT_13.itemLabels));
+      this.story.inventory = Array.from(new Set(Array.isArray(snapshot.inventory) ? snapshot.inventory.filter((id) => allowedItems.has(id)) : []));
+      const allowedEntries = new Map(Object.values(CONTESTANT_13.journal).map((entry) => [entry.id, entry]));
+      this.story.journalEntries = Array.from(new Set(Array.isArray(snapshot.journalEntries) ? snapshot.journalEntries.map((entry) => entry?.id).filter((id) => allowedEntries.has(id)) : []))
+        .map((id) => ({ ...allowedEntries.get(id) }));
+      this.syncWorldPresentation();
+      this.updateUI();
+    }
+
+    syncWorldPresentation() {
+      const shovelInteraction = this.interactions.get("garden-shovel");
+      if (contestant13Scene.shovel) {
+        contestant13Scene.shovel.visible = !this.story.shovelTaken;
+        if (this.story.shovelTaken) this.unregisterTree(contestant13Scene.shovel);
+        else this.registerTree(contestant13Scene.shovel, shovelInteraction);
+      }
+      if (contestant13Scene.digMound) contestant13Scene.digMound.visible = !this.story.digSiteExcavated;
+      if (contestant13Scene.digMarker) contestant13Scene.digMarker.visible = !this.story.digSiteExcavated;
+      if (contestant13Scene.digHole) contestant13Scene.digHole.visible = this.story.digSiteExcavated;
+      if (contestant13Scene.basementDoor) {
+        contestant13Scene.basementDoor.locked = !this.story.basementUnlocked;
+        contestant13Scene.basementDoor.setOpen(Boolean(this.story.basementUnlocked));
+      }
+      if (contestant13Scene.archiveCageDoor) contestant13Scene.archiveCageDoor.rotation.y = this.story.archiveCageUnlocked ? -1.25 : 0;
+      if (contestant13Scene.archiveRecorderIndicator && contestant13Scene.archiveRecorderIndicatorMaterial) {
+        contestant13Scene.archiveRecorderIndicator.userData.active = this.story.recordingPlayed;
+        contestant13Scene.archiveRecorderIndicatorMaterial.color.setHex(this.story.recordingPlayed ? 0xd2ad5c : 0x331916);
+        contestant13Scene.archiveRecorderIndicatorMaterial.emissive.setHex(this.story.recordingPlayed ? 0xff9d32 : 0x120200);
+        contestant13Scene.archiveRecorderIndicatorMaterial.emissiveIntensity = this.story.recordingPlayed ? 2.2 : 0.3;
+      }
+      if (contestant13Scene.relayBlackCables) contestant13Scene.relayBlackCables.visible = !this.story.relaySabotaged;
+      if (contestant13Scene.relayOnlineBulb) contestant13Scene.relayOnlineBulb.visible = !this.story.relaySabotaged;
+      if (contestant13Scene.relayAlarmBulb) contestant13Scene.relayAlarmBulb.visible = this.story.relaySabotaged;
+    }
+
+    setDevMode(enabled) {
+      const nextEnabled = Boolean(enabled);
+      if (nextEnabled === state.devMode) return state.devMode;
+      if (nextEnabled) {
+        state.devModeSnapshot = this.getQuestSnapshot();
+        this.story.bookRead = true;
+        this.story.shovelTaken = true;
+        this.story.digSiteExcavated = true;
+        this.story.basementKeyFound = true;
+        this.story.basementUnlocked = true;
+        this.story.badgeFound = true;
+        this.story.tapeFound = true;
+        this.story.archiveCageUnlocked = true;
+        this.story.recordingPlayed = true;
+        this.story.relaySabotaged = false;
+        this.story.threatEscalated = false;
+        this.story.inventory = Object.keys(CONTESTANT_13.itemLabels);
+        this.story.journalEntries = [
+          CONTESTANT_13.journal.book,
+          CONTESTANT_13.journal.shovel,
+          CONTESTANT_13.journal.cache,
+          CONTESTANT_13.journal.basement,
+          CONTESTANT_13.journal.transcript,
+        ].map((entry) => ({ ...entry }));
+        state.devMode = true;
+        this.syncWorldPresentation();
+        this.updateUI();
+      } else {
+        const snapshot = state.devModeSnapshot;
+        state.devMode = false;
+        state.devModeSnapshot = null;
+        this.restoreQuestSnapshot(snapshot || {});
+      }
+      updateMenuControls();
+      return state.devMode;
     }
 
     getInventoryDiagnostics() {
@@ -8500,7 +8669,7 @@
   }
 
   function requestPointerLock() {
-    if (!state.started || matchMedia("(pointer: coarse)").matches) return;
+    if (!state.started || state.journalOpen || state.menuOpen || matchMedia("(pointer: coarse)").matches) return;
     if (document.pointerLockElement !== dom.canvas && dom.canvas.requestPointerLock) {
       try {
         const request = dom.canvas.requestPointerLock();
@@ -8707,10 +8876,144 @@
     if (key === "KeyS" || key === "ArrowDown") input.back = value;
     if (key === "KeyA" || key === "ArrowLeft") input.left = value;
     if (key === "KeyD" || key === "ArrowRight") input.right = value;
+    if (key === "ShiftLeft" || key === "ShiftRight") input.sprint = value;
+  }
+
+  function clearMovementInput() {
+    input.forward = false;
+    input.back = false;
+    input.left = false;
+    input.right = false;
+    input.sprint = false;
+  }
+
+  function serializeMansionSave() {
+    if (!physics || !contestant13Quest || state.devMode) return null;
+    const playerPosition = physics.playerPosition();
+    return {
+      playerPosition: { x: playerPosition.x, y: playerPosition.y, z: playerPosition.z },
+      yaw: state.yaw,
+      pitch: state.pitch,
+      movement: {
+        energy: state.movement.energy,
+        crouched: state.movement.crouched,
+      },
+      contestant13: contestant13Quest.getQuestSnapshot(),
+    };
+  }
+
+  function restoreMansionSave(saved) {
+    const data = saved?.data || saved;
+    if (!data || !data.playerPosition || !data.contestant13 || !physics || !contestant13Quest) return false;
+    state.devMode = false;
+    state.devModeSnapshot = null;
+    contestant13Quest.restoreQuestSnapshot(data.contestant13);
+    const playerPosition = data.playerPosition;
+    const x = Number(playerPosition.x);
+    const y = Number(playerPosition.y);
+    const z = Number(playerPosition.z);
+    if (![x, y, z].every(Number.isFinite)) return false;
+    physics.verticalVelocity = 0;
+    physics.playerBody.setTranslation({ x, y, z }, true);
+    physics.playerBody.setNextKinematicTranslation({ x, y, z });
+    state.yaw = Number.isFinite(Number(data.yaw)) ? Number(data.yaw) : Math.PI;
+    state.pitch = Number.isFinite(Number(data.pitch)) ? clamp(Number(data.pitch), -1.35, 1.35) : 0;
+    state.movement.energy = clamp(Number(data.movement?.energy) || 0, 0, PLAYER.energyMax);
+    state.movement.crouched = Boolean(data.movement?.crouched);
+    state.movement.exhausted = state.movement.energy <= 0;
+    state.movement.rechargeDelay = 0;
+    state.movement.sprinting = false;
+    clearMovementInput();
+    syncCamera();
+    updateMovementHud();
+    updateLocation();
+    updateInteractionPrompt();
+    updateMenuControls();
+    return true;
+  }
+
+  function saveMansionGame() {
+    if (state.devMode) {
+      setMenuStatus("Turn off Dev Mode before saving.");
+      return false;
+    }
+    const payload = serializeMansionSave();
+    const saved = Boolean(payload && mansionSaveSlot?.save(payload, { room: state.currentRoom, objective: contestant13Quest?.getObjective() }));
+    setMenuStatus(saved ? "Game saved." : "Save unavailable in this browser.");
+    updateMenuControls();
+    return saved;
+  }
+
+  function loadMansionGame() {
+    const saved = mansionSaveSlot?.read();
+    const loaded = restoreMansionSave(saved);
+    setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
+    if (loaded) setMenuOpen(false);
+    return loaded;
+  }
+
+  function setMenuStatus(message) {
+    if (dom.menuStatus) dom.menuStatus.textContent = message;
+  }
+
+  function updateMenuControls() {
+    const hasSave = Boolean(mansionSaveSlot?.has());
+    if (dom.menuLoad) dom.menuLoad.disabled = !hasSave;
+    if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode;
+    if (dom.menuDev) {
+      dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
+      dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
+    }
+    if (dom.menuMaximize) dom.menuMaximize.textContent = state.maximized ? "Restore size" : "Maximize";
+    if (dom.fullscreen) {
+      dom.fullscreen.setAttribute("aria-label", state.maximized ? "Restore game size" : "Maximize game");
+      dom.fullscreen.setAttribute("title", state.maximized ? "Restore game size" : "Maximize game");
+    }
+  }
+
+  function setMaximized(active) {
+    state.maximized = Boolean(active);
+    dom.stage.classList.toggle("is-maxed", state.maximized);
+    document.body.classList.toggle("rb-game-maxed", state.maximized);
+    updateMenuControls();
+    resize();
+    return state.maximized;
+  }
+
+  function toggleMaximized() {
+    return setMaximized(!state.maximized);
+  }
+
+  let menuReturnFocus = null;
+  function setMenuOpen(open) {
+    const nextOpen = Boolean(open);
+    if (nextOpen === state.menuOpen) return;
+    if (nextOpen && state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+    state.menuOpen = nextOpen;
+    clearMovementInput();
+    if (nextOpen) {
+      menuReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
+      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+    }
+    if (dom.menu) dom.menu.hidden = !nextOpen;
+    if (dom.stage && dom.menu) {
+      for (const child of dom.stage.children) {
+        if (child !== dom.menu) child.inert = nextOpen;
+      }
+    }
+    updateMenuControls();
+    if (nextOpen) {
+      if (!mansionSaveSlot?.has()) setMenuStatus("Progress is not autosaved.");
+      requestAnimationFrame(() => dom.menuResume?.focus({ preventScroll: true }));
+    } else {
+      const returnTarget = menuReturnFocus && menuReturnFocus.isConnected ? menuReturnFocus : dom.canvas;
+      menuReturnFocus = null;
+      returnTarget?.focus({ preventScroll: true });
+    }
   }
 
   function activateCurrentInteraction() {
-    if (state.journalOpen || state.contestant13.actionInProgress) return;
+    if (state.journalOpen || state.menuOpen || state.contestant13.actionInProgress) return;
     if (!state.currentInteraction) return;
     state.currentInteraction.activate();
     updateInteractionPrompt();
@@ -8718,8 +9021,9 @@
 
   function bindInput() {
     window.addEventListener("keydown", (event) => {
-      if (event.code === "Tab" && state.journalOpen && dom.journal) {
-        const focusable = Array.from(dom.journal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
+      const activeModal = state.menuOpen ? dom.menu : state.journalOpen ? dom.journal : null;
+      if (event.code === "Tab" && activeModal) {
+        const focusable = Array.from(activeModal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
         if (focusable.length) {
           const first = focusable[0];
           const last = focusable[focusable.length - 1];
@@ -8730,16 +9034,27 @@
         }
         return;
       }
-      if (event.code === "KeyJ" && !event.repeat && contestant13Quest) {
+      if (event.code === "Escape") {
+        event.preventDefault();
+        if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+        else if (state.started) setMenuOpen(!state.menuOpen);
+        return;
+      }
+      if (state.menuOpen) return;
+      if ((event.code === "KeyI" || event.code === "KeyJ") && !event.repeat && contestant13Quest) {
         event.preventDefault();
         contestant13Quest.toggleJournal();
         return;
       }
-      if (event.code === "Escape" && state.journalOpen && contestant13Quest) {
-        contestant13Quest.setJournalOpen(false);
+      if (event.code === "KeyC" && !event.repeat && state.started && !state.journalOpen && !state.contestant13.actionInProgress) {
+        event.preventDefault();
+        state.movement.crouched = !state.movement.crouched;
+        state.movement.sprinting = false;
+        input.sprint = false;
+        updateMovementHud();
         return;
       }
-      if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.code)) {
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
         setMoveIntent(event.code, true);
       }
@@ -8747,9 +9062,7 @@
       if (event.code === "KeyM" && !event.repeat && audioSystem) audioSystem.setEnabled(!state.audioEnabled);
     });
     window.addEventListener("keyup", (event) => setMoveIntent(event.code, false));
-    window.addEventListener("blur", () => {
-      input.forward = input.back = input.left = input.right = false;
-    });
+    window.addEventListener("blur", clearMovementInput);
     document.addEventListener("pointerlockchange", () => {
       state.pointerLocked = document.pointerLockElement === dom.canvas;
       dom.crosshair.classList.toggle("is-active", state.pointerLocked || matchMedia("(pointer: coarse)").matches);
@@ -8760,7 +9073,7 @@
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
-      if (state.journalOpen) return;
+      if (state.journalOpen || state.menuOpen) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
     });
@@ -8770,16 +9083,20 @@
       if (!state.audioEnabled) await audioSystem.unlock();
       else audioSystem.setEnabled(false);
     });
-    if (dom.fullscreen) dom.fullscreen.addEventListener("click", async () => {
-      try {
-        if (!document.fullscreenElement) await dom.stage.requestFullscreen();
-        else await document.exitFullscreen();
-      } catch (_) { /* Fullscreen is optional. */ }
-    });
+    if (dom.fullscreen) dom.fullscreen.addEventListener("click", toggleMaximized);
     if (dom.journalButton) dom.journalButton.addEventListener("click", () => contestant13Quest && contestant13Quest.toggleJournal());
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
       if (event.target === dom.journal && contestant13Quest) contestant13Quest.setJournalOpen(false);
+    });
+    if (dom.menuResume) dom.menuResume.addEventListener("click", () => setMenuOpen(false));
+    if (dom.menuMaximize) dom.menuMaximize.addEventListener("click", toggleMaximized);
+    if (dom.menuSave) dom.menuSave.addEventListener("click", saveMansionGame);
+    if (dom.menuLoad) dom.menuLoad.addEventListener("click", loadMansionGame);
+    if (dom.menuDev) dom.menuDev.addEventListener("click", () => {
+      if (!contestant13Quest) return;
+      contestant13Quest.setDevMode(!state.devMode);
+      setMenuStatus(state.devMode ? "Dev Mode granted all current clues and objects." : "Pre-dev quest state restored.");
     });
 
     const touchBindings = [
@@ -8906,7 +9223,7 @@
   }
 
   function findInteraction() {
-    if (state.journalOpen || state.contestant13.actionInProgress) return null;
+    if (state.journalOpen || state.menuOpen || state.contestant13.actionInProgress) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
@@ -8935,7 +9252,7 @@
         interactionId: interactionObject?.userData?.interaction?.id || interactionObject?.userData?.interaction?.type || null,
       } : null,
       blocker: blockers[0] ? { name: blockers[0].object.name, distance: Number(blockers[0].distance.toFixed(2)) } : null,
-      stateBlocked: state.journalOpen ? "journal-open" : state.contestant13.actionInProgress ? "story-action" : null,
+      stateBlocked: state.menuOpen ? "menu-open" : state.journalOpen ? "journal-open" : state.contestant13.actionInProgress ? "story-action" : null,
       selectableId: selected?.id || selected?.type || null,
     };
   }
@@ -9291,7 +9608,13 @@
   }
 
   function updatePlayer(fixedDt) {
+    const movement = state.movement;
+    const targetEyeHeight = movement.crouched ? PLAYER.crouchEye : PLAYER.eye;
+    movement.eyeHeight += (targetEyeHeight - movement.eyeHeight) * Math.min(1, fixedDt * PLAYER.crouchTransitionSpeed);
     if (!state.started) {
+      movement.mode = "idle";
+      movement.speed = 0;
+      updateMovementHud();
       physics.movePlayer(0, 0);
       physics.step();
       physics.updateSafety();
@@ -9304,13 +9627,19 @@
       physics.step();
       physics.updateSafety();
       state.lastMove = { dx: 0, dz: 0 };
+      movement.mode = "hidden";
+      movement.speed = 0;
+      updateMovementHud();
       return;
     }
-    if (state.journalOpen || state.contestant13.actionInProgress) {
+    if (state.journalOpen || state.menuOpen || state.contestant13.actionInProgress) {
       physics.movePlayer(0, 0);
       physics.step();
       physics.updateSafety();
       state.lastMove = { dx: 0, dz: 0 };
+      movement.mode = movement.crouched ? "crouch" : "idle";
+      movement.speed = 0;
+      updateMovementHud();
       return;
     }
     let forward = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
@@ -9320,21 +9649,64 @@
       forward /= length;
       strafe /= length;
     }
+    const moving = length > 0;
+    const canSprint = input.sprint && moving && !movement.crouched && !movement.exhausted && movement.energy > 0;
+    movement.sprinting = canSprint;
+    if (canSprint) {
+      movement.energy = Math.max(0, movement.energy - PLAYER.energyDrainPerSecond * fixedDt);
+      movement.rechargeDelay = PLAYER.energyRechargeDelay;
+      if (movement.energy <= 0) {
+        movement.energy = 0;
+        movement.exhausted = true;
+        movement.sprinting = false;
+      }
+    } else {
+      movement.rechargeDelay = Math.max(0, movement.rechargeDelay - fixedDt);
+      if (movement.rechargeDelay <= 0 && movement.energy < PLAYER.energyMax) {
+        movement.energy = Math.min(PLAYER.energyMax, movement.energy + PLAYER.energyRechargePerSecond * fixedDt);
+      }
+      if (movement.exhausted && movement.energy >= PLAYER.energyResumeThreshold) movement.exhausted = false;
+    }
+    movement.stealthVisibilityMultiplier = movement.crouched ? PLAYER.crouchVisibilityMultiplier : 1;
+    movement.stealthNoiseMultiplier = movement.crouched ? PLAYER.crouchNoiseMultiplier : 1;
+    const speed = movement.crouched
+      ? PLAYER.crouchSpeed
+      : movement.sprinting ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+    movement.speed = moving ? speed : 0;
+    movement.mode = movement.crouched ? "crouch" : movement.sprinting ? "sprint" : moving ? "walk" : "idle";
     const sin = Math.sin(state.yaw);
     const cos = Math.cos(state.yaw);
-    const dx = (strafe * cos - forward * sin) * PLAYER.speed * fixedDt;
-    const dz = (-strafe * sin - forward * cos) * PLAYER.speed * fixedDt;
+    const dx = (strafe * cos - forward * sin) * speed * fixedDt;
+    const dz = (-strafe * sin - forward * cos) * speed * fixedDt;
     if (dx || dz) state.lastMove = { dx, dz };
     physics.movePlayer(dx, dz);
     physics.step();
     physics.updateSafety();
+    updateMovementHud();
+  }
+
+  function updateMovementHud() {
+    if (!dom.energy) return;
+    const movement = state.movement;
+    const energyPercent = clamp((movement.energy / PLAYER.energyMax) * 100, 0, 100);
+    const roundedEnergy = Math.round(movement.energy);
+    dom.energy.hidden = !state.started;
+    dom.energy.setAttribute("aria-valuenow", String(roundedEnergy));
+    dom.energy.classList.toggle("is-exhausted", movement.exhausted);
+    if (dom.energyFill) dom.energyFill.style.width = `${energyPercent}%`;
+    if (dom.energyValue) dom.energyValue.textContent = String(roundedEnergy);
+    if (dom.energyMode) {
+      dom.energyMode.textContent = movement.crouched
+        ? "Crouched · stealth"
+        : movement.sprinting ? "Sprinting" : movement.exhausted ? "Recovering" : "Energy";
+    }
   }
 
   function syncCamera() {
     const p = physics.playerPosition();
     // Rapier's controller keeps a small skin depth around stepped surfaces; the
     // extra 0.17m preserves the authored 1.67m eye line without changing collision.
-    camera.position.set(p.x, p.y + PLAYER.eye - (PLAYER.halfHeight + PLAYER.radius) + 0.17, p.z);
+    camera.position.set(p.x, p.y + state.movement.eyeHeight - (PLAYER.halfHeight + PLAYER.radius) + 0.17, p.z);
     camera.rotation.y = state.yaw;
     camera.rotation.x = state.pitch;
   }
@@ -9394,20 +9766,26 @@
       fpsElapsed = 0;
     }
 
-    for (const object of animatedObjects) object.update(dt);
-    for (const system of yardWaterSystems) system.update(dt);
-    updateLightTransitions(dt);
-    if (rainSystem) rainSystem.update(dt);
-    if (stormSystem) stormSystem.update(dt);
-    if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
-      const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
-      contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
-    }
+    if (!state.menuOpen) {
+      for (const object of animatedObjects) object.update(dt);
+      for (const system of yardWaterSystems) system.update(dt);
+      updateLightTransitions(dt);
+      if (rainSystem) rainSystem.update(dt);
+      if (stormSystem) stormSystem.update(dt);
+      if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
+        const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
+        contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
+      }
 
-    accumulator += dt;
-    while (accumulator >= 1 / 60) {
-      updatePlayer(1 / 60);
-      accumulator -= 1 / 60;
+      accumulator += dt;
+      while (accumulator >= 1 / 60) {
+        updatePlayer(1 / 60);
+        accumulator -= 1 / 60;
+      }
+    } else {
+      // Escape is a true pause, including NPC, storm, door, and movement
+      // simulation. Drop accumulated time so Resume cannot cause catch-up.
+      accumulator = 0;
     }
     syncCamera();
 
@@ -9418,7 +9796,7 @@
       updateLocation();
       interactionTimer = 0.08;
     }
-    updateContextLighting(dt);
+    if (!state.menuOpen) updateContextLighting(dt);
     // The diagnostics object is available on demand through the QA API. Do
     // not stringify its large room/circuit/yard payload into a hidden DOM node
     // twice per second during normal play; those allocations caused periodic
@@ -9456,6 +9834,17 @@
       floor: state.currentFloor,
       room: state.currentRoom,
       hidden: state.isHidden,
+      menus: {
+        inventoryOpen: state.journalOpen,
+        escapeOpen: state.menuOpen,
+        simulationPaused: state.menuOpen,
+        maximized: state.maximized,
+        hasSave: Boolean(mansionSaveSlot?.has()),
+      },
+      devMode: {
+        enabled: state.devMode,
+        snapshotPresent: Boolean(state.devModeSnapshot),
+      },
       hiding: {
         active: state.isHidden,
         spot: state.activeHideSpot ? state.activeHideSpot.name : null,
@@ -9475,6 +9864,22 @@
         pitch: Number(state.pitch.toFixed(3)),
         grounded: Boolean(physics && physics.grounded),
         hidden: state.isHidden,
+        movement: {
+          mode: state.movement.mode,
+          stance: state.movement.crouched ? "crouched" : "standing",
+          crouched: state.movement.crouched,
+          sprinting: state.movement.sprinting,
+          exhausted: state.movement.exhausted,
+          energy: Number(state.movement.energy.toFixed(2)),
+          energyPercent: Number(((state.movement.energy / PLAYER.energyMax) * 100).toFixed(1)),
+          speed: Number(state.movement.speed.toFixed(3)),
+          eyeHeight: Number(state.movement.eyeHeight.toFixed(3)),
+          standingEyeHeight: PLAYER.eye,
+          stealth: {
+            visibilityMultiplier: state.movement.stealthVisibilityMultiplier,
+            noiseMultiplier: state.movement.stealthNoiseMultiplier,
+          },
+        },
       },
       lastMove: { dx: Number(state.lastMove.dx.toFixed(4)), dz: Number(state.lastMove.dz.toFixed(4)) },
       qaRoute: state.qaRoute,
@@ -9673,6 +10078,26 @@
       requestAnimationFrame(step);
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
+    window.MrFeastFresh.setPlayerEnergyForQA = (value) => {
+      if (!state.qa) return null;
+      state.movement.energy = clamp(Number(value) || 0, 0, PLAYER.energyMax);
+      state.movement.exhausted = state.movement.energy <= 0;
+      state.movement.rechargeDelay = 0;
+      updateMovementHud();
+      return getDiagnostics().player.movement;
+    };
+    window.MrFeastFresh.advancePlayerForQA = (seconds) => {
+      if (!state.qa || !physics) return null;
+      const steps = Math.min(720, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
+      for (let step = 0; step < steps; step += 1) updatePlayer(1 / 60);
+      syncCamera();
+      updateLocation();
+      updateInteractionPrompt();
+      return getDiagnostics().player;
+    };
+    window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
+    window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
+    window.MrFeastFresh.setDevModeForQA = (enabled) => state.qa && contestant13Quest ? contestant13Quest.setDevMode(Boolean(enabled)) : null;
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
     window.MrFeastFresh.resetMrFeastWandererForQA = () => mrFeastNpc ? mrFeastNpc.resetForQA() : null;
@@ -10398,6 +10823,8 @@
       updateAudioButton();
       bindInput();
       installDiagnostics();
+      updateMovementHud();
+      updateMenuControls();
       updateLocation();
       syncLightRendering();
       setLoading("Preparing the first frame", 96);

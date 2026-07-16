@@ -197,6 +197,7 @@ const exteriorCulling = section("function registerExteriorDetailCulling()", "fun
 const stormSystem = section("class StormSystem", "class MansionAudio");
 const resizeSystem = section("function resize()", "function requestPointerLock()");
 const portraitManifest = section("const PORTRAIT_ARTWORKS", "const PLAYER");
+const playerConfig = section("const PLAYER", "const MR_FEAST_LEVEL");
 const portraitBuilder = section("function loadArtworkTexture", "function addBeamBetween");
 const exoticRugTextureBuilder = section("function makeExoticRugTexture", "function loadTexture");
 const foyerRugTextureBuilder = section("function makeFoyerRugTexture", "function loadTexture");
@@ -1206,6 +1207,16 @@ check("47 basement key trail state machine", /this\.story\.basementKeyFound\s*=\
 check("47 basement key trail diagnostics", /bookVisible:/.test(contestant13Quest) && /bookScratch:\s*"XIII"/.test(contestant13Quest) && /bookSlotReserved:\s*true/.test(contestant13Quest) && /basementDoorLocked:/.test(contestant13Quest) && /basementDoorOpen:/.test(contestant13Quest) && /basementUnlocked:\s*this\.story\.basementUnlocked/.test(contestant13Quest), "diagnostics do not expose the separated XIII-marked shelf book and persistent basement-door state");
 check("47 basement key trail QA views", /contestant13LibraryBook:\s*\[-12\.75,\s*FLOOR\.MAIN,\s*8\.1,\s*Math\.PI \/ 2,\s*-0\.08\]/.test(qaRoomViews) && /contestant13BasementDoor:\s*\[12\.55,\s*FLOOR\.MAIN,\s*-4\.65,\s*Math\.PI,\s*-0\.08\]/.test(qaRoomViews), "QA views do not frame the subtle book and basement lock from the player's Kitchen approach");
 check("47 basement key trail patrol gate", /door\.name === "basement stair door" && target\.id === "main-service-door"/.test(mrFeastWanderer) && /point\.id === "main-service-exit"/.test(mrFeastWanderer) && /lockedRouteDoors/.test(mrFeastWanderer) && /door\.locked = true/.test(mrFeastWanderer), "Mr. Feast can walk through the locked basement threshold or full-route QA can corrupt story-door state");
+
+// 48. Player mobility and testing controls share one authoritative state
+// contract so future detection can consume crouch stealth without redefining it.
+check("48 player movement controls", /walkSpeed:\s*2\.2/.test(playerConfig) && /sprintSpeed:/.test(playerConfig) && /crouchSpeed:/.test(playerConfig) && /energyMax:\s*100/.test(playerConfig) && /energyDrainPerSecond:/.test(playerConfig) && /energyRechargePerSecond:/.test(playerConfig), "player tuning lacks named walk, sprint, crouch, and energy values");
+check("48 player movement controls", /ShiftLeft/.test(mansion) && /ShiftRight/.test(mansion) && /KeyC/.test(mansion) && /crouched/.test(playerUpdate) && /stealthVisibilityMultiplier/.test(playerUpdate) && /stealthNoiseMultiplier/.test(playerUpdate), "keyboard movement does not implement sprint energy and crouch stealth");
+check("48 energy HUD", /id="mansion-energy"/.test(page) && /id="mansion-energy-fill"/.test(page) && /aria-valuemax="100"/.test(page) && /energyPercent/.test(mansion), "stamina reserve is not exposed through an accessible HUD bar and diagnostics");
+check("48 inventory dossier", /KeyI/.test(mansion) && /id="mansion-inventory-dialog-items"/.test(page) && /Inventory &amp; Clues/.test(page) && /mansion-journal-entries/.test(page), "I does not open a combined carried-object and recovered-clue dossier");
+check("48 escape menu", /id="mansion-menu"/.test(page) && /id="mansion-menu-maximize"/.test(page) && /id="mansion-menu-save"/.test(page) && /id="mansion-menu-load"/.test(page) && /id="mansion-menu-dev"/.test(page) && /event\.code === "Escape"/.test(mansion), "Escape menu lacks maximize, save/load, or Dev Mode controls");
+check("48 save contract", /RBGameSaves\?\.create\("mr-feast-mansion",\s*\{ version:\s*1 \}\)/.test(mansion) && /serializeMansionSave/.test(mansion) && /restoreMansionSave/.test(mansion) && /playerPosition/.test(mansion), "mansion progress and player transform are not versioned through RBGameSaves");
+check("48 reversible dev mode", /devModeSnapshot/.test(mansion) && /setDevMode\(enabled/.test(mansion) && /recordingPlayed\s*=\s*true/.test(mansion) && /relaySabotaged\s*=\s*false/.test(mansion) && /restoreQuestSnapshot/.test(mansion), "Dev Mode does not grant the current trail while preserving a reversible pre-dev snapshot and unfinished sabotage");
 
 // 43. Mr. Feast is an optional, animated test layer. He follows a safe
 // authored main-floor loop, never blocks mansion boot, and exposes enough

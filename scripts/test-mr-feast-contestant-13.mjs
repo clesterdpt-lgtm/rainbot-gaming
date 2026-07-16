@@ -94,12 +94,14 @@ async function run() {
     await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
 
     let state = await diagnostics(page);
-    assert(state.contestant13?.phase === "find-note", "fresh story phase should be find-note");
+    assert(state.contestant13?.phase === "find-book", "fresh story phase should be find-book");
     assert(state.inventory?.items?.length === 0, "fresh inventory should be empty");
     assert(state.journal?.entries?.length === 0, "fresh journal should be empty");
     assert(state.contestant13.world.shovelScale <= 0.56, "garden shovel should be reduced to a short concealed spade");
     assert(state.contestant13.world.shovelPosition.x > -23.53 && state.contestant13.world.shovelPosition.x < -18.07 && state.contestant13.world.shovelPosition.z > -12.65 && state.contestant13.world.shovelPosition.z < -4.35, "shovel should sit inside the shifted southeast rose bed");
     assert(state.contestant13.world.digSiteCell.row === 19 && state.contestant13.world.digSiteCell.col === 3 && state.contestant13.world.digSiteCell.pathStepsFromRear >= 82, "cache should occupy the maze's maximum-depth dead end");
+    assert(state.contestant13.world.bookVisible === true, "the unusual Library book should begin visible on its shelf");
+    assert(state.contestant13.world.basementDoorLocked === true && state.contestant13.world.basementDoorOpen === false, "the basement stair door should begin closed and locked");
 
     await page.waitForFunction(() => {
       const npc = window.MrFeastFresh?.getMrFeastState?.();
@@ -217,28 +219,38 @@ async function run() {
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.digSiteExcavated === false, "dig site must not excavate without the shovel");
-    assert(state.contestant13.archiveKeyFound === false, "early dig must not grant the Archive key");
+    assert(state.contestant13.basementKeyFound === false, "early dig must not grant the basement key");
+
+    await teleportForInteraction(page, "contestant13BasementDoor", /basement.*locked|need.*key/i);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-locked-desktop.png") });
+    await pressInteract(page);
+    state = await diagnostics(page);
+    assert(state.contestant13.basementUnlocked === false, "the basement door must remain locked without the maze key");
+    assert(state.contestant13.world.basementDoorLocked === true && state.contestant13.world.basementDoorOpen === false, "an early door attempt must not change its physical state");
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /cage.*locked|evidence.*locked/i);
     await pressInteract(page);
     state = await diagnostics(page);
-    assert(state.contestant13.archiveCageUnlocked === false, "evidence cage must remain locked without A-3");
+    assert(state.contestant13.archiveCageUnlocked === false, "evidence cage must remain locked without the recovered basement key");
+    assert(state.contestant13.basementUnlocked === false, "QA teleporting into the Archive must not bypass the basement gate");
 
     await teleportForInteraction(page, "contestant13WorkshopRelay", /inspect.*relay|camera relay/i);
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.relaySabotaged === false, "relay must not be sabotaged before hearing the recording");
 
-    await teleportForInteraction(page, "contestant13LibraryNote", /contestant 13|rulebook/i);
+    await teleportForInteraction(page, "contestant13LibraryBook", /book|misfiled|volume/i);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
     await pressInteract(page);
     state = await diagnostics(page);
-    assert(state.contestant13.noteRead === true, "Library note interaction should mark the clue read");
-    assert(state.journal.entries.filter((id) => id === "contestant-13-note").length === 1, "note should enter the journal exactly once");
-    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/6", "reading the note should count as the first trail step");
+    assert(state.contestant13.bookRead === true, "Library book interaction should mark the clue read");
+    assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
+    assert(/garden.*shovel|shovel.*garden/i.test(state.journal.currentObjective), "reading the book should direct the player to the garden shovel");
+    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
     await pressInteract(page);
     state = await diagnostics(page);
-    assert(state.journal.entries.filter((id) => id === "contestant-13-note").length === 1, "rereading must not duplicate the note");
+    assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "rereading must not duplicate the book clue");
 
     await teleportForInteraction(page, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-hidden-in-roses-desktop.png") });
@@ -254,18 +266,27 @@ async function run() {
     await pressInteract(page);
     await waitForContestantFlag(page, "digSiteExcavated");
     state = await diagnostics(page);
-    assert(state.contestant13.archiveKeyFound === true, "excavation should grant Archive key A-3");
+    assert(state.contestant13.basementKeyFound === true, "excavation should grant the basement service key");
     assert(state.contestant13.tapeFound === true, "excavation should recover Contestant 13's tape");
-    assert(state.inventory.items.filter((id) => id === "archive-key-a3").length === 1, "Archive key must not duplicate");
+    assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "basement key must not duplicate");
     assert(state.inventory.items.filter((id) => id === "contestant-13-tape").length === 1, "tape must not duplicate");
     assert(state.contestant13.world.digMoundVisible === false && state.contestant13.world.digMarkerVisible === false && state.contestant13.world.digHoleVisible === true, "excavation should leave only an unmarked hole");
     await teleportForInteraction(page, "contestant13DigSite", /empty hole/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-empty-hole-desktop.png") });
 
+    await teleportForInteraction(page, "contestant13BasementDoor", /unlock.*basement|use.*key/i);
+    await pressInteract(page);
+    await waitForContestantFlag(page, "basementUnlocked");
+    state = await diagnostics(page);
+    assert(state.contestant13.basementUnlocked === true, "the recovered maze key should unlock the basement threshold");
+    assert(state.contestant13.world.basementDoorLocked === false && state.contestant13.world.basementDoorOpen === true, "unlocking should open the basement door and persist in world diagnostics");
+    assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "using the basement key must not duplicate it");
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-unlocked-desktop.png") });
+
     await teleportForInteraction(page, "contestant13ArchiveCage", /unlock.*a-3|evidence cage/i);
     await pressInteract(page);
     state = await diagnostics(page);
-    assert(state.contestant13.archiveCageUnlocked === true, "A-3 key should unlock the evidence cage");
+    assert(state.contestant13.archiveCageUnlocked === true, "the recovered service key should unlock the basement evidence cage");
     assert(state.contestant13.recordingPlayed === false, "unlocking the cage must not auto-play the recording");
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /play.*recording|contestant 13.*recording/i);
@@ -332,7 +353,7 @@ async function run() {
     await mobilePage.locator("#touch-interact").click({ force: true });
     const earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
-    assert(/library/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should keep the Library clue as the objective");
+    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should keep the Library shelf clue as the objective");
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

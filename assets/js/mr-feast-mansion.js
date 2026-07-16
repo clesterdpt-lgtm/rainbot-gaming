@@ -256,16 +256,28 @@
     trackingTurnSpeed: THREE.MathUtils.degToRad(72),
     scanningLightColor: 0x42ff78,
     warningLightColor: 0xff2d21,
-    statusLightScale: 0.045,
-    alertLightScale: 0.06,
-    statusHaloScale: 0.08,
-    alertHaloScale: 0.105,
+    statusLightScale: 0.055,
+    alertLightScale: 0.07,
+    statusHaloScale: 0.095,
+    alertHaloScale: 0.12,
     responseSpeed: 1.08,
     searchSeconds: 6.5,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
     exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "DEEP HEDGE MAZE"]),
     requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
+  });
+  const SECURITY_CAMERA_FIXTURE = Object.freeze({
+    mountSize: 0.18,
+    mountHalfHeight: 0.09,
+    postRadius: 0.055,
+    indoorPitchDegrees: -20,
+    outdoorPitchDegrees: -14,
+    indoorMountY: Object.freeze({
+      basement: FLOOR.MAIN - 0.24 - 0.09,
+      main: FLOOR.UPPER - 0.24 - 0.09,
+      upper: FLOOR.UPPER + UPPER_HEIGHT - 0.09,
+    }),
   });
   const WORKROOM_SECURITY = Object.freeze({
     code: "0513",
@@ -348,10 +360,13 @@
       sweep: THREE.MathUtils.degToRad(sweepDegrees),
       range,
       floorY: Number.isFinite(options.floorY) ? options.floorY : FLOOR.MAIN,
-      pitch: THREE.MathUtils.degToRad(options.pitchDegrees == null ? -14 : options.pitchDegrees),
+      pitch: THREE.MathUtils.degToRad(options.pitchDegrees == null
+        ? (options.outdoors ? SECURITY_CAMERA_FIXTURE.outdoorPitchDegrees : SECURITY_CAMERA_FIXTURE.indoorPitchDegrees)
+        : options.pitchDegrees),
       outdoors: Boolean(options.outdoors),
       restricted: Boolean(options.restricted),
-      mount: options.mount || (options.outdoors ? "chokepoint" : "wall-center"),
+      mount: options.mount || (options.support === "post" ? "post" : options.outdoors ? "chokepoint" : "wall-center"),
+      support: options.support || null,
       wallCentered: options.wallCentered == null ? !options.outdoors : Boolean(options.wallCentered),
       responseNodeId: options.responseNodeId || null,
       scanSeconds: CAMERA_SECURITY.scanMinimumSeconds + (seed % 17) / 16 * periodRange,
@@ -361,40 +376,39 @@
   }
 
   const SECURITY_CAMERA_PLACEMENTS = Object.freeze([
-    securityCameraPlacement("cam-main-library", "LIBRARY", -10, 3.45, 3.55, 180, 38, 11.8),
-    securityCameraPlacement("cam-main-foyer", "FRONT FOYER", 0, 3.55, 11.58, 0, 48, 7.9),
-    securityCameraPlacement("cam-main-music", "MUSIC ROOM", 10, 3.45, 3.55, 180, 38, 11.8),
-    securityCameraPlacement("cam-main-stair", "GRAND STAIR HALL", 0, 3.55, -2.8, 180, 42, 5.7),
-    securityCameraPlacement("cam-main-painting", "PAINTING ROOM", 14.62, 3.45, 0, 90, 38, 10.2),
-    securityCameraPlacement("cam-main-dining", "DINING ROOM", -10, 3.45, -3.55, 0, 38, 11.5),
-    securityCameraPlacement("cam-main-ballroom", "BALLROOM", 0, 3.45, -11.58, 180, 45, 8.0),
-    securityCameraPlacement("cam-main-kitchen", "KITCHEN", 10, 3.45, -3.55, 0, 38, 11.5),
+    securityCameraPlacement("cam-main-library", "LIBRARY", -10, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 3.55, 180, 38, 11.8),
+    securityCameraPlacement("cam-main-foyer", "FRONT FOYER", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 11.58, 0, 48, 7.9),
+    securityCameraPlacement("cam-main-music", "MUSIC ROOM", 10, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 3.55, 180, 38, 11.8),
+    securityCameraPlacement("cam-main-painting", "PAINTING ROOM", 14.62, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 0, 90, 38, 10.2),
+    securityCameraPlacement("cam-main-dining", "DINING ROOM", -10, SECURITY_CAMERA_FIXTURE.indoorMountY.main, -3.55, 0, 38, 11.5),
+    securityCameraPlacement("cam-main-ballroom", "BALLROOM", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.main, -11.58, 180, 45, 8.0),
+    securityCameraPlacement("cam-main-kitchen", "KITCHEN", 10, SECURITY_CAMERA_FIXTURE.indoorMountY.main, -3.55, 0, 38, 11.5),
 
-    securityCameraPlacement("cam-upper-west-front", "WEST FRONT SUITE", -10, 7.25, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-balcony", "FOYER BALCONY", 0, 7.5, 11.35, 0, 48, 7.7, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-east-front", "EAST FRONT SUITE", 10, 7.25, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-landing", "UPPER LANDING", 0, 7.25, -2.82, 180, 42, 5.7, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-reading", "READING ROOM", 10, 7.25, -2.82, 0, 38, 10.2, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-primary", "PRIMARY SUITE", -14.62, 7.25, -7.6, -90, 38, 11.4, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-lounge", "REAR LOUNGE", 0, 7.35, -3.55, 0, 45, 8.0, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-east-rear", "EAST REAR SUITE", 14.62, 7.25, -7.6, 90, 38, 11.4, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-west-front", "WEST FRONT SUITE", -10, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-balcony", "FOYER BALCONY", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, 11.35, 0, 48, 7.7, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-front", "EAST FRONT SUITE", 10, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-landing", "UPPER LANDING", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, -2.82, 180, 42, 5.7, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-reading", "READING ROOM", 10, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, -2.82, 180, 38, 10.2, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-primary", "PRIMARY SUITE", -14.62, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, -7.6, -90, 38, 11.4, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-lounge", "REAR LOUNGE", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, -3.55, 0, 45, 8.0, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-rear", "EAST REAR SUITE", 14.62, SECURITY_CAMERA_FIXTURE.indoorMountY.upper, -7.6, 90, 38, 11.4, { floorY: FLOOR.UPPER }),
 
-    securityCameraPlacement("cam-basement-wine", "WINE CELLAR", -8.15, -0.62, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-archive", "ARCHIVE", 8.15, -0.55, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-corridor", "BASEMENT CORRIDOR", 0, -0.62, 11.6, 0, 58, 14.3, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -8.15, -0.62, 2.85, 0, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-pantry", "PANTRY", 5.85, -0.62, 2.85, 0, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, 3.15, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
-    securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, -0.62, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, -0.62, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workroom-west", "WORKROOM", -2.35, -0.62, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workroom-east", "WORKROOM", 4.45, -0.62, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, -0.62, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-wine", "WINE CELLAR", -8.15, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-archive", "ARCHIVE", 8.15, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-corridor", "BASEMENT CORRIDOR", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 11.6, 0, 58, 14.3, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -8.15, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 2.85, 0, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-pantry", "PANTRY", 5.85, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 2.85, 0, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
+    securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workroom-west", "WORKROOM", -2.35, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workroom-east", "WORKROOM", 4.45, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
 
     securityCameraPlacement("cam-yard-gate", "FRONT DRIVE", 3.9, 2.75, 33.12, 29, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-gate" }),
     securityCameraPlacement("cam-yard-portico", "FRONT DRIVE", 3.35, 3.1, 14.55, 153, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-portico" }),
     securityCameraPlacement("cam-yard-rear-terrace", "REAR LAWN", 0, 3.3, -12.25, 0, 55, 7.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-rear-terrace" }),
-    securityCameraPlacement("cam-yard-pool", "POOL TERRACE", -16.2, 2.7, -18.55, -46, 34, 10.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-pool" }),
+    securityCameraPlacement("cam-yard-pool", "POOL TERRACE", -16.2, 2.7, -18.55, -46, 34, 10.8, { outdoors: true, floorY: ESTATE_GROUND_Y, support: "post", responseNodeId: "response-yard-pool" }),
     securityCameraPlacement("cam-yard-garden-front", "FORMAL GARDEN", -19.0, 2.82, 18.65, 42, 34, 8.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-garden-front" }),
     securityCameraPlacement("cam-yard-garden-rear", "FORMAL GARDEN", -19.5, 2.82, -16.35, 141, 34, 8.8, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-garden-rear" }),
     securityCameraPlacement("cam-yard-maze-north", "HEDGE MAZE", 19.5, 3.0, 4.45, -113, 42, 5.5, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-maze-north" }),
@@ -5390,6 +5404,8 @@
       });
       this.mounts = new THREE.InstancedMesh(geometry("securityCameraMount", () => new THREE.BoxGeometry(1, 1, 1)), mountMaterial, count);
       this.mounts.name = "security-camera-mounts";
+      this.supports = new THREE.InstancedMesh(geometry("securityCameraSupport", () => new THREE.CylinderGeometry(1, 1, 1, 10)), mountMaterial, count);
+      this.supports.name = "security-camera-supports";
       this.housings = new THREE.InstancedMesh(geometry("securityCameraHousing", () => new THREE.BoxGeometry(1, 1, 1)), housingMaterial, count);
       this.housings.name = "security-camera-housings";
       this.lenses = new THREE.InstancedMesh(geometry("securityCameraLens", () => new THREE.CylinderGeometry(1, 1, 1, 12)), lensMaterial, count);
@@ -5400,7 +5416,7 @@
       this.statusHalos.name = "security-camera-status-halos";
       this.statusHalos.renderOrder = 8;
       this.statusLights.renderOrder = 9;
-      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusHalos, this.statusLights]) {
+      for (const mesh of [this.mounts, this.supports, this.housings, this.lenses, this.statusHalos, this.statusLights]) {
         mesh.castShadow = false;
         mesh.receiveShadow = false;
         mesh.frustumCulled = false;
@@ -5456,7 +5472,8 @@
       const bodyQuaternion = new THREE.Quaternion();
       const lensQuaternion = new THREE.Quaternion();
       const upAxis = new THREE.Vector3(0, 1, 0);
-      const mountScale = new THREE.Vector3(0.18, 0.18, 0.18);
+      const mountScale = new THREE.Vector3(SECURITY_CAMERA_FIXTURE.mountSize, SECURITY_CAMERA_FIXTURE.mountSize, SECURITY_CAMERA_FIXTURE.mountSize);
+      const hiddenSupportScale = new THREE.Vector3(0, 0, 0);
       const bodyScale = new THREE.Vector3(0.34, 0.2, 0.44);
       const lensScale = new THREE.Vector3(0.075, 0.12, 0.075);
       const statusScale = new THREE.Vector3(CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale);
@@ -5464,6 +5481,11 @@
       for (let index = 0; index < this.cameras.length; index += 1) {
         const cameraState = this.cameras[index];
         const mountPosition = new THREE.Vector3(cameraState.x, cameraState.y, cameraState.z);
+        const supportHeight = cameraState.support === "post" ? Math.max(0, cameraState.y - cameraState.floorY) : 0;
+        const supportPosition = new THREE.Vector3(cameraState.x, cameraState.floorY + supportHeight / 2, cameraState.z);
+        const supportScale = supportHeight > 0
+          ? new THREE.Vector3(SECURITY_CAMERA_FIXTURE.postRadius, supportHeight, SECURITY_CAMERA_FIXTURE.postRadius)
+          : hiddenSupportScale;
         this.euler.set(0, cameraState.yaw, 0);
         mountQuaternion.setFromEuler(this.euler);
         this.euler.set(cameraState.pitch, cameraState.yaw, 0);
@@ -5477,6 +5499,7 @@
         const statusPosition = bodyPosition.clone().add(this.offset.set(0.2, 0.055, -0.34).applyQuaternion(bodyQuaternion));
         lensQuaternion.setFromUnitVectors(upAxis, cameraState.forward);
         this.setInstance(this.mounts, index, mountPosition, mountQuaternion, mountScale);
+        this.setInstance(this.supports, index, supportPosition, mountQuaternion, supportScale);
         this.setInstance(this.housings, index, bodyPosition, bodyQuaternion, bodyScale);
         this.setInstance(this.lenses, index, cameraState.lensOrigin, lensQuaternion, lensScale);
         const indicator = this.statusIndicator(cameraState);
@@ -5491,7 +5514,7 @@
         this.statusLights.setColorAt(index, this.instanceColor);
         this.statusHalos.setColorAt(index, this.instanceColor);
       }
-      for (const mesh of [this.mounts, this.housings, this.lenses, this.statusHalos, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of [this.mounts, this.supports, this.housings, this.lenses, this.statusHalos, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
       if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
       if (this.statusHalos.instanceColor) this.statusHalos.instanceColor.needsUpdate = true;
     }
@@ -5834,7 +5857,9 @@
         outdoors: cameraState.outdoors,
         restricted: cameraState.restricted,
         mount: cameraState.mount,
+        support: cameraState.support,
         wallCentered: cameraState.wallCentered,
+        floorY: cameraState.floorY,
         position: { x: cameraState.x, y: cameraState.y, z: cameraState.z },
         yaw: Number(cameraState.yaw.toFixed(4)),
         baseYaw: Number(cameraState.baseYaw.toFixed(4)),

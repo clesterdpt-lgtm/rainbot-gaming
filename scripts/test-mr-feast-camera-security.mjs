@@ -120,11 +120,27 @@ async function run() {
     assert(state.security.tuning.warningSeconds >= 2 && state.security.tuning.trackingGraceSeconds >= 1.5 && state.security.tuning.exposureSeconds >= state.security.tuning.warningSeconds + state.security.tuning.trackingGraceSeconds, `warning and solid-red tracking phases need readable real-time durations; tuning=${JSON.stringify(state.security.tuning)}`);
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
+    const cameraById = new Map(securityDetails.cameras.details.map((entry) => [entry.id, entry]));
+    assert(!cameraById.has("cam-main-stair"), "the duplicate camera behind the grand-stair mid-landing should be removed");
+    const readingCamera = cameraById.get("cam-upper-reading");
+    assert(readingCamera && Math.abs(Math.abs(readingCamera.baseYaw) - Math.PI) < 0.001, `Reading Room camera should face north into the room from its south-wall mount; camera=${JSON.stringify(readingCamera)}`);
+    const poolCamera = cameraById.get("cam-yard-pool");
+    assert(poolCamera?.mount === "post" && poolCamera.support === "post", `pool camera should be visibly attached to a dedicated support post; camera=${JSON.stringify(poolCamera)}`);
     assert(indoorMounts.every((entry) => entry.mount === "wall-center" && entry.wallCentered), `every indoor camera should be centered on one wall rather than tucked into a corner; offenders=${JSON.stringify(indoorMounts.filter((entry) => entry.mount !== "wall-center" || !entry.wallCentered))}`);
     assert(indoorMounts.every((entry) => {
       const cardinal = Math.PI / 2;
       return Math.abs(entry.baseYaw / cardinal - Math.round(entry.baseYaw / cardinal)) < 0.001;
     }), `indoor camera mounts should face cardinally away from their centered wall; mounts=${JSON.stringify(indoorMounts)}`);
+    const ceilingUndersideByFloor = new Map([
+      [-3.8, -0.24],
+      [0, 4.26],
+      [4.5, 7.8],
+    ]);
+    const detachedIndoorMounts = indoorMounts.filter((entry) => {
+      const ceilingY = ceilingUndersideByFloor.get(entry.floorY);
+      return !Number.isFinite(ceilingY) || Math.abs((entry.position.y + 0.09) - ceilingY) > 0.011;
+    });
+    assert(detachedIndoorMounts.length === 0, `indoor camera brackets should meet their floor's ceiling underside; offenders=${JSON.stringify(detachedIndoorMounts)}`);
     const initialLightLayout = await page.evaluate(() => window.MrFeastFresh.lightLayout());
     const cameraMeshes = await page.evaluate(() => window.MrFeastFresh.inspectScene("security-camera-"));
     assert(cameraMeshes.count >= 4, `shared camera presentation meshes should exist; scene=${JSON.stringify(cameraMeshes)}`);

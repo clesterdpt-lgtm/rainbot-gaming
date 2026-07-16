@@ -440,7 +440,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260715-mr-feast-whole-home-patrol-1",
+    assetVersion: "20260715-basement-key-trail-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -470,20 +470,21 @@
   const CONTESTANT_13 = Object.freeze({
     title: "Contestant 13",
     objectives: Object.freeze({
-      note: "Search the Library for something a previous contestant left behind.",
-      shovel: "The note points to a faceless figure among the roses.",
-      maze: "Carry the concealed shovel into the hedge maze. Look for XIII in stone.",
-      archive: "Use the brass A-3 key on the evidence cage in the basement Archive.",
+      book: "Search the Library shelves for a book that does not quite belong.",
+      shovel: "The book points to a shovel under dead roses in the formal garden.",
+      maze: "Use the garden shovel at the hedge maze's deepest dead end to recover the basement key.",
+      basement: "Use the recovered key on the locked basement stair door in the Kitchen.",
+      archive: "Search the basement Archive and unlock Contestant 13's evidence cage.",
       recording: "Load Contestant 13's recovered tape into the caged recorder.",
       relay: "Find the Workshop relay and sever the unlabeled patron feed.",
       complete: "The patron feed is blind. Signal loss has been noticed—leave the Workshop.",
     }),
     transcript: "If you found the garden copy, they missed one. The brass-tagged cameras are theatre. The patrons watch through the unlabelled black bank in the Workshop relay. Sever that whole bundle and their private feed goes blind.",
     journal: Object.freeze({
-      note: Object.freeze({
-        id: "contestant-13-note",
-        title: "A note inside the rulebook",
-        body: "The angel has no face. Follow the dead roses. I buried what they couldn't edit out. — 13",
+      book: Object.freeze({
+        id: "contestant-13-book",
+        title: "The misfiled garden ledger",
+        body: "The basement key is buried where the hedge maze stops. A shovel waits in the formal garden, under dead roses beside the faceless angel. — 13",
       }),
       shovel: Object.freeze({
         id: "faceless-fountain-shovel",
@@ -491,9 +492,14 @@
         body: "A short groundskeeper's shovel was woven beneath the rose stems east of the faceless fountain. XIII is carved into its wet handle.",
       }),
       cache: Object.freeze({
-        id: "maze-cache-a3",
-        title: "The buried cache",
-        body: "Beneath a faint XIII scratched into the soil: an A-3 Archive key, Contestant 13's badge, and a sealed tape reel.",
+        id: "maze-cache-b13",
+        title: "The buried basement key",
+        body: "Beneath a faint XIII scratched into the soil: a B-13 basement service key, Contestant 13's badge, and a sealed tape reel.",
+      }),
+      basement: Object.freeze({
+        id: "basement-threshold-b13",
+        title: "The restricted basement",
+        body: "The B-13 key opens the Kitchen service stair and the matching evidence cage in the Archive below.",
       }),
       transcript: Object.freeze({
         id: "patron-feed-transcript",
@@ -508,11 +514,17 @@
     }),
     itemLabels: Object.freeze({
       "garden-shovel": "Garden shovel",
-      "archive-key-a3": "A-3 key",
+      "basement-key-b13": "Basement key",
       "contestant-13-badge": "Badge 13",
       "contestant-13-tape": "Tape reel",
     }),
     world: Object.freeze({
+      book: Object.freeze({
+        x: -14.5, z: 7.9, shelfY: 1.685,
+        shelfIndex: 2, reservedSlot: 5,
+        localX: 0.215, localZ: -0.075,
+        width: 0.12, height: 0.43, depth: 0.3,
+      }),
       shovel: Object.freeze({ x: -22.35, z: -5.50, yOffset: 0.16, scale: 0.56 }),
       digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
     }),
@@ -799,9 +811,10 @@
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
-    contestant13LibraryNote: [-10.5, FLOOR.MAIN, 6.35, 0, -0.5],
+    contestant13LibraryBook: [-12.75, FLOOR.MAIN, 8.1, Math.PI / 2, -0.08],
     contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
     contestant13DigSite: [25, YARD_LAYOUT.groundY, -13.90, 0, -0.93],
+    contestant13BasementDoor: [12.55, FLOOR.MAIN, -4.65, Math.PI, -0.08],
     contestant13ArchiveCage: [13.15, FLOOR.BASEMENT, 5.25, Math.PI / 2, -0.14],
     contestant13WorkshopRelay: [-2.5, FLOOR.BASEMENT, -10.0, 0, -0.12],
   });
@@ -824,10 +837,11 @@
     activeHideSpot: null,
     journalOpen: false,
     contestant13: {
-      noteRead: false,
+      bookRead: false,
       shovelTaken: false,
       digSiteExcavated: false,
-      archiveKeyFound: false,
+      basementKeyFound: false,
+      basementUnlocked: false,
       badgeFound: false,
       tapeFound: false,
       archiveCageUnlocked: false,
@@ -947,7 +961,8 @@
   const fadingLights = new Set();
   const fadingBulbs = new Set();
   const contestant13Scene = {
-    libraryNote: null,
+    libraryBook: null,
+    libraryBookScratch: null,
     shovel: null,
     digMound: null,
     digMarker: null,
@@ -957,6 +972,7 @@
     archiveRecorderIndicator: null,
     archiveRecorderIndicatorMaterial: null,
     archiveCageDoor: null,
+    basementDoor: null,
     relayBlackCables: null,
     relayOnlineBulb: null,
     relayAlarmBulb: null,
@@ -2111,7 +2127,24 @@
       this.waitingForDoor = null;
       if (!target?.door) return false;
       const door = this.routeDoor(target.door);
-      if (!door || door.locked) return false;
+      if (!door) return false;
+      if (door.locked) {
+        this.waitingForDoor = door.name;
+        // Keep the visual-only patrol on its main/upper loop until the player
+        // opens the new story threshold. Skipping to the Kitchen-side return
+        // point avoids both a permanent stall and walking through a locked leaf.
+        if (door.name === "basement stair door" && target.id === "main-service-door") {
+          const resumeIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === "main-service-exit");
+          if (resumeIndex >= 0) {
+            this.waypointIndex = resumeIndex;
+            const resumeTarget = MR_FEAST_NPC.waypoints[resumeIndex];
+            this.currentRouteZone = resumeTarget.zone;
+            this.currentRouteLevel = resumeTarget.level;
+            this.setSegmentPresentation(resumeTarget);
+          }
+        }
+        return true;
+      }
       if (distance <= MR_FEAST_NPC.doorOpenDistance && !door.open) {
         door.setOpen(true);
         this.autoOpenedDoors.add(door);
@@ -2343,6 +2376,11 @@
 
     runWholeHomeRouteForQA(maxSeconds = 1800) {
       if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      // Deterministic route QA proves every authored floor independently of
+      // story progress. Temporarily release route locks, then restore their
+      // closed/locked state without touching Contestant 13's progression.
+      const lockedRouteDoors = animatedObjects.filter((object) => object instanceof HingedDoor && object.locked);
+      for (const door of lockedRouteDoors) door.locked = false;
       this.resetForQA();
       state.started = true;
       this.pauseRemaining = 0;
@@ -2372,6 +2410,15 @@
         doors: [...this.visitedRouteDoors],
         doorOpenEvents: this.routeDoorOpenEvents,
       };
+      for (const door of lockedRouteDoors) {
+        this.autoOpenedDoors.delete(door);
+        door.open = false;
+        door.angle = 0;
+        door.target = 0;
+        door.root.rotation.y = 0;
+        door.locked = true;
+        door.updatePhysics();
+      }
       return this.getDiagnostics();
     }
 
@@ -2619,6 +2666,7 @@
       const {
         name, axis, fixed, center, width = 1.15, height = 2.55, floorY,
         direction = 1, hingeSide = -1, material = M.darkWood, locked = false,
+        getLockedLabel = null, onLockedActivate = null,
       } = options;
       this.name = name;
       this.axis = axis;
@@ -2627,6 +2675,8 @@
       this.direction = direction;
       this.hingeSide = hingeSide;
       this.locked = locked;
+      this.getLockedLabel = getLockedLabel;
+      this.onLockedActivate = onLockedActivate;
       this.open = false;
       this.angle = 0;
       this.target = 0;
@@ -2679,8 +2729,16 @@
 
       this.interaction = {
         type: "door",
-        getLabel: () => this.locked ? `${name} is sealed` : `${this.open ? "Close" : "Open"} ${name}`,
-        activate: () => this.toggle(),
+        getLabel: () => this.locked
+          ? (typeof this.getLockedLabel === "function" ? this.getLockedLabel(this) : `${name} is sealed`)
+          : `${this.open ? "Close" : "Open"} ${name}`,
+        activate: () => {
+          if (this.locked) {
+            if (typeof this.onLockedActivate === "function") this.onLockedActivate(this);
+            return;
+          }
+          this.toggle();
+        },
       };
       addInteractionTarget(this.panel, this.interaction);
       for (const knob of knobs) addInteractionTarget(knob, this.interaction);
@@ -3085,11 +3143,12 @@
 
     getPhase() {
       if (this.story.relaySabotaged) return "complete";
-      if (!this.story.noteRead) return "find-note";
+      if (!this.story.bookRead) return "find-book";
       if (this.story.recordingPlayed) return "sabotage-relay";
       if (this.story.archiveCageUnlocked) return "play-recording";
-      if (this.story.archiveKeyFound) return "unlock-archive";
-      if (this.story.shovelTaken) return "dig-maze";
+      if (this.story.basementUnlocked) return "unlock-archive";
+      if (this.story.basementKeyFound) return "unlock-basement";
+      if (this.story.shovelTaken) return "find-maze-key";
       return "find-shovel";
     }
 
@@ -3099,9 +3158,10 @@
       if (phase === "sabotage-relay") return CONTESTANT_13.objectives.relay;
       if (phase === "play-recording") return CONTESTANT_13.objectives.recording;
       if (phase === "unlock-archive") return CONTESTANT_13.objectives.archive;
-      if (phase === "dig-maze") return CONTESTANT_13.objectives.maze;
+      if (phase === "unlock-basement") return CONTESTANT_13.objectives.basement;
+      if (phase === "find-maze-key") return CONTESTANT_13.objectives.maze;
       if (phase === "find-shovel") return CONTESTANT_13.objectives.shovel;
-      return CONTESTANT_13.objectives.note;
+      return CONTESTANT_13.objectives.book;
     }
 
     updateUI() {
@@ -3109,14 +3169,15 @@
       if (dom.objective) dom.objective.textContent = this.getObjective();
       if (dom.storyProgress) {
         const completed = [
-          this.story.noteRead,
+          this.story.bookRead,
           this.story.shovelTaken,
           this.story.digSiteExcavated,
+          this.story.basementUnlocked,
           this.story.archiveCageUnlocked,
           this.story.recordingPlayed,
           this.story.relaySabotaged,
         ].filter(Boolean).length;
-        dom.storyProgress.textContent = `Trail ${completed}/6`;
+        dom.storyProgress.textContent = `Trail ${completed}/7`;
       }
       if (dom.inventory) {
         dom.inventory.replaceChildren();
@@ -3228,14 +3289,14 @@
       return true;
     }
 
-    readNote() {
-      if (this.story.noteRead) {
-        this.showDiscovery(CONTESTANT_13.journal.note.title, CONTESTANT_13.journal.note.body);
+    readBook() {
+      if (this.story.bookRead) {
+        this.showDiscovery(CONTESTANT_13.journal.book.title, CONTESTANT_13.journal.book.body);
         return;
       }
-      this.story.noteRead = true;
-      this.addJournalEntry(CONTESTANT_13.journal.note);
-      this.showDiscovery("Message from Contestant 13", CONTESTANT_13.journal.note.body);
+      this.story.bookRead = true;
+      this.addJournalEntry(CONTESTANT_13.journal.book);
+      this.showDiscovery("A message inside the misfiled book", CONTESTANT_13.journal.book.body);
       if (audioSystem) audioSystem.ping(392, 0.42, 0.06, "sine");
       this.updateUI();
     }
@@ -3249,7 +3310,7 @@
         this.unregisterTree(contestant13Scene.shovel);
         contestant13Scene.shovel.visible = false;
       }
-      this.showDiscovery("Concealed garden shovel", "XIII is cut into the handle. The maze is the only ground soft enough to hide something quickly.");
+      this.showDiscovery("Concealed garden shovel", "The book's garden clue was right. XIII is cut into the handle—the hedge maze is the next lead.");
       if (audioSystem) audioSystem.ping(145, 0.25, 0.08, "triangle");
       this.updateUI();
     }
@@ -3259,8 +3320,8 @@
         if (this.story.digSiteExcavated) this.showDiscovery(CONTESTANT_13.journal.cache.title, CONTESTANT_13.journal.cache.body);
         return;
       }
-      if (!this.story.noteRead) {
-        this.showDiscovery("XIII in stone", "The mark is deliberate, but without Contestant 13's message you do not know what was buried here. Search the Library.");
+      if (!this.story.bookRead) {
+        this.showDiscovery("XIII in stone", "The mark is deliberate, but without Contestant 13's book you do not know what was buried here. Search the Library shelves.");
         return;
       }
       if (!this.hasItem("garden-shovel")) {
@@ -3271,17 +3332,17 @@
       const started = this.runTimedAction("contestant-13-dig", "Digging beneath the faint mark", 1800, () => {
         this.story.digging = false;
         this.story.digSiteExcavated = true;
-        this.story.archiveKeyFound = true;
+        this.story.basementKeyFound = true;
         this.story.badgeFound = true;
         this.story.tapeFound = true;
-        this.addItem("archive-key-a3");
+        this.addItem("basement-key-b13");
         this.addItem("contestant-13-badge");
         this.addItem("contestant-13-tape");
         this.addJournalEntry(CONTESTANT_13.journal.cache);
         if (contestant13Scene.digMound) contestant13Scene.digMound.visible = false;
         if (contestant13Scene.digMarker) contestant13Scene.digMarker.visible = false;
         if (contestant13Scene.digHole) contestant13Scene.digHole.visible = true;
-        this.showDiscovery("Buried cache A-3", "A brass Archive key, Badge 13, and a wax-sealed tape reel emerge from the rain-black soil.");
+        this.showDiscovery("Buried basement key B-13", "A brass basement service key, Badge 13, and a wax-sealed tape reel emerge from the rain-black soil.");
         if (audioSystem) {
           audioSystem.ping(118, 0.34, 0.08, "triangle");
           audioSystem.ping(236, 0.4, 0.05, "sine");
@@ -3290,10 +3351,41 @@
       if (!started) this.story.digging = false;
     }
 
+    unlockBasement(door = contestant13Scene.basementDoor) {
+      if (this.story.basementUnlocked) {
+        if (door) {
+          door.locked = false;
+          if (!door.open) door.setOpen(true);
+        }
+        this.showDiscovery(CONTESTANT_13.journal.basement.title, CONTESTANT_13.journal.basement.body);
+        return;
+      }
+      if (!this.hasItem("basement-key-b13")) {
+        this.showDiscovery("Locked basement stair", "The Kitchen service stair is locked. Contestant 13's book says the key is buried in the hedge maze.");
+        return;
+      }
+      this.story.basementUnlocked = true;
+      if (door) {
+        door.locked = false;
+        door.setOpen(true);
+      }
+      this.addJournalEntry(CONTESTANT_13.journal.basement);
+      this.showDiscovery("Basement threshold unlocked", "The B-13 key turns. The service stair descends toward the Archive and whatever the show keeps below.");
+      if (audioSystem) {
+        audioSystem.ping(196, 0.28, 0.07, "square");
+        audioSystem.door(true);
+      }
+      this.updateUI();
+    }
+
     unlockArchiveCage() {
       if (this.story.archiveCageUnlocked) return;
-      if (!this.hasItem("archive-key-a3")) {
-        this.showDiscovery("Evidence cage A-3", "The brass lock is stamped with the same A-3 mark as an Archive key.");
+      if (!this.story.basementUnlocked) {
+        this.showDiscovery("Evidence below", "Finding this room out of sequence does not open its evidence. Unlock the basement stair first.");
+        return;
+      }
+      if (!this.hasItem("basement-key-b13")) {
+        this.showDiscovery("Evidence cage B-13", "The brass lock matches the basement service key hidden in the hedge maze.");
         return;
       }
       this.story.archiveCageUnlocked = true;
@@ -3378,10 +3470,11 @@
 
     getDiagnostics() {
       return {
-        noteRead: this.story.noteRead,
+        bookRead: this.story.bookRead,
         shovelTaken: this.story.shovelTaken,
         digSiteExcavated: this.story.digSiteExcavated,
-        archiveKeyFound: this.story.archiveKeyFound,
+        basementKeyFound: this.story.basementKeyFound,
+        basementUnlocked: this.story.basementUnlocked,
         badgeFound: this.story.badgeFound,
         tapeFound: this.story.tapeFound,
         archiveCageUnlocked: this.story.archiveCageUnlocked,
@@ -3392,6 +3485,10 @@
         phase: this.getPhase(),
         completed: this.story.relaySabotaged,
         world: {
+          bookVisible: Boolean(contestant13Scene.libraryBook?.visible),
+          bookPulledOffset: CONTESTANT_13.world.book.localZ,
+          bookScratch: "XIII",
+          bookSlotReserved: true,
           shovelVisible: Boolean(contestant13Scene.shovel && contestant13Scene.shovel.visible),
           shovelScale: contestant13Scene.shovel?.scale.x ?? CONTESTANT_13.world.shovel.scale,
           shovelPosition: {
@@ -3408,6 +3505,8 @@
           digMoundVisible: Boolean(contestant13Scene.digMound?.visible),
           digMarkerVisible: Boolean(contestant13Scene.digMarker?.visible),
           digHoleVisible: Boolean(contestant13Scene.digHole?.visible),
+          basementDoorLocked: Boolean(contestant13Scene.basementDoor?.locked),
+          basementDoorOpen: Boolean(contestant13Scene.basementDoor?.open),
           archiveCageOpen: state.contestant13.archiveCageUnlocked,
           recorderIndicatorActive: Boolean(contestant13Scene.archiveRecorderIndicator?.userData.active),
           relayOnline: !state.contestant13.relaySabotaged,
@@ -4517,7 +4616,7 @@
         }
         addDoorFrame(axis, fixed, opening.center, floorY, opening.width, doorH);
         if (opening.kind !== "arch" && opening.kind !== "open") {
-          new HingedDoor({
+          const door = new HingedDoor({
             name: opening.label || "door", axis, fixed, center: opening.center,
             // Match the leaf to the lintel underside. The old 8 cm reduction
             // exposed a bright strip above every closed door; 2 cm preserves
@@ -4526,7 +4625,11 @@
             direction: opening.direction || 1,
             hingeSide: opening.hingeSide == null ? -1 : opening.hingeSide,
             material: opening.material || M.darkWood,
+            locked: Boolean(opening.locked),
+            getLockedLabel: opening.getLockedLabel || null,
+            onLockedActivate: opening.onLockedActivate || null,
           });
+          if (typeof opening.onCreate === "function") opening.onCreate(door);
         }
       }
       cursor = right;
@@ -5397,13 +5500,15 @@
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.UPPER);
   }
 
-  function addBookshelf(x, z, floorY, rotationY, width, height) {
+  function addBookshelf(x, z, floorY, rotationY, width, height, options = {}) {
     const group = new THREE.Group();
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
     const w = width || 2.3;
     const h = height || 2.75;
+    const reservedBookSlots = options?.reservedBookSlots || [];
+    const reservedSlots = new Set(reservedBookSlots.map(({ shelf, slot }) => `${shelf}:${slot}`));
     box({ name: "bookcase-back", w, h, d: 0.18, x: 0, y: h / 2, z: 0.18, material: M.blackWood, parent: group });
     for (const sx of [-1, 1]) box({ name: "bookcase-side", w: 0.14, h: h + 0.1, d: 0.44, x: sx * (w / 2 - 0.07), y: h / 2, z: 0, material: M.darkWood, parent: group });
     const bookTransforms = M.bookPalette.map(() => []);
@@ -5413,6 +5518,7 @@
       if (shelf < 4) {
         const count = Math.floor(w / 0.16);
         for (let i = 0; i < count; i += 1) {
+          if (reservedSlots.has(`${shelf}:${i}`)) continue;
           bookTransforms[(i + shelf * 2) % M.bookPalette.length].push({
             x: -w / 2 + 0.2 + i * (w - 0.36) / count,
             y: sy + 0.245,
@@ -6351,7 +6457,15 @@
     // Close the kitchen off from the basement stair while keeping the landing
     // safe: the leaf swings south into the kitchen, never over the flight.
     buildWallRun({ axis: "x", fixed: -3.2, start: 11.3, end: 15, floorY: FLOOR.MAIN, name: "main-kitchen-service-stair-wall", openings: [
-      { kind: "door", center: 12.55, width: 1.35, label: "basement stair door", direction: 1, hingeSide: -1 },
+      {
+        kind: "door", center: 12.55, width: 1.35, label: "basement stair door", direction: 1, hingeSide: -1,
+        locked: true,
+        getLockedLabel: () => contestant13Quest?.hasItem("basement-key-b13")
+          ? "Unlock basement stair door with the B-13 key"
+          : "Basement stair door — locked; the key is missing",
+        onLockedActivate: (door) => contestant13Quest?.unlockBasement(door),
+        onCreate: (door) => { contestant13Scene.basementDoor = door; },
+      },
     ] });
     buildWallRun({ axis: "z", fixed: 10.4, start: -3.2, end: 3.2, floorY: FLOOR.MAIN, name: "main-service-shaft-wall", openings: [] });
     buildWallRun({ axis: "z", fixed: -11.5, start: -3.2, end: 1.6, floorY: FLOOR.MAIN, name: "main-bath-east-wall", openings: [] });
@@ -6404,7 +6518,13 @@
   function furnishMainFloor() {
     addFoyerPanelwork();
     // Library
-    for (const z of [4.8, 7.9, 10.95]) addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85);
+    const clueBookLayout = CONTESTANT_13.world.book;
+    for (const z of [4.8, 7.9, 10.95]) {
+      const bookshelfOptions = z === clueBookLayout.z
+        ? { reservedBookSlots: [{ shelf: clueBookLayout.shelfIndex, slot: clueBookLayout.reservedSlot }] }
+        : undefined;
+      addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85, bookshelfOptions);
+    }
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
     addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.greenRug);
     addTable(-10.5, 5.2, 2.25, 1.05, FLOOR.MAIN, 0, M.darkWood);
@@ -6577,23 +6697,48 @@
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
   }
 
-  function addContestantThirteenLibraryNote() {
+  function addContestantThirteenLibraryBook() {
+    const bookLayout = CONTESTANT_13.world.book;
     const group = new THREE.Group();
-    group.name = "contestant-13-library-rulebook";
-    group.position.set(-10.5, FLOOR.MAIN + 0.87, 5.2);
-    group.rotation.y = -0.12;
+    group.name = "contestant-13-library-shelf-book";
+    group.position.set(bookLayout.x, FLOOR.MAIN, bookLayout.z);
+    group.rotation.y = -Math.PI / 2;
     scene.add(group);
-    box({ name: "contestant-13-library-rulebook-bottom-cover", w: 0.62, h: 0.035, d: 0.82, y: 0.018, material: M.leather, parent: group, cast: false });
-    box({ name: "contestant-13-library-rulebook-pages", w: 0.56, h: 0.07, d: 0.75, y: 0.066, material: M.canvasLinen, parent: group, cast: false });
-    const cover = box({ name: "contestant-13-library-rulebook-cover", w: 0.62, h: 0.035, d: 0.82, y: 0.12, material: M.leather, parent: group, cast: false });
-    box({ name: "contestant-13-library-rulebook-brass-13", w: 0.18, h: 0.018, d: 0.28, y: 0.145, z: 0.04, material: M.brass, parent: group, cast: false });
-    const note = plane({ name: "contestant-13-library-hidden-note", w: 0.45, h: 0.63, y: 0.146, z: -0.02, rotationX: -Math.PI / 2, rotationZ: 0.06, material: M.canvasLinen, parent: group });
-    contestant13Scene.libraryNote = group;
+    const fadedBlueLeather = new THREE.MeshStandardMaterial({ color: 0x30413e, roughness: 0.9, metalness: 0 });
+    const book = box({
+      name: "contestant-13-library-book-spine",
+      w: bookLayout.width, h: bookLayout.height, d: bookLayout.depth,
+      x: bookLayout.localX, y: bookLayout.shelfY, z: bookLayout.localZ,
+      material: fadedBlueLeather, parent: group, cast: false,
+    });
+    const scratch = new THREE.Group();
+    scratch.name = "contestant-13-library-book-scratch-xiii";
+    scratch.position.set(bookLayout.localX, bookLayout.shelfY + 0.13, bookLayout.localZ - bookLayout.depth / 2 - 0.006);
+    scratch.userData.mark = "XIII";
+    group.add(scratch);
+    const scratchStrokes = [
+      ["contestant-13-library-book-scratch-x-left", 0.037, 0.002, -0.44, 0.056],
+      ["contestant-13-library-book-scratch-x-right", 0.037, 0.002, 0.44, 0.056],
+      ["contestant-13-library-book-scratch-i-1", 0.004, -0.001, 0.025, 0.052],
+      ["contestant-13-library-book-scratch-i-2", -0.018, 0.001, -0.018, 0.054],
+      ["contestant-13-library-book-scratch-i-3", -0.04, -0.002, 0.02, 0.051],
+    ];
+    for (const [name, x, y, rotationZ, height] of scratchStrokes) {
+      const stroke = box({
+        name,
+        w: 0.006, h: height, d: 0.008,
+        x, y, z: 0,
+        material: M.agedTrim, parent: scratch, cast: false,
+      });
+      stroke.rotation.z = rotationZ;
+    }
+    contestant13Scene.libraryBook = group;
+    contestant13Scene.libraryBookScratch = scratch;
     contestant13Quest.registerInteraction(
-      "library-note",
-      [cover, note],
-      () => state.contestant13.noteRead ? "Reread Contestant 13's note" : "Examine Contestant 13's rulebook",
-      () => contestant13Quest.readNote(),
+      "library-book",
+      [book],
+      () => state.contestant13.bookRead ? "Reread the misfiled garden ledger" : "Examine the slightly misfiled book",
+      () => contestant13Quest.readBook(),
     );
   }
 
@@ -6661,7 +6806,7 @@
       () => {
         if (state.contestant13.digSiteExcavated) return "Inspect empty hole";
         if (state.contestant13.digging) return "Digging beneath the faint mark…";
-        return contestant13Quest.hasItem("garden-shovel") ? "Dig beneath the faint XIII mark" : "Faintly disturbed earth — need a shovel";
+        return contestant13Quest.hasItem("garden-shovel") ? "Dig for the basement key beneath XIII" : "Faintly disturbed earth — need a shovel";
       },
       () => contestant13Quest.digSite(),
     );
@@ -6684,16 +6829,16 @@
       box({ name: "contestant-13-archive-cage-vertical-bar", w: 0.04, h: 0.55, d: 0.035, x, y: 0.25, material: cageBrass, parent: door, cast: false });
     }
     for (const y of [0, 0.5]) box({ name: "contestant-13-archive-cage-horizontal-bar", w: 0.66, h: 0.04, d: 0.035, x: 0.32, y, material: cageBrass, parent: door, cast: false });
-    const latch = box({ name: "contestant-13-archive-cage-a3-lock", w: 0.15, h: 0.18, d: 0.08, x: 0.66, y: 0.24, z: 0.015, material: M.iron, parent: door, cast: false });
+    const latch = box({ name: "contestant-13-archive-cage-b13-lock", w: 0.15, h: 0.18, d: 0.08, x: 0.66, y: 0.24, z: 0.015, material: M.iron, parent: door, cast: false });
     box({ name: "contestant-13-archive-cage-routing-card", w: 0.4, h: 0.23, d: 0.025, x: 0, y: 0.05, z: 0.11, material: M.canvasLinen, parent: cage, cast: false });
-    box({ name: "contestant-13-archive-cage-a3-placard", w: 0.28, h: 0.11, d: 0.025, x: 0, y: 0.57, z: 0.12, material: M.canvasLinen, parent: cage, cast: false });
-    for (const x of [-0.075, 0, 0.075]) box({ name: "contestant-13-archive-cage-a3-placard-mark", w: 0.025, h: 0.065, d: 0.012, x, y: 0.57, z: 0.139, material: cageBrass, parent: cage, cast: false });
+    box({ name: "contestant-13-archive-cage-b13-placard", w: 0.28, h: 0.11, d: 0.025, x: 0, y: 0.57, z: 0.12, material: M.canvasLinen, parent: cage, cast: false });
+    for (const x of [-0.075, 0, 0.075]) box({ name: "contestant-13-archive-cage-b13-placard-mark", w: 0.025, h: 0.065, d: 0.012, x, y: 0.57, z: 0.139, material: cageBrass, parent: cage, cast: false });
     contestant13Scene.archiveCageDoor = door;
     contestant13Quest.registerInteraction(
       "archive-cage",
       [latch, recorderDeck],
       () => {
-        if (!state.contestant13.archiveCageUnlocked) return contestant13Quest.hasItem("archive-key-a3") ? "Unlock evidence cage A-3" : "Evidence cage A-3 — locked";
+        if (!state.contestant13.archiveCageUnlocked) return contestant13Quest.hasItem("basement-key-b13") && state.contestant13.basementUnlocked ? "Unlock evidence cage B-13" : "Evidence cage B-13 — locked";
         return state.contestant13.recordingPlayed ? "Replay Contestant 13's recording" : "Play Contestant 13's recording";
       },
       () => state.contestant13.archiveCageUnlocked ? contestant13Quest.playRecording() : contestant13Quest.unlockArchiveCage(),
@@ -6738,7 +6883,7 @@
 
   function buildContestantThirteenQuest() {
     contestant13Quest = new ContestantThirteenQuest();
-    addContestantThirteenLibraryNote();
+    addContestantThirteenLibraryBook();
     addContestantThirteenGardenShovel();
     addContestantThirteenDigSite();
     addContestantThirteenArchiveCage();

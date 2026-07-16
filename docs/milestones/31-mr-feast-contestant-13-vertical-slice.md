@@ -59,6 +59,7 @@ User reads Contestant 13's Library note, finds the short shovel hidden inside th
 
 ## Notes
 
+- Milestone 34 supersedes this milestone's original table-top rulebook → A-3 key opening sequence with a subtle shelf book → garden shovel → hedge-maze basement key → locked service stair. The remaining Archive recording and Workshop sabotage behavior stays authoritative.
 - Progress intentionally resets on reload for this first slice.
 - The shovel may be discovered before the Library note. The objective and journal must adapt without corrupting later progression.
 - The cache is at maze cell `(19, 3)`, 82 moves from the rear entrance and 30 moves beyond the former cache cell on the same reachable route.

@@ -209,6 +209,7 @@ const upperGalleryPortraits = upperFurnishings;
 const musicRoomFurnishings = section("// Music room", "// Painting room", mainFurnishings);
 const paintingRoomFurnishings = section("// Painting room", "// Dining room", mainFurnishings);
 const paintingStudioBuilder = section("function addPaintingStudio(", "function addKitchenRange(");
+const bookshelfBuilder = section("function addBookshelf(", "function addArchiveCurio(");
 const boxBuilder = section("function box(", "function cylinder(");
 const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSlabsAndCeilings()");
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
@@ -228,9 +229,11 @@ const eastRearFrontWall = namedWallRun("upper-east-rear-front-wall", upperPartit
 const westRearSpine = namedWallRun("upper-west-rear-spine", upperPartitions);
 const eastRearSpine = namedWallRun("upper-east-rear-spine", upperPartitions);
 const cabinetSetOpen = section("setOpen(open, silent)", "makeDoor(", cabinetClass);
+const hingedDoorClass = section("class HingedDoor", "class LightCircuit");
 const contestant13Config = section("const CONTESTANT_13", "const GRAND_STAIR");
 const contestant13Quest = section("class ContestantThirteenQuest", "function kitchenShelfHeights");
 const contestant13Build = section("function buildContestantThirteenQuest", "function buildLighting()");
+const contestant13BookBuild = section("function addContestantThirteenLibraryBook", "function addContestantThirteenGardenShovel");
 const contestant13ShovelBuild = section("function addContestantThirteenGardenShovel", "function addContestantThirteenDigSite");
 const contestant13DigSiteBuild = section("function addContestantThirteenDigSite", "function addContestantThirteenArchiveCage");
 const mrFeastPatrolRoute = section("const MR_FEAST_PATROL_ROUTE", "const MR_FEAST_NPC");
@@ -1157,21 +1160,21 @@ for (const route of ["paintingWestWallBlock", "paintingEastWallBlock", "rearLoun
 // gated, and sabotage changes story state without mutating the light budget.
 check("41 Contestant 13 configuration", /objectives:\s*Object\.freeze/.test(contestant13Config) && /transcript:/.test(contestant13Config), "Contestant 13 objectives and recording transcript are not centralized");
 check("41 Contestant 13 interaction registry", /this\.interactions\s*=\s*new Map\(\)/.test(contestant13Quest) && /addInteractionTarget\(/.test(contestant13Quest), "story objects do not share the mansion interaction contract");
-check("41 Contestant 13 idempotency", /if \(this\.story\.noteRead\)/.test(contestant13Quest) && /if \(this\.story\.shovelTaken\)/.test(contestant13Quest) && /if \(this\.story\.digSiteExcavated \|\| this\.story\.digging\)/.test(contestant13Quest), "repeat clue, pickup, or dig interactions can duplicate progression rewards");
-check("41 Contestant 13 dig gate", /if \(!this\.story\.noteRead\)/.test(contestant13Quest) && /if \(!this\.hasItem\("garden-shovel"\)\)/.test(contestant13Quest) && /archive-key-a3/.test(contestant13Quest), "digging can grant the A-3 key without the clue or shovel");
-check("41 Contestant 13 Archive gate", /if \(!this\.hasItem\("archive-key-a3"\)\)/.test(contestant13Quest) && /archiveCageUnlocked\s*=\s*true/.test(contestant13Quest), "evidence cage does not require and consume the A-3 progression gate");
+check("41 Contestant 13 idempotency", /if \(this\.story\.bookRead\)/.test(contestant13Quest) && /if \(this\.story\.shovelTaken\)/.test(contestant13Quest) && /if \(this\.story\.digSiteExcavated \|\| this\.story\.digging\)/.test(contestant13Quest), "repeat clue, pickup, or dig interactions can duplicate progression rewards");
+check("41 Contestant 13 dig gate", /if \(!this\.story\.bookRead\)/.test(contestant13Quest) && /if \(!this\.hasItem\("garden-shovel"\)\)/.test(contestant13Quest) && /basement-key-b13/.test(contestant13Quest), "digging can grant the basement key without the book clue or shovel");
+check("41 Contestant 13 Archive gate", /if \(!this\.story\.basementUnlocked\)/.test(contestant13Quest) && /if \(!this\.hasItem\("basement-key-b13"\)\)/.test(contestant13Quest) && /archiveCageUnlocked\s*=\s*true/.test(contestant13Quest), "evidence cage does not require the basement threshold and recovered service key");
 check("41 Contestant 13 recording gate", /if \(!this\.story\.archiveCageUnlocked \|\| !this\.story\.tapeFound\)/.test(contestant13Quest) && /recordingPlayed\s*=\s*true/.test(contestant13Quest), "Contestant 13's recording can play before the cage and tape are available");
 check("41 Contestant 13 sabotage gate", /if \(!this\.story\.recordingPlayed\)/.test(contestant13Quest) && /relaySabotaged\s*=\s*true/.test(contestant13Quest) && /threatEscalated\s*=\s*true/.test(contestant13Quest), "camera relay sabotage lacks recording knowledge or a persistent threat consequence");
-for (const helper of ["addContestantThirteenLibraryNote", "addContestantThirteenGardenShovel", "addContestantThirteenDigSite", "addContestantThirteenArchiveCage", "addContestantThirteenCameraRelay"]) {
+for (const helper of ["addContestantThirteenLibraryBook", "addContestantThirteenGardenShovel", "addContestantThirteenDigSite", "addContestantThirteenArchiveCage", "addContestantThirteenCameraRelay"]) {
   check("41 Contestant 13 physical story", contestant13Build.includes(`${helper}(`), `missing story furnishing helper ${helper}`);
 }
-for (const objectName of ["contestant-13-library-rulebook", "contestant-13-garden-shovel", "contestant-13-dig-site", "contestant-13-archive-cage", "contestant-13-camera-relay"]) {
+for (const objectName of ["contestant-13-library-shelf-book", "contestant-13-garden-shovel", "contestant-13-dig-site", "contestant-13-archive-cage", "contestant-13-camera-relay"]) {
   check("41 Contestant 13 physical story", mansion.includes(objectName), `missing stable scene name ${objectName}`);
 }
 check("41 Contestant 13 physical state", /recorderIndicatorActive:/.test(contestant13Quest) && /relayOnlineBulbVisible:/.test(contestant13Quest) && /relayAlarmBulbVisible:/.test(contestant13Quest) && /archiveCageOpen:\s*state\.contestant13\.archiveCageUnlocked/.test(contestant13Quest) && /preExteriorVisibility\s*=\s*false/.test(contestant13Quest) && /preExteriorVisibility\s*=\s*true/.test(contestant13Quest), "diagnostics or exterior-culling state do not preserve recorder, cage, and relay visuals");
 check("41 Contestant 13 warning pulse", /warningPulse/.test(mansion) && /relayAlarmMaterial\.emissiveIntensity/.test(mansion), "sabotage warning lamp does not visibly pulse");
 check("41 Contestant 13 diagnostics", /inventory:\s*contestant13Quest\?\.getInventoryDiagnostics/.test(diagnostics) && /journal:\s*contestant13Quest\?\.getJournalDiagnostics/.test(diagnostics) && /contestant13:\s*contestant13Quest\?\.getDiagnostics/.test(diagnostics), "objective, inventory, journal, and story state are missing from render_game_to_text");
-for (const view of ["contestant13LibraryNote", "contestant13GardenShovel", "contestant13DigSite", "contestant13ArchiveCage", "contestant13WorkshopRelay"]) {
+for (const view of ["contestant13LibraryBook", "contestant13GardenShovel", "contestant13DigSite", "contestant13BasementDoor", "contestant13ArchiveCage", "contestant13WorkshopRelay"]) {
   check("41 Contestant 13 QA views", qaRoomViews.includes(`${view}:`), `missing Contestant 13 QA view ${view}`);
 }
 check("41 Contestant 13 accessible UI", /id="mansion-casefile"/.test(page) && /id="mansion-objective"/.test(page) && /id="mansion-inventory"/.test(page) && /id="mansion-journal"[^>]+role="dialog"[^>]+aria-modal="true"/.test(page) && /aria-live="polite"/.test(page) && /journalReturnFocus/.test(contestant13Quest), "page lacks accessible objective, inventory, discovery, or modal journal feedback");
@@ -1188,6 +1191,21 @@ check("42 Contestant 13 clean hole", /digMound\.visible\s*=\s*false/.test(contes
 check("42 Contestant 13 discovery diagnostics", /shovelScale:/.test(contestant13Quest) && /pathStepsFromRear:/.test(contestant13Quest) && /digMoundVisible:/.test(contestant13Quest) && /digMarkerVisible:/.test(contestant13Quest) && /digHoleVisible:/.test(contestant13Quest), "runtime diagnostics do not expose the tuned clue geometry and post-dig state");
 check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*-4\.05,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[25,\s*YARD_LAYOUT\.groundY,\s*-13\.90,\s*0,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deeper cache");
 check("44 garden quest placement", /const shovelLayout = CONTESTANT_13\.world\.shovel;/.test(contestant13ShovelBuild) && /group\.position\.set\(shovelLayout\.x, YARD_LAYOUT\.groundY \+ shovelLayout\.yOffset, shovelLayout\.z\)/.test(contestant13ShovelBuild), "the garden shovel does not move with its authored garden placement");
+
+// 47. The revised trail starts with a subtle shelf volume, separates the
+// garden-tool and maze-key hints, and makes the basement a real quest gate.
+check("47 basement key trail physical story", /book:\s*Object\.freeze\(\{[\s\S]*?x:\s*-14\.5, z:\s*7\.9,[\s\S]*?localZ:\s*-0\.075/.test(contestant13Config) && /contestant-13-library-shelf-book/.test(contestant13BookBuild) && /group\.position\.set\(bookLayout\.x, FLOOR\.MAIN, bookLayout\.z\)/.test(contestant13BookBuild) && /group\.rotation\.y\s*=\s*-Math\.PI \/ 2/.test(contestant13BookBuild), "Contestant 13's clue is not embedded in the middle Library bookcase");
+check("47 basement key trail physical story", /shelfIndex:\s*2, reservedSlot:\s*5/.test(contestant13Config) && /localX:\s*0\.215, localZ:\s*-0\.075/.test(contestant13Config) && /reservedBookSlots/.test(bookshelfBuilder) && /reservedSlots\.has\(`\$\{shelf\}:\$\{i\}`\)/.test(bookshelfBuilder) && /reservedBookSlots:\s*\[\{ shelf:\s*clueBookLayout\.shelfIndex, slot:\s*clueBookLayout\.reservedSlot \}\]/.test(mainFurnishings), "the clue book does not own a clean reserved gap between neighboring instanced volumes");
+check("47 basement key trail physical story", /width:\s*0\.12, height:\s*0\.43, depth:\s*0\.3/.test(contestant13Config) && /w:\s*bookLayout\.width, h:\s*bookLayout\.height, d:\s*bookLayout\.depth/.test(contestant13BookBuild) && /contestant-13-library-book-scratch-x-left/.test(contestant13BookBuild) && /contestant-13-library-book-scratch-x-right/.test(contestant13BookBuild) && count(contestant13BookBuild, /contestant-13-library-book-scratch-i-/g) === 3 && !/contestant-13-library-book-worn-mark/.test(contestant13BookBuild), "the clue volume lacks a small scratched XIII made from two X strokes and three I strokes");
+check("47 basement key trail copy", /garden[^\n"]*shovel/i.test(contestant13Config) && /hedge maze[^\n"]*(?:key|brass)|(?:key|brass)[^\n"]*hedge maze/i.test(contestant13Config), "the shelf-book clue does not independently point to the garden shovel and hedge-maze key");
+check("47 basement key trail copy", /"basement-key-b13":\s*"Basement key"/.test(contestant13Config) && /basement:\s*"Use the recovered key on the locked basement stair door/.test(contestant13Config), "the recovered item and objective do not identify the locked basement threshold");
+check("47 basement key trail state machine", /bookRead:\s*false/.test(mansion) && /basementKeyFound:\s*false/.test(mansion) && /basementUnlocked:\s*false/.test(mansion), "central quest state lacks book, basement-key, or basement-unlock flags");
+check("47 basement key trail state machine", /locked:\s*true[\s\S]*?onCreate:\s*\(door\)\s*=>\s*\{\s*contestant13Scene\.basementDoor\s*=\s*door;\s*\}/.test(kitchenServiceStairWall), "the Kitchen service-stair door is not authored as the captured locked basement door");
+check("47 basement key trail state machine", /getLockedLabel/.test(hingedDoorClass) && /onLockedActivate/.test(hingedDoorClass) && /unlockBasement\(door/.test(contestant13Quest) && /door\.locked\s*=\s*false/.test(contestant13Quest), "the shared door contract cannot explain or resolve the basement lock through the quest");
+check("47 basement key trail state machine", /this\.story\.basementKeyFound\s*=\s*true/.test(contestant13Quest) && /this\.addItem\("basement-key-b13"\)/.test(contestant13Quest) && /if \(!this\.story\.basementUnlocked\)/.test(contestant13Quest), "the maze reward does not gate the Archive chain behind basement unlock");
+check("47 basement key trail diagnostics", /bookVisible:/.test(contestant13Quest) && /bookScratch:\s*"XIII"/.test(contestant13Quest) && /bookSlotReserved:\s*true/.test(contestant13Quest) && /basementDoorLocked:/.test(contestant13Quest) && /basementDoorOpen:/.test(contestant13Quest) && /basementUnlocked:\s*this\.story\.basementUnlocked/.test(contestant13Quest), "diagnostics do not expose the separated XIII-marked shelf book and persistent basement-door state");
+check("47 basement key trail QA views", /contestant13LibraryBook:\s*\[-12\.75,\s*FLOOR\.MAIN,\s*8\.1,\s*Math\.PI \/ 2,\s*-0\.08\]/.test(qaRoomViews) && /contestant13BasementDoor:\s*\[12\.55,\s*FLOOR\.MAIN,\s*-4\.65,\s*Math\.PI,\s*-0\.08\]/.test(qaRoomViews), "QA views do not frame the subtle book and basement lock from the player's Kitchen approach");
+check("47 basement key trail patrol gate", /door\.name === "basement stair door" && target\.id === "main-service-door"/.test(mrFeastWanderer) && /point\.id === "main-service-exit"/.test(mrFeastWanderer) && /lockedRouteDoors/.test(mrFeastWanderer) && /door\.locked = true/.test(mrFeastWanderer), "Mr. Feast can walk through the locked basement threshold or full-route QA can corrupt story-door state");
 
 // 43. Mr. Feast is an optional, animated test layer. He follows a safe
 // authored main-floor loop, never blocks mansion boot, and exposes enough
@@ -1260,8 +1278,9 @@ for (const view of ["mainHallBathroomShowerLight", "upperGrandBathroomShowerLigh
   check("40 bathroom fixture QA views", qaRoomViews.includes(`${view}:`), `missing bathroom inspection view ${view}`);
 }
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
+const runtimeAssetVersion = mansion.match(/assetVersion:\s*"([^"]+)"/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", cacheKey === "20260715-garden-walkway-lamps-1", `mansion page cache key is stale (${cacheKey || "missing"})`);
+check("cache key", Boolean(runtimeAssetVersion) && cacheKey === runtimeAssetVersion, `mansion page cache key (${cacheKey || "missing"}) does not match the runtime asset version (${runtimeAssetVersion || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

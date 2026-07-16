@@ -10,11 +10,39 @@ const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
 const mrFeastAssetRoot = path.join(root, "assets/models/mr-feast");
 const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest.json");
 const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
+const mrFeastFacialReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-facial-report.json");
+const mrFeastRetopologyReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-retopology-report.json");
 const mansion = fs.readFileSync(mansionPath, "utf8");
 const page = fs.readFileSync(pagePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
 const mrFeastManifest = JSON.parse(fs.readFileSync(mrFeastManifestPath, "utf8"));
 const mrFeastTuningReport = JSON.parse(fs.readFileSync(mrFeastTuningReportPath, "utf8"));
+const mrFeastFacialReport = JSON.parse(fs.readFileSync(mrFeastFacialReportPath, "utf8"));
+const mrFeastRetopologyReport = fs.existsSync(mrFeastRetopologyReportPath)
+  ? JSON.parse(fs.readFileSync(mrFeastRetopologyReportPath, "utf8"))
+  : null;
+const requiredMrFeastFacialTargets = [
+  "blink_left",
+  "blink_right",
+  "brow_raise",
+  "brow_compress",
+  "smile",
+  "smile_wide",
+  "sneer_left",
+  "sneer_right",
+  "mouth_open",
+  "jaw_shift",
+];
+const requiredMrFeastRetopologyObjects = [
+  "MrFeast_RetopoFace",
+  "MrFeast_Eyelid_L",
+  "MrFeast_Eyelid_R",
+  "MrFeast_Eye_L",
+  "MrFeast_Eye_R",
+  "MrFeast_OralCavity",
+  "MrFeast_Teeth",
+  "MrFeast_LipRim",
+];
 
 const failures = [];
 
@@ -243,7 +271,8 @@ const mrFeastPatrolRoute = section("const MR_FEAST_PATROL_ROUTE", "const MR_FEAS
 const mrFeastNpcConfig = section("const MR_FEAST_NPC", "const TOILET_FLUSH_DURATION");
 const mrFeastWanderer = section("class MrFeastWanderer", "window.MrFeastFresh");
 const cameraSecurityConfig = section("const CAMERA_SECURITY_MODE", "const MR_FEAST_LEVEL");
-const cameraSecuritySystem = section("class CameraSecuritySystem", "function addLocalInstanceBatch");
+const cameraSecuritySystem = section("class CameraSecuritySystem", "class WorkroomMonitorWallSystem");
+const workroomMonitorWallSystem = section("class WorkroomMonitorWallSystem", "function kitchenShelfHeights");
 const patronFeedSecurityHandler = section("handlePatronFeedSabotage()", "beginIllegalAction(id)", cameraSecuritySystem);
 
 // 29. Crown trim remains continuous over the entire authored wall run, while
@@ -1102,6 +1131,10 @@ check("47 rotated table collider", /physics\.addFixedBox\(x,\s*floorY \+ 0\.42,\
 check("47 music-room table clearance route", /musicTableWestClearance:\s*\[8\.05,\s*FLOOR\.MAIN,\s*6\.15,\s*Math\.PI\]/.test(qaRoomViews) && /musicTableWestClearance:\s*\{[\s\S]*?start:\s*"musicTableWestClearance"/.test(qaHooks), "Music Room lacks deterministic physical QA through the table collider's former invisible corner");
 check("48 rotated sofa collider", /physics\.addFixedBox\(x,\s*floorY \+ 0\.65,\s*z,\s*w,\s*1\.3,\s*0\.9,\s*rotationY \|\| 0\)/.test(sofaBuilder), "rotated sofas still use an oversized axis-aligned collider");
 check("48 music-room couch-table aisle", /musicTableWestClearance:\s*\{[\s\S]*?actions:\s*\[\{\s*yaw:\s*Math\.PI,\s*seconds:\s*3\.0\s*\}\][\s\S]*?minZ:\s*8\.0[\s\S]*?maxZ:\s*9\.3/.test(qaHooks), "Music Room route does not prove the full aisle between the couch and table is clear");
+check("49 dossier Tab binding", /event\.code === "Tab"[\s\S]*?contestant13Quest\.toggleJournal\(\)/.test(mansion) && !/event\.code === "KeyI"|event\.code === "KeyJ"/.test(mansion), "inventory dossier is not exclusively bound to Tab");
+check("49 discovery-first HUD", !/Search the Library shelves for a book that does not quite belong\./i.test(page) && /dom\.caseFile\.hidden\s*=\s*!state\.started\s*\|\|\s*!this\.story\.bookRead/.test(contestant13Quest), "fresh play still exposes the left-side Library direction");
+check("50 illustrated dossier", /itemIcons:\s*Object\.freeze/.test(contestant13Config) && /function itemIconSvg\(/.test(mansion) && /mansion-inventory-card__icon/.test(contestant13Quest), "carried objects lack distinct scalable dossier illustrations");
+check("50 illustrated dossier", /id="mansion-clue-notepad"/.test(page) && /\.mansion-clue-notepad/.test(page) && /\.mansion-clue-note/.test(page) && /linear-gradient/.test(page), "recovered clues are not presented on a ruled notepad");
 
 check("24 closet interior materials", /const closetInterior\s*=\s*new THREE\.MeshStandardMaterial\(/.test(cabinetClass) && !/const closetInterior\s*=\s*new THREE\.MeshBasicMaterial\(/.test(cabinetClass), "walk-in closet liners still ignore real scene lighting");
 check("24 closet interior materials", !/lightCircuit\.glowMaterials\.push\(closetInterior\)/.test(cabinetClass), "closet liner is still a circuit-tinted glow surface");
@@ -1227,10 +1260,6 @@ check("48 inventory dossier", /event\.code === "Tab"/.test(mansion) && /id="mans
 check("48 escape menu", /id="mansion-menu"/.test(page) && /id="mansion-menu-maximize"/.test(page) && /id="mansion-menu-save"/.test(page) && /id="mansion-menu-load"/.test(page) && /id="mansion-menu-dev"/.test(page) && /event\.code === "Escape"/.test(mansion), "Escape menu lacks maximize, save/load, or Dev Mode controls");
 check("48 save contract", /RBGameSaves\?\.create\("mr-feast-mansion",\s*\{ version:\s*1 \}\)/.test(mansion) && /serializeMansionSave/.test(mansion) && /restoreMansionSave/.test(mansion) && /playerPosition/.test(mansion), "mansion progress and player transform are not versioned through RBGameSaves");
 check("48 reversible dev mode", /devModeSnapshot/.test(mansion) && /setDevMode\(enabled/.test(mansion) && /recordingPlayed\s*=\s*true/.test(mansion) && /relaySabotaged\s*=\s*false/.test(mansion) && /restoreQuestSnapshot/.test(mansion), "Dev Mode does not grant the current trail while preserving a reversible pre-dev snapshot and unfinished sabotage");
-check("49 dossier Tab binding", /event\.code === "Tab"[\s\S]*?contestant13Quest\.toggleJournal\(\)/.test(mansion) && !/event\.code === "KeyI"|event\.code === "KeyJ"/.test(mansion), "inventory dossier is not exclusively bound to Tab");
-check("49 discovery-first HUD", !/Search the Library shelves for a book that does not quite belong\./i.test(page) && /dom\.caseFile\.hidden\s*=\s*!state\.started\s*\|\|\s*!this\.story\.bookRead/.test(contestant13Quest), "fresh play still exposes the left-side Library direction");
-check("50 illustrated dossier", /itemIcons:\s*Object\.freeze/.test(contestant13Config) && /function itemIconSvg\(/.test(mansion) && /mansion-inventory-card__icon/.test(contestant13Quest), "carried objects lack distinct scalable dossier illustrations");
-check("50 illustrated dossier", /id="mansion-clue-notepad"/.test(page) && /\.mansion-clue-notepad/.test(page) && /\.mansion-clue-note/.test(page) && /linear-gradient/.test(page), "recovered clues are not presented on a ruled notepad");
 
 // 43. Mr. Feast is an optional, animated test layer. He follows a safe
 // authored main-floor loop, never blocks mansion boot, and exposes enough
@@ -1264,13 +1293,58 @@ for (const asset of expectedMrFeastAssets.slice(1)) {
   check("43 Mr Feast stable motion assets", Boolean(json) && (json.meshes?.length || 0) === 0 && (json.skins?.length || 0) === 0, `${asset} is not a mesh-free animation GLB`);
   check("43 Mr Feast stable motion assets", paths.filter((value) => value === "rotation").length === 24 && paths.filter((value) => value === "translation").length === 1 && !paths.includes("scale") && translatedNodes[0] === "Hips", `${asset} can still scale bones or change limb lengths`);
 }
+const mrFeastModelPath = path.join(mrFeastAssetRoot, mrFeastManifest.model);
+const mrFeastModelJson = glbJson(mrFeastModelPath);
+const mrFeastFaceNode = (mrFeastModelJson?.nodes || []).find((node) => node.name === "MrFeast_RetopoFace");
+const mrFeastModelMesh = Number.isInteger(mrFeastFaceNode?.mesh)
+  ? mrFeastModelJson?.meshes?.[mrFeastFaceNode.mesh]
+  : (mrFeastModelJson?.meshes || []).find((mesh) => mesh.name === "MrFeast_RetopoFace");
+const mrFeastModelPrimitives = mrFeastModelMesh?.primitives || [];
+const mrFeastModelTargets = mrFeastModelPrimitives.flatMap((primitive) => primitive.targets || []);
+const mrFeastFacialTargetNames = mrFeastModelMesh?.extras?.targetNames || [];
+const mrFeastFacialMappings = Object.values(mrFeastManifest.face?.morphTargets || {});
+const mrFeastRetopologyNodeNames = (mrFeastModelJson?.nodes || []).map((node) => node.name).filter(Boolean);
+const mrFeastRetopologyMeshNames = (mrFeastModelJson?.meshes || []).map((mesh) => mesh.name).filter(Boolean);
+const mrFeastSceneRootNodes = new Set(mrFeastModelJson?.scenes?.[mrFeastModelJson?.scene || 0]?.nodes || []);
+const mrFeastRetopologyNodeIndexes = requiredMrFeastRetopologyObjects.map((name) =>
+  (mrFeastModelJson?.nodes || []).findIndex((node) => node.name === name),
+);
+const mrFeastFacePositionAccessor = mrFeastModelJson?.accessors?.[
+  mrFeastModelPrimitives[0]?.attributes?.POSITION
+];
+const mrFeastFaceAccessorSize = mrFeastFacePositionAccessor?.min?.map(
+  (minimum, index) => mrFeastFacePositionAccessor.max[index] - minimum,
+) || [];
+check("45 Mr Feast facial asset", mrFeastModelJson?.meshes?.length >= 7 && mrFeastModelJson?.skins?.length === 1 && mrFeastModelJson.skins[0].joints?.length === 24, "retopologized model must expose its modular face parts while retaining one shared skin and the 24-bone body rig");
+check("45 Mr Feast facial asset", mrFeastModelTargets.length === requiredMrFeastFacialTargets.length && mrFeastModelTargets.every((target) => Number.isInteger(target.POSITION) && Object.keys(target).length === 1), "facialized model must contain ten POSITION-only morph targets without morph normals or tangents");
+check("45 Mr Feast facial asset", requiredMrFeastFacialTargets.every((name) => mrFeastFacialTargetNames.includes(name)), `facialized model is missing approved targets: ${requiredMrFeastFacialTargets.filter((name) => !mrFeastFacialTargetNames.includes(name)).join(", ")}`);
+check("46 Mr Feast retopology transforms", mrFeastRetopologyNodeIndexes.every((index) => index >= 0 && mrFeastSceneRootNodes.has(index)) && mrFeastFaceAccessorSize[0] >= 0.14 && mrFeastFaceAccessorSize[1] >= 0.20 && mrFeastFaceAccessorSize[2] >= 0.16, "retopologized face parts are parented beneath the 0.01-scale armature or their exported face bounds collapsed below head scale");
+check("45 Mr Feast facial manifest", mrFeastManifest.version === 3 && mrFeastManifest.face?.rigVersion === 3 && mrFeastManifest.face?.presetVersion === 3 && requiredMrFeastFacialTargets.every((name) => mrFeastFacialMappings.includes(name)) && new Set(mrFeastFacialMappings).size === requiredMrFeastFacialTargets.length, "manifest does not expose the version-three retopologized facial contract");
+check("45 Mr Feast facial size", fs.statSync(mrFeastModelPath).size <= 15 * 1024 * 1024, "retopologized runtime GLB exceeds the 15 MiB mobile budget");
+check("45 Mr Feast facial report", mrFeastFacialReport.trianglesBefore === 65000 && mrFeastFacialReport.trianglesAfter === 65000 && mrFeastFacialReport.vertexCountBefore === mrFeastFacialReport.vertexCountAfter && requiredMrFeastFacialTargets.every((name) => mrFeastFacialReport.targets?.includes(name) && mrFeastFacialReport.targetStats?.[name]?.changedVertices > 0), "facial authoring report does not prove stable topology and non-empty sparse targets");
+check("46 Mr Feast retopology structure", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.pipelineVersion === 1 && mrFeastRetopologyReport?.face?.components === 1 && mrFeastRetopologyReport?.face?.vertices >= 2000 && mrFeastRetopologyReport?.morphMeshes === 4 && mrFeastRetopologyReport?.morphBindings === 18 && mrFeastRetopologyReport?.albedoBake?.completed === true && requiredMrFeastRetopologyObjects.every((name) => mrFeastRetopologyNodeNames.includes(name) || mrFeastRetopologyMeshNames.includes(name)), "runtime asset does not contain the one-piece textured face, separate eyes, eyelids, oral cavity, teeth, and smooth textured lip-rim binding contract");
+check("46 Mr Feast retopology budget", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.rig?.bones === 24 && mrFeastRetopologyReport?.rig?.skinnedMeshes >= 2 && mrFeastRetopologyReport?.asset?.triangles <= 90000 && mrFeastRetopologyReport?.asset?.sizeBytes <= 15 * 1024 * 1024, "retopologized character exceeds the browser budget or no longer preserves the 24-bone body rig");
+check("46 Mr Feast retopology deformation", Boolean(mrFeastRetopologyReport) && requiredMrFeastFacialTargets.every((name) => mrFeastRetopologyReport?.targets?.includes(name) && mrFeastRetopologyReport?.targetStats?.[name]?.changedVertices > 0) && mrFeastRetopologyReport?.morphNormalExported === false && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.left <= 1 && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.right <= 1 && mrFeastRetopologyReport?.mouthOpenGapMillimeters >= 8, "retopology report does not prove ten non-empty POSITION-only targets, true independent eyelid closure, and a visible mouth opening");
+const readableFacialDisplacementMillimeters = {
+  blink_left: 5,
+  blink_right: 5,
+  brow_raise: 7,
+  brow_compress: 4,
+  smile: 5,
+  smile_wide: 10,
+  sneer_left: 7,
+  sneer_right: 7,
+  mouth_open: 4.5,
+  jaw_shift: 6,
+};
+check("45 Mr Feast readable facial displacement", Object.entries(readableFacialDisplacementMillimeters).every(([name, minimum]) => mrFeastFacialReport.targetStats?.[name]?.maxDeltaMillimeters >= minimum), `facial targets remain below readable displacement thresholds: ${Object.entries(readableFacialDisplacementMillimeters).filter(([name, minimum]) => (mrFeastFacialReport.targetStats?.[name]?.maxDeltaMillimeters || 0) < minimum).map(([name]) => name).join(", ")}`);
 check("43 Mr Feast tuning report", mrFeastTuningReport.policy === "no-scale; hips-translation-only; restrained-idle-and-stalk" && mrFeastTuningReport.clips?.length === 4 && mrFeastTuningReport.clips.every((clip) => clip.channelsAfter?.scale === 0 && clip.channelsAfter?.translation === 1), "motion tuning report does not prove the scale and translation cleanup");
 const mrFeastPatrolIds = [...mrFeastPatrolRoute.matchAll(/mrFeastPatrolPoint\("([^"]+)"/g)].map((match) => match[1]);
 check("43 Mr Feast whole-home route", mrFeastPatrolIds.length >= 220 && new Set(mrFeastPatrolIds).size === mrFeastPatrolIds.length && /speed:\s*0\.62/.test(mrFeastNpcConfig) && /arrivalRadius:\s*0\.06/.test(mrFeastNpcConfig), "whole-home patrol is too short, contains duplicate waypoint IDs, or lost the restrained walk speed");
 check("43 Mr Feast floor coverage", /FLOOR\.MAIN/.test(mrFeastPatrolRoute) && /FLOOR\.UPPER/.test(mrFeastPatrolRoute) && /FLOOR\.BASEMENT/.test(mrFeastPatrolRoute) && /"UPPER GRAND BATHROOM"/.test(mrFeastPatrolRoute) && /"REAR LOUNGE"/.test(mrFeastPatrolRoute) && /"WINE CELLAR"/.test(mrFeastPatrolRoute) && /"BULK STORAGE"/.test(mrFeastPatrolRoute), "patrol does not cover all three interior levels and their major rooms");
 check("43 Mr Feast stair geometry", /"grand-lower-bottom", 0, FLOOR\.MAIN, 2\.8/.test(mrFeastPatrolRoute) && /"grand-lower-top", 0, 2\.5, -0\.98/.test(mrFeastPatrolRoute) && /"grand-mid-west", -2\.48, 2\.5, -1\.55/.test(mrFeastPatrolRoute) && /"grand-west-top", -2\.48, FLOOR\.UPPER, 3\.1/.test(mrFeastPatrolRoute) && /"grand-east-top", 2\.48, FLOOR\.UPPER, 3\.1/.test(mrFeastPatrolRoute) && /"service-main-top", 12\.55, FLOOR\.MAIN, -2\.7/.test(mrFeastPatrolRoute) && /"service-basement-bottom", 12\.55, FLOOR\.BASEMENT, 2\.7/.test(mrFeastPatrolRoute), "patrol stair endpoints or rail-clearing mid-landing turn are missing");
 check("43 Mr Feast door route", /doorOpenDistance:\s*1\.8/.test(mrFeastNpcConfig) && /doorWaitDistance:\s*0\.88/.test(mrFeastNpcConfig) && /doorCloseDistance:\s*2\.5/.test(mrFeastNpcConfig) && /basement stair door/.test(mrFeastPatrolRoute) && /archive door/.test(mrFeastPatrolRoute), "patrol does not author door approaches for the service stair and basement");
-check("43 Mr Feast doorway clearance", count(basementPartitions, /width:\s*1\.35/g) >= 8 && count(upperPartitions, /width:\s*1\.35/g) >= 6 && /width: 1\.35[^\n]+bathroom gallery door/.test(mainPartitions) && /width: 1\.35[^\n]+painting gallery door/.test(mainPartitions), "route doors remain narrower than the fitted character");
+check("43 Mr Feast doorway clearance", count(basementPartitions, /width:\s*1\.35/g) >= 7 && count(upperPartitions, /width:\s*1\.35/g) >= 6 && /width: 1\.35[^\n]+bathroom gallery door/.test(mainPartitions) && /width: 1\.35[^\n]+painting gallery door/.test(mainPartitions), "route doors remain narrower than the fitted character");
 check("43 Mr Feast animation", /THREE\.SkeletonUtils\.clone/.test(mrFeastWanderer) && /new THREE\.AnimationMixer/.test(mrFeastWanderer) && /fadeToAction\("idle"/.test(mrFeastWanderer) && /fadeToAction\("stalk"/.test(mrFeastWanderer), "rigged clone, mixer, or idle/stalk cross-fades are missing");
 check("43 Mr Feast animation hardening", /sanitizeAnimationClip/.test(mrFeastWanderer) && /propertyName === "scale"/.test(mrFeastWanderer) && /propertyName === "position" && !targetsHips/.test(mrFeastWanderer), "runtime does not defensively reject scale and limb-translation tracks");
 check("43 Mr Feast eye-level fit", /heightMeters:\s*2\.01/.test(mrFeastNpcConfig) && /MR_FEAST_NPC\.heightMeters \|\| Number\(manifest\.heightMeters\)/.test(mrFeastWanderer), "runtime cannot keep Mr. Feast at the authored 2.01m eye-level fit");
@@ -1285,7 +1359,13 @@ check("43 Mr Feast nonfatal load", /catch \(error\)/.test(mrFeastWanderer) && /t
 check("43 Mr Feast moving shadows", /object\.castShadow\s*=\s*false/.test(mrFeastWanderer) && /object\.receiveShadow\s*=\s*true/.test(mrFeastWanderer), "moving character is incompatible with the mansion's cached shadow policy");
 check("43 Mr Feast culling", /interiorDetailMeshes\.push\(object\)/.test(mrFeastWanderer) && /object\.visible\s*=\s*!interiorDetailsHidden/.test(mrFeastWanderer), "asynchronously loaded meshes do not join exterior detail culling");
 check("43 Mr Feast diagnostics", /mrFeast:\s*mrFeastNpc\?\.getDiagnostics/.test(diagnostics) && /resetMrFeastWandererForQA/.test(qaHooks) && /setMrFeastPoseForQA/.test(qaHooks) && /transitionMrFeastForQA/.test(qaHooks) && /advanceMrFeastAnimationForQA/.test(qaHooks) && /setMrFeastRouteSegmentForQA/.test(qaHooks) && /runMrFeastWholeHomeRouteForQA/.test(qaHooks) && /visitedRouteFloors/.test(mrFeastWanderer) && /visitedRouteDoors/.test(mrFeastWanderer) && /routeDoorOpenEvents/.test(mrFeastWanderer) && /routeSummary:/.test(mrFeastWanderer) && /liveBones/.test(mrFeastWanderer) && /animationTracks:/.test(mrFeastWanderer) && /castShadowMeshes:/.test(mrFeastWanderer), "wanderer diagnostics or deterministic whole-home QA controls are missing");
+check("45 Mr Feast facial controller", /updateFace\(/.test(mrFeastWanderer) && /resolveAutomaticExpression\(/.test(mrFeastWanderer) && /state\.contestant13\.(?:relaySabotaged|threatEscalated)/.test(mrFeastWanderer) && /blink_left/.test(mrFeastWanderer) && /blink_right/.test(mrFeastWanderer), "wanderer lacks autonomous expression blending, threat escalation, or asymmetric blink control");
+check("45 Mr Feast facial material readability", /tuneCharacterMaterial\(/.test(mrFeastWanderer) && /material\.emissiveIntensity\s*=\s*0\.08/.test(mrFeastWanderer) && /material\.roughness\s*=\s*Math\.max\(Number\(material\.roughness\) \|\| 0, 0\.68\)/.test(mrFeastWanderer), "Meshy material can still self-illuminate the face strongly enough to erase expression contours");
+check("45 Mr Feast facial diagnostics", /face:\s*this\.getFaceDiagnostics\(\)/.test(mrFeastWanderer) && /targetWeights:/.test(mrFeastWanderer) && /phase:\s*blinkPhase/.test(mrFeastWanderer) && /attention:/.test(mrFeastWanderer) && /setMrFeastFaceForQA/.test(qaHooks) && /triggerMrFeastBlinkForQA/.test(qaHooks) && /advanceMrFeastFaceForQA/.test(qaHooks), "facial weights, blink phase, attention diagnostics, or deterministic QA controls are missing");
+check("45 Mr Feast facial interaction order", /qaExpressionCycle:\s*Object\.freeze\(\["neutral",\s*"friendly",\s*"watching",\s*"close",\s*"threatened"\]\)/.test(mrFeastNpcConfig) && /cycleFaceExpressionForQA\(/.test(mrFeastWanderer), "QA interaction does not cycle the five facial presets in the approved inspection order");
+check("45 Mr Feast QA-only interaction", /if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "loaded Mr. Feast model does not expose a QA-only look-at interaction and expression prompt");
 check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
+check("45 Mr Feast facial framing", /mrFeastFaceClose:\s*\[0,\s*FLOOR\.MAIN,\s*-8\.45,\s*0,\s*-0\.02\]/.test(qaRoomViews), "close facial QA framing is missing");
 check("51 Mr Feast bounded camera response", !/attack|capture|damage|gameOver|failureState/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack, capture, damage, or a failure state");
 
 // 51. Physical public-show cameras create a performance-safe stealth layer.
@@ -1296,7 +1376,7 @@ const securityPlacementIds = securityPlacementMatches.map((match) => match[1]);
 const securityPlacementZones = securityPlacementMatches.map((match) => match[2]);
 check("51 camera surveillance source invariants", /SHOW:\s*"show"/.test(cameraSecurityConfig) && /RESTRICTED:\s*"restricted"/.test(cameraSecurityConfig) && /LOCKDOWN:\s*"lockdown"/.test(cameraSecurityConfig) && /CAMERA_POLICY_TRANSITIONS/.test(cameraSecurityConfig), "camera policy is not an explicit show/restricted/lockdown transition table");
 check("51 camera surveillance source invariants", securityPlacementMatches.length >= 28 && new Set(securityPlacementIds).size === securityPlacementIds.length, `camera placement table needs at least 28 unique units; found ${securityPlacementMatches.length}`);
-for (const zone of ["FRONT FOYER", "BALLROOM", "WORKSHOP", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
+for (const zone of ["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
   check("51 camera surveillance source invariants", securityPlacementZones.includes(zone), `camera placement table does not cover ${zone}`);
 }
 for (const zone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET"]) {
@@ -1311,6 +1391,20 @@ check("51 camera surveillance detection", !/raiseAlarm\(/.test(patronFeedSecurit
 check("51 camera surveillance response", /MR_FEAST_RESPONSE_STATE/.test(mrFeastWanderer) && /respondToCameraAlarm/.test(mrFeastWanderer) && /updateSecurityResponse/.test(mrFeastWanderer) && /responding/.test(mrFeastWanderer) && /searching/.test(mrFeastWanderer) && /returning/.test(mrFeastWanderer), "Mr. Feast lacks the bounded patrol/responding/searching/returning alarm lifecycle");
 check("51 camera surveillance diagnostics", /security:\s*cameraSecurity\?\.getDiagnostics/.test(diagnostics) && /resetCameraSecurityForQA/.test(qaHooks) && /setCameraSweepForQA/.test(qaHooks) && /advanceCameraSecurityForQA/.test(qaHooks) && /runMrFeastCameraResponseForQA/.test(qaHooks), "camera diagnostics or deterministic QA controls are missing");
 check("51 camera surveillance HUD", /id="mansion-security"/.test(page) && /id="mansion-security-fill"/.test(page) && /id="mansion-security-status"/.test(page) && /\.mansion-security__track/.test(page), "camera suspicion/alarm feedback is missing from the mansion HUD");
+
+// 52. The former Workshop and Cold Room are one access-controlled security
+// hub. One low-rate render-target feed is refreshed per normal frame so the
+// physical monitor bank can show the authoritative scanning camera poses.
+const workroomBasementPartitions = section("function buildBasementPartitions()", "function furnishMainFloor()");
+const basementZones = section("const basementZones", "basementZones.forEach");
+const workroomFurnishings = section("function addWorkroomKeypadHardware()", "function furnishBasement()");
+check("52 merged Workroom", /\[-6, 7\.6, -12, -4\.9, "WORKROOM"\]/.test(basementZones) && !/"COLD ROOM"/.test(basementZones), "Workshop and Cold Room are not one canonical WORKROOM zone");
+check("52 single Workroom entrance", /label: "workroom door"/.test(workroomBasementPartitions) && !/label: "cold room door"/.test(workroomBasementPartitions) && /locked: true/.test(workroomBasementPartitions) && /onLockedActivate: \(\) => openWorkroomKeypad\(\)/.test(workroomBasementPartitions), "the Workroom does not have one keypad-locked entrance with the former Cold Room door filled");
+check("52 Workroom lighting", /"WORKROOM": \["workroom lights"\]/.test(lightingMap) && /const workroom = new LightCircuit\("workroom lights"/.test(lightingBuild) && count(lightingBuild, /workroom\.addFixture/g) === 2 && !/cold room lights/.test(lightingBuild), "the merged room does not own both fixtures through one workroom circuit");
+check("52 physical keypad", /workroom-pin-pad-lock/.test(workroomFurnishings) && /workroom-keypad-physical-key/.test(workroomFurnishings) && /id="mansion-workroom-keypad"/.test(page) && count(page, /data-workroom-key/g) >= 12, "the Workroom PIN lock lacks matching in-world and touch-safe modal controls");
+check("52 live monitor bank", /monitorCount: 8/.test(cameraSecurityConfig) && /workroom-live-monitor-wall/.test(workroomFurnishings) && /new THREE\.WebGLRenderTarget/.test(workroomMonitorWallSystem) && /copyViewPoseTo/.test(workroomMonitorWallSystem), "the Workroom does not have an eight-screen render-target wall driven by security-camera poses");
+check("52 monitor performance", /monitorDesktopSize:[\s\S]*?width: 256, height: 144/.test(cameraSecurityConfig) && /normalFrameRenderCount = 1/.test(workroomMonitorWallSystem) && /this\.root\.visible = false/.test(workroomMonitorWallSystem) && /renderer\.setRenderTarget\(previousTarget\)/.test(workroomMonitorWallSystem), "monitor feeds are not low-resolution, time-sliced, recursion-safe, and render-state-restored");
+check("52 Workroom diagnostics", /workroom: getWorkroomDiagnostics\(\)/.test(diagnostics) && /refreshMonitorWallForQA/.test(qaHooks) && /submitWorkroomCodeForQA/.test(qaHooks), "Workroom access and live feeds are not exposed to deterministic diagnostics");
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.

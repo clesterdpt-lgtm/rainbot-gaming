@@ -2,15 +2,19 @@
 
 ## Current milestone
 
+**33 — Mr. Feast Face Retopology** is in progress with automated acceptance complete and the live facial checkpoint awaiting user visual approval.
+
 **34 — Basement Key Trail** remains preserved with automated acceptance complete and the subtle shelf-book discovery awaiting user playtest.
 
 **35 — Player Mobility, Inventory, and Test Menu** is in progress with automated acceptance complete and sprint/crouch pacing awaiting user playtest.
 
 **36 — Camera Surveillance and Alarm Investigation** is in progress with automated acceptance complete and stealth timing, feedback, and Mr. Feast search tension awaiting user playtest.
 
+**37 — Workroom Security Hub and Keypad** is in progress with automated acceptance complete and room layout, keypad feel, monitor readability, and ambience awaiting user playtest.
+
 ## Stable baseline
 
-- Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → Workshop patron-feed sabotage.
+- Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
 - The middle Library case now omits one generated volume so the clue book occupies a clean shelf gap rather than overlapping it. The off-tone spine is pulled about `0.07m` ahead of its neighbors and carries a small scratched `XIII` above the interaction reticle.
 - The shelf book separately points to the formal-garden shovel and hedge-maze key; the basement key and unlock are idempotent and exposed in diagnostics.
 - Holding `Shift` now sprints at a faster named speed while draining a visible energy reserve; exhaustion blocks sprint until the reserve recovers.
@@ -27,38 +31,52 @@
 - Camera policy progresses from public-show filming to restricted-basement rules and global lockdown. Watched sabotage alarms immediately; blind patron-feed sabotage starts lockdown without summoning Mr. Feast until a later camera sighting.
 - Hostile camera exposure has a grace meter, consumes crouch's `0.5` visibility multiplier, respects active hiding, and uses explicit wall/live-door/hedge occluders. A continuous sighting raises only one latched alarm until line of sight is broken.
 - Camera alarms record source and last-seen data, then divert Mr. Feast through responding, searching, returning, and patrol along authored route/door points without teleporting. This is bounded investigation, not direct perception or chase.
-- Whole-home patrol: 624.95m through 227 waypoints, all 30 major room/stair zones, and 21 route doors across the main, upper, and basement levels.
+- The former Workshop and Cold Room are now one continuous `WORKROOM`. The west entrance is the only remaining door; the former east doorway is solid wall and collision, and the room's two cameras, two ceiling fixtures, player label, and Mr. Feast route share the merged identity.
+- The retained entrance begins behind a persistent four-digit PIN pad with a real in-world terminal and focus-safe desktop/touch overlay. Explicit save/load and reversible Dev Mode preserve the gate correctly without revealing the code in ordinary diagnostics.
+- An eight-screen 4×2 monitor bank cycles through all 35 public cameras. Each low-resolution feed copies its source camera's live lens/yaw/pitch, uses a legible green low-light pass, refreshes one target at a time, and freezes when the player leaves the Workroom vicinity.
+- The Workroom now includes a broad operator console, three rolling chairs, three server racks, patch ports, cable trays/bundles, equipment cases, radio, coffee cup, shift logs, binders, and the existing tool bench/relay while preserving the central aisle.
+- Whole-home patrol still traverses more than 220 authored points across all 29 current major room/stair zones and 20 route doors; while the Workroom is locked, Mr. Feast skips that room branch instead of stalling or walking through its door.
+- Mr. Feast now uses an 86,546-triangle, 6.46MB runtime model with a connected face, separate eyes/eyelids, oral cavity, teeth, textured lip rim, ten position-only targets, and 18 synchronized bindings.
+- The five test expressions, independent/paired blinks, 2.01m fit, 24-bone rig, and whole-home animations are controlled through the existing static Three.js r128 runtime.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
 
 ## Important constraint
 
-The future Workshop keypad/code clue chain and broader basement puzzle/sabotage network are intentionally deferred beyond Milestone 34. The Workshop stays accessible for the existing patron-feed ending until that later milestone is designed.
+The Workroom keypad and security hub are implemented in Milestone 37. Only the in-world clue/puzzle that reveals its combination remains deferred, along with the broader basement sabotage network; use temporary PIN `0513` for the current playtest.
 
 Mobile sprint/crouch buttons remain deferred; Milestone 35 adds the desktop keyboard controls while preserving the existing touch exploration and interaction layer.
 
 Full Mr. Feast sight/hearing perception, live pursuit, capture, recovery, and failure flow remain deferred beyond Milestone 36.
+
+The retopology is a face-only gameplay checkpoint, not dialogue-viseme or cinematic-close-up topology. Subjective likeness, seam quality, and expression appeal still require user approval before the milestone is complete.
 
 ## Verification
 
 - `node --check assets/js/mr-feast-mansion.js` — passed
 - `node --check scripts/test-mr-feast-basement-key-trail.mjs` — passed
 - `node scripts/test-mr-feast-basement-key-trail.mjs` — passed after the shelf-spacing and `XIII` refinement: real E/touch interactions, reserved book slot diagnostics, dual clue copy, early gates, idempotent maze key, locked/unlocked door state, full-route lock restoration, Archive recording, Workshop sabotage, desktop/mobile layout, and zero console errors
-- `node scripts/test-mr-feast-renovation.mjs` — all renovation and Milestone 34/Requirement 47 invariants passed on the isolated publish patch
+- `node scripts/test-mr-feast-renovation.mjs` — all renovation invariants passed, including Mr. Feast retopology structure, scene-root transform, budget, deformation, binding, and cache checks
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
-- Browser captures — `output/playwright/mr-feast-basement-key-trail/library-shelf-book-subtle-desktop.png` now visibly confirms the clean gap and correctly ordered `XIII`; `basement-door-locked-desktop.png`, `basement-door-unlocked-desktop.png`, and `library-shelf-book-mobile.png` cover the adjacent states
+- `node scripts/test-mr-feast-contestant-13.mjs` — passes progression, patrol, persistence, accessibility, mobile touch, discovery-first objective visibility, full-size animated face/eye bounds, all five expressions, real E-key cycling, and independent/paired blink coverage
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
 - `node scripts/test-mr-feast-camera-security.mjs` — passed 35-camera placement, 27 wall-centered indoor mounts, 10.5–14.5 second one-way sweep/reversal, rendered green/red fixture-pixel checks, three-pulse warning, permitted and hostile solid-red tracking, two-second pre-alarm grace, physical blind-side traversal, show/restricted/lockdown policy, watched sabotage, crouch/hiding, natural and deterministic occlusion, alarm latching, Mr. Feast response/search/return, unchanged light layout, and desktop/mobile HUD checks with zero console errors
+- `node scripts/test-mr-feast-workroom-security-hub.mjs` — passed merged west/east room identity, removed doorway, real E/click/touch keypad entry, wrong/correct PIN states, explicit save/load persistence, eight independent render targets, full 35-camera roster, distinct/nonblank feed signatures, live sweep-image change, one-feed-per-frame budget, renderer restoration, ambience diagnostics, and desktop/mobile layout
+- Workroom browser captures — `output/playwright/mr-feast-workroom-security-hub/workroom-monitor-wall-desktop.png`, `workroom-wide-desktop.png`, `workroom-keypad-desktop.png`, and `workroom-keypad-mobile.png` confirm the live 4×2 wall, broader equipment layout, and access terminal at 1280×820 and 390×844
 - Camera browser captures — `output/playwright/mr-feast-camera-security/camera-indicator-green-desktop.png`, `camera-indicator-warning-red-desktop.png`, `camera-permitted-tracking-desktop.png`, `camera-solid-red-tracking-desktop.png`, `camera-suspicion-desktop.png`, and `camera-suspicion-mobile.png` confirm readable fixture feedback, tracking states, and the compact meter at 1280×820 and 390×844
 - The focused player-system suite also verifies four unique scalable object icons, the ruled handwritten clue pad, and in-stage title/close placement without horizontal overflow at 390×844
-- `node scripts/test-mr-feast-contestant-13.mjs` — passed progression, gates, persistence, accessibility, mobile touch, and discovery-first objective visibility
 - `musicTableWestClearance` QA route — clears the couch-table aisle beyond `z=8.0`, grounded with zero fall recoveries, unchanged light circuits, and zero console errors
-- Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays
+- Browser captures — `output/iterate/2026-07-15-music-room-layout-a.png` and `output/iterate/2026-07-15-music-room-layout-b.png` confirm the piano wall clearance and corrected center-table layout
+- Browser capture — `output/iterate/2026-07-16-tab-inventory-no-library-prompt.png` confirms the opening foyer has no left-side Library direction and displays the new Tab inventory control
+- Browser captures — `output/iterate/2026-07-16-inventory-icons-notepad-desktop.png` and `output/iterate/2026-07-16-inventory-icons-notepad-mobile.png` confirm the illustrated object cards and evidence-pad treatment at both target layouts
+- `python3 -m py_compile scripts/blender/retopologize-mr-feast-face.py` — passed
+- Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays; the existing basement-key captures continue to cover the adjacent story states
 
 ## Next action
 
-User watches the slower wall-centered indoor and outdoor camera sweeps, confirms the green → three red pulses → solid-red tracking sequence is readable in both permitted filming and hostile lockdown, crosses a blind window, tests watched versus blind Workshop sabotage, and judges the lockdown warning plus Mr. Feast investigation timing. Music Room spacing, sprint/crouch feel, and the now-unguided Library shelf-book discovery remain separate Milestone 34–35 playtests.
+User enters temporary PIN `0513`, checks that the merged Workroom reads as one large security hub, watches several live feeds pan, and confirms the console/server clutter still leaves comfortable access to the relay. Camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate Milestone 33–36 playtests.
 
 ## Working conventions
 
+- Preserve the current static Three.js/Blender GLB architecture from ADR 0001.
 - Keep the three unrelated `.rainbot-*-state.json` files untouched.
 - Do not commit or push this milestone unless the user asks.

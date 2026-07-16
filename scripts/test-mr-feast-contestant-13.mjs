@@ -110,8 +110,16 @@ async function run() {
     let npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.loaded && !npc.error, `Mr. Feast should load for visual QA: ${npc.error || "unknown error"}`);
     assert(npc.modelHeight === 2.01, "Mr. Feast should use the slightly larger 2.01m eye-level fit");
-    assert(npc.skinnedMeshes === 1 && npc.bones === 24, "Mr. Feast should retain his complete skinned rig");
+    assert(npc.skinnedMeshes >= 2 && npc.bones === 24, "Mr. Feast should retain the complete 24-bone rig across the body and retopologized face");
     assert(Object.values(npc.animationTracks).every((clip) => clip.scaleTracks === 0 && clip.translationTracks === 1), "runtime animation clips must contain no scale tracks and only Hips translation");
+    const requiredFacialTargets = [
+      "blink_left", "blink_right", "brow_raise", "brow_compress", "smile",
+      "smile_wide", "sneer_left", "sneer_right", "mouth_open", "jaw_shift",
+    ];
+    assert(npc.face?.supported && npc.face.morphTargetCount === 10, "Mr. Feast should expose the ten-target facial rig");
+    assert(npc.face.missingTargets.length === 0 && requiredFacialTargets.every((name) => npc.face.availableTargets.includes(name)), "facial controller should bind every approved morph target");
+    assert(npc.face.retopologized && npc.face.parts?.face && npc.face.parts?.eyelids === 2 && npc.face.parts?.eyes === 2 && npc.face.parts?.oralCavity && npc.face.parts?.teeth, "Mr. Feast should expose the retopologized face, paired eyelids, separate eyes, oral cavity, and teeth");
+    assert(npc.face.missingComponents.length === 0 && npc.face.morphMeshes === 4 && npc.face.totalBindingCount === 18 && npc.face.bindingsInSync, "retopologized facial controller should resolve all components and keep its 18 bindings synchronized across the face, eyelids, and textured lip rim");
 
     await page.evaluate(() => {
       window.MrFeastFresh.teleport("ballroomA");
@@ -119,6 +127,88 @@ async function run() {
     });
     npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.liveBones.cameraY > npc.liveBones.eyeHeight && npc.liveBones.cameraY < npc.liveBones.headTopHeight, "player eye line should cross Mr. Feast's visible eye/head band");
+    const retopologyBounds = await page.evaluate(() => ({
+      face: window.MrFeastFresh.inspectScene("MrFeast_RetopoFace"),
+      eyes: window.MrFeastFresh.inspectScene("MrFeast_Eye"),
+    }));
+    const liveFaceSize = retopologyBounds.face.meshes[0]?.size;
+    assert(retopologyBounds.face.count === 1 && liveFaceSize?.x >= 0.14 && liveFaceSize?.y >= 0.2 && liveFaceSize?.z >= 0.16, "retopologized face should remain at full head scale after Three.js evaluates the animated skin");
+    assert(retopologyBounds.eyes.meshes.filter(({ name }) => /^MrFeast_Eye_[LR]$/.test(name)).every(({ size }) => size.x >= 0.022 && size.y >= 0.022), "separate eye spheres should remain full-sized on the animated head instead of collapsing under armature scale");
+
+    const facialBodyBaseline = {
+      hipsScale: { ...npc.liveBones.hipsScale },
+      leftThighLength: npc.liveBones.leftThighLength,
+      modelHeight: npc.modelHeight,
+    };
+    const facialPresets = {};
+    for (const expression of ["neutral", "friendly", "watching", "threatened", "close"]) {
+      facialPresets[expression] = await page.evaluate((name) => {
+        window.MrFeastFresh.setMrFeastFaceForQA({ expression: name, snap: true });
+        window.MrFeastFresh.advanceMrFeastFaceForQA(0.5);
+        return window.MrFeastFresh.getMrFeastState();
+      }, expression);
+      assert(facialPresets[expression].face.expression === expression, `facial QA should select the ${expression} preset`);
+    }
+    assert(facialPresets.friendly.face.weights.smile >= 0.5, "friendly host preset should carry a readable controlled smile");
+    assert(facialPresets.watching.face.weights.brow_compress >= 0.6, "watching preset should visibly compress the brow");
+    assert(facialPresets.threatened.face.weights.smile_wide >= 0.9 && facialPresets.threatened.face.weights.jaw_shift >= 0.4, "threatened preset should fracture into a strongly widened, tense smile");
+    assert(facialPresets.close.face.weights.sneer_left >= 0.35 && facialPresets.close.face.weights.smile_wide >= 0.65, "close-range preset should add a readable asymmetric sneer");
+    const facialBodyAfter = facialPresets.close;
+    assert(JSON.stringify(facialBodyAfter.liveBones.hipsScale) === JSON.stringify(facialBodyBaseline.hipsScale), "facial presets must not scale the hips");
+    assert(facialBodyAfter.liveBones.leftThighLength === facialBodyBaseline.leftThighLength && facialBodyAfter.modelHeight === facialBodyBaseline.modelHeight, "facial presets must not change limb length or model height");
+
+    const independentBlink = await page.evaluate(() => {
+      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "neutral", snap: true });
+      window.MrFeastFresh.triggerMrFeastBlinkForQA("left");
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
+      return window.MrFeastFresh.getMrFeastState().face;
+    });
+    assert(independentBlink.weights.blink_left > 0.65 && independentBlink.weights.blink_right < 0.1, "facial QA should support a truly independent left blink");
+    assert(independentBlink.bindingsByTarget.blink_left.length === 2 && independentBlink.bindingsByTarget.blink_left.every(({ value }) => value > 0.65), "independent left blink should close both the face aperture and left eyelid mesh");
+    const pairedBlinkBudget = await page.evaluate(() => {
+      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "threatened", snap: true });
+      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "friendly" });
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.02);
+      window.MrFeastFresh.triggerMrFeastBlinkForQA("both");
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
+      return window.MrFeastFresh.getMrFeastState().face;
+    });
+    assert(pairedBlinkBudget.weights.blink_left > 0.65 && pairedBlinkBudget.weights.blink_right > 0.65, "paired blink should fully close both retopologized eyelids during an expression transition");
+    assert(["blink_left", "blink_right"].every((name) => pairedBlinkBudget.bindingsByTarget[name].length === 2 && pairedBlinkBudget.bindingsByTarget[name].every(({ value }) => value > 0.65)), "paired blink should drive both face-aperture and eyelid bindings in sync");
+    assert(pairedBlinkBudget.maxActiveMorphs <= 8 && pairedBlinkBudget.bindingsInSync, "expression transitions must reserve two of Three.js r128's eight morph slots for blinking");
+    await page.evaluate(() => {
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.25);
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", time: 0, x: 0, z: -9, yaw: 0 });
+      window.MrFeastFresh.setMrFeastFaceForQA({ clear: true, snap: true });
+    });
+    await teleportForInteraction(page, "mrFeastFaceClose", /cycle expression.*neutral/i);
+    for (const expression of ["neutral", "friendly", "watching", "close", "threatened"]) {
+      await pressInteract(page);
+      const cycledFace = await page.evaluate(() => window.MrFeastFresh.getMrFeastState().face);
+      assert(cycledFace.expression === expression && cycledFace.qaCycle?.current === expression, `interacting with Mr. Feast should cycle to ${expression}`);
+    }
+    const wrappedPrompt = (await diagnostics(page)).prompt;
+    assert(/cycle expression.*neutral/i.test(wrappedPrompt || ""), "facial interaction prompt should wrap back to neutral after threatened");
+    await page.evaluate(() => {
+      window.MrFeastFresh.teleport("mrFeastFaceClose");
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", time: 0, x: 0, z: -9, yaw: 0 });
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.25);
+      window.MrFeastFresh.setMrFeastFaceForQA({ expression: "friendly", snap: true });
+    });
+    await page.evaluate(() => window.advanceTime(80));
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-face-friendly-desktop.png") });
+    for (const expression of ["watching", "threatened", "close", "neutral"]) {
+      await page.evaluate((name) => window.MrFeastFresh.setMrFeastFaceForQA({ expression: name, snap: true }), expression);
+      await page.evaluate(() => window.advanceTime(80));
+      await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `mr-feast-face-${expression}-desktop.png`) });
+    }
+    await page.evaluate(() => {
+      window.MrFeastFresh.triggerMrFeastBlinkForQA("left");
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.075);
+    });
+    await page.evaluate(() => window.advanceTime(80));
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-face-blink-left-desktop.png") });
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastFaceForQA(0.2));
 
     const transitionSamples = await page.evaluate(() => {
       const samples = [];
@@ -173,17 +263,17 @@ async function run() {
       "PAINTING ROOM", "KITCHEN", "GRAND STAIR HALL", "GRAND STAIR", "FOYER BALCONY", "UPPER LANDING",
       "UPPER GRAND BATHROOM", "PRIMARY SUITE", "REAR LOUNGE", "EAST REAR SUITE", "READING ROOM",
       "EAST FRONT SUITE", "WEST FRONT SUITE", "SERVICE STAIR", "ARCHIVE", "BASEMENT CORRIDOR",
-      "WINE CELLAR", "LAUNDRY & LINEN", "PANTRY", "REAR CROSS-CORRIDOR", "BOILER ROOM", "WORKSHOP",
-      "COLD ROOM", "BULK STORAGE",
+      "WINE CELLAR", "LAUNDRY & LINEN", "PANTRY", "REAR CROSS-CORRIDOR", "BOILER ROOM", "WORKROOM",
+      "BULK STORAGE",
     ];
     assert(wholeHomeRun.qaLastWholeHomeRun?.completed && wholeHomeRun.completedRouteLoops === 1, "deterministic whole-home patrol should complete one full loop");
     assert(requiredFloors.every((floor) => wholeHomeRun.visitedRouteFloors.includes(floor)), "whole-home patrol should visit the main, upper, and basement levels");
     assert(requiredZones.every((zone) => wholeHomeRun.visitedRouteZones.includes(zone)), "whole-home patrol should reach every major room and connecting stair zone");
     assert(wholeHomeRun.waypointCount >= 220 && wholeHomeRun.routeSegmentsTraversed === wholeHomeRun.waypointCount - 1, "whole-home patrol should traverse every authored route segment");
     assert(wholeHomeRun.routeSummary.distanceMeters > 600 && wholeHomeRun.qaLastWholeHomeRun.simulatedSeconds < 1800, "whole-home loop should cover the full mansion within the QA time budget");
-    assert(wholeHomeRun.routeSummary.doors >= 20 && wholeHomeRun.visitedRouteDoors.length === wholeHomeRun.routeSummary.doors, "Mr. Feast should automatically open every door required by his route");
+    assert(wholeHomeRun.routeSummary.doors >= 19 && wholeHomeRun.visitedRouteDoors.length === wholeHomeRun.routeSummary.doors, "Mr. Feast should automatically open every door required by his route");
     assert(wholeHomeRun.routeDoorOpenEvents >= wholeHomeRun.visitedRouteDoors.length, "whole-home patrol should record real automatic door-open events");
-    assert(Object.values(wholeHomeRun.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001) && Math.abs(wholeHomeRun.liveBones.leftThighLength - 0.4642) < 0.001, "a complete route loop must not resize Mr. Feast or his limbs");
+    assert(Object.values(wholeHomeRun.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001) && Math.abs(wholeHomeRun.liveBones.leftThighLength - facialBodyBaseline.leftThighLength) < 0.001, `a complete route loop must not resize Mr. Feast or his limbs: ${JSON.stringify(wholeHomeRun.liveBones)}`);
     assert((await diagnostics(page)).lighting.activeFloor === playerFloorBeforeNpcTraversal, "Mr. Feast changing floors must not change the player's lighting context");
 
     await page.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
@@ -313,6 +403,14 @@ async function run() {
     assert(state.contestant13.world.relayAlarmBulbVisible === true && state.contestant13.world.relayAlarmPulsing === true, "red relay alarm should remain visible and pulse after sabotage");
     assert(JSON.stringify(state.circuits.map(({ name, on }) => [name, on])) === circuitsBefore, "story sabotage must not toggle mansion light circuits");
     assert(/blind|signal|feed/i.test(state.journal.currentObjective), "completion objective should acknowledge the severed feed");
+
+    const threatenedFace = await page.evaluate(() => {
+      window.MrFeastFresh.setMrFeastFaceForQA({ expression: null, snap: true });
+      window.MrFeastFresh.advanceMrFeastFaceForQA(0.5);
+      return window.MrFeastFresh.getMrFeastState().face;
+    });
+    assert(threatenedFace.automaticExpression === "threatened" && threatenedFace.expression === "threatened", "relay sabotage should autonomously escalate Mr. Feast's expression");
+    assert(threatenedFace.weights.smile_wide >= 0.5, "autonomous threat escalation should visibly widen Mr. Feast's smile");
 
     const objectiveText = await page.locator("#mansion-objective").textContent();
     assert(/blind|signal|feed/i.test(objectiveText || ""), "HUD should show the completed sabotage state");

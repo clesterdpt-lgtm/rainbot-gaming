@@ -58,6 +58,10 @@
     menuLoad: $("mansion-menu-load"),
     menuDev: $("mansion-menu-dev"),
     menuStatus: $("mansion-menu-status"),
+    workroomKeypad: $("mansion-workroom-keypad"),
+    workroomKeypadClose: $("mansion-workroom-keypad-close"),
+    workroomKeypadDisplay: $("mansion-workroom-keypad-display"),
+    workroomKeypadStatus: $("mansion-workroom-keypad-status"),
     crosshair: $("mansion-crosshair"),
     audio: $("mansion-audio"),
     fullscreen: $("mansion-fullscreen"),
@@ -145,8 +149,7 @@
     "SERVICE STAIR": ["service stair lights"],
     "REAR CROSS-CORRIDOR": ["rear service corridor lights"],
     "BOILER ROOM": ["boiler room lights"],
-    "WORKSHOP": ["workshop lights"],
-    "COLD ROOM": ["cold room lights"],
+    "WORKROOM": ["workroom lights"],
     "BULK STORAGE": ["bulk storage lights"],
     "FRONT DRIVE": ["estate exterior lights"],
     "FORMAL GARDEN": ["estate exterior lights"],
@@ -262,7 +265,34 @@
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
     exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "DEEP HEDGE MAZE"]),
-    requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "WORKSHOP", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
+    requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
+  });
+  const WORKROOM_SECURITY = Object.freeze({
+    code: "0513",
+    codeLength: 4,
+    room: "WORKROOM",
+    bounds: Object.freeze({ minX: -6, maxX: 7.6, minZ: -12, maxZ: -4.9 }),
+    removedDoor: Object.freeze({ x: 4.5, z: -4.9 }),
+    monitorColumns: 4,
+    monitorRows: 2,
+    monitorCount: 8,
+    monitorDesktopSize: Object.freeze({ width: 256, height: 144 }),
+    monitorMobileSize: Object.freeze({ width: 128, height: 72 }),
+    monitorRefreshSeconds: 0.14,
+    monitorMobileRefreshSeconds: 0.34,
+    monitorReducedRefreshSeconds: 0.5,
+    monitorPageSeconds: 10,
+    monitorFov: 70,
+    initialFeeds: Object.freeze([
+      "cam-main-foyer",
+      "cam-main-ballroom",
+      "cam-main-library",
+      "cam-main-kitchen",
+      "cam-basement-archive",
+      "cam-basement-corridor",
+      "cam-yard-portico",
+      "cam-yard-garden-front",
+    ]),
   });
 
   function securityCameraPlacement(id, room, x, y, z, yawDegrees, sweepDegrees, range, options = {}) {
@@ -317,8 +347,8 @@
     securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, 3.15, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
     securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, -0.62, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, -0.62, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workshop", "WORKSHOP", -2.35, -0.62, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-cold", "COLD ROOM", 4.45, -0.62, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workroom-west", "WORKROOM", -2.35, -0.62, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workroom-east", "WORKROOM", 4.45, -0.62, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, -0.62, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
 
     securityCameraPlacement("cam-yard-gate", "FRONT DRIVE", 3.9, 2.75, 33.12, 29, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-gate" }),
@@ -545,21 +575,16 @@
     mrFeastPatrolPoint("basement-boiler-south", -13.2, FLOOR.BASEMENT, -10.3, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM", { pause: 0.8 }),
     mrFeastPatrolPoint("basement-boiler-return", -12.8, FLOOR.BASEMENT, -5.8, MR_FEAST_LEVEL.BASEMENT, "BOILER ROOM"),
     mrFeastPatrolPoint("basement-boiler-door-out", -10.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "boiler room door" }),
-    mrFeastPatrolPoint("basement-workshop-corridor", -2.3, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
-    mrFeastPatrolPoint("basement-workshop-door", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP", { segmentKind: "door", door: "workshop door" }),
-    mrFeastPatrolPoint("basement-workshop-entry", -2.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
-    mrFeastPatrolPoint("basement-workshop-east", 0.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
-    mrFeastPatrolPoint("basement-workshop-south", 0.3, FLOOR.BASEMENT, -10.5, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP", { pause: 0.8 }),
-    mrFeastPatrolPoint("basement-workshop-return", 0.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKSHOP"),
-    mrFeastPatrolPoint("basement-workshop-door-out", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "workshop door" }),
-    mrFeastPatrolPoint("basement-cold-corridor", 4.5, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
-    mrFeastPatrolPoint("basement-cold-door", 4.5, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM", { segmentKind: "door", door: "cold room door" }),
-    mrFeastPatrolPoint("basement-cold-entry", 4.5, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
-    mrFeastPatrolPoint("basement-cold-west", 2.2, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
-    mrFeastPatrolPoint("basement-cold-southwest", 2.2, FLOOR.BASEMENT, -10.4, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
-    mrFeastPatrolPoint("basement-cold-southeast", 6.7, FLOOR.BASEMENT, -10.4, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM", { pause: 0.8 }),
-    mrFeastPatrolPoint("basement-cold-return", 2.2, FLOOR.BASEMENT, -6.1, MR_FEAST_LEVEL.BASEMENT, "COLD ROOM"),
-    mrFeastPatrolPoint("basement-cold-door-out", 4.5, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "cold room door" }),
+    mrFeastPatrolPoint("basement-workroom-corridor", -2.3, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
+    mrFeastPatrolPoint("basement-workroom-door", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "WORKROOM", { segmentKind: "door", door: "workroom door" }),
+    mrFeastPatrolPoint("basement-workroom-entry", -2.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-west", -4.6, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-southwest", -4.6, FLOOR.BASEMENT, -10.35, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-center", 0.4, FLOOR.BASEMENT, -10.4, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-southeast", 5.3, FLOOR.BASEMENT, -10.35, MR_FEAST_LEVEL.BASEMENT, "WORKROOM", { pause: 0.8 }),
+    mrFeastPatrolPoint("basement-workroom-east", 5.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-return", -2.3, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "WORKROOM"),
+    mrFeastPatrolPoint("basement-workroom-door-out", -2.3, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "workroom door" }),
     mrFeastPatrolPoint("basement-bulk-corridor", 11.2, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
     mrFeastPatrolPoint("basement-bulk-door", 11.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { segmentKind: "door", door: "bulk storage door" }),
     mrFeastPatrolPoint("basement-bulk-front", 11.2, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { pause: 0.7 }),
@@ -588,7 +613,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-camera-visibility-tracking-3",
+    assetVersion: "20260716-workroom-security-hub-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -648,6 +673,47 @@
     Object.freeze(["response-rear-terrace", "response-rear-east-junction", null]),
     Object.freeze(["response-rear-east-junction", "response-maze-rear", null]),
   ]);
+  const MR_FEAST_FACE = Object.freeze({
+    expressionDamping: 11,
+    attentionDamping: 6.5,
+    maxExpressionMorphs: 6,
+    closeDistance: 2.6,
+    watchingDistance: 7.5,
+    qaExpressionCycle: Object.freeze(["neutral", "friendly", "watching", "close", "threatened"]),
+    maxAttentionYaw: 0.13,
+    maxAttentionPitch: 0.055,
+    blinkIntervals: Object.freeze([3.35, 4.8, 2.9, 5.25, 3.7]),
+    blinkCloseSeconds: 0.055,
+    blinkHoldSeconds: 0.028,
+    blinkOpenSeconds: 0.105,
+    blinkEyeLagSeconds: 0.016,
+    morphTargets: Object.freeze({
+      blinkLeft: "blink_left",
+      blinkRight: "blink_right",
+      browRaise: "brow_raise",
+      browCompress: "brow_compress",
+      smile: "smile",
+      smileWide: "smile_wide",
+      sneerLeft: "sneer_left",
+      sneerRight: "sneer_right",
+      mouthOpen: "mouth_open",
+      jawShift: "jaw_shift",
+    }),
+    presets: Object.freeze({
+      neutral: Object.freeze({}),
+      friendly: Object.freeze({ browRaise: 0.28, smile: 0.55 }),
+      watching: Object.freeze({ browRaise: 0.08, browCompress: 0.68, smile: 0.1, jawShift: 0.12 }),
+      threatened: Object.freeze({ browCompress: 0.85, smileWide: 0.95, sneerLeft: 0.6, sneerRight: 0.35, mouthOpen: 0.28, jawShift: 0.45 }),
+      close: Object.freeze({ browCompress: 0.52, smileWide: 0.72, sneerLeft: 0.42, sneerRight: 0.14, mouthOpen: 0.16, jawShift: 0.24 }),
+    }),
+    attentionStrength: Object.freeze({
+      neutral: 0,
+      friendly: 0.12,
+      watching: 0.56,
+      threatened: 0.68,
+      close: 0.84,
+    }),
+  });
   const MR_FEAST_ROUTE_DISTANCE_METERS = MR_FEAST_PATROL_ROUTE.reduce((total, target, index) => {
     const source = MR_FEAST_PATROL_ROUTE[(index - 1 + MR_FEAST_PATROL_ROUTE.length) % MR_FEAST_PATROL_ROUTE.length];
     return total + Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
@@ -673,10 +739,10 @@
       basement: "Use the recovered key on the locked basement stair door in the Kitchen.",
       archive: "Search the basement Archive and unlock Contestant 13's evidence cage.",
       recording: "Load Contestant 13's recovered tape into the caged recorder.",
-      relay: "Find the Workshop relay and sever the unlabeled patron feed.",
-      complete: "The patron feed is blind. Signal loss has been noticed—leave the Workshop.",
+      relay: "Unlock the Workroom and sever the unlabeled patron feed.",
+      complete: "The patron feed is blind. Signal loss has been noticed—leave the Workroom.",
     }),
-    transcript: "If you found the garden copy, they missed one. The brass-tagged cameras are theatre. The patrons watch through the unlabelled black bank in the Workshop relay. Sever that whole bundle and their private feed goes blind.",
+    transcript: "If you found the garden copy, they missed one. The brass-tagged cameras are theatre. The patrons watch through the unlabelled black bank in the Workroom relay. Sever that whole bundle and their private feed goes blind.",
     journal: Object.freeze({
       book: Object.freeze({
         id: "contestant-13-book",
@@ -701,7 +767,7 @@
       transcript: Object.freeze({
         id: "patron-feed-transcript",
         title: "Recovered recording",
-        body: "The public cameras preserve the recruitment show. A separate unlabeled feed carries the real broadcast to the patrons through the Workshop relay.",
+        body: "The public cameras preserve the recruitment show. A separate unlabeled feed carries the real broadcast to the patrons through the Workroom relay.",
       }),
       sabotage: Object.freeze({
         id: "patron-feed-severed",
@@ -741,10 +807,35 @@
 
   function itemIconSvg(iconName) {
     const paths = {
-      shovel: `<g transform="rotate(-34 48 48)"><path d="M48 13v49" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M37 14c0-7 22-7 22 0" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M31 65h34l-5 18c-2 7-22 7-24 0z" fill="currentColor" opacity=".9"/><path d="M48 66v22" stroke="#211b16" stroke-width="2" opacity=".5"/></g>`,
-      key: `<circle cx="29" cy="48" r="16" stroke="currentColor" stroke-width="7"/><circle cx="29" cy="48" r="5" fill="currentColor"/><path d="M45 48h36M65 48v13M75 48v8" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M51 42h24" stroke="#fff4d1" stroke-width="2" opacity=".36"/>`,
-      badge: `<path d="M41 16v9M55 16v9" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><rect x="20" y="23" width="56" height="60" rx="7" fill="currentColor" opacity=".92"/><rect x="26" y="30" width="44" height="46" rx="3" fill="#211b16" opacity=".9"/><circle cx="40" cy="46" r="8" fill="currentColor"/><path d="M29 65c2-9 20-9 22 0" fill="currentColor"/><text x="57" y="58" fill="currentColor" font-family="Georgia,serif" font-size="14" font-weight="700" text-anchor="middle">XIII</text>`,
-      tape: `<rect x="15" y="24" width="66" height="50" rx="7" fill="currentColor" opacity=".9"/><rect x="21" y="30" width="54" height="28" rx="4" fill="#211b16"/><circle cx="36" cy="44" r="9" stroke="currentColor" stroke-width="4"/><circle cx="60" cy="44" r="9" stroke="currentColor" stroke-width="4"/><path d="M42 44h12M28 66h40l-5-8H33z" fill="#211b16" opacity=".9"/><circle cx="31" cy="67" r="2" fill="currentColor"/><circle cx="65" cy="67" r="2" fill="currentColor"/>`,
+      shovel: `
+        <g transform="rotate(-34 48 48)">
+          <path d="M48 13v49" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+          <path d="M37 14c0-7 22-7 22 0" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+          <path d="M31 65h34l-5 18c-2 7-22 7-24 0z" fill="currentColor" opacity=".9"/>
+          <path d="M48 66v22" stroke="#211b16" stroke-width="2" opacity=".5"/>
+        </g>`,
+      key: `
+        <circle cx="29" cy="48" r="16" stroke="currentColor" stroke-width="7"/>
+        <circle cx="29" cy="48" r="5" fill="currentColor"/>
+        <path d="M45 48h36M65 48v13M75 48v8" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M51 42h24" stroke="#fff4d1" stroke-width="2" opacity=".36"/>
+      `,
+      badge: `
+        <path d="M41 16v9M55 16v9" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+        <rect x="20" y="23" width="56" height="60" rx="7" fill="currentColor" opacity=".92"/>
+        <rect x="26" y="30" width="44" height="46" rx="3" fill="#211b16" opacity=".9"/>
+        <circle cx="40" cy="46" r="8" fill="currentColor"/>
+        <path d="M29 65c2-9 20-9 22 0" fill="currentColor"/>
+        <text x="57" y="58" fill="currentColor" font-family="Georgia,serif" font-size="14" font-weight="700" text-anchor="middle">XIII</text>
+      `,
+      tape: `
+        <rect x="15" y="24" width="66" height="50" rx="7" fill="currentColor" opacity=".9"/>
+        <rect x="21" y="30" width="54" height="28" rx="4" fill="#211b16"/>
+        <circle cx="36" cy="44" r="9" stroke="currentColor" stroke-width="4"/>
+        <circle cx="60" cy="44" r="9" stroke="currentColor" stroke-width="4"/>
+        <path d="M42 44h12M28 66h40l-5-8H33z" fill="#211b16" opacity=".9"/>
+        <circle cx="31" cy="67" r="2" fill="currentColor"/><circle cx="65" cy="67" r="2" fill="currentColor"/>
+      `,
     };
     return `<svg viewBox="0 0 96 96" focusable="false" aria-hidden="true">${paths[iconName] || paths.badge}</svg>`;
   }
@@ -897,6 +988,7 @@
     ballroomPortraits: [0, FLOOR.MAIN, -8.7, 0],
     mrFeastShowcase: [0, FLOOR.MAIN, -1.4, 0, -0.08],
     mrFeastSideProfile: [-3.2, FLOOR.MAIN, -9.0, -Math.PI / 2, 0],
+    mrFeastFaceClose: [0, FLOOR.MAIN, -8.45, 0, -0.02],
     openRearFromStair: [0, FLOOR.MAIN, -2.35, 0],
     openRearToDining: [0, FLOOR.MAIN, -6.0, Math.PI / 2],
     openRearToKitchen: [0, FLOOR.MAIN, -6.0, -Math.PI / 2],
@@ -983,6 +1075,12 @@
     rearCrossCorridorB: [13.2, FLOOR.BASEMENT, -4.05, Math.PI / 2],
     boilerRoomA: [-13.5, FLOOR.BASEMENT, -5.8, -0.9],
     boilerRoomB: [-6.65, FLOOR.BASEMENT, -10.8, 2.15],
+    workroomWest: [-5.4, FLOOR.BASEMENT, -5.8, -0.88],
+    workroomEast: [5.9, FLOOR.BASEMENT, -7.2, 0.72],
+    workroomMonitorWall: [2.4, FLOOR.BASEMENT, -6.55, 0, -0.03],
+    workroomWide: [-4.6, FLOOR.BASEMENT, -5.9, -0.82, -0.08],
+    workroomDoorOutside: [-2.3, FLOOR.BASEMENT, -3.75, 0, -0.04],
+    workroomKeypadOutside: [-1.3, FLOOR.BASEMENT, -3.75, 0, -0.47],
     workshopA: [-5.4, FLOOR.BASEMENT, -5.8, -0.88],
     workshopB: [0.5, FLOOR.BASEMENT, -10.8, 2.27],
     coldRoomA: [2.0, FLOOR.BASEMENT, -5.8, -0.7],
@@ -1085,6 +1183,13 @@
       lastAlarm: null,
       alarmCooldown: 0,
       alarmLatchCameraId: null,
+    },
+    workroom: {
+      unlocked: false,
+      keypadOpen: false,
+      keypadInput: "",
+      keypadStatus: "idle",
+      deniedAttempts: 0,
     },
     contestant13: {
       bookRead: false,
@@ -1231,9 +1336,27 @@
     relayAlarmBulb: null,
     relayAlarmMaterial: null,
   };
+  const workroomScene = {
+    entranceDoor: null,
+    keypadRoot: null,
+    keypadIndicator: null,
+    keypadIndicatorMaterial: null,
+    monitorRoot: null,
+    monitorScreens: [],
+    monitorStatusLights: [],
+    ambience: {
+      serverRacks: 0,
+      operatorStations: 0,
+      chairs: 0,
+      cableTrays: 0,
+      equipmentCases: 0,
+      smallProps: 0,
+    },
+  };
   let contestant13Quest = null;
   let mrFeastNpc = null;
   let cameraSecurity = null;
+  let monitorWallSystem = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -2126,9 +2249,45 @@
       this.contactShadow = null;
       this.bonesByName = new Map();
       this.hipsBone = null;
+      this.headBone = null;
       this.headFrontBone = null;
       this.headEndBone = null;
       this.bindHipsScale = null;
+      this.faceMorphBindings = new Map();
+      this.faceMorphMeshes = new Set();
+      this.faceComponentObjects = new Map();
+      this.faceMissingComponents = [];
+      this.faceSemanticTargets = {};
+      this.faceAvailableTargets = [];
+      this.faceMissingTargets = [];
+      this.faceExpressionWeights = {};
+      this.faceTargetWeights = {};
+      this.faceAppliedWeights = {};
+      this.faceExpression = "neutral";
+      this.faceAutomaticExpression = "friendly";
+      this.faceQaOverride = null;
+      this.faceQaCycleIndex = -1;
+      this.faceQaInteraction = null;
+      this.faceBlink = {
+        active: false,
+        side: null,
+        leadingEye: "left",
+        elapsed: 0,
+        left: 0,
+        right: 0,
+        cycle: 0,
+        nextSeconds: MR_FEAST_FACE.blinkIntervals[0],
+      };
+      this.faceAttention = {
+        yaw: 0,
+        pitch: 0,
+        targetYaw: 0,
+        targetPitch: 0,
+        distance: null,
+      };
+      this.faceHeadOffset = new THREE.Quaternion();
+      this.faceHeadOffsetInverse = new THREE.Quaternion();
+      this.faceHeadOffsetApplied = false;
       this.animationTrackDiagnostics = {};
       this.qaAnimationFrozen = false;
       this.mixer = null;
@@ -2227,6 +2386,48 @@
       return clip;
     }
 
+    tuneCharacterMaterial(sourceMaterial, objectName = "") {
+      for (const material of Array.isArray(sourceMaterial) ? sourceMaterial : [sourceMaterial]) {
+        if (!material) continue;
+        if (/^MrFeast_Eye_[LR]$/.test(objectName)) {
+          if (material.color) material.color.setRGB(0.72, 0.62, 0.52);
+          material.emissiveIntensity = 0;
+          material.roughness = Math.min(Number(material.roughness) || 1, 0.32);
+          material.metalness = 0;
+          material.needsUpdate = true;
+          continue;
+        }
+        if (objectName.startsWith("MrFeast_EyeDetail")) {
+          material.emissiveIntensity = 0;
+          material.roughness = Math.min(Number(material.roughness) || 1, 0.32);
+          material.metalness = 0;
+          material.needsUpdate = true;
+          continue;
+        }
+        if (/^MrFeast_(?:RetopoFace|Eyelid|LipRim)/.test(objectName)) {
+          if (material.color) material.color.setRGB(0.72, 0.62, 0.56);
+          material.emissiveIntensity = 0;
+          material.roughness = Math.max(Number(material.roughness) || 0, 0.72);
+          material.metalness = 0;
+          material.needsUpdate = true;
+          continue;
+        }
+        if (/^MrFeast_(?:OralCavity|Teeth)/.test(objectName)) {
+          material.emissiveIntensity = 0;
+          material.roughness = objectName.includes("Teeth") ? 0.42 : 0.58;
+          material.metalness = 0;
+          material.needsUpdate = true;
+          continue;
+        }
+        // Meshy exports the same color texture as both base color and a
+        // full-strength emissive map. That self-lighting flattens the face
+        // and erases the shadows needed to read brows, cheeks, and mouth.
+        material.emissiveIntensity = 0.08;
+        material.roughness = Math.max(Number(material.roughness) || 0, 0.68);
+        material.needsUpdate = true;
+      }
+    }
+
     async load() {
       if (this.loadStatus === "loading" || this.loadStatus === "ready") return;
       this.loadStatus = "loading";
@@ -2289,6 +2490,7 @@
             this.bonesByName.set(object.name, object);
           }
           if (!object.isMesh) return;
+          this.tuneCharacterMaterial(object.material, object.name);
           // Shadow maps are cached in this mansion. A moving caster would
           // leave a frozen ghost unless every animation frame rebuilt them.
           object.castShadow = false;
@@ -2302,9 +2504,12 @@
         this.model = model;
         this.root.add(model);
         this.hipsBone = this.bonesByName.get("Hips") || null;
+        this.headBone = this.bonesByName.get("Head") || null;
         this.headFrontBone = this.bonesByName.get("headfront") || null;
         this.headEndBone = this.bonesByName.get("head_end") || null;
         this.bindHipsScale = this.hipsBone ? this.hipsBone.scale.clone() : null;
+        this.cacheFaceMorphBindings();
+        if (state.qa) this.registerFaceQaInteraction(model);
         this.contactShadow = new THREE.Mesh(
           new THREE.CircleGeometry(1, 24),
           new THREE.MeshBasicMaterial({
@@ -2348,6 +2553,7 @@
         this.loadingProgress = 1;
         document.documentElement.dataset.mrFeastNpc = "ready";
         this.fadeToAction("idle", 0, true);
+        this.stepAnimationAndFace(0, true, true);
         console.info(
           `[MrFeast] loaded ${this.modelSize.x.toFixed(2)} × ${this.modelSize.y.toFixed(2)} × ${this.modelSize.z.toFixed(2)}m; `
           + `${this.skinnedMeshes} skinned mesh; ${this.bones} bones; clips ${Object.keys(this.actions).join(", ")}`,
@@ -2359,6 +2565,424 @@
         document.documentElement.dataset.mrFeastNpc = "error";
         console.error("Mr. Feast character could not be loaded", error);
       }
+    }
+
+    cacheFaceMorphBindings() {
+      this.faceMorphBindings.clear();
+      this.faceMorphMeshes.clear();
+      this.faceComponentObjects.clear();
+      this.faceSemanticTargets = {
+        ...MR_FEAST_FACE.morphTargets,
+        ...(this.manifest?.face?.morphTargets || {}),
+      };
+      const availableTargets = new Set();
+      const configuredComponents = this.manifest?.face?.components || {};
+      if (this.model) {
+        this.model.traverse((object) => {
+          for (const [semanticName, objectName] of Object.entries(configuredComponents)) {
+            if (object.name === objectName) this.faceComponentObjects.set(semanticName, object);
+          }
+          if (!object.isMesh || !object.morphTargetDictionary || !Array.isArray(object.morphTargetInfluences)) return;
+          this.faceMorphMeshes.add(object);
+          for (const [name, index] of Object.entries(object.morphTargetDictionary)) {
+            if (!Number.isInteger(index) || index < 0 || index >= object.morphTargetInfluences.length) continue;
+            availableTargets.add(name);
+            if (!this.faceMorphBindings.has(name)) this.faceMorphBindings.set(name, []);
+            this.faceMorphBindings.get(name).push({ mesh: object, index });
+          }
+        });
+      }
+      const configuredTargets = [...new Set(Object.values(this.faceSemanticTargets).filter(Boolean))];
+      this.faceMissingComponents = Object.keys(configuredComponents).filter((name) => !this.faceComponentObjects.has(name));
+      this.faceAvailableTargets = [...availableTargets].sort();
+      this.faceMissingTargets = configuredTargets.filter((name) => !this.faceMorphBindings.has(name));
+      this.faceExpressionWeights = Object.fromEntries(configuredTargets.map((name) => [name, 0]));
+      this.faceTargetWeights = { ...this.faceExpressionWeights };
+      this.faceAppliedWeights = { ...this.faceExpressionWeights };
+      this.faceExpression = "neutral";
+      this.faceAutomaticExpression = "friendly";
+      this.faceQaOverride = null;
+      this.faceQaCycleIndex = -1;
+      this.faceBlink.active = false;
+      this.faceBlink.side = null;
+      this.faceBlink.elapsed = 0;
+      this.faceBlink.left = 0;
+      this.faceBlink.right = 0;
+      this.faceBlink.cycle = 0;
+      this.faceBlink.leadingEye = "left";
+      this.faceBlink.nextSeconds = MR_FEAST_FACE.blinkIntervals[0];
+      this.faceAttention.yaw = 0;
+      this.faceAttention.pitch = 0;
+      this.faceAttention.targetYaw = 0;
+      this.faceAttention.targetPitch = 0;
+      this.faceAttention.distance = null;
+      this.applyFaceMorphWeights();
+    }
+
+    resolveFaceMorphName(name) {
+      if (!name) return null;
+      if (this.faceSemanticTargets[name]) return this.faceSemanticTargets[name];
+      if (this.faceMorphBindings.has(name)) return name;
+      if (Object.values(this.faceSemanticTargets).includes(name)) return name;
+      return null;
+    }
+
+    facePresetWeights(expression) {
+      const weights = Object.fromEntries(
+        [...new Set(Object.values(this.faceSemanticTargets).filter(Boolean))].map((name) => [name, 0]),
+      );
+      const preset = MR_FEAST_FACE.presets[expression] || MR_FEAST_FACE.presets.neutral;
+      for (const [semanticName, value] of Object.entries(preset)) {
+        const morphName = this.resolveFaceMorphName(semanticName);
+        if (morphName) weights[morphName] = clamp(Number(value) || 0, 0, 1);
+      }
+      return weights;
+    }
+
+    normalizeFaceMorphOverrides(morphs) {
+      if (!morphs || typeof morphs !== "object") return {};
+      const normalized = {};
+      for (const [name, value] of Object.entries(morphs)) {
+        const morphName = this.resolveFaceMorphName(name);
+        if (!morphName) continue;
+        normalized[morphName] = clamp(Number(value) || 0, 0, 1);
+      }
+      return normalized;
+    }
+
+    visualDistanceToPlayer() {
+      const facePosition = this.headFrontBone
+        ? this.headFrontBone.getWorldPosition(new THREE.Vector3())
+        : this.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, this.modelSize.y * 0.86, 0));
+      return facePosition.distanceTo(camera.position);
+    }
+
+    resolveAutomaticExpression() {
+      const distance = this.visualDistanceToPlayer();
+      this.faceAttention.distance = distance;
+      if (state.contestant13.relaySabotaged || state.contestant13.threatEscalated || state.security.alarmCount > 0) return "threatened";
+      if (distance <= MR_FEAST_FACE.closeDistance) return "close";
+      if (distance <= MR_FEAST_FACE.watchingDistance) return "watching";
+      return "friendly";
+    }
+
+    beginFaceBlink(side = "both") {
+      const resolvedSide = side === "left" || side === "right" ? side : "both";
+      this.faceBlink.active = true;
+      this.faceBlink.side = resolvedSide;
+      this.faceBlink.elapsed = 0;
+      this.faceBlink.left = 0;
+      this.faceBlink.right = 0;
+      this.faceBlink.leadingEye = this.faceBlink.cycle % 2 === 0 ? "left" : "right";
+      this.faceBlink.cycle += 1;
+    }
+
+    blinkEnvelope(seconds) {
+      if (seconds <= 0) return 0;
+      if (seconds < MR_FEAST_FACE.blinkCloseSeconds) {
+        const amount = seconds / MR_FEAST_FACE.blinkCloseSeconds;
+        return amount * amount * (3 - 2 * amount);
+      }
+      const openingAt = MR_FEAST_FACE.blinkCloseSeconds + MR_FEAST_FACE.blinkHoldSeconds;
+      if (seconds <= openingAt) return 1;
+      const amount = clamp((seconds - openingAt) / MR_FEAST_FACE.blinkOpenSeconds, 0, 1);
+      return 1 - amount * amount * (3 - 2 * amount);
+    }
+
+    updateFaceBlink(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (!this.faceBlink.active) {
+        this.faceBlink.nextSeconds = Math.max(0, this.faceBlink.nextSeconds - step);
+        if (this.faceBlink.nextSeconds <= 0) this.beginFaceBlink("both");
+      }
+      if (!this.faceBlink.active) return;
+      this.faceBlink.elapsed += step;
+      const lag = MR_FEAST_FACE.blinkEyeLagSeconds;
+      let leftDelay = 0;
+      let rightDelay = 0;
+      if (this.faceBlink.side === "both") {
+        if (this.faceBlink.leadingEye === "left") rightDelay = lag;
+        else leftDelay = lag;
+      }
+      this.faceBlink.left = this.faceBlink.side === "right"
+        ? 0
+        : this.blinkEnvelope(this.faceBlink.elapsed - leftDelay);
+      this.faceBlink.right = this.faceBlink.side === "left"
+        ? 0
+        : this.blinkEnvelope(this.faceBlink.elapsed - rightDelay);
+      const duration = MR_FEAST_FACE.blinkCloseSeconds
+        + MR_FEAST_FACE.blinkHoldSeconds
+        + MR_FEAST_FACE.blinkOpenSeconds
+        + (this.faceBlink.side === "both" ? lag : 0);
+      if (this.faceBlink.elapsed < duration) return;
+      this.faceBlink.active = false;
+      this.faceBlink.side = null;
+      this.faceBlink.elapsed = 0;
+      this.faceBlink.left = 0;
+      this.faceBlink.right = 0;
+      this.faceBlink.nextSeconds = MR_FEAST_FACE.blinkIntervals[
+        this.faceBlink.cycle % MR_FEAST_FACE.blinkIntervals.length
+      ];
+    }
+
+    clearFaceAttentionPose() {
+      if (!this.headBone || !this.faceHeadOffsetApplied) return;
+      this.faceHeadOffsetInverse.copy(this.faceHeadOffset).conjugate();
+      this.headBone.quaternion.multiply(this.faceHeadOffsetInverse).normalize();
+      this.faceHeadOffsetApplied = false;
+    }
+
+    updateFaceAttention(dt, snap = false) {
+      const strength = MR_FEAST_FACE.attentionStrength[this.faceExpression] || 0;
+      const facePosition = this.headFrontBone
+        ? this.headFrontBone.getWorldPosition(new THREE.Vector3())
+        : this.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, this.modelSize.y * 0.86, 0));
+      const dx = camera.position.x - facePosition.x;
+      const dy = camera.position.y - facePosition.y;
+      const dz = camera.position.z - facePosition.z;
+      const horizontalDistance = Math.max(0.0001, Math.hypot(dx, dz));
+      const desiredWorldYaw = Math.atan2(dx, dz);
+      const relativeYaw = Math.atan2(
+        Math.sin(desiredWorldYaw - this.root.rotation.y),
+        Math.cos(desiredWorldYaw - this.root.rotation.y),
+      );
+      const elevation = Math.atan2(dy, horizontalDistance);
+      this.faceAttention.targetYaw = clamp(
+        relativeYaw,
+        -MR_FEAST_FACE.maxAttentionYaw,
+        MR_FEAST_FACE.maxAttentionYaw,
+      ) * strength;
+      this.faceAttention.targetPitch = clamp(
+        -elevation,
+        -MR_FEAST_FACE.maxAttentionPitch,
+        MR_FEAST_FACE.maxAttentionPitch,
+      ) * strength;
+      const amount = snap ? 1 : 1 - Math.exp(-MR_FEAST_FACE.attentionDamping * Math.max(0, Number(dt) || 0));
+      this.faceAttention.yaw += (this.faceAttention.targetYaw - this.faceAttention.yaw) * amount;
+      this.faceAttention.pitch += (this.faceAttention.targetPitch - this.faceAttention.pitch) * amount;
+    }
+
+    applyFaceAttentionPose() {
+      if (!this.headBone) return;
+      this.faceHeadOffset.setFromEuler(new THREE.Euler(
+        this.faceAttention.pitch,
+        this.faceAttention.yaw,
+        0,
+        "YXZ",
+      ));
+      this.headBone.quaternion.multiply(this.faceHeadOffset).normalize();
+      this.faceHeadOffsetApplied = true;
+    }
+
+    applyFaceMorphWeights() {
+      const applied = { ...this.faceExpressionWeights };
+      const blinkLeft = this.resolveFaceMorphName("blinkLeft") || "blink_left";
+      const blinkRight = this.resolveFaceMorphName("blinkRight") || "blink_right";
+      // Three.js r128 only submits the eight strongest POSITION morphs per
+      // primitive. Reserve two slots for independent blinking even while old
+      // expression targets are still damping out during a preset transition.
+      const blinkTargets = new Set([blinkLeft, blinkRight].filter(Boolean));
+      const strongestExpressions = Object.entries(applied)
+        .filter(([name, value]) => !blinkTargets.has(name) && value > 0.0001)
+        .map(([name, value], order) => ({ name, value, order }))
+        .sort((a, b) => b.value - a.value || a.order - b.order)
+        .slice(0, MR_FEAST_FACE.maxExpressionMorphs);
+      const activeExpressions = new Set(strongestExpressions.map(({ name }) => name));
+      for (const name of Object.keys(applied)) {
+        if (!blinkTargets.has(name) && !activeExpressions.has(name)) applied[name] = 0;
+      }
+      if (blinkLeft) applied[blinkLeft] = Math.max(applied[blinkLeft] || 0, this.faceBlink.left);
+      if (blinkRight) applied[blinkRight] = Math.max(applied[blinkRight] || 0, this.faceBlink.right);
+      for (const [name, value] of Object.entries(applied)) {
+        for (const binding of this.faceMorphBindings.get(name) || []) {
+          binding.mesh.morphTargetInfluences[binding.index] = clamp(value, 0, 1);
+        }
+      }
+      this.faceAppliedWeights = applied;
+    }
+
+    updateFace(dt, snap = false) {
+      this.faceAutomaticExpression = this.resolveAutomaticExpression();
+      this.faceExpression = this.faceQaOverride?.expression || this.faceAutomaticExpression;
+      const targetWeights = this.facePresetWeights(this.faceExpression);
+      for (const [name, value] of Object.entries(this.faceQaOverride?.morphs || {})) {
+        targetWeights[name] = clamp(value, 0, 1);
+      }
+      this.faceTargetWeights = { ...targetWeights };
+      const amount = snap ? 1 : 1 - Math.exp(-MR_FEAST_FACE.expressionDamping * Math.max(0, Number(dt) || 0));
+      for (const [name, target] of Object.entries(targetWeights)) {
+        const current = this.faceExpressionWeights[name] || 0;
+        this.faceExpressionWeights[name] = current + (target - current) * amount;
+      }
+      this.updateFaceBlink(dt);
+      this.updateFaceAttention(dt, snap);
+      this.applyFaceMorphWeights();
+    }
+
+    stepAnimationAndFace(dt, advanceMixer = true, snapFace = false) {
+      this.clearFaceAttentionPose();
+      if (advanceMixer && this.mixer) this.mixer.update(Math.max(0, Number(dt) || 0));
+      this.updateFace(dt, snapFace);
+      this.applyFaceAttentionPose();
+    }
+
+    setFaceForQA(options = {}) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      this.faceQaCycleIndex = -1;
+      const requestedExpression = options.expression;
+      if (options.clear || requestedExpression === null || requestedExpression === "auto") {
+        this.faceQaOverride = null;
+      } else if (Object.prototype.hasOwnProperty.call(MR_FEAST_FACE.presets, requestedExpression)) {
+        this.faceQaOverride = {
+          expression: requestedExpression,
+          morphs: this.normalizeFaceMorphOverrides(options.morphs),
+        };
+      } else if (options.morphs && typeof options.morphs === "object") {
+        this.faceQaOverride = {
+          expression: this.faceQaOverride?.expression || this.faceExpression || "neutral",
+          morphs: this.normalizeFaceMorphOverrides(options.morphs),
+        };
+      }
+      this.stepAnimationAndFace(0, false, Boolean(options.snap));
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    registerFaceQaInteraction(model) {
+      if (!state.qa || !model || this.faceQaInteraction) return;
+      this.faceQaInteraction = {
+        type: "mr-feast-face-qa",
+        id: "mr-feast-face-expression-cycle",
+        getLabel: () => {
+          const nextIndex = (this.faceQaCycleIndex + 1) % MR_FEAST_FACE.qaExpressionCycle.length;
+          const nextExpression = MR_FEAST_FACE.qaExpressionCycle[nextIndex];
+          return `Cycle expression → ${nextExpression}`;
+        },
+        activate: () => this.cycleFaceExpressionForQA(),
+      };
+      addInteractionTarget(model, this.faceQaInteraction);
+    }
+
+    cycleFaceExpressionForQA() {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      this.faceQaCycleIndex = (this.faceQaCycleIndex + 1) % MR_FEAST_FACE.qaExpressionCycle.length;
+      const expression = MR_FEAST_FACE.qaExpressionCycle[this.faceQaCycleIndex];
+      this.faceQaOverride = { expression, morphs: {} };
+      this.stepAnimationAndFace(0, false, true);
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    triggerBlinkForQA(side = "both") {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      this.beginFaceBlink(side);
+      this.stepAnimationAndFace(0, false);
+      return this.getDiagnostics();
+    }
+
+    advanceFaceForQA(seconds) {
+      if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
+      const frameCount = Math.min(7200, Math.max(0, Math.round((Number(seconds) || 0) * 60)));
+      if (frameCount === 0) this.stepAnimationAndFace(0, false);
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        this.stepAnimationAndFace(1 / 60, false);
+      }
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    getFaceDiagnostics() {
+      const configuredTargets = [...new Set(Object.values(this.faceSemanticTargets).filter(Boolean))];
+      const rigVersion = Number(this.manifest?.face?.rigVersion) || 0;
+      const appliedWeights = Object.fromEntries(configuredTargets.map((name) => {
+        const binding = this.faceMorphBindings.get(name)?.[0];
+        const value = binding ? binding.mesh.morphTargetInfluences[binding.index] : this.faceAppliedWeights[name] || 0;
+        return [name, Number(value.toFixed(4))];
+      }));
+      const blinkCloseAt = MR_FEAST_FACE.blinkCloseSeconds;
+      const blinkOpenAt = blinkCloseAt + MR_FEAST_FACE.blinkHoldSeconds;
+      const blinkPhase = !this.faceBlink.active
+        ? "idle"
+        : this.faceBlink.elapsed < blinkCloseAt
+          ? "closing"
+          : this.faceBlink.elapsed < blinkOpenAt
+            ? "holding"
+            : "opening";
+      const bindingsByTarget = Object.fromEntries(configuredTargets.map((name) => [
+        name,
+        (this.faceMorphBindings.get(name) || []).map((binding) => ({
+          mesh: binding.mesh.name,
+          value: Number((binding.mesh.morphTargetInfluences[binding.index] || 0).toFixed(4)),
+        })),
+      ]));
+      const bindingValues = Object.values(bindingsByTarget).flatMap((bindings) => bindings.map(({ value }) => value));
+      const bindingsInSync = Object.values(bindingsByTarget).every((bindings) => (
+        bindings.length < 2 || Math.max(...bindings.map(({ value }) => value)) - Math.min(...bindings.map(({ value }) => value)) < 0.0001
+      ));
+      const configuredComponents = this.manifest?.face?.components || {};
+      const requiredComponents = ["face", "eyelidLeft", "eyelidRight", "eyeLeft", "eyeRight", "oralCavity", "teeth"];
+      const completeRetopology = requiredComponents.every((name) => this.faceComponentObjects.has(name));
+      return {
+        supported: configuredTargets.length > 0 && this.faceMorphMeshes.size > 0 && this.faceMissingTargets.length === 0,
+        retopologized: Number(this.manifest?.version) >= 3 && rigVersion >= 3 && completeRetopology && this.faceMissingComponents.length === 0,
+        rigVersion,
+        requiredComponents,
+        parts: {
+          face: this.faceComponentObjects.has("face"),
+          eyelids: Number(this.faceComponentObjects.has("eyelidLeft")) + Number(this.faceComponentObjects.has("eyelidRight")),
+          eyes: Number(this.faceComponentObjects.has("eyeLeft")) + Number(this.faceComponentObjects.has("eyeRight")),
+          oralCavity: this.faceComponentObjects.has("oralCavity"),
+          teeth: this.faceComponentObjects.has("teeth"),
+        },
+        components: Object.fromEntries(
+          Object.keys(configuredComponents).map((name) => [name, this.faceComponentObjects.get(name)?.name || null]),
+        ),
+        missingComponents: [...this.faceMissingComponents],
+        expression: this.faceExpression,
+        automaticExpression: this.faceAutomaticExpression,
+        qaOverride: this.faceQaOverride ? {
+          expression: this.faceQaOverride.expression,
+          morphs: { ...this.faceQaOverride.morphs },
+        } : null,
+        qaCycle: state.qa ? {
+          index: this.faceQaCycleIndex,
+          current: this.faceQaCycleIndex >= 0 ? MR_FEAST_FACE.qaExpressionCycle[this.faceQaCycleIndex] : null,
+          next: MR_FEAST_FACE.qaExpressionCycle[
+            (this.faceQaCycleIndex + 1) % MR_FEAST_FACE.qaExpressionCycle.length
+          ],
+          order: [...MR_FEAST_FACE.qaExpressionCycle],
+        } : null,
+        morphMeshes: this.faceMorphMeshes.size,
+        morphTargetCount: this.faceAvailableTargets.length,
+        totalBindingCount: bindingValues.length,
+        bindingsByTarget,
+        bindingsInSync,
+        maxActiveMorphs: Object.values(appliedWeights).filter((value) => value > 0.0001).length,
+        availableTargets: [...this.faceAvailableTargets],
+        missingTargets: [...this.faceMissingTargets],
+        weights: appliedWeights,
+        targetWeights: Object.fromEntries(
+          Object.entries(this.faceTargetWeights).map(([name, value]) => [name, Number(value.toFixed(4))]),
+        ),
+        blinking: {
+          active: this.faceBlink.active,
+          phase: blinkPhase,
+          side: this.faceBlink.side,
+          leadingEye: this.faceBlink.leadingEye,
+          left: Number(this.faceBlink.left.toFixed(4)),
+          right: Number(this.faceBlink.right.toFixed(4)),
+        },
+        nextBlinkSeconds: Number(this.faceBlink.nextSeconds.toFixed(3)),
+        attention: {
+          yaw: Number(this.faceAttention.yaw.toFixed(4)),
+          pitch: Number(this.faceAttention.pitch.toFixed(4)),
+          targetYaw: Number(this.faceAttention.targetYaw.toFixed(4)),
+          targetPitch: Number(this.faceAttention.targetPitch.toFixed(4)),
+          distance: Number.isFinite(this.faceAttention.distance)
+            ? Number(this.faceAttention.distance.toFixed(3))
+            : null,
+        },
+      };
     }
 
     fadeToAction(name, duration = MR_FEAST_NPC.fadeSeconds, force = false) {
@@ -2605,7 +3229,7 @@
           if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
           else this.finishSecurityReturn();
         }
-        this.mixer.update(dt);
+        this.stepAnimationAndFace(dt);
         return;
       }
       this.faceTarget(target);
@@ -2616,7 +3240,7 @@
       if (waitingForDoor || facingAlignment < 0.92) {
         this.moving = false;
         this.fadeToAction("idle");
-        this.mixer.update(dt);
+        this.stepAnimationAndFace(dt);
         return;
       }
       const step = Math.min(distance, CAMERA_SECURITY.responseSpeed * dt);
@@ -2627,7 +3251,7 @@
       this.moving = step > 0;
       this.closeClearedRouteDoors(target);
       this.fadeToAction("stalk");
-      this.mixer.update(dt);
+      this.stepAnimationAndFace(dt);
     }
 
     updateSecurityResponse(dt) {
@@ -2639,7 +3263,7 @@
         this.moving = false;
         this.fadeToAction("idle");
         this.closeClearedRouteDoors(null);
-        this.mixer.update(dt);
+        this.stepAnimationAndFace(dt);
         if (this.searchRemaining <= 0) this.beginSecurityReturn();
       } else {
         this.updateSecurityPath(dt);
@@ -2667,6 +3291,16 @@
         // point avoids both a permanent stall and walking through a locked leaf.
         if (door.name === "basement stair door" && target.id === "main-service-door") {
           const resumeIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === "main-service-exit");
+          if (resumeIndex >= 0) {
+            this.waypointIndex = resumeIndex;
+            const resumeTarget = MR_FEAST_NPC.waypoints[resumeIndex];
+            this.currentRouteZone = resumeTarget.zone;
+            this.currentRouteLevel = resumeTarget.level;
+            this.setSegmentPresentation(resumeTarget);
+          }
+        }
+        if (door.name === "workroom door" && target.id === "basement-workroom-door") {
+          const resumeIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === "basement-bulk-corridor");
           if (resumeIndex >= 0) {
             this.waypointIndex = resumeIndex;
             const resumeTarget = MR_FEAST_NPC.waypoints[resumeIndex];
@@ -2760,7 +3394,7 @@
       if (state.qa && this.qaAnimationFrozen) return;
       if (!state.started || !this.wanderingEnabled) {
         this.fadeToAction("idle");
-        this.mixer.update(this.lastDt);
+        this.stepAnimationAndFace(this.lastDt);
         return;
       }
 
@@ -2773,7 +3407,7 @@
         this.pauseRemaining = Math.max(0, this.pauseRemaining - this.lastDt);
         this.fadeToAction("idle");
         this.closeClearedRouteDoors(MR_FEAST_NPC.waypoints[this.waypointIndex]);
-        this.mixer.update(this.lastDt);
+        this.stepAnimationAndFace(this.lastDt);
         return;
       }
 
@@ -2789,7 +3423,7 @@
         if (this.pauseRemaining > 0) this.fadeToAction("idle");
         else this.fadeToAction("stalk");
         this.closeClearedRouteDoors(MR_FEAST_NPC.waypoints[this.waypointIndex]);
-        this.mixer.update(this.lastDt);
+        this.stepAnimationAndFace(this.lastDt);
         return;
       }
 
@@ -2805,7 +3439,7 @@
         // Pause translation for a fraction of a second at sharp corners so
         // the character pivots deliberately instead of skating sideways.
         this.fadeToAction("idle");
-        this.mixer.update(this.lastDt);
+        this.stepAnimationAndFace(this.lastDt);
         return;
       }
       const step = Math.min(distance, MR_FEAST_NPC.speed * this.lastDt);
@@ -2816,7 +3450,7 @@
       this.moving = step > 0;
       this.closeClearedRouteDoors(target);
       this.fadeToAction("stalk");
-      this.mixer.update(this.lastDt);
+      this.stepAnimationAndFace(this.lastDt);
     }
 
     resetForQA() {
@@ -2855,10 +3489,22 @@
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
       this.moving = this.loadStatus === "ready";
+      this.clearFaceAttentionPose();
+      this.faceQaOverride = null;
+      this.faceQaCycleIndex = -1;
+      this.faceBlink.active = false;
+      this.faceBlink.side = null;
+      this.faceBlink.elapsed = 0;
+      this.faceBlink.left = 0;
+      this.faceBlink.right = 0;
+      this.faceBlink.cycle = 0;
+      this.faceBlink.leadingEye = "left";
+      this.faceBlink.nextSeconds = MR_FEAST_FACE.blinkIntervals[0];
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
       this.setSegmentPresentation(MR_FEAST_NPC.waypoints[this.waypointIndex]);
       if (this.mixer) this.mixer.setTime(0);
       if (this.loadStatus === "ready") this.fadeToAction("stalk", 0, true);
+      if (this.loadStatus === "ready") this.stepAnimationAndFace(0, false, true);
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
     }
@@ -2878,12 +3524,14 @@
         Number.isFinite(Number(options.z)) ? Number(options.z) : -9,
       );
       this.root.rotation.y = Number.isFinite(Number(options.yaw)) ? Number(options.yaw) : 0;
+      this.clearFaceAttentionPose();
       this.mixer.stopAllAction();
       this.activeAction = null;
       this.currentAnimation = null;
       this.fadeToAction(actionName, 0, true);
       this.activeAction.time = ((requestedTime % duration) + duration) % duration;
       this.mixer.update(0);
+      this.stepAnimationAndFace(0, false);
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
     }
@@ -2899,7 +3547,7 @@
 
     advanceAnimationForQA(seconds) {
       if (!state.qa || this.loadStatus !== "ready") return this.getDiagnostics();
-      this.mixer.update(Math.max(0, Number(seconds) || 0));
+      this.stepAnimationAndFace(Math.max(0, Number(seconds) || 0));
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
     }
@@ -3139,6 +3787,7 @@
           Object.entries(this.actions).map(([name, action]) => [name, Number(action.getClip().duration.toFixed(3))]),
         ),
         animationTracks: this.animationTrackDiagnostics,
+        face: this.getFaceDiagnostics(),
         skinnedMeshes: this.skinnedMeshes,
         bones: this.bones,
         modelHeight: Number(this.modelSize.y.toFixed(3)),
@@ -3889,6 +4538,7 @@
       const nextOpen = Boolean(open);
       if (nextOpen === state.journalOpen) return;
       if (nextOpen && state.menuOpen) setMenuOpen(false);
+      if (nextOpen && state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
       if (nextOpen) this.journalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.journalButton;
       state.journalOpen = nextOpen;
       clearMovementInput();
@@ -4124,6 +4774,7 @@
         recordingPlayed: Boolean(this.story.recordingPlayed),
         relaySabotaged: Boolean(this.story.relaySabotaged),
         threatEscalated: Boolean(this.story.threatEscalated),
+        workroomUnlocked: Boolean(state.workroom.unlocked),
         inventory: this.story.inventory.slice(),
         journalEntries: this.story.journalEntries.map((entry) => ({ ...entry })),
       };
@@ -4135,6 +4786,8 @@
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
       ];
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
+      state.workroom.unlocked = Boolean(snapshot.workroomUnlocked);
+      syncWorkroomDoorState();
       this.story.digging = false;
       this.story.actionInProgress = null;
       cameraSecurity?.endIllegalAction();
@@ -4187,6 +4840,8 @@
         this.story.tapeFound = true;
         this.story.archiveCageUnlocked = true;
         this.story.recordingPlayed = true;
+        state.workroom.unlocked = true;
+        syncWorkroomDoorState();
         this.story.relaySabotaged = false;
         this.story.threatEscalated = false;
         this.story.inventory = Object.keys(CONTESTANT_13.itemLabels);
@@ -4273,6 +4928,172 @@
         },
       };
     }
+  }
+
+  let workroomKeypadReturnFocus = null;
+
+  function updateWorkroomKeypadPresentation() {
+    const entered = state.workroom.keypadInput.length;
+    if (dom.workroomKeypadDisplay) {
+      dom.workroomKeypadDisplay.textContent = `${"●".repeat(entered)}${"–".repeat(Math.max(0, WORKROOM_SECURITY.codeLength - entered))}`;
+      dom.workroomKeypadDisplay.setAttribute("aria-label", `${entered} of ${WORKROOM_SECURITY.codeLength} digits entered`);
+    }
+    const messages = {
+      idle: state.workroom.unlocked ? "ACCESS GRANTED" : "ENTER ACCESS PIN",
+      incomplete: "FOUR DIGITS REQUIRED",
+      denied: "ACCESS DENIED",
+      accepted: "ACCESS GRANTED",
+    };
+    if (dom.workroomKeypadStatus) {
+      dom.workroomKeypadStatus.textContent = messages[state.workroom.keypadStatus] || messages.idle;
+      dom.workroomKeypadStatus.dataset.state = state.workroom.keypadStatus;
+    }
+    if (workroomScene.keypadIndicatorMaterial) {
+      const status = state.workroom.unlocked || state.workroom.keypadStatus === "accepted"
+        ? "accepted"
+        : state.workroom.keypadStatus === "denied" || state.workroom.keypadStatus === "incomplete" ? "denied" : "idle";
+      const color = status === "accepted" ? 0x48ff7c : status === "denied" ? 0xff3428 : 0xe6a948;
+      workroomScene.keypadIndicatorMaterial.color.setHex(color);
+      workroomScene.keypadIndicatorMaterial.emissive.setHex(color);
+      workroomScene.keypadIndicatorMaterial.emissiveIntensity = status === "idle" ? 0.9 : 2.1;
+    }
+  }
+
+  function syncWorkroomDoorState() {
+    const door = workroomScene.entranceDoor;
+    if (door) {
+      if (!state.workroom.unlocked && door.open) door.setOpen(false);
+      door.locked = !state.workroom.unlocked;
+    }
+    updateWorkroomKeypadPresentation();
+  }
+
+  function setWorkroomKeypadOpen(open) {
+    const nextOpen = Boolean(open);
+    if (nextOpen === state.workroom.keypadOpen) return nextOpen;
+    if (nextOpen && state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+    if (nextOpen && state.menuOpen) setMenuOpen(false);
+    state.workroom.keypadOpen = nextOpen;
+    clearMovementInput();
+    if (nextOpen) {
+      workroomKeypadReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
+      state.workroom.keypadInput = "";
+      state.workroom.keypadStatus = state.workroom.unlocked ? "accepted" : "idle";
+      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+    }
+    if (dom.workroomKeypad) dom.workroomKeypad.hidden = !nextOpen;
+    if (dom.stage && dom.workroomKeypad) {
+      for (const child of dom.stage.children) {
+        if (child !== dom.workroomKeypad) child.inert = nextOpen;
+      }
+    }
+    updateWorkroomKeypadPresentation();
+    if (nextOpen) {
+      requestAnimationFrame(() => dom.workroomKeypad.querySelector("[data-workroom-key]")?.focus({ preventScroll: true }));
+    } else {
+      const returnTarget = workroomKeypadReturnFocus && workroomKeypadReturnFocus.isConnected ? workroomKeypadReturnFocus : dom.canvas;
+      workroomKeypadReturnFocus = null;
+      returnTarget?.focus({ preventScroll: true });
+    }
+    return nextOpen;
+  }
+
+  function openWorkroomKeypad() {
+    return setWorkroomKeypadOpen(true);
+  }
+
+  function appendWorkroomKeypadDigit(digit) {
+    if (state.workroom.unlocked) return getWorkroomDiagnostics();
+    const normalized = String(digit || "").replace(/\D/g, "").slice(0, 1);
+    if (!normalized || state.workroom.keypadInput.length >= WORKROOM_SECURITY.codeLength) return getWorkroomDiagnostics();
+    state.workroom.keypadInput += normalized;
+    state.workroom.keypadStatus = "idle";
+    updateWorkroomKeypadPresentation();
+    if (audioSystem) audioSystem.ping(220 + Number(normalized) * 14, 0.045, 0.018, "square");
+    return getWorkroomDiagnostics();
+  }
+
+  function clearWorkroomKeypad() {
+    state.workroom.keypadInput = "";
+    state.workroom.keypadStatus = "idle";
+    updateWorkroomKeypadPresentation();
+    return getWorkroomDiagnostics();
+  }
+
+  function submitWorkroomCode(code = null) {
+    if (state.workroom.unlocked) {
+      state.workroom.keypadStatus = "accepted";
+      updateWorkroomKeypadPresentation();
+      return getWorkroomDiagnostics();
+    }
+    const candidate = String(code == null ? state.workroom.keypadInput : code).replace(/\D/g, "").slice(0, WORKROOM_SECURITY.codeLength);
+    state.workroom.keypadInput = candidate;
+    if (candidate.length !== WORKROOM_SECURITY.codeLength) {
+      state.workroom.keypadStatus = "incomplete";
+      if (audioSystem) audioSystem.ping(132, 0.12, 0.035, "square");
+      updateWorkroomKeypadPresentation();
+      return getWorkroomDiagnostics();
+    }
+    if (candidate !== WORKROOM_SECURITY.code) {
+      state.workroom.deniedAttempts += 1;
+      state.workroom.keypadStatus = "denied";
+      if (audioSystem) audioSystem.ping(104, 0.22, 0.055, "sawtooth");
+      updateWorkroomKeypadPresentation();
+      return getWorkroomDiagnostics();
+    }
+    state.workroom.unlocked = true;
+    state.workroom.keypadStatus = "accepted";
+    syncWorkroomDoorState();
+    if (audioSystem) {
+      audioSystem.ping(330, 0.12, 0.04, "square");
+      audioSystem.ping(660, 0.2, 0.035, "sine");
+    }
+    contestant13Quest?.showDiscovery("Workroom access granted", "The keypad releases the only remaining entrance. The surveillance hub is open.", 5200);
+    return getWorkroomDiagnostics();
+  }
+
+  function resetWorkroomForQA() {
+    if (!state.qa) return getWorkroomDiagnostics();
+    state.workroom.unlocked = false;
+    state.workroom.keypadInput = "";
+    state.workroom.keypadStatus = "idle";
+    state.workroom.deniedAttempts = 0;
+    if (workroomScene.entranceDoor) {
+      workroomScene.entranceDoor.setOpen(false);
+      workroomScene.entranceDoor.locked = true;
+    }
+    updateWorkroomKeypadPresentation();
+    return getWorkroomDiagnostics();
+  }
+
+  function getWorkroomDiagnostics() {
+    const door = workroomScene.entranceDoor;
+    const ambience = { ...workroomScene.ambience };
+    ambience.propCount = Object.values(ambience).reduce((total, count) => total + count, 0);
+    const result = {
+      merged: roomZones.some((zone) => zone.roomLabel === WORKROOM_SECURITY.room && zone.x1 === WORKROOM_SECURITY.bounds.minX && zone.x2 === WORKROOM_SECURITY.bounds.maxX),
+      room: WORKROOM_SECURITY.room,
+      bounds: { ...WORKROOM_SECURITY.bounds },
+      formerColdRoomDoorRemoved: !animatedObjects.some((object) => object instanceof HingedDoor && /cold room door/i.test(object.name)),
+      entrance: {
+        name: door?.name || "workroom door",
+        locked: door ? Boolean(door.locked) : !state.workroom.unlocked,
+        open: Boolean(door?.open),
+        colliderEnabled: Boolean(door?.collider?.isEnabled?.()),
+      },
+      keypad: {
+        open: state.workroom.keypadOpen,
+        codeLength: WORKROOM_SECURITY.codeLength,
+        codeExposedToPlayer: false,
+        inputLength: state.workroom.keypadInput.length,
+        status: state.workroom.keypadStatus,
+        deniedAttempts: state.workroom.deniedAttempts,
+      },
+      ambience,
+      monitors: monitorWallSystem?.getDiagnostics() || null,
+    };
+    if (state.qa) result.qaCode = WORKROOM_SECURITY.code;
+    return result;
   }
 
   class CameraSecuritySystem {
@@ -4696,7 +5517,7 @@
     handlePatronFeedSabotage() {
       this.syncPolicy();
       if (state.security.mode !== CAMERA_SECURITY_MODE.LOCKDOWN) this.transitionPolicy("patronFeedSabotaged");
-      // Cutting the feed while the Workshop camera faces away is a valid
+      // Cutting the feed while a Workroom camera faces away is a valid
       // stealth success. It starts global lockdown, but Mr. Feast is summoned
       // only by an actual camera sighting (including one during the action).
       this.updatePresentation();
@@ -4763,6 +5584,26 @@
       }
       this.updatePresentation();
       this.updateHud();
+    }
+
+    copyViewPoseTo(cameraId, targetCamera) {
+      const cameraState = this.cameraById.get(cameraId);
+      if (!cameraState || !targetCamera) return null;
+      targetCamera.position.copy(cameraState.lensOrigin);
+      targetCamera.rotation.order = "YXZ";
+      targetCamera.rotation.set(cameraState.pitch, cameraState.yaw, 0);
+      targetCamera.updateMatrixWorld(true);
+      return {
+        cameraId: cameraState.id,
+        room: cameraState.room,
+        position: {
+          x: cameraState.lensOrigin.x,
+          y: cameraState.lensOrigin.y,
+          z: cameraState.lensOrigin.z,
+        },
+        yaw: cameraState.yaw,
+        pitch: cameraState.pitch,
+      };
     }
 
     cameraDiagnostics(cameraState) {
@@ -4840,7 +5681,7 @@
           manual: this.qaManual,
           soloCameraId: this.qaSoloCameraId,
           mainCameraId: "cam-main-foyer",
-          basementCameraId: "cam-basement-workshop",
+          basementCameraId: "cam-basement-workroom-west",
         },
       };
     }
@@ -4965,6 +5806,270 @@
       const steps = Math.min(7200, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
       for (let step = 0; step < steps; step += 1) this.update(1 / 60, true);
       return this.getDiagnostics(true);
+    }
+  }
+
+  class WorkroomMonitorWallSystem {
+    constructor(presentation, securitySystem) {
+      this.presentation = presentation;
+      this.root = presentation?.monitorRoot || null;
+      this.securitySystem = securitySystem;
+      this.screens = presentation?.monitorScreens || [];
+      this.rosterCameraIds = [
+        ...WORKROOM_SECURITY.initialFeeds,
+        ...securitySystem.cameras.map((cameraState) => cameraState.id).filter((cameraId) => !WORKROOM_SECURITY.initialFeeds.includes(cameraId)),
+      ];
+      this.refreshAccumulator = WORKROOM_SECURITY.monitorRefreshSeconds;
+      this.pageAccumulator = 0;
+      this.pageIndex = 0;
+      this.feedCursor = 0;
+      this.renderCount = 0;
+      this.normalFrameRenderCount = 0;
+      this.maxNormalFeedsPerFrame = 0;
+      this.lastRenderStateRestored = true;
+      // A stylized low-light normal pass keeps remote rooms legible even when
+      // their physical circuit is outside the player's active floor. It still
+      // renders the real scene geometry from each live security-camera pose,
+      // without changing mansion lights or compiling a larger light program.
+      this.feedOverrideMaterial = new THREE.MeshNormalMaterial({ flatShading: false });
+      this.feedOverrideMaterial.name = "workroom-monitor-low-light-pass";
+      this.feedOverrideMaterial.toneMapped = false;
+      this.feeds = this.screens.map((screen, index) => this.createFeed(screen, index));
+      this.applyPage(0);
+    }
+
+    targetSize() {
+      return state.mobileRenderProfile ? WORKROOM_SECURITY.monitorMobileSize : WORKROOM_SECURITY.monitorDesktopSize;
+    }
+
+    createRenderTarget() {
+      const size = this.targetSize();
+      const target = new THREE.WebGLRenderTarget(size.width, size.height, {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        depthBuffer: true,
+        stencilBuffer: false,
+      });
+      target.texture.name = "workroom-live-security-feed";
+      target.texture.encoding = THREE.sRGBEncoding;
+      target.texture.generateMipmaps = false;
+      return target;
+    }
+
+    createFeed(screen, index) {
+      const target = this.createRenderTarget();
+      const feedCamera = new THREE.PerspectiveCamera(WORKROOM_SECURITY.monitorFov, 16 / 9, 0.06, 120);
+      feedCamera.rotation.order = "YXZ";
+      const material = new THREE.ShaderMaterial({
+        uniforms: { map: { value: target.texture } },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D map;
+          varying vec2 vUv;
+          void main() {
+            vec3 source = texture2D(map, vUv).rgb;
+            float structure = dot(source, vec3(0.30, 0.52, 0.18));
+            float visibleSignal = smoothstep(0.025, 0.94, structure);
+            vec3 darkSignal = vec3(0.006, 0.018, 0.012);
+            vec3 liveSignal = vec3(0.16, 0.92, 0.46);
+            float scanline = 0.91 + 0.09 * sin(vUv.y * 620.0);
+            gl_FragColor = vec4(mix(darkSignal, liveSignal, visibleSignal) * scanline, 1.0);
+          }
+        `,
+        depthWrite: true,
+        depthTest: true,
+        toneMapped: false,
+      });
+      // Preserve the ordinary material.map contract for diagnostics and
+      // renderer tooling even though the CCTV tint is applied in a shader.
+      material.map = target.texture;
+      screen.material = material;
+      screen.userData.workroomMonitorIndex = index;
+      screen.userData.renderTargetTexture = true;
+      return {
+        index,
+        screen,
+        target,
+        camera: feedCamera,
+        material,
+        cameraId: null,
+        sourceRoom: null,
+        sourcePosition: null,
+        sourceYaw: null,
+        sourcePitch: null,
+        renderCount: 0,
+        signature: null,
+      };
+    }
+
+    applyPage(pageIndex) {
+      const pageCount = Math.max(1, Math.ceil(this.rosterCameraIds.length / Math.max(1, this.feeds.length)));
+      this.pageIndex = ((Number(pageIndex) || 0) % pageCount + pageCount) % pageCount;
+      const offset = this.pageIndex * this.feeds.length;
+      this.feeds.forEach((feed, index) => {
+        feed.cameraId = this.rosterCameraIds[(offset + index) % this.rosterCameraIds.length];
+        feed.signature = null;
+      });
+      return this.pageIndex;
+    }
+
+    setMobileProfile() {
+      const size = this.targetSize();
+      for (const feed of this.feeds) feed.target.setSize(size.width, size.height);
+    }
+
+    isActive() {
+      if (!state.started || !physics) return false;
+      if (state.currentRoom === WORKROOM_SECURITY.room) return true;
+      const p = physics.playerPosition();
+      const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
+      return Math.abs(feetY - FLOOR.BASEMENT) < 1.25
+        && p.x >= WORKROOM_SECURITY.bounds.minX - 0.5
+        && p.x <= WORKROOM_SECURITY.bounds.maxX + 0.5
+        && p.z >= -5.35 && p.z <= -3.2;
+    }
+
+    refreshSeconds() {
+      if (state.renderQuality === "reduced") return WORKROOM_SECURITY.monitorReducedRefreshSeconds;
+      return state.mobileRenderProfile ? WORKROOM_SECURITY.monitorMobileRefreshSeconds : WORKROOM_SECURITY.monitorRefreshSeconds;
+    }
+
+    renderFeed(feed, captureSignature = false) {
+      if (!feed || !this.root) return false;
+      const pose = this.securitySystem.copyViewPoseTo(feed.cameraId, feed.camera);
+      if (!pose) return false;
+      feed.sourceRoom = pose.room;
+      feed.sourcePosition = pose.position;
+      feed.sourceYaw = pose.yaw;
+      feed.sourcePitch = pose.pitch;
+      const previousTarget = renderer.getRenderTarget();
+      const previousViewport = renderer.getViewport(new THREE.Vector4()).clone();
+      const previousScissor = renderer.getScissor(new THREE.Vector4()).clone();
+      const previousScissorTest = renderer.getScissorTest();
+      const previousOverrideMaterial = scene.overrideMaterial;
+      const wasVisible = this.root.visible;
+      let restored = false;
+      try {
+        this.root.visible = false;
+        renderer.setRenderTarget(feed.target);
+        renderer.setViewport(0, 0, feed.target.width, feed.target.height);
+        renderer.setScissorTest(false);
+        scene.overrideMaterial = this.feedOverrideMaterial;
+        renderer.clear(true, true, true);
+        renderer.render(scene, feed.camera);
+      } finally {
+        scene.overrideMaterial = previousOverrideMaterial;
+        renderer.setRenderTarget(previousTarget);
+        renderer.setViewport(previousViewport);
+        renderer.setScissor(previousScissor);
+        renderer.setScissorTest(previousScissorTest);
+        this.root.visible = wasVisible;
+        restored = renderer.getRenderTarget() === previousTarget
+          && scene.overrideMaterial === previousOverrideMaterial
+          && this.root.visible === wasVisible;
+      }
+      this.lastRenderStateRestored = restored;
+      feed.renderCount += 1;
+      this.renderCount += 1;
+      if (captureSignature && state.qa) feed.signature = this.readSignature(feed.target);
+      return true;
+    }
+
+    readSignature(target) {
+      const width = target.width;
+      const height = target.height;
+      const pixels = new Uint8Array(width * height * 4);
+      renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+      let hash = 2166136261;
+      let luminance = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        luminance += red + green + blue;
+        hash ^= red;
+        hash = Math.imul(hash, 16777619);
+        hash ^= green;
+        hash = Math.imul(hash, 16777619);
+        hash ^= blue;
+        hash = Math.imul(hash, 16777619);
+      }
+      return luminance <= width * height * 2 ? "00000000" : (hash >>> 0).toString(16).padStart(8, "0");
+    }
+
+    update(dt) {
+      this.normalFrameRenderCount = 0;
+      if (!this.isActive()) return;
+      this.pageAccumulator += Math.max(0, Number(dt) || 0);
+      if (this.pageAccumulator >= WORKROOM_SECURITY.monitorPageSeconds) {
+        this.pageAccumulator %= WORKROOM_SECURITY.monitorPageSeconds;
+        this.applyPage(this.pageIndex + 1);
+      }
+      this.refreshAccumulator += Math.max(0, Number(dt) || 0);
+      if (this.refreshAccumulator < this.refreshSeconds()) return;
+      this.refreshAccumulator %= this.refreshSeconds();
+      if (this.renderFeed(this.feeds[this.feedCursor])) this.normalFrameRenderCount = 1;
+      this.maxNormalFeedsPerFrame = Math.max(this.maxNormalFeedsPerFrame, this.normalFrameRenderCount);
+      this.feedCursor = (this.feedCursor + 1) % Math.max(1, this.feeds.length);
+    }
+
+    refreshForQA(cameraId = null) {
+      if (!state.qa) return this.getDiagnostics();
+      if (cameraId) {
+        const feed = this.feeds.find((candidate) => candidate.cameraId === cameraId);
+        if (feed) this.renderFeed(feed, true);
+      } else {
+        for (const feed of this.feeds) this.renderFeed(feed, true);
+      }
+      return this.getDiagnostics();
+    }
+
+    setFeedForQA(screenIndex, cameraId) {
+      if (!state.qa || !this.securitySystem.cameraById.has(cameraId)) return this.getDiagnostics();
+      const feed = this.feeds[clamp(Math.floor(Number(screenIndex) || 0), 0, this.feeds.length - 1)];
+      feed.cameraId = cameraId;
+      feed.signature = null;
+      this.renderFeed(feed, true);
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const size = this.targetSize();
+      return {
+        active: this.isActive(),
+        live: this.feeds.some((feed) => feed.renderCount > 0),
+        screenCount: this.feeds.length,
+        renderTargets: this.feeds.filter((feed) => feed.target?.isWebGLRenderTarget).length,
+        rosterCameraCount: this.rosterCameraIds.length,
+        pageIndex: this.pageIndex,
+        pageSeconds: WORKROOM_SECURITY.monitorPageSeconds,
+        renderCount: this.renderCount,
+        maxFeedsPerFrame: 1,
+        observedMaxFeedsPerFrame: this.maxNormalFeedsPerFrame,
+        targetTotalPixels: size.width * size.height * this.feeds.length,
+        renderStateRestored: this.lastRenderStateRestored,
+        feeds: this.feeds.map((feed) => ({
+          screenIndex: feed.index,
+          cameraId: feed.cameraId,
+          sourceRoom: feed.sourceRoom || this.securitySystem.cameraById.get(feed.cameraId)?.room || null,
+          sourcePosition: feed.sourcePosition ? { ...feed.sourcePosition } : null,
+          sourceYaw: feed.sourceYaw == null ? null : Number(feed.sourceYaw.toFixed(5)),
+          sourcePitch: feed.sourcePitch == null ? null : Number(feed.sourcePitch.toFixed(5)),
+          width: feed.target.width,
+          height: feed.target.height,
+          renderTargetTexture: Boolean(feed.screen.userData.renderTargetTexture && feed.material.map === feed.target.texture),
+          renderCount: feed.renderCount,
+          signature: feed.signature,
+        })),
+      };
     }
   }
 
@@ -7756,8 +8861,7 @@
       [10.4, 15, -3.2, 3.2, "SERVICE STAIR"],
       [-15, 15, -4.9, -3.2, "REAR CROSS-CORRIDOR"],
       [-15, -6, -12, -4.9, "BOILER ROOM"],
-      [-6, 1.3, -12, -4.9, "WORKSHOP"],
-      [1.3, 7.6, -12, -4.9, "COLD ROOM"],
+      [-6, 7.6, -12, -4.9, "WORKROOM"],
       [7.6, 15, -12, -4.9, "BULK STORAGE"],
     ];
     basementZones.forEach((r) => addRoomZone(-9, basementMax, r[0], r[1], r[2], r[3], "BASEMENT", r[4]));
@@ -7953,8 +9057,13 @@
     buildWallRun({ axis: "x", fixed: -3.2, start: -15, end: 11.3, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-cross-corridor-front", openings: [{ kind: "arch", center: 0, width: 2.2, height: 2.8 }] });
     buildWallRun({ axis: "x", fixed: -4.9, start: -15, end: 15, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-rear-rooms", openings: [
       { kind: "door", center: -10.2, width: 1.35, label: "boiler room door", direction: 1 },
-      { kind: "door", center: -2.3, width: 1.35, label: "workshop door", direction: -1 },
-      { kind: "door", center: 4.5, width: 1.35, label: "cold room door", direction: 1 },
+      {
+        kind: "door", center: -2.3, width: 1.35, label: "workroom door", direction: -1,
+        locked: true,
+        getLockedLabel: () => "Workroom access — enter the four-digit PIN",
+        onLockedActivate: () => openWorkroomKeypad(),
+        onCreate: (door) => { workroomScene.entranceDoor = door; },
+      },
       { kind: "door", center: 11.2, width: 1.35, label: "bulk storage door", direction: -1 },
     ] });
     buildWallRun({ axis: "z", fixed: -6, start: -12, end: -4.9, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-boiler-divider", openings: [] });
@@ -8069,6 +9178,138 @@
     addWallPortrait({ axis: "z", fixed: 5, center: -9.2, floorY: FLOOR.UPPER, centerY: 1.72, side: -1, width: 0.85, height: 1.24, color: 0x27252d, artId: "orchard-porcelain-teeth", circuitName: "rear lounge lights" });
   }
 
+  function addWorkroomKeypadHardware() {
+    const root = new THREE.Group();
+    root.name = "workroom-pin-pad-lock";
+    root.position.set(-1.3, FLOOR.BASEMENT, -4.72);
+    scene.add(root);
+    const plate = roundedBox({ name: "workroom-keypad-backplate", w: 0.46, h: 0.76, d: 0.12, radius: 0.045, y: 1.38, material: M.iron, parent: root, cast: true });
+    const displayMaterial = new THREE.MeshBasicMaterial({ color: 0x163128, toneMapped: false });
+    const display = roundedBox({ name: "workroom-keypad-display", w: 0.33, h: 0.13, d: 0.025, radius: 0.018, y: 1.62, z: 0.075, material: displayMaterial, parent: root, cast: false });
+    const keyMaterial = new THREE.MeshStandardMaterial({ color: 0x282b2c, metalness: 0.55, roughness: 0.46 });
+    const keyAccentMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4d28, metalness: 0.62, roughness: 0.4 });
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = 0; column < 3; column += 1) {
+        roundedBox({
+          name: `workroom-keypad-physical-key-${row}-${column}`,
+          w: 0.075, h: 0.065, d: 0.028, radius: 0.012,
+          x: (column - 1) * 0.108,
+          y: 1.46 - row * 0.09,
+          z: 0.078,
+          material: row === 3 && column !== 1 ? keyAccentMaterial : keyMaterial,
+          parent: root,
+          cast: false,
+        });
+      }
+    }
+    const indicatorMaterial = new THREE.MeshStandardMaterial({ color: 0xe6a948, emissive: 0xe6a948, emissiveIntensity: 0.9, roughness: 0.34 });
+    const indicator = sphere({ name: "workroom-keypad-access-indicator", radius: 0.035, x: 0.17, y: 1.64, z: 0.095, material: indicatorMaterial, parent: root, cast: false });
+    const interaction = {
+      type: "workroom-keypad",
+      id: "workroom-keypad",
+      getLabel: () => state.workroom.unlocked ? "Workroom keypad — access granted" : "Enter Workroom access PIN",
+      activate: openWorkroomKeypad,
+    };
+    addInteractionTarget(plate, interaction);
+    addInteractionTarget(display, interaction);
+    addInteractionTarget(indicator, interaction);
+    workroomScene.keypadRoot = root;
+    workroomScene.keypadIndicator = indicator;
+    workroomScene.keypadIndicatorMaterial = indicatorMaterial;
+    updateWorkroomKeypadPresentation();
+  }
+
+  function addWorkroomSecurityHub() {
+    const root = new THREE.Group();
+    root.name = "workroom-live-monitor-wall";
+    root.position.set(0, FLOOR.BASEMENT, -11.7);
+    scene.add(root);
+    const placeholderMaterial = new THREE.MeshBasicMaterial({ color: 0x07171d, toneMapped: false });
+    const bezelMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1d, metalness: 0.72, roughness: 0.34 });
+    const indicatorMaterial = new THREE.MeshBasicMaterial({ color: 0x42ff78, toneMapped: false });
+    const screenWidth = 1.42;
+    const screenHeight = 0.8;
+    const columnGap = 0.16;
+    const rowGap = 0.18;
+    const startX = -0.25;
+    for (let index = 0; index < WORKROOM_SECURITY.monitorCount; index += 1) {
+      const column = index % WORKROOM_SECURITY.monitorColumns;
+      const row = Math.floor(index / WORKROOM_SECURITY.monitorColumns);
+      const x = startX + column * (screenWidth + columnGap);
+      const y = 1.05 + (WORKROOM_SECURITY.monitorRows - 1 - row) * (screenHeight + rowGap);
+      roundedBox({ name: `workroom-monitor-${index + 1}-bezel`, w: screenWidth + 0.13, h: screenHeight + 0.14, d: 0.11, radius: 0.045, x, y, material: bezelMaterial, parent: root, cast: false });
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(screenWidth, screenHeight), placeholderMaterial);
+      screen.name = `workroom-live-camera-screen-${index + 1}`;
+      // Rounded-box bevels extend beyond their nominal depth. Seat the live
+      // image clearly in front of that bevel so the bezel cannot occlude or
+      // z-fight with the render-target plane at normal viewing distance.
+      screen.position.set(x, y, 0.135);
+      screen.castShadow = false;
+      screen.receiveShadow = false;
+      screen.userData.securitySightTransparent = true;
+      root.add(screen);
+      const status = sphere({ name: `workroom-monitor-${index + 1}-status`, radius: 0.025, x: x + screenWidth * 0.43, y: y - screenHeight * 0.43, z: 0.165, material: indicatorMaterial, parent: root, cast: false });
+      workroomScene.monitorScreens.push(screen);
+      workroomScene.monitorStatusLights.push(status);
+    }
+    roundedBox({ name: "workroom-monitor-network-header", w: 6.35, h: 0.16, d: 0.09, radius: 0.03, x: 2.12, y: 2.65, z: 0, material: M.iron, parent: root, cast: false });
+    for (let index = 0; index < 18; index += 1) {
+      box({ name: "workroom-monitor-patch-bay-port", w: 0.11, h: 0.035, d: 0.025, x: -0.75 + index * 0.34, y: 0.48, z: 0.08, material: index % 5 === 0 ? M.brass : M.copper, parent: root, cast: false });
+    }
+    workroomScene.monitorRoot = root;
+
+    // A broad operator console anchors the live wall without closing the
+    // central aisle from the keypad door to the relay panel.
+    addTable(2.55, -9.25, 4.65, 0.92, FLOOR.BASEMENT, 0, M.blackWood);
+    workroomScene.ambience.operatorStations += 1;
+    for (const x of [1.05, 2.55, 4.05]) {
+      roundedBox({ name: "workroom-operator-keyboard", w: 0.72, h: 0.055, d: 0.26, radius: 0.035, x, y: FLOOR.BASEMENT + 0.83, z: -9.1, rotationX: -0.08, material: M.iron, cast: false });
+      const chair = new THREE.Group();
+      chair.name = "workroom-rolling-operator-chair";
+      chair.position.set(x, FLOOR.BASEMENT, -8.05);
+      scene.add(chair);
+      cylinder({ name: "workroom-chair-post", radius: 0.055, height: 0.48, segments: 10, y: 0.3, material: M.iron, parent: chair });
+      roundedBox({ name: "workroom-chair-seat", w: 0.58, h: 0.12, d: 0.54, radius: 0.08, y: 0.58, material: M.leather, parent: chair });
+      roundedBox({ name: "workroom-chair-back", w: 0.58, h: 0.72, d: 0.12, radius: 0.08, y: 1.02, z: 0.22, rotationX: -0.12, material: M.leather, parent: chair });
+      for (const angle of [0, Math.PI * 0.4, Math.PI * 0.8, Math.PI * 1.2, Math.PI * 1.6]) {
+        const wheelX = Math.sin(angle) * 0.28;
+        const wheelZ = Math.cos(angle) * 0.28;
+        cylinder({ name: "workroom-chair-wheel", radius: 0.045, height: 0.08, segments: 8, x: wheelX, y: 0.07, z: wheelZ, rotationZ: Math.PI / 2, material: M.iron, parent: chair, cast: false });
+      }
+      workroomScene.ambience.chairs += 1;
+    }
+
+    for (const [index, z] of [-10.35, -8.55, -6.75].entries()) {
+      const rack = roundedBox({ name: `workroom-server-rack-${index + 1}`, w: 0.72, h: 2.35, d: 1.2, radius: 0.055, x: 7.08, y: FLOOR.BASEMENT + 1.18, z, material: M.iron, cast: true });
+      rack.rotation.y = Math.PI / 2;
+      physics.addFixedBox(7.08, FLOOR.BASEMENT + 1.18, z, 0.72, 2.35, 1.2, Math.PI / 2);
+      for (let slot = 0; slot < 8; slot += 1) {
+        box({ name: "workroom-server-blade", w: 0.035, h: 0.16, d: 0.82, x: 6.66, y: FLOOR.BASEMENT + 0.27 + slot * 0.25, z, material: slot % 3 === 0 ? M.copper : M.blackWood, cast: false });
+      }
+      workroomScene.ambience.serverRacks += 1;
+    }
+
+    for (const z of [-10.8, -8.9, -7.0, -5.45]) {
+      box({ name: "workroom-overhead-cable-tray", w: 0.16, h: 0.12, d: 1.25, x: 6.75, y: FLOOR.BASEMENT + 3.08, z, material: M.iron, cast: false });
+      for (const offset of [-0.045, 0, 0.045]) cylinder({ name: "workroom-data-cable-bundle", radius: 0.018, height: 1.16, segments: 7, x: 6.75 + offset, y: FLOOR.BASEMENT + 3.04, z, rotationX: Math.PI / 2, material: offset === 0 ? M.copper : M.soot, cast: false });
+      workroomScene.ambience.cableTrays += 1;
+    }
+
+    for (const [index, x] of [-4.8, -3.95].entries()) {
+      roundedBox({ name: `workroom-equipment-case-${index + 1}`, w: 0.72, h: 0.48, d: 0.62, radius: 0.055, x, y: FLOOR.BASEMENT + 0.24, z: -10.95, material: M.iron, cast: true });
+      box({ name: "workroom-equipment-case-latch", w: 0.12, h: 0.08, d: 0.03, x, y: FLOOR.BASEMENT + 0.34, z: -10.62, material: M.brass, cast: false });
+      workroomScene.ambience.equipmentCases += 1;
+    }
+
+    // Small human traces keep the room from reading like a sterile prop set.
+    roundedBox({ name: "workroom-two-way-radio", w: 0.2, h: 0.34, d: 0.11, radius: 0.025, x: 4.6, y: FLOOR.BASEMENT + 0.98, z: -9.2, material: M.iron, cast: false });
+    cylinder({ name: "workroom-radio-antenna", radius: 0.012, height: 0.28, segments: 7, x: 4.66, y: FLOOR.BASEMENT + 1.27, z: -9.2, material: M.soot, cast: false });
+    cylinder({ name: "workroom-abandoned-coffee-cup", radius: 0.07, radiusTop: 0.065, radiusBottom: 0.055, height: 0.16, segments: 12, x: 0.35, y: FLOOR.BASEMENT + 0.9, z: -9.05, material: M.porcelain, cast: false });
+    for (let index = 0; index < 5; index += 1) box({ name: "workroom-shift-log-paper", w: 0.34, h: 0.012, d: 0.24, x: 0.1 + index * 0.045, y: FLOOR.BASEMENT + 0.9 + index * 0.004, z: -9.25 + index * 0.02, rotationY: -0.18 + index * 0.08, material: M.canvasLinen, cast: false });
+    for (let index = 0; index < 4; index += 1) roundedBox({ name: "workroom-archive-binder", w: 0.1, h: 0.42, d: 0.3, radius: 0.015, x: -5.55, y: FLOOR.BASEMENT + 0.31, z: -6.15 - index * 0.34, rotationY: Math.PI / 2, material: index % 2 ? M.leather : M.darkWood, cast: false });
+    workroomScene.ambience.smallProps += 12;
+  }
+
   function furnishBasement() {
     for (const z of [5.0, 7.8, 10.5]) addWineRack(-14.35, z, FLOOR.BASEMENT, -Math.PI / 2, 2.25);
     for (const x of [-11.5, -8.8, -6.1, -3.4]) addWineRack(x, 11.55, FLOOR.BASEMENT, 0, 2.35);
@@ -8139,7 +9380,9 @@
     addPipeRun([[-10.2, -1.35, -8.6], [-10.2, -0.65, -8.6], [-10.2, -0.65, -5.2], [-2.2, -0.65, -5.2]], 0.075, M.copper);
     addPipeRun([[-7.8, -1.3, -8.8], [-7.8, -0.9, -10.7], [4.4, -0.9, -10.7]], 0.065, M.iron);
     addTable(-2.5, -8.2, 3.1, 1.25, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "workshop tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2 });
+    new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2 });
+    addWorkroomKeypadHardware();
+    addWorkroomSecurityHub();
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
   }
 
@@ -8518,13 +9761,10 @@
     for (const x of [-9.0, 0, 9.0]) rearService.addFixture(x, -4.05, "corridor");
     rearService.addSwitch(0, FLOOR.BASEMENT + 1.15, -4.739, 0);
 
-    const workshop = new LightCircuit("workshop lights", FLOOR.BASEMENT, 0xff9147, true);
-    workshop.addFixture(-2.3, -8.2, "basement");
-    workshop.addSwitch(-1.0, FLOOR.BASEMENT + 1.15, -5.061, Math.PI);
-
-    const coldRoom = new LightCircuit("cold room lights", FLOOR.BASEMENT, 0xd7e6ff, true);
-    coldRoom.addFixture(4.5, -8.2, "basement");
-    coldRoom.addSwitch(6.0, FLOOR.BASEMENT + 1.15, -5.061, Math.PI);
+    const workroom = new LightCircuit("workroom lights", FLOOR.BASEMENT, 0xff9a53, true);
+    workroom.addFixture(-2.3, -8.2, "basement");
+    workroom.addFixture(4.5, -8.2, "basement");
+    workroom.addSwitch(-1.0, FLOOR.BASEMENT + 1.15, -5.061, Math.PI);
 
     const bulkStorage = new LightCircuit("bulk storage lights", FLOOR.BASEMENT, 0xff9f5f, true);
     bulkStorage.addFixture(11.2, -8.2, "basement");
@@ -9940,6 +11180,7 @@
       : 70;
     camera.fov = clamp(portraitExpansion, 70, 96);
     camera.updateProjectionMatrix();
+    if (mobileProfileChanged) monitorWallSystem?.setMobileProfile();
     // Rotating a phone can cross the render-profile boundary without changing
     // floors. Re-apply the bounded light layout once the scene is ready so a
     // landscape-to-portrait resize cannot retain the desktop shader budget.
@@ -9947,7 +11188,7 @@
   }
 
   function requestPointerLock() {
-    if (!state.started || state.journalOpen || state.menuOpen || matchMedia("(pointer: coarse)").matches) return;
+    if (!state.started || state.journalOpen || state.menuOpen || state.workroom.keypadOpen || matchMedia("(pointer: coarse)").matches) return;
     if (document.pointerLockElement !== dom.canvas && dom.canvas.requestPointerLock) {
       try {
         const request = dom.canvas.requestPointerLock();
@@ -10267,6 +11508,7 @@
     const nextOpen = Boolean(open);
     if (nextOpen === state.menuOpen) return;
     if (nextOpen && state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+    if (nextOpen && state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
     state.menuOpen = nextOpen;
     clearMovementInput();
     if (nextOpen) {
@@ -10291,7 +11533,7 @@
   }
 
   function activateCurrentInteraction() {
-    if (state.journalOpen || state.menuOpen || state.contestant13.actionInProgress) return;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.contestant13.actionInProgress) return;
     if (!state.currentInteraction) return;
     state.currentInteraction.activate();
     updateInteractionPrompt();
@@ -10304,7 +11546,7 @@
         contestant13Quest.toggleJournal();
         return;
       }
-      const activeModal = state.menuOpen ? dom.menu : null;
+      const activeModal = state.workroom.keypadOpen ? dom.workroomKeypad : state.menuOpen ? dom.menu : null;
       if (event.code === "Tab" && activeModal) {
         const focusable = Array.from(activeModal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
         if (focusable.length) {
@@ -10319,8 +11561,22 @@
       }
       if (event.code === "Escape") {
         event.preventDefault();
-        if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+        if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+        else if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
         else if (state.started) setMenuOpen(!state.menuOpen);
+        return;
+      }
+      if (state.workroom.keypadOpen) {
+        if (!event.repeat && (/^Digit\d$/.test(event.code) || /^Numpad\d$/.test(event.code))) {
+          event.preventDefault();
+          appendWorkroomKeypadDigit(event.code.slice(-1));
+        } else if (!event.repeat && (event.code === "Backspace" || event.code === "Delete")) {
+          event.preventDefault();
+          clearWorkroomKeypad();
+        } else if (!event.repeat && (event.code === "Enter" || event.code === "NumpadEnter")) {
+          event.preventDefault();
+          submitWorkroomCode();
+        }
         return;
       }
       if (state.menuOpen) return;
@@ -10356,7 +11612,7 @@
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
-      if (state.journalOpen || state.menuOpen) return;
+      if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
     });
@@ -10381,6 +11637,20 @@
       contestant13Quest.setDevMode(!state.devMode);
       setMenuStatus(state.devMode ? "Dev Mode granted all current clues and objects." : "Pre-dev quest state restored.");
     });
+    if (dom.workroomKeypadClose) dom.workroomKeypadClose.addEventListener("click", () => setWorkroomKeypadOpen(false));
+    if (dom.workroomKeypad) {
+      dom.workroomKeypad.addEventListener("click", (event) => {
+        if (event.target === dom.workroomKeypad) {
+          setWorkroomKeypadOpen(false);
+          return;
+        }
+        const key = event.target.closest?.("[data-workroom-key]");
+        if (!key) return;
+        if (key.dataset.digit != null) appendWorkroomKeypadDigit(key.dataset.digit);
+        else if (key.dataset.action === "clear") clearWorkroomKeypad();
+        else if (key.dataset.action === "enter") submitWorkroomCode();
+      });
+    }
 
     const touchBindings = [
       ["touch-forward", "forward"], ["touch-back", "back"],
@@ -10506,7 +11776,7 @@
   }
 
   function findInteraction() {
-    if (state.journalOpen || state.menuOpen || state.contestant13.actionInProgress) return null;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.contestant13.actionInProgress) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
@@ -11049,7 +12319,7 @@
       fpsElapsed = 0;
     }
 
-    if (!state.menuOpen) {
+    if (!state.menuOpen && !state.workroom.keypadOpen) {
       for (const object of animatedObjects) object.update(dt);
       if (cameraSecurity) cameraSecurity.update(dt);
       for (const system of yardWaterSystems) system.update(dt);
@@ -11067,8 +12337,9 @@
         accumulator -= 1 / 60;
       }
     } else {
-      // Escape is a true pause, including NPC, storm, door, and movement
-      // simulation. Drop accumulated time so Resume cannot cause catch-up.
+      // Escape and the PIN terminal are true pauses, including NPC, storm,
+      // door, and movement simulation. Drop accumulated time so returning to
+      // the world cannot cause catch-up.
       accumulator = 0;
     }
     syncCamera();
@@ -11080,7 +12351,10 @@
       updateLocation();
       interactionTimer = 0.08;
     }
-    if (!state.menuOpen) updateContextLighting(dt);
+    if (!state.menuOpen && !state.workroom.keypadOpen) {
+      updateContextLighting(dt);
+      monitorWallSystem?.update(dt);
+    }
     // The diagnostics object is available on demand through the QA API. Do
     // not stringify its large room/circuit/yard payload into a hidden DOM node
     // twice per second during normal play; those allocations caused periodic
@@ -11121,7 +12395,8 @@
       menus: {
         inventoryOpen: state.journalOpen,
         escapeOpen: state.menuOpen,
-        simulationPaused: state.menuOpen,
+        keypadOpen: state.workroom.keypadOpen,
+        simulationPaused: state.menuOpen || state.workroom.keypadOpen,
         maximized: state.maximized,
         hasSave: Boolean(mansionSaveSlot?.has()),
       },
@@ -11140,6 +12415,7 @@
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
+      workroom: getWorkroomDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -11386,6 +12662,13 @@
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
     window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
+    window.MrFeastFresh.getWorkroomState = () => getWorkroomDiagnostics();
+    window.MrFeastFresh.openWorkroomKeypadForQA = () => state.qa ? openWorkroomKeypad() : false;
+    window.MrFeastFresh.submitWorkroomCodeForQA = (code) => state.qa ? submitWorkroomCode(code) : getWorkroomDiagnostics();
+    window.MrFeastFresh.resetWorkroomForQA = () => resetWorkroomForQA();
+    window.MrFeastFresh.getMonitorWallState = () => monitorWallSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.refreshMonitorWallForQA = (cameraId) => state.qa ? monitorWallSystem?.refreshForQA(cameraId) || null : null;
+    window.MrFeastFresh.setMonitorFeedForQA = (screenIndex, cameraId) => state.qa ? monitorWallSystem?.setFeedForQA(screenIndex, cameraId) || null : null;
     window.MrFeastFresh.resetCameraSecurityForQA = (mode) => cameraSecurity ? cameraSecurity.resetForQA(mode) : null;
     window.MrFeastFresh.setCameraPolicyForQA = (mode) => cameraSecurity ? cameraSecurity.setPolicyForQA(mode) : null;
     window.MrFeastFresh.setCameraSoloForQA = (cameraId) => cameraSecurity ? cameraSecurity.setSoloForQA(cameraId) : null;
@@ -11411,6 +12694,9 @@
     window.MrFeastFresh.setMrFeastPoseForQA = (options) => mrFeastNpc ? mrFeastNpc.setPoseForQA(options) : null;
     window.MrFeastFresh.transitionMrFeastForQA = (actionName, duration) => mrFeastNpc ? mrFeastNpc.transitionForQA(actionName, duration) : null;
     window.MrFeastFresh.advanceMrFeastAnimationForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceAnimationForQA(seconds) : null;
+    window.MrFeastFresh.setMrFeastFaceForQA = (options) => mrFeastNpc ? mrFeastNpc.setFaceForQA(options) : null;
+    window.MrFeastFresh.triggerMrFeastBlinkForQA = (side) => mrFeastNpc ? mrFeastNpc.triggerBlinkForQA(side) : null;
+    window.MrFeastFresh.advanceMrFeastFaceForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceFaceForQA(seconds) : null;
     window.MrFeastFresh.setMrFeastRouteSegmentForQA = (targetId, progress, animationTime) => mrFeastNpc ? mrFeastNpc.setRouteSegmentForQA(targetId, progress, animationTime) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastCameraResponseForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runCameraResponseForQA(maxSeconds) : null;
@@ -11553,6 +12839,8 @@
         laundry: [-8.0, FLOOR.BASEMENT, 0, Math.PI / 2],
         pantry: [6.0, FLOOR.BASEMENT, 0, -Math.PI / 2],
         boiler: [-8.0, FLOOR.BASEMENT, -5.3, 0],
+        workroom: [-2.3, FLOOR.BASEMENT, -8.0, 0],
+        workroomEast: [4.5, FLOOR.BASEMENT, -8.0, 0],
         workshop: [-2.3, FLOOR.BASEMENT, -8.0, 0],
         coldRoom: [4.5, FLOOR.BASEMENT, -8.0, 0],
         bulkStorage: [11.2, FLOOR.BASEMENT, -8.0, 0],
@@ -12127,6 +13415,8 @@
       mergeStaticDecor();
       registerExteriorDetailCulling();
       cameraSecurity = new CameraSecuritySystem();
+      monitorWallSystem = new WorkroomMonitorWallSystem(workroomScene, cameraSecurity);
+      syncWorkroomDoorState();
       mrFeastNpc = new MrFeastWanderer();
       // The character is an optional test layer: it loads after the mansion is
       // usable and a failed GLB never blocks exploration or the boot watchdog.

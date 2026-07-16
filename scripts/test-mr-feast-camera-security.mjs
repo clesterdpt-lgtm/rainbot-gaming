@@ -108,7 +108,7 @@ async function run() {
       assert(state.security.cameras.exemptZones.includes(safeZone), `intentional camera-free zone is missing: ${safeZone}`);
       assert(!state.security.cameras.coveredZones.includes(safeZone), `safe zone should not contain a camera: ${safeZone}`);
     }
-    for (const coveredZone of ["FRONT FOYER", "BALLROOM", "WORKSHOP", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
+    for (const coveredZone of ["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
       assert(state.security.cameras.coveredZones.includes(coveredZone), `major camera coverage is missing: ${coveredZone}`);
     }
 

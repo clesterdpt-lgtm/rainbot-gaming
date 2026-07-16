@@ -370,10 +370,27 @@ async function run() {
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.35);
     state = await diagnostics(page);
-    assert(await page.locator("#mansion-security").isVisible(), "suspicion HUD should appear during hostile observation");
-    assert(Number(await page.locator("#mansion-security").getAttribute("aria-valuenow")) > 0, "suspicion HUD meter should mirror exposure");
-    assert(/camera|watched|lockdown|suspicion/i.test(await page.locator("#mansion-security-status").textContent() || ""), "suspicion HUD should explain the current camera state");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-suspicion-desktop.png") });
+    const securityNotice = page.locator("#mansion-security");
+    assert(await securityNotice.isVisible(), "camera status should appear during acquisition");
+    assert((await securityNotice.getAttribute("role")) === "status", "camera feedback should be an unobtrusive live status rather than a suspicion meter");
+    assert((await page.locator("#mansion-security-status").textContent() || "").trim() === "Spotted", "the three-pulse acquisition warning should say only Spotted");
+    assert(await page.locator("#mansion-security-mode, #mansion-security-value, .mansion-security__track").count() === 0, "camera notice should not retain policy, percentage, or meter-track UI");
+    let recordingState = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
+    for (let step = 0; step < 30 && !recordingState.trackingPlayer; step += 1) {
+      await advanceSecurity(page, 0.1);
+      recordingState = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
+    }
+    assert(recordingState.trackingPlayer, `camera should reach its solid-red recording phase; camera=${JSON.stringify(recordingState)}`);
+    assert((await page.locator("#mansion-security-status").textContent() || "").trim() === "Being recorded", "solid-red tracking should change the notice to Being recorded");
+    const desktopNoticeLayout = await securityNotice.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+    assert(desktopNoticeLayout.width <= 160 && desktopNoticeLayout.height <= 40, `desktop camera notice should stay subtle and compact; layout=${JSON.stringify(desktopNoticeLayout)}`);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-desktop.png") });
+    await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, true), mainCamera);
+    await advanceSecurity(page, 0.2);
+    assert(!(await securityNotice.isVisible()), "camera notice should disappear immediately after observation ends, even during lockdown");
 
     const finalLightLayout = await page.evaluate(() => window.MrFeastFresh.lightLayout());
     assert(JSON.stringify(finalLightLayout) === JSON.stringify(initialLightLayout), `security cameras must not add or toggle shader lights; before=${JSON.stringify(initialLightLayout)} after=${JSON.stringify(finalLightLayout)}`);
@@ -400,15 +417,17 @@ async function run() {
       return {
         withinStage: meter.left >= stage.left && meter.right <= stage.right && meter.top >= stage.top && meter.bottom <= stage.bottom,
         width: meter.width,
+        height: meter.height,
         stageWidth: stage.width,
       };
     });
-    assert(mobileLayout.withinStage && mobileLayout.width < mobileLayout.stageWidth, `mobile security HUD should remain inside the stage; layout=${JSON.stringify(mobileLayout)}`);
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-suspicion-mobile.png") });
+    assert(mobileLayout.withinStage && mobileLayout.width <= 160 && mobileLayout.height <= 40, `mobile camera notice should remain compact inside the stage; layout=${JSON.stringify(mobileLayout)}`);
+    assert((await mobilePage.locator("#mansion-security-status").textContent() || "").trim() === "Spotted", "mobile acquisition notice should use the same subtle Spotted copy");
+    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-mobile.png") });
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast camera security browser test: wall-centered slow scanning, warning pulses, player tracking, policy, stealth, occlusion, alarm investigation, and responsive HUD passed");
+    console.log("Mr. Feast camera security browser test: wall-centered slow scanning, warning pulses, player tracking, policy, stealth, occlusion, alarm investigation, and transient camera status passed");
     await context.close();
   } finally {
     if (browser) await browser.close();

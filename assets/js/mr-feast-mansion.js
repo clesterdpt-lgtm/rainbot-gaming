@@ -47,9 +47,6 @@
     energyValue: $("mansion-energy-value"),
     energyFill: $("mansion-energy-fill"),
     security: $("mansion-security"),
-    securityMode: $("mansion-security-mode"),
-    securityValue: $("mansion-security-value"),
-    securityFill: $("mansion-security-fill"),
     securityStatus: $("mansion-security-status"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
@@ -4903,7 +4900,7 @@
         return;
       }
       if (!this.hasItem("basement-key-b13")) {
-        this.showDiscovery("Locked basement stair", "The Kitchen service stair is locked. Contestant 13's book says the key is buried in the hedge maze.");
+        this.showDiscovery("Locked", "The basement stair door will not open.");
         return;
       }
       this.story.basementUnlocked = true;
@@ -5785,34 +5782,12 @@
 
     updateHud() {
       if (!dom.security) return;
-      const exposurePercent = Math.round(clamp(state.security.exposure, 0, 1) * 100);
-      const alarmActive = this.isAlarmResponseActive();
-      const hostileObservation = state.security.observed && !state.security.permitted;
-      const showHud = state.started && !state.isHidden && (
-        state.security.observed
-        || state.security.mode !== CAMERA_SECURITY_MODE.SHOW
-        || alarmActive
-      );
+      const activeCamera = this.cameraById.get(state.security.activeCameraId);
+      const beingRecorded = Boolean(activeCamera && (activeCamera.trackingPlayer || activeCamera.acquisition >= 1));
+      const showHud = state.started && !state.isHidden && state.security.observed;
       dom.security.hidden = !showHud;
-      dom.security.setAttribute("aria-valuenow", String(exposurePercent));
-      dom.security.dataset.state = alarmActive ? "alarm" : hostileObservation ? "hostile" : "permitted";
-      if (dom.securityFill) dom.securityFill.style.width = `${exposurePercent}%`;
-      if (dom.securityValue) dom.securityValue.textContent = String(exposurePercent);
-      if (dom.securityMode) {
-        dom.securityMode.textContent = alarmActive
-          ? "Alarm"
-          : state.security.mode === CAMERA_SECURITY_MODE.LOCKDOWN
-            ? "Lockdown"
-            : state.security.mode === CAMERA_SECURITY_MODE.RESTRICTED ? "Restricted" : "Public cameras";
-      }
-      if (dom.securityStatus) {
-        dom.securityStatus.textContent = alarmActive
-          ? "Mr Feast is responding"
-          : hostileObservation
-            ? "Camera acquiring you"
-            : state.security.observed ? "Filming permitted" : state.security.mode === CAMERA_SECURITY_MODE.LOCKDOWN
-              ? "Avoid every camera" : "Basement cameras are hostile";
-      }
+      dom.security.dataset.state = beingRecorded ? "recording" : "spotted";
+      if (dom.securityStatus) dom.securityStatus.textContent = beingRecorded ? "Being recorded" : "Spotted";
     }
 
     update(dt, force = false) {

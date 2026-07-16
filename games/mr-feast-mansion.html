@@ -335,77 +335,55 @@
       left: 50%;
       bottom: max(64px, calc(env(safe-area-inset-bottom) + 54px));
       z-index: 7;
-      display: grid;
-      width: min(230px, calc(100% - 36px));
-      gap: 5px;
-      padding: 8px 10px 9px;
-      border: 1px solid rgba(205, 177, 124, 0.28);
-      border-radius: 3px;
-      color: #d8cdbb;
-      background: rgba(7, 8, 10, 0.82);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.44);
-      backdrop-filter: blur(8px);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      max-width: calc(100% - 36px);
+      padding: 5px 9px;
+      border: 1px solid rgba(186, 125, 103, 0.24);
+      border-radius: 99px;
+      color: rgba(225, 215, 203, 0.82);
+      background: rgba(9, 9, 11, 0.58);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(4px);
       pointer-events: none;
       transform: translateX(-50%);
     }
 
     #mansion-security[hidden] { display: none; }
 
-    .mansion-security__head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 0.54rem;
-      font-weight: 700;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-    }
-
-    #mansion-security-mode { color: #d9c38f; }
-    #mansion-security-value { color: #9d968b; font-variant-numeric: tabular-nums; }
-
-    .mansion-security__track {
-      height: 5px;
-      overflow: hidden;
-      border-radius: 99px;
-      background: rgba(255, 255, 255, 0.09);
-    }
-
-    #mansion-security-fill {
-      width: 0;
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, #6e825b, #c9b368);
-      transform-origin: left center;
-      transition: width 80ms linear, background 140ms ease;
-    }
-
     #mansion-security-status {
       overflow: hidden;
-      color: #aaa397;
-      font-family: var(--mansion-serif);
-      font-size: 0.72rem;
-      line-height: 1.05;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      line-height: 1;
       text-overflow: ellipsis;
+      text-transform: uppercase;
       white-space: nowrap;
     }
 
-    #mansion-security[data-state="hostile"] {
-      border-color: rgba(207, 152, 73, 0.52);
+    #mansion-security::before {
+      width: 5px;
+      height: 5px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #d15243;
+      box-shadow: 0 0 7px rgba(209, 82, 67, 0.58);
+      content: "";
     }
 
-    #mansion-security[data-state="hostile"] #mansion-security-fill {
-      background: linear-gradient(90deg, #a56c30, #e0b35b);
+    #mansion-security[data-state="spotted"]::before {
+      animation: mansion-security-spotted 800ms steps(1, end) infinite;
     }
 
-    #mansion-security[data-state="alarm"] {
-      border-color: rgba(220, 72, 55, 0.72);
-      box-shadow: 0 0 0 1px rgba(150, 32, 23, 0.3), 0 8px 28px rgba(86, 9, 6, 0.58);
+    #mansion-security[data-state="recording"] {
+      border-color: rgba(186, 125, 103, 0.34);
     }
 
-    #mansion-security[data-state="alarm"] #mansion-security-fill {
-      background: linear-gradient(90deg, #8b2019, #ef4f3f);
+    @keyframes mansion-security-spotted {
+      0%, 52% { opacity: 1; }
+      53%, 100% { opacity: 0.2; }
     }
 
     .mansion-tools {
@@ -1435,9 +1413,9 @@
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
       #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
-      #mansion-security { bottom: max(160px, calc(env(safe-area-inset-bottom) + 146px)); width: 184px; }
-      #mansion-security:not([hidden]) ~ #mansion-discovery { bottom: max(230px, calc(env(safe-area-inset-bottom) + 214px)); }
-      #mansion-security:not([hidden]) ~ #mansion-action { bottom: max(218px, calc(env(safe-area-inset-bottom) + 202px)); }
+      #mansion-security { bottom: max(160px, calc(env(safe-area-inset-bottom) + 146px)); }
+      #mansion-security:not([hidden]) ~ #mansion-discovery { bottom: max(206px, calc(env(safe-area-inset-bottom) + 190px)); }
+      #mansion-security:not([hidden]) ~ #mansion-action { bottom: max(196px, calc(env(safe-area-inset-bottom) + 180px)); }
       #mansion-journal {
         place-items: start stretch;
         overflow: hidden;
@@ -1539,10 +1517,8 @@
           <div class="mansion-energy__track" aria-hidden="true"><div id="mansion-energy-fill"></div></div>
         </div>
 
-        <div id="mansion-security" role="meter" aria-label="Camera suspicion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-state="permitted" hidden>
-          <div class="mansion-security__head"><span id="mansion-security-mode">Public cameras</span><span id="mansion-security-value">0</span></div>
-          <div class="mansion-security__track" aria-hidden="true"><div id="mansion-security-fill"></div></div>
-          <span id="mansion-security-status">Filming permitted</span>
+        <div id="mansion-security" role="status" aria-live="polite" aria-atomic="true" data-state="spotted" hidden>
+          <span id="mansion-security-status">Spotted</span>
         </div>
 
         <div class="mansion-tools" aria-label="View controls">

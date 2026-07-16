@@ -107,6 +107,12 @@ async function run() {
     await pressInteract(page);
     state = await diagnostics(page);
     assert(!state.contestant13.basementUnlocked && state.contestant13.world.basementDoorLocked, "early basement interaction must not unlock the door");
+    const lockedDoorFeedback = [
+      await page.locator("#mansion-discovery-title").textContent(),
+      await page.locator("#mansion-discovery-body").textContent(),
+    ].filter(Boolean).join(" ");
+    assert(/locked/i.test(lockedDoorFeedback), `locked basement interaction should still give generic feedback; feedback=${JSON.stringify(lockedDoorFeedback)}`);
+    assert(!/contestant 13|book|hedge maze|basement key|buried/i.test(lockedDoorFeedback), `locked basement interaction must not reveal the clue solution; feedback=${JSON.stringify(lockedDoorFeedback)}`);
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /evidence cage.*locked/i);
     await pressInteract(page);

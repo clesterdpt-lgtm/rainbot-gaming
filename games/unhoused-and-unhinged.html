@@ -1640,6 +1640,148 @@
       text-transform: uppercase;
     }
 
+    /* Pawn Cart shop overlay (reuses the bag scrim/panel shell). */
+    .uh-shop .uh-bag__panel {
+      max-width: 560px;
+    }
+
+    .uh-shop__dealnote {
+      background: rgba(255, 212, 59, 0.12);
+      border: 1px dashed rgba(255, 212, 59, 0.55);
+      border-radius: 8px;
+      color: #ffd43b;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 800;
+      letter-spacing: 0.4px;
+      margin-bottom: 10px;
+      padding: 7px 10px;
+      text-transform: uppercase;
+    }
+
+    .uh-shop__list {
+      display: grid;
+      gap: 7px;
+    }
+
+    .uh-shop__section {
+      color: rgba(234, 247, 255, 0.55);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      margin: 8px 0 1px;
+      text-transform: uppercase;
+    }
+
+    .uh-shop__section:first-child {
+      margin-top: 0;
+    }
+
+    .uh-shop__row {
+      align-items: center;
+      background: rgba(8, 11, 16, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      padding: 9px 11px;
+      text-align: left;
+      touch-action: manipulation;
+      width: 100%;
+    }
+
+    .uh-shop__row:hover {
+      border-color: rgba(46, 224, 255, 0.5);
+    }
+
+    .uh-shop__row.is-deal {
+      border-color: rgba(255, 212, 59, 0.75);
+      box-shadow: 0 0 0 1px rgba(255, 212, 59, 0.25), inset 0 0 18px rgba(255, 212, 59, 0.07);
+    }
+
+    .uh-shop__row.is-owned {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    .uh-shop__row.is-broke:not(.is-owned) {
+      opacity: 0.72;
+    }
+
+    .uh-shop__icon {
+      font-size: 22px;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .uh-shop__info {
+      min-width: 0;
+    }
+
+    .uh-shop__info b {
+      color: #fff;
+      display: block;
+      font-family: var(--font-display);
+      font-size: 12.5px;
+      text-transform: uppercase;
+    }
+
+    .uh-shop__info i {
+      color: rgba(234, 247, 255, 0.66);
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-style: normal;
+      line-height: 1.35;
+      margin-top: 3px;
+    }
+
+    .uh-shop__dealtag {
+      background: rgba(255, 212, 59, 0.18);
+      border-radius: 999px;
+      color: #ffd43b;
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      font-style: normal;
+      font-weight: 800;
+      margin-left: 6px;
+      padding: 1px 7px;
+      vertical-align: 1px;
+    }
+
+    .uh-shop__price {
+      font-family: var(--font-mono);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .uh-shop__price b {
+      color: #75ff92;
+      display: block;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .uh-shop__price s {
+      color: rgba(234, 247, 255, 0.45);
+      display: block;
+      font-size: 10px;
+    }
+
+    .uh-shop__row.is-owned .uh-shop__price b {
+      color: rgba(234, 247, 255, 0.55);
+      font-size: 11px;
+    }
+
+    .uh-shop__row.is-broke:not(.is-owned) .uh-shop__price b {
+      color: #ffb3a7;
+    }
+
     /* City map overlay (pauses while open). */
     .uh-map {
       align-items: center;
@@ -2312,6 +2454,21 @@
             </div>
           </div>
 
+          <!-- Pawn Cart shop overlay: browse weapons, run upgrades, supplies. -->
+          <div class="uh-bag uh-shop" id="shop-overlay" hidden>
+            <div class="uh-bag__panel">
+              <div class="uh-bag__head">
+                <div>
+                  <strong>Pawn Cart — Pete's Finest</strong>
+                  <span>Street-grade gear, zero warranties. Cash: <b id="shop-cash">$0</b></span>
+                </div>
+                <button class="btn btn--ghost" id="shop-close" type="button">Close</button>
+              </div>
+              <div class="uh-shop__dealnote" id="shop-deal-note">Pete rotates a fresh deal every dawn.</div>
+              <div class="uh-shop__list" id="shop-list" aria-label="Shop catalog"></div>
+            </div>
+          </div>
+
           <!-- Touch controls: left joystick + right action buttons (ACT / ATTACK / BAG) -->
           <div class="rb-touch-layer rb-touch-layer--unhinged" aria-label="Touch controls">
             <div class="rb-touch-zone" id="unhinged-touch-stick" aria-label="Move"></div>
@@ -2369,10 +2526,12 @@
         <div class="game-side__panel">
           <h3 class="game-side__title">HOW TO PLAY</h3>
           <ul class="unhinged-howto-list">
-            <li><strong>Earn by day.</strong> Stand near people and tap <strong>ACT</strong> to perform for tips.</li>
+            <li><strong>Earn by day.</strong> Stand near people and tap <strong>ACT</strong> to perform for tips. Keep performing — curious passers-by wander over, and bigger crowds pay better.</li>
+            <li><strong>Chase the daily favor.</strong> Every dawn deals a different <strong>District Favor</strong> from a rotating deck — pack a park crowd, slip cops on peels, chain an act streak. Complete it for a reward before nightfall.</li>
+            <li><strong>Work street gigs.</strong> Three regulars — <strong>Prophet Dave</strong> (Underpass), <strong>Granny Boombox</strong> (Camp Row), and <strong>Mascot Marv</strong> (Crosswalk Circus) — hang out under <strong>GIG!</strong> markers. Tap <strong>ACT</strong> next to one to take their job, do the thing, then return to hand it in for unique rewards.</li>
             <li><strong>Collect &amp; equip props.</strong> Grab cones, a boombox, a plunger and more, open the <strong>BAG</strong>, tap an item, then tap the slot (1-4) where you want it. The equipped item changes what ACT and ATTACK do (a cone earns tips as a hat, or throws as a weapon).</li>
             <li><strong>Study the block.</strong> Tap <strong>MAP</strong> or the round minimap (or press <strong>M</strong>) to open the city map — the game pauses while you check districts, landmarks, and your current objective.</li>
-            <li><strong>Shop the Pawn Cart.</strong> Bring cash to the <strong>Pawn Cart</strong> at the kiosk and tap <strong>ACT</strong> to buy gear — a long-reach <strong>Mop Spear</strong>, a zombie-confusing <strong>Rubber Chicken</strong>, then restock cones and peels.</li>
+            <li><strong>Shop the Pawn Cart.</strong> Tap <strong>ACT</strong> at Pete's cart to browse the full catalog — weapons (<strong>Mop Spear</strong>, <strong>Rubber Chicken</strong>, <strong>Trash Boombox</strong>), permanent <strong>run upgrades</strong> (faster sneakers, tip-boosting top hat, puffy jacket, cart caddy, hype man), and supplies. Watch for the <strong>DAWN DEAL</strong> — one item is 30% off each day.</li>
             <li><strong>Mind your stars.</strong> Aggressive moves near regular folks raise your <strong>wanted level</strong> faster when more NPCs see it. Hit 2 stars and the cops chase — lie low or rest at camp to cool down.</li>
             <li><strong>Survive the night.</strong> Tweeker Zombies swarm in — including <strong>Goo Spitters</strong> that lob slowing slime from range. Tap <strong>ATTACK</strong> to clear the wave, then dawn resets the block. Last 3 nights to win.</li>
           </ul>
@@ -2393,7 +2552,7 @@
             <li>Two buttons: ACT earns money, ATTACK fights. Collected props in your bag flavor both.</li>
             <li>Hitting bystanders or over-performing raises your wanted stars and brings the cops. Lie low or rest at camp to cool down.</li>
             <li>At night, Tweeker Zombies spawn from alleys — clear the wave with whatever you've equipped.</li>
-            <li>The goal arrow points to the nearest pickup by day, or the nearest zombie at night.</li>
+            <li>The goal arrow tracks your active street gig or district favor by day, or the nearest zombie at night.</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
             Satire prototype. The target is absurd systems and slapstick city chaos, not real unhoused people or addiction.
@@ -2418,7 +2577,7 @@
   <script src="../assets/vendor/three/three-r128.min.js"></script>
   <script src="../assets/vendor/three/GLTFLoader-r128.js"></script>
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
-  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260710-kenney-models-2"></script>
+  <script src="../assets/js/unhoused-and-unhinged-topdown.js?v=20260716-pawn-shop-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

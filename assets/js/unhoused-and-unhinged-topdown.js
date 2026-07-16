@@ -71,6 +71,10 @@
     bagGrid: document.getElementById("bag-grid"),
     bagSlotPicker: document.getElementById("bag-slot-picker"),
     bagHint: document.getElementById("bag-hint"),
+    shopOverlay: document.getElementById("shop-overlay"),
+    shopList: document.getElementById("shop-list"),
+    shopCash: document.getElementById("shop-cash"),
+    shopDealNote: document.getElementById("shop-deal-note"),
     mapOverlay: document.getElementById("map-overlay"),
     mapCanvas: document.getElementById("map-canvas"),
     mapLegend: document.getElementById("map-legend"),
@@ -1299,6 +1303,7 @@
     danger: "#ff6c6c",
     loot: "#2ee0ff",
     objective: "#ff9d5c",
+    npc: "#ff9df5",
     you: "#2ee0ff",
   };
 
@@ -1374,6 +1379,154 @@
       intro: "District Favor: restock three supplies in Coupon Canyon.",
       reward: "Coupon Canyon doubled the coupons.",
     },
+    {
+      id: "tip-rush-circus",
+      name: "Circus Tip Rush",
+      district: "Crosswalk Circus",
+      target: points.busk,
+      kind: "earn",
+      goal: 12,
+      hud: "Circus tips $",
+      intro: "District Favor: rake in $12 of tips at Crosswalk Circus.",
+      reward: "Circus regulars ran cover. Heat way down, cones tossed in.",
+    },
+    {
+      id: "streak-hot-hand",
+      name: "Hot Hand",
+      target: points.busk,
+      kind: "streak",
+      absolute: true,
+      goal: 4,
+      hud: "Best act streak",
+      intro: "District Favor: chain a x4 act streak anywhere on the block.",
+      reward: "The block respects the hustle. Cash bonus, heat cooled.",
+    },
+    {
+      id: "slip-patrol",
+      name: "Slip Patrol",
+      target: points.policeStation,
+      kind: "slip",
+      goal: 2,
+      hud: "Cops slipped",
+      intro: "District Favor: slip two cops on banana peels before night.",
+      reward: "The block saw the cops eat pavement. Heat plummets.",
+    },
+    {
+      id: "fountain-splash-show",
+      name: "Fountain Splash Show",
+      near: points.fountain,
+      nearRadius: 18,
+      target: points.fountain,
+      kind: "act",
+      goal: 2,
+      minAudience: 3,
+      hud: "Fountain shows",
+      intro: "District Favor: land two bits for 3+ people at Fountain Plaza.",
+      reward: "Fountain crowd showered you in coins.",
+    },
+  ];
+
+  // ----------------------------------------------------------------------------
+  // NPC quest-givers: named regulars who hang out at fixed spots by day and hand
+  // out street gigs. ACT next to one to accept; gigs run alongside the district
+  // favor, rotate daily per NPC, and pay out unique rewards on hand-in.
+  // ----------------------------------------------------------------------------
+  const NPC_TALK_RADIUS = 6.5;
+  const NPC_QUEST_GIVERS = [
+    {
+      id: "prophet-dave",
+      name: "Prophet Dave",
+      short: "Dave",
+      home: { x: -40, z: 62 },
+      color: 0x7d5ba6,
+      prop: "sign",
+      blurb: "Underpass oracle. His gigs pay in blessings (max health).",
+      greeting: "Prophet Dave: 'The block provides, friend. Prove you believe.'",
+      quests: [
+        {
+          id: "dave-sermon-tour",
+          kind: "tour",
+          goal: 3,
+          hud: "Districts preached",
+          intro: "Dave's gig — spread the word: land a paid bit in 3 different districts.",
+          reward: "Dave lays hands on your hit points. Blessed.",
+          give: { maxHealth: 10, heal: 25, wanted: -5 },
+        },
+        {
+          id: "dave-donation-drive",
+          kind: "earn",
+          goal: 8,
+          hud: "Donations $",
+          intro: "Dave's gig — collect $8 in tips for The Cause (you keep the tips).",
+          reward: "The Cause is pleased. Dave blesses your constitution.",
+          give: { maxHealth: 6, heal: 22, cash: 3 },
+        },
+      ],
+    },
+    {
+      id: "granny-boombox",
+      name: "Granny Boombox",
+      short: "Granny",
+      home: { x: -112, z: 60 },
+      color: 0x3d9e8c,
+      prop: "boombox",
+      blurb: "Camp Row fixer. Fetch her supplies, she kicks back gear.",
+      greeting: "Granny Boombox: 'Run an errand, sugar. Granny remembers favors.'",
+      quests: [
+        {
+          id: "granny-snack-run",
+          kind: "deliver",
+          types: ["snack"],
+          goal: 3,
+          hud: "Snacks fetched",
+          intro: "Granny's gig — round up 3 street snacks, then swing back to Camp Row.",
+          reward: "Granny digs out her spare boombox. 'Make some noise, baby.'",
+          give: { item: "boombox", itemFallbackCash: 6, heal: 15 },
+        },
+        {
+          id: "granny-scrap-run",
+          kind: "deliver",
+          types: ["scrap"],
+          goal: 2,
+          hud: "Scrap fetched",
+          intro: "Granny's gig — fetch 2 scrap piles for her cart, then report back.",
+          reward: "Granny pays scrap rates plus interest.",
+          give: { item: "boombox", itemFallbackCash: 6, cash: 4 },
+        },
+      ],
+    },
+    {
+      id: "mascot-marv",
+      name: "Mascot Marv",
+      short: "Marv",
+      home: { x: 17, z: 23 },
+      color: 0xe67e22,
+      prop: "cone",
+      blurb: "Disgraced mascot at the Circus. His gigs pay cold cash.",
+      greeting: "Mascot Marv: 'The suit's gone but the showmanship stays. Show me.'",
+      quests: [
+        {
+          id: "marv-encore",
+          kind: "crowd",
+          district: "Crosswalk Circus",
+          minAudience: 4,
+          goal: 2,
+          hud: "Encores",
+          intro: "Marv's gig — land 2 bits for a crowd of 4+ at Crosswalk Circus.",
+          reward: "Marv salutes with a foam finger he no longer owns. Cash out.",
+          give: { cash: 10, wanted: -12 },
+        },
+        {
+          id: "marv-hot-streak",
+          kind: "streak",
+          goal: 5,
+          hud: "Best streak",
+          intro: "Marv's gig — chain a x5 act streak without letting the crowd cool.",
+          reward: "Marv declares you varsity material. Cash and cones.",
+          give: { cash: 8, wanted: -8, restock: { cone: 3 } },
+        },
+      ],
+    },
   ];
 
   const keys = Object.create(null);
@@ -1381,6 +1534,11 @@
   const clock = new THREE.Clock();
   const AUDIENCE_RADIUS = 13.5;
   const BUSK_AUDIENCE_RADIUS = 17;
+  // Acts also turn heads outside the paying radius: those civilians walk over,
+  // so repeat performances snowball into a real crowd instead of requiring one
+  // to already exist (the old behavior made crowd favors nearly impossible).
+  const ACT_ATTRACT_BONUS = 9;
+  const WATCHER_GATHER_GAP = 4.0;
   const AGGRESSION_RADIUS = 11.5;
   const WATCH_EMOJIS = ["👀", "😂", "👏", "💸", "🔥"];
   const PANIC_EMOJIS = ["😱", "🏃", "🚨", "❗"];
@@ -1436,18 +1594,75 @@
     },
   };
   const STARTER_HOTBAR = ["fists", "cone", "plunger", "peel"];
-  // Pawn Cart stock at the kiosk. Weapons are one-time unlocks; restocks refill
-  // consumables up to their cap. The cart offers the first unowned weapon, then
-  // falls back to restocks, so ACT near the kiosk always has a sensible buy.
+  // ----------------------------------------------------------------------------
+  // Pawn Cart shop. ACT at the kiosk opens a browsable menu (Pete's catalog):
+  // one-time weapons, one-time per-run UPGRADES that change how the run plays
+  // (the "save up for it" tier), and repeatable supplies. One catalog entry is
+  // discounted 30% each dawn (the DAWN DEAL) so the cart is worth revisiting.
+  // ----------------------------------------------------------------------------
   const SHOP_RADIUS = 7.5;
-  const SHOP_STOCK = [
-    { id: "mop", price: 14, kind: "weapon", label: "Mop Spear" },
-    { id: "chicken", price: 9, kind: "weapon", label: "Rubber Chicken" },
-    { id: "cone", price: 3, kind: "restock", qty: 3, label: "Cones x3" },
-    { id: "peel", price: 3, kind: "restock", qty: 2, label: "Peels x2" },
+  const SHOP_DEAL_PCT = 30;
+  const SHOP_CATALOG = [
+    {
+      id: "mop", cat: "Weapons", icon: "🧹", price: 14, kind: "weapon", label: "Mop Spear",
+      desc: "Long reach, pokes and staggers. ATTACK becomes a spear jab.",
+    },
+    {
+      id: "chicken", cat: "Weapons", icon: "🐔", price: 9, kind: "weapon", label: "Rubber Chicken",
+      desc: "The squeak confuses Tweeker Zombies into wandering off.",
+    },
+    {
+      id: "boombox", cat: "Weapons", icon: "📻", price: 22, kind: "weapon", label: "Trash Boombox",
+      desc: "Block-party bits pull big crowds and big tips. Bass blast stuns.",
+    },
+    {
+      id: "sneakers", cat: "Upgrades", icon: "👟", price: 16, kind: "upgrade", label: "Comfy Sneakers",
+      desc: "Barely-worn. Move 15% faster for the rest of the run.",
+    },
+    {
+      id: "showhat", cat: "Upgrades", icon: "🎩", price: 24, kind: "upgrade", label: "Showman's Top Hat",
+      desc: "Every act tips 25% better. Dress for the job you deserve.",
+    },
+    {
+      id: "jacket", cat: "Upgrades", icon: "🧥", price: 20, kind: "upgrade", label: "Puffy Jacket",
+      desc: "+25 max health and a full patch-up on the spot.",
+    },
+    {
+      id: "caddy", cat: "Upgrades", icon: "🛒", price: 12, kind: "upgrade", label: "Cart Caddy",
+      desc: "Carry +4 extra cones and peels. Never busk unprepared.",
+    },
+    {
+      id: "hype", cat: "Upgrades", icon: "📣", price: 30, kind: "upgrade", label: "Hype Man Contract",
+      desc: "A guy who yells about you. Act streaks last 50% longer.",
+    },
+    {
+      id: "cone", cat: "Supplies", icon: "🚧", price: 3, kind: "restock", qty: 3, label: "Cones x3",
+      desc: "Restock the classics: hat, projectile, lifestyle.",
+    },
+    {
+      id: "peel", cat: "Supplies", icon: "🍌", price: 3, kind: "restock", qty: 2, label: "Peels x2",
+      desc: "Restock slip hazards for cops and zombies alike.",
+    },
+    {
+      id: "snackpack", cat: "Supplies", icon: "🌭", price: 4, kind: "heal", heal: 30, label: "Street Snack",
+      desc: "Mystery meat, real recovery. +30 HP on the spot.",
+    },
+    {
+      id: "nightkit", cat: "Supplies", icon: "🎒", price: 7, kind: "bundle", label: "Night Kit",
+      desc: "+2 cones, +2 peels, +10 HP. Everything the wave demands.",
+    },
+  ];
+  const PETE_BARKS = [
+    "Pete: 'Quality junk, guaranteed-ish.'",
+    "Pete: 'No refunds. The cart forgets faces.'",
+    "Pete: 'That fell off a truck I also sell.'",
+    "Pete: 'Spend it before the zombies tax it.'",
+    "Pete: 'A pleasure. Tell the block.'",
   ];
   let kioskPromptSprite = null;
   let kioskPromptText = "";
+  let npcPromptSprite = null;
+  let npcPromptText = "";
   let cameraTarget = new THREE.Vector3(0, 0, 0);
   let labelCounter = 0;
   let arrestTimeout = null;
@@ -1480,6 +1695,9 @@
     bagPickItem: null,
     bagSlotPrimed: false,
     mapOpen: false,
+    shopOpen: false,
+    shopDeal: null,
+    upgrades: {},
     inventory: {
       cone: 5,
       peel: 2,
@@ -1500,6 +1718,9 @@
     waveKills: 0,
     objective: "Earn $20 before nightfall",
     favor: null,
+    favorDeck: [],
+    npcQuest: null,
+    npcDone: {},
     lastAudience: {
       watching: 0,
       panicked: 0,
@@ -1594,18 +1815,20 @@
     return SFX[key] ? key : "actFists";
   }
 
+  const PLAYER_BASE_SPEED = 12;
   const player = {
     x: points.start.x,
     z: points.start.z,
     y: 0,
     radius: 1.1,
-    speed: 12,
+    speed: PLAYER_BASE_SPEED,
     facing: { x: 0, z: -1 },
     mesh: null,
     stun: 0,
   };
 
   const civilians = [];
+  const npcs = [];
   const cops = [];
   const zombies = [];
   const cars = [];
@@ -3914,6 +4137,7 @@
     actorGroup.clear();
     fxGroup.clear();
     civilians.length = 0;
+    npcs.length = 0;
     cops.length = 0;
     zombies.length = 0;
     cars.length = 0;
@@ -3929,6 +4153,8 @@
     hijackPromptSprite = null;
     kioskPromptSprite = null;
     kioskPromptText = "";
+    npcPromptSprite = null;
+    npcPromptText = "";
     if (player.mesh) {
       player.mesh.visible = true;
     }
@@ -3968,6 +4194,145 @@
     sign.position.set(0, 3.7, 0);
     group.add(sign);
     actorGroup.add(group);
+
+    // Pawn Cart Pete mans the counter — pure set dressing that gives purchases
+    // someone to buy FROM (his barks land in the city log on every sale).
+    const pete = makeActor("npc", points.kiosk.x - 0.5, points.kiosk.z - 2.6, {
+      color: mat("npc_pete", 0xc4884a),
+    });
+    pete.rotation.y = 0; // face the counter front
+    const peteTag = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeTextTexture("Pawn Cart Pete", "#ffd1ff", "rgba(40,20,44,0.9)"),
+      transparent: true,
+      depthWrite: false,
+    }));
+    peteTag.scale.set(4.6, 1.15, 1);
+    peteTag.position.set(0, 3.15, 0);
+    pete.add(peteTag);
+  }
+
+  function setNpcMarker(npc, text, color = "#ffe07a") {
+    if (npc.markerText === text) return;
+    npc.markerText = text;
+    if (!text) {
+      npc.marker.visible = false;
+      return;
+    }
+    npc.marker.material.map = makeTextTexture(text, color, "rgba(40,30,10,0.88)");
+    npc.marker.material.needsUpdate = true;
+    npc.marker.visible = true;
+  }
+
+  // Quest-givers stand at fixed, walkable spots with a name tag and a bobbing
+  // "GIG!" marker while they have work to hand out. See NPC_QUEST_GIVERS.
+  function spawnNpcs() {
+    NPC_QUEST_GIVERS.forEach((def, index) => {
+      let pos = { x: def.home.x, z: def.home.z };
+      if (!isStaticWalkable(pos.x, pos.z, 1.0) || pointNearRoad(pos.x, pos.z, 1.2)) {
+        pos = randomSidewalkPointNear(def.home, 14, 1.0);
+      }
+      const mesh = makeActor("npc", pos.x, pos.z, { color: mat(`npc_${def.id}`, def.color) });
+      if (def.prop === "sign") {
+        mesh.add(makeMesh(new THREE.BoxGeometry(0.82, 0.72, 0.08), materials.cardboard, 0, 0.95, 0.55, true, false));
+      } else if (def.prop === "boombox") {
+        mesh.add(makeMesh(new THREE.BoxGeometry(0.95, 0.5, 0.4), materials.black, 0, 1.4, 0.52, true, false));
+      } else if (def.prop === "cone") {
+        addCone(mesh, 0.42, 0.85, 0, 2.5, -0.02, materials.cone, 8);
+      }
+      const tag = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeTextTexture(def.name, "#ff9df5", "rgba(30,16,34,0.85)"),
+        transparent: true,
+        depthWrite: false,
+      }));
+      tag.scale.set(5.4, 1.35, 1);
+      tag.position.set(0, 3.55, 0);
+      mesh.add(tag);
+      const marker = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeTextTexture("GIG!", "#ffe07a", "rgba(40,30,10,0.88)"),
+        transparent: true,
+        depthWrite: false,
+      }));
+      marker.scale.set(2.6, 0.85, 1);
+      marker.position.set(0, 4.55, 0);
+      mesh.add(marker);
+      npcs.push({
+        ...def,
+        x: pos.x,
+        z: pos.z,
+        mesh,
+        marker,
+        markerText: "GIG!",
+        bobSeed: index * 1.7,
+      });
+    });
+  }
+
+  function updateNpcs() {
+    if (state.phase !== "day") return;
+    npcs.forEach((npc) => {
+      if (distSq(npc, player) < 20 * 20) {
+        npc.mesh.rotation.y = Math.atan2(player.x - npc.x, player.z - npc.z);
+      }
+      npc.marker.position.y = 4.55 + Math.sin(state.phaseTime * 2.2 + npc.bobSeed) * 0.16;
+      if (state.npcQuest && state.npcQuest.npcId === npc.id) {
+        setNpcMarker(npc, state.npcQuest.stage === "return" ? "PAY DAY!" : null, "#75ff92");
+      } else if (state.npcQuest || npcDoneToday(npc)) {
+        setNpcMarker(npc, null);
+      } else {
+        setNpcMarker(npc, "GIG!");
+      }
+    });
+  }
+
+  function npcPromptFor(npc) {
+    const quest = state.npcQuest;
+    if (quest && quest.npcId === npc.id) {
+      const def = npcQuestDef();
+      if (!def) return "";
+      if (quest.stage === "return") return `[E] Hand in — ${npc.short}'s gig`;
+      return `${def.hud} ${Math.floor(quest.progress)}/${def.goal}`;
+    }
+    if (quest) {
+      const owner = npcById(quest.npcId);
+      return `Finish ${owner ? owner.short + "'s" : "your"} gig first`;
+    }
+    if (npcDoneToday(npc)) return `${npc.short}: fresh gigs tomorrow`;
+    return `[E] Talk to ${npc.name}`;
+  }
+
+  // Floating prompt over the nearest quest-giver, mirroring the kiosk prompt.
+  function updateNpcPrompt() {
+    const active = state.running && !state.paused && !state.ended && state.phase === "day" && !state.drivingCar;
+    let npc = null;
+    if (active) {
+      let best = 15 * 15;
+      npcs.forEach((candidate) => {
+        const d = distSq(candidate, player);
+        if (d < best) {
+          best = d;
+          npc = candidate;
+        }
+      });
+    }
+    if (!npc) {
+      if (npcPromptSprite) npcPromptSprite.visible = false;
+      return;
+    }
+    const text = npcPromptFor(npc);
+    if (!npcPromptSprite) {
+      npcPromptSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: makeTextTexture(text, "#ff9df5", "rgba(18,18,18,0.82)"), transparent: true, depthWrite: false })
+      );
+      npcPromptSprite.scale.set(7, 1.75, 1);
+      fxGroup.add(npcPromptSprite);
+      npcPromptText = text;
+    } else if (text !== npcPromptText) {
+      npcPromptSprite.material.map = makeTextTexture(text, "#ff9df5", "rgba(18,18,18,0.82)");
+      npcPromptSprite.material.needsUpdate = true;
+      npcPromptText = text;
+    }
+    npcPromptSprite.position.set(npc.x, 5.7, npc.z - 1.0);
+    npcPromptSprite.visible = true;
   }
 
   function spawnActors() {
@@ -3981,9 +4346,9 @@
     const audienceAnchors = [
       points.busk,
       { x: points.busk.x - 12, z: points.busk.z + 5 },
-      { x: points.busk.x + 13, z: points.busk.z - 7 },
       points.park,
-      points.cache,
+      { x: points.park.x + 11, z: points.park.z + 8 },
+      points.fountain,
     ];
     for (let i = 0; i < (VISUAL_TARGET ? 20 : 30); i += 1) {
       const pos = i < 10
@@ -4046,6 +4411,8 @@
       assignCivilianTarget(copObj);
       cops.push(copObj);
     });
+
+    spawnNpcs();
 
     [
       ["snack", points.fountain.x, points.fountain.z],
@@ -4144,7 +4511,11 @@
     state.cash = 7.25;
     state.wanted = 8;
     state.arrest = 0;
+    state.upgrades = {};
+    state.maxHealth = 100;
     state.health = state.maxHealth;
+    applyUpgradeEffects();
+    rollShopDeal();
     state.score = 0;
     state.actStreak = 0;
     state.actStreakTime = 0;
@@ -4156,12 +4527,16 @@
     state.waveTarget = 8;
     state.waveKills = 0;
     state.objective = "Earn $20 before nightfall";
+    state.favorDeck = [];
+    state.npcQuest = null;
+    state.npcDone = {};
     startFavorForCycle();
     Object.keys(state.cooldowns).forEach((key) => {
       state.cooldowns[key] = 0;
     });
     toggleBag(false);
     toggleMap(false);
+    toggleShop(false);
     if (els.overlay) {
       els.overlay.classList.toggle("overlay--show", !autoStart);
     }
@@ -4169,7 +4544,7 @@
     ui.setText(els.overlayTitle, "UNHOUSED AND UNHINGED");
     ui.setText(
       els.overlaySub,
-      "Earn tips by doing funny bits near NPCs, keep your wanted stars down, then survive the Tweeker Zombie night. Move, tap ACT to perform, tap ATTACK to fight. Collect props and equip them to slots 1-4."
+      "Earn tips by doing funny bits near NPCs, keep your wanted stars down, then survive the Tweeker Zombie night. Move, tap ACT to perform, tap ATTACK to fight. Chat up the block regulars (ACT next to them) for street gigs — daily favors rotate every dawn."
     );
     ui.setText(els.overlayScore, "");
     refreshHotbar();
@@ -4304,8 +4679,23 @@
     return favorById(state.favor.id);
   }
 
+  // Daily favors rotate through a shuffled deck so every run (and every day)
+  // hands out a different objective; the deck refills only once exhausted, so
+  // nothing repeats until the whole pool has been seen.
+  function drawFavorId() {
+    if (!Array.isArray(state.favorDeck) || !state.favorDeck.length) {
+      const ids = FAVORS.map((favor) => favor.id);
+      for (let i = ids.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+      }
+      state.favorDeck = ids;
+    }
+    return state.favorDeck.shift();
+  }
+
   function startFavorForCycle(id = null) {
-    const favor = id ? favorById(id) : FAVORS[(Math.max(1, state.cycle) - 1) % FAVORS.length];
+    const favor = id ? favorById(id) : favorById(drawFavorId());
     if (!favor || state.cycle > 3) {
       state.favor = null;
       return null;
@@ -4324,7 +4714,7 @@
   function favorProgressText() {
     const favor = activeFavor();
     if (!favor || !state.favor) return "";
-    return `Favor: ${favor.hud} ${state.favor.progress}/${favor.goal}`;
+    return `Favor: ${favor.hud} ${Math.floor(state.favor.progress)}/${favor.goal}`;
   }
 
   function grantFavorReward(favor) {
@@ -4348,6 +4738,19 @@
       addToBag("cone", 3);
       addToBag("peel", 2);
       state.health = clamp(state.health + 12, 0, state.maxHealth);
+    } else if (favor.id === "tip-rush-circus") {
+      state.wanted = clamp(state.wanted - 14, 0, 100);
+      addToBag("cone", 2);
+    } else if (favor.id === "streak-hot-hand") {
+      state.cash += 6;
+      state.wanted = clamp(state.wanted - 6, 0, 100);
+    } else if (favor.id === "slip-patrol") {
+      state.cash += 4;
+      state.wanted = clamp(state.wanted - 20, 0, 100);
+      addToBag("peel", 2);
+    } else if (favor.id === "fountain-splash-show") {
+      state.cash += 7;
+      state.health = clamp(state.health + 10, 0, state.maxHealth);
     }
     refreshHotbar();
     if (state.bagOpen) renderBag();
@@ -4371,15 +4774,223 @@
     if (favor.kind !== kind) return false;
     const currentDistrict = districts.find((district) => pointInDistrict(player, district)) || state.district;
     if (favor.district && currentDistrict.name !== favor.district) return false;
+    if (favor.near && distSq(player, favor.near) > (favor.nearRadius || 16) * (favor.nearRadius || 16)) return false;
     if (favor.types && !favor.types.includes(context.type)) return false;
     if (favor.minAudience && (context.audienceCount || 0) < favor.minAudience) return false;
     if (favor.kind === "trap" && context.itemId !== "peel") return false;
 
-    state.favor.progress = clamp(state.favor.progress + amount, 0, favor.goal);
-    addFloater(`${favor.hud} ${state.favor.progress}/${favor.goal}`, player.x, player.z, "#ffd43b");
+    // "absolute" favors track a high-water mark (e.g. best act streak) instead
+    // of accumulating ticks.
+    const next = favor.absolute
+      ? Math.max(state.favor.progress, amount)
+      : state.favor.progress + amount;
+    if (next <= state.favor.progress) return false;
+    state.favor.progress = clamp(next, 0, favor.goal);
+    addFloater(`${favor.hud} ${Math.floor(state.favor.progress)}/${favor.goal}`, player.x, player.z, "#ffd43b");
     if (state.favor.progress >= favor.goal) {
       completeFavor(favor);
     }
+    return true;
+  }
+
+  // When an act pays out but doesn't tick an act favor, say why — a silently
+  // stuck 0/3 counter reads as "the objective is broken."
+  function hintActFavor(audienceCount) {
+    const favor = activeFavor();
+    if (!favor || favor.kind !== "act" || state.phase !== "day" || !state.favor) return;
+    const here = districts.find((district) => pointInDistrict(player, district)) || state.district;
+    const inPlace = (!favor.district || here.name === favor.district)
+      && (!favor.near || distSq(player, favor.near) <= (favor.nearRadius || 16) * (favor.nearRadius || 16));
+    if (!inPlace) return;
+    if (favor.minAudience && audienceCount > 0 && audienceCount < favor.minAudience) {
+      addFloater(`Crowd ${audienceCount}/${favor.minAudience} — keep performing, they'll gather!`, player.x, player.z, "#ffd43b");
+    }
+  }
+
+  // ---- NPC street gigs ------------------------------------------------------
+  function npcById(id) {
+    return npcs.find((npc) => npc.id === id) || null;
+  }
+
+  function npcDoneToday(npc) {
+    return state.npcDone[npc.id] === state.cycle;
+  }
+
+  // The active gig's quest definition, or null if none/invalid.
+  function npcQuestDef() {
+    if (!state.npcQuest) return null;
+    const npc = npcById(state.npcQuest.npcId);
+    if (!npc) return null;
+    return npc.quests.find((quest) => quest.id === state.npcQuest.questId) || null;
+  }
+
+  function npcQuestText() {
+    const quest = state.npcQuest;
+    const def = npcQuestDef();
+    if (!quest || !def || state.phase !== "day") return "";
+    const npc = npcById(quest.npcId);
+    if (quest.stage === "return") return `Gig: hand in to ${npc ? npc.name : "your client"}`;
+    return `Gig: ${def.hud} ${Math.floor(quest.progress)}/${def.goal}`;
+  }
+
+  // Where the objective arrow should point for the active gig: the NPC when
+  // handing in, otherwise the nearest thing that advances the quest.
+  function npcQuestPoint() {
+    const quest = state.npcQuest;
+    const def = npcQuestDef();
+    if (!quest || !def || state.phase !== "day") return null;
+    const npc = npcById(quest.npcId);
+    if (!npc) return null;
+    if (quest.stage === "return") return npc;
+    if (def.kind === "tour") {
+      let best = null;
+      districts.forEach((district) => {
+        if (quest.districtsHit.includes(district.name)) return;
+        const d = distSq(player, district);
+        if (!best || d < best.d) best = { x: district.x, z: district.z, d };
+      });
+      return best || npc;
+    }
+    if (def.kind === "deliver") {
+      let best = null;
+      pickups.forEach((pickup) => {
+        if (!pickup.active || !def.types.includes(pickup.type)) return;
+        const d = distSq(pickup, player);
+        if (!best || d < best.d) best = { x: pickup.x, z: pickup.z, d };
+      });
+      return best || npc;
+    }
+    if (def.district) {
+      const district = districts.find((candidate) => candidate.name === def.district);
+      if (district) return { x: district.x, z: district.z };
+    }
+    return npc;
+  }
+
+  function acceptNpcQuest(npc) {
+    const quest = npc.quests[(Math.max(1, state.cycle) - 1) % npc.quests.length];
+    state.npcQuest = {
+      npcId: npc.id,
+      questId: quest.id,
+      progress: 0,
+      goal: quest.goal,
+      stage: "active",
+      districtsHit: [],
+    };
+    logLine(npc.greeting);
+    logLine(`Gig accepted — ${quest.intro}`);
+    addFloater(`Gig: ${quest.hud} 0/${quest.goal}`, player.x, player.z, "#ff9df5");
+    addPulse(npc.x, npc.z, 0xff9df5, 5.2, 0.55);
+    playSfx("select");
+  }
+
+  function grantNpcReward(def) {
+    const give = def.give || {};
+    if (give.cash) state.cash += give.cash;
+    if (give.wanted) state.wanted = clamp(state.wanted + give.wanted, 0, 100);
+    if (give.maxHealth) state.maxHealth = Math.min(140, state.maxHealth + give.maxHealth);
+    if (give.heal) state.health = clamp(state.health + give.heal, 0, state.maxHealth);
+    if (give.item) {
+      if (!ownsItem(give.item)) {
+        addToBag(give.item, 1);
+      } else if (give.itemFallbackCash) {
+        state.cash += give.itemFallbackCash;
+      }
+    }
+    if (give.restock) {
+      Object.keys(give.restock).forEach((id) => addToBag(id, give.restock[id]));
+    }
+    refreshHotbar();
+    if (state.bagOpen) renderBag();
+  }
+
+  function completeNpcQuest(npc, def) {
+    grantNpcReward(def);
+    state.npcDone[npc.id] = state.cycle;
+    state.npcQuest = null;
+    logLine(`${npc.name}: ${def.reward}`);
+    addFloater("Gig complete!", player.x, player.z, "#ff9df5");
+    addPulse(player.x, player.z, 0xff9df5, 6.5, 0.7);
+    playSfx("favor");
+  }
+
+  // Advance the active gig from gameplay events ("act", "streak", "pickup").
+  // Mirrors progressFavor but tracks per-quest mechanics like district tours
+  // and deliveries; hitting the goal flips the gig to its hand-in stage.
+  function progressNpcQuest(event, amount = 1, context = {}) {
+    const quest = state.npcQuest;
+    const def = npcQuestDef();
+    if (!quest || !def || quest.stage !== "active") return false;
+    if (state.phase !== "day") return false;
+    let next = quest.progress;
+    if (def.kind === "tour" && event === "act") {
+      const name = context.districtName;
+      if (!name || name === "Open Block" || quest.districtsHit.includes(name)) return false;
+      quest.districtsHit.push(name);
+      next = quest.districtsHit.length;
+    } else if (def.kind === "earn" && event === "act") {
+      next = quest.progress + (context.gain || 0);
+    } else if (def.kind === "crowd" && event === "act") {
+      if ((context.audienceCount || 0) < (def.minAudience || 1)) return false;
+      if (def.district && context.districtName !== def.district) return false;
+      next = quest.progress + 1;
+    } else if (def.kind === "streak" && event === "streak") {
+      next = Math.max(quest.progress, amount);
+    } else if (def.kind === "deliver" && event === "pickup") {
+      if (!def.types || !def.types.includes(context.type)) return false;
+      next = quest.progress + 1;
+    } else {
+      return false;
+    }
+    if (next <= quest.progress) return false;
+    quest.progress = clamp(next, 0, def.goal);
+    const npc = npcById(quest.npcId);
+    if (quest.progress >= def.goal) {
+      quest.stage = "return";
+      logLine(`Gig ready to hand in — find ${npc ? npc.name : "your client"}.`);
+      addFloater(`Return to ${npc ? npc.short : "client"}!`, player.x, player.z, "#ff9df5");
+      playSfx("favor");
+    } else {
+      addFloater(`Gig: ${def.hud} ${Math.floor(quest.progress)}/${def.goal}`, player.x, player.z, "#ff9df5");
+    }
+    return true;
+  }
+
+  // ACT near a quest-giver talks instead of performing. Returns true when the
+  // interaction was handled so ACT stops there (same contract as the kiosk).
+  function tryNpcTalk() {
+    if (state.phase !== "day" || state.drivingCar) return false;
+    const npc = npcs.find((candidate) => distSq(candidate, player) <= NPC_TALK_RADIUS * NPC_TALK_RADIUS);
+    if (!npc) return false;
+    state.cooldowns.act = 0.4;
+    const quest = state.npcQuest;
+    if (quest && quest.npcId === npc.id) {
+      const def = npcQuestDef();
+      if (!def) {
+        state.npcQuest = null;
+        return true;
+      }
+      if (quest.stage === "return" || quest.progress >= def.goal) {
+        completeNpcQuest(npc, def);
+      } else {
+        addFloater(`Gig: ${def.hud} ${Math.floor(quest.progress)}/${def.goal}`, player.x, player.z, "#ff9df5");
+        logLine(`${npc.name}: 'Gig's still on.' ${def.intro}`);
+        playSfx("select");
+      }
+      return true;
+    }
+    if (quest) {
+      const owner = npcById(quest.npcId);
+      addFloater(`Finish ${owner ? owner.short + "'s" : "your"} gig first`, player.x, player.z, "#dde6ef");
+      playSfx("empty");
+      return true;
+    }
+    if (npcDoneToday(npc)) {
+      addFloater(`${npc.short}: "Come back tomorrow."`, player.x, player.z, "#dde6ef");
+      playSfx("empty");
+      return true;
+    }
+    acceptNpcQuest(npc);
     return true;
   }
 
@@ -4396,7 +5007,7 @@
     const isNew = !state.bag[id];
     state.bag[id] = true;
     if (item.count) {
-      state.inventory[item.count] = clamp((state.inventory[item.count] || 0) + n, 0, item.cap || 9);
+      state.inventory[item.count] = clamp((state.inventory[item.count] || 0) + n, 0, itemCap(item));
     }
     if (isNew) {
       const empty = state.hotbar.findIndex((slot) => !slot);
@@ -4526,8 +5137,15 @@
   function audienceForAct(earn, itemId) {
     const buskZone = distSq(player, points.busk) < 170;
     const radius = (buskZone ? BUSK_AUDIENCE_RADIUS : AUDIENCE_RADIUS) + (earn.crowd ? 2.8 : 0);
-    const audience = nearbyCivilians(radius).filter((civilian) => civilian.panic <= 0);
+    const reach = nearbyCivilians(radius + ACT_ATTRACT_BONUS).filter((civilian) => civilian.panic <= 0);
+    const payR2 = radius * radius;
+    const audience = reach.filter((civilian) => distSq(civilian, player) <= payR2);
     audience.forEach((civilian) => setCivilianWatching(civilian, emojiForAct(itemId), 2.4 + Math.min(1.2, (earn.crowd || 1) * 0.25)));
+    // Passers-by just outside the paying circle get curious and wander over
+    // (watchers walk toward the performer in updateCivilians).
+    reach.forEach((civilian) => {
+      if (distSq(civilian, player) > payR2) setCivilianWatching(civilian, "👀", 3.4);
+    });
     return { audience, buskZone };
   }
 
@@ -4806,7 +5424,9 @@
 
   function bumpActStreak() {
     state.actStreak = Math.min(6, state.actStreak + 1);
-    state.actStreakTime = 2.4;
+    state.actStreakTime = state.upgrades.hype ? 3.6 : 2.4;
+    progressFavor("streak", state.actStreak);
+    progressNpcQuest("streak", state.actStreak, {});
   }
 
   function logLine(text) {
@@ -4929,6 +5549,7 @@
     state.bagOpen = open === undefined ? !state.bagOpen : open;
     if (els.bagOverlay) els.bagOverlay.hidden = !state.bagOpen;
     if (state.bagOpen) {
+      if (state.shopOpen) toggleShop(false);
       state.bagPickItem = null;
       state.bagSlotPrimed = false;
       renderBag();
@@ -4946,6 +5567,8 @@
   }
 
   function mapObjectiveText() {
+    const gigText = npcQuestText();
+    if (gigText) return gigText;
     const favorText = state.phase === "day" ? favorProgressText() : "";
     if (favorText) return favorText;
     if (state.phase === "day") {
@@ -4967,6 +5590,18 @@
         `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.objective}"></span><div><b>District favor</b> ${safeText(favor.name)} — ${safeText(favor.intro)}</div></li>`
       );
     }
+    const gigDef = npcQuestDef();
+    if (gigDef && state.npcQuest) {
+      const gigNpc = npcById(state.npcQuest.npcId);
+      rows.push(
+        `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.npc}"></span><div><b>Street gig</b> ${safeText(gigNpc ? gigNpc.name : "Client")} — ${safeText(gigDef.intro)}</div></li>`
+      );
+    }
+    npcs.forEach((npc) => {
+      rows.push(
+        `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS.npc}"></span><div><b>${safeText(npc.name)}</b> ${safeText(npc.blurb)}</div></li>`
+      );
+    });
     MAP_LANDMARKS.forEach((landmark) => {
       rows.push(
         `<li><span class="uh-map__swatch" style="background:${MAP_KIND_COLORS[landmark.kind] || "#fff"}"></span><div><b>${safeText(landmark.name)}</b> ${safeText(landmark.blurb)}</div></li>`
@@ -5037,6 +5672,27 @@
         ctx.stroke();
       }
     });
+
+    // Quest-givers show as pink diamonds while they're out (daytime).
+    if (state.phase === "day") {
+      npcs.forEach((npc) => {
+        const p = worldToMap(npc.x, npc.z, width, height);
+        const r = mini ? 2.6 : 6;
+        ctx.fillStyle = MAP_KIND_COLORS.npc;
+        ctx.beginPath();
+        ctx.moveTo(p.mx, p.my - r);
+        ctx.lineTo(p.mx + r, p.my);
+        ctx.lineTo(p.mx, p.my + r);
+        ctx.lineTo(p.mx - r, p.my);
+        ctx.closePath();
+        ctx.fill();
+        if (!mini) {
+          ctx.strokeStyle = "rgba(0,0,0,0.75)";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      });
+    }
 
     const objective = objectivePoint();
     if (objective) {
@@ -5425,6 +6081,7 @@
     updateDistrict();
     updatePlayer(dt);
     updateCivilians(dt);
+    updateNpcs();
     updateCops(dt);
     updateCars(dt);
     updatePickups(dt);
@@ -5437,6 +6094,7 @@
     updateHUD();
     updateHijackPrompt();
     updateKioskPrompt();
+    updateNpcPrompt();
 
     if (state._god) state.health = state.maxHealth;
     if (state.health <= 0) {
@@ -5467,8 +6125,12 @@
     state.objective = "Survive the Tweeker Zombie wave";
     state.wanted = clamp(state.wanted * 0.5, 8, 45);
     state.arrest = 0;
+    npcs.forEach((npc) => {
+      npc.mesh.visible = false;
+    });
+    toggleShop(false);
     spawnNightWave();
-    logLine("Tweeker Zombies rolling in. Bonk clean, keep moving.");
+    logLine("Tweeker Zombies rolling in. The block regulars head inside.");
     addPulse(player.x, player.z, 0x6dff83, 8, 1.25);
     playSfx("night", { force: true });
   }
@@ -5482,8 +6144,15 @@
     state.arrest = 0;
     state.health = clamp(state.health + 22, 1, state.maxHealth);
     zombies.splice(0).forEach((zombie) => actorGroup.remove(zombie.mesh));
+    npcs.forEach((npc) => {
+      npc.mesh.visible = true;
+    });
     spawnDayPickups();
-    logLine(`Dawn cycle ${state.cycle}. The block resets, mostly.`);
+    logLine(`Dawn cycle ${state.cycle}. The block resets, mostly. Fresh gigs on offer.`);
+    const dawnDeal = rollShopDeal();
+    if (dawnDeal) {
+      logLine(`DAWN DEAL at the Pawn Cart: ${dawnDeal.label} — ${SHOP_DEAL_PCT}% off today.`);
+    }
     startFavorForCycle();
     playSfx("dawn", { force: true });
     if (state.cycle > 3) {
@@ -5821,7 +6490,10 @@
         const mag = len2(dx, dz) || 1;
         dx /= mag;
         dz /= mag;
-        speed = 0;
+        // Curious watchers shuffle in toward the performer, then hold a
+        // comfortable gap — crowds pack themselves, which is what act favors
+        // that require a minimum audience are balanced around.
+        speed = mag > WATCHER_GATHER_GAP ? speed * 0.72 : 0;
         civilian.timer = Math.max(civilian.timer, 0.45);
       } else {
         const reached = !civilian.target || distSq(civilian, civilian.target) < 1.2;
@@ -6345,6 +7017,7 @@
           addWanted(-5);
           addFloater("slip!", cop.x, cop.z, "#ffe56f");
           playSfx("slip");
+          progressFavor("slip", 1, {});
         }
       });
       zombies.forEach((zombie) => {
@@ -6605,6 +7278,7 @@
       if (state.bagOpen) renderBag();
     }
     progressFavor("pickup", 1, { type: pickup.type, pickup });
+    progressNpcQuest("pickup", 1, { type: pickup.type });
     addPulse(pickup.x, pickup.z, 0xffffff, 2.5, 0.35);
   }
 
@@ -6632,55 +7306,169 @@
     if (player.mesh) player.mesh.rotation.y = Math.atan2(player.facing.x, player.facing.z);
   }
 
-  // ACT button: earn tips with the active item's bit only when NPCs are close
-  // enough to watch. Bigger watching crowds pay better.
-  // What the Pawn Cart is currently selling: the first unowned weapon, then any
-  // consumable that isn't at cap. Returns null when there's nothing left to buy.
-  function currentKioskOffer() {
-    for (const stock of SHOP_STOCK) {
-      if (stock.kind === "weapon" && !ownsItem(stock.id)) return stock;
+  // ---- Pawn Cart shop -------------------------------------------------------
+  function catalogEntry(id) {
+    return SHOP_CATALOG.find((entry) => entry.id === id) || null;
+  }
+
+  function entryOwned(entry) {
+    if (!entry) return false;
+    if (entry.kind === "weapon") return ownsItem(entry.id);
+    if (entry.kind === "upgrade") return !!state.upgrades[entry.id];
+    return false;
+  }
+
+  function dealPrice(entry) {
+    if (!entry) return 0;
+    if (state.shopDeal && state.shopDeal.id === entry.id) {
+      return Math.max(1, Math.round(entry.price * (1 - SHOP_DEAL_PCT / 100)));
     }
-    for (const stock of SHOP_STOCK) {
-      if (stock.kind === "restock") {
-        const item = ITEMS[stock.id];
-        const cur = state.inventory[item.count] || 0;
-        if (cur < (item.cap || 9)) return stock;
-      }
-    }
-    return null;
+    return entry.price;
+  }
+
+  // Each dawn discounts one still-buyable catalog entry so the cart stays
+  // worth a daily visit.
+  function rollShopDeal() {
+    const pool = SHOP_CATALOG.filter((entry) => !entryOwned(entry));
+    const pick = pool.length ? choose(pool) : null;
+    state.shopDeal = pick ? { id: pick.id, pct: SHOP_DEAL_PCT } : null;
+    return pick;
+  }
+
+  function itemCap(item) {
+    const bonus = state.upgrades.caddy && (item.id === "cone" || item.id === "peel") ? 4 : 0;
+    return (item.cap || 9) + bonus;
+  }
+
+  // Recompute stats derived from owned upgrades (on buy, restore, and reset).
+  function applyUpgradeEffects() {
+    player.speed = PLAYER_BASE_SPEED * (state.upgrades.sneakers ? 1.15 : 1);
   }
 
   function nearKiosk() {
     return distSq(player, points.kiosk) <= SHOP_RADIUS * SHOP_RADIUS;
   }
 
-  // ACT near the Pawn Cart buys instead of performing. Returns true when the
-  // interaction was handled (bought, or blocked on cash) so ACT stops there.
-  function tryKioskPurchase() {
+  function toggleShop(open) {
+    const next = open === undefined ? !state.shopOpen : open;
+    if (next === state.shopOpen) {
+      if (next) renderShop();
+      return;
+    }
+    state.shopOpen = next;
+    if (els.shopOverlay) els.shopOverlay.hidden = !state.shopOpen;
+    if (state.shopOpen) {
+      if (state.bagOpen) toggleBag(false);
+      renderShop();
+    }
+    playSfx(state.shopOpen ? "bagOpen" : "bagClose");
+  }
+
+  // ACT near the Pawn Cart browses the shop instead of performing. Returns true
+  // when handled so ACT stops there (same contract as NPC talk).
+  function tryOpenShop() {
     if (state.phase !== "day" || state.drivingCar || !nearKiosk()) return false;
-    const offer = currentKioskOffer();
-    if (!offer) return false; // sold out — let ACT perform normally
-    state.cooldowns.act = 0.5;
-    if (state.cash < offer.price) {
-      addFloater(`Need $${offer.price} — ${offer.label}`, player.x, player.z, "#ffb3a7");
-      addPulse(player.x, player.z, 0xffb3a7, 3.0, 0.3);
+    state.cooldowns.act = 0.4;
+    toggleShop(true);
+    return true;
+  }
+
+  function shopRowsHtml() {
+    const rows = [];
+    ["Weapons", "Upgrades", "Supplies"].forEach((cat) => {
+      rows.push(`<span class="uh-shop__section">${cat}</span>`);
+      SHOP_CATALOG.filter((entry) => entry.cat === cat).forEach((entry) => {
+        const owned = entryOwned(entry);
+        const price = dealPrice(entry);
+        const deal = !owned && state.shopDeal && state.shopDeal.id === entry.id;
+        const broke = !owned && state.cash < price;
+        const classes = ["uh-shop__row"];
+        if (owned) classes.push("is-owned");
+        if (deal) classes.push("is-deal");
+        if (broke) classes.push("is-broke");
+        const priceHtml = owned
+          ? "<b>OWNED ✓</b>"
+          : deal
+            ? `<s>$${entry.price}</s><b>$${price}</b>`
+            : `<b>$${price}</b>`;
+        rows.push(
+          `<button type="button" class="${classes.join(" ")}" data-shop-id="${entry.id}"${owned ? " disabled" : ""}>` +
+            `<span class="uh-shop__icon">${entry.icon}</span>` +
+            `<span class="uh-shop__info"><b>${safeText(entry.label)}${deal ? ` <em class="uh-shop__dealtag">DAWN DEAL -${SHOP_DEAL_PCT}%</em>` : ""}</b><i>${safeText(entry.desc)}</i></span>` +
+            `<span class="uh-shop__price">${priceHtml}</span>` +
+          `</button>`
+        );
+      });
+    });
+    return rows.join("");
+  }
+
+  function renderShop() {
+    if (!els.shopList) return;
+    ui.setHtml(els.shopList, shopRowsHtml());
+    ui.setText(els.shopCash, `$${state.cash.toFixed(2)}`);
+    const deal = state.shopDeal ? catalogEntry(state.shopDeal.id) : null;
+    ui.setText(
+      els.shopDealNote,
+      deal && !entryOwned(deal)
+        ? `DAWN DEAL: ${deal.label} — ${SHOP_DEAL_PCT}% off today only.`
+        : "Pete rotates a fresh deal every dawn."
+    );
+  }
+
+  function buyCatalogItem(id) {
+    if (state.phase !== "day") return false;
+    const entry = catalogEntry(id);
+    if (!entry) return false;
+    if (entryOwned(entry)) {
+      addFloater("Already owned", player.x, player.z, "#dde6ef");
       playSfx("empty");
-      return true;
+      renderShop();
+      return false;
     }
-    state.cash -= offer.price;
-    if (offer.kind === "weapon") {
-      addToBag(offer.id, ITEMS[offer.id].refill || 1);
-      logLine(`Bought the ${offer.label} at the Pawn Cart for $${offer.price}.`);
-      addFloater(`Bought ${offer.label}!`, player.x, player.z, "#ffe07a");
-    } else {
-      addToBag(offer.id, offer.qty);
-      logLine(`Restocked ${offer.label} for $${offer.price}.`);
-      addFloater(`+${offer.label}`, player.x, player.z, "#ffe07a");
+    const price = dealPrice(entry);
+    if (state.cash < price) {
+      addFloater(`Need $${price} — ${entry.label}`, player.x, player.z, "#ffb3a7");
+      playSfx("empty");
+      renderShop();
+      return false;
     }
-    addPulse(player.x, player.z, 0xffd43b, 5.0, 0.5);
+    state.cash -= price;
+    let celebration = `Bought ${entry.label}!`;
+    if (entry.kind === "weapon") {
+      addToBag(entry.id, ITEMS[entry.id].refill || 1);
+      logLine(`Bought the ${entry.label} for $${price}. Open the Bag (B) to equip it.`);
+    } else if (entry.kind === "upgrade") {
+      state.upgrades[entry.id] = true;
+      applyUpgradeEffects();
+      if (entry.id === "jacket") {
+        state.maxHealth = Math.min(160, state.maxHealth + 25);
+        state.health = state.maxHealth;
+      }
+      celebration = `${entry.label} — UPGRADED!`;
+      logLine(`Upgrade: ${entry.label}. ${entry.desc}`);
+      addPulse(player.x, player.z, 0xffd43b, 7.5, 0.8);
+    } else if (entry.kind === "restock") {
+      addToBag(entry.id, entry.qty);
+      logLine(`Restocked ${entry.label} for $${price}.`);
+    } else if (entry.kind === "heal") {
+      state.health = clamp(state.health + entry.heal, 0, state.maxHealth);
+      logLine(`Ate a ${entry.label}. +${entry.heal} HP.`);
+    } else if (entry.kind === "bundle") {
+      addToBag("cone", 2);
+      addToBag("peel", 2);
+      state.health = clamp(state.health + 10, 0, state.maxHealth);
+      logLine(`Grabbed the ${entry.label}: cones, peels, and a hot meal.`);
+    }
+    logLine(choose(PETE_BARKS));
+    addFloater(celebration, player.x, player.z, "#ffe07a");
+    addFloater(`-$${price}`, points.kiosk.x, points.kiosk.z - 2, "#ffb3a7");
+    addPulse(points.kiosk.x, points.kiosk.z, 0xffd43b, 5.0, 0.5);
     playSfx("shopBuy");
     refreshHotbar();
     if (state.bagOpen) renderBag();
+    renderShop();
+    updateHUD();
     return true;
   }
 
@@ -6692,8 +7480,10 @@
       if (kioskPromptSprite) kioskPromptSprite.visible = false;
       return;
     }
-    const offer = currentKioskOffer();
-    const text = offer ? `[E] ${offer.label} — $${offer.price}` : "Pawn Cart — sold out";
+    const deal = state.shopDeal ? catalogEntry(state.shopDeal.id) : null;
+    const text = deal && !entryOwned(deal)
+      ? `[E] Pawn Cart — DEAL: ${deal.label} $${dealPrice(deal)}`
+      : "[E] Pawn Cart — browse gear";
     if (!kioskPromptSprite) {
       kioskPromptSprite = new THREE.Sprite(
         new THREE.SpriteMaterial({ map: makeTextTexture(text, "#ffe07a", "rgba(18,18,18,0.82)"), transparent: true, depthWrite: false })
@@ -6711,11 +7501,17 @@
   }
 
   function act() {
-    if (!state.running || state.paused || state.mapOpen || state.cooldowns.act > 0) {
+    if (!state.running || state.paused || state.mapOpen) {
       return;
     }
+    if (state.shopOpen) {
+      toggleShop(false);
+      return;
+    }
+    if (state.cooldowns.act > 0) return;
     if (state.drivingCar) return;
-    if (tryKioskPurchase()) return;
+    if (tryNpcTalk()) return;
+    if (tryOpenShop()) return;
     const item = activeItem();
     const earn = item.earn || ITEMS.fists.earn;
     state.cooldowns.act = earn.cool || 0.5;
@@ -6735,7 +7531,8 @@
     const [lo, hi] = earn.cash;
     const crowdFlavor = earn.crowd || 1;
     const audienceScale = 1 + Math.max(0, crowd - 1) * 0.18 + Math.max(0, crowdFlavor - 1) * 0.2;
-    const gain = (rand(lo, hi) * audienceScale + crowd * 0.32 * crowdFlavor) * tip * (buskZone ? 1.25 : 1);
+    const hatBonus = state.upgrades.showhat ? 1.25 : 1;
+    const gain = (rand(lo, hi) * audienceScale + crowd * 0.32 * crowdFlavor) * tip * (buskZone ? 1.25 : 1) * hatBonus;
     state.cash += gain;
     state.tasks.buskCash += gain;
     bumpActStreak();
@@ -6749,7 +7546,11 @@
     addFloater(`+$${gain.toFixed(0)} ${earn.label || ""} x${audience.length}`.trim(), player.x, player.z, "#73ff91");
     addPulse(player.x, player.z, earn.crowd ? 0xffbf47 : 0x74fff0, earn.crowd ? 7.2 : 4.8 + crowd * 0.28, 0.55);
     playSfx(actSfxKey(item.id));
-    progressFavor("act", 1, { audienceCount: audience.length, itemId: item.id, gain });
+    const districtName = (districts.find((district) => pointInDistrict(player, district)) || state.district).name;
+    const actCounted = progressFavor("act", 1, { audienceCount: audience.length, itemId: item.id, gain });
+    progressFavor("earn", gain, { audienceCount: audience.length, itemId: item.id });
+    progressNpcQuest("act", 1, { audienceCount: audience.length, districtName, gain });
+    if (!actCounted) hintActFavor(audience.length);
   }
 
   // ATTACK button: dispatches on the active item's attack type. Aggression near
@@ -6961,9 +7762,10 @@
     ui.setText(els.phasePill, `${state.phase === "day" ? "Day" : "Night"} ${state.cycle}`);
     ui.setText(els.districtName, state.district.name);
 
-    // Objective line with live progress.
+    // Objective line with live progress. Priority: the gig you opted into,
+    // then the daily district favor, then the baseline cash goal.
     const favorText = state.phase === "day" ? favorProgressText() : "";
-    const objective = favorText || (
+    const objective = npcQuestText() || favorText || (
       state.phase === "day"
         ? `Earn $${Math.min(20, Math.floor(state.tasks.buskCash))}/20 before dusk`
         : `Survive - ${Math.max(0, state.waveTarget - state.waveKills)} zombies left`
@@ -6989,6 +7791,8 @@
       return nearest ? nearest.zombie : points.alley;
     }
     if (copsChasing()) return points.camp;
+    const gigPoint = npcQuestPoint();
+    if (gigPoint) return gigPoint;
     const favor = activeFavor();
     if (favor && favor.target) return favor.target;
     // Point at the nearest prop pickup, else the busk plaza.
@@ -7059,6 +7863,10 @@
       }
       if (state.mapOpen) {
         toggleMap(false);
+        return;
+      }
+      if (state.shopOpen) {
+        toggleShop(false);
         return;
       }
       if (state.bagOpen) {
@@ -7148,6 +7956,14 @@
     document.getElementById("btn-bag")?.addEventListener("click", () => toggleBag());
     document.getElementById("map-close")?.addEventListener("click", () => toggleMap(false));
     document.getElementById("btn-map")?.addEventListener("click", () => toggleMap());
+    document.getElementById("shop-close")?.addEventListener("click", () => {
+      toggleShop(false);
+      canvas.focus({ preventScroll: true });
+    });
+    els.shopList?.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-shop-id]");
+      if (row && !row.disabled) buyCatalogItem(row.dataset.shopId);
+    });
 
     bindActionTouch("touch-act", act);
     bindActionTouch("touch-attack", attack);
@@ -7179,6 +7995,9 @@
       cash: state.cash,
       wanted: state.wanted,
       health: state.health,
+      maxHealth: state.maxHealth,
+      upgrades: { ...state.upgrades },
+      shopDeal: state.shopDeal ? { ...state.shopDeal } : null,
       score: state.score,
       bag: { ...state.bag },
       hotbar: state.hotbar.slice(),
@@ -7189,6 +8008,11 @@
       waveKills: state.waveKills,
       objective: state.objective,
       favor: state.favor ? { ...state.favor } : null,
+      favorDeck: Array.isArray(state.favorDeck) ? state.favorDeck.slice() : [],
+      npcQuest: state.npcQuest
+        ? { ...state.npcQuest, districtsHit: (state.npcQuest.districtsHit || []).slice() }
+        : null,
+      npcDone: { ...state.npcDone },
       player: {
         x: player.x,
         z: player.z,
@@ -7203,6 +8027,8 @@
     const data = saved && saved.data;
     if (!data) return;
     resetGame(false);
+    // maxHealth must be resolved before the health clamp below uses it.
+    const restoredMax = clamp(Number(data.maxHealth) || 100, 100, 160);
     Object.assign(state, {
       running: true,
       paused: false,
@@ -7213,7 +8039,13 @@
       cash: Number(data.cash) || 0,
       wanted: clamp(Number(data.wanted) || 0, 0, 100),
       arrest: 0,
-      health: clamp(Number(data.health) || state.maxHealth, 0, state.maxHealth),
+      maxHealth: restoredMax,
+      health: clamp(Number(data.health) || restoredMax, 0, restoredMax),
+      upgrades: data.upgrades && typeof data.upgrades === "object" ? { ...data.upgrades } : {},
+      shopDeal: data.shopDeal && catalogEntry(data.shopDeal.id)
+        ? { id: data.shopDeal.id, pct: SHOP_DEAL_PCT }
+        : null,
+      shopOpen: false,
       score: Number(data.score) || 0,
       bag: data.bag && typeof data.bag === "object" ? { ...data.bag } : state.bag,
       hotbar: Array.isArray(data.hotbar) ? data.hotbar.slice(0, 4) : state.hotbar,
@@ -7232,7 +8064,31 @@
             completed: !!data.favor.completed,
           }
         : null,
+      favorDeck: Array.isArray(data.favorDeck) ? data.favorDeck.filter((id) => favorById(id)) : [],
+      npcDone: data.npcDone && typeof data.npcDone === "object" ? { ...data.npcDone } : {},
+      npcQuest: null,
     });
+    // Re-validate the saved gig against current quest definitions.
+    if (data.npcQuest && data.npcQuest.npcId && data.npcQuest.questId) {
+      const gigNpc = NPC_QUEST_GIVERS.find((def) => def.id === data.npcQuest.npcId);
+      const gigDef = gigNpc && gigNpc.quests.find((quest) => quest.id === data.npcQuest.questId);
+      if (gigDef) {
+        state.npcQuest = {
+          npcId: gigNpc.id,
+          questId: gigDef.id,
+          goal: gigDef.goal,
+          progress: clamp(Number(data.npcQuest.progress) || 0, 0, gigDef.goal),
+          stage: data.npcQuest.stage === "return" ? "return" : "active",
+          districtsHit: Array.isArray(data.npcQuest.districtsHit)
+            ? data.npcQuest.districtsHit.slice(0, districts.length)
+            : [],
+        };
+      }
+    }
+    npcs.forEach((npc) => {
+      npc.mesh.visible = state.phase === "day";
+    });
+    applyUpgradeEffects();
     // Always own whatever sits on the hotbar (guards against corrupt saves).
     state.hotbar.forEach((id) => {
       if (id) state.bag[id] = true;
@@ -7602,7 +8458,7 @@
           const favor = activeFavor();
           if (!favor || !state.favor) return window.__UNHINGED.favor();
           state.favor.progress = Math.max(0, favor.goal - 1);
-          progressFavor(favor.kind, 1, {
+          progressFavor(favor.kind, favor.absolute ? favor.goal : 1, {
             type: favor.types ? favor.types[0] : null,
             audienceCount: favor.minAudience || 99,
             itemId: favor.kind === "trap" ? "peel" : activeItem().id,
@@ -7610,6 +8466,87 @@
           updateHUD();
           return window.__UNHINGED.favor();
         },
+        favorDeck: () => (state.favorDeck || []).slice(),
+        favorPool: () => FAVORS.map((favor) => favor.id),
+        npcs: () => npcs.map((npc) => ({
+          id: npc.id,
+          name: npc.name,
+          x: npc.x,
+          z: npc.z,
+          visible: !!(npc.mesh && npc.mesh.visible),
+          marker: npc.markerText,
+        })),
+        npcQuest: () => ({
+          active: state.npcQuest
+            ? { ...state.npcQuest, districtsHit: (state.npcQuest.districtsHit || []).slice() }
+            : null,
+          definition: npcQuestDef(),
+          done: { ...state.npcDone },
+        }),
+        talkTo: (id) => {
+          const npc = npcById(id);
+          if (!npc) return null;
+          setActorPosition(player, npc.x + 2, npc.z);
+          updateDistrict();
+          updateCamera(1);
+          tryNpcTalk();
+          updateHUD();
+          return window.__UNHINGED.npcQuest();
+        },
+        spawnPickupNear: (type = "snack", dist = 3) => {
+          const point = { x: player.x + dist, z: player.z };
+          const spot = isStaticWalkable(point.x, point.z, 1.0) ? point : getOpenPoint(1.0, true);
+          makePickup(type, spot.x, spot.z);
+          return spot;
+        },
+        pickups: () => pickups.filter((pickup) => pickup.active).map((pickup) => ({
+          type: pickup.type,
+          x: Number(pickup.x.toFixed(1)),
+          z: Number(pickup.z.toFixed(1)),
+        })),
+        snapshotData: () => snapshot(),
+        restoreData: (data) => {
+          restoreGame({ data });
+          return window.__UNHINGED.npcQuest();
+        },
+        shop: () => ({
+          open: state.shopOpen,
+          deal: state.shopDeal ? { ...state.shopDeal } : null,
+          upgrades: { ...state.upgrades },
+          playerSpeed: player.speed,
+          maxHealth: state.maxHealth,
+          catalog: SHOP_CATALOG.map((entry) => ({
+            id: entry.id,
+            kind: entry.kind,
+            price: dealPrice(entry),
+            basePrice: entry.price,
+            owned: entryOwned(entry),
+          })),
+        }),
+        openShop: (place = true) => {
+          if (place) {
+            setActorPosition(player, points.kiosk.x + 3, points.kiosk.z + 2);
+            updateDistrict();
+            updateCamera(1);
+          }
+          const opened = tryOpenShop();
+          updateHUD();
+          return { opened, ...window.__UNHINGED.shop() };
+        },
+        closeShop: () => {
+          toggleShop(false);
+          return window.__UNHINGED.shop();
+        },
+        buy: (id) => {
+          const bought = buyCatalogItem(id);
+          return { bought, cash: Number(state.cash.toFixed(2)), ...window.__UNHINGED.shop() };
+        },
+        setDeal: (id) => {
+          state.shopDeal = catalogEntry(id) ? { id, pct: SHOP_DEAL_PCT } : null;
+          if (state.shopOpen) renderShop();
+          return state.shopDeal;
+        },
+        objectiveText: () => (els.objectiveText ? els.objectiveText.textContent : ""),
         activeItem: () => activeItem().id,
       };
     }

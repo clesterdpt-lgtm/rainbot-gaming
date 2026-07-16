@@ -696,13 +696,122 @@
     #mansion-inventory-dialog-items,
     #mansion-journal-entries {
       display: grid;
-      gap: 17px;
       margin: 0;
       padding: 0;
       list-style: none;
     }
 
-    #mansion-inventory-dialog-items { align-content: start; }
+    #mansion-inventory-dialog-items { align-content: start; gap: 10px; }
+
+    .mansion-inventory-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 62px minmax(0, 1fr);
+      align-items: center;
+      gap: 11px;
+      min-height: 76px;
+      padding: 8px 10px 8px 8px;
+      overflow: hidden;
+      border: 1px solid rgba(224, 194, 139, 0.28);
+      border-radius: 5px;
+      background: radial-gradient(circle at 18% 18%, rgba(230, 199, 139, 0.13), transparent 45%), linear-gradient(145deg, rgba(52, 43, 33, 0.88), rgba(17, 16, 16, 0.95));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.04), 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .mansion-inventory-card__icon {
+      display: grid;
+      place-items: center;
+      width: 60px;
+      aspect-ratio: 1;
+      border: 1px solid rgba(231, 202, 149, 0.25);
+      border-radius: 4px;
+      color: #e2bd78;
+      background: radial-gradient(circle, rgba(212, 174, 107, 0.14), rgba(5, 6, 7, 0.55));
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.42);
+    }
+
+    .mansion-inventory-card__icon svg { width: 52px; height: 52px; }
+    .mansion-inventory-card[data-icon="key"] .mansion-inventory-card__icon { color: #d7b45f; }
+    .mansion-inventory-card[data-icon="badge"] .mansion-inventory-card__icon { color: #b7a27f; }
+    .mansion-inventory-card[data-icon="tape"] .mansion-inventory-card__icon { color: #c9b493; }
+    .mansion-inventory-card__copy { min-width: 0; }
+
+    .mansion-inventory-card__copy strong {
+      display: block;
+      color: #f0e5d2;
+      font-family: var(--mansion-serif);
+      font-size: 1rem;
+      font-weight: 600;
+      line-height: 1.08;
+    }
+
+    .mansion-inventory-card__copy > span {
+      display: block;
+      margin-top: 5px;
+      color: #9f9688;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    .mansion-clue-notepad {
+      position: relative;
+      min-height: 250px;
+      padding: 34px 24px 26px 48px;
+      overflow: hidden;
+      border: 1px solid rgba(86, 69, 42, 0.72);
+      border-radius: 2px 5px 6px 2px;
+      color: #2d2923;
+      background-color: #e8ddbd;
+      background-image: linear-gradient(90deg, transparent 0 31px, rgba(154, 65, 57, 0.42) 32px, rgba(154, 65, 57, 0.42) 33px, transparent 34px), repeating-linear-gradient(0deg, transparent 0 27px, rgba(65, 104, 126, 0.24) 28px, transparent 29px), linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(183, 165, 128, 0.16));
+      box-shadow: 7px 8px 0 rgba(114, 93, 58, 0.18), 0 16px 35px rgba(0, 0, 0, 0.38);
+      transform: rotate(0.25deg);
+    }
+
+    .mansion-clue-notepad::before {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 18px;
+      right: 12px;
+      height: 9px;
+      opacity: 0.55;
+      background: radial-gradient(circle, #4b4030 0 2px, transparent 3px) 0 0 / 29px 9px repeat-x;
+    }
+
+    #mansion-journal-entries { gap: 0; }
+
+    .mansion-clue-note {
+      position: relative;
+      padding: 4px 0 13px;
+      border-bottom: 1px dashed rgba(62, 54, 41, 0.2);
+    }
+
+    .mansion-clue-note:nth-child(even) { transform: rotate(-0.18deg); }
+
+    .mansion-clue-note strong {
+      display: block;
+      color: #3c3126;
+      font-family: "Courier New", monospace;
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      line-height: 1.35;
+      text-transform: uppercase;
+    }
+
+    .mansion-clue-note span {
+      display: block;
+      margin-top: 4px;
+      color: #34302a;
+      font-family: "Segoe Print", "Bradley Hand", "Comic Sans MS", cursive;
+      font-size: 0.78rem;
+      line-height: 1.65;
+    }
+
+    .mansion-clue-notepad .mansion-journal__empty { color: #756a58; font-family: "Segoe Print", "Bradley Hand", cursive; }
 
     .mansion-journal__entry {
       padding-left: 13px;
@@ -1120,7 +1229,18 @@
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
       #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
+      #mansion-journal { place-items: start stretch; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+      .mansion-journal__panel { width: 100%; max-height: 100%; padding: 24px 16px 28px; }
+      .mansion-journal__title { margin: 6px 46px 18px 0; font-size: 2.35rem; }
+      #mansion-journal-close { top: 10px; right: 10px; }
       .mansion-journal__grid { grid-template-columns: 1fr; }
+      #mansion-inventory-dialog-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .mansion-inventory-card { grid-template-columns: 48px minmax(0, 1fr); gap: 7px; min-height: 64px; padding: 7px; }
+      .mansion-inventory-card__icon { width: 46px; }
+      .mansion-inventory-card__icon svg { width: 40px; height: 40px; }
+      .mansion-inventory-card__copy strong { font-size: 0.88rem; }
+      .mansion-inventory-card__copy > span { font-size: 0.49rem; }
+      .mansion-clue-notepad { min-height: 220px; padding: 32px 15px 22px 40px; }
       .mansion-menu__actions { grid-template-columns: 1fr; }
       .mansion-tools { top: max(9px, env(safe-area-inset-top)); right: max(9px, env(safe-area-inset-right)); }
       .mansion-tool { width: 44px; height: 44px; }
@@ -1262,7 +1382,9 @@
               </section>
               <section aria-labelledby="mansion-clues-title">
                 <h3 class="mansion-journal__section-title" id="mansion-clues-title">Recovered clues</h3>
-                <ol id="mansion-journal-entries"><li class="mansion-journal__empty">No clues yet. Search the mansion.</li></ol>
+                <div id="mansion-clue-notepad" class="mansion-clue-notepad">
+                  <ol id="mansion-journal-entries"><li class="mansion-journal__empty">No clues yet. Search the mansion.</li></ol>
+                </div>
               </section>
             </div>
           </div>
@@ -1409,6 +1531,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260716-tab-discovery-4" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260716-inventory-notepad-5" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

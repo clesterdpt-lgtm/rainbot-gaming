@@ -185,8 +185,18 @@ async function run() {
     await page.locator("#mansion-menu-resume").click();
     await page.keyboard.press("Tab");
     await page.waitForTimeout(100);
-    assert(await page.locator("#mansion-inventory-dialog-items .mansion-journal__entry").count() === expectedItems.length, "inventory dossier should render all granted objects");
-    assert(await page.locator("#mansion-journal-entries .mansion-journal__entry").count() >= expectedClues.length, "inventory dossier should render all granted clues");
+    assert(await page.locator("#mansion-inventory-dialog-items .mansion-inventory-card").count() === expectedItems.length, "inventory dossier should render every object as an item card");
+    assert(await page.locator("#mansion-inventory-dialog-items .mansion-inventory-card__icon svg[viewBox]").count() === expectedItems.length, "every object card should include a scalable picture icon");
+    const objectIconNames = await page.locator("#mansion-inventory-dialog-items .mansion-inventory-card").evaluateAll((cards) => cards.map((card) => card.dataset.icon));
+    assert(new Set(objectIconNames).size === expectedItems.length, `object cards should have distinct illustrations; icons=${JSON.stringify(objectIconNames)}`);
+    assert(await page.locator("#mansion-clue-notepad").count() === 1, "recovered clues should live on one notepad sheet");
+    assert(await page.locator("#mansion-journal-entries .mansion-clue-note").count() >= expectedClues.length, "inventory dossier should render all granted clues as handwritten notes");
+    const clueVisual = await page.locator("#mansion-clue-notepad").evaluate((notepad) => ({
+      backgroundImage: getComputedStyle(notepad).backgroundImage,
+      fontFamily: getComputedStyle(notepad.querySelector(".mansion-clue-note span")).fontFamily,
+    }));
+    assert(/linear-gradient/i.test(clueVisual.backgroundImage), "clue notepad should visibly use ruled-paper lines");
+    assert(/print|hand|cursive/i.test(clueVisual.fontFamily), `clue copy should use a handwriting-style font; font=${clueVisual.fontFamily}`);
     await page.screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-desktop.png") });
 
     await page.keyboard.press("Escape");
@@ -205,6 +215,40 @@ async function run() {
     assert(!state.devMode.enabled, "second Dev Mode activation should disable the grant");
     assert(JSON.stringify(state.inventory.items) === JSON.stringify(cleanSnapshot.inventory.items), "disabling Dev Mode should restore the exact pre-dev inventory");
     assert(JSON.stringify(state.journal.entries) === JSON.stringify(cleanSnapshot.journal.entries), "disabling Dev Mode should restore the exact pre-dev clues");
+
+    const mobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      screen: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const mobilePage = await mobileContext.newPage();
+    mobilePage.on("pageerror", (error) => errors.push(`mobile: ${error.message}`));
+    mobilePage.on("console", (message) => {
+      if (message.type() === "error" && !/favicon\.ico/i.test(message.text())) errors.push(`mobile: ${message.text()}`);
+    });
+    await mobilePage.goto(gameUrl, { waitUntil: "domcontentloaded" });
+    await mobilePage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+    await mobilePage.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
+    await mobilePage.locator("#mansion-journal-button").click();
+    await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.inventoryOpen);
+    const mobileDossierLayout = await mobilePage.evaluate(() => {
+      const stage = document.getElementById("mansion-stage").getBoundingClientRect();
+      const panel = document.querySelector(".mansion-journal__panel");
+      const title = document.getElementById("mansion-journal-title").getBoundingClientRect();
+      const close = document.getElementById("mansion-journal-close").getBoundingClientRect();
+      return {
+        titleTop: title.top,
+        closeTop: close.top,
+        stageTop: stage.top,
+        panelClientWidth: panel.clientWidth,
+        panelScrollWidth: panel.scrollWidth,
+      };
+    });
+    assert(mobileDossierLayout.titleTop >= mobileDossierLayout.stageTop && mobileDossierLayout.closeTop >= mobileDossierLayout.stageTop, `mobile dossier title or close control begins outside the stage; layout=${JSON.stringify(mobileDossierLayout)}`);
+    assert(mobileDossierLayout.panelScrollWidth <= mobileDossierLayout.panelClientWidth, "mobile dossier should not scroll horizontally");
+    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-mobile.png") });
+    await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     console.log("Mr. Feast player systems browser test: sprint energy, crouch stealth, inventory dossier, Escape menu, save/load, maximize, and reversible Dev Mode passed");

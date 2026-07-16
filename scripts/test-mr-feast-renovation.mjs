@@ -1226,6 +1226,8 @@ check("48 save contract", /RBGameSaves\?\.create\("mr-feast-mansion",\s*\{ versi
 check("48 reversible dev mode", /devModeSnapshot/.test(mansion) && /setDevMode\(enabled/.test(mansion) && /recordingPlayed\s*=\s*true/.test(mansion) && /relaySabotaged\s*=\s*false/.test(mansion) && /restoreQuestSnapshot/.test(mansion), "Dev Mode does not grant the current trail while preserving a reversible pre-dev snapshot and unfinished sabotage");
 check("49 dossier Tab binding", /event\.code === "Tab"[\s\S]*?contestant13Quest\.toggleJournal\(\)/.test(mansion) && !/event\.code === "KeyI"|event\.code === "KeyJ"/.test(mansion), "inventory dossier is not exclusively bound to Tab");
 check("49 discovery-first HUD", !/Search the Library shelves for a book that does not quite belong\./i.test(page) && /dom\.caseFile\.hidden\s*=\s*!state\.started\s*\|\|\s*!this\.story\.bookRead/.test(contestant13Quest), "fresh play still exposes the left-side Library direction");
+check("50 illustrated dossier", /itemIcons:\s*Object\.freeze/.test(contestant13Config) && /function itemIconSvg\(/.test(mansion) && /mansion-inventory-card__icon/.test(contestant13Quest), "carried objects lack distinct scalable dossier illustrations");
+check("50 illustrated dossier", /id="mansion-clue-notepad"/.test(page) && /\.mansion-clue-notepad/.test(page) && /\.mansion-clue-note/.test(page) && /linear-gradient/.test(page), "recovered clues are not presented on a ruled notepad");
 
 // 43. Mr. Feast is an optional, animated test layer. He follows a safe
 // authored main-floor loop, never blocks mansion boot, and exposes enough

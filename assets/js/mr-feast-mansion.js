@@ -463,7 +463,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-tab-discovery-4",
+    assetVersion: "20260716-inventory-notepad-5",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -541,6 +541,18 @@
       "contestant-13-badge": "Badge 13",
       "contestant-13-tape": "Tape reel",
     }),
+    itemIcons: Object.freeze({
+      "garden-shovel": "shovel",
+      "basement-key-b13": "key",
+      "contestant-13-badge": "badge",
+      "contestant-13-tape": "tape",
+    }),
+    itemDetails: Object.freeze({
+      "garden-shovel": "Garden tool",
+      "basement-key-b13": "B-13 service key",
+      "contestant-13-badge": "Contestant credential",
+      "contestant-13-tape": "Sealed recording",
+    }),
     world: Object.freeze({
       book: Object.freeze({
         x: -14.5, z: 7.9, shelfY: 1.685,
@@ -552,6 +564,16 @@
       digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
     }),
   });
+
+  function itemIconSvg(iconName) {
+    const paths = {
+      shovel: `<g transform="rotate(-34 48 48)"><path d="M48 13v49" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M37 14c0-7 22-7 22 0" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><path d="M31 65h34l-5 18c-2 7-22 7-24 0z" fill="currentColor" opacity=".9"/><path d="M48 66v22" stroke="#211b16" stroke-width="2" opacity=".5"/></g>`,
+      key: `<circle cx="29" cy="48" r="16" stroke="currentColor" stroke-width="7"/><circle cx="29" cy="48" r="5" fill="currentColor"/><path d="M45 48h36M65 48v13M75 48v8" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M51 42h24" stroke="#fff4d1" stroke-width="2" opacity=".36"/>`,
+      badge: `<path d="M41 16v9M55 16v9" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><rect x="20" y="23" width="56" height="60" rx="7" fill="currentColor" opacity=".92"/><rect x="26" y="30" width="44" height="46" rx="3" fill="#211b16" opacity=".9"/><circle cx="40" cy="46" r="8" fill="currentColor"/><path d="M29 65c2-9 20-9 22 0" fill="currentColor"/><text x="57" y="58" fill="currentColor" font-family="Georgia,serif" font-size="14" font-weight="700" text-anchor="middle">XIII</text>`,
+      tape: `<rect x="15" y="24" width="66" height="50" rx="7" fill="currentColor" opacity=".9"/><rect x="21" y="30" width="54" height="28" rx="4" fill="#211b16"/><circle cx="36" cy="44" r="9" stroke="currentColor" stroke-width="4"/><circle cx="60" cy="44" r="9" stroke="currentColor" stroke-width="4"/><path d="M42 44h12M28 66h40l-5-8H33z" fill="#211b16" opacity=".9"/><circle cx="31" cy="67" r="2" fill="currentColor"/><circle cx="65" cy="67" r="2" fill="currentColor"/>`,
+    };
+    return `<svg viewBox="0 0 96 96" focusable="false" aria-hidden="true">${paths[iconName] || paths.badge}</svg>`;
+  }
 
   // Keep the raised mid-landing and both flights on one authored datum. The
   // landing is deliberately above the halfway point so the foyer-to-ballroom
@@ -3256,13 +3278,22 @@
         } else {
           for (const id of this.story.inventory) {
             const item = document.createElement("li");
-            item.className = "mansion-journal__entry";
+            const iconName = CONTESTANT_13.itemIcons[id] || "badge";
+            item.className = "mansion-inventory-card";
             item.dataset.item = id;
+            item.dataset.icon = iconName;
+            const icon = document.createElement("span");
+            icon.className = "mansion-inventory-card__icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.innerHTML = itemIconSvg(iconName);
+            const copy = document.createElement("span");
+            copy.className = "mansion-inventory-card__copy";
             const title = document.createElement("strong");
             title.textContent = CONTESTANT_13.itemLabels[id] || id;
             const detail = document.createElement("span");
-            detail.textContent = id === "garden-shovel" ? "Bulky tool" : "Quest object";
-            item.append(title, detail);
+            detail.textContent = CONTESTANT_13.itemDetails[id] || "Quest object";
+            copy.append(title, detail);
+            item.append(icon, copy);
             dom.inventoryDialogItems.appendChild(item);
           }
         }
@@ -3277,7 +3308,7 @@
         } else {
           for (const entry of this.story.journalEntries) {
             const item = document.createElement("li");
-            item.className = "mansion-journal__entry";
+            item.className = "mansion-clue-note";
             item.dataset.entry = entry.id;
             const title = document.createElement("strong");
             title.textContent = entry.title;

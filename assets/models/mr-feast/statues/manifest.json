@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-16",
+  "pipeline": "Meshy 6 text-to-3D preview/refine, then Blender 4.5 LTS static-prop cleanup and standard GLB export",
+  "runtimeContract": {
+    "engine": "Three.js r128 GLTFLoader",
+    "compression": "none",
+    "animations": false,
+    "skins": false,
+    "morphTargets": false,
+    "textureMaxSize": 1024
+  },
+  "statues": [
+    {
+      "id": "garden-weeping-crown",
+      "title": "The Weeping Crown",
+      "location": "FORMAL GARDEN",
+      "meshy": {
+        "previewTaskId": "019f6c4d-a86d-707e-b11b-c2e62fa7c86d",
+        "refineTaskId": "019f6c4e-a880-70af-a510-aa92fd2b15df",
+        "credits": 30,
+        "prompt": "single elegant eerie neoclassical garden fountain statue, tall androgynous courtier in flowing stone robes, smooth featureless oval mask, elongated neck, two unnaturally long arms raised to cradle an empty crown above the head, graceful symmetrical silhouette, full body upright on a compact circular plinth, isolated single object, no environment, no water, no text, game-ready PBR prop",
+        "texturePrompt": "weathered pale Carrara marble, charcoal veins, subtle moss in recesses, restrained antique gold repair seams, realistic rough stone, no skin colors"
+      },
+      "runtimeFile": "garden-weeping-crown.glb",
+      "blenderReport": "garden-weeping-crown.report.json"
+    },
+    {
+      "id": "foyer-listening-host",
+      "title": "The Listening Host",
+      "location": "FRONT FOYER",
+      "meshy": {
+        "previewTaskId": "019f6c4d-a874-7f7a-a8da-dadd160ad832",
+        "refineTaskId": "019f6c4e-9457-70a2-b4f6-b416bc52a9f2",
+        "credits": 30,
+        "prompt": "single elegant unsettling neoclassical statue of a tall faceless aristocratic host, elongated neck, unnaturally long fingers gathered around one ear as if listening, formal draped evening coat merging into carved robes, poised contrapposto, full body on a compact square plinth, isolated single object, no background, no text, game-ready PBR prop",
+        "texturePrompt": "polished black marble with thin ivory veins, subtle aged bronze gold repair seams, realistic stone only, no human skin"
+      },
+      "runtimeFile": "foyer-listening-host.glb",
+      "blenderReport": "foyer-listening-host.report.json"
+    },
+    {
+      "id": "foyer-veiled-waltz",
+      "title": "The Veiled Waltz",
+      "location": "FRONT FOYER",
+      "meshy": {
+        "previewTaskId": "019f6c4d-a871-7f79-8255-1206d2bff8b9",
+        "refineTaskId": "019f6c4e-fb61-7fa0-a3b7-a22ac7a01331",
+        "credits": 30,
+        "prompt": "single elegant eerie neoclassical statue of a veiled ballroom dancer caught mid-curtsy, flowing veil covers a smooth blank face, head turned subtly too far backward, long graceful arms folded across the chest, gown spirals into a narrow pedestal, full body on a compact square plinth, isolated single object, no background, no text, game-ready PBR prop",
+        "texturePrompt": "aged ivory marble, smoke grey patina, fine cracks, restrained tarnished gold leaf repair seams, realistic stone only, no human skin"
+      },
+      "runtimeFile": "foyer-veiled-waltz.glb",
+      "blenderReport": "foyer-veiled-waltz.report.json"
+    }
+  ]
+}

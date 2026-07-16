@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-07-16T19:10:33.911272+00:00",
+  "pipeline": "Meshy master -> Blender 4.5 static prop cleanup -> standard GLB",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/statues/garden-weeping-crown-master.glb",
+  "output": "garden-weeping-crown.glb",
+  "normalizationScale": 0.6843725212129028,
+  "targetHeightMeters": 1.3,
+  "targetTriangles": 10000,
+  "sourceTriangles": 349243,
+  "finalTriangles": 17462,
+  "meshCount": 1,
+  "materials": [
+    "Estate_Statue_Material_01"
+  ],
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_1",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_2",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_3",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "sourceBounds": {
+    "min": [
+      -0.473179,
+      -0.312172,
+      -0.950795
+    ],
+    "max": [
+      0.470909,
+      0.313984,
+      0.948755
+    ]
+  },
+  "runtimeBounds": {
+    "min": [
+      -0.323186,
+      -0.214477,
+      -0.001141
+    ],
+    "max": [
+      0.323061,
+      0.214433,
+      1.299345
+    ]
+  },
+  "fileBytes": 5029196,
+  "features": {
+    "animations": false,
+    "skins": false,
+    "morphTargets": false,
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false
+  }
+}

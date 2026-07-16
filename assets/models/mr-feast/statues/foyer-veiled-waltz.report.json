@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-07-16T19:15:29.586970+00:00",
+  "pipeline": "Meshy master -> Blender 4.5 static prop cleanup -> standard GLB",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/statues/foyer-veiled-waltz-master.glb",
+  "output": "foyer-veiled-waltz.glb",
+  "normalizationScale": 0.9371635726052929,
+  "targetHeightMeters": 1.78,
+  "targetTriangles": 12000,
+  "sourceTriangles": 286340,
+  "finalTriangles": 14317,
+  "meshCount": 1,
+  "materials": [
+    "Estate_Statue_Material_01"
+  ],
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_1",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_2",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_3",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "sourceBounds": {
+    "min": [
+      -0.246798,
+      -0.242019,
+      -0.950742
+    ],
+    "max": [
+      0.245138,
+      0.242091,
+      0.948606
+    ]
+  },
+  "runtimeBounds": {
+    "min": [
+      -0.230651,
+      -0.228144,
+      -0.00036
+    ],
+    "max": [
+      0.231201,
+      0.226798,
+      1.780142
+    ]
+  },
+  "fileBytes": 4695584,
+  "features": {
+    "animations": false,
+    "skins": false,
+    "morphTargets": false,
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false
+  }
+}

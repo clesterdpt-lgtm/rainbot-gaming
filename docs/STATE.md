@@ -12,6 +12,8 @@
 
 **37 — Workroom Security Hub and Keypad** is in progress with automated acceptance complete and room layout, keypad feel, monitor readability, and ambience awaiting user playtest.
 
+**38 — Estate Statue Trio** is in progress with implementation and automated acceptance complete; the creepy-elegant foyer pair and formal-garden fountain figure await user visual approval.
+
 ## Stable baseline
 
 - Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
@@ -35,6 +37,9 @@
 - The retained entrance begins behind a persistent four-digit PIN pad with a real in-world terminal and focus-safe desktop/touch overlay. Explicit save/load and reversible Dev Mode preserve the gate correctly without revealing the code in ordinary diagnostics.
 - An eight-screen 4×2 monitor bank cycles through all 35 public cameras. Each low-resolution feed copies its source camera's live lens/yaw/pitch, uses a legible green low-light pass, refreshes one target at a time, and freezes when the player leaves the Workroom vicinity.
 - The Workroom now includes a broad operator console, three rolling chairs, three server racks, patch ports, cable trays/bundles, equipment cases, radio, coffee cup, shift logs, binders, and the existing tool bench/relay while preserving the central aisle.
+- Three Meshy-authored, Blender-prepared sculptures now establish the estate's creepy-elegant art language: The Listening Host and The Veiled Waltz replace the foyer's procedural busts, while The Weeping Crown replaces only the primitive fountain figure and preserves the existing basin, water, jets, practical glow, paths, and collider.
+- The static Three.js r128 statue assets total 45,985 triangles and 13.1 MB across three uncompressed GLBs with 1024 px PBR textures. Runtime bounds fitting grounds each model at its authored anchor, the foyer pair remains outside the central rug, all three placements have simple fixed colliders, and the black-marble host uses a restrained material-only readability lift rather than a new light.
+- Estate-statue diagnostics expose per-model load state, dimensions, triangle/material/texture cost, placement, grounding, and collider state. The provenance manifest preserves the Meshy task IDs/prompts and is regression-locked to the JavaScript runtime IDs and filenames.
 - Whole-home patrol still traverses more than 220 authored points across all 29 current major room/stair zones and 20 route doors; while the Workroom is locked, Mr. Feast skips that room branch instead of stalling or walking through its door.
 - Mr. Feast now uses an 86,546-triangle, 6.46MB runtime model with a connected face, separate eyes/eyelids, oral cavity, teeth, textured lip rim, ten position-only targets, and 18 synchronized bindings.
 - The five test expressions, independent/paired blinks, 2.01m fit, 24-bone rig, and whole-home animations are controlled through the existing static Three.js r128 runtime.
@@ -61,6 +66,9 @@ The retopology is a face-only gameplay checkpoint, not dialogue-viseme or cinema
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
 - `node scripts/test-mr-feast-camera-security.mjs` — passed 35-camera placement, 27 wall-centered indoor mounts, 10.5–14.5 second one-way sweep/reversal, rendered green/red fixture-pixel checks, three-pulse warning, permitted and hostile solid-red tracking, two-second pre-alarm grace, physical blind-side traversal, show/restricted/lockdown policy, watched sabotage, crouch/hiding, natural and deterministic occlusion, alarm latching, Mr. Feast response/search/return, unchanged light layout, and desktop/mobile HUD checks with zero console errors
 - `node scripts/test-mr-feast-workroom-security-hub.mjs` — passed merged west/east room identity, removed doorway, real E/click/touch keypad entry, wrong/correct PIN states, explicit save/load persistence, eight independent render targets, full 35-camera roster, distinct/nonblank feed signatures, live sweep-image change, one-feed-per-frame budget, renderer restoration, ambience diagnostics, and desktop/mobile layout
+- `node scripts/test-mr-feast-estate-statues.mjs` — passed three browser-safe GLB budgets, runtime loading, bounds fitting, grounding, three fixed colliders, removal of the old foyer/fountain primitives, central-aisle clearance, deterministic foyer/garden framing, and zero console errors
+- `python3 -m py_compile scripts/blender/prepare-estate-statue.py` and `node --check scripts/meshy-generate.mjs` — passed the reusable Meshy preview/refine and Blender static-prop preparation pipeline checks
+- Estate statue browser captures — `output/playwright/mr-feast-estate-statues/foyer-statues-desktop.png` and `garden-fountain-statue-desktop.png` confirm the balanced wall-side foyer composition and the retained working fountain at 1280×820
 - Workroom browser captures — `output/playwright/mr-feast-workroom-security-hub/workroom-monitor-wall-desktop.png`, `workroom-wide-desktop.png`, `workroom-keypad-desktop.png`, and `workroom-keypad-mobile.png` confirm the live 4×2 wall, broader equipment layout, and access terminal at 1280×820 and 390×844
 - Camera browser captures — `output/playwright/mr-feast-camera-security/camera-indicator-green-desktop.png`, `camera-indicator-warning-red-desktop.png`, `camera-permitted-tracking-desktop.png`, `camera-solid-red-tracking-desktop.png`, `camera-suspicion-desktop.png`, and `camera-suspicion-mobile.png` confirm readable fixture feedback, tracking states, and the compact meter at 1280×820 and 390×844
 - The focused player-system suite also verifies four unique scalable object icons, the ruled handwritten clue pad, and in-stage title/close placement without horizontal overflow at 390×844
@@ -73,7 +81,7 @@ The retopology is a face-only gameplay checkpoint, not dialogue-viseme or cinema
 
 ## Next action
 
-User enters temporary PIN `0513`, checks that the merged Workroom reads as one large security hub, watches several live feeds pan, and confirms the console/server clutter still leaves comfortable access to the relay. Camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate Milestone 33–36 playtests.
+User visually checks the new foyer statues from the front rug and passes the formal-garden fountain at night, confirming that all three read as expensive commissions first and unsettling figures second. The temporary PIN `0513` Workroom layout, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate Milestone 33–37 playtests.
 
 ## Working conventions
 

@@ -216,6 +216,11 @@ async function run() {
     assert(JSON.stringify(state.inventory.items) === JSON.stringify(cleanSnapshot.inventory.items), "disabling Dev Mode should restore the exact pre-dev inventory");
     assert(JSON.stringify(state.journal.entries) === JSON.stringify(cleanSnapshot.journal.entries), "disabling Dev Mode should restore the exact pre-dev clues");
 
+    // The desktop routes are complete. Release their continuously rendered
+    // WebGL scene before opening the second, mobile mansion so a real touch
+    // click is not starved behind two simultaneous full-scene render loops.
+    await context.close();
+
     const mobileContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
       screen: { width: 390, height: 844 },
@@ -252,7 +257,6 @@ async function run() {
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     console.log("Mr. Feast player systems browser test: sprint energy, crouch stealth, inventory dossier, Escape menu, save/load, maximize, and reversible Dev Mode passed");
-    await context.close();
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

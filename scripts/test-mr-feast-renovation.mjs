@@ -12,6 +12,7 @@ const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest
 const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
 const mrFeastFacialReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-facial-report.json");
 const mrFeastRetopologyReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-retopology-report.json");
+const estateStatueManifestPath = path.join(mrFeastAssetRoot, "statues/manifest.json");
 const mansion = fs.readFileSync(mansionPath, "utf8");
 const page = fs.readFileSync(pagePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
@@ -21,6 +22,7 @@ const mrFeastFacialReport = JSON.parse(fs.readFileSync(mrFeastFacialReportPath, 
 const mrFeastRetopologyReport = fs.existsSync(mrFeastRetopologyReportPath)
   ? JSON.parse(fs.readFileSync(mrFeastRetopologyReportPath, "utf8"))
   : null;
+const estateStatueManifest = JSON.parse(fs.readFileSync(estateStatueManifestPath, "utf8"));
 const requiredMrFeastFacialTargets = [
   "blink_left",
   "blink_right",
@@ -893,7 +895,7 @@ check("35 fireplace audio", /fireplace\(on\)/.test(mansionAudio) && /this\.ping\
 // lighting use separate stable shader layouts; enclosure lights occupy stable
 // slots so no interaction can mint a novel count; every reachable layout is
 // drawn once during boot; and the cross-floor fade retires unions promptly.
-check("31 merged static decor", /function mergeStaticDecor\(\)/.test(mansion) && /buildMansion\(\);\s*\n\s*mergeStaticDecor\(\);\s*\n\s*registerExteriorDetailCulling\(\)/.test(mansion), "static decor is not merged between mansion build and culling registration");
+check("31 merged static decor", /function mergeStaticDecor\(\)/.test(mansion) && /buildMansion\(\);[\s\S]*?await loadEstateStatues\(\);\s*\n\s*mergeStaticDecor\(\);\s*\n\s*registerExteriorDetailCulling\(\)/.test(initSequence), "static decor is not merged between mansion build and culling registration");
 check("31 merged static decor", /const skip = new Set\(\[\.\.\.occluderMeshes, \.\.\.interactableMeshes\]\)/.test(mansion) && /for \(const object of \[\.\.\.scene\.children\]\)/.test(mansion) && /object\.userData\.interaction\) continue/.test(mansion), "the decor merge can swallow occluders, interactive meshes, or animated subtrees");
 check("31 merged static decor", /exteriorCullingClass/.test(mansion) && /mergedDecor: state\.mergedDecor/.test(diagnostics), "merged decor loses its exterior-culling class or QA observability");
 check("31 stable light layouts", /const preclassified = object\.userData\.exteriorCullingClass/.test(mansion), "culling registration ignores pre-classified merged meshes");
@@ -1405,6 +1407,28 @@ check("52 physical keypad", /workroom-pin-pad-lock/.test(workroomFurnishings) &&
 check("52 live monitor bank", /monitorCount: 8/.test(cameraSecurityConfig) && /workroom-live-monitor-wall/.test(workroomFurnishings) && /new THREE\.WebGLRenderTarget/.test(workroomMonitorWallSystem) && /copyViewPoseTo/.test(workroomMonitorWallSystem), "the Workroom does not have an eight-screen render-target wall driven by security-camera poses");
 check("52 monitor performance", /monitorDesktopSize:[\s\S]*?width: 256, height: 144/.test(cameraSecurityConfig) && /normalFrameRenderCount = 1/.test(workroomMonitorWallSystem) && /this\.root\.visible = false/.test(workroomMonitorWallSystem) && /renderer\.setRenderTarget\(previousTarget\)/.test(workroomMonitorWallSystem), "monitor feeds are not low-resolution, time-sliced, recursion-safe, and render-state-restored");
 check("52 Workroom diagnostics", /workroom: getWorkroomDiagnostics\(\)/.test(diagnostics) && /refreshMonitorWallForQA/.test(qaHooks) && /submitWorkroomCodeForQA/.test(qaHooks), "Workroom access and live feeds are not exposed to deterministic diagnostics");
+
+// 53. Three authored Meshy masters, prepared as static browser GLBs in
+// Blender, replace the primitive foyer and fountain sculpture while preserving
+// the established navigation, fountain effects, and interior culling contract.
+const estateStatueConfig = section("const ESTATE_STATUES", "function securityCameraPlacement");
+const estateStatueLoader = section("function loadEstateStatueGltf", "function furnishMainFloor");
+const estateStatueManifestEntries = Array.isArray(estateStatueManifest.statues) ? estateStatueManifest.statues : [];
+const estateStatueManifestIds = estateStatueManifestEntries.map((entry) => entry.id);
+const estateStatueManifestFiles = estateStatueManifestEntries.map((entry) => entry.runtimeFile);
+const estateStatueConfigMatches = [...estateStatueConfig.matchAll(/id:\s*"([^"]+)"[\s\S]*?file:\s*"\.\.\/models\/mr-feast\/statues\/([^"]+)"/g)];
+check("53 estate statue manifest", estateStatueManifestEntries.length === 3 && new Set(estateStatueManifestIds).size === 3, `estate statue provenance manifest needs three unique entries; found ${estateStatueManifestEntries.length}`);
+check("53 estate statue manifest", estateStatueManifest.runtimeContract?.engine === "Three.js r128 GLTFLoader" && estateStatueManifest.runtimeContract?.compression === "none" && estateStatueManifest.runtimeContract?.animations === false, "estate statue manifest does not preserve the plain static Three.js r128 runtime contract");
+check("53 estate statue config", estateStatueConfigMatches.length === 3, `estate statue runtime config needs three placements; found ${estateStatueConfigMatches.length}`);
+check("53 estate statue config", estateStatueConfigMatches.every((match) => estateStatueManifestIds.includes(match[1]) && estateStatueManifestFiles.includes(match[2])), "estate statue runtime IDs/files drifted from the Blender provenance manifest");
+check("53 estate statue placement", count(estateStatueConfig, /location:\s*"FRONT FOYER"/g) === 2 && count(estateStatueConfig, /location:\s*"FORMAL GARDEN"/g) === 1 && /centralAisleHalfWidth:\s*2\.75/.test(estateStatueConfig), "the trio is not split between two wall-side foyer placements and one garden centerpiece");
+check("53 estate statue fitting", /new THREE\.Box3\(\)\.setFromObject\(model\)/.test(estateStatueLoader) && /placement\.targetHeight \/ fitSize\.y/.test(estateStatueLoader) && /model\.position\.y -= fitBounds\.min\.y/.test(estateStatueLoader), "runtime statue fitting does not derive scale and grounding from actual GLB bounds");
+check("53 estate statue integration", /physics\.addFixedBox\(/.test(estateStatueLoader) && /colliderEnabled = true/.test(estateStatueLoader) && /receiveShadow = true/.test(estateStatueLoader), "estate statues lack fixed colliders or static shadow presentation");
+check("53 estate statue integration", initSequence.indexOf("await loadEstateStatues()") < initSequence.indexOf("mergeStaticDecor()") && initSequence.indexOf("await loadEstateStatues()") < initSequence.indexOf("registerExteriorDetailCulling()"), "foyer statue meshes must load before static-decor merging and interior detail culling registration");
+check("53 estate statue cleanup", !/function addBust\(/.test(mansion) && !/garden-fountain-(?:faceless-figure|carved-torso)/.test(mansion), "primitive foyer bust or fountain figure geometry remains in the authored statue scene");
+check("53 estate statue fountain continuity", /garden-fountain-basin/.test(yardBuild) && /garden-fountain-water/.test(yardBuild) && /garden-fountain-upper-bowl/.test(yardBuild) && /garden-fountain-crown-lantern-bulb/.test(yardBuild) && /garden-fountain-crown-lantern-light/.test(yardBuild), "the new centerpiece displaced required fountain water, bowls, or crown glow");
+check("53 estate statue diagnostics", /estateStatues:\s*getEstateStatueDiagnostics\(\)/.test(diagnostics) && /getEstateStatueDiagnostics/.test(qaHooks) && /legacyFountainFigureCount/.test(estateStatueLoader) && /legacyFoyerBustCount/.test(estateStatueLoader), "statue load/cost/cleanup diagnostics are not exposed to deterministic QA");
+check("53 estate statue views", /foyerStatues:/.test(qaRoomViews) && /gardenFountainStatue:/.test(qaRoomViews), "focused foyer and garden statue QA framing is missing");
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.

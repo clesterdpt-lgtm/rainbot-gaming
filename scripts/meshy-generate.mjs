@@ -8,11 +8,12 @@ const TERMINAL_STATUSES = new Set(["SUCCEEDED", "FAILED", "CANCELED"]);
 const DEFAULT_POLL_MS = 5000;
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 
-const HELP = `Meshy character pipeline
+const HELP = `Meshy model pipeline
 
 Usage:
   node scripts/meshy-generate.mjs --mode balance
   node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID
+  node scripts/meshy-generate.mjs --mode text-to-3d --prompt TEXT --output DIR --slug NAME [--polycount 12000] [--texture-prompt TEXT]
   node scripts/meshy-generate.mjs --mode image-to-3d --image FILE --output DIR --slug NAME [--polycount 100000]
   node scripts/meshy-generate.mjs --mode rig --task-id IMAGE_TASK_ID --output DIR --slug NAME [--height 1.92]
   node scripts/meshy-generate.mjs --mode animate --task-id RIG_TASK_ID --action-id ID --output DIR --slug NAME
@@ -69,13 +70,14 @@ function nonNegativeInteger(value, name) {
 }
 
 function endpointForTaskType(type, id = "") {
-  const collection = {
-    "image-to-3d": "image-to-3d",
-    rigging: "rigging",
-    animations: "animations",
+  const route = {
+    "text-to-3d": ["v2", "text-to-3d"],
+    "image-to-3d": ["v1", "image-to-3d"],
+    rigging: ["v1", "rigging"],
+    animations: ["v1", "animations"],
   }[type];
-  if (!collection) throw new Error(`Unsupported --task-type ${type}`);
-  return `/v1/${collection}${id ? `/${id}` : ""}`;
+  if (!route) throw new Error(`Unsupported --task-type ${type}`);
+  return `/${route[0]}/${route[1]}${id ? `/${id}` : ""}`;
 }
 
 async function apiRequest(apiKey, endpoint, options = {}) {
@@ -170,6 +172,64 @@ async function localImageDataUri(file) {
   if (!mime) throw new Error("--image must be a PNG or JPEG file");
   const bytes = await readFile(resolved);
   return `data:${mime};base64,${bytes.toString("base64")}`;
+}
+
+async function runTextTo3d(apiKey, args) {
+  const prompt = required(args, "prompt");
+  const output = path.resolve(required(args, "output"));
+  const slug = required(args, "slug");
+  const polycount = positiveNumber(args.polycount || 12000, "polycount");
+  const texturePrompt = args["texture-prompt"] || "";
+  if (prompt.length > 600) throw new Error("--prompt must be 600 characters or fewer");
+  if (texturePrompt.length > 600) throw new Error("--texture-prompt must be 600 characters or fewer");
+
+  const previewRequest = {
+    mode: "preview",
+    prompt,
+    ai_model: args["ai-model"] || "meshy-6",
+    model_type: args["model-type"] || "standard",
+    topology: "triangle",
+    target_polycount: polycount,
+    symmetry_mode: args.symmetry || "auto",
+    pose_mode: args.pose || "",
+  };
+  const previewTaskId = await createTask(apiKey, "text-to-3d", previewRequest);
+  await writeMetadata(path.join(output, `${slug}.submission.json`), {
+    taskId: previewTaskId,
+    taskType: "text-to-3d-preview",
+    request: previewRequest,
+  });
+  if (args["no-poll"]) return;
+
+  const previewTask = await pollTask(apiKey, "text-to-3d", previewTaskId);
+  const refineRequest = {
+    mode: "refine",
+    preview_task_id: previewTaskId,
+    enable_pbr: args.pbr !== "false",
+    ...(texturePrompt ? { texture_prompt: texturePrompt } : {}),
+  };
+  const refineTaskId = await createTask(apiKey, "text-to-3d", refineRequest);
+  await writeMetadata(path.join(output, `${slug}-refine.submission.json`), {
+    taskId: refineTaskId,
+    taskType: "text-to-3d-refine",
+    previewTaskId,
+    request: refineRequest,
+  });
+  const refineTask = await pollTask(apiKey, "text-to-3d", refineTaskId);
+  await download(refineTask.model_urls?.glb, path.join(output, `${slug}-master.glb`));
+  const thumbnailEntries = Object.entries(refineTask.thumbnail_urls || {});
+  if (!thumbnailEntries.length && refineTask.thumbnail_url) thumbnailEntries.push(["preview", refineTask.thumbnail_url]);
+  for (const [view, url] of thumbnailEntries) {
+    await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
+  }
+  await writeMetadata(path.join(output, `${slug}.meta.json`), {
+    source: "Meshy text-to-3d",
+    preview: taskSummary(previewTask),
+    refine: taskSummary(refineTask),
+    masterFile: `${slug}-master.glb`,
+    thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
+    request: { preview: previewRequest, refine: refineRequest },
+  });
 }
 
 async function runImageTo3d(apiKey, args) {
@@ -290,6 +350,7 @@ async function main() {
     console.log(JSON.stringify(taskSummary(task), null, 2));
     return;
   }
+  if (mode === "text-to-3d") return runTextTo3d(apiKey, args);
   if (mode === "image-to-3d") return runImageTo3d(apiKey, args);
   if (mode === "rig") return runRig(apiKey, args);
   if (mode === "animate") return runAnimation(apiKey, args);

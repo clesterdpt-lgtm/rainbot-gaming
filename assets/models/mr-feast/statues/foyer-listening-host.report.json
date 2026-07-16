@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-07-16T19:15:29.666643+00:00",
+  "pipeline": "Meshy master -> Blender 4.5 static prop cleanup -> standard GLB",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/statues/foyer-listening-host-master.glb",
+  "output": "foyer-listening-host.glb",
+  "normalizationScale": 0.9582854979357082,
+  "targetHeightMeters": 1.82,
+  "targetTriangles": 12000,
+  "sourceTriangles": 284147,
+  "finalTriangles": 14206,
+  "meshCount": 1,
+  "materials": [
+    "Estate_Statue_Material_01"
+  ],
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_1",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_2",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "name": "Image_3",
+      "width": 1024,
+      "height": 1024
+    }
+  ],
+  "sourceBounds": {
+    "min": [
+      -0.341925,
+      -0.228892,
+      -0.950556
+    ],
+    "max": [
+      0.33163,
+      0.231048,
+      0.948669
+    ]
+  },
+  "runtimeBounds": {
+    "min": [
+      -0.322268,
+      -0.22034,
+      -0.000403
+    ],
+    "max": [
+      0.323639,
+      0.220911,
+      1.819785
+    ]
+  },
+  "fileBytes": 4045512,
+  "features": {
+    "animations": false,
+    "skins": false,
+    "morphTargets": false,
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false
+  }
+}

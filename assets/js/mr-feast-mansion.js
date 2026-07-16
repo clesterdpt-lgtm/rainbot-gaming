@@ -294,6 +294,46 @@
       "cam-yard-garden-front",
     ]),
   });
+  const ESTATE_STATUES = Object.freeze({
+    assetVersion: "20260716-estate-statues-1",
+    centralAisleHalfWidth: 2.75,
+    placements: Object.freeze([
+      Object.freeze({
+        id: "garden-weeping-crown",
+        title: "The Weeping Crown",
+        file: "../models/mr-feast/statues/garden-weeping-crown.glb",
+        location: "FORMAL GARDEN",
+        position: Object.freeze({ x: -25, y: ESTATE_GROUND_Y + 1.55, z: -2.2 }),
+        targetHeight: 1.3,
+        rotationY: Math.PI,
+        castShadow: true,
+        collider: Object.freeze({ width: 0.78, height: 1.3, depth: 0.78 }),
+      }),
+      Object.freeze({
+        id: "foyer-listening-host",
+        title: "The Listening Host",
+        file: "../models/mr-feast/statues/foyer-listening-host.glb",
+        location: "FRONT FOYER",
+        position: Object.freeze({ x: -3.85, y: FLOOR.MAIN, z: 5.0 }),
+        targetHeight: 1.82,
+        rotationY: Math.PI / 2,
+        castShadow: true,
+        materialLift: Object.freeze({ color: 0x62584f, intensity: 0.16 }),
+        collider: Object.freeze({ width: 0.72, height: 1.82, depth: 0.72 }),
+      }),
+      Object.freeze({
+        id: "foyer-veiled-waltz",
+        title: "The Veiled Waltz",
+        file: "../models/mr-feast/statues/foyer-veiled-waltz.glb",
+        location: "FRONT FOYER",
+        position: Object.freeze({ x: 3.85, y: FLOOR.MAIN, z: 5.0 }),
+        targetHeight: 1.78,
+        rotationY: -Math.PI / 2,
+        castShadow: true,
+        collider: Object.freeze({ width: 0.72, height: 1.78, depth: 0.72 }),
+      }),
+    ]),
+  });
 
   function securityCameraPlacement(id, room, x, y, z, yawDegrees, sweepDegrees, range, options = {}) {
     const seed = Array.from(id).reduce((total, character) => total + character.charCodeAt(0), 0);
@@ -947,6 +987,7 @@
     foyerA: [0, FLOOR.MAIN, 10.4, 0],
     frontThresholdSeam: [0, FLOOR.MAIN, 10.25, Math.PI, -0.58],
     foyerB: [-2.7, FLOOR.MAIN, 4.6, -2.47],
+    foyerStatues: [0, FLOOR.MAIN, 10.4, 0, 0.01],
     foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
     musicRoomB: [11.5, FLOOR.MAIN, 10.6, 0.72],
@@ -1002,6 +1043,7 @@
     kitchenServiceStairDoor: [12.55, FLOOR.MAIN, -5.75, Math.PI],
     serviceStairTopLight: [14.0, FLOOR.MAIN, -1.2, 0.95, 0.6],
     serviceStairTopSwitch: [14.0, FLOOR.MAIN, -2.2, 0.32, -0.52],
+    gardenFountainStatue: [-25, YARD_LAYOUT.groundY, 1.6, 0, 0.1],
 
     westFrontSuiteA: [-6.4, FLOOR.UPPER, 4.7, 2.31],
     westFrontSuiteB: [-13.0, FLOOR.UPPER, 10.6, -0.86],
@@ -1353,6 +1395,28 @@
       smallProps: 0,
     },
   };
+  const estateStatueScene = {
+    settled: false,
+    colliders: 0,
+    statues: ESTATE_STATUES.placements.map((placement) => ({
+      id: placement.id,
+      title: placement.title,
+      file: placement.file,
+      location: placement.location,
+      status: "pending",
+      error: null,
+      placement,
+      root: null,
+      meshCount: 0,
+      triangles: 0,
+      materials: 0,
+      textures: 0,
+      size: null,
+      center: null,
+      grounded: false,
+      colliderEnabled: false,
+    })),
+  };
   let contestant13Quest = null;
   let mrFeastNpc = null;
   let cameraSecurity = null;
@@ -1388,6 +1452,7 @@
       mazeHedges: 0,
       exteriorLamps: 0,
       estateTrees: 0,
+      estateStatues: 0,
     },
     circuit: null,
   };
@@ -8762,35 +8827,6 @@
     return mesh;
   }
 
-  function addBust(x, z, floorY, rotationY) {
-    const group = new THREE.Group();
-    group.position.set(x, floorY, z);
-    group.rotation.y = rotationY || 0;
-    scene.add(group);
-    box({ name: "marble-bust-pedestal", w: 0.58, h: 0.92, d: 0.58, x: 0, y: 0.46, z: 0, material: M.marble, parent: group });
-    box({ name: "marble-bust-plinth", w: 0.7, h: 0.12, d: 0.7, x: 0, y: 0.98, z: 0, material: M.marble, parent: group });
-    const shoulders = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), M.porcelain);
-    shoulders.name = "carved-marble-shoulders";
-    shoulders.scale.set(0.42, 0.16, 0.25);
-    shoulders.position.set(0, 1.22, 0);
-    shoulders.castShadow = true;
-    group.add(shoulders);
-    roundedBox({ name: "carved-marble-torso", w: 0.45, h: 0.42, d: 0.28, radius: 0.08, x: 0, y: 1.15, z: 0, material: M.porcelain, parent: group });
-    const head = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), M.porcelain);
-    head.name = "faceless-marble-bust-head";
-    head.scale.set(0.16, 0.22, 0.17);
-    head.position.set(0, 1.55, 0);
-    head.castShadow = true;
-    group.add(head);
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.12, 8), M.porcelain);
-    nose.name = "marble-bust-nose";
-    nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, 1.55, -0.18);
-    group.add(nose);
-    cylinder({ name: "marble-bust-neck", radius: 0.09, height: 0.2, segments: 14, x: 0, y: 1.36, z: 0, material: M.porcelain, parent: group });
-    physics.addFixedBox(x, floorY + 0.85, z, 0.72, 1.7, 0.72, rotationY || 0);
-  }
-
   function addFoyerPanelwork() {
     const lowerRailY = FLOOR.MAIN + 0.34;
     const upperRailY = FLOOR.MAIN + 1.52;
@@ -8804,8 +8840,8 @@
         for (const y of [lowerRailY, upperRailY]) box({ name: "foyer-panel-horizontal", w: 0.055, h: 0.045, d: 1.18, x: x - side * 0.035, y, z, material: M.brass, cast: false });
       }
     }
-    addBust(-3.85, 5.0, FLOOR.MAIN, Math.PI / 2);
-    addBust(3.85, 5.0, FLOOR.MAIN, -Math.PI / 2);
+    // The two procedural busts that once occupied these sconce niches have
+    // been replaced by Blender-prepared Meshy estate commissions.
   }
 
   function addRoomZone(floorMin, floorMax, x1, x2, z1, z2, floorLabel, roomLabel) {
@@ -9068,6 +9104,179 @@
     ] });
     buildWallRun({ axis: "z", fixed: -6, start: -12, end: -4.9, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-boiler-divider", openings: [] });
     buildWallRun({ axis: "z", fixed: 7.6, start: -12, end: -4.9, floorY: FLOOR.BASEMENT, material: M.limestone, name: "basement-storage-divider", openings: [] });
+  }
+
+  function loadEstateStatueGltf(loader, url) {
+    return new Promise((resolve, reject) => {
+      loader.load(url, resolve, undefined, (error) => reject(new Error(error?.message || `Could not load ${url}`)));
+    });
+  }
+
+  function estateStatueAssetUrl(placement) {
+    const url = new URL(placement.file, SCRIPT_URL);
+    url.searchParams.set("v", ESTATE_STATUES.assetVersion);
+    return url.href;
+  }
+
+  function countEstateStatueRenderCost(root) {
+    let meshCount = 0;
+    let triangles = 0;
+    const materials = new Set();
+    const textures = new Set();
+    const textureProperties = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap", "alphaMap"];
+    root.traverse((object) => {
+      if (!object.isMesh || !object.geometry) return;
+      meshCount += 1;
+      const indexCount = object.geometry.index?.count;
+      const positionCount = object.geometry.attributes?.position?.count;
+      triangles += Math.floor((Number(indexCount == null ? positionCount : indexCount) || 0) / 3);
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        if (!material) continue;
+        materials.add(material.uuid);
+        const materialLift = object.userData.estateStatueMaterialLift;
+        if (material.emissive?.isColor && materialLift) {
+          material.emissive.setHex(materialLift.color);
+          material.emissiveIntensity = materialLift.intensity;
+        } else {
+          material.emissiveIntensity = 0;
+        }
+        material.roughness = Math.max(Number(material.roughness) || 0, 0.48);
+        material.needsUpdate = true;
+        for (const property of textureProperties) if (material[property]?.isTexture) textures.add(material[property].uuid);
+      }
+      object.castShadow = Boolean(object.userData.estateStatueCastShadow);
+      object.receiveShadow = true;
+    });
+    return { meshCount, triangles, materials: materials.size, textures: textures.size };
+  }
+
+  async function loadEstateStatue(loader, entry) {
+    const placement = entry.placement;
+    entry.status = "loading";
+    const gltf = await loadEstateStatueGltf(loader, estateStatueAssetUrl(placement));
+    const anchor = new THREE.Group();
+    anchor.name = `estate-statue-${placement.id}`;
+    anchor.position.set(placement.position.x, placement.position.y, placement.position.z);
+    anchor.rotation.y = placement.rotationY;
+    anchor.userData.estateStatueId = placement.id;
+
+    const model = gltf.scene.clone(true);
+    model.name = `${placement.id}-blender-model`;
+    model.traverse((object) => {
+      if (!object.isMesh) return;
+      object.name = `${placement.id}-${object.name || "mesh"}`;
+      object.userData.estateStatueCastShadow = placement.castShadow;
+      object.userData.estateStatueMaterialLift = placement.materialLift || null;
+    });
+    model.updateMatrixWorld(true);
+    const fitBounds = new THREE.Box3().setFromObject(model);
+    const fitSize = fitBounds.getSize(new THREE.Vector3());
+    if (!Number.isFinite(fitSize.y) || fitSize.y <= 0) throw new Error(`${placement.title} has invalid bounds`);
+    model.scale.multiplyScalar(placement.targetHeight / fitSize.y);
+    model.updateMatrixWorld(true);
+    fitBounds.setFromObject(model);
+    const fitCenter = fitBounds.getCenter(new THREE.Vector3());
+    model.position.x -= fitCenter.x;
+    model.position.y -= fitBounds.min.y;
+    model.position.z -= fitCenter.z;
+    anchor.add(model);
+    scene.add(anchor);
+    anchor.updateMatrixWorld(true);
+
+    const cost = countEstateStatueRenderCost(anchor);
+    const worldBounds = new THREE.Box3().setFromObject(anchor);
+    const size = worldBounds.getSize(new THREE.Vector3());
+    const center = worldBounds.getCenter(new THREE.Vector3());
+    const collider = placement.collider;
+    physics.addFixedBox(
+      placement.position.x,
+      placement.position.y + collider.height / 2,
+      placement.position.z,
+      collider.width,
+      collider.height,
+      collider.depth,
+      placement.rotationY,
+    );
+
+    entry.root = anchor;
+    entry.status = "ready";
+    entry.meshCount = cost.meshCount;
+    entry.triangles = cost.triangles;
+    entry.materials = cost.materials;
+    entry.textures = cost.textures;
+    entry.size = { x: size.x, y: size.y, z: size.z };
+    entry.center = { x: center.x, y: center.y, z: center.z };
+    entry.grounded = Math.abs(worldBounds.min.y - placement.position.y) < 0.025;
+    entry.colliderEnabled = true;
+    estateStatueScene.colliders += 1;
+  }
+
+  async function loadEstateStatues() {
+    estateStatueScene.settled = false;
+    if (typeof THREE.GLTFLoader !== "function") {
+      for (const entry of estateStatueScene.statues) {
+        entry.status = "failed";
+        entry.error = "THREE.GLTFLoader is unavailable";
+      }
+      estateStatueScene.settled = true;
+      return;
+    }
+    const loader = new THREE.GLTFLoader();
+    await Promise.all(estateStatueScene.statues.map(async (entry) => {
+      try {
+        await loadEstateStatue(loader, entry);
+      } catch (error) {
+        entry.status = "failed";
+        entry.error = error?.message || String(error);
+        console.warn(`[Estate statue] ${entry.title} could not load: ${entry.error}`);
+      }
+    }));
+    yardState.featureCounts.estateStatues = estateStatueScene.statues.filter((entry) => entry.status === "ready").length;
+    estateStatueScene.settled = true;
+    renderer.shadowMap.needsUpdate = true;
+  }
+
+  function getEstateStatueDiagnostics() {
+    let legacyFountainFigureCount = 0;
+    let legacyFoyerBustCount = 0;
+    scene.traverse((object) => {
+      if (/garden-fountain-(?:faceless-figure|carved-torso)/.test(object.name || "")) legacyFountainFigureCount += 1;
+      if (/(?:marble-bust|carved-marble-(?:shoulders|torso)|faceless-marble-bust-head)/.test(object.name || "")) legacyFoyerBustCount += 1;
+    });
+    const foyerPlacements = ESTATE_STATUES.placements.filter((placement) => placement.location === "FRONT FOYER");
+    const centralFoyerAisleClear = foyerPlacements.every((placement) => (
+      Math.abs(placement.position.x) - placement.collider.width / 2 >= ESTATE_STATUES.centralAisleHalfWidth
+    ));
+    return {
+      settled: estateStatueScene.settled,
+      expected: ESTATE_STATUES.placements.length,
+      loaded: estateStatueScene.statues.filter((entry) => entry.status === "ready").length,
+      failed: estateStatueScene.statues.filter((entry) => entry.status === "failed").length,
+      colliders: estateStatueScene.colliders,
+      assetVersion: ESTATE_STATUES.assetVersion,
+      legacyFountainFigureCount,
+      legacyFoyerBustCount,
+      centralFoyerAisleClear,
+      statues: estateStatueScene.statues.map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        file: entry.file,
+        location: entry.location,
+        status: entry.status,
+        error: entry.error,
+        meshCount: entry.meshCount,
+        triangles: entry.triangles,
+        materials: entry.materials,
+        textures: entry.textures,
+        height: entry.size ? Number(entry.size.y.toFixed(3)) : 0,
+        size: entry.size ? Object.fromEntries(Object.entries(entry.size).map(([key, value]) => [key, Number(value.toFixed(3))])) : null,
+        center: entry.center ? Object.fromEntries(Object.entries(entry.center).map(([key, value]) => [key, Number(value.toFixed(3))])) : null,
+        position: { ...entry.placement.position },
+        rotationY: entry.placement.rotationY,
+        grounded: entry.grounded,
+        colliderEnabled: entry.colliderEnabled,
+      })),
+    };
   }
 
   function furnishMainFloor() {
@@ -9784,6 +9993,7 @@
       mazeHedges: 0,
       exteriorLamps: 0,
       estateTrees: 0,
+      estateStatues: 0,
     };
     yardState.perimeterClosed = false;
     yardState.perimeterSegments = null;
@@ -10077,21 +10287,14 @@
     scene.add(fountainWater);
     cylinder({ name: "garden-fountain-pedestal", radius: 0.34, radiusTop: 0.23, radiusBottom: 0.42, height: 1.45, segments: 20, x: gardenX, y: groundY + 0.83, z: gardenZ, material: M.marble });
     cylinder({ name: "garden-fountain-upper-bowl", radius: 0.8, radiusTop: 0.65, radiusBottom: 0.28, height: 0.26, segments: 30, x: gardenX, y: groundY + 1.42, z: gardenZ, material: M.marble });
-    sphere({ name: "garden-fountain-faceless-figure", radius: 0.24, x: gardenX, y: groundY + 1.94, z: gardenZ, material: M.porcelain });
-    roundedBox({ name: "garden-fountain-carved-torso", w: 0.42, h: 0.68, d: 0.28, radius: 0.08, x: gardenX, y: groundY + 1.63, z: gardenZ, material: M.porcelain });
-    // A crown lantern makes the fountain's nighttime glow physically legible:
-    // the bulb below is also the exact origin of its practical PointLight.
-    cylinder({ name: "garden-fountain-crown-lantern-post", radius: 0.045, height: 0.34, segments: 10, x: gardenX, y: groundY + 2.20, z: gardenZ, material: M.brass, cast: false });
-    cylinder({ name: "garden-fountain-crown-lantern-base", radius: 0.16, radiusTop: 0.11, radiusBottom: 0.18, height: 0.10, segments: 16, x: gardenX, y: groundY + 2.36, z: gardenZ, material: M.brass, cast: false });
-    const fountainLanternShade = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.11, 0.34, 18, 1, true), M.frostedShade);
-    fountainLanternShade.name = "garden-fountain-crown-lantern-frosted-glass";
-    fountainLanternShade.position.set(gardenX, groundY + 2.52, gardenZ);
-    fountainLanternShade.castShadow = false;
-    fountainLanternShade.receiveShadow = false;
-    scene.add(fountainLanternShade);
-    sphere({ name: "garden-fountain-crown-lantern-bulb", radius: 0.075, x: gardenX, y: groundY + 2.52, z: gardenZ, material: M.lampGlow, cast: false });
-    cylinder({ name: "garden-fountain-crown-lantern-cap", radius: 0.19, radiusTop: 0.05, radiusBottom: 0.19, height: 0.16, segments: 16, x: gardenX, y: groundY + 2.75, z: gardenZ, material: M.brass, cast: false });
-    sphere({ name: "garden-fountain-crown-lantern-finial", radius: 0.055, x: gardenX, y: groundY + 2.87, z: gardenZ, material: M.brass, cast: false });
+    // The primitive faceless sphere-and-torso has been retired. A Blender-
+    // prepared Meshy sculpture now rises from this bowl and cradles the
+    // existing crown lantern so the light remains physically authored.
+    // The new sculpture supplies the physical crown. A compact frosted jewel
+    // nests just above it, preserving a visible source for the exact same
+    // practical light without driving a post through the statue's head.
+    sphere({ name: "garden-fountain-crown-lantern-frosted-jewel", radius: 0.085, x: gardenX, y: groundY + 2.86, z: gardenZ, material: M.frostedShade, cast: false });
+    sphere({ name: "garden-fountain-crown-lantern-bulb", radius: 0.045, x: gardenX, y: groundY + 2.86, z: gardenZ, material: M.lampGlow, cast: false });
     const jetPositions = [];
     for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
       const x1 = gardenX + Math.cos(a) * 0.28;
@@ -10643,7 +10846,7 @@
     }
     finalizeEstateLanterns(estateExteriorLights, lanterns);
     addFrontPorticoChandelier(estateExteriorLights);
-    const fountainLight = estateExteriorLights.addPracticalLight(YARD_LAYOUT.garden.centerX, YARD_LAYOUT.groundY + 2.52, YARD_LAYOUT.garden.centerZ, 58, 10.5, ["MAIN LEVEL"]);
+    const fountainLight = estateExteriorLights.addPracticalLight(YARD_LAYOUT.garden.centerX, YARD_LAYOUT.groundY + 2.86, YARD_LAYOUT.garden.centerZ, 58, 10.5, ["MAIN LEVEL"]);
     fountainLight.name = "garden-fountain-crown-lantern-light";
     fountainLight.userData.visibleFixtureEmitter = true;
     estateExteriorLights.addPracticalLight(-9, -0.05, -25.5, 48, 10.5, ["MAIN LEVEL"]);
@@ -12416,6 +12619,7 @@
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       workroom: getWorkroomDiagnostics(),
+      estateStatues: getEstateStatueDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -12667,6 +12871,7 @@
     window.MrFeastFresh.submitWorkroomCodeForQA = (code) => state.qa ? submitWorkroomCode(code) : getWorkroomDiagnostics();
     window.MrFeastFresh.resetWorkroomForQA = () => resetWorkroomForQA();
     window.MrFeastFresh.getMonitorWallState = () => monitorWallSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getEstateStatueDiagnostics = () => getEstateStatueDiagnostics();
     window.MrFeastFresh.refreshMonitorWallForQA = (cameraId) => state.qa ? monitorWallSystem?.refreshForQA(cameraId) || null : null;
     window.MrFeastFresh.setMonitorFeedForQA = (screenIndex, cameraId) => state.qa ? monitorWallSystem?.setFeedForQA(screenIndex, cameraId) || null : null;
     window.MrFeastFresh.resetCameraSecurityForQA = (mode) => cameraSecurity ? cameraSecurity.resetForQA(mode) : null;
@@ -13412,6 +13617,8 @@
       scene.add(moonLight);
 
       buildMansion();
+      setLoading("Unveiling the estate statues", 68);
+      await loadEstateStatues();
       mergeStaticDecor();
       registerExteriorDetailCulling();
       cameraSecurity = new CameraSecuritySystem();

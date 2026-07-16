@@ -35,6 +35,8 @@ First-person 3D gothic manor horror with a sleek reality-show veneer: storm-dark
 
 AI-assisted concept art, textures, and source models are acceptable when they are refined, optimized, validated, and integrated locally through Blender. Runtime assets remain GLB-compatible with the existing Three.js browser renderer.
 
+The estate's authored sculpture language is creepy elegance rather than gore: a faceless Weeping Crown courtier above the formal-garden fountain and the Listening Host and Veiled Waltz flanking the Grand Foyer. Their physically impossible poses should first read as expensive neoclassical commissions, then become unsettling at closer range.
+
 ## Audio direction
 
 Sparse, oppressive sound design: storm ambience, distant mansion mechanisms, footsteps, restrained musical drones, and brief stingers tied to discoveries or threat escalation. Full dialogue performance and lip synchronization are deferred; silence and controlled breathing should carry close encounters first.

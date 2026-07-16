@@ -79,6 +79,8 @@ async function run() {
     let state = await diagnostics(page);
     assert(state.player.movement.energy === 100 && state.player.movement.mode === "idle", "fresh player should expose a full sprint reserve and idle mode");
     assert(state.player.movement.stealth.visibilityMultiplier === 1 && state.player.movement.stealth.noiseMultiplier === 1, "standing movement should expose neutral stealth multipliers");
+    assert(await page.locator("#mansion-casefile").isHidden(), "fresh play should withhold the left-side case file until the first clue is discovered");
+    assert(!/library|shelves|book that does not/i.test(await page.locator("#mansion-objective").textContent() || ""), "fresh HUD markup should not direct the player to the Library");
 
     await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
     const walkStart = (await diagnostics(page)).player;
@@ -132,12 +134,18 @@ async function run() {
     assert(!(await diagnostics(page)).player.movement.crouched, "pressing C again should restore standing stance");
 
     await page.keyboard.press("i");
+    await page.waitForTimeout(50);
+    assert(!(await diagnostics(page)).menus.inventoryOpen, "I should no longer open the inventory and clue dossier");
+    await page.keyboard.press("j");
+    await page.waitForTimeout(50);
+    assert(!(await diagnostics(page)).menus.inventoryOpen, "J should no longer open the inventory and clue dossier");
+    await page.keyboard.press("Tab");
     await page.waitForTimeout(100);
     state = await diagnostics(page);
-    assert(state.menus.inventoryOpen && await page.locator("#mansion-journal").isVisible(), "I should open the inventory and clue dossier");
+    assert(state.menus.inventoryOpen && await page.locator("#mansion-journal").isVisible(), "Tab should open the inventory and clue dossier");
     assert(await page.locator("#mansion-inventory-dialog-items").getAttribute("aria-label") === "Carried objects", "dossier should expose a carried-objects region");
-    await page.keyboard.press("Escape");
-    assert(!(await diagnostics(page)).menus.inventoryOpen, "Escape should close the dossier before opening the game menu");
+    await page.keyboard.press("Tab");
+    assert(!(await diagnostics(page)).menus.inventoryOpen, "Tab should close the inventory and clue dossier");
 
     await page.keyboard.press("Escape");
     await page.waitForTimeout(100);
@@ -175,7 +183,7 @@ async function run() {
     assert(!(await page.locator("#mansion-menu-save").isEnabled()), "Dev Mode should prevent polluted saves");
 
     await page.locator("#mansion-menu-resume").click();
-    await page.keyboard.press("i");
+    await page.keyboard.press("Tab");
     await page.waitForTimeout(100);
     assert(await page.locator("#mansion-inventory-dialog-items .mansion-journal__entry").count() === expectedItems.length, "inventory dossier should render all granted objects");
     assert(await page.locator("#mansion-journal-entries .mansion-journal__entry").count() >= expectedClues.length, "inventory dossier should render all granted clues");

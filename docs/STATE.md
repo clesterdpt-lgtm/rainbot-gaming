@@ -13,7 +13,8 @@
 - The shelf book separately points to the formal-garden shovel and hedge-maze key; the basement key and unlock are idempotent and exposed in diagnostics.
 - Holding `Shift` now sprints at a faster named speed while draining a visible energy reserve; exhaustion blocks sprint until the reserve recovers.
 - `C` toggles a slower, lower crouched stance with authoritative `0.5` visibility and `0.32` movement-noise multipliers for the future detection system.
-- `I` opens a combined carried-object and clue dossier (`J` remains an alias), while `Escape` opens a true pause menu with Resume, Maximize, Save, Load, and reversible Dev Mode controls.
+- `Tab` opens and closes the combined carried-object and clue dossier; the previous `I` / `J` bindings are retired, while `Escape` opens a true pause menu with Resume, Maximize, Save, Load, and reversible Dev Mode controls.
+- A fresh playthrough withholds the left-side Contestant 13 case file and its Library direction until the player discovers the shelf book; later objectives still appear after that first clue.
 - Explicit saves preserve the player transform and Contestant 13 state through `RBGameSaves`. Dev Mode grants every current item/clue and testing gate without completing sabotage, cannot be saved, and restores the exact pre-dev snapshot when disabled.
 - The west-lawn garden paving remains one continuous `ShapeGeometry` network, with both approach lamps offset onto the grass beyond the walking line.
 - The Music Room grand piano now sits `0.45m` farther north from the south wall, while its rotated table and couch use their true oriented footprints instead of oversized axis-aligned collision boxes.
@@ -35,13 +36,14 @@ Mobile sprint/crouch buttons remain deferred; Milestone 35 adds the desktop keyb
 - `node scripts/test-mr-feast-renovation.mjs` — all renovation and Milestone 34/Requirement 47 invariants passed on the isolated publish patch
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
 - Browser captures — `output/playwright/mr-feast-basement-key-trail/library-shelf-book-subtle-desktop.png` now visibly confirms the clean gap and correctly ordered `XIII`; `basement-door-locked-desktop.png`, `basement-door-unlocked-desktop.png`, and `library-shelf-book-mobile.png` cover the adjacent states
-- `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, inventory dossier, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
+- `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
+- `node scripts/test-mr-feast-contestant-13.mjs` — passed progression, gates, persistence, accessibility, mobile touch, and discovery-first objective visibility
 - `musicTableWestClearance` QA route — clears the couch-table aisle beyond `z=8.0`, grounded with zero fall recoveries, unchanged light circuits, and zero console errors
 - Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays
 
 ## Next action
 
-User checks the Music Room piano spacing and walks around the center table, then playtests sprint drain/recharge and crouch speed/eye-height feel before checking the `I` dossier and `Escape` save/Dev Mode workflow. The Library shelf-book discovery remains a separate Milestone 34 playtest.
+User checks the Music Room piano spacing and walks around the center table, then playtests sprint drain/recharge and crouch speed/eye-height feel before checking the `Tab` dossier and `Escape` save/Dev Mode workflow. The now-unguided Library shelf-book discovery remains a separate Milestone 34 playtest.
 
 ## Working conventions
 

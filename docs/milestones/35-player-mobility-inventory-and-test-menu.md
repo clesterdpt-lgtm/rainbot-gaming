@@ -12,7 +12,8 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 
 - Hold `Shift` while moving to sprint until the visible energy reserve is exhausted; recover energy while not sprinting.
 - Toggle crouch with `C`, lowering the viewpoint and movement speed while exposing stronger stealth and quieter-movement multipliers for future detection logic.
-- Open a combined carried-object and recovered-clue dossier with `I`; preserve `J` as a compatibility shortcut.
+- Open and close a combined carried-object and recovered-clue dossier with `Tab`; retire the previous `I` / `J` bindings.
+- Keep the left-side investigation HUD hidden until Contestant 13's first clue is discovered instead of telling a fresh player to search the Library.
 - Open a mansion-specific menu with `Escape` that blocks player/world simulation and offers Resume, Maximize, Save, Load, and Dev Mode controls.
 - Save and restore the player's position, view direction, current Contestant 13 progression, inventory, journal, and relevant story-world presentation through the existing `RBGameSaves` layer.
 - Make Dev Mode reversible: enabling it snapshots the current quest state, grants all current objects/clues and opens the basement/Archive testing gates, while disabling it restores the snapshot and never auto-completes the patron-feed sabotage.
@@ -33,7 +34,8 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 
 - [x] Holding `Shift` while moving selects sprint speed, drains energy only during active movement, prevents sprint at zero energy, and recharges the reserve after sprinting stops; the HUD and diagnostics expose the same reserve and mode. — test: `scripts/test-mr-feast-player-systems.mjs::sprint energy lifecycle`
 - [x] Pressing `C` toggles crouch, lowers the eye line, prevents sprinting, slows movement, and exposes improved noise/visibility multipliers; pressing `C` again restores standing movement. — test: `scripts/test-mr-feast-player-systems.mjs::crouch movement and stealth contract`
-- [x] Pressing `I` opens one accessible modal showing carried objects and recovered clues, blocks movement, and closes with `I` or `Escape`; `J` remains an alias. — test: `scripts/test-mr-feast-player-systems.mjs::inventory and clues dossier`
+- [x] Pressing `Tab` opens one accessible modal showing carried objects and recovered clues, blocks movement, and closes with `Tab` or `Escape`; the old `I` and `J` bindings no longer open it. — test: `scripts/test-mr-feast-player-systems.mjs::inventory and clues dossier`
+- [x] A fresh playthrough shows no left-side case file or Library-search objective; the investigation HUD appears only after the first clue is discovered. — tests: `scripts/test-mr-feast-player-systems.mjs::withheld opening guidance`, `scripts/test-mr-feast-contestant-13.mjs::discovery-first objective HUD`, and `scripts/test-mr-feast-renovation.mjs::49 discovery-first HUD`
 - [x] Pressing `Escape` opens a focus-safe mansion menu, releases pointer lock, blocks simulation, resumes cleanly, and exposes working Maximize, Save, Load, and Dev Mode actions. — test: `scripts/test-mr-feast-player-systems.mjs::escape menu controls`
 - [x] Save/Load restores player transform plus idempotent Contestant 13 story, inventory, journal, and story-world presentation without saving transient actions or Dev Mode. — test: `scripts/test-mr-feast-player-systems.mjs::save and load round trip`
 - [x] Dev Mode is reversible, grants every current item and clue, opens the basement/Archive test gates, leaves `relaySabotaged` false, and restores the exact pre-dev quest snapshot when disabled. — test: `scripts/test-mr-feast-player-systems.mjs::reversible dev inventory grant`
@@ -41,7 +43,7 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 
 ## Exit condition
 
-User enters the mansion, sprints until the energy bar drains, crouches and observes the slower/lower stealth state, opens Inventory with `I`, then uses the `Escape` menu to save, alter progress with Dev Mode, restore the clean state, and maximize the game.
+User enters the mansion without an explicit Library direction, discovers the first clue through exploration, sprints until the energy bar drains, crouches and observes the slower/lower stealth state, opens Inventory with `Tab`, then uses the `Escape` menu to save, alter progress with Dev Mode, restore the clean state, and maximize the game.
 
 ## Test plan
 
@@ -53,7 +55,8 @@ User enters the mansion, sprints until the energy bar drains, crouches and obser
 
 ## Notes
 
-- `J` remains an alias so existing regression and player habits do not break; `I` is the primary displayed binding.
+- `Tab` supersedes both previous dossier shortcuts so the displayed control and runtime binding remain unambiguous.
 - The current Mr. Feast wanderer is visual-only. Crouch therefore establishes authoritative stealth/noise values now so the future detection system can consume them without redefining the player contract.
 - Dev Mode exists only for test acceleration and is intentionally excluded from saved-game payloads.
 - Automated acceptance completed on 2026-07-15. The milestone remains in progress only for the user's sprint/crouch pacing playtest.
+- The 2026-07-16 discovery refinement moved the dossier to `Tab` and withheld the opening case-file direction until the shelf book is found.

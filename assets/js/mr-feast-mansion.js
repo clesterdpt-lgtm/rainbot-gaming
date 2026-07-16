@@ -463,7 +463,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-music-room-couch-clearance-2",
+    assetVersion: "20260716-tab-discovery-4",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -3215,8 +3215,8 @@
     }
 
     updateUI() {
-      if (dom.caseFile) dom.caseFile.hidden = !state.started;
-      if (dom.objective) dom.objective.textContent = this.getObjective();
+      if (dom.caseFile) dom.caseFile.hidden = !state.started || !this.story.bookRead;
+      if (dom.objective) dom.objective.textContent = this.story.bookRead ? this.getObjective() : "";
       if (dom.storyProgress) {
         const completed = [
           this.story.bookRead,
@@ -9018,7 +9018,12 @@
 
   function bindInput() {
     window.addEventListener("keydown", (event) => {
-      const activeModal = state.menuOpen ? dom.menu : state.journalOpen ? dom.journal : null;
+      if (event.code === "Tab" && state.journalOpen && !event.repeat && contestant13Quest) {
+        event.preventDefault();
+        contestant13Quest.toggleJournal();
+        return;
+      }
+      const activeModal = state.menuOpen ? dom.menu : null;
       if (event.code === "Tab" && activeModal) {
         const focusable = Array.from(activeModal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
         if (focusable.length) {
@@ -9038,7 +9043,7 @@
         return;
       }
       if (state.menuOpen) return;
-      if ((event.code === "KeyI" || event.code === "KeyJ") && !event.repeat && contestant13Quest) {
+      if (event.code === "Tab" && !event.repeat && state.started && contestant13Quest) {
         event.preventDefault();
         contestant13Quest.toggleJournal();
         return;

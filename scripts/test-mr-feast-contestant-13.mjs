@@ -210,7 +210,10 @@ async function run() {
     assert(journalA11y.role === "dialog" && journalA11y.modal === "true", "journal should expose modal dialog semantics");
     assert(journalA11y.activeId === "mansion-journal-close" && journalA11y.canvasInert, "journal should move focus inside and make the game background inert");
     await page.keyboard.press("Tab");
-    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-journal-close", "journal should trap keyboard focus");
+    await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).journal.open);
+    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-journal-button", "Tab should close the dossier and restore focus to its opener");
+    await page.locator("#mansion-journal-button").click();
+    await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).journal.open);
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).journal.open);
     assert(await page.evaluate(() => document.activeElement?.id) === "mansion-journal-button", "closing the journal should restore focus to its opener");
@@ -246,6 +249,7 @@ async function run() {
     assert(state.contestant13.bookRead === true, "Library book interaction should mark the clue read");
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
     assert(/garden.*shovel|shovel.*garden/i.test(state.journal.currentObjective), "reading the book should direct the player to the garden shovel");
+    assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should appear after the first clue is discovered");
     assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
     await pressInteract(page);
@@ -336,6 +340,15 @@ async function run() {
     await teleportForInteraction(mobilePage, "contestant13GardenShovel", /shovel/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "shovelTaken");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book should not reveal the Library objective HUD");
+    await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*xiii|disturbed earth/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
+    const earlyShovelState = await diagnostics(mobilePage);
+    assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
+    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library clue without exposing it on the HUD");
+    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /book|misfiled|volume/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
+    await waitForContestantFlag(mobilePage, "bookRead");
     const mobileUi = await mobilePage.evaluate(() => {
       const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();
       const touch = document.getElementById("touch-interact")?.getBoundingClientRect();
@@ -349,11 +362,6 @@ async function run() {
     assert(mobileUi.caseFile.height >= 44, "mobile objective HUD should remain readable");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "touch interact target should remain at least 44px");
     await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-picked-up-mobile.png") });
-    await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*xiii|disturbed earth/i);
-    await mobilePage.locator("#touch-interact").click({ force: true });
-    const earlyShovelState = await diagnostics(mobilePage);
-    assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
-    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should keep the Library shelf clue as the objective");
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

@@ -19,7 +19,7 @@ Explore the mansion, inspect suspicious objects, connect clues left by previous 
 - Discovery chains may be approached out of order, but rewards, journal entries, and progression flags must remain consistent and non-duplicating.
 - The basement begins as a restricted threshold: its service-stair door requires the hedge-maze key before the Archive evidence and Workroom sabotage trail can advance.
 - The former Workshop and Cold Room are one security Workroom with a single persistent PIN-locked entrance. Its eight-screen wall shows paged live views from the public camera network; discovery of the current combination is intentionally deferred.
-- Mr. Feast is a physical host character whose presentation should remain controlled and camera-friendly until threat cues expose something inhuman beneath it.
+- Mr. Feast is a physical host character whose presentation should remain controlled and camera-friendly until threat cues expose something inhuman beneath it; his locomotion should pivot before travel and read as planted, restrained, and propulsive rather than skating.
 - The current camera network can divert Mr. Feast into a bounded investigation/search response. Direct host vision/hearing, continuous pursuit, capture, combat, and a failure state require later milestones.
 - Vertical-slice progress resets on reload unless the player explicitly restores a saved mansion state from the Escape menu.
 

@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-**33 — Mr. Feast Face Retopology** is in progress with automated acceptance complete and the live facial checkpoint awaiting user visual approval.
+**33 — Mr. Feast Face Retopology** is paused after the current visual result was rejected. Its experimental assets remain local reference material only; the original rigged model stays authoritative.
 
 **34 — Basement Key Trail** remains preserved with automated acceptance complete and the subtle shelf-book discovery awaiting user playtest.
 
@@ -13,6 +13,8 @@
 **37 — Workroom Security Hub and Keypad** is in progress with automated acceptance complete and room layout, keypad feel, monitor readability, and ambience awaiting user playtest.
 
 **38 — Estate Statue Trio** is in progress with implementation and automated acceptance complete; the creepy-elegant foyer pair and formal-garden fountain figure await user visual approval.
+
+**39 — Mr. Feast Grounded Gait** is in progress with implementation and automated acceptance complete; planted-foot weight and pacing await user playtest.
 
 ## Stable baseline
 
@@ -41,8 +43,10 @@
 - The static Three.js r128 statue assets total 45,985 triangles and 13.1 MB across three uncompressed GLBs with 1024 px PBR textures. Runtime bounds fitting grounds each model at its authored anchor, the foyer pair remains outside the central rug, all three placements have simple fixed colliders, and the black-marble host uses a restrained material-only readability lift rather than a new light.
 - Estate-statue diagnostics expose per-model load state, dimensions, triangle/material/texture cost, placement, grounding, and collider state. The provenance manifest preserves the Meshy task IDs/prompts and is regression-locked to the JavaScript runtime IDs and filenames.
 - Whole-home patrol still traverses more than 220 authored points across all 29 current major room/stair zones and 20 route doors; while the Workroom is locked, Mr. Feast skips that room branch instead of stalling or walking through its door.
-- Mr. Feast now uses an 86,546-triangle, 6.46MB runtime model with a connected face, separate eyes/eyelids, oral cavity, teeth, textured lip rim, ten position-only targets, and 18 synchronized bindings.
-- The five test expressions, independent/paired blinks, 2.01m fit, 24-bone rig, and whole-home animations are controlled through the existing static Three.js r128 runtime.
+- Mr. Feast continues to use the original 65,000-triangle rigged runtime model. The rejected face-retopology model, reports, and Blender scripts are not part of the active manifest or release baseline.
+- The 2.01m fit, 24-bone rig, and whole-home animations remain controlled through the existing static Three.js r128 runtime; a replacement facial direction is deferred.
+- Mr. Feast's stalk now preserves the source pelvis and full lower-body rotation chain instead of pulling it toward the idle pose. In-browser toe travel is about 3 degrees off-forward rather than 31–36 degrees, and fixed-step planted intervals stay below 0.051m horizontal drift.
+- The stalk cadence is calibrated to the existing 0.62m/s patrol at 0.37 playback and scales to about 0.645 for the existing 1.08m/s camera response. Patrol and response movement share a 0.985 facing gate so he pivots before translating through corners.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
 
 ## Important constraint
@@ -53,22 +57,24 @@ Mobile sprint/crouch buttons remain deferred; Milestone 35 adds the desktop keyb
 
 Full Mr. Feast sight/hearing perception, live pursuit, capture, recovery, and failure flow remain deferred beyond Milestone 36.
 
-The retopology is a face-only gameplay checkpoint, not dialogue-viseme or cinematic-close-up topology. Subjective likeness, seam quality, and expression appeal still require user approval before the milestone is complete.
+The current face-retopology experiment is paused and must not be published or treated as the active runtime. A future facial pass needs a new visual direction before implementation resumes.
 
 ## Verification
 
 - `node --check assets/js/mr-feast-mansion.js` — passed
 - `node --check scripts/test-mr-feast-basement-key-trail.mjs` — passed
 - `node scripts/test-mr-feast-basement-key-trail.mjs` — passed after the shelf-spacing and `XIII` refinement: real E/touch interactions, reserved book slot diagnostics, dual clue copy, early gates, idempotent maze key, locked/unlocked door state, full-route lock restoration, Archive recording, Workshop sabotage, desktop/mobile layout, and zero console errors
-- `node scripts/test-mr-feast-renovation.mjs` — all renovation invariants passed, including Mr. Feast retopology structure, scene-root transform, budget, deformation, binding, and cache checks
+- `node scripts/test-mr-feast-renovation.mjs` — all current renovation invariants passed in the development checkout; the rejected facial-retopology checkpoint is not part of the release baseline
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
-- `node scripts/test-mr-feast-contestant-13.mjs` — passes progression, patrol, persistence, accessibility, mobile touch, discovery-first objective visibility, full-size animated face/eye bounds, all five expressions, real E-key cycling, and independent/paired blink coverage
+- `node scripts/test-mr-feast-contestant-13.mjs` — passes progression, patrol, persistence, accessibility, mobile touch, and discovery-first objective visibility; its experimental facial-checkpoint coverage is paused with Milestone 33
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
 - `node scripts/test-mr-feast-camera-security.mjs` — passed 35-camera placement, 27 wall-centered indoor mounts, 10.5–14.5 second one-way sweep/reversal, rendered green/red fixture-pixel checks, three-pulse warning, permitted and hostile solid-red tracking, two-second pre-alarm grace, physical blind-side traversal, show/restricted/lockdown policy, watched sabotage, crouch/hiding, natural and deterministic occlusion, alarm latching, Mr. Feast response/search/return, unchanged light layout, and desktop/mobile HUD checks with zero console errors
 - `node scripts/test-mr-feast-workroom-security-hub.mjs` — passed merged west/east room identity, removed doorway, real E/click/touch keypad entry, wrong/correct PIN states, explicit save/load persistence, eight independent render targets, full 35-camera roster, distinct/nonblank feed signatures, live sweep-image change, one-feed-per-frame budget, renderer restoration, ambience diagnostics, and desktop/mobile layout
 - `node scripts/test-mr-feast-estate-statues.mjs` — passed three browser-safe GLB budgets, runtime loading, bounds fitting, grounding, three fixed colliders, removal of the old foyer/fountain primitives, central-aisle clearance, deterministic foyer/garden framing, and zero console errors
+- `node scripts/test-mr-feast-grounded-gait.mjs` — passed source lower-body preservation, 3-degree toe travel planes, stride-scaled patrol/response cadence, repeated planted-toe drift, aligned corner translation, four side-on gait phases, and zero console errors
 - `python3 -m py_compile scripts/blender/prepare-estate-statue.py` and `node --check scripts/meshy-generate.mjs` — passed the reusable Meshy preview/refine and Blender static-prop preparation pipeline checks
 - Estate statue browser captures — `output/playwright/mr-feast-estate-statues/foyer-statues-desktop.png` and `garden-fountain-statue-desktop.png` confirm the balanced wall-side foyer composition and the retained working fountain at 1280×820
+- Grounded gait browser captures — `output/playwright/mr-feast-grounded-gait/grounded-stalk-00.png`, `grounded-stalk-25.png`, `grounded-stalk-50.png`, `grounded-stalk-75.png`, `corner-pivot-start.png`, and `corner-first-planted-steps.png` confirm a forward-aligned side profile plus pivot-before-travel cornering at 1280×820
 - Workroom browser captures — `output/playwright/mr-feast-workroom-security-hub/workroom-monitor-wall-desktop.png`, `workroom-wide-desktop.png`, `workroom-keypad-desktop.png`, and `workroom-keypad-mobile.png` confirm the live 4×2 wall, broader equipment layout, and access terminal at 1280×820 and 390×844
 - Camera browser captures — `output/playwright/mr-feast-camera-security/camera-indicator-green-desktop.png`, `camera-indicator-warning-red-desktop.png`, `camera-permitted-tracking-desktop.png`, `camera-solid-red-tracking-desktop.png`, `camera-suspicion-desktop.png`, and `camera-suspicion-mobile.png` confirm readable fixture feedback, tracking states, and the compact meter at 1280×820 and 390×844
 - The focused player-system suite also verifies four unique scalable object icons, the ruled handwritten clue pad, and in-stage title/close placement without horizontal overflow at 390×844
@@ -81,7 +87,7 @@ The retopology is a face-only gameplay checkpoint, not dialogue-viseme or cinema
 
 ## Next action
 
-User visually checks the new foyer statues from the front rug and passes the formal-garden fountain at night, confirming that all three read as expensive commissions first and unsettling figures second. The temporary PIN `0513` Workroom layout, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate Milestone 33–37 playtests.
+User walks alongside Mr. Feast on a straight main-floor stretch and watches him take a 90-degree corner, confirming the planted boot reads as propulsive rather than sliding and that his pacing still feels threatening. Estate-statue approval, the temporary PIN `0513` Workroom layout, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate playtests.
 
 ## Working conventions
 

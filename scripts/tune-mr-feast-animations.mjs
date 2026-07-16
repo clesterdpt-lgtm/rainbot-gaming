@@ -56,6 +56,15 @@ const MOTIONS = Object.freeze([
   }),
 ]);
 
+// The raw Meshy walk already travels in a clean forward plane. Blending these
+// bones toward the first idle frame twists that plane sideways and shortens the
+// stride, so the locomotion chain must retain its authored rotations.
+const STALK_LOCOMOTION_BONES = new Set([
+  "Hips",
+  "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase",
+  "RightUpLeg", "RightLeg", "RightFoot", "RightToeBase",
+]);
+
 function parseArgs(argv) {
   const args = {
     sourceDir: "assets/models/mr-feast/animations",
@@ -122,6 +131,7 @@ function rotationWeight(profile, boneName) {
     if (/upleg|leg|foot|toe/i.test(boneName)) return 0.10;
     return 0.10;
   }
+  if (profile === "stalk" && STALK_LOCOMOTION_BONES.has(boneName)) return 1;
   if (/shoulder/i.test(boneName)) return 0.15;
   if (/forearm/i.test(boneName)) return 0.24;
   if (/arm/i.test(boneName)) return 0.20;

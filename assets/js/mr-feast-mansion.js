@@ -653,10 +653,11 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-workroom-security-hub-1",
+    assetVersion: "20260716-grounded-gait-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
+    movementAlignment: 0.985,
     arrivalRadius: 0.06,
     fadeSeconds: 0.24,
     doorOpenDistance: 1.8,
@@ -1029,6 +1030,8 @@
     ballroomPortraits: [0, FLOOR.MAIN, -8.7, 0],
     mrFeastShowcase: [0, FLOOR.MAIN, -1.4, 0, -0.08],
     mrFeastSideProfile: [-3.2, FLOOR.MAIN, -9.0, -Math.PI / 2, 0],
+    mrFeastGaitSide: [-3.2, FLOOR.MAIN, -9.0, -Math.PI / 2, -0.16],
+    mrFeastGaitTurnSide: [-2.6, FLOOR.MAIN, -6.4, Math.PI / 2, -0.16],
     mrFeastFaceClose: [0, FLOOR.MAIN, -8.45, 0, -0.02],
     openRearFromStair: [0, FLOOR.MAIN, -2.35, 0],
     openRearToDining: [0, FLOOR.MAIN, -6.0, Math.PI / 2],
@@ -2377,6 +2380,7 @@
       this.waitingForDoor = null;
       this.onStairs = false;
       this.qaLastWholeHomeRun = null;
+      this.qaLastLocomotionProbe = null;
       this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
       this.responseGraph = this.buildResponseGraph();
       this.responsePath = [];
@@ -3050,11 +3054,18 @@
       };
     }
 
-    fadeToAction(name, duration = MR_FEAST_NPC.fadeSeconds, force = false) {
+    stalkPlaybackRateForSpeed(speed) {
+      const baseRate = Number(this.manifest?.animations?.stalk?.playbackRate) || 1;
+      return baseRate * Math.max(0, Number(speed) || 0) / MR_FEAST_NPC.speed;
+    }
+
+    fadeToAction(name, duration = MR_FEAST_NPC.fadeSeconds, force = false, rateOverride = null) {
       const nextAction = this.actions[name] || this.actions.idle;
       if (!nextAction) return;
       const spec = this.manifest?.animations?.[name] || this.manifest?.animations?.idle;
-      nextAction.setEffectiveTimeScale(Number(spec?.playbackRate) || 1);
+      nextAction.setEffectiveTimeScale(Number.isFinite(rateOverride)
+        ? Math.max(0, rateOverride)
+        : Number(spec?.playbackRate) || 1);
       if (!force && this.activeAction === nextAction) return;
       if (this.activeAction) {
         if (duration > 0) this.activeAction.fadeOut(duration);
@@ -3257,7 +3268,7 @@
       this.searchRemaining = 0;
       this.searchElapsed = 0;
       this.moving = false;
-      this.fadeToAction("stalk");
+      this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
     }
 
     syncResponseVisibility() {
@@ -3302,7 +3313,7 @@
         ? (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontalDistance
         : 1;
       const waitingForDoor = this.prepareRouteDoor(target, distance);
-      if (waitingForDoor || facingAlignment < 0.92) {
+      if (waitingForDoor || facingAlignment < MR_FEAST_NPC.movementAlignment) {
         this.moving = false;
         this.fadeToAction("idle");
         this.stepAnimationAndFace(dt);
@@ -3315,7 +3326,7 @@
       this.responseDistance += step;
       this.moving = step > 0;
       this.closeClearedRouteDoors(target);
-      this.fadeToAction("stalk");
+      this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed));
       this.stepAnimationAndFace(dt);
     }
 
@@ -3486,7 +3497,7 @@
       if (distance <= MR_FEAST_NPC.arrivalRadius) {
         this.arriveAtWaypoint(target);
         if (this.pauseRemaining > 0) this.fadeToAction("idle");
-        else this.fadeToAction("stalk");
+        else this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
         this.closeClearedRouteDoors(MR_FEAST_NPC.waypoints[this.waypointIndex]);
         this.stepAnimationAndFace(this.lastDt);
         return;
@@ -3500,7 +3511,7 @@
         ) / horizontalDistance
         : 1;
       const waitingForDoor = this.prepareRouteDoor(target, distance);
-      if (waitingForDoor || facingAlignment < 0.92) {
+      if (waitingForDoor || facingAlignment < MR_FEAST_NPC.movementAlignment) {
         // Pause translation for a fraction of a second at sharp corners so
         // the character pivots deliberately instead of skating sideways.
         this.fadeToAction("idle");
@@ -3514,7 +3525,7 @@
       this.distanceTravelled += step;
       this.moving = step > 0;
       this.closeClearedRouteDoors(target);
-      this.fadeToAction("stalk");
+      this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
       this.stepAnimationAndFace(this.lastDt);
     }
 
@@ -3538,6 +3549,7 @@
       this.waitingForDoor = null;
       this.onStairs = false;
       this.qaLastWholeHomeRun = null;
+      this.qaLastLocomotionProbe = null;
       this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
       this.responsePath = [];
       this.responseCurrentNodeId = start.id;
@@ -3568,7 +3580,9 @@
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
       this.setSegmentPresentation(MR_FEAST_NPC.waypoints[this.waypointIndex]);
       if (this.mixer) this.mixer.setTime(0);
-      if (this.loadStatus === "ready") this.fadeToAction("stalk", 0, true);
+      if (this.loadStatus === "ready") {
+        this.fadeToAction("stalk", 0, true, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
+      }
       if (this.loadStatus === "ready") this.stepAnimationAndFace(0, false, true);
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
@@ -3635,6 +3649,134 @@
       this.setSegmentPresentation(target);
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
+    }
+
+    runLocomotionProbeForQA(options = {}) {
+      const responseMode = options.mode === "response";
+      const emptyResult = (error) => ({
+        error,
+        mode: responseMode ? "response" : "patrol",
+        samples: [],
+        patrolPlaybackRate: Number(this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed).toFixed(6)),
+        responsePlaybackRate: Number(this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed).toFixed(6)),
+        movementAlignment: MR_FEAST_NPC.movementAlignment,
+      });
+      if (!state.qa || this.loadStatus !== "ready") return emptyResult("Mr. Feast locomotion probe is not ready");
+      const sourceIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === options.sourceId);
+      const targetIndex = MR_FEAST_NPC.waypoints.findIndex((point) => point.id === options.targetId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+        return emptyResult(`Unknown or identical locomotion probe segment ${options.sourceId} -> ${options.targetId}`);
+      }
+      const source = MR_FEAST_NPC.waypoints[sourceIndex];
+      const target = MR_FEAST_NPC.waypoints[targetIndex];
+      const initialFrom = MR_FEAST_NPC.waypoints.find((point) => point.id === options.initialFromId) || null;
+      const fixedStep = 1 / 60;
+      const seconds = clamp(Number(options.seconds) || 6, fixedStep, 20);
+      const settleSeconds = clamp(Number(options.settleSeconds) || 0, 0, seconds);
+      const stopAfterFirstTranslationFrames = clamp(
+        Math.floor(Number(options.stopAfterFirstTranslationFrames) || 0),
+        0,
+        120,
+      );
+      const previousStarted = state.started;
+
+      this.root.position.set(source.x, source.y, source.z);
+      this.waypointIndex = targetIndex;
+      this.pauseRemaining = 0;
+      this.currentRouteZone = source.zone;
+      this.currentRouteLevel = source.level;
+      this.behaviorState = responseMode ? MR_FEAST_RESPONSE_STATE.RESPONDING : MR_FEAST_RESPONSE_STATE.PATROL;
+      this.responsePath = responseMode ? [{ node: target, door: null }] : [];
+      this.responseCurrentNodeId = source.id;
+      this.activeCameraAlarm = null;
+      this.responseResume = null;
+      this.responseBlockedReason = null;
+      this.waitingForDoor = null;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      this.moving = false;
+      this.setSegmentPresentation(target);
+      if (initialFrom) {
+        this.root.rotation.y = Math.atan2(source.x - initialFrom.x, source.z - initialFrom.z);
+      } else {
+        this.faceTarget(target, true);
+      }
+      if (this.mixer) this.mixer.stopAllAction();
+      this.activeAction = null;
+      this.currentAnimation = null;
+      this.fadeToAction(
+        "stalk",
+        0,
+        true,
+        this.stalkPlaybackRateForSpeed(responseMode ? CAMERA_SECURITY.responseSpeed : MR_FEAST_NPC.speed),
+      );
+      if (this.activeAction) this.activeAction.time = 0;
+      this.mixer?.update(0);
+      state.started = true;
+
+      const samples = [];
+      const previousPosition = this.root.position.clone();
+      let elapsed = 0;
+      let translatingFrames = 0;
+      while (elapsed < seconds - 0.000001) {
+        this.update(fixedStep);
+        elapsed += fixedStep;
+        this.root.updateMatrixWorld(true);
+        const dx = this.root.position.x - previousPosition.x;
+        const dy = this.root.position.y - previousPosition.y;
+        const dz = this.root.position.z - previousPosition.z;
+        const distance = Math.hypot(dx, dy, dz);
+        if (distance > 0.000001) translatingFrames += 1;
+        const travelYaw = distance > 0.000001 ? Math.atan2(dx, dz) : this.root.rotation.y;
+        const yawError = Math.atan2(
+          Math.sin(travelYaw - this.root.rotation.y),
+          Math.cos(travelYaw - this.root.rotation.y),
+        );
+        if (elapsed + 0.000001 >= settleSeconds) {
+          const liveBones = this.getLiveBoneMetrics();
+          const clipDuration = Math.max(0.0001, this.activeAction?.getClip()?.duration || 0.0001);
+          const actionTime = this.activeAction?.time || 0;
+          samples.push({
+            elapsed,
+            root: { x: this.root.position.x, y: this.root.position.y, z: this.root.position.z },
+            delta: { x: dx, y: dy, z: dz },
+            distance,
+            yaw: this.root.rotation.y,
+            travelFacingAngleDeg: Math.abs(yawError) * 180 / Math.PI,
+            action: this.currentAnimation,
+            actionTime,
+            actionPhase: ((actionTime / clipDuration) % 1 + 1) % 1,
+            playbackRate: this.activeAction?.getEffectiveTimeScale?.() || 0,
+            leftFoot: liveBones?.leftFoot || null,
+            rightFoot: liveBones?.rightFoot || null,
+            leftToe: liveBones?.leftToe || null,
+            rightToe: liveBones?.rightToe || null,
+          });
+        }
+        previousPosition.copy(this.root.position);
+        if (stopAfterFirstTranslationFrames > 0 && translatingFrames >= stopAfterFirstTranslationFrames) break;
+      }
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      state.started = previousStarted;
+      this.qaLastLocomotionProbe = {
+        mode: responseMode ? "response" : "patrol",
+        sourceId: source.id,
+        targetId: target.id,
+        initialFromId: initialFrom?.id || null,
+        seconds,
+        simulatedSeconds: elapsed,
+        settleSeconds,
+        samples: samples.length,
+      };
+      return {
+        ...this.qaLastLocomotionProbe,
+        samples,
+        patrolPlaybackRate: Number(this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed).toFixed(6)),
+        responsePlaybackRate: Number(this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed).toFixed(6)),
+        movementAlignment: MR_FEAST_NPC.movementAlignment,
+      };
     }
 
     runWholeHomeRouteForQA(maxSeconds = 1800) {
@@ -3740,7 +3882,16 @@
       const headTopPosition = positionOf(this.headEndBone);
       const leftUpLegPosition = positionOf(this.bonesByName.get("LeftUpLeg"));
       const leftLegPosition = positionOf(this.bonesByName.get("LeftLeg"));
+      const leftFootPosition = positionOf(this.bonesByName.get("LeftFoot"));
+      const rightFootPosition = positionOf(this.bonesByName.get("RightFoot"));
+      const leftToePosition = positionOf(this.bonesByName.get("LeftToeBase"));
+      const rightToePosition = positionOf(this.bonesByName.get("RightToeBase"));
       const hipsWorldScale = this.hipsBone ? this.hipsBone.getWorldScale(new THREE.Vector3()) : null;
+      const serializePosition = (position) => position ? {
+        x: Number(position.x.toFixed(5)),
+        y: Number(position.y.toFixed(5)),
+        z: Number(position.z.toFixed(5)),
+      } : null;
       return {
         cameraY: Number(camera.position.y.toFixed(4)),
         eyeHeight: eyePosition ? Number((eyePosition.y - rootPosition.y).toFixed(4)) : null,
@@ -3760,6 +3911,10 @@
         leftThighLength: leftUpLegPosition && leftLegPosition
           ? Number(leftUpLegPosition.distanceTo(leftLegPosition).toFixed(5))
           : null,
+        leftFoot: serializePosition(leftFootPosition),
+        rightFoot: serializePosition(rightFootPosition),
+        leftToe: serializePosition(leftToePosition),
+        rightToe: serializePosition(rightToePosition),
       };
     }
 
@@ -3865,6 +4020,7 @@
         liveBones,
         qaAnimationFrozen: this.qaAnimationFrozen,
         qaLastWholeHomeRun: this.qaLastWholeHomeRun,
+        qaLastLocomotionProbe: this.qaLastLocomotionProbe,
         contactShadowVisible: Boolean(this.contactShadow?.visible),
         castShadowMeshes: this.meshes.filter((mesh) => mesh.castShadow).length,
       };
@@ -12903,6 +13059,7 @@
     window.MrFeastFresh.triggerMrFeastBlinkForQA = (side) => mrFeastNpc ? mrFeastNpc.triggerBlinkForQA(side) : null;
     window.MrFeastFresh.advanceMrFeastFaceForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceFaceForQA(seconds) : null;
     window.MrFeastFresh.setMrFeastRouteSegmentForQA = (targetId, progress, animationTime) => mrFeastNpc ? mrFeastNpc.setRouteSegmentForQA(targetId, progress, animationTime) : null;
+    window.MrFeastFresh.runMrFeastLocomotionProbeForQA = (options) => mrFeastNpc ? mrFeastNpc.runLocomotionProbeForQA(options) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastCameraResponseForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runCameraResponseForQA(maxSeconds) : null;
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;

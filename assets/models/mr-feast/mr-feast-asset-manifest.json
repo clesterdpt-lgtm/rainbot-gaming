@@ -14,7 +14,7 @@
     "stalk": {
       "file": "animations/mr-feast-stalk-tuned.glb",
       "loop": true,
-      "playbackRate": 0.68
+      "playbackRate": 0.37
     },
     "alert": {
       "file": "animations/mr-feast-alert-clean.glb",

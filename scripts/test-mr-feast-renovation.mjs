@@ -10,6 +10,7 @@ const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
 const mrFeastAssetRoot = path.join(root, "assets/models/mr-feast");
 const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest.json");
 const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
+const mrFeastTuningScriptPath = path.join(root, "scripts/tune-mr-feast-animations.mjs");
 const mrFeastFacialReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-facial-report.json");
 const mrFeastRetopologyReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-retopology-report.json");
 const estateStatueManifestPath = path.join(mrFeastAssetRoot, "statues/manifest.json");
@@ -18,6 +19,7 @@ const page = fs.readFileSync(pagePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
 const mrFeastManifest = JSON.parse(fs.readFileSync(mrFeastManifestPath, "utf8"));
 const mrFeastTuningReport = JSON.parse(fs.readFileSync(mrFeastTuningReportPath, "utf8"));
+const mrFeastTuningScript = fs.readFileSync(mrFeastTuningScriptPath, "utf8");
 const mrFeastFacialReport = JSON.parse(fs.readFileSync(mrFeastFacialReportPath, "utf8"));
 const mrFeastRetopologyReport = fs.existsSync(mrFeastRetopologyReportPath)
   ? JSON.parse(fs.readFileSync(mrFeastRetopologyReportPath, "utf8"))
@@ -1278,7 +1280,7 @@ const expectedMrFeastAssets = [
   mrFeastManifest.animations?.alert?.file,
   mrFeastManifest.animations?.run?.file,
 ];
-check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.68 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, tuned stalk rate, or motion assets");
+check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.37 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, stride-calibrated stalk rate, or motion assets");
 for (const asset of expectedMrFeastAssets) {
   const assetPath = path.join(mrFeastAssetRoot, asset);
   check("43 Mr Feast runtime assets", fs.existsSync(assetPath), `missing runtime character asset ${asset}`);
@@ -1350,7 +1352,8 @@ check("43 Mr Feast doorway clearance", count(basementPartitions, /width:\s*1\.35
 check("43 Mr Feast animation", /THREE\.SkeletonUtils\.clone/.test(mrFeastWanderer) && /new THREE\.AnimationMixer/.test(mrFeastWanderer) && /fadeToAction\("idle"/.test(mrFeastWanderer) && /fadeToAction\("stalk"/.test(mrFeastWanderer), "rigged clone, mixer, or idle/stalk cross-fades are missing");
 check("43 Mr Feast animation hardening", /sanitizeAnimationClip/.test(mrFeastWanderer) && /propertyName === "scale"/.test(mrFeastWanderer) && /propertyName === "position" && !targetsHips/.test(mrFeastWanderer), "runtime does not defensively reject scale and limb-translation tracks");
 check("43 Mr Feast eye-level fit", /heightMeters:\s*2\.01/.test(mrFeastNpcConfig) && /MR_FEAST_NPC\.heightMeters \|\| Number\(manifest\.heightMeters\)/.test(mrFeastWanderer), "runtime cannot keep Mr. Feast at the authored 2.01m eye-level fit");
-check("43 Mr Feast cornering", /facingAlignment\s*</.test(mrFeastWanderer) && /Math\.atan2\(Math\.sin\(nextYaw\), Math\.cos\(nextYaw\)\)/.test(mrFeastWanderer), "sharp turns can still produce visible strafing or unbounded long-session yaw");
+check("43 Mr Feast grounded gait", /const STALK_LOCOMOTION_BONES\s*=\s*new Set/.test(mrFeastTuningScript) && /profile === "stalk" && STALK_LOCOMOTION_BONES\.has\(boneName\)/.test(mrFeastTuningScript) && /stalkPlaybackRateForSpeed\(speed\)/.test(mrFeastWanderer), "stalk tuning can still twist the lower-body gait plane or desynchronize cadence from travel speed");
+check("43 Mr Feast cornering", /movementAlignment:\s*0\.985/.test(mrFeastNpcConfig) && count(mrFeastWanderer, /facingAlignment < MR_FEAST_NPC\.movementAlignment/g) === 2 && /Math\.atan2\(Math\.sin\(nextYaw\), Math\.cos\(nextYaw\)\)/.test(mrFeastWanderer), "sharp turns can still produce visible strafing or unbounded long-session yaw");
 check("43 Mr Feast 3D navigation", /const distance = Math\.hypot\(dx, dy, dz\)/.test(mrFeastWanderer) && /const horizontalDistance = Math\.hypot\(dx, dz\)/.test(mrFeastWanderer) && /this\.root\.position\.y \+= dy \/ distance \* step/.test(mrFeastWanderer) && !/this\.root\.position\.y = FLOOR\.MAIN/.test(mrFeastWanderer), "wanderer cannot continuously interpolate elevation while keeping yaw horizontal");
 check("43 Mr Feast door behavior", /prepareRouteDoor\(target, distance\)/.test(mrFeastWanderer) && /door\.setOpen\(true\)/.test(mrFeastWanderer) && /closeClearedRouteDoors/.test(mrFeastWanderer) && /door\.playerInSwingPath\(\)/.test(mrFeastWanderer), "wanderer does not open, wait for, and safely close route doors");
 check("43 Mr Feast contact shadow", /mr-feast-contact-shadow/.test(mrFeastWanderer) && /new THREE\.CircleGeometry\(1, 24\)/.test(mrFeastWanderer) && /depthWrite:\s*false/.test(mrFeastWanderer), "the moving character lacks a cheap floor contact shadow");
@@ -1360,13 +1363,13 @@ check("43 Mr Feast start gate", /if \(!state\.started \|\| !this\.wanderingEnabl
 check("43 Mr Feast nonfatal load", /catch \(error\)/.test(mrFeastWanderer) && /this\.loadStatus\s*=\s*"error"/.test(mrFeastWanderer) && /this\.root\.visible\s*=\s*false/.test(mrFeastWanderer), "character asset failure does not settle into an isolated error state");
 check("43 Mr Feast moving shadows", /object\.castShadow\s*=\s*false/.test(mrFeastWanderer) && /object\.receiveShadow\s*=\s*true/.test(mrFeastWanderer), "moving character is incompatible with the mansion's cached shadow policy");
 check("43 Mr Feast culling", /interiorDetailMeshes\.push\(object\)/.test(mrFeastWanderer) && /object\.visible\s*=\s*!interiorDetailsHidden/.test(mrFeastWanderer), "asynchronously loaded meshes do not join exterior detail culling");
-check("43 Mr Feast diagnostics", /mrFeast:\s*mrFeastNpc\?\.getDiagnostics/.test(diagnostics) && /resetMrFeastWandererForQA/.test(qaHooks) && /setMrFeastPoseForQA/.test(qaHooks) && /transitionMrFeastForQA/.test(qaHooks) && /advanceMrFeastAnimationForQA/.test(qaHooks) && /setMrFeastRouteSegmentForQA/.test(qaHooks) && /runMrFeastWholeHomeRouteForQA/.test(qaHooks) && /visitedRouteFloors/.test(mrFeastWanderer) && /visitedRouteDoors/.test(mrFeastWanderer) && /routeDoorOpenEvents/.test(mrFeastWanderer) && /routeSummary:/.test(mrFeastWanderer) && /liveBones/.test(mrFeastWanderer) && /animationTracks:/.test(mrFeastWanderer) && /castShadowMeshes:/.test(mrFeastWanderer), "wanderer diagnostics or deterministic whole-home QA controls are missing");
+check("43 Mr Feast diagnostics", /mrFeast:\s*mrFeastNpc\?\.getDiagnostics/.test(diagnostics) && /resetMrFeastWandererForQA/.test(qaHooks) && /setMrFeastPoseForQA/.test(qaHooks) && /transitionMrFeastForQA/.test(qaHooks) && /advanceMrFeastAnimationForQA/.test(qaHooks) && /setMrFeastRouteSegmentForQA/.test(qaHooks) && /runMrFeastLocomotionProbeForQA/.test(qaHooks) && /runMrFeastWholeHomeRouteForQA/.test(qaHooks) && /visitedRouteFloors/.test(mrFeastWanderer) && /visitedRouteDoors/.test(mrFeastWanderer) && /routeDoorOpenEvents/.test(mrFeastWanderer) && /routeSummary:/.test(mrFeastWanderer) && /leftToe:/.test(mrFeastWanderer) && /rightToe:/.test(mrFeastWanderer) && /liveBones/.test(mrFeastWanderer) && /animationTracks:/.test(mrFeastWanderer) && /castShadowMeshes:/.test(mrFeastWanderer), "wanderer diagnostics or deterministic locomotion/whole-home QA controls are missing");
 check("45 Mr Feast facial controller", /updateFace\(/.test(mrFeastWanderer) && /resolveAutomaticExpression\(/.test(mrFeastWanderer) && /state\.contestant13\.(?:relaySabotaged|threatEscalated)/.test(mrFeastWanderer) && /blink_left/.test(mrFeastWanderer) && /blink_right/.test(mrFeastWanderer), "wanderer lacks autonomous expression blending, threat escalation, or asymmetric blink control");
 check("45 Mr Feast facial material readability", /tuneCharacterMaterial\(/.test(mrFeastWanderer) && /material\.emissiveIntensity\s*=\s*0\.08/.test(mrFeastWanderer) && /material\.roughness\s*=\s*Math\.max\(Number\(material\.roughness\) \|\| 0, 0\.68\)/.test(mrFeastWanderer), "Meshy material can still self-illuminate the face strongly enough to erase expression contours");
 check("45 Mr Feast facial diagnostics", /face:\s*this\.getFaceDiagnostics\(\)/.test(mrFeastWanderer) && /targetWeights:/.test(mrFeastWanderer) && /phase:\s*blinkPhase/.test(mrFeastWanderer) && /attention:/.test(mrFeastWanderer) && /setMrFeastFaceForQA/.test(qaHooks) && /triggerMrFeastBlinkForQA/.test(qaHooks) && /advanceMrFeastFaceForQA/.test(qaHooks), "facial weights, blink phase, attention diagnostics, or deterministic QA controls are missing");
 check("45 Mr Feast facial interaction order", /qaExpressionCycle:\s*Object\.freeze\(\["neutral",\s*"friendly",\s*"watching",\s*"close",\s*"threatened"\]\)/.test(mrFeastNpcConfig) && /cycleFaceExpressionForQA\(/.test(mrFeastWanderer), "QA interaction does not cycle the five facial presets in the approved inspection order");
 check("45 Mr Feast QA-only interaction", /if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "loaded Mr. Feast model does not expose a QA-only look-at interaction and expression prompt");
-check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
+check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /mrFeastGaitSide:/.test(qaRoomViews) && /mrFeastGaitTurnSide:/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
 check("45 Mr Feast facial framing", /mrFeastFaceClose:\s*\[0,\s*FLOOR\.MAIN,\s*-8\.45,\s*0,\s*-0\.02\]/.test(qaRoomViews), "close facial QA framing is missing");
 check("51 Mr Feast bounded camera response", !/attack|capture|damage|gameOver|failureState/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack, capture, damage, or a failure state");
 
@@ -1445,7 +1448,7 @@ for (const view of ["mainHallBathroomShowerLight", "upperGrandBathroomShowerLigh
   check("40 bathroom fixture QA views", qaRoomViews.includes(`${view}:`), `missing bathroom inspection view ${view}`);
 }
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-const runtimeAssetVersion = mansion.match(/assetVersion:\s*"([^"]+)"/)?.[1] || "";
+const runtimeAssetVersion = mrFeastNpcConfig.match(/assetVersion:\s*"([^"]+)"/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
 check("cache key", Boolean(runtimeAssetVersion) && cacheKey === runtimeAssetVersion, `mansion page cache key (${cacheKey || "missing"}) does not match the runtime asset version (${runtimeAssetVersion || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");

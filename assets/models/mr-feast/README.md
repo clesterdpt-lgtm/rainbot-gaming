@@ -28,7 +28,7 @@ The facial identity, smile, tailoring, and palette are derived from the fictiona
 - Source/master: 100,053 triangles with the original 2K texture, retained for Blender work.
 - Game mesh: 65,000 triangles, one material, and one 1024px texture.
 - Source bounds: 0.9241m wide, 1.9200m high, and 0.4620m deep with feet at Y=0. Mansion fit: approximately 0.9674m × 2.0100m × 0.4837m.
-- Runtime motion: restrained idle, restrained in-place stalk, cleaned alert/search, and cleaned in-place run. Play the stalk at `0.68` for the authored 0.62m/s patrol.
+- Runtime motion: restrained idle, grounded in-place stalk, cleaned alert/search, and cleaned in-place run. Play the stalk at `0.37` for the authored 0.62m/s patrol and scale that rate with actual travel speed.
 - Add a grab/attack clip only when that gameplay is authored; do not infer an attack from the alert motion.
 
 ## Asset map

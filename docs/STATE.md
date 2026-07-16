@@ -16,6 +16,8 @@
 
 **39 — Mr. Feast Grounded Gait** is in progress with implementation and automated acceptance complete; planted-foot weight and pacing await user playtest.
 
+**40 — Upper Window Gallery** is in progress with implementation and automated acceptance complete; the wider path and finished railing composition await user playtest.
+
 ## Stable baseline
 
 - Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
@@ -48,6 +50,8 @@
 - The 2.01m fit, 24-bone rig, and whole-home animations remain controlled through the existing static Three.js r128 runtime; a replacement facial direction is deferred.
 - Mr. Feast's stalk now preserves the source pelvis and full lower-body rotation chain instead of pulling it toward the idle pose. In-browser toe travel is about 3 degrees off-forward rather than 31–36 degrees, and fixed-step planted intervals stay below 0.051m horizontal drift.
 - The stalk cadence is calibrated to the existing 0.62m/s patrol at 0.37 playback and scales to about 0.645 for the existing 1.08m/s camera response. Patrol and response movement share a 0.985 facing gate so he pivots before translating through corners.
+- The marble path directly inside the large upper foyer window is now a finished `1.7m`-deep gallery with `1.5m` of usable clearance, replacing the exposed `0.9m` strip. A mansion-matched `0.98m` railing, repeated balusters, brass-topped corner newels, and a full Rapier guard join both side-balcony rails across its open edge.
+- Mr. Feast's east, center, and west window-gallery patrol points now share the widened deck centerline at `z=11.15`. The player can complete the full upper-balcony loop without falling, and a forward edge probe stops against the new guard while remaining grounded on the second floor.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
 
 ## Important constraint
@@ -73,9 +77,11 @@ The current face-retopology experiment is paused and must not be published or tr
 - `node scripts/test-mr-feast-workroom-security-hub.mjs` — passed merged west/east room identity, removed doorway, real E/click/touch keypad entry, wrong/correct PIN states, explicit save/load persistence, eight independent render targets, full 34-camera roster, distinct/nonblank feed signatures, live sweep-image change, one-feed-per-frame budget, renderer restoration, ambience diagnostics, and desktop/mobile layout
 - `node scripts/test-mr-feast-estate-statues.mjs` — passed three browser-safe GLB budgets, runtime loading, bounds fitting, grounding, three fixed colliders, removal of the old foyer/fountain primitives, central-aisle clearance, deterministic foyer/garden framing, and zero console errors
 - `node scripts/test-mr-feast-grounded-gait.mjs` — passed source lower-body preservation, 3-degree toe travel planes, stride-scaled patrol/response cadence, repeated planted-toe drift, aligned corner translation, four side-on gait phases, and zero console errors
+- `node scripts/test-mr-feast-upper-window-gallery.mjs` — passed `1.7m` deck and `1.5m` usable-clearance diagnostics, a real forward walk into the physical upper guard, full balcony-loop traversal with zero fall recoveries, upper/main-floor framing, stable circuits, and zero console errors
 - `python3 -m py_compile scripts/blender/prepare-estate-statue.py` and `node --check scripts/meshy-generate.mjs` — passed the reusable Meshy preview/refine and Blender static-prop preparation pipeline checks
 - Estate statue browser captures — `output/playwright/mr-feast-estate-statues/foyer-statues-desktop.png` and `garden-fountain-statue-desktop.png` confirm the balanced wall-side foyer composition and the retained working fountain at 1280×820
 - Grounded gait browser captures — `output/playwright/mr-feast-grounded-gait/grounded-stalk-00.png`, `grounded-stalk-25.png`, `grounded-stalk-50.png`, `grounded-stalk-75.png`, `corner-pivot-start.png`, and `corner-first-planted-steps.png` confirm a forward-aligned side profile plus pivot-before-travel cornering at 1280×820
+- Upper window gallery captures — `output/iterate/2026-07-16-upper-window-gallery-after.png` and `output/iterate/2026-07-16-upper-window-gallery-foyer-after.png` confirm the wider marble path, continuous front guard, clean side-rail returns, large-window relationship, and foyer sightline at 1280×820
 - Workroom browser captures — `output/playwright/mr-feast-workroom-security-hub/workroom-monitor-wall-desktop.png`, `workroom-wide-desktop.png`, `workroom-keypad-desktop.png`, and `workroom-keypad-mobile.png` confirm the live 4×2 wall, broader equipment layout, and access terminal at 1280×820 and 390×844
 - Camera browser captures — `output/playwright/mr-feast-camera-security/camera-indicator-green-desktop.png`, `camera-indicator-warning-red-desktop.png`, `camera-permitted-tracking-desktop.png`, `camera-solid-red-tracking-desktop.png`, `camera-status-desktop.png`, and `camera-status-mobile.png` confirm readable fixture feedback, tracking states, and the transient status pill at 1280×820 and 390×844
 - Camera placement captures — `output/iterate/2026-07-16-camera-reading-facing.png`, `2026-07-16-camera-stair-landing-removed.png`, and `2026-07-16-camera-pool-post-close.png` confirm the corrected Reading Room facing, empty mid-landing wall, ceiling-height indoor bracket, and grounded pool support at 1280×820 with zero console errors
@@ -89,7 +95,7 @@ The current face-retopology experiment is paused and must not be published or tr
 
 ## Next action
 
-User walks alongside Mr. Feast on a straight main-floor stretch and watches him take a 90-degree corner, confirming the planted boot reads as propulsive rather than sliding and that his pacing still feels threatening. Estate-statue approval, the temporary PIN `0513` Workroom layout, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate playtests.
+User walks the widened path beside the large upper foyer window, checks that the railing feels finished from both floors, and watches Mr. Feast cross it without crowding the glass or guard. Grounded-gait pacing, estate-statue approval, the temporary PIN `0513` Workroom layout, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate playtests.
 
 ## Working conventions
 

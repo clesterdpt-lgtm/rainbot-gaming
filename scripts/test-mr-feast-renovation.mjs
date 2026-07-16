@@ -1434,6 +1434,16 @@ check("53 estate statue fountain continuity", /garden-fountain-basin/.test(yardB
 check("53 estate statue diagnostics", /estateStatues:\s*getEstateStatueDiagnostics\(\)/.test(diagnostics) && /getEstateStatueDiagnostics/.test(qaHooks) && /legacyFountainFigureCount/.test(estateStatueLoader) && /legacyFoyerBustCount/.test(estateStatueLoader), "statue load/cost/cleanup diagnostics are not exposed to deterministic QA");
 check("53 estate statue views", /foyerStatues:/.test(qaRoomViews) && /gardenFountainStatue:/.test(qaRoomViews), "focused foyer and garden statue QA framing is missing");
 
+// 54. The front-window crosswalk is a finished upper gallery rather than a
+// narrow exposed slab: it has passable depth, a continuous physical guard,
+// and one shared centerline for Mr. Feast's three front patrol points.
+const upperWindowGalleryConfig = section("const UPPER_WINDOW_GALLERY", "const YARD_LAYOUT");
+const upperWindowGalleryStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");
+check("54 upper window gallery dimensions", /depth:\s*1\.7\b/.test(upperWindowGalleryConfig) && /usableDepth:\s*1\.5\b/.test(upperWindowGalleryConfig) && /floorSlab\("upper-floor-front-crosswalk",\s*0,\s*UPPER_WINDOW_GALLERY\.centerZ,\s*UPPER_WINDOW_GALLERY\.width,\s*UPPER_WINDOW_GALLERY\.depth/.test(mansion), "front-window gallery is not at least 1.7 m deep with 1.5 m of named usable clearance");
+check("54 upper window gallery guard", /addRailingRun\("x",\s*-UPPER_WINDOW_GALLERY\.guardSpan \/ 2,\s*UPPER_WINDOW_GALLERY\.guardSpan \/ 2,\s*UPPER_WINDOW_GALLERY\.guardZ/.test(upperWindowGalleryStairBuild) && /upper-window-gallery-guard/.test(upperWindowGalleryStairBuild) && /physics\.addFixedBox\(0,\s*FLOOR\.UPPER \+ 0\.5,\s*UPPER_WINDOW_GALLERY\.guardZ/.test(upperWindowGalleryStairBuild), "front-window gallery lacks a full matching railing and Rapier edge guard");
+check("54 upper window gallery patrol", count(mrFeastPatrolRoute, /UPPER_WINDOW_GALLERY\.patrolZ/g) === 3, "Mr. Feast's east, center, and west front-gallery patrol points do not share the widened deck centerline");
+check("54 upper window gallery diagnostics", /upperWindowGallery:\s*getUpperWindowGalleryDiagnostics\(\)/.test(diagnostics) && /upperWindowGalleryFoyer:/.test(qaRoomViews), "upper-window gallery diagnostics or focused foyer framing are missing");
+
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");

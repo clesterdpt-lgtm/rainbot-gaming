@@ -92,6 +92,20 @@
   }
 
   const FLOOR = Object.freeze({ BASEMENT: -3.8, MAIN: 0, UPPER: 4.5 });
+  // Complete the narrow marble strip inside the large foyer window as a real
+  // upper gallery. The outside edge stays aligned with the facade while the
+  // inner edge reaches far enough into the stair hall for a comfortable path
+  // and a continuous guard between the two side-balcony rails.
+  const UPPER_WINDOW_GALLERY = Object.freeze({
+    width: 7.5,
+    depth: 1.7,
+    usableDepth: 1.5,
+    centerZ: 11.15,
+    guardZ: 10.3,
+    guardHeight: 0.98,
+    guardSpan: 6.84,
+    patrolZ: 11.15,
+  });
   const ESTATE_GROUND_Y = -0.205;
   const MOBILE_RENDER_WIDTH = 720;
   const PRE_ENTRY_FRAME_INTERVAL_MS = 250;
@@ -553,9 +567,9 @@
     mrFeastPatrolPoint("upper-east-front-center", 9.5, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE", { pause: 0.8 }),
     mrFeastPatrolPoint("upper-east-front-return", 7, FLOOR.UPPER, 6, MR_FEAST_LEVEL.UPPER, "EAST FRONT SUITE"),
     mrFeastPatrolPoint("upper-east-front-door-out", 5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { segmentKind: "door", door: "east front suite door" }),
-    mrFeastPatrolPoint("upper-east-rail", 4.2, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
-    mrFeastPatrolPoint("upper-front-crosswalk", 0, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { pause: 1.3 }),
-    mrFeastPatrolPoint("upper-west-rail", -4.2, FLOOR.UPPER, 11.55, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-east-rail", 4.2, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
+    mrFeastPatrolPoint("upper-front-crosswalk", 0, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY", { pause: 1.3 }),
+    mrFeastPatrolPoint("upper-west-rail", -4.2, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
     mrFeastPatrolPoint("upper-west-front-door-outside", -4.2, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "FOYER BALCONY"),
     mrFeastPatrolPoint("upper-west-front-door", -5, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE", { segmentKind: "door", door: "west front suite door" }),
     mrFeastPatrolPoint("upper-west-front-entry", -5.8, FLOOR.UPPER, 7.3, MR_FEAST_LEVEL.UPPER, "WEST FRONT SUITE"),
@@ -664,7 +678,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-grounded-gait-1",
+    assetVersion: "20260716-upper-window-gallery-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -1001,6 +1015,8 @@
     foyerB: [-2.7, FLOOR.MAIN, 4.6, -2.47],
     foyerStatues: [0, FLOOR.MAIN, 10.4, 0, 0.01],
     foyerGrandChandelier: [0, FLOOR.MAIN, 10.45, 0, 0.82],
+    upperWindowGalleryFoyer: [-2.8, FLOOR.MAIN, 5.2, -2.65, 0.58],
+    upperWindowGallerySide: [3.0, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, Math.PI / 2, -0.08],
     musicRoomA: [6.4, FLOOR.MAIN, 5.0, -2.25],
     musicRoomB: [11.5, FLOOR.MAIN, 10.6, 0.72],
     musicTableWestClearance: [8.05, FLOOR.MAIN, 6.15, Math.PI],
@@ -7692,15 +7708,23 @@
     for (const x of [-3.18, 3.18]) box({ name: "grand-upper-coffer-inlay", w: 0.035, h: 0.018, d: 1.0, x, y: FLOOR.UPPER - 0.21, z: 3.75, material: M.brass, cast: false });
     box({ name: "grand-upper-cross-fascia", w: 6.94, h: 0.28, d: 0.13, x: 0, y: FLOOR.UPPER - 0.14, z: 3.1, material: M.blackWood, cast: true });
     box({ name: "grand-upper-cross-inlay", w: 3.0, h: 0.04, d: 0.028, x: 0, y: FLOOR.UPPER - 0.08, z: 3.025, material: M.brass, cast: false });
-    addRailingRun("x", -3.42, 3.42, 4.4, FLOOR.UPPER, 0.98, "foyer-balcony-front-guard");
+    const balconySideGuardStartZ = 4.4;
+    const balconySideGuardDepth = UPPER_WINDOW_GALLERY.guardZ - balconySideGuardStartZ;
+    const balconySideGuardCenterZ = balconySideGuardStartZ + balconySideGuardDepth / 2;
+    addRailingRun("x", -3.42, 3.42, balconySideGuardStartZ, FLOOR.UPPER, 0.98, "foyer-balcony-front-guard");
     addRailingRun("x", -branchInner, branchInner, 3.1, FLOOR.UPPER, 0.98, "foyer-balcony-center-rear-guard");
-    addRailingRun("z", 4.4, 11.1, -3.42, FLOOR.UPPER, 0.98, "foyer-balcony-west");
-    addRailingRun("z", 4.4, 11.1, 3.42, FLOOR.UPPER, 0.98, "foyer-balcony-east");
-    for (const x of [-3.42, 3.42]) addStairNewel("grand-balcony-corner", x, 4.4, FLOOR.UPPER, 0.98);
-    physics.addFixedBox(0, FLOOR.UPPER + 0.5, 4.4, 6.84, 1, 0.16, 0);
+    addRailingRun("z", balconySideGuardStartZ, UPPER_WINDOW_GALLERY.guardZ, -3.42, FLOOR.UPPER, 0.98, "foyer-balcony-west");
+    addRailingRun("z", balconySideGuardStartZ, UPPER_WINDOW_GALLERY.guardZ, 3.42, FLOOR.UPPER, 0.98, "foyer-balcony-east");
+    addRailingRun("x", -UPPER_WINDOW_GALLERY.guardSpan / 2, UPPER_WINDOW_GALLERY.guardSpan / 2, UPPER_WINDOW_GALLERY.guardZ, FLOOR.UPPER, UPPER_WINDOW_GALLERY.guardHeight, "upper-window-gallery-guard");
+    for (const x of [-3.42, 3.42]) {
+      addStairNewel("grand-balcony-corner", x, balconySideGuardStartZ, FLOOR.UPPER, 0.98);
+      addStairNewel("upper-window-gallery-corner", x, UPPER_WINDOW_GALLERY.guardZ, FLOOR.UPPER, UPPER_WINDOW_GALLERY.guardHeight);
+    }
+    physics.addFixedBox(0, FLOOR.UPPER + 0.5, balconySideGuardStartZ, 6.84, 1, 0.16, 0);
     physics.addFixedBox(0, FLOOR.UPPER + 0.5, 3.1, branchInner * 2, 1, 0.16, 0);
-    physics.addFixedBox(-3.42, FLOOR.UPPER + 0.5, 7.75, 0.16, 1, 6.7, 0);
-    physics.addFixedBox(3.42, FLOOR.UPPER + 0.5, 7.75, 0.16, 1, 6.7, 0);
+    physics.addFixedBox(-3.42, FLOOR.UPPER + 0.5, balconySideGuardCenterZ, 0.16, 1, balconySideGuardDepth, 0);
+    physics.addFixedBox(3.42, FLOOR.UPPER + 0.5, balconySideGuardCenterZ, 0.16, 1, balconySideGuardDepth, 0);
+    physics.addFixedBox(0, FLOOR.UPPER + 0.5, UPPER_WINDOW_GALLERY.guardZ, UPPER_WINDOW_GALLERY.guardSpan, 1, 0.16, 0);
     buildRearUpperWalkwayGuard();
   }
 
@@ -9081,7 +9105,7 @@
     floorSlab("upper-floor-west", -9.2, 0, 11.6, 24, FLOOR.UPPER, M.oakFloor);
     floorSlab("upper-floor-east", 9.2, 0, 11.6, 24, FLOOR.UPPER, M.oakFloor);
     floorSlab("upper-floor-rear", 0, -7.25, 7.5, 9.5, FLOOR.UPPER, M.oakFloor);
-    floorSlab("upper-floor-front-crosswalk", 0, 11.55, 7.5, 0.9, FLOOR.UPPER, M.marble);
+    floorSlab("upper-floor-front-crosswalk", 0, UPPER_WINDOW_GALLERY.centerZ, UPPER_WINDOW_GALLERY.width, UPPER_WINDOW_GALLERY.depth, FLOOR.UPPER, M.marble);
 
     box({ name: "upper-ceiling", w: 30, h: 0.22, d: 24, x: 0, y: FLOOR.UPPER + UPPER_HEIGHT + 0.11, z: 0, material: M.ceiling, cast: false, receive: true });
     box({ name: "basement-damp-course", w: 30.8, h: 0.24, d: 24.8, x: 0, y: FLOOR.BASEMENT - 0.3, z: 0, material: M.limestone, cast: false });
@@ -12725,6 +12749,22 @@
     renderer.render(scene, camera);
   }
 
+  function getUpperWindowGalleryDiagnostics() {
+    return {
+      width: UPPER_WINDOW_GALLERY.width,
+      depth: UPPER_WINDOW_GALLERY.depth,
+      usableDepth: UPPER_WINDOW_GALLERY.usableDepth,
+      centerZ: UPPER_WINDOW_GALLERY.centerZ,
+      patrolZ: UPPER_WINDOW_GALLERY.patrolZ,
+      guard: {
+        z: UPPER_WINDOW_GALLERY.guardZ,
+        height: UPPER_WINDOW_GALLERY.guardHeight,
+        span: UPPER_WINDOW_GALLERY.guardSpan,
+        collider: true,
+      },
+    };
+  }
+
   function getDiagnostics() {
     const p = physics ? physics.playerPosition() : { x: 0, y: 0, z: 0 };
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
@@ -12776,6 +12816,7 @@
       security: cameraSecurity?.getDiagnostics() || null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
+      upperWindowGallery: getUpperWindowGalleryDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -13233,8 +13274,8 @@
         openDiningCross: [-6.2, FLOOR.MAIN, -6.0, -Math.PI / 2],
         westRail: [-4.3, FLOOR.UPPER, 7.2, -Math.PI / 2],
         eastRail: [4.3, FLOOR.UPPER, 7.2, Math.PI / 2],
-        frontCrosswalk: [0, FLOOR.UPPER, 11.55, 0],
-        overlookDown: [0, FLOOR.UPPER, 11.55, 0, -0.32],
+        frontCrosswalk: [0, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, 0],
+        overlookDown: [0, FLOOR.UPPER, UPPER_WINDOW_GALLERY.patrolZ, 0, -0.32],
         rearLanding: [0, FLOOR.UPPER, -3.1, Math.PI],
         serviceTop: [12.55, FLOOR.MAIN, -3.05, Math.PI],
         serviceBottom: [12.55, FLOOR.BASEMENT, 2.72, 0],

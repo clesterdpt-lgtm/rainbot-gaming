@@ -89,6 +89,15 @@ async function run() {
     const mainCamera = state.security.qa.mainCameraId;
     const basementCamera = state.security.qa.basementCameraId;
     assert(mainCamera && basementCamera, `QA camera anchors are missing; qa=${JSON.stringify(state.security.qa)}`);
+    assert(state.security.tuning.scanMinimumSeconds >= 10 && state.security.tuning.scanMaximumSeconds > state.security.tuning.scanMinimumSeconds, `camera one-way sweeps should be deliberately slow; tuning=${JSON.stringify(state.security.tuning)}`);
+    assert(state.security.tuning.warningPulseCount === 3 && state.security.tuning.trackingThreshold > 0.5 && state.security.tuning.trackingThreshold < 1, `camera warning/tracking tuning should provide three pulses before alarm; tuning=${JSON.stringify(state.security.tuning)}`);
+    const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
+    const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
+    assert(indoorMounts.every((entry) => entry.mount === "wall-center" && entry.wallCentered), `every indoor camera should be centered on one wall rather than tucked into a corner; offenders=${JSON.stringify(indoorMounts.filter((entry) => entry.mount !== "wall-center" || !entry.wallCentered))}`);
+    assert(indoorMounts.every((entry) => {
+      const cardinal = Math.PI / 2;
+      return Math.abs(entry.baseYaw / cardinal - Math.round(entry.baseYaw / cardinal)) < 0.001;
+    }), `indoor camera mounts should face cardinally away from their centered wall; mounts=${JSON.stringify(indoorMounts)}`);
     const initialLightLayout = await page.evaluate(() => window.MrFeastFresh.lightLayout());
     const cameraMeshes = await page.evaluate(() => window.MrFeastFresh.inspectScene("security-camera-"));
     assert(cameraMeshes.count >= 4, `shared camera presentation meshes should exist; scene=${JSON.stringify(cameraMeshes)}`);
@@ -97,7 +106,7 @@ async function run() {
       window.MrFeastFresh.resetCameraSecurityForQA("show");
       window.MrFeastFresh.setCameraSoloForQA(id);
       const samples = [];
-      for (let step = 0; step < 60; step += 1) {
+      for (let step = 0; step < 360; step += 1) {
         const security = window.MrFeastFresh.advanceCameraSecurityForQA(0.1);
         const camera = security.cameras.details.find((entry) => entry.id === id);
         samples.push({ yaw: camera.yaw, sweep: camera.sweepNormalized, direction: camera.scanDirection });
@@ -157,6 +166,32 @@ async function run() {
 
     await page.evaluate((id) => window.MrFeastFresh.setCameraSweepForQA(id, 0), mainCamera);
     await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4 }), mainCamera);
+    const warningProbe = await page.evaluate((id) => {
+      const samples = [];
+      for (let step = 0; step < 14; step += 1) {
+        const security = window.MrFeastFresh.advanceCameraSecurityForQA(0.08);
+        const camera = security.cameras.details.find((entry) => entry.id === id);
+        samples.push({
+          indicator: camera.indicator,
+          pulse: camera.warningPulseIndex,
+          tracking: camera.trackingPlayer,
+          exposure: security.exposure,
+          alarms: security.alarm.count,
+        });
+      }
+      return samples;
+    }, mainCamera);
+    const warnedPulses = new Set(warningProbe.filter((sample) => sample.indicator === "warning-red").map((sample) => sample.pulse));
+    assert(warningProbe[0]?.indicator === "warning-red" || warningProbe.some((sample) => sample.indicator === "warning-green"), `hostile acquisition should visibly pulse between red and green; warning=${JSON.stringify(warningProbe)}`);
+    assert(warnedPulses.size === 3, `camera should give exactly three visible red warning pulses before solid lock; warning=${JSON.stringify(warningProbe)}`);
+    const trackingSample = warningProbe.find((sample) => sample.indicator === "tracking-red");
+    assert(trackingSample?.tracking && trackingSample.alarms === 0, `solid red tracking should begin before the alarm so the player still has time to escape; warning=${JSON.stringify(warningProbe)}`);
+    const trackingYawBefore = (await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id).yaw, mainCamera));
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1 }), mainCamera);
+    await advanceSecurity(page, 0.12);
+    const trackedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
+    assert(trackedCamera.trackingPlayer && trackedCamera.indicator === "tracking-red" && Math.abs(trackedCamera.yaw - trackingYawBefore) > 0.03, `solid-red camera should follow player movement within its room; before=${trackingYawBefore} after=${JSON.stringify(trackedCamera)}`);
+    await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.55);
     state = await diagnostics(page);
     assert(state.security.observed && state.security.exposure > 0 && state.security.exposure < 1, `facing-toward exposure should build through a grace period; security=${JSON.stringify(state.security)}`);
@@ -247,7 +282,7 @@ async function run() {
     assert(response.teleports === 0 && response.distanceTravelled > 0, `Mr. Feast must navigate rather than teleport; response=${JSON.stringify(response)}`);
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
-    await advanceSecurity(page, 0.7);
+    await advanceSecurity(page, 0.45);
     state = await diagnostics(page);
     assert(await page.locator("#mansion-security").isVisible(), "suspicion HUD should appear during hostile observation");
     assert(Number(await page.locator("#mansion-security").getAttribute("aria-valuenow")) > 0, "suspicion HUD meter should mirror exposure");
@@ -287,7 +322,7 @@ async function run() {
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast camera security browser test: placement, scanning, policy, stealth, occlusion, alarm investigation, and responsive HUD passed");
+    console.log("Mr. Feast camera security browser test: wall-centered slow scanning, warning pulses, player tracking, policy, stealth, occlusion, alarm investigation, and responsive HUD passed");
     await context.close();
   } finally {
     if (browser) await browser.close();

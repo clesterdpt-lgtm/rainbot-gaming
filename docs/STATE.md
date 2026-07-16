@@ -23,6 +23,7 @@
 - The Music Room grand piano now sits `0.45m` farther north from the south wall, while its rotated table and couch use their true oriented footprints instead of oversized axis-aligned collision boxes.
 - Mr. Feast skips the basement patrol branch until the story door is unlocked; full-route QA temporarily releases and restores that lock without advancing story state.
 - Thirty-five unsynchronized surveillance cameras now scan 27 eligible interior zones and eight outdoor chokepoints. Bathrooms, the coat-closet hiding space, walk-in wardrobes, and the deep maze remain deliberate blind spots.
+- Indoor cameras are centered on cardinal walls rather than tucked into corners, and their one-way sweeps now take 10.5–14.5 seconds. A small green LED marks normal scanning; hostile acquisition gives three red pulses, then turns solid red and follows the player within the authored sweep before the alarm threshold.
 - Camera policy progresses from public-show filming to restricted-basement rules and global lockdown. Watched sabotage alarms immediately; blind patron-feed sabotage starts lockdown without summoning Mr. Feast until a later camera sighting.
 - Hostile camera exposure has a grace meter, consumes crouch's `0.5` visibility multiplier, respects active hiding, and uses explicit wall/live-door/hedge occluders. A continuous sighting raises only one latched alarm until line of sight is broken.
 - Camera alarms record source and last-seen data, then divert Mr. Feast through responding, searching, returning, and patrol along authored route/door points without teleporting. This is bounded investigation, not direct perception or chase.
@@ -46,7 +47,7 @@ Full Mr. Feast sight/hearing perception, live pursuit, capture, recovery, and fa
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
 - Browser captures — `output/playwright/mr-feast-basement-key-trail/library-shelf-book-subtle-desktop.png` now visibly confirms the clean gap and correctly ordered `XIII`; `basement-door-locked-desktop.png`, `basement-door-unlocked-desktop.png`, and `library-shelf-book-mobile.png` cover the adjacent states
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
-- `node scripts/test-mr-feast-camera-security.mjs` — passed 35-camera placement, autonomous sweep/reversal, physical blind-side traversal, show/restricted/lockdown policy, watched sabotage, crouch/hiding, natural and deterministic occlusion, alarm latching, Mr. Feast response/search/return, unchanged light layout, and desktop/mobile HUD checks with zero console errors
+- `node scripts/test-mr-feast-camera-security.mjs` — passed 35-camera placement, 27 wall-centered indoor mounts, 10.5–14.5 second one-way sweep/reversal, three-pulse red warning, solid-red pre-alarm tracking, physical blind-side traversal, show/restricted/lockdown policy, watched sabotage, crouch/hiding, natural and deterministic occlusion, alarm latching, Mr. Feast response/search/return, unchanged light layout, and desktop/mobile HUD checks with zero console errors
 - Camera browser captures — `output/playwright/mr-feast-camera-security/camera-suspicion-desktop.png` and `camera-suspicion-mobile.png` confirm the working fixture and compact lockdown meter at 1280×820 and 390×844
 - The focused player-system suite also verifies four unique scalable object icons, the ruled handwritten clue pad, and in-stage title/close placement without horizontal overflow at 390×844
 - `node scripts/test-mr-feast-contestant-13.mjs` — passed progression, gates, persistence, accessibility, mobile touch, and discovery-first objective visibility
@@ -55,7 +56,7 @@ Full Mr. Feast sight/hearing perception, live pursuit, capture, recovery, and fa
 
 ## Next action
 
-User watches several indoor and outdoor camera sweeps, crosses a blind window, tests watched versus blind Workshop sabotage, and judges the lockdown warning plus Mr. Feast investigation timing. Music Room spacing, sprint/crouch feel, and the now-unguided Library shelf-book discovery remain separate Milestone 34–35 playtests.
+User watches the slower wall-centered indoor and outdoor camera sweeps, confirms the green → three red pulses → solid-red tracking sequence is readable, crosses a blind window, tests watched versus blind Workshop sabotage, and judges the lockdown warning plus Mr. Feast investigation timing. Music Room spacing, sprint/crouch feel, and the now-unguided Library shelf-book discovery remain separate Milestone 34–35 playtests.
 
 ## Working conventions
 

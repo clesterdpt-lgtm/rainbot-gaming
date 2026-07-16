@@ -242,8 +242,16 @@
     exposureDecayPerSecond: 1.4,
     alarmCooldownSeconds: 1.25,
     endpointPauseSeconds: 0.58,
-    scanMinimumSeconds: 5.8,
-    scanMaximumSeconds: 8.2,
+    scanMinimumSeconds: 10.5,
+    scanMaximumSeconds: 14.5,
+    warningPulseCount: 3,
+    warningPulseDutyCycle: 0.52,
+    trackingThreshold: 0.72,
+    trackingTurnSpeed: THREE.MathUtils.degToRad(72),
+    scanningLightColor: 0x42ff78,
+    warningLightColor: 0xff2d21,
+    statusLightScale: 0.072,
+    alertLightScale: 0.09,
     responseSpeed: 1.08,
     searchSeconds: 6.5,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
@@ -268,6 +276,8 @@
       pitch: THREE.MathUtils.degToRad(options.pitchDegrees == null ? -14 : options.pitchDegrees),
       outdoors: Boolean(options.outdoors),
       restricted: Boolean(options.restricted),
+      mount: options.mount || (options.outdoors ? "chokepoint" : "wall-center"),
+      wallCentered: options.wallCentered == null ? !options.outdoors : Boolean(options.wallCentered),
       responseNodeId: options.responseNodeId || null,
       scanSeconds: CAMERA_SECURITY.scanMinimumSeconds + (seed % 17) / 16 * periodRange,
       initialSweep: ((seed % 101) / 100) * 2 - 1,
@@ -276,35 +286,35 @@
   }
 
   const SECURITY_CAMERA_PLACEMENTS = Object.freeze([
-    securityCameraPlacement("cam-main-library", "LIBRARY", -5.35, 3.45, 3.55, 135, 38, 11.8),
+    securityCameraPlacement("cam-main-library", "LIBRARY", -10, 3.45, 3.55, 180, 38, 11.8),
     securityCameraPlacement("cam-main-foyer", "FRONT FOYER", 0, 3.55, 11.58, 0, 48, 7.9),
-    securityCameraPlacement("cam-main-music", "MUSIC ROOM", 5.35, 3.45, 3.55, -135, 38, 11.8),
+    securityCameraPlacement("cam-main-music", "MUSIC ROOM", 10, 3.45, 3.55, 180, 38, 11.8),
     securityCameraPlacement("cam-main-stair", "GRAND STAIR HALL", 0, 3.55, -2.8, 180, 42, 5.7),
-    securityCameraPlacement("cam-main-painting", "PAINTING ROOM", 14.62, 3.45, 2.82, 45, 38, 10.2),
-    securityCameraPlacement("cam-main-dining", "DINING ROOM", -5.42, 3.45, -3.55, 45, 38, 11.5),
+    securityCameraPlacement("cam-main-painting", "PAINTING ROOM", 14.62, 3.45, 0, 90, 38, 10.2),
+    securityCameraPlacement("cam-main-dining", "DINING ROOM", -10, 3.45, -3.55, 0, 38, 11.5),
     securityCameraPlacement("cam-main-ballroom", "BALLROOM", 0, 3.45, -11.58, 180, 45, 8.0),
-    securityCameraPlacement("cam-main-kitchen", "KITCHEN", 5.42, 3.45, -3.55, -45, 38, 11.5),
+    securityCameraPlacement("cam-main-kitchen", "KITCHEN", 10, 3.45, -3.55, 0, 38, 11.5),
 
-    securityCameraPlacement("cam-upper-west-front", "WEST FRONT SUITE", -5.35, 7.25, 3.55, 135, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-west-front", "WEST FRONT SUITE", -10, 7.25, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
     securityCameraPlacement("cam-upper-balcony", "FOYER BALCONY", 0, 7.5, 11.35, 0, 48, 7.7, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-east-front", "EAST FRONT SUITE", 5.35, 7.25, 3.55, -135, 38, 11.5, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-front", "EAST FRONT SUITE", 10, 7.25, 3.55, 180, 38, 11.5, { floorY: FLOOR.UPPER }),
     securityCameraPlacement("cam-upper-landing", "UPPER LANDING", 0, 7.25, -2.82, 180, 42, 5.7, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-reading", "READING ROOM", 5.35, 7.25, -2.82, -135, 38, 10.2, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-primary", "PRIMARY SUITE", -14.62, 7.25, -3.55, -45, 38, 11.4, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-reading", "READING ROOM", 10, 7.25, -2.82, 0, 38, 10.2, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-primary", "PRIMARY SUITE", -14.62, 7.25, -7.6, -90, 38, 11.4, { floorY: FLOOR.UPPER }),
     securityCameraPlacement("cam-upper-lounge", "REAR LOUNGE", 0, 7.35, -3.55, 0, 45, 8.0, { floorY: FLOOR.UPPER }),
-    securityCameraPlacement("cam-upper-east-rear", "EAST REAR SUITE", 14.62, 7.25, -3.55, 45, 38, 11.4, { floorY: FLOOR.UPPER }),
+    securityCameraPlacement("cam-upper-east-rear", "EAST REAR SUITE", 14.62, 7.25, -7.6, 90, 38, 11.4, { floorY: FLOOR.UPPER }),
 
-    securityCameraPlacement("cam-basement-wine", "WINE CELLAR", -1.65, -0.62, 3.55, 135, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-archive", "ARCHIVE", 1.65, -0.55, 3.55, -135, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-wine", "WINE CELLAR", -8.15, -0.62, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-archive", "ARCHIVE", 8.15, -0.55, 3.55, 180, 38, 14.5, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-corridor", "BASEMENT CORRIDOR", 0, -0.62, 11.6, 0, 58, 14.3, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -1.65, -0.62, 2.85, 45, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-pantry", "PANTRY", 10.05, -0.62, 2.85, 45, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, 3.15, -2.72, 180, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
+    securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -8.15, -0.62, 2.85, 0, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-pantry", "PANTRY", 5.85, -0.62, 2.85, 0, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, 3.15, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
     securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, -0.62, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -6.35, -0.62, -5.25, 45, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workshop", "WORKSHOP", 0.95, -0.62, -5.25, 45, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-cold", "COLD ROOM", 7.25, -0.62, -5.25, 45, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 14.65, -0.62, -5.25, 45, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, -0.62, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-workshop", "WORKSHOP", -2.35, -0.62, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-cold", "COLD ROOM", 4.45, -0.62, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
+    securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, -0.62, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
 
     securityCameraPlacement("cam-yard-gate", "FRONT DRIVE", 3.9, 2.75, 33.12, 29, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-gate" }),
     securityCameraPlacement("cam-yard-portico", "FRONT DRIVE", 3.35, 3.1, 14.55, 153, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-portico" }),
@@ -573,7 +583,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-camera-security-1",
+    assetVersion: "20260716-camera-warning-tracking-2",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -4269,8 +4279,13 @@
         sweepNormalized: placement.initialSweep,
         scanDirection: placement.initialDirection,
         pauseRemaining: 0,
+        baseYaw: placement.yaw,
         yaw: placement.yaw + placement.sweep * placement.initialSweep,
         frozen: false,
+        trackingPlayer: false,
+        indicator: "scanning-green",
+        warningPulseIndex: 0,
+        lightColor: CAMERA_SECURITY.scanningLightColor,
         playerInCone: false,
         hasLineOfSight: false,
         blocker: null,
@@ -4321,7 +4336,7 @@
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.root.add(mesh);
       }
-      for (let index = 0; index < count; index += 1) this.statusLights.setColorAt(index, new THREE.Color(0x79b078));
+      for (let index = 0; index < count; index += 1) this.statusLights.setColorAt(index, new THREE.Color(CAMERA_SECURITY.scanningLightColor));
       if (this.statusLights.instanceColor) this.statusLights.instanceColor.needsUpdate = true;
     }
 
@@ -4340,12 +4355,26 @@
       return { permitted: true, reason: "show-filming" };
     }
 
-    statusColor(cameraState) {
+    statusIndicator(cameraState) {
       const disposition = this.cameraDisposition(cameraState);
-      if (state.security.lastAlarm?.cameraId === cameraState.id && this.isAlarmResponseActive()) return 0xf44737;
-      if (!disposition.permitted && cameraState.playerInCone && cameraState.hasLineOfSight) return 0xe7a440;
-      if (!disposition.permitted) return 0xc74836;
-      return 0x79b078;
+      const isActive = state.security.activeCameraId === cameraState.id
+        && cameraState.playerInCone
+        && cameraState.hasLineOfSight
+        && !disposition.permitted;
+      if (state.security.lastAlarm?.cameraId === cameraState.id && state.security.alarmLatchCameraId === cameraState.id) {
+        return { name: "alarm-red", color: CAMERA_SECURITY.warningLightColor, pulse: CAMERA_SECURITY.warningPulseCount };
+      }
+      if (isActive && (cameraState.trackingPlayer || state.security.exposure >= CAMERA_SECURITY.trackingThreshold)) {
+        return { name: "tracking-red", color: CAMERA_SECURITY.warningLightColor, pulse: CAMERA_SECURITY.warningPulseCount };
+      }
+      if (isActive && state.security.exposure > 0) {
+        const progress = clamp(state.security.exposure / CAMERA_SECURITY.trackingThreshold, 0, 0.9999);
+        const pulsePosition = progress * CAMERA_SECURITY.warningPulseCount;
+        const pulse = Math.min(CAMERA_SECURITY.warningPulseCount, Math.floor(pulsePosition) + 1);
+        const red = pulsePosition - Math.floor(pulsePosition) < CAMERA_SECURITY.warningPulseDutyCycle;
+        return { name: red ? "warning-red" : "warning-green", color: red ? CAMERA_SECURITY.warningLightColor : CAMERA_SECURITY.scanningLightColor, pulse };
+      }
+      return { name: "scanning-green", color: CAMERA_SECURITY.scanningLightColor, pulse: 0 };
     }
 
     updatePresentation() {
@@ -4356,7 +4385,7 @@
       const mountScale = new THREE.Vector3(0.18, 0.18, 0.18);
       const bodyScale = new THREE.Vector3(0.34, 0.2, 0.44);
       const lensScale = new THREE.Vector3(0.075, 0.12, 0.075);
-      const statusScale = new THREE.Vector3(0.055, 0.055, 0.055);
+      const statusScale = new THREE.Vector3(CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale, CAMERA_SECURITY.statusLightScale);
       for (let index = 0; index < this.cameras.length; index += 1) {
         const cameraState = this.cameras[index];
         const mountPosition = new THREE.Vector3(cameraState.x, cameraState.y, cameraState.z);
@@ -4367,13 +4396,20 @@
         cameraState.forward.set(0, 0, -1).applyEuler(this.euler).normalize();
         const bodyPosition = mountPosition.clone().add(new THREE.Vector3(0, -0.17, 0)).addScaledVector(cameraState.forward, 0.08);
         cameraState.lensOrigin.copy(bodyPosition).addScaledVector(cameraState.forward, 0.27);
-        const statusPosition = bodyPosition.clone().add(this.offset.set(0, 0.125, -0.02).applyQuaternion(bodyQuaternion));
+        // Put the indicator on the camera's front shoulder so the lens cannot
+        // hide it when the player looks up from below.
+        const statusPosition = bodyPosition.clone().add(this.offset.set(0.13, 0.08, -0.23).applyQuaternion(bodyQuaternion));
         lensQuaternion.setFromUnitVectors(upAxis, cameraState.forward);
         this.setInstance(this.mounts, index, mountPosition, mountQuaternion, mountScale);
         this.setInstance(this.housings, index, bodyPosition, bodyQuaternion, bodyScale);
         this.setInstance(this.lenses, index, cameraState.lensOrigin, lensQuaternion, lensScale);
-        this.setInstance(this.statusLights, index, statusPosition, bodyQuaternion, statusScale);
-        this.instanceColor.setHex(this.statusColor(cameraState));
+        const indicator = this.statusIndicator(cameraState);
+        const indicatorScale = indicator.name.endsWith("red") ? CAMERA_SECURITY.alertLightScale / CAMERA_SECURITY.statusLightScale : 1;
+        this.setInstance(this.statusLights, index, statusPosition, bodyQuaternion, statusScale.clone().multiplyScalar(indicatorScale));
+        cameraState.indicator = indicator.name;
+        cameraState.warningPulseIndex = indicator.pulse;
+        cameraState.lightColor = indicator.color;
+        this.instanceColor.setHex(indicator.color);
         this.statusLights.setColorAt(index, this.instanceColor);
       }
       for (const mesh of [this.mounts, this.housings, this.lenses, this.statusLights]) mesh.instanceMatrix.needsUpdate = true;
@@ -4381,19 +4417,39 @@
     }
 
     updateScan(cameraState, dt) {
-      if (cameraState.frozen) return;
+      if (cameraState.frozen || cameraState.trackingPlayer) return;
       if (cameraState.pauseRemaining > 0) {
         cameraState.pauseRemaining = Math.max(0, cameraState.pauseRemaining - dt);
         return;
       }
-      cameraState.sweepNormalized += cameraState.scanDirection * (4 * dt / cameraState.scanSeconds);
+      cameraState.sweepNormalized += cameraState.scanDirection * (2 * dt / cameraState.scanSeconds);
       if (cameraState.sweepNormalized >= 1 || cameraState.sweepNormalized <= -1) {
         cameraState.sweepNormalized = clamp(cameraState.sweepNormalized, -1, 1);
         cameraState.scanDirection *= -1;
         cameraState.pauseRemaining = CAMERA_SECURITY.endpointPauseSeconds;
       }
-      cameraState.yaw = cameraState.yaw - cameraState.sweep * cameraState.initialSweep + cameraState.sweep * cameraState.sweepNormalized;
-      cameraState.initialSweep = cameraState.sweepNormalized;
+      cameraState.yaw = cameraState.baseYaw + cameraState.sweep * cameraState.sweepNormalized;
+    }
+
+    trackCameraTowardPlayer(cameraState, playerEye, dt) {
+      this.toPlayer.copy(playerEye).sub(cameraState.lensOrigin);
+      const desiredYaw = Math.atan2(-this.toPlayer.x, -this.toPlayer.z);
+      const desiredFromBase = Math.atan2(
+        Math.sin(desiredYaw - cameraState.baseYaw),
+        Math.cos(desiredYaw - cameraState.baseYaw),
+      );
+      const clampedYaw = cameraState.baseYaw + clamp(desiredFromBase, -cameraState.sweep, cameraState.sweep);
+      const yawDelta = Math.atan2(
+        Math.sin(clampedYaw - cameraState.yaw),
+        Math.cos(clampedYaw - cameraState.yaw),
+      );
+      cameraState.yaw += clamp(
+        yawDelta,
+        -CAMERA_SECURITY.trackingTurnSpeed * dt,
+        CAMERA_SECURITY.trackingTurnSpeed * dt,
+      );
+      cameraState.sweepNormalized = clamp((cameraState.yaw - cameraState.baseYaw) / cameraState.sweep, -1, 1);
+      cameraState.trackingPlayer = true;
     }
 
     transitionPolicy(eventName) {
@@ -4456,6 +4512,8 @@
       cameraState.playerInCone = false;
       cameraState.hasLineOfSight = false;
       cameraState.blocker = null;
+      this.euler.set(cameraState.pitch, cameraState.yaw, 0);
+      cameraState.forward.set(0, 0, -1).applyEuler(this.euler).normalize();
       this.toPlayer.copy(playerEye).sub(cameraState.lensOrigin);
       const distance = this.toPlayer.length();
       if (distance <= 0.05 || distance > cameraState.range) return null;
@@ -4476,6 +4534,7 @@
         cameraState.playerInCone = false;
         cameraState.hasLineOfSight = false;
         cameraState.blocker = null;
+        cameraState.trackingPlayer = false;
       }
       if (state.isHidden) {
         state.security.observed = false;
@@ -4511,6 +4570,9 @@
       }
       const visibility = clamp(state.movement.stealthVisibilityMultiplier, 0.1, 1);
       state.security.exposure = clamp(state.security.exposure + dt / CAMERA_SECURITY.exposureSeconds * visibility, 0, 1);
+      if (state.security.exposure >= CAMERA_SECURITY.trackingThreshold) {
+        this.trackCameraTowardPlayer(selected.cameraState, this.playerEye, dt);
+      }
       if (state.security.exposure >= 1) this.raiseAlarm(selected.cameraState, selected.reason);
     }
 
@@ -4625,12 +4687,12 @@
       this.syncPolicy();
       state.security.alarmCooldown = Math.max(0, state.security.alarmCooldown - safeDt);
       for (const cameraState of this.cameras) this.updateScan(cameraState, safeDt);
-      this.updatePresentation();
       this.detectionAccumulator += safeDt;
       while (this.detectionAccumulator >= CAMERA_SECURITY.checkInterval) {
         this.evaluatePlayer(CAMERA_SECURITY.checkInterval);
         this.detectionAccumulator -= CAMERA_SECURITY.checkInterval;
       }
+      this.updatePresentation();
       this.updateHud();
     }
 
@@ -4640,12 +4702,19 @@
         room: cameraState.room,
         outdoors: cameraState.outdoors,
         restricted: cameraState.restricted,
+        mount: cameraState.mount,
+        wallCentered: cameraState.wallCentered,
+        position: { x: cameraState.x, y: cameraState.y, z: cameraState.z },
         yaw: Number(cameraState.yaw.toFixed(4)),
-        baseYaw: Number(cameraState.yaw - cameraState.sweep * cameraState.sweepNormalized),
+        baseYaw: Number(cameraState.baseYaw.toFixed(4)),
         sweepNormalized: Number(cameraState.sweepNormalized.toFixed(4)),
         scanDirection: cameraState.scanDirection,
         paused: cameraState.pauseRemaining > 0,
         frozen: cameraState.frozen,
+        trackingPlayer: cameraState.trackingPlayer,
+        indicator: cameraState.indicator,
+        warningPulseIndex: cameraState.warningPulseIndex,
+        lightColor: `#${cameraState.lightColor.toString(16).padStart(6, "0")}`,
         playerInCone: cameraState.playerInCone,
         hasLineOfSight: cameraState.hasLineOfSight,
         blocker: cameraState.blocker,
@@ -4688,6 +4757,11 @@
           checkInterval: CAMERA_SECURITY.checkInterval,
           exposureSeconds: CAMERA_SECURITY.exposureSeconds,
           detectionHalfAngle: Number(CAMERA_SECURITY.detectionHalfAngle.toFixed(4)),
+          scanMinimumSeconds: CAMERA_SECURITY.scanMinimumSeconds,
+          scanMaximumSeconds: CAMERA_SECURITY.scanMaximumSeconds,
+          warningPulseCount: CAMERA_SECURITY.warningPulseCount,
+          trackingThreshold: CAMERA_SECURITY.trackingThreshold,
+          trackingTurnSpeed: Number(CAMERA_SECURITY.trackingTurnSpeed.toFixed(4)),
         },
         qa: {
           manual: this.qaManual,
@@ -4723,6 +4797,7 @@
         cameraState.playerInCone = false;
         cameraState.hasLineOfSight = false;
         cameraState.blocker = null;
+        cameraState.trackingPlayer = false;
       }
       this.syncPolicy();
       this.updatePresentation();
@@ -4750,8 +4825,7 @@
       const cameraState = this.cameraById.get(cameraId);
       if (!cameraState) return this.getDiagnostics(true);
       cameraState.sweepNormalized = clamp(Number(normalized) || 0, -1, 1);
-      cameraState.yaw = cameraState.yaw - cameraState.sweep * cameraState.initialSweep + cameraState.sweep * cameraState.sweepNormalized;
-      cameraState.initialSweep = cameraState.sweepNormalized;
+      cameraState.yaw = cameraState.baseYaw + cameraState.sweep * cameraState.sweepNormalized;
       cameraState.frozen = true;
       cameraState.pauseRemaining = 0;
       this.updatePresentation();
@@ -4770,7 +4844,7 @@
       const cameraState = this.cameraById.get(cameraId);
       if (!cameraState) return this.getDiagnostics(true);
       const distance = clamp(Number(options.distance) || 4, 1.5, Math.max(1.5, cameraState.range - 0.5));
-      this.euler.set(cameraState.pitch, cameraState.yaw - cameraState.sweep * cameraState.sweepNormalized, 0);
+      this.euler.set(cameraState.pitch, cameraState.baseYaw, 0);
       const centerDirection = new THREE.Vector3(0, 0, -1).applyEuler(this.euler);
       centerDirection.y = 0;
       centerDirection.normalize();

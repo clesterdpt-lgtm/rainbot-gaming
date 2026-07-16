@@ -463,7 +463,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-music-room-layout-1",
+    assetVersion: "20260716-music-room-couch-clearance-2",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -5217,9 +5217,7 @@
     }
     for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: group, cast: false });
     for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: group, cast: false });
-    const cw = Math.abs(Math.cos(rotationY || 0)) * w + Math.abs(Math.sin(rotationY || 0)) * 0.9;
-    const cd = Math.abs(Math.sin(rotationY || 0)) * w + Math.abs(Math.cos(rotationY || 0)) * 0.9;
-    physics.addFixedBox(x, floorY + 0.65, z, cw, 1.3, cd, 0);
+    physics.addFixedBox(x, floorY + 0.65, z, w, 1.3, 0.9, rotationY || 0);
     return group;
   }
 
@@ -10578,9 +10576,9 @@
         },
         musicTableWestClearance: {
           start: "musicTableWestClearance",
-          actions: [{ yaw: Math.PI, seconds: 2.0 }],
+          actions: [{ yaw: Math.PI, seconds: 3.0 }],
           startDelayMs: 1800,
-          expected: { inBounds: true, grounded: true, room: "MUSIC ROOM", minZ: 7.0, maxZ: 7.8 },
+          expected: { inBounds: true, grounded: true, room: "MUSIC ROOM", minZ: 8.0, maxZ: 9.3 },
         },
         rearLoungeEntry: {
           start: "rearLoungeEntry",

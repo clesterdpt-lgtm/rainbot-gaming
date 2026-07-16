@@ -213,6 +213,7 @@ const paintingStudioBuilder = section("function addPaintingStudio(", "function a
 const bookshelfBuilder = section("function addBookshelf(", "function addArchiveCurio(");
 const boxBuilder = section("function box(", "function cylinder(");
 const tableBuilder = section("function addTable(", "function addChair(");
+const sofaBuilder = section("function addSofa(", "function faceTargetYaw(");
 const foyerPanelwork = section("function addFoyerPanelwork()", "function buildSlabsAndCeilings()");
 const localBootstrap = section("const LOCAL_SERVER_URL", "const FLOOR");
 const mainEastFrontSpine = namedWallRun("main-east-front-spine", mainPartitions);
@@ -1095,7 +1096,9 @@ check("24 music room furnishings", /\baddPiano\(/.test(musicRoomFurnishings) && 
 check("24 music room furnishings", /musicPiano/i.test(musicRoomFurnishings) && /musicSofa/i.test(musicRoomFurnishings) && /(?:faceTargetYaw|yawToward|Math\.atan2)\s*\(/.test(musicRoomFurnishings), "Music Room couch lacks an explicit face-target relationship to the piano");
 check("47 music-room piano clearance", /const musicPiano\s*=\s*\{\s*x:\s*11\.2,\s*z:\s*5\.85\s*\}/.test(musicRoomFurnishings), "Music Room piano has not been pulled slightly north from the south wall");
 check("47 rotated table collider", /physics\.addFixedBox\(x,\s*floorY \+ 0\.42,\s*z,\s*width,\s*0\.84,\s*depth,\s*rotationY \|\| 0\)/.test(tableBuilder), "rotated tables still use an oversized axis-aligned collider");
-check("47 music-room table clearance route", /musicTableWestClearance:\s*\[8\.05,\s*FLOOR\.MAIN,\s*6\.15,\s*Math\.PI\]/.test(qaRoomViews) && /musicTableWestClearance:\s*\{[\s\S]*?start:\s*"musicTableWestClearance"[\s\S]*?minZ:\s*7\.0/.test(qaHooks), "Music Room lacks deterministic physical QA through the table collider's former invisible corner");
+check("47 music-room table clearance route", /musicTableWestClearance:\s*\[8\.05,\s*FLOOR\.MAIN,\s*6\.15,\s*Math\.PI\]/.test(qaRoomViews) && /musicTableWestClearance:\s*\{[\s\S]*?start:\s*"musicTableWestClearance"/.test(qaHooks), "Music Room lacks deterministic physical QA through the table collider's former invisible corner");
+check("48 rotated sofa collider", /physics\.addFixedBox\(x,\s*floorY \+ 0\.65,\s*z,\s*w,\s*1\.3,\s*0\.9,\s*rotationY \|\| 0\)/.test(sofaBuilder), "rotated sofas still use an oversized axis-aligned collider");
+check("48 music-room couch-table aisle", /musicTableWestClearance:\s*\{[\s\S]*?actions:\s*\[\{\s*yaw:\s*Math\.PI,\s*seconds:\s*3\.0\s*\}\][\s\S]*?minZ:\s*8\.0[\s\S]*?maxZ:\s*9\.3/.test(qaHooks), "Music Room route does not prove the full aisle between the couch and table is clear");
 
 check("24 closet interior materials", /const closetInterior\s*=\s*new THREE\.MeshStandardMaterial\(/.test(cabinetClass) && !/const closetInterior\s*=\s*new THREE\.MeshBasicMaterial\(/.test(cabinetClass), "walk-in closet liners still ignore real scene lighting");
 check("24 closet interior materials", !/lightCircuit\.glowMaterials\.push\(closetInterior\)/.test(cabinetClass), "closet liner is still a circuit-tinted glow surface");

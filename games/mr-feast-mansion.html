@@ -1023,6 +1023,12 @@
       padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
       background: radial-gradient(circle at 50% 42%, rgba(23, 18, 12, 0.54), rgba(2, 3, 4, 0.9));
       backdrop-filter: blur(9px);
+      cursor: none;
+    }
+
+    #mansion-stage.is-book-open,
+    #mansion-stage.is-book-open * {
+      cursor: none !important;
     }
 
     .mansion-book__page {
@@ -2096,6 +2102,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260717-escape-menu-controls-6" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260717-pointer-resume-book-7" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

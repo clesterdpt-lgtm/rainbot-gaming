@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-escape-menu-controls-6";
+  const MANSION_RUNTIME_VERSION = "20260717-pointer-resume-book-7";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -8718,7 +8718,8 @@
       state.readableBooks.activePlacementId = placement.placementId;
       if (!state.readableBooks.openedPlacementIds.includes(placement.placementId)) state.readableBooks.openedPlacementIds.push(placement.placementId);
       clearMovementInput();
-      releasePointerLock();
+      // Keep pointer lock while reading so the system cursor never pops in over
+      // the page. Close with E / Escape; look input is gated while the book is open.
       if (dom.bookTitle) dom.bookTitle.textContent = placement.title;
       if (dom.bookAuthor) dom.bookAuthor.textContent = `by ${placement.author}`;
       if (dom.bookPreview) dom.bookPreview.textContent = placement.preview;
@@ -8733,14 +8734,19 @@
         else delete dom.bookReader.dataset.annotationSlot;
       }
       if (dom.bookReader) dom.bookReader.hidden = false;
-      if (dom.stage && dom.bookReader) {
-        for (const child of dom.stage.children) {
-          if (child !== dom.bookReader) child.inert = true;
+      if (dom.stage) {
+        dom.stage.classList.add("is-book-open");
+        if (dom.bookReader) {
+          for (const child of dom.stage.children) {
+            if (child !== dom.bookReader) child.inert = true;
+          }
         }
       }
       if (audioSystem) audioSystem.book("open");
       updateInteractionPrompt();
-      requestAnimationFrame(() => dom.bookClose?.focus({ preventScroll: true }));
+      // Do not steal focus to the close button while pointer-locked — that can
+      // surface a system caret/focus ring. Keyboard E / Escape still closes.
+      if (dom.canvas) dom.canvas.focus({ preventScroll: true });
       return true;
     }
 
@@ -8749,9 +8755,12 @@
       state.readableBooks.open = false;
       state.readableBooks.activePlacementId = null;
       if (dom.bookReader) dom.bookReader.hidden = true;
-      if (dom.stage && dom.bookReader) {
-        for (const child of dom.stage.children) {
-          if (child !== dom.bookReader) child.inert = false;
+      if (dom.stage) {
+        dom.stage.classList.remove("is-book-open");
+        if (dom.bookReader) {
+          for (const child of dom.stage.children) {
+            if (child !== dom.bookReader) child.inert = false;
+          }
         }
       }
       const returnTarget = this.returnFocus && this.returnFocus.isConnected ? this.returnFocus : dom.canvas;
@@ -8759,6 +8768,8 @@
       if (audioSystem) audioSystem.book("close");
       if (restoreFocus) returnTarget?.focus({ preventScroll: true });
       else dom.canvas?.focus({ preventScroll: true });
+      // If pointer lock was lost somehow during reading, try to reclaim look.
+      requestPointerLock();
       updateInteractionPrompt();
       return true;
     }
@@ -16378,7 +16389,15 @@
   }
 
   function requestPointerLock() {
-    if (!state.started || state.journalOpen || state.menuOpen || state.workroom.keypadOpen || matchMedia("(pointer: coarse)").matches) return;
+    if (
+      !state.started
+      || state.journalOpen
+      || state.menuOpen
+      || state.workroom.keypadOpen
+      || state.readableBooks.open
+      || state.gameOver
+      || matchMedia("(pointer: coarse)").matches
+    ) return;
     if (document.pointerLockElement !== dom.canvas && dom.canvas.requestPointerLock) {
       try {
         const request = dom.canvas.requestPointerLock();
@@ -16730,9 +16749,12 @@
       if (!mansionSaveSlot?.has()) setMenuStatus("Progress is not autosaved.");
       requestAnimationFrame(() => dom.menuResume?.focus({ preventScroll: true }));
     } else {
-      const returnTarget = menuReturnFocus && menuReturnFocus.isConnected ? menuReturnFocus : dom.canvas;
+      // Resume (and any other close path) should return look control immediately.
+      // Resume is a trusted click, so pointer lock succeeds; keyboard close may
+      // still fail silently and leave the player one canvas click away.
       menuReturnFocus = null;
-      returnTarget?.focus({ preventScroll: true });
+      if (dom.canvas) dom.canvas.focus({ preventScroll: true });
+      requestPointerLock();
     }
   }
 
@@ -16775,10 +16797,21 @@
         // If pointerlockchange already opened the menu for this gesture, do
         // not immediately toggle it closed.
         if (performance.now() < ignoreEscapeMenuToggleUntil) return;
-        if (state.readableBooks.open) readableBookSystem?.close();
-        else if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
-        else if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
-        else if (state.started) setMenuOpen(!state.menuOpen);
+        if (state.readableBooks.open) {
+          readableBookSystem?.close();
+          // Escape also exits pointer lock. Mark this unlock intentional so the
+          // lock-loss path does not immediately open the pause menu.
+          intentionalPointerUnlockUntil = performance.now() + 450;
+          ignoreEscapeMenuToggleUntil = performance.now() + 400;
+        } else if (state.workroom.keypadOpen) {
+          setWorkroomKeypadOpen(false);
+          intentionalPointerUnlockUntil = performance.now() + 450;
+          ignoreEscapeMenuToggleUntil = performance.now() + 400;
+        } else if (state.journalOpen && contestant13Quest) {
+          contestant13Quest.setJournalOpen(false);
+          intentionalPointerUnlockUntil = performance.now() + 450;
+          ignoreEscapeMenuToggleUntil = performance.now() + 400;
+        } else if (state.started) setMenuOpen(!state.menuOpen);
         return;
       }
       if (state.readableBooks.open) {
@@ -16833,7 +16866,12 @@
     document.addEventListener("pointerlockchange", () => {
       const wasLocked = state.pointerLocked;
       state.pointerLocked = document.pointerLockElement === dom.canvas;
-      dom.crosshair.classList.toggle("is-active", state.pointerLocked || matchMedia("(pointer: coarse)").matches);
+      const showCrosshair = (state.pointerLocked || matchMedia("(pointer: coarse)").matches)
+        && !state.readableBooks.open
+        && !state.menuOpen
+        && !state.workroom.keypadOpen
+        && !state.journalOpen;
+      dom.crosshair.classList.toggle("is-active", showCrosshair);
       // One Escape while locked often only exits pointer lock. Treat that as
       // opening the pause menu immediately so players never need a second Esc.
       if (
@@ -16853,6 +16891,8 @@
     });
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
+      // Keep the cursor hidden while reading, but freeze look so the page stays readable.
+      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver) return;
       state.yaw -= event.movementX * 0.00205;
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });

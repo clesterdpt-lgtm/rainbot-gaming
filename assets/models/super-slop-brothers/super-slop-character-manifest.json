@@ -1,0 +1,2537 @@
+{
+  "version": 1,
+  "generator": "scripts/build-super-slop-character-manifest.mjs",
+  "inputDigest": {
+    "algorithm": "sha256",
+    "value": "89f4ad90000ddaf0d52fbebc4ac518df88cae37b9dd71319801cac53b169bb4f"
+  },
+  "runtimeContract": {
+    "renderer": "Canvas2D sprite atlas",
+    "clips": [
+      "idle",
+      "run",
+      "jump",
+      "fall",
+      "hit",
+      "shield",
+      "dodge",
+      "grab",
+      "attack",
+      "special-neutral",
+      "special-side",
+      "special-up",
+      "special-down"
+    ],
+    "framesPerClip": 8,
+    "mirrorLeftFacing": true,
+    "staticBodyAtlasFallback": true,
+    "maxProcessedRigBytes": 15728640,
+    "maxSpriteSheetBytes": 3145728,
+    "maxRosterSpriteSheetBytes": 14680064,
+    "totalSpriteSheetBytes": 2206564
+  },
+  "fighters": [
+    {
+      "id": "rainbot",
+      "reference": "assets/models/super-slop-brothers/concepts/rainbot-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/rainbot-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/rainbot.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 34
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d74-bc24-7845-a302-acb704dd3707",
+        "rigTaskId": "019f6d78-dc7c-7d22-a072-cc40515519b1",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/rainbot-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "neon black robot mascot, glossy segmented limbs, CRT screen face, cyan and hot pink cloud halo, preserve readable emissive panels and clean toy-like PBR materials"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/rainbot-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/rainbot-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 1.7,
+          "riggedFile": "assets/models/super-slop-brothers/source/rainbot-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/rainbot-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/rainbot-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d7e-2083-7c32-b453-9adb3a6502b0",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d7e-2073-7de6-a757-a2a397a756d7",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d7e-208e-7de8-bd64-37b53ff4a8ad",
+            "actionId": 125,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d7e-209f-7de9-94da-949cb1eefd97",
+            "actionId": 96,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d7e-2084-7de7-a0bc-571c9229822b",
+            "actionId": 86,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d7e-2093-79d3-8099-672b95ac8f28",
+            "actionId": 138,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/rainbot-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/rainbot-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "rainbot_Armature",
+          "bones": 24,
+          "triangles": 25950,
+          "materials": [
+            "rainbot_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 34,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/rainbot-reference.png",
+          "bytes": 145251,
+          "sha256": "bd2368432b4b0603815c26bcd1173afe36a6cc5445723e75646c7a69c1ffb453"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/rainbot-rigged.glb",
+            "bytes": 9056084,
+            "sha256": "57033c9dc65298c2eddafc3eb13e75507b25d1b5ecc128e48baf0a07d0415c3b"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/rainbot.webp",
+            "bytes": 299402,
+            "sha256": "12f8a04e8258fe053db3ed5533c24867f8fe4b8f53b64b981bc724ad8e8f1509"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/rainbot-master.glb",
+            "bytes": 14675032,
+            "sha256": "5322008ff617a746d334a7e9872b70c3e5db6159055127a542aa157634726370"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/rainbot-preview.png",
+              "bytes": 142541,
+              "sha256": "8e8f7eca61cfbaa265d7affd4c82e36596be47735aa6acd42b15027369e68b9e"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/rainbot-rigged.glb",
+            "bytes": 9071680,
+            "sha256": "e06dbae9d4a996ff144fcada68a8f20f7afd2118d6ab5a3b52bd34ab90f984a2"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/rainbot-walk.glb",
+            "bytes": 9084468,
+            "sha256": "5262833faad6dd0da7a36ed51fac16e0e09f722e8ac8452394348247dc2a5767"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/rainbot-run.glb",
+            "bytes": 9079848,
+            "sha256": "f5b8ab092c9b7a337d3d98e2747eff20957460905a4a8f63a3fd9e06e7688a0f"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-idle.glb",
+              "bytes": 9090984,
+              "sha256": "69e37f2b36ad3e360f0842b7fc67128d4ad09fa32cbc763104e6966648a16aa7"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-hit.glb",
+              "bytes": 9089512,
+              "sha256": "b3ce56f098d8cf721e500e8e0bdb6bb511f9045d3c0c987114a0c2f773db2974"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb",
+              "bytes": 9104580,
+              "sha256": "f074d086fe7c002f5858e60dc9e14c39401363d405efcf13f8807161fe09992a"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb",
+              "bytes": 9160236,
+              "sha256": "3ecb60967d921149a9859a5391177b14d3166f4564919eccdde06158b96f0f4a"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb",
+              "bytes": 9145548,
+              "sha256": "347e1ee20a28409893f89f7d42007ad4750708e8292927cc592a0912279a8646"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb",
+              "bytes": 9114196,
+              "sha256": "5db2c59d59e893857885b1ebd1534356851ebd682f683a02ac57c837c6fbb398"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/rainbot.meta.json",
+            "bytes": 1043,
+            "sha256": "daa7d8746eda48028739912d90f82677a3c3bdb60aba0e1a9f28484018fa9a73"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/rainbot-rig.meta.json",
+            "bytes": 480,
+            "sha256": "24cea5e2e3f26ce444dbff678a5b4f2b4f8c3f6b197f24221d2f2bece48ef85d"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-idle.meta.json",
+              "bytes": 385,
+              "sha256": "d568ebd6dce25683311dab2aa12b6f15e4e3c44947548c3812147f18dd0a5a6c"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-hit.meta.json",
+              "bytes": 383,
+              "sha256": "ccad5a76b7b9cd5dde2270434acb141b7012d70ecce9aa25d0a683870f4dcc6d"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.meta.json",
+              "bytes": 397,
+              "sha256": "ea6c0615195267af9effc962d7957b4ab3dde8c2d8150b4ecf019445126bcdc2"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-side.meta.json",
+              "bytes": 393,
+              "sha256": "5119ac32b3c83d12cb779039c9ff8dd32d93811f230a31ecbd03b08720a4e87d"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-up.meta.json",
+              "bytes": 391,
+              "sha256": "e698855b0fd3d6de1721a3cacc665b407a4a12fa6edab92ccf440650085b85ea"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/rainbot-special-down.meta.json",
+              "bytes": 394,
+              "sha256": "f767ce36273f8034757257ea25a067f5ff8e3d04ac5be9a5d1c95e3235e5a736"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/rainbot-blender-report.json",
+            "bytes": 30799,
+            "sha256": "34aff1b9059a55102a2d7ae4bccd0b0b09f3fa93d8f647693e8c8fe57f9ef662"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/rainbot-atlas-report.json",
+            "bytes": 46109,
+            "sha256": "5b66e0f4c88aa4114e9e2d557c20c8ced5df07027235f7ad9be778fef8a78cd0"
+          }
+        }
+      }
+    },
+    {
+      "id": "gigachad",
+      "reference": "assets/models/super-slop-brothers/concepts/gigachad-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/gigachad-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/gigachad.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 7
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d74-bc24-7c8d-80a4-a56b8055c1b7",
+        "rigTaskId": "019f6d78-dc80-78cd-bbf7-7cd717fc239b",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/gigachad-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "monumental gray stone golem fighter, carved marble curls and angular heroic face, layered stone armor, cool blue rim accents, clean stylized PBR materials"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/gigachad-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/gigachad-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 2.05,
+          "riggedFile": "assets/models/super-slop-brothers/source/gigachad-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/gigachad-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/gigachad-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d7e-a51d-7c39-a2f7-4e37d1410564",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d7e-a50e-7e15-831d-5fbafd02c667",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d7e-a515-7e16-8fa6-27350b44311a",
+            "actionId": 96,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d7e-a510-7ee6-ab7d-53a35f668163",
+            "actionId": 510,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d7e-a528-7e17-93fc-bb1e24674d90",
+            "actionId": 94,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d7e-a537-7ee7-bd20-5b646acd7f36",
+            "actionId": 93,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/gigachad-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/gigachad-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "gigachad_Armature",
+          "bones": 24,
+          "triangles": 25990,
+          "materials": [
+            "gigachad_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 7,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/gigachad-reference.png",
+          "bytes": 246442,
+          "sha256": "fc4d29dfd21ffbd21804a4f86d4b4273d62c6cc19f9cd38e35a058bac2a761bc"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/gigachad-rigged.glb",
+            "bytes": 9195872,
+            "sha256": "5df4a0d6bc221ec32fc633a9bedaabf2df193b57fe40d4649ffad8920ce6c749"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/gigachad.webp",
+            "bytes": 342632,
+            "sha256": "c7f2b7e36423dbb1764d11f5c5f9a3e9b4e19ef79e19a82afae23c60df86e5e2"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/gigachad-master.glb",
+            "bytes": 15210588,
+            "sha256": "b1ff55431ceaa7fea0ff2a96a2fb3daa26f71c9c77334c5d26b0230ae68674ee"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/gigachad-preview.png",
+              "bytes": 205523,
+              "sha256": "46ec2ac1383187343c8dba18bdf564a9dcd2a3e7e66ea7bbaca74d6d70ff7303"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/gigachad-rigged.glb",
+            "bytes": 9210140,
+            "sha256": "c18c9321efced6eafd0091802363f9a0bdda5c6c9d5eaf778fb5aa995c92f5bc"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/gigachad-walk.glb",
+            "bytes": 9222912,
+            "sha256": "083c1a5652bd62dfed78e6747500ca4d6c21c04d1fb1e70f32d171c58711c5bf"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/gigachad-run.glb",
+            "bytes": 9218304,
+            "sha256": "93b325cb17f33f23836f7e22a5e9e3b0397b75c34106a3c727efe953b4b9446e"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-idle.glb",
+              "bytes": 9229444,
+              "sha256": "f9b6ca2a2db1c587a670a8970ec093319cc8417c06693005bd90b01e9fdbd074"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-hit.glb",
+              "bytes": 9229412,
+              "sha256": "9e6cd81839b8f3a8ca2cdf3a19b16a7a7cb5a19da6ddb6bc7194549883a465be"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb",
+              "bytes": 9306556,
+              "sha256": "1541185fadae103c1873918b8dabe5272ec5734398ba97f06184eb63182ee49c"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb",
+              "bytes": 9218732,
+              "sha256": "e460a8a078cc521ce4330d3991b811214e5077251a2d60ca8f3d7eabb59a20d3"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb",
+              "bytes": 9273756,
+              "sha256": "5b1b9ede89e80962b733e5227abdac8b9c9e711872d62567c62df39ea80bdbb2"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb",
+              "bytes": 9323104,
+              "sha256": "e9e3c2dff229876a7c1da7253c5b415274d9aaf360ce18e423b1ea867c2a3bb6"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/gigachad.meta.json",
+            "bytes": 1038,
+            "sha256": "579b9389ca9fde433cbdfb0dfde5b2ab2376c0d7eeca52e3dfafafdf5425b7f4"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/gigachad-rig.meta.json",
+            "bytes": 484,
+            "sha256": "d83122346201dd12bf52fc79476c0750d455f41db1d57ebb3cd721a9497382bf"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-idle.meta.json",
+              "bytes": 386,
+              "sha256": "5dd1fd7bc3c044c6626b237ec5ea4aa3291666705370cd09f00da42865b610b2"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-hit.meta.json",
+              "bytes": 384,
+              "sha256": "1b0aaffbf6373e482b232441c30ffd6a5754781af5cde5dc8ed0742ddccd3707"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.meta.json",
+              "bytes": 397,
+              "sha256": "5f786bd6ee7da61b93fef32d52ce8c262cbcf6bbf31d4d42bb1c215fe7c49f87"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-side.meta.json",
+              "bytes": 395,
+              "sha256": "59145ecc141edbcc5814e9c4bb85a654b3b3dcb3084b6d74add95358892aecb9"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-up.meta.json",
+              "bytes": 392,
+              "sha256": "ae4e4ec7063a1629880c10760b313bcc46baab7b7e460c7f03e61e57b0e1969b"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/gigachad-special-down.meta.json",
+              "bytes": 394,
+              "sha256": "c5e04bdf25fa2211fbbd9413c3c20ec70fd4c18a4ea531de29ae629c13538de1"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/gigachad-blender-report.json",
+            "bytes": 30922,
+            "sha256": "2f9169a0713dc60b508fb8e7f4a30511536186d2fbcede0c2a9e986bf7095a29"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/gigachad-atlas-report.json",
+            "bytes": 46225,
+            "sha256": "0f9305da1a34512622274dea4f6fac81e0b19255f074ad4474bef5df2ae97df5"
+          }
+        }
+      }
+    },
+    {
+      "id": "mrfeast",
+      "reference": "assets/models/super-slop-brothers/concepts/mrfeast-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/mrfeast-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/mrfeast.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 20
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d74-bbe8-7c8d-9df8-d2875f9ede60",
+        "rigTaskId": "019f6d79-ee5f-7bc4-b126-a0a9506affee",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/mrfeast-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "cartoon red and gold burger magnate fighter, ornate coat and striped trousers, burger crown, red glasses and moustache, polished toy-like PBR materials"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/mrfeast-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/mrfeast-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 1.75,
+          "riggedFile": "assets/models/super-slop-brothers/source/mrfeast-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/mrfeast-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/mrfeast-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d7f-5448-7c5a-a39a-e4fb9cb41d7f",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d7f-5455-7c5b-a794-8a27ceb8c29d",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d7f-544b-7e4c-87fc-18ecad9c3297",
+            "actionId": 393,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d7f-545e-7c5c-bf85-770651b2e875",
+            "actionId": 280,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d7f-5463-7e4d-ab77-06e3e0e9104c",
+            "actionId": 86,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d7f-547d-79f4-8a1e-2ddafcda4047",
+            "actionId": 389,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/mrfeast-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/mrfeast-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/mrfeast-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "mrfeast_Armature",
+          "bones": 24,
+          "triangles": 24902,
+          "materials": [
+            "mrfeast_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 20,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/mrfeast-reference.png",
+          "bytes": 305477,
+          "sha256": "784f100ff0e1cd60bc5c0ccc864d5f6692ad59566e106b20d2df28a8abbeee97"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/mrfeast-rigged.glb",
+            "bytes": 7997744,
+            "sha256": "f99f967e382c8bfffa2395db3c018f70d727709d851950f158c609a35779d680"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/mrfeast.webp",
+            "bytes": 458578,
+            "sha256": "3a8a5e0d9bff2aa313f3a2d2858beceb75b134f6af992f67e2d70bc637bf7194"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast-master.glb",
+            "bytes": 13476812,
+            "sha256": "2303df60ad60554a0333021269f9efe1e6fa6abae6c6d0f1e18a27d4d9c040c2"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/mrfeast-preview.png",
+              "bytes": 238667,
+              "sha256": "cc33fea5f8276d713498b6b6fbff48b77e4c8b10d88f0cbc79c72c2055e82ae3"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast-rigged.glb",
+            "bytes": 8012676,
+            "sha256": "0dcaf72c157bfa51c8d476fe3cb4485aacf0578b9ae4623bbed13ad2c1d48c0b"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast-walk.glb",
+            "bytes": 8025444,
+            "sha256": "e2ff02f3382bcb0823853a813cc2ac1fe4ff53de3c2ef7365a0f93f0de3f5447"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast-run.glb",
+            "bytes": 8020836,
+            "sha256": "9b488e70ccead8b7af2d1daf68900389c8de3f7d9998b4e72d7a213c35674dc1"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-idle.glb",
+              "bytes": 8033548,
+              "sha256": "9cf00b5256dd3ef45379ad53eb133f2692f0123fc3a551d547de7acc6b1158dd"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-hit.glb",
+              "bytes": 8030496,
+              "sha256": "aead24602fb015504a4cd3cc6846f2eeb76d0026d02294fca2c829549f1172cd"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-neutral.glb",
+              "bytes": 8061192,
+              "sha256": "f34fef8941bc5fdbbbbe7462a44de09d488d3bfc4b7489e316738ee52e456b84"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-side.glb",
+              "bytes": 8072448,
+              "sha256": "0f92b709e48c3ef0a803424e120b426bf4539cf451aab6e17122efb44b02a7b2"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-up.glb",
+              "bytes": 8084416,
+              "sha256": "4f9390114191963ba1f997de567f2c5f5f5676e9d7dc1822ad96209d4bdd6248"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-down.glb",
+              "bytes": 8069612,
+              "sha256": "90393423843b85fc9651adaad4cf8a6e59050ded35b4faba1833d1713e4ca46c"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast.meta.json",
+            "bytes": 1032,
+            "sha256": "42f02be1fc406db25d2b10a9e71b6115126daec83cb96f84466791e853d56b8c"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/mrfeast-rig.meta.json",
+            "bytes": 481,
+            "sha256": "c9ff01e2e10da1c59086090ca5ed2a7be4ec57fe3c6223eed543fe948bc91606"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-idle.meta.json",
+              "bytes": 385,
+              "sha256": "99d4dddaa2e53923bd090d2a42c0352807324a1f0fba35c9fe6af16301abab22"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-hit.meta.json",
+              "bytes": 383,
+              "sha256": "f07b09e3028d257e4a61e0e1dca694ed21d959dcbcbb5d996eb97bb9f162ed43"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-neutral.meta.json",
+              "bytes": 397,
+              "sha256": "2170a0ad348735045c1b62c37145ecfd537cab45bf8a6832f656b74efa2e47c2"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-side.meta.json",
+              "bytes": 394,
+              "sha256": "5fe4f55176420af424ac8f4b616aa494ede331c1bac84eb777af147cb3c56839"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-up.meta.json",
+              "bytes": 391,
+              "sha256": "82125df72b97f5e3b641a40b82ce904bf903a324192595ea758335ed5fbb9a9d"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/mrfeast-special-down.meta.json",
+              "bytes": 394,
+              "sha256": "92bbe601763b86c8be297015d72bdaf8f0b7416815cc3f7c7f88249b02961b25"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/mrfeast-blender-report.json",
+            "bytes": 30796,
+            "sha256": "5a1ddfa69c56575d422a1f7b25558cc33baf2ccdb9ccd583643768caa1023e60"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/mrfeast-atlas-report.json",
+            "bytes": 46111,
+            "sha256": "64da3d560531124c163583ef25df1300cf9323cca6cfbaa7cbcfffde1aa69275"
+          }
+        }
+      }
+    },
+    {
+      "id": "skibidi",
+      "reference": "assets/models/super-slop-brothers/concepts/skibidi-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/skibidi-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/skibidi.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 26
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d78-dc62-7d22-9136-ee56c97e46b1",
+        "rigTaskId": "019f6d7c-aa43-7db2-ae17-100969f49e55",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/skibidi-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "stylized purple and silver humanoid plumbing trickster robot, open toilet-bowl head with glowing cyan water, segmented tube limbs, expressive cyan eyes, clean toy-like PBR materials"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/skibidi-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/skibidi-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 1.7,
+          "riggedFile": "assets/models/super-slop-brothers/source/skibidi-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/skibidi-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/skibidi-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d7f-e268-7f15-96be-62d5ebb109f9",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d7f-e26d-7f17-b6b8-9b5f5992455d",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d7f-e26e-7c8d-8fc8-fb35561fa661",
+            "actionId": 125,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d7f-e26b-7f16-a6c0-ea11c41b6e32",
+            "actionId": 516,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d7f-e25c-7c8c-83f7-7c9f8cdf7fe2",
+            "actionId": 397,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d7f-e278-7e5c-9e9a-4ec4b6a51841",
+            "actionId": 398,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/skibidi-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/skibidi-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "skibidi_Armature",
+          "bones": 22,
+          "triangles": 25762,
+          "materials": [
+            "skibidi_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 26,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/skibidi-reference.png",
+          "bytes": 243839,
+          "sha256": "8575d2141c7d66a76968048ad2147293495843a3306df4a712fc207d026b4230"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/skibidi-rigged.glb",
+            "bytes": 8710180,
+            "sha256": "c1939578de8b85aa374fca67c8531bc25801a927e53270f7ec3c706b1bc66c49"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/skibidi.webp",
+            "bytes": 382164,
+            "sha256": "8b2cf939bf160d7f9b51528f67645dc2fc3c8922770e0205e7e0a616b29952d2"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/skibidi-master.glb",
+            "bytes": 15492004,
+            "sha256": "18138b05e5e6973a5b9a4b8e2a4301118503c7136ffb1b9a573476e47985d8be"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/skibidi-preview.png",
+              "bytes": 174701,
+              "sha256": "8cec9f0ba13bab9ffd9e3fc685ae958a01dc1194b7b4633e5bdc985b418a76fe"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/skibidi-rigged.glb",
+            "bytes": 8724224,
+            "sha256": "4cbfd094a37a95133dd8b21c00ff43ed1fb56d82795946b0ad4e81549149482e"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/skibidi-walk.glb",
+            "bytes": 8736428,
+            "sha256": "6310c2bf372f6edb87bdffb81b60dd6d794b8b133fee4a8707f131c03f221730"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/skibidi-run.glb",
+            "bytes": 8732008,
+            "sha256": "f221c25d301d22e8586e9f07f791b541569b0157a206aeafa4d096f475992429"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-idle.glb",
+              "bytes": 8743440,
+              "sha256": "129ab9f087bdca9b7d59e0ae3918c6f7b7892bafcd763cdd2d46535b13ed52b2"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-hit.glb",
+              "bytes": 8741960,
+              "sha256": "5d8796342626e2255b0bbae57c48a6d3f6601997ffd43a36cb40813ffa95895b"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb",
+              "bytes": 8754512,
+              "sha256": "c2f5729de6af968397ac3b2ce891227892704d4170d145979d8038ab7f5e3ef7"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb",
+              "bytes": 8752284,
+              "sha256": "88ca8a340efef4c21d20c9fb0bc76752cc1333f7e3cc472ef781d693bf719a45"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb",
+              "bytes": 8758936,
+              "sha256": "781f16f6bd341e4447b163e91d74470488acc6b785d1255676a0291d457457c5"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb",
+              "bytes": 8810140,
+              "sha256": "507ea4ff27ee600a17008b4889f530731659bb876635fcdb39d1ab7b420f817b"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/skibidi.meta.json",
+            "bytes": 1062,
+            "sha256": "ae281d27d17e006d91352784559afcd5cf006d8de24e7376d8f769f532bb9b00"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/skibidi-rig.meta.json",
+            "bytes": 480,
+            "sha256": "9493293d98e3f1842564675719150e821bc378ba9413d071eb8dd4ddb93c37b0"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-idle.meta.json",
+              "bytes": 385,
+              "sha256": "64baf18b59025786cf5fa28b473d4f2e6799a76a4c90d16b3838ca0ee26c356d"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-hit.meta.json",
+              "bytes": 383,
+              "sha256": "6dded49a2c656318c907784e54225e99b7ab3236c0e2d5d53baeea1db7c0a1d4"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.meta.json",
+              "bytes": 397,
+              "sha256": "21e06b8f774c090e5e4bc292cb565c31ff6da4bef0a6ce10ceeda9f7559f1104"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-side.meta.json",
+              "bytes": 394,
+              "sha256": "1cdc0e3e17f1b4051eebf38078cf81d8797aa0683e58af025ec54781dafc8598"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-up.meta.json",
+              "bytes": 392,
+              "sha256": "e9d9cb668c0c35638dee3f3805f7cdd84ddbbe9865b020d9c505654c1cf4024c"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/skibidi-special-down.meta.json",
+              "bytes": 394,
+              "sha256": "13fb7f0ce7c02a90b0471aa10b13642ed2ac8d76d1c0a754d63361840f749c68"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/skibidi-blender-report.json",
+            "bytes": 30860,
+            "sha256": "dca5e2c7ef6eb5782ed1ea8b9025446e6ccdd498e8bfa17d33b618c0cdceb7bd"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/skibidi-atlas-report.json",
+            "bytes": 46131,
+            "sha256": "61656ba713acd7250cf9a17df97c090708f911163adcf12bf0fa955efad658b3"
+          }
+        }
+      }
+    },
+    {
+      "id": "sigma",
+      "reference": "assets/models/super-slop-brothers/concepts/sigma-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/sigma-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/sigma.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 27
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d78-dca8-7e31-9df0-a76ebfaea2be",
+        "rigTaskId": "019f6d7c-12d1-7eae-9f04-282aea51db94",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/sigma-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "anthropomorphic white wolf fighter, blue tech streetwear jacket and joggers, high-top shoes, silver fur, cyan geometric accents, polished stylized PBR materials"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/sigma-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/sigma-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 1.85,
+          "riggedFile": "assets/models/super-slop-brothers/source/sigma-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/sigma-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/sigma-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d80-5771-7f1f-b4ba-61f1a75aff40",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d80-5763-7e6f-99bf-287ce894907a",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d80-5776-7f20-9854-c6f2096c8bc8",
+            "actionId": 104,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d80-577b-7c9b-a9f4-02f9f8d43b86",
+            "actionId": 94,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d80-5764-7f1e-95dc-49b65b044a7f",
+            "actionId": 402,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d80-5775-7a0c-8123-db441317ae67",
+            "actionId": 93,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/sigma-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/sigma-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/sigma-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "sigma_Armature",
+          "bones": 24,
+          "triangles": 25975,
+          "materials": [
+            "sigma_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 27,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/sigma-reference.png",
+          "bytes": 218917,
+          "sha256": "abd2f6301e32b9772cbaa9f91c2705427b4e308a12be1b582ace98703319162d"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/sigma-rigged.glb",
+            "bytes": 7749024,
+            "sha256": "d7b337181c0f5f13615bfee9b57b94081689417e2b2f19eda851c7017e111f1c"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/sigma.webp",
+            "bytes": 372330,
+            "sha256": "e0408d56e00b216e8f51ce35ddbc3c3f9965ae139ff8e08053a06d940067b9dc"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/sigma-master.glb",
+            "bytes": 12342632,
+            "sha256": "35c265d1495962a03fb3ff07a5a63d19a3c04f14e246c6cb261b5f8fe77f348e"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/sigma-preview.png",
+              "bytes": 167328,
+              "sha256": "c858036d0a65d05f67be34b1fa60d729ac380fdbfc279dc9fbc9dfa54c4f7874"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/sigma-rigged.glb",
+            "bytes": 7764152,
+            "sha256": "2c50027f6aa7de1d952a929815fce3947464c09fa01c2936bb47dd67f980f867"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/sigma-walk.glb",
+            "bytes": 7776928,
+            "sha256": "16420961630b5d3fa182a4b925a5ad5297aa492333104453258423ab02ba9a46"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/sigma-run.glb",
+            "bytes": 7772320,
+            "sha256": "5d43912cfd3b901d1a8c6db8425b8f751d1f5c46d5fdc98c8a8ec3b17e0bce10"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-idle.glb",
+              "bytes": 7783452,
+              "sha256": "4ebefea967a2e22be04f5a6a869adf41c3dd02426127a0ea9e568646ff6b577b"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-hit.glb",
+              "bytes": 7782516,
+              "sha256": "429f84f1290ff1c4b25775ab33c0789d890608600e8f4d83677978cb0dc9db35"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb",
+              "bytes": 7813100,
+              "sha256": "45001c9376d977226afeba27b0d0228981153c6b521525d6c48a6d263b0ae7cc"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-side.glb",
+              "bytes": 7827212,
+              "sha256": "db340877ca34504f636d37994dc28344858b39694441376bb80c9d173f47db77"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-up.glb",
+              "bytes": 7813812,
+              "sha256": "a2f010ba9258834b43a7c6cf937fe7b67cedf34ef02a1dfcb1a663e3af00ec80"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-down.glb",
+              "bytes": 7877116,
+              "sha256": "ea6f6bfa7cab3e48db917201c36ead74b6d7e8455401fb5605a5e2e9102dbe0d"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/sigma.meta.json",
+            "bytes": 1035,
+            "sha256": "5b22ca0451c92bc6453161273f26085ef9926a746a013cfeca339859486e0c75"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/sigma-rig.meta.json",
+            "bytes": 475,
+            "sha256": "8a01447f4fb8b282796b6c94ac62c1b605e1b986d3dbe858c417196e84abea2f"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-idle.meta.json",
+              "bytes": 383,
+              "sha256": "f64fb1decd770b98501f19fbdc57ba662ce96dd4bf1a5ea6cc19636c8c8023ae"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-hit.meta.json",
+              "bytes": 381,
+              "sha256": "e94cdfb3e04a5e9bca51f560d27f7dc9ec41d88a16774a3b8ffbee7522d8597e"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-neutral.meta.json",
+              "bytes": 395,
+              "sha256": "d6ded175613329cea6d129cadd19b3b48483e116deb7353b6d68b24e15b2e87c"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-side.meta.json",
+              "bytes": 391,
+              "sha256": "fd8aa3ca9f810a70d60f68d8c7b3f71af230c2b8f132022acd9e896874b846d6"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-up.meta.json",
+              "bytes": 390,
+              "sha256": "85c5e6919a48b28372bc0deaef424927297e220e32931592e6032b2555750b62"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/sigma-special-down.meta.json",
+              "bytes": 391,
+              "sha256": "0850e5f51df0800596de2945a75dbc693b780ca8bf680dc0d00ac31495773abf"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/sigma-blender-report.json",
+            "bytes": 30554,
+            "sha256": "9160216b501c309ebeb420e4eb7629b48f4c136a15f8a2ae85f6dcb645f2b4ef"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/sigma-atlas-report.json",
+            "bytes": 46169,
+            "sha256": "c992553f8140902ab0e2786c43f28f2871c60042515134b94bd53197aa1b0bec"
+          }
+        }
+      }
+    },
+    {
+      "id": "slopbot",
+      "reference": "assets/models/super-slop-brothers/concepts/slopbot-reference.png",
+      "riggedModel": "assets/models/super-slop-brothers/processed/slopbot-rigged.glb",
+      "spriteSheet": "assets/img/super-slop-brothers/animated/slopbot.webp",
+      "sheet": {
+        "format": "webp",
+        "width": 1536,
+        "height": 2496,
+        "cellSize": 192,
+        "columns": 8,
+        "rows": 13,
+        "framesPerClip": 8,
+        "alpha": true,
+        "minimumAlphaMargin": 26
+      },
+      "clips": {
+        "idle": {
+          "row": 0,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "idle",
+          "derived": false
+        },
+        "run": {
+          "row": 1,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "run",
+          "derived": false
+        },
+        "jump": {
+          "row": 2,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "fall": {
+          "row": 3,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-up",
+          "derived": true
+        },
+        "hit": {
+          "row": 4,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "hit",
+          "derived": false
+        },
+        "shield": {
+          "row": 5,
+          "frames": 8,
+          "loop": true,
+          "sourceMotion": "special-down",
+          "derived": true
+        },
+        "dodge": {
+          "row": 6,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "grab": {
+          "row": 7,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": true
+        },
+        "attack": {
+          "row": 8,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": true
+        },
+        "special-neutral": {
+          "row": 9,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-neutral",
+          "derived": false
+        },
+        "special-side": {
+          "row": 10,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-side",
+          "derived": false
+        },
+        "special-up": {
+          "row": 11,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-up",
+          "derived": false
+        },
+        "special-down": {
+          "row": 12,
+          "frames": 8,
+          "loop": false,
+          "sourceMotion": "special-down",
+          "derived": false
+        }
+      },
+      "meshy": {
+        "imageTaskId": "019f6d78-dcb5-7e31-92ca-a0a6f385aba7",
+        "rigTaskId": "019f6d7c-aa4e-7c10-93dc-01cdc97df202",
+        "consumedCredits": {
+          "imageTo3d": 30,
+          "rig": 5,
+          "animations": 18,
+          "total": 53
+        },
+        "generation": {
+          "sourceImage": "assets/models/super-slop-brothers/concepts/slopbot-reference.png",
+          "request": {
+            "aiModel": "meshy-6",
+            "modelType": "standard",
+            "pbr": true,
+            "textured": true,
+            "remeshed": true,
+            "topology": "triangle",
+            "targetPolycount": 25000,
+            "poseMode": "a-pose",
+            "texturePrompt": "boxy glitch robot fighter with monitor head, olive green and magenta casing, exposed segmented limbs, pixel artifacts, colorful screen icons, stylized PBR game asset"
+          },
+          "masterFile": "assets/models/super-slop-brothers/source/slopbot-master.glb",
+          "thumbnails": [
+            "assets/models/super-slop-brothers/source/slopbot-preview.png"
+          ]
+        },
+        "rig": {
+          "heightMeters": 1.75,
+          "riggedFile": "assets/models/super-slop-brothers/source/slopbot-rigged.glb",
+          "walkingFile": "assets/models/super-slop-brothers/source/slopbot-walk.glb",
+          "runningFile": "assets/models/super-slop-brothers/source/slopbot-run.glb"
+        },
+        "animationTasks": {
+          "idle": {
+            "taskId": "019f6d81-18fd-7cb2-b85b-cd24245ab577",
+            "actionId": 89,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-idle.glb"
+          },
+          "hit": {
+            "taskId": "019f6d81-18fb-7a1e-9fd2-0052b777bc9e",
+            "actionId": 7,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-hit.glb"
+          },
+          "special-neutral": {
+            "taskId": "019f6d81-18fa-7cb1-83f1-bf0f55c30448",
+            "actionId": 125,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb"
+          },
+          "special-side": {
+            "taskId": "019f6d81-1917-7e7f-8b59-f8f83f3be1fb",
+            "actionId": 100,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb"
+          },
+          "special-up": {
+            "taskId": "019f6d81-1912-7e7e-98b4-43940897e4f7",
+            "actionId": 384,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb"
+          },
+          "special-down": {
+            "taskId": "019f6d81-191e-7a1f-82f9-b02a2496c903",
+            "actionId": 129,
+            "consumedCredits": 3,
+            "file": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb"
+          }
+        }
+      },
+      "blender": {
+        "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+        "version": "4.5.11 LTS",
+        "report": "assets/models/super-slop-brothers/processed/slopbot-blender-report.json",
+        "atlasReport": "assets/models/super-slop-brothers/processed/slopbot-atlas-report.json",
+        "processedRig": {
+          "meshCount": 1,
+          "armature": "slopbot_Armature",
+          "bones": 24,
+          "triangles": 25961,
+          "materials": [
+            "slopbot_Material_01"
+          ],
+          "images": []
+        },
+        "render": {
+          "frameSize": 192,
+          "framesPerClip": 8,
+          "columns": 8,
+          "rows": 13,
+          "transparent": true,
+          "camera": {
+            "projection": "orthographic",
+            "view": "front-right three-quarter",
+            "location": [
+              4.2,
+              -7,
+              3.35
+            ],
+            "target": [
+              0,
+              0,
+              0.94
+            ],
+            "orthoScale": 3.3,
+            "lights": [
+              {
+                "name": "SuperSlop_Key",
+                "type": "AREA",
+                "location": [
+                  -3.8,
+                  -4.6,
+                  6.2
+                ],
+                "energy": 900,
+                "size": 4,
+                "color": [
+                  1,
+                  0.8,
+                  0.66
+                ]
+              },
+              {
+                "name": "SuperSlop_Fill",
+                "type": "AREA",
+                "location": [
+                  4.7,
+                  -2.4,
+                  3.5
+                ],
+                "energy": 520,
+                "size": 4.5,
+                "color": [
+                  0.45,
+                  0.72,
+                  1
+                ]
+              },
+              {
+                "name": "SuperSlop_Rim",
+                "type": "AREA",
+                "location": [
+                  -3,
+                  3.8,
+                  5.2
+                ],
+                "energy": 760,
+                "size": 3,
+                "color": [
+                  1,
+                  0.22,
+                  0.62
+                ]
+              }
+            ],
+            "worldStrength": 0.32,
+            "colorManagement": "AgX medium-high contrast"
+          },
+          "lighting": "fixed three-area-light rig plus fixed world fill"
+        },
+        "atlas": {
+          "quality": 88,
+          "method": 6,
+          "requiredAlphaMargin": 6,
+          "minimumAlphaMargin": 26,
+          "clippedFrames": 0
+        }
+      },
+      "integrity": {
+        "algorithm": "sha256",
+        "reference": {
+          "file": "assets/models/super-slop-brothers/concepts/slopbot-reference.png",
+          "bytes": 259625,
+          "sha256": "d845e9f26373c3c23670dc88153bfce7f584d9510bd743684972f7ada1f03b6b"
+        },
+        "runtime": {
+          "processedRig": {
+            "file": "assets/models/super-slop-brothers/processed/slopbot-rigged.glb",
+            "bytes": 9134668,
+            "sha256": "0b87fde5e02512aefdbfb256b46a72e84f53c9e040b1f191fa5475e6f559d106"
+          },
+          "spriteSheet": {
+            "file": "assets/img/super-slop-brothers/animated/slopbot.webp",
+            "bytes": 351458,
+            "sha256": "d8609b109a927b5b81b8ca0797f341dd1260edd3f272084423546319afb91a46"
+          }
+        },
+        "source": {
+          "master": {
+            "file": "assets/models/super-slop-brothers/source/slopbot-master.glb",
+            "bytes": 15066612,
+            "sha256": "426302d5d2212a213458c6425de180611f966225a3b81e02a3885408e1f74391"
+          },
+          "thumbnails": [
+            {
+              "file": "assets/models/super-slop-brothers/source/slopbot-preview.png",
+              "bytes": 161886,
+              "sha256": "eb8db6611d8224085afe6bf0f98806a571f3eb5ab19c3ab0a14148dc210c916e"
+            }
+          ],
+          "rigged": {
+            "file": "assets/models/super-slop-brothers/source/slopbot-rigged.glb",
+            "bytes": 9149812,
+            "sha256": "46e7e70e4ce0c385aac307b2622ad50c3330148235ff3b81aed50f20cb64d2ff"
+          },
+          "walking": {
+            "file": "assets/models/super-slop-brothers/source/slopbot-walk.glb",
+            "bytes": 9162596,
+            "sha256": "755ed7b0768f4350278a082108e0e2644d1acb7df5f57eaedb11255e22ca606a"
+          },
+          "running": {
+            "file": "assets/models/super-slop-brothers/source/slopbot-run.glb",
+            "bytes": 9157984,
+            "sha256": "1fc5e861f1411ffe8c943412b44d51122ca3c25fbfaa867d3546d86417b1e771"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-idle.glb",
+              "bytes": 9169120,
+              "sha256": "22fd302da2001a949791bd075a6745ece77ad93d9fb2ef4cf9e0379f960623f2"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-hit.glb",
+              "bytes": 9169080,
+              "sha256": "5806813d4dcc98cf8e4ac33f2df804bd8412ddf321eea38d07f2bbe84ba72691"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb",
+              "bytes": 9182720,
+              "sha256": "924217ed5cb50a1643eb88138499be8eee9eabab487487e25b227da7e8c9feb8"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb",
+              "bytes": 9246764,
+              "sha256": "8354b03b1fa3ed467f5c301527aa872a078c12b7bbd76b1600bbb9bcee05f238"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb",
+              "bytes": 9165120,
+              "sha256": "e32369261734b34f254574dac4e3fa31965459eb9bc3268c8792d649f08d6795"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb",
+              "bytes": 9177912,
+              "sha256": "0cda91e067d6e3187d8f673ff28d0238abd3af9fd2201795a72b78f6e595bb0e"
+            }
+          }
+        },
+        "metadata": {
+          "generation": {
+            "file": "assets/models/super-slop-brothers/source/slopbot.meta.json",
+            "bytes": 1046,
+            "sha256": "bf6c569966d7479df8409f0c2111ad65c65768d43031886472c66d947dc0635f"
+          },
+          "rig": {
+            "file": "assets/models/super-slop-brothers/source/slopbot-rig.meta.json",
+            "bytes": 481,
+            "sha256": "23960e6d1d00142cf3b0b1d30c768547e8fed8ba4ebe381e29a518aa602b6f6b"
+          },
+          "animations": {
+            "idle": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-idle.meta.json",
+              "bytes": 385,
+              "sha256": "5eb8f21ac3918f44e24b817ea0f08e4efab32211f09e2838b90772923ca83976"
+            },
+            "hit": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-hit.meta.json",
+              "bytes": 383,
+              "sha256": "6928103a7415bf9fe7dc9593d4a5ab441d4eeb05fa3614f5dbc8c6bd5deba9f0"
+            },
+            "special-neutral": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.meta.json",
+              "bytes": 397,
+              "sha256": "f4824bf3e839611d9ad58ba2934b8c1c8b262b74ff0738b8b5b9d61e8f1881e7"
+            },
+            "special-side": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-side.meta.json",
+              "bytes": 394,
+              "sha256": "ec1ec948f96c61b64eb61ae7a72eebf3d79c12bc2be8c81601cca1eddd21a915"
+            },
+            "special-up": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-up.meta.json",
+              "bytes": 392,
+              "sha256": "036e64fb5bdb01fa7b9ceda5c9215d3b192c1ed8d576b14015bb523b4b6e8482"
+            },
+            "special-down": {
+              "file": "assets/models/super-slop-brothers/animations/slopbot-special-down.meta.json",
+              "bytes": 394,
+              "sha256": "4b1a70ad27133e3cbf4c9b43a79462ad2ff6f6bf9d8d743c21fe91c4e21610aa"
+            }
+          }
+        },
+        "reports": {
+          "blender": {
+            "file": "assets/models/super-slop-brothers/processed/slopbot-blender-report.json",
+            "bytes": 30807,
+            "sha256": "3127353a7521a54b9128b6f368babc11953bbeaff2c69e81ec15b9309b01dee9"
+          },
+          "atlas": {
+            "file": "assets/models/super-slop-brothers/processed/slopbot-atlas-report.json",
+            "bytes": 46113,
+            "sha256": "b14179ad628d41e8de3d2dbab7a6c6619c32c8979517685878b744b019588e0a"
+          }
+        }
+      }
+    }
+  ]
+}

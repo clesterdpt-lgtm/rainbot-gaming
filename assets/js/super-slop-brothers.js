@@ -93,6 +93,135 @@
 
   const imageReady = (img) => img && img.complete && img.naturalWidth > 0;
 
+  // ---------- Meshy / Blender fighter animation atlases ----------
+  // Each fighter sheet is eight frame columns by thirteen named clip rows.
+  // Gameplay remains authoritative; this table only resolves what art frame
+  // should be shown for the state the simulation has already produced.
+  const FIGHTER_ANIMATION_RELEASE = "20260716-character-animation-1";
+  const FIGHTER_ANIMATION_COLUMNS = 8;
+  const FIGHTER_ANIMATION_ROWS = 13;
+  const FIGHTER_ANIMATION_DRAW_SCALE = 1.9;
+  const FIGHTER_ANIMATION_BASELINE = 156 / 192;
+  const SPECIAL_ANIMATION_CLIPS = Object.freeze({
+    neutral: "special-neutral",
+    side: "special-side",
+    up: "special-up",
+    down: "special-down",
+  });
+  const FIGHTER_ANIMATION_CLIPS = Object.freeze({
+    idle:              Object.freeze({ row: 0,  frames: 8, fps: 8,  loop: true }),
+    run:               Object.freeze({ row: 1,  frames: 8, fps: 14, loop: true }),
+    jump:              Object.freeze({ row: 2,  frames: 8, fps: 12, loop: false }),
+    fall:              Object.freeze({ row: 3,  frames: 8, fps: 10, loop: true }),
+    hit:               Object.freeze({ row: 4,  frames: 8, fps: 16, loop: false }),
+    shield:            Object.freeze({ row: 5,  frames: 8, fps: 8,  loop: true }),
+    dodge:             Object.freeze({ row: 6,  frames: 8, fps: 15, loop: false }),
+    grab:              Object.freeze({ row: 7,  frames: 8, fps: 12, loop: false }),
+    attack:            Object.freeze({ row: 8,  frames: 8, fps: 16, loop: false }),
+    "special-neutral": Object.freeze({ row: 9,  frames: 8, fps: 14, loop: false }),
+    "special-side":    Object.freeze({ row: 10, frames: 8, fps: 16, loop: false }),
+    "special-up":      Object.freeze({ row: 11, frames: 8, fps: 15, loop: false }),
+    "special-down":    Object.freeze({ row: 12, frames: 8, fps: 14, loop: false }),
+  });
+  const FIGHTER_ANIMATION_IDS = Object.freeze(["rainbot", "gigachad", "mrfeast", "skibidi", "sigma", "slopbot"]);
+
+  function createFighterAnimation(id) {
+    const image = new Image();
+    return {
+      id,
+      image,
+      src: `../assets/img/super-slop-brothers/animated/${id}.webp?v=${FIGHTER_ANIMATION_RELEASE}`,
+      status: "idle",
+      requested: false,
+      ready: false,
+      failed: false,
+      error: null,
+      promise: null,
+      cancelLoad: null,
+      columns: FIGHTER_ANIMATION_COLUMNS,
+      rows: FIGHTER_ANIMATION_ROWS,
+      clips: FIGHTER_ANIMATION_CLIPS,
+      specials: SPECIAL_ANIMATION_CLIPS,
+    };
+  }
+
+  const FIGHTER_ANIMATIONS = Object.freeze(Object.fromEntries(
+    FIGHTER_ANIMATION_IDS.map((id) => [id, createFighterAnimation(id)]),
+  ));
+  const requiredFighterAnimationIds = new Set();
+
+  function resetFighterAnimation(asset) {
+    asset.image.onload = null;
+    asset.image.onerror = null;
+    asset.cancelLoad?.();
+    asset.cancelLoad = null;
+    asset.image.removeAttribute("src");
+    asset.image = new Image();
+    asset.status = "idle";
+    asset.requested = false;
+    asset.ready = false;
+    asset.failed = false;
+    asset.error = null;
+    asset.promise = null;
+  }
+
+  function requestFighterAnimation(id) {
+    const asset = FIGHTER_ANIMATIONS[id];
+    if (!asset) return Promise.resolve(null);
+    if (asset.promise) return asset.promise;
+    asset.requested = true;
+    asset.status = "loading";
+    asset.promise = new Promise((resolve) => {
+      const image = asset.image;
+      asset.cancelLoad = () => resolve(asset);
+      const finish = (ready, error = null) => {
+        if (asset.image !== image) return resolve(asset);
+        asset.ready = ready;
+        asset.failed = !ready;
+        asset.error = error;
+        asset.status = ready ? "ready" : "error";
+        asset.cancelLoad = null;
+        resolve(asset);
+      };
+      image.onload = () => {
+        const width = image.naturalWidth || 0;
+        const height = image.naturalHeight || 0;
+        const cellWidth = width / asset.columns;
+        const cellHeight = height / asset.rows;
+        const valid = imageReady(image)
+          && Number.isInteger(cellWidth)
+          && Number.isInteger(cellHeight)
+          && cellWidth === cellHeight
+          && cellWidth >= 160;
+        finish(valid, valid ? null : `invalid ${width}x${height} atlas layout`);
+      };
+      image.onerror = () => finish(false, "image load failed");
+      image.decoding = "async";
+      image.src = asset.src;
+    });
+    return asset.promise;
+  }
+
+  function requireFighterAnimations(ids, { replace = false } = {}) {
+    const requested = [...new Set(ids)].filter((id) => FIGHTER_ANIMATIONS[id]);
+    if (replace) {
+      requiredFighterAnimationIds.clear();
+      if (!state.qaManualClock) {
+        const keep = new Set(requested);
+        FIGHTER_ANIMATION_IDS.forEach((id) => {
+          const asset = FIGHTER_ANIMATIONS[id];
+          if (!keep.has(id) && asset.requested) resetFighterAnimation(asset);
+        });
+      }
+    }
+    requested.forEach((id) => requiredFighterAnimationIds.add(id));
+    return Promise.all(requested.map(requestFighterAnimation));
+  }
+
+  function preloadAllCharacterAnimations() {
+    return requireFighterAnimations(FIGHTER_ANIMATION_IDS, { replace: true });
+  }
+
   function rectsOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
     return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
   }
@@ -362,6 +491,7 @@
     best: 0,
     sound: true,
     debug: false,
+    qaManualClock: false,
   };
 
   // ============================================================
@@ -494,6 +624,10 @@
       onPlatform: null,
       dropTimer: 0,
       animTime: 0,
+      visualClip: null,
+      visualClipStartedAt: 0,
+      visualAction: null,
+      lastSpecialDirection: null,
     };
     return f;
   }
@@ -799,6 +933,123 @@
   // ============================================================
   //  ATTACK DISPATCH
   // ============================================================
+  const SPECIAL_VISUAL_DURATIONS = Object.freeze({
+    projectile: 0.52,
+    "projectile-burst": 0.58,
+    melee: 0.5,
+    recovery: 0.52,
+    counter: 0.5,
+    reflect: 0.5,
+    teleport: 0.42,
+    fallobject: 0.6,
+    trap: 0.58,
+    summon: 0.62,
+  });
+  const SPECIAL_VISUAL_RELEASE_PROGRESS = Object.freeze({
+    projectile: 0.2,
+    "projectile-burst": 0.2,
+    teleport: 0.32,
+    fallobject: 0.2,
+    trap: 0.18,
+    summon: 0.18,
+  });
+
+  function startVisualAction(f, clip, duration = 0.5, options = {}) {
+    const meta = FIGHTER_ANIMATION_CLIPS[clip];
+    if (!f || !meta) return null;
+    const specialDirection = SPECIAL_ANIMATION_CLIPS[options.specialDirection]
+      ? options.specialDirection
+      : null;
+    const safeDuration = Math.max(1 / 60, Number(duration) || 0.5);
+    const progress = clamp(Number(options.progress) || 0, 0, 0.999999);
+    f.visualAction = {
+      clip,
+      elapsed: safeDuration * progress,
+      duration: safeDuration,
+      syncAttack: !!options.syncAttack,
+      specialDirection,
+      source: options.source || "visual-action",
+      override: !!options.override,
+    };
+    if (specialDirection) f.lastSpecialDirection = specialDirection;
+    f.visualClip = null;
+    f.visualClipStartedAt = f.animTime;
+    return f.visualAction;
+  }
+
+  function resolveFighterAnimation(f, commit = false) {
+    let clip = "idle";
+    let source = "state";
+    let specialDirection = null;
+    let progress = null;
+
+    if (f.visualAction?.override && f.visualAction.elapsed < f.visualAction.duration) {
+      clip = f.visualAction.clip;
+      source = f.visualAction.source;
+      specialDirection = f.visualAction.specialDirection;
+      progress = clamp(f.visualAction.elapsed / Math.max(f.visualAction.duration, 0.001), 0, 0.999999);
+    } else if (f.hitstun > 0 || f.state === "hit" || f.grabbedBy) {
+      clip = "hit";
+    } else if (f.dodgeTimer > 0 || f.state === "dodge") {
+      clip = "dodge";
+    } else if (f.shielding || f.state === "shield") {
+      clip = "shield";
+    } else if (f.attack) {
+      specialDirection = SPECIAL_ANIMATION_CLIPS[f.attack.specialDirection]
+        ? f.attack.specialDirection
+        : null;
+      if (specialDirection) clip = SPECIAL_ANIMATION_CLIPS[specialDirection];
+      else if (f.attackKind === "grab" || f.attack.name === "grab") clip = "grab";
+      else clip = "attack";
+      source = "attack";
+      progress = clamp(f.attack.t / Math.max(f.attack.dur, 0.001), 0, 0.999999);
+    } else if (f.grabbing) {
+      clip = "grab";
+    } else if (f.visualAction && f.visualAction.elapsed < f.visualAction.duration) {
+      clip = f.visualAction.clip;
+      source = f.visualAction.source;
+      specialDirection = f.visualAction.specialDirection;
+      progress = clamp(f.visualAction.elapsed / Math.max(f.visualAction.duration, 0.001), 0, 0.999999);
+    } else if (!f.onGround) {
+      clip = f.vy <= 0 ? "jump" : "fall";
+    } else if (f.state === "run" || f.state === "walk" || Math.abs(f.vx) > 34) {
+      clip = "run";
+    }
+
+    const meta = FIGHTER_ANIMATION_CLIPS[clip] || FIGHTER_ANIMATION_CLIPS.idle;
+    const changed = f.visualClip !== clip;
+    const clipStartedAt = changed ? f.animTime : (f.visualClipStartedAt || 0);
+    if (changed && commit) {
+      f.visualClip = clip;
+      f.visualClipStartedAt = clipStartedAt;
+    }
+    const localTime = Math.max(0, f.animTime - clipStartedAt);
+    if (progress === null) {
+      if (meta.loop) {
+        const frameFloat = localTime * meta.fps;
+        progress = (frameFloat % meta.frames) / meta.frames;
+      } else {
+        progress = clamp(localTime / Math.max(meta.frames / meta.fps, 0.001), 0, 0.999999);
+      }
+    }
+    const frame = meta.loop
+      ? Math.floor(localTime * meta.fps) % meta.frames
+      : Math.min(meta.frames - 1, Math.floor(progress * meta.frames));
+
+    return {
+      clip,
+      frame,
+      progress,
+      source,
+      loop: meta.loop,
+      row: meta.row,
+      frames: meta.frames,
+      fps: meta.fps,
+      specialDirection,
+      assetReady: !!FIGHTER_ANIMATIONS[f.id]?.ready,
+    };
+  }
+
   function startAttack(f, c) {
     if (f.attack || f.hitstun > 0 || f.shielding || f.dodgeTimer > 0 || f.grabbedBy || f.grabbing) return;
     let moveName;
@@ -925,6 +1176,27 @@
       case "trap": spawnTrap(f, desc); break;
       case "summon": spawnDog(f, desc); break;
     }
+
+    // Direction identity is explicit even though gameplay still uses its
+    // existing generic attackKind. Melee/recovery/counter/reflect clips follow
+    // the authoritative attack timer; instant abilities get a visual-only
+    // timer so their cast pose remains visible after the entity is spawned.
+    const clip = SPECIAL_ANIMATION_CLIPS[dir];
+    if (f.attack) {
+      f.attack.specialDirection = dir;
+      f.attack.visualClip = clip;
+    }
+    startVisualAction(
+      f,
+      clip,
+      f.attack?.dur || desc.dur || SPECIAL_VISUAL_DURATIONS[desc.type] || 0.5,
+      {
+        progress: f.attack ? 0 : SPECIAL_VISUAL_RELEASE_PROGRESS[desc.type] || 0,
+        specialDirection: dir,
+        syncAttack: !!f.attack,
+        source: f.attack ? "attack" : "visual-action",
+      },
+    );
   }
 
   // ============================================================
@@ -1223,11 +1495,20 @@
 
   function updateFighter(f, dt) {
     if (f.hidden) return;
-    f.animTime += dt;
     if (f.facingFlash > 0) f.facingFlash -= dt;
 
-    // hitlag freeze
+    // Hitlag freezes both gameplay attacks and every visual animation clock.
     if (f.hitlag > 0) { f.hitlag -= dt; return; }
+
+    f.animTime += dt;
+    if (f.visualAction) {
+      f.visualAction.elapsed += dt;
+      if (f.visualAction.elapsed >= f.visualAction.duration) {
+        f.visualAction = null;
+        f.visualClip = null;
+        f.visualClipStartedAt = f.animTime;
+      }
+    }
 
     // timers
     if (f.invuln > 0) f.invuln -= dt;
@@ -2032,7 +2313,54 @@
     return true;
   }
 
+  function drawAnimatedBodySprite(f) {
+    const asset = FIGHTER_ANIMATIONS[f.id];
+    if (!asset?.ready || !imageReady(asset.image)) return false;
+
+    const animation = resolveFighterAnimation(f, true);
+    const cellW = asset.image.naturalWidth / asset.columns;
+    const cellH = asset.image.naturalHeight / asset.rows;
+    if (!Number.isFinite(cellW) || !Number.isFinite(cellH) || cellW <= 0 || cellH <= 0) return false;
+
+    const srcX = animation.frame * cellW;
+    const srcY = animation.row * cellH;
+    const art = BODY_ART[f.id];
+    const renderH = (art?.h || 94) * FIGHTER_ANIMATION_DRAW_SCALE;
+    const renderW = renderH * (cellW / cellH);
+    const baselineOffset = renderH * (1 - FIGHTER_ANIMATION_BASELINE);
+    const isAction = animation.source === "attack" || animation.source === "visual-action";
+    const isHit = animation.clip === "hit";
+    const isFastRun = animation.clip === "run" && Math.abs(f.vx) > f.def.run * STAGE_MOVE_SCALE * 0.7;
+
+    function drawPass(offsetX, offsetY, alpha, blur = 0) {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.translate(f.x + offsetX, f.y + baselineOffset + offsetY);
+      // Mirroring is render-only. Collision and authored attack geometry stay
+      // in their existing world-space simulation.
+      ctx.scale(f.facing, 1);
+      ctx.shadowColor = f.accent;
+      ctx.shadowBlur = blur;
+      ctx.drawImage(asset.image, srcX, srcY, cellW, cellH, -renderW / 2, -renderH, renderW, renderH);
+      ctx.restore();
+    }
+
+    if (isAction || isHit || isFastRun) {
+      const trails = isAction ? 3 : 2;
+      for (let i = trails; i >= 1; i--) {
+        const distance = isAction ? 10 : 6;
+        drawPass(-f.facing * i * distance, i * 0.75, (isAction ? 0.12 : 0.075) / i, 12 - i * 2);
+      }
+    }
+    drawPass(0, 0, 1, f.invuln > 0 || f.counterTimer > 0 || f.reflectTimer > 0 ? 14 : 4);
+    return true;
+  }
+
   function drawBodySprite(f) {
+    return drawAnimatedBodySprite(f) || drawLegacyBodySprite(f);
+  }
+
+  function drawLegacyBodySprite(f) {
     const art = BODY_ART[f.id];
     const img = ART.bodyAtlas;
     if (!imageReady(img) || !art) return false;
@@ -3066,6 +3394,9 @@
       for (let i = 0; i < settings.rivals; i++) ids.push(pool[i % pool.length]);
     }
 
+    // Only decode the fighters used by this match. The legacy atlas remains
+    // visible during the short async load, keeping menu/mobile memory bounded.
+    requireFighterAnimations(ids, { replace: true });
     state.fighters = ids.map((id, i) => makeFighter(id, i, options.online ? false : i !== 0));
     if (options.online) {
       const peerBySlot = new Map();
@@ -3316,18 +3647,241 @@
     let dt = state.lastTime ? now - state.lastTime : 0;
     state.lastTime = now;
     if (dt > 0.05) dt = 0.05; // clamp
-    update(dt);
-    draw();
+    if (!state.qaManualClock) {
+      update(dt);
+      draw();
+    }
     requestAnimationFrame(frame);
   }
+
+  function getCharacterAnimationDiagnostics() {
+    const assets = FIGHTER_ANIMATION_IDS.map((id) => {
+      const asset = FIGHTER_ANIMATIONS[id];
+      const width = asset.image.naturalWidth || 0;
+      const height = asset.image.naturalHeight || 0;
+      return {
+        id,
+        status: asset.status,
+        requested: asset.requested,
+        required: requiredFighterAnimationIds.has(id),
+        ready: asset.ready,
+        failed: asset.failed,
+        error: asset.error,
+        src: asset.src,
+        width,
+        height,
+        cellWidth: width ? width / asset.columns : 0,
+        cellHeight: height ? height / asset.rows : 0,
+        fallback: asset.ready ? null : "body-atlas-rainbot-site-20260627.png",
+      };
+    });
+    const required = assets.filter((asset) => asset.required);
+    const fighters = state.fighters.map((f) => {
+      const animation = resolveFighterAnimation(f);
+      return {
+        id: f.id,
+        slot: f.slot,
+        state: f.state,
+        facing: f.facing,
+        assetReady: animation.assetReady,
+        fallbackActive: !animation.assetReady,
+        clip: animation.clip,
+        row: animation.row,
+        frame: animation.frame,
+        frames: animation.frames,
+        progress: Math.round(animation.progress * 10000) / 10000,
+        source: animation.source,
+        loop: animation.loop,
+        specialDirection: animation.specialDirection,
+        lastSpecialDirection: f.lastSpecialDirection,
+        hitlag: Math.max(0, f.hitlag),
+        visualAction: f.visualAction ? {
+          clip: f.visualAction.clip,
+          elapsed: Math.round(f.visualAction.elapsed * 10000) / 10000,
+          duration: f.visualAction.duration,
+          specialDirection: f.visualAction.specialDirection,
+          source: f.visualAction.source,
+        } : null,
+      };
+    });
+    return {
+      release: FIGHTER_ANIMATION_RELEASE,
+      ready: required.length > 0 && required.every((asset) => asset.ready),
+      allReady: assets.every((asset) => asset.ready),
+      required: required.map((asset) => asset.id),
+      requested: assets.filter((asset) => asset.requested).map((asset) => asset.id),
+      pending: assets.filter((asset) => asset.status === "loading").map((asset) => asset.id),
+      missing: assets.filter((asset) => asset.failed).map((asset) => asset.id),
+      decodedBytes: assets.reduce((total, asset) => total + (asset.ready ? asset.width * asset.height * 4 : 0), 0),
+      layout: {
+        columns: FIGHTER_ANIMATION_COLUMNS,
+        rows: FIGHTER_ANIMATION_ROWS,
+        clipOrder: Object.keys(FIGHTER_ANIMATION_CLIPS),
+      },
+      specialMappings: Object.fromEntries(FIGHTER_ANIMATION_IDS.map((id) => [id, { ...SPECIAL_ANIMATION_CLIPS }])),
+      assets,
+      fighters,
+    };
+  }
+
+  function renderGameToText() {
+    const animations = getCharacterAnimationDiagnostics();
+    const animationBySlot = new Map(animations.fighters.map((fighter) => [fighter.slot, fighter]));
+    const entityCounts = state.entities.reduce((counts, entity) => {
+      counts[entity.type] = (counts[entity.type] || 0) + 1;
+      return counts;
+    }, {});
+    return JSON.stringify({
+      game: GAME_ID,
+      screen: state.screen,
+      paused: state.paused,
+      time: Math.round(state.time * 1000) / 1000,
+      frame: state.frame,
+      stage: getStage().id,
+      entities: entityCounts,
+      animation: {
+        release: animations.release,
+        ready: animations.ready,
+        pending: animations.pending,
+        missing: animations.missing,
+      },
+      fighters: state.fighters.map((f) => {
+        const animation = animationBySlot.get(f.slot);
+        return {
+          id: f.id,
+          slot: f.slot,
+          state: f.state,
+          x: Math.round(f.x * 10) / 10,
+          y: Math.round(f.y * 10) / 10,
+          vx: Math.round(f.vx * 10) / 10,
+          vy: Math.round(f.vy * 10) / 10,
+          damage: Math.round(f.damage * 10) / 10,
+          stocks: f.stocks,
+          onGround: f.onGround,
+          attack: f.attack?.name || null,
+          animation: animation ? {
+            clip: animation.clip,
+            frame: animation.frame,
+            progress: animation.progress,
+            source: animation.source,
+            specialDirection: animation.specialDirection,
+            assetReady: animation.assetReady,
+          } : null,
+        };
+      }),
+    });
+  }
+
+  function advanceGameTime(ms) {
+    let remaining = clamp(Number(ms) || 0, 0, 60000) / 1000;
+    while (remaining > 0.0000001) {
+      const dt = Math.min(1 / 60, remaining);
+      update(dt);
+      remaining -= dt;
+    }
+    draw();
+    return Promise.resolve(renderGameToText());
+  }
+
+  function showcaseAbility(id, direction, progress = null) {
+    const dir = String(direction || "").toLowerCase();
+    if (!SPECIAL_ANIMATION_CLIPS[dir]) return null;
+    const fighter = state.fighters.find((candidate) => candidate.id === id);
+    if (!fighter) return null;
+    const desc = fighter.def.specials[dir];
+    if (!desc) return null;
+
+    // Deterministic QA still delegates to the production input dispatcher.
+    // Only transient blockers are cleared so every call proves the actual
+    // cooldown/attack/entity/teleport path and its attached visual clip.
+    fighter.attack = null;
+    fighter.attackKind = null;
+    fighter.hitstun = 0;
+    fighter.hitlag = 0;
+    fighter.shielding = false;
+    fighter.dodgeTimer = 0;
+    fighter.grabbedBy = null;
+    fighter.grabbing = null;
+    fighter.specialCd = 0;
+    fighter.recoveryUsed = false;
+    fighter.visualAction = null;
+    fighter.control.x = dir === "side" ? fighter.facing || 1 : 0;
+    fighter.control.up = dir === "up";
+    fighter.control.down = dir === "down";
+
+    const before = {
+      entityCount: state.entities.length,
+      x: fighter.x,
+      y: fighter.y,
+      vx: fighter.vx,
+      vy: fighter.vy,
+      counterTimer: fighter.counterTimer,
+      reflectTimer: fighter.reflectTimer,
+    };
+    performSpecial(fighter, fighter.control);
+
+    if (progress !== null && progress !== undefined) {
+      const safeProgress = clamp(Number(progress) || 0, 0, 0.999999);
+      if (fighter.attack?.specialDirection === dir) {
+        fighter.attack.t = fighter.attack.dur * safeProgress;
+      }
+      if (fighter.visualAction?.specialDirection === dir) {
+        fighter.visualAction.elapsed = fighter.visualAction.duration * safeProgress;
+      }
+    }
+    draw();
+    const diagnostic = getCharacterAnimationDiagnostics().fighters.find((entry) => entry.slot === fighter.slot);
+    if (!diagnostic) return null;
+    const spawnedEntities = state.entities.slice(before.entityCount).map((entity) => ({
+      type: entity.type,
+      kind: entity.kind || null,
+    }));
+    const positionChanged = Math.abs(fighter.x - before.x) > 0.01 || Math.abs(fighter.y - before.y) > 0.01;
+    const velocityChanged = Math.abs(fighter.vx - before.vx) > 0.01 || Math.abs(fighter.vy - before.vy) > 0.01;
+    const evidence = [];
+    if (spawnedEntities.length) evidence.push("entity");
+    if (fighter.attack?.specialDirection === dir) evidence.push("attack");
+    if (fighter.counterTimer > before.counterTimer) evidence.push("counter");
+    if (fighter.reflectTimer > before.reflectTimer) evidence.push("reflect");
+    if (positionChanged) evidence.push("position");
+    if (velocityChanged) evidence.push("velocity");
+    return {
+      ...diagnostic,
+      ability: {
+        performed: fighter.lastSpecialDirection === dir && fighter.specialCd > 0,
+        direction: dir,
+        type: desc.type,
+        specialCooldown: fighter.specialCd,
+        attack: fighter.attack?.name || null,
+        spawnedEntities,
+        positionChanged,
+        velocityChanged,
+        counterTimer: fighter.counterTimer,
+        reflectTimer: fighter.reflectTimer,
+        recoveryUsed: fighter.recoveryUsed,
+        evidence,
+      },
+    };
+  }
+
+  window.render_game_to_text = renderGameToText;
+  window.advanceTime = advanceGameTime;
 
   // ============================================================
   //  DEBUG HOOK
   // ============================================================
   window.__SLOP = {
-    state, settings, netSlop, FIGHTERS, STAGES,
+    state, settings, netSlop, FIGHTERS, STAGES, FIGHTER_ANIMATIONS,
     start: startMatch, menu: showMenu, results: endMatch,
     arcade: startArcadeRun,
+    getCharacterAnimationDiagnostics,
+    preloadAllCharacterAnimations,
+    showcaseAbility,
+    setManualClock(enabled = true) {
+      state.qaManualClock = !!enabled;
+      state.lastTime = 0;
+      return state.qaManualClock;
+    },
     setStage(id) { settings.stage = id; },
     setChar(id) { settings.p1 = id; },
     setRivals(n) { settings.rivals = n; },
@@ -3340,7 +3894,11 @@
     god() { state.fighters.forEach((f) => { if (!f.isCpu) f.invuln = 9999; }); },
     hazardNow() { const h = state.hazard; if (h) { h.timer = 0; if (h.phase) h.phase = "idle"; } },
     // deterministic fixed-step simulator for headless testing (bypasses rAF throttling)
-    step(n = 60, dt = 1 / 60) { for (let i = 0; i < n; i++) update(dt); return state.fighters.map((f) => ({ id: f.id, dmg: Math.round(f.damage), stocks: f.stocks, x: Math.round(f.x), y: Math.round(f.y), state: f.state })); },
+    step(n = 60, dt = 1 / 60) {
+      for (let i = 0; i < n; i++) update(dt);
+      draw();
+      return state.fighters.map((f) => ({ id: f.id, dmg: Math.round(f.damage), stocks: f.stocks, x: Math.round(f.x), y: Math.round(f.y), state: f.state }));
+    },
   };
 
   // ============================================================

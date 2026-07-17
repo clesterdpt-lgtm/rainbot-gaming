@@ -1,0 +1,2249 @@
+{
+  "generatedAt": "2026-07-17T01:08:48.597053+00:00",
+  "fighterId": "sigma",
+  "pipeline": "Blender RGBA clip frames -> Pillow WebP Canvas2D atlas",
+  "sourceReport": "assets/models/super-slop-brothers/processed/sigma-blender-report.json",
+  "sourceFramesDir": "output/blender/super-slop-brothers/sigma",
+  "output": "assets/img/super-slop-brothers/animated/sigma.webp",
+  "runtimePath": "assets/img/super-slop-brothers/animated/sigma.webp",
+  "fileBytes": 372330,
+  "sha256": "e0408d56e00b216e8f51ce35ddbc3c3f9965ae139ff8e08053a06d940067b9dc",
+  "format": "webp",
+  "width": 1536,
+  "height": 2496,
+  "cellSize": 192,
+  "columns": 8,
+  "rows": 13,
+  "alpha": true,
+  "visualQA": {
+    "requiredAlphaMarginPixels": 6,
+    "minimumAlphaMarginPixels": 27,
+    "tightestFrames": [
+      {
+        "clip": "attack",
+        "column": 3,
+        "file": "output/blender/super-slop-brothers/sigma/attack/frame-03.png",
+        "margins": {
+          "left": 34,
+          "top": 49,
+          "right": 50,
+          "bottom": 27
+        }
+      },
+      {
+        "clip": "special-side",
+        "column": 3,
+        "file": "output/blender/super-slop-brothers/sigma/special-side/frame-03.png",
+        "margins": {
+          "left": 34,
+          "top": 49,
+          "right": 50,
+          "bottom": 27
+        }
+      }
+    ],
+    "clippedFrames": 0
+  },
+  "encoding": {
+    "library": "Pillow 12.2.0",
+    "lossless": false,
+    "requestedQuality": 88,
+    "actualQuality": 88,
+    "method": 6,
+    "maxBytes": 3145728,
+    "attempts": [
+      {
+        "quality": 88,
+        "fileBytes": 372330
+      }
+    ]
+  },
+  "clips": {
+    "idle": {
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "derived": false,
+      "derivation": "direct looping source motion"
+    },
+    "run": {
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "derived": false,
+      "derivation": "direct looping source motion"
+    },
+    "jump": {
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up"
+    },
+    "fall": {
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up"
+    },
+    "hit": {
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "derived": false,
+      "derivation": "direct source motion"
+    },
+    "shield": {
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down"
+    },
+    "dodge": {
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side"
+    },
+    "grab": {
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral"
+    },
+    "attack": {
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack"
+    },
+    "special-neutral": {
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "derived": false,
+      "derivation": "direct source motion"
+    },
+    "special-side": {
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "derived": false,
+      "derivation": "direct source motion"
+    },
+    "special-up": {
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "derived": false,
+      "derivation": "direct source motion"
+    },
+    "special-down": {
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "derived": false,
+      "derivation": "direct source motion"
+    }
+  },
+  "sourceFrames": [
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-00.png",
+      "fileBytes": 21537,
+      "alphaBounds": [
+        46,
+        57,
+        134,
+        155
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 57,
+        "right": 58,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-01.png",
+      "fileBytes": 21587,
+      "alphaBounds": [
+        46,
+        58,
+        134,
+        154
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 58,
+        "right": 58,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-02.png",
+      "fileBytes": 21528,
+      "alphaBounds": [
+        45,
+        58,
+        133,
+        154
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 58,
+        "right": 59,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-03.png",
+      "fileBytes": 21723,
+      "alphaBounds": [
+        45,
+        57,
+        133,
+        154
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 57,
+        "right": 59,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-04.png",
+      "fileBytes": 21697,
+      "alphaBounds": [
+        45,
+        56,
+        133,
+        155
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 56,
+        "right": 59,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-05.png",
+      "fileBytes": 21681,
+      "alphaBounds": [
+        45,
+        56,
+        134,
+        155
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 56,
+        "right": 58,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-06.png",
+      "fileBytes": 21576,
+      "alphaBounds": [
+        46,
+        57,
+        134,
+        155
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 57,
+        "right": 58,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "idle",
+      "row": 0,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/idle/frame-07.png",
+      "fileBytes": 21505,
+      "alphaBounds": [
+        46,
+        57,
+        134,
+        155
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 57,
+        "right": 58,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-00.png",
+      "fileBytes": 23575,
+      "alphaBounds": [
+        60,
+        52,
+        139,
+        150
+      ],
+      "alphaMargins": {
+        "left": 60,
+        "top": 52,
+        "right": 53,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-01.png",
+      "fileBytes": 22872,
+      "alphaBounds": [
+        61,
+        52,
+        143,
+        157
+      ],
+      "alphaMargins": {
+        "left": 61,
+        "top": 52,
+        "right": 49,
+        "bottom": 35
+      },
+      "minimumAlphaMargin": 35
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-02.png",
+      "fileBytes": 21939,
+      "alphaBounds": [
+        64,
+        52,
+        143,
+        155
+      ],
+      "alphaMargins": {
+        "left": 64,
+        "top": 52,
+        "right": 49,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-03.png",
+      "fileBytes": 21177,
+      "alphaBounds": [
+        67,
+        52,
+        143,
+        156
+      ],
+      "alphaMargins": {
+        "left": 67,
+        "top": 52,
+        "right": 49,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-04.png",
+      "fileBytes": 21044,
+      "alphaBounds": [
+        70,
+        52,
+        141,
+        153
+      ],
+      "alphaMargins": {
+        "left": 70,
+        "top": 52,
+        "right": 51,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-05.png",
+      "fileBytes": 20847,
+      "alphaBounds": [
+        60,
+        51,
+        137,
+        152
+      ],
+      "alphaMargins": {
+        "left": 60,
+        "top": 51,
+        "right": 55,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-06.png",
+      "fileBytes": 20563,
+      "alphaBounds": [
+        56,
+        51,
+        137,
+        152
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 51,
+        "right": 55,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "run",
+      "row": 1,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/run/frame-07.png",
+      "fileBytes": 21778,
+      "alphaBounds": [
+        64,
+        53,
+        139,
+        153
+      ],
+      "alphaMargins": {
+        "left": 64,
+        "top": 53,
+        "right": 53,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-00.png",
+      "fileBytes": 21263,
+      "alphaBounds": [
+        66,
+        52,
+        142,
+        152
+      ],
+      "alphaMargins": {
+        "left": 66,
+        "top": 52,
+        "right": 50,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-01.png",
+      "fileBytes": 22241,
+      "alphaBounds": [
+        60,
+        53,
+        138,
+        152
+      ],
+      "alphaMargins": {
+        "left": 60,
+        "top": 53,
+        "right": 54,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-02.png",
+      "fileBytes": 22517,
+      "alphaBounds": [
+        41,
+        53,
+        137,
+        149
+      ],
+      "alphaMargins": {
+        "left": 41,
+        "top": 53,
+        "right": 55,
+        "bottom": 43
+      },
+      "minimumAlphaMargin": 41
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-03.png",
+      "fileBytes": 23516,
+      "alphaBounds": [
+        37,
+        52,
+        137,
+        159
+      ],
+      "alphaMargins": {
+        "left": 37,
+        "top": 52,
+        "right": 55,
+        "bottom": 33
+      },
+      "minimumAlphaMargin": 33
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-04.png",
+      "fileBytes": 23265,
+      "alphaBounds": [
+        38,
+        53,
+        137,
+        155
+      ],
+      "alphaMargins": {
+        "left": 38,
+        "top": 53,
+        "right": 55,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-05.png",
+      "fileBytes": 23070,
+      "alphaBounds": [
+        44,
+        53,
+        138,
+        152
+      ],
+      "alphaMargins": {
+        "left": 44,
+        "top": 53,
+        "right": 54,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-06.png",
+      "fileBytes": 24216,
+      "alphaBounds": [
+        40,
+        54,
+        141,
+        151
+      ],
+      "alphaMargins": {
+        "left": 40,
+        "top": 54,
+        "right": 51,
+        "bottom": 41
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "jump",
+      "row": 2,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/jump/frame-07.png",
+      "fileBytes": 22469,
+      "alphaBounds": [
+        54,
+        55,
+        145,
+        155
+      ],
+      "alphaMargins": {
+        "left": 54,
+        "top": 55,
+        "right": 47,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-00.png",
+      "fileBytes": 22469,
+      "alphaBounds": [
+        54,
+        55,
+        145,
+        155
+      ],
+      "alphaMargins": {
+        "left": 54,
+        "top": 55,
+        "right": 47,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-01.png",
+      "fileBytes": 21819,
+      "alphaBounds": [
+        59,
+        55,
+        141,
+        154
+      ],
+      "alphaMargins": {
+        "left": 59,
+        "top": 55,
+        "right": 51,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-02.png",
+      "fileBytes": 21199,
+      "alphaBounds": [
+        39,
+        49,
+        134,
+        139
+      ],
+      "alphaMargins": {
+        "left": 39,
+        "top": 49,
+        "right": 58,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-03.png",
+      "fileBytes": 22189,
+      "alphaBounds": [
+        48,
+        52,
+        135,
+        152
+      ],
+      "alphaMargins": {
+        "left": 48,
+        "top": 52,
+        "right": 57,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-04.png",
+      "fileBytes": 23968,
+      "alphaBounds": [
+        43,
+        55,
+        138,
+        152
+      ],
+      "alphaMargins": {
+        "left": 43,
+        "top": 55,
+        "right": 54,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-05.png",
+      "fileBytes": 22284,
+      "alphaBounds": [
+        61,
+        54,
+        142,
+        153
+      ],
+      "alphaMargins": {
+        "left": 61,
+        "top": 54,
+        "right": 50,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-06.png",
+      "fileBytes": 21618,
+      "alphaBounds": [
+        65,
+        52,
+        142,
+        153
+      ],
+      "alphaMargins": {
+        "left": 65,
+        "top": 52,
+        "right": 50,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "fall",
+      "row": 3,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/fall/frame-07.png",
+      "fileBytes": 21253,
+      "alphaBounds": [
+        66,
+        52,
+        142,
+        152
+      ],
+      "alphaMargins": {
+        "left": 66,
+        "top": 52,
+        "right": 50,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-00.png",
+      "fileBytes": 21827,
+      "alphaBounds": [
+        40,
+        55,
+        135,
+        141
+      ],
+      "alphaMargins": {
+        "left": 40,
+        "top": 55,
+        "right": 57,
+        "bottom": 51
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-01.png",
+      "fileBytes": 18042,
+      "alphaBounds": [
+        49,
+        84,
+        126,
+        147
+      ],
+      "alphaMargins": {
+        "left": 49,
+        "top": 84,
+        "right": 66,
+        "bottom": 45
+      },
+      "minimumAlphaMargin": 45
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-02.png",
+      "fileBytes": 19585,
+      "alphaBounds": [
+        46,
+        61,
+        127,
+        149
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 61,
+        "right": 65,
+        "bottom": 43
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-03.png",
+      "fileBytes": 21254,
+      "alphaBounds": [
+        42,
+        59,
+        138,
+        147
+      ],
+      "alphaMargins": {
+        "left": 42,
+        "top": 59,
+        "right": 54,
+        "bottom": 45
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-04.png",
+      "fileBytes": 19563,
+      "alphaBounds": [
+        47,
+        74,
+        135,
+        148
+      ],
+      "alphaMargins": {
+        "left": 47,
+        "top": 74,
+        "right": 57,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-05.png",
+      "fileBytes": 21263,
+      "alphaBounds": [
+        43,
+        68,
+        134,
+        148
+      ],
+      "alphaMargins": {
+        "left": 43,
+        "top": 68,
+        "right": 58,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-06.png",
+      "fileBytes": 20279,
+      "alphaBounds": [
+        45,
+        75,
+        135,
+        150
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 75,
+        "right": 57,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "hit",
+      "row": 4,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/hit/frame-07.png",
+      "fileBytes": 20659,
+      "alphaBounds": [
+        46,
+        74,
+        132,
+        149
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 74,
+        "right": 60,
+        "bottom": 43
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-00.png",
+      "fileBytes": 21565,
+      "alphaBounds": [
+        54,
+        53,
+        131,
+        156
+      ],
+      "alphaMargins": {
+        "left": 54,
+        "top": 53,
+        "right": 61,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-01.png",
+      "fileBytes": 20934,
+      "alphaBounds": [
+        58,
+        57,
+        133,
+        154
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 57,
+        "right": 59,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-02.png",
+      "fileBytes": 21698,
+      "alphaBounds": [
+        47,
+        53,
+        126,
+        150
+      ],
+      "alphaMargins": {
+        "left": 47,
+        "top": 53,
+        "right": 66,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-03.png",
+      "fileBytes": 20547,
+      "alphaBounds": [
+        67,
+        53,
+        121,
+        151
+      ],
+      "alphaMargins": {
+        "left": 67,
+        "top": 53,
+        "right": 71,
+        "bottom": 41
+      },
+      "minimumAlphaMargin": 41
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-04.png",
+      "fileBytes": 21815,
+      "alphaBounds": [
+        56,
+        49,
+        114,
+        156
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 49,
+        "right": 78,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-05.png",
+      "fileBytes": 21815,
+      "alphaBounds": [
+        56,
+        49,
+        114,
+        156
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 49,
+        "right": 78,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-06.png",
+      "fileBytes": 21324,
+      "alphaBounds": [
+        58,
+        48,
+        114,
+        155
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 48,
+        "right": 78,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "shield",
+      "row": 5,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/shield/frame-07.png",
+      "fileBytes": 20867,
+      "alphaBounds": [
+        64,
+        52,
+        140,
+        150
+      ],
+      "alphaMargins": {
+        "left": 64,
+        "top": 52,
+        "right": 52,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-00.png",
+      "fileBytes": 22350,
+      "alphaBounds": [
+        59,
+        53,
+        138,
+        157
+      ],
+      "alphaMargins": {
+        "left": 59,
+        "top": 53,
+        "right": 54,
+        "bottom": 35
+      },
+      "minimumAlphaMargin": 35
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-01.png",
+      "fileBytes": 23026,
+      "alphaBounds": [
+        59,
+        52,
+        138,
+        158
+      ],
+      "alphaMargins": {
+        "left": 59,
+        "top": 52,
+        "right": 54,
+        "bottom": 34
+      },
+      "minimumAlphaMargin": 34
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-02.png",
+      "fileBytes": 21974,
+      "alphaBounds": [
+        47,
+        63,
+        141,
+        155
+      ],
+      "alphaMargins": {
+        "left": 47,
+        "top": 63,
+        "right": 51,
+        "bottom": 37
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-03.png",
+      "fileBytes": 18547,
+      "alphaBounds": [
+        48,
+        86,
+        126,
+        163
+      ],
+      "alphaMargins": {
+        "left": 48,
+        "top": 86,
+        "right": 66,
+        "bottom": 29
+      },
+      "minimumAlphaMargin": 29
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-04.png",
+      "fileBytes": 18768,
+      "alphaBounds": [
+        51,
+        63,
+        131,
+        141
+      ],
+      "alphaMargins": {
+        "left": 51,
+        "top": 63,
+        "right": 61,
+        "bottom": 51
+      },
+      "minimumAlphaMargin": 51
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-05.png",
+      "fileBytes": 22447,
+      "alphaBounds": [
+        48,
+        58,
+        129,
+        153
+      ],
+      "alphaMargins": {
+        "left": 48,
+        "top": 58,
+        "right": 63,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-06.png",
+      "fileBytes": 24128,
+      "alphaBounds": [
+        29,
+        58,
+        140,
+        151
+      ],
+      "alphaMargins": {
+        "left": 29,
+        "top": 58,
+        "right": 52,
+        "bottom": 41
+      },
+      "minimumAlphaMargin": 29
+    },
+    {
+      "clip": "dodge",
+      "row": 6,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/dodge/frame-07.png",
+      "fileBytes": 19920,
+      "alphaBounds": [
+        52,
+        60,
+        136,
+        148
+      ],
+      "alphaMargins": {
+        "left": 52,
+        "top": 60,
+        "right": 56,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-00.png",
+      "fileBytes": 20346,
+      "alphaBounds": [
+        46,
+        59,
+        124,
+        148
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 59,
+        "right": 68,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-01.png",
+      "fileBytes": 20045,
+      "alphaBounds": [
+        46,
+        61,
+        124,
+        147
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 61,
+        "right": 68,
+        "bottom": 45
+      },
+      "minimumAlphaMargin": 45
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-02.png",
+      "fileBytes": 19845,
+      "alphaBounds": [
+        44,
+        64,
+        121,
+        139
+      ],
+      "alphaMargins": {
+        "left": 44,
+        "top": 64,
+        "right": 71,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-03.png",
+      "fileBytes": 20428,
+      "alphaBounds": [
+        58,
+        59,
+        156,
+        139
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 59,
+        "right": 36,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-04.png",
+      "fileBytes": 20487,
+      "alphaBounds": [
+        56,
+        61,
+        151,
+        139
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 61,
+        "right": 41,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 41
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-05.png",
+      "fileBytes": 20167,
+      "alphaBounds": [
+        58,
+        64,
+        151,
+        138
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 64,
+        "right": 41,
+        "bottom": 54
+      },
+      "minimumAlphaMargin": 41
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-06.png",
+      "fileBytes": 19911,
+      "alphaBounds": [
+        57,
+        65,
+        149,
+        138
+      ],
+      "alphaMargins": {
+        "left": 57,
+        "top": 65,
+        "right": 43,
+        "bottom": 54
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "grab",
+      "row": 7,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/grab/frame-07.png",
+      "fileBytes": 20080,
+      "alphaBounds": [
+        47,
+        68,
+        131,
+        137
+      ],
+      "alphaMargins": {
+        "left": 47,
+        "top": 68,
+        "right": 61,
+        "bottom": 55
+      },
+      "minimumAlphaMargin": 47
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-00.png",
+      "fileBytes": 22350,
+      "alphaBounds": [
+        59,
+        53,
+        138,
+        157
+      ],
+      "alphaMargins": {
+        "left": 59,
+        "top": 53,
+        "right": 54,
+        "bottom": 35
+      },
+      "minimumAlphaMargin": 35
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-01.png",
+      "fileBytes": 22960,
+      "alphaBounds": [
+        58,
+        54,
+        138,
+        158
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 54,
+        "right": 54,
+        "bottom": 34
+      },
+      "minimumAlphaMargin": 34
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-02.png",
+      "fileBytes": 24122,
+      "alphaBounds": [
+        38,
+        63,
+        145,
+        163
+      ],
+      "alphaMargins": {
+        "left": 38,
+        "top": 63,
+        "right": 47,
+        "bottom": 29
+      },
+      "minimumAlphaMargin": 29
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-03.png",
+      "fileBytes": 24876,
+      "alphaBounds": [
+        34,
+        49,
+        142,
+        165
+      ],
+      "alphaMargins": {
+        "left": 34,
+        "top": 49,
+        "right": 50,
+        "bottom": 27
+      },
+      "minimumAlphaMargin": 27
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-04.png",
+      "fileBytes": 23339,
+      "alphaBounds": [
+        73,
+        43,
+        150,
+        153
+      ],
+      "alphaMargins": {
+        "left": 73,
+        "top": 43,
+        "right": 42,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-05.png",
+      "fileBytes": 24182,
+      "alphaBounds": [
+        36,
+        55,
+        144,
+        147
+      ],
+      "alphaMargins": {
+        "left": 36,
+        "top": 55,
+        "right": 48,
+        "bottom": 45
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-06.png",
+      "fileBytes": 19878,
+      "alphaBounds": [
+        51,
+        59,
+        135,
+        148
+      ],
+      "alphaMargins": {
+        "left": 51,
+        "top": 59,
+        "right": 57,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "attack",
+      "row": 8,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/attack/frame-07.png",
+      "fileBytes": 20000,
+      "alphaBounds": [
+        53,
+        60,
+        137,
+        148
+      ],
+      "alphaMargins": {
+        "left": 53,
+        "top": 60,
+        "right": 55,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-00.png",
+      "fileBytes": 20346,
+      "alphaBounds": [
+        46,
+        59,
+        124,
+        148
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 59,
+        "right": 68,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-01.png",
+      "fileBytes": 19784,
+      "alphaBounds": [
+        44,
+        64,
+        119,
+        140
+      ],
+      "alphaMargins": {
+        "left": 44,
+        "top": 64,
+        "right": 73,
+        "bottom": 52
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-02.png",
+      "fileBytes": 20484,
+      "alphaBounds": [
+        56,
+        60,
+        155,
+        141
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 60,
+        "right": 37,
+        "bottom": 51
+      },
+      "minimumAlphaMargin": 37
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-03.png",
+      "fileBytes": 20352,
+      "alphaBounds": [
+        57,
+        63,
+        152,
+        139
+      ],
+      "alphaMargins": {
+        "left": 57,
+        "top": 63,
+        "right": 40,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-04.png",
+      "fileBytes": 20082,
+      "alphaBounds": [
+        58,
+        64,
+        150,
+        138
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 64,
+        "right": 42,
+        "bottom": 54
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-05.png",
+      "fileBytes": 19581,
+      "alphaBounds": [
+        57,
+        67,
+        135,
+        139
+      ],
+      "alphaMargins": {
+        "left": 57,
+        "top": 67,
+        "right": 57,
+        "bottom": 53
+      },
+      "minimumAlphaMargin": 53
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-06.png",
+      "fileBytes": 20004,
+      "alphaBounds": [
+        46,
+        63,
+        120,
+        142
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 63,
+        "right": 72,
+        "bottom": 50
+      },
+      "minimumAlphaMargin": 46
+    },
+    {
+      "clip": "special-neutral",
+      "row": 9,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/special-neutral/frame-07.png",
+      "fileBytes": 20437,
+      "alphaBounds": [
+        46,
+        59,
+        124,
+        148
+      ],
+      "alphaMargins": {
+        "left": 46,
+        "top": 59,
+        "right": 68,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-00.png",
+      "fileBytes": 22350,
+      "alphaBounds": [
+        59,
+        53,
+        138,
+        157
+      ],
+      "alphaMargins": {
+        "left": 59,
+        "top": 53,
+        "right": 54,
+        "bottom": 35
+      },
+      "minimumAlphaMargin": 35
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-01.png",
+      "fileBytes": 22960,
+      "alphaBounds": [
+        58,
+        54,
+        138,
+        158
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 54,
+        "right": 54,
+        "bottom": 34
+      },
+      "minimumAlphaMargin": 34
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-02.png",
+      "fileBytes": 24122,
+      "alphaBounds": [
+        38,
+        63,
+        145,
+        163
+      ],
+      "alphaMargins": {
+        "left": 38,
+        "top": 63,
+        "right": 47,
+        "bottom": 29
+      },
+      "minimumAlphaMargin": 29
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-03.png",
+      "fileBytes": 24876,
+      "alphaBounds": [
+        34,
+        49,
+        142,
+        165
+      ],
+      "alphaMargins": {
+        "left": 34,
+        "top": 49,
+        "right": 50,
+        "bottom": 27
+      },
+      "minimumAlphaMargin": 27
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-04.png",
+      "fileBytes": 23339,
+      "alphaBounds": [
+        73,
+        43,
+        150,
+        153
+      ],
+      "alphaMargins": {
+        "left": 73,
+        "top": 43,
+        "right": 42,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-05.png",
+      "fileBytes": 24182,
+      "alphaBounds": [
+        36,
+        55,
+        144,
+        147
+      ],
+      "alphaMargins": {
+        "left": 36,
+        "top": 55,
+        "right": 48,
+        "bottom": 45
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-06.png",
+      "fileBytes": 19878,
+      "alphaBounds": [
+        51,
+        59,
+        135,
+        148
+      ],
+      "alphaMargins": {
+        "left": 51,
+        "top": 59,
+        "right": 57,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-side",
+      "row": 10,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/special-side/frame-07.png",
+      "fileBytes": 20000,
+      "alphaBounds": [
+        53,
+        60,
+        137,
+        148
+      ],
+      "alphaMargins": {
+        "left": 53,
+        "top": 60,
+        "right": 55,
+        "bottom": 44
+      },
+      "minimumAlphaMargin": 44
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-00.png",
+      "fileBytes": 21263,
+      "alphaBounds": [
+        66,
+        52,
+        142,
+        152
+      ],
+      "alphaMargins": {
+        "left": 66,
+        "top": 52,
+        "right": 50,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-01.png",
+      "fileBytes": 22824,
+      "alphaBounds": [
+        45,
+        54,
+        138,
+        150
+      ],
+      "alphaMargins": {
+        "left": 45,
+        "top": 54,
+        "right": 54,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-02.png",
+      "fileBytes": 23699,
+      "alphaBounds": [
+        36,
+        52,
+        137,
+        160
+      ],
+      "alphaMargins": {
+        "left": 36,
+        "top": 52,
+        "right": 55,
+        "bottom": 32
+      },
+      "minimumAlphaMargin": 32
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-03.png",
+      "fileBytes": 22910,
+      "alphaBounds": [
+        43,
+        53,
+        138,
+        151
+      ],
+      "alphaMargins": {
+        "left": 43,
+        "top": 53,
+        "right": 54,
+        "bottom": 41
+      },
+      "minimumAlphaMargin": 41
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-04.png",
+      "fileBytes": 22212,
+      "alphaBounds": [
+        58,
+        55,
+        145,
+        154
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 55,
+        "right": 47,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-05.png",
+      "fileBytes": 21016,
+      "alphaBounds": [
+        39,
+        47,
+        134,
+        137
+      ],
+      "alphaMargins": {
+        "left": 39,
+        "top": 47,
+        "right": 58,
+        "bottom": 55
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-06.png",
+      "fileBytes": 24039,
+      "alphaBounds": [
+        44,
+        55,
+        138,
+        154
+      ],
+      "alphaMargins": {
+        "left": 44,
+        "top": 55,
+        "right": 54,
+        "bottom": 38
+      },
+      "minimumAlphaMargin": 38
+    },
+    {
+      "clip": "special-up",
+      "row": 11,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/special-up/frame-07.png",
+      "fileBytes": 21253,
+      "alphaBounds": [
+        66,
+        52,
+        142,
+        152
+      ],
+      "alphaMargins": {
+        "left": 66,
+        "top": 52,
+        "right": 50,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 0,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-00.png",
+      "fileBytes": 21565,
+      "alphaBounds": [
+        54,
+        53,
+        131,
+        156
+      ],
+      "alphaMargins": {
+        "left": 54,
+        "top": 53,
+        "right": 61,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 1,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-01.png",
+      "fileBytes": 21803,
+      "alphaBounds": [
+        50,
+        55,
+        131,
+        153
+      ],
+      "alphaMargins": {
+        "left": 50,
+        "top": 55,
+        "right": 61,
+        "bottom": 39
+      },
+      "minimumAlphaMargin": 39
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 2,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-02.png",
+      "fileBytes": 20348,
+      "alphaBounds": [
+        66,
+        53,
+        135,
+        149
+      ],
+      "alphaMargins": {
+        "left": 66,
+        "top": 53,
+        "right": 57,
+        "bottom": 43
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 3,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-03.png",
+      "fileBytes": 21374,
+      "alphaBounds": [
+        56,
+        51,
+        113,
+        156
+      ],
+      "alphaMargins": {
+        "left": 56,
+        "top": 51,
+        "right": 79,
+        "bottom": 36
+      },
+      "minimumAlphaMargin": 36
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 4,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-04.png",
+      "fileBytes": 20453,
+      "alphaBounds": [
+        52,
+        61,
+        136,
+        146
+      ],
+      "alphaMargins": {
+        "left": 52,
+        "top": 61,
+        "right": 56,
+        "bottom": 46
+      },
+      "minimumAlphaMargin": 46
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 5,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-05.png",
+      "fileBytes": 21270,
+      "alphaBounds": [
+        57,
+        53,
+        132,
+        149
+      ],
+      "alphaMargins": {
+        "left": 57,
+        "top": 53,
+        "right": 60,
+        "bottom": 43
+      },
+      "minimumAlphaMargin": 43
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 6,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-06.png",
+      "fileBytes": 21590,
+      "alphaBounds": [
+        60,
+        51,
+        128,
+        150
+      ],
+      "alphaMargins": {
+        "left": 60,
+        "top": 51,
+        "right": 64,
+        "bottom": 42
+      },
+      "minimumAlphaMargin": 42
+    },
+    {
+      "clip": "special-down",
+      "row": 12,
+      "column": 7,
+      "file": "output/blender/super-slop-brothers/sigma/special-down/frame-07.png",
+      "fileBytes": 21612,
+      "alphaBounds": [
+        58,
+        51,
+        128,
+        152
+      ],
+      "alphaMargins": {
+        "left": 58,
+        "top": 51,
+        "right": 64,
+        "bottom": 40
+      },
+      "minimumAlphaMargin": 40
+    }
+  ]
+}

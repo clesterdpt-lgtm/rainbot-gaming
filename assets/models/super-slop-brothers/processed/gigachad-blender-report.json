@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-07-17T01:03:58.894050+00:00",
+  "fighterId": "gigachad",
+  "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+  "blenderVersion": "4.5.11 LTS",
+  "sourceFiles": {
+    "base": "assets/models/super-slop-brothers/source/gigachad-rigged.glb",
+    "run": "assets/models/super-slop-brothers/source/gigachad-run.glb",
+    "idle": "assets/models/super-slop-brothers/animations/gigachad-idle.glb",
+    "hit": "assets/models/super-slop-brothers/animations/gigachad-hit.glb",
+    "special-neutral": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb",
+    "special-side": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb",
+    "special-up": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb",
+    "special-down": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb"
+  },
+  "processedRig": {
+    "file": "assets/models/super-slop-brothers/processed/gigachad-rigged.glb",
+    "fileBytes": 9195872,
+    "sha256": "5df4a0d6bc221ec32fc633a9bedaabf2df193b57fe40d4649ffad8920ce6c749",
+    "meshCount": 1,
+    "armature": "gigachad_Armature",
+    "bones": 24,
+    "triangles": 25990,
+    "materials": [
+      "gigachad_Material_01"
+    ],
+    "images": [],
+    "targetHeightMeters": 1.8,
+    "textureMaxSize": 1024,
+    "normalizationScale": 0.8780488555570474,
+    "sourceBounds": {
+      "min": [
+        -0.973518,
+        -0.435995,
+        0.0
+      ],
+      "max": [
+        0.973519,
+        0.435995,
+        2.05
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.854797,
+        -0.382825,
+        -0.0
+      ],
+      "max": [
+        0.854797,
+        0.382825,
+        1.8
+      ]
+    },
+    "validation": {
+      "meshes": 1,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 26
+    },
+    "features": {
+      "mesh": true,
+      "armature": true,
+      "skin": true,
+      "animations": false,
+      "draco": false,
+      "meshopt": false
+    }
+  },
+  "motions": {
+    "run": {
+      "sourceAction": "gigachad_Armature_run",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.8510637283325195,
+            "removedRange": 4.876879453659058
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -7.717206954956055,
+            "removedRange": 6.360468864440918
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 8.528791427612305,
+            "removedRange": 4.78423547744751
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/source/gigachad-run.glb"
+    },
+    "idle": {
+      "sourceAction": "gigachad_Armature_idle",
+      "frameRange": [
+        0.8000000715255737,
+        40.80000305175781
+      ],
+      "durationFrames": 40.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 32.055091857910156,
+            "removedRange": 1.2407474517822266
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.04931676387786865,
+            "removedRange": 2.325486183166504
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 7.177520751953125,
+            "removedRange": 2.2217698097229004
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-idle.glb"
+    },
+    "hit": {
+      "sourceAction": "gigachad_Armature_hit",
+      "frameRange": [
+        0.0,
+        36.79999923706055
+      ],
+      "durationFrames": 36.79999923706055,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.53353750705719,
+            "removedRange": 2.8178335428237915
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -17.804319381713867,
+            "removedRange": 171.60672760009766
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 14.074525833129883,
+            "removedRange": 159.86340713500977
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-hit.glb"
+    },
+    "special-neutral": {
+      "sourceAction": "gigachad_Armature_special-neutral",
+      "frameRange": [
+        0.8000000715255737,
+        176.0
+      ],
+      "durationFrames": 175.19999992847443,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.692175030708313,
+            "removedRange": 196.58810305595398
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.7420414686203003,
+            "removedRange": 90.80684685707092
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -5.824798583984375,
+            "removedRange": 77.8138198852539
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb"
+    },
+    "special-side": {
+      "sourceAction": "gigachad_Armature_special-side",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.038818359375,
+            "removedRange": 6.3460575342178345
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.245637893676758,
+            "removedRange": 219.4528522491455
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 7.545587539672852,
+            "removedRange": 241.8373622894287
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb"
+    },
+    "special-up": {
+      "sourceAction": "gigachad_Armature_special-up",
+      "frameRange": [
+        0.8000000715255737,
+        112.79999542236328
+      ],
+      "durationFrames": 111.99999535083771,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.8830005526542664,
+            "removedRange": 142.52096557617188
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.0513830184936523,
+            "removedRange": 153.98333358764648
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.6243290901184082,
+            "removedRange": 143.57126426696777
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb"
+    },
+    "special-down": {
+      "sourceAction": "gigachad_Armature_special-down",
+      "frameRange": [
+        0.8000000715255737,
+        224.8000030517578
+      ],
+      "durationFrames": 224.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.5508685111999512,
+            "removedRange": 99.73438262939453
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.2144026756286621,
+            "removedRange": 70.63851928710938
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -4.572376728057861,
+            "removedRange": 84.04593849182129
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb"
+    }
+  },
+  "render": {
+    "frameSize": 192,
+    "framesPerClip": 8,
+    "columns": 8,
+    "rows": 13,
+    "pixelFormat": "PNG RGBA 8-bit",
+    "transparent": true,
+    "engine": "BLENDER_EEVEE_NEXT",
+    "framesDir": "output/blender/super-slop-brothers/gigachad",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-right three-quarter",
+      "location": [
+        4.2,
+        -7.0,
+        3.35
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.94
+      ],
+      "orthoScale": 3.3,
+      "lights": [
+        {
+          "name": "SuperSlop_Key",
+          "type": "AREA",
+          "location": [
+            -3.8,
+            -4.6,
+            6.2
+          ],
+          "energy": 900.0,
+          "size": 4.0,
+          "color": [
+            1.0,
+            0.8,
+            0.66
+          ]
+        },
+        {
+          "name": "SuperSlop_Fill",
+          "type": "AREA",
+          "location": [
+            4.7,
+            -2.4,
+            3.5
+          ],
+          "energy": 520.0,
+          "size": 4.5,
+          "color": [
+            0.45,
+            0.72,
+            1.0
+          ]
+        },
+        {
+          "name": "SuperSlop_Rim",
+          "type": "AREA",
+          "location": [
+            -3.0,
+            3.8,
+            5.2
+          ],
+          "energy": 760.0,
+          "size": 3.0,
+          "color": [
+            1.0,
+            0.22,
+            0.62
+          ]
+        }
+      ],
+      "worldStrength": 0.32,
+      "colorManagement": "AgX medium-high contrast"
+    },
+    "lighting": "fixed three-area-light rig plus fixed world fill"
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-idle.glb",
+      "sourceAction": "gigachad_Armature_idle",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.8,
+        10.800001,
+        15.800001,
+        20.800002,
+        25.800002,
+        30.800002,
+        35.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 35.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/idle/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/idle/frame-07.png"
+      ]
+    },
+    {
+      "name": "run",
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "sourceFile": "assets/models/super-slop-brothers/source/gigachad-run.glb",
+      "sourceAction": "gigachad_Armature_run",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.7,
+        4.6,
+        6.5,
+        8.4,
+        10.3,
+        12.2,
+        14.1
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.1,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/run/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/run/frame-07.png"
+      ]
+    },
+    {
+      "name": "jump",
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb",
+      "sourceAction": "gigachad_Armature_special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up",
+      "normalizedSamples": [
+        0.0,
+        0.08,
+        0.17,
+        0.27,
+        0.36,
+        0.44,
+        0.5,
+        0.56
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.76,
+        19.839999,
+        31.039999,
+        41.119998,
+        50.079998,
+        56.799998,
+        63.519997
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 63.519997,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/jump/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/jump/frame-07.png"
+      ]
+    },
+    {
+      "name": "fall",
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb",
+      "sourceAction": "gigachad_Armature_special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up",
+      "normalizedSamples": [
+        0.56,
+        0.64,
+        0.71,
+        0.78,
+        0.85,
+        0.91,
+        0.96,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        63.519997,
+        72.479997,
+        80.319997,
+        88.159996,
+        95.999996,
+        102.719996,
+        108.319996,
+        112.799995
+      ],
+      "frameStart": 63.519997,
+      "frameEnd": 112.799995,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/fall/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/fall/frame-07.png"
+      ]
+    },
+    {
+      "name": "hit",
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-hit.glb",
+      "sourceAction": "gigachad_Armature_hit",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.0,
+        5.257143,
+        10.514285,
+        15.771428,
+        21.028571,
+        26.285714,
+        31.542856,
+        36.799999
+      ],
+      "frameStart": 0.0,
+      "frameEnd": 36.799999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/hit/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/hit/frame-07.png"
+      ]
+    },
+    {
+      "name": "shield",
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb",
+      "sourceAction": "gigachad_Armature_special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down",
+      "normalizedSamples": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.38,
+        0.38,
+        0.34,
+        0.28
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        23.2,
+        45.600001,
+        68.000001,
+        85.920001,
+        85.920001,
+        76.960001,
+        63.520001
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 85.920001,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/shield/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/shield/frame-07.png"
+      ]
+    },
+    {
+      "name": "dodge",
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb",
+      "sourceAction": "gigachad_Armature_special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side",
+      "normalizedSamples": [
+        0.0,
+        0.09,
+        0.2,
+        0.34,
+        0.49,
+        0.64,
+        0.79,
+        0.92
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.168,
+        3.84,
+        5.968,
+        8.248,
+        10.528,
+        12.808,
+        14.784
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.784,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/dodge/frame-07.png"
+      ]
+    },
+    {
+      "name": "grab",
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb",
+      "sourceAction": "gigachad_Armature_special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral",
+      "normalizedSamples": [
+        0.0,
+        0.07,
+        0.15,
+        0.25,
+        0.37,
+        0.5,
+        0.64,
+        0.78
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        13.064,
+        27.08,
+        44.6,
+        65.624,
+        88.4,
+        112.928,
+        137.456
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 137.456,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/grab/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/grab/frame-07.png"
+      ]
+    },
+    {
+      "name": "attack",
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb",
+      "sourceAction": "gigachad_Armature_special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.971429,
+        5.142857,
+        7.314286,
+        9.485714,
+        11.657143,
+        13.828571,
+        16.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 16.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/attack/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/attack/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-neutral",
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-neutral.glb",
+      "sourceAction": "gigachad_Armature_special-neutral",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        25.828571,
+        50.857143,
+        75.885714,
+        100.914286,
+        125.942857,
+        150.971429,
+        176.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 176.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/special-neutral/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-side",
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-side.glb",
+      "sourceAction": "gigachad_Armature_special-side",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.971429,
+        5.142857,
+        7.314286,
+        9.485714,
+        11.657143,
+        13.828571,
+        16.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 16.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/special-side/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-up",
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-up.glb",
+      "sourceAction": "gigachad_Armature_special-up",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        16.799999,
+        32.799999,
+        48.799998,
+        64.799997,
+        80.799997,
+        96.799996,
+        112.799995
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 112.799995,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/special-up/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-down",
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/gigachad-special-down.glb",
+      "sourceAction": "gigachad_Armature_special-down",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        32.8,
+        64.800001,
+        96.800001,
+        128.800002,
+        160.800002,
+        192.800003,
+        224.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 224.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-00.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-01.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-02.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-03.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-04.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-05.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-06.png",
+        "output/blender/super-slop-brothers/gigachad/special-down/frame-07.png"
+      ]
+    }
+  ]
+}

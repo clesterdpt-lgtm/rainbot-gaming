@@ -18,6 +18,8 @@
 
 **40 — Upper Window Gallery** is in progress with implementation and automated acceptance complete; the wider path and finished railing composition await user playtest.
 
+**41 — Super Slop Character Animation Upgrade** is in progress with implementation and automated acceptance complete; the six-fighter Meshy/Blender roster and ability feel await user playtest.
+
 ## Stable baseline
 
 - Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
@@ -52,6 +54,10 @@
 - The stalk cadence is calibrated to the existing 0.62m/s patrol at 0.37 playback and scales to about 0.645 for the existing 1.08m/s camera response. Patrol and response movement share a 0.985 facing gate so he pivots before translating through corners.
 - The marble path directly inside the large upper foyer window is now a finished `1.7m`-deep gallery with `1.5m` of usable clearance, replacing the exposed `0.9m` strip. A mansion-matched `0.98m` railing, repeated balusters, brass-topped corner newels, and a full Rapier guard join both side-balcony rails across its open edge.
 - Mr. Feast's east, center, and west window-gallery patrol points now share the widened deck centerline at `z=11.15`. The player can complete the full upper-balcony loop without falling, and a forward edge probe stops against the new guard while remaining grounded on the second floor.
+- Super Slop Brothers now uses six Meshy-authored, 24-bone fighter rigs prepared in Blender 4.5: Rainbot, Gigachad, Mr. Feast, Skibidi, Sigma, and AI Slop Bot. The preserved processed GLBs are 7.39–8.77 MiB each; raw Meshy masters/actions and editable Blender files remain ignored.
+- Each fighter has one 8-column × 13-row WebP atlas covering idle, run, jump, fall, hit, shield, dodge, grab, normal attack, and all four directional specials. The six atlases total 2,206,564 bytes, retain at least a six-pixel transparent margin, and contain zero clipped poses.
+- The Canvas2D simulation remains authoritative. Root translation is removed from the offline motion bake, active-match sheets load lazily with the old body atlas as fallback, hitlag freezes animation time, left-facing art mirrors without collision changes, and instant gameplay effects start on their rendered release pose.
+- All 24 directional specials now carry explicit animation identity. Deterministic QA executes the real dispatcher and verifies each move's projectile, melee, recovery, counter, reflect, teleport/clone, falling object, trap, or summoned dog alongside clip selection and frame progression.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
 
 ## Important constraint
@@ -91,6 +97,10 @@ The current face-retopology experiment is paused and must not be published or tr
 - Browser capture — `output/iterate/2026-07-16-tab-inventory-no-library-prompt.png` confirms the opening foyer has no left-side Library direction and displays the new Tab inventory control
 - Browser captures — `output/iterate/2026-07-16-inventory-icons-notepad-desktop.png` and `output/iterate/2026-07-16-inventory-icons-notepad-mobile.png` confirm the illustrated object cards and evidence-pad treatment at both target layouts
 - `python3 -m py_compile scripts/blender/retopologize-mr-feast-face.py` — passed
+- `python3 -m py_compile scripts/blender/prepare-super-slop-fighter.py scripts/build-super-slop-animation-atlas.py` — passed under the bundled Python/Blender 4.5 toolchain
+- `node --check assets/js/super-slop-brothers.js` and `node --check scripts/test-super-slop-character-animations.mjs` — passed with bundled Node 24
+- `node scripts/test-super-slop-character-animations.mjs` — passed six manifests/rigs/sheets, all 624 decoded poses, exact atlas layout, animation variation, all 24 real special dispatches, release-pose sync, frame progression, hitlag freeze, read-only diagnostics, lazy active-roster loading, forced legacy fallback, four-fighter rendering, desktop/mobile layout, touch controls, and zero unexpected browser errors
+- Super Slop browser captures — `output/iterate/super-slop-character-upgrade/all-24-specials-contact-sheet.jpg` summarizes the 24 deterministic ability captures; the source desktop, mobile, and fallback proofs are under `output/playwright/super-slop-character-animations/`
 - Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays; the existing basement-key captures continue to cover the adjacent story states
 
 ## Next action
@@ -100,5 +110,6 @@ User enters the temporary PIN `0513`, confirms number keys visibly populate the 
 ## Working conventions
 
 - Preserve the current static Three.js/Blender GLB architecture from ADR 0001.
+- Preserve Super Slop Brothers' static Canvas2D runtime; Meshy/Blender stay offline and sprite atlases remain a visual layer over existing gameplay authority.
 - Keep the three unrelated `.rainbot-*-state.json` files untouched.
 - Do not commit or push this milestone unless the user asks.

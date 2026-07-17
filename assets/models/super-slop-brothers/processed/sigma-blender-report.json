@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-07-17T01:08:42.162808+00:00",
+  "fighterId": "sigma",
+  "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+  "blenderVersion": "4.5.11 LTS",
+  "sourceFiles": {
+    "base": "assets/models/super-slop-brothers/source/sigma-rigged.glb",
+    "run": "assets/models/super-slop-brothers/source/sigma-run.glb",
+    "idle": "assets/models/super-slop-brothers/animations/sigma-idle.glb",
+    "hit": "assets/models/super-slop-brothers/animations/sigma-hit.glb",
+    "special-neutral": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb",
+    "special-side": "assets/models/super-slop-brothers/animations/sigma-special-side.glb",
+    "special-up": "assets/models/super-slop-brothers/animations/sigma-special-up.glb",
+    "special-down": "assets/models/super-slop-brothers/animations/sigma-special-down.glb"
+  },
+  "processedRig": {
+    "file": "assets/models/super-slop-brothers/processed/sigma-rigged.glb",
+    "fileBytes": 7749024,
+    "sha256": "d7b337181c0f5f13615bfee9b57b94081689417e2b2f19eda851c7017e111f1c",
+    "meshCount": 1,
+    "armature": "sigma_Armature",
+    "bones": 24,
+    "triangles": 25975,
+    "materials": [
+      "sigma_Material_01"
+    ],
+    "images": [],
+    "targetHeightMeters": 1.8,
+    "textureMaxSize": 1024,
+    "normalizationScale": 0.9729732010151121,
+    "sourceBounds": {
+      "min": [
+        -0.788583,
+        -0.497632,
+        0.0
+      ],
+      "max": [
+        0.788583,
+        0.497631,
+        1.85
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.76727,
+        -0.484182,
+        -0.0
+      ],
+      "max": [
+        0.76727,
+        0.484182,
+        1.8
+      ]
+    },
+    "validation": {
+      "meshes": 1,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 26
+    },
+    "features": {
+      "mesh": true,
+      "armature": true,
+      "skin": true,
+      "animations": false,
+      "draco": false,
+      "meshopt": false
+    }
+  },
+  "motions": {
+    "run": {
+      "sourceAction": "sigma_Armature_run",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.35588002204895,
+            "removedRange": 5.523271322250366
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -10.044241905212402,
+            "removedRange": 7.114823341369629
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 5.089180946350098,
+            "removedRange": 5.639479398727417
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/source/sigma-run.glb"
+    },
+    "idle": {
+      "sourceAction": "sigma_Armature_idle",
+      "frameRange": [
+        0.8000000715255737,
+        40.80000305175781
+      ],
+      "durationFrames": 40.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 29.78311538696289,
+            "removedRange": 1.7330951690673828
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -4.1815996170043945,
+            "removedRange": 2.9131040573120117
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.9441972970962524,
+            "removedRange": 1.9475494623184204
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-idle.glb"
+    },
+    "hit": {
+      "sourceAction": "sigma_Armature_hit",
+      "frameRange": [
+        0.0,
+        36.79999923706055
+      ],
+      "durationFrames": 36.79999923706055,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.03173547983169556,
+            "removedRange": 7.301100313663483
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -21.45522689819336,
+            "removedRange": 201.9798126220703
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 8.730417251586914,
+            "removedRange": 159.78566360473633
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-hit.glb"
+    },
+    "special-neutral": {
+      "sourceAction": "sigma_Armature_special-neutral",
+      "frameRange": [
+        0.8000000715255737,
+        96.80000305175781
+      ],
+      "durationFrames": 96.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 3.24859356880188,
+            "removedRange": 36.23526668548584
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -42.60116195678711,
+            "removedRange": 20.60500144958496
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 24.217937469482422,
+            "removedRange": 6.645853042602539
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb"
+    },
+    "special-side": {
+      "sourceAction": "sigma_Armature_special-side",
+      "frameRange": [
+        0.8000000715255737,
+        112.79999542236328
+      ],
+      "durationFrames": 111.99999535083771,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -2.3775722980499268,
+            "removedRange": 164.20507049560547
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.4050421714782715,
+            "removedRange": 162.04225540161133
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -3.310115337371826,
+            "removedRange": 157.24189949035645
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-side.glb"
+    },
+    "special-up": {
+      "sourceAction": "sigma_Armature_special-up",
+      "frameRange": [
+        0.8000000715255737,
+        64.80000305175781
+      ],
+      "durationFrames": 64.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.2552285194396973,
+            "removedRange": 18.732158422470093
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -9.764695167541504,
+            "removedRange": 252.87550449371338
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.7804834842681885,
+            "removedRange": 332.00705313682556
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-up.glb"
+    },
+    "special-down": {
+      "sourceAction": "sigma_Armature_special-down",
+      "frameRange": [
+        0.8000000715255737,
+        224.8000030517578
+      ],
+      "durationFrames": 224.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -4.635793685913086,
+            "removedRange": 98.80774688720703
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.1804029941558838,
+            "removedRange": 66.93425369262695
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -10.420097351074219,
+            "removedRange": 94.2682523727417
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-down.glb"
+    }
+  },
+  "render": {
+    "frameSize": 192,
+    "framesPerClip": 8,
+    "columns": 8,
+    "rows": 13,
+    "pixelFormat": "PNG RGBA 8-bit",
+    "transparent": true,
+    "engine": "BLENDER_EEVEE_NEXT",
+    "framesDir": "output/blender/super-slop-brothers/sigma",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-right three-quarter",
+      "location": [
+        4.2,
+        -7.0,
+        3.35
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.94
+      ],
+      "orthoScale": 3.3,
+      "lights": [
+        {
+          "name": "SuperSlop_Key",
+          "type": "AREA",
+          "location": [
+            -3.8,
+            -4.6,
+            6.2
+          ],
+          "energy": 900.0,
+          "size": 4.0,
+          "color": [
+            1.0,
+            0.8,
+            0.66
+          ]
+        },
+        {
+          "name": "SuperSlop_Fill",
+          "type": "AREA",
+          "location": [
+            4.7,
+            -2.4,
+            3.5
+          ],
+          "energy": 520.0,
+          "size": 4.5,
+          "color": [
+            0.45,
+            0.72,
+            1.0
+          ]
+        },
+        {
+          "name": "SuperSlop_Rim",
+          "type": "AREA",
+          "location": [
+            -3.0,
+            3.8,
+            5.2
+          ],
+          "energy": 760.0,
+          "size": 3.0,
+          "color": [
+            1.0,
+            0.22,
+            0.62
+          ]
+        }
+      ],
+      "worldStrength": 0.32,
+      "colorManagement": "AgX medium-high contrast"
+    },
+    "lighting": "fixed three-area-light rig plus fixed world fill"
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-idle.glb",
+      "sourceAction": "sigma_Armature_idle",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.8,
+        10.800001,
+        15.800001,
+        20.800002,
+        25.800002,
+        30.800002,
+        35.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 35.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/idle/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/idle/frame-07.png"
+      ]
+    },
+    {
+      "name": "run",
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "sourceFile": "assets/models/super-slop-brothers/source/sigma-run.glb",
+      "sourceAction": "sigma_Armature_run",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.7,
+        4.6,
+        6.5,
+        8.4,
+        10.3,
+        12.2,
+        14.1
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.1,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/run/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/run/frame-07.png"
+      ]
+    },
+    {
+      "name": "jump",
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-up.glb",
+      "sourceAction": "sigma_Armature_special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up",
+      "normalizedSamples": [
+        0.0,
+        0.08,
+        0.17,
+        0.27,
+        0.36,
+        0.44,
+        0.5,
+        0.56
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.92,
+        11.680001,
+        18.080001,
+        23.840001,
+        28.960001,
+        32.800002,
+        36.640002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 36.640002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/jump/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/jump/frame-07.png"
+      ]
+    },
+    {
+      "name": "fall",
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-up.glb",
+      "sourceAction": "sigma_Armature_special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up",
+      "normalizedSamples": [
+        0.56,
+        0.64,
+        0.71,
+        0.78,
+        0.85,
+        0.91,
+        0.96,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        36.640002,
+        41.760002,
+        46.240002,
+        50.720002,
+        55.200003,
+        59.040003,
+        62.240003,
+        64.800003
+      ],
+      "frameStart": 36.640002,
+      "frameEnd": 64.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/fall/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/fall/frame-07.png"
+      ]
+    },
+    {
+      "name": "hit",
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-hit.glb",
+      "sourceAction": "sigma_Armature_hit",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.0,
+        5.257143,
+        10.514285,
+        15.771428,
+        21.028571,
+        26.285714,
+        31.542856,
+        36.799999
+      ],
+      "frameStart": 0.0,
+      "frameEnd": 36.799999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/hit/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/hit/frame-07.png"
+      ]
+    },
+    {
+      "name": "shield",
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-down.glb",
+      "sourceAction": "sigma_Armature_special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down",
+      "normalizedSamples": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.38,
+        0.38,
+        0.34,
+        0.28
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        23.2,
+        45.600001,
+        68.000001,
+        85.920001,
+        85.920001,
+        76.960001,
+        63.520001
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 85.920001,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/shield/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/shield/frame-07.png"
+      ]
+    },
+    {
+      "name": "dodge",
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-side.glb",
+      "sourceAction": "sigma_Armature_special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side",
+      "normalizedSamples": [
+        0.0,
+        0.09,
+        0.2,
+        0.34,
+        0.49,
+        0.64,
+        0.79,
+        0.92
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        10.88,
+        23.199999,
+        38.879998,
+        55.679998,
+        72.479997,
+        89.279996,
+        103.839996
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 103.839996,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/dodge/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/dodge/frame-07.png"
+      ]
+    },
+    {
+      "name": "grab",
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb",
+      "sourceAction": "sigma_Armature_special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral",
+      "normalizedSamples": [
+        0.0,
+        0.07,
+        0.15,
+        0.25,
+        0.37,
+        0.5,
+        0.64,
+        0.78
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        7.52,
+        15.200001,
+        24.800001,
+        36.320001,
+        48.800002,
+        62.240002,
+        75.680002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 75.680002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/grab/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/grab/frame-07.png"
+      ]
+    },
+    {
+      "name": "attack",
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-side.glb",
+      "sourceAction": "sigma_Armature_special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        16.799999,
+        32.799999,
+        48.799998,
+        64.799997,
+        80.799997,
+        96.799996,
+        112.799995
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 112.799995,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/attack/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/attack/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-neutral",
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-neutral.glb",
+      "sourceAction": "sigma_Armature_special-neutral",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        14.514286,
+        28.228572,
+        41.942858,
+        55.657145,
+        69.371431,
+        83.085717,
+        96.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 96.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/special-neutral/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-side",
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-side.glb",
+      "sourceAction": "sigma_Armature_special-side",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        16.799999,
+        32.799999,
+        48.799998,
+        64.799997,
+        80.799997,
+        96.799996,
+        112.799995
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 112.799995,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/special-side/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/special-side/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-up",
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-up.glb",
+      "sourceAction": "sigma_Armature_special-up",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.942858,
+        19.085715,
+        28.228573,
+        37.37143,
+        46.514288,
+        55.657145,
+        64.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 64.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/special-up/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/special-up/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-down",
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/sigma-special-down.glb",
+      "sourceAction": "sigma_Armature_special-down",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        32.8,
+        64.800001,
+        96.800001,
+        128.800002,
+        160.800002,
+        192.800003,
+        224.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 224.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/sigma/special-down/frame-00.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-01.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-02.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-03.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-04.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-05.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-06.png",
+        "output/blender/super-slop-brothers/sigma/special-down/frame-07.png"
+      ]
+    }
+  ]
+}

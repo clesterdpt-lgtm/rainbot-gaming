@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-07-17T01:07:53.364534+00:00",
+  "fighterId": "skibidi",
+  "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+  "blenderVersion": "4.5.11 LTS",
+  "sourceFiles": {
+    "base": "assets/models/super-slop-brothers/source/skibidi-rigged.glb",
+    "run": "assets/models/super-slop-brothers/source/skibidi-run.glb",
+    "idle": "assets/models/super-slop-brothers/animations/skibidi-idle.glb",
+    "hit": "assets/models/super-slop-brothers/animations/skibidi-hit.glb",
+    "special-neutral": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb",
+    "special-side": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb",
+    "special-up": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb",
+    "special-down": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb"
+  },
+  "processedRig": {
+    "file": "assets/models/super-slop-brothers/processed/skibidi-rigged.glb",
+    "fileBytes": 8710180,
+    "sha256": "c1939578de8b85aa374fca67c8531bc25801a927e53270f7ec3c706b1bc66c49",
+    "meshCount": 1,
+    "armature": "skibidi_Armature",
+    "bones": 22,
+    "triangles": 25762,
+    "materials": [
+      "skibidi_Material_01"
+    ],
+    "images": [],
+    "targetHeightMeters": 1.8,
+    "textureMaxSize": 1024,
+    "normalizationScale": 1.0588226905258955,
+    "sourceBounds": {
+      "min": [
+        -0.7653,
+        -0.46491,
+        -1e-06
+      ],
+      "max": [
+        0.7653,
+        0.46491,
+        1.700001
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.810317,
+        -0.492257,
+        0.0
+      ],
+      "max": [
+        0.810317,
+        0.492257,
+        1.8
+      ]
+    },
+    "validation": {
+      "meshes": 1,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 24
+    },
+    "features": {
+      "mesh": true,
+      "armature": true,
+      "skin": true,
+      "animations": false,
+      "draco": false,
+      "meshopt": false
+    }
+  },
+  "motions": {
+    "run": {
+      "sourceAction": "skibidi_Armature_run",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.7320257425308228,
+            "removedRange": 5.140647888183594
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.5778346061706543,
+            "removedRange": 5.377334117889404
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 9.14251708984375,
+            "removedRange": 3.798591136932373
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/source/skibidi-run.glb"
+    },
+    "idle": {
+      "sourceAction": "skibidi_Armature_idle",
+      "frameRange": [
+        0.8000000715255737,
+        40.80000305175781
+      ],
+      "durationFrames": 40.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 36.87546157836914,
+            "removedRange": 0.7219772338867188
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 11.3109130859375,
+            "removedRange": 1.315591812133789
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 13.912595748901367,
+            "removedRange": 3.420477867126465
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-idle.glb"
+    },
+    "hit": {
+      "sourceAction": "skibidi_Armature_hit",
+      "frameRange": [
+        0.0,
+        36.79999923706055
+      ],
+      "durationFrames": 36.79999923706055,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.867754936218262,
+            "removedRange": 11.452270030975342
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.006590843200684,
+            "removedRange": 125.98117065429688
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 21.06317901611328,
+            "removedRange": 146.80715942382812
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-hit.glb"
+    },
+    "special-neutral": {
+      "sourceAction": "skibidi_Armature_special-neutral",
+      "frameRange": [
+        0.8000000715255737,
+        64.80000305175781
+      ],
+      "durationFrames": 64.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 10.687434196472168,
+            "removedRange": 12.852736473083496
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 4.318967819213867,
+            "removedRange": 20.84992504119873
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 14.079741477966309,
+            "removedRange": 21.379825592041016
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb"
+    },
+    "special-side": {
+      "sourceAction": "skibidi_Armature_special-side",
+      "frameRange": [
+        0.8000000715255737,
+        37.60000228881836
+      ],
+      "durationFrames": 36.800002217292786,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.8538567423820496,
+            "removedRange": 24.975282669067383
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.05768942832946777,
+            "removedRange": 367.2654001712799
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 9.750958442687988,
+            "removedRange": 297.947283744812
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb"
+    },
+    "special-up": {
+      "sourceAction": "skibidi_Armature_special-up",
+      "frameRange": [
+        0.8000000715255737,
+        74.39999389648438
+      ],
+      "durationFrames": 73.5999938249588,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.71915340423584,
+            "removedRange": 46.35213899612427
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.1310248374938965,
+            "removedRange": 150.40101861953735
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 6.350069046020508,
+            "removedRange": 125.28149223327637
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb"
+    },
+    "special-down": {
+      "sourceAction": "skibidi_Armature_special-down",
+      "frameRange": [
+        0.8000000715255737,
+        185.59999084472656
+      ],
+      "durationFrames": 184.799990773201,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -15.244379043579102,
+            "removedRange": 20.670320630073547
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -14.559885025024414,
+            "removedRange": 19.399958610534668
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 16.555635452270508,
+            "removedRange": 8.79594612121582
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb"
+    }
+  },
+  "render": {
+    "frameSize": 192,
+    "framesPerClip": 8,
+    "columns": 8,
+    "rows": 13,
+    "pixelFormat": "PNG RGBA 8-bit",
+    "transparent": true,
+    "engine": "BLENDER_EEVEE_NEXT",
+    "framesDir": "output/blender/super-slop-brothers/skibidi",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-right three-quarter",
+      "location": [
+        4.2,
+        -7.0,
+        3.35
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.94
+      ],
+      "orthoScale": 3.3,
+      "lights": [
+        {
+          "name": "SuperSlop_Key",
+          "type": "AREA",
+          "location": [
+            -3.8,
+            -4.6,
+            6.2
+          ],
+          "energy": 900.0,
+          "size": 4.0,
+          "color": [
+            1.0,
+            0.8,
+            0.66
+          ]
+        },
+        {
+          "name": "SuperSlop_Fill",
+          "type": "AREA",
+          "location": [
+            4.7,
+            -2.4,
+            3.5
+          ],
+          "energy": 520.0,
+          "size": 4.5,
+          "color": [
+            0.45,
+            0.72,
+            1.0
+          ]
+        },
+        {
+          "name": "SuperSlop_Rim",
+          "type": "AREA",
+          "location": [
+            -3.0,
+            3.8,
+            5.2
+          ],
+          "energy": 760.0,
+          "size": 3.0,
+          "color": [
+            1.0,
+            0.22,
+            0.62
+          ]
+        }
+      ],
+      "worldStrength": 0.32,
+      "colorManagement": "AgX medium-high contrast"
+    },
+    "lighting": "fixed three-area-light rig plus fixed world fill"
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-idle.glb",
+      "sourceAction": "skibidi_Armature_idle",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.8,
+        10.800001,
+        15.800001,
+        20.800002,
+        25.800002,
+        30.800002,
+        35.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 35.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/idle/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/idle/frame-07.png"
+      ]
+    },
+    {
+      "name": "run",
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "sourceFile": "assets/models/super-slop-brothers/source/skibidi-run.glb",
+      "sourceAction": "skibidi_Armature_run",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.7,
+        4.6,
+        6.5,
+        8.4,
+        10.3,
+        12.2,
+        14.1
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.1,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/run/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/run/frame-07.png"
+      ]
+    },
+    {
+      "name": "jump",
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb",
+      "sourceAction": "skibidi_Armature_special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up",
+      "normalizedSamples": [
+        0.0,
+        0.08,
+        0.17,
+        0.27,
+        0.36,
+        0.44,
+        0.5,
+        0.56
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        6.688,
+        13.311999,
+        20.671998,
+        27.295998,
+        33.183997,
+        37.599997,
+        42.015997
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 42.015997,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/jump/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/jump/frame-07.png"
+      ]
+    },
+    {
+      "name": "fall",
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb",
+      "sourceAction": "skibidi_Armature_special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up",
+      "normalizedSamples": [
+        0.56,
+        0.64,
+        0.71,
+        0.78,
+        0.85,
+        0.91,
+        0.96,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        42.015997,
+        47.903996,
+        53.055996,
+        58.207995,
+        63.359995,
+        67.775994,
+        71.455994,
+        74.399994
+      ],
+      "frameStart": 42.015997,
+      "frameEnd": 74.399994,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/fall/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/fall/frame-07.png"
+      ]
+    },
+    {
+      "name": "hit",
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-hit.glb",
+      "sourceAction": "skibidi_Armature_hit",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.0,
+        5.257143,
+        10.514285,
+        15.771428,
+        21.028571,
+        26.285714,
+        31.542856,
+        36.799999
+      ],
+      "frameStart": 0.0,
+      "frameEnd": 36.799999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/hit/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/hit/frame-07.png"
+      ]
+    },
+    {
+      "name": "shield",
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb",
+      "sourceAction": "skibidi_Armature_special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down",
+      "normalizedSamples": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.38,
+        0.38,
+        0.34,
+        0.28
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        19.279999,
+        37.759998,
+        56.239997,
+        71.023997,
+        71.023997,
+        63.631997,
+        52.543997
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 71.023997,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/shield/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/shield/frame-07.png"
+      ]
+    },
+    {
+      "name": "dodge",
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb",
+      "sourceAction": "skibidi_Armature_special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side",
+      "normalizedSamples": [
+        0.0,
+        0.09,
+        0.2,
+        0.34,
+        0.49,
+        0.64,
+        0.79,
+        0.92
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        4.112,
+        8.160001,
+        13.312001,
+        18.832001,
+        24.352001,
+        29.872002,
+        34.656002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 34.656002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/dodge/frame-07.png"
+      ]
+    },
+    {
+      "name": "grab",
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb",
+      "sourceAction": "skibidi_Armature_special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral",
+      "normalizedSamples": [
+        0.0,
+        0.07,
+        0.15,
+        0.25,
+        0.37,
+        0.5,
+        0.64,
+        0.78
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.28,
+        10.400001,
+        16.800001,
+        24.480001,
+        32.800002,
+        41.760002,
+        50.720002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 50.720002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/grab/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/grab/frame-07.png"
+      ]
+    },
+    {
+      "name": "attack",
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb",
+      "sourceAction": "skibidi_Armature_special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        6.057143,
+        11.314286,
+        16.57143,
+        21.828573,
+        27.085716,
+        32.342859,
+        37.600002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 37.600002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/attack/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/attack/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-neutral",
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-neutral.glb",
+      "sourceAction": "skibidi_Armature_special-neutral",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.942858,
+        19.085715,
+        28.228573,
+        37.37143,
+        46.514288,
+        55.657145,
+        64.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 64.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/special-neutral/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-side",
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-side.glb",
+      "sourceAction": "skibidi_Armature_special-side",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        6.057143,
+        11.314286,
+        16.57143,
+        21.828573,
+        27.085716,
+        32.342859,
+        37.600002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 37.600002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/special-side/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-up",
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-up.glb",
+      "sourceAction": "skibidi_Armature_special-up",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        11.314285,
+        21.82857,
+        32.342855,
+        42.857139,
+        53.371424,
+        63.885709,
+        74.399994
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 74.399994,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/special-up/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-down",
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/skibidi-special-down.glb",
+      "sourceAction": "skibidi_Armature_special-down",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        27.199999,
+        53.599997,
+        79.999996,
+        106.399995,
+        132.799993,
+        159.199992,
+        185.599991
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 185.599991,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-00.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-01.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-02.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-03.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-04.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-05.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-06.png",
+        "output/blender/super-slop-brothers/skibidi/special-down/frame-07.png"
+      ]
+    }
+  ]
+}

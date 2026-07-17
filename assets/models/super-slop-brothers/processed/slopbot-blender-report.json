@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-07-17T01:09:26.343488+00:00",
+  "fighterId": "slopbot",
+  "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+  "blenderVersion": "4.5.11 LTS",
+  "sourceFiles": {
+    "base": "assets/models/super-slop-brothers/source/slopbot-rigged.glb",
+    "run": "assets/models/super-slop-brothers/source/slopbot-run.glb",
+    "idle": "assets/models/super-slop-brothers/animations/slopbot-idle.glb",
+    "hit": "assets/models/super-slop-brothers/animations/slopbot-hit.glb",
+    "special-neutral": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb",
+    "special-side": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb",
+    "special-up": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb",
+    "special-down": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb"
+  },
+  "processedRig": {
+    "file": "assets/models/super-slop-brothers/processed/slopbot-rigged.glb",
+    "fileBytes": 9134668,
+    "sha256": "0b87fde5e02512aefdbfb256b46a72e84f53c9e040b1f191fa5475e6f559d106",
+    "meshCount": 1,
+    "armature": "slopbot_Armature",
+    "bones": 24,
+    "triangles": 25961,
+    "materials": [
+      "slopbot_Material_01"
+    ],
+    "images": [],
+    "targetHeightMeters": 1.8,
+    "textureMaxSize": 1024,
+    "normalizationScale": 1.0285713270199066,
+    "sourceBounds": {
+      "min": [
+        -0.777521,
+        -0.316419,
+        0.0
+      ],
+      "max": [
+        0.777521,
+        0.316419,
+        1.75
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.799735,
+        -0.32546,
+        0.0
+      ],
+      "max": [
+        0.799735,
+        0.32546,
+        1.8
+      ]
+    },
+    "validation": {
+      "meshes": 1,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 26
+    },
+    "features": {
+      "mesh": true,
+      "armature": true,
+      "skin": true,
+      "animations": false,
+      "draco": false,
+      "meshopt": false
+    }
+  },
+  "motions": {
+    "run": {
+      "sourceAction": "slopbot_Armature_run",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.7140486240386963,
+            "removedRange": 2.8177205324172974
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.969962120056152,
+            "removedRange": 5.374058723449707
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.3522911071777344,
+            "removedRange": 5.531397819519043
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/source/slopbot-run.glb"
+    },
+    "idle": {
+      "sourceAction": "slopbot_Armature_idle",
+      "frameRange": [
+        0.8000000715255737,
+        40.80000305175781
+      ],
+      "durationFrames": 40.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 33.63325881958008,
+            "removedRange": 1.254180908203125
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -3.804455518722534,
+            "removedRange": 2.3779094219207764
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 7.595150470733643,
+            "removedRange": 1.5078368186950684
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-idle.glb"
+    },
+    "hit": {
+      "sourceAction": "slopbot_Armature_hit",
+      "frameRange": [
+        0.0,
+        36.79999923706055
+      ],
+      "durationFrames": 36.79999923706055,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -3.250364303588867,
+            "removedRange": 7.8343241810798645
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -17.52406120300293,
+            "removedRange": 200.0726432800293
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.768665313720703,
+            "removedRange": 95.38681411743164
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-hit.glb"
+    },
+    "special-neutral": {
+      "sourceAction": "slopbot_Armature_special-neutral",
+      "frameRange": [
+        0.8000000715255737,
+        64.80000305175781
+      ],
+      "durationFrames": 64.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.6252132654190063,
+            "removedRange": 6.809774994850159
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -4.861959934234619,
+            "removedRange": 28.963391602039337
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.898492693901062,
+            "removedRange": 22.740328788757324
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb"
+    },
+    "special-side": {
+      "sourceAction": "slopbot_Armature_special-side",
+      "frameRange": [
+        0.8000000715255737,
+        192.80001831054688
+      ],
+      "durationFrames": 192.0000182390213,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 3.5511646270751953,
+            "removedRange": 27.719392776489258
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -4.343883514404297,
+            "removedRange": 31.794381767511368
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 3.6380927562713623,
+            "removedRange": 106.49988460540771
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb"
+    },
+    "special-up": {
+      "sourceAction": "slopbot_Armature_special-up",
+      "frameRange": [
+        0.8000000715255737,
+        29.600000381469727
+      ],
+      "durationFrames": 28.800000309944153,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -10.026636123657227,
+            "removedRange": 128.92220497131348
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -8.678339958190918,
+            "removedRange": 42.31501483917236
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 9.989701271057129,
+            "removedRange": 105.16192150115967
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb"
+    },
+    "special-down": {
+      "sourceAction": "slopbot_Armature_special-down",
+      "frameRange": [
+        0.8000000715255737,
+        55.19999694824219
+      ],
+      "durationFrames": 54.399996876716614,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.787054181098938,
+            "removedRange": 12.898480415344238
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -3.6524369716644287,
+            "removedRange": 19.147810697555542
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.6279628276824951,
+            "removedRange": 7.119170427322388
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb"
+    }
+  },
+  "render": {
+    "frameSize": 192,
+    "framesPerClip": 8,
+    "columns": 8,
+    "rows": 13,
+    "pixelFormat": "PNG RGBA 8-bit",
+    "transparent": true,
+    "engine": "BLENDER_EEVEE_NEXT",
+    "framesDir": "output/blender/super-slop-brothers/slopbot",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-right three-quarter",
+      "location": [
+        4.2,
+        -7.0,
+        3.35
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.94
+      ],
+      "orthoScale": 3.3,
+      "lights": [
+        {
+          "name": "SuperSlop_Key",
+          "type": "AREA",
+          "location": [
+            -3.8,
+            -4.6,
+            6.2
+          ],
+          "energy": 900.0,
+          "size": 4.0,
+          "color": [
+            1.0,
+            0.8,
+            0.66
+          ]
+        },
+        {
+          "name": "SuperSlop_Fill",
+          "type": "AREA",
+          "location": [
+            4.7,
+            -2.4,
+            3.5
+          ],
+          "energy": 520.0,
+          "size": 4.5,
+          "color": [
+            0.45,
+            0.72,
+            1.0
+          ]
+        },
+        {
+          "name": "SuperSlop_Rim",
+          "type": "AREA",
+          "location": [
+            -3.0,
+            3.8,
+            5.2
+          ],
+          "energy": 760.0,
+          "size": 3.0,
+          "color": [
+            1.0,
+            0.22,
+            0.62
+          ]
+        }
+      ],
+      "worldStrength": 0.32,
+      "colorManagement": "AgX medium-high contrast"
+    },
+    "lighting": "fixed three-area-light rig plus fixed world fill"
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-idle.glb",
+      "sourceAction": "slopbot_Armature_idle",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.8,
+        10.800001,
+        15.800001,
+        20.800002,
+        25.800002,
+        30.800002,
+        35.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 35.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/idle/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/idle/frame-07.png"
+      ]
+    },
+    {
+      "name": "run",
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "sourceFile": "assets/models/super-slop-brothers/source/slopbot-run.glb",
+      "sourceAction": "slopbot_Armature_run",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.7,
+        4.6,
+        6.5,
+        8.4,
+        10.3,
+        12.2,
+        14.1
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.1,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/run/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/run/frame-07.png"
+      ]
+    },
+    {
+      "name": "jump",
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb",
+      "sourceAction": "slopbot_Armature_special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up",
+      "normalizedSamples": [
+        0.0,
+        0.08,
+        0.17,
+        0.27,
+        0.36,
+        0.44,
+        0.5,
+        0.56
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        3.104,
+        5.696,
+        8.576,
+        11.168,
+        13.472,
+        15.2,
+        16.928
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 16.928,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/jump/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/jump/frame-07.png"
+      ]
+    },
+    {
+      "name": "fall",
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb",
+      "sourceAction": "slopbot_Armature_special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up",
+      "normalizedSamples": [
+        0.56,
+        0.64,
+        0.71,
+        0.78,
+        0.85,
+        0.91,
+        0.96,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        16.928,
+        19.232,
+        21.248,
+        23.264,
+        25.28,
+        27.008,
+        28.448,
+        29.6
+      ],
+      "frameStart": 16.928,
+      "frameEnd": 29.6,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/fall/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/fall/frame-07.png"
+      ]
+    },
+    {
+      "name": "hit",
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-hit.glb",
+      "sourceAction": "slopbot_Armature_hit",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.0,
+        5.257143,
+        10.514285,
+        15.771428,
+        21.028571,
+        26.285714,
+        31.542856,
+        36.799999
+      ],
+      "frameStart": 0.0,
+      "frameEnd": 36.799999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/hit/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/hit/frame-07.png"
+      ]
+    },
+    {
+      "name": "shield",
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb",
+      "sourceAction": "slopbot_Armature_special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down",
+      "normalizedSamples": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.38,
+        0.38,
+        0.34,
+        0.28
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        6.24,
+        11.679999,
+        17.119999,
+        21.471999,
+        21.471999,
+        19.295999,
+        16.031999
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 21.471999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/shield/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/shield/frame-07.png"
+      ]
+    },
+    {
+      "name": "dodge",
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb",
+      "sourceAction": "slopbot_Armature_special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side",
+      "normalizedSamples": [
+        0.0,
+        0.09,
+        0.2,
+        0.34,
+        0.49,
+        0.64,
+        0.79,
+        0.92
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        18.080002,
+        39.200004,
+        66.080006,
+        94.880009,
+        123.680012,
+        152.480014,
+        177.440017
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 177.440017,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/dodge/frame-07.png"
+      ]
+    },
+    {
+      "name": "grab",
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb",
+      "sourceAction": "slopbot_Armature_special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral",
+      "normalizedSamples": [
+        0.0,
+        0.07,
+        0.15,
+        0.25,
+        0.37,
+        0.5,
+        0.64,
+        0.78
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.28,
+        10.400001,
+        16.800001,
+        24.480001,
+        32.800002,
+        41.760002,
+        50.720002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 50.720002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/grab/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/grab/frame-07.png"
+      ]
+    },
+    {
+      "name": "attack",
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb",
+      "sourceAction": "slopbot_Armature_special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        28.228574,
+        55.657148,
+        83.085722,
+        110.514296,
+        137.94287,
+        165.371444,
+        192.800018
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 192.800018,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/attack/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/attack/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-neutral",
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-neutral.glb",
+      "sourceAction": "slopbot_Armature_special-neutral",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.942858,
+        19.085715,
+        28.228573,
+        37.37143,
+        46.514288,
+        55.657145,
+        64.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 64.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/special-neutral/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-side",
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-side.glb",
+      "sourceAction": "slopbot_Armature_special-side",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        28.228574,
+        55.657148,
+        83.085722,
+        110.514296,
+        137.94287,
+        165.371444,
+        192.800018
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 192.800018,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/special-side/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-up",
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-up.glb",
+      "sourceAction": "slopbot_Armature_special-up",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        4.914286,
+        9.028572,
+        13.142857,
+        17.257143,
+        21.371429,
+        25.485715,
+        29.6
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 29.6,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/special-up/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-down",
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/slopbot-special-down.glb",
+      "sourceAction": "slopbot_Armature_special-down",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        8.571428,
+        16.342856,
+        24.114284,
+        31.885713,
+        39.657141,
+        47.428569,
+        55.199997
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 55.199997,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-00.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-01.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-02.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-03.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-04.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-05.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-06.png",
+        "output/blender/super-slop-brothers/slopbot/special-down/frame-07.png"
+      ]
+    }
+  ]
+}

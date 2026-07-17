@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-07-17T01:06:17.578326+00:00",
+  "fighterId": "rainbot",
+  "pipeline": "Meshy rig and motions -> Blender 4.5 cleanup and fixed sprite render",
+  "blenderVersion": "4.5.11 LTS",
+  "sourceFiles": {
+    "base": "assets/models/super-slop-brothers/source/rainbot-rigged.glb",
+    "run": "assets/models/super-slop-brothers/source/rainbot-run.glb",
+    "idle": "assets/models/super-slop-brothers/animations/rainbot-idle.glb",
+    "hit": "assets/models/super-slop-brothers/animations/rainbot-hit.glb",
+    "special-neutral": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb",
+    "special-side": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb",
+    "special-up": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb",
+    "special-down": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb"
+  },
+  "processedRig": {
+    "file": "assets/models/super-slop-brothers/processed/rainbot-rigged.glb",
+    "fileBytes": 9056084,
+    "sha256": "57033c9dc65298c2eddafc3eb13e75507b25d1b5ecc128e48baf0a07d0415c3b",
+    "meshCount": 1,
+    "armature": "rainbot_Armature",
+    "bones": 24,
+    "triangles": 25950,
+    "materials": [
+      "rainbot_Material_01"
+    ],
+    "images": [],
+    "targetHeightMeters": 1.8,
+    "textureMaxSize": 1024,
+    "normalizationScale": 1.0588238069850113,
+    "sourceBounds": {
+      "min": [
+        -0.681616,
+        -0.247195,
+        0.0
+      ],
+      "max": [
+        0.681616,
+        0.247195,
+        1.7
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.721711,
+        -0.261736,
+        0.0
+      ],
+      "max": [
+        0.721711,
+        0.261736,
+        1.8
+      ]
+    },
+    "validation": {
+      "meshes": 1,
+      "skins": 1,
+      "animations": 0,
+      "nodes": 26
+    },
+    "features": {
+      "mesh": true,
+      "armature": true,
+      "skin": true,
+      "animations": false,
+      "draco": false,
+      "meshopt": false
+    }
+  },
+  "motions": {
+    "run": {
+      "sourceAction": "rainbot_Armature_run",
+      "frameRange": [
+        0.8000000715255737,
+        16.0
+      ],
+      "durationFrames": 15.199999928474426,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.1623259782791138,
+            "removedRange": 1.1403754949569702
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -7.1417460441589355,
+            "removedRange": 4.798006296157837
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.15647172927856445,
+            "removedRange": 6.802321672439575
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/source/rainbot-run.glb"
+    },
+    "idle": {
+      "sourceAction": "rainbot_Armature_idle",
+      "frameRange": [
+        0.8000000715255737,
+        40.80000305175781
+      ],
+      "durationFrames": 40.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 33.21596908569336,
+            "removedRange": 1.3160552978515625
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.8528001308441162,
+            "removedRange": 2.4715014696121216
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 3.8962364196777344,
+            "removedRange": 1.0366370677947998
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-idle.glb"
+    },
+    "hit": {
+      "sourceAction": "rainbot_Armature_hit",
+      "frameRange": [
+        0.0,
+        36.79999923706055
+      ],
+      "durationFrames": 36.79999923706055,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -1.1326515674591064,
+            "removedRange": 18.136863946914673
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -17.43086051940918,
+            "removedRange": 196.91341400146484
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -6.510610103607178,
+            "removedRange": 79.3701229095459
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-hit.glb"
+    },
+    "special-neutral": {
+      "sourceAction": "rainbot_Armature_special-neutral",
+      "frameRange": [
+        0.8000000715255737,
+        64.80000305175781
+      ],
+      "durationFrames": 64.00000298023224,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.3314385414123535,
+            "removedRange": 6.053976535797119
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -6.157968521118164,
+            "removedRange": 24.741910696029663
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.6159586906433105,
+            "removedRange": 17.450124740600586
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb"
+    },
+    "special-side": {
+      "sourceAction": "rainbot_Armature_special-side",
+      "frameRange": [
+        0.8000000715255737,
+        176.0
+      ],
+      "durationFrames": 175.19999992847443,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.9983706474304199,
+            "removedRange": 178.98265719413757
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 4.123812198638916,
+            "removedRange": 51.38759136199951
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.6954249143600464,
+            "removedRange": 71.57505798339844
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb"
+    },
+    "special-up": {
+      "sourceAction": "rainbot_Armature_special-up",
+      "frameRange": [
+        0.8000000715255737,
+        142.39999389648438
+      ],
+      "durationFrames": 141.5999938249588,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 2.1283791065216064,
+            "removedRange": 30.659053802490234
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -3.918154001235962,
+            "removedRange": 146.7087631225586
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 1.1509404182434082,
+            "removedRange": 106.49487400054932
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb"
+    },
+    "special-down": {
+      "sourceAction": "rainbot_Armature_special-down",
+      "frameRange": [
+        0.8000000715255737,
+        84.0
+      ],
+      "durationFrames": 83.19999992847443,
+      "rootMotion": {
+        "strategy": "freeze Blender X/Y/Z root channels at common neutral zero; Canvas physics owns world displacement",
+        "removedAxes": [
+          "x",
+          "y",
+          "z"
+        ],
+        "strippedChannels": [
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "x",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 0.7324981689453125,
+            "removedRange": 3.5773876905441284
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "y",
+            "anchoredValue": 0.0,
+            "sourceStartValue": 3.0744004249572754,
+            "removedRange": 13.021516799926758
+          },
+          {
+            "dataPath": "pose.bones[\"Hips\"].location",
+            "axis": "z",
+            "anchoredValue": 0.0,
+            "sourceStartValue": -0.25822770595550537,
+            "removedRange": 6.285082578659058
+          }
+        ]
+      },
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb"
+    }
+  },
+  "render": {
+    "frameSize": 192,
+    "framesPerClip": 8,
+    "columns": 8,
+    "rows": 13,
+    "pixelFormat": "PNG RGBA 8-bit",
+    "transparent": true,
+    "engine": "BLENDER_EEVEE_NEXT",
+    "framesDir": "output/blender/super-slop-brothers/rainbot",
+    "camera": {
+      "projection": "orthographic",
+      "view": "front-right three-quarter",
+      "location": [
+        4.2,
+        -7.0,
+        3.35
+      ],
+      "target": [
+        0.0,
+        0.0,
+        0.94
+      ],
+      "orthoScale": 3.3,
+      "lights": [
+        {
+          "name": "SuperSlop_Key",
+          "type": "AREA",
+          "location": [
+            -3.8,
+            -4.6,
+            6.2
+          ],
+          "energy": 900.0,
+          "size": 4.0,
+          "color": [
+            1.0,
+            0.8,
+            0.66
+          ]
+        },
+        {
+          "name": "SuperSlop_Fill",
+          "type": "AREA",
+          "location": [
+            4.7,
+            -2.4,
+            3.5
+          ],
+          "energy": 520.0,
+          "size": 4.5,
+          "color": [
+            0.45,
+            0.72,
+            1.0
+          ]
+        },
+        {
+          "name": "SuperSlop_Rim",
+          "type": "AREA",
+          "location": [
+            -3.0,
+            3.8,
+            5.2
+          ],
+          "energy": 760.0,
+          "size": 3.0,
+          "color": [
+            1.0,
+            0.22,
+            0.62
+          ]
+        }
+      ],
+      "worldStrength": 0.32,
+      "colorManagement": "AgX medium-high contrast"
+    },
+    "lighting": "fixed three-area-light rig plus fixed world fill"
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "row": 0,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "idle",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-idle.glb",
+      "sourceAction": "rainbot_Armature_idle",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.8,
+        10.800001,
+        15.800001,
+        20.800002,
+        25.800002,
+        30.800002,
+        35.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 35.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/idle/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/idle/frame-07.png"
+      ]
+    },
+    {
+      "name": "run",
+      "row": 1,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "run",
+      "sourceFile": "assets/models/super-slop-brothers/source/rainbot-run.glb",
+      "sourceAction": "rainbot_Armature_run",
+      "derived": false,
+      "derivation": "direct looping source motion",
+      "normalizedSamples": [
+        0.0,
+        0.125,
+        0.25,
+        0.375,
+        0.5,
+        0.625,
+        0.75,
+        0.875
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        2.7,
+        4.6,
+        6.5,
+        8.4,
+        10.3,
+        12.2,
+        14.1
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 14.1,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/run/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/run/frame-07.png"
+      ]
+    },
+    {
+      "name": "jump",
+      "row": 2,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb",
+      "sourceAction": "rainbot_Armature_special-up",
+      "derived": true,
+      "derivation": "launch and ascent phase of special-up",
+      "normalizedSamples": [
+        0.0,
+        0.08,
+        0.17,
+        0.27,
+        0.36,
+        0.44,
+        0.5,
+        0.56
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        12.128,
+        24.871999,
+        39.031998,
+        51.775998,
+        63.103997,
+        71.599997,
+        80.095997
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 80.095997,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/jump/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/jump/frame-07.png"
+      ]
+    },
+    {
+      "name": "fall",
+      "row": 3,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb",
+      "sourceAction": "rainbot_Armature_special-up",
+      "derived": true,
+      "derivation": "apex and descent phase of special-up",
+      "normalizedSamples": [
+        0.56,
+        0.64,
+        0.71,
+        0.78,
+        0.85,
+        0.91,
+        0.96,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        80.095997,
+        91.423996,
+        101.335996,
+        111.247995,
+        121.159995,
+        129.655994,
+        136.735994,
+        142.399994
+      ],
+      "frameStart": 80.095997,
+      "frameEnd": 142.399994,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/fall/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/fall/frame-07.png"
+      ]
+    },
+    {
+      "name": "hit",
+      "row": 4,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "hit",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-hit.glb",
+      "sourceAction": "rainbot_Armature_hit",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.0,
+        5.257143,
+        10.514285,
+        15.771428,
+        21.028571,
+        26.285714,
+        31.542856,
+        36.799999
+      ],
+      "frameStart": 0.0,
+      "frameEnd": 36.799999,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/hit/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/hit/frame-07.png"
+      ]
+    },
+    {
+      "name": "shield",
+      "row": 5,
+      "frames": 8,
+      "loop": true,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb",
+      "sourceAction": "rainbot_Armature_special-down",
+      "derived": true,
+      "derivation": "anticipation and held brace from special-down",
+      "normalizedSamples": [
+        0.0,
+        0.1,
+        0.2,
+        0.3,
+        0.38,
+        0.38,
+        0.34,
+        0.28
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.12,
+        17.44,
+        25.76,
+        32.416,
+        32.416,
+        29.088,
+        24.096
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 32.416,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/shield/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/shield/frame-07.png"
+      ]
+    },
+    {
+      "name": "dodge",
+      "row": 6,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb",
+      "sourceAction": "rainbot_Armature_special-side",
+      "derived": true,
+      "derivation": "fast displacement pose sequence from special-side",
+      "normalizedSamples": [
+        0.0,
+        0.09,
+        0.2,
+        0.34,
+        0.49,
+        0.64,
+        0.79,
+        0.92
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        16.568,
+        35.84,
+        60.368,
+        86.648,
+        112.928,
+        139.208,
+        161.984
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 161.984,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/dodge/frame-07.png"
+      ]
+    },
+    {
+      "name": "grab",
+      "row": 7,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb",
+      "sourceAction": "rainbot_Armature_special-neutral",
+      "derived": true,
+      "derivation": "reach and hold phase from special-neutral",
+      "normalizedSamples": [
+        0.0,
+        0.07,
+        0.15,
+        0.25,
+        0.37,
+        0.5,
+        0.64,
+        0.78
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        5.28,
+        10.400001,
+        16.800001,
+        24.480001,
+        32.800002,
+        41.760002,
+        50.720002
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 50.720002,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/grab/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/grab/frame-07.png"
+      ]
+    },
+    {
+      "name": "attack",
+      "row": 8,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb",
+      "sourceAction": "rainbot_Armature_special-side",
+      "derived": true,
+      "derivation": "full special-side strike used as normal attack",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        25.828571,
+        50.857143,
+        75.885714,
+        100.914286,
+        125.942857,
+        150.971429,
+        176.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 176.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/attack/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/attack/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-neutral",
+      "row": 9,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-neutral",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-neutral.glb",
+      "sourceAction": "rainbot_Armature_special-neutral",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        9.942858,
+        19.085715,
+        28.228573,
+        37.37143,
+        46.514288,
+        55.657145,
+        64.800003
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 64.800003,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/special-neutral/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-side",
+      "row": 10,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-side",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-side.glb",
+      "sourceAction": "rainbot_Armature_special-side",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        25.828571,
+        50.857143,
+        75.885714,
+        100.914286,
+        125.942857,
+        150.971429,
+        176.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 176.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/special-side/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-up",
+      "row": 11,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-up",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-up.glb",
+      "sourceAction": "rainbot_Armature_special-up",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        21.028571,
+        41.257141,
+        61.485712,
+        81.714282,
+        101.942853,
+        122.171423,
+        142.399994
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 142.399994,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/special-up/frame-07.png"
+      ]
+    },
+    {
+      "name": "special-down",
+      "row": 12,
+      "frames": 8,
+      "loop": false,
+      "sourceMotion": "special-down",
+      "sourceFile": "assets/models/super-slop-brothers/animations/rainbot-special-down.glb",
+      "sourceAction": "rainbot_Armature_special-down",
+      "derived": false,
+      "derivation": "direct source motion",
+      "normalizedSamples": [
+        0.0,
+        0.14285714285714285,
+        0.2857142857142857,
+        0.42857142857142855,
+        0.5714285714285714,
+        0.7142857142857143,
+        0.8571428571428571,
+        1.0
+      ],
+      "sampledSourceFrames": [
+        0.8,
+        12.685714,
+        24.571429,
+        36.457143,
+        48.342857,
+        60.228571,
+        72.114286,
+        84.0
+      ],
+      "frameStart": 0.8,
+      "frameEnd": 84.0,
+      "renderedFrames": [
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-00.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-01.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-02.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-03.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-04.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-05.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-06.png",
+        "output/blender/super-slop-brothers/rainbot/special-down/frame-07.png"
+      ]
+    }
+  ]
+}

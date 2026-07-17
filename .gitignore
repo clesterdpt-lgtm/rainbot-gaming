@@ -37,3 +37,8 @@ assets/models/mr-feast/*.meta.json
 assets/models/mr-feast/*.submission.json
 assets/models/mr-feast/processed/mr-feast-master.glb
 assets/models/mr-feast/processed/mr-feast-working.blend*
+
+# Super Slop Brothers raw Meshy outputs and editable Blender working files
+assets/models/super-slop-brothers/source/
+assets/models/super-slop-brothers/animations/
+assets/models/super-slop-brothers/processed/*-working.blend*

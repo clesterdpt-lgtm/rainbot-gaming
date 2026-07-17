@@ -1371,7 +1371,11 @@ check("45 Mr Feast facial interaction order", /qaExpressionCycle:\s*Object\.free
 check("45 Mr Feast QA-only interaction", /if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "loaded Mr. Feast model does not expose a QA-only look-at interaction and expression prompt");
 check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /mrFeastGaitSide:/.test(qaRoomViews) && /mrFeastGaitTurnSide:/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
 check("45 Mr Feast facial framing", /mrFeastFaceClose:\s*\[0,\s*FLOOR\.MAIN,\s*-8\.45,\s*0,\s*-0\.02\]/.test(qaRoomViews), "close facial QA framing is missing");
-check("51 Mr Feast bounded camera response", !/attack|capture|damage|gameOver|failureState/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack, capture, damage, or a failure state");
+check("51 Mr Feast bounded camera response", !/attack|damage/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack or damage behavior");
+// Milestone 46 sanctions capture and failure, but only along one documented
+// path: the witnessed/recorded pursuit, whose speed is clamped below the
+// player's walk speed and whose game-over fires solely on a basement catch.
+check("51 Mr Feast explicit capture boundary", /Math\.min\(MR_FEAST_PURSUIT\.speed,\s*PLAYER\.walkSpeed\s*-\s*0\.05\)/.test(mrFeastWanderer) && /feetY <= MR_FEAST_PURSUIT\.basementFeetY/.test(mrFeastWanderer) && count(mrFeastWanderer, /triggerMansionGameOver\(/g) === 1, "capture and failure must exist only through the speed-capped pursuit's basement catch");
 
 // 51. Physical public-show cameras create a performance-safe stealth layer.
 // They scan through one data-driven system, preserve intentional blind spots,

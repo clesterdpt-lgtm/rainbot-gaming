@@ -414,6 +414,30 @@
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
     }
 
+    #mansion-gameover {
+      position: absolute;
+      inset: 0;
+      z-index: 24;
+      display: grid;
+      place-items: center;
+      overflow: auto;
+      padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      background: rgba(10, 3, 4, 0.86);
+      backdrop-filter: blur(10px);
+    }
+
+    #mansion-gameover[hidden] { display: none; }
+
+    .mansion-gameover__panel {
+      border-color: rgba(186, 80, 60, 0.55);
+      background: linear-gradient(150deg, rgba(38, 18, 16, 0.98), rgba(10, 8, 10, 0.98));
+    }
+
+    #mansion-gameover-title {
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
     @media (max-width: 820px) {
       #mansion-speech {
         max-width: min(300px, 80%);
@@ -1881,6 +1905,18 @@
               <button id="mansion-menu-save" class="mansion-menu__button" type="button">Save game</button>
               <button id="mansion-menu-load" class="mansion-menu__button" type="button" disabled>Load save</button>
               <button id="mansion-menu-dev" class="mansion-menu__button" type="button" aria-pressed="false">Dev mode: Off</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="mansion-gameover" role="dialog" aria-modal="true" aria-labelledby="mansion-gameover-title" hidden>
+          <div class="mansion-menu__panel mansion-gameover__panel">
+            <p class="mansion-menu__eyebrow">Game over</p>
+            <h2 class="mansion-menu__title" id="mansion-gameover-title">Caught</h2>
+            <p class="mansion-menu__copy" id="mansion-gameover-copy">Mr. Feast caught you in the restricted basement. The house keeps its guests.</p>
+            <div class="mansion-menu__actions">
+              <button id="mansion-gameover-load" class="mansion-menu__button mansion-menu__button--primary" type="button">Load last save</button>
+              <button id="mansion-gameover-restart" class="mansion-menu__button" type="button">Start over</button>
             </div>
           </div>
         </section>

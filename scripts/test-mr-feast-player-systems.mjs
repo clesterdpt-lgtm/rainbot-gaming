@@ -246,6 +246,7 @@ async function run() {
         titleTop: title.top,
         closeTop: close.top,
         stageTop: stage.top,
+        stageBottom: stage.bottom,
         panelClientWidth: panel.clientWidth,
         panelScrollWidth: panel.scrollWidth,
       };

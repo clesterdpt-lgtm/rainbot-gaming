@@ -109,6 +109,10 @@
     speech: $("mansion-speech"),
     speechSpeaker: $("mansion-speech-speaker"),
     speechText: $("mansion-speech-text"),
+    gameOver: $("mansion-gameover"),
+    gameOverCopy: $("mansion-gameover-copy"),
+    gameOverLoad: $("mansion-gameover-load"),
+    gameOverRestart: $("mansion-gameover-restart"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
     menuMaximize: $("mansion-menu-maximize"),
@@ -1054,6 +1058,21 @@
     chairPullYawRadians: 0.62,
     chairColliderCenterY: 0.55,
   });
+  const MR_FEAST_PURSUIT = Object.freeze({
+    // Hard fairness rule: pursuit must stay below PLAYER.walkSpeed so a
+    // walking player always escapes; a crouched player does not.
+    speed: 1.95,
+    referenceRunSpeed: 1.95,
+    sightRangeMeters: 9,
+    sightHalfAngleRadians: 0.95,
+    eyeHeightMeters: 1.86,
+    catchRadiusMeters: 1.15,
+    approachRadiusMeters: 4.2,
+    repathSeconds: 0.9,
+    giveUpSeconds: 26,
+    warningSeconds: 2.4,
+    basementFeetY: -0.45,
+  });
   const MR_FEAST_SPEECH = Object.freeze({
     minSeconds: 4.2,
     maxSeconds: 9,
@@ -1127,6 +1146,37 @@
         "One moment. The house is embarrassing itself.",
         "We will chat once the disorder has apologized.",
         "Later. Entropy has made a request, and I am declining it.",
+      ]),
+      "pursuit-witnessed": Object.freeze([
+        "I SAW that. Stay where you are.",
+        "In front of me? Bold. Hold still.",
+        "You did that while I was watching. Come here.",
+        "Ah. A performance. Let us discuss it. Closely.",
+      ]),
+      "pursuit-recorded": Object.freeze([
+        "The cameras saw you. Which means I saw you.",
+        "Smile — you are on the program. Now hold still.",
+        "Recorded, timestamped, and — excuse me — pursued.",
+        "The patrons saw that too. They are delighted. I am not.",
+      ]),
+      warning: Object.freeze([
+        "Consider this a warning. The house rarely gives two.",
+        "Touch my house again and the menu grows by one name.",
+        "A warning, freely given. Generosity is my brand.",
+        "That was small. So is my patience.",
+        "We will call this a misunderstanding. Do not explain yourself.",
+      ]),
+      "pursuit-lost": Object.freeze([
+        "Fine. The house knows where you sleep.",
+        "Hide. It flatters the furniture.",
+        "I will finish this later. I always finish.",
+        "Gone. How rude. And how temporary.",
+      ]),
+      "caught-basement": Object.freeze([
+        "You were told the basement was private. Now you are part of the tour.",
+        "The basement keeps its guests. House rules.",
+        "Curiosity, meet the cellar. You two will have forever.",
+        "Dinner is served.",
       ]),
     }),
   });
@@ -1565,6 +1615,7 @@
     maximized: false,
     devMode: false,
     devModeSnapshot: null,
+    gameOver: null,
     movement: {
       crouched: false,
       sprinting: false,
@@ -2770,6 +2821,10 @@
       this.qaLastCameraResponse = null;
       this.housekeeping = { active: null, fixesCompleted: 0 };
       this.qaLastHousekeepingRun = null;
+      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null };
+      this.pursuitWarningFocus = null;
+      this.qaPursuitGiveUpOverride = null;
+      this.qaLastPursuitRun = null;
       this.talkHitbox = null;
       this.lastDt = 1 / 60;
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
@@ -3580,6 +3635,9 @@
 
     respondToCameraAlarm(alarm) {
       if (!alarm) return this.getDiagnostics();
+      // An active pursuit already has him bearing down on the player; a new
+      // camera ping about the same person must not reroute him.
+      if (this.pursuit.active) return this.getDiagnostics();
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       const startId = this.nearestResponseStartId();
       if (!this.responseResume) {
@@ -3621,7 +3679,7 @@
     }
 
     canAcceptHousekeeping() {
-      if (this.loadStatus !== "ready" || this.activeCameraAlarm || this.housekeeping.active) return false;
+      if (this.loadStatus !== "ready" || this.activeCameraAlarm || this.housekeeping.active || this.pursuit.active) return false;
       return this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL
         || this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING
         || this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING;
@@ -3630,6 +3688,7 @@
     respondToHousekeepingTask(task) {
       if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
+      if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
       const startId = this.nearestResponseStartId();
       const targetId = this.nearestResponseTargetId(task.position);
@@ -3748,7 +3807,297 @@
       return this.qaLastHousekeepingRun;
     }
 
+    pursuitSpeed() {
+      // Fairness invariant: even if the tuning table drifts, he can never
+      // outrun a walking player.
+      return Math.min(MR_FEAST_PURSUIT.speed, PLAYER.walkSpeed - 0.05);
+    }
+
+    runPlaybackRate() {
+      const baseRate = Number(this.manifest?.animations?.run?.playbackRate) || 1;
+      return baseRate * this.pursuitSpeed() / MR_FEAST_PURSUIT.referenceRunSpeed;
+    }
+
+    pursuitGiveUpSeconds() {
+      const override = Number(this.qaPursuitGiveUpOverride);
+      return Number.isFinite(override) && override > 0 ? override : MR_FEAST_PURSUIT.giveUpSeconds;
+    }
+
+    playerFeetY(p) {
+      return p.y - (PLAYER.halfHeight + PLAYER.radius + 0.03);
+    }
+
+    canSeePlayerAct() {
+      if (this.loadStatus !== "ready" || !physics || state.isHidden) return false;
+      const p = physics.playerPosition();
+      const dx = p.x - this.root.position.x;
+      const dz = p.z - this.root.position.z;
+      const horizontal = Math.hypot(dx, dz);
+      if (horizontal > MR_FEAST_PURSUIT.sightRangeMeters) return false;
+      if (Math.abs(this.playerFeetY(p) - this.root.position.y) > 2.2) return false;
+      if (horizontal > 0.0001) {
+        const facingDot = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
+        if (facingDot < Math.cos(MR_FEAST_PURSUIT.sightHalfAngleRadians)) return false;
+      }
+      pursuitSight.eye.set(this.root.position.x, this.root.position.y + MR_FEAST_PURSUIT.eyeHeightMeters, this.root.position.z);
+      pursuitSight.target.set(p.x, p.y + 0.35, p.z);
+      pursuitSight.direction.copy(pursuitSight.target).sub(pursuitSight.eye);
+      const distance = pursuitSight.direction.length();
+      if (distance < 0.0001) return true;
+      pursuitSight.direction.divideScalar(distance);
+      pursuitSight.raycaster.set(pursuitSight.eye, pursuitSight.direction);
+      pursuitSight.raycaster.far = Math.max(0.05, distance - 0.1);
+      return pursuitSight.raycaster.intersectObjects(occluderMeshes, false).length === 0;
+    }
+
+    beginPursuit(info = {}) {
+      if (state.gameOver || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
+      if (this.pursuit.active) {
+        this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+        return { accepted: true, refreshed: true };
+      }
+      if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
+      this.activeCameraAlarm = null;
+      const startId = this.nearestResponseStartId();
+      if (!this.responseResume) {
+        const resumeNode = this.responseGraph.nodes.get(startId);
+        this.responseResume = {
+          nodeId: startId,
+          routeIndex: Number.isInteger(resumeNode?.routeIndex) ? resumeNode.routeIndex : this.waypointIndex,
+          pauseRemaining: this.pauseRemaining,
+        };
+      }
+      this.pursuit.active = { reason: info.reason || "witnessed", kind: info.kind || null };
+      this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+      this.pursuit.repathRemaining = 0;
+      // Chase pathing starts from wherever he physically stands, not from the
+      // patrol bookkeeping, so a witness mid-room runs directly at the player.
+      this.responseCurrentNodeId = this.nearestResponseTargetId(this.root.position) || startId;
+      this.responseBlockedReason = null;
+      this.transitionSecurityResponse("alarm");
+      this.repathPursuit();
+      this.pauseRemaining = 0;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      speechSystem?.sayFromPool(this.pursuit.active.reason === "recorded" ? "pursuit-recorded" : "pursuit-witnessed");
+      return { accepted: true };
+    }
+
+    repathPursuit() {
+      if (!physics) return;
+      const p = physics.playerPosition();
+      const targetId = this.nearestResponseTargetId({ x: p.x, y: this.playerFeetY(p), z: p.z });
+      // Approach steering leaves the graph, so re-anchor to the node nearest
+      // his actual position before planning the next leg of the chase.
+      const startId = this.nearestResponseTargetId(this.root.position) || this.responseCurrentNodeId;
+      if (startId) this.responseCurrentNodeId = startId;
+      this.responsePath = startId && targetId ? this.findResponsePath(startId, targetId) : [];
+      this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
+    }
+
+    updatePursuit(dt) {
+      if (!physics) {
+        this.givePursuitUp();
+        return;
+      }
+      const p = physics.playerPosition();
+      const feetY = this.playerFeetY(p);
+      const dx = p.x - this.root.position.x;
+      const dz = p.z - this.root.position.z;
+      const horizontal = Math.hypot(dx, dz);
+      const sameFloor = Math.abs(feetY - this.root.position.y) < 1.2;
+      if (!state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.catchRadiusMeters) {
+        this.resolveCatch(p, feetY);
+        return;
+      }
+      this.pursuit.giveUpRemaining -= dt;
+      if (this.pursuit.giveUpRemaining <= 0) {
+        this.givePursuitUp();
+        return;
+      }
+      this.pursuit.repathRemaining -= dt;
+      this.updateSecurityPath(dt);
+    }
+
+    updatePursuitApproach(dt) {
+      const p = physics.playerPosition();
+      const feetY = this.playerFeetY(p);
+      const dx = p.x - this.root.position.x;
+      const dz = p.z - this.root.position.z;
+      const horizontal = Math.hypot(dx, dz);
+      const sameFloor = Math.abs(feetY - this.root.position.y) < 1.2;
+      if (!state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.approachRadiusMeters && horizontal > 0.0001) {
+        this.faceTarget({ x: p.x, z: p.z });
+        const facingAlignment = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
+        if (facingAlignment >= MR_FEAST_NPC.movementAlignment) {
+          const step = Math.min(
+            Math.max(0, horizontal - MR_FEAST_PURSUIT.catchRadiusMeters * 0.55),
+            this.pursuitSpeed() * dt,
+          );
+          this.root.position.x += dx / horizontal * step;
+          this.root.position.z += dz / horizontal * step;
+          this.responseDistance += step;
+          this.moving = step > 0;
+          this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
+        } else {
+          this.moving = false;
+          this.fadeToAction("idle");
+        }
+        this.stepAnimationAndFace(dt);
+        return;
+      }
+      if (this.pursuit.repathRemaining <= 0) this.repathPursuit();
+      this.moving = false;
+      this.fadeToAction("idle");
+      this.stepAnimationAndFace(dt);
+    }
+
+    resolveCatch(p, feetY) {
+      const info = this.pursuit.active;
+      this.pursuit.active = null;
+      this.pursuit.catches += 1;
+      this.faceTarget({ x: p.x, z: p.z }, true);
+      this.moving = false;
+      this.fadeToAction("idle");
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
+      if (feetY <= MR_FEAST_PURSUIT.basementFeetY) {
+        this.pursuit.lastOutcome = "game-over";
+        this.searchRemaining = 0;
+        this.searchElapsed = 0;
+        speechSystem?.sayFromPool("caught-basement");
+        triggerMansionGameOver({ reason: info?.reason, kind: info?.kind, feetY });
+        return;
+      }
+      this.pursuit.lastOutcome = "warning";
+      this.pursuit.warnings += 1;
+      this.pursuitWarningFocus = { x: p.x, y: this.root.position.y, z: p.z };
+      this.searchRemaining = MR_FEAST_PURSUIT.warningSeconds;
+      this.searchElapsed = 0;
+      this.searchBaseYaw = this.root.rotation.y;
+      speechSystem?.sayFromPool("warning");
+    }
+
+    givePursuitUp() {
+      if (!this.pursuit.active) return;
+      this.pursuit.active = null;
+      this.pursuit.lastOutcome = "lost";
+      speechSystem?.sayFromPool("pursuit-lost");
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
+      this.searchRemaining = CAMERA_SECURITY.searchSeconds;
+      this.searchElapsed = 0;
+      this.searchBaseYaw = this.root.rotation.y;
+      this.moving = false;
+      this.fadeToAction("idle");
+    }
+
+    recoverAfterLoad() {
+      this.pursuit.active = null;
+      this.pursuitWarningFocus = null;
+      this.housekeeping.active = null;
+      this.activeCameraAlarm = null;
+      this.responsePath = [];
+      this.responseResume = null;
+      this.responseBlockedReason = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      if (this.responseStateTrace[this.responseStateTrace.length - 1] !== MR_FEAST_RESPONSE_STATE.PATROL) {
+        this.responseStateTrace.push(MR_FEAST_RESPONSE_STATE.PATROL);
+      }
+      let nearestIndex = 0;
+      let nearestDistance = Infinity;
+      MR_FEAST_NPC.waypoints.forEach((waypoint, index) => {
+        const distance = Math.hypot(
+          waypoint.x - this.root.position.x,
+          waypoint.y - this.root.position.y,
+          waypoint.z - this.root.position.z,
+        );
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      this.waypointIndex = nearestIndex;
+      this.currentRouteZone = MR_FEAST_NPC.waypoints[nearestIndex].zone;
+      this.currentRouteLevel = MR_FEAST_NPC.waypoints[nearestIndex].level;
+      this.pauseRemaining = 0;
+      this.moving = false;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      if (this.loadStatus === "ready") {
+        this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
+      }
+      return this.getDiagnostics();
+    }
+
+    runPursuitForQA(maxSeconds = 120) {
+      if (!state.qa || this.loadStatus !== "ready") {
+        return { outcome: "not-ready", simulatedSeconds: 0, states: [...this.responseStateTrace] };
+      }
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(maxSeconds) || 120, 1, 600);
+      const warningsBefore = this.pursuit.warnings;
+      const catchesBefore = this.pursuit.catches;
+      const teleportsBefore = this.responseTeleports;
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let simulatedSeconds = 0;
+      let maxFrameSpeed = 0;
+      const actionsSeen = new Set();
+      const previous = this.root.position.clone();
+      while (simulatedSeconds < limit) {
+        if (state.gameOver) break;
+        if (!this.pursuit.active && this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL) break;
+        const pursuingAtFrameStart = Boolean(this.pursuit.active);
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(fixedStep);
+        }
+        tamperSystem?.update(fixedStep);
+        this.update(fixedStep);
+        if (pursuingAtFrameStart) {
+          const frameDistance = Math.hypot(
+            this.root.position.x - previous.x,
+            this.root.position.y - previous.y,
+            this.root.position.z - previous.z,
+          );
+          maxFrameSpeed = Math.max(maxFrameSpeed, frameDistance / fixedStep);
+          if (this.currentAnimation) actionsSeen.add(this.currentAnimation);
+        }
+        previous.copy(this.root.position);
+        simulatedSeconds += fixedStep;
+      }
+      if (!state.gameOver) {
+        this.qaAnimationFrozen = true;
+        this.wanderingEnabled = false;
+        this.moving = false;
+      }
+      this.root.updateMatrixWorld(true);
+      const outcome = state.gameOver
+        ? "game-over"
+        : this.pursuit.catches > catchesBefore && this.pursuit.warnings > warningsBefore
+          ? "warning"
+          : this.pursuit.lastOutcome === "lost"
+            ? "lost"
+            : "timeout";
+      this.qaLastPursuitRun = {
+        outcome,
+        completed: !this.pursuit.active,
+        simulatedSeconds: Number(simulatedSeconds.toFixed(2)),
+        states: [...this.responseStateTrace],
+        teleports: this.responseTeleports - teleportsBefore,
+        maxFrameSpeed: Number(maxFrameSpeed.toFixed(3)),
+        pursuitSpeed: Number(this.pursuitSpeed().toFixed(3)),
+        playerWalkSpeed: PLAYER.walkSpeed,
+        actionsSeen: [...actionsSeen],
+        warnings: this.pursuit.warnings - warningsBefore,
+        catches: this.pursuit.catches - catchesBefore,
+      };
+      return this.qaLastPursuitRun;
+    }
+
     beginSecurityReturn() {
+      this.pursuitWarningFocus = null;
       if (!this.responseResume) {
         this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
         return;
@@ -3791,6 +4140,10 @@
     updateSecurityPath(dt) {
       const pathStep = this.responsePath[0];
       if (!pathStep) {
+        if (this.pursuit.active) {
+          this.updatePursuitApproach(dt);
+          return;
+        }
         if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
         else if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING) this.finishSecurityReturn();
         return;
@@ -3809,7 +4162,7 @@
         this.currentRouteLevel = target.level;
         this.responsePath.shift();
         this.closeClearedRouteDoors(this.responsePath[0]?.node || null);
-        if (!this.responsePath.length) {
+        if (!this.responsePath.length && !this.pursuit.active) {
           if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
           else this.finishSecurityReturn();
         }
@@ -3827,24 +4180,34 @@
         this.stepAnimationAndFace(dt);
         return;
       }
-      const step = Math.min(distance, CAMERA_SECURITY.responseSpeed * dt);
+      const travelSpeed = this.pursuit.active ? this.pursuitSpeed() : CAMERA_SECURITY.responseSpeed;
+      const step = Math.min(distance, travelSpeed * dt);
       this.root.position.x += dx / distance * step;
       this.root.position.y += dy / distance * step;
       this.root.position.z += dz / distance * step;
       this.responseDistance += step;
       this.moving = step > 0;
       this.closeClearedRouteDoors(target);
-      this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed));
+      if (this.pursuit.active) this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
+      else this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed));
       this.stepAnimationAndFace(dt);
     }
 
     updateSecurityResponse(dt) {
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING && this.pursuit.active) {
+        this.updatePursuit(dt);
+        this.syncResponseVisibility();
+        return;
+      }
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING) {
         this.searchRemaining = Math.max(0, this.searchRemaining - dt);
         this.searchElapsed += dt;
         if (this.housekeeping.active) {
           // Fixing, not sweeping: he squares up to the disorder and stays on it.
           this.faceTarget(this.housekeeping.active.position);
+        } else if (this.pursuitWarningFocus) {
+          // Delivering a warning: he keeps facing the player he just caught.
+          this.faceTarget(this.pursuitWarningFocus);
         } else {
           this.root.rotation.y = this.searchBaseYaw
             + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2) * CAMERA_SECURITY.searchHalfAngle;
@@ -3854,8 +4217,12 @@
         this.closeClearedRouteDoors(null);
         this.stepAnimationAndFace(dt);
         if (this.searchRemaining <= 0) {
-          if (this.housekeeping.active) this.completeHousekeepingFix();
-          else this.beginSecurityReturn();
+          if (this.housekeeping.active) {
+            this.completeHousekeepingFix();
+          } else {
+            this.pursuitWarningFocus = null;
+            this.beginSecurityReturn();
+          }
         }
       } else {
         this.updateSecurityPath(dt);
@@ -4081,6 +4448,10 @@
       this.qaLastCameraResponse = null;
       this.housekeeping = { active: null, fixesCompleted: 0 };
       this.qaLastHousekeepingRun = null;
+      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null };
+      this.pursuitWarningFocus = null;
+      this.qaPursuitGiveUpOverride = null;
+      this.qaLastPursuitRun = null;
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
       this.moving = this.loadStatus === "ready";
@@ -4525,6 +4896,16 @@
           fixesCompleted: this.housekeeping.fixesCompleted,
           queued: tamperSystem ? tamperSystem.queuedCount() : 0,
           lastRun: this.qaLastHousekeepingRun,
+        },
+        pursuit: {
+          active: this.pursuit.active ? { ...this.pursuit.active } : null,
+          giveUpRemaining: Number(Math.max(0, this.pursuit.giveUpRemaining).toFixed(2)),
+          warnings: this.pursuit.warnings,
+          catches: this.pursuit.catches,
+          lastOutcome: this.pursuit.lastOutcome,
+          speed: Number(this.pursuitSpeed().toFixed(3)),
+          playerWalkSpeed: PLAYER.walkSpeed,
+          lastRun: this.qaLastPursuitRun,
         },
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         moving: this.moving,
@@ -6623,8 +7004,14 @@
       if (entry.isTampered || entry.tampered === tampered) return false;
       entry.tampered = tampered;
       entry.apply(tampered);
-      if (tampered) entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
-      else this.handleRestored(entry, cause);
+      if (tampered) {
+        entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
+        // Deliberate mischief can be caught in the act; straightening never
+        // counts, and ordinary fridge use stays innocent until left open.
+        if (cause === "player" && entry.kind !== "fridge") reportPlayerInfraction(entry.kind);
+      } else {
+        this.handleRestored(entry, cause);
+      }
       return true;
     }
 
@@ -6768,6 +7155,55 @@
       }
       return { seconds: Number(elapsed.toFixed(2)), dispatched, queued: this.queuedCount() };
     }
+  }
+
+  const pursuitSight = {
+    raycaster: new THREE.Raycaster(),
+    eye: new THREE.Vector3(),
+    target: new THREE.Vector3(),
+    direction: new THREE.Vector3(),
+  };
+
+  function reportPlayerInfraction(kind) {
+    if (!state.started || state.gameOver || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
+    const witnessed = mrFeastNpc.canSeePlayerAct();
+    const recorded = !witnessed && Boolean(cameraSecurity?.isRecordingPlayer());
+    if (!witnessed && !recorded) return null;
+    return mrFeastNpc.beginPursuit({ kind, reason: witnessed ? "witnessed" : "recorded" });
+  }
+
+  function triggerMansionGameOver(details = {}) {
+    if (state.gameOver) return state.gameOver;
+    const floor = Number.isFinite(details.feetY) && details.feetY <= MR_FEAST_PURSUIT.basementFeetY
+      ? "BASEMENT"
+      : state.currentFloor;
+    state.gameOver = {
+      reason: details.reason || "witnessed",
+      kind: details.kind || null,
+      floor,
+      room: state.currentRoom,
+    };
+    document.exitPointerLock?.();
+    if (dom.gameOverCopy) {
+      dom.gameOverCopy.textContent = state.gameOver.reason === "recorded"
+        ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
+        : "Mr. Feast caught you in the restricted basement. The house keeps its guests.";
+    }
+    if (dom.gameOverLoad) dom.gameOverLoad.disabled = !mansionSaveSlot?.has();
+    if (dom.gameOver) {
+      dom.gameOver.hidden = false;
+      requestAnimationFrame(() => {
+        const target = mansionSaveSlot?.has() ? dom.gameOverLoad : dom.gameOverRestart;
+        target?.focus({ preventScroll: true });
+      });
+    }
+    return state.gameOver;
+  }
+
+  function clearMansionGameOver() {
+    state.gameOver = null;
+    if (dom.gameOver) dom.gameOver.hidden = true;
+    dom.canvas?.focus({ preventScroll: true });
   }
 
   let workroomKeypadReturnFocus = null;
@@ -7405,6 +7841,19 @@
       return Boolean(mrFeastNpc && mrFeastNpc.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL);
     }
 
+    isRecordingPlayer() {
+      // Mirrors the HUD pill: infractions count as "on camera" exactly when
+      // the player-facing status reads `Being recorded`.
+      const activeCamera = this.cameraById.get(state.security.activeCameraId);
+      return Boolean(
+        state.started
+        && !state.isHidden
+        && state.security.observed
+        && activeCamera
+        && (activeCamera.trackingPlayer || activeCamera.acquisition >= 1),
+      );
+    }
+
     updateHud() {
       if (!dom.security) return;
       const activeCamera = this.cameraById.get(state.security.activeCameraId);
@@ -7490,6 +7939,7 @@
         patronFeedOnline: !state.contestant13.relaySabotaged,
         observed: state.security.observed,
         permitted: state.security.permitted,
+        recordingPlayer: this.isRecordingPlayer(),
         exposure: Number(state.security.exposure.toFixed(4)),
         exposurePercent: Number((state.security.exposure * 100).toFixed(1)),
         illegalAction: state.security.illegalAction,
@@ -13894,7 +14344,14 @@
     const saved = mansionSaveSlot?.read();
     const loaded = restoreMansionSave(saved);
     setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
-    if (loaded) setMenuOpen(false);
+    if (loaded) {
+      setMenuOpen(false);
+      // Loading is time travel: any capture, pursuit, or errand in flight
+      // belongs to the abandoned timeline.
+      if (state.gameOver) clearMansionGameOver();
+      mrFeastNpc?.recoverAfterLoad();
+      speechSystem?.dismiss();
+    }
     return loaded;
   }
 
@@ -13961,7 +14418,7 @@
   }
 
   function activateCurrentInteraction() {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress) return;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return;
     if (!state.currentInteraction) return;
     state.currentInteraction.activate();
     updateInteractionPrompt();
@@ -13969,6 +14426,11 @@
 
   function bindInput() {
     window.addEventListener("keydown", (event) => {
+      if (state.gameOver) {
+        // The fail overlay owns the page: only its focusable buttons react.
+        if (event.code === "Escape") event.preventDefault();
+        return;
+      }
       if (event.code === "Tab" && state.journalOpen && !event.repeat && contestant13Quest) {
         event.preventDefault();
         contestant13Quest.toggleJournal();
@@ -14074,6 +14536,8 @@
     if (dom.bookReader) dom.bookReader.addEventListener("click", (event) => {
       if (event.target === dom.bookReader) readableBookSystem?.close();
     });
+    if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => loadMansionGame());
+    if (dom.gameOverRestart) dom.gameOverRestart.addEventListener("click", () => location.reload());
     if (dom.menuResume) dom.menuResume.addEventListener("click", () => setMenuOpen(false));
     if (dom.menuMaximize) dom.menuMaximize.addEventListener("click", toggleMaximized);
     if (dom.menuSave) dom.menuSave.addEventListener("click", saveMansionGame);
@@ -14222,7 +14686,7 @@
   }
 
   function findInteraction() {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress) return null;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
@@ -14777,7 +15241,7 @@
       fpsElapsed = 0;
     }
 
-    if (!state.menuOpen && !state.workroom.keypadOpen) {
+    if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver) {
       for (const object of animatedObjects) object.update(dt);
       if (cameraSecurity) cameraSecurity.update(dt);
       if (tamperSystem) tamperSystem.update(dt);
@@ -14906,6 +15370,7 @@
       security: cameraSecurity?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
+      gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
@@ -14927,6 +15392,7 @@
           energy: Number(state.movement.energy.toFixed(2)),
           energyPercent: Number(((state.movement.energy / PLAYER.energyMax) * 100).toFixed(1)),
           speed: Number(state.movement.speed.toFixed(3)),
+          walkSpeed: PLAYER.walkSpeed,
           eyeHeight: Number(state.movement.eyeHeight.toFixed(3)),
           standingEyeHeight: PLAYER.eye,
           stealth: {
@@ -15247,6 +15713,35 @@
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
+    window.MrFeastFresh.runMrFeastPursuitForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runPursuitForQA(maxSeconds) : null;
+    window.MrFeastFresh.setPursuitGiveUpForQA = (seconds) => {
+      if (!state.qa || !mrFeastNpc) return null;
+      mrFeastNpc.qaPursuitGiveUpOverride = Number(seconds) > 0 ? Number(seconds) : null;
+      if (mrFeastNpc.pursuit.active) {
+        mrFeastNpc.pursuit.giveUpRemaining = Math.min(mrFeastNpc.pursuit.giveUpRemaining, mrFeastNpc.pursuitGiveUpSeconds());
+      }
+      return { giveUpSeconds: mrFeastNpc.pursuitGiveUpSeconds() };
+    };
+    window.MrFeastFresh.reportInfractionForQA = (kind) => state.qa ? reportPlayerInfraction(kind || "portrait") : null;
+    window.MrFeastFresh.enterHideSpotForQA = (name = "") => {
+      if (!state.qa) return null;
+      const query = String(name).toLowerCase();
+      const spot = hidingSpots.find((candidate) => !query || candidate.name.toLowerCase().includes(query));
+      if (!spot) return null;
+      spot.enter();
+      return { name: spot.name, hidden: state.isHidden };
+    };
+    window.MrFeastFresh.leaveHideSpotForQA = () => {
+      if (!state.qa) return null;
+      state.activeHideSpot?.exit();
+      return { hidden: state.isHidden };
+    };
+    window.MrFeastFresh.clearGameOverForQA = () => {
+      if (!state.qa) return null;
+      clearMansionGameOver();
+      mrFeastNpc?.recoverAfterLoad();
+      return { gameOver: state.gameOver };
+    };
     window.MrFeastFresh.placePlayerNearMrFeastForQA = (distance = 1.6) => {
       if (!state.qa || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready" || !physics) return null;
       const host = mrFeastNpc.root.position;

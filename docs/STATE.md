@@ -28,6 +28,8 @@
 
 **45 — Tamper Distractions and Host Speech** is in progress with implementation and automated acceptance complete; tamper distraction pacing, bubble readability while hiding, and smalltalk tone await user playtest.
 
+**46 — Caught in the Act** is in progress with implementation and automated acceptance complete; witnessed/recorded pursuit tension, warning tone, and the basement game-over flow await user playtest.
+
 **47 — Mansion Contestant Conversations** is in progress with implementation and automated acceptance complete; Mara, Kip, and Juniper's room placement, visual readability, idle motion, and dialogue tone await user playtest.
 
 ## Stable baseline
@@ -80,7 +82,10 @@
 - All 24 directional specials now carry explicit animation identity. Deterministic QA executes the real dispatcher and verifies each move's projectile, melee, recovery, counter, reflect, teleport/clone, falling object, trap, or summoned dog alongside clip selection and frame progression.
 - Super Slop's phone setup surface now expands enough to expose the fighter, mode, stage, and match controls without a tiny nested viewport. The page HUD is one compact row, keyboard-only instructions are hidden on phone layouts, and menu-only screens no longer show combat controls.
 - Entering Max reparents the active nine-button touch dock into the fullscreen canvas subtree, applies safe-area-aware 44 px-or-larger targets, leaves the arena center clear in portrait and landscape, and restores the dock and unchanged match state on exit. Native fullscreen and the CSS fallback share the same behavior.
-- Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
+- Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, no attack or damage behavior, and no continuous player perception; outside the bounded camera-alarm investigation his only aggression is the infraction-triggered pursuit below.
+- Tilting a portrait or pulling a chair while Mr. Feast has clear line of sight (9m range, forward cone, wall/door occlusion respected), or while the HUD reads `Being recorded`, starts a pursuit: he runs the response graph toward the player at `1.95m/s` — hard-capped below the `2.2m/s` walk speed so walking away always escapes while crouching does not — re-pathing every `0.9s` with a bounded `26s` give-up, and hidden players cannot be caught. Ordinary fridge opening and straightening objects never trigger pursuit, though self-fixing the evidence does not call off a pursuit already started.
+- A catch on the main or second floor delivers a spoken warning while he faces the player, then he resumes patrol; warnings and catches are counted in diagnostics. A catch anywhere in the basement is game over: a modal `CAUGHT` overlay freezes the simulation and input, releases pointer lock, and offers `Load last save` and `Start over`. Loading is treated as time travel — it clears the fail state and any pursuit/errand/alarm and rejoins Mr. Feast to his nearest patrol waypoint without teleporting.
+- Pursuit outranks housekeeping errands and camera alarms (a new alarm cannot reroute an active chase), uses the run animation at a rate scaled to the capped speed, and speaks from dedicated witnessed/recorded/warning/lost/basement line pools through the existing overhead bubble.
 
 ## Important constraint
 
@@ -88,7 +93,7 @@ The Workroom keypad and security hub are implemented in Milestone 37. Only the i
 
 Mobile sprint/crouch buttons remain deferred; Milestone 35 adds the desktop keyboard controls while preserving the existing touch exploration and interaction layer.
 
-Full Mr. Feast sight/hearing perception, live pursuit, capture, recovery, and failure flow remain deferred beyond Milestone 36.
+Continuous Mr. Feast sight/hearing perception and free-roaming chase remain deferred: Milestone 46 adds only infraction-triggered pursuit (witnessed or on-camera tampering), a main/upper-floor warning, and the basement capture fail state. The renovation contract's capture-boundary pin now enforces that failure exists solely through that speed-capped path.
 
 The current face-retopology experiment is paused and must not be published or treated as the active runtime. A future facial pass needs a new visual direction before implementation resumes.
 
@@ -97,13 +102,14 @@ The current face-retopology experiment is paused and must not be published or tr
 - `node --check assets/js/mr-feast-mansion.js` — passed
 - `node --check scripts/test-mr-feast-basement-key-trail.mjs` — passed
 - `node scripts/test-mr-feast-basement-key-trail.mjs` — passed after the shelf-spacing, `XIII`, and clue-free locked-door refinements: real E/touch interactions, reserved book slot diagnostics, dual clue copy, generic early-door feedback, early gates, idempotent maze key, locked/unlocked door state, full-route lock restoration, Archive recording, Workshop sabotage, desktop/mobile layout, and zero console errors
-- `node scripts/test-mr-feast-renovation.mjs` — all current renovation invariants passed in the development checkout; the rejected facial-retopology checkpoint is not part of the release baseline
+- `node scripts/test-mr-feast-renovation.mjs` — all current renovation invariants passed after the concurrent Milestone 46 contract update; the contestant slice preserves the caught-in-the-act boundary
 - `node scripts/test-mr-feast-readable-books.mjs` — passed exactly 20 unique lore titles, all 384 physical assignments, Library/Reading Room/Archive distribution, seed-based reshuffling, physical E interaction, direct QA opening, focus-managed desktop/mobile parchment layout, reserved clue-book priority, unchanged shader-light layout, and zero browser errors
 - `node scripts/test-mr-feast-audio-upgrade.mjs` — passed trusted-click Web Audio unlock, all 38 declared samples decoded, layered recorded rain plus one-layer recorded fallback with the optional detail track blocked, four recorded thunder variants, grounded wood/stone/grass steps, walk/crouch/sprint cadence separation, stationary/teleport/pause/hide suppression, sampled book/light/door cues, complete ♪/M mute behavior, local CC0 provenance, and zero browser errors
 - `node scripts/test-mr-feast-tamper-distractions.mjs` — passed 19/16/1 portrait/chair/fridge registration, real E-key portrait tilt and collider-synced chair pull with straighten prompts, deterministic notice dispatch with an upset line, the full walk-fix-return errand with restored decor and zero teleports through the bounded responding/searching/returning states, self-fix cancellation with re-tamper cooldown, refrigerator closing, camera-alarm preemption with re-queue and later completion, talk interaction with patrol pause, non-repeating smalltalk, busy pool mid-errand, on-screen and edge-clamped bubble geometry at readable font sizes, and desktop/mobile layout with zero console errors
 - `node scripts/test-mr-feast-contestant-conversations.mjs` — passed all three Meshy/Blender asset budgets, exact cast/persona/room contracts, 24-bone rigs, 24 bound stationary rotation tracks with observed bone motion, continuous patrol clearance, real E interaction, ten private non-repeating lines each, named speaker labels, Mr. Feast speech compatibility, desktop/mobile layout, touch input, and zero browser errors
 - `python3 -m py_compile scripts/blender/prepare-mansion-contestant.py` plus syntax checks for the runtime, Meshy helper, animation extractor, and focused regression — passed
 - Post-fix combined `node scripts/test-mr-feast-contestant-13.mjs` rerun — passes again: the Milestone 45 talk hitbox now stops below the face so the `mrFeastFaceClose` QA expression-cycle checkpoint and the new `Speak with Mr. Feast` body prompt coexist
+- `node scripts/test-mr-feast-caught-pursuit.mjs` — passed the hard pursuit-speed cap under player walk speed, real E-key witnessed trigger with sight-cone/occlusion negatives, straighten non-trigger, run-animation pursuit with zero teleports, main-floor warning catch with counted warnings and patrol recovery, hidden-player give-up with a frustrated line, live `Being recorded` trigger, basement catch game over with the `CAUGHT` overlay, frozen simulation underneath, working load recovery to the pre-capture save, mobile overlay layout, and zero console errors
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
 - `node scripts/test-mr-feast-contestant-13.mjs` — passes progression, patrol, persistence, accessibility, mobile touch, and discovery-first objective visibility; its experimental facial-checkpoint coverage is paused with Milestone 33
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
@@ -135,6 +141,7 @@ The current face-retopology experiment is paused and must not be published or tr
 - Readable-book captures — `output/playwright/mr-feast-readable-books/readable-book-desktop.png` and `readable-book-mobile.png` confirm the centered parchment volume, title/author hierarchy, short drop-cap excerpt, close affordance, and unobtrusive scene backdrop at 1280×820 and 390×844
 - Tamper and speech captures — `output/playwright/mr-feast-tamper-distractions/tilted-portrait-desktop.png`, `pulled-chair-desktop.png`, `noticed-bubble-desktop.png`, `speech-bubble-desktop.png`, and `speech-bubble-mobile.png` confirm the visible frame roll with straighten prompt, the diagonal dining chair against its aligned row, and the readable italic bubble over Mr. Feast's head at 1280×820 and 390×844
 - Contestant conversation captures — `output/playwright/mr-feast-contestant-conversations/mara-voss-desktop.png`, `kip-solano-desktop.png`, `juniper-cross-desktop.png`, and `kip-solano-mobile.png` confirm three distinct silhouettes, occupied rooms, animated poses, named dialogue bubbles, and a touch-safe phone layout at 1280×820 and 390×844
+- Caught-pursuit captures — `output/playwright/mr-feast-caught-pursuit/game-over-desktop.png` and `game-over-mobile.png` confirm the oxblood `CAUGHT` dialog with themed copy and working Load/Start-over controls over the frozen scene at 1280×820 and 390×844
 
 ## Next action
 
@@ -147,6 +154,8 @@ For mansion books, user aims at several spines in the Library, Reading Room, and
 For mansion audio, user walks between the wood floors, basement stone, and wet grounds; crouches and sprints; opens doors/books and uses switches/keypads; then checks that rain exposure, thunder weight, step cadence, and interaction loudness stay atmospheric without becoming tiring.
 
 For mansion mischief, user tilts a portrait, pulls a dining chair diagonal, and leaves the refrigerator open; watches Mr. Feast walk over and correct each while reading his overhead reaction from across the room and from inside the coat closet; then speaks with him directly (and again mid-errand) and checks that the bubble stays legible at a distance on desktop and phone without feeling spammy.
+
+For getting caught, user tilts a portrait right in front of Mr. Feast and walks (not sprints) away to confirm he can be outpaced, lets him catch up for the warning, repeats the mischief under a solid-red camera to draw the recorded pursuit, then saves, heads into the basement, gets caught deliberately, and checks that the `CAUGHT` screen, Load last save, and Start over all feel fair and readable.
 
 For the new cast, user visits Mara in the Library, Kip in the Ballroom, and Juniper in the upper Reading Room; speaks to each several times on desktop or phone; and checks that their silhouettes, idle gestures, room placement, and strategist/comic/folklorist voices feel distinct without blocking circulation.
 

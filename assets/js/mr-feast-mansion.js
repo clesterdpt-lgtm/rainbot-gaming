@@ -36,6 +36,12 @@
     journal: $("mansion-journal"),
     journalClose: $("mansion-journal-close"),
     journalEntries: $("mansion-journal-entries"),
+    bookReader: $("mansion-book-reader"),
+    bookClose: $("mansion-book-close"),
+    bookTitle: $("mansion-book-title"),
+    bookAuthor: $("mansion-book-author"),
+    bookPreview: $("mansion-book-preview"),
+    bookCollection: $("mansion-book-collection"),
     discovery: $("mansion-discovery"),
     discoveryTitle: $("mansion-discovery-title"),
     discoveryBody: $("mansion-discovery-body"),
@@ -208,6 +214,145 @@
     "moths-guests": Object.freeze({ title: "Moths Wearing the Guests", file: "paintings/painting-moths-guests-v1-ai.jpg" }),
     "arrived-early": Object.freeze({ title: "The Portrait That Arrived Early", file: "paintings/painting-arrived-early-v1-ai.jpg" }),
   });
+  const READABLE_BOOK_CATALOG = Object.freeze([
+    Object.freeze({
+      id: "etiquette-empty-rooms",
+      title: "The Etiquette of Empty Rooms",
+      author: "Mirabel Voss",
+      preview: "An unoccupied room is never truly without company. Enter as though introduced, greet the darkest corner first, and never sit in a chair that has been turned toward the wall. If the room answers, excuse yourself without haste.",
+    }),
+    Object.freeze({
+      id: "weather-locked-houses",
+      title: "Weather for Locked Houses",
+      author: "Dr. Orrin Vale",
+      preview: "Storms behave differently around old estates. Rain climbs the glass, thunder waits beneath the stairs, and certain drafts travel against the wind. A careful observer can chart a household's secrets by noting which candles gutter before the clouds arrive.",
+    }),
+    Object.freeze({
+      id: "glass-orchard-field-notes",
+      title: "Field Notes from the Glass Orchard",
+      author: "Edda Morcant",
+      preview: "The fruit looked flawless until sunrise passed through it. Inside every pear was a tiny furnished room, and inside each room a figure stood at the window. We stopped harvesting when the figures began to resemble the pickers.",
+    }),
+    Object.freeze({
+      id: "servants-night-atlas",
+      title: "The Servants' Night Atlas",
+      author: "N. Bell",
+      preview: "These maps describe the house after midnight, when familiar corridors lengthen and the service doors forget their destinations. Chalk arrows are reliable for one hour only. A bell drawn beside a passage means: cross quietly, and do not count the footsteps behind you.",
+    }),
+    Object.freeze({
+      id: "banquets-after-midnight",
+      title: "Banquets After Midnight",
+      author: "Chef Alwen Pike",
+      preview: "A late table must include one setting more than the guest list requires. Leave its glass empty and its knife turned inward. Should the spare plate become warm, clear the room before dessert and allow the unseen diner to finish alone.",
+    }),
+    Object.freeze({
+      id: "misplaced-doors-catalogue",
+      title: "A Catalogue of Misplaced Doors",
+      author: "Peregrine Holt",
+      preview: "Door 47 was discovered standing freely in a meadow, yet opened onto a linen closet in a house six counties away. Door 88 appeared only in mirrors. The final entry has no illustration, because the photographer did not return from the other side.",
+    }),
+    Object.freeze({
+      id: "moon-garden-almanac",
+      title: "The Moon-Garden Almanac",
+      author: "Sabine Wren",
+      preview: "Night-blooming flowers remember every hand that tends them. Silverleaf leans toward honest visitors; widow's lace closes at the sound of a false name. Never prune beneath a red moon, for the cuttings may take root in your shadow.",
+    }),
+    Object.freeze({
+      id: "applause-ledger",
+      title: "The Applause Ledger",
+      author: "T. C. Marr",
+      preview: "Every cheer was entered by duration, volume, and apparent sincerity. On the ninth evening the audience applauded for eleven minutes before the curtain rose. The performers refused to step onstage, but their names were crossed out all the same.",
+    }),
+    Object.freeze({
+      id: "generous-spectacle",
+      title: "The Anatomy of a Generous Spectacle",
+      author: "Professor Lyle Mercy",
+      preview: "A gift offered before witnesses becomes three things at once: an object, a promise, and a performance. The object may be spent. The promise may be forgotten. The performance remains, wandering from mouth to mouth until no one recalls who was meant to receive it.",
+    }),
+    Object.freeze({
+      id: "letters-drowning-pool",
+      title: "Letters from the Drowning Pool",
+      author: "Ione March",
+      preview: "Your letter arrived soaked though the envelope was sealed. I have placed it beside the hearth, but the paper grows wetter each night. Yesterday a small wave crossed the writing desk and carried your signature beneath the locked door.",
+    }),
+    Object.freeze({
+      id: "brass-keymaker",
+      title: "The Brass Keymaker",
+      author: "Old Rusk",
+      preview: "A key is only a question cut into metal. Most locks answer plainly. The finest locks lie, turning sweetly while keeping their doors shut. When that happens, listen at the keyhole; the room beyond may be deciding whether it wishes to be found.",
+    }),
+    Object.freeze({
+      id: "static-among-portraits",
+      title: "Static Among the Portraits",
+      author: "Lenora Quill",
+      preview: "The new electrical wires made the painted mouths tremble. At first we blamed vibration, then poor varnish. The oldest portrait eventually whispered through the wireless set, asking us to move its frame somewhere it could no longer see the stairs.",
+    }),
+    Object.freeze({
+      id: "unwatched-hallways",
+      title: "Rules for Unwatched Hallways",
+      author: "The Estate Night Staff",
+      preview: "Walk in the center and keep both hands visible. Do not follow music into an unlit wing. If a hallway appears longer on your return, choose another route. Above all, never reassure the house that you are alone; it may take this as an invitation.",
+    }),
+    Object.freeze({
+      id: "practical-ghost-lighting",
+      title: "Practical Ghost Lighting",
+      author: "A. Lumen",
+      preview: "Blue flame flatters an apparition but encourages lingering. Amber glass is safer and reveals footprints that end too abruptly. Avoid mirrors behind the lamp. A spirit surprised by its own reflection will often extinguish every light in the room.",
+    }),
+    Object.freeze({
+      id: "moth-curator",
+      title: "The Moth Curator",
+      author: "Celia Fen",
+      preview: "He catalogued the moths by the memories powdered across their wings. One carried a summer picnic; another, the sound of a nursery door. The largest specimen held no memory at all, only a view of the curator's desk from directly behind him.",
+    }),
+    Object.freeze({
+      id: "last-train-no-station",
+      title: "The Last Train to No Station",
+      author: "Bram Sallow",
+      preview: "The conductor punched a hole shaped like an eye into every ticket. We passed the same moonlit platform seven times, though no passenger admitted noticing. At dawn the train stopped, the doors opened, and everyone pretended the darkness outside was a town.",
+    }),
+    Object.freeze({
+      id: "impossible-guests-index",
+      title: "An Index of Impossible Guests",
+      author: "Lady Cressida Vane",
+      preview: "Some guests arrive before they are invited. Others attend only in photographs taken afterward. Seat neither kind near a clock. If an impossible guest offers a toast, raise your glass but do not drink until their reflection has done so first.",
+    }),
+    Object.freeze({
+      id: "cellar-acoustics",
+      title: "On the Acoustics of Cellars",
+      author: "Hector Drail",
+      preview: "Stone chambers preserve a voice longer than expected. In the deepest vault, a word spoken on Monday may answer on Thursday in another person's tone. The experiment ended when the walls began repeating conversations that had not yet occurred.",
+    }),
+    Object.freeze({
+      id: "haunted-housekeeping",
+      title: "Housekeeping for Haunted Estates",
+      author: "Maud Pritchard",
+      preview: "Dust the frames clockwise, polish silver before sunset, and leave stubborn bloodstains until morning. Sheets that rise without assistance should be folded around a sprig of rosemary. Never shake them out near an open staircase.",
+    }),
+    Object.freeze({
+      id: "small-book-storms",
+      title: "A Small Book of Indoor Storms",
+      author: "E. Weatherly",
+      preview: "A storm contained within a house begins as a pressure behind the wallpaper. Soon there is rain in the chandeliers and distant lightning under the carpets. Open no windows. Indoor storms do not want release; they want the rest of the sky invited in.",
+    }),
+  ]);
+  const READABLE_BOOKS = Object.freeze({
+    seedParameter: "bookSeed",
+    interactionDepth: 0.035,
+    shelfTargetHeight: 0.5,
+    promptVerb: "Read",
+  });
+
+  function createReadableBookSeed() {
+    const requested = Number(new URLSearchParams(location.search).get(READABLE_BOOKS.seedParameter));
+    if (Number.isFinite(requested) && requested > 0) return Math.trunc(requested) >>> 0;
+    if (window.crypto?.getRandomValues) {
+      const values = new Uint32Array(1);
+      window.crypto.getRandomValues(values);
+      if (values[0]) return values[0];
+    }
+    return (Date.now() ^ Math.floor(performance.now() * 1000)) >>> 0 || 1;
+  }
   const PLAYER = Object.freeze({
     radius: 0.32,
     halfHeight: 0.59,
@@ -685,7 +830,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-workroom-dual-lighting-1",
+    assetVersion: "20260716-readable-books-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -1270,6 +1415,12 @@
       keypadStatus: "idle",
       deniedAttempts: 0,
     },
+    readableBooks: {
+      seed: createReadableBookSeed(),
+      open: false,
+      activePlacementId: null,
+      openedPlacementIds: [],
+    },
     contestant13: {
       bookRead: false,
       shovelTaken: false,
@@ -1456,6 +1607,7 @@
     })),
   };
   let contestant13Quest = null;
+  let readableBookSystem = null;
   let mrFeastNpc = null;
   let cameraSecurity = null;
   let monitorWallSystem = null;
@@ -4795,6 +4947,7 @@
       if (nextOpen === state.journalOpen) return;
       if (nextOpen && state.menuOpen) setMenuOpen(false);
       if (nextOpen && state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+      if (nextOpen && state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
       if (nextOpen) this.journalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.journalButton;
       state.journalOpen = nextOpen;
       clearMovementInput();
@@ -5186,6 +5339,190 @@
     }
   }
 
+  class ReadableBookSystem {
+    constructor(seed) {
+      this.seed = Number(seed) >>> 0 || 1;
+      this.randomState = this.seed;
+      this.catalogCycle = [];
+      this.catalogCursor = 0;
+      this.placements = [];
+      this.interactionTargets = [];
+      this.collections = { LIBRARY: 0, "READING ROOM": 0, ARCHIVE: 0 };
+      this.returnFocus = null;
+      this.hitMaterial = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+    }
+
+    random() {
+      let value = this.randomState || 1;
+      value ^= value << 13;
+      value ^= value >>> 17;
+      value ^= value << 5;
+      this.randomState = value >>> 0;
+      return this.randomState / 4294967296;
+    }
+
+    refillCatalogCycle() {
+      this.catalogCycle = [...READABLE_BOOK_CATALOG];
+      for (let index = this.catalogCycle.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(this.random() * (index + 1));
+        [this.catalogCycle[index], this.catalogCycle[swapIndex]] = [this.catalogCycle[swapIndex], this.catalogCycle[index]];
+      }
+      this.catalogCursor = 0;
+    }
+
+    nextCatalogBook() {
+      if (this.catalogCursor >= this.catalogCycle.length) this.refillCatalogCycle();
+      return this.catalogCycle[this.catalogCursor++];
+    }
+
+    createPlacement(collection, shelfName, entry, slotIndex) {
+      const book = this.nextCatalogBook();
+      const placement = {
+        placementId: `readable-book-${this.placements.length + 1}`,
+        bookId: book.id,
+        title: book.title,
+        author: book.author,
+        preview: book.preview,
+        collection,
+        shelfName,
+        slotIndex,
+        localX: Number(entry.x) || 0,
+      };
+      placement.interaction = {
+        type: "readable-book",
+        id: placement.placementId,
+        bookId: placement.bookId,
+        getLabel: () => `${READABLE_BOOKS.promptVerb} “${placement.title}”`,
+        activate: () => this.open(placement),
+      };
+      this.placements.push(placement);
+      this.collections[collection] = (this.collections[collection] || 0) + 1;
+      return placement;
+    }
+
+    registerShelfRow({ parent, name, collection, entries, y, z, width, height = READABLE_BOOKS.shelfTargetHeight }) {
+      if (!parent || !entries?.length) return null;
+      const shelfName = name || `readable-shelf-${this.interactionTargets.length + 1}`;
+      const placements = entries.map((entry, index) => this.createPlacement(collection, shelfName, entry, index));
+      const target = box({
+        name: `${shelfName}-book-hit-target`,
+        w: width,
+        h: height,
+        d: READABLE_BOOKS.interactionDepth,
+        y,
+        z,
+        material: this.hitMaterial,
+        parent,
+        cast: false,
+        receive: false,
+      });
+      const row = { parent, placements };
+      const interaction = {
+        type: "readable-book-row",
+        id: shelfName,
+        resolve: (hit) => this.resolveShelfHit(row, hit),
+      };
+      target.userData.readableBookRow = row;
+      addInteractionTarget(target, interaction);
+      this.interactionTargets.push(target);
+      return target;
+    }
+
+    resolveShelfHit(row, hit) {
+      if (!row?.placements?.length || !hit?.point) return null;
+      const localPoint = row.parent.worldToLocal(hit.point.clone());
+      let nearest = row.placements[0];
+      let nearestDistance = Math.abs(nearest.localX - localPoint.x);
+      for (let index = 1; index < row.placements.length; index += 1) {
+        const candidate = row.placements[index];
+        const distance = Math.abs(candidate.localX - localPoint.x);
+        if (distance < nearestDistance) {
+          nearest = candidate;
+          nearestDistance = distance;
+        }
+      }
+      return nearest.interaction;
+    }
+
+    open(placement) {
+      if (!placement) return false;
+      if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
+      if (state.menuOpen) setMenuOpen(false);
+      if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+      if (!state.readableBooks.open) this.returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
+      state.readableBooks.open = true;
+      state.readableBooks.activePlacementId = placement.placementId;
+      if (!state.readableBooks.openedPlacementIds.includes(placement.placementId)) state.readableBooks.openedPlacementIds.push(placement.placementId);
+      clearMovementInput();
+      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      if (dom.bookTitle) dom.bookTitle.textContent = placement.title;
+      if (dom.bookAuthor) dom.bookAuthor.textContent = `by ${placement.author}`;
+      if (dom.bookPreview) dom.bookPreview.textContent = placement.preview;
+      if (dom.bookCollection) dom.bookCollection.textContent = `Hollow Estate collection · ${placement.collection}`;
+      if (dom.bookReader) dom.bookReader.hidden = false;
+      if (dom.stage && dom.bookReader) {
+        for (const child of dom.stage.children) {
+          if (child !== dom.bookReader) child.inert = true;
+        }
+      }
+      updateInteractionPrompt();
+      requestAnimationFrame(() => dom.bookClose?.focus({ preventScroll: true }));
+      return true;
+    }
+
+    close({ restoreFocus = true } = {}) {
+      if (!state.readableBooks.open) return false;
+      state.readableBooks.open = false;
+      state.readableBooks.activePlacementId = null;
+      if (dom.bookReader) dom.bookReader.hidden = true;
+      if (dom.stage && dom.bookReader) {
+        for (const child of dom.stage.children) {
+          if (child !== dom.bookReader) child.inert = false;
+        }
+      }
+      const returnTarget = this.returnFocus && this.returnFocus.isConnected ? this.returnFocus : dom.canvas;
+      this.returnFocus = null;
+      if (restoreFocus) returnTarget?.focus({ preventScroll: true });
+      else dom.canvas?.focus({ preventScroll: true });
+      updateInteractionPrompt();
+      return true;
+    }
+
+    openByIndex(index = 0) {
+      if (!this.placements.length) return false;
+      const normalized = Math.abs(Math.trunc(Number(index) || 0)) % this.placements.length;
+      return this.open(this.placements[normalized]);
+    }
+
+    getDiagnostics() {
+      const active = this.placements.find((placement) => placement.placementId === state.readableBooks.activePlacementId) || null;
+      return {
+        seed: this.seed,
+        catalogSize: READABLE_BOOK_CATALOG.length,
+        uniqueTitlesAssigned: new Set(this.placements.map((placement) => placement.bookId)).size,
+        physicalCopies: this.placements.length,
+        assignedCopies: this.placements.length,
+        collections: { ...this.collections },
+        interactionTargets: this.interactionTargets.length,
+        open: state.readableBooks.open,
+        openedCopies: state.readableBooks.openedPlacementIds.length,
+        active: active ? {
+          placementId: active.placementId,
+          bookId: active.bookId,
+          title: active.title,
+          author: active.author,
+          collection: active.collection,
+        } : null,
+        assignmentSample: this.placements.slice(0, 20).map((placement) => ({
+          placementId: placement.placementId,
+          bookId: placement.bookId,
+          collection: placement.collection,
+        })),
+        clueBookReserved: true,
+      };
+    }
+  }
+
   let workroomKeypadReturnFocus = null;
 
   function updateWorkroomKeypadPresentation() {
@@ -5229,6 +5566,7 @@
     if (nextOpen === state.workroom.keypadOpen) return nextOpen;
     if (nextOpen && state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
     if (nextOpen && state.menuOpen) setMenuOpen(false);
+    if (nextOpen && state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
     state.workroom.keypadOpen = nextOpen;
     clearMovementInput();
     if (nextOpen) {
@@ -8334,21 +8672,26 @@
     box({ name: "bookcase-back", w, h, d: 0.18, x: 0, y: h / 2, z: 0.18, material: M.blackWood, parent: group });
     for (const sx of [-1, 1]) box({ name: "bookcase-side", w: 0.14, h: h + 0.1, d: 0.44, x: sx * (w / 2 - 0.07), y: h / 2, z: 0, material: M.darkWood, parent: group });
     const bookTransforms = M.bookPalette.map(() => []);
+    const readableRows = [];
     for (let shelf = 0; shelf < 5; shelf += 1) {
       const sy = 0.14 + shelf * (h - 0.25) / 4;
       box({ name: "bookcase-shelf", w: w - 0.12, h: 0.09, d: 0.46, x: 0, y: sy, z: 0, material: M.darkWood, parent: group });
       if (shelf < 4) {
         const count = Math.floor(w / 0.16);
+        const rowEntries = [];
         for (let i = 0; i < count; i += 1) {
           if (reservedSlots.has(`${shelf}:${i}`)) continue;
-          bookTransforms[(i + shelf * 2) % M.bookPalette.length].push({
+          const entry = {
             x: -w / 2 + 0.2 + i * (w - 0.36) / count,
             y: sy + 0.245,
             z: -0.02,
             w: 0.105 + (i % 3) * 0.018,
             h: 0.38 + ((i + shelf) % 4) * 0.035,
-          });
+          };
+          bookTransforms[(i + shelf * 2) % M.bookPalette.length].push(entry);
+          rowEntries.push(entry);
         }
+        readableRows.push({ shelf, y: sy + 0.245, entries: rowEntries });
       }
     }
     const dummy = new THREE.Object3D();
@@ -8368,6 +8711,16 @@
       books.instanceMatrix.needsUpdate = true;
       group.add(books);
     });
+    const collection = String(options.collection || "LIBRARY").toUpperCase();
+    readableRows.forEach((row) => readableBookSystem?.registerShelfRow({
+      parent: group,
+      name: `${collection.toLowerCase().replace(/\s+/g, "-")}-${x.toFixed(2)}-${z.toFixed(2)}-row-${row.shelf + 1}`,
+      collection,
+      entries: row.entries,
+      y: row.y,
+      z: -0.175,
+      width: w - 0.26,
+    }));
     const cw = Math.abs(Math.cos(rotationY || 0)) * w + Math.abs(Math.sin(rotationY || 0)) * 0.52;
     const cd = Math.abs(Math.sin(rotationY || 0)) * w + Math.abs(Math.cos(rotationY || 0)) * 0.52;
     physics.addFixedBox(x, floorY + h / 2, z, cw, h, cd, 0);
@@ -8440,6 +8793,7 @@
     const documentLabels = [];
     const tapeMaterials = [M.iron, M.copper, M.blackWood];
     const tapeBatches = tapeMaterials.map(() => []);
+    const readableRows = [];
     const contentWidth = width - 0.32;
     for (const [faceIndex, face] of [-1, 1].entries()) {
       for (let shelfIndex = 0; shelfIndex < 4; shelfIndex += 1) {
@@ -8448,9 +8802,10 @@
         const kind = (seed + shelfIndex + faceIndex) % 3;
         if (kind === 0) {
           const count = Math.max(8, Math.floor(contentWidth / 0.15));
+          const rowEntries = [];
           for (let i = 0; i < count; i += 1) {
             const bookHeight = 0.39 + ((i + seed + shelfIndex) % 4) * 0.035;
-            bookBatches[(i + shelfIndex + seed) % bookBatches.length].push({
+            const entry = {
               x: -contentWidth / 2 + (i + 0.5) * contentWidth / count,
               y: shelfTop + bookHeight / 2,
               z: face * 0.225,
@@ -8458,8 +8813,11 @@
               sy: bookHeight,
               sz: 0.245,
               rz: (i % 7 === 0 ? face * 0.045 : 0),
-            });
+            };
+            bookBatches[(i + shelfIndex + seed) % bookBatches.length].push(entry);
+            rowEntries.push(entry);
           }
+          readableRows.push({ face, shelfIndex, y: shelfTop + 0.245, entries: rowEntries });
         } else if (kind === 1) {
           const count = Math.max(5, Math.floor(contentWidth / 0.3));
           for (let i = 0; i < count; i += 1) {
@@ -8487,6 +8845,16 @@
     }
 
     bookBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-books-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.bookPalette[index], transforms));
+    readableRows.forEach((row) => readableBookSystem?.registerShelfRow({
+      parent: group,
+      name: `${name}-face-${row.face > 0 ? "north" : "south"}-row-${row.shelfIndex + 1}`,
+      collection: "ARCHIVE",
+      entries: row.entries,
+      y: row.y,
+      z: row.face * 0.36,
+      width: contentWidth,
+      height: 0.52,
+    }));
     documentBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-documents-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), documentMaterials[index], transforms));
     addLocalInstanceBatch(`${name}-archive-document-labels`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.brass, documentLabels);
     tapeBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-tapes-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), tapeMaterials[index], transforms));
@@ -9491,8 +9859,8 @@
     const clueBookLayout = CONTESTANT_13.world.book;
     for (const z of [4.8, 7.9, 10.95]) {
       const bookshelfOptions = z === clueBookLayout.z
-        ? { reservedBookSlots: [{ shelf: clueBookLayout.shelfIndex, slot: clueBookLayout.reservedSlot }] }
-        : undefined;
+        ? { collection: "LIBRARY", reservedBookSlots: [{ shelf: clueBookLayout.shelfIndex, slot: clueBookLayout.reservedSlot }] }
+        : { collection: "LIBRARY" };
       addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85, bookshelfOptions);
     }
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
@@ -9569,8 +9937,8 @@
     addTable(5.58, 9.55, 1.25, 0.68, FLOOR.UPPER, -Math.PI / 2, M.darkWood);
     addChair(6.48, 9.55, FLOOR.UPPER, Math.PI / 2, M.darkWood);
 
-    addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45);
-    addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45);
+    addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45, { collection: "READING ROOM" });
+    addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
     addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug);
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
@@ -11956,6 +12324,7 @@
     if (nextOpen === state.menuOpen) return;
     if (nextOpen && state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
     if (nextOpen && state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+    if (nextOpen && state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
     state.menuOpen = nextOpen;
     clearMovementInput();
     if (nextOpen) {
@@ -11980,7 +12349,7 @@
   }
 
   function activateCurrentInteraction() {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.contestant13.actionInProgress) return;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress) return;
     if (!state.currentInteraction) return;
     state.currentInteraction.activate();
     updateInteractionPrompt();
@@ -11993,7 +12362,7 @@
         contestant13Quest.toggleJournal();
         return;
       }
-      const activeModal = state.workroom.keypadOpen ? dom.workroomKeypad : state.menuOpen ? dom.menu : null;
+      const activeModal = state.readableBooks.open ? dom.bookReader : state.workroom.keypadOpen ? dom.workroomKeypad : state.menuOpen ? dom.menu : null;
       if (event.code === "Tab" && activeModal) {
         const focusable = Array.from(activeModal.querySelectorAll("button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])"));
         if (focusable.length) {
@@ -12008,9 +12377,17 @@
       }
       if (event.code === "Escape") {
         event.preventDefault();
-        if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+        if (state.readableBooks.open) readableBookSystem?.close();
+        else if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
         else if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
         else if (state.started) setMenuOpen(!state.menuOpen);
+        return;
+      }
+      if (state.readableBooks.open) {
+        if (event.code === "KeyE" && !event.repeat) {
+          event.preventDefault();
+          readableBookSystem?.close();
+        }
         return;
       }
       if (state.workroom.keypadOpen) {
@@ -12062,7 +12439,7 @@
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
-      if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen) return;
+      if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
     });
@@ -12077,6 +12454,10 @@
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
       if (event.target === dom.journal && contestant13Quest) contestant13Quest.setJournalOpen(false);
+    });
+    if (dom.bookClose) dom.bookClose.addEventListener("click", () => readableBookSystem?.close());
+    if (dom.bookReader) dom.bookReader.addEventListener("click", (event) => {
+      if (event.target === dom.bookReader) readableBookSystem?.close();
     });
     if (dom.menuResume) dom.menuResume.addEventListener("click", () => setMenuOpen(false));
     if (dom.menuMaximize) dom.menuMaximize.addEventListener("click", toggleMaximized);
@@ -12226,7 +12607,7 @@
   }
 
   function findInteraction() {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.contestant13.actionInProgress) return null;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
@@ -12237,7 +12618,9 @@
     if (blockers.length && blockers[0].distance < hit.distance - 0.075) return null;
     let object = hit.object;
     while (object && !object.userData.interaction) object = object.parent;
-    return object ? object.userData.interaction : null;
+    if (!object) return null;
+    const interaction = object.userData.interaction;
+    return typeof interaction.resolve === "function" ? interaction.resolve(hit) : interaction;
   }
 
   function inspectInteractionRay() {
@@ -12255,7 +12638,7 @@
         interactionId: interactionObject?.userData?.interaction?.id || interactionObject?.userData?.interaction?.type || null,
       } : null,
       blocker: blockers[0] ? { name: blockers[0].object.name, distance: Number(blockers[0].distance.toFixed(2)) } : null,
-      stateBlocked: state.menuOpen ? "menu-open" : state.journalOpen ? "journal-open" : state.contestant13.actionInProgress ? "story-action" : null,
+      stateBlocked: state.menuOpen ? "menu-open" : state.journalOpen ? "journal-open" : state.readableBooks.open ? "book-open" : state.contestant13.actionInProgress ? "story-action" : null,
       selectableId: selected?.id || selected?.type || null,
     };
   }
@@ -12888,6 +13271,16 @@
       },
       inventory: contestant13Quest?.getInventoryDiagnostics() || { items: [], bulkyItem: null },
       journal: contestant13Quest?.getJournalDiagnostics() || { entries: [], currentObjective: null, open: false },
+      books: readableBookSystem?.getDiagnostics() || {
+        seed: state.readableBooks.seed,
+        catalogSize: READABLE_BOOK_CATALOG.length,
+        physicalCopies: 0,
+        assignedCopies: 0,
+        collections: {},
+        interactionTargets: 0,
+        open: state.readableBooks.open,
+        active: null,
+      },
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
@@ -13138,6 +13531,9 @@
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
     window.MrFeastFresh.setDevModeForQA = (enabled) => state.qa && contestant13Quest ? contestant13Quest.setDevMode(Boolean(enabled)) : null;
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
+    window.MrFeastFresh.getReadableBookState = () => readableBookSystem ? readableBookSystem.getDiagnostics() : null;
+    window.MrFeastFresh.openReadableBookForQA = (index) => state.qa && readableBookSystem ? readableBookSystem.openByIndex(index) : false;
+    window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
     window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
     window.MrFeastFresh.getWorkroomState = () => getWorkroomDiagnostics();
@@ -13290,6 +13686,7 @@
         ...QA_ROOM_VIEWS,
         foyer: [0, FLOOR.MAIN, 9.8, 0],
         library: [-10.0, FLOOR.MAIN, 7.7, Math.PI / 2],
+        readableBookLibrary: [-12.65, FLOOR.MAIN, 4.8, Math.PI / 2, -0.05],
         music: [10.0, FLOOR.MAIN, 7.7, -Math.PI / 2],
         mainHallBathroom: [-10.0, FLOOR.MAIN, 0, Math.PI / 2],
         coatCloset: [COAT_CLOSET.center.x, FLOOR.MAIN, -2.1, Math.PI],
@@ -13874,6 +14271,7 @@
       await RAPIER.init({});
       physics = new PhysicsWorld(RAPIER);
       M = await createMaterials();
+      readableBookSystem = new ReadableBookSystem(state.readableBooks.seed);
 
       setLoading("Raising the walls", 28);
       hemisphereLight = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);

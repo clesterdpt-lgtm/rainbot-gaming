@@ -22,12 +22,16 @@
 
 **42 — Super Slop Mobile Max Screen** is in progress with implementation and automated acceptance complete; portrait/landscape control comfort awaits user phone playtest.
 
+**43 — Readable Mansion Books** is in progress with implementation and automated acceptance complete; the 20-volume lore collection and parchment reader await user playtest.
+
 ## Stable baseline
 
 - Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
 - The middle Library case now omits one generated volume so the clue book occupies a clean shelf gap rather than overlapping it. The off-tone spine is pulled about `0.07m` ahead of its neighbors and carries a small scratched `XIII` above the interaction reticle.
 - The shelf book separately points to the formal-garden shovel and hedge-maze key; the basement key and unlock are idempotent and exposed in diagnostics.
 - Trying the locked Kitchen basement door now gives only generic locked feedback; it no longer repeats the book or reveals the hedge-maze key solution.
+- Every ordinary shelf volume in the main Library, upper Reading Room, and basement Archive is now readable. Twenty original titled excerpts shuffle in complete 20-book cycles across 384 physical copies on every fresh run, while the XIII-marked Contestant 13 volume retains its dedicated clue interaction.
+- The parchment reader exposes the aimed-at title in the E/touch prompt, manages focus and Escape/E/backdrop closing, and fits desktop and phone layouts. The original instanced books remain batched; 35 invisible shelf-row hit targets resolve individual spines without adding per-book meshes, materials, draw calls, or shader lights.
 - Holding `Shift` now sprints at a faster named speed while draining a visible energy reserve; exhaustion blocks sprint until the reserve recovers.
 - `C` toggles a slower, lower crouched stance with authoritative `0.5` visibility and `0.32` movement-noise multipliers for the future detection system.
 - `Tab` opens and closes the combined carried-object and clue dossier; the previous `I` / `J` bindings are retired, while `Escape` opens a true pause menu with Resume, Maximize, Save, Load, and reversible Dev Mode controls.
@@ -80,6 +84,7 @@ The current face-retopology experiment is paused and must not be published or tr
 - `node --check scripts/test-mr-feast-basement-key-trail.mjs` — passed
 - `node scripts/test-mr-feast-basement-key-trail.mjs` — passed after the shelf-spacing, `XIII`, and clue-free locked-door refinements: real E/touch interactions, reserved book slot diagnostics, dual clue copy, generic early-door feedback, early gates, idempotent maze key, locked/unlocked door state, full-route lock restoration, Archive recording, Workshop sabotage, desktop/mobile layout, and zero console errors
 - `node scripts/test-mr-feast-renovation.mjs` — all current renovation invariants passed in the development checkout; the rejected facial-retopology checkpoint is not part of the release baseline
+- `node scripts/test-mr-feast-readable-books.mjs` — passed exactly 20 unique lore titles, all 384 physical assignments, Library/Reading Room/Archive distribution, seed-based reshuffling, physical E interaction, direct QA opening, focus-managed desktop/mobile parchment layout, reserved clue-book priority, unchanged shader-light layout, and zero browser errors
 - Previous garden browser proof completed both connection routes with zero fall recoveries and confirmed one `18.8m × 32.4m` walkway mesh
 - `node scripts/test-mr-feast-contestant-13.mjs` — passes progression, patrol, persistence, accessibility, mobile touch, and discovery-first objective visibility; its experimental facial-checkpoint coverage is paused with Milestone 33
 - `node scripts/test-mr-feast-player-systems.mjs` — passed real-browser keyboard, Rapier movement, stamina lifecycle, crouch eye/stealth contract, Tab dossier toggling with retired I/J bindings, withheld opening guidance, focus-safe pause, maximize, save/load, and reversible Dev Mode with zero console errors
@@ -108,10 +113,13 @@ The current face-retopology experiment is paused and must not be published or tr
 - `node scripts/test-super-slop-mobile-maximize.mjs` — passed 390×844 embedded/portrait-max and 844×390 landscape-max layouts, native fullscreen subtree and rejected-request fallback paths, nine visible non-overlapping touch targets, safe-area/chrome geometry, real movement and attack input, max exit/restoration, zero horizontal overflow, and zero console/page errors
 - Super Slop mobile captures — `output/playwright/super-slop-mobile-maximize/after-portrait-embedded.png`, `after-portrait-max.png`, and `after-landscape-max.png` confirm the complete phone setup UI, lower-letterbox portrait dock, and edge-mounted landscape controls
 - Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays; the existing basement-key captures continue to cover the adjacent story states
+- Readable-book captures — `output/playwright/mr-feast-readable-books/readable-book-desktop.png` and `readable-book-mobile.png` confirm the centered parchment volume, title/author hierarchy, short drop-cap excerpt, close affordance, and unobtrusive scene backdrop at 1280×820 and 390×844
 
 ## Next action
 
 User enters the temporary PIN `0513`, confirms number keys visibly populate the Workroom pad, and checks that the camera-free room and brighter east server bank feel right while walking around. The widened upper-window gallery, grounded-gait pacing, estate-statue approval, camera warning/search tension, Music Room spacing, sprint/crouch feel, Mr. Feast facial approval, and the unguided Library shelf-book discovery remain separate playtests.
+
+For mansion books, user aims at several spines in the Library, Reading Room, and Archive, confirms their titles and excerpts vary naturally, and checks that the parchment reader feels quick to open and dismiss while exploring.
 
 ## Working conventions
 

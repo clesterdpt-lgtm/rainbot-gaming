@@ -41,6 +41,8 @@
   const btnMenu = document.getElementById("ssb-btn-menu");
   const btnPause = document.getElementById("ssb-btn-pause");
   const btnSound = document.getElementById("ssb-btn-sound");
+  const canvasWrap = canvas.closest(".canvas-wrap");
+  const touchControls = document.querySelector(".ssb-touch");
 
   // ---------- helpers ----------
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -2882,6 +2884,12 @@
     }
     if (hudKos) hudKos.textContent = state.p1Kos;
     if (hudHigh) hudHigh.textContent = state.best;
+    const touchActive = state.screen === "fight";
+    if (touchControls) {
+      touchControls.classList.toggle("is-active", touchActive);
+      touchControls.setAttribute("aria-hidden", String(!touchActive));
+    }
+    if (canvasWrap) canvasWrap.classList.toggle("ssb-overlay-active", !touchActive);
   }
 
   // ============================================================
@@ -3616,21 +3624,45 @@
   // fullscreen / max-screen toggle (best-effort native + .is-maxed fallback)
   (function setupFullscreen() {
     const fsBtn = document.getElementById("btn-fullscreen");
-    const target = canvas.closest(".canvas-wrap");
+    const target = canvasWrap;
     if (!fsBtn || !target) return;
+    const touchHome = touchControls?.parentNode || null;
+    const touchAnchor = touchControls?.nextSibling || null;
     const isMaxed = () => target.classList.contains("is-maxed");
     const nativeEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+    function placeTouchControls(inTarget) {
+      if (!touchControls || !touchHome) return;
+      if (inTarget) {
+        if (touchControls.parentNode !== target) target.appendChild(touchControls);
+        return;
+      }
+      if (touchControls.parentNode === touchHome) return;
+      if (touchAnchor && touchAnchor.parentNode === touchHome) touchHome.insertBefore(touchControls, touchAnchor);
+      else touchHome.appendChild(touchControls);
+    }
+
     function setMaxed(on) {
+      placeTouchControls(on);
       target.classList.toggle("is-maxed", on);
+      document.body.classList.toggle("rb-game-maxed", on);
       fsBtn.textContent = on ? "✕" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit max screen" : "Max screen");
     }
     fsBtn.addEventListener("click", () => {
       const on = !isMaxed();
       setMaxed(on);
       try {
-        if (on && target.requestFullscreen) target.requestFullscreen().catch(() => {});
-        else if (on && target.webkitRequestFullscreen) target.webkitRequestFullscreen();
-        else if (!on && document.exitFullscreen && nativeEl()) document.exitFullscreen().catch(() => {});
+        if (on) {
+          const request = target.requestFullscreen || target.webkitRequestFullscreen;
+          const result = request && request.call(target);
+          if (result && typeof result.catch === "function") result.catch(() => {});
+        } else if (nativeEl()) {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen;
+          const result = exit && exit.call(document);
+          if (result && typeof result.catch === "function") result.catch(() => {});
+        }
       } catch (e) {}
       canvas.focus();
     });

@@ -20,6 +20,8 @@
 
 **41 — Super Slop Character Animation Upgrade** is in progress with implementation and automated acceptance complete; the six-fighter Meshy/Blender roster and ability feel await user playtest.
 
+**42 — Super Slop Mobile Max Screen** is in progress with implementation and automated acceptance complete; portrait/landscape control comfort awaits user phone playtest.
+
 ## Stable baseline
 
 - Playable chain: subtly misfiled Library shelf book → rose-hidden hand shovel → B-13 basement key beneath faint XIII at the deepest hedge-maze dead end → locked Kitchen service stair → Archive evidence cage and recording → keypad-gated Workroom patron-feed sabotage. The future combination clue is not implemented yet; `0513` is the temporary playtest PIN.
@@ -58,6 +60,8 @@
 - Each fighter has one 8-column × 13-row WebP atlas covering idle, run, jump, fall, hit, shield, dodge, grab, normal attack, and all four directional specials. The six atlases total 2,206,564 bytes, retain at least a six-pixel transparent margin, and contain zero clipped poses.
 - The Canvas2D simulation remains authoritative. Root translation is removed from the offline motion bake, active-match sheets load lazily with the old body atlas as fallback, hitlag freezes animation time, left-facing art mirrors without collision changes, and instant gameplay effects start on their rendered release pose.
 - All 24 directional specials now carry explicit animation identity. Deterministic QA executes the real dispatcher and verifies each move's projectile, melee, recovery, counter, reflect, teleport/clone, falling object, trap, or summoned dog alongside clip selection and frame progression.
+- Super Slop's phone setup surface now expands enough to expose the fighter, mode, stage, and match controls without a tiny nested viewport. The page HUD is one compact row, keyboard-only instructions are hidden on phone layouts, and menu-only screens no longer show combat controls.
+- Entering Max reparents the active nine-button touch dock into the fullscreen canvas subtree, applies safe-area-aware 44 px-or-larger targets, leaves the arena center clear in portrait and landscape, and restores the dock and unchanged match state on exit. Native fullscreen and the CSS fallback share the same behavior.
 - Reload starts fresh unless the player explicitly restores a saved game. Mr. Feast still has no collider, direct player perception, pursuit, attack, capture, or failure state outside the bounded camera-alarm investigation.
 
 ## Important constraint
@@ -101,6 +105,8 @@ The current face-retopology experiment is paused and must not be published or tr
 - `node --check assets/js/super-slop-brothers.js` and `node --check scripts/test-super-slop-character-animations.mjs` — passed with bundled Node 24
 - `node scripts/test-super-slop-character-animations.mjs` — passed six manifests/rigs/sheets, all 624 decoded poses, exact atlas layout, animation variation, all 24 real special dispatches, release-pose sync, frame progression, hitlag freeze, read-only diagnostics, lazy active-roster loading, forced legacy fallback, four-fighter rendering, desktop/mobile layout, touch controls, and zero unexpected browser errors
 - Super Slop browser captures — `output/iterate/super-slop-character-upgrade/all-24-specials-contact-sheet.jpg` summarizes the 24 deterministic ability captures; the source desktop, mobile, and fallback proofs are under `output/playwright/super-slop-character-animations/`
+- `node scripts/test-super-slop-mobile-maximize.mjs` — passed 390×844 embedded/portrait-max and 844×390 landscape-max layouts, native fullscreen subtree and rejected-request fallback paths, nine visible non-overlapping touch targets, safe-area/chrome geometry, real movement and attack input, max exit/restoration, zero horizontal overflow, and zero console/page errors
+- Super Slop mobile captures — `output/playwright/super-slop-mobile-maximize/after-portrait-embedded.png`, `after-portrait-max.png`, and `after-landscape-max.png` confirm the complete phone setup UI, lower-letterbox portrait dock, and edge-mounted landscape controls
 - Browser captures — `output/playwright/mr-feast-player-systems/sprint-energy-hud-desktop.png`, `escape-menu-desktop.png`, and `inventory-and-clues-dev-desktop.png` confirm the new HUD and overlays; the existing basement-key captures continue to cover the adjacent story states
 
 ## Next action

@@ -31,6 +31,14 @@
       --game-max-width: min(1520px, calc(100vw - 40px));
       width: min(100%, var(--game-fit-width, var(--game-max-width)));
     }
+    .ssb-page .canvas-wrap.is-maxed,
+    .ssb-page .canvas-wrap:fullscreen,
+    .ssb-page .canvas-wrap:-webkit-full-screen {
+      background:
+        radial-gradient(circle at 16% 18%, rgba(46,224,255,0.14), transparent 28%),
+        radial-gradient(circle at 84% 78%, rgba(255,46,136,0.13), transparent 30%),
+        #050510 !important;
+    }
     @media (min-width: 1100px) {
       .ssb-page .canvas-wrap {
         --game-max-width: min(1520px, calc(100vw - 330px));
@@ -429,6 +437,59 @@
       .ssb-stage-strip { grid-column: 2; }
     }
     @media (max-width: 820px) {
+      .ssb-page .game-page__header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+      }
+      .ssb-page .game-page__title {
+        font-size: clamp(17px, 5vw, 22px);
+        line-height: 1.05;
+      }
+      .ssb-page .game-page__sub { display: none; }
+      .ssb-page .game-page__header .btn {
+        width: auto;
+        min-height: 42px;
+        padding: 7px 10px !important;
+        font-size: 10px !important;
+      }
+      .ssb-page .hud {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 4px;
+        padding: 5px;
+      }
+      .ssb-page .hud__item {
+        min-height: 38px;
+        padding: 4px 2px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 1px;
+      }
+      .ssb-page .hud__label {
+        font-size: 7px;
+        letter-spacing: 0.8px;
+        line-height: 1;
+      }
+      .ssb-page .hud__value {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 10px;
+        line-height: 1.1;
+      }
+      .ssb-page .merge-hint { display: none; }
+      .ssb-page .canvas-wrap.ssb-overlay-active:not(.is-maxed) {
+        height: clamp(470px, 68dvh, 560px);
+        aspect-ratio: auto;
+      }
+      .ssb-page .canvas-wrap .fs-btn,
+      .ssb-page .canvas-wrap .rb-escape-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+      }
       .ssb-page .canvas-wrap .overlay {
         padding: 8px;
         gap: 4px;
@@ -525,15 +586,50 @@
       .ssb-stage-strip { display: none; }
       .ssb-row { grid-template-columns: 1fr; gap: 5px; }
       .ssb-mode-row { gap: 5px; }
-      .ssb-mode-card { padding: 7px; }
+      .ssb-mode-card { min-height: 44px; padding: 7px; }
       .ssb-mode-card span { font-size: 10px; }
       .ssb-mode-card small { font-size: 9px; }
       .ssb-chips { margin-top: 3px; }
-      .ssb-chip { flex-basis: 58px; padding: 6px 8px; font-size: 10px; }
+      .ssb-chip { flex-basis: 58px; min-height: 44px; padding: 6px 8px; font-size: 10px; }
+      .ssb-pick--char,
+      .ssb-pick--stage { min-height: 44px; }
       .ssb-start {
         padding-block: 8px;
         font-size: 14px;
-        min-height: 40px;
+        min-height: 46px;
+      }
+      .ssb-page .game-side .controls-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .ssb-page .game-side .controls-row .btn {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        padding: 6px 4px !important;
+        font-size: 9px !important;
+      }
+    }
+    @media (orientation: portrait) and (max-width: 820px) {
+      .ssb-page .canvas-wrap.is-maxed:not(.ssb-overlay-active)::after,
+      .ssb-page .canvas-wrap:fullscreen:not(.ssb-overlay-active)::after,
+      .ssb-page .canvas-wrap:-webkit-full-screen:not(.ssb-overlay-active)::after {
+        content: "ROTATE FOR A WIDER ARENA";
+        position: absolute;
+        top: max(84px, calc(env(safe-area-inset-top) + 64px));
+        left: 50%;
+        z-index: 2;
+        padding: 7px 11px;
+        transform: translateX(-50%);
+        border: 1px solid rgba(46,224,255,0.22);
+        border-radius: 999px;
+        color: rgba(191,231,246,0.72);
+        background: rgba(5,8,18,0.52);
+        font: 700 8px/1 var(--font-mono, monospace);
+        letter-spacing: 1.2px;
+        white-space: nowrap;
+        pointer-events: none;
       }
     }
     .ssb-controls-hint b { color: var(--ink, #f4f7fb); }
@@ -618,21 +714,147 @@
 
     /* ---------- on-screen touch controls ---------- */
     .ssb-touch { display: none; }
-    @media (hover: none) and (pointer: coarse), (max-width: 820px) {
-      .ssb-touch {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;
-        touch-action: none; user-select: none; -webkit-user-select: none;
+    @media (hover: none) and (pointer: coarse), (max-width: 820px), (max-height: 600px) {
+      .ssb-touch.is-active {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+        gap: 8px;
+        width: 100%;
+        margin-top: 8px;
+        padding: 8px;
+        box-sizing: border-box;
+        border: 1px solid rgba(255,255,255,0.09);
+        border-radius: 14px;
+        background:
+          linear-gradient(135deg, rgba(46,224,255,0.08), rgba(255,46,136,0.08)),
+          rgba(8,9,18,0.94);
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.32), 0 10px 28px rgba(0,0,0,0.22);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
       }
       .ssb-touch__cluster { display: grid; gap: 6px; }
+      .ssb-touch__cluster:last-child { align-self: end; }
       .ssb-touch__row { display: flex; gap: 6px; justify-content: center; }
       .ssb-touch button {
-        flex: 1 1 0; min-height: 52px; border-radius: 12px; font-size: 18px; font-weight: 800;
-        background: #15182a; border: 2px solid #2c3150; color: var(--ink, #f4f7fb);
+        flex: 1 1 0;
+        min-width: 44px;
+        min-height: 48px;
+        padding: 6px;
+        border-radius: 12px;
+        font-size: clamp(12px, 4.2vw, 18px);
+        font-weight: 800;
+        background: rgba(21,24,42,0.9);
+        border: 2px solid #39405f;
+        color: var(--ink, #f4f7fb);
         font-family: 'Bungee', sans-serif;
+        line-height: 1;
+        text-shadow: 0 1px 0 rgba(0,0,0,0.62);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.24);
+        -webkit-tap-highlight-color: transparent;
       }
-      .ssb-touch button:active { background: #232a44; border-color: var(--accent-2, #2ee0ff); }
-      .ssb-touch .t-atk { border-color: var(--accent-3, #f7d716); }
-      .ssb-touch .t-spc { border-color: var(--accent, #ff2e88); }
+      .ssb-touch button:active {
+        transform: translateY(1px) scale(0.97);
+        background: #232a44;
+        border-color: var(--accent-2, #2ee0ff);
+        filter: brightness(1.18);
+      }
+      .ssb-touch .t-atk {
+        border-color: var(--accent-3, #f7d716);
+        background: linear-gradient(145deg, rgba(247,215,22,0.22), rgba(21,24,42,0.94));
+      }
+      .ssb-touch .t-spc {
+        border-color: var(--accent, #ff2e88);
+        background: linear-gradient(145deg, rgba(255,46,136,0.23), rgba(21,24,42,0.94));
+      }
+
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        margin: 0;
+        padding:
+          8px
+          max(12px, env(safe-area-inset-right))
+          max(12px, env(safe-area-inset-bottom))
+          max(12px, env(safe-area-inset-left));
+        border: 0;
+        border-radius: 18px 18px 0 0;
+        background: linear-gradient(180deg, rgba(5,5,12,0), rgba(5,5,12,0.86) 24%, rgba(5,5,12,0.96));
+        box-shadow: none;
+        z-index: 18;
+        pointer-events: none;
+        align-items: end;
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch__cluster,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch__cluster,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch__cluster {
+        pointer-events: auto;
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch button,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch button,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch button {
+        min-height: 52px;
+        background-color: rgba(10,12,24,0.86);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+
+      .ssb-page .canvas-wrap.is-maxed .fs-btn,
+      .ssb-page .canvas-wrap:fullscreen .fs-btn,
+      .ssb-page .canvas-wrap:-webkit-full-screen .fs-btn {
+        top: max(10px, env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        width: 44px;
+        height: 44px;
+        z-index: 30;
+      }
+      .ssb-page .canvas-wrap.is-maxed .rb-escape-btn,
+      .ssb-page .canvas-wrap:fullscreen .rb-escape-btn,
+      .ssb-page .canvas-wrap:-webkit-full-screen .rb-escape-btn {
+        width: 44px;
+        height: 44px;
+        z-index: 30;
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 600px) {
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch {
+        inset: 0;
+        display: block;
+        padding: 0;
+        background: none;
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch__cluster,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch__cluster,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch__cluster {
+        position: absolute;
+        bottom: max(10px, env(safe-area-inset-bottom));
+        width: min(166px, 26vw);
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch__cluster:first-child,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch__cluster:first-child,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch__cluster:first-child {
+        left: max(10px, env(safe-area-inset-left));
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch__cluster:last-child,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch__cluster:last-child,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch__cluster:last-child {
+        right: max(10px, env(safe-area-inset-right));
+      }
+      .ssb-page .canvas-wrap.is-maxed .ssb-touch button,
+      .ssb-page .canvas-wrap:fullscreen .ssb-touch button,
+      .ssb-page .canvas-wrap:-webkit-full-screen .ssb-touch button {
+        min-height: 44px;
+        padding: 4px;
+        font-size: clamp(10px, 2.1vw, 14px);
+      }
     }
   </style>
 </head>
@@ -674,24 +896,24 @@
         </p>
 
         <!-- On-screen controls for touch devices -->
-        <div class="ssb-touch" aria-hidden="true">
+        <div class="ssb-touch" aria-hidden="true" aria-label="Touch fight controls">
           <div class="ssb-touch__cluster">
-            <div class="ssb-touch__row"><button id="ssb-touch-up" type="button">⤒</button></div>
+            <div class="ssb-touch__row"><button id="ssb-touch-up" type="button" aria-label="Aim up">↑</button></div>
             <div class="ssb-touch__row">
-              <button id="ssb-touch-left" type="button">◀</button>
-              <button id="ssb-touch-down" type="button">▼</button>
-              <button id="ssb-touch-right" type="button">▶</button>
+              <button id="ssb-touch-left" type="button" aria-label="Move left">←</button>
+              <button id="ssb-touch-down" type="button" aria-label="Crouch or aim down">↓</button>
+              <button id="ssb-touch-right" type="button" aria-label="Move right">→</button>
             </div>
             <div class="ssb-touch__row"><button id="ssb-touch-jump" type="button">JUMP</button></div>
           </div>
           <div class="ssb-touch__cluster">
             <div class="ssb-touch__row">
-              <button id="ssb-touch-attack" class="t-atk" type="button">ATK</button>
-              <button id="ssb-touch-special" class="t-spc" type="button">SP</button>
+              <button id="ssb-touch-attack" class="t-atk" type="button" aria-label="Attack">ATK</button>
+              <button id="ssb-touch-special" class="t-spc" type="button" aria-label="Special attack">SP</button>
             </div>
             <div class="ssb-touch__row">
-              <button id="ssb-touch-shield" type="button">SHLD</button>
-              <button id="ssb-touch-grab" type="button">GRAB</button>
+              <button id="ssb-touch-shield" type="button" aria-label="Shield">SHLD</button>
+              <button id="ssb-touch-grab" type="button" aria-label="Grab">GRAB</button>
             </div>
           </div>
         </div>
@@ -758,7 +980,7 @@
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
   <script src="../assets/js/supabase-config.js?v=20260704-online-1"></script>
   <script src="../assets/js/rb-multiplayer.js?v=20260709-mp-3"></script>
-  <script src="../assets/js/super-slop-brothers.js?v=20260716-character-animation-1"></script>
+  <script src="../assets/js/super-slop-brothers.js?v=20260716-mobile-max-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

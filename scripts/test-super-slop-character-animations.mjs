@@ -126,7 +126,7 @@ for (const marker of [
 ]) {
   check("runtime animation contract", gameSource.includes(marker), `runtime is missing ${marker}`);
 }
-check("cache-busted animation release", /super-slop-brothers\.js\?v=20260716-character-animation-1/.test(pageSource), "page is not pinned to the character-animation release token");
+check("cache-busted animation release", /super-slop-brothers\.js\?v=20260716-mobile-max-1/.test(pageSource), "page is not pinned to the current Super Slop release token");
 
 const mime = {
   ".css": "text/css; charset=utf-8",

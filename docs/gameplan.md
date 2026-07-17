@@ -11,6 +11,8 @@ Explore the mansion, inspect suspicious objects, connect clues left by previous 
 ## Game rules
 
 - The player explores in first person and interacts with doors, switches, furniture, clues, tools, locks, hiding places, and sabotage targets.
+- The player can sit on available chairs and sofas with the normal E/touch interaction. Sitting is an observable, non-hidden state: movement, sprinting, and crouching stop until the player stands, while looking, menus, cameras, and danger continue to work.
+- Mansion seats have exclusive occupancy. The three contestant NPCs follow short room-scale routines that alternate walking, idle pauses, and seated breaks without blocking Mr. Feast's authored patrol or the player's core circulation.
 - The player can trade stamina for sprint speed, or crouch for slower movement with a quieter, less-visible stealth profile.
 - Brass-tagged public surveillance cameras visibly scan most major rooms and exterior approaches. Ordinary filming is permitted in show spaces, but observed sabotage raises an alarm; unlocked basement zones treat sightings as trespass, and any alarm or patron-feed sabotage starts a global lockdown in which all camera sightings are hostile.
 - Camera exposure builds over a short readable grace period, slows while crouched, and stops behind solid cover or inside an active hiding place. Camera HUD feedback stays transient and text-first: `Spotted` during blinking acquisition and `Being recorded` after tracking locks. An alarm sends Mr. Feast to investigate the last reliable camera sighting before he returns to patrol if the player escapes or hides.

@@ -88,6 +88,7 @@ async function run() {
     assert(state.contestant13.phase === "find-book", "fresh trail should begin at the Library shelf book");
     assert(state.contestant13.world.bookVisible, "shelf book should begin visible");
     assert(state.contestant13.world.bookSlotReserved && state.contestant13.world.bookScratch === "XIII", "shelf book should occupy a clean reserved gap and carry the scratched XIII mark");
+    assert(state.contestant13.world.bookScratchTreatment === "etched-decal" && state.contestant13.world.bookScratchRaisedDepth === 0, `the XIII should be a flat irregular surface scratch instead of raised lettering; world=${JSON.stringify(state.contestant13.world)}`);
     assert(state.contestant13.world.bookTitle === state.books.clueBook?.title && state.contestant13.world.bookTitleVisible, `the shelf clue should display its seeded catalog title on the physical spine; world=${JSON.stringify(state.contestant13.world)} books=${JSON.stringify(state.books)}`);
     assert(state.contestant13.world.basementDoorLocked && !state.contestant13.world.basementDoorOpen, "basement door should begin closed and locked");
 

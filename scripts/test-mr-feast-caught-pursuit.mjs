@@ -100,12 +100,20 @@ async function run() {
     assert(state.speech.visible && state.speech.category === "pursuit-witnessed", `a witnessed start should speak a pursuit line; got ${JSON.stringify(state.speech)}`);
 
     // Straightening the evidence does not undo being seen: the pursuit stays.
+    // Re-tamper it immediately after so the object is still disorderly for the
+    // warning-catch flow below, which must exercise the object staying
+    // tampered through the whole chase (its own notice timer keeps running
+    // the entire time pursuit is active, and must not race the outcome).
     state = await page.evaluate(() => {
       const tilted = window.MrFeastFresh.getTamperState().entries.find((entry) => entry.tampered);
       if (tilted) window.MrFeastFresh.tamperForQA(tilted.id, false);
       return JSON.parse(window.render_game_to_text());
     });
     assert(state.mrFeast.pursuit.active?.reason === "witnessed", "self-fixing the object must not cancel an active pursuit");
+    await page.evaluate(() => {
+      const entryId = window.MrFeastFresh.getMrFeastState().pursuit.active?.entryId;
+      if (entryId) window.MrFeastFresh.tamperForQA(entryId, true);
+    });
 
     // --- Warning catch on the main level -------------------------------------
     const warningRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(120));
@@ -114,11 +122,20 @@ async function run() {
     assert(warningRun.maxFrameSpeed <= warningRun.pursuitSpeed + 0.05, `pursuit translation should respect the tuned speed; got ${JSON.stringify(warningRun)}`);
     assert(warningRun.pursuitSpeed < warningRun.playerWalkSpeed, `the effective pursuit speed must remain below player walk speed; got ${JSON.stringify(warningRun)}`);
     assert(warningRun.actionsSeen.includes("run"), `pursuit should use the run animation; got ${JSON.stringify(warningRun.actionsSeen)}`);
+    assert(
+      JSON.stringify(warningRun.states) === JSON.stringify(["patrol", "responding", "searching", "returning", "patrol"]),
+      `a warning catch must not be interrupted by a housekeeping detour; got states ${JSON.stringify(warningRun.states)}`,
+    );
     state = await diagnostics(page);
     assert(state.mrFeast.pursuit.warnings === 1 && state.mrFeast.pursuit.catches === 1, `the warning should be counted; got ${JSON.stringify(state.mrFeast.pursuit)}`);
     assert(state.gameOver === null, "a main-level catch must not end the game");
-    assert(state.speech.lastCategory === "warning", `the catch should deliver a warning line; got ${JSON.stringify(state.speech)}`);
+    assert(state.speech.lastCategory === "warning", `the catch should deliver a warning line, not a housekeeping notice or fix line; got ${JSON.stringify(state.speech)}`);
     assert(state.mrFeast.security.state === "patrol", `he should resume patrol after the warning; got ${state.mrFeast.security.state}`);
+    assert(state.mrFeast.housekeeping.state === "idle" && state.mrFeast.housekeeping.activeTaskId === null, `catching the player in the act must not also queue a housekeeping visit; got ${JSON.stringify(state.mrFeast.housekeeping)}`);
+    const caughtPortrait = state.tamper.entries.find((entry) => entry.id === "tamper-portrait-1");
+    assert(caughtPortrait?.tampered === false, `the portrait he caught the player tampering with should be resolved by the catch itself; got ${JSON.stringify(caughtPortrait)}`);
+    const settleWait = await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(20));
+    assert(!settleWait.dispatched.length, `a catch-resolved object must not later trigger a separate housekeeping visit; got ${JSON.stringify(settleWait)}`);
 
     // --- No pursuit without a witness, and straightening is never an infraction
     await page.evaluate(() => {
@@ -147,19 +164,39 @@ async function run() {
     await page.waitForFunction(() => /tilt/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 8000 });
     await pressKey(page, "KeyE", "e");
     await page.waitForTimeout(120);
+    // Deliberately leave the object tampered through the whole give-up: its
+    // notice timer keeps counting down the entire time pursuit is active, so
+    // by the time he gives up it is already overdue — that must not corrupt
+    // the give-up sweep with an immediate housekeeping detour either.
     const hid = await page.evaluate(() => {
-      const tilted = window.MrFeastFresh.getTamperState().entries.find((entry) => entry.tampered);
-      if (tilted) window.MrFeastFresh.tamperForQA(tilted.id, false);
       window.MrFeastFresh.setPursuitGiveUpForQA(3);
       return window.MrFeastFresh.enterHideSpotForQA();
     });
     assert(hid && hid.hidden === true, `the QA hide hook should tuck the player into a hiding spot; got ${JSON.stringify(hid)}`);
-    const hiddenRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(120));
+    // Fetch the run result and the diagnostics it implies in the same
+    // round-trip: a real browser keeps a live rAF loop ticking in wall-clock
+    // time, and the tampered object's own notice is already overdue by the
+    // time the sweep completes, so a separate later read can legitimately
+    // race an already-queued follow-up dispatch.
+    const { hiddenRun, atSweepEnd } = await page.evaluate(() => {
+      const run = window.MrFeastFresh.runMrFeastPursuitForQA(120);
+      return { hiddenRun: run, atSweepEnd: JSON.parse(window.render_game_to_text()) };
+    });
     assert(hiddenRun.outcome === "lost", `a hidden player should force the pursuit to give up; got ${JSON.stringify(hiddenRun)}`);
-    state = await diagnostics(page);
-    assert(state.mrFeast.pursuit.catches === 0, `a hidden player must not be caught; got ${JSON.stringify(state.mrFeast.pursuit)}`);
-    assert(state.speech.lastCategory === "pursuit-lost", `an abandoned pursuit should speak a frustrated line; got ${JSON.stringify(state.speech)}`);
+    assert(
+      JSON.stringify(hiddenRun.states) === JSON.stringify(["patrol", "responding", "searching", "returning", "patrol"]),
+      `giving up must not be interrupted by a housekeeping detour either; got states ${JSON.stringify(hiddenRun.states)}`,
+    );
+    assert(atSweepEnd.mrFeast.pursuit.catches === 0, `a hidden player must not be caught; got ${JSON.stringify(atSweepEnd.mrFeast.pursuit)}`);
+    assert(atSweepEnd.speech.lastCategory === "pursuit-lost", `an abandoned pursuit should speak a frustrated line; got ${JSON.stringify(atSweepEnd.speech)}`);
+    const stillTampered = atSweepEnd.tamper.entries.find((entry) => entry.id === "tamper-portrait-1");
+    assert(stillTampered?.tampered === true, `giving up must not silently resolve the object he never caught; got ${JSON.stringify(stillTampered)}`);
     await page.evaluate(() => window.MrFeastFresh.leaveHideSpotForQA());
+    // He should still come back for it later, as an ordinary, undisturbed housekeeping errand.
+    const lateFixRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
+    assert(lateFixRun.completed === true && lateFixRun.fixesCompleted === 1, `an escaped tamper should still get a normal later fix; got ${JSON.stringify(lateFixRun)}`);
+    state = await diagnostics(page);
+    assert(state.tamper.entries.find((entry) => entry.id === "tamper-portrait-1")?.tampered === false, "the escaped tamper should be fixed after the later housekeeping errand");
 
     // --- Recorded trigger: tampering while the camera pill reads Being recorded
     await page.evaluate(() => {

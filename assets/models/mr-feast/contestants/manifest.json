@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260717-contestant-conversations-1",
+  "assetVersion": "20260717-seating-routines-1",
   "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
   "characters": [
     {
@@ -37,6 +37,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 4
+        },
+        "walk": {
+          "file": "mara-voss-walk.glb",
+          "name": "walk",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 1.033333420753479
         }
       },
       "dialogue": [
@@ -86,6 +93,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 4
+        },
+        "walk": {
+          "file": "kip-solano-walk.glb",
+          "name": "walk",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 1.033333420753479
         }
       },
       "dialogue": [
@@ -136,6 +150,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 4
+        },
+        "walk": {
+          "file": "juniper-cross-walk.glb",
+          "name": "walk",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 1.033333420753479
         }
       },
       "dialogue": [

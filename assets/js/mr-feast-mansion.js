@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-matte-spines-rushed-note-1";
+  const MANSION_RUNTIME_VERSION = "20260717-seating-routines-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -432,6 +432,85 @@
     crouchVisibilityMultiplier: 0.5,
     crouchNoiseMultiplier: 0.32,
     interactionRange: 2.35,
+  });
+  const MANSION_SEATING = Object.freeze({
+    playerEyeHeight: 1.22,
+    chairAimMaximumY: 0.76,
+    chairInteractionWidth: 0.78,
+    chairInteractionHeight: 1.34,
+    chairInteractionDepth: 0.78,
+    sofaInteractionWidth: 0.78,
+    sofaInteractionHeight: 0.46,
+    sofaInteractionDepth: 0.72,
+    defaultChairExitX: 0.92,
+    defaultSofaExitZ: -1.05,
+    npcRootDrop: 0.32,
+    npcSeatPauseSeconds: 5.4,
+    contestantTalkPauseSeconds: 2.8,
+    occupantClearanceRadius: 0.72,
+  });
+  const CONTESTANT_ACTIVITY = Object.freeze({
+    IDLE: "idle",
+    TURNING: "turning",
+    WALKING: "walking",
+    TALKING: "talking",
+    SEATED: "seated",
+  });
+  const CONTESTANT_SEATED_POSES = Object.freeze({
+    "mara-voss": Object.freeze({
+      rootDrop: 0.338872,
+      bones: Object.freeze({
+        Spine02: Object.freeze([0.021815, 0.000103, 0.000111, 0.999762]),
+        Spine01: Object.freeze([0.021814, 0.000102, 0.000111, 0.999762]),
+        Spine: Object.freeze([0.017428, 0.000583, 0.000709, 0.999848]),
+        LeftUpLeg: Object.freeze([-0.598002, 0.000006, 0.049998, 0.799934]),
+        LeftLeg: Object.freeze([0.553390, 0.000002, 0.000037, 0.832922]),
+        LeftFoot: Object.freeze([-0.206669, 0.000001, 0.124562, 0.970450]),
+        RightUpLeg: Object.freeze([-0.627917, 0, -0.032846, 0.777587]),
+        RightLeg: Object.freeze([0.580036, 0, -0.015961, 0.814434]),
+        RightFoot: Object.freeze([-0.233434, 0.000001, 0.089805, 0.968217]),
+        LeftArm: Object.freeze([-0.175259, -0.000002, 0.298514, 0.938176]),
+        LeftForeArm: Object.freeze([0.759236, -0.000005, -0.092815, 0.644163]),
+        RightArm: Object.freeze([-0.142239, 0, -0.328310, 0.933799]),
+        RightForeArm: Object.freeze([0.752561, -0.000015, 0.088723, 0.652518]),
+      }),
+    }),
+    "kip-solano": Object.freeze({
+      rootDrop: 0.327635,
+      bones: Object.freeze({
+        Spine02: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
+        Spine01: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
+        Spine: Object.freeze([0.017453, 0.000023, 0.000028, 0.999848]),
+        LeftUpLeg: Object.freeze([-0.637786, 0, 0.036649, 0.769341]),
+        LeftLeg: Object.freeze([0.560778, 0.000001, 0.038037, 0.827092]),
+        LeftFoot: Object.freeze([-0.114101, 0.000003, 0.066720, 0.991226]),
+        RightUpLeg: Object.freeze([-0.638624, -0.000002, -0.0299, 0.768938]),
+        RightLeg: Object.freeze([0.562837, -0.000001, -0.0298, 0.82603]),
+        RightFoot: Object.freeze([-0.111425, 0.000002, -0.069813, 0.991318]),
+        LeftArm: Object.freeze([-0.146489, 0.000003, 0.498257, 0.854565]),
+        LeftForeArm: Object.freeze([0.538898, -0.000005, -0.066183, 0.839767]),
+        RightArm: Object.freeze([-0.189284, 0, -0.475843, 0.858921]),
+        RightForeArm: Object.freeze([0.564771, 0.000002, 0.058299, 0.823186]),
+      }),
+    }),
+    "juniper-cross": Object.freeze({
+      rootDrop: 0.373552,
+      bones: Object.freeze({
+        Spine02: Object.freeze([0.021806, -0.000433, -0.000435, 0.999762]),
+        Spine01: Object.freeze([0.021806, -0.000433, -0.000435, 0.999762]),
+        Spine: Object.freeze([0.017418, -0.0008, -0.000757, 0.999848]),
+        LeftUpLeg: Object.freeze([-0.636127, 0.000004, 0.043116, 0.770379]),
+        LeftLeg: Object.freeze([0.613814, -0.000002, -0.033659, 0.788733]),
+        LeftFoot: Object.freeze([-0.301909, 0.000001, 0.012251, 0.953258]),
+        RightUpLeg: Object.freeze([-0.655065, 0, -0.033017, 0.754851]),
+        RightLeg: Object.freeze([0.628501, 0, -0.005172, 0.777792]),
+        RightFoot: Object.freeze([-0.304722, 0.000001, 0.013267, 0.952349]),
+        LeftArm: Object.freeze([-0.036143, -0.000003, 0.258542, 0.965324]),
+        LeftForeArm: Object.freeze([0.816941, 0.000008, -0.27856, 0.504987]),
+        RightArm: Object.freeze([-0.011074, -0.000003, -0.292927, 0.956071]),
+        RightForeArm: Object.freeze([0.816101, 0.000021, 0.28272, 0.504032]),
+      }),
+    }),
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
@@ -906,13 +985,18 @@
   });
   const MANSION_CONTESTANTS = Object.freeze({
     manifestPath: "../models/mr-feast/contestants/manifest.json",
-    assetVersion: "20260717-contestant-conversations-1",
+    assetVersion: "20260717-seating-routines-1",
     contactShadowOpacity: 0.2,
     interactionWidth: 0.82,
     interactionDepth: 0.7,
     colliderWidth: 0.46,
     colliderDepth: 0.4,
     speakerLiftMeters: 0.22,
+    speed: 0.62,
+    turnSpeed: 4.2,
+    movementAlignment: 0.975,
+    arrivalRadius: 0.055,
+    fadeSeconds: 0.2,
     placements: Object.freeze([
       Object.freeze({
         id: "mara-voss",
@@ -922,6 +1006,14 @@
         rotationY: 0,
         idleRate: 0.88,
         idlePhase: 0.17,
+        initialPause: 3.1,
+        route: Object.freeze([
+          Object.freeze({ x: -6.6, z: 4.45, pause: 1.4 }),
+          Object.freeze({ x: -7.4, z: 4.45, pause: 0.9 }),
+          Object.freeze({ x: -7.4, z: 5.25, pause: 1.1 }),
+          Object.freeze({ x: -8.8, z: 6.35, pause: 0.8 }),
+          Object.freeze({ x: -9.55, z: 6.35, pause: 0.2, seatTag: "library-writing-chair" }),
+        ]),
       }),
       Object.freeze({
         id: "kip-solano",
@@ -931,6 +1023,15 @@
         rotationY: 0,
         idleRate: 1.08,
         idlePhase: 0.53,
+        initialPause: 3.6,
+        route: Object.freeze([
+          Object.freeze({ x: -1.8, z: -7.6, pause: 1.1 }),
+          Object.freeze({ x: -0.8, z: -7.6, pause: 0.6 }),
+          Object.freeze({ x: -0.8, z: -6.7, pause: 0.8 }),
+          Object.freeze({ x: -1.8, z: -6.7, pause: 0.6 }),
+          Object.freeze({ x: -2.5, z: -5.5, pause: 0.7 }),
+          Object.freeze({ x: -3.9, z: -5.1, pause: 0.2, seatTag: "ballroom-sideline-chair" }),
+        ]),
       }),
       Object.freeze({
         id: "juniper-cross",
@@ -941,6 +1042,15 @@
         qaApproach: Object.freeze({ x: -0.7, z: 1.45 }),
         idleRate: 0.94,
         idlePhase: 0.79,
+        initialPause: 4.1,
+        route: Object.freeze([
+          Object.freeze({ x: 10.7, z: 0, pause: 1.5 }),
+          Object.freeze({ x: 10.7, z: 0.4, pause: 0.8 }),
+          Object.freeze({ x: 10.1, z: 0.4, pause: 0.9 }),
+          Object.freeze({ x: 10.05, z: 0, pause: 0.2, seatTag: "reading-room-sofa" }),
+          Object.freeze({ x: 10.1, z: -0.4, pause: 0.8 }),
+          Object.freeze({ x: 10.7, z: -0.4, pause: 1.0 }),
+        ]),
       }),
     ]),
   });
@@ -1261,6 +1371,7 @@
         shelfIndex: 2, reservedSlot: 5,
         localX: 0.215, localZ: -0.075,
         width: 0.12, height: 0.43, depth: 0.3,
+        scratchWidth: 0.098, scratchHeight: 0.078,
       }),
       shovel: Object.freeze({ x: -22.35, z: -5.50, yOffset: 0.16, scale: 0.56 }),
       digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
@@ -1621,6 +1732,7 @@
     currentInteraction: null,
     isHidden: false,
     activeHideSpot: null,
+    activeSeat: null,
     journalOpen: false,
     menuOpen: false,
     maximized: false,
@@ -1855,6 +1967,7 @@
   let readableBookSystem = null;
   let mrFeastNpc = null;
   let mansionContestants = null;
+  let seatingSystem = null;
   let cameraSecurity = null;
   let monitorWallSystem = null;
   let tamperSystem = null;
@@ -2832,7 +2945,7 @@
       this.qaLastCameraResponse = null;
       this.housekeeping = { active: null, fixesCompleted: 0 };
       this.qaLastHousekeepingRun = null;
-      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null };
+      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
       this.qaPursuitGiveUpOverride = null;
       this.qaLastPursuitRun = null;
@@ -3690,7 +3803,13 @@
     }
 
     canAcceptHousekeeping() {
-      if (this.loadStatus !== "ready" || this.activeCameraAlarm || this.housekeeping.active || this.pursuit.active) return false;
+      if (
+        this.loadStatus !== "ready"
+        || this.activeCameraAlarm
+        || this.housekeeping.active
+        || this.pursuit.active
+        || this.pursuit.cooldownActive
+      ) return false;
       return this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL
         || this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING
         || this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING;
@@ -3878,7 +3997,7 @@
           pauseRemaining: this.pauseRemaining,
         };
       }
-      this.pursuit.active = { reason: info.reason || "witnessed", kind: info.kind || null };
+      this.pursuit.active = { reason: info.reason || "witnessed", kind: info.kind || null, entryId: info.entryId || null };
       this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
       this.pursuit.repathRemaining = 0;
       // Chase pathing starts from wherever he physically stands, not from the
@@ -3981,7 +4100,14 @@
       }
       this.pursuit.lastOutcome = "warning";
       this.pursuit.warnings += 1;
+      // A tampered object's own notice timer keeps ticking through the whole
+      // chase, so it is almost always already overdue the instant the catch
+      // resolves. Without this, housekeeping hijacks him mid-warning on the
+      // very next tick — resolve that exact entry here instead, so catching
+      // the player in the act is itself the resolution, not a later errand.
+      if (info?.entryId) tamperSystem?.resolveEntryForCatch(info.entryId);
       this.pursuitWarningFocus = { x: p.x, y: this.root.position.y, z: p.z };
+      this.pursuit.cooldownActive = true;
       this.searchRemaining = MR_FEAST_PURSUIT.warningSeconds;
       this.searchElapsed = 0;
       this.searchBaseYaw = this.root.rotation.y;
@@ -3992,6 +4118,7 @@
       if (!this.pursuit.active) return;
       this.pursuit.active = null;
       this.pursuit.lastOutcome = "lost";
+      this.pursuit.cooldownActive = true;
       speechSystem?.sayFromPool("pursuit-lost");
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
       this.searchRemaining = CAMERA_SECURITY.searchSeconds;
@@ -4003,6 +4130,7 @@
 
     recoverAfterLoad() {
       this.pursuit.active = null;
+      this.pursuit.cooldownActive = false;
       this.pursuitWarningFocus = null;
       this.housekeeping.active = null;
       this.activeCameraAlarm = null;
@@ -4135,6 +4263,7 @@
       this.responseBlockedReason = null;
       this.searchRemaining = 0;
       this.searchElapsed = 0;
+      this.pursuit.cooldownActive = false;
       this.moving = false;
       this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
     }
@@ -4459,7 +4588,7 @@
       this.qaLastCameraResponse = null;
       this.housekeeping = { active: null, fixesCompleted: 0 };
       this.qaLastHousekeepingRun = null;
-      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null };
+      this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
       this.qaPursuitGiveUpOverride = null;
       this.qaLastPursuitRun = null;
@@ -4914,6 +5043,7 @@
           warnings: this.pursuit.warnings,
           catches: this.pursuit.catches,
           lastOutcome: this.pursuit.lastOutcome,
+          cooldownActive: this.pursuit.cooldownActive,
           speed: Number(this.pursuitSpeed().toFixed(3)),
           playerWalkSpeed: PLAYER.walkSpeed,
           lastRun: this.qaLastPursuitRun,
@@ -4948,6 +5078,265 @@
     }
   }
 
+  class MansionSeatingSystem {
+    constructor() {
+      this.entries = [];
+      this.byId = new Map();
+      this.counts = { chair: 0, sofa: 0 };
+      this.playerReturn = null;
+      this.hitMaterial = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+    }
+
+    safeTag(value) {
+      return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+
+    registerSeat(options) {
+      const kind = options.kind || "chair";
+      this.counts[kind] = (this.counts[kind] || 0) + 1;
+      const tag = this.safeTag(options.tag);
+      const slotSuffix = Number(options.slotCount) > 1 ? `-${Number(options.slotIndex) + 1}` : "";
+      const id = tag ? `seat-${tag}${slotSuffix}` : `seat-${kind}-${this.counts[kind]}`;
+      const entry = {
+        id,
+        tag: tag || null,
+        kind,
+        label: options.label || kind,
+        group: options.group,
+        localSeat: { ...(options.localSeat || { x: 0, y: 0, z: 0 }) },
+        localEye: { ...(options.localEye || { x: 0, y: MANSION_SEATING.playerEyeHeight, z: 0 }) },
+        localExit: { ...(options.localExit || { x: 0, y: 0, z: MANSION_SEATING.defaultChairExitX }) },
+        localInteraction: { ...(options.localInteraction || { x: 0, y: 0.62, z: -0.18 }) },
+        occupantBy: null,
+        interaction: null,
+        interactionTarget: null,
+        tamperId: null,
+      };
+      entry.interaction = {
+        type: "sit",
+        id: entry.id,
+        getLabel: () => {
+          if (state.activeSeat === entry && entry.occupantBy === "player") return "Stand up";
+          if (entry.occupantBy) return `${entry.label[0].toUpperCase()}${entry.label.slice(1)} occupied`;
+          if (entry.tamperId && tamperSystem?.byId.get(entry.tamperId)?.tampered) return "Straighten this seat before sitting";
+          return `Sit on ${entry.label}`;
+        },
+        activate: () => state.activeSeat === entry ? this.standPlayer() : this.sitPlayer(entry.id),
+      };
+      this.entries.push(entry);
+      this.byId.set(entry.id, entry);
+      if (options.interactionSize) {
+        const hitbox = new THREE.Mesh(
+          new THREE.BoxGeometry(options.interactionSize.x, options.interactionSize.y, options.interactionSize.z),
+          this.hitMaterial,
+        );
+        hitbox.name = `${entry.id}-interaction`;
+        hitbox.position.set(entry.localInteraction.x, entry.localInteraction.y, entry.localInteraction.z);
+        entry.group.add(hitbox);
+        addInteractionTarget(hitbox, entry.interaction);
+        entry.interactionTarget = hitbox;
+      }
+      return entry;
+    }
+
+    registerChair({ group, tag = null, exitLocal = null }) {
+      return this.registerSeat({
+        kind: "chair",
+        label: "chair",
+        tag,
+        group,
+        localSeat: { x: 0, y: 0, z: -0.04 },
+        localEye: { x: 0, y: MANSION_SEATING.playerEyeHeight, z: -0.08 },
+        localExit: exitLocal || { x: MANSION_SEATING.defaultChairExitX, y: 0, z: -0.04 },
+        localInteraction: { x: 0, y: 0.62, z: -0.16 },
+      });
+    }
+
+    registerSofa({ group, width, tag = null, slots = null }) {
+      const slotCount = Math.max(1, Number(slots) || (width >= 2.9 ? 3 : 2));
+      const spread = slotCount === 1 ? 0 : Math.min(0.82, width * 0.25);
+      const entries = [];
+      for (let index = 0; index < slotCount; index += 1) {
+        const x = slotCount === 1 ? 0 : -spread + (spread * 2 * index) / (slotCount - 1);
+        entries.push(this.registerSeat({
+          kind: "sofa",
+          label: "sofa",
+          tag,
+          group,
+          slotIndex: index,
+          slotCount,
+          localSeat: { x, y: 0, z: -0.08 },
+          localEye: { x, y: MANSION_SEATING.playerEyeHeight + 0.03, z: -0.12 },
+          localExit: { x, y: 0, z: MANSION_SEATING.defaultSofaExitZ },
+          localInteraction: { x, y: 0.68, z: -0.25 },
+          interactionSize: {
+            x: Math.min(MANSION_SEATING.sofaInteractionWidth, width / slotCount),
+            y: MANSION_SEATING.sofaInteractionHeight,
+            z: MANSION_SEATING.sofaInteractionDepth,
+          },
+        }));
+      }
+      return entries;
+    }
+
+    linkTamper(seat, tamperId) {
+      if (!seat) return;
+      seat.tamperId = tamperId;
+    }
+
+    entryById(id) {
+      return this.byId.get(id) || null;
+    }
+
+    entryForTag(tag, availableOnly = false) {
+      const safeTag = this.safeTag(tag);
+      return this.entries.find((entry) => entry.tag === safeTag && (!availableOnly || !entry.occupantBy)) || null;
+    }
+
+    worldPoint(entry, key) {
+      entry.group.updateMatrixWorld(true);
+      const value = entry[key];
+      return entry.group.localToWorld(new THREE.Vector3(value.x, value.y, value.z));
+    }
+
+    worldYaw(entry) {
+      entry.group.updateMatrixWorld(true);
+      const quaternion = entry.group.getWorldQuaternion(new THREE.Quaternion());
+      return new THREE.Euler().setFromQuaternion(quaternion, "YXZ").y;
+    }
+
+    sitPlayer(id) {
+      const entry = this.entryById(id);
+      if (!state.qa && !state.started) return { seated: false, reason: "not started" };
+      if (!entry) return { seated: false, reason: "unknown seat" };
+      if (entry.occupantBy && entry.occupantBy !== "player") return { seated: false, reason: `occupied by ${entry.occupantBy}` };
+      if (entry.tamperId && tamperSystem?.byId.get(entry.tamperId)?.tampered) return { seated: false, reason: "seat is tampered" };
+      if (state.activeSeat && state.activeSeat !== entry) this.standPlayer();
+      if (!this.playerReturn && physics) {
+        const position = physics.playerPosition();
+        this.playerReturn = {
+          position: { x: position.x, y: position.y, z: position.z },
+          yaw: state.yaw,
+          pitch: state.pitch,
+        };
+      }
+      entry.occupantBy = "player";
+      state.activeSeat = entry;
+      // Three's camera looks down local -Z, while contestant roots face +Z.
+      // Matching the furniture yaw therefore looks away from its backrest.
+      state.yaw = this.worldYaw(entry);
+      state.pitch = 0;
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      state.movement.eyeHeight = MANSION_SEATING.playerEyeHeight;
+      state.currentInteraction = entry.interaction;
+      audioSystem?.resetFootsteps();
+      syncCamera();
+      updateMovementHud();
+      updateInteractionPrompt();
+      return { seated: true, seatId: entry.id, kind: entry.kind };
+    }
+
+    standPlayer() {
+      const entry = state.activeSeat;
+      if (!entry || entry.occupantBy !== "player") return { seated: false, reason: "player is not seated" };
+      entry.occupantBy = null;
+      state.activeSeat = null;
+      this.playerReturn = null;
+      state.currentInteraction = null;
+      state.movement.eyeHeight = PLAYER.eye;
+      syncCamera();
+      updateMovementHud();
+      updateLocation();
+      updateInteractionPrompt();
+      return { seated: false, seatId: entry.id };
+    }
+
+    occupyNpc(occupantId, seatId = null, seatTag = null) {
+      const existing = this.entries.find((entry) => entry.occupantBy === occupantId);
+      if (existing && (!seatId || existing.id === seatId)) return { seated: true, seatId: existing.id };
+      if (existing) existing.occupantBy = null;
+      const entry = seatId ? this.entryById(seatId) : this.entryForTag(seatTag, true);
+      if (!entry) return { seated: false, reason: "seat unavailable" };
+      if (entry.occupantBy) return { seated: false, reason: `occupied by ${entry.occupantBy}` };
+      if (entry.tamperId && tamperSystem?.byId.get(entry.tamperId)?.tampered) return { seated: false, reason: "seat is tampered" };
+      entry.occupantBy = occupantId;
+      return { seated: true, seatId: entry.id };
+    }
+
+    releaseNpc(occupantId) {
+      const entry = this.entries.find((candidate) => candidate.occupantBy === occupantId);
+      if (!entry) return { seated: false, reason: "contestant is not seated" };
+      entry.occupantBy = null;
+      return { seated: false, seatId: entry.id };
+    }
+
+    clearTransientOccupancy() {
+      if (state.activeSeat) this.standPlayer();
+      for (const entry of this.entries) entry.occupantBy = null;
+    }
+
+    playerCameraAnchor(target) {
+      if (!state.activeSeat || state.activeSeat.occupantBy !== "player") return null;
+      const point = this.worldPoint(state.activeSeat, "localEye");
+      return target.copy(point);
+    }
+
+    placePlayerNearForQA(id) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || !physics) return null;
+      if (state.activeSeat) this.standPlayer();
+      const exit = this.worldPoint(entry, "localExit");
+      const target = this.worldPoint(entry, "localInteraction");
+      const yaw = Math.atan2(exit.x - target.x, exit.z - target.z);
+      teleport(exit.x, exit.y, exit.z, yaw, -0.48);
+      const horizontal = Math.max(0.01, Math.hypot(target.x - camera.position.x, target.z - camera.position.z));
+      state.pitch = -Math.atan2(camera.position.y - target.y, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      const player = physics.playerPosition();
+      return {
+        seatId: entry.id,
+        distance: Number(Math.hypot(player.x - target.x, player.z - target.z).toFixed(3)),
+        prompt: state.currentInteraction?.getLabel() || null,
+      };
+    }
+
+    getDiagnostics() {
+      const occupied = this.entries.filter((entry) => entry.occupantBy).length;
+      return {
+        total: this.entries.length,
+        available: this.entries.length - occupied,
+        occupied,
+        player: {
+          seated: Boolean(state.activeSeat && state.activeSeat.occupantBy === "player"),
+          seatId: state.activeSeat?.id || null,
+          movementLocked: Boolean(state.activeSeat),
+        },
+        entries: this.entries.map((entry) => {
+          const position = this.worldPoint(entry, "localSeat");
+          return {
+            id: entry.id,
+            tag: entry.tag,
+            kind: entry.kind,
+            label: entry.label,
+            occupiedBy: entry.occupantBy,
+            tamperId: entry.tamperId,
+            position: {
+              x: Number(position.x.toFixed(3)),
+              y: Number(position.y.toFixed(3)),
+              z: Number(position.z.toFixed(3)),
+            },
+            yaw: Number(this.worldYaw(entry).toFixed(3)),
+          };
+        }),
+      };
+    }
+  }
+
   class MansionContestantSystem {
     constructor() {
       this.manifest = null;
@@ -4973,10 +5362,32 @@
           headBone: null,
           mixer: null,
           action: null,
+          actions: {},
+          currentAnimation: null,
           interactionTarget: null,
           interactionRegistered: false,
+          contactShadow: null,
           colliderEnabled: false,
+          colliderBody: null,
+          collider: null,
+          colliderHeight: 0,
           routeClearance: this.routeClearanceForPlacement(placement),
+          routeMinimumClearance: this.minimumRouteClearance(placement),
+          routeLength: this.routeLength(placement),
+          routeIndex: 0,
+          routeDirection: 1,
+          routeCycles: 0,
+          routeSegmentsTraversed: 0,
+          distanceTravelled: 0,
+          activity: CONTESTANT_ACTIVITY.IDLE,
+          pauseRemaining: placement.initialPause || 0,
+          talkPauseRemaining: 0,
+          seatedSeatId: null,
+          seatedPoseApplied: false,
+          blockedSteps: 0,
+          maximumColliderOffset: 0,
+          teleports: 0,
+          locomotionStatus: "pending",
           size: null,
           center: null,
           grounded: false,
@@ -4989,34 +5400,72 @@
           lastLineIndex: -1,
           lastLine: null,
           speaker: null,
-          animationTracks: null,
+          animationTracks: {},
           animationProbeBone: null,
           animationProbeStart: null,
           animationPoseChanged: false,
+          modelBaseY: 0,
+          restPoseBones: [],
+          seatPoseBones: {},
+          lastDt: 0,
+          qaIgnorePlayer: false,
         };
       });
       animatedObjects.push(this);
     }
 
+    routeLength(placement) {
+      const route = placement.route || [];
+      let length = 0;
+      for (let index = 1; index < route.length; index += 1) {
+        length += Math.hypot(route[index].x - route[index - 1].x, route[index].z - route[index - 1].z);
+      }
+      return length;
+    }
+
+    minimumRouteClearance(placement) {
+      const route = placement.route || [];
+      let minimum = Infinity;
+      for (let index = 0; index < route.length; index += 1) {
+        const start = route[index];
+        const end = route[index + 1] || start;
+        const length = Math.hypot(end.x - start.x, end.z - start.z);
+        const samples = Math.max(1, Math.ceil(length / 0.08));
+        for (let sample = 0; sample <= samples; sample += 1) {
+          const t = sample / samples;
+          minimum = Math.min(minimum, this.routeClearanceForPosition({
+            x: start.x + (end.x - start.x) * t,
+            y: placement.position.y,
+            z: start.z + (end.z - start.z) * t,
+          }));
+        }
+      }
+      return minimum;
+    }
+
     routeClearanceForPlacement(placement) {
+      return this.routeClearanceForPosition(placement.position);
+    }
+
+    routeClearanceForPosition(position) {
       let nearest = Infinity;
       for (let index = 0; index < MR_FEAST_NPC.waypoints.length; index += 1) {
         const start = MR_FEAST_NPC.waypoints[index];
         const end = MR_FEAST_NPC.waypoints[(index + 1) % MR_FEAST_NPC.waypoints.length];
-        if (Math.abs(start.y - placement.position.y) > 0.35 || Math.abs(end.y - placement.position.y) > 0.35) continue;
+        if (Math.abs(start.y - position.y) > 0.35 || Math.abs(end.y - position.y) > 0.35) continue;
         const dx = end.x - start.x;
         const dz = end.z - start.z;
         const lengthSquared = dx * dx + dz * dz;
         const projected = lengthSquared > 0
           ? THREE.MathUtils.clamp(
-            ((placement.position.x - start.x) * dx + (placement.position.z - start.z) * dz) / lengthSquared,
+            ((position.x - start.x) * dx + (position.z - start.z) * dz) / lengthSquared,
             0,
             1,
           )
           : 0;
         const closestX = start.x + dx * projected;
         const closestZ = start.z + dz * projected;
-        nearest = Math.min(nearest, Math.hypot(closestX - placement.position.x, closestZ - placement.position.z));
+        nearest = Math.min(nearest, Math.hypot(closestX - position.x, closestZ - position.z));
       }
       return nearest;
     }
@@ -5031,6 +5480,206 @@
       return new Promise((resolve, reject) => {
         loader.load(url, resolve, undefined, (error) => reject(new Error(error?.message || `Could not load ${url}`)));
       });
+    }
+
+    prepareAction(entry, gltf, name) {
+      const clip = gltf?.animations?.[0]?.clone();
+      if (!clip) throw new Error(`Contestant ${name} GLB has no animation clip`);
+      clip.name = name;
+      const rotationTracks = clip.tracks.filter((track) => track.name.endsWith(".quaternion"));
+      const translationTracks = clip.tracks.filter((track) => track.name.endsWith(".position"));
+      const scaleTracks = clip.tracks.filter((track) => track.name.endsWith(".scale"));
+      const boundRotationTracks = rotationTracks.filter((track) => {
+        const splitAt = track.name.lastIndexOf(".");
+        return entry.model.getObjectByName(track.name.slice(0, splitAt));
+      });
+      const dynamicRotationTracks = boundRotationTracks.filter((track) => {
+        const values = track.values || [];
+        for (let offset = 4; offset + 3 < values.length; offset += 4) {
+          if (
+            Math.abs(values[offset] - values[0])
+            + Math.abs(values[offset + 1] - values[1])
+            + Math.abs(values[offset + 2] - values[2])
+            + Math.abs(values[offset + 3] - values[3]) > 0.0001
+          ) return true;
+        }
+        return false;
+      });
+      const diagnostics = {
+        total: clip.tracks.length,
+        rotation: rotationTracks.length,
+        translation: translationTracks.length,
+        scale: scaleTracks.length,
+        boundRotation: boundRotationTracks.length,
+        dynamicRotation: dynamicRotationTracks.length,
+      };
+      if (
+        rotationTracks.length < 20
+        || boundRotationTracks.length !== rotationTracks.length
+        || dynamicRotationTracks.length < 1
+        || translationTracks.length
+        || scaleTracks.length
+      ) throw new Error(`Contestant ${name} clip failed stationary rig binding checks: ${JSON.stringify(diagnostics)}`);
+      const action = entry.mixer.clipAction(clip);
+      action.enabled = true;
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      entry.actions[name] = action;
+      entry.animationTracks[name] = diagnostics;
+      if (name === "idle") {
+        const probeTrack = dynamicRotationTracks[0];
+        entry.animationProbeBone = entry.model.getObjectByName(probeTrack.name.slice(0, probeTrack.name.lastIndexOf(".")));
+        entry.animationProbeStart = entry.animationProbeBone?.quaternion.clone() || null;
+      }
+      return action;
+    }
+
+    fadeToAction(entry, requestedName, duration = MANSION_CONTESTANTS.fadeSeconds) {
+      const name = requestedName === "walk" && !entry.actions.walk ? "idle" : requestedName;
+      const next = entry.actions[name];
+      if (!next) return null;
+      const rate = name === "idle" ? entry.placement.idleRate : 1;
+      next.setEffectiveTimeScale(rate);
+      if (entry.currentAnimation === name && next.isRunning()) {
+        entry.action = next;
+        return next;
+      }
+      const previous = entry.action;
+      next.enabled = true;
+      next.setEffectiveWeight(1);
+      next.reset();
+      next.play();
+      if (previous && previous !== next) next.crossFadeFrom(previous, Math.max(0, duration), true);
+      entry.action = next;
+      entry.currentAnimation = name;
+      return next;
+    }
+
+    applySeatedPose(entry) {
+      const pose = CONTESTANT_SEATED_POSES[entry.id];
+      if (!pose || !entry.model) return false;
+      for (const rest of entry.restPoseBones) rest.bone.quaternion.copy(rest.quaternion);
+      for (const [name, values] of Object.entries(pose.bones)) {
+        const rest = entry.seatPoseBones[name];
+        if (!rest) continue;
+        rest.bone.quaternion.copy(rest.quaternion).multiply(new THREE.Quaternion(...values));
+      }
+      entry.model.position.y = entry.modelBaseY - pose.rootDrop;
+      entry.seatedPoseApplied = true;
+      return true;
+    }
+
+    restoreStandingPose(entry) {
+      if (!entry.model) return;
+      entry.model.position.y = entry.modelBaseY;
+      entry.seatedPoseApplied = false;
+      this.fadeToAction(entry, "idle", 0);
+      entry.mixer?.update(0);
+    }
+
+    setColliderEnabled(entry, enabled) {
+      const next = Boolean(enabled);
+      entry.colliderEnabled = next;
+      entry.collider?.setEnabled(next);
+      if (next) this.syncCollider(entry);
+    }
+
+    syncCollider(entry) {
+      if (!entry.colliderBody || !entry.colliderEnabled) return;
+      const center = {
+        x: entry.root.position.x,
+        y: entry.root.position.y + entry.colliderHeight / 2,
+        z: entry.root.position.z,
+      };
+      const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, entry.root.rotation.y, 0));
+      entry.colliderBody.setTranslation(center, false);
+      entry.colliderBody.setNextKinematicTranslation(center);
+      entry.colliderBody.setRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w }, false);
+      entry.colliderBody.setNextKinematicRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w });
+      const live = entry.colliderBody.translation();
+      const offset = Math.hypot(live.x - center.x, live.y - center.y, live.z - center.z);
+      entry.maximumColliderOffset = Math.max(entry.maximumColliderOffset, offset);
+    }
+
+    playerBlocksStep(entry, nextX, nextZ) {
+      if (!physics || state.activeSeat || entry.qaIgnorePlayer) return false;
+      const player = physics.playerPosition();
+      const playerFeetY = player.y - PLAYER.halfHeight - PLAYER.radius;
+      if (Math.abs(playerFeetY - entry.root.position.y) > 0.45) return false;
+      return Math.hypot(player.x - nextX, player.z - nextZ) < MANSION_SEATING.occupantClearanceRadius;
+    }
+
+    nextRouteTarget(entry) {
+      const route = entry.placement.route || [];
+      if (route.length < 2) return null;
+      let nextIndex = entry.routeIndex + entry.routeDirection;
+      if (nextIndex < 0 || nextIndex >= route.length) {
+        entry.routeDirection *= -1;
+        nextIndex = entry.routeIndex + entry.routeDirection;
+      }
+      entry.routeIndex = clamp(nextIndex, 0, route.length - 1);
+      entry.activity = CONTESTANT_ACTIVITY.TURNING;
+      return route[entry.routeIndex];
+    }
+
+    arriveAtRoutePoint(entry, target) {
+      entry.root.position.set(target.x, entry.placement.position.y, target.z);
+      entry.routeSegmentsTraversed += 1;
+      const lastIndex = entry.placement.route.length - 1;
+      if (entry.routeIndex === lastIndex && entry.routeDirection > 0) entry.routeDirection = -1;
+      if (entry.routeIndex === 0 && entry.routeDirection < 0) {
+        entry.routeDirection = 1;
+        entry.routeCycles += 1;
+      }
+      this.syncCollider(entry);
+      if (target.seatTag && this.seatEntry(entry, null, target.seatTag).seated) return;
+      entry.pauseRemaining = Math.max(0.18, Number(target.pause) || 0);
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      this.fadeToAction(entry, "idle");
+    }
+
+    seatEntry(entry, seatId = null, seatTag = null) {
+      if (!seatingSystem || entry.status !== "ready") return { seated: false, reason: "seating unavailable" };
+      const occupied = seatingSystem.occupyNpc(entry.id, seatId, seatTag);
+      if (!occupied.seated) return occupied;
+      const seat = seatingSystem.entryById(occupied.seatId);
+      if (!seat) {
+        seatingSystem.releaseNpc(entry.id);
+        return { seated: false, reason: "seat unavailable" };
+      }
+      const point = seatingSystem.worldPoint(seat, "localSeat");
+      entry.root.position.set(point.x, point.y, point.z);
+      entry.root.rotation.y = Math.atan2(
+        Math.sin(seatingSystem.worldYaw(seat) + Math.PI),
+        Math.cos(seatingSystem.worldYaw(seat) + Math.PI),
+      );
+      entry.seatedSeatId = seat.id;
+      entry.activity = CONTESTANT_ACTIVITY.SEATED;
+      entry.pauseRemaining = MANSION_SEATING.npcSeatPauseSeconds;
+      entry.contactShadow.visible = false;
+      for (const action of Object.values(entry.actions)) action.stop();
+      entry.action = null;
+      entry.currentAnimation = "seated";
+      this.setColliderEnabled(entry, false);
+      const poseApplied = this.applySeatedPose(entry);
+      entry.root.updateMatrixWorld(true);
+      return { seated: true, seatId: seat.id, poseApplied };
+    }
+
+    standEntry(entry) {
+      if (!entry.seatedSeatId) return { seated: false, reason: "contestant is not seated" };
+      const seat = seatingSystem?.entryById(entry.seatedSeatId);
+      const exit = seat ? seatingSystem.worldPoint(seat, "localExit") : null;
+      const seatId = entry.seatedSeatId;
+      seatingSystem?.releaseNpc(entry.id);
+      entry.seatedSeatId = null;
+      if (exit) entry.root.position.set(exit.x, entry.placement.position.y, exit.z);
+      entry.contactShadow.visible = !interiorDetailsHidden;
+      this.restoreStandingPose(entry);
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      entry.pauseRemaining = 0.2;
+      this.setColliderEnabled(entry, true);
+      entry.root.updateMatrixWorld(true);
+      return { seated: false, seatId };
     }
 
     async load() {
@@ -5098,9 +5747,14 @@
       }
       entry.status = "loading";
       entry.loadStatus = "loading";
-      const [base, idle] = await Promise.all([
+      const [base, idle, walkResult] = await Promise.all([
         this.loadGltf(loader, this.assetUrl(spec.model, manifestUrl)),
         this.loadGltf(loader, this.assetUrl(spec.animations.idle.file, manifestUrl)),
+        spec.animations.walk?.file
+          ? this.loadGltf(loader, this.assetUrl(spec.animations.walk.file, manifestUrl))
+            .then((gltf) => ({ gltf, error: null }))
+            .catch((error) => ({ gltf: null, error }))
+          : Promise.resolve({ gltf: null, error: new Error("walk clip is not declared") }),
       ]);
       const model = THREE.SkeletonUtils.clone(base.scene);
       model.name = `contestant-${entry.id}-model`;
@@ -5148,55 +5802,30 @@
       entry.textures = textures.size;
       entry.model = model;
       entry.root.add(model);
-
-      const clip = idle.animations?.[0]?.clone();
-      if (!clip) throw new Error("Contestant idle GLB has no animation clip");
-      clip.name = "idle";
-      const rotationTracks = clip.tracks.filter((track) => track.name.endsWith(".quaternion"));
-      const translationTracks = clip.tracks.filter((track) => track.name.endsWith(".position"));
-      const scaleTracks = clip.tracks.filter((track) => track.name.endsWith(".scale"));
-      const boundRotationTracks = rotationTracks.filter((track) => {
-        const splitAt = track.name.lastIndexOf(".");
-        return model.getObjectByName(track.name.slice(0, splitAt));
-      });
-      const dynamicRotationTracks = boundRotationTracks.filter((track) => {
-        const values = track.values || [];
-        for (let offset = 4; offset + 3 < values.length; offset += 4) {
-          if (
-            Math.abs(values[offset] - values[0])
-            + Math.abs(values[offset + 1] - values[1])
-            + Math.abs(values[offset + 2] - values[2])
-            + Math.abs(values[offset + 3] - values[3]) > 0.0001
-          ) return true;
-        }
-        return false;
-      });
-      entry.animationTracks = {
-        total: clip.tracks.length,
-        rotation: rotationTracks.length,
-        translation: translationTracks.length,
-        scale: scaleTracks.length,
-        boundRotation: boundRotationTracks.length,
-        dynamicRotation: dynamicRotationTracks.length,
-      };
-      if (
-        rotationTracks.length < 20
-        || boundRotationTracks.length !== rotationTracks.length
-        || dynamicRotationTracks.length < 1
-        || translationTracks.length
-        || scaleTracks.length
-      ) throw new Error(`Contestant idle clip failed stationary rig binding checks: ${JSON.stringify(entry.animationTracks)}`);
       entry.mixer = new THREE.AnimationMixer(model);
-      entry.action = entry.mixer.clipAction(clip);
-      entry.action.enabled = true;
-      entry.action.setLoop(THREE.LoopRepeat, Infinity);
-      entry.action.setEffectiveTimeScale(entry.placement.idleRate);
-      entry.action.play();
-      entry.action.time = clip.duration * entry.placement.idlePhase;
+      entry.modelBaseY = model.position.y;
+      model.traverse((object) => {
+        if (!object.isBone) return;
+        const rest = { bone: object, quaternion: object.quaternion.clone() };
+        entry.restPoseBones.push(rest);
+        if (CONTESTANT_SEATED_POSES[entry.id]?.bones[object.name]) entry.seatPoseBones[object.name] = rest;
+      });
+      const idleAction = this.prepareAction(entry, idle, "idle");
+      if (walkResult.gltf) {
+        try {
+          this.prepareAction(entry, walkResult.gltf, "walk");
+          entry.locomotionStatus = "ready";
+        } catch (error) {
+          entry.locomotionStatus = "idle-fallback";
+          console.warn(`[Contestants] ${spec.name} walk clip rejected; using idle fallback: ${error?.message || error}`);
+        }
+      } else {
+        entry.locomotionStatus = "idle-fallback";
+        console.warn(`[Contestants] ${spec.name} walk clip unavailable; using idle fallback: ${walkResult.error?.message || walkResult.error}`);
+      }
+      this.fadeToAction(entry, "idle", 0);
+      idleAction.time = idleAction.getClip().duration * entry.placement.idlePhase;
       entry.mixer.update(0);
-      const probeTrack = dynamicRotationTracks[0];
-      entry.animationProbeBone = model.getObjectByName(probeTrack.name.slice(0, probeTrack.name.lastIndexOf(".")));
-      entry.animationProbeStart = entry.animationProbeBone?.quaternion.clone() || null;
 
       const contactShadow = new THREE.Mesh(
         new THREE.CircleGeometry(0.42, 20),
@@ -5217,6 +5846,7 @@
       contactShadow.userData.preExteriorVisibility = true;
       contactShadow.visible = !interiorDetailsHidden;
       entry.root.add(contactShadow);
+      entry.contactShadow = contactShadow;
       interiorDetailMeshes.push(contactShadow);
 
       const interaction = {
@@ -5237,16 +5867,19 @@
       entry.interactionTarget = hitbox;
 
       const colliderHeight = Math.max(1.25, targetHeight * 0.8);
-      physics.addFixedBox(
+      const movingCollider = physics.addKinematicBox(
         entry.placement.position.x,
         entry.placement.position.y + colliderHeight / 2,
         entry.placement.position.z,
         MANSION_CONTESTANTS.colliderWidth,
         colliderHeight,
         MANSION_CONTESTANTS.colliderDepth,
-        entry.placement.rotationY,
       );
+      entry.colliderBody = movingCollider.body;
+      entry.collider = movingCollider.collider;
+      entry.colliderHeight = colliderHeight;
       entry.colliderEnabled = true;
+      this.syncCollider(entry);
       entry.speaker = {
         id: entry.id,
         name: spec.name,
@@ -5278,14 +5911,199 @@
       );
     }
 
+    stepAnimation(entry, dt) {
+      entry.mixer.update(dt);
+      if (entry.activity === CONTESTANT_ACTIVITY.SEATED) this.applySeatedPose(entry);
+      if (!entry.animationPoseChanged && entry.animationProbeBone && entry.animationProbeStart) {
+        entry.animationPoseChanged = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart)) > 0.000001;
+      }
+    }
+
+    facePoint(entry, point, dt) {
+      const distance = Math.hypot(point.x - entry.root.position.x, point.z - entry.root.position.z);
+      if (distance < 0.0001) return 1;
+      const desiredYaw = Math.atan2(point.x - entry.root.position.x, point.z - entry.root.position.z);
+      const yawDelta = Math.atan2(
+        Math.sin(desiredYaw - entry.root.rotation.y),
+        Math.cos(desiredYaw - entry.root.rotation.y),
+      );
+      const nextYaw = entry.root.rotation.y + clamp(
+        yawDelta,
+        -MANSION_CONTESTANTS.turnSpeed * dt,
+        MANSION_CONTESTANTS.turnSpeed * dt,
+      );
+      entry.root.rotation.y = Math.atan2(Math.sin(nextYaw), Math.cos(nextYaw));
+      return Math.cos(yawDelta);
+    }
+
+    updateEntry(entry, dt) {
+      if (entry.status !== "ready" || !entry.mixer || !entry.root.visible) return;
+      const stepDt = Math.max(0, Number(dt) || 0);
+      entry.lastDt = stepDt;
+
+      if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
+        entry.pauseRemaining = Math.max(0, entry.pauseRemaining - stepDt);
+        this.stepAnimation(entry, stepDt);
+        if (entry.pauseRemaining <= 0) this.standEntry(entry);
+        return;
+      }
+
+      if (entry.talkPauseRemaining > 0) {
+        entry.talkPauseRemaining = Math.max(0, entry.talkPauseRemaining - stepDt);
+        entry.activity = CONTESTANT_ACTIVITY.TALKING;
+        this.fadeToAction(entry, "idle");
+        if (physics) this.facePoint(entry, physics.playerPosition(), stepDt);
+        this.syncCollider(entry);
+        this.stepAnimation(entry, stepDt);
+        if (entry.talkPauseRemaining <= 0) {
+          entry.activity = CONTESTANT_ACTIVITY.IDLE;
+          entry.pauseRemaining = 0.2;
+        }
+        return;
+      }
+
+      if (entry.pauseRemaining > 0) {
+        entry.pauseRemaining = Math.max(0, entry.pauseRemaining - stepDt);
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        this.syncCollider(entry);
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+
+      if (entry.activity === CONTESTANT_ACTIVITY.IDLE) this.nextRouteTarget(entry);
+      const target = entry.placement.route?.[entry.routeIndex];
+      if (!target) {
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const dx = target.x - entry.root.position.x;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance <= MANSION_CONTESTANTS.arrivalRadius) {
+        this.arriveAtRoutePoint(entry, target);
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+
+      const alignment = this.facePoint(entry, target, stepDt);
+      if (alignment < MANSION_CONTESTANTS.movementAlignment) {
+        entry.activity = CONTESTANT_ACTIVITY.TURNING;
+        this.fadeToAction(entry, "idle");
+        this.syncCollider(entry);
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+
+      const distanceStep = Math.min(distance, MANSION_CONTESTANTS.speed * stepDt);
+      const nextX = entry.root.position.x + dx / distance * distanceStep;
+      const nextZ = entry.root.position.z + dz / distance * distanceStep;
+      if (this.playerBlocksStep(entry, nextX, nextZ)) {
+        entry.blockedSteps += 1;
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        entry.pauseRemaining = 0.15;
+        this.fadeToAction(entry, "idle");
+        this.syncCollider(entry);
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      entry.root.position.x = nextX;
+      entry.root.position.z = nextZ;
+      entry.distanceTravelled += distanceStep;
+      entry.activity = CONTESTANT_ACTIVITY.WALKING;
+      this.fadeToAction(entry, "walk");
+      this.syncCollider(entry);
+      this.stepAnimation(entry, stepDt);
+    }
+
     update(dt) {
       if (!state.started) return;
+      for (const entry of this.entries) this.updateEntry(entry, dt);
+    }
+
+    resetRoutineForQA(entry) {
+      if (entry.seatedSeatId) this.standEntry(entry);
+      seatingSystem?.releaseNpc(entry.id);
+      const start = entry.placement.route?.[0] || entry.placement.position;
+      entry.root.position.set(start.x, entry.placement.position.y, start.z);
+      entry.root.rotation.y = entry.placement.rotationY;
+      entry.routeIndex = 0;
+      entry.routeDirection = 1;
+      entry.routeCycles = 0;
+      entry.routeSegmentsTraversed = 0;
+      entry.distanceTravelled = 0;
+      entry.blockedSteps = 0;
+      entry.maximumColliderOffset = 0;
+      entry.teleports = 0;
+      entry.talkPauseRemaining = 0;
+      entry.pauseRemaining = 0.25;
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      entry.seatedSeatId = null;
+      entry.contactShadow.visible = !interiorDetailsHidden;
+      this.restoreStandingPose(entry);
+      const idle = entry.actions.idle;
+      if (idle) idle.time = idle.getClip().duration * entry.placement.idlePhase;
+      this.setColliderEnabled(entry, true);
+      entry.root.updateMatrixWorld(true);
+    }
+
+    runContestantRoutineForQA(id, maxSeconds = 90) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready") return null;
+      this.resetRoutineForQA(entry);
+      const wasStarted = state.started;
+      state.started = true;
+      entry.qaIgnorePlayer = true;
+      const activities = new Set([entry.activity]);
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(maxSeconds) || 90, 1, 240);
+      let elapsed = 0;
+      let floorStayedFixed = true;
+      while (elapsed < limit && (entry.routeCycles < 1 || !activities.has(CONTESTANT_ACTIVITY.SEATED))) {
+        this.updateEntry(entry, fixedStep);
+        elapsed += fixedStep;
+        activities.add(entry.activity);
+        floorStayedFixed = floorStayedFixed && Math.abs(entry.root.position.y - entry.placement.position.y) < 0.001;
+      }
+      entry.qaIgnorePlayer = false;
+      state.started = wasStarted;
+      return {
+        id: entry.id,
+        completed: entry.routeCycles >= 1 && activities.has(CONTESTANT_ACTIVITY.SEATED),
+        simulatedSeconds: Number(elapsed.toFixed(2)),
+        cycles: entry.routeCycles,
+        activities: Array.from(activities),
+        distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
+        teleports: entry.teleports,
+        blockedSteps: entry.blockedSteps,
+        maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
+        floorStayedFixed,
+        minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
+      };
+    }
+
+    seatContestantForQA(id, seatId = null) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready") return null;
+      if (entry.seatedSeatId && (!seatId || entry.seatedSeatId === seatId)) {
+        return { seated: true, seatId: entry.seatedSeatId, poseApplied: entry.seatedPoseApplied };
+      }
+      if (entry.seatedSeatId) this.standEntry(entry);
+      const seatTag = seatId ? null : entry.placement.route?.find((point) => point.seatTag)?.seatTag;
+      return this.seatEntry(entry, seatId, seatTag);
+    }
+
+    standContestantForQA(id) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready") return null;
+      return this.standEntry(entry);
+    }
+
+    clearTransientSeating() {
       for (const entry of this.entries) {
-        if (entry.status !== "ready" || !entry.mixer || !entry.root.visible) continue;
-        entry.mixer.update(Math.max(0, Number(dt) || 0));
-        if (!entry.animationPoseChanged && entry.animationProbeBone && entry.animationProbeStart) {
-          entry.animationPoseChanged = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart)) > 0.000001;
-        }
+        if (entry.seatedSeatId) this.standEntry(entry);
       }
     }
 
@@ -5302,6 +6120,11 @@
       entry.lastLineIndex = index;
       entry.lastLine = pool[index];
       entry.linesSpoken += 1;
+      entry.talkPauseRemaining = MANSION_SEATING.contestantTalkPauseSeconds;
+      if (!entry.seatedSeatId) {
+        entry.activity = CONTESTANT_ACTIVITY.TALKING;
+        this.fadeToAction(entry, "idle");
+      }
       return speechSystem.sayForSpeaker(entry.speaker, `contestant-${entry.id}`, entry.lastLine);
     }
 
@@ -5310,7 +6133,9 @@
       if (!state.qa || !physics || !entry || entry.status !== "ready") return null;
       const gap = Math.max(0.9, Number(distance) || 1.65);
       const yaw = entry.root.rotation.y;
-      const approach = entry.placement.qaApproach || { x: Math.sin(yaw), z: Math.cos(yaw) };
+      const approach = entry.seatedSeatId
+        ? { x: Math.sin(yaw), z: Math.cos(yaw) }
+        : entry.placement.qaApproach || { x: Math.sin(yaw), z: Math.cos(yaw) };
       const approachLength = Math.max(0.001, Math.hypot(approach.x, approach.z));
       const playerX = entry.root.position.x + (approach.x / approachLength) * gap;
       const playerZ = entry.root.position.z + (approach.z / approachLength) * gap;
@@ -5369,27 +6194,46 @@
           modelVisible: Boolean(entry.model && entry.root.visible && entry.modelMeshes.some((mesh) => mesh.visible)),
           modelFile: entry.spec?.model || null,
           idleFile: entry.spec?.animations?.idle?.file || null,
+          walkFile: entry.spec?.animations?.walk?.file || null,
           triangles: Math.round(entry.triangles),
           materials: entry.materials,
           textures: entry.textures,
           skinnedMeshes: entry.skinnedMeshes,
           bones: entry.bones,
           colliderEnabled: entry.colliderEnabled,
+          locomotionStatus: entry.locomotionStatus,
+          activity: entry.activity,
+          seated: Boolean(entry.seatedSeatId),
+          seatId: entry.seatedSeatId,
           routeClearance: Number.isFinite(entry.routeClearance) ? Number(entry.routeClearance.toFixed(3)) : null,
+          route: {
+            points: entry.placement.route?.length || 0,
+            length: Number(entry.routeLength.toFixed(3)),
+            minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
+            currentIndex: entry.routeIndex,
+            direction: entry.routeDirection,
+            cycles: entry.routeCycles,
+            segmentsTraversed: entry.routeSegmentsTraversed,
+            distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
+            blockedSteps: entry.blockedSteps,
+            maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
+          },
           interactionRegistered: entry.interactionRegistered,
           dialoguePoolSize: entry.spec?.dialogue?.length || 0,
           linesSpoken: entry.linesSpoken,
           lastLine: entry.lastLine,
           lastLineIndex: entry.lastLineIndex,
           animation: {
-            name: entry.action ? "idle" : null,
+            name: entry.currentAnimation,
             playing: Boolean(entry.action?.isRunning()),
             time: Number((entry.action?.time || 0).toFixed(3)),
             duration: Number((entry.action?.getClip()?.duration || 0).toFixed(3)),
-            playbackRate: entry.placement.idleRate,
-            tracks: entry.animationTracks,
+            playbackRate: Number((entry.action?.getEffectiveTimeScale?.() || 0).toFixed(3)),
+            tracks: entry.animationTracks[entry.currentAnimation] || null,
+            available: Object.keys(entry.actions),
             probeBone: entry.animationProbeBone?.name || null,
             poseChanged: entry.animationPoseChanged,
+            seatedPose: entry.seatedPoseApplied,
           },
         })),
       };
@@ -6502,6 +7346,8 @@
           bookVisible: Boolean(contestant13Scene.libraryBook?.visible),
           bookPulledOffset: CONTESTANT_13.world.book.localZ,
           bookScratch: "XIII",
+          bookScratchTreatment: contestant13Scene.libraryBookScratch?.userData.surfaceTreatment || null,
+          bookScratchRaisedDepth: contestant13Scene.libraryBookScratch?.userData.raisedDepth ?? null,
           bookSlotReserved: true,
           bookTitle: contestant13Scene.libraryBookPlacement?.title || null,
           bookTitleVisible: Boolean(contestant13Scene.libraryBookPlacement && readableBookSystem?.spineTitlesFinalized),
@@ -7098,6 +7944,8 @@
         noticeRemaining: 0,
         cooldownRemaining: 0,
         dispatched: false,
+        blockedReason: null,
+        seatId: null,
         apply: options.apply,
         isTampered: options.isTampered || null,
         visualOffset: options.visualOffset || (() => 0),
@@ -7134,7 +7982,7 @@
       return entry;
     }
 
-    registerChair({ group, body, x, z, floorY, rotationY }) {
+    registerChair({ group, body, x, z, floorY, rotationY, seat = null }) {
       const entry = this.createEntry("chair", {
         label: "chair",
         position: { x, y: floorY, z },
@@ -7143,6 +7991,8 @@
       entry.body = body;
       entry.home = { x, z, yaw: rotationY || 0 };
       entry.floorY = floorY;
+      entry.seatId = seat?.id || null;
+      seatingSystem?.linkTamper(seat, entry.id);
       entry.pullSign = this.counts.chair % 2 === 0 ? 1 : -1;
       entry.apply = (tampered) => this.applyChairPose(entry, tampered);
       entry.visualOffset = () => {
@@ -7159,10 +8009,30 @@
         x: 0, y: 0.67, z: 0.02,
         material: this.hitMaterial, parent: group, cast: false, receive: false,
       });
-      addInteractionTarget(hit, this.createToggleInteraction(entry, {
+      const tamperInteraction = this.createToggleInteraction(entry, {
         tamperLabel: "Pull the chair askew",
         restoreLabel: "Straighten the chair",
-      }));
+      });
+      addInteractionTarget(hit, seat ? {
+        type: "chair-actions",
+        id: entry.id,
+        resolve: () => {
+          // A tall shared hitbox is easy to acquire from the side, but its near
+          // wall can be above the cushion even when the crosshair is aimed low.
+          // Project the look ray to the chair center before choosing the action.
+          const localOrigin = group.worldToLocal(raycaster.ray.origin.clone());
+          const localDirectionPoint = group.worldToLocal(
+            raycaster.ray.origin.clone().add(raycaster.ray.direction),
+          );
+          const localDirection = localDirectionPoint.sub(localOrigin);
+          const horizontalLengthSquared = localDirection.x * localDirection.x + localDirection.z * localDirection.z;
+          const projection = horizontalLengthSquared > 0.000001
+            ? ((-localOrigin.x) * localDirection.x + (-0.04 - localOrigin.z) * localDirection.z) / horizontalLengthSquared
+            : 0;
+          const aimedY = localOrigin.y + localDirection.y * Math.max(0, projection);
+          return aimedY <= MANSION_SEATING.chairAimMaximumY ? seat.interaction : tamperInteraction;
+        },
+      } : tamperInteraction);
       return entry;
     }
 
@@ -7201,6 +8071,8 @@
         type: `tamper-${entry.kind}`,
         id: entry.id,
         getLabel: () => {
+          const seat = entry.seatId ? seatingSystem?.entryById(entry.seatId) : null;
+          if (seat?.occupantBy) return "Chair occupied";
           if (this.isBeingCorrected(entry)) return "Mr. Feast is attending to this";
           return entry.tampered ? labels.restoreLabel : labels.tamperLabel;
         },
@@ -7223,13 +8095,19 @@
 
     setTampered(entry, tampered, cause) {
       if (entry.isTampered || entry.tampered === tampered) return false;
+      const seat = entry.seatId ? seatingSystem?.entryById(entry.seatId) : null;
+      if (tampered && seat?.occupantBy) {
+        entry.blockedReason = `occupied by ${seat.occupantBy}`;
+        return false;
+      }
+      entry.blockedReason = null;
       entry.tampered = tampered;
       entry.apply(tampered);
       if (tampered) {
         entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
         // Deliberate mischief can be caught in the act; straightening never
         // counts, and ordinary fridge use stays innocent until left open.
-        if (cause === "player" && entry.kind !== "fridge") reportPlayerInfraction(entry.kind);
+        if (cause === "player" && entry.kind !== "fridge") reportPlayerInfraction(entry.kind, entry.id);
       } else {
         this.handleRestored(entry, cause);
       }
@@ -7316,6 +8194,20 @@
       entry.noticeRemaining = MANSION_TAMPER.alarmRequeueSeconds;
     }
 
+    resolveEntryForCatch(entryId) {
+      const entry = this.byId.get(entryId);
+      if (!entry || !entry.tampered) return false;
+      // Being caught in the act resolves the object silently — the warning
+      // line already covers this beat, so no separate "fixed-*" line plays.
+      entry.apply(false);
+      entry.tampered = false;
+      entry.dispatched = false;
+      entry.noticeRemaining = 0;
+      entry.cooldownRemaining = MANSION_TAMPER.retamperCooldownSeconds;
+      this.fixesCompleted += 1;
+      return true;
+    }
+
     queuedCount() {
       return this.entries.filter((entry) => entry.tampered && !entry.dispatched).length;
     }
@@ -7338,6 +8230,8 @@
           dispatched: entry.dispatched,
           noticeRemaining: Number(entry.noticeRemaining.toFixed(2)),
           cooldownRemaining: Number(entry.cooldownRemaining.toFixed(2)),
+          blockedReason: entry.blockedReason,
+          seatId: entry.seatId,
           visualOffset: Number(entry.visualOffset().toFixed(3)),
           colliderOffset: Number(entry.colliderOffset().toFixed(3)),
         })),
@@ -7359,7 +8253,9 @@
       } else {
         this.setTampered(entry, Boolean(tampered), "player");
       }
-      return this.getDiagnostics();
+      const diagnostics = this.getDiagnostics();
+      const updated = diagnostics.entries.find((candidate) => candidate.id === id) || null;
+      return updated ? { ...updated, state: diagnostics } : null;
     }
 
     advanceForQA(seconds) {
@@ -7385,12 +8281,12 @@
     direction: new THREE.Vector3(),
   };
 
-  function reportPlayerInfraction(kind) {
+  function reportPlayerInfraction(kind, entryId = null) {
     if (!state.started || state.gameOver || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
     const witnessed = mrFeastNpc.canSeePlayerAct();
     const recorded = !witnessed && Boolean(cameraSecurity?.isRecordingPlayer());
     if (!witnessed && !recorded) return null;
-    return mrFeastNpc.beginPursuit({ kind, reason: witnessed ? "witnessed" : "recorded" });
+    return mrFeastNpc.beginPursuit({ kind, entryId, reason: witnessed ? "witnessed" : "recorded" });
   }
 
   function triggerMansionGameOver(details = {}) {
@@ -10099,7 +10995,7 @@
     return group;
   }
 
-  function addChair(x, z, floorY, rotationY, material) {
+  function addChair(x, z, floorY, rotationY, material, options = {}) {
     const group = new THREE.Group();
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
@@ -10110,11 +11006,12 @@
     for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: group });
     box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.velvet, parent: group });
     const chairBody = physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
-    if (tamperSystem) tamperSystem.registerChair({ group, body: chairBody, x, z, floorY, rotationY: rotationY || 0 });
+    const seat = seatingSystem?.registerChair({ group, tag: options.seatTag, exitLocal: options.exitLocal }) || null;
+    if (tamperSystem) tamperSystem.registerChair({ group, body: chairBody, x, z, floorY, rotationY: rotationY || 0, seat });
     return group;
   }
 
-  function addSofa(x, z, floorY, rotationY, width, material) {
+  function addSofa(x, z, floorY, rotationY, width, material, options = {}) {
     const group = new THREE.Group();
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
@@ -10130,6 +11027,7 @@
     for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: group, cast: false });
     for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: group, cast: false });
     physics.addFixedBox(x, floorY + 0.65, z, w, 1.3, 0.9, rotationY || 0);
+    seatingSystem?.registerSofa({ group, width: w, tag: options.seatTag, slots: options.slots });
     return group;
   }
 
@@ -11785,7 +12683,10 @@
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
     addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.greenRug);
     addTable(-10.5, 5.2, 2.25, 1.05, FLOOR.MAIN, 0, M.darkWood);
-    addChair(-10.5, 6.15, FLOOR.MAIN, 0, M.darkWood);
+    addChair(-10.5, 6.15, FLOOR.MAIN, 0, M.darkWood, {
+      seatTag: "library-writing-chair",
+      exitLocal: { x: 0.95, y: 0, z: 0.2 },
+    });
     new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0 });
 
     // Music room — the sofa is deliberately aimed at the grand piano.
@@ -11826,7 +12727,13 @@
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0 });
-    // Ballroom — open marble dance floor, with no furniture in circulation.
+    // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
+    // against the north wall beyond both the dance and host patrol lanes.
+    const ballroomSidelineChair = addChair(-3.9, -4.2, FLOOR.MAIN, 0, M.darkWood, {
+      seatTag: "ballroom-sideline-chair",
+      exitLocal: { x: 0, y: 0, z: -0.9 },
+    });
+    ballroomSidelineChair.name = "ballroom-sideline-chair";
     for (const portrait of [
       { x: -1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0 }, circuitName: "ballroom lights" },
       { x: 1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0.5 }, circuitName: "ballroom lights" },
@@ -11858,7 +12765,10 @@
 
     addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45, { collection: "READING ROOM" });
     addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
-    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug);
+    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug, {
+      seatTag: "reading-room-sofa",
+      slots: 1,
+    });
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
@@ -12088,6 +12998,50 @@
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
   }
 
+  function createContestantThirteenScratchTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 192;
+    const ctx = canvas.getContext("2d");
+    const scratchPaths = [
+      [[38, 27], [46, 51], [41, 72], [60, 97], [54, 126], [68, 162]],
+      [[82, 29], [70, 54], [76, 75], [57, 102], [61, 129], [44, 161]],
+      [[112, 31], [108, 56], [113, 82], [108, 108], [114, 133], [110, 162]],
+      [[157, 28], [153, 52], [158, 78], [152, 105], [159, 132], [155, 164]],
+      [[204, 31], [199, 56], [205, 80], [198, 108], [204, 136], [200, 161]],
+    ];
+    const trace = (path) => {
+      ctx.beginPath();
+      ctx.moveTo(path[0][0], path[0][1]);
+      for (let index = 1; index < path.length; index += 1) ctx.lineTo(path[index][0], path[index][1]);
+      ctx.stroke();
+    };
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(14, 10, 7, 0.68)";
+    ctx.lineWidth = 5.2;
+    ctx.setLineDash([16, 2, 11, 5]);
+    scratchPaths.forEach(trace);
+    ctx.strokeStyle = "rgba(190, 170, 126, 0.72)";
+    ctx.lineWidth = 1.7;
+    ctx.setLineDash([13, 4, 8, 3]);
+    ctx.lineDashOffset = 2;
+    scratchPaths.forEach(trace);
+    ctx.strokeStyle = "rgba(218, 199, 151, 0.34)";
+    ctx.lineWidth = 0.7;
+    ctx.setLineDash([5, 8, 3, 11]);
+    ctx.lineDashOffset = -3;
+    scratchPaths.forEach((path, index) => trace(path.map(([x, y], pointIndex) => [x + ((index + pointIndex) % 2 ? 1.4 : -0.8), y + 0.9])));
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = "contestant-13-library-book-etched-xiii";
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function addContestantThirteenLibraryBook() {
     const bookLayout = CONTESTANT_13.world.book;
     const group = new THREE.Group();
@@ -12104,25 +13058,29 @@
     });
     const scratch = new THREE.Group();
     scratch.name = "contestant-13-library-book-scratch-xiii";
-    scratch.position.set(bookLayout.localX, bookLayout.shelfY + 0.13, bookLayout.localZ - bookLayout.depth / 2 - 0.006);
+    scratch.position.set(bookLayout.localX, bookLayout.shelfY + 0.13, bookLayout.localZ - bookLayout.depth / 2 - 0.002);
     scratch.userData.mark = "XIII";
+    scratch.userData.surfaceTreatment = "etched-decal";
+    scratch.userData.raisedDepth = 0;
     group.add(scratch);
-    const scratchStrokes = [
-      ["contestant-13-library-book-scratch-x-left", 0.037, 0.002, -0.44, 0.056],
-      ["contestant-13-library-book-scratch-x-right", 0.037, 0.002, 0.44, 0.056],
-      ["contestant-13-library-book-scratch-i-1", 0.004, -0.001, 0.025, 0.052],
-      ["contestant-13-library-book-scratch-i-2", -0.018, 0.001, -0.018, 0.054],
-      ["contestant-13-library-book-scratch-i-3", -0.04, -0.002, 0.02, 0.051],
-    ];
-    for (const [name, x, y, rotationZ, height] of scratchStrokes) {
-      const stroke = box({
-        name,
-        w: 0.006, h: height, d: 0.008,
-        x, y, z: 0,
-        material: M.agedTrim, parent: scratch, cast: false,
-      });
-      stroke.rotation.z = rotationZ;
-    }
+    const scratchMaterial = new THREE.MeshBasicMaterial({
+      map: createContestantThirteenScratchTexture(),
+      transparent: true,
+      alphaTest: 0.035,
+      depthWrite: false,
+      toneMapped: true,
+      side: THREE.FrontSide,
+    });
+    const scratchDecal = new THREE.Mesh(
+      new THREE.PlaneGeometry(bookLayout.scratchWidth, bookLayout.scratchHeight),
+      scratchMaterial,
+    );
+    scratchDecal.name = "contestant-13-library-book-etched-xiii-decal";
+    scratchDecal.rotation.y = Math.PI;
+    scratchDecal.renderOrder = 6;
+    scratchDecal.castShadow = false;
+    scratchDecal.receiveShadow = false;
+    scratch.add(scratchDecal);
     const cluePlacement = readableBookSystem?.registerSpecialBook(CONTESTANT_13.clueBook, {
       parent: group,
       x: bookLayout.localX,
@@ -14533,6 +15491,8 @@
   function restoreMansionSave(saved) {
     const data = saved?.data || saved;
     if (!data || !data.playerPosition || !data.contestant13 || !physics || !contestant13Quest) return false;
+    mansionContestants?.clearTransientSeating();
+    seatingSystem?.clearTransientOccupancy();
     state.devMode = false;
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
@@ -14651,8 +15611,9 @@
 
   function activateCurrentInteraction() {
     if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return;
-    if (!state.currentInteraction) return;
-    state.currentInteraction.activate();
+    const interaction = state.activeSeat?.interaction || state.currentInteraction;
+    if (!interaction) return;
+    interaction.activate();
     updateInteractionPrompt();
   }
 
@@ -14718,7 +15679,7 @@
         contestant13Quest.toggleJournal();
         return;
       }
-      if (event.code === "KeyC" && !event.repeat && state.started && !state.journalOpen && !state.contestant13.actionInProgress) {
+      if (event.code === "KeyC" && !event.repeat && state.started && !state.journalOpen && !state.activeSeat && !state.contestant13.actionInProgress) {
         event.preventDefault();
         state.movement.crouched = !state.movement.crouched;
         state.movement.sprinting = false;
@@ -14920,6 +15881,7 @@
   function findInteraction() {
     if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
+    if (state.activeSeat) return state.activeSeat.interaction;
     raycaster.setFromCamera(lookCenter, camera);
     const hits = raycaster.intersectObjects(interactableMeshes, true);
     if (!hits.length) return null;
@@ -15316,7 +16278,9 @@
 
   function updatePlayer(fixedDt) {
     const movement = state.movement;
-    const targetEyeHeight = movement.crouched ? PLAYER.crouchEye : PLAYER.eye;
+    const targetEyeHeight = state.activeSeat
+      ? MANSION_SEATING.playerEyeHeight
+      : movement.crouched ? PLAYER.crouchEye : PLAYER.eye;
     movement.eyeHeight += (targetEyeHeight - movement.eyeHeight) * Math.min(1, fixedDt * PLAYER.crouchTransitionSpeed);
     if (!state.started) {
       movement.mode = "idle";
@@ -15325,6 +16289,20 @@
       physics.movePlayer(0, 0);
       physics.step();
       physics.updateSafety();
+      return;
+    }
+    if (state.activeSeat) {
+      physics.movePlayer(0, 0);
+      physics.step();
+      physics.updateSafety();
+      state.lastMove = { dx: 0, dz: 0 };
+      movement.crouched = false;
+      movement.sprinting = false;
+      movement.stealthVisibilityMultiplier = 1;
+      movement.stealthNoiseMultiplier = 1;
+      movement.mode = "seated";
+      movement.speed = 0;
+      updateMovementHud();
       return;
     }
     if (state.isHidden) {
@@ -15403,7 +16381,9 @@
     if (dom.energyFill) dom.energyFill.style.width = `${energyPercent}%`;
     if (dom.energyValue) dom.energyValue.textContent = String(roundedEnergy);
     if (dom.energyMode) {
-      dom.energyMode.textContent = movement.crouched
+      dom.energyMode.textContent = state.activeSeat
+        ? "Seated"
+        : movement.crouched
         ? "Crouched · stealth"
         : movement.sprinting ? "Sprinting" : movement.exhausted ? "Recovering" : "Energy";
     }
@@ -15413,7 +16393,9 @@
     const p = physics.playerPosition();
     // Rapier's controller keeps a small skin depth around stepped surfaces; the
     // extra 0.17m preserves the authored 1.67m eye line without changing collision.
-    camera.position.set(p.x, p.y + state.movement.eyeHeight - (PLAYER.halfHeight + PLAYER.radius) + 0.17, p.z);
+    if (!seatingSystem?.playerCameraAnchor(camera.position)) {
+      camera.position.set(p.x, p.y + state.movement.eyeHeight - (PLAYER.halfHeight + PLAYER.radius) + 0.17, p.z);
+    }
     camera.rotation.y = state.yaw;
     camera.rotation.x = state.pitch;
   }
@@ -15599,6 +16581,7 @@
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       contestants: mansionContestants?.getDiagnostics() || null,
+      seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
@@ -15615,9 +16598,11 @@
         pitch: Number(state.pitch.toFixed(3)),
         grounded: Boolean(physics && physics.grounded),
         hidden: state.isHidden,
+        seated: Boolean(state.activeSeat),
+        seatId: state.activeSeat?.id || null,
         movement: {
           mode: state.movement.mode,
-          stance: state.movement.crouched ? "crouched" : "standing",
+          stance: state.activeSeat ? "seated" : state.movement.crouched ? "crouched" : "standing",
           crouched: state.movement.crouched,
           sprinting: state.movement.sprinting,
           exhausted: state.movement.exhausted,
@@ -15814,6 +16799,7 @@
 
   function teleport(x, floorY, z, yaw, pitch) {
     if (!physics) return;
+    if (state.activeSeat) seatingSystem?.standPlayer();
     physics.verticalVelocity = 0;
     physics.playerBody.setTranslation({ x, y: floorY + PLAYER.halfHeight + PLAYER.radius + 0.03, z }, true);
     physics.playerBody.setNextKinematicTranslation({ x, y: floorY + PLAYER.halfHeight + PLAYER.radius + 0.03, z });
@@ -15897,6 +16883,25 @@
     );
     window.MrFeastFresh.converseWithContestantForQA = (id) => (
       state.qa && mansionContestants ? mansionContestants.converse(id) : null
+    );
+    window.MrFeastFresh.getSeatingState = () => seatingSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.placePlayerNearSeatForQA = (seatId) => (
+      state.qa && seatingSystem ? seatingSystem.placePlayerNearForQA(seatId) : null
+    );
+    window.MrFeastFresh.sitPlayerForQA = (seatId) => (
+      state.qa && seatingSystem ? seatingSystem.sitPlayer(seatId) : null
+    );
+    window.MrFeastFresh.standPlayerForQA = () => (
+      state.qa && seatingSystem ? seatingSystem.standPlayer() : null
+    );
+    window.MrFeastFresh.seatContestantForQA = (id, seatId = null) => (
+      state.qa && mansionContestants ? mansionContestants.seatContestantForQA(id, seatId) : null
+    );
+    window.MrFeastFresh.standContestantForQA = (id) => (
+      state.qa && mansionContestants ? mansionContestants.standContestantForQA(id) : null
+    );
+    window.MrFeastFresh.runContestantRoutineForQA = (id, maxSeconds = 90) => (
+      state.qa && mansionContestants ? mansionContestants.runContestantRoutineForQA(id, maxSeconds) : null
     );
     window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
     window.MrFeastFresh.getWorkroomState = () => getWorkroomDiagnostics();
@@ -16696,6 +17701,7 @@
       M = await createMaterials();
       readableBookSystem = new ReadableBookSystem(state.readableBooks.seed);
       tamperSystem = new TamperSystem();
+      seatingSystem = new MansionSeatingSystem();
       speechSystem = new MrFeastSpeechSystem();
 
       setLoading("Raising the walls", 28);

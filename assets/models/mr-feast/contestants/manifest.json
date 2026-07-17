@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260717-seating-routines-1",
+  "assetVersion": "20260717-seating-routines-3",
   "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
   "characters": [
     {
@@ -32,8 +32,8 @@
       },
       "animations": {
         "idle": {
-          "file": "mara-voss-idle.glb",
-          "name": "idle",
+          "file": "mara-voss-neutral-idle.glb",
+          "name": "neutral-idle",
           "loop": true,
           "stationary": true,
           "durationSeconds": 4
@@ -88,8 +88,8 @@
       },
       "animations": {
         "idle": {
-          "file": "kip-solano-idle.glb",
-          "name": "idle",
+          "file": "kip-solano-neutral-idle.glb",
+          "name": "neutral-idle",
           "loop": true,
           "stationary": true,
           "durationSeconds": 4
@@ -145,8 +145,8 @@
       },
       "animations": {
         "idle": {
-          "file": "juniper-cross-idle.glb",
-          "name": "idle",
+          "file": "juniper-cross-neutral-idle.glb",
+          "name": "neutral-idle",
           "loop": true,
           "stationary": true,
           "durationSeconds": 4

@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-seating-routines-1";
+  const MANSION_RUNTIME_VERSION = "20260717-seating-routines-5";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -442,10 +442,17 @@
     sofaInteractionWidth: 0.78,
     sofaInteractionHeight: 0.46,
     sofaInteractionDepth: 0.72,
+    readingRoomSofaHeightScale: 0.77,
+    regularChairHeightScale: 0.86,
     defaultChairExitX: 0.92,
     defaultSofaExitZ: -1.05,
     npcRootDrop: 0.32,
-    npcSeatPauseSeconds: 5.4,
+    npcChairForwardOffset: 0.1,
+    npcSofaForwardOffset: 0.18,
+    npcSeatPauseSeconds: 36,
+    maximumNpcSeatDwellSeconds: 240,
+    minimumNpcPostSeatWalkDistance: 0.35,
+    npcSeatTransitionSeconds: 0.72,
     contestantTalkPauseSeconds: 2.8,
     occupantClearanceRadius: 0.72,
   });
@@ -483,7 +490,7 @@
         Spine: Object.freeze([0.017453, 0.000023, 0.000028, 0.999848]),
         LeftUpLeg: Object.freeze([-0.637786, 0, 0.036649, 0.769341]),
         LeftLeg: Object.freeze([0.560778, 0.000001, 0.038037, 0.827092]),
-        LeftFoot: Object.freeze([-0.114101, 0.000003, 0.066720, 0.991226]),
+        LeftFoot: Object.freeze([-0.114101, 0.000003, 0.06672, 0.991226]),
         RightUpLeg: Object.freeze([-0.638624, -0.000002, -0.0299, 0.768938]),
         RightLeg: Object.freeze([0.562837, -0.000001, -0.0298, 0.82603]),
         RightFoot: Object.freeze([-0.111425, 0.000002, -0.069813, 0.991318]),
@@ -494,22 +501,53 @@
       }),
     }),
     "juniper-cross": Object.freeze({
-      rootDrop: 0.373552,
+      rootDrop: 0.28,
       bones: Object.freeze({
         Spine02: Object.freeze([0.021806, -0.000433, -0.000435, 0.999762]),
         Spine01: Object.freeze([0.021806, -0.000433, -0.000435, 0.999762]),
         Spine: Object.freeze([0.017418, -0.0008, -0.000757, 0.999848]),
-        LeftUpLeg: Object.freeze([-0.636127, 0.000004, 0.043116, 0.770379]),
-        LeftLeg: Object.freeze([0.613814, -0.000002, -0.033659, 0.788733]),
-        LeftFoot: Object.freeze([-0.301909, 0.000001, 0.012251, 0.953258]),
-        RightUpLeg: Object.freeze([-0.655065, 0, -0.033017, 0.754851]),
-        RightLeg: Object.freeze([0.628501, 0, -0.005172, 0.777792]),
-        RightFoot: Object.freeze([-0.304722, 0.000001, 0.013267, 0.952349]),
+        LeftUpLeg: Object.freeze([-0.558852, 0.019516, 0.028933, 0.828533]),
+        LeftLeg: Object.freeze([0.544452, 0.014257, -0.021954, 0.838383]),
+        LeftFoot: Object.freeze([-0.258809, 0.002259, 0.008429, 0.965889]),
+        RightUpLeg: Object.freeze([-0.558852, -0.019516, -0.028933, 0.828533]),
+        RightLeg: Object.freeze([0.544452, -0.014257, 0.021954, 0.838383]),
+        RightFoot: Object.freeze([-0.258809, -0.002259, -0.008429, 0.965889]),
         LeftArm: Object.freeze([-0.036143, -0.000003, 0.258542, 0.965324]),
         LeftForeArm: Object.freeze([0.816941, 0.000008, -0.27856, 0.504987]),
         RightArm: Object.freeze([-0.011074, -0.000003, -0.292927, 0.956071]),
         RightForeArm: Object.freeze([0.816101, 0.000021, 0.28272, 0.504032]),
       }),
+    }),
+  });
+  const CONTESTANT_SEATED_IDLE_MOTION = Object.freeze({
+    "mara-voss": Object.freeze({ cycleSeconds: 5.8, phase: 0.17 }),
+    "kip-solano": Object.freeze({ cycleSeconds: 6.6, phase: 0.53 }),
+    "juniper-cross": Object.freeze({ cycleSeconds: 7.1, phase: 0.79 }),
+  });
+  const CONTESTANT_NEUTRAL_REST_POSES = Object.freeze({
+    "mara-voss": Object.freeze({
+      LeftArm: Object.freeze([0.098011, 0, 0.198846, 0.975118]),
+      LeftForeArm: Object.freeze([0.617228, -0.000007, -0.214189, 0.757068]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([0.129322, 0.000001, -0.214937, 0.968028]),
+      RightForeArm: Object.freeze([0.59421, -0.000013, 0.225593, 0.772025]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+    }),
+    "kip-solano": Object.freeze({
+      LeftArm: Object.freeze([0.030668, 0.000004, 0.365237, 0.93041]),
+      LeftForeArm: Object.freeze([0.391136, -0.000002, -0.202265, 0.897831]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([-0.012388, 0, -0.349244, 0.93695]),
+      RightForeArm: Object.freeze([0.416328, -0.000001, 0.190537, 0.889026]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+    }),
+    "juniper-cross": Object.freeze({
+      LeftArm: Object.freeze([0.170889, -0.000001, 0.186825, 0.967416]),
+      LeftForeArm: Object.freeze([0.656258, 0.000004, -0.406868, 0.63544]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([0.171181, 0, -0.186641, 0.9674]),
+      RightForeArm: Object.freeze([0.656413, 0.000017, 0.404059, 0.63707]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
     }),
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
@@ -985,7 +1023,7 @@
   });
   const MANSION_CONTESTANTS = Object.freeze({
     manifestPath: "../models/mr-feast/contestants/manifest.json",
-    assetVersion: "20260717-seating-routines-1",
+    assetVersion: "20260717-seating-routines-3",
     contactShadowOpacity: 0.2,
     interactionWidth: 0.82,
     interactionDepth: 0.7,
@@ -993,63 +1031,70 @@
     colliderDepth: 0.4,
     speakerLiftMeters: 0.22,
     speed: 0.62,
+    staticClearanceRadius: 0.28,
     turnSpeed: 4.2,
     movementAlignment: 0.975,
-    arrivalRadius: 0.055,
+    arrivalRadius: 0.015,
     fadeSeconds: 0.2,
     placements: Object.freeze([
       Object.freeze({
         id: "mara-voss",
         room: "LIBRARY",
         floor: "MAIN LEVEL",
-        position: Object.freeze({ x: -6.6, y: FLOOR.MAIN, z: 4.45 }),
-        rotationY: 0,
+        position: Object.freeze({ x: -9.55, y: FLOOR.MAIN, z: 6.35 }),
+        rotationY: Math.PI / 2,
         idleRate: 0.88,
         idlePhase: 0.17,
-        initialPause: 3.1,
+        initialPause: 2.8,
+        seatPause: 60,
         route: Object.freeze([
-          Object.freeze({ x: -6.6, z: 4.45, pause: 1.4 }),
-          Object.freeze({ x: -7.4, z: 4.45, pause: 0.9 }),
-          Object.freeze({ x: -7.4, z: 5.25, pause: 1.1 }),
-          Object.freeze({ x: -8.8, z: 6.35, pause: 0.8 }),
+          Object.freeze({ x: -9.55, z: 6.35, pause: 2.8 }),
           Object.freeze({ x: -9.55, z: 6.35, pause: 0.2, seatTag: "library-writing-chair" }),
+          Object.freeze({ x: -8.8, z: 6.35, pause: 5.5 }),
+          Object.freeze({ x: -7.4, z: 5.25, pause: 6.5 }),
+          Object.freeze({ x: -7.4, z: 4.45, pause: 5.0 }),
+          Object.freeze({ x: -6.6, z: 4.45, pause: 7.0 }),
         ]),
       }),
       Object.freeze({
         id: "kip-solano",
         room: "BALLROOM",
         floor: "MAIN LEVEL",
-        position: Object.freeze({ x: -1.8, y: FLOOR.MAIN, z: -7.6 }),
-        rotationY: 0,
+        position: Object.freeze({ x: -3.9, y: FLOOR.MAIN, z: -5.1 }),
+        rotationY: Math.PI,
         idleRate: 1.08,
         idlePhase: 0.53,
-        initialPause: 3.6,
+        initialPause: 3.4,
+        seatPause: 72,
         route: Object.freeze([
-          Object.freeze({ x: -1.8, z: -7.6, pause: 1.1 }),
-          Object.freeze({ x: -0.8, z: -7.6, pause: 0.6 }),
-          Object.freeze({ x: -0.8, z: -6.7, pause: 0.8 }),
-          Object.freeze({ x: -1.8, z: -6.7, pause: 0.6 }),
-          Object.freeze({ x: -2.5, z: -5.5, pause: 0.7 }),
+          Object.freeze({ x: -3.9, z: -5.1, pause: 3.4 }),
           Object.freeze({ x: -3.9, z: -5.1, pause: 0.2, seatTag: "ballroom-sideline-chair" }),
+          Object.freeze({ x: -2.5, z: -5.5, pause: 5.0 }),
+          Object.freeze({ x: -1.8, z: -6.7, pause: 5.5 }),
+          Object.freeze({ x: -0.8, z: -6.7, pause: 6.0 }),
+          Object.freeze({ x: -0.8, z: -7.6, pause: 4.5 }),
+          Object.freeze({ x: -1.8, z: -7.6, pause: 7.0 }),
         ]),
       }),
       Object.freeze({
         id: "juniper-cross",
         room: "READING ROOM",
         floor: "SECOND FLOOR",
-        position: Object.freeze({ x: 10.7, y: FLOOR.UPPER, z: 0 }),
-        rotationY: -Math.PI / 2,
+        position: Object.freeze({ x: 10.05, y: FLOOR.UPPER, z: 0 }),
+        rotationY: Math.PI / 2,
         qaApproach: Object.freeze({ x: -0.7, z: 1.45 }),
         idleRate: 0.94,
         idlePhase: 0.79,
-        initialPause: 4.1,
+        initialPause: 4.0,
+        seatPause: 84,
         route: Object.freeze([
-          Object.freeze({ x: 10.7, z: 0, pause: 1.5 }),
-          Object.freeze({ x: 10.7, z: 0.4, pause: 0.8 }),
-          Object.freeze({ x: 10.1, z: 0.4, pause: 0.9 }),
+          Object.freeze({ x: 10.05, z: 0, pause: 4.0 }),
           Object.freeze({ x: 10.05, z: 0, pause: 0.2, seatTag: "reading-room-sofa" }),
-          Object.freeze({ x: 10.1, z: -0.4, pause: 0.8 }),
-          Object.freeze({ x: 10.7, z: -0.4, pause: 1.0 }),
+          Object.freeze({ x: 10.1, z: 0.4, pause: 6.0 }),
+          Object.freeze({ x: 10.7, z: 0.4, pause: 5.5 }),
+          Object.freeze({ x: 10.7, z: 0, pause: 7.0 }),
+          Object.freeze({ x: 10.7, z: -0.4, pause: 5.5 }),
+          Object.freeze({ x: 10.1, z: -0.4, pause: 6.0 }),
         ]),
       }),
     ]),
@@ -2748,6 +2793,7 @@
       this.R = rapier;
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 });
       this.fixedBodies = 0;
+      this.fixedBoxes = [];
       this.kinematicBodies = 0;
       this.colliderCount = 0;
       this.verticalVelocity = 0;
@@ -2779,6 +2825,17 @@
       this.world.createCollider(this.R.ColliderDesc.cuboid(w / 2, h / 2, d / 2).setFriction(0.74), body);
       this.fixedBodies += 1;
       this.colliderCount += 1;
+      this.fixedBoxes.push({
+        x,
+        y,
+        z,
+        w,
+        h,
+        d,
+        rotationY: rotationY || 0,
+        rotationX: rotationX || 0,
+        rotationZ: rotationZ || 0,
+      });
       return body;
     }
 
@@ -5107,6 +5164,12 @@
         localEye: { ...(options.localEye || { x: 0, y: MANSION_SEATING.playerEyeHeight, z: 0 }) },
         localExit: { ...(options.localExit || { x: 0, y: 0, z: MANSION_SEATING.defaultChairExitX }) },
         localInteraction: { ...(options.localInteraction || { x: 0, y: 0.62, z: -0.18 }) },
+        localSupportTop: options.localSupportTop ? { ...options.localSupportTop } : null,
+        localSupportFront: options.localSupportFront ? { ...options.localSupportFront } : null,
+        heightScale: Number.isFinite(options.heightScale) ? options.heightScale : 1,
+        colliderRecord: options.colliderRecord || null,
+        visualSeatTopHeight: Number.isFinite(options.visualSeatTopHeight) ? options.visualSeatTopHeight : null,
+        visualBackTopHeight: Number.isFinite(options.visualBackTopHeight) ? options.visualBackTopHeight : null,
         occupantBy: null,
         interaction: null,
         interactionTarget: null,
@@ -5139,22 +5202,37 @@
       return entry;
     }
 
-    registerChair({ group, tag = null, exitLocal = null }) {
+    registerChair({ group, tag = null, exitLocal = null, heightScale = 1, colliderRecord = null }) {
+      const supportHeight = 0.61 * heightScale;
       return this.registerSeat({
         kind: "chair",
         label: "chair",
         tag,
         group,
+        heightScale,
+        colliderRecord,
+        visualSeatTopHeight: supportHeight,
+        visualBackTopHeight: 1.3 * heightScale,
         localSeat: { x: 0, y: 0, z: -0.04 },
         localEye: { x: 0, y: MANSION_SEATING.playerEyeHeight, z: -0.08 },
         localExit: exitLocal || { x: MANSION_SEATING.defaultChairExitX, y: 0, z: -0.04 },
         localInteraction: { x: 0, y: 0.62, z: -0.16 },
+        localSupportTop: { x: 0, y: supportHeight, z: -0.01 },
+        localSupportFront: { x: 0, y: supportHeight, z: -0.23 },
       });
     }
 
-    registerSofa({ group, width, tag = null, slots = null }) {
+    registerSofa({
+      group,
+      width,
+      tag = null,
+      slots = null,
+      heightScale = 1,
+      colliderRecord = null,
+    }) {
       const slotCount = Math.max(1, Number(slots) || (width >= 2.9 ? 3 : 2));
       const spread = slotCount === 1 ? 0 : Math.min(0.82, width * 0.25);
+      const supportHeight = 0.72 * heightScale;
       const entries = [];
       for (let index = 0; index < slotCount; index += 1) {
         const x = slotCount === 1 ? 0 : -spread + (spread * 2 * index) / (slotCount - 1);
@@ -5165,13 +5243,19 @@
           group,
           slotIndex: index,
           slotCount,
+          heightScale,
+          colliderRecord,
+          visualSeatTopHeight: 0.72 * heightScale,
+          visualBackTopHeight: 1.33 * heightScale,
           localSeat: { x, y: 0, z: -0.08 },
           localEye: { x, y: MANSION_SEATING.playerEyeHeight + 0.03, z: -0.12 },
           localExit: { x, y: 0, z: MANSION_SEATING.defaultSofaExitZ },
-          localInteraction: { x, y: 0.68, z: -0.25 },
+          localInteraction: { x, y: 0.68 * heightScale, z: -0.25 },
+          localSupportTop: { x, y: supportHeight, z: -0.04 },
+          localSupportFront: { x, y: supportHeight, z: -0.39 },
           interactionSize: {
             x: Math.min(MANSION_SEATING.sofaInteractionWidth, width / slotCount),
-            y: MANSION_SEATING.sofaInteractionHeight,
+            y: MANSION_SEATING.sofaInteractionHeight * heightScale,
             z: MANSION_SEATING.sofaInteractionDepth,
           },
         }));
@@ -5205,6 +5289,12 @@
       return new THREE.Euler().setFromQuaternion(quaternion, "YXZ").y;
     }
 
+    playerBodyPoint(entry, key) {
+      const point = this.worldPoint(entry, key);
+      point.y += PLAYER.halfHeight + PLAYER.radius + 0.03;
+      return point;
+    }
+
     sitPlayer(id) {
       const entry = this.entryById(id);
       if (!state.qa && !state.started) return { seated: false, reason: "not started" };
@@ -5226,6 +5316,14 @@
       // Matching the furniture yaw therefore looks away from its backrest.
       state.yaw = this.worldYaw(entry);
       state.pitch = 0;
+      if (physics) {
+        const seatedBody = this.playerBodyPoint(entry, "localSeat");
+        physics.verticalVelocity = 0;
+        physics.grounded = true;
+        physics.playerCollider.setEnabled(false);
+        physics.playerBody.setTranslation({ x: seatedBody.x, y: seatedBody.y, z: seatedBody.z }, true);
+        physics.playerBody.setNextKinematicTranslation({ x: seatedBody.x, y: seatedBody.y, z: seatedBody.z });
+      }
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -5241,6 +5339,15 @@
     standPlayer() {
       const entry = state.activeSeat;
       if (!entry || entry.occupantBy !== "player") return { seated: false, reason: "player is not seated" };
+      if (physics) {
+        const exitBody = this.playerBodyPoint(entry, "localExit");
+        physics.verticalVelocity = 0;
+        physics.grounded = true;
+        physics.playerBody.setTranslation({ x: exitBody.x, y: exitBody.y, z: exitBody.z }, true);
+        physics.playerBody.setNextKinematicTranslation({ x: exitBody.x, y: exitBody.y, z: exitBody.z });
+        physics.lastSafePosition = { x: exitBody.x, y: exitBody.y, z: exitBody.z };
+        physics.playerCollider.setEnabled(true);
+      }
       entry.occupantBy = null;
       state.activeSeat = null;
       this.playerReturn = null;
@@ -5251,6 +5358,15 @@
       updateLocation();
       updateInteractionPrompt();
       return { seated: false, seatId: entry.id };
+    }
+
+    playerSaveSnapshot() {
+      if (!state.activeSeat || !this.playerReturn) return null;
+      return {
+        position: { ...this.playerReturn.position },
+        yaw: this.playerReturn.yaw,
+        pitch: this.playerReturn.pitch,
+      };
     }
 
     occupyNpc(occupantId, seatId = null, seatTag = null) {
@@ -5315,9 +5431,14 @@
           seated: Boolean(state.activeSeat && state.activeSeat.occupantBy === "player"),
           seatId: state.activeSeat?.id || null,
           movementLocked: Boolean(state.activeSeat),
+          colliderEnabled: Boolean(physics?.playerCollider?.isEnabled?.()),
         },
         entries: this.entries.map((entry) => {
           const position = this.worldPoint(entry, "localSeat");
+          const floor = entry.group.localToWorld(new THREE.Vector3(0, 0, 0));
+          const supportTop = entry.localSupportTop ? this.worldPoint(entry, "localSupportTop") : null;
+          const collider = entry.colliderRecord;
+          const colliderCenterHeight = collider ? collider.y - floor.y : null;
           return {
             id: entry.id,
             tag: entry.tag,
@@ -5331,6 +5452,16 @@
               z: Number(position.z.toFixed(3)),
             },
             yaw: Number(this.worldYaw(entry).toFixed(3)),
+            heightScale: Number(entry.heightScale.toFixed(3)),
+            supportHeight: supportTop ? Number((supportTop.y - floor.y).toFixed(4)) : null,
+            supportTopY: supportTop ? Number(supportTop.y.toFixed(4)) : null,
+            colliderCenterY: collider ? Number(collider.y.toFixed(4)) : null,
+            colliderCenterHeight: collider ? Number(colliderCenterHeight.toFixed(4)) : null,
+            colliderHeight: collider ? Number(collider.h.toFixed(4)) : null,
+            colliderBottomHeight: collider ? Number((colliderCenterHeight - collider.h / 2).toFixed(4)) : null,
+            colliderTopHeight: collider ? Number((colliderCenterHeight + collider.h / 2).toFixed(4)) : null,
+            visualSeatTopHeight: entry.visualSeatTopHeight == null ? null : Number(entry.visualSeatTopHeight.toFixed(4)),
+            visualBackTopHeight: entry.visualBackTopHeight == null ? null : Number(entry.visualBackTopHeight.toFixed(4)),
           };
         }),
       };
@@ -5343,6 +5474,8 @@
       this.manifestStatus = "idle";
       this.settled = false;
       this.error = null;
+      this.seatedMotionEuler = new THREE.Euler();
+      this.seatedMotionQuaternion = new THREE.Quaternion();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
         root.name = `mansion-contestant-${placement.id}`;
@@ -5373,9 +5506,11 @@
           colliderHeight: 0,
           routeClearance: this.routeClearanceForPlacement(placement),
           routeMinimumClearance: this.minimumRouteClearance(placement),
+          routeStaticMinimumClearance: this.minimumStaticRouteClearance(placement),
           routeLength: this.routeLength(placement),
           routeIndex: 0,
           routeDirection: 1,
+          routeTargetActive: false,
           routeCycles: 0,
           routeSegmentsTraversed: 0,
           distanceTravelled: 0,
@@ -5384,6 +5519,17 @@
           talkPauseRemaining: 0,
           seatedSeatId: null,
           seatedPoseApplied: false,
+          seatedPoseBlend: 0,
+          seatedMotionElapsed: 0,
+          seatedMotionCurrentDelta: 0,
+          seatedMotionPoseChanged: false,
+          seatTransition: null,
+          seatedDwellElapsed: 0,
+          longestSeatedDwellSeconds: 0,
+          seatExitsCompleted: 0,
+          postSeatDeparture: null,
+          postSeatDeparturesCompleted: 0,
+          minimumPostSeatDepartureDistance: Infinity,
           blockedSteps: 0,
           maximumColliderOffset: 0,
           teleports: 0,
@@ -5404,11 +5550,15 @@
           animationProbeBone: null,
           animationProbeStart: null,
           animationPoseChanged: false,
+          animationProbeMaximumDelta: 0,
           modelBaseY: 0,
           restPoseBones: [],
+          restPoseByName: {},
           seatPoseBones: {},
+          neutralRestApplied: false,
           lastDt: 0,
           qaIgnorePlayer: false,
+          qaRoutineFast: false,
         };
       });
       animatedObjects.push(this);
@@ -5421,6 +5571,37 @@
         length += Math.hypot(route[index].x - route[index - 1].x, route[index].z - route[index - 1].z);
       }
       return length;
+    }
+
+    effectiveSeatDwellSeconds(placement) {
+      const authored = Number(placement?.seatPause) || MANSION_SEATING.npcSeatPauseSeconds;
+      return Math.min(
+        MANSION_SEATING.maximumNpcSeatDwellSeconds,
+        Math.max(1, authored),
+      );
+    }
+
+    estimatedSeatedShare(placement) {
+      const route = placement.route || [];
+      if (route.length < 2) return 0;
+      const lastIndex = route.length - 1;
+      const seatedPause = this.effectiveSeatDwellSeconds(placement);
+      let seatedSeconds = 0;
+      let hangoutSeconds = 0;
+      let seatVisits = 0;
+      route.forEach((point, index) => {
+        const visitsPerCycle = index === 0 || index === lastIndex ? 1 : 2;
+        if (point.seatTag) {
+          seatedSeconds += seatedPause * visitsPerCycle;
+          seatVisits += visitsPerCycle;
+        } else {
+          hangoutSeconds += Math.max(0.18, Number(point.pause) || 0) * visitsPerCycle;
+        }
+      });
+      const walkingSeconds = this.routeLength(placement) * 2 / MANSION_CONTESTANTS.speed;
+      const transitionSeconds = seatVisits * MANSION_SEATING.npcSeatTransitionSeconds * 2;
+      const cycleSeconds = seatedSeconds + hangoutSeconds + walkingSeconds + transitionSeconds;
+      return cycleSeconds > 0 ? seatedSeconds / cycleSeconds : 0;
     }
 
     minimumRouteClearance(placement) {
@@ -5441,6 +5622,48 @@
         }
       }
       return minimum;
+    }
+
+    minimumStaticRouteClearance(placement) {
+      const route = placement.route || [];
+      let minimum = Infinity;
+      for (let index = 0; index < route.length; index += 1) {
+        const start = route[index];
+        const end = route[index + 1] || start;
+        const length = Math.hypot(end.x - start.x, end.z - start.z);
+        const samples = Math.max(1, Math.ceil(length / 0.06));
+        for (let sample = 0; sample <= samples; sample += 1) {
+          const t = sample / samples;
+          minimum = Math.min(minimum, this.staticClearanceForPosition({
+            x: start.x + (end.x - start.x) * t,
+            y: placement.position.y,
+            z: start.z + (end.z - start.z) * t,
+          }));
+        }
+      }
+      return minimum;
+    }
+
+    staticClearanceForPosition(position) {
+      const bodyBottom = position.y + 0.08;
+      const bodyTop = position.y + 1.55;
+      let nearest = Infinity;
+      for (const box of physics?.fixedBoxes || []) {
+        if (box.rotationX || box.rotationZ) continue;
+        const boxBottom = box.y - box.h / 2;
+        const boxTop = box.y + box.h / 2;
+        if (boxTop <= bodyBottom || boxBottom >= bodyTop) continue;
+        const dx = position.x - box.x;
+        const dz = position.z - box.z;
+        const cos = Math.cos(box.rotationY);
+        const sin = Math.sin(box.rotationY);
+        const localX = cos * dx - sin * dz;
+        const localZ = sin * dx + cos * dz;
+        const outsideX = Math.max(0, Math.abs(localX) - box.w / 2);
+        const outsideZ = Math.max(0, Math.abs(localZ) - box.d / 2);
+        nearest = Math.min(nearest, Math.hypot(outsideX, outsideZ));
+      }
+      return nearest;
     }
 
     routeClearanceForPlacement(placement) {
@@ -5526,7 +5749,22 @@
       entry.actions[name] = action;
       entry.animationTracks[name] = diagnostics;
       if (name === "idle") {
-        const probeTrack = dynamicRotationTracks[0];
+        const probeTrack = dynamicRotationTracks.reduce((strongest, track) => {
+          const values = track.values || [];
+          let maximumDelta = 0;
+          for (let offset = 4; offset + 3 < values.length; offset += 4) {
+            maximumDelta = Math.max(
+              maximumDelta,
+              Math.abs(values[offset] - values[0])
+                + Math.abs(values[offset + 1] - values[1])
+                + Math.abs(values[offset + 2] - values[2])
+                + Math.abs(values[offset + 3] - values[3]),
+            );
+          }
+          return !strongest || maximumDelta > strongest.maximumDelta
+            ? { track, maximumDelta }
+            : strongest;
+        }, null)?.track || dynamicRotationTracks[0];
         entry.animationProbeBone = entry.model.getObjectByName(probeTrack.name.slice(0, probeTrack.name.lastIndexOf(".")));
         entry.animationProbeStart = entry.animationProbeBone?.quaternion.clone() || null;
       }
@@ -5554,36 +5792,164 @@
       return next;
     }
 
-    applySeatedPose(entry) {
+    seatForwardOffset(seat) {
+      return seat?.kind === "sofa"
+        ? MANSION_SEATING.npcSofaForwardOffset
+        : MANSION_SEATING.npcChairForwardOffset;
+    }
+
+    applySeatedMotionBone(entry, name, x, y, z, blend) {
+      const rest = entry.restPoseByName[name];
+      if (!rest) return 0;
+      this.seatedMotionEuler.set(x * blend, y * blend, z * blend, "XYZ");
+      this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
+      rest.bone.quaternion.multiply(this.seatedMotionQuaternion);
+      return 1 - Math.abs(this.seatedMotionQuaternion.w);
+    }
+
+    applySeatedIdleMotion(entry, blend) {
+      const tuning = CONTESTANT_SEATED_IDLE_MOTION[entry.id];
+      if (!tuning || blend <= 0) {
+        entry.seatedMotionCurrentDelta = 0;
+        return 0;
+      }
+      const cycle = Math.max(1, tuning.cycleSeconds);
+      const phase = tuning.phase * Math.PI * 2;
+      const breath = Math.sin((entry.seatedMotionElapsed / cycle) * Math.PI * 2);
+      const sway = Math.sin((entry.seatedMotionElapsed / (cycle * 2.3)) * Math.PI * 2 + phase);
+      const glanceWave = Math.sin((entry.seatedMotionElapsed / (cycle * 3.4)) * Math.PI * 2 + phase + 1.1);
+      const glance = glanceWave * glanceWave * glanceWave;
+      let maximumDelta = 0;
+      const move = (name, x, y, z) => {
+        maximumDelta = Math.max(
+          maximumDelta,
+          this.applySeatedMotionBone(entry, name, x, y, z, blend),
+        );
+      };
+      move("Spine", 0.003 * breath, 0, 0.003 * sway);
+      move("Spine01", 0.005 * breath, 0.003 * glance, 0.004 * sway);
+      move("Spine02", 0.007 * breath, 0.005 * glance, 0.005 * sway);
+      move("neck", -0.004 * breath, 0.018 * glance, -0.004 * sway);
+      move("Head", -0.003 * breath, 0.014 * glance, -0.005 * sway);
+      move("LeftShoulder", 0, 0, 0.003 * breath);
+      move("RightShoulder", 0, 0, -0.003 * breath);
+      move("LeftHand", 0, 0.006 * glance, 0.004 * sway);
+      move("RightHand", 0, -0.006 * glance, -0.004 * sway);
+      entry.seatedMotionCurrentDelta = maximumDelta;
+      entry.seatedMotionPoseChanged = entry.seatedMotionPoseChanged || maximumDelta > 0.00000001;
+      return maximumDelta;
+    }
+
+    getSeatedFit(entry) {
+      const seat = seatingSystem?.entryById(entry.seatedSeatId);
+      const pose = CONTESTANT_SEATED_POSES[entry.id];
+      if (!seat || !pose || !seat.localSupportFront || !seat.localSupportTop) return null;
+      entry.root.updateMatrixWorld(true);
+      const front = seatingSystem.worldPoint(seat, "localSupportFront");
+      const supportTop = seatingSystem.worldPoint(seat, "localSupportTop");
+      const forward = {
+        x: Math.sin(entry.root.rotation.y),
+        z: Math.cos(entry.root.rotation.y),
+      };
+      const pointForBone = (name) => {
+        const bone = entry.restPoseByName[name]?.bone;
+        if (!bone) return null;
+        return bone.getWorldPosition(new THREE.Vector3());
+      };
+      const forwardFromFront = (point) => (
+        (point.x - front.x) * forward.x + (point.z - front.z) * forward.z
+      );
+      const hips = [pointForBone("LeftUpLeg"), pointForBone("RightUpLeg")].filter(Boolean);
+      const knees = [pointForBone("LeftLeg"), pointForBone("RightLeg")].filter(Boolean);
+      const toes = [pointForBone("LeftToeBase"), pointForBone("RightToeBase")].filter(Boolean);
+      if (hips.length !== 2 || knees.length !== 2 || toes.length !== 2) return null;
+      const hipDepths = hips.map((point) => Math.max(0, -forwardFromFront(point)));
+      const kneeClearances = knees.map((point) => Math.max(0, forwardFromFront(point)));
+      const overlapRatios = hipDepths.map((depth, index) => {
+        const span = depth + kneeClearances[index];
+        return span > 0 ? depth / span : 1;
+      });
+      const thighCushionTopClearances = hipDepths.map((depth, index) => {
+        const span = depth + kneeClearances[index];
+        const frontCrossing = span > 0 ? depth / span : 0;
+        return THREE.MathUtils.lerp(hips[index].y, knees[index].y, frontCrossing) - supportTop.y;
+      });
+      return {
+        kind: seat.kind,
+        forwardOffset: Number(this.seatForwardOffset(seat).toFixed(3)),
+        rootDrop: Number(pose.rootDrop.toFixed(3)),
+        supportTopY: Number(supportTop.y.toFixed(3)),
+        minimumHipSupportDepth: Number(Math.min(...hipDepths).toFixed(3)),
+        minimumKneeFrontClearance: Number(Math.min(...kneeClearances).toFixed(3)),
+        maximumThighCushionOverlapRatio: Number(Math.max(...overlapRatios).toFixed(3)),
+        minimumThighCushionTopClearance: Number(Math.min(...thighCushionTopClearances).toFixed(3)),
+        maximumToeFloorDistance: Number(Math.max(...toes.map((point) => Math.abs(point.y - entry.root.position.y))).toFixed(3)),
+      };
+    }
+
+    applySeatedPose(entry, blend = 1) {
       const pose = CONTESTANT_SEATED_POSES[entry.id];
       if (!pose || !entry.model) return false;
+      entry.neutralRestApplied = false;
+      const amount = clamp(Number(blend) || 0, 0, 1);
       for (const rest of entry.restPoseBones) rest.bone.quaternion.copy(rest.quaternion);
       for (const [name, values] of Object.entries(pose.bones)) {
         const rest = entry.seatPoseBones[name];
         if (!rest) continue;
-        rest.bone.quaternion.copy(rest.quaternion).multiply(new THREE.Quaternion(...values));
+        const target = rest.quaternion.clone().multiply(new THREE.Quaternion(...values));
+        rest.bone.quaternion.copy(rest.quaternion).slerp(target, amount);
       }
-      entry.model.position.y = entry.modelBaseY - pose.rootDrop;
-      entry.seatedPoseApplied = true;
+      entry.model.position.y = entry.modelBaseY - pose.rootDrop * amount;
+      this.applySeatedIdleMotion(entry, amount);
+      entry.seatedPoseBlend = amount;
+      entry.seatedPoseApplied = amount >= 0.999;
+      return entry.seatedPoseApplied;
+    }
+
+    applyNeutralRestPose(entry) {
+      const pose = CONTESTANT_NEUTRAL_REST_POSES[entry.id];
+      if (
+        !pose
+        || !entry.model
+        || entry.activity === CONTESTANT_ACTIVITY.SEATED
+        || entry.currentAnimation !== "idle"
+      ) {
+        entry.neutralRestApplied = false;
+        return false;
+      }
+      for (const name of ["LeftShoulder", "RightShoulder"]) {
+        const rest = entry.restPoseByName[name];
+        if (rest) rest.bone.quaternion.copy(rest.quaternion);
+      }
+      for (const [name, values] of Object.entries(pose)) {
+        const rest = entry.restPoseByName[name];
+        if (!rest) continue;
+        rest.bone.quaternion
+          .copy(rest.quaternion)
+          .multiply(new THREE.Quaternion(...values));
+      }
+      entry.neutralRestApplied = true;
       return true;
     }
 
     restoreStandingPose(entry) {
       if (!entry.model) return;
       entry.model.position.y = entry.modelBaseY;
+      entry.seatedPoseBlend = 0;
       entry.seatedPoseApplied = false;
       this.fadeToAction(entry, "idle", 0);
       entry.mixer?.update(0);
+      this.applyNeutralRestPose(entry);
     }
 
     setColliderEnabled(entry, enabled) {
       const next = Boolean(enabled);
       entry.colliderEnabled = next;
       entry.collider?.setEnabled(next);
-      if (next) this.syncCollider(entry);
+      if (next) this.syncCollider(entry, false);
     }
 
-    syncCollider(entry) {
+    syncCollider(entry, measure = true) {
       if (!entry.colliderBody || !entry.colliderEnabled) return;
       const center = {
         x: entry.root.position.x,
@@ -5591,39 +5957,91 @@
         z: entry.root.position.z,
       };
       const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, entry.root.rotation.y, 0));
+      const live = entry.colliderBody.translation();
+      const offset = Math.hypot(live.x - center.x, live.y - center.y, live.z - center.z);
+      if (measure) entry.maximumColliderOffset = Math.max(entry.maximumColliderOffset, offset);
       entry.colliderBody.setTranslation(center, false);
       entry.colliderBody.setNextKinematicTranslation(center);
       entry.colliderBody.setRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w }, false);
       entry.colliderBody.setNextKinematicRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w });
-      const live = entry.colliderBody.translation();
-      const offset = Math.hypot(live.x - center.x, live.y - center.y, live.z - center.z);
-      entry.maximumColliderOffset = Math.max(entry.maximumColliderOffset, offset);
     }
 
     playerBlocksStep(entry, nextX, nextZ) {
-      if (!physics || state.activeSeat || entry.qaIgnorePlayer) return false;
+      if (!physics || entry.qaIgnorePlayer) return false;
       const player = physics.playerPosition();
       const playerFeetY = player.y - PLAYER.halfHeight - PLAYER.radius;
       if (Math.abs(playerFeetY - entry.root.position.y) > 0.45) return false;
       return Math.hypot(player.x - nextX, player.z - nextZ) < MANSION_SEATING.occupantClearanceRadius;
     }
 
+    nextPostSeatRouteTarget(entry, route) {
+      const departure = entry.postSeatDeparture;
+      if (!departure || route.length < 2) return null;
+      let cursor = entry.routeIndex;
+      let direction = entry.routeDirection;
+      let crossedStartCount = 0;
+      for (let attempt = 0; attempt < route.length * 2; attempt += 1) {
+        let nextIndex = cursor + direction;
+        if (nextIndex < 0 || nextIndex >= route.length) {
+          if (nextIndex < 0) crossedStartCount += 1;
+          direction *= -1;
+          nextIndex = cursor + direction;
+        }
+        cursor = clamp(nextIndex, 0, route.length - 1);
+        const candidate = route[cursor];
+        const distance = Math.hypot(
+          candidate.x - departure.origin.x,
+          candidate.z - departure.origin.z,
+        );
+        if (
+          cursor === 0
+          || candidate.seatTag
+          || distance < MANSION_SEATING.minimumNpcPostSeatWalkDistance
+        ) continue;
+        entry.routeIndex = cursor;
+        entry.routeDirection = direction;
+        entry.routeCycles += crossedStartCount;
+        entry.routeTargetActive = true;
+        entry.activity = CONTESTANT_ACTIVITY.TURNING;
+        departure.targetIndex = cursor;
+        return candidate;
+      }
+      departure.failed = true;
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      return null;
+    }
+
     nextRouteTarget(entry) {
       const route = entry.placement.route || [];
       if (route.length < 2) return null;
+      if (entry.postSeatDeparture) return this.nextPostSeatRouteTarget(entry, route);
       let nextIndex = entry.routeIndex + entry.routeDirection;
       if (nextIndex < 0 || nextIndex >= route.length) {
         entry.routeDirection *= -1;
         nextIndex = entry.routeIndex + entry.routeDirection;
       }
       entry.routeIndex = clamp(nextIndex, 0, route.length - 1);
+      entry.routeTargetActive = true;
       entry.activity = CONTESTANT_ACTIVITY.TURNING;
       return route[entry.routeIndex];
     }
 
     arriveAtRoutePoint(entry, target) {
       entry.root.position.set(target.x, entry.placement.position.y, target.z);
+      entry.routeTargetActive = false;
       entry.routeSegmentsTraversed += 1;
+      if (entry.postSeatDeparture?.targetIndex === entry.routeIndex) {
+        const departureDistance = Math.hypot(
+          entry.root.position.x - entry.postSeatDeparture.origin.x,
+          entry.root.position.z - entry.postSeatDeparture.origin.z,
+        );
+        entry.minimumPostSeatDepartureDistance = Math.min(
+          entry.minimumPostSeatDepartureDistance,
+          departureDistance,
+        );
+        entry.postSeatDeparturesCompleted += 1;
+        entry.postSeatDeparture = null;
+      }
       const lastIndex = entry.placement.route.length - 1;
       if (entry.routeIndex === lastIndex && entry.routeDirection > 0) entry.routeDirection = -1;
       if (entry.routeIndex === 0 && entry.routeDirection < 0) {
@@ -5632,7 +6050,8 @@
       }
       this.syncCollider(entry);
       if (target.seatTag && this.seatEntry(entry, null, target.seatTag).seated) return;
-      entry.pauseRemaining = Math.max(0.18, Number(target.pause) || 0);
+      const authoredPause = Math.max(0.18, Number(target.pause) || 0);
+      entry.pauseRemaining = entry.qaRoutineFast ? Math.min(0.45, authoredPause) : authoredPause;
       entry.activity = CONTESTANT_ACTIVITY.IDLE;
       this.fadeToAction(entry, "idle");
     }
@@ -5647,39 +6066,117 @@
         return { seated: false, reason: "seat unavailable" };
       }
       const point = seatingSystem.worldPoint(seat, "localSeat");
-      entry.root.position.set(point.x, point.y, point.z);
-      entry.root.rotation.y = Math.atan2(
+      const targetYaw = Math.atan2(
         Math.sin(seatingSystem.worldYaw(seat) + Math.PI),
         Math.cos(seatingSystem.worldYaw(seat) + Math.PI),
       );
+      const forwardOffset = this.seatForwardOffset(seat);
+      point.x += Math.sin(targetYaw) * forwardOffset;
+      point.z += Math.cos(targetYaw) * forwardOffset;
       entry.seatedSeatId = seat.id;
       entry.activity = CONTESTANT_ACTIVITY.SEATED;
-      entry.pauseRemaining = MANSION_SEATING.npcSeatPauseSeconds;
-      entry.contactShadow.visible = false;
+      entry.pauseRemaining = 0;
+      entry.seatedDwellElapsed = 0;
+      entry.seatedMotionElapsed = 0;
+      entry.seatedMotionCurrentDelta = 0;
+      entry.seatedMotionPoseChanged = false;
+      entry.seatTransition = {
+        kind: "sitting",
+        elapsed: 0,
+        duration: MANSION_SEATING.npcSeatTransitionSeconds,
+        start: entry.root.position.clone(),
+        end: point,
+        startYaw: entry.root.rotation.y,
+        endYaw: targetYaw,
+        startBlend: entry.seatedPoseBlend,
+        endBlend: 1,
+      };
       for (const action of Object.values(entry.actions)) action.stop();
       entry.action = null;
       entry.currentAnimation = "seated";
       this.setColliderEnabled(entry, false);
-      const poseApplied = this.applySeatedPose(entry);
+      this.applySeatedPose(entry, entry.seatedPoseBlend);
       entry.root.updateMatrixWorld(true);
-      return { seated: true, seatId: seat.id, poseApplied };
+      return { seated: true, seatId: seat.id, poseApplied: entry.seatedPoseApplied, transitioning: true };
     }
 
     standEntry(entry) {
       if (!entry.seatedSeatId) return { seated: false, reason: "contestant is not seated" };
+      if (entry.seatTransition?.kind === "standing") {
+        return { seated: true, seatId: entry.seatedSeatId, standing: true };
+      }
       const seat = seatingSystem?.entryById(entry.seatedSeatId);
       const exit = seat ? seatingSystem.worldPoint(seat, "localExit") : null;
       const seatId = entry.seatedSeatId;
+      const end = exit || entry.root.position.clone();
+      end.y = entry.placement.position.y;
+      const distance = Math.hypot(end.x - entry.root.position.x, end.z - entry.root.position.z);
+      const travelYaw = distance > 0.0001
+        ? Math.atan2(end.x - entry.root.position.x, end.z - entry.root.position.z)
+        : entry.root.rotation.y;
+      entry.seatTransition = {
+        kind: "standing",
+        elapsed: 0,
+        duration: MANSION_SEATING.npcSeatTransitionSeconds,
+        start: entry.root.position.clone(),
+        end,
+        startYaw: entry.root.rotation.y,
+        endYaw: travelYaw,
+        startBlend: entry.seatedPoseBlend,
+        endBlend: 0,
+      };
+      entry.pauseRemaining = 0;
+      return { seated: true, seatId, standing: true };
+    }
+
+    finishStandingTransition(entry) {
+      const seatId = entry.seatedSeatId;
       seatingSystem?.releaseNpc(entry.id);
       entry.seatedSeatId = null;
-      if (exit) entry.root.position.set(exit.x, entry.placement.position.y, exit.z);
+      entry.seatTransition = null;
       entry.contactShadow.visible = !interiorDetailsHidden;
       this.restoreStandingPose(entry);
       entry.activity = CONTESTANT_ACTIVITY.IDLE;
       entry.pauseRemaining = 0.2;
+      entry.seatExitsCompleted += 1;
+      entry.postSeatDeparture = {
+        origin: entry.root.position.clone(),
+        targetIndex: null,
+      };
       this.setColliderEnabled(entry, true);
       entry.root.updateMatrixWorld(true);
       return { seated: false, seatId };
+    }
+
+    updateSeatTransition(entry, dt) {
+      const transition = entry.seatTransition;
+      if (!transition) return;
+      transition.elapsed = Math.min(transition.duration, transition.elapsed + Math.max(0, dt));
+      const t = transition.duration > 0 ? transition.elapsed / transition.duration : 1;
+      const eased = t * t * (3 - 2 * t);
+      entry.root.position.lerpVectors(transition.start, transition.end, eased);
+      const yawDelta = Math.atan2(
+        Math.sin(transition.endYaw - transition.startYaw),
+        Math.cos(transition.endYaw - transition.startYaw),
+      );
+      entry.root.rotation.y = Math.atan2(
+        Math.sin(transition.startYaw + yawDelta * eased),
+        Math.cos(transition.startYaw + yawDelta * eased),
+      );
+      entry.seatedPoseBlend = THREE.MathUtils.lerp(transition.startBlend, transition.endBlend, eased);
+      entry.contactShadow.visible = !interiorDetailsHidden && entry.seatedPoseBlend < 0.55;
+      if (t < 1) return;
+      if (transition.kind === "sitting") {
+        entry.seatTransition = null;
+        entry.seatedPoseBlend = 1;
+        entry.pauseRemaining = entry.qaRoutineFast
+          ? 1.2
+          : this.effectiveSeatDwellSeconds(entry.placement);
+        entry.contactShadow.visible = false;
+        this.applySeatedPose(entry, 1);
+      } else {
+        this.finishStandingTransition(entry);
+      }
     }
 
     async load() {
@@ -5808,6 +6305,7 @@
         if (!object.isBone) return;
         const rest = { bone: object, quaternion: object.quaternion.clone() };
         entry.restPoseBones.push(rest);
+        entry.restPoseByName[object.name] = rest;
         if (CONTESTANT_SEATED_POSES[entry.id]?.bones[object.name]) entry.seatPoseBones[object.name] = rest;
       });
       const idleAction = this.prepareAction(entry, idle, "idle");
@@ -5912,10 +6410,17 @@
     }
 
     stepAnimation(entry, dt) {
-      entry.mixer.update(dt);
-      if (entry.activity === CONTESTANT_ACTIVITY.SEATED) this.applySeatedPose(entry);
-      if (!entry.animationPoseChanged && entry.animationProbeBone && entry.animationProbeStart) {
-        entry.animationPoseChanged = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart)) > 0.000001;
+      if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
+        entry.seatedMotionElapsed += Math.max(0, dt);
+        this.applySeatedPose(entry, entry.seatedPoseBlend);
+      } else {
+        entry.mixer.update(dt);
+        this.applyNeutralRestPose(entry);
+      }
+      if (entry.animationProbeBone && entry.animationProbeStart) {
+        const poseDelta = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart));
+        entry.animationProbeMaximumDelta = Math.max(entry.animationProbeMaximumDelta, poseDelta);
+        if (!entry.animationPoseChanged) entry.animationPoseChanged = entry.animationProbeMaximumDelta > 0.00000001;
       }
     }
 
@@ -5942,6 +6447,13 @@
       entry.lastDt = stepDt;
 
       if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
+        if (entry.seatTransition) {
+          this.updateSeatTransition(entry, stepDt);
+          this.stepAnimation(entry, stepDt);
+          return;
+        }
+        entry.seatedDwellElapsed += stepDt;
+        entry.longestSeatedDwellSeconds = Math.max(entry.longestSeatedDwellSeconds, entry.seatedDwellElapsed);
         entry.pauseRemaining = Math.max(0, entry.pauseRemaining - stepDt);
         this.stepAnimation(entry, stepDt);
         if (entry.pauseRemaining <= 0) this.standEntry(entry);
@@ -5971,7 +6483,7 @@
         return;
       }
 
-      if (entry.activity === CONTESTANT_ACTIVITY.IDLE) this.nextRouteTarget(entry);
+      if (!entry.routeTargetActive) this.nextRouteTarget(entry);
       const target = entry.placement.route?.[entry.routeIndex];
       if (!target) {
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
@@ -6031,9 +6543,14 @@
       entry.root.rotation.y = entry.placement.rotationY;
       entry.routeIndex = 0;
       entry.routeDirection = 1;
+      entry.routeTargetActive = false;
       entry.routeCycles = 0;
       entry.routeSegmentsTraversed = 0;
       entry.distanceTravelled = 0;
+      entry.seatExitsCompleted = 0;
+      entry.postSeatDeparture = null;
+      entry.postSeatDeparturesCompleted = 0;
+      entry.minimumPostSeatDepartureDistance = Infinity;
       entry.blockedSteps = 0;
       entry.maximumColliderOffset = 0;
       entry.teleports = 0;
@@ -6041,6 +6558,13 @@
       entry.pauseRemaining = 0.25;
       entry.activity = CONTESTANT_ACTIVITY.IDLE;
       entry.seatedSeatId = null;
+      entry.seatTransition = null;
+      entry.seatedPoseBlend = 0;
+      entry.seatedMotionElapsed = 0;
+      entry.seatedMotionCurrentDelta = 0;
+      entry.seatedMotionPoseChanged = false;
+      entry.seatedDwellElapsed = 0;
+      entry.longestSeatedDwellSeconds = 0;
       entry.contactShadow.visible = !interiorDetailsHidden;
       this.restoreStandingPose(entry);
       const idle = entry.actions.idle;
@@ -6056,54 +6580,163 @@
       const wasStarted = state.started;
       state.started = true;
       entry.qaIgnorePlayer = true;
+      entry.qaRoutineFast = true;
       const activities = new Set([entry.activity]);
       const fixedStep = 1 / 30;
       const limit = clamp(Number(maxSeconds) || 90, 1, 240);
       let elapsed = 0;
       let floorStayedFixed = true;
-      while (elapsed < limit && (entry.routeCycles < 1 || !activities.has(CONTESTANT_ACTIVITY.SEATED))) {
+      let maximumRootStep = 0;
+      const previousRoot = entry.root.position.clone();
+      const routineComplete = () => (
+        entry.routeCycles >= 1
+        && activities.has(CONTESTANT_ACTIVITY.SEATED)
+        && entry.seatExitsCompleted >= 2
+        && entry.postSeatDeparturesCompleted === entry.seatExitsCompleted
+        && !entry.postSeatDeparture
+      );
+      while (elapsed < limit && !routineComplete()) {
         this.updateEntry(entry, fixedStep);
         elapsed += fixedStep;
         activities.add(entry.activity);
+        const rootStep = entry.root.position.distanceTo(previousRoot);
+        maximumRootStep = Math.max(maximumRootStep, rootStep);
+        if (rootStep > 0.12) entry.teleports += 1;
+        previousRoot.copy(entry.root.position);
         floorStayedFixed = floorStayedFixed && Math.abs(entry.root.position.y - entry.placement.position.y) < 0.001;
       }
       entry.qaIgnorePlayer = false;
+      entry.qaRoutineFast = false;
       state.started = wasStarted;
       return {
         id: entry.id,
-        completed: entry.routeCycles >= 1 && activities.has(CONTESTANT_ACTIVITY.SEATED),
+        completed: routineComplete(),
         simulatedSeconds: Number(elapsed.toFixed(2)),
         cycles: entry.routeCycles,
         activities: Array.from(activities),
         distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
         teleports: entry.teleports,
         blockedSteps: entry.blockedSteps,
+        segmentsTraversed: entry.routeSegmentsTraversed,
+        seatDwellLimitSeconds: MANSION_SEATING.maximumNpcSeatDwellSeconds,
+        longestSeatedDwellSeconds: Number(entry.longestSeatedDwellSeconds.toFixed(3)),
+        seatExitsCompleted: entry.seatExitsCompleted,
+        postSeatDeparturesCompleted: entry.postSeatDeparturesCompleted,
+        postSeatDeparturePending: Boolean(entry.postSeatDeparture),
+        minimumPostSeatDepartureDistance: Number((Number.isFinite(entry.minimumPostSeatDepartureDistance)
+          ? entry.minimumPostSeatDepartureDistance
+          : 0).toFixed(3)),
+        maximumRootStep: Number(maximumRootStep.toFixed(4)),
         maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
         floorStayedFixed,
         minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
+        minimumStaticClearance: Number(entry.routeStaticMinimumClearance.toFixed(3)),
       };
+    }
+
+    settleSeatTransitionForQA(entry) {
+      const fixedStep = 1 / 30;
+      let elapsed = 0;
+      while (entry.seatTransition && elapsed < MANSION_SEATING.npcSeatTransitionSeconds + 0.5) {
+        this.updateEntry(entry, fixedStep);
+        elapsed += fixedStep;
+      }
     }
 
     seatContestantForQA(id, seatId = null) {
       const entry = this.entryById(id);
       if (!state.qa || !entry || entry.status !== "ready") return null;
       if (entry.seatedSeatId && (!seatId || entry.seatedSeatId === seatId)) {
+        this.settleSeatTransitionForQA(entry);
         return { seated: true, seatId: entry.seatedSeatId, poseApplied: entry.seatedPoseApplied };
       }
-      if (entry.seatedSeatId) this.standEntry(entry);
+      if (entry.seatedSeatId) {
+        this.standEntry(entry);
+        this.settleSeatTransitionForQA(entry);
+      }
       const seatTag = seatId ? null : entry.placement.route?.find((point) => point.seatTag)?.seatTag;
-      return this.seatEntry(entry, seatId, seatTag);
+      const result = this.seatEntry(entry, seatId, seatTag);
+      if (result.seated) this.settleSeatTransitionForQA(entry);
+      return { ...result, poseApplied: entry.seatedPoseApplied, transitioning: false };
+    }
+
+    advanceContestantSeatedIdleForQA(id, seconds = 3.2) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready" || !entry.seatedSeatId) return null;
+      this.settleSeatTransitionForQA(entry);
+      const duration = clamp(Number(seconds) || 3.2, 0.1, 30);
+      entry.pauseRemaining = Math.min(
+        MANSION_SEATING.maximumNpcSeatDwellSeconds,
+        Math.max(entry.pauseRemaining, duration + 1),
+      );
+      const lowerBodyNames = [
+        "Hips",
+        "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase",
+        "RightUpLeg", "RightLeg", "RightFoot", "RightToeBase",
+      ];
+      const upperBodyNames = [
+        "Spine", "Spine01", "Spine02", "neck", "Head",
+        "LeftShoulder", "RightShoulder", "LeftHand", "RightHand",
+      ];
+      const snapshot = (names) => new Map(names.map((name) => {
+        const bone = entry.restPoseByName[name]?.bone;
+        return [name, bone?.quaternion.clone() || null];
+      }));
+      const lowerStart = snapshot(lowerBodyNames);
+      const upperStart = snapshot(upperBodyNames);
+      const rootStart = entry.root.position.clone();
+      const quaternionDelta = (bone, start) => bone && start
+        ? 1 - Math.abs(bone.quaternion.dot(start))
+        : 0;
+      let maximumLowerBodyDelta = 0;
+      let maximumUpperBodyDelta = 0;
+      let rootDrift = 0;
+      let elapsed = 0;
+      const fixedStep = 1 / 60;
+      while (elapsed < duration && entry.seatedSeatId) {
+        this.updateEntry(entry, Math.min(fixedStep, duration - elapsed));
+        elapsed += fixedStep;
+        for (const name of lowerBodyNames) {
+          maximumLowerBodyDelta = Math.max(
+            maximumLowerBodyDelta,
+            quaternionDelta(entry.restPoseByName[name]?.bone, lowerStart.get(name)),
+          );
+        }
+        for (const name of upperBodyNames) {
+          maximumUpperBodyDelta = Math.max(
+            maximumUpperBodyDelta,
+            quaternionDelta(entry.restPoseByName[name]?.bone, upperStart.get(name)),
+          );
+        }
+        rootDrift = Math.max(rootDrift, entry.root.position.distanceTo(rootStart));
+      }
+      return {
+        id: entry.id,
+        stillSeated: Boolean(entry.seatedSeatId && entry.activity === CONTESTANT_ACTIVITY.SEATED),
+        poseChanged: entry.seatedMotionPoseChanged && maximumUpperBodyDelta >= 0.000001,
+        simulatedSeconds: Number(Math.min(elapsed, duration).toFixed(3)),
+        cycleSeconds: CONTESTANT_SEATED_IDLE_MOTION[entry.id]?.cycleSeconds || 0,
+        rootDrift: Number(rootDrift.toFixed(8)),
+        maximumLowerBodyDelta: Number(maximumLowerBodyDelta.toFixed(10)),
+        maximumUpperBodyDelta: Number(maximumUpperBodyDelta.toFixed(10)),
+        seatFit: this.getSeatedFit(entry),
+      };
     }
 
     standContestantForQA(id) {
       const entry = this.entryById(id);
       if (!state.qa || !entry || entry.status !== "ready") return null;
-      return this.standEntry(entry);
+      const result = this.standEntry(entry);
+      this.settleSeatTransitionForQA(entry);
+      return entry.seatedSeatId ? result : { seated: false, seatId: result?.seatId || null };
     }
 
     clearTransientSeating() {
       for (const entry of this.entries) {
-        if (entry.seatedSeatId) this.standEntry(entry);
+        if (entry.seatedSeatId) {
+          this.standEntry(entry);
+          this.settleSeatTransitionForQA(entry);
+        }
       }
     }
 
@@ -6128,7 +6761,7 @@
       return speechSystem.sayForSpeaker(entry.speaker, `contestant-${entry.id}`, entry.lastLine);
     }
 
-    placePlayerNearForQA(id, distance = 1.65) {
+    placePlayerNearForQA(id, distance = 1.65, orbitRadians = 0) {
       const entry = this.entryById(id);
       if (!state.qa || !physics || !entry || entry.status !== "ready") return null;
       const gap = Math.max(0.9, Number(distance) || 1.65);
@@ -6137,8 +6770,15 @@
         ? { x: Math.sin(yaw), z: Math.cos(yaw) }
         : entry.placement.qaApproach || { x: Math.sin(yaw), z: Math.cos(yaw) };
       const approachLength = Math.max(0.001, Math.hypot(approach.x, approach.z));
-      const playerX = entry.root.position.x + (approach.x / approachLength) * gap;
-      const playerZ = entry.root.position.z + (approach.z / approachLength) * gap;
+      const normalizedX = approach.x / approachLength;
+      const normalizedZ = approach.z / approachLength;
+      const orbit = Number(orbitRadians) || 0;
+      const orbitCos = Math.cos(orbit);
+      const orbitSin = Math.sin(orbit);
+      const approachX = normalizedX * orbitCos - normalizedZ * orbitSin;
+      const approachZ = normalizedX * orbitSin + normalizedZ * orbitCos;
+      const playerX = entry.root.position.x + approachX * gap;
+      const playerZ = entry.root.position.z + approachZ * gap;
       const lookYaw = Math.atan2(playerX - entry.root.position.x, playerZ - entry.root.position.z);
       teleport(
         playerX,
@@ -6209,14 +6849,28 @@
           route: {
             points: entry.placement.route?.length || 0,
             length: Number(entry.routeLength.toFixed(3)),
+            seatStops: entry.placement.route?.filter((point) => point.seatTag).length || 0,
+            seatPauseSeconds: this.effectiveSeatDwellSeconds(entry.placement),
+            maximumSeatDwellSeconds: MANSION_SEATING.maximumNpcSeatDwellSeconds,
+            minimumPostSeatWalkDistance: MANSION_SEATING.minimumNpcPostSeatWalkDistance,
+            estimatedSeatedShare: Number(this.estimatedSeatedShare(entry.placement).toFixed(3)),
+            behavior: "sit-dominant-hangout",
             minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
+            minimumStaticClearance: Number(entry.routeStaticMinimumClearance.toFixed(3)),
             currentIndex: entry.routeIndex,
             direction: entry.routeDirection,
+            targetActive: entry.routeTargetActive,
             cycles: entry.routeCycles,
             segmentsTraversed: entry.routeSegmentsTraversed,
             distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
             blockedSteps: entry.blockedSteps,
             maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
+            seatExitsCompleted: entry.seatExitsCompleted,
+            postSeatDeparturesCompleted: entry.postSeatDeparturesCompleted,
+            postSeatDeparturePending: Boolean(entry.postSeatDeparture),
+            minimumPostSeatDepartureDistance: Number.isFinite(entry.minimumPostSeatDepartureDistance)
+              ? Number(entry.minimumPostSeatDepartureDistance.toFixed(3))
+              : null,
           },
           interactionRegistered: entry.interactionRegistered,
           dialoguePoolSize: entry.spec?.dialogue?.length || 0,
@@ -6233,7 +6887,20 @@
             available: Object.keys(entry.actions),
             probeBone: entry.animationProbeBone?.name || null,
             poseChanged: entry.animationPoseChanged,
+            probeMaximumDelta: Number(entry.animationProbeMaximumDelta.toFixed(8)),
+            neutralRestApplied: entry.neutralRestApplied,
             seatedPose: entry.seatedPoseApplied,
+            seatedPoseBlend: Number(entry.seatedPoseBlend.toFixed(3)),
+            seatTransition: entry.seatTransition?.kind || null,
+            seatedIdle: {
+              active: entry.activity === CONTESTANT_ACTIVITY.SEATED,
+              cycleSeconds: CONTESTANT_SEATED_IDLE_MOTION[entry.id]?.cycleSeconds || 0,
+              elapsed: Number(entry.seatedMotionElapsed.toFixed(3)),
+              poseChanged: entry.seatedMotionPoseChanged,
+              currentDelta: Number(entry.seatedMotionCurrentDelta.toFixed(10)),
+              lowerBodyLocked: true,
+            },
+            seatFit: entry.seatedSeatId ? this.getSeatedFit(entry) : null,
           },
         })),
       };
@@ -11000,13 +11667,25 @@
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
-    box({ name: "chair-seat", w: 0.52, h: 0.1, d: 0.5, x: 0, y: 0.48, z: 0, material: material || M.darkWood, parent: group });
-    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.velvet, parent: group, cast: false });
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "chair-leg", radius: 0.035, radiusBottom: 0.045, height: 0.47, segments: 9, x: sx * 0.2, y: 0.235, z: sz * 0.19, material: material || M.darkWood, parent: group });
-    for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: group });
-    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.velvet, parent: group });
+    const heightScale = clamp(Number(options.heightScale) || MANSION_SEATING.regularChairHeightScale, 0.7, 1.15);
+    const visual = new THREE.Group();
+    visual.name = "chair-visual";
+    visual.scale.y = heightScale;
+    group.add(visual);
+    box({ name: "chair-seat", w: 0.52, h: 0.1, d: 0.5, x: 0, y: 0.48, z: 0, material: material || M.darkWood, parent: visual });
+    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.velvet, parent: visual, cast: false });
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "chair-leg", radius: 0.035, radiusBottom: 0.045, height: 0.47, segments: 9, x: sx * 0.2, y: 0.235, z: sz * 0.19, material: material || M.darkWood, parent: visual });
+    for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: visual });
+    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.velvet, parent: visual });
     const chairBody = physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
-    const seat = seatingSystem?.registerChair({ group, tag: options.seatTag, exitLocal: options.exitLocal }) || null;
+    const colliderRecord = physics.fixedBoxes[physics.fixedBoxes.length - 1] || null;
+    const seat = seatingSystem?.registerChair({
+      group,
+      tag: options.seatTag,
+      exitLocal: options.exitLocal,
+      heightScale,
+      colliderRecord,
+    }) || null;
     if (tamperSystem) tamperSystem.registerChair({ group, body: chairBody, x, z, floorY, rotationY: rotationY || 0, seat });
     return group;
   }
@@ -11017,17 +11696,31 @@
     group.rotation.y = rotationY || 0;
     scene.add(group);
     const w = width || 2.4;
-    box({ name: "sofa-base", w, h: 0.42, d: 0.9, x: 0, y: 0.31, z: 0, material: M.blackWood, parent: group });
-    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.velvet, parent: group });
-    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.velvet, parent: group });
+    const heightScale = clamp(Number(options.heightScale) || 1, 0.7, 1.15);
+    const visual = new THREE.Group();
+    visual.name = "sofa-visual";
+    visual.scale.y = heightScale;
+    group.add(visual);
+    box({ name: "sofa-base", w, h: 0.42, d: 0.9, x: 0, y: 0.31, z: 0, material: M.blackWood, parent: visual });
+    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.velvet, parent: visual });
+    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.velvet, parent: visual });
     for (const sx of [-1, 1]) {
-      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.velvet, parent: group });
-      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.velvet, parent: group, cast: true });
+      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.velvet, parent: visual });
+      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.velvet, parent: visual, cast: true });
     }
-    for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: group, cast: false });
-    for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: group, cast: false });
-    physics.addFixedBox(x, floorY + 0.65, z, w, 1.3, 0.9, rotationY || 0);
-    seatingSystem?.registerSofa({ group, width: w, tag: options.seatTag, slots: options.slots });
+    for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: visual, cast: false });
+    for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: visual, cast: false });
+    const colliderHeight = 1.3 * heightScale;
+    physics.addFixedBox(x, floorY + colliderHeight / 2, z, w, colliderHeight, 0.9, rotationY || 0);
+    const colliderRecord = physics.fixedBoxes[physics.fixedBoxes.length - 1] || null;
+    seatingSystem?.registerSofa({
+      group,
+      width: w,
+      tag: options.seatTag,
+      slots: options.slots,
+      heightScale,
+      colliderRecord,
+    });
     return group;
   }
 
@@ -12765,10 +13458,7 @@
 
     addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45, { collection: "READING ROOM" });
     addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
-    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug, {
-      seatTag: "reading-room-sofa",
-      slots: 1,
-    });
+    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug, { seatTag: "reading-room-sofa", slots: 1, heightScale: MANSION_SEATING.readingRoomSofaHeightScale });
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
@@ -16902,6 +17592,9 @@
     );
     window.MrFeastFresh.runContestantRoutineForQA = (id, maxSeconds = 90) => (
       state.qa && mansionContestants ? mansionContestants.runContestantRoutineForQA(id, maxSeconds) : null
+    );
+    window.MrFeastFresh.advanceContestantSeatedIdleForQA = (id, seconds = 3.2) => (
+      state.qa && mansionContestants ? mansionContestants.advanceContestantSeatedIdleForQA(id, seconds) : null
     );
     window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
     window.MrFeastFresh.getWorkroomState = () => getWorkroomDiagnostics();

@@ -88,17 +88,36 @@ async function run() {
   assert(/const CONTESTANT_ACTIVITY\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the contestant activity state table");
   assert(/class MansionSeatingSystem/.test(runtimeSource), "runtime is missing MansionSeatingSystem");
   assert(/runContestantRoutineForQA/.test(runtimeSource), "runtime is missing deterministic contestant routine QA");
+  assert(/const CONTESTANT_SEATED_IDLE_MOTION\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the planted procedural seated-idle tuning table");
+  assert(/advanceContestantSeatedIdleForQA/.test(runtimeSource), "runtime is missing deterministic seated-idle motion QA");
+  assert(/readingRoomSofaHeightScale:\s*0\.77/.test(runtimeSource), "runtime is missing the lower Reading Room sofa tuning value");
+  assert(/regularChairHeightScale:\s*0\.86/.test(runtimeSource), "runtime is missing the fitted regular-chair height tuning value");
   assert(/getSeatingState/.test(runtimeSource), "runtime is missing focused seating diagnostics");
 
   for (const id of contestantIds) {
     const spec = manifest.characters.find((entry) => entry.id === id);
+    assert(spec?.animations?.idle?.file && spec.animations.idle.name === "neutral-idle", `${id} is missing its relaxed neutral idle clip`);
     assert(spec?.animations?.walk?.file, `${id} is missing its walk clip manifest entry`);
+    const idlePath = path.join(path.dirname(manifestPath), spec.animations.idle.file);
+    const idleReportPath = idlePath.replace(/\.glb$/i, ".animation-report.json");
     const walkPath = path.join(path.dirname(manifestPath), spec.animations.walk.file);
     const walkReportPath = walkPath.replace(/\.glb$/i, ".animation-report.json");
-    const [walkStats, walkReport] = await Promise.all([
+    const [idleStats, idleReport, walkStats, walkReport] = await Promise.all([
+      stat(idlePath),
+      readFile(idleReportPath, "utf8").then(JSON.parse),
       stat(walkPath),
       readFile(walkReportPath, "utf8").then(JSON.parse),
     ]);
+    assert(idleStats.size > 1_000 && idleStats.size <= 128 * 1024, `${id} neutral idle clip exceeds the 128 KiB budget (${idleStats.size})`);
+    assert(
+      idleReport.name === "neutral-idle"
+      && idleReport.stationary === true
+      && idleReport.loopClosed === true
+      && idleReport.channelsAfter?.rotation >= 20
+      && idleReport.channelsAfter?.translation === 0
+      && idleReport.channelsAfter?.scale === 0,
+      `${id} neutral idle must be a loop-closed stationary rotation-only action; got ${JSON.stringify(idleReport)}`,
+    );
     assert(walkStats.size > 1_000 && walkStats.size <= 512 * 1024, `${id} walk clip exceeds the 512 KiB budget (${walkStats.size})`);
     assert(
       walkReport.name === "walk"
@@ -135,6 +154,29 @@ async function run() {
     assert(state.seating.entries.some((entry) => entry.kind === "chair"), "seating registry should include standard chairs");
     assert(state.seating.entries.some((entry) => entry.kind === "sofa"), "seating registry should include sofa slots");
     assert(state.seating.occupied === 0 && state.seating.player.seated === false, "fresh seating should begin unoccupied");
+    const readingRoomSofa = state.seating.entries.find((entry) => entry.tag === "reading-room-sofa");
+    const standardSofaSlots = state.seating.entries.filter((entry) => entry.kind === "sofa" && entry.tag !== "reading-room-sofa");
+    const regularChairs = state.seating.entries.filter((entry) => entry.kind === "chair");
+    assert(readingRoomSofa?.heightScale === 0.77, `Reading Room sofa should use only the named lower profile; got ${JSON.stringify(readingRoomSofa)}`);
+    assert(readingRoomSofa.supportHeight >= 0.55 && readingRoomSofa.supportHeight <= 0.56, `Reading Room cushion top should sit near 0.55m; got ${JSON.stringify(readingRoomSofa)}`);
+    assert(Math.abs(readingRoomSofa.colliderHeight / 1.3 - readingRoomSofa.heightScale) <= 0.001, `Reading Room sofa collider must follow its visual height scale; got ${JSON.stringify(readingRoomSofa)}`);
+    assert(Math.abs(readingRoomSofa.colliderCenterHeight - readingRoomSofa.colliderHeight / 2) <= 0.001 && Math.abs(readingRoomSofa.colliderBottomHeight) <= 0.001, `Reading Room sofa collider must remain floor-anchored; got ${JSON.stringify(readingRoomSofa)}`);
+    assert(Math.abs(readingRoomSofa.colliderTopHeight - readingRoomSofa.visualBackTopHeight) <= 0.03, `Reading Room sofa collider must track the shortened visible back; got ${JSON.stringify(readingRoomSofa)}`);
+    assert(standardSofaSlots.length >= 2 && standardSofaSlots.every((entry) => (
+      Math.abs(entry.heightScale - 1) <= 0.001
+      && Math.abs(entry.supportHeight - 0.72) <= 0.001
+      && Math.abs(entry.colliderHeight - 1.3) <= 0.001
+      && Math.abs(entry.colliderBottomHeight) <= 0.001
+    )), `all non-Reading-Room sofas should retain their original height; got ${JSON.stringify(standardSofaSlots)}`);
+    assert(regularChairs.length >= 17 && regularChairs.every((entry) => (
+      Math.abs(entry.heightScale - 0.86) <= 0.001
+      && entry.supportHeight >= 0.52
+      && entry.supportHeight <= 0.53
+      && Math.abs(entry.supportHeight - entry.visualSeatTopHeight) <= 0.001
+      && Math.abs(entry.colliderHeight - 1.1) <= 0.001
+      && Math.abs(entry.colliderBottomHeight) <= 0.001
+      && Math.abs(entry.colliderTopHeight - entry.visualBackTopHeight) <= 0.03
+    )), `all standard chairs should share the fitted floor-anchored profile; got ${JSON.stringify(regularChairs)}`);
 
     // --- Real player E interaction and movement lock ------------------------
     const sofaSeat = state.seating.entries.find((entry) => entry.kind === "sofa" && !entry.occupiedBy);
@@ -142,7 +184,6 @@ async function run() {
     const approach = await desktop.evaluate((seatId) => window.MrFeastFresh.placePlayerNearSeatForQA(seatId), sofaSeat.id);
     assert(approach?.seatId === sofaSeat.id && approach.distance <= 2.35, `QA seat placement should use a real interaction approach; got ${JSON.stringify(approach)}`);
     await desktop.waitForFunction(() => /^sit\b/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 8000 });
-    const beforeSit = await diagnostics(desktop);
     await pressInteract(desktop);
     await desktop.waitForTimeout(100);
     state = await diagnostics(desktop);
@@ -151,11 +192,15 @@ async function run() {
     assert(state.hidden === false && state.player.hidden === false, "sitting must stay visible to cameras and danger");
     assert(state.player.movement.eyeHeight < state.player.movement.standingEyeHeight - 0.2, "sitting should visibly lower the player's eye line");
     assert(/^stand up$/i.test(state.prompt || ""), `the occupied seat should expose Stand up; got ${state.prompt}`);
+    const occupiedSofa = state.seating.entries.find((entry) => entry.id === sofaSeat.id);
+    assert(planarDistance(state.player, occupiedSofa.position) < 0.12, "the authoritative player body should move to the visible seated position");
+    assert(state.seating.player.colliderEnabled === false, "the player collider should be disabled only while embedded in furniture");
 
     const seatedEnergy = state.player.movement.energy;
+    const seatedPlayerPosition = state.player;
     await pressKey(desktop, "KeyC", "c");
     const afterBlockedMove = await holdMove(desktop, { sprint: true, seconds: 0.8 });
-    assert(planarDistance(beforeSit.player, afterBlockedMove.player) < 0.01, "W/Shift must not move the seated player capsule");
+    assert(planarDistance(seatedPlayerPosition, afterBlockedMove.player) < 0.01, "W/Shift must not move the seated player capsule");
     assert(afterBlockedMove.player.movement.mode === "seated" && !afterBlockedMove.player.movement.crouched && !afterBlockedMove.player.movement.sprinting, "seated input must not crouch or sprint");
     assert(Math.abs(afterBlockedMove.player.movement.energy - seatedEnergy) < 0.01, "blocked seated sprint input must not drain energy");
 
@@ -189,7 +234,7 @@ async function run() {
     assert(!state.seating.player.seated && state.seating.occupied === 0, "load should clear transient seat reservations rather than restore a stale seated state");
 
     // --- Chair cushion/back resolver and tamper compatibility ----------------
-    const chairSeat = state.seating.entries.find((entry) => entry.kind === "chair" && entry.tamperId);
+    const chairSeat = state.seating.entries.find((entry) => entry.kind === "chair" && entry.tamperId && !entry.tag && !entry.occupiedBy);
     assert(chairSeat, "standard chair seats should link to the existing tamper entry");
     await desktop.evaluate((seatId) => window.MrFeastFresh.placePlayerNearSeatForQA(seatId), chairSeat.id);
     await desktop.waitForFunction(() => /^sit\b/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 8000 });
@@ -206,14 +251,51 @@ async function run() {
       const initial = entryById(await diagnostics(desktop), id);
       assert(initial?.route?.points >= 3, `${id} needs a compact multi-point route; got ${JSON.stringify(initial?.route)}`);
       assert(initial.route.length >= 1 && initial.route.length <= 8, `${id} route should remain room-scale; got ${initial.route.length}m`);
+      assert(initial.route.seatStops >= 1 && initial.route.seatPauseSeconds >= 30 && initial.route.estimatedSeatedShare >= 0.6 && initial.route.behavior === "sit-dominant-hangout", `${id} should spend most of the routine seated, with walking used only between hangouts; got ${JSON.stringify(initial.route)}`);
+      assert(initial.route.seatPauseSeconds <= initial.route.maximumSeatDwellSeconds && initial.route.maximumSeatDwellSeconds < 300, `${id} seated dwell must be hard-clamped below five minutes; got ${JSON.stringify(initial.route)}`);
+      assert(initial.route.minimumPostSeatWalkDistance >= 0.35, `${id} needs a meaningful post-seat departure distance; got ${JSON.stringify(initial.route)}`);
       assert(initial.route.minimumPatrolClearance >= 1.65, `${id} route is too close to Mr. Feast's patrol; got ${initial.route.minimumPatrolClearance}m`);
+      assert(initial.route.minimumStaticClearance >= 0.28, `${id} route clips fixed furniture or walls; got ${initial.route.minimumStaticClearance}m clearance`);
       assert(initial.animation?.available?.includes("walk") && initial.animation.available.includes("idle"), `${id} should bind idle and walk actions; got ${JSON.stringify(initial.animation)}`);
       const result = await desktop.evaluate(({ id, seconds }) => window.MrFeastFresh.runContestantRoutineForQA(id, seconds), { id, seconds: 90 });
       assert(result?.completed === true && result.cycles >= 1, `${id} should complete a deterministic routine cycle; got ${JSON.stringify(result)}`);
       assert(result.activities.includes("walking") && result.activities.includes("idle") && result.activities.includes("seated"), `${id} routine should walk, pause, and sit; got ${JSON.stringify(result.activities)}`);
       assert(result.distanceTravelled >= 1 && result.teleports === 0, `${id} should materially walk without teleporting; got ${JSON.stringify(result)}`);
+      assert(result.segmentsTraversed >= (initial.route.points - 1) * 2 - 1, `${id} should visit the authored loop while skipping only the duplicate seat-exit waypoint; got ${JSON.stringify(result)}`);
+      assert(result.seatExitsCompleted >= 2, `${id} QA cycle should include both outbound and return seat exits; got ${JSON.stringify(result)}`);
+      assert(result.postSeatDeparturesCompleted === result.seatExitsCompleted && result.postSeatDeparturePending === false, `${id} must walk to a different hangout after every seat exit; got ${JSON.stringify(result)}`);
+      assert(result.minimumPostSeatDepartureDistance >= initial.route.minimumPostSeatWalkDistance, `${id} post-seat walk was too short; got ${JSON.stringify(result)}`);
+      assert(result.maximumRootStep <= 0.09, `${id} sit/stand ingress should interpolate without a visible root snap; got ${JSON.stringify(result)}`);
       assert(result.blockedSteps === 0 && result.maximumColliderOffset <= 0.03, `${id} collider should follow the rendered root; got ${JSON.stringify(result)}`);
-      assert(result.floorStayedFixed === true && result.minimumPatrolClearance >= 1.65, `${id} should remain on a route-safe authored floor; got ${JSON.stringify(result)}`);
+      assert(result.floorStayedFixed === true && result.minimumPatrolClearance >= 1.65 && result.minimumStaticClearance >= 0.28, `${id} should remain on a route-safe authored floor; got ${JSON.stringify(result)}`);
+      const settled = entryById(await diagnostics(desktop), id);
+      assert(settled.activity === "idle" && settled.animation.name === "idle" && settled.animation.neutralRestApplied === true, `${id} should end the routine in a relaxed arms-down idle; got ${JSON.stringify(settled.animation)}`);
+      await desktop.evaluate((contestantId) => {
+        window.MrFeastFresh.state.started = false;
+        window.MrFeastFresh.placePlayerNearContestantForQA(contestantId, 2.2);
+        window.MrFeastFresh.state.pitch = -0.16;
+        const speech = document.getElementById("mansion-speech");
+        if (speech) speech.hidden = true;
+      }, id);
+      await desktop.waitForTimeout(100);
+      await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `${id}-neutral-idle-desktop.png`) });
+      const seatedMotion = await desktop.evaluate((contestantId) => {
+        const seated = window.MrFeastFresh.seatContestantForQA(contestantId);
+        const probe = window.MrFeastFresh.advanceContestantSeatedIdleForQA(contestantId, 2.4);
+        window.MrFeastFresh.standContestantForQA(contestantId);
+        window.MrFeastFresh.state.started = true;
+        return { seated, probe };
+      }, id);
+      assert(seatedMotion.seated?.seated && seatedMotion.probe?.stillSeated && seatedMotion.probe.poseChanged, `${id} should use a living seated idle; got ${JSON.stringify(seatedMotion)}`);
+      assert(seatedMotion.probe.rootDrift <= 0.002 && seatedMotion.probe.maximumLowerBodyDelta <= 0.000001, `${id} seated motion must keep its root and lower body planted; got ${JSON.stringify(seatedMotion.probe)}`);
+      assert(seatedMotion.probe.maximumUpperBodyDelta >= 0.000001 && seatedMotion.probe.maximumUpperBodyDelta <= 0.02, `${id} seated upper-body motion should stay restrained; got ${JSON.stringify(seatedMotion.probe)}`);
+      if (id !== "juniper-cross") {
+        const chairFit = seatedMotion.probe.seatFit;
+        assert(chairFit?.kind === "chair", `${id} should use an authored standard chair; got ${JSON.stringify(chairFit)}`);
+        assert(chairFit.minimumThighCushionTopClearance >= 0.025, `${id}'s thigh line should visibly clear the regular-chair cushion; got ${JSON.stringify(chairFit)}`);
+        assert(chairFit.minimumHipSupportDepth >= 0.06 && chairFit.minimumKneeFrontClearance >= 0.22, `${id} should retain supported hips and forward knees on a regular chair; got ${JSON.stringify(chairFit)}`);
+        assert(chairFit.maximumThighCushionOverlapRatio <= 0.3 && chairFit.maximumToeFloorDistance <= 0.08, `${id} should avoid a buried/perched chair pose and keep floor-near boots; got ${JSON.stringify(chairFit)}`);
+      }
     }
 
     // Conversations must still bind to the contestant's live moving root.
@@ -229,11 +311,63 @@ async function run() {
     await desktop.waitForTimeout(100);
     await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "player-seated-desktop.png") });
     await desktop.evaluate(() => window.MrFeastFresh.standPlayerForQA());
+    const chairProofCases = [
+      { id: "mara-voss", tag: "library-writing-chair", views: [{ name: "three-quarter", orbit: Math.PI / 2 }] },
+      {
+        id: "kip-solano",
+        tag: "ballroom-sideline-chair",
+        views: [
+          { name: "front", orbit: 0 },
+          { name: "profile", orbit: Math.PI / 2 },
+          { name: "three-quarter", orbit: -Math.PI / 4 },
+        ],
+      },
+    ];
+    for (const proof of chairProofCases) {
+      const chairSeat = (await diagnostics(desktop)).seating.entries.find((entry) => entry.tag === proof.tag);
+      const standing = entryById(await diagnostics(desktop), proof.id);
+      const seated = await desktop.evaluate(({ id, seatId }) => window.MrFeastFresh.seatContestantForQA(id, seatId), { id: proof.id, seatId: chairSeat.id });
+      const probe = await desktop.evaluate((id) => window.MrFeastFresh.advanceContestantSeatedIdleForQA(id, 3.2), proof.id);
+      assert(seated?.seated && seated.poseApplied && probe?.seatFit?.kind === "chair", `${proof.id} should visibly use the fitted standard chair; got ${JSON.stringify({ seated, probe })}`);
+      assert(probe.seatFit.minimumThighCushionTopClearance >= 0.025 && probe.seatFit.maximumToeFloorDistance <= 0.08, `${proof.id} chair visual proof should preserve thigh and boot clearance; got ${JSON.stringify(probe.seatFit)}`);
+      const sitting = entryById(await diagnostics(desktop), proof.id);
+      assert(Math.abs(sitting.position.y - standing.position.y) <= 0.001, `fitting the chair must not lower ${proof.id}'s floor root; standing ${JSON.stringify(standing.position)}, seated ${JSON.stringify(sitting.position)}`);
+      for (const view of proof.views) {
+        await desktop.evaluate(({ id, orbit }) => {
+          window.MrFeastFresh.placePlayerNearContestantForQA(id, 2.05, orbit);
+          window.MrFeastFresh.state.pitch = -0.34;
+          const speech = document.getElementById("mansion-speech");
+          if (speech) speech.hidden = true;
+        }, { id: proof.id, orbit: view.orbit });
+        await desktop.waitForTimeout(120);
+        await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `${proof.id}-regular-chair-${view.name}.png`) });
+      }
+      await desktop.evaluate((id) => window.MrFeastFresh.standContestantForQA(id), proof.id);
+    }
+    const juniperBeforeSeat = entryById(await diagnostics(desktop), "juniper-cross");
     const seatedContestant = await desktop.evaluate(() => window.MrFeastFresh.seatContestantForQA("juniper-cross"));
     assert(seatedContestant?.seated && seatedContestant.poseApplied, `Juniper should visibly use the shared seated pose; got ${JSON.stringify(seatedContestant)}`);
-    await desktop.evaluate(() => window.MrFeastFresh.placePlayerNearContestantForQA("juniper-cross", 2.1));
+    const seatedIdleProbe = await desktop.evaluate(() => window.MrFeastFresh.advanceContestantSeatedIdleForQA("juniper-cross", 3.2));
+    assert(seatedIdleProbe?.stillSeated && seatedIdleProbe.poseChanged, `Juniper should visibly breathe and glance while seated; got ${JSON.stringify(seatedIdleProbe)}`);
+    assert(seatedIdleProbe.rootDrift <= 0.002 && seatedIdleProbe.maximumLowerBodyDelta <= 0.000001, `Juniper's seated root and lower body must remain planted; got ${JSON.stringify(seatedIdleProbe)}`);
+    assert(seatedIdleProbe.maximumUpperBodyDelta >= 0.000001 && seatedIdleProbe.maximumUpperBodyDelta <= 0.02, `Juniper's seated motion should be visible but restrained; got ${JSON.stringify(seatedIdleProbe)}`);
+    assert(seatedIdleProbe.seatFit?.kind === "sofa" && seatedIdleProbe.seatFit.forwardOffset >= 0.16, `Juniper should be moved toward the sofa front; got ${JSON.stringify(seatedIdleProbe?.seatFit)}`);
+    assert(seatedIdleProbe.seatFit.maximumThighCushionOverlapRatio <= 0.45 && seatedIdleProbe.seatFit.minimumKneeFrontClearance >= 0.18, `Juniper's legs should clear most of the sofa cushion/fascia; got ${JSON.stringify(seatedIdleProbe?.seatFit)}`);
+    assert(seatedIdleProbe.seatFit.minimumThighCushionTopClearance >= 0.025, `Juniper's thigh line should visibly clear the lowered cushion top; got ${JSON.stringify(seatedIdleProbe?.seatFit)}`);
+    assert(seatedIdleProbe.seatFit.minimumHipSupportDepth >= 0.08 && seatedIdleProbe.seatFit.maximumToeFloorDistance <= 0.08, `Juniper should keep supported hips and floor-near boots; got ${JSON.stringify(seatedIdleProbe?.seatFit)}`);
+    const juniperWhileSeated = entryById(await diagnostics(desktop), "juniper-cross");
+    assert(Math.abs(juniperWhileSeated.position.y - juniperBeforeSeat.position.y) <= 0.001, `shortening the sofa must not lower Juniper's floor-anchored root; before ${JSON.stringify(juniperBeforeSeat.position)}, seated ${JSON.stringify(juniperWhileSeated.position)}`);
+    await desktop.evaluate(() => {
+      window.MrFeastFresh.placePlayerNearContestantForQA("juniper-cross", 2.25, -0.62);
+      window.MrFeastFresh.state.pitch = -0.38;
+      const speech = document.getElementById("mansion-speech");
+      if (speech) speech.hidden = true;
+    });
     await desktop.waitForTimeout(120);
     await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "juniper-seated-desktop.png") });
+    await desktop.setViewportSize({ width: 1920, height: 1080 });
+    await desktop.waitForTimeout(120);
+    await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "juniper-seated-lowered-sofa-three-quarter.png") });
     await desktop.evaluate(() => window.MrFeastFresh.standContestantForQA("juniper-cross"));
     assert(desktopErrors.length === 0, `desktop console errors: ${desktopErrors.join(" | ")}`);
     await desktop.close();

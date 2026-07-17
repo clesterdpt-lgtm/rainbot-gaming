@@ -1460,9 +1460,9 @@ for (const view of ["mainHallBathroomShowerLight", "upperGrandBathroomShowerLigh
   check("40 bathroom fixture QA views", qaRoomViews.includes(`${view}:`), `missing bathroom inspection view ${view}`);
 }
 const cacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
-const runtimeAssetVersion = mrFeastNpcConfig.match(/assetVersion:\s*"([^"]+)"/)?.[1] || "";
+const runtimeCacheVersion = mansion.match(/const MANSION_RUNTIME_VERSION\s*=\s*"([^"]+)"/)?.[1] || "";
 check("closed door lintel fit", /height:\s*doorH\s*-\s*0\.02/.test(mansion), "hinged door leaves still leave a visible gap beneath the lintel");
-check("cache key", Boolean(runtimeAssetVersion) && cacheKey === runtimeAssetVersion, `mansion page cache key (${cacheKey || "missing"}) does not match the runtime asset version (${runtimeAssetVersion || "missing"})`);
+check("cache key", Boolean(runtimeCacheVersion) && cacheKey === runtimeCacheVersion, `mansion page cache key (${cacheKey || "missing"}) does not match the runtime cache version (${runtimeCacheVersion || "missing"})`);
 check("26 page-owned boot watchdog", /window\.__MR_FEAST_BOOT__\s*=/.test(page) && /setTimeout\([^;]*fail[\s\S]*?18000\)/.test(page), "the page shell cannot detect a missing or pre-init mansion runtime");
 check("26 page-owned boot watchdog", /aria-busy/.test(page) && /Retry loading/.test(page) && /mansion-enter/.test(page), "the page-owned watchdog does not restore an actionable entry button");
 check("26 runtime script error recovery", /mr-feast-mansion\.js[^>]+onerror=["'][^"']*__MR_FEAST_BOOT__[^"']*\.fail/.test(page), "a network error on the core mansion script leaves the page disabled");

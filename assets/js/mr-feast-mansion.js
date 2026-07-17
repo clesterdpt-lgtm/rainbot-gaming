@@ -10,6 +10,58 @@
   const LOCAL_LAUNCHER_NAME = "Open Mr Feast Mansion.command";
   const LOCAL_SERVER_GUIDANCE = `Mr Feast needs the local web server. Double-click “${LOCAL_LAUNCHER_NAME}” in the RainbotGaming folder; the launcher will open the correct page automatically.`;
   const SCRIPT_URL = document.currentScript && document.currentScript.src;
+  // Page/runtime cache identity is deliberately separate from the large NPC
+  // asset bundle so a JS-only mansion update does not re-fetch the GLB and
+  // motion files.
+  const MANSION_RUNTIME_VERSION = "20260716-sfx-upgrade-1";
+  // One local, license-audited sound manifest keeps every mansion cue behind
+  // MansionAudio's single master gain. The first step in each material set is
+  // the original shared Kenney clip; the extra variants prevent the familiar
+  // machine-gun repetition that made long walks sound synthetic.
+  const MANSION_AUDIO_ASSETS = Object.freeze({
+    rainBase: Object.freeze(["../Sounds/shared/ambience/rain-heavy-loop.mp3"]),
+    rainDetail: Object.freeze(["../Sounds/mr-feast/rain-concrete.ogg"]),
+    thunder: Object.freeze([
+      "../Sounds/mr-feast/thunder-01.ogg",
+      "../Sounds/mr-feast/thunder-02.ogg",
+      "../Sounds/mr-feast/thunder-03.ogg",
+      "../Sounds/mr-feast/thunder-04.ogg",
+    ]),
+    footstepWood: Object.freeze([
+      "../Sounds/shared/impact/footstep-wood.ogg",
+      "../Sounds/mr-feast/footstep-wood-01.ogg",
+      "../Sounds/mr-feast/footstep-wood-02.ogg",
+      "../Sounds/mr-feast/footstep-wood-03.ogg",
+      "../Sounds/mr-feast/footstep-wood-04.ogg",
+    ]),
+    footstepStone: Object.freeze([
+      "../Sounds/shared/impact/footstep-concrete.ogg",
+      "../Sounds/mr-feast/footstep-stone-01.ogg",
+      "../Sounds/mr-feast/footstep-stone-02.ogg",
+      "../Sounds/mr-feast/footstep-stone-03.ogg",
+      "../Sounds/mr-feast/footstep-stone-04.ogg",
+    ]),
+    footstepGrass: Object.freeze([
+      "../Sounds/shared/impact/footstep-grass.ogg",
+      "../Sounds/mr-feast/footstep-grass-01.ogg",
+      "../Sounds/mr-feast/footstep-grass-02.ogg",
+      "../Sounds/mr-feast/footstep-grass-03.ogg",
+      "../Sounds/mr-feast/footstep-grass-04.ogg",
+    ]),
+    doorOpen: Object.freeze(["../Sounds/mr-feast/door-open-01.ogg", "../Sounds/mr-feast/door-open-02.ogg"]),
+    doorClose: Object.freeze(["../Sounds/mr-feast/door-close-01.ogg", "../Sounds/mr-feast/door-close-02.ogg"]),
+    bookOpen: Object.freeze(["../Sounds/mr-feast/book-open.ogg"]),
+    bookClose: Object.freeze(["../Sounds/mr-feast/book-close.ogg"]),
+    bookFlip: Object.freeze(["../Sounds/mr-feast/book-flip-01.ogg", "../Sounds/mr-feast/book-flip-02.ogg"]),
+    cloth: Object.freeze(["../Sounds/mr-feast/cloth-01.ogg", "../Sounds/mr-feast/cloth-02.ogg"]),
+    metalClick: Object.freeze(["../Sounds/mr-feast/metal-click.ogg"]),
+    metalLatch: Object.freeze(["../Sounds/mr-feast/metal-latch.ogg"]),
+    lightOn: Object.freeze(["../Sounds/mr-feast/light-switch-on.ogg"]),
+    lightOff: Object.freeze(["../Sounds/mr-feast/light-switch-off.ogg"]),
+    keypadTick: Object.freeze(["../Sounds/mr-feast/keypad-tick.ogg"]),
+    keypadConfirm: Object.freeze(["../Sounds/mr-feast/keypad-confirm.ogg"]),
+    keypadError: Object.freeze(["../Sounds/mr-feast/keypad-error.ogg"]),
+  });
   const THREE = window.THREE;
   const boot = window.__MR_FEAST_BOOT__;
 
@@ -54,6 +106,8 @@
     energyFill: $("mansion-energy-fill"),
     security: $("mansion-security"),
     securityStatus: $("mansion-security-status"),
+    speech: $("mansion-speech"),
+    speechText: $("mansion-speech-text"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
     menuMaximize: $("mansion-menu-maximize"),
@@ -948,6 +1002,94 @@
     exitPosition: Object.freeze({ x: -13.2, z: -1.58, yaw: 0 }),
   });
 
+  const MANSION_TAMPER = Object.freeze({
+    noticeSeconds: 4.2,
+    fixSeconds: 2.8,
+    retamperCooldownSeconds: 6,
+    blockedRetrySeconds: 24,
+    alarmRequeueSeconds: 2,
+    portraitTiltRadians: 0.17,
+    chairPullDistance: 0.34,
+    chairPullYawRadians: 0.62,
+    chairColliderCenterY: 0.55,
+  });
+  const MR_FEAST_SPEECH = Object.freeze({
+    minSeconds: 4.2,
+    maxSeconds: 9,
+    perCharacterSeconds: 0.05,
+    talkPauseSeconds: 2.8,
+    anchorHeightMeters: 2.24,
+    anchorLiftMeters: 0.34,
+    edgeMarginPx: 18,
+    tailClearancePx: 14,
+    lines: Object.freeze({
+      "noticed-portrait": Object.freeze([
+        "Who has tilted “{title}”? The dead sit for their portraits once.",
+        "A crooked frame. A crooked guest, somewhere.",
+        "“{title}” did not hang itself askew. I am coming.",
+        "The portraits complain so quietly. I always hear them.",
+        "Crooked art. In my gallery. Unforgivable — and yet, expected.",
+        "I curated that wall. I will re-curate whoever touched it.",
+      ]),
+      "fixed-portrait": Object.freeze([
+        "Level. As all things end.",
+        "There. “{title}” forgives us. Probably.",
+        "Straight again. The eyes follow better this way.",
+        "Hung true. Like the best of my guests.",
+      ]),
+      "noticed-chair": Object.freeze([
+        "A chair has wandered. Chairs do not wander.",
+        "Diagonal seating. How avant-garde. No.",
+        "Who pulled that chair? It seats a guest you cannot see.",
+        "The table setting is a promise. Someone is breaking it.",
+        "That chair was aligned to the millimeter. I measured. I always measure.",
+        "Furniture out of line. The house grinds its teeth.",
+      ]),
+      "fixed-chair": Object.freeze([
+        "Tucked in. Like the rest of them.",
+        "Aligned. The unseen diner thanks no one.",
+        "There. Every seat faces its consequence again.",
+        "Order restored. The dinner party never truly ends.",
+      ]),
+      "noticed-fridge": Object.freeze([
+        "The cold is escaping. Nothing else may.",
+        "An open refrigerator. The condiments are shivering.",
+        "Who left the cold door singing? The chill is for the menu.",
+        "I feel a draft with a price tag on it.",
+        "The refrigerator weeps into my kitchen. Excuse me.",
+        "Cold air is expensive. Guests are free.",
+      ]),
+      "fixed-fridge": Object.freeze([
+        "Sealed. The house keeps its secrets chilled.",
+        "Closed. What is inside must stay patient.",
+        "The chill is safe again. As are you. For now.",
+        "Shut. A refrigerator is a promise about later.",
+      ]),
+      talk: Object.freeze([
+        "Every guest arrives twice. Once through the door, once through the menu.",
+        "You walk loudly for someone who wishes to be a rumor.",
+        "The show asks nothing of you but appetite.",
+        "I have counted the spoons. I always count the spoons.",
+        "Twelve seasons, twelve toasts. The thirteenth glass kept its opinion.",
+        "Enjoy the library. The books enjoy being held. Briefly.",
+        "Dinner is always almost ready.",
+        "The patrons adore you. They have such particular tastes.",
+        "Mind the cameras. They blink slower than I do.",
+        "The house was generous once. Then it learned bookkeeping.",
+        "Sleep is a room with no cameras. I would not linger there.",
+        "You remind me of a contestant. All of them, actually.",
+        "The storm stays outside by arrangement. We honor our arrangements here.",
+        "Ask me nothing, and I will tell you no menu.",
+      ]),
+      busy: Object.freeze([
+        "Not now. Something is crooked.",
+        "One moment. The house is embarrassing itself.",
+        "We will chat once the disorder has apologized.",
+        "Later. Entropy has made a request, and I am declining it.",
+      ]),
+    }),
+  });
+
   const CONTESTANT_13 = Object.freeze({
     title: "Contestant 13",
     objectives: Object.freeze({
@@ -1611,6 +1753,8 @@
   let mrFeastNpc = null;
   let cameraSecurity = null;
   let monitorWallSystem = null;
+  let tamperSystem = null;
+  let speechSystem = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -2582,6 +2726,9 @@
       this.responseBlockedReason = null;
       this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
       this.qaLastCameraResponse = null;
+      this.housekeeping = { active: null, fixesCompleted: 0 };
+      this.qaLastHousekeepingRun = null;
+      this.talkHitbox = null;
       this.lastDt = 1 / 60;
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
       scene.add(this.root);
@@ -2765,6 +2912,7 @@
         this.headEndBone = this.bonesByName.get("head_end") || null;
         this.bindHipsScale = this.hipsBone ? this.hipsBone.scale.clone() : null;
         this.cacheFaceMorphBindings();
+        this.registerTalkInteraction(model);
         if (state.qa) this.registerFaceQaInteraction(model);
         this.contactShadow = new THREE.Mesh(
           new THREE.CircleGeometry(1, 24),
@@ -3390,6 +3538,7 @@
 
     respondToCameraAlarm(alarm) {
       if (!alarm) return this.getDiagnostics();
+      if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       const startId = this.nearestResponseStartId();
       if (!this.responseResume) {
         const resumeNode = this.responseGraph.nodes.get(startId);
@@ -3420,11 +3569,141 @@
 
     beginSecuritySearch() {
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
-      this.searchRemaining = CAMERA_SECURITY.searchSeconds;
+      // A housekeeping errand reuses the bounded searching state as the
+      // fixing pause; a real camera response keeps the longer sweep search.
+      this.searchRemaining = this.housekeeping.active ? MANSION_TAMPER.fixSeconds : CAMERA_SECURITY.searchSeconds;
       this.searchElapsed = 0;
       this.searchBaseYaw = this.root.rotation.y;
       this.moving = false;
       this.fadeToAction("idle");
+    }
+
+    canAcceptHousekeeping() {
+      if (this.loadStatus !== "ready" || this.activeCameraAlarm || this.housekeeping.active) return false;
+      return this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL
+        || this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING
+        || this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING;
+    }
+
+    respondToHousekeepingTask(task) {
+      if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
+      if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
+      if (this.housekeeping.active) return { accepted: false, reason: "busy" };
+      const startId = this.nearestResponseStartId();
+      const targetId = this.nearestResponseTargetId(task.position);
+      if (!targetId) return { accepted: false, reason: "no response node" };
+      const path = this.findResponsePath(startId, targetId);
+      if (!path.length && startId !== targetId) return { accepted: false, reason: "no unlocked response route" };
+      if (!this.responseResume) {
+        const resumeNode = this.responseGraph.nodes.get(startId);
+        this.responseResume = {
+          nodeId: startId,
+          routeIndex: Number.isInteger(resumeNode?.routeIndex) ? resumeNode.routeIndex : this.waypointIndex,
+          pauseRemaining: this.pauseRemaining,
+        };
+      }
+      this.housekeeping.active = { ...task, targetNodeId: targetId };
+      this.responseCurrentNodeId = startId;
+      this.responsePath = path;
+      this.responseBlockedReason = null;
+      this.transitionSecurityResponse("alarm");
+      this.pauseRemaining = 0;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      return { accepted: true, targetNodeId: targetId };
+    }
+
+    abandonHousekeepingToAlarm() {
+      const task = this.housekeeping.active;
+      this.housekeeping.active = null;
+      if (task) tamperSystem?.releaseTask(task.id);
+    }
+
+    cancelHousekeepingTask(taskId) {
+      if (!this.housekeeping.active || this.housekeeping.active.id !== taskId) return false;
+      this.housekeeping.active = null;
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
+      if (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING) this.beginSecurityReturn();
+      return true;
+    }
+
+    completeHousekeepingFix() {
+      const task = this.housekeeping.active;
+      this.housekeeping.active = null;
+      if (task) {
+        tamperSystem?.completeFix(task.id);
+        this.housekeeping.fixesCompleted += 1;
+      }
+      if (tamperSystem?.nextDispatch()) return;
+      this.beginSecurityReturn();
+    }
+
+    registerTalkInteraction(model) {
+      if (this.talkHitbox) return;
+      const interaction = {
+        type: "mr-feast-talk",
+        id: "mr-feast-converse",
+        getLabel: () => "Speak with Mr. Feast",
+        activate: () => this.converse(),
+      };
+      const material = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+      // The invisible catch-all stops below the face so the QA-only
+      // expression-cycle interaction registered on the model keeps owning
+      // close-up face aims; body aims land here in every mode.
+      this.talkHitbox = box({
+        name: "mr-feast-talk-hitbox",
+        w: 0.95, h: 1.62, d: 0.95,
+        x: 0, y: 0.81, z: 0,
+        material, parent: this.root, cast: false, receive: false,
+      });
+      addInteractionTarget(this.talkHitbox, interaction);
+      // Outside QA the model itself also converses, so aiming at his face
+      // still offers the prompt; registerFaceQaInteraction overrides this
+      // mapping afterward when the QA harness is active.
+      if (model) addInteractionTarget(model, interaction);
+    }
+
+    converse() {
+      if (this.loadStatus !== "ready" || !speechSystem) return null;
+      const busy = Boolean(this.housekeeping.active) || this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL;
+      if (!busy) this.pauseRemaining = Math.max(this.pauseRemaining, MR_FEAST_SPEECH.talkPauseSeconds);
+      return speechSystem.sayFromPool(busy ? "busy" : "talk");
+    }
+
+    runHousekeepingForQA(maxSeconds = 240) {
+      if (!state.qa || this.loadStatus !== "ready") {
+        return { completed: false, simulatedSeconds: 0, states: [...this.responseStateTrace], fixesCompleted: 0, error: "Mr Feast housekeeping is not ready" };
+      }
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(maxSeconds) || 240, 1, 600);
+      const fixesBefore = this.housekeeping.fixesCompleted;
+      const teleportsBefore = this.responseTeleports;
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let simulatedSeconds = 0;
+      while ((this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL || this.housekeeping.active) && simulatedSeconds < limit) {
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(fixedStep);
+        }
+        tamperSystem?.update(fixedStep);
+        this.update(fixedStep);
+        simulatedSeconds += fixedStep;
+      }
+      this.qaAnimationFrozen = true;
+      this.wanderingEnabled = false;
+      this.moving = false;
+      this.root.updateMatrixWorld(true);
+      this.qaLastHousekeepingRun = {
+        completed: this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL && !this.housekeeping.active,
+        simulatedSeconds: Number(simulatedSeconds.toFixed(2)),
+        states: [...this.responseStateTrace],
+        teleports: this.responseTeleports - teleportsBefore,
+        distanceTravelled: Number(this.responseDistance.toFixed(3)),
+        fixesCompleted: this.housekeeping.fixesCompleted - fixesBefore,
+        blockedReason: this.responseBlockedReason,
+      };
+      return this.qaLastHousekeepingRun;
     }
 
     beginSecurityReturn() {
@@ -3521,13 +3800,21 @@
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING) {
         this.searchRemaining = Math.max(0, this.searchRemaining - dt);
         this.searchElapsed += dt;
-        this.root.rotation.y = this.searchBaseYaw
-          + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2) * CAMERA_SECURITY.searchHalfAngle;
+        if (this.housekeeping.active) {
+          // Fixing, not sweeping: he squares up to the disorder and stays on it.
+          this.faceTarget(this.housekeeping.active.position);
+        } else {
+          this.root.rotation.y = this.searchBaseYaw
+            + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2) * CAMERA_SECURITY.searchHalfAngle;
+        }
         this.moving = false;
         this.fadeToAction("idle");
         this.closeClearedRouteDoors(null);
         this.stepAnimationAndFace(dt);
-        if (this.searchRemaining <= 0) this.beginSecurityReturn();
+        if (this.searchRemaining <= 0) {
+          if (this.housekeeping.active) this.completeHousekeepingFix();
+          else this.beginSecurityReturn();
+        }
       } else {
         this.updateSecurityPath(dt);
       }
@@ -3750,6 +4037,8 @@
       this.responseBlockedReason = null;
       this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
       this.qaLastCameraResponse = null;
+      this.housekeeping = { active: null, fixesCompleted: 0 };
+      this.qaLastHousekeepingRun = null;
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
       this.moving = this.loadStatus === "ready";
@@ -4185,6 +4474,17 @@
           states: [...this.responseStateTrace],
           qaLastResponse: this.qaLastCameraResponse,
         },
+        housekeeping: {
+          state: this.housekeeping.active
+            ? (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING ? "fixing" : "responding")
+            : "idle",
+          activeTaskId: this.housekeeping.active?.id || null,
+          activeTaskKind: this.housekeeping.active?.kind || null,
+          fixesCompleted: this.housekeeping.fixesCompleted,
+          queued: tamperSystem ? tamperSystem.queuedCount() : 0,
+          lastRun: this.qaLastHousekeepingRun,
+        },
+        pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         currentAnimation: this.currentAnimation,
@@ -4756,6 +5056,7 @@
       input.left = false;
       input.right = false;
       teleport(this.hidePosition.x, this.floorY, this.hidePosition.z, this.hidePosition.yaw, 0);
+      if (audioSystem) audioSystem.hide("enter");
       if (dom.stage) dom.stage.classList.add("is-hiding");
       if (dom.hiddenStatus) {
         dom.hiddenStatus.hidden = false;
@@ -4770,6 +5071,7 @@
       state.activeHideSpot = null;
       state.isHidden = false;
       teleport(this.exitPosition.x, this.floorY, this.exitPosition.z, this.exitPosition.yaw, 0);
+      if (audioSystem) audioSystem.hide("exit");
       if (dom.stage) dom.stage.classList.remove("is-hiding");
       if (dom.hiddenStatus) dom.hiddenStatus.hidden = true;
       state.currentInteraction = null;
@@ -5013,7 +5315,7 @@
       this.story.bookRead = true;
       this.addJournalEntry(CONTESTANT_13.journal.book);
       this.showDiscovery("A message inside the misfiled book", CONTESTANT_13.journal.book.body);
-      if (audioSystem) audioSystem.ping(392, 0.42, 0.06, "sine");
+      if (audioSystem) audioSystem.book("open");
       this.updateUI();
     }
 
@@ -5027,7 +5329,7 @@
         contestant13Scene.shovel.visible = false;
       }
       this.showDiscovery("Concealed garden shovel", "The book's garden clue was right. XIII is cut into the handle—the hedge maze is the next lead.");
-      if (audioSystem) audioSystem.ping(145, 0.25, 0.08, "triangle");
+      if (audioSystem) audioSystem.pickup("object");
       this.updateUI();
     }
 
@@ -5060,8 +5362,8 @@
         if (contestant13Scene.digHole) contestant13Scene.digHole.visible = true;
         this.showDiscovery("Buried basement key B-13", "A brass basement service key, Badge 13, and a wax-sealed tape reel emerge from the rain-black soil.");
         if (audioSystem) {
-          audioSystem.ping(118, 0.34, 0.08, "triangle");
-          audioSystem.ping(236, 0.4, 0.05, "sine");
+          audioSystem.pickup("key");
+          audioSystem.ping(236, 0.4, 0.035, "sine");
         }
       });
       if (!started) this.story.digging = false;
@@ -5088,7 +5390,7 @@
       this.addJournalEntry(CONTESTANT_13.journal.basement);
       this.showDiscovery("Basement threshold unlocked", "The B-13 key turns. The service stair descends toward the Archive and whatever the show keeps below.");
       if (audioSystem) {
-        audioSystem.ping(196, 0.28, 0.07, "square");
+        audioSystem.key("unlock");
         audioSystem.door(true);
       }
       this.updateUI();
@@ -5107,7 +5409,7 @@
       this.story.archiveCageUnlocked = true;
       if (contestant13Scene.archiveCageDoor) contestant13Scene.archiveCageDoor.rotation.y = -1.25;
       this.showDiscovery("Evidence cage unlocked", "The buried reel fits the recorder inside. A typed routing card mentions two separate camera feeds.");
-      if (audioSystem) audioSystem.ping(310, 0.24, 0.07, "square");
+      if (audioSystem) audioSystem.key("unlock");
       this.updateUI();
     }
 
@@ -5465,6 +5767,7 @@
           if (child !== dom.bookReader) child.inert = true;
         }
       }
+      if (audioSystem) audioSystem.book("open");
       updateInteractionPrompt();
       requestAnimationFrame(() => dom.bookClose?.focus({ preventScroll: true }));
       return true;
@@ -5482,6 +5785,7 @@
       }
       const returnTarget = this.returnFocus && this.returnFocus.isConnected ? this.returnFocus : dom.canvas;
       this.returnFocus = null;
+      if (audioSystem) audioSystem.book("close");
       if (restoreFocus) returnTarget?.focus({ preventScroll: true });
       else dom.canvas?.focus({ preventScroll: true });
       updateInteractionPrompt();
@@ -5520,6 +5824,432 @@
         })),
         clueBookReserved: true,
       };
+    }
+  }
+
+  class MrFeastSpeechSystem {
+    constructor() {
+      this.container = dom.speech;
+      this.textElement = dom.speechText;
+      this.active = null;
+      this.remaining = 0;
+      this.lastCategory = null;
+      this.lastLineByCategory = new Map();
+      this.linesSpoken = 0;
+      this.lastScreen = { x: 0, y: 0, clamped: false };
+      this.anchor = new THREE.Vector3();
+      this.viewPosition = new THREE.Vector3();
+    }
+
+    pickLine(category, context = {}) {
+      const pool = MR_FEAST_SPEECH.lines[category] || [];
+      if (!pool.length) return null;
+      const previous = this.lastLineByCategory.get(category);
+      let index = Math.floor(Math.random() * pool.length);
+      if (pool.length > 1 && index === previous) index = (index + 1) % pool.length;
+      this.lastLineByCategory.set(category, index);
+      return pool[index].replace(/\{title\}/g, context.title || "the artwork");
+    }
+
+    sayFromPool(category, context = {}) {
+      const text = this.pickLine(category, context);
+      if (!text) return null;
+      return this.say(category, text);
+    }
+
+    say(category, text) {
+      const duration = clamp(
+        MR_FEAST_SPEECH.minSeconds + text.length * MR_FEAST_SPEECH.perCharacterSeconds,
+        MR_FEAST_SPEECH.minSeconds,
+        MR_FEAST_SPEECH.maxSeconds,
+      );
+      this.active = { category, text };
+      this.remaining = duration;
+      this.lastCategory = category;
+      this.linesSpoken += 1;
+      if (this.textElement) this.textElement.textContent = text;
+      if (this.container) this.container.hidden = false;
+      this.updatePlacement();
+      return { category, text, seconds: Number(duration.toFixed(2)) };
+    }
+
+    dismiss() {
+      this.active = null;
+      this.remaining = 0;
+      if (this.container) this.container.hidden = true;
+    }
+
+    update(dt) {
+      if (!this.active) return;
+      this.remaining -= dt;
+      if (this.remaining <= 0) {
+        this.dismiss();
+        return;
+      }
+      this.updatePlacement();
+    }
+
+    updatePlacement() {
+      if (!this.active || !this.container) return;
+      const npc = mrFeastNpc;
+      if (!npc || npc.loadStatus !== "ready") {
+        this.container.hidden = true;
+        return;
+      }
+      if (npc.headEndBone) {
+        npc.headEndBone.getWorldPosition(this.anchor);
+      } else {
+        this.anchor.copy(npc.root.position);
+        this.anchor.y += MR_FEAST_SPEECH.anchorHeightMeters;
+      }
+      this.anchor.y += MR_FEAST_SPEECH.anchorLiftMeters;
+      const width = dom.canvas?.clientWidth || 1;
+      const height = dom.canvas?.clientHeight || 1;
+      this.viewPosition.copy(this.anchor).applyMatrix4(camera.matrixWorldInverse);
+      const behind = this.viewPosition.z > -0.05;
+      let pixelX;
+      let pixelY;
+      if (behind) {
+        // The host is behind the camera: pin the bubble along the top edge,
+        // offset toward whichever side he is actually on, so a hiding player
+        // still sees that the bait landed.
+        const side = Math.abs(this.viewPosition.x) > 0.0001 ? Math.sign(this.viewPosition.x) : 0;
+        pixelX = width / 2 - side * width;
+        pixelY = -height;
+      } else {
+        this.viewPosition.copy(this.anchor).project(camera);
+        pixelX = (this.viewPosition.x * 0.5 + 0.5) * width;
+        pixelY = (0.5 - this.viewPosition.y * 0.5) * height;
+      }
+      // The bubble is absolutely positioned in the stage, while the ray math
+      // above lives in canvas space; honor any canvas inset inside the stage.
+      pixelX += dom.canvas?.offsetLeft || 0;
+      pixelY += dom.canvas?.offsetTop || 0;
+      const bubbleWidth = this.container.offsetWidth || 0;
+      const bubbleHeight = this.container.offsetHeight || 0;
+      const margin = MR_FEAST_SPEECH.edgeMarginPx;
+      const tail = MR_FEAST_SPEECH.tailClearancePx;
+      const minX = margin + bubbleWidth / 2;
+      const maxX = Math.max(minX, width - margin - bubbleWidth / 2);
+      const minY = margin + bubbleHeight + tail;
+      const maxY = Math.max(minY, height - margin);
+      const clampedX = clamp(pixelX, minX, maxX);
+      const clampedY = clamp(pixelY, minY, maxY);
+      const clamped = behind || Math.abs(clampedX - pixelX) > 0.5 || Math.abs(clampedY - pixelY) > 0.5;
+      this.container.style.left = `${clampedX.toFixed(1)}px`;
+      this.container.style.top = `${clampedY.toFixed(1)}px`;
+      this.container.dataset.clamped = clamped ? "true" : "false";
+      this.lastScreen = { x: clampedX, y: clampedY, clamped };
+    }
+
+    getDiagnostics() {
+      return {
+        visible: Boolean(this.active),
+        text: this.active?.text || null,
+        category: this.active?.category || null,
+        secondsRemaining: Number(this.remaining.toFixed(2)),
+        lastCategory: this.lastCategory,
+        linesSpoken: this.linesSpoken,
+        x: Number(this.lastScreen.x.toFixed(1)),
+        y: Number(this.lastScreen.y.toFixed(1)),
+        clamped: this.lastScreen.clamped,
+      };
+    }
+  }
+
+  class TamperSystem {
+    constructor() {
+      this.entries = [];
+      this.byId = new Map();
+      this.hitMaterial = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+      this.fixesCompleted = 0;
+      this.cancelledErrands = 0;
+      this.noticesDispatched = 0;
+      this.counts = { portrait: 0, chair: 0, fridge: 0 };
+    }
+
+    createEntry(kind, options) {
+      const entry = {
+        id: `tamper-${kind}-${this.counts[kind] + 1}`,
+        kind,
+        label: options.label,
+        title: options.title || null,
+        position: options.position,
+        tampered: false,
+        noticeRemaining: 0,
+        cooldownRemaining: 0,
+        dispatched: false,
+        apply: options.apply,
+        isTampered: options.isTampered || null,
+        visualOffset: options.visualOffset || (() => 0),
+        colliderOffset: options.colliderOffset || (() => 0),
+      };
+      this.entries.push(entry);
+      this.byId.set(entry.id, entry);
+      this.counts[kind] += 1;
+      return entry;
+    }
+
+    registerPortrait({ group, title, width, height }) {
+      const entry = this.createEntry("portrait", {
+        label: "portrait",
+        title,
+        position: { x: group.position.x, y: group.position.y, z: group.position.z },
+        visualOffset: () => group.rotation.z,
+      });
+      entry.tiltSign = this.counts.portrait % 2 === 0 ? 1 : -1;
+      entry.apply = (tampered) => {
+        group.rotation.z = tampered ? entry.tiltSign * MANSION_TAMPER.portraitTiltRadians : 0;
+        renderer.shadowMap.needsUpdate = true;
+      };
+      const hit = box({
+        name: `${entry.id}-hitbox`,
+        w: width + 0.3, h: height + 0.3, d: 0.16,
+        x: 0, y: 0, z: 0.05,
+        material: this.hitMaterial, parent: group, cast: false, receive: false,
+      });
+      addInteractionTarget(hit, this.createToggleInteraction(entry, {
+        tamperLabel: "Tilt the portrait",
+        restoreLabel: "Straighten the portrait",
+      }));
+      return entry;
+    }
+
+    registerChair({ group, body, x, z, floorY, rotationY }) {
+      const entry = this.createEntry("chair", {
+        label: "chair",
+        position: { x, y: floorY, z },
+      });
+      entry.group = group;
+      entry.body = body;
+      entry.home = { x, z, yaw: rotationY || 0 };
+      entry.floorY = floorY;
+      entry.pullSign = this.counts.chair % 2 === 0 ? 1 : -1;
+      entry.apply = (tampered) => this.applyChairPose(entry, tampered);
+      entry.visualOffset = () => {
+        const delta = group.rotation.y - entry.home.yaw;
+        return Math.atan2(Math.sin(delta), Math.cos(delta));
+      };
+      entry.colliderOffset = () => {
+        const translation = body.translation();
+        return Math.hypot(translation.x - entry.home.x, translation.z - entry.home.z);
+      };
+      const hit = box({
+        name: `${entry.id}-hitbox`,
+        w: 0.78, h: 1.34, d: 0.78,
+        x: 0, y: 0.67, z: 0.02,
+        material: this.hitMaterial, parent: group, cast: false, receive: false,
+      });
+      addInteractionTarget(hit, this.createToggleInteraction(entry, {
+        tamperLabel: "Pull the chair askew",
+        restoreLabel: "Straighten the chair",
+      }));
+      return entry;
+    }
+
+    applyChairPose(entry, tampered) {
+      const { group, body, home, floorY } = entry;
+      const yaw = tampered ? home.yaw + entry.pullSign * MANSION_TAMPER.chairPullYawRadians : home.yaw;
+      // The backrest sits on local +z, away from the table the chair was
+      // aimed at, so sliding along the home yaw pulls the seat outward.
+      const distance = tampered ? MANSION_TAMPER.chairPullDistance : 0;
+      const nextX = home.x + Math.sin(home.yaw) * distance;
+      const nextZ = home.z + Math.cos(home.yaw) * distance;
+      group.position.set(nextX, floorY, nextZ);
+      group.rotation.y = yaw;
+      body.setTranslation({ x: nextX, y: floorY + MANSION_TAMPER.chairColliderCenterY, z: nextZ }, false);
+      const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0));
+      body.setRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w }, false);
+      renderer.shadowMap.needsUpdate = true;
+    }
+
+    registerRefrigerator(fridge) {
+      const entry = this.createEntry("fridge", {
+        label: "refrigerator",
+        position: { x: fridge.root.position.x, y: fridge.root.position.y, z: fridge.root.position.z },
+        isTampered: () => Boolean(fridge.open),
+        visualOffset: () => Math.abs(fridge.angle),
+      });
+      entry.fridge = fridge;
+      entry.apply = (tampered) => {
+        if (!tampered && fridge.open) fridge.setOpen(false);
+      };
+      return entry;
+    }
+
+    createToggleInteraction(entry, labels) {
+      return {
+        type: `tamper-${entry.kind}`,
+        id: entry.id,
+        getLabel: () => {
+          if (this.isBeingCorrected(entry)) return "Mr. Feast is attending to this";
+          return entry.tampered ? labels.restoreLabel : labels.tamperLabel;
+        },
+        activate: () => this.toggle(entry),
+      };
+    }
+
+    isBeingCorrected(entry) {
+      return Boolean(
+        mrFeastNpc?.housekeeping?.active
+        && mrFeastNpc.housekeeping.active.id === entry.id
+        && mrFeastNpc.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING,
+      );
+    }
+
+    toggle(entry) {
+      if (this.isBeingCorrected(entry)) return false;
+      return this.setTampered(entry, !entry.tampered, "player");
+    }
+
+    setTampered(entry, tampered, cause) {
+      if (entry.isTampered || entry.tampered === tampered) return false;
+      entry.tampered = tampered;
+      entry.apply(tampered);
+      if (tampered) entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
+      else this.handleRestored(entry, cause);
+      return true;
+    }
+
+    handleRestored(entry, cause) {
+      entry.noticeRemaining = 0;
+      entry.cooldownRemaining = MANSION_TAMPER.retamperCooldownSeconds;
+      if (!entry.dispatched) return;
+      entry.dispatched = false;
+      if (cause !== "mr-feast") {
+        this.cancelledErrands += 1;
+        mrFeastNpc?.cancelHousekeepingTask(entry.id);
+      }
+    }
+
+    update(dt, dispatchCollector = null) {
+      if (!state.started) return;
+      for (const entry of this.entries) {
+        if (entry.cooldownRemaining > 0) entry.cooldownRemaining = Math.max(0, entry.cooldownRemaining - dt);
+        if (entry.isTampered) {
+          const derived = entry.isTampered();
+          if (derived !== entry.tampered) {
+            entry.tampered = derived;
+            if (derived) entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
+            else this.handleRestored(entry, "player");
+          }
+        }
+        if (!entry.tampered || entry.dispatched) continue;
+        entry.noticeRemaining = Math.max(0, entry.noticeRemaining - dt);
+        if (entry.noticeRemaining <= 0) this.dispatch(entry, dispatchCollector);
+      }
+    }
+
+    dispatch(entry, dispatchCollector = null) {
+      const npc = mrFeastNpc;
+      if (!npc || !npc.canAcceptHousekeeping()) return false;
+      const response = npc.respondToHousekeepingTask(this.taskFor(entry));
+      if (!response?.accepted) {
+        entry.noticeRemaining = MANSION_TAMPER.blockedRetrySeconds;
+        return false;
+      }
+      entry.dispatched = true;
+      this.noticesDispatched += 1;
+      speechSystem?.sayFromPool(`noticed-${entry.kind}`, { title: entry.title });
+      dispatchCollector?.push(entry.id);
+      return true;
+    }
+
+    taskFor(entry) {
+      return {
+        id: entry.id,
+        kind: entry.kind,
+        title: entry.title,
+        position: { x: entry.position.x, y: entry.position.y, z: entry.position.z },
+      };
+    }
+
+    nextDispatch(dispatchCollector = null) {
+      for (const entry of this.entries) {
+        if (entry.tampered && !entry.dispatched && entry.noticeRemaining <= 0 && this.dispatch(entry, dispatchCollector)) return true;
+      }
+      return false;
+    }
+
+    completeFix(taskId) {
+      const entry = this.byId.get(taskId);
+      if (!entry) return false;
+      entry.apply(false);
+      entry.tampered = false;
+      entry.dispatched = false;
+      entry.noticeRemaining = 0;
+      entry.cooldownRemaining = MANSION_TAMPER.retamperCooldownSeconds;
+      this.fixesCompleted += 1;
+      speechSystem?.sayFromPool(`fixed-${entry.kind}`, { title: entry.title });
+      return true;
+    }
+
+    releaseTask(taskId) {
+      const entry = this.byId.get(taskId);
+      if (!entry) return;
+      entry.dispatched = false;
+      entry.noticeRemaining = MANSION_TAMPER.alarmRequeueSeconds;
+    }
+
+    queuedCount() {
+      return this.entries.filter((entry) => entry.tampered && !entry.dispatched).length;
+    }
+
+    getDiagnostics() {
+      return {
+        counts: { ...this.counts },
+        tamperedCount: this.entries.filter((entry) => entry.tampered).length,
+        queued: this.queuedCount(),
+        fixesCompleted: this.fixesCompleted,
+        cancelledErrands: this.cancelledErrands,
+        noticesDispatched: this.noticesDispatched,
+        entries: this.entries.map((entry) => ({
+          id: entry.id,
+          kind: entry.kind,
+          label: entry.label,
+          title: entry.title,
+          position: { x: Number(entry.position.x.toFixed(2)), z: Number(entry.position.z.toFixed(2)) },
+          tampered: entry.tampered,
+          dispatched: entry.dispatched,
+          noticeRemaining: Number(entry.noticeRemaining.toFixed(2)),
+          cooldownRemaining: Number(entry.cooldownRemaining.toFixed(2)),
+          visualOffset: Number(entry.visualOffset().toFixed(3)),
+          colliderOffset: Number(entry.colliderOffset().toFixed(3)),
+        })),
+      };
+    }
+
+    setTamperedForQA(id, tampered = true) {
+      if (!state.qa) return null;
+      const entry = this.byId.get(id);
+      if (!entry) return null;
+      if (entry.kind === "fridge") {
+        entry.fridge.setOpen(Boolean(tampered), true);
+        const derived = entry.isTampered();
+        if (derived !== entry.tampered) {
+          entry.tampered = derived;
+          if (derived) entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
+          else this.handleRestored(entry, "player");
+        }
+      } else {
+        this.setTampered(entry, Boolean(tampered), "player");
+      }
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return null;
+      const dispatched = [];
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(seconds) || 0, 0, 600);
+      state.started = true;
+      let elapsed = 0;
+      while (elapsed < limit) {
+        this.update(fixedStep, dispatched);
+        elapsed += fixedStep;
+        if (dispatched.length) break;
+      }
+      return { seconds: Number(elapsed.toFixed(2)), dispatched, queued: this.queuedCount() };
     }
   }
 
@@ -5603,7 +6333,7 @@
     state.workroom.keypadInput += normalized;
     state.workroom.keypadStatus = "idle";
     updateWorkroomKeypadPresentation();
-    if (audioSystem) audioSystem.ping(220 + Number(normalized) * 14, 0.045, 0.018, "square");
+    if (audioSystem) audioSystem.keypad("digit");
     return getWorkroomDiagnostics();
   }
 
@@ -5611,6 +6341,7 @@
     state.workroom.keypadInput = "";
     state.workroom.keypadStatus = "idle";
     updateWorkroomKeypadPresentation();
+    if (audioSystem) audioSystem.keypad("clear");
     return getWorkroomDiagnostics();
   }
 
@@ -5624,24 +6355,21 @@
     state.workroom.keypadInput = candidate;
     if (candidate.length !== WORKROOM_SECURITY.codeLength) {
       state.workroom.keypadStatus = "incomplete";
-      if (audioSystem) audioSystem.ping(132, 0.12, 0.035, "square");
+      if (audioSystem) audioSystem.keypad("incomplete");
       updateWorkroomKeypadPresentation();
       return getWorkroomDiagnostics();
     }
     if (candidate !== WORKROOM_SECURITY.code) {
       state.workroom.deniedAttempts += 1;
       state.workroom.keypadStatus = "denied";
-      if (audioSystem) audioSystem.ping(104, 0.22, 0.055, "sawtooth");
+      if (audioSystem) audioSystem.keypad("denied");
       updateWorkroomKeypadPresentation();
       return getWorkroomDiagnostics();
     }
     state.workroom.unlocked = true;
     state.workroom.keypadStatus = "accepted";
     syncWorkroomDoorState();
-    if (audioSystem) {
-      audioSystem.ping(330, 0.12, 0.04, "square");
-      audioSystem.ping(660, 0.2, 0.035, "sine");
-    }
+    if (audioSystem) audioSystem.keypad("accepted");
     contestant13Quest?.showDiscovery("Workroom access granted", "The keypad releases the only remaining entrance. The surveillance hub is open.", 5200);
     return getWorkroomDiagnostics();
   }
@@ -6831,6 +7559,7 @@
       stockedStorages.push(this);
       refrigerators.push(this);
       animatedObjects.push(this);
+      if (tamperSystem) tamperSystem.registerRefrigerator(this);
     }
 
     setOpen(open, silent) {
@@ -8192,7 +8921,8 @@
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "chair-leg", radius: 0.035, radiusBottom: 0.045, height: 0.47, segments: 9, x: sx * 0.2, y: 0.235, z: sz * 0.19, material: material || M.darkWood, parent: group });
     for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: group });
     box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.velvet, parent: group });
-    physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
+    const chairBody = physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
+    if (tamperSystem) tamperSystem.registerChair({ group, body: chairBody, x, z, floorY, rotationY: rotationY || 0 });
     return group;
   }
 
@@ -9360,6 +10090,7 @@
       sphere({ name: "portrait-face-shadow", radius: Math.min(width, height) * 0.16, widthSegments: 12, heightSegments: 8, x: 0, y: height * 0.12, z: 0.065, material: M.soot, parent: group, cast: false });
       box({ name: "portrait-silhouette", w: width * 0.45, h: height * 0.42, d: 0.02, x: 0, y: -height * 0.22, z: 0.066, material: M.blackWood, parent: group, cast: false });
     }
+    if (tamperSystem) tamperSystem.registerPortrait({ group, title: artPanel.userData.title, width, height });
     return group;
   }
 
@@ -11700,11 +12431,30 @@
       this.master = null;
       this.rain = null;
       this.waterLoops = new Map();
+      this.assetPaths = Array.from(new Set(Object.values(MANSION_AUDIO_ASSETS).flat()));
+      this.buffers = new Map();
+      this.loadingAssets = new Map();
+      this.pendingAssets = new Set(this.assetPaths);
+      this.failedAssets = new Map();
+      this.lastVariant = new Map();
+      this.cueCounts = Object.create(null);
+      this.activeVoices = 0;
+      this.thunderState = { playCount: 0, lastDelay: -1 };
+      this.footsteps = {
+        lastPosition: null,
+        distance: 0,
+        count: 0,
+        lastSurface: null,
+        left: false,
+      };
       if (!this.ctx) return;
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.58;
+      // Stay silent until the trusted Enter click resumes Web Audio and
+      // deliberately enables the full mix.
+      this.master.gain.value = 0.0001;
       this.master.connect(this.ctx.destination);
       this.makeRain();
+      this.preloadPromise = null;
     }
 
     async unlock() {
@@ -11712,7 +12462,125 @@
       if (this.ctx.state !== "running") await this.ctx.resume();
       state.audioEnabled = true;
       this.master.gain.setTargetAtTime(0.58, this.ctx.currentTime, 0.06);
+      this.resetFootsteps();
       updateAudioButton();
+      if (!this.preloadPromise) {
+        // Fetch and decode only after a trusted gesture. The procedural rain
+        // is already available, so exploration starts immediately while the
+        // compact local sample bank warms in the background.
+        this.preloadPromise = this.preloadSfx();
+        void this.loadRecordedRain();
+      }
+    }
+
+    decodeAudioBuffer(encoded) {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (buffer) => {
+          if (settled) return;
+          settled = true;
+          resolve(buffer);
+        };
+        const fail = (error) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+        try {
+          const result = this.ctx.decodeAudioData(encoded, finish, fail);
+          if (result && typeof result.then === "function") result.then(finish, fail);
+        } catch (error) {
+          fail(error);
+        }
+      });
+    }
+
+    loadAsset(path) {
+      if (this.buffers.has(path)) return Promise.resolve(this.buffers.get(path));
+      if (this.loadingAssets.has(path)) return this.loadingAssets.get(path);
+      const loading = (async () => {
+        if (!this.ctx || !SCRIPT_URL) throw new Error("Web Audio is unavailable");
+        const url = new URL(path, SCRIPT_URL).href;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`audio asset http ${response.status}`);
+        const buffer = await this.decodeAudioBuffer(await response.arrayBuffer());
+        this.buffers.set(path, buffer);
+        this.failedAssets.delete(path);
+        return buffer;
+      })().catch((error) => {
+        this.failedAssets.set(path, error instanceof Error ? error.message : String(error));
+        throw error;
+      }).finally(() => {
+        this.pendingAssets.delete(path);
+      });
+      this.loadingAssets.set(path, loading);
+      return loading;
+    }
+
+    preloadSfx() {
+      return Promise.allSettled(this.assetPaths.map((path) => this.loadAsset(path)));
+    }
+
+    assetsFor(key) {
+      return MANSION_AUDIO_ASSETS[key] || [];
+    }
+
+    availableAssets(key) {
+      return this.assetsFor(key).filter((path) => this.buffers.has(path));
+    }
+
+    playSample(key, options = {}) {
+      if (!this.ctx || !this.master || !state.audioEnabled) return false;
+      const candidates = this.availableAssets(key);
+      if (!candidates.length) return false;
+      let index = Math.floor(Math.random() * candidates.length);
+      const previous = this.lastVariant.get(key);
+      if (candidates.length > 1 && candidates[index] === previous) index = (index + 1) % candidates.length;
+      const path = candidates[index];
+      this.lastVariant.set(key, path);
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.buffers.get(path);
+      const baseRate = Math.max(0.25, Number(options.rate) || 1);
+      const rateVariance = Math.max(0, Number(options.rateVariance) || 0);
+      source.playbackRate.value = baseRate + (Math.random() * 2 - 1) * rateVariance;
+      const gain = this.ctx.createGain();
+      gain.gain.value = Math.max(0.0001, Number(options.volume) || 0.1);
+      let tail = source;
+      if (options.highpass) {
+        const high = this.ctx.createBiquadFilter();
+        high.type = "highpass";
+        high.frequency.value = Math.max(10, Number(options.highpass));
+        tail.connect(high);
+        tail = high;
+      }
+      if (options.lowpass) {
+        const low = this.ctx.createBiquadFilter();
+        low.type = "lowpass";
+        low.frequency.value = Math.max(20, Number(options.lowpass));
+        tail.connect(low);
+        tail = low;
+      }
+      if (this.ctx.createStereoPanner && Number.isFinite(Number(options.pan))) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = clamp(Number(options.pan), -1, 1);
+        tail.connect(panner);
+        tail = panner;
+      }
+      tail.connect(gain).connect(this.master);
+      const when = this.ctx.currentTime + Math.max(0, Number(options.delay) || 0);
+      this.activeVoices += 1;
+      source.onended = () => { this.activeVoices = Math.max(0, this.activeVoices - 1); };
+      try {
+        source.start(when, Math.max(0, Number(options.offset) || 0));
+        return true;
+      } catch (_) {
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        return false;
+      }
+    }
+
+    markCue(name) {
+      this.cueCounts[name] = (this.cueCounts[name] || 0) + 1;
     }
 
     makeNoiseBuffer(seconds) {
@@ -11740,9 +12608,8 @@
       muffle.type = "lowpass";
       muffle.frequency.value = 8200;
       gain.connect(muffle).connect(this.master);
-      this.rain = { gain, muffle, source: null, mode: "pending", level: 0.5, exposure: 1 };
+      this.rain = { gain, muffle, source: null, mode: "pending", level: 0.5, exposure: 1, layers: 0 };
       this.startProceduralRain();
-      void this.loadRecordedRain();
     }
 
     startProceduralRain() {
@@ -11776,6 +12643,7 @@
       hiss.start();
       this.rain.mode = "procedural";
       this.rain.level = 0.5;
+      this.rain.layers = 2;
       this.rain.source = {
         stop: () => {
           try { body.stop(); } catch (_) { /* Already stopped. */ }
@@ -11786,32 +12654,65 @@
 
     async loadRecordedRain() {
       if (!this.ctx || !SCRIPT_URL) return;
+      const [basePath = "../Sounds/shared/ambience/rain-heavy-loop.mp3"] = this.assetsFor("rainBase");
+      const [detailPath] = this.assetsFor("rainDetail");
+      let baseBuffer;
       try {
-        const url = new URL("../Sounds/shared/ambience/rain-heavy-loop.mp3", SCRIPT_URL).href;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`rain loop http ${response.status}`);
-        const encoded = await response.arrayBuffer();
-        const buffer = await new Promise((resolve, reject) => {
-          const result = this.ctx.decodeAudioData(encoded, resolve, reject);
-          if (result && typeof result.then === "function") result.then(resolve, reject);
-        });
-        if (!this.rain) return;
-        if (this.rain.source) this.rain.source.stop();
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-        // Trim the MP3 encoder padding out of the loop points so the 26s
-        // seam stays buried in the rain texture instead of clicking.
-        source.loopStart = 0.06;
-        source.loopEnd = Math.max(1, buffer.duration - 0.06);
-        source.connect(this.rain.gain);
-        source.start();
-        this.rain.source = source;
-        this.rain.mode = "recorded";
-        this.rain.level = 0.9;
+        baseBuffer = await this.loadAsset(basePath);
+      } catch (_) {
+        // If even the established MP3 bed fails, keep the procedural storm.
+        return;
+      }
+      if (!this.rain) return;
+      if (this.rain.source) this.rain.source.stop();
+      const recordedSources = [];
+      const source = this.ctx.createBufferSource();
+      source.buffer = baseBuffer;
+      source.loop = true;
+      // Trim the MP3 encoder padding out of the loop points so the 26s
+      // seam stays buried in the rain texture instead of clicking.
+      source.loopStart = 0.06;
+      source.loopEnd = Math.max(1, baseBuffer.duration - 0.06);
+      const baseGain = this.ctx.createGain();
+      baseGain.gain.value = 0.78;
+      source.connect(baseGain).connect(this.rain.gain);
+      source.start();
+      recordedSources.push(source);
+      const recordedRain = {
+        stop: () => {
+          for (const recordedSource of recordedSources) {
+            try { recordedSource.stop(); } catch (_) { /* Already stopped. */ }
+          }
+        },
+      };
+      this.rain.source = recordedRain;
+      this.rain.mode = "recorded";
+      this.rain.level = 0.82;
+      this.rain.layers = 1;
+      this.setRainExposure(this.rain.exposure);
+
+      // The long concrete recording is optional detail. A fetch or codec
+      // failure must not discard the already-running recorded roof bed.
+      try {
+        const detailBuffer = await this.loadAsset(detailPath);
+        if (!this.rain || this.rain.source !== recordedRain) return;
+        const detail = this.ctx.createBufferSource();
+        detail.buffer = detailBuffer;
+        detail.loop = true;
+        detail.playbackRate.value = 0.997;
+        const detailHigh = this.ctx.createBiquadFilter();
+        detailHigh.type = "highpass";
+        detailHigh.frequency.value = 520;
+        const detailGain = this.ctx.createGain();
+        detailGain.gain.value = 0.18;
+        detail.connect(detailHigh).connect(detailGain).connect(this.rain.gain);
+        detail.start(0, Math.min(9.5, Math.max(0, detailBuffer.duration - 0.25)));
+        recordedSources.push(detail);
+        this.rain.level = 0.86;
+        this.rain.layers = 2;
         this.setRainExposure(this.rain.exposure);
       } catch (_) {
-        // Offline or file:// context: the procedural wash keeps storming.
+        // One recorded layer is still a better and more faithful fallback.
       }
     }
 
@@ -11833,9 +12734,12 @@
       if (!this.rain) return { mode: "unavailable", exposure: 0 };
       return {
         mode: this.rain.mode,
+        layers: this.rain.layers,
         exposure: Number(this.rain.exposure.toFixed(3)),
         gain: Number(this.rain.gain.gain.value.toFixed(4)),
         muffleHz: Math.round(this.rain.muffle.frequency.value),
+        baseReady: this.availableAssets("rainBase").length > 0,
+        detailReady: this.availableAssets("rainDetail").length > 0,
       };
     }
 
@@ -11847,7 +12751,7 @@
     }
 
     ping(frequency, duration, gainValue, type) {
-      if (!this.ctx || !state.audioEnabled) return;
+      if (!this.ctx || !state.audioEnabled) return false;
       const now = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -11858,24 +12762,101 @@
       osc.connect(gain).connect(this.master);
       osc.start(now);
       osc.stop(now + duration + 0.02);
+      return true;
     }
 
     door(opening) {
-      this.ping(opening ? 92 : 74, 0.48, 0.055, "sawtooth");
-      setTimeout(() => this.ping(opening ? 410 : 260, 0.08, 0.025, "triangle"), opening ? 80 : 220);
+      const cue = opening ? "doorOpen" : "doorClose";
+      const played = this.playSample(cue, {
+        volume: opening ? 0.19 : 0.22,
+        rateVariance: 0.035,
+        pan: (Math.random() * 2 - 1) * 0.08,
+        lowpass: 5200,
+      });
+      if (!played) {
+        if (!this.ping(opening ? 92 : 74, 0.48, 0.055, "sawtooth")) return false;
+        setTimeout(() => this.ping(opening ? 410 : 260, 0.08, 0.025, "triangle"), opening ? 80 : 220);
+      }
+      this.markCue(cue);
+      return true;
     }
 
     cabinet(opening) {
-      this.ping(opening ? 165 : 118, 0.24, 0.035, "triangle");
+      const played = this.playSample(opening ? "doorOpen" : "doorClose", {
+        volume: 0.105,
+        rate: 1.22,
+        rateVariance: 0.035,
+        lowpass: 4300,
+      });
+      if (!played && !this.ping(opening ? 165 : 118, 0.24, 0.035, "triangle")) return false;
+      this.markCue(opening ? "cabinetOpen" : "cabinetClose");
+      return true;
     }
 
     light(on) {
-      this.ping(on ? 820 : 510, 0.06, 0.028, "square");
+      const played = this.playSample(on ? "lightOn" : "lightOff", { volume: 0.115, rateVariance: 0.018 });
+      if (!played && !this.ping(on ? 820 : 510, 0.06, 0.028, "square")) return false;
+      this.markCue("lightSwitch");
+      return true;
+    }
+
+    book(action) {
+      const opening = action === "open";
+      const cue = opening ? "bookOpen" : "bookClose";
+      const played = this.playSample(cue, { volume: opening ? 0.16 : 0.13, rateVariance: 0.025, lowpass: 6500 });
+      if (!played && !this.ping(opening ? 330 : 240, 0.12, 0.022, "triangle")) return false;
+      if (opening) this.playSample("bookFlip", { volume: 0.055, delay: 0.18, rateVariance: 0.04, pan: 0.06 });
+      this.markCue(opening ? "bookOpen" : "bookClose");
+      return true;
+    }
+
+    hide(action) {
+      const entering = action === "enter";
+      const played = this.playSample("cloth", {
+        volume: entering ? 0.145 : 0.115,
+        rate: entering ? 0.92 : 1.08,
+        rateVariance: 0.04,
+        lowpass: 5200,
+      });
+      if (!played && !this.ping(entering ? 120 : 155, 0.18, 0.018, "triangle")) return false;
+      this.markCue(entering ? "hideEnter" : "hideExit");
+      return true;
+    }
+
+    pickup(kind) {
+      const isKey = kind === "key";
+      const played = this.playSample(isKey ? "metalClick" : "metalLatch", {
+        volume: isKey ? 0.14 : 0.11,
+        rate: isKey ? 1.04 : 1.16,
+        rateVariance: 0.035,
+      });
+      if (!played && !this.ping(isKey ? 620 : 210, 0.16, 0.028, "triangle")) return false;
+      this.markCue(isKey ? "pickupKey" : "pickupObject");
+      return true;
+    }
+
+    key(action) {
+      const unlocking = action === "unlock";
+      const played = this.playSample("metalLatch", { volume: 0.17, rate: unlocking ? 0.92 : 1.08, rateVariance: 0.025 });
+      if (!played && !this.ping(unlocking ? 196 : 260, 0.22, 0.04, "square")) return false;
+      this.playSample("metalClick", { volume: 0.075, delay: 0.1, rateVariance: 0.03 });
+      this.markCue(unlocking ? "keyUnlock" : "keyUse");
+      return true;
+    }
+
+    keypad(kind) {
+      const key = kind === "accepted" ? "keypadConfirm" : (kind === "denied" || kind === "incomplete") ? "keypadError" : "keypadTick";
+      const played = this.playSample(key, { volume: key === "keypadTick" ? 0.075 : 0.11, rateVariance: key === "keypadTick" ? 0.025 : 0 });
+      if (!played && !this.ping(key === "keypadConfirm" ? 660 : key === "keypadError" ? 118 : 310, 0.09, 0.02, "square")) return false;
+      this.markCue(key === "keypadConfirm" ? "keypadConfirm" : key === "keypadError" ? "keypadError" : "keypadTick");
+      return true;
     }
 
     fireplace(on) {
-      this.ping(on ? 145 : 82, on ? 0.24 : 0.32, 0.034, on ? "triangle" : "sawtooth");
+      if (!this.ping(on ? 145 : 82, on ? 0.24 : 0.32, 0.034, on ? "triangle" : "sawtooth")) return false;
       setTimeout(() => this.ping(on ? 520 : 190, 0.07, 0.018, "triangle"), on ? 70 : 120);
+      this.markCue(on ? "fireplaceOn" : "fireplaceOff");
+      return true;
     }
 
     toiletFlush() {
@@ -11899,6 +12880,7 @@
       source.start(now);
       source.stop(now + 2.55);
       this.ping(58, 1.35, 0.035, "sine");
+      this.markCue("toiletFlush");
     }
 
     setWater(name, on, kind) {
@@ -11940,34 +12922,147 @@
       }, 240);
     }
 
-    thunder(delay) {
-      if (!this.ctx || !state.audioEnabled) return;
+    thunder(delay = 0) {
+      if (!this.ctx || !state.audioEnabled) return false;
+      const safeDelay = Math.max(0, Number(delay) || 0);
+      this.thunderState.lastDelay = safeDelay;
       setTimeout(() => {
         if (!this.ctx || !state.audioEnabled) return;
-        const now = this.ctx.currentTime;
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = this.makeNoiseBuffer(2.6);
-        const low = this.ctx.createBiquadFilter();
-        low.type = "lowpass";
-        low.frequency.setValueAtTime(580, now);
-        low.frequency.exponentialRampToValueAtTime(85, now + 2.5);
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.exponentialRampToValueAtTime(0.42, now + 0.06);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
-        noise.connect(low).connect(gain).connect(this.master);
-        noise.start(now);
-        noise.stop(now + 2.55);
-        this.ping(46, 2.2, 0.19, "sine");
-      }, delay * 1000);
+        const recorded = this.playSample("thunder", {
+          volume: 0.31,
+          rate: 0.98,
+          rateVariance: 0.055,
+          pan: (Math.random() * 2 - 1) * 0.32,
+          lowpass: safeDelay > 1 ? 2100 : 4200,
+        });
+        if (recorded) {
+          // A very quiet sub tail lends weight on laptop speakers without
+          // masking the transient and long roll in the field recording.
+          this.ping(42, 2.4, 0.045, "sine");
+        } else {
+          const now = this.ctx.currentTime;
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = this.makeNoiseBuffer(2.6);
+          const low = this.ctx.createBiquadFilter();
+          low.type = "lowpass";
+          low.frequency.setValueAtTime(580, now);
+          low.frequency.exponentialRampToValueAtTime(85, now + 2.5);
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.34, now + 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+          noise.connect(low).connect(gain).connect(this.master);
+          noise.start(now);
+          noise.stop(now + 2.55);
+          this.ping(46, 2.2, 0.12, "sine");
+        }
+        this.thunderState.playCount += 1;
+        this.markCue("thunder");
+      }, safeDelay * 1000);
+      return true;
+    }
+
+    footstepSurface(position = physics?.playerPosition()) {
+      if (!position) return "wood";
+      if (state.currentFloor === "BASEMENT" || position.y < -1.65) return "stone";
+      if (outdoorRoomNames.has(state.currentRoom)) {
+        return state.currentRoom === "FRONT DRIVE" || state.currentRoom === "POOL TERRACE" ? "stone" : "grass";
+      }
+      return "wood";
+    }
+
+    resetFootsteps() {
+      const position = physics?.playerPosition();
+      this.footsteps.lastPosition = position ? { x: position.x, z: position.z } : null;
+      this.footsteps.distance = 0;
+    }
+
+    updateFootsteps(fixedDt) {
+      if (!physics) return;
+      const position = physics.playerPosition();
+      const previous = this.footsteps.lastPosition;
+      this.footsteps.lastPosition = { x: position.x, z: position.z };
+      if (!previous) return;
+      const travelled = Math.hypot(position.x - previous.x, position.z - previous.z);
+      if (travelled > 1.5) {
+        this.footsteps.distance = 0;
+        return;
+      }
+      const canStep = fixedDt > 0
+        && state.started
+        && state.audioEnabled
+        && physics.grounded
+        && !state.isHidden
+        && !state.journalOpen
+        && !state.menuOpen
+        && !state.workroom.keypadOpen
+        && state.movement.speed > 0;
+      if (!canStep) {
+        this.footsteps.distance = 0;
+        return;
+      }
+      this.footsteps.distance += travelled;
+      const stride = state.movement.crouched ? 0.5 : state.movement.sprinting ? 0.82 : 0.68;
+      let emitted = 0;
+      while (this.footsteps.distance >= stride && emitted < 2) {
+        this.footsteps.distance -= stride;
+        const surface = this.footstepSurface(position);
+        const key = surface === "stone" ? "footstepStone" : surface === "grass" ? "footstepGrass" : "footstepWood";
+        const baseVolume = state.movement.crouched ? 0.075 : state.movement.sprinting ? 0.155 : 0.115;
+        const played = this.playSample(key, {
+          volume: baseVolume * state.movement.stealthNoiseMultiplier,
+          rate: state.movement.sprinting ? 1.05 : state.movement.crouched ? 0.94 : 1,
+          rateVariance: 0.06,
+          pan: this.footsteps.left ? -0.09 : 0.09,
+          lowpass: state.movement.crouched ? 3900 : 6200,
+        });
+        if (!played && !this.ping(surface === "stone" ? 105 : surface === "grass" ? 82 : 125, 0.065, baseVolume * 0.22, "triangle")) break;
+        this.footsteps.left = !this.footsteps.left;
+        this.footsteps.count += 1;
+        this.footsteps.lastSurface = surface;
+        this.markCue(`footstep${surface[0].toUpperCase()}${surface.slice(1)}`);
+        emitted += 1;
+      }
+    }
+
+    thunderDiagnostics() {
+      const paths = this.assetsFor("thunder");
+      const pending = paths.some((path) => this.pendingAssets.has(path));
+      const available = this.availableAssets("thunder").length;
+      return {
+        mode: available > 0 && !pending ? "recorded-ready" : pending ? "recorded-loading" : "procedural",
+        variantsReady: available,
+        playCount: this.thunderState.playCount,
+        lastDelay: this.thunderState.lastDelay,
+      };
+    }
+
+    getDiagnostics() {
+      return {
+        enabled: state.audioEnabled,
+        contextState: this.ctx ? this.ctx.state : "unavailable",
+        expectedAssets: this.assetPaths.length,
+        loadedAssets: Array.from(this.buffers.keys()).sort(),
+        pendingAssets: Array.from(this.pendingAssets).sort(),
+        failedAssets: Array.from(this.failedAssets, ([path, error]) => ({ path, error })),
+        activeVoices: this.activeVoices,
+        cueCounts: { ...this.cueCounts },
+        rain: this.rainDiagnostics(),
+        thunder: this.thunderDiagnostics(),
+        footsteps: {
+          count: this.footsteps.count,
+          lastSurface: this.footsteps.lastSurface,
+          strideProgress: Number(this.footsteps.distance.toFixed(3)),
+        },
+      };
     }
   }
 
   function updateAudioButton() {
     if (!dom.audio) return;
     dom.audio.setAttribute("aria-pressed", String(state.audioEnabled));
-    dom.audio.setAttribute("aria-label", state.audioEnabled ? "Mute storm audio" : "Enable storm audio");
-    dom.audio.title = state.audioEnabled ? "Mute storm audio" : "Enable storm audio";
+    dom.audio.setAttribute("aria-label", state.audioEnabled ? "Mute game audio" : "Enable game audio");
+    dom.audio.title = state.audioEnabled ? "Mute game audio" : "Enable game audio";
   }
 
   function resize() {
@@ -12425,7 +13520,10 @@
         setMoveIntent(event.code, true);
       }
       if (event.code === "KeyE" && !event.repeat) activateCurrentInteraction();
-      if (event.code === "KeyM" && !event.repeat && audioSystem) audioSystem.setEnabled(!state.audioEnabled);
+      if (event.code === "KeyM" && !event.repeat && audioSystem) {
+        if (state.audioEnabled) audioSystem.setEnabled(false);
+        else void audioSystem.unlock().catch(() => {});
+      }
     });
     window.addEventListener("keyup", (event) => setMoveIntent(event.code, false));
     window.addEventListener("blur", clearMovementInput);
@@ -13165,6 +14263,8 @@
     if (!state.menuOpen && !state.workroom.keypadOpen) {
       for (const object of animatedObjects) object.update(dt);
       if (cameraSecurity) cameraSecurity.update(dt);
+      if (tamperSystem) tamperSystem.update(dt);
+      if (speechSystem) speechSystem.update(dt);
       for (const system of yardWaterSystems) system.update(dt);
       updateLightTransitions(dt);
       if (rainSystem) rainSystem.update(dt);
@@ -13177,6 +14277,7 @@
       accumulator += dt;
       while (accumulator >= 1 / 60) {
         updatePlayer(1 / 60);
+        audioSystem?.updateFootsteps(1 / 60);
         accumulator -= 1 / 60;
       }
     } else {
@@ -13242,6 +14343,7 @@
       .filter((storage) => storage.stockKind === "dishes")
       .reduce((total, storage) => total + storage.itemCount, 0);
     return {
+      runtimeVersion: MANSION_RUNTIME_VERSION,
       ready: state.ready,
       started: state.started,
       startupPhase: state.startupPhase,
@@ -13284,6 +14386,8 @@
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
+      tamper: tamperSystem?.getDiagnostics() || null,
+      speech: speechSystem?.getDiagnostics() || null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
@@ -13374,11 +14478,22 @@
         uniqueArtIds: Array.from(new Set(portraitPlacements.map((placement) => placement.artId).filter(Boolean))),
       },
       audio: {
-        enabled: state.audioEnabled,
+        ...(audioSystem ? audioSystem.getDiagnostics() : {
+          enabled: state.audioEnabled,
+          contextState: "unavailable",
+          expectedAssets: 0,
+          loadedAssets: [],
+          pendingAssets: [],
+          failedAssets: [],
+          cueCounts: {},
+          rain: null,
+          thunder: null,
+          footsteps: { count: 0, lastSurface: null, strideProgress: 0 },
+        }),
+        rain: audioSystem ? audioSystem.rainDiagnostics() : null,
         activeWaterLoops: audioSystem && audioSystem.waterLoops
           ? Array.from(audioSystem.waterLoops.entries()).filter(([, entry]) => entry.active).map(([name]) => name)
           : [],
-        rain: audioSystem ? audioSystem.rainDiagnostics() : null,
         rainApertures: rainApertures.length,
         exteriorRainDoors: exteriorRainDoors.length,
       },
@@ -13488,6 +14603,7 @@
     physics.playerBody.setNextKinematicTranslation({ x, y: floorY + PLAYER.halfHeight + PLAYER.radius + 0.03, z });
     state.yaw = yaw == null ? Math.PI : yaw;
     state.pitch = pitch == null ? 0 : pitch;
+    audioSystem?.resetFootsteps();
     syncCamera();
     // QA views and hide-spot transitions may query the look ray before the
     // next render. Keep the camera world matrix in step with the teleport so
@@ -13510,6 +14626,27 @@
       requestAnimationFrame(step);
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
+    window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
+    window.MrFeastFresh.playAudioCueForQA = (cue) => {
+      if (!state.qa || !audioSystem) return null;
+      if (cue === "thunder") audioSystem.thunder(0);
+      else if (cue === "doorOpen") audioSystem.door(true);
+      else if (cue === "doorClose") audioSystem.door(false);
+      else if (cue === "light") audioSystem.light(true);
+      else if (cue === "bookOpen") audioSystem.book("open");
+      else if (cue === "bookClose") audioSystem.book("close");
+      return audioSystem.getDiagnostics();
+    };
+    window.MrFeastFresh.setDoorForAudioQA = (name, open) => {
+      if (!state.qa || !audioSystem) return null;
+      const query = String(name || "").toLowerCase();
+      const door = animatedObjects.find((object) => object instanceof HingedDoor && object.name.toLowerCase().includes(query));
+      if (!door) return null;
+      const nextOpen = Boolean(open);
+      if (door.open !== nextOpen) door.setOpen(nextOpen);
+      audioSystem.door(nextOpen);
+      return { name: door.name, open: door.open };
+    };
     window.MrFeastFresh.setPlayerEnergyForQA = (value) => {
       if (!state.qa) return null;
       state.movement.energy = clamp(Number(value) || 0, 0, PLAYER.energyMax);
@@ -13521,7 +14658,10 @@
     window.MrFeastFresh.advancePlayerForQA = (seconds) => {
       if (!state.qa || !physics) return null;
       const steps = Math.min(720, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
-      for (let step = 0; step < steps; step += 1) updatePlayer(1 / 60);
+      for (let step = 0; step < steps; step += 1) {
+        updatePlayer(1 / 60);
+        audioSystem?.updateFootsteps(1 / 60);
+      }
       syncCamera();
       updateLocation();
       updateInteractionPrompt();
@@ -13576,6 +14716,34 @@
     window.MrFeastFresh.runMrFeastLocomotionProbeForQA = (options) => mrFeastNpc ? mrFeastNpc.runLocomotionProbeForQA(options) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastCameraResponseForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runCameraResponseForQA(maxSeconds) : null;
+    window.MrFeastFresh.getTamperState = () => tamperSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.tamperForQA = (id, tampered = true) => tamperSystem ? tamperSystem.setTamperedForQA(id, tampered) : null;
+    window.MrFeastFresh.advanceTamperForQA = (seconds) => tamperSystem ? tamperSystem.advanceForQA(seconds) : null;
+    window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
+    window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
+    window.MrFeastFresh.placePlayerNearMrFeastForQA = (distance = 1.6) => {
+      if (!state.qa || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready" || !physics) return null;
+      const host = mrFeastNpc.root.position;
+      const yaw = mrFeastNpc.root.rotation.y;
+      const gap = Math.max(0.8, Number(distance) || 1.6);
+      teleport(host.x + Math.sin(yaw) * gap, host.y, host.z + Math.cos(yaw) * gap, yaw, -0.26);
+      updateInteractionPrompt();
+      const p = physics.playerPosition();
+      return {
+        distance: Number(Math.hypot(p.x - host.x, p.z - host.z).toFixed(3)),
+        prompt: state.currentInteraction ? state.currentInteraction.getLabel() : null,
+      };
+    };
+    window.MrFeastFresh.faceAwayFromMrFeastForQA = () => {
+      if (!state.qa || !mrFeastNpc || !physics) return null;
+      const p = physics.playerPosition();
+      const host = mrFeastNpc.root.position;
+      const facingYaw = Math.atan2(p.x - host.x, p.z - host.z);
+      teleport(p.x, p.y - (PLAYER.halfHeight + PLAYER.radius + 0.03), p.z, facingYaw + Math.PI, 0);
+      updateInteractionPrompt();
+      return { yaw: Number(state.yaw.toFixed(3)) };
+    };
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
     window.MrFeastFresh.inspectScene = (prefix = "") => {
       const meshes = [];
@@ -13687,6 +14855,9 @@
         foyer: [0, FLOOR.MAIN, 9.8, 0],
         library: [-10.0, FLOOR.MAIN, 7.7, Math.PI / 2],
         readableBookLibrary: [-12.65, FLOOR.MAIN, 4.8, Math.PI / 2, -0.05],
+        tamperMusicPortrait: [13.0, FLOOR.MAIN, 7.8, -Math.PI / 2, 0.28],
+        tamperDiningChair: [-12.0, FLOOR.MAIN, -5.9, 0, -0.55],
+        tamperFridge: [12.9, FLOOR.MAIN, -4.04, -Math.PI / 2, -0.12],
         music: [10.0, FLOOR.MAIN, 7.7, -Math.PI / 2],
         mainHallBathroom: [-10.0, FLOOR.MAIN, 0, Math.PI / 2],
         coatCloset: [COAT_CLOSET.center.x, FLOOR.MAIN, -2.1, Math.PI],
@@ -14272,6 +15443,8 @@
       physics = new PhysicsWorld(RAPIER);
       M = await createMaterials();
       readableBookSystem = new ReadableBookSystem(state.readableBooks.seed);
+      tamperSystem = new TamperSystem();
+      speechSystem = new MrFeastSpeechSystem();
 
       setLoading("Raising the walls", 28);
       hemisphereLight = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);

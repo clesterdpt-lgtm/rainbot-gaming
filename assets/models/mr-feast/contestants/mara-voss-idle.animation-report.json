@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-07-17T12:03:06.373Z",
+  "format": "animation-only-glb",
+  "source": "assets/models/mr-feast/source/contestants/mara-voss-idle.glb",
+  "file": "mara-voss-idle.glb",
+  "name": "idle",
+  "stationary": true,
+  "loopClosed": true,
+  "compression": "none",
+  "bytes": 65716,
+  "durationSeconds": 4,
+  "channelsBefore": {
+    "rotation": 24,
+    "translation": 24,
+    "scale": 24,
+    "weights": 0,
+    "other": 0
+  },
+  "channelsAfter": {
+    "rotation": 24,
+    "translation": 0,
+    "scale": 0,
+    "weights": 0,
+    "other": 0
+  },
+  "animations": 1,
+  "nodes": 25,
+  "meshes": 0,
+  "skins": 0,
+  "materials": 0,
+  "textures": 0
+}

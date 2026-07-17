@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "assetVersion": "20260717-contestant-conversations-1",
+  "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
+  "characters": [
+    {
+      "id": "mara-voss",
+      "name": "Mara Voss",
+      "number": "03",
+      "persona": "The Strategist",
+      "room": "LIBRARY",
+      "heightMeters": 1.72,
+      "model": "mara-voss.glb",
+      "report": "mara-voss.report.json",
+      "visualNotes": "Long dark hair, oxblood tailoring, ivory blouse, and a composed negotiator's posture.",
+      "source": {
+        "provider": "Meshy",
+        "model": "meshy-6",
+        "previewTaskId": "019f6fed-5d8d-78bb-9d64-f168dd327b51",
+        "refineTaskId": "019f6fee-48d0-7560-a396-c026cb4e7292",
+        "rigTaskId": "019f6ff0-3fe0-7082-872a-a6cba30cf48b",
+        "idleTaskId": "019f6ff1-796a-7970-b6c2-e8f5334b6b87",
+        "consumedCredits": 38,
+        "prompt": "Original fictional adult woman reality-show contestant, full body humanoid in a clean A-pose, poised silver bob haircut, intelligent guarded face, tailored deep oxblood pantsuit with aged brass trim, ivory high-neck blouse, practical black ankle boots, small brass number 03 badge on lapel, sleek gothic manor challenge wardrobe, stylized semi-realistic 3D game character, clean silhouette, symmetrical limbs, isolated single character, no props, no logos, no weapons"
+      },
+      "blender": {
+        "version": "4.5.11 LTS",
+        "script": "../../../../scripts/blender/prepare-mansion-contestant.py",
+        "triangles": 25999,
+        "textureMaxSize": 512,
+        "compression": "none"
+      },
+      "animations": {
+        "idle": {
+          "file": "mara-voss-idle.glb",
+          "name": "idle",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 4
+        }
+      },
+      "dialogue": [
+        "Don't confuse hospitality with leverage. This house has both.",
+        "I asked for the rules in writing. They gave me a camera release.",
+        "Mr. Feast smiles when he knows your price. Stop advertising.",
+        "If a door needs a code, someone nearby needs to remember it.",
+        "The cameras aren't security. They're an audience with better angles.",
+        "We survive by sharing facts, not panic.",
+        "Every challenge has an incentive. Find the one they forgot to announce.",
+        "You keep moving. I'll keep count of who doesn't return.",
+        "The safest alliance is a fact nobody can edit out.",
+        "Watch who asks questions, then watch who answers too quickly."
+      ]
+    },
+    {
+      "id": "kip-solano",
+      "name": "Kip Solano",
+      "number": "07",
+      "persona": "The Wild Card",
+      "room": "BALLROOM",
+      "heightMeters": 1.78,
+      "model": "kip-solano.glb",
+      "report": "kip-solano.report.json",
+      "visualNotes": "Tousled dark hair, storm-teal showman layers, and the restless energy of a stunt streamer improvising under pressure.",
+      "source": {
+        "provider": "Meshy",
+        "model": "meshy-6",
+        "previewTaskId": "019f6fed-5d85-752c-943d-5bfa375cae22",
+        "refineTaskId": "019f6fee-70cf-7ed2-8b20-684fba31581d",
+        "rigTaskId": "019f6ff1-7957-70dd-825f-c00b0ae67d7b",
+        "idleTaskId": "019f6ff2-d926-700e-88f2-c8fdf64b4e5a",
+        "consumedCredits": 38,
+        "prompt": "Original fictional adult man reality-show contestant, full body humanoid in a clean A-pose, wiry athletic build, tousled dark curls, expressive nervous grin, cropped teal showman jacket with copper piping over charcoal shirt, fitted dark trousers, worn high-top boots, small brass number 07 badge on chest, energetic stunt-streamer personality, stylized semi-realistic 3D game character, clean silhouette, symmetrical limbs, isolated single character, no props, no logos, no weapons"
+      },
+      "blender": {
+        "version": "4.5.11 LTS",
+        "script": "../../../../scripts/blender/prepare-mansion-contestant.py",
+        "triangles": 25999,
+        "textureMaxSize": 512,
+        "compression": "none"
+      },
+      "animations": {
+        "idle": {
+          "file": "kip-solano-idle.glb",
+          "name": "idle",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 4
+        }
+      },
+      "dialogue": [
+        "If I vanish, tell the edit I looked heroic.",
+        "I found six cameras and waved to all of them. Tactical confusion.",
+        "This ballroom has terrible acoustics for screaming. I checked.",
+        "The host said elimination dinner. That's two red flags in one noun.",
+        "My plan was to become a meme. New plan: remain a person.",
+        "Do you think the thunder is sponsored?",
+        "I tried a prank on Mr. Feast. He corrected my posture.",
+        "If you see a vent big enough for a coward, that's mine.",
+        "I'm not panicking. This is premium subscriber breathing.",
+        "Good news: I found an exit. Bad news: it was painted on."
+      ]
+    },
+    {
+      "id": "juniper-cross",
+      "name": "Juniper Cross",
+      "number": "10",
+      "persona": "The Folklorist",
+      "room": "READING ROOM",
+      "heightMeters": 1.82,
+      "model": "juniper-cross.glb",
+      "report": "juniper-cross.report.json",
+      "visualNotes": "A tall shaved-head silhouette in plum and black, with a calm gothic presence and an observant folklorist's reserve.",
+      "source": {
+        "provider": "Meshy",
+        "model": "meshy-6",
+        "previewTaskId": "019f6fed-5d7a-7e9d-acb6-e9032e854e68",
+        "refineTaskId": "019f6fee-7114-7566-8d7f-391c2d8d9715",
+        "remeshTaskId": "019f6ff2-2142-79a4-9ac9-04baebfbe6ae",
+        "rigTaskId": "019f6ff6-6f43-72c0-87b3-133eae0d79a2",
+        "idleTaskId": "019f6ffd-093c-7278-8d8d-4218a31fd388",
+        "consumedCredits": 43,
+        "prompt": "Original fictional adult Black woman reality-show contestant, full body humanoid in a clean A-pose, tall calm silhouette, long neat braids swept behind shoulders, observant serious expression, plum velvet longline jacket over black high-collar shirt, dark wide-leg trousers, sturdy lace boots, small antique silver number 10 badge, gothic folklorist personality, stylized semi-realistic 3D game character, clean symmetrical limbs, isolated single character, no props, no logos, no weapons"
+      },
+      "blender": {
+        "version": "4.5.11 LTS",
+        "script": "../../../../scripts/blender/prepare-mansion-contestant.py",
+        "triangles": 26000,
+        "textureMaxSize": 512,
+        "compression": "none"
+      },
+      "animations": {
+        "idle": {
+          "file": "juniper-cross-idle.glb",
+          "name": "idle",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 4
+        }
+      },
+      "dialogue": [
+        "Houses keep echoes. This one edits them.",
+        "The portraits change their silence when he enters.",
+        "Don't trust a room simply because it has no camera.",
+        "I came here to study fear. It has been taking notes.",
+        "Every old house has a hungry story. This one has a production budget.",
+        "The books are quieter when the storm says his name.",
+        "A locked door is only a boundary if the house agrees.",
+        "Listen after the thunder. The useful sounds come second.",
+        "Someone taught this house our names before we arrived.",
+        "Folklore calls it a warning when the same mistake happens three times."
+      ]
+    }
+  ]
+}

@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260716-sfx-upgrade-1";
+  const MANSION_RUNTIME_VERSION = "20260717-contestant-conversations-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -107,6 +107,7 @@
     security: $("mansion-security"),
     securityStatus: $("mansion-security-status"),
     speech: $("mansion-speech"),
+    speechSpeaker: $("mansion-speech-speaker"),
     speechText: $("mansion-speech-text"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
@@ -895,6 +896,46 @@
     doorWaitDistance: 0.88,
     doorCloseDistance: 2.5,
     waypoints: MR_FEAST_PATROL_ROUTE,
+  });
+  const MANSION_CONTESTANTS = Object.freeze({
+    manifestPath: "../models/mr-feast/contestants/manifest.json",
+    assetVersion: "20260717-contestant-conversations-1",
+    contactShadowOpacity: 0.2,
+    interactionWidth: 0.82,
+    interactionDepth: 0.7,
+    colliderWidth: 0.46,
+    colliderDepth: 0.4,
+    speakerLiftMeters: 0.22,
+    placements: Object.freeze([
+      Object.freeze({
+        id: "mara-voss",
+        room: "LIBRARY",
+        floor: "MAIN LEVEL",
+        position: Object.freeze({ x: -6.6, y: FLOOR.MAIN, z: 4.45 }),
+        rotationY: 0,
+        idleRate: 0.88,
+        idlePhase: 0.17,
+      }),
+      Object.freeze({
+        id: "kip-solano",
+        room: "BALLROOM",
+        floor: "MAIN LEVEL",
+        position: Object.freeze({ x: -1.8, y: FLOOR.MAIN, z: -7.6 }),
+        rotationY: 0,
+        idleRate: 1.08,
+        idlePhase: 0.53,
+      }),
+      Object.freeze({
+        id: "juniper-cross",
+        room: "READING ROOM",
+        floor: "SECOND FLOOR",
+        position: Object.freeze({ x: 10.7, y: FLOOR.UPPER, z: 0 }),
+        rotationY: -Math.PI / 2,
+        qaApproach: Object.freeze({ x: -0.7, z: 1.45 }),
+        idleRate: 0.94,
+        idlePhase: 0.79,
+      }),
+    ]),
   });
   function mrFeastResponseNode(id, x, y, z, zone, options = {}) {
     return Object.freeze({
@@ -1751,6 +1792,7 @@
   let contestant13Quest = null;
   let readableBookSystem = null;
   let mrFeastNpc = null;
+  let mansionContestants = null;
   let cameraSecurity = null;
   let monitorWallSystem = null;
   let tamperSystem = null;
@@ -4514,6 +4556,454 @@
     }
   }
 
+  class MansionContestantSystem {
+    constructor() {
+      this.manifest = null;
+      this.manifestStatus = "idle";
+      this.settled = false;
+      this.error = null;
+      this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
+        const root = new THREE.Group();
+        root.name = `mansion-contestant-${placement.id}`;
+        root.position.set(placement.position.x, placement.position.y, placement.position.z);
+        root.rotation.y = placement.rotationY;
+        scene.add(root);
+        return {
+          id: placement.id,
+          placement,
+          root,
+          spec: null,
+          status: "pending",
+          loadStatus: "pending",
+          error: null,
+          model: null,
+          modelMeshes: [],
+          headBone: null,
+          mixer: null,
+          action: null,
+          interactionTarget: null,
+          interactionRegistered: false,
+          colliderEnabled: false,
+          routeClearance: this.routeClearanceForPlacement(placement),
+          size: null,
+          center: null,
+          grounded: false,
+          triangles: 0,
+          materials: 0,
+          textures: 0,
+          skinnedMeshes: 0,
+          bones: 0,
+          linesSpoken: 0,
+          lastLineIndex: -1,
+          lastLine: null,
+          speaker: null,
+          animationTracks: null,
+          animationProbeBone: null,
+          animationProbeStart: null,
+          animationPoseChanged: false,
+        };
+      });
+      animatedObjects.push(this);
+    }
+
+    routeClearanceForPlacement(placement) {
+      let nearest = Infinity;
+      for (let index = 0; index < MR_FEAST_NPC.waypoints.length; index += 1) {
+        const start = MR_FEAST_NPC.waypoints[index];
+        const end = MR_FEAST_NPC.waypoints[(index + 1) % MR_FEAST_NPC.waypoints.length];
+        if (Math.abs(start.y - placement.position.y) > 0.35 || Math.abs(end.y - placement.position.y) > 0.35) continue;
+        const dx = end.x - start.x;
+        const dz = end.z - start.z;
+        const lengthSquared = dx * dx + dz * dz;
+        const projected = lengthSquared > 0
+          ? THREE.MathUtils.clamp(
+            ((placement.position.x - start.x) * dx + (placement.position.z - start.z) * dz) / lengthSquared,
+            0,
+            1,
+          )
+          : 0;
+        const closestX = start.x + dx * projected;
+        const closestZ = start.z + dz * projected;
+        nearest = Math.min(nearest, Math.hypot(closestX - placement.position.x, closestZ - placement.position.z));
+      }
+      return nearest;
+    }
+
+    assetUrl(relativePath, manifestUrl) {
+      const url = new URL(relativePath, manifestUrl);
+      url.searchParams.set("v", MANSION_CONTESTANTS.assetVersion);
+      return url.href;
+    }
+
+    loadGltf(loader, url) {
+      return new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, (error) => reject(new Error(error?.message || `Could not load ${url}`)));
+      });
+    }
+
+    async load() {
+      if (this.manifestStatus === "loading" || this.settled) return;
+      this.manifestStatus = "loading";
+      this.error = null;
+      document.documentElement.dataset.mansionContestants = "loading";
+      try {
+        if (typeof THREE.GLTFLoader !== "function") throw new Error("THREE.GLTFLoader is unavailable");
+        if (!THREE.SkeletonUtils || typeof THREE.SkeletonUtils.clone !== "function") {
+          throw new Error("THREE.SkeletonUtils.clone is unavailable");
+        }
+        const manifestUrl = new URL(MANSION_CONTESTANTS.manifestPath, SCRIPT_URL);
+        manifestUrl.searchParams.set("v", MANSION_CONTESTANTS.assetVersion);
+        const response = await fetch(manifestUrl.href, { cache: state.qa ? "no-store" : "default" });
+        if (!response.ok) throw new Error(`Contestant manifest returned HTTP ${response.status}`);
+        const manifest = await response.json();
+        if (!Array.isArray(manifest?.characters) || manifest.characters.length !== this.entries.length) {
+          throw new Error("Contestant manifest must declare exactly three characters");
+        }
+        this.manifest = manifest;
+        const loader = new THREE.GLTFLoader();
+        await Promise.all(this.entries.map(async (entry) => {
+          const spec = manifest.characters.find((character) => character.id === entry.id);
+          if (!spec) {
+            entry.status = "error";
+            entry.loadStatus = "error";
+            entry.error = "Missing contestant manifest entry";
+            return;
+          }
+          entry.spec = spec;
+          try {
+            await this.loadEntry(loader, entry, manifestUrl);
+          } catch (error) {
+            entry.status = "error";
+            entry.loadStatus = "error";
+            entry.error = String(error?.message || error);
+            entry.root.visible = false;
+            console.warn(`[Contestants] ${spec.name || entry.id} could not load: ${entry.error}`);
+          }
+        }));
+        const readyCount = this.entries.filter((entry) => entry.status === "ready").length;
+        const failedCount = this.entries.filter((entry) => entry.status === "error").length;
+        this.manifestStatus = failedCount === 0 ? "ready" : readyCount > 0 ? "partial" : "error";
+      } catch (error) {
+        this.manifestStatus = "error";
+        this.error = String(error?.message || error);
+        for (const entry of this.entries) {
+          entry.status = "error";
+          entry.loadStatus = "error";
+          entry.error = this.error;
+          entry.root.visible = false;
+        }
+        console.warn("Mansion contestants could not be loaded", error);
+      } finally {
+        this.settled = true;
+        document.documentElement.dataset.mansionContestants = this.manifestStatus;
+      }
+    }
+
+    async loadEntry(loader, entry, manifestUrl) {
+      const spec = entry.spec;
+      if (!spec?.model || !spec?.animations?.idle?.file || !Array.isArray(spec.dialogue) || !spec.dialogue.length) {
+        throw new Error("Contestant entry is missing its model, idle clip, or dialogue");
+      }
+      entry.status = "loading";
+      entry.loadStatus = "loading";
+      const [base, idle] = await Promise.all([
+        this.loadGltf(loader, this.assetUrl(spec.model, manifestUrl)),
+        this.loadGltf(loader, this.assetUrl(spec.animations.idle.file, manifestUrl)),
+      ]);
+      const model = THREE.SkeletonUtils.clone(base.scene);
+      model.name = `contestant-${entry.id}-model`;
+      model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(model);
+      const initialSize = bounds.getSize(new THREE.Vector3());
+      const targetHeight = Number(spec.heightMeters) || 1.75;
+      if (!Number.isFinite(initialSize.y) || initialSize.y <= 0) throw new Error("Contestant has invalid bounds");
+      model.scale.multiplyScalar(targetHeight / initialSize.y);
+      model.updateMatrixWorld(true);
+      bounds.setFromObject(model);
+      const center = bounds.getCenter(new THREE.Vector3());
+      model.position.x -= center.x;
+      model.position.y -= bounds.min.y;
+      model.position.z -= center.z;
+
+      const materials = new Set();
+      const textures = new Set();
+      model.traverse((object) => {
+        if (object.isBone) {
+          entry.bones += 1;
+          if (object.name === "Head") entry.headBone = object;
+        }
+        if (!object.isMesh) return;
+        if (object.isSkinnedMesh) entry.skinnedMeshes += 1;
+        const positionCount = object.geometry?.getAttribute("position")?.count || 0;
+        entry.triangles += object.geometry?.index ? object.geometry.index.count / 3 : positionCount / 3;
+        object.castShadow = false;
+        object.receiveShadow = true;
+        object.userData.preExteriorVisibility = true;
+        object.visible = !interiorDetailsHidden;
+        entry.modelMeshes.push(object);
+        interiorDetailMeshes.push(object);
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (!material) continue;
+          materials.add(material);
+          if ("emissiveIntensity" in material) material.emissiveIntensity = 0;
+          if ("roughness" in material) material.roughness = Math.max(Number(material.roughness) || 0, 0.56);
+          for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
+          material.needsUpdate = true;
+        }
+      });
+      if (!entry.skinnedMeshes || entry.bones < 20) throw new Error("Contestant GLB is not a valid humanoid rig");
+      entry.materials = materials.size;
+      entry.textures = textures.size;
+      entry.model = model;
+      entry.root.add(model);
+
+      const clip = idle.animations?.[0]?.clone();
+      if (!clip) throw new Error("Contestant idle GLB has no animation clip");
+      clip.name = "idle";
+      const rotationTracks = clip.tracks.filter((track) => track.name.endsWith(".quaternion"));
+      const translationTracks = clip.tracks.filter((track) => track.name.endsWith(".position"));
+      const scaleTracks = clip.tracks.filter((track) => track.name.endsWith(".scale"));
+      const boundRotationTracks = rotationTracks.filter((track) => {
+        const splitAt = track.name.lastIndexOf(".");
+        return model.getObjectByName(track.name.slice(0, splitAt));
+      });
+      const dynamicRotationTracks = boundRotationTracks.filter((track) => {
+        const values = track.values || [];
+        for (let offset = 4; offset + 3 < values.length; offset += 4) {
+          if (
+            Math.abs(values[offset] - values[0])
+            + Math.abs(values[offset + 1] - values[1])
+            + Math.abs(values[offset + 2] - values[2])
+            + Math.abs(values[offset + 3] - values[3]) > 0.0001
+          ) return true;
+        }
+        return false;
+      });
+      entry.animationTracks = {
+        total: clip.tracks.length,
+        rotation: rotationTracks.length,
+        translation: translationTracks.length,
+        scale: scaleTracks.length,
+        boundRotation: boundRotationTracks.length,
+        dynamicRotation: dynamicRotationTracks.length,
+      };
+      if (
+        rotationTracks.length < 20
+        || boundRotationTracks.length !== rotationTracks.length
+        || dynamicRotationTracks.length < 1
+        || translationTracks.length
+        || scaleTracks.length
+      ) throw new Error(`Contestant idle clip failed stationary rig binding checks: ${JSON.stringify(entry.animationTracks)}`);
+      entry.mixer = new THREE.AnimationMixer(model);
+      entry.action = entry.mixer.clipAction(clip);
+      entry.action.enabled = true;
+      entry.action.setLoop(THREE.LoopRepeat, Infinity);
+      entry.action.setEffectiveTimeScale(entry.placement.idleRate);
+      entry.action.play();
+      entry.action.time = clip.duration * entry.placement.idlePhase;
+      entry.mixer.update(0);
+      const probeTrack = dynamicRotationTracks[0];
+      entry.animationProbeBone = model.getObjectByName(probeTrack.name.slice(0, probeTrack.name.lastIndexOf(".")));
+      entry.animationProbeStart = entry.animationProbeBone?.quaternion.clone() || null;
+
+      const contactShadow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.42, 20),
+        new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: MANSION_CONTESTANTS.contactShadowOpacity,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      contactShadow.name = `contestant-${entry.id}-contact-shadow`;
+      contactShadow.rotation.x = -Math.PI / 2;
+      contactShadow.position.y = 0.012;
+      contactShadow.scale.set(0.72, 0.48, 1);
+      contactShadow.castShadow = false;
+      contactShadow.receiveShadow = false;
+      contactShadow.userData.preExteriorVisibility = true;
+      contactShadow.visible = !interiorDetailsHidden;
+      entry.root.add(contactShadow);
+      interiorDetailMeshes.push(contactShadow);
+
+      const interaction = {
+        type: "contestant-talk",
+        id: `contestant-talk-${entry.id}`,
+        getLabel: () => `Speak with ${spec.name}`,
+        activate: () => this.converse(entry.id),
+      };
+      const interactionMaterial = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+      const interactionHeight = Math.max(1.35, targetHeight * 0.94);
+      const hitbox = new THREE.Mesh(
+        new THREE.BoxGeometry(MANSION_CONTESTANTS.interactionWidth, interactionHeight, MANSION_CONTESTANTS.interactionDepth),
+        interactionMaterial,
+      );
+      hitbox.name = `contestant-${entry.id}-talk-hitbox`;
+      hitbox.position.y = interactionHeight / 2;
+      entry.root.add(hitbox);
+      entry.interactionTarget = hitbox;
+
+      const colliderHeight = Math.max(1.25, targetHeight * 0.8);
+      physics.addFixedBox(
+        entry.placement.position.x,
+        entry.placement.position.y + colliderHeight / 2,
+        entry.placement.position.z,
+        MANSION_CONTESTANTS.colliderWidth,
+        colliderHeight,
+        MANSION_CONTESTANTS.colliderDepth,
+        entry.placement.rotationY,
+      );
+      entry.colliderEnabled = true;
+      entry.speaker = {
+        id: entry.id,
+        name: spec.name,
+        anchorLiftMeters: MANSION_CONTESTANTS.speakerLiftMeters,
+        getAnchor: (target) => {
+          entry.root.updateMatrixWorld(true);
+          if (entry.headBone) entry.headBone.getWorldPosition(target);
+          else target.copy(entry.root.position).add(new THREE.Vector3(0, targetHeight, 0));
+          return target;
+        },
+      };
+
+      entry.root.updateMatrixWorld(true);
+      const worldBounds = new THREE.Box3().setFromObject(model);
+      const size = worldBounds.getSize(new THREE.Vector3());
+      const worldCenter = worldBounds.getCenter(new THREE.Vector3());
+      entry.size = { x: size.x, y: size.y, z: size.z };
+      entry.center = { x: worldCenter.x, y: worldCenter.y, z: worldCenter.z };
+      entry.grounded = Math.abs(worldBounds.min.y - entry.placement.position.y) < 0.025;
+      addInteractionTarget(hitbox, interaction);
+      entry.interactionRegistered = true;
+      entry.status = "ready";
+      entry.loadStatus = "ready";
+      entry.error = null;
+      console.info(
+        `[Contestants] loaded ${spec.name} at ${entry.placement.room}: `
+        + `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}m, `
+        + `${Math.round(entry.triangles).toLocaleString()} triangles, ${entry.bones} bones`,
+      );
+    }
+
+    update(dt) {
+      if (!state.started) return;
+      for (const entry of this.entries) {
+        if (entry.status !== "ready" || !entry.mixer || !entry.root.visible) continue;
+        entry.mixer.update(Math.max(0, Number(dt) || 0));
+        if (!entry.animationPoseChanged && entry.animationProbeBone && entry.animationProbeStart) {
+          entry.animationPoseChanged = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart)) > 0.000001;
+        }
+      }
+    }
+
+    entryById(id) {
+      return this.entries.find((entry) => entry.id === id) || null;
+    }
+
+    converse(id) {
+      const entry = this.entryById(id);
+      if (!entry || entry.status !== "ready" || !speechSystem || !entry.speaker) return null;
+      const pool = entry.spec.dialogue;
+      let index = Math.floor(Math.random() * pool.length);
+      if (pool.length > 1 && index === entry.lastLineIndex) index = (index + 1) % pool.length;
+      entry.lastLineIndex = index;
+      entry.lastLine = pool[index];
+      entry.linesSpoken += 1;
+      return speechSystem.sayForSpeaker(entry.speaker, `contestant-${entry.id}`, entry.lastLine);
+    }
+
+    placePlayerNearForQA(id, distance = 1.65) {
+      const entry = this.entryById(id);
+      if (!state.qa || !physics || !entry || entry.status !== "ready") return null;
+      const gap = Math.max(0.9, Number(distance) || 1.65);
+      const yaw = entry.root.rotation.y;
+      const approach = entry.placement.qaApproach || { x: Math.sin(yaw), z: Math.cos(yaw) };
+      const approachLength = Math.max(0.001, Math.hypot(approach.x, approach.z));
+      const playerX = entry.root.position.x + (approach.x / approachLength) * gap;
+      const playerZ = entry.root.position.z + (approach.z / approachLength) * gap;
+      const lookYaw = Math.atan2(playerX - entry.root.position.x, playerZ - entry.root.position.z);
+      teleport(
+        playerX,
+        entry.root.position.y,
+        playerZ,
+        lookYaw,
+        -0.16,
+      );
+      updateInteractionPrompt();
+      const player = physics.playerPosition();
+      return {
+        id: entry.id,
+        distance: Number(Math.hypot(player.x - entry.root.position.x, player.z - entry.root.position.z).toFixed(3)),
+        position: {
+          x: Number(player.x.toFixed(3)),
+          y: Number(player.y.toFixed(3)),
+          z: Number(player.z.toFixed(3)),
+        },
+        prompt: state.currentInteraction ? state.currentInteraction.getLabel() : null,
+      };
+    }
+
+    getDiagnostics() {
+      return {
+        expected: this.entries.length,
+        loaded: this.entries.filter((entry) => entry.status === "ready").length,
+        failed: this.entries.filter((entry) => entry.status === "error").length,
+        settled: this.settled,
+        manifestStatus: this.manifestStatus,
+        error: this.error,
+        assetVersion: MANSION_CONTESTANTS.assetVersion,
+        entries: this.entries.map((entry) => ({
+          id: entry.id,
+          name: entry.spec?.name || null,
+          number: entry.spec?.number || null,
+          persona: entry.spec?.persona || null,
+          room: entry.placement.room,
+          floor: entry.placement.floor,
+          status: entry.status,
+          loadStatus: entry.loadStatus,
+          loaded: entry.status === "ready",
+          error: entry.error,
+          position: {
+            x: Number(entry.root.position.x.toFixed(3)),
+            y: Number(entry.root.position.y.toFixed(3)),
+            z: Number(entry.root.position.z.toFixed(3)),
+          },
+          rotationY: Number(entry.root.rotation.y.toFixed(3)),
+          height: entry.size ? Number(entry.size.y.toFixed(3)) : 0,
+          size: entry.size ? Object.fromEntries(Object.entries(entry.size).map(([key, value]) => [key, Number(value.toFixed(3))])) : null,
+          center: entry.center ? Object.fromEntries(Object.entries(entry.center).map(([key, value]) => [key, Number(value.toFixed(3))])) : null,
+          grounded: entry.grounded,
+          modelVisible: Boolean(entry.model && entry.root.visible && entry.modelMeshes.some((mesh) => mesh.visible)),
+          modelFile: entry.spec?.model || null,
+          idleFile: entry.spec?.animations?.idle?.file || null,
+          triangles: Math.round(entry.triangles),
+          materials: entry.materials,
+          textures: entry.textures,
+          skinnedMeshes: entry.skinnedMeshes,
+          bones: entry.bones,
+          colliderEnabled: entry.colliderEnabled,
+          routeClearance: Number.isFinite(entry.routeClearance) ? Number(entry.routeClearance.toFixed(3)) : null,
+          interactionRegistered: entry.interactionRegistered,
+          dialoguePoolSize: entry.spec?.dialogue?.length || 0,
+          linesSpoken: entry.linesSpoken,
+          lastLine: entry.lastLine,
+          lastLineIndex: entry.lastLineIndex,
+          animation: {
+            name: entry.action ? "idle" : null,
+            playing: Boolean(entry.action?.isRunning()),
+            time: Number((entry.action?.time || 0).toFixed(3)),
+            duration: Number((entry.action?.getClip()?.duration || 0).toFixed(3)),
+            playbackRate: entry.placement.idleRate,
+            tracks: entry.animationTracks,
+            probeBone: entry.animationProbeBone?.name || null,
+            poseChanged: entry.animationPoseChanged,
+          },
+        })),
+      };
+    }
+  }
+
   window.MrFeastFresh = window.MrFeastFresh || {};
   window.MrFeastFresh.state = state;
 
@@ -5830,6 +6320,7 @@
   class MrFeastSpeechSystem {
     constructor() {
       this.container = dom.speech;
+      this.speakerElement = dom.speechSpeaker;
       this.textElement = dom.speechText;
       this.active = null;
       this.remaining = 0;
@@ -5841,36 +6332,66 @@
       this.viewPosition = new THREE.Vector3();
     }
 
-    pickLine(category, context = {}) {
+    hostSpeaker() {
+      return {
+        id: "mr-feast",
+        name: "Mr. Feast",
+        anchorLiftMeters: MR_FEAST_SPEECH.anchorLiftMeters,
+        getAnchor: (target) => {
+          const npc = mrFeastNpc;
+          if (!npc || npc.loadStatus !== "ready") return null;
+          if (npc.headEndBone) npc.headEndBone.getWorldPosition(target);
+          else target.copy(npc.root.position).add(new THREE.Vector3(0, MR_FEAST_SPEECH.anchorHeightMeters, 0));
+          return target;
+        },
+      };
+    }
+
+    pickLine(category, context = {}, speakerId = "mr-feast") {
       const pool = MR_FEAST_SPEECH.lines[category] || [];
       if (!pool.length) return null;
-      const previous = this.lastLineByCategory.get(category);
+      const historyKey = `${speakerId}:${category}`;
+      const previous = this.lastLineByCategory.get(historyKey);
       let index = Math.floor(Math.random() * pool.length);
       if (pool.length > 1 && index === previous) index = (index + 1) % pool.length;
-      this.lastLineByCategory.set(category, index);
+      this.lastLineByCategory.set(historyKey, index);
       return pool[index].replace(/\{title\}/g, context.title || "the artwork");
     }
 
     sayFromPool(category, context = {}) {
-      const text = this.pickLine(category, context);
+      const speaker = this.hostSpeaker();
+      const text = this.pickLine(category, context, speaker.id);
       if (!text) return null;
-      return this.say(category, text);
+      return this.say(category, text, speaker);
     }
 
-    say(category, text) {
+    sayForSpeaker(speaker, category, text) {
+      if (!speaker?.id || !speaker?.name || typeof speaker.getAnchor !== "function") return null;
+      return this.say(category, text, speaker);
+    }
+
+    say(category, text, speaker = this.hostSpeaker()) {
+      if (!speaker || !text) return null;
       const duration = clamp(
         MR_FEAST_SPEECH.minSeconds + text.length * MR_FEAST_SPEECH.perCharacterSeconds,
         MR_FEAST_SPEECH.minSeconds,
         MR_FEAST_SPEECH.maxSeconds,
       );
-      this.active = { category, text };
+      this.active = { category, text, speaker };
       this.remaining = duration;
       this.lastCategory = category;
       this.linesSpoken += 1;
+      if (this.speakerElement) this.speakerElement.textContent = speaker.name;
       if (this.textElement) this.textElement.textContent = text;
       if (this.container) this.container.hidden = false;
       this.updatePlacement();
-      return { category, text, seconds: Number(duration.toFixed(2)) };
+      return {
+        category,
+        text,
+        speakerId: speaker.id,
+        speakerName: speaker.name,
+        seconds: Number(duration.toFixed(2)),
+      };
     }
 
     dismiss() {
@@ -5891,18 +6412,12 @@
 
     updatePlacement() {
       if (!this.active || !this.container) return;
-      const npc = mrFeastNpc;
-      if (!npc || npc.loadStatus !== "ready") {
+      const anchor = this.active.speaker?.getAnchor?.(this.anchor);
+      if (!anchor) {
         this.container.hidden = true;
         return;
       }
-      if (npc.headEndBone) {
-        npc.headEndBone.getWorldPosition(this.anchor);
-      } else {
-        this.anchor.copy(npc.root.position);
-        this.anchor.y += MR_FEAST_SPEECH.anchorHeightMeters;
-      }
-      this.anchor.y += MR_FEAST_SPEECH.anchorLiftMeters;
+      this.anchor.y += Number(this.active.speaker.anchorLiftMeters) || 0;
       const width = dom.canvas?.clientWidth || 1;
       const height = dom.canvas?.clientHeight || 1;
       this.viewPosition.copy(this.anchor).applyMatrix4(camera.matrixWorldInverse);
@@ -5910,7 +6425,7 @@
       let pixelX;
       let pixelY;
       if (behind) {
-        // The host is behind the camera: pin the bubble along the top edge,
+        // The speaker is behind the camera: pin the bubble along the top edge,
         // offset toward whichever side he is actually on, so a hiding player
         // still sees that the bait landed.
         const side = Math.abs(this.viewPosition.x) > 0.0001 ? Math.sign(this.viewPosition.x) : 0;
@@ -5947,6 +6462,8 @@
         visible: Boolean(this.active),
         text: this.active?.text || null,
         category: this.active?.category || null,
+        speakerId: this.active?.speaker?.id || null,
+        speakerName: this.active?.speaker?.name || null,
         secondsRemaining: Number(this.remaining.toFixed(2)),
         lastCategory: this.lastCategory,
         linesSpoken: this.linesSpoken,
@@ -14385,6 +14902,7 @@
       },
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
+      contestants: mansionContestants?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
@@ -14675,6 +15193,13 @@
     window.MrFeastFresh.openReadableBookForQA = (index) => state.qa && readableBookSystem ? readableBookSystem.openByIndex(index) : false;
     window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
+    window.MrFeastFresh.getContestantState = () => mansionContestants ? mansionContestants.getDiagnostics() : null;
+    window.MrFeastFresh.placePlayerNearContestantForQA = (id, distance = 1.65) => (
+      state.qa && mansionContestants ? mansionContestants.placePlayerNearForQA(id, distance) : null
+    );
+    window.MrFeastFresh.converseWithContestantForQA = (id) => (
+      state.qa && mansionContestants ? mansionContestants.converse(id) : null
+    );
     window.MrFeastFresh.getCameraSecurityState = () => cameraSecurity ? cameraSecurity.getDiagnostics(true) : null;
     window.MrFeastFresh.getWorkroomState = () => getWorkroomDiagnostics();
     window.MrFeastFresh.openWorkroomKeypadForQA = () => state.qa ? openWorkroomKeypad() : false;
@@ -15474,6 +15999,11 @@
       // The character is an optional test layer: it loads after the mansion is
       // usable and a failed GLB never blocks exploration or the boot watchdog.
       void mrFeastNpc.load();
+      mansionContestants = new MansionContestantSystem();
+      // The social roster follows the same optional post-geometry contract:
+      // three failed downloads can never hold the mansion behind its loading
+      // veil, while focused QA can still wait for the settled roster.
+      void mansionContestants.load();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();
       stormSystem = new StormSystem();

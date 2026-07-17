@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-07-17T12:03:53.075269+00:00",
+  "pipeline": "Meshy textured humanoid -> Meshy auto-rig -> Blender 4.5 browser preparation",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/contestants/mara-voss-rigged.glb",
+  "output": "mara-voss.glb",
+  "slug": "mara-voss",
+  "rigged": true,
+  "bones": 24,
+  "skinnedMeshes": 1,
+  "normalizationStrategy": "baked-scene-roots",
+  "normalizationScale": 0.999999853454747,
+  "targetHeightMeters": 1.72,
+  "targetTriangles": 26000,
+  "textureMaxSize": 512,
+  "sourceBounds": {
+    "min": [
+      -0.674214,
+      -0.170498,
+      -0.0
+    ],
+    "max": [
+      0.674214,
+      0.170498,
+      1.72
+    ]
+  },
+  "game": {
+    "file": "mara-voss.glb",
+    "triangles": 25999,
+    "boundsMin": [
+      -0.674882,
+      -0.170602,
+      3.1e-05
+    ],
+    "boundsMax": [
+      0.674456,
+      0.170763,
+      1.719741
+    ],
+    "fileBytes": 1482916
+  },
+  "sourceTriangles": 226209,
+  "meshes": [
+    "Contestant_Mara_Voss_Mesh_01"
+  ],
+  "materials": [
+    "Contestant_Mara_Voss_Material_01"
+  ],
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "warnings": [],
+  "features": {
+    "animations": false,
+    "skins": true,
+    "draco": false,
+    "meshopt": false,
+    "validatedFor": "Three.js r128"
+  }
+}

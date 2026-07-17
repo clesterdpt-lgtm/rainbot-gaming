@@ -390,6 +390,23 @@
     #mansion-speech[data-clamped="true"]::after { display: none; }
     #mansion-speech[hidden] { display: none; }
 
+    #mansion-speech-speaker {
+      display: block;
+      max-width: 100%;
+      margin-bottom: 3px;
+      overflow: hidden;
+      color: #d8b67f;
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
     #mansion-speech-text {
       display: block;
       font-style: italic;
@@ -1748,6 +1765,7 @@
         </div>
 
         <div id="mansion-speech" role="status" aria-live="polite" aria-atomic="true" data-clamped="false" hidden>
+          <span id="mansion-speech-speaker"></span>
           <span id="mansion-speech-text"></span>
         </div>
 
@@ -1992,6 +2010,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260716-sfx-upgrade-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260717-contestant-conversations-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

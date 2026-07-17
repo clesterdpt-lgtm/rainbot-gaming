@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-07-17T12:03:53.161446+00:00",
+  "pipeline": "Meshy textured humanoid -> Meshy auto-rig -> Blender 4.5 browser preparation",
+  "blenderVersion": "4.5.11 LTS",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/contestants/kip-solano-rigged.glb",
+  "output": "kip-solano.glb",
+  "slug": "kip-solano",
+  "rigged": true,
+  "bones": 24,
+  "skinnedMeshes": 1,
+  "normalizationStrategy": "baked-scene-roots",
+  "normalizationScale": 0.9999998206508379,
+  "targetHeightMeters": 1.78,
+  "targetTriangles": 26000,
+  "textureMaxSize": 512,
+  "sourceBounds": {
+    "min": [
+      -0.629564,
+      -0.163358,
+      0.0
+    ],
+    "max": [
+      0.629564,
+      0.163358,
+      1.780001
+    ]
+  },
+  "game": {
+    "file": "kip-solano.glb",
+    "triangles": 25999,
+    "boundsMin": [
+      -0.629428,
+      -0.163269,
+      -0.000139
+    ],
+    "boundsMax": [
+      0.629795,
+      0.163514,
+      1.780267
+    ],
+    "fileBytes": 1465420
+  },
+  "sourceTriangles": 241364,
+  "meshes": [
+    "Contestant_Kip_Solano_Mesh_01"
+  ],
+  "materials": [
+    "Contestant_Kip_Solano_Material_01"
+  ],
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "warnings": [],
+  "features": {
+    "animations": false,
+    "skins": true,
+    "draco": false,
+    "meshopt": false,
+    "validatedFor": "Three.js r128"
+  }
+}

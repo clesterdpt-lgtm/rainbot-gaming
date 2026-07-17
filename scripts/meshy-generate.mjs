@@ -15,6 +15,7 @@ Usage:
   node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID
   node scripts/meshy-generate.mjs --mode text-to-3d --prompt TEXT --output DIR --slug NAME [--polycount 12000] [--texture-prompt TEXT]
   node scripts/meshy-generate.mjs --mode image-to-3d --image FILE --output DIR --slug NAME [--polycount 100000]
+  node scripts/meshy-generate.mjs --mode remesh --task-id MODEL_TASK_ID --output DIR --slug NAME [--polycount 80000]
   node scripts/meshy-generate.mjs --mode rig --task-id IMAGE_TASK_ID --output DIR --slug NAME [--height 1.92]
   node scripts/meshy-generate.mjs --mode animate --task-id RIG_TASK_ID --action-id ID --output DIR --slug NAME
 
@@ -73,6 +74,7 @@ function endpointForTaskType(type, id = "") {
   const route = {
     "text-to-3d": ["v2", "text-to-3d"],
     "image-to-3d": ["v1", "image-to-3d"],
+    remesh: ["v1", "remesh"],
     rigging: ["v1", "rigging"],
     animations: ["v1", "animations"],
   }[type];
@@ -307,6 +309,35 @@ async function runRig(apiKey, args) {
   });
 }
 
+async function runRemesh(apiKey, args) {
+  const inputTaskId = required(args, "task-id");
+  const output = path.resolve(required(args, "output"));
+  const slug = required(args, "slug");
+  const polycount = positiveNumber(args.polycount || 80000, "polycount");
+  const request = {
+    input_task_id: inputTaskId,
+    target_formats: ["glb"],
+    topology: "triangle",
+    target_polycount: polycount,
+  };
+  const taskId = await createTask(apiKey, "remesh", request);
+  await writeMetadata(path.join(output, `${slug}-remesh.submission.json`), {
+    taskId,
+    taskType: "remesh",
+    inputTaskId,
+    request,
+  });
+  if (args["no-poll"]) return;
+  const task = await pollTask(apiKey, "remesh", taskId);
+  await download(task.model_urls?.glb, path.join(output, `${slug}-remeshed.glb`));
+  await writeMetadata(path.join(output, `${slug}-remesh.meta.json`), {
+    ...taskSummary(task),
+    inputTaskId,
+    targetPolycount: polycount,
+    file: `${slug}-remeshed.glb`,
+  });
+}
+
 async function runAnimation(apiKey, args) {
   const rigTaskId = required(args, "task-id");
   const output = path.resolve(required(args, "output"));
@@ -352,6 +383,7 @@ async function main() {
   }
   if (mode === "text-to-3d") return runTextTo3d(apiKey, args);
   if (mode === "image-to-3d") return runImageTo3d(apiKey, args);
+  if (mode === "remesh") return runRemesh(apiKey, args);
   if (mode === "rig") return runRig(apiKey, args);
   if (mode === "animate") return runAnimation(apiKey, args);
   throw new Error(`Unsupported --mode ${mode}`);

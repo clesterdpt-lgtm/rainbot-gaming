@@ -88,6 +88,7 @@ async function run() {
     assert(state.contestant13.phase === "find-book", "fresh trail should begin at the Library shelf book");
     assert(state.contestant13.world.bookVisible, "shelf book should begin visible");
     assert(state.contestant13.world.bookSlotReserved && state.contestant13.world.bookScratch === "XIII", "shelf book should occupy a clean reserved gap and carry the scratched XIII mark");
+    assert(state.contestant13.world.bookTitle === state.books.clueBook?.title && state.contestant13.world.bookTitleVisible, `the shelf clue should display its seeded catalog title on the physical spine; world=${JSON.stringify(state.contestant13.world)} books=${JSON.stringify(state.books)}`);
     assert(state.contestant13.world.basementDoorLocked && !state.contestant13.world.basementDoorOpen, "basement door should begin closed and locked");
 
     await page.waitForFunction(() => {
@@ -99,7 +100,7 @@ async function run() {
     state = await diagnostics(page);
     assert(!state.contestant13.basementUnlocked && state.contestant13.world.basementDoorLocked && !state.contestant13.world.basementDoorOpen, "whole-home QA must restore the locked door without advancing story state");
 
-    await teleportForInteraction(page, "contestant13LibraryBook", /book|misfiled|ledger/i);
+    await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
 
     await teleportForInteraction(page, "contestant13BasementDoor", /basement.*locked|key.*missing/i);
@@ -124,17 +125,36 @@ async function run() {
     state = await diagnostics(page);
     assert(!state.contestant13.digSiteExcavated && !state.contestant13.basementKeyFound, "maze cache must remain buried without the book and shovel");
 
-    await teleportForInteraction(page, "contestant13LibraryBook", /book|misfiled|ledger/i);
+    await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await pressInteract(page);
+    await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
-    const bookMessage = await page.locator("#mansion-discovery-body").textContent();
+    const printedPage = await page.locator("#mansion-book-preview").textContent();
+    const bookMessage = await page.locator("#mansion-book-annotation").textContent();
+    const cluePresentation = await page.evaluate(() => ({
+      title: document.getElementById("mansion-book-title")?.textContent,
+      kind: document.getElementById("mansion-book-reader")?.dataset.bookKind,
+      annotationSlot: document.getElementById("mansion-book-reader")?.dataset.annotationSlot,
+      printFont: getComputedStyle(document.getElementById("mansion-book-preview")).fontFamily,
+      noteFont: getComputedStyle(document.getElementById("mansion-book-annotation")).fontFamily,
+      focused: document.activeElement?.id,
+    }));
     assert(state.contestant13.bookRead, "reading the unusual book should set bookRead");
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book journal entry should be idempotent");
     assert(/hedge maze/i.test(bookMessage || "") && /basement key/i.test(bookMessage || "") && /shovel/i.test(bookMessage || "") && /formal garden/i.test(bookMessage || ""), "book message should point to both the hedge-maze key and garden shovel");
+    assert((printedPage || "").length >= 120 && !/basement key is buried/i.test(printedPage || ""), `the clue should be handwritten into an otherwise ordinary printed page; print=${JSON.stringify(printedPage)}`);
+    assert(cluePresentation.title === state.books.clueBook.title && cluePresentation.kind === "clue" && /Georgia|serif/i.test(cluePresentation.printFont) && /Bradley Hand|Segoe Print|Comic Sans|cursive/i.test(cluePresentation.noteFont) && cluePresentation.focused === "mansion-book-close", `clue should use separate printed and handwritten layers in the shared reader; clue=${JSON.stringify(cluePresentation)}`);
     assert((await page.locator("#mansion-story-progress").textContent()) === "Trail 1/7", "book should be the first of seven trail steps");
+    await page.waitForTimeout(200);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-with-handwritten-marginalia-desktop.png") });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
     await pressInteract(page);
+    await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "rereading the book must not duplicate its journal entry");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
 
     await teleportForInteraction(page, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
     await pressInteract(page);
@@ -188,23 +208,34 @@ async function run() {
     });
     await mobilePage.goto(`${gameUrl}&view=contestant13LibraryBook`, { waitUntil: "domcontentloaded" });
     await mobilePage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
-    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /book|misfiled|ledger/i);
+    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForFlag(mobilePage, "bookRead");
+    await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     const mobileState = await diagnostics(mobilePage);
     const mobileUi = await mobilePage.evaluate(() => {
       const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();
       const touch = document.getElementById("touch-interact")?.getBoundingClientRect();
+      const reader = document.querySelector(".mansion-book__page")?.getBoundingClientRect();
+      const annotation = document.getElementById("mansion-book-annotation")?.getBoundingClientRect();
       return {
         caseFile: caseFile && { left: caseFile.left, right: caseFile.right, height: caseFile.height },
         touch: touch && { width: touch.width, height: touch.height },
+        reader: reader && { left: reader.left, top: reader.top, right: reader.right, bottom: reader.bottom },
+        annotation: annotation && { left: annotation.left, top: annotation.top, right: annotation.right, bottom: annotation.bottom },
+        printedLength: document.getElementById("mansion-book-preview")?.textContent?.length || 0,
+        annotationCopy: document.getElementById("mansion-book-annotation")?.textContent || "",
+        clueKind: document.getElementById("mansion-book-reader")?.dataset.bookKind,
         viewportWidth: innerWidth,
+        viewportHeight: innerHeight,
       };
     });
     assert(mobileState.contestant13.bookRead, "touch interaction should read the shelf book");
     assert(mobileUi.caseFile && mobileUi.caseFile.left >= 0 && mobileUi.caseFile.right <= mobileUi.viewportWidth && mobileUi.caseFile.height >= 44, "mobile objective HUD should remain readable and on-screen");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "mobile interact control should remain at least 44px");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-mobile.png") });
+    assert(mobileUi.clueKind === "clue" && mobileUi.reader && mobileUi.reader.left >= 0 && mobileUi.reader.top >= 0 && mobileUi.reader.right <= mobileUi.viewportWidth && mobileUi.reader.bottom <= mobileUi.viewportHeight, `mobile handwritten clue reader should fit on-screen; ui=${JSON.stringify(mobileUi)}`);
+    assert(mobileUi.printedLength >= 120 && /basement key/i.test(mobileUi.annotationCopy) && mobileUi.annotation && mobileUi.annotation.left >= 0 && mobileUi.annotation.right <= mobileUi.viewportWidth && mobileUi.annotation.bottom <= mobileUi.viewportHeight, `mobile printed prose and handwritten marginalia should both be visible without horizontal overflow; ui=${JSON.stringify(mobileUi)}`);
+    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

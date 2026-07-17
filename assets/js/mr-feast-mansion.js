@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-contestant-conversations-1";
+  const MANSION_RUNTIME_VERSION = "20260717-marginalia-clue-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -93,6 +93,7 @@
     bookTitle: $("mansion-book-title"),
     bookAuthor: $("mansion-book-author"),
     bookPreview: $("mansion-book-preview"),
+    bookAnnotation: $("mansion-book-annotation"),
     bookCollection: $("mansion-book-collection"),
     discovery: $("mansion-discovery"),
     discoveryTitle: $("mansion-discovery-title"),
@@ -1181,8 +1182,16 @@
     }),
   });
 
+  const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
+  const CONTESTANT_13_CLUE_BOOK = Object.freeze({
+    placementId: "contestant-13-marginalia-book",
+    kind: "clue",
+    annotation: "The basement key is buried where the hedge maze stops.\nA shovel waits in the formal garden, under the dead roses beside the faceless angel.\n— XIII",
+  });
+
   const CONTESTANT_13 = Object.freeze({
     title: "Contestant 13",
+    clueBook: CONTESTANT_13_CLUE_BOOK,
     objectives: Object.freeze({
       book: "Search the Library shelves for a book that does not quite belong.",
       shovel: "The book points to a shovel under dead roses in the formal garden.",
@@ -1197,8 +1206,8 @@
     journal: Object.freeze({
       book: Object.freeze({
         id: "contestant-13-book",
-        title: "The misfiled garden ledger",
-        body: "The basement key is buried where the hedge maze stops. A shovel waits in the formal garden, under dead roses beside the faceless angel. — 13",
+        title: "XIII's handwritten margin note",
+        body: CONTESTANT_13_CLUE_BOOK.annotation.replace(/\n+/g, " "),
       }),
       shovel: Object.freeze({
         id: "faceless-fountain-shovel",
@@ -6179,15 +6188,24 @@
     }
 
     readBook() {
+      const openCluePage = () => {
+        if (!readableBookSystem?.open(contestant13Scene.libraryBookPlacement)) {
+          this.showDiscovery(CONTESTANT_13.journal.book.title, CONTESTANT_13.journal.book.body);
+        }
+      };
       if (this.story.bookRead) {
-        this.showDiscovery(CONTESTANT_13.journal.book.title, CONTESTANT_13.journal.book.body);
+        openCluePage();
         return;
       }
       this.story.bookRead = true;
-      this.addJournalEntry(CONTESTANT_13.journal.book);
-      this.showDiscovery("A message inside the misfiled book", CONTESTANT_13.journal.book.body);
-      if (audioSystem) audioSystem.book("open");
+      this.addJournalEntry({
+        ...CONTESTANT_13.journal.book,
+        title: contestant13Scene.libraryBookPlacement?.title
+          ? `Handwritten note in “${contestant13Scene.libraryBookPlacement.title}”`
+          : CONTESTANT_13.journal.book.title,
+      });
       this.updateUI();
+      openCluePage();
     }
 
     takeShovel() {
@@ -6483,6 +6501,8 @@
           bookPulledOffset: CONTESTANT_13.world.book.localZ,
           bookScratch: "XIII",
           bookSlotReserved: true,
+          bookTitle: contestant13Scene.libraryBookPlacement?.title || null,
+          bookTitleVisible: Boolean(contestant13Scene.libraryBookPlacement && readableBookSystem?.spineTitlesFinalized),
           shovelVisible: Boolean(contestant13Scene.shovel && contestant13Scene.shovel.visible),
           shovelScale: contestant13Scene.shovel?.scale.x ?? CONTESTANT_13.world.shovel.scale,
           shovelPosition: {
@@ -6516,13 +6536,37 @@
     constructor(seed) {
       this.seed = Number(seed) >>> 0 || 1;
       this.randomState = this.seed;
+      this.cluePrintBook = this.selectCluePrintBook();
+      this.clueAnnotationSlot = this.selectClueAnnotationSlot();
       this.catalogCycle = [];
       this.catalogCursor = 0;
       this.placements = [];
+      this.specialPlacements = new Map();
       this.interactionTargets = [];
       this.collections = { LIBRARY: 0, "READING ROOM": 0, ARCHIVE: 0 };
       this.returnFocus = null;
       this.hitMaterial = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
+      this.spineTitleLabels = [];
+      this.spineTitleMeshes = [];
+      this.spineTitleTextures = new Map();
+      this.spineTitlesFinalized = false;
+    }
+
+    seededChoice(salt, length) {
+      if (!length) return 0;
+      let value = (this.seed ^ salt) >>> 0;
+      value = Math.imul(value ^ (value >>> 16), 0x7feb352d);
+      value = Math.imul(value ^ (value >>> 15), 0x846ca68b);
+      value = (value ^ (value >>> 16)) >>> 0;
+      return value % length;
+    }
+
+    selectCluePrintBook() {
+      return READABLE_BOOK_CATALOG[this.seededChoice(0xa13f29c7, READABLE_BOOK_CATALOG.length)];
+    }
+
+    selectClueAnnotationSlot() {
+      return CLUE_ANNOTATION_SLOTS[this.seededChoice(0x51d3b79a, CLUE_ANNOTATION_SLOTS.length)];
     }
 
     random() {
@@ -6548,7 +6592,7 @@
       return this.catalogCycle[this.catalogCursor++];
     }
 
-    createPlacement(collection, shelfName, entry, slotIndex) {
+    createPlacement(collection, shelfName, entry, slotIndex, parent, faceZ) {
       const book = this.nextCatalogBook();
       const placement = {
         placementId: `readable-book-${this.placements.length + 1}`,
@@ -6561,6 +6605,14 @@
         slotIndex,
         localX: Number(entry.x) || 0,
       };
+      this.registerSpineTitle({
+        bookId: placement.bookId,
+        title: placement.title,
+        kind: "lore",
+        parent,
+        entry,
+        faceZ,
+      });
       placement.interaction = {
         type: "readable-book",
         id: placement.placementId,
@@ -6576,7 +6628,7 @@
     registerShelfRow({ parent, name, collection, entries, y, z, width, height = READABLE_BOOKS.shelfTargetHeight }) {
       if (!parent || !entries?.length) return null;
       const shelfName = name || `readable-shelf-${this.interactionTargets.length + 1}`;
-      const placements = entries.map((entry, index) => this.createPlacement(collection, shelfName, entry, index));
+      const placements = entries.map((entry, index) => this.createPlacement(collection, shelfName, entry, index, parent, z));
       const target = box({
         name: `${shelfName}-book-hit-target`,
         w: width,
@@ -6599,6 +6651,140 @@
       addInteractionTarget(target, interaction);
       this.interactionTargets.push(target);
       return target;
+    }
+
+    registerSpineTitle({ bookId, title, kind = "lore", parent, entry, faceZ, width, height, depth, x, y, z, rotationZ = 0 }) {
+      if (!parent || !title) return null;
+      const frontSign = Math.sign(Number(faceZ) || Number(z) || -1) || -1;
+      const bookDepth = Math.abs(Number(depth ?? entry?.d ?? entry?.sz) || 0.27);
+      const bookCenterZ = Number(entry?.z ?? z) || 0;
+      const label = {
+        bookId,
+        title,
+        kind,
+        parent,
+        x: Number(entry?.x ?? x) || 0,
+        y: Number(entry?.y ?? y) || 0,
+        z: bookCenterZ + frontSign * (bookDepth / 2 + 0.004),
+        width: Math.max(0.04, (Number(width ?? entry?.w ?? entry?.sx) || 0.11) * 0.72),
+        height: Math.max(0.12, (Number(height ?? entry?.h ?? entry?.sy) || 0.4) * 0.76),
+        rotationZ: Number(entry?.rz ?? rotationZ) || 0,
+        frontSign,
+      };
+      this.spineTitleLabels.push(label);
+      return label;
+    }
+
+    registerSpecialBook(book, spine) {
+      if (!book?.placementId || !spine) return null;
+      const printedBook = book.kind === "clue" ? this.cluePrintBook : book;
+      const placement = {
+        placementId: book.placementId,
+        bookId: `special-copy-${printedBook.id}`,
+        printBookId: printedBook.id,
+        title: printedBook.title,
+        author: printedBook.author,
+        preview: printedBook.preview,
+        collection: book.kind === "clue" ? "Library · misfiled copy" : book.collection,
+        kind: book.kind || "clue",
+        annotation: book.annotation || "",
+        annotationSlot: book.kind === "clue" ? this.clueAnnotationSlot : null,
+      };
+      this.specialPlacements.set(placement.placementId, placement);
+      this.registerSpineTitle({
+        bookId: placement.bookId,
+        title: placement.title,
+        kind: placement.kind,
+        ...spine,
+      });
+      return placement;
+    }
+
+    createSpineTitleTexture(title) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 96;
+      canvas.height = 512;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      let fontSize = 34;
+      do {
+        ctx.font = `600 ${fontSize}px Georgia, serif`;
+        fontSize -= 1;
+      } while (fontSize > 17 && ctx.measureText(title).width > 452);
+      ctx.shadowColor = "rgba(20, 10, 4, 0.72)";
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = "#ead9a2";
+      ctx.fillText(title, 0, 0);
+      ctx.restore();
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = `book-spine-title-${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+      texture.encoding = THREE.sRGBEncoding;
+      return texture;
+    }
+
+    finalizeSpineTitles() {
+      if (this.spineTitlesFinalized) return this.spineTitleMeshes.length;
+      this.spineTitlesFinalized = true;
+      scene.updateMatrixWorld(true);
+      const groups = new Map();
+      for (const label of this.spineTitleLabels) {
+        const key = `${label.kind}:${label.bookId}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(label);
+      }
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      const localMatrix = new THREE.Matrix4();
+      const worldMatrix = new THREE.Matrix4();
+      const euler = new THREE.Euler(0, 0, 0, "YXZ");
+      for (const [key, labels] of groups) {
+        const sample = labels[0];
+        const texture = this.createSpineTitleTexture(sample.title);
+        this.spineTitleTextures.set(key, texture);
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          alphaTest: 0.08,
+          depthWrite: false,
+          toneMapped: false,
+          side: THREE.FrontSide,
+        });
+        const titles = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, labels.length);
+        titles.name = `readable-book-spine-titles-${key.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+        titles.castShadow = false;
+        titles.receiveShadow = false;
+        titles.frustumCulled = false;
+        titles.renderOrder = 4;
+        titles.userData.bookSpineTitles = true;
+        titles.userData.bookKind = sample.kind;
+        titles.userData.title = sample.title;
+        labels.forEach((label, index) => {
+          label.parent.updateWorldMatrix(true, false);
+          position.set(label.x, label.y, label.z);
+          euler.set(0, label.frontSign < 0 ? Math.PI : 0, label.rotationZ);
+          quaternion.setFromEuler(euler);
+          scale.set(label.width, label.height, 1);
+          localMatrix.compose(position, quaternion, scale);
+          worldMatrix.multiplyMatrices(label.parent.matrixWorld, localMatrix);
+          titles.setMatrixAt(index, worldMatrix);
+        });
+        titles.instanceMatrix.needsUpdate = true;
+        scene.add(titles);
+        this.spineTitleMeshes.push(titles);
+      }
+      return this.spineTitleMeshes.length;
     }
 
     resolveShelfHit(row, hit) {
@@ -6631,7 +6817,16 @@
       if (dom.bookTitle) dom.bookTitle.textContent = placement.title;
       if (dom.bookAuthor) dom.bookAuthor.textContent = `by ${placement.author}`;
       if (dom.bookPreview) dom.bookPreview.textContent = placement.preview;
+      if (dom.bookAnnotation) {
+        dom.bookAnnotation.textContent = placement.annotation || "";
+        dom.bookAnnotation.hidden = !placement.annotation;
+      }
       if (dom.bookCollection) dom.bookCollection.textContent = `Hollow Estate collection · ${placement.collection}`;
+      if (dom.bookReader) {
+        dom.bookReader.dataset.bookKind = placement.kind || "lore";
+        if (placement.annotationSlot) dom.bookReader.dataset.annotationSlot = placement.annotationSlot;
+        else delete dom.bookReader.dataset.annotationSlot;
+      }
       if (dom.bookReader) dom.bookReader.hidden = false;
       if (dom.stage && dom.bookReader) {
         for (const child of dom.stage.children) {
@@ -6670,7 +6865,12 @@
     }
 
     getDiagnostics() {
-      const active = this.placements.find((placement) => placement.placementId === state.readableBooks.activePlacementId) || null;
+      const active = this.placements.find((placement) => placement.placementId === state.readableBooks.activePlacementId)
+        || this.specialPlacements.get(state.readableBooks.activePlacementId)
+        || null;
+      const ordinarySpineLabels = this.spineTitleLabels.filter((label) => label.kind === "lore");
+      const clueSpineLabels = this.spineTitleLabels.filter((label) => label.kind === "clue");
+      const ordinarySpineMeshes = this.spineTitleMeshes.filter((mesh) => mesh.userData.bookKind === "lore");
       return {
         seed: this.seed,
         catalogSize: READABLE_BOOK_CATALOG.length,
@@ -6687,6 +6887,9 @@
           title: active.title,
           author: active.author,
           collection: active.collection,
+          kind: active.kind || "lore",
+          printBookId: active.printBookId || active.bookId,
+          annotationSlot: active.annotationSlot || null,
         } : null,
         assignmentSample: this.placements.slice(0, 20).map((placement) => ({
           placementId: placement.placementId,
@@ -6694,6 +6897,24 @@
           collection: placement.collection,
         })),
         clueBookReserved: true,
+        clueBook: (() => {
+          const clue = [...this.specialPlacements.values()].find((placement) => placement.kind === "clue");
+          return clue ? {
+            printBookId: clue.printBookId,
+            title: clue.title,
+            author: clue.author,
+            previewLength: clue.preview.length,
+            annotationSlot: clue.annotationSlot,
+          } : null;
+        })(),
+        spineTitles: {
+          instances: ordinarySpineLabels.length,
+          batches: ordinarySpineMeshes.length,
+          textures: new Set(ordinarySpineLabels.map((label) => label.bookId)).size,
+          clueInstances: clueSpineLabels.length,
+          clueTitle: clueSpineLabels[0]?.title || null,
+          finalized: this.spineTitlesFinalized,
+        },
       };
     }
   }
@@ -11902,12 +12123,23 @@
       });
       stroke.rotation.z = rotationZ;
     }
+    const cluePlacement = readableBookSystem?.registerSpecialBook(CONTESTANT_13.clueBook, {
+      parent: group,
+      x: bookLayout.localX,
+      y: bookLayout.shelfY - 0.055,
+      z: bookLayout.localZ,
+      faceZ: -1,
+      width: bookLayout.width,
+      height: bookLayout.height * 0.72,
+      depth: bookLayout.depth,
+    });
     contestant13Scene.libraryBook = group;
     contestant13Scene.libraryBookScratch = scratch;
+    contestant13Scene.libraryBookPlacement = cluePlacement;
     contestant13Quest.registerInteraction(
       "library-book",
       [book],
-      () => state.contestant13.bookRead ? "Reread the misfiled garden ledger" : "Examine the slightly misfiled book",
+      () => `${state.contestant13.bookRead ? "Reread" : "Read"} “${cluePlacement?.title || "Misfiled volume"}”`,
       () => contestant13Quest.readBook(),
     );
   }
@@ -16483,6 +16715,7 @@
       scene.add(moonLight);
 
       buildMansion();
+      readableBookSystem.finalizeSpineTitles();
       setLoading("Unveiling the estate statues", 68);
       await loadEstateStatues();
       mergeStaticDecor();

@@ -47,6 +47,7 @@ async function run() {
   assert(/const READABLE_BOOK_CATALOG\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the readable-book catalog");
   assert(/class ReadableBookSystem/.test(runtimeSource), "runtime is missing the readable-book system");
   assert(/id="mansion-book-reader"[^>]+role="dialog"[^>]+aria-modal="true"/.test(pageSource), "page is missing the accessible book reader");
+  assert(/id="mansion-book-annotation"[^>]+aria-label="Handwritten note"/.test(pageSource), "the shared reader is missing a separate handwritten marginalia layer");
 
   let server = null;
   let browser = null;
@@ -75,11 +76,18 @@ async function run() {
     assert(books.interactionTargets > 0 && books.interactionTargets <= 40, `books should use shelf-row interaction batching instead of hundreds of draw/raycast targets; books=${JSON.stringify(books)}`);
     assert(books.seed === 13013 && new Set(books.assignmentSample.slice(0, 20).map((entry) => entry.bookId)).size === 20, `one shuffled cycle should contain all 20 titles exactly once; books=${JSON.stringify(books)}`);
     assert(books.clueBookReserved === true, "the Contestant 13 clue-book slot should remain reserved from ordinary lore assignments");
+    assert(books.spineTitles?.instances === books.physicalCopies, `every ordinary physical volume should render its assigned title on the spine; books=${JSON.stringify(books)}`);
+    assert(books.spineTitles?.batches === books.catalogSize && books.spineTitles?.textures === books.catalogSize, `spine titles should stay batched by the 20-title catalog instead of creating one draw call/material per copy; books=${JSON.stringify(books)}`);
+    const firstCycleBookIds = new Set(books.assignmentSample.slice(0, 20).map((entry) => entry.bookId));
+    assert(firstCycleBookIds.has(books.clueBook?.printBookId) && books.clueBook?.title && books.clueBook?.previewLength >= 120, `the clue volume should borrow a complete printed title, author, and excerpt from the ordinary catalog; books=${JSON.stringify(books)}`);
+    assert(books.spineTitles?.clueTitle === books.clueBook.title && books.spineTitles?.clueInstances === 1, `the reserved clue volume should print its selected lore title on the physical spine; books=${JSON.stringify(books)}`);
+    assert(["left-margin", "right-margin", "lower-page"].includes(books.clueBook.annotationSlot), `the handwritten clue should receive one stable seeded location on the printed page; books=${JSON.stringify(books)}`);
 
     const lightLayoutBefore = await desktop.evaluate(() => window.MrFeastFresh.lightLayout());
     await desktop.waitForFunction(() => /read/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
     const physicalPrompt = (await diagnostics(desktop)).prompt;
     assert(/^Read “.+”$/.test(physicalPrompt), `aiming at a physical spine should show its title; prompt=${JSON.stringify(physicalPrompt)}`);
+    await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "titled-book-spines-desktop.png") });
     await desktop.keyboard.press("KeyE");
     await desktop.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
 
@@ -108,11 +116,45 @@ async function run() {
     assert(JSON.stringify(lightLayoutAfter) === JSON.stringify(lightLayoutBefore), `reading books must not alter the shader-light layout; before=${JSON.stringify(lightLayoutBefore)} after=${JSON.stringify(lightLayoutAfter)}`);
 
     await desktop.evaluate(() => window.MrFeastFresh.teleport("contestant13LibraryBook"));
-    await desktop.waitForFunction(() => /misfiled|garden ledger/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
+    await desktop.waitForFunction((title) => (JSON.parse(window.render_game_to_text()).prompt || "").includes(title), books.clueBook.title, { timeout: 10000 });
     await desktop.keyboard.press("KeyE");
-    await desktop.waitForFunction(() => JSON.parse(window.render_game_to_text()).contestant13?.bookRead);
+    await desktop.waitForFunction(() => JSON.parse(window.render_game_to_text()).contestant13?.bookRead && !document.getElementById("mansion-book-reader")?.hidden);
+    const clueReader = await desktop.evaluate(() => {
+      const preview = document.getElementById("mansion-book-preview");
+      return {
+        title: document.getElementById("mansion-book-title")?.textContent,
+        author: document.getElementById("mansion-book-author")?.textContent,
+        collection: document.getElementById("mansion-book-collection")?.textContent,
+        preview: preview?.textContent,
+        annotation: document.getElementById("mansion-book-annotation")?.textContent,
+        kind: document.getElementById("mansion-book-reader")?.dataset.bookKind,
+        annotationSlot: document.getElementById("mansion-book-reader")?.dataset.annotationSlot,
+        previewFont: preview ? getComputedStyle(preview).fontFamily : "",
+        annotationFont: getComputedStyle(document.getElementById("mansion-book-annotation")).fontFamily,
+      };
+    });
     state = await diagnostics(desktop);
-    assert(state.contestant13.bookRead && await desktop.locator("#mansion-book-reader").isHidden(), "the reserved Contestant 13 book should keep its original progression interaction");
+    assert(clueReader.title === books.clueBook.title && clueReader.author === `by ${books.clueBook.author}`, `the disguised clue volume should retain the selected catalog book's printed title and author; clue=${JSON.stringify(clueReader)} books=${JSON.stringify(books.clueBook)}`);
+    assert(clueReader.kind === "clue" && clueReader.preview.length >= 120 && !/basement key is buried/i.test(clueReader.preview), `the main page copy should remain an ordinary printed lore excerpt rather than becoming the clue; clue=${JSON.stringify(clueReader)}`);
+    assert(/hedge maze/i.test(clueReader.annotation || "") && /formal garden/i.test(clueReader.annotation || "") && /XIII/i.test(clueReader.annotation || ""), `a separate handwritten annotation should preserve both trail directions and signature; clue=${JSON.stringify(clueReader)}`);
+    assert(/Georgia|serif/i.test(clueReader.previewFont) && /Bradley Hand|Segoe Print|Comic Sans|cursive/i.test(clueReader.annotationFont), `printed prose and handwritten marginalia need visibly different typography; clue=${JSON.stringify(clueReader)}`);
+    assert(clueReader.annotationSlot === books.clueBook.annotationSlot && state.contestant13.bookRead && state.books.open && state.books.active?.kind === "clue", `the clue volume should retain its seeded annotation location and advance through the shared reader; books=${JSON.stringify(state.books)}`);
+    await desktop.waitForTimeout(200);
+    await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-with-handwritten-marginalia-desktop.png") });
+    await desktop.keyboard.press("Escape");
+    await desktop.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
+    await desktop.evaluate(() => {
+      window.MrFeastFresh.teleport("readingRoom");
+      window.advanceTime(180);
+    });
+    await desktop.waitForTimeout(180);
+    await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "titled-book-spines-reading-room-desktop.png") });
+    await desktop.evaluate(() => {
+      window.MrFeastFresh.teleport("archiveWestAisle");
+      window.advanceTime(180);
+    });
+    await desktop.waitForTimeout(180);
+    await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "titled-book-spines-archive-desktop.png") });
 
     const alternate = await browser.newPage({ viewport: { width: 900, height: 650 } });
     const alternateErrors = [];
@@ -121,14 +163,18 @@ async function run() {
     await alternate.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
     const alternateBooks = (await diagnostics(alternate)).books;
     assert(alternateBooks.seed === 90210 && JSON.stringify(alternateBooks.assignmentSample) !== JSON.stringify(books.assignmentSample), "different fresh-run seeds should reshuffle titles across the physical shelves");
+    assert(alternateBooks.clueBook.printBookId !== books.clueBook.printBookId || alternateBooks.clueBook.annotationSlot !== books.clueBook.annotationSlot, `different seeds should vary the disguised clue print or handwritten placement; first=${JSON.stringify(books.clueBook)} alternate=${JSON.stringify(alternateBooks.clueBook)}`);
 
     const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const mobileErrors = [];
     watchErrors(mobile, mobileErrors);
     await mobile.goto(`${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&bookSeed=13013&frame=1`, { waitUntil: "domcontentloaded" });
     await mobile.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
-    await mobile.evaluate(() => window.MrFeastFresh.openReadableBookForQA(4));
-    await mobile.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
+    const mobileQaOpen = await mobile.evaluate(() => ({
+      opened: window.MrFeastFresh.openReadableBookForQA(4),
+      hidden: document.getElementById("mansion-book-reader")?.hidden,
+    }));
+    assert(mobileQaOpen.opened && mobileQaOpen.hidden === false, `direct mobile QA should synchronously open the selected lore volume; result=${JSON.stringify(mobileQaOpen)}`);
     const mobileLayout = await mobile.evaluate(() => {
       const panel = document.querySelector(".mansion-book__page").getBoundingClientRect();
       const close = document.getElementById("mansion-book-close").getBoundingClientRect();
@@ -145,7 +191,7 @@ async function run() {
     await mobile.locator("#mansion-book-close").click();
 
     assert([...desktopErrors, ...alternateErrors, ...mobileErrors].length === 0, `browser errors: ${[...desktopErrors, ...alternateErrors, ...mobileErrors].join(" | ")}`);
-    console.log("Mr. Feast readable books browser test: 20 shuffled titles, all physical copies, lore reader, clue isolation, lighting stability, and mobile layout passed");
+    console.log("Mr. Feast readable books browser test: 20 shuffled titles, 384 batched spine labels, random printed clue volume with separate marginalia, lighting stability, and mobile layout passed");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");
@@ -153,6 +199,6 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error(`Mr. Feast readable books browser test failed: ${error.message}`);
+  console.error(`Mr. Feast readable books browser test failed: ${error.stack || error.message}`);
   process.exitCode = 1;
 });

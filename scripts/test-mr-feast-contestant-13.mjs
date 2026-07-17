@@ -332,9 +332,10 @@ async function run() {
     state = await diagnostics(page);
     assert(state.contestant13.relaySabotaged === false, "relay must not be sabotaged before hearing the recording");
 
-    await teleportForInteraction(page, "contestant13LibraryBook", /book|misfiled|volume/i);
+    await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
     await pressInteract(page);
+    await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
     assert(state.contestant13.bookRead === true, "Library book interaction should mark the clue read");
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
@@ -342,9 +343,14 @@ async function run() {
     assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should appear after the first clue is discovered");
     assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
     await pressInteract(page);
+    await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "rereading must not duplicate the book clue");
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
 
     await teleportForInteraction(page, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-hidden-in-roses-desktop.png") });
@@ -444,9 +450,10 @@ async function run() {
     const earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
     assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library clue without exposing it on the HUD");
-    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /book|misfiled|volume/i);
+    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "bookRead");
+    await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     const mobileUi = await mobilePage.evaluate(() => {
       const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();
       const touch = document.getElementById("touch-interact")?.getBoundingClientRect();
@@ -459,7 +466,7 @@ async function run() {
     assert(mobileUi.caseFile && mobileUi.caseFile.left >= 0 && mobileUi.caseFile.right <= mobileUi.viewport.width, "mobile case file must fit the viewport");
     assert(mobileUi.caseFile.height >= 44, "mobile objective HUD should remain readable");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "touch interact target should remain at least 44px");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-picked-up-mobile.png") });
+    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

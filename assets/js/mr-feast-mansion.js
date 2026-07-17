@@ -275,8 +275,8 @@
     searchSeconds: 6.5,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
-    exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "DEEP HEDGE MAZE"]),
-    requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
+    exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "WORKROOM", "DEEP HEDGE MAZE"]),
+    requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
   });
   const SECURITY_CAMERA_FIXTURE = Object.freeze({
     mountSize: 0.18,
@@ -306,6 +306,14 @@
     monitorReducedRefreshSeconds: 0.5,
     monitorPageSeconds: 10,
     monitorFov: 70,
+    serverLighting: Object.freeze({
+      x: 6.1,
+      z: -8.55,
+      intensityScale: 1.55,
+      radius: 7.6,
+      taskLightX: 6.35,
+      taskLightZs: Object.freeze([-10.35, -8.55, -6.75]),
+    }),
     initialFeeds: Object.freeze([
       "cam-main-foyer",
       "cam-main-ballroom",
@@ -412,8 +420,6 @@
     securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
     securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workroom-west", "WORKROOM", -2.35, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 52, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-workroom-east", "WORKROOM", 4.45, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 7.4, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),
 
     securityCameraPlacement("cam-yard-gate", "FRONT DRIVE", 3.9, 2.75, 33.12, 29, 38, 9.0, { outdoors: true, floorY: ESTATE_GROUND_Y, responseNodeId: "response-yard-gate" }),
@@ -678,7 +684,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-upper-window-gallery-1",
+    assetVersion: "20260716-workroom-refinement-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -1416,6 +1422,7 @@
     monitorRoot: null,
     monitorScreens: [],
     monitorStatusLights: [],
+    serverTaskLights: [],
     ambience: {
       serverRacks: 0,
       operatorStations: 0,
@@ -5318,6 +5325,8 @@
     const door = workroomScene.entranceDoor;
     const ambience = { ...workroomScene.ambience };
     ambience.propCount = Object.values(ambience).reduce((total, count) => total + count, 0);
+    const workroomCircuit = circuits.find((circuit) => circuit.name === "workroom lights") || null;
+    const serverFixture = workroomCircuit?.lights.find((light) => light.userData.workroomRole === "server-side") || null;
     const result = {
       merged: roomZones.some((zone) => zone.roomLabel === WORKROOM_SECURITY.room && zone.x1 === WORKROOM_SECURITY.bounds.minX && zone.x2 === WORKROOM_SECURITY.bounds.maxX),
       room: WORKROOM_SECURITY.room,
@@ -5338,6 +5347,19 @@
         deniedAttempts: state.workroom.deniedAttempts,
       },
       ambience,
+      serverLighting: {
+        cameraFree: !cameraSecurity?.cameras.some((cameraState) => cameraState.room === WORKROOM_SECURITY.room),
+        fixtureCount: workroomCircuit?.lights.length || 0,
+        taskLights: workroomScene.serverTaskLights.length,
+        serverFixture: serverFixture ? {
+          x: Number(serverFixture.position.x.toFixed(2)),
+          z: Number(serverFixture.position.z.toFixed(2)),
+          intensityScale: serverFixture.userData.intensityScale,
+          intensity: Number(serverFixture.userData.baseIntensity.toFixed(2)),
+          radius: Number(serverFixture.userData.authoredReach.toFixed(2)),
+          rendered: Boolean(serverFixture.userData.renderPlaced && serverFixture.intensity > 0),
+        } : null,
+      },
       monitors: monitorWallSystem?.getDiagnostics() || null,
     };
     if (state.qa) result.qaCode = WORKROOM_SECURITY.code;
@@ -5774,9 +5796,9 @@
     handlePatronFeedSabotage() {
       this.syncPolicy();
       if (state.security.mode !== CAMERA_SECURITY_MODE.LOCKDOWN) this.transitionPolicy("patronFeedSabotaged");
-      // Cutting the feed while a Workroom camera faces away is a valid
-      // stealth success. It starts global lockdown, but Mr. Feast is summoned
-      // only by an actual camera sighting (including one during the action).
+      // The Workroom itself is camera-free, so cutting the private feed is a
+      // valid stealth success. It starts global lockdown, but Mr. Feast is
+      // summoned only by a later sighting from the remaining public network.
       this.updatePresentation();
       this.updateHud();
     }
@@ -5918,7 +5940,7 @@
           manual: this.qaManual,
           soloCameraId: this.qaSoloCameraId,
           mainCameraId: "cam-main-foyer",
-          basementCameraId: "cam-basement-workroom-west",
+          basementCameraId: "cam-basement-archive",
         },
       };
     }
@@ -10151,8 +10173,46 @@
     rearService.addSwitch(0, FLOOR.BASEMENT + 1.15, -4.739, 0);
 
     const workroom = new LightCircuit("workroom lights", FLOOR.BASEMENT, 0xff9a53, true);
-    workroom.addFixture(-2.3, -8.2, "basement");
-    workroom.addFixture(4.5, -8.2, "basement");
+    const operatorFixture = workroom.addFixture(-2.3, -8.2, "basement");
+    operatorFixture.userData.fixtureRole = "support";
+    operatorFixture.userData.workroomRole = "operator-side";
+    const serverFixture = workroom.addFixture(WORKROOM_SECURITY.serverLighting.x, WORKROOM_SECURITY.serverLighting.z, "basement");
+    // The fixed basement light budget preserves one primary emitter per
+    // switch-owned circuit. Make the east fixture that primary so the rack
+    // bank receives real illumination instead of only decorative glow.
+    serverFixture.userData.fixtureRole = "primary";
+    serverFixture.userData.workroomRole = "server-side";
+    serverFixture.userData.intensityScale = WORKROOM_SECURITY.serverLighting.intensityScale;
+    serverFixture.userData.baseIntensity *= WORKROOM_SECURITY.serverLighting.intensityScale;
+    serverFixture.userData.authoredReach = WORKROOM_SECURITY.serverLighting.radius;
+    serverFixture.intensity = workroom.on ? serverFixture.userData.baseIntensity : 0;
+    serverFixture.distance = WORKROOM_SECURITY.serverLighting.radius;
+    const serverTaskLightMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffd7a0,
+      emissive: 0xff9a42,
+      emissiveIntensity: workroom.on ? 2.1 : 0,
+      roughness: 0.26,
+      metalness: 0.05,
+    });
+    serverTaskLightMaterial.userData.onEmissiveIntensity = 2.1;
+    serverTaskLightMaterial.userData.offEmissiveIntensity = 0;
+    workroom.glowMaterials.push(serverTaskLightMaterial);
+    for (const z of WORKROOM_SECURITY.serverLighting.taskLightZs) {
+      const taskLight = box({
+        name: "workroom-server-task-light",
+        w: 0.24,
+        h: 0.07,
+        d: 0.82,
+        x: WORKROOM_SECURITY.serverLighting.taskLightX,
+        y: FLOOR.MAIN - 0.29,
+        z,
+        material: serverTaskLightMaterial,
+        cast: false,
+        receive: false,
+      });
+      workroomScene.serverTaskLights.push(taskLight);
+      workroom.addSourceHalo(WORKROOM_SECURITY.serverLighting.taskLightX, FLOOR.MAIN - 0.38, z, 0.88, 0.2);
+    }
     workroom.addSwitch(-1.0, FLOOR.BASEMENT + 1.15, -5.061, Math.PI);
 
     const bulkStorage = new LightCircuit("bulk storage lights", FLOOR.BASEMENT, 0xff9f5f, true);
@@ -11950,13 +12010,16 @@
         return;
       }
       if (state.workroom.keypadOpen) {
-        if (!event.repeat && (/^Digit\d$/.test(event.code) || /^Numpad\d$/.test(event.code))) {
+        const keypadDigit = /^Digit\d$/.test(event.code) || /^Numpad\d$/.test(event.code)
+          ? event.code.slice(-1)
+          : /^\d$/.test(event.key) ? event.key : null;
+        if (!event.repeat && keypadDigit != null) {
           event.preventDefault();
-          appendWorkroomKeypadDigit(event.code.slice(-1));
-        } else if (!event.repeat && (event.code === "Backspace" || event.code === "Delete")) {
+          appendWorkroomKeypadDigit(keypadDigit);
+        } else if (!event.repeat && (["Backspace", "Delete"].includes(event.code) || ["Backspace", "Delete"].includes(event.key))) {
           event.preventDefault();
           clearWorkroomKeypad();
-        } else if (!event.repeat && (event.code === "Enter" || event.code === "NumpadEnter")) {
+        } else if (!event.repeat && (event.code === "Enter" || event.code === "NumpadEnter" || event.key === "Enter")) {
           event.preventDefault();
           submitWorkroomCode();
         }

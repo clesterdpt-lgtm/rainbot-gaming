@@ -102,13 +102,13 @@ async function run() {
     let state = await diagnostics(page);
     assert(state.security, "render_game_to_text() should expose the camera-security system");
     assert(state.security.mode === "show", `fresh security policy should start in show mode; security=${JSON.stringify(state.security)}`);
-    assert(state.security.cameras.total >= 28, `most mansion and exterior zones should receive working cameras; total=${state.security.cameras.total}`);
-    assert(state.security.cameras.indoors >= 20 && state.security.cameras.outdoors >= 7, `camera coverage should span interior and grounds; cameras=${JSON.stringify(state.security.cameras)}`);
-    for (const safeZone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET"]) {
+    assert(state.security.cameras.total === 32, `removing both Workroom cameras should leave 32 public cameras; total=${state.security.cameras.total}`);
+    assert(state.security.cameras.indoors === 24 && state.security.cameras.outdoors === 8, `camera coverage should retain 24 interior and eight grounds units; cameras=${JSON.stringify(state.security.cameras)}`);
+    for (const safeZone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WORKROOM"]) {
       assert(state.security.cameras.exemptZones.includes(safeZone), `intentional camera-free zone is missing: ${safeZone}`);
       assert(!state.security.cameras.coveredZones.includes(safeZone), `safe zone should not contain a camera: ${safeZone}`);
     }
-    for (const coveredZone of ["FRONT FOYER", "BALLROOM", "WORKROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
+    for (const coveredZone of ["FRONT FOYER", "BALLROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]) {
       assert(state.security.cameras.coveredZones.includes(coveredZone), `major camera coverage is missing: ${coveredZone}`);
     }
 
@@ -122,6 +122,7 @@ async function run() {
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
     const cameraById = new Map(securityDetails.cameras.details.map((entry) => [entry.id, entry]));
     assert(!cameraById.has("cam-main-stair"), "the duplicate camera behind the grand-stair mid-landing should be removed");
+    assert(!cameraById.has("cam-basement-workroom-west") && !cameraById.has("cam-basement-workroom-east"), "the Workroom should contain no public security cameras");
     const readingCamera = cameraById.get("cam-upper-reading");
     assert(readingCamera && Math.abs(Math.abs(readingCamera.baseYaw) - Math.PI) < 0.001, `Reading Room camera should face north into the room from its south-wall mount; camera=${JSON.stringify(readingCamera)}`);
     const poolCamera = cameraById.get("cam-yard-pool");

@@ -4,6 +4,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.MR_FEAST_TEST_PORT || (43000 + (process.pid % 18000)));
@@ -36,6 +37,32 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function captureServerSideVisibility(page, outputPath) {
+  const screenshot = await page.screenshot();
+  await sharp(screenshot).png().toFile(outputPath);
+  const metadata = await sharp(screenshot).metadata();
+  const region = {
+    left: Math.floor((metadata.width || 1) * 0.68),
+    top: Math.floor((metadata.height || 1) * 0.15),
+    width: Math.floor((metadata.width || 1) * 0.30),
+    height: Math.floor((metadata.height || 1) * 0.65),
+  };
+  const { data, info } = await sharp(screenshot).extract(region).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let luminance = 0;
+  let visiblePixels = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const value = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+    luminance += value;
+    if (value >= 18) visiblePixels += 1;
+  }
+  const pixelCount = data.length / info.channels;
+  return {
+    meanLuminance: Number((luminance / pixelCount).toFixed(3)),
+    visiblePercent: Number((visiblePixels / pixelCount * 100).toFixed(2)),
+    region,
+  };
+}
+
 async function run() {
   let server = null;
   if (!(await serverResponds())) {
@@ -63,6 +90,8 @@ async function run() {
 
     let state = await diagnostics(page);
     assert(state.room === "WORKROOM", `both former room halves should resolve to WORKROOM, received ${state.room}`);
+    assert(state.security.cameras.total === 32 && state.security.cameras.indoors === 24 && state.security.cameras.outdoors === 8, `the Workroom camera removal should leave a 32-camera estate roster; cameras=${JSON.stringify(state.security.cameras)}`);
+    assert(state.security.cameras.exemptZones.includes("WORKROOM") && !state.security.cameras.coveredZones.includes("WORKROOM"), "the Workroom should be an explicit camera-free zone");
     const eastHalf = await page.evaluate(() => window.MrFeastFresh.teleport("workroomEast"));
     assert(eastHalf.room === "WORKROOM", `the former Cold Room half should resolve to WORKROOM, received ${eastHalf.room}`);
     await page.evaluate(() => window.MrFeastFresh.teleport("workroomMonitorWall"));
@@ -91,6 +120,20 @@ async function run() {
     await page.keyboard.press("e");
     await page.waitForFunction(() => !document.getElementById("mansion-workroom-keypad")?.hidden);
     const qaCode = await page.evaluate(() => window.MrFeastFresh.getWorkroomState().qaCode);
+
+    // Some browser/keyboard layouts report the typed character through
+    // `event.key` without a usable physical `event.code`. Exercise that real
+    // input path so the PIN pad does not silently ignore number entry.
+    for (const digit of qaCode) {
+      await page.evaluate((key) => window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })), digit);
+    }
+    state = await diagnostics(page);
+    assert(state.workroom.keypad.inputLength === qaCode.length, `layout-neutral keyboard digits should populate the Workroom keypad; keypad=${JSON.stringify(state.workroom.keypad)}`);
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    state = await diagnostics(page);
+    assert(state.workroom.entrance.locked === false && state.workroom.keypad.status === "accepted", "layout-neutral keyboard input should submit and unlock the Workroom");
+    await page.evaluate(() => window.MrFeastFresh.resetWorkroomForQA());
+
     for (const digit of qaCode) await page.locator(`[data-workroom-key][data-digit="${digit}"]`).click();
     await page.locator('[data-workroom-key][data-action="enter"]').click();
     state = await diagnostics(page);
@@ -132,11 +175,14 @@ async function run() {
     assert(state.workroom?.ambience?.serverRacks >= 2, "the Workroom should include server racks");
     assert(state.workroom?.ambience?.operatorStations >= 1, "the Workroom should include an operator console");
     assert(state.workroom?.ambience?.propCount >= 12, "the Workroom should include substantial atmospheric equipment and clutter");
+    assert(state.workroom?.serverLighting?.cameraFree === true && state.workroom.serverLighting.fixtureCount === 2, `Workroom diagnostics should expose a camera-free two-emitter circuit; lighting=${JSON.stringify(state.workroom?.serverLighting)}`);
+    assert(state.workroom.serverLighting.serverFixture?.x >= 6 && state.workroom.serverLighting.serverFixture?.intensityScale >= 1.5 && state.workroom.serverLighting.serverFixture?.rendered === true && state.workroom.serverLighting.taskLights >= 3, `the east rack bank should own a budgeted real emitter plus switched task practicals; lighting=${JSON.stringify(state.workroom.serverLighting)}`);
 
     await page.screenshot({ path: path.join(artifactDir, "workroom-monitor-wall-desktop.png") });
     await page.evaluate(() => window.MrFeastFresh.teleport("workroomWide"));
-    await page.waitForTimeout(350);
-    await page.screenshot({ path: path.join(artifactDir, "workroom-wide-desktop.png") });
+    await page.waitForTimeout(500);
+    const serverVisibility = await captureServerSideVisibility(page, path.join(artifactDir, "workroom-server-racks-desktop.png"));
+    assert(serverVisibility.meanLuminance >= 10 && serverVisibility.visiblePercent >= 15, `the server side remains too dark to read; visibility=${JSON.stringify(serverVisibility)}`);
 
     await page.evaluate(() => window.MrFeastFresh.openWorkroomKeypadForQA());
     await page.waitForFunction(() => !document.getElementById("mansion-workroom-keypad")?.hidden);

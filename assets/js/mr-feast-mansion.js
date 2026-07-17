@@ -306,6 +306,7 @@
     monitorReducedRefreshSeconds: 0.5,
     monitorPageSeconds: 10,
     monitorFov: 70,
+    lightBudgetFixtureRoles: Object.freeze(["server-side", "operator-side"]),
     serverLighting: Object.freeze({
       x: 6.1,
       z: -8.55,
@@ -684,7 +685,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-workroom-refinement-1",
+    assetVersion: "20260716-workroom-dual-lighting-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -5327,6 +5328,15 @@
     ambience.propCount = Object.values(ambience).reduce((total, count) => total + count, 0);
     const workroomCircuit = circuits.find((circuit) => circuit.name === "workroom lights") || null;
     const serverFixture = workroomCircuit?.lights.find((light) => light.userData.workroomRole === "server-side") || null;
+    const operatorFixture = workroomCircuit?.lights.find((light) => light.userData.workroomRole === "operator-side") || null;
+    const fixtureDiagnostics = (fixture) => fixture ? {
+      x: Number(fixture.position.x.toFixed(2)),
+      z: Number(fixture.position.z.toFixed(2)),
+      intensityScale: fixture.userData.intensityScale || 1,
+      intensity: Number(fixture.userData.baseIntensity.toFixed(2)),
+      radius: Number(fixture.userData.authoredReach.toFixed(2)),
+      rendered: Boolean(fixture.userData.renderPlaced && fixture.intensity > 0),
+    } : null;
     const result = {
       merged: roomZones.some((zone) => zone.roomLabel === WORKROOM_SECURITY.room && zone.x1 === WORKROOM_SECURITY.bounds.minX && zone.x2 === WORKROOM_SECURITY.bounds.maxX),
       room: WORKROOM_SECURITY.room,
@@ -5351,14 +5361,8 @@
         cameraFree: !cameraSecurity?.cameras.some((cameraState) => cameraState.room === WORKROOM_SECURITY.room),
         fixtureCount: workroomCircuit?.lights.length || 0,
         taskLights: workroomScene.serverTaskLights.length,
-        serverFixture: serverFixture ? {
-          x: Number(serverFixture.position.x.toFixed(2)),
-          z: Number(serverFixture.position.z.toFixed(2)),
-          intensityScale: serverFixture.userData.intensityScale,
-          intensity: Number(serverFixture.userData.baseIntensity.toFixed(2)),
-          radius: Number(serverFixture.userData.authoredReach.toFixed(2)),
-          rendered: Boolean(serverFixture.userData.renderPlaced && serverFixture.intensity > 0),
-        } : null,
+        serverFixture: fixtureDiagnostics(serverFixture),
+        operatorFixture: fixtureDiagnostics(operatorFixture),
       },
       monitors: monitorWallSystem?.getDiagnostics() || null,
     };
@@ -12459,6 +12463,16 @@
         (light.isSpotLight && selectedSpots < spotLimit)
         || (light.isPointLight && selectedPoints < pointLimit)
       )));
+    }
+
+    // The merged Workroom spans two former rooms, so one representative does
+    // not illuminate both halves. Claim its second existing point-light slot
+    // before optional same-circuit extras elsewhere in the basement. The
+    // global 11-point budget remains unchanged; this only replaces a later
+    // optional emitter with the west operator fixture.
+    const workroomCircuit = renderedCircuits.find((circuit) => circuit.name === "workroom lights");
+    for (const role of WORKROOM_SECURITY.lightBudgetFixtureRoles) {
+      trySelect(workroomCircuit?.lights.find((light) => light.userData.workroomRole === role));
     }
 
     // Bathroom ceiling fixtures keep their central room omni, then claim one

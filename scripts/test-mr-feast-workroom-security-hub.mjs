@@ -37,30 +37,42 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
-async function captureServerSideVisibility(page, outputPath) {
+async function captureWorkroomSideVisibility(page, outputPath) {
   const screenshot = await page.screenshot();
   await sharp(screenshot).png().toFile(outputPath);
   const metadata = await sharp(screenshot).metadata();
-  const region = {
-    left: Math.floor((metadata.width || 1) * 0.68),
-    top: Math.floor((metadata.height || 1) * 0.15),
-    width: Math.floor((metadata.width || 1) * 0.30),
-    height: Math.floor((metadata.height || 1) * 0.65),
+  const regions = {
+    operator: {
+      left: Math.floor((metadata.width || 1) * 0.02),
+      top: Math.floor((metadata.height || 1) * 0.14),
+      width: Math.floor((metadata.width || 1) * 0.34),
+      height: Math.floor((metadata.height || 1) * 0.62),
+    },
+    server: {
+      left: Math.floor((metadata.width || 1) * 0.68),
+      top: Math.floor((metadata.height || 1) * 0.15),
+      width: Math.floor((metadata.width || 1) * 0.30),
+      height: Math.floor((metadata.height || 1) * 0.65),
+    },
   };
-  const { data, info } = await sharp(screenshot).extract(region).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  let luminance = 0;
-  let visiblePixels = 0;
-  for (let index = 0; index < data.length; index += info.channels) {
-    const value = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
-    luminance += value;
-    if (value >= 18) visiblePixels += 1;
+  const visibility = {};
+  for (const [name, region] of Object.entries(regions)) {
+    const { data, info } = await sharp(screenshot).extract(region).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    let luminance = 0;
+    let visiblePixels = 0;
+    for (let index = 0; index < data.length; index += info.channels) {
+      const value = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+      luminance += value;
+      if (value >= 18) visiblePixels += 1;
+    }
+    const pixelCount = data.length / info.channels;
+    visibility[name] = {
+      meanLuminance: Number((luminance / pixelCount).toFixed(3)),
+      visiblePercent: Number((visiblePixels / pixelCount * 100).toFixed(2)),
+      region,
+    };
   }
-  const pixelCount = data.length / info.channels;
-  return {
-    meanLuminance: Number((luminance / pixelCount).toFixed(3)),
-    visiblePercent: Number((visiblePixels / pixelCount * 100).toFixed(2)),
-    region,
-  };
+  return visibility;
 }
 
 async function run() {
@@ -177,12 +189,14 @@ async function run() {
     assert(state.workroom?.ambience?.propCount >= 12, "the Workroom should include substantial atmospheric equipment and clutter");
     assert(state.workroom?.serverLighting?.cameraFree === true && state.workroom.serverLighting.fixtureCount === 2, `Workroom diagnostics should expose a camera-free two-emitter circuit; lighting=${JSON.stringify(state.workroom?.serverLighting)}`);
     assert(state.workroom.serverLighting.serverFixture?.x >= 6 && state.workroom.serverLighting.serverFixture?.intensityScale >= 1.5 && state.workroom.serverLighting.serverFixture?.rendered === true && state.workroom.serverLighting.taskLights >= 3, `the east rack bank should own a budgeted real emitter plus switched task practicals; lighting=${JSON.stringify(state.workroom.serverLighting)}`);
+    assert(state.workroom.serverLighting.operatorFixture?.x < 0 && state.workroom.serverLighting.operatorFixture?.rendered === true, `the west operator/monitor half should retain its own budgeted emitter; lighting=${JSON.stringify(state.workroom.serverLighting)}`);
 
     await page.screenshot({ path: path.join(artifactDir, "workroom-monitor-wall-desktop.png") });
     await page.evaluate(() => window.MrFeastFresh.teleport("workroomWide"));
     await page.waitForTimeout(500);
-    const serverVisibility = await captureServerSideVisibility(page, path.join(artifactDir, "workroom-server-racks-desktop.png"));
-    assert(serverVisibility.meanLuminance >= 10 && serverVisibility.visiblePercent >= 15, `the server side remains too dark to read; visibility=${JSON.stringify(serverVisibility)}`);
+    const sideVisibility = await captureWorkroomSideVisibility(page, path.join(artifactDir, "workroom-both-sides-desktop.png"));
+    assert(sideVisibility.operator.meanLuminance >= 10 && sideVisibility.operator.visiblePercent >= 15, `the operator/monitor side remains too dark to read; visibility=${JSON.stringify(sideVisibility)}`);
+    assert(sideVisibility.server.meanLuminance >= 10 && sideVisibility.server.visiblePercent >= 15, `the server side remains too dark to read; visibility=${JSON.stringify(sideVisibility)}`);
 
     await page.evaluate(() => window.MrFeastFresh.openWorkroomKeypadForQA());
     await page.waitForFunction(() => !document.getElementById("mansion-workroom-keypad")?.hidden);

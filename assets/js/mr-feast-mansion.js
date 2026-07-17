@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-seating-routines-5";
+  const MANSION_RUNTIME_VERSION = "20260717-escape-menu-controls-6";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -116,6 +116,7 @@
     gameOverRestart: $("mansion-gameover-restart"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
+    menuMusic: $("mansion-menu-music"),
     menuMaximize: $("mansion-menu-maximize"),
     menuSave: $("mansion-menu-save"),
     menuLoad: $("mansion-menu-load"),
@@ -126,8 +127,10 @@
     workroomKeypadDisplay: $("mansion-workroom-keypad-display"),
     workroomKeypadStatus: $("mansion-workroom-keypad-status"),
     crosshair: $("mansion-crosshair"),
-    audio: $("mansion-audio"),
-    fullscreen: $("mansion-fullscreen"),
+    // Music on/off lives in the Escape menu. Keep the legacy id alias so older
+    // helper paths still resolve if a host page reintroduces a toolbar control.
+    audio: $("mansion-menu-music") || $("mansion-audio"),
+    fullscreen: $("mansion-menu-maximize") || $("mansion-fullscreen"),
     touch: $("mansion-touch"),
     debug: $("mansion-debug"),
   };
@@ -1016,6 +1019,9 @@
     movementAlignment: 0.985,
     arrivalRadius: 0.06,
     fadeSeconds: 0.24,
+    colliderWidth: 0.52,
+    colliderDepth: 0.42,
+    colliderHeight: 1.72,
     doorOpenDistance: 1.8,
     doorWaitDistance: 0.88,
     doorCloseDistance: 2.5,
@@ -1036,6 +1042,8 @@
     movementAlignment: 0.975,
     arrivalRadius: 0.015,
     fadeSeconds: 0.2,
+    sourceUpAxis: "Z",
+    locomotionArmBones: Object.freeze(["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]),
     placements: Object.freeze([
       Object.freeze({
         id: "mara-voss",
@@ -1230,6 +1238,21 @@
     giveUpSeconds: 26,
     warningSeconds: 2.4,
     basementFeetY: -0.45,
+    // Presence in the basement is itself the offense: being personally seen
+    // or hostile-recorded down there starts a pursuit with no tamper needed.
+    trespassDwellSeconds: 0.55,
+    trespassCheckSeconds: 0.2,
+    // While he can still see or record the runner, the chase never expires;
+    // the give-up clock only counts unseen seconds.
+    sightRefreshSeconds: 0.25,
+    // Chase pathing may cut straight lines between same-floor graph nodes
+    // when no wall, hedge, or door leaf crosses the segment.
+    shortcutMaxMeters: 7,
+    shortcutMinMeters: 1.2,
+    shortcutSameFloorMaxDeltaY: 0.6,
+    shortcutRayHeightMeters: 1.35,
+    shortcutDoorClearanceMeters: 1.0,
+    retargetMinPlayerMoveMeters: 1.2,
   });
   const MR_FEAST_SPEECH = Object.freeze({
     minSeconds: 4.2,
@@ -1316,6 +1339,13 @@
         "Smile — you are on the program. Now hold still.",
         "Recorded, timestamped, and — excuse me — pursued.",
         "The patrons saw that too. They are delighted. I am not.",
+      ]),
+      "pursuit-trespass": Object.freeze([
+        "The basement is not on the tour.",
+        "You are below the show, guest. Hold still.",
+        "This floor is for inventory. Are you inventory?",
+        "Ah. A volunteer for the cellar. Stay exactly there.",
+        "Guests do not come down here. Guests who do stay longer.",
       ]),
       warning: Object.freeze([
         "Consider this a warning. The house rarely gives two.",
@@ -2847,6 +2877,20 @@
       return { body, collider };
     }
 
+    moveKinematicCharacter(kinematic, requested) {
+      if (!kinematic?.body || !kinematic?.collider) return requested;
+      this.controller.computeColliderMovement(kinematic.collider, requested);
+      const corrected = this.controller.computedMovement();
+      const position = kinematic.body.translation();
+      const next = {
+        x: position.x + corrected.x,
+        y: position.y + corrected.y,
+        z: position.z + corrected.z,
+      };
+      kinematic.body.setNextKinematicTranslation(next);
+      return corrected;
+    }
+
     addFixedRamp(x, centerZ, lowY, highY, run, width, directionZ) {
       const lowZ = centerZ - directionZ * run / 2;
       const highZ = centerZ + directionZ * run / 2;
@@ -2971,6 +3015,9 @@
       this.modelSize = new THREE.Vector3();
       this.skinnedMeshes = 0;
       this.bones = 0;
+      this.colliderBody = null;
+      this.collider = null;
+      this.collisionBlockedSteps = 0;
       this.distanceTravelled = 0;
       this.completedRouteLoops = 0;
       this.routeSegmentsTraversed = 0;
@@ -3004,6 +3051,13 @@
       this.qaLastHousekeepingRun = null;
       this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
+      this.pursuitTargetNodeId = null;
+      this.pursuitTargetPlayerPosition = null;
+      this.pursuitSightCheckRemaining = 0;
+      this.pursuitShortcuts = null;
+      this.pursuitShortcutEdgeCount = 0;
+      this.trespassDwell = 0;
+      this.trespassCheckRemaining = 0;
       this.qaPursuitGiveUpOverride = null;
       this.qaLastPursuitRun = null;
       this.talkHitbox = null;
@@ -3011,6 +3065,66 @@
       this.faceTarget(MR_FEAST_NPC.waypoints[this.waypointIndex], true);
       scene.add(this.root);
       animatedObjects.push(this);
+    }
+
+    syncCollider() {
+      if (!this.colliderBody) return;
+      const center = {
+        x: this.root.position.x,
+        y: this.root.position.y + MR_FEAST_NPC.colliderHeight / 2,
+        z: this.root.position.z,
+      };
+      const rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, this.root.rotation.y, 0));
+      this.colliderBody.setTranslation(center, false);
+      this.colliderBody.setNextKinematicTranslation(center);
+      this.colliderBody.setRotation(rotation, false);
+      this.colliderBody.setNextKinematicRotation(rotation);
+    }
+
+    moveWithCollision(dx, dy, dz) {
+      if (!physics || !this.colliderBody || !this.collider) {
+        this.root.position.x += dx;
+        this.root.position.y += dy;
+        this.root.position.z += dz;
+        return Math.hypot(dx, dy, dz);
+      }
+      this.syncCollider();
+      const corrected = physics.moveKinematicCharacter(
+        { body: this.colliderBody, collider: this.collider },
+        { x: dx, y: dy, z: dz },
+      );
+      const requestedDistance = Math.hypot(dx, dy, dz);
+      const movedDistance = Math.hypot(corrected.x, corrected.y, corrected.z);
+      if (movedDistance + 0.0001 < requestedDistance) this.collisionBlockedSteps += 1;
+      this.root.position.x += corrected.x;
+      this.root.position.y += corrected.y;
+      this.root.position.z += corrected.z;
+      this.syncCollider();
+      return movedDistance;
+    }
+
+    probeFurnitureCollisionForQA() {
+      if (!state.qa || !physics || !this.colliderBody || !this.collider) return null;
+      const originalPosition = this.root.position.clone();
+      const originalYaw = this.root.rotation.y;
+      const floorY = originalPosition.y;
+      const obstacle = physics.fixedBoxes.find((box) => (
+        box.h >= 0.5 && box.h <= 2.4 && box.w <= 3 && box.d <= 3
+        && Math.abs((box.y - box.h / 2) - floorY) <= 0.2
+      ));
+      if (!obstacle) return { blocked: false, reason: "no furniture-height obstacle" };
+      const axis = { x: Math.cos(obstacle.rotationY), z: -Math.sin(obstacle.rotationY) };
+      const startDistance = obstacle.w / 2 + MR_FEAST_NPC.colliderWidth / 2 + 0.32;
+      this.root.position.set(obstacle.x - axis.x * startDistance, floorY, obstacle.z - axis.z * startDistance);
+      this.root.rotation.y = Math.atan2(axis.x, axis.z);
+      this.syncCollider();
+      const requested = 1.1;
+      const moved = this.moveWithCollision(axis.x * requested, 0, axis.z * requested);
+      const blocked = moved + 0.0001 < requested;
+      this.root.position.copy(originalPosition);
+      this.root.rotation.y = originalYaw;
+      this.syncCollider();
+      return { blocked, requested, moved: Number(moved.toFixed(4)) };
     }
 
     assetUrl(relativePath, manifestUrl) {
@@ -3184,6 +3298,19 @@
 
         this.model = model;
         this.root.add(model);
+        if (physics) {
+          const movingCollider = physics.addKinematicBox(
+            this.root.position.x,
+            this.root.position.y + MR_FEAST_NPC.colliderHeight / 2,
+            this.root.position.z,
+            MR_FEAST_NPC.colliderWidth,
+            MR_FEAST_NPC.colliderHeight,
+            MR_FEAST_NPC.colliderDepth,
+          );
+          this.colliderBody = movingCollider.body;
+          this.collider = movingCollider.collider;
+          this.syncCollider();
+        }
         this.hipsBone = this.bonesByName.get("Hips") || null;
         this.headBone = this.bonesByName.get("Head") || null;
         this.headFrontBone = this.bonesByName.get("headfront") || null;
@@ -3740,9 +3867,10 @@
       return Boolean(door && !door.locked);
     }
 
-    findResponsePath(startId, targetId) {
+    findResponsePath(startId, targetId, useShortcuts = false) {
       if (!this.responseGraph.nodes.has(startId) || !this.responseGraph.nodes.has(targetId)) return [];
       if (startId === targetId) return [];
+      const shortcuts = useShortcuts ? this.ensurePursuitShortcuts() : null;
       const distances = new Map([[startId, 0]]);
       const previous = new Map();
       const unvisited = new Set(this.responseGraph.nodes.keys());
@@ -3759,7 +3887,9 @@
         if (current == null || currentDistance === Infinity) break;
         unvisited.delete(current);
         if (current === targetId) break;
-        for (const edge of this.responseGraph.edges.get(current) || []) {
+        const authored = this.responseGraph.edges.get(current) || [];
+        const extra = shortcuts?.get(current) || [];
+        for (const edge of extra.length ? [...authored, ...extra] : authored) {
           if (!unvisited.has(edge.to) || !this.responseDoorAvailable(edge.door)) continue;
           const nextDistance = currentDistance + edge.cost;
           if (nextDistance >= (distances.get(edge.to) ?? Infinity)) continue;
@@ -3776,6 +3906,90 @@
         cursor = step.from;
       }
       return reversed.reverse();
+    }
+
+    ensurePursuitShortcuts() {
+      if (this.pursuitShortcuts) return this.pursuitShortcuts;
+      // Straight-line edges between same-floor graph nodes let a chase cut
+      // across rooms instead of tracing the authored patrol loop the long way
+      // around. A segment qualifies only when no wall/hedge occluder box and
+      // no hinged-door leaf crosses it, so every door crossing still happens
+      // on an authored edge that knows how to open its door.
+      const shortcuts = new Map();
+      let edgeCount = 0;
+      const nodes = [...this.responseGraph.nodes.values()]
+        .filter((node) => node.segmentKind !== "stairs" && node.segmentKind !== "ramp");
+      const blockers = occluderMeshes.map((mesh) => new THREE.Box3().setFromObject(mesh))
+        .filter((box) => !box.isEmpty());
+      const doorPoints = animatedObjects
+        .filter((object) => object instanceof HingedDoor)
+        .map((door) => ({ x: door.root.position.x, z: door.root.position.z }));
+      const directNeighbors = new Map();
+      for (const [fromId, edges] of this.responseGraph.edges) {
+        directNeighbors.set(fromId, new Set(edges.map((edge) => edge.to)));
+      }
+      const segmentHitsBox = (ax, ay, az, bx, by, bz, box) => {
+        let tMin = 0;
+        let tMax = 1;
+        const axes = [[ax, bx, box.min.x, box.max.x], [ay, by, box.min.y, box.max.y], [az, bz, box.min.z, box.max.z]];
+        for (const [start, end, min, max] of axes) {
+          const delta = end - start;
+          if (Math.abs(delta) < 1e-9) {
+            if (start < min || start > max) return false;
+            continue;
+          }
+          let t0 = (min - start) / delta;
+          let t1 = (max - start) / delta;
+          if (t0 > t1) [t0, t1] = [t1, t0];
+          tMin = Math.max(tMin, t0);
+          tMax = Math.min(tMax, t1);
+          if (tMin > tMax) return false;
+        }
+        return true;
+      };
+      const segmentNearDoor = (a, b) => {
+        const clearance = MR_FEAST_PURSUIT.shortcutDoorClearanceMeters;
+        for (const door of doorPoints) {
+          const abX = b.x - a.x;
+          const abZ = b.z - a.z;
+          const lengthSq = abX * abX + abZ * abZ;
+          const t = lengthSq > 1e-9 ? clamp(((door.x - a.x) * abX + (door.z - a.z) * abZ) / lengthSq, 0, 1) : 0;
+          const nearestX = a.x + abX * t;
+          const nearestZ = a.z + abZ * t;
+          if (Math.hypot(door.x - nearestX, door.z - nearestZ) < clearance) return true;
+        }
+        return false;
+      };
+      const addShortcut = (fromId, toId, cost) => {
+        if (!shortcuts.has(fromId)) shortcuts.set(fromId, []);
+        shortcuts.get(fromId).push({ to: toId, cost, door: null });
+      };
+      for (let i = 0; i < nodes.length; i += 1) {
+        for (let j = i + 1; j < nodes.length; j += 1) {
+          const a = nodes[i];
+          const b = nodes[j];
+          if (Math.abs(a.y - b.y) > MR_FEAST_PURSUIT.shortcutSameFloorMaxDeltaY) continue;
+          const distance = Math.hypot(b.x - a.x, b.z - a.z);
+          if (distance < MR_FEAST_PURSUIT.shortcutMinMeters || distance > MR_FEAST_PURSUIT.shortcutMaxMeters) continue;
+          if (directNeighbors.get(a.id)?.has(b.id)) continue;
+          if (segmentNearDoor(a, b)) continue;
+          const rayY = a.y + MR_FEAST_PURSUIT.shortcutRayHeightMeters;
+          let blocked = false;
+          for (const box of blockers) {
+            if (segmentHitsBox(a.x, rayY, a.z, b.x, rayY, b.z, box)) {
+              blocked = true;
+              break;
+            }
+          }
+          if (blocked) continue;
+          addShortcut(a.id, b.id, distance);
+          addShortcut(b.id, a.id, distance);
+          edgeCount += 1;
+        }
+      }
+      this.pursuitShortcutEdgeCount = edgeCount;
+      this.pursuitShortcuts = shortcuts;
+      return this.pursuitShortcuts;
     }
 
     nearestResponseStartId() {
@@ -3796,11 +4010,22 @@
       }, null).id;
     }
 
-    nearestResponseTargetId(position) {
-      return [...this.responseGraph.nodes.values()].reduce((nearest, node) => {
+    nearestResponseTargetId(position, sameFloorBias = false) {
+      // Raw 3D distance lets a node on the floor directly above or below win
+      // over a same-floor node one room away; a pursuit targeted that way
+      // strands him overhead. With the bias on, same-floor nodes are the only
+      // candidates unless none exist at all.
+      const nodes = [...this.responseGraph.nodes.values()];
+      const pick = (candidates) => candidates.reduce((nearest, node) => {
         const distance = Math.hypot(node.x - position.x, node.y - position.y, node.z - position.z);
         return !nearest || distance < nearest.distance ? { id: node.id, distance } : nearest;
       }, null)?.id || null;
+      if (sameFloorBias) {
+        const sameFloor = nodes.filter((node) => Math.abs(node.y - position.y) < 1.2);
+        const biased = pick(sameFloor);
+        if (biased) return biased;
+      }
+      return pick(nodes);
     }
 
     transitionSecurityResponse(eventName) {
@@ -3878,9 +4103,11 @@
       if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
       const startId = this.nearestResponseStartId();
-      const targetId = this.nearestResponseTargetId(task.position);
+      const targetId = this.nearestResponseTargetId(task.position, true);
       if (!targetId) return { accepted: false, reason: "no response node" };
-      const path = this.findResponsePath(startId, targetId);
+      // Errands cut the same wall-checked corners the chase does; only the
+      // bounded camera-alarm investigation keeps the fully authored route.
+      const path = this.findResponsePath(startId, targetId, true);
       if (!path.length && startId !== targetId) return { accepted: false, reason: "no unlocked response route" };
       if (!this.responseResume) {
         const resumeNode = this.responseGraph.nodes.get(startId);
@@ -3971,6 +4198,7 @@
       this.qaAnimationFrozen = false;
       let simulatedSeconds = 0;
       while ((this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL || this.housekeeping.active) && simulatedSeconds < limit) {
+        if (state.gameOver) break;
         for (const object of animatedObjects) {
           if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(fixedStep);
         }
@@ -4045,7 +4273,10 @@
       }
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       this.activeCameraAlarm = null;
-      const startId = this.nearestResponseStartId();
+      // The "interrupted patrol point" is wherever he physically stands, not
+      // the waypoint bookkeeping; anchoring the resume there keeps the later
+      // return walk short and honest.
+      const startId = this.nearestResponseTargetId(this.root.position, true) || this.nearestResponseStartId();
       if (!this.responseResume) {
         const resumeNode = this.responseGraph.nodes.get(startId);
         this.responseResume = {
@@ -4066,19 +4297,26 @@
       this.pauseRemaining = 0;
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
-      speechSystem?.sayFromPool(this.pursuit.active.reason === "recorded" ? "pursuit-recorded" : "pursuit-witnessed");
+      speechSystem?.sayFromPool(
+        this.pursuit.active.kind === "trespass"
+          ? "pursuit-trespass"
+          : this.pursuit.active.reason === "recorded" ? "pursuit-recorded" : "pursuit-witnessed",
+      );
       return { accepted: true };
     }
 
     repathPursuit() {
       if (!physics) return;
       const p = physics.playerPosition();
-      const targetId = this.nearestResponseTargetId({ x: p.x, y: this.playerFeetY(p), z: p.z });
+      const playerFeet = { x: p.x, y: this.playerFeetY(p), z: p.z };
+      const targetId = this.nearestResponseTargetId(playerFeet, true);
       // Approach steering leaves the graph, so re-anchor to the node nearest
       // his actual position before planning the next leg of the chase.
-      const startId = this.nearestResponseTargetId(this.root.position) || this.responseCurrentNodeId;
+      const startId = this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
       if (startId) this.responseCurrentNodeId = startId;
-      this.responsePath = startId && targetId ? this.findResponsePath(startId, targetId) : [];
+      this.responsePath = startId && targetId ? this.findResponsePath(startId, targetId, true) : [];
+      this.pursuitTargetNodeId = targetId;
+      this.pursuitTargetPlayerPosition = playerFeet;
       this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
     }
 
@@ -4097,13 +4335,67 @@
         this.resolveCatch(p, feetY);
         return;
       }
+      // The give-up clock only counts unseen time: while he still personally
+      // sees the runner, or a hostile camera still records them, the chase
+      // stays fresh.
+      this.pursuitSightCheckRemaining = (this.pursuitSightCheckRemaining ?? 0) - dt;
+      if (this.pursuitSightCheckRemaining <= 0) {
+        this.pursuitSightCheckRemaining = MR_FEAST_PURSUIT.sightRefreshSeconds;
+        const stillSeen = this.canSeePlayerAct()
+          || (Boolean(cameraSecurity?.isRecordingPlayer()) && !state.security.permitted);
+        if (stillSeen) this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+      }
       this.pursuit.giveUpRemaining -= dt;
       if (this.pursuit.giveUpRemaining <= 0) {
         this.givePursuitUp();
         return;
       }
       this.pursuit.repathRemaining -= dt;
+      // Mid-path retargeting: when the runner has moved to a different part
+      // of the house, abandon the stale leg instead of finishing a walk to
+      // where they used to be.
+      if (this.pursuit.repathRemaining <= 0) {
+        const moved = this.pursuitTargetPlayerPosition
+          ? Math.hypot(p.x - this.pursuitTargetPlayerPosition.x, p.z - this.pursuitTargetPlayerPosition.z)
+          : Infinity;
+        if (moved > MR_FEAST_PURSUIT.retargetMinPlayerMoveMeters) {
+          const nextTargetId = this.nearestResponseTargetId({ x: p.x, y: feetY, z: p.z }, true);
+          if (nextTargetId && nextTargetId !== this.pursuitTargetNodeId) this.repathPursuit();
+          else this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
+        } else {
+          this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
+        }
+      }
       this.updateSecurityPath(dt);
+    }
+
+    updateTrespassWatch(dt) {
+      // Being in the basement is itself the offense: personally seen or
+      // hostile-recorded presence starts a pursuit with no tamper required.
+      if (state.gameOver || this.pursuit.active || this.pursuit.cooldownActive || state.isHidden || !physics) {
+        this.trespassDwell = 0;
+        return;
+      }
+      const p = physics.playerPosition();
+      if (this.playerFeetY(p) > MR_FEAST_PURSUIT.basementFeetY) {
+        this.trespassDwell = 0;
+        return;
+      }
+      this.trespassCheckRemaining = (this.trespassCheckRemaining ?? 0) - dt;
+      if (this.trespassCheckRemaining > 0) return;
+      this.trespassCheckRemaining = MR_FEAST_PURSUIT.trespassCheckSeconds;
+      const witnessed = this.canSeePlayerAct();
+      const recorded = !witnessed
+        && Boolean(cameraSecurity?.isRecordingPlayer())
+        && !state.security.permitted;
+      if (!witnessed && !recorded) {
+        this.trespassDwell = Math.max(0, (this.trespassDwell ?? 0) - MR_FEAST_PURSUIT.trespassCheckSeconds);
+        return;
+      }
+      this.trespassDwell = (this.trespassDwell ?? 0) + MR_FEAST_PURSUIT.trespassCheckSeconds;
+      if (this.trespassDwell < MR_FEAST_PURSUIT.trespassDwellSeconds) return;
+      this.trespassDwell = 0;
+      this.beginPursuit({ kind: "trespass", reason: witnessed ? "witnessed" : "recorded" });
     }
 
     updatePursuitApproach(dt) {
@@ -4121,10 +4413,9 @@
             Math.max(0, horizontal - MR_FEAST_PURSUIT.catchRadiusMeters * 0.55),
             this.pursuitSpeed() * dt,
           );
-          this.root.position.x += dx / horizontal * step;
-          this.root.position.z += dz / horizontal * step;
-          this.responseDistance += step;
-          this.moving = step > 0;
+          const movedDistance = this.moveWithCollision(dx / horizontal * step, 0, dz / horizontal * step);
+          this.responseDistance += movedDistance;
+          this.moving = movedDistance > 0.0001;
           this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
         } else {
           this.moving = false;
@@ -4299,8 +4590,14 @@
         return;
       }
       this.transitionSecurityResponse("expired");
-      const startId = this.responseCurrentNodeId;
-      this.responsePath = this.findResponsePath(startId, this.responseResume.nodeId);
+      // Post-pursuit and post-errand walks may cut the same wall-checked
+      // corners as the chase; only a camera-alarm investigation keeps its
+      // fully authored return leg.
+      const startId = this.activeCameraAlarm
+        ? this.responseCurrentNodeId
+        : this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
+      if (startId) this.responseCurrentNodeId = startId;
+      this.responsePath = this.findResponsePath(startId, this.responseResume.nodeId, !this.activeCameraAlarm);
       if (!this.responsePath.length && startId === this.responseResume.nodeId) this.finishSecurityReturn();
     }
 
@@ -4379,11 +4676,9 @@
       }
       const travelSpeed = this.pursuit.active ? this.pursuitSpeed() : CAMERA_SECURITY.responseSpeed;
       const step = Math.min(distance, travelSpeed * dt);
-      this.root.position.x += dx / distance * step;
-      this.root.position.y += dy / distance * step;
-      this.root.position.z += dz / distance * step;
-      this.responseDistance += step;
-      this.moving = step > 0;
+      const movedDistance = this.moveWithCollision(dx / distance * step, dy / distance * step, dz / distance * step);
+      this.responseDistance += movedDistance;
+      this.moving = movedDistance > 0.0001;
       this.closeClearedRouteDoors(target);
       if (this.pursuit.active) this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
       else this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(CAMERA_SECURITY.responseSpeed));
@@ -4554,6 +4849,8 @@
         return;
       }
 
+      this.updateTrespassWatch(this.lastDt);
+
       if (this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL) {
         this.updateSecurityResponse(this.lastDt);
         return;
@@ -4599,11 +4896,9 @@
         return;
       }
       const step = Math.min(distance, MR_FEAST_NPC.speed * this.lastDt);
-      this.root.position.x += dx / distance * step;
-      this.root.position.y += dy / distance * step;
-      this.root.position.z += dz / distance * step;
-      this.distanceTravelled += step;
-      this.moving = step > 0;
+      const movedDistance = this.moveWithCollision(dx / distance * step, dy / distance * step, dz / distance * step);
+      this.distanceTravelled += movedDistance;
+      this.moving = movedDistance > 0.0001;
       this.closeClearedRouteDoors(target);
       this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
       this.stepAnimationAndFace(this.lastDt);
@@ -4647,6 +4942,11 @@
       this.qaLastHousekeepingRun = null;
       this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
+      this.pursuitTargetNodeId = null;
+      this.pursuitTargetPlayerPosition = null;
+      this.pursuitSightCheckRemaining = 0;
+      this.trespassDwell = 0;
+      this.trespassCheckRemaining = 0;
       this.qaPursuitGiveUpOverride = null;
       this.qaLastPursuitRun = null;
       this.wanderingEnabled = true;
@@ -5103,11 +5403,23 @@
           cooldownActive: this.pursuit.cooldownActive,
           speed: Number(this.pursuitSpeed().toFixed(3)),
           playerWalkSpeed: PLAYER.walkSpeed,
+          targetNodeId: this.pursuitTargetNodeId,
+          trespassDwell: Number((this.trespassDwell || 0).toFixed(2)),
+          pathShortcuts: {
+            built: Boolean(this.pursuitShortcuts),
+            edges: this.pursuitShortcutEdgeCount,
+          },
           lastRun: this.qaLastPursuitRun,
         },
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
+        collision: {
+          enabled: Boolean(this.colliderBody && this.collider),
+          blockedSteps: this.collisionBlockedSteps,
+          width: MR_FEAST_NPC.colliderWidth,
+          depth: MR_FEAST_NPC.colliderDepth,
+        },
         currentAnimation: this.currentAnimation,
         mixerTime: Number((this.mixer?.time || 0).toFixed(3)),
         clipsLoaded: Object.keys(this.actions),
@@ -5531,6 +5843,7 @@
           postSeatDeparturesCompleted: 0,
           minimumPostSeatDepartureDistance: Infinity,
           blockedSteps: 0,
+          furnitureBlockedSteps: 0,
           maximumColliderOffset: 0,
           teleports: 0,
           locomotionStatus: "pending",
@@ -5556,6 +5869,7 @@
           restPoseByName: {},
           seatPoseBones: {},
           neutralRestApplied: false,
+          locomotionArmPoseApplied: false,
           lastDt: 0,
           qaIgnorePlayer: false,
           qaRoutineFast: false,
@@ -5705,8 +6019,27 @@
       });
     }
 
+    normalizeContestantModelUpAxis(model) {
+      if (MANSION_CONTESTANTS.sourceUpAxis === "Z") model.rotation.x = -Math.PI / 2;
+      model.updateMatrixWorld(true);
+      return model;
+    }
+
+    sanitizeLocomotionClip(sourceClip, name) {
+      const clip = sourceClip?.clone();
+      if (!clip || name !== "walk") return clip;
+      const armBones = new Set(MANSION_CONTESTANTS.locomotionArmBones);
+      const sourceTracks = clip.tracks;
+      clip.tracks = sourceTracks.filter((track) => {
+        const splitAt = track.name.lastIndexOf(".");
+        return !armBones.has(track.name.slice(0, splitAt));
+      });
+      clip.userData = { ...clip.userData, removedArmTracks: sourceTracks.length - clip.tracks.length };
+      return clip;
+    }
+
     prepareAction(entry, gltf, name) {
-      const clip = gltf?.animations?.[0]?.clone();
+      const clip = this.sanitizeLocomotionClip(gltf?.animations?.[0], name);
       if (!clip) throw new Error(`Contestant ${name} GLB has no animation clip`);
       clip.name = name;
       const rotationTracks = clip.tracks.filter((track) => track.name.endsWith(".quaternion"));
@@ -5735,9 +6068,10 @@
         scale: scaleTracks.length,
         boundRotation: boundRotationTracks.length,
         dynamicRotation: dynamicRotationTracks.length,
+        removedArmTracks: Number(clip.userData?.removedArmTracks) || 0,
       };
       if (
-        rotationTracks.length < 20
+        rotationTracks.length < (name === "walk" ? 12 : 20)
         || boundRotationTracks.length !== rotationTracks.length
         || dynamicRotationTracks.length < 1
         || translationTracks.length
@@ -5912,9 +6246,10 @@
         !pose
         || !entry.model
         || entry.activity === CONTESTANT_ACTIVITY.SEATED
-        || entry.currentAnimation !== "idle"
+        || (entry.currentAnimation !== "idle" && entry.currentAnimation !== "walk")
       ) {
         entry.neutralRestApplied = false;
+        entry.locomotionArmPoseApplied = false;
         return false;
       }
       for (const name of ["LeftShoulder", "RightShoulder"]) {
@@ -5929,6 +6264,7 @@
           .multiply(new THREE.Quaternion(...values));
       }
       entry.neutralRestApplied = true;
+      entry.locomotionArmPoseApplied = entry.currentAnimation === "walk";
       return true;
     }
 
@@ -5972,6 +6308,52 @@
       const playerFeetY = player.y - PLAYER.halfHeight - PLAYER.radius;
       if (Math.abs(playerFeetY - entry.root.position.y) > 0.45) return false;
       return Math.hypot(player.x - nextX, player.z - nextZ) < MANSION_SEATING.occupantClearanceRadius;
+    }
+
+    moveWithCollision(entry, dx, dz) {
+      if (!physics || !entry.colliderBody || !entry.colliderEnabled) return { x: dx, z: dz, blocked: false };
+      this.syncCollider(entry, false);
+      const corrected = physics.moveKinematicCharacter(
+        { body: entry.colliderBody, collider: entry.collider },
+        { x: dx, y: 0, z: dz },
+      );
+      const requestedDistance = Math.hypot(dx, dz);
+      const movedDistance = Math.hypot(corrected.x, corrected.z);
+      const blocked = movedDistance + 0.0001 < requestedDistance;
+      if (blocked) entry.furnitureBlockedSteps += 1;
+      entry.root.position.x += corrected.x;
+      entry.root.position.z += corrected.z;
+      this.syncCollider(entry);
+      return { x: corrected.x, z: corrected.z, blocked };
+    }
+
+    probeFurnitureCollisionForQA(id) {
+      const entry = this.entryById(id);
+      if (!state.qa || !physics || !entry?.colliderBody || !entry.collider) return null;
+      const originalPosition = entry.root.position.clone();
+      const originalYaw = entry.root.rotation.y;
+      const floorY = entry.placement.position.y;
+      const obstacle = physics.fixedBoxes.find((box) => (
+        box.h >= 0.5 && box.h <= 2.4 && box.w <= 3 && box.d <= 3
+        && Math.abs((box.y - box.h / 2) - floorY) <= 0.2
+      ));
+      if (!obstacle) return { id, blocked: false, reason: "no furniture-height obstacle" };
+      const axis = { x: Math.cos(obstacle.rotationY), z: -Math.sin(obstacle.rotationY) };
+      const startDistance = obstacle.w / 2 + MANSION_CONTESTANTS.colliderWidth / 2 + 0.32;
+      entry.root.position.set(obstacle.x - axis.x * startDistance, floorY, obstacle.z - axis.z * startDistance);
+      entry.root.rotation.y = Math.atan2(axis.x, axis.z);
+      this.syncCollider(entry, false);
+      const requested = 1.1;
+      const result = this.moveWithCollision(entry, axis.x * requested, axis.z * requested);
+      entry.root.position.copy(originalPosition);
+      entry.root.rotation.y = originalYaw;
+      this.syncCollider(entry, false);
+      return {
+        id,
+        blocked: result.blocked,
+        requested,
+        moved: Number(Math.hypot(result.x, result.z).toFixed(4)),
+      };
     }
 
     nextPostSeatRouteTarget(entry, route) {
@@ -6255,7 +6637,7 @@
       ]);
       const model = THREE.SkeletonUtils.clone(base.scene);
       model.name = `contestant-${entry.id}-model`;
-      model.updateMatrixWorld(true);
+      this.normalizeContestantModelUpAxis(model);
       const bounds = new THREE.Box3().setFromObject(model);
       const initialSize = bounds.getSize(new THREE.Vector3());
       const targetHeight = Number(spec.heightMeters) || 1.75;
@@ -6521,9 +6903,16 @@
         this.stepAnimation(entry, stepDt);
         return;
       }
-      entry.root.position.x = nextX;
-      entry.root.position.z = nextZ;
-      entry.distanceTravelled += distanceStep;
+      const movement = this.moveWithCollision(entry, nextX - entry.root.position.x, nextZ - entry.root.position.z);
+      entry.distanceTravelled += Math.hypot(movement.x, movement.z);
+      if (movement.blocked) {
+        entry.blockedSteps += 1;
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        entry.pauseRemaining = 0.15;
+        this.fadeToAction(entry, "idle");
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
       entry.activity = CONTESTANT_ACTIVITY.WALKING;
       this.fadeToAction(entry, "walk");
       this.syncCollider(entry);
@@ -6552,6 +6941,7 @@
       entry.postSeatDeparturesCompleted = 0;
       entry.minimumPostSeatDepartureDistance = Infinity;
       entry.blockedSteps = 0;
+      entry.furnitureBlockedSteps = 0;
       entry.maximumColliderOffset = 0;
       entry.teleports = 0;
       entry.talkPauseRemaining = 0;
@@ -6864,6 +7254,7 @@
             segmentsTraversed: entry.routeSegmentsTraversed,
             distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
             blockedSteps: entry.blockedSteps,
+            furnitureBlockedSteps: entry.furnitureBlockedSteps,
             maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
             seatExitsCompleted: entry.seatExitsCompleted,
             postSeatDeparturesCompleted: entry.postSeatDeparturesCompleted,
@@ -6889,6 +7280,7 @@
             poseChanged: entry.animationPoseChanged,
             probeMaximumDelta: Number(entry.animationProbeMaximumDelta.toFixed(8)),
             neutralRestApplied: entry.neutralRestApplied,
+            locomotionArmPoseApplied: entry.locomotionArmPoseApplied,
             seatedPose: entry.seatedPoseApplied,
             seatedPoseBlend: Number(entry.seatedPoseBlend.toFixed(3)),
             seatTransition: entry.seatTransition?.kind || null,
@@ -7646,7 +8038,7 @@
       if (nextOpen) this.journalReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.journalButton;
       state.journalOpen = nextOpen;
       clearMovementInput();
-      if (state.journalOpen && document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      if (state.journalOpen) releasePointerLock();
       if (dom.journal) dom.journal.hidden = !state.journalOpen;
       if (dom.stage && dom.journal) {
         for (const child of dom.stage.children) {
@@ -8326,7 +8718,7 @@
       state.readableBooks.activePlacementId = placement.placementId;
       if (!state.readableBooks.openedPlacementIds.includes(placement.placementId)) state.readableBooks.openedPlacementIds.push(placement.placementId);
       clearMovementInput();
-      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      releasePointerLock();
       if (dom.bookTitle) dom.bookTitle.textContent = placement.title;
       if (dom.bookAuthor) dom.bookAuthor.textContent = `by ${placement.author}`;
       if (dom.bookPreview) dom.bookPreview.textContent = placement.preview;
@@ -8967,7 +9359,7 @@
       floor,
       room: state.currentRoom,
     };
-    document.exitPointerLock?.();
+    releasePointerLock();
     if (dom.gameOverCopy) {
       dom.gameOverCopy.textContent = state.gameOver.reason === "recorded"
         ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
@@ -9040,7 +9432,7 @@
       workroomKeypadReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
       state.workroom.keypadInput = "";
       state.workroom.keypadStatus = state.workroom.unlocked ? "accepted" : "idle";
-      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      releasePointerLock();
     }
     if (dom.workroomKeypad) dom.workroomKeypad.hidden = !nextOpen;
     if (dom.stage && dom.workroomKeypad) {
@@ -13694,11 +14086,15 @@
     canvas.height = 192;
     const ctx = canvas.getContext("2d");
     const scratchPaths = [
-      [[38, 27], [46, 51], [41, 72], [60, 97], [54, 126], [68, 162]],
-      [[82, 29], [70, 54], [76, 75], [57, 102], [61, 129], [44, 161]],
+      [[32, 24], [41, 47], [48, 70], [60, 96], [73, 126], [88, 164]],
+      [[88, 27], [79, 48], [70, 73], [59, 98], [45, 128], [31, 162]],
       [[112, 31], [108, 56], [113, 82], [108, 108], [114, 133], [110, 162]],
       [[157, 28], [153, 52], [158, 78], [152, 105], [159, 132], [155, 164]],
       [[204, 31], [199, 56], [205, 80], [198, 108], [204, 136], [200, 161]],
+    ];
+    const crossIntersection = [
+      [[52, 78], [60, 96], [69, 116]],
+      [[69, 79], [59, 98], [49, 117]],
     ];
     const trace = (path) => {
       ctx.beginPath();
@@ -13722,6 +14118,13 @@
     ctx.setLineDash([5, 8, 3, 11]);
     ctx.lineDashOffset = -3;
     scratchPaths.forEach((path, index) => trace(path.map(([x, y], pointIndex) => [x + ((index + pointIndex) % 2 ? 1.4 : -0.8), y + 0.9])));
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "rgba(14, 10, 7, 0.76)";
+    ctx.lineWidth = 3.8;
+    crossIntersection.forEach(trace);
+    ctx.strokeStyle = "rgba(205, 184, 137, 0.78)";
+    ctx.lineWidth = 1.25;
+    crossIntersection.forEach(trace);
     const texture = new THREE.CanvasTexture(canvas);
     texture.name = "contestant-13-library-book-etched-xiii";
     texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -15906,10 +16309,40 @@
   }
 
   function updateAudioButton() {
-    if (!dom.audio) return;
-    dom.audio.setAttribute("aria-pressed", String(state.audioEnabled));
-    dom.audio.setAttribute("aria-label", state.audioEnabled ? "Mute game audio" : "Enable game audio");
-    dom.audio.title = state.audioEnabled ? "Mute game audio" : "Enable game audio";
+    const label = state.audioEnabled ? "Music: On" : "Music: Off";
+    const aria = state.audioEnabled ? "Mute game audio" : "Enable game audio";
+    if (dom.menuMusic) {
+      dom.menuMusic.textContent = label;
+      dom.menuMusic.setAttribute("aria-pressed", String(state.audioEnabled));
+      dom.menuMusic.setAttribute("aria-label", aria);
+      dom.menuMusic.title = aria;
+    }
+    if (dom.audio && dom.audio !== dom.menuMusic) {
+      dom.audio.setAttribute("aria-pressed", String(state.audioEnabled));
+      dom.audio.setAttribute("aria-label", aria);
+      dom.audio.title = aria;
+    }
+  }
+
+  // Browser Escape exits pointer lock before (or instead of) delivering a
+  // keydown. Track intentional unlocks so an Escape-to-unlock while playing
+  // can open the menu on the same gesture instead of requiring a second press.
+  let intentionalPointerUnlockUntil = 0;
+  let ignoreEscapeMenuToggleUntil = 0;
+
+  function releasePointerLock({ intentional = true } = {}) {
+    if (intentional) intentionalPointerUnlockUntil = performance.now() + 450;
+    if (document.pointerLockElement === dom.canvas && document.exitPointerLock) {
+      document.exitPointerLock();
+    }
+  }
+
+  async function toggleGameAudio() {
+    if (!audioSystem) return state.audioEnabled;
+    if (!state.audioEnabled) await audioSystem.unlock();
+    else audioSystem.setEnabled(false);
+    updateAudioButton();
+    return state.audioEnabled;
   }
 
   function resize() {
@@ -16165,11 +16598,12 @@
 
   function serializeMansionSave() {
     if (!physics || !contestant13Quest || state.devMode) return null;
-    const playerPosition = physics.playerPosition();
+    const seatedSave = seatingSystem?.playerSaveSnapshot();
+    const playerPosition = seatedSave?.position || physics.playerPosition();
     return {
       playerPosition: { x: playerPosition.x, y: playerPosition.y, z: playerPosition.z },
-      yaw: state.yaw,
-      pitch: state.pitch,
+      yaw: seatedSave?.yaw ?? state.yaw,
+      pitch: seatedSave?.pitch ?? state.pitch,
       movement: {
         energy: state.movement.energy,
         crouched: state.movement.crouched,
@@ -16249,11 +16683,12 @@
       dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
     }
-    if (dom.menuMaximize) dom.menuMaximize.textContent = state.maximized ? "Restore size" : "Maximize";
-    if (dom.fullscreen) {
-      dom.fullscreen.setAttribute("aria-label", state.maximized ? "Restore game size" : "Maximize game");
-      dom.fullscreen.setAttribute("title", state.maximized ? "Restore game size" : "Maximize game");
+    if (dom.menuMaximize) {
+      dom.menuMaximize.textContent = state.maximized ? "Restore size" : "Maximize";
+      dom.menuMaximize.setAttribute("aria-label", state.maximized ? "Restore game size" : "Maximize game");
+      dom.menuMaximize.title = state.maximized ? "Restore game size" : "Maximize game";
     }
+    updateAudioButton();
   }
 
   function setMaximized(active) {
@@ -16280,7 +16715,9 @@
     clearMovementInput();
     if (nextOpen) {
       menuReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
-      if (document.pointerLockElement === dom.canvas && document.exitPointerLock) document.exitPointerLock();
+      // Opening the menu is always an intentional unlock so pointerlockchange
+      // does not re-enter setMenuOpen and thrash the dialog.
+      releasePointerLock();
     }
     if (dom.menu) dom.menu.hidden = !nextOpen;
     if (dom.stage && dom.menu) {
@@ -16334,6 +16771,10 @@
       }
       if (event.code === "Escape") {
         event.preventDefault();
+        // Browser Escape can unlock the pointer and still deliver a keydown.
+        // If pointerlockchange already opened the menu for this gesture, do
+        // not immediately toggle it closed.
+        if (performance.now() < ignoreEscapeMenuToggleUntil) return;
         if (state.readableBooks.open) readableBookSystem?.close();
         else if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
         else if (state.journalOpen && contestant13Quest) contestant13Quest.setJournalOpen(false);
@@ -16383,15 +16824,32 @@
       }
       if (event.code === "KeyE" && !event.repeat) activateCurrentInteraction();
       if (event.code === "KeyM" && !event.repeat && audioSystem) {
-        if (state.audioEnabled) audioSystem.setEnabled(false);
-        else void audioSystem.unlock().catch(() => {});
+        event.preventDefault();
+        void toggleGameAudio().catch(() => {});
       }
     });
     window.addEventListener("keyup", (event) => setMoveIntent(event.code, false));
     window.addEventListener("blur", clearMovementInput);
     document.addEventListener("pointerlockchange", () => {
+      const wasLocked = state.pointerLocked;
       state.pointerLocked = document.pointerLockElement === dom.canvas;
       dom.crosshair.classList.toggle("is-active", state.pointerLocked || matchMedia("(pointer: coarse)").matches);
+      // One Escape while locked often only exits pointer lock. Treat that as
+      // opening the pause menu immediately so players never need a second Esc.
+      if (
+        wasLocked
+        && !state.pointerLocked
+        && performance.now() >= intentionalPointerUnlockUntil
+        && state.started
+        && !state.menuOpen
+        && !state.journalOpen
+        && !state.workroom.keypadOpen
+        && !state.readableBooks.open
+        && !state.gameOver
+      ) {
+        ignoreEscapeMenuToggleUntil = performance.now() + 400;
+        setMenuOpen(true);
+      }
     });
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
@@ -16404,12 +16862,18 @@
       else requestPointerLock();
     });
 
-    if (dom.audio) dom.audio.addEventListener("click", async () => {
-      if (!audioSystem) return;
-      if (!state.audioEnabled) await audioSystem.unlock();
-      else audioSystem.setEnabled(false);
+    if (dom.menuMusic) dom.menuMusic.addEventListener("click", () => {
+      void toggleGameAudio().catch(() => {});
     });
-    if (dom.fullscreen) dom.fullscreen.addEventListener("click", toggleMaximized);
+    // Toolbar audio/fullscreen aliases only fire when distinct from menu controls.
+    if (dom.audio && dom.audio !== dom.menuMusic) {
+      dom.audio.addEventListener("click", () => {
+        void toggleGameAudio().catch(() => {});
+      });
+    }
+    if (dom.fullscreen && dom.fullscreen !== dom.menuMaximize) {
+      dom.fullscreen.addEventListener("click", toggleMaximized);
+    }
     if (dom.journalButton) dom.journalButton.addEventListener("click", () => contestant13Quest && contestant13Quest.toggleJournal());
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
@@ -16982,9 +17446,11 @@
       return;
     }
     if (state.activeSeat) {
-      physics.movePlayer(0, 0);
+      const seatedBody = physics.playerPosition();
+      physics.verticalVelocity = 0;
+      physics.grounded = true;
+      physics.playerBody.setNextKinematicTranslation({ x: seatedBody.x, y: seatedBody.y, z: seatedBody.z });
       physics.step();
-      physics.updateSafety();
       state.lastMove = { dx: 0, dz: 0 };
       movement.crouched = false;
       movement.sprinting = false;
@@ -17567,9 +18033,12 @@
     window.MrFeastFresh.openReadableBookForQA = (index) => state.qa && readableBookSystem ? readableBookSystem.openByIndex(index) : false;
     window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
+    window.MrFeastFresh.probeMrFeastFurnitureCollisionForQA = () => (
+      state.qa && mrFeastNpc ? mrFeastNpc.probeFurnitureCollisionForQA() : null
+    );
     window.MrFeastFresh.getContestantState = () => mansionContestants ? mansionContestants.getDiagnostics() : null;
-    window.MrFeastFresh.placePlayerNearContestantForQA = (id, distance = 1.65) => (
-      state.qa && mansionContestants ? mansionContestants.placePlayerNearForQA(id, distance) : null
+    window.MrFeastFresh.placePlayerNearContestantForQA = (id, distance = 1.65, orbitRadians = 0) => (
+      state.qa && mansionContestants ? mansionContestants.placePlayerNearForQA(id, distance, orbitRadians) : null
     );
     window.MrFeastFresh.converseWithContestantForQA = (id) => (
       state.qa && mansionContestants ? mansionContestants.converse(id) : null
@@ -17592,6 +18061,9 @@
     );
     window.MrFeastFresh.runContestantRoutineForQA = (id, maxSeconds = 90) => (
       state.qa && mansionContestants ? mansionContestants.runContestantRoutineForQA(id, maxSeconds) : null
+    );
+    window.MrFeastFresh.probeContestantFurnitureCollisionForQA = (id) => (
+      state.qa && mansionContestants ? mansionContestants.probeFurnitureCollisionForQA(id) : null
     );
     window.MrFeastFresh.advanceContestantSeatedIdleForQA = (id, seconds = 3.2) => (
       state.qa && mansionContestants ? mansionContestants.advanceContestantSeatedIdleForQA(id, seconds) : null
@@ -17665,6 +18137,13 @@
       if (!state.qa) return null;
       state.activeHideSpot?.exit();
       return { hidden: state.isHidden };
+    };
+    window.MrFeastFresh.resumeMrFeastForQA = () => {
+      if (!state.qa || !mrFeastNpc) return null;
+      state.started = true;
+      mrFeastNpc.wanderingEnabled = true;
+      mrFeastNpc.qaAnimationFrozen = false;
+      return mrFeastNpc.getDiagnostics();
     };
     window.MrFeastFresh.clearGameOverForQA = () => {
       if (!state.qa) return null;

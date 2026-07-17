@@ -48,6 +48,10 @@ async function run() {
   assert(/class ReadableBookSystem/.test(runtimeSource), "runtime is missing the readable-book system");
   assert(/id="mansion-book-reader"[^>]+role="dialog"[^>]+aria-modal="true"/.test(pageSource), "page is missing the accessible book reader");
   assert(/id="mansion-book-annotation"[^>]+aria-label="Handwritten note"/.test(pageSource), "the shared reader is missing a separate handwritten marginalia layer");
+  assert(/spineTitleInk:\s*"#14110e"/.test(runtimeSource) && /ctx\.fillStyle\s*=\s*READABLE_BOOKS\.spineTitleInk/.test(runtimeSource), "physical spine titles should use the named matte-black ink treatment");
+  assert(!/createSpineTitleTexture\(title\)[\s\S]*?ctx\.shadowColor[\s\S]*?return texture;/.test(runtimeSource), "physical spine titles should not retain a bright shadow that reads as a glow");
+  assert(/#mansion-book-annotation\s*\{[\s\S]*?font-style:\s*italic;[\s\S]*?letter-spacing:\s*-0\.025em;/.test(pageSource), "the XIII annotation should use compressed, hurried handwriting styling");
+  assert(/#mansion-book-reader\[data-annotation-slot="left-margin"\][\s\S]*?rotate\(-2\.4deg\)\s*skewX\(-1\.6deg\)/.test(pageSource), "the handwritten clue should sit at a visibly rushed angle");
 
   let server = null;
   let browser = null;
@@ -131,6 +135,10 @@ async function run() {
         annotationSlot: document.getElementById("mansion-book-reader")?.dataset.annotationSlot,
         previewFont: preview ? getComputedStyle(preview).fontFamily : "",
         annotationFont: getComputedStyle(document.getElementById("mansion-book-annotation")).fontFamily,
+        annotationStyle: (() => {
+          const style = getComputedStyle(document.getElementById("mansion-book-annotation"));
+          return { fontStyle: style.fontStyle, letterSpacing: style.letterSpacing, transform: style.transform };
+        })(),
       };
     });
     state = await diagnostics(desktop);
@@ -138,6 +146,7 @@ async function run() {
     assert(clueReader.kind === "clue" && clueReader.preview.length >= 120 && !/basement key is buried/i.test(clueReader.preview), `the main page copy should remain an ordinary printed lore excerpt rather than becoming the clue; clue=${JSON.stringify(clueReader)}`);
     assert(/hedge maze/i.test(clueReader.annotation || "") && /formal garden/i.test(clueReader.annotation || "") && /XIII/i.test(clueReader.annotation || ""), `a separate handwritten annotation should preserve both trail directions and signature; clue=${JSON.stringify(clueReader)}`);
     assert(/Georgia|serif/i.test(clueReader.previewFont) && /Bradley Hand|Segoe Print|Comic Sans|cursive/i.test(clueReader.annotationFont), `printed prose and handwritten marginalia need visibly different typography; clue=${JSON.stringify(clueReader)}`);
+    assert(clueReader.annotationStyle.fontStyle === "italic" && Number.parseFloat(clueReader.annotationStyle.letterSpacing) < 0 && clueReader.annotationStyle.transform !== "none", `the marginalia should look compressed and angled as if XIII wrote it in a rush; clue=${JSON.stringify(clueReader)}`);
     assert(clueReader.annotationSlot === books.clueBook.annotationSlot && state.contestant13.bookRead && state.books.open && state.books.active?.kind === "clue", `the clue volume should retain its seeded annotation location and advance through the shared reader; books=${JSON.stringify(state.books)}`);
     await desktop.waitForTimeout(200);
     await desktop.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-with-handwritten-marginalia-desktop.png") });

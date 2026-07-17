@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-marginalia-clue-1";
+  const MANSION_RUNTIME_VERSION = "20260717-matte-spines-rushed-note-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -401,6 +401,8 @@
     interactionDepth: 0.035,
     shelfTargetHeight: 0.5,
     promptVerb: "Read",
+    spineTitleInk: "#14110e",
+    spineTitleOpacity: 0.82,
   });
 
   function createReadableBookSeed() {
@@ -1186,7 +1188,7 @@
   const CONTESTANT_13_CLUE_BOOK = Object.freeze({
     placementId: "contestant-13-marginalia-book",
     kind: "clue",
-    annotation: "The basement key is buried where the hedge maze stops.\nA shovel waits in the formal garden, under the dead roses beside the faceless angel.\n— XIII",
+    annotation: "The basement key is buried where the hedge maze stops.\nShovel — under the dead roses, formal garden, beside the faceless angel.\nHurry.\n—XIII",
   });
 
   const CONTESTANT_13 = Object.freeze({
@@ -6716,10 +6718,8 @@
         ctx.font = `600 ${fontSize}px Georgia, serif`;
         fontSize -= 1;
       } while (fontSize > 17 && ctx.measureText(title).width > 452);
-      ctx.shadowColor = "rgba(20, 10, 4, 0.72)";
-      ctx.shadowBlur = 2;
-      ctx.shadowOffsetY = 1;
-      ctx.fillStyle = "#ead9a2";
+      ctx.globalAlpha = READABLE_BOOKS.spineTitleOpacity;
+      ctx.fillStyle = READABLE_BOOKS.spineTitleInk;
       ctx.fillText(title, 0, 0);
       ctx.restore();
       const texture = new THREE.CanvasTexture(canvas);
@@ -6758,7 +6758,7 @@
           transparent: true,
           alphaTest: 0.08,
           depthWrite: false,
-          toneMapped: false,
+          toneMapped: true,
           side: THREE.FrontSide,
         });
         const titles = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, labels.length);

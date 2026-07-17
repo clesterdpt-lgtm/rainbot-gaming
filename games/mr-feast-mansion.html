@@ -1160,16 +1160,19 @@
     #mansion-book-annotation {
       position: relative;
       width: min(31ch, 88%);
-      margin-top: 24px;
+      margin-top: 22px;
       color: #263c4b;
-      font-family: "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+      font-family: "Bradley Hand", "Chalkboard SE", "Segoe Print", "Comic Sans MS", cursive;
       font-size: clamp(0.92rem, 2.4vw, 1.08rem);
-      font-weight: 600;
-      line-height: 1.58;
-      letter-spacing: 0.018em;
+      font-style: italic;
+      font-weight: 500;
+      line-height: 1.43;
+      letter-spacing: -0.025em;
+      word-spacing: 0.045em;
       white-space: pre-line;
-      text-shadow: 0.35px 0 rgba(26, 50, 68, 0.32);
+      text-shadow: 0.4px 0 rgba(26, 50, 68, 0.38), -0.2px 0.35px rgba(26, 50, 68, 0.18);
       text-wrap: pretty;
+      transform-origin: left top;
     }
 
     #mansion-book-annotation[hidden] { display: none; }
@@ -1189,20 +1192,20 @@
     #mansion-book-reader[data-annotation-slot="left-margin"] #mansion-book-annotation {
       margin-right: auto;
       margin-left: 2%;
-      transform: rotate(-0.8deg);
+      transform: rotate(-2.4deg) skewX(-1.6deg);
     }
 
     #mansion-book-reader[data-annotation-slot="right-margin"] #mansion-book-annotation {
       margin-right: 2%;
       margin-left: auto;
-      transform: rotate(0.7deg);
+      transform: rotate(2.1deg) skewX(1.2deg);
     }
 
     #mansion-book-reader[data-annotation-slot="lower-page"] #mansion-book-annotation {
       width: min(34ch, 92%);
       margin-right: auto;
       margin-left: auto;
-      transform: rotate(-0.35deg);
+      transform: rotate(-1.7deg) skewX(-1deg);
     }
 
     .mansion-book__hint {
@@ -2095,6 +2098,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260717-marginalia-clue-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260717-matte-spines-rushed-note-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

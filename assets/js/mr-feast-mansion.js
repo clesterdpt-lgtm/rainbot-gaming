@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-kip-wrist-1";
+  const MANSION_RUNTIME_VERSION = "20260718-code-scratch-corners-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -744,6 +744,17 @@
     Object.freeze({ artId: "garden-knees", order: 3, numeral: "III", digit: "1" }),
     Object.freeze({ artId: "choir-floorboards", order: 4, numeral: "IV", digit: "3" }),
   ]);
+  const WORKROOM_CODE_SCRATCH_STYLE = Object.freeze({
+    // Only the four clue carriers need this wider roll. Ordinary mansion
+    // portraits keep the subtler housekeeping tilt.
+    carrierTiltRadians: 0.32,
+    textureWidth: 320,
+    textureHeight: 160,
+    planeWidth: 0.32,
+    planeHeight: 0.16,
+    bottomOffset: 0.16,
+    cornerBias: 0.04,
+  });
   const ESTATE_STATUES = Object.freeze({
     assetVersion: "20260716-estate-statues-1",
     centralAisleHalfWidth: 2.75,
@@ -1326,6 +1337,10 @@
     exitPosition: Object.freeze({ x: -13.2, z: -1.58, yaw: 0 }),
   });
 
+  const MANSION_PORTRAIT = Object.freeze({
+    frameRail: 0.105,
+    wallOffset: 0.19,
+  });
   const MANSION_TAMPER = Object.freeze({
     noticeSeconds: 4.2,
     fixSeconds: 2.8,
@@ -11334,6 +11349,9 @@
             digit: state.qa ? config.digit : (this.discovered.has(config.artId) ? config.digit : null),
             revealed: Boolean(mark?.scratch?.visible),
             discovered: this.discovered.has(config.artId),
+            placement: mark?.scratch?.userData?.workroomScratchPlacement
+              ? { ...mark.scratch.userData.workroomScratchPlacement }
+              : null,
           };
         }),
         discoveredCount: this.discovered.size,
@@ -11388,8 +11406,11 @@
         visualOffset: () => group.rotation.z,
       });
       entry.tiltSign = this.counts.portrait % 2 === 0 ? 1 : -1;
+      entry.tiltRadians = WORKROOM_CODE_SCRATCHES.some((config) => config.artId === entry.artId)
+        ? WORKROOM_CODE_SCRATCH_STYLE.carrierTiltRadians
+        : MANSION_TAMPER.portraitTiltRadians;
       entry.apply = (tampered) => {
-        group.rotation.z = tampered ? entry.tiltSign * MANSION_TAMPER.portraitTiltRadians : 0;
+        group.rotation.z = tampered ? entry.tiltSign * entry.tiltRadians : 0;
         // Tilting a code-carrier painting exposes the scratch behind it; any
         // straighten or Mr. Feast fix hides it again. Discovery persists.
         if (entry.artId) workroomCodeClue?.setRevealed(entry.artId, tampered);
@@ -11677,6 +11698,8 @@
           cooldownRemaining: Number(entry.cooldownRemaining.toFixed(2)),
           blockedReason: entry.blockedReason,
           seatId: entry.seatId,
+          tiltSign: entry.kind === "portrait" ? entry.tiltSign : null,
+          tiltRadians: entry.kind === "portrait" ? entry.tiltRadians : null,
           visualOffset: Number(entry.visualOffset().toFixed(3)),
           colliderOffset: Number(entry.colliderOffset().toFixed(3)),
         })),
@@ -15635,7 +15658,7 @@
     group.position.set(x, y, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
-    const rail = 0.105;
+    const rail = MANSION_PORTRAIT.frameRail;
     box({ name: "portrait-frame-top", w: width + rail * 2, h: rail, d: 0.09, x: 0, y: height / 2 + rail / 2, z: 0, material: M.brass, parent: group, cast: false });
     box({ name: "portrait-frame-bottom", w: width + rail * 2, h: rail, d: 0.09, x: 0, y: -height / 2 - rail / 2, z: 0, material: M.brass, parent: group, cast: false });
     for (const side of [-1, 1]) box({ name: "portrait-frame-side", w: rail, h: height, d: 0.09, x: side * (width / 2 + rail / 2), y: 0, z: 0, material: M.brass, parent: group, cast: false });
@@ -15655,7 +15678,7 @@
 
   function addWallPortrait(options) {
     const { axis, fixed, center, floorY, centerY = 1.95, side = 1, width = 1, height = 1.4, color, artId, crop, circuitName } = options;
-    const offset = 0.19;
+    const offset = MANSION_PORTRAIT.wallOffset;
     if (axis === "x") {
       return addPortrait(center, floorY + centerY, fixed + side * offset, side > 0 ? 0 : Math.PI, width, height, color, artId, crop, circuitName);
     }
@@ -16524,38 +16547,144 @@
     return texture;
   }
 
+  const WORKROOM_SCRATCH_GLYPHS = Object.freeze({
+    I: Object.freeze([
+      [[0.18, 0.08], [0.82, 0.06]],
+      [[0.51, 0.06], [0.47, 0.3], [0.53, 0.57], [0.48, 0.93]],
+      [[0.17, 0.94], [0.8, 0.92]],
+    ]),
+    V: Object.freeze([
+      [[0.1, 0.07], [0.21, 0.35], [0.49, 0.94], [0.77, 0.39], [0.91, 0.06]],
+    ]),
+    "0": Object.freeze([
+      [[0.35, 0.06], [0.18, 0.15], [0.1, 0.39], [0.13, 0.73], [0.3, 0.93], [0.66, 0.92], [0.84, 0.74], [0.9, 0.4], [0.77, 0.14], [0.35, 0.06]],
+    ]),
+    "1": Object.freeze([
+      [[0.22, 0.24], [0.5, 0.06], [0.48, 0.94]],
+      [[0.19, 0.94], [0.79, 0.92]],
+    ]),
+    "3": Object.freeze([
+      [[0.16, 0.13], [0.42, 0.05], [0.71, 0.1], [0.86, 0.26], [0.74, 0.44], [0.47, 0.5], [0.74, 0.55], [0.88, 0.72], [0.76, 0.9], [0.47, 0.96], [0.15, 0.88]],
+    ]),
+    "5": Object.freeze([
+      [[0.86, 0.08], [0.22, 0.06], [0.17, 0.48], [0.65, 0.47], [0.84, 0.58], [0.81, 0.81], [0.64, 0.94], [0.22, 0.91]],
+    ]),
+  });
+
   function createWorkroomScratchTexture(numeral, digit) {
     const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 128;
+    canvas.width = WORKROOM_CODE_SCRATCH_STYLE.textureWidth;
+    canvas.height = WORKROOM_CODE_SCRATCH_STYLE.textureHeight;
     const ctx = canvas.getContext("2d");
-    const label = `${numeral} · ${digit}`;
-    ctx.font = "700 72px Georgia, serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    let seed = 2166136261;
+    for (const character of `${numeral}:${digit}`) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619) >>> 0;
+    const random = () => {
+      seed = (seed + 0x6d2b79f5) >>> 0;
+      let value = seed;
+      value = Math.imul(value ^ (value >>> 15), value | 1);
+      value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+      return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+    const roughenPath = (source) => {
+      const rough = [];
+      for (let segmentIndex = 1; segmentIndex < source.length; segmentIndex += 1) {
+        const from = source[segmentIndex - 1];
+        const to = source[segmentIndex];
+        const dx = to[0] - from[0];
+        const dy = to[1] - from[1];
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        const steps = Math.max(2, Math.ceil(length / 13));
+        for (let step = 0; step < steps; step += 1) {
+          if (segmentIndex > 1 && step === 0) continue;
+          const progress = step / steps;
+          const endDamping = progress < 0.001 ? 0.35 : 1;
+          const lateral = (random() - 0.5) * 3.4 * endDamping;
+          const along = (random() - 0.5) * 1.2 * endDamping;
+          rough.push([
+            from[0] + dx * progress + (dx / length) * along - (dy / length) * lateral,
+            from[1] + dy * progress + (dy / length) * along + (dx / length) * lateral,
+          ]);
+        }
+      }
+      const last = source[source.length - 1];
+      rough.push([last[0] + (random() - 0.5) * 0.8, last[1] + (random() - 0.5) * 0.8]);
+      return rough;
+    };
+    const glyphWidth = 50;
+    const glyphHeight = 112;
+    const glyphGap = 10;
+    const separatorWidth = 44;
+    const numeralWidth = numeral.length * glyphWidth + Math.max(0, numeral.length - 1) * glyphGap;
+    const contentWidth = numeralWidth + separatorWidth + glyphWidth;
+    const glyphTop = 23;
+    let cursorX = (canvas.width - contentWidth) / 2;
+    const scratchPaths = [];
+    const appendGlyph = (character, originX) => {
+      for (const sourcePath of WORKROOM_SCRATCH_GLYPHS[character] || []) {
+        scratchPaths.push(roughenPath(sourcePath.map(([x, y]) => [originX + x * glyphWidth, glyphTop + y * glyphHeight])));
+      }
+    };
+    for (const character of numeral) {
+      appendGlyph(character, cursorX);
+      cursorX += glyphWidth + glyphGap;
+    }
+    cursorX -= glyphGap;
+    scratchPaths.push(roughenPath([
+      [cursorX + 9, glyphTop + glyphHeight * 0.52],
+      [cursorX + separatorWidth - 9, glyphTop + glyphHeight * 0.49],
+    ]));
+    cursorX += separatorWidth;
+    appendGlyph(digit, cursorX);
+
+    const trace = (path, offsetX = 0, offsetY = 0) => {
+      ctx.beginPath();
+      ctx.moveTo(path[0][0] + offsetX, path[0][1] + offsetY);
+      for (let index = 1; index < path.length; index += 1) ctx.lineTo(path[index][0] + offsetX, path[index][1] + offsetY);
+      ctx.stroke();
+    };
+    const fibers = Array.from({ length: 16 }, (_, index) => {
+      const sourcePath = scratchPaths[index % scratchPaths.length];
+      const point = sourcePath[Math.floor(random() * sourcePath.length)];
+      const angle = (random() - 0.5) * 2.2;
+      const length = 5 + random() * 9;
+      return roughenPath([
+        [point[0] - Math.cos(angle) * length * 0.5, point[1] - Math.sin(angle) * length * 0.5],
+        [point[0] + Math.cos(angle) * length * 0.5, point[1] + Math.sin(angle) * length * 0.5],
+      ]);
+    });
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(-0.035);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.save();
-    ctx.translate(128, 66);
-    ctx.rotate(-0.045);
-    // The library book's XIII is dark gouges on pale leather; a wall scratch
-    // is the inverse — dark wallpaper torn away to pale plaster. The wide
-    // pale stroke carries the mark, a thin dark pass shadows the cut edge,
-    // and the dashes keep every stroke broken and hand-carved.
-    ctx.strokeStyle = "rgba(24, 16, 12, 0.7)";
-    ctx.lineWidth = 8.2;
-    ctx.setLineDash([14, 3, 9, 4]);
-    ctx.strokeText(label, 1.4, 1.6);
-    ctx.strokeStyle = "rgba(214, 196, 158, 0.92)";
-    ctx.lineWidth = 5.6;
-    ctx.setLineDash([13, 3, 8, 4]);
+    // Match the book-spine XIII: an irregular dark undercut, a broken pale
+    // plaster core, a hairline highlight, and stray fibers. The glyphs above
+    // are traced paths rather than typography, so the marks read as hurried
+    // cuts while their numeral/digit shapes remain unambiguous.
+    ctx.strokeStyle = "rgba(24, 16, 12, 0.76)";
+    ctx.lineWidth = 9.2;
+    ctx.setLineDash([17, 3, 10, 5]);
+    scratchPaths.forEach((path) => trace(path, 1.5, 1.7));
+    ctx.strokeStyle = "rgba(214, 196, 158, 0.94)";
+    ctx.lineWidth = 4.6;
+    ctx.setLineDash([14, 3, 8, 4]);
     ctx.lineDashOffset = 1;
-    ctx.strokeText(label, 0, 0);
-    ctx.strokeStyle = "rgba(238, 224, 192, 0.6)";
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash([6, 8, 4, 9]);
+    scratchPaths.forEach((path) => trace(path));
+    ctx.strokeStyle = "rgba(240, 226, 194, 0.62)";
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([5, 8, 3, 10]);
     ctx.lineDashOffset = -3;
-    ctx.strokeText(label, -0.8, -0.7);
+    scratchPaths.forEach((path) => trace(path, -0.7, -0.8));
+    ctx.strokeStyle = "rgba(35, 23, 16, 0.64)";
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([5, 3, 2, 4]);
+    fibers.forEach((path) => trace(path, 0.8, 0.9));
+    ctx.strokeStyle = "rgba(222, 204, 166, 0.72)";
+    ctx.lineWidth = 0.65;
+    ctx.setLineDash([3, 4, 2, 5]);
+    fibers.forEach((path) => trace(path));
     ctx.restore();
     const texture = new THREE.CanvasTexture(canvas);
     texture.name = `workroom-code-scratch-${numeral}`;
@@ -16571,6 +16700,9 @@
     const config = WORKROOM_CODE_SCRATCHES.find((candidate) => candidate.artId === options.artId);
     if (!config || !workroomCodeClue) return;
     const { axis, fixed, center, centerY = 1.95, side = 1, width = 1, height = 1.4 } = options;
+    const carrierEntry = tamperSystem?.entries.find((entry) => entry.kind === "portrait" && entry.artId === config.artId);
+    const tiltSign = carrierEntry?.tiltSign || 1;
+    const tiltRadians = carrierEntry?.tiltRadians || WORKROOM_CODE_SCRATCH_STYLE.carrierTiltRadians;
     // The scratch sits just proud of the wall surface (walls are 0.28m boxes
     // centered on `fixed`, so the face is 0.14m out), well behind the
     // painting's 0.19m stand-off, anchored to a sibling group so tilting the
@@ -16590,15 +16722,34 @@
     }
     const anchor = new THREE.Group();
     anchor.name = `workroom-code-scratch-${config.artId}`;
-    // The mark peeks out from under the frame's bottom rail (its top edge
-    // tucked slightly behind it) so a tilted painting visibly uncovers a
-    // scratch that was hidden at its edge, rather than one buried dead-center
-    // behind the canvas where no tilt could ever reveal it.
-    anchor.position.set(x, FLOOR.MAIN + centerY - height / 2 - 0.165, z);
+    // Each painting alternates its roll direction. Put the mark under the
+    // bottom corner that rises for this carrier instead of always using the
+    // left side (which left two of the four clues under the lowered rail).
+    const localX = tiltSign * Math.max(
+      WORKROOM_CODE_SCRATCH_STYLE.planeWidth / 2,
+      width / 2 - WORKROOM_CODE_SCRATCH_STYLE.planeWidth / 2 + WORKROOM_CODE_SCRATCH_STYLE.cornerBias,
+    );
+    const localY = -height / 2 - WORKROOM_CODE_SCRATCH_STYLE.bottomOffset;
+    anchor.position.set(x, FLOOR.MAIN + centerY + localY, z);
     anchor.rotation.y = rotationY;
+    anchor.userData.workroomScratchPlacement = {
+      tiltSign,
+      tiltRadians,
+      revealCorner: tiltSign > 0 ? "bottom-right" : "bottom-left",
+      portraitWidth: width,
+      portraitHeight: height,
+      frameRail: MANSION_PORTRAIT.frameRail,
+      localX,
+      localY,
+      planeWidth: WORKROOM_CODE_SCRATCH_STYLE.planeWidth,
+      planeHeight: WORKROOM_CODE_SCRATCH_STYLE.planeHeight,
+      surfaceTreatment: "etched-decal",
+      raisedDepth: 0,
+      textureTechnique: "hand-traced-broken-gouges",
+    };
     scene.add(anchor);
     const scratch = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.4, 0.22),
+      new THREE.PlaneGeometry(WORKROOM_CODE_SCRATCH_STYLE.planeWidth, WORKROOM_CODE_SCRATCH_STYLE.planeHeight),
       new THREE.MeshBasicMaterial({
         map: createWorkroomScratchTexture(config.numeral, config.digit),
         transparent: true,
@@ -16609,7 +16760,12 @@
       }),
     );
     scratch.name = `workroom-code-scratch-mark-${config.artId}`;
-    scratch.position.set(-width * 0.18, 0, 0);
+    scratch.position.set(localX, 0, 0);
+    scratch.renderOrder = 6;
+    scratch.castShadow = false;
+    scratch.receiveShadow = false;
+    scratch.userData.surfaceTreatment = "etched-decal";
+    scratch.userData.raisedDepth = 0;
     anchor.add(scratch);
     workroomCodeClue.registerScratch(config.artId, anchor);
   }

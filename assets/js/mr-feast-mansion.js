@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-audio-floor-mix-2";
+  const MANSION_RUNTIME_VERSION = "20260718-intro-save-load-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -74,6 +74,8 @@
     intro: $("mansion-intro"),
     introLead: document.querySelector(".mansion-intro__lead"),
     enter: $("mansion-enter"),
+    introLoad: $("mansion-intro-load"),
+    introSaveStatus: $("mansion-intro-save-status"),
     floor: $("mansion-floor"),
     room: $("mansion-room"),
     prompt: $("mansion-prompt"),
@@ -2288,11 +2290,12 @@
       dom.enter.removeAttribute("aria-disabled");
       dom.enter.textContent = action === "server" ? "Server running? Open game" : "Retry loading";
     }
+    updateIntroMenuControls();
   }
 
   function handleEnterClick() {
     if (state.ready) {
-      startExploration();
+      startExploration({ fromSave: false });
       return;
     }
     if (!state.loadFailed) return;
@@ -2301,6 +2304,11 @@
       return;
     }
     location.reload();
+  }
+
+  function handleIntroLoadClick() {
+    if (!state.ready || !mansionSaveSlot?.has()) return;
+    startExploration({ fromSave: true });
   }
 
   function textureUrl(name) {
@@ -19116,8 +19124,86 @@
     }
   }
 
-  function startExploration() {
-    if (!state.ready || state.started) return;
+  function formatIntroSaveSummary(saved) {
+    if (!saved) return "";
+    const parts = [];
+    const room = String(saved.meta?.room || "").trim();
+    if (room) parts.push(room);
+    const objective = String(saved.meta?.objective || "").trim();
+    if (objective && objective !== room) parts.push(objective);
+    const date = new Date(saved.savedAt || 0);
+    if (!Number.isNaN(date.getTime())) {
+      parts.push(date.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }));
+    }
+    return parts.length ? `Last save: ${parts.join(" · ")}` : "Saved game ready to continue.";
+  }
+
+  function updateIntroMenuControls() {
+    const hasSave = Boolean(mansionSaveSlot?.has());
+    const ready = Boolean(state.ready && !state.loadFailed && !state.started);
+    if (dom.introLoad) {
+      if (!ready) {
+        dom.introLoad.disabled = true;
+        dom.introLoad.setAttribute("aria-disabled", "true");
+        if (!state.ready && !state.loadFailed) {
+          dom.introLoad.textContent = "Load save";
+        } else if (!hasSave) {
+          dom.introLoad.textContent = "No save yet";
+        } else {
+          dom.introLoad.textContent = "Load save";
+        }
+      } else if (!hasSave) {
+        dom.introLoad.disabled = true;
+        dom.introLoad.setAttribute("aria-disabled", "true");
+        dom.introLoad.textContent = "No save yet";
+      } else {
+        dom.introLoad.disabled = false;
+        dom.introLoad.removeAttribute("aria-disabled");
+        dom.introLoad.textContent = "Load save";
+      }
+    }
+    if (dom.introSaveStatus) {
+      if (ready && hasSave) {
+        dom.introSaveStatus.hidden = false;
+        dom.introSaveStatus.textContent = formatIntroSaveSummary(mansionSaveSlot.read());
+      } else {
+        dom.introSaveStatus.hidden = true;
+        dom.introSaveStatus.textContent = "";
+      }
+    }
+  }
+
+  function skipOpeningWelcomeForLoad() {
+    if (!openingWelcomeSystem) return;
+    openingWelcomeSystem.active = false;
+    openingWelcomeSystem.completed = true;
+    openingWelcomeSystem.phase = "skipped-for-load";
+    openingWelcomeSystem.phaseRemaining = 0;
+    openingWelcomeSystem.lineIndex = -1;
+    openingWelcomeSystem.lineElapsed = 0;
+    openingWelcomeSystem.currentLineDuration = 0;
+    openingWelcomeSystem.cancelledReason = "loaded-save";
+    speechSystem?.dismiss();
+  }
+
+  function applyLoadedSaveState() {
+    const saved = mansionSaveSlot?.read();
+    if (!restoreMansionSave(saved)) return false;
+    if (state.gameOver) clearMansionGameOver();
+    tamperSystem?.resetAllForLoad();
+    mrFeastSystem?.recoverAfterLoad();
+    speechSystem?.dismiss();
+    return true;
+  }
+
+  function startExploration({ fromSave = false } = {}) {
+    if (!state.ready || state.started) return false;
+    if (fromSave && !mansionSaveSlot?.has()) return false;
     state.started = true;
     // Do not let the deliberately low-rate intro preview pollute the live FPS
     // sample or deliver a large accumulated simulation step on entry.
@@ -19131,12 +19217,39 @@
       dom.enter.disabled = true;
       dom.enter.setAttribute("aria-disabled", "true");
     }
+    if (dom.introLoad) {
+      dom.introLoad.disabled = true;
+      dom.introLoad.setAttribute("aria-disabled", "true");
+    }
+    if (dom.introSaveStatus) {
+      dom.introSaveStatus.hidden = true;
+      dom.introSaveStatus.textContent = "";
+    }
     if (dom.canvas) dom.canvas.focus({ preventScroll: true });
     if (contestant13Quest) contestant13Quest.updateUI();
-    openingWelcomeSystem?.start();
+    if (fromSave) {
+      // Continue mid-investigation without replaying the front-door briefing.
+      skipOpeningWelcomeForLoad();
+      if (!applyLoadedSaveState()) {
+        // Corrupt/incompatible save: fall through to a fresh welcome start.
+        if (openingWelcomeSystem) {
+          openingWelcomeSystem.completed = false;
+          openingWelcomeSystem.cancelledReason = null;
+          openingWelcomeSystem.phase = "idle";
+        }
+        openingWelcomeSystem?.start();
+        setMenuStatus("Save could not be restored. Starting a new game.");
+      } else {
+        setMenuStatus("Saved game restored.");
+      }
+    } else {
+      openingWelcomeSystem?.start();
+    }
     // Pointer lock must be requested during the trusted click. Audio is optional and must not delay entry.
     requestPointerLock();
     if (audioSystem) void audioSystem.unlock().catch(() => {});
+    updateMenuControls();
+    return true;
   }
 
   function mergeStaticDecor() {
@@ -19387,18 +19500,18 @@
   }
 
   function loadMansionGame() {
-    const saved = mansionSaveSlot?.read();
-    const loaded = restoreMansionSave(saved);
-    setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
-    if (loaded) {
-      setMenuOpen(false);
-      // Loading is time travel: any capture, pursuit, errand, or tilted
-      // decor in flight belongs to the abandoned timeline.
-      if (state.gameOver) clearMansionGameOver();
-      tamperSystem?.resetAllForLoad();
-      mrFeastNpc?.recoverAfterLoad();
-      speechSystem?.dismiss();
+    // From the main intro menu, loading must also begin exploration.
+    if (!state.started) {
+      const started = startExploration({ fromSave: true });
+      if (!started) setMenuStatus("No compatible save found.");
+      return started;
     }
+    // Loading is time travel: any capture, pursuit, errand, or tilted
+    // decor in flight belongs to the abandoned timeline.
+    const loaded = applyLoadedSaveState();
+    setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
+    if (loaded) setMenuOpen(false);
+    updateMenuControls();
     return loaded;
   }
 
@@ -19423,6 +19536,7 @@
       dom.menuMaximize.title = fullscreen ? "Exit fullscreen" : "Enter fullscreen";
       dom.menuMaximize.setAttribute("aria-pressed", String(fullscreen));
     }
+    updateIntroMenuControls();
     updateAudioButton();
   }
 
@@ -21936,8 +22050,9 @@
       if (dom.enter) {
         dom.enter.disabled = false;
         dom.enter.removeAttribute("aria-disabled");
-        dom.enter.textContent = "Cross the threshold";
+        dom.enter.textContent = "Start new game";
       }
+      updateIntroMenuControls();
       setLoading("Ready", 100);
       // Give the browser one complete paint with the loading veil removed and
       // the entry button enabled before the first Three.js shader compilation.
@@ -21951,5 +22066,7 @@
   }
 
   if (dom.enter) dom.enter.addEventListener("click", handleEnterClick);
+  if (dom.introLoad) dom.introLoad.addEventListener("click", handleIntroLoadClick);
+  updateIntroMenuControls();
   init();
 })();

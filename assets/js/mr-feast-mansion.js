@@ -628,6 +628,12 @@
     }),
     handLengthMeters: 0.18,
   });
+  // Kip's blended wrist seam loses volume when a second full-strength hand
+  // correction is stacked on his authored relaxed pose. A partial standing
+  // correction preserves the inward palm read without candy-wrapper twisting.
+  const CONTESTANT_STANDING_HAND_ORIENTATION_BLEND = Object.freeze({
+    "kip-solano": 0.4,
+  });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
     RESTRICTED: "restricted",
@@ -7306,6 +7312,140 @@
       return vertices;
     }
 
+    measureWristDeformation(entry) {
+      if (!state.qa || !entry?.model) return null;
+      entry.root.updateMatrixWorld(true);
+      const localPoint = (bone) => (
+        entry.root.worldToLocal(bone.getWorldPosition(new THREE.Vector3()))
+      );
+      const crossSection = (vertices, indices, wrist, axis) => {
+        const reference = Math.abs(axis.y) < 0.9
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(1, 0, 0);
+        const across = new THREE.Vector3().crossVectors(axis, reference).normalize();
+        const depth = new THREE.Vector3().crossVectors(axis, across).normalize();
+        const samples = indices.map((index) => {
+          const offset = vertices[index].clone().sub(wrist);
+          return [offset.dot(across), offset.dot(depth)];
+        });
+        if (samples.length < 3) return null;
+        const meanX = samples.reduce((sum, sample) => sum + sample[0], 0) / samples.length;
+        const meanY = samples.reduce((sum, sample) => sum + sample[1], 0) / samples.length;
+        let covarianceXX = 0;
+        let covarianceXY = 0;
+        let covarianceYY = 0;
+        for (const sample of samples) {
+          const x = sample[0] - meanX;
+          const y = sample[1] - meanY;
+          covarianceXX += x * x;
+          covarianceXY += x * y;
+          covarianceYY += y * y;
+        }
+        covarianceXX /= samples.length;
+        covarianceXY /= samples.length;
+        covarianceYY /= samples.length;
+        const eigenSpan = Math.sqrt(
+          ((covarianceXX - covarianceYY) ** 2) + (4 * covarianceXY * covarianceXY),
+        );
+        const majorVariance = Math.max(0, (covarianceXX + covarianceYY + eigenSpan) * 0.5);
+        const minorVariance = Math.max(0, (covarianceXX + covarianceYY - eigenSpan) * 0.5);
+        const majorStd = Math.sqrt(majorVariance);
+        const minorStd = Math.sqrt(minorVariance);
+        return {
+          majorStd,
+          minorStd,
+          aspect: majorStd > 0.00000001 ? minorStd / majorStd : 0,
+        };
+      };
+      const sides = {};
+      for (const sideName of ["Left", "Right"]) {
+        const sideKey = sideName.toLowerCase();
+        const forearm = entry.restPoseByName[`${sideName}ForeArm`]?.bone;
+        const handRest = entry.restPoseByName[`${sideName}Hand`];
+        const hand = handRest?.bone;
+        if (!forearm || !hand || !handRest) continue;
+        const elbow = localPoint(forearm);
+        const wrist = localPoint(hand);
+        const axis = wrist.clone().sub(elbow);
+        if (axis.lengthSq() < 0.00000001) continue;
+        axis.normalize();
+        const currentHandQuaternion = hand.quaternion.clone();
+        let referenceVertices = [];
+        try {
+          hand.quaternion.copy(handRest.quaternion);
+          entry.root.updateMatrixWorld(true);
+          referenceVertices = this.collectWeightedSkinnedVertices(
+            entry,
+            [`${sideName}ForeArm`, `${sideName}Hand`],
+            0.5,
+          );
+        } finally {
+          hand.quaternion.copy(currentHandQuaternion);
+          entry.root.updateMatrixWorld(true);
+        }
+        const bandIndices = [];
+        for (let index = 0; index < referenceVertices.length; index += 1) {
+          if (Math.abs(referenceVertices[index].clone().sub(wrist).dot(axis)) <= 0.012) {
+            bandIndices.push(index);
+          }
+        }
+        const currentVertices = this.collectWeightedSkinnedVertices(
+          entry,
+          [`${sideName}ForeArm`, `${sideName}Hand`],
+          0.5,
+        );
+        const current = currentVertices.length === referenceVertices.length
+          ? crossSection(currentVertices, bandIndices, wrist, axis)
+          : null;
+        const referenceSection = referenceVertices.length === currentVertices.length
+          ? crossSection(referenceVertices, bandIndices, wrist, axis)
+          : null;
+        const localDelta = currentHandQuaternion.clone()
+          .multiply(handRest.quaternion.clone().conjugate())
+          .normalize();
+        const twistAxis = hand.position.clone().normalize();
+        const twistProjection = (localDelta.x * twistAxis.x)
+          + (localDelta.y * twistAxis.y)
+          + (localDelta.z * twistAxis.z);
+        const localTwist = new THREE.Quaternion(
+          twistAxis.x * twistProjection,
+          twistAxis.y * twistProjection,
+          twistAxis.z * twistProjection,
+          localDelta.w,
+        ).normalize();
+        const localSwing = localDelta.clone()
+          .multiply(localTwist.clone().conjugate())
+          .normalize();
+        sides[sideKey] = {
+          valid: Boolean(current && referenceSection && bandIndices.length >= 3),
+          samples: bandIndices.length,
+          minorSectionRetention: current && referenceSection?.minorStd > 0.00000001
+            ? current.minorStd / referenceSection.minorStd
+            : 0,
+          handTwistDegrees: THREE.MathUtils.radToDeg(
+            2 * Math.acos(clamp(Math.abs(localTwist.w), 0, 1)),
+          ),
+          handSwingDegrees: THREE.MathUtils.radToDeg(
+            2 * Math.acos(clamp(Math.abs(localSwing.w), 0, 1)),
+          ),
+        };
+      }
+      const validSides = Object.values(sides).filter((side) => side.valid);
+      return {
+        valid: validSides.length === 2,
+        minimumMinorSectionRetention: validSides.length === 2
+          ? Math.min(...validSides.map((side) => side.minorSectionRetention))
+          : 0,
+        maximumHandTwistDegrees: validSides.length === 2
+          ? Math.max(...validSides.map((side) => side.handTwistDegrees))
+          : Infinity,
+        maximumHandSwingDegrees: validSides.length === 2
+          ? Math.max(...validSides.map((side) => side.handSwingDegrees))
+          : Infinity,
+        sides,
+      };
+    }
+
     measureSeatedHandSurfaceClearance(entry) {
       if (!state.qa || !entry?.model) return null;
       const point = (name) => {
@@ -7420,8 +7560,9 @@
         const hip = point(`${sideName}UpLeg`);
         const knee = point(`${sideName}Leg`);
         const handBone = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        const handRest = entry.restPoseByName[`${sideName}Hand`];
         const handAxes = geometryAxes?.[sideKey];
-        if (!shoulder || !elbow || !wrist || !hip || !knee || !handBone || !handAxes) continue;
+        if (!shoulder || !elbow || !wrist || !hip || !knee || !handBone || !handRest || !handAxes) continue;
         const anatomicalSide = Math.sign(shoulder.x - center.x) || (sideName === "Left" ? 1 : -1);
         const thigh = knee.clone().sub(hip);
         const thighLengthSq = thigh.lengthSq();
@@ -7460,6 +7601,10 @@
         const inwardToBody = center.clone().sub(wrist);
         inwardToBody.y = 0;
         if (inwardToBody.lengthSq() > 0.00000001) inwardToBody.normalize();
+        const handLocalOffset = handRest.quaternion.clone()
+          .conjugate()
+          .multiply(handBone.quaternion)
+          .normalize();
         arms[sideKey] = {
           shoulder,
           elbow,
@@ -7477,6 +7622,9 @@
           fingerThighDot: fingerDirection.dot(thighDirection),
           palmTowardThighAlignment: -palmDirection.dot(thighSurfaceNormal),
           palmTowardBodyAlignment: palmDirection.dot(inwardToBody),
+          handLocalOffsetDegrees: THREE.MathUtils.radToDeg(
+            2 * Math.acos(clamp(Math.abs(handLocalOffset.w), 0, 1)),
+          ),
           handTipToThighDistance: fingerTip.distanceTo(closestTipThighPoint),
           wristThighClearance,
           handTipThighClearance,
@@ -7519,6 +7667,9 @@
         minimumPalmTowardBodyAlignment: left && right
           ? Math.min(left.palmTowardBodyAlignment, right.palmTowardBodyAlignment)
           : -1,
+        maximumHandLocalOffsetDegrees: left && right
+          ? Math.max(left.handLocalOffsetDegrees, right.handLocalOffsetDegrees)
+          : Infinity,
         minimumHandPlaneThighClearance: left && right
           ? Math.min(
             left.wristThighClearance,
@@ -7548,6 +7699,7 @@
             fingerThighDot: left.fingerThighDot,
             palmTowardThighAlignment: left.palmTowardThighAlignment,
             palmTowardBodyAlignment: left.palmTowardBodyAlignment,
+            handLocalOffsetDegrees: left.handLocalOffsetDegrees,
             handTipToThighDistance: left.handTipToThighDistance,
             wristThighClearance: left.wristThighClearance,
             handTipThighClearance: left.handTipThighClearance,
@@ -7562,6 +7714,7 @@
             fingerThighDot: right.fingerThighDot,
             palmTowardThighAlignment: right.palmTowardThighAlignment,
             palmTowardBodyAlignment: right.palmTowardBodyAlignment,
+            handLocalOffsetDegrees: right.handLocalOffsetDegrees,
             handTipToThighDistance: right.handTipToThighDistance,
             wristThighClearance: right.wristThighClearance,
             handTipThighClearance: right.handTipThighClearance,
@@ -7623,10 +7776,17 @@
         this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
         rightForeArm?.quaternion.multiply(this.seatedMotionQuaternion);
       }
-      // Keep one inward-facing world-space hand basis through every activity;
-      // the seated support pass rolls it palm-down with the same eased blend as
-      // the arm IK, avoiding a wrist snap at either endpoint.
-      this.applyBodyFacingHands(entry, 1);
+      // Keep one inward-facing world-space hand basis through every activity.
+      // Kip uses a softer standing correction so rotation stays within the
+      // skinned wrist's healthy range; seated support still resolves palm-down
+      // at full strength with the same eased blend as the arm IK.
+      const standingHandBlend = CONTESTANT_STANDING_HAND_ORIENTATION_BLEND[entry.id] ?? 1;
+      const handOrientationBlend = THREE.MathUtils.lerp(
+        standingHandBlend,
+        1,
+        seatedBlend,
+      );
+      this.applyBodyFacingHands(entry, handOrientationBlend);
       entry.armPoseMode = mode;
       entry.armPoseMaximumAngle = maximumPoseAngle;
       entry.armSwingCurrent = swing;
@@ -8655,6 +8815,7 @@
         id: entry.id,
         phase: clamp(Number(phase) || 0, 0, 1),
         armPose: this.measureArmPose(entry),
+        wristGeometry: this.measureWristDeformation(entry),
       };
     }
 
@@ -8667,7 +8828,11 @@
       entry.mixer.update(0);
       this.applyNeutralRestPose(entry);
       entry.root.updateMatrixWorld(true);
-      return { id: entry.id, armPose: this.measureArmPose(entry) };
+      return {
+        id: entry.id,
+        armPose: this.measureArmPose(entry),
+        wristGeometry: this.measureWristDeformation(entry),
+      };
     }
 
     settleSeatTransitionForQA(entry) {

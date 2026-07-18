@@ -11,6 +11,11 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-seating-and-routes");
 const contestantIds = Object.freeze(["mara-voss", "kip-solano", "juniper-cross"]);
+const seatedHandClearanceByContestant = Object.freeze({
+  "mara-voss": 0.14,
+  "kip-solano": 0.15,
+  "juniper-cross": 0.21,
+});
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -385,6 +390,7 @@ async function run() {
       assert(result.activities.includes("walking") && result.activities.includes("idle") && result.activities.includes("seated"), `${id} routine should walk, pause, and sit; got ${JSON.stringify(result.activities)}`);
       assert(result.distanceTravelled >= 1 && result.teleports === 0, `${id} should materially walk without teleporting; got ${JSON.stringify(result)}`);
       assert(result.maximumArmSwingRadians >= 0.08 && result.maximumArmSwingRadians <= 0.11, `${id} walk should have a restrained procedural counter-swing instead of frozen or flailing arms; got ${JSON.stringify(result)}`);
+      assert(result.minimumWalkingPalmTowardBodyAlignment >= 0.7, `${id} should keep both palms naturally facing the torso throughout the walking swing; got ${JSON.stringify(result)}`);
       assert(result.segmentsTraversed >= (initial.route.points - 1) * 2 - 1, `${id} should visit the authored loop while skipping only the duplicate seat-exit waypoint; got ${JSON.stringify(result)}`);
       assert(result.seatExitsCompleted >= 2, `${id} QA cycle should include both outbound and return seat exits; got ${JSON.stringify(result)}`);
       assert(result.postSeatDeparturesCompleted === result.seatExitsCompleted && result.postSeatDeparturePending === false, `${id} must walk to a different hangout after every seat exit; got ${JSON.stringify(result)}`);
@@ -418,14 +424,23 @@ async function run() {
       assert(seatedMotion.probe.maximumUpperBodyDelta >= 0.000001 && seatedMotion.probe.maximumUpperBodyDelta <= 0.02, `${id} seated upper-body motion should stay restrained; got ${JSON.stringify(seatedMotion.probe)}`);
       assert(seatedMotion.probe.armPose?.valid && !seatedMotion.probe.armPose.handsCrossedCenterline && seatedMotion.probe.armPose.handSeparation >= 0.12, `${id} seated hands should remain relaxed and separated on their own side; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       assert(seatedMotion.probe.armPose.minimumWristForwardOfTorso >= 0.04, `${id} seated wrists should rest forward over the lap instead of hanging behind the torso; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
-      assert(seatedMotion.probe.armPose.maximumWristToLapDistance <= 0.2, `${id} seated hands should rest naturally over the upper thighs; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.maximumWristToLapDistance <= 0.25, `${id} seated hands should rest naturally over the upper thighs; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       assert(seatedMotion.probe.armPose.minimumElbowFlexionDegrees >= 45 && seatedMotion.probe.armPose.maximumElbowFlexionDegrees <= 105, `${id} seated elbows should flex forward in a relaxed anatomical range; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       assert(seatedMotion.probe.armPose.minimumFingerThighDot >= 0.7, `${id} seated fingers should point down the thighs instead of flipping backward; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       const palmAlignments = Object.values(seatedMotion.probe.armPose.sides)
         .map((side) => side.palmTowardThighAlignment);
+      const wristThighFractions = Object.values(seatedMotion.probe.armPose.sides)
+        .map((side) => side.wristThighFraction);
       assert(seatedMotion.probe.armPose.minimumPalmTowardThighAlignment >= 0.65, `${id} should roll both palms down toward the thighs instead of exposing them upward; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       assert(palmAlignments.every((alignment) => alignment >= 0.65), `${id} should keep each palm individually facing the thigh; got ${JSON.stringify({ palmAlignments, armPose: seatedMotion.probe.armPose })}`);
-      assert(seatedMotion.probe.armPose.maximumHandTipToThighDistance <= 0.11, `${id} seated fingertips should finish close to the thigh instead of floating or twisting away; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(wristThighFractions.every((fraction) => fraction >= 0.24 && fraction <= 0.36), `${id} seated wrists should rest on top of the thighs instead of tucking back toward the hips; got ${JSON.stringify({ wristThighFractions, armPose: seatedMotion.probe.armPose })}`);
+      const expectedHandClearance = seatedHandClearanceByContestant[id];
+      assert(seatedMotion.probe.armPose.minimumHandPlaneThighClearance >= expectedHandClearance - 0.015, `${id} seated hand mesh should remain above its thigh bone line instead of tucking into it; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.maximumHandPlaneThighClearance <= expectedHandClearance + 0.015, `${id} seated hands should remain supported by the thighs instead of floating above them; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.maximumHandPlaneTilt <= 0.025, `${id} seated wrists and fingertips should form a flat plane along the thigh; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      const handSurfaceSides = Object.values(seatedMotion.probe.handThighSurface?.sides || {});
+      assert(seatedMotion.probe.handThighSurface?.valid && handSurfaceSides.length === 2, `${id} needs a valid deformed hand-to-thigh surface probe; got ${JSON.stringify(seatedMotion.probe.handThighSurface)}`);
+      assert(handSurfaceSides.every((side) => side.minimumGap >= 0.005 && side.minimumGap <= 0.06), `${id} hands should visibly clear, but remain supported by, the actual skinned thigh surface; got ${JSON.stringify(seatedMotion.probe.handThighSurface)}`);
       if (id !== "juniper-cross") {
         const chairFit = seatedMotion.probe.seatFit;
         assert(chairFit?.kind === "chair", `${id} should use an authored standard chair; got ${JSON.stringify(chairFit)}`);

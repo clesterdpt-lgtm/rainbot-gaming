@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-front-door-welcome-1";
+  const MANSION_RUNTIME_VERSION = "20260718-contestant-hand-poses-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -455,7 +455,7 @@
     npcSeatPauseSeconds: 36,
     maximumNpcSeatDwellSeconds: 240,
     minimumNpcPostSeatWalkDistance: 0.35,
-    npcSeatTransitionSeconds: 0.72,
+    npcSeatTransitionSeconds: 0.82,
     contestantTalkPauseSeconds: 2.8,
     occupantClearanceRadius: 0.72,
   });
@@ -581,7 +581,11 @@
   });
   const CONTESTANT_SEATED_ARM_SUPPORT = Object.freeze({
     thighFraction: 0.27,
-    wristLiftMeters: 0.16,
+    thighNormalClearanceMeters: Object.freeze({
+      "mara-voss": 0.14,
+      "kip-solano": 0.15,
+      "juniper-cross": 0.21,
+    }),
     wristOutwardMeters: 0.01,
     elbowOutwardWeight: 0.8,
     elbowRearwardWeight: 0.45,
@@ -6477,6 +6481,8 @@
       this.seatedArmSolvedElbow = new THREE.Vector3();
       this.seatedArmOutward = new THREE.Vector3();
       this.seatedArmForward = new THREE.Vector3();
+      this.seatedArmThighDirection = new THREE.Vector3();
+      this.seatedArmThighNormal = new THREE.Vector3();
       this.seatedArmBoneOrigin = new THREE.Vector3();
       this.seatedArmChildPosition = new THREE.Vector3();
       this.seatedArmCurrentDirection = new THREE.Vector3();
@@ -6485,6 +6491,18 @@
       this.seatedArmParentQuaternion = new THREE.Quaternion();
       this.seatedArmDeltaQuaternion = new THREE.Quaternion();
       this.seatedArmDesiredQuaternion = new THREE.Quaternion();
+      this.handOrientationCurrentPalm = new THREE.Vector3();
+      this.handOrientationCurrentFinger = new THREE.Vector3();
+      this.handOrientationDesiredPalm = new THREE.Vector3();
+      this.handOrientationDesiredFinger = new THREE.Vector3();
+      this.handOrientationCross = new THREE.Vector3();
+      this.handOrientationWrist = new THREE.Vector3();
+      this.handOrientationTorso = new THREE.Vector3();
+      this.handOrientationWorld = new THREE.Quaternion();
+      this.handOrientationParent = new THREE.Quaternion();
+      this.handOrientationDelta = new THREE.Quaternion();
+      this.handOrientationTwist = new THREE.Quaternion();
+      this.handOrientationLocal = new THREE.Quaternion();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
         root.name = `mansion-contestant-${placement.id}`;
@@ -6984,6 +7002,105 @@
       return true;
     }
 
+    orientHandAxes(hand, geometryAxes, desiredPalm, desiredFinger, blend = 1) {
+      const amount = clamp(Number(blend) || 0, 0, 1);
+      if (!hand?.parent || !geometryAxes || amount <= 0) return false;
+      hand.updateWorldMatrix(true, false);
+      hand.getWorldQuaternion(this.handOrientationWorld);
+      this.handOrientationCurrentPalm
+        .set(...geometryAxes.palm)
+        .applyQuaternion(this.handOrientationWorld)
+        .normalize();
+      this.handOrientationCurrentFinger
+        .set(...geometryAxes.finger)
+        .applyQuaternion(this.handOrientationWorld)
+        .normalize();
+      this.handOrientationDesiredPalm.copy(desiredPalm).normalize();
+      this.handOrientationDesiredFinger
+        .copy(desiredFinger)
+        .addScaledVector(
+          this.handOrientationDesiredPalm,
+          -desiredFinger.dot(this.handOrientationDesiredPalm),
+        );
+      if (this.handOrientationDesiredFinger.lengthSq() < 0.00000001) return false;
+      this.handOrientationDesiredFinger.normalize();
+
+      this.handOrientationDelta.setFromUnitVectors(
+        this.handOrientationCurrentPalm,
+        this.handOrientationDesiredPalm,
+      );
+      this.handOrientationWorld.premultiply(this.handOrientationDelta).normalize();
+      this.handOrientationCurrentFinger
+        .applyQuaternion(this.handOrientationDelta)
+        .addScaledVector(
+          this.handOrientationDesiredPalm,
+          -this.handOrientationCurrentFinger.dot(this.handOrientationDesiredPalm),
+        );
+      if (this.handOrientationCurrentFinger.lengthSq() < 0.00000001) return false;
+      this.handOrientationCurrentFinger.normalize();
+      this.handOrientationCross.crossVectors(
+        this.handOrientationCurrentFinger,
+        this.handOrientationDesiredFinger,
+      );
+      const signedTwist = Math.atan2(
+        this.handOrientationDesiredPalm.dot(this.handOrientationCross),
+        clamp(this.handOrientationCurrentFinger.dot(this.handOrientationDesiredFinger), -1, 1),
+      );
+      this.handOrientationTwist.setFromAxisAngle(this.handOrientationDesiredPalm, signedTwist);
+      this.handOrientationWorld.premultiply(this.handOrientationTwist).normalize();
+      hand.parent.getWorldQuaternion(this.handOrientationParent).conjugate();
+      this.handOrientationLocal
+        .copy(this.handOrientationParent)
+        .multiply(this.handOrientationWorld)
+        .normalize();
+      hand.quaternion.slerp(this.handOrientationLocal, amount).normalize();
+      hand.updateWorldMatrix(true, false);
+      return true;
+    }
+
+    applyBodyFacingHands(entry, blend = 1) {
+      const torso = entry.restPoseByName.Spine02?.bone || entry.restPoseByName.Spine?.bone;
+      if (!torso) return false;
+      const geometryAxes = CONTESTANT_HAND_GEOMETRY_AXES[entry.id];
+      if (!geometryAxes) return false;
+      torso.getWorldPosition(this.handOrientationTorso);
+      this.seatedArmForward.set(
+        Math.sin(entry.root.rotation.y),
+        0,
+        Math.cos(entry.root.rotation.y),
+      ).normalize();
+      let applied = false;
+      for (const sideName of ["Left", "Right"]) {
+        const sideKey = sideName.toLowerCase();
+        const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        const axes = geometryAxes[sideKey];
+        if (!hand || !axes) continue;
+        hand.getWorldPosition(this.handOrientationWrist);
+        this.handOrientationDesiredPalm
+          .copy(this.handOrientationTorso)
+          .sub(this.handOrientationWrist);
+        this.handOrientationDesiredPalm.y = 0;
+        if (this.handOrientationDesiredPalm.lengthSq() < 0.00000001) continue;
+        this.handOrientationDesiredPalm.normalize();
+        this.handOrientationDesiredFinger
+          .set(0, -1, 0)
+          .addScaledVector(this.seatedArmForward, 0.12)
+          .addScaledVector(
+            this.handOrientationDesiredPalm,
+            -this.handOrientationDesiredFinger.dot(this.handOrientationDesiredPalm),
+          )
+          .normalize();
+        applied = this.orientHandAxes(
+          hand,
+          axes,
+          this.handOrientationDesiredPalm,
+          this.handOrientationDesiredFinger,
+          blend,
+        ) || applied;
+      }
+      return applied;
+    }
+
     applySeatedArmSupport(entry, blend = 1) {
       if (!entry.model) return false;
       const amount = clamp(Number(blend) || 0, 0, 1);
@@ -7030,11 +7147,25 @@
           this.seatedArmOutward.normalize();
         }
 
+        this.seatedArmThighDirection
+          .copy(this.seatedArmKnee)
+          .sub(this.seatedArmHip)
+          .normalize();
+        this.seatedArmThighNormal
+          .set(0, 1, 0)
+          .addScaledVector(this.seatedArmThighDirection, -this.seatedArmThighDirection.y)
+          .normalize();
+        const thighLength = this.seatedArmHip.distanceTo(this.seatedArmKnee);
+        const thighNormalClearance = CONTESTANT_SEATED_ARM_SUPPORT
+          .thighNormalClearanceMeters[entry.id];
         this.seatedArmTarget
           .copy(this.seatedArmHip)
-          .lerp(this.seatedArmKnee, CONTESTANT_SEATED_ARM_SUPPORT.thighFraction)
+          .addScaledVector(
+            this.seatedArmThighDirection,
+            thighLength * CONTESTANT_SEATED_ARM_SUPPORT.thighFraction,
+          )
+          .addScaledVector(this.seatedArmThighNormal, thighNormalClearance)
           .addScaledVector(this.seatedArmOutward, CONTESTANT_SEATED_ARM_SUPPORT.wristOutwardMeters);
-        this.seatedArmTarget.y += CONTESTANT_SEATED_ARM_SUPPORT.wristLiftMeters;
         this.seatedArmTarget.lerp(this.seatedArmWrist, 1 - smoothAmount);
 
         this.seatedArmDirection
@@ -7078,9 +7209,165 @@
         this.seatedArmElbow.lerp(this.seatedArmSolvedElbow, smoothAmount);
         this.pointBoneToward(entry, upperArm, forearm, this.seatedArmElbow);
         this.pointBoneToward(entry, forearm, hand, this.seatedArmTarget);
+        this.handOrientationDesiredFinger
+          .copy(this.seatedArmThighDirection);
+        this.handOrientationDesiredPalm
+          .copy(this.seatedArmThighNormal)
+          .multiplyScalar(-1);
+        this.orientHandAxes(
+          hand,
+          CONTESTANT_HAND_GEOMETRY_AXES[entry.id]?.[sideName.toLowerCase()],
+          this.handOrientationDesiredPalm,
+          this.handOrientationDesiredFinger,
+          smoothAmount,
+        );
         applied = true;
       }
       return applied;
+    }
+
+    collectWeightedSkinnedVertices(entry, boneNames, minimumWeight) {
+      if (!state.qa || !entry?.model) return [];
+      const targetBones = new Set(
+        boneNames.map((name) => entry.restPoseByName[name]?.bone).filter(Boolean),
+      );
+      const vertices = [];
+      const vertex = new THREE.Vector3();
+      entry.root.updateMatrixWorld(true);
+      for (const mesh of entry.modelMeshes.filter((candidate) => candidate.isSkinnedMesh)) {
+        const position = mesh.geometry?.getAttribute("position");
+        const skinIndex = mesh.geometry?.getAttribute("skinIndex");
+        const skinWeight = mesh.geometry?.getAttribute("skinWeight");
+        if (!position || !skinIndex || !skinWeight || typeof mesh.boneTransform !== "function") continue;
+        const targetIndices = new Set(
+          Array.from(targetBones)
+            .map((bone) => mesh.skeleton.bones.indexOf(bone))
+            .filter((index) => index >= 0),
+        );
+        if (!targetIndices.size) continue;
+        mesh.updateWorldMatrix(true, false);
+        mesh.skeleton.update();
+        for (let index = 0; index < position.count; index += 1) {
+          const indices = [
+            skinIndex.getX(index),
+            skinIndex.getY(index),
+            skinIndex.getZ(index),
+            skinIndex.getW(index),
+          ];
+          const weights = [
+            skinWeight.getX(index),
+            skinWeight.getY(index),
+            skinWeight.getZ(index),
+            skinWeight.getW(index),
+          ];
+          let targetWeight = 0;
+          for (let slot = 0; slot < 4; slot += 1) {
+            if (targetIndices.has(indices[slot])) targetWeight += weights[slot];
+          }
+          if (targetWeight < minimumWeight) continue;
+          vertex.fromBufferAttribute(position, index);
+          mesh.boneTransform(index, vertex);
+          mesh.localToWorld(vertex);
+          entry.root.worldToLocal(vertex);
+          vertices.push(vertex.clone());
+        }
+      }
+      return vertices;
+    }
+
+    measureSeatedHandSurfaceClearance(entry) {
+      if (!state.qa || !entry?.model) return null;
+      const point = (name) => {
+        const bone = entry.restPoseByName[name]?.bone;
+        return bone ? entry.root.worldToLocal(bone.getWorldPosition(new THREE.Vector3())) : null;
+      };
+      const torso = point("Spine02") || point("Spine");
+      if (!torso) return null;
+      const sides = {};
+      const cellSize = 0.035;
+      for (const sideName of ["Left", "Right"]) {
+        const sideKey = sideName.toLowerCase();
+        const shoulder = point(`${sideName}Arm`);
+        const hip = point(`${sideName}UpLeg`);
+        const knee = point(`${sideName}Leg`);
+        if (!shoulder || !hip || !knee) continue;
+        const thighDirection = knee.clone().sub(hip);
+        const thighLength = thighDirection.length();
+        if (thighLength < 0.0001) continue;
+        thighDirection.divideScalar(thighLength);
+        const thighNormal = new THREE.Vector3(0, 1, 0)
+          .addScaledVector(thighDirection, -thighDirection.y)
+          .normalize();
+        const outward = shoulder.clone().sub(torso);
+        outward.y = 0;
+        if (outward.lengthSq() < 0.00000001) continue;
+        outward.normalize();
+        const coordinates = (vertex) => {
+          const delta = vertex.clone().sub(hip);
+          return {
+            s: delta.dot(thighDirection),
+            u: delta.dot(outward),
+            n: delta.dot(thighNormal),
+          };
+        };
+        const handVertices = this.collectWeightedSkinnedVertices(
+          entry,
+          [`${sideName}Hand`],
+          0.45,
+        );
+        const thighVertices = this.collectWeightedSkinnedVertices(
+          entry,
+          [`${sideName}UpLeg`],
+          0.35,
+        );
+        const thighBins = new Map();
+        for (const vertex of thighVertices) {
+          const sample = coordinates(vertex);
+          if (sample.s < -0.04 || sample.s > thighLength * 0.72) continue;
+          const key = `${Math.floor(sample.s / cellSize)}:${Math.floor(sample.u / cellSize)}`;
+          if (!thighBins.has(key)) thighBins.set(key, []);
+          thighBins.get(key).push(sample);
+        }
+        const gaps = [];
+        for (const vertex of handVertices) {
+          const hand = coordinates(vertex);
+          const sCell = Math.floor(hand.s / cellSize);
+          const uCell = Math.floor(hand.u / cellSize);
+          let surfaceN = -Infinity;
+          for (let sOffset = -1; sOffset <= 1; sOffset += 1) {
+            for (let uOffset = -1; uOffset <= 1; uOffset += 1) {
+              const candidates = thighBins.get(`${sCell + sOffset}:${uCell + uOffset}`) || [];
+              for (const thigh of candidates) {
+                if (Math.abs(hand.s - thigh.s) > cellSize || Math.abs(hand.u - thigh.u) > cellSize) continue;
+                surfaceN = Math.max(surfaceN, thigh.n);
+              }
+            }
+          }
+          if (Number.isFinite(surfaceN)) gaps.push(hand.n - surfaceN);
+        }
+        gaps.sort((a, b) => a - b);
+        const percentile = (fraction) => gaps.length
+          ? gaps[Math.floor((gaps.length - 1) * fraction)]
+          : -Infinity;
+        sides[sideKey] = {
+          valid: gaps.length > 0,
+          samples: gaps.length,
+          minimumGap: percentile(0),
+          tenthPercentileGap: percentile(0.1),
+          medianGap: percentile(0.5),
+        };
+      }
+      const validSides = Object.values(sides).filter((side) => side.valid);
+      return {
+        valid: validSides.length === 2,
+        minimumGap: validSides.length === 2
+          ? Math.min(...validSides.map((side) => side.minimumGap))
+          : -Infinity,
+        maximumMinimumGap: validSides.length === 2
+          ? Math.max(...validSides.map((side) => side.minimumGap))
+          : Infinity,
+        sides,
+      };
     }
 
     measureArmPose(entry) {
@@ -7137,6 +7424,11 @@
           ? clamp(fingerTip.clone().sub(hip).dot(thigh) / thighLengthSq, 0, 1)
           : 0;
         const closestTipThighPoint = hip.clone().addScaledVector(thigh, tipThighFraction);
+        const wristThighClearance = wrist.clone().sub(closestThighPoint).dot(thighSurfaceNormal);
+        const handTipThighClearance = fingerTip.clone().sub(closestTipThighPoint).dot(thighSurfaceNormal);
+        const inwardToBody = center.clone().sub(wrist);
+        inwardToBody.y = 0;
+        if (inwardToBody.lengthSq() > 0.00000001) inwardToBody.normalize();
         arms[sideKey] = {
           shoulder,
           elbow,
@@ -7153,7 +7445,11 @@
           fingerForward: fingerDirection.z,
           fingerThighDot: fingerDirection.dot(thighDirection),
           palmTowardThighAlignment: -palmDirection.dot(thighSurfaceNormal),
+          palmTowardBodyAlignment: palmDirection.dot(inwardToBody),
           handTipToThighDistance: fingerTip.distanceTo(closestTipThighPoint),
+          wristThighClearance,
+          handTipThighClearance,
+          handPlaneTilt: Math.abs(wristThighClearance - handTipThighClearance),
         };
       }
       const left = arms.left;
@@ -7189,6 +7485,28 @@
         maximumHandTipToThighDistance: left && right
           ? Math.max(left.handTipToThighDistance, right.handTipToThighDistance)
           : Infinity,
+        minimumPalmTowardBodyAlignment: left && right
+          ? Math.min(left.palmTowardBodyAlignment, right.palmTowardBodyAlignment)
+          : -1,
+        minimumHandPlaneThighClearance: left && right
+          ? Math.min(
+            left.wristThighClearance,
+            left.handTipThighClearance,
+            right.wristThighClearance,
+            right.handTipThighClearance,
+          )
+          : -Infinity,
+        maximumHandPlaneThighClearance: left && right
+          ? Math.max(
+            left.wristThighClearance,
+            left.handTipThighClearance,
+            right.wristThighClearance,
+            right.handTipThighClearance,
+          )
+          : Infinity,
+        maximumHandPlaneTilt: left && right
+          ? Math.max(left.handPlaneTilt, right.handPlaneTilt)
+          : Infinity,
         sides: left && right ? {
           left: {
             wristForwardOfTorso: left.wristForwardOfTorso,
@@ -7198,7 +7516,11 @@
             fingerForward: left.fingerForward,
             fingerThighDot: left.fingerThighDot,
             palmTowardThighAlignment: left.palmTowardThighAlignment,
+            palmTowardBodyAlignment: left.palmTowardBodyAlignment,
             handTipToThighDistance: left.handTipToThighDistance,
+            wristThighClearance: left.wristThighClearance,
+            handTipThighClearance: left.handTipThighClearance,
+            handPlaneTilt: left.handPlaneTilt,
           },
           right: {
             wristForwardOfTorso: right.wristForwardOfTorso,
@@ -7208,7 +7530,11 @@
             fingerForward: right.fingerForward,
             fingerThighDot: right.fingerThighDot,
             palmTowardThighAlignment: right.palmTowardThighAlignment,
+            palmTowardBodyAlignment: right.palmTowardBodyAlignment,
             handTipToThighDistance: right.handTipToThighDistance,
+            wristThighClearance: right.wristThighClearance,
+            handTipThighClearance: right.handTipThighClearance,
+            handPlaneTilt: right.handPlaneTilt,
           },
         } : null,
       };
@@ -7266,6 +7592,10 @@
         this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
         rightForeArm?.quaternion.multiply(this.seatedMotionQuaternion);
       }
+      // Keep one inward-facing world-space hand basis through every activity;
+      // the seated support pass rolls it palm-down with the same eased blend as
+      // the arm IK, avoiding a wrist snap at either endpoint.
+      this.applyBodyFacingHands(entry, 1);
       entry.armPoseMode = mode;
       entry.armPoseMaximumAngle = maximumPoseAngle;
       entry.armSwingCurrent = swing;
@@ -7292,6 +7622,18 @@
       this.applyRelaxedArmPose(entry, "seated", amount);
       this.applySeatedIdleMotion(entry, amount);
       this.applySeatedArmSupport(entry, amount);
+      const transitionArmStart = entry.seatTransition?.kind === "sitting"
+        ? entry.seatTransition.armStartQuaternions
+        : null;
+      if (transitionArmStart) {
+        for (const name of MANSION_CONTESTANTS.locomotionArmBones) {
+          const bone = entry.restPoseByName[name]?.bone;
+          const start = transitionArmStart[name];
+          if (!bone || !start) continue;
+          this.seatedArmDesiredQuaternion.copy(bone.quaternion);
+          bone.quaternion.copy(start).slerp(this.seatedArmDesiredQuaternion, amount).normalize();
+        }
+      }
       entry.seatedPoseBlend = amount;
       entry.seatedPoseApplied = amount >= 0.999;
       return entry.seatedPoseApplied;
@@ -7526,6 +7868,11 @@
         endYaw: targetYaw,
         startBlend: entry.seatedPoseBlend,
         endBlend: 1,
+        armStartQuaternions: Object.fromEntries(
+          MANSION_CONTESTANTS.locomotionArmBones
+            .map((name) => [name, entry.restPoseByName[name]?.bone?.quaternion.clone()])
+            .filter(([, quaternion]) => Boolean(quaternion)),
+        ),
       };
       for (const action of Object.values(entry.actions)) action.stop();
       entry.action = null;
@@ -8159,6 +8506,9 @@
       let floorStayedFixed = true;
       let maximumRootStep = 0;
       let maximumTransitionArmStepRadians = 0;
+      let maximumTransitionArmStepBone = null;
+      let maximumTransitionArmStepContext = null;
+      let minimumWalkingPalmTowardBodyAlignment = Infinity;
       const previousRoot = entry.root.position.clone();
       const transitionArmBones = MANSION_CONTESTANTS.locomotionArmBones
         .map((name) => entry.restPoseByName[name]?.bone)
@@ -8173,16 +8523,42 @@
       );
       while (elapsed < limit && !routineComplete()) {
         const transitionWasActive = Boolean(entry.seatTransition);
+        const transitionBefore = entry.seatTransition ? {
+          kind: entry.seatTransition.kind,
+          elapsed: entry.seatTransition.elapsed,
+          duration: entry.seatTransition.duration,
+          blend: entry.seatedPoseBlend,
+        } : null;
         this.updateEntry(entry, fixedStep);
         elapsed += fixedStep;
         activities.add(entry.activity);
+        if (entry.activity === CONTESTANT_ACTIVITY.WALKING) {
+          const walkingArmPose = this.measureArmPose(entry);
+          if (walkingArmPose?.valid) {
+            minimumWalkingPalmTowardBodyAlignment = Math.min(
+              minimumWalkingPalmTowardBodyAlignment,
+              walkingArmPose.minimumPalmTowardBodyAlignment,
+            );
+          }
+        }
         if (transitionWasActive || entry.seatTransition) {
           transitionArmBones.forEach((bone, index) => {
             const dot = clamp(Math.abs(previousArmQuaternions[index].dot(bone.quaternion)), 0, 1);
-            maximumTransitionArmStepRadians = Math.max(
-              maximumTransitionArmStepRadians,
-              2 * Math.acos(dot),
-            );
+            const stepRadians = 2 * Math.acos(dot);
+            if (stepRadians > maximumTransitionArmStepRadians) {
+              maximumTransitionArmStepRadians = stepRadians;
+              maximumTransitionArmStepBone = bone.name;
+              maximumTransitionArmStepContext = {
+                before: transitionBefore,
+                after: entry.seatTransition ? {
+                  kind: entry.seatTransition.kind,
+                  elapsed: entry.seatTransition.elapsed,
+                  duration: entry.seatTransition.duration,
+                  blend: entry.seatedPoseBlend,
+                } : null,
+                activity: entry.activity,
+              };
+            }
           });
         }
         transitionArmBones.forEach((bone, index) => previousArmQuaternions[index].copy(bone.quaternion));
@@ -8215,12 +8591,52 @@
           : 0).toFixed(3)),
         maximumRootStep: Number(maximumRootStep.toFixed(4)),
         maximumTransitionArmStepRadians: Number(maximumTransitionArmStepRadians.toFixed(5)),
+        maximumTransitionArmStepBone,
+        maximumTransitionArmStepContext,
         maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
         floorStayedFixed,
         minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
         minimumStaticClearance: Number(entry.routeStaticMinimumClearance.toFixed(3)),
         maximumArmSwingRadians: Number(entry.armSwingMaximum.toFixed(5)),
+        minimumWalkingPalmTowardBodyAlignment: Number((Number.isFinite(minimumWalkingPalmTowardBodyAlignment)
+          ? minimumWalkingPalmTowardBodyAlignment
+          : -1).toFixed(5)),
       };
+    }
+
+    poseWalkingForQA(id, phase = 0.25) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready") return null;
+      if (entry.seatedSeatId) {
+        this.standEntry(entry);
+        this.settleSeatTransitionForQA(entry);
+      }
+      entry.activity = CONTESTANT_ACTIVITY.WALKING;
+      const action = this.fadeToAction(entry, "walk", 0);
+      if (action) {
+        const duration = Math.max(0.001, action.getClip().duration);
+        action.time = clamp(Number(phase) || 0, 0, 1) * duration;
+        entry.mixer.update(0);
+      }
+      this.applyNeutralRestPose(entry);
+      entry.root.updateMatrixWorld(true);
+      return {
+        id: entry.id,
+        phase: clamp(Number(phase) || 0, 0, 1),
+        armPose: this.measureArmPose(entry),
+      };
+    }
+
+    restoreIdleForQA(id) {
+      const entry = this.entryById(id);
+      if (!state.qa || !entry || entry.status !== "ready") return null;
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      entry.pauseRemaining = 0.2;
+      this.fadeToAction(entry, "idle", 0);
+      entry.mixer.update(0);
+      this.applyNeutralRestPose(entry);
+      entry.root.updateMatrixWorld(true);
+      return { id: entry.id, armPose: this.measureArmPose(entry) };
     }
 
     settleSeatTransitionForQA(entry) {
@@ -8309,6 +8725,7 @@
         maximumLowerBodyDelta: Number(maximumLowerBodyDelta.toFixed(10)),
         maximumUpperBodyDelta: Number(maximumUpperBodyDelta.toFixed(10)),
         armPose: this.measureArmPose(entry),
+        handThighSurface: this.measureSeatedHandSurfaceClearance(entry),
         seatFit: this.getSeatedFit(entry),
       };
     }
@@ -19888,6 +20305,12 @@
     );
     window.MrFeastFresh.runContestantRoutineForQA = (id, maxSeconds = 90) => (
       state.qa && mansionContestants ? mansionContestants.runContestantRoutineForQA(id, maxSeconds) : null
+    );
+    window.MrFeastFresh.poseContestantWalkingForQA = (id, phase = 0.25) => (
+      state.qa && mansionContestants ? mansionContestants.poseWalkingForQA(id, phase) : null
+    );
+    window.MrFeastFresh.restoreContestantIdleForQA = (id) => (
+      state.qa && mansionContestants ? mansionContestants.restoreIdleForQA(id) : null
     );
     window.MrFeastFresh.probeContestantFurnitureCollisionForQA = (id) => (
       state.qa && mansionContestants ? mansionContestants.probeFurnitureCollisionForQA(id) : null

@@ -14,6 +14,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function wrappedAngleDelta(a, b) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
 async function serverResponds() {
   try {
     return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
@@ -207,9 +211,60 @@ async function run() {
     assert(state.speech.visible === true && state.speech.category === "talk", `speaking should show a smalltalk line; got ${JSON.stringify(state.speech)}`);
     assert(state.speech.text.length >= 16, `smalltalk should be a full sentence; got ${JSON.stringify(state.speech.text)}`);
     assert(state.mrFeast.pauseRemaining > 0, `smalltalk should briefly pause the patrol; got ${state.mrFeast.pauseRemaining}`);
+    assert(state.mrFeast.conversationFocusRemaining > 0, `smalltalk should keep Mr. Feast focused on the player while he is paused; got ${JSON.stringify(state.mrFeast)}`);
+    assert(state.mrFeast.conversationFocusRemaining >= state.speech.secondsRemaining - 0.25, `Mr. Feast should stay paused for the whole spoken line; got ${JSON.stringify({ focus: state.mrFeast.conversationFocusRemaining, speech: state.speech.secondsRemaining })}`);
+    const firstTalkAttentionYaw = state.mrFeast.face.attention.visualYawDegrees;
+    const firstTalkBodyYaw = state.mrFeast.yaw;
+    const conversationAdvance = await desktop.evaluate(() => {
+      window.MrFeastFresh.placePlayerNearMrFeastForQA(1.6, -0.38);
+      return window.MrFeastFresh.advanceMrFeastConversationForQA(0.8);
+    });
+    state = await diagnostics(desktop);
+    assert(conversationAdvance.maximumRootDrift <= 0.005 && !conversationAdvance.moving && conversationAdvance.currentAnimation === "idle", `Mr. Feast should stop walking while the conversation line is active; got ${JSON.stringify(conversationAdvance)}`);
+    assert(conversationAdvance.focusAfter < conversationAdvance.focusBefore && conversationAdvance.pauseAfter < conversationAdvance.pauseBefore, `the deterministic conversation step should advance both pause timers; got ${JSON.stringify(conversationAdvance)}`);
+    assert(state.mrFeast.pauseRemaining > 0 && state.mrFeast.conversationFocusRemaining > 0, `moving nearby during smalltalk must not resume his patrol; got ${JSON.stringify(state.mrFeast)}`);
+    assert(state.mrFeast.face.attention.active && state.mrFeast.face.attention.visualFacingDot >= 0.96, `Mr. Feast should keep his face aimed at the player's updated position during smalltalk; got ${JSON.stringify(state.mrFeast.face.attention)}`);
+    assert(Math.abs(state.mrFeast.face.attention.visualYawDegrees - firstTalkAttentionYaw) >= 5, `Mr. Feast's head should visibly follow the player across his nearby field of vision; got ${JSON.stringify(state.mrFeast.face.attention)}`);
+    assert(Math.abs(state.mrFeast.yaw - firstTalkBodyYaw) <= 0.001, `a nearby conversation target inside the head limit should not rotate Mr. Feast's whole body; got ${JSON.stringify({ before: firstTalkBodyYaw, after: state.mrFeast.yaw })}`);
     const firstLine = state.speech.text;
     const secondLine = await desktop.evaluate(() => window.MrFeastFresh.converseWithMrFeastForQA().text);
     assert(secondLine && secondLine !== firstLine, `back-to-back smalltalk should avoid repeating the same line; got ${JSON.stringify(secondLine)}`);
+
+    const behindConversation = await desktop.evaluate(() => {
+      window.MrFeastFresh.placePlayerNearMrFeastForQA(1.6, Math.PI);
+      const advanced = window.MrFeastFresh.advanceMrFeastConversationForQA(0.9);
+      return { advanced, state: JSON.parse(window.render_game_to_text()) };
+    });
+    const behindAttention = behindConversation.state.mrFeast.face.attention;
+    assert(Math.abs(wrappedAngleDelta(behindConversation.advanced.bodyYawAfter, behindConversation.advanced.bodyYawBefore)) >= 2, `Mr. Feast should turn his torso when a conversation partner moves behind his safe head arc; got ${JSON.stringify(behindConversation.advanced)}`);
+    assert(behindConversation.advanced.maximumBodyYawStep <= 0.07, `Mr. Feast should turn toward a rear conversation partner smoothly instead of snapping around; got ${JSON.stringify(behindConversation.advanced)}`);
+    assert(behindAttention.active && behindAttention.visualFacingDot >= 0.96, `after turning his torso, Mr. Feast should reacquire and face the nearby player; got ${JSON.stringify(behindAttention)}`);
+    assert(Math.abs(behindAttention.visualYawDegrees) <= behindAttention.limits.maxYawDegrees + 0.5, `Mr. Feast's visible head must stay inside its anatomical yaw limit during torso follow; got ${JSON.stringify(behindAttention)}`);
+
+    const alarmDuringTalk = await desktop.evaluate(() => {
+      const cameraId = window.MrFeastFresh.getCameraSecurityState().cameras.details[0].id;
+      window.MrFeastFresh.triggerCameraAlarmForQA(cameraId, "qa-conversation-preemption");
+      const advanced = window.MrFeastFresh.advanceMrFeastConversationForQA(0.5);
+      return { advanced, state: JSON.parse(window.render_game_to_text()) };
+    });
+    assert(alarmDuringTalk.state.mrFeast.conversationFocusRemaining === 0, `a security alarm must preempt conversation focus instead of freezing Mr. Feast; got ${JSON.stringify(alarmDuringTalk)}`);
+    assert(alarmDuringTalk.state.mrFeast.security.activeAlarm, `the camera alarm should own Mr. Feast immediately after preempting a conversation; got ${JSON.stringify(alarmDuringTalk.state.mrFeast.security)}`);
+    const conversationAlarmRun = await desktop.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(420));
+    assert(conversationAlarmRun.completed === true, `Mr. Feast should finish the security response that preempted his conversation; got ${JSON.stringify(conversationAlarmRun)}`);
+
+    const trespassDuringTalk = await desktop.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.placePlayerNearMrFeastForQA(1.6);
+      window.MrFeastFresh.converseWithMrFeastForQA();
+      window.MrFeastFresh.teleport("archive");
+      window.MrFeastFresh.setMrFeastRouteSegmentForQA("basement-archive-inner", 0.35);
+      window.MrFeastFresh.resumeMrFeastForQA();
+      window.MrFeastFresh.advanceMrFeastConversationForQA(0.9);
+      return JSON.parse(window.render_game_to_text());
+    });
+    assert(trespassDuringTalk.mrFeast.conversationFocusRemaining === 0, `a witnessed basement trespass must cancel conversational focus; got ${JSON.stringify(trespassDuringTalk.mrFeast)}`);
+    assert(trespassDuringTalk.mrFeast.pursuit.active?.kind === "trespass", `trespass detection should still start pursuit during an active conversation; got ${JSON.stringify(trespassDuringTalk.mrFeast.pursuit)}`);
+    await desktop.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
 
     // Busy pool while he is on an errand.
     await desktop.evaluate((id) => window.MrFeastFresh.tamperForQA(id, true), chairEntry.id);

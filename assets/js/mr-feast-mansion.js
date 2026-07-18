@@ -557,27 +557,71 @@
     "mara-voss": Object.freeze({
       LeftArm: Object.freeze([-0.175259, -0.000002, 0.298514, 0.938176]),
       LeftForeArm: Object.freeze([0.624, 0, -0.076, 0.777]),
-      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      LeftHand: Object.freeze([-0.185697, -0.955626, 0.060458, 0.220545]),
       RightArm: Object.freeze([-0.142239, 0, -0.328310, 0.933799]),
       RightForeArm: Object.freeze([0.624, 0, 0.074, 0.777]),
-      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+      RightHand: Object.freeze([-0.181763, 0.961743, -0.061838, 0.195421]),
     }),
     "kip-solano": Object.freeze({
       LeftArm: Object.freeze([-0.146489, 0.000003, 0.498257, 0.854565]),
       LeftForeArm: Object.freeze([0.538898, -0.000005, -0.066183, 0.839767]),
-      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      LeftHand: Object.freeze([0.006716, -0.978986, -0.094749, 0.180456]),
       RightArm: Object.freeze([-0.189284, 0, -0.475843, 0.858921]),
       RightForeArm: Object.freeze([0.564771, 0.000002, 0.058299, 0.823186]),
-      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+      RightHand: Object.freeze([0.071562, 0.981707, 0.087514, 0.153206]),
     }),
     "juniper-cross": Object.freeze({
       LeftArm: Object.freeze([-0.04, 0, 0.27, 0.962]),
       LeftForeArm: Object.freeze([0.697, 0, -0.238, 0.676]),
-      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      LeftHand: Object.freeze([0.053619, -0.913958, 0.369579, 0.158796]),
       RightArm: Object.freeze([-0.04, 0, -0.27, 0.962]),
       RightForeArm: Object.freeze([0.697, 0, 0.238, 0.676]),
-      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+      RightHand: Object.freeze([0.033553, 0.908823, -0.378105, 0.173064]),
     }),
+  });
+  const CONTESTANT_SEATED_ARM_SUPPORT = Object.freeze({
+    thighFraction: 0.27,
+    wristLiftMeters: 0.16,
+    wristOutwardMeters: 0.01,
+    elbowOutwardWeight: 0.8,
+    elbowRearwardWeight: 0.45,
+    elbowDownwardWeight: 0.15,
+    reachEpsilonMeters: 0.004,
+  });
+  // These are signed anatomical directions: `palm` points out through the
+  // palm surface. PCA-derived hand axes must be sign-corrected per rig/side.
+  const CONTESTANT_HAND_GEOMETRY_AXES = Object.freeze({
+    "mara-voss": Object.freeze({
+      left: Object.freeze({
+        finger: Object.freeze([-0.313897623, 0.827736238, 0.465103217]),
+        palm: Object.freeze([-0.485954113, 0.280772826, -0.827656463]),
+      }),
+      right: Object.freeze({
+        finger: Object.freeze([0.337295759, 0.799640405, 0.496796532]),
+        palm: Object.freeze([0.551607031, 0.259764217, -0.792623640]),
+      }),
+    }),
+    "kip-solano": Object.freeze({
+      left: Object.freeze({
+        finger: Object.freeze([-0.456508834, 0.755358826, 0.470141179]),
+        palm: Object.freeze([-0.782531690, -0.089431837, -0.616154283]),
+      }),
+      right: Object.freeze({
+        finger: Object.freeze([0.502393937, 0.730269611, 0.462932639]),
+        palm: Object.freeze([0.799953223, -0.189383310, -0.569393364]),
+      }),
+    }),
+    "juniper-cross": Object.freeze({
+      left: Object.freeze({
+        finger: Object.freeze([-0.135921406, 0.897435881, 0.419683465]),
+        palm: Object.freeze([-0.558943039, 0.280295041, -0.780395650]),
+      }),
+      right: Object.freeze({
+        finger: Object.freeze([0.105394221, 0.897754330, 0.427702257]),
+        palm: Object.freeze([0.546320452, 0.307105333, -0.779243401]),
+      }),
+    }),
+    handLengthMeters: 0.18,
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
@@ -1205,6 +1249,7 @@
     attentionReleaseDamping: 3.8,
     attentionDistance: 4.8,
     attentionHalfFovRadians: 0.95,
+    conversationBodyFollowYawRadians: 0.46,
     attentionNeckShare: 0.3,
     maxExpressionMorphs: 6,
     closeDistance: 2.6,
@@ -3051,6 +3096,7 @@
       );
       this.waypointIndex = 1;
       this.pauseRemaining = MR_FEAST_NPC.waypoints[0].pause;
+      this.conversationFocusRemaining = 0;
       this.wanderingEnabled = true;
       this.moving = false;
       this.loadStatus = "idle";
@@ -3102,12 +3148,30 @@
         targetYaw: 0,
         targetPitch: 0,
         distance: null,
+        visualTurnDegrees: 0,
+        visualYawDegrees: 0,
+        visualFacingDot: 1,
       };
       this.faceHeadOffset = new THREE.Quaternion();
       this.faceHeadOffsetInverse = new THREE.Quaternion();
       this.faceNeckOffset = new THREE.Quaternion();
       this.faceNeckOffsetInverse = new THREE.Quaternion();
       this.faceHeadOffsetApplied = false;
+      this.facePoseOrigin = new THREE.Vector3();
+      this.facePoseMarker = new THREE.Vector3();
+      this.facePoseDirection = new THREE.Vector3();
+      this.facePoseTargetDirection = new THREE.Vector3();
+      this.facePoseIntermediateDirection = new THREE.Vector3();
+      this.facePosePlayerDirection = new THREE.Vector3();
+      this.facePoseRight = new THREE.Vector3();
+      this.facePoseWorldUp = new THREE.Vector3(0, 1, 0);
+      this.facePoseDeltaQuaternion = new THREE.Quaternion();
+      this.facePoseWorldQuaternion = new THREE.Quaternion();
+      this.facePoseParentQuaternion = new THREE.Quaternion();
+      this.facePoseDesiredQuaternion = new THREE.Quaternion();
+      this.facePoseLocalQuaternion = new THREE.Quaternion();
+      this.facePoseYawQuaternion = new THREE.Quaternion();
+      this.facePosePitchQuaternion = new THREE.Quaternion();
       this.animationTrackDiagnostics = {};
       this.qaAnimationFrozen = false;
       this.mixer = null;
@@ -3557,6 +3621,9 @@
       this.faceAttention.targetYaw = 0;
       this.faceAttention.targetPitch = 0;
       this.faceAttention.distance = null;
+      this.faceAttention.visualTurnDegrees = 0;
+      this.faceAttention.visualYawDegrees = 0;
+      this.faceAttention.visualFacingDot = 1;
       this.applyFaceMorphWeights();
     }
 
@@ -3592,8 +3659,8 @@
     }
 
     visualDistanceToPlayer() {
-      const facePosition = this.headFrontBone
-        ? this.headFrontBone.getWorldPosition(new THREE.Vector3())
+      const facePosition = this.headBone
+        ? this.headBone.getWorldPosition(new THREE.Vector3())
         : this.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, this.modelSize.y * 0.86, 0));
       return facePosition.distanceTo(camera.position);
     }
@@ -3725,24 +3792,103 @@
       );
     }
 
+    faceWorldDirection(target = this.facePoseDirection) {
+      this.root.updateMatrixWorld(true);
+      if (this.headBone && this.headFrontBone) {
+        this.headBone.getWorldPosition(this.facePoseOrigin);
+        this.headFrontBone.getWorldPosition(this.facePoseMarker);
+        target.copy(this.facePoseMarker).sub(this.facePoseOrigin);
+        if (target.lengthSq() > 0.00000001) return target.normalize();
+      }
+      target.set(0, 0, 1).applyQuaternion(this.root.getWorldQuaternion(this.facePoseWorldQuaternion));
+      return target.normalize();
+    }
+
+    alignFaceBoneToWorldDirection(bone, fromDirection, toDirection, offsetTarget) {
+      if (!bone || !bone.parent || fromDirection.lengthSq() < 0.00000001 || toDirection.lengthSq() < 0.00000001) {
+        offsetTarget.identity();
+        return false;
+      }
+      this.facePoseDeltaQuaternion.setFromUnitVectors(fromDirection, toDirection);
+      bone.getWorldQuaternion(this.facePoseWorldQuaternion);
+      this.facePoseDesiredQuaternion
+        .copy(this.facePoseDeltaQuaternion)
+        .multiply(this.facePoseWorldQuaternion)
+        .normalize();
+      bone.parent.getWorldQuaternion(this.facePoseParentQuaternion);
+      this.facePoseParentQuaternion.conjugate();
+      this.facePoseLocalQuaternion
+        .copy(this.facePoseParentQuaternion)
+        .multiply(this.facePoseDesiredQuaternion)
+        .normalize();
+      offsetTarget
+        .copy(bone.quaternion)
+        .conjugate()
+        .multiply(this.facePoseLocalQuaternion)
+        .normalize();
+      bone.quaternion.copy(this.facePoseLocalQuaternion);
+      this.root.updateMatrixWorld(true);
+      return true;
+    }
+
+    updateFaceAttentionVisualDiagnostics(neutralDirection) {
+      const appliedDirection = this.faceWorldDirection(this.facePoseDirection);
+      const neutralHorizontalYaw = Math.atan2(neutralDirection.x, neutralDirection.z);
+      const appliedHorizontalYaw = Math.atan2(appliedDirection.x, appliedDirection.z);
+      const visualYaw = Math.atan2(
+        Math.sin(appliedHorizontalYaw - neutralHorizontalYaw),
+        Math.cos(appliedHorizontalYaw - neutralHorizontalYaw),
+      );
+      this.faceAttention.visualTurnDegrees = THREE.MathUtils.radToDeg(neutralDirection.angleTo(appliedDirection));
+      this.faceAttention.visualYawDegrees = THREE.MathUtils.radToDeg(visualYaw);
+      if (this.headBone) this.headBone.getWorldPosition(this.facePoseOrigin);
+      else this.root.getWorldPosition(this.facePoseOrigin);
+      this.facePosePlayerDirection.copy(camera.position).sub(this.facePoseOrigin);
+      this.faceAttention.visualFacingDot = this.facePosePlayerDirection.lengthSq() > 0.00000001
+        ? appliedDirection.dot(this.facePosePlayerDirection.normalize())
+        : 1;
+    }
+
     applyFaceAttentionPose() {
       if (!this.neckBone && !this.headBone) return;
-      const neckShare = this.neckBone ? MR_FEAST_FACE.attentionNeckShare : 0;
-      this.faceNeckOffset.setFromEuler(new THREE.Euler(
-        this.faceAttention.pitch * neckShare,
-        this.faceAttention.yaw * neckShare,
+      const neutralDirection = this.faceWorldDirection(this.facePoseDirection).clone();
+      this.facePoseRight.set(
+        Math.cos(this.root.rotation.y),
         0,
-        "YXZ",
-      ));
-      this.faceHeadOffset.setFromEuler(new THREE.Euler(
-        this.faceAttention.pitch * (1 - neckShare),
-        this.faceAttention.yaw * (1 - neckShare),
-        0,
-        "YXZ",
-      ));
-      if (this.neckBone) this.neckBone.quaternion.multiply(this.faceNeckOffset).normalize();
-      if (this.headBone) this.headBone.quaternion.multiply(this.faceHeadOffset).normalize();
+        -Math.sin(this.root.rotation.y),
+      ).normalize();
+      this.facePoseYawQuaternion.setFromAxisAngle(this.facePoseWorldUp, this.faceAttention.yaw);
+      this.facePosePitchQuaternion.setFromAxisAngle(this.facePoseRight, this.faceAttention.pitch);
+      this.facePoseTargetDirection
+        .copy(neutralDirection)
+        .applyQuaternion(this.facePosePitchQuaternion)
+        .applyQuaternion(this.facePoseYawQuaternion)
+        .normalize();
+      this.faceNeckOffset.identity();
+      this.faceHeadOffset.identity();
+      if (this.neckBone) {
+        this.facePoseIntermediateDirection
+          .copy(neutralDirection)
+          .lerp(this.facePoseTargetDirection, MR_FEAST_FACE.attentionNeckShare)
+          .normalize();
+        this.alignFaceBoneToWorldDirection(
+          this.neckBone,
+          neutralDirection,
+          this.facePoseIntermediateDirection,
+          this.faceNeckOffset,
+        );
+      }
+      const afterNeckDirection = this.faceWorldDirection(this.facePoseDirection).clone();
+      if (this.headBone) {
+        this.alignFaceBoneToWorldDirection(
+          this.headBone,
+          afterNeckDirection,
+          this.facePoseTargetDirection,
+          this.faceHeadOffset,
+        );
+      }
       this.faceHeadOffsetApplied = true;
+      this.updateFaceAttentionVisualDiagnostics(neutralDirection);
     }
 
     applyFaceMorphWeights() {
@@ -3862,6 +4008,49 @@
       return this.getDiagnostics();
     }
 
+    advanceConversationForQA(seconds = 0.8) {
+      if (!state.qa || this.loadStatus !== "ready") return null;
+      const duration = clamp(Number(seconds) || 0.8, 1 / 60, MR_FEAST_SPEECH.maxSeconds + 1);
+      const start = this.root.position.clone();
+      const bodyYawBefore = this.root.rotation.y;
+      const focusBefore = this.conversationFocusRemaining;
+      const pauseBefore = this.pauseRemaining;
+      let maximumRootDrift = 0;
+      let maximumBodyYawStep = 0;
+      let previousBodyYaw = this.root.rotation.y;
+      let elapsed = 0;
+      const fixedStep = 1 / 60;
+      while (elapsed < duration - 0.000001) {
+        const step = Math.min(fixedStep, duration - elapsed);
+        this.update(step);
+        speechSystem?.update(step);
+        elapsed += step;
+        maximumRootDrift = Math.max(maximumRootDrift, this.root.position.distanceTo(start));
+        const bodyYawStep = Math.abs(Math.atan2(
+          Math.sin(this.root.rotation.y - previousBodyYaw),
+          Math.cos(this.root.rotation.y - previousBodyYaw),
+        ));
+        maximumBodyYawStep = Math.max(maximumBodyYawStep, bodyYawStep);
+        previousBodyYaw = this.root.rotation.y;
+      }
+      this.root.updateMatrixWorld(true);
+      return {
+        simulatedSeconds: Number(elapsed.toFixed(3)),
+        maximumRootDrift: Number(maximumRootDrift.toFixed(6)),
+        maximumBodyYawStep: Number(maximumBodyYawStep.toFixed(6)),
+        bodyYawBefore: Number(bodyYawBefore.toFixed(6)),
+        bodyYawAfter: Number(this.root.rotation.y.toFixed(6)),
+        focusBefore: Number(focusBefore.toFixed(3)),
+        focusAfter: Number(this.conversationFocusRemaining.toFixed(3)),
+        pauseBefore: Number(pauseBefore.toFixed(3)),
+        pauseAfter: Number(this.pauseRemaining.toFixed(3)),
+        moving: this.moving,
+        currentAnimation: this.currentAnimation,
+        attention: this.faceAttentionSnapshotForQA(),
+        speech: speechSystem?.getDiagnostics() || null,
+      };
+    }
+
     faceAttentionSnapshotForQA() {
       return {
         active: this.faceAttention.active,
@@ -3876,6 +4065,9 @@
         pitch: Number(this.faceAttention.pitch.toFixed(6)),
         targetYaw: Number(this.faceAttention.targetYaw.toFixed(6)),
         targetPitch: Number(this.faceAttention.targetPitch.toFixed(6)),
+        visualTurnDegrees: Number(this.faceAttention.visualTurnDegrees.toFixed(4)),
+        visualYawDegrees: Number(this.faceAttention.visualYawDegrees.toFixed(4)),
+        visualFacingDot: Number(this.faceAttention.visualFacingDot.toFixed(6)),
         headQuaternionLength: Number((this.headBone?.quaternion.length() || 0).toFixed(6)),
         neckQuaternionLength: Number((this.neckBone?.quaternion.length() || 0).toFixed(6)),
       };
@@ -4066,6 +4258,9 @@
           pitch: Number(this.faceAttention.pitch.toFixed(4)),
           targetYaw: Number(this.faceAttention.targetYaw.toFixed(4)),
           targetPitch: Number(this.faceAttention.targetPitch.toFixed(4)),
+          visualTurnDegrees: Number(this.faceAttention.visualTurnDegrees.toFixed(3)),
+          visualYawDegrees: Number(this.faceAttention.visualYawDegrees.toFixed(3)),
+          visualFacingDot: Number(this.faceAttention.visualFacingDot.toFixed(4)),
           distance: Number.isFinite(this.faceAttention.distance)
             ? Number(this.faceAttention.distance.toFixed(3))
             : null,
@@ -4341,6 +4536,7 @@
       // An active pursuit already has him bearing down on the player; a new
       // camera ping about the same person must not reroute him.
       if (this.pursuit.active) return this.getDiagnostics();
+      this.conversationFocusRemaining = 0;
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       const startId = this.nearestResponseStartId();
       if (!this.responseResume) {
@@ -4399,6 +4595,7 @@
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
       if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
+      this.conversationFocusRemaining = 0;
       const startId = this.nearestResponseStartId();
       const targetId = this.nearestResponseTargetId(task.position, true);
       if (!targetId) return { accepted: false, reason: "no response node" };
@@ -4478,8 +4675,47 @@
     converse() {
       if (this.loadStatus !== "ready" || !speechSystem) return null;
       const busy = Boolean(this.housekeeping.active) || this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL;
-      if (!busy) this.pauseRemaining = Math.max(this.pauseRemaining, MR_FEAST_SPEECH.talkPauseSeconds);
-      return speechSystem.sayFromPool(busy ? "busy" : "talk");
+      const line = speechSystem.sayFromPool(busy ? "busy" : "talk");
+      const canPauseForConversation = (
+        !state.gameOver
+        && !this.pursuit.active
+        && !this.activeCameraAlarm
+        && !this.housekeeping.active
+        && this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL
+      );
+      if (line && canPauseForConversation) {
+        const focusSeconds = Math.max(MR_FEAST_SPEECH.talkPauseSeconds, Number(line.seconds) || 0);
+        this.pauseRemaining = Math.max(this.pauseRemaining, focusSeconds);
+        this.conversationFocusRemaining = Math.max(
+          this.conversationFocusRemaining,
+          focusSeconds,
+        );
+        // The focus update turns his body toward rear conversation partners
+        // over several frames, avoiding both a neck reversal and a 180° snap.
+      }
+      return line;
+    }
+
+    updateConversationFocus(dt) {
+      if (this.conversationFocusRemaining <= 0) return;
+      const step = Math.max(0, dt);
+      this.conversationFocusRemaining = Math.max(0, this.conversationFocusRemaining - step);
+      this.pauseRemaining = Math.max(0, this.pauseRemaining - step);
+      if (!physics || state.isHidden) return;
+      const player = physics.playerPosition();
+      const desiredYaw = Math.atan2(
+        player.x - this.root.position.x,
+        player.z - this.root.position.z,
+      );
+      const relativeYaw = Math.atan2(
+        Math.sin(desiredYaw - this.root.rotation.y),
+        Math.cos(desiredYaw - this.root.rotation.y),
+      );
+      // Let the head own normal conversational movement. Only follow with the
+      // torso when the player would otherwise leave the anatomical head arc.
+      if (Math.abs(relativeYaw) > MR_FEAST_FACE.conversationBodyFollowYawRadians) {
+        this.faceTarget(player);
+      }
     }
 
     runHousekeepingForQA(maxSeconds = 240) {
@@ -4564,6 +4800,7 @@
 
     beginPursuit(info = {}) {
       if (state.gameOver || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
+      this.conversationFocusRemaining = 0;
       if (this.pursuit.active) {
         this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
         return { accepted: true, refreshed: true };
@@ -4812,6 +5049,7 @@
 
     recoverAfterLoad() {
       this.pursuit.active = null;
+      this.conversationFocusRemaining = 0;
       this.pursuit.cooldownActive = false;
       this.pursuitWarningFocus = null;
       this.housekeeping.active = null;
@@ -5177,6 +5415,7 @@
       this.lastDt = Math.max(0, Number(dt) || 0);
       this.moving = false;
       if (state.qa && this.qaAnimationFrozen) return;
+      this.updateConversationFocus(this.lastDt);
       if (!state.started || !this.wanderingEnabled) {
         this.fadeToAction("idle");
         this.stepAnimationAndFace(this.lastDt);
@@ -5184,6 +5423,18 @@
       }
 
       this.updateTrespassWatch(this.lastDt);
+
+      if (
+        this.conversationFocusRemaining > 0
+        && !this.pursuit.active
+        && !this.activeCameraAlarm
+        && !this.housekeeping.active
+        && this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL
+      ) {
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(this.lastDt);
+        return;
+      }
 
       if (this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL) {
         this.updateSecurityResponse(this.lastDt);
@@ -5246,6 +5497,7 @@
       this.root.position.set(start.x, start.y, start.z);
       this.waypointIndex = 1;
       this.pauseRemaining = 0;
+      this.conversationFocusRemaining = 0;
       this.distanceTravelled = 0;
       this.completedRouteLoops = 0;
       this.routeSegmentsTraversed = 0;
@@ -5761,6 +6013,7 @@
           lastRun: this.qaLastPursuitRun,
         },
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
+        conversationFocusRemaining: Number(this.conversationFocusRemaining.toFixed(3)),
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         collision: {
@@ -6141,6 +6394,26 @@
       this.attentionOrigin = new THREE.Vector3();
       this.attentionTarget = new THREE.Vector3();
       this.attentionDirection = new THREE.Vector3();
+      this.seatedArmShoulder = new THREE.Vector3();
+      this.seatedArmElbow = new THREE.Vector3();
+      this.seatedArmWrist = new THREE.Vector3();
+      this.seatedArmHip = new THREE.Vector3();
+      this.seatedArmKnee = new THREE.Vector3();
+      this.seatedArmTorso = new THREE.Vector3();
+      this.seatedArmTarget = new THREE.Vector3();
+      this.seatedArmDirection = new THREE.Vector3();
+      this.seatedArmBend = new THREE.Vector3();
+      this.seatedArmSolvedElbow = new THREE.Vector3();
+      this.seatedArmOutward = new THREE.Vector3();
+      this.seatedArmForward = new THREE.Vector3();
+      this.seatedArmBoneOrigin = new THREE.Vector3();
+      this.seatedArmChildPosition = new THREE.Vector3();
+      this.seatedArmCurrentDirection = new THREE.Vector3();
+      this.seatedArmDesiredDirection = new THREE.Vector3();
+      this.seatedArmWorldQuaternion = new THREE.Quaternion();
+      this.seatedArmParentQuaternion = new THREE.Quaternion();
+      this.seatedArmDeltaQuaternion = new THREE.Quaternion();
+      this.seatedArmDesiredQuaternion = new THREE.Quaternion();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
         root.name = `mansion-contestant-${placement.id}`;
@@ -6604,6 +6877,141 @@
       };
     }
 
+    pointBoneToward(entry, bone, childBone, worldTarget) {
+      if (!bone || !childBone || !bone.parent) return false;
+      entry.root.updateMatrixWorld(true);
+      bone.getWorldPosition(this.seatedArmBoneOrigin);
+      childBone.getWorldPosition(this.seatedArmChildPosition);
+      this.seatedArmCurrentDirection
+        .copy(this.seatedArmChildPosition)
+        .sub(this.seatedArmBoneOrigin);
+      this.seatedArmDesiredDirection
+        .copy(worldTarget)
+        .sub(this.seatedArmBoneOrigin);
+      if (
+        this.seatedArmCurrentDirection.lengthSq() < 0.00000001
+        || this.seatedArmDesiredDirection.lengthSq() < 0.00000001
+      ) return false;
+      this.seatedArmCurrentDirection.normalize();
+      this.seatedArmDesiredDirection.normalize();
+      this.seatedArmDeltaQuaternion.setFromUnitVectors(
+        this.seatedArmCurrentDirection,
+        this.seatedArmDesiredDirection,
+      );
+      bone.getWorldQuaternion(this.seatedArmWorldQuaternion);
+      this.seatedArmDesiredQuaternion
+        .copy(this.seatedArmDeltaQuaternion)
+        .multiply(this.seatedArmWorldQuaternion)
+        .normalize();
+      bone.parent.getWorldQuaternion(this.seatedArmParentQuaternion);
+      this.seatedArmParentQuaternion.conjugate();
+      bone.quaternion
+        .copy(this.seatedArmParentQuaternion)
+        .multiply(this.seatedArmDesiredQuaternion)
+        .normalize();
+      entry.root.updateMatrixWorld(true);
+      return true;
+    }
+
+    applySeatedArmSupport(entry, blend = 1) {
+      if (!entry.model) return false;
+      const amount = clamp(Number(blend) || 0, 0, 1);
+      if (amount <= 0) return false;
+      const smoothAmount = amount * amount * (3 - 2 * amount);
+      const torsoBone = entry.restPoseByName.Spine02?.bone || entry.restPoseByName.Spine?.bone;
+      if (!torsoBone) return false;
+      torsoBone.getWorldPosition(this.seatedArmTorso);
+      this.seatedArmForward.set(
+        Math.sin(entry.root.rotation.y),
+        0,
+        Math.cos(entry.root.rotation.y),
+      ).normalize();
+      let applied = false;
+      for (const sideName of ["Left", "Right"]) {
+        const upperArm = entry.restPoseByName[`${sideName}Arm`]?.bone;
+        const forearm = entry.restPoseByName[`${sideName}ForeArm`]?.bone;
+        const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        const upLeg = entry.restPoseByName[`${sideName}UpLeg`]?.bone;
+        const leg = entry.restPoseByName[`${sideName}Leg`]?.bone;
+        if (!upperArm || !forearm || !hand || !upLeg || !leg) continue;
+        entry.root.updateMatrixWorld(true);
+        upperArm.getWorldPosition(this.seatedArmShoulder);
+        forearm.getWorldPosition(this.seatedArmElbow);
+        hand.getWorldPosition(this.seatedArmWrist);
+        upLeg.getWorldPosition(this.seatedArmHip);
+        leg.getWorldPosition(this.seatedArmKnee);
+        const upperLength = this.seatedArmShoulder.distanceTo(this.seatedArmElbow);
+        const forearmLength = this.seatedArmElbow.distanceTo(this.seatedArmWrist);
+        if (upperLength < 0.0001 || forearmLength < 0.0001) continue;
+
+        this.seatedArmOutward
+          .copy(this.seatedArmShoulder)
+          .sub(this.seatedArmTorso);
+        this.seatedArmOutward.y = 0;
+        if (this.seatedArmOutward.lengthSq() < 0.00000001) {
+          const side = sideName === "Left" ? 1 : -1;
+          this.seatedArmOutward.set(
+            Math.cos(entry.root.rotation.y) * side,
+            0,
+            -Math.sin(entry.root.rotation.y) * side,
+          );
+        } else {
+          this.seatedArmOutward.normalize();
+        }
+
+        this.seatedArmTarget
+          .copy(this.seatedArmHip)
+          .lerp(this.seatedArmKnee, CONTESTANT_SEATED_ARM_SUPPORT.thighFraction)
+          .addScaledVector(this.seatedArmOutward, CONTESTANT_SEATED_ARM_SUPPORT.wristOutwardMeters);
+        this.seatedArmTarget.y += CONTESTANT_SEATED_ARM_SUPPORT.wristLiftMeters;
+        this.seatedArmTarget.lerp(this.seatedArmWrist, 1 - smoothAmount);
+
+        this.seatedArmDirection
+          .copy(this.seatedArmTarget)
+          .sub(this.seatedArmShoulder);
+        const requestedDistance = this.seatedArmDirection.length();
+        if (requestedDistance < 0.0001) continue;
+        const minimumReach = Math.abs(upperLength - forearmLength) + CONTESTANT_SEATED_ARM_SUPPORT.reachEpsilonMeters;
+        const maximumReach = upperLength + forearmLength - CONTESTANT_SEATED_ARM_SUPPORT.reachEpsilonMeters;
+        const reach = clamp(requestedDistance, minimumReach, maximumReach);
+        this.seatedArmDirection.normalize();
+        this.seatedArmTarget
+          .copy(this.seatedArmShoulder)
+          .addScaledVector(this.seatedArmDirection, reach);
+        const elbowAlongReach = (
+          upperLength * upperLength
+          - forearmLength * forearmLength
+          + reach * reach
+        ) / (2 * reach);
+        const elbowOffAxis = Math.sqrt(Math.max(
+          0,
+          upperLength * upperLength - elbowAlongReach * elbowAlongReach,
+        ));
+        this.seatedArmBend
+          .copy(this.seatedArmOutward)
+          .multiplyScalar(CONTESTANT_SEATED_ARM_SUPPORT.elbowOutwardWeight)
+          .addScaledVector(this.seatedArmForward, -CONTESTANT_SEATED_ARM_SUPPORT.elbowRearwardWeight);
+        this.seatedArmBend.y -= CONTESTANT_SEATED_ARM_SUPPORT.elbowDownwardWeight;
+        this.seatedArmBend.addScaledVector(
+          this.seatedArmDirection,
+          -this.seatedArmBend.dot(this.seatedArmDirection),
+        );
+        if (this.seatedArmBend.lengthSq() < 0.00000001) {
+          this.seatedArmBend.copy(this.seatedArmOutward);
+        }
+        this.seatedArmBend.normalize();
+        this.seatedArmSolvedElbow
+          .copy(this.seatedArmShoulder)
+          .addScaledVector(this.seatedArmDirection, elbowAlongReach)
+          .addScaledVector(this.seatedArmBend, elbowOffAxis);
+        this.seatedArmElbow.lerp(this.seatedArmSolvedElbow, smoothAmount);
+        this.pointBoneToward(entry, upperArm, forearm, this.seatedArmElbow);
+        this.pointBoneToward(entry, forearm, hand, this.seatedArmTarget);
+        applied = true;
+      }
+      return applied;
+    }
+
     measureArmPose(entry) {
       if (!entry.model) return null;
       entry.root.updateMatrixWorld(true);
@@ -6612,14 +7020,53 @@
         return bone ? entry.root.worldToLocal(bone.getWorldPosition(new THREE.Vector3())) : null;
       };
       const center = point("Spine02") || point("Spine") || new THREE.Vector3();
+      const rootWorldInverse = entry.root.getWorldQuaternion(new THREE.Quaternion()).conjugate();
+      const geometryAxes = CONTESTANT_HAND_GEOMETRY_AXES[entry.id];
       const arms = {};
       for (const sideName of ["Left", "Right"]) {
+        const sideKey = sideName.toLowerCase();
         const shoulder = point(`${sideName}Arm`);
         const elbow = point(`${sideName}ForeArm`);
         const wrist = point(`${sideName}Hand`);
-        if (!shoulder || !elbow || !wrist) continue;
+        const hip = point(`${sideName}UpLeg`);
+        const knee = point(`${sideName}Leg`);
+        const handBone = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        const handAxes = geometryAxes?.[sideKey];
+        if (!shoulder || !elbow || !wrist || !hip || !knee || !handBone || !handAxes) continue;
         const anatomicalSide = Math.sign(shoulder.x - center.x) || (sideName === "Left" ? 1 : -1);
-        arms[sideName.toLowerCase()] = {
+        const thigh = knee.clone().sub(hip);
+        const thighLengthSq = thigh.lengthSq();
+        const thighFraction = thighLengthSq > 0.00000001
+          ? clamp(wrist.clone().sub(hip).dot(thigh) / thighLengthSq, 0, 1)
+          : 0;
+        const closestThighPoint = hip.clone().addScaledVector(thigh, thighFraction);
+        const upperTowardShoulder = shoulder.clone().sub(elbow).normalize();
+        const forearmTowardWrist = wrist.clone().sub(elbow).normalize();
+        const elbowInteriorDegrees = THREE.MathUtils.radToDeg(
+          upperTowardShoulder.angleTo(forearmTowardWrist),
+        );
+        const handRootQuaternion = rootWorldInverse.clone()
+          .multiply(handBone.getWorldQuaternion(new THREE.Quaternion()))
+          .normalize();
+        const fingerDirection = new THREE.Vector3(...handAxes.finger)
+          .applyQuaternion(handRootQuaternion)
+          .normalize();
+        const palmDirection = new THREE.Vector3(...handAxes.palm)
+          .applyQuaternion(handRootQuaternion)
+          .normalize();
+        const thighDirection = thigh.clone().normalize();
+        const thighSurfaceNormal = new THREE.Vector3(0, 1, 0)
+          .addScaledVector(thighDirection, -thighDirection.y)
+          .normalize();
+        const fingerTip = wrist.clone().addScaledVector(
+          fingerDirection,
+          CONTESTANT_HAND_GEOMETRY_AXES.handLengthMeters,
+        );
+        const tipThighFraction = thighLengthSq > 0.00000001
+          ? clamp(fingerTip.clone().sub(hip).dot(thigh) / thighLengthSq, 0, 1)
+          : 0;
+        const closestTipThighPoint = hip.clone().addScaledVector(thigh, tipThighFraction);
+        arms[sideKey] = {
           shoulder,
           elbow,
           wrist,
@@ -6628,6 +7075,14 @@
             (wrist.x - center.x) * anatomicalSide,
           ),
           wristDrop: shoulder.y - wrist.y,
+          wristForwardOfTorso: wrist.z - center.z,
+          wristToThighDistance: wrist.distanceTo(closestThighPoint),
+          wristThighFraction: thighFraction,
+          elbowFlexionDegrees: 180 - elbowInteriorDegrees,
+          fingerForward: fingerDirection.z,
+          fingerThighDot: fingerDirection.dot(thighDirection),
+          palmTowardThighAlignment: -palmDirection.dot(thighSurfaceNormal),
+          handTipToThighDistance: fingerTip.distanceTo(closestTipThighPoint),
         };
       }
       const left = arms.left;
@@ -6639,6 +7094,52 @@
         minimumSideClearance: left && right ? Math.min(left.sideClearance, right.sideClearance) : 0,
         minimumWristDrop: left && right ? Math.min(left.wristDrop, right.wristDrop) : 0,
         handSeparation,
+        minimumWristForwardOfTorso: left && right
+          ? Math.min(left.wristForwardOfTorso, right.wristForwardOfTorso)
+          : 0,
+        maximumWristToLapDistance: left && right
+          ? Math.max(left.wristToThighDistance, right.wristToThighDistance)
+          : Infinity,
+        minimumElbowFlexionDegrees: left && right
+          ? Math.min(left.elbowFlexionDegrees, right.elbowFlexionDegrees)
+          : 0,
+        maximumElbowFlexionDegrees: left && right
+          ? Math.max(left.elbowFlexionDegrees, right.elbowFlexionDegrees)
+          : 0,
+        minimumFingerForward: left && right
+          ? Math.min(left.fingerForward, right.fingerForward)
+          : -1,
+        minimumFingerThighDot: left && right
+          ? Math.min(left.fingerThighDot, right.fingerThighDot)
+          : -1,
+        minimumPalmTowardThighAlignment: left && right
+          ? Math.min(left.palmTowardThighAlignment, right.palmTowardThighAlignment)
+          : -1,
+        maximumHandTipToThighDistance: left && right
+          ? Math.max(left.handTipToThighDistance, right.handTipToThighDistance)
+          : Infinity,
+        sides: left && right ? {
+          left: {
+            wristForwardOfTorso: left.wristForwardOfTorso,
+            wristToThighDistance: left.wristToThighDistance,
+            wristThighFraction: left.wristThighFraction,
+            elbowFlexionDegrees: left.elbowFlexionDegrees,
+            fingerForward: left.fingerForward,
+            fingerThighDot: left.fingerThighDot,
+            palmTowardThighAlignment: left.palmTowardThighAlignment,
+            handTipToThighDistance: left.handTipToThighDistance,
+          },
+          right: {
+            wristForwardOfTorso: right.wristForwardOfTorso,
+            wristToThighDistance: right.wristToThighDistance,
+            wristThighFraction: right.wristThighFraction,
+            elbowFlexionDegrees: right.elbowFlexionDegrees,
+            fingerForward: right.fingerForward,
+            fingerThighDot: right.fingerThighDot,
+            palmTowardThighAlignment: right.palmTowardThighAlignment,
+            handTipToThighDistance: right.handTipToThighDistance,
+          },
+        } : null,
       };
     }
 
@@ -6719,6 +7220,7 @@
       entry.model.position.y = entry.modelBaseY - pose.rootDrop * amount;
       this.applyRelaxedArmPose(entry, "seated", amount);
       this.applySeatedIdleMotion(entry, amount);
+      this.applySeatedArmSupport(entry, amount);
       entry.seatedPoseBlend = amount;
       entry.seatedPoseApplied = amount >= 0.999;
       return entry.seatedPoseApplied;
@@ -7585,7 +8087,12 @@
       let elapsed = 0;
       let floorStayedFixed = true;
       let maximumRootStep = 0;
+      let maximumTransitionArmStepRadians = 0;
       const previousRoot = entry.root.position.clone();
+      const transitionArmBones = MANSION_CONTESTANTS.locomotionArmBones
+        .map((name) => entry.restPoseByName[name]?.bone)
+        .filter(Boolean);
+      const previousArmQuaternions = transitionArmBones.map((bone) => bone.quaternion.clone());
       const routineComplete = () => (
         entry.routeCycles >= 1
         && activities.has(CONTESTANT_ACTIVITY.SEATED)
@@ -7594,9 +8101,20 @@
         && !entry.postSeatDeparture
       );
       while (elapsed < limit && !routineComplete()) {
+        const transitionWasActive = Boolean(entry.seatTransition);
         this.updateEntry(entry, fixedStep);
         elapsed += fixedStep;
         activities.add(entry.activity);
+        if (transitionWasActive || entry.seatTransition) {
+          transitionArmBones.forEach((bone, index) => {
+            const dot = clamp(Math.abs(previousArmQuaternions[index].dot(bone.quaternion)), 0, 1);
+            maximumTransitionArmStepRadians = Math.max(
+              maximumTransitionArmStepRadians,
+              2 * Math.acos(dot),
+            );
+          });
+        }
+        transitionArmBones.forEach((bone, index) => previousArmQuaternions[index].copy(bone.quaternion));
         const rootStep = entry.root.position.distanceTo(previousRoot);
         maximumRootStep = Math.max(maximumRootStep, rootStep);
         if (rootStep > 0.12) entry.teleports += 1;
@@ -7625,6 +8143,7 @@
           ? entry.minimumPostSeatDepartureDistance
           : 0).toFixed(3)),
         maximumRootStep: Number(maximumRootStep.toFixed(4)),
+        maximumTransitionArmStepRadians: Number(maximumTransitionArmStepRadians.toFixed(5)),
         maximumColliderOffset: Number(entry.maximumColliderOffset.toFixed(4)),
         floorStayedFixed,
         minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
@@ -19045,6 +19564,9 @@
     window.MrFeastFresh.setMrFeastFaceForQA = (options) => mrFeastNpc ? mrFeastNpc.setFaceForQA(options) : null;
     window.MrFeastFresh.triggerMrFeastBlinkForQA = (side) => mrFeastNpc ? mrFeastNpc.triggerBlinkForQA(side) : null;
     window.MrFeastFresh.advanceMrFeastFaceForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceFaceForQA(seconds) : null;
+    window.MrFeastFresh.advanceMrFeastConversationForQA = (seconds) => (
+      mrFeastNpc ? mrFeastNpc.advanceConversationForQA(seconds) : null
+    );
     window.MrFeastFresh.setMrFeastRouteSegmentForQA = (targetId, progress, animationTime) => mrFeastNpc ? mrFeastNpc.setRouteSegmentForQA(targetId, progress, animationTime) : null;
     window.MrFeastFresh.runMrFeastLocomotionProbeForQA = (options) => mrFeastNpc ? mrFeastNpc.runLocomotionProbeForQA(options) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;

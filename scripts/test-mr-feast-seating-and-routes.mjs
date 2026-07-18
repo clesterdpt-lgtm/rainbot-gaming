@@ -21,6 +21,11 @@ const radians = (degrees) => degrees * Math.PI / 180;
 function assertAttentionProbe(probe, label) {
   assert(probe?.acquired?.active && probe.acquired.inRange && probe.acquired.inFov, `${label} should notice a nearby player inside its field of view: ${JSON.stringify(probe)}`);
   assert(Math.abs(probe.acquired.yaw) >= radians(8), `${label} head turn is too subtle to read: ${JSON.stringify(probe.acquired)}`);
+  if (label === "Mr. Feast") {
+    assert(probe.acquired.visualTurnDegrees >= 8, `${label} must visibly turn the face rig, not only update an internal yaw number: ${JSON.stringify(probe.acquired)}`);
+    assert(probe.acquired.visualFacingDot >= 0.96, `${label} face marker should point toward the nearby player after attention settles: ${JSON.stringify(probe.acquired)}`);
+    assert(probe.samples.every((sample) => Math.abs(sample.visualYawDegrees) <= probe.limits.maxYawDegrees + 0.5), `${label} visible face yaw exceeded the anatomical limit: ${JSON.stringify(probe.samples)}`);
+  }
   assert(Math.abs(probe.bodyYawAfter - probe.bodyYawBefore) <= 0.001, `${label} passive attention must remain head-and-neck-only: ${JSON.stringify(probe)}`);
   assert(Math.abs(probe.afterFirstFrame.yaw) > 0 && Math.abs(probe.afterFirstFrame.yaw) < Math.abs(probe.acquired.yaw) * 0.8, `${label} attention should ease in instead of snapping: ${JSON.stringify(probe)}`);
   assert(Math.abs(probe.afterFirstReturnFrame.yaw) > radians(0.25) && Math.abs(probe.afterFirstReturnFrame.yaw) < Math.abs(probe.acquired.yaw), `${label} attention should ease back instead of snapping neutral: ${JSON.stringify(probe)}`);
@@ -385,6 +390,7 @@ async function run() {
       assert(result.postSeatDeparturesCompleted === result.seatExitsCompleted && result.postSeatDeparturePending === false, `${id} must walk to a different hangout after every seat exit; got ${JSON.stringify(result)}`);
       assert(result.minimumPostSeatDepartureDistance >= initial.route.minimumPostSeatWalkDistance, `${id} post-seat walk was too short; got ${JSON.stringify(result)}`);
       assert(result.maximumRootStep <= 0.09, `${id} sit/stand ingress should interpolate without a visible root snap; got ${JSON.stringify(result)}`);
+      assert(result.maximumTransitionArmStepRadians <= 0.22, `${id} arms should blend through sit/stand transitions without an IK pop; got ${JSON.stringify(result)}`);
       assert(result.blockedSteps === 0 && result.maximumColliderOffset <= 0.03, `${id} collider should follow the rendered root; got ${JSON.stringify(result)}`);
       assert(result.floorStayedFixed === true && result.minimumPatrolClearance >= 1.65 && result.minimumStaticClearance >= 0.28, `${id} should remain on a route-safe authored floor; got ${JSON.stringify(result)}`);
       const settled = entryById(await diagnostics(desktop), id);
@@ -411,6 +417,15 @@ async function run() {
       assert(seatedMotion.probe.rootDrift <= 0.002 && seatedMotion.probe.maximumLowerBodyDelta <= 0.000001, `${id} seated motion must keep its root and lower body planted; got ${JSON.stringify(seatedMotion.probe)}`);
       assert(seatedMotion.probe.maximumUpperBodyDelta >= 0.000001 && seatedMotion.probe.maximumUpperBodyDelta <= 0.02, `${id} seated upper-body motion should stay restrained; got ${JSON.stringify(seatedMotion.probe)}`);
       assert(seatedMotion.probe.armPose?.valid && !seatedMotion.probe.armPose.handsCrossedCenterline && seatedMotion.probe.armPose.handSeparation >= 0.12, `${id} seated hands should remain relaxed and separated on their own side; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.minimumWristForwardOfTorso >= 0.04, `${id} seated wrists should rest forward over the lap instead of hanging behind the torso; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.maximumWristToLapDistance <= 0.2, `${id} seated hands should rest naturally over the upper thighs; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.minimumElbowFlexionDegrees >= 45 && seatedMotion.probe.armPose.maximumElbowFlexionDegrees <= 105, `${id} seated elbows should flex forward in a relaxed anatomical range; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(seatedMotion.probe.armPose.minimumFingerThighDot >= 0.7, `${id} seated fingers should point down the thighs instead of flipping backward; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      const palmAlignments = Object.values(seatedMotion.probe.armPose.sides)
+        .map((side) => side.palmTowardThighAlignment);
+      assert(seatedMotion.probe.armPose.minimumPalmTowardThighAlignment >= 0.65, `${id} should roll both palms down toward the thighs instead of exposing them upward; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
+      assert(palmAlignments.every((alignment) => alignment >= 0.65), `${id} should keep each palm individually facing the thigh; got ${JSON.stringify({ palmAlignments, armPose: seatedMotion.probe.armPose })}`);
+      assert(seatedMotion.probe.armPose.maximumHandTipToThighDistance <= 0.11, `${id} seated fingertips should finish close to the thigh instead of floating or twisting away; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       if (id !== "juniper-cross") {
         const chairFit = seatedMotion.probe.seatFit;
         assert(chairFit?.kind === "chair", `${id} should use an authored standard chair; got ${JSON.stringify(chairFit)}`);
@@ -474,12 +489,14 @@ async function run() {
       holdSeconds: 10,
     }));
     assert(!mrFeastBehind.acquired.active && !mrFeastBehind.acquired.inFov && mrFeastBehind.maximumObservedYaw <= radians(mrFeastBehind.limits.maxYawDegrees) + 0.001, `Mr. Feast must never track through 180 degrees: ${JSON.stringify(mrFeastBehind)}`);
+    assert(mrFeastBehind.acquired.visualTurnDegrees <= 1, `Mr. Feast's visible head rig must remain neutral for a player behind him: ${JSON.stringify(mrFeastBehind.acquired)}`);
     const mrFeastFar = await desktop.evaluate((distance) => window.MrFeastFresh.probeMrFeastHeadTrackingForQA({
       distance,
       bearingDegrees: 0,
       holdSeconds: 1,
     }), mrFeastAttention.limits.maximumDistance + 1);
     assert(!mrFeastFar.acquired.active && !mrFeastFar.acquired.inRange, `Mr. Feast attention must be nearby-only: ${JSON.stringify(mrFeastFar)}`);
+    assert(mrFeastFar.acquired.visualTurnDegrees <= 1, `Mr. Feast's visible head rig must remain neutral for a distant player: ${JSON.stringify(mrFeastFar.acquired)}`);
     await desktop.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resumeMrFeastForQA();

@@ -728,6 +728,16 @@
       "cam-yard-garden-front",
     ]),
   });
+  // Four Painting Room paintings each hide a scratched wall marking: a Roman
+  // numeral for the digit's position in the Workroom code, and the digit
+  // beside it. Read in numeral order they assemble WORKROOM_SECURITY.code.
+  // The order/digit pairs are asserted against that code at build time.
+  const WORKROOM_CODE_SCRATCHES = Object.freeze([
+    Object.freeze({ artId: "five-doors", order: 1, numeral: "I", digit: "0" }),
+    Object.freeze({ artId: "polite-eclipse", order: 2, numeral: "II", digit: "5" }),
+    Object.freeze({ artId: "garden-knees", order: 3, numeral: "III", digit: "1" }),
+    Object.freeze({ artId: "choir-floorboards", order: 4, numeral: "IV", digit: "3" }),
+  ]);
   const ESTATE_STATUES = Object.freeze({
     assetVersion: "20260716-estate-statues-1",
     centralAisleHalfWidth: 2.75,
@@ -1465,7 +1475,6 @@
       ]),
     }),
   });
-
   const MR_FEAST_OPENING_WELCOME = Object.freeze({
     playerPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 10.2, yaw: 0, pitch: 0 }),
     hostPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 8.15, yaw: 0 }),
@@ -2172,6 +2181,7 @@
   let tamperSystem = null;
   let speechSystem = null;
   let openingWelcomeSystem = null;
+  let workroomCodeClue = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -9684,6 +9694,19 @@
       return true;
     }
 
+    upsertJournalEntry(entry) {
+      if (!entry?.id) return false;
+      const existing = this.story.journalEntries.find((candidate) => candidate.id === entry.id);
+      if (existing) {
+        existing.title = entry.title;
+        existing.body = entry.body;
+      } else {
+        this.story.journalEntries.push({ id: entry.id, title: entry.title, body: entry.body });
+      }
+      this.updateUI();
+      return true;
+    }
+
     getPhase() {
       if (this.story.relaySabotaged) return "complete";
       if (!this.story.bookRead) return "find-book";
@@ -10055,6 +10078,7 @@
         relaySabotaged: Boolean(this.story.relaySabotaged),
         threatEscalated: Boolean(this.story.threatEscalated),
         workroomUnlocked: Boolean(state.workroom.unlocked),
+        workroomScratches: workroomCodeClue ? workroomCodeClue.getSnapshot() : [],
         inventory: this.story.inventory.slice(),
         journalEntries: this.story.journalEntries.map((entry) => ({ ...entry })),
       };
@@ -10076,6 +10100,10 @@
       const allowedEntries = new Map(Object.values(CONTESTANT_13.journal).map((entry) => [entry.id, entry]));
       this.story.journalEntries = Array.from(new Set(Array.isArray(snapshot.journalEntries) ? snapshot.journalEntries.map((entry) => entry?.id).filter((id) => allowedEntries.has(id)) : []))
         .map((id) => ({ ...allowedEntries.get(id) }));
+      // The scratch-hunt entry is regenerated from the restored discovery
+      // list rather than surviving the id whitelist above, so its wording
+      // always matches the canonical evolving format.
+      workroomCodeClue?.restoreSnapshot(snapshot.workroomScratches);
       this.syncWorldPresentation();
       this.updateUI();
     }
@@ -10132,6 +10160,7 @@
           CONTESTANT_13.journal.basement,
           CONTESTANT_13.journal.transcript,
         ].map((entry) => ({ ...entry }));
+        workroomCodeClue?.grantAllForDevMode();
         state.devMode = true;
         this.syncWorldPresentation();
         this.updateUI();
@@ -10155,6 +10184,7 @@
     getJournalDiagnostics() {
       return {
         entries: this.story.journalEntries.map((entry) => entry.id),
+        details: this.story.journalEntries.map((entry) => ({ id: entry.id, title: entry.title, body: entry.body })),
         currentObjective: this.getObjective(),
         open: state.journalOpen,
       };
@@ -11016,6 +11046,138 @@
     }
   }
 
+  const WORKROOM_CODE_CLUE = Object.freeze({
+    journalId: "workroom-keypad-scratches",
+    journalTitle: "Workroom keypad scratches",
+    unknownMark: "??",
+  });
+
+  class WorkroomCodeClue {
+    constructor() {
+      // artId -> { config, scratch mesh group }; scratches register as their
+      // carrier paintings are built. Discovery is the persistent state; scratch
+      // visibility is always derived from the live painting tilt.
+      this.marks = new Map();
+      this.discovered = new Set();
+      for (const config of WORKROOM_CODE_SCRATCHES) this.marks.set(config.artId, { config, scratch: null });
+    }
+
+    registerScratch(artId, scratch) {
+      const mark = this.marks.get(artId);
+      if (!mark) return;
+      mark.scratch = scratch;
+      if (scratch) scratch.visible = false;
+    }
+
+    isCarrier(artId) {
+      return this.marks.has(artId);
+    }
+
+    setRevealed(artId, revealed) {
+      const mark = this.marks.get(artId);
+      if (!mark) return;
+      if (mark.scratch) mark.scratch.visible = Boolean(revealed);
+      if (revealed) this.discover(artId);
+    }
+
+    discover(artId) {
+      if (!this.marks.has(artId) || this.discovered.has(artId)) return;
+      this.discovered.add(artId);
+      const config = this.marks.get(artId).config;
+      const complete = this.isComplete();
+      this.syncJournalEntry();
+      if (complete) {
+        contestant13Quest?.showDiscovery("Keypad code assembled", `Every scratch is accounted for. The Workroom access PIN reads ${this.assembledCode()}.`, 11000);
+      } else {
+        contestant13Quest?.showDiscovery("Scratched keypad clue", `Behind the painting, gouged into the plaster: ${config.numeral} — ${config.digit}. Part of the Workroom access PIN. Find the rest.`, 8600);
+      }
+      if (audioSystem) audioSystem.ping(56, 0.4, 0.06, "triangle");
+    }
+
+    orderedMarks() {
+      return WORKROOM_CODE_SCRATCHES.map((config) => ({
+        config,
+        found: this.discovered.has(config.artId),
+      }));
+    }
+
+    isComplete() {
+      return this.discovered.size >= WORKROOM_CODE_SCRATCHES.length;
+    }
+
+    assembledCode() {
+      return WORKROOM_CODE_SCRATCHES.map((config) => config.digit).join("");
+    }
+
+    journalBody() {
+      const pairs = this.orderedMarks()
+        .map(({ config, found }) => `${config.numeral} ${found ? config.digit : WORKROOM_CODE_CLUE.unknownMark}`)
+        .join("   ");
+      if (this.isComplete()) {
+        return `Four paintings, four scratches. In numeral order: ${pairs}. The Workroom keypad code is ${this.assembledCode()}.`;
+      }
+      const remaining = WORKROOM_CODE_SCRATCHES.length - this.discovered.size;
+      return `Scratches hidden behind the Painting Room paintings spell the Workroom keypad code. So far, in numeral order: ${pairs}. ${remaining} still hidden — tilt the other paintings.`;
+    }
+
+    syncJournalEntry() {
+      if (!this.discovered.size) return;
+      contestant13Quest?.upsertJournalEntry({
+        id: WORKROOM_CODE_CLUE.journalId,
+        title: WORKROOM_CODE_CLUE.journalTitle,
+        body: this.journalBody(),
+      });
+    }
+
+    resyncScratchVisibility() {
+      // Called after a load/dev change: paintings are untampered, so every
+      // scratch hides regardless of the discovered set.
+      for (const mark of this.marks.values()) {
+        if (mark.scratch) mark.scratch.visible = false;
+      }
+    }
+
+    getSnapshot() {
+      return WORKROOM_CODE_SCRATCHES
+        .filter((config) => this.discovered.has(config.artId))
+        .map((config) => config.artId);
+    }
+
+    restoreSnapshot(list) {
+      this.discovered = new Set(Array.isArray(list) ? list.filter((artId) => this.marks.has(artId)) : []);
+      this.resyncScratchVisibility();
+      this.syncJournalEntry();
+    }
+
+    grantAllForDevMode() {
+      // The quest's own dev snapshot/restore round-trips the discovered list,
+      // so enabling only needs the grant; disabling flows through
+      // restoreQuestSnapshot like every other quest flag.
+      this.discovered = new Set(WORKROOM_CODE_SCRATCHES.map((config) => config.artId));
+      this.resyncScratchVisibility();
+      this.syncJournalEntry();
+    }
+
+    getDiagnostics() {
+      return {
+        targets: WORKROOM_CODE_SCRATCHES.map((config) => {
+          const mark = this.marks.get(config.artId);
+          return {
+            artId: config.artId,
+            order: config.order,
+            numeral: config.numeral,
+            digit: state.qa ? config.digit : (this.discovered.has(config.artId) ? config.digit : null),
+            revealed: Boolean(mark?.scratch?.visible),
+            discovered: this.discovered.has(config.artId),
+          };
+        }),
+        discoveredCount: this.discovered.size,
+        complete: this.isComplete(),
+        code: state.qa && this.isComplete() ? this.assembledCode() : null,
+      };
+    }
+  }
+
   class TamperSystem {
     constructor() {
       this.entries = [];
@@ -11033,6 +11195,7 @@
         kind,
         label: options.label,
         title: options.title || null,
+        artId: options.artId || null,
         position: options.position,
         tampered: false,
         noticeRemaining: 0,
@@ -11051,16 +11214,20 @@
       return entry;
     }
 
-    registerPortrait({ group, title, width, height }) {
+    registerPortrait({ group, title, width, height, artId = null }) {
       const entry = this.createEntry("portrait", {
         label: "portrait",
         title,
+        artId,
         position: { x: group.position.x, y: group.position.y, z: group.position.z },
         visualOffset: () => group.rotation.z,
       });
       entry.tiltSign = this.counts.portrait % 2 === 0 ? 1 : -1;
       entry.apply = (tampered) => {
         group.rotation.z = tampered ? entry.tiltSign * MANSION_TAMPER.portraitTiltRadians : 0;
+        // Tilting a code-carrier painting exposes the scratch behind it; any
+        // straighten or Mr. Feast fix hides it again. Discovery persists.
+        if (entry.artId) workroomCodeClue?.setRevealed(entry.artId, tampered);
         renderer.shadowMap.needsUpdate = true;
       };
       const hit = box({
@@ -11288,6 +11455,24 @@
       entry.noticeRemaining = MANSION_TAMPER.alarmRequeueSeconds;
     }
 
+    resetAllForLoad() {
+      // Loading is time travel: tilted decor, pulled chairs, and pending
+      // notices belong to the abandoned timeline, so everything straightens
+      // (which also re-hides any exposed keycode scratches via apply).
+      for (const entry of this.entries) {
+        if (entry.tampered && !entry.isTampered) {
+          entry.apply(false);
+          entry.tampered = false;
+        }
+        if (entry.isTampered && entry.isTampered()) entry.apply(false);
+        entry.tampered = entry.isTampered ? Boolean(entry.isTampered()) : false;
+        entry.dispatched = false;
+        entry.noticeRemaining = 0;
+        entry.cooldownRemaining = 0;
+        entry.blockedReason = null;
+      }
+    }
+
     resolveEntryForCatch(entryId) {
       const entry = this.byId.get(entryId);
       if (!entry || !entry.tampered) return false;
@@ -11319,6 +11504,7 @@
           kind: entry.kind,
           label: entry.label,
           title: entry.title,
+          artId: entry.artId,
           position: { x: Number(entry.position.x.toFixed(2)), z: Number(entry.position.z.toFixed(2)) },
           tampered: entry.tampered,
           dispatched: entry.dispatched,
@@ -11491,7 +11677,9 @@
   }
 
   function appendWorkroomKeypadDigit(digit) {
-    if (state.workroom.unlocked) return getWorkroomDiagnostics();
+    // Digits must always echo. A save that already unlocked the Workroom
+    // reopens this pad in the accepted state, and silently swallowing key
+    // presses there reads as a broken keypad; only submit decides meaning.
     const normalized = String(digit || "").replace(/\D/g, "").slice(0, 1);
     if (!normalized || state.workroom.keypadInput.length >= WORKROOM_SECURITY.codeLength) return getWorkroomDiagnostics();
     state.workroom.keypadInput += normalized;
@@ -15296,7 +15484,7 @@
       sphere({ name: "portrait-face-shadow", radius: Math.min(width, height) * 0.16, widthSegments: 12, heightSegments: 8, x: 0, y: height * 0.12, z: 0.065, material: M.soot, parent: group, cast: false });
       box({ name: "portrait-silhouette", w: width * 0.45, h: height * 0.42, d: 0.02, x: 0, y: -height * 0.22, z: 0.066, material: M.blackWood, parent: group, cast: false });
     }
-    if (tamperSystem) tamperSystem.registerPortrait({ group, title: artPanel.userData.title, width, height });
+    if (tamperSystem) tamperSystem.registerPortrait({ group, title: artPanel.userData.title, width, height, artId });
     return group;
   }
 
@@ -15832,6 +16020,7 @@
       { axis: "x", fixed: -3.2, center: 6.15, centerY: 2.2, side: 1, width: 1.0, height: 1.3, artId: "choir-floorboards", circuitName: "painting room lights" },
     ]) {
       addWallPortrait({ ...artwork, floorY: FLOOR.MAIN, color: 0x242127 });
+      addWorkroomCodeScratch(artwork);
     }
 
     // Dining room
@@ -16168,6 +16357,96 @@
     texture.generateMipmaps = false;
     texture.encoding = THREE.sRGBEncoding;
     return texture;
+  }
+
+  function createWorkroomScratchTexture(numeral, digit) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    const label = `${numeral} · ${digit}`;
+    ctx.font = "700 72px Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.save();
+    ctx.translate(128, 66);
+    ctx.rotate(-0.045);
+    // The library book's XIII is dark gouges on pale leather; a wall scratch
+    // is the inverse — dark wallpaper torn away to pale plaster. The wide
+    // pale stroke carries the mark, a thin dark pass shadows the cut edge,
+    // and the dashes keep every stroke broken and hand-carved.
+    ctx.strokeStyle = "rgba(24, 16, 12, 0.7)";
+    ctx.lineWidth = 8.2;
+    ctx.setLineDash([14, 3, 9, 4]);
+    ctx.strokeText(label, 1.4, 1.6);
+    ctx.strokeStyle = "rgba(214, 196, 158, 0.92)";
+    ctx.lineWidth = 5.6;
+    ctx.setLineDash([13, 3, 8, 4]);
+    ctx.lineDashOffset = 1;
+    ctx.strokeText(label, 0, 0);
+    ctx.strokeStyle = "rgba(238, 224, 192, 0.6)";
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 8, 4, 9]);
+    ctx.lineDashOffset = -3;
+    ctx.strokeText(label, -0.8, -0.7);
+    ctx.restore();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = `workroom-code-scratch-${numeral}`;
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function addWorkroomCodeScratch(options) {
+    const config = WORKROOM_CODE_SCRATCHES.find((candidate) => candidate.artId === options.artId);
+    if (!config || !workroomCodeClue) return;
+    const { axis, fixed, center, centerY = 1.95, side = 1, width = 1, height = 1.4 } = options;
+    // The scratch sits just proud of the wall surface (walls are 0.28m boxes
+    // centered on `fixed`, so the face is 0.14m out), well behind the
+    // painting's 0.19m stand-off, anchored to a sibling group so tilting the
+    // painting never moves the mark it conceals.
+    const wallGap = 0.152;
+    let x;
+    let z;
+    let rotationY;
+    if (axis === "x") {
+      x = center;
+      z = fixed + side * wallGap;
+      rotationY = side > 0 ? 0 : Math.PI;
+    } else {
+      x = fixed + side * wallGap;
+      z = center;
+      rotationY = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    }
+    const anchor = new THREE.Group();
+    anchor.name = `workroom-code-scratch-${config.artId}`;
+    // The mark peeks out from under the frame's bottom rail (its top edge
+    // tucked slightly behind it) so a tilted painting visibly uncovers a
+    // scratch that was hidden at its edge, rather than one buried dead-center
+    // behind the canvas where no tilt could ever reveal it.
+    anchor.position.set(x, FLOOR.MAIN + centerY - height / 2 - 0.165, z);
+    anchor.rotation.y = rotationY;
+    scene.add(anchor);
+    const scratch = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.4, 0.22),
+      new THREE.MeshBasicMaterial({
+        map: createWorkroomScratchTexture(config.numeral, config.digit),
+        transparent: true,
+        alphaTest: 0.035,
+        depthWrite: false,
+        toneMapped: true,
+        side: THREE.FrontSide,
+      }),
+    );
+    scratch.name = `workroom-code-scratch-mark-${config.artId}`;
+    scratch.position.set(-width * 0.18, 0, 0);
+    anchor.add(scratch);
+    workroomCodeClue.registerScratch(config.artId, anchor);
   }
 
   function addContestantThirteenLibraryBook() {
@@ -18771,9 +19050,10 @@
     setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
     if (loaded) {
       setMenuOpen(false);
-      // Loading is time travel: any capture, pursuit, or errand in flight
-      // belongs to the abandoned timeline.
+      // Loading is time travel: any capture, pursuit, errand, or tilted
+      // decor in flight belongs to the abandoned timeline.
       if (state.gameOver) clearMansionGameOver();
+      tamperSystem?.resetAllForLoad();
       mrFeastNpc?.recoverAfterLoad();
       speechSystem?.dismiss();
     }
@@ -19997,6 +20277,7 @@
       seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
+      workroomCode: workroomCodeClue?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
       openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
       gameOver: state.gameOver ? { ...state.gameOver } : null,
@@ -20464,6 +20745,30 @@
       return { yaw: Number(state.yaw.toFixed(3)) };
     };
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
+    window.MrFeastFresh.probeSceneRayForQA = (fromX, fromY, fromZ, toX, toY, toZ) => {
+      if (!state.qa) return null;
+      const origin = new THREE.Vector3(fromX, fromY, fromZ);
+      const target = new THREE.Vector3(toX, toY, toZ);
+      const direction = target.clone().sub(origin);
+      const distance = direction.length();
+      if (distance < 0.0001) return { hits: [] };
+      direction.divideScalar(distance);
+      const raycaster = new THREE.Raycaster(origin, direction, 0, distance + 0.25);
+      scene.updateMatrixWorld(true);
+      const plainMeshes = [];
+      scene.traverse((object) => {
+        if (object.isMesh && !object.isSkinnedMesh && !object.isInstancedMesh) plainMeshes.push(object);
+      });
+      return {
+        distance: Number(distance.toFixed(3)),
+        hits: raycaster.intersectObjects(plainMeshes, false).slice(0, 12).map((hit) => ({
+          name: hit.object.name || hit.object.type,
+          distance: Number(hit.distance.toFixed(3)),
+          visible: hit.object.visible,
+          parentVisible: !(function hidden(node) { return node ? (!node.visible || hidden(node.parent)) : false; })(hit.object.parent),
+        })),
+      };
+    };
     window.MrFeastFresh.inspectScene = (prefix = "") => {
       const meshes = [];
       const bounds = new THREE.Box3();
@@ -20575,6 +20880,8 @@
         library: [-10.0, FLOOR.MAIN, 7.7, Math.PI / 2],
         readableBookLibrary: [-12.65, FLOOR.MAIN, 4.8, Math.PI / 2, -0.05],
         tamperMusicPortrait: [13.0, FLOOR.MAIN, 7.8, -Math.PI / 2, 0.28],
+        codeScratchFiveDoors: [8.3, FLOOR.MAIN, -1.7, -Math.PI / 2, 0.1],
+        codeScratchFiveDoorsLow: [8.7, FLOOR.MAIN, -1.7, -Math.PI / 2, -0.1],
         tamperDiningChair: [-12.0, FLOOR.MAIN, -5.9, 0, -0.55],
         tamperFridge: [12.9, FLOOR.MAIN, -4.04, -Math.PI / 2, -0.12],
         music: [10.0, FLOOR.MAIN, 7.7, -Math.PI / 2],
@@ -21159,6 +21466,7 @@
       M = await createMaterials();
       readableBookSystem = new ReadableBookSystem(state.readableBooks.seed);
       tamperSystem = new TamperSystem();
+      workroomCodeClue = new WorkroomCodeClue();
       seatingSystem = new MansionSeatingSystem();
       speechSystem = new MrFeastSpeechSystem();
       openingWelcomeSystem = new MrFeastOpeningWelcome();

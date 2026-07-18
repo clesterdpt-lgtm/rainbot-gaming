@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-natural-characters-1";
+  const MANSION_RUNTIME_VERSION = "20260718-front-door-welcome-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1461,6 +1461,31 @@
     }),
   });
 
+  const MR_FEAST_OPENING_WELCOME = Object.freeze({
+    playerPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 10.2, yaw: 0, pitch: 0 }),
+    hostPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 8.15, yaw: 0 }),
+    frontDoorZ: 12,
+    resumeWaypointId: "main-foyer-west",
+    initialDelaySeconds: 1.15,
+    lineGapSeconds: 0.78,
+    minimumLineSeconds: 6,
+    maximumLineSeconds: 10,
+    baseLineSeconds: 4,
+    perCharacterSeconds: 0.045,
+    manualAdvanceAfterSeconds: 2.4,
+    maximumHostWaitSeconds: 20,
+    maximumTimerStepSeconds: 0.5,
+    lines: Object.freeze([
+      "Welcome, contestant. Smile—the cameras started rolling before you reached the door.",
+      "You are competing on my newest reality show. Outlast the others, and one million dollars is yours.",
+      "The library, ballroom, kitchen, upper rooms, and grounds are open to you. Most doors are.",
+      "Stay on the estate. Treat the house gently. When a camera turns red, keep smiling.",
+      "Locked doors are for your protection. Do not force them, and do not ask what they protect.",
+      "One restriction matters above all: do not enter the basement. It is not part of the show.",
+      "The last contestant who ignored that rule became our most-watched episode. Enjoy your stay.",
+    ]),
+  });
+
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
   const CONTESTANT_13_CLUE_BOOK = Object.freeze({
     placementId: "contestant-13-marginalia-book",
@@ -2139,6 +2164,7 @@
   let monitorWallSystem = null;
   let tamperSystem = null;
   let speechSystem = null;
+  let openingWelcomeSystem = null;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -5410,6 +5436,50 @@
       this.root.rotation.y = Math.atan2(Math.sin(nextYaw), Math.cos(nextYaw));
     }
 
+    stageOpeningWelcome() {
+      const placement = MR_FEAST_OPENING_WELCOME.hostPosition;
+      const resumeIndex = MR_FEAST_NPC.waypoints.findIndex(
+        (point) => point.id === MR_FEAST_OPENING_WELCOME.resumeWaypointId,
+      );
+      this.root.position.set(placement.x, placement.y, placement.z);
+      this.root.rotation.y = placement.yaw;
+      this.waypointIndex = resumeIndex >= 0 ? resumeIndex : 0;
+      this.currentRouteZone = "FRONT FOYER";
+      this.currentRouteLevel = MR_FEAST_LEVEL.MAIN;
+      this.responseCurrentNodeId = "main-foyer-center";
+      this.pauseRemaining = 0;
+      this.conversationFocusRemaining = 0;
+      this.waitingForDoor = null;
+      this.moving = false;
+      this.wanderingEnabled = false;
+      this.syncCollider();
+      if (this.loadStatus === "ready") {
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(0, true, true);
+      }
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    releaseOpeningWelcome() {
+      const resumeIndex = MR_FEAST_NPC.waypoints.findIndex(
+        (point) => point.id === MR_FEAST_OPENING_WELCOME.resumeWaypointId,
+      );
+      this.waypointIndex = resumeIndex >= 0 ? resumeIndex : 0;
+      this.currentRouteZone = "FRONT FOYER";
+      this.currentRouteLevel = MR_FEAST_LEVEL.MAIN;
+      this.responseCurrentNodeId = "main-foyer-center";
+      this.pauseRemaining = 0;
+      this.conversationFocusRemaining = 0;
+      this.waitingForDoor = null;
+      this.moving = false;
+      this.wanderingEnabled = true;
+      this.setSegmentPresentation(MR_FEAST_NPC.waypoints[this.waypointIndex]);
+      this.syncCollider();
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
     update(dt) {
       if (this.loadStatus !== "ready") return;
       this.lastDt = Math.max(0, Number(dt) || 0);
@@ -6014,6 +6084,7 @@
         },
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         conversationFocusRemaining: Number(this.conversationFocusRemaining.toFixed(3)),
+        wanderingEnabled: this.wanderingEnabled,
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         collision: {
@@ -10151,13 +10222,16 @@
       return this.say(category, text, speaker);
     }
 
-    say(category, text, speaker = this.hostSpeaker()) {
+    say(category, text, speaker = this.hostSpeaker(), options = {}) {
       if (!speaker || !text) return null;
-      const duration = clamp(
-        MR_FEAST_SPEECH.minSeconds + text.length * MR_FEAST_SPEECH.perCharacterSeconds,
-        MR_FEAST_SPEECH.minSeconds,
-        MR_FEAST_SPEECH.maxSeconds,
-      );
+      const requestedDuration = Number(options.durationSeconds);
+      const duration = Number.isFinite(requestedDuration)
+        ? clamp(requestedDuration, 0.1, 60)
+        : clamp(
+          MR_FEAST_SPEECH.minSeconds + text.length * MR_FEAST_SPEECH.perCharacterSeconds,
+          MR_FEAST_SPEECH.minSeconds,
+          MR_FEAST_SPEECH.maxSeconds,
+        );
       this.active = { category, text, speaker };
       this.remaining = duration;
       this.lastCategory = category;
@@ -10251,6 +10325,255 @@
         x: Number(this.lastScreen.x.toFixed(1)),
         y: Number(this.lastScreen.y.toFixed(1)),
         clamped: this.lastScreen.clamped,
+      };
+    }
+  }
+
+  class MrFeastOpeningWelcome {
+    constructor() {
+      this.active = false;
+      this.completed = false;
+      this.phase = "idle";
+      this.phaseRemaining = 0;
+      this.lineIndex = -1;
+      this.lineElapsed = 0;
+      this.currentLineDuration = 0;
+      this.totalElapsed = 0;
+      this.hostWaitElapsed = 0;
+      this.hostStaged = false;
+      this.cancelledReason = null;
+      this.advanceAttempts = 0;
+      this.acceptedAdvances = 0;
+      this.lastAdvanceSource = null;
+      this.spokenLines = [];
+    }
+
+    lineDuration(text) {
+      return clamp(
+        MR_FEAST_OPENING_WELCOME.baseLineSeconds
+          + String(text || "").length * MR_FEAST_OPENING_WELCOME.perCharacterSeconds,
+        MR_FEAST_OPENING_WELCOME.minimumLineSeconds,
+        MR_FEAST_OPENING_WELCOME.maximumLineSeconds,
+      );
+    }
+
+    totalPlannedSeconds() {
+      const speaking = MR_FEAST_OPENING_WELCOME.lines.reduce(
+        (total, line) => total + this.lineDuration(line),
+        0,
+      );
+      return speaking
+        + MR_FEAST_OPENING_WELCOME.initialDelaySeconds
+        + MR_FEAST_OPENING_WELCOME.lineGapSeconds * Math.max(0, MR_FEAST_OPENING_WELCOME.lines.length - 1);
+    }
+
+    start() {
+      if (this.completed) return { started: false, reason: "already-completed" };
+      if (this.active) return { started: false, reason: "already-active" };
+      this.active = true;
+      this.phase = "waiting-for-host";
+      this.phaseRemaining = 0;
+      this.lineIndex = -1;
+      this.lineElapsed = 0;
+      this.currentLineDuration = 0;
+      this.totalElapsed = 0;
+      this.hostWaitElapsed = 0;
+      this.hostStaged = false;
+      this.cancelledReason = null;
+      this.advanceAttempts = 0;
+      this.acceptedAdvances = 0;
+      this.lastAdvanceSource = null;
+      this.spokenLines = [];
+      speechSystem?.dismiss();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      const player = MR_FEAST_OPENING_WELCOME.playerPosition;
+      teleport(player.x, player.y, player.z, player.yaw, player.pitch);
+      if (mrFeastNpc) {
+        mrFeastNpc.stageOpeningWelcome();
+        this.hostStaged = true;
+      }
+      state.currentInteraction = null;
+      updateMovementHud();
+      updateMenuControls();
+      updateInteractionPrompt();
+      return { started: true, reason: null };
+    }
+
+    beginFirstLineWhenReady() {
+      if (!mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return false;
+      if (!this.hostStaged) {
+        mrFeastNpc.stageOpeningWelcome();
+        this.hostStaged = true;
+      }
+      this.phase = "lead-in";
+      this.phaseRemaining = MR_FEAST_OPENING_WELCOME.initialDelaySeconds;
+      return true;
+    }
+
+    beginLine(index) {
+      const text = MR_FEAST_OPENING_WELCOME.lines[index];
+      if (!text) {
+        this.finish();
+        return false;
+      }
+      this.lineIndex = index;
+      this.lineElapsed = 0;
+      this.currentLineDuration = this.lineDuration(text);
+      this.phase = "speaking";
+      this.phaseRemaining = this.currentLineDuration;
+      this.spokenLines.push({
+        index,
+        text,
+        duration: Number(this.currentLineDuration.toFixed(3)),
+      });
+      speechSystem?.say(
+        `opening-welcome-${index + 1}`,
+        text,
+        speechSystem.hostSpeaker(),
+        { durationSeconds: this.currentLineDuration },
+      );
+      updateInteractionPrompt();
+      return true;
+    }
+
+    finishCurrentLine() {
+      speechSystem?.dismiss();
+      this.lineElapsed = this.currentLineDuration;
+      this.phaseRemaining = 0;
+      if (this.lineIndex >= MR_FEAST_OPENING_WELCOME.lines.length - 1) {
+        this.finish();
+        return;
+      }
+      this.phase = "gap";
+      this.phaseRemaining = MR_FEAST_OPENING_WELCOME.lineGapSeconds;
+      updateInteractionPrompt();
+    }
+
+    finish(cancelledReason = null) {
+      if (!this.active) return;
+      this.active = false;
+      this.completed = true;
+      this.cancelledReason = cancelledReason;
+      this.phase = cancelledReason ? "cancelled" : "complete";
+      this.phaseRemaining = 0;
+      speechSystem?.dismiss();
+      clearMovementInput();
+      state.currentInteraction = null;
+      mrFeastNpc?.releaseOpeningWelcome();
+      updateMovementHud();
+      updateMenuControls();
+      updateInteractionPrompt();
+    }
+
+    canAdvance() {
+      return this.active
+        && this.phase === "speaking"
+        && this.lineElapsed >= MR_FEAST_OPENING_WELCOME.manualAdvanceAfterSeconds;
+    }
+
+    requestAdvance(source = "player") {
+      this.advanceAttempts += 1;
+      this.lastAdvanceSource = source;
+      if (!this.active) return { accepted: false, reason: "inactive" };
+      if (this.phase !== "speaking") return { accepted: false, reason: "between-lines" };
+      if (!this.canAdvance()) return { accepted: false, reason: "reading-hold" };
+      this.acceptedAdvances += 1;
+      this.finishCurrentLine();
+      return { accepted: true, reason: null };
+    }
+
+    update(dt) {
+      if (!this.active) return;
+      const step = Math.max(0, Number(dt) || 0);
+      this.totalElapsed += step;
+      if (this.phase === "waiting-for-host") {
+        this.hostWaitElapsed += step;
+        if (mrFeastNpc?.loadStatus === "error" || this.hostWaitElapsed >= MR_FEAST_OPENING_WELCOME.maximumHostWaitSeconds) {
+          this.finish("host-unavailable");
+          return;
+        }
+        this.beginFirstLineWhenReady();
+        return;
+      }
+      if (this.phase === "lead-in") {
+        this.phaseRemaining = Math.max(0, this.phaseRemaining - step);
+        if (this.phaseRemaining <= 0) this.beginLine(0);
+        return;
+      }
+      if (this.phase === "speaking") {
+        const wasAdvanceable = this.canAdvance();
+        this.lineElapsed = Math.min(this.currentLineDuration, this.lineElapsed + step);
+        this.phaseRemaining = Math.max(0, this.currentLineDuration - this.lineElapsed);
+        if (!wasAdvanceable && this.canAdvance()) updateInteractionPrompt();
+        if (this.lineElapsed >= this.currentLineDuration) this.finishCurrentLine();
+        return;
+      }
+      if (this.phase === "gap") {
+        this.phaseRemaining = Math.max(0, this.phaseRemaining - step);
+        if (this.phaseRemaining <= 0) this.beginLine(this.lineIndex + 1);
+      }
+    }
+
+    advanceForQA(seconds = 0) {
+      if (!state.qa) return this.getDiagnostics();
+      let remaining = clamp(Number(seconds) || 0, 0, 180);
+      const fixedStep = 1 / 60;
+      while (remaining > 0 && this.active) {
+        const step = Math.min(fixedStep, remaining);
+        speechSystem?.update(step);
+        this.update(step);
+        remaining -= step;
+      }
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const player = physics?.playerPosition?.() || MR_FEAST_OPENING_WELCOME.playerPosition;
+      const host = mrFeastNpc?.root?.position || MR_FEAST_OPENING_WELCOME.hostPosition;
+      const dx = player.x - host.x;
+      const dz = player.z - host.z;
+      const horizontalDistance = Math.hypot(dx, dz);
+      const hostYaw = mrFeastNpc?.root?.rotation?.y || 0;
+      const hostFacingPlayerDot = horizontalDistance > 0.0001
+        ? (Math.sin(hostYaw) * dx + Math.cos(hostYaw) * dz) / horizontalDistance
+        : 1;
+      return {
+        active: this.active,
+        completed: this.completed,
+        phase: this.phase,
+        movementLocked: this.active,
+        interactionsLocked: this.active,
+        hostStaged: this.hostStaged,
+        hostWaitElapsed: Number(this.hostWaitElapsed.toFixed(3)),
+        cancelledReason: this.cancelledReason,
+        lineIndex: this.lineIndex,
+        lineNumber: this.lineIndex >= 0 ? this.lineIndex + 1 : 0,
+        lineCount: MR_FEAST_OPENING_WELCOME.lines.length,
+        currentLine: this.lineIndex >= 0 ? MR_FEAST_OPENING_WELCOME.lines[this.lineIndex] : null,
+        lineElapsed: Number(this.lineElapsed.toFixed(3)),
+        currentLineDuration: Number(this.currentLineDuration.toFixed(3)),
+        phaseRemaining: Number(this.phaseRemaining.toFixed(3)),
+        totalElapsed: Number(this.totalElapsed.toFixed(3)),
+        totalPlannedSeconds: Number(this.totalPlannedSeconds().toFixed(3)),
+        minimumLineSeconds: MR_FEAST_OPENING_WELCOME.minimumLineSeconds,
+        maximumLineSeconds: MR_FEAST_OPENING_WELCOME.maximumLineSeconds,
+        manualAdvanceAfterSeconds: MR_FEAST_OPENING_WELCOME.manualAdvanceAfterSeconds,
+        canAdvance: this.canAdvance(),
+        advanceAttempts: this.advanceAttempts,
+        acceptedAdvances: this.acceptedAdvances,
+        lastAdvanceSource: this.lastAdvanceSource,
+        authoredLines: [...MR_FEAST_OPENING_WELCOME.lines],
+        spokenLines: this.spokenLines.map((entry) => ({ ...entry })),
+        hostPosition: {
+          x: Number(host.x.toFixed(3)),
+          y: Number(host.y.toFixed(3)),
+          z: Number(host.z.toFixed(3)),
+        },
+        hostDistanceFromFrontDoor: Number(Math.abs(MR_FEAST_OPENING_WELCOME.frontDoorZ - host.z).toFixed(3)),
+        hostDistanceFromPlayer: Number(horizontalDistance.toFixed(3)),
+        hostFacingPlayerDot: Number(hostFacingPlayerDot.toFixed(4)),
       };
     }
   }
@@ -17751,6 +18074,7 @@
     }
     if (dom.canvas) dom.canvas.focus({ preventScroll: true });
     if (contestant13Quest) contestant13Quest.updateUI();
+    openingWelcomeSystem?.start();
     // Pointer lock must be requested during the trusted click. Audio is optional and must not delay entry.
     requestPointerLock();
     if (audioSystem) void audioSystem.unlock().catch(() => {});
@@ -18024,9 +18348,11 @@
 
   function updateMenuControls() {
     const hasSave = Boolean(mansionSaveSlot?.has());
-    if (dom.menuLoad) dom.menuLoad.disabled = !hasSave;
-    if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode;
+    const welcomeActive = Boolean(openingWelcomeSystem?.active);
+    if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
+    if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode || welcomeActive;
     if (dom.menuDev) {
+      dom.menuDev.disabled = welcomeActive;
       dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
     }
@@ -18147,6 +18473,11 @@
 
   function activateCurrentInteraction() {
     if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return;
+    if (openingWelcomeSystem?.active) {
+      openingWelcomeSystem.requestAdvance("player");
+      updateInteractionPrompt();
+      return;
+    }
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
     interaction.activate();
@@ -18225,12 +18556,16 @@
         return;
       }
       if (state.menuOpen) return;
-      if (event.code === "Tab" && !event.repeat && state.started && contestant13Quest) {
+      if (openingWelcomeSystem?.active && ["Tab", "KeyC"].includes(event.code)) {
+        event.preventDefault();
+        return;
+      }
+      if (event.code === "Tab" && !event.repeat && state.started && !openingWelcomeSystem?.active && contestant13Quest) {
         event.preventDefault();
         contestant13Quest.toggleJournal();
         return;
       }
-      if (event.code === "KeyC" && !event.repeat && state.started && !state.journalOpen && !state.activeSeat && !state.contestant13.actionInProgress) {
+      if (event.code === "KeyC" && !event.repeat && state.started && !openingWelcomeSystem?.active && !state.journalOpen && !state.activeSeat && !state.contestant13.actionInProgress) {
         event.preventDefault();
         state.movement.crouched = !state.movement.crouched;
         state.movement.sprinting = false;
@@ -18301,7 +18636,9 @@
     if (dom.fullscreen && dom.fullscreen !== dom.menuMaximize) {
       dom.fullscreen.addEventListener("click", toggleMaximized);
     }
-    if (dom.journalButton) dom.journalButton.addEventListener("click", () => contestant13Quest && contestant13Quest.toggleJournal());
+    if (dom.journalButton) dom.journalButton.addEventListener("click", () => {
+      if (!openingWelcomeSystem?.active && contestant13Quest) contestant13Quest.toggleJournal();
+    });
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
       if (event.target === dom.journal && contestant13Quest) contestant13Quest.setJournalOpen(false);
@@ -18519,8 +18856,18 @@
   }
 
   function updateInteractionPrompt() {
-    state.currentInteraction = findInteraction();
     if (!dom.prompt) return;
+    if (openingWelcomeSystem?.active) {
+      state.currentInteraction = null;
+      const showContinue = openingWelcomeSystem.canAdvance();
+      dom.prompt.hidden = !showContinue;
+      if (showContinue) {
+        if (dom.promptKey) dom.promptKey.textContent = matchMedia("(pointer: coarse)").matches ? "TAP E" : "E";
+        if (dom.promptText) dom.promptText.textContent = "Continue";
+      }
+      return;
+    }
+    state.currentInteraction = findInteraction();
     if (!state.currentInteraction || !state.started) {
       dom.prompt.hidden = true;
       return;
@@ -18893,6 +19240,20 @@
       physics.updateSafety();
       return;
     }
+    if (openingWelcomeSystem?.active) {
+      physics.movePlayer(0, 0);
+      physics.step();
+      physics.updateSafety();
+      state.lastMove = { dx: 0, dz: 0 };
+      movement.crouched = false;
+      movement.sprinting = false;
+      movement.stealthVisibilityMultiplier = 1;
+      movement.stealthNoiseMultiplier = 1;
+      movement.mode = "listening";
+      movement.speed = 0;
+      updateMovementHud();
+      return;
+    }
     if (state.activeSeat) {
       const seatedBody = physics.playerPosition();
       physics.verticalVelocity = 0;
@@ -19064,6 +19425,12 @@
       if (cameraSecurity) cameraSecurity.update(dt);
       if (tamperSystem) tamperSystem.update(dt);
       if (speechSystem) speechSystem.update(dt);
+      // Dialogue pacing follows visible wall-clock time rather than the
+      // physics-clamped step, so a slow phone cannot stretch one sentence
+      // into a minute. Hidden tabs drain the clock above and never reach here.
+      if (openingWelcomeSystem) {
+        openingWelcomeSystem.update(Math.min(rawDt, MR_FEAST_OPENING_WELCOME.maximumTimerStepSeconds));
+      }
       for (const system of yardWaterSystems) system.update(dt);
       updateLightTransitions(dt);
       if (rainSystem) rainSystem.update(dt);
@@ -19189,6 +19556,7 @@
       security: cameraSecurity?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
+      openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
@@ -19575,6 +19943,16 @@
     window.MrFeastFresh.tamperForQA = (id, tampered = true) => tamperSystem ? tamperSystem.setTamperedForQA(id, tampered) : null;
     window.MrFeastFresh.advanceTamperForQA = (seconds) => tamperSystem ? tamperSystem.advanceForQA(seconds) : null;
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getOpeningWelcomeState = () => openingWelcomeSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.advanceOpeningWelcomeForQA = (seconds) => (
+      state.qa && openingWelcomeSystem ? openingWelcomeSystem.advanceForQA(seconds) : null
+    );
+    window.MrFeastFresh.continueOpeningWelcomeForQA = () => (
+      state.qa && openingWelcomeSystem ? openingWelcomeSystem.requestAdvance("qa") : null
+    );
+    window.MrFeastFresh.startOpeningWelcomeForQA = () => (
+      state.qa && openingWelcomeSystem ? openingWelcomeSystem.start() : { started: false, reason: "qa-only" }
+    );
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastPursuitForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runPursuitForQA(maxSeconds) : null;
@@ -20339,6 +20717,7 @@
       tamperSystem = new TamperSystem();
       seatingSystem = new MansionSeatingSystem();
       speechSystem = new MrFeastSpeechSystem();
+      openingWelcomeSystem = new MrFeastOpeningWelcome();
 
       setLoading("Raising the walls", 28);
       hemisphereLight = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);

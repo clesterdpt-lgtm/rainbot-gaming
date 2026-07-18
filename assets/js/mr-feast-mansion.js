@@ -9,11 +9,12 @@
   const LOCAL_SERVER_URL = "http://127.0.0.1:8000/games/mr-feast-mansion.html";
   const LOCAL_LAUNCHER_NAME = "Open Mr Feast Mansion.command";
   const LOCAL_SERVER_GUIDANCE = `Mr Feast needs the local web server. Double-click “${LOCAL_LAUNCHER_NAME}” in the RainbotGaming folder; the launcher will open the correct page automatically.`;
+  const STARTUP_STALL_TIMEOUT_MS = 45000;
   const SCRIPT_URL = document.currentScript && document.currentScript.src;
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-contestant-hand-poses-1";
+  const MANSION_RUNTIME_VERSION = "20260718-startup-reliability-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2005,6 +2006,8 @@
 
   const qaParams = new URLSearchParams(location.search);
   let initWatchdog = null;
+  let initWatchdogDelay = STARTUP_STALL_TIMEOUT_MS;
+  let initWatchdogActivityCount = 0;
 
   const input = {
     forward: false,
@@ -2214,8 +2217,26 @@
   const lerp = THREE.MathUtils.lerp;
   const ease = (current, target, speed, dt) => lerp(current, target, 1 - Math.exp(-speed * dt));
 
+  function armInitWatchdog() {
+    clearTimeout(initWatchdog);
+    if (state.ready || state.loadFailed) return;
+    initWatchdogActivityCount += 1;
+    initWatchdog = setTimeout(() => {
+      if (!state.ready && !state.loadFailed) {
+        showLoadFailure("Loading stalled. Retry the mansion, or open it through the local web server.");
+      }
+    }, initWatchdogDelay);
+  }
+
+  function noteStartupActivity(phase = state.startupPhase, percent = null) {
+    if (state.ready || state.loadFailed) return;
+    boot?.progress(phase, percent);
+    armInitWatchdog();
+  }
+
   function setLoading(message, percent) {
     state.startupPhase = message;
+    noteStartupActivity(message, percent);
     if (!dom.loading) return;
     dom.loading.textContent = percent == null ? message : `${message} ${Math.round(percent)}%`;
     dom.loading.dataset.progress = percent == null ? "" : String(percent);
@@ -2821,7 +2842,7 @@
           if (encoding) texture.encoding = encoding;
           resolve(texture);
         },
-        undefined,
+        () => noteStartupActivity(),
         () => resolve(null)
       );
     });
@@ -2842,7 +2863,7 @@
           texture.encoding = THREE.sRGBEncoding;
           resolve(texture);
         },
-        undefined,
+        () => noteStartupActivity(),
         () => resolve(null),
       );
     });
@@ -15598,7 +15619,7 @@
 
   function loadEstateStatueGltf(loader, url) {
     return new Promise((resolve, reject) => {
-      loader.load(url, resolve, undefined, (error) => reject(new Error(error?.message || `Could not load ${url}`)));
+      loader.load(url, resolve, () => noteStartupActivity(), (error) => reject(new Error(error?.message || `Could not load ${url}`)));
     });
   }
 
@@ -19931,6 +19952,10 @@
       started: state.started,
       startupPhase: state.startupPhase,
       startupReadyMs: state.startupReadyMs == null ? null : Number(state.startupReadyMs.toFixed(1)),
+      startupProtection: {
+        stallTimeoutMs: initWatchdogDelay,
+        activityCount: initWatchdogActivityCount,
+      },
       startupSafeGpuProfile: startupSafeGpuProfile,
       contextLost: state.contextLost,
       floor: state.currentFloor,
@@ -21114,14 +21139,10 @@
   }
 
   async function init() {
-    const watchdogDelay = state.qa
+    initWatchdogDelay = state.qa
       ? Math.max(500, Number(qaParams.get("initTimeout")) || 15000)
-      : 15000;
-    initWatchdog = setTimeout(() => {
-      if (!state.ready && !state.loadFailed) {
-        showLoadFailure("Loading stalled. Retry the mansion, or open it through the local web server.");
-      }
-    }, watchdogDelay);
+      : STARTUP_STALL_TIMEOUT_MS;
+    armInitWatchdog();
 
     try {
       resize();

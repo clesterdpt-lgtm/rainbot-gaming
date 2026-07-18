@@ -2051,17 +2051,36 @@
       const introLead = document.querySelector(".mansion-intro__lead");
       const enter = document.getElementById("mansion-enter");
       const localUrl = "http://127.0.0.1:8000/games/mr-feast-mansion.html";
+      // This protects against a genuinely missing runtime, not a merely slow
+      // first download. The mansion script is roughly 1 MB before its other
+      // cold assets, so the old fixed 18-second deadline could briefly expose
+      // Retry loading even while the response was still healthy.
+      const BOOT_STALL_TIMEOUT_MS = 60000;
       let timer = null;
+      let boot = null;
       const clearTimer = () => {
         if (timer == null) return;
         clearTimeout(timer);
         timer = null;
       };
-      const boot = {
+      const armTimer = () => {
+        clearTimer();
+        timer = window.setTimeout(() => boot.fail("The mansion runtime stopped responding. Retry the page or use the local launcher."), BOOT_STALL_TIMEOUT_MS);
+      };
+      boot = {
         status: "pending",
+        phase: "page-shell",
+        percent: null,
+        progress(phase, percent) {
+          if (this.status === "ready" || this.status === "failed") return;
+          this.status = "runtime-loading";
+          this.phase = phase || this.phase;
+          this.percent = Number.isFinite(Number(percent)) ? Number(percent) : this.percent;
+          armTimer();
+        },
         settle() {
           clearTimer();
-          if (this.status === "pending") this.status = "runtime-owned";
+          if (this.status !== "ready" && this.status !== "failed") this.status = "runtime-owned";
         },
         ready() {
           clearTimer();
@@ -2096,14 +2115,14 @@
         },
       };
       window.__MR_FEAST_BOOT__ = boot;
-      timer = window.setTimeout(() => boot.fail("The mansion runtime did not load. Retry the page or use the local launcher."), 18000);
+      armTimer();
     })();
   </script>
-  <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/vendor/three/GLTFLoader-r128.js"></script>
-  <script src="../assets/vendor/three/SkeletonUtils-r128.js"></script>
-  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260718-contestant-hand-poses-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/vendor/three/three-r128.min.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;three-runtime&quot;)"></script>
+  <script src="../assets/vendor/three/GLTFLoader-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;model-loader&quot;)"></script>
+  <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
+  <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260718-startup-reliability-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

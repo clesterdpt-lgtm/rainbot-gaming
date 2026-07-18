@@ -136,6 +136,8 @@ async function run() {
     assert(caughtPortrait?.tampered === false, `the portrait he caught the player tampering with should be resolved by the catch itself; got ${JSON.stringify(caughtPortrait)}`);
     const settleWait = await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(20));
     assert(!settleWait.dispatched.length, `a catch-resolved object must not later trigger a separate housekeeping visit; got ${JSON.stringify(settleWait)}`);
+    assert(warningRun.simulatedSeconds < 45, `shortcut pathing should keep a same-room catch brisk; got ${JSON.stringify(warningRun.simulatedSeconds)}`);
+    assert(state.mrFeast.pursuit.pathShortcuts.built === true && state.mrFeast.pursuit.pathShortcuts.edges > 30, `pursuit should densify the patrol loop with wall-checked shortcut edges; got ${JSON.stringify(state.mrFeast.pursuit.pathShortcuts)}`);
 
     // --- No pursuit without a witness, and straightening is never an infraction
     await page.evaluate(() => {
@@ -192,7 +194,10 @@ async function run() {
     const stillTampered = atSweepEnd.tamper.entries.find((entry) => entry.id === "tamper-portrait-1");
     assert(stillTampered?.tampered === true, `giving up must not silently resolve the object he never caught; got ${JSON.stringify(stillTampered)}`);
     await page.evaluate(() => window.MrFeastFresh.leaveHideSpotForQA());
-    // He should still come back for it later, as an ordinary, undisturbed housekeeping errand.
+    // He should still come back for it later, as an ordinary, undisturbed
+    // housekeeping errand. The dispatch now correctly waits until he is fully
+    // back on patrol, so step the notice deterministically before driving it.
+    await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(10));
     const lateFixRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
     assert(lateFixRun.completed === true && lateFixRun.fixesCompleted === 1, `an escaped tamper should still get a normal later fix; got ${JSON.stringify(lateFixRun)}`);
     state = await diagnostics(page);
@@ -212,7 +217,14 @@ async function run() {
       return window.MrFeastFresh.getCameraSecurityState().recordingPlayer === true;
     }, null, { timeout: 20000 });
     const recordedStart = await page.evaluate(() => {
-      const chair = window.MrFeastFresh.getTamperState().entries.find((entry) => entry.kind === "chair");
+      // Milestone 48 lets contestants occupy seats, and an occupied chair
+      // refuses tampering; use a dining chair no routine ever sits on.
+      const chair = window.MrFeastFresh.getTamperState().entries
+        .filter((entry) => entry.kind === "chair")
+        .reduce((nearest, entry) => {
+          const distance = Math.hypot(entry.position.x - -12.0, entry.position.z - -7.25);
+          return !nearest || distance < nearest.distance ? { entry, distance } : nearest;
+        }, null).entry;
       window.MrFeastFresh.tamperForQA(chair.id, true);
       return JSON.parse(window.render_game_to_text());
     });
@@ -232,7 +244,7 @@ async function run() {
     assert(saved === true, "the pre-capture save should succeed");
     await page.evaluate(() => {
       window.MrFeastFresh.teleport("archive");
-      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 3.0, y: -3.8, z: 4.6, yaw: 0 });
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 5.5, y: -3.8, z: 7.2, yaw: -Math.PI / 2 });
       window.MrFeastFresh.reportInfractionForQA("portrait");
     });
     state = await diagnostics(page);
@@ -265,6 +277,82 @@ async function run() {
     overlay = await page.evaluate(() => document.getElementById("mansion-gameover").hidden);
     assert(overlay === true, "the overlay should close after loading");
 
+    // --- Basement trespass: being SEEN down there is itself the offense -------
+    // Place him mid-way along his authored archive lane, walking toward the
+    // player, exactly as a live basement patrol pass would encounter them.
+    await page.evaluate(() => {
+      window.MrFeastFresh.clearGameOverForQA();
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.teleport("archive");
+      window.MrFeastFresh.setMrFeastRouteSegmentForQA("basement-archive-inner", 0.35);
+      window.MrFeastFresh.resumeMrFeastForQA();
+    });
+    await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState().pursuit.active?.kind === "trespass", null, { timeout: 8000 });
+    state = await diagnostics(page);
+    assert(state.mrFeast.pursuit.active.reason === "witnessed", `a personally seen basement trespass should start a witnessed pursuit with no tamper; got ${JSON.stringify(state.mrFeast.pursuit.active)}`);
+    assert(state.speech.category === "pursuit-trespass", `a trespass pursuit should use the trespass line pool; got ${JSON.stringify(state.speech)}`);
+    const trespassRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(120));
+    assert(trespassRun.outcome === "game-over", `a basement trespass catch should end the game; got ${JSON.stringify(trespassRun)}`);
+    state = await diagnostics(page);
+    assert(state.gameOver && state.gameOver.kind === "trespass" && state.gameOver.floor === "BASEMENT", `the trespass capture should record its kind and floor; got ${JSON.stringify(state.gameOver)}`);
+    await page.evaluate(() => window.MrFeastFresh.clearGameOverForQA());
+
+    // --- Recorded trespass: a hostile basement camera lock also starts it -----
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: false });
+      window.MrFeastFresh.setCameraSoloForQA("cam-basement-boiler");
+      window.MrFeastFresh.placePlayerInCameraLaneForQA("cam-basement-boiler", { distance: 3.5 });
+    });
+    await page.waitForFunction(() => {
+      window.MrFeastFresh.advanceCameraSecurityForQA(0.4);
+      return window.MrFeastFresh.getCameraSecurityState().recordingPlayer === true;
+    }, null, { timeout: 20000 });
+    await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState().pursuit.active?.kind === "trespass", null, { timeout: 8000 });
+    state = await diagnostics(page);
+    assert(state.mrFeast.pursuit.active.reason === "recorded", `a hostile basement camera lock should start a recorded trespass pursuit; got ${JSON.stringify(state.mrFeast.pursuit.active)}`);
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: false, relaySabotaged: false });
+    });
+
+    // --- Fleeing into the basement mid-pursuit still ends in capture ----------
+    await page.evaluate(() => {
+      window.MrFeastFresh.setDevModeForQA(true);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 10.6, y: 0, z: 7.8, yaw: Math.PI / 2 });
+      window.MrFeastFresh.teleport("tamperMusicPortrait");
+      window.MrFeastFresh.resumeMrFeastForQA();
+    });
+    await page.waitForFunction(() => /tilt/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 8000 });
+    await pressKey(page, "KeyE", "e");
+    await page.waitForTimeout(120);
+    state = await diagnostics(page);
+    assert(state.mrFeast.pursuit.active?.reason === "witnessed", `the flee scenario should open with a witnessed pursuit; got ${JSON.stringify(state.mrFeast.pursuit.active)}`);
+    await page.evaluate(() => {
+      const entryId = window.MrFeastFresh.getMrFeastState().pursuit.active?.entryId;
+      if (entryId) window.MrFeastFresh.tamperForQA(entryId, false);
+      // The scenario proves cross-floor pathing and the basement capture; the
+      // give-up tuning itself is covered by the hidden-player section above.
+      window.MrFeastFresh.setPursuitGiveUpForQA(90);
+      window.MrFeastFresh.teleport("archive");
+    });
+    const fleeRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(240));
+    const fleeState = await diagnostics(page);
+    assert(
+      fleeRun.outcome === "game-over",
+      `with the stair unlocked he should chase into the basement and capture; got ${JSON.stringify({ fleeRun, mrFeast: fleeState.mrFeast })}`,
+    );
+    assert(fleeRun.teleports === 0, "the cross-floor chase must not teleport Mr. Feast");
+    state = fleeState;
+    assert(state.gameOver && state.gameOver.floor === "BASEMENT", `the flee capture should land in the basement; got ${JSON.stringify(state.gameOver)}`);
+    await page.evaluate(() => {
+      window.MrFeastFresh.clearGameOverForQA();
+      window.MrFeastFresh.setDevModeForQA(false);
+    });
+
     assert(desktopErrors.length === 0, `desktop console errors: ${desktopErrors.join(" | ")}`);
     await page.close();
 
@@ -273,7 +361,7 @@ async function run() {
     const mobile = await bootPage(browser, { width: 390, height: 844 }, mobileErrors);
     await mobile.evaluate(() => {
       window.MrFeastFresh.teleport("archive");
-      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 3.0, y: -3.8, z: 4.6, yaw: 0 });
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 5.5, y: -3.8, z: 7.2, yaw: -Math.PI / 2 });
       window.MrFeastFresh.reportInfractionForQA("portrait");
       return window.MrFeastFresh.runMrFeastPursuitForQA(120);
     });

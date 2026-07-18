@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-resume-sound-fs-9";
+  const MANSION_RUNTIME_VERSION = "20260718-basement-pursuit-10";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -988,6 +988,7 @@
     mrFeastPatrolPoint("basement-bulk-door", 11.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { segmentKind: "door", door: "bulk storage door" }),
     mrFeastPatrolPoint("basement-bulk-front", 11.2, FLOOR.BASEMENT, -6.2, MR_FEAST_LEVEL.BASEMENT, "BULK STORAGE", { pause: 0.7 }),
     mrFeastPatrolPoint("basement-bulk-door-out", 11.2, FLOOR.BASEMENT, -4.9, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR", { segmentKind: "door", door: "bulk storage door" }),
+    mrFeastPatrolPoint("basement-bulk-corridor-return", 11.2, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
     mrFeastPatrolPoint("basement-rear-cross-return", 0, FLOOR.BASEMENT, -4.05, MR_FEAST_LEVEL.BASEMENT, "REAR CROSS-CORRIDOR"),
     mrFeastPatrolPoint("basement-corridor-return", 0, FLOOR.BASEMENT, 0, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
     mrFeastPatrolPoint("basement-corridor-north-return", 0, FLOOR.BASEMENT, 7.2, MR_FEAST_LEVEL.BASEMENT, "BASEMENT CORRIDOR"),
@@ -2913,6 +2914,31 @@
       return true;
     }
 
+    resolveCharacterMovement(start, requested, radius, height) {
+      const horizontal = Math.hypot(requested.x, requested.z);
+      const angles = horizontal > 0.000001
+        ? [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2]
+        : [0];
+      for (const angle of angles) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const movement = {
+          x: requested.x * cos - requested.z * sin,
+          y: requested.y,
+          z: requested.x * sin + requested.z * cos,
+        };
+        const end = {
+          x: start.x + movement.x,
+          y: start.y + movement.y,
+          z: start.z + movement.z,
+        };
+        if (this.canCharacterTraverse(start, end, radius, height)) {
+          return { ...movement, avoided: angle !== 0, blocked: false };
+        }
+      }
+      return { x: 0, y: 0, z: 0, avoided: false, blocked: true };
+    }
+
     addFixedRamp(x, centerZ, lowY, highY, run, width, directionZ) {
       const lowZ = centerZ - directionZ * run / 2;
       const highZ = centerZ + directionZ * run / 2;
@@ -3076,6 +3102,9 @@
       this.pursuitTargetNodeId = null;
       this.pursuitTargetPlayerPosition = null;
       this.pursuitSightCheckRemaining = 0;
+      this.pursuitStallSeconds = 0;
+      this.pursuitApproachSuppressedRemaining = 0;
+      this.pursuitBlockedEdges = new Map();
       this.pursuitShortcuts = null;
       this.pursuitShortcutEdgeCount = 0;
       this.trespassDwell = 0;
@@ -3110,19 +3139,31 @@
         this.root.position.z += dz;
         return Math.hypot(dx, dy, dz);
       }
-      this.syncCollider();
-      const start = this.root.position;
-      const end = { x: start.x + dx, y: start.y + dy, z: start.z + dz };
-      const requestedDistance = Math.hypot(dx, dy, dz);
-      const radius = Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2;
-      const clear = physics.canCharacterTraverse(start, end, radius, MR_FEAST_NPC.colliderHeight);
-      const movedDistance = clear ? requestedDistance : 0;
-      if (!clear) this.collisionBlockedSteps += 1;
-      if (clear) {
+      // Stair and ramp routes already run inside dedicated rail/ramp proxies;
+      // applying a floor-level furniture footprint there can mistake the
+      // landing guard for furniture and trap the authored vertical path.
+      if (this.onStairs) {
         this.root.position.x += dx;
         this.root.position.y += dy;
         this.root.position.z += dz;
+        this.syncCollider();
+        return Math.hypot(dx, dy, dz);
       }
+      this.syncCollider();
+      const start = this.root.position;
+      const requestedDistance = Math.hypot(dx, dy, dz);
+      const radius = Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2;
+      const movement = physics.resolveCharacterMovement(
+        start,
+        { x: dx, y: dy, z: dz },
+        radius,
+        MR_FEAST_NPC.colliderHeight,
+      );
+      const movedDistance = Math.hypot(movement.x, movement.y, movement.z);
+      if (movement.blocked || movement.avoided) this.collisionBlockedSteps += 1;
+      this.root.position.x += movement.x;
+      this.root.position.y += movement.y;
+      this.root.position.z += movement.z;
       this.syncCollider();
       return movedDistance;
     }
@@ -3143,8 +3184,14 @@
       this.root.rotation.y = Math.atan2(axis.x, axis.z);
       this.syncCollider();
       const requested = 1.1;
-      const moved = this.moveWithCollision(axis.x * requested, 0, axis.z * requested);
-      const blocked = moved + 0.0001 < requested;
+      const radius = Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2;
+      const blocked = !physics.canCharacterTraverse(
+        this.root.position,
+        { x: this.root.position.x + axis.x * requested, y: floorY, z: this.root.position.z + axis.z * requested },
+        radius,
+        MR_FEAST_NPC.colliderHeight,
+      );
+      const moved = blocked ? 0 : requested;
       this.root.position.copy(originalPosition);
       this.root.rotation.y = originalYaw;
       this.syncCollider();
@@ -3915,6 +3962,9 @@
         const extra = shortcuts?.get(current) || [];
         for (const edge of extra.length ? [...authored, ...extra] : authored) {
           if (!unvisited.has(edge.to) || !this.responseDoorAvailable(edge.door)) continue;
+          // Chase planning avoids segments that recently stalled against
+          // furniture, forcing a genuine reroute (e.g. a room's other door).
+          if (useShortcuts && this.pursuitBlockedEdges?.has(`${current}>${edge.to}`)) continue;
           const nextDistance = currentDistance + edge.cost;
           if (nextDistance >= (distances.get(edge.to) ?? Infinity)) continue;
           distances.set(edge.to, nextDistance);
@@ -4034,18 +4084,25 @@
       }, null).id;
     }
 
+    nearestResponseFloorY(y) {
+      const floors = [FLOOR.BASEMENT, FLOOR.MAIN, FLOOR.UPPER];
+      return floors.reduce((best, floorY) => (Math.abs(floorY - y) < Math.abs(best - y) ? floorY : best), FLOOR.MAIN);
+    }
+
     nearestResponseTargetId(position, sameFloorBias = false) {
       // Raw 3D distance lets a node on the floor directly above or below win
       // over a same-floor node one room away; a pursuit targeted that way
-      // strands him overhead. With the bias on, same-floor nodes are the only
-      // candidates unless none exist at all.
+      // strands him overhead. The bias classifies the query and every node by
+      // their nearest floor plane — not raw height — so a wall-hung portrait
+      // at y≈2.15 still targets main-floor nodes instead of stair landings.
       const nodes = [...this.responseGraph.nodes.values()];
       const pick = (candidates) => candidates.reduce((nearest, node) => {
         const distance = Math.hypot(node.x - position.x, node.y - position.y, node.z - position.z);
         return !nearest || distance < nearest.distance ? { id: node.id, distance } : nearest;
       }, null)?.id || null;
       if (sameFloorBias) {
-        const sameFloor = nodes.filter((node) => Math.abs(node.y - position.y) < 1.2);
+        const floorY = this.nearestResponseFloorY(position.y);
+        const sameFloor = nodes.filter((node) => Math.abs(node.y - floorY) < 0.6);
         const biased = pick(sameFloor);
         if (biased) return biased;
       }
@@ -4359,20 +4416,16 @@
         this.resolveCatch(p, feetY);
         return;
       }
-      // The give-up clock only counts unseen time: while he still personally
-      // sees the runner, or a hostile camera still records them, the chase
-      // stays fresh.
+      // The give-up clock measures a lost trail, not elapsed effort: seeing
+      // (or hostile-recording) the runner refreshes it, and frames where he
+      // is actively closing the route hold it steady. It drains only while
+      // he is stalled, blocked, or idling with no idea where you went.
       this.pursuitSightCheckRemaining = (this.pursuitSightCheckRemaining ?? 0) - dt;
       if (this.pursuitSightCheckRemaining <= 0) {
         this.pursuitSightCheckRemaining = MR_FEAST_PURSUIT.sightRefreshSeconds;
         const stillSeen = this.canSeePlayerAct()
           || (Boolean(cameraSecurity?.isRecordingPlayer()) && !state.security.permitted);
         if (stillSeen) this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
-      }
-      this.pursuit.giveUpRemaining -= dt;
-      if (this.pursuit.giveUpRemaining <= 0) {
-        this.givePursuitUp();
-        return;
       }
       this.pursuit.repathRemaining -= dt;
       // Mid-path retargeting: when the runner has moved to a different part
@@ -4390,7 +4443,43 @@
           this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
         }
       }
+      this.pursuitApproachSuppressedRemaining = Math.max(0, (this.pursuitApproachSuppressedRemaining ?? 0) - dt);
+      const beforeX = this.root.position.x;
+      const beforeZ = this.root.position.z;
       this.updateSecurityPath(dt);
+      // Since he now collides with furniture, a chase leg can physically
+      // stall (a desk between him and the runner, a pulled chair in a
+      // doorway). Sustained lack of progress while trying to move falls back
+      // to graph pathing instead of running in place forever.
+      for (const [edgeKey, remaining] of this.pursuitBlockedEdges) {
+        if (remaining - dt <= 0) this.pursuitBlockedEdges.delete(edgeKey);
+        else this.pursuitBlockedEdges.set(edgeKey, remaining - dt);
+      }
+      const frameMoved = Math.hypot(this.root.position.x - beforeX, this.root.position.z - beforeZ);
+      const progressing = frameMoved >= this.pursuitSpeed() * dt * 0.6;
+      if (!this.pursuit.active) return;
+      if (!progressing) {
+        this.pursuit.giveUpRemaining -= dt;
+        if (this.pursuit.giveUpRemaining <= 0) {
+          this.givePursuitUp();
+          return;
+        }
+      }
+      if (this.moving && frameMoved < this.pursuitSpeed() * dt * 0.2) {
+        this.pursuitStallSeconds = (this.pursuitStallSeconds ?? 0) + dt;
+        if (this.pursuitStallSeconds >= 0.7) {
+          this.pursuitStallSeconds = 0;
+          this.pursuitApproachSuppressedRemaining = 1.5;
+          const stalledStep = this.responsePath[0]?.node?.id;
+          if (stalledStep && this.responseCurrentNodeId) {
+            this.pursuitBlockedEdges.set(`${this.responseCurrentNodeId}>${stalledStep}`, 20);
+            this.pursuitBlockedEdges.set(`${stalledStep}>${this.responseCurrentNodeId}`, 20);
+          }
+          this.repathPursuit();
+        }
+      } else {
+        this.pursuitStallSeconds = 0;
+      }
     }
 
     updateTrespassWatch(dt) {
@@ -4429,7 +4518,8 @@
       const dz = p.z - this.root.position.z;
       const horizontal = Math.hypot(dx, dz);
       const sameFloor = Math.abs(feetY - this.root.position.y) < 1.2;
-      if (!state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.approachRadiusMeters && horizontal > 0.0001) {
+      const approachSuppressed = (this.pursuitApproachSuppressedRemaining ?? 0) > 0;
+      if (!approachSuppressed && !state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.approachRadiusMeters && horizontal > 0.0001) {
         this.faceTarget({ x: p.x, z: p.z });
         const facingAlignment = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
         if (facingAlignment >= MR_FEAST_NPC.movementAlignment) {
@@ -4437,9 +4527,13 @@
             Math.max(0, horizontal - MR_FEAST_PURSUIT.catchRadiusMeters * 0.55),
             this.pursuitSpeed() * dt,
           );
-          const movedDistance = this.moveWithCollision(dx / horizontal * step, 0, dz / horizontal * step);
-          this.responseDistance += movedDistance;
-          this.moving = movedDistance > 0.0001;
+          // The stall watchdog in updatePursuit treats a blocked "moving"
+          // frame as evidence to suppress this straight line and try the
+          // graph instead, so report the intent to move even when furniture
+          // absorbs the whole step.
+          this.moveWithCollision(dx / horizontal * step, 0, dz / horizontal * step);
+          this.responseDistance += step;
+          this.moving = step > 0.0001;
           this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
         } else {
           this.moving = false;
@@ -4969,6 +5063,9 @@
       this.pursuitTargetNodeId = null;
       this.pursuitTargetPlayerPosition = null;
       this.pursuitSightCheckRemaining = 0;
+      this.pursuitStallSeconds = 0;
+      this.pursuitApproachSuppressedRemaining = 0;
+      this.pursuitBlockedEdges = new Map();
       this.trespassDwell = 0;
       this.trespassCheckRemaining = 0;
       this.qaPursuitGiveUpOverride = null;
@@ -6340,13 +6437,18 @@
       if (!physics || !entry.colliderBody || !entry.colliderEnabled) return { x: dx, z: dz, blocked: false };
       this.syncCollider(entry, false);
       const start = entry.root.position;
-      const end = { x: start.x + dx, y: start.y, z: start.z + dz };
       const radius = Math.max(MANSION_CONTESTANTS.colliderWidth, MANSION_CONTESTANTS.colliderDepth) / 2;
-      const blocked = !physics.canCharacterTraverse(start, end, radius, entry.colliderHeight);
-      if (blocked) entry.furnitureBlockedSteps += 1;
-      if (!blocked) entry.root.position.set(end.x, end.y, end.z);
+      const movement = physics.resolveCharacterMovement(
+        start,
+        { x: dx, y: 0, z: dz },
+        radius,
+        entry.colliderHeight,
+      );
+      if (movement.blocked || movement.avoided) entry.furnitureBlockedSteps += 1;
+      entry.root.position.x += movement.x;
+      entry.root.position.z += movement.z;
       this.syncCollider(entry);
-      return { x: blocked ? 0 : dx, z: blocked ? 0 : dz, blocked };
+      return { x: movement.x, z: movement.z, blocked: movement.blocked };
     }
 
     probeFurnitureCollisionForQA(id) {
@@ -6366,15 +6468,21 @@
       entry.root.rotation.y = Math.atan2(axis.x, axis.z);
       this.syncCollider(entry, false);
       const requested = 1.1;
-      const result = this.moveWithCollision(entry, axis.x * requested, axis.z * requested);
+      const radius = Math.max(MANSION_CONTESTANTS.colliderWidth, MANSION_CONTESTANTS.colliderDepth) / 2;
+      const blocked = !physics.canCharacterTraverse(
+        entry.root.position,
+        { x: entry.root.position.x + axis.x * requested, y: floorY, z: entry.root.position.z + axis.z * requested },
+        radius,
+        entry.colliderHeight,
+      );
       entry.root.position.copy(originalPosition);
       entry.root.rotation.y = originalYaw;
       this.syncCollider(entry, false);
       return {
         id,
-        blocked: result.blocked,
+        blocked,
         requested,
-        moved: Number(Math.hypot(result.x, result.z).toFixed(4)),
+        moved: blocked ? 0 : requested,
       };
     }
 

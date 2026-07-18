@@ -93,6 +93,11 @@ async function run() {
   assert(/readingRoomSofaHeightScale:\s*0\.77/.test(runtimeSource), "runtime is missing the lower Reading Room sofa tuning value");
   assert(/regularChairHeightScale:\s*0\.86/.test(runtimeSource), "runtime is missing the fitted regular-chair height tuning value");
   assert(/getSeatingState/.test(runtimeSource), "runtime is missing focused seating diagnostics");
+  assert(/sanitizeLocomotionClip/.test(runtimeSource), "contestant walk clips must strip the source arm tracks before playback");
+  assert(/canCharacterOccupy/.test(runtimeSource), "NPC movement must reject fixed furniture footprints rather than relying on route clearance alone");
+  assert(/probeFurnitureCollisionForQA/.test(runtimeSource), "runtime is missing deterministic NPC furniture-collision QA");
+  assert(/preserveContestantModelOrientation/.test(runtimeSource), "contestant GLBs must preserve GLTFLoader's imported Y-up orientation");
+  assert(!/model\.rotation\.x\s*=\s*-Math\.PI\s*\/\s*2/.test(runtimeSource), "contestant models must not receive a second X-axis conversion after GLTFLoader");
 
   for (const id of contestantIds) {
     const spec = manifest.characters.find((entry) => entry.id === id);
@@ -249,6 +254,8 @@ async function run() {
     // --- Three deterministic walk-idle-sit routines --------------------------
     for (const id of contestantIds) {
       const initial = entryById(await diagnostics(desktop), id);
+      assert(initial?.size?.y >= 1.65 && initial.size.y <= 1.9, `${id} should retain its authored human-scale vertical height; got ${JSON.stringify(initial?.size)}`);
+      assert(initial.size.y > initial.size.x && initial.size.y > initial.size.z, `${id} must remain upright after GLTF loading; got ${JSON.stringify(initial.size)}`);
       assert(initial?.route?.points >= 3, `${id} needs a compact multi-point route; got ${JSON.stringify(initial?.route)}`);
       assert(initial.route.length >= 1 && initial.route.length <= 8, `${id} route should remain room-scale; got ${initial.route.length}m`);
       assert(initial.route.seatStops >= 1 && initial.route.seatPauseSeconds >= 30 && initial.route.estimatedSeatedShare >= 0.6 && initial.route.behavior === "sit-dominant-hangout", `${id} should spend most of the routine seated, with walking used only between hangouts; got ${JSON.stringify(initial.route)}`);
@@ -297,6 +304,13 @@ async function run() {
         assert(chairFit.maximumThighCushionOverlapRatio <= 0.3 && chairFit.maximumToeFloorDistance <= 0.08, `${id} should avoid a buried/perched chair pose and keep floor-near boots; got ${JSON.stringify(chairFit)}`);
       }
     }
+
+    // Kinematic character controllers, not only authored route clearance,
+    // must stop every living character against the mansion's furniture boxes.
+    const contestantCollision = await desktop.evaluate(() => window.MrFeastFresh.probeContestantFurnitureCollisionForQA("mara-voss"));
+    const mrFeastCollision = await desktop.evaluate(() => window.MrFeastFresh.probeMrFeastFurnitureCollisionForQA());
+    assert(contestantCollision?.blocked === true && contestantCollision.moved < contestantCollision.requested, `contestant furniture collision should reject the blocked step; got ${JSON.stringify(contestantCollision)}`);
+    assert(mrFeastCollision?.blocked === true && mrFeastCollision.moved < mrFeastCollision.requested, `Mr. Feast furniture collision should reject the blocked step; got ${JSON.stringify(mrFeastCollision)}`);
 
     // Conversations must still bind to the contestant's live moving root.
     await desktop.evaluate(() => window.MrFeastFresh.placePlayerNearContestantForQA("mara-voss", 1.6));

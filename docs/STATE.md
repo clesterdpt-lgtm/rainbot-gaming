@@ -6,7 +6,7 @@
 
 **34 — Basement Key Trail** remains preserved with automated acceptance complete and the subtle shelf-book discovery awaiting user playtest.
 
-**35 — Player Mobility, Inventory, and Test Menu** is in progress with automated acceptance complete and sprint/crouch pacing awaiting user playtest.
+**35 — Player Mobility, Inventory, and Test Menu** is in progress with automated acceptance complete and sprint/crouch pacing awaiting user playtest. The intro-menu Load regression is fixed and cold-load covered: saves now restore atomically without the front-door welcome, malformed payloads remain safely at the intro, and focused Chromium measured a 4.1 ms restore with an 18.1 ms next frame.
 
 **36 — Camera Surveillance and Alarm Investigation** is in progress with automated acceptance complete and stealth timing, feedback, and Mr. Feast search tension awaiting user playtest.
 

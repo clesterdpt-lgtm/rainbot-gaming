@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-intro-save-load-1";
+  const MANSION_RUNTIME_VERSION = "20260718-intro-save-load-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -182,6 +182,9 @@
   const MOBILE_RENDER_WIDTH = 720;
   const PRE_ENTRY_FRAME_INTERVAL_MS = 250;
   const BALANCED_FRAME_INTERVAL_MS = 1000 / 30;
+  const OPTIONAL_CHARACTER_LOADING = Object.freeze({
+    postStartDelayMs: 300,
+  });
   const WALL_HEIGHT = 4.15;
   const UPPER_HEIGHT = 3.3;
   const NIGHT_LIGHTING = Object.freeze({
@@ -2204,6 +2207,8 @@
   let speechSystem = null;
   let openingWelcomeSystem = null;
   let workroomCodeClue = null;
+  let optionalCharacterLoadTimer = 0;
+  let optionalCharacterLoadsStarted = false;
   let hemisphereLight = null;
   let moonLight = null;
   // Every opening in the mansion shell the storm can be heard through:
@@ -2307,8 +2312,31 @@
   }
 
   function handleIntroLoadClick() {
-    if (!state.ready || !mansionSaveSlot?.has()) return;
-    startExploration({ fromSave: true });
+    if (!state.ready) return;
+    loadMansionGame();
+  }
+
+  function startOptionalCharacterLoads() {
+    if (optionalCharacterLoadsStarted) return;
+    optionalCharacterLoadsStarted = true;
+    if (optionalCharacterLoadTimer) {
+      clearTimeout(optionalCharacterLoadTimer);
+      optionalCharacterLoadTimer = 0;
+    }
+    // Characters are optional visual layers. Begin their large GLB downloads
+    // only after the base estate has painted so parsing cannot trap an enabled
+    // Start/Load button behind a long main-thread task.
+    void mrFeastNpc?.load();
+    void mansionContestants?.load();
+  }
+
+  function scheduleOptionalCharacterLoads(delayMs) {
+    if (optionalCharacterLoadsStarted) return;
+    if (optionalCharacterLoadTimer) clearTimeout(optionalCharacterLoadTimer);
+    optionalCharacterLoadTimer = window.setTimeout(
+      startOptionalCharacterLoads,
+      Math.max(0, Number(delayMs) || 0),
+    );
   }
 
   function textureUrl(name) {
@@ -19143,8 +19171,8 @@
     return parts.length ? `Last save: ${parts.join(" · ")}` : "Saved game ready to continue.";
   }
 
-  function updateIntroMenuControls() {
-    const hasSave = Boolean(mansionSaveSlot?.has());
+  function updateIntroMenuControls(saved = mansionSaveSlot?.read() || null) {
+    const hasSave = Boolean(saved);
     const ready = Boolean(state.ready && !state.loadFailed && !state.started);
     if (dom.introLoad) {
       if (!ready) {
@@ -19170,7 +19198,7 @@
     if (dom.introSaveStatus) {
       if (ready && hasSave) {
         dom.introSaveStatus.hidden = false;
-        dom.introSaveStatus.textContent = formatIntroSaveSummary(mansionSaveSlot.read());
+        dom.introSaveStatus.textContent = formatIntroSaveSummary(saved);
       } else {
         dom.introSaveStatus.hidden = true;
         dom.introSaveStatus.textContent = "";
@@ -19191,19 +19219,19 @@
     speechSystem?.dismiss();
   }
 
-  function applyLoadedSaveState() {
-    const saved = mansionSaveSlot?.read();
+  function applyLoadedSaveState(saved = mansionSaveSlot?.read() || null) {
     if (!restoreMansionSave(saved)) return false;
     if (state.gameOver) clearMansionGameOver();
     tamperSystem?.resetAllForLoad();
-    mrFeastSystem?.recoverAfterLoad();
+    mrFeastNpc?.recoverAfterLoad();
     speechSystem?.dismiss();
     return true;
   }
 
-  function startExploration({ fromSave = false } = {}) {
+  function startExploration({ fromSave = false, saved = null } = {}) {
     if (!state.ready || state.started) return false;
-    if (fromSave && !mansionSaveSlot?.has()) return false;
+    const loadSnapshot = fromSave ? (saved || mansionSaveSlot?.read() || null) : null;
+    if (fromSave && (!loadSnapshot || !applyLoadedSaveState(loadSnapshot))) return false;
     state.started = true;
     // Do not let the deliberately low-rate intro preview pollute the live FPS
     // sample or deliver a large accumulated simulation step on entry.
@@ -19230,18 +19258,7 @@
     if (fromSave) {
       // Continue mid-investigation without replaying the front-door briefing.
       skipOpeningWelcomeForLoad();
-      if (!applyLoadedSaveState()) {
-        // Corrupt/incompatible save: fall through to a fresh welcome start.
-        if (openingWelcomeSystem) {
-          openingWelcomeSystem.completed = false;
-          openingWelcomeSystem.cancelledReason = null;
-          openingWelcomeSystem.phase = "idle";
-        }
-        openingWelcomeSystem?.start();
-        setMenuStatus("Save could not be restored. Starting a new game.");
-      } else {
-        setMenuStatus("Saved game restored.");
-      }
+      setMenuStatus("Saved game restored.");
     } else {
       openingWelcomeSystem?.start();
     }
@@ -19249,6 +19266,7 @@
     requestPointerLock();
     if (audioSystem) void audioSystem.unlock().catch(() => {});
     updateMenuControls();
+    scheduleOptionalCharacterLoads(OPTIONAL_CHARACTER_LOADING.postStartDelayMs);
     return true;
   }
 
@@ -19458,16 +19476,18 @@
   function restoreMansionSave(saved) {
     const data = saved?.data || saved;
     if (!data || !data.playerPosition || !data.contestant13 || !physics || !contestant13Quest) return false;
+    const playerPosition = data.playerPosition;
+    const x = Number(playerPosition.x);
+    const y = Number(playerPosition.y);
+    const z = Number(playerPosition.z);
+    // Validate the complete required transform before touching quest/world
+    // presentation so a malformed save can never half-restore a fresh game.
+    if (![x, y, z].every(Number.isFinite)) return false;
     mansionContestants?.clearTransientSeating();
     seatingSystem?.clearTransientOccupancy();
     state.devMode = false;
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
-    const playerPosition = data.playerPosition;
-    const x = Number(playerPosition.x);
-    const y = Number(playerPosition.y);
-    const z = Number(playerPosition.z);
-    if (![x, y, z].every(Number.isFinite)) return false;
     physics.verticalVelocity = 0;
     physics.playerBody.setTranslation({ x, y, z }, true);
     physics.playerBody.setNextKinematicTranslation({ x, y, z });
@@ -19500,15 +19520,32 @@
   }
 
   function loadMansionGame() {
+    const saved = mansionSaveSlot?.read() || null;
+    if (!saved) {
+      setMenuStatus("No compatible save found.");
+      updateMenuControls();
+      if (!state.started && dom.introSaveStatus) {
+        dom.introSaveStatus.hidden = false;
+        dom.introSaveStatus.textContent = "No compatible save could be found. Start a new game instead.";
+      }
+      return false;
+    }
     // From the main intro menu, loading must also begin exploration.
     if (!state.started) {
-      const started = startExploration({ fromSave: true });
-      if (!started) setMenuStatus("No compatible save found.");
+      const started = startExploration({ fromSave: true, saved });
+      if (!started) {
+        setMenuStatus("Save could not be restored.");
+        updateMenuControls();
+        if (dom.introSaveStatus) {
+          dom.introSaveStatus.hidden = false;
+          dom.introSaveStatus.textContent = "This save could not be restored. Start a new game instead.";
+        }
+      }
       return started;
     }
     // Loading is time travel: any capture, pursuit, errand, or tilted
     // decor in flight belongs to the abandoned timeline.
-    const loaded = applyLoadedSaveState();
+    const loaded = applyLoadedSaveState(saved);
     setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
     if (loaded) setMenuOpen(false);
     updateMenuControls();
@@ -19520,7 +19557,8 @@
   }
 
   function updateMenuControls() {
-    const hasSave = Boolean(mansionSaveSlot?.has());
+    const saved = mansionSaveSlot?.read() || null;
+    const hasSave = Boolean(saved);
     const welcomeActive = Boolean(openingWelcomeSystem?.active);
     if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
     if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode || welcomeActive;
@@ -19536,7 +19574,7 @@
       dom.menuMaximize.title = fullscreen ? "Exit fullscreen" : "Enter fullscreen";
       dom.menuMaximize.setAttribute("aria-pressed", String(fullscreen));
     }
-    updateIntroMenuControls();
+    updateIntroMenuControls(saved);
     updateAudioButton();
   }
 
@@ -21954,14 +21992,7 @@
       monitorWallSystem = new WorkroomMonitorWallSystem(workroomScene, cameraSecurity);
       syncWorkroomDoorState();
       mrFeastNpc = new MrFeastWanderer();
-      // The character is an optional test layer: it loads after the mansion is
-      // usable and a failed GLB never blocks exploration or the boot watchdog.
-      void mrFeastNpc.load();
       mansionContestants = new MansionContestantSystem();
-      // The social roster follows the same optional post-geometry contract:
-      // three failed downloads can never hold the mansion behind its loading
-      // veil, while focused QA can still wait for the settled roster.
-      void mansionContestants.load();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();
       stormSystem = new StormSystem();
@@ -21974,6 +22005,11 @@
       updateLocation();
       syncLightRendering();
       setLoading("Preparing the first frame", 96);
+      // Compile and render the base estate while the loading veil still owns
+      // the UI. Once Start/Load becomes actionable, the first frame is already
+      // available and optional character parsing cannot masquerade as a hung
+      // save restore.
+      renderer.render(scene, camera);
       state.ready = true;
       state.startupPhase = "Ready";
       state.startupReadyMs = performance.now() - startupStartedAt;
@@ -22054,9 +22090,11 @@
       }
       updateIntroMenuControls();
       setLoading("Ready", 100);
-      // Give the browser one complete paint with the loading veil removed and
-      // the entry button enabled before the first Three.js shader compilation.
-      requestAnimationFrame(() => requestAnimationFrame(animate));
+      requestAnimationFrame(animate);
+      // QA autostart bypasses startExploration(), so explicitly preserve its
+      // optional-character behavior. Normal intro sessions wait for the
+      // player's Start/Load choice and cannot be frozen by background parsing.
+      if (state.started) scheduleOptionalCharacterLoads(OPTIONAL_CHARACTER_LOADING.postStartDelayMs);
     } catch (error) {
       console.error("The Hollow Estate failed to initialize", error);
       clearTimeout(initWatchdog);

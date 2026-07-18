@@ -161,6 +161,7 @@ async function run() {
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "escape-menu-desktop.png") });
 
     await page.locator("#mansion-menu-maximize").click();
+    await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.maximized, null, { timeout: 3000 });
     state = await diagnostics(page);
     assert(state.menus.maximized, "Maximize should expand the mansion stage");
     assert(await page.locator("#mansion-stage").evaluate((element) => getComputedStyle(element).position === "fixed"), "Maximize should pin the stage over the viewport");
@@ -200,7 +201,9 @@ async function run() {
     await page.screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-desktop.png") });
 
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).menus.inventoryOpen, null, { timeout: 3000 });
     await page.keyboard.press("Escape");
+    await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen, null, { timeout: 3000 });
     await page.locator("#mansion-menu-load").click();
     await page.waitForTimeout(150);
     state = await diagnostics(page);

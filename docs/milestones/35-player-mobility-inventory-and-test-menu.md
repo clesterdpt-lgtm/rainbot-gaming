@@ -39,7 +39,7 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 - [x] A fresh playthrough shows no left-side case file or Library-search objective; the investigation HUD appears only after the first clue is discovered. — tests: `scripts/test-mr-feast-player-systems.mjs::withheld opening guidance`, `scripts/test-mr-feast-contestant-13.mjs::discovery-first objective HUD`, and `scripts/test-mr-feast-renovation.mjs::49 discovery-first HUD`
 - [x] Every current carried object has a distinct, decorative SVG illustration in a readable item card, and every recovered clue is rendered as handwriting on one ruled-paper notepad at desktop and mobile widths. — tests: `scripts/test-mr-feast-player-systems.mjs::illustrated dossier` and `scripts/test-mr-feast-renovation.mjs::50 illustrated dossier`
 - [x] Pressing `Escape` opens a focus-safe mansion menu, releases pointer lock, blocks simulation, resumes cleanly, and exposes working Maximize, Save, Load, and Dev Mode actions. — test: `scripts/test-mr-feast-player-systems.mjs::escape menu controls`
-- [x] Save/Load restores player transform plus idempotent Contestant 13 story, inventory, journal, and story-world presentation without saving transient actions or Dev Mode. — test: `scripts/test-mr-feast-player-systems.mjs::save and load round trip`
+- [x] Save/Load restores player transform plus idempotent Contestant 13 story, inventory, journal, and story-world presentation without saving transient actions or Dev Mode, including a cold Load from the main intro. — tests: `scripts/test-mr-feast-player-systems.mjs::save and load round trip` and `scripts/test-mr-feast-intro-save-load.mjs::cold main-menu restore and invalid-save containment`
 - [x] Dev Mode is reversible, grants every current item and clue, opens the basement/Archive test gates, leaves `relaySabotaged` false, and restores the exact pre-dev quest snapshot when disabled. — test: `scripts/test-mr-feast-player-systems.mjs::reversible dev inventory grant`
 - [x] The mansion boots without new console errors and the existing renovation, Contestant 13, and basement-key regressions retain their prior results. — tests: `node scripts/test-mr-feast-player-systems.mjs`, `node scripts/test-mr-feast-renovation.mjs`, `node scripts/test-mr-feast-contestant-13.mjs`, and `node scripts/test-mr-feast-basement-key-trail.mjs`
 
@@ -63,3 +63,14 @@ User enters the mansion without an explicit Library direction, discovers the fir
 - Automated acceptance completed on 2026-07-15. The milestone remains in progress only for the user's sprint/crouch pacing playtest.
 - The 2026-07-16 discovery refinement moved the dossier to `Tab` and withheld the opening case-file direction until the shelf book is found.
 - The 2026-07-16 visual refinement gives the shovel, B-13 key, badge, and tape distinct inline SVG illustrations; the evidence trail now reads from a warm ruled notepad with mobile-safe internal scrolling.
+
+## Post-launch fix — reliable main-menu Load
+
+The first intro-menu Load implementation called an undeclared `mrFeastSystem` name after applying the saved player and quest state. That threw a browser error and left the intro hidden in a half-finished transition. The repaired path now uses the authoritative `mrFeastNpc`, reads one versioned save snapshot once, validates its required transform before mutating quest/world state, and leaves an invalid save safely at the intro with a clear Start-new fallback.
+
+The base estate also renders once before Start/Load becomes actionable, while optional character GLBs begin shortly after exploration starts. This keeps character parsing from competing with the load click. Focused Chromium QA measured a 4.1 ms restore task and an 18.1 ms next frame, with the saved Archive position, crouch/energy state, skipped welcome, confirmation copy, and zero browser errors all verified.
+
+- `node scripts/test-mr-feast-intro-save-load.mjs` — passed valid cold-menu restore, malformed-save containment, 100 ms restore-task budget, 250 ms next-frame budget, screenshots, and zero console errors.
+- `node scripts/test-mr-feast-player-systems.mjs` — passed the original in-session save/dev-mode round trip after its fullscreen assertion was made asynchronous like the production control.
+- `node scripts/test-mr-feast-caught-pursuit.mjs` — passed the shared game-over Load recovery path.
+- `node scripts/test-mr-feast-contestant-13.mjs` and `node scripts/test-mr-feast-renovation.mjs` — passed adjacent progression and static mansion coverage.

@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260717-pointer-resume-book-7";
+  const MANSION_RUNTIME_VERSION = "20260718-pointer-resume-book-8";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1042,7 +1042,6 @@
     movementAlignment: 0.975,
     arrivalRadius: 0.015,
     fadeSeconds: 0.2,
-    sourceUpAxis: "Z",
     locomotionArmBones: Object.freeze(["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]),
     placements: Object.freeze([
       Object.freeze({
@@ -2879,7 +2878,14 @@
 
     moveKinematicCharacter(kinematic, requested) {
       if (!kinematic?.body || !kinematic?.collider) return requested;
-      this.controller.computeColliderMovement(kinematic.collider, requested);
+      // Player/NPC spacing is handled by their behavior. Restrict NPC motion
+      // correction to fixed mansion geometry so other kinematic actors cannot
+      // stall a room routine while furniture and walls still block movement.
+      this.controller.computeColliderMovement(
+        kinematic.collider,
+        requested,
+        this.R.QueryFilterFlags.EXCLUDE_KINEMATIC,
+      );
       const corrected = this.controller.computedMovement();
       const position = kinematic.body.translation();
       const next = {
@@ -6019,8 +6025,10 @@
       });
     }
 
-    normalizeContestantModelUpAxis(model) {
-      if (MANSION_CONTESTANTS.sourceUpAxis === "Z") model.rotation.x = -Math.PI / 2;
+    preserveContestantModelOrientation(model) {
+      // GLTFLoader has already converted the asset into Three.js's Y-up
+      // coordinate system. Applying the Blender-source Z-up correction again
+      // lays the character on its side and makes its fitted scale enormous.
       model.updateMatrixWorld(true);
       return model;
     }
@@ -6637,7 +6645,7 @@
       ]);
       const model = THREE.SkeletonUtils.clone(base.scene);
       model.name = `contestant-${entry.id}-model`;
-      this.normalizeContestantModelUpAxis(model);
+      this.preserveContestantModelOrientation(model);
       const bounds = new THREE.Box3().setFromObject(model);
       const initialSize = bounds.getSize(new THREE.Vector3());
       const targetHeight = Number(spec.heightMeters) || 1.75;
@@ -8720,6 +8728,8 @@
       clearMovementInput();
       // Keep pointer lock while reading so the system cursor never pops in over
       // the page. Close with E / Escape; look input is gated while the book is open.
+      // Critical: do NOT inert the canvas — inerting the pointer-lock target
+      // forces browsers to drop lock and show the OS cursor.
       if (dom.bookTitle) dom.bookTitle.textContent = placement.title;
       if (dom.bookAuthor) dom.bookAuthor.textContent = `by ${placement.author}`;
       if (dom.bookPreview) dom.bookPreview.textContent = placement.preview;
@@ -8734,19 +8744,19 @@
         else delete dom.bookReader.dataset.annotationSlot;
       }
       if (dom.bookReader) dom.bookReader.hidden = false;
-      if (dom.stage) {
-        dom.stage.classList.add("is-book-open");
-        if (dom.bookReader) {
-          for (const child of dom.stage.children) {
-            if (child !== dom.bookReader) child.inert = true;
-          }
-        }
-      }
+      if (dom.stage) dom.stage.classList.add("is-book-open");
+      document.body.classList.add("mr-feast-book-open");
+      setStageOverlayInert(dom.bookReader, true, { keepCanvasInteractive: true });
       if (audioSystem) audioSystem.book("open");
       updateInteractionPrompt();
-      // Do not steal focus to the close button while pointer-locked — that can
-      // surface a system caret/focus ring. Keyboard E / Escape still closes.
-      if (dom.canvas) dom.canvas.focus({ preventScroll: true });
+      // Keep focus on the locked canvas so the close button never surfaces a
+      // system focus ring / caret. Keyboard E / Escape still closes.
+      if (dom.canvas) {
+        dom.canvas.inert = false;
+        dom.canvas.focus({ preventScroll: true });
+      }
+      // If lock was already lost, try to reclaim from this interaction gesture.
+      requestPointerLock();
       return true;
     }
 
@@ -8755,21 +8765,16 @@
       state.readableBooks.open = false;
       state.readableBooks.activePlacementId = null;
       if (dom.bookReader) dom.bookReader.hidden = true;
-      if (dom.stage) {
-        dom.stage.classList.remove("is-book-open");
-        if (dom.bookReader) {
-          for (const child of dom.stage.children) {
-            if (child !== dom.bookReader) child.inert = false;
-          }
-        }
-      }
+      if (dom.stage) dom.stage.classList.remove("is-book-open");
+      document.body.classList.remove("mr-feast-book-open");
+      setStageOverlayInert(dom.bookReader, false);
       const returnTarget = this.returnFocus && this.returnFocus.isConnected ? this.returnFocus : dom.canvas;
       this.returnFocus = null;
       if (audioSystem) audioSystem.book("close");
       if (restoreFocus) returnTarget?.focus({ preventScroll: true });
       else dom.canvas?.focus({ preventScroll: true });
-      // If pointer lock was lost somehow during reading, try to reclaim look.
-      requestPointerLock();
+      // Reclaim look after reading; succeeds when close came from a click/tap.
+      reclaimLookControl();
       updateInteractionPrompt();
       return true;
     }
@@ -16394,15 +16399,47 @@
       || state.journalOpen
       || state.menuOpen
       || state.workroom.keypadOpen
-      || state.readableBooks.open
       || state.gameOver
       || matchMedia("(pointer: coarse)").matches
-    ) return;
-    if (document.pointerLockElement !== dom.canvas && dom.canvas.requestPointerLock) {
-      try {
-        const request = dom.canvas.requestPointerLock();
-        if (request && typeof request.catch === "function") request.catch(() => {});
-      } catch (_) { /* Pointer lock is optional; keyboard/touch exploration still works. */ }
+    ) return false;
+    // Books keep look locked (cursor hidden) with look input gated separately.
+    if (!dom.canvas) return false;
+    if (dom.canvas.inert) dom.canvas.inert = false;
+    if (document.pointerLockElement === dom.canvas) {
+      state.pointerLocked = true;
+      return true;
+    }
+    if (!dom.canvas.requestPointerLock) return false;
+    try {
+      const request = dom.canvas.requestPointerLock();
+      if (request && typeof request.catch === "function") request.catch(() => {});
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function reclaimLookControl() {
+    if (!state.started || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver) return false;
+    if (dom.canvas) {
+      dom.canvas.inert = false;
+      try { dom.canvas.focus({ preventScroll: true }); } catch (_) { /* focus is best-effort */ }
+    }
+    return requestPointerLock();
+  }
+
+  function setStageOverlayInert(activeOverlay, active, { keepCanvasInteractive = false } = {}) {
+    if (!dom.stage || !activeOverlay) return;
+    for (const child of dom.stage.children) {
+      if (child === activeOverlay) continue;
+      // Making the pointer-lock target inert forces browsers to drop lock and
+      // show the system cursor. Book reading keeps the canvas interactive so
+      // lock (and the hidden cursor) can survive the overlay.
+      if (keepCanvasInteractive && child === dom.canvas) {
+        child.inert = false;
+        continue;
+      }
+      child.inert = Boolean(active);
     }
   }
 
@@ -16737,25 +16774,26 @@
       // Opening the menu is always an intentional unlock so pointerlockchange
       // does not re-enter setMenuOpen and thrash the dialog.
       releasePointerLock();
-    }
-    if (dom.menu) dom.menu.hidden = !nextOpen;
-    if (dom.stage && dom.menu) {
-      for (const child of dom.stage.children) {
-        if (child !== dom.menu) child.inert = nextOpen;
-      }
-    }
-    updateMenuControls();
-    if (nextOpen) {
+      if (dom.menu) dom.menu.hidden = false;
+      setStageOverlayInert(dom.menu, true);
+      updateMenuControls();
       if (!mansionSaveSlot?.has()) setMenuStatus("Progress is not autosaved.");
       requestAnimationFrame(() => dom.menuResume?.focus({ preventScroll: true }));
-    } else {
-      // Resume (and any other close path) should return look control immediately.
-      // Resume is a trusted click, so pointer lock succeeds; keyboard close may
-      // still fail silently and leave the player one canvas click away.
-      menuReturnFocus = null;
-      if (dom.canvas) dom.canvas.focus({ preventScroll: true });
-      requestPointerLock();
+      return;
     }
+
+    // Resume path: reclaim look BEFORE hiding the menu control that owns the
+    // trusted gesture. Hiding the Resume button first can drop user activation
+    // and make requestPointerLock silently fail in Chromium.
+    menuReturnFocus = null;
+    if (dom.canvas) dom.canvas.inert = false;
+    reclaimLookControl();
+    if (dom.menu) dom.menu.hidden = true;
+    setStageOverlayInert(dom.menu, false);
+    updateMenuControls();
+    // Second attempt after layout settles still runs inside the same turn for
+    // browsers that accept re-lock only once the dialog is gone.
+    reclaimLookControl();
   }
 
   function activateCurrentInteraction() {
@@ -16925,7 +16963,17 @@
     });
     if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => loadMansionGame());
     if (dom.gameOverRestart) dom.gameOverRestart.addEventListener("click", () => location.reload());
-    if (dom.menuResume) dom.menuResume.addEventListener("click", () => setMenuOpen(false));
+    if (dom.menuResume) {
+      // pointerdown keeps the trusted gesture alive better than click alone:
+      // setMenuOpen reclaims pointer lock before the Resume control is hidden.
+      const resumeExploration = (event) => {
+        event.preventDefault();
+        if (state.menuOpen) setMenuOpen(false);
+        else reclaimLookControl();
+      };
+      dom.menuResume.addEventListener("pointerdown", resumeExploration);
+      dom.menuResume.addEventListener("click", resumeExploration);
+    }
     if (dom.menuMaximize) dom.menuMaximize.addEventListener("click", toggleMaximized);
     if (dom.menuSave) dom.menuSave.addEventListener("click", saveMansionGame);
     if (dom.menuLoad) dom.menuLoad.addEventListener("click", loadMansionGame);

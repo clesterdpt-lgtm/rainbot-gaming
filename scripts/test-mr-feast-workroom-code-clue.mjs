@@ -51,7 +51,7 @@ async function pressKey(page, code, key) {
 }
 
 function clueEntry(state) {
-  return (state.journal?.details || []).find((entry) => /workroom keypad scratches/i.test(entry.title || "")) || null;
+  return (state.journal?.details || []).find((entry) => /painting room notes/i.test(entry.title || "")) || null;
 }
 
 async function run() {
@@ -131,9 +131,9 @@ async function run() {
     assert(target.revealed === true && target.discovered === true, `tilting the carrier painting should reveal and discover its scratch; got ${JSON.stringify(target)}`);
     assert(state.workroomCode.discoveredCount === 1, `one discovery should be recorded; got ${JSON.stringify(state.workroomCode)}`);
     let entry = clueEntry(state);
-    assert(entry, "the first discovery should create the evidence-pad entry");
+    assert(entry, "the first discovery should create a neutral evidence-pad note");
     assert(new RegExp(`${target.numeral}\\s+${target.digit}`).test(entry.body), `the entry should record the numeral and digit; got ${JSON.stringify(entry.body)}`);
-    assert(!entry.body.includes(configuredCode), `the full code must not appear before all four are found; got ${JSON.stringify(entry.body)}`);
+    assert(!/keypad|workroom|access pin|code/i.test(`${entry.title} ${entry.body}`), `the player-facing note must not identify what the marks unlock; got ${JSON.stringify(entry)}`);
     await page.screenshot({ path: path.join(artifactDir, "scratch-revealed-desktop.png") });
 
     // Straightening hides the scratch again but keeps the discovery.
@@ -173,7 +173,9 @@ async function run() {
     state = await diagnostics(page);
     assert(state.workroomCode.discoveredCount === 4 && state.workroomCode.complete === true, `all four discoveries should complete the hunt; got ${JSON.stringify(state.workroomCode)}`);
     entry = clueEntry(state);
-    assert(entry.body.includes(configuredCode), `the finalized entry should assemble the code; got ${JSON.stringify(entry.body)}`);
+    assert(new RegExp(`I\\s+0[\\s\\S]*II\\s+5[\\s\\S]*III\\s+1[\\s\\S]*IV\\s+3`).test(entry.body), `the completed note should preserve all four raw marks; got ${JSON.stringify(entry.body)}`);
+    assert(!entry.body.includes(configuredCode), `the completed note must not assemble the digits into an answer; got ${JSON.stringify(entry.body)}`);
+    assert(!/keypad|workroom|access pin|code/i.test(`${entry.title} ${entry.body}`), `the completed note must not identify what the marks unlock; got ${JSON.stringify(entry)}`);
     assert(state.workroomCode.code === configuredCode, `QA diagnostics should expose the assembled code; got ${JSON.stringify(state.workroomCode.code)}`);
 
     const loaded = await page.evaluate(() => window.MrFeastFresh.loadGameForQA());
@@ -183,12 +185,13 @@ async function run() {
     assert(state.workroomCode.discoveredCount === 2 && state.workroomCode.complete === false, `loading should restore the two-discovery state; got ${JSON.stringify(state.workroomCode)}`);
     assert(state.workroomCode.targets.every((candidate) => candidate.revealed === false), "loading should resync all scratches to the untampered paintings");
     entry = clueEntry(state);
-    assert(entry && !entry.body.includes(configuredCode), `the reloaded entry should be partial again; got ${JSON.stringify(entry?.body)}`);
+    assert(entry && !entry.body.includes(configuredCode) && !/keypad|workroom|access pin|code/i.test(`${entry.title} ${entry.body}`), `the reloaded note should remain neutral and partial; got ${JSON.stringify(entry)}`);
 
     // --- Dev mode grants everything and restores on disable -------------------
     await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
     state = await diagnostics(page);
-    assert(state.workroomCode.discoveredCount === 4 && clueEntry(state)?.body.includes(configuredCode), `dev mode should grant the finalized hunt; got ${JSON.stringify(state.workroomCode)}`);
+    entry = clueEntry(state);
+    assert(state.workroomCode.discoveredCount === 4 && entry && !entry.body.includes(configuredCode) && !/keypad|workroom|access pin|code/i.test(`${entry.title} ${entry.body}`), `dev mode should preserve a neutral complete note; got ${JSON.stringify(state.workroomCode)}`);
     await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(false));
     state = await diagnostics(page);
     assert(state.workroomCode.discoveredCount === 2, `disabling dev mode should restore the pre-dev hunt; got ${JSON.stringify(state.workroomCode)}`);

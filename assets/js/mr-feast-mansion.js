@@ -735,9 +735,8 @@
     ]),
   });
   // Four Painting Room paintings each hide a scratched wall marking: a Roman
-  // numeral for the digit's position in the Workroom code, and the digit
-  // beside it. Read in numeral order they assemble WORKROOM_SECURITY.code.
-  // The order/digit pairs are asserted against that code at build time.
+  // numeral and a digit. Their internal order/digit agreement is asserted at
+  // build time, but player-facing text deliberately leaves their purpose open.
   const WORKROOM_CODE_SCRATCHES = Object.freeze([
     Object.freeze({ artId: "five-doors", order: 1, numeral: "I", digit: "0" }),
     Object.freeze({ artId: "polite-eclipse", order: 2, numeral: "II", digit: "5" }),
@@ -11228,7 +11227,7 @@
 
   const WORKROOM_CODE_CLUE = Object.freeze({
     journalId: "workroom-keypad-scratches",
-    journalTitle: "Workroom keypad scratches",
+    journalTitle: "Painting Room notes",
     unknownMark: "??",
   });
 
@@ -11267,9 +11266,9 @@
       const complete = this.isComplete();
       this.syncJournalEntry();
       if (complete) {
-        contestant13Quest?.showDiscovery("Keypad code assembled", `Every scratch is accounted for. The Workroom access PIN reads ${this.assembledCode()}.`, 11000);
+        contestant13Quest?.showDiscovery("More scratched plaster", "Four separate marks are hidden behind the Painting Room frames.", 8600);
       } else {
-        contestant13Quest?.showDiscovery("Scratched keypad clue", `Behind the painting, gouged into the plaster: ${config.numeral} — ${config.digit}. Part of the Workroom access PIN. Find the rest.`, 8600);
+        contestant13Quest?.showDiscovery("Scratched plaster", `Behind the painting, gouged into the plaster: ${config.numeral} — ${config.digit}.`, 7600);
       }
       if (audioSystem) audioSystem.ping(56, 0.4, 0.06, "triangle");
     }
@@ -11293,11 +11292,7 @@
       const pairs = this.orderedMarks()
         .map(({ config, found }) => `${config.numeral} ${found ? config.digit : WORKROOM_CODE_CLUE.unknownMark}`)
         .join("   ");
-      if (this.isComplete()) {
-        return `Four paintings, four scratches. In numeral order: ${pairs}. The Workroom keypad code is ${this.assembledCode()}.`;
-      }
-      const remaining = WORKROOM_CODE_SCRATCHES.length - this.discovered.size;
-      return `Scratches hidden behind the Painting Room paintings spell the Workroom keypad code. So far, in numeral order: ${pairs}. ${remaining} still hidden — tilt the other paintings.`;
+      return `Marks copied from behind the Painting Room frames: ${pairs}.`;
     }
 
     syncJournalEntry() {

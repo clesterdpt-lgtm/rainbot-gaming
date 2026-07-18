@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-intro-save-load-2";
+  const MANSION_RUNTIME_VERSION = "20260718-stealth-meter-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -108,6 +108,10 @@
     energyMode: $("mansion-energy-mode"),
     energyValue: $("mansion-energy-value"),
     energyFill: $("mansion-energy-fill"),
+    stealth: $("mansion-stealth"),
+    stealthMode: $("mansion-stealth-mode"),
+    stealthValue: $("mansion-stealth-value"),
+    stealthFill: $("mansion-stealth-fill"),
     security: $("mansion-security"),
     securityStatus: $("mansion-security-status"),
     speech: $("mansion-speech"),
@@ -1386,6 +1390,41 @@
     shortcutDoorClearanceMeters: 1.0,
     retargetMinPlayerMoveMeters: 1.2,
   });
+  const STEALTH = Object.freeze({
+    // One concealment model with two consumers. The player-facing meter mixes
+    // stance, sampled room light, and recent movement into a readable 0-100
+    // score. The AI-facing effective visibility multiplies the authoritative
+    // Milestone 35 stance multipliers with darkness/stillness bonuses that
+    // apply only while crouched: a lit, moving crouch equals the authored 0.5
+    // baseline exactly and every standing value stays at 1, so existing
+    // camera and pursuit tuning (and regression timing) cannot drift. The
+    // bonuses can only ever make the runner harder to detect than today.
+    lightSampleIntervalSeconds: 0.12,
+    // Divisor that maps gathered inverse-square candela onto 0..1 exposure;
+    // one compact room fixture overhead saturates near 0.8, a grand
+    // chandelier or corridor cone pins 1.
+    lightNormalizationCandela: 12,
+    // Even a storm-dark mansion never renders a runner truly invisible.
+    ambientLightFloor: 0.05,
+    lightSmoothingRate: 7,
+    motionRiseRate: 6,
+    motionDecayRate: 2.2,
+    meterSmoothingRate: 9,
+    // Meter exposure weights: stance + light + motion, clamped to 0..1.
+    meterStandingExposure: 0.42,
+    meterCrouchExposure: 0.04,
+    meterLightWeight: 0.34,
+    meterMotionWeight: 0.2,
+    // Crouch-gated AI bonuses. Full darkness multiplies crouch visibility by
+    // (1 - 0.55); perfect stillness by (1 - 0.25); both together reach 0.169.
+    darknessVisibilityBonus: 0.55,
+    stillnessVisibilityBonus: 0.25,
+    minVisibility: 0.12,
+    // Mr. Feast's witnessed-sight range collapses toward this floor as the
+    // crouched runner darkens and stills, but never below it: point-blank
+    // wrongdoing is always seen.
+    sightRangeFloorMeters: 2.6,
+  });
   const MR_FEAST_SPEECH = Object.freeze({
     minSeconds: 4.2,
     maxSeconds: 9,
@@ -1981,6 +2020,17 @@
       speed: 0,
       stealthVisibilityMultiplier: 1,
       stealthNoiseMultiplier: 1,
+    },
+    stealth: {
+      meter: 0,
+      meterVisible: false,
+      lightExposure: 1,
+      sampledLight: 1,
+      sampleRemaining: 0,
+      motionActivity: 0,
+      effectiveVisibility: 1,
+      sightRangeMeters: MR_FEAST_PURSUIT.sightRangeMeters,
+      lightOverride: null,
     },
     security: {
       mode: CAMERA_SECURITY_MODE.SHOW,
@@ -4892,13 +4942,20 @@
       return p.y - (PLAYER.halfHeight + PLAYER.radius + 0.03);
     }
 
+    effectiveSightRangeMeters() {
+      // Crouched stealth strangles how far he notices wrongdoing: darkness
+      // and stillness pull the authored range toward the fairness floor,
+      // while a standing runner is always judged at the full authored range.
+      return state.stealth ? state.stealth.sightRangeMeters : MR_FEAST_PURSUIT.sightRangeMeters;
+    }
+
     canSeePlayerAct() {
       if (this.loadStatus !== "ready" || !physics || state.isHidden) return false;
       const p = physics.playerPosition();
       const dx = p.x - this.root.position.x;
       const dz = p.z - this.root.position.z;
       const horizontal = Math.hypot(dx, dz);
-      if (horizontal > MR_FEAST_PURSUIT.sightRangeMeters) return false;
+      if (horizontal > this.effectiveSightRangeMeters()) return false;
       if (Math.abs(this.playerFeetY(p) - this.root.position.y) > 2.2) return false;
       if (horizontal > 0.0001) {
         const facingDot = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
@@ -6165,6 +6222,7 @@
           cooldownActive: this.pursuit.cooldownActive,
           speed: Number(this.pursuitSpeed().toFixed(3)),
           playerWalkSpeed: PLAYER.walkSpeed,
+          effectiveSightRangeMeters: Number(this.effectiveSightRangeMeters().toFixed(2)),
           targetNodeId: this.pursuitTargetNodeId,
           trespassDwell: Number((this.trespassDwell || 0).toFixed(2)),
           pathShortcuts: {
@@ -12362,7 +12420,10 @@
         state.security.exposure = Math.max(0, state.security.exposure - CAMERA_SECURITY.exposureDecayPerSecond * dt);
         return;
       }
-      const visibility = clamp(state.movement.stealthVisibilityMultiplier, 0.1, 1);
+      // Acquisition consumes the stealth-scaled effective visibility: standing
+      // stays at the authored full rate, while a dark, motionless crouch fills
+      // the warning and exposure clocks at less than half the crouch baseline.
+      const visibility = clamp(state.stealth.effectiveVisibility, 0.1, 1);
       selected.cameraState.acquisition = clamp(
         selected.cameraState.acquisition + dt / CAMERA_SECURITY.warningSeconds * visibility,
         0,
@@ -19023,6 +19084,9 @@
   let ignoreEscapeMenuToggleUntil = 0;
   let lookReclaimFollowUpUntil = 0;
   let lookReclaimFollowUpHandler = null;
+  let rendererCssWidth = 0;
+  let rendererCssHeight = 0;
+  let rendererPixelRatio = 0;
 
   function releasePointerLock({ intentional = true } = {}) {
     if (intentional) intentionalPointerUnlockUntil = performance.now() + 450;
@@ -19040,9 +19104,12 @@
   }
 
   function resize() {
-    const rect = dom.stage.getBoundingClientRect();
-    const width = Math.max(1, Math.floor(rect.width));
-    const height = Math.max(1, Math.floor(rect.height));
+    // The stage owns a definite CSS height and the canvas is absolutely
+    // positioned inside its content box. Measure that content box directly:
+    // feeding the canvas's intrinsic size back into an auto-height parent made
+    // browser-toolbar and orientation changes ratchet the embedded game taller.
+    const width = Math.max(1, Math.floor(dom.stage.clientWidth));
+    const height = Math.max(1, Math.floor(dom.stage.clientHeight));
     const mobile = width < MOBILE_RENDER_WIDTH;
     const mobileProfileChanged = state.mobileRenderProfile !== mobile;
     state.mobileRenderProfile = mobile;
@@ -19052,8 +19119,15 @@
     const preferredDpr = mobile ? 1.0 : 1.25;
     const reducedDpr = mobile ? 0.8 : 1.0;
     const dprCap = state.renderQuality === "reduced" ? reducedDpr : preferredDpr;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
-    renderer.setSize(width, height, false);
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, dprCap);
+    const sizeChanged = width !== rendererCssWidth || height !== rendererCssHeight;
+    if (sizeChanged || pixelRatio !== rendererPixelRatio) {
+      rendererCssWidth = width;
+      rendererCssHeight = height;
+      rendererPixelRatio = pixelRatio;
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(width, height, false);
+    }
     camera.aspect = width / height;
     // Preserve more of the desktop composition on tall phone canvases. A
     // fixed 70-degree vertical FOV falls to roughly 36 degrees horizontally
@@ -20567,6 +20641,130 @@
     }
   }
 
+  const stealthSpotSample = { direction: new THREE.Vector3(), toPlayer: new THREE.Vector3() };
+
+  function stealthSmoothstep(edge0, edge1, value) {
+    const t = clamp((value - edge0) / Math.max(0.0001, edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  function sampleStealthLightExposure() {
+    if (state.stealth.lightOverride != null) return state.stealth.lightOverride;
+    if (!physics) return 1;
+    const p = physics.playerPosition();
+    // Sample at torso height: the score should track what a watcher sees lit,
+    // not the floor pool at the runner's feet.
+    const px = p.x;
+    const py = p.y + 0.15;
+    const pz = p.z;
+    let gathered = 0;
+    const gatherLight = (light) => {
+      if (!light.visible || light.intensity <= 0) return;
+      const dx = px - light.position.x;
+      const dy = py - light.position.y;
+      const dz = pz - light.position.z;
+      const range = light.distance || light.userData.authoredReach || 0;
+      const distanceSq = dx * dx + dy * dy + dz * dz;
+      if (range > 0 && distanceSq > range * range) return;
+      const distance = Math.sqrt(distanceSq);
+      // Match the renderer's punctual falloff: inverse-square, dying inside
+      // the authored cutoff window so room-bounded fixtures stay room-bounded.
+      let contribution = light.intensity / Math.max(distanceSq, 0.25);
+      if (range > 0) {
+        const windowFactor = clamp(1 - Math.pow(distance / range, 4), 0, 1);
+        contribution *= windowFactor * windowFactor;
+      }
+      if (light.isSpotLight) {
+        stealthSpotSample.direction.copy(light.target.position).sub(light.position).normalize();
+        stealthSpotSample.toPlayer.set(dx, dy, dz).divideScalar(Math.max(distance, 0.0001));
+        const angleCos = stealthSpotSample.direction.dot(stealthSpotSample.toPlayer);
+        const coneCos = Math.cos(light.angle);
+        const penumbraCos = Math.cos(light.angle * (1 - light.penumbra));
+        contribution *= stealthSmoothstep(coneCos, penumbraCos, angleCos);
+      }
+      gathered += contribution;
+    };
+    for (const circuit of circuits) {
+      for (const light of circuit.lights) gatherLight(light);
+    }
+    for (const light of auxiliaryInteriorLights) gatherLight(light);
+    return clamp(STEALTH.ambientLightFloor + gathered / STEALTH.lightNormalizationCandela, 0, 1);
+  }
+
+  function updateStealth(fixedDt) {
+    const stealth = state.stealth;
+    const movement = state.movement;
+    stealth.sampleRemaining -= fixedDt;
+    if (stealth.sampleRemaining <= 0) {
+      stealth.sampleRemaining = STEALTH.lightSampleIntervalSeconds;
+      stealth.sampledLight = sampleStealthLightExposure();
+    }
+    stealth.lightExposure += (stealth.sampledLight - stealth.lightExposure) * Math.min(1, fixedDt * STEALTH.lightSmoothingRate);
+    // Motion activity follows actual travel: it rises toward the stance's own
+    // full pace while moving and settles back to stillness after stopping, so
+    // a crouch-step costs concealment for a beat even after the keys release.
+    const referenceSpeed = movement.crouched ? PLAYER.crouchSpeed : PLAYER.walkSpeed;
+    const motionTarget = movement.speed > 0.01 ? clamp(movement.speed / referenceSpeed, 0, 1) : 0;
+    const motionRate = motionTarget > stealth.motionActivity ? STEALTH.motionRiseRate : STEALTH.motionDecayRate;
+    stealth.motionActivity += (motionTarget - stealth.motionActivity) * Math.min(1, fixedDt * motionRate);
+    // AI-facing visibility: the authored stance multipliers stay untouched;
+    // darkness and stillness bonuses apply only to the crouched stance, so a
+    // standing runner keeps effective visibility at exactly 1.
+    const crouchConcealed = movement.crouched && !state.isHidden && !state.activeSeat;
+    let effectiveVisibility = 1;
+    if (crouchConcealed) {
+      const darknessFactor = 1 - STEALTH.darknessVisibilityBonus * (1 - stealth.lightExposure);
+      const stillnessFactor = 1 - STEALTH.stillnessVisibilityBonus * (1 - stealth.motionActivity);
+      effectiveVisibility = Math.max(
+        STEALTH.minVisibility,
+        movement.stealthVisibilityMultiplier * darknessFactor * stillnessFactor,
+      );
+    }
+    stealth.effectiveVisibility = effectiveVisibility;
+    stealth.sightRangeMeters = crouchConcealed
+      ? STEALTH.sightRangeFloorMeters
+        + (MR_FEAST_PURSUIT.sightRangeMeters - STEALTH.sightRangeFloorMeters) * clamp(effectiveVisibility, 0, 1)
+      : MR_FEAST_PURSUIT.sightRangeMeters;
+    if (state.isHidden) {
+      // Entering cover is a discrete state with its own status pill; the score
+      // pegs immediately instead of easing so QA and players read it as total.
+      stealth.meter = 100;
+    } else {
+      const stanceExposure = crouchConcealed ? STEALTH.meterCrouchExposure : STEALTH.meterStandingExposure;
+      const exposure = clamp(
+        stanceExposure
+          + STEALTH.meterLightWeight * stealth.lightExposure
+          + STEALTH.meterMotionWeight * stealth.motionActivity,
+        0,
+        1,
+      );
+      const meterTarget = (1 - exposure) * 100;
+      stealth.meter += (meterTarget - stealth.meter) * Math.min(1, fixedDt * STEALTH.meterSmoothingRate);
+    }
+    updateStealthHud();
+  }
+
+  function updateStealthHud() {
+    if (!dom.stealth) return;
+    const stealth = state.stealth;
+    const visible = state.started
+      && state.movement.crouched
+      && !state.isHidden
+      && !state.activeSeat
+      && !state.gameOver;
+    stealth.meterVisible = visible;
+    dom.stealth.hidden = !visible;
+    if (!visible) return;
+    const rounded = Math.round(clamp(stealth.meter, 0, 100));
+    dom.stealth.setAttribute("aria-valuenow", String(rounded));
+    dom.stealth.classList.toggle("is-exposed", stealth.meter < 35);
+    if (dom.stealthFill) dom.stealthFill.style.width = `${clamp(stealth.meter, 0, 100)}%`;
+    if (dom.stealthValue) dom.stealthValue.textContent = String(rounded);
+    if (dom.stealthMode) {
+      dom.stealthMode.textContent = stealth.lightExposure < 0.25 ? "Stealth · dark" : "Stealth · lit";
+    }
+  }
+
   function syncCamera() {
     const p = physics.playerPosition();
     // Rapier's controller keeps a small skin depth around stepped surfaces; the
@@ -20656,6 +20854,7 @@
       accumulator += dt;
       while (accumulator >= 1 / 60) {
         updatePlayer(1 / 60);
+        updateStealth(1 / 60);
         audioSystem?.updateFootsteps(1 / 60);
         accumulator -= 1 / 60;
       }
@@ -20805,6 +21004,12 @@
           stealth: {
             visibilityMultiplier: state.movement.stealthVisibilityMultiplier,
             noiseMultiplier: state.movement.stealthNoiseMultiplier,
+            meter: Number(state.stealth.meter.toFixed(1)),
+            meterVisible: state.stealth.meterVisible,
+            lightExposure: Number(state.stealth.lightExposure.toFixed(3)),
+            motionActivity: Number(state.stealth.motionActivity.toFixed(3)),
+            effectiveVisibility: Number(state.stealth.effectiveVisibility.toFixed(3)),
+            sightRangeMeters: Number(state.stealth.sightRangeMeters.toFixed(2)),
           },
         },
       },
@@ -21052,12 +21257,30 @@
       const steps = Math.min(720, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
       for (let step = 0; step < steps; step += 1) {
         updatePlayer(1 / 60);
+        updateStealth(1 / 60);
         audioSystem?.updateFootsteps(1 / 60);
       }
       syncCamera();
       updateLocation();
       updateInteractionPrompt();
       return getDiagnostics().player;
+    };
+    window.MrFeastFresh.getStealth = () => ({
+      meter: Number(state.stealth.meter.toFixed(1)),
+      meterVisible: state.stealth.meterVisible,
+      lightExposure: Number(state.stealth.lightExposure.toFixed(3)),
+      motionActivity: Number(state.stealth.motionActivity.toFixed(3)),
+      effectiveVisibility: Number(state.stealth.effectiveVisibility.toFixed(3)),
+      stanceVisibilityMultiplier: state.movement.stealthVisibilityMultiplier,
+      mrFeastSightRangeMeters: Number(state.stealth.sightRangeMeters.toFixed(2)),
+      crouched: state.movement.crouched,
+      lightOverride: state.stealth.lightOverride,
+    });
+    window.MrFeastFresh.setStealthLightOverrideForQA = (value) => {
+      if (!state.qa) return null;
+      state.stealth.lightOverride = value == null ? null : clamp(Number(value) || 0, 0, 1);
+      state.stealth.sampleRemaining = 0;
+      return { lightOverride: state.stealth.lightOverride };
     };
     window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;

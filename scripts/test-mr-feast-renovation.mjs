@@ -1405,7 +1405,10 @@ for (const zone of ["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET",
 }
 check("51 camera surveillance source invariants", /new THREE\.InstancedMesh/.test(cameraSecuritySystem) && /security-camera-housings/.test(cameraSecuritySystem) && /security-camera-lenses/.test(cameraSecuritySystem), "camera bodies do not use shared instanced presentation meshes");
 check("51 camera surveillance source invariants", !/new THREE\.(?:PerspectiveCamera|SpotLight|PointLight|DirectionalLight)/.test(cameraSecuritySystem) && !/castShadow\s*=\s*true/.test(cameraSecuritySystem), "surveillance units add a render camera, shader light, or shadow caster");
-check("51 camera surveillance detection", /new THREE\.Raycaster/.test(cameraSecuritySystem) && /dot\(/.test(cameraSecuritySystem) && /stealthVisibilityMultiplier/.test(cameraSecuritySystem) && /state\.isHidden/.test(cameraSecuritySystem), "camera detection lacks cone/range, line-of-sight, crouch visibility, or hiding contracts");
+// Milestone 51 (stealth meter) moved camera acquisition from the raw stance
+// multiplier onto the crouch-derived state.stealth.effectiveVisibility, which
+// still multiplies the authoritative Milestone 35 crouch value underneath.
+check("51 camera surveillance detection", /new THREE\.Raycaster/.test(cameraSecuritySystem) && /dot\(/.test(cameraSecuritySystem) && /state\.stealth\.effectiveVisibility/.test(cameraSecuritySystem) && /state\.isHidden/.test(cameraSecuritySystem), "camera detection lacks cone/range, line-of-sight, crouch visibility, or hiding contracts");
 check("51 camera surveillance detection", /intersectObjects\(occluderMeshes, false\)/.test(cameraSecuritySystem) && /occluderMeshes\.push\(this\.panel\)/.test(hingedDoorClass) && /occluderMeshes\.push\(hedgeMazeWalls\)/.test(mansion), "camera LOS does not use the explicit wall, live-door, and hedge blocker registry");
 check("51 camera surveillance detection", /illegalAction/.test(cameraSecuritySystem) && /observed-sabotage/.test(cameraSecuritySystem) && /restricted-trespass/.test(cameraSecuritySystem) && /lockdown-sighting/.test(cameraSecuritySystem), "camera policy does not distinguish observed sabotage, restricted trespass, and lockdown sightings");
 check("51 camera surveillance detection", !/raiseAlarm\(/.test(patronFeedSecurityHandler) && /patronFeedSabotaged/.test(patronFeedSecurityHandler), "blind patron-feed sabotage should start lockdown without summoning Mr. Feast until a camera actually sees the player");
@@ -1460,6 +1463,20 @@ check("54 upper window gallery dimensions", /depth:\s*1\.7\b/.test(upperWindowGa
 check("54 upper window gallery guard", /addRailingRun\("x",\s*-UPPER_WINDOW_GALLERY\.guardSpan \/ 2,\s*UPPER_WINDOW_GALLERY\.guardSpan \/ 2,\s*UPPER_WINDOW_GALLERY\.guardZ/.test(upperWindowGalleryStairBuild) && /upper-window-gallery-guard/.test(upperWindowGalleryStairBuild) && /physics\.addFixedBox\(0,\s*FLOOR\.UPPER \+ 0\.5,\s*UPPER_WINDOW_GALLERY\.guardZ/.test(upperWindowGalleryStairBuild), "front-window gallery lacks a full matching railing and Rapier edge guard");
 check("54 upper window gallery patrol", count(mrFeastPatrolRoute, /UPPER_WINDOW_GALLERY\.patrolZ/g) === 3, "Mr. Feast's east, center, and west front-gallery patrol points do not share the widened deck centerline");
 check("54 upper window gallery diagnostics", /upperWindowGallery:\s*getUpperWindowGalleryDiagnostics\(\)/.test(diagnostics) && /upperWindowGalleryFoyer:/.test(qaRoomViews), "upper-window gallery diagnostics or focused foyer framing are missing");
+
+// 55. Crouched stealth is one readable concealment meter: stance, movement,
+// and light sampled from the real circuit emitters drive a single score that
+// narrows Mr. Feast's witnessed-sight range and slows camera acquisition,
+// while every authored standing baseline stays byte-identical.
+const stealthConfig = section("const STEALTH = Object.freeze({", "const MR_FEAST_SPEECH");
+const stealthUpdate = section("function updateStealth(", "function syncCamera()");
+check("55 stealth tuning table", /lightSampleIntervalSeconds:/.test(stealthConfig) && /darknessVisibilityBonus:/.test(stealthConfig) && /stillnessVisibilityBonus:/.test(stealthConfig) && /sightRangeFloorMeters:/.test(stealthConfig) && /minVisibility:/.test(stealthConfig) && /meterLightWeight:/.test(stealthConfig) && /meterMotionWeight:/.test(stealthConfig), "stealth tuning lacks the named constants table");
+check("55 stealth meter hud", /id="mansion-stealth"[^>]*role="meter"/.test(page) && /id="mansion-stealth-mode"/.test(page) && /id="mansion-stealth-value"/.test(page) && /id="mansion-stealth-fill"/.test(page), "the stealth meter HUD markup is missing or not an accessible meter");
+check("55 stealth light sampling", /function sampleStealthLightExposure/.test(mansion) && /for \(const circuit of circuits\)/.test(section("function sampleStealthLightExposure", "function updateStealth(")) && /isSpotLight/.test(section("function sampleStealthLightExposure", "function updateStealth(")) && /auxiliaryInteriorLights/.test(section("function sampleStealthLightExposure", "function updateStealth(")), "stealth light sampling does not read the real circuit and auxiliary emitters");
+check("55 stealth crouch-gated bonuses", /movement\.crouched/.test(stealthUpdate) && /STEALTH\.darknessVisibilityBonus/.test(stealthUpdate) && /STEALTH\.stillnessVisibilityBonus/.test(stealthUpdate) && /effectiveVisibility = 1/.test(stealthUpdate), "stealth bonuses must apply only to the crouched stance so standing detection keeps its authored baseline");
+check("55 stealth sight gating", /effectiveSightRangeMeters\(\)/.test(section("canSeePlayerAct()", "beginPursuit(")) && /STEALTH\.sightRangeFloorMeters/.test(mansion), "Mr. Feast's witnessed-sight check does not consume the stealth-scaled range with a fairness floor");
+check("55 stealth camera consumption", /state\.stealth\.effectiveVisibility/.test(cameraSecuritySystem), "camera acquisition does not consume the stealth effective visibility");
+check("55 stealth diagnostics", /meter:/.test(section("stealth: {", "}", diagnostics)) && /getStealth/.test(mansion) && /setStealthLightOverrideForQA/.test(mansion), "stealth diagnostics or QA controls are missing");
 
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.

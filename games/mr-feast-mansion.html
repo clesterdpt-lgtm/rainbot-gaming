@@ -88,7 +88,8 @@
       position: relative;
       isolation: isolate;
       width: 100%;
-      min-height: min(73vh, 920px);
+      height: min(73vh, 920px, calc(100dvh - 250px));
+      min-height: 0;
       padding: 0;
       overflow: hidden;
       border: 1px solid rgba(198, 181, 150, 0.24);
@@ -122,10 +123,12 @@
     }
 
     #mansion-canvas {
+      position: absolute;
+      inset: 0;
       display: block;
       width: 100%;
       height: 100%;
-      min-height: inherit;
+      min-height: 0;
       border: 0;
       outline: none;
       background: transparent;
@@ -329,6 +332,61 @@
     #mansion-energy.is-exhausted #mansion-energy-fill {
       background: linear-gradient(90deg, #6e2e29, #a94a3f);
     }
+
+    #mansion-stealth {
+      position: absolute;
+      left: max(18px, env(safe-area-inset-left));
+      bottom: max(112px, calc(env(safe-area-inset-bottom) + 102px));
+      z-index: 7;
+      width: min(210px, calc(100% - 36px));
+      padding: 8px 10px 9px;
+      border: 1px solid rgba(147, 189, 225, 0.22);
+      border-radius: 3px;
+      color: #c3d2dc;
+      background: rgba(7, 8, 10, 0.76);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+
+    #mansion-stealth[hidden] { display: none; }
+
+    .mansion-stealth__head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 5px;
+      font-size: 0.54rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    #mansion-stealth-mode { color: #9fc7db; }
+    #mansion-stealth-value { color: #8b959c; font-variant-numeric: tabular-nums; }
+
+    .mansion-stealth__track {
+      height: 5px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    #mansion-stealth-fill {
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2f4b5c, #86c3dd);
+      transform-origin: left center;
+      transition: width 90ms linear, background 160ms ease;
+    }
+
+    #mansion-stealth.is-exposed #mansion-stealth-fill {
+      background: linear-gradient(90deg, #6e2e29, #a94a3f);
+    }
+
+    #mansion-stealth.is-exposed #mansion-stealth-mode { color: #c98a80; }
 
     #mansion-security {
       position: absolute;
@@ -562,12 +620,12 @@
       z-index: 20;
       display: grid;
       place-items: center;
-      overflow: auto;
+      overflow: hidden;
       padding:
-        max(22px, env(safe-area-inset-top))
-        max(18px, env(safe-area-inset-right))
-        max(22px, env(safe-area-inset-bottom))
-        max(18px, env(safe-area-inset-left));
+        max(12px, env(safe-area-inset-top))
+        max(12px, env(safe-area-inset-right))
+        max(12px, env(safe-area-inset-bottom))
+        max(12px, env(safe-area-inset-left));
       background:
         radial-gradient(circle at 50% 42%, transparent 0, rgba(4, 5, 7, 0.14) 40%, rgba(3, 4, 5, 0.64) 100%);
       backdrop-filter: blur(2px);
@@ -578,7 +636,8 @@
 
     .mansion-intro__panel {
       width: min(560px, 100%);
-      padding: clamp(24px, 5vw, 46px);
+      max-height: 100%;
+      padding: clamp(18px, 3.5vmin, 36px);
       border: 1px solid rgba(226, 202, 159, 0.32);
       border-radius: 3px;
       background:
@@ -601,7 +660,7 @@
       margin: 0;
       color: #f0e7d6;
       font-family: var(--mansion-serif);
-      font-size: clamp(2.65rem, 8vw, 5rem);
+      font-size: clamp(2.35rem, 7.5vmin, 5rem);
       font-weight: 600;
       letter-spacing: 0.015em;
       line-height: 0.8;
@@ -610,7 +669,7 @@
 
     .mansion-intro__lead {
       max-width: 41ch;
-      margin: 22px auto 0;
+      margin: clamp(10px, 2.2vmin, 18px) auto 0;
       color: #b9b1a4;
       font-family: var(--mansion-serif);
       font-size: clamp(1rem, 2vw, 1.18rem);
@@ -622,7 +681,7 @@
       flex-wrap: wrap;
       justify-content: center;
       gap: 7px 15px;
-      margin: 22px auto 0;
+      margin: clamp(10px, 2.2vmin, 18px) auto 0;
       color: #8e8b84;
       font-size: 0.68rem;
       letter-spacing: 0.04em;
@@ -642,16 +701,16 @@
     }
 
     .mansion-intro__actions {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
-      justify-content: center;
-      margin-top: 25px;
+      margin-top: clamp(12px, 2.5vmin, 20px);
     }
 
     #mansion-enter,
     #mansion-intro-load {
-      min-width: min(220px, 100%);
+      width: 100%;
+      min-width: 0;
       min-height: 48px;
       margin-top: 0;
       padding: 12px 22px;
@@ -1385,14 +1444,15 @@
       z-index: 21;
       display: grid;
       place-items: center;
-      overflow: auto;
-      padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      overflow: hidden;
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
       background: transparent;
     }
 
     .mansion-menu__panel {
       width: min(520px, 100%);
-      padding: clamp(26px, 5vw, 42px);
+      max-height: 100%;
+      padding: clamp(18px, 3.5vmin, 36px);
       border: 1px solid rgba(226, 199, 151, 0.34);
       border-radius: 4px;
       background: linear-gradient(150deg, rgba(35, 29, 23, 0.98), rgba(9, 10, 12, 0.98));
@@ -1412,7 +1472,7 @@
       margin: 7px 0 10px;
       color: #f0e7d6;
       font-family: var(--mansion-serif);
-      font-size: clamp(2.5rem, 7vw, 4.25rem);
+      font-size: clamp(2rem, 7vmin, 4.25rem);
       font-weight: 600;
       line-height: 0.9;
     }
@@ -1713,14 +1773,14 @@
 
     @media (max-width: 1080px) {
       .mansion-layout { grid-template-columns: minmax(0, 1fr) 270px; }
-      #mansion-stage { min-height: min(68vh, 760px); }
+      #mansion-stage { height: min(68vh, 760px, calc(100dvh - 234px)); min-height: 0; }
     }
 
     @media (max-width: 820px) {
       .mansion-page .game-page { width: min(100% - 20px, 760px); }
       .mansion-page .game-page__header { align-items: start; }
       .mansion-layout { grid-template-columns: 1fr; }
-      #mansion-stage { min-height: min(67dvh, 680px); }
+      #mansion-stage { height: min(67dvh, 680px, calc(100dvh - 170px)); min-height: 0; }
       .mansion-aside { padding: 23px 20px; }
       .mansion-floors { grid-template-columns: repeat(3, 1fr); }
       .mansion-floor-row {
@@ -1749,7 +1809,7 @@
       .mansion-page .game-page__sub { max-width: 34ch; font-size: 0.6rem; line-height: 1.5; }
       .mansion-layout { gap: 0; }
       #mansion-stage {
-        height: clamp(520px, 72dvh, 700px);
+        height: clamp(400px, calc(100dvh - 200px), 650px);
         min-height: 0;
         border-inline: 0;
         border-radius: 0;
@@ -1766,6 +1826,7 @@
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
       #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
+      #mansion-stealth { left: max(12px, env(safe-area-inset-left)); bottom: max(164px, calc(env(safe-area-inset-bottom) + 150px)); width: 160px; }
       #mansion-security { bottom: max(160px, calc(env(safe-area-inset-bottom) + 146px)); }
       #mansion-security:not([hidden]) ~ #mansion-discovery { bottom: max(206px, calc(env(safe-area-inset-bottom) + 190px)); }
       #mansion-security:not([hidden]) ~ #mansion-action { bottom: max(196px, calc(env(safe-area-inset-bottom) + 180px)); }
@@ -1803,7 +1864,7 @@
       .mansion-book__ornament { margin-bottom: 15px; }
       #mansion-book-preview { font-size: 0.98rem; line-height: 1.58; }
       .mansion-book__hint { margin-top: 17px; }
-      .mansion-menu__actions { grid-template-columns: 1fr; }
+      .mansion-menu__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mansion-tools { top: max(9px, env(safe-area-inset-top)); right: max(9px, env(safe-area-inset-right)); }
       .mansion-tool { width: 44px; height: 44px; }
       #mansion-loading { top: 66px; max-width: calc(100% - 30px); font-size: 0.57rem; }
@@ -1835,14 +1896,45 @@
     }
 
     @media (max-height: 600px) and (orientation: landscape) {
-      #mansion-stage { height: calc(100dvh - 12px); min-height: 0; }
-      .mansion-intro__panel { padding: 18px 24px; }
-      .mansion-intro__title { font-size: 2.65rem; }
-      .mansion-intro__lead { margin-top: 12px; }
-      .mansion-controls { margin-top: 12px; }
-      .mansion-intro__actions { margin-top: 14px; }
+      #mansion-intro,
+      #mansion-menu {
+        place-items: start center;
+        padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+      }
+      .mansion-intro__panel,
+      .mansion-menu__panel { padding: 10px 16px; }
+      .mansion-intro__eyebrow { margin-bottom: 4px; }
+      .mansion-intro__title { font-size: 2rem; }
+      .mansion-intro__lead { margin-top: 7px; font-size: 0.86rem; line-height: 1.3; }
+      .mansion-controls { display: none; }
+      .mansion-intro__actions { margin-top: 8px; gap: 6px; }
+      #mansion-enter,
+      #mansion-intro-load { min-height: 44px; padding: 8px 10px; font-size: 0.62rem; }
       .mansion-intro__save-status { font-size: 0.62rem; }
       .mansion-intro__note { display: none; }
+      .mansion-menu__title { margin: 3px 0 5px; font-size: 2rem; }
+      .mansion-menu__copy { display: none; }
+      #mansion-menu-status { margin: 5px 0; font-size: 0.64rem; line-height: 1.25; }
+      .mansion-menu__actions { gap: 6px; }
+      .mansion-menu__button { min-height: 44px; padding: 7px 9px; font-size: 0.59rem; }
+    }
+
+    @media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
+      #mansion-stage:not(.is-maxed):not(:fullscreen) {
+        height: max(130px, calc(100dvh - 200px));
+        min-height: 0;
+      }
+    }
+
+    @media (max-height: 360px) and (orientation: landscape) {
+      .mansion-intro__panel,
+      .mansion-menu__panel { padding: 6px 10px; }
+      .mansion-intro__eyebrow,
+      .mansion-intro__lead,
+      .mansion-menu__eyebrow,
+      .mansion-menu__title { display: none; }
+      .mansion-menu__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+      #mansion-menu-status { margin: 3px 0 5px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1884,6 +1976,10 @@
           <div id="mansion-inventory" aria-label="Carried items"><span class="mansion-inventory__empty">Nothing carried</span></div>
         </section>
 
+        <div id="mansion-stealth" role="meter" aria-label="Stealth concealment" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+          <div class="mansion-stealth__head"><span id="mansion-stealth-mode">Stealth</span><span id="mansion-stealth-value">0</span></div>
+          <div class="mansion-stealth__track" aria-hidden="true"><div id="mansion-stealth-fill"></div></div>
+        </div>
         <div id="mansion-energy" role="meter" aria-label="Sprint energy" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" hidden>
           <div class="mansion-energy__head"><span id="mansion-energy-mode">Energy</span><span id="mansion-energy-value">100</span></div>
           <div class="mansion-energy__track" aria-hidden="true"><div id="mansion-energy-fill"></div></div>
@@ -2174,6 +2270,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260718-intro-save-load-2" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260718-stealth-meter-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

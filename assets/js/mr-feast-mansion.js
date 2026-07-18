@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-code-scratch-corners-1";
+  const MANSION_RUNTIME_VERSION = "20260718-audio-floor-mix-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -18601,11 +18601,13 @@
       const clamped = clamp(Number(exposure) || 0, 0, 1);
       this.rain.exposure = clamped;
       const now = this.ctx.currentTime;
-      // Perceptual staging: even the deepest interior keeps a faint wash of
-      // rain on the roof, and the muffle filter opens with exposure so
-      // stepping outside reads as walls falling away, not a volume knob.
-      const gainTarget = this.rain.level * (0.05 + 0.95 * Math.pow(clamped, 1.35));
-      const cutoffTarget = 420 + 7800 * Math.pow(clamped, 1.6);
+      // Perceptual staging: outdoors is the full storm, sealed interiors keep
+      // a faint roof wash, and the basement can drop nearly silent. The muffle
+      // filter opens with exposure so stepping outside reads as walls falling
+      // away, not a pure volume knob.
+      const gainFloor = 0.003;
+      const gainTarget = this.rain.level * (gainFloor + (1 - gainFloor) * Math.pow(clamped, 1.35));
+      const cutoffTarget = 160 + 8060 * Math.pow(clamped, 1.6);
       this.rain.gain.gain.setTargetAtTime(gainTarget, now, 0.24);
       this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, 0.24);
     }
@@ -18808,33 +18810,39 @@
       this.thunderState.lastDelay = safeDelay;
       setTimeout(() => {
         if (!this.ctx || !state.audioEnabled) return;
+        // Evaluate location when the strike actually plays so a delayed roll
+        // still muffles if the player has already gone underground.
+        const inBasement = state.currentFloor === "BASEMENT";
         const recorded = this.playSample("thunder", {
-          volume: 0.31,
-          rate: 0.98,
+          volume: inBasement ? 0.045 : 0.31,
+          rate: inBasement ? 0.86 : 0.98,
           rateVariance: 0.055,
-          pan: (Math.random() * 2 - 1) * 0.32,
-          lowpass: safeDelay > 1 ? 2100 : 4200,
+          pan: (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
+          // Deep basement: very low cutoff so only a distant, felt rumble remains.
+          lowpass: inBasement
+            ? (safeDelay > 1 ? 280 : 450)
+            : (safeDelay > 1 ? 2100 : 4200),
         });
         if (recorded) {
           // A very quiet sub tail lends weight on laptop speakers without
           // masking the transient and long roll in the field recording.
-          this.ping(42, 2.4, 0.045, "sine");
+          this.ping(42, 2.4, inBasement ? 0.006 : 0.045, "sine");
         } else {
           const now = this.ctx.currentTime;
           const noise = this.ctx.createBufferSource();
           noise.buffer = this.makeNoiseBuffer(2.6);
           const low = this.ctx.createBiquadFilter();
           low.type = "lowpass";
-          low.frequency.setValueAtTime(580, now);
-          low.frequency.exponentialRampToValueAtTime(85, now + 2.5);
+          low.frequency.setValueAtTime(inBasement ? 120 : 580, now);
+          low.frequency.exponentialRampToValueAtTime(inBasement ? 40 : 85, now + 2.5);
           const gain = this.ctx.createGain();
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(0.34, now + 0.06);
+          gain.gain.exponentialRampToValueAtTime(inBasement ? 0.045 : 0.34, now + 0.06);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
           noise.connect(low).connect(gain).connect(this.master);
           noise.start(now);
           noise.stop(now + 2.55);
-          this.ping(46, 2.2, 0.12, "sine");
+          this.ping(46, 2.2, inBasement ? 0.014 : 0.12, "sine");
         }
         this.thunderState.playCount += 1;
         this.markCue("thunder");
@@ -18883,20 +18891,38 @@
       }
       this.footsteps.distance += travelled;
       const stride = state.movement.crouched ? 0.5 : state.movement.sprinting ? 0.82 : 0.68;
+      // Main level and second floor wood reads clearly underfoot; crouch stays
+      // almost silent so stealth feels intentional. Basement/outdoor keep a
+      // more restrained walk level so stone and wet grass do not dominate.
+      const onUpperFloors = state.currentFloor === "MAIN LEVEL" || state.currentFloor === "SECOND FLOOR";
       let emitted = 0;
       while (this.footsteps.distance >= stride && emitted < 2) {
         this.footsteps.distance -= stride;
         const surface = this.footstepSurface(position);
         const key = surface === "stone" ? "footstepStone" : surface === "grass" ? "footstepGrass" : "footstepWood";
-        const baseVolume = state.movement.crouched ? 0.075 : state.movement.sprinting ? 0.155 : 0.115;
+        // Intentionally large deltas: upper walk is ~3.5x the old 0.115 walk level.
+        // Crouch uses a dedicated quiet level (no stealth multiply stack) so it
+        // stays near-silent without vanishing entirely.
+        let stepVolume;
+        let stepLowpass;
+        if (state.movement.crouched) {
+          stepVolume = 0.012;
+          stepLowpass = 1800;
+        } else if (state.movement.sprinting) {
+          stepVolume = onUpperFloors ? 0.48 : 0.22;
+          stepLowpass = 7200;
+        } else {
+          stepVolume = onUpperFloors ? 0.40 : 0.15;
+          stepLowpass = 6500;
+        }
         const played = this.playSample(key, {
-          volume: baseVolume * state.movement.stealthNoiseMultiplier,
-          rate: state.movement.sprinting ? 1.05 : state.movement.crouched ? 0.94 : 1,
+          volume: stepVolume,
+          rate: state.movement.sprinting ? 1.05 : state.movement.crouched ? 0.9 : 1,
           rateVariance: 0.06,
           pan: this.footsteps.left ? -0.09 : 0.09,
-          lowpass: state.movement.crouched ? 3900 : 6200,
+          lowpass: stepLowpass,
         });
-        if (!played && !this.ping(surface === "stone" ? 105 : surface === "grass" ? 82 : 125, 0.065, baseVolume * 0.22, "triangle")) break;
+        if (!played && !this.ping(surface === "stone" ? 105 : surface === "grass" ? 82 : 125, 0.065, stepVolume * 0.22, "triangle")) break;
         this.footsteps.left = !this.footsteps.left;
         this.footsteps.count += 1;
         this.footsteps.lastSurface = surface;
@@ -19784,12 +19810,13 @@
     // How much of the storm reaches the player's ears. Outdoors is full
     // exposure; indoors the strongest nearby shell opening wins — an open
     // exterior door is open air, a window is loud but glassed, and away from
-    // the shell only a faint roof wash remains (fainter still underground).
+    // the shell only a faint roof wash remains. The basement is almost sealed:
+    // no shell openings contribute, so only a near-silent residual wash remains.
     if (outdoorRoomNames.has(state.currentRoom)) return 1;
+    // Near-silent residual only — no shell apertures leak into the basement.
+    if (state.currentFloor === "BASEMENT") return 0;
     const p = physics.playerPosition();
-    let strongest = state.currentFloor === "BASEMENT" ? 0.05
-      : state.currentFloor === "SECOND FLOOR" ? 0.16
-        : 0.12;
+    let strongest = state.currentFloor === "SECOND FLOOR" ? 0.16 : 0.12;
     const consider = (x, y, z, openness) => {
       const distance = Math.hypot(p.x - x, p.y - y, p.z - z);
       const falloff = clamp(1 - (distance - 1.1) / 6.4, 0, 1);

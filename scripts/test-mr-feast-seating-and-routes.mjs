@@ -16,6 +16,108 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+const radians = (degrees) => degrees * Math.PI / 180;
+
+function assertAttentionProbe(probe, label) {
+  assert(probe?.acquired?.active && probe.acquired.inRange && probe.acquired.inFov, `${label} should notice a nearby player inside its field of view: ${JSON.stringify(probe)}`);
+  assert(Math.abs(probe.acquired.yaw) >= radians(8), `${label} head turn is too subtle to read: ${JSON.stringify(probe.acquired)}`);
+  assert(Math.abs(probe.bodyYawAfter - probe.bodyYawBefore) <= 0.001, `${label} passive attention must remain head-and-neck-only: ${JSON.stringify(probe)}`);
+  assert(Math.abs(probe.afterFirstFrame.yaw) > 0 && Math.abs(probe.afterFirstFrame.yaw) < Math.abs(probe.acquired.yaw) * 0.8, `${label} attention should ease in instead of snapping: ${JSON.stringify(probe)}`);
+  assert(Math.abs(probe.afterFirstReturnFrame.yaw) > radians(0.25) && Math.abs(probe.afterFirstReturnFrame.yaw) < Math.abs(probe.acquired.yaw), `${label} attention should ease back instead of snapping neutral: ${JSON.stringify(probe)}`);
+  assert(Math.abs(probe.returned.yaw) <= radians(1) && Math.abs(probe.returned.pitch) <= radians(1), `${label} attention should settle back to neutral: ${JSON.stringify(probe.returned)}`);
+  const yawLimit = radians(probe.limits.maxYawDegrees) + 0.001;
+  const pitchLimit = radians(probe.limits.maxPitchDegrees) + 0.001;
+  assert(probe.limits.maxYawDegrees >= 25 && probe.limits.maxYawDegrees <= 40, `${label} yaw limit should be visible but anatomical: ${JSON.stringify(probe.limits)}`);
+  assert(probe.limits.maxPitchDegrees >= 10 && probe.limits.maxPitchDegrees <= 22, `${label} pitch limit should be anatomical: ${JSON.stringify(probe.limits)}`);
+  assert(probe.maximumObservedYaw <= yawLimit && probe.maximumObservedPitch <= pitchLimit, `${label} exceeded its anatomical clamp: ${JSON.stringify(probe)}`);
+  assert(probe.samples.every((sample) => Math.abs(sample.headQuaternionLength - 1) <= 0.0001), `${label} accumulated an invalid head quaternion: ${JSON.stringify(probe.samples)}`);
+}
+
+async function inspectHeadShading(glbPath) {
+  const bytes = await readFile(glbPath);
+  assert(bytes.toString("ascii", 0, 4) === "glTF", `${glbPath} is not GLB`);
+  const jsonLength = bytes.readUInt32LE(12);
+  const json = JSON.parse(bytes.toString("utf8", 20, 20 + jsonLength).replace(/\0+$/, ""));
+  const binHeader = 20 + jsonLength;
+  assert(bytes.readUInt32LE(binHeader + 4) === 0x004e4942, `${glbPath} has no BIN chunk`);
+  const binOffset = binHeader + 8;
+  const componentCount = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
+  const componentBytes = { 5121: 1, 5123: 2, 5125: 4, 5126: 4 };
+  const readComponent = {
+    5121: (offset) => bytes.readUInt8(offset),
+    5123: (offset) => bytes.readUInt16LE(offset),
+    5125: (offset) => bytes.readUInt32LE(offset),
+    5126: (offset) => bytes.readFloatLE(offset),
+  };
+  const readAccessor = (index) => {
+    const accessor = json.accessors[index];
+    const view = json.bufferViews[accessor.bufferView];
+    const width = componentCount[accessor.type];
+    const scalarBytes = componentBytes[accessor.componentType];
+    const stride = view.byteStride || width * scalarBytes;
+    const start = binOffset + (view.byteOffset || 0) + (accessor.byteOffset || 0);
+    return Array.from({ length: accessor.count }, (_, item) => Array.from(
+      { length: width },
+      (_, component) => readComponent[accessor.componentType](start + item * stride + component * scalarBytes),
+    ));
+  };
+  const primitive = json.meshes[0].primitives[0];
+  assert(primitive.attributes.NORMAL !== undefined, `${glbPath} is missing vertex normals`);
+  const positions = readAccessor(primitive.attributes.POSITION);
+  const normals = readAccessor(primitive.attributes.NORMAL);
+  const joints = readAccessor(primitive.attributes.JOINTS_0);
+  const weights = readAccessor(primitive.attributes.WEIGHTS_0);
+  const indices = readAccessor(primitive.indices).flat();
+  const jointNames = json.skins[0].joints.map((nodeIndex) => json.nodes[nodeIndex].name);
+  const headJointIndices = new Set(
+    [jointNames.indexOf("Head"), jointNames.indexOf("neck")].filter((index) => index >= 0),
+  );
+  const headWeights = joints.map((vertexJoints, vertex) => vertexJoints.reduce(
+    (total, joint, slot) => total + (headJointIndices.has(joint) ? weights[vertex][slot] : 0),
+    0,
+  ));
+  const normalLengths = normals.map((normal) => Math.hypot(...normal));
+  let headTriangles = 0;
+  let flatHeadTriangles = 0;
+  let invertedHeadTriangles = 0;
+  let degenerateHeadTriangles = 0;
+  for (let offset = 0; offset < indices.length; offset += 3) {
+    const ids = indices.slice(offset, offset + 3);
+    if (ids.filter((id) => headWeights[id] > 0.25).length < 2) continue;
+    headTriangles += 1;
+    const [a, b, c] = ids.map((id) => positions[id]);
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const geometric = [
+      ab[1] * ac[2] - ab[2] * ac[1],
+      ab[2] * ac[0] - ab[0] * ac[2],
+      ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    const length = Math.hypot(...geometric);
+    if (length < 1e-9) {
+      degenerateHeadTriangles += 1;
+      continue;
+    }
+    for (let axis = 0; axis < 3; axis += 1) geometric[axis] /= length;
+    const dots = ids.map((id) => normals[id].reduce(
+      (sum, value, axis) => sum + value * geometric[axis],
+      0,
+    ));
+    if (dots.every((dot) => Math.abs(dot) >= 0.9999)) flatHeadTriangles += 1;
+    if (dots.reduce((sum, dot) => sum + dot, 0) / 3 < 0) invertedHeadTriangles += 1;
+  }
+  return {
+    headWeightedVertices: headWeights.filter((weight) => weight > 0.25).length,
+    headTriangles,
+    flatHeadTriangleRatio: flatHeadTriangles / headTriangles,
+    invertedHeadTriangleRatio: invertedHeadTriangles / headTriangles,
+    degenerateHeadTriangles,
+    normalsFinite: normalLengths.every(Number.isFinite),
+    minimumNormalLength: Math.min(...normalLengths),
+    maximumNormalLength: Math.max(...normalLengths),
+  };
+}
+
 function planarDistance(a, b) {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
@@ -98,12 +200,16 @@ async function run() {
   assert(/probeFurnitureCollisionForQA/.test(runtimeSource), "runtime is missing deterministic NPC furniture-collision QA");
   assert(/preserveContestantModelOrientation/.test(runtimeSource), "contestant GLBs must preserve GLTFLoader's imported Y-up orientation");
   assert(!/model\.rotation\.x\s*=\s*-Math\.PI\s*\/\s*2/.test(runtimeSource), "contestant models must not receive a second X-axis conversion after GLTFLoader");
+  assert(/updateHeadAttention/.test(runtimeSource), "contestants need nearby field-of-view head attention with anatomical limits");
+  assert(/probeNpcAttentionForQA/.test(runtimeSource), "runtime is missing deterministic contestant and Mr. Feast head-attention QA");
+  assert(/applyRelaxedArmPose/.test(runtimeSource), "contestants need one coherent relaxed arm pose layer for standing, walking, and seating");
 
   for (const id of contestantIds) {
     const spec = manifest.characters.find((entry) => entry.id === id);
     assert(spec?.animations?.idle?.file && spec.animations.idle.name === "neutral-idle", `${id} is missing its relaxed neutral idle clip`);
     assert(spec?.animations?.walk?.file, `${id} is missing its walk clip manifest entry`);
     const idlePath = path.join(path.dirname(manifestPath), spec.animations.idle.file);
+    const modelPath = path.join(path.dirname(manifestPath), spec.model);
     const idleReportPath = idlePath.replace(/\.glb$/i, ".animation-report.json");
     const walkPath = path.join(path.dirname(manifestPath), spec.animations.walk.file);
     const walkReportPath = walkPath.replace(/\.glb$/i, ".animation-report.json");
@@ -132,6 +238,11 @@ async function run() {
       && walkReport.channelsAfter?.scale === 0,
       `${id} walk clip must be a stationary rotation-only rig action; got ${JSON.stringify(walkReport)}`,
     );
+    const shading = await inspectHeadShading(modelPath);
+    assert(shading.headWeightedVertices >= 1_000 && shading.headTriangles >= 1_500, `${id} head coverage is invalid: ${JSON.stringify(shading)}`);
+    assert(shading.normalsFinite && shading.minimumNormalLength >= 0.999 && shading.maximumNormalLength <= 1.001, `${id} normals are invalid: ${JSON.stringify(shading)}`);
+    assert(shading.degenerateHeadTriangles === 0 && shading.invertedHeadTriangleRatio <= 0.005, `${id} head has degenerate or inverted shading: ${JSON.stringify(shading)}`);
+    assert(shading.flatHeadTriangleRatio <= 0.02, `${id} head is visibly faceted: ${JSON.stringify(shading)}`);
   }
 
   let server = null;
@@ -268,6 +379,7 @@ async function run() {
       assert(result?.completed === true && result.cycles >= 1, `${id} should complete a deterministic routine cycle; got ${JSON.stringify(result)}`);
       assert(result.activities.includes("walking") && result.activities.includes("idle") && result.activities.includes("seated"), `${id} routine should walk, pause, and sit; got ${JSON.stringify(result.activities)}`);
       assert(result.distanceTravelled >= 1 && result.teleports === 0, `${id} should materially walk without teleporting; got ${JSON.stringify(result)}`);
+      assert(result.maximumArmSwingRadians >= 0.08 && result.maximumArmSwingRadians <= 0.11, `${id} walk should have a restrained procedural counter-swing instead of frozen or flailing arms; got ${JSON.stringify(result)}`);
       assert(result.segmentsTraversed >= (initial.route.points - 1) * 2 - 1, `${id} should visit the authored loop while skipping only the duplicate seat-exit waypoint; got ${JSON.stringify(result)}`);
       assert(result.seatExitsCompleted >= 2, `${id} QA cycle should include both outbound and return seat exits; got ${JSON.stringify(result)}`);
       assert(result.postSeatDeparturesCompleted === result.seatExitsCompleted && result.postSeatDeparturePending === false, `${id} must walk to a different hangout after every seat exit; got ${JSON.stringify(result)}`);
@@ -277,6 +389,8 @@ async function run() {
       assert(result.floorStayedFixed === true && result.minimumPatrolClearance >= 1.65 && result.minimumStaticClearance >= 0.28, `${id} should remain on a route-safe authored floor; got ${JSON.stringify(result)}`);
       const settled = entryById(await diagnostics(desktop), id);
       assert(settled.activity === "idle" && settled.animation.name === "idle" && settled.animation.neutralRestApplied === true, `${id} should end the routine in a relaxed arms-down idle; got ${JSON.stringify(settled.animation)}`);
+      assert(settled.armPose?.coherentChain && settled.armPose.handsIncluded && settled.armPose.world?.valid && !settled.armPose.world.handsCrossedCenterline, `${id} standing arm chain should keep elbows and hands on their anatomical sides; got ${JSON.stringify(settled.armPose)}`);
+      assert(settled.armPose.world.handSeparation >= 0.12 && settled.armPose.world.minimumWristDrop >= 0.2, `${id} standing hands should hang separately below the shoulders; got ${JSON.stringify(settled.armPose.world)}`);
       await desktop.evaluate((contestantId) => {
         window.MrFeastFresh.state.started = false;
         window.MrFeastFresh.placePlayerNearContestantForQA(contestantId, 2.2);
@@ -296,6 +410,7 @@ async function run() {
       assert(seatedMotion.seated?.seated && seatedMotion.probe?.stillSeated && seatedMotion.probe.poseChanged, `${id} should use a living seated idle; got ${JSON.stringify(seatedMotion)}`);
       assert(seatedMotion.probe.rootDrift <= 0.002 && seatedMotion.probe.maximumLowerBodyDelta <= 0.000001, `${id} seated motion must keep its root and lower body planted; got ${JSON.stringify(seatedMotion.probe)}`);
       assert(seatedMotion.probe.maximumUpperBodyDelta >= 0.000001 && seatedMotion.probe.maximumUpperBodyDelta <= 0.02, `${id} seated upper-body motion should stay restrained; got ${JSON.stringify(seatedMotion.probe)}`);
+      assert(seatedMotion.probe.armPose?.valid && !seatedMotion.probe.armPose.handsCrossedCenterline && seatedMotion.probe.armPose.handSeparation >= 0.12, `${id} seated hands should remain relaxed and separated on their own side; got ${JSON.stringify(seatedMotion.probe.armPose)}`);
       if (id !== "juniper-cross") {
         const chairFit = seatedMotion.probe.seatFit;
         assert(chairFit?.kind === "chair", `${id} should use an authored standard chair; got ${JSON.stringify(chairFit)}`);
@@ -304,6 +419,71 @@ async function run() {
         assert(chairFit.maximumThighCushionOverlapRatio <= 0.3 && chairFit.maximumToeFloorDistance <= 0.08, `${id} should avoid a buried/perched chair pose and keep floor-near boots; got ${JSON.stringify(chairFit)}`);
       }
     }
+
+    // Nearby passive attention is head/neck-only, smoothly damped, and cannot
+    // follow a player around the back of the body.
+    for (const id of contestantIds) {
+      const near = await desktop.evaluate((contestantId) => (
+        window.MrFeastFresh.probeContestantHeadTrackingForQA(contestantId, {
+          distance: 1.8,
+          bearingDegrees: 30,
+          elevationDegrees: 8,
+          holdSeconds: 0.9,
+          releaseSeconds: 1.4,
+        })
+      ), id);
+      assertAttentionProbe(near, id);
+      const rear = await desktop.evaluate((contestantId) => (
+        window.MrFeastFresh.probeContestantHeadTrackingForQA(contestantId, {
+          distance: 1.8,
+          bearingDegrees: 170,
+          holdSeconds: 1.1,
+        })
+      ), id);
+      assert(!rear.acquired.active && !rear.acquired.inFov && Math.abs(rear.acquired.targetYaw) <= 0.001, `${id} must not turn its head backward toward a player behind it: ${JSON.stringify(rear)}`);
+      const extreme = await desktop.evaluate((contestantId) => (
+        window.MrFeastFresh.probeContestantHeadTrackingForQA(contestantId, {
+          distance: 1.5,
+          bearingDegrees: 50,
+          elevationDegrees: 25,
+          holdSeconds: 10,
+          releaseSeconds: 0.2,
+        })
+      ), id);
+      assert(extreme.maximumObservedYaw <= radians(extreme.limits.maxYawDegrees) + 0.001 && extreme.maximumObservedPitch <= radians(extreme.limits.maxPitchDegrees) + 0.001, `${id} extreme attention hold exceeded its clamp: ${JSON.stringify(extreme)}`);
+    }
+
+    await desktop.evaluate(() => window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, z: -7, yaw: 0 }));
+    const mrFeastAttention = await desktop.evaluate(() => window.MrFeastFresh.probeMrFeastHeadTrackingForQA({
+      distance: 2.1,
+      bearingDegrees: 30,
+      elevationDegrees: 8,
+      holdSeconds: 0.9,
+      releaseSeconds: 1.4,
+    }));
+    assertAttentionProbe(mrFeastAttention, "Mr. Feast");
+    const mrFeastOutsideFov = await desktop.evaluate(() => window.MrFeastFresh.probeMrFeastHeadTrackingForQA({
+      distance: 2.1,
+      bearingDegrees: 60,
+      holdSeconds: 1,
+    }));
+    assert(!mrFeastOutsideFov.acquired.active && !mrFeastOutsideFov.acquired.inFov && Math.abs(mrFeastOutsideFov.acquired.targetYaw) <= 0.001, `Mr. Feast must ignore a player outside his forward field of view: ${JSON.stringify(mrFeastOutsideFov)}`);
+    const mrFeastBehind = await desktop.evaluate(() => window.MrFeastFresh.probeMrFeastHeadTrackingForQA({
+      distance: 2.1,
+      bearingDegrees: 180,
+      holdSeconds: 10,
+    }));
+    assert(!mrFeastBehind.acquired.active && !mrFeastBehind.acquired.inFov && mrFeastBehind.maximumObservedYaw <= radians(mrFeastBehind.limits.maxYawDegrees) + 0.001, `Mr. Feast must never track through 180 degrees: ${JSON.stringify(mrFeastBehind)}`);
+    const mrFeastFar = await desktop.evaluate((distance) => window.MrFeastFresh.probeMrFeastHeadTrackingForQA({
+      distance,
+      bearingDegrees: 0,
+      holdSeconds: 1,
+    }), mrFeastAttention.limits.maximumDistance + 1);
+    assert(!mrFeastFar.acquired.active && !mrFeastFar.acquired.inRange, `Mr. Feast attention must be nearby-only: ${JSON.stringify(mrFeastFar)}`);
+    await desktop.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resumeMrFeastForQA();
+    });
 
     // Kinematic character controllers, not only authored route clearance,
     // must stop every living character against the mansion's furniture boxes.

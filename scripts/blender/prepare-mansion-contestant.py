@@ -25,7 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import bpy
+import bmesh
 from mathutils import Matrix, Vector
+
+
+NORMAL_WELD_DISTANCE_METERS = 1e-4
 
 
 def parse_args() -> argparse.Namespace:
@@ -144,6 +148,49 @@ def decimate(meshes: list[bpy.types.Object], target_triangles: int) -> list[str]
         move_modifier_to_front(mesh, modifier.name)
         bpy.ops.object.modifier_apply(modifier=modifier.name)
     return warnings
+
+
+def smooth_skinned_meshes(meshes: list[bpy.types.Object]) -> dict[str, int]:
+    """Rebuild organic character shading after destructive decimation.
+
+    Meshy exports can contain isolated flat polygons across faces and limbs.
+    Collapse decimation preserves and can amplify those split normals, which
+    reads as torn or black facial geometry under the mansion's spotlights.
+    Contestant bodies are organic skinned meshes, so their exported polygons
+    should share smooth vertex normals; unskinned helper geometry is left
+    untouched.
+    """
+    smoothed = 0
+    flat = 0
+    welded = 0
+    for mesh in meshes:
+        if not any(modifier.type == "ARMATURE" for modifier in mesh.modifiers):
+            continue
+        # glTF represents hard/split normals as duplicate vertices. Merely
+        # toggling smooth polygons cannot reconnect those normals, so weld only
+        # coincident duplicates before rebuilding the organic surface shading.
+        edit_mesh = bmesh.new()
+        edit_mesh.from_mesh(mesh.data)
+        before_vertices = len(edit_mesh.verts)
+        bmesh.ops.remove_doubles(
+            edit_mesh,
+            verts=list(edit_mesh.verts),
+            dist=NORMAL_WELD_DISTANCE_METERS,
+        )
+        welded += before_vertices - len(edit_mesh.verts)
+        edit_mesh.to_mesh(mesh.data)
+        edit_mesh.free()
+        for polygon in mesh.data.polygons:
+            polygon.use_smooth = True
+        mesh.data.update()
+        smoothed += sum(1 for polygon in mesh.data.polygons if polygon.use_smooth)
+        flat += sum(1 for polygon in mesh.data.polygons if not polygon.use_smooth)
+    return {
+        "smoothPolygons": smoothed,
+        "flatPolygons": flat,
+        "weldedVertices": welded,
+        "weldDistanceMeters": NORMAL_WELD_DISTANCE_METERS,
+    }
 
 
 def rename_assets(slug: str, meshes: list[bpy.types.Object]) -> tuple[list[str], list[str]]:
@@ -275,6 +322,7 @@ def main() -> None:
     mesh_names, material_names = rename_assets(args.slug, meshes)
     source_triangles = triangle_count(meshes)
     warnings = decimate(meshes, args.target_triangles)
+    shading = smooth_skinned_meshes(meshes)
     images = resize_and_pack_images(args.texture_size)
     final_triangles = triangle_count(meshes)
     final_bounds = world_bounds(meshes)
@@ -315,6 +363,7 @@ def main() -> None:
         "materials": material_names,
         "images": images,
         "warnings": warnings,
+        "shading": shading,
         "features": {
             "animations": False,
             "skins": True,

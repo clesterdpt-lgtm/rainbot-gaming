@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260717-seating-routines-3",
+  "assetVersion": "20260718-natural-characters-1",
   "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
   "characters": [
     {
@@ -124,6 +124,9 @@
       "heightMeters": 1.82,
       "model": "juniper-cross.glb",
       "report": "juniper-cross.report.json",
+      "materialTuning": {
+        "emissiveFromAlbedo": 0.5
+      },
       "visualNotes": "A tall shaved-head silhouette in plum and black, with a calm gothic presence and an observant folklorist's reserve.",
       "source": {
         "provider": "Meshy",
@@ -139,8 +142,8 @@
       "blender": {
         "version": "4.5.11 LTS",
         "script": "../../../../scripts/blender/prepare-mansion-contestant.py",
-        "triangles": 26000,
-        "textureMaxSize": 512,
+        "triangles": 50000,
+        "textureMaxSize": 1024,
         "compression": "none"
       },
       "animations": {

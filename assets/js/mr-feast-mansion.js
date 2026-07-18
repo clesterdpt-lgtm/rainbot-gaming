@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-basement-pursuit-10";
+  const MANSION_RUNTIME_VERSION = "20260718-natural-characters-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -553,6 +553,32 @@
       RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
     }),
   });
+  const CONTESTANT_SEATED_ARM_POSES = Object.freeze({
+    "mara-voss": Object.freeze({
+      LeftArm: Object.freeze([-0.175259, -0.000002, 0.298514, 0.938176]),
+      LeftForeArm: Object.freeze([0.624, 0, -0.076, 0.777]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([-0.142239, 0, -0.328310, 0.933799]),
+      RightForeArm: Object.freeze([0.624, 0, 0.074, 0.777]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+    }),
+    "kip-solano": Object.freeze({
+      LeftArm: Object.freeze([-0.146489, 0.000003, 0.498257, 0.854565]),
+      LeftForeArm: Object.freeze([0.538898, -0.000005, -0.066183, 0.839767]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([-0.189284, 0, -0.475843, 0.858921]),
+      RightForeArm: Object.freeze([0.564771, 0.000002, 0.058299, 0.823186]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+    }),
+    "juniper-cross": Object.freeze({
+      LeftArm: Object.freeze([-0.04, 0, 0.27, 0.962]),
+      LeftForeArm: Object.freeze([0.697, 0, -0.238, 0.676]),
+      LeftHand: Object.freeze([0, 0.358368, 0, 0.93358]),
+      RightArm: Object.freeze([-0.04, 0, -0.27, 0.962]),
+      RightForeArm: Object.freeze([0.697, 0, 0.238, 0.676]),
+      RightHand: Object.freeze([0, -0.358368, 0, 0.93358]),
+    }),
+  });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
     RESTRICTED: "restricted",
@@ -1030,7 +1056,7 @@
   });
   const MANSION_CONTESTANTS = Object.freeze({
     manifestPath: "../models/mr-feast/contestants/manifest.json",
-    assetVersion: "20260717-seating-routines-3",
+    assetVersion: "20260718-natural-characters-1",
     contactShadowOpacity: 0.2,
     interactionWidth: 0.82,
     interactionDepth: 0.7,
@@ -1043,6 +1069,23 @@
     movementAlignment: 0.975,
     arrivalRadius: 0.015,
     fadeSeconds: 0.2,
+    defaultEmissiveFromAlbedo: 0.04,
+    maximumMaterialMetalness: 0,
+    armMotion: Object.freeze({
+      idleSwayRadians: 0.012,
+      walkSwingRadians: 0.105,
+      walkElbowFlexRadians: 0.035,
+    }),
+    attention: Object.freeze({
+      maximumDistance: 3.8,
+      halfFovRadians: 1.05,
+      maximumYawRadians: 0.55,
+      maximumPitchRadians: 0.24,
+      acquireDamping: 5.2,
+      releaseDamping: 3.6,
+      neckShare: 0.32,
+      walkingStrength: 0.58,
+    }),
     locomotionArmBones: Object.freeze(["LeftShoulder", "LeftArm", "LeftForeArm", "LeftHand", "RightShoulder", "RightArm", "RightForeArm", "RightHand"]),
     placements: Object.freeze([
       Object.freeze({
@@ -1158,13 +1201,17 @@
   ]);
   const MR_FEAST_FACE = Object.freeze({
     expressionDamping: 11,
-    attentionDamping: 6.5,
+    attentionDamping: 5.4,
+    attentionReleaseDamping: 3.8,
+    attentionDistance: 4.8,
+    attentionHalfFovRadians: 0.95,
+    attentionNeckShare: 0.3,
     maxExpressionMorphs: 6,
     closeDistance: 2.6,
     watchingDistance: 7.5,
     qaExpressionCycle: Object.freeze(["neutral", "friendly", "watching", "close", "threatened"]),
-    maxAttentionYaw: 0.13,
-    maxAttentionPitch: 0.055,
+    maxAttentionYaw: 0.5,
+    maxAttentionPitch: 0.18,
     blinkIntervals: Object.freeze([3.35, 4.8, 2.9, 5.25, 3.7]),
     blinkCloseSeconds: 0.055,
     blinkHoldSeconds: 0.028,
@@ -1190,11 +1237,11 @@
       close: Object.freeze({ browCompress: 0.52, smileWide: 0.72, sneerLeft: 0.42, sneerRight: 0.14, mouthOpen: 0.16, jawShift: 0.24 }),
     }),
     attentionStrength: Object.freeze({
-      neutral: 0,
-      friendly: 0.12,
-      watching: 0.56,
-      threatened: 0.68,
-      close: 0.84,
+      neutral: 0.72,
+      friendly: 0.72,
+      watching: 0.9,
+      threatened: 1,
+      close: 1,
     }),
   });
   const MR_FEAST_ROUTE_DISTANCE_METERS = MR_FEAST_PATROL_ROUTE.reduce((total, target, index) => {
@@ -3014,6 +3061,7 @@
       this.contactShadow = null;
       this.bonesByName = new Map();
       this.hipsBone = null;
+      this.neckBone = null;
       this.headBone = null;
       this.headFrontBone = null;
       this.headEndBone = null;
@@ -3044,6 +3092,11 @@
         nextSeconds: MR_FEAST_FACE.blinkIntervals[0],
       };
       this.faceAttention = {
+        active: false,
+        inRange: false,
+        inFov: false,
+        occluded: false,
+        relativeYaw: 0,
         yaw: 0,
         pitch: 0,
         targetYaw: 0,
@@ -3052,6 +3105,8 @@
       };
       this.faceHeadOffset = new THREE.Quaternion();
       this.faceHeadOffsetInverse = new THREE.Quaternion();
+      this.faceNeckOffset = new THREE.Quaternion();
+      this.faceNeckOffsetInverse = new THREE.Quaternion();
       this.faceHeadOffsetApplied = false;
       this.animationTrackDiagnostics = {};
       this.qaAnimationFrozen = false;
@@ -3383,6 +3438,7 @@
           this.syncCollider();
         }
         this.hipsBone = this.bonesByName.get("Hips") || null;
+        this.neckBone = this.bonesByName.get("neck") || null;
         this.headBone = this.bonesByName.get("Head") || null;
         this.headFrontBone = this.bonesByName.get("headfront") || null;
         this.headEndBone = this.bonesByName.get("head_end") || null;
@@ -3491,6 +3547,11 @@
       this.faceBlink.cycle = 0;
       this.faceBlink.leadingEye = "left";
       this.faceBlink.nextSeconds = MR_FEAST_FACE.blinkIntervals[0];
+      this.faceAttention.active = false;
+      this.faceAttention.inRange = false;
+      this.faceAttention.inFov = false;
+      this.faceAttention.occluded = false;
+      this.faceAttention.relativeYaw = 0;
       this.faceAttention.yaw = 0;
       this.faceAttention.pitch = 0;
       this.faceAttention.targetYaw = 0;
@@ -3606,14 +3667,19 @@
     }
 
     clearFaceAttentionPose() {
-      if (!this.headBone || !this.faceHeadOffsetApplied) return;
-      this.faceHeadOffsetInverse.copy(this.faceHeadOffset).conjugate();
-      this.headBone.quaternion.multiply(this.faceHeadOffsetInverse).normalize();
+      if (!this.faceHeadOffsetApplied) return;
+      if (this.neckBone) {
+        this.faceNeckOffsetInverse.copy(this.faceNeckOffset).conjugate();
+        this.neckBone.quaternion.multiply(this.faceNeckOffsetInverse).normalize();
+      }
+      if (this.headBone) {
+        this.faceHeadOffsetInverse.copy(this.faceHeadOffset).conjugate();
+        this.headBone.quaternion.multiply(this.faceHeadOffsetInverse).normalize();
+      }
       this.faceHeadOffsetApplied = false;
     }
 
     updateFaceAttention(dt, snap = false) {
-      const strength = MR_FEAST_FACE.attentionStrength[this.faceExpression] || 0;
       const facePosition = this.headFrontBone
         ? this.headFrontBone.getWorldPosition(new THREE.Vector3())
         : this.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, this.modelSize.y * 0.86, 0));
@@ -3627,30 +3693,55 @@
         Math.cos(desiredWorldYaw - this.root.rotation.y),
       );
       const elevation = Math.atan2(dy, horizontalDistance);
-      this.faceAttention.targetYaw = clamp(
-        relativeYaw,
+      const distance = Math.hypot(horizontalDistance, dy);
+      const inRange = distance <= MR_FEAST_FACE.attentionDistance;
+      const inFov = Math.abs(relativeYaw) <= MR_FEAST_FACE.attentionHalfFovRadians;
+      const hasSight = inRange && inFov && !state.isHidden && this.canSeePlayerAct();
+      const occluded = inRange && inFov && !state.isHidden && !hasSight;
+      const strength = hasSight ? (MR_FEAST_FACE.attentionStrength[this.faceExpression] || 0.72) : 0;
+      this.faceAttention.active = hasSight;
+      this.faceAttention.inRange = inRange;
+      this.faceAttention.inFov = inFov;
+      this.faceAttention.occluded = occluded;
+      this.faceAttention.relativeYaw = relativeYaw;
+      this.faceAttention.distance = distance;
+      this.faceAttention.targetYaw = hasSight
+        ? clamp(relativeYaw, -MR_FEAST_FACE.maxAttentionYaw, MR_FEAST_FACE.maxAttentionYaw) * strength
+        : 0;
+      this.faceAttention.targetPitch = hasSight
+        ? clamp(-elevation, -MR_FEAST_FACE.maxAttentionPitch, MR_FEAST_FACE.maxAttentionPitch) * strength
+        : 0;
+      const damping = hasSight ? MR_FEAST_FACE.attentionDamping : MR_FEAST_FACE.attentionReleaseDamping;
+      const amount = snap ? 1 : 1 - Math.exp(-damping * Math.max(0, Number(dt) || 0));
+      this.faceAttention.yaw = clamp(
+        this.faceAttention.yaw + (this.faceAttention.targetYaw - this.faceAttention.yaw) * amount,
         -MR_FEAST_FACE.maxAttentionYaw,
         MR_FEAST_FACE.maxAttentionYaw,
-      ) * strength;
-      this.faceAttention.targetPitch = clamp(
-        -elevation,
+      );
+      this.faceAttention.pitch = clamp(
+        this.faceAttention.pitch + (this.faceAttention.targetPitch - this.faceAttention.pitch) * amount,
         -MR_FEAST_FACE.maxAttentionPitch,
         MR_FEAST_FACE.maxAttentionPitch,
-      ) * strength;
-      const amount = snap ? 1 : 1 - Math.exp(-MR_FEAST_FACE.attentionDamping * Math.max(0, Number(dt) || 0));
-      this.faceAttention.yaw += (this.faceAttention.targetYaw - this.faceAttention.yaw) * amount;
-      this.faceAttention.pitch += (this.faceAttention.targetPitch - this.faceAttention.pitch) * amount;
+      );
     }
 
     applyFaceAttentionPose() {
-      if (!this.headBone) return;
-      this.faceHeadOffset.setFromEuler(new THREE.Euler(
-        this.faceAttention.pitch,
-        this.faceAttention.yaw,
+      if (!this.neckBone && !this.headBone) return;
+      const neckShare = this.neckBone ? MR_FEAST_FACE.attentionNeckShare : 0;
+      this.faceNeckOffset.setFromEuler(new THREE.Euler(
+        this.faceAttention.pitch * neckShare,
+        this.faceAttention.yaw * neckShare,
         0,
         "YXZ",
       ));
-      this.headBone.quaternion.multiply(this.faceHeadOffset).normalize();
+      this.faceHeadOffset.setFromEuler(new THREE.Euler(
+        this.faceAttention.pitch * (1 - neckShare),
+        this.faceAttention.yaw * (1 - neckShare),
+        0,
+        "YXZ",
+      ));
+      if (this.neckBone) this.neckBone.quaternion.multiply(this.faceNeckOffset).normalize();
+      if (this.headBone) this.headBone.quaternion.multiply(this.faceHeadOffset).normalize();
       this.faceHeadOffsetApplied = true;
     }
 
@@ -3771,6 +3862,118 @@
       return this.getDiagnostics();
     }
 
+    faceAttentionSnapshotForQA() {
+      return {
+        active: this.faceAttention.active,
+        inRange: this.faceAttention.inRange,
+        inFov: this.faceAttention.inFov,
+        occluded: this.faceAttention.occluded,
+        distance: Number.isFinite(this.faceAttention.distance)
+          ? Number(this.faceAttention.distance.toFixed(4))
+          : null,
+        relativeYaw: Number(this.faceAttention.relativeYaw.toFixed(6)),
+        yaw: Number(this.faceAttention.yaw.toFixed(6)),
+        pitch: Number(this.faceAttention.pitch.toFixed(6)),
+        targetYaw: Number(this.faceAttention.targetYaw.toFixed(6)),
+        targetPitch: Number(this.faceAttention.targetPitch.toFixed(6)),
+        headQuaternionLength: Number((this.headBone?.quaternion.length() || 0).toFixed(6)),
+        neckQuaternionLength: Number((this.neckBone?.quaternion.length() || 0).toFixed(6)),
+      };
+    }
+
+    probeHeadTrackingForQA(options = {}) {
+      if (!state.qa || this.loadStatus !== "ready" || !physics) return null;
+      const distance = clamp(Number(options.distance) || 2.1, 0.8, 14);
+      const bearing = THREE.MathUtils.degToRad(Number(options.bearingDegrees) || 0);
+      const elevation = THREE.MathUtils.degToRad(Number(options.elevationDegrees) || 0);
+      const holdSeconds = clamp(Number(options.holdSeconds) || 0.9, 1 / 60, 10);
+      const releaseSeconds = clamp(Number(options.releaseSeconds) || 1.4, 1 / 60, 10);
+      const originalPlayer = physics.playerPosition();
+      const originalFeetY = originalPlayer.y - (PLAYER.halfHeight + PLAYER.radius + 0.03);
+      const originalYaw = state.yaw;
+      const originalPitch = state.pitch;
+      const wasHidden = state.isHidden;
+      const wasWandering = this.wanderingEnabled;
+      const wasFrozen = this.qaAnimationFrozen;
+      const bodyYawBefore = this.root.rotation.y;
+      const worldYaw = this.root.rotation.y + bearing;
+      state.isHidden = false;
+      this.wanderingEnabled = false;
+      this.qaAnimationFrozen = true;
+      teleport(
+        this.root.position.x + Math.sin(worldYaw) * distance,
+        this.root.position.y + Math.tan(elevation) * distance,
+        this.root.position.z + Math.cos(worldYaw) * distance,
+        worldYaw + Math.PI,
+        0,
+      );
+      this.clearFaceAttentionPose();
+      Object.assign(this.faceAttention, {
+        active: false,
+        inRange: false,
+        inFov: false,
+        occluded: false,
+        relativeYaw: 0,
+        yaw: 0,
+        pitch: 0,
+        targetYaw: 0,
+        targetPitch: 0,
+        distance: null,
+      });
+      const samples = [];
+      const record = () => {
+        const snapshot = this.faceAttentionSnapshotForQA();
+        samples.push(snapshot);
+        return snapshot;
+      };
+      this.stepAnimationAndFace(1 / 60, false);
+      const afterFirstFrame = record();
+      const holdFrames = Math.max(1, Math.round(holdSeconds * 60));
+      for (let frame = 1; frame < holdFrames; frame += 1) {
+        this.stepAnimationAndFace(1 / 60, false);
+        if (frame % 6 === 0 || frame === holdFrames - 1) record();
+      }
+      const acquired = this.faceAttentionSnapshotForQA();
+      const releaseYaw = this.root.rotation.y + Math.PI;
+      const releaseDistance = MR_FEAST_FACE.attentionDistance + 2;
+      teleport(
+        this.root.position.x + Math.sin(releaseYaw) * releaseDistance,
+        this.root.position.y,
+        this.root.position.z + Math.cos(releaseYaw) * releaseDistance,
+        releaseYaw + Math.PI,
+        0,
+      );
+      this.stepAnimationAndFace(1 / 60, false);
+      const afterFirstReturnFrame = record();
+      const releaseFrames = Math.max(1, Math.round(releaseSeconds * 60));
+      for (let frame = 1; frame < releaseFrames; frame += 1) {
+        this.stepAnimationAndFace(1 / 60, false);
+        if (frame % 6 === 0 || frame === releaseFrames - 1) record();
+      }
+      const returned = this.faceAttentionSnapshotForQA();
+      teleport(originalPlayer.x, originalFeetY, originalPlayer.z, originalYaw, originalPitch);
+      state.isHidden = wasHidden;
+      this.wanderingEnabled = wasWandering;
+      this.qaAnimationFrozen = wasFrozen;
+      return {
+        bodyYawBefore: Number(bodyYawBefore.toFixed(6)),
+        bodyYawAfter: Number(this.root.rotation.y.toFixed(6)),
+        limits: {
+          maximumDistance: MR_FEAST_FACE.attentionDistance,
+          halfFovDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.attentionHalfFovRadians).toFixed(2)),
+          maxYawDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.maxAttentionYaw).toFixed(2)),
+          maxPitchDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.maxAttentionPitch).toFixed(2)),
+        },
+        afterFirstFrame,
+        acquired,
+        afterFirstReturnFrame,
+        returned,
+        maximumObservedYaw: Number(Math.max(...samples.map((sample) => Math.abs(sample.yaw))).toFixed(6)),
+        maximumObservedPitch: Number(Math.max(...samples.map((sample) => Math.abs(sample.pitch))).toFixed(6)),
+        samples,
+      };
+    }
+
     getFaceDiagnostics() {
       const configuredTargets = [...new Set(Object.values(this.faceSemanticTargets).filter(Boolean))];
       const rigVersion = Number(this.manifest?.face?.rigVersion) || 0;
@@ -3854,6 +4057,11 @@
         },
         nextBlinkSeconds: Number(this.faceBlink.nextSeconds.toFixed(3)),
         attention: {
+          active: this.faceAttention.active,
+          inRange: this.faceAttention.inRange,
+          inFov: this.faceAttention.inFov,
+          occluded: this.faceAttention.occluded,
+          relativeYaw: Number(this.faceAttention.relativeYaw.toFixed(4)),
           yaw: Number(this.faceAttention.yaw.toFixed(4)),
           pitch: Number(this.faceAttention.pitch.toFixed(4)),
           targetYaw: Number(this.faceAttention.targetYaw.toFixed(4)),
@@ -3861,6 +4069,14 @@
           distance: Number.isFinite(this.faceAttention.distance)
             ? Number(this.faceAttention.distance.toFixed(3))
             : null,
+          neckBone: Boolean(this.neckBone),
+          headBone: Boolean(this.headBone),
+          limits: {
+            maximumDistance: MR_FEAST_FACE.attentionDistance,
+            halfFovDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.attentionHalfFovRadians).toFixed(2)),
+            maxYawDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.maxAttentionYaw).toFixed(2)),
+            maxPitchDegrees: Number(THREE.MathUtils.radToDeg(MR_FEAST_FACE.maxAttentionPitch).toFixed(2)),
+          },
         },
       };
     }
@@ -5074,6 +5290,18 @@
       this.qaAnimationFrozen = false;
       this.moving = this.loadStatus === "ready";
       this.clearFaceAttentionPose();
+      Object.assign(this.faceAttention, {
+        active: false,
+        inRange: false,
+        inFov: false,
+        occluded: false,
+        relativeYaw: 0,
+        yaw: 0,
+        pitch: 0,
+        targetYaw: 0,
+        targetPitch: 0,
+        distance: null,
+      });
       this.faceQaOverride = null;
       this.faceQaCycleIndex = -1;
       this.faceBlink.active = false;
@@ -5909,6 +6137,10 @@
       this.error = null;
       this.seatedMotionEuler = new THREE.Euler();
       this.seatedMotionQuaternion = new THREE.Quaternion();
+      this.attentionRaycaster = new THREE.Raycaster();
+      this.attentionOrigin = new THREE.Vector3();
+      this.attentionTarget = new THREE.Vector3();
+      this.attentionDirection = new THREE.Vector3();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
         root.name = `mansion-contestant-${placement.id}`;
@@ -5925,7 +6157,29 @@
           error: null,
           model: null,
           modelMeshes: [],
+          neckBone: null,
           headBone: null,
+          headAttention: {
+            active: false,
+            inRange: false,
+            inFov: false,
+            occluded: false,
+            distance: null,
+            relativeYaw: 0,
+            yaw: 0,
+            pitch: 0,
+            targetYaw: 0,
+            targetPitch: 0,
+          },
+          headAttentionOffsets: {
+            neck: new THREE.Quaternion(),
+            head: new THREE.Quaternion(),
+          },
+          headAttentionInverses: {
+            neck: new THREE.Quaternion(),
+            head: new THREE.Quaternion(),
+          },
+          headAttentionApplied: false,
           mixer: null,
           action: null,
           actions: {},
@@ -5991,6 +6245,12 @@
           seatPoseBones: {},
           neutralRestApplied: false,
           locomotionArmPoseApplied: false,
+          armPoseMode: "standing",
+          armPoseMaximumAngle: 0,
+          armSwingCurrent: 0,
+          armSwingMaximum: 0,
+          materialEmissiveFromAlbedo: 0,
+          materialMaximumMetalness: 0,
           lastDt: 0,
           qaIgnorePlayer: false,
           qaRoutineFast: false,
@@ -6344,6 +6604,105 @@
       };
     }
 
+    measureArmPose(entry) {
+      if (!entry.model) return null;
+      entry.root.updateMatrixWorld(true);
+      const point = (name) => {
+        const bone = entry.restPoseByName[name]?.bone;
+        return bone ? entry.root.worldToLocal(bone.getWorldPosition(new THREE.Vector3())) : null;
+      };
+      const center = point("Spine02") || point("Spine") || new THREE.Vector3();
+      const arms = {};
+      for (const sideName of ["Left", "Right"]) {
+        const shoulder = point(`${sideName}Arm`);
+        const elbow = point(`${sideName}ForeArm`);
+        const wrist = point(`${sideName}Hand`);
+        if (!shoulder || !elbow || !wrist) continue;
+        const anatomicalSide = Math.sign(shoulder.x - center.x) || (sideName === "Left" ? 1 : -1);
+        arms[sideName.toLowerCase()] = {
+          shoulder,
+          elbow,
+          wrist,
+          sideClearance: Math.min(
+            (elbow.x - center.x) * anatomicalSide,
+            (wrist.x - center.x) * anatomicalSide,
+          ),
+          wristDrop: shoulder.y - wrist.y,
+        };
+      }
+      const left = arms.left;
+      const right = arms.right;
+      const handSeparation = left && right ? left.wrist.distanceTo(right.wrist) : 0;
+      return {
+        valid: Boolean(left && right),
+        handsCrossedCenterline: Boolean(left && right && (left.sideClearance < 0 || right.sideClearance < 0)),
+        minimumSideClearance: left && right ? Math.min(left.sideClearance, right.sideClearance) : 0,
+        minimumWristDrop: left && right ? Math.min(left.wristDrop, right.wristDrop) : 0,
+        handSeparation,
+      };
+    }
+
+    applyRelaxedArmPose(entry, mode = "standing", blend = 1) {
+      if (!entry.model) return false;
+      const standingPose = CONTESTANT_NEUTRAL_REST_POSES[entry.id];
+      const seatedPose = CONTESTANT_SEATED_ARM_POSES[entry.id];
+      if (!standingPose || !seatedPose) return false;
+      const seatedBlend = mode === "seated" ? clamp(Number(blend) || 0, 0, 1) : 0;
+      for (const name of ["LeftShoulder", "RightShoulder"]) {
+        const rest = entry.restPoseByName[name];
+        if (rest) rest.bone.quaternion.copy(rest.quaternion);
+      }
+      let maximumPoseAngle = 0;
+      for (const name of Object.keys(standingPose)) {
+        const rest = entry.restPoseByName[name];
+        const standingValues = standingPose[name];
+        const seatedValues = seatedPose[name] || standingValues;
+        if (!rest || !standingValues) continue;
+        const standingOffset = new THREE.Quaternion(...standingValues).normalize();
+        const seatedOffset = new THREE.Quaternion(...seatedValues).normalize();
+        const offset = standingOffset.clone().slerp(seatedOffset, seatedBlend).normalize();
+        rest.bone.quaternion.copy(rest.quaternion).multiply(offset).normalize();
+        maximumPoseAngle = Math.max(maximumPoseAngle, 2 * Math.acos(clamp(Math.abs(offset.w), 0, 1)));
+      }
+
+      const action = entry.action;
+      const duration = Math.max(0.001, action?.getClip?.().duration || 1);
+      const phase = ((action?.time || 0) / duration) * Math.PI * 2;
+      let swing = 0;
+      if (mode === "walking") {
+        swing = Math.sin(phase) * MANSION_CONTESTANTS.armMotion.walkSwingRadians;
+      } else if (mode === "standing") {
+        swing = Math.sin(phase) * MANSION_CONTESTANTS.armMotion.idleSwayRadians;
+      }
+      if (Math.abs(swing) > 0.000001) {
+        const leftArm = entry.restPoseByName.LeftArm?.bone;
+        const rightArm = entry.restPoseByName.RightArm?.bone;
+        const leftForeArm = entry.restPoseByName.LeftForeArm?.bone;
+        const rightForeArm = entry.restPoseByName.RightForeArm?.bone;
+        this.seatedMotionEuler.set(swing, 0, 0, "XYZ");
+        this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
+        leftArm?.quaternion.multiply(this.seatedMotionQuaternion);
+        this.seatedMotionEuler.set(-swing, 0, 0, "XYZ");
+        this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
+        rightArm?.quaternion.multiply(this.seatedMotionQuaternion);
+        const elbowFlex = Math.abs(swing) / MANSION_CONTESTANTS.armMotion.walkSwingRadians
+          * MANSION_CONTESTANTS.armMotion.walkElbowFlexRadians;
+        this.seatedMotionEuler.set(0, 0, -elbowFlex, "XYZ");
+        this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
+        leftForeArm?.quaternion.multiply(this.seatedMotionQuaternion);
+        this.seatedMotionEuler.set(0, 0, elbowFlex, "XYZ");
+        this.seatedMotionQuaternion.setFromEuler(this.seatedMotionEuler);
+        rightForeArm?.quaternion.multiply(this.seatedMotionQuaternion);
+      }
+      entry.armPoseMode = mode;
+      entry.armPoseMaximumAngle = maximumPoseAngle;
+      entry.armSwingCurrent = swing;
+      entry.armSwingMaximum = Math.max(entry.armSwingMaximum, Math.abs(swing));
+      entry.neutralRestApplied = mode !== "seated";
+      entry.locomotionArmPoseApplied = mode === "walking";
+      return true;
+    }
+
     applySeatedPose(entry, blend = 1) {
       const pose = CONTESTANT_SEATED_POSES[entry.id];
       if (!pose || !entry.model) return false;
@@ -6351,12 +6710,14 @@
       const amount = clamp(Number(blend) || 0, 0, 1);
       for (const rest of entry.restPoseBones) rest.bone.quaternion.copy(rest.quaternion);
       for (const [name, values] of Object.entries(pose.bones)) {
+        if (MANSION_CONTESTANTS.locomotionArmBones.includes(name)) continue;
         const rest = entry.seatPoseBones[name];
         if (!rest) continue;
-        const target = rest.quaternion.clone().multiply(new THREE.Quaternion(...values));
+        const target = rest.quaternion.clone().multiply(new THREE.Quaternion(...values).normalize());
         rest.bone.quaternion.copy(rest.quaternion).slerp(target, amount);
       }
       entry.model.position.y = entry.modelBaseY - pose.rootDrop * amount;
+      this.applyRelaxedArmPose(entry, "seated", amount);
       this.applySeatedIdleMotion(entry, amount);
       entry.seatedPoseBlend = amount;
       entry.seatedPoseApplied = amount >= 0.999;
@@ -6364,10 +6725,8 @@
     }
 
     applyNeutralRestPose(entry) {
-      const pose = CONTESTANT_NEUTRAL_REST_POSES[entry.id];
       if (
-        !pose
-        || !entry.model
+        !entry.model
         || entry.activity === CONTESTANT_ACTIVITY.SEATED
         || (entry.currentAnimation !== "idle" && entry.currentAnimation !== "walk")
       ) {
@@ -6375,24 +6734,16 @@
         entry.locomotionArmPoseApplied = false;
         return false;
       }
-      for (const name of ["LeftShoulder", "RightShoulder"]) {
-        const rest = entry.restPoseByName[name];
-        if (rest) rest.bone.quaternion.copy(rest.quaternion);
-      }
-      for (const [name, values] of Object.entries(pose)) {
-        const rest = entry.restPoseByName[name];
-        if (!rest) continue;
-        rest.bone.quaternion
-          .copy(rest.quaternion)
-          .multiply(new THREE.Quaternion(...values));
-      }
-      entry.neutralRestApplied = true;
-      entry.locomotionArmPoseApplied = entry.currentAnimation === "walk";
-      return true;
+      return this.applyRelaxedArmPose(
+        entry,
+        entry.currentAnimation === "walk" ? "walking" : "standing",
+        1,
+      );
     }
 
     restoreStandingPose(entry) {
       if (!entry.model) return;
+      this.clearHeadAttentionPose(entry);
       entry.model.position.y = entry.modelBaseY;
       entry.seatedPoseBlend = 0;
       entry.seatedPoseApplied = false;
@@ -6782,9 +7133,18 @@
 
       const materials = new Set();
       const textures = new Set();
+      const materialTuning = spec.materialTuning || {};
+      const emissiveFromAlbedo = clamp(
+        Number.isFinite(Number(materialTuning.emissiveFromAlbedo))
+          ? Number(materialTuning.emissiveFromAlbedo)
+          : MANSION_CONTESTANTS.defaultEmissiveFromAlbedo,
+        0,
+        0.6,
+      );
       model.traverse((object) => {
         if (object.isBone) {
           entry.bones += 1;
+          if (object.name === "neck") entry.neckBone = object;
           if (object.name === "Head") entry.headBone = object;
         }
         if (!object.isMesh) return;
@@ -6802,6 +7162,15 @@
           materials.add(material);
           if ("emissiveIntensity" in material) material.emissiveIntensity = 0;
           if ("roughness" in material) material.roughness = Math.max(Number(material.roughness) || 0, 0.56);
+          if ("metalness" in material) material.metalness = Math.min(
+            Number(material.metalness) || 0,
+            MANSION_CONTESTANTS.maximumMaterialMetalness,
+          );
+          if (material.map && material.emissive && "emissiveIntensity" in material) {
+            material.emissive.set(0xffffff);
+            material.emissiveMap = material.map;
+            material.emissiveIntensity = emissiveFromAlbedo;
+          }
           for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
           material.needsUpdate = true;
         }
@@ -6809,6 +7178,11 @@
       if (!entry.skinnedMeshes || entry.bones < 20) throw new Error("Contestant GLB is not a valid humanoid rig");
       entry.materials = materials.size;
       entry.textures = textures.size;
+      entry.materialEmissiveFromAlbedo = emissiveFromAlbedo;
+      entry.materialMaximumMetalness = Math.max(
+        0,
+        ...[...materials].map((material) => Number(material.metalness) || 0),
+      );
       entry.model = model;
       entry.root.add(model);
       entry.mixer = new THREE.AnimationMixer(model);
@@ -6921,7 +7295,106 @@
       );
     }
 
+    clearHeadAttentionPose(entry) {
+      if (!entry.headAttentionApplied) return;
+      if (entry.neckBone) {
+        entry.headAttentionInverses.neck.copy(entry.headAttentionOffsets.neck).conjugate();
+        entry.neckBone.quaternion.multiply(entry.headAttentionInverses.neck).normalize();
+      }
+      if (entry.headBone) {
+        entry.headAttentionInverses.head.copy(entry.headAttentionOffsets.head).conjugate();
+        entry.headBone.quaternion.multiply(entry.headAttentionInverses.head).normalize();
+      }
+      entry.headAttentionApplied = false;
+    }
+
+    contestantAttentionHasLineOfSight(entry, facePosition, targetPosition) {
+      this.attentionOrigin.copy(facePosition);
+      this.attentionTarget.copy(targetPosition);
+      this.attentionDirection.copy(this.attentionTarget).sub(this.attentionOrigin);
+      const distance = this.attentionDirection.length();
+      if (distance < 0.0001) return true;
+      this.attentionDirection.divideScalar(distance);
+      this.attentionRaycaster.set(this.attentionOrigin, this.attentionDirection);
+      this.attentionRaycaster.far = Math.max(0.05, distance - 0.1);
+      return this.attentionRaycaster.intersectObjects(occluderMeshes, false).length === 0;
+    }
+
+    updateHeadAttention(entry, dt, snap = false) {
+      const tuning = MANSION_CONTESTANTS.attention;
+      entry.root.updateMatrixWorld(true);
+      const facePosition = entry.headBone
+        ? entry.headBone.getWorldPosition(this.attentionOrigin)
+        : this.attentionOrigin.copy(entry.root.position).add(new THREE.Vector3(0, entry.size?.y || 1.7, 0));
+      const targetPosition = this.attentionTarget.copy(camera.position);
+      const dx = targetPosition.x - facePosition.x;
+      const dy = targetPosition.y - facePosition.y;
+      const dz = targetPosition.z - facePosition.z;
+      const horizontalDistance = Math.max(0.0001, Math.hypot(dx, dz));
+      const distance = Math.hypot(horizontalDistance, dy);
+      const desiredWorldYaw = Math.atan2(dx, dz);
+      const relativeYaw = Math.atan2(
+        Math.sin(desiredWorldYaw - entry.root.rotation.y),
+        Math.cos(desiredWorldYaw - entry.root.rotation.y),
+      );
+      const inRange = distance <= tuning.maximumDistance;
+      const inFov = Math.abs(relativeYaw) <= tuning.halfFovRadians;
+      const occluded = inRange && inFov
+        ? !this.contestantAttentionHasLineOfSight(entry, facePosition, targetPosition)
+        : false;
+      const canAttend = !state.isHidden && inRange && inFov && !occluded;
+      const activityStrength = entry.activity === CONTESTANT_ACTIVITY.WALKING
+        ? tuning.walkingStrength
+        : 1;
+      const elevation = Math.atan2(dy, horizontalDistance);
+      entry.headAttention.active = canAttend;
+      entry.headAttention.inRange = inRange;
+      entry.headAttention.inFov = inFov;
+      entry.headAttention.occluded = occluded;
+      entry.headAttention.distance = distance;
+      entry.headAttention.relativeYaw = relativeYaw;
+      entry.headAttention.targetYaw = canAttend
+        ? clamp(relativeYaw, -tuning.maximumYawRadians, tuning.maximumYawRadians) * activityStrength
+        : 0;
+      entry.headAttention.targetPitch = canAttend
+        ? clamp(-elevation, -tuning.maximumPitchRadians, tuning.maximumPitchRadians) * activityStrength
+        : 0;
+      const damping = canAttend ? tuning.acquireDamping : tuning.releaseDamping;
+      const amount = snap ? 1 : 1 - Math.exp(-damping * Math.max(0, Number(dt) || 0));
+      entry.headAttention.yaw = clamp(
+        entry.headAttention.yaw + (entry.headAttention.targetYaw - entry.headAttention.yaw) * amount,
+        -tuning.maximumYawRadians,
+        tuning.maximumYawRadians,
+      );
+      entry.headAttention.pitch = clamp(
+        entry.headAttention.pitch + (entry.headAttention.targetPitch - entry.headAttention.pitch) * amount,
+        -tuning.maximumPitchRadians,
+        tuning.maximumPitchRadians,
+      );
+    }
+
+    applyHeadAttentionPose(entry) {
+      if (!entry.neckBone && !entry.headBone) return;
+      const neckShare = entry.neckBone ? MANSION_CONTESTANTS.attention.neckShare : 0;
+      entry.headAttentionOffsets.neck.setFromEuler(new THREE.Euler(
+        entry.headAttention.pitch * neckShare,
+        entry.headAttention.yaw * neckShare,
+        0,
+        "YXZ",
+      ));
+      entry.headAttentionOffsets.head.setFromEuler(new THREE.Euler(
+        entry.headAttention.pitch * (1 - neckShare),
+        entry.headAttention.yaw * (1 - neckShare),
+        0,
+        "YXZ",
+      ));
+      if (entry.neckBone) entry.neckBone.quaternion.multiply(entry.headAttentionOffsets.neck).normalize();
+      if (entry.headBone) entry.headBone.quaternion.multiply(entry.headAttentionOffsets.head).normalize();
+      entry.headAttentionApplied = true;
+    }
+
     stepAnimation(entry, dt) {
+      this.clearHeadAttentionPose(entry);
       if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
         entry.seatedMotionElapsed += Math.max(0, dt);
         this.applySeatedPose(entry, entry.seatedPoseBlend);
@@ -6929,6 +7402,8 @@
         entry.mixer.update(dt);
         this.applyNeutralRestPose(entry);
       }
+      this.updateHeadAttention(entry, dt);
+      this.applyHeadAttentionPose(entry);
       if (entry.animationProbeBone && entry.animationProbeStart) {
         const poseDelta = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart));
         entry.animationProbeMaximumDelta = Math.max(entry.animationProbeMaximumDelta, poseDelta);
@@ -7085,6 +7560,9 @@
       entry.seatedMotionPoseChanged = false;
       entry.seatedDwellElapsed = 0;
       entry.longestSeatedDwellSeconds = 0;
+      entry.armSwingCurrent = 0;
+      entry.armSwingMaximum = 0;
+      this.resetHeadAttentionForQA(entry);
       entry.contactShadow.visible = !interiorDetailsHidden;
       this.restoreStandingPose(entry);
       const idle = entry.actions.idle;
@@ -7151,6 +7629,7 @@
         floorStayedFixed,
         minimumPatrolClearance: Number(entry.routeMinimumClearance.toFixed(3)),
         minimumStaticClearance: Number(entry.routeStaticMinimumClearance.toFixed(3)),
+        maximumArmSwingRadians: Number(entry.armSwingMaximum.toFixed(5)),
       };
     }
 
@@ -7239,6 +7718,7 @@
         rootDrift: Number(rootDrift.toFixed(8)),
         maximumLowerBodyDelta: Number(maximumLowerBodyDelta.toFixed(10)),
         maximumUpperBodyDelta: Number(maximumUpperBodyDelta.toFixed(10)),
+        armPose: this.measureArmPose(entry),
         seatFit: this.getSeatedFit(entry),
       };
     }
@@ -7321,6 +7801,119 @@
       };
     }
 
+    headAttentionSnapshot(entry) {
+      return {
+        active: entry.headAttention.active,
+        inRange: entry.headAttention.inRange,
+        inFov: entry.headAttention.inFov,
+        occluded: entry.headAttention.occluded,
+        distance: Number.isFinite(entry.headAttention.distance)
+          ? Number(entry.headAttention.distance.toFixed(4))
+          : null,
+        relativeYaw: Number(entry.headAttention.relativeYaw.toFixed(6)),
+        yaw: Number(entry.headAttention.yaw.toFixed(6)),
+        pitch: Number(entry.headAttention.pitch.toFixed(6)),
+        targetYaw: Number(entry.headAttention.targetYaw.toFixed(6)),
+        targetPitch: Number(entry.headAttention.targetPitch.toFixed(6)),
+        headQuaternionLength: Number((entry.headBone?.quaternion.length() || 0).toFixed(6)),
+        neckQuaternionLength: Number((entry.neckBone?.quaternion.length() || 0).toFixed(6)),
+      };
+    }
+
+    resetHeadAttentionForQA(entry) {
+      this.clearHeadAttentionPose(entry);
+      Object.assign(entry.headAttention, {
+        active: false,
+        inRange: false,
+        inFov: false,
+        occluded: false,
+        distance: null,
+        relativeYaw: 0,
+        yaw: 0,
+        pitch: 0,
+        targetYaw: 0,
+        targetPitch: 0,
+      });
+    }
+
+    probeHeadTrackingForQA(id, options = {}) {
+      const entry = this.entryById(id);
+      if (!state.qa || !physics || !entry || entry.status !== "ready") return null;
+      const distance = clamp(Number(options.distance) || 1.8, 0.8, 12);
+      const bearing = THREE.MathUtils.degToRad(Number(options.bearingDegrees) || 0);
+      const elevation = THREE.MathUtils.degToRad(Number(options.elevationDegrees) || 0);
+      const holdSeconds = clamp(Number(options.holdSeconds) || 0.9, 1 / 60, 10);
+      const releaseSeconds = clamp(Number(options.releaseSeconds) || 1.4, 1 / 60, 10);
+      const originalPlayer = physics.playerPosition();
+      const originalFeetY = originalPlayer.y - (PLAYER.halfHeight + PLAYER.radius + 0.03);
+      const originalYaw = state.yaw;
+      const originalPitch = state.pitch;
+      const wasHidden = state.isHidden;
+      const bodyYawBefore = entry.root.rotation.y;
+      const worldYaw = entry.root.rotation.y + bearing;
+      const targetFeetY = entry.root.position.y + Math.tan(elevation) * distance;
+      state.isHidden = false;
+      teleport(
+        entry.root.position.x + Math.sin(worldYaw) * distance,
+        targetFeetY,
+        entry.root.position.z + Math.cos(worldYaw) * distance,
+        worldYaw + Math.PI,
+        0,
+      );
+      this.resetHeadAttentionForQA(entry);
+      const samples = [];
+      const record = () => {
+        const snapshot = this.headAttentionSnapshot(entry);
+        samples.push(snapshot);
+        return snapshot;
+      };
+      this.stepAnimation(entry, 1 / 60);
+      const afterFirstFrame = record();
+      const holdFrames = Math.max(1, Math.round(holdSeconds * 60));
+      for (let frame = 1; frame < holdFrames; frame += 1) {
+        this.stepAnimation(entry, 1 / 60);
+        if (frame % 6 === 0 || frame === holdFrames - 1) record();
+      }
+      const acquired = this.headAttentionSnapshot(entry);
+      const releaseYaw = entry.root.rotation.y + Math.PI;
+      const releaseDistance = MANSION_CONTESTANTS.attention.maximumDistance + 2;
+      teleport(
+        entry.root.position.x + Math.sin(releaseYaw) * releaseDistance,
+        entry.root.position.y,
+        entry.root.position.z + Math.cos(releaseYaw) * releaseDistance,
+        releaseYaw + Math.PI,
+        0,
+      );
+      this.stepAnimation(entry, 1 / 60);
+      const afterFirstReturnFrame = record();
+      const releaseFrames = Math.max(1, Math.round(releaseSeconds * 60));
+      for (let frame = 1; frame < releaseFrames; frame += 1) {
+        this.stepAnimation(entry, 1 / 60);
+        if (frame % 6 === 0 || frame === releaseFrames - 1) record();
+      }
+      const returned = this.headAttentionSnapshot(entry);
+      teleport(originalPlayer.x, originalFeetY, originalPlayer.z, originalYaw, originalPitch);
+      state.isHidden = wasHidden;
+      return {
+        id: entry.id,
+        bodyYawBefore: Number(bodyYawBefore.toFixed(6)),
+        bodyYawAfter: Number(entry.root.rotation.y.toFixed(6)),
+        limits: {
+          maximumDistance: MANSION_CONTESTANTS.attention.maximumDistance,
+          halfFovDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.halfFovRadians).toFixed(2)),
+          maxYawDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.maximumYawRadians).toFixed(2)),
+          maxPitchDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.maximumPitchRadians).toFixed(2)),
+        },
+        afterFirstFrame,
+        acquired,
+        afterFirstReturnFrame,
+        returned,
+        maximumObservedYaw: Number(Math.max(...samples.map((sample) => Math.abs(sample.yaw))).toFixed(6)),
+        maximumObservedPitch: Number(Math.max(...samples.map((sample) => Math.abs(sample.pitch))).toFixed(6)),
+        samples,
+      };
+    }
+
     getDiagnostics() {
       return {
         expected: this.entries.length,
@@ -7360,6 +7953,30 @@
           textures: entry.textures,
           skinnedMeshes: entry.skinnedMeshes,
           bones: entry.bones,
+          material: {
+            emissiveFromAlbedo: Number(entry.materialEmissiveFromAlbedo.toFixed(3)),
+            maximumMetalness: Number(entry.materialMaximumMetalness.toFixed(3)),
+          },
+          attention: {
+            ...this.headAttentionSnapshot(entry),
+            neckBone: Boolean(entry.neckBone),
+            headBone: Boolean(entry.headBone),
+            limits: {
+              maximumDistance: MANSION_CONTESTANTS.attention.maximumDistance,
+              halfFovDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.halfFovRadians).toFixed(2)),
+              maxYawDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.maximumYawRadians).toFixed(2)),
+              maxPitchDegrees: Number(THREE.MathUtils.radToDeg(MANSION_CONTESTANTS.attention.maximumPitchRadians).toFixed(2)),
+            },
+          },
+          armPose: {
+            mode: entry.armPoseMode,
+            coherentChain: true,
+            handsIncluded: true,
+            maximumPoseAngleDegrees: Number(THREE.MathUtils.radToDeg(entry.armPoseMaximumAngle).toFixed(2)),
+            swingRadians: Number(entry.armSwingCurrent.toFixed(5)),
+            maximumSwingRadians: Number(entry.armSwingMaximum.toFixed(5)),
+            world: this.measureArmPose(entry),
+          },
           colliderEnabled: entry.colliderEnabled,
           locomotionStatus: entry.locomotionStatus,
           activity: entry.activity,
@@ -18352,6 +18969,17 @@
     window.MrFeastFresh.placePlayerNearContestantForQA = (id, distance = 1.65, orbitRadians = 0) => (
       state.qa && mansionContestants ? mansionContestants.placePlayerNearForQA(id, distance, orbitRadians) : null
     );
+    window.MrFeastFresh.probeContestantHeadTrackingForQA = (id, options = {}) => (
+      state.qa && mansionContestants ? mansionContestants.probeHeadTrackingForQA(id, options) : null
+    );
+    window.MrFeastFresh.probeMrFeastHeadTrackingForQA = (options = {}) => (
+      state.qa && mrFeastNpc ? mrFeastNpc.probeHeadTrackingForQA(options) : null
+    );
+    window.MrFeastFresh.probeNpcAttentionForQA = (options = {}) => (
+      options.kind === "mr-feast"
+        ? window.MrFeastFresh.probeMrFeastHeadTrackingForQA(options)
+        : window.MrFeastFresh.probeContestantHeadTrackingForQA(options.id, options)
+    );
     window.MrFeastFresh.converseWithContestantForQA = (id) => (
       state.qa && mansionContestants ? mansionContestants.converse(id) : null
     );
@@ -18463,12 +19091,14 @@
       mrFeastNpc?.recoverAfterLoad();
       return { gameOver: state.gameOver };
     };
-    window.MrFeastFresh.placePlayerNearMrFeastForQA = (distance = 1.6) => {
+    window.MrFeastFresh.placePlayerNearMrFeastForQA = (distance = 1.6, orbitRadians = 0) => {
       if (!state.qa || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready" || !physics) return null;
       const host = mrFeastNpc.root.position;
       const yaw = mrFeastNpc.root.rotation.y;
       const gap = Math.max(0.8, Number(distance) || 1.6);
-      teleport(host.x + Math.sin(yaw) * gap, host.y, host.z + Math.cos(yaw) * gap, yaw, -0.26);
+      const orbit = Number(orbitRadians) || 0;
+      const approachYaw = yaw + orbit;
+      teleport(host.x + Math.sin(approachYaw) * gap, host.y, host.z + Math.cos(approachYaw) * gap, approachYaw, -0.26);
       updateInteractionPrompt();
       const p = physics.playerPosition();
       return {

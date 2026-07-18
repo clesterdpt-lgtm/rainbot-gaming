@@ -101,7 +101,8 @@ async function run() {
     assert(modelStats.size > 100_000 && modelStats.size <= 12 * 1024 * 1024, `${spec.id} model exceeds the 12 MiB browser budget (${modelStats.size})`);
     assert(idleStats.size > 1_000 && idleStats.size <= 512 * 1024, `${spec.id} idle clip exceeds the 512 KiB budget (${idleStats.size})`);
     assert(report.rigged === true && report.bones >= 20, `${spec.id} Blender report must prove a humanoid rig`);
-    assert(report.game?.triangles > 1_000 && report.game.triangles <= 30_000, `${spec.id} exceeds the 30k triangle budget`);
+    const triangleBudget = spec.id === "juniper-cross" ? 55_000 : 30_000;
+    assert(report.game?.triangles > 1_000 && report.game.triangles <= triangleBudget, `${spec.id} exceeds its ${triangleBudget.toLocaleString()} triangle budget`);
     assert(report.textureMaxSize <= 1024, `${spec.id} exceeds the 1024 px texture budget`);
   }
   assert(new Set(allLines).size === allLines.length, "contestants must not share dialogue lines");

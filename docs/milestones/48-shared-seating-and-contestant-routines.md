@@ -6,14 +6,16 @@ in-progress — implementation and automated acceptance complete; final chair/so
 
 ## Objective
 
-Make the mansion feel occupied instead of staged: the player can sit on authored furniture, while Mara, Kip, and Juniper spend most of their ambient time seated and occasionally stand, walk a compact room-safe route, and settle at another hangout. Standing idle contestants hold relaxed arms-down poses instead of a confused hands-up shrug, and sit/stand transitions interpolate into and out of the furniture. Seating remains a visible, vulnerable state rather than a hiding shortcut, and moving contestants keep their rendered bodies, interactions, speech anchors, and physical colliders synchronized.
+Make the mansion feel occupied instead of staged: the player can sit on authored furniture, while Mara, Kip, and Juniper spend most of their ambient time seated and occasionally stand, walk a compact room-safe route, and settle at another hangout. Contestants use coherent relaxed arm chains with a restrained walking counter-swing, and nearby players inside the forward field of view draw a smoothly limited head-and-neck glance from the contestants and Mr. Feast. Sit/stand transitions interpolate into and out of the furniture. Seating remains a visible, vulnerable state rather than a hiding shortcut, and moving contestants keep their rendered bodies, interactions, speech anchors, and physical colliders synchronized.
 
 ## Scope
 
 - Register reusable, exclusively occupied seat slots on the mansion's standard chairs and sofas.
 - Let the player sit and stand through the existing E/touch interaction while retaining free look and locking locomotion, sprint, and crouch.
 - Give each contestant a sit-dominant in-room routine with named speed, turning, arrival, brief hangout pause, and long seated-dwell values.
-- Apply contestant-specific relaxed arms-down rest poses while standing idle, without overriding the walk animation or seated pose.
+- Apply contestant-specific coherent shoulder/arm/forearm/hand poses while standing and seated, and replace the rejected source walk-arm tracks with a restrained procedural counter-swing.
+- Let nearby contestants and Mr. Feast glance toward the player only inside a named forward field of view, ease back to neutral outside it, and clamp combined head/neck yaw and pitch well below a backward turn.
+- Rebuild Juniper's split head normals after decimation, retain a higher-quality face budget, and restore a restrained albedo-based material lift without making her glow.
 - Interpolate contestant root position, facing, and pose blend through sit/stand transitions instead of snapping between the floor and seat.
 - Keep seated hips and feet planted while subtle upper-body breathing, weight shifts, and glances prevent contestants from becoming statues.
 - Use a lower, floor-anchored lounge-sofa profile for Juniper's Reading Room seat so the cushion supports her legs from below instead of intersecting them; keep all other mansion sofas at their existing height.
@@ -46,6 +48,10 @@ Make the mansion feel occupied instead of staged: the player can sit on authored
 - [x] Chair-back aiming still pulls/straightens a vacant chair, while a seated chair cannot be tampered with or dispatched as a housekeeping errand until vacated. — test: `scripts/test-mr-feast-seating-and-routes.mjs::chair seating and tamper resolver compatibility`
 - [x] Mara, Kip, and Juniper each use a sit-dominant routine with a long seated dwell, occasionally traverse a compact multi-point room route to another hangout, turn toward travel, use a bound walk clip while moving, and pause without gliding. — test: `scripts/test-mr-feast-seating-and-routes.mjs::three deterministic walk-idle-sit routines`
 - [x] A standing idle contestant uses their authored relaxed arms-down rest pose instead of the confused hands-up shrug, while walking and seated poses remain activity-specific. — test: `scripts/test-mr-feast-seating-and-routes.mjs::three deterministic walk-idle-sit routines`
+- [x] Standing, walking, and seated arm layers include the complete shoulder-to-hand chain; hands stay separated on their anatomical sides, standing wrists hang below the shoulders, and walking adds a bounded `0.105rad` opposing counter-swing instead of frozen or reversed arms. — test: `scripts/test-mr-feast-seating-and-routes.mjs::coherent arm-chain and procedural swing probes`
+- [x] Juniper's shipped 50,000-triangle / 1024px GLB has finite unit head normals, no degenerate head triangles, no more than 0.5% inverted head triangles, and no more than 2% flat head triangles; runtime removes skin/cloth metalness and restores only the manifest-authored albedo emission lift. — test: `scripts/test-mr-feast-seating-and-routes.mjs::direct shipped-GLB head shading audit`
+- [x] Each contestant smoothly glances toward a nearby player inside the forward 120-degree field, leaves body yaw unchanged, eases back within one degree of neutral, ignores a player behind them, and remains hard-clamped to about 31.5 degrees yaw / 13.8 degrees pitch during a ten-second extreme hold. — test: `scripts/test-mr-feast-seating-and-routes.mjs::contestant attention acquisition, release, and extreme hold`
+- [x] Mr. Feast uses the same head-and-neck-only behavior within 4.8m and his narrower forward field, ignores just-outside, rear, hidden, occluded, and distant targets, and never exceeds about 28.7 degrees yaw / 10.3 degrees pitch. — test: `scripts/test-mr-feast-seating-and-routes.mjs::Mr Feast nearby-FOV attention boundaries`
 - [x] Contestant sit/stand transitions interpolate root position, facing, and pose blend so entering or leaving furniture does not snap or teleport. — test: `scripts/test-mr-feast-seating-and-routes.mjs::three deterministic walk-idle-sit routines`
 - [x] Every authored seated dwell is clamped by one runtime ceiling below 300 seconds; after every stand transition, the contestant reaches a distinct non-seat hangout at least 0.35m away before the vacated seat can be selected again. — test: `scripts/test-mr-feast-seating-and-routes.mjs::bounded dwell and post-seat departure`
 - [x] Seated contestants visibly breathe, shift their upper torso, and glance on contestant-specific loops while the root, hips, thighs, knees, and feet remain planted. — test: `scripts/test-mr-feast-seating-and-routes.mjs::planted procedural seated idle`
@@ -61,7 +67,7 @@ Make the mansion feel occupied instead of staged: the player can sit on authored
 
 ## Exit condition
 
-User approaches a chair or sofa and presses E/taps to sit, then visits Mara, Kip, and Juniper and observes them resting mostly in seats, occasionally rising smoothly to walk a short room route to another hangout, and standing with relaxed arms-down idle poses without invisible blockers or lost dialogue prompts.
+User approaches a chair or sofa and presses E/taps to sit, then visits Mara, Kip, and Juniper and observes them resting mostly in seats, occasionally rising smoothly to walk a short room route to another hangout, using relaxed separated arms, and glancing toward a nearby player without twisting their heads backward. Juniper's face remains smooth and readable at conversational distance, and Mr. Feast gives the same restrained nearby-FOV glance without changing his patrol-body direction.
 
 ## Test plan
 

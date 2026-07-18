@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-17T12:11:23.506939+00:00",
+  "generatedAt": "2026-07-18T01:39:57.625085+00:00",
   "pipeline": "Meshy textured humanoid -> Meshy auto-rig -> Blender 4.5 browser preparation",
   "blenderVersion": "4.5.11 LTS",
   "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/contestants/juniper-cross-rigged.glb",
@@ -11,8 +11,8 @@
   "normalizationStrategy": "baked-scene-roots",
   "normalizationScale": 1.0000005542089576,
   "targetHeightMeters": 1.82,
-  "targetTriangles": 26000,
-  "textureMaxSize": 512,
+  "targetTriangles": 50000,
+  "textureMaxSize": 1024,
   "sourceBounds": {
     "min": [
       -0.675829,
@@ -27,18 +27,18 @@
   },
   "game": {
     "file": "juniper-cross.glb",
-    "triangles": 26000,
+    "triangles": 50000,
     "boundsMin": [
-      -0.675724,
-      -0.217249,
-      -9.9e-05
+      -0.675846,
+      -0.216818,
+      6e-05
     ],
     "boundsMax": [
-      0.675738,
-      0.216268,
-      1.820183
+      0.675742,
+      0.216781,
+      1.819989
     ],
-    "fileBytes": 2056024
+    "fileBytes": 4021404
   },
   "sourceTriangles": 82349,
   "meshes": [
@@ -50,11 +50,17 @@
   "images": [
     {
       "name": "texture_0",
-      "width": 512,
-      "height": 512
+      "width": 1024,
+      "height": 1024
     }
   ],
   "warnings": [],
+  "shading": {
+    "smoothPolygons": 50000,
+    "flatPolygons": 0,
+    "weldedVertices": 16647,
+    "weldDistanceMeters": 0.0001
+  },
   "features": {
     "animations": false,
     "skins": true,

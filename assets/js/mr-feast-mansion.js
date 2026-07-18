@@ -13,7 +13,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-pointer-resume-book-8";
+  const MANSION_RUNTIME_VERSION = "20260718-resume-sound-fs-9";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2876,25 +2876,41 @@
       return { body, collider };
     }
 
-    moveKinematicCharacter(kinematic, requested) {
-      if (!kinematic?.body || !kinematic?.collider) return requested;
-      // Player/NPC spacing is handled by their behavior. Restrict NPC motion
-      // correction to fixed mansion geometry so other kinematic actors cannot
-      // stall a room routine while furniture and walls still block movement.
-      this.controller.computeColliderMovement(
-        kinematic.collider,
-        requested,
-        this.R.QueryFilterFlags.EXCLUDE_KINEMATIC,
-      );
-      const corrected = this.controller.computedMovement();
-      const position = kinematic.body.translation();
-      const next = {
-        x: position.x + corrected.x,
-        y: position.y + corrected.y,
-        z: position.z + corrected.z,
-      };
-      kinematic.body.setNextKinematicTranslation(next);
-      return corrected;
+    canCharacterOccupy(position, radius, height) {
+      const bodyBottom = position.y + 0.06;
+      const bodyTop = position.y + height;
+      const paddedRadius = radius + 0.015;
+      for (const box of this.fixedBoxes) {
+        if (box.rotationX || box.rotationZ) continue;
+        const boxBottom = box.y - box.h / 2;
+        const boxTop = box.y + box.h / 2;
+        // Floor slabs that merely support the feet are not lateral blockers.
+        if (boxTop <= bodyBottom || boxBottom >= bodyTop) continue;
+        const dx = position.x - box.x;
+        const dz = position.z - box.z;
+        const cos = Math.cos(box.rotationY);
+        const sin = Math.sin(box.rotationY);
+        const localX = cos * dx - sin * dz;
+        const localZ = sin * dx + cos * dz;
+        const nearestX = clamp(localX, -box.w / 2, box.w / 2);
+        const nearestZ = clamp(localZ, -box.d / 2, box.d / 2);
+        if (Math.hypot(localX - nearestX, localZ - nearestZ) < paddedRadius) return false;
+      }
+      return true;
+    }
+
+    canCharacterTraverse(start, end, radius, height) {
+      const distance = Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z);
+      const samples = Math.max(1, Math.ceil(distance / Math.max(0.04, radius * 0.5)));
+      for (let sample = 1; sample <= samples; sample += 1) {
+        const t = sample / samples;
+        if (!this.canCharacterOccupy({
+          x: THREE.MathUtils.lerp(start.x, end.x, t),
+          y: THREE.MathUtils.lerp(start.y, end.y, t),
+          z: THREE.MathUtils.lerp(start.z, end.z, t),
+        }, radius, height)) return false;
+      }
+      return true;
     }
 
     addFixedRamp(x, centerZ, lowY, highY, run, width, directionZ) {
@@ -3095,16 +3111,18 @@
         return Math.hypot(dx, dy, dz);
       }
       this.syncCollider();
-      const corrected = physics.moveKinematicCharacter(
-        { body: this.colliderBody, collider: this.collider },
-        { x: dx, y: dy, z: dz },
-      );
+      const start = this.root.position;
+      const end = { x: start.x + dx, y: start.y + dy, z: start.z + dz };
       const requestedDistance = Math.hypot(dx, dy, dz);
-      const movedDistance = Math.hypot(corrected.x, corrected.y, corrected.z);
-      if (movedDistance + 0.0001 < requestedDistance) this.collisionBlockedSteps += 1;
-      this.root.position.x += corrected.x;
-      this.root.position.y += corrected.y;
-      this.root.position.z += corrected.z;
+      const radius = Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2;
+      const clear = physics.canCharacterTraverse(start, end, radius, MR_FEAST_NPC.colliderHeight);
+      const movedDistance = clear ? requestedDistance : 0;
+      if (!clear) this.collisionBlockedSteps += 1;
+      if (clear) {
+        this.root.position.x += dx;
+        this.root.position.y += dy;
+        this.root.position.z += dz;
+      }
       this.syncCollider();
       return movedDistance;
     }
@@ -6321,18 +6339,14 @@
     moveWithCollision(entry, dx, dz) {
       if (!physics || !entry.colliderBody || !entry.colliderEnabled) return { x: dx, z: dz, blocked: false };
       this.syncCollider(entry, false);
-      const corrected = physics.moveKinematicCharacter(
-        { body: entry.colliderBody, collider: entry.collider },
-        { x: dx, y: 0, z: dz },
-      );
-      const requestedDistance = Math.hypot(dx, dz);
-      const movedDistance = Math.hypot(corrected.x, corrected.z);
-      const blocked = movedDistance + 0.0001 < requestedDistance;
+      const start = entry.root.position;
+      const end = { x: start.x + dx, y: start.y, z: start.z + dz };
+      const radius = Math.max(MANSION_CONTESTANTS.colliderWidth, MANSION_CONTESTANTS.colliderDepth) / 2;
+      const blocked = !physics.canCharacterTraverse(start, end, radius, entry.colliderHeight);
       if (blocked) entry.furnitureBlockedSteps += 1;
-      entry.root.position.x += corrected.x;
-      entry.root.position.z += corrected.z;
+      if (!blocked) entry.root.position.set(end.x, end.y, end.z);
       this.syncCollider(entry);
-      return { x: corrected.x, z: corrected.z, blocked };
+      return { x: blocked ? 0 : dx, z: blocked ? 0 : dz, blocked };
     }
 
     probeFurnitureCollisionForQA(id) {
@@ -16325,8 +16339,8 @@
   }
 
   function updateAudioButton() {
-    const label = state.audioEnabled ? "Music: On" : "Music: Off";
-    const aria = state.audioEnabled ? "Mute game audio" : "Enable game audio";
+    const label = state.audioEnabled ? "Sound: On" : "Sound: Off";
+    const aria = state.audioEnabled ? "Mute game sound" : "Enable game sound";
     if (dom.menuMusic) {
       dom.menuMusic.textContent = label;
       dom.menuMusic.setAttribute("aria-pressed", String(state.audioEnabled));
@@ -16345,6 +16359,8 @@
   // can open the menu on the same gesture instead of requiring a second press.
   let intentionalPointerUnlockUntil = 0;
   let ignoreEscapeMenuToggleUntil = 0;
+  let lookReclaimFollowUpUntil = 0;
+  let lookReclaimFollowUpHandler = null;
 
   function releasePointerLock({ intentional = true } = {}) {
     if (intentional) intentionalPointerUnlockUntil = performance.now() + 450;
@@ -16402,7 +16418,6 @@
       || state.gameOver
       || matchMedia("(pointer: coarse)").matches
     ) return false;
-    // Books keep look locked (cursor hidden) with look input gated separately.
     if (!dom.canvas) return false;
     if (dom.canvas.inert) dom.canvas.inert = false;
     if (document.pointerLockElement === dom.canvas) {
@@ -16419,13 +16434,45 @@
     }
   }
 
-  function reclaimLookControl() {
+  function clearLookReclaimFollowUps() {
+    lookReclaimFollowUpUntil = 0;
+    if (lookReclaimFollowUpHandler) {
+      window.removeEventListener("pointerdown", lookReclaimFollowUpHandler, true);
+      window.removeEventListener("pointerup", lookReclaimFollowUpHandler, true);
+      window.removeEventListener("click", lookReclaimFollowUpHandler, true);
+      lookReclaimFollowUpHandler = null;
+    }
+  }
+
+  function armLookReclaimFollowUps() {
+    clearLookReclaimFollowUps();
+    // Chromium often accepts pointer lock on click/pointerup of the Resume
+    // gesture more reliably than on the initial pointerdown. Keep trying for
+    // the rest of this gesture chain (and the immediate next click).
+    lookReclaimFollowUpUntil = performance.now() + 2000;
+    lookReclaimFollowUpHandler = () => {
+      if (performance.now() > lookReclaimFollowUpUntil) {
+        clearLookReclaimFollowUps();
+        return;
+      }
+      if (state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || !state.started) return;
+      requestPointerLock();
+      if (document.pointerLockElement === dom.canvas) clearLookReclaimFollowUps();
+    };
+    window.addEventListener("pointerdown", lookReclaimFollowUpHandler, true);
+    window.addEventListener("pointerup", lookReclaimFollowUpHandler, true);
+    window.addEventListener("click", lookReclaimFollowUpHandler, true);
+  }
+
+  function reclaimLookControl({ armFollowUps = false } = {}) {
     if (!state.started || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver) return false;
     if (dom.canvas) {
       dom.canvas.inert = false;
       try { dom.canvas.focus({ preventScroll: true }); } catch (_) { /* focus is best-effort */ }
     }
-    return requestPointerLock();
+    const requested = requestPointerLock();
+    if (armFollowUps || document.pointerLockElement !== dom.canvas) armLookReclaimFollowUps();
+    return requested;
   }
 
   function setStageOverlayInert(activeOverlay, active, { keepCanvasInteractive = false } = {}) {
@@ -16740,24 +16787,83 @@
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
     }
     if (dom.menuMaximize) {
-      dom.menuMaximize.textContent = state.maximized ? "Restore size" : "Maximize";
-      dom.menuMaximize.setAttribute("aria-label", state.maximized ? "Restore game size" : "Maximize game");
-      dom.menuMaximize.title = state.maximized ? "Restore game size" : "Maximize game";
+      const fullscreen = isNativeFullscreen() || state.maximized;
+      dom.menuMaximize.textContent = fullscreen ? "Exit fullscreen" : "Fullscreen";
+      dom.menuMaximize.setAttribute("aria-label", fullscreen ? "Exit fullscreen" : "Enter fullscreen");
+      dom.menuMaximize.title = fullscreen ? "Exit fullscreen" : "Enter fullscreen";
+      dom.menuMaximize.setAttribute("aria-pressed", String(fullscreen));
     }
     updateAudioButton();
   }
 
-  function setMaximized(active) {
+  function isNativeFullscreen() {
+    const active = document.fullscreenElement || document.webkitFullscreenElement || null;
+    return Boolean(dom.stage && active === dom.stage);
+  }
+
+  function applyMaximizedChrome(active) {
     state.maximized = Boolean(active);
-    dom.stage.classList.toggle("is-maxed", state.maximized);
+    if (dom.stage) dom.stage.classList.toggle("is-maxed", state.maximized);
     document.body.classList.toggle("rb-game-maxed", state.maximized);
     updateMenuControls();
     resize();
     return state.maximized;
   }
 
+  async function setMaximized(active) {
+    const want = Boolean(active);
+    if (want) {
+      // Prefer true OS/browser fullscreen over CSS "max inside the browser".
+      try {
+        if (dom.stage?.requestFullscreen) {
+          try {
+            await dom.stage.requestFullscreen({ navigationUI: "hide" });
+          } catch (_) {
+            await dom.stage.requestFullscreen();
+          }
+          return applyMaximizedChrome(true);
+        }
+        if (dom.stage?.webkitRequestFullscreen) {
+          dom.stage.webkitRequestFullscreen();
+          return applyMaximizedChrome(true);
+        }
+      } catch (_) {
+        // Fall through to CSS maximize when the Fullscreen API is blocked.
+      }
+      return applyMaximizedChrome(true);
+    }
+
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (_) { /* ignore exit failures and still clear CSS chrome */ }
+    return applyMaximizedChrome(false);
+  }
+
   function toggleMaximized() {
-    return setMaximized(!state.maximized);
+    return setMaximized(!(isNativeFullscreen() || state.maximized));
+  }
+
+  function syncFullscreenStateFromDocument() {
+    const native = isNativeFullscreen();
+    if (native) {
+      applyMaximizedChrome(true);
+      return;
+    }
+    // Exiting native fullscreen (often via Escape) should leave maximized mode.
+    // Suppress the same Escape from also opening the pause menu.
+    if (state.maximized && !dom.stage?.classList.contains("is-maxed")) {
+      ignoreEscapeMenuToggleUntil = performance.now() + 450;
+      intentionalPointerUnlockUntil = performance.now() + 450;
+    }
+    if (state.maximized && !document.fullscreenElement && !document.webkitFullscreenElement) {
+      // If we were in native FS and it closed, clear. Keep CSS-only max if it
+      // was applied as a fallback without ever entering native FS: detect via
+      // class still set while no native element — clear that too when user
+      // asked for real fullscreen as the primary path.
+      ignoreEscapeMenuToggleUntil = Math.max(ignoreEscapeMenuToggleUntil, performance.now() + 450);
+      applyMaximizedChrome(false);
+    }
   }
 
   let menuReturnFocus = null;
@@ -16770,6 +16876,7 @@
     state.menuOpen = nextOpen;
     clearMovementInput();
     if (nextOpen) {
+      clearLookReclaimFollowUps();
       menuReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : dom.canvas;
       // Opening the menu is always an intentional unlock so pointerlockchange
       // does not re-enter setMenuOpen and thrash the dialog.
@@ -16782,18 +16889,16 @@
       return;
     }
 
-    // Resume path: reclaim look BEFORE hiding the menu control that owns the
-    // trusted gesture. Hiding the Resume button first can drop user activation
-    // and make requestPointerLock silently fail in Chromium.
+    // Resume path: free the canvas, hide the dialog, then reclaim look using
+    // the current user gesture plus short click/pointerup follow-ups. Chromium
+    // often rejects the first requestPointerLock from a button unless the rest
+    // of the same gesture chain retries.
     menuReturnFocus = null;
     if (dom.canvas) dom.canvas.inert = false;
-    reclaimLookControl();
     if (dom.menu) dom.menu.hidden = true;
     setStageOverlayInert(dom.menu, false);
     updateMenuControls();
-    // Second attempt after layout settles still runs inside the same turn for
-    // browsers that accept re-lock only once the dialog is gone.
-    reclaimLookControl();
+    reclaimLookControl({ armFollowUps: true });
   }
 
   function activateCurrentInteraction() {
@@ -16964,17 +17069,23 @@
     if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => loadMansionGame());
     if (dom.gameOverRestart) dom.gameOverRestart.addEventListener("click", () => location.reload());
     if (dom.menuResume) {
-      // pointerdown keeps the trusted gesture alive better than click alone:
-      // setMenuOpen reclaims pointer lock before the Resume control is hidden.
+      // Use pointerdown as the primary Resume gesture and keep retrying lock
+      // through pointerup/click of the same press. Do not wait for click only.
       const resumeExploration = (event) => {
         event.preventDefault();
+        event.stopPropagation();
         if (state.menuOpen) setMenuOpen(false);
-        else reclaimLookControl();
+        else reclaimLookControl({ armFollowUps: true });
       };
       dom.menuResume.addEventListener("pointerdown", resumeExploration);
       dom.menuResume.addEventListener("click", resumeExploration);
     }
-    if (dom.menuMaximize) dom.menuMaximize.addEventListener("click", toggleMaximized);
+    if (dom.menuMaximize) {
+      dom.menuMaximize.addEventListener("click", (event) => {
+        event.preventDefault();
+        void toggleMaximized();
+      });
+    }
     if (dom.menuSave) dom.menuSave.addEventListener("click", saveMansionGame);
     if (dom.menuLoad) dom.menuLoad.addEventListener("click", loadMansionGame);
     if (dom.menuDev) dom.menuDev.addEventListener("click", () => {
@@ -17046,7 +17157,12 @@
       const stageResizeObserver = new ResizeObserver(() => resize());
       stageResizeObserver.observe(dom.stage);
     }
-    document.addEventListener("fullscreenchange", resize);
+    document.addEventListener("fullscreenchange", () => {
+      syncFullscreenStateFromDocument();
+    });
+    document.addEventListener("webkitfullscreenchange", () => {
+      syncFullscreenStateFromDocument();
+    });
   }
 
   function computeRainExposure() {

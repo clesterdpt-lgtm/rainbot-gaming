@@ -2650,7 +2650,7 @@
     const isMaxed = () => fsTarget.classList.contains("is-maxed");
     const updateButton = () => {
       const on = isMaxed();
-      fsBtn.textContent = on ? "x" : "⛶";
+      fsBtn.textContent = on ? "✕" : "⛶";
       fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
       fsBtn.setAttribute("title", on ? "Exit max screen" : "Max screen");
     };

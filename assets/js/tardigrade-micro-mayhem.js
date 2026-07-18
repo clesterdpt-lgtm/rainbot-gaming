@@ -5575,9 +5575,9 @@
     const isMaxed = () => fsTarget.classList.contains("is-maxed") || nativeFsEl() === fsTarget;
     const updateButton = () => {
       const on = isMaxed();
-      fsBtn.textContent = on ? "Min" : "⛶";
-      fsBtn.setAttribute("aria-label", on ? "Minimize game" : "Max screen");
-      fsBtn.setAttribute("title", on ? "Minimize game" : "Max screen");
+      fsBtn.textContent = on ? "✕" : "⛶";
+      fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
+      fsBtn.setAttribute("title", on ? "Exit max screen" : "Max screen");
     };
     const setMaxed = (on) => {
       fsTarget.classList.toggle("is-maxed", on);

@@ -1725,7 +1725,7 @@
     const nativeFsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
     const updateBtn = () => {
       const on = isMaxed();
-      fsBtn.textContent = on ? "Exit" : "Max";
+      fsBtn.textContent = on ? "✕" : "⛶";
       fsBtn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
       fsBtn.setAttribute("title", on ? "Exit" : "Max screen");
     };

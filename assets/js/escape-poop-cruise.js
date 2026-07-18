@@ -5419,7 +5419,7 @@
     function setMaxed(on) {
       target.classList.toggle("is-maxed", on);
       document.body.classList.toggle("rb-game-maxed", on);
-      btn.textContent = on ? "x" : "+";
+      btn.textContent = on ? "✕" : "⛶";
       btn.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
       setTimeout(resize, 60);
     }

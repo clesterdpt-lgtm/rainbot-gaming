@@ -445,7 +445,7 @@
     const setMaxed = (active) => {
       gameStage.classList.toggle("is-maxed", active);
       document.body.classList.toggle("rb-game-maxed", active);
-      btnFullscreen.textContent = active ? "×" : "⛶";
+      btnFullscreen.textContent = active ? "✕" : "⛶";
       btnFullscreen.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
       btnFullscreen.title = active ? "Exit max screen" : "Max screen";
       requestAnimationFrame(() => {

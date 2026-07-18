@@ -3968,7 +3968,7 @@
 
     const onFullscreenChange = () => {
       const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
-      fullscreenBtn.innerHTML = isFullscreen ? "⛶ Minimize" : "⛶ Maximize";
+      fullscreenBtn.textContent = isFullscreen ? "✕" : "⛶";
     };
 
     document.addEventListener("fullscreenchange", onFullscreenChange);

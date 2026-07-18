@@ -4649,11 +4649,11 @@ function initGameEscapeMenu() {
   document.addEventListener("webkitfullscreenchange", refreshActions);
 }
 
-function initStandaloneGameShell() {
-  const surface = document.querySelector(".rb-standalone-surface");
-  const fsButton = surface && surface.querySelector("#btn-fullscreen");
-  if (!surface || !fsButton || fsButton.dataset.rbStandaloneFsBound === "true") return;
+function bindMaxScreenButton(fsButton, surface) {
+  if (!fsButton || !surface) return;
+  if (fsButton.dataset.rbFsBound === "true" || fsButton.dataset.rbStandaloneFsBound === "true") return;
 
+  fsButton.dataset.rbFsBound = "true";
   fsButton.dataset.rbStandaloneFsBound = "true";
 
   const isNativeFullscreen = () => (
@@ -4663,9 +4663,9 @@ function initStandaloneGameShell() {
   const isMaxed = () => surface.classList.contains("is-maxed") || isNativeFullscreen();
   const updateButton = () => {
     const active = isMaxed();
-    fsButton.textContent = active ? "Min" : "Max";
-    fsButton.setAttribute("aria-label", active ? "Minimize game" : "Max screen");
-    fsButton.setAttribute("title", active ? "Minimize game" : "Max screen");
+    fsButton.textContent = active ? "✕" : "⛶";
+    fsButton.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
+    fsButton.setAttribute("title", active ? "Exit max screen" : "Max screen");
   };
   const setMaxed = (active) => {
     surface.classList.toggle("is-maxed", active);
@@ -4699,7 +4699,28 @@ function initStandaloneGameShell() {
 
   document.addEventListener("fullscreenchange", syncFullscreenState);
   document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && surface.classList.contains("is-maxed") && !isNativeFullscreen()) {
+      setMaxed(false);
+    }
+  });
   updateButton();
+}
+
+function initStandaloneGameShell() {
+  const surface = document.querySelector(".rb-standalone-surface");
+  const fsButton = surface && surface.querySelector("#btn-fullscreen");
+  bindMaxScreenButton(fsButton, surface);
+}
+
+/** Opt-in max button for games that only ship the HTML chrome (data-rb-auto-fs). */
+function initAutoMaxScreenButtons() {
+  document.querySelectorAll("#btn-fullscreen[data-rb-auto-fs]").forEach((fsButton) => {
+    const surface =
+      fsButton.closest(".canvas-wrap, .rb-max-surface, .merge-board, .game-stage") ||
+      fsButton.parentElement;
+    bindMaxScreenButton(fsButton, surface);
+  });
 }
 
 let gameCanvasFitFrame = 0;
@@ -4816,6 +4837,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initSearchPage();
   initGamesCatalog();
   initStandaloneGameShell();
+  initAutoMaxScreenButtons();
   initGameEscapeMenu();
   initHomeRecentPanel();
   initHomeProgressPanel();

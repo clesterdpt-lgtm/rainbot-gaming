@@ -1820,7 +1820,7 @@
       maxed = on;
       wrap.classList.toggle("is-maxed", on);
       document.body.classList.toggle("rb-game-maxed", on);
-      btnFullscreen.textContent = on ? "x" : "⛶";
+      btnFullscreen.textContent = on ? "✕" : "⛶";
       btnFullscreen.setAttribute("title", on ? "Exit" : "Max screen");
       btnFullscreen.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
       setTimeout(() => canvas.focus({ preventScroll: true }), 0);

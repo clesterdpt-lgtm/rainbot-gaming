@@ -1038,7 +1038,7 @@
 
   function updateFullscreenButton(on) {
     if (!btnFullscreen) return;
-    btnFullscreen.textContent = on ? "Min" : "\u26f6";
+    btnFullscreen.textContent = on ? "✕" : "⛶";
     btnFullscreen.setAttribute("aria-label", on ? "Exit max screen" : "Max screen");
     btnFullscreen.title = on ? "Exit max screen" : "Max screen";
   }

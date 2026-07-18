@@ -2246,7 +2246,7 @@
       const active = !wrap.classList.contains("is-maxed");
       wrap.classList.toggle("is-maxed", active);
       document.body.classList.toggle("rb-game-maxed", active);
-      btnFullscreen.textContent = active ? "Exit" : "Max";
+      btnFullscreen.textContent = active ? "✕" : "⛶";
       setTimeout(draw, 60);
     });
   }

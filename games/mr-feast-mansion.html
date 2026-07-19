@@ -486,6 +486,13 @@
       border-block: 1px solid rgba(223, 186, 113, 0.18);
     }
 
+    .mansion-feast__command-content {
+      display: grid;
+      align-content: center;
+      gap: 3px;
+      min-width: 0;
+    }
+
     #mansion-feast-command {
       min-width: 0;
       margin: 0;
@@ -497,6 +504,17 @@
       line-height: 1.05;
       text-shadow: 0 2px 12px rgba(0, 0, 0, 0.56);
     }
+
+    #mansion-feast-hint {
+      margin: 0;
+      color: rgba(235, 224, 206, 0.76);
+      font-size: clamp(0.7rem, 1.35vw, 0.82rem);
+      font-weight: 600;
+      letter-spacing: 0.035em;
+      line-height: 1.15;
+    }
+
+    #mansion-feast-hint[hidden] { display: none; }
 
     #mansion-feast-timer {
       display: inline-grid;
@@ -566,6 +584,48 @@
       background: linear-gradient(#4d1015, #27090c);
       box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.48);
       transform: translateY(1px);
+    }
+
+    #mansion-feast-says[data-phase="dormant"] {
+      width: min(360px, calc(100% - 210px));
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 2px 8px;
+      padding: 6px 9px 7px 11px;
+    }
+
+    #mansion-feast-says[data-phase="dormant"] .mansion-feast__header { grid-column: 1 / -1; }
+
+    #mansion-feast-says[data-phase="dormant"] #mansion-feast-round,
+    #mansion-feast-says[data-phase="dormant"] .mansion-feast__footer,
+    #mansion-feast-says[data-phase="dormant"] #mansion-feast-hint { display: none; }
+
+    #mansion-feast-says[data-phase="dormant"] .mansion-feast__command-row { display: contents; }
+
+    #mansion-feast-says[data-phase="dormant"] .mansion-feast__command-content {
+      align-self: center;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    #mansion-feast-says[data-phase="dormant"] #mansion-feast-command {
+      align-self: center;
+      overflow: hidden;
+      font: 800 0.75rem/1 var(--mansion-sans);
+      letter-spacing: 0.08em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-feast-says[data-phase="dormant"] #mansion-feast-timer {
+      width: auto;
+      height: auto;
+      align-self: center;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      font-size: 0.85rem;
     }
 
     #mansion-security {
@@ -2044,7 +2104,15 @@
       #mansion-feast-score,
       #mansion-feast-standings { font-size: 0.51rem; }
       .mansion-feast__command-row { gap: 8px; padding: 3px 0; }
+      .mansion-feast__command-content { gap: 2px; }
       #mansion-feast-command { font-size: clamp(1rem, 4.5vw, 1.25rem); }
+      #mansion-feast-hint { font-size: 0.7rem; line-height: 1.05; }
+      .mansion-feast__command-content:has(#mansion-feast-hint:not([hidden])) { gap: 1px; }
+      .mansion-feast__command-content:has(#mansion-feast-hint:not([hidden])) #mansion-feast-command {
+        font-size: 1rem;
+        line-height: 1;
+      }
+      .mansion-feast__command-content:has(#mansion-feast-hint:not([hidden])) #mansion-feast-hint { line-height: 1; }
       #mansion-feast-timer { width: 44px; height: 44px; font-size: 1rem; }
       .mansion-feast__footer { gap: 5px; min-height: 44px; }
       #mansion-feast-score { padding: 3px 6px; }
@@ -2261,6 +2329,20 @@
         gap: 5px 10px;
         padding: 6px 8px 7px 10px;
       }
+      #mansion-feast-says[data-phase="dormant"] {
+        top: max(64px, calc(env(safe-area-inset-top) + 60px));
+      }
+      #mansion-feast-says[data-phase="dormant"] .mansion-feast__header { display: none; }
+      #mansion-feast-says:not([data-phase="dormant"]) {
+        width: min(570px, calc(100% - 24px));
+        grid-template-columns: minmax(0, 1fr);
+        gap: 3px;
+        padding: 4px 8px 5px 10px;
+      }
+      #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .mansion-location,
+      #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .mansion-tools {
+        display: none;
+      }
       .mansion-feast__header { grid-column: 1 / -1; }
       .mansion-feast__command-row { gap: 8px; padding: 3px 0; border-bottom: 0; }
       #mansion-feast-command { font-size: clamp(0.95rem, 3.5vw, 1.25rem); }
@@ -2268,6 +2350,20 @@
       .mansion-feast__footer { align-self: stretch; }
       #mansion-feast-standings { max-width: 128px; }
       #mansion-feast-crouch { min-width: 68px; min-height: 44px; padding: 5px 8px; }
+      #mansion-feast-says:not([data-phase="dormant"]) .mansion-feast__command-row { padding-block: 1px; }
+      #mansion-feast-says:not([data-phase="dormant"]) #mansion-feast-command {
+        font-size: 1rem;
+        line-height: 1;
+      }
+      #mansion-feast-says:not([data-phase="dormant"]) #mansion-feast-hint {
+        font-size: 0.7rem;
+        line-height: 1;
+      }
+      #mansion-feast-says:not([data-phase="dormant"]) #mansion-feast-timer {
+        width: 36px;
+        height: 36px;
+        font-size: 0.9rem;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2333,7 +2429,10 @@
             <span id="mansion-feast-round">Round 0 / 0</span>
           </div>
           <div class="mansion-feast__command-row">
-            <p id="mansion-feast-command" role="status" aria-live="assertive" aria-atomic="true">Waiting for Mr. Feast…</p>
+            <div class="mansion-feast__command-content">
+              <p id="mansion-feast-command" role="status" aria-live="assertive" aria-atomic="true">Waiting for Mr. Feast…</p>
+              <p id="mansion-feast-hint" aria-live="polite" aria-atomic="true" hidden></p>
+            </div>
             <output id="mansion-feast-timer" aria-label="Response time remaining" aria-live="off">—</output>
           </div>
           <div class="mansion-feast__footer">
@@ -2622,6 +2721,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260718-feast-says-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260719-ambient-details-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

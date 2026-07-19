@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-feast-says-1";
+  const MANSION_RUNTIME_VERSION = "20260719-ambient-details-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -120,6 +120,7 @@
     feastSays: $("mansion-feast-says"),
     feastEyebrow: $("mansion-feast-eyebrow"),
     feastCommand: $("mansion-feast-command"),
+    feastHint: $("mansion-feast-hint"),
     feastTimer: $("mansion-feast-timer"),
     feastRound: $("mansion-feast-round"),
     feastScore: $("mansion-feast-score"),
@@ -1589,15 +1590,15 @@
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 6.5,
-    responseSeconds: 4.25,
+    responseSeconds: 5.25,
     resultSeconds: 1.65,
     completionCardSeconds: 5.5,
     movementThreshold: 0.48,
     stationRadius: 1.05,
     briefingSpeechSeconds: 5.8,
-    commandSpeechSeconds: 2.6,
+    commandSpeechSeconds: 3.25,
     npcResponseDistance: 0.52,
-    npcCrouchDepth: 0.27,
+    npcCrouchDepth: 0.12,
     npcResponseSeconds: 0.42,
     npcResponseDelays: Object.freeze({
       "mara-voss": 0.12,
@@ -1613,18 +1614,51 @@
       "juniper-cross": Object.freeze({ x: 1.45, y: FLOOR.MAIN, z: -8.15, yaw: Math.PI }),
     }),
     commands: Object.freeze([
-      Object.freeze({ text: "Feast says step forward.", obey: true, action: "forward" }),
-      Object.freeze({ text: "Crouch.", obey: false, action: "crouch" }),
-      Object.freeze({ text: "Feast says step left.", obey: true, action: "left" }),
-      Object.freeze({ text: "Step right.", obey: false, action: "right" }),
-      Object.freeze({ text: "Feast says crouch.", obey: true, action: "crouch" }),
-      Object.freeze({ text: "Feast says step back.", obey: true, action: "back" }),
+      Object.freeze({
+        text: "Feast says point to the person you trust the least.",
+        obey: true,
+        action: "point",
+        acceptedActions: Object.freeze(["left", "forward", "right"]),
+        targetByAction: Object.freeze({
+          left: "mara-voss",
+          forward: "kip-solano",
+          right: "juniper-cross",
+        }),
+        npcTargets: Object.freeze({
+          "mara-voss": "kip-solano",
+          "kip-solano": "mara-voss",
+          "juniper-cross": "kip-solano",
+        }),
+        hint: "A / ◀ Mara · W / ▲ Kip · D / ▶ Juniper",
+      }),
+      Object.freeze({ text: "Crouch if you think Kip would save you.", obey: false, action: "crouch" }),
+      Object.freeze({ text: "Feast says step left—toward whoever you would betray first.", obey: true, action: "left" }),
+      Object.freeze({ text: "Step right if you would leave the others here for the prize.", obey: false, action: "right" }),
+      Object.freeze({ text: "Feast says crouch like you are hiding what you know.", obey: true, action: "crouch" }),
+      Object.freeze({ text: "Feast says step back from the person you would sacrifice first.", obey: true, action: "back" }),
     ]),
     npcCorrect: Object.freeze({
       "mara-voss": Object.freeze([true, true, true, true, true, true]),
       "kip-solano": Object.freeze([true, false, true, false, false, true]),
       "juniper-cross": Object.freeze([true, true, true, false, true, true]),
     }),
+  });
+  const CONTESTANT_FEAST_SAYS_MOTION = Object.freeze({
+    returnSeconds: 0.7,
+    crouchPoseBlend: 0.42,
+    sidestepPlaybackRate: 0.92,
+    backpedalPlaybackRate: -0.78,
+    sidestepSpineLeanRadians: 0.095,
+    sidestepHipLeanRadians: 0.075,
+    sidestepLeadingLegRadians: 0.12,
+    backpedalSpineLeanRadians: 0.09,
+    backpedalHipLeanRadians: 0.06,
+    pointPoseBlend: 0.9,
+    lowerBodyBones: Object.freeze([
+      "Spine", "Spine01", "Spine02",
+      "LeftUpLeg", "LeftLeg", "LeftFoot",
+      "RightUpLeg", "RightLeg", "RightFoot",
+    ]),
   });
 
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
@@ -1776,6 +1810,21 @@
       front: Object.freeze({ x: -19.0, z: 18.65 }),
       rear: Object.freeze({ x: -19.5, z: -16.35 }),
     }),
+  });
+
+  // Milestone 53 ambient detail pass. Foundation beds hug the front facade on
+  // both sides of the portico, low clipped shrubs line the driveway lawn edge,
+  // and two stone urns flank the entry steps. The east/west bed spans stop at
+  // |x|=4.4 so the portico columns, door aisle, and welcome mark stay open,
+  // and the shrub stations deliberately skip z≈29.5 where Mr. Feast stands
+  // when he answers a gate disturbance.
+  const ESTATE_PLANTING_LAYOUT = Object.freeze({
+    facadeBedOffsetZ: 12.82,
+    facadeBedDepth: 0.92,
+    facadeBedSpans: Object.freeze([Object.freeze([4.4, 14.2]), Object.freeze([-14.2, -4.4])]),
+    drivewayEdgeX: 3.86,
+    drivewayShrubZs: Object.freeze([18.3, 20.5, 22.7, 24.9, 27.1, 31.2]),
+    porticoUrn: Object.freeze({ x: 4.18, z: 14.15 }),
   });
 
   // A long, narrow maze follows the whole east lawn from the rear grounds to
@@ -6788,6 +6837,13 @@
       this.handOrientationDelta = new THREE.Quaternion();
       this.handOrientationTwist = new THREE.Quaternion();
       this.handOrientationLocal = new THREE.Quaternion();
+      this.challengePoseEuler = new THREE.Euler();
+      this.challengePoseQuaternion = new THREE.Quaternion();
+      this.challengePoseScaledQuaternion = new THREE.Quaternion();
+      this.challengePoseIdentityQuaternion = new THREE.Quaternion();
+      this.challengePoseStartQuaternion = new THREE.Quaternion();
+      this.challengePoseTargetQuaternion = new THREE.Quaternion();
+      this.challengePointTarget = new THREE.Vector3();
       this.challengeActive = false;
       this.challengeSnapshots = new Map();
       this.eliminatedIds = new Set();
@@ -6839,6 +6895,12 @@
           interactionRegistered: false,
           challengeResponse: null,
           challengeResponseProgress: 0,
+          challengeMotionKind: "still",
+          challengePoseWeight: 0,
+          challengeLowerBodyMaximumAngle: 0,
+          challengeUpperBodyMaximumAngle: 0,
+          challengePointArm: null,
+          challengePlaybackRate: 0,
           contactShadow: null,
           colliderEnabled: false,
           colliderBody: null,
@@ -8769,6 +8831,7 @@
         entry.mixer.update(dt);
         this.applyNeutralRestPose(entry);
       }
+      if (this.challengeActive) this.applyChallengeResponsePose(entry);
       this.updateHeadAttention(entry, dt);
       this.applyHeadAttentionPose(entry);
       if (entry.animationProbeBone && entry.animationProbeStart) {
@@ -8896,10 +8959,7 @@
       if (this.challengeActive) {
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
-          entry.activity = CONTESTANT_ACTIVITY.IDLE;
-          this.fadeToAction(entry, "idle");
-          this.updateChallengeResponse(entry, dt);
-          this.stepAnimation(entry, dt);
+          this.updateChallengeEntry(entry, dt);
         }
         return;
       }
@@ -8938,6 +8998,7 @@
         entry.challengeMark = { ...mark };
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
+        this.resetChallengeMotion(entry);
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         entry.pauseRemaining = 0;
         entry.routeTargetActive = false;
@@ -8956,15 +9017,32 @@
       };
     }
 
-    setChallengeResponse(id, action = "still") {
+    resetChallengeMotion(entry) {
+      entry.challengeMotionKind = "still";
+      entry.challengePoseWeight = 0;
+      entry.challengeLowerBodyMaximumAngle = 0;
+      entry.challengeUpperBodyMaximumAngle = 0;
+      entry.challengePointArm = null;
+      entry.challengePlaybackRate = 0;
+      if (entry.model) entry.model.position.y = entry.modelBaseY;
+    }
+
+    setChallengeResponse(id, action = "still", { targetId = null } = {}) {
       const entry = this.entryById(id);
       if (!this.challengeActive || !entry || entry.status !== "ready" || !entry.challengeMark) return false;
       entry.challengeResponse = {
         action,
+        targetId,
         elapsed: 0,
         delay: FEAST_SAYS.npcResponseDelays[id] || 0,
+        returning: false,
+        returnElapsed: 0,
+        returnStartProgress: 0,
+        playbackSign: 0,
+        reverseInitialized: false,
       };
       entry.challengeResponseProgress = 0;
+      this.resetChallengeMotion(entry);
       this.applyChallengeResponse(entry, action, 0);
       return true;
     }
@@ -8990,14 +9068,201 @@
         this.syncCollider(entry);
         return;
       }
-      response.elapsed += Math.max(0, Number(dt) || 0);
-      const progress = clamp(
-        (response.elapsed - response.delay) / FEAST_SAYS.npcResponseSeconds,
-        0,
-        1,
-      );
+      const step = Math.max(0, Number(dt) || 0);
+      let progress;
+      if (response.returning) {
+        response.returnElapsed = Math.min(
+          CONTESTANT_FEAST_SAYS_MOTION.returnSeconds,
+          response.returnElapsed + step,
+        );
+        const returnProgress = CONTESTANT_FEAST_SAYS_MOTION.returnSeconds > 0
+          ? response.returnElapsed / CONTESTANT_FEAST_SAYS_MOTION.returnSeconds
+          : 1;
+        progress = response.returnStartProgress * (1 - clamp(returnProgress, 0, 1));
+      } else {
+        response.elapsed += step;
+        progress = clamp(
+          (response.elapsed - response.delay) / FEAST_SAYS.npcResponseSeconds,
+          0,
+          1,
+        );
+      }
       entry.challengeResponseProgress = progress;
       this.applyChallengeResponse(entry, response.action, progress);
+    }
+
+    returnChallengeResponses() {
+      if (!this.challengeActive) return { returning: false, entries: [] };
+      const returningIds = [];
+      for (const entry of this.entries) {
+        const response = entry.challengeResponse;
+        if (entry.status !== "ready" || !entry.challengeMark || !response) continue;
+        response.returning = true;
+        response.returnElapsed = 0;
+        response.returnStartProgress = clamp(entry.challengeResponseProgress, 0, 1);
+        response.playbackSign = 0;
+        response.reverseInitialized = false;
+        returningIds.push(entry.id);
+      }
+      return { returning: returningIds.length > 0, entries: returningIds };
+    }
+
+    applyChallengeBoneEuler(entry, name, x, y, z, weight, upperBody = false) {
+      const bone = entry.restPoseByName[name]?.bone;
+      if (!bone || weight <= 0) return 0;
+      this.challengePoseEuler.set(x * weight, y * weight, z * weight, "XYZ");
+      this.challengePoseQuaternion.setFromEuler(this.challengePoseEuler);
+      bone.quaternion.multiply(this.challengePoseQuaternion).normalize();
+      const angle = 2 * Math.acos(clamp(Math.abs(this.challengePoseQuaternion.w), 0, 1));
+      if (upperBody) entry.challengeUpperBodyMaximumAngle = Math.max(entry.challengeUpperBodyMaximumAngle, angle);
+      else entry.challengeLowerBodyMaximumAngle = Math.max(entry.challengeLowerBodyMaximumAngle, angle);
+      return angle;
+    }
+
+    applyChallengeCrouchPose(entry, weight) {
+      const pose = CONTESTANT_SEATED_POSES[entry.id];
+      if (!pose) return;
+      const blend = CONTESTANT_FEAST_SAYS_MOTION.crouchPoseBlend * weight;
+      for (const name of CONTESTANT_FEAST_SAYS_MOTION.lowerBodyBones) {
+        const values = pose.bones[name];
+        const bone = entry.restPoseByName[name]?.bone;
+        if (!values || !bone) continue;
+        this.challengePoseQuaternion.set(...values).normalize();
+        this.challengePoseScaledQuaternion
+          .copy(this.challengePoseIdentityQuaternion)
+          .slerp(this.challengePoseQuaternion, blend)
+          .normalize();
+        bone.quaternion.multiply(this.challengePoseScaledQuaternion).normalize();
+        const angle = 2 * Math.acos(clamp(Math.abs(this.challengePoseScaledQuaternion.w), 0, 1));
+        entry.challengeLowerBodyMaximumAngle = Math.max(entry.challengeLowerBodyMaximumAngle, angle);
+      }
+    }
+
+    applyChallengePointPose(entry, targetId, weight) {
+      const target = this.entryById(targetId);
+      const targetMark = FEAST_SAYS.contestantMarks[targetId];
+      if ((!target || target.status !== "ready") && !targetMark) return;
+      const pointWeight = CONTESTANT_FEAST_SAYS_MOTION.pointPoseBlend * weight;
+      const targetHeight = Math.max(1.1, ((target?.status === "ready" ? target.size?.y : null) || 1.7) * 0.72);
+      if (target?.status === "ready") this.challengePointTarget.copy(target.root.position);
+      else this.challengePointTarget.set(targetMark.x, targetMark.y, targetMark.z);
+      this.challengePointTarget.y += targetHeight;
+      const pointsLeft = this.challengePointTarget.x < entry.root.position.x;
+      const sideName = pointsLeft ? "Left" : "Right";
+      const arm = entry.restPoseByName[`${sideName}Arm`]?.bone;
+      const forearm = entry.restPoseByName[`${sideName}ForeArm`]?.bone;
+      const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
+      if (!arm || !forearm) return;
+      this.challengePoseStartQuaternion.copy(arm.quaternion);
+      if (this.pointBoneToward(entry, arm, forearm, this.challengePointTarget)) {
+        this.challengePoseTargetQuaternion.copy(arm.quaternion);
+        arm.quaternion.copy(this.challengePoseStartQuaternion).slerp(this.challengePoseTargetQuaternion, pointWeight).normalize();
+        entry.challengeUpperBodyMaximumAngle = Math.max(
+          entry.challengeUpperBodyMaximumAngle,
+          2 * Math.acos(clamp(Math.abs(this.challengePoseStartQuaternion.dot(arm.quaternion)), 0, 1)),
+        );
+      }
+      if (hand) {
+        this.challengePoseStartQuaternion.copy(forearm.quaternion);
+        if (this.pointBoneToward(entry, forearm, hand, this.challengePointTarget)) {
+          this.challengePoseTargetQuaternion.copy(forearm.quaternion);
+          forearm.quaternion.copy(this.challengePoseStartQuaternion).slerp(this.challengePoseTargetQuaternion, pointWeight).normalize();
+          entry.challengeUpperBodyMaximumAngle = Math.max(
+            entry.challengeUpperBodyMaximumAngle,
+            2 * Math.acos(clamp(Math.abs(this.challengePoseStartQuaternion.dot(forearm.quaternion)), 0, 1)),
+          );
+        }
+      }
+      entry.challengePointArm = sideName.toLowerCase();
+    }
+
+    stabilizeChallengeBackpedalTorso(entry) {
+      for (const name of ["Hips", "Spine", "Spine01", "Spine02"]) {
+        const rest = entry.restPoseByName[name];
+        if (rest) rest.bone.quaternion.copy(rest.quaternion);
+      }
+    }
+
+    measureChallengeTorsoTilt(entry) {
+      const hips = entry.restPoseByName.Hips;
+      if (!hips) return 0;
+      return 2 * Math.acos(clamp(Math.abs(hips.quaternion.dot(hips.bone.quaternion)), 0, 1));
+    }
+
+    applyChallengeResponsePose(entry) {
+      const response = entry.challengeResponse;
+      const progress = entry.challengeResponseProgress;
+      const weight = progress * progress * (3 - 2 * progress);
+      entry.challengePoseWeight = weight;
+      entry.challengeLowerBodyMaximumAngle = 0;
+      entry.challengeUpperBodyMaximumAngle = 0;
+      entry.challengePointArm = null;
+      if (!response || weight <= 0) {
+        entry.challengeMotionKind = "still";
+        return;
+      }
+      if (response.action === "crouch") {
+        entry.challengeMotionKind = "crouch";
+        this.applyChallengeCrouchPose(entry, weight);
+      } else if (response.action === "left" || response.action === "right") {
+        const direction = response.action === "left" ? -1 : 1;
+        entry.challengeMotionKind = `sidestep-${response.action}`;
+        this.applyChallengeBoneEuler(entry, "Hips", 0, 0, -direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepHipLeanRadians, weight);
+        this.applyChallengeBoneEuler(entry, "Spine", 0, 0, -direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepSpineLeanRadians, weight);
+        this.applyChallengeBoneEuler(entry, direction < 0 ? "LeftUpLeg" : "RightUpLeg", 0, 0, direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepLeadingLegRadians, weight);
+      } else if (response.action === "back") {
+        entry.challengeMotionKind = "backpedal";
+        this.stabilizeChallengeBackpedalTorso(entry);
+        this.applyChallengeBoneEuler(entry, "Hips", CONTESTANT_FEAST_SAYS_MOTION.backpedalHipLeanRadians, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, "Spine", -CONTESTANT_FEAST_SAYS_MOTION.backpedalSpineLeanRadians, 0, 0, weight);
+      } else if (response.action === "forward") {
+        entry.challengeMotionKind = "forward-step";
+      } else if (response.action === "point") {
+        entry.challengeMotionKind = "point";
+        this.applyChallengePointPose(entry, response.targetId, weight);
+      } else {
+        entry.challengeMotionKind = "still";
+      }
+    }
+
+    prepareChallengeAnimation(entry) {
+      const response = entry.challengeResponse;
+      const progress = entry.challengeResponseProgress;
+      const translating = Boolean(
+        response
+        && ["forward", "back", "left", "right"].includes(response.action)
+        && progress > 0
+        && (response.returning || progress < 1),
+      );
+      const locomotion = translating;
+      entry.activity = locomotion ? CONTESTANT_ACTIVITY.WALKING : CONTESTANT_ACTIVITY.IDLE;
+      const action = this.fadeToAction(entry, locomotion ? "walk" : "idle");
+      let playbackRate = entry.currentAnimation === "idle" ? entry.placement.idleRate : 1;
+      if (entry.currentAnimation === "walk" && (response.action === "left" || response.action === "right")) {
+        playbackRate = CONTESTANT_FEAST_SAYS_MOTION.sidestepPlaybackRate;
+      } else if (entry.currentAnimation === "walk" && response.action === "back") {
+        playbackRate = response.returning
+          ? Math.abs(CONTESTANT_FEAST_SAYS_MOTION.backpedalPlaybackRate)
+          : CONTESTANT_FEAST_SAYS_MOTION.backpedalPlaybackRate;
+      } else if (entry.currentAnimation === "walk" && response.action === "forward" && response.returning) {
+        playbackRate = -1;
+      }
+      const playbackSign = Math.sign(playbackRate);
+      if (entry.currentAnimation === "walk" && playbackSign < 0 && response.playbackSign !== playbackSign && action) {
+          action.time = Math.max(0, action.getClip().duration - 0.0001);
+      }
+      action?.setEffectiveTimeScale(playbackRate);
+      if (response) {
+        response.playbackSign = entry.currentAnimation === "walk" ? playbackSign : 0;
+        response.reverseInitialized = entry.currentAnimation === "walk" && playbackSign < 0;
+      }
+      entry.challengePlaybackRate = action?.getEffectiveTimeScale?.() || 0;
+    }
+
+    updateChallengeEntry(entry, dt) {
+      this.updateChallengeResponse(entry, dt);
+      this.prepareChallengeAnimation(entry);
+      this.stepAnimation(entry, dt);
     }
 
     clearChallengeResponses() {
@@ -9007,6 +9272,11 @@
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
         this.applyChallengeResponse(entry, "still", 1);
+        this.resetChallengeMotion(entry);
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle", 0);
+        entry.mixer?.update(0);
+        this.applyNeutralRestPose(entry);
       }
     }
 
@@ -9018,7 +9288,7 @@
       while (elapsed < duration) {
         const step = Math.min(fixedStep, duration - elapsed);
         for (const entry of this.entries) {
-          if (entry.status === "ready" && entry.root.visible) this.updateChallengeResponse(entry, step);
+          if (entry.status === "ready" && entry.root.visible) this.updateChallengeEntry(entry, step);
         }
         elapsed += step;
       }
@@ -9066,8 +9336,11 @@
         entry.challengeMark = null;
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
+        this.resetChallengeMotion(entry);
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         this.fadeToAction(entry, "idle", 0);
+        entry.mixer?.update(0);
+        this.applyNeutralRestPose(entry);
         entry.root.updateMatrixWorld(true);
         this.setEliminated(entry.id, this.eliminatedIds.has(entry.id) || entry.id === eliminatedId);
       }
@@ -9578,7 +9851,27 @@
           challengeStaged: Boolean(this.challengeActive && entry.challengeMark),
           challengeResponse: entry.challengeResponse ? {
             action: entry.challengeResponse.action,
+            targetId: entry.challengeResponse.targetId || null,
             progress: Number(entry.challengeResponseProgress.toFixed(3)),
+            returning: Boolean(entry.challengeResponse.returning),
+            motion: {
+              kind: entry.challengeMotionKind,
+              poseWeight: Number(entry.challengePoseWeight.toFixed(3)),
+              lowerBodyMaximumAngleDegrees: Number(THREE.MathUtils.radToDeg(entry.challengeLowerBodyMaximumAngle).toFixed(2)),
+              upperBodyMaximumAngleDegrees: Number(THREE.MathUtils.radToDeg(entry.challengeUpperBodyMaximumAngle).toFixed(2)),
+              pointArm: entry.challengePointArm,
+              modelDrop: Number(Math.max(0, entry.modelBaseY - (entry.model?.position.y ?? entry.modelBaseY)).toFixed(3)),
+              playbackRate: Number(entry.challengePlaybackRate.toFixed(3)),
+              torsoTiltDegrees: Number(THREE.MathUtils.radToDeg(this.measureChallengeTorsoTilt(entry)).toFixed(2)),
+              markOffsetDistance: Number(Math.hypot(
+                entry.root.position.x - entry.challengeMark.x,
+                entry.root.position.z - entry.challengeMark.z,
+              ).toFixed(3)),
+              facingDeltaRadians: Number(Math.atan2(
+                Math.sin(entry.root.rotation.y - entry.challengeMark.yaw),
+                Math.cos(entry.root.rotation.y - entry.challengeMark.yaw),
+              ).toFixed(4)),
+            },
           } : null,
           error: entry.error,
           position: {
@@ -11899,7 +12192,8 @@
         const action = correct
           ? (command.obey ? command.action : "still")
           : (command.obey ? "still" : command.action);
-        mansionContestants?.setChallengeResponse(id, action);
+        const targetId = action === "point" ? command.npcTargets?.[id] || null : null;
+        mansionContestants?.setChallengeResponse(id, action, { targetId });
       }
       this.transition(FEAST_SAYS_PHASE.COMMAND, `round-${nextIndex + 1}`);
       speechSystem?.say(
@@ -11922,12 +12216,34 @@
       return dz < 0 ? "forward" : "back";
     }
 
+    pointTargetForInput(command, inputAction) {
+      return command?.action === "point" ? command.targetByAction?.[inputAction] || null : null;
+    }
+
+    normalizeCommandResponse(command, inputAction) {
+      const targetId = this.pointTargetForInput(command, inputAction);
+      if (command?.action === "point" && targetId) {
+        return { action: "point", inputAction, targetId };
+      }
+      if (command?.action === "point" && inputAction === "point") {
+        const fallbackInput = command.acceptedActions?.[1] || command.acceptedActions?.[0] || "forward";
+        return {
+          action: "point",
+          inputAction: fallbackInput,
+          targetId: this.pointTargetForInput(command, fallbackInput),
+        };
+      }
+      return { action: inputAction, inputAction, targetId: null };
+    }
+
     resolveCommand(submittedAction = null) {
       if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND || this.show.commandResult) {
         return { resolved: false, reason: "no-open-command" };
       }
       const command = FEAST_SAYS.commands[this.show.roundIndex];
-      const action = submittedAction || this.detectPlayerAction();
+      const inputAction = submittedAction || this.detectPlayerAction();
+      const normalized = this.normalizeCommandResponse(command, inputAction);
+      const action = normalized.action;
       const expected = command.obey ? command.action : "still";
       const correct = action === expected;
       if (correct) this.show.playerScore += 1;
@@ -11938,11 +12254,14 @@
         obey: command.obey,
         expected,
         action,
+        inputAction: normalized.inputAction,
+        targetId: normalized.targetId,
         correct,
       };
       this.show.commandResult = result;
       this.show.responses.push({ ...result });
       this.show.phaseRemaining = FEAST_SAYS.resultSeconds;
+      mansionContestants?.returnChallengeResponses();
       this.transition(FEAST_SAYS_PHASE.RESULT, correct ? "correct" : "incorrect");
       audioSystem?.ping(correct ? 659 : 116, correct ? 0.26 : 0.38, correct ? 0.04 : 0.065, correct ? "sine" : "sawtooth");
       return { resolved: true, ...result };
@@ -12099,6 +12418,7 @@
       };
       setText(dom.feastStandings, `Mara ${scores.mara} · Kip ${scores.kip} · Juniper ${scores.juniper} · You ${scores.player}`);
       setText(dom.feastScore, `Score ${this.show.playerScore} · Misses ${this.show.strikes}`);
+      let commandHint = "";
       if (dom.feastCrouch) {
         dom.feastCrouch.hidden = phase !== FEAST_SAYS_PHASE.COMMAND;
         dom.feastCrouch.disabled = phase !== FEAST_SAYS_PHASE.COMMAND;
@@ -12127,6 +12447,7 @@
         setText(dom.feastEyebrow, "Live challenge");
         setText(dom.feastRound, `Round ${this.show.roundIndex + 1} / ${FEAST_SAYS.commands.length}`);
         setText(dom.feastCommand, command?.text || "Hold your mark.");
+        commandHint = command?.hint || "";
         setText(dom.feastTimer, String(Math.max(0, Math.ceil(this.show.phaseRemaining))));
       } else if (phase === FEAST_SAYS_PHASE.RESULT) {
         setText(dom.feastEyebrow, "Judges’ call");
@@ -12143,6 +12464,10 @@
         setText(dom.feastRound, "Game 1 complete");
         setText(dom.feastCommand, "YOU — ELIMINATED");
         setText(dom.feastTimer, "OUT");
+      }
+      if (dom.feastHint) {
+        setText(dom.feastHint, commandHint);
+        dom.feastHint.hidden = !commandHint;
       }
     }
 
@@ -12241,8 +12566,9 @@
       const command = FEAST_SAYS.commands[this.show.roundIndex];
       const expected = command.obey ? command.action : "still";
       let submitted = action;
-      if (action === "correct") submitted = expected;
+      if (action === "correct") submitted = expected === "point" ? (command.acceptedActions?.[1] || "forward") : expected;
       if (action === "incorrect") submitted = expected === "still" ? command.action : "still";
+      if (action === "point") submitted = command.acceptedActions?.[1] || "forward";
       if (["ignore", "none", "hold"].includes(action)) submitted = "still";
       return this.resolveCommand(submitted);
     }
@@ -12253,14 +12579,24 @@
       if (this.show.phase === FEAST_SAYS_PHASE.CALLED && this.castReady()) this.reportToBallroom();
       this.show.playerScore = clamp(Math.floor(Number(playerScore) || 0), 0, FEAST_SAYS.commands.length);
       this.show.strikes = FEAST_SAYS.commands.length - this.show.playerScore;
-      this.show.responses = FEAST_SAYS.commands.map((command, index) => ({
-        index,
-        text: command.text,
-        obey: command.obey,
-        expected: command.obey ? command.action : "still",
-        action: this.show.playerScore > index ? (command.obey ? command.action : "still") : "miss",
-        correct: this.show.playerScore > index,
-      }));
+      this.show.responses = FEAST_SAYS.commands.map((command, index) => {
+        const correct = this.show.playerScore > index;
+        const expected = command.obey ? command.action : "still";
+        const inputAction = correct
+          ? (expected === "point" ? command.acceptedActions?.[1] || "forward" : expected)
+          : "miss";
+        const normalized = this.normalizeCommandResponse(command, inputAction);
+        return {
+          index,
+          text: command.text,
+          obey: command.obey,
+          expected,
+          action: normalized.action,
+          inputAction: normalized.inputAction,
+          targetId: normalized.targetId,
+          correct,
+        };
+      });
       this.show.roundIndex = FEAST_SAYS.commands.length - 1;
       this.show.phase = FEAST_SAYS_PHASE.RESULT;
       this.show.phaseRemaining = 0;
@@ -12308,6 +12644,9 @@
           text: command.text,
           obey: command.obey,
           action: command.action,
+          acceptedActions: command.acceptedActions ? [...command.acceptedActions] : null,
+          targetByAction: command.targetByAction ? { ...command.targetByAction } : null,
+          hint: command.hint || null,
           resolved: Boolean(this.show.commandResult),
           result: this.show.commandResult ? { ...this.show.commandResult } : null,
         } : null,
@@ -12316,6 +12655,9 @@
           strikes: this.show.strikes,
           qualified: this.show.playerScore > this.npcScore("kip-solano", FEAST_SAYS.commands.length),
           detectedAction: this.show.phase === FEAST_SAYS_PHASE.COMMAND ? this.detectPlayerAction() : null,
+          detectedTargetId: this.show.phase === FEAST_SAYS_PHASE.COMMAND
+            ? this.pointTargetForInput(command, this.detectPlayerAction())
+            : null,
           distanceFromMark: p ? Number(Math.hypot(p.x - FEAST_SAYS.playerMark.x, p.z - FEAST_SAYS.playerMark.z).toFixed(3)) : null,
         },
         standings: [
@@ -16728,6 +17070,53 @@
     new Refrigerator({ name: "kitchen refrigerator", x: KITCHEN_LAYOUT.refrigeratorX, z: KITCHEN_LAYOUT.refrigeratorZ, floorY: FLOOR.MAIN, width: 1.25, height: 2.25, depth: 0.82, rotationY: -Math.PI / 2 });
     box({ name: "kitchen-refrigerator-surround-top", w: 0.9, h: 0.11, d: 1.42, x: KITCHEN_LAYOUT.refrigeratorX, y: FLOOR.MAIN + 2.3, z: KITCHEN_LAYOUT.refrigeratorZ, material: M.darkWood, cast: false });
     for (const side of [-1, 1]) box({ name: "kitchen-refrigerator-surround-gable", w: 0.9, h: 2.3, d: 0.075, x: KITCHEN_LAYOUT.refrigeratorX, y: FLOOR.MAIN + 1.15, z: KITCHEN_LAYOUT.refrigeratorZ + side * 0.69, material: M.darkWood, cast: true });
+    addKitchenCounterDressing();
+  }
+
+  function addKitchenCounterDressing() {
+    // Milestone 53: working-kitchen clutter on the counter backs. Everything
+    // stays behind the front work edge, outside the sink span (x 8.8–10.5),
+    // and off the four burner rings, so no interaction ray or patrol changes.
+    const counterY = FLOOR.MAIN + KITCHEN_LAYOUT.counterTop;
+    const group = new THREE.Group();
+    group.name = "kitchen-counter-dressing";
+    scene.add(group);
+    box({ name: "kitchen-cutting-board", w: 0.52, h: 0.03, d: 0.32, x: 6.55, y: counterY + 0.015, z: -11.5, rotationY: 0.09, material: M.darkWood, parent: group, cast: false });
+    sphere({ name: "kitchen-bread-loaf", radius: 1, x: 6.44, y: counterY + 0.075, z: -11.52, material: M.foodBox, parent: group, cast: false }).scale.set(0.15, 0.075, 0.095);
+    sphere({ name: "kitchen-bread-loaf", radius: 1, x: 6.74, y: counterY + 0.065, z: -11.46, material: M.foodBox, parent: group, cast: false }).scale.set(0.11, 0.06, 0.08);
+    cylinder({ name: "kitchen-copper-pot", radius: 0.15, height: 0.15, segments: 16, x: 7.7, y: counterY + 0.075, z: -11.56, material: M.copper, parent: group, cast: false });
+    cylinder({ name: "kitchen-copper-pot-lid", radius: 0.155, height: 0.016, segments: 16, x: 7.7, y: counterY + 0.158, z: -11.56, material: M.copper, parent: group, cast: false });
+    sphere({ name: "kitchen-copper-pot-knob", radius: 0.02, x: 7.7, y: counterY + 0.175, z: -11.56, material: M.brass, parent: group, cast: false });
+    cylinder({ name: "kitchen-copper-pan", radius: 0.115, height: 0.075, segments: 14, x: 7.36, y: counterY + 0.038, z: -11.62, material: M.copper, parent: group, cast: false });
+    box({ name: "kitchen-copper-pan-handle", w: 0.2, h: 0.02, d: 0.032, x: 7.16, y: counterY + 0.06, z: -11.6, rotationY: 0.2, material: M.iron, parent: group, cast: false });
+    cylinder({ name: "kitchen-utensil-crock", radius: 0.072, height: 0.15, segments: 12, x: 10.95, y: counterY + 0.075, z: -11.58, material: M.terracotta, parent: group, cast: false });
+    for (const [index, tilt] of [-0.16, 0.05, 0.2].entries()) {
+      cylinder({ name: "kitchen-utensil-handle", radius: 0.011, height: 0.24, segments: 6, x: 10.95 + tilt * 0.3, y: counterY + 0.22, z: -11.58 + index * 0.02 - 0.02, rotationZ: tilt, material: M.darkWood, parent: group, cast: false });
+    }
+    cylinder({ name: "kitchen-fruit-bowl", radius: 0.15, radiusTop: 0.165, radiusBottom: 0.09, height: 0.07, segments: 16, x: 12.35, y: counterY + 0.035, z: -11.52, material: M.porcelain, parent: group, cast: false });
+    const kitchenFruit = [];
+    for (let i = 0; i < 4; i += 1) {
+      kitchenFruit.push({
+        x: 12.35 + yardJitter(i, 61) * 0.1,
+        y: counterY + 0.095 + (i % 2) * 0.035,
+        z: -11.52 + yardJitter(i, 62) * 0.08,
+        sx: 0.05, sy: 0.046, sz: 0.05,
+      });
+    }
+    addLocalInstanceBatch("kitchen-bowl-fruit", group, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.produce, kitchenFruit);
+    const kitchenPlateStack = [];
+    for (let i = 0; i < 4; i += 1) {
+      kitchenPlateStack.push({ x: 13.45, y: counterY + 0.012 + i * 0.024, z: -11.52, sx: 0.125, sy: 0.018, sz: 0.125, ry: yardJitter(i, 63) * 0.3 });
+    }
+    addLocalInstanceBatch("kitchen-plate-stack", group, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 16), M.dishBlue, kitchenPlateStack);
+    for (const [index, towelY] of [0.028, 0.082].entries()) {
+      box({ name: "kitchen-folded-towel", w: 0.3, h: 0.055, d: 0.22, x: 14.45, y: counterY + towelY, z: -6.05, rotationY: 0.06 - index * 0.13, material: M.canvasLinen, parent: group, cast: false });
+    }
+    cylinder({ name: "kitchen-rolling-pin", radius: 0.035, height: 0.4, segments: 12, x: 5.5, y: counterY + 0.035, z: -10.45, rotationZ: Math.PI / 2, rotationY: 0.28, material: M.darkWood, parent: group, cast: false });
+    // Copper kettle waiting on the rear-north burner ring.
+    sphere({ name: "kitchen-copper-kettle", radius: 1, x: 14.68, y: counterY + 0.093, z: -7.95, material: M.copper, parent: group, cast: false }).scale.set(0.13, 0.1, 0.13);
+    cylinder({ name: "kitchen-copper-kettle-spout", radius: 0.014, height: 0.11, segments: 8, x: 14.56, y: counterY + 0.13, z: -7.95, rotationZ: 0.85, material: M.copper, parent: group, cast: false });
+    box({ name: "kitchen-copper-kettle-handle", w: 0.03, h: 0.016, d: 0.15, x: 14.68, y: counterY + 0.2, z: -7.95, material: M.brass, parent: group, cast: false });
   }
 
   function addWineRack(x, z, floorY, rotationY, width) {
@@ -17469,6 +17858,240 @@
     feastSaysScene.reportHitbox = hitbox;
   }
 
+  // --- Milestone 53: ambient detail vignettes -------------------------------
+  // Small, room-specific prop sets. Tabletop decor never adds colliders;
+  // floor-standing pieces (nightstands, trunks, tubs, barrels) always do.
+
+  const DINING_SERVICE_SEATS = Object.freeze([
+    // [x, z, settingRotation] — one setting per dining chair, plate edge
+    // toward the table center so every seat reads as expecting a guest.
+    Object.freeze([-12.0, -7.78, Math.PI]),
+    Object.freeze([-10.45, -7.78, Math.PI]),
+    Object.freeze([-8.95, -7.78, Math.PI]),
+    Object.freeze([-7.4, -7.78, Math.PI]),
+    Object.freeze([-12.0, -9.02, 0]),
+    Object.freeze([-10.45, -9.02, 0]),
+    Object.freeze([-8.95, -9.02, 0]),
+    Object.freeze([-7.4, -9.02, 0]),
+    Object.freeze([-12.32, -8.4, -Math.PI / 2]),
+    Object.freeze([-7.08, -8.4, Math.PI / 2]),
+  ]);
+
+  function addDiningTableService() {
+    const group = new THREE.Group();
+    group.name = "dining-table-service";
+    group.position.set(0, FLOOR.MAIN + 0.852, 0);
+    scene.add(group);
+    box({ name: "dining-table-runner", w: 4.7, h: 0.014, d: 0.58, x: -9.7, y: 0, z: -8.4, material: M.velvet, parent: group, cast: false });
+    const plates = [];
+    const goblets = [];
+    const napkins = [];
+    DINING_SERVICE_SEATS.forEach(([x, z, ry], index) => {
+      const towardCenter = { x: Math.sin(ry), z: Math.cos(ry) };
+      plates.push({ x, y: 0.024, z, sx: 0.145, sy: 0.016, sz: 0.145 });
+      goblets.push({ x: x - towardCenter.z * 0.21, y: 0.075, z: z + towardCenter.x * 0.21, sx: 0.042, sy: 0.115, sz: 0.042 });
+      napkins.push({ x: x + towardCenter.z * 0.22, y: 0.022, z: z - towardCenter.x * 0.22, sx: 0.085, sy: 0.018, sz: 0.15, ry: ry + yardJitter(index, 47) * 0.14 });
+    });
+    addLocalInstanceBatch("dining-service-plates", group, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 16), M.porcelain, plates);
+    addLocalInstanceBatch("dining-service-goblets", group, "unitGoblet", () => new THREE.CylinderGeometry(0.72, 1, 1, 12), M.brass, goblets);
+    addLocalInstanceBatch("dining-service-napkins", group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.canvasLinen, napkins);
+    for (const x of [-11.05, -8.35]) {
+      cylinder({ name: "dining-candelabrum-base", radius: 0.095, height: 0.035, segments: 14, x, y: 0.018, z: -8.4, material: M.brass, parent: group, cast: false });
+      cylinder({ name: "dining-candelabrum-stem", radius: 0.026, height: 0.35, segments: 10, x, y: 0.2, z: -8.4, material: M.brass, parent: group, cast: false });
+      box({ name: "dining-candelabrum-crossarm", w: 0.44, h: 0.026, d: 0.045, x, y: 0.375, z: -8.4, material: M.brass, parent: group, cast: false });
+      for (const armOffset of [-0.19, 0, 0.19]) {
+        cylinder({ name: "dining-candelabrum-candle", radius: 0.019, height: armOffset === 0 ? 0.17 : 0.13, segments: 8, x: x + armOffset, y: armOffset === 0 ? 0.47 : 0.45, z: -8.4, material: M.porcelain, parent: group, cast: false });
+      }
+    }
+    cylinder({ name: "dining-centerpiece-bowl", radius: 0.235, radiusTop: 0.26, radiusBottom: 0.14, height: 0.1, segments: 18, x: -9.7, y: 0.055, z: -8.4, material: M.brass, parent: group, cast: false });
+    const centerpieceFruit = [];
+    for (let i = 0; i < 5; i += 1) {
+      centerpieceFruit.push({
+        x: -9.7 + yardJitter(i, 48) * 0.14,
+        y: 0.13 + (i % 2) * 0.045,
+        z: -8.4 + yardJitter(i, 49) * 0.1,
+        sx: 0.055, sy: 0.05, sz: 0.055,
+      });
+    }
+    addLocalInstanceBatch("dining-centerpiece-fruit", group, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.produce, centerpieceFruit);
+  }
+
+  function addMusicRoomDetails() {
+    const standYaw = faceTargetYaw(10.35, 7.15, 11.2, 5.85);
+    cylinder({ name: "music-sheet-stand-base", radius: 0.11, height: 0.02, segments: 12, x: 10.35, y: FLOOR.MAIN + 0.01, z: 7.15, material: M.iron, cast: false });
+    cylinder({ name: "music-sheet-stand-column", radius: 0.016, height: 0.98, segments: 8, x: 10.35, y: FLOOR.MAIN + 0.5, z: 7.15, material: M.iron, cast: false });
+    box({ name: "music-sheet-stand-desk", w: 0.4, h: 0.3, d: 0.014, x: 10.35, y: FLOOR.MAIN + 1.06, z: 7.15, rotationX: -0.4, rotationY: standYaw, material: M.blackWood, cast: false });
+    box({ name: "music-sheet-stand-pages", w: 0.3, h: 0.22, d: 0.006, x: 10.35 - Math.sin(standYaw) * 0.014, y: FLOOR.MAIN + 1.07, z: 7.15 - Math.cos(standYaw) * 0.014, rotationX: -0.4, rotationY: standYaw, material: M.porcelain, cast: false });
+    box({ name: "music-metronome-body", w: 0.095, h: 0.16, d: 0.095, x: 9.05, y: FLOOR.MAIN + 0.93, z: 7.28, rotationY: -0.4, material: M.darkWood, cast: false });
+    box({ name: "music-metronome-pendulum", w: 0.014, h: 0.12, d: 0.008, x: 9.05, y: FLOOR.MAIN + 0.985, z: 7.315, rotationY: -0.4, rotationZ: 0.16, material: M.brass, cast: false });
+    roundedBox({ name: "music-violin-case", w: 0.78, h: 0.13, d: 0.27, radius: 0.055, x: 12.4, y: FLOOR.MAIN + 0.065, z: 7.1, rotationY: 0.85, material: M.leather, cast: true });
+  }
+
+  function addLibraryWritingSet() {
+    const tableTop = FLOOR.MAIN + 0.852;
+    box({ name: "library-open-book-cover", w: 0.42, h: 0.016, d: 0.3, x: -10.85, y: tableTop + 0.008, z: 5.05, rotationY: 0.18, material: M.leather, cast: false });
+    for (const side of [-1, 1]) {
+      box({ name: "library-open-book-pages", w: 0.19, h: 0.02, d: 0.27, x: -10.85 + side * 0.1 * Math.cos(0.18), y: tableTop + 0.026, z: 5.05 + side * 0.1 * Math.sin(0.18), rotationY: 0.18, rotationZ: side * 0.045, material: M.porcelain, cast: false });
+    }
+    cylinder({ name: "library-inkwell", radius: 0.036, height: 0.065, segments: 12, x: -10.12, y: tableTop + 0.033, z: 4.92, material: M.glass, cast: false });
+    cylinder({ name: "library-inkwell-cap", radius: 0.02, height: 0.02, segments: 10, x: -10.12, y: tableTop + 0.075, z: 4.92, material: M.brass, cast: false });
+    for (const [index, offset] of [0.005, 0.017].entries()) {
+      box({ name: "library-letter-stack", w: 0.17, h: 0.008, d: 0.115, x: -10.18, y: tableTop + offset, z: 5.5, rotationY: 0.32 + index * 0.24, material: M.canvasLinen, cast: false });
+    }
+    const cabinetTop = FLOOR.MAIN + 1.73;
+    sphere({ name: "library-decanter-body", radius: 0.085, x: -13.9, y: cabinetTop + 0.085, z: 3.6, material: M.wineRed, cast: false });
+    cylinder({ name: "library-decanter-neck", radius: 0.022, height: 0.11, segments: 10, x: -13.9, y: cabinetTop + 0.2, z: 3.6, material: M.glass, cast: false });
+    for (const side of [-1, 1]) {
+      cylinder({ name: "library-tumbler", radius: 0.032, height: 0.075, segments: 10, x: -13.9 + side * 0.22, y: cabinetTop + 0.038, z: 3.85, material: M.glass, cast: false });
+    }
+  }
+
+  const SUITE_NIGHTSTAND_ITEMS = Object.freeze(["candle", "books", "carafe", "watch"]);
+
+  function addSuiteNightstandItem(kind, x, topY, z, seed) {
+    if (kind === "candle") {
+      cylinder({ name: "suite-candle-dish", radius: 0.05, height: 0.018, segments: 12, x, y: topY + 0.009, z, material: M.brass, cast: false });
+      cylinder({ name: "suite-candle", radius: 0.017, height: 0.12, segments: 8, x, y: topY + 0.078, z, material: M.porcelain, cast: false });
+    } else if (kind === "books") {
+      box({ name: "suite-bedside-book", w: 0.2, h: 0.035, d: 0.14, x, y: topY + 0.018, z, rotationY: yardJitter(seed, 50) * 0.5, material: M.leather, cast: false });
+      box({ name: "suite-bedside-book", w: 0.17, h: 0.03, d: 0.12, x: x + 0.015, y: topY + 0.05, z, rotationY: yardJitter(seed, 51) * 0.5, material: M.wineRed, cast: false });
+    } else if (kind === "carafe") {
+      cylinder({ name: "suite-water-carafe", radius: 0.048, radiusTop: 0.026, height: 0.16, segments: 12, x, y: topY + 0.08, z, material: M.glass, cast: false });
+      cylinder({ name: "suite-water-cup", radius: 0.03, height: 0.05, segments: 10, x: x + 0.11, y: topY + 0.025, z: z + 0.05, material: M.glass, cast: false });
+    } else {
+      cylinder({ name: "suite-pocket-watch", radius: 0.034, height: 0.012, segments: 12, x, y: topY + 0.006, z, material: M.brass, cast: false });
+      box({ name: "suite-watch-ribbon", w: 0.02, h: 0.004, d: 0.1, x: x + 0.03, y: topY + 0.004, z: z + 0.07, rotationY: 0.6, material: M.velvet, cast: false });
+    }
+  }
+
+  function addBedroomSuiteDressing(bedX, bedZ, rotationY, accents, options = {}) {
+    const dir = Math.abs(rotationY) < 0.1 ? 1 : -1;
+    const floorY = FLOOR.UPPER;
+    const standZ = bedZ + dir * 0.65;
+    const standTop = floorY + 0.56;
+    accents.forEach((accent, index) => {
+      const side = index === 0 ? -1 : 1;
+      const standX = bedX + side * 1.46;
+      box({ name: "suite-nightstand-body", w: 0.5, h: 0.5, d: 0.42, x: standX, y: floorY + 0.25, z: standZ, material: M.darkWood, cast: true });
+      box({ name: "suite-nightstand-top", w: 0.56, h: 0.05, d: 0.48, x: standX, y: floorY + 0.525, z: standZ, material: M.blackWood, cast: false });
+      sphere({ name: "suite-nightstand-knob", radius: 0.02, x: standX, y: floorY + 0.36, z: standZ - dir * 0.22, material: M.brass, cast: false });
+      physics.addFixedBox(standX, floorY + 0.3, standZ, 0.56, 0.6, 0.48, 0);
+      addSuiteNightstandItem(accent, standX, standTop, standZ + dir * 0.02, bedX + index * 13);
+    });
+    const trunkZ = bedZ - dir * 1.72;
+    const trunkYaw = yardJitter(bedX * 3 + bedZ, 52) * 0.07;
+    box({ name: "suite-travel-trunk", w: 0.95, h: 0.4, d: 0.5, x: bedX, y: floorY + 0.2, z: trunkZ, rotationY: trunkYaw, material: M.leather, cast: true });
+    box({ name: "suite-travel-trunk-lid", w: 0.97, h: 0.09, d: 0.52, x: bedX, y: floorY + 0.445, z: trunkZ, rotationY: trunkYaw, material: M.blackWood, cast: false });
+    for (const side of [-1, 1]) {
+      box({ name: "suite-travel-trunk-strap", w: 0.045, h: 0.51, d: 0.53, x: bedX + side * 0.28, y: floorY + 0.25, z: trunkZ, rotationY: trunkYaw, material: M.brass, cast: false });
+    }
+    sphere({ name: "suite-travel-trunk-latch", radius: 0.024, x: bedX + Math.sin(trunkYaw) * (dir * 0.26), y: floorY + 0.4, z: trunkZ - dir * 0.26, material: M.brass, cast: false });
+    physics.addFixedBox(bedX, floorY + 0.25, trunkZ, 1.0, 0.5, 0.56, trunkYaw);
+    const rugX = bedX + (bedX < 0 ? 1 : -1) * 1.58;
+    addRug(rugX, bedZ - dir * 0.1, 0.72, 1.62, floorY, options.rugMaterial || M.redRug, 0);
+  }
+
+  function addRearLoungeTeaService() {
+    const trayY = FLOOR.UPPER + 0.852;
+    cylinder({ name: "lounge-tea-tray", radius: 0.2, height: 0.014, segments: 18, x: 0.1, y: trayY + 0.007, z: -8.25, material: M.brass, cast: false });
+    sphere({ name: "lounge-teapot", radius: 0.085, x: 0.04, y: trayY + 0.085, z: -8.3, material: M.porcelain, cast: false });
+    cylinder({ name: "lounge-teapot-spout", radius: 0.014, height: 0.1, segments: 8, x: 0.13, y: trayY + 0.11, z: -8.3, rotationZ: -0.9, material: M.porcelain, cast: false });
+    sphere({ name: "lounge-teapot-lid", radius: 0.02, x: 0.04, y: trayY + 0.165, z: -8.3, material: M.brass, cast: false });
+    for (const side of [-1, 1]) {
+      cylinder({ name: "lounge-tea-saucer", radius: 0.05, height: 0.008, segments: 12, x: 0.1 + side * 0.13, y: trayY + 0.004, z: -8.13, material: M.porcelain, cast: false });
+      cylinder({ name: "lounge-tea-cup", radius: 0.031, height: 0.042, segments: 10, x: 0.1 + side * 0.13, y: trayY + 0.029, z: -8.13, material: M.porcelain, cast: false });
+    }
+    box({ name: "lounge-folded-throw", w: 0.5, h: 0.06, d: 0.34, x: -1.28, y: FLOOR.UPPER + 0.75, z: -6.5, rotationY: 0.12, material: M.exoticRug, cast: false });
+  }
+
+  function addLaundryDetails() {
+    const floorY = FLOOR.BASEMENT;
+    // Two strung drying lines with staggered hanging linens.
+    const linens = [];
+    for (const [lineIndex, lineZ] of [1.45, 2.3].entries()) {
+      for (const postX of [-12.7, -9.55]) {
+        cylinder({ name: "laundry-drying-post", radius: 0.032, height: 2.06, segments: 8, x: postX, y: floorY + 1.03, z: lineZ, material: M.iron, cast: false });
+      }
+      cylinder({ name: "laundry-drying-line", radius: 0.008, height: 3.15, segments: 6, x: -11.125, y: floorY + 2.02, z: lineZ, rotationZ: Math.PI / 2, material: M.iron, cast: false });
+      for (let i = 0; i < 3; i += 1) {
+        const x = -12.25 + i * 1.1 + lineIndex * 0.32;
+        linens.push({
+          x, y: floorY + 2.02 - 0.35, z: lineZ + yardJitter(i + lineIndex * 5, 53) * 0.03,
+          sx: 0.56 + Math.abs(yardJitter(i, 54)) * 0.12, sy: 0.66, sz: 0.02,
+          ry: yardJitter(i + lineIndex, 55) * 0.08,
+        });
+      }
+    }
+    addLocalInstanceBatch("laundry-hanging-linen", scene, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.canvasLinen, linens);
+    // A deep enamel washtub with a leaning washboard.
+    cylinder({ name: "laundry-washtub", radius: 0.42, radiusTop: 0.46, height: 0.52, segments: 18, x: -4.7, y: floorY + 0.26, z: 1.9, material: M.enamel });
+    cylinder({ name: "laundry-washtub-water", radius: 0.4, height: 0.02, segments: 18, x: -4.7, y: floorY + 0.46, z: 1.9, material: M.soot, cast: false });
+    box({ name: "laundry-washboard", w: 0.34, h: 0.52, d: 0.028, x: -4.62, y: floorY + 0.56, z: 1.72, rotationX: -0.52, material: M.darkWood, cast: false });
+    physics.addFixedBox(-4.7, floorY + 0.31, 1.9, 0.95, 0.62, 0.95, 0);
+    // Wicker baskets with linen mounds, plus folded stacks on the work table.
+    for (const [x, z] of [[-6.85, 2.35], [-3.25, -2.15]]) {
+      cylinder({ name: "laundry-basket", radius: 0.29, radiusTop: 0.32, height: 0.35, segments: 14, x, y: floorY + 0.175, z, material: M.foodBox, cast: false });
+      sphere({ name: "laundry-basket-linen", radius: 0.24, x, y: floorY + 0.38, z, material: M.porcelain, cast: false });
+    }
+    const stacks = [];
+    for (let i = 0; i < 4; i += 1) {
+      stacks.push({
+        x: -8.9 + (i % 2) * 0.62 + yardJitter(i, 56) * 0.05,
+        y: floorY + 0.9 + Math.floor(i / 2) * 0.001,
+        z: -0.1 + Math.floor(i / 2) * 0.42 - 0.21,
+        sx: 0.4, sy: 0.09 + Math.abs(yardJitter(i, 57)) * 0.03, sz: 0.3,
+        ry: yardJitter(i, 58) * 0.1,
+      });
+    }
+    addLocalInstanceBatch("laundry-folded-linen", scene, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.porcelain, stacks);
+  }
+
+  function addWineCellarDetails() {
+    const tableTop = FLOOR.BASEMENT + 0.852;
+    cylinder({ name: "wine-tasting-bottle", radius: 0.045, height: 0.28, segments: 12, x: -8.55, y: tableTop + 0.14, z: 7.25, material: M.wineRed, cast: false });
+    cylinder({ name: "wine-tasting-bottle-neck", radius: 0.018, height: 0.1, segments: 8, x: -8.55, y: tableTop + 0.33, z: 7.25, material: M.wineRed, cast: false });
+    cylinder({ name: "wine-tasting-bottle", radius: 0.045, height: 0.28, segments: 12, x: -8.3, y: tableTop + 0.14, z: 7.6, material: M.wineGreen, cast: false });
+    cylinder({ name: "wine-tasting-bottle-neck", radius: 0.018, height: 0.1, segments: 8, x: -8.3, y: tableTop + 0.33, z: 7.6, material: M.wineGreen, cast: false });
+    for (const side of [-1, 1]) {
+      cylinder({ name: "wine-tasting-goblet", radius: 0.038, radiusTop: 0.045, height: 0.1, segments: 10, x: -7.6 + side * 0.16, y: tableTop + 0.05, z: 7.3, material: M.brass, cast: false });
+    }
+    cylinder({ name: "wine-tasting-candlestick", radius: 0.05, height: 0.025, segments: 12, x: -7.15, y: tableTop + 0.012, z: 7.55, material: M.brass, cast: false });
+    cylinder({ name: "wine-tasting-candle", radius: 0.018, height: 0.13, segments: 8, x: -7.15, y: tableTop + 0.09, z: 7.55, material: M.porcelain, cast: false });
+    box({ name: "wine-tasting-ledger", w: 0.34, h: 0.02, d: 0.24, x: -8.85, y: tableTop + 0.01, z: 7.05, rotationY: -0.24, material: M.leather, cast: false });
+    for (const [index, x] of [-12.95, -11.9].entries()) {
+      cylinder({ name: "wine-cellar-barrel", radius: 0.34, radiusTop: 0.3, radiusBottom: 0.3, height: 0.82, segments: 16, x, y: FLOOR.BASEMENT + 0.41, z: 3.82, material: M.darkWood });
+      for (const hoopY of [0.18, 0.64]) {
+        cylinder({ name: "wine-cellar-barrel-hoop", radius: 0.325, height: 0.035, segments: 16, x, y: FLOOR.BASEMENT + hoopY, z: 3.82, material: M.brass, cast: false });
+      }
+      physics.addFixedBox(x, FLOOR.BASEMENT + 0.42, 3.82, 0.72, 0.85, 0.72, 0);
+    }
+  }
+
+  function addBulkStorageDetails() {
+    const floorY = FLOOR.BASEMENT;
+    // Second-tier crates stagger on two of the existing floor crates.
+    for (const [x, baseH, yaw] of [[9.0, 1.0, 0.14], [13.2, 1.0, -0.1]]) {
+      box({ name: "storage-crate-stacked", w: 0.82, h: 0.72, d: 0.78, x: x + 0.08, y: floorY + baseH + 0.36, z: -8.14, rotationY: yaw, material: M.darkWood, cast: true });
+    }
+    for (const z of [-5.75, -6.85]) {
+      cylinder({ name: "storage-barrel", radius: 0.33, radiusTop: 0.29, radiusBottom: 0.29, height: 0.78, segments: 14, x: 14.25, y: floorY + 0.39, z, material: M.darkWood });
+      cylinder({ name: "storage-barrel-hoop", radius: 0.315, height: 0.032, segments: 14, x: 14.25, y: floorY + 0.6, z, material: M.iron, cast: false });
+      physics.addFixedBox(14.25, floorY + 0.4, z, 0.7, 0.8, 0.7, 0);
+    }
+    box({ name: "storage-tarp-covered-pile", w: 1.35, h: 0.82, d: 1.05, x: 8.5, y: floorY + 0.41, z: -10.85, rotationY: 0.2, material: M.canvasLinen, cast: true });
+    physics.addFixedBox(8.5, floorY + 0.41, -10.85, 1.4, 0.85, 1.1, 0.2);
+  }
+
+  function addBoilerRoomDetails() {
+    const floorY = FLOOR.BASEMENT;
+    cylinder({ name: "boiler-coal-scuttle", radius: 0.155, radiusTop: 0.19, radiusBottom: 0.12, height: 0.3, segments: 12, x: -9.15, y: floorY + 0.15, z: -10.3, material: M.iron, cast: false });
+    for (let i = 0; i < 3; i += 1) {
+      sphere({ name: "boiler-coal-lump", radius: 0.05 + (i % 2) * 0.015, x: -9.15 + yardJitter(i, 59) * 0.12, y: floorY + 0.32, z: -10.3 + yardJitter(i, 60) * 0.1, material: M.soot, cast: false });
+    }
+    cylinder({ name: "boiler-shovel-handle", radius: 0.016, height: 0.78, segments: 8, x: -8.62, y: floorY + 0.42, z: -10.05, rotationZ: 0.4, rotationX: 0.1, material: M.darkWood, cast: false });
+    box({ name: "boiler-shovel-blade", w: 0.13, h: 0.02, d: 0.17, x: -8.47, y: floorY + 0.05, z: -10.08, rotationY: 0.3, material: M.iron, cast: false });
+  }
+
   function furnishMainFloor() {
     addFoyerPanelwork();
     // Library
@@ -17487,6 +18110,7 @@
       exitLocal: { x: 0.95, y: 0, z: 0.2 },
     });
     new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0 });
+    addLibraryWritingSet();
 
     // Music room — the sofa is deliberately aimed at the grand piano.
     addFireplace("music room fireplace", 5.35, 10.25, FLOOR.MAIN, -Math.PI / 2);
@@ -17498,6 +18122,7 @@
     const musicRoomPiano = addPiano(musicPiano.x, musicPiano.z, FLOOR.MAIN, -0.55);
     musicRoomPiano.name = "music-room-grand-piano";
     addTable(9.2, 7.4, 1.1, 0.65, FLOOR.MAIN, -Math.PI / 4, M.darkWood);
+    addMusicRoomDetails();
     addWallPortrait({ axis: "z", fixed: 15, center: 7.8, floorY: FLOOR.MAIN, centerY: 2.15, side: -1, width: 1.15, height: 1.7, color: 0x28222b, artId: "patron-empty-plates", circuitName: "music room lights" });
 
     // Painting room; all three door approaches keep a broad clear aisle.
@@ -17527,6 +18152,7 @@
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0 });
+    addDiningTableService();
     // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
     // against the north wall beyond both the dance and host patrol lanes.
     const ballroomSidelineChair = addChair(-3.9, -4.2, FLOOR.MAIN, 0, M.darkWood, {
@@ -17558,11 +18184,13 @@
     new Cabinet({ name: "west front walk-in closet", x: -12.8, z: 3.98, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: 0, walkIn: true });
     addTable(-7.2, 9.3, 1.25, 0.68, FLOOR.UPPER, Math.PI / 2, M.darkWood);
     addChair(-7.2, 8.45, FLOOR.UPPER, Math.PI, M.darkWood);
+    addBedroomSuiteDressing(-10.5, 10.1, 0, ["candle", "books"]);
 
     addBed(10.5, 10.1, FLOOR.UPPER, 0, 2.05, false);
     new Cabinet({ name: "east front walk-in closet", x: 12.8, z: 3.98, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: 0, walkIn: true });
     addTable(5.58, 9.55, 1.25, 0.68, FLOOR.UPPER, -Math.PI / 2, M.darkWood);
     addChair(6.48, 9.55, FLOOR.UPPER, Math.PI / 2, M.darkWood);
+    addBedroomSuiteDressing(10.5, 10.1, 0, ["carafe", "candle"]);
 
     addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45, { collection: "READING ROOM" });
     addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
@@ -17576,8 +18204,11 @@
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addFireplace("rear lounge fireplace", -4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
+    addBedroomSuiteDressing(-10.5, -10.1, Math.PI, ["books", "watch"], { rugMaterial: M.exoticRug });
+    addRearLoungeTeaService();
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "east rear walk-in closet", x: 6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI / 2, walkIn: true });
+    addBedroomSuiteDressing(10.5, -10.1, Math.PI, ["candle", "carafe"]);
     for (const portrait of [
       { x: -12.5, artId: "house-dreams-back", circuitName: "primary suite lights" },
       { x: -7.2, artId: "audit-of-souls", circuitName: "primary suite lights" },
@@ -17725,6 +18356,7 @@
     for (const x of [-11.5, -8.8, -6.1, -3.4]) addWineRack(x, 11.55, FLOOR.BASEMENT, 0, 2.35);
     addTable(-8.0, 7.4, 2.6, 1.05, FLOOR.BASEMENT, 0, M.darkWood);
     new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2 });
+    addWineCellarDetails();
 
     // Archive — the perimeter is intentionally bare. Three double-sided rows
     // stand well clear of every wall and split at the doorway datum, leaving
@@ -17759,6 +18391,7 @@
     // Laundry & linen
     new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2 });
     addTable(-8.0, -0.1, 2.6, 1.15, FLOOR.BASEMENT, 0, M.darkWood);
+    addLaundryDetails();
 
     // Pantry storage — five semantic cupboards line the solid walls while the
     // doorway, archive opening, service-stair approach, and broad center aisle
@@ -17793,7 +18426,9 @@
     new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2 });
     addWorkroomKeypadHardware();
     addWorkroomSecurityHub();
+    addBoilerRoomDetails();
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
+    addBulkStorageDetails();
   }
 
   function createContestantThirteenScratchTexture() {
@@ -18534,6 +19169,7 @@
     addLockedDrivewayGate();
     derivePerimeterCoverage();
     buildDrivewayAndEstatePaths();
+    buildFoundationPlantings();
     buildFormalGarden();
     buildEstatePool();
     buildHedgeMaze();
@@ -18752,6 +19388,78 @@
     // A second, clearly paved entrance opens the previously remote north half
     // directly onto the house-side promenade.
     box({ name: "maze-north-access-spur", w: 2.9, h: 0.044, d: 1.6, x: 19.95, y, z: 5.75, material: M.wetPavers, cast: false });
+  }
+
+  function buildFoundationPlantings() {
+    const groundY = YARD_LAYOUT.groundY;
+    const layout = ESTATE_PLANTING_LAYOUT;
+    const clumps = [];
+    const darkClumps = [];
+    // Facade foundation beds: a soil strip with a limestone curb and two
+    // staggered rows of clipped boxwood, kept below the main-floor sills.
+    layout.facadeBedSpans.forEach(([spanA, spanB], bedIndex) => {
+      const start = Math.min(spanA, spanB);
+      const end = Math.max(spanA, spanB);
+      const length = end - start;
+      const center = (start + end) / 2;
+      const z = layout.facadeBedOffsetZ;
+      box({ name: `estate-foundation-bed-${bedIndex + 1}`, w: length, h: 0.1, d: layout.facadeBedDepth, x: center, y: groundY + 0.05, z, material: M.gardenSoil, cast: false });
+      box({ name: `estate-foundation-curb-${bedIndex + 1}`, w: length + 0.14, h: 0.16, d: 0.12, x: center, y: groundY + 0.08, z: z + layout.facadeBedDepth / 2, material: M.limestone, cast: false });
+      const count = Math.max(4, Math.round(length / 1.05));
+      for (let i = 0; i <= count; i += 1) {
+        const along = start + (i / count) * length;
+        const primaryScale = 0.44 + Math.abs(yardJitter(i + bedIndex * 41, 31)) * 0.14;
+        clumps.push({
+          x: along + yardJitter(i, 32) * 0.1,
+          y: groundY + 0.36 + Math.abs(yardJitter(i, 33)) * 0.05,
+          z: z - 0.12 + yardJitter(i + 7, 34) * 0.08,
+          sx: primaryScale, sy: 0.36 + Math.abs(yardJitter(i, 35)) * 0.1, sz: primaryScale,
+          ry: yardJitter(i, 36) * 0.8,
+        });
+        if (i % 2 === 0) {
+          darkClumps.push({
+            x: along + 0.42 + yardJitter(i, 37) * 0.12,
+            y: groundY + 0.24,
+            z: z + 0.2 + yardJitter(i, 38) * 0.07,
+            sx: 0.26, sy: 0.22 + Math.abs(yardJitter(i, 39)) * 0.06, sz: 0.26,
+            ry: yardJitter(i, 40),
+          });
+        }
+      }
+    });
+    // Driveway lining: soft paired shrub balls on the lawn just beyond the
+    // limestone edging. They stay collider-free so lawn crossings, contestant
+    // walk-ups, and the host's drive response never fight an invisible wall.
+    for (const z of layout.drivewayShrubZs) {
+      for (const side of [-1, 1]) {
+        const x = side * layout.drivewayEdgeX;
+        const primaryScale = 0.5 + Math.abs(yardJitter(z * 10 + side, 41)) * 0.1;
+        clumps.push({
+          x, y: groundY + 0.42, z: z + yardJitter(z + side, 42) * 0.14,
+          sx: primaryScale, sy: 0.44 + Math.abs(yardJitter(z, 43)) * 0.09, sz: primaryScale,
+          ry: yardJitter(z, 44),
+        });
+        darkClumps.push({
+          x: x + side * 0.34, y: groundY + 0.22, z: z + 0.4 + yardJitter(z + side * 3, 45) * 0.12,
+          sx: 0.24, sy: 0.2, sz: 0.24, ry: yardJitter(z, 46),
+        });
+      }
+    }
+    addOutdoorInstanceBatch("estate-foundation-boxwood", "yardHedgeClump", () => new THREE.IcosahedronGeometry(1, 1), M.hedge, clumps, false, true);
+    addOutdoorInstanceBatch("driveway-lining-shrubs", "yardHedgeClump", () => new THREE.IcosahedronGeometry(1, 1), M.hedgeDark, darkClumps, false, true);
+    // Two carved urns flank the portico steps; solid stone earns a collider.
+    for (const side of [-1, 1]) {
+      const x = side * layout.porticoUrn.x;
+      const z = layout.porticoUrn.z;
+      cylinder({ name: "portico-planter-plinth", radius: 0.21, height: 0.14, segments: 14, x, y: groundY + 0.07, z, material: M.marble, cast: false });
+      cylinder({ name: "portico-planter-stem", radius: 0.115, height: 0.2, segments: 14, x, y: groundY + 0.24, z, material: M.limestone });
+      cylinder({ name: "portico-planter-urn", radius: 0.31, radiusTop: 0.35, radiusBottom: 0.17, height: 0.34, segments: 16, x, y: groundY + 0.5, z, material: M.limestone });
+      cylinder({ name: "portico-planter-soil", radius: 0.29, height: 0.03, segments: 14, x, y: groundY + 0.665, z, material: M.gardenSoil, cast: false });
+      sphere({ name: "portico-planter-shrub", radius: 0.34, x, y: groundY + 0.94, z, material: M.hedge, cast: false });
+      sphere({ name: "portico-planter-shrub-crown", radius: 0.2, x: x + side * 0.1, y: groundY + 1.2, z: z + 0.06, material: M.hedgeDark, cast: false });
+      physics.addFixedBox(x, groundY + 0.45, z, 0.72, 0.9, 0.72, 0);
+    }
+    yardState.featureCounts.foundationPlantings = clumps.length + darkClumps.length;
   }
 
   function addGardenBench(x, z, rotationY) {

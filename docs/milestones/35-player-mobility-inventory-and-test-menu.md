@@ -13,6 +13,8 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 - Hold `Shift` while moving to sprint until the visible energy reserve is exhausted; recover energy while not sprinting.
 - Toggle crouch with `C`, lowering the viewpoint and movement speed while exposing stronger stealth and quieter-movement multipliers for future detection logic.
 - Open and close a combined carried-object and recovered-clue dossier with `Tab`; retire the previous `I` / `J` bindings.
+- On touch/mobile layouts, expose persistent hold-to-`Sprint`, `Crouch`, and `Menu` controls that drive the same authoritative stamina, stance, and pause-menu state as keyboard input.
+- Show the dossier toolbar control only on touch/mobile layouts and label it `Bag`; keep `Tab` as the desktop keyboard shortcut without desktop toolbar clutter.
 - Keep the left-side investigation HUD hidden until Contestant 13's first clue is discovered instead of telling a fresh player to search the Library.
 - Present carried objects as illustrated item cards and recovered clues as handwritten entries on a ruled notepad without changing quest state or controls.
 - Open a mansion-specific menu with `Escape` that blocks player/world simulation and offers Resume, Maximize, Save, Load, and Dev Mode controls.
@@ -22,7 +24,7 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 ## Out of scope
 
 - Mr. Feast detection, hearing, pursuit, capture, or AI reactions to the new stealth multipliers.
-- Mobile sprint/crouch buttons or touch-menu redesign in this desktop-keyboard control slice.
+- A broader touch-control redesign beyond the requested Sprint, Crouch, Menu, and Bag controls.
 - Multiple named save slots, cloud-save UI, checkpoints, or autosave.
 - Workshop keypad implementation or additional basement clue chains.
 
@@ -39,6 +41,7 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 - [x] A fresh playthrough shows no left-side case file or Library-search objective; the investigation HUD appears only after the first clue is discovered. — tests: `scripts/test-mr-feast-player-systems.mjs::withheld opening guidance`, `scripts/test-mr-feast-contestant-13.mjs::discovery-first objective HUD`, and `scripts/test-mr-feast-renovation.mjs::49 discovery-first HUD`
 - [x] Every current carried object has a distinct, decorative SVG illustration in a readable item card, and every recovered clue is rendered as handwriting on one ruled-paper notepad at desktop and mobile widths. — tests: `scripts/test-mr-feast-player-systems.mjs::illustrated dossier` and `scripts/test-mr-feast-renovation.mjs::50 illustrated dossier`
 - [x] Pressing `Escape` opens a focus-safe mansion menu, releases pointer lock, blocks simulation, resumes cleanly, and exposes working Maximize, Save, Load, and Dev Mode actions. — test: `scripts/test-mr-feast-player-systems.mjs::escape menu controls`
+- [x] On a 390×844 touch viewport, hold-to-`Sprint` drains the same stamina reserve as `Shift`, `Crouch` toggles the same stealth stance as `C`, `Menu` opens the simulation-blocking mansion menu, and the mobile-only dossier control reads `Bag`. Every action remains at least 44 px, the movement pad remains 48 px per direction, Sprint/Crouch do not overlap Interact, and the complete lower control footprint stays within 24% of the stage. Persistent Sprint/Crouch yield while Feast Says owns movement. — tests: `scripts/test-mr-feast-player-systems.mjs::mobile touch controls` and `scripts/test-mr-feast-feast-says.mjs::mobile challenge input ownership`
 - [x] The intro and Escape menus fit without internal scrolling at desktop, portrait-phone, and short-landscape sizes; every action remains at least 44 px tall, the embedded stage stays inside the visible viewport, and a viewport grow/shrink cycle returns the stage and canvas to their original height instead of ratcheting downward. — tests: `scripts/test-mr-feast-menu-viewport.mjs` and `scripts/test-mr-feast-renovation.mjs::26 explicit mobile stage height`
 - [x] Save/Load restores player transform plus idempotent Contestant 13 story, inventory, journal, and story-world presentation without saving transient actions or Dev Mode, including a cold Load from the main intro. — tests: `scripts/test-mr-feast-player-systems.mjs::save and load round trip` and `scripts/test-mr-feast-intro-save-load.mjs::cold main-menu restore and invalid-save containment`
 - [x] Dev Mode is reversible, grants every current item and clue, opens the basement/Archive test gates, leaves `relaySabotaged` false, and restores the exact pre-dev quest snapshot when disabled. — test: `scripts/test-mr-feast-player-systems.mjs::reversible dev inventory grant`
@@ -46,7 +49,7 @@ Add one cohesive player-control and testing layer to the mansion: stamina-limite
 
 ## Exit condition
 
-User enters the mansion without an explicit Library direction, discovers the first clue through exploration, sprints until the energy bar drains, crouches and observes the slower/lower stealth state, opens Inventory with `Tab`, then uses the `Escape` menu to save, alter progress with Dev Mode, restore the clean state, and maximize the game.
+User enters the mansion without an explicit Library direction, discovers the first clue through exploration, sprints until the energy bar drains, crouches and observes the slower/lower stealth state, opens Inventory with `Tab`, then uses the `Escape` menu to save, alter progress with Dev Mode, restore the clean state, and maximize the game. On phone, the same sprint, crouch, dossier, and menu actions remain directly available through `Sprint`, `Crouch`, `Bag`, and `Menu` touch controls.
 
 ## Test plan
 
@@ -64,6 +67,8 @@ User enters the mansion without an explicit Library direction, discovers the fir
 - Automated acceptance completed on 2026-07-15. The milestone remains in progress only for the user's sprint/crouch pacing playtest.
 - The 2026-07-16 discovery refinement moved the dossier to `Tab` and withheld the opening case-file direction until the shelf book is found.
 - The 2026-07-16 visual refinement gives the shovel, B-13 key, badge, and tape distinct inline SVG illustrations; the evidence trail now reads from a warm ruled notepad with mobile-safe internal scrolling.
+- The 2026-07-18 mobile refinement adds persistent touch Crouch and Menu controls, renames the touch-only dossier toolbar control to Bag, removes that toolbar from desktop, and prevents duplicate crouch controls during Feast Says.
+- The 2026-07-19 mobile refinement adds hold-to-Sprint through the authoritative stamina input, compacts the energy/stealth cards and movement-pad spacing, preserves 44–48 px targets, and caps the lower touch footprint at 24% of the phone stage.
 
 ## Post-launch fix — reliable main-menu Load
 

@@ -148,6 +148,9 @@
     audio: $("mansion-menu-music") || $("mansion-audio"),
     fullscreen: $("mansion-menu-maximize") || $("mansion-fullscreen"),
     touch: $("mansion-touch"),
+    touchSprint: $("touch-sprint"),
+    touchCrouch: $("touch-crouch"),
+    touchMenu: $("touch-menu"),
     debug: $("mansion-debug"),
   };
   if (!dom.canvas || !dom.stage) return;
@@ -12101,6 +12104,8 @@
         dom.feastCrouch.disabled = phase !== FEAST_SAYS_PHASE.COMMAND;
         dom.feastCrouch.setAttribute("aria-pressed", String(state.movement.crouched));
       }
+      if (dom.touchSprint) dom.touchSprint.hidden = this.isPlaying();
+      if (dom.touchCrouch) dom.touchCrouch.hidden = this.isPlaying();
       if (phase === FEAST_SAYS_PHASE.DORMANT) {
         const remaining = FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed;
         setText(dom.feastEyebrow, "Next live event");
@@ -20736,6 +20741,10 @@
     input.left = false;
     input.right = false;
     input.sprint = false;
+    if (dom.touchSprint) {
+      dom.touchSprint.classList.remove("is-held");
+      dom.touchSprint.setAttribute("aria-pressed", "false");
+    }
   }
 
   function toggleFeastSaysCrouch() {
@@ -20745,6 +20754,26 @@
     input.sprint = false;
     updateMovementHud();
     feastSaysSystem.syncHud();
+    return state.movement.crouched;
+  }
+
+  function togglePlayerCrouch() {
+    if (
+      !state.started
+      || state.menuOpen
+      || state.journalOpen
+      || state.workroom.keypadOpen
+      || state.readableBooks.open
+      || state.gameOver
+      || openingWelcomeSystem?.active
+      || state.activeSeat
+      || state.contestant13.actionInProgress
+    ) return false;
+    if (feastSaysSystem?.isPlaying()) return toggleFeastSaysCrouch();
+    state.movement.crouched = !state.movement.crouched;
+    state.movement.sprinting = false;
+    input.sprint = false;
+    updateMovementHud();
     return state.movement.crouched;
   }
 
@@ -21084,10 +21113,7 @@
       }
       if (event.code === "KeyC" && !event.repeat && state.started && !openingWelcomeSystem?.active && !state.journalOpen && !state.activeSeat && !state.contestant13.actionInProgress) {
         event.preventDefault();
-        state.movement.crouched = !state.movement.crouched;
-        state.movement.sprinting = false;
-        input.sprint = false;
-        updateMovementHud();
+        togglePlayerCrouch();
         return;
       }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
@@ -21157,6 +21183,10 @@
     if (dom.journalButton) dom.journalButton.addEventListener("click", () => {
       if (!openingWelcomeSystem?.active && contestant13Quest) contestant13Quest.toggleJournal();
     });
+    if (dom.touchMenu) dom.touchMenu.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (state.started && !state.gameOver) setMenuOpen(true);
+    });
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
       if (event.target === dom.journal && contestant13Quest) contestant13Quest.setJournalOpen(false);
@@ -21210,6 +21240,7 @@
     const touchBindings = [
       ["touch-forward", "forward"], ["touch-back", "back"],
       ["touch-left", "left"], ["touch-right", "right"],
+      ["touch-sprint", "sprint"],
     ];
     for (const [id, property] of touchBindings) {
       const button = $(id);
@@ -21231,6 +21262,10 @@
     }
     const touchInteract = $("touch-interact");
     if (touchInteract) touchInteract.addEventListener("pointerdown", (event) => { event.preventDefault(); activateCurrentInteraction(); });
+    if (dom.touchCrouch) dom.touchCrouch.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      togglePlayerCrouch();
+    });
     if (dom.feastCrouch) dom.feastCrouch.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       toggleFeastSaysCrouch();
@@ -21896,6 +21931,15 @@
         : movement.crouched
         ? "Crouched · stealth"
         : movement.sprinting ? "Sprinting" : movement.exhausted ? "Recovering" : "Energy";
+    }
+    if (dom.touchCrouch) {
+      dom.touchCrouch.textContent = movement.crouched ? "Stand" : "Crouch";
+      dom.touchCrouch.setAttribute("aria-label", movement.crouched ? "Stand up" : "Crouch");
+      dom.touchCrouch.setAttribute("aria-pressed", String(movement.crouched));
+    }
+    if (dom.touchSprint) {
+      dom.touchSprint.setAttribute("aria-pressed", String(input.sprint));
+      dom.touchSprint.dataset.unavailable = String(movement.crouched || movement.exhausted);
     }
   }
 

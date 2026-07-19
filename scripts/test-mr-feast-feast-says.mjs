@@ -260,9 +260,11 @@ async function feastHudLayout(page) {
     const panel = byId("mansion-feast-says");
     const command = byId("mansion-feast-command");
     const score = byId("mansion-feast-score");
+    const standings = byId("mansion-feast-standings");
     const crouch = byId("mansion-feast-crouch");
     const interact = byId("touch-interact");
     const movement = document.querySelector(".mansion-touch__move");
+    const tools = document.querySelector(".mansion-tools");
     return {
       stage: plain(stage.getBoundingClientRect()),
       panel: plain(panel.getBoundingClientRect()),
@@ -271,8 +273,11 @@ async function feastHudLayout(page) {
       crouch: plain(crouch.getBoundingClientRect()),
       interact: plain(interact.getBoundingClientRect()),
       movement: plain(movement.getBoundingClientRect()),
+      tools: plain(tools.getBoundingClientRect()),
       panelHidden: panel.hidden,
       crouchHidden: crouch.hidden,
+      phase: panel.dataset.phase,
+      standingsDisplay: getComputedStyle(standings).display,
       commandFontPx: Number.parseFloat(getComputedStyle(command).fontSize),
       interactHeight: interact.getBoundingClientRect().height,
       interactWidth: interact.getBoundingClientRect().width,
@@ -308,6 +313,7 @@ async function run() {
   }
   const mobileCss = pageSource.slice(pageSource.indexOf("@media (max-width: 560px)"));
   assert(/#mansion-feast-says/.test(mobileCss), "the Feast Says HUD needs an explicit phone layout");
+  assert(/#mansion-feast-says\[data-phase="dormant"\]/.test(mobileCss), "the idle Feast Says countdown needs its own compact phone layout");
   assert(/id="touch-interact"/.test(pageSource), "the shipped touch interaction control must remain available for Ballroom staging");
 
   let server = null;
@@ -559,12 +565,17 @@ async function run() {
     await mobile.locator("#mansion-feast-crouch").click({ force: true });
     const mobileHud = await feastHudLayout(mobile);
     assert(!mobileHud.panelHidden && !mobileHud.crouchHidden, `mobile show HUD and challenge crouch should be visible during play; got ${JSON.stringify(mobileHud)}`);
+    assert(await mobile.locator("#touch-crouch").isHidden(), "the persistent mobile crouch control should yield to the challenge-specific crouch button");
+    assert(await mobile.locator("#touch-sprint").isHidden(), "mobile Sprint should yield while Feast Says owns movement input");
     assertInside(mobileHud.panel, mobileHud.stage, "mobile Feast Says panel");
-    assert(mobileHud.commandFontPx >= 14, `mobile command text is too small at ${mobileHud.commandFontPx}px`);
+    assert(mobileHud.phase === "command" && mobileHud.panel.height <= 126, `active mobile Feast Says should use a shallow command card; got ${JSON.stringify(mobileHud)}`);
+    assert(mobileHud.commandFontPx >= 16, `mobile command text is too small at ${mobileHud.commandFontPx}px`);
+    assert(mobileHud.standingsDisplay === "none", `mobile standings should yield to the command, timer, score, and action; got ${JSON.stringify(mobileHud)}`);
     assert(mobileHud.interactHeight >= 44 && mobileHud.interactWidth >= 44, `mobile E control must remain at least 44px; got ${JSON.stringify(mobileHud.interact)}`);
     assert(mobileHud.crouch.height >= 44 && mobileHud.crouch.width >= 44, `mobile Feast Says crouch control must remain at least 44px; got ${JSON.stringify(mobileHud.crouch)}`);
     assert(!rectanglesOverlap(mobileHud.panel, mobileHud.interact), `mobile event panel overlaps the E control; got ${JSON.stringify(mobileHud)}`);
     assert(!rectanglesOverlap(mobileHud.panel, mobileHud.movement), `mobile event panel overlaps movement controls; got ${JSON.stringify(mobileHud)}`);
+    assert(!rectanglesOverlap(mobileHud.panel, mobileHud.tools), `mobile event panel overlaps Bag/Menu; got ${JSON.stringify(mobileHud)}`);
     assert(mobileHud.documentWidth <= mobileHud.viewportWidth + 1, `Feast Says introduced horizontal overflow; got ${JSON.stringify(mobileHud)}`);
     await mobile.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "six-command-round-mobile.png") });
     assert(mobileErrors.length === 0, `mobile console errors: ${mobileErrors.join(" | ")}`);

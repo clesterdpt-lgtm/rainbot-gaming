@@ -81,6 +81,10 @@ async function run() {
     assert(state.player.movement.stealth.visibilityMultiplier === 1 && state.player.movement.stealth.noiseMultiplier === 1, "standing movement should expose neutral stealth multipliers");
     assert(await page.locator("#mansion-casefile").isHidden(), "fresh play should withhold the left-side case file until the first clue is discovered");
     assert(!/library|shelves|book that does not/i.test(await page.locator("#mansion-objective").textContent() || ""), "fresh HUD markup should not direct the player to the Library");
+    assert(await page.locator("#mansion-journal-button").isHidden(), "the Bag toolbar control should stay hidden on desktop where Tab remains available");
+    assert(await page.locator("#touch-sprint").count() === 1 && await page.locator("#touch-sprint").isHidden(), "the sprint touch control should exist but stay hidden on desktop");
+    assert(await page.locator("#touch-crouch").isHidden(), "the crouch touch control should stay hidden on desktop");
+    assert(await page.locator("#touch-menu").isHidden(), "the menu touch control should stay hidden on desktop");
 
     await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
     const walkStart = (await diagnostics(page)).player;
@@ -201,6 +205,10 @@ async function run() {
     await page.screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-desktop.png") });
 
     await page.keyboard.press("Escape");
+    await page.waitForTimeout(100);
+    // Native fullscreen may consume the first Escape before the page receives
+    // it. Send the page-owned close gesture once fullscreen has yielded.
+    if ((await diagnostics(page)).menus.inventoryOpen) await page.keyboard.press("Escape");
     await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).menus.inventoryOpen, null, { timeout: 3000 });
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen, null, { timeout: 3000 });
@@ -237,7 +245,96 @@ async function run() {
     });
     await mobilePage.goto(gameUrl, { waitUntil: "domcontentloaded" });
     await mobilePage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+    await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.1));
+    const mobileControls = await mobilePage.evaluate(() => {
+      const plain = (element) => {
+        if (!element) return null;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+          display: style.display,
+          visibility: style.visibility,
+        };
+      };
+      return {
+        stage: plain(document.getElementById("mansion-stage")),
+        bag: plain(document.getElementById("mansion-journal-button")),
+        sprint: plain(document.getElementById("touch-sprint")),
+        crouch: plain(document.getElementById("touch-crouch")),
+        menu: plain(document.getElementById("touch-menu")),
+        interact: plain(document.getElementById("touch-interact")),
+        movement: plain(document.querySelector(".mansion-touch__move")),
+        energy: plain(document.getElementById("mansion-energy")),
+        feast: plain(document.getElementById("mansion-feast-says")),
+        feastPhase: document.getElementById("mansion-feast-says")?.dataset.phase || "",
+        bagText: document.getElementById("mansion-journal-button")?.textContent?.trim() || "",
+        sprintText: document.getElementById("touch-sprint")?.textContent?.trim() || "",
+      };
+    });
+    for (const [name, control] of Object.entries({ bag: mobileControls.bag, sprint: mobileControls.sprint, crouch: mobileControls.crouch, menu: mobileControls.menu })) {
+      assert(control && control.display !== "none" && control.visibility !== "hidden", `mobile ${name} control should be visible; controls=${JSON.stringify(mobileControls)}`);
+      assert(control.width >= 44 && control.height >= 44, `mobile ${name} control should be at least 44px; control=${JSON.stringify(control)}`);
+    }
+    assert(mobileControls.bagText === "Bag", `the mobile inventory control should say Bag, got ${JSON.stringify(mobileControls.bagText)}`);
+    assert(mobileControls.sprintText === "Sprint", `the mobile sprint control should say Sprint, got ${JSON.stringify(mobileControls.sprintText)}`);
+    assert(mobileControls.sprint.right <= mobileControls.crouch.left, `mobile Sprint and Crouch should not overlap; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.sprint.bottom <= mobileControls.interact.top, `mobile Sprint should not overlap Interact; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.crouch.bottom <= mobileControls.interact.top, `mobile crouch should not overlap Interact; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.movement.width <= 148 && mobileControls.movement.height <= 100, `mobile movement controls should keep a compact footprint; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.energy.width <= 136 && mobileControls.energy.height <= 32, `mobile energy HUD should stay compact; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.feastPhase === "dormant" && mobileControls.feast.width <= 250 && mobileControls.feast.height <= 58, `the idle Feast Says countdown should collapse into a compact phone strip; controls=${JSON.stringify(mobileControls)}`);
+    const bottomUiTop = Math.min(...[mobileControls.movement, mobileControls.sprint, mobileControls.crouch, mobileControls.interact, mobileControls.energy]
+      .filter((control) => control.display !== "none" && control.height > 0)
+      .map((control) => control.top));
+    assert((mobileControls.stage.bottom - bottomUiTop) / mobileControls.stage.height <= 0.24, `mobile controls should reserve no more than the lower 24% of the stage; controls=${JSON.stringify(mobileControls)}`);
+
+    await mobilePage.evaluate(() => {
+      window.MrFeastFresh.teleport("foyer");
+      window.MrFeastFresh.setPlayerEnergyForQA(100);
+    });
+    await mobilePage.locator("#touch-sprint").hover();
+    await mobilePage.mouse.down();
+    await mobilePage.keyboard.down("w");
+    await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.65));
+    state = await diagnostics(mobilePage);
+    assert(state.player.movement.sprinting && state.player.movement.energy < 100, `holding mobile Sprint while moving should use the authoritative sprint/energy state; movement=${JSON.stringify(state.player.movement)}`);
+    assert(await mobilePage.locator("#touch-sprint").getAttribute("aria-pressed") === "true", "mobile Sprint should expose its held state");
+    await mobilePage.keyboard.up("w");
+    await mobilePage.mouse.up();
+    await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.1));
+    assert(!(await diagnostics(mobilePage)).player.movement.sprinting, "releasing mobile Sprint should stop sprinting");
+    assert(await mobilePage.locator("#touch-sprint").getAttribute("aria-pressed") === "false", "mobile Sprint should clear its held state on release");
+
+    await mobilePage.locator("#touch-crouch").click();
+    await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
+    state = await diagnostics(mobilePage);
+    assert(state.player.movement.crouched, "the mobile Crouch button should enter the authoritative crouched stance");
+    assert(await mobilePage.locator("#touch-crouch").getAttribute("aria-pressed") === "true", "the mobile Crouch button should expose its pressed state");
+    await mobilePage.locator("#touch-crouch").click();
+    await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
+    assert(!(await diagnostics(mobilePage)).player.movement.crouched, "pressing mobile Crouch again should restore standing stance");
+    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mobile-touch-controls.png") });
+
+    await mobilePage.locator("#touch-menu").click();
+    await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
+    state = await diagnostics(mobilePage);
+    assert(state.menus.simulationPaused && await mobilePage.locator("#mansion-menu").isVisible(), "the mobile Menu button should open the simulation-blocking mansion menu");
+    await mobilePage.locator("#mansion-menu-resume").click();
+    await mobilePage.waitForFunction(() => !JSON.parse(window.render_game_to_text()).menus.escapeOpen);
+
     await mobilePage.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
+    const competingTopHud = await mobilePage.evaluate(() => ({
+      caseFileVisible: !document.getElementById("mansion-casefile")?.hidden,
+      idleFeastDisplay: getComputedStyle(document.getElementById("mansion-feast-says")).display,
+    }));
+    assert(competingTopHud.caseFileVisible && competingTopHud.idleFeastDisplay === "none", `the idle minigame countdown should yield when the investigation card is visible; got ${JSON.stringify(competingTopHud)}`);
+
     await mobilePage.locator("#mansion-journal-button").click();
     await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.inventoryOpen);
     const mobileDossierLayout = await mobilePage.evaluate(() => {

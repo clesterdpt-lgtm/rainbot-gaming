@@ -310,7 +310,8 @@ async function run() {
     npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.currentAnimation === "stalk" && npc.distanceTravelled > 0.2, "Mr. Feast should resume his restrained live patrol after deterministic animation QA");
 
-    await page.locator("#mansion-journal-button").click();
+    await page.locator("#mansion-canvas").focus();
+    await page.keyboard.press("Tab");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).journal.open);
     const journalA11y = await page.evaluate(() => ({
       role: document.getElementById("mansion-journal")?.getAttribute("role"),
@@ -322,12 +323,12 @@ async function run() {
     assert(journalA11y.activeId === "mansion-journal-close" && journalA11y.canvasInert, "journal should move focus inside and make the game background inert");
     await page.keyboard.press("Tab");
     await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).journal.open);
-    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-journal-button", "Tab should close the dossier and restore focus to its opener");
-    await page.locator("#mansion-journal-button").click();
+    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-canvas", "Tab should close the desktop dossier and restore focus to the canvas opener");
+    await page.keyboard.press("Tab");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).journal.open);
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).journal.open);
-    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-journal-button", "closing the journal should restore focus to its opener");
+    assert(await page.evaluate(() => document.activeElement?.id) === "mansion-canvas", "closing the desktop dossier should restore focus to the canvas opener");
 
     await teleportForInteraction(page, "contestant13DigSite", /need.*shovel|disturbed earth/i);
     await pressInteract(page);

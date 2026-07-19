@@ -14,7 +14,7 @@ Add the mansion's first sanctioned reality-show competition and use it to pace t
 - A ten-minute active-exploration trigger that starts only after the front-door welcome and pauses with the existing game pauses.
 - A first-major-clue trigger covering the XIII book, concealed shovel, and first Painting Room scratch.
 - A temporary investigation pause while the event is called or running, with clear in-world feedback instead of silently swallowing interactions.
-- A visible Ballroom reporting station, four contestant marks, staged Mr. Feast and contestant positions, and a responsive event HUD.
+- A visible Ballroom reporting station, four contestant marks, staged Mr. Feast and contestant positions, and a responsive event HUD with separate compact idle/call and active-command phone layouts.
 - Six authored commands mixing genuine `Feast says ...` instructions with decoys. The player responds through existing movement and crouch controls while Mara, Kip, and Juniper visibly compete.
 - A round scoreboard, authored contestant performance, player success/failure, Kip's first-place-last elimination on a player win, and an `ELIMINATED` recovery modal when the player loses.
 - Save/load persistence for the countdown, called/completed state, and elimination result. Mid-competition saves resume from the Ballroom call rather than inside a command.
@@ -57,6 +57,7 @@ Invalid transition requests are reported in diagnostics and warned in QA.
 - [x] Explicit save/load preserves dormant elapsed time, called/completed state, and Kip's elimination; a transient briefing/command/result save restores as `called`. — test: `scripts/test-mr-feast-feast-says.mjs::save restore contract`
 - [x] `render_game_to_text()` and focused QA controls expose phase, trigger, elapsed time, command, response time, scores, staged cast, clue lock, invalid transitions, and completion. — test: `scripts/test-mr-feast-feast-says.mjs::diagnostics and deterministic controls`
 - [x] The call card, command card, timer, scoreboard, and recovery screen fit both 1280x820 and 390x844 without obscuring the required touch movement/interact controls. — test: `scripts/test-mr-feast-feast-says.mjs::desktop and phone presentation`
+- [x] On 390×844, the dormant/called HUD collapses to a ≤58 px status strip and yields entirely to a visible investigation card; the active command card stays ≤126 px tall, retains ≥16 px command text and a ≥44 px crouch action, hides nonessential standings, and does not overlap Bag/Menu or lower controls. — tests: `scripts/test-mr-feast-player-systems.mjs::compact idle countdown` and `scripts/test-mr-feast-feast-says.mjs::compact active command card`
 - [ ] User playtest confirms that six commands are readable at normal speed, decoys feel fair, the Ballroom staging feels like a produced reality show, and the clue pause feels motivated rather than arbitrary. — verified by user playtest
 
 ## Exit condition
@@ -72,6 +73,7 @@ Create `scripts/test-mr-feast-feast-says.mjs` before implementation and run it r
 - The player must beat Kip rather than merely tie him. Mara and Juniper's authored scores preserve the planned elimination order without making player input cosmetic.
 - Only the first discovery is allowed through before the call. Already-earned clues remain readable; only new progression is paused.
 - Later competition milestones will add later investigation ceilings. This slice solves the immediate problem of clearing the full chain before competition one without inventing unapproved games two and three.
+- The 2026-07-19 phone-HUD refinement replaces the full dormant card with a compact countdown strip, removes round standings from the active phone card, and preserves only the command, timer, score, and touch action at full readability.
 
 ## Verification
 

@@ -723,7 +723,7 @@
       top: max(14px, env(safe-area-inset-top));
       right: max(14px, env(safe-area-inset-right));
       z-index: 8;
-      display: flex;
+      display: none;
       gap: 8px;
     }
 
@@ -754,6 +754,16 @@
     }
 
     .mansion-tool:active { transform: translateY(1px); }
+
+    .mansion-tool--label {
+      width: auto;
+      min-width: 52px;
+      padding-inline: 10px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
 
     #mansion-audio[aria-pressed="false"] { color: #77736b; }
 
@@ -1812,6 +1822,30 @@
       font-size: 1.45rem;
     }
 
+    #touch-sprint,
+    #touch-crouch {
+      position: absolute;
+      bottom: max(100px, calc(env(safe-area-inset-bottom) + 86px));
+      width: 72px;
+      min-height: 48px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    #touch-sprint { right: max(95px, calc(env(safe-area-inset-right) + 84px)); }
+    #touch-crouch { right: max(17px, env(safe-area-inset-right)); }
+
+    #touch-sprint[aria-pressed="true"],
+    #touch-crouch[aria-pressed="true"] {
+      border-color: var(--mansion-brass-bright);
+      color: var(--mansion-brass-bright);
+      background: rgba(88, 66, 35, 0.72);
+    }
+
+    #touch-sprint[data-unavailable="true"] { opacity: 0.52; }
+
     #mansion-debug {
       position: absolute;
       right: max(12px, env(safe-area-inset-right));
@@ -1975,6 +2009,7 @@
     }
 
     @media (hover: none), (pointer: coarse) {
+      .mansion-tools { display: flex; }
       #mansion-touch { display: block; }
       #mansion-prompt { bottom: max(104px, calc(env(safe-area-inset-bottom) + 96px)); }
       #mansion-crosshair { display: none; }
@@ -1998,22 +2033,60 @@
       .mansion-location { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); max-width: 48%; }
       #mansion-room { font-size: 1.2rem; }
       #mansion-feast-says {
-        top: max(70px, calc(env(safe-area-inset-top) + 62px));
+        top: max(66px, calc(env(safe-area-inset-top) + 58px));
         width: calc(100% - 24px);
-        gap: 6px;
-        padding: 9px 10px 10px 12px;
+        gap: 3px;
+        padding: 5px 8px 6px 10px;
         border-radius: 8px;
       }
       #mansion-feast-eyebrow,
       #mansion-feast-round,
       #mansion-feast-score,
       #mansion-feast-standings { font-size: 0.51rem; }
-      .mansion-feast__command-row { gap: 9px; padding: 6px 0; }
-      #mansion-feast-command { font-size: clamp(1.08rem, 5.2vw, 1.45rem); }
-      #mansion-feast-timer { width: 50px; height: 50px; font-size: 1.12rem; }
-      .mansion-feast__footer { gap: 6px; }
-      #mansion-feast-score { padding: 4px 6px; }
-      #mansion-feast-crouch { min-width: 72px; min-height: 48px; padding: 7px 9px; font-size: 0.58rem; }
+      .mansion-feast__command-row { gap: 8px; padding: 3px 0; }
+      #mansion-feast-command { font-size: clamp(1rem, 4.5vw, 1.25rem); }
+      #mansion-feast-timer { width: 44px; height: 44px; font-size: 1rem; }
+      .mansion-feast__footer { gap: 5px; min-height: 44px; }
+      #mansion-feast-score { padding: 3px 6px; }
+      #mansion-feast-standings { display: none; }
+      #mansion-feast-crouch { min-width: 70px; min-height: 44px; padding: 6px 8px; font-size: 0.56rem; }
+      #mansion-feast-says[data-phase="dormant"],
+      #mansion-feast-says[data-phase="called"] {
+        width: min(240px, calc(100% - 128px));
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2px 8px;
+        padding: 6px 9px 7px 11px;
+      }
+      #mansion-feast-says[data-phase="dormant"] .mansion-feast__header,
+      #mansion-feast-says[data-phase="called"] .mansion-feast__header { grid-column: 1 / -1; }
+      #mansion-feast-says[data-phase="dormant"] #mansion-feast-round,
+      #mansion-feast-says[data-phase="called"] #mansion-feast-round,
+      #mansion-feast-says[data-phase="dormant"] .mansion-feast__footer,
+      #mansion-feast-says[data-phase="called"] .mansion-feast__footer { display: none; }
+      #mansion-feast-says[data-phase="dormant"] .mansion-feast__command-row,
+      #mansion-feast-says[data-phase="called"] .mansion-feast__command-row { display: contents; }
+      #mansion-feast-says[data-phase="dormant"] #mansion-feast-command,
+      #mansion-feast-says[data-phase="called"] #mansion-feast-command {
+        align-self: center;
+        overflow: hidden;
+        font: 800 0.7rem/1 var(--mansion-sans);
+        letter-spacing: 0.08em;
+        text-overflow: ellipsis;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      #mansion-feast-says[data-phase="dormant"] #mansion-feast-timer,
+      #mansion-feast-says[data-phase="called"] #mansion-feast-timer {
+        width: auto;
+        height: auto;
+        align-self: center;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        font-size: 0.78rem;
+      }
+      #mansion-casefile:not([hidden]) ~ #mansion-feast-says[data-phase="dormant"] { display: none; }
       #mansion-casefile {
         top: max(72px, calc(env(safe-area-inset-top) + 62px));
         left: max(12px, env(safe-area-inset-left));
@@ -2023,8 +2096,14 @@
       #mansion-objective { font-size: 0.87rem; }
       #mansion-discovery { bottom: max(168px, calc(env(safe-area-inset-bottom) + 150px)); }
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
-      #mansion-energy { left: max(12px, env(safe-area-inset-left)); bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); width: 160px; }
-      #mansion-stealth { left: max(12px, env(safe-area-inset-left)); bottom: max(164px, calc(env(safe-area-inset-bottom) + 150px)); width: 160px; }
+      #mansion-energy,
+      #mansion-stealth { left: max(10px, env(safe-area-inset-left)); width: 132px; padding: 5px 7px 6px; }
+      #mansion-energy { bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); }
+      #mansion-stealth { bottom: max(150px, calc(env(safe-area-inset-bottom) + 136px)); }
+      .mansion-energy__head,
+      .mansion-stealth__head { gap: 6px; margin-bottom: 3px; font-size: 0.48rem; letter-spacing: 0.11em; }
+      .mansion-energy__track,
+      .mansion-stealth__track { height: 4px; }
       #mansion-security { bottom: max(160px, calc(env(safe-area-inset-bottom) + 146px)); }
       #mansion-security:not([hidden]) ~ #mansion-discovery { bottom: max(206px, calc(env(safe-area-inset-bottom) + 190px)); }
       #mansion-security:not([hidden]) ~ #mansion-action { bottom: max(196px, calc(env(safe-area-inset-bottom) + 180px)); }
@@ -2076,10 +2155,14 @@
         bottom: max(12px, env(safe-area-inset-bottom));
         grid-template-columns: repeat(3, 48px);
         grid-template-rows: repeat(2, 48px);
-        gap: 4px;
+        gap: 2px;
       }
       .mansion-touch__button { min-width: 48px; min-height: 48px; }
       #touch-interact { right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); }
+      #touch-sprint,
+      #touch-crouch { bottom: max(94px, calc(env(safe-area-inset-bottom) + 80px)); }
+      #touch-sprint { right: max(89px, calc(env(safe-area-inset-right) + 78px)); }
+      #touch-crouch { right: max(11px, env(safe-area-inset-right)); }
       .mansion-aside { padding-inline: 17px; }
       .mansion-floors { grid-template-columns: 1fr; }
       .mansion-floor-row,
@@ -2261,7 +2344,8 @@
         </section>
 
         <div class="mansion-tools" aria-label="View controls">
-          <button id="mansion-journal-button" class="mansion-tool" type="button" aria-label="Open inventory and clues" aria-expanded="false" title="Inventory &amp; Clues (Tab)">Tab</button>
+          <button id="mansion-journal-button" class="mansion-tool mansion-tool--label" type="button" aria-label="Open bag, inventory, and clues" aria-expanded="false" title="Bag · Inventory &amp; Clues">Bag</button>
+          <button id="touch-menu" class="mansion-tool mansion-tool--label" type="button" aria-label="Open mansion menu">Menu</button>
         </div>
 
         <div id="mansion-loading" role="status" aria-live="polite">Preparing the estate…</div>
@@ -2399,6 +2483,8 @@
             <button id="touch-back" class="mansion-touch__button" type="button" aria-label="Move backward">▼</button>
             <button id="touch-right" class="mansion-touch__button" type="button" aria-label="Move right">▶</button>
           </div>
+          <button id="touch-sprint" class="mansion-touch__button" type="button" aria-label="Hold to sprint" aria-pressed="false">Sprint</button>
+          <button id="touch-crouch" class="mansion-touch__button" type="button" aria-label="Crouch" aria-pressed="false">Crouch</button>
           <button id="touch-interact" class="mansion-touch__button" type="button" aria-label="Interact">E</button>
         </div>
 

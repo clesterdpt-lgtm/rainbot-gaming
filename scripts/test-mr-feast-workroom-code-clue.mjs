@@ -34,6 +34,27 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function completeFirstClueCompetition(page, expectedClueId) {
+  let state = await diagnostics(page);
+  assert(
+    state.feastSays?.phase === "called"
+      && state.feastSays.triggerReason === "clue"
+      && state.feastSays.triggerClueId === expectedClueId
+      && state.feastSays.callCount === 1
+      && state.feastSays.clueProgressLocked,
+    `the first clue should call Feast Says once and pause later clues; got ${JSON.stringify(state.feastSays)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
+  assert(result?.survived === true, `the QA completion should survive Feast Says; got ${JSON.stringify(result)}`);
+  await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.feastSays.clueProgressLocked === false && state.feastSays.eliminatedContestantId === "kip-solano",
+    `completing Feast Says should reopen investigation and eliminate Kip; got ${JSON.stringify(state.feastSays)}`,
+  );
+  return state;
+}
+
 function watchErrors(page, errors) {
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -136,6 +157,13 @@ async function run() {
     assert(!/keypad|workroom|access pin|code/i.test(`${entry.title} ${entry.body}`), `the player-facing note must not identify what the marks unlock; got ${JSON.stringify(entry)}`);
     await page.screenshot({ path: path.join(artifactDir, "scratch-revealed-desktop.png") });
 
+    assert(
+      state.feastSays?.phase === "called"
+        && state.feastSays.triggerClueId === "painting-scratch:five-doors"
+        && state.feastSays.clueProgressLocked,
+      `the first discovered scratch should call Feast Says and lock later clue carriers; got ${JSON.stringify(state.feastSays)}`,
+    );
+
     // Straightening hides the scratch again but keeps the discovery.
     await page.waitForFunction(() => /straighten/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 8000 });
     await pressKey(page, "KeyE", "e");
@@ -143,6 +171,21 @@ async function run() {
     state = await diagnostics(page);
     target = state.workroomCode.targets.find((candidate) => candidate.artId === "five-doors");
     assert(target.revealed === false && target.discovered === true, `straightening should hide the scratch but keep the discovery; got ${JSON.stringify(target)}`);
+
+    // A second carrier stays untouched while production has paused clues.
+    const blockedSecondArtId = await page.evaluate(() => {
+      const second = window.MrFeastFresh.getTamperState().entries.find((candidate) => candidate.artId === "polite-eclipse");
+      window.MrFeastFresh.tamperForQA(second.id, true);
+      return second.artId;
+    });
+    state = await diagnostics(page);
+    const blockedSecond = state.workroomCode.targets.find((candidate) => candidate.artId === blockedSecondArtId);
+    const blockedTamper = state.tamper.entries.find((candidate) => candidate.artId === blockedSecondArtId);
+    assert(
+      blockedSecond.revealed === false && blockedSecond.discovered === false && blockedTamper.tampered === false,
+      `the Feast Says clue gate should leave a later carrier untouched; scratch=${JSON.stringify(blockedSecond)} tamper=${JSON.stringify(blockedTamper)}`,
+    );
+    await completeFirstClueCompetition(page, "painting-scratch:five-doors");
 
     // --- Mr. Feast's fix also re-hides a revealed scratch ---------------------
     const secondArtId = await page.evaluate(() => {
@@ -244,6 +287,9 @@ async function run() {
       await visualPage.waitForTimeout(180);
       await visualPage.locator("#mansion-discovery").evaluate((element) => { element.hidden = true; });
       await visualPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, `scratch-${carrier.artId}-corner-desktop.png`) });
+      if (carrier.artId === "five-doors") {
+        await completeFirstClueCompetition(visualPage, "painting-scratch:five-doors");
+      }
       await visualPage.evaluate((artId) => {
         const entryForArt = window.MrFeastFresh.getTamperState().entries.find((candidate) => candidate.artId === artId);
         window.MrFeastFresh.tamperForQA(entryForArt.id, false);

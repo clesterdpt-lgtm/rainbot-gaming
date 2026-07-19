@@ -388,6 +388,186 @@
 
     #mansion-stealth.is-exposed #mansion-stealth-mode { color: #c98a80; }
 
+    #mansion-feast-says {
+      position: absolute;
+      top: max(18px, calc(env(safe-area-inset-top) + 10px));
+      left: 50%;
+      z-index: 10;
+      display: grid;
+      width: min(620px, calc(100% - 210px));
+      gap: 9px;
+      padding: 12px 14px 13px;
+      overflow: hidden;
+      border: 1px solid rgba(223, 186, 113, 0.7);
+      border-radius: 10px;
+      color: #f5ead6;
+      background:
+        linear-gradient(110deg, rgba(62, 12, 18, 0.96), rgba(18, 12, 17, 0.94) 58%, rgba(8, 8, 10, 0.93)),
+        rgba(13, 10, 12, 0.96);
+      box-shadow:
+        0 14px 34px rgba(0, 0, 0, 0.52),
+        inset 0 1px 0 rgba(255, 241, 210, 0.1);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+
+    #mansion-feast-says::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(#e1bc70, #7e171d 56%, #390b0e);
+    }
+
+    #mansion-feast-says[hidden] { display: none; }
+
+    #mansion-feast-says[data-result="correct"] {
+      border-color: rgba(129, 205, 151, 0.85);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.52), inset 0 0 24px rgba(51, 127, 73, 0.16);
+    }
+
+    #mansion-feast-says[data-result="incorrect"] {
+      border-color: rgba(220, 94, 85, 0.92);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.52), inset 0 0 24px rgba(166, 38, 38, 0.2);
+    }
+
+    .mansion-feast__header,
+    .mansion-feast__footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    #mansion-feast-eyebrow,
+    #mansion-feast-round,
+    #mansion-feast-score,
+    #mansion-feast-standings {
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    #mansion-feast-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: #f3c981;
+    }
+
+    #mansion-feast-eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #e64040;
+      box-shadow: 0 0 0 3px rgba(230, 64, 64, 0.16), 0 0 10px rgba(230, 64, 64, 0.66);
+      animation: mansion-feast-live 1.35s ease-in-out infinite;
+    }
+
+    @keyframes mansion-feast-live {
+      50% { opacity: 0.48; transform: scale(0.78); }
+    }
+
+    #mansion-feast-round { color: rgba(231, 216, 193, 0.68); }
+
+    .mansion-feast__command-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+      padding: 9px 0;
+      border-block: 1px solid rgba(223, 186, 113, 0.18);
+    }
+
+    #mansion-feast-command {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1.3rem, 2.5vw, 2rem);
+      font-weight: 700;
+      letter-spacing: 0.015em;
+      line-height: 1.05;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.56);
+    }
+
+    #mansion-feast-timer {
+      display: inline-grid;
+      width: 58px;
+      height: 58px;
+      place-items: center;
+      border: 2px solid rgba(236, 196, 119, 0.72);
+      border-radius: 50%;
+      color: #fff0ce;
+      background: rgba(0, 0, 0, 0.24);
+      box-shadow: inset 0 0 0 4px rgba(236, 196, 119, 0.06);
+      font-size: 1.35rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    #mansion-feast-score {
+      flex: 0 0 auto;
+      padding: 5px 8px;
+      border: 1px solid rgba(223, 186, 113, 0.32);
+      border-radius: 99px;
+      color: #f3cf8a;
+      background: rgba(223, 186, 113, 0.08);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #mansion-feast-standings {
+      min-width: 0;
+      overflow: hidden;
+      color: rgba(235, 224, 206, 0.72);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-feast-crouch {
+      display: none;
+      min-width: 76px;
+      min-height: 48px;
+      place-items: center;
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border: 1px solid rgba(244, 207, 139, 0.7);
+      border-radius: 7px;
+      color: #fff2d9;
+      background: linear-gradient(#7e2428, #4e1117);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.14), 0 4px 12px rgba(0, 0, 0, 0.3);
+      font: inherit;
+      font-size: 0.65rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    #mansion-feast-crouch:focus-visible {
+      outline: 2px solid #fff0c4;
+      outline-offset: 2px;
+    }
+
+    #mansion-feast-crouch:active,
+    #mansion-feast-crouch[aria-pressed="true"] {
+      background: linear-gradient(#4d1015, #27090c);
+      box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.48);
+      transform: translateY(1px);
+    }
+
     #mansion-security {
       position: absolute;
       left: 50%;
@@ -1798,6 +1978,7 @@
       #mansion-touch { display: block; }
       #mansion-prompt { bottom: max(104px, calc(env(safe-area-inset-bottom) + 96px)); }
       #mansion-crosshair { display: none; }
+      #mansion-feast-crouch { display: inline-grid; }
       .mansion-controls span:nth-child(-n + 3) { display: none; }
     }
 
@@ -1816,6 +1997,23 @@
       }
       .mansion-location { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); max-width: 48%; }
       #mansion-room { font-size: 1.2rem; }
+      #mansion-feast-says {
+        top: max(70px, calc(env(safe-area-inset-top) + 62px));
+        width: calc(100% - 24px);
+        gap: 6px;
+        padding: 9px 10px 10px 12px;
+        border-radius: 8px;
+      }
+      #mansion-feast-eyebrow,
+      #mansion-feast-round,
+      #mansion-feast-score,
+      #mansion-feast-standings { font-size: 0.51rem; }
+      .mansion-feast__command-row { gap: 9px; padding: 6px 0; }
+      #mansion-feast-command { font-size: clamp(1.08rem, 5.2vw, 1.45rem); }
+      #mansion-feast-timer { width: 50px; height: 50px; font-size: 1.12rem; }
+      .mansion-feast__footer { gap: 6px; }
+      #mansion-feast-score { padding: 4px 6px; }
+      #mansion-feast-crouch { min-width: 72px; min-height: 48px; padding: 7px 9px; font-size: 0.58rem; }
       #mansion-casefile {
         top: max(72px, calc(env(safe-area-inset-top) + 62px));
         left: max(12px, env(safe-area-inset-left));
@@ -1973,6 +2171,20 @@
       .mansion-menu__title { display: none; }
       .mansion-menu__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
       #mansion-menu-status { display: none; }
+      #mansion-feast-says {
+        top: max(4px, env(safe-area-inset-top));
+        width: min(570px, calc(100% - 110px));
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 5px 10px;
+        padding: 6px 8px 7px 10px;
+      }
+      .mansion-feast__header { grid-column: 1 / -1; }
+      .mansion-feast__command-row { gap: 8px; padding: 3px 0; border-bottom: 0; }
+      #mansion-feast-command { font-size: clamp(0.95rem, 3.5vw, 1.25rem); }
+      #mansion-feast-timer { width: 44px; height: 44px; font-size: 1rem; }
+      .mansion-feast__footer { align-self: stretch; }
+      #mansion-feast-standings { max-width: 128px; }
+      #mansion-feast-crouch { min-width: 68px; min-height: 44px; padding: 5px 8px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2031,6 +2243,22 @@
           <span id="mansion-speech-speaker"></span>
           <span id="mansion-speech-text"></span>
         </div>
+
+        <section id="mansion-feast-says" role="region" aria-label="Feast Says live challenge" data-result="waiting" hidden>
+          <div class="mansion-feast__header">
+            <span id="mansion-feast-eyebrow">Live challenge</span>
+            <span id="mansion-feast-round">Round 0 / 0</span>
+          </div>
+          <div class="mansion-feast__command-row">
+            <p id="mansion-feast-command" role="status" aria-live="assertive" aria-atomic="true">Waiting for Mr. Feast…</p>
+            <output id="mansion-feast-timer" aria-label="Response time remaining" aria-live="off">—</output>
+          </div>
+          <div class="mansion-feast__footer">
+            <output id="mansion-feast-score" aria-label="Your Feast Says score" aria-live="polite">Score 0</output>
+            <output id="mansion-feast-standings" aria-label="Contestant standings" aria-live="polite">Mara 0 · Kip 0 · Juniper 0 · You 0</output>
+            <button id="mansion-feast-crouch" type="button" aria-label="Crouch for the Feast Says challenge" aria-pressed="false">Crouch</button>
+          </div>
+        </section>
 
         <div class="mansion-tools" aria-label="View controls">
           <button id="mansion-journal-button" class="mansion-tool" type="button" aria-label="Open inventory and clues" aria-expanded="false" title="Inventory &amp; Clues (Tab)">Tab</button>
@@ -2308,6 +2536,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260718-stealth-meter-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260718-feast-says-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

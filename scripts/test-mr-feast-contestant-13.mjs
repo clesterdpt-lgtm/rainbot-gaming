@@ -36,6 +36,27 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function completeFirstClueCompetition(page, expectedClueId) {
+  let state = await diagnostics(page);
+  assert(
+    state.feastSays?.phase === "called"
+      && state.feastSays.triggerReason === "clue"
+      && state.feastSays.triggerClueId === expectedClueId
+      && state.feastSays.callCount === 1
+      && state.feastSays.clueProgressLocked,
+    `the first clue should call Feast Says once and pause later clues; got ${JSON.stringify(state.feastSays)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
+  assert(result?.survived === true, `the QA completion should survive Feast Says; got ${JSON.stringify(result)}`);
+  await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.feastSays.clueProgressLocked === false && state.feastSays.eliminatedContestantId === "kip-solano",
+    `completing Feast Says should reopen investigation and eliminate Kip; got ${JSON.stringify(state.feastSays)}`,
+  );
+  return state;
+}
+
 async function teleportForInteraction(page, view, promptPattern) {
   const result = await page.evaluate((destination) => window.MrFeastFresh.teleport(destination), view);
   assert(!result?.error, result?.error || `Could not teleport to ${view}`);
@@ -340,11 +361,18 @@ async function run() {
     assert(state.contestant13.bookRead === true, "Library book interaction should mark the clue read");
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
     assert(/garden.*shovel|shovel.*garden/i.test(state.journal.currentObjective), "reading the book should direct the player to the garden shovel");
-    assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should appear after the first clue is discovered");
+    assert(state.feastSays?.phase === "called" && state.feastSays.triggerClueId === "contestant-13-book" && state.feastSays.clueProgressLocked, `the first story clue should call Feast Says and pause the trail; got ${JSON.stringify(state.feastSays)}`);
+    assert(await page.locator("#mansion-casefile").isHidden(), "the investigation HUD should yield to the Feast Says call while clues are paused");
     assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
-    await page.keyboard.press("Escape");
-    await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
+
+    state = await completeFirstClueCompetition(page, "contestant-13-book");
+    if (!(await page.locator("#mansion-book-reader").isHidden())) {
+      await page.keyboard.press("Escape");
+      await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
+    }
+    assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should return after Feast Says reopens the mansion");
+    await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await pressInteract(page);
     await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
@@ -445,11 +473,16 @@ async function run() {
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "shovelTaken");
     assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book should not reveal the Library objective HUD");
+    let earlyShovelState = await diagnostics(mobilePage);
+    assert(earlyShovelState.feastSays?.phase === "called" && earlyShovelState.feastSays.triggerClueId === "faceless-fountain-shovel" && earlyShovelState.feastSays.clueProgressLocked, `finding the first clue out of order should still call Feast Says and pause later clues; got ${JSON.stringify(earlyShovelState.feastSays)}`);
     await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*xiii|disturbed earth/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
-    const earlyShovelState = await diagnostics(mobilePage);
+    earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
     assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library clue without exposing it on the HUD");
+    assert(earlyShovelState.feastSays.clueProgressLocked, "the out-of-order dig attempt should remain blocked during the live-event call");
+    await completeFirstClueCompetition(mobilePage, "faceless-fountain-shovel");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "completing Feast Says should not reveal the Library HUD before the book is read");
     await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "bookRead");

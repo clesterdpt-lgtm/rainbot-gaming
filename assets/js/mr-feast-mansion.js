@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260718-stealth-meter-1";
+  const MANSION_RUNTIME_VERSION = "20260718-feast-says-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -117,7 +117,16 @@
     speech: $("mansion-speech"),
     speechSpeaker: $("mansion-speech-speaker"),
     speechText: $("mansion-speech-text"),
+    feastSays: $("mansion-feast-says"),
+    feastEyebrow: $("mansion-feast-eyebrow"),
+    feastCommand: $("mansion-feast-command"),
+    feastTimer: $("mansion-feast-timer"),
+    feastRound: $("mansion-feast-round"),
+    feastScore: $("mansion-feast-score"),
+    feastStandings: $("mansion-feast-standings"),
+    feastCrouch: $("mansion-feast-crouch"),
     gameOver: $("mansion-gameover"),
+    gameOverTitle: $("mansion-gameover-title"),
     gameOverCopy: $("mansion-gameover-copy"),
     gameOverLoad: $("mansion-gameover-load"),
     gameOverRestart: $("mansion-gameover-restart"),
@@ -1564,6 +1573,57 @@
     ]),
   });
 
+  const FEAST_SAYS_PHASE = Object.freeze({
+    DORMANT: "dormant",
+    CALLED: "called",
+    BRIEFING: "briefing",
+    COMMAND: "command",
+    RESULT: "result",
+    COMPLETED: "completed",
+    FAILED: "failed",
+  });
+  const FEAST_SAYS = Object.freeze({
+    intermissionSeconds: 10 * 60,
+    maximumTimerStepSeconds: 0.5,
+    briefingSeconds: 6.5,
+    responseSeconds: 4.25,
+    resultSeconds: 1.65,
+    completionCardSeconds: 5.5,
+    movementThreshold: 0.48,
+    stationRadius: 1.05,
+    briefingSpeechSeconds: 5.8,
+    commandSpeechSeconds: 2.6,
+    npcResponseDistance: 0.52,
+    npcCrouchDepth: 0.27,
+    npcResponseSeconds: 0.42,
+    npcResponseDelays: Object.freeze({
+      "mara-voss": 0.12,
+      "kip-solano": 0.24,
+      "juniper-cross": 0.18,
+    }),
+    playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -5.75, yaw: 0 }),
+    hostMark: Object.freeze({ x: 0.65, y: FLOOR.MAIN, z: -10.9, yaw: 0 }),
+    reportMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -4.05, yaw: Math.PI }),
+    contestantMarks: Object.freeze({
+      "mara-voss": Object.freeze({ x: -1.45, y: FLOOR.MAIN, z: -8.15, yaw: Math.PI }),
+      "kip-solano": Object.freeze({ x: -0.2, y: FLOOR.MAIN, z: -8.45, yaw: Math.PI }),
+      "juniper-cross": Object.freeze({ x: 1.45, y: FLOOR.MAIN, z: -8.15, yaw: Math.PI }),
+    }),
+    commands: Object.freeze([
+      Object.freeze({ text: "Feast says step forward.", obey: true, action: "forward" }),
+      Object.freeze({ text: "Crouch.", obey: false, action: "crouch" }),
+      Object.freeze({ text: "Feast says step left.", obey: true, action: "left" }),
+      Object.freeze({ text: "Step right.", obey: false, action: "right" }),
+      Object.freeze({ text: "Feast says crouch.", obey: true, action: "crouch" }),
+      Object.freeze({ text: "Feast says step back.", obey: true, action: "back" }),
+    ]),
+    npcCorrect: Object.freeze({
+      "mara-voss": Object.freeze([true, true, true, true, true, true]),
+      "kip-solano": Object.freeze([true, false, true, false, false, true]),
+      "juniper-cross": Object.freeze([true, true, true, false, true, true]),
+    }),
+  });
+
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
   const CONTESTANT_13_CLUE_BOOK = Object.freeze({
     placementId: "contestant-13-marginalia-book",
@@ -2009,6 +2069,24 @@
     devMode: false,
     devModeSnapshot: null,
     gameOver: null,
+    feastSays: {
+      phase: FEAST_SAYS_PHASE.DORMANT,
+      triggerReason: null,
+      triggerClueId: null,
+      callCount: 0,
+      intermissionElapsed: 0,
+      roundIndex: -1,
+      phaseRemaining: 0,
+      playerScore: 0,
+      strikes: 0,
+      responses: [],
+      commandResult: null,
+      eliminatedContestantId: null,
+      staged: false,
+      completionCardRemaining: 0,
+      invalidTransitions: 0,
+      lastInvalidTransition: null,
+    },
     movement: {
       crouched: false,
       sprinting: false,
@@ -2224,6 +2302,13 @@
       smallProps: 0,
     },
   };
+  const feastSaysScene = {
+    root: null,
+    reportRoot: null,
+    reportHitbox: null,
+    marks: [],
+    actionPads: [],
+  };
   const estateStatueScene = {
     settled: false,
     colliders: 0,
@@ -2256,6 +2341,7 @@
   let tamperSystem = null;
   let speechSystem = null;
   let openingWelcomeSystem = null;
+  let feastSaysSystem = null;
   let workroomCodeClue = null;
   let optionalCharacterLoadTimer = 0;
   let optionalCharacterLoadsStarted = false;
@@ -3265,6 +3351,7 @@
       this.pauseRemaining = MR_FEAST_NPC.waypoints[0].pause;
       this.conversationFocusRemaining = 0;
       this.wanderingEnabled = true;
+      this.challengeStaged = false;
       this.moving = false;
       this.loadStatus = "idle";
       this.loadingProgress = 0;
@@ -4747,6 +4834,8 @@
     canAcceptHousekeeping() {
       if (
         this.loadStatus !== "ready"
+        || feastSaysSystem?.blocksInvestigation()
+        || !this.wanderingEnabled
         || this.activeCameraAlarm
         || this.housekeeping.active
         || this.pursuit.active
@@ -4759,6 +4848,7 @@
 
     respondToHousekeepingTask(task) {
       if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
+      if (feastSaysSystem?.blocksInvestigation()) return { accepted: false, reason: "competition" };
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
       if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
@@ -4793,6 +4883,23 @@
       const task = this.housekeeping.active;
       this.housekeeping.active = null;
       if (task) tamperSystem?.releaseTask(task.id);
+    }
+
+    suspendHousekeepingForCompetition() {
+      const task = this.housekeeping.active;
+      if (!task) return false;
+      tamperSystem?.releaseTask(task.id);
+      this.housekeeping.active = null;
+      this.responsePath = [];
+      this.responseResume = null;
+      this.responseBlockedReason = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      if (this.responseStateTrace[this.responseStateTrace.length - 1] !== MR_FEAST_RESPONSE_STATE.PATROL) {
+        this.responseStateTrace.push(MR_FEAST_RESPONSE_STATE.PATROL);
+      }
+      return true;
     }
 
     cancelHousekeepingTask(taskId) {
@@ -5628,6 +5735,35 @@
       return this.getDiagnostics();
     }
 
+    stageChallenge() {
+      this.suspendHousekeepingForCompetition();
+      this.recoverAfterLoad();
+      const placement = FEAST_SAYS.hostMark;
+      this.root.position.set(placement.x, placement.y, placement.z);
+      this.root.rotation.y = placement.yaw;
+      this.currentRouteZone = "BALLROOM";
+      this.currentRouteLevel = MR_FEAST_LEVEL.MAIN;
+      this.responseCurrentNodeId = "main-ballroom-south";
+      this.pauseRemaining = 0;
+      this.conversationFocusRemaining = 0;
+      this.waitingForDoor = null;
+      this.moving = false;
+      this.wanderingEnabled = false;
+      this.challengeStaged = true;
+      this.syncCollider();
+      if (this.loadStatus === "ready") {
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(0, true, true);
+      }
+      this.root.updateMatrixWorld(true);
+      return this.getDiagnostics();
+    }
+
+    releaseChallenge() {
+      this.challengeStaged = false;
+      return this.recoverAfterLoad();
+    }
+
     update(dt) {
       if (this.loadStatus !== "ready") return;
       this.lastDt = Math.max(0, Number(dt) || 0);
@@ -6234,6 +6370,7 @@
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         conversationFocusRemaining: Number(this.conversationFocusRemaining.toFixed(3)),
         wanderingEnabled: this.wanderingEnabled,
+        challengeStaged: this.challengeStaged,
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         collision: {
@@ -6648,6 +6785,9 @@
       this.handOrientationDelta = new THREE.Quaternion();
       this.handOrientationTwist = new THREE.Quaternion();
       this.handOrientationLocal = new THREE.Quaternion();
+      this.challengeActive = false;
+      this.challengeSnapshots = new Map();
+      this.eliminatedIds = new Set();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
         root.name = `mansion-contestant-${placement.id}`;
@@ -6692,7 +6832,10 @@
           actions: {},
           currentAnimation: null,
           interactionTarget: null,
+          interaction: null,
           interactionRegistered: false,
+          challengeResponse: null,
+          challengeResponseProgress: 0,
           contactShadow: null,
           colliderEnabled: false,
           colliderBody: null,
@@ -8468,6 +8611,7 @@
       hitbox.position.y = interactionHeight / 2;
       entry.root.add(hitbox);
       entry.interactionTarget = hitbox;
+      entry.interaction = interaction;
 
       const colliderHeight = Math.max(1.25, targetHeight * 0.8);
       const movingCollider = physics.addKinematicBox(
@@ -8507,6 +8651,7 @@
       entry.status = "ready";
       entry.loadStatus = "ready";
       entry.error = null;
+      this.setEliminated(entry.id, this.eliminatedIds.has(entry.id));
       console.info(
         `[Contestants] loaded ${spec.name} at ${entry.placement.room}: `
         + `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}m, `
@@ -8745,7 +8890,186 @@
 
     update(dt) {
       if (!state.started) return;
+      if (this.challengeActive) {
+        for (const entry of this.entries) {
+          if (entry.status !== "ready" || !entry.root.visible) continue;
+          entry.activity = CONTESTANT_ACTIVITY.IDLE;
+          this.fadeToAction(entry, "idle");
+          this.updateChallengeResponse(entry, dt);
+          this.stepAnimation(entry, dt);
+        }
+        return;
+      }
       for (const entry of this.entries) this.updateEntry(entry, dt);
+    }
+
+    challengeReady() {
+      return this.entries.length > 0 && this.entries.every((entry) => entry.status === "ready");
+    }
+
+    challengeResolved() {
+      return this.settled && this.entries.every((entry) => ["ready", "error"].includes(entry.status));
+    }
+
+    stageChallenge() {
+      if (!this.challengeResolved()) return { staged: false, reason: "cast-not-ready" };
+      this.clearTransientSeating();
+      this.challengeSnapshots.clear();
+      for (const entry of this.entries) {
+        if (entry.status !== "ready") {
+          entry.challengeMark = null;
+          continue;
+        }
+        this.challengeSnapshots.set(entry.id, {
+          position: entry.root.position.clone(),
+          rotationY: entry.root.rotation.y,
+          routeIndex: entry.routeIndex,
+          routeDirection: entry.routeDirection,
+          routeTargetActive: entry.routeTargetActive,
+          pauseRemaining: entry.pauseRemaining,
+        });
+        const mark = FEAST_SAYS.contestantMarks[entry.id];
+        if (!mark) continue;
+        entry.root.position.set(mark.x, mark.y, mark.z);
+        entry.root.rotation.y = mark.yaw;
+        entry.challengeMark = { ...mark };
+        entry.challengeResponse = null;
+        entry.challengeResponseProgress = 0;
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        entry.pauseRemaining = 0;
+        entry.routeTargetActive = false;
+        entry.talkPauseRemaining = 0;
+        if (entry.model) entry.model.position.y = entry.modelBaseY;
+        this.fadeToAction(entry, "idle", 0);
+        this.setColliderEnabled(entry, !this.eliminatedIds.has(entry.id));
+        entry.root.visible = !this.eliminatedIds.has(entry.id);
+        entry.root.updateMatrixWorld(true);
+      }
+      this.challengeActive = true;
+      return {
+        staged: true,
+        entries: this.entries.filter((entry) => entry.status === "ready").map((entry) => entry.id),
+        fallbackIds: this.entries.filter((entry) => entry.status === "error").map((entry) => entry.id),
+      };
+    }
+
+    setChallengeResponse(id, action = "still") {
+      const entry = this.entryById(id);
+      if (!this.challengeActive || !entry || entry.status !== "ready" || !entry.challengeMark) return false;
+      entry.challengeResponse = {
+        action,
+        elapsed: 0,
+        delay: FEAST_SAYS.npcResponseDelays[id] || 0,
+      };
+      entry.challengeResponseProgress = 0;
+      this.applyChallengeResponse(entry, action, 0);
+      return true;
+    }
+
+    applyChallengeResponse(entry, action, progress) {
+      const mark = entry.challengeMark;
+      entry.root.position.set(mark.x, mark.y, mark.z);
+      if (entry.model) entry.model.position.y = entry.modelBaseY;
+      const eased = progress * progress * (3 - 2 * progress);
+      const distance = FEAST_SAYS.npcResponseDistance * eased;
+      if (action === "forward") entry.root.position.z -= distance;
+      if (action === "back") entry.root.position.z += distance;
+      if (action === "left") entry.root.position.x -= distance;
+      if (action === "right") entry.root.position.x += distance;
+      if (action === "crouch" && entry.model) entry.model.position.y = entry.modelBaseY - FEAST_SAYS.npcCrouchDepth * eased;
+      this.syncCollider(entry, false);
+      entry.root.updateMatrixWorld(true);
+    }
+
+    updateChallengeResponse(entry, dt) {
+      const response = entry.challengeResponse;
+      if (!response) {
+        this.syncCollider(entry);
+        return;
+      }
+      response.elapsed += Math.max(0, Number(dt) || 0);
+      const progress = clamp(
+        (response.elapsed - response.delay) / FEAST_SAYS.npcResponseSeconds,
+        0,
+        1,
+      );
+      entry.challengeResponseProgress = progress;
+      this.applyChallengeResponse(entry, response.action, progress);
+    }
+
+    clearChallengeResponses() {
+      if (!this.challengeActive) return;
+      for (const entry of this.entries) {
+        if (entry.status !== "ready" || !entry.challengeMark) continue;
+        entry.challengeResponse = null;
+        entry.challengeResponseProgress = 0;
+        this.applyChallengeResponse(entry, "still", 1);
+      }
+    }
+
+    advanceChallengeForQA(seconds = 0) {
+      if (!state.qa || !this.challengeActive) return this.getDiagnostics();
+      const duration = clamp(Number(seconds) || 0, 0, 5);
+      const fixedStep = 1 / 60;
+      let elapsed = 0;
+      while (elapsed < duration) {
+        const step = Math.min(fixedStep, duration - elapsed);
+        for (const entry of this.entries) {
+          if (entry.status === "ready" && entry.root.visible) this.updateChallengeResponse(entry, step);
+        }
+        elapsed += step;
+      }
+      return this.getDiagnostics();
+    }
+
+    setEliminated(id, eliminated = true) {
+      const entry = this.entryById(id);
+      if (eliminated) this.eliminatedIds.add(id);
+      else this.eliminatedIds.delete(id);
+      if (entry) {
+        entry.eliminated = Boolean(eliminated);
+        entry.root.visible = !eliminated && entry.status === "ready";
+        this.setColliderEnabled(entry, !eliminated && entry.status === "ready");
+        if (eliminated && entry.interactionRegistered) {
+          removeInteractionTarget(entry.interactionTarget);
+          entry.interactionRegistered = false;
+        } else if (
+          !eliminated
+          && entry.status === "ready"
+          && entry.interactionTarget
+          && entry.interaction
+          && !entry.interactionRegistered
+        ) {
+          addInteractionTarget(entry.interactionTarget, entry.interaction);
+          entry.interactionRegistered = true;
+        }
+      }
+      return Boolean(eliminated);
+    }
+
+    releaseChallenge({ eliminatedId = null } = {}) {
+      this.challengeActive = false;
+      for (const entry of this.entries) {
+        const snapshot = this.challengeSnapshots.get(entry.id);
+        if (snapshot) {
+          entry.root.position.copy(snapshot.position);
+          entry.root.rotation.y = snapshot.rotationY;
+          entry.routeIndex = snapshot.routeIndex;
+          entry.routeDirection = snapshot.routeDirection;
+          entry.routeTargetActive = snapshot.routeTargetActive;
+          entry.pauseRemaining = Math.max(0.2, snapshot.pauseRemaining);
+        }
+        if (entry.model) entry.model.position.y = entry.modelBaseY;
+        entry.challengeMark = null;
+        entry.challengeResponse = null;
+        entry.challengeResponseProgress = 0;
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle", 0);
+        entry.root.updateMatrixWorld(true);
+        this.setEliminated(entry.id, this.eliminatedIds.has(entry.id) || entry.id === eliminatedId);
+      }
+      this.challengeSnapshots.clear();
+      return { active: false, eliminatedId };
     }
 
     resetRoutineForQA(entry) {
@@ -9057,7 +9381,7 @@
 
     converse(id) {
       const entry = this.entryById(id);
-      if (!entry || entry.status !== "ready" || !speechSystem || !entry.speaker) return null;
+      if (!entry || entry.status !== "ready" || this.eliminatedIds.has(id) || !speechSystem || !entry.speaker) return null;
       const pool = entry.spec.dialogue;
       let index = Math.floor(Math.random() * pool.length);
       if (pool.length > 1 && index === entry.lastLineIndex) index = (index + 1) % pool.length;
@@ -9231,6 +9555,9 @@
         loaded: this.entries.filter((entry) => entry.status === "ready").length,
         failed: this.entries.filter((entry) => entry.status === "error").length,
         settled: this.settled,
+        challengeActive: this.challengeActive,
+        challengeReady: this.challengeReady(),
+        eliminatedIds: [...this.eliminatedIds],
         manifestStatus: this.manifestStatus,
         error: this.error,
         assetVersion: MANSION_CONTESTANTS.assetVersion,
@@ -9244,6 +9571,12 @@
           status: entry.status,
           loadStatus: entry.loadStatus,
           loaded: entry.status === "ready",
+          eliminated: this.eliminatedIds.has(entry.id),
+          challengeStaged: Boolean(this.challengeActive && entry.challengeMark),
+          challengeResponse: entry.challengeResponse ? {
+            action: entry.challengeResponse.action,
+            progress: Number(entry.challengeResponseProgress.toFixed(3)),
+          } : null,
           error: entry.error,
           position: {
             x: Number(entry.root.position.x.toFixed(3)),
@@ -10100,6 +10433,12 @@
       }, durationMs);
     }
 
+    hideDiscovery() {
+      clearTimeout(this.discoveryTimer);
+      this.discoveryTimer = null;
+      if (dom.discovery) dom.discovery.hidden = true;
+    }
+
     setJournalOpen(open) {
       const nextOpen = Boolean(open);
       if (nextOpen === state.journalOpen) return;
@@ -10173,6 +10512,10 @@
         openCluePage();
         return;
       }
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
+        return;
+      }
       this.story.bookRead = true;
       this.addJournalEntry({
         ...CONTESTANT_13.journal.book,
@@ -10182,10 +10525,15 @@
       });
       this.updateUI();
       openCluePage();
+      feastSaysSystem?.noteClueDiscovered("contestant-13-book");
     }
 
     takeShovel() {
       if (this.story.shovelTaken) return;
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
+        return;
+      }
       this.story.shovelTaken = true;
       this.addItem("garden-shovel");
       this.addJournalEntry(CONTESTANT_13.journal.shovel);
@@ -10196,11 +10544,16 @@
       this.showDiscovery("Concealed garden shovel", "The book's garden clue was right. XIII is cut into the handle—the hedge maze is the next lead.");
       if (audioSystem) audioSystem.pickup("object");
       this.updateUI();
+      feastSaysSystem?.noteClueDiscovered("faceless-fountain-shovel");
     }
 
     digSite() {
       if (this.story.digSiteExcavated || this.story.digging) {
         if (this.story.digSiteExcavated) this.showDiscovery(CONTESTANT_13.journal.cache.title, CONTESTANT_13.journal.cache.body);
+        return;
+      }
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
         return;
       }
       if (!this.story.bookRead) {
@@ -10243,6 +10596,10 @@
         this.showDiscovery(CONTESTANT_13.journal.basement.title, CONTESTANT_13.journal.basement.body);
         return;
       }
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
+        return;
+      }
       if (!this.hasItem("basement-key-b13")) {
         this.showDiscovery("Locked", "The basement stair door will not open.");
         return;
@@ -10263,6 +10620,10 @@
 
     unlockArchiveCage() {
       if (this.story.archiveCageUnlocked) return;
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
+        return;
+      }
       if (!this.story.basementUnlocked) {
         this.showDiscovery("Evidence below", "Finding this room out of sequence does not open its evidence. Unlock the basement stair first.");
         return;
@@ -10279,6 +10640,10 @@
     }
 
     playRecording() {
+      if (!this.story.recordingPlayed && feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
+        return;
+      }
       if (!this.story.archiveCageUnlocked || !this.story.tapeFound) {
         this.showDiscovery("Silent recorder", "The cage is locked and its tape spindle is empty.");
         return;
@@ -10304,6 +10669,10 @@
     sabotageRelay() {
       if (this.story.relaySabotaged) {
         this.showDiscovery("Private feed offline", "The unlabeled cable bank is dead. A red warning lamp is still calling attention to the loss.");
+        return;
+      }
+      if (feastSaysSystem?.blocksInvestigation()) {
+        feastSaysSystem.notifyInvestigationPaused();
         return;
       }
       if (!this.story.recordingPlayed) {
@@ -11319,6 +11688,651 @@
     }
   }
 
+  class FeastSaysSystem {
+    constructor() {
+      this.show = state.feastSays;
+      this.stationInteractionRegistered = false;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      this.transitionTable = Object.freeze({
+        [FEAST_SAYS_PHASE.DORMANT]: Object.freeze([FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.COMPLETED]),
+        [FEAST_SAYS_PHASE.CALLED]: Object.freeze([FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.DORMANT, FEAST_SAYS_PHASE.COMPLETED]),
+        [FEAST_SAYS_PHASE.BRIEFING]: Object.freeze([FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.CALLED]),
+        [FEAST_SAYS_PHASE.COMMAND]: Object.freeze([FEAST_SAYS_PHASE.RESULT, FEAST_SAYS_PHASE.CALLED]),
+        [FEAST_SAYS_PHASE.RESULT]: Object.freeze([FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.COMPLETED, FEAST_SAYS_PHASE.FAILED, FEAST_SAYS_PHASE.CALLED]),
+        [FEAST_SAYS_PHASE.COMPLETED]: Object.freeze([]),
+        [FEAST_SAYS_PHASE.FAILED]: Object.freeze([FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.DORMANT]),
+      });
+      this.reportInteraction = {
+        type: "feast-says-report",
+        id: "feast-says-report-station",
+        getLabel: () => this.castReady() ? "Report for Feast Says" : "Wait for the contestants",
+        activate: () => this.reportToBallroom(),
+      };
+      this.syncPresentation();
+    }
+
+    transition(nextPhase, reason = "system") {
+      const current = this.show.phase;
+      if (current === nextPhase) return true;
+      const allowed = this.transitionTable[current] || [];
+      if (!allowed.includes(nextPhase)) {
+        this.show.invalidTransitions += 1;
+        this.show.lastInvalidTransition = { from: current, to: nextPhase, reason };
+        if (state.qa) console.warn(`[Feast Says] Invalid transition ${current} -> ${nextPhase} (${reason})`);
+        return false;
+      }
+      this.show.phase = nextPhase;
+      this.show.lastInvalidTransition = null;
+      this.syncPresentation();
+      updateMenuControls();
+      return true;
+    }
+
+    welcomeIsCompleteForTimer() {
+      if (!openingWelcomeSystem) return false;
+      if (openingWelcomeSystem.completed && !openingWelcomeSystem.active) return true;
+      // QA autostart deliberately bypasses the welcome. Treat that harness as
+      // a post-welcome exploration session without weakening the live rule.
+      return Boolean(state.qa && state.started && !openingWelcomeSystem.active);
+    }
+
+    canCountIntermission() {
+      return Boolean(
+        state.started
+        && this.show.phase === FEAST_SAYS_PHASE.DORMANT
+        && this.welcomeIsCompleteForTimer()
+        && !state.menuOpen
+        && !state.workroom.keypadOpen
+        && !state.gameOver
+      );
+    }
+
+    blocksInvestigation() {
+      return [
+        FEAST_SAYS_PHASE.CALLED,
+        FEAST_SAYS_PHASE.BRIEFING,
+        FEAST_SAYS_PHASE.COMMAND,
+        FEAST_SAYS_PHASE.RESULT,
+      ].includes(this.show.phase);
+    }
+
+    isPlaying() {
+      return [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase);
+    }
+
+    locksPlayerMovement() {
+      return this.isPlaying() && this.show.phase !== FEAST_SAYS_PHASE.COMMAND;
+    }
+
+    castReady() {
+      return Boolean(
+        ["ready", "error"].includes(mrFeastNpc?.loadStatus)
+        && mansionContestants?.challengeResolved()
+      );
+    }
+
+    call(reason = "timer", clueId = null) {
+      if (this.show.phase !== FEAST_SAYS_PHASE.DORMANT) {
+        return { called: false, reason: "already-called", phase: this.show.phase };
+      }
+      this.show.triggerReason = reason === "timer" ? "timer" : "clue";
+      this.show.triggerClueId = clueId;
+      this.show.callCount += 1;
+      this.show.phaseRemaining = 0;
+      this.show.commandResult = null;
+      this.transition(FEAST_SAYS_PHASE.CALLED, `call:${this.show.triggerReason}`);
+      mrFeastNpc?.suspendHousekeepingForCompetition();
+      cameraSecurity?.suspendForCompetition();
+      const preserveClue = this.show.triggerReason === "clue" && dom.discovery && !dom.discovery.hidden;
+      const clueTitle = preserveClue ? dom.discoveryTitle?.textContent?.trim() : "";
+      const clueBody = preserveClue ? dom.discoveryBody?.textContent?.trim() : "";
+      contestant13Quest?.showDiscovery(
+        clueTitle ? `${clueTitle} · LIVE EVENT` : "LIVE EVENT — FEAST SAYS",
+        [
+          clueBody,
+          "Production has called every contestant to the Ballroom. Your investigation is on hold until the game ends.",
+        ].filter(Boolean).join(" "),
+        clueBody ? 11000 : 9000,
+      );
+      audioSystem?.ping(392, 0.35, 0.055, "square");
+      audioSystem?.ping(587, 0.46, 0.04, "sine");
+      return { called: true, reason: this.show.triggerReason, clueId };
+    }
+
+    noteClueDiscovered(clueId) {
+      return this.call("clue", clueId);
+    }
+
+    notifyInvestigationPaused() {
+      contestant13Quest?.showDiscovery(
+        "Production hold",
+        "Mr. Feast has called you to the Ballroom. New clues will wait until Feast Says is over.",
+        6200,
+      );
+      audioSystem?.ping(164, 0.18, 0.025, "square");
+      return false;
+    }
+
+    reportToBallroom() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.CALLED) return { started: false, reason: "not-called" };
+      if (!this.castReady()) {
+        contestant13Quest?.showDiscovery(
+          "Holding for cast",
+          "The floor manager is still bringing the other contestants to their marks.",
+          4200,
+        );
+        return { started: false, reason: "cast-not-ready" };
+      }
+      if (state.activeSeat) seatingSystem?.standPlayer();
+      if (state.isHidden) state.activeHideSpot?.exit();
+      if (state.journalOpen) contestant13Quest?.setJournalOpen(false);
+      if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+      if (state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
+      contestant13Quest?.hideDiscovery();
+      cameraSecurity?.suspendForCompetition();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      mrFeastNpc.stageChallenge();
+      const staged = mansionContestants.stageChallenge();
+      if (!staged.staged) {
+        mrFeastNpc.releaseChallenge();
+        return { started: false, reason: staged.reason || "staging-failed" };
+      }
+      teleport(
+        FEAST_SAYS.playerMark.x,
+        FEAST_SAYS.playerMark.y,
+        FEAST_SAYS.playerMark.z,
+        FEAST_SAYS.playerMark.yaw,
+        -0.08,
+      );
+      this.show.staged = true;
+      this.show.roundIndex = -1;
+      this.show.playerScore = 0;
+      this.show.strikes = 0;
+      this.show.responses = [];
+      this.show.commandResult = null;
+      this.show.phaseRemaining = FEAST_SAYS.briefingSeconds;
+      this.transition(FEAST_SAYS_PHASE.BRIEFING, "reported-to-ballroom");
+      speechSystem?.say(
+        "feast-says-rules",
+        "Only obey me when I begin with ‘Feast says.’ Beat Kip, or you are out.",
+        speechSystem.hostSpeaker(),
+        { durationSeconds: FEAST_SAYS.briefingSpeechSeconds },
+      );
+      audioSystem?.ping(523, 0.42, 0.045, "triangle");
+      return { started: true, staged: true };
+    }
+
+    resetPlayerToMark() {
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      teleport(
+        FEAST_SAYS.playerMark.x,
+        FEAST_SAYS.playerMark.y,
+        FEAST_SAYS.playerMark.z,
+        FEAST_SAYS.playerMark.yaw,
+        -0.08,
+      );
+      updateMovementHud();
+    }
+
+    beginCommand() {
+      const nextIndex = this.show.roundIndex + 1;
+      if (nextIndex >= FEAST_SAYS.commands.length) {
+        this.finishCompetition();
+        return;
+      }
+      this.show.roundIndex = nextIndex;
+      this.show.commandResult = null;
+      this.show.phaseRemaining = FEAST_SAYS.responseSeconds;
+      this.resetPlayerToMark();
+      mansionContestants?.clearChallengeResponses();
+      const command = FEAST_SAYS.commands[nextIndex];
+      for (const id of Object.keys(FEAST_SAYS.contestantMarks)) {
+        const correct = Boolean(FEAST_SAYS.npcCorrect[id]?.[nextIndex]);
+        const action = correct
+          ? (command.obey ? command.action : "still")
+          : (command.obey ? "still" : command.action);
+        mansionContestants?.setChallengeResponse(id, action);
+      }
+      this.transition(FEAST_SAYS_PHASE.COMMAND, `round-${nextIndex + 1}`);
+      speechSystem?.say(
+        `feast-says-command-${nextIndex + 1}`,
+        command.text,
+        speechSystem.hostSpeaker(),
+        { durationSeconds: FEAST_SAYS.commandSpeechSeconds },
+      );
+      audioSystem?.ping(command.obey ? 440 : 330, 0.16, 0.025, "square");
+    }
+
+    detectPlayerAction() {
+      if (!physics) return "still";
+      if (state.movement.crouched) return "crouch";
+      const p = physics.playerPosition();
+      const dx = p.x - FEAST_SAYS.playerMark.x;
+      const dz = p.z - FEAST_SAYS.playerMark.z;
+      if (Math.hypot(dx, dz) < FEAST_SAYS.movementThreshold) return "still";
+      if (Math.abs(dx) > Math.abs(dz)) return dx < 0 ? "left" : "right";
+      return dz < 0 ? "forward" : "back";
+    }
+
+    resolveCommand(submittedAction = null) {
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND || this.show.commandResult) {
+        return { resolved: false, reason: "no-open-command" };
+      }
+      const command = FEAST_SAYS.commands[this.show.roundIndex];
+      const action = submittedAction || this.detectPlayerAction();
+      const expected = command.obey ? command.action : "still";
+      const correct = action === expected;
+      if (correct) this.show.playerScore += 1;
+      else this.show.strikes += 1;
+      const result = {
+        index: this.show.roundIndex,
+        text: command.text,
+        obey: command.obey,
+        expected,
+        action,
+        correct,
+      };
+      this.show.commandResult = result;
+      this.show.responses.push({ ...result });
+      this.show.phaseRemaining = FEAST_SAYS.resultSeconds;
+      this.transition(FEAST_SAYS_PHASE.RESULT, correct ? "correct" : "incorrect");
+      audioSystem?.ping(correct ? 659 : 116, correct ? 0.26 : 0.38, correct ? 0.04 : 0.065, correct ? "sine" : "sawtooth");
+      return { resolved: true, ...result };
+    }
+
+    npcScore(id, resolvedRounds = this.show.responses.length) {
+      return (FEAST_SAYS.npcCorrect[id] || [])
+        .slice(0, resolvedRounds)
+        .filter(Boolean).length;
+    }
+
+    finishCompetition() {
+      const kipScore = this.npcScore("kip-solano", FEAST_SAYS.commands.length);
+      const survived = this.show.playerScore > kipScore;
+      this.show.phaseRemaining = 0;
+      mansionContestants?.clearChallengeResponses();
+      if (survived) {
+        this.show.eliminatedContestantId = "kip-solano";
+        this.show.completionCardRemaining = FEAST_SAYS.completionCardSeconds;
+        this.transition(FEAST_SAYS_PHASE.COMPLETED, "player-beat-kip");
+        mansionContestants?.setEliminated("kip-solano", true);
+        this.releaseProduction("kip-solano");
+        contestant13Quest?.showDiscovery(
+          "KIP SOLANO — ELIMINATED",
+          `You scored ${this.show.playerScore}. Kip scored ${kipScore}. Production has reopened the mansion.`,
+          9000,
+        );
+      } else {
+        this.show.eliminatedContestantId = "player";
+        this.transition(FEAST_SAYS_PHASE.FAILED, "player-did-not-beat-kip");
+        this.releaseProduction(null);
+        triggerMansionGameOver({ reason: "feast-says-eliminated", kind: "feast-says" });
+      }
+      this.syncPresentation();
+      return { survived, playerScore: this.show.playerScore, kipScore };
+    }
+
+    releaseProduction(eliminatedId = null) {
+      this.show.staged = false;
+      mrFeastNpc?.releaseChallenge();
+      mansionContestants?.releaseChallenge({ eliminatedId });
+      clearMovementInput();
+      state.movement.crouched = false;
+      updateMovementHud();
+    }
+
+    constrainPlayer() {
+      if (!this.isPlaying() || !physics) return;
+      state.yaw = FEAST_SAYS.playerMark.yaw;
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
+      const p = physics.playerPosition();
+      const radius = FEAST_SAYS.stationRadius;
+      const x = clamp(p.x, FEAST_SAYS.playerMark.x - radius, FEAST_SAYS.playerMark.x + radius);
+      const z = clamp(p.z, FEAST_SAYS.playerMark.z - radius, FEAST_SAYS.playerMark.z + radius);
+      if (Math.abs(x - p.x) < 0.0001 && Math.abs(z - p.z) < 0.0001) return;
+      const next = { x, y: p.y, z };
+      physics.playerBody.setTranslation(next, true);
+      physics.playerBody.setNextKinematicTranslation(next);
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (state.qa && this.qaManualClock && !this.qaStepping) {
+        this.syncHud();
+        return;
+      }
+      if (this.show.phase === FEAST_SAYS_PHASE.DORMANT) {
+        if (this.canCountIntermission() && (!state.qa || !this.qaManualClock || this.qaStepping)) {
+          this.show.intermissionElapsed = Math.min(
+            FEAST_SAYS.intermissionSeconds,
+            this.show.intermissionElapsed + step,
+          );
+          if (this.show.intermissionElapsed >= FEAST_SAYS.intermissionSeconds) this.call("timer");
+        }
+        this.syncHud();
+        return;
+      }
+      if (this.show.phase === FEAST_SAYS_PHASE.COMPLETED) {
+        this.show.completionCardRemaining = Math.max(0, this.show.completionCardRemaining - step);
+        this.syncPresentation();
+        return;
+      }
+      if (![FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase)) {
+        this.syncHud();
+        return;
+      }
+      this.show.phaseRemaining = Math.max(0, this.show.phaseRemaining - step);
+      if (this.show.phaseRemaining > 0) {
+        this.syncHud();
+        return;
+      }
+      if (this.show.phase === FEAST_SAYS_PHASE.BRIEFING) this.beginCommand();
+      else if (this.show.phase === FEAST_SAYS_PHASE.COMMAND) this.resolveCommand();
+      else if (this.show.phase === FEAST_SAYS_PHASE.RESULT) this.beginCommand();
+      this.syncPresentation();
+    }
+
+    setStationInteractive(interactive) {
+      const hitbox = feastSaysScene.reportHitbox;
+      if (!hitbox) return;
+      if (interactive && !this.stationInteractionRegistered) {
+        addInteractionTarget(hitbox, this.reportInteraction);
+        this.stationInteractionRegistered = true;
+      } else if (!interactive && this.stationInteractionRegistered) {
+        removeInteractionTarget(hitbox);
+        this.stationInteractionRegistered = false;
+      }
+    }
+
+    syncScene() {
+      if (!feastSaysScene.root) return;
+      const productionVisible = [
+        FEAST_SAYS_PHASE.CALLED,
+        FEAST_SAYS_PHASE.BRIEFING,
+        FEAST_SAYS_PHASE.COMMAND,
+        FEAST_SAYS_PHASE.RESULT,
+      ].includes(this.show.phase);
+      feastSaysScene.root.visible = productionVisible;
+      feastSaysScene.actionPads.forEach((pad) => {
+        pad.visible = this.show.phase === FEAST_SAYS_PHASE.COMMAND;
+      });
+      this.setStationInteractive(this.show.phase === FEAST_SAYS_PHASE.CALLED);
+    }
+
+    formatClock(seconds) {
+      const whole = Math.max(0, Math.ceil(seconds));
+      return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+    }
+
+    syncHud() {
+      if (!dom.feastSays) return;
+      // Avoid mutating live regions on every animation frame. Reassigning the
+      // same text can make assistive technology announce a static scoreboard
+      // and command repeatedly.
+      const setText = (element, value) => {
+        if (element && element.textContent !== value) element.textContent = value;
+      };
+      const phase = this.show.phase;
+      const timerEligible = this.canCountIntermission();
+      const showCompletion = phase === FEAST_SAYS_PHASE.COMPLETED && this.show.completionCardRemaining > 0;
+      const visible = state.started && (phase !== FEAST_SAYS_PHASE.DORMANT || timerEligible) && (phase !== FEAST_SAYS_PHASE.COMPLETED || showCompletion);
+      dom.feastSays.hidden = !visible;
+      if (dom.caseFile) dom.caseFile.hidden = !state.started || !state.contestant13.bookRead || this.blocksInvestigation();
+      dom.feastSays.dataset.phase = phase;
+      dom.feastSays.dataset.result = this.show.commandResult
+        ? (this.show.commandResult.correct ? "correct" : "incorrect")
+        : "waiting";
+      const resolvedRounds = this.show.responses.length;
+      const scores = {
+        mara: this.npcScore("mara-voss", resolvedRounds),
+        kip: this.npcScore("kip-solano", resolvedRounds),
+        juniper: this.npcScore("juniper-cross", resolvedRounds),
+        player: this.show.playerScore,
+      };
+      setText(dom.feastStandings, `Mara ${scores.mara} · Kip ${scores.kip} · Juniper ${scores.juniper} · You ${scores.player}`);
+      setText(dom.feastScore, `Score ${this.show.playerScore} · Misses ${this.show.strikes}`);
+      if (dom.feastCrouch) {
+        dom.feastCrouch.hidden = phase !== FEAST_SAYS_PHASE.COMMAND;
+        dom.feastCrouch.disabled = phase !== FEAST_SAYS_PHASE.COMMAND;
+        dom.feastCrouch.setAttribute("aria-pressed", String(state.movement.crouched));
+      }
+      if (phase === FEAST_SAYS_PHASE.DORMANT) {
+        const remaining = FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed;
+        setText(dom.feastEyebrow, "Next live event");
+        setText(dom.feastRound, "Game 1");
+        setText(dom.feastCommand, "FEAST SAYS");
+        setText(dom.feastTimer, this.formatClock(remaining));
+      } else if (phase === FEAST_SAYS_PHASE.CALLED) {
+        setText(dom.feastEyebrow, "Live call");
+        setText(dom.feastRound, "Game 1 · Ballroom");
+        setText(dom.feastCommand, this.castReady() ? "REPORT TO THE BALLROOM" : "HOLDING FOR CAST…");
+        setText(dom.feastTimer, "LIVE");
+      } else if (phase === FEAST_SAYS_PHASE.BRIEFING) {
+        setText(dom.feastEyebrow, "Feast Says");
+        setText(dom.feastRound, "Rules");
+        setText(dom.feastCommand, "Obey only commands that begin “Feast says.” Beat Kip to survive.");
+        setText(dom.feastTimer, String(Math.ceil(this.show.phaseRemaining)));
+      } else if (phase === FEAST_SAYS_PHASE.COMMAND) {
+        const command = FEAST_SAYS.commands[this.show.roundIndex];
+        setText(dom.feastEyebrow, "Live challenge");
+        setText(dom.feastRound, `Round ${this.show.roundIndex + 1} / ${FEAST_SAYS.commands.length}`);
+        setText(dom.feastCommand, command?.text || "Hold your mark.");
+        setText(dom.feastTimer, String(Math.max(0, Math.ceil(this.show.phaseRemaining))));
+      } else if (phase === FEAST_SAYS_PHASE.RESULT) {
+        setText(dom.feastEyebrow, "Judges’ call");
+        setText(dom.feastRound, `Round ${this.show.roundIndex + 1} / ${FEAST_SAYS.commands.length}`);
+        setText(dom.feastCommand, this.show.commandResult?.correct ? "CORRECT" : `MISS — ${this.show.commandResult?.expected?.toUpperCase() || "HOLD"}`);
+        setText(dom.feastTimer, "✓");
+      } else if (phase === FEAST_SAYS_PHASE.COMPLETED) {
+        setText(dom.feastEyebrow, "Results official");
+        setText(dom.feastRound, "Game 1 complete");
+        setText(dom.feastCommand, "KIP SOLANO — ELIMINATED");
+        setText(dom.feastTimer, "OUT");
+      } else if (phase === FEAST_SAYS_PHASE.FAILED) {
+        setText(dom.feastEyebrow, "Results official");
+        setText(dom.feastRound, "Game 1 complete");
+        setText(dom.feastCommand, "YOU — ELIMINATED");
+        setText(dom.feastTimer, "OUT");
+      }
+    }
+
+    syncPresentation() {
+      this.syncScene();
+      this.syncHud();
+      updateInteractionPrompt();
+    }
+
+    getSnapshot() {
+      const transient = [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase);
+      return {
+        phase: transient ? FEAST_SAYS_PHASE.CALLED : this.show.phase,
+        triggerReason: this.show.triggerReason,
+        triggerClueId: this.show.triggerClueId,
+        callCount: this.show.callCount,
+        callAfterSeconds: FEAST_SAYS.intermissionSeconds,
+        intermissionElapsed: this.show.intermissionElapsed,
+        playerScore: transient ? 0 : this.show.playerScore,
+        strikes: transient ? 0 : this.show.strikes,
+        eliminatedContestantId: this.show.eliminatedContestantId,
+      };
+    }
+
+    cancelStaging() {
+      if (this.show.staged || mansionContestants?.challengeActive || mrFeastNpc?.challengeStaged) {
+        this.releaseProduction(null);
+      }
+      this.show.staged = false;
+    }
+
+    restoreSnapshot(snapshot = null, questSnapshot = {}) {
+      this.cancelStaging();
+      const legacyProgress = [
+        "bookRead", "shovelTaken", "digSiteExcavated", "basementUnlocked",
+        "archiveCageUnlocked", "recordingPlayed", "relaySabotaged",
+      ].some((field) => Boolean(questSnapshot?.[field]))
+        || (Array.isArray(questSnapshot?.workroomScratches) && questSnapshot.workroomScratches.length > 0);
+      const source = snapshot && typeof snapshot === "object"
+        ? snapshot
+        : legacyProgress ? { phase: FEAST_SAYS_PHASE.COMPLETED, eliminatedContestantId: "kip-solano" } : {};
+      const requestedPhase = Object.values(FEAST_SAYS_PHASE).includes(source.phase)
+        ? source.phase
+        : FEAST_SAYS_PHASE.DORMANT;
+      const restoredPhase = [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT, FEAST_SAYS_PHASE.FAILED].includes(requestedPhase)
+        ? FEAST_SAYS_PHASE.CALLED
+        : requestedPhase;
+      this.show.phase = restoredPhase;
+      this.show.triggerReason = source.triggerReason || (restoredPhase === FEAST_SAYS_PHASE.DORMANT ? null : "saved");
+      this.show.triggerClueId = source.triggerClueId || null;
+      this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === FEAST_SAYS_PHASE.DORMANT ? 0 : 1), 0, 1);
+      this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, FEAST_SAYS.intermissionSeconds);
+      this.show.roundIndex = -1;
+      this.show.phaseRemaining = 0;
+      this.show.playerScore = restoredPhase === FEAST_SAYS_PHASE.CALLED
+        ? 0
+        : Math.max(0, Math.floor(Number(source.playerScore) || 0));
+      this.show.strikes = restoredPhase === FEAST_SAYS_PHASE.CALLED
+        ? 0
+        : Math.max(0, Math.floor(Number(source.strikes) || 0));
+      this.show.responses = [];
+      this.show.commandResult = null;
+      this.show.eliminatedContestantId = restoredPhase === FEAST_SAYS_PHASE.COMPLETED
+        ? (source.eliminatedContestantId || "kip-solano")
+        : null;
+      this.show.completionCardRemaining = 0;
+      mansionContestants?.setEliminated("kip-solano", this.show.eliminatedContestantId === "kip-solano");
+      this.syncPresentation();
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return null;
+      const duration = clamp(Number(seconds) || 0, 0, 900);
+      this.qaManualClock = true;
+      this.qaStepping = true;
+      if ([FEAST_SAYS_PHASE.DORMANT, FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.COMPLETED].includes(this.show.phase)) {
+        if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver) this.update(duration);
+        this.qaStepping = false;
+        return { elapsed: Number(duration.toFixed(3)), state: this.getDiagnostics() };
+      }
+      const fixedStep = 1 / 30;
+      let elapsed = 0;
+      while (elapsed < duration) {
+        if (state.menuOpen || state.workroom.keypadOpen || state.gameOver) break;
+        const step = Math.min(fixedStep, duration - elapsed);
+        this.update(step);
+        elapsed += step;
+      }
+      this.qaStepping = false;
+      return { elapsed: Number(elapsed.toFixed(3)), state: this.getDiagnostics() };
+    }
+
+    respondForQA(action = "correct") {
+      if (!state.qa || this.show.phase !== FEAST_SAYS_PHASE.COMMAND) return null;
+      const command = FEAST_SAYS.commands[this.show.roundIndex];
+      const expected = command.obey ? command.action : "still";
+      let submitted = action;
+      if (action === "correct") submitted = expected;
+      if (action === "incorrect") submitted = expected === "still" ? command.action : "still";
+      if (["ignore", "none", "hold"].includes(action)) submitted = "still";
+      return this.resolveCommand(submitted);
+    }
+
+    completeForQA(playerScore = 6) {
+      if (!state.qa) return null;
+      if (this.show.phase === FEAST_SAYS_PHASE.DORMANT) this.call("qa");
+      if (this.show.phase === FEAST_SAYS_PHASE.CALLED && this.castReady()) this.reportToBallroom();
+      this.show.playerScore = clamp(Math.floor(Number(playerScore) || 0), 0, FEAST_SAYS.commands.length);
+      this.show.strikes = FEAST_SAYS.commands.length - this.show.playerScore;
+      this.show.responses = FEAST_SAYS.commands.map((command, index) => ({
+        index,
+        text: command.text,
+        obey: command.obey,
+        expected: command.obey ? command.action : "still",
+        action: this.show.playerScore > index ? (command.obey ? command.action : "still") : "miss",
+        correct: this.show.playerScore > index,
+      }));
+      this.show.roundIndex = FEAST_SAYS.commands.length - 1;
+      this.show.phase = FEAST_SAYS_PHASE.RESULT;
+      this.show.phaseRemaining = 0;
+      return this.finishCompetition();
+    }
+
+    getDiagnostics() {
+      const command = this.show.roundIndex >= 0 ? FEAST_SAYS.commands[this.show.roundIndex] : null;
+      const resolvedRounds = this.show.responses.length;
+      const p = physics ? physics.playerPosition() : null;
+      return {
+        phase: this.show.phase,
+        triggerReason: this.show.triggerReason,
+        triggerClueId: this.show.triggerClueId,
+        callCount: this.show.callCount,
+        callAfterSeconds: FEAST_SAYS.intermissionSeconds,
+        intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
+        secondsUntilCall: Number(Math.max(0, FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        clueProgressLocked: this.blocksInvestigation(),
+        saveAllowed: this.show.phase !== FEAST_SAYS_PHASE.FAILED,
+        staged: this.show.staged,
+        castReady: this.castReady(),
+        hostStaged: Boolean(mrFeastNpc?.challengeStaged),
+        staging: {
+          active: this.show.staged,
+          contestantsReady: Boolean(mansionContestants?.challengeReady()),
+          contestantsStaged: Boolean(mansionContestants?.challengeActive),
+          hostStaged: Boolean(mrFeastNpc?.challengeStaged),
+        },
+        station: {
+          visible: Boolean(feastSaysScene.root?.visible),
+          interactive: this.stationInteractionRegistered,
+          position: feastSaysScene.reportRoot ? {
+            x: Number(feastSaysScene.reportRoot.position.x.toFixed(3)),
+            y: Number(feastSaysScene.reportRoot.position.y.toFixed(3)),
+            z: Number(feastSaysScene.reportRoot.position.z.toFixed(3)),
+          } : null,
+        },
+        round: this.show.roundIndex + 1,
+        totalRounds: FEAST_SAYS.commands.length,
+        phaseRemaining: Number(this.show.phaseRemaining.toFixed(3)),
+        command: command ? {
+          index: this.show.roundIndex,
+          total: FEAST_SAYS.commands.length,
+          text: command.text,
+          obey: command.obey,
+          action: command.action,
+          resolved: Boolean(this.show.commandResult),
+          result: this.show.commandResult ? { ...this.show.commandResult } : null,
+        } : null,
+        player: {
+          score: this.show.playerScore,
+          strikes: this.show.strikes,
+          qualified: this.show.playerScore > this.npcScore("kip-solano", FEAST_SAYS.commands.length),
+          detectedAction: this.show.phase === FEAST_SAYS_PHASE.COMMAND ? this.detectPlayerAction() : null,
+          distanceFromMark: p ? Number(Math.hypot(p.x - FEAST_SAYS.playerMark.x, p.z - FEAST_SAYS.playerMark.z).toFixed(3)) : null,
+        },
+        standings: [
+          { id: "mara-voss", score: this.npcScore("mara-voss", resolvedRounds), status: "safe" },
+          { id: "juniper-cross", score: this.npcScore("juniper-cross", resolvedRounds), status: "safe" },
+          { id: "kip-solano", score: this.npcScore("kip-solano", resolvedRounds), status: this.show.eliminatedContestantId === "kip-solano" ? "eliminated" : "competing" },
+          { id: "player", score: this.show.playerScore, status: this.show.eliminatedContestantId === "player" ? "eliminated" : "competing" },
+        ],
+        eliminatedContestantId: this.show.eliminatedContestantId,
+        responses: this.show.responses.map((response) => ({ ...response })),
+        invalidTransitions: this.show.invalidTransitions,
+        lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
+        ui: {
+          visible: Boolean(dom.feastSays && !dom.feastSays.hidden),
+          command: dom.feastCommand?.textContent || null,
+          timer: dom.feastTimer?.textContent || null,
+          crouchVisible: Boolean(dom.feastCrouch && !dom.feastCrouch.hidden),
+        },
+      };
+    }
+  }
+
   const WORKROOM_CODE_CLUE = Object.freeze({
     journalId: "workroom-keypad-scratches",
     journalTitle: "Painting Room notes",
@@ -11349,8 +12363,14 @@
     setRevealed(artId, revealed) {
       const mark = this.marks.get(artId);
       if (!mark) return;
+      if (revealed && !this.discovered.has(artId) && feastSaysSystem?.blocksInvestigation()) {
+        if (mark.scratch) mark.scratch.visible = false;
+        feastSaysSystem.notifyInvestigationPaused();
+        return false;
+      }
       if (mark.scratch) mark.scratch.visible = Boolean(revealed);
       if (revealed) this.discover(artId);
+      return true;
     }
 
     discover(artId) {
@@ -11365,6 +12385,7 @@
         contestant13Quest?.showDiscovery("Scratched plaster", `Behind the painting, gouged into the plaster: ${config.numeral} — ${config.digit}.`, 7600);
       }
       if (audioSystem) audioSystem.ping(56, 0.4, 0.06, "triangle");
+      feastSaysSystem?.noteClueDiscovered(`painting-scratch:${artId}`);
     }
 
     orderedMarks() {
@@ -11631,6 +12652,18 @@
 
     setTampered(entry, tampered, cause) {
       if (entry.isTampered || entry.tampered === tampered) return false;
+      if (
+        tampered
+        && entry.kind === "portrait"
+        && entry.artId
+        && workroomCodeClue?.isCarrier(entry.artId)
+        && !workroomCodeClue.discovered.has(entry.artId)
+        && feastSaysSystem?.blocksInvestigation()
+      ) {
+        entry.blockedReason = "Feast Says production hold";
+        feastSaysSystem.notifyInvestigationPaused();
+        return false;
+      }
       const seat = entry.seatId ? seatingSystem?.entryById(entry.seatId) : null;
       if (tampered && seat?.occupantBy) {
         entry.blockedReason = `occupied by ${seat.occupantBy}`;
@@ -11663,6 +12696,7 @@
 
     update(dt, dispatchCollector = null) {
       if (!state.started) return;
+      if (feastSaysSystem?.blocksInvestigation()) return;
       for (const entry of this.entries) {
         if (entry.cooldownRemaining > 0) entry.cooldownRemaining = Math.max(0, entry.cooldownRemaining - dt);
         if (entry.isTampered) {
@@ -11680,6 +12714,7 @@
     }
 
     dispatch(entry, dispatchCollector = null) {
+      if (feastSaysSystem?.blocksInvestigation()) return false;
       const npc = mrFeastNpc;
       if (!npc || !npc.canAcceptHousekeeping()) return false;
       const response = npc.respondToHousekeepingTask(this.taskFor(entry));
@@ -11839,7 +12874,7 @@
   };
 
   function reportPlayerInfraction(kind, entryId = null) {
-    if (!state.started || state.gameOver || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
+    if (!state.started || state.gameOver || feastSaysSystem?.blocksInvestigation() || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
     const witnessed = mrFeastNpc.canSeePlayerAct();
     const recorded = !witnessed && Boolean(cameraSecurity?.isRecordingPlayer());
     if (!witnessed && !recorded) return null;
@@ -11858,10 +12893,14 @@
       room: state.currentRoom,
     };
     releasePointerLock();
+    const feastSaysElimination = state.gameOver.reason === "feast-says-eliminated";
+    if (dom.gameOverTitle) dom.gameOverTitle.textContent = feastSaysElimination ? "Eliminated" : "Caught";
     if (dom.gameOverCopy) {
-      dom.gameOverCopy.textContent = state.gameOver.reason === "recorded"
-        ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
-        : "Mr. Feast caught you in the restricted basement. The house keeps its guests.";
+      dom.gameOverCopy.textContent = feastSaysElimination
+        ? "You did not beat Kip in Feast Says. Last place leaves the competition."
+        : state.gameOver.reason === "recorded"
+          ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
+          : "Mr. Feast caught you in the restricted basement. The house keeps its guests.";
     }
     if (dom.gameOverLoad) dom.gameOverLoad.disabled = !mansionSaveSlot?.has();
     if (dom.gameOver) {
@@ -11876,6 +12915,7 @@
 
   function clearMansionGameOver() {
     state.gameOver = null;
+    if (dom.gameOverTitle) dom.gameOverTitle.textContent = "Caught";
     if (dom.gameOver) dom.gameOver.hidden = true;
     dom.canvas?.focus({ preventScroll: true });
   }
@@ -11950,6 +12990,10 @@
   }
 
   function openWorkroomKeypad() {
+    if (!state.workroom.unlocked && feastSaysSystem?.blocksInvestigation()) {
+      feastSaysSystem.notifyInvestigationPaused();
+      return false;
+    }
     return setWorkroomKeypadOpen(true);
   }
 
@@ -11978,6 +13022,10 @@
     if (state.workroom.unlocked) {
       state.workroom.keypadStatus = "accepted";
       updateWorkroomKeypadPresentation();
+      return getWorkroomDiagnostics();
+    }
+    if (feastSaysSystem?.blocksInvestigation()) {
+      feastSaysSystem.notifyInvestigationPaused();
       return getWorkroomDiagnostics();
     }
     const candidate = String(code == null ? state.workroom.keypadInput : code).replace(/\D/g, "").slice(0, WORKROOM_SECURITY.codeLength);
@@ -12543,10 +13591,43 @@
       if (dom.securityStatus) dom.securityStatus.textContent = beingRecorded ? "Being recorded" : "Spotted";
     }
 
+    suspendForCompetition() {
+      this.detectionAccumulator = 0;
+      state.security.exposure = 0;
+      state.security.observed = false;
+      state.security.permitted = true;
+      state.security.illegalAction = null;
+      state.security.activeCameraId = null;
+      state.security.occludedBy = null;
+      state.security.alarmCooldown = 0;
+      state.security.alarmLatchCameraId = null;
+      for (const cameraState of this.cameras) {
+        cameraState.playerInCone = false;
+        cameraState.hasLineOfSight = false;
+        cameraState.blocker = null;
+        cameraState.acquisition = 0;
+        cameraState.trackingPlayer = false;
+      }
+      this.updatePresentation();
+      this.updateHud();
+    }
+
     update(dt, force = false) {
       const safeDt = Math.max(0, Number(dt) || 0);
       if (this.qaManual && !force) return;
       this.syncPolicy();
+      if (feastSaysSystem?.blocksInvestigation()) {
+        state.security.exposure = 0;
+        state.security.observed = false;
+        state.security.permitted = true;
+        state.security.illegalAction = null;
+        state.security.activeCameraId = null;
+        state.security.occludedBy = null;
+        this.detectionAccumulator = 0;
+        this.updatePresentation();
+        this.updateHud();
+        return;
+      }
       state.security.alarmCooldown = Math.max(0, state.security.alarmCooldown - safeDt);
       for (const cameraState of this.cameras) this.updateScan(cameraState, safeDt);
       this.detectionAccumulator += safeDt;
@@ -16258,6 +17339,131 @@
     };
   }
 
+  function addFeastSaysBallroomSet() {
+    const root = new THREE.Group();
+    root.name = "feast-says-ballroom-set";
+    root.visible = false;
+    scene.add(root);
+    feastSaysScene.root = root;
+
+    const markGeometry = new THREE.RingGeometry(0.48, 0.61, 40);
+    const markColors = [0x5fd8ff, 0xffcf5a, 0xff5c78, 0xb987ff];
+    const marks = [FEAST_SAYS.playerMark, ...Object.values(FEAST_SAYS.contestantMarks)];
+    marks.forEach((mark, index) => {
+      const material = new THREE.MeshBasicMaterial({
+        color: markColors[index],
+        transparent: true,
+        opacity: index === 0 ? 0.92 : 0.72,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(markGeometry, material);
+      ring.name = index === 0 ? "feast-says-player-mark" : `feast-says-contestant-mark-${index}`;
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(mark.x, FLOOR.MAIN + 0.055, mark.z);
+      root.add(ring);
+      feastSaysScene.marks.push(ring);
+    });
+
+    const actionMaterial = new THREE.MeshBasicMaterial({
+      color: 0x5fd8ff,
+      transparent: true,
+      opacity: 0.28,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const actionOffsets = [
+      { id: "forward", x: 0, z: -0.72 },
+      { id: "left", x: -0.72, z: 0 },
+      { id: "right", x: 0.72, z: 0 },
+      { id: "back", x: 0, z: 0.72 },
+    ];
+    for (const offset of actionOffsets) {
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.25, 28), actionMaterial.clone());
+      pad.name = `feast-says-action-pad-${offset.id}`;
+      pad.userData.feastSaysAction = offset.id;
+      pad.rotation.x = -Math.PI / 2;
+      pad.position.set(
+        FEAST_SAYS.playerMark.x + offset.x,
+        FLOOR.MAIN + 0.052,
+        FEAST_SAYS.playerMark.z + offset.z,
+      );
+      pad.visible = false;
+      root.add(pad);
+      feastSaysScene.actionPads.push(pad);
+    }
+
+    const reportRoot = new THREE.Group();
+    reportRoot.name = "feast-says-report-station";
+    reportRoot.position.set(FEAST_SAYS.reportMark.x, FLOOR.MAIN, FEAST_SAYS.reportMark.z);
+    root.add(reportRoot);
+    feastSaysScene.reportRoot = reportRoot;
+
+    const shellMaterial = new THREE.MeshStandardMaterial({
+      color: 0x111827,
+      roughness: 0.28,
+      metalness: 0.62,
+      emissive: 0x07111f,
+      emissiveIntensity: 0.6,
+    });
+    const trimMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd7ad55,
+      roughness: 0.22,
+      metalness: 0.85,
+      emissive: 0x7d3c09,
+      emissiveIntensity: 0.35,
+    });
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.16, 0.48), shellMaterial);
+    plinth.name = "feast-says-report-plinth";
+    plinth.position.y = 0.08;
+    reportRoot.add(plinth);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.045, 0.56), trimMaterial);
+    trim.name = "feast-says-report-trim";
+    trim.position.y = 0.18;
+    reportRoot.add(trim);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 192;
+    const context = canvas.getContext("2d");
+    if (context) {
+      const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, "#081222");
+      gradient.addColorStop(1, "#241017");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.strokeStyle = "#ffcc5c";
+      context.lineWidth = 10;
+      context.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+      context.fillStyle = "#ff4b5f";
+      context.font = "700 38px system-ui, sans-serif";
+      context.textAlign = "center";
+      context.fillText("● LIVE", canvas.width / 2, 65);
+      context.fillStyle = "#ffffff";
+      context.font = "900 54px system-ui, sans-serif";
+      context.fillText("FEAST SAYS", canvas.width / 2, 137);
+    }
+    const displayTexture = new THREE.CanvasTexture(canvas);
+    displayTexture.encoding = THREE.sRGBEncoding;
+    const display = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 0.6),
+      new THREE.MeshBasicMaterial({ map: displayTexture, toneMapped: false }),
+    );
+    display.name = "feast-says-live-display";
+    display.position.set(0, 0.72, -0.02);
+    display.rotation.x = -0.08;
+    reportRoot.add(display);
+
+    const hitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(1.85, 2.05, 0.75),
+      new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false }),
+    );
+    hitbox.name = "feast-says-report-hitbox";
+    hitbox.position.set(0, 1.0, 0);
+    reportRoot.add(hitbox);
+    feastSaysScene.reportHitbox = hitbox;
+  }
+
   function furnishMainFloor() {
     addFoyerPanelwork();
     // Library
@@ -16323,6 +17529,7 @@
       exitLocal: { x: 0, y: 0, z: -0.9 },
     });
     ballroomSidelineChair.name = "ballroom-sideline-chair";
+    addFeastSaysBallroomSet();
     for (const portrait of [
       { x: -1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0 }, circuitName: "ballroom lights" },
       { x: 1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0.5 }, circuitName: "ballroom lights" },
@@ -19531,6 +20738,16 @@
     input.sprint = false;
   }
 
+  function toggleFeastSaysCrouch() {
+    if (feastSaysSystem?.show.phase !== FEAST_SAYS_PHASE.COMMAND) return false;
+    state.movement.crouched = !state.movement.crouched;
+    state.movement.sprinting = false;
+    input.sprint = false;
+    updateMovementHud();
+    feastSaysSystem.syncHud();
+    return state.movement.crouched;
+  }
+
   function serializeMansionSave() {
     if (!physics || !contestant13Quest || state.devMode) return null;
     const seatedSave = seatingSystem?.playerSaveSnapshot();
@@ -19544,6 +20761,7 @@
         crouched: state.movement.crouched,
       },
       contestant13: contestant13Quest.getQuestSnapshot(),
+      feastSays: feastSaysSystem?.getSnapshot() || null,
     };
   }
 
@@ -19557,11 +20775,13 @@
     // Validate the complete required transform before touching quest/world
     // presentation so a malformed save can never half-restore a fresh game.
     if (![x, y, z].every(Number.isFinite)) return false;
+    feastSaysSystem?.cancelStaging();
     mansionContestants?.clearTransientSeating();
     seatingSystem?.clearTransientOccupancy();
     state.devMode = false;
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
+    feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     physics.verticalVelocity = 0;
     physics.playerBody.setTranslation({ x, y, z }, true);
     physics.playerBody.setNextKinematicTranslation({ x, y, z });
@@ -19634,10 +20854,11 @@
     const saved = mansionSaveSlot?.read() || null;
     const hasSave = Boolean(saved);
     const welcomeActive = Boolean(openingWelcomeSystem?.active);
+    const feastSaysActive = Boolean(feastSaysSystem?.isPlaying());
     if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
     if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode || welcomeActive;
     if (dom.menuDev) {
-      dom.menuDev.disabled = welcomeActive;
+      dom.menuDev.disabled = welcomeActive || feastSaysActive || feastSaysSystem?.blocksInvestigation();
       dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
     }
@@ -19764,6 +20985,7 @@
       updateInteractionPrompt();
       return;
     }
+    if (feastSaysSystem?.isPlaying()) return;
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
     interaction.activate();
@@ -19842,6 +21064,10 @@
         return;
       }
       if (state.menuOpen) return;
+      if (feastSaysSystem?.isPlaying() && event.code === "Tab") {
+        event.preventDefault();
+        return;
+      }
       if (openingWelcomeSystem?.active && ["Tab", "KeyC"].includes(event.code)) {
         event.preventDefault();
         return;
@@ -19849,6 +21075,11 @@
       if (event.code === "Tab" && !event.repeat && state.started && !openingWelcomeSystem?.active && contestant13Quest) {
         event.preventDefault();
         contestant13Quest.toggleJournal();
+        return;
+      }
+      if (event.code === "KeyC" && !event.repeat && feastSaysSystem?.isPlaying()) {
+        event.preventDefault();
+        toggleFeastSaysCrouch();
         return;
       }
       if (event.code === "KeyC" && !event.repeat && state.started && !openingWelcomeSystem?.active && !state.journalOpen && !state.activeSeat && !state.contestant13.actionInProgress) {
@@ -19861,6 +21092,7 @@
       }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
+        if (feastSaysSystem?.isPlaying() && feastSaysSystem.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
         setMoveIntent(event.code, true);
       }
       if (event.code === "KeyE" && !event.repeat) activateCurrentInteraction();
@@ -19900,7 +21132,7 @@
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
       // Keep the cursor hidden while reading, but freeze look so the page stays readable.
-      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver) return;
+      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || feastSaysSystem?.isPlaying()) return;
       state.yaw -= event.movementX * 0.00205;
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
@@ -19999,9 +21231,13 @@
     }
     const touchInteract = $("touch-interact");
     if (touchInteract) touchInteract.addEventListener("pointerdown", (event) => { event.preventDefault(); activateCurrentInteraction(); });
+    if (dom.feastCrouch) dom.feastCrouch.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      toggleFeastSaysCrouch();
+    });
 
     dom.canvas.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "touch" || event.clientX < innerWidth * 0.38) return;
+      if (event.pointerType !== "touch" || event.clientX < innerWidth * 0.38 || feastSaysSystem?.isPlaying()) return;
       input.touchLookId = event.pointerId;
       input.touchLookX = event.clientX;
       input.touchLookY = event.clientY;
@@ -20152,6 +21388,11 @@
         if (dom.promptKey) dom.promptKey.textContent = matchMedia("(pointer: coarse)").matches ? "TAP E" : "E";
         if (dom.promptText) dom.promptText.textContent = "Continue";
       }
+      return;
+    }
+    if (feastSaysSystem?.isPlaying()) {
+      state.currentInteraction = null;
+      dom.prompt.hidden = true;
       return;
     }
     state.currentInteraction = findInteraction();
@@ -20579,6 +21820,22 @@
       updateMovementHud();
       return;
     }
+    if (feastSaysSystem?.locksPlayerMovement()) {
+      physics.movePlayer(0, 0);
+      physics.step();
+      physics.updateSafety();
+      state.lastMove = { dx: 0, dz: 0 };
+      movement.crouched = false;
+      movement.sprinting = false;
+      movement.stealthVisibilityMultiplier = 1;
+      movement.stealthNoiseMultiplier = 1;
+      movement.mode = "on-mark";
+      movement.speed = 0;
+      clearMovementInput();
+      feastSaysSystem.constrainPlayer();
+      updateMovementHud();
+      return;
+    }
     let forward = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
     let strafe = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const length = Math.hypot(forward, strafe);
@@ -20587,7 +21844,7 @@
       strafe /= length;
     }
     const moving = length > 0;
-    const canSprint = input.sprint && moving && !movement.crouched && !movement.exhausted && movement.energy > 0;
+    const canSprint = !feastSaysSystem?.isPlaying() && input.sprint && moving && !movement.crouched && !movement.exhausted && movement.energy > 0;
     movement.sprinting = canSprint;
     if (canSprint) {
       movement.energy = Math.max(0, movement.energy - PLAYER.energyDrainPerSecond * fixedDt);
@@ -20619,6 +21876,7 @@
     physics.movePlayer(dx, dz);
     physics.step();
     physics.updateSafety();
+    feastSaysSystem?.constrainPlayer();
     updateMovementHud();
   }
 
@@ -20842,6 +22100,7 @@
       if (openingWelcomeSystem) {
         openingWelcomeSystem.update(Math.min(rawDt, MR_FEAST_OPENING_WELCOME.maximumTimerStepSeconds));
       }
+      feastSaysSystem?.update(Math.min(rawDt, FEAST_SAYS.maximumTimerStepSeconds));
       for (const system of yardWaterSystems) system.update(dt);
       updateLightTransitions(dt);
       if (rainSystem) rainSystem.update(dt);
@@ -20974,6 +22233,7 @@
       workroomCode: workroomCodeClue?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
       openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
+      feastSays: feastSaysSystem?.getDiagnostics() || null,
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
@@ -21284,6 +22544,11 @@
     };
     window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
+    window.MrFeastFresh.setMenuOpenForQA = (open) => {
+      if (!state.qa) return null;
+      setMenuOpen(Boolean(open));
+      return { open: state.menuOpen, feastSays: feastSaysSystem?.getDiagnostics() || null };
+    };
     window.MrFeastFresh.setDevModeForQA = (enabled) => state.qa && contestant13Quest ? contestant13Quest.setDevMode(Boolean(enabled)) : null;
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getReadableBookState = () => readableBookSystem ? readableBookSystem.getDiagnostics() : null;
@@ -21400,6 +22665,35 @@
     window.MrFeastFresh.startOpeningWelcomeForQA = () => (
       state.qa && openingWelcomeSystem ? openingWelcomeSystem.start() : { started: false, reason: "qa-only" }
     );
+    window.MrFeastFresh.getFeastSaysState = () => feastSaysSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.advanceFeastSaysForQA = (seconds) => (
+      state.qa && feastSaysSystem ? feastSaysSystem.advanceForQA(seconds) : null
+    );
+    window.MrFeastFresh.advanceFeastSaysCastForQA = (seconds) => (
+      state.qa && mansionContestants ? mansionContestants.advanceChallengeForQA(seconds) : null
+    );
+    window.MrFeastFresh.callFeastSaysForQA = (reason = "timer") => {
+      if (!state.qa || !feastSaysSystem) return { started: false, reason: "qa-only" };
+      const result = feastSaysSystem.call(reason);
+      return { ...result, started: Boolean(result.called) };
+    };
+    window.MrFeastFresh.respondToFeastSaysForQA = (action = "correct") => {
+      const result = state.qa && feastSaysSystem ? feastSaysSystem.respondForQA(action) : null;
+      return result ? { ...result, accepted: Boolean(result.resolved) } : { accepted: false };
+    };
+    window.MrFeastFresh.startFeastSaysForQA = () => (
+      state.qa && feastSaysSystem ? feastSaysSystem.reportToBallroom() : { started: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.completeFeastSaysForQA = (playerScore = 6) => (
+      state.qa && feastSaysSystem ? feastSaysSystem.completeForQA(playerScore) : null
+    );
+    window.MrFeastFresh.triggerFeastSaysClueForQA = (kind = "book") => {
+      if (!state.qa || !contestant13Quest) return null;
+      if (kind === "shovel") contestant13Quest.takeShovel();
+      else if (kind === "scratch") workroomCodeClue?.discover(WORKROOM_CODE_SCRATCHES[0].artId);
+      else contestant13Quest.readBook();
+      return feastSaysSystem?.getDiagnostics() || null;
+    };
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastPursuitForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runPursuitForQA(maxSeconds) : null;
@@ -21612,6 +22906,7 @@
         dining: [-9.7, FLOOR.MAIN, -8.4, 0],
         kitchen: [6.3, FLOOR.MAIN, -6.1, -0.8],
         ballroom: [0, FLOOR.MAIN, -6.0, 0],
+        feastSaysStaging: [FEAST_SAYS.reportMark.x, FLOOR.MAIN, FEAST_SAYS.reportMark.z + 1.35, 0, -0.26],
         openRearWest: [-9.7, FLOOR.MAIN, -4.05, Math.PI / 2],
         openRearEast: [8.2, FLOOR.MAIN, -4.05, -Math.PI / 2],
         upper: [0, FLOOR.UPPER, -3.8, Math.PI],
@@ -22216,6 +23511,7 @@
       syncWorkroomDoorState();
       mrFeastNpc = new MrFeastWanderer();
       mansionContestants = new MansionContestantSystem();
+      feastSaysSystem = new FeastSaysSystem();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();
       stormSystem = new StormSystem();

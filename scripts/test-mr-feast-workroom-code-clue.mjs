@@ -76,6 +76,9 @@ async function completeSecondClueCompetition(page, expectedClueId) {
     state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
     `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
   );
+  await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-storm-run")?.hidden);
+  state = await diagnostics(page);
   return state;
 }
 

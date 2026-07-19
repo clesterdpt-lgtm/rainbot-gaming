@@ -12,12 +12,12 @@ const introUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&allLights=1`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-feast-says");
 const FEAST_COMMAND_FLOW = Object.freeze([
-  Object.freeze({ action: "left", text: "Feast says step left." }),
-  Object.freeze({ action: "right", text: "Feast says step right." }),
-  Object.freeze({ action: "back", text: "Feast says step back." }),
-  Object.freeze({ action: "crouch", text: "Feast says crouch." }),
-  Object.freeze({ action: "point", text: "Feast says point to the contestant you distrust most." }),
-  Object.freeze({ action: "approach", text: "Feast says step toward the contestant you would eliminate." }),
+  Object.freeze({ action: "left", text: "Feast says step left.", obey: true }),
+  Object.freeze({ action: "right", text: "Step right.", obey: false }),
+  Object.freeze({ action: "back", text: "Feast says step back.", obey: true }),
+  Object.freeze({ action: "crouch", text: "Crouch.", obey: false }),
+  Object.freeze({ action: "point", text: "Feast says point to the contestant you distrust most.", obey: true }),
+  Object.freeze({ action: "approach", text: "Feast says step toward the contestant you would sacrifice.", obey: true }),
 ]);
 const FEAST_TARGET_IDS = new Set(["mara-voss", "kip-solano", "juniper-cross", "player"]);
 
@@ -188,9 +188,9 @@ async function startBallroomRound(page, useTouch = false) {
   const briefing = await diagnostics(page);
   assert(
     briefing.speech?.speakerId === "mr-feast"
-      && /follow (?:each|my|the) instruction(?:s)?/i.test(briefing.speech.text || "")
+      && /only follow.*(?:if|when).*feast says/i.test(briefing.speech.text || "")
       && /lowest score.*eliminated/i.test(briefing.speech.text || ""),
-    `Mr. Feast should explain the generic rules before naming any rival; got ${JSON.stringify(briefing.speech)}`,
+    `Mr. Feast should explain that only "Feast says" instructions count before naming any rival; got ${JSON.stringify(briefing.speech)}`,
   );
   assert(!/kip|beat\s+\w+/i.test(briefing.speech.text || ""), `the briefing must not spoil the authored loser or tell the player whom to beat; got ${JSON.stringify(briefing.speech.text)}`);
   assert(!/kip|beat\s+\w+/i.test(briefing.feastSays.ui?.command || ""), `the briefing HUD must use the same generic elimination rule; got ${JSON.stringify(briefing.feastSays.ui)}`);
@@ -480,8 +480,7 @@ async function playSixCommandRound(page, intendedOutcome) {
     }
     assert(command.total === 6, `Feast Says should be one readable six-command round; got ${JSON.stringify(command)}`);
     const expected = FEAST_COMMAND_FLOW[command.index];
-    assert(expected && command.action === expected.action && command.text === expected.text, `command ${command.index + 1} is out of the locked physical-to-psychological order; expected=${JSON.stringify(expected)} got=${JSON.stringify(command)}`);
-    assert(command.obey === true, `all six instructions should be genuine Feast Says rounds; got ${JSON.stringify(command)}`);
+    assert(expected && command.action === expected.action && command.text === expected.text && command.obey === expected.obey, `command ${command.index + 1} is out of the locked fake-out-to-psychological order; expected=${JSON.stringify(expected)} got=${JSON.stringify(command)}`);
 
     const beforeMotion = await diagnostics(page);
     const alreadySettled = beforeMotion.contestants.entries
@@ -521,11 +520,13 @@ async function playSixCommandRound(page, intendedOutcome) {
       }
     }
 
-    let responseAction = intendedOutcome === "win" ? command.action : wrongActionFor(command.action);
+    let responseAction = intendedOutcome === "win"
+      ? (command.obey ? command.action : "still")
+      : wrongActionFor(command.action);
     let result;
     const useRealPoint = intendedOutcome === "win" && command.action === "point";
     const useRealApproach = intendedOutcome === "win" && command.action === "approach";
-    const useRealCrouch = intendedOutcome === "win" && command.action === "crouch";
+    const useRealCrouch = intendedOutcome === "win" && command.obey && command.action === "crouch";
     if (useRealPoint) {
       responseAction = "point:juniper-cross";
       const beforePoint = await aimAtFeastContestant(page, "juniper-cross", { expectPrompt: true });
@@ -548,7 +549,7 @@ async function playSixCommandRound(page, intendedOutcome) {
         await page.keyboard.up("w");
       }
       const liveInput = await feastState(page);
-      assert(liveInput.player.detectedAction === "approach" && liveInput.player.detectedTargetId === "mara-voss", `actual forward displacement toward Mara should drive the elimination choice; got ${JSON.stringify(liveInput.player)}`);
+      assert(liveInput.player.detectedAction === "approach" && liveInput.player.detectedTargetId === "mara-voss", `actual forward displacement toward Mara should drive the sacrifice choice; got ${JSON.stringify(liveInput.player)}`);
       assert(liveInput.player.distanceFromMark >= 0.48 && liveInput.player.distanceFromMark > beforeApproach.feastSays.player.distanceFromMark + 0.4, `the approach choice must come from real displacement, not a key-to-name shortcut; before=${JSON.stringify(beforeApproach.feastSays.player)} after=${JSON.stringify(liveInput.player)}`);
       await page.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), liveInput.phaseRemaining + 0.02);
       const resolved = await feastState(page);
@@ -589,15 +590,15 @@ async function playSixCommandRound(page, intendedOutcome) {
 
   const state = await diagnostics(page);
   assert(observed.length === 6, `the round should resolve exactly six unique commands; got ${JSON.stringify(observed)}`);
-  assert(observed.every((entry) => entry.obey), `the revised deck should contain six genuine instructions and no decoys; got ${JSON.stringify(observed)}`);
-  assert(JSON.stringify(observed.map(({ action, text }) => ({ action, text }))) === JSON.stringify(FEAST_COMMAND_FLOW), `the six commands should progress from four plain physical calls into two psychological choices; got ${JSON.stringify(observed.map(({ action, text }) => ({ action, text })))}`);
+  assert(observed.filter((entry) => !entry.obey).length === 2, `the revised deck should contain two physical fake-outs without “Feast says”; got ${JSON.stringify(observed)}`);
+  assert(JSON.stringify(observed.map(({ action, text, obey }) => ({ action, text, obey }))) === JSON.stringify(FEAST_COMMAND_FLOW), `the six commands should progress through two physical fake-outs into two psychological choices; got ${JSON.stringify(observed.map(({ action, text, obey }) => ({ action, text, obey })))}`);
   const trustPrompt = observed[4];
   const eliminationPrompt = observed[5];
   const authoredDecisionTargets = [trustPrompt, eliminationPrompt].flatMap((entry) => Object.values(entry.npcTargets || {}));
   assert(authoredDecisionTargets.includes("player"), `at least one authored NPC choice should visibly implicate the player; got ${JSON.stringify(authoredDecisionTargets)}`);
   if (intendedOutcome === "win") {
     assert(trustPrompt.result?.targetId === "juniper-cross" && trustPrompt.result?.correct, `look + E should record the looked-at distrust choice without judging who was selected; got ${JSON.stringify(trustPrompt)}`);
-    assert(eliminationPrompt.result?.targetId === "mara-voss" && eliminationPrompt.result?.correct, `real displacement should record the approached elimination choice without judging who was selected; got ${JSON.stringify(eliminationPrompt)}`);
+    assert(eliminationPrompt.result?.targetId === "mara-voss" && eliminationPrompt.result?.correct, `real displacement should record the approached sacrifice choice without judging who was selected; got ${JSON.stringify(eliminationPrompt)}`);
   } else {
     assert(!trustPrompt.result?.correct && trustPrompt.result?.targetId === null, `a non-choice response must fail the trust prompt; got ${JSON.stringify(trustPrompt)}`);
     assert(!eliminationPrompt.result?.correct && eliminationPrompt.result?.targetId === null, `remaining on the mark must fail the approach prompt; got ${JSON.stringify(eliminationPrompt)}`);
@@ -680,7 +681,7 @@ async function playTouchOnlyLandscapeRound(page) {
     assert(layout.commandFontPx >= 16, `landscape command ${expectedIndex + 1} text is too small at ${layout.commandFontPx}px`);
     assert(layout.leaderboardDisplay === "none", `landscape command ${expectedIndex + 1} must hide the global Scores control so it cannot intercept movement; got ${JSON.stringify(layout)}`);
     assert(Object.values(layout.auxiliaryHudDisplays).every((display) => display === "none"), `landscape command ${expectedIndex + 1} should yield duplicate and irrelevant HUDs; got ${JSON.stringify(layout.auxiliaryHudDisplays)}`);
-    if (expectedIndex === 3) {
+    if (expectedIndex === 3 && before.command.obey) {
       assert(!layout.crouchHidden && layout.crouch.height >= 44 && layout.crouch.width >= 44, `landscape crouch command lost its 44px action target; got ${JSON.stringify(layout.crouch)}`);
     } else {
       assert(layout.crouchHidden && layout.crouch.height === 0 && layout.crouch.width === 0, `the challenge-only crouch target should take no space outside round four; got ${JSON.stringify(layout)}`);
@@ -690,10 +691,12 @@ async function playTouchOnlyLandscapeRound(page) {
     assert(layout.documentWidth <= layout.viewportWidth + 1, `landscape command ${expectedIndex + 1} introduced horizontal overflow; got ${JSON.stringify(layout)}`);
 
     const expected = FEAST_COMMAND_FLOW[expectedIndex];
-    assert(before.command.obey === true && before.command.action === expected.action && before.command.text === expected.text, `touch-only command ${expectedIndex + 1} is out of order; expected=${JSON.stringify(expected)} got=${JSON.stringify(before.command)}`);
+    assert(before.command.obey === expected.obey && before.command.action === expected.action && before.command.text === expected.text, `touch-only command ${expectedIndex + 1} is out of order; expected=${JSON.stringify(expected)} got=${JSON.stringify(before.command)}`);
     await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
 
-    if (before.command.action === "crouch") {
+    if (!before.command.obey) {
+      // The correct touch response to a fake-out is no input at all.
+    } else if (before.command.action === "crouch") {
       await page.locator("#mansion-feast-crouch").click({ force: true });
       assert((await feastState(page)).player.detectedAction === "crouch", `command ${expectedIndex + 1} did not accept the visible mobile crouch action`);
     } else if (before.command.action === "point") {
@@ -732,11 +735,11 @@ async function playTouchOnlyLandscapeRound(page) {
 
   await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 8000 });
   const completed = await diagnostics(page);
-  assert(observed.length === 6 && observed.every((entry) => entry.obey), `touch-only landscape run must complete six genuine commands; got ${JSON.stringify(observed)}`);
-  assert(JSON.stringify(observed.map(({ action, text }) => ({ action, text }))) === JSON.stringify(FEAST_COMMAND_FLOW), `touch-only flow should retain the locked command order; got ${JSON.stringify(observed)}`);
+  assert(observed.length === 6 && observed.filter((entry) => !entry.obey).length === 2, `touch-only landscape run must hold still through two fake-outs; got ${JSON.stringify(observed)}`);
+  assert(JSON.stringify(observed.map(({ action, text, obey }) => ({ action, text, obey }))) === JSON.stringify(FEAST_COMMAND_FLOW), `touch-only flow should retain the locked command order; got ${JSON.stringify(observed)}`);
   assert(completed.feastSays.player.score === 6 && completed.feastSays.player.qualified, `touch-only landscape player should qualify with a perfect score; got ${JSON.stringify(completed.feastSays)}`);
-  const eliminatedKip = completed.contestants.entries.find((entry) => entry.id === "kip-solano");
-  assert(completed.feastSays.eliminatedContestantId === "kip-solano" && eliminatedKip?.eliminated, `touch-only landscape completion should eliminate Kip; got ${JSON.stringify({ feast: completed.feastSays.eliminatedContestantId, kip: eliminatedKip })}`);
+  const aftermathKip = completed.contestants.entries.find((entry) => entry.id === "kip-solano");
+  assert(completed.feastSays.eliminatedContestantId === "kip-solano" && completed.feastSays.aftermath.active && !aftermathKip?.eliminated && aftermathKip?.modelVisible, `touch-only landscape completion should record Kip's elimination while preserving the witnessed aftermath; got ${JSON.stringify({ feast: completed.feastSays.eliminatedContestantId, aftermath: completed.feastSays.aftermath, kip: aftermathKip })}`);
   assert(!completed.feastSays.clueProgressLocked, "touch-only landscape completion should reopen clue progression");
   return completed;
 }
@@ -819,7 +822,7 @@ async function run() {
   assert(/const CONTESTANT_FEAST_SAYS_MOTION\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing named contestant response-animation tuning");
   assert(/class FeastSaysSystem/.test(runtimeSource), "runtime is missing the FeastSaysSystem state machine");
   assert(/feastSays:\s*feastSaysSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose Feast Says diagnostics");
-  for (const hook of ["getFeastSaysState", "advanceFeastSaysForQA", "advanceFeastSaysCastForQA", "callFeastSaysForQA", "respondToFeastSaysForQA", "aimFeastSaysTargetForQA"]) {
+  for (const hook of ["getFeastSaysState", "advanceFeastSaysForQA", "advanceFeastSaysCastForQA", "callFeastSaysForQA", "respondToFeastSaysForQA", "aimFeastSaysTargetForQA", "completeFeastSaysWithAftermathForQA", "resolveFeastSaysAftermathForQA"]) {
     assert(runtimeSource.includes(hook), `runtime is missing the focused ${hook} QA hook`);
   }
 
@@ -828,11 +831,11 @@ async function run() {
   assert(/feastSaysSystem\?\.update\(Math\.min\(rawDt, FEAST_SAYS\.maximumTimerStepSeconds\)\)/.test(runtimeSource), "the live show clock must consume capped wall time instead of physics-clamped frame time");
   const authoredCommandOrder = [
     'text: "Feast says step left."',
-    'text: "Feast says step right."',
+    'text: "Step right."',
     'text: "Feast says step back."',
-    'text: "Feast says crouch."',
+    'text: "Crouch."',
     'text: "Feast says point to the contestant you distrust most."',
-    'text: "Feast says step toward the contestant you would eliminate."',
+    'text: "Feast says step toward the contestant you would sacrifice."',
   ];
   let previousCommandOffset = -1;
   for (const commandSource of authoredCommandOrder) {
@@ -840,6 +843,7 @@ async function run() {
     assert(commandOffset > previousCommandOffset, `the command deck is missing or misorders ${commandSource}`);
     previousCommandOffset = commandOffset;
   }
+  assert((runtimeSource.match(/obey:\s*false/g) || []).length >= 2, "Feast Says needs at least two commands that omit the trigger phrase and should be ignored");
   assert(!/Beat Kip(?:'s score)? to (?:remain|survive)|beat Kip to survive/i.test(runtimeSource), "player-facing Feast Says instructions must describe the generic elimination rule instead of hinting to beat Kip");
   assert(/selectPointTargetFromLook\(/.test(runtimeSource), "the distrust decision must select the looked-at contestant instead of mapping movement keys to names");
   assert(/approachTargetForDisplacement\(/.test(runtimeSource), "the elimination decision must infer the contestant from real player displacement");
@@ -848,6 +852,12 @@ async function run() {
   assert(/addEventListener\(["']pointermove["'][\s\S]{0,420}!feastSaysSystem\.allowsLook\(\)[\s\S]{0,180}input\.touchLookId\s*=\s*null/.test(runtimeSource), "active touch-look must cancel as soon as Feast Says returns to a look-locked phase");
   assert(!/targetByAction:\s*Object\.freeze/.test(runtimeSource), "Feast Says must not retain the old A/W/D contestant mapping");
   assert(/resultSeconds:\s*[4-9](?:\.\d+)?/.test(runtimeSource), "the challenge needs a longer pause between instructions");
+  assert(/aftermath:\s*Object\.freeze\([\s\S]{0,1600}kipLine:[\s\S]{0,400}hostLine:[\s\S]{0,600}firstTalkLines:/.test(runtimeSource), "Feast Says needs a named post-game dialogue and survivor-return contract");
+  assert(/beginFeastSaysAftermath\(/.test(runtimeSource), "the contestant system needs a Feast Says aftermath entry point");
+  assert(/updateFeastSaysAftermathEntry\(/.test(runtimeSource), "surviving contestants must visibly walk back to their normal routines");
+  assert(/resolveAftermath\(/.test(runtimeSource), "Feast Says must defer Kip's disappearance and Mr. Feast's release until the player leaves");
+  assert(/consumePostGameContestantLine\(/.test(runtimeSource), "survivors need a one-use post-game conversation before returning to normal dialogue");
+  assert(/challengeMotionKind\s*=\s*["']upset["']/.test(runtimeSource), "Kip needs a readable upset aftermath pose");
   assert(/contestantLine:[\s\S]{0,240}hostWarning:/.test(runtimeSource), "the command deck needs contestant banter paired with Mr. Feast's no-talking warnings");
   assert(/applyChallengeResponsePose\(/.test(runtimeSource), "contestant responses need a challenge-only skeletal pose layer");
   assert(/returnSeconds:\s*0\.[5-9]/.test(runtimeSource), "contestant response motion needs a named eased-return duration");
@@ -989,7 +999,7 @@ async function run() {
       title: document.getElementById("mansion-discovery-title")?.textContent || "",
       body: document.getElementById("mansion-discovery-body")?.textContent || "",
     }));
-    assert(/concealed garden shovel/i.test(shovelToast.title) && /production has called/i.test(shovelToast.body), `the shovel clue and live call should share one readable discovery card; got ${JSON.stringify(shovelToast)}`);
+    assert(/concealed garden shovel|faceless fountain/i.test(shovelToast.title) && /production has called/i.test(shovelToast.body), `the shovel clue and live call should share one readable discovery card; got ${JSON.stringify(shovelToast)}`);
     await shovelPage.close();
 
     const scratchPage = await browser.newPage({ viewport: { width: 1280, height: 820 } });
@@ -1073,7 +1083,7 @@ async function run() {
     feast = await feastState(winPage);
     assert(feast.phase === "called" && feast.callCount === 1 && feast.triggerReason === "clue", `timer and blocked clues must not queue a duplicate call; got ${JSON.stringify(feast)}`);
 
-    // --- A perfect six-command round eliminates Kip and unlocks investigation
+    // --- A perfect round leaves a witnessed aftermath before Kip disappears
     state = await startBallroomRound(winPage);
     assert(state.feastSays.command.total === 6, `the staged round should expose six commands; got ${JSON.stringify(state.feastSays.command)}`);
     const desktopHud = await feastHudLayout(winPage);
@@ -1090,10 +1100,50 @@ async function run() {
     const kipStanding = state.feastSays.standings.find((entry) => entry.id === "kip-solano");
     assert(kipStanding?.status === "eliminated", `Kip's standings entry should record elimination; got ${JSON.stringify(kipStanding)}`);
     assert(state.feastSays.clueProgressLocked === false, "finishing Feast Says should unlock investigation");
+    assert(state.feastSays.aftermath.active && state.feastSays.aftermath.stage === "kip-speaking", `winning should begin the witnessed Kip aftermath; got ${JSON.stringify(state.feastSays.aftermath)}`);
+    assert(state.feastSays.staging.hostStaged && state.contestants.challengeMode === "feast-says-aftermath", `Mr. Feast and the cast should remain staged during the aftermath; got ${JSON.stringify({ feast: state.feastSays.staging, contestants: state.contestants.challengeMode })}`);
+    const aftermathKip = state.contestants.entries.find((entry) => entry.id === "kip-solano");
+    assert(!aftermathKip?.eliminated && aftermathKip?.modelVisible && !aftermathKip?.interactionRegistered, `Kip should remain visible but unavailable for normal chatter during his scripted loss; got ${JSON.stringify(aftermathKip)}`);
+    assert(aftermathKip?.challengeResponse?.motion?.kind === "upset" && aftermathKip.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 8, `Kip needs a visibly slumped upset pose; got ${JSON.stringify(aftermathKip?.challengeResponse)}`);
+    assert(state.speech?.speakerId === "kip-solano" && /give back the money|do it again/i.test(state.speech.text || ""), `Kip should plead immediately after losing; got ${JSON.stringify(state.speech)}`);
+    const returningSurvivors = state.contestants.entries.filter((entry) => ["mara-voss", "juniper-cross"].includes(entry.id));
+    assert(returningSurvivors.every((entry) => entry.aftermathReturn?.active), `both surviving contestants should start walking home; got ${JSON.stringify(returningSurvivors.map((entry) => ({ id: entry.id, aftermathReturn: entry.aftermathReturn })))}`);
+    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "kip-elimination-aftermath.png") });
+
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(4.9));
+    state = await diagnostics(winPage);
+    assert(state.feastSays.aftermath.stage === "host-speaking" && state.speech?.speakerId === "mr-feast", `Mr. Feast should answer Kip after the plea; got ${JSON.stringify({ aftermath: state.feastSays.aftermath, speech: state.speech })}`);
+    assert(/part of the show/i.test(state.speech.text || ""), `Mr. Feast's response should be ominous without explaining the full horror; got ${JSON.stringify(state.speech?.text)}`);
+
+    const maraDebrief = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("mara-voss"));
+    assert(/stopped looking at him like a contestant/i.test(maraDebrief?.text || ""), `Mara's first conversation should reflect Feast Says; got ${JSON.stringify(maraDebrief)}`);
+    const maraNormal = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("mara-voss"));
+    assert(maraNormal?.text && maraNormal.text !== maraDebrief.text, `Mara should return to her normal dialogue pool after the one-use debrief; first=${JSON.stringify(maraDebrief)} second=${JSON.stringify(maraNormal)}`);
+    state = await diagnostics(winPage);
+    const maraDialogue = state.contestants.entries.find((entry) => entry.id === "mara-voss")?.dialogue;
+    assert(maraDialogue?.lastKind === "normal" && !state.feastSays.aftermath.postGameDialoguePendingIds.includes("mara-voss"), `Mara's post-game line must be consumed exactly once; got ${JSON.stringify({ maraDialogue, aftermath: state.feastSays.aftermath })}`);
+
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(42));
+    state = await diagnostics(winPage);
+    const returnedMara = state.contestants.entries.find((entry) => entry.id === "mara-voss");
+    const returnedJuniper = state.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    assert(!returnedMara?.aftermathReturn && !returnedMara?.challengeStaged && returnedMara?.position.x < -6, `Mara should physically return to her Library routine; got ${JSON.stringify(returnedMara)}`);
+    assert(!returnedJuniper?.aftermathReturn && !returnedJuniper?.challengeStaged && returnedJuniper?.position.y >= 4.4 && returnedJuniper?.position.x > 5, `Juniper should physically climb back to her Reading Room routine; got ${JSON.stringify(returnedJuniper)}`);
+
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(4.6));
+    state = await diagnostics(winPage);
+    assert(state.feastSays.aftermath.active && state.feastSays.aftermath.stage === "waiting-for-player-exit", `the staged scene should remain while the player stays nearby; got ${JSON.stringify(state.feastSays.aftermath)}`);
+    assert(state.feastSays.staging.hostStaged && !state.contestants.entries.find((entry) => entry.id === "kip-solano")?.eliminated, "Mr. Feast and Kip should not vanish in front of a nearby player");
+
+    await teleportForInteraction(winPage, "readingRoom");
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(0.2));
+    state = await diagnostics(winPage);
     const eliminatedKip = state.contestants.entries.find((entry) => entry.id === "kip-solano");
-    assert(eliminatedKip?.eliminated && !eliminatedKip?.interactionRegistered && !eliminatedKip?.modelVisible, `an eliminated contestant must leave both the scene and interaction registry; got ${JSON.stringify(eliminatedKip)}`);
+    assert(!state.feastSays.aftermath.active && /player-left:SECOND FLOOR:READING ROOM/.test(state.feastSays.aftermath.cleanupReason || ""), `moving significantly away should resolve the aftermath; got ${JSON.stringify(state.feastSays.aftermath)}`);
+    assert(eliminatedKip?.eliminated && !eliminatedKip?.interactionRegistered && !eliminatedKip?.modelVisible, `Kip should disappear only after the player leaves the scene; got ${JSON.stringify(eliminatedKip)}`);
+    assert(!state.feastSays.staging.hostStaged && !state.contestants.challengeActive, `Mr. Feast should resume normal pathing after offscreen cleanup; got ${JSON.stringify({ feast: state.feastSays.staging, contestants: state.contestants.challengeActive })}`);
     const eliminatedConversation = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("kip-solano"));
-    assert(eliminatedConversation === null, `Kip should not speak after elimination; got ${JSON.stringify(eliminatedConversation)}`);
+    assert(eliminatedConversation === null, `Kip should not speak after disappearing; got ${JSON.stringify(eliminatedConversation)}`);
 
     // Completed state must persist across a fresh runtime and never retrigger.
     assert(await winPage.evaluate(() => window.MrFeastFresh.saveGameForQA()) === true, "saving completed Feast Says should succeed");
@@ -1105,6 +1155,10 @@ async function run() {
     const repeatCall = await winPage.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
     assert(repeatCall?.started === false, `completed Feast Says must not retrigger; got ${JSON.stringify(repeatCall)}`);
     assert((await feastState(winPage)).callCount === 1, "retrigger attempt must not increase callCount");
+    const juniperDebrief = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("juniper-cross"));
+    assert(/house made room for him/i.test(juniperDebrief?.text || ""), `Juniper's unconsumed post-game line should survive save/load; got ${JSON.stringify(juniperDebrief)}`);
+    const juniperNormal = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("juniper-cross"));
+    assert(juniperNormal?.text && juniperNormal.text !== juniperDebrief.text, `Juniper should return to normal dialogue after the saved one-use debrief; got ${JSON.stringify({ juniperDebrief, juniperNormal })}`);
 
     await teleportForInteraction(winPage, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
     await pressInteract(winPage);
@@ -1123,7 +1177,7 @@ async function run() {
       body: document.getElementById("mansion-discovery-body")?.textContent || "",
     }));
     assert(
-      /concealed garden shovel/i.test(stormCallToast.title)
+      /concealed garden shovel|faceless fountain/i.test(stormCallToast.title)
         && /five-checkpoint course|rear terrace/i.test(stormCallToast.body),
       `the earned shovel clue and Storm Run call should share one readable discovery card; got ${JSON.stringify(stormCallToast)}`,
     );
@@ -1214,8 +1268,8 @@ async function run() {
     await mobile.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
     await startBallroomRound(mobile, true);
 
-    // Resolve the three opening directional calls, then exercise the visible
-    // challenge crouch on round four instead of assuming the choice round is first.
+    // Resolve the first three physical calls, including the right-step fake-out,
+    // then prove a touch player can also hold through the crouch fake-out.
     for (let expectedIndex = 0; expectedIndex < 3; expectedIndex += 1) {
       const physical = await feastState(mobile);
       assert(physical.phase === "command" && physical.command.index === expectedIndex && physical.command.action === FEAST_COMMAND_FLOW[expectedIndex].action, `phone physical round ${expectedIndex + 1} is out of order; got ${JSON.stringify(physical.command)}`);
@@ -1228,14 +1282,14 @@ async function run() {
     }
 
     let mobileFeast = await feastState(mobile);
-    assert(mobileFeast.command.index === 3 && mobileFeast.command.action === "crouch", `the fourth phone command should be crouch; got ${JSON.stringify(mobileFeast.command)}`);
+    assert(mobileFeast.command.index === 3 && mobileFeast.command.action === "crouch" && !mobileFeast.command.obey, `the fourth phone command should be the crouch fake-out; got ${JSON.stringify(mobileFeast.command)}`);
     await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
-    await mobile.locator("#mansion-feast-crouch").click({ force: true });
-    assert((await feastState(mobile)).player.detectedAction === "crouch", "the challenge-only mobile crouch button should feed the live fourth command");
+    assert(await mobile.locator("#mansion-feast-crouch").isHidden(), "the crouch fake-out must not expose a misleading challenge action button");
+    assert((await feastState(mobile)).player.detectedAction === "still", "the touch player should remain still through the crouch fake-out");
     mobileFeast = await feastState(mobile);
     await mobile.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), mobileFeast.phaseRemaining + 0.02);
     mobileFeast = await feastState(mobile);
-    assert(mobileFeast.command.result?.correct, `the real mobile crouch should score; got ${JSON.stringify(mobileFeast.command)}`);
+    assert(mobileFeast.command.result?.correct && mobileFeast.command.result.expected === "still", `holding still through the mobile crouch fake-out should score; got ${JSON.stringify(mobileFeast.command)}`);
     await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
     await mobile.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), mobileFeast.phaseRemaining + 0.02);
 
@@ -1276,14 +1330,14 @@ async function run() {
     await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
     await mobile.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), mobileFeast.phaseRemaining + 0.02);
     mobileFeast = await feastState(mobile);
-    assert(mobileFeast.command.index === 5 && mobileFeast.command.action === "approach", `the elimination approach should be the sixth phone command; got ${JSON.stringify(mobileFeast.command)}`);
+    assert(mobileFeast.command.index === 5 && mobileFeast.command.action === "approach", `the sacrifice approach should be the sixth phone command; got ${JSON.stringify(mobileFeast.command)}`);
     await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
     const beforeMobileApproach = await aimAtFeastContestant(mobile, "mara-voss");
     const approachSession = await mobile.context().newCDPSession(mobile);
     await holdTouchDirection(mobile, approachSession, "forward", { expectedAction: "approach", advanceSeconds: 0.38 });
     await approachSession.detach();
     mobileFeast = await feastState(mobile);
-    assert(mobileFeast.player.detectedTargetId === "mara-voss" && mobileFeast.player.distanceFromMark > beforeMobileApproach.feastSays.player.distanceFromMark + 0.4, `the phone elimination choice should come from actual movement toward Mara; before=${JSON.stringify(beforeMobileApproach.feastSays.player)} after=${JSON.stringify(mobileFeast.player)}`);
+    assert(mobileFeast.player.detectedTargetId === "mara-voss" && mobileFeast.player.distanceFromMark > beforeMobileApproach.feastSays.player.distanceFromMark + 0.4, `the phone sacrifice choice should come from actual movement toward Mara; before=${JSON.stringify(beforeMobileApproach.feastSays.player)} after=${JSON.stringify(mobileFeast.player)}`);
     await mobile.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), mobileFeast.phaseRemaining + 0.02);
     mobileFeast = await feastState(mobile);
     assert(mobileFeast.command.result?.correct && mobileFeast.command.result.targetId === "mara-voss", `the phone approach choice should score without judging its target; got ${JSON.stringify(mobileFeast.command)}`);

@@ -391,6 +391,7 @@ async function playAndPublish(token, user, args) {
       metadata: {
         ...result.scoreMetadata,
         bragBody: result.bragBody,
+        bragTechnical: result.bragTechnical,
         memory: result.memory,
         lastEvents: result.lastEvents,
       },
@@ -427,6 +428,8 @@ async function playAndPublish(token, user, args) {
         runId: result.runId,
         score: result.score,
         gameRunActionId: out.gameRunAction?.id || null,
+        bragTechnical: result.bragTechnical,
+        publicComment: true,
       },
     });
   }

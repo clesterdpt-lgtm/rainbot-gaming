@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260719-hide-trail-countdown-1";
+  const MANSION_RUNTIME_VERSION = "20260719-feast-aftermath-ambient-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1627,6 +1627,51 @@
       "kip-solano": 0.24,
       "juniper-cross": 0.18,
     }),
+    aftermath: Object.freeze({
+      kipLine: "Wait—please. I can do it again. I’ll give back the money. I don’t even need to win.",
+      kipLineSeconds: 4.8,
+      hostLine: "You misunderstand, Kip. Losing is how you become part of the show.",
+      hostLineSeconds: 4.5,
+      returnSpeed: 1.05,
+      arrivalRadius: 0.08,
+      farMainFloorDistance: 13,
+      firstTalkLines: Object.freeze({
+        "mara-voss": "Kip lost before the score appeared. Feast had already stopped looking at him like a contestant.",
+        "juniper-cross": "When Kip’s name went red, the house made room for him. Houses only make room for what they expect.",
+      }),
+      returnRoutes: Object.freeze({
+        "mara-voss": Object.freeze([
+          Object.freeze({ x: -3.2, y: FLOOR.MAIN, z: -9.2 }),
+          Object.freeze({ x: -3.2, y: FLOOR.MAIN, z: -5.6 }),
+          Object.freeze({ x: -1.8, y: FLOOR.MAIN, z: 4.15 }),
+          Object.freeze({ x: -4.3, y: FLOOR.MAIN, z: 7.3 }),
+          Object.freeze({ x: -5, y: FLOOR.MAIN, z: 7.3, door: "library door" }),
+          Object.freeze({ x: -6.2, y: FLOOR.MAIN, z: 7.3 }),
+        ]),
+        "juniper-cross": Object.freeze([
+          Object.freeze({ x: 3.2, y: FLOOR.MAIN, z: -5.6 }),
+          Object.freeze({ x: 2.05, y: FLOOR.MAIN, z: 4.15 }),
+          Object.freeze({ x: 0, y: FLOOR.MAIN, z: 4.15 }),
+          Object.freeze({ x: 0, y: FLOOR.MAIN, z: 2.8 }),
+          Object.freeze({ x: 0, y: 0.625, z: 1.855 }),
+          Object.freeze({ x: 0, y: 1.25, z: 0.91 }),
+          Object.freeze({ x: 0, y: 1.875, z: -0.035 }),
+          Object.freeze({ x: 0, y: 2.5, z: -0.98 }),
+          Object.freeze({ x: 0, y: 2.5, z: -1.55 }),
+          Object.freeze({ x: 2.48, y: 2.5, z: -1.55 }),
+          Object.freeze({ x: 2.48, y: 2.5, z: -0.98 }),
+          Object.freeze({ x: 2.48, y: 3, z: 0.04 }),
+          Object.freeze({ x: 2.48, y: 3.5, z: 1.06 }),
+          Object.freeze({ x: 2.48, y: 4, z: 2.08 }),
+          Object.freeze({ x: 2.48, y: FLOOR.UPPER, z: 3.1 }),
+          Object.freeze({ x: 2.48, y: FLOOR.UPPER, z: 3.75 }),
+          Object.freeze({ x: 4.2, y: FLOOR.UPPER, z: 3.75 }),
+          Object.freeze({ x: 4.2, y: FLOOR.UPPER, z: 0 }),
+          Object.freeze({ x: 5, y: FLOOR.UPPER, z: 0, door: "reading room door" }),
+          Object.freeze({ x: 5.8, y: FLOOR.UPPER, z: 0 }),
+        ]),
+      }),
+    }),
     playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -5.75, yaw: 0 }),
     hostMark: Object.freeze({ x: 0.65, y: FLOOR.MAIN, z: -10.9, yaw: 0 }),
     reportMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -4.05, yaw: Math.PI }),
@@ -1648,13 +1693,13 @@
       }),
       Object.freeze({
         id: "step-right",
-        text: "Feast says step right.",
-        obey: true,
+        text: "Step right.",
+        obey: false,
         action: "right",
-        hint: "Use your movement controls.",
-        contestantId: "juniper-cross",
-        contestantLine: "So we are all pretending that felt natural?",
-        hostWarning: "No talking, Juniper. It is not part of the score.",
+        hint: "Remember the rule.",
+        contestantId: "kip-solano",
+        contestantLine: "Oh. You didn’t say Feast says. Great.",
+        hostWarning: "No talking, Kip. Your score already said enough.",
       }),
       Object.freeze({
         id: "step-back",
@@ -1668,13 +1713,13 @@
       }),
       Object.freeze({
         id: "crouch",
-        text: "Feast says crouch.",
-        obey: true,
+        text: "Crouch.",
+        obey: false,
         action: "crouch",
-        hint: "Press C or use Crouch.",
-        contestantId: "kip-solano",
-        contestantLine: "My knees just unsubscribed.",
-        hostWarning: "Save it, Kip. One more joke and they leave before you do.",
+        hint: "Remember the rule.",
+        contestantId: "juniper-cross",
+        contestantLine: "The house wanted me closer to the floor.",
+        hostWarning: "Quiet, Juniper. The house does not award points.",
       }),
       Object.freeze({
         id: "distrust",
@@ -1694,7 +1739,7 @@
       }),
       Object.freeze({
         id: "eliminate",
-        text: "Feast says step toward the contestant you would eliminate.",
+        text: "Feast says step toward the contestant you would sacrifice.",
         obey: true,
         action: "approach",
         choiceMode: "world-displacement",
@@ -1705,7 +1750,7 @@
         }),
         hint: "Move toward any contestant.",
         contestantId: "mara-voss",
-        contestantLine: "At least now the vote is honest.",
+        contestantLine: "At least now we know what kind of show this is.",
         hostWarning: "Silence. The audience prefers the reveal.",
       }),
     ]),
@@ -1732,6 +1777,10 @@
     backpedalSpineLeanRadians: 0.09,
     backpedalHipLeanRadians: 0.06,
     pointPoseBlend: 0.9,
+    upsetSpineRadians: 0.24,
+    upsetNeckRadians: 0.2,
+    upsetShoulderRadians: 0.18,
+    upsetArmRadians: 0.14,
   });
 
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
@@ -2284,6 +2333,11 @@
       eliminatedContestantId: null,
       staged: false,
       completionCardRemaining: 0,
+      aftermathActive: false,
+      aftermathStage: "inactive",
+      aftermathElapsed: 0,
+      aftermathCleanupReason: null,
+      postGameDialoguePendingIds: [],
       invalidTransitions: 0,
       lastInvalidTransition: null,
     },
@@ -7272,6 +7326,8 @@
       this.challengeActive = false;
       this.challengeMode = null;
       this.challengeSnapshots = new Map();
+      this.aftermathDoorCache = new Map();
+      this.aftermathOpenedDoors = new Set();
       this.eliminatedIds = new Set();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
@@ -7329,6 +7385,7 @@
           challengePlaybackRate: 0,
           challengePoseBaseQuaternions: new Map(),
           challengePoseLayerCaptured: false,
+          aftermathReturn: null,
           race: null,
           raceDistanceTravelled: 0,
           raceMaximumObservedSpeed: 0,
@@ -7382,6 +7439,7 @@
           linesSpoken: 0,
           lastLineIndex: -1,
           lastLine: null,
+          lastDialogueKind: null,
           speaker: null,
           animationTracks: {},
           animationProbeBone: null,
@@ -9417,6 +9475,7 @@
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
           if (this.challengeMode === "storm-run") this.updateStormRunEntry(entry, dt);
+          else if (this.challengeMode === "feast-says-aftermath") this.updateFeastSaysAftermathEntry(entry, dt);
           else this.updateChallengeEntry(entry, dt);
         }
         this.syncStormRunCastVisibility();
@@ -9504,6 +9563,169 @@
         entries: this.entries.filter((entry) => entry.status === "ready" && entry.challengeMark).map((entry) => entry.id),
         fallbackIds: this.entries.filter((entry) => entry.status === "error").map((entry) => entry.id),
       };
+    }
+
+    aftermathDoor(name) {
+      if (!name) return null;
+      if (this.aftermathDoorCache.has(name)) return this.aftermathDoorCache.get(name);
+      const door = animatedObjects.find((object) => object instanceof HingedDoor && object.name === name) || null;
+      if (door) this.aftermathDoorCache.set(name, door);
+      return door;
+    }
+
+    restoreAftermathRoutine(entry, { teleportToSnapshot = false } = {}) {
+      const snapshot = this.challengeSnapshots.get(entry.id);
+      if (snapshot) {
+        if (teleportToSnapshot) entry.root.position.copy(snapshot.position);
+        entry.root.rotation.y = snapshot.rotationY;
+        entry.routeIndex = snapshot.routeIndex;
+        entry.routeDirection = snapshot.routeDirection;
+        entry.routeTargetActive = snapshot.routeTargetActive;
+        entry.pauseRemaining = Math.max(0.2, snapshot.pauseRemaining);
+      }
+      if (entry.model) entry.model.position.y = entry.modelBaseY;
+      entry.challengeMark = null;
+      entry.challengeResponse = null;
+      entry.challengeResponseProgress = 0;
+      entry.aftermathReturn = null;
+      this.resetChallengeMotion(entry);
+      entry.activity = CONTESTANT_ACTIVITY.IDLE;
+      this.fadeToAction(entry, "idle", 0.14);
+      entry.mixer?.update(0);
+      this.applyNeutralRestPose(entry);
+      entry.root.updateMatrixWorld(true);
+      this.setEliminated(entry.id, this.eliminatedIds.has(entry.id));
+    }
+
+    beginFeastSaysAftermath(eliminatedId = "kip-solano") {
+      if (!this.challengeActive || this.challengeMode !== "feast-says") {
+        return { started: false, reason: "feast-says-cast-not-staged" };
+      }
+      this.challengeMode = "feast-says-aftermath";
+      for (const entry of this.entries) {
+        if (entry.status !== "ready" || !entry.challengeMark) continue;
+        entry.challengeResponse = null;
+        entry.challengeResponseProgress = 0;
+        entry.aftermathReturn = null;
+        this.resetChallengeMotion(entry);
+        if (entry.id === eliminatedId) {
+          entry.challengeResponse = {
+            action: "upset",
+            targetId: null,
+            elapsed: 1,
+            delay: 0,
+            returning: false,
+            returnElapsed: 0,
+            returnStartProgress: 1,
+            playbackSign: 0,
+            reverseInitialized: false,
+          };
+          entry.challengeResponseProgress = 1;
+          this.applyChallengeResponse(entry, "upset", 1);
+          entry.challengeMotionKind = "upset";
+          entry.activity = CONTESTANT_ACTIVITY.IDLE;
+          this.fadeToAction(entry, "idle", 0.12);
+          if (entry.interactionRegistered) {
+            removeInteractionTarget(entry.interactionTarget);
+            entry.interactionRegistered = false;
+          }
+          continue;
+        }
+        const snapshot = this.challengeSnapshots.get(entry.id);
+        const authoredRoute = FEAST_SAYS.aftermath.returnRoutes[entry.id] || [];
+        const destination = snapshot?.position || entry.root.position;
+        entry.aftermathReturn = {
+          active: true,
+          routeIndex: 0,
+          distanceTravelled: 0,
+          route: [
+            ...authoredRoute.map((point) => ({ ...point })),
+            { x: destination.x, y: destination.y, z: destination.z, destination: true },
+          ],
+        };
+        this.setColliderEnabled(entry, false);
+        entry.activity = CONTESTANT_ACTIVITY.WALKING;
+        this.fadeToAction(entry, "walk", 0.14);
+      }
+      return {
+        started: true,
+        eliminatedId,
+        returningIds: this.entries.filter((entry) => entry.aftermathReturn?.active).map((entry) => entry.id),
+      };
+    }
+
+    updateFeastSaysAftermathEntry(entry, dt) {
+      const stepDt = Math.max(0, Number(dt) || 0);
+      entry.lastDt = stepDt;
+      if (entry.id === "kip-solano") {
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        entry.challengeMotionKind = "upset";
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const returning = entry.aftermathReturn;
+      if (!returning?.active) {
+        this.updateEntry(entry, stepDt);
+        return;
+      }
+      let target = returning.route[returning.routeIndex];
+      while (target) {
+        const distance = Math.hypot(
+          target.x - entry.root.position.x,
+          target.y - entry.root.position.y,
+          target.z - entry.root.position.z,
+        );
+        if (distance > FEAST_SAYS.aftermath.arrivalRadius) break;
+        returning.routeIndex += 1;
+        target = returning.route[returning.routeIndex];
+      }
+      if (!target) {
+        returning.active = false;
+        this.restoreAftermathRoutine(entry);
+        return;
+      }
+      if (target.door) {
+        const door = this.aftermathDoor(target.door);
+        if (door && !door.locked && !door.open) {
+          door.setOpen(true);
+          this.aftermathOpenedDoors.add(door);
+        }
+      }
+      const dx = target.x - entry.root.position.x;
+      const dy = target.y - entry.root.position.y;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.max(0.000001, Math.hypot(dx, dy, dz));
+      this.facePoint(entry, target, stepDt);
+      const distanceStep = Math.min(distance, FEAST_SAYS.aftermath.returnSpeed * stepDt);
+      entry.root.position.x += dx / distance * distanceStep;
+      entry.root.position.y += dy / distance * distanceStep;
+      entry.root.position.z += dz / distance * distanceStep;
+      returning.distanceTravelled += distanceStep;
+      entry.distanceTravelled += distanceStep;
+      entry.activity = CONTESTANT_ACTIVITY.WALKING;
+      const action = this.fadeToAction(entry, "walk");
+      action?.setEffectiveTimeScale(1);
+      entry.root.updateMatrixWorld(true);
+      this.stepAnimation(entry, stepDt);
+    }
+
+    finishFeastSaysAftermath({ eliminatedId = "kip-solano" } = {}) {
+      const releasedMode = this.challengeMode;
+      for (const entry of this.entries) {
+        if (entry.status !== "ready") continue;
+        const survivorWasStillReturning = entry.id !== eliminatedId && Boolean(entry.aftermathReturn?.active);
+        this.restoreAftermathRoutine(entry, { teleportToSnapshot: survivorWasStillReturning || entry.id === eliminatedId });
+        this.setEliminated(entry.id, this.eliminatedIds.has(entry.id) || entry.id === eliminatedId);
+      }
+      for (const door of this.aftermathOpenedDoors) {
+        if (door.open && !door.playerInSwingPath()) door.setOpen(false);
+      }
+      this.aftermathOpenedDoors.clear();
+      this.challengeSnapshots.clear();
+      this.challengeActive = false;
+      this.challengeMode = null;
+      return { active: false, eliminatedId, mode: releasedMode };
     }
 
     startStormRunRace() {
@@ -9729,6 +9951,16 @@
       }
     }
 
+    applyChallengeUpsetPose(entry, weight) {
+      this.applyChallengeBoneEuler(entry, "Spine", CONTESTANT_FEAST_SAYS_MOTION.upsetSpineRadians, 0, 0, weight, true);
+      this.applyChallengeBoneEuler(entry, "Spine01", CONTESTANT_FEAST_SAYS_MOTION.upsetSpineRadians * 0.55, 0, 0, weight, true);
+      this.applyChallengeBoneEuler(entry, "Neck", CONTESTANT_FEAST_SAYS_MOTION.upsetNeckRadians, 0, 0, weight, true);
+      this.applyChallengeBoneEuler(entry, "LeftShoulder", 0, 0, -CONTESTANT_FEAST_SAYS_MOTION.upsetShoulderRadians, weight, true);
+      this.applyChallengeBoneEuler(entry, "RightShoulder", 0, 0, CONTESTANT_FEAST_SAYS_MOTION.upsetShoulderRadians, weight, true);
+      this.applyChallengeBoneEuler(entry, "LeftArm", CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, 0, -CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, weight, true);
+      this.applyChallengeBoneEuler(entry, "RightArm", CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, 0, CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, weight, true);
+    }
+
     applyChallengePointPose(entry, targetId, weight) {
       const target = this.entryById(targetId);
       const targetMark = targetId === "player" ? FEAST_SAYS.playerMark : FEAST_SAYS.contestantMarks[targetId];
@@ -9798,6 +10030,9 @@
       if (response.action === "crouch") {
         entry.challengeMotionKind = "crouch";
         this.applyChallengeCrouchPose(entry, weight);
+      } else if (response.action === "upset") {
+        entry.challengeMotionKind = "upset";
+        this.applyChallengeUpsetPose(entry, weight);
       } else if (response.action === "left" || response.action === "right") {
         const direction = response.action === "left" ? -1 : 1;
         const leadingSide = direction < 0 ? "Left" : "Right";
@@ -9885,13 +10120,15 @@
 
     advanceChallengeForQA(seconds = 0) {
       if (!state.qa || !this.challengeActive) return this.getDiagnostics();
-      const duration = clamp(Number(seconds) || 0, 0, 5);
-      const fixedStep = 1 / 60;
+      const duration = clamp(Number(seconds) || 0, 0, this.challengeMode === "feast-says-aftermath" ? 90 : 5);
+      const fixedStep = this.challengeMode === "feast-says-aftermath" ? 1 / 30 : 1 / 60;
       let elapsed = 0;
       while (elapsed < duration) {
         const step = Math.min(fixedStep, duration - elapsed);
         for (const entry of this.entries) {
-          if (entry.status === "ready" && entry.root.visible) this.updateChallengeEntry(entry, step);
+          if (entry.status !== "ready" || !entry.root.visible) continue;
+          if (this.challengeMode === "feast-says-aftermath") this.updateFeastSaysAftermathEntry(entry, step);
+          else this.updateChallengeEntry(entry, step);
         }
         elapsed += step;
       }
@@ -10267,10 +10504,18 @@
       const entry = this.entryById(id);
       if (!entry || entry.status !== "ready" || this.eliminatedIds.has(id) || !speechSystem || !entry.speaker) return null;
       const pool = entry.spec.dialogue;
-      let index = Math.floor(Math.random() * pool.length);
-      if (pool.length > 1 && index === entry.lastLineIndex) index = (index + 1) % pool.length;
-      entry.lastLineIndex = index;
-      entry.lastLine = pool[index];
+      const postGameLine = feastSaysSystem?.consumePostGameContestantLine(id) || null;
+      let index = -1;
+      if (postGameLine) {
+        entry.lastLine = postGameLine;
+        entry.lastDialogueKind = "feast-says-aftermath";
+      } else {
+        index = Math.floor(Math.random() * pool.length);
+        if (pool.length > 1 && index === entry.lastLineIndex) index = (index + 1) % pool.length;
+        entry.lastLineIndex = index;
+        entry.lastLine = pool[index];
+        entry.lastDialogueKind = "normal";
+      }
       entry.linesSpoken += 1;
       entry.talkPauseRemaining = MANSION_SEATING.contestantTalkPauseSeconds;
       if (!entry.seatedSeatId) {
@@ -10459,6 +10704,12 @@
           visible: Boolean(entry.root.visible),
           eliminated: this.eliminatedIds.has(entry.id),
           challengeStaged: Boolean(this.challengeActive && entry.challengeMark),
+          aftermathReturn: entry.aftermathReturn ? {
+            active: Boolean(entry.aftermathReturn.active),
+            routeIndex: entry.aftermathReturn.routeIndex,
+            routeLength: entry.aftermathReturn.route.length,
+            distanceTravelled: Number(entry.aftermathReturn.distanceTravelled.toFixed(3)),
+          } : null,
           challengeResponse: entry.challengeResponse ? {
             action: entry.challengeResponse.action,
             targetId: entry.challengeResponse.targetId || null,
@@ -10532,6 +10783,11 @@
           locomotionStatus: entry.locomotionStatus,
           runStatus: entry.runStatus,
           activity: entry.activity,
+          dialogue: {
+            linesSpoken: entry.linesSpoken,
+            lastLine: entry.lastLine,
+            lastKind: entry.lastDialogueKind,
+          },
           race: entry.race || entry.raceDistanceTravelled > 0 ? {
             active: Boolean(entry.race?.active),
             finished: Boolean(entry.raceFinished),
@@ -12337,7 +12593,11 @@
       const minX = margin + bubbleWidth / 2;
       const maxX = Math.max(minX, width - margin - bubbleWidth / 2);
       let minY = margin + bubbleHeight + tail;
-      if (dom.feastSays && !dom.feastSays.hidden && dom.feastSays.dataset.phase === FEAST_SAYS_PHASE.RESULT) {
+      if (
+        dom.feastSays
+        && !dom.feastSays.hidden
+        && [FEAST_SAYS_PHASE.RESULT, FEAST_SAYS_PHASE.COMPLETED].includes(dom.feastSays.dataset.phase)
+      ) {
         const stageRect = dom.stage?.getBoundingClientRect();
         const feastRect = dom.feastSays.getBoundingClientRect();
         if (stageRect) {
@@ -12814,11 +13074,16 @@
       this.show.selectedTargetId = null;
       this.show.resultDialogue = null;
       this.show.dialogueHistory = [];
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
+      this.show.postGameDialoguePendingIds = [];
       this.show.phaseRemaining = FEAST_SAYS.briefingSeconds;
       this.transition(FEAST_SAYS_PHASE.BRIEFING, "reported-to-ballroom");
       speechSystem?.say(
         "feast-says-rules",
-        "Follow each instruction before time runs out. The contestant with the lowest score is eliminated.",
+        "Only follow an instruction if it begins with ‘Feast says.’ The contestant with the lowest score is eliminated.",
         speechSystem.hostSpeaker(),
         { durationSeconds: FEAST_SAYS.briefingSpeechSeconds },
       );
@@ -13088,6 +13353,91 @@
         .filter(Boolean).length;
     }
 
+    beginAftermath() {
+      const staged = mansionContestants?.beginFeastSaysAftermath("kip-solano");
+      if (!staged?.started) {
+        this.releaseProduction("kip-solano");
+        this.show.aftermathActive = false;
+        this.show.aftermathStage = "resolved";
+        this.show.aftermathCleanupReason = "cast-unavailable";
+        return staged || { started: false, reason: "cast-unavailable" };
+      }
+      this.show.aftermathActive = true;
+      this.show.aftermathStage = "kip-speaking";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
+      this.show.postGameDialoguePendingIds = Object.keys(FEAST_SAYS.aftermath.firstTalkLines);
+      const kip = mansionContestants?.entryById("kip-solano");
+      speechSystem?.sayForSpeaker(
+        kip?.speaker,
+        "feast-says-aftermath-kip",
+        FEAST_SAYS.aftermath.kipLine,
+        { durationSeconds: FEAST_SAYS.aftermath.kipLineSeconds },
+      );
+      return staged;
+    }
+
+    consumePostGameContestantLine(id) {
+      const index = this.show.postGameDialoguePendingIds.indexOf(id);
+      const line = FEAST_SAYS.aftermath.firstTalkLines[id] || null;
+      if (index < 0 || !line) return null;
+      this.show.postGameDialoguePendingIds.splice(index, 1);
+      return line;
+    }
+
+    playerHasLeftAftermath() {
+      if (!physics) return false;
+      if (outdoorRoomNames.has(state.currentRoom)) return true;
+      if (["SECOND FLOOR", "BASEMENT"].includes(state.currentFloor)) return true;
+      const player = physics.playerPosition();
+      const distance = Math.hypot(player.x - FEAST_SAYS.playerMark.x, player.z - FEAST_SAYS.playerMark.z);
+      return distance >= FEAST_SAYS.aftermath.farMainFloorDistance
+        && !mrFeastNpc?.canSeePlayerAct?.();
+    }
+
+    updateAftermath(dt) {
+      if (!this.show.aftermathActive) return;
+      this.show.aftermathElapsed += Math.max(0, Number(dt) || 0);
+      if (
+        this.show.aftermathStage === "kip-speaking"
+        && this.show.aftermathElapsed >= FEAST_SAYS.aftermath.kipLineSeconds
+      ) {
+        this.show.aftermathStage = "host-speaking";
+        this.show.aftermathElapsed = 0;
+        speechSystem?.say(
+          "feast-says-aftermath-host",
+          FEAST_SAYS.aftermath.hostLine,
+          speechSystem.hostSpeaker(),
+          { durationSeconds: FEAST_SAYS.aftermath.hostLineSeconds },
+        );
+      } else if (
+        this.show.aftermathStage === "host-speaking"
+        && this.show.aftermathElapsed >= FEAST_SAYS.aftermath.hostLineSeconds
+      ) {
+        this.show.aftermathStage = "waiting-for-player-exit";
+        this.show.aftermathElapsed = 0;
+      }
+      if (this.show.aftermathStage === "waiting-for-player-exit" && this.playerHasLeftAftermath()) {
+        this.resolveAftermath(`player-left:${state.currentFloor}:${state.currentRoom}`);
+      }
+    }
+
+    resolveAftermath(reason = "player-left") {
+      if (!this.show.aftermathActive) return { resolved: false, reason: "inactive" };
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "resolved";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = reason;
+      this.show.staged = false;
+      mansionContestants?.finishFeastSaysAftermath({ eliminatedId: "kip-solano" });
+      mrFeastNpc?.releaseChallenge();
+      clearMovementInput();
+      state.movement.crouched = false;
+      updateMovementHud();
+      this.syncPresentation();
+      return { resolved: true, reason };
+    }
+
     finishCompetition() {
       const kipScore = this.npcScore("kip-solano", FEAST_SAYS.commands.length);
       const survived = this.show.playerScore > kipScore;
@@ -13097,13 +13447,8 @@
         this.show.eliminatedContestantId = "kip-solano";
         this.show.completionCardRemaining = FEAST_SAYS.completionCardSeconds;
         this.transition(FEAST_SAYS_PHASE.COMPLETED, "player-beat-kip");
-        mansionContestants?.setEliminated("kip-solano", true);
-        this.releaseProduction("kip-solano");
-        contestant13Quest?.showDiscovery(
-          "KIP SOLANO — ELIMINATED",
-          `You scored ${this.show.playerScore}. Kip scored ${kipScore}. Production has reopened the mansion.`,
-          9000,
-        );
+        this.beginAftermath();
+        contestant13Quest?.hideDiscovery();
       } else {
         this.show.eliminatedContestantId = "player";
         this.transition(FEAST_SAYS_PHASE.FAILED, "player-did-not-beat-kip");
@@ -13111,7 +13456,7 @@
         triggerMansionGameOver({ reason: "feast-says-eliminated", kind: "feast-says" });
       }
       this.syncPresentation();
-      return { survived, playerScore: this.show.playerScore, kipScore };
+      return { survived, playerScore: this.show.playerScore, kipScore, aftermathActive: this.show.aftermathActive };
     }
 
     releaseProduction(eliminatedId = null) {
@@ -13156,6 +13501,7 @@
       }
       if (this.show.phase === FEAST_SAYS_PHASE.COMPLETED) {
         this.show.completionCardRemaining = Math.max(0, this.show.completionCardRemaining - step);
+        this.updateAftermath(step);
         this.syncPresentation();
         return;
       }
@@ -13250,7 +13596,9 @@
       setText(dom.feastScore, `Score ${this.show.playerScore} · Misses ${this.show.strikes}`);
       let commandHint = "";
       if (dom.feastCrouch) {
-        const crouchRound = phase === FEAST_SAYS_PHASE.COMMAND && this.currentCommand()?.action === "crouch";
+        const crouchRound = phase === FEAST_SAYS_PHASE.COMMAND
+          && this.currentCommand()?.obey
+          && this.currentCommand()?.action === "crouch";
         dom.feastCrouch.hidden = !crouchRound;
         dom.feastCrouch.disabled = !crouchRound;
         dom.feastCrouch.setAttribute("aria-pressed", String(state.movement.crouched));
@@ -13271,7 +13619,7 @@
       } else if (phase === FEAST_SAYS_PHASE.BRIEFING) {
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Rules");
-        setText(dom.feastCommand, "Follow each instruction. Lowest score is eliminated.");
+        setText(dom.feastCommand, "Only obey commands that begin with ‘Feast says.’ Lowest score is eliminated.");
         setText(dom.feastTimer, String(Math.ceil(this.show.phaseRemaining)));
       } else if (phase === FEAST_SAYS_PHASE.COMMAND) {
         const command = FEAST_SAYS.commands[this.show.roundIndex];
@@ -13320,6 +13668,7 @@
         playerScore: transient ? 0 : this.show.playerScore,
         strikes: transient ? 0 : this.show.strikes,
         eliminatedContestantId: this.show.eliminatedContestantId,
+        postGameDialoguePendingIds: [...this.show.postGameDialoguePendingIds],
       };
     }
 
@@ -13390,6 +13739,13 @@
         ? (source.eliminatedContestantId || "kip-solano")
         : null;
       this.show.completionCardRemaining = 0;
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = restoredPhase === FEAST_SAYS_PHASE.COMPLETED ? "save-restored-offscreen" : null;
+      this.show.postGameDialoguePendingIds = Array.isArray(source.postGameDialoguePendingIds)
+        ? source.postGameDialoguePendingIds.filter((id) => FEAST_SAYS.aftermath.firstTalkLines[id])
+        : [];
       mansionContestants?.setEliminated("kip-solano", this.show.eliminatedContestantId === "kip-solano");
       this.syncPresentation();
       return this.getDiagnostics();
@@ -13444,7 +13800,7 @@
       return this.resolveCommand(submitted, targetId);
     }
 
-    completeForQA(playerScore = 6) {
+    completeForQA(playerScore = 6, resolveAftermath = true) {
       if (!state.qa) return null;
       if (this.show.phase === FEAST_SAYS_PHASE.DORMANT) this.call("qa");
       if (this.show.phase === FEAST_SAYS_PHASE.CALLED && this.castReady()) this.reportToBallroom();
@@ -13470,7 +13826,9 @@
       this.show.roundIndex = FEAST_SAYS.commands.length - 1;
       this.show.phase = FEAST_SAYS_PHASE.RESULT;
       this.show.phaseRemaining = 0;
-      return this.finishCompetition();
+      const result = this.finishCompetition();
+      if (result.survived && resolveAftermath) this.resolveAftermath("qa-completion");
+      return { ...result, aftermathActive: this.show.aftermathActive };
     }
 
     getDiagnostics() {
@@ -13555,6 +13913,17 @@
         responses: this.show.responses.map((response) => ({ ...response })),
         resultDialogue: this.show.resultDialogue ? { ...this.show.resultDialogue } : null,
         dialogueHistory: this.show.dialogueHistory.map((entry) => ({ ...entry })),
+        aftermath: {
+          active: this.show.aftermathActive,
+          stage: this.show.aftermathStage,
+          elapsed: Number(this.show.aftermathElapsed.toFixed(3)),
+          cleanupReason: this.show.aftermathCleanupReason,
+          kipLine: FEAST_SAYS.aftermath.kipLine,
+          hostLine: FEAST_SAYS.aftermath.hostLine,
+          farMainFloorDistance: FEAST_SAYS.aftermath.farMainFloorDistance,
+          playerHasLeft: this.show.aftermathActive ? this.playerHasLeftAftermath() : null,
+          postGameDialoguePendingIds: [...this.show.postGameDialoguePendingIds],
+        },
         invalidTransitions: this.show.invalidTransitions,
         lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
         ui: {
@@ -13608,7 +13977,8 @@
     }
 
     eligible() {
-      return feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED;
+      return feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED
+        && !feastSaysSystem.show.aftermathActive;
     }
 
     canCountIntermission() {
@@ -25407,6 +25777,12 @@
     );
     window.MrFeastFresh.completeFeastSaysForQA = (playerScore = 6) => (
       state.qa && feastSaysSystem ? feastSaysSystem.completeForQA(playerScore) : null
+    );
+    window.MrFeastFresh.completeFeastSaysWithAftermathForQA = (playerScore = 6) => (
+      state.qa && feastSaysSystem ? feastSaysSystem.completeForQA(playerScore, false) : null
+    );
+    window.MrFeastFresh.resolveFeastSaysAftermathForQA = (reason = "qa-player-left") => (
+      state.qa && feastSaysSystem ? feastSaysSystem.resolveAftermath(reason) : null
     );
     window.MrFeastFresh.triggerFeastSaysClueForQA = (kind = "book") => {
       if (!state.qa || !contestant13Quest) return null;

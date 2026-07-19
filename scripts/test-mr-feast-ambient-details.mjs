@@ -141,6 +141,20 @@ check("10 rear corridor pipes", /addRearCorridorServicePipes\(\);/.test(basement
 check("10 rear terrace urns", /rear-terrace-planter-urn/.test(plantingBuilder) && /portico-entry-mat/.test(plantingBuilder), "the rear terrace urns or portico entry mat are missing (names must keep culling-safe prefixes)");
 check("10 pool deck table", /pool-side-table-top/.test(section("function buildEstatePool()", "\n  function ")), "the pool deck lacks its lounger-side drinks table");
 
+// 11. Texture/detail pass. Procedural grocery labels replace flat-color food
+// primitives (bread and baskets keep the plain surface), the refrigerator
+// carries semantic cold-larder stock, the pool stair gains finished treads
+// and collider-free handrails, and the pool water shader rains.
+check("11 grocery textures", /function makeGroceryTexture\(kind\)/.test(mansion) && /makeGroceryTexture\("tin"\)/.test(mansion) && /makeGroceryTexture\("box"\)/.test(mansion) && /makeGroceryTexture\("produce"\)/.test(mansion), "procedural grocery label/skin textures are missing");
+check("11 labeled stock only", /M\.groceryBox, boxes/.test(mansion) && /M\.groceryTin, tins/.test(mansion) && /material: M\.foodBox/.test(section("function addKitchenCounterDressing()", "\n  function ")), "labeled cartons must apply to shelf stock while bread keeps the plain foodBox surface");
+const stockBuilder = section("function addStockedStorageContents", "class Refrigerator");
+check("11 semantic fridge", /kind === "refrigerator"/.test(stockBuilder) && ["fridge-milk-bottles", "fridge-roast", "fridge-cheese-wedges", "fridge-eggs", "fridge-butter"].every((batch) => stockBuilder.includes(batch)), "the refrigerator still stocks the generic dry-goods mix");
+const poolBuilder = section("function buildEstatePool()", "\n  function ");
+check("11 pool stair finish", /estate-pool-step-tread-/.test(poolBuilder) && /estate-pool-rail-/.test(poolBuilder) && /estate-pool-step-riser-reveal-/.test(poolBuilder), "the pool stair lacks its finished treads, riser reveals, or handrails");
+check("11 pool rails stay soft", !/estate-pool-rail[\s\S]{0,400}physics\.addFixedBox/.test(poolBuilder), "pool handrails must remain decor so the entry ramp and QA routes are unchanged");
+const waterBuilder = section("function makeEstatePoolWater", "function addPoolLounger");
+check("11 storm water", /rainRipples/.test(waterBuilder) && /valueNoise/.test(waterBuilder) && /uniform float uTime;[\s\S]*uDeep/.test(waterBuilder), "the pool water shader lacks the storm rain ripples and drifting grain");
+
 // 9. Cache-busting: the page key and the runtime version stay in sync and
 // moved past the pre-ambient-details value. The exact key is deliberately not
 // pinned so parallel milestones can bump it again without editing this suite.

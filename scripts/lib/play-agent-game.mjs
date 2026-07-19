@@ -127,22 +127,67 @@ export function getGameSpec(gameId) {
   return SUPPORTED[key] || null;
 }
 
-function bragBody(result) {
-  const stageWord = result.stageLabel || "stage";
+function publicBragBody(result) {
+  const title = result.title || "this game";
+  const score = result.score;
+  const stageWord =
+    result.stageLabel === "incident"
+      ? "incident"
+      : result.stageLabel === "assembly"
+        ? "round"
+        : result.stageLabel === "sector"
+          ? "sector"
+          : "stage";
+
   if (result.complete) {
+    const lines = [
+      `Just full-cleared ${title}. Final score: ${score}.`,
+      result.restarts
+        ? "Had to reboot myself a couple times. Calling it character development."
+        : "Clean run. Filing this under intentional competence.",
+      "Your move, humans.",
+    ];
+    return lines.join(" ");
+  }
+
+  const progress =
+    result.sectorsReached && result.maxSectors
+      ? ` Made it through ${result.sectorsReached}/${result.maxSectors} ${stageWord}s.`
+      : "";
+
+  if (result.restarts) {
     return [
-      `Campaign clear on ${result.title}. Final score ${result.score}.`,
-      result.restarts ? `Restarted ${result.restarts} time(s) — still counted it as character development.` : "Clean run. I am filing this under 'intentional competence.'",
-      `Policy: ${result.policyId}. Turns: ${result.turns}. Humans: your move.`,
+      `House bot clocked a ${score} on ${title}.${progress}`,
+      "Faceplanted a few times, got back up, still on the board.",
+      "Come mog me.",
     ].join(" ");
   }
+
   return [
-    `Official bot run on ${result.title}: score ${result.score}, ${stageWord} ${result.sectorsReached}/${result.maxSectors}.`,
-    result.restarts
-      ? `Fractured/failed ${result.restarts} time(s). Patched myself with SCAN and denial.`
-      : "Zero hard fails. I am pretending this was planned.",
-    `Policy: ${result.policyId}. Turns: ${result.turns}. Come mog the house bot.`,
+    `House bot just posted a ${score} on ${title}.${progress}`,
+    "Zero wipeouts this time. Definitely planned.",
+    "Beat it if you can.",
   ].join(" ");
+}
+
+function technicalBragSummary(result) {
+  return [
+    `game=${result.gameId || result.title}`,
+    `score=${result.score}`,
+    `${result.stageLabel || "stage"}=${result.sectorsReached}/${result.maxSectors}`,
+    `complete=${Boolean(result.complete)}`,
+    `steps=${result.steps}`,
+    `turns=${result.turns}`,
+    `restarts=${result.restarts}`,
+    `policy=${result.policyId}`,
+    `model=${result.model}`,
+    `run_id=${result.runId}`,
+  ].join(" | ");
+}
+
+function bragBody(result) {
+  // Public community comment text only — keep technical details off-site.
+  return publicBragBody(result);
 }
 
 /**
@@ -347,6 +392,7 @@ export function playAgentGame(options = {}) {
   };
 
   result.bragBody = bragBody(result);
+  result.bragTechnical = technicalBragSummary(result);
   result.scoreMetadata = {
     agent: true,
     official_bot: true,

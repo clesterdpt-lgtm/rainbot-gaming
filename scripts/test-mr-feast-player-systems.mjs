@@ -79,8 +79,8 @@ async function run() {
     let state = await diagnostics(page);
     assert(state.player.movement.energy === 100 && state.player.movement.mode === "idle", "fresh player should expose a full sprint reserve and idle mode");
     assert(state.player.movement.stealth.visibilityMultiplier === 1 && state.player.movement.stealth.noiseMultiplier === 1, "standing movement should expose neutral stealth multipliers");
-    assert(await page.locator("#mansion-casefile").isHidden(), "fresh play should withhold the left-side case file until the first clue is discovered");
-    assert(!/library|shelves|book that does not/i.test(await page.locator("#mansion-objective").textContent() || ""), "fresh HUD markup should not direct the player to the Library");
+    assert(await page.locator("#mansion-casefile").isHidden(), "fresh play must never show a left-side trail/objective case file");
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "fresh HUD markup should not direct the player with objective tip text");
     assert(await page.locator("#mansion-journal-button").isHidden(), "the Bag toolbar control should stay hidden on desktop where Tab remains available");
     assert(await page.locator("#touch-sprint").count() === 1 && await page.locator("#touch-sprint").isHidden(), "the sprint touch control should exist but stay hidden on desktop");
     assert(await page.locator("#touch-crouch").isHidden(), "the crouch touch control should stay hidden on desktop");
@@ -288,7 +288,7 @@ async function run() {
     assert(mobileControls.crouch.bottom <= mobileControls.interact.top, `mobile crouch should not overlap Interact; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.movement.width <= 148 && mobileControls.movement.height <= 100, `mobile movement controls should keep a compact footprint; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.energy.width <= 136 && mobileControls.energy.height <= 32, `mobile energy HUD should stay compact; controls=${JSON.stringify(mobileControls)}`);
-    assert(mobileControls.feastPhase === "dormant" && mobileControls.feast.width <= 242 && mobileControls.feast.height <= 44, `the idle Feast Says countdown should collapse into a compact phone strip; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.feastPhase === "dormant" && (mobileControls.feast.display === "none" || mobileControls.feast.height === 0 || mobileControls.feast.width === 0), `the idle Feast Says countdown must stay hidden on phone; controls=${JSON.stringify(mobileControls)}`);
     const bottomUiTop = Math.min(...[mobileControls.movement, mobileControls.sprint, mobileControls.crouch, mobileControls.interact, mobileControls.energy]
       .filter((control) => control.display !== "none" && control.height > 0)
       .map((control) => control.top));
@@ -331,9 +331,12 @@ async function run() {
     await mobilePage.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
     const competingTopHud = await mobilePage.evaluate(() => ({
       caseFileVisible: !document.getElementById("mansion-casefile")?.hidden,
+      objectiveText: document.getElementById("mansion-objective")?.textContent || "",
       idleFeastDisplay: getComputedStyle(document.getElementById("mansion-feast-says")).display,
+      idleFeastPhase: document.getElementById("mansion-feast-says")?.dataset.phase || "",
     }));
-    assert(competingTopHud.caseFileVisible && competingTopHud.idleFeastDisplay === "none", `the idle minigame countdown should yield when the investigation card is visible; got ${JSON.stringify(competingTopHud)}`);
+    assert(!competingTopHud.caseFileVisible && competingTopHud.objectiveText.trim() === "", `dev-unlocked clues must still never surface the trail/objective HUD; got ${JSON.stringify(competingTopHud)}`);
+    assert(competingTopHud.idleFeastPhase === "dormant" && competingTopHud.idleFeastDisplay === "none", `the idle next-game countdown must stay hidden while dormant; got ${JSON.stringify(competingTopHud)}`);
 
     await mobilePage.locator("#mansion-journal-button").click();
     await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.inventoryOpen);

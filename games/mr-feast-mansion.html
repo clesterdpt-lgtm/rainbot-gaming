@@ -216,26 +216,18 @@
 
     #mansion-hidden[hidden] { display: none; }
 
+    /* Trail/objective card permanently retired — clues live only in Bag. */
     #mansion-casefile {
-      position: absolute;
-      top: max(86px, calc(env(safe-area-inset-top) + 76px));
-      left: max(18px, env(safe-area-inset-left));
-      z-index: 7;
-      display: grid;
-      width: min(330px, calc(100% - 36px));
-      gap: 6px;
-      padding: 11px 13px 12px;
-      border: 1px solid rgba(224, 194, 139, 0.25);
-      border-left: 2px solid var(--mansion-brass);
-      border-radius: 3px;
-      color: #ded4c3;
-      background: linear-gradient(135deg, rgba(15, 14, 13, 0.9), rgba(7, 8, 10, 0.76));
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(9px);
-      pointer-events: none;
+      display: none !important;
     }
 
-    #mansion-casefile[hidden] { display: none; }
+    #mansion-casefile[hidden] { display: none !important; }
+
+    /* Idle next-game countdown strips stay off-screen; only live calls/races show. */
+    #mansion-feast-says[data-phase="dormant"],
+    #mansion-storm-run[data-phase="dormant"] {
+      display: none !important;
+    }
 
     .mansion-casefile__head {
       display: flex;
@@ -427,7 +419,7 @@
     #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-energy,
     #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-stealth,
     #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-security,
-    #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-speech {
+    #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"]):not([data-phase="result"])) #mansion-speech {
       display: none;
     }
 
@@ -582,6 +574,8 @@
       pointer-events: auto;
       touch-action: manipulation;
     }
+
+    #mansion-feast-crouch[hidden] { display: none; }
 
     #mansion-feast-crouch:focus-visible {
       outline: 2px solid #fff0c4;
@@ -3015,6 +3009,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260719-storm-run-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260719-hide-trail-countdown-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

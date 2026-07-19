@@ -204,8 +204,7 @@ async function run() {
         overlaps,
       };
     });
-    assert(dormantLayout.caseVisible && dormantLayout.stormVisible && dormantLayout.stormPhase === "dormant", `free investigation should retain both clue and Game 2 timer HUDs: ${JSON.stringify(dormantLayout)}`);
-    assert(!dormantLayout.overlaps && dormantLayout.stormHeight <= 52, `the dormant Game 2 strip must not cover the case file: ${JSON.stringify(dormantLayout)}`);
+    assert(!dormantLayout.caseVisible && !dormantLayout.stormVisible && dormantLayout.stormPhase === "dormant", `free investigation must hide trail and next-game countdown HUDs: ${JSON.stringify(dormantLayout)}`);
     await timerPage.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 10.6, y: 0, z: 7.8, yaw: Math.PI / 2 });
@@ -300,7 +299,7 @@ async function run() {
       stormHidden: document.getElementById("mansion-storm-run").hidden,
       stormPhase: document.getElementById("mansion-storm-run").dataset.phase,
     }));
-    assert(resultLayout.caseHidden && !resultLayout.stormHidden && resultLayout.stormPhase === "completed", `the result card must temporarily own the case-file space: ${JSON.stringify(resultLayout)}`);
+    assert(resultLayout.caseHidden && !resultLayout.stormHidden && resultLayout.stormPhase === "completed", `the result card must show without a trail/objective card: ${JSON.stringify(resultLayout)}`);
     assert(timerErrors.length === 0, `timer/clue/race page produced console errors: ${JSON.stringify(timerErrors)}`);
     await timerContext.close();
 
@@ -355,7 +354,7 @@ async function run() {
           && caseRect.top < stormRect.bottom && caseRect.bottom > stormRect.top,
       };
     });
-    assert(phoneDormantLayout.caseVisible && phoneDormantLayout.stormVisible && !phoneDormantLayout.overlaps && phoneDormantLayout.stormHeight <= 52, `the phone Game 2 strip must remain compact beneath the clue panel: ${JSON.stringify(phoneDormantLayout)}`);
+    assert(!phoneDormantLayout.caseVisible && !phoneDormantLayout.stormVisible, `phone free investigation must hide trail and next-game countdown HUDs: ${JSON.stringify(phoneDormantLayout)}`);
     const phoneCalled = await phonePage.evaluate(() => window.MrFeastFresh.callStormRunForQA("qa"));
     assert(phoneCalled?.started === true, `the phone Storm Run call should start: ${JSON.stringify(phoneCalled)}`);
     const phoneStarted = await phonePage.evaluate(() => window.MrFeastFresh.startStormRunForQA());

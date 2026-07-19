@@ -54,6 +54,9 @@ async function completeFirstClueCompetition(page, expectedClueId) {
     state.feastSays.clueProgressLocked === false && state.feastSays.eliminatedContestantId === "kip-solano",
     `completing Feast Says should reopen investigation and eliminate Kip; got ${JSON.stringify(state.feastSays)}`,
   );
+  await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-feast-says")?.hidden);
+  state = await diagnostics(page);
   return state;
 }
 
@@ -76,6 +79,9 @@ async function completeStormRunCompetition(page, expectedClueId) {
     state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
     `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
   );
+  await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7));
+  await page.waitForFunction(() => document.getElementById("mansion-storm-run")?.hidden);
+  state = await diagnostics(page);
   return state;
 }
 
@@ -385,8 +391,9 @@ async function run() {
     assert(state.journal.entries.filter((id) => id === "contestant-13-book").length === 1, "book clue should enter the journal exactly once");
     assert(/garden.*shovel|shovel.*garden/i.test(state.journal.currentObjective), "reading the book should direct the player to the garden shovel");
     assert(state.feastSays?.phase === "called" && state.feastSays.triggerClueId === "contestant-13-book" && state.feastSays.clueProgressLocked, `the first story clue should call Feast Says and pause the trail; got ${JSON.stringify(state.feastSays)}`);
-    assert(await page.locator("#mansion-casefile").isHidden(), "the investigation HUD should yield to the Feast Says call while clues are paused");
-    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step");
+    assert(await page.locator("#mansion-casefile").isHidden(), "clue discoveries must not open an on-screen trail/objective HUD");
+    assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step for diagnostics");
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "objective tip text must stay blank; clues live in Bag only");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
 
     state = await completeFirstClueCompetition(page, "contestant-13-book");
@@ -394,7 +401,7 @@ async function run() {
       await page.keyboard.press("Escape");
       await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
     }
-    assert(await page.locator("#mansion-casefile").isVisible(), "the investigation HUD should return after Feast Says reopens the mansion");
+    assert(await page.locator("#mansion-casefile").isHidden(), "after Feast Says, investigation guidance must remain inventory-only with no trail HUD");
     await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
     await pressInteract(page);
     await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
@@ -472,8 +479,8 @@ async function run() {
     assert(threatenedFace.automaticExpression === "threatened" && threatenedFace.expression === "threatened", "relay sabotage should autonomously escalate Mr. Feast's expression");
     assert(threatenedFace.weights.smile_wide >= 0.5, "autonomous threat escalation should visibly widen Mr. Feast's smile");
 
-    const objectiveText = await page.locator("#mansion-objective").textContent();
-    assert(/blind|signal|feed/i.test(objectiveText || ""), "HUD should show the completed sabotage state");
+    assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "completed sabotage must not re-open objective tip text on the HUD");
+    assert(/blind|signal|feed/i.test(state.journal.currentObjective || ""), "internal completion state should still acknowledge the severed feed for diagnostics/saves");
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "relay-sabotaged-desktop.png") });
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13GardenShovel"));
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13WorkshopRelay"));
@@ -498,17 +505,18 @@ async function run() {
     await teleportForInteraction(mobilePage, "contestant13GardenShovel", /shovel/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "shovelTaken");
-    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book should not reveal the Library objective HUD");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "finding the shovel before the book must not open any trail/objective HUD");
     let earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.feastSays?.phase === "called" && earlyShovelState.feastSays.triggerClueId === "faceless-fountain-shovel" && earlyShovelState.feastSays.clueProgressLocked, `finding the first clue out of order should still call Feast Says and pause later clues; got ${JSON.stringify(earlyShovelState.feastSays)}`);
     await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*xiii|disturbed earth/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     earlyShovelState = await diagnostics(mobilePage);
     assert(earlyShovelState.contestant13.digSiteExcavated === false, "finding the shovel first must not bypass the Library story clue");
-    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library clue without exposing it on the HUD");
+    assert(/library|book|shel/i.test(earlyShovelState.journal.currentObjective), "early shovel discovery should preserve the internal Library progression without exposing tips on the HUD");
+    assert((await mobilePage.locator("#mansion-objective").textContent() || "").trim() === "", "out-of-order dig must not surface Library tip text on screen");
     assert(earlyShovelState.feastSays.clueProgressLocked, "the out-of-order dig attempt should remain blocked during the live-event call");
     await completeFirstClueCompetition(mobilePage, "faceless-fountain-shovel");
-    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "completing Feast Says should not reveal the Library HUD before the book is read");
+    assert(await mobilePage.locator("#mansion-casefile").isHidden(), "completing Feast Says must still keep the trail HUD suppressed");
     await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "bookRead");
@@ -521,16 +529,17 @@ async function run() {
     await mobilePage.locator("#touch-interact").click({ force: true });
     await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     const mobileUi = await mobilePage.evaluate(() => {
-      const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();
+      const caseFile = document.getElementById("mansion-casefile");
       const touch = document.getElementById("touch-interact")?.getBoundingClientRect();
       return {
-        caseFile: caseFile && { left: caseFile.left, right: caseFile.right, width: caseFile.width, height: caseFile.height },
+        caseHidden: Boolean(caseFile?.hidden),
+        objectiveText: document.getElementById("mansion-objective")?.textContent || "",
         touch: touch && { width: touch.width, height: touch.height },
         viewport: { width: innerWidth, height: innerHeight },
       };
     });
-    assert(mobileUi.caseFile && mobileUi.caseFile.left >= 0 && mobileUi.caseFile.right <= mobileUi.viewport.width, "mobile case file must fit the viewport");
-    assert(mobileUi.caseFile.height >= 44, "mobile objective HUD should remain readable");
+    assert(mobileUi.caseHidden, "mobile trail/objective HUD must stay hidden after clues are found");
+    assert(mobileUi.objectiveText.trim() === "", "mobile objective tip text must stay blank after clues are found");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "touch interact target should remain at least 44px");
     await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

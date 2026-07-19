@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260719-storm-run-1";
+  const MANSION_RUNTIME_VERSION = "20260719-hide-trail-countdown-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1605,17 +1605,23 @@
   const FEAST_SAYS = Object.freeze({
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
-    briefingSeconds: 6.5,
-    responseSeconds: 5.25,
-    resultSeconds: 1.65,
+    briefingSeconds: 8,
+    responseSeconds: 7.5,
+    resultSeconds: 6,
     completionCardSeconds: 5.5,
     movementThreshold: 0.48,
+    approachTargetMinimumDot: 0.82,
+    pointTargetRange: 4.25,
+    pointTargetMinimumDot: 0.94,
     stationRadius: 1.05,
-    briefingSpeechSeconds: 5.8,
-    commandSpeechSeconds: 3.25,
+    briefingSpeechSeconds: 7.2,
+    commandSpeechSeconds: 4.25,
+    contestantLineSeconds: 2.5,
+    hostWarningAtRemainingSeconds: 3,
+    hostWarningSeconds: 2.55,
     npcResponseDistance: 0.52,
-    npcCrouchDepth: 0.12,
-    npcResponseSeconds: 0.42,
+    npcCrouchDepth: 0.085,
+    npcResponseSeconds: 0.62,
     npcResponseDelays: Object.freeze({
       "mara-voss": 0.12,
       "kip-solano": 0.24,
@@ -1631,50 +1637,101 @@
     }),
     commands: Object.freeze([
       Object.freeze({
-        text: "Feast says point to the person you trust the least.",
+        id: "step-left",
+        text: "Feast says step left.",
+        obey: true,
+        action: "left",
+        hint: "Use your movement controls.",
+        contestantId: "kip-solano",
+        contestantLine: "Great. My other left was union.",
+        hostWarning: "Quiet. Contestants do not add dialogue.",
+      }),
+      Object.freeze({
+        id: "step-right",
+        text: "Feast says step right.",
+        obey: true,
+        action: "right",
+        hint: "Use your movement controls.",
+        contestantId: "juniper-cross",
+        contestantLine: "So we are all pretending that felt natural?",
+        hostWarning: "No talking, Juniper. It is not part of the score.",
+      }),
+      Object.freeze({
+        id: "step-back",
+        text: "Feast says step back.",
+        obey: true,
+        action: "back",
+        hint: "Use your movement controls.",
+        contestantId: "mara-voss",
+        contestantLine: "Backing away is usually my best interview skill.",
+        hostWarning: "No talking on my mark.",
+      }),
+      Object.freeze({
+        id: "crouch",
+        text: "Feast says crouch.",
+        obey: true,
+        action: "crouch",
+        hint: "Press C or use Crouch.",
+        contestantId: "kip-solano",
+        contestantLine: "My knees just unsubscribed.",
+        hostWarning: "Save it, Kip. One more joke and they leave before you do.",
+      }),
+      Object.freeze({
+        id: "distrust",
+        text: "Feast says point to the contestant you distrust most.",
         obey: true,
         action: "point",
-        acceptedActions: Object.freeze(["left", "forward", "right"]),
-        targetByAction: Object.freeze({
-          left: "mara-voss",
-          forward: "kip-solano",
-          right: "juniper-cross",
-        }),
+        choiceMode: "look-interact",
         npcTargets: Object.freeze({
           "mara-voss": "kip-solano",
           "kip-solano": "mara-voss",
-          "juniper-cross": "kip-solano",
+          "juniper-cross": "player",
         }),
-        hint: "A / ◀ Mara · W / ▲ Kip · D / ▶ Juniper",
+        hint: "Look at any contestant and press E.",
+        contestantId: "juniper-cross",
+        contestantLine: "Does choosing slowly count as distrust?",
+        hostWarning: "Quiet. Point. Do not explain.",
       }),
-      Object.freeze({ text: "Crouch if you think Kip would save you.", obey: false, action: "crouch" }),
-      Object.freeze({ text: "Feast says step left—toward whoever you would betray first.", obey: true, action: "left" }),
-      Object.freeze({ text: "Step right if you would leave the others here for the prize.", obey: false, action: "right" }),
-      Object.freeze({ text: "Feast says crouch like you are hiding what you know.", obey: true, action: "crouch" }),
-      Object.freeze({ text: "Feast says step back from the person you would sacrifice first.", obey: true, action: "back" }),
+      Object.freeze({
+        id: "eliminate",
+        text: "Feast says step toward the contestant you would eliminate.",
+        obey: true,
+        action: "approach",
+        choiceMode: "world-displacement",
+        npcTargets: Object.freeze({
+          "mara-voss": "kip-solano",
+          "kip-solano": "player",
+          "juniper-cross": "mara-voss",
+        }),
+        hint: "Move toward any contestant.",
+        contestantId: "mara-voss",
+        contestantLine: "At least now the vote is honest.",
+        hostWarning: "Silence. The audience prefers the reveal.",
+      }),
     ]),
     npcCorrect: Object.freeze({
       "mara-voss": Object.freeze([true, true, true, true, true, true]),
-      "kip-solano": Object.freeze([true, false, true, false, false, true]),
+      "kip-solano": Object.freeze([true, false, false, true, true, true]),
       "juniper-cross": Object.freeze([true, true, true, false, true, true]),
     }),
   });
   const CONTESTANT_FEAST_SAYS_MOTION = Object.freeze({
     returnSeconds: 0.7,
-    crouchPoseBlend: 0.42,
-    sidestepPlaybackRate: 0.92,
     backpedalPlaybackRate: -0.78,
-    sidestepSpineLeanRadians: 0.095,
-    sidestepHipLeanRadians: 0.075,
-    sidestepLeadingLegRadians: 0.12,
+    crouchHipRadians: 0.1,
+    crouchSpineRadians: -0.06,
+    crouchThighRadians: -0.28,
+    crouchKneeRadians: 0.52,
+    crouchAnkleRadians: -0.22,
+    sidestepSpineLeanRadians: 0.035,
+    sidestepHipLeanRadians: 0.025,
+    sidestepLeadingThighRadians: 0.12,
+    sidestepTrailingThighRadians: 0.07,
+    sidestepKneeRadians: 0.16,
+    sidestepAnkleRadians: 0.08,
     backpedalSpineLeanRadians: 0.09,
     backpedalHipLeanRadians: 0.06,
     pointPoseBlend: 0.9,
-    lowerBodyBones: Object.freeze([
-      "Spine", "Spine01", "Spine02",
-      "LeftUpLeg", "LeftLeg", "LeftFoot",
-      "RightUpLeg", "RightLeg", "RightFoot",
-    ]),
   });
 
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
@@ -2221,6 +2278,9 @@
       strikes: 0,
       responses: [],
       commandResult: null,
+      selectedTargetId: null,
+      resultDialogue: null,
+      dialogueHistory: [],
       eliminatedContestantId: null,
       staged: false,
       completionCardRemaining: 0,
@@ -2521,14 +2581,10 @@
     return Boolean(activeCompetitionSystem());
   }
 
+  // Investigation guidance stays off-screen: clues live only in Bag/inventory.
+  // Live events no longer share layout with a case-file objective card.
   function competitionOwnsCaseFile() {
-    if (competitionBlocksInvestigation() || state.gameOver) return true;
-    return Boolean(
-      feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED
-        && feastSaysSystem.show.completionCardRemaining > 0
-      || stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED
-        && stormRunSystem.show.completionCardRemaining > 0
-    );
+    return true;
   }
 
   function notifyCompetitionHold() {
@@ -2742,6 +2798,101 @@
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearMipMapLinearFilter;
     texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeGroceryTexture(kind) {
+    // Milestone 53 detail pass: printed labels and mottled skins lift the
+    // stocked-food primitives out of flat-color placeholder territory. All
+    // procedural (repo convention) — no downloaded assets to license or lazily
+    // fetch. Cylinder UVs wrap the label; the top/bottom rows read as metal.
+    const size = 128;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (kind === "tin") {
+      ctx.fillStyle = "#8f8168";
+      ctx.fillRect(0, 0, size, size);
+      for (let y = 3; y < 20; y += 5) {
+        ctx.fillStyle = y % 2 ? "#7a6e57" : "#a1937a";
+        ctx.fillRect(0, y, size, 2);
+        ctx.fillRect(0, size - y - 2, size, 2);
+      }
+      ctx.fillStyle = "#d9c9a2";
+      ctx.fillRect(0, 24, size, size - 48);
+      ctx.fillStyle = "#7e2f26";
+      ctx.fillRect(0, 30, size, 7);
+      ctx.fillRect(0, size - 37, size, 7);
+      ctx.fillStyle = "#33261a";
+      for (let x = 10; x < size; x += 32) {
+        ctx.fillRect(x, 52, 20, 3);
+        ctx.fillRect(x + 3, 60, 14, 2);
+        ctx.fillRect(x + 1, 66, 18, 2);
+      }
+      ctx.strokeStyle = "#7e2f26";
+      ctx.lineWidth = 2;
+      for (let x = 16; x < size; x += 32) {
+        ctx.beginPath();
+        ctx.ellipse(x + 4, 84, 9, 6, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else if (kind === "box") {
+      ctx.fillStyle = "#8a5a33";
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 260; i += 1) {
+        ctx.fillStyle = i % 2 ? "rgba(58,36,20,0.16)" : "rgba(178,127,80,0.14)";
+        ctx.fillRect((i * 53) % size, (i * 89) % size, 3, 2);
+      }
+      ctx.fillStyle = "#432a18";
+      ctx.fillRect(16, 22, size - 32, size - 52);
+      ctx.strokeStyle = "#c9a06a";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(21, 27, size - 42, size - 62);
+      ctx.fillStyle = "#c9a06a";
+      ctx.fillRect(30, 42, size - 60, 8);
+      ctx.fillRect(38, 58, size - 76, 4);
+      ctx.fillRect(34, 68, size - 68, 4);
+      ctx.fillStyle = "#7e2f26";
+      ctx.fillRect(30, 82, size - 60, 10);
+      ctx.fillStyle = "#8a5a33";
+      ctx.fillRect(0, size - 18, size, 18);
+      ctx.strokeStyle = "rgba(58,36,20,0.5)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, size - 18);
+      ctx.lineTo(size, size - 18);
+      ctx.stroke();
+    } else {
+      // Mottled orchard skin shared by every produce sphere: an olive base
+      // with warm blush patches and pale speckle.
+      ctx.fillStyle = "#6f7b3c";
+      ctx.fillRect(0, 0, size, size);
+      let seed = 97;
+      const random = () => {
+        seed = (seed * 1664525 + 1013904223) >>> 0;
+        return seed / 4294967296;
+      };
+      for (let i = 0; i < 26; i += 1) {
+        const gradient = ctx.createRadialGradient(
+          random() * size, random() * size, 2,
+          random() * size, random() * size, 14 + random() * 22,
+        );
+        const warm = random() > 0.45;
+        gradient.addColorStop(0, warm ? "rgba(164,94,54,0.5)" : "rgba(196,168,84,0.4)");
+        gradient.addColorStop(1, "rgba(111,123,60,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+      }
+      for (let i = 0; i < 240; i += 1) {
+        ctx.fillStyle = random() > 0.5 ? "rgba(222,206,150,0.28)" : "rgba(70,64,30,0.25)";
+        const x = random() * size;
+        const y = random() * size;
+        ctx.fillRect(x, y, 1.6, 1.2);
+      }
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
     return texture;
   }
 
@@ -3329,8 +3480,16 @@
       enamel: new THREE.MeshPhysicalMaterial({ color: 0xc8c5bc, roughness: 0.28, metalness: 0.14, clearcoat: 0.32 }),
       foodBox: new THREE.MeshStandardMaterial({ color: 0x8e5e35, roughness: 0.76 }),
       foodTin: new THREE.MeshStandardMaterial({ color: 0x9d8b6b, metalness: 0.42, roughness: 0.38 }),
+      // Labeled variants for shelf stock only — bread loaves and wicker
+      // baskets keep the plain foodBox surface.
+      groceryBox: new THREE.MeshStandardMaterial({ map: makeGroceryTexture("box"), color: 0xd8c2a6, roughness: 0.78 }),
+      groceryTin: new THREE.MeshStandardMaterial({ map: makeGroceryTexture("tin"), color: 0xe8ddc4, metalness: 0.34, roughness: 0.4 }),
+      milk: new THREE.MeshPhysicalMaterial({ color: 0xe9e4d6, roughness: 0.32, clearcoat: 0.4 }),
+      cheese: new THREE.MeshStandardMaterial({ color: 0xd9a441, roughness: 0.62 }),
+      ham: new THREE.MeshStandardMaterial({ color: 0xa85a60, roughness: 0.52 }),
+      eggshell: new THREE.MeshStandardMaterial({ color: 0xe0d7bf, roughness: 0.55 }),
       foodBottle: new THREE.MeshPhysicalMaterial({ color: 0x315b46, roughness: 0.28, metalness: 0.05, transparent: true, opacity: 0.84 }),
-      produce: new THREE.MeshStandardMaterial({ color: 0x6d793b, roughness: 0.86 }),
+      produce: new THREE.MeshStandardMaterial({ map: makeGroceryTexture("produce"), color: 0xcfd3ad, roughness: 0.82 }),
       fireOuter: new THREE.SpriteMaterial({ map: fireFlameMap, color: 0xff6a18, transparent: true, opacity: 0.86, depthWrite: false, blending: THREE.AdditiveBlending }),
       fireInner: new THREE.SpriteMaterial({ map: fireFlameMap, color: 0xffe08a, transparent: true, opacity: 0.92, depthWrite: false, blending: THREE.AdditiveBlending }),
       fireGlow: new THREE.MeshBasicMaterial({ map: makeRadialGlowTexture(128), color: 0xff5a12, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
@@ -7168,6 +7327,8 @@
           challengeUpperBodyMaximumAngle: 0,
           challengePointArm: null,
           challengePlaybackRate: 0,
+          challengePoseBaseQuaternions: new Map(),
+          challengePoseLayerCaptured: false,
           race: null,
           raceDistanceTravelled: 0,
           raceMaximumObservedSpeed: 0,
@@ -9116,6 +9277,7 @@
 
     stepAnimation(entry, dt) {
       this.clearHeadAttentionPose(entry);
+      this.clearChallengePoseLayer(entry);
       const raceRunning = this.challengeMode === "storm-run" && entry.activity === CONTESTANT_ACTIVITY.RUNNING;
       if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
         entry.seatedMotionElapsed += Math.max(0, dt);
@@ -9416,6 +9578,7 @@
     }
 
     resetChallengeMotion(entry) {
+      this.clearChallengePoseLayer(entry);
       entry.challengeMotionKind = "still";
       entry.challengePoseWeight = 0;
       entry.challengeLowerBodyMaximumAngle = 0;
@@ -9423,6 +9586,28 @@
       entry.challengePointArm = null;
       entry.challengePlaybackRate = 0;
       if (entry.model) entry.model.position.y = entry.modelBaseY;
+    }
+
+    clearChallengePoseLayer(entry) {
+      if (!entry.challengePoseLayerCaptured || !entry.challengePoseBaseQuaternions?.size) return;
+      for (const [bone, quaternion] of entry.challengePoseBaseQuaternions) {
+        bone.quaternion.copy(quaternion);
+      }
+      entry.challengePoseLayerCaptured = false;
+    }
+
+    captureChallengePoseLayer(entry) {
+      const snapshots = entry.challengePoseBaseQuaternions;
+      if (!snapshots || entry.challengePoseLayerCaptured) return;
+      for (const rest of entry.restPoseBones) {
+        let snapshot = snapshots.get(rest.bone);
+        if (!snapshot) {
+          snapshot = new THREE.Quaternion();
+          snapshots.set(rest.bone, snapshot);
+        }
+        snapshot.copy(rest.bone.quaternion);
+      }
+      entry.challengePoseLayerCaptured = true;
     }
 
     setChallengeResponse(id, action = "still", { targetId = null } = {}) {
@@ -9448,6 +9633,7 @@
     applyChallengeResponse(entry, action, progress) {
       const mark = entry.challengeMark;
       entry.root.position.set(mark.x, mark.y, mark.z);
+      entry.root.rotation.y = mark.yaw;
       if (entry.model) entry.model.position.y = entry.modelBaseY;
       const eased = progress * progress * (3 - 2 * progress);
       const distance = FEAST_SAYS.npcResponseDistance * eased;
@@ -9455,6 +9641,22 @@
       if (action === "back") entry.root.position.z += distance;
       if (action === "left") entry.root.position.x -= distance;
       if (action === "right") entry.root.position.x += distance;
+      if (action === "approach" && entry.challengeResponse?.targetId) {
+        const targetId = entry.challengeResponse.targetId;
+        const targetMark = targetId === "player"
+          ? FEAST_SAYS.playerMark
+          : (this.entryById(targetId)?.challengeMark || FEAST_SAYS.contestantMarks[targetId]);
+        if (targetMark && targetId !== entry.id) {
+          const dx = targetMark.x - mark.x;
+          const dz = targetMark.z - mark.z;
+          const targetDistance = Math.max(0.001, Math.hypot(dx, dz));
+          entry.root.position.x += dx / targetDistance * distance;
+          entry.root.position.z += dz / targetDistance * distance;
+          const targetYaw = Math.atan2(dx, dz);
+          const yawDelta = Math.atan2(Math.sin(targetYaw - mark.yaw), Math.cos(targetYaw - mark.yaw));
+          entry.root.rotation.y = mark.yaw + yawDelta * eased;
+        }
+      }
       if (action === "crouch" && entry.model) entry.model.position.y = entry.modelBaseY - FEAST_SAYS.npcCrouchDepth * eased;
       this.syncCollider(entry, false);
       entry.root.updateMatrixWorld(true);
@@ -9518,30 +9720,23 @@
     }
 
     applyChallengeCrouchPose(entry, weight) {
-      const pose = CONTESTANT_SEATED_POSES[entry.id];
-      if (!pose) return;
-      const blend = CONTESTANT_FEAST_SAYS_MOTION.crouchPoseBlend * weight;
-      for (const name of CONTESTANT_FEAST_SAYS_MOTION.lowerBodyBones) {
-        const values = pose.bones[name];
-        const bone = entry.restPoseByName[name]?.bone;
-        if (!values || !bone) continue;
-        this.challengePoseQuaternion.set(...values).normalize();
-        this.challengePoseScaledQuaternion
-          .copy(this.challengePoseIdentityQuaternion)
-          .slerp(this.challengePoseQuaternion, blend)
-          .normalize();
-        bone.quaternion.multiply(this.challengePoseScaledQuaternion).normalize();
-        const angle = 2 * Math.acos(clamp(Math.abs(this.challengePoseScaledQuaternion.w), 0, 1));
-        entry.challengeLowerBodyMaximumAngle = Math.max(entry.challengeLowerBodyMaximumAngle, angle);
+      this.applyChallengeBoneEuler(entry, "Hips", CONTESTANT_FEAST_SAYS_MOTION.crouchHipRadians, 0, 0, weight);
+      this.applyChallengeBoneEuler(entry, "Spine", CONTESTANT_FEAST_SAYS_MOTION.crouchSpineRadians, 0, 0, weight);
+      for (const side of ["Left", "Right"]) {
+        this.applyChallengeBoneEuler(entry, `${side}UpLeg`, CONTESTANT_FEAST_SAYS_MOTION.crouchThighRadians, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, `${side}Leg`, CONTESTANT_FEAST_SAYS_MOTION.crouchKneeRadians, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, `${side}Foot`, CONTESTANT_FEAST_SAYS_MOTION.crouchAnkleRadians, 0, 0, weight);
       }
     }
 
     applyChallengePointPose(entry, targetId, weight) {
       const target = this.entryById(targetId);
-      const targetMark = FEAST_SAYS.contestantMarks[targetId];
+      const targetMark = targetId === "player" ? FEAST_SAYS.playerMark : FEAST_SAYS.contestantMarks[targetId];
       if ((!target || target.status !== "ready") && !targetMark) return;
       const pointWeight = CONTESTANT_FEAST_SAYS_MOTION.pointPoseBlend * weight;
-      const targetHeight = Math.max(1.1, ((target?.status === "ready" ? target.size?.y : null) || 1.7) * 0.72);
+      const targetHeight = targetId === "player"
+        ? PLAYER.eye * 0.78
+        : Math.max(1.1, ((target?.status === "ready" ? target.size?.y : null) || 1.7) * 0.72);
       if (target?.status === "ready") this.challengePointTarget.copy(target.root.position);
       else this.challengePointTarget.set(targetMark.x, targetMark.y, targetMark.z);
       this.challengePointTarget.y += targetHeight;
@@ -9599,15 +9794,23 @@
         entry.challengeMotionKind = "still";
         return;
       }
+      this.captureChallengePoseLayer(entry);
       if (response.action === "crouch") {
         entry.challengeMotionKind = "crouch";
         this.applyChallengeCrouchPose(entry, weight);
       } else if (response.action === "left" || response.action === "right") {
         const direction = response.action === "left" ? -1 : 1;
+        const leadingSide = direction < 0 ? "Left" : "Right";
+        const trailingSide = direction < 0 ? "Right" : "Left";
         entry.challengeMotionKind = `sidestep-${response.action}`;
         this.applyChallengeBoneEuler(entry, "Hips", 0, 0, -direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepHipLeanRadians, weight);
         this.applyChallengeBoneEuler(entry, "Spine", 0, 0, -direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepSpineLeanRadians, weight);
-        this.applyChallengeBoneEuler(entry, direction < 0 ? "LeftUpLeg" : "RightUpLeg", 0, 0, direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepLeadingLegRadians, weight);
+        this.applyChallengeBoneEuler(entry, `${leadingSide}UpLeg`, 0, 0, direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepLeadingThighRadians, weight);
+        this.applyChallengeBoneEuler(entry, `${trailingSide}UpLeg`, 0, 0, -direction * CONTESTANT_FEAST_SAYS_MOTION.sidestepTrailingThighRadians, weight);
+        this.applyChallengeBoneEuler(entry, `${leadingSide}Leg`, CONTESTANT_FEAST_SAYS_MOTION.sidestepKneeRadians, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, `${trailingSide}Leg`, CONTESTANT_FEAST_SAYS_MOTION.sidestepKneeRadians * 0.55, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, `${leadingSide}Foot`, -CONTESTANT_FEAST_SAYS_MOTION.sidestepAnkleRadians, 0, 0, weight);
+        this.applyChallengeBoneEuler(entry, `${trailingSide}Foot`, CONTESTANT_FEAST_SAYS_MOTION.sidestepAnkleRadians * 0.45, 0, 0, weight);
       } else if (response.action === "back") {
         entry.challengeMotionKind = "backpedal";
         this.stabilizeChallengeBackpedalTorso(entry);
@@ -9615,6 +9818,8 @@
         this.applyChallengeBoneEuler(entry, "Spine", -CONTESTANT_FEAST_SAYS_MOTION.backpedalSpineLeanRadians, 0, 0, weight);
       } else if (response.action === "forward") {
         entry.challengeMotionKind = "forward-step";
+      } else if (response.action === "approach") {
+        entry.challengeMotionKind = "approach";
       } else if (response.action === "point") {
         entry.challengeMotionKind = "point";
         this.applyChallengePointPose(entry, response.targetId, weight);
@@ -9628,7 +9833,7 @@
       const progress = entry.challengeResponseProgress;
       const translating = Boolean(
         response
-        && ["forward", "back", "left", "right"].includes(response.action)
+        && ["forward", "back", "approach"].includes(response.action)
         && progress > 0
         && (response.returning || progress < 1),
       );
@@ -9636,13 +9841,13 @@
       entry.activity = locomotion ? CONTESTANT_ACTIVITY.WALKING : CONTESTANT_ACTIVITY.IDLE;
       const action = this.fadeToAction(entry, locomotion ? "walk" : "idle");
       let playbackRate = entry.currentAnimation === "idle" ? entry.placement.idleRate : 1;
-      if (entry.currentAnimation === "walk" && (response.action === "left" || response.action === "right")) {
-        playbackRate = CONTESTANT_FEAST_SAYS_MOTION.sidestepPlaybackRate;
-      } else if (entry.currentAnimation === "walk" && response.action === "back") {
+      if (entry.currentAnimation === "walk" && response.action === "back") {
         playbackRate = response.returning
           ? Math.abs(CONTESTANT_FEAST_SAYS_MOTION.backpedalPlaybackRate)
           : CONTESTANT_FEAST_SAYS_MOTION.backpedalPlaybackRate;
       } else if (entry.currentAnimation === "walk" && response.action === "forward" && response.returning) {
+        playbackRate = -1;
+      } else if (entry.currentAnimation === "walk" && response.action === "approach" && response.returning) {
         playbackRate = -1;
       }
       const playbackSign = Math.sign(playbackRate);
@@ -11049,12 +11254,9 @@
     }
 
     updateUI() {
-      if (dom.caseFile) {
-        dom.caseFile.hidden = !state.started
-          || !this.story.bookRead
-          || competitionOwnsCaseFile();
-      }
-      if (dom.objective) dom.objective.textContent = this.story.bookRead ? this.getObjective() : "";
+      // Never surface step-by-step trail tips. Players read found clues in Bag.
+      if (dom.caseFile) dom.caseFile.hidden = true;
+      if (dom.objective) dom.objective.textContent = "";
       if (dom.storyProgress) {
         const completed = [
           this.story.bookRead,
@@ -11065,6 +11267,7 @@
           this.story.recordingPlayed,
           this.story.relaySabotaged,
         ].filter(Boolean).length;
+        // Keep progress as a diagnostic string only; the panel stays hidden.
         dom.storyProgress.textContent = `Trail ${completed}/7`;
       }
       if (dom.inventory) {
@@ -11257,7 +11460,7 @@
         this.unregisterTree(contestant13Scene.shovel);
         contestant13Scene.shovel.visible = false;
       }
-      this.showDiscovery("Concealed garden shovel", "The book's garden clue was right. XIII is cut into the handle—the hedge maze is the next lead.");
+      this.showDiscovery(CONTESTANT_13.journal.shovel.title, CONTESTANT_13.journal.shovel.body);
       if (audioSystem) audioSystem.pickup("object");
       this.updateUI();
       noteMajorClueDiscovered("faceless-fountain-shovel");
@@ -11273,7 +11476,7 @@
         return;
       }
       if (!this.story.bookRead) {
-        this.showDiscovery("XIII in stone", "The mark is deliberate, but without Contestant 13's book you do not know what was buried here. Search the Library shelves.");
+        this.showDiscovery("XIII in stone", "The mark is deliberate, but something still does not line up.");
         return;
       }
       if (!this.hasItem("garden-shovel")) {
@@ -11294,7 +11497,7 @@
         if (contestant13Scene.digMound) contestant13Scene.digMound.visible = false;
         if (contestant13Scene.digMarker) contestant13Scene.digMarker.visible = false;
         if (contestant13Scene.digHole) contestant13Scene.digHole.visible = true;
-        this.showDiscovery("Buried basement key B-13", "A brass basement service key, Badge 13, and a wax-sealed tape reel emerge from the rain-black soil.");
+        this.showDiscovery(CONTESTANT_13.journal.cache.title, CONTESTANT_13.journal.cache.body);
         if (audioSystem) {
           audioSystem.pickup("key");
           audioSystem.ping(236, 0.4, 0.035, "sine");
@@ -11327,7 +11530,7 @@
         door.setOpen(true);
       }
       this.addJournalEntry(CONTESTANT_13.journal.basement);
-      this.showDiscovery("Basement threshold unlocked", "The B-13 key turns. The service stair descends toward the Archive and whatever the show keeps below.");
+      this.showDiscovery(CONTESTANT_13.journal.basement.title, CONTESTANT_13.journal.basement.body);
       if (audioSystem) {
         audioSystem.key("unlock");
         audioSystem.door(true);
@@ -11343,16 +11546,16 @@
         return;
       }
       if (!this.story.basementUnlocked) {
-        this.showDiscovery("Evidence below", "Finding this room out of sequence does not open its evidence. Unlock the basement stair first.");
+        this.showDiscovery("Evidence below", "The cage will not open yet.");
         return;
       }
       if (!this.hasItem("basement-key-b13")) {
-        this.showDiscovery("Evidence cage B-13", "The brass lock matches the basement service key hidden in the hedge maze.");
+        this.showDiscovery("Evidence cage B-13", "A brass lock holds the cage shut.");
         return;
       }
       this.story.archiveCageUnlocked = true;
       if (contestant13Scene.archiveCageDoor) contestant13Scene.archiveCageDoor.rotation.y = -1.25;
-      this.showDiscovery("Evidence cage unlocked", "The buried reel fits the recorder inside. A typed routing card mentions two separate camera feeds.");
+      this.showDiscovery("Evidence cage unlocked", "Inside: a recorder, a wax-sealed tape spindle, and a typed routing card about two camera feeds.");
       if (audioSystem) audioSystem.key("unlock");
       this.updateUI();
       noteMajorClueDiscovered("archive-evidence-cage");
@@ -11397,7 +11600,7 @@
         return;
       }
       if (!this.story.recordingPlayed) {
-        this.showDiscovery("Two camera networks", "Brass tags identify the public feed. The second cable bank is unlabelled. Guessing here could wake every alarm in the house.");
+        this.showDiscovery("Two camera networks", "Brass tags mark one cable bank. The other is unlabelled.");
         return;
       }
       this.runTimedAction("contestant-13-relay", "Severing the patron camera feed", 2400, () => {
@@ -12049,9 +12252,9 @@
       return this.say(category, text, speaker);
     }
 
-    sayForSpeaker(speaker, category, text) {
+    sayForSpeaker(speaker, category, text, options = {}) {
       if (!speaker?.id || !speaker?.name || typeof speaker.getAnchor !== "function") return null;
-      return this.say(category, text, speaker);
+      return this.say(category, text, speaker, options);
     }
 
     say(category, text, speaker = this.hostSpeaker(), options = {}) {
@@ -12133,7 +12336,15 @@
       const tail = MR_FEAST_SPEECH.tailClearancePx;
       const minX = margin + bubbleWidth / 2;
       const maxX = Math.max(minX, width - margin - bubbleWidth / 2);
-      const minY = margin + bubbleHeight + tail;
+      let minY = margin + bubbleHeight + tail;
+      if (dom.feastSays && !dom.feastSays.hidden && dom.feastSays.dataset.phase === FEAST_SAYS_PHASE.RESULT) {
+        const stageRect = dom.stage?.getBoundingClientRect();
+        const feastRect = dom.feastSays.getBoundingClientRect();
+        if (stageRect) {
+          const feastBottom = feastRect.bottom - stageRect.top;
+          minY = Math.max(minY, feastBottom + bubbleHeight + tail + 8);
+        }
+      }
       const maxY = Math.max(minY, height - margin);
       const clampedX = clamp(pixelX, minX, maxX);
       const clampedY = clamp(pixelY, minY, maxY);
@@ -12416,6 +12627,11 @@
       this.stationInteractionRegistered = false;
       this.qaManualClock = false;
       this.qaStepping = false;
+      this.lookDirection = new THREE.Vector3();
+      this.lookTargetPoint = new THREE.Vector3();
+      this.lookOffset = new THREE.Vector3();
+      this.pointRaycaster = new THREE.Raycaster();
+      this.pointRaycaster.far = FEAST_SAYS.pointTargetRange;
       this.transitionTable = Object.freeze({
         [FEAST_SAYS_PHASE.DORMANT]: Object.freeze([FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.COMPLETED]),
         [FEAST_SAYS_PHASE.CALLED]: Object.freeze([FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.DORMANT, FEAST_SAYS_PHASE.COMPLETED]),
@@ -12430,6 +12646,15 @@
         id: "feast-says-report-station",
         getLabel: () => this.castReady() ? "Report for Feast Says" : "Wait for the contestants",
         activate: () => this.reportToBallroom(),
+      };
+      this.pointInteraction = {
+        type: "feast-says-point",
+        id: "feast-says-point-choice",
+        getLabel: () => {
+          const targetId = this.selectPointTargetFromLook();
+          return targetId ? `Point at ${this.targetName(targetId)}` : "Look at a contestant";
+        },
+        activate: () => this.submitPointChoice(),
       };
       this.syncPresentation();
     }
@@ -12483,8 +12708,19 @@
       return [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase);
     }
 
+    currentCommand() {
+      return this.show.roundIndex >= 0 ? FEAST_SAYS.commands[this.show.roundIndex] || null : null;
+    }
+
+    allowsLook() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND) return false;
+      return ["point", "approach"].includes(this.currentCommand()?.action);
+    }
+
     locksPlayerMovement() {
-      return this.isPlaying() && this.show.phase !== FEAST_SAYS_PHASE.COMMAND;
+      if (!this.isPlaying()) return false;
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND) return true;
+      return this.currentCommand()?.action === "point";
     }
 
     castReady() {
@@ -12575,11 +12811,14 @@
       this.show.strikes = 0;
       this.show.responses = [];
       this.show.commandResult = null;
+      this.show.selectedTargetId = null;
+      this.show.resultDialogue = null;
+      this.show.dialogueHistory = [];
       this.show.phaseRemaining = FEAST_SAYS.briefingSeconds;
       this.transition(FEAST_SAYS_PHASE.BRIEFING, "reported-to-ballroom");
       speechSystem?.say(
         "feast-says-rules",
-        "Only obey me when I begin with ‘Feast says.’ Beat Kip, or you are out.",
+        "Follow each instruction before time runs out. The contestant with the lowest score is eliminated.",
         speechSystem.hostSpeaker(),
         { durationSeconds: FEAST_SAYS.briefingSpeechSeconds },
       );
@@ -12609,6 +12848,8 @@
       }
       this.show.roundIndex = nextIndex;
       this.show.commandResult = null;
+      this.show.selectedTargetId = null;
+      this.show.resultDialogue = null;
       this.show.phaseRemaining = FEAST_SAYS.responseSeconds;
       this.resetPlayerToMark();
       mansionContestants?.clearChallengeResponses();
@@ -12618,7 +12859,7 @@
         const action = correct
           ? (command.obey ? command.action : "still")
           : (command.obey ? "still" : command.action);
-        const targetId = action === "point" ? command.npcTargets?.[id] || null : null;
+        const targetId = ["point", "approach"].includes(action) ? command.npcTargets?.[id] || null : null;
         mansionContestants?.setChallengeResponse(id, action, { targetId });
       }
       this.transition(FEAST_SAYS_PHASE.COMMAND, `round-${nextIndex + 1}`);
@@ -12633,6 +12874,9 @@
 
     detectPlayerAction() {
       if (!physics) return "still";
+      const command = this.currentCommand();
+      if (command?.action === "point") return this.show.selectedTargetId ? "point" : "still";
+      if (command?.action === "approach") return this.approachTargetForDisplacement() ? "approach" : "still";
       if (state.movement.crouched) return "crouch";
       const p = physics.playerPosition();
       const dx = p.x - FEAST_SAYS.playerMark.x;
@@ -12642,33 +12886,177 @@
       return dz < 0 ? "forward" : "back";
     }
 
-    pointTargetForInput(command, inputAction) {
-      return command?.action === "point" ? command.targetByAction?.[inputAction] || null : null;
+    pointableContestants() {
+      return (mansionContestants?.entries || []).filter((entry) => (
+        entry.status === "ready"
+        && entry.root.visible
+        && entry.interactionTarget
+        && !mansionContestants.eliminatedIds.has(entry.id)
+      ));
     }
 
-    normalizeCommandResponse(command, inputAction) {
-      const targetId = this.pointTargetForInput(command, inputAction);
-      if (command?.action === "point" && targetId) {
-        return { action: "point", inputAction, targetId };
+    selectPointTargetFromLook() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND || this.currentCommand()?.action !== "point") return null;
+      const candidates = this.pointableContestants();
+      if (!candidates.length) return null;
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      this.pointRaycaster.far = FEAST_SAYS.pointTargetRange;
+      this.pointRaycaster.setFromCamera(lookCenter, camera);
+      const hits = this.pointRaycaster.intersectObjects(candidates.map((entry) => entry.interactionTarget), false);
+      const directHit = hits.find((hit) => hit.distance <= FEAST_SAYS.pointTargetRange);
+      if (directHit) {
+        const blocker = this.pointRaycaster.intersectObjects(occluderMeshes, false)[0];
+        if (!blocker || blocker.distance >= directHit.distance - 0.075) {
+          return candidates.find((entry) => entry.interactionTarget === directHit.object)?.id || null;
+        }
       }
-      if (command?.action === "point" && inputAction === "point") {
-        const fallbackInput = command.acceptedActions?.[1] || command.acceptedActions?.[0] || "forward";
-        return {
-          action: "point",
-          inputAction: fallbackInput,
-          targetId: this.pointTargetForInput(command, fallbackInput),
-        };
+
+      camera.getWorldDirection(this.lookDirection).normalize();
+      let bestId = null;
+      let bestDot = FEAST_SAYS.pointTargetMinimumDot;
+      for (const entry of candidates) {
+        entry.root.updateMatrixWorld(true);
+        this.lookTargetPoint.copy(entry.root.position);
+        this.lookTargetPoint.y += Math.max(1.05, (entry.size?.y || 1.7) * 0.62);
+        this.lookOffset.copy(this.lookTargetPoint).sub(camera.position);
+        const distance = this.lookOffset.length();
+        if (distance <= 0.001 || distance > FEAST_SAYS.pointTargetRange) continue;
+        const dot = this.lookDirection.dot(this.lookOffset.multiplyScalar(1 / distance));
+        if (dot <= bestDot) continue;
+        this.pointRaycaster.set(camera.position, this.lookOffset);
+        this.pointRaycaster.far = distance;
+        const blocker = this.pointRaycaster.intersectObjects(occluderMeshes, false)[0];
+        if (blocker && blocker.distance < distance - 0.075) continue;
+        bestDot = dot;
+        bestId = entry.id;
+      }
+      this.pointRaycaster.far = FEAST_SAYS.pointTargetRange;
+      return bestId;
+    }
+
+    targetName(targetId) {
+      if (targetId === "player") return "you";
+      return mansionContestants?.entryById(targetId)?.spec?.name
+        || ({ "mara-voss": "Mara", "kip-solano": "Kip", "juniper-cross": "Juniper" }[targetId] || null);
+    }
+
+    submitPointChoice() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND || this.currentCommand()?.action !== "point") {
+        return { resolved: false, reason: "no-point-command" };
+      }
+      const targetId = this.selectPointTargetFromLook();
+      if (!targetId) {
+        audioSystem?.ping(174, 0.1, 0.018, "square");
+        return { resolved: false, reason: "no-look-target" };
+      }
+      this.show.selectedTargetId = targetId;
+      return this.resolveCommand("point", targetId);
+    }
+
+    approachTargetForDisplacement() {
+      if (!physics) return null;
+      const p = physics.playerPosition();
+      const dx = p.x - FEAST_SAYS.playerMark.x;
+      const dz = p.z - FEAST_SAYS.playerMark.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance < FEAST_SAYS.movementThreshold) return null;
+      const moveX = dx / distance;
+      const moveZ = dz / distance;
+      let bestId = null;
+      let bestDot = FEAST_SAYS.approachTargetMinimumDot;
+      for (const entry of this.pointableContestants()) {
+        const id = entry.id;
+        const mark = entry.challengeMark || FEAST_SAYS.contestantMarks[id];
+        if (!mark) continue;
+        const targetX = mark.x - FEAST_SAYS.playerMark.x;
+        const targetZ = mark.z - FEAST_SAYS.playerMark.z;
+        const targetDistance = Math.max(0.001, Math.hypot(targetX, targetZ));
+        const dot = moveX * targetX / targetDistance + moveZ * targetZ / targetDistance;
+        if (dot > bestDot) {
+          bestDot = dot;
+          bestId = id;
+        }
+      }
+      return bestId;
+    }
+
+    detectedTargetId(command = this.currentCommand()) {
+      if (command?.action === "point") return this.show.selectedTargetId || this.selectPointTargetFromLook();
+      if (command?.action === "approach") return this.approachTargetForDisplacement();
+      return null;
+    }
+
+    normalizeCommandResponse(command, inputAction, submittedTargetId = null) {
+      if (command?.action === "point") {
+        const targetId = submittedTargetId || this.show.selectedTargetId;
+        return targetId
+          ? { action: "point", inputAction: "point", targetId }
+          : { action: inputAction === "point" ? "still" : inputAction, inputAction, targetId: null };
+      }
+      if (command?.action === "approach") {
+        const targetId = submittedTargetId || this.approachTargetForDisplacement();
+        return targetId
+          ? { action: "approach", inputAction: "approach", targetId }
+          : { action: inputAction === "approach" ? "still" : inputAction, inputAction, targetId: null };
       }
       return { action: inputAction, inputAction, targetId: null };
     }
 
-    resolveCommand(submittedAction = null) {
+    beginResultDialogue(command) {
+      if (!command?.contestantLine || !command?.hostWarning) {
+        this.show.resultDialogue = null;
+        return;
+      }
+      const contestant = mansionContestants?.entryById(command.contestantId);
+      if (contestant?.status !== "ready" || !contestant.speaker) {
+        this.show.resultDialogue = null;
+        speechSystem?.dismiss();
+        return;
+      }
+      this.show.resultDialogue = {
+        round: this.show.roundIndex + 1,
+        contestantId: command.contestantId,
+        contestantLine: command.contestantLine,
+        hostWarning: command.hostWarning,
+        stage: "contestant",
+        warningDelivered: false,
+      };
+      this.show.dialogueHistory.push({ ...this.show.resultDialogue });
+      speechSystem?.sayForSpeaker(
+        contestant.speaker,
+        `feast-says-banter-${this.show.roundIndex + 1}`,
+        command.contestantLine,
+        { durationSeconds: FEAST_SAYS.contestantLineSeconds },
+      );
+    }
+
+    updateResultDialogue() {
+      const dialogue = this.show.resultDialogue;
+      if (!dialogue || dialogue.warningDelivered || this.show.phase !== FEAST_SAYS_PHASE.RESULT) return;
+      if (this.show.phaseRemaining > FEAST_SAYS.hostWarningAtRemainingSeconds) return;
+      dialogue.warningDelivered = true;
+      dialogue.stage = "host-warning";
+      const history = this.show.dialogueHistory[this.show.dialogueHistory.length - 1];
+      if (history?.round === dialogue.round) {
+        history.warningDelivered = true;
+        history.stage = "host-warning";
+      }
+      speechSystem?.say(
+        `feast-says-warning-${dialogue.round}`,
+        dialogue.hostWarning,
+        speechSystem.hostSpeaker(),
+        { durationSeconds: FEAST_SAYS.hostWarningSeconds },
+      );
+    }
+
+    resolveCommand(submittedAction = null, submittedTargetId = null) {
       if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND || this.show.commandResult) {
         return { resolved: false, reason: "no-open-command" };
       }
       const command = FEAST_SAYS.commands[this.show.roundIndex];
       const inputAction = submittedAction || this.detectPlayerAction();
-      const normalized = this.normalizeCommandResponse(command, inputAction);
+      const normalized = this.normalizeCommandResponse(command, inputAction, submittedTargetId);
       const action = normalized.action;
       const expected = command.obey ? command.action : "still";
       const correct = action === expected;
@@ -12689,6 +13077,7 @@
       this.show.phaseRemaining = FEAST_SAYS.resultSeconds;
       mansionContestants?.returnChallengeResponses();
       this.transition(FEAST_SAYS_PHASE.RESULT, correct ? "correct" : "incorrect");
+      this.beginResultDialogue(command);
       audioSystem?.ping(correct ? 659 : 116, correct ? 0.26 : 0.38, correct ? 0.04 : 0.065, correct ? "sine" : "sawtooth");
       return { resolved: true, ...result };
     }
@@ -12736,7 +13125,7 @@
 
     constrainPlayer() {
       if (!this.isPlaying() || !physics) return;
-      state.yaw = FEAST_SAYS.playerMark.yaw;
+      if (!this.allowsLook()) state.yaw = FEAST_SAYS.playerMark.yaw;
       if (this.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
       const p = physics.playerPosition();
       const radius = FEAST_SAYS.stationRadius;
@@ -12775,6 +13164,7 @@
         return;
       }
       this.show.phaseRemaining = Math.max(0, this.show.phaseRemaining - step);
+      if (this.show.phase === FEAST_SAYS_PHASE.RESULT) this.updateResultDialogue();
       if (this.show.phaseRemaining > 0) {
         this.syncHud();
         return;
@@ -12826,7 +13216,6 @@
         if (element && element.textContent !== value) element.textContent = value;
       };
       const phase = this.show.phase;
-      const timerEligible = this.canCountIntermission();
       const showCompletion = phase === FEAST_SAYS_PHASE.COMPLETED && this.show.completionCardRemaining > 0;
       const stormRunOwnsHud = stormRunSystem && [
         STORM_RUN_PHASE.CALLED,
@@ -12838,16 +13227,14 @@
           stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED
           && stormRunSystem.show.completionCardRemaining > 0
         );
+      // Hide the idle "next game" countdown strip entirely. Only show once the
+      // event is called, live, or briefly completing. Trail/objective HUD stays off.
       const visible = state.started
         && !stormRunOwnsHud
-        && (phase !== FEAST_SAYS_PHASE.DORMANT || timerEligible)
+        && phase !== FEAST_SAYS_PHASE.DORMANT
         && (phase !== FEAST_SAYS_PHASE.COMPLETED || showCompletion);
       dom.feastSays.hidden = !visible;
-      if (dom.caseFile) {
-        dom.caseFile.hidden = !state.started
-          || !state.contestant13.bookRead
-          || competitionOwnsCaseFile();
-      }
+      if (dom.caseFile) dom.caseFile.hidden = true;
       dom.feastSays.dataset.phase = phase;
       dom.feastSays.dataset.result = this.show.commandResult
         ? (this.show.commandResult.correct ? "correct" : "incorrect")
@@ -12863,8 +13250,9 @@
       setText(dom.feastScore, `Score ${this.show.playerScore} · Misses ${this.show.strikes}`);
       let commandHint = "";
       if (dom.feastCrouch) {
-        dom.feastCrouch.hidden = phase !== FEAST_SAYS_PHASE.COMMAND;
-        dom.feastCrouch.disabled = phase !== FEAST_SAYS_PHASE.COMMAND;
+        const crouchRound = phase === FEAST_SAYS_PHASE.COMMAND && this.currentCommand()?.action === "crouch";
+        dom.feastCrouch.hidden = !crouchRound;
+        dom.feastCrouch.disabled = !crouchRound;
         dom.feastCrouch.setAttribute("aria-pressed", String(state.movement.crouched));
       }
       if (dom.touchSprint) dom.touchSprint.hidden = this.isPlaying();
@@ -12883,7 +13271,7 @@
       } else if (phase === FEAST_SAYS_PHASE.BRIEFING) {
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Rules");
-        setText(dom.feastCommand, "Obey only commands that begin “Feast says.” Beat Kip to survive.");
+        setText(dom.feastCommand, "Follow each instruction. Lowest score is eliminated.");
         setText(dom.feastTimer, String(Math.ceil(this.show.phaseRemaining)));
       } else if (phase === FEAST_SAYS_PHASE.COMMAND) {
         const command = FEAST_SAYS.commands[this.show.roundIndex];
@@ -12942,6 +13330,28 @@
       this.show.staged = false;
     }
 
+    aimAtContestantForQA(targetId) {
+      if (!state.qa) return null;
+      const entry = mansionContestants?.entryById(targetId);
+      if (!entry || entry.status !== "ready" || !entry.root.visible) return null;
+      syncCamera();
+      this.lookTargetPoint.copy(entry.root.position);
+      this.lookTargetPoint.y += Math.max(1.05, (entry.size?.y || 1.7) * 0.62);
+      const dx = this.lookTargetPoint.x - camera.position.x;
+      const dz = this.lookTargetPoint.z - camera.position.z;
+      const horizontal = Math.max(0.001, Math.hypot(dx, dz));
+      state.yaw = Math.atan2(-dx, -dz);
+      state.pitch = -Math.atan2(camera.position.y - this.lookTargetPoint.y, horizontal);
+      syncCamera();
+      updateInteractionPrompt();
+      return {
+        targetId,
+        lookedAtTargetId: this.selectPointTargetFromLook(),
+        yaw: Number(state.yaw.toFixed(4)),
+        pitch: Number(state.pitch.toFixed(4)),
+      };
+    }
+
     restoreSnapshot(snapshot = null, questSnapshot = {}) {
       this.cancelStaging();
       const legacyProgress = [
@@ -12973,6 +13383,9 @@
         : Math.max(0, Math.floor(Number(source.strikes) || 0));
       this.show.responses = [];
       this.show.commandResult = null;
+      this.show.selectedTargetId = null;
+      this.show.resultDialogue = null;
+      this.show.dialogueHistory = [];
       this.show.eliminatedContestantId = restoredPhase === FEAST_SAYS_PHASE.COMPLETED
         ? (source.eliminatedContestantId || "kip-solano")
         : null;
@@ -13009,11 +13422,26 @@
       const command = FEAST_SAYS.commands[this.show.roundIndex];
       const expected = command.obey ? command.action : "still";
       let submitted = action;
-      if (action === "correct") submitted = expected === "point" ? (command.acceptedActions?.[1] || "forward") : expected;
+      let targetId = null;
+      if (action && typeof action === "object") {
+        submitted = action.action || "still";
+        targetId = action.targetId || null;
+      }
+      if (action === "correct") {
+        submitted = expected;
+        if (["point", "approach"].includes(expected)) targetId = "kip-solano";
+      }
       if (action === "incorrect") submitted = expected === "still" ? command.action : "still";
-      if (action === "point") submitted = command.acceptedActions?.[1] || "forward";
+      if (action === "point") {
+        submitted = "point";
+        targetId = "kip-solano";
+      }
+      if (action === "approach") {
+        submitted = "approach";
+        targetId = "kip-solano";
+      }
       if (["ignore", "none", "hold"].includes(action)) submitted = "still";
-      return this.resolveCommand(submitted);
+      return this.resolveCommand(submitted, targetId);
     }
 
     completeForQA(playerScore = 6) {
@@ -13025,10 +13453,9 @@
       this.show.responses = FEAST_SAYS.commands.map((command, index) => {
         const correct = this.show.playerScore > index;
         const expected = command.obey ? command.action : "still";
-        const inputAction = correct
-          ? (expected === "point" ? command.acceptedActions?.[1] || "forward" : expected)
-          : "miss";
-        const normalized = this.normalizeCommandResponse(command, inputAction);
+        const inputAction = correct ? expected : "miss";
+        const targetId = correct && ["point", "approach"].includes(expected) ? "kip-solano" : null;
+        const normalized = this.normalizeCommandResponse(command, inputAction, targetId);
         return {
           index,
           text: command.text,
@@ -13081,14 +13508,23 @@
         round: this.show.roundIndex + 1,
         totalRounds: FEAST_SAYS.commands.length,
         phaseRemaining: Number(this.show.phaseRemaining.toFixed(3)),
+        pacing: {
+          briefingSeconds: FEAST_SAYS.briefingSeconds,
+          responseSeconds: FEAST_SAYS.responseSeconds,
+          resultSeconds: FEAST_SAYS.resultSeconds,
+        },
         command: command ? {
+          id: command.id,
           index: this.show.roundIndex,
           total: FEAST_SAYS.commands.length,
           text: command.text,
           obey: command.obey,
           action: command.action,
-          acceptedActions: command.acceptedActions ? [...command.acceptedActions] : null,
-          targetByAction: command.targetByAction ? { ...command.targetByAction } : null,
+          choiceMode: command.choiceMode || null,
+          npcTargets: command.npcTargets ? { ...command.npcTargets } : null,
+          contestantSpeakerId: command.contestantId || null,
+          contestantLine: command.contestantLine || null,
+          hostWarning: command.hostWarning || null,
           hint: command.hint || null,
           resolved: Boolean(this.show.commandResult),
           result: this.show.commandResult ? { ...this.show.commandResult } : null,
@@ -13098,9 +13534,15 @@
           strikes: this.show.strikes,
           qualified: this.show.playerScore > this.npcScore("kip-solano", FEAST_SAYS.commands.length),
           detectedAction: this.show.phase === FEAST_SAYS_PHASE.COMMAND ? this.detectPlayerAction() : null,
-          detectedTargetId: this.show.phase === FEAST_SAYS_PHASE.COMMAND
-            ? this.pointTargetForInput(command, this.detectPlayerAction())
+          detectedTargetId: this.show.phase === FEAST_SAYS_PHASE.COMMAND ? this.detectedTargetId(command) : null,
+          aimedTargetId: this.show.phase === FEAST_SAYS_PHASE.COMMAND && command?.action === "point"
+            ? this.selectPointTargetFromLook()
             : null,
+          lookedAtTargetId: this.show.phase === FEAST_SAYS_PHASE.COMMAND && command?.action === "point"
+            ? this.selectPointTargetFromLook()
+            : null,
+          selectedTargetId: this.show.selectedTargetId,
+          lookEnabled: this.allowsLook(),
           distanceFromMark: p ? Number(Math.hypot(p.x - FEAST_SAYS.playerMark.x, p.z - FEAST_SAYS.playerMark.z).toFixed(3)) : null,
         },
         standings: [
@@ -13111,6 +13553,8 @@
         ],
         eliminatedContestantId: this.show.eliminatedContestantId,
         responses: this.show.responses.map((response) => ({ ...response })),
+        resultDialogue: this.show.resultDialogue ? { ...this.show.resultDialogue } : null,
+        dialogueHistory: this.show.dialogueHistory.map((entry) => ({ ...entry })),
         invalidTransitions: this.show.invalidTransitions,
         lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
         ui: {
@@ -13519,18 +13963,14 @@
         if (element && element.textContent !== value) element.textContent = value;
       };
       const phase = this.show.phase;
-      const timerEligible = this.canCountIntermission();
       const showCompletion = phase === STORM_RUN_PHASE.COMPLETED && this.show.completionCardRemaining > 0;
+      // Hide the idle Game 2 countdown. Only surface after Storm Run is called.
       const visible = state.started
-        && (phase !== STORM_RUN_PHASE.DORMANT || timerEligible)
+        && phase !== STORM_RUN_PHASE.DORMANT
         && (phase !== STORM_RUN_PHASE.COMPLETED || showCompletion);
       dom.stormRun.hidden = !visible;
       dom.stormRun.dataset.phase = phase;
-      if (dom.caseFile) {
-        dom.caseFile.hidden = !state.started
-          || !state.contestant13.bookRead
-          || competitionOwnsCaseFile();
-      }
+      if (dom.caseFile) dom.caseFile.hidden = true;
       const checkpoint = this.expectedCheckpoint();
       setText(dom.stormRunProgress, `${this.show.completedCheckpoints} / ${STORM_RUN.checkpoints.length}`);
       setText(dom.stormRunStandings, this.standingsText());
@@ -14375,7 +14815,7 @@
       dom.gameOverCopy.textContent = stormRunElimination
         ? "Mara finished Storm Run first. Last place leaves the competition."
         : feastSaysElimination
-        ? "You did not beat Kip in Feast Says. Last place leaves the competition."
+        ? "Your Feast Says score put you in last place. Last place leaves the competition."
         : state.gameOver.reason === "recorded"
           ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
           : "Mr. Feast caught you in the restricted basement. The house keeps its guests.";
@@ -15647,6 +16087,15 @@
     const jarLids = [];
     const plates = [];
     const cups = [];
+    const milkBottles = [];
+    const milkCaps = [];
+    const butterDishes = [];
+    const butterSlabs = [];
+    const hams = [];
+    const cheeseWedges = [];
+    const lettuces = [];
+    const eggTrays = [];
+    const eggs = [];
     const usable = width * 0.78;
     const z = Math.min(depth * 0.06, 0.08);
     const positionX = (index, count) => -usable / 2 + 0.13 + index * (usable - 0.26) / Math.max(1, count - 1);
@@ -15690,9 +16139,44 @@
           else bottles.push({ x, y: shelfY + 0.17, z, sx: 0.07, sy: 0.32, sz: 0.07 });
         }
       });
+    } else if (kind === "refrigerator") {
+      // Semantic cold-larder shelves instead of the generic dry-goods mix:
+      // milk and jam low, the roast/cheese board mid, eggs and fruit up top.
+      const [lowY, midY, topY] = shelfYs;
+      for (const [index, x] of [-0.36, -0.26].entries()) {
+        milkBottles.push({ x: x * usable, y: lowY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05 });
+        milkCaps.push({ x: x * usable, y: lowY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028, ry: index });
+      }
+      butterDishes.push({ x: -0.02 * usable, y: lowY + 0.024, z, sx: 0.17, sy: 0.048, sz: 0.115 });
+      butterSlabs.push({ x: -0.02 * usable, y: lowY + 0.062, z, sx: 0.115, sy: 0.028, sz: 0.07 });
+      for (const [index, x] of [0.22, 0.36].entries()) {
+        const jarHeight = 0.16 + index * 0.03;
+        jars.push({ x: x * usable, y: lowY + jarHeight / 2 + 0.01, z, sx: 0.062, sy: jarHeight, sz: 0.062 });
+        jarLids.push({ x: x * usable, y: lowY + jarHeight + 0.02, z, sx: 0.068, sy: 0.022, sz: 0.068 });
+      }
+      plates.push({ x: -0.22 * usable, y: midY + 0.008, z, sx: 0.125, sy: 0.014, sz: 0.125 });
+      hams.push({ x: -0.22 * usable, y: midY + 0.08, z, sx: 0.15, sy: 0.085, sz: 0.1, ry: 0.4 });
+      for (const [index, x] of [0.05, 0.17].entries()) {
+        cheeseWedges.push({ x: x * usable, y: midY + 0.033, z: z + index * 0.05 - 0.02, sx: 0.085, sy: 0.065, sz: 0.085, ry: 0.7 + index * 1.9 });
+      }
+      lettuces.push({ x: 0.34 * usable, y: midY + 0.062, z, sx: 0.078, sy: 0.062, sz: 0.078 });
+      eggTrays.push({ x: -0.25 * usable, y: topY + 0.014, z, sx: 0.26, sy: 0.026, sz: 0.15 });
+      for (let egg = 0; egg < 6; egg += 1) {
+        eggs.push({
+          x: -0.25 * usable + ((egg % 3) - 1) * 0.075,
+          y: topY + 0.05,
+          z: z + (egg < 3 ? -0.033 : 0.033),
+          sx: 0.026, sy: 0.033, sz: 0.026,
+        });
+      }
+      for (let i = 0; i < 3; i += 1) {
+        produce.push({ x: (0.12 + i * 0.12) * usable, y: topY + 0.05, z: z + (i % 2) * 0.04 - 0.02, sx: 0.05, sy: 0.047, sz: 0.05 });
+      }
+      milkBottles.push({ x: 0.38 * usable, y: topY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05 });
+      milkCaps.push({ x: 0.38 * usable, y: topY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028 });
     } else {
       shelfYs.forEach((shelfY, shelfIndex) => {
-        const count = kind === "refrigerator" ? 5 : 6;
+        const count = 6;
         for (let i = 0; i < count; i += 1) {
           const x = positionX(i, count);
           const selector = (i + shelfIndex * 2) % 4;
@@ -15704,8 +16188,8 @@
       });
     }
     const meshes = [
-      addLocalInstanceBatch(`${name}-stocked-boxes`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.foodBox, boxes),
-      addLocalInstanceBatch(`${name}-stocked-tins`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodTin, tins),
+      addLocalInstanceBatch(`${name}-stocked-boxes`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.groceryBox, boxes),
+      addLocalInstanceBatch(`${name}-stocked-tins`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.groceryTin, tins),
       addLocalInstanceBatch(`${name}-stocked-bottles`, parent, "unitBottle", () => new THREE.CylinderGeometry(0.62, 1, 1, 12), M.foodBottle, bottles),
       addLocalInstanceBatch(`${name}-stocked-produce`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.produce, produce),
       addLocalInstanceBatch(`${name}-pantry-flour-sacks`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.canvasLinen, sacks),
@@ -15713,8 +16197,21 @@
       addLocalInstanceBatch(`${name}-pantry-jar-lids`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodTin, jarLids),
       addLocalInstanceBatch(`${name}-stacked-plates`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.dishBlue, plates),
       addLocalInstanceBatch(`${name}-cups`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.porcelain, cups),
+      addLocalInstanceBatch(`${name}-fridge-milk-bottles`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.milk, milkBottles),
+      addLocalInstanceBatch(`${name}-fridge-milk-caps`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.foodTin, milkCaps),
+      addLocalInstanceBatch(`${name}-fridge-butter-dishes`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.porcelain, butterDishes),
+      addLocalInstanceBatch(`${name}-fridge-butter`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.cheese, butterSlabs),
+      addLocalInstanceBatch(`${name}-fridge-roast`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.ham, hams),
+      addLocalInstanceBatch(`${name}-fridge-cheese-wedges`, parent, "cheeseWedge", () => new THREE.CylinderGeometry(1, 1, 1, 3), M.cheese, cheeseWedges),
+      addLocalInstanceBatch(`${name}-fridge-lettuce`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.hedge, lettuces),
+      addLocalInstanceBatch(`${name}-fridge-egg-trays`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.canvasLinen, eggTrays),
+      addLocalInstanceBatch(`${name}-fridge-eggs`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.eggshell, eggs),
     ].filter(Boolean);
-    return { count: boxes.length + tins.length + bottles.length + produce.length + sacks.length + jars.length + plates.length + cups.length, meshes };
+    return {
+      count: boxes.length + tins.length + bottles.length + produce.length + sacks.length + jars.length + plates.length + cups.length
+        + milkBottles.length + butterDishes.length + hams.length + cheeseWedges.length + lettuces.length + eggTrays.length + eggs.length,
+      meshes,
+    };
   }
 
   class Refrigerator {
@@ -20908,21 +21405,68 @@
           vec3 p = position;
           float wave = sin((p.x + uTime * 0.55) * 2.1) * 0.018 + cos((p.y - uTime * 0.42) * 2.7) * 0.014;
           wave += sin((p.x + p.y) * 4.8 - uTime * 1.3) * 0.006;
+          wave += sin(p.x * 9.5 - uTime * 2.2) * sin(p.y * 8.3 + uTime * 1.7) * 0.004;
           p.z += wave;
           vWave = wave;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
       fragmentShader: `
+        uniform float uTime;
         uniform vec3 uDeep;
         uniform vec3 uShallow;
         varying vec2 vUv;
         varying float vWave;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+
+        float valueNoise(vec2 p) {
+          vec2 cell = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash(cell);
+          float b = hash(cell + vec2(1.0, 0.0));
+          float c = hash(cell + vec2(0.0, 1.0));
+          float d = hash(cell + vec2(1.0, 1.0));
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+
+        // Storm rain: each cell spawns an expanding, fading ring with its own
+        // phase so drops pepper the whole surface out of sync.
+        float rainRipples(vec2 uv, float t) {
+          float total = 0.0;
+          for (int layer = 0; layer < 2; layer += 1) {
+            float fl = float(layer);
+            vec2 grid = uv * (9.0 + fl * 7.0) + vec2(fl * 17.31, fl * 9.77);
+            vec2 cell = floor(grid);
+            vec2 f = fract(grid) - 0.5;
+            float h = hash(cell);
+            float life = fract(t * (0.55 + h * 0.35) + h * 7.0);
+            vec2 center = (vec2(hash(cell + 3.1), hash(cell + 5.7)) - 0.5) * 0.55;
+            float d = length(f - center);
+            float radius = life * 0.42;
+            float ring = smoothstep(0.05, 0.012, abs(d - radius));
+            total += ring * (1.0 - life) * (1.0 - life) * 0.85;
+          }
+          return total;
+        }
+
         void main() {
           float edge = smoothstep(0.0, 0.16, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-          float glint = smoothstep(0.018, 0.034, vWave);
-          vec3 color = mix(uDeep, uShallow, 0.28 + edge * 0.42) + vec3(glint * 0.28);
-          gl_FragColor = vec4(color, 0.76);
+          // Two drifting noise octaves give the surface its wind-blown grain.
+          float grain = valueNoise(vUv * 26.0 + vec2(uTime * 0.16, -uTime * 0.11));
+          float swell = valueNoise(vUv * 7.0 + vec2(-uTime * 0.05, uTime * 0.07));
+          float glint = smoothstep(0.016, 0.034, vWave + (grain - 0.5) * 0.012);
+          float sparkle = pow(max(0.0, grain * swell), 6.0) * 2.4;
+          float rain = rainRipples(vUv, uTime);
+          vec3 color = mix(uDeep, uShallow, 0.24 + edge * 0.4 + swell * 0.18 + vWave * 2.2);
+          color += vec3(0.30, 0.34, 0.35) * glint;
+          color += vec3(0.42, 0.47, 0.48) * sparkle;
+          color += vec3(0.24, 0.28, 0.30) * rain;
+          float alpha = 0.72 + grain * 0.08 + rain * 0.08;
+          gl_FragColor = vec4(color, alpha);
         }
       `,
     });
@@ -20978,8 +21522,32 @@
     const stepTops = [-0.42, -0.7, -0.98, -1.26, -1.54];
     stepTops.forEach((top, index) => {
       const h = top + 1.8;
-      box({ name: `estate-pool-step-${index + 1}`, w: 2.45, h, d: 0.64, x: pool.centerX, y: -1.8 + h / 2, z: -18.3 - index * 0.58, material: M.poolTile, collider: true, cast: false });
+      const stepZ = -18.3 - index * 0.58;
+      box({ name: `estate-pool-step-${index + 1}`, w: 2.45, h, d: 0.64, x: pool.centerX, y: -1.8 + h / 2, z: stepZ, material: M.poolTile, collider: true, cast: false });
+      // Finished marble tread with a slight nosing overhang on the approach
+      // edge, and a shadow reveal under it so each step reads from above the
+      // water instead of merging into one tiled wedge.
+      roundedBox({ name: `estate-pool-step-tread-${index + 1}`, w: 2.51, h: 0.05, d: 0.7, radius: 0.02, x: pool.centerX, y: top + 0.025, z: stepZ + 0.03, material: M.marble, cast: false });
+      box({ name: `estate-pool-step-riser-reveal-${index + 1}`, w: 2.45, h: 0.05, d: 0.02, x: pool.centerX, y: top - 0.035, z: stepZ + 0.33, material: M.soot, cast: false, receive: false });
     });
+    // Deck-level marble curbs frame the stair mouth on the terrace.
+    for (const side of [-1, 1]) {
+      box({ name: "estate-pool-step-curb", w: 0.14, h: 0.12, d: 1.5, x: pool.centerX + side * 1.295, y: groundY + 0.06, z: -18.75, material: M.marble, cast: false });
+      // A brass handrail follows the descent into the water on each side,
+      // with posts on the first, middle, and last treads. Decor only: no
+      // colliders, so the authored entry ramp and QA pool routes are
+      // untouched and the 2m centre channel stays clear.
+      const railX = pool.centerX + side * 1.06;
+      const railStart = [railX, groundY + 0.9, -18.05];
+      const railEnd = [railX, -0.64, -20.75];
+      addBeamBetween(`estate-pool-rail-${side < 0 ? "west" : "east"}`, railStart, railEnd, 0.028, M.brass);
+      for (const [postZ, treadTop] of [[-18.3, -0.42], [-19.46, -0.98], [-20.62, -1.54]]) {
+        const t = (postZ - railStart[2]) / (railEnd[2] - railStart[2]);
+        const railY = railStart[1] + (railEnd[1] - railStart[1]) * t;
+        cylinder({ name: "estate-pool-rail-post", radius: 0.02, height: railY - treadTop, segments: 8, x: railX, y: (railY + treadTop) / 2, z: postZ, material: M.brass, cast: false });
+      }
+      sphere({ name: "estate-pool-rail-finial", radius: 0.045, x: railX, y: railStart[1] + 0.02, z: railStart[2], material: M.brass, cast: false });
+    }
     // A shallow invisible walking plane follows the visible treads. Rapier's
     // stair auto-step is intentionally conservative; the ramp guarantees that
     // entering and leaving the pool remains smooth at every frame rate.
@@ -22807,7 +23375,10 @@
   }
 
   function toggleFeastSaysCrouch() {
-    if (feastSaysSystem?.show.phase !== FEAST_SAYS_PHASE.COMMAND) return false;
+    if (
+      feastSaysSystem?.show.phase !== FEAST_SAYS_PHASE.COMMAND
+      || feastSaysSystem.currentCommand()?.action !== "crouch"
+    ) return false;
     state.movement.crouched = !state.movement.crouched;
     state.movement.sprinting = false;
     input.sprint = false;
@@ -23077,7 +23648,12 @@
       updateInteractionPrompt();
       return;
     }
-    if (feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) return;
+    if (feastSaysSystem?.isPlaying()) {
+      feastSaysSystem.submitPointChoice();
+      updateInteractionPrompt();
+      return;
+    }
+    if (stormRunSystem?.isPlaying()) return;
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
     interaction.activate();
@@ -23222,7 +23798,15 @@
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
       // Keep the cursor hidden while reading, but freeze look so the page stays readable.
-      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || feastSaysSystem?.isPlaying() || stormRunSystem?.locksPlayerMovement()) return;
+      if (
+        state.readableBooks.open
+        || state.menuOpen
+        || state.journalOpen
+        || state.workroom.keypadOpen
+        || state.gameOver
+        || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
+        || stormRunSystem?.locksPlayerMovement()
+      ) return;
       state.yaw -= event.movementX * 0.00205;
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
@@ -23336,7 +23920,12 @@
     });
 
     dom.canvas.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "touch" || event.clientX < innerWidth * 0.38 || feastSaysSystem?.isPlaying() || stormRunSystem?.locksPlayerMovement()) return;
+      if (
+        event.pointerType !== "touch"
+        || event.clientX < innerWidth * 0.38
+        || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
+        || stormRunSystem?.locksPlayerMovement()
+      ) return;
       input.touchLookId = event.pointerId;
       input.touchLookX = event.clientX;
       input.touchLookY = event.clientY;
@@ -23344,6 +23933,13 @@
     });
     dom.canvas.addEventListener("pointermove", (event) => {
       if (event.pointerId !== input.touchLookId) return;
+      if (
+        (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
+        || stormRunSystem?.locksPlayerMovement()
+      ) {
+        input.touchLookId = null;
+        return;
+      }
       state.yaw -= (event.clientX - input.touchLookX) * 0.005;
       state.pitch = clamp(state.pitch - (event.clientY - input.touchLookY) * 0.004, -1.3, 1.3);
       input.touchLookX = event.clientX;
@@ -23490,8 +24086,17 @@
       return;
     }
     if (feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) {
-      state.currentInteraction = null;
-      dom.prompt.hidden = true;
+      const pointCommand = feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMMAND
+        && feastSaysSystem.currentCommand()?.action === "point";
+      state.currentInteraction = pointCommand ? feastSaysSystem.pointInteraction : null;
+      const targetId = pointCommand ? feastSaysSystem.selectPointTargetFromLook() : null;
+      dom.prompt.hidden = !pointCommand;
+      if (pointCommand) {
+        if (dom.promptKey) dom.promptKey.textContent = matchMedia("(pointer: coarse)").matches ? "TAP E" : "E";
+        if (dom.promptText) dom.promptText.textContent = targetId
+          ? `Point at ${feastSaysSystem.targetName(targetId)}`
+          : "Look at a contestant";
+      }
       return;
     }
     state.currentInteraction = findInteraction();
@@ -24791,6 +25396,12 @@
       const result = state.qa && feastSaysSystem ? feastSaysSystem.respondForQA(action) : null;
       return result ? { ...result, accepted: Boolean(result.resolved) } : { accepted: false };
     };
+    window.MrFeastFresh.aimFeastSaysAtForQA = (targetId) => (
+      state.qa && feastSaysSystem ? feastSaysSystem.aimAtContestantForQA(targetId) : null
+    );
+    window.MrFeastFresh.aimFeastSaysTargetForQA = (targetId) => (
+      state.qa && feastSaysSystem ? feastSaysSystem.aimAtContestantForQA(targetId) : null
+    );
     window.MrFeastFresh.startFeastSaysForQA = () => (
       state.qa && feastSaysSystem ? feastSaysSystem.reportToBallroom() : { started: false, reason: "qa-only" }
     );

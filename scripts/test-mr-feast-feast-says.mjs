@@ -126,6 +126,11 @@ async function startBallroomRound(page, useTouch = false) {
   const settled = await diagnostics(page);
   const responseEnd = settled.contestants.entries.map((entry) => entry.challengeResponse?.progress).filter(Number.isFinite);
   assert(responseEnd.length === 3 && responseEnd.every((progress) => progress === 1), `contestant responses should reach their authored poses; got ${JSON.stringify(responseEnd)}`);
+  assert(settled.feastSays.command.text === "Feast says point to the person you trust the least." && settled.feastSays.command.action === "point", `the live round should open with the requested trust prompt; got ${JSON.stringify(settled.feastSays.command)}`);
+  assert(JSON.stringify(settled.feastSays.command.acceptedActions) === JSON.stringify(["left", "forward", "right"]), `the trust prompt should expose all three fair directional choices; got ${JSON.stringify(settled.feastSays.command)}`);
+  const pointTargets = Object.fromEntries(settled.contestants.entries.map((entry) => [entry.id, entry.challengeResponse?.targetId]));
+  assert(pointTargets["mara-voss"] === "kip-solano" && pointTargets["kip-solano"] === "mara-voss" && pointTargets["juniper-cross"] === "kip-solano", `contestants should make authored trust choices; got ${JSON.stringify(pointTargets)}`);
+  assertContestantResponseMotion(settled.feastSays.command, settled);
   const liveRegionMutations = await page.evaluate(async () => {
     const targets = ["mansion-feast-command", "mansion-feast-score", "mansion-feast-standings"]
       .map((id) => document.getElementById(id));
@@ -141,7 +146,67 @@ async function startBallroomRound(page, useTouch = false) {
 }
 
 function wrongActionFor(expectedAction) {
+  if (expectedAction === "point") return "crouch";
   return expectedAction === "crouch" ? "stand" : "crouch";
+}
+
+function assertContestantResponseMotion(command, state) {
+  const responders = state.contestants.entries.filter((entry) => entry.challengeResponse?.action !== "still");
+  assert(responders.length > 0, `round ${command.index + 1} should visibly move at least one contestant; got ${JSON.stringify(state.contestants.entries.map((entry) => entry.challengeResponse))}`);
+  for (const entry of responders) {
+    const response = entry.challengeResponse;
+    const motion = response.motion;
+    assert(motion && motion.poseWeight >= 0.98, `${entry.id} ${response.action} needs a settled skeletal response pose; got ${JSON.stringify(response)}`);
+    if (response.action === "point") {
+      assert(response.targetId && /^(?:mara-voss|kip-solano|juniper-cross)$/.test(response.targetId), `${entry.id} must point at an authored contestant target; got ${JSON.stringify(response)}`);
+      assert(motion.kind === "point" && motion.upperBodyMaximumAngleDegrees >= 18, `${entry.id} point response must visibly raise an arm; got ${JSON.stringify(motion)}`);
+    } else if (response.action === "crouch") {
+      assert(motion.kind === "crouch" && motion.lowerBodyMaximumAngleDegrees >= 12, `${entry.id} crouch must bend the lower-body rig; got ${JSON.stringify(motion)}`);
+      assert(motion.modelDrop >= 0.08 && motion.modelDrop <= 0.2, `${entry.id} crouch should combine a bounded root drop with bent knees instead of sinking the whole model; got ${JSON.stringify(motion)}`);
+      assert(entry.animation.name === "idle", `${entry.id} crouch should use the planted idle base; got ${JSON.stringify(entry.animation)}`);
+    } else if (response.action === "left" || response.action === "right") {
+      assert(motion.kind === `sidestep-${response.action}`, `${entry.id} needs a directional sidestep pose; got ${JSON.stringify(motion)}`);
+      assert(entry.animation.name === "idle", `${entry.id} should settle from its sidestep gait instead of walking in place; got ${JSON.stringify(entry.animation)}`);
+      assert(motion.lowerBodyMaximumAngleDegrees >= 4 && Math.abs(motion.facingDeltaRadians) <= 0.03, `${entry.id} sidestep should move the legs while keeping Feast-facing staging; got ${JSON.stringify(motion)}`);
+    } else if (response.action === "back") {
+      assert(motion.kind === "backpedal", `${entry.id} backward response needs a dedicated backpedal state; got ${JSON.stringify(motion)}`);
+      assert(entry.animation.name === "idle", `${entry.id} should settle from its reversed gait instead of walking in place; got ${JSON.stringify(entry.animation)}`);
+      assert(motion.lowerBodyMaximumAngleDegrees >= 3 && Math.abs(motion.facingDeltaRadians) <= 0.03, `${entry.id} backpedal should preserve host-facing staging and add a readable lean; got ${JSON.stringify(motion)}`);
+    }
+  }
+}
+
+function assertContestantLocomotionInFlight(command, state) {
+  if (!["left", "right", "back"].includes(command.action)) return;
+  const movers = state.contestants.entries.filter((entry) => (
+    entry.challengeResponse?.action !== "still"
+      && entry.challengeResponse?.progress > 0
+      && entry.challengeResponse?.progress < 1
+  ));
+  assert(movers.length > 0, `round ${command.index + 1} needs an observable in-flight gait; got ${JSON.stringify(state.contestants.entries.map((entry) => entry.challengeResponse))}`);
+  for (const entry of movers) {
+    const response = entry.challengeResponse;
+    assert(entry.animation.name === "walk", `${entry.id} ${response.action} should use the walk clip only while translating; got ${JSON.stringify(entry.animation)}`);
+    if (response.action === "back") {
+      assert(entry.animation.playbackRate < 0, `${entry.id} backpedal should reverse the walk clip while moving outward; got ${JSON.stringify(entry.animation)}`);
+      assert(response.motion.torsoTiltDegrees <= 25, `${entry.id} backpedal should read as an upright backward walk, not a fall; got ${JSON.stringify(response.motion)}`);
+    } else {
+      assert(entry.animation.playbackRate > 0, `${entry.id} sidestep should advance the walk clip while moving outward; got ${JSON.stringify(entry.animation)}`);
+    }
+  }
+}
+
+function assertContestantResponsesReturned(state) {
+  const responses = state.contestants.entries
+    .filter((entry) => entry.status === "ready")
+    .map((entry) => ({ id: entry.id, animation: entry.animation, response: entry.challengeResponse }));
+  assert(responses.length > 0, "the staged cast should remain available through the response return");
+  for (const { id, animation, response } of responses) {
+    assert(response?.returning && response.progress === 0, `${id} should finish its eased return before the next command; got ${JSON.stringify(response)}`);
+    assert(response.motion.poseWeight === 0 && response.motion.modelDrop === 0, `${id} should have no residual response pose after returning; got ${JSON.stringify(response.motion)}`);
+    assert(response.motion.markOffsetDistance <= 0.01, `${id} should return to its mark without a next-round teleport; got ${JSON.stringify(response.motion)}`);
+    assert(animation.name === "idle", `${id} should be idle after returning; got ${JSON.stringify(animation)}`);
+  }
 }
 
 async function playSixCommandRound(page, intendedOutcome) {
@@ -171,14 +236,39 @@ async function playSixCommandRound(page, intendedOutcome) {
     assert(command.total === 6, `Feast Says should be one readable six-command round; got ${JSON.stringify(command)}`);
     assert(typeof command.obey === "boolean" && typeof command.action === "string", `command diagnostics must expose obey/action; got ${JSON.stringify(command)}`);
 
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.32));
+    const movingMotion = await diagnostics(page);
+    assertContestantLocomotionInFlight(command, movingMotion);
+    if (intendedOutcome === "win" && ["left", "right", "back"].includes(command.action)) {
+      const visualProofName = {
+        left: "contestant-sidestep-left-desktop.png",
+        right: "contestant-sidestep-right-desktop.png",
+        back: "contestant-backpedal-desktop.png",
+      }[command.action];
+      await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, visualProofName) });
+    }
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.68));
+    const stagedMotion = await diagnostics(page);
+    assertContestantResponseMotion(command, stagedMotion);
+    if (intendedOutcome === "win" && !["left", "right", "back"].includes(command.action)) {
+      const visualProofName = {
+        point: "contestant-point-desktop.png",
+        crouch: "contestant-crouch-desktop.png",
+      }[command.action];
+      if (visualProofName) {
+        await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, visualProofName) });
+      }
+    }
+
     const responseAction = intendedOutcome === "win"
-      ? (command.obey ? command.action : "ignore")
+      ? (command.obey ? (command.action === "point" ? "forward" : command.action) : "ignore")
       : (command.obey ? wrongActionFor(command.action) : command.action);
     let result;
     const useRealForward = intendedOutcome === "win" && command.index === 0 && command.action === "forward";
+    const useRealPoint = intendedOutcome === "win" && command.action === "point";
     const useRealCrouch = intendedOutcome === "win" && command.obey && command.action === "crouch";
-    if (useRealForward || useRealCrouch) {
-      if (useRealForward) {
+    if (useRealForward || useRealPoint || useRealCrouch) {
+      if (useRealForward || useRealPoint) {
         await page.keyboard.down("w");
         try {
           await page.waitForFunction(
@@ -193,7 +283,10 @@ async function playSixCommandRound(page, intendedOutcome) {
         await page.keyboard.press("c");
       }
       const liveInput = await feastState(page);
-      assert(liveInput.player.detectedAction === command.action, `real ${command.action} input was not detected; got ${JSON.stringify(liveInput.player)}`);
+      assert(liveInput.player.detectedAction === (useRealPoint ? "forward" : command.action), `real ${command.action} input was not detected; got ${JSON.stringify(liveInput.player)}`);
+      if (useRealPoint) {
+        assert(liveInput.player.detectedTargetId === "kip-solano", `W/up should point to Kip during the trust command; got ${JSON.stringify(liveInput.player)}`);
+      }
       await page.evaluate(
         (seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds),
         liveInput.phaseRemaining + 0.02,
@@ -208,6 +301,10 @@ async function playSixCommandRound(page, intendedOutcome) {
     }
     assert(result?.accepted === true, `focused QA response was rejected; command=${JSON.stringify(command)} result=${JSON.stringify(result)}`);
     assert(result.correct === (intendedOutcome === "win"), `command result drifted from the intended ${intendedOutcome}; got ${JSON.stringify(result)}`);
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.24));
+    const returning = await diagnostics(page);
+    const returningResponses = returning.contestants.entries.filter((entry) => entry.status === "ready").map((entry) => entry.challengeResponse);
+    assert(returningResponses.every((response) => response?.returning && response.progress > 0 && response.progress < 1), `contestants should ease back during the result instead of snapping at the next command; got ${JSON.stringify(returningResponses)}`);
     if (command.index === 0) {
       const beforeResultMove = await diagnostics(page);
       await page.keyboard.down("w");
@@ -220,6 +317,8 @@ async function playSixCommandRound(page, intendedOutcome) {
       );
       assert(resultDrift <= 0.03, `the player must remain frozen while a result is judged; drift=${resultDrift}`);
     }
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.8));
+    assertContestantResponsesReturned(await diagnostics(page));
     answered.add(key);
     observed.push({ ...command, responseAction, result });
     await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(0.25));
@@ -228,6 +327,16 @@ async function playSixCommandRound(page, intendedOutcome) {
   const state = await diagnostics(page);
   assert(observed.length === 6, `the round should resolve exactly six unique commands; got ${JSON.stringify(observed)}`);
   assert(observed.some((entry) => entry.obey) && observed.some((entry) => !entry.obey), `the authored deck needs both real commands and decoys; got ${JSON.stringify(observed)}`);
+  assert(observed.filter((entry) => !entry.obey).length === 2, `the psychological deck should retain exactly two fair decoys; got ${JSON.stringify(observed)}`);
+  const trustPrompt = observed.find((entry) => entry.text === "Feast says point to the person you trust the least.");
+  assert(trustPrompt?.action === "point", `the exact trust prompt should remain a scored pointing command; got ${JSON.stringify(trustPrompt)}`);
+  if (intendedOutcome === "win") {
+    assert(trustPrompt.result?.targetId === "kip-solano" && trustPrompt.result?.correct, `the exact trust prompt should accept the real W/up choice and record Kip; got ${JSON.stringify(trustPrompt)}`);
+  } else {
+    assert(!trustPrompt.result?.correct && trustPrompt.result?.targetId === null, `a non-choice response must fail the trust prompt; got ${JSON.stringify(trustPrompt)}`);
+  }
+  const coerciveCount = observed.filter((entry) => /trust|save you|betray|leave the others|hiding what you know|sacrifice/i.test(entry.text)).length;
+  assert(coerciveCount >= 4, `at least four commands should carry the requested psychological pressure; got ${JSON.stringify(observed.map((entry) => entry.text))}`);
   return { observed, state };
 }
 
@@ -245,6 +354,108 @@ function rectanglesOverlap(a, b) {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
+async function holdTouchDirection(page, session, direction) {
+  const button = await page.locator(`#touch-${direction}`).boundingBox();
+  assert(button, `the mobile ${direction} action needs its visible touch control`);
+  const center = { x: button.x + button.width / 2, y: button.y + button.height / 2 };
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ id: 1, ...center }],
+  });
+  try {
+    try {
+      await page.waitForFunction(
+        (expected) => window.MrFeastFresh.getFeastSaysState?.()?.player?.detectedAction === expected,
+        direction,
+        { timeout: 3500, polling: 50 },
+      );
+    } catch (_) {
+      const probe = await page.evaluate(({ x, y, id }) => ({
+        hitId: document.elementFromPoint(x, y)?.id || null,
+        hitStack: document.elementsFromPoint(x, y).slice(0, 6).map((element) => ({
+          tag: element.tagName,
+          id: element.id || null,
+          className: typeof element.className === "string" ? element.className : null,
+          hidden: element.hidden,
+          pointerEvents: getComputedStyle(element).pointerEvents,
+        })),
+        held: document.getElementById(id)?.classList.contains("is-held") || false,
+        rect: (() => {
+          const rect = document.getElementById(id)?.getBoundingClientRect();
+          return rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null;
+        })(),
+        viewport: { width: innerWidth, height: innerHeight, scrollX, scrollY },
+        center: { x, y },
+      }), { ...center, id: `touch-${direction}` });
+      throw new Error(`visible touch-${direction} did not reach the live command detector; input=${JSON.stringify(probe)} player=${JSON.stringify((await feastState(page)).player)}`);
+    }
+  } finally {
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+}
+
+async function playTouchOnlyLandscapeRound(page) {
+  const observed = [];
+  const touchSession = await page.context().newCDPSession(page);
+  for (let expectedIndex = 0; expectedIndex < 6; expectedIndex += 1) {
+    await page.waitForFunction(
+      (index) => {
+        const feast = window.MrFeastFresh.getFeastSaysState?.();
+        return feast?.phase === "command" && feast?.command?.index === index && !feast.command.resolved;
+      },
+      expectedIndex,
+      { timeout: 8000, polling: 50 },
+    );
+    const before = await feastState(page);
+    const layout = await feastHudLayout(page);
+    assertInside(layout.panel, layout.stage, `landscape command ${expectedIndex + 1}`);
+    assert(layout.panel.height <= 90, `landscape command ${expectedIndex + 1} is taller than 90px; got ${JSON.stringify(layout)}`);
+    assert(layout.panel.height <= layout.stage.height * 0.48, `landscape command ${expectedIndex + 1} consumes too much of the stage; got ${JSON.stringify(layout)}`);
+    assert(layout.commandFontPx >= 16, `landscape command ${expectedIndex + 1} text is too small at ${layout.commandFontPx}px`);
+    assert(layout.leaderboardDisplay === "none", `landscape command ${expectedIndex + 1} must hide the global Scores control so it cannot intercept movement; got ${JSON.stringify(layout)}`);
+    assert(Object.values(layout.auxiliaryHudDisplays).every((display) => display === "none"), `landscape command ${expectedIndex + 1} should yield duplicate and irrelevant HUDs; got ${JSON.stringify(layout.auxiliaryHudDisplays)}`);
+    assert(layout.crouch.height >= 44 && layout.crouch.width >= 44, `landscape command ${expectedIndex + 1} lost its 44px crouch target; got ${JSON.stringify(layout.crouch)}`);
+    assert(!rectanglesOverlap(layout.panel, layout.movement), `landscape command ${expectedIndex + 1} overlaps movement controls; got ${JSON.stringify(layout)}`);
+    assert(!rectanglesOverlap(layout.panel, layout.interact), `landscape command ${expectedIndex + 1} overlaps the interaction control; got ${JSON.stringify(layout)}`);
+    assert(layout.documentWidth <= layout.viewportWidth + 1, `landscape command ${expectedIndex + 1} introduced horizontal overflow; got ${JSON.stringify(layout)}`);
+
+    if (before.command.obey) {
+      const action = before.command.action === "point" ? "right" : before.command.action;
+      if (action === "crouch") {
+        await page.locator("#mansion-feast-crouch").click({ force: true });
+        assert((await feastState(page)).player.detectedAction === "crouch", `command ${expectedIndex + 1} did not accept the visible mobile crouch action`);
+      } else {
+        await holdTouchDirection(page, touchSession, action);
+      }
+    } else {
+      assert(before.player.detectedAction === "still", `decoy command ${expectedIndex + 1} should begin with the player holding still; got ${JSON.stringify(before.player)}`);
+    }
+
+    const active = await feastState(page);
+    await page.evaluate(
+      (seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds),
+      active.phaseRemaining + 0.02,
+    );
+    const resolved = await feastState(page);
+    assert(resolved.phase === "result" && resolved.command.result?.correct, `touch-only command ${expectedIndex + 1} should score correctly; got ${JSON.stringify(resolved.command)}`);
+    if (before.command.action === "point") {
+      assert(resolved.command.result.targetId === "juniper-cross", `touch-right should point to Juniper; got ${JSON.stringify(resolved.command.result)}`);
+    }
+    observed.push({ text: before.command.text, obey: before.command.obey, action: before.command.action });
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(2));
+  }
+  await touchSession.detach();
+
+  await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 8000 });
+  const completed = await diagnostics(page);
+  assert(observed.length === 6 && observed.filter((entry) => !entry.obey).length === 2, `touch-only landscape run must complete all six commands and ignore two decoys; got ${JSON.stringify(observed)}`);
+  assert(completed.feastSays.player.score === 6 && completed.feastSays.player.qualified, `touch-only landscape player should qualify with a perfect score; got ${JSON.stringify(completed.feastSays)}`);
+  const eliminatedKip = completed.contestants.entries.find((entry) => entry.id === "kip-solano");
+  assert(completed.feastSays.eliminatedContestantId === "kip-solano" && eliminatedKip?.eliminated, `touch-only landscape completion should eliminate Kip; got ${JSON.stringify({ feast: completed.feastSays.eliminatedContestantId, kip: eliminatedKip })}`);
+  assert(!completed.feastSays.clueProgressLocked, "touch-only landscape completion should reopen clue progression");
+  return completed;
+}
+
 async function feastHudLayout(page) {
   return page.evaluate(() => {
     const byId = (id) => document.getElementById(id);
@@ -259,26 +470,50 @@ async function feastHudLayout(page) {
     const stage = byId("mansion-stage");
     const panel = byId("mansion-feast-says");
     const command = byId("mansion-feast-command");
+    const hint = byId("mansion-feast-hint");
+    const timer = byId("mansion-feast-timer");
+    const round = byId("mansion-feast-round");
+    const footer = panel.querySelector(".mansion-feast__footer");
     const score = byId("mansion-feast-score");
     const standings = byId("mansion-feast-standings");
     const crouch = byId("mansion-feast-crouch");
     const interact = byId("touch-interact");
     const movement = document.querySelector(".mansion-touch__move");
     const tools = document.querySelector(".mansion-tools");
+    const location = document.querySelector(".mansion-location");
+    const sprint = byId("touch-sprint");
+    const touchCrouch = byId("touch-crouch");
+    const leaderboardButton = document.querySelector(".rb-standalone-leaderboard-btn");
+    const auxiliaryHud = ["mansion-energy", "mansion-stealth", "mansion-security", "mansion-speech"]
+      .map((id) => byId(id));
     return {
       stage: plain(stage.getBoundingClientRect()),
       panel: plain(panel.getBoundingClientRect()),
       command: plain(command.getBoundingClientRect()),
+      hint: plain(hint.getBoundingClientRect()),
+      timer: plain(timer.getBoundingClientRect()),
       score: plain(score.getBoundingClientRect()),
       crouch: plain(crouch.getBoundingClientRect()),
       interact: plain(interact.getBoundingClientRect()),
       movement: plain(movement.getBoundingClientRect()),
       tools: plain(tools.getBoundingClientRect()),
+      location: plain(location.getBoundingClientRect()),
+      sprint: plain(sprint.getBoundingClientRect()),
+      touchCrouch: plain(touchCrouch.getBoundingClientRect()),
       panelHidden: panel.hidden,
       crouchHidden: crouch.hidden,
       phase: panel.dataset.phase,
+      hintHidden: hint.hidden,
+      roundDisplay: getComputedStyle(round).display,
+      footerDisplay: getComputedStyle(footer).display,
       standingsDisplay: getComputedStyle(standings).display,
+      toolsDisplay: getComputedStyle(tools).display,
+      locationDisplay: getComputedStyle(location).display,
+      leaderboardDisplay: leaderboardButton ? getComputedStyle(leaderboardButton).display : "missing",
+      auxiliaryHudDisplays: Object.fromEntries(auxiliaryHud.map((element) => [element.id, getComputedStyle(element).display])),
       commandFontPx: Number.parseFloat(getComputedStyle(command).fontSize),
+      timerFontPx: Number.parseFloat(getComputedStyle(timer).fontSize),
+      commandOverflow: command.scrollWidth - command.clientWidth,
       interactHeight: interact.getBoundingClientRect().height,
       interactWidth: interact.getBoundingClientRect().width,
       viewportWidth: window.innerWidth,
@@ -296,6 +531,7 @@ async function run() {
   // Red-first contracts: fail here before Chromium starts until the event is
   // represented as a named, persistable system with focused diagnostics.
   assert(/const FEAST_SAYS\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the named FEAST_SAYS tuning and command contract");
+  assert(/const CONTESTANT_FEAST_SAYS_MOTION\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing named contestant response-animation tuning");
   assert(/class FeastSaysSystem/.test(runtimeSource), "runtime is missing the FeastSaysSystem state machine");
   assert(/feastSays:\s*feastSaysSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose Feast Says diagnostics");
   for (const hook of ["getFeastSaysState", "advanceFeastSaysForQA", "advanceFeastSaysCastForQA", "callFeastSaysForQA", "respondToFeastSaysForQA"]) {
@@ -305,15 +541,27 @@ async function run() {
   assert(/blocksInvestigation\(\)/.test(runtimeSource), "Feast Says needs one explicit clue-investigation gate");
   assert(/entry\.kind === "portrait"[\s\S]{0,500}blocksInvestigation/.test(runtimeSource), "the clue gate must explicitly include clue-bearing portrait carriers");
   assert(/feastSaysSystem\?\.update\(Math\.min\(rawDt, FEAST_SAYS\.maximumTimerStepSeconds\)\)/.test(runtimeSource), "the live show clock must consume capped wall time instead of physics-clamped frame time");
+  assert(runtimeSource.includes('text: "Feast says point to the person you trust the least."'), "the command deck is missing the exact requested trust prompt");
+  assert(/acceptedActions:\s*Object\.freeze\(\["left",\s*"forward",\s*"right"\]\)/.test(runtimeSource), "the trust prompt must accept the three existing directional choices");
+  assert(/targetByAction:\s*Object\.freeze/.test(runtimeSource), "the trust prompt must map each direction to a named contestant");
+  assert(/applyChallengeResponsePose\(/.test(runtimeSource), "contestant responses need a challenge-only skeletal pose layer");
+  assert(/returnSeconds:\s*0\.[5-9]/.test(runtimeSource), "contestant response motion needs a named eased-return duration");
+  assert(/returnChallengeResponses\(/.test(runtimeSource), "contestant responses must ease back to their marks during the result phase");
+  assert(/FEAST_SAYS\.contestantMarks\[targetId\]/.test(runtimeSource), "point gestures need an authored-mark fallback when a target model is unavailable");
+  assert(/stabilizeChallengeBackpedalTorso\(/.test(runtimeSource), "backpedal gait needs an upright challenge-only torso stabilizer");
 
   assert(/feastSays:\s*feastSaysSystem\?\.getSnapshot\(\)/.test(runtimeSource), "mansion saves must serialize Feast Says progress");
   assert(/feastSaysSystem\?\.restoreSnapshot\(data\.feastSays/.test(runtimeSource), "mansion loads must restore Feast Says progress");
-  for (const id of ["mansion-feast-says", "mansion-feast-command", "mansion-feast-score", "mansion-feast-timer", "mansion-feast-crouch"]) {
+  for (const id of ["mansion-feast-says", "mansion-feast-command", "mansion-feast-hint", "mansion-feast-score", "mansion-feast-timer", "mansion-feast-crouch"]) {
     assert(pageSource.includes(`id="${id}"`), `page is missing #${id}`);
   }
   const mobileCss = pageSource.slice(pageSource.indexOf("@media (max-width: 560px)"));
   assert(/#mansion-feast-says/.test(mobileCss), "the Feast Says HUD needs an explicit phone layout");
   assert(/#mansion-feast-says\[data-phase="dormant"\]/.test(mobileCss), "the idle Feast Says countdown needs its own compact phone layout");
+  const shortLandscapeCss = pageSource.slice(pageSource.indexOf("@media (max-height: 420px) and (orientation: landscape)"));
+  assert(/#mansion-feast-says:not\(\[data-phase="dormant"\]\)/.test(shortLandscapeCss), "active Feast Says needs a single-column short-landscape layout");
+  assert(/#mansion-feast-says\[data-phase="dormant"\]/.test(shortLandscapeCss), "the dormant countdown needs a conflict-free short-landscape position");
+  assert(/#mansion-feast-says\[data-phase="dormant"\]\s+\.mansion-feast__header\s*\{\s*display:\s*none/.test(shortLandscapeCss), "the short-landscape dormant strip must drop its eyebrow row to clear Sprint/Crouch");
   assert(/id="touch-interact"/.test(pageSource), "the shipped touch interaction control must remain available for Ballroom staging");
 
   let server = null;
@@ -343,6 +591,13 @@ async function run() {
     await timerPage.waitForFunction(() => window.MrFeastFresh.getMrFeastState?.()?.loadStatus === "ready", null, { timeout: 120000 });
     await timerPage.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(120));
     await timerPage.waitForFunction(() => JSON.parse(window.render_game_to_text()).openingWelcome?.completed, null, { timeout: 8000 });
+    const dormantDesktopHud = await feastHudLayout(timerPage);
+    assert(!dormantDesktopHud.panelHidden && dormantDesktopHud.phase === "dormant", `desktop dormant countdown should be visible after the welcome; got ${JSON.stringify(dormantDesktopHud)}`);
+    assertInside(dormantDesktopHud.panel, dormantDesktopHud.stage, "desktop dormant countdown");
+    assert(dormantDesktopHud.panel.width <= 360 && dormantDesktopHud.panel.height <= 48, `desktop dormant countdown should be a small strip, not the active command card; got ${JSON.stringify(dormantDesktopHud)}`);
+    assert(dormantDesktopHud.roundDisplay === "none" && dormantDesktopHud.footerDisplay === "none", `dormant countdown should hide round/score chrome; got ${JSON.stringify(dormantDesktopHud)}`);
+    assert(dormantDesktopHud.timer.width <= 54 && dormantDesktopHud.timer.height <= 20 && dormantDesktopHud.timerFontPx >= 12, `dormant countdown timer should render inline and remain readable; got ${JSON.stringify(dormantDesktopHud)}`);
+    assert(dormantDesktopHud.commandOverflow <= 1, `dormant countdown label should not clip; got ${JSON.stringify(dormantDesktopHud)}`);
     const pauseProbe = await timerPage.evaluate(() => {
       const before = window.MrFeastFresh.getFeastSaysState().secondsUntilCall;
       window.MrFeastFresh.setMenuOpenForQA(true);
@@ -368,6 +623,63 @@ async function run() {
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "timer-call-desktop.png") });
     assert(timerErrors.length === 0, `timer-page console errors: ${timerErrors.join(" | ")}`);
     await timerPage.close();
+
+    const landscapeErrors = [];
+    const landscapeCountdownPage = await browser.newPage({
+      viewport: { width: 844, height: 390 },
+      screen: { width: 844, height: 390 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    watchErrors(landscapeCountdownPage, landscapeErrors);
+    await bootPage(landscapeCountdownPage, gameUrl, { waitForCast: false });
+    const dormantLandscapeHud = await feastHudLayout(landscapeCountdownPage);
+    assert(!dormantLandscapeHud.panelHidden && dormantLandscapeHud.phase === "dormant", `short-landscape dormant countdown should be visible; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assertInside(dormantLandscapeHud.panel, dormantLandscapeHud.stage, "short-landscape dormant countdown");
+    assert(dormantLandscapeHud.panel.width <= 320 && dormantLandscapeHud.panel.height <= 48, `short-landscape dormant countdown should stay compact; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(dormantLandscapeHud.roundDisplay === "none" && dormantLandscapeHud.footerDisplay === "none", `short-landscape dormant countdown should hide active-round chrome; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(dormantLandscapeHud.commandOverflow <= 1, `short-landscape dormant label should not clip; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(!rectanglesOverlap(dormantLandscapeHud.panel, dormantLandscapeHud.location), `short-landscape dormant countdown overlaps the room label; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(!rectanglesOverlap(dormantLandscapeHud.panel, dormantLandscapeHud.tools), `short-landscape dormant countdown overlaps Bag/Menu; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(!rectanglesOverlap(dormantLandscapeHud.panel, dormantLandscapeHud.sprint), `short-landscape dormant countdown overlaps Sprint; got ${JSON.stringify(dormantLandscapeHud)}`);
+    assert(!rectanglesOverlap(dormantLandscapeHud.panel, dormantLandscapeHud.touchCrouch), `short-landscape dormant countdown overlaps Crouch; got ${JSON.stringify(dormantLandscapeHud)}`);
+    await landscapeCountdownPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dormant-countdown-landscape.png") });
+
+    await landscapeCountdownPage.waitForFunction(() => window.MrFeastFresh.getMrFeastState?.()?.loadStatus === "ready", null, { timeout: 120000 });
+    await landscapeCountdownPage.waitForFunction(() => window.MrFeastFresh.getContestantState?.()?.settled, null, { timeout: 120000 });
+    const landscapeCall = await landscapeCountdownPage.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
+    assert(landscapeCall?.started, `short-landscape QA call should start; got ${JSON.stringify(landscapeCall)}`);
+    await startBallroomRound(landscapeCountdownPage, true);
+    const activeLandscapeHud = await feastHudLayout(landscapeCountdownPage);
+    assert(activeLandscapeHud.phase === "command" && !activeLandscapeHud.hintHidden, `short-landscape should retain the trust choice and its hint; got ${JSON.stringify(activeLandscapeHud)}`);
+    assertInside(activeLandscapeHud.panel, activeLandscapeHud.stage, "short-landscape active trust card");
+    assert(activeLandscapeHud.panel.height <= 90 && activeLandscapeHud.panel.height <= activeLandscapeHud.stage.height * 0.48, `short-landscape live card should use little vertical space; got ${JSON.stringify(activeLandscapeHud)}`);
+    assert(activeLandscapeHud.commandFontPx >= 15, `short-landscape trust command is too small at ${activeLandscapeHud.commandFontPx}px`);
+    assert(activeLandscapeHud.commandOverflow <= 1, `short-landscape trust command should wrap inside its card; got ${JSON.stringify(activeLandscapeHud)}`);
+    assert(activeLandscapeHud.locationDisplay === "none" && activeLandscapeHud.toolsDisplay === "none", `nonessential top HUDs should yield to the short-landscape live challenge; got ${JSON.stringify(activeLandscapeHud)}`);
+    assert(!rectanglesOverlap(activeLandscapeHud.panel, activeLandscapeHud.movement), `short-landscape trust card overlaps movement choices; got ${JSON.stringify(activeLandscapeHud)}`);
+    assert(!rectanglesOverlap(activeLandscapeHud.panel, activeLandscapeHud.interact), `short-landscape trust card overlaps the E control; got ${JSON.stringify(activeLandscapeHud)}`);
+    await landscapeCountdownPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "point-command-landscape.png") });
+    const touchLandscapeCompletion = await playTouchOnlyLandscapeRound(landscapeCountdownPage);
+    assert(touchLandscapeCompletion.feastSays.phase === "completed", `the touch-only landscape round should reach completion; got ${JSON.stringify(touchLandscapeCompletion.feastSays)}`);
+    await landscapeCountdownPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "six-command-complete-landscape.png") });
+    assert(landscapeErrors.length === 0, `short-landscape Feast Says console errors: ${landscapeErrors.join(" | ")}`);
+    await landscapeCountdownPage.close();
+
+    const compactLandscapePage = await browser.newPage({
+      viewport: { width: 568, height: 320 },
+      screen: { width: 568, height: 320 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    await bootPage(compactLandscapePage);
+    await compactLandscapePage.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
+    await startBallroomRound(compactLandscapePage, true);
+    const compactLandscapeHud = await feastHudLayout(compactLandscapePage);
+    assert(compactLandscapeHud.panel.height <= 90 && compactLandscapeHud.panel.height <= compactLandscapeHud.stage.height * 0.48, `compact 568×320 live card should stay below the landscape budget; got ${JSON.stringify(compactLandscapeHud)}`);
+    assert(!rectanglesOverlap(compactLandscapeHud.panel, compactLandscapeHud.movement) && !rectanglesOverlap(compactLandscapeHud.panel, compactLandscapeHud.interact), `compact 568×320 live card should clear all touch controls; got ${JSON.stringify(compactLandscapeHud)}`);
+    await compactLandscapePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "point-command-compact-landscape.png") });
+    await compactLandscapePage.close();
 
     // Every supported first clue can call the same event without losing its
     // own discovery feedback. These are fresh runtimes, not a scripted book
@@ -544,6 +856,14 @@ async function run() {
     await fallbackPage.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "briefing", null, { timeout: 8000 });
     const fallbackRound = await diagnostics(fallbackPage);
     assert(fallbackRound.feastSays.castReady && fallbackRound.feastSays.staging.contestantsStaged && !fallbackRound.feastSays.staging.contestantsReady, `a settled partial cast must still start Feast Says; got ${JSON.stringify(fallbackRound.feastSays.staging)}`);
+    await fallbackPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(7));
+    await fallbackPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
+    const fallbackPoint = await diagnostics(fallbackPage);
+    const visiblePointers = fallbackPoint.contestants.entries.filter((entry) => entry.status === "ready" && entry.challengeResponse?.action === "point");
+    assert(visiblePointers.length === 2, `the loaded partial cast should still perform the opening point command; got ${JSON.stringify(fallbackPoint.contestants.entries.map((entry) => entry.challengeResponse))}`);
+    assert(visiblePointers.every((entry) => entry.challengeResponse.targetId === "kip-solano" && entry.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 18), `loaded contestants should point toward Kip's authored mark even when his model is unavailable; got ${JSON.stringify(visiblePointers.map((entry) => entry.challengeResponse))}`);
+    const fallbackLeftChoice = await fallbackPage.evaluate(() => window.MrFeastFresh.respondToFeastSaysForQA("left"));
+    assert(fallbackLeftChoice?.correct && fallbackLeftChoice.targetId === "mara-voss", `A/left should remain a valid trust choice in a partial cast; got ${JSON.stringify(fallbackLeftChoice)}`);
     await fallbackPage.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
     assert((await feastState(fallbackPage)).phase === "completed", "the partial-cast fallback should still release the clue gate");
     await fallbackPage.close();
@@ -558,8 +878,41 @@ async function run() {
     });
     watchErrors(mobile, mobileErrors);
     await bootPage(mobile);
+    const mobileDormantHud = await feastHudLayout(mobile);
+    assert(mobileDormantHud.phase === "dormant" && mobileDormantHud.panel.width <= 242 && mobileDormantHud.panel.height <= 44, `portrait-phone dormant countdown should stay compact; got ${JSON.stringify(mobileDormantHud)}`);
+    assert(!rectanglesOverlap(mobileDormantHud.panel, mobileDormantHud.location) && !rectanglesOverlap(mobileDormantHud.panel, mobileDormantHud.tools), `portrait-phone dormant countdown should not cover the room label or Bag/Menu; got ${JSON.stringify(mobileDormantHud)}`);
+    assert(!rectanglesOverlap(mobileDormantHud.panel, mobileDormantHud.sprint) && !rectanglesOverlap(mobileDormantHud.panel, mobileDormantHud.touchCrouch), `portrait-phone dormant countdown should not cover Sprint/Crouch; got ${JSON.stringify(mobileDormantHud)}`);
     await mobile.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
     await startBallroomRound(mobile, true);
+    const pointHint = await mobile.locator("#mansion-feast-hint").textContent();
+    assert(/Mara/i.test(pointHint) && /Kip/i.test(pointHint) && /Juniper/i.test(pointHint), `the point round should explain the three keyboard/touch choices; got ${JSON.stringify(pointHint)}`);
+    const mobilePointHud = await feastHudLayout(mobile);
+    assert(mobilePointHud.phase === "command" && !mobilePointHud.hintHidden && mobilePointHud.panel.height <= 126, `the hinted point command should fit the active phone card; got ${JSON.stringify(mobilePointHud)}`);
+    await mobile.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "point-command-mobile.png") });
+    const rightButton = await mobile.locator("#touch-right").boundingBox();
+    assert(rightButton, "the phone trust-choice test needs the real touch-right control");
+    const touchSession = await mobile.context().newCDPSession(mobile);
+    await touchSession.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: rightButton.x + rightButton.width / 2, y: rightButton.y + rightButton.height / 2 }],
+    });
+    try {
+      await mobile.waitForFunction(
+        () => window.MrFeastFresh.getFeastSaysState?.()?.player?.detectedAction === "right",
+        null,
+        { timeout: 3500, polling: 50 },
+      );
+    } finally {
+      await touchSession.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await touchSession.detach();
+    }
+    let mobileFeast = await feastState(mobile);
+    assert(mobileFeast.player.detectedTargetId === "juniper-cross", `D/right should choose Juniper on the phone layout; got ${JSON.stringify(mobileFeast.player)}`);
+    await mobile.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), mobileFeast.phaseRemaining + 0.02);
+    mobileFeast = await feastState(mobile);
+    assert(mobileFeast.command.result?.correct && mobileFeast.command.result?.targetId === "juniper-cross", `the phone trust choice should score without judging its target; got ${JSON.stringify(mobileFeast.command)}`);
+    await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(2));
+    await mobile.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "command", null, { timeout: 4000 });
     await mobile.locator("#mansion-feast-crouch").click({ force: true });
     assert((await feastState(mobile)).player.detectedAction === "crouch", "the challenge-only mobile crouch button should feed the live command detector");
     await mobile.locator("#mansion-feast-crouch").click({ force: true });

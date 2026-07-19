@@ -288,7 +288,7 @@ async function run() {
     assert(mobileControls.crouch.bottom <= mobileControls.interact.top, `mobile crouch should not overlap Interact; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.movement.width <= 148 && mobileControls.movement.height <= 100, `mobile movement controls should keep a compact footprint; controls=${JSON.stringify(mobileControls)}`);
     assert(mobileControls.energy.width <= 136 && mobileControls.energy.height <= 32, `mobile energy HUD should stay compact; controls=${JSON.stringify(mobileControls)}`);
-    assert(mobileControls.feastPhase === "dormant" && mobileControls.feast.width <= 250 && mobileControls.feast.height <= 58, `the idle Feast Says countdown should collapse into a compact phone strip; controls=${JSON.stringify(mobileControls)}`);
+    assert(mobileControls.feastPhase === "dormant" && mobileControls.feast.width <= 242 && mobileControls.feast.height <= 44, `the idle Feast Says countdown should collapse into a compact phone strip; controls=${JSON.stringify(mobileControls)}`);
     const bottomUiTop = Math.min(...[mobileControls.movement, mobileControls.sprint, mobileControls.crouch, mobileControls.interact, mobileControls.energy]
       .filter((control) => control.display !== "none" && control.height > 0)
       .map((control) => control.top));

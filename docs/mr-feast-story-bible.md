@@ -109,9 +109,11 @@ rises with it, and the finale is a scheduled arrival.
   wax; a freezer manifest lists deliveries by weight only; Mr. Feast never eats on
   camera; thunder rolls with no rain on the glass for one beat.
 - **Game 1 — FEAST SAYS.** Six short Ballroom rounds mix genuine movement/crouch
-  orders with decoys that omit "Feast says." Mara is nearly perfect, Juniper stays
-  composed, Kip plays to the cameras and misses enough calls to finish last. The
-  player must beat him; otherwise the player is the contestant eliminated.
+  orders with decoys that omit "Feast says." The orders weaponize distrust—one asks
+  every contestant to point to the person they trust least—while remaining mechanically
+  explicit and fair. Mara is nearly perfect, Juniper stays composed, Kip plays to the
+  cameras and misses enough calls to finish last. The player must beat him; otherwise
+  the player is the contestant eliminated.
 - The **SCARE CAM** gag: a mascot pops from the coat closet with confetti; Mr. Feast
   crows "That's our SCARE CAM! Our audience loves a good scare." This trains the player
   to relax and establishes that the show manufactures fear (lore: seasoning) — the

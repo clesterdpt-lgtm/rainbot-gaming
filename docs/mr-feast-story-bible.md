@@ -131,12 +131,17 @@ rises with it, and the finale is a scheduled arrival.
 - Kip aftermath beats: his goodbye video loops on the monitor bank with the wrong room
   behind him (the Archive); his confessional is dated Day 41 of a 12-day season; his
   reserved seat stays reserved and nobody — including the player — may sit in it.
-- **Game 2 — LIGHTS OUT (hide-and-seek).** The circuits drop and Mr. Feast "plays
-  seeker." The crouch stealth meter, darkness sampling, and hiding spots become the
-  competition itself. First contestant found is eliminated.
-- **Elimination 2 — Mara**, found in the statistically optimal hiding spot she
-  calculated — the show always knew. Heard through the walls, never seen: the
-  elimination jingle plays over something that is not applause.
+- **Game 2 — STORM RUN.** Ten active exploration minutes after Feast Says, or as
+  soon as the player earns the next major clue, Mr. Feast calls the remaining cast
+  to a rear-terrace start line. Five ordered television checkpoints cross the rear
+  grounds, formal garden, front grounds, east lawn, and hedge-maze interior. Mara
+  and Juniper visibly run the same authored course without exceeding the player's
+  maximum sprint speed. Lightning is not a hazard: selected checkpoint approaches
+  use a flash to reveal Mr. Feast standing impossibly close to the route, then hide
+  him again when darkness returns.
+- **Elimination 2 — Mara**, last across the Storm Run course despite calculating the
+  optimal route. The show knew every shortcut before she chose it. Her elimination
+  jingle begins outside and finishes somewhere beneath the floorboards.
 - Aftermath: through a service hatch the player can overlook the **Elimination
   Dinner** — hooded patrons, thirteen place settings, silverware etiquette, no gore
   (the horror is the manners). One empty chair; the place card carries the player's
@@ -311,7 +316,9 @@ idea that fits a lane is automatically coherent; anything that fits none gets cu
    tamper states (portrait tilt, chair pull, fridge door) plus a silent no-comment
    housekeeping variant for Mr. Feast; authored set pieces (portrait unison, chair
    ring, piano) come after the ambient tier works.
-5. **Game 2 + Mara elimination + dinner overlook** — the stealth showcase event.
+5. **Game 2 + Mara elimination + dinner overlook** — Storm Run crosses the full
+   estate and turns the weather into a supernatural reveal language without adding
+   a damaging weather-hazard system.
 6. **Phase dressing pass** — painting scoreboard, audio sweetener/detune swaps,
    line-pool swaps, statue notches, the reverse-jingle motif.
 7. **Game 3 + Juniper arc + maze night** — includes the monitor-8 sigil aerial.

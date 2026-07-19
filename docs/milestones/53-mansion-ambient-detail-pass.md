@@ -17,6 +17,7 @@ Raise ambient believability across the whole estate with small, room-specific pr
 - Basement vignettes: `addLaundryDetails()` (strung drying lines with hanging linens, enamel washtub with washboard, wicker baskets, folded stacks), `addWineCellarDetails()` (tasting-table bottles, goblets, candlestick, ledger, two hooped barrels), `addBulkStorageDetails()` (stacked crates, two barrels, tarp-covered pile), and `addBoilerRoomDetails()` (coal scuttle, lumps, shovel).
 - Main-floor accents: `addMusicRoomDetails()` (sheet stand, metronome, violin case), `addLibraryWritingSet()` (open book, inkwell, letters, drinks-cabinet decanter), and `addRearLoungeTeaService()`.
 - Static acceptance suite `scripts/test-mr-feast-ambient-details.mjs` and a synchronized cache-key/runtime-version bump.
+- Second pass (user-directed): every below-grade ceiling fixture now shares the utility cage-and-bare-bulb look — basement corridor and service-stair-landing fixtures drop their chandelier rings while keeping their authored cone emitters untouched; mantel decor on all three fireplaces (clock, urn pair, leaning frame variants); vanity counter sets in both bathrooms; foyer console vases and card trays; an exposed service pipe with valve along the rear cross-corridor ceiling (overhead only — the chase lane stays clear); a drinks table and towels between the pool loungers; a portico entry mat; and a smaller planter-urn pair flanking the rear terrace doors.
 
 ## Out of scope
 
@@ -39,6 +40,8 @@ Raise ambient believability across the whole estate with small, room-specific pr
 - [x] Laundry, wine cellar, and bulk storage receive their vignettes with solid washtub/barrel/tarp colliders. — test: `scripts/test-mr-feast-ambient-details.mjs::6`
 - [x] Music room, library, rear lounge, and boiler room accents exist; the library set stays tabletop-only so Mara's writing-chair approach is unchanged. — test: `scripts/test-mr-feast-ambient-details.mjs::7–8`
 - [x] The page cache key and `MANSION_RUNTIME_VERSION` move together past the pre-ambient value. — test: `scripts/test-mr-feast-ambient-details.mjs::9`
+- [x] Basement fixtures are visually uniform: corridor-style fixtures below grade use the cage-and-bare-bulb look via a geometry-only branch, while ring shadows and the pinned cone emitters stay authored (renovation checks 16/22/29 unchanged). — test: `scripts/test-mr-feast-ambient-details.mjs::10`
+- [x] Second-pass vignettes exist: three mantels, two vanity sets, foyer consoles, rear-corridor overhead pipes with no chase-lane colliders, pool deck table, rear terrace urns, and the portico mat with culling-safe names. — test: `scripts/test-mr-feast-ambient-details.mjs::10`
 - [x] All prior renovation invariants still pass. — test: `scripts/test-mr-feast-renovation.mjs`
 - [ ] User playtest: overall tone (props feel period-correct and subtle, nothing gamey or overbright), suite navigation comfort around the new trunk/nightstand colliders, and laundry drying-line readability.
 

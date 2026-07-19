@@ -538,8 +538,8 @@ async function run() {
     assert(runtimeSource.includes(hook), `runtime is missing the focused ${hook} QA hook`);
   }
 
-  assert(/blocksInvestigation\(\)/.test(runtimeSource), "Feast Says needs one explicit clue-investigation gate");
-  assert(/entry\.kind === "portrait"[\s\S]{0,500}blocksInvestigation/.test(runtimeSource), "the clue gate must explicitly include clue-bearing portrait carriers");
+  assert(/function competitionBlocksInvestigation\(\)[\s\S]{0,180}activeCompetitionSystem\(\)/.test(runtimeSource), "clue carriers need one centralized active-competition gate");
+  assert(/function noteMajorClueDiscovered\(clueId\)[\s\S]{0,420}feastSaysSystem\?\.noteClueDiscovered\(clueId\)[\s\S]{0,420}stormRunSystem\?\.noteClueDiscovered\(clueId\)/.test(runtimeSource), "earned clues must dispatch through Feast Says and then Storm Run");
   assert(/feastSaysSystem\?\.update\(Math\.min\(rawDt, FEAST_SAYS\.maximumTimerStepSeconds\)\)/.test(runtimeSource), "the live show clock must consume capped wall time instead of physics-clamped frame time");
   assert(runtimeSource.includes('text: "Feast says point to the person you trust the least."'), "the command deck is missing the exact requested trust prompt");
   assert(/acceptedActions:\s*Object\.freeze\(\["left",\s*"forward",\s*"right"\]\)/.test(runtimeSource), "the trust prompt must accept the three existing directional choices");
@@ -814,6 +814,23 @@ async function run() {
     await pressInteract(winPage);
     state = await diagnostics(winPage);
     assert(state.contestant13.shovelTaken && state.inventory.items.includes("garden-shovel"), `investigation should resume after Feast Says; got ${JSON.stringify(state.contestant13)}`);
+    assert(
+      state.stormRun?.phase === "called"
+        && state.stormRun.triggerReason === "clue"
+        && state.stormRun.triggerClueId === "faceless-fountain-shovel"
+        && state.stormRun.callCount === 1
+        && state.stormRun.clueProgressLocked,
+      `the first post-Feast clue should remain earned while calling Storm Run exactly once; got ${JSON.stringify(state.stormRun)}`,
+    );
+    const stormCallToast = await winPage.evaluate(() => ({
+      title: document.getElementById("mansion-discovery-title")?.textContent || "",
+      body: document.getElementById("mansion-discovery-body")?.textContent || "",
+    }));
+    assert(
+      /concealed garden shovel/i.test(stormCallToast.title)
+        && /five-checkpoint course|rear terrace/i.test(stormCallToast.body),
+      `the earned shovel clue and Storm Run call should share one readable discovery card; got ${JSON.stringify(stormCallToast)}`,
+    );
     assert(winErrors.length === 0, `winning-page console errors: ${winErrors.join(" | ")}`);
     await winPage.close();
 

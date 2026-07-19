@@ -125,6 +125,22 @@ check("7 boiler scuttle", /boiler-coal-scuttle/.test(basementFurnishings) || /bo
 const libraryWritingSet = section("function addLibraryWritingSet()", "\n  function ");
 check("8 library floor clear", !/physics\.addFixedBox/.test(libraryWritingSet), "the library writing set is tabletop decor and must not block Mara's seat approach");
 
+// 10. Second detail pass. Basement corridor fixtures drop their chandelier
+// rings for the shared utility cage-and-bulb look while keeping the authored
+// cone emitters (check 29 of the renovation suite still forbids corridor
+// omnis), and the mantels, vanities, foyer consoles, rear corridor ceiling,
+// pool deck, and rear terrace each gain one dressed vignette.
+const fixtureBuilder = section("addFixture(x, z, style, floorYOverride)", "addCeilingResponseGlow");
+check("10 uniform basement fixtures", /const utilityLook = style === "basement" \|\| \(style === "corridor" && fixtureFloorY === FLOOR\.BASEMENT\)/.test(fixtureBuilder), "basement corridor fixtures still hang formal chandelier rings");
+check("10 uniform basement fixtures", /if \(utilityLook\) \{/.test(fixtureBuilder) && /ring\.castShadow\s*=\s*style\s*===\s*"atrium"/.test(fixtureBuilder), "the utility look must swap only the visible geometry, leaving ring shadows and emitters authored");
+check("10 mantel decor", count(mainFurnishings + upperFurnishings, /addMantelDecor\(/g) >= 3, "all three fireplaces should carry mantel decor");
+check("10 vanity sets", count(mansion, /addVanityCounterSet\(/g) >= 3, "both bathroom vanities need counter sets");
+check("10 foyer consoles", /addFoyerConsoleDecor\(\);/.test(mainFurnishings) && /foyer-console-vase/.test(section("function addFoyerConsoleDecor()", "\n  function ")), "the foyer console tables are still bare");
+const pipeBuilder = section("function addRearCorridorServicePipes()", "\n  function ");
+check("10 rear corridor pipes", /addRearCorridorServicePipes\(\);/.test(basementFurnishings) && /rear-corridor-pipe-bracket/.test(pipeBuilder) && !/physics\.addFixedBox/.test(pipeBuilder), "the rear cross-corridor ceiling line is missing or blocks the chase lane");
+check("10 rear terrace urns", /rear-terrace-planter-urn/.test(plantingBuilder) && /portico-entry-mat/.test(plantingBuilder), "the rear terrace urns or portico entry mat are missing (names must keep culling-safe prefixes)");
+check("10 pool deck table", /pool-side-table-top/.test(section("function buildEstatePool()", "\n  function ")), "the pool deck lacks its lounger-side drinks table");
+
 // 9. Cache-busting: the page key and the runtime version stay in sync and
 // moved past the pre-ambient-details value. The exact key is deliberately not
 // pinned so parallel milestones can bump it again without editing this suite.

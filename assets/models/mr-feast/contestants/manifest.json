@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260718-natural-characters-1",
+  "assetVersion": "20260719-storm-run-1",
   "pipeline": "Meshy 6 text-to-3D and auto-rig, followed by Blender 4.5 browser preparation",
   "characters": [
     {
@@ -44,6 +44,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 1.033333420753479
+        },
+        "run": {
+          "file": "mara-voss-run.glb",
+          "name": "run",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 0.6333333253860474
         }
       },
       "dialogue": [
@@ -160,6 +167,13 @@
           "loop": true,
           "stationary": true,
           "durationSeconds": 1.033333420753479
+        },
+        "run": {
+          "file": "juniper-cross-run.glb",
+          "name": "run",
+          "loop": true,
+          "stationary": true,
+          "durationSeconds": 0.6333333253860474
         }
       },
       "dialogue": [

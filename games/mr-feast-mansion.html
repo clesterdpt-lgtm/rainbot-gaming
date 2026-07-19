@@ -637,6 +637,200 @@
       font-size: 0.85rem;
     }
 
+    #mansion-storm-run {
+      position: absolute;
+      top: max(18px, calc(env(safe-area-inset-top) + 10px));
+      left: 50%;
+      z-index: 10;
+      display: grid;
+      width: min(520px, calc(100% - 220px));
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "storm-header storm-timer"
+        "storm-title storm-timer"
+        "storm-progress storm-standings";
+      gap: 4px 14px;
+      padding: 9px 12px 10px 15px;
+      overflow: hidden;
+      border: 1px solid rgba(137, 187, 213, 0.62);
+      border-radius: 10px;
+      color: #edf6f7;
+      background:
+        linear-gradient(112deg, rgba(17, 37, 52, 0.96), rgba(12, 18, 27, 0.95) 58%, rgba(7, 8, 13, 0.94)),
+        rgba(8, 12, 18, 0.96);
+      box-shadow:
+        0 14px 34px rgba(0, 0, 0, 0.54),
+        inset 0 1px 0 rgba(220, 244, 255, 0.1);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+
+    #mansion-storm-run::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(#d8f2ff, #4d879f 50%, #1c3449);
+      box-shadow: 0 0 16px rgba(173, 226, 248, 0.34);
+    }
+
+    #mansion-storm-run[hidden] { display: none; }
+
+    body:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .rb-standalone-leaderboard-btn,
+    body:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .rb-standalone-leaderboard,
+    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-stealth,
+    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-security,
+    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-speech {
+      display: none;
+    }
+
+    .mansion-storm__header {
+      grid-area: storm-header;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #mansion-storm-run-eyebrow {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+      overflow: hidden;
+      color: #b9e3f2;
+      font-size: 0.56rem;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-storm-run-eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #d8f3ff;
+      box-shadow: 0 0 0 3px rgba(129, 197, 224, 0.14), 0 0 11px rgba(178, 229, 250, 0.7);
+      animation: mansion-feast-live 1.35s ease-in-out infinite;
+    }
+
+    #mansion-storm-run-title {
+      grid-area: storm-title;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(1rem, 2vw, 1.35rem);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.05;
+      text-overflow: ellipsis;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.58);
+      white-space: nowrap;
+    }
+
+    #mansion-storm-run-timer {
+      grid-area: storm-timer;
+      display: inline-grid;
+      width: 48px;
+      height: 48px;
+      place-self: center end;
+      place-items: center;
+      border: 2px solid rgba(175, 221, 239, 0.7);
+      border-radius: 50%;
+      color: #effbff;
+      background: rgba(0, 0, 0, 0.24);
+      box-shadow: inset 0 0 0 4px rgba(175, 221, 239, 0.055);
+      font-size: 1.05rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .mansion-storm__progress-row {
+      grid-area: storm-progress;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+      border-top: 1px solid rgba(166, 215, 235, 0.16);
+    }
+
+    #mansion-storm-run-progress,
+    #mansion-storm-run-checkpoint,
+    #mansion-storm-run-standings {
+      min-width: 0;
+      font-size: 0.56rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    #mansion-storm-run-progress {
+      flex: 0 0 auto;
+      color: #bce5f3;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #mansion-storm-run-checkpoint {
+      overflow: hidden;
+      color: rgba(226, 240, 244, 0.72);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-storm-run-standings {
+      grid-area: storm-standings;
+      align-self: end;
+      max-width: 190px;
+      padding-top: 4px;
+      overflow: hidden;
+      border-top: 1px solid rgba(166, 215, 235, 0.16);
+      color: rgba(226, 240, 244, 0.7);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-storm-run[data-phase="dormant"] {
+      width: min(260px, calc(100% - 220px));
+      grid-template-areas: "storm-title storm-timer";
+      gap: 8px;
+      padding: 7px 10px 8px 13px;
+    }
+
+    #mansion-storm-run[data-phase="dormant"] .mansion-storm__header,
+    #mansion-storm-run[data-phase="dormant"] .mansion-storm__progress-row,
+    #mansion-storm-run[data-phase="dormant"] #mansion-storm-run-standings {
+      display: none;
+    }
+
+    #mansion-storm-run[data-phase="dormant"] #mansion-storm-run-title {
+      align-self: center;
+      font: 800 0.72rem/1 var(--mansion-sans);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    #mansion-storm-run[data-phase="dormant"] #mansion-storm-run-timer {
+      width: auto;
+      height: auto;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      font-size: 0.82rem;
+    }
+
     #mansion-security {
       position: absolute;
       left: 50%;
@@ -2163,6 +2357,38 @@
         box-shadow: none;
         font-size: 0.78rem;
       }
+      #mansion-storm-run {
+        top: max(66px, calc(env(safe-area-inset-top) + 58px));
+        width: calc(100% - 24px);
+        grid-template-areas:
+          "storm-header storm-timer"
+          "storm-title storm-timer"
+          "storm-progress storm-progress"
+          "storm-standings storm-standings";
+        gap: 3px 8px;
+        padding: 7px 9px 8px 12px;
+        border-radius: 8px;
+      }
+      #mansion-storm-run-eyebrow,
+      #mansion-storm-run-progress,
+      #mansion-storm-run-checkpoint,
+      #mansion-storm-run-standings { font-size: 0.5rem; }
+      #mansion-storm-run-title { font-size: 1rem; }
+      #mansion-storm-run-timer { width: 42px; height: 42px; font-size: 0.92rem; }
+      .mansion-storm__progress-row { gap: 6px; padding-top: 3px; }
+      #mansion-storm-run-standings {
+        width: 100%;
+        max-width: none;
+        padding-top: 3px;
+        text-align: left;
+      }
+      #mansion-storm-run[data-phase="dormant"] {
+        width: min(190px, calc(100% - 128px));
+      }
+      #mansion-casefile:not([hidden]) ~ #mansion-storm-run[data-phase="dormant"] {
+        top: max(178px, calc(env(safe-area-inset-top) + 170px));
+        width: min(170px, calc(100% - 24px));
+      }
       #mansion-casefile:not([hidden]) ~ #mansion-feast-says[data-phase="dormant"] { display: none; }
       #mansion-casefile {
         top: max(72px, calc(env(safe-area-inset-top) + 62px));
@@ -2389,6 +2615,30 @@
         height: 36px;
         font-size: 0.9rem;
       }
+      #mansion-storm-run {
+        top: max(2px, env(safe-area-inset-top));
+        width: min(520px, calc(100% - 110px));
+        gap: 2px 8px;
+        padding: 4px 8px 5px 11px;
+      }
+      #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .mansion-location,
+      #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .mansion-tools {
+        display: none;
+      }
+      #mansion-storm-run-title { font-size: 0.92rem; }
+      #mansion-storm-run-timer { width: 36px; height: 36px; font-size: 0.86rem; }
+      #mansion-storm-run-eyebrow,
+      #mansion-storm-run-progress,
+      #mansion-storm-run-checkpoint,
+      #mansion-storm-run-standings { font-size: 0.47rem; }
+      .mansion-storm__progress-row,
+      #mansion-storm-run-standings { padding-top: 2px; }
+      #mansion-storm-run-standings { max-width: 128px; }
+      #mansion-storm-run[data-phase="dormant"] {
+        top: max(64px, calc(env(safe-area-inset-top) + 60px));
+        width: min(190px, calc(100% - 128px));
+      }
+      #mansion-casefile:not([hidden]) ~ #mansion-storm-run[data-phase="dormant"] { display: none; }
       .mansion-touch__move {
         bottom: max(0px, env(safe-area-inset-bottom));
       }
@@ -2471,6 +2721,19 @@
             <output id="mansion-feast-standings" aria-label="Contestant standings" aria-live="polite">Mara 0 · Kip 0 · Juniper 0 · You 0</output>
             <button id="mansion-feast-crouch" type="button" aria-label="Crouch for the Feast Says challenge" aria-pressed="false">Crouch</button>
           </div>
+        </section>
+
+        <section id="mansion-storm-run" role="region" aria-label="Storm Run live race" aria-live="polite" aria-atomic="true" data-phase="dormant" hidden>
+          <div class="mansion-storm__header">
+            <span id="mansion-storm-run-eyebrow">Game 2 · Live race</span>
+          </div>
+          <p id="mansion-storm-run-title">Storm Run</p>
+          <output id="mansion-storm-run-timer" aria-label="Storm Run elapsed time" aria-live="off">—</output>
+          <div class="mansion-storm__progress-row">
+            <output id="mansion-storm-run-progress" aria-label="Storm Run checkpoint progress">Checkpoint 0 / 5</output>
+            <span id="mansion-storm-run-checkpoint">Report to the rear terrace</span>
+          </div>
+          <output id="mansion-storm-run-standings" aria-label="Storm Run contestant standings">Mara · Juniper · You</output>
         </section>
 
         <div class="mansion-tools" aria-label="View controls">
@@ -2752,6 +3015,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260719-ambient-details-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260719-storm-run-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

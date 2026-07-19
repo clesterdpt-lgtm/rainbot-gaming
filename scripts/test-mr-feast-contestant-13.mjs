@@ -57,6 +57,28 @@ async function completeFirstClueCompetition(page, expectedClueId) {
   return state;
 }
 
+async function completeStormRunCompetition(page, expectedClueId) {
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 30000 });
+  let state = await diagnostics(page);
+  assert(
+    state.stormRun?.phase === "called"
+      && state.stormRun.triggerReason === "clue"
+      && state.stormRun.triggerClueId === expectedClueId
+      && state.stormRun.callCount === 1
+      && state.stormRun.clueProgressLocked,
+    `the first post-Feast clue should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
+  assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
+    `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
+  );
+  return state;
+}
+
 async function teleportForInteraction(page, view, promptPattern) {
   const result = await page.evaluate((destination) => window.MrFeastFresh.teleport(destination), view);
   assert(!result?.error, result?.error || `Could not teleport to ${view}`);
@@ -389,6 +411,9 @@ async function run() {
     assert(state.inventory.items.filter((id) => id === "garden-shovel").length === 1, "shovel should enter inventory exactly once");
     assert(state.inventory.bulkyItem === "garden-shovel", "shovel should be the carried bulky item");
     assert(state.contestant13.world.shovelVisible === false, "collected shovel should disappear from the world");
+    assert(state.stormRun?.phase === "called" && state.stormRun.triggerClueId === "faceless-fountain-shovel", `the first post-Feast clue should call Storm Run; got ${JSON.stringify(state.stormRun)}`);
+    assert(state.stormRun.clueProgressLocked && state.contestant13.shovelTaken, "the shovel that calls Storm Run should remain earned while later investigation is held");
+    state = await completeStormRunCompetition(page, "faceless-fountain-shovel");
 
     await teleportForInteraction(page, "contestant13DigSite", /dig.*(?:contestant 13|xiii)|excavate|disturbed earth/i);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-subtle-desktop.png") });
@@ -487,6 +512,13 @@ async function run() {
     await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await waitForContestantFlag(mobilePage, "bookRead");
+    await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
+    let mobileBookState = await diagnostics(mobilePage);
+    assert(mobileBookState.stormRun?.phase === "called" && mobileBookState.stormRun.triggerClueId === "contestant-13-book", `the first post-Feast mobile clue should call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
+    assert(mobileBookState.stormRun.clueProgressLocked && mobileBookState.contestant13.bookRead && mobileBookState.journal.entries.includes("contestant-13-book"), "the mobile book clue should remain earned while Storm Run holds later investigation");
+    await completeStormRunCompetition(mobilePage, "contestant-13-book");
+    await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
     await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     const mobileUi = await mobilePage.evaluate(() => {
       const caseFile = document.getElementById("mansion-casefile")?.getBoundingClientRect();

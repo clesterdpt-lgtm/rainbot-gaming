@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260719-ambient-details-1";
+  const MANSION_RUNTIME_VERSION = "20260719-storm-run-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -126,6 +126,13 @@
     feastScore: $("mansion-feast-score"),
     feastStandings: $("mansion-feast-standings"),
     feastCrouch: $("mansion-feast-crouch"),
+    stormRun: $("mansion-storm-run"),
+    stormRunEyebrow: $("mansion-storm-run-eyebrow"),
+    stormRunTitle: $("mansion-storm-run-title"),
+    stormRunTimer: $("mansion-storm-run-timer"),
+    stormRunProgress: $("mansion-storm-run-progress"),
+    stormRunCheckpoint: $("mansion-storm-run-checkpoint"),
+    stormRunStandings: $("mansion-storm-run-standings"),
     gameOver: $("mansion-gameover"),
     gameOverTitle: $("mansion-gameover-title"),
     gameOverCopy: $("mansion-gameover-copy"),
@@ -486,6 +493,7 @@
     IDLE: "idle",
     TURNING: "turning",
     WALKING: "walking",
+    RUNNING: "running",
     TALKING: "talking",
     SEATED: "seated",
   });
@@ -1153,7 +1161,7 @@
   });
   const MANSION_CONTESTANTS = Object.freeze({
     manifestPath: "../models/mr-feast/contestants/manifest.json",
-    assetVersion: "20260718-natural-characters-1",
+    assetVersion: "20260719-storm-run-1",
     contactShadowOpacity: 0.2,
     interactionWidth: 0.82,
     interactionDepth: 0.7,
@@ -1586,6 +1594,14 @@
     COMPLETED: "completed",
     FAILED: "failed",
   });
+  const STORM_RUN_PHASE = Object.freeze({
+    DORMANT: "dormant",
+    CALLED: "called",
+    BRIEFING: "briefing",
+    RUNNING: "running",
+    COMPLETED: "completed",
+    FAILED: "failed",
+  });
   const FEAST_SAYS = Object.freeze({
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
@@ -1875,6 +1891,77 @@
   ]);
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
+  const STORM_RUN = Object.freeze({
+    intermissionSeconds: 10 * 60,
+    maximumTimerStepSeconds: 0.5,
+    briefingSeconds: 5,
+    briefingSpeechSeconds: 4.5,
+    completionCardSeconds: 6,
+    checkpointRadius: 1.25,
+    checkpointApproachRadius: 6,
+    hostRevealFlashThreshold: 0.04,
+    hostRevealMaximumSeconds: 1.05,
+    playerMaximumSprintSpeed: PLAYER.sprintSpeed,
+    contestantMaximumSpeed: Math.min(3, PLAYER.sprintSpeed - 0.5),
+    contestantSpeeds: Object.freeze({
+      "mara-voss": 2.65,
+      "juniper-cross": 2.85,
+    }),
+    startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.6, yaw: -Math.PI / 2 }),
+    reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15, yaw: Math.PI }),
+    hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -18.0, yaw: 0 }),
+    contestantMarks: Object.freeze({
+      "mara-voss": Object.freeze({ x: -0.7, y: YARD_LAYOUT.groundY, z: -16.45, yaw: -Math.PI / 2 }),
+      "juniper-cross": Object.freeze({ x: 0.7, y: YARD_LAYOUT.groundY, z: -16.45, yaw: -Math.PI / 2 }),
+    }),
+    checkpoints: Object.freeze([
+      Object.freeze({ id: "formal-garden", label: "Formal Garden", region: "FORMAL GARDEN", x: -25, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false,
+        reveal: Object.freeze({ x: 4.8, y: YARD_LAYOUT.groundY, z: 28.4, yaw: -Math.PI / 2 }) }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
+        scareTrigger: Object.freeze({ x: 28, z: 2.75, radius: 1.15 }),
+        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: 2.75, yaw: Math.PI / 2 }) }),
+      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
+      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false,
+        reveal: Object.freeze({ x: -9.4, y: YARD_LAYOUT.groundY, z: -21.2, yaw: -0.7 }) }),
+    ]),
+    contestantRoute: Object.freeze([
+      Object.freeze({ x: 0, z: -15.6 }),
+      Object.freeze({ x: -14.5, z: -15.6 }),
+      Object.freeze({ x: -25, z: -14 }),
+      Object.freeze({ x: -25, z: -11.5, checkpointIndex: 0 }),
+      Object.freeze({ x: -25, z: -14 }),
+      Object.freeze({ x: -14.5, z: -14 }),
+      Object.freeze({ x: 0, z: -14 }),
+      Object.freeze({ x: 14.5, z: -14 }),
+      Object.freeze({ x: 17.35, z: -13.75 }),
+      Object.freeze({ x: 17.35, z: 16.3 }),
+      Object.freeze({ x: 0, z: 16.3 }),
+      Object.freeze({ x: 0, z: 29, checkpointIndex: 1 }),
+      Object.freeze({ x: 0, z: 16.3 }),
+      Object.freeze({ x: 17.35, z: 16.3 }),
+      Object.freeze({ x: 17.35, z: 5.75 }),
+      Object.freeze({ x: 20.5, z: 5.75 }),
+      Object.freeze({ x: 22, z: 5.75 }),
+      Object.freeze({ x: 22, z: 10.25 }),
+      Object.freeze({ x: 25, z: 10.25 }),
+      Object.freeze({ x: 25, z: 11.75 }),
+      Object.freeze({ x: 28, z: 11.75 }),
+      Object.freeze({ x: 28, z: 2.75 }),
+      Object.freeze({ x: 26.5, z: 2.75, checkpointIndex: 2 }),
+      Object.freeze({ x: 25, z: 2.75 }),
+      Object.freeze({ x: 25, z: -0.25 }),
+      Object.freeze({ x: 22, z: -0.25 }),
+      Object.freeze({ x: 22, z: -13.75 }),
+      Object.freeze({ x: 20.5, z: -13.75 }),
+      Object.freeze({ x: 17.35, z: -13.75 }),
+      Object.freeze({ x: 13.5, z: -15.6, checkpointIndex: 3 }),
+      Object.freeze({ x: 0, z: -15.6 }),
+      Object.freeze({ x: -14.5, z: -15.6 }),
+      Object.freeze({ x: -14.5, z: -18.85 }),
+      Object.freeze({ x: -12.8, z: -18.85, checkpointIndex: 4 }),
+    ]),
+  });
   // Six evenly distributed pools replace the facade spots only while the
   // player is in the maze or on its west approach. This preserves the exact
   // fixed shader-light count that the frame-rate pass established.
@@ -2076,6 +2163,7 @@
     yardMazeSouthGoal: [28, YARD_LAYOUT.groundY, -30.25, 0],
     yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
+    stormRunStaging: [0, YARD_LAYOUT.groundY, -12.9, 0, -0.26],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, Math.PI],
     yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.rearJunctionZ, Math.PI / 2],
     yardExteriorSwitch: [1.72, YARD_LAYOUT.groundY, 13.65, 0, -0.26],
@@ -2136,6 +2224,26 @@
       eliminatedContestantId: null,
       staged: false,
       completionCardRemaining: 0,
+      invalidTransitions: 0,
+      lastInvalidTransition: null,
+    },
+    stormRun: {
+      phase: STORM_RUN_PHASE.DORMANT,
+      triggerReason: null,
+      triggerClueId: null,
+      callCount: 0,
+      intermissionElapsed: 0,
+      briefingRemaining: 0,
+      raceElapsed: 0,
+      completedCheckpoints: 0,
+      visitedCheckpointIds: [],
+      eliminatedContestantId: null,
+      staged: false,
+      completionCardRemaining: 0,
+      scareCheckpointIndex: -1,
+      scareTriggeredCheckpointIds: [],
+      scareRevealRemaining: 0,
+      hostVisible: false,
       invalidTransitions: 0,
       lastInvalidTransition: null,
     },
@@ -2361,6 +2469,12 @@
     marks: [],
     actionPads: [],
   };
+  const stormRunScene = {
+    root: null,
+    reportRoot: null,
+    reportHitbox: null,
+    checkpoints: [],
+  };
   const estateStatueScene = {
     settled: false,
     colliders: 0,
@@ -2394,7 +2508,40 @@
   let speechSystem = null;
   let openingWelcomeSystem = null;
   let feastSaysSystem = null;
+  let stormRunSystem = null;
   let workroomCodeClue = null;
+
+  function activeCompetitionSystem() {
+    if (stormRunSystem?.blocksInvestigation()) return stormRunSystem;
+    if (feastSaysSystem?.blocksInvestigation()) return feastSaysSystem;
+    return null;
+  }
+
+  function competitionBlocksInvestigation() {
+    return Boolean(activeCompetitionSystem());
+  }
+
+  function competitionOwnsCaseFile() {
+    if (competitionBlocksInvestigation() || state.gameOver) return true;
+    return Boolean(
+      feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED
+        && feastSaysSystem.show.completionCardRemaining > 0
+      || stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED
+        && stormRunSystem.show.completionCardRemaining > 0
+    );
+  }
+
+  function notifyCompetitionHold() {
+    return activeCompetitionSystem()?.notifyInvestigationPaused() || false;
+  }
+
+  function noteMajorClueDiscovered(clueId) {
+    const firstGame = feastSaysSystem?.noteClueDiscovered(clueId);
+    if (firstGame?.called) return { competition: "feast-says", ...firstGame };
+    const secondGame = stormRunSystem?.noteClueDiscovered(clueId);
+    if (secondGame?.called) return { competition: "storm-run", ...secondGame };
+    return secondGame || firstGame || { called: false, reason: "not-ready" };
+  }
   let optionalCharacterLoadTimer = 0;
   let optionalCharacterLoadsStarted = false;
   let hemisphereLight = null;
@@ -3404,6 +3551,9 @@
       this.conversationFocusRemaining = 0;
       this.wanderingEnabled = true;
       this.challengeStaged = false;
+      this.challengeMode = null;
+      this.challengeInteractionSnapshots = [];
+      this.challengeSnapshot = null;
       this.moving = false;
       this.loadStatus = "idle";
       this.loadingProgress = 0;
@@ -3555,6 +3705,33 @@
       this.colliderBody.setNextKinematicTranslation(center);
       this.colliderBody.setRotation(rotation, false);
       this.colliderBody.setNextKinematicRotation(rotation);
+    }
+
+    setChallengeColliderEnabled(enabled) {
+      this.collider?.setEnabled(Boolean(enabled));
+      if (enabled) this.syncCollider();
+    }
+
+    setChallengeInteractionsEnabled(enabled) {
+      const targets = [this.talkHitbox, this.model].filter(Boolean);
+      if (!enabled) {
+        this.challengeInteractionSnapshots = targets
+          .map((target) => ({ target, interaction: target.userData?.interaction || null }))
+          .filter((entry) => entry.interaction);
+        for (const target of targets) {
+          let index = interactableMeshes.indexOf(target);
+          while (index >= 0) {
+            interactableMeshes.splice(index, 1);
+            index = interactableMeshes.indexOf(target);
+          }
+          if (target.userData) delete target.userData.interaction;
+        }
+        return;
+      }
+      for (const snapshot of this.challengeInteractionSnapshots) {
+        if (!snapshot.target.userData?.interaction) addInteractionTarget(snapshot.target, snapshot.interaction);
+      }
+      this.challengeInteractionSnapshots = [];
     }
 
     moveWithCollision(dx, dy, dz) {
@@ -4886,7 +5063,7 @@
     canAcceptHousekeeping() {
       if (
         this.loadStatus !== "ready"
-        || feastSaysSystem?.blocksInvestigation()
+        || competitionBlocksInvestigation()
         || !this.wanderingEnabled
         || this.activeCameraAlarm
         || this.housekeeping.active
@@ -4900,7 +5077,7 @@
 
     respondToHousekeepingTask(task) {
       if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
-      if (feastSaysSystem?.blocksInvestigation()) return { accepted: false, reason: "competition" };
+      if (competitionBlocksInvestigation()) return { accepted: false, reason: "competition" };
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
       if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
@@ -4952,6 +5129,41 @@
         this.responseStateTrace.push(MR_FEAST_RESPONSE_STATE.PATROL);
       }
       return true;
+    }
+
+    suspendThreatsForCompetition() {
+      const hadThreat = Boolean(
+        this.pursuit.active
+        || this.pursuit.cooldownActive
+        || this.activeCameraAlarm
+        || this.housekeeping.active
+        || this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL
+      );
+      this.suspendHousekeepingForCompetition();
+      this.pursuit.active = null;
+      this.pursuit.cooldownActive = false;
+      this.pursuit.giveUpRemaining = 0;
+      this.pursuit.repathRemaining = 0;
+      this.pursuitWarningFocus = null;
+      this.pursuitTargetNodeId = null;
+      this.pursuitTargetPlayerPosition = null;
+      this.pursuitSightCheckRemaining = 0;
+      this.pursuitStallSeconds = 0;
+      this.pursuitApproachSuppressedRemaining = 0;
+      this.activeCameraAlarm = null;
+      this.responsePath = [];
+      this.responseResume = null;
+      this.responseBlockedReason = null;
+      this.searchRemaining = 0;
+      this.searchElapsed = 0;
+      this.trespassDwell = 0;
+      this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      if (this.responseStateTrace[this.responseStateTrace.length - 1] !== MR_FEAST_RESPONSE_STATE.PATROL) {
+        this.responseStateTrace.push(MR_FEAST_RESPONSE_STATE.PATROL);
+      }
+      this.moving = false;
+      if (this.loadStatus === "ready") this.fadeToAction("idle");
+      return hadThreat;
     }
 
     cancelHousekeepingTask(taskId) {
@@ -5787,22 +5999,31 @@
       return this.getDiagnostics();
     }
 
-    stageChallenge() {
+    stageChallenge(placement = FEAST_SAYS.hostMark, options = {}) {
+      if (!this.challengeStaged) {
+        this.challengeSnapshot = {
+          position: this.root.position.clone(),
+          rotationY: this.root.rotation.y,
+        };
+      }
       this.suspendHousekeepingForCompetition();
       this.recoverAfterLoad();
-      const placement = FEAST_SAYS.hostMark;
       this.root.position.set(placement.x, placement.y, placement.z);
       this.root.rotation.y = placement.yaw;
-      this.currentRouteZone = "BALLROOM";
-      this.currentRouteLevel = MR_FEAST_LEVEL.MAIN;
-      this.responseCurrentNodeId = "main-ballroom-south";
+      this.currentRouteZone = options.zone || "BALLROOM";
+      this.currentRouteLevel = options.level || MR_FEAST_LEVEL.MAIN;
+      this.responseCurrentNodeId = options.responseNodeId || "main-ballroom-south";
       this.pauseRemaining = 0;
       this.conversationFocusRemaining = 0;
       this.waitingForDoor = null;
       this.moving = false;
       this.wanderingEnabled = false;
       this.challengeStaged = true;
-      this.syncCollider();
+      this.challengeMode = options.mode || "feast-says";
+      this.root.visible = options.visible !== false;
+      this.setChallengeColliderEnabled(options.colliderEnabled !== false);
+      if (options.interactionsEnabled === false) this.setChallengeInteractionsEnabled(false);
+      for (const mesh of this.meshes) mesh.visible = this.root.visible;
       if (this.loadStatus === "ready") {
         this.fadeToAction("idle");
         this.stepAnimationAndFace(0, true, true);
@@ -5811,9 +6032,54 @@
       return this.getDiagnostics();
     }
 
+    setStormRunReveal(placement, visible = false) {
+      if (!placement) return false;
+      if (!this.challengeStaged || this.challengeMode !== "storm-run") {
+        this.stageChallenge(placement, {
+          mode: "storm-run",
+          zone: "GROUNDS",
+          level: MR_FEAST_LEVEL.GROUNDS,
+          responseNodeId: "response-rear-terrace",
+          colliderEnabled: false,
+          interactionsEnabled: false,
+          visible,
+        });
+      } else {
+        this.root.position.set(placement.x, placement.y, placement.z);
+        this.root.rotation.y = placement.yaw;
+      }
+      this.root.visible = Boolean(visible);
+      for (const mesh of this.meshes) mesh.visible = Boolean(visible);
+      if (this.contactShadow) this.contactShadow.visible = Boolean(visible);
+      this.setChallengeColliderEnabled(false);
+      this.root.updateMatrixWorld(true);
+      return this.root.visible;
+    }
+
+    syncStormRunVisibility(visible) {
+      if (!this.challengeStaged || this.challengeMode !== "storm-run") return false;
+      this.root.visible = Boolean(visible);
+      for (const mesh of this.meshes) mesh.visible = Boolean(visible);
+      if (this.contactShadow) this.contactShadow.visible = Boolean(visible);
+      this.setChallengeColliderEnabled(false);
+      return this.root.visible;
+    }
+
     releaseChallenge() {
+      const snapshot = this.challengeSnapshot;
       this.challengeStaged = false;
-      return this.recoverAfterLoad();
+      this.challengeMode = null;
+      this.challengeSnapshot = null;
+      if (snapshot) {
+        this.root.position.copy(snapshot.position);
+        this.root.rotation.y = snapshot.rotationY;
+      }
+      this.root.visible = true;
+      this.setChallengeColliderEnabled(true);
+      this.setChallengeInteractionsEnabled(true);
+      const result = this.recoverAfterLoad();
+      if (physics) updateExteriorDetailCulling();
+      return result;
     }
 
     update(dt) {
@@ -6845,6 +7111,7 @@
       this.challengePoseTargetQuaternion = new THREE.Quaternion();
       this.challengePointTarget = new THREE.Vector3();
       this.challengeActive = false;
+      this.challengeMode = null;
       this.challengeSnapshots = new Map();
       this.eliminatedIds = new Set();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
@@ -6901,6 +7168,12 @@
           challengeUpperBodyMaximumAngle: 0,
           challengePointArm: null,
           challengePlaybackRate: 0,
+          race: null,
+          raceDistanceTravelled: 0,
+          raceMaximumObservedSpeed: 0,
+          raceTeleports: 0,
+          raceFinished: false,
+          runStatus: "not-declared",
           contactShadow: null,
           colliderEnabled: false,
           colliderBody: null,
@@ -7204,7 +7477,9 @@
     }
 
     fadeToAction(entry, requestedName, duration = MANSION_CONTESTANTS.fadeSeconds) {
-      const name = requestedName === "walk" && !entry.actions.walk ? "idle" : requestedName;
+      const name = requestedName === "run" && !entry.actions.run
+        ? (entry.actions.walk ? "walk" : "idle")
+        : requestedName === "walk" && !entry.actions.walk ? "idle" : requestedName;
       const next = entry.actions[name];
       if (!next) return null;
       const rate = name === "idle" ? entry.placement.idleRate : 1;
@@ -8534,7 +8809,7 @@
       }
       entry.status = "loading";
       entry.loadStatus = "loading";
-      const [base, idle, walkResult] = await Promise.all([
+      const [base, idle, walkResult, runResult] = await Promise.all([
         this.loadGltf(loader, this.assetUrl(spec.model, manifestUrl)),
         this.loadGltf(loader, this.assetUrl(spec.animations.idle.file, manifestUrl)),
         spec.animations.walk?.file
@@ -8542,6 +8817,11 @@
             .then((gltf) => ({ gltf, error: null }))
             .catch((error) => ({ gltf: null, error }))
           : Promise.resolve({ gltf: null, error: new Error("walk clip is not declared") }),
+        spec.animations.run?.file
+          ? this.loadGltf(loader, this.assetUrl(spec.animations.run.file, manifestUrl))
+            .then((gltf) => ({ gltf, error: null }))
+            .catch((error) => ({ gltf: null, error }))
+          : Promise.resolve({ gltf: null, error: new Error("run clip is not declared") }),
       ]);
       const model = THREE.SkeletonUtils.clone(base.scene);
       model.name = `contestant-${entry.id}-model`;
@@ -8633,6 +8913,18 @@
       } else {
         entry.locomotionStatus = "idle-fallback";
         console.warn(`[Contestants] ${spec.name} walk clip unavailable; using idle fallback: ${walkResult.error?.message || walkResult.error}`);
+      }
+      if (runResult.gltf) {
+        try {
+          this.prepareAction(entry, runResult.gltf, "run");
+          entry.runStatus = "ready";
+        } catch (error) {
+          entry.runStatus = "locomotion-fallback";
+          console.warn(`[Contestants] ${spec.name} run clip rejected; using locomotion fallback: ${error?.message || error}`);
+        }
+      } else if (spec.animations.run?.file) {
+        entry.runStatus = "locomotion-fallback";
+        console.warn(`[Contestants] ${spec.name} run clip unavailable; using locomotion fallback: ${runResult.error?.message || runResult.error}`);
       }
       this.fadeToAction(entry, "idle", 0);
       idleAction.time = idleAction.getClip().duration * entry.placement.idlePhase;
@@ -8824,6 +9116,7 @@
 
     stepAnimation(entry, dt) {
       this.clearHeadAttentionPose(entry);
+      const raceRunning = this.challengeMode === "storm-run" && entry.activity === CONTESTANT_ACTIVITY.RUNNING;
       if (entry.activity === CONTESTANT_ACTIVITY.SEATED) {
         entry.seatedMotionElapsed += Math.max(0, dt);
         this.applySeatedPose(entry, entry.seatedPoseBlend);
@@ -8831,9 +9124,11 @@
         entry.mixer.update(dt);
         this.applyNeutralRestPose(entry);
       }
-      if (this.challengeActive) this.applyChallengeResponsePose(entry);
-      this.updateHeadAttention(entry, dt);
-      this.applyHeadAttentionPose(entry);
+      if (this.challengeActive && this.challengeMode !== "storm-run") this.applyChallengeResponsePose(entry);
+      if (!raceRunning) {
+        this.updateHeadAttention(entry, dt);
+        this.applyHeadAttentionPose(entry);
+      }
       if (entry.animationProbeBone && entry.animationProbeStart) {
         const poseDelta = 1 - Math.abs(entry.animationProbeBone.quaternion.dot(entry.animationProbeStart));
         entry.animationProbeMaximumDelta = Math.max(entry.animationProbeMaximumDelta, poseDelta);
@@ -8959,8 +9254,10 @@
       if (this.challengeActive) {
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
-          this.updateChallengeEntry(entry, dt);
+          if (this.challengeMode === "storm-run") this.updateStormRunEntry(entry, dt);
+          else this.updateChallengeEntry(entry, dt);
         }
+        this.syncStormRunCastVisibility();
         return;
       }
       for (const entry of this.entries) this.updateEntry(entry, dt);
@@ -8974,10 +9271,11 @@
       return this.settled && this.entries.every((entry) => ["ready", "error"].includes(entry.status));
     }
 
-    stageChallenge() {
+    stageChallenge(marks = FEAST_SAYS.contestantMarks, { mode = "feast-says" } = {}) {
       if (!this.challengeResolved()) return { staged: false, reason: "cast-not-ready" };
       this.clearTransientSeating();
       this.challengeSnapshots.clear();
+      this.challengeMode = mode;
       for (const entry of this.entries) {
         if (entry.status !== "ready") {
           entry.challengeMark = null;
@@ -8990,9 +9288,19 @@
           routeDirection: entry.routeDirection,
           routeTargetActive: entry.routeTargetActive,
           pauseRemaining: entry.pauseRemaining,
+          rootVisible: entry.root.visible,
+          colliderEnabled: entry.colliderEnabled,
+          interactionRegistered: entry.interactionRegistered,
         });
-        const mark = FEAST_SAYS.contestantMarks[entry.id];
-        if (!mark) continue;
+        const mark = marks[entry.id];
+        if (!mark) {
+          entry.challengeMark = null;
+          if (mode === "storm-run") {
+            entry.root.visible = false;
+            this.setColliderEnabled(entry, false);
+          }
+          continue;
+        }
         entry.root.position.set(mark.x, mark.y, mark.z);
         entry.root.rotation.y = mark.yaw;
         entry.challengeMark = { ...mark };
@@ -9003,18 +9311,108 @@
         entry.pauseRemaining = 0;
         entry.routeTargetActive = false;
         entry.talkPauseRemaining = 0;
+        entry.race = mode === "storm-run" ? {
+          active: false,
+          routeIndex: 1,
+          configuredSpeed: Math.min(
+            Number(STORM_RUN.contestantSpeeds[entry.id]) || STORM_RUN.contestantMaximumSpeed,
+            STORM_RUN.contestantMaximumSpeed,
+            STORM_RUN.playerMaximumSprintSpeed,
+          ),
+        } : null;
+        entry.raceDistanceTravelled = 0;
+        entry.raceMaximumObservedSpeed = 0;
+        entry.raceTeleports = 0;
+        entry.raceFinished = false;
         if (entry.model) entry.model.position.y = entry.modelBaseY;
         this.fadeToAction(entry, "idle", 0);
-        this.setColliderEnabled(entry, !this.eliminatedIds.has(entry.id));
+        this.setColliderEnabled(entry, mode === "storm-run" ? false : !this.eliminatedIds.has(entry.id));
+        if (mode === "storm-run" && entry.interactionRegistered) {
+          removeInteractionTarget(entry.interactionTarget);
+          entry.interactionRegistered = false;
+        }
         entry.root.visible = !this.eliminatedIds.has(entry.id);
         entry.root.updateMatrixWorld(true);
       }
       this.challengeActive = true;
+      this.syncStormRunCastVisibility();
       return {
         staged: true,
-        entries: this.entries.filter((entry) => entry.status === "ready").map((entry) => entry.id),
+        mode,
+        entries: this.entries.filter((entry) => entry.status === "ready" && entry.challengeMark).map((entry) => entry.id),
         fallbackIds: this.entries.filter((entry) => entry.status === "error").map((entry) => entry.id),
       };
+    }
+
+    startStormRunRace() {
+      if (!this.challengeActive || this.challengeMode !== "storm-run") return false;
+      for (const entry of this.entries) {
+        if (!entry.challengeMark || !entry.race || this.eliminatedIds.has(entry.id)) continue;
+        entry.race.active = true;
+        entry.activity = CONTESTANT_ACTIVITY.RUNNING;
+        const action = this.fadeToAction(entry, "run", 0.08);
+        action?.setEffectiveTimeScale(1);
+      }
+      this.syncStormRunCastVisibility();
+      return true;
+    }
+
+    updateStormRunEntry(entry, dt) {
+      const stepDt = Math.max(0, Number(dt) || 0);
+      entry.lastDt = stepDt;
+      if (!entry.race?.active || entry.raceFinished) {
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const route = STORM_RUN.contestantRoute;
+      let target = route[entry.race.routeIndex];
+      while (target && Math.hypot(target.x - entry.root.position.x, target.z - entry.root.position.z) <= MANSION_CONTESTANTS.arrivalRadius) {
+        entry.race.routeIndex += 1;
+        target = route[entry.race.routeIndex];
+      }
+      if (!target) {
+        entry.race.active = false;
+        entry.raceFinished = true;
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle", 0.12);
+        this.stepAnimation(entry, stepDt);
+        stormRunSystem?.noteContestantFinished(entry.id);
+        return;
+      }
+      const dx = target.x - entry.root.position.x;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.max(0.000001, Math.hypot(dx, dz));
+      this.facePoint(entry, target, stepDt);
+      const speed = Math.min(
+        entry.race.configuredSpeed,
+        STORM_RUN.contestantMaximumSpeed,
+        STORM_RUN.playerMaximumSprintSpeed,
+      );
+      const distanceStep = Math.min(distance, speed * stepDt);
+      entry.root.position.x += dx / distance * distanceStep;
+      entry.root.position.z += dz / distance * distanceStep;
+      const observedSpeed = stepDt > 0 ? distanceStep / stepDt : 0;
+      entry.raceDistanceTravelled += distanceStep;
+      entry.distanceTravelled += distanceStep;
+      entry.raceMaximumObservedSpeed = Math.max(entry.raceMaximumObservedSpeed, observedSpeed);
+      if (distanceStep > speed * stepDt + 0.001) entry.raceTeleports += 1;
+      entry.activity = CONTESTANT_ACTIVITY.RUNNING;
+      const action = this.fadeToAction(entry, "run");
+      action?.setEffectiveTimeScale(1);
+      entry.root.updateMatrixWorld(true);
+      this.stepAnimation(entry, stepDt);
+    }
+
+    syncStormRunCastVisibility() {
+      if (!this.challengeActive || this.challengeMode !== "storm-run") return;
+      for (const entry of this.entries) {
+        if (!entry.challengeMark || this.eliminatedIds.has(entry.id) || entry.status !== "ready") continue;
+        entry.root.visible = true;
+        for (const mesh of entry.modelMeshes) mesh.visible = true;
+        if (entry.contactShadow) entry.contactShadow.visible = true;
+      }
     }
 
     resetChallengeMotion(entry) {
@@ -9322,6 +9720,8 @@
 
     releaseChallenge({ eliminatedId = null } = {}) {
       this.challengeActive = false;
+      const releasedMode = this.challengeMode;
+      this.challengeMode = null;
       for (const entry of this.entries) {
         const snapshot = this.challengeSnapshots.get(entry.id);
         if (snapshot) {
@@ -9336,6 +9736,8 @@
         entry.challengeMark = null;
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
+        entry.race = null;
+        entry.raceFinished = false;
         this.resetChallengeMotion(entry);
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         this.fadeToAction(entry, "idle", 0);
@@ -9345,7 +9747,8 @@
         this.setEliminated(entry.id, this.eliminatedIds.has(entry.id) || entry.id === eliminatedId);
       }
       this.challengeSnapshots.clear();
-      return { active: false, eliminatedId };
+      if (releasedMode === "storm-run" && physics) updateExteriorDetailCulling();
+      return { active: false, eliminatedId, mode: releasedMode };
     }
 
     resetRoutineForQA(entry) {
@@ -9832,6 +10235,7 @@
         failed: this.entries.filter((entry) => entry.status === "error").length,
         settled: this.settled,
         challengeActive: this.challengeActive,
+        challengeMode: this.challengeMode,
         challengeReady: this.challengeReady(),
         eliminatedIds: [...this.eliminatedIds],
         manifestStatus: this.manifestStatus,
@@ -9847,6 +10251,7 @@
           status: entry.status,
           loadStatus: entry.loadStatus,
           loaded: entry.status === "ready",
+          visible: Boolean(entry.root.visible),
           eliminated: this.eliminatedIds.has(entry.id),
           challengeStaged: Boolean(this.challengeActive && entry.challengeMark),
           challengeResponse: entry.challengeResponse ? {
@@ -9888,6 +10293,7 @@
           modelFile: entry.spec?.model || null,
           idleFile: entry.spec?.animations?.idle?.file || null,
           walkFile: entry.spec?.animations?.walk?.file || null,
+          runFile: entry.spec?.animations?.run?.file || null,
           triangles: Math.round(entry.triangles),
           materials: entry.materials,
           textures: entry.textures,
@@ -9919,7 +10325,17 @@
           },
           colliderEnabled: entry.colliderEnabled,
           locomotionStatus: entry.locomotionStatus,
+          runStatus: entry.runStatus,
           activity: entry.activity,
+          race: entry.race || entry.raceDistanceTravelled > 0 ? {
+            active: Boolean(entry.race?.active),
+            finished: Boolean(entry.raceFinished),
+            routeIndex: entry.race?.routeIndex ?? null,
+            configuredSpeed: Number((entry.race?.configuredSpeed || STORM_RUN.contestantSpeeds[entry.id] || 0).toFixed(3)),
+            distanceTravelled: Number(entry.raceDistanceTravelled.toFixed(3)),
+            maximumObservedSpeed: Number(entry.raceMaximumObservedSpeed.toFixed(3)),
+            teleports: entry.raceTeleports,
+          } : null,
           seated: Boolean(entry.seatedSeatId),
           seatId: entry.seatedSeatId,
           routeClearance: Number.isFinite(entry.routeClearance) ? Number(entry.routeClearance.toFixed(3)) : null,
@@ -10633,7 +11049,11 @@
     }
 
     updateUI() {
-      if (dom.caseFile) dom.caseFile.hidden = !state.started || !this.story.bookRead;
+      if (dom.caseFile) {
+        dom.caseFile.hidden = !state.started
+          || !this.story.bookRead
+          || competitionOwnsCaseFile();
+      }
       if (dom.objective) dom.objective.textContent = this.story.bookRead ? this.getObjective() : "";
       if (dom.storyProgress) {
         const completed = [
@@ -10808,8 +11228,8 @@
         openCluePage();
         return;
       }
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       this.story.bookRead = true;
@@ -10821,13 +11241,13 @@
       });
       this.updateUI();
       openCluePage();
-      feastSaysSystem?.noteClueDiscovered("contestant-13-book");
+      noteMajorClueDiscovered("contestant-13-book");
     }
 
     takeShovel() {
       if (this.story.shovelTaken) return;
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       this.story.shovelTaken = true;
@@ -10840,7 +11260,7 @@
       this.showDiscovery("Concealed garden shovel", "The book's garden clue was right. XIII is cut into the handle—the hedge maze is the next lead.");
       if (audioSystem) audioSystem.pickup("object");
       this.updateUI();
-      feastSaysSystem?.noteClueDiscovered("faceless-fountain-shovel");
+      noteMajorClueDiscovered("faceless-fountain-shovel");
     }
 
     digSite() {
@@ -10848,8 +11268,8 @@
         if (this.story.digSiteExcavated) this.showDiscovery(CONTESTANT_13.journal.cache.title, CONTESTANT_13.journal.cache.body);
         return;
       }
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       if (!this.story.bookRead) {
@@ -10879,6 +11299,7 @@
           audioSystem.pickup("key");
           audioSystem.ping(236, 0.4, 0.035, "sine");
         }
+        noteMajorClueDiscovered("hedge-maze-b13-cache");
       });
       if (!started) this.story.digging = false;
     }
@@ -10892,8 +11313,8 @@
         this.showDiscovery(CONTESTANT_13.journal.basement.title, CONTESTANT_13.journal.basement.body);
         return;
       }
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       if (!this.hasItem("basement-key-b13")) {
@@ -10912,12 +11333,13 @@
         audioSystem.door(true);
       }
       this.updateUI();
+      noteMajorClueDiscovered("basement-threshold");
     }
 
     unlockArchiveCage() {
       if (this.story.archiveCageUnlocked) return;
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       if (!this.story.basementUnlocked) {
@@ -10933,18 +11355,20 @@
       this.showDiscovery("Evidence cage unlocked", "The buried reel fits the recorder inside. A typed routing card mentions two separate camera feeds.");
       if (audioSystem) audioSystem.key("unlock");
       this.updateUI();
+      noteMajorClueDiscovered("archive-evidence-cage");
     }
 
     playRecording() {
-      if (!this.story.recordingPlayed && feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (!this.story.recordingPlayed && competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       if (!this.story.archiveCageUnlocked || !this.story.tapeFound) {
         this.showDiscovery("Silent recorder", "The cage is locked and its tape spindle is empty.");
         return;
       }
-      if (!this.story.recordingPlayed) {
+      const newlyPlayed = !this.story.recordingPlayed;
+      if (newlyPlayed) {
         this.story.recordingPlayed = true;
         this.addJournalEntry(CONTESTANT_13.journal.transcript);
       }
@@ -10960,6 +11384,7 @@
         audioSystem.ping(184, 0.5, 0.025, "sine");
       }
       this.updateUI();
+      if (newlyPlayed) noteMajorClueDiscovered("contestant-13-recording");
     }
 
     sabotageRelay() {
@@ -10967,8 +11392,8 @@
         this.showDiscovery("Private feed offline", "The unlabeled cable bank is dead. A red warning lamp is still calling attention to the loss.");
         return;
       }
-      if (feastSaysSystem?.blocksInvestigation()) {
-        feastSaysSystem.notifyInvestigationPaused();
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
         return;
       }
       if (!this.story.recordingPlayed) {
@@ -10999,6 +11424,7 @@
           audioSystem.ping(74, 0.7, 0.09, "sawtooth");
           audioSystem.ping(520, 0.18, 0.08, "square");
         }
+        noteMajorClueDiscovered("patron-feed-sabotage");
       }, { illegalWhileObserved: true });
     }
 
@@ -12078,7 +12504,7 @@
       this.show.phaseRemaining = 0;
       this.show.commandResult = null;
       this.transition(FEAST_SAYS_PHASE.CALLED, `call:${this.show.triggerReason}`);
-      mrFeastNpc?.suspendHousekeepingForCompetition();
+      mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
       const preserveClue = this.show.triggerReason === "clue" && dom.discovery && !dom.discovery.hidden;
       const clueTitle = preserveClue ? dom.discoveryTitle?.textContent?.trim() : "";
@@ -12402,9 +12828,26 @@
       const phase = this.show.phase;
       const timerEligible = this.canCountIntermission();
       const showCompletion = phase === FEAST_SAYS_PHASE.COMPLETED && this.show.completionCardRemaining > 0;
-      const visible = state.started && (phase !== FEAST_SAYS_PHASE.DORMANT || timerEligible) && (phase !== FEAST_SAYS_PHASE.COMPLETED || showCompletion);
+      const stormRunOwnsHud = stormRunSystem && [
+        STORM_RUN_PHASE.CALLED,
+        STORM_RUN_PHASE.BRIEFING,
+        STORM_RUN_PHASE.RUNNING,
+        STORM_RUN_PHASE.FAILED,
+      ].includes(stormRunSystem.show.phase)
+        || Boolean(
+          stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED
+          && stormRunSystem.show.completionCardRemaining > 0
+        );
+      const visible = state.started
+        && !stormRunOwnsHud
+        && (phase !== FEAST_SAYS_PHASE.DORMANT || timerEligible)
+        && (phase !== FEAST_SAYS_PHASE.COMPLETED || showCompletion);
       dom.feastSays.hidden = !visible;
-      if (dom.caseFile) dom.caseFile.hidden = !state.started || !state.contestant13.bookRead || this.blocksInvestigation();
+      if (dom.caseFile) {
+        dom.caseFile.hidden = !state.started
+          || !state.contestant13.bookRead
+          || competitionOwnsCaseFile();
+      }
       dom.feastSays.dataset.phase = phase;
       dom.feastSays.dataset.result = this.show.commandResult
         ? (this.show.commandResult.correct ? "correct" : "incorrect")
@@ -12680,6 +13123,691 @@
     }
   }
 
+  class StormRunSystem {
+    constructor() {
+      this.show = state.stormRun;
+      this.stationInteractionRegistered = false;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      this.transitionTable = Object.freeze({
+        [STORM_RUN_PHASE.DORMANT]: Object.freeze([STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.COMPLETED]),
+        [STORM_RUN_PHASE.CALLED]: Object.freeze([STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.COMPLETED]),
+        [STORM_RUN_PHASE.BRIEFING]: Object.freeze([STORM_RUN_PHASE.RUNNING, STORM_RUN_PHASE.CALLED]),
+        [STORM_RUN_PHASE.RUNNING]: Object.freeze([STORM_RUN_PHASE.COMPLETED, STORM_RUN_PHASE.FAILED, STORM_RUN_PHASE.CALLED]),
+        [STORM_RUN_PHASE.COMPLETED]: Object.freeze([]),
+        [STORM_RUN_PHASE.FAILED]: Object.freeze([STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.DORMANT]),
+      });
+      this.reportInteraction = {
+        type: "storm-run-report",
+        id: "storm-run-report-station",
+        getLabel: () => this.castReady() ? "Report for Storm Run" : "Wait for the contestants",
+        activate: () => this.reportToStart(),
+      };
+      this.syncPresentation();
+    }
+
+    transition(nextPhase, reason = "system") {
+      const current = this.show.phase;
+      if (current === nextPhase) return true;
+      const allowed = this.transitionTable[current] || [];
+      if (!allowed.includes(nextPhase)) {
+        this.show.invalidTransitions += 1;
+        this.show.lastInvalidTransition = { from: current, to: nextPhase, reason };
+        if (state.qa) console.warn(`[Storm Run] Invalid transition ${current} -> ${nextPhase} (${reason})`);
+        return false;
+      }
+      this.show.phase = nextPhase;
+      this.show.lastInvalidTransition = null;
+      this.syncPresentation();
+      updateMenuControls();
+      return true;
+    }
+
+    eligible() {
+      return feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED;
+    }
+
+    canCountIntermission() {
+      return Boolean(
+        state.started
+        && this.eligible()
+        && this.show.phase === STORM_RUN_PHASE.DORMANT
+        && !state.menuOpen
+        && !state.workroom.keypadOpen
+        && !state.gameOver
+      );
+    }
+
+    blocksInvestigation() {
+      return [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
+    }
+
+    isPlaying() {
+      return [STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
+    }
+
+    locksPlayerMovement() {
+      return this.show.phase === STORM_RUN_PHASE.BRIEFING;
+    }
+
+    castReady() {
+      return Boolean(
+        ["ready", "error"].includes(mrFeastNpc?.loadStatus)
+        && mansionContestants?.challengeResolved()
+      );
+    }
+
+    call(reason = "timer", clueId = null) {
+      if (!this.eligible()) return { called: false, reason: "game-one-incomplete", phase: this.show.phase };
+      if (this.show.phase !== STORM_RUN_PHASE.DORMANT) {
+        return { called: false, reason: "already-called", phase: this.show.phase };
+      }
+      this.show.triggerReason = reason === "clue" ? "clue" : reason === "qa" ? "qa" : "timer";
+      this.show.triggerClueId = clueId;
+      this.show.callCount += 1;
+      this.show.briefingRemaining = 0;
+      this.show.raceElapsed = 0;
+      this.show.completedCheckpoints = 0;
+      this.show.visitedCheckpointIds = [];
+      this.show.scareCheckpointIndex = -1;
+      this.show.scareTriggeredCheckpointIds = [];
+      this.show.scareRevealRemaining = 0;
+      this.show.hostVisible = false;
+      this.transition(STORM_RUN_PHASE.CALLED, `call:${this.show.triggerReason}`);
+      mrFeastNpc?.suspendThreatsForCompetition();
+      cameraSecurity?.suspendForCompetition();
+      const preserveClue = this.show.triggerReason === "clue" && dom.discovery && !dom.discovery.hidden;
+      const clueTitle = preserveClue ? dom.discoveryTitle?.textContent?.trim() : "";
+      const clueBody = preserveClue ? dom.discoveryBody?.textContent?.trim() : "";
+      contestant13Quest?.showDiscovery(
+        clueTitle ? `${clueTitle} · LIVE EVENT` : "LIVE EVENT — STORM RUN",
+        [
+          clueBody,
+          "Production has opened a five-checkpoint course across the grounds. Report to the rear terrace. Your investigation is on hold until the race ends.",
+        ].filter(Boolean).join(" "),
+        clueBody ? 11500 : 9200,
+      );
+      audioSystem?.ping(330, 0.24, 0.05, "square");
+      audioSystem?.ping(659, 0.38, 0.04, "triangle");
+      return { called: true, reason: this.show.triggerReason, clueId };
+    }
+
+    noteClueDiscovered(clueId) {
+      if (!this.eligible()) return { called: false, reason: "game-one-incomplete", clueId };
+      return this.call("clue", clueId);
+    }
+
+    notifyInvestigationPaused() {
+      contestant13Quest?.showDiscovery(
+        "Production hold",
+        "Storm Run has been called. New clues will wait until the yard race is over.",
+        6200,
+      );
+      audioSystem?.ping(148, 0.18, 0.025, "square");
+      return false;
+    }
+
+    reportToStart() {
+      if (this.show.phase !== STORM_RUN_PHASE.CALLED) return { started: false, reason: "not-called" };
+      if (!this.castReady()) {
+        contestant13Quest?.showDiscovery(
+          "Holding for cast",
+          "The surviving contestants are still being moved to the rear-terrace start line.",
+          4200,
+        );
+        return { started: false, reason: "cast-not-ready" };
+      }
+      if (state.activeSeat) seatingSystem?.standPlayer();
+      if (state.isHidden) state.activeHideSpot?.exit();
+      if (state.journalOpen) contestant13Quest?.setJournalOpen(false);
+      if (state.workroom.keypadOpen) setWorkroomKeypadOpen(false);
+      if (state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
+      contestant13Quest?.hideDiscovery();
+      cameraSecurity?.suspendForCompetition();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      mrFeastNpc.stageChallenge(STORM_RUN.hostStartMark, {
+        mode: "storm-run",
+        zone: "REAR LAWN",
+        level: MR_FEAST_LEVEL.GROUNDS,
+        responseNodeId: "response-rear-terrace",
+        colliderEnabled: false,
+        interactionsEnabled: false,
+        visible: true,
+      });
+      const staged = mansionContestants.stageChallenge(STORM_RUN.contestantMarks, { mode: "storm-run" });
+      if (!staged.staged) {
+        mrFeastNpc.releaseChallenge();
+        return { started: false, reason: staged.reason || "staging-failed" };
+      }
+      teleport(
+        STORM_RUN.startMark.x,
+        STORM_RUN.startMark.y,
+        STORM_RUN.startMark.z,
+        STORM_RUN.startMark.yaw,
+        -0.08,
+      );
+      this.show.staged = true;
+      this.show.briefingRemaining = STORM_RUN.briefingSeconds;
+      this.show.raceElapsed = 0;
+      this.show.completedCheckpoints = 0;
+      this.show.visitedCheckpointIds = [];
+      this.transition(STORM_RUN_PHASE.BRIEFING, "reported-to-rear-terrace");
+      speechSystem?.say(
+        "storm-run-rules",
+        "Five checkpoints. Follow them in order. Beat Mara back through the course, or you are out.",
+        speechSystem.hostSpeaker(),
+        { durationSeconds: STORM_RUN.briefingSpeechSeconds },
+      );
+      audioSystem?.ping(523, 0.42, 0.045, "triangle");
+      this.syncCastVisibility();
+      return { started: true, staged: true, entries: staged.entries };
+    }
+
+    beginRace() {
+      if (this.show.phase !== STORM_RUN_PHASE.BRIEFING) return false;
+      this.show.briefingRemaining = 0;
+      this.show.raceElapsed = 0;
+      this.show.hostVisible = false;
+      this.transition(STORM_RUN_PHASE.RUNNING, "countdown-complete");
+      mansionContestants?.startStormRunRace();
+      mrFeastNpc?.setStormRunReveal(STORM_RUN.hostStartMark, false);
+      clearMovementInput();
+      updateMovementHud();
+      audioSystem?.ping(784, 0.34, 0.055, "square");
+      return true;
+    }
+
+    expectedCheckpoint() {
+      return STORM_RUN.checkpoints[this.show.completedCheckpoints] || null;
+    }
+
+    collectCheckpoint(index, source = "proximity") {
+      const checkpointIndex = Math.floor(Number(index));
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING) {
+        return { accepted: false, reason: "not-running", completed: this.show.completedCheckpoints };
+      }
+      if (!Number.isInteger(checkpointIndex) || !STORM_RUN.checkpoints[checkpointIndex]) {
+        return { accepted: false, reason: "unknown-checkpoint", completed: this.show.completedCheckpoints };
+      }
+      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+      if (this.show.visitedCheckpointIds.includes(checkpoint.id)) {
+        return { accepted: false, reason: "already-collected", completed: this.show.completedCheckpoints };
+      }
+      if (checkpointIndex !== this.show.completedCheckpoints) {
+        return { accepted: false, reason: "out-of-order", completed: this.show.completedCheckpoints };
+      }
+      this.show.visitedCheckpointIds.push(checkpoint.id);
+      this.show.completedCheckpoints += 1;
+      audioSystem?.ping(620 + checkpointIndex * 56, 0.26, 0.045, "triangle");
+      const result = {
+        accepted: true,
+        reason: null,
+        source,
+        checkpointId: checkpoint.id,
+        completed: this.show.completedCheckpoints,
+      };
+      if (this.show.completedCheckpoints >= STORM_RUN.checkpoints.length) {
+        return { ...result, ...this.finishCompetition("player") };
+      }
+      this.syncPresentation();
+      return result;
+    }
+
+    triggerScare(index = this.show.completedCheckpoints) {
+      const checkpointIndex = Math.floor(Number(index));
+      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return { triggered: false, reason: "not-running" };
+      if (!checkpoint?.reveal) return { triggered: false, reason: "not-authored" };
+      if (this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)) return { triggered: false, reason: "already-triggered" };
+      this.show.scareTriggeredCheckpointIds.push(checkpoint.id);
+      this.show.scareCheckpointIndex = checkpointIndex;
+      this.show.scareRevealRemaining = STORM_RUN.hostRevealMaximumSeconds;
+      this.show.hostVisible = false;
+      mrFeastNpc?.setStormRunReveal(checkpoint.reveal, false);
+      stormSystem?.trigger();
+      this.syncCastVisibility();
+      return { triggered: true, checkpointId: checkpoint.id, index: checkpointIndex };
+    }
+
+    updateScare(dt) {
+      if (this.show.scareRevealRemaining > 0) {
+        this.show.scareRevealRemaining = Math.max(0, this.show.scareRevealRemaining - dt);
+      }
+      const visible = Boolean(
+        this.show.phase === STORM_RUN_PHASE.RUNNING
+        && this.show.scareRevealRemaining > 0
+        && (stormSystem?.flash || 0) > STORM_RUN.hostRevealFlashThreshold
+      );
+      this.show.hostVisible = visible;
+      this.syncCastVisibility();
+    }
+
+    updateRace(dt) {
+      this.show.raceElapsed += dt;
+      if (!physics) return;
+      const player = physics.playerPosition();
+      const checkpoint = this.expectedCheckpoint();
+      if (!checkpoint) return;
+      const distance = Math.hypot(player.x - checkpoint.x, player.z - checkpoint.z);
+      const scareTrigger = checkpoint.scareTrigger || checkpoint;
+      const scareDistance = Math.hypot(player.x - scareTrigger.x, player.z - scareTrigger.z);
+      if (
+        checkpoint.reveal
+        && scareDistance <= (scareTrigger.radius || STORM_RUN.checkpointApproachRadius)
+        && !this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)
+      ) this.triggerScare(this.show.completedCheckpoints);
+      if (distance <= STORM_RUN.checkpointRadius) this.collectCheckpoint(this.show.completedCheckpoints, "proximity");
+    }
+
+    noteContestantFinished(id) {
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return { accepted: false, reason: "not-running" };
+      if (id === "mara-voss") return this.finishCompetition("mara");
+      return { accepted: true, survived: null, finisher: id };
+    }
+
+    finishCompetition(winner = "player") {
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING) {
+        return { survived: this.show.phase === STORM_RUN_PHASE.COMPLETED, eliminatedContestantId: this.show.eliminatedContestantId };
+      }
+      this.show.hostVisible = false;
+      this.show.scareRevealRemaining = 0;
+      if (winner === "player") {
+        this.show.completedCheckpoints = STORM_RUN.checkpoints.length;
+        this.show.visitedCheckpointIds = STORM_RUN.checkpoints.map((checkpoint) => checkpoint.id);
+        this.show.eliminatedContestantId = "mara-voss";
+        this.show.completionCardRemaining = STORM_RUN.completionCardSeconds;
+        this.transition(STORM_RUN_PHASE.COMPLETED, "player-beat-mara");
+        mansionContestants?.setEliminated("mara-voss", true);
+        this.releaseProduction("mara-voss");
+        contestant13Quest?.showDiscovery(
+          "MARA VOSS — ELIMINATED",
+          "You cleared all five checkpoints before Mara. Production has reopened the mansion.",
+          9200,
+        );
+        this.syncPresentation();
+        return { survived: true, eliminatedContestantId: "mara-voss" };
+      }
+      this.show.eliminatedContestantId = "player";
+      this.transition(STORM_RUN_PHASE.FAILED, "mara-finished-first");
+      this.releaseProduction(null);
+      triggerMansionGameOver({ reason: "storm-run-eliminated", kind: "storm-run" });
+      this.syncPresentation();
+      return { survived: false, eliminatedContestantId: "player" };
+    }
+
+    releaseProduction(eliminatedId = null) {
+      this.show.staged = false;
+      mrFeastNpc?.releaseChallenge();
+      mansionContestants?.releaseChallenge({ eliminatedId });
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      updateMovementHud();
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (state.qa && this.qaManualClock && !this.qaStepping) {
+        this.syncPresentation();
+        return;
+      }
+      if (this.show.phase === STORM_RUN_PHASE.DORMANT) {
+        if (this.canCountIntermission() && (!state.qa || !this.qaManualClock || this.qaStepping)) {
+          this.show.intermissionElapsed = Math.min(
+            STORM_RUN.intermissionSeconds,
+            this.show.intermissionElapsed + step,
+          );
+          if (this.show.intermissionElapsed >= STORM_RUN.intermissionSeconds) this.call("timer");
+        }
+        this.syncHud();
+        return;
+      }
+      if (this.show.phase === STORM_RUN_PHASE.COMPLETED) {
+        this.show.completionCardRemaining = Math.max(0, this.show.completionCardRemaining - step);
+        this.syncPresentation();
+        return;
+      }
+      if (this.show.phase === STORM_RUN_PHASE.BRIEFING) {
+        this.show.briefingRemaining = Math.max(0, this.show.briefingRemaining - step);
+        if (this.show.briefingRemaining <= 0) this.beginRace();
+      } else if (this.show.phase === STORM_RUN_PHASE.RUNNING) {
+        this.updateRace(step);
+        this.updateScare(step);
+      }
+      this.syncPresentation();
+    }
+
+    setStationInteractive(interactive) {
+      const hitbox = stormRunScene.reportHitbox;
+      if (!hitbox) return;
+      if (interactive && !this.stationInteractionRegistered) {
+        addInteractionTarget(hitbox, this.reportInteraction);
+        this.stationInteractionRegistered = true;
+      } else if (!interactive && this.stationInteractionRegistered) {
+        removeInteractionTarget(hitbox);
+        this.stationInteractionRegistered = false;
+      }
+    }
+
+    syncScene() {
+      if (!stormRunScene.root) return;
+      const productionVisible = [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
+      stormRunScene.root.visible = productionVisible;
+      if (stormRunScene.reportRoot) stormRunScene.reportRoot.visible = this.show.phase === STORM_RUN_PHASE.CALLED;
+      stormRunScene.checkpoints.forEach((entry, index) => {
+        entry.root.visible = this.show.phase === STORM_RUN_PHASE.RUNNING && index === this.show.completedCheckpoints;
+      });
+      this.setStationInteractive(this.show.phase === STORM_RUN_PHASE.CALLED);
+    }
+
+    syncCastVisibility() {
+      mansionContestants?.syncStormRunCastVisibility();
+      if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
+      else if (this.show.phase === STORM_RUN_PHASE.RUNNING) mrFeastNpc?.syncStormRunVisibility(this.show.hostVisible);
+    }
+
+    formatClock(seconds) {
+      const whole = Math.max(0, Math.ceil(seconds));
+      return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+    }
+
+    syncHud() {
+      if (!dom.stormRun) return;
+      const setText = (element, value) => {
+        if (element && element.textContent !== value) element.textContent = value;
+      };
+      const phase = this.show.phase;
+      const timerEligible = this.canCountIntermission();
+      const showCompletion = phase === STORM_RUN_PHASE.COMPLETED && this.show.completionCardRemaining > 0;
+      const visible = state.started
+        && (phase !== STORM_RUN_PHASE.DORMANT || timerEligible)
+        && (phase !== STORM_RUN_PHASE.COMPLETED || showCompletion);
+      dom.stormRun.hidden = !visible;
+      dom.stormRun.dataset.phase = phase;
+      if (dom.caseFile) {
+        dom.caseFile.hidden = !state.started
+          || !state.contestant13.bookRead
+          || competitionOwnsCaseFile();
+      }
+      const checkpoint = this.expectedCheckpoint();
+      setText(dom.stormRunProgress, `${this.show.completedCheckpoints} / ${STORM_RUN.checkpoints.length}`);
+      setText(dom.stormRunStandings, this.standingsText());
+      dom.stormRunStandings?.setAttribute(
+        "aria-label",
+        `Storm Run checkpoint progress: ${dom.stormRunStandings.textContent}`,
+      );
+      if (phase === STORM_RUN_PHASE.DORMANT) {
+        setText(dom.stormRunEyebrow, "Next live event");
+        setText(dom.stormRunTitle, "STORM RUN");
+        setText(dom.stormRunTimer, this.formatClock(STORM_RUN.intermissionSeconds - this.show.intermissionElapsed));
+        setText(dom.stormRunCheckpoint, "Game 2 unlocks after the next clue or when the clock expires.");
+      } else if (phase === STORM_RUN_PHASE.CALLED) {
+        setText(dom.stormRunEyebrow, "Live call · Game 2");
+        setText(dom.stormRunTitle, "REPORT TO THE REAR TERRACE");
+        setText(dom.stormRunTimer, "LIVE");
+        setText(dom.stormRunCheckpoint, this.castReady() ? "The yard course is ready." : "Holding for cast…");
+      } else if (phase === STORM_RUN_PHASE.BRIEFING) {
+        setText(dom.stormRunEyebrow, "Storm Run · Rules");
+        setText(dom.stormRunTitle, "FIVE CHECKPOINTS · BEAT MARA");
+        setText(dom.stormRunTimer, String(Math.ceil(this.show.briefingRemaining)));
+        setText(dom.stormRunCheckpoint, "Follow the blue markers in order.");
+      } else if (phase === STORM_RUN_PHASE.RUNNING) {
+        setText(dom.stormRunEyebrow, "Storm Run · Live");
+        setText(dom.stormRunTitle, checkpoint ? `CHECKPOINT ${this.show.completedCheckpoints + 1}` : "FINISH");
+        setText(dom.stormRunTimer, this.formatClock(this.show.raceElapsed));
+        setText(dom.stormRunCheckpoint, checkpoint ? checkpoint.region : "Course clear");
+      } else if (phase === STORM_RUN_PHASE.COMPLETED) {
+        setText(dom.stormRunEyebrow, "Results official");
+        setText(dom.stormRunTitle, "MARA VOSS — ELIMINATED");
+        setText(dom.stormRunTimer, "SAFE");
+        setText(dom.stormRunCheckpoint, "Game 2 complete");
+      } else if (phase === STORM_RUN_PHASE.FAILED) {
+        setText(dom.stormRunEyebrow, "Results official");
+        setText(dom.stormRunTitle, "YOU — ELIMINATED");
+        setText(dom.stormRunTimer, "OUT");
+        setText(dom.stormRunCheckpoint, "Mara finished first");
+      }
+    }
+
+    syncPresentation() {
+      this.syncScene();
+      this.syncCastVisibility();
+      this.syncHud();
+      updateInteractionPrompt();
+    }
+
+    getSnapshot() {
+      const transient = [STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
+      return {
+        phase: transient ? STORM_RUN_PHASE.CALLED : this.show.phase,
+        triggerReason: this.show.triggerReason,
+        triggerClueId: this.show.triggerClueId,
+        callCount: this.show.callCount,
+        callAfterSeconds: STORM_RUN.intermissionSeconds,
+        intermissionElapsed: this.show.intermissionElapsed,
+        completedCheckpoints: transient ? 0 : this.show.completedCheckpoints,
+        eliminatedContestantId: this.show.eliminatedContestantId,
+      };
+    }
+
+    cancelStaging() {
+      const stormCastActive = mansionContestants?.challengeMode === "storm-run" || mrFeastNpc?.challengeMode === "storm-run";
+      if (this.show.staged || stormCastActive) this.releaseProduction(null);
+      this.show.staged = false;
+      this.show.hostVisible = false;
+      this.show.scareRevealRemaining = 0;
+    }
+
+    restoreSnapshot(snapshot = null, questSnapshot = {}) {
+      this.cancelStaging();
+      const majorProgress = [
+        "bookRead", "shovelTaken", "digSiteExcavated", "basementUnlocked",
+        "archiveCageUnlocked", "recordingPlayed", "relaySabotaged",
+      ].filter((field) => Boolean(questSnapshot?.[field])).length
+        + (Array.isArray(questSnapshot?.workroomScratches) ? questSnapshot.workroomScratches.length : 0);
+      const inferLegacyComplete = this.eligible() && majorProgress >= 2;
+      const source = snapshot && typeof snapshot === "object"
+        ? snapshot
+        : inferLegacyComplete ? { phase: STORM_RUN_PHASE.COMPLETED, eliminatedContestantId: "mara-voss" } : {};
+      const requestedPhase = Object.values(STORM_RUN_PHASE).includes(source.phase)
+        ? source.phase
+        : STORM_RUN_PHASE.DORMANT;
+      const restoredPhase = [STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING, STORM_RUN_PHASE.FAILED].includes(requestedPhase)
+        ? STORM_RUN_PHASE.CALLED
+        : requestedPhase;
+      this.show.phase = restoredPhase;
+      this.show.triggerReason = source.triggerReason || (restoredPhase === STORM_RUN_PHASE.DORMANT ? null : "saved");
+      this.show.triggerClueId = source.triggerClueId || null;
+      this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === STORM_RUN_PHASE.DORMANT ? 0 : 1), 0, 1);
+      this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, STORM_RUN.intermissionSeconds);
+      this.show.briefingRemaining = 0;
+      this.show.raceElapsed = 0;
+      this.show.completedCheckpoints = restoredPhase === STORM_RUN_PHASE.COMPLETED
+        ? STORM_RUN.checkpoints.length
+        : 0;
+      this.show.visitedCheckpointIds = restoredPhase === STORM_RUN_PHASE.COMPLETED
+        ? STORM_RUN.checkpoints.map((checkpoint) => checkpoint.id)
+        : [];
+      this.show.eliminatedContestantId = restoredPhase === STORM_RUN_PHASE.COMPLETED
+        ? (source.eliminatedContestantId || "mara-voss")
+        : null;
+      this.show.completionCardRemaining = 0;
+      this.show.scareCheckpointIndex = -1;
+      this.show.scareTriggeredCheckpointIds = [];
+      this.show.scareRevealRemaining = 0;
+      this.show.hostVisible = false;
+      mansionContestants?.setEliminated("mara-voss", this.show.eliminatedContestantId === "mara-voss");
+      this.syncPresentation();
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return null;
+      const duration = clamp(Number(seconds) || 0, 0, 900);
+      this.qaManualClock = true;
+      this.qaStepping = true;
+      if ([STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.COMPLETED].includes(this.show.phase)) {
+        if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver) this.update(duration);
+        this.qaStepping = false;
+        return { elapsed: Number(duration.toFixed(3)), state: this.getDiagnostics() };
+      }
+      const fixedStep = 1 / 60;
+      let elapsed = 0;
+      while (elapsed < duration) {
+        if (state.menuOpen || state.workroom.keypadOpen || state.gameOver) break;
+        const step = Math.min(fixedStep, duration - elapsed);
+        stormSystem?.update(step);
+        mansionContestants?.update(step);
+        this.update(step);
+        elapsed += step;
+      }
+      this.qaStepping = false;
+      return { elapsed: Number(elapsed.toFixed(3)), state: this.getDiagnostics() };
+    }
+
+    completeForQA(outcome = "player") {
+      if (!state.qa) return null;
+      if (this.show.phase === STORM_RUN_PHASE.DORMANT) this.call("qa");
+      if (this.show.phase === STORM_RUN_PHASE.CALLED && this.castReady()) this.reportToStart();
+      if (this.show.phase === STORM_RUN_PHASE.BRIEFING) this.beginRace();
+      return this.finishCompetition(outcome === "mara" ? "mara" : "player");
+    }
+
+    checkpointWalkable(checkpoint) {
+      if (!checkpoint.insideMaze) return true;
+      for (let row = 0; row < HEDGE_MAZE_LAYOUT.rows.length; row += 1) {
+        for (let col = 0; col < HEDGE_MAZE_LAYOUT.rows[row].length; col += 1) {
+          if (HEDGE_MAZE_LAYOUT.rows[row][col] === "#") continue;
+          const center = mazeCellCenter(row, col);
+          if (Math.hypot(center.x - checkpoint.x, center.z - checkpoint.z) < 0.05) return true;
+        }
+      }
+      return false;
+    }
+
+    contestantCheckpointCount(entry) {
+      if (!entry) return 0;
+      if (entry.raceFinished) return STORM_RUN.checkpoints.length;
+      const routeIndex = Math.max(0, Math.floor(Number(entry.race?.routeIndex) || 0));
+      return STORM_RUN.contestantRoute
+        .slice(0, routeIndex)
+        .filter((point) => Number.isInteger(point.checkpointIndex))
+        .length;
+    }
+
+    standingsText() {
+      const juniper = this.contestantCheckpointCount(mansionContestants?.entryById("juniper-cross"));
+      const mara = this.contestantCheckpointCount(mansionContestants?.entryById("mara-voss"));
+      return `YOU ${this.show.completedCheckpoints} · JUNIPER ${juniper} · MARA ${mara}`;
+    }
+
+    contestantDiagnostics() {
+      return ["mara-voss", "juniper-cross"].map((id) => {
+        const entry = mansionContestants?.entryById(id);
+        return {
+          id,
+          activity: entry?.activity || "unavailable",
+          finished: Boolean(entry?.raceFinished),
+          completedCheckpoints: this.contestantCheckpointCount(entry),
+          configuredSpeed: Number((entry?.race?.configuredSpeed || STORM_RUN.contestantSpeeds[id] || 0).toFixed(3)),
+          distanceTravelled: Number((entry?.raceDistanceTravelled || 0).toFixed(3)),
+          maximumObservedSpeed: Number((entry?.raceMaximumObservedSpeed || 0).toFixed(3)),
+          teleports: entry?.raceTeleports || 0,
+          animation: {
+            name: entry?.currentAnimation || null,
+            poseChanged: Boolean(entry?.animationPoseChanged),
+            playbackRate: Number((entry?.action?.getEffectiveTimeScale?.() || 0).toFixed(3)),
+            available: entry ? Object.keys(entry.actions) : [],
+          },
+        };
+      });
+    }
+
+    getDiagnostics() {
+      const contestantEntries = mansionContestants?.entries || [];
+      const staged = (id) => Boolean(
+        mansionContestants?.challengeMode === "storm-run"
+        && contestantEntries.find((entry) => entry.id === id)?.challengeMark
+      );
+      return {
+        phase: this.show.phase,
+        eligible: this.eligible(),
+        triggerReason: this.show.triggerReason,
+        triggerClueId: this.show.triggerClueId,
+        callCount: this.show.callCount,
+        callAfterSeconds: STORM_RUN.intermissionSeconds,
+        intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
+        secondsUntilCall: Number(Math.max(0, STORM_RUN.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        clueProgressLocked: this.blocksInvestigation(),
+        saveAllowed: this.show.phase !== STORM_RUN_PHASE.FAILED,
+        staged: this.show.staged,
+        castReady: this.castReady(),
+        staging: {
+          active: this.show.staged,
+          mara: staged("mara-voss"),
+          juniper: staged("juniper-cross"),
+          kip: staged("kip-solano"),
+          host: Boolean(mrFeastNpc?.challengeMode === "storm-run"),
+        },
+        station: {
+          visible: Boolean(stormRunScene.root?.visible && stormRunScene.reportRoot?.visible),
+          interactive: this.stationInteractionRegistered,
+          position: stormRunScene.reportRoot ? {
+            x: Number(stormRunScene.reportRoot.position.x.toFixed(3)),
+            y: Number(stormRunScene.reportRoot.position.y.toFixed(3)),
+            z: Number(stormRunScene.reportRoot.position.z.toFixed(3)),
+          } : null,
+        },
+        briefingRemaining: Number(this.show.briefingRemaining.toFixed(3)),
+        raceElapsed: Number(this.show.raceElapsed.toFixed(3)),
+        completedCheckpoints: this.show.completedCheckpoints,
+        visitedCheckpointIds: [...this.show.visitedCheckpointIds],
+        nextCheckpointIndex: this.show.completedCheckpoints,
+        checkpoints: STORM_RUN.checkpoints.map((checkpoint, index) => ({
+          id: checkpoint.id,
+          index,
+          order: index + 1,
+          label: checkpoint.label,
+          region: checkpoint.region,
+          insideMaze: checkpoint.insideMaze,
+          inYardBounds: checkpoint.x >= YARD_LAYOUT.bounds.minX && checkpoint.x <= YARD_LAYOUT.bounds.maxX
+            && checkpoint.z >= YARD_LAYOUT.bounds.minZ && checkpoint.z <= YARD_LAYOUT.bounds.maxZ,
+          walkable: this.checkpointWalkable(checkpoint),
+          visited: this.show.visitedCheckpointIds.includes(checkpoint.id),
+          active: this.show.phase === STORM_RUN_PHASE.RUNNING && index === this.show.completedCheckpoints,
+          position: { x: checkpoint.x, y: checkpoint.y, z: checkpoint.z },
+          scareTrigger: checkpoint.scareTrigger ? { ...checkpoint.scareTrigger } : null,
+        })),
+        player: {
+          maximumSprintSpeed: STORM_RUN.playerMaximumSprintSpeed,
+          sprintAvailable: this.show.phase === STORM_RUN_PHASE.RUNNING
+            && !state.movement.crouched
+            && !state.movement.exhausted,
+        },
+        contestants: this.contestantDiagnostics(),
+        scare: {
+          checkpointIndex: this.show.scareCheckpointIndex,
+          triggeredCheckpointIds: [...this.show.scareTriggeredCheckpointIds],
+          revealRemaining: Number(this.show.scareRevealRemaining.toFixed(3)),
+          hostVisible: Boolean(this.show.hostVisible),
+          lightning: Number((stormSystem?.flash || 0).toFixed(3)),
+        },
+        hazard: { enabled: false, penaltySeconds: 0 },
+        eliminatedContestantId: this.show.eliminatedContestantId,
+        invalidTransitions: this.show.invalidTransitions,
+        lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
+        ui: {
+          visible: Boolean(dom.stormRun && !dom.stormRun.hidden),
+          title: dom.stormRunTitle?.textContent || null,
+          timer: dom.stormRunTimer?.textContent || null,
+          progress: dom.stormRunProgress?.textContent || null,
+        },
+      };
+    }
+  }
+
   const WORKROOM_CODE_CLUE = Object.freeze({
     journalId: "workroom-keypad-scratches",
     journalTitle: "Painting Room notes",
@@ -12710,9 +13838,9 @@
     setRevealed(artId, revealed) {
       const mark = this.marks.get(artId);
       if (!mark) return;
-      if (revealed && !this.discovered.has(artId) && feastSaysSystem?.blocksInvestigation()) {
+      if (revealed && !this.discovered.has(artId) && competitionBlocksInvestigation()) {
         if (mark.scratch) mark.scratch.visible = false;
-        feastSaysSystem.notifyInvestigationPaused();
+        notifyCompetitionHold();
         return false;
       }
       if (mark.scratch) mark.scratch.visible = Boolean(revealed);
@@ -12732,7 +13860,7 @@
         contestant13Quest?.showDiscovery("Scratched plaster", `Behind the painting, gouged into the plaster: ${config.numeral} — ${config.digit}.`, 7600);
       }
       if (audioSystem) audioSystem.ping(56, 0.4, 0.06, "triangle");
-      feastSaysSystem?.noteClueDiscovered(`painting-scratch:${artId}`);
+      noteMajorClueDiscovered(`painting-scratch:${artId}`);
     }
 
     orderedMarks() {
@@ -13005,10 +14133,10 @@
         && entry.artId
         && workroomCodeClue?.isCarrier(entry.artId)
         && !workroomCodeClue.discovered.has(entry.artId)
-        && feastSaysSystem?.blocksInvestigation()
+        && competitionBlocksInvestigation()
       ) {
-        entry.blockedReason = "Feast Says production hold";
-        feastSaysSystem.notifyInvestigationPaused();
+        entry.blockedReason = "live competition production hold";
+        notifyCompetitionHold();
         return false;
       }
       const seat = entry.seatId ? seatingSystem?.entryById(entry.seatId) : null;
@@ -13043,7 +14171,7 @@
 
     update(dt, dispatchCollector = null) {
       if (!state.started) return;
-      if (feastSaysSystem?.blocksInvestigation()) return;
+      if (competitionBlocksInvestigation()) return;
       for (const entry of this.entries) {
         if (entry.cooldownRemaining > 0) entry.cooldownRemaining = Math.max(0, entry.cooldownRemaining - dt);
         if (entry.isTampered) {
@@ -13061,7 +14189,7 @@
     }
 
     dispatch(entry, dispatchCollector = null) {
-      if (feastSaysSystem?.blocksInvestigation()) return false;
+      if (competitionBlocksInvestigation()) return false;
       const npc = mrFeastNpc;
       if (!npc || !npc.canAcceptHousekeeping()) return false;
       const response = npc.respondToHousekeepingTask(this.taskFor(entry));
@@ -13221,7 +14349,7 @@
   };
 
   function reportPlayerInfraction(kind, entryId = null) {
-    if (!state.started || state.gameOver || feastSaysSystem?.blocksInvestigation() || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
+    if (!state.started || state.gameOver || competitionBlocksInvestigation() || !mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return null;
     const witnessed = mrFeastNpc.canSeePlayerAct();
     const recorded = !witnessed && Boolean(cameraSecurity?.isRecordingPlayer());
     if (!witnessed && !recorded) return null;
@@ -13241,9 +14369,12 @@
     };
     releasePointerLock();
     const feastSaysElimination = state.gameOver.reason === "feast-says-eliminated";
-    if (dom.gameOverTitle) dom.gameOverTitle.textContent = feastSaysElimination ? "Eliminated" : "Caught";
+    const stormRunElimination = state.gameOver.reason === "storm-run-eliminated";
+    if (dom.gameOverTitle) dom.gameOverTitle.textContent = feastSaysElimination || stormRunElimination ? "Eliminated" : "Caught";
     if (dom.gameOverCopy) {
-      dom.gameOverCopy.textContent = feastSaysElimination
+      dom.gameOverCopy.textContent = stormRunElimination
+        ? "Mara finished Storm Run first. Last place leaves the competition."
+        : feastSaysElimination
         ? "You did not beat Kip in Feast Says. Last place leaves the competition."
         : state.gameOver.reason === "recorded"
           ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
@@ -13337,8 +14468,8 @@
   }
 
   function openWorkroomKeypad() {
-    if (!state.workroom.unlocked && feastSaysSystem?.blocksInvestigation()) {
-      feastSaysSystem.notifyInvestigationPaused();
+    if (!state.workroom.unlocked && competitionBlocksInvestigation()) {
+      notifyCompetitionHold();
       return false;
     }
     return setWorkroomKeypadOpen(true);
@@ -13371,8 +14502,8 @@
       updateWorkroomKeypadPresentation();
       return getWorkroomDiagnostics();
     }
-    if (feastSaysSystem?.blocksInvestigation()) {
-      feastSaysSystem.notifyInvestigationPaused();
+    if (competitionBlocksInvestigation()) {
+      notifyCompetitionHold();
       return getWorkroomDiagnostics();
     }
     const candidate = String(code == null ? state.workroom.keypadInput : code).replace(/\D/g, "").slice(0, WORKROOM_SECURITY.codeLength);
@@ -13963,7 +15094,7 @@
       const safeDt = Math.max(0, Number(dt) || 0);
       if (this.qaManual && !force) return;
       this.syncPolicy();
-      if (feastSaysSystem?.blocksInvestigation()) {
+      if (competitionBlocksInvestigation()) {
         state.security.exposure = 0;
         state.security.observed = false;
         state.security.permitted = true;
@@ -14826,10 +15957,16 @@
         },
       };
       const profile = profiles[style] || profiles.small;
+      // Every below-grade fixture shares the same utility look — an iron
+      // ceiling cage, a short wire, and one bare bulb — so basement corridors
+      // no longer hang formal chandelier rings. Only the visible geometry is
+      // unified: corridor emitters keep their authored tight cones, because
+      // an omni would floodlight walls a metre from the fixture.
+      const utilityLook = style === "basement" || (style === "corridor" && fixtureFloorY === FLOOR.BASEMENT);
       const group = new THREE.Group();
       group.position.set(x, 0, z);
       scene.add(group);
-      if (style === "basement") {
+      if (utilityLook) {
         box({ name: `${this.name}-cage`, w: 0.42, h: 0.12, d: 0.42, x, y: ceilingY - 0.12, z, material: M.iron, cast: false });
         // Hang the wire entirely below the basement ceiling plane. Centering
         // it above that plane left its top 10cm poking through the main floor
@@ -14859,7 +15996,7 @@
         }
         this.addSourceHalo(x, ringY + 0.13, z, isGrand ? 1.9 : 1.15, isGrand ? 0.24 : 0.2);
       }
-      if (style === "basement") {
+      if (utilityLook) {
         const bulb = sphere({ name: `${this.name}-bulb`, radius: 0.1, x, y: ceilingY - 0.28, z, material: new THREE.MeshStandardMaterial({ color: 0xffd6a0, emissive: 0xff9b42, emissiveIntensity: this.on ? 0.9 : 0 }), cast: false });
         bulb.userData.onEmissiveIntensity = 0.9;
         bulb.userData.levels = new Set(this.levels);
@@ -16463,6 +17600,7 @@
     box({ name: "main-hall-bathroom-marble-floor", w: 6.35, h: 0.045, d: 6.15, x: -8.25, y: FLOOR.MAIN + 0.024, z: 0, material: M.marble, cast: false, receive: true });
     box({ name: "main-hall-bathroom-north-annex-floor", w: 3.35, h: 0.045, d: 1.5, x: -13.25, y: FLOOR.MAIN + 0.024, z: 2.38, material: M.marble, cast: false, receive: true });
     const sinkXs = addDoubleVanityBase("main hall bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55);
+    addVanityCounterSet("main-hall-bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55);
     for (const [index, sinkX] of sinkXs.entries()) {
       new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.105, z: -2.52, drop: 0.165 });
     }
@@ -16479,6 +17617,7 @@
   function furnishUpperGrandBathroom() {
     box({ name: "upper-grand-bathroom-marble-floor", w: 9.7, h: 0.045, d: 6.15, x: -10, y: FLOOR.UPPER + 0.024, z: 0, material: M.marble, cast: false, receive: true });
     const sinkXs = addDoubleVanityBase("upper grand bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65);
+    addVanityCounterSet("upper-grand-bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65);
     for (const [index, sinkX] of sinkXs.entries()) {
       new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.105, z: -2.52, drop: 0.165 });
     }
@@ -17858,6 +18997,119 @@
     feastSaysScene.reportHitbox = hitbox;
   }
 
+  function addStormRunCourseSet() {
+    const root = new THREE.Group();
+    root.name = "storm-run-yard-course";
+    root.visible = false;
+    scene.add(root);
+    stormRunScene.root = root;
+
+    const ringGeometry = new THREE.RingGeometry(0.72, 0.92, 42);
+    const beaconGeometry = new THREE.CylinderGeometry(0.045, 0.12, 2.8, 12, 1, true);
+    STORM_RUN.checkpoints.forEach((checkpoint, index) => {
+      const checkpointRoot = new THREE.Group();
+      checkpointRoot.name = `storm-run-checkpoint-${index + 1}-${checkpoint.id}`;
+      checkpointRoot.position.set(checkpoint.x, checkpoint.y, checkpoint.z);
+      checkpointRoot.visible = false;
+      root.add(checkpointRoot);
+
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0x76d9ff,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.name = `storm-run-ring-${index + 1}`;
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.065;
+      ring.renderOrder = 3;
+      checkpointRoot.add(ring);
+
+      const beacon = new THREE.Mesh(
+        beaconGeometry,
+        new THREE.MeshBasicMaterial({
+          color: 0x58b9e9,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      beacon.name = `storm-run-beacon-${index + 1}`;
+      beacon.position.y = 1.4;
+      checkpointRoot.add(beacon);
+      stormRunScene.checkpoints.push({ root: checkpointRoot, ring, beacon, checkpoint });
+    });
+
+    const reportRoot = new THREE.Group();
+    reportRoot.name = "storm-run-report-station";
+    reportRoot.position.set(STORM_RUN.reportMark.x, STORM_RUN.reportMark.y, STORM_RUN.reportMark.z);
+    root.add(reportRoot);
+    stormRunScene.reportRoot = reportRoot;
+
+    const shellMaterial = new THREE.MeshStandardMaterial({
+      color: 0x0b1720,
+      roughness: 0.32,
+      metalness: 0.58,
+      emissive: 0x082d42,
+      emissiveIntensity: 0.72,
+    });
+    const trimMaterial = new THREE.MeshBasicMaterial({ color: 0x72d8ff, toneMapped: false });
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 0.55), shellMaterial);
+    plinth.name = "storm-run-report-plinth";
+    plinth.position.y = 0.08;
+    reportRoot.add(plinth);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.04, 0.63), trimMaterial);
+    trim.name = "storm-run-report-trim";
+    trim.position.y = 0.18;
+    reportRoot.add(trim);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 192;
+    const context = canvas.getContext("2d");
+    if (context) {
+      const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, "#07121c");
+      gradient.addColorStop(1, "#10354a");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.strokeStyle = "#79dcff";
+      context.lineWidth = 10;
+      context.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+      context.fillStyle = "#ff5368";
+      context.font = "700 38px system-ui, sans-serif";
+      context.textAlign = "center";
+      context.fillText("● LIVE", canvas.width / 2, 64);
+      context.fillStyle = "#ffffff";
+      context.font = "900 52px system-ui, sans-serif";
+      context.fillText("STORM RUN", canvas.width / 2, 137);
+    }
+    const displayTexture = new THREE.CanvasTexture(canvas);
+    displayTexture.encoding = THREE.sRGBEncoding;
+    const display = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.7, 0.64),
+      new THREE.MeshBasicMaterial({ map: displayTexture, toneMapped: false }),
+    );
+    display.name = "storm-run-live-display";
+    display.position.set(0, 0.76, -0.04);
+    display.rotation.x = -0.08;
+    reportRoot.add(display);
+
+    const hitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(2.05, 2.1, 0.85),
+      new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false }),
+    );
+    hitbox.name = "storm-run-report-hitbox";
+    hitbox.position.set(0, 1.02, 0);
+    reportRoot.add(hitbox);
+    stormRunScene.reportHitbox = hitbox;
+  }
+
   // --- Milestone 53: ambient detail vignettes -------------------------------
   // Small, room-specific prop sets. Tabletop decor never adds colliders;
   // floor-standing pieces (nightstands, trunks, tubs, barrels) always do.
@@ -18092,6 +19344,72 @@
     box({ name: "boiler-shovel-blade", w: 0.13, h: 0.02, d: 0.17, x: -8.47, y: floorY + 0.05, z: -10.08, rotationY: 0.3, material: M.iron, cast: false });
   }
 
+  function addMantelDecor(x, z, floorY, rotationY, variant) {
+    // Sits on the marble mantle shelf (local y 2.30, room side is local -z).
+    const group = new THREE.Group();
+    group.name = "fireplace-mantel-decor";
+    group.position.set(x, floorY + 2.3, z);
+    group.rotation.y = rotationY || 0;
+    scene.add(group);
+    for (const side of [-1, 1]) {
+      cylinder({ name: "mantel-candlestick-base", radius: 0.055, height: 0.03, segments: 12, x: side * 0.78, y: 0.015, z: -0.08, material: M.brass, parent: group, cast: false });
+      cylinder({ name: "mantel-candlestick-stem", radius: 0.02, height: 0.16, segments: 10, x: side * 0.78, y: 0.11, z: -0.08, material: M.brass, parent: group, cast: false });
+      cylinder({ name: "mantel-candle", radius: 0.017, height: 0.11, segments: 8, x: side * 0.78, y: 0.245, z: -0.08, material: M.porcelain, parent: group, cast: false });
+    }
+    if (variant === "clock") {
+      box({ name: "mantel-clock-case", w: 0.24, h: 0.3, d: 0.11, x: 0, y: 0.15, z: -0.08, material: M.blackWood, parent: group, cast: false });
+      cylinder({ name: "mantel-clock-face", radius: 0.085, height: 0.012, segments: 18, x: 0, y: 0.17, z: -0.142, rotationX: Math.PI / 2, material: M.porcelain, parent: group, cast: false });
+      sphere({ name: "mantel-clock-finial", radius: 0.025, x: 0, y: 0.32, z: -0.08, material: M.brass, parent: group, cast: false });
+    } else if (variant === "urnPair") {
+      for (const side of [-0.38, 0.38]) {
+        cylinder({ name: "mantel-urn", radius: 0.06, radiusTop: 0.075, radiusBottom: 0.045, height: 0.17, segments: 12, x: side, y: 0.085, z: -0.08, material: M.dishBlue, parent: group, cast: false });
+      }
+    } else {
+      box({ name: "mantel-leaning-frame", w: 0.34, h: 0.26, d: 0.02, x: 0.05, y: 0.13, z: -0.02, rotationX: -0.12, material: M.brass, parent: group, cast: false });
+      box({ name: "mantel-leaning-art", w: 0.28, h: 0.2, d: 0.008, x: 0.05, y: 0.13, z: -0.032, rotationX: -0.12, material: M.velvet, parent: group, cast: false });
+    }
+  }
+
+  function addVanityCounterSet(label, x, z, floorY, width) {
+    const counterY = floorY + 0.91;
+    cylinder({ name: `${label}-soap-dish`, radius: 0.055, height: 0.02, segments: 12, x, y: counterY + 0.01, z: z + 0.12, material: M.porcelain, cast: false });
+    sphere({ name: `${label}-soap-bar`, radius: 1, x, y: counterY + 0.04, z: z + 0.12, material: M.dishBlue, cast: false }).scale.set(0.04, 0.018, 0.028);
+    for (const [index, towelY] of [0.03, 0.085].entries()) {
+      box({ name: `${label}-guest-towel`, w: 0.26, h: 0.05, d: 0.18, x: x + width * 0.42, y: counterY + towelY, z, rotationY: 0.08 - index * 0.15, material: M.canvasLinen, cast: false });
+    }
+    cylinder({ name: `${label}-amenity-bottle`, radius: 0.026, radiusTop: 0.014, height: 0.13, segments: 10, x: x - width * 0.42, y: counterY + 0.065, z: z + 0.06, material: M.glass, cast: false });
+  }
+
+  function addFoyerConsoleDecor() {
+    for (const side of [-1, 1]) {
+      const x = side * 3.9;
+      const topY = FLOOR.MAIN + 0.852;
+      cylinder({ name: "foyer-console-vase", radius: 0.07, radiusTop: 0.05, radiusBottom: 0.055, height: 0.24, segments: 14, x, y: topY + 0.12, z: 9.32, material: M.dishBlue, cast: false });
+      for (let i = 0; i < 3; i += 1) {
+        cylinder({ name: "foyer-vase-stem", radius: 0.006, height: 0.2, segments: 6, x: x + yardJitter(i + side, 64) * 0.04, y: topY + 0.3, z: 9.32 + yardJitter(i, 65) * 0.03, rotationZ: yardJitter(i, 66) * 0.3, material: M.hedge, cast: false });
+        sphere({ name: "foyer-vase-bloom", radius: 0.028, x: x + yardJitter(i + side, 64) * 0.07, y: topY + 0.4, z: 9.32 + yardJitter(i, 65) * 0.05, material: i % 2 ? M.roseIvory : M.roseRed, cast: false });
+      }
+      box({ name: "foyer-console-card-tray", w: 0.2, h: 0.018, d: 0.14, x: x - side * 0.35, y: topY + 0.009, z: 9.28, rotationY: side * 0.2, material: M.brass, cast: false });
+    }
+  }
+
+  function addRearCorridorServicePipes() {
+    // An exposed service line along the rear cross-corridor ceiling: pure
+    // overhead dressing, so the metre-wide chase lane underneath stays clear.
+    const pipeY = FLOOR.BASEMENT + 2.62;
+    addPipeRun([[-13.6, pipeY, -4.45], [12.8, pipeY, -4.45]], 0.055, M.iron);
+    addPipeRun([[-13.6, pipeY - 0.16, -4.45], [-13.6, -1.35, -8.2]], 0.05, M.copper);
+    for (const x of [-9.0, 0, 9.0]) {
+      box({ name: "rear-corridor-pipe-bracket", w: 0.05, h: 0.16, d: 0.05, x, y: pipeY + 0.1, z: -4.45, material: M.iron, cast: false });
+    }
+    const valve = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.018, 8, 16), M.copper);
+    valve.name = "rear-corridor-pipe-valve";
+    valve.position.set(-11.4, pipeY - 0.12, -4.45);
+    valve.rotation.z = Math.PI / 2;
+    valve.castShadow = false;
+    scene.add(valve);
+  }
+
   function furnishMainFloor() {
     addFoyerPanelwork();
     // Library
@@ -18103,6 +19421,7 @@
       addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85, bookshelfOptions);
     }
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
+    addMantelDecor(-5.35, 10.25, FLOOR.MAIN, Math.PI / 2, "clock");
     addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.greenRug);
     addTable(-10.5, 5.2, 2.25, 1.05, FLOOR.MAIN, 0, M.darkWood);
     addChair(-10.5, 6.15, FLOOR.MAIN, 0, M.darkWood, {
@@ -18114,6 +19433,7 @@
 
     // Music room — the sofa is deliberately aimed at the grand piano.
     addFireplace("music room fireplace", 5.35, 10.25, FLOOR.MAIN, -Math.PI / 2);
+    addMantelDecor(5.35, 10.25, FLOOR.MAIN, -Math.PI / 2, "urnPair");
     const musicPiano = { x: 11.2, z: 5.85 };
     const musicSofa = { x: 7.4, z: 9.2 };
     const musicRoomSofa = addSofa(musicSofa.x, musicSofa.z, FLOOR.MAIN, faceTargetYaw(musicSofa.x, musicSofa.z, musicPiano.x, musicPiano.z), 2.5, M.velvet);
@@ -18161,6 +19481,7 @@
     });
     ballroomSidelineChair.name = "ballroom-sideline-chair";
     addFeastSaysBallroomSet();
+    addStormRunCourseSet();
     for (const portrait of [
       { x: -1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0 }, circuitName: "ballroom lights" },
       { x: 1.95, artId: "infinite-giveaway", crop: { repeatX: 0.5, offsetX: 0.5 }, circuitName: "ballroom lights" },
@@ -18171,6 +19492,7 @@
 
     // Foyer and gallery detail
     for (const x of [-3.9, 3.9]) addTable(x, 9.3, 1.2, 0.55, FLOOR.MAIN, Math.PI / 2, M.marble);
+    addFoyerConsoleDecor();
     for (const portrait of [
       { x: -11.5, artId: "audit-of-souls", circuitName: "grand stair lights" },
       { x: -6.5, artId: "generosity-engine", circuitName: "grand stair lights" },
@@ -18204,6 +19526,7 @@
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addFireplace("rear lounge fireplace", -4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
+    addMantelDecor(-4.7, -10.55, FLOOR.UPPER, -Math.PI / 2, "frame");
     addBedroomSuiteDressing(-10.5, -10.1, Math.PI, ["books", "watch"], { rugMaterial: M.exoticRug });
     addRearLoungeTeaService();
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
@@ -18427,6 +19750,7 @@
     addWorkroomKeypadHardware();
     addWorkroomSecurityHub();
     addBoilerRoomDetails();
+    addRearCorridorServicePipes();
     for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
     addBulkStorageDetails();
   }
@@ -19459,6 +20783,21 @@
       sphere({ name: "portico-planter-shrub-crown", radius: 0.2, x: x + side * 0.1, y: groundY + 1.2, z: z + 0.06, material: M.hedgeDark, cast: false });
       physics.addFixedBox(x, groundY + 0.45, z, 0.72, 0.9, 0.72, 0);
     }
+    // A woven entry mat under the portico and a smaller pair of urns flanking
+    // the ballroom's rear terrace door mirror the front composition. Both stay
+    // outside the host's authored door-response lane at x≈0.66.
+    // The portico slab tops out at y=0 and the rear terrace pavers at ≈-0.16;
+    // both pieces sit on those surfaces, not on the lawn datum.
+    plane({ name: "portico-entry-mat", w: 2.1, h: 0.95, x: 0, y: 0.008, z: 13.9, material: M.redRug });
+    const terracePaverTop = groundY + 0.044;
+    for (const side of [-1, 1]) {
+      const x = side * 1.95;
+      const z = -13.35;
+      cylinder({ name: "rear-terrace-planter-plinth", radius: 0.17, height: 0.12, segments: 14, x, y: terracePaverTop + 0.06, z, material: M.marble, cast: false });
+      cylinder({ name: "rear-terrace-planter-urn", radius: 0.24, radiusTop: 0.27, radiusBottom: 0.13, height: 0.28, segments: 16, x, y: terracePaverTop + 0.26, z, material: M.limestone });
+      sphere({ name: "rear-terrace-planter-shrub", radius: 0.26, x, y: terracePaverTop + 0.58, z, material: M.hedge, cast: false });
+      physics.addFixedBox(x, terracePaverTop + 0.4, z, 0.56, 0.8, 0.56, 0);
+    }
     yardState.featureCounts.foundationPlantings = clumps.length + darkClumps.length;
   }
 
@@ -19649,7 +20988,17 @@
     makeEstatePoolWater(9.7, 11.25, pool.centerX, pool.centerZ, -0.39);
     addPoolLounger(-0.95, -23.1, 0);
     addPoolLounger(-0.95, -28.0, 0);
-    yardState.featureCounts.poolComponents = 18;
+    // A drinks table between the two loungers, with towels waiting on the
+    // rain-soaked deck — nobody is swimming tonight.
+    const deckY = YARD_LAYOUT.groundY;
+    cylinder({ name: "pool-side-table-leg", radius: 0.035, height: 0.46, segments: 10, x: -0.95, y: deckY + 0.23, z: -25.55, material: M.iron, cast: false });
+    cylinder({ name: "pool-side-table-top", radius: 0.24, height: 0.03, segments: 16, x: -0.95, y: deckY + 0.475, z: -25.55, material: M.darkWood, cast: false });
+    cylinder({ name: "pool-side-table-base", radius: 0.14, height: 0.025, segments: 12, x: -0.95, y: deckY + 0.012, z: -25.55, material: M.iron, cast: false });
+    for (const [index, towelY] of [0.03, 0.082].entries()) {
+      box({ name: "pool-deck-towel", w: 0.34, h: 0.05, d: 0.24, x: -0.85, y: deckY + towelY + 0.47, z: -25.62, rotationY: 0.1 - index * 0.2, material: M.canvasLinen, cast: false });
+    }
+    physics.addFixedBox(-0.95, deckY + 0.26, -25.55, 0.5, 0.52, 0.5, 0);
+    yardState.featureCounts.poolComponents = 20;
   }
 
   function mazeCellCenter(row, col) {
@@ -21414,6 +22763,7 @@
     ]) : new Set(["front", "rear", "west", "east"]);
     const nextFacadeKey = Array.from(visibleSides).sort().join("|");
     if (shouldHide === interiorDetailsHidden && nextFacadeKey === facadeVisibilityKey) {
+      stormRunSystem?.syncCastVisibility();
       return;
     }
     interiorDetailsHidden = shouldHide;
@@ -21432,6 +22782,7 @@
       if (!storage.stockMeshes) continue;
       for (const mesh of storage.stockMeshes) mesh.visible = !shouldHide && Boolean(storage.open);
     }
+    stormRunSystem?.syncCastVisibility();
     renderer.shadowMap.needsUpdate = true;
   }
 
@@ -21478,6 +22829,7 @@
       || state.contestant13.actionInProgress
     ) return false;
     if (feastSaysSystem?.isPlaying()) return toggleFeastSaysCrouch();
+    if (stormRunSystem?.locksPlayerMovement()) return false;
     state.movement.crouched = !state.movement.crouched;
     state.movement.sprinting = false;
     input.sprint = false;
@@ -21499,6 +22851,7 @@
       },
       contestant13: contestant13Quest.getQuestSnapshot(),
       feastSays: feastSaysSystem?.getSnapshot() || null,
+      stormRun: stormRunSystem?.getSnapshot() || null,
     };
   }
 
@@ -21512,6 +22865,7 @@
     // Validate the complete required transform before touching quest/world
     // presentation so a malformed save can never half-restore a fresh game.
     if (![x, y, z].every(Number.isFinite)) return false;
+    stormRunSystem?.cancelStaging();
     feastSaysSystem?.cancelStaging();
     mansionContestants?.clearTransientSeating();
     seatingSystem?.clearTransientOccupancy();
@@ -21519,6 +22873,7 @@
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
+    stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
     physics.verticalVelocity = 0;
     physics.playerBody.setTranslation({ x, y, z }, true);
     physics.playerBody.setNextKinematicTranslation({ x, y, z });
@@ -21595,7 +22950,7 @@
     if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
     if (dom.menuSave) dom.menuSave.disabled = !state.started || state.devMode || welcomeActive;
     if (dom.menuDev) {
-      dom.menuDev.disabled = welcomeActive || feastSaysActive || feastSaysSystem?.blocksInvestigation();
+      dom.menuDev.disabled = welcomeActive || feastSaysActive || competitionBlocksInvestigation();
       dom.menuDev.textContent = `Dev mode: ${state.devMode ? "On" : "Off"}`;
       dom.menuDev.setAttribute("aria-pressed", String(state.devMode));
     }
@@ -21722,7 +23077,7 @@
       updateInteractionPrompt();
       return;
     }
-    if (feastSaysSystem?.isPlaying()) return;
+    if (feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) return;
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
     interaction.activate();
@@ -21801,7 +23156,7 @@
         return;
       }
       if (state.menuOpen) return;
-      if (feastSaysSystem?.isPlaying() && event.code === "Tab") {
+      if ((feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) && event.code === "Tab") {
         event.preventDefault();
         return;
       }
@@ -21827,6 +23182,7 @@
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
         if (feastSaysSystem?.isPlaying() && feastSaysSystem.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
+        if (stormRunSystem?.locksPlayerMovement()) return;
         setMoveIntent(event.code, true);
       }
       if (event.code === "KeyE" && !event.repeat) activateCurrentInteraction();
@@ -21866,7 +23222,7 @@
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
       // Keep the cursor hidden while reading, but freeze look so the page stays readable.
-      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || feastSaysSystem?.isPlaying()) return;
+      if (state.readableBooks.open || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || feastSaysSystem?.isPlaying() || stormRunSystem?.locksPlayerMovement()) return;
       state.yaw -= event.movementX * 0.00205;
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
@@ -21980,7 +23336,7 @@
     });
 
     dom.canvas.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "touch" || event.clientX < innerWidth * 0.38 || feastSaysSystem?.isPlaying()) return;
+      if (event.pointerType !== "touch" || event.clientX < innerWidth * 0.38 || feastSaysSystem?.isPlaying() || stormRunSystem?.locksPlayerMovement()) return;
       input.touchLookId = event.pointerId;
       input.touchLookX = event.clientX;
       input.touchLookY = event.clientY;
@@ -22133,7 +23489,7 @@
       }
       return;
     }
-    if (feastSaysSystem?.isPlaying()) {
+    if (feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) {
       state.currentInteraction = null;
       dom.prompt.hidden = true;
       return;
@@ -22563,7 +23919,7 @@
       updateMovementHud();
       return;
     }
-    if (feastSaysSystem?.locksPlayerMovement()) {
+    if (feastSaysSystem?.locksPlayerMovement() || stormRunSystem?.locksPlayerMovement()) {
       physics.movePlayer(0, 0);
       physics.step();
       physics.updateSafety();
@@ -22575,7 +23931,7 @@
       movement.mode = "on-mark";
       movement.speed = 0;
       clearMovementInput();
-      feastSaysSystem.constrainPlayer();
+      feastSaysSystem?.constrainPlayer();
       updateMovementHud();
       return;
     }
@@ -22857,6 +24213,7 @@
       updateLightTransitions(dt);
       if (rainSystem) rainSystem.update(dt);
       if (stormSystem) stormSystem.update(dt);
+      stormRunSystem?.update(Math.min(rawDt, STORM_RUN.maximumTimerStepSeconds));
       if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
         const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
         contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
@@ -22986,6 +24343,7 @@
       speech: speechSystem?.getDiagnostics() || null,
       openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
       feastSays: feastSaysSystem?.getDiagnostics() || null,
+      stormRun: stormRunSystem?.getDiagnostics() || null,
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
@@ -23445,6 +24803,71 @@
       else if (kind === "scratch") workroomCodeClue?.discover(WORKROOM_CODE_SCRATCHES[0].artId);
       else contestant13Quest.readBook();
       return feastSaysSystem?.getDiagnostics() || null;
+    };
+    window.MrFeastFresh.getStormRunState = () => stormRunSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.advanceStormRunForQA = (seconds) => (
+      state.qa && stormRunSystem ? stormRunSystem.advanceForQA(seconds) : null
+    );
+    window.MrFeastFresh.callStormRunForQA = (reason = "timer") => {
+      if (!state.qa || !stormRunSystem) return { started: false, reason: "qa-only" };
+      const result = stormRunSystem.call(reason);
+      return { ...result, started: Boolean(result.called) };
+    };
+    window.MrFeastFresh.startStormRunForQA = () => (
+      state.qa && stormRunSystem ? stormRunSystem.reportToStart() : { started: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.collectStormCheckpointForQA = (index) => (
+      state.qa && stormRunSystem
+        ? stormRunSystem.collectCheckpoint(index, "qa")
+        : { accepted: false, reason: "qa-only", completed: 0 }
+    );
+    window.MrFeastFresh.triggerStormRunScareForQA = (index) => (
+      state.qa && stormRunSystem ? stormRunSystem.triggerScare(index) : { triggered: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.placePlayerBeforeStormCheckpointForQA = (index, approachDistance = 4) => {
+      if (!state.qa || !stormRunSystem || !physics) return null;
+      const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
+      if (!checkpoint) return null;
+      const distance = clamp(Number(approachDistance) || 4, STORM_RUN.checkpointRadius + 0.5, STORM_RUN.checkpointApproachRadius - 0.25);
+      const x = checkpoint.x;
+      const z = checkpoint.z - distance;
+      const lookTarget = checkpoint.reveal || checkpoint;
+      const yaw = Math.atan2(-(lookTarget.x - x), -(lookTarget.z - z));
+      teleport(x, checkpoint.y, z, yaw, -0.08);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        index: Math.floor(Number(index)),
+        distance: Number(Math.hypot(x - checkpoint.x, z - checkpoint.z).toFixed(3)),
+        position: { x, y: checkpoint.y, z },
+      };
+    };
+    window.MrFeastFresh.placePlayerAtStormScareTriggerForQA = (index) => {
+      if (!state.qa || !stormRunSystem || !physics) return null;
+      const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
+      if (!checkpoint?.scareTrigger) return null;
+      const trigger = checkpoint.scareTrigger;
+      const lookTarget = checkpoint.reveal || checkpoint;
+      const yaw = Math.atan2(-(lookTarget.x - trigger.x), -(lookTarget.z - trigger.z));
+      teleport(trigger.x, checkpoint.y, trigger.z, yaw, -0.08);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        index: Math.floor(Number(index)),
+        position: { x: trigger.x, y: checkpoint.y, z: trigger.z },
+        radius: trigger.radius,
+      };
+    };
+    window.MrFeastFresh.completeStormRunForQA = (outcome = "player") => (
+      state.qa && stormRunSystem ? stormRunSystem.completeForQA(outcome) : null
+    );
+    window.MrFeastFresh.triggerStormRunClueForQA = (kind = "shovel") => {
+      if (!state.qa || !contestant13Quest || !stormRunSystem) return null;
+      if (kind === "shovel") contestant13Quest.takeShovel();
+      else if (kind === "dig") contestant13Quest.digSite();
+      else if (kind === "scratch") workroomCodeClue?.discover(WORKROOM_CODE_SCRATCHES[0].artId);
+      else contestant13Quest.readBook();
+      return { ...stormRunSystem.getDiagnostics(), quest: contestant13Quest.getDiagnostics() };
     };
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
@@ -24267,6 +25690,7 @@
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();
       stormSystem = new StormSystem();
+      stormRunSystem = new StormRunSystem();
       audioSystem = new MansionAudio();
       updateAudioButton();
       bindInput();

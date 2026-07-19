@@ -56,6 +56,43 @@ async function completeFirstClueCompetition(page, expectedClueId) {
   return state;
 }
 
+async function completeStormRunAfterShovel(page) {
+  try {
+    await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 30000 });
+  } catch (_) {
+    const stalled = await diagnostics(page);
+    throw new Error(`Storm Run cast did not settle after the shovel clue; storm=${JSON.stringify(stalled.stormRun)} contestants=${JSON.stringify(stalled.contestants)} mrFeast=${JSON.stringify(stalled.mrFeast)}`);
+  }
+  let state = await diagnostics(page);
+  assert(
+    state.stormRun?.phase === "called"
+      && state.stormRun.triggerReason === "clue"
+      && state.stormRun.triggerClueId === "faceless-fountain-shovel"
+      && state.stormRun.callCount === 1
+      && state.stormRun.clueProgressLocked,
+    `the first post-Feast clue should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+  );
+  assert(
+    state.contestant13.shovelTaken
+      && state.inventory.items.filter((id) => id === "garden-shovel").length === 1,
+    `the shovel that called Storm Run should remain earned; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
+  );
+  const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
+  assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 8000 });
+  state = await diagnostics(page);
+  assert(
+    state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
+    `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
+  );
+  assert(
+    state.contestant13.shovelTaken
+      && state.inventory.items.filter((id) => id === "garden-shovel").length === 1,
+    `Storm Run completion must preserve the triggering shovel clue; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
+  );
+  return state;
+}
+
 async function teleportForInteraction(page, view, promptPattern) {
   await page.evaluate((name) => window.MrFeastFresh.teleport(name), view);
   await page.evaluate(() => window.advanceTime(100));
@@ -193,6 +230,7 @@ async function run() {
     state = await diagnostics(page);
     assert(state.contestant13.shovelTaken && state.inventory.items.filter((id) => id === "garden-shovel").length === 1, "garden shovel should be collected exactly once");
     assert(/hedge maze|basement key/i.test(state.journal.currentObjective), "shovel pickup should advance the objective to the hedge-maze key");
+    await completeStormRunAfterShovel(page);
 
     await teleportForInteraction(page, "contestant13DigSite", /dig.*basement key|xiii/i);
     await pressInteract(page);

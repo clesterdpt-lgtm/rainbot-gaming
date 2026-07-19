@@ -6,7 +6,7 @@
 
 **34 — Basement Key Trail** remains preserved with automated acceptance complete and the subtle shelf-book discovery awaiting user playtest.
 
-**35 — Player Mobility, Inventory, and Test Menu** is in progress with automated acceptance complete and sprint/crouch pacing awaiting user playtest. The intro-menu Load regression is fixed and cold-load covered: saves now restore atomically without the front-door welcome, malformed payloads remain safely at the intro, and focused Chromium measured a 4.1 ms restore with an 18.1 ms next frame.
+**35 — Player Mobility, Inventory, and Test Menu** is in progress with automated acceptance complete and sprint/crouch pacing awaiting user playtest. The intro-menu Load regression is fixed and cold-load covered: saves restore atomically without the front-door welcome, malformed payloads remain safely at the intro, and focused Chromium measured a 4.1 ms restore with an 18.1 ms next frame. Intro and Escape menus now fit without scrolling through 568×320 landscape, while definite stage sizing and guarded renderer updates prevent the canvas from expanding downward after Start or retaining a larger viewport height.
 
 **36 — Camera Surveillance and Alarm Investigation** is in progress with automated acceptance complete and stealth timing, feedback, and Mr. Feast search tension awaiting user playtest.
 
@@ -125,6 +125,7 @@ The current face-retopology experiment is paused and must not be published or tr
 ## Verification
 
 - `node --check assets/js/mr-feast-mansion.js` — passed
+- `node scripts/test-mr-feast-menu-viewport.mjs` — passed a real saved-game intro and the Escape menu at 1024×600, 1280×720, 390×844, 390×667, 560×600, 844×390, and 568×320 at DPR 2; every panel and 44 px-or-larger action stayed inside the visible stage/browser with no overflow, Start kept a stable 366 px desktop stage, a 600→720→600 viewport cycle returned exactly to its original stage/canvas height, opening the menu did not move page scroll, and no unexpected browser errors appeared
 - `node --check scripts/test-mr-feast-stealth-meter.mjs` and `node scripts/test-mr-feast-stealth-meter.mjs` — passed (red-first before implementation): exact standing `1`/crouched `0.5` stance pins, crouch-only accessible meter HUD with aria mirroring, clear crouch-walk meter drop with stillness recovery, real-circuit lit/dark response with the deterministic QA light override, the staged `4.8m` witnessed/unseen/point-blank sight probe, hiding handoff to the hidden pill, phone-layout hiding with zero overflow, and zero console errors
 - Renovation section 55 stealth pins (constants table, HUD markup, circuit sampling, crouch-gated bonuses, sight gating, camera consumption, diagnostics) failed red before implementation and pass green after; the section 51 camera pin now accepts the `state.stealth.effectiveVisibility` consumption that multiplies the Milestone 35 crouch value underneath
 - Post-stealth adjacent reruns passed `test-mr-feast-renovation.mjs`, `test-mr-feast-player-systems.mjs` (full pass, including the previously flaky fullscreen checkpoint), `test-mr-feast-camera-security.mjs`, and `test-mr-feast-caught-pursuit.mjs`

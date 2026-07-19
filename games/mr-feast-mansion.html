@@ -1809,7 +1809,7 @@
       .mansion-page .game-page__sub { max-width: 34ch; font-size: 0.6rem; line-height: 1.5; }
       .mansion-layout { gap: 0; }
       #mansion-stage {
-        height: clamp(400px, calc(100dvh - 200px), 650px);
+        height: clamp(320px, calc(100dvh - 212px), 650px);
         min-height: 0;
         border-inline: 0;
         border-radius: 0;
@@ -1895,6 +1895,40 @@
       .mansion-floor-row:last-child { border-bottom: 0; }
     }
 
+    @media (max-height: 700px) {
+      #mansion-intro,
+      #mansion-menu {
+        padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+      }
+      .mansion-intro__panel,
+      .mansion-menu__panel { padding: 18px 20px; }
+      .mansion-controls,
+      .mansion-intro__note,
+      .mansion-menu__copy { display: none; }
+      .mansion-intro__eyebrow { margin-bottom: 6px; }
+      .mansion-intro__lead { margin-top: 9px; line-height: 1.35; }
+      .mansion-intro__actions { margin-top: 10px; }
+      .mansion-menu__title { margin-block: 4px 8px; }
+      #mansion-menu-status { margin: 7px 0 10px; }
+    }
+
+    @media (max-width: 900px) and (max-height: 700px) {
+      .mansion-page .game-page__header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 4px;
+        padding: 4px 0;
+      }
+      .mansion-page .game-page__title { font-size: 1.7rem; }
+      .mansion-page .game-page__sub { display: none; }
+      .mansion-page .game-page__header .mansion-back {
+        min-height: 44px;
+        padding: 7px 10px !important;
+      }
+      .mansion-layout { gap: 0; }
+    }
+
     @media (max-height: 600px) and (orientation: landscape) {
       #mansion-intro,
       #mansion-menu {
@@ -1921,12 +1955,16 @@
 
     @media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
       #mansion-stage:not(.is-maxed):not(:fullscreen) {
-        height: max(130px, calc(100dvh - 200px));
+        height: max(130px, calc(100dvh - 142px));
         min-height: 0;
       }
     }
 
-    @media (max-height: 360px) and (orientation: landscape) {
+    @media (max-height: 420px) and (orientation: landscape) {
+      #mansion-intro,
+      #mansion-menu {
+        padding: max(2px, env(safe-area-inset-top)) max(2px, env(safe-area-inset-right)) max(2px, env(safe-area-inset-bottom)) max(2px, env(safe-area-inset-left));
+      }
       .mansion-intro__panel,
       .mansion-menu__panel { padding: 6px 10px; }
       .mansion-intro__eyebrow,
@@ -1934,7 +1972,7 @@
       .mansion-menu__eyebrow,
       .mansion-menu__title { display: none; }
       .mansion-menu__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-      #mansion-menu-status { margin: 3px 0 5px; }
+      #mansion-menu-status { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {

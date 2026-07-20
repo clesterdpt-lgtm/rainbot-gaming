@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260719-stocked-cabinets-1";
+  const MANSION_RUNTIME_VERSION = "20260720-storm-maze-visibility-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2010,6 +2010,19 @@
   ]);
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
+  const MAZE_NORTH_VISIBILITY = Object.freeze({
+    fixture: "maze-wayfinding-lamp-3",
+    intensity: 380,
+    distance: 14.2,
+    view: Object.freeze({ x: 25, z: 11.75, yaw: -Math.PI / 2, pitch: -0.04 }),
+    samplePoints: Object.freeze([
+      Object.freeze({ x: 22, z: 10.25 }),
+      Object.freeze({ x: 25, z: 11.75 }),
+      Object.freeze({ x: 28, z: 11.75 }),
+    ]),
+    minimumExposure: 0.16,
+    minimumCanvasLuminance: 0.035,
+  });
   const AMBIENT_STORM_FLASH = Object.freeze({
     decayPerSecond: 3.7,
     pulsePattern: Object.freeze([
@@ -2028,9 +2041,9 @@
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
     callLine: "Contestants, report to the back door. Storm Run is next.",
-    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. I will call the direction to each one. Start west through the formal garden, loop around the front, cross the maze, and finish at the pool. Beat Mara. Last place is eliminated.",
+    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. I will announce each checkpoint. The markers cover the grounds and finish at the pool. Beat Mara. Last place is eliminated.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
-    startLine: "Run! Checkpoint one: west into the formal garden.",
+    startLine: "Run! Checkpoint one: formal garden.",
     checkpointSpeechSeconds: 3.1,
     resultLines: Object.freeze({
       player: "Course complete. Mara is last. Mara, you are eliminated.",
@@ -2071,22 +2084,27 @@
       "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
     }),
     checkpoints: Object.freeze([
-      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", callout: "Checkpoint one: west into the formal garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
-      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", callout: "Checkpoint two: keep north along the garden path.", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
-      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", callout: "Checkpoint three: stay north toward the front of the garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
-      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", callout: "Checkpoint four: turn left and follow the garden’s front edge.", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", callout: "Checkpoint five: cross toward the driveway carriage turn.", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", callout: "Checkpoint six: run up the driveway toward the gate.", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
-      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", callout: "Checkpoint seven: cut across the east front lawn toward the trees.", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
-        scareTrigger: Object.freeze({ x: 7.2, z: 16.3, radius: 2.25, viewYaw: -Math.PI / 2 }),
+      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", callout: "Checkpoint one: formal garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", callout: "Checkpoint two: garden crossing.", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
+      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", callout: "Checkpoint three: garden front.", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
+      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", callout: "Checkpoint four: garden junction.", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", callout: "Checkpoint five: carriage marker.", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", callout: "Checkpoint six: driveway gate.", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", callout: "Checkpoint seven: front-lawn trees.", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
+        scareTrigger: Object.freeze({
+          zones: Object.freeze([
+            Object.freeze({ id: "direct-lawn", x: 7.3, z: 23.65, radius: 4.4, viewYaw: -0.94 }),
+            Object.freeze({ id: "carriage-path", x: 7.2, z: 16.3, radius: 3.4, viewYaw: -Math.PI / 2 }),
+          ]),
+        }),
         reveal: Object.freeze({ x: 16.2, y: YARD_LAYOUT.groundY, z: 20, yaw: -1.96, darkSpot: true }) }),
-      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", callout: "Checkpoint eight: follow the east lawn south to the maze promenade.", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", callout: "Checkpoint nine: turn toward the hedge-maze entrance.", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", callout: "Checkpoint ten: enter the maze and find the blue marker inside.", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
+      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", callout: "Checkpoint eight: maze promenade.", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", callout: "Checkpoint nine: hedge-maze entrance.", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", callout: "Checkpoint ten: hedge-maze marker.", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
         scareTrigger: Object.freeze({ x: 28, z: 8.75, radius: 1.75, viewYaw: 0 }),
         reveal: Object.freeze({ x: 28, y: YARD_LAYOUT.groundY, z: 4.25, yaw: 0, darkSpot: true }) }),
-      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", callout: "Checkpoint eleven: leave the maze for the east rear lawn.", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
-      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", callout: "Final checkpoint: west to the pool terrace.", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
+      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", callout: "Checkpoint eleven: rear lawn.", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
+      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", callout: "Final checkpoint: pool terrace.", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
@@ -2129,8 +2147,8 @@
   // player is in the maze or on its west approach. This preserves the exact
   // fixed shader-light count that the frame-rate pass established.
   const MAZE_LIGHT_BUDGET_FIXTURES = Object.freeze([
-    "maze-north-entrance-lamp-north",
-    "maze-wayfinding-lamp-11",
+    "maze-north-entrance-lamp-south",
+    MAZE_NORTH_VISIBILITY.fixture,
     "maze-center-tall-lamp",
     "maze-rear-entrance-lamp-north",
     "maze-wayfinding-lamp-23",
@@ -2414,6 +2432,7 @@
       staged: false,
       completionCardRemaining: 0,
       scareCheckpointIndex: -1,
+      scareTriggerZoneId: null,
       scareTriggeredCheckpointIds: [],
       scareRevealRemaining: 0,
       scareBaselineLightExposure: 1,
@@ -14158,6 +14177,7 @@
       this.show.completedCheckpoints = 0;
       this.show.visitedCheckpointIds = [];
       this.show.scareCheckpointIndex = -1;
+      this.show.scareTriggerZoneId = null;
       this.show.scareTriggeredCheckpointIds = [];
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
@@ -14336,7 +14356,13 @@
       return result;
     }
 
-    triggerScare(index = this.show.completedCheckpoints) {
+    scareTriggerZones(checkpoint) {
+      const trigger = checkpoint?.scareTrigger;
+      if (!trigger) return [];
+      return Array.isArray(trigger.zones) && trigger.zones.length ? trigger.zones : [trigger];
+    }
+
+    triggerScare(index = this.show.completedCheckpoints, triggerZone = null) {
       const checkpointIndex = Math.floor(Number(index));
       const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
       if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return { triggered: false, reason: "not-running" };
@@ -14344,6 +14370,7 @@
       if (this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)) return { triggered: false, reason: "already-triggered" };
       this.show.scareTriggeredCheckpointIds.push(checkpoint.id);
       this.show.scareCheckpointIndex = checkpointIndex;
+      this.show.scareTriggerZoneId = triggerZone?.id || null;
       this.show.scareRevealRemaining = STORM_RUN.hostRevealMaximumSeconds;
       this.show.scareBaselineLightExposure = sampleStealthLightExposure({
         x: checkpoint.reveal.x,
@@ -14384,13 +14411,16 @@
       const checkpoint = this.expectedCheckpoint();
       if (!checkpoint) return;
       const distance = Math.hypot(player.x - checkpoint.x, player.z - checkpoint.z);
-      const scareTrigger = checkpoint.scareTrigger || checkpoint;
-      const scareDistance = Math.hypot(player.x - scareTrigger.x, player.z - scareTrigger.z);
+      const scareTriggerZones = this.scareTriggerZones(checkpoint);
+      const matchedScareZone = scareTriggerZones.find((zone) => (
+        Math.hypot(player.x - zone.x, player.z - zone.z)
+          <= (zone.radius || STORM_RUN.checkpointApproachRadius)
+      ));
       if (
         checkpoint.reveal
-        && scareDistance <= (scareTrigger.radius || STORM_RUN.checkpointApproachRadius)
+        && matchedScareZone
         && !this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)
-      ) this.triggerScare(this.show.completedCheckpoints);
+      ) this.triggerScare(this.show.completedCheckpoints, matchedScareZone);
       if (distance <= STORM_RUN.checkpointRadius) this.collectCheckpoint(this.show.completedCheckpoints, "proximity");
     }
 
@@ -14654,6 +14684,7 @@
         : null;
       this.show.completionCardRemaining = 0;
       this.show.scareCheckpointIndex = -1;
+      this.show.scareTriggerZoneId = null;
       this.show.scareTriggeredCheckpointIds = [];
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
@@ -14703,8 +14734,9 @@
     scareViewpoint(index) {
       const checkpoint = STORM_RUN.checkpoints[index];
       if (!checkpoint?.reveal) return null;
-      if (checkpoint.scareTrigger) {
-        return { x: checkpoint.scareTrigger.x, y: checkpoint.y, z: checkpoint.scareTrigger.z };
+      const scareTrigger = this.scareTriggerZones(checkpoint)[0];
+      if (scareTrigger) {
+        return { x: scareTrigger.x, y: checkpoint.y, z: scareTrigger.z };
       }
       const previous = this.checkpointPreviousPosition(index);
       const dx = checkpoint.x - previous.x;
@@ -14808,8 +14840,9 @@
       const previous = this.checkpointPreviousPosition(checkpointIndex);
       const incomingDx = checkpoint.x - previous.x;
       const incomingDz = checkpoint.z - previous.z;
-      state.yaw = Number.isFinite(checkpoint.scareTrigger?.viewYaw)
-        ? checkpoint.scareTrigger.viewYaw
+      const scareTrigger = this.scareTriggerZones(checkpoint)[0];
+      state.yaw = Number.isFinite(scareTrigger?.viewYaw)
+        ? scareTrigger.viewYaw
         : Math.atan2(-incomingDx, -incomingDz);
       state.pitch = 0;
       syncCamera();
@@ -15029,6 +15062,7 @@
         contestants: this.contestantDiagnostics(),
         scare: {
           checkpointIndex: this.show.scareCheckpointIndex,
+          triggerZoneId: this.show.scareTriggerZoneId,
           triggeredCheckpointIds: [...this.show.scareTriggeredCheckpointIds],
           revealRemaining: Number(this.show.scareRevealRemaining.toFixed(3)),
           hostVisible: Boolean(this.show.hostVisible),
@@ -22877,7 +22911,7 @@
       { row: 30, col: 8, role: "corner", name: "maze-south-east-corner-lamp" },
     ];
     const mazeWayfindingCells = [
-      { row: 3, col: 4, targetRow: 3, targetCol: 3, role: "wayfinding" },
+      { row: 3, col: 4, targetRow: 3, targetCol: 3, role: "wayfinding", name: MAZE_NORTH_VISIBILITY.fixture },
       { row: 7, col: 6, targetRow: 7, targetCol: 5, role: "wayfinding" },
       { row: 11, col: 6, targetRow: 11, targetCol: 5, role: "wayfinding" },
       { row: 15, col: 4, targetRow: 15, targetCol: 3, role: "center", name: "maze-center-tall-lamp", castsShadow: true },
@@ -22891,14 +22925,19 @@
       ...mazeWayfindingCells.map((source) => {
         const center = mazeCellCenter(source.row, source.col);
         const target = mazeCellCenter(source.targetRow, source.targetCol);
+        const northVisibilitySource = source.name === MAZE_NORTH_VISIBILITY.fixture;
         return {
           x: center.x,
           z: center.z,
           targetX: target.x,
           targetZ: target.z,
           height: source.role === "center" ? 4.35 : 3.75,
-          intensity: source.role === "center" ? 420 : 300,
-          distance: source.role === "center" ? 13.2 : 12.6,
+          intensity: source.role === "center"
+            ? 420
+            : northVisibilitySource ? MAZE_NORTH_VISIBILITY.intensity : 300,
+          distance: source.role === "center"
+            ? 13.2
+            : northVisibilitySource ? MAZE_NORTH_VISIBILITY.distance : 12.6,
           angle: source.role === "center" ? 1.1 : 1.05,
           downward: true,
           contained: true,
@@ -26522,6 +26561,66 @@
     window.MrFeastFresh.triggerStormRunScareForQA = (index) => (
       state.qa && stormRunSystem ? stormRunSystem.triggerScare(index) : { triggered: false, reason: "qa-only" }
     );
+    window.MrFeastFresh.placePlayerAlongStormLegForQA = (index, progress = 0.42) => {
+      if (!state.qa || !stormRunSystem || !physics) return null;
+      const checkpointIndex = Math.floor(Number(index));
+      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+      const previous = stormRunSystem.checkpointPreviousPosition(checkpointIndex);
+      if (!checkpoint || !previous) return null;
+      const routeProgress = clamp(Number(progress) || 0, 0, 1);
+      const x = previous.x + (checkpoint.x - previous.x) * routeProgress;
+      const z = previous.z + (checkpoint.z - previous.z) * routeProgress;
+      const yaw = Math.atan2(-(checkpoint.x - x), -(checkpoint.z - z));
+      teleport(x, checkpoint.y, z, yaw, -0.08);
+      updateLocation();
+      updateInteractionPrompt();
+      const zones = stormRunSystem.scareTriggerZones(checkpoint);
+      const closestZone = zones.reduce((closest, zone) => {
+        const distance = Math.hypot(x - zone.x, z - zone.z);
+        return !closest || distance < closest.distance ? { zone, distance } : closest;
+      }, null);
+      return {
+        index: checkpointIndex,
+        progress: Number(routeProgress.toFixed(3)),
+        onAuthoredLeg: true,
+        position: { x: Number(x.toFixed(3)), y: checkpoint.y, z: Number(z.toFixed(3)) },
+        triggerZoneId: closestZone?.zone?.id || null,
+        triggerZoneDistance: Number((closestZone?.distance ?? Infinity).toFixed(3)),
+        triggerRadius: Number((closestZone?.zone?.radius || 0).toFixed(3)),
+      };
+    };
+    window.MrFeastFresh.previewStormMazeNorthForQA = () => {
+      if (!state.qa || !physics) return null;
+      const view = MAZE_NORTH_VISIBILITY.view;
+      teleport(view.x, YARD_LAYOUT.groundY, view.z, view.yaw, view.pitch);
+      updateLocation();
+      syncLightRendering();
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateInteractionPrompt();
+      const routeExposures = MAZE_NORTH_VISIBILITY.samplePoints.map((point) => ({
+        x: point.x,
+        z: point.z,
+        exposure: Number(sampleStealthLightExposure({
+          x: point.x,
+          y: YARD_LAYOUT.groundY + 1.1,
+          z: point.z,
+        }, { ignoreOverride: true }).toFixed(3)),
+      }));
+      const yard = getYardDiagnostics(physics.playerPosition());
+      return {
+        fixture: MAZE_NORTH_VISIBILITY.fixture,
+        minimumExposure: MAZE_NORTH_VISIBILITY.minimumExposure,
+        minimumCanvasLuminance: MAZE_NORTH_VISIBILITY.minimumCanvasLuminance,
+        minimumRouteExposure: Math.min(...routeExposures.map((sample) => sample.exposure)),
+        routeExposures,
+        mazeLightingContext: state.mazeLightingContext,
+        activeFixtureNames: yard.maze.renderedLightSources
+          .filter((source) => source.active)
+          .map((source) => source.fixture),
+        view: { ...view },
+      };
+    };
     window.MrFeastFresh.placePlayerBeforeStormCheckpointForQA = (index, approachDistance = 4) => {
       if (!state.qa || !stormRunSystem || !physics) return null;
       const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
@@ -26544,7 +26643,8 @@
       if (!state.qa || !stormRunSystem || !physics) return null;
       const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
       if (!checkpoint?.scareTrigger) return null;
-      const trigger = checkpoint.scareTrigger;
+      const trigger = stormRunSystem.scareTriggerZones(checkpoint)[0];
+      if (!trigger) return null;
       const lookTarget = checkpoint.reveal || checkpoint;
       const yaw = Math.atan2(-(lookTarget.x - trigger.x), -(lookTarget.z - trigger.z));
       teleport(trigger.x, checkpoint.y, trigger.z, yaw, -0.08);

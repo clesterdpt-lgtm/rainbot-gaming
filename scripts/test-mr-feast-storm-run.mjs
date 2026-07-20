@@ -28,8 +28,8 @@ async function assertSourceContract() {
   ]);
   assert(source.includes("const STORM_RUN_PHASE"), "Storm Run must define an explicit phase enum");
   assert(source.includes("const STORM_RUN"), "Storm Run must keep tuning in a named constant table");
-  assert(source.includes('instructionDelivery: "speech"'), "Storm Run must declare Mr. Feast speech as its authoritative direction channel");
-  assert(source.includes("checkpointCallout"), "Storm Run must let Mr. Feast name each newly active checkpoint landmark");
+  assert(source.includes('instructionDelivery: "visual-checkpoints"'), "Storm Run must declare its glowing checkpoints as the authoritative direction channel");
+  assert(!source.includes("checkpointCallout"), "Storm Run must not retain a spoken checkpoint-announcement path");
   assert(source.includes("storm-run-countdown-"), "Mr. Feast must verbally call the Storm Run countdown steps");
   assert(source.includes("class StormRunSystem"), "Storm Run must use a focused owning system");
   assert(source.includes("stormRun:"), "central state and diagnostics must expose Storm Run");
@@ -297,8 +297,8 @@ async function run() {
     for (const category of ["storm-run-rules", "storm-run-countdown-3", "storm-run-countdown-2", "storm-run-countdown-1", "storm-run-start"]) {
       assert(startCategories.includes(category), `Mr. Feast must verbally deliver ${category}: ${JSON.stringify(startSpeech.history)}`);
     }
-    assert(/checkpoint one.*formal garden/i.test(startSpeech.text || "") && !/\bwest\b/i.test(startSpeech.text || ""), `GO must name checkpoint one without calling a specific turn: ${JSON.stringify(startSpeech)}`);
-    assert(storm.instructionDelivery === "speech" && storm.ui?.minimal, `Storm Run must expose speech-owned instructions and a minimal HUD: ${JSON.stringify({ delivery: storm.instructionDelivery, ui: storm.ui })}`);
+    assert(startSpeech.text === "Run!", `GO must release the contestants without naming a checkpoint or landmark: ${JSON.stringify(startSpeech)}`);
+    assert(storm.instructionDelivery === "visual-checkpoints" && storm.ui?.minimal, `Storm Run must expose visual checkpoint guidance and a minimal HUD: ${JSON.stringify({ delivery: storm.instructionDelivery, ui: storm.ui })}`);
 
     const checkpoints = storm.checkpoints;
     const expectedCheckpointOrder = [
@@ -326,8 +326,7 @@ async function run() {
     assert(storm.courseRoute?.postFirstGardenToFrontClear && postFirstGardenSegments.length === 8 && postFirstGardenSegments.every((entry) => entry.clear), `the route after checkpoint one must physically clear the garden and front-drive colliders for the player capsule: ${JSON.stringify(storm.courseRoute)}`);
     assert(checkpoints.every((entry) => entry.guidance?.visibleFromPrevious), `every next marker must be configured as visible from the previous checkpoint: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.guidance?.distanceFromPrevious <= 32), `no breadcrumb leg may exceed the readable yard distance: ${JSON.stringify(checkpoints)}`);
-    const turnByTurnLanguage = /\b(?:turn|left|right|keep|stay|follow|cut|enter|leave|toward|through|around|west|north|south|east)\b/i;
-    assert(checkpoints.every((entry) => !turnByTurnLanguage.test(entry.callout)), `Mr. Feast must announce checkpoint landmarks without calling specific turns: ${JSON.stringify(checkpoints.map((entry) => entry.callout))}`);
+    assert(checkpoints.every((entry) => entry.callout == null), `checkpoint diagnostics must not expose unused spoken landmark lines: ${JSON.stringify(checkpoints.map((entry) => entry.callout))}`);
     const scareCheckpoints = checkpoints.filter((entry) => entry.scareReveal);
     assert(JSON.stringify(scareCheckpoints.map((entry) => entry.id)) === JSON.stringify(["east-front-lawn", "hedge-maze"]), `Storm Run must use exactly two well-spaced Mr. Feast apparitions, with the first in the trees after the driveway turn: ${JSON.stringify(scareCheckpoints)}`);
     assert(scareCheckpoints.every((entry) => entry.scareReveal.darkSpot), `every apparition must be authored as a measured dark spot: ${JSON.stringify(scareCheckpoints)}`);
@@ -342,7 +341,7 @@ async function run() {
     const duplicate = await collectCheckpoint(timerPage, 0);
     assert(duplicate.accepted === false && duplicate.completed === 1, `re-crossing a marker must not double count: ${JSON.stringify(duplicate)}`);
     const checkpointSpeech = (await diagnostics(timerPage)).speech;
-    assert(checkpointSpeech.category === "storm-run-checkpoint-2" && checkpointSpeech.text === storm.checkpoints[1].callout, `collecting checkpoint one must make Mr. Feast name the next landmark: ${JSON.stringify(checkpointSpeech)}`);
+    assert(checkpointSpeech.category === "storm-run-start" && checkpointSpeech.text === "Run!" && checkpointSpeech.history.length === startSpeech.history.length, `collecting a checkpoint must not make Mr. Feast announce a landmark: ${JSON.stringify(checkpointSpeech)}`);
     const standingsAfterFirst = await timerPage.locator("#mansion-storm-run-standings").evaluate((element) => ({ text: element.textContent, display: getComputedStyle(element).display }));
     assert(standingsAfterFirst.text === "" && standingsAfterFirst.display === "none", `the minimal HUD must not duplicate contestant standings: ${JSON.stringify(standingsAfterFirst)}`);
 

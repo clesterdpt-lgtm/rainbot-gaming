@@ -2034,17 +2034,17 @@
     thunderDelayRange: 0.8,
   });
   const STORM_RUN = Object.freeze({
-    instructionDelivery: "speech",
+    instructionDelivery: "visual-checkpoints",
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 14,
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
     callLine: "Contestants, report to the back door. Storm Run is next.",
-    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. I will announce each checkpoint. The markers cover the grounds and finish at the pool. Beat Mara. Last place is eliminated.",
+    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. Find the next glowing marker and keep moving. Beat Mara. Last place is eliminated.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
-    startLine: "Run! Checkpoint one: formal garden.",
-    checkpointSpeechSeconds: 3.1,
+    startLine: "Run!",
+    startSpeechSeconds: 1.15,
     resultLines: Object.freeze({
       player: "Course complete. Mara is last. Mara, you are eliminated.",
       mara: "Mara has finished. You are last. You are eliminated.",
@@ -2084,13 +2084,13 @@
       "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
     }),
     checkpoints: Object.freeze([
-      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", callout: "Checkpoint one: formal garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
-      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", callout: "Checkpoint two: garden crossing.", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
-      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", callout: "Checkpoint three: garden front.", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
-      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", callout: "Checkpoint four: garden junction.", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", callout: "Checkpoint five: carriage marker.", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", callout: "Checkpoint six: driveway gate.", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
-      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", callout: "Checkpoint seven: front-lawn trees.", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
+      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
+      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
+      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
         scareTrigger: Object.freeze({
           zones: Object.freeze([
             Object.freeze({ id: "direct-lawn", x: 7.3, z: 23.65, radius: 4.4, viewYaw: -0.94 }),
@@ -2098,13 +2098,13 @@
           ]),
         }),
         reveal: Object.freeze({ x: 16.2, y: YARD_LAYOUT.groundY, z: 20, yaw: -1.96, darkSpot: true }) }),
-      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", callout: "Checkpoint eight: maze promenade.", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", callout: "Checkpoint nine: hedge-maze entrance.", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", callout: "Checkpoint ten: hedge-maze marker.", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
+      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
         scareTrigger: Object.freeze({ x: 28, z: 8.75, radius: 1.75, viewYaw: 0 }),
         reveal: Object.freeze({ x: 28, y: YARD_LAYOUT.groundY, z: 4.25, yaw: 0, darkSpot: true }) }),
-      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", callout: "Checkpoint eleven: rear lawn.", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
-      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", callout: "Final checkpoint: pool terrace.", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
+      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
+      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
@@ -14303,24 +14303,13 @@
         "storm-run-start",
         STORM_RUN.startLine,
         speechSystem.announcerSpeaker(),
-        { durationSeconds: STORM_RUN.checkpointSpeechSeconds },
+        { durationSeconds: STORM_RUN.startSpeechSeconds },
       );
       return true;
     }
 
     expectedCheckpoint() {
       return STORM_RUN.checkpoints[this.show.completedCheckpoints] || null;
-    }
-
-    checkpointCallout(index = this.show.completedCheckpoints) {
-      const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
-      if (!checkpoint?.callout) return null;
-      return speechSystem?.say(
-        `storm-run-checkpoint-${Math.floor(Number(index)) + 1}`,
-        checkpoint.callout,
-        speechSystem.announcerSpeaker(),
-        { durationSeconds: STORM_RUN.checkpointSpeechSeconds },
-      ) || null;
     }
 
     collectCheckpoint(index, source = "proximity") {
@@ -14351,7 +14340,6 @@
       if (this.show.completedCheckpoints >= STORM_RUN.checkpoints.length) {
         return { ...result, ...this.finishCompetition("player") };
       }
-      this.checkpointCallout(this.show.completedCheckpoints);
       this.syncPresentation();
       return result;
     }
@@ -15036,7 +15024,6 @@
           order: index + 1,
           label: checkpoint.label,
           region: checkpoint.region,
-          callout: checkpoint.callout,
           insideMaze: checkpoint.insideMaze,
           inYardBounds: checkpoint.x >= YARD_LAYOUT.bounds.minX && checkpoint.x <= YARD_LAYOUT.bounds.maxX
             && checkpoint.z >= YARD_LAYOUT.bounds.minZ && checkpoint.z <= YARD_LAYOUT.bounds.maxZ,

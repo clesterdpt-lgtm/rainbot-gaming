@@ -22392,9 +22392,9 @@
         void main() {
           float edge = smoothstep(0.0, 0.16, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
           // Two drifting noise octaves give the surface its wind-blown grain.
-          // The doubled basin is ~1.72x wider than deep; correcting uv keeps
-          // rain rings circular and grain isotropic across the long axis.
-          vec2 suv = vUv * vec2(1.72, 1.0);
+          // Correcting uv by the plane's width/depth aspect keeps rain rings
+          // circular and grain isotropic across the long axis.
+          vec2 suv = vUv * vec2(${(width / depth).toFixed(3)}, 1.0);
           float grain = valueNoise(suv * 26.0 + vec2(uTime * 0.16, -uTime * 0.11));
           float swell = valueNoise(suv * 7.0 + vec2(-uTime * 0.05, uTime * 0.07));
           float glint = smoothstep(0.016, 0.034, vWave + (grain - 0.5) * 0.012);
@@ -22501,12 +22501,13 @@
     // entering and leaving the pool remains smooth at every frame rate.
     physics.addFixedRamp(stairX, -19.6, -1.58, groundY, 3.2, 2.25, 1);
     for (const x of [-19.9, -15.9, -11.9, -7.9]) box({ name: "estate-pool-bottom-lane-inlay", w: 0.09, h: 0.025, d: 9.6, x, y: -1.565, z: pool.centerZ + 0.2, material: M.brass, cast: false });
-    makeEstatePoolWater(19.4, 11.25, pool.centerX, pool.centerZ, -0.39);
-    // The main plane's north edge stops at z=-19.88, short of the entry stairs
-    // whose lower treads sit below the waterline. A short tongue fills the
-    // stair mouth (inside the basin-wall gap) and laps at the step 1/2 riser
-    // so the submerged steps read as underwater instead of dry with a gap.
-    makeEstatePoolWater(2.5, 1.4, stairX, -19.18, -0.39, "estate-pool-water-stair-inlet");
+    // One continuous water plane, extended north so its edge tucks under the
+    // north wall, coping, deck pavers, and the dry top step — all opaque, so
+    // they hide the overshoot — while it stays visible through the open stair
+    // gap and laps the submerged steps. A single surface avoids any seam.
+    // South edge stays at the south basin wall (z=-31.125); north edge reaches
+    // z=-18.4 (under the top step / deck at the stair mouth).
+    makeEstatePoolWater(19.4, 12.725, pool.centerX, -24.7625, -0.39);
     addPoolLounger(-0.95, -23.1, 0);
     addPoolLounger(-0.95, -28.0, 0);
     // A drinks table between the two loungers, with towels waiting on the

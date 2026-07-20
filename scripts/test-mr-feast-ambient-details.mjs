@@ -160,7 +160,8 @@ check("11 storm water", /rainRipples/.test(waterBuilder) && /valueNoise/.test(wa
 // Feast's deck response geometry stayed fixed at their original coordinates.
 check("12 doubled pool", /pool: Object\.freeze\(\{ centerX: -13\.85, centerZ: -25\.5, width: 20\.0, depth: 11\.8 \}\)/.test(mansion), "YARD_LAYOUT.pool does not carry the doubled westward basin");
 const poolBuild = section("function buildEstatePool()", "\n  function ");
-check("12 doubled pool water", /makeEstatePoolWater\(19\.4, 11\.25, pool\.centerX, pool\.centerZ, -0\.39\)/.test(poolBuild), "the water plane does not span the doubled basin");
+check("12 doubled pool water", /makeEstatePoolWater\(19\.4, 12\.725, pool\.centerX, -24\.7625, -0\.39\)/.test(poolBuild), "the water plane does not span the doubled basin and reach the stairs");
+check("12 single water plane", (poolBuild.match(/makeEstatePoolWater\(/g) || []).length === 1, "the pool must use one continuous water plane, not a seamed tongue");
 check("12 stair stays authored", /const stairX = -9;/.test(poolBuild) && /physics\.addFixedRamp\(stairX, -19\.6/.test(poolBuild), "the entry stair and ramp must stay at x=-9 so pool routes and the deck response spot survive");
 check("12 west grounds cut", /rain-soaked-grounds-rear-west-middle", -29\.7, -25, 8\.6, 14/.test(mansion), "the west grounds slab still fills the enlarged basin");
 check("12 pool zone widened", /addRoomZone\(-2\.2, mainMax, -26\.5, -1\.2, -33\.5, -17\.8, "MAIN LEVEL", "POOL TERRACE"\)/.test(mansion), "the POOL TERRACE room zone does not cover the west water and deck");

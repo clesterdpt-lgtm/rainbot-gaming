@@ -22242,7 +22242,12 @@
     // even though the doubled basin's centre moved west — every pool QA route
     // and Mr. Feast's deck response spot keep their original geometry.
     const stairX = -9;
-    box({ name: "pool-terrace-pavers-north", w: 23.4, h: 0.044, d: 1.7, x: -13.45, y: terraceY, z: -18.85, material: M.wetPavers, cast: false });
+    // Split the north deck around the stair mouth (x -10.3 .. -7.7) so the
+    // entry stairwell is open from above instead of capped by a solid slab.
+    // The two pieces mirror the already-split deck supports and coping; the
+    // gap is a touch wider than the 2.45m-wide treads on each side.
+    box({ name: "pool-terrace-pavers-north-west", w: 14.85, h: 0.044, d: 1.7, x: -17.725, y: terraceY, z: -18.85, material: M.wetPavers, cast: false });
+    box({ name: "pool-terrace-pavers-north-east", w: 5.95, h: 0.044, d: 1.7, x: -4.725, y: terraceY, z: -18.85, material: M.wetPavers, cast: false });
     box({ name: "pool-terrace-pavers-south", w: 23.4, h: 0.044, d: 1.7, x: -13.45, y: terraceY, z: -32.15, material: M.wetPavers, cast: false });
     box({ name: "pool-terrace-pavers-west", w: 1.7, h: 0.044, d: 11.8, x: -24.85, y: terraceY, z: pool.centerZ, material: M.wetPavers, cast: false });
     box({ name: "pool-terrace-pavers-east", w: 1.7, h: 0.044, d: 11.8, x: -2.95, y: terraceY, z: pool.centerZ, material: M.wetPavers, cast: false });

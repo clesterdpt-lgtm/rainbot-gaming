@@ -1603,25 +1603,34 @@
     FAILED: "failed",
   });
   const FEAST_SAYS = Object.freeze({
+    instructionDelivery: "speech",
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
-    briefingSeconds: 8,
+    briefingSeconds: 11,
     responseSeconds: 7.5,
-    resultSeconds: 6,
+    resultSeconds: 7.2,
     completionCardSeconds: 5.5,
     movementThreshold: 0.48,
     approachTargetMinimumDot: 0.82,
     pointTargetRange: 4.25,
     pointTargetMinimumDot: 0.94,
     stationRadius: 1.05,
-    briefingSpeechSeconds: 7.2,
+    briefingSpeechSeconds: 10.2,
     commandSpeechSeconds: 4.25,
+    verdictSpeechSeconds: 1.15,
     contestantLineSeconds: 2.5,
     hostWarningAtRemainingSeconds: 3,
     hostWarningSeconds: 2.55,
     npcResponseDistance: 0.52,
     npcCrouchDepth: 0.085,
     npcResponseSeconds: 0.62,
+    callLine: "Contestants, report to the Ballroom. Feast Says begins now.",
+    briefingLine: "Listen carefully. Only follow an instruction if it begins with ‘Feast says.’ Move or crouch when ordered. If I ask you to point, look at your choice and press E. The contestant with the lowest score is eliminated.",
+    verdictLines: Object.freeze({
+      correct: "Correct.",
+      falseMove: "Miss. I did not say ‘Feast says.’",
+      failedOrder: "Miss. You failed to follow my instruction.",
+    }),
     npcResponseDelays: Object.freeze({
       "mara-voss": 0.12,
       "kip-solano": 0.24,
@@ -1724,6 +1733,7 @@
       Object.freeze({
         id: "distrust",
         text: "Feast says point to the contestant you distrust most.",
+        spokenText: "Feast says point to the contestant you distrust most. Look at them and press E.",
         obey: true,
         action: "point",
         choiceMode: "look-interact",
@@ -2011,10 +2021,21 @@
     thunderDelayRange: 0.8,
   });
   const STORM_RUN = Object.freeze({
+    instructionDelivery: "speech",
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
-    briefingSeconds: 5,
-    briefingSpeechSeconds: 4.5,
+    briefingSeconds: 14,
+    briefingSpeechSeconds: 10.8,
+    countdownSeconds: 3,
+    callLine: "Contestants, report to the back door. Storm Run is next.",
+    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. I will call the direction to each one. Start west through the formal garden, loop around the front, cross the maze, and finish at the pool. Beat Mara. Last place is eliminated.",
+    countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
+    startLine: "Run! Checkpoint one: west into the formal garden.",
+    checkpointSpeechSeconds: 3.1,
+    resultLines: Object.freeze({
+      player: "Course complete. Mara is last. Mara, you are eliminated.",
+      mara: "Mara has finished. You are last. You are eliminated.",
+    }),
     completionCardSeconds: 6,
     checkpointRadius: 1.25,
     checkpointApproachRadius: 6,
@@ -2041,30 +2062,31 @@
       "mara-voss": 2.4,
       "juniper-cross": 2.5,
     }),
-    startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.6, yaw: -Math.PI / 2 }),
+    briefingMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -17, yaw: Math.PI }),
+    startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -17, yaw: Math.PI / 2 }),
     reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15, yaw: Math.PI }),
-    hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -18.0, yaw: 0 }),
+    hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.05, yaw: Math.PI }),
     contestantMarks: Object.freeze({
-      "mara-voss": Object.freeze({ x: -0.7, y: YARD_LAYOUT.groundY, z: -16.45, yaw: -Math.PI / 2 }),
-      "juniper-cross": Object.freeze({ x: 0.7, y: YARD_LAYOUT.groundY, z: -16.45, yaw: -Math.PI / 2 }),
+      "mara-voss": Object.freeze({ x: -1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
+      "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
     }),
     checkpoints: Object.freeze([
-      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
-      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
-      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
-      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false,
-        scareTrigger: Object.freeze({ x: 0, z: 19.5, radius: 2.25, viewYaw: Math.PI }),
-        reveal: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: 24.5, yaw: Math.PI, darkSpot: true }) }),
-      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
-      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
+      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", callout: "Checkpoint one: west into the formal garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", callout: "Checkpoint two: keep north along the garden path.", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
+      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", callout: "Checkpoint three: stay north toward the front of the garden.", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
+      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", callout: "Checkpoint four: turn left and follow the garden’s front edge.", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", callout: "Checkpoint five: cross toward the driveway carriage turn.", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", callout: "Checkpoint six: run up the driveway toward the gate.", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", callout: "Checkpoint seven: cut across the east front lawn toward the trees.", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
+        scareTrigger: Object.freeze({ x: 7.2, z: 16.3, radius: 2.25, viewYaw: -Math.PI / 2 }),
+        reveal: Object.freeze({ x: 16.2, y: YARD_LAYOUT.groundY, z: 20, yaw: -1.96, darkSpot: true }) }),
+      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", callout: "Checkpoint eight: follow the east lawn south to the maze promenade.", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", callout: "Checkpoint nine: turn toward the hedge-maze entrance.", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", callout: "Checkpoint ten: enter the maze and find the blue marker inside.", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
         scareTrigger: Object.freeze({ x: 28, z: 8.75, radius: 1.75, viewYaw: 0 }),
         reveal: Object.freeze({ x: 28, y: YARD_LAYOUT.groundY, z: 4.25, yaw: 0, darkSpot: true }) }),
-      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
-      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
+      Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", callout: "Checkpoint eleven: leave the maze for the east rear lawn.", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
+      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", callout: "Final checkpoint: west to the pool terrace.", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
@@ -2383,6 +2405,8 @@
       callCount: 0,
       intermissionElapsed: 0,
       briefingRemaining: 0,
+      countdownLastSecond: null,
+      countdownSequence: [],
       raceElapsed: 0,
       completedCheckpoints: 0,
       visitedCheckpointIds: [],
@@ -12507,6 +12531,7 @@
       this.lastCategory = null;
       this.lastLineByCategory = new Map();
       this.linesSpoken = 0;
+      this.history = [];
       this.lastScreen = { x: 0, y: 0, clamped: false };
       this.anchor = new THREE.Vector3();
       this.viewPosition = new THREE.Vector3();
@@ -12522,6 +12547,19 @@
           if (!npc || npc.loadStatus !== "ready") return null;
           if (npc.headEndBone) npc.headEndBone.getWorldPosition(target);
           else target.copy(npc.root.position).add(new THREE.Vector3(0, MR_FEAST_SPEECH.anchorHeightMeters, 0));
+          return target;
+        },
+      };
+    }
+
+    announcerSpeaker() {
+      return {
+        id: "mr-feast",
+        name: "Mr. Feast",
+        anchorLiftMeters: 0,
+        getAnchor: (target) => {
+          camera.getWorldDirection(target).multiplyScalar(4.5).add(camera.position);
+          target.y += 0.72;
           return target;
         },
       };
@@ -12564,6 +12602,14 @@
       this.remaining = duration;
       this.lastCategory = category;
       this.linesSpoken += 1;
+      this.history.push({
+        category,
+        text,
+        speakerId: speaker.id,
+        speakerName: speaker.name,
+        seconds: Number(duration.toFixed(2)),
+      });
+      if (this.history.length > 40) this.history.splice(0, this.history.length - 40);
       if (this.speakerElement) this.speakerElement.textContent = speaker.name;
       if (this.textElement) this.textElement.textContent = text;
       if (this.container) this.container.hidden = false;
@@ -12630,16 +12676,17 @@
       const minX = margin + bubbleWidth / 2;
       const maxX = Math.max(minX, width - margin - bubbleWidth / 2);
       let minY = margin + bubbleHeight + tail;
-      if (
-        dom.feastSays
-        && !dom.feastSays.hidden
-        && [FEAST_SAYS_PHASE.RESULT, FEAST_SAYS_PHASE.COMPLETED].includes(dom.feastSays.dataset.phase)
-      ) {
+      const activeCompetitionPanel = dom.stormRun && !dom.stormRun.hidden
+        ? dom.stormRun
+        : dom.feastSays && !dom.feastSays.hidden
+          ? dom.feastSays
+          : null;
+      if (activeCompetitionPanel) {
         const stageRect = dom.stage?.getBoundingClientRect();
-        const feastRect = dom.feastSays.getBoundingClientRect();
+        const panelRect = activeCompetitionPanel.getBoundingClientRect();
         if (stageRect) {
-          const feastBottom = feastRect.bottom - stageRect.top;
-          minY = Math.max(minY, feastBottom + bubbleHeight + tail + 8);
+          const panelBottom = panelRect.bottom - stageRect.top;
+          minY = Math.max(minY, panelBottom + bubbleHeight + tail + 8);
         }
       }
       const maxY = Math.max(minY, height - margin);
@@ -12662,6 +12709,7 @@
         secondsRemaining: Number(this.remaining.toFixed(2)),
         lastCategory: this.lastCategory,
         linesSpoken: this.linesSpoken,
+        history: this.history.map((entry) => ({ ...entry })),
         x: Number(this.lastScreen.x.toFixed(1)),
         y: Number(this.lastScreen.y.toFixed(1)),
         clamped: this.lastScreen.clamped,
@@ -13051,6 +13099,12 @@
         ].filter(Boolean).join(" "),
         clueBody ? 11000 : 9000,
       );
+      speechSystem?.say(
+        "feast-says-call",
+        FEAST_SAYS.callLine,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: 4.2 },
+      );
       audioSystem?.ping(392, 0.35, 0.055, "square");
       audioSystem?.ping(587, 0.46, 0.04, "sine");
       return { called: true, reason: this.show.triggerReason, clueId };
@@ -13121,7 +13175,7 @@
       this.transition(FEAST_SAYS_PHASE.BRIEFING, "reported-to-ballroom");
       speechSystem?.say(
         "feast-says-rules",
-        "Only follow an instruction if it begins with ‘Feast says.’ The contestant with the lowest score is eliminated.",
+        FEAST_SAYS.briefingLine,
         speechSystem.hostSpeaker(),
         { durationSeconds: FEAST_SAYS.briefingSpeechSeconds },
       );
@@ -13168,7 +13222,7 @@
       this.transition(FEAST_SAYS_PHASE.COMMAND, `round-${nextIndex + 1}`);
       speechSystem?.say(
         `feast-says-command-${nextIndex + 1}`,
-        command.text,
+        command.spokenText || command.text,
         speechSystem.hostSpeaker(),
         { durationSeconds: FEAST_SAYS.commandSpeechSeconds },
       );
@@ -13306,37 +13360,75 @@
       return { action: inputAction, inputAction, targetId: null };
     }
 
-    beginResultDialogue(command) {
+    beginResultDialogue(command, correct) {
+      const verdictLine = correct
+        ? FEAST_SAYS.verdictLines.correct
+        : command?.obey
+          ? FEAST_SAYS.verdictLines.failedOrder
+          : FEAST_SAYS.verdictLines.falseMove;
       if (!command?.contestantLine || !command?.hostWarning) {
         this.show.resultDialogue = null;
+        speechSystem?.say(
+          `feast-says-verdict-${this.show.roundIndex + 1}`,
+          verdictLine,
+          speechSystem.hostSpeaker(),
+          { durationSeconds: FEAST_SAYS.verdictSpeechSeconds },
+        );
         return;
       }
       const contestant = mansionContestants?.entryById(command.contestantId);
       if (contestant?.status !== "ready" || !contestant.speaker) {
         this.show.resultDialogue = null;
-        speechSystem?.dismiss();
+        speechSystem?.say(
+          `feast-says-verdict-${this.show.roundIndex + 1}`,
+          verdictLine,
+          speechSystem.hostSpeaker(),
+          { durationSeconds: FEAST_SAYS.verdictSpeechSeconds },
+        );
         return;
       }
       this.show.resultDialogue = {
         round: this.show.roundIndex + 1,
         contestantId: command.contestantId,
+        verdictLine,
         contestantLine: command.contestantLine,
         hostWarning: command.hostWarning,
-        stage: "contestant",
+        stage: "host-verdict",
+        contestantDelivered: false,
         warningDelivered: false,
       };
       this.show.dialogueHistory.push({ ...this.show.resultDialogue });
-      speechSystem?.sayForSpeaker(
-        contestant.speaker,
-        `feast-says-banter-${this.show.roundIndex + 1}`,
-        command.contestantLine,
-        { durationSeconds: FEAST_SAYS.contestantLineSeconds },
+      speechSystem?.say(
+        `feast-says-verdict-${this.show.roundIndex + 1}`,
+        verdictLine,
+        speechSystem.hostSpeaker(),
+        { durationSeconds: FEAST_SAYS.verdictSpeechSeconds },
       );
     }
 
     updateResultDialogue() {
       const dialogue = this.show.resultDialogue;
-      if (!dialogue || dialogue.warningDelivered || this.show.phase !== FEAST_SAYS_PHASE.RESULT) return;
+      if (!dialogue || this.show.phase !== FEAST_SAYS_PHASE.RESULT) return;
+      if (
+        !dialogue.contestantDelivered
+        && this.show.phaseRemaining <= FEAST_SAYS.resultSeconds - FEAST_SAYS.verdictSpeechSeconds
+      ) {
+        dialogue.contestantDelivered = true;
+        dialogue.stage = "contestant";
+        const history = this.show.dialogueHistory[this.show.dialogueHistory.length - 1];
+        if (history?.round === dialogue.round) {
+          history.contestantDelivered = true;
+          history.stage = "contestant";
+        }
+        const contestant = mansionContestants?.entryById(dialogue.contestantId);
+        speechSystem?.sayForSpeaker(
+          contestant?.speaker,
+          `feast-says-banter-${dialogue.round}`,
+          dialogue.contestantLine,
+          { durationSeconds: FEAST_SAYS.contestantLineSeconds },
+        );
+      }
+      if (dialogue.warningDelivered || !dialogue.contestantDelivered) return;
       if (this.show.phaseRemaining > FEAST_SAYS.hostWarningAtRemainingSeconds) return;
       dialogue.warningDelivered = true;
       dialogue.stage = "host-warning";
@@ -13380,7 +13472,7 @@
       this.show.phaseRemaining = FEAST_SAYS.resultSeconds;
       mansionContestants?.returnChallengeResponses();
       this.transition(FEAST_SAYS_PHASE.RESULT, correct ? "correct" : "incorrect");
-      this.beginResultDialogue(command);
+      this.beginResultDialogue(command, correct);
       audioSystem?.ping(correct ? 659 : 116, correct ? 0.26 : 0.38, correct ? 0.04 : 0.065, correct ? "sine" : "sawtooth");
       return { resolved: true, ...result };
     }
@@ -13647,39 +13739,37 @@
         const remaining = FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed;
         setText(dom.feastEyebrow, "Next live event");
         setText(dom.feastRound, "Game 1");
-        setText(dom.feastCommand, "FEAST SAYS");
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, this.formatClock(remaining));
       } else if (phase === FEAST_SAYS_PHASE.CALLED) {
-        setText(dom.feastEyebrow, "Live call");
-        setText(dom.feastRound, "Game 1 · Ballroom");
-        setText(dom.feastCommand, this.castReady() ? "REPORT TO THE BALLROOM" : "HOLDING FOR CAST…");
+        setText(dom.feastEyebrow, "Feast Says");
+        setText(dom.feastRound, this.castReady() ? "Called" : "Holding for cast");
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, "LIVE");
       } else if (phase === FEAST_SAYS_PHASE.BRIEFING) {
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Rules");
-        setText(dom.feastCommand, "Only obey commands that begin with ‘Feast says.’ Lowest score is eliminated.");
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, String(Math.ceil(this.show.phaseRemaining)));
       } else if (phase === FEAST_SAYS_PHASE.COMMAND) {
-        const command = FEAST_SAYS.commands[this.show.roundIndex];
-        setText(dom.feastEyebrow, "Live challenge");
+        setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, `Round ${this.show.roundIndex + 1} / ${FEAST_SAYS.commands.length}`);
-        setText(dom.feastCommand, command?.text || "Hold your mark.");
-        commandHint = command?.hint || "";
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, String(Math.max(0, Math.ceil(this.show.phaseRemaining))));
       } else if (phase === FEAST_SAYS_PHASE.RESULT) {
-        setText(dom.feastEyebrow, "Judges’ call");
+        setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, `Round ${this.show.roundIndex + 1} / ${FEAST_SAYS.commands.length}`);
-        setText(dom.feastCommand, this.show.commandResult?.correct ? "CORRECT" : `MISS — ${this.show.commandResult?.expected?.toUpperCase() || "HOLD"}`);
-        setText(dom.feastTimer, "✓");
+        setText(dom.feastCommand, "");
+        setText(dom.feastTimer, "HOLD");
       } else if (phase === FEAST_SAYS_PHASE.COMPLETED) {
-        setText(dom.feastEyebrow, "Results official");
+        setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Game 1 complete");
-        setText(dom.feastCommand, "KIP SOLANO — ELIMINATED");
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, "OUT");
       } else if (phase === FEAST_SAYS_PHASE.FAILED) {
-        setText(dom.feastEyebrow, "Results official");
+        setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Game 1 complete");
-        setText(dom.feastCommand, "YOU — ELIMINATED");
+        setText(dom.feastCommand, "");
         setText(dom.feastTimer, "OUT");
       }
       if (dom.feastHint) {
@@ -13875,6 +13965,7 @@
       const p = physics ? physics.playerPosition() : null;
       return {
         phase: this.show.phase,
+        instructionDelivery: FEAST_SAYS.instructionDelivery,
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
         callCount: this.show.callCount,
@@ -13908,12 +13999,14 @@
           briefingSeconds: FEAST_SAYS.briefingSeconds,
           responseSeconds: FEAST_SAYS.responseSeconds,
           resultSeconds: FEAST_SAYS.resultSeconds,
+          verdictSpeechSeconds: FEAST_SAYS.verdictSpeechSeconds,
         },
         command: command ? {
           id: command.id,
           index: this.show.roundIndex,
           total: FEAST_SAYS.commands.length,
           text: command.text,
+          spokenText: command.spokenText || command.text,
           obey: command.obey,
           action: command.action,
           choiceMode: command.choiceMode || null,
@@ -13966,6 +14059,7 @@
         lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
         ui: {
           visible: Boolean(dom.feastSays && !dom.feastSays.hidden),
+          minimal: dom.feastSays?.dataset.guidance === "speech",
           command: dom.feastCommand?.textContent || null,
           timer: dom.feastTimer?.textContent || null,
           crouchVisible: Boolean(dom.feastCrouch && !dom.feastCrouch.hidden),
@@ -14058,6 +14152,8 @@
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
       this.show.briefingRemaining = 0;
+      this.show.countdownLastSecond = null;
+      this.show.countdownSequence = [];
       this.show.raceElapsed = 0;
       this.show.completedCheckpoints = 0;
       this.show.visitedCheckpointIds = [];
@@ -14080,6 +14176,12 @@
           "Production has opened a twelve-checkpoint course across the grounds. Report to the rear terrace. Your investigation is on hold until the race ends.",
         ].filter(Boolean).join(" "),
         clueBody ? 11500 : 9200,
+      );
+      speechSystem?.say(
+        "storm-run-call",
+        STORM_RUN.callLine,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: 4.2 },
       );
       audioSystem?.ping(330, 0.24, 0.05, "square");
       audioSystem?.ping(659, 0.38, 0.04, "triangle");
@@ -14136,25 +14238,26 @@
         return { started: false, reason: staged.reason || "staging-failed" };
       }
       teleport(
-        STORM_RUN.startMark.x,
-        STORM_RUN.startMark.y,
-        STORM_RUN.startMark.z,
-        STORM_RUN.startMark.yaw,
+        STORM_RUN.briefingMark.x,
+        STORM_RUN.briefingMark.y,
+        STORM_RUN.briefingMark.z,
+        STORM_RUN.briefingMark.yaw,
         -0.08,
       );
       this.show.staged = true;
       this.show.briefingRemaining = STORM_RUN.briefingSeconds;
+      this.show.countdownLastSecond = null;
+      this.show.countdownSequence = [];
       this.show.raceElapsed = 0;
       this.show.completedCheckpoints = 0;
       this.show.visitedCheckpointIds = [];
       this.transition(STORM_RUN_PHASE.BRIEFING, "reported-to-rear-terrace");
       speechSystem?.say(
         "storm-run-rules",
-        "Twelve checkpoints. The next blue marker is always visible. Beat Mara back through the course, or you are out.",
+        STORM_RUN.briefingLine,
         speechSystem.hostSpeaker(),
         { durationSeconds: STORM_RUN.briefingSpeechSeconds },
       );
-      audioSystem?.ping(523, 0.42, 0.045, "triangle");
       this.syncCastVisibility();
       return { started: true, staged: true, entries: staged.entries };
     }
@@ -14167,14 +14270,37 @@
       this.transition(STORM_RUN_PHASE.RUNNING, "countdown-complete");
       mansionContestants?.startStormRunRace();
       mrFeastNpc?.setStormRunReveal(STORM_RUN.hostStartMark, false);
+      state.yaw = STORM_RUN.startMark.yaw;
+      state.pitch = -0.08;
+      syncCamera();
+      camera.updateMatrixWorld(true);
       clearMovementInput();
       updateMovementHud();
-      audioSystem?.ping(784, 0.34, 0.055, "square");
+      this.show.countdownLastSecond = 0;
+      this.show.countdownSequence.push(0);
+      audioSystem?.stormCountdown(0);
+      speechSystem?.say(
+        "storm-run-start",
+        STORM_RUN.startLine,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: STORM_RUN.checkpointSpeechSeconds },
+      );
       return true;
     }
 
     expectedCheckpoint() {
       return STORM_RUN.checkpoints[this.show.completedCheckpoints] || null;
+    }
+
+    checkpointCallout(index = this.show.completedCheckpoints) {
+      const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
+      if (!checkpoint?.callout) return null;
+      return speechSystem?.say(
+        `storm-run-checkpoint-${Math.floor(Number(index)) + 1}`,
+        checkpoint.callout,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: STORM_RUN.checkpointSpeechSeconds },
+      ) || null;
     }
 
     collectCheckpoint(index, source = "proximity") {
@@ -14194,7 +14320,7 @@
       }
       this.show.visitedCheckpointIds.push(checkpoint.id);
       this.show.completedCheckpoints += 1;
-      audioSystem?.ping(620 + checkpointIndex * 56, 0.26, 0.045, "triangle");
+      audioSystem?.stormCheckpoint(checkpointIndex, STORM_RUN.checkpoints.length);
       const result = {
         accepted: true,
         reason: null,
@@ -14205,6 +14331,7 @@
       if (this.show.completedCheckpoints >= STORM_RUN.checkpoints.length) {
         return { ...result, ...this.finishCompetition("player") };
       }
+      this.checkpointCallout(this.show.completedCheckpoints);
       this.syncPresentation();
       return result;
     }
@@ -14226,6 +14353,7 @@
       this.show.scareProfile = "storm-run";
       this.show.hostVisible = false;
       mrFeastNpc?.setStormRunReveal(checkpoint.reveal, false);
+      audioSystem?.stormScare();
       stormSystem?.trigger({ profile: "storm-run" });
       this.syncCastVisibility();
       return {
@@ -14284,6 +14412,12 @@
         this.show.eliminatedContestantId = "mara-voss";
         this.show.completionCardRemaining = STORM_RUN.completionCardSeconds;
         this.transition(STORM_RUN_PHASE.COMPLETED, "player-beat-mara");
+        speechSystem?.say(
+          "storm-run-result-player",
+          STORM_RUN.resultLines.player,
+          speechSystem.announcerSpeaker(),
+          { durationSeconds: 5.2 },
+        );
         mansionContestants?.setEliminated("mara-voss", true);
         this.releaseProduction("mara-voss");
         contestant13Quest?.showDiscovery(
@@ -14296,6 +14430,12 @@
       }
       this.show.eliminatedContestantId = "player";
       this.transition(STORM_RUN_PHASE.FAILED, "mara-finished-first");
+      speechSystem?.say(
+        "storm-run-result-mara",
+        STORM_RUN.resultLines.mara,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: 4.8 },
+      );
       this.releaseProduction(null);
       triggerMansionGameOver({ reason: "storm-run-eliminated", kind: "storm-run" });
       this.syncPresentation();
@@ -14336,6 +14476,20 @@
       }
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) {
         this.show.briefingRemaining = Math.max(0, this.show.briefingRemaining - step);
+        if (this.show.briefingRemaining > 0 && this.show.briefingRemaining <= STORM_RUN.countdownSeconds) {
+          const countdownSecond = Math.ceil(this.show.briefingRemaining);
+          if (countdownSecond !== this.show.countdownLastSecond) {
+            this.show.countdownLastSecond = countdownSecond;
+            this.show.countdownSequence.push(countdownSecond);
+            audioSystem?.stormCountdown(countdownSecond);
+            speechSystem?.say(
+              `storm-run-countdown-${countdownSecond}`,
+              STORM_RUN.countdownLines[countdownSecond],
+              speechSystem.hostSpeaker(),
+              { durationSeconds: 0.92 },
+            );
+          }
+        }
         if (this.show.briefingRemaining <= 0) this.beginRace();
       } else if (this.show.phase === STORM_RUN_PHASE.RUNNING) {
         this.updateRace(step);
@@ -14392,43 +14546,43 @@
       dom.stormRun.hidden = !visible;
       dom.stormRun.dataset.phase = phase;
       if (dom.caseFile) dom.caseFile.hidden = true;
-      const checkpoint = this.expectedCheckpoint();
       setText(dom.stormRunProgress, `${this.show.completedCheckpoints} / ${STORM_RUN.checkpoints.length}`);
-      setText(dom.stormRunStandings, this.standingsText());
+      setText(dom.stormRunStandings, "");
       dom.stormRunStandings?.setAttribute(
         "aria-label",
         `Storm Run checkpoint progress: ${dom.stormRunStandings.textContent}`,
       );
       if (phase === STORM_RUN_PHASE.DORMANT) {
         setText(dom.stormRunEyebrow, "Next live event");
-        setText(dom.stormRunTitle, "STORM RUN");
+        setText(dom.stormRunTitle, "");
         setText(dom.stormRunTimer, this.formatClock(STORM_RUN.intermissionSeconds - this.show.intermissionElapsed));
-        setText(dom.stormRunCheckpoint, "Game 2 unlocks after the next clue or when the clock expires.");
+        setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.CALLED) {
-        setText(dom.stormRunEyebrow, "Live call · Game 2");
-        setText(dom.stormRunTitle, "REPORT TO THE REAR TERRACE");
+        setText(dom.stormRunEyebrow, this.castReady() ? "Storm Run · Called" : "Storm Run · Holding for cast");
+        setText(dom.stormRunTitle, "");
         setText(dom.stormRunTimer, "LIVE");
-        setText(dom.stormRunCheckpoint, this.castReady() ? "The yard course is ready." : "Holding for cast…");
+        setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.BRIEFING) {
-        setText(dom.stormRunEyebrow, "Storm Run · Rules");
-        setText(dom.stormRunTitle, "TWELVE CHECKPOINTS · BEAT MARA");
-        setText(dom.stormRunTimer, String(Math.ceil(this.show.briefingRemaining)));
-        setText(dom.stormRunCheckpoint, "Follow the blue markers in order.");
+        const inCountdown = this.show.briefingRemaining <= STORM_RUN.countdownSeconds;
+        setText(dom.stormRunEyebrow, inCountdown ? "Storm Run · Starting" : "Storm Run · Rules");
+        setText(dom.stormRunTitle, "");
+        setText(dom.stormRunTimer, inCountdown ? String(Math.max(1, Math.ceil(this.show.briefingRemaining))) : "RULES");
+        setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.RUNNING) {
         setText(dom.stormRunEyebrow, "Storm Run · Live");
-        setText(dom.stormRunTitle, checkpoint ? `CHECKPOINT ${this.show.completedCheckpoints + 1}` : "FINISH");
+        setText(dom.stormRunTitle, "");
         setText(dom.stormRunTimer, this.formatClock(this.show.raceElapsed));
-        setText(dom.stormRunCheckpoint, checkpoint ? checkpoint.region : "Course clear");
+        setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.COMPLETED) {
-        setText(dom.stormRunEyebrow, "Results official");
-        setText(dom.stormRunTitle, "MARA VOSS — ELIMINATED");
+        setText(dom.stormRunEyebrow, "Storm Run · Complete");
+        setText(dom.stormRunTitle, "");
         setText(dom.stormRunTimer, "SAFE");
-        setText(dom.stormRunCheckpoint, "Game 2 complete");
+        setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.FAILED) {
-        setText(dom.stormRunEyebrow, "Results official");
-        setText(dom.stormRunTitle, "YOU — ELIMINATED");
+        setText(dom.stormRunEyebrow, "Storm Run · Complete");
+        setText(dom.stormRunTitle, "");
         setText(dom.stormRunTimer, "OUT");
-        setText(dom.stormRunCheckpoint, "Mara finished first");
+        setText(dom.stormRunCheckpoint, "");
       }
     }
 
@@ -14486,6 +14640,8 @@
       this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === STORM_RUN_PHASE.DORMANT ? 0 : 1), 0, 1);
       this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, STORM_RUN.intermissionSeconds);
       this.show.briefingRemaining = 0;
+      this.show.countdownLastSecond = null;
+      this.show.countdownSequence = [];
       this.show.raceElapsed = 0;
       this.show.completedCheckpoints = restoredPhase === STORM_RUN_PHASE.COMPLETED
         ? STORM_RUN.checkpoints.length
@@ -14785,12 +14941,14 @@
 
     getDiagnostics() {
       const contestantEntries = mansionContestants?.entries || [];
+      const hostPosition = mrFeastNpc?.root?.position || null;
       const staged = (id) => Boolean(
         mansionContestants?.challengeMode === "storm-run"
         && contestantEntries.find((entry) => entry.id === id)?.challengeMark
       );
       return {
         phase: this.show.phase,
+        instructionDelivery: STORM_RUN.instructionDelivery,
         eligible: this.eligible(),
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
@@ -14819,6 +14977,22 @@
           } : null,
         },
         briefingRemaining: Number(this.show.briefingRemaining.toFixed(3)),
+        briefing: {
+          line: STORM_RUN.briefingLine,
+          rulesExplained: /twelve blue checkpoints/i.test(STORM_RUN.briefingLine)
+            && /last place is eliminated/i.test(STORM_RUN.briefingLine),
+          countdownSeconds: STORM_RUN.countdownSeconds,
+          countdownLastSecond: this.show.countdownLastSecond,
+          countdownSequence: [...this.show.countdownSequence],
+          playerMark: { ...STORM_RUN.briefingMark },
+          raceFacingYaw: STORM_RUN.startMark.yaw,
+          hostMark: { ...STORM_RUN.hostStartMark },
+          hostAtBackDoor: Boolean(
+            hostPosition
+            && Math.hypot(hostPosition.x - STORM_RUN.hostStartMark.x, hostPosition.z - STORM_RUN.hostStartMark.z) <= 0.2
+            && Math.hypot(STORM_RUN.hostStartMark.x - STORM_RUN.reportMark.x, STORM_RUN.hostStartMark.z - STORM_RUN.reportMark.z) <= 0.35
+          ),
+        },
         raceElapsed: Number(this.show.raceElapsed.toFixed(3)),
         completedCheckpoints: this.show.completedCheckpoints,
         visitedCheckpointIds: [...this.show.visitedCheckpointIds],
@@ -14829,6 +15003,7 @@
           order: index + 1,
           label: checkpoint.label,
           region: checkpoint.region,
+          callout: checkpoint.callout,
           insideMaze: checkpoint.insideMaze,
           inYardBounds: checkpoint.x >= YARD_LAYOUT.bounds.minX && checkpoint.x <= YARD_LAYOUT.bounds.maxX
             && checkpoint.z >= YARD_LAYOUT.bounds.minZ && checkpoint.z <= YARD_LAYOUT.bounds.maxZ,
@@ -14877,6 +15052,7 @@
         lastInvalidTransition: this.show.lastInvalidTransition ? { ...this.show.lastInvalidTransition } : null,
         ui: {
           visible: Boolean(dom.stormRun && !dom.stormRun.hidden),
+          minimal: dom.stormRun?.dataset.guidance === "speech",
           title: dom.stormRunTitle?.textContent || null,
           timer: dom.stormRunTimer?.textContent || null,
           progress: dom.stormRunProgress?.textContent || null,
@@ -22130,7 +22306,7 @@
     yardState.featureCounts.gardenPlants = stems.length;
   }
 
-  function makeEstatePoolWater(width, depth, x, z, y) {
+  function makeEstatePoolWater(width, depth, x, z, y, name = "estate-pool-water") {
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -22213,7 +22389,7 @@
       `,
     });
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth, Math.max(34, Math.round(width * 3)), 42), material);
-    mesh.name = "estate-pool-water";
+    mesh.name = name;
     mesh.position.set(x, y, z);
     mesh.rotation.x = -Math.PI / 2;
     mesh.renderOrder = 2;
@@ -22305,6 +22481,11 @@
     physics.addFixedRamp(stairX, -19.6, -1.58, groundY, 3.2, 2.25, 1);
     for (const x of [-19.9, -15.9, -11.9, -7.9]) box({ name: "estate-pool-bottom-lane-inlay", w: 0.09, h: 0.025, d: 9.6, x, y: -1.565, z: pool.centerZ + 0.2, material: M.brass, cast: false });
     makeEstatePoolWater(19.4, 11.25, pool.centerX, pool.centerZ, -0.39);
+    // The main plane's north edge stops at z=-19.88, short of the entry stairs
+    // whose lower treads sit below the waterline. A short tongue fills the
+    // stair mouth (inside the basin-wall gap) and laps at the step 1/2 riser
+    // so the submerged steps read as underwater instead of dry with a gap.
+    makeEstatePoolWater(2.5, 1.4, stairX, -19.18, -0.39, "estate-pool-water-stair-inlet");
     addPoolLounger(-0.95, -23.1, 0);
     addPoolLounger(-0.95, -28.0, 0);
     // A drinks table between the two loungers, with towels waiting on the
@@ -23370,6 +23551,68 @@
       osc.connect(gain).connect(this.master);
       osc.start(now);
       osc.stop(now + duration + 0.02);
+      return true;
+    }
+
+    stormCountdown(number) {
+      if (!this.ctx || !state.audioEnabled) return false;
+      const step = Math.max(0, Math.floor(Number(number) || 0));
+      if (step > 0) {
+        this.ping(360 + (3 - Math.min(3, step)) * 70, 0.16, 0.095, "square");
+        setTimeout(() => this.ping(180, 0.08, 0.035, "sine"), 45);
+        this.markCue("stormCountdown");
+        this.markCue(`stormCountdown${step}`);
+      } else {
+        this.ping(720, 0.24, 0.12, "square");
+        setTimeout(() => this.ping(1080, 0.3, 0.095, "triangle"), 70);
+        this.markCue("stormRaceStart");
+      }
+      return true;
+    }
+
+    stormCheckpoint(index, total) {
+      if (!this.ctx || !state.audioEnabled) return false;
+      const checkpointIndex = Math.max(0, Math.floor(Number(index) || 0));
+      const checkpointTotal = Math.max(1, Math.floor(Number(total) || 1));
+      const finish = checkpointIndex >= checkpointTotal - 1;
+      const base = 610 + Math.min(11, checkpointIndex) * 24;
+      this.ping(base, finish ? 0.28 : 0.17, finish ? 0.12 : 0.09, "square");
+      setTimeout(() => this.ping(finish ? 1120 : base + 190, finish ? 0.34 : 0.22, finish ? 0.11 : 0.075, "triangle"), 60);
+      this.markCue("stormCheckpoint");
+      if (finish) this.markCue("stormCheckpointFinish");
+      return true;
+    }
+
+    stormScare() {
+      if (!this.ctx || !state.audioEnabled) return false;
+      const now = this.ctx.currentTime;
+      const sting = this.ctx.createBufferSource();
+      sting.buffer = this.makeNoiseBuffer(0.24);
+      const band = this.ctx.createBiquadFilter();
+      band.type = "bandpass";
+      band.frequency.setValueAtTime(1850, now);
+      band.Q.setValueAtTime(0.75, now);
+      const stingGain = this.ctx.createGain();
+      stingGain.gain.setValueAtTime(0.0001, now);
+      stingGain.gain.exponentialRampToValueAtTime(0.16, now + 0.008);
+      stingGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      sting.connect(band).connect(stingGain).connect(this.master);
+      sting.start(now);
+      sting.stop(now + 0.24);
+
+      const shriek = this.ctx.createOscillator();
+      shriek.type = "sawtooth";
+      shriek.frequency.setValueAtTime(920, now);
+      shriek.frequency.exponentialRampToValueAtTime(240, now + 0.3);
+      const shriekGain = this.ctx.createGain();
+      shriekGain.gain.setValueAtTime(0.095, now);
+      shriekGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+      shriek.connect(shriekGain).connect(this.master);
+      shriek.start(now);
+      shriek.stop(now + 0.32);
+
+      this.ping(74, 0.46, 0.08, "square");
+      this.markCue("stormScare");
       return true;
     }
 

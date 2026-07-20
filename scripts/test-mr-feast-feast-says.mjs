@@ -74,47 +74,41 @@ async function assertStableCommandPaint(page, command, label) {
   const paint = await page.evaluate(() => {
     const commandElement = document.getElementById("mansion-feast-command");
     const hintElement = document.getElementById("mansion-feast-hint");
+    const speech = document.getElementById("mansion-speech");
+    const panel = document.getElementById("mansion-feast-says");
     const commandStyle = getComputedStyle(commandElement);
     const hintStyle = getComputedStyle(hintElement);
+    const speechStyle = getComputedStyle(speech);
     return {
       commandText: commandElement.textContent,
       hintText: hintElement.textContent,
       commandDisplay: commandStyle.display,
-      commandVisibility: commandStyle.visibility,
-      commandOpacity: Number(commandStyle.opacity),
-      commandWidth: commandElement.getBoundingClientRect().width,
-      commandHeight: commandElement.getBoundingClientRect().height,
-      commandOverflowX: commandElement.scrollWidth - commandElement.clientWidth,
-      commandOverflowY: commandElement.scrollHeight - commandElement.clientHeight,
       hintDisplay: hintStyle.display,
-      hintVisibility: hintStyle.visibility,
-      hintOpacity: Number(hintStyle.opacity),
-      hintOverflowX: hintElement.scrollWidth - hintElement.clientWidth,
-      hintOverflowY: hintElement.scrollHeight - hintElement.clientHeight,
+      speechDisplay: speechStyle.display,
+      speechHidden: speech.hidden,
+      speechSpeaker: document.getElementById("mansion-speech-speaker").textContent,
+      speechText: document.getElementById("mansion-speech-text").textContent,
+      speechRect: speech.getBoundingClientRect().toJSON(),
+      panelHeight: panel.getBoundingClientRect().height,
     };
   });
   assert(
-    paint.commandText === command.text
-      && paint.commandDisplay !== "none"
-      && paint.commandVisibility !== "hidden"
-      && paint.commandOpacity > 0
-      && paint.commandWidth > 0
-      && paint.commandHeight > 0
-      && paint.commandOverflowX <= 1
-      && paint.commandOverflowY <= 1,
-    `${label} needs a fully painted, unclipped command before capture; got ${JSON.stringify(paint)}`,
+    paint.commandText === ""
+      && paint.commandDisplay === "none"
+      && paint.hintText === ""
+      && paint.hintDisplay === "none",
+    `${label} must not duplicate Mr. Feast's instruction in the minimal HUD; got ${JSON.stringify(paint)}`,
   );
-  if (command.hint) {
-    assert(
-      paint.hintText === command.hint
-        && paint.hintDisplay !== "none"
-        && paint.hintVisibility !== "hidden"
-        && paint.hintOpacity > 0
-        && paint.hintOverflowX <= 1
-        && paint.hintOverflowY <= 1,
-      `${label} needs a fully painted, unclipped hint before capture; got ${JSON.stringify(paint)}`,
-    );
-  }
+  assert(
+    !paint.speechHidden
+      && paint.speechDisplay !== "none"
+      && /mr\.?\s*feast/i.test(paint.speechSpeaker)
+      && paint.speechText === (command.spokenText || command.text)
+      && paint.speechRect.width > 0
+      && paint.speechRect.height > 0,
+    `${label} must render the complete command through Mr. Feast's visible speech; got ${JSON.stringify(paint)}`,
+  );
+  assert(paint.panelHeight <= 58, `${label} should leave only a shallow status strip; got ${JSON.stringify(paint)}`);
   return paint;
 }
 
@@ -189,11 +183,12 @@ async function startBallroomRound(page, useTouch = false) {
   assert(
     briefing.speech?.speakerId === "mr-feast"
       && /only follow.*(?:if|when).*feast says/i.test(briefing.speech.text || "")
+      && /look.*press E/i.test(briefing.speech.text || "")
       && /lowest score.*eliminated/i.test(briefing.speech.text || ""),
-    `Mr. Feast should explain that only "Feast says" instructions count before naming any rival; got ${JSON.stringify(briefing.speech)}`,
+    `Mr. Feast should verbally explain the rule and special choice control before naming any rival; got ${JSON.stringify(briefing.speech)}`,
   );
   assert(!/kip|beat\s+\w+/i.test(briefing.speech.text || ""), `the briefing must not spoil the authored loser or tell the player whom to beat; got ${JSON.stringify(briefing.speech.text)}`);
-  assert(!/kip|beat\s+\w+/i.test(briefing.feastSays.ui?.command || ""), `the briefing HUD must use the same generic elimination rule; got ${JSON.stringify(briefing.feastSays.ui)}`);
+  assert(briefing.feastSays.instructionDelivery === "speech" && briefing.feastSays.ui?.minimal && briefing.feastSays.ui?.command === null, `the briefing HUD must defer completely to Mr. Feast's speech; got ${JSON.stringify(briefing.feastSays.ui)}`);
   if (!useTouch) {
     const beforeBriefingMove = await diagnostics(page);
     await page.keyboard.down("w");
@@ -217,7 +212,7 @@ async function startBallroomRound(page, useTouch = false) {
   const state = await diagnostics(page);
   assert(state.room === "BALLROOM", `Feast Says must begin in the Ballroom; got room=${state.room}`);
   assert(state.feastSays.staging?.contestantsReady === true, `all contestants should be staged before play; got ${JSON.stringify(state.feastSays.staging)}`);
-  assert(state.speech?.speakerId === "mr-feast" && state.speech?.text === state.feastSays.command.text, `Mr. Feast should visibly deliver the live command; got ${JSON.stringify(state.speech)}`);
+  assert(state.speech?.speakerId === "mr-feast" && state.speech?.text === state.feastSays.command.spokenText, `Mr. Feast should visibly deliver the complete live command; got ${JSON.stringify(state.speech)}`);
   const responseStart = state.contestants.entries.map((entry) => entry.challengeResponse?.progress).filter(Number.isFinite);
   assert(responseStart.length === 3 && responseStart.every((progress) => progress >= 0 && progress < 0.35), `contestants should begin each eased response near their marks; got ${JSON.stringify(responseStart)}`);
   await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.18));
@@ -243,6 +238,7 @@ async function startBallroomRound(page, useTouch = false) {
     return count;
   });
   assert(liveRegionMutations === 0, `static command and score live regions should not mutate every frame; got ${liveRegionMutations}`);
+  await assertStableCommandPaint(page, state.feastSays.command, "opening speech-led command");
   return settled;
 }
 
@@ -398,9 +394,21 @@ async function finishReadableResult(page, command, { captureProof = false } = {}
     `round ${command.index + 1} needs authored contestant banter; got ${JSON.stringify(command)}`,
   );
   assert(
+    state.speech?.speakerId === "mr-feast"
+      && state.speech?.category === `feast-says-verdict-${command.index + 1}`
+      && state.speech?.text === state.feastSays.resultDialogue?.verdictLine,
+    `round ${command.index + 1} should begin with Mr. Feast's verbal verdict instead of result-card text; speech=${JSON.stringify(state.speech)} command=${JSON.stringify(command)}`,
+  );
+  await assertVisibleResultSpeech(page, "mr-feast", state.feastSays.resultDialogue.verdictLine, `round ${command.index + 1} Mr. Feast verdict`);
+  await page.evaluate(
+    (seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds),
+    state.feastSays.pacing.verdictSpeechSeconds + 0.03,
+  );
+  state = await diagnostics(page);
+  assert(
     state.speech?.speakerId === command.contestantSpeakerId
       && state.speech?.text === command.contestantLine,
-    `round ${command.index + 1} should let the authored contestant line land first; speech=${JSON.stringify(state.speech)} command=${JSON.stringify(command)}`,
+    `round ${command.index + 1} should follow the verdict with the authored contestant line; speech=${JSON.stringify(state.speech)} command=${JSON.stringify(command)}`,
   );
   await assertVisibleResultSpeech(page, command.contestantSpeakerId, command.contestantLine, `round ${command.index + 1} contestant banter`);
   if (captureProof) {
@@ -676,9 +684,11 @@ async function playTouchOnlyLandscapeRound(page) {
     const before = await feastState(page);
     const layout = await feastHudLayout(page);
     assertInside(layout.panel, layout.stage, `landscape command ${expectedIndex + 1}`);
-    assert(layout.panel.height <= 90, `landscape command ${expectedIndex + 1} is taller than 90px; got ${JSON.stringify(layout)}`);
-    assert(layout.panel.height <= layout.stage.height * 0.48, `landscape command ${expectedIndex + 1} consumes too much of the stage; got ${JSON.stringify(layout)}`);
-    assert(layout.commandFontPx >= 16, `landscape command ${expectedIndex + 1} text is too small at ${layout.commandFontPx}px`);
+    assert(layout.panel.height <= 58, `landscape command ${expectedIndex + 1} should leave only a shallow status strip; got ${JSON.stringify(layout)}`);
+    assert(layout.commandDisplay === "none" && layout.hintDisplay === "none", `landscape command ${expectedIndex + 1} must not duplicate instructions in the HUD; got ${JSON.stringify(layout)}`);
+    assert(!layout.speechHidden && layout.speechDisplay !== "none" && layout.speechText === before.command.spokenText, `landscape command ${expectedIndex + 1} must come from Mr. Feast's speech; got ${JSON.stringify(layout)}`);
+    assertInside(layout.speech, layout.stage, `landscape command ${expectedIndex + 1} speech`);
+    assert(!rectanglesOverlap(layout.panel, layout.speech), `landscape command ${expectedIndex + 1} speech overlaps the minimal status strip; got ${JSON.stringify(layout)}`);
     assert(layout.leaderboardDisplay === "none", `landscape command ${expectedIndex + 1} must hide the global Scores control so it cannot intercept movement; got ${JSON.stringify(layout)}`);
     assert(Object.values(layout.auxiliaryHudDisplays).every((display) => display === "none"), `landscape command ${expectedIndex + 1} should yield duplicate and irrelevant HUDs; got ${JSON.stringify(layout.auxiliaryHudDisplays)}`);
     if (expectedIndex === 3 && before.command.obey) {
@@ -772,7 +782,8 @@ async function feastHudLayout(page) {
     const sprint = byId("touch-sprint");
     const touchCrouch = byId("touch-crouch");
     const leaderboardButton = document.querySelector(".rb-standalone-leaderboard-btn");
-    const auxiliaryHud = ["mansion-energy", "mansion-stealth", "mansion-security", "mansion-speech"]
+    const speech = byId("mansion-speech");
+    const auxiliaryHud = ["mansion-energy", "mansion-stealth", "mansion-security"]
       .map((id) => byId(id));
     return {
       stage: plain(stage.getBoundingClientRect()),
@@ -795,6 +806,12 @@ async function feastHudLayout(page) {
       roundDisplay: getComputedStyle(round).display,
       footerDisplay: getComputedStyle(footer).display,
       standingsDisplay: getComputedStyle(standings).display,
+      commandDisplay: getComputedStyle(command).display,
+      hintDisplay: getComputedStyle(hint).display,
+      speechDisplay: getComputedStyle(speech).display,
+      speechHidden: speech.hidden,
+      speech: plain(speech.getBoundingClientRect()),
+      speechText: byId("mansion-speech-text").textContent,
       toolsDisplay: getComputedStyle(tools).display,
       locationDisplay: getComputedStyle(location).display,
       leaderboardDisplay: leaderboardButton ? getComputedStyle(leaderboardButton).display : "missing",
@@ -819,6 +836,8 @@ async function run() {
   // Red-first contracts: fail here before Chromium starts until the event is
   // represented as a named, persistable system with focused diagnostics.
   assert(/const FEAST_SAYS\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the named FEAST_SAYS tuning and command contract");
+  assert(runtimeSource.includes('instructionDelivery: "speech"'), "Feast Says must declare Mr. Feast speech as its authoritative instruction channel");
+  assert(runtimeSource.includes("feast-says-verdict"), "Mr. Feast must verbally judge each Feast Says response instead of relying on result-card text");
   assert(/const CONTESTANT_FEAST_SAYS_MOTION\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing named contestant response-animation tuning");
   assert(/class FeastSaysSystem/.test(runtimeSource), "runtime is missing the FeastSaysSystem state machine");
   assert(/feastSays:\s*feastSaysSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose Feast Says diagnostics");
@@ -871,6 +890,8 @@ async function run() {
   for (const id of ["mansion-feast-says", "mansion-feast-command", "mansion-feast-hint", "mansion-feast-score", "mansion-feast-timer", "mansion-feast-crouch"]) {
     assert(pageSource.includes(`id="${id}"`), `page is missing #${id}`);
   }
+  assert(pageSource.includes('id="mansion-feast-says" role="region" aria-label="Feast Says minimal status" data-guidance="speech"'), "Feast Says must ship a speech-led minimal status strip");
+  assert(!/#mansion-stage:has\(#mansion-feast-says[^\n]+#mansion-speech\s*\{\s*display:\s*none/.test(pageSource), "active Feast Says must never hide Mr. Feast's speech bubble");
   const mobileCss = pageSource.slice(pageSource.indexOf("@media (max-width: 560px)"));
   assert(/#mansion-feast-says/.test(mobileCss), "the Feast Says HUD needs an explicit phone layout");
   assert(/#mansion-feast-says\[data-phase="dormant"\]/.test(mobileCss), "the idle Feast Says countdown needs its own compact phone layout");
@@ -954,13 +975,12 @@ async function run() {
     assert(landscapeCall?.started, `short-landscape QA call should start; got ${JSON.stringify(landscapeCall)}`);
     await startBallroomRound(landscapeCountdownPage, true);
     const activeLandscapeHud = await feastHudLayout(landscapeCountdownPage);
-    const openingHint = await landscapeCountdownPage.locator("#mansion-feast-hint").textContent();
     assert(activeLandscapeHud.phase === "command", `the opening physical command should be active; got ${JSON.stringify(activeLandscapeHud)}`);
-    assert(/move|movement|controls/i.test(openingHint || "") && !/Mara|Kip|Juniper/i.test(openingHint || ""), `the opening physical hint should stay generic instead of previewing a contestant choice; got ${JSON.stringify(openingHint)}`);
     assertInside(activeLandscapeHud.panel, activeLandscapeHud.stage, "short-landscape opening command card");
-    assert(activeLandscapeHud.panel.height <= 90 && activeLandscapeHud.panel.height <= activeLandscapeHud.stage.height * 0.48, `short-landscape live card should use little vertical space; got ${JSON.stringify(activeLandscapeHud)}`);
-    assert(activeLandscapeHud.commandFontPx >= 15, `short-landscape opening command is too small at ${activeLandscapeHud.commandFontPx}px`);
-    assert(activeLandscapeHud.commandOverflow <= 1, `short-landscape opening command should wrap inside its card; got ${JSON.stringify(activeLandscapeHud)}`);
+    assert(activeLandscapeHud.panel.height <= 58 && activeLandscapeHud.commandDisplay === "none" && activeLandscapeHud.hintDisplay === "none", `short-landscape play should use only the minimal status strip: ${JSON.stringify(activeLandscapeHud)}`);
+    assert(!activeLandscapeHud.speechHidden && activeLandscapeHud.speechDisplay !== "none" && /Feast says step left/i.test(activeLandscapeHud.speechText), `the opening direction must come from Mr. Feast's visible speech: ${JSON.stringify(activeLandscapeHud)}`);
+    assertInside(activeLandscapeHud.speech, activeLandscapeHud.stage, "short-landscape opening speech");
+    assert(!rectanglesOverlap(activeLandscapeHud.panel, activeLandscapeHud.speech), `short-landscape speech overlaps the status strip: ${JSON.stringify(activeLandscapeHud)}`);
     assert(activeLandscapeHud.locationDisplay === "none" && activeLandscapeHud.toolsDisplay === "none", `nonessential top HUDs should yield to the short-landscape live challenge; got ${JSON.stringify(activeLandscapeHud)}`);
     assert(!rectanglesOverlap(activeLandscapeHud.panel, activeLandscapeHud.movement), `short-landscape opening card overlaps movement choices; got ${JSON.stringify(activeLandscapeHud)}`);
     assert(!rectanglesOverlap(activeLandscapeHud.panel, activeLandscapeHud.interact), `short-landscape opening card overlaps the E control; got ${JSON.stringify(activeLandscapeHud)}`);
@@ -981,7 +1001,7 @@ async function run() {
     await compactLandscapePage.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
     await startBallroomRound(compactLandscapePage, true);
     const compactLandscapeHud = await feastHudLayout(compactLandscapePage);
-    assert(compactLandscapeHud.panel.height <= 90 && compactLandscapeHud.panel.height <= compactLandscapeHud.stage.height * 0.48, `compact 568×320 live card should stay below the landscape budget; got ${JSON.stringify(compactLandscapeHud)}`);
+    assert(compactLandscapeHud.panel.height <= 58 && compactLandscapeHud.commandDisplay === "none" && compactLandscapeHud.speechDisplay !== "none", `compact 568×320 play should keep a speech-led minimal strip; got ${JSON.stringify(compactLandscapeHud)}`);
     assert(!rectanglesOverlap(compactLandscapeHud.panel, compactLandscapeHud.movement) && !rectanglesOverlap(compactLandscapeHud.panel, compactLandscapeHud.interact), `compact 568×320 live card should clear all touch controls; got ${JSON.stringify(compactLandscapeHud)}`);
     await compactLandscapePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "opening-command-compact-landscape.png") });
     await compactLandscapePage.close();
@@ -1089,7 +1109,8 @@ async function run() {
     const desktopHud = await feastHudLayout(winPage);
     assert(!desktopHud.panelHidden, `desktop show HUD should be visible during play; got ${JSON.stringify(desktopHud)}`);
     assertInside(desktopHud.panel, desktopHud.stage, "desktop Feast Says panel");
-    assert(desktopHud.commandFontPx >= 14, `desktop command text is too small at ${desktopHud.commandFontPx}px`);
+    assert(desktopHud.panel.height <= 58 && desktopHud.commandDisplay === "none" && desktopHud.hintDisplay === "none", `desktop Feast Says must use only a shallow, non-instructional status strip: ${JSON.stringify(desktopHud)}`);
+    assert(!desktopHud.speechHidden && desktopHud.speechDisplay !== "none", `desktop Feast Says must keep Mr. Feast's speech visible: ${JSON.stringify(desktopHud)}`);
     await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "six-command-round-desktop.png") });
 
     const won = await playSixCommandRound(winPage, "win");
@@ -1297,10 +1318,10 @@ async function run() {
     assert(mobileFeast.command.index === 4 && mobileFeast.command.action === "point", `the distrust choice should wait until round five; got ${JSON.stringify(mobileFeast.command)}`);
     await mobile.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(1));
     const pointHint = await mobile.locator("#mansion-feast-hint").textContent();
-    assert(/look|aim/i.test(pointHint || "") && /tap|interact|\bE\b/i.test(pointHint || ""), `the phone point hint should explain camera look + Interact; got ${JSON.stringify(pointHint)}`);
-    assert(!/A\s*\/?\s*.*Mara|W\s*\/?\s*.*Kip|D\s*\/?\s*.*Juniper/i.test(pointHint || ""), `the phone hint must not revive the removed direction-to-name map; got ${JSON.stringify(pointHint)}`);
+    const pointSpeech = (await diagnostics(mobile)).speech;
+    assert(pointHint === "" && /look.*press E/i.test(pointSpeech.text || ""), `the phone point control must be explained by Mr. Feast instead of a HUD hint: ${JSON.stringify({ pointHint, pointSpeech })}`);
     const mobilePointHud = await feastHudLayout(mobile);
-    assert(mobilePointHud.phase === "command" && !mobilePointHud.hintHidden && mobilePointHud.panel.height <= 126, `the hinted point command should fit the active phone card; got ${JSON.stringify(mobilePointHud)}`);
+    assert(mobilePointHud.phase === "command" && mobilePointHud.hintHidden && mobilePointHud.panel.height <= 58 && mobilePointHud.speechDisplay !== "none", `the point command should use visible speech and the minimal phone strip: ${JSON.stringify(mobilePointHud)}`);
     await mobile.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "point-command-mobile.png") });
     await aimAtFeastContestant(mobile, "juniper-cross", { expectPrompt: true });
     await mobile.locator("#touch-interact").click({ force: true });
@@ -1317,9 +1338,9 @@ async function run() {
     assert(await mobile.locator("#touch-crouch").isHidden(), "the persistent mobile crouch control should yield throughout Feast Says");
     assert(await mobile.locator("#touch-sprint").isHidden(), "mobile Sprint should yield while Feast Says owns movement input");
     assertInside(mobileHud.panel, mobileHud.stage, "mobile Feast Says panel");
-    assert(mobileHud.phase === "command" && mobileHud.panel.height <= 126, `active mobile Feast Says should use a shallow command card; got ${JSON.stringify(mobileHud)}`);
-    assert(mobileHud.commandFontPx >= 16, `mobile command text is too small at ${mobileHud.commandFontPx}px`);
-    assert(mobileHud.standingsDisplay === "none", `mobile standings should yield to the command, timer, score, and action; got ${JSON.stringify(mobileHud)}`);
+    assert(mobileHud.phase === "command" && mobileHud.panel.height <= 58, `active mobile Feast Says should use a shallow status strip; got ${JSON.stringify(mobileHud)}`);
+    assert(mobileHud.commandDisplay === "none" && mobileHud.hintDisplay === "none" && mobileHud.standingsDisplay === "none", `mobile instructions and standings must yield to Mr. Feast's speech: ${JSON.stringify(mobileHud)}`);
+    assert(!mobileHud.speechHidden && mobileHud.speechDisplay !== "none", `mobile Feast Says must keep Mr. Feast's speech visible: ${JSON.stringify(mobileHud)}`);
     assert(mobileHud.interactHeight >= 44 && mobileHud.interactWidth >= 44, `mobile E control must remain at least 44px; got ${JSON.stringify(mobileHud.interact)}`);
     assert(!rectanglesOverlap(mobileHud.panel, mobileHud.interact), `mobile event panel overlaps the E control; got ${JSON.stringify(mobileHud)}`);
     assert(!rectanglesOverlap(mobileHud.panel, mobileHud.movement), `mobile event panel overlaps movement controls; got ${JSON.stringify(mobileHud)}`);

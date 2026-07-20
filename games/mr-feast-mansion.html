@@ -418,8 +418,7 @@
     body:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .rb-standalone-leaderboard,
     #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-energy,
     #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-stealth,
-    #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-security,
-    #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"]):not([data-phase="result"]):not([data-phase="completed"])) #mansion-speech {
+    #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) #mansion-security {
       display: none;
     }
 
@@ -674,8 +673,7 @@
     body:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .rb-standalone-leaderboard-btn,
     body:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .rb-standalone-leaderboard,
     #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-stealth,
-    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-security,
-    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-speech {
+    #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) #mansion-security {
       display: none;
     }
 
@@ -851,7 +849,7 @@
       position: absolute;
       left: 0;
       top: 0;
-      z-index: 8;
+      z-index: 12;
       width: max-content;
       max-width: min(340px, 74%);
       padding: 9px 13px 10px;
@@ -2641,6 +2639,130 @@
       }
     }
 
+    /* Both sanctioned competitions are speech-led. These late overrides keep
+       only a small, non-instructional status strip while Mr. Feast's bubble
+       carries rules, commands, directions, countdown calls, and results. */
+    #mansion-feast-says[data-guidance="speech"]:not([hidden]) {
+      top: max(8px, calc(env(safe-area-inset-top) + 6px));
+      display: flex;
+      width: min(360px, calc(100% - 24px));
+      min-height: 48px;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 6px 12px;
+      border-radius: 8px;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] .mansion-feast__header {
+      display: flex !important;
+      flex: 1 1 auto;
+      gap: 8px;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] .mansion-feast__command-row,
+    #mansion-feast-says[data-guidance="speech"] .mansion-feast__footer {
+      display: contents !important;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] .mansion-feast__command-content,
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-command,
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-hint,
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-score,
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-standings {
+      display: none !important;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-timer {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      border-width: 1px;
+      font-size: 0.78rem;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-crouch:not([hidden]) {
+      display: grid !important;
+      min-width: 60px;
+      min-height: 44px;
+    }
+
+    #mansion-feast-says[data-guidance="speech"] #mansion-feast-crouch[hidden] {
+      display: none !important;
+    }
+
+    #mansion-storm-run[data-guidance="speech"]:not([hidden]) {
+      top: max(8px, calc(env(safe-area-inset-top) + 6px));
+      display: flex;
+      width: min(360px, calc(100% - 24px));
+      min-height: 48px;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px 6px 12px;
+      border-radius: 8px;
+    }
+
+    #mansion-storm-run[data-guidance="speech"] .mansion-storm__header {
+      display: flex !important;
+      flex: 1 1 auto;
+    }
+
+    #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-title,
+    #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-checkpoint,
+    #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-standings {
+      display: none !important;
+    }
+
+    #mansion-storm-run[data-guidance="speech"] .mansion-storm__progress-row {
+      display: flex;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 0;
+    }
+
+    #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-progress {
+      font-size: 0.58rem;
+    }
+
+    #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-timer {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 auto;
+      border-width: 1px;
+      font-size: 0.78rem;
+    }
+
+    @media (max-width: 560px), (max-height: 420px) and (orientation: landscape) {
+      #mansion-feast-says[data-guidance="speech"]:not([hidden]),
+      #mansion-storm-run[data-guidance="speech"]:not([hidden]) {
+        top: max(3px, env(safe-area-inset-top));
+        width: min(300px, calc(100% - 160px));
+        min-height: 44px;
+        gap: 7px;
+        padding: 4px 6px 4px 9px;
+      }
+
+      #mansion-feast-says[data-guidance="speech"] #mansion-feast-timer,
+      #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-timer {
+        width: 36px;
+        height: 36px;
+        font-size: 0.72rem;
+      }
+
+      #mansion-feast-says[data-guidance="speech"] #mansion-feast-eyebrow,
+      #mansion-feast-says[data-guidance="speech"] #mansion-feast-round,
+      #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-eyebrow,
+      #mansion-storm-run[data-guidance="speech"] #mansion-storm-run-progress {
+        font-size: 0.48rem;
+      }
+    }
+
+    @media (max-width: 560px) and (orientation: portrait) {
+      #mansion-feast-says[data-guidance="speech"]:not([hidden]),
+      #mansion-storm-run[data-guidance="speech"]:not([hidden]) {
+        top: max(58px, calc(env(safe-area-inset-top) + 58px));
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         scroll-behavior: auto !important;
@@ -2698,26 +2820,26 @@
           <span id="mansion-speech-text"></span>
         </div>
 
-        <section id="mansion-feast-says" role="region" aria-label="Feast Says live challenge" data-result="waiting" hidden>
+        <section id="mansion-feast-says" role="region" aria-label="Feast Says minimal status" data-guidance="speech" data-result="waiting" hidden>
           <div class="mansion-feast__header">
             <span id="mansion-feast-eyebrow">Live challenge</span>
             <span id="mansion-feast-round">Round 0 / 0</span>
           </div>
           <div class="mansion-feast__command-row">
             <div class="mansion-feast__command-content">
-              <p id="mansion-feast-command" role="status" aria-live="assertive" aria-atomic="true">Waiting for Mr. Feast…</p>
-              <p id="mansion-feast-hint" aria-live="polite" aria-atomic="true" hidden></p>
+              <p id="mansion-feast-command" aria-hidden="true"></p>
+              <p id="mansion-feast-hint" aria-hidden="true" hidden></p>
             </div>
             <output id="mansion-feast-timer" aria-label="Response time remaining" aria-live="off">—</output>
           </div>
           <div class="mansion-feast__footer">
-            <output id="mansion-feast-score" aria-label="Your Feast Says score" aria-live="polite">Score 0</output>
-            <output id="mansion-feast-standings" aria-label="Contestant standings" aria-live="polite">Mara 0 · Kip 0 · Juniper 0 · You 0</output>
+            <output id="mansion-feast-score" aria-hidden="true">Score 0</output>
+            <output id="mansion-feast-standings" aria-hidden="true">Mara 0 · Kip 0 · Juniper 0 · You 0</output>
             <button id="mansion-feast-crouch" type="button" aria-label="Crouch for the Feast Says challenge" aria-pressed="false">Crouch</button>
           </div>
         </section>
 
-        <section id="mansion-storm-run" role="region" aria-label="Storm Run live race" aria-live="polite" aria-atomic="true" data-phase="dormant" hidden>
+        <section id="mansion-storm-run" role="region" aria-label="Storm Run minimal status" aria-live="polite" aria-atomic="true" data-guidance="speech" data-phase="dormant" hidden>
           <div class="mansion-storm__header">
             <span id="mansion-storm-run-eyebrow">Game 2 · Live race</span>
           </div>

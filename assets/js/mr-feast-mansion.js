@@ -2021,17 +2021,20 @@
     maximumBreadcrumbDistance: 32,
     checkpointBeaconHeight: 4.4,
     checkpointGuideHeight: 3.85,
-    hostRevealFlashThreshold: 0.04,
-    hostRevealMaximumSeconds: 0.9,
+    hostRevealFlashThreshold: 0.035,
+    hostRevealMaximumSeconds: 1.2,
     scareMaximumLightExposure: 0.12,
-    scareFlashDecayPerSecond: 2.75,
+    scareFlashStrengthMultiplier: 1.35,
+    scareLightIntensityMultiplier: 1.55,
+    scareFlashDecayPerSecond: 2.1,
     scareFlashPulses: Object.freeze([
       Object.freeze({ delay: 0, strength: 1 }),
-      Object.freeze({ delay: 0.17, strength: 0.5 }),
-      Object.freeze({ delay: 0.42, strength: 0.88 }),
+      Object.freeze({ delay: 0.22, strength: 0.55 }),
+      Object.freeze({ delay: 0.52, strength: 0.95 }),
     ]),
-    scareThunderDelaySeconds: 0.08,
-    scareThunderVolumeMultiplier: 1.4,
+    scareThunderDelaySeconds: 0.02,
+    scareThunderVolumeMultiplier: 1.7,
+    scareThunderCloseStrike: true,
     playerMaximumSprintSpeed: PLAYER.sprintSpeed,
     contestantMaximumSpeed: Math.min(3, PLAYER.sprintSpeed - 0.5),
     contestantSpeeds: Object.freeze({
@@ -2046,39 +2049,38 @@
       "juniper-cross": Object.freeze({ x: 0.7, y: YARD_LAYOUT.groundY, z: -16.45, yaw: -Math.PI / 2 }),
     }),
     checkpoints: Object.freeze([
-      Object.freeze({ id: "formal-garden", label: "Formal Garden", region: "FORMAL GARDEN", x: -25, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
-      Object.freeze({ id: "garden-rear-junction", label: "Garden Rear Junction", region: "GARDEN REAR JUNCTION", x: -14.5, y: YARD_LAYOUT.groundY, z: -14, insideMaze: false }),
-      Object.freeze({ id: "rear-terrace", label: "Rear Terrace", region: "REAR TERRACE", x: 0, y: YARD_LAYOUT.groundY, z: -14, insideMaze: false }),
-      Object.freeze({ id: "east-terrace-turn", label: "East Terrace Turn", region: "EAST TERRACE TURN", x: 17.35, y: YARD_LAYOUT.groundY, z: -13.75, insideMaze: false }),
-      Object.freeze({ id: "east-side-path", label: "East Side Path", region: "EAST SIDE PATH", x: 17.35, y: YARD_LAYOUT.groundY, z: 1, insideMaze: false }),
-      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
+      Object.freeze({ id: "garden-front-turn", label: "Garden Front Turn", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: 9.5, insideMaze: false }),
+      Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
+      Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false,
-        reveal: Object.freeze({ x: 9.6, y: YARD_LAYOUT.groundY, z: 24.8, yaw: -Math.PI / 2, darkSpot: true }) }),
+        scareTrigger: Object.freeze({ x: 0, z: 19.5, radius: 2.25, viewYaw: Math.PI }),
+        reveal: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: 24.5, yaw: Math.PI, darkSpot: true }) }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
       Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
       Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
-        scareTrigger: Object.freeze({ x: 28, z: 2.75, radius: 1.15 }),
-        reveal: Object.freeze({ x: 31, y: YARD_LAYOUT.groundY, z: 2.75, yaw: -Math.PI / 2, darkSpot: true }) }),
+        scareTrigger: Object.freeze({ x: 28, z: 8.75, radius: 1.75, viewYaw: 0 }),
+        reveal: Object.freeze({ x: 28, y: YARD_LAYOUT.groundY, z: 4.25, yaw: 0, darkSpot: true }) }),
       Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
-      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false,
-        reveal: Object.freeze({ x: -25, y: YARD_LAYOUT.groundY, z: -20.7, yaw: Math.PI / 2, darkSpot: true }) }),
+      Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
       Object.freeze({ x: -14.5, z: -15.6 }),
-      Object.freeze({ x: -25, z: -14 }),
-      Object.freeze({ x: -25, z: -11.5, checkpointIndex: 0 }),
-      Object.freeze({ x: -25, z: -14 }),
-      Object.freeze({ x: -14.5, z: -14, checkpointIndex: 1 }),
-      Object.freeze({ x: 0, z: -14, checkpointIndex: 2 }),
-      Object.freeze({ x: 14.5, z: -14 }),
-      Object.freeze({ x: 17.35, z: -13.75, checkpointIndex: 3 }),
-      Object.freeze({ x: 17.35, z: 1, checkpointIndex: 4 }),
-      Object.freeze({ x: 17.35, z: 16.3, checkpointIndex: 5 }),
+      Object.freeze({ x: -17.2, z: -14 }),
+      Object.freeze({ x: -17.2, z: -11.5, checkpointIndex: 0 }),
+      Object.freeze({ x: -17.2, z: -2.2, checkpointIndex: 1 }),
+      Object.freeze({ x: -17.2, z: 9.5, checkpointIndex: 2 }),
+      Object.freeze({ x: -25, z: 9.5 }),
+      Object.freeze({ x: -25, z: 16.3, checkpointIndex: 3 }),
+      Object.freeze({ x: -13.5, z: 16.3 }),
+      Object.freeze({ x: 0, z: 16.3, checkpointIndex: 4 }),
+      Object.freeze({ x: 0, z: 19.5 }),
+      Object.freeze({ x: 0, z: 29, checkpointIndex: 5 }),
       Object.freeze({ x: 0, z: 16.3 }),
-      Object.freeze({ x: 0, z: 29, checkpointIndex: 6 }),
-      Object.freeze({ x: 0, z: 16.3 }),
-      Object.freeze({ x: 17.35, z: 16.3 }),
+      Object.freeze({ x: 17.35, z: 16.3, checkpointIndex: 6 }),
       Object.freeze({ x: 17.35, z: 5.75, checkpointIndex: 7 }),
       Object.freeze({ x: 20.5, z: 5.75, checkpointIndex: 8 }),
       Object.freeze({ x: 22, z: 5.75 }),
@@ -12922,6 +12924,7 @@
       this.stationInteractionRegistered = false;
       this.qaManualClock = false;
       this.qaStepping = false;
+      this.courseRouteClearance = null;
       this.lookDirection = new THREE.Vector3();
       this.lookTargetPoint = new THREE.Vector3();
       this.lookOffset = new THREE.Vector3();
@@ -14541,6 +14544,24 @@
       return index > 0 ? STORM_RUN.checkpoints[index - 1] : STORM_RUN.startMark;
     }
 
+    scareViewpoint(index) {
+      const checkpoint = STORM_RUN.checkpoints[index];
+      if (!checkpoint?.reveal) return null;
+      if (checkpoint.scareTrigger) {
+        return { x: checkpoint.scareTrigger.x, y: checkpoint.y, z: checkpoint.scareTrigger.z };
+      }
+      const previous = this.checkpointPreviousPosition(index);
+      const dx = checkpoint.x - previous.x;
+      const dz = checkpoint.z - previous.z;
+      const distance = Math.max(0.001, Math.hypot(dx, dz));
+      const approachDistance = Math.min(STORM_RUN.checkpointApproachRadius - 0.25, distance * 0.45);
+      return {
+        x: checkpoint.x - dx / distance * approachDistance,
+        y: checkpoint.y,
+        z: checkpoint.z - dz / distance * approachDistance,
+      };
+    }
+
     checkpointGuidance(index) {
       const checkpoint = STORM_RUN.checkpoints[index];
       const previous = this.checkpointPreviousPosition(index);
@@ -14615,6 +14636,75 @@
       };
     }
 
+    previewScareForQA(index) {
+      if (!state.qa || !physics) return { active: false, reason: "qa-only" };
+      const checkpointIndex = Math.floor(Number(index));
+      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+      const viewpoint = this.scareViewpoint(checkpointIndex);
+      if (!checkpoint?.reveal || !viewpoint) return { active: false, reason: "not-authored" };
+      teleport(viewpoint.x, viewpoint.y, viewpoint.z, 0, 0);
+      syncCamera();
+      const revealCenter = new THREE.Vector3(
+        checkpoint.reveal.x,
+        checkpoint.reveal.y + 1.25,
+        checkpoint.reveal.z,
+      );
+      const previous = this.checkpointPreviousPosition(checkpointIndex);
+      const incomingDx = checkpoint.x - previous.x;
+      const incomingDz = checkpoint.z - previous.z;
+      state.yaw = Number.isFinite(checkpoint.scareTrigger?.viewYaw)
+        ? checkpoint.scareTrigger.viewYaw
+        : Math.atan2(-incomingDx, -incomingDz);
+      state.pitch = 0;
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      const projected = revealCenter.clone().project(camera);
+      const projectedFeet = new THREE.Vector3(
+        checkpoint.reveal.x,
+        checkpoint.reveal.y + 0.08,
+        checkpoint.reveal.z,
+      ).project(camera);
+      const projectedHead = new THREE.Vector3(
+        checkpoint.reveal.x,
+        checkpoint.reveal.y + 2.08,
+        checkpoint.reveal.z,
+      ).project(camera);
+      const sightDirection = revealCenter.clone().sub(camera.position);
+      const sightDistance = sightDirection.length();
+      sightDirection.normalize();
+      const sightRay = new THREE.Raycaster(camera.position, sightDirection, 0, Math.max(0.05, sightDistance - 0.15));
+      const sightBlocker = sightRay.intersectObjects(occluderMeshes, false)[0] || null;
+      const onScreen = Boolean(
+        Number.isFinite(projected.x)
+        && Number.isFinite(projected.y)
+        && Number.isFinite(projected.z)
+        && Math.abs(projected.x) <= 1
+        && Math.abs(projected.y) <= 1
+        && projected.z >= -1
+        && projected.z <= 1
+        && !sightBlocker
+      );
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        active: this.show.phase === STORM_RUN_PHASE.RUNNING && checkpointIndex === this.show.completedCheckpoints,
+        index: checkpointIndex,
+        id: checkpoint.id,
+        onScreen,
+        lineOfSight: !sightBlocker,
+        occluder: sightBlocker?.object?.name || null,
+        naturalYaw: Number(state.yaw.toFixed(4)),
+        distance: Number(Math.hypot(checkpoint.reveal.x - viewpoint.x, checkpoint.reveal.z - viewpoint.z).toFixed(3)),
+        viewpoint: { x: Number(viewpoint.x.toFixed(3)), y: viewpoint.y, z: Number(viewpoint.z.toFixed(3)) },
+        projected: {
+          x: Number(projected.x.toFixed(4)),
+          y: Number(projected.y.toFixed(4)),
+          z: Number(projected.z.toFixed(4)),
+        },
+        projectedHeight: Number(Math.abs(projectedFeet.y - projectedHead.y).toFixed(4)),
+      };
+    }
+
     checkpointWalkable(checkpoint) {
       if (!checkpoint.insideMaze) return true;
       for (let row = 0; row < HEDGE_MAZE_LAYOUT.rows.length; row += 1) {
@@ -14625,6 +14715,34 @@
         }
       }
       return false;
+    }
+
+    courseRouteDiagnostics() {
+      if (this.courseRouteClearance) return this.courseRouteClearance;
+      const height = PLAYER.halfHeight * 2 + PLAYER.radius * 2;
+      const segments = STORM_RUN.contestantRoute.slice(1).map((point, index) => {
+        const previous = STORM_RUN.contestantRoute[index];
+        const start = { x: previous.x, y: YARD_LAYOUT.groundY, z: previous.z };
+        const end = { x: point.x, y: YARD_LAYOUT.groundY, z: point.z };
+        return {
+          index,
+          checkpointIndex: Number.isInteger(point.checkpointIndex) ? point.checkpointIndex : null,
+          start: { x: previous.x, z: previous.z },
+          end: { x: point.x, z: point.z },
+          distance: Number(Math.hypot(point.x - previous.x, point.z - previous.z).toFixed(3)),
+          clear: Boolean(physics?.canCharacterTraverse(start, end, PLAYER.radius, height)),
+        };
+      });
+      this.courseRouteClearance = Object.freeze({
+        allClear: segments.every((segment) => segment.clear),
+        postFirstGardenToFrontClear: segments
+          .filter((segment) => segment.index >= 3 && segment.index <= 10)
+          .every((segment) => segment.clear),
+        radius: PLAYER.radius,
+        height: Number(height.toFixed(3)),
+        segments: Object.freeze(segments.map((segment) => Object.freeze(segment))),
+      });
+      return this.courseRouteClearance;
     }
 
     contestantCheckpointCount(entry) {
@@ -14726,6 +14844,7 @@
           } : null,
           guidance: this.checkpointGuidance(index),
         })),
+        courseRoute: this.courseRouteDiagnostics(),
         player: {
           maximumSprintSpeed: STORM_RUN.playerMaximumSprintSpeed,
           sprintAvailable: this.show.phase === STORM_RUN_PHASE.RUNNING
@@ -14742,12 +14861,15 @@
           profile: this.show.scareProfile,
           baselineLightExposure: Number(this.show.scareBaselineLightExposure.toFixed(3)),
           maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
+          flashStrengthMultiplier: STORM_RUN.scareFlashStrengthMultiplier,
+          lightIntensityMultiplier: STORM_RUN.scareLightIntensityMultiplier,
           flashDecayPerSecond: stormSystem?.flashDecayPerSecond || AMBIENT_STORM_FLASH.decayPerSecond,
           normalFlashDecayPerSecond: AMBIENT_STORM_FLASH.decayPerSecond,
           flashPulseSpanSeconds: STORM_RUN.scareFlashPulses[STORM_RUN.scareFlashPulses.length - 1].delay,
           normalFlashPulseSpanSeconds: AMBIENT_STORM_FLASH.pulsePattern[AMBIENT_STORM_FLASH.pulsePattern.length - 1].delay,
           thunderDelaySeconds: stormSystem?.thunderDelaySeconds ?? -1,
           thunderVolumeMultiplier: stormSystem?.thunderVolumeMultiplier || 1,
+          thunderCloseStrike: Boolean(stormSystem?.thunderCloseStrike),
         },
         hazard: { enabled: false, penaltySeconds: 0 },
         eliminatedContestantId: this.show.eliminatedContestantId,
@@ -22827,8 +22949,10 @@
       this.pulses = [];
       this.flashDecayPerSecond = AMBIENT_STORM_FLASH.decayPerSecond;
       this.activeProfile = "ambient";
+      this.lightIntensityMultiplier = 1;
       this.thunderDelaySeconds = -1;
       this.thunderVolumeMultiplier = 1;
+      this.thunderCloseStrike = false;
       this.light = new THREE.DirectionalLight(0xc9e8ff, 0);
       this.light.position.set(-18, 24, 12);
       scene.add(this.light);
@@ -22836,7 +22960,8 @@
 
     trigger(options = {}) {
       const stormRunProfile = options.profile === "storm-run";
-      const strength = state.reducedFlash ? 0.38 : 1;
+      const strength = (state.reducedFlash ? 0.38 : 1)
+        * (stormRunProfile ? STORM_RUN.scareFlashStrengthMultiplier : 1);
       const pulsePattern = stormRunProfile ? STORM_RUN.scareFlashPulses : AMBIENT_STORM_FLASH.pulsePattern;
       this.pulses = pulsePattern.map((pulse) => ({
         delay: pulse.delay,
@@ -22846,14 +22971,17 @@
         ? STORM_RUN.scareFlashDecayPerSecond
         : AMBIENT_STORM_FLASH.decayPerSecond;
       this.activeProfile = stormRunProfile ? "storm-run" : "ambient";
+      this.lightIntensityMultiplier = stormRunProfile ? STORM_RUN.scareLightIntensityMultiplier : 1;
       this.thunderDelaySeconds = stormRunProfile
         ? STORM_RUN.scareThunderDelaySeconds
         : AMBIENT_STORM_FLASH.thunderDelayMinimum + Math.random() * AMBIENT_STORM_FLASH.thunderDelayRange;
       this.thunderVolumeMultiplier = stormRunProfile ? STORM_RUN.scareThunderVolumeMultiplier : 1;
+      this.thunderCloseStrike = Boolean(stormRunProfile && STORM_RUN.scareThunderCloseStrike);
       this.timer = 12 + Math.random() * 23;
       if (audioSystem) audioSystem.thunder(this.thunderDelaySeconds, {
         profile: this.activeProfile,
         volumeMultiplier: this.thunderVolumeMultiplier,
+        closeStrike: this.thunderCloseStrike,
       });
     }
 
@@ -22876,12 +23004,17 @@
       // The unshadowed storm key exists only over the grounds. Indoors, a
       // restrained exposure/fog pulse reads through the windows without a
       // directional light passing through every wall and closed door.
-      this.light.intensity = outdoors ? lightning * 11 : 0;
+      this.light.intensity = outdoors ? lightning * 11 * this.lightIntensityMultiplier : 0;
       const baseExposure = state.mazeLightingContext
         ? MAZE_EXPOSURE
         : outdoors ? GROUNDS_EXPOSURE : NIGHT_LIGHTING.exposure;
-      renderer.toneMappingExposure = baseExposure + lightning * (outdoors ? 0.72 : 0.12);
-      scene.fog.color.setRGB(0.031 + lightning * 0.16, 0.043 + lightning * 0.19, 0.07 + lightning * 0.24);
+      const exposureMultiplier = this.activeProfile === "storm-run" ? 1.28 : 1;
+      renderer.toneMappingExposure = baseExposure + lightning * (outdoors ? 0.72 * exposureMultiplier : 0.12);
+      scene.fog.color.setRGB(
+        0.031 + lightning * 0.16 * this.lightIntensityMultiplier,
+        0.043 + lightning * 0.19 * this.lightIntensityMultiplier,
+        0.07 + lightning * 0.24 * this.lightIntensityMultiplier,
+      );
     }
   }
 
@@ -22902,9 +23035,11 @@
       this.activeVoices = 0;
       this.thunderState = {
         playCount: 0,
+        closeStrikeCount: 0,
         lastDelay: -1,
         lastVolumeMultiplier: 1,
         lastProfile: "ambient",
+        lastCloseStrike: false,
       };
       this.footsteps = {
         lastPosition: null,
@@ -23394,24 +23529,52 @@
       const safeDelay = Math.max(0, Number(delay) || 0);
       const volumeMultiplier = clamp(Number(options.volumeMultiplier) || 1, 0.5, 1.75);
       const profile = options.profile === "storm-run" ? "storm-run" : "ambient";
+      const closeStrike = Boolean(profile === "storm-run" && options.closeStrike);
       this.thunderState.lastDelay = safeDelay;
       this.thunderState.lastVolumeMultiplier = volumeMultiplier;
       this.thunderState.lastProfile = profile;
+      this.thunderState.lastCloseStrike = closeStrike;
       if (!this.ctx || !state.audioEnabled) return false;
       setTimeout(() => {
         if (!this.ctx || !state.audioEnabled) return;
         // Evaluate location when the strike actually plays so a delayed roll
         // still muffles if the player has already gone underground.
         const inBasement = state.currentFloor === "BASEMENT";
+        if (closeStrike) {
+          // The apparition cue needs the dry, almost simultaneous snap of a
+          // nearby bolt before the longer field recording blooms. Keep this
+          // layer exclusive to Storm Run so ordinary ambient thunder remains
+          // distant and non-fatiguing.
+          const now = this.ctx.currentTime;
+          const crack = this.ctx.createBufferSource();
+          crack.buffer = this.makeNoiseBuffer(0.34);
+          const high = this.ctx.createBiquadFilter();
+          high.type = "highpass";
+          high.frequency.setValueAtTime(720, now);
+          const low = this.ctx.createBiquadFilter();
+          low.type = "lowpass";
+          low.frequency.setValueAtTime(6200, now);
+          const crackGain = this.ctx.createGain();
+          crackGain.gain.setValueAtTime(0.0001, now);
+          crackGain.gain.exponentialRampToValueAtTime(0.28 * volumeMultiplier, now + 0.006);
+          crackGain.gain.exponentialRampToValueAtTime(0.085 * volumeMultiplier, now + 0.055);
+          crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.31);
+          crack.connect(high).connect(low).connect(crackGain).connect(this.master);
+          crack.start(now);
+          crack.stop(now + 0.34);
+          this.ping(86, 0.42, 0.075 * volumeMultiplier, "square");
+          this.thunderState.closeStrikeCount += 1;
+          this.markCue("thunderClose");
+        }
         const recorded = this.playSample("thunder", {
           volume: (inBasement ? 0.045 : 0.31) * volumeMultiplier,
-          rate: inBasement ? 0.86 : 0.98,
-          rateVariance: 0.055,
-          pan: (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
+          rate: inBasement ? 0.86 : closeStrike ? 1.04 : 0.98,
+          rateVariance: closeStrike ? 0.015 : 0.055,
+          pan: closeStrike ? 0 : (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
           // Deep basement: very low cutoff so only a distant, felt rumble remains.
           lowpass: inBasement
             ? (safeDelay > 1 ? 280 : 450)
-            : (safeDelay > 1 ? 2100 : 4200),
+            : closeStrike ? 6800 : (safeDelay > 1 ? 2100 : 4200),
         });
         if (recorded) {
           // A very quiet sub tail lends weight on laptop speakers without
@@ -23529,9 +23692,11 @@
         mode: available > 0 && !pending ? "recorded-ready" : pending ? "recorded-loading" : "procedural",
         variantsReady: available,
         playCount: this.thunderState.playCount,
+        closeStrikeCount: this.thunderState.closeStrikeCount,
         lastDelay: this.thunderState.lastDelay,
         lastVolumeMultiplier: this.thunderState.lastVolumeMultiplier,
         lastProfile: this.thunderState.lastProfile,
+        lastCloseStrike: this.thunderState.lastCloseStrike,
       };
     }
 
@@ -26099,6 +26264,11 @@
     window.MrFeastFresh.previewStormCheckpointForQA = (index) => (
       state.qa && stormRunSystem
         ? stormRunSystem.previewCheckpointForQA(index)
+        : { active: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.previewStormScareForQA = (index) => (
+      state.qa && stormRunSystem
+        ? stormRunSystem.previewScareForQA(index)
         : { active: false, reason: "qa-only" }
     );
     window.MrFeastFresh.triggerStormRunScareForQA = (index) => (

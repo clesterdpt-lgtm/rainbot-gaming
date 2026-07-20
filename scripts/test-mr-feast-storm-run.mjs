@@ -31,7 +31,11 @@ async function assertSourceContract() {
   assert(source.includes("advanceStormRunForQA"), "Storm Run must support deterministic time stepping");
   assert(source.includes("collectStormCheckpointForQA"), "Storm Run checkpoints must use the focused QA contract");
   assert(source.includes("previewStormCheckpointForQA"), "every Storm Run leg needs a focused next-marker visibility QA hook");
+  assert(source.includes("previewStormScareForQA"), "each Storm Run apparition needs a focused forward-view composition QA hook");
   assert(source.includes("scareThunderVolumeMultiplier"), "Storm Run must own a louder thunder profile instead of changing ambient lightning globally");
+  assert(source.includes("scareThunderCloseStrike"), "Storm Run must own a sharp close-bolt layer instead of relying on an ordinary distant roll");
+  assert(source.includes("scareFlashStrengthMultiplier"), "Storm Run apparitions must use a stronger flash than ambient lightning");
+  assert(source.includes("scareLightIntensityMultiplier"), "Storm Run apparitions must illuminate the surrounding grounds more strongly than ambient lightning");
   assert(source.includes("scareMaximumLightExposure"), "Storm Run apparitions must be authored in measured dark positions");
   assert(source.includes("placePlayerAtStormScareTriggerForQA"), "authored scare positions need a focused proximity QA hook");
   assert(source.includes("completeStormRunForQA"), "Storm Run outcomes must be deterministic in QA");
@@ -248,14 +252,33 @@ async function run() {
     assert(storm.player.sprintAvailable === true, `normal sprint must remain available during the race: ${JSON.stringify(storm.player)}`);
 
     const checkpoints = storm.checkpoints;
+    const expectedCheckpointOrder = [
+      "formal-garden",
+      "garden-cross-east",
+      "garden-front-turn",
+      "garden-front-junction",
+      "front-carriage",
+      "front-drive",
+      "east-front-lawn",
+      "maze-promenade",
+      "maze-north-entrance",
+      "hedge-maze",
+      "east-rear-lawn",
+      "pool-terrace",
+    ];
     assert(checkpoints.length === 12, `Storm Run must use twelve breadcrumb checkpoints: ${JSON.stringify(checkpoints)}`);
+    assert(JSON.stringify(checkpoints.map((entry) => entry.id)) === JSON.stringify(expectedCheckpointOrder), `the race must run through the garden and around to the front without returning to the start after checkpoint one: ${JSON.stringify(checkpoints.map((entry) => entry.id))}`);
+    assert(checkpoints[1].position.z > checkpoints[0].position.z && checkpoints[2].position.z > checkpoints[1].position.z, `checkpoints two and three must continue forward through the formal garden: ${JSON.stringify(checkpoints.slice(0, 4))}`);
+    assert(checkpoints[3].position.x < checkpoints[2].position.x && checkpoints[4].id === "front-carriage" && checkpoints[5].id === "front-drive", `the garden exit must wrap across its north edge onto the front carriage turn before running up the drive: ${JSON.stringify(checkpoints.slice(2, 6))}`);
     assert(new Set(checkpoints.map((entry) => entry.region)).size >= 7, `checkpoints must still span the named yard regions: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.filter((entry) => entry.insideMaze).length === 1, `exactly one checkpoint must be inside the hedge maze: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.inYardBounds && entry.walkable), `every checkpoint must be in a walkable yard position: ${JSON.stringify(checkpoints)}`);
+    const postFirstGardenSegments = storm.courseRoute?.segments.filter((entry) => entry.index >= 3 && entry.index <= 10) || [];
+    assert(storm.courseRoute?.postFirstGardenToFrontClear && postFirstGardenSegments.length === 8 && postFirstGardenSegments.every((entry) => entry.clear), `the route after checkpoint one must physically clear the garden and front-drive colliders for the player capsule: ${JSON.stringify(storm.courseRoute)}`);
     assert(checkpoints.every((entry) => entry.guidance?.visibleFromPrevious), `every next marker must be configured as visible from the previous checkpoint: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.guidance?.distanceFromPrevious <= 32), `no breadcrumb leg may exceed the readable yard distance: ${JSON.stringify(checkpoints)}`);
     const scareCheckpoints = checkpoints.filter((entry) => entry.scareReveal);
-    assert(scareCheckpoints.length === 3, `Storm Run must preserve three authored Mr. Feast apparitions: ${JSON.stringify(scareCheckpoints)}`);
+    assert(JSON.stringify(scareCheckpoints.map((entry) => entry.id)) === JSON.stringify(["front-drive", "hedge-maze"]), `Storm Run must use exactly two well-spaced Mr. Feast apparitions: ${JSON.stringify(scareCheckpoints)}`);
     assert(scareCheckpoints.every((entry) => entry.scareReveal.darkSpot), `every apparition must be authored as a measured dark spot: ${JSON.stringify(scareCheckpoints)}`);
     assert(Math.max(...checkpoints.map((entry) => entry.position.x)) - Math.min(...checkpoints.map((entry) => entry.position.x)) >= 35, "Storm checkpoints must span the yard's east/west axis");
     assert(Math.max(...checkpoints.map((entry) => entry.position.z)) - Math.min(...checkpoints.map((entry) => entry.position.z)) >= 35, "Storm checkpoints must span the yard's front/rear axis");
@@ -287,7 +310,7 @@ async function run() {
 
     const frontDriveIndex = checkpoints.findIndex((entry) => entry.id === "front-drive");
     const mazeIndex = checkpoints.findIndex((entry) => entry.id === "hedge-maze");
-    assert(frontDriveIndex > 1 && mazeIndex > frontDriveIndex, `legacy scare checkpoints must remain in course order: ${JSON.stringify({ frontDriveIndex, mazeIndex })}`);
+    assert(frontDriveIndex === 5 && mazeIndex === 9, `the two scare checkpoints must bracket the middle of the clockwise course: ${JSON.stringify({ frontDriveIndex, mazeIndex })}`);
     for (let index = 1; index < frontDriveIndex; index += 1) {
       const preview = await previewCheckpoint(timerPage, index);
       assert(preview?.active && preview.onScreen && preview.guideVisible && preview.alwaysVisible, `checkpoint ${index + 1} must be visible from checkpoint ${index}: ${JSON.stringify(preview)}`);
@@ -295,27 +318,32 @@ async function run() {
       assert(collected.accepted === true && collected.completed === index + 1, `breadcrumb checkpoint ${index + 1} must advance in order: ${JSON.stringify(collected)}`);
     }
     const frontPreview = await previewCheckpoint(timerPage, frontDriveIndex);
-    assert(frontPreview?.active && frontPreview.onScreen && frontPreview.guideVisible && frontPreview.alwaysVisible, `front-drive marker must be visible from the east-front marker: ${JSON.stringify(frontPreview)}`);
+    assert(frontPreview?.active && frontPreview.onScreen && frontPreview.guideVisible && frontPreview.alwaysVisible, `front-drive marker must be visible from the carriage-turn marker: ${JSON.stringify(frontPreview)}`);
+    const frontScareComposition = await timerPage.evaluate((index) => window.MrFeastFresh.previewStormScareForQA(index), frontDriveIndex);
+    assert(frontScareComposition?.onScreen && frontScareComposition.lineOfSight && Math.abs(frontScareComposition.projected.x) <= 0.18, `the front-drive apparition must sit unobstructed near the center of the player's natural incoming view: ${JSON.stringify(frontScareComposition)}`);
+    assert(frontScareComposition.distance >= 4 && frontScareComposition.distance <= 14 && frontScareComposition.projectedHeight >= 0.12, `the front-drive apparition must be large enough to read immediately without touching the player: ${JSON.stringify(frontScareComposition)}`);
     const scareBefore = await stormState(timerPage);
-    await timerPage.evaluate((index) => window.MrFeastFresh.placePlayerBeforeStormCheckpointForQA(index, 4), frontDriveIndex);
-    const scare = await timerPage.evaluate((index) => window.MrFeastFresh.triggerStormRunScareForQA(index), frontDriveIndex);
-    assert(scare.triggered === true, `an authored checkpoint approach should trigger lightning: ${JSON.stringify(scare)}`);
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
     const scareVisible = await stormState(timerPage);
+    assert(scareVisible.scare.triggeredCheckpointIds.includes("front-drive"), `the natural front-drive approach must trigger lightning automatically: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.hostVisible && scareVisible.scare.lightning > 0, `Mr. Feast must appear only with the flash: ${JSON.stringify(scareVisible.scare)}`);
+    assert(scareVisible.scare.lightning >= 1.15 && scareVisible.scare.lightIntensityMultiplier >= 1.4, `the close bolt must light enough of the surrounding grounds to make Mr. Feast unmistakable: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.profile === "storm-run" && scareVisible.scare.flashDecayPerSecond < scareVisible.scare.normalFlashDecayPerSecond, `the race scare flash must last slightly longer than ambient lightning: ${JSON.stringify(scareVisible.scare)}`);
-    assert(scareVisible.scare.thunderVolumeMultiplier >= 1.3 && scareVisible.scare.thunderDelaySeconds <= 0.15, `the race scare thunder must be louder and land with the flash: ${JSON.stringify(scareVisible.scare)}`);
+    assert(scareVisible.scare.flashStrengthMultiplier >= 1.1, `the apparition flash must be visibly stronger than ambient lightning: ${JSON.stringify(scareVisible.scare)}`);
+    assert(scareVisible.scare.thunderVolumeMultiplier >= 1.6 && scareVisible.scare.thunderDelaySeconds <= 0.05 && scareVisible.scare.thunderCloseStrike, `the race scare must use a loud, immediate close-bolt crack: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.baselineLightExposure <= scareVisible.scare.maximumLightExposure, `Mr. Feast must wait in a very dark front-drive position: ${JSON.stringify(scareVisible.scare)}`);
     const frontThunder = await timerPage.evaluate(() => window.MrFeastFresh.getAudioStateForQA().thunder);
-    assert(frontThunder.lastProfile === "storm-run" && frontThunder.lastVolumeMultiplier >= 1.3, `the audio system must receive the louder Storm Run thunder mix: ${JSON.stringify(frontThunder)}`);
+    assert(frontThunder.lastProfile === "storm-run" && frontThunder.lastVolumeMultiplier >= 1.6 && frontThunder.lastCloseStrike, `the audio system must receive the close Storm Run thunder mix: ${JSON.stringify(frontThunder)}`);
     assert(scareVisible.hazard.enabled === false && scareVisible.hazard.penaltySeconds === 0, `lightning must not be a hazard: ${JSON.stringify(scareVisible.hazard)}`);
     assert(scareVisible.raceElapsed >= scareBefore.raceElapsed, "the scare must not subtract race time or checkpoint progress");
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.5));
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.8));
     const scareHeld = await stormState(timerPage);
-    assert(scareHeld.scare.hostVisible && scareHeld.scare.lightning > 0, `the authored flash must hold Mr. Feast slightly longer than ordinary lightning: ${JSON.stringify(scareHeld.scare)}`);
+    assert(scareHeld.scare.hostVisible && scareHeld.scare.lightning > 0, `the authored flash must hold Mr. Feast long enough to be unmistakable while still brief: ${JSON.stringify(scareHeld.scare)}`);
     await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-dark-lightning-reveal-desktop.png") });
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.42));
-    assert((await stormState(timerPage)).scare.hostVisible === false, "Mr. Feast must disappear when the flash ends");
+    const scareGone = await stormState(timerPage);
+    assert(scareGone.scare.hostVisible === false && scareGone.scare.lightning === 0, `Mr. Feast must disappear exactly when the close bolt falls back to darkness: ${JSON.stringify(scareGone.scare)}`);
+    await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-front-dark-after-reveal-desktop.png") });
     const frontDrive = await collectCheckpoint(timerPage, frontDriveIndex);
     assert(frontDrive.accepted === true && frontDrive.completed === frontDriveIndex + 1, `front-drive checkpoint should open the maze approach: ${JSON.stringify(frontDrive)}`);
     for (let index = frontDriveIndex + 1; index < mazeIndex; index += 1) {
@@ -329,6 +357,9 @@ async function run() {
     }
     const mazePreview = await previewCheckpoint(timerPage, mazeIndex);
     assert(mazePreview?.active && mazePreview.onScreen && mazePreview.guideVisible && mazePreview.alwaysVisible, `hedge-maze marker must remain visible from its entrance: ${JSON.stringify(mazePreview)}`);
+    const mazeScareComposition = await timerPage.evaluate((index) => window.MrFeastFresh.previewStormScareForQA(index), mazeIndex);
+    assert(mazeScareComposition?.onScreen && mazeScareComposition.lineOfSight && Math.abs(mazeScareComposition.projected.x) <= 0.18, `the maze apparition must fill the player's unobstructed natural corridor view: ${JSON.stringify(mazeScareComposition)}`);
+    assert(mazeScareComposition.distance >= 3 && mazeScareComposition.distance <= 9 && mazeScareComposition.projectedHeight >= 0.2, `the maze apparition must be large enough to read immediately: ${JSON.stringify(mazeScareComposition)}`);
     await timerPage.evaluate((index) => window.MrFeastFresh.placePlayerBeforeStormCheckpointForQA(index, 4), mazeIndex);
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
     const mazeBlockedApproach = await stormState(timerPage);
@@ -338,22 +369,21 @@ async function run() {
     const mazeVisibleApproach = await stormState(timerPage);
     assert(mazeVisibleApproach.scare.triggeredCheckpointIds.includes("hedge-maze") && mazeVisibleApproach.scare.hostVisible, `entering the authored maze corridor must reveal Mr. Feast: ${JSON.stringify(mazeVisibleApproach.scare)}`);
     assert(mazeVisibleApproach.scare.baselineLightExposure <= mazeVisibleApproach.scare.maximumLightExposure, `the hedge-maze apparition must begin in deep shadow: ${JSON.stringify(mazeVisibleApproach.scare)}`);
+    await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-maze-lightning-reveal-desktop.png") });
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
+    const mazeScareGone = await stormState(timerPage);
+    assert(!mazeScareGone.scare.hostVisible && mazeScareGone.scare.lightning === 0, `the maze apparition must vanish with the close bolt: ${JSON.stringify(mazeScareGone.scare)}`);
+    await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-maze-dark-after-reveal-desktop.png") });
     const mazeCollected = await collectCheckpoint(timerPage, mazeIndex);
     assert(mazeCollected.accepted === true && mazeCollected.completed === mazeIndex + 1, `hedge-maze checkpoint must advance in order: ${JSON.stringify(mazeCollected)}`);
     for (let index = mazeIndex + 1; index < checkpoints.length; index += 1) {
       const preview = await previewCheckpoint(timerPage, index);
       assert(preview?.active && preview.onScreen && preview.guideVisible && preview.alwaysVisible, `checkpoint ${index + 1} must be visible from checkpoint ${index}: ${JSON.stringify(preview)}`);
-      if (checkpoints[index].id === "pool-terrace") {
-        await timerPage.evaluate((checkpointIndex) => window.MrFeastFresh.placePlayerBeforeStormCheckpointForQA(checkpointIndex, 4), index);
-        await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
-        const poolScare = await stormState(timerPage);
-        assert(poolScare.scare.triggeredCheckpointIds.includes("pool-terrace") && poolScare.scare.hostVisible, `approaching the pool checkpoint must trigger its lightning apparition: ${JSON.stringify(poolScare.scare)}`);
-        assert(poolScare.scare.baselineLightExposure <= poolScare.scare.maximumLightExposure, `the pool apparition must begin in deep shadow: ${JSON.stringify(poolScare.scare)}`);
-      }
       const collected = await collectCheckpoint(timerPage, index);
       assert(collected.accepted === true && collected.completed === index + 1, `closing checkpoint ${index + 1} must advance in order: ${JSON.stringify(collected)}`);
       if (index === checkpoints.length - 1) assert(collected.survived === true, `the final checkpoint must complete the race: ${JSON.stringify(collected)}`);
     }
+    assert(JSON.stringify((await stormState(timerPage)).scare.triggeredCheckpointIds) === JSON.stringify(["front-drive", "hedge-maze"]), "the complete race must contain exactly the two authored apparitions");
     await assertHudFits(timerPage, false);
     const timerWin = await timerPage.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
     assert(timerWin.survived === true, `the HUD integration page should finish cleanly: ${JSON.stringify(timerWin)}`);

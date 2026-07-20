@@ -6,17 +6,17 @@ Implemented — automated acceptance complete; user playtest pending
 
 ## Objective
 
-Add the mansion's second sanctioned reality-show competition as a readable checkpoint race across the existing grounds. Storm Run becomes eligible only after Feast Says is complete, then calls the player after ten active exploration minutes or immediately after the next newly earned major clue. The triggering clue remains earned, further investigation pauses, and the player must outrun Mara through five ordered yard checkpoints while lightning briefly reveals Mr. Feast near selected course markers.
+Add the mansion's second sanctioned reality-show competition as a readable checkpoint race across the existing grounds. Storm Run becomes eligible only after Feast Says is complete, then calls the player after ten active exploration minutes or immediately after the next newly earned major clue. The triggering clue remains earned, further investigation pauses, and the player must outrun Mara through twelve ordered breadcrumb checkpoints while special lightning flashes briefly reveal Mr. Feast waiting in deep shadow near selected course markers.
 
 ## Scope
 
 - One authoritative `STORM_RUN` tuning table and explicit event state machine.
 - A ten-minute active-exploration timer beginning at Feast Says completion and pausing with existing game pause surfaces.
 - An early call on the first newly earned major clue after Feast Says, preserving that discovery before later clue progression pauses.
-- A physical report/start station on the rear terrace and five ordered checkpoints distributed across the rear grounds, formal garden, front grounds, east lawn, and hedge-maze interior.
+- A physical report/start station on the rear terrace and twelve ordered checkpoints distributed across the rear grounds, formal garden, front grounds, east lawn, and hedge-maze interior. Every active marker uses a tall blue beacon and raised guide configured to remain visible from the previous checkpoint, with no leg longer than 32 metres.
 - A real player race using existing movement, sprint, stamina, collision, and mobile controls.
 - Mara and Juniper visibly running the authored course with their existing compatible source run motions reduced through the checked-in stationary-animation extractor. Their measured world speed must remain below the player's maximum sprint speed.
-- Authored lightning scares near selected checkpoints: Mr. Feast appears only during the flash and disappears with it. Lightning has no collision, damage, stun, slowdown, or time penalty.
+- Three authored lightning scares near selected checkpoints: Mr. Feast waits in measured deep shadow, appears only during a slightly extended multi-pulse flash backed by thunder at `1.4x` ordinary volume, and disappears within `0.9s`. Ordinary ambient lightning is unchanged, and neither profile has collision, damage, stun, slowdown, or a time penalty.
 - Race HUD, checkpoint feedback, contestant progress, result handling, Mara elimination on a player win, and recoverable player elimination on a loss.
 - Save/load persistence for the countdown, called/completed state, and Mara elimination. Mid-race saves restore to the clean report call.
 - Deterministic diagnostics and QA controls through `render_game_to_text()` and `window.MrFeastFresh`.
@@ -40,8 +40,8 @@ Add the mansion's second sanctioned reality-show competition as a readable check
 | `dormant` | Feast Says complete, then ten active minutes or next major clue | `called` |
 | `called` | player reports at rear-terrace start station | `briefing` |
 | `briefing` | countdown expires | `running` |
-| `running` | player reaches checkpoint five before Mara | `completed` |
-| `running` | Mara reaches checkpoint five before player | `failed` |
+| `running` | player reaches checkpoint twelve before Mara | `completed` |
+| `running` | Mara reaches checkpoint twelve before player | `failed` |
 | `failed` | load or restart | restored save or fresh `dormant` |
 
 ## Acceptance criteria
@@ -49,26 +49,29 @@ Add the mansion's second sanctioned reality-show competition as a readable check
 - [x] Storm Run cannot count down or trigger before Feast Says completes. After completion it calls exactly once at ten active exploration minutes, while the menu and other existing pause surfaces stop the clock. — test: `scripts/test-mr-feast-storm-run.mjs::post-Feast timer contract`
 - [x] The first newly earned major clue after Feast Says calls Storm Run immediately while preserving that clue's discovery feedback; subsequent undiscovered story interactions pause until the race resolves. — test: `scripts/test-mr-feast-storm-run.mjs::next-clue call and investigation hold`
 - [x] Reporting at the rear-terrace station stages the player, Mara, Juniper, and Mr. Feast, then begins one readable countdown without restoring eliminated Kip. — test: `scripts/test-mr-feast-storm-run.mjs::start-line staging`
-- [x] Five physical checkpoints must be crossed in order and occupy five distinct grounds regions, with exactly one marker inside a walkable hedge-maze cell; touching markers out of order cannot advance progress. — test: `scripts/test-mr-feast-storm-run.mjs::ordered yard course`
-- [x] Mara and Juniper visibly traverse the authored course with a challenge-only run animation, report `running` activity and nonzero animation playback, never teleport between route points, and never exceed the player's `3.75 m/s` sprint speed. — test: `scripts/test-mr-feast-storm-run.mjs::contestant run contract`
-- [x] Approaching selected active checkpoints triggers an authored storm flash that reveals Mr. Feast only during visible lightning, then hides him again; the event exposes no damaging or penalizing lightning hazard. — test: `scripts/test-mr-feast-storm-run.mjs::lightning reveal scare`
-- [x] Reaching checkpoint five before Mara completes the event, eliminates only Mara, releases Juniper and Mr. Feast, and reopens investigation; Mara finishing first produces a recoverable `ELIMINATED` screen for the player. — test: `scripts/test-mr-feast-storm-run.mjs::race outcomes`
+- [x] Twelve physical breadcrumb checkpoints must be crossed in order and span at least seven named grounds regions, with exactly one marker inside a walkable hedge-maze cell; touching markers out of order cannot advance progress. — test: `scripts/test-mr-feast-storm-run.mjs::ordered yard course`
+- [x] From the start line and every collected checkpoint, the next active marker's raised guide projects on-screen, remains readable through hedge occlusion, and sits no more than 32 metres away. The player never has to follow an NPC to infer the route. — test: `scripts/test-mr-feast-storm-run.mjs::visible breadcrumb chain`
+- [x] Mara and Juniper visibly traverse the authored course with a challenge-only run animation, report `running` activity and nonzero animation playback, never teleport between route points, and never exceed their stamina-fair configured speeds of `2.4` and `2.5 m/s` or the player's `3.75 m/s` sprint speed. — test: `scripts/test-mr-feast-storm-run.mjs::contestant run contract`
+- [x] Approaching each of three selected active checkpoints automatically triggers an authored scare. The actual reveal position measures no brighter than `0.12` baseline exposure, the special multi-pulse flash lasts slightly longer than ambient lightning, thunder starts promptly at `1.4x` ordinary volume, and Mr. Feast is hidden again within `0.9s`; the event exposes no damaging or penalizing lightning hazard and leaves ordinary ambient storms unchanged. — test: `scripts/test-mr-feast-storm-run.mjs::dark lightning reveal scare`
+- [x] Reaching checkpoint twelve before Mara completes the event, eliminates only Mara, releases Juniper and Mr. Feast, and reopens investigation; Mara finishing first produces a recoverable `ELIMINATED` screen for the player. — test: `scripts/test-mr-feast-storm-run.mjs::race outcomes`
 - [x] Explicit save/load preserves dormant elapsed time, called/completed state, and Mara's elimination; briefing/running saves normalize to `called`. — test: `scripts/test-mr-feast-storm-run.mjs::save restore contract`
-- [x] `render_game_to_text()` and focused QA controls expose phase, trigger, elapsed time, current checkpoint, all checkpoint regions, contestant distance/progress/speed/animation, lightning reveal state, investigation lock, and outcome. — test: `scripts/test-mr-feast-storm-run.mjs::diagnostics and QA controls`
+- [x] `render_game_to_text()` and focused QA controls expose phase, trigger, elapsed time, current checkpoint, all checkpoint regions, per-leg guidance distance/visibility, contestant distance/progress/speed/animation, lightning reveal state, investigation lock, and outcome. — test: `scripts/test-mr-feast-storm-run.mjs::diagnostics and QA controls`
 - [x] The called, countdown, running, checkpoint, standings, and result HUD fit 1280x820 and 390x844 while leaving touch movement, sprint, interact, and menu controls usable. — test: `scripts/test-mr-feast-storm-run.mjs::desktop and phone presentation`
 - [ ] User playtest confirms that the yard-spanning route is readable without a minimap, the contestants visibly read as running without feeling unfairly fast, and the Mr. Feast lightning appearances are startling without becoming repetitive. — verified by user playtest
 
 ## Implementation and verification
 
-- Added the authoritative Storm Run state machine, post-Feast timer and next-clue scheduler, shared investigation ceiling, rear-terrace report station, five ordered course markers, race outcomes, save normalization, diagnostics, and deterministic QA controls.
-- Added stationary 24-bone run clips for Mara and Juniper. Both authored world speeds remain below the player's sprint maximum; live diagnostics pin observed speed and reject race teleports.
+- Added the authoritative Storm Run state machine, post-Feast timer and next-clue scheduler, shared investigation ceiling, rear-terrace report station, twelve ordered breadcrumb markers, race outcomes, save normalization, diagnostics, and deterministic QA controls.
+- Added stationary 24-bone run clips for Mara and Juniper. Their tuned `2.4` and `2.5 m/s` world speeds remain below the player's sprint maximum and permit stamina recovery; live diagnostics pin observed speed and reject race teleports.
+- The original five landmark stops are connected by seven intermediate markers. Each active checkpoint combines the physical ground ring with a `4.4m` blue beam and raised depth-independent diamond, and focused QA proves all twelve guides are on-screen from the prior marker.
+- The three apparition points were relocated away from nearby fixtures and authored as explicit dark spots at the front drive, hedge maze, and pool approach. Runtime sampling proves each torso position is at or below `0.12` baseline light exposure before the reveal. Storm Run owns a separate `0.42s` pulse pattern, slower flash decay, `0.08s` thunder delay, `1.4x` thunder volume, and `0.9s` hard disappearance cap while ambient lightning retains its original profile.
 - Review fixes keep an active pursuit or camera response from leaking into the live-event call, delay the maze scare until the player enters its visible corridor, preserve the sprint-energy meter, report checkpoint counts instead of a false fixed ranking, and prevent clue/timer/result HUD overlap.
 - `scripts/test-mr-feast-storm-run.mjs`, the full Feast Says suite, renovation invariants, player systems, Workroom scratches, basement trail, Contestant 13, contestant conversations, and seating/routines all pass. Syntax and `git diff --check` pass.
-- Visual proof: `output/playwright/mr-feast-storm-run/mr-feast-lightning-reveal-desktop.png` and `output/playwright/mr-feast-storm-run/storm-run-mobile.png`.
+- Visual proof: `output/playwright/mr-feast-storm-run/storm-run-visible-checkpoint-chain-desktop.png`, `mr-feast-dark-lightning-reveal-desktop.png`, and `storm-run-mobile.png`.
 
 ## Exit condition
 
-User completes Feast Says, explores for ten minutes or earns the next clue, reports to the rear terrace, races through five ordered yard checkpoints including the hedge maze, sees Mr. Feast appear only in authored lightning flashes, and reaches the finish before Mara to eliminate her and reopen investigation.
+User completes Feast Says, explores for ten minutes or earns the next clue, reports to the rear terrace, follows twelve mutually visible ordered yard checkpoints including the hedge maze, sees Mr. Feast emerge from deep shadow only during three louder, slightly extended authored lightning flashes, and reaches the finish before Mara to eliminate her and reopen investigation.
 
 ## Test plan
 

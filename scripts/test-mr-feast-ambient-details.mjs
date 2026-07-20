@@ -155,6 +155,37 @@ check("11 pool rails stay soft", !/estate-pool-rail[\s\S]{0,400}physics\.addFixe
 const waterBuilder = section("function makeEstatePoolWater", "function addPoolLounger");
 check("11 storm water", /rainRipples/.test(waterBuilder) && /valueNoise/.test(waterBuilder) && /uniform float uTime;[\s\S]*uDeep/.test(waterBuilder), "the pool water shader lacks the storm rain ripples and drifting grain");
 
+// 12. Doubled pool. The basin's swimming area doubled by growing west while
+// the authored entry stair, ramp, wall gap, east lounger deck, and Mr.
+// Feast's deck response geometry stayed fixed at their original coordinates.
+check("12 doubled pool", /pool: Object\.freeze\(\{ centerX: -13\.85, centerZ: -25\.5, width: 20\.0, depth: 11\.8 \}\)/.test(mansion), "YARD_LAYOUT.pool does not carry the doubled westward basin");
+const poolBuild = section("function buildEstatePool()", "\n  function ");
+check("12 doubled pool water", /makeEstatePoolWater\(19\.4, 11\.25, pool\.centerX, pool\.centerZ, -0\.39\)/.test(poolBuild), "the water plane does not span the doubled basin");
+check("12 stair stays authored", /const stairX = -9;/.test(poolBuild) && /physics\.addFixedRamp\(stairX, -19\.6/.test(poolBuild), "the entry stair and ramp must stay at x=-9 so pool routes and the deck response spot survive");
+check("12 west grounds cut", /rain-soaked-grounds-rear-west-middle", -29\.7, -25, 8\.6, 14/.test(mansion), "the west grounds slab still fills the enlarged basin");
+check("12 pool zone widened", /addRoomZone\(-2\.2, mainMax, -26\.5, -1\.2, -33\.5, -17\.8, "MAIN LEVEL", "POOL TERRACE"\)/.test(mansion), "the POOL TERRACE room zone does not cover the west water and deck");
+
+// 13. No empty cabinets anywhere in the home: every Cabinet is either a
+// dressed walk-in or carries a role-specific stockKind, and every new stock
+// kind has a builder branch. Newly stocked cabinets opt out of door-operated
+// interior lights so the fixed shader-light budget is untouched.
+const cabinetCalls = Array.from(mansion.matchAll(/new Cabinet\(\{\s*name: [`"']([^`"']+)[`"'][^;]*?\}\)/gs))
+  .concat(Array.from(mansion.matchAll(/addKitchenBaseCabinet\(\{\s*name: [`"']([^`"']+)[`"'][^;]*?\}\)/gs)))
+  .filter((match) => !/\.\.\.options|\.\.\.pantryCabinet/.test(match[0]));
+check("13 cabinets enumerated", cabinetCalls.length >= 16, `expected at least sixteen cabinet call sites; found ${cabinetCalls.length}`);
+for (const match of cabinetCalls) {
+  check("13 no empty cabinets", /stockKind:|walkIn: true/.test(match[0]), `cabinet "${match[1]}" opens empty`);
+}
+const stockKindBranches = section("function addStockedStorageContents", "class Refrigerator");
+for (const kindName of ["barware", "sideboard", "cookware", "prep", "undersink", "cellar-reserve", "linens", "tools", "washroom"]) {
+  check("13 stock kind builders", stockKindBranches.includes(`"${kindName}"`), `stock kind ${kindName} has no builder branch`);
+}
+const newlyStocked = ["library drinks cabinet", "dining sideboard", "wine cabinet", "linen cupboard", "workroom tool cabinet"];
+for (const cabinetName of newlyStocked) {
+  const call = cabinetCalls.find((match) => match[1] === cabinetName);
+  check("13 light budget preserved", call && /interiorLight: false/.test(call[0]), `newly stocked "${cabinetName}" would mint a door-operated spotlight`);
+}
+
 // 9. Cache-busting: the page key and the runtime version stay in sync and
 // moved past the pre-ambient-details value. The exact key is deliberately not
 // pinned so parallel milestones can bump it again without editing this suite.

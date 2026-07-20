@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260719-feast-aftermath-ambient-1";
+  const MANSION_RUNTIME_VERSION = "20260719-stocked-cabinets-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1919,7 +1919,10 @@
     // Pull the garden behind the facade while keeping its rear axis exactly on
     // the terrace centerline. A separate west-lawn approach reaches the front.
     garden: Object.freeze({ centerX: -25, centerZ: -2.2, width: 15, depth: 23.6, pathWidth: 2.1, frontJunctionZ: 16.3, rearJunctionZ: -14.0 }),
-    pool: Object.freeze({ centerX: -9, centerZ: -25.5, width: 10.4, depth: 11.8 }),
+    // Doubled swimming area (was 10.4 wide at centerX -9): the basin grows
+    // west across the former lawn while the north entry stair, east lounger
+    // deck, and south terrace keep their authored positions and routes.
+    pool: Object.freeze({ centerX: -13.85, centerZ: -25.5, width: 20.0, depth: 11.8 }),
     maze: Object.freeze({ centerX: 26.5, centerZ: -9.25 }),
   });
 
@@ -1997,6 +2000,16 @@
   ]);
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
+  const AMBIENT_STORM_FLASH = Object.freeze({
+    decayPerSecond: 3.7,
+    pulsePattern: Object.freeze([
+      Object.freeze({ delay: 0, strength: 1 }),
+      Object.freeze({ delay: 0.13, strength: 0.42 }),
+      Object.freeze({ delay: 0.34, strength: 0.82 }),
+    ]),
+    thunderDelayMinimum: 0.55,
+    thunderDelayRange: 0.8,
+  });
   const STORM_RUN = Object.freeze({
     intermissionSeconds: 10 * 60,
     maximumTimerStepSeconds: 0.5,
@@ -2005,13 +2018,25 @@
     completionCardSeconds: 6,
     checkpointRadius: 1.25,
     checkpointApproachRadius: 6,
+    maximumBreadcrumbDistance: 32,
+    checkpointBeaconHeight: 4.4,
+    checkpointGuideHeight: 3.85,
     hostRevealFlashThreshold: 0.04,
-    hostRevealMaximumSeconds: 1.05,
+    hostRevealMaximumSeconds: 0.9,
+    scareMaximumLightExposure: 0.12,
+    scareFlashDecayPerSecond: 2.75,
+    scareFlashPulses: Object.freeze([
+      Object.freeze({ delay: 0, strength: 1 }),
+      Object.freeze({ delay: 0.17, strength: 0.5 }),
+      Object.freeze({ delay: 0.42, strength: 0.88 }),
+    ]),
+    scareThunderDelaySeconds: 0.08,
+    scareThunderVolumeMultiplier: 1.4,
     playerMaximumSprintSpeed: PLAYER.sprintSpeed,
     contestantMaximumSpeed: Math.min(3, PLAYER.sprintSpeed - 0.5),
     contestantSpeeds: Object.freeze({
-      "mara-voss": 2.65,
-      "juniper-cross": 2.85,
+      "mara-voss": 2.4,
+      "juniper-cross": 2.5,
     }),
     startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.6, yaw: -Math.PI / 2 }),
     reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15, yaw: Math.PI }),
@@ -2022,14 +2047,21 @@
     }),
     checkpoints: Object.freeze([
       Object.freeze({ id: "formal-garden", label: "Formal Garden", region: "FORMAL GARDEN", x: -25, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
+      Object.freeze({ id: "garden-rear-junction", label: "Garden Rear Junction", region: "GARDEN REAR JUNCTION", x: -14.5, y: YARD_LAYOUT.groundY, z: -14, insideMaze: false }),
+      Object.freeze({ id: "rear-terrace", label: "Rear Terrace", region: "REAR TERRACE", x: 0, y: YARD_LAYOUT.groundY, z: -14, insideMaze: false }),
+      Object.freeze({ id: "east-terrace-turn", label: "East Terrace Turn", region: "EAST TERRACE TURN", x: 17.35, y: YARD_LAYOUT.groundY, z: -13.75, insideMaze: false }),
+      Object.freeze({ id: "east-side-path", label: "East Side Path", region: "EAST SIDE PATH", x: 17.35, y: YARD_LAYOUT.groundY, z: 1, insideMaze: false }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false,
-        reveal: Object.freeze({ x: 4.8, y: YARD_LAYOUT.groundY, z: 28.4, yaw: -Math.PI / 2 }) }),
+        reveal: Object.freeze({ x: 9.6, y: YARD_LAYOUT.groundY, z: 24.8, yaw: -Math.PI / 2, darkSpot: true }) }),
+      Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
+      Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
       Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
         scareTrigger: Object.freeze({ x: 28, z: 2.75, radius: 1.15 }),
-        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: 2.75, yaw: Math.PI / 2 }) }),
+        reveal: Object.freeze({ x: 31, y: YARD_LAYOUT.groundY, z: 2.75, yaw: -Math.PI / 2, darkSpot: true }) }),
       Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
       Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false,
-        reveal: Object.freeze({ x: -9.4, y: YARD_LAYOUT.groundY, z: -21.2, yaw: -0.7 }) }),
+        reveal: Object.freeze({ x: -25, y: YARD_LAYOUT.groundY, z: -20.7, yaw: Math.PI / 2, darkSpot: true }) }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
@@ -2037,35 +2069,36 @@
       Object.freeze({ x: -25, z: -14 }),
       Object.freeze({ x: -25, z: -11.5, checkpointIndex: 0 }),
       Object.freeze({ x: -25, z: -14 }),
-      Object.freeze({ x: -14.5, z: -14 }),
-      Object.freeze({ x: 0, z: -14 }),
+      Object.freeze({ x: -14.5, z: -14, checkpointIndex: 1 }),
+      Object.freeze({ x: 0, z: -14, checkpointIndex: 2 }),
       Object.freeze({ x: 14.5, z: -14 }),
-      Object.freeze({ x: 17.35, z: -13.75 }),
-      Object.freeze({ x: 17.35, z: 16.3 }),
+      Object.freeze({ x: 17.35, z: -13.75, checkpointIndex: 3 }),
+      Object.freeze({ x: 17.35, z: 1, checkpointIndex: 4 }),
+      Object.freeze({ x: 17.35, z: 16.3, checkpointIndex: 5 }),
       Object.freeze({ x: 0, z: 16.3 }),
-      Object.freeze({ x: 0, z: 29, checkpointIndex: 1 }),
+      Object.freeze({ x: 0, z: 29, checkpointIndex: 6 }),
       Object.freeze({ x: 0, z: 16.3 }),
       Object.freeze({ x: 17.35, z: 16.3 }),
-      Object.freeze({ x: 17.35, z: 5.75 }),
-      Object.freeze({ x: 20.5, z: 5.75 }),
+      Object.freeze({ x: 17.35, z: 5.75, checkpointIndex: 7 }),
+      Object.freeze({ x: 20.5, z: 5.75, checkpointIndex: 8 }),
       Object.freeze({ x: 22, z: 5.75 }),
       Object.freeze({ x: 22, z: 10.25 }),
       Object.freeze({ x: 25, z: 10.25 }),
       Object.freeze({ x: 25, z: 11.75 }),
       Object.freeze({ x: 28, z: 11.75 }),
       Object.freeze({ x: 28, z: 2.75 }),
-      Object.freeze({ x: 26.5, z: 2.75, checkpointIndex: 2 }),
+      Object.freeze({ x: 26.5, z: 2.75, checkpointIndex: 9 }),
       Object.freeze({ x: 25, z: 2.75 }),
       Object.freeze({ x: 25, z: -0.25 }),
       Object.freeze({ x: 22, z: -0.25 }),
       Object.freeze({ x: 22, z: -13.75 }),
       Object.freeze({ x: 20.5, z: -13.75 }),
       Object.freeze({ x: 17.35, z: -13.75 }),
-      Object.freeze({ x: 13.5, z: -15.6, checkpointIndex: 3 }),
+      Object.freeze({ x: 13.5, z: -15.6, checkpointIndex: 10 }),
       Object.freeze({ x: 0, z: -15.6 }),
       Object.freeze({ x: -14.5, z: -15.6 }),
       Object.freeze({ x: -14.5, z: -18.85 }),
-      Object.freeze({ x: -12.8, z: -18.85, checkpointIndex: 4 }),
+      Object.freeze({ x: -12.8, z: -18.85, checkpointIndex: 11 }),
     ]),
   });
   // Six evenly distributed pools replace the facade spots only while the
@@ -2253,7 +2286,7 @@
     yardGardenFrontApproach: [YARD_LAYOUT.garden.centerX, YARD_LAYOUT.groundY, 15.15, 0, -0.18],
     yardGardenRearJunction: [-15.2, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.rearJunctionZ, Math.PI / 2, -0.08],
     yardPoolA: [-1.8, YARD_LAYOUT.groundY, -21.8, 1.13, -0.08],
-    yardPoolB: [-16.2, YARD_LAYOUT.groundY, -30.4, -2.11, -0.06],
+    yardPoolB: [-24.7, YARD_LAYOUT.groundY, -32.1, -2.35, -0.06],
     yardPoolSteps: [-9, YARD_LAYOUT.groundY, -18.25, 0, -0.14],
     yardPoolBottom: [-9, -1.58, -22.35, Math.PI, -0.04],
     // Cross laterally from the west lawn onto the north pool-deck support.
@@ -2357,6 +2390,8 @@
       scareCheckpointIndex: -1,
       scareTriggeredCheckpointIds: [],
       scareRevealRemaining: 0,
+      scareBaselineLightExposure: 1,
+      scareProfile: null,
       hostVisible: false,
       invalidTransitions: 0,
       lastInvalidTransition: null,
@@ -14026,6 +14061,8 @@
       this.show.scareCheckpointIndex = -1;
       this.show.scareTriggeredCheckpointIds = [];
       this.show.scareRevealRemaining = 0;
+      this.show.scareBaselineLightExposure = 1;
+      this.show.scareProfile = null;
       this.show.hostVisible = false;
       this.transition(STORM_RUN_PHASE.CALLED, `call:${this.show.triggerReason}`);
       mrFeastNpc?.suspendThreatsForCompetition();
@@ -14037,7 +14074,7 @@
         clueTitle ? `${clueTitle} · LIVE EVENT` : "LIVE EVENT — STORM RUN",
         [
           clueBody,
-          "Production has opened a five-checkpoint course across the grounds. Report to the rear terrace. Your investigation is on hold until the race ends.",
+          "Production has opened a twelve-checkpoint course across the grounds. Report to the rear terrace. Your investigation is on hold until the race ends.",
         ].filter(Boolean).join(" "),
         clueBody ? 11500 : 9200,
       );
@@ -14110,7 +14147,7 @@
       this.transition(STORM_RUN_PHASE.BRIEFING, "reported-to-rear-terrace");
       speechSystem?.say(
         "storm-run-rules",
-        "Five checkpoints. Follow them in order. Beat Mara back through the course, or you are out.",
+        "Twelve checkpoints. The next blue marker is always visible. Beat Mara back through the course, or you are out.",
         speechSystem.hostSpeaker(),
         { durationSeconds: STORM_RUN.briefingSpeechSeconds },
       );
@@ -14178,11 +14215,22 @@
       this.show.scareTriggeredCheckpointIds.push(checkpoint.id);
       this.show.scareCheckpointIndex = checkpointIndex;
       this.show.scareRevealRemaining = STORM_RUN.hostRevealMaximumSeconds;
+      this.show.scareBaselineLightExposure = sampleStealthLightExposure({
+        x: checkpoint.reveal.x,
+        y: checkpoint.reveal.y + 1.1,
+        z: checkpoint.reveal.z,
+      }, { ignoreOverride: true });
+      this.show.scareProfile = "storm-run";
       this.show.hostVisible = false;
       mrFeastNpc?.setStormRunReveal(checkpoint.reveal, false);
-      stormSystem?.trigger();
+      stormSystem?.trigger({ profile: "storm-run" });
       this.syncCastVisibility();
-      return { triggered: true, checkpointId: checkpoint.id, index: checkpointIndex };
+      return {
+        triggered: true,
+        checkpointId: checkpoint.id,
+        index: checkpointIndex,
+        baselineLightExposure: Number(this.show.scareBaselineLightExposure.toFixed(3)),
+      };
     }
 
     updateScare(dt) {
@@ -14237,7 +14285,7 @@
         this.releaseProduction("mara-voss");
         contestant13Quest?.showDiscovery(
           "MARA VOSS — ELIMINATED",
-          "You cleared all five checkpoints before Mara. Production has reopened the mansion.",
+          "You cleared all twelve checkpoints before Mara. Production has reopened the mansion.",
           9200,
         );
         this.syncPresentation();
@@ -14360,7 +14408,7 @@
         setText(dom.stormRunCheckpoint, this.castReady() ? "The yard course is ready." : "Holding for cast…");
       } else if (phase === STORM_RUN_PHASE.BRIEFING) {
         setText(dom.stormRunEyebrow, "Storm Run · Rules");
-        setText(dom.stormRunTitle, "FIVE CHECKPOINTS · BEAT MARA");
+        setText(dom.stormRunTitle, "TWELVE CHECKPOINTS · BEAT MARA");
         setText(dom.stormRunTimer, String(Math.ceil(this.show.briefingRemaining)));
         setText(dom.stormRunCheckpoint, "Follow the blue markers in order.");
       } else if (phase === STORM_RUN_PHASE.RUNNING) {
@@ -14408,6 +14456,8 @@
       this.show.staged = false;
       this.show.hostVisible = false;
       this.show.scareRevealRemaining = 0;
+      this.show.scareBaselineLightExposure = 1;
+      this.show.scareProfile = null;
     }
 
     restoreSnapshot(snapshot = null, questSnapshot = {}) {
@@ -14447,6 +14497,8 @@
       this.show.scareCheckpointIndex = -1;
       this.show.scareTriggeredCheckpointIds = [];
       this.show.scareRevealRemaining = 0;
+      this.show.scareBaselineLightExposure = 1;
+      this.show.scareProfile = null;
       this.show.hostVisible = false;
       mansionContestants?.setEliminated("mara-voss", this.show.eliminatedContestantId === "mara-voss");
       this.syncPresentation();
@@ -14483,6 +14535,84 @@
       if (this.show.phase === STORM_RUN_PHASE.CALLED && this.castReady()) this.reportToStart();
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) this.beginRace();
       return this.finishCompetition(outcome === "mara" ? "mara" : "player");
+    }
+
+    checkpointPreviousPosition(index) {
+      return index > 0 ? STORM_RUN.checkpoints[index - 1] : STORM_RUN.startMark;
+    }
+
+    checkpointGuidance(index) {
+      const checkpoint = STORM_RUN.checkpoints[index];
+      const previous = this.checkpointPreviousPosition(index);
+      const sceneEntry = stormRunScene.checkpoints[index];
+      if (!checkpoint || !previous) return null;
+      const distanceFromPrevious = Math.hypot(checkpoint.x - previous.x, checkpoint.z - previous.z);
+      const alwaysVisible = Boolean(
+        sceneEntry?.beacon?.material?.depthTest === false
+        && sceneEntry?.guide?.material?.depthTest === false
+      );
+      return {
+        previousId: index > 0 ? STORM_RUN.checkpoints[index - 1].id : "start-line",
+        distanceFromPrevious: Number(distanceFromPrevious.toFixed(3)),
+        maximumDistance: STORM_RUN.maximumBreadcrumbDistance,
+        beaconHeight: STORM_RUN.checkpointBeaconHeight,
+        guideHeight: STORM_RUN.checkpointGuideHeight,
+        alwaysVisible,
+        visibleFromPrevious: alwaysVisible && distanceFromPrevious <= STORM_RUN.maximumBreadcrumbDistance,
+      };
+    }
+
+    previewCheckpointForQA(index) {
+      if (!state.qa || !physics) return { active: false, reason: "qa-only" };
+      const checkpointIndex = Math.floor(Number(index));
+      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+      if (!checkpoint) return { active: false, reason: "unknown-checkpoint" };
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING || checkpointIndex !== this.show.completedCheckpoints) {
+        return { active: false, reason: "not-active", expectedIndex: this.show.completedCheckpoints };
+      }
+      const previous = this.checkpointPreviousPosition(checkpointIndex);
+      teleport(previous.x, previous.y, previous.z, 0, 0);
+      syncCamera();
+      const dx = checkpoint.x - camera.position.x;
+      const dz = checkpoint.z - camera.position.z;
+      const horizontal = Math.max(0.001, Math.hypot(dx, dz));
+      const targetY = checkpoint.y + STORM_RUN.checkpointGuideHeight;
+      state.yaw = Math.atan2(-dx, -dz);
+      state.pitch = -Math.atan2(camera.position.y - targetY, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      const sceneEntry = stormRunScene.checkpoints[checkpointIndex];
+      sceneEntry?.guide?.updateMatrixWorld(true);
+      const guideWorld = sceneEntry?.guide?.getWorldPosition(new THREE.Vector3()) || null;
+      const projected = guideWorld?.clone().project(camera) || null;
+      const onScreen = Boolean(
+        projected
+        && Number.isFinite(projected.x)
+        && Number.isFinite(projected.y)
+        && Number.isFinite(projected.z)
+        && Math.abs(projected.x) <= 1
+        && Math.abs(projected.y) <= 1
+        && projected.z >= -1
+        && projected.z <= 1
+      );
+      updateLocation();
+      updateInteractionPrompt();
+      const guidance = this.checkpointGuidance(checkpointIndex);
+      return {
+        index: checkpointIndex,
+        id: checkpoint.id,
+        previousId: guidance?.previousId || null,
+        active: Boolean(sceneEntry?.root?.visible),
+        guideVisible: Boolean(sceneEntry?.root?.visible && sceneEntry?.guide?.visible),
+        alwaysVisible: Boolean(guidance?.alwaysVisible),
+        onScreen,
+        distanceFromPrevious: guidance?.distanceFromPrevious || 0,
+        projected: projected ? {
+          x: Number(projected.x.toFixed(4)),
+          y: Number(projected.y.toFixed(4)),
+          z: Number(projected.z.toFixed(4)),
+        } : null,
+      };
     }
 
     checkpointWalkable(checkpoint) {
@@ -14589,6 +14719,12 @@
           active: this.show.phase === STORM_RUN_PHASE.RUNNING && index === this.show.completedCheckpoints,
           position: { x: checkpoint.x, y: checkpoint.y, z: checkpoint.z },
           scareTrigger: checkpoint.scareTrigger ? { ...checkpoint.scareTrigger } : null,
+          scareReveal: checkpoint.reveal ? {
+            position: { x: checkpoint.reveal.x, y: checkpoint.reveal.y, z: checkpoint.reveal.z },
+            darkSpot: Boolean(checkpoint.reveal.darkSpot),
+            maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
+          } : null,
+          guidance: this.checkpointGuidance(index),
         })),
         player: {
           maximumSprintSpeed: STORM_RUN.playerMaximumSprintSpeed,
@@ -14603,6 +14739,15 @@
           revealRemaining: Number(this.show.scareRevealRemaining.toFixed(3)),
           hostVisible: Boolean(this.show.hostVisible),
           lightning: Number((stormSystem?.flash || 0).toFixed(3)),
+          profile: this.show.scareProfile,
+          baselineLightExposure: Number(this.show.scareBaselineLightExposure.toFixed(3)),
+          maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
+          flashDecayPerSecond: stormSystem?.flashDecayPerSecond || AMBIENT_STORM_FLASH.decayPerSecond,
+          normalFlashDecayPerSecond: AMBIENT_STORM_FLASH.decayPerSecond,
+          flashPulseSpanSeconds: STORM_RUN.scareFlashPulses[STORM_RUN.scareFlashPulses.length - 1].delay,
+          normalFlashPulseSpanSeconds: AMBIENT_STORM_FLASH.pulsePattern[AMBIENT_STORM_FLASH.pulsePattern.length - 1].delay,
+          thunderDelaySeconds: stormSystem?.thunderDelaySeconds ?? -1,
+          thunderVolumeMultiplier: stormSystem?.thunderVolumeMultiplier || 1,
         },
         hazard: { enabled: false, penaltySeconds: 0 },
         eliminatedContestantId: this.show.eliminatedContestantId,
@@ -16466,6 +16611,17 @@
     const lettuces = [];
     const eggTrays = [];
     const eggs = [];
+    const copperware = [];
+    const brassCups = [];
+    const whiteLinens = [];
+    const clothRolls = [];
+    const ironTools = [];
+    const toolJars = [];
+    const ceramicBowls = [];
+    const wineReds = [];
+    const wineGreens = [];
+    const glassBottles = [];
+    const woodBoards = [];
     const usable = width * 0.78;
     const z = Math.min(depth * 0.06, 0.08);
     const positionX = (index, count) => -usable / 2 + 0.13 + index * (usable - 0.26) / Math.max(1, count - 1);
@@ -16544,6 +16700,64 @@
       }
       milkBottles.push({ x: 0.38 * usable, y: topY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05 });
       milkCaps.push({ x: 0.38 * usable, y: topY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028 });
+    } else if (["barware", "sideboard", "cookware", "prep", "undersink", "cellar-reserve", "linens", "tools", "washroom"].includes(kind)) {
+      // Final no-empty-cabinets sweep: every remaining cupboard receives a
+      // role-specific shelf set. Shelves without standing headroom (short
+      // sideboards clamp their top shelf near the crown) only take flat stock.
+      shelfYs.forEach((shelfY, shelfIndex) => {
+        const above = shelfIndex + 1 < shelfYs.length ? shelfYs[shelfIndex + 1] : height - 0.1;
+        const tallShelf = above - shelfY >= 0.3;
+        const spread = (slot, count) => -usable / 2 + 0.14 + slot * (usable - 0.28) / Math.max(1, count - 1);
+        if (kind === "barware") {
+          if (tallShelf) {
+            for (let i = 0; i < 3; i += 1) {
+              (i % 2 ? wineGreens : wineReds).push({ x: spread(i, 4), y: shelfY + 0.17, z, sx: 0.045, sy: 0.3, sz: 0.045 });
+            }
+            for (let i = 0; i < 3; i += 1) brassCups.push({ x: spread(i, 4) + usable * 0.24, y: shelfY + 0.06, z: z + 0.04, sx: 0.04, sy: 0.1, sz: 0.04 });
+          } else {
+            for (let i = 0; i < 2; i += 1) wineReds.push({ x: spread(i, 3), y: shelfY + 0.05, z, sx: 0.045, sy: 0.3, sz: 0.045, rz: Math.PI / 2, ry: 0.06 * (i ? 1 : -1) });
+          }
+        } else if (kind === "sideboard") {
+          if (tallShelf) {
+            for (let i = 0; i < 4; i += 1) plates.push({ x: -usable * 0.28, y: shelfY + 0.045 + i * 0.026, z, sx: 0.14, sy: 0.018, sz: 0.14 });
+            for (let i = 0; i < 2; i += 1) brassCups.push({ x: usable * (0.08 + i * 0.2), y: shelfY + 0.06, z, sx: 0.042, sy: 0.1, sz: 0.042 });
+          } else {
+            for (let i = 0; i < 2; i += 1) whiteLinens.push({ x: spread(i, 3) + usable * 0.14, y: shelfY + 0.045, z, sx: 0.3, sy: 0.08, sz: 0.22, ry: yardJitter(i + shelfIndex, 67) * 0.12 });
+          }
+        } else if (kind === "cookware") {
+          copperware.push({ x: -usable * 0.26, y: shelfY + 0.07, z, sx: 0.13, sy: 0.13, sz: 0.13 });
+          copperware.push({ x: -usable * 0.26, y: shelfY + 0.152, z, sx: 0.138, sy: 0.016, sz: 0.138 });
+          copperware.push({ x: usable * 0.05, y: shelfY + 0.055, z: z + 0.03, sx: 0.105, sy: 0.1, sz: 0.105 });
+          copperware.push({ x: usable * 0.32, y: shelfY + 0.03, z, sx: 0.12, sy: 0.05, sz: 0.12 });
+        } else if (kind === "prep") {
+          for (let i = 0; i < 3; i += 1) ceramicBowls.push({ x: spread(i, 3), y: shelfY + 0.055 - i * 0.008, z, sx: 0.12 - i * 0.025, sy: 0.09 - i * 0.014, sz: 0.12 - i * 0.025 });
+          woodBoards.push({ x: usable * 0.3, y: shelfY + 0.11, z: z - 0.06, sx: 0.32, sy: 0.02, sz: 0.22, rx: -0.5 });
+        } else if (kind === "undersink") {
+          copperware.push({ x: -usable * 0.28, y: shelfY + 0.095, z, sx: 0.115, sy: 0.18, sz: 0.115 });
+          for (let i = 0; i < 2; i += 1) bottles.push({ x: spread(i, 3) + usable * 0.24, y: shelfY + 0.13, z, sx: 0.055, sy: 0.24, sz: 0.055 });
+          clothRolls.push({ x: usable * 0.34, y: shelfY + 0.05, z: z + 0.05, sx: 0.05, sy: 0.16, sz: 0.05, rz: Math.PI / 2 });
+        } else if (kind === "cellar-reserve") {
+          if (tallShelf) {
+            for (let i = 0; i < 3; i += 1) {
+              (i % 2 ? wineGreens : wineReds).push({ x: spread(i, 3), y: shelfY + 0.06, z, sx: 0.045, sy: 0.3, sz: 0.045, rz: Math.PI / 2, ry: yardJitter(i + shelfIndex, 68) * 0.1 });
+            }
+            wineReds.push({ x: usable * 0.34, y: shelfY + 0.17, z: z - 0.03, sx: 0.045, sy: 0.3, sz: 0.045 });
+          } else {
+            for (let i = 0; i < 2; i += 1) brassCups.push({ x: spread(i, 3), y: shelfY + 0.06, z, sx: 0.042, sy: 0.1, sz: 0.042 });
+          }
+        } else if (kind === "linens") {
+          for (let i = 0; i < 2; i += 1) whiteLinens.push({ x: spread(i, 2), y: shelfY + 0.055 + (i % 2) * 0.002, z, sx: 0.34, sy: 0.1, sz: 0.26, ry: yardJitter(i + shelfIndex, 69) * 0.1 });
+          for (let i = 0; i < 3; i += 1) clothRolls.push({ x: spread(i, 3), y: shelfY + 0.175, z: z + 0.06, sx: 0.055, sy: 0.2, sz: 0.055, rz: Math.PI / 2, ry: yardJitter(i, 70) * 0.2 });
+        } else if (kind === "tools") {
+          for (let i = 0; i < 3; i += 1) toolJars.push({ x: spread(i, 4), y: shelfY + 0.075, z, sx: 0.055, sy: 0.14, sz: 0.055 });
+          ironTools.push({ x: usable * 0.28, y: shelfY + 0.035, z, sx: 0.24, sy: 0.06, sz: 0.14, ry: yardJitter(shelfIndex, 71) * 0.3 });
+          if (shelfIndex === 0) clothRolls.push({ x: usable * 0.05, y: shelfY + 0.05, z: z + 0.07, sx: 0.05, sy: 0.15, sz: 0.05, rz: Math.PI / 2 });
+        } else {
+          for (let i = 0; i < 2; i += 1) whiteLinens.push({ x: spread(i, 3), y: shelfY + 0.05, z, sx: 0.28, sy: 0.09, sz: 0.2, ry: yardJitter(i + shelfIndex, 72) * 0.14 });
+          for (let i = 0; i < 2; i += 1) glassBottles.push({ x: spread(i, 3) + usable * 0.3, y: shelfY + 0.075, z, sx: 0.032, sy: 0.14, sz: 0.032 });
+          clothRolls.push({ x: usable * 0.36, y: shelfY + 0.05, z: z + 0.04, sx: 0.048, sy: 0.14, sz: 0.048, rz: Math.PI / 2 });
+        }
+      });
     } else {
       shelfYs.forEach((shelfY, shelfIndex) => {
         const count = 6;
@@ -16576,10 +16790,23 @@
       addLocalInstanceBatch(`${name}-fridge-lettuce`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.hedge, lettuces),
       addLocalInstanceBatch(`${name}-fridge-egg-trays`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.canvasLinen, eggTrays),
       addLocalInstanceBatch(`${name}-fridge-eggs`, parent, "unitSphere", () => new THREE.SphereGeometry(1, 12, 8), M.eggshell, eggs),
+      addLocalInstanceBatch(`${name}-stocked-copperware`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 14), M.copper, copperware),
+      addLocalInstanceBatch(`${name}-stocked-brass-cups`, parent, "unitGoblet", () => new THREE.CylinderGeometry(0.72, 1, 1, 12), M.brass, brassCups),
+      addLocalInstanceBatch(`${name}-stocked-white-linens`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.porcelain, whiteLinens),
+      addLocalInstanceBatch(`${name}-stocked-cloth-rolls`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.canvasLinen, clothRolls),
+      addLocalInstanceBatch(`${name}-stocked-iron-tools`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.iron, ironTools),
+      addLocalInstanceBatch(`${name}-stocked-tool-jars`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.groceryTin, toolJars),
+      addLocalInstanceBatch(`${name}-stocked-bowls`, parent, "unitBowl", () => new THREE.CylinderGeometry(1, 0.62, 1, 14), M.dishBlue, ceramicBowls),
+      addLocalInstanceBatch(`${name}-stocked-wine-red`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.wineRed, wineReds),
+      addLocalInstanceBatch(`${name}-stocked-wine-green`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.wineGreen, wineGreens),
+      addLocalInstanceBatch(`${name}-stocked-glass-bottles`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 10), M.glass, glassBottles),
+      addLocalInstanceBatch(`${name}-stocked-wood-boards`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.darkWood, woodBoards),
     ].filter(Boolean);
     return {
       count: boxes.length + tins.length + bottles.length + produce.length + sacks.length + jars.length + plates.length + cups.length
-        + milkBottles.length + butterDishes.length + hams.length + cheeseWedges.length + lettuces.length + eggTrays.length + eggs.length,
+        + milkBottles.length + butterDishes.length + hams.length + cheeseWedges.length + lettuces.length + eggTrays.length + eggs.length
+        + copperware.length + brassCups.length + whiteLinens.length + clothRolls.length + ironTools.length + toolJars.length
+        + ceramicBowls.length + wineReds.length + wineGreens.length + glassBottles.length + woodBoards.length,
       meshes,
     };
   }
@@ -18412,7 +18639,7 @@
   }
 
   function addDoubleVanityBase(label, x, z, floorY, width) {
-    const vanity = new Cabinet({ name: `${label} double vanity`, x, z, floorY, width, height: 0.84, depth: 0.58, rotationY: 0, material: M.darkWood });
+    const vanity = new Cabinet({ name: `${label} double vanity`, x, z, floorY, width, height: 0.84, depth: 0.58, rotationY: 0, material: M.darkWood, stockKind: "washroom", interiorLight: false });
     vanity.root.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     roundedBox({ name: `${label}-vanity-marble-countertop`, w: width + 0.12, h: 0.07, d: 0.68, radius: 0.035, x, y: floorY + 0.875, z, material: M.marble, cast: false });
     const sinkXs = [x - width * 0.23, x + width * 0.23];
@@ -19015,13 +19242,13 @@
 
     // Interactive dark-oak bases share one datum under every work surface.
     addKitchenBaseCabinet({ name: "kitchen inner food cabinet", x: 5.52, z: -10.35, floorY: FLOOR.MAIN, width: 1.25, height: cabinetHeight, rotationY: Math.PI / 2, stockKind: "food" });
-    addKitchenBaseCabinet({ name: "kitchen rear west cabinet", x: 6.55, z: -11.43, floorY: FLOOR.MAIN, width: 1.2, height: cabinetHeight, rotationY: 0 });
-    addKitchenBaseCabinet({ name: "kitchen rear prep cabinet", x: 7.77, z: -11.43, floorY: FLOOR.MAIN, width: 1.18, height: cabinetHeight, rotationY: 0 });
-    addKitchenBaseCabinet({ name: "kitchen sink base cabinet", x: sinkX, z: sinkZ, floorY: FLOOR.MAIN, width: 1.7, height: cabinetHeight, rotationY: 0 });
-    addKitchenBaseCabinet({ name: "kitchen rear drawer cabinet", x: 11.35, z: -11.43, floorY: FLOOR.MAIN, width: 1.65, height: cabinetHeight, rotationY: 0 });
+    addKitchenBaseCabinet({ name: "kitchen rear west cabinet", x: 6.55, z: -11.43, floorY: FLOOR.MAIN, width: 1.2, height: cabinetHeight, rotationY: 0, stockKind: "cookware", interiorLight: false });
+    addKitchenBaseCabinet({ name: "kitchen rear prep cabinet", x: 7.77, z: -11.43, floorY: FLOOR.MAIN, width: 1.18, height: cabinetHeight, rotationY: 0, stockKind: "prep", interiorLight: false });
+    addKitchenBaseCabinet({ name: "kitchen sink base cabinet", x: sinkX, z: sinkZ, floorY: FLOOR.MAIN, width: 1.7, height: cabinetHeight, rotationY: 0, stockKind: "undersink", interiorLight: false });
+    addKitchenBaseCabinet({ name: "kitchen rear drawer cabinet", x: 11.35, z: -11.43, floorY: FLOOR.MAIN, width: 1.65, height: cabinetHeight, rotationY: 0, stockKind: "cookware", interiorLight: false });
     addKitchenBaseCabinet({ name: "kitchen rear dish cabinet", x: 13.1, z: -11.43, floorY: FLOOR.MAIN, width: 1.8, height: cabinetHeight, rotationY: 0, stockKind: "dishes" });
-    addKitchenBaseCabinet({ name: "kitchen east rear cabinet", x: 14.48, z: -10.05, floorY: FLOOR.MAIN, width: 1.85, height: cabinetHeight, rotationY: -Math.PI / 2 });
-    addKitchenBaseCabinet({ name: "kitchen east forward cabinet", x: 14.48, z: -6.42, floorY: FLOOR.MAIN, width: 2.1, height: cabinetHeight, rotationY: -Math.PI / 2 });
+    addKitchenBaseCabinet({ name: "kitchen east rear cabinet", x: 14.48, z: -10.05, floorY: FLOOR.MAIN, width: 1.85, height: cabinetHeight, rotationY: -Math.PI / 2, stockKind: "prep", interiorLight: false });
+    addKitchenBaseCabinet({ name: "kitchen east forward cabinet", x: 14.48, z: -6.42, floorY: FLOOR.MAIN, width: 2.1, height: cabinetHeight, rotationY: -Math.PI / 2, stockKind: "dishes", interiorLight: false });
 
     // Butt the three counter runs at their corners. The rear slab is split at
     // the sink and the east slab at the range, eliminating coplanar overlap.
@@ -19316,7 +19543,7 @@
     // Exterior zones stay on the main-level render rig so crossing a threshold
     // never toggles a circuit or makes the mansion/grounds lights pop on.
     addRoomZone(mainMin, mainMax, -33.5, -17.3, YARD_LAYOUT.garden.centerZ - YARD_LAYOUT.garden.depth / 2 - 0.2, YARD_LAYOUT.garden.centerZ + YARD_LAYOUT.garden.depth / 2 + 0.2, "MAIN LEVEL", "FORMAL GARDEN");
-    addRoomZone(-2.2, mainMax, -17.0, -1.2, -33.5, -17.8, "MAIN LEVEL", "POOL TERRACE");
+    addRoomZone(-2.2, mainMax, -26.5, -1.2, -33.5, -17.8, "MAIN LEVEL", "POOL TERRACE");
     addRoomZone(mainMin, mainMax, 19.5, 33.5, -33.5, 14.35, "MAIN LEVEL", "HEDGE MAZE");
     addRoomZone(mainMin, mainMax, -17.2, 17.2, 12.01, 33.5, "MAIN LEVEL", "FRONT DRIVE");
     addRoomZone(mainMin, mainMax, -33.5, 33.5, -33.5, -12.01, "MAIN LEVEL", "REAR LAWN");
@@ -19872,7 +20099,8 @@
     stormRunScene.root = root;
 
     const ringGeometry = new THREE.RingGeometry(0.72, 0.92, 42);
-    const beaconGeometry = new THREE.CylinderGeometry(0.045, 0.12, 2.8, 12, 1, true);
+    const beaconGeometry = new THREE.CylinderGeometry(0.05, 0.14, STORM_RUN.checkpointBeaconHeight, 12, 1, true);
+    const guideGeometry = new THREE.OctahedronGeometry(0.34, 0);
     STORM_RUN.checkpoints.forEach((checkpoint, index) => {
       const checkpointRoot = new THREE.Group();
       checkpointRoot.name = `storm-run-checkpoint-${index + 1}-${checkpoint.id}`;
@@ -19902,14 +20130,33 @@
           transparent: true,
           opacity: 0.18,
           side: THREE.DoubleSide,
+          depthTest: false,
           depthWrite: false,
           toneMapped: false,
         }),
       );
       beacon.name = `storm-run-beacon-${index + 1}`;
-      beacon.position.y = 1.4;
+      beacon.position.y = STORM_RUN.checkpointBeaconHeight / 2;
+      beacon.renderOrder = 4;
       checkpointRoot.add(beacon);
-      stormRunScene.checkpoints.push({ root: checkpointRoot, ring, beacon, checkpoint });
+
+      const guide = new THREE.Mesh(
+        guideGeometry,
+        new THREE.MeshBasicMaterial({
+          color: 0xb9efff,
+          transparent: true,
+          opacity: 0.94,
+          depthTest: false,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      guide.name = `storm-run-guide-${index + 1}`;
+      guide.position.y = STORM_RUN.checkpointGuideHeight;
+      guide.rotation.y = Math.PI / 4;
+      guide.renderOrder = 5;
+      checkpointRoot.add(guide);
+      stormRunScene.checkpoints.push({ root: checkpointRoot, ring, beacon, guide, checkpoint });
     });
 
     const reportRoot = new THREE.Group();
@@ -20295,7 +20542,7 @@
       seatTag: "library-writing-chair",
       exitLocal: { x: 0.95, y: 0, z: 0.2 },
     });
-    new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0 });
+    new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0, stockKind: "barware", interiorLight: false });
     addLibraryWritingSet();
 
     // Music room — the sofa is deliberately aimed at the grand piano.
@@ -20338,7 +20585,7 @@
     addChair(-7.4, -9.55, FLOOR.MAIN, Math.PI, M.darkWood);
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
-    new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0 });
+    new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
     addDiningTableService();
     // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
     // against the north wall beyond both the dance and host patrol lanes.
@@ -20545,7 +20792,7 @@
     for (const z of [5.0, 7.8, 10.5]) addWineRack(-14.35, z, FLOOR.BASEMENT, -Math.PI / 2, 2.25);
     for (const x of [-11.5, -8.8, -6.1, -3.4]) addWineRack(x, 11.55, FLOOR.BASEMENT, 0, 2.35);
     addTable(-8.0, 7.4, 2.6, 1.05, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2 });
+    new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2, stockKind: "cellar-reserve", interiorLight: false });
     addWineCellarDetails();
 
     // Archive — the perimeter is intentionally bare. Three double-sided rows
@@ -20579,7 +20826,7 @@
     }));
 
     // Laundry & linen
-    new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2 });
+    new Cabinet({ name: "linen cupboard", x: -14.2, z: 0.2, floorY: FLOOR.BASEMENT, width: 1.75, height: 2.15, rotationY: Math.PI / 2, stockKind: "linens", interiorLight: false });
     addTable(-8.0, -0.1, 2.6, 1.15, FLOOR.BASEMENT, 0, M.darkWood);
     addLaundryDetails();
 
@@ -20613,7 +20860,7 @@
     addPipeRun([[-10.2, -1.35, -8.6], [-10.2, -0.65, -8.6], [-10.2, -0.65, -5.2], [-2.2, -0.65, -5.2]], 0.075, M.copper);
     addPipeRun([[-7.8, -1.3, -8.8], [-7.8, -0.9, -10.7], [4.4, -0.9, -10.7]], 0.065, M.iron);
     addTable(-2.5, -8.2, 3.1, 1.25, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2 });
+    new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2, stockKind: "tools", interiorLight: false });
     addWorkroomKeypadHardware();
     addWorkroomSecurityHub();
     addBoilerRoomDetails();
@@ -21826,11 +22073,14 @@
         void main() {
           float edge = smoothstep(0.0, 0.16, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
           // Two drifting noise octaves give the surface its wind-blown grain.
-          float grain = valueNoise(vUv * 26.0 + vec2(uTime * 0.16, -uTime * 0.11));
-          float swell = valueNoise(vUv * 7.0 + vec2(-uTime * 0.05, uTime * 0.07));
+          // The doubled basin is ~1.72x wider than deep; correcting uv keeps
+          // rain rings circular and grain isotropic across the long axis.
+          vec2 suv = vUv * vec2(1.72, 1.0);
+          float grain = valueNoise(suv * 26.0 + vec2(uTime * 0.16, -uTime * 0.11));
+          float swell = valueNoise(suv * 7.0 + vec2(-uTime * 0.05, uTime * 0.07));
           float glint = smoothstep(0.016, 0.034, vWave + (grain - 0.5) * 0.012);
           float sparkle = pow(max(0.0, grain * swell), 6.0) * 2.4;
-          float rain = rainRipples(vUv, uTime);
+          float rain = rainRipples(suv, uTime);
           vec3 color = mix(uDeep, uShallow, 0.24 + edge * 0.4 + swell * 0.18 + vWave * 2.2);
           color += vec3(0.30, 0.34, 0.35) * glint;
           color += vec3(0.42, 0.47, 0.48) * sparkle;
@@ -21840,7 +22090,7 @@
         }
       `,
     });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth, 34, 42), material);
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, depth, Math.max(34, Math.round(width * 3)), 42), material);
     mesh.name = "estate-pool-water";
     mesh.position.set(x, y, z);
     mesh.rotation.x = -Math.PI / 2;
@@ -21866,48 +22116,52 @@
     const groundY = YARD_LAYOUT.groundY;
     const pool = YARD_LAYOUT.pool;
     const terraceY = groundY + 0.022;
-    box({ name: "pool-terrace-pavers-north", w: 14.5, h: 0.044, d: 1.7, x: pool.centerX, y: terraceY, z: -18.85, material: M.wetPavers, cast: false });
-    box({ name: "pool-terrace-pavers-south", w: 14.5, h: 0.044, d: 1.7, x: pool.centerX, y: terraceY, z: -32.15, material: M.wetPavers, cast: false });
-    box({ name: "pool-terrace-pavers-west", w: 1.7, h: 0.044, d: 11.8, x: -15.05, y: terraceY, z: pool.centerZ, material: M.wetPavers, cast: false });
+    // The entry stair, its wall gap, and the exit ramp stay authored at x=-9
+    // even though the doubled basin's centre moved west — every pool QA route
+    // and Mr. Feast's deck response spot keep their original geometry.
+    const stairX = -9;
+    box({ name: "pool-terrace-pavers-north", w: 23.4, h: 0.044, d: 1.7, x: -13.45, y: terraceY, z: -18.85, material: M.wetPavers, cast: false });
+    box({ name: "pool-terrace-pavers-south", w: 23.4, h: 0.044, d: 1.7, x: -13.45, y: terraceY, z: -32.15, material: M.wetPavers, cast: false });
+    box({ name: "pool-terrace-pavers-west", w: 1.7, h: 0.044, d: 11.8, x: -24.85, y: terraceY, z: pool.centerZ, material: M.wetPavers, cast: false });
     box({ name: "pool-terrace-pavers-east", w: 1.7, h: 0.044, d: 11.8, x: -2.95, y: terraceY, z: pool.centerZ, material: M.wetPavers, cast: false });
     const poolDeckSupports = [
-      { name: "pool-north-terrace-support-left", x: -12.65, z: -18.85, w: 4.7, d: 1.7 },
+      { name: "pool-north-terrace-support-left", x: -17.85, z: -18.85, w: 15.1, d: 1.7 },
       { name: "pool-north-terrace-support-right", x: -4.85, z: -18.85, w: 5.7, d: 1.7 },
-      { name: "pool-west-terrace-support", x: -14.7, z: -25.5, w: 0.6, d: 12.1 },
+      { name: "pool-west-terrace-support", x: -24.48, z: -25.5, w: 1.85, d: 12.1 },
       { name: "pool-east-terrace-support", x: -2.8, z: -25.5, w: 1.6, d: 12.1 },
-      { name: "pool-south-terrace-support", x: -8.5, z: -31.85, w: 13, d: 0.5 },
+      { name: "pool-south-terrace-support", x: -13.7, z: -31.85, w: 23.4, d: 0.5 },
     ];
     for (const support of poolDeckSupports) physics.addFixedBox(support.x, -0.38, support.z, support.w, 0.35, support.d, 0);
 
-    box({ name: "estate-pool-bottom", w: 9.9, h: 0.22, d: 11.2, x: pool.centerX, y: -1.69, z: pool.centerZ, material: M.poolTile, collider: true, cast: false });
-    for (const x of [-13.99, -4.01]) box({ name: "estate-pool-basin-wall", w: 0.28, h: 1.42, d: 11.7, x, y: -0.95, z: pool.centerZ, material: M.poolTile, collider: true });
-    box({ name: "estate-pool-basin-wall", w: 10.25, h: 1.42, d: 0.28, x: pool.centerX, y: -0.95, z: -31.34, material: M.poolTile, collider: true });
-    box({ name: "estate-pool-basin-wall", w: 3.7, h: 1.42, d: 0.28, x: -12.15, y: -0.95, z: -19.66, material: M.poolTile, collider: true });
+    box({ name: "estate-pool-bottom", w: 19.6, h: 0.22, d: 11.2, x: pool.centerX, y: -1.69, z: pool.centerZ, material: M.poolTile, collider: true, cast: false });
+    for (const x of [-23.69, -4.01]) box({ name: "estate-pool-basin-wall", w: 0.28, h: 1.42, d: 11.7, x, y: -0.95, z: pool.centerZ, material: M.poolTile, collider: true });
+    box({ name: "estate-pool-basin-wall", w: 19.95, h: 1.42, d: 0.28, x: pool.centerX, y: -0.95, z: -31.34, material: M.poolTile, collider: true });
+    box({ name: "estate-pool-basin-wall", w: 13.3, h: 1.42, d: 0.28, x: -16.95, y: -0.95, z: -19.66, material: M.poolTile, collider: true });
     box({ name: "estate-pool-basin-wall", w: 3.7, h: 1.42, d: 0.28, x: -5.85, y: -0.95, z: -19.66, material: M.poolTile, collider: true });
-    for (const x of [-14.15, -3.85]) box({ name: "estate-pool-coping", w: 0.52, h: 0.18, d: 12.0, x, y: groundY + 0.07, z: pool.centerZ, material: M.marble, collider: true });
-    box({ name: "estate-pool-coping", w: 10.8, h: 0.18, d: 0.52, x: pool.centerX, y: groundY + 0.07, z: -31.48, material: M.marble, collider: true });
-    box({ name: "estate-pool-coping", w: 3.95, h: 0.18, d: 0.52, x: -12.02, y: groundY + 0.07, z: -19.52, material: M.marble, collider: true });
+    for (const x of [-23.99, -3.85]) box({ name: "estate-pool-coping", w: 0.52, h: 0.18, d: 12.0, x, y: groundY + 0.07, z: pool.centerZ, material: M.marble, collider: true });
+    box({ name: "estate-pool-coping", w: 20.4, h: 0.18, d: 0.52, x: pool.centerX, y: groundY + 0.07, z: -31.48, material: M.marble, collider: true });
+    box({ name: "estate-pool-coping", w: 13.95, h: 0.18, d: 0.52, x: -17.28, y: groundY + 0.07, z: -19.52, material: M.marble, collider: true });
     box({ name: "estate-pool-coping", w: 3.95, h: 0.18, d: 0.52, x: -5.98, y: groundY + 0.07, z: -19.52, material: M.marble, collider: true });
 
     const stepTops = [-0.42, -0.7, -0.98, -1.26, -1.54];
     stepTops.forEach((top, index) => {
       const h = top + 1.8;
       const stepZ = -18.3 - index * 0.58;
-      box({ name: `estate-pool-step-${index + 1}`, w: 2.45, h, d: 0.64, x: pool.centerX, y: -1.8 + h / 2, z: stepZ, material: M.poolTile, collider: true, cast: false });
+      box({ name: `estate-pool-step-${index + 1}`, w: 2.45, h, d: 0.64, x: stairX, y: -1.8 + h / 2, z: stepZ, material: M.poolTile, collider: true, cast: false });
       // Finished marble tread with a slight nosing overhang on the approach
       // edge, and a shadow reveal under it so each step reads from above the
       // water instead of merging into one tiled wedge.
-      roundedBox({ name: `estate-pool-step-tread-${index + 1}`, w: 2.51, h: 0.05, d: 0.7, radius: 0.02, x: pool.centerX, y: top + 0.025, z: stepZ + 0.03, material: M.marble, cast: false });
-      box({ name: `estate-pool-step-riser-reveal-${index + 1}`, w: 2.45, h: 0.05, d: 0.02, x: pool.centerX, y: top - 0.035, z: stepZ + 0.33, material: M.soot, cast: false, receive: false });
+      roundedBox({ name: `estate-pool-step-tread-${index + 1}`, w: 2.51, h: 0.05, d: 0.7, radius: 0.02, x: stairX, y: top + 0.025, z: stepZ + 0.03, material: M.marble, cast: false });
+      box({ name: `estate-pool-step-riser-reveal-${index + 1}`, w: 2.45, h: 0.05, d: 0.02, x: stairX, y: top - 0.035, z: stepZ + 0.33, material: M.soot, cast: false, receive: false });
     });
     // Deck-level marble curbs frame the stair mouth on the terrace.
     for (const side of [-1, 1]) {
-      box({ name: "estate-pool-step-curb", w: 0.14, h: 0.12, d: 1.5, x: pool.centerX + side * 1.295, y: groundY + 0.06, z: -18.75, material: M.marble, cast: false });
+      box({ name: "estate-pool-step-curb", w: 0.14, h: 0.12, d: 1.5, x: stairX + side * 1.295, y: groundY + 0.06, z: -18.75, material: M.marble, cast: false });
       // A brass handrail follows the descent into the water on each side,
       // with posts on the first, middle, and last treads. Decor only: no
       // colliders, so the authored entry ramp and QA pool routes are
       // untouched and the 2m centre channel stays clear.
-      const railX = pool.centerX + side * 1.06;
+      const railX = stairX + side * 1.06;
       const railStart = [railX, groundY + 0.9, -18.05];
       const railEnd = [railX, -0.64, -20.75];
       addBeamBetween(`estate-pool-rail-${side < 0 ? "west" : "east"}`, railStart, railEnd, 0.028, M.brass);
@@ -21921,9 +22175,9 @@
     // A shallow invisible walking plane follows the visible treads. Rapier's
     // stair auto-step is intentionally conservative; the ramp guarantees that
     // entering and leaving the pool remains smooth at every frame rate.
-    physics.addFixedRamp(pool.centerX, -19.6, -1.58, groundY, 3.2, 2.25, 1);
-    for (const x of [-11.1, -6.9]) box({ name: "estate-pool-bottom-lane-inlay", w: 0.09, h: 0.025, d: 9.6, x, y: -1.565, z: pool.centerZ + 0.2, material: M.brass, cast: false });
-    makeEstatePoolWater(9.7, 11.25, pool.centerX, pool.centerZ, -0.39);
+    physics.addFixedRamp(stairX, -19.6, -1.58, groundY, 3.2, 2.25, 1);
+    for (const x of [-19.9, -15.9, -11.9, -7.9]) box({ name: "estate-pool-bottom-lane-inlay", w: 0.09, h: 0.025, d: 9.6, x, y: -1.565, z: pool.centerZ + 0.2, material: M.brass, cast: false });
+    makeEstatePoolWater(19.4, 11.25, pool.centerX, pool.centerZ, -0.39);
     addPoolLounger(-0.95, -23.1, 0);
     addPoolLounger(-0.95, -28.0, 0);
     // A drinks table between the two loungers, with towels waiting on the
@@ -22089,7 +22343,8 @@
     const groundY = YARD_LAYOUT.groundY;
     const positions = [
       [-30.5, -13.5], [-31.0, 28.5], [-17.5, 30.0], [13.0, 29.5], [24.5, 29.0],
-      [31.0, 19.0], [18.7, 20.5], [13.5, -31.0], [-24.0, -31.0],
+      // The last tree moved off the doubled pool's new southwest deck corner.
+      [31.0, 19.0], [18.7, 20.5], [13.5, -31.0], [-28.9, -32.2],
     ];
     const trunks = [];
     const branches = [];
@@ -22454,7 +22709,7 @@
       ["rain-soaked-grounds-front", 0, 23, 68, 22],
       ["rain-soaked-grounds-rear-north", 0, -15, 68, 6],
       ["rain-soaked-grounds-rear-south", 0, -33, 68, 2],
-      ["rain-soaked-grounds-rear-west-middle", -24.5, -25, 19, 14],
+      ["rain-soaked-grounds-rear-west-middle", -29.7, -25, 8.6, 14],
       ["rain-soaked-grounds-rear-east-middle", 16, -25, 36, 14],
       ["rain-soaked-grounds-west", -24.5, 0, 19, 24],
       ["rain-soaked-grounds-east", 24.5, 0, 19, 24],
@@ -22570,30 +22825,52 @@
       this.flash = 0;
       this.timer = state.qa ? 999 : 3.5;
       this.pulses = [];
+      this.flashDecayPerSecond = AMBIENT_STORM_FLASH.decayPerSecond;
+      this.activeProfile = "ambient";
+      this.thunderDelaySeconds = -1;
+      this.thunderVolumeMultiplier = 1;
       this.light = new THREE.DirectionalLight(0xc9e8ff, 0);
       this.light.position.set(-18, 24, 12);
       scene.add(this.light);
     }
 
-    trigger() {
+    trigger(options = {}) {
+      const stormRunProfile = options.profile === "storm-run";
       const strength = state.reducedFlash ? 0.38 : 1;
-      this.pulses = [
-        { delay: 0, strength },
-        { delay: 0.13, strength: strength * 0.42 },
-        { delay: 0.34, strength: strength * 0.82 },
-      ];
+      const pulsePattern = stormRunProfile ? STORM_RUN.scareFlashPulses : AMBIENT_STORM_FLASH.pulsePattern;
+      this.pulses = pulsePattern.map((pulse) => ({
+        delay: pulse.delay,
+        strength: strength * pulse.strength,
+      }));
+      this.flashDecayPerSecond = stormRunProfile
+        ? STORM_RUN.scareFlashDecayPerSecond
+        : AMBIENT_STORM_FLASH.decayPerSecond;
+      this.activeProfile = stormRunProfile ? "storm-run" : "ambient";
+      this.thunderDelaySeconds = stormRunProfile
+        ? STORM_RUN.scareThunderDelaySeconds
+        : AMBIENT_STORM_FLASH.thunderDelayMinimum + Math.random() * AMBIENT_STORM_FLASH.thunderDelayRange;
+      this.thunderVolumeMultiplier = stormRunProfile ? STORM_RUN.scareThunderVolumeMultiplier : 1;
       this.timer = 12 + Math.random() * 23;
-      if (audioSystem) audioSystem.thunder(0.55 + Math.random() * 0.8);
+      if (audioSystem) audioSystem.thunder(this.thunderDelaySeconds, {
+        profile: this.activeProfile,
+        volumeMultiplier: this.thunderVolumeMultiplier,
+      });
     }
 
     update(dt) {
+      if (
+        state.qa
+        && this.activeProfile === "storm-run"
+        && stormRunSystem?.qaManualClock
+        && !stormRunSystem.qaStepping
+      ) return;
       this.timer -= dt;
       if (this.timer <= 0) this.trigger();
       for (const pulse of this.pulses) pulse.delay -= dt;
       while (this.pulses.length && this.pulses[0].delay <= 0) {
         this.flash = Math.max(this.flash, this.pulses.shift().strength);
       }
-      this.flash = Math.max(0, this.flash - dt * 3.7);
+      this.flash = Math.max(0, this.flash - dt * this.flashDecayPerSecond);
       const lightning = this.flash * this.flash;
       const outdoors = outdoorRoomNames.has(state.currentRoom);
       // The unshadowed storm key exists only over the grounds. Indoors, a
@@ -22623,7 +22900,12 @@
       this.lastVariant = new Map();
       this.cueCounts = Object.create(null);
       this.activeVoices = 0;
-      this.thunderState = { playCount: 0, lastDelay: -1 };
+      this.thunderState = {
+        playCount: 0,
+        lastDelay: -1,
+        lastVolumeMultiplier: 1,
+        lastProfile: "ambient",
+      };
       this.footsteps = {
         lastPosition: null,
         distance: 0,
@@ -23108,17 +23390,21 @@
       }, 240);
     }
 
-    thunder(delay = 0) {
-      if (!this.ctx || !state.audioEnabled) return false;
+    thunder(delay = 0, options = {}) {
       const safeDelay = Math.max(0, Number(delay) || 0);
+      const volumeMultiplier = clamp(Number(options.volumeMultiplier) || 1, 0.5, 1.75);
+      const profile = options.profile === "storm-run" ? "storm-run" : "ambient";
       this.thunderState.lastDelay = safeDelay;
+      this.thunderState.lastVolumeMultiplier = volumeMultiplier;
+      this.thunderState.lastProfile = profile;
+      if (!this.ctx || !state.audioEnabled) return false;
       setTimeout(() => {
         if (!this.ctx || !state.audioEnabled) return;
         // Evaluate location when the strike actually plays so a delayed roll
         // still muffles if the player has already gone underground.
         const inBasement = state.currentFloor === "BASEMENT";
         const recorded = this.playSample("thunder", {
-          volume: inBasement ? 0.045 : 0.31,
+          volume: (inBasement ? 0.045 : 0.31) * volumeMultiplier,
           rate: inBasement ? 0.86 : 0.98,
           rateVariance: 0.055,
           pan: (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
@@ -23130,7 +23416,7 @@
         if (recorded) {
           // A very quiet sub tail lends weight on laptop speakers without
           // masking the transient and long roll in the field recording.
-          this.ping(42, 2.4, inBasement ? 0.006 : 0.045, "sine");
+          this.ping(42, 2.4, (inBasement ? 0.006 : 0.045) * volumeMultiplier, "sine");
         } else {
           const now = this.ctx.currentTime;
           const noise = this.ctx.createBufferSource();
@@ -23141,12 +23427,12 @@
           low.frequency.exponentialRampToValueAtTime(inBasement ? 40 : 85, now + 2.5);
           const gain = this.ctx.createGain();
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(inBasement ? 0.045 : 0.34, now + 0.06);
+          gain.gain.exponentialRampToValueAtTime((inBasement ? 0.045 : 0.34) * volumeMultiplier, now + 0.06);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
           noise.connect(low).connect(gain).connect(this.master);
           noise.start(now);
           noise.stop(now + 2.55);
-          this.ping(46, 2.2, inBasement ? 0.014 : 0.12, "sine");
+          this.ping(46, 2.2, (inBasement ? 0.014 : 0.12) * volumeMultiplier, "sine");
         }
         this.thunderState.playCount += 1;
         this.markCue("thunder");
@@ -23244,6 +23530,8 @@
         variantsReady: available,
         playCount: this.thunderState.playCount,
         lastDelay: this.thunderState.lastDelay,
+        lastVolumeMultiplier: this.thunderState.lastVolumeMultiplier,
+        lastProfile: this.thunderState.lastProfile,
       };
     }
 
@@ -24989,14 +25277,14 @@
     return t * t * (3 - 2 * t);
   }
 
-  function sampleStealthLightExposure() {
-    if (state.stealth.lightOverride != null) return state.stealth.lightOverride;
-    if (!physics) return 1;
-    const p = physics.playerPosition();
+  function sampleStealthLightExposure(position = null, { ignoreOverride = false } = {}) {
+    if (!ignoreOverride && state.stealth.lightOverride != null) return state.stealth.lightOverride;
+    if (!physics && !position) return 1;
+    const p = position || physics.playerPosition();
     // Sample at torso height: the score should track what a watcher sees lit,
     // not the floor pool at the runner's feet.
     const px = p.x;
-    const py = p.y + 0.15;
+    const py = position ? p.y : p.y + 0.15;
     const pz = p.z;
     let gathered = 0;
     const gatherLight = (light) => {
@@ -25807,6 +26095,11 @@
       state.qa && stormRunSystem
         ? stormRunSystem.collectCheckpoint(index, "qa")
         : { accepted: false, reason: "qa-only", completed: 0 }
+    );
+    window.MrFeastFresh.previewStormCheckpointForQA = (index) => (
+      state.qa && stormRunSystem
+        ? stormRunSystem.previewCheckpointForQA(index)
+        : { active: false, reason: "qa-only" }
     );
     window.MrFeastFresh.triggerStormRunScareForQA = (index) => (
       state.qa && stormRunSystem ? stormRunSystem.triggerScare(index) : { triggered: false, reason: "qa-only" }

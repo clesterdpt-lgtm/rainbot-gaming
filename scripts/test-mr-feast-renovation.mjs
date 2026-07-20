@@ -694,7 +694,9 @@ for (const name of ["estate-pool-water", "estate-pool-bottom", "estate-pool-copi
 }
 check("19 swimming pool", ["north", "south", "west-middle", "east-middle"].every((part) => exteriorBuild.includes(`rain-soaked-grounds-rear-${part}`)), "rear ground/collider is not carved around the pool cavity");
 check("19 swimming pool", !/rain-soaked-grounds-rear["']\s*,\s*w:\s*92[^;]*d:\s*36/.test(exteriorBuild), "legacy solid rear collider still runs beneath the pool");
-check("19 swimming pool", /physics\.addFixedRamp\(pool\.centerX/.test(yardBuild), "pool entry stairs lack a continuous Rapier walking surface");
+// The doubled basin's centre moved west of the authored stair, so the ramp
+// anchors to the fixed stairX rather than pool.centerX.
+check("19 swimming pool", /physics\.addFixedRamp\((?:stairX|pool\.centerX), -19\.6/.test(yardBuild), "pool entry stairs lack a continuous Rapier walking surface");
 for (const support of [
   "pool-north-terrace-support-left",
   "pool-north-terrace-support-right",
